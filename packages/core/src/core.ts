@@ -1264,22 +1264,27 @@ export function propKey(name: string): string {
  * shadows the host's binding of that name.
  */
 export function bindingIdentifiers(pattern: Node): string[] {
+  return bindingIdentifierNodes(pattern).map((node) => node.name);
+}
+
+/** `bindingIdentifiers`, as the `Identifier` nodes, so a caller can position each. */
+export function bindingIdentifierNodes(pattern: Node): Node[] {
   if (!pattern || typeof pattern !== "object") return [];
   switch (pattern.type) {
     case "Identifier":
-      return [pattern.name];
+      return [pattern];
     case "ObjectPattern":
       return (pattern.properties ?? []).flatMap((property: Node) =>
-        bindingIdentifiers(property.value ?? property.argument),
+        bindingIdentifierNodes(property.value ?? property.argument),
       );
     case "ArrayPattern":
       return (pattern.elements ?? []).flatMap((element: Node) =>
-        bindingIdentifiers(element),
+        bindingIdentifierNodes(element),
       );
     case "AssignmentPattern":
-      return bindingIdentifiers(pattern.left);
+      return bindingIdentifierNodes(pattern.left);
     case "RestElement":
-      return bindingIdentifiers(pattern.argument);
+      return bindingIdentifierNodes(pattern.argument);
     default:
       return [];
   }

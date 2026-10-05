@@ -527,6 +527,8 @@ export type IrNode =
        * decide what an unbackable binding means. Null for every other call.
        */
       var?: string | null;
+      /** Each identifier `var` declares, with its authored span (empty without `/var`). */
+      varBindings?: Array<{ name: string; span?: SourceSpan }>;
       /**
        * This call's target returns `{ value, output }` rather than output
        * alone (design §3.3).

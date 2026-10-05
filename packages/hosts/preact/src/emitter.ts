@@ -38,6 +38,7 @@ import {
   mapped,
   mappedExpr,
   type Position,
+  type SourceSpan,
   TranslateError,
   unresolvedCustomTagMessage,
 } from "@mxlang/core";
@@ -115,7 +116,10 @@ interface RegionSink {
   segment: string;
   /** Lifted `<define>` statements, in source order. */
   defines: MappedCode[];
-  /** Their names, to refuse a duplicate. */
+  /**
+   * Every name lifted into the region's one arrow (`<define>` names and the
+   * identifiers a `/var` pattern declares), to refuse a duplicate.
+   */
   names: Set<string>;
   /** File line (1-based) and column of a file-absolute offset. */
   positionAt(offset: number): { line: number; column: number };
@@ -603,6 +607,28 @@ export class PreactEmitter implements Emitter<string> {
       decodeText,
       this.#region,
     );
+  }
+
+  /**
+   * Claims `name` in a region's shared arrow. A second claim would be a second
+   * `const` in the one IIFE, which Babel reports at a generated position, so it
+   * is refused here at the authored name, with Marko 6.3.51's text.
+   */
+  #claimRegionName(
+    region: RegionSink,
+    name: string,
+    span: SourceSpan | null | undefined,
+    fallback: Position,
+  ): void {
+    if (region.names.has(name)) {
+      const at = span ? region.positionAt(span.sourceStart) : fallback;
+      throw new TranslateError(
+        `Duplicate declaration "${name}"`,
+        at.line,
+        at.column,
+      );
+    }
+    region.names.add(name);
   }
 
   #render(
@@ -1713,10 +1739,16 @@ export class PreactEmitter implements Emitter<string> {
         if (this.#callbackScope) {
           fail(
             this.#region
-              ? `\`/var\` on \`<${node.authoredName ?? name}>\` inside \`<for>\`/\`<if>\`/an attribute-tag body is not supported in a \`.${this.#region.segment}.mx\` region; bind it directly in the region's markup, outside those bodies`
+              ? `\`/var\` on \`<${node.authoredName ?? name}>\` inside \`<for>\`, \`<if>\`, an attribute-tag body or a \`<define>\` body is not supported in a \`.${this.#region.segment}.mx\` region; bind it directly in the region's markup, outside those bodies`
               : `\`/var\` on \`<${node.authoredName ?? name}>\` inside \`<for>\`/\`<if>\` is not supported on ${this.#dialect.name} yet; bind it at the top level of the template`,
             node,
           );
+        }
+        if (this.#region) {
+          const bindings = node.varBindings ?? [];
+          for (const { name: bound, span } of bindings) {
+            this.#claimRegionName(this.#region, bound, span, node.loc);
+          }
         }
         const temp = `__mxRet${this.#varSerial.n++}`;
         this.#varStatements.push(`const ${temp} = ${name}(${props});`);
@@ -1970,21 +2002,10 @@ export class PreactEmitter implements Emitter<string> {
    */
   define(node: Extract<IrNode, { kind: "Define" }>): void {
     if (this.#region && !this.#callbackScope) {
-      // Every lifted define shares the region's one arrow, so a second
-      // `<define/Row>` in a sibling element would be a second `const Row`.
-      // Marko 6.3.51 refuses it too: `Duplicate declaration "Row"`, at the
-      // second define's name.
-      if (this.#region.names.has(node.name)) {
-        const at = node.nameSpan
-          ? this.#region.positionAt(node.nameSpan.sourceStart)
-          : node.loc;
-        throw new TranslateError(
-          `Duplicate declaration "${node.name}"`,
-          at.line,
-          at.column,
-        );
-      }
-      this.#region.names.add(node.name);
+      // Every lifted define shares the region's one arrow with the region's
+      // `/var` bindings, so a second `<define/Row>` (or a `/var` of the same
+      // name) would be a second `const Row`; see `#claimRegionName`.
+      this.#claimRegionName(this.#region, node.name, node.nameSpan, node.loc);
       // The whole-file statement text (`emitModuleWithMappings`). The body is
       // a function of its own, so it renders as a callback: a `/var` inside
       // it has no statement position and is refused, as in any callback.
@@ -1999,7 +2020,7 @@ export class PreactEmitter implements Emitter<string> {
     }
     fail(
       this.#region
-        ? `\`<define>\` inside \`<for>\`/\`<if>\`/an attribute-tag body cannot be lifted out of it in a \`.${this.#region.segment}.mx\` region without changing its scope; declare it directly in the region's markup, outside those bodies`
+        ? `\`<define>\` inside \`<for>\`, \`<if>\`, an attribute-tag body or a \`<define>\` body cannot be lifted out of it in a \`.${this.#region.segment}.mx\` region without changing its scope; declare it directly in the region's markup, outside those bodies`
         : "`<define>` must appear at the top level of the template; a block declared inside markup cannot be lifted without changing its scope",
       node,
     );

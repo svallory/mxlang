@@ -136,7 +136,7 @@ describe("region rule", () => {
       ),
     ).toEqual({
       message:
-        "`<define>` inside `<for>`/`<if>`/an attribute-tag body cannot be lifted out of it in a `.react.mx` region without changing its scope; declare it directly in the region's markup, outside those bodies",
+        "`<define>` inside `<for>`, `<if>`, an attribute-tag body or a `<define>` body cannot be lifted out of it in a `.react.mx` region without changing its scope; declare it directly in the region's markup, outside those bodies",
       line: 6,
       column: 8,
     });
@@ -167,7 +167,7 @@ describe("region rule", () => {
     const source = `import Counter from "./counter.mx";\nexport function Panel() {\n  return (\n    <div>\n      <for|n| of=[1]><Counter/doubled start=n/></for>\n    </div>\n  );\n}\n`;
     expect(errorOf(source, file)).toEqual({
       message:
-        "`/var` on `<Counter>` inside `<for>`/`<if>`/an attribute-tag body is not supported in a `.react.mx` region; bind it directly in the region's markup, outside those bodies",
+        "`/var` on `<Counter>` inside `<for>`, `<if>`, an attribute-tag body or a `<define>` body is not supported in a `.react.mx` region; bind it directly in the region's markup, outside those bodies",
       line: 5,
       column: 21,
     });
@@ -180,6 +180,99 @@ describe("region rule", () => {
       ),
       line: 5,
       column: 6,
+    });
+  });
+
+  describe("duplicate bindings lifted into one region arrow", () => {
+    // `counter.mx` declares `<return>`, so `/x` is a real tag variable. The
+    // path is beside it; the region sits in `Panel`, body on file line 5.
+    const file = join(
+      import.meta.dirname,
+      "fixtures",
+      "region",
+      "tag-var",
+      "dup.react.mx",
+    );
+    const withCounter = (body: string) =>
+      `import Counter from "./counter.mx";\nexport function Panel() {\n  return (\n    <div>\n      ${body}\n    </div>\n  );\n}\n`;
+    const row = "<define/Row><b>1</b></define>";
+    const dup = (name: string) => `Duplicate declaration "${name}"`;
+
+    it("refuses a /var and a /var of the same name in sibling elements, at the second name", () => {
+      const body =
+        "<section><Counter/x start=1/></section><p><Counter/x start=2/></p>";
+      expect(errorOf(withCounter(body), file)).toEqual({
+        message: dup("x"),
+        line: 5,
+        column: 57,
+      });
+    });
+
+    it("refuses a /var after a <define> of the same name, at the var", () => {
+      const body = `${row}<Counter/Row start=1/>`;
+      expect(errorOf(withCounter(body), file)).toEqual({
+        message: dup("Row"),
+        line: 5,
+        column: 44,
+      });
+    });
+
+    it("refuses a <define> after a /var of the same name, at the define", () => {
+      const body = `<Counter/Row start=1/>${row}`;
+      expect(errorOf(withCounter(body), file)).toEqual({
+        message: dup("Row"),
+        line: 5,
+        column: 36,
+      });
+    });
+
+    it("refuses a destructured /var that collides with a <define>", () => {
+      const body = `${row}<Counter/{ Row, other } start=1/>`;
+      expect(errorOf(withCounter(body), file)).toEqual({
+        message: dup("Row"),
+        line: 5,
+        column: 46,
+      });
+    });
+
+    it("compiles the same name in two different regions of one file", () => {
+      const source = `import Counter from "./counter.mx";\nexport function A() {\n  return (\n    <div><Counter/x start=1/></div>\n  );\n}\nexport function B() {\n  return (\n    <div><Counter/x start=2/></div>\n  );\n}\n`;
+      const out = print(source, file, {
+        mx: true,
+        mxRegionCompile: (input) =>
+          compileReactRegion(input.source, { ...input, targets }) as ReturnType<
+            NonNullable<
+              NonNullable<Parameters<typeof print>[2]>["mxRegionCompile"]
+            >
+          >,
+      });
+      expect(out.code.match(/const x = /g)).toHaveLength(2);
+    });
+
+    it("names a <define> body when a /var or <define> is refused inside one", () => {
+      expect(
+        errorOf(
+          withCounter("<define/Row><Counter/y start=1/></define><Row/>"),
+          file,
+        ),
+      ).toEqual({
+        message:
+          "`/var` on `<Counter>` inside `<for>`, `<if>`, an attribute-tag body or a `<define>` body is not supported in a `.react.mx` region; bind it directly in the region's markup, outside those bodies",
+        line: 5,
+        column: 18,
+      });
+      expect(
+        errorOf(
+          inRegion(
+            "<define/Row><define/Inner><b/></define><Inner/></define><Row/>",
+          ),
+        ),
+      ).toEqual({
+        message:
+          "`<define>` inside `<for>`, `<if>`, an attribute-tag body or a `<define>` body cannot be lifted out of it in a `.react.mx` region without changing its scope; declare it directly in the region's markup, outside those bodies",
+        line: 5,
+        column: 18,
+      });
     });
   });
 });

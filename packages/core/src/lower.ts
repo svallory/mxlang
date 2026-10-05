@@ -43,6 +43,7 @@ import {
 import { CALLEE_INPUT_ERROR } from "./callee-input-error.ts";
 import {
   attrByName,
+  bindingIdentifierNodes,
   bindingIdentifiers,
   type Ctx,
   DYNAMIC_TAG,
@@ -193,6 +194,18 @@ function nodeSpan(ctx: Ctx, node: Node): SourceSpan {
 export function exprSpan(ctx: Ctx, node: Node): SourceSpan | undefined {
   if (!node?.loc) return undefined;
   return nodeSpan(ctx, node);
+}
+
+/**
+ * Every identifier a `/var` pattern declares, with its authored span, for a
+ * host that has to point at one (a region refusing a duplicate binding).
+ * Empty for a call without `/var`.
+ */
+function varBindingsOf(ctx: Ctx, pattern: Node | null | undefined) {
+  return bindingIdentifierNodes(pattern as Node).map((id) => ({
+    name: id.name as string,
+    span: exprSpan(ctx, id),
+  }));
 }
 
 /**
@@ -2699,6 +2712,7 @@ function lowerCustomTag(
     attrTagProps: loweredTags.props,
     params: paramsOf(ctx, node),
     var: node.var ? declName(ctx, node.var) : null,
+    varBindings: varBindingsOf(ctx, node.var),
   };
   // The binding was pre-registered by `lowerChildList` at its sibling index;
   // reaching the call is what makes it readable, so its sequence drops to
@@ -2807,6 +2821,7 @@ function lowerComponent(ctx: Ctx, node: Node, target: ComponentTarget): IrNode {
     // `{ value, output }`; a discovered one already says so through
     // `routeTemplateCall`, which also carries the `/var` the emitters bind.
     var: callVar,
+    varBindings: varBindingsOf(ctx, node.var),
     ...(returnShape === "returns" ? { returnsValue: true } : {}),
     loc: posOf(node),
   };

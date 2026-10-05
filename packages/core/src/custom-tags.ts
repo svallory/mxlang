@@ -231,6 +231,12 @@ export interface FinalizeContext {
   gensym(hint?: string): string;
 }
 
+/** One identifier a `/var` declares, and where it was written. */
+export interface VarBinding {
+  name: string;
+  span?: SourceSpan;
+}
+
 /** One call site: resolved IR plus optional authored-child syntax metadata. */
 export interface TagCall {
   name: string;
@@ -255,6 +261,8 @@ export interface TagCall {
   attrTagProps?: AttrTagProp[];
   params: string[];
   var: string | null;
+  /** Each identifier `var` declares, with its authored span. */
+  varBindings?: VarBinding[];
 }
 
 function directAttributeTagTree(
