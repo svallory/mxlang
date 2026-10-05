@@ -37,7 +37,7 @@ An attribute declaration supports:
 - `enum`: accept only one of the listed string literals.
 - `default`: append a string, number, or boolean value when the call omits it.
 - `literalOnly`: reject values that cannot be read at compile time. Literal arrays and objects are accepted as well as scalar literals.
-- `values`, `pattern`, `ref`: with `type: "atom"` only (see [Atoms in contracts](#atoms-in-contracts)); on any other type they are registration errors.
+- `values`, `pattern`, `ref`: with `type: "atom"` only (see [Atoms in contracts](#sidecars-declare-the-call-contract-atoms-in-contracts)); on any other type they are registration errors.
 
 Declaring `attributes` makes a closed contract: undeclared attributes and spreads are errors. Omitting `attributes` leaves attributes open.
 
