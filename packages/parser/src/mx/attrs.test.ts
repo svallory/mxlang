@@ -43,9 +43,17 @@ describe("spread attributes", () => {
     const attrs = attrsOf(`const el = <div ...props>x</div>;`);
     expect(attrs).toHaveLength(1);
     expect(attrs[0]?.type).toBe("JSXSpreadAttribute");
-    const argument = attrs[0]?.argument as { type: string; name: string };
-    expect(argument.type).toBe("Identifier");
-    expect(argument.name).toBe("props");
+    // A native element's spread goes through the host's attribute guard
+    // (`__mxAttrSpread(props, "div")`); the authored value is its first argument.
+    const argument = attrs[0]?.argument as {
+      type: string;
+      callee: { name: string };
+      arguments: Array<{ type: string; name: string }>;
+    };
+    expect(argument.type).toBe("CallExpression");
+    expect(argument.callee.name).toBe("__mxAttrSpread");
+    expect(argument.arguments[0]?.type).toBe("Identifier");
+    expect(argument.arguments[0]?.name).toBe("props");
   });
 
   it("preserves order relative to other attributes", () => {

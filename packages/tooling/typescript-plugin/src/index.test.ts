@@ -2236,7 +2236,9 @@ describe("MX language plugin", () => {
     ).toContain('Omit<Input, "content"> & { children?: unknown }');
     expect(
       solidVirtual?.snapshot.getText(0, solidVirtual.snapshot.getLength()),
-    ).toContain("<button title={count}>count</button>");
+    ).toContain(
+      '<button title={__mxAttrValue("title", count, "button")}>count</button>',
+    );
   });
 
   it("compiles a whole-file .mx through the Preact host", () => {
