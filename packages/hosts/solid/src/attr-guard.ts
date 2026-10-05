@@ -35,3 +35,40 @@ export const ATTR_SPREAD_HELPER = String.raw`function ${MX_ATTR_SPREAD_BINDING}<
     },
   }) as T;
 }`;
+
+/** Module-scope bindings the emitted `<textarea>` helpers call. */
+export const MX_TEXTAREA_CONTENT_BINDING = "__mxTextareaContent";
+export const MX_TEXTAREA_PICK_BINDING = "__mxTextareaPick";
+export const MX_TEXTAREA_OMIT_BINDING = "__mxTextareaOmit";
+export const MX_IS_SERVER_BINDING = "__mxIsServer";
+
+/**
+ * `<textarea value=x>` renders `x` as the textarea's content, as Marko 6.3.51
+ * does: `null`/`undefined`/`false`/`true` as nothing, everything else as text,
+ * and a leading newline doubled because the HTML parser drops a textarea's
+ * first one. Only the server renderer writes markup, so the doubling is keyed
+ * on `isServer` (Solid's own build-time constant); a client render sets the
+ * text through the DOM, where a doubled newline would show.
+ */
+export const TEXTAREA_CONTENT_HELPER = String.raw`function ${MX_TEXTAREA_CONTENT_BINDING}(value: unknown): string {
+  const text = value === null || value === undefined || value === false || value === true ? "" : String(value);
+  return ${MX_IS_SERVER_BINDING} && text[0] === "\n" ? "\n" + text : text;
+}`;
+
+/** The `value` a spread contributes in source order: its own, else what came before. */
+export const TEXTAREA_PICK_HELPER = `function ${MX_TEXTAREA_PICK_BINDING}(previous: unknown, attrs: unknown): unknown { return attrs !== null && typeof attrs === "object" && "value" in attrs ? (attrs as { value: unknown }).value : previous; }`;
+
+/**
+ * A spread's view without `value`: a textarea's value is rendered as content
+ * (see above), never as an attribute. A Proxy, not a copy, so Solid's lazy
+ * spread keeps reading the live object.
+ */
+export const TEXTAREA_OMIT_HELPER = `function ${MX_TEXTAREA_OMIT_BINDING}<T,>(attrs: T): T {
+  if (attrs === null || typeof attrs !== "object") return attrs;
+  return new Proxy(attrs as object, {
+    get: (target, key) => (key === "value" ? undefined : Reflect.get(target, key)),
+    has: (target, key) => key !== "value" && Reflect.has(target, key),
+    ownKeys: (target) => Reflect.ownKeys(target).filter((key) => key !== "value"),
+    getOwnPropertyDescriptor: (target, key) => (key === "value" ? undefined : Reflect.getOwnPropertyDescriptor(target, key)),
+  }) as T;
+}`;

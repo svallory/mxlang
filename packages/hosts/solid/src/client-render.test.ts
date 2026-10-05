@@ -186,6 +186,18 @@ function nodeIdFor(html: string, needle: string): string {
 }
 
 describe("Solid client render: live signal updates through the real DOM", () => {
+  it("renders a textarea's value as content on the client without the server's doubled leading newline", () => {
+    // A doubled client render would serialize as `\n\nx`.
+    const { snapshots } = renderDomApp(
+      '<textarea value=input.v/><textarea ...input.attrs class="c"/>',
+      'const input = { v: "\\nx", attrs: { value: "\\nx" } };',
+      "unused",
+      [],
+    );
+    expect(snapshots).toEqual([
+      '<ul><textarea>\nx</textarea><textarea class="c">\nx</textarea></ul>',
+    ]);
+  });
   it("preserves empty and multi-colon attribute names through JSX prop spreads", () => {
     const { snapshots } = renderDomApp(
       '<div :/><div value:foo:bar="y"/><div value:foo:baz=input.v/><div x:/><div x: = "s"/><div x: = input.v/>',

@@ -155,6 +155,8 @@ export const reactDialect: JsxDialect = {
   classAttr: "className",
   reactBooleanAttributes: true,
   forAttr: "htmlFor",
+  textareaContent: "defaultValue",
+  textareaLeadingNewline: "never",
   rawHtmlProp: "dangerouslySetInnerHTML",
   rawHtmlValue: (code) => `{ __html: ${code} }`,
   errorBoundaryModule: "@mxlang/react/runtime",

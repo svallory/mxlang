@@ -26,7 +26,13 @@ import {
 } from "@mxlang/core";
 import { SOLID_BUILTIN_TAGS } from "@mxlang/parser";
 import { decodeHTML } from "entities";
-import { MX_ATTR_SPREAD_BINDING, MX_ATTR_VALUE_BINDING } from "./attr-guard.ts";
+import {
+  MX_ATTR_SPREAD_BINDING,
+  MX_ATTR_VALUE_BINDING,
+  MX_TEXTAREA_CONTENT_BINDING,
+  MX_TEXTAREA_OMIT_BINDING,
+  MX_TEXTAREA_PICK_BINDING,
+} from "./attr-guard.ts";
 import { solidEventPropName } from "./event-names.ts";
 
 const STATEFUL_ERRORS: HostDeclarations["tags"] = {
@@ -89,7 +95,11 @@ let returnVars: Set<string> | null = null;
 let escapeUse: { used: boolean } | null = null;
 
 /** Which native-attribute guard helpers the current module needs. */
-let attrGuardUse: { value: boolean; spread: boolean } | null = null;
+let attrGuardUse: {
+  value: boolean;
+  spread: boolean;
+  textarea: boolean;
+} | null = null;
 
 /**
  * Native props with genuine non-attribute semantics on Solid. Everything else
@@ -527,7 +537,7 @@ export function collectReturnVars(
   code: string;
   vars: string[];
   needsEscapeImport: boolean;
-  needsAttrGuard: { value: boolean; spread: boolean };
+  needsAttrGuard: { value: boolean; spread: boolean; textarea: boolean };
   hoistedDefines: HoistedSolidDefine[];
 } {
   const outer = returnVars;
@@ -537,7 +547,11 @@ export function collectReturnVars(
   const outerDefineBindings = defineBindings;
   const collected = new Set<string>();
   const collectedEscapeUse = { used: false };
-  const collectedAttrGuardUse = { value: false, spread: false };
+  const collectedAttrGuardUse = {
+    value: false,
+    spread: false,
+    textarea: false,
+  };
   const collectedDefines: HoistedSolidDefine[] = [];
   returnVars = collected;
   escapeUse = collectedEscapeUse;
@@ -960,6 +974,72 @@ function renderAttr(
       );
     }
   }
+}
+
+/**
+ * A native `<textarea>`'s `value` is its content (Marko 6.3.51), never an
+ * attribute. Returns the attributes to render (the explicit `value` removed,
+ * each spread viewed without its `value`) and the content expression: the
+ * last `value` in source order across explicit attributes and spreads, or
+ * none when the element has a body (a body wins over a spread's value; an
+ * explicit value beside a body is the compile error Marko raises).
+ */
+function textareaContent(node: Extract<IrNode, { kind: "Element" }>): {
+  attrs: Attr[];
+  content: MappedCode | null;
+} {
+  const isValue = (attr: Attr): boolean =>
+    attr.kind !== "spread" && attr.kind !== "bound" && attr.name === "value";
+  const explicit = node.attrs.find(isValue);
+  const hasBody = node.children.length > 0;
+  if (explicit && hasBody) {
+    fail(
+      "A textarea cannot have both a value attribute and body content.",
+      explicit,
+    );
+  }
+  const hasSpread = node.attrs.some((attr) => attr.kind === "spread");
+  if (!explicit && !hasSpread) return { attrs: node.attrs, content: null };
+  if (attrGuardUse) attrGuardUse.textarea = true;
+  const attrs = node.attrs.flatMap((attr): Attr[] => {
+    if (isValue(attr)) return [];
+    if (attr.kind !== "spread") return [attr];
+    return [
+      {
+        ...attr,
+        value: {
+          ...attr.value,
+          code: `${MX_TEXTAREA_OMIT_BINDING}(${attr.value.code})`,
+        },
+      },
+    ];
+  });
+  if (hasBody) return { attrs, content: null };
+  // Source order decides: a later spread's `value` beats an earlier explicit
+  // one and the other way round.
+  let value: MappedCode = concatMapped("undefined");
+  for (const attr of node.attrs) {
+    if (attr.kind === "spread") {
+      value = concatMapped(
+        `${MX_TEXTAREA_PICK_BINDING}(`,
+        value,
+        `, ${attr.value.code})`,
+      );
+    } else if (isValue(attr)) {
+      value =
+        attr.kind === "static"
+          ? concatMapped(JSON.stringify(attr.value))
+          : attr.kind === "boolean"
+            ? concatMapped("true")
+            : attr.kind === "dynamic"
+              ? mapped(attr.value.code, attr.value.span ?? null)
+              : value;
+    }
+  }
+  return {
+    attrs,
+    content: concatMapped(`${MX_TEXTAREA_CONTENT_BINDING}(`, value, ")"),
+  };
 }
 
 function renderAttrs(
@@ -1717,7 +1797,10 @@ export class SolidEmitter implements Emitter<string> {
         raw,
       );
     }
-    const attrs = renderAttrs(node.attrs, false, {
+    // `<textarea value=x/>` renders the value as content, as Marko does.
+    const textarea =
+      node.name === "textarea" ? textareaContent(node) : undefined;
+    const attrs = renderAttrs(textarea?.attrs ?? node.attrs, false, {
       tag: JSON.stringify(node.name),
     });
     const innerHtml = raw ? ` innerHTML={${raw.expr.code}}` : "";
@@ -1727,7 +1810,9 @@ export class SolidEmitter implements Emitter<string> {
     }
     const children = raw
       ? concatMapped()
-      : renderWithNewEmitter(node.children, "template");
+      : textarea?.content
+        ? concatMapped("{", textarea.content, "}")
+        : renderWithNewEmitter(node.children, "template");
     this.#out.push(
       concatMapped(
         `<${node.name}`,

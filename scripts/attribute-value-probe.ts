@@ -196,6 +196,7 @@ try {
       str: "hello",
       special: "a<b>&\"'c",
       newline: "\nx",
+      newlines: "\n\nx",
     };
     const inputs = Object.fromEntries(
       Object.entries(textareaValues).map(([value, v]) => [

@@ -38,6 +38,21 @@ export interface JsxDialect {
    * primitive-attribute normalization passes `true` for them.
    */
   reactBooleanAttributes?: boolean;
+  /**
+   * How a native `<textarea>`'s content (Marko renders `value` as content) is
+   * handed to the renderer. `"children"` (Preact, Hono) passes a text child;
+   * `"defaultValue"` (React) passes the `defaultValue` prop, which react-dom
+   * renders as content on the server and treats as uncontrolled on the client.
+   */
+  textareaContent: "children" | "defaultValue";
+  /**
+   * When the doubled leading newline Marko writes (the HTML parser drops a
+   * textarea's first one) must be added: `"ssr"` only where no `document`
+   * exists (Preact: its client renderer sets the text through the DOM, which
+   * drops nothing), `"always"` (Hono: `hono/jsx` is the string renderer),
+   * `"never"` where the renderer already does it (React).
+   */
+  textareaLeadingNewline: "ssr" | "always" | "never";
   /** The prop that sets raw HTML from a sole `$!{expr}` child. */
   rawHtmlProp: string;
   /**
@@ -122,6 +137,8 @@ export const preactDialect: JsxDialect = {
   attrTagModule: "@mxlang/preact",
   classAttr: "class",
   forAttr: "for",
+  textareaContent: "children",
+  textareaLeadingNewline: "ssr",
   rawHtmlProp: "dangerouslySetInnerHTML",
   rawHtmlValue: (code) => `{ __html: ${code} }`,
   errorBoundaryModule: "@mxlang/preact/runtime",

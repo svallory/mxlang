@@ -38,6 +38,8 @@ import {
 import {
   JSX_ATTRIBUTE_SPREAD_EXPRESSION,
   jsxAttrValueExpression,
+  jsxTextareaContentExpression,
+  jsxTextareaPropsExpression,
 } from "./attribute-normalize.ts";
 import { type JsxDialect, preactDialect } from "./dialect.ts";
 import {
@@ -186,6 +188,10 @@ function __mxDynamic(target: any, payload: any, content?: any) {
     if (typeof target === "string" || __mxIsHostComponentObject(target)) {
       const Tag: any = target;
       const attrs = payload[0] || {};
+      if (target === "textarea") {
+        if (content) throw new Error("A dynamic tag rendering a \`<textarea>\` cannot have \`content\` and must use the \`value\` attribute instead.");
+        return <Tag {...__mxTextarea(__mxAttrSpread(attrs, target, ["ref", "key", "dangerouslySetInnerHTML", "className"], true))} />;
+      }
       return <Tag {...(typeof target === "string" ? __mxAttrSpread(attrs, target, ["ref", "key", "dangerouslySetInnerHTML", "className"], true) : attrs)}>{content ? content() : undefined}</Tag>;
     }
     return target;
@@ -198,6 +204,10 @@ function __mxDynamic(target: any, payload: any, content?: any) {
   ) {
     const Tag: any = target;
     const { content: bodyContent, ...rest } = props;
+    if (target === "textarea") {
+      if (bodyContent) throw new Error("A dynamic tag rendering a \`<textarea>\` cannot have \`content\` and must use the \`value\` attribute instead.");
+      return <Tag {...__mxTextarea(__mxAttrSpread(rest, target, ["ref", "key", "dangerouslySetInnerHTML", "className"], true))} />;
+    }
     return <Tag {...(typeof target === "string" ? __mxAttrSpread(rest, target, ["ref", "key", "dangerouslySetInnerHTML", "className"], true) : rest)}>{bodyContent ? bodyContent() : undefined}</Tag>;
   }
   if (
@@ -359,6 +369,17 @@ export function emitModuleWithMappings(
   if (helperInput.includes("__mxAttrSpread("))
     attrHelpers.push(
       `const __mxAttrSpread = ${JSX_ATTRIBUTE_SPREAD_EXPRESSION};`,
+    );
+  if (
+    helperInput.includes("__mxTextareaContent(") ||
+    helperInput.includes("__mxTextarea(")
+  )
+    attrHelpers.push(
+      `const __mxTextareaContent = ${jsxTextareaContentExpression(dialect.textareaLeadingNewline)};`,
+    );
+  if (helperInput.includes("__mxTextarea("))
+    attrHelpers.push(
+      `const __mxTextarea = ${jsxTextareaPropsExpression(dialect.textareaContent)};`,
     );
   const importedNames = new Set(ir.imports.flatMap((node) => node.bindings));
   const hoisted = [

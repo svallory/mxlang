@@ -11,6 +11,8 @@ export const honoDialect: JsxDialect = {
   attrTagModule: "@mxlang/hono",
   classAttr: "class",
   forAttr: "for",
+  textareaContent: "children",
+  textareaLeadingNewline: "always",
   rawHtmlProp: "dangerouslySetInnerHTML",
   rawHtmlValue: (code) => `{ __html: ${code} }`,
   errorBoundaryModule: "hono/jsx",

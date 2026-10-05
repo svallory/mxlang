@@ -39,6 +39,13 @@ import {
   ATTR_VALUE_HELPER,
   MX_ATTR_SPREAD_BINDING,
   MX_ATTR_VALUE_BINDING,
+  MX_IS_SERVER_BINDING,
+  MX_TEXTAREA_CONTENT_BINDING,
+  MX_TEXTAREA_OMIT_BINDING,
+  MX_TEXTAREA_PICK_BINDING,
+  TEXTAREA_CONTENT_HELPER,
+  TEXTAREA_OMIT_HELPER,
+  TEXTAREA_PICK_HELPER,
 } from "./attr-guard.ts";
 import {
   collectReturnVars,
@@ -367,6 +374,19 @@ export function compileSolidMx(
       binding: MX_ATTR_SPREAD_BINDING,
     });
   }
+  if (needsAttrGuard.textarea) {
+    hoistedImports.unshift({
+      code: `import { isServer as ${MX_IS_SERVER_BINDING} } from "@solidjs/web";`,
+      binding: MX_IS_SERVER_BINDING,
+      specifier: "@solidjs/web",
+      resolvedPath: "@solidjs/web#mx-is-server",
+    });
+    hoistedDefines.unshift(
+      { code: TEXTAREA_OMIT_HELPER, binding: MX_TEXTAREA_OMIT_BINDING },
+      { code: TEXTAREA_PICK_HELPER, binding: MX_TEXTAREA_PICK_BINDING },
+      { code: TEXTAREA_CONTENT_HELPER, binding: MX_TEXTAREA_CONTENT_BINDING },
+    );
+  }
   const code = emitted.code;
   const rewritten = new MagicString(source);
   rewritten.overwrite(0, source.length, code);
@@ -487,6 +507,12 @@ export function compileSolidUnit(
   if (needsEscapeImport) {
     parts.unshift(
       `import { escape as ${MX_ESCAPE_BINDING} } from "@solidjs/web";\n`,
+    );
+  }
+  if (needsAttrGuard.textarea) {
+    parts.unshift(
+      `import { isServer as ${MX_IS_SERVER_BINDING} } from "@solidjs/web";\n`,
+      `${TEXTAREA_OMIT_HELPER}\n${TEXTAREA_PICK_HELPER}\n${TEXTAREA_CONTENT_HELPER}\n`,
     );
   }
   if (needsAttrGuard.spread) parts.unshift(`${ATTR_SPREAD_HELPER}\n`);

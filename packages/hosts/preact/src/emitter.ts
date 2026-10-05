@@ -925,6 +925,7 @@ export class PreactEmitter implements Emitter<string> {
     mapNames: boolean,
     isComponent: boolean,
     tag?: string,
+    textareaBody = false,
   ): MappedCode {
     if (!isComponent && attrs.some((attr) => attr.kind === "spread")) {
       // Validate after the authored merge: an overwritten object is never
@@ -982,8 +983,11 @@ export class PreactEmitter implements Emitter<string> {
           renderedValue,
         ];
       });
+      // A textarea's merged `value` is its content (Marko), or dropped when the
+      // element has a body.
+      const textarea = tag === "textarea";
       return concatMapped(
-        " {...",
+        textarea ? " {...__mxTextarea(" : " {...",
         ATTRIBUTE_SPREAD_EXPRESSION,
         "({ ",
         ...entries,
@@ -998,11 +1002,26 @@ export class PreactEmitter implements Emitter<string> {
             ? []
             : [this.#dialect.classAttr]),
         ]),
-        ", true)}",
+        textarea ? `, true), ${textareaBody})}` : ", true)}",
       );
     }
     return concatMapped(
       ...attrs.map((attr) => this.#attr(attr, mapNames, isComponent, tag)),
+    );
+  }
+
+  /** `__mxTextareaContent(<value>)` for a textarea's explicit `value`. */
+  #textareaContent(attr: Attr): MappedCode {
+    const span =
+      attr.kind === "dynamic"
+        ? attr.value.span
+        : attr.kind === "static"
+          ? attr.valueSpan
+          : null;
+    return concatMapped(
+      "__mxTextareaContent(",
+      mapped(this.#attrValue(attr), span ?? null),
+      ")",
     );
   }
 
@@ -1431,14 +1450,37 @@ export class PreactEmitter implements Emitter<string> {
         raw,
       );
     }
+    // `<textarea value=x/>` renders the value as content, as Marko does.
+    let explicitValue: Attr | undefined;
+    if (node.name === "textarea") {
+      explicitValue = node.attrs.find(
+        (attr) =>
+          attr.kind !== "spread" &&
+          attr.kind !== "bound" &&
+          attr.name === "value",
+      );
+      if (explicitValue && node.children.length > 0) {
+        fail(
+          "A textarea cannot have both a value attribute and body content.",
+          explicitValue,
+        );
+      }
+    }
+    const content = explicitValue ? this.#textareaContent(explicitValue) : null;
     // IR elements include hyphenated custom elements, whose arbitrary
     // props are not native contracts. CamelCase SVG tags are native too.
-    const attrs = this.#attrs(
-      node.attrs,
+    let attrs = this.#attrs(
+      explicitValue
+        ? node.attrs.filter((attr) => attr !== explicitValue)
+        : node.attrs,
       !node.name.includes("-"),
       false,
       node.name,
+      node.children.length > 0,
     );
+    if (content && this.#dialect.textareaContent === "defaultValue") {
+      attrs = concatMapped(attrs, " defaultValue={", content, "}");
+    }
     const rawHtml = raw
       ? ` ${this.#dialect.rawHtmlProp}={${this.#dialect.rawHtmlValue(raw.expr.code)}}`
       : "";
@@ -1450,11 +1492,13 @@ export class PreactEmitter implements Emitter<string> {
     // applies no character references inside them, unlike the JSX decoder.
     const children = raw
       ? concatMapped()
-      : this.#render(
-          node.children,
-          undefined,
-          !RAW_TEXT_ELEMENTS.has(node.name),
-        );
+      : content && this.#dialect.textareaContent === "children"
+        ? concatMapped("{", content, "}")
+        : this.#render(
+            node.children,
+            undefined,
+            !RAW_TEXT_ELEMENTS.has(node.name),
+          );
     if (children.code === "") {
       this.#out.push(concatMapped(`<${node.name}`, attrs, `${rawHtml} />`));
       return;

@@ -27,5 +27,8 @@
   },
   "peerDependencies": {
     "preact": "10.29.8"
+  },
+  "devDependencies": {
+    "jsdom": "30.1.1"
   }
 }

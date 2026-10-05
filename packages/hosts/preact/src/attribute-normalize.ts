@@ -122,3 +122,46 @@ export const JSX_ATTRIBUTE_SPREAD_EXPRESSION = `(<T extends object | null | unde
   }
   return values as T;
 })`;
+
+/**
+ * `<textarea value=x>` renders `x` as the textarea's content, as Marko 6.3.51
+ * does: `null`/`undefined`/`false`/`true` as nothing, everything else as text,
+ * and a leading newline doubled because the HTML parser drops a textarea's
+ * first one. `newline` says where the doubling applies (`JsxDialect`).
+ *
+ * Preact's "ssr" mode keys on `typeof document`: preact-render-to-string
+ * exposes no public renderer signal (only the mangled internal `options.__s`),
+ * and its client renderer writes the text through the DOM, where a doubled
+ * newline would show as a second one. Environment-dependent by construction;
+ * recorded in docs/divergences.md.
+ */
+export function jsxTextareaContentExpression(
+  newline: "ssr" | "always" | "never",
+): string {
+  const double =
+    newline === "never"
+      ? "false"
+      : newline === "always"
+        ? "true"
+        : 'typeof document === "undefined"';
+  return `((value: unknown): string => {
+  const text = value === null || value === undefined || value === false || value === true ? "" : \`\${value}\`;
+  return ${double} && text[0] === "\\n" ? "\\n" + text : text;
+})`;
+}
+
+/**
+ * The spread/merged-object path of a native `<textarea>`: the merged `value`
+ * is the content unless the element has a body, in which case the spread's
+ * `value` is dropped (Marko: a body wins over a spread). Needs
+ * `__mxTextareaContent` hoisted first.
+ */
+export function jsxTextareaPropsExpression(
+  prop: "children" | "defaultValue",
+): string {
+  return `(<T extends object | null | undefined,>(attrs: T, body = false): T => {
+  const { value, ...rest } = { ...attrs } as Record<string, unknown>;
+  if (!body) rest[${JSON.stringify(prop)}] = __mxTextareaContent(value);
+  return rest as T;
+})`;
+}
