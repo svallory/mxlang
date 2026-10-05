@@ -346,6 +346,21 @@ function inSourceOrder(
     .map(({ part }) => part);
 }
 
+/**
+ * The `contract`/`groups` fields of a wildcard-matched tag (decision 147);
+ * empty for every other tag, so an existing tree serializes byte-identically.
+ */
+function wildcardMatch(
+  tag: DelegatedTag<unknown>,
+): Pick<DataTag, "contract" | "groups"> {
+  const { alias } = tag;
+  if (alias === undefined) return {};
+  return {
+    contract: tag.name,
+    ...(Object.keys(alias.groups).length > 0 ? { groups: alias.groups } : {}),
+  };
+}
+
 function dataTag(tag: DelegatedTag<unknown>): DataTag {
   checkTagName(tag.name, tag.loc);
   rejectMergedShorthandClass(tag.attrs, tag.loc);
@@ -362,7 +377,10 @@ function dataTag(tag: DelegatedTag<unknown>): DataTag {
   const { attrTags, children } = dataParts(tag.attributeTagTree, tag.children);
   return {
     kind: "tag",
-    name: tag.name,
+    // A wildcard child keeps the name the author wrote; `tag.name` is then the
+    // canonical tag whose contract matched, exposed as `contract` (decision 147).
+    name: tag.alias?.authored ?? tag.name,
+    ...wildcardMatch(tag),
     nameSpan: requiredSpan(tag.nameSpan, `tag \`<${tag.name}>\`'s name`),
     span: withoutTrailingNewline(
       requiredSpan(tag.span, `tag \`<${tag.name}>\``),

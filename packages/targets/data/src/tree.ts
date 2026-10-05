@@ -99,6 +99,19 @@ export interface DataTag {
    * no scriptlets). The same rule applies to `DataAttrTag.name`.
    */
   name: string;
+  /**
+   * Set only when a parent's `children["*"]` entry claimed this tag (decision
+   * 147): the canonical tag whose contract applied. `name` stays the authored
+   * spelling (`title`), `contract` is `attribute` for a `contract: "attribute"`
+   * entry, and for an inline contract it equals `name`. Absent on every other
+   * tag.
+   */
+  contract?: string;
+  /**
+   * The matched pattern's named capture groups; present only on a wildcard
+   * match whose pattern has at least one named group that participated.
+   */
+  groups?: Record<string, string>;
   nameSpan: SourceSpan;
   /** The whole tag: opening tag, body and closing tag included. */
   span: SourceSpan;

@@ -1,0 +1,8 @@
+{
+  "name": "data-wildcard-nomatch-fixture",
+  "private": true,
+  "mx": {
+    "target": "data",
+    "contracts": "./contracts.ts"
+  }
+}

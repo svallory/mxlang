@@ -93,6 +93,37 @@ derived from Marko's own lookup), so a data tag named `source`, `input`,
 `title` or `script` may have child tags. The trade: a tag-like `<name` in a
 `script`/`style`/`textarea`/`title` body parses as a tag, not text.
 
+## Wildcard children
+
+A parent's `children["*"]` entry claims child names no explicit entry, registered
+tag or target built-in resolves (decision 147,
+[ADR 147](../../../apps/docs/docs/design-notes/adr-wildcard-children.md)). The
+tree keeps what was written and says what claimed it, on the matched `tag`:
+
+| field | meaning |
+|---|---|
+| `name` | the authored name (`title`), as for every tag; `nameSpan` slices it |
+| `contract` | the canonical tag whose contract applied (`attribute`); for an inline contract, equal to `name` |
+| `groups` | the entry pattern's named capture groups; absent without any |
+
+Both fields are absent on every tag no wildcard claimed, so a tree without
+wildcards serializes exactly as before. With
+`attributes: { children: { "*": { pattern: "^[a-z][a-z0-9_]*$", contract: "attribute" } } }`,
+`<attributes><title type="string"/></attributes>` has this `title` tag
+(`attrs` omitted here):
+
+```json
+{ "kind": "tag", "name": "title", "contract": "attribute",
+  "nameSpan": { "sourceStart": 16, "sourceEnd": 21 },
+  "span": { "sourceStart": 15, "sourceEnd": 37 },
+  "args": [], "params": [], "attrTags": [], "children": [] }
+```
+
+A name no entry matches is the E2 error listing the patterns, and one a typo
+away from an explicit child is an error (the did-you-mean guard) on every target;
+`mx-tsc` reports both for a data package at the child's position.
+`unknownTags: "reject"` counts a claimed child as known.
+
 ## The unnamed tag
 
 `<#id>`, `<.class>` and concise `#id` / `.class` carry no tag name (decision

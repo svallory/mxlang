@@ -2,6 +2,7 @@
 
 ## 0.1.0-alpha.4
 
+- **Feat (wildcard-children-data, decision 147):** a tag claimed by a parent's `children["*"]` entry keeps its authored `name` and gains two optional fields, `contract` (the canonical tag whose contract applied; equal to `name` for an inline contract) and `groups` (the pattern's named captures, omitted when empty). `SerializedDataDocument` and `compileModule`'s emitted literal follow; every tree without a wildcard match is byte-identical. `mx-tsc` host-dispatch rows `data-wildcard`, `data-wildcard-nomatch` and `data-wildcard-guard` pin the data check.
 - `unknownTags: "reject"` counts a child claimed by a parent's `children["*"]` as known, on the build path and on the parse-only scan used when core reports an earlier error (decision 147).
 - `<let>`, `<style>` and the other core-taglib names are never claimed by a wildcard, like every target (decision 147 addendum 2).
 - **Added: atoms in `parseData` (decision 156).** An attribute whose whole value is one atom, the sugar-derived `name` included, is `DataAttr { kind: "atom", name, value, nameSpan?, span }`; an atom nested in an expression is a `StringLiteral` with `extra.mxAtom = { span }` in `DataExpr.node`. Atom contracts (`type: "atom"` with `values`, `pattern`, `ref`, and `declares`) are checked; see `@mxlang/core` 0.1.0-alpha.4.

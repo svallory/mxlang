@@ -180,6 +180,14 @@ const ROWS = [
   // E1 error on it names the token (`:title` (`name`)) at the sugar.
   "data-sugar",
   "data-sugar-e1",
+  // Decision 147 (wildcard children), PR 2: the data check on a package whose
+  // `attributes` claims lowercase children by `children["*"]`. A claimed child
+  // is clean; a name no entry matches is the E2 error listing the patterns; a
+  // name one typo from an explicit child is the guard, an error on every
+  // target and tool.
+  "data-wildcard",
+  "data-wildcard-nomatch",
+  "data-wildcard-guard",
 ] as const;
 
 /** Rows whose Vite leg resolves `~/` through a configured alias. */
@@ -528,7 +536,10 @@ describe("dispatch goldens", () => {
       ...(row === "data-check" ||
       row === "default-tag-data" ||
       row === "data-sugar" ||
-      row === "data-sugar-e1"
+      row === "data-sugar-e1" ||
+      row === "data-wildcard" ||
+      row === "data-wildcard-nomatch" ||
+      row === "data-wildcard-guard"
         ? { mxTscDataCheck: dataCheckLeg(row) }
         : {}),
     });
