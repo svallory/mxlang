@@ -155,3 +155,23 @@ custom element. Solid's own PascalCase-means-component convention
 (`packages/hosts/solid/src/emitter.ts`'s `isComponent`) is unrelated and
 unchanged by this — it follows JSX, and is a separate host on a separate
 lowering path.
+
+## Known local failure: `src/mx/perf.test.ts`
+
+`MX parser performance > parses a 3000-line file with 50 MX elements well
+under 500ms` asserts wall-clock time, so it fails under machine load with
+nothing actually wrong — measured at 480ms against the 500ms budget during an
+otherwise fully green run of this package's vitest project. It exercises the
+Babel/MX path, not `src/template/`. Rerun it on its own before calling a
+failure a regression:
+
+```
+bunx vitest run --root ../.. --project @mxlang/parser src/mx/perf.test.ts
+```
+
+Note also that Biome **ignores** `src/template/` wholesale
+(`packages/parser/src/template/{core,states,util,__tests__}` and `index.ts` in
+`biome.json`'s `files.includes`), to keep the vendored copy byte-comparable
+with upstream. `biome check` on those paths reports them as ignored and checks
+nothing, so "lint clean" is vacuous there: match the repo's formatting by hand
+or via `biome format --stdin-file-path=x.ts < <file>`.
