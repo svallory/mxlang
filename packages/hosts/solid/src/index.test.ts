@@ -94,9 +94,21 @@ describe("Solid IR lowering", () => {
       `<div oncapture:click=fn/>`,
       ["oncapture:click={fn}"],
     ],
-    ["ordinary attr name", `<div attr:title=value/>`, ["attr:title={value}"]],
-    ["ordinary bool name", `<div bool:hidden=value/>`, ["bool:hidden={value}"]],
-    ["ordinary use name", `<div use:tip=opts/>`, ["use:tip={opts}"]],
+    [
+      "ordinary attr name",
+      `<div attr:title=value/>`,
+      ['attr:title={__mxAttrValue("attr:title", value, "div")}'],
+    ],
+    [
+      "ordinary bool name",
+      `<div bool:hidden=value/>`,
+      ['bool:hidden={__mxAttrValue("bool:hidden", value, "div")}'],
+    ],
+    [
+      "ordinary use name",
+      `<div use:tip=opts/>`,
+      ['use:tip={__mxAttrValue("use:tip", opts, "div")}'],
+    ],
     [
       "ordinary colon name",
       `<div x:foo=value/>`,

@@ -1,0 +1,19 @@
+export function Page(input: {
+  a: unknown;
+  s: string;
+  n: number;
+  b: boolean;
+  o: Record<string, unknown>;
+  v: unknown;
+}) {
+  return (
+    <div>
+      <p ...input.a/>
+      <p ...input.s/>
+      <p ...input.n/>
+      <p ...input.b/>
+      <p ...input.o data-x=input.v/>
+      <p ...input.o/>
+    </div>
+  );
+}

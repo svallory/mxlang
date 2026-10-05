@@ -82,6 +82,31 @@ const CASES: Record<string, Case> = {
     fragment: "<div classList=input.o/>",
     setup: "const input = { o: { x: true } };",
   },
+  attrNamespace: {
+    fragment: "<div attr:x=input.o/>",
+    setup: "const input = { o: { a: 1 } };",
+  },
+  boolNamespace: {
+    fragment: "<div bool:x=input.o/>",
+    setup: "const input = { o: { a: 1 } };",
+  },
+  useNamespace: {
+    fragment: "<div use:x=input.o/>",
+    setup: "const input = { o: { a: 1 } };",
+  },
+  attrNamespaceSpread: {
+    fragment: "<div ...input.a/>",
+    setup: 'const input = { a: { "attr:x": { a: 1 }, "bool:y": { a: 1 } } };',
+  },
+  propNamespace: {
+    fragment: "<div prop:x=input.o/>",
+    setup: "const input = { o: { a: 1 } };",
+  },
+  eventSpread: {
+    fragment: "<div ...input.a/>",
+    setup:
+      '(globalThis as any).__mxHit = 0; const input = { a: { "on-myevent": () => { (globalThis as any).__mxHit++; }, onClick: () => {} } };',
+  },
   classListSpread: {
     fragment: "<div ...input.a/>",
     setup: "const input = { a: { classList: { x: true } } };",
@@ -113,7 +138,7 @@ const CASES: Record<string, Case> = {
   },
 };
 
-type Outcome = { html?: string; error?: string };
+type Outcome = { html?: string; error?: string; hit?: number };
 const outcomes: Record<"ssr" | "dom", Record<string, Outcome>> = {
   ssr: {},
   dom: {},
@@ -194,7 +219,8 @@ function runNames(
             "    document.body.appendChild(c);",
             "    render(() => App(), c);",
             "    await new Promise((r) => setTimeout(r, 0));",
-            "    out[names[i]] = { html: c.innerHTML };",
+            '    for (const el of c.querySelectorAll("*")) for (const n of ["myevent", "-myevent"]) el.dispatchEvent(new dom.window.CustomEvent(n));',
+            "    out[names[i]] = { html: c.innerHTML, hit: globalThis.__mxHit ?? 0 };",
             "  } catch (e) { out[names[i]] = { error: String(e && e.message) }; }",
             "}",
             "process.stdout.write(JSON.stringify(out));",
@@ -257,6 +283,23 @@ describe.each(["ssr", "dom"] as const)(
         );
       }
       expect(get("colonName").error).toContain("`value:foo`");
+    });
+    it("validates attr:, bool: and use:, which are attribute writes on Solid", () => {
+      for (const name of [
+        "attrNamespace",
+        "boolNamespace",
+        "useNamespace",
+        "attrNamespaceSpread",
+      ]) {
+        expect(get(name).error ?? `${name} did not throw`, name).toMatch(
+          /^The `(?:attr:x|bool:x|use:x|attr:x)` attribute cannot be a plain object/,
+        );
+      }
+    });
+    it("leaves prop: (a property write) and event handler keys alone", () => {
+      expect(get("propNamespace").error).toBeUndefined();
+      expect(get("eventSpread").error).toBeUndefined();
+      if (mode === "dom") expect(get("eventSpread").hit).toBe(1);
     });
     it("guards a string-target dynamic tag but not a component target", () => {
       expect(get("dynamicTagString").error).toBe(PLAIN);

@@ -39,9 +39,11 @@ elements to `{...__mxAttrSpread(expr, "tag")}`; string-valued dynamic tags
 (`<${tag} .../>`, including attribute tags and the args spread) are guarded
 when the target resolves to a string and pass through for a component target.
 Only names with genuine non-attribute semantics on Solid are exempt: `class`,
-`style`, `ref`, `children` and the `on:`/`oncapture:`/`use:`/`prop:`/`attr:`/
-`bool:` namespaces. `innerHTML`, `textContent`, `classList` and `:foo`
-(`value:foo`) are validated like Marko, which exempts no name. String-shaped
+`style`, `ref`, `children`, event handlers (Marko's `/^on[A-Z-]/` in a spread,
+plus Solid's `on:`/`oncapture:`) and `prop:`, a real property write. `attr:`,
+`bool:` and `use:` lower to `setAttribute` on Solid 2, so they validate, as do
+`innerHTML`, `textContent`, `classList` and `:foo` (`value:foo`); Marko
+exempts no name. String-shaped
 values and component props are not wrapped. The spread helper is a Proxy that
 validates each key as Solid reads it, so reactivity is preserved and an
 attribute or spread key that a later source overwrites is never validated,

@@ -99,8 +99,12 @@ let attrGuardUse: { value: boolean; spread: boolean } | null = null;
  */
 const UNGUARDED_ATTRS = new Set(["class", "style", "ref", "children"]);
 
-/** Solid's own prop namespaces; none is a plain attribute write. */
-const UNGUARDED_NAMESPACE = /^(?:on|oncapture|use|prop|attr|bool):/;
+/**
+ * Solid prop namespaces that are not attribute writes: `on:`/`oncapture:`
+ * listeners and `prop:` (a real property write). `attr:`, `bool:` and `use:`
+ * lower to `setAttribute` on Solid 2, so they validate like any attribute.
+ */
+const UNGUARDED_NAMESPACE = /^(?:on|oncapture|prop):/;
 
 /**
  * What a native-attribute guard needs: the JS expression for the tag name, and
