@@ -19,7 +19,7 @@ it("keeps config evaluation and reader registration compiler-lazy", () => {
     const { default: mx } = await import(${JSON.stringify(entry)});
     const plugin = mx();
     const compilers = () => Object.keys(require.cache).filter((key) =>
-      /node_modules\\/(\\.bun\\/)?(@marko[+/]compiler|@astrojs[+/]compiler)/.test(key));
+      /node_modules\\/(\\.bun\\/)?(@marko[+/]compiler|@astrojs[+/]compiler)|\\/marko-frontend\\.cjs$/.test(key));
     const before = compilers();
     await plugin.buildStart.call({});
     const registered = compilers();
