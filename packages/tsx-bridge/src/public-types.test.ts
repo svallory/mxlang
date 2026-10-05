@@ -40,9 +40,13 @@ it("keeps public.d.ts's ambient MX region types assignable both ways with the re
   expectTypeOf<PublicMxRegionPositionCheck>().toEqualTypeOf<RealMxRegionPositionCheck>();
   expectTypeOf<PublicMxRegionHoistedImport>().toEqualTypeOf<RealHoistedImport>();
   expectTypeOf<PublicMxRegionHoistedDefine>().toEqualTypeOf<RealHoistedDefine>();
-  expectTypeOf<PublicMxRegionCompileInput>().toEqualTypeOf<RealMxRegionCompileInput>();
+  expectTypeOf<PublicMxRegionCompileInput>().toEqualTypeOf<
+    RealMxRegionCompileInput<CustomTag>
+  >();
   expectTypeOf<PublicMxRegionCompileResult>().toEqualTypeOf<RealMxRegionCompileResult>();
-  expectTypeOf<PublicMxRegionCompile>().toEqualTypeOf<RealMxRegionCompile>();
+  expectTypeOf<PublicMxRegionCompile>().toEqualTypeOf<
+    RealMxRegionCompile<CustomTag>
+  >();
 });
 
 it("types customTags as core's CustomTag, so a wrong shape is rejected", () => {

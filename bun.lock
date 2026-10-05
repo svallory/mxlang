@@ -249,7 +249,6 @@
       "version": "0.0.0",
       "dependencies": {
         "@babel/types": "7.29.8",
-        "@mxlang/core": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "1.4.2",

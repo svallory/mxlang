@@ -16,7 +16,6 @@
  * `packages/babel` what a `Component` or a `template` is.
  */
 
-import type { CustomTag } from "@mxlang/core";
 import type { Position } from "./util/location.ts";
 
 /**
@@ -201,7 +200,7 @@ export type MxRegionParentFrame =
   | { kind: "boundary"; valueStart: number; argumentIndex: number | null };
 
 /** The region text and its file-relative position, as the bridge found it. */
-export interface MxRegionCompileInput {
+export interface MxRegionCompileInput<TTag = unknown> {
   /** The region's own source text, `source.slice(start, end)`. */
   source: string;
   /**
@@ -225,11 +224,12 @@ export interface MxRegionCompileInput {
   /** The region's 0-based start column on that line. */
   baseColumn: number;
   /**
-   * Custom tag definitions the caller registered, opaque here. The bridge
+   * Custom tag definitions the caller registered. Opaque to `@mxlang/babel`
+   * (`TTag`); `@mxlang/tsx-bridge` instantiates it with core's `CustomTag`. The bridge
    * runs inside the tokenizer, so the options bag is the only channel an
    * integration has to the region being lowered.
    */
-  customTags?: Record<string, CustomTag>;
+  customTags?: Record<string, TTag>;
   /** `package.json#mx.<target>.defaultTag` the caller resolved (decision 145). */
   defaultTag?: string;
   /**
@@ -341,8 +341,8 @@ export interface MxRegionCompileResult {
  * property is V8's *throw site* inside the host's own module, which would
  * otherwise be read as a position in the user's `.mx` file.
  */
-export type MxRegionCompile = (
-  input: MxRegionCompileInput,
+export type MxRegionCompile<TTag = unknown> = (
+  input: MxRegionCompileInput<TTag>,
 ) => MxRegionCompileResult;
 
 /**

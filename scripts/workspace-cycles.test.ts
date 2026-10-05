@@ -126,7 +126,8 @@ describe("workspace dependency graph", () => {
       const extra = (graph.get(name) ?? []).filter((d) => !allowed.has(d));
       expect(extra, `${name} depends on ${extra.join(", ")}`).toEqual([]);
     }
-    expect(graph.get("@mxlang/babel")).not.toContain("@mxlang/tsx-bridge");
+    // native-parser makes core -> parser -> babel, so babel -> core would be a cycle.
+    expect(graph.get("@mxlang/babel")).toEqual([]);
   });
 
   it("points every host at tsx-bridge, never at the parser package", () => {

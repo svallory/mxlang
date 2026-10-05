@@ -16,5 +16,5 @@ object, `mxHooks` (`src/mx-hooks.ts`, type `MxHooks`), which
   to re-vendor (`scripts/vendor.sh`).
 
 The package is private and has no build: `@mxlang/tsx-bridge` bundles it into
-its `dist/`. It depends on nothing in the repo but `@mxlang/core`, for one
-type (`CustomTag`).
+its `dist/`. It depends on no workspace package; custom tags are an opaque
+type parameter (`MxRegionCompile<TTag>`) that tsx-bridge instantiates.

@@ -11,8 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@babel/types": "7.29.8",
-    "@mxlang/core": "workspace:*"
+    "@babel/types": "7.29.8"
   },
   "devDependencies": {
     "@types/bun": "1.4.2"

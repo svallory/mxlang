@@ -41,7 +41,7 @@ export interface PrintOptions {
    * grammar is on (`mx: true`) — the parser has no host of its own, so an
    * absent hook is a compile error at the first region.
    */
-  mxRegionCompile?: MxRegionCompile;
+  mxRegionCompile?: MxRegionCompile<CustomTag>;
   /**
    * Turns the MX grammar on explicitly, forwarded to `parse` unchanged. Unset,
    * the grammar is on exactly when `mxRegionCompile` is given.
