@@ -1512,20 +1512,6 @@ function identifierNames(text: string): Set<string> {
 }
 
 /**
- * The `<for step=...>` mapper's own binding, and why it is `__mx`-prefixed.
- *
- * With a step, the row value is derived from the index *inside* Solid's
- * `<Repeat>` callback, so the callback's parameter is in scope for the
- * author's own `from`/`step` expressions: `<Repeat count={…}>{(mxIndex) => {
- * const i = (mxIndex) + mxIndex * (2); …`. A generated `mxIndex` shadowed an
- * authored binding of the same name and the loop rendered `0, 3, 6` where the
- * author wrote `10, 12, 14`. `__mx` is reserved by `checkReservedBindings`,
- * so no authored binding can take this name.
- */
-function hygienicIndex(params: string[], body: string): string {
-  return hygienicName("__mxIndex", params, body);
-}
-/**
  * Every identifier appearing anywhere in a `<for>`'s body or params.
  *
  * Walks the IR subtree collecting `Expr.code` and bound names, rather than
@@ -2218,14 +2204,13 @@ export class SolidEmitter implements Emitter<string> {
       );
       return;
     }
-    const body = inLazyScope(() => jsxValue(blockExpression(node.children)));
-
     const from = node.source.from?.code ?? "0";
     const bound = node.source.bound.code;
     const fromValue = node.source.from ? numericValue(node.source.from) : 0;
     const boundValue = numericValue(node.source.bound);
     const step = node.source.step;
     if (!step) {
+      const body = inLazyScope(() => jsxValue(blockExpression(node.children)));
       const count =
         fromValue !== null && boundValue !== null
           ? String(
@@ -2264,12 +2249,25 @@ export class SolidEmitter implements Emitter<string> {
       const rounded = `${node.source.inclusive ? "Math.floor" : "Math.ceil"}(((${bound}) - (${from})) / (${step.code}))${node.source.inclusive ? " + 1" : ""}`;
       count = `Number.isFinite(${rounded}) ? Math.max(0, ${rounded}) : 0`;
     }
-    const counter = hygienicIndex(node.params, body.code);
+    // The row value is not a callback-local `const`: Solid runs the callback
+    // once per row and never again, so a value computed there would freeze
+    // `from`/`step` at their first reading. Reads of the param become the
+    // expression itself, which then evaluates inside the tracking scope of
+    // whatever reads it and follows a changed signal bound.
+    const counter = gensym("__mxIndex", node, [
+      ...identifierNames(`${from} ${step.code}`),
+    ]);
+    rewriteForBody(
+      node,
+      readsForParam(node, first, `((${from}) + ${counter} * (${step.code}))`),
+      [counter],
+    );
+    const body = inLazyScope(() => jsxValue(blockExpression(node.children)));
     this.#out.push(
       concatMapped(
-        `<Repeat count={${count}}>{(${counter}) => { const ${first} = (${from}) + ${counter} * (${step.code}); return `,
+        `<Repeat count={${count}}>{(${counter}) => `,
         body,
-        "; }}</Repeat>",
+        "}</Repeat>",
       ),
     );
   }

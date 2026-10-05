@@ -223,7 +223,7 @@ describe("Solid IR lowering", () => {
     [
       "stepped range",
       `<for|n| from=2 to=8 step=2><p>\${n}</p></for>`,
-      ["<Repeat count={4}>", "const n = (2) + __mxIndex * (2);"],
+      ["<Repeat count={4}>", "<p>{2 + __mxIndex * 2}</p>"],
     ],
     [
       "try boundary",

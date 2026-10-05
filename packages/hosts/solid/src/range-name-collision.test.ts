@@ -158,21 +158,57 @@ describe("<for> range bounds are not shadowed by the mapper's own counter", () =
     ).toBe("<ul><b>10</b><b>11</b></ul>");
   });
 
-  it("renders a stepped range over a signal bound on the client (DOM codegen)", () => {
-    // Only the initial render is asserted. A stepped range does not re-render
-    // when a signal bound changes on this host — `<Repeat count={…}>` is given
-    // a count computed from the signal, but the rows are keyed by their own
-    // value and the callback's `const i = from + index * step` is not tracked.
-    // That is a separate, pre-existing reactivity gap (it reproduces on
-    // `main`, where the same template renders `0, 3, 6`), not a name
-    // collision; it is filed as a follow-up rather than fixed here.
+  it("re-renders a stepped range when `from` changes (client)", () => {
     const snapshots = renderDom(
       `<for|i| from=base() to=base()+4 step=2><b>\${i}</b></for>`,
       "const [base, setBase] = createSignal(10);\nglobalThis.__setBase = setBase;",
       "__setBase",
       "20",
     );
-    expect(snapshots[0]).toBe("<ul><b>10</b><b>12</b><b>14</b></ul>");
+    expect(snapshots).toEqual([
+      "<ul><b>10</b><b>12</b><b>14</b></ul>",
+      "<ul><b>20</b><b>22</b><b>24</b></ul>",
+    ]);
+  });
+
+  it("grows and shrinks a stepped range when `to` changes (client)", () => {
+    const fragment = "<for|i| from=0 to=end() step=2><b>${i}</b></for>";
+    const setup =
+      "const [end, setEnd] = createSignal(4);\nglobalThis.__setEnd = setEnd;";
+    expect(renderDom(fragment, setup, "__setEnd", "9")).toEqual([
+      "<ul><b>0</b><b>2</b><b>4</b></ul>",
+      "<ul><b>0</b><b>2</b><b>4</b><b>6</b><b>8</b></ul>",
+    ]);
+    expect(renderDom(fragment, setup, "__setEnd", "1")).toEqual([
+      "<ul><b>0</b><b>2</b><b>4</b></ul>",
+      "<ul><b>0</b></ul>",
+    ]);
+  });
+
+  it("re-renders a stepped range when `step` changes (client)", () => {
+    const snapshots = renderDom(
+      "<for|i| from=0 to=12 step=gap()><b>${i}</b></for>",
+      "const [gap, setGap] = createSignal(4);\nglobalThis.__setGap = setGap;",
+      "__setGap",
+      "3",
+    );
+    expect(snapshots).toEqual([
+      "<ul><b>0</b><b>4</b><b>8</b><b>12</b></ul>",
+      "<ul><b>0</b><b>3</b><b>6</b><b>9</b><b>12</b></ul>",
+    ]);
+  });
+
+  it("re-renders an exclusive (`until`) stepped range when its bound changes (client)", () => {
+    const snapshots = renderDom(
+      "<for|i| from=1 until=end() step=2><b>${i}</b></for>",
+      "const [end, setEnd] = createSignal(5);\nglobalThis.__setEnd = setEnd;",
+      "__setEnd",
+      "9",
+    );
+    expect(snapshots).toEqual([
+      "<ul><b>1</b><b>3</b></ul>",
+      "<ul><b>1</b><b>3</b><b>5</b><b>7</b></ul>",
+    ]);
   });
 
   it("re-renders an unstepped range when a signal bound changes (client)", () => {
