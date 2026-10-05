@@ -10,6 +10,10 @@
 
 - **Added:** the data check reads `package.json#mx.data.imports` (`"pass"` | `"reject"`) and passes it to `parseData`; an invalid value is a positioned error at the value and `"reject"` applies; `imports` joins the known `mx.data` keys.
 
+||||||| parent of 3472ce94d (docs(targets): host-author steps for a third-party host on the data target, and changelogs)
+- **Fix (third-party-data-host, decision 148):** a loaded descriptor's own `defaultTag` and `host.defaultTag` are checked against the names its declarations provide (`HostDeclarations.builtinTags`) in addition to its lookup, so a host on the data target keeps data's `object` instead of being refused with "`<object>` is not an element of this target". A value no lookup, custom tag or `builtinTags` entry covers is still the same positioned error.
+- **Changed:** a loaded host's file kinds are part of the project lookup (`lookupFor(policy)`): the `mx.<target>.defaultTag` key a file of such a kind reads follows the lookup, not the built-ins, and its `readCalleeInput` is registered into this core. A whole-file kind (no `compileRegion`) is never a region kind.
+
 - **Added (bridge-host, decision 154):** a file kind is a region kind because it has a `compileRegion`, not because its segment is `solid`: `builtinFileKinds` derives `pipeline: "region"` from it, and `regionFileKinds(lookup?)`, `regionFileKind(file, lookup?)` and `regionCompileFor(file, options)` route a `.<segment>.mx` file to its host's region entry through any lookup, `lookupFor(policy)` included. An unregistered `.<word>.mx`, and a file kind without a region entry, are never region files. `regionKindCompile(kind, options)` is the same hook for a kind already in hand (the TS plugin's per-kind plugins).
 
 - **Fix (default-tag-contracts r3):** a target's declarations decide whether contracts may declare `defaultTag`, host or not: a target with no host that forbids it is refused too (naming the target), and a host whose declarations permit it is no longer refused.

@@ -6,6 +6,8 @@
 
 - **Added:** `mx-tsc`'s data check honours `package.json#mx.data.imports` (`"pass"` | `"reject"`; invalid value: error at the value, strict).
 
+- **Tests (third-party-data-host, decision 148):** `mx-tsc` accepts a valid `.mesh.mx` file of a third-party host on the data target, fails on a data error positioned in the file, and reports an invalid host `defaultTag` once.
+
 - **Changed (bridge-host, decision 154):** the extra extensions and region plugins come from the registry's file kinds (`moduleFileExtensions()`, `createRegionLanguagePlugins`) instead of a literal `.solid.mx`; same list and order today.
 
 - **Tests (name-sugar-default-value):** host-dispatch row `sugar-default-value` (preact: the sugar tokens and each value expression map exactly); `sugar-value` is now the second-default-value error row.

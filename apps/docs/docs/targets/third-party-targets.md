@@ -52,7 +52,7 @@ The loader is synchronous: no top-level `await`, and relative imports need expli
 `defaultTag` is missing: the tag `<#id>`/`<.class>` stands for on this target, expected a string
 ```
 
-The name has to be a tag of your target: the registry checks a loaded descriptor's `defaultTag` (and `host.defaultTag`) against the Marko lookup built from your `translator`, and a name that lookup does not know is an error at the `mx.target` value naming the owner. The optional `parseTranslator` is the Marko translator whose taglib answers how a tag parses (void, text, whitespace-preserving) in your compiles; absent means `translator`, or the default target's, answers. It is used for this check only, never for the mapping pass.
+The name has to be a tag of your target: the registry checks a loaded descriptor's `defaultTag` (and `host.defaultTag`) against the Marko lookup built from your `translator`, plus the names your `declarations.default.builtinTags` lists, and a name neither knows is an error at the `mx.target` value naming the owner. The optional `parseTranslator` is the Marko translator whose taglib answers how a tag parses (void, text, whitespace-preserving) in your compiles; absent means `translator`, or the default target's, answers. It is used for this check only, never for the mapping pass.
 
 **`TargetHost.defaultTag?`.** Optional, on the descriptor's `host` part: a host that emits the shorthand as something other than its target's built-in. It outranks the target's `defaultTag` and is outranked by the package's `mx.<target>.defaultTag` and by a parent contract.
 
@@ -77,7 +77,48 @@ resolveDefaultTag(node, parents: readonly DefaultTagParent[], context: DefaultTa
 - `context.contractRung` is `false` when your declarations set `allowContractDefaultTag: false`; `contractDefaultTag` honours it.
 - `context.scope` carries what the compile can say about reachable names (custom tags, Marko's lookup, the host's `isElement`); `contractDefaultTag` uses it to check the contract's value, and returns `undefined` for a rejected one so the next rung answers. `context.onContractRejected` is how the use-site error learns the declaration was the problem.
 
+**`HostDeclarations.builtinTags?`.** Optional list, on `declarations.default`: the tag names your target provides without a taglib entry (the data target's anonymous `object`). The registry counts them as reachable when it checks `defaultTag` and `host.defaultTag`, so a descriptor that reuses a target's declarations keeps the target's built-in with no literal of its own. A name no taglib, custom tag or `builtinTags` entry covers is still an error.
+
 **`contractDefaultTag(parents, context, builtins?)`** is the exported helper for rung 1: the nearest authored parent's declared `defaultTag` (reading attribute-tag declarations at any depth, skipping control flow by the tag's own definition, never climbing past a parent that declares none), or `undefined`. `builtins` lists names your target provides without a taglib entry. The same module exports `validateDefaultTag(name, scope)` (the reason a value is invalid, or `undefined`), used by the registry for every rung.
+### A host on the data target
+
+A host can be built on the [data target](/targets/data/) and name its own file kind. This is how Mesh ships `.mesh.mx` (decision 148): a package `@acme/mx-mesh` whose descriptor reuses data's declarations, keeps data's `defaultTag` (`object`), and compiles through data's own compile.
+
+```js
+// @acme/mx-mesh/index.cjs
+const data = require("@mxlang/data").default; // the data target's descriptor
+
+module.exports = {
+  descriptorVersion: 0,
+  name: "mesh-data",
+  packageName: "@acme/mx-mesh",
+  defaultTag: data.defaultTag, // `object`, data's built-in
+  declarations: data.declarations, // carries builtinTags: ["object"] and the permit flag
+  get parseTranslator() {
+    return data.parseTranslator;
+  },
+  host: {
+    name: "mesh",
+    // optional: outranks the target's built-in, outranked by package config and a parent contract
+    // defaultTag: "node",
+    fileKinds: [{ segment: "mesh", diagnosticSource: "mesh" }], // `.mesh.mx`
+  },
+  load(core) {
+    return data.load(core); // or wrap it: add your own checks, then delegate
+  },
+};
+```
+
+The project selects it with `mx.host`:
+
+```json
+{ "name": "my-app", "mx": { "host": "@acme/mx-mesh" } }
+```
+
+- **`defaultTag`** keeps data's `object` because `builtinTags` travels with the declarations; a host override (`host.defaultTag`) or `mx.mesh-data.defaultTag` follows the [ladder](#the-unnamed-tag), and an override the target cannot reach is the same positioned error as on any target. Set `allowContractDefaultTag: false` on a copy of the declarations to forbid the parent-contract rung.
+- **`fileKinds`** is checked like a built-in's: a segment is one lowercase word with no dot and never `mx`, needs a `diagnosticSource`, and is refused when another host already owns it (`file-kind segment "x" is declared more than once (host "a" and host "b")`). A kind without `compileRegion` is a **whole-file** kind: `post.mesh.mx` compiles whole-file on the host's target, never through the region bridge. A kind's `readCalleeInput` is registered into the tool's core when the project loads the descriptor.
+- **Tools.** The registry, language server, Vite plugin, `mx-tsc` and the TypeScript plugin all resolve `post.mesh.mx` through `mx.host`, compile it through the descriptor's `load`, and report data's errors positioned in the file.
+
 ### Use the injected core
 
 The tool passes its own `@mxlang/core` to `load(core)`. Use it. That gives you the tool's scan cache and its unsaved-buffer overrides (so a callee edited in the editor is seen before it is saved), and one `TranslateError` class. A target that imports its own copy still works, and a positioned error it throws stays positioned (the class is recognised by a `Symbol.for` brand, not `instanceof`); declare `@mxlang/core` as a **peer** dependency in that case, so the project installs one copy.
@@ -103,7 +144,7 @@ The language server shows them on the document, linked to the key in `package.js
 
 ### What a third-party target cannot do yet
 
-- **No file kinds.** A descriptor with `host.fileKinds` is rejected: `mx.target "@acme/mx-vue" cannot be registered next to the built-in targets: file kinds are supported for built-in targets only (for now).` Reader registration, `hostModuleSegment` and editor wiring exist only for built-ins (TODO `third-party-file-kinds`). Page `.mx` files are fully supported.
+- **No region file kinds in the editor.** A loaded host may declare `host.fileKinds` (see [A host on the data target](#a-host-on-the-data-target)): the segment is validated like a built-in's, joins the project's lookup and routes whole-file on the host's target. A kind that carries a `compileRegion` (TypeScript with MX regions) is routed by the registry, the language server and Vite from the project's lookup, but the TypeScript plugin builds its region plugins once from the built-ins, so a third-party region kind gets no editor type-checking yet.
 - **No joining a built-in host.** A descriptor naming `solid`, `react`, or any other built-in host is rejected: `host "solid" belongs to the built-in targets; a third-party target cannot join it (for now)`. Pick your own host name (TODO `third-party-join-builtin-host`).
 
 Two loaded packages that name the same host agree under `mx.host` / `mx.target`, and a bare `mx.host: "vue"` beside `mx.target: "@acme/mx-vue"` (whose host is `vue`) selects it without an unknown-host warning.

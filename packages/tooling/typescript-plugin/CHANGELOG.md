@@ -2,6 +2,10 @@
 
 - **Tests (render-consumers, decision 155):** `tsserver-load.test.ts` pins the signature wording of an html unit's default export in diagnostics again (reverts PR 1's `typeof Comp`).
 
+## Unreleased
+
+- **Tests (third-party-data-host, decision 148):** a third-party host on the data target (`.mesh.mx`) is claimed as a whole-file `.mx`, compiles through the host's descriptor and reports data's errors at their offset. No code change.
+
 - **Fix (reserve-mx-identifiers):** a `TranslateError` carrying a position but no Babel `loc` — the Solid and Angular module-binding paths, including the reserved-`__mx` diagnostic — now lands at its real line and column instead of offset 0. Errors that already carry a Babel `loc` are unchanged.
 
 ## 0.1.0 (unreleased)

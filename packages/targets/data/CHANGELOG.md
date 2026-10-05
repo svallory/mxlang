@@ -13,6 +13,11 @@
 
 - **Added:** `parseData` option `imports: "pass" | "reject"` (default: the effective `structural` value). With `structural: "reject"` and `imports: "pass"`, control flow, `export` and `static` stay rejected and the tree gains `imports: DataImport[]` (`{ code, span }`, each top-level `import` verbatim, file order, UTF-16 spans); those imports leave `statements`. `structural: "pass"` with `imports: "reject"` rejects only imports. `DataImport` is exported; additive.
 
+||||||| parent of 3472ce94d (docs(targets): host-author steps for a third-party host on the data target, and changelogs)
+## Unreleased
+
+- **Added (third-party-data-host, decision 148):** the data declarations list `builtinTags: ["object"]`, so a third-party host built on data (Mesh) that reuses them keeps `object` as its `defaultTag` and may override it per the decision 145 ladder.
+
 ## 0.1.0-alpha.3
 
 - **Changed (decision 159):** `@marko/compiler` is no longer a dependency. The scan and the data taglib use `@mxlang/core`'s `markoCompiler()`, so data parses with core's bundled Marko front end and MX's own template parser: after-value sugar (`<field type="email" :email/>`) works in a registry install. Requires `@mxlang/core` 0.1.0-alpha.3.

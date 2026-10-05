@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Changed (third-party-data-host, decision 148):** a third-party host on the data target (`.mesh.mx`) resolves with no diagnostics and compiles whole-file through the host's descriptor; data's errors are positioned in the file. `tsconfig.json` roots at the repo for the shared fixtures; the build config keeps `src`.
+
 - **Changed (bridge-host, decision 154):** a region file is routed by suffix through the document's own lookup (`lookupFor(policy)`) to the host whose file kind has a region entry; the file is printed with `mx: true`. `REGION_LANGUAGE_IDS` added; `SOLID_MX_LANGUAGE_IDS` kept as its alias. An unregistered `.<word>.mx` and a third-party host's file (`.mesh.mx`) compile whole-file under the page policy, as before.
 
 - **Changed (solid-rename, decision 154):** the Solid file kind accepts the language ids `solidmx` and `solid`; `SolidMX` is no longer recognised. Zed now sends `solid` because its LSP id is the lowercased language name, and the Zed language is renamed from `SolidMX` to `Solid`. Settings keyed by `"SolidMX"` must use `"Solid"`.
