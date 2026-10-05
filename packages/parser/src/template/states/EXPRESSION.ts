@@ -17,6 +17,12 @@ export interface ExpressionMeta extends Meta {
   /** MX: the expression is a named attribute's (or spread's) value. */
   attrValue: boolean;
   /**
+   * MX (decision 146 addendum 5): the expression is a default attribute's
+   * value, which is exempt from the after-value rule unless it is one single
+   * atom: an atom takes no member access, so ` :name` after it is sugar.
+   */
+  defaultAtom: boolean;
+  /**
    * MX (decision 156): `:name` here is an atom where an expression is
    * expected. Set for attribute values, spreads and arguments, tag
    * arguments, placeholders, method-shorthand bodies (an attribute value,
@@ -96,6 +102,7 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
       shouldTerminate,
       operators: false,
       attrValue: false,
+      defaultAtom: false,
       atoms: false,
       atomEnd: -1,
       comments: undefined,
@@ -603,6 +610,24 @@ function lookBehindForOperator(
   }
 }
 
+/**
+ * MX (decision 146 addendum 5): a default attribute's value that is exactly
+ * one atom so far (`=:Customer`, not `=:a + :b` or `=:a.b`), with only
+ * whitespace between it and `pos`.
+ */
+function isSingleAtomDefault(
+  expression: ExpressionMeta,
+  data: string,
+  pos: number,
+): boolean {
+  return (
+    expression.defaultAtom &&
+    data.charCodeAt(expression.start) === CODE.COLON &&
+    expression.atomEnd === atomNameEnd(data, expression.start + 1) &&
+    lookAheadWhile(isWhitespaceCode, data, expression.atomEnd) === pos
+  );
+}
+
 function lookAheadForOperator(
   expression: ExpressionMeta,
   data: string,
@@ -632,7 +657,8 @@ function lookAheadForOperator(
     case CODE.COLON:
       // MX: in an attribute value, ` :name` (no open `?`) or a bare `:` before
       // the end of the tag or line starts a new attribute.
-      return expression.attrValue &&
+      return (expression.attrValue ||
+        isSingleAtomDefault(expression, data, pos)) &&
         !expression.ternaryDepth &&
         (isIdentStartCode(data.charCodeAt(pos + 1)) ||
           isBareColonEnd(data, pos + 1))

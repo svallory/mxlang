@@ -196,15 +196,43 @@ describe("Mesh's syntax-v3 lines", () => {
     ]);
   });
 
-  it("an atom default value then `:name` is the decision-151 error (not supported yet)", () => {
-    // `belongs-to=:Customer :customer`: sugar right after a *default* value is
-    // exempt from the after-value split (decision 151, ruling 2). Open for the
-    // lead; see the PR 1 core report.
-    const result = parseData("x\n  belongs-to=:Customer :customer\n", "/t.mx");
+  // Decision 146 addendum 5: a default value that is a single atom takes a
+  // following ` :name` as name sugar (an atom takes no member access).
+  it.each([
+    [
+      "x\n  belongs-to=:Customer :customer\n",
+      "belongs-to value=:Customer name=:customer",
+    ],
+    ["x\n  has-many=:Order :orders\n", "has-many value=:Order name=:orders"],
+    ["<x><has-many=:Order :orders/></x>", "has-many value=:Order name=:orders"],
+    [
+      "x\n  belongs-to=:Customer :customer required\n",
+      "belongs-to value=:Customer name=:customer required",
+    ],
+  ] as const)(
+    "a single-atom default value then `:name` is name sugar: %j",
+    (source, line) => {
+      const result = parseData(source, "/t.mx");
+      expect(result.diagnostics).toEqual([]);
+      const tag = tags(ok(source).children).find((t) => t.name !== "x")!;
+      const attrs = tag.attrs.map(
+        (a) => `${a.name}=${shape(a).split("=").slice(1).join("=")}`,
+      );
+      expect(`${tag.name} ${attrs.join(" ")}`.replace(/=$/, "")).toBe(line);
+    },
+  );
+
+  it("a non-atom default value then `:name` is still the decision-151 error", () => {
+    const result = parseData("x\n  belongs-to=a :customer\n", "/t.mx");
     expect(result.diagnostics[0]?.message).toContain(
       "right after a default value is not supported",
     );
-    expect(result.diagnostics[0]).toMatchObject({ line: 2, column: 23 });
+    expect(result.diagnostics[0]).toMatchObject({ line: 2, column: 15 });
+  });
+
+  it("`:name` after a single-atom value on a non-default attribute is unchanged", () => {
+    const result = parseData("x\n  tag y=:a :b\n", "/t.mx");
+    expect(result.diagnostics).toEqual([]);
   });
 });
 

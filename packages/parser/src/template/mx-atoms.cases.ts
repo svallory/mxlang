@@ -234,6 +234,28 @@ export const ATOMS: [string, string][] = [
   ["<div:b x=[:c]/>", '<div:b> @x atom(c@10-12) ="[0.]"'],
   ["<div x=:a .b/>", '<div> @x atom(a@7-9) ="0." @.b'],
   ["div x=:a :b", '<div> @x atom(a@6-8) ="0." @:b'],
+  // Decision 146 addendum 5: a default attribute whose value is a single atom
+  // takes a following ` :name` as sugar (an atom takes no member access).
+  ["<has-many=:X :y/>", '<has-many> @ atom(X@10-12) ="0." @:y'],
+  ["has-many=:X :y", '<has-many> @ atom(X@9-11) ="0." @:y'],
+  [
+    "<has-many=:X :y required/>",
+    '<has-many> @ atom(X@10-12) ="0." @:y @required',
+  ],
+  ["<has-many=:X  :y/>", '<has-many> @ atom(X@10-12) ="0." @:y'],
+  [
+    "<belongs-to=:Customer :customer/>",
+    '<belongs-to> @ atom(Customer@12-21) ="0.0000000" @:customer',
+  ],
+  // Every other default value keeps decision 151 ruling 2.
+  ["<has-many=a :y/>", '<has-many> @ ="a :y"'],
+  [
+    "<has-many=:X + :y/>",
+    '<has-many> @ atom(X@10-12) atom(y@15-17) ="0. + 0."',
+  ],
+  ["<has-many=:X.y :z/>", '<has-many> @ atom(X@10-12) ="0..y :z"'],
+  // The exception is the default attribute's only.
+  ["<const/x=(a) :T => a/>", '<const> var:"x" @ ="(a) :T => a"'],
   // Review round 5 (PR #342): a comparison or shift `>` and a unary run of
   // `!` still expect an expression; a numeric literal never carries
   // TypeScript's `?` marker (N2).

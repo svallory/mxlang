@@ -324,6 +324,44 @@ describe("the name sugar keeps atom-ness (addendum 1, item 2)", () => {
     });
   });
 
+  // Decision 146 addendum 5: a default attribute whose value is a single atom
+  // takes a following ` :name` as sugar, concise and HTML, with more after.
+  it.each([
+    ["<belongs-to=:Customer :customer/>", ["Customer", "customer"]],
+    ["belongs-to=:Customer :customer", ["Customer", "customer"]],
+    ["<has-many=:X  :y/>", ["X", "y"]],
+    ["<belongs-to=:Customer :customer required/>", ["Customer", "customer"]],
+    ["belongs-to=:Customer :customer required", ["Customer", "customer"]],
+  ])(
+    "a single-atom default value plus the sugar: %j",
+    (source, [value, name]) => {
+      const [first, second] = firstElement(source).attrs;
+      expect(first).toMatchObject({
+        name: "value",
+        value,
+        atom: { name: value },
+      });
+      expect(second).toMatchObject({
+        name: "name",
+        value: name,
+        atom: { name },
+      });
+      expect(firstElement(source).attrs).toHaveLength(
+        source.includes("required") ? 3 : 2,
+      );
+    },
+  );
+
+  // The raw parser failure; core turns it into the positioned ruling-2 error
+  // (stock-parser.test.ts). `<const/x=(a) :T => a/>` stays a type annotation
+  // (parser case table).
+  it.each(["<has-many=a :y/>", "<has-many=:X.y :z/>"])(
+    "every other default value keeps ruling 2: %j",
+    (source) => {
+      expect(() => firstElement(source)).toThrow("found `:` after it");
+    },
+  );
+
   it("`#id` and `.class` are not atoms", () => {
     const element = firstElement("<input#main.big/>");
     for (const a of element.attrs) expect("atom" in a).toBe(false);

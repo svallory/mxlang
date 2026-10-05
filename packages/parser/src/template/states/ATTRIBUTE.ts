@@ -115,6 +115,9 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
         const expr = this.enterState(STATE.EXPRESSION);
         // MX: a default attribute (no name) is exempt from the after-value rule.
         expr.attrValue = !!(attr.name || attr.spread);
+        // MX (decision 146 addendum 5): except that a single-atom default
+        // value is followed by name sugar.
+        expr.defaultAtom = !expr.attrValue;
         expr.atoms = true; // MX: decision 156
         expr.operators = true;
         expr.terminatedByWhitespace = true;

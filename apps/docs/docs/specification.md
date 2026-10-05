@@ -754,7 +754,7 @@ explicit `value:x`), a dynamic tag name
 **default attribute**: sugar right after a default value (`<if=a .b>`,
 `<const/x=items\n  .filter()/>`) keeps Marko's meaning, and `:name` there is one
 error ("sugar right after a default value is not supported (decision 151,
-ruling 2); put it before the value or on the tag") on every parser.
+ruling 2); put it before the value or on the tag") on every parser. The one exception is a default value that is a single atom: `belongs-to=:Customer :customer` is `value` (the atom `Customer`) plus `name` (the atom `customer`), since an atom takes no member access (decision 146, addendum 5).
 
 **Hosts.** Every host applies the sugar, Angular included (decision 146,
 addendum 3). The one host-owned exception is attribute-position `#x` on Angular,
@@ -825,9 +825,7 @@ included. An atom nested in an expression is a `StringLiteral` whose
 `extra.mxAtom` is `{ span }` and whose `Expr.atoms` lists it (see
 [the IR spec](/architecture/ir-spec/)).
 
-**Not yet:** an atom default value followed by `:name` (`belongs-to=:Customer
-:customer`) is the decision-151 "right after a default value" error; contracts
-over atoms (`{ type: "atom" }`, `ref`, `declares`) are Phase B PR 2.
+**Not yet:** contracts over atoms (`{ type: "atom" }`, `ref`, `declares`) are Phase B PR 2.
 
 ### The unnamed tag
 
