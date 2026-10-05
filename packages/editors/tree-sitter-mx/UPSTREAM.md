@@ -171,9 +171,10 @@ is MX's own (decision 151 ruling 2, decision 146 addendum 5):
 - `src/scanner.c`: the after-value sugar rule (`src/scanner.c`'s
   `ExprCfg.split_at_shorthand`, from patch 0001) no longer applies to the tag's
   **default** attribute value, so `<if=a .b>` is member access and
-  `<a=1 .d=2/>` one value, as in core. `attr_default_value` is set at the `=`
-  (or a nameless `:=`) that starts the value and cleared by a spread and by a
-  name scanned before it, and it is serialized with the rest of the tag state.
+  `<a=1 .d=2/>` one value, as in core. `attr_default_value` is recomputed at
+  every `=` or `:=` that starts a value (true only when no attribute name was
+  scanned before it) and zeroed by a spread, and it is serialized with the
+  rest of the tag state.
 - `src/scanner.c`: the one exception is decision 146 addendum 5: a default
   value that is a **single atom** still ends at `:name`
   (`belongs-to=:Customer :customer`). `after_single_atom` reads it off the
