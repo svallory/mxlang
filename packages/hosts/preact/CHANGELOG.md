@@ -1,5 +1,7 @@
 # @mxlang/preact
 
+- **Added (preact-region, decision 154):** `.preact.mx`, TSX with MX regions on Preact, is a built-in region file kind (segment `preact`, language id `preactmx`, diagnostic source `preactmx`): `compilePreactRegion` (exported; `targets` defaults to the package's own lookup) is the shared `compileJsxRegion` with Preact's dialect and the new `preactRegionDeclarations`, wired through the descriptor's `fileKinds` with the shared `readJsxCalleeInput` reader. **Behaviour change:** a `*.preact.mx` file stops being a whole-file `.mx`; a region renders what the same markup renders in a whole-file Preact `.mx`. Whole-file output is unchanged.
+
 - **Added (react-region, decision 154):** the shared JSX region engine, `compileJsxRegion` (`@mxlang/preact/region`), which every JSX host wraps for its `.<segment>.mx` file kind, and `readJsxCalleeInput` (`@mxlang/preact/callee-reader`), their one callee reader (new dependency on `@mxlang/parser`). `createJsxDeclarations(name, { region: true })` is the region variant of the reactive-tag errors, naming only the hook in the surrounding component; whole-file messages and output are unchanged.
 
 - **Fix (html-imported-return-tag-object-object):** an imported `.mx` tag that declares `<return>`, called without `/var`, renders its body and drops the value on this host too (the call now carries `returnsValue`, so the shared emitter unwraps `.output`). Render-locked by `imported-return-render.test.ts`.

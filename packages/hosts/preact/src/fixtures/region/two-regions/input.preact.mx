@@ -1,0 +1,10 @@
+function Header(props: { text: string }) {
+  return <h1 class={ big: true }>${props.text}</h1>;
+}
+
+export default function Page() {
+  return (<>
+    <Header text="hi"/>
+    <p class={ small: true }>second</p>
+  </>);
+}

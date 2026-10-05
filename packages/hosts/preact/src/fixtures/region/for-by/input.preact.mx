@@ -1,0 +1,11 @@
+type Item = { id: string; name: string };
+
+export default function Page(props: { items: Item[] }) {
+  return (<>
+    <ul>
+      <for|item, index| of=props.items by="id">
+        <li data-index=index>${item.name}</li>
+      </for>
+    </ul>
+  </>);
+}

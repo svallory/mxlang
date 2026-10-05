@@ -1,0 +1,6 @@
+export default function Page(props: { active: boolean }) {
+  return (<>
+    <p class={ on: props.active, off: !props.active } style={ color: "red" }>x</p>
+    <label for="n" class=["a", props.active && "b"]>n</label>
+  </>);
+}

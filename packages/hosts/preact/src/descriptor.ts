@@ -58,7 +58,29 @@ const descriptor: TargetDescriptor = {
         }),
     };
   },
-  host: { name: "preact" },
+  host: {
+    name: "preact",
+    fileKinds: [
+      {
+        segment: "preact",
+        // VS Code's language id; Zed's language `PreactMX` lowercases to it.
+        languageIds: ["preactmx"],
+        diagnosticSource: "preactmx",
+        compileRegion: (source, input) =>
+          (
+            require("./region-compile.ts") as typeof import("./region-compile.ts")
+          ).compilePreactRegion(source, {
+            ...input,
+            targets: input.targets ?? targets(),
+          }),
+        // The JSX hosts' one reader, in this package.
+        readCalleeInput: (request) =>
+          (
+            require("./callee-reader.ts") as typeof import("./callee-reader.ts")
+          ).readJsxCalleeInput(request),
+      },
+    ],
+  },
 };
 
 export default descriptor;

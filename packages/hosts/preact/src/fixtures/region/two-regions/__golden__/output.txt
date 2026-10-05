@@ -1,0 +1,10 @@
+import { mxClass as __mxClass } from "@mxlang/preact/runtime";function Header(props: {text: string;}) {
+  return <><h1 class={__mxClass({ big: true })}>{props.text}</h1></>;
+}
+
+export default function Page() {
+  return <>
+    <><Header text="hi" /></>
+    <><p class={__mxClass({ small: true })}>second</p></>
+  </>;
+}

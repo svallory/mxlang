@@ -1,0 +1,7 @@
+export default function Page(props: { tag: string }) {
+  return (<>
+    <badge label="new"/>
+    <${props.tag} class="dyn">dynamic</>
+    <textarea value="t"/>
+  </>);
+}

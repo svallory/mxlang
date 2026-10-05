@@ -79,6 +79,11 @@ import {
   host,
 } from "./compile.ts";
 import descriptor from "./descriptor.ts";
+import type { CompileJsxRegionResult } from "./region.ts";
+import {
+  compilePreactRegion as compilePreactRegionWith,
+  type PreactRegionOptions,
+} from "./region-compile.ts";
 
 export type { AttrTagConfig, AttrTagOf } from "@mxlang/core";
 // Re-exported for the hosts built on this emitter (`@mxlang/react`,
@@ -100,6 +105,7 @@ export {
   type JsxDeclarationsOptions,
   PreactEmitter,
   preactDeclarations,
+  preactRegionDeclarations,
 } from "./emitter.ts";
 export {
   type CompileJsxRegionOptions,
@@ -107,6 +113,7 @@ export {
   compileJsxRegion,
   type JsxHoistedImport,
 } from "./region.ts";
+export type { PreactRegionOptions } from "./region-compile.ts";
 export { MxErrorBoundary, MxPlaceholder, mxClass } from "./runtime.ts";
 export type {
   CompilePreactOptions,
@@ -160,6 +167,23 @@ export function compilePreactFile(
   options: CompilePreactOptions = {},
 ): CompileResult {
   return compilePreactFileWith(filename, {
+    ...options,
+    targets: options.targets ?? ownTargets,
+  });
+}
+
+/**
+ * Compiles one MX region of a `.preact.mx` module to a Preact JSX expression.
+ *
+ * A `.preact.mx` file is TypeScript (TSX) with MX regions: hooks and logic
+ * live in the surrounding module, and the parser bridge calls this once per
+ * region. `options.targets` defaults to this package's own lookup.
+ */
+export function compilePreactRegion(
+  source: string,
+  options: Omit<PreactRegionOptions, "targets"> & { targets?: TargetLookup },
+): CompileJsxRegionResult {
+  return compilePreactRegionWith(source, {
     ...options,
     targets: options.targets ?? ownTargets,
   });

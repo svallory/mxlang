@@ -1,0 +1,21 @@
+import type { ComponentChildren } from "preact";
+
+function Card(props: { header?: ComponentChildren; footer?: { content?: ComponentChildren; align: string }; children?: ComponentChildren }) {
+  return (
+    <div class="card">
+      <h2>${props.header}</h2>
+      ${props.children}
+      <if=props.footer><small data-align=props.footer.align>${props.footer.content}</small></if>
+    </div>
+  );
+}
+
+export default function Page() {
+  return (<>
+    <Card>
+      <@header>Items</@header>
+      <@footer align="end">total</@footer>
+      <p>body</p>
+    </Card>
+  </>);
+}

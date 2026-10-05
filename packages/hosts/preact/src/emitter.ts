@@ -300,6 +300,11 @@ export function createJsxDeclarations(
 
 export const preactDeclarations = createJsxDeclarations("Preact");
 
+/** {@link preactDeclarations} for a `.preact.mx` region: hook errors name the surrounding component. */
+export const preactRegionDeclarations = createJsxDeclarations("Preact", {
+  region: true,
+});
+
 /**
  * HTML raw-text elements: the tokenizer reads these bodies without emitting
  * character references, so the browser shows authored `&…` literally and

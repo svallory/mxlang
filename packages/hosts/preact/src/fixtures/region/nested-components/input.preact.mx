@@ -1,0 +1,17 @@
+import type { ComponentChildren } from "preact";
+
+function Outer(props: { title: string; children?: ComponentChildren }) {
+  return <section title=props.title>${props.children}</section>;
+}
+function Inner(props: { label: string }) {
+  return <em>${props.label}</em>;
+}
+
+export default function Page() {
+  return (<>
+    <Outer title="o">
+      <Inner label="one"/>
+      <Outer title="nested"><Inner label="two"/></Outer>
+    </Outer>
+  </>);
+}
