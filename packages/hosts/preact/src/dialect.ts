@@ -49,8 +49,9 @@ export interface JsxDialect {
    * When the doubled leading newline Marko writes (the HTML parser drops a
    * textarea's first one) must be added: `"ssr"` only where no `document`
    * exists (Preact: its client renderer sets the text through the DOM, which
-   * drops nothing), `"always"` (Hono: `hono/jsx` is the string renderer),
-   * `"never"` where the renderer already does it (React).
+   * drops nothing; Hono too: `hono/jsx/dom`'s `render` accepts these nodes
+   * and sets the text through the DOM), `"never"` where the renderer already
+   * does it (React). `"always"` is for a renderer that can only write markup.
    */
   textareaLeadingNewline: "ssr" | "always" | "never";
   /** The prop that sets raw HTML from a sole `$!{expr}` child. */

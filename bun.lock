@@ -318,6 +318,7 @@
       "devDependencies": {
         "@types/bun": "1.4.2",
         "hono": "4.6.20",
+        "jsdom": "30.1.1",
       },
       "peerDependencies": {
         "hono": "4.6.20",

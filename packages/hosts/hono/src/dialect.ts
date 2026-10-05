@@ -12,7 +12,7 @@ export const honoDialect: JsxDialect = {
   classAttr: "class",
   forAttr: "for",
   textareaContent: "children",
-  textareaLeadingNewline: "always",
+  textareaLeadingNewline: "ssr",
   rawHtmlProp: "dangerouslySetInnerHTML",
   rawHtmlValue: (code) => `{ __html: ${code} }`,
   errorBoundaryModule: "hono/jsx",
