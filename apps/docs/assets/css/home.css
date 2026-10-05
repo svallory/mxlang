@@ -343,24 +343,68 @@
   --ts-operator: #56b6c2;
 }
 
-.ts-comment { color: var(--ts-comment); font-style: italic; }
-.ts-keyword { color: var(--ts-keyword); }
-.ts-string { color: var(--ts-string); }
-.ts-type { color: var(--ts-type); }
-.ts-variable { color: var(--ts-variable); }
-.ts-variable-parameter { color: var(--ts-parameter); }
-.ts-tag { color: var(--ts-tag); }
-.ts-attribute { color: var(--ts-attribute); }
-.ts-property { color: var(--ts-property); }
-.ts-label { color: var(--ts-label); }
-.ts-constant { color: var(--ts-constant); }
-.ts-punctuation-bracket { color: var(--ts-punctuation); }
-.ts-punctuation-special { color: var(--ts-special); }
-.ts-punctuation-delimiter { color: var(--ts-punctuation); }
-.ts-function, .ts-function-method { color: var(--ts-function); }
-.ts-function-builtin, .ts-variable-builtin, .ts-constant-builtin,
-.ts-type-builtin { color: var(--ts-builtin); }
-.ts-constructor { color: var(--ts-type); }
-.ts-number { color: var(--ts-number); }
-.ts-string-special { color: var(--ts-string); }
-.ts-operator { color: var(--ts-operator); }
+.ts-comment {
+  color: var(--ts-comment);
+  font-style: italic;
+}
+.ts-keyword {
+  color: var(--ts-keyword);
+}
+.ts-string {
+  color: var(--ts-string);
+}
+.ts-type {
+  color: var(--ts-type);
+}
+.ts-variable {
+  color: var(--ts-variable);
+}
+.ts-variable-parameter {
+  color: var(--ts-parameter);
+}
+.ts-tag {
+  color: var(--ts-tag);
+}
+.ts-attribute {
+  color: var(--ts-attribute);
+}
+.ts-property {
+  color: var(--ts-property);
+}
+.ts-label {
+  color: var(--ts-label);
+}
+.ts-constant {
+  color: var(--ts-constant);
+}
+.ts-punctuation-bracket {
+  color: var(--ts-punctuation);
+}
+.ts-punctuation-special {
+  color: var(--ts-special);
+}
+.ts-punctuation-delimiter {
+  color: var(--ts-punctuation);
+}
+.ts-function,
+.ts-function-method {
+  color: var(--ts-function);
+}
+.ts-function-builtin,
+.ts-variable-builtin,
+.ts-constant-builtin,
+.ts-type-builtin {
+  color: var(--ts-builtin);
+}
+.ts-constructor {
+  color: var(--ts-type);
+}
+.ts-number {
+  color: var(--ts-number);
+}
+.ts-string-special {
+  color: var(--ts-string);
+}
+.ts-operator {
+  color: var(--ts-operator);
+}
