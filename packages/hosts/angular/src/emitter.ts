@@ -613,9 +613,7 @@ function primitiveForm(
   // `[attr.on*]` for security), so `once`/`onto` keep the property binding.
   // Only a plain lowercase attribute name: a camelCase name is a DOM property
   // and an authored `[prop]`/`(event)`/`*directive` spelling is Angular syntax.
-  return /^[a-z][a-z0-9:_.-]*$/.test(name) && !/^on/.test(name)
-    ? "attr"
-    : null;
+  return /^[a-z][a-z0-9:_.-]*$/.test(name) && !/^on/.test(name) ? "attr" : null;
 }
 
 function primitiveExpression(variable: string, form: PrimitiveForm): string {
