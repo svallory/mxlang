@@ -11,7 +11,11 @@
         "from": 0,
         "to": 49
       }
-    ]
+    ],
+    "node": "element",
+    "exact": true,
+    "startsIn": "tag_name_fragment",
+    "endsIn": "statement_expr"
   },
   {
     "id": "import-type",
@@ -25,7 +29,11 @@
         "from": 0,
         "to": 44
       }
-    ]
+    ],
+    "node": "element",
+    "exact": true,
+    "startsIn": "tag_name_fragment",
+    "endsIn": "statement_expr"
   },
   {
     "id": "concise",
@@ -65,7 +73,15 @@
         "to": 43
       }
     ],
-    "covers": ["section.printed", "h3", "p", "-- Concise mode"]
+    "covers": [
+      "section.printed",
+      "h3",
+      "p",
+      "-- Concise mode"
+    ],
+    "node": "element",
+    "startsIn": "tag_name_fragment",
+    "endsIn": "text"
   },
   {
     "id": "input-interface",
@@ -109,7 +125,11 @@
         "from": 0,
         "to": 1
       }
-    ]
+    ],
+    "node": "element",
+    "exact": true,
+    "startsIn": "tag_name_fragment",
+    "endsIn": "statement_expr"
   },
   {
     "id": "static",
@@ -123,7 +143,11 @@
         "from": 0,
         "to": 27
       }
-    ]
+    ],
+    "node": "element",
+    "exact": true,
+    "startsIn": "tag_name_fragment",
+    "endsIn": "statement_expr"
   },
   {
     "id": "const",
@@ -137,7 +161,11 @@
         "from": 0,
         "to": 49
       }
-    ]
+    ],
+    "node": "element",
+    "exact": true,
+    "startsIn": "open_tag_start",
+    "endsIn": "open_tag_end_self"
   },
   {
     "id": "let",
@@ -151,7 +179,11 @@
         "from": 0,
         "to": 30
       }
-    ]
+    ],
+    "node": "element",
+    "exact": true,
+    "startsIn": "open_tag_start",
+    "endsIn": "open_tag_end_self"
   },
   {
     "id": "define",
@@ -181,7 +213,16 @@
         "to": 9
       }
     ],
-    "covers": ["<define/Row|label, value|>", "<dt>", "<dd>", "</define>"]
+    "covers": [
+      "<define/Row|label, value|>",
+      "<dt>",
+      "<dd>",
+      "</define>"
+    ],
+    "node": "element",
+    "exact": true,
+    "startsIn": "open_tag_start",
+    "endsIn": "close_tag_end"
   },
   {
     "id": "html-comment",
@@ -195,7 +236,11 @@
         "from": 0,
         "to": 55
       }
-    ]
+    ],
+    "node": "html_comment",
+    "exact": true,
+    "startsIn": "html_comment",
+    "endsIn": "html_comment"
   },
   {
     "id": "tag-adjacent",
@@ -209,7 +254,10 @@
         "from": 0,
         "to": 28
       }
-    ]
+    ],
+    "node": "element",
+    "startsIn": "open_tag_start",
+    "endsIn": "open_tag_end"
   },
   {
     "id": "escaped",
@@ -223,7 +271,10 @@
         "from": 28,
         "to": 62
       }
-    ]
+    ],
+    "node": "element",
+    "startsIn": "placeholder_start",
+    "endsIn": "text"
   },
   {
     "id": "boolean-attr",
@@ -237,12 +288,16 @@
         "from": 57,
         "to": 65
       }
-    ]
+    ],
+    "node": "attr_name",
+    "exact": true,
+    "startsIn": "attr_name",
+    "endsIn": "attr_name"
   },
   {
     "id": "attr-expression",
     "label": "expression attribute",
-    "note": "`name=expr` takes any expression, and a bare `>` would end the tag \u2014 so a comparison goes in parentheses.",
+    "note": "`name=expr` takes any expression, and a bare `>` would end the tag — so a comparison goes in parentheses.",
     "href": "/language/errors/#errors-an-ambiguous-in-an-attribute-value",
     "match": "data-high-value=(product.price > 30)",
     "ranges": [
@@ -251,7 +306,10 @@
         "from": 20,
         "to": 56
       }
-    ]
+    ],
+    "node": "element",
+    "startsIn": "attr_name",
+    "endsIn": "attr_value_expr"
   },
   {
     "id": "attr-spread",
@@ -265,7 +323,11 @@
         "from": 54,
         "to": 66
       }
-    ]
+    ],
+    "node": "attr_spread",
+    "exact": true,
+    "startsIn": "attr_spread",
+    "endsIn": "attr_value_expr"
   },
   {
     "id": "attr-static",
@@ -279,7 +341,10 @@
         "from": 8,
         "to": 19
       }
-    ]
+    ],
+    "node": "element",
+    "startsIn": "attr_name",
+    "endsIn": "attr_value_expr"
   },
   {
     "id": "structured-style",
@@ -293,7 +358,10 @@
         "from": 57,
         "to": 92
       }
-    ]
+    ],
+    "node": "element",
+    "startsIn": "attr_name",
+    "endsIn": "attr_value_expr"
   },
   {
     "id": "if-chain",
@@ -348,7 +416,15 @@
         "to": 7
       }
     ],
-    "covers": ["<if=", "<else if=", "<else>", "</else>"]
+    "covers": [
+      "<if=",
+      "<else if=",
+      "<else>",
+      "</else>"
+    ],
+    "node": "document",
+    "startsIn": "open_tag_start",
+    "endsIn": "close_tag_end"
   },
   {
     "id": "for",
@@ -363,7 +439,13 @@
         "to": 28
       }
     ],
-    "covers": ["<for|product, i|", "of=shown"]
+    "covers": [
+      "<for|product, i|",
+      "of=shown"
+    ],
+    "node": "element",
+    "startsIn": "open_tag_start",
+    "endsIn": "open_tag_end"
   },
   {
     "id": "custom-tag",
@@ -377,7 +459,10 @@
         "from": 6,
         "to": 18
       }
-    ]
+    ],
+    "node": "element",
+    "startsIn": "open_tag_start",
+    "endsIn": "tag_name_fragment"
   },
   {
     "id": "attr-tag",
@@ -392,7 +477,14 @@
         "to": 75
       }
     ],
-    "covers": ["<@badge>", "</@badge>"]
+    "covers": [
+      "<@badge>",
+      "</@badge>"
+    ],
+    "node": "element",
+    "exact": true,
+    "startsIn": "open_tag_start",
+    "endsIn": "close_tag_end"
   },
   {
     "id": "attr-tag-params",
@@ -407,12 +499,19 @@
         "to": 77
       }
     ],
-    "covers": ["<@price|amount|>", "</@price>"]
+    "covers": [
+      "<@price|amount|>",
+      "</@price>"
+    ],
+    "node": "element",
+    "exact": true,
+    "startsIn": "open_tag_start",
+    "endsIn": "close_tag_end"
   },
   {
     "id": "tag-var",
     "label": "tag variable",
-    "note": "`/name` binds the value the callee hands back with `<return>` \u2014 `undefined` here, because the list can be empty.",
+    "note": "`/name` binds the value the callee hands back with `<return>` — `undefined` here, because the list can be empty.",
     "href": "/custom-tags/templates/#template-tags-returning-a-value",
     "match": "<Cheapest/best products=shown/>",
     "ranges": [
@@ -421,7 +520,11 @@
         "from": 0,
         "to": 31
       }
-    ]
+    ],
+    "node": "element",
+    "exact": true,
+    "startsIn": "open_tag_start",
+    "endsIn": "open_tag_end_self"
   },
   {
     "id": "raw",
@@ -435,6 +538,10 @@
         "from": 11,
         "to": 70
       }
-    ]
+    ],
+    "node": "placeholder",
+    "exact": true,
+    "startsIn": "placeholder_start_raw",
+    "endsIn": "placeholder_end"
   }
 ]

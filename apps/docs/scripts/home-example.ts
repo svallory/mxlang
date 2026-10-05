@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 import type { MxWarning } from "@mxlang/core";
 import { scanCached } from "@mxlang/core";
 import { compileFile, htmlTargets } from "@mxlang/html";
-import { codeToTokens } from "shiki";
+import { escapeHtml, parseMx, renderMx } from "../plugins/mx-highlight.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -65,6 +65,23 @@ export interface Marker {
    * Naming the constructs closes that gap: the build fails instead.
    */
   covers?: string[];
+  /**
+   * The node assertion: the type of the smallest named syntax node that
+   * contains the whole marked region, in the tree-sitter MX grammar.
+   *
+   * A marker's line/column ranges are sub-node on purpose (a marker may cover
+   * `class="row"` inside an element), so ranges cannot be node ranges. They
+   * are tied to the tree instead: when an edit moves a range onto a different
+   * construct, the enclosing node changes type and the build fails. See
+   * `validateNodes`.
+   */
+  node: string;
+  /** The region is exactly that node: same start, same end. */
+  exact?: boolean;
+  /** The smallest named node containing the region's first character. */
+  startsIn: string;
+  /** The smallest named node containing the region's last character. */
+  endsIn: string;
 }
 
 /**
@@ -153,6 +170,10 @@ const MARKER_KEYS = new Set([
   "match",
   "ranges",
   "covers",
+  "node",
+  "exact",
+  "startsIn",
+  "endsIn",
 ]);
 
 /**
@@ -247,89 +268,116 @@ export function compileExample(): { code: string; warnings: MxWarning[] } {
   return { code, warnings };
 }
 
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+/** The offset of each line's first character in `source`. */
+function lineStarts(lines: string[]): number[] {
+  const starts: number[] = [];
+  let offset = 0;
+  for (const line of lines) {
+    starts.push(offset);
+    offset += line.length + 1;
+  }
+  return starts;
+}
+
+/** A marker's whole region as offsets into the source: first start, last end. */
+function regionOf(
+  starts: number[],
+  marker: Marker,
+): { start: number; end: number } {
+  const first = marker.ranges[0] as MarkerRange;
+  const last = marker.ranges[marker.ranges.length - 1] as MarkerRange;
+  return {
+    start: (starts[first.line - 1] as number) + first.from,
+    end: (starts[last.line - 1] as number) + last.to,
+  };
 }
 
 /**
- * The example, highlighted at build time with Shiki's bundled Marko grammar
- * under the `mx` name.
+ * Check every marker against the syntax tree.
  *
- * Two deliberate choices. `defaultColor: false` leaves every token carrying
- * `--shiki-light` and `--shiki-dark`, which `assets/css/home.css` resolves
- * against `html[data-theme]` — so the theme switch needs no JavaScript and no
- * second copy of the block. And the marked regions are wrapped here rather
- * than through Shiki's `decorations`, whose `end` position must land inside a
- * token: a marker that ends at a line's last character silently produced an
- * empty wrapper, which is the one bug a landing page cannot ship.
+ * `match` and `covers` prove the text is still the text; this proves the text
+ * is still the *construct*: the smallest named node around the region, the
+ * node at its first character and the node at its last must all be the types
+ * the marker names, and `exact` regions must equal their node. A range that
+ * drifts off its construct changes one of those types and fails the build.
  */
-export async function highlightExample(
-  source: string,
-  markers: Marker[],
-): Promise<string> {
-  const lines = source.split("\n");
-  const { tokens } = await codeToTokens(source, {
-    lang: "marko",
-    themes: { light: "github-light", dark: "github-dark" },
-    defaultColor: false,
-  });
-
-  /** Which marker owns each column, per 0-based line index. */
-  const owners = new Map<number, string[]>();
+export function validateNodes(source: string, markers: Marker[]): string[] {
+  const errors: string[] = [];
+  const tree = parseMx(source);
+  if (tree.rootNode.hasError) {
+    errors.push(
+      `the example has syntax errors in the tree-sitter grammar: ${tree.rootNode.toString().slice(0, 300)}`,
+    );
+  }
+  const starts = lineStarts(source.split("\n"));
   for (const marker of markers) {
-    for (const range of marker.ranges) {
-      const index = range.line - 1;
-      const owner =
-        owners.get(index) ?? new Array(lines[index]?.length ?? 0).fill("");
-      for (let column = range.from; column < range.to; column++) {
-        owner[column] = marker.id;
+    if (!marker.node || !marker.startsIn || !marker.endsIn) {
+      errors.push(
+        `marker \`${marker.id}\` needs \`node\`, \`startsIn\` and \`endsIn\``,
+      );
+      continue;
+    }
+    const { start, end } = regionOf(starts, marker);
+    const root = tree.rootNode;
+    const around = root.namedDescendantForIndex(start, end);
+    const checks: Array<[string, string | undefined, string]> = [
+      ["node", marker.node, around?.type ?? "(none)"],
+      [
+        "startsIn",
+        marker.startsIn,
+        root.namedDescendantForIndex(start, start + 1)?.type ?? "(none)",
+      ],
+      [
+        "endsIn",
+        marker.endsIn,
+        root.namedDescendantForIndex(end - 1, end)?.type ?? "(none)",
+      ],
+    ];
+    for (const [key, expected, found] of checks) {
+      if (expected !== found) {
+        errors.push(
+          `marker \`${marker.id}\` ${key} is \`${expected}\`, the tree has \`${found}\``,
+        );
       }
-      owners.set(index, owner);
+    }
+    const exact = around?.startIndex === start && around?.endIndex === end;
+    if (Boolean(marker.exact) !== exact) {
+      errors.push(
+        marker.exact
+          ? `marker \`${marker.id}\` is declared exact but does not equal its \`${around?.type}\` node`
+          : `marker \`${marker.id}\` equals its \`${around?.type}\` node exactly; declare \`exact: true\``,
+      );
     }
   }
-
-  let html = `<pre class="shiki" tabindex="0"><code>`;
-  for (let line = 0; line < lines.length; line++) {
-    html += `<span class="line">`;
-    const owner = owners.get(line) ?? [];
-    let column = 0;
-    let open = "";
-    for (const token of tokens[line] ?? []) {
-      const style = styleOf(token);
-      let start = 0;
-      while (start < token.content.length) {
-        const id = owner[column + start] ?? "";
-        let end = start + 1;
-        while (
-          end < token.content.length &&
-          (owner[column + end] ?? "") === id
-        ) {
-          end++;
-        }
-        if (id !== open) {
-          if (open) html += `</span>`;
-          if (id) html += markerOpen(id);
-          open = id;
-        }
-        html += `<span style="${style}">${escapeHtml(token.content.slice(start, end))}</span>`;
-        start = end;
-      }
-      column += token.content.length;
-    }
-    if (open) html += `</span>`;
-    html += `</span>\n`;
-  }
-  return `${html}</code></pre>`;
+  return errors;
 }
 
-function styleOf(token: { htmlStyle?: Record<string, string> }): string {
-  return Object.entries(token.htmlStyle ?? {})
-    .map(([property, value]) => `${property}:${value}`)
-    .join(";");
+/**
+ * The example, highlighted at build time by the tree-sitter MX grammar — the
+ * very `renderMx` an ordinary ```mx fence goes through, so the annotated
+ * example and a plain block carry identical spans. Colours come from the
+ * `ts-*` classes in `assets/css/home.css`, which resolve against
+ * `html[data-theme]`: the theme switch needs no JavaScript and no second copy
+ * of the block.
+ *
+ * The marked regions are wrapped by cutting the capture spans at every marker
+ * boundary (`renderMx`'s `ownerAt`): a marker that ends inside a token splits
+ * that token, and the wrappers stay well nested.
+ */
+export function highlightExample(source: string, markers: Marker[]): string {
+  const text = source.replace(/\n$/, "");
+  const starts = lineStarts(text.split("\n"));
+  const owners: string[] = new Array(text.length).fill("");
+  for (const marker of markers) {
+    const open = markerOpen(marker.id);
+    for (const range of marker.ranges) {
+      const base = starts[range.line - 1] as number;
+      for (let at = base + range.from; at < base + range.to; at++) {
+        owners[at] = open;
+      }
+    }
+  }
+  return `<pre class="hljs mx-hl" tabindex="0"><code class="language-mx">${renderMx(text, (at: number) => owners[at] ?? "")}</code></pre>`;
 }
 
 function markerOpen(id: string): string {
@@ -378,11 +426,8 @@ export function markerCss(markers: Marker[]): string {
  * ends an HTML block at the first one, and this text is written into a
  * markdown file.
  */
-export async function exampleSection(
-  source: string,
-  markers: Marker[],
-): Promise<string> {
-  const code = await highlightExample(source, markers);
+export function exampleSection(source: string, markers: Marker[]): string {
+  const code = highlightExample(source, markers);
   return [
     `<style id="mx-home-marker-styles">`,
     markerCss(markers),

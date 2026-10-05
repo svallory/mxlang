@@ -152,26 +152,18 @@
 }
 
 /* The code: the site's own `pre` styling, which already scrolls sideways on a
-   phone, and carries both themes in CSS variables (`defaultColor: false`), so
-   the theme toggle needs no JavaScript. */
+   phone. The block is highlighted at build time by the tree-sitter MX grammar,
+   the same as every ```mx fence on the site, so it carries only `ts-*` classes;
+   the colours are the `--ts-*` tokens in the section below, so the theme toggle
+   needs no JavaScript and no second copy of the block. */
 
 .mx-home-code {
   max-width: 100%;
 }
 
-.mx-home-code .shiki {
+.mx-home-code pre {
   font-size: 0.8125rem;
   margin: 0;
-}
-
-.mx-home-code .shiki,
-.mx-home-code .shiki span {
-  color: var(--shiki-light);
-}
-
-[data-theme="dark"] .mx-home-code .shiki,
-[data-theme="dark"] .mx-home-code .shiki span {
-  color: var(--shiki-dark);
 }
 
 /* A marked region. The pen swipe is the marko-ui home hero's technique
@@ -298,3 +290,57 @@
   padding-top: 1.25rem;
   text-align: center;
 }
+
+/* Syntax colours for the tree-sitter MX grammar's captures
+   (`packages/editors/tree-sitter-mx/queries/highlights.scm`). `plugins/
+   mx-highlight.mjs` turns a capture name into a class by prefixing `ts-` and
+   replacing dots with dashes (`punctuation.bracket` -> `ts-punctuation-bracket`);
+   `@none` ("deliberately unstyled") gets no class. The values are docmd's own
+   highlight palette (`docmd-highlight-light.css` / `-dark.css`), keyed on the
+   same `data-theme` attribute the theme switch sets on <html>. */
+
+:root {
+  --ts-comment: #a0a1a7;
+  --ts-keyword: #a626a4;
+  --ts-string: #50a14f;
+  --ts-type: #986801;
+  --ts-variable: #986801;
+  --ts-parameter: #c18401;
+  --ts-tag: #e45649;
+  --ts-attribute: #986801;
+  --ts-property: #4078f2;
+  --ts-label: #0184bb;
+  --ts-constant: #0184bb;
+  --ts-punctuation: #696c77;
+  --ts-special: #a626a4;
+}
+
+:root[data-theme="dark"] {
+  --ts-comment: #7f848e;
+  --ts-keyword: #c678dd;
+  --ts-string: #98c379;
+  --ts-type: #d19a66;
+  --ts-variable: #d19a66;
+  --ts-parameter: #e5c07b;
+  --ts-tag: #e06c75;
+  --ts-attribute: #d19a66;
+  --ts-property: #61aeee;
+  --ts-label: #56b6c2;
+  --ts-constant: #56b6c2;
+  --ts-punctuation: #abb2bf;
+  --ts-special: #c678dd;
+}
+
+.ts-comment { color: var(--ts-comment); font-style: italic; }
+.ts-keyword { color: var(--ts-keyword); }
+.ts-string { color: var(--ts-string); }
+.ts-type { color: var(--ts-type); }
+.ts-variable { color: var(--ts-variable); }
+.ts-variable-parameter { color: var(--ts-parameter); }
+.ts-tag { color: var(--ts-tag); }
+.ts-attribute { color: var(--ts-attribute); }
+.ts-property { color: var(--ts-property); }
+.ts-label { color: var(--ts-label); }
+.ts-constant { color: var(--ts-constant); }
+.ts-punctuation-bracket { color: var(--ts-punctuation); }
+.ts-punctuation-special { color: var(--ts-special); }

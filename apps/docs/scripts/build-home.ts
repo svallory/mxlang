@@ -28,6 +28,7 @@ import {
   siteRoot,
   spliceIndex,
   validate,
+  validateNodes,
 } from "./home-example.ts";
 
 const check = process.argv.includes("--check");
@@ -123,7 +124,12 @@ const errors: string[] = [];
 const { source, lines } = readExample();
 const markers = readMarkers();
 
-for (const problem of validate(lines, markers)) errors.push(problem);
+for (const problem of [
+  ...validate(lines, markers),
+  ...validateNodes(source, markers),
+]) {
+  errors.push(problem);
+}
 
 if (!errors.length) {
   const { warnings } = compileExample();
@@ -157,7 +163,7 @@ if (!errors.length) {
   }
 }
 
-const fragment = await exampleSection(source, markers);
+const fragment = exampleSection(source, markers);
 const onDisk = readFileSync(indexPath, "utf8");
 const next = spliceIndex(onDisk, fragment);
 

@@ -26,6 +26,7 @@ import {
   siteRoot,
   spliceIndex,
   validate,
+  validateNodes,
 } from "./home-example.ts";
 
 describe("the home page example", () => {
@@ -40,9 +41,14 @@ describe("the home page example", () => {
     expect(validate(lines, readMarkers())).toEqual([]);
   });
 
-  it("leaves docs/index.md exactly as the generator writes it", async () => {
+  it("has markers whose node assertions still hold in the syntax tree", () => {
     const { source } = readExample();
-    const fragment = await exampleSection(source, readMarkers());
+    expect(validateNodes(source, readMarkers())).toEqual([]);
+  });
+
+  it("leaves docs/index.md exactly as the generator writes it", () => {
+    const { source } = readExample();
+    const fragment = exampleSection(source, readMarkers());
     const onDisk = readFileSync(indexPath, "utf8");
     const start = onDisk.indexOf(START);
     const end = onDisk.indexOf(END);

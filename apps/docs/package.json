@@ -6,11 +6,12 @@
   "scripts": {
     "build:home": "bun scripts/build-home.ts",
     "check:home": "bun scripts/build-home.ts --check",
-    "dev": "bun run build:home && docmd dev",
-    "build": "bun run build:home && docmd validate && docmd build && bun run check:home",
+    "dev": "bun run build:wasm && bun run build:home && docmd dev",
+    "build": "bun run build:wasm && bun run build:home && docmd validate && docmd build && bun run check:home",
     "validate": "docmd validate",
-    "test": "vitest run",
-    "preview": "npx serve site"
+    "test": "bun run build:wasm && vitest run",
+    "preview": "npx serve site",
+    "build:wasm": "bun run --cwd ../../packages/editors/tree-sitter-mx build:wasm"
   },
   "dependencies": {
     "@docmd/core": "0.9.5"
@@ -18,7 +19,8 @@
   "devDependencies": {
     "@mxlang/core": "workspace:*",
     "@mxlang/html": "workspace:*",
-    "shiki": "4.4.3",
-    "vitest": "3.2.7"
+    "@mxlang/tree-sitter-mx": "workspace:*",
+    "vitest": "3.2.7",
+    "web-tree-sitter": "0.26.9"
   }
 }

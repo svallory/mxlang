@@ -51,8 +51,9 @@
       "devDependencies": {
         "@mxlang/core": "workspace:*",
         "@mxlang/html": "workspace:*",
-        "shiki": "4.4.3",
+        "@mxlang/tree-sitter-mx": "workspace:*",
         "vitest": "3.2.7",
+        "web-tree-sitter": "0.26.9",
       },
     },
     "examples/angular-app": {

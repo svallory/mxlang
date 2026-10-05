@@ -172,6 +172,7 @@
     }
   ],
   "plugins": {
+    "./plugins/mx-highlight.mjs": {},
     "seo": {
       "defaultDescription": "MX is a template language born from Marko: one markup language, many hosts."
     }
