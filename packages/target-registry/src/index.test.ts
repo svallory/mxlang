@@ -108,15 +108,6 @@ describe("shape of each descriptor", () => {
     expect(kind?.readCalleeInput).toBeTypeOf("function");
   });
 
-  it("hono-jsx: host hono, a compile entry, no file kinds, no mapping override", () => {
-    const target = byName("hono-jsx");
-    expect(target.host).toEqual({ name: "hono" });
-    expect(target.load).toBeTypeOf("function");
-    expect(target.mappings).toBeUndefined();
-    expect(target.typeSurface).toBeUndefined();
-    expect(target.strict).toBeUndefined();
-  });
-
   it("preact-jsx: host preact with one `preact` region file kind, a compile entry, no mapping override", () => {
     const preact = byName("preact-jsx");
     expect(preact.load).toBeTypeOf("function");
@@ -130,6 +121,23 @@ describe("shape of each descriptor", () => {
       segment: "preact",
       languageIds: ["preactmx"],
       diagnosticSource: "preactmx",
+    });
+    expect(kind?.compileRegion).toBeTypeOf("function");
+    expect(kind?.readCalleeInput).toBeTypeOf("function");
+    expect(kind?.completeTypecheckModule).toBeUndefined();
+  });
+
+  it("hono-jsx: host hono with one `hono` region file kind, a compile entry, no mapping override", () => {
+    const hono = byName("hono-jsx");
+    expect(hono.load).toBeTypeOf("function");
+    expect(hono.mappings).toBeUndefined();
+    expect(hono.host?.name).toBe("hono");
+    const [kind, ...rest] = hono.host?.fileKinds ?? [];
+    expect(rest).toEqual([]);
+    expect(kind).toMatchObject({
+      segment: "hono",
+      languageIds: ["honomx"],
+      diagnosticSource: "honomx",
     });
     expect(kind?.compileRegion).toBeTypeOf("function");
     expect(kind?.readCalleeInput).toBeTypeOf("function");
@@ -173,8 +181,8 @@ describe("shape of each descriptor", () => {
     ]);
   });
 
-  it("only solid-jsx, preact-jsx and react-jsx carry a region compile and a callee reader", () => {
-    const regionTargets = ["solid-jsx", "preact-jsx", "react-jsx"];
+  it("only solid-jsx, preact-jsx, react-jsx and hono-jsx carry a region compile and a callee reader", () => {
+    const regionTargets = ["solid-jsx", "preact-jsx", "react-jsx", "hono-jsx"];
     for (const t of builtinTargets) {
       for (const kind of t.host?.fileKinds ?? []) {
         expect(Boolean(kind.compileRegion)).toBe(
@@ -260,12 +268,13 @@ describe("builtinLookup: packages and host values", () => {
     expect(lookup.hostFilterKey("angular-template")).toBe("angular");
   });
 
-  it("moduleSegments are astro, solid, preact, react and ng (target registration order)", () => {
+  it("moduleSegments are astro, solid, preact, react, hono and ng (target registration order)", () => {
     expect(lookup.moduleSegments()).toEqual([
       "astro",
       "solid",
       "preact",
       "react",
+      "hono",
       "ng",
     ]);
   });
@@ -314,6 +323,14 @@ describe("the hostless `data` target", () => {
       "solid",
       "preact",
       "react",
+      "hono",
+      "ng",
+    ]);
+    expect(lookup.moduleSegments()).toEqual([
+      "astro",
+      "solid",
+      "react",
+      "hono",
       "ng",
     ]);
   });
@@ -388,7 +405,7 @@ describe("the reserved `astro-template` name", () => {
 });
 
 describe("builtinFileKinds", () => {
-  it("tags solid, preact and react with the region pipeline, ng with ng-template and astro with astro-template", () => {
+  it("tags solid, preact, react and hono with the region pipeline, ng with ng-template and astro with astro-template", () => {
     expect(
       builtinFileKinds.map((k) => [k.segment, k.pipeline, k.diagnosticSource]),
     ).toEqual([
@@ -396,6 +413,7 @@ describe("builtinFileKinds", () => {
       ["solid", "region", "solidmx"],
       ["preact", "region", "preactmx"],
       ["react", "region", "reactmx"],
+      ["hono", "region", "honomx"],
       ["ng", "ng-template", "ngmx"],
     ]);
   });

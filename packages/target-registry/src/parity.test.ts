@@ -321,6 +321,7 @@ describe("module segments (the file kinds the lookup holds)", () => {
   it("are the file-kind segments of the targets, in registration order", () => {
     expect([...moduleSegments()].sort()).toEqual([
       "astro",
+      "hono",
       "ng",
       "preact",
       "react",
@@ -416,15 +417,17 @@ describe("callee readers are installed from the table at registry creation", () 
 });
 
 describe("registered file-kind language ids and diagnostic sources", () => {
-  it("solid's, preact's and react's ids are the language server's region ids, and solid's matches the TS plugin", () => {
+  it("solid's, preact's, react's and hono's ids are the language server's region ids, and solid's matches the TS plugin", () => {
     const [solid] = target("solid-jsx").host?.fileKinds ?? [];
     const [preact] = target("preact-jsx").host?.fileKinds ?? [];
     const [react] = target("react-jsx").host?.fileKinds ?? [];
+    const [hono] = target("hono-jsx").host?.fileKinds ?? [];
     expect(
       new Set([
         ...(solid?.languageIds ?? []),
         ...(preact?.languageIds ?? []),
         ...(react?.languageIds ?? []),
+        ...(hono?.languageIds ?? []),
       ]),
     ).toEqual(SOLID_MX_LANGUAGE_IDS);
     expect(solid?.languageIds).toContain(SOLID_MX_LANGUAGE_ID);
@@ -433,6 +436,7 @@ describe("registered file-kind language ids and diagnostic sources", () => {
   it.each([
     ["react-jsx", ".react.mx"],
     ["preact-jsx", ".preact.mx"],
+    ["hono-jsx", ".hono.mx"],
   ])("%s's first id is VS Code's language id for %s", (name, extension) => {
     const [kind] = target(name).host?.fileKinds ?? [];
     const contributes = JSON.parse(
@@ -467,6 +471,7 @@ describe("registered file-kind language ids and diagnostic sources", () => {
       solid: "solidmx",
       preact: "preactmx",
       react: "reactmx",
+      hono: "honomx",
       ng: "ngmx",
       astro: "astromx",
     });

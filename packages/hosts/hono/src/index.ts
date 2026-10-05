@@ -6,11 +6,17 @@ import {
   type RawSourceMap,
   type TargetLookup,
 } from "@mxlang/core";
-import type { CompilePreactOptions, CompilePreactResult } from "@mxlang/preact";
+import type {
+  CompileJsxRegionResult,
+  CompilePreactOptions,
+  CompilePreactResult,
+} from "@mxlang/preact";
 import type { Child } from "hono/jsx";
 import {
   compileHonoFile as compileHonoFileWith,
   compileHonoMx as compileHonoMxWith,
+  compileHonoRegion as compileHonoRegionWith,
+  type HonoRegionOptions,
 } from "./compile.ts";
 import descriptor from "./descriptor.ts";
 
@@ -33,7 +39,12 @@ const ownTargets: TargetLookup = createTargetLookup([descriptor]);
 export const honoTargets = ownTargets;
 
 export { TranslateError } from "@mxlang/preact";
-export { honoDeclarations, honoDialect } from "./dialect.ts";
+export type { HonoRegionOptions } from "./compile.ts";
+export {
+  honoDeclarations,
+  honoDialect,
+  honoRegionDeclarations,
+} from "./dialect.ts";
 export type { CompileResult, RawSourceMap };
 
 /** Attribute-tag value specialised to Hono's renderable child type. */
@@ -81,6 +92,23 @@ export function compileHonoFile(
   > = {},
 ): CompileResult {
   return compileHonoFileWith(filename, {
+    ...options,
+    targets: options.targets ?? ownTargets,
+  });
+}
+
+/**
+ * Compiles one MX region of a `.hono.mx` module to a Hono JSX expression.
+ *
+ * A `.hono.mx` file is TypeScript (TSX) with MX regions: hooks and logic
+ * live in the surrounding module, and the parser bridge calls this once per
+ * region. `options.targets` defaults to this package's own lookup.
+ */
+export function compileHonoRegion(
+  source: string,
+  options: Omit<HonoRegionOptions, "targets"> & { targets?: TargetLookup },
+): CompileJsxRegionResult {
+  return compileHonoRegionWith(source, {
     ...options,
     targets: options.targets ?? ownTargets,
   });

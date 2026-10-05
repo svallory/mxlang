@@ -68,6 +68,7 @@ describe("region file kinds are a capability, not a name", () => {
       { segment: "solid", target: "solid-jsx" },
       { segment: "preact", target: "preact-jsx" },
       { segment: "react", target: "react-jsx" },
+      { segment: "hono", target: "hono-jsx" },
     ]);
   });
 });

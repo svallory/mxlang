@@ -33,3 +33,8 @@ export const honoDialect: JsxDialect = {
 
 /** Resolve-time policy shared structurally with Preact/React, Hono diagnostics. */
 export const honoDeclarations = createJsxDeclarations("Hono");
+
+/** {@link honoDeclarations} for a `.hono.mx` region: hook errors name the surrounding component. */
+export const honoRegionDeclarations = createJsxDeclarations("Hono", {
+  region: true,
+});

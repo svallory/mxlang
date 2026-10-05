@@ -2,7 +2,7 @@
  * The `hono-jsx` target descriptor (decisions 129 and 132; unstable).
  *
  * Importing this module loads `./dialect.ts` (the declarations) only; the
- * compile entry is required by a relative path inside `load`, from
+ * compile entry (whole-file and region) is required by a relative path, from
  * `./compile.ts` — a descriptor-free leaf. The descriptor never requires
  * `./index.ts`: the index imports this module to build the package's own
  * lookup, so a require back would close an entry-point cycle that a bundler
@@ -60,7 +60,30 @@ const descriptor: TargetDescriptor = {
         }),
     };
   },
-  host: { name: "hono" },
+  host: {
+    name: "hono",
+    fileKinds: [
+      {
+        segment: "hono",
+        // VS Code's language id; Zed's language `HonoMX` lowercases to it.
+        languageIds: ["honomx"],
+        diagnosticSource: "honomx",
+        compileRegion: (source, input) =>
+          (
+            require("./compile.ts") as typeof import("./compile.ts")
+          ).compileHonoRegion(source, {
+            ...input,
+            targets: input.targets ?? targets(),
+          }),
+        // The JSX hosts' one reader, in `@mxlang/preact`: the only place
+        // they import `@mxlang/parser`.
+        readCalleeInput: (request) =>
+          (
+            require("@mxlang/preact/callee-reader") as typeof import("@mxlang/preact/callee-reader")
+          ).readJsxCalleeInput(request),
+      },
+    ],
+  },
 };
 
 export default descriptor;

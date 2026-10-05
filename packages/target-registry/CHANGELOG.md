@@ -4,6 +4,8 @@
 
 - **Changed (preact-region, decision 154):** the built-in table has a third region kind, `preact` (`.preact.mx`, from `@mxlang/preact`, registered before `react`); `regionFileKinds()`, `moduleSegments()` and every derived list (Vite default extensions, LS language ids, TS plugin per-kind plugins) include it. A `*.preact.mx` file is no longer a whole-file `.mx`.
 
+- **Changed (hono-region, decision 154):** the built-in table has a third region kind, `hono` (`.hono.mx`, from `@mxlang/hono`); `regionFileKinds()`, `moduleSegments()` and every derived list (Vite default extensions, LS language ids, TS plugin per-kind plugins) include it.
+
 - **Changed (react-region, decision 154):** the built-in table has a second region kind, `react` (`.react.mx`, from `@mxlang/react`); `regionFileKinds()`, `moduleSegments()` and every derived list (Vite default extensions, LS language ids, TS plugin per-kind plugins) include it.
 
 - **Added:** the data check reads `package.json#mx.data.imports` (`"pass"` | `"reject"`) and passes it to `parseData`; an invalid value is a positioned error at the value and `"reject"` applies; `imports` joins the known `mx.data` keys.

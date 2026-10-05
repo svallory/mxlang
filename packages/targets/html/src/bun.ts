@@ -46,6 +46,7 @@ const FOREIGN_SEGMENTS: readonly string[] = [
   "astro",
   "react",
   "preact",
+  "hono",
 ];
 
 /**

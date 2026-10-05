@@ -2,6 +2,10 @@
 
 - **Changed (preact-region, decision 154):** the Bun loader declines `.preact.mx` (Preact's region file kind), as `@mxlang/html`'s does.
 
+- **Added (hono-region, decision 154):** `.hono.mx` region files: TSX with MX regions, as `.solid.mx` is for Solid. The `hono-jsx` descriptor gains the `hono` file kind (`compileRegion`, `readCalleeInput`, language id `honomx`), and `compileHonoRegion` is exported. A region renders what the same markup renders in a whole-file `.mx`; hooks live in the surrounding component. In a region, `<const>` and module-level MX (`import`, `static`, `export`, `Input`, `<return>`) are errors at the statement, and `<let>`/`<effect>`/`<id>`/`<lifecycle>` name only the hook in the surrounding component (`honoRegionDeclarations`).
+
+- **Changed (hono-region, decision 154):** **behaviour change:** a `*.hono.mx` file is no longer a whole-file `.mx`; it is a region file, and the Bun loader declines it.
+
 - **Changed (react-region, decision 154):** the Bun loader declines `.react.mx` (React's region file kind), as `@mxlang/html`'s does.
 
 - **Changed (bridge-host, decision 154):** the Bun loader's filter is built from its lookup (`mxFilter`), as `@mxlang/html`'s; unchanged with the package's own lookup.

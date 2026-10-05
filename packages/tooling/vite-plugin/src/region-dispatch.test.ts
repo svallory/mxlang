@@ -50,6 +50,7 @@ describe("default extensions", () => {
       ".solid.mx",
       ".preact.mx",
       ".react.mx",
+      ".hono.mx",
       ".mx",
     ]);
   });

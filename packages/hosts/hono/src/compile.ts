@@ -19,12 +19,19 @@
 import { readFileSync } from "node:fs";
 import type { TargetLookup } from "@mxlang/core";
 import {
+  type CompileJsxRegionOptions,
+  type CompileJsxRegionResult,
   type CompilePreactOptions,
   type CompilePreactResult,
   type CompileResult,
+  compileJsxRegion,
   compilePreactMx,
 } from "@mxlang/preact";
-import { honoDeclarations, honoDialect } from "./dialect.ts";
+import {
+  honoDeclarations,
+  honoDialect,
+  honoRegionDeclarations,
+} from "./dialect.ts";
 
 /** This host's compile options: the preact emitter's surface, minus the dialect, which is always hono's here. */
 export type HonoCompileOptions = Pick<
@@ -61,4 +68,27 @@ export function compileHonoFile(
   options: HonoCompileOptions & { targets: TargetLookup },
 ): CompileResult {
   return compileHonoMx(readFileSync(filename, "utf8"), filename, options);
+}
+
+/** A `.hono.mx` region's options: the shared JSX region engine's, minus what Hono fixes. */
+export type HonoRegionOptions = Omit<
+  CompileJsxRegionOptions,
+  "dialect" | "declarations" | "segment"
+>;
+
+/**
+ * Compiles one MX region of a `.hono.mx` module to a Hono JSX expression,
+ * under an explicit `targets` lookup (`@mxlang/preact`'s `compileJsxRegion`
+ * with Hono's dialect and region declarations).
+ */
+export function compileHonoRegion(
+  source: string,
+  options: HonoRegionOptions,
+): CompileJsxRegionResult {
+  return compileJsxRegion(source, {
+    ...options,
+    dialect: honoDialect,
+    declarations: honoRegionDeclarations,
+    segment: "hono",
+  });
 }

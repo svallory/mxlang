@@ -10,6 +10,8 @@
 - **Fix (render-sink):** `/var` on a dynamic tag called with arguments (`<${Counter}/n({ start: 2 })/>`) renders through the callee's `render` with args[0] as its input, and binds the return value, as in Marko 6.3.51.
 - How these are locked against Marko: the `try-catch-partial`, `try-nested` and `try-child-throw` oracle fixtures lock the partial-output drop, and `dynamic-tag-var` locks `/var` on a dynamic tag, with and without arguments. The catch-less rethrow is locked by a unit test against measured Marko 6.3.51 output; the oracle cannot express a throw, and `try-no-catch` covers only the path that does not throw.
 
+- **Changed (hono-region, decision 154):** the Bun loader declines `.hono.mx` (`@mxlang/hono`'s region file kind) as it declines `.solid.mx`, `.astro.mx` and `.react.mx`: such a file is no longer translated as a whole-file `.mx`.
+
 - **Changed (react-region, decision 154):** the Bun loader declines `.react.mx` (React's region file kind) as it declines `.solid.mx` and `.astro.mx`: such a file is no longer translated as a whole-file `.mx`.
 
 - **Changed (preact-region, decision 154):** the Bun loader declines `.preact.mx` (Preact's region file kind) as it declines `.solid.mx`, `.astro.mx` and `.react.mx`: such a file is no longer translated as a whole-file `.mx`.
