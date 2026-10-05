@@ -199,6 +199,13 @@ export function exprSpan(ctx: Ctx, node: Node): SourceSpan | undefined {
  * the attribute's own start, which is the `:`.
  */
 function attrNameSpan(ctx: Ctx, attr: Node): SourceSpan {
+  // A name-sugar attribute (`:b`, `#b`, `.c`) is spelled as one token.
+  if (attr?.sugarNameSpan) {
+    return {
+      sourceStart: attr.sugarNameSpan.start,
+      sourceEnd: attr.sugarNameSpan.end,
+    };
+  }
   const sourceStart = offsetOf(ctx, attr?.loc?.start ?? attr?.start ?? {});
   const sourceName =
     attr.modifier != null

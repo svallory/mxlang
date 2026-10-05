@@ -3626,10 +3626,14 @@ describe("<for> by=/key= (Marko parity)", () => {
  * Both spellings are the same attribute in Marko (`<div value:foo="y"/>`
  * compiles identically), and `attr.default` is the flag its parser sets for
  * the `:foo` spelling, so neither can keep going to the modifier hooks.
+ *
+ * Decision 146 changed the bare spelling: `:foo` is now `name="foo"` sugar
+ * (`name-sugar.test.ts`), so these rows write the explicit `value:foo`, which
+ * is still Marko's attribute.
  */
 describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", () => {
   it("lowers the shorthand to an ordinary attribute named `value:foo`", () => {
-    const ir = lowerSource('<div :foo=y id="z"/>\n');
+    const ir = lowerSource('<div value:foo=y id="z"/>\n');
     expect(find(ir.body, "Element").attrs).toMatchObject([
       { kind: "dynamic", name: "value:foo", value: { code: "y" } },
       { kind: "static", name: "id", value: "z" },
@@ -3638,14 +3642,14 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
 
   it("keeps the value kind each other attribute gets", () => {
     expect(
-      find(lowerSource('<div :foo="lit"/>').body, "Element").attrs,
+      find(lowerSource('<div value:foo="lit"/>').body, "Element").attrs,
     ).toMatchObject([{ kind: "static", name: "value:foo", value: "lit" }]);
-    // `<div :foo/>` is HTML's valueless attribute — present with an empty
+    // `<div value:foo/>` is HTML's valueless attribute — present with an empty
     // value — which is what Marko emits (`<div value:foo>`). It is NOT the
     // `boolean` kind: a host handed `true` renders React's non-boolean
     // warning and drops the attribute, Hono writes `value:foo="true"`.
     expect(
-      find(lowerSource("<div :foo/>").body, "Element").attrs,
+      find(lowerSource("<div value:foo/>").body, "Element").attrs,
     ).toMatchObject([{ kind: "static", name: "value:foo", value: "" }]);
     // Every other valueless attribute stays `boolean` — only this one means
     // an empty value, because only this one is not a flag-shaped name.
@@ -3658,9 +3662,9 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
     // A consumer that slices `valueSpan` (the data tree) needs a span, even
     // for an empty value; the Mesh bug was an invariant failure on its absence.
     expect(
-      find(lowerSource("<div :foo/>").body, "Element").attrs,
+      find(lowerSource("<div value:foo/>").body, "Element").attrs,
     ).toMatchObject([
-      { kind: "static", valueSpan: { sourceStart: 9, sourceEnd: 9 } },
+      { kind: "static", valueSpan: { sourceStart: 14, sourceEnd: 14 } },
     ]);
     expect(find(lowerSource("<div x:/>").body, "Element").attrs).toMatchObject([
       { kind: "static", valueSpan: { sourceStart: 7, sourceEnd: 7 } },
@@ -3837,7 +3841,7 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
 
   it.each([
     ["<div x:() {}/>", "x:", 1, 5],
-    ["<div :foo() {}/>", "value:foo", 1, 5],
+    ["<div value:foo() {}/>", "value:foo", 1, 5],
     ["<div x:foo() {}/>", "x:foo", 1, 5],
     ["<div\n  x:foo() {}\n/>", "x:foo", 2, 2],
     ["<div x:foo=(function(){})/>", "x:foo", 1, 5],
@@ -3962,7 +3966,7 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
 
   it("carries a component call's `:foo` as the prop `value:foo`", () => {
     const ir = lowerSource(
-      'import Card from "./card.marko"\n<Card :foo=y/>\n',
+      'import Card from "./card.marko"\n<Card value:foo=y/>\n',
       fakeDeclarations({ isElement: (name) => name !== "Card" }),
     );
     expect(find(ir.body, "Component").attrs).toMatchObject([
@@ -3971,12 +3975,13 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
   });
 
   it("keeps the position of the name it was authored at", () => {
-    const attr = find(lowerSource("<div :foo=y/>\n").body, "Element").attrs[0];
+    const attr = find(lowerSource("<div value:foo=y/>\n").body, "Element")
+      .attrs[0];
     expect(attr?.kind).toBe("dynamic");
     expect(attr?.kind === "dynamic" ? attr.nameSpan : null).toMatchObject({
-      // `:foo` — the name as authored — starts at column 5 in `<div :foo=y/>`.
+      // `value:foo` — the name as authored — starts at column 5.
       sourceStart: 5,
-      sourceEnd: 9,
+      sourceEnd: 14,
     });
   });
 

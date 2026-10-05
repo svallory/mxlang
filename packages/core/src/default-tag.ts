@@ -7,6 +7,7 @@ import {
   nativeElementPredicate,
 } from "./default-tag-check.ts";
 import type { DefaultTagScope } from "./default-tag-validate.ts";
+import { rewriteNameSugar } from "./name-sugar.ts";
 
 /**
  * Marko's parser writes `div` into the name of every tag that has only a
@@ -61,6 +62,9 @@ export function resolveUnnamedTags(ctx: Ctx, body: readonly Node[]): void {
   const walk = (nodes: readonly Node[], parents: DefaultTagParent[]): void => {
     for (const node of new Set(nodes)) {
       if (node?.type !== "MarkoTag") continue;
+      // Decision 146: `:name`/`#id`/`.class` sugar turns into the tag the
+      // author would have written without it, before the name is read.
+      rewriteNameSugar(ctx, node);
       if (!resolved.has(node) && isUnnamedTag(node)) {
         resolved.add(node);
         const resolve = ctx.declarations.resolveDefaultTag;
