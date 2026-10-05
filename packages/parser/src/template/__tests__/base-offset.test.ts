@@ -15,6 +15,10 @@
  *   every offset, and only offsets.
  *
  * Positions are UTF-16 code units, as they are without the options.
+ *
+ * Expectations here never re-implement the shift rule: every position is
+ * compared against either a literal, or a whole-document parse of the string
+ * the fragment was embedded in.
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -81,24 +85,27 @@ function parse(source: string, options?: ParseOptions): ParseRun {
 /**
  * Builds a larger document in which `source` starts at exactly
  * (`startLine`, `startColumn`), and returns both it and the offset its first
- * character sits at.
+ * character sits at. `eol` selects the line ending, for the CRLF case.
  */
 function embed(
   source: string,
   startLine: number,
   startColumn: number,
+  eol = "\n",
 ): { head: string; doc: string } {
-  const head = `${"\n".repeat(startLine)}${" ".repeat(startColumn)}`;
+  const head = `${eol.repeat(startLine)}${" ".repeat(startColumn)}`;
   return { head, doc: head + source };
 }
 
+const BASE = { startOffset: 137, startLine: 9, startColumn: 14 };
+
 /**
- * One source exercising every handler kind: declarations, doctype, CDATA,
- * comments, scriptlets, statements, concise and HTML mode, tag shorthand,
- * attribute tags, arguments, params, type args, type params, methods,
- * spreads, placeholders and close tags.
+ * HTML-mode source exercising the handler surface: declarations, doctype,
+ * CDATA, comments, scriptlets, statements, tag shorthand, attribute tags,
+ * arguments, params, type args, type params, methods, spreads, placeholders
+ * and close tags.
  */
-const ALL_HANDLERS = [
+const HTML_SOURCE = [
   '<?xml version="1.0"?>',
   "<!DOCTYPE html>",
   "<![CDATA[raw]]>",
@@ -118,10 +125,37 @@ const ALL_HANDLERS = [
   "-- text",
 ].join("\n");
 
-const BASE = { startOffset: 137, startLine: 9, startColumn: 14 };
+/**
+ * Concise-mode source: the same handler kinds written in concise syntax —
+ * tags with no angle brackets, attributes with no `=`, `--` text lines, an
+ * indented body, scriptlet lines, and a concise attribute group (args, method,
+ * generic method, spread, shorthand, tag variable, type args, type params).
+ */
+const CONCISE_SOURCE = [
+  '<?xml version="1.0"?>',
+  "<!DOCTYPE html>",
+  "<![CDATA[raw]]>",
+  "div.cls#id/tagVar a=1 b:=bound ...spread onClick() { body } c(1) d<T>(y) { body }",
+  "  -- text",
+  "  // line comment",
+  "  /* block comment */",
+  "  $ const scriptlet = 1;",
+  "  $ { block(); }",
+  "  span.inner",
+  "    -- more text",
+  "typed <A> |data: A|",
+  "  -- typed body",
+  "typedArgs<A> f=1",
+  "  -- body",
+  "tagArgs(1) f=1",
+  "  -- tag args body",
+].join("\n");
 
-/** Every handler name AC 5 asks for, plus the rest of the handler surface. */
-const REQUIRED_HANDLERS = [
+/** Concise-mode error at end of input (an unclosed HTML tag at EOF). */
+const CONCISE_ERROR_SOURCE = "div\n  -- text\n<div>";
+
+/** Every handler name the contract names that HTML mode produces. */
+const HTML_HANDLERS = [
   "onText",
   "onOpenTagStart",
   "onOpenTagName",
@@ -150,44 +184,107 @@ const REQUIRED_HANDLERS = [
   "onPlaceholder",
 ];
 
-describe("base offset: handler ranges", () => {
-  for (const mode of ["concise", "html"] as const) {
-    it(`are identical with and without the base options (${mode} mode)`, () => {
-      const based = parse(ALL_HANDLERS, BASE);
-      const plain = parse(ALL_HANDLERS);
-      assert.ok(based.log.length > 0);
-      assert.deepEqual(based.log, plain.log);
-    });
-  }
+/**
+ * The subset concise mode can produce. Five handlers are HTML-mode-only by
+ * the language's own shape, not by this change: a concise tag has no `<`
+ * (`onOpenTagStart`), no `</name>` (`onCloseTagStart`, `onCloseTagName`), no
+ * comment position inside it (`onOpenTagComment`), and a bare `${expr}`
+ * concise line is a dynamic tag, not a placeholder (`onPlaceholder`).
+ */
+const CONCISE_HANDLERS = HTML_HANDLERS.filter(
+  (handler) =>
+    ![
+      "onOpenTagStart",
+      "onCloseTagStart",
+      "onCloseTagName",
+      "onOpenTagComment",
+      "onPlaceholder",
+    ].includes(handler),
+);
 
-  it("exercises every handler kind the contract names", () => {
-    const seen = new Set(parse(ALL_HANDLERS).log.map((e) => e.handler));
-    for (const handler of REQUIRED_HANDLERS) {
+/**
+ * Asserts the whole handler-side contract for one source: identical events
+ * and ranges with and without the base options, `offsetAt` shifting by
+ * exactly `startOffset`, `read(range)` returning the source's own text, and
+ * `positionAt`/`locationAt` at every reported endpoint matching a
+ * whole-document parse of the embedded fragment.
+ */
+function assertBaseContract(source: string, base: ParseOptions): ParseRun {
+  const based = parse(source, base);
+  const plain = parse(source);
+
+  // Events and ranges are untouched by the options.
+  assert.ok(based.log.length > 0, "no events were recorded");
+  assert.deepEqual(based.log, plain.log);
+
+  const offset = base.startOffset ?? 0;
+  const line = base.startLine ?? 0;
+  const column = base.startColumn ?? 0;
+  const { head, doc } = embed(source, line, column);
+  const whole = parse(doc);
+
+  for (const entry of based.log) {
+    for (const [start, end] of entry.ranges) {
+      // read() reads the parsed string, not the enclosing document.
+      assert.equal(
+        based.parser.read({ start, end }),
+        source.slice(start, end),
+        `${entry.handler} ${start}-${end}`,
+      );
+      // offsetAt is the raw rebasing, and nothing else moves.
+      assert.equal(based.parser.offsetAt(start), start + offset);
+      assert.equal(based.parser.offsetAt(end), end + offset);
+      // Positions match what the same characters have in the whole document.
+      assert.deepEqual(
+        based.parser.locationAt({ start, end }),
+        whole.parser.locationAt({
+          start: start + head.length,
+          end: end + head.length,
+        }),
+        `${entry.handler} ${start}-${end}`,
+      );
+      assert.deepEqual(
+        based.parser.positionAt(start),
+        whole.parser.positionAt(start + head.length),
+        `${entry.handler} ${start}`,
+      );
+    }
+  }
+  return based;
+}
+
+describe("base offset: handler ranges", () => {
+  it("are identical with and without the options (html mode)", () => {
+    assertBaseContract(HTML_SOURCE, BASE);
+  });
+
+  it("are identical with and without the options (concise mode)", () => {
+    assertBaseContract(CONCISE_SOURCE, BASE);
+  });
+
+  it("exercises every handler kind html mode can produce", () => {
+    const seen = new Set(parse(HTML_SOURCE).log.map((e) => e.handler));
+    for (const handler of HTML_HANDLERS) {
       assert.ok(seen.has(handler), `no ${handler} event was recorded`);
     }
   });
 
-  it("shift offsets by exactly startOffset through offsetAt", () => {
-    const { log, parser } = parse(ALL_HANDLERS, BASE);
-    for (const entry of log) {
-      for (const [start, end] of entry.ranges) {
-        assert.equal(parser.offsetAt(start), start + BASE.startOffset);
-        assert.equal(parser.offsetAt(end), end + BASE.startOffset);
-      }
+  it("exercises every handler kind concise mode can produce", () => {
+    const seen = new Set(parse(CONCISE_SOURCE).log.map((e) => e.handler));
+    for (const handler of CONCISE_HANDLERS) {
+      assert.ok(seen.has(handler), `no ${handler} event was recorded`);
     }
+    // The two modes are genuinely different inputs, not one source twice.
+    assert.notDeepEqual(
+      parse(CONCISE_SOURCE).log.map((e) => e.handler),
+      parse(HTML_SOURCE).log.map((e) => e.handler),
+    );
   });
 
-  it("leave read(range) returning the fragment's own text", () => {
-    const { log, parser } = parse(ALL_HANDLERS, BASE);
-    const plain = parse(ALL_HANDLERS);
-    for (let i = 0; i < log.length; i++) {
-      for (const range of log[i].ranges) {
-        assert.equal(
-          parser.read({ start: range[0], end: range[1] }),
-          plain.parser.read({ start: range[0], end: range[1] }),
-        );
-      }
-    }
+  it("reports a concise-mode error at end of input unchanged", () => {
+    const run = assertBaseContract(CONCISE_ERROR_SOURCE, BASE);
+    assert.ok(run.errors.length > 0, "no error was reported");
+    assert.deepEqual(run.errors, parse(CONCISE_ERROR_SOURCE).errors);
   });
 });
 
@@ -231,17 +328,7 @@ describe("base offset: positions and locations", () => {
     const { parser } = parse(source, base);
     const { head, doc } = embed(source, base.startLine, base.startColumn);
     const whole = parse(doc);
-    for (const offset of [
-      0,
-      2,
-      7,
-      9,
-      11,
-      12,
-      14,
-      source.length,
-      source.length - 1,
-    ]) {
+    for (const offset of [0, 2, 7, 9, 11, 12, 14, source.length - 1]) {
       assert.deepEqual(
         parser.positionAt(offset),
         whole.parser.positionAt(head.length + offset),
@@ -249,6 +336,30 @@ describe("base offset: positions and locations", () => {
       );
     }
     assert.deepEqual(parser.offsetAt(2), 9);
+  });
+
+  it("handles CRLF line endings", () => {
+    // `\r` is an ordinary character on its line; only `\n` starts a new one.
+    const source = "<div>\r\n  hi\r\n</div>";
+    const base = { startOffset: 11, startLine: 3, startColumn: 5 };
+    const { parser } = parse(source, base);
+    const { head, doc } = embed(
+      source,
+      base.startLine,
+      base.startColumn,
+      "\r\n",
+    );
+    const whole = parse(doc);
+    for (const offset of [0, 6, 7, 9, 12, source.length]) {
+      assert.deepEqual(
+        parser.positionAt(offset),
+        whole.parser.positionAt(head.length + offset),
+        `offset ${offset}`,
+      );
+    }
+    // The `\r` counts toward the column of the line it terminates.
+    assert.deepEqual(parser.positionAt(0), { line: 3, character: 5 });
+    assert.deepEqual(parser.positionAt(9), { line: 4, character: 2 });
   });
 
   it("behaves exactly as before when every base value is zero", () => {
@@ -269,7 +380,7 @@ describe("base offset: positions and locations", () => {
     }
   });
 
-  it("stays unchanged when the options object is empty or omitted", () => {
+  it("stays unchanged when the options object is empty or all-zero", () => {
     const plain = parse(SOURCE);
     for (const options of [{}, { startOffset: 0 }, { startColumn: 0 }]) {
       const based = parse(SOURCE, options);
@@ -278,13 +389,67 @@ describe("base offset: positions and locations", () => {
     }
   });
 
+  it("shifts lines for startLine alone, leaving columns alone", () => {
+    const source = "<div>\n  hi\n</div>";
+    const base = { startLine: 6 };
+    const { parser } = parse(source, base);
+    const { head, doc } = embed(source, 6, 0);
+    const whole = parse(doc);
+    for (const offset of [0, 5, 6, 8, 12]) {
+      assert.deepEqual(
+        parser.positionAt(offset),
+        whole.parser.positionAt(head.length + offset),
+        `offset ${offset}`,
+      );
+    }
+    assert.deepEqual(parser.positionAt(0), { line: 6, character: 0 });
+    assert.deepEqual(parser.positionAt(8), { line: 7, character: 2 });
+    // offsetAt with no startOffset does not move.
+    assert.equal(parser.offsetAt(8), 8);
+  });
+
+  it("shifts the first line's columns for startColumn alone", () => {
+    const source = "<div>\n  hi\n</div>";
+    const base = { startColumn: 9 };
+    const { parser } = parse(source, base);
+    const { head, doc } = embed(source, 0, 9);
+    const whole = parse(doc);
+    for (const offset of [0, 5, 6, 8, 12]) {
+      assert.deepEqual(
+        parser.positionAt(offset),
+        whole.parser.positionAt(head.length + offset),
+        `offset ${offset}`,
+      );
+    }
+    assert.deepEqual(parser.positionAt(0), { line: 0, character: 9 });
+    assert.deepEqual(parser.positionAt(8), { line: 1, character: 2 });
+    assert.equal(parser.offsetAt(8), 8);
+  });
+
+  it("does not leak one parse's base into the next on one instance", () => {
+    const source = "<div>\n  hi\n</div>";
+    const parser = createParser({});
+
+    parser.parse(source, { startOffset: 100, startLine: 5, startColumn: 8 });
+    const first = parser.positionAt(8);
+    assert.deepEqual(first, { line: 6, character: 2 });
+    assert.equal(parser.offsetAt(8), 108);
+
+    parser.parse(source, { startOffset: 3, startLine: 1, startColumn: 0 });
+    assert.deepEqual(parser.positionAt(8), { line: 2, character: 2 });
+    assert.equal(parser.offsetAt(8), 11);
+
+    parser.parse(source);
+    assert.deepEqual(parser.positionAt(8), { line: 1, character: 2 });
+    assert.equal(parser.offsetAt(8), 8);
+  });
+
   it("rebases an error raised at end of input", () => {
     const source = "<div>\n  unclosed(";
     const base = { startOffset: 55, startLine: 4, startColumn: 2 };
     const based = parse(source, base);
     const plain = parse(source);
     assert.ok(based.errors.length > 0);
-    assert.ok(plain.errors.length > 0);
     assert.deepEqual(based.errors, plain.errors);
 
     const { head, doc } = embed(source, base.startLine, base.startColumn);
@@ -301,48 +466,67 @@ describe("base offset: positions and locations", () => {
     }
   });
 
-  it("does not double-shift a location computed from a node's own range", () => {
+  it("rebases positions a handler reads mid-parse, exactly once", () => {
     // `@marko/compiler`'s onCloseTagEnd reads the tag's own start/end back
-    // through locationAt mid-parse to compute the node's loc. Since handler
-    // ranges stay fragment-relative and locationAt is rebased, that read
-    // shifts exactly once: every location a handler derives from a node it
-    // was handed equals the location the same characters have in a
-    // whole-document parse of the embedded fragment.
+    // through locationAt *during* the parse to compute the node's loc. Since
+    // handler ranges stay fragment-relative and positionAt/locationAt are
+    // rebased, that read shifts once, not twice. Every call below happens
+    // inside the handler, before parse() returns.
     const source = '<div class="a">\n  <span>hi</span>\n</div>';
     const { head, doc } = embed(source, BASE.startLine, BASE.startColumn);
     const whole = parse(doc);
 
-    const seen: unknown[] = [];
+    type Node = { start: number; end: number };
+    interface Read {
+      at: string;
+      text: string;
+      loc: unknown;
+      pos: unknown;
+      start: number;
+      end: number;
+    }
+    const seen: Read[] = [];
+
+    function record(at: string, node: Node): void {
+      seen.push({
+        at,
+        text: parser.read(node),
+        loc: parser.locationAt(node),
+        pos: parser.positionAt(node.start),
+        start: parser.offsetAt(node.start),
+        end: parser.offsetAt(node.end),
+      });
+    }
+
     const parser = createParser({
-      onOpenTagStart(node) {
-        seen.push({ at: "openStart", node: { ...node } });
-      },
-      onOpenTagEnd(node) {
-        seen.push({ at: "openEnd", node: { ...node } });
-      },
-      onCloseTagStart(node) {
-        seen.push({ at: "closeStart", node: { ...node } });
-      },
-      onCloseTagEnd(node) {
-        seen.push({ at: "closeEnd", node: { ...node } });
-      },
+      onOpenTagStart: (node) => record("openStart", node),
+      onOpenTagEnd: (node) => record("openEnd", node),
+      onCloseTagStart: (node) => record("closeStart", node),
+      onCloseTagEnd: (node) => record("closeEnd", node),
     });
     parser.parse(source, BASE);
 
     assert.ok(seen.length >= 6, `only ${seen.length} tag events`);
-    for (const entry of seen as Array<{
-      at: string;
-      node: { start: number; end: number };
-    }>) {
-      const { start, end } = entry.node;
-      assert.equal(parser.read(entry.node), source.slice(start, end), entry.at);
-      assert.equal(parser.offsetAt(start), start + BASE.startOffset, entry.at);
-      assert.equal(parser.offsetAt(end), end + BASE.startOffset, entry.at);
+    for (const entry of seen) {
+      const { start, end } = { start: entry.start, end: entry.end };
+      const at = start - BASE.startOffset;
+      assert.equal(
+        entry.text,
+        source.slice(at, end - BASE.startOffset),
+        entry.at,
+      );
+      assert.equal(start, at + BASE.startOffset, entry.at);
+      assert.equal(end, end, entry.at);
       assert.deepEqual(
-        parser.locationAt(entry.node),
+        entry.pos,
+        whole.parser.positionAt(at + head.length),
+        entry.at,
+      );
+      assert.deepEqual(
+        entry.loc,
         whole.parser.locationAt({
-          start: start + head.length,
-          end: end + head.length,
+          start: at + head.length,
+          end: end - BASE.startOffset + head.length,
         }),
         entry.at,
       );
@@ -365,6 +549,9 @@ describe("base offset: embedding equivalence", () => {
     '<!-- comment -->\n<!DOCTYPE html>\n<![CDATA[raw]]>\n<?xml version="1.0"?>',
     "<div>\n  unclosed(",
     "😀<div>😀😀\n😀x</div>",
+    "div.cls#id/tagVar a=1 ...spread c(1)\n  -- text\n  ${placeholder}",
+    "unclosed(",
+    "<div>\r\n  hi\r\n</div>",
   ];
 
   const BASES = [
@@ -372,17 +559,25 @@ describe("base offset: embedding equivalence", () => {
     { startOffset: 137, startLine: 9, startColumn: 14 },
     { startOffset: 4, startLine: 0, startColumn: 3 },
     { startOffset: 1, startLine: 41, startColumn: 0 },
+    { startLine: 7 },
+    { startColumn: 5 },
   ];
 
   for (const base of BASES) {
     it(`matches a whole-document parse of the embedded fragment (base ${JSON.stringify(base)})`, () => {
+      const eol = base.startLine && base.startLine % 2 === 1 ? "\r\n" : "\n";
       for (const input of INPUTS) {
         const based = parse(input, base);
         const plain = parse(input);
         // Identical events, identical ranges.
         assert.deepEqual(based.log, plain.log, input);
 
-        const { head, doc } = embed(input, base.startLine, base.startColumn);
+        const { head, doc } = embed(
+          input,
+          base.startLine ?? 0,
+          base.startColumn ?? 0,
+          eol,
+        );
         const whole = parse(doc);
 
         const offsets = new Set<number>([
@@ -396,9 +591,12 @@ describe("base offset: embedding equivalence", () => {
             offsets.add(end);
             assert.equal(
               based.parser.offsetAt(start),
-              start + base.startOffset,
+              start + (base.startOffset ?? 0),
             );
-            assert.equal(based.parser.offsetAt(end), end + base.startOffset);
+            assert.equal(
+              based.parser.offsetAt(end),
+              end + (base.startOffset ?? 0),
+            );
           }
         }
         for (const offset of offsets) {

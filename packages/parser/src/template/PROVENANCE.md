@@ -59,13 +59,17 @@ extract `git archive v5.18.0 src` of upstream and diff; only
 `states/ATTRIBUTE.ts` and `states/EXPRESSION.ts` differ from upstream for that
 rule, plus the three files the base-position addition below touches.
 
-## Base position for fragment parses (MX addition, not from the patch)
+## Base position for fragment parses
 
 `docs/upstream/htmljs-parser-offset.patch` is this project's own proposal to
-upstream htmljs-parser, never sent. Its design is applied here as ordinary
-source, so `core/Parser.ts` and `index.ts` now also differ from `v5.18.0`.
-No state file is touched — the change is confined to the two files and one
-test file the patch itself names.
+upstream htmljs-parser, never sent. Its design is applied here verbatim, as
+ordinary source, so `core/Parser.ts` and `index.ts` now also differ from
+`v5.18.0`. It was applied by editing this copy directly rather than by running
+`git apply`: the patch's non-test hunks landed unchanged, and its test hunk —
+which edits `__tests__/api.test.ts`, upstream's own byte-identical file — was
+replaced by a new `__tests__/base-offset.test.ts` so that upstream's suite and
+its snapshots stay untouched. No state file is touched: the change is confined
+to the two source files the patch names.
 
 `parse(code, options?)` accepts an optional base position
 `{ startOffset?, startLine?, startColumn? }` for the case where `code` is a

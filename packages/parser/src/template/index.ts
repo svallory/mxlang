@@ -49,19 +49,25 @@ export function createParser(handlers: ParserOptions) {
     },
     /**
      * Given a offset in the current source code, returns a Position object with line & character information.
+     * When `parse` was given a base position, this is relative to the enclosing document rather than `code`.
      */
     positionAt(offset: number) {
       return parser.positionAt(offset);
     },
     /**
      * Given a offset range in the current source code, returns a Location object with a start & end position information.
+     * When `parse` was given a base position, both ends are relative to the enclosing document; the range
+     * passed in stays relative to `code`.
      */
     locationAt(range: Range) {
       return parser.locationAt(range);
     },
     /**
      * Given an offset in the current source code, returns that offset rebased
-     * onto the enclosing document using `parse`'s base position.
+     * onto the enclosing document using `parse`'s base position. Use it to
+     * turn a fragment-relative offset (a handler's range, a `node.start` into
+     * `offsetAt`) into a document-absolute one; without a base position it is
+     * the identity.
      */
     offsetAt(offset: number) {
       return parser.offsetAt(offset);
