@@ -27,6 +27,8 @@ First npm prerelease (dist-tag `alpha`), with everything listed under 0.1.0 belo
 
 ## 0.1.0 (unreleased)
 
+- **Tests (dynamic-shorthand-class):** `<a.${x}/>`, a dynamic tag-adjacent class shorthand, builds a data tree: the `class` expression carries its `nameSpan` (a shorthand attribute has had a real one since the `nameSpan` fix). It used to throw "core IR invariant broken — attribute `class` carries no name span"; the tag-adjacent-only rule and the merged-`class` reject are unchanged.
+
 - **Fix:** a shorthand attribute (`#id`, `.cls`) now carries its `nameSpan` (sigil plus token) in the tree; it was omitted while core gave it `NaN` offsets. The field stays optional in the type.
 - **Feat (name-sugar-default-value, decision 146 addendum 4):** Mesh's `boolean #isOverdue({ self }) { return self.x }` is a `boolean` tag with `id="isOverdue"` and a function `value` (concise, html, child line, either order of the params); `#x=1`, `:x=input.y`, `.c=1` give the sugar plus `value`; a `value: function` contract passes it and E1 on it is positioned at the sugar's value.
 

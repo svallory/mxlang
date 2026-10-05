@@ -1788,3 +1788,35 @@ describe("name sugar on attribute tags", () => {
     ]);
   });
 });
+
+// TODO `data-dynamic-shorthand-invariant`: `parseData('<a.${x}/>')` used to
+// throw "core IR invariant broken — attribute `class` carries no name span"
+// instead of returning a diagnostic. #338 gave a shorthand attribute a real
+// nameSpan, so the case works now; this pins that, and that the `class` the
+// tree carries names the expression the author wrote.
+describe("a dynamic shorthand class on data", () => {
+  it("a dynamic tag-adjacent class shorthand builds", () => {
+    const tag = firstTag(ok(`<a.${D}x}/>`));
+    const cls = tag.attrs[0];
+    expect(cls?.kind).toBe("expression");
+    if (cls?.kind !== "expression") throw new Error("expected an expression");
+    expect(cls.name).toBe("class");
+    expect(cls.value.code).toBe("x");
+    expect(named(cls.nameSpan)).toEqual({ sourceStart: 5, sourceEnd: 6 });
+  });
+
+  it.each([
+    [`<a.${D}x} .${D}y}/>`, "a dynamic shorthand works only tag-adjacent"],
+    [`<a .${D}x}/>`, "a dynamic shorthand works only tag-adjacent"],
+    [
+      `<a.${D}x} class="y"/>`,
+      "a shorthand class (`.a`) together with a `class` attribute",
+    ],
+  ])("%s is a positioned diagnostic, not a throw", (source, expected) => {
+    const result = parseData(source, "/t.mx");
+    expect(result.tree).toBeUndefined();
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]?.severity).toBe("error");
+    expect(result.diagnostics[0]?.message).toContain(expected);
+  });
+});
