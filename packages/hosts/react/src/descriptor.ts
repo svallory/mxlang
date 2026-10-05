@@ -64,8 +64,8 @@ const descriptor: TargetDescriptor = {
     fileKinds: [
       {
         segment: "react",
-        // VS Code's language id, then Zed's language name (lowercased).
-        languageIds: ["reactmx", "react"],
+        // VS Code's language id; Zed's language `ReactMX` lowercases to it.
+        languageIds: ["reactmx"],
         diagnosticSource: "reactmx",
         compileRegion: (source, input) =>
           (

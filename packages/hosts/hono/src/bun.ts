@@ -31,7 +31,7 @@ import { compileHonoMx, honoTargets } from "./index.ts";
  * target, and this package cannot import the registry (the registry depends
  * on it). A host that adds a module file kind adds its segment here.
  */
-const FOREIGN_SEGMENTS: readonly string[] = ["solid", "astro"];
+const FOREIGN_SEGMENTS: readonly string[] = ["solid", "astro", "react"];
 
 /**
  * The `onLoad` filter: every `.mx` except a host module file (`.<segment>.mx`)

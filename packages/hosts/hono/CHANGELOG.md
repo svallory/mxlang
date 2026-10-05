@@ -1,5 +1,7 @@
 # @mxlang/hono
 
+- **Changed (react-region, decision 154):** the Bun loader declines `.react.mx` (React's region file kind), as `@mxlang/html`'s does.
+
 - **Changed (bridge-host, decision 154):** the Bun loader's filter is built from its lookup (`mxFilter`), as `@mxlang/html`'s; unchanged with the package's own lookup.
 
 - **Fix (html-imported-return-tag-object-object):** an imported `.mx` tag that declares `<return>`, called without `/var`, renders its body and drops the value on this host too (the call now carries `returnsValue`, so the shared emitter unwraps `.output`). Render-locked by `imported-return-render.test.ts`.
