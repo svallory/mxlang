@@ -1,13 +1,13 @@
 # @mxlang/data
 
-## 0.1.0-alpha.3
-
-- **Changed (decision 159):** `@marko/compiler` is no longer a dependency. The scan and the data taglib use `@mxlang/core`'s `markoCompiler()`, so data parses with core's bundled Marko front end and MX's own template parser: after-value sugar (`<field type="email" :email/>`) works in a registry install. Requires `@mxlang/core` 0.1.0-alpha.3.
-
 ## Unreleased
 
 - `unknownTags: "reject"` counts a child claimed by a parent's `children["*"]` as known, on the build path and on the parse-only scan used when core reports an earlier error (decision 147).
 - `<let>`, `<style>` and the other core-taglib names are never claimed by a wildcard, like every target (decision 147 addendum 2).
+
+## 0.1.0-alpha.3
+
+- **Changed (decision 159):** `@marko/compiler` is no longer a dependency. The scan and the data taglib use `@mxlang/core`'s `markoCompiler()`, so data parses with core's bundled Marko front end and MX's own template parser: after-value sugar (`<field type="email" :email/>`) works in a registry install. Requires `@mxlang/core` 0.1.0-alpha.3.
 
 ## 0.1.0-alpha.2
 
