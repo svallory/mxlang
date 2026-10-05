@@ -1,8 +1,9 @@
 # @mxlang/tree-sitter-mx
 
-## 0.1.0 (unreleased)
+## 0.1.0-alpha.1 (2026-10-05)
 
-First version. A vendored snapshot of `marko-js/tree-sitter` at
+First version, published as an alpha. A vendored snapshot of
+`marko-js/tree-sitter` at
 `7fb20382b9b0c97c8bdbceee0e0641bea11dd00f` (`@marko/tree-sitter` 0.2.0) with
 two local patches (see `UPSTREAM.md`):
 
@@ -31,6 +32,9 @@ two local patches (see `UPSTREAM.md`):
 - The injected TypeScript highlights gain `highlight/extra-highlights.scm`:
   names bound by an object pattern (`({ self }) => ...`, a parameter or a
   `const { a } = x`) and a ternary's `?` and `:` had no capture.
+- A package-specific README (patch 0005) replaces upstream's: what the package
+  is, the two entry points with a docmd example, the dependency and when the
+  wasm is built.
 - Tests run on bun through web-tree-sitter, and compare against htmljs-parser
   fixtures pinned to v5.12.0 instead of its unpinned HEAD.
 - Tag-param patterns/types/defaults, tag-var types and type arguments start at

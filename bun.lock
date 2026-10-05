@@ -241,7 +241,7 @@
     },
     "packages/editors/tree-sitter-mx": {
       "name": "@mxlang/tree-sitter-mx",
-      "version": "0.1.0",
+      "version": "0.1.0-alpha.1",
       "dependencies": {
         "web-tree-sitter": "0.26.9",
       },
