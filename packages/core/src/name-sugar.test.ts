@@ -318,3 +318,28 @@ describe("a host with its own attribute syntax opts out", () => {
     expect(shape("<a #ref/>", foreign)).toBe("a #ref");
   });
 });
+
+// The parser reads the tag name before the split, so what it decides from the
+// name (void elements, the closing tag) sees the whole `tag:rest`.
+describe("known limits of the tag-adjacent split", () => {
+  it("a void element written tag-adjacent needs `/>` in HTML mode", () => {
+    expect(() => lowerSource('<input:email type="email">')).toThrow(
+      'Missing ending "input:email" tag',
+    );
+    expect(shape('<input:email type="email"/>')).toBe(
+      'input name="email" type="email"',
+    );
+    // Concise mode has no closing tag to miss.
+    expect(shape('input:email type="email"')).toBe(
+      'input name="email" type="email"',
+    );
+  });
+
+  it("the closing tag repeats the written name, or is `</>`", () => {
+    expect(() => lowerSource("<div:x>hi</div>")).toThrow(
+      'The closing "div" tag does not match the corresponding opening "div:x" tag',
+    );
+    expect(shape("<div:x>hi</div:x>")).toBe('div name="x"');
+    expect(shape("<div:x>hi</>")).toBe('div name="x"');
+  });
+});

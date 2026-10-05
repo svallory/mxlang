@@ -191,7 +191,7 @@ describe("`:modifier` renders as the attribute `value:modifier` (astro)", () => 
   it("renders Marko's attribute for the static and valueless forms", async () => {
     const html = await renderPlain(
       "value-modifier-plain",
-      ['<div :foo="lit"/>', "<div :bar/>"].join("\n"),
+      ['<div value:foo="lit"/>', "<div value:bar/>"].join("\n"),
     );
     expect(html).toContain(`value:foo="lit"`);
     expect(html).toContain(`value:bar=""`);
@@ -212,7 +212,7 @@ describe("`:modifier` renders as the attribute `value:modifier` (astro)", () => 
       'const y = "hello";',
       // In `.astro.mx` the braces would be an MX object expression, so the
       // dynamic attribute is written without them.
-      "<div :foo=y/>",
+      "<div value:foo=y/>",
     );
     expect(html).toContain(`value:foo="hello"`);
   });

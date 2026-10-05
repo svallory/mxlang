@@ -33,7 +33,6 @@ describe("invalid attribute names (html)", () => {
     ["[prop]", '<div [prop]="x">hi</div>', 5, "write `prop=`"],
     ["[attr.x]", '<div [attr.x]="y"/>', 5, "write `x=`"],
     ["[class.a]", '<div [class.a]="y"/>', 5, "class={ a: cond }"],
-    ["#ref", "<div #ref/>", 5, "reference"],
     ["*ngIf", '<div *ngIf="x"/>', 5, "<if=cond>"],
     // biome-ignore lint/suspicious/noTemplateCurlyInString: literal mx source
     ["$foo", "<${input.tag} $foo=1/>", 14, "attribute name"],
@@ -43,6 +42,13 @@ describe("invalid attribute names (html)", () => {
     expect(error.message).toContain(`Invalid attribute name \`${name}\``);
     expect(error.message).toContain(hint);
     expect(error).toMatchObject({ line: 1, column });
+  });
+
+  // Decision 146: `#ref` is `id="ref"` sugar, not Angular's reference.
+  it("reads `#ref` as `id` sugar", () => {
+    expect(compile("<div #ref/>", "/fixtures/test.mx").code).toContain(
+      `__mxOut += "<div id=\\"ref\\"></div>";`,
+    );
   });
 
   it("positions on the right line and column in a multi-line tag", () => {
@@ -72,6 +78,9 @@ describe("invalid attribute names (html)", () => {
  * Only native `class:`, `style:` and `on:` prefixes are reserved; every other
  * colon name, such as `x:foo` or `data:x`, is an ordinary attribute.
  *
+ * Decision 146 made the bare `:foo` spelling `name="foo"` sugar; the explicit
+ * `value:foo` below is still Marko's attribute.
+ *
  * Plain HTML carries the name verbatim, so this host renders exactly what
  * Marko renders. `expected.html` in the `attr-value-modifier` fixture is
  * stock Marko's own output (`bun run oracle:marko`).
@@ -81,16 +90,15 @@ describe("`:modifier` is the attribute `value:modifier` (html)", () => {
     compile(source, "/fixtures/test.mx").code;
 
   it("renders Marko's attribute, for every value kind", () => {
-    expect(rendered(`<div :foo="lit"/>`)).toContain(
-      `__mxOut += "<div value:foo=\\"lit\\"></div>";`,
-    );
-    expect(rendered(`<div :foo/>`)).toContain(
-      `__mxOut += "<div value:foo=\\"\\"></div>";`,
-    );
-    // The same attribute under its long spelling: Marko compiles
-    // `<div value:foo="y"/>` to the same output as `<div :foo="y"/>`.
     expect(rendered(`<div value:foo="lit"/>`)).toContain(
       `__mxOut += "<div value:foo=\\"lit\\"></div>";`,
+    );
+    expect(rendered(`<div value:foo/>`)).toContain(
+      `__mxOut += "<div value:foo=\\"\\"></div>";`,
+    );
+    // Decision 146: the bare spelling is `name` sugar.
+    expect(rendered(`<div :foo/>`)).toContain(
+      `__mxOut += "<div name=\\"foo\\"></div>";`,
     );
   });
 
@@ -133,7 +141,7 @@ describe("`:modifier` is the attribute `value:modifier` (html)", () => {
   it.each([
     ["<div x:() {}/>", "The `x:` attribute cannot be a function.", 1, 5],
     [
-      "<div :foo() {}/>",
+      "<div value:foo() {}/>",
       "The `value:foo` attribute cannot be a function.",
       1,
       5,
@@ -308,5 +316,55 @@ describe("`<for>` by=/key= (html)", () => {
     ]) {
       expect(() => failure(ok)).toThrow("expected a compile error");
     }
+  });
+});
+
+/**
+ * Decision 146: `:name`, `#id` and `.class` sugar, rendered. The IR rows are in
+ * `packages/core/src/name-sugar.test.ts`; these pin the HTML each position
+ * produces, in HTML and concise mode.
+ */
+describe("name sugar renders (html)", () => {
+  const html = (source: string): string =>
+    compile(source, "/fixtures/test.mx").code.match(
+      /__mxOut \+= (".*");/,
+    )?.[1] ?? "";
+  const rendered = (source: string): string => JSON.parse(html(source));
+
+  it.each([
+    ['<input:email type="email"/>', '<input name="email" type="email">'],
+    ["<:email/>", '<div name="email"></div>'],
+    ["<a.c:b/>", '<a name="b" class="c"></a>'],
+    ["<a#d:b.c/>", '<a name="b" class="c" id="d"></a>'],
+    ["<a.c:b#d/>", '<a name="b" class="c" id="d"></a>'],
+    ["<a:b.c#d/>", '<a name="b" class="c" id="d"></a>'],
+    ["<a.hover:x/>", '<a name="x" class="hover"></a>'],
+    ['<a class="hover:x"/>', '<a class="hover:x"></a>'],
+    ["<a :b/>", '<a name="b"></a>'],
+    ['<a x="1" :b/>', '<a x="1" name="b"></a>'],
+    ["<a #b/>", '<a id="b"></a>'],
+    ["<a .b/>", '<a class="b"></a>'],
+    ['<a x="1" #b/>', '<a x="1" id="b"></a>'],
+    ['<a x="1" .b/>', '<a x="1" class="b"></a>'],
+    ["<div.a #m .b/>", '<div class="a b" id="m"></div>'],
+    ["<div.a.b#m/>", '<div class="a b" id="m"></div>'],
+    ['a x="1" #b .c :d', '<a x="1" id="b" class="c" name="d"></a>'],
+  ])("%s", (source, expected) => {
+    expect(rendered(source)).toBe(expected);
+  });
+
+  it("`x=a.b .c` is two attributes, `x=(a.b .c)` is one value", () => {
+    const code = (source: string) => compile(source, "/fixtures/test.mx").code;
+    expect(code("<a x=input.a .c/>")).toContain('"x", input.a');
+    expect(code("<a x=input.a .c/>")).toContain('class=\\"c\\"');
+    expect(code("<a x=(input.a .c)/>")).not.toContain('class=\\"c\\"');
+  });
+
+  it.each([
+    ["<a :b=1/>", "`:b=1`"],
+    ["<a :1/>", "`:1`"],
+    ["<a:b.c:d/>", "one `:name`"],
+  ])("%s is a positioned error", (source, text) => {
+    expect(failure(source).message).toContain(text);
   });
 });

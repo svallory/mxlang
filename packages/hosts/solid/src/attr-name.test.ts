@@ -33,7 +33,6 @@ describe("invalid attribute names (solid)", () => {
     ["[prop]", '<div [prop]="x">hi</div>', 5, "write `prop=`"],
     ["[attr.x]", '<div [attr.x]="y"/>', 5, "write `x=`"],
     ["[class.a]", '<div [class.a]="y"/>', 5, "class={ a: cond }"],
-    ["#ref", "<div #ref/>", 5, "reference"],
     ["*ngIf", '<div *ngIf="x"/>', 5, "<if=cond>"],
     ["$foo", "<foo $foo=1/>", 5, "attribute name"],
     ["@foo", '<div @foo="y"/>', 5, "attribute name"],
@@ -66,7 +65,7 @@ describe("invalid attribute names (solid)", () => {
 /**
  * Marko's parser (`babel-plugin/parser.js`, `onAttrName`) splits an attribute
  * name at its LAST `:` and fills an empty head with `value`, so
- * `<div :foo="y"/>` is not a modifier: it is the attribute literally named
+ * `<div value:foo="y"/>` is not a modifier: it is the attribute literally named
  * `value:foo`, which Marko compiles and renders as `<div value:foo=y>`.
  * Only native `class:`, `style:` and `on:` prefixes are reserved; every other
  * colon name is an ordinary attribute in Marko.
@@ -78,14 +77,15 @@ describe("invalid attribute names (solid)", () => {
 describe("`:modifier` is the attribute `value:modifier` (solid)", () => {
   it("emits Marko's attribute, for every value kind", () => {
     expect(
-      compileSolidMx(`<div :foo=y/>`, { filename: "fixture.solid.mx" }).code,
+      compileSolidMx(`<div value:foo=y/>`, { filename: "fixture.solid.mx" })
+        .code,
     ).toContain('<div value:foo={__mxAttrValue("value:foo", y, "div")}>');
     expect(
-      compileSolidMx(`<div :foo="lit"/>`, { filename: "fixture.solid.mx" })
+      compileSolidMx(`<div value:foo="lit"/>`, { filename: "fixture.solid.mx" })
         .code,
     ).toContain(`<div value:foo="lit">`);
     expect(
-      compileSolidMx(`<div :foo/>`, { filename: "fixture.solid.mx" }).code,
+      compileSolidMx(`<div value:foo/>`, { filename: "fixture.solid.mx" }).code,
     ).toContain('<div value:foo="">');
     // The same attribute under its long spelling: Marko compiles
     // `<div value:foo="y"/>` to the same output as `<div :foo="y"/>`.
@@ -93,6 +93,18 @@ describe("`:modifier` is the attribute `value:modifier` (solid)", () => {
       compileSolidMx(`<div value:foo=y/>`, { filename: "fixture.solid.mx" })
         .code,
     ).toContain('<div value:foo={__mxAttrValue("value:foo", y, "div")}>');
+  });
+
+  // Decision 146: the bare spelling is `name`/`id`/`class` sugar.
+  it.each([
+    ["<div :foo/>", '<div name="foo"></div>'],
+    ['<input type="email" :email/>', '<input type="email" name="email" />'],
+    ['<input:email type="email"/>', '<input name="email" type="email" />'],
+    ["<div #main .big/>", '<div id="main" class="big"></div>'],
+  ])("compiles the sugar %s", (source, expected) => {
+    expect(
+      compileSolidMx(source, { filename: "fixture.solid.mx" }).code,
+    ).toContain(expected);
   });
 
   it.each([

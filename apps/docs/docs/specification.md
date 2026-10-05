@@ -698,6 +698,58 @@ front — otherwise the attribute is emitted twice and the second wins
 `style=` accepts an **object literal only**: `style={color: c()}` →
 `style={{color: c()}}`. Any other `style=` expression is a parse error in MX 1.
 
+### Name sugar: `:name`, `#id` and `.class` anywhere on a tag
+
+**Decisions 146 and 151; [ADR 146](/design-notes/adr-name-sugar/).** `:val` sets
+`name="val"`, as `#val` sets `id="val"` and `.val` sets `class="val"`. All three
+work in three positions, in HTML and concise mode alike:
+
+| Position | Example | Result |
+|---|---|---|
+| tag-adjacent | `<input:email>`, `<a.c:b#d>`, `<:email>` | the tag plus the attributes written out; `<:email>` is the unnamed tag (decision 145) with `name="email"` |
+| first attribute | `<input :email type="email">` | `name="email"` first |
+| after any attribute | `<input type="email" :email>`, `<input x="1" #main .big>` | the attribute at its written position |
+
+The value is a static identifier-like token (`[A-Za-z_$][\w$-]*`), exactly what
+Marko's shorthand allows; `name` is then an ordinary attribute, so contracts,
+the duplicate-attribute rule (decision 135) and E1 types all apply.
+
+**Tag-adjacent sugars compose in any order** (23:23 addendum): `<a.c:b>` is class
+`c` and name `b`; `<a#d:b.c>` is id `d`, name `b`, class `c`; `<:b.c>` is the
+unnamed tag with name `b` and class `c`. A static tag name splits at its first
+`:`; the static part of a shorthand `class`/`id` value splits the same way (a
+dynamic shorthand splits only its static tail: `<a.${x}:b>` is a dynamic class
+and name `b`; `<a.c:b${x}>` keeps `c:b` as class text). **A second `:` in the
+tag head is a positioned error**: a tag takes one name (`<a:b.c:d>`). The split
+is post-parse, so the parser still sees `tag:rest` as the name: in HTML mode a
+void element needs its `/>` (`<input:email type="email"/>`) and the closing tag
+repeats the written name (`</div:x>`) or is `</>`; concise mode is unaffected.
+
+**In attribute position** `#x`, `.x` and `:x` are rewritten to `id`, class and
+`name` before the shorthand merge, so `<div.a #m .b>` is exactly
+`<div.a.b#m>`: `.x` values are space-joined, an authored `class=` merges as a
+shorthand does, and `#x` or `:x` repeated or beside an explicit `id=`/`name=`
+follow the duplicate rule (the later one wins, with a warning). A value on the
+sugar (`:x=1`) and a token that is not an identifier are positioned errors.
+
+**Left alone:** the named forms (`class:x`, `style:x`, `value:fn:=x`, and the
+explicit `value:x`), a bare `:` (still Marko's `value:`), a dynamic tag name
+(`<${x}>`), an attribute tag's name (`<@svg:rect>`), a bound attribute, and the
+**default attribute**: sugar right after a default value (`<if=a .b>`,
+`<const/x=items\n  .filter()/>`) is not supported and keeps Marko's meaning.
+A host with attribute syntax of its own (`acceptsForeignAttrNames`, Angular) does
+not apply the sugar: there `svg:rect` and `#ref` are not ours.
+
+**Consumers on a stock parser.** The after-attribute positions need the patched
+`htmljs-parser` (a `patchedDependencies` entry of this repo). On a stock parser
+`<input type="email" :email>` fails; core probes the installed parser once and
+raises a positioned error naming the rule, the requirement and the way out
+(`<input:email type="email">`). `x=a.b .c` is silently member access there and
+is not detected. Tag-adjacent and first-position sugars work everywhere.
+
+Divergences from Marko: four rows in `divergences.md` (a `:` in a tag name, bare
+`:x` as `name`, the parser's after-value rule, a `:` in a shorthand class or id).
+
 ### The unnamed tag
 
 **Decision 145; [ADR 145](/design-notes/adr-default-tag/).** A tag with a

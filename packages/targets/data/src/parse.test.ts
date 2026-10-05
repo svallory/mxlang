@@ -1621,30 +1621,27 @@ describe("a warning with no source position is file-level too", () => {
 describe("valueless default-attribute modifier (Mesh span bug)", () => {
   const options = { structural: "reject" } as const;
 
-  it("`entity :Todo table=...` does not throw the span invariant", () => {
-    const tree = ok('entity :Todo table="todos"\n', options);
-    const entity = firstTag(tree);
-    const attr = entity.attrs.find((a) => a.name === "value:Todo");
-    expect(attr).toMatchObject({ kind: "string", value: "" });
-  });
-
-  it("a child line `create :complete ...` does not throw either", () => {
-    const tree = ok("entity\n  create :complete done=true\n", options);
-    const create = firstTag(tree).children.find(
-      (c) => c.kind === "tag" && c.name === "create",
-    ) as DataTag;
-    expect(create.attrs.map((a) => a.name)).toContain("value:complete");
-  });
-
+  // Decision 146 made the bare `:Todo` `name="Todo"` sugar; the Mesh bug was
+  // an invariant failure on every valueless modifier attribute, so the
+  // regression rows use the spellings that are still modifiers.
   it.each([
     ["x:foo", "<a x:foo/>"],
     ["x:", "<a x:/>"],
     ["value:foo", "<a value:foo/>"],
+    ["value:Todo", 'entity value:Todo table="todos"\n'],
   ])("`%s` valueless modifier carries a zero-width value span", (name, src) => {
     const attr = firstTag(ok(src, options)).attrs.find((a) => a.name === name);
     expect(attr).toMatchObject({ kind: "string", value: "" });
     const span = (attr as Extract<DataAttr, { kind: "string" }>).valueSpan;
     expect(span.sourceEnd).toBe(span.sourceStart);
+  });
+
+  it("a child line with a valueless modifier does not throw either", () => {
+    const tree = ok("entity\n  create value:complete done=true\n", options);
+    const create = firstTag(tree).children.find(
+      (c) => c.kind === "tag" && c.name === "create",
+    ) as DataTag;
+    expect(create.attrs.map((a) => a.name)).toContain("value:complete");
   });
 
   it("the other modifier forms keep working (`x:=y` bound, `class:x`)", () => {
@@ -1655,5 +1652,57 @@ describe("valueless default-attribute modifier (Mesh span bug)", () => {
     });
     const classX = firstTag(ok('<a class:x="y"/>', options)).attrs[0];
     expect(classX?.kind).toBeDefined();
+  });
+});
+
+// Decision 146: `:name`, `#id` and `.class` sugar reaches the tree as the
+// attributes the author would have written.
+describe("name sugar (decision 146)", () => {
+  const options = { structural: "reject" } as const;
+  const attrNames = (src: string) =>
+    firstTag(ok(src, options)).attrs.map((a) =>
+      a.kind === "string" ? `${a.name}=${a.value}` : a.name,
+    );
+
+  it("`entity :Todo table=...` is name=Todo (the Mesh spelling)", () => {
+    const entity = firstTag(ok('entity :Todo table="todos"\n', options));
+    expect(
+      entity.attrs.map((a) =>
+        a.kind === "string" ? [a.name, a.value] : a.name,
+      ),
+    ).toEqual([
+      ["name", "Todo"],
+      ["table", "todos"],
+    ]);
+    const name = entity.attrs[0] as Extract<DataAttr, { kind: "string" }>;
+    // The token `:Todo` is the name span; the value span is `Todo`.
+    expect(name.nameSpan).toEqual({ sourceStart: 7, sourceEnd: 12 });
+    expect(name.valueSpan).toEqual({ sourceStart: 8, sourceEnd: 12 });
+  });
+
+  it("a child line `create :complete ...` works", () => {
+    const tree = ok("entity\n  create :complete done=true\n", options);
+    const create = firstTag(tree).children.find(
+      (c) => c.kind === "tag" && c.name === "create",
+    ) as DataTag;
+    expect(create.attrs.map((a) => a.name)).toEqual(["name", "done"]);
+  });
+
+  it.each([
+    ['<input:email type="email"/>', ["name=email", "type=email"]],
+    ["<:email/>", ["name=email"]],
+    ["<a.c:b/>", ["name=b", "class=c"]],
+    ['<a x="1" :b/>', ["x=1", "name=b"]],
+    ['<a x="1" #b .c :d/>', ["x=1", "id=b", "class=c", "name=d"]],
+  ])("%s", (src, expected) => {
+    expect(attrNames(src)).toEqual(expected);
+  });
+
+  it("an unnamed `<:title/>` is the data target's default tag, named `title`", () => {
+    const tag = firstTag(ok("<:title/>\n", options));
+    expect(tag.name).toBe("object");
+    expect(
+      tag.attrs.map((a) => (a.kind === "string" ? [a.name, a.value] : a.name)),
+    ).toEqual([["name", "title"]]);
   });
 });

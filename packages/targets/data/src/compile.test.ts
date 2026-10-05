@@ -41,7 +41,7 @@ static const k = 1
   <for|k, v| in=obj><li>\${k}\${v}</li></for>
   <for|i| from=0 to=10 step=2><span>\${i}</span></for>
   <const/total=items.length * 2/>
-  <ünï:tag a="é😀"/>
+  <ünï-tag a="é😀"/>
 </card>
 `;
 
@@ -263,7 +263,7 @@ describe("compileModule on every kind of node", () => {
       "export",
       "static",
     ]);
-    expect(JSON.stringify(emitted)).toContain("ünï:tag");
+    expect(JSON.stringify(emitted)).toContain("ünï-tag");
     expect(JSON.stringify(emitted)).toContain("é😀");
   });
 

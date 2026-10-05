@@ -28,7 +28,6 @@ describe("invalid attribute names (astro)", () => {
   it.each([
     ["[prop]", '<div [prop]="x">hi</div>', "write `prop=`"],
     ["[attr.x]", '<div [attr.x]="y"/>', "write `x=`"],
-    ["#ref", "<div #ref/>", "reference"],
     ["*ngIf", '<div *ngIf="x"/>', "<if=cond>"],
     ["$foo", "<foo $foo=1/>", "attribute name"],
     ["@foo", '<div @foo="y"/>', "attribute name"],
@@ -51,7 +50,7 @@ describe("invalid attribute names (astro)", () => {
 /**
  * Marko's parser (`babel-plugin/parser.js`, `onAttrName`) splits an attribute
  * name at its LAST `:` and fills an empty head with `value`, so
- * `<div :foo="y"/>` is not a modifier: it is the attribute literally named
+ * `<div value:foo="y"/>` is not a modifier: it is the attribute literally named
  * `value:foo`, which Marko compiles and renders as `<div value:foo=y>`.
  * Only native `class:`, `style:` and `on:` prefixes are reserved; other colon
  * names are ordinary. An `.astro.mx` template body is HTML, so the shorthand
@@ -62,15 +61,17 @@ describe("`:modifier` is the attribute `value:modifier` (astro)", () => {
     lowerAstroMx(`${FENCE}${source}`, "Test.astro.mx").code;
 
   it("emits Marko's attribute, for every value kind", () => {
-    expect(template(`<div :foo=y/>`)).toContain(
+    expect(template(`<div value:foo=y/>`)).toContain(
       `<div value:foo={${ATTR}("value:foo", (y), "div")}>`,
     );
-    expect(template(`<div :foo="lit"/>`)).toContain(`<div value:foo="lit">`);
-    expect(template(`<div :foo/>`)).toContain(`<div value:foo="">`);
+    expect(template(`<div value:foo="lit"/>`)).toContain(
+      `<div value:foo="lit">`,
+    );
+    expect(template(`<div value:foo/>`)).toContain(`<div value:foo="">`);
     // The `{…}` form, emitted exactly like any other dynamic attribute on
     // this host (`<div id={y}/>` emits `id={{y}}`: the outer braces are
     // Astro's interpolation, the inner ones the MX expression).
-    expect(template(`<div :foo={y}/>`)).toContain(
+    expect(template(`<div value:foo={y}/>`)).toContain(
       `<div value:foo={${ATTR}("value:foo", ({y}), "div")}>`,
     );
     // The same attribute under its long spelling: Marko compiles
@@ -78,6 +79,16 @@ describe("`:modifier` is the attribute `value:modifier` (astro)", () => {
     expect(template(`<div value:foo=y/>`)).toContain(
       `<div value:foo={${ATTR}("value:foo", (y), "div")}>`,
     );
+  });
+
+  // Decision 146: the bare spelling is `name`/`id`/`class` sugar.
+  it.each([
+    ["<div :foo/>", '<div name="foo">'],
+    ['<input type="email" :email/>', '<input type="email" name="email" />'],
+    ['<input:email type="email"/>', '<input name="email" type="email" />'],
+    ["<div #main .big/>", '<div id="main" class="big">'],
+  ])("compiles the sugar %s", (source, expected) => {
+    expect(template(source)).toContain(expected);
   });
 
   it.each(["set:html", "set:text"])(

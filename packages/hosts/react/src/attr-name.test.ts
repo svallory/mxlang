@@ -35,7 +35,6 @@ describe("invalid attribute names (react)", () => {
     ["[prop]", '<div [prop]="x">hi</div>', 5, "write `prop=`"],
     ["[attr.x]", '<div [attr.x]="y"/>', 5, "write `x=`"],
     ["[class.a]", '<div [class.a]="y"/>', 5, "class={ a: cond }"],
-    ["#ref", "<div #ref/>", 5, "reference"],
     ["*ngIf", '<div *ngIf="x"/>', 5, "<if=cond>"],
     ["$foo", "<foo $foo=1/>", 5, "attribute name"],
     ["@foo", '<div @foo="y"/>', 5, "attribute name"],
@@ -68,7 +67,7 @@ describe("invalid attribute names (react)", () => {
 /**
  * Marko's parser (`babel-plugin/parser.js`, `onAttrName`) splits an attribute
  * name at its LAST `:` and fills an empty head with `value`, so
- * `<div :foo="y"/>` is not a modifier: it is the attribute literally named
+ * `<div value:foo="y"/>` is not a modifier: it is the attribute literally named
  * `value:foo`, which Marko compiles and renders as `<div value:foo=y>`.
  * Only native `class:`, `style:` and `on:` prefixes are reserved; every other
  * colon name is an ordinary attribute in Marko.
@@ -81,20 +80,34 @@ describe("invalid attribute names (react)", () => {
  */
 describe("`:modifier` is the attribute `value:modifier` (react)", () => {
   it("emits Marko's attribute, for every value kind", () => {
-    expect(compileReactMx(`<div :foo=y/>`, "/fixtures/test.mx").code).toContain(
-      `<div value:foo={${ATTR}("value:foo", y, "div")} />`,
-    );
     expect(
-      compileReactMx(`<div :foo="lit"/>`, "/fixtures/test.mx").code,
+      compileReactMx(`<div value:foo=y/>`, "/fixtures/test.mx").code,
+    ).toContain(`<div value:foo={${ATTR}("value:foo", y, "div")} />`);
+    expect(
+      compileReactMx(`<div value:foo="lit"/>`, "/fixtures/test.mx").code,
     ).toContain(`<div value:foo="lit" />`);
-    expect(compileReactMx(`<div :foo/>`, "/fixtures/test.mx").code).toContain(
-      '<div value:foo="" />',
-    );
+    expect(
+      compileReactMx(`<div value:foo/>`, "/fixtures/test.mx").code,
+    ).toContain('<div value:foo="" />');
     // The same attribute under its long spelling: Marko compiles
     // `<div value:foo="y"/>` to the same output as `<div :foo="y"/>`.
     expect(
       compileReactMx(`<div value:foo=y/>`, "/fixtures/test.mx").code,
     ).toContain(`<div value:foo={${ATTR}("value:foo", y, "div")} />`);
+  });
+
+  // Decision 146: the bare spelling is `name`/`id`/`class` sugar, in every
+  // position, compiled on this host as the attributes written out.
+  it.each([
+    ["<div :foo/>", '<div name="foo" />'],
+    ['<input type="email" :email/>', '<input type="email" name="email" />'],
+    ['<input:email type="email"/>', '<input name="email" type="email" />'],
+    ["<div #main .big/>", '<div id="main" className="big" />'],
+    ['<div x="1" .big/>', '<div x="1" className="big" />'],
+  ])("compiles the sugar %s", (source, expected) => {
+    expect(compileReactMx(source, "/fixtures/test.mx").code).toContain(
+      expected,
+    );
   });
 
   it("still refuses a real modifier, in this host's words", () => {

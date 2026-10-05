@@ -479,6 +479,8 @@ function rewriteHead(ctx: Ctx, node: Node): void {
     nameNode?.type === "StringLiteral" &&
     typeof nameNode.value === "string" &&
     nameNode.loc &&
+    // An attribute tag's name is a key (`<@svg:rect>`), not an element.
+    !nameNode.value.startsWith("@") &&
     nameNode.value.includes(":")
   ) {
     nameStart = startOf(ctx, nameNode);

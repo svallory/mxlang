@@ -8,6 +8,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Changed (name-sugar-core, decision 146):** bare `:x` is `name="x"` sugar, as `#x` is `id` and `.x` is `class`, in every position (`<input type="email" :email>`, `<input:email>`). Marko's `value:x` is still written `value:x`. The `attr-value-modifier` oracle fixture now writes it that way. See `divergences.md`.
+
 - **Changed (default-tag-contracts r3):** the Marko core taglib moved to `@mxlang/core` (`CORE_TAGLIB`); no behaviour change.
 
 - **Fix (default-tag-contracts r2):** `loadMx`, nested tags, the Bun loader and the example runner run the contracts' `defaultTag` registration check and warn once at the declaring file; an invalid contract value no longer compiles to the wrong element (`input`) and the next rung answers.

@@ -6,6 +6,8 @@ First npm prerelease (dist-tag `alpha`), with everything listed under 0.1.0 belo
 
 ## 0.1.0 (unreleased)
 
+- **Fix (name-sugar-core, Mesh):** a valueless modifier attribute (`x:foo`, `value:foo`) no longer trips "core IR invariant broken — static attribute … carries no span" under `structural: "reject"`; core gives it a zero-width `valueSpan`. `<:title/>` resolves to the target's `object` tag with `name="title"` and `entity :Todo table="todos"` is `name="Todo"` (decision 146, `@mxlang/core`).
+
 - **Docs (default-tag-docs, decision 145):** the README documents the built-in `object` tag, `mx.data.defaultTag`, the ladder and the Mesh example (`<attributes><#title type="string"/></attributes>` with `attributes` declaring `defaultTag: "attribute"`).
 
 - **Fix (default-tag-contracts r3):** when an invalid contract `defaultTag` falls through, the E2 at the use site says so.
