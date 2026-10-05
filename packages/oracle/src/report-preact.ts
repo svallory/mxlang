@@ -60,6 +60,8 @@ function skips(targetName: string): Record<string, string> {
       "`<!doctype html>` belongs to the HTML shell that mounts the app, not to a component's markup",
     "html-comment-placeholder":
       "`<html-comment>` emits a comment node with interpolated content; JSX has no comment node that reaches the DOM",
+    "html-comment-falsy":
+      "same as `html-comment-placeholder`: a rendered HTML comment has no JSX form",
     "comments-and-html-comment":
       "same as `html-comment-placeholder`: a rendered HTML comment has no JSX form",
     "while-loop":
