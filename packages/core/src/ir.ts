@@ -31,8 +31,12 @@
  * Marko/Babel node it came from. The lowerer computes the shape once so an
  * emitter never has to inspect that parser node to distinguish an object,
  * array, string, or other expression. The text is what every host ultimately
- * emits, and printing it once during lower keeps hosts from each reaching
- * for a Babel generator.
+ * emits: it is sliced from the authored source once during lower (printed
+ * with Marko's own generator only for a node with no offsets), which keeps
+ * hosts from each reaching for a Babel generator.
+ *
+ * The normative contract for every type here is
+ * `apps/docs/docs/architecture/ir-spec.md`.
  */
 
 import type { Node } from "./core.ts";
@@ -66,18 +70,22 @@ export interface Position {
 /**
  * An expression, as both the parsed node and its printed source.
  *
- * `code` has already been through the binding registry's reference rewriting
- * (decision 70's third hook), so a host emits it verbatim rather than
- * re-deriving it. `node` is the original, for a host that must inspect the
- * shape — `class={a: true}` versus `class=someCall()` is an
- * `ObjectExpression` test, not a string test.
+ * `code` is the authored source text, sliced rather than reprinted, and has
+ * already been through the binding registry's reference rewriting (decision
+ * 70's third hook), so a host emits it verbatim rather than re-deriving it.
+ * `node` is the original, for a host that must inspect the shape —
+ * `class={a: true}` versus `class=someCall()` is an `ObjectExpression` test,
+ * not a string test. It is `null` on a synthesized `Expr` (a custom tag's
+ * `ctx.build.expr`, a decision-116 dynamic target), whose `shape` is
+ * `"other"` and which has no `span`.
  */
 export interface Expr {
   code: string;
   shape: ExprShape;
   node: Node;
   /**
-   * File-absolute byte offsets of this expression's authored source text.
+   * File-absolute UTF-16 code-unit offsets of this expression's authored
+   * source text.
    * Absent when the expression has no authored source — a synthesized `Expr`
    * built with no backing node, or a fabricated literal default — rather
    * than a fabricated span pointing at unrelated text. When `file` is set,
@@ -225,7 +233,8 @@ export type ForSource =
   | { kind: "in"; object: Expr }
   /**
    * `from`/`to`/`until`. `inclusive` distinguishes `to=` (`<=`) from `until=`
-   * (`<`); `from` defaults to a literal `0` when the author omitted it.
+   * (`<`); `from` is `null` when the author omitted it, and the host starts
+   * at 0 — the lowerer does not invent a literal the author never wrote.
    * `step` is the increment per iteration; absent when the author omitted it,
    * and the host decides the default (1 for HTML's runtime loop, a `step`
    * prop for Solid's `<Repeat>`).
@@ -257,8 +266,9 @@ export interface Branch extends IrBase {
  * structural tags are real IR kinds, and everything a host defines for itself
  * (`<try>`, `<html-comment>`, a `server` block, a future `<signal>`) arrives
  * here with its name, attributes, children and attribute tags already
- * resolved, so the host emits rather than re-parses. `node` is the original
- * Marko node, for a host that needs a field the IR does not model.
+ * resolved, so the host emits rather than re-parses. The Marko node itself is
+ * not carried: a host that needs a field the IR does not model records it in
+ * `data` from `resolveDelegatedTag`, while the node is still in hand.
  */
 export interface DelegatedTag<Data = unknown> extends IrBase {
   name: string;
@@ -436,7 +446,11 @@ export type IrNode =
   | ({
       kind: "Component";
       target: ComponentTarget;
-      /** The opening tag name; null only for a run-time dynamic target. */
+      /**
+       * The opening tag name. Null for a run-time dynamic target, and for a
+       * discovered template tag's call routed to its generated binding
+       * (`template-tag.ts`), which carries no `span` either.
+       */
       nameSpan: SourceSpan | null;
       /** File-absolute UTF-16 code-unit span of the whole call, body and closing tag included. */
       span?: SourceSpan;
@@ -501,8 +515,8 @@ export type IrNode =
        */
       span?: SourceSpan;
       /**
-       * File-absolute byte spans of each param, same convention as
-       * `Expr.span` — one per `params`/`paramNodes` entry, `undefined` for a
+       * File-absolute UTF-16 code-unit spans of each param, same convention
+       * as `Expr.span` — one per `params`/`paramNodes` entry, `undefined` for a
        * param whose node carries no `loc`.
        */
       paramSpans?: Array<SourceSpan | undefined>;
@@ -518,7 +532,7 @@ export type IrNode =
   | ({
       kind: "Define";
       name: string;
-      /** File-absolute byte span of the `<define>`'s own name, e.g. `Row`. */
+      /** File-absolute UTF-16 code-unit span of the `<define>`'s own name, e.g. `Row`. */
       nameSpan?: SourceSpan;
       /**
        * File-absolute UTF-16 code-unit span of the whole tag — opening tag,
@@ -527,8 +541,8 @@ export type IrNode =
       span?: SourceSpan;
       params: string[];
       /**
-       * File-absolute byte spans of each param, same convention as
-       * `Expr.span` — one per `params` entry, `undefined` for a param whose
+       * File-absolute UTF-16 code-unit spans of each param, same convention
+       * as `Expr.span` — one per `params` entry, `undefined` for a param whose
        * node carries no `loc`.
        */
       paramSpans?: Array<SourceSpan | undefined>;

@@ -747,7 +747,7 @@ Five facts worth knowing before editing it:
 - **Positions get a third rule** (spec §2): material from a tag template keeps
   that file's line and column, tagged through the optional `Position.file` (and
   `Expr.file`, since an `Expr` carries no `loc` of its own — only the optional
-  `span?: SourceSpan` core contract C4 added, file-absolute byte offsets into
+  `span?: SourceSpan` core contract C4 added, file-absolute UTF-16 code-unit offsets into
   `file` when that is set). Neither `Position.file` nor `Expr.file` is written
   anywhere in `packages/core` today; both are read-only plumbing for a future
   writer. `TranslateError` gained a matching optional `file`. Absent means the

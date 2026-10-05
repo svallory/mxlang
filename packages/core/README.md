@@ -553,7 +553,7 @@ Marko AST ──lower()──▶ Ir ──drive(emitter)──▶ whatever the h
              └─ HostDeclarations: the questions the lowerer asks
 ```
 
-`src/ir.ts` defines the kinds. Each one exists because a host has to emit it
+`src/ir.ts` defines the kinds; the normative contract — every field, position rule and emitter invariant — is the docs site's [IR specification](../../apps/docs/docs/architecture/ir-spec.md). Each one exists because a host has to emit it
 differently, and each carries a `loc` (1-based line, 0-based column — the
 shape `TranslateError` reports, which is what an editor squiggle needs):
 
@@ -580,7 +580,7 @@ An expression arrives as `Expr`: the printed `code` (sliced from source if untou
 the binding registry, so an emitter stays dumb) plus the original `node`, for a
 host that must inspect the shape — `class={a: true}` versus `class=someCall()`
 is an `ObjectExpression` test, not a string test. `Expr.span?: SourceSpan`
-(core contract C4) carries file-absolute byte offsets of the expression's own
+(core contract C4) carries file-absolute UTF-16 code-unit offsets of the expression's own
 authored source text, filled by `exprOf` for every construction site and
 absent only when the expression has no authored source — a synthesized `Expr`
 built with no backing node, or a custom tag's fabricated literal default —
@@ -591,7 +591,7 @@ half of the mapped population; adopting it is per host and out of scope here.
 
 `Define.nameSpan`/`paramSpans` and `For.paramSpans` extend the same
 convention to `<define>`'s own name and params and a `<for>`'s params — the
-file-absolute byte spans every other source-derived IR run already carried.
+file-absolute UTF-16 code-unit spans every other source-derived IR run already carried.
 Each is `undefined` under the same rule as `Expr.span`: no span for a node
 with no authored `loc`. A component call's own tag-name span is not
 duplicated on `ComponentTarget`: `Component.nameSpan` (above) already

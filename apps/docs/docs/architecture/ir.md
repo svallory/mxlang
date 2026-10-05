@@ -11,9 +11,11 @@ The core resolves structural markup into an intermediate representation (IR) fir
 
 A host's job is to: resolve structure once in the core, then write an emitter for one IR to one target syntax.
 
+This page introduces the IR. The normative contract — every field, which are required, the position rules, and the invariants emitters rely on — is the [IR specification](/architecture/ir-spec/).
+
 ## The node kinds
 
-Every kind carries a source position, which is what lets a diagnostic and a source map point back at the original MX file.
+Every kind carries a source position (`loc`, the start of the construct), which is what lets a diagnostic point back at the original MX file; most also carry source spans, which is what source mappings are built from.
 
 | Kind | What it holds |
 | --- | --- |
@@ -28,8 +30,9 @@ Every kind carries a source position, which is what lets a diagnostic and a sour
 | `DelegatedTag` | A tag this host claimed, with whatever `resolveDelegatedTag` recorded in its `data` slot |
 | `DocumentType` | `<!doctype html>` |
 | `Comment` | A comment, and whether it was an HTML comment or a `//` line comment |
+| `Hoisted` | A statement a host lifted with `ctx.hoist`; it reaches the walk only at the head of a `Define`'s children, and the render function's own hoists are in `Ir.prelude` |
 
-Four more kinds are *module-level* and never reach the emitter's walk. `resolve()` lifts them out of the body into `Ir`'s own fields, so a host places them from there rather than filtering the tree: `Import`, `Static`, `Export`, and `InputInterface`. Each carries an `end` position beside its start, because they are mapped whole-block rather than per expression.
+Four more kinds are *module-level* and never reach the emitter's walk. `lower()` lifts them out of the body into `Ir`'s own fields, so a host places them from there rather than filtering the tree: `Import`, `Static`, `Export`, and `InputInterface`. Each carries an `end` position beside its start, as `Hoisted` does, because their code is a plain string mapped whole-block rather than per expression. `drive()` throws if one reaches the walk.
 
 ## The emitter side
 
@@ -53,12 +56,12 @@ interface Emitter<Out> {
 }
 ```
 
-`Out` is the host's output type — a string for every host shipped today, whether that string is a JSX expression, an Astro template, or a `__mxOut +=` function body.
+`Out` is the host's output type — a string for the JSX hosts, Solid, Astro and Angular, and an array of `__mxOut +=` lines for the html target. Using `drive()` is not mandatory: `@mxlang/data` walks the IR directly, and throws on any kind its declarations make unreachable.
 
 A host that cannot express a kind **throws**, naming the construct. There is no optional method and no default no-op, deliberately: an emitter that could silently skip a kind would compile a template and quietly drop part of it, which is exactly the failure the IR split was meant to make impossible.
 
 ## Where a host's own decisions live
 
-Nothing target-specific leaks into the IR. A host-specific decision made at resolve time travels in `DelegatedTag.data`, opaque to the core — which is how `<try>` becomes `<Loading>`/`<Errored>` on Solid, a `try`/`catch` on the html target, and an error boundary on React, from one IR kind and no special-casing in `packages/core`.
+No IR field is specific to one target. The host does shape *which* nodes appear — through its `HostDeclarations` answers it decides whether a tag is an element, a component or a delegated tag, may rename a modifier attribute or reorder attributes, and names a discovered tag's import binding — but a host-specific decision about how to *render* a construct travels in `DelegatedTag.data`, opaque to the core — which is how `<try>` becomes `<Loading>`/`<Errored>` on Solid, a `try`/`catch` on the html target, and an error boundary on React, from one IR kind and no special-casing in `packages/core`.
 
 The two exceptions prove the rule: `For` carries a `key`, and a range source carries `step`. Both are structural facts any Marko-syntax host needs regardless of target, not a concession to one framework.

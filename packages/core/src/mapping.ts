@@ -1,6 +1,9 @@
 import type { Expr } from "./ir.ts";
 
-/** A byte range in an MX source file. */
+/**
+ * A half-open `[sourceStart, sourceEnd)` range in an MX source file, in UTF-16
+ * code units (JS string indexes), file-absolute.
+ */
 export interface SourceSpan {
   sourceStart: number;
   sourceEnd: number;
