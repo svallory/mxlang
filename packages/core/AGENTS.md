@@ -1013,6 +1013,8 @@ stable version.
   and `checkAtomContracts` (called from `lowerTemplate`) declares everything,
   then checks every `values`/`pattern`/`ref`. Scopes are tag *instances* (Marko
   nodes in `ctx.authoredAncestorNodes`, pushed beside `authoredAncestors`);
-  the default scope is the outermost authored tag, so two top-level siblings do
-  not share names. A call's own atom-vs-string type check stays in
+  the default scope is the file (decision 156 addendum 7), the outermost link of
+  every resolution chain, so top-level siblings share names and a `ctx.declare`
+  outside every call is visible too. Attribute-tag attributes (any depth) are
+  checked from `call.attributeTags` against `definition.attributeTags`. A call's own atom-vs-string type check stays in
   `validateAttributes` (`checkAtomAttr`), not here.

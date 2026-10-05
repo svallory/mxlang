@@ -953,6 +953,7 @@ function checkAtomAttr(
   attr: Exclude<Attr, { kind: "spread" }>,
   locate?: Locate,
 ): void {
+  const at = valueLoc(attr, locate);
   // An atom, the sugar-derived `name` included, satisfies an atom contract.
   if (attr.kind === "static" && attr.atom) return;
   const shape = attrShape(attr);
@@ -960,7 +961,7 @@ function checkAtomAttr(
     failForOwner(
       owner,
       `attribute ${attrLabel(attr)} must be atom, got ${shape}`,
-      attr.loc,
+      at,
     );
   }
   if (
@@ -1211,6 +1212,18 @@ export function validateCustomTagChildren(
 type Locate = (offset: number) => { line: number; column: number };
 
 /** Where a value error points: at a whole-value atom when the offset can be located, else the attribute. */
+/** Where an attribute's value starts: the string, the expression or the atom; the attribute when it has none. */
+function valueLoc(attr: Attr, locate?: Locate): Position {
+  if (!locate || attr.kind === "spread") return attr.loc;
+  let offset: number | undefined;
+  if (attr.kind === "static") {
+    offset = (attr.atom?.span ?? attr.valueSpan)?.sourceStart;
+  } else if (attr.kind === "dynamic" || attr.kind === "bound") {
+    offset = attr.value.span?.sourceStart;
+  }
+  return offset === undefined ? attr.loc : { ...attr.loc, ...locate(offset) };
+}
+
 function valueAt(attr: Attr, locate?: Locate): Position {
   if (attr.kind === "static" && attr.atom && locate) {
     return { ...attr.loc, ...locate(attr.atom.span.sourceStart) };
@@ -1346,6 +1359,7 @@ function validateAttributeTags(
   tree: readonly AttributeTagNode[],
   loc: Position,
   allowUncontractedTags: boolean,
+  locate?: Locate,
 ): void {
   for (const tag of tags) {
     const declaration =
@@ -1379,6 +1393,7 @@ function validateAttributeTags(
         declaration.attributes,
         tag.attrs,
         tag.loc,
+        locate,
       );
       validateAttributeTags(
         nestedOwner,
@@ -1388,6 +1403,7 @@ function validateAttributeTags(
         tag.loc,
         allowUncontractedTags ||
           (extended && declaration.attributeTags === undefined),
+        locate,
       );
     }
   }
@@ -1432,6 +1448,7 @@ export function validateCustomTagCall(
     call.attributeTagTree ?? directAttributeTagTree(call.attributeTags),
     call.loc,
     hasTemplate(definition),
+    locate,
   );
 }
 

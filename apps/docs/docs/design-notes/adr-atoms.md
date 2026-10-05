@@ -5,7 +5,7 @@ description: "Why `:name` in an expression position is a value that represents i
 
 # ADR 156: atoms
 
-**Status:** accepted (decision 156 in the decisions log); parser approach implemented in PR #342. **Depends on:** ADR 145 (`defaultTag`), ADR 146 (`:name`). **Amended by:** decision 156 addendum 1 (the lead's rulings on Mesh's review) and addendum 5 (`scope` takes a list). **Implementation:** Phase B PR 1 (parser, core conversion, IR, typecheck splice, `parseData`); contracts implemented in PR 2 (`feat/atoms-contracts`, `packages/core/src/atom-contracts.ts`).
+**Status:** accepted (decision 156 in the decisions log); parser approach implemented in PR #342. **Depends on:** ADR 145 (`defaultTag`), ADR 146 (`:name`). **Amended by:** decision 156 addendum 1 (the lead's rulings on Mesh's review), addendum 5 (`scope` takes a list) and addendum 7 (the default scope is the file). **Implementation:** Phase B PR 1 (parser, core conversion, IR, typecheck splice, `parseData`); contracts implemented in PR 2 (`feat/atoms-contracts`, `packages/core/src/atom-contracts.ts`).
 
 ## Context
 
@@ -103,11 +103,11 @@ Entry = { kind: "<kind>", from: "id" | "name", scope?: "<ancestor tag name>" | [
 - `under` (optional) limits the entry to a tag whose **parent** is one of the named tags. An entry without `under` applies under any parent. When several entries match, the **most specific wins**: an entry whose `under` names the parent beats one without.
 - `kind` is a plain name. Any number of tags may declare the same kind (the ten type tags all declare `attribute`).
 - `from` is where the name comes from: the tag's `#id` sugar (`"id"`) or its `name`, including `:name` (`"name"`).
-- `scope` is the **nearest ancestor tag with that name** (or, as a list, with any of those names; decision 156 addendum 5) that the declaration belongs to; when it is omitted, the scope is the file's **root tag**, the outermost authored tag. **No such ancestor is a positioned error** at the declaration, never a silent fallback to the root: "`newTitle` declares an `argument` scoped to `create`, `read`, `update`, `destroy` or `action`, but has no such ancestor". A list is how a vocabulary whose actions are several tags (`create`, `read`, `update`, `destroy`, `action`) names "the enclosing action". A tag such as `string` declares an `argument` with `scope: ["create", "read", "update", "destroy", "action"]` when it sits under `arguments`, so the argument is visible only inside its action, and an `attribute` with the default scope when it sits under `attributes`, visible across the whole entity.
-- A reference resolves against every enclosing scope, **innermost first**; the first scope that declares the name decides. **No tag "opens a context"**: a scope is an ancestor tag a declaration names, and a contract never says it is a boundary.
+- `scope` is the **nearest ancestor tag with that name** (or, as a list, with any of those names; decision 156 addendum 5) that the declaration belongs to; when it is omitted, the scope is **the file** (decision 156 addendum 7): the file scope is the outermost link of every resolution chain, so every reference in the file sees it, whether the file has one root tag or several. For a single-root file that is the same as the root tag. **No such ancestor is a positioned error** at the declaration, never a silent fallback to the file: "`newTitle` declares an `argument` scoped to `create`, `read`, `update`, `destroy` or `action`, but has no such ancestor". A list is how a vocabulary whose actions are several tags (`create`, `read`, `update`, `destroy`, `action`) names "the enclosing action". A tag such as `string` declares an `argument` with `scope: ["create", "read", "update", "destroy", "action"]` when it sits under `arguments`, so the argument is visible only inside its action, and an `attribute` with the default scope when it sits under `attributes`, visible across the whole entity.
+- A reference resolves against every enclosing scope, **innermost first**, and last against the file scope; the first scope that declares the name decides. **No tag "opens a context"**: a scope is an ancestor tag a declaration names, and a contract never says it is a boundary.
 - `uniqueWith` (optional): a declaration also collides with a same-named declaration of the listed kinds in its scope, not just with its own kind.
 
-This refines the earlier wording "the enclosing tag's whole subtree" (the lead's earlier ruling and the first draft of this ADR; decision 156 item 3 says only "declared in the context the contract defines"). A declaration in a sibling section is still in scope, because the default scope is the root tag and the root's whole subtree is searched. What changed: the scope is a named ancestor, not "the enclosing tag" in general, and resolution walks the scopes from the innermost outward.
+This refines the earlier wording "the enclosing tag's whole subtree" (the lead's earlier ruling and the first draft of this ADR; decision 156 item 3 says only "declared in the context the contract defines"). A declaration in a sibling section is still in scope, because the default scope is the file, which every reference sees. What changed: the scope is a named ancestor, not "the enclosing tag" in general, and resolution walks the scopes from the innermost outward.
 
 **Derived declarations** (item 6). A name that no tag states, such as the `listId` a `belongs-to` derives, is added from the vocabulary's `analyze` hook with `ctx.declare(kind, name, { span, scope })`, in the declare phase. It is not a name transform in `declares`. `span` is where an error or go-to for that name should point (the tag that caused the derivation); `scope` has the same meaning and default as above.
 
@@ -125,7 +125,7 @@ The kinds Mesh refers to: an *attribute* (`accept`, `require`, `sort`, the left 
 |---|---|---|
 | 1 | **Declare by tag set.** An attribute is declared by any of ten type tags (`uuid`, `string`, `integer`, ...) under `attributes`, and a `belongs-to` under `relationships` also declares an attribute (`listId`, derived, not written) | each tag's contract says `declares: { kind: "attribute", from: "name" }` (`string` adds a second entry, `under: "arguments"`, see the arguments example). The derived `listId` comes from `ctx.declare` in `analyze` |
 | 2 | **Declare by `id` or by `name`** | `declares.from` is `"id"` or `"name"` (the tag's `#id` sugar or its `name`, including `:name`) |
-| 3 | **Scope.** Declarations sit in a sibling section (`attributes` against `actions`), and `arguments` are visible only inside their action | `scope` names an ancestor tag, default the root; `under` picks the entry by parent tag; resolution is innermost first (see above) |
+| 3 | **Scope.** Declarations sit in a sibling section (`attributes` against `actions`), and `arguments` are visible only inside their action | `scope` names an ancestor tag, default the file; `under` picks the entry by parent tag; resolution is innermost first (see above) |
 | 4 | **Cross-entity references** (`belongs-to=Customer`) | out of scope for the single-file checker. A name that is not declared in scope is checked by the vocabulary's own build step (Mesh checks at model build). Core does not resolve across files |
 | 5 | **Union of kinds.** `load` is a relationship or a computed field; `sort` an attribute or a computed field; `require` an attribute or an argument | `ref` takes a list of kinds |
 | 6 | **Derived declarations from `analyze`** | `ctx.declare(kind, name, { span, scope })` |
@@ -210,7 +210,7 @@ With atoms:
 ```
 
 - `uuid :id primary-key` is the name sugar of section 5: `name="id"` and a boolean attribute.
-- `accept=[:title, :body]` is a list of atoms, and the names are *attributes* of the entity. With `accept` declared `{ type: "atom", ref: "attribute" }` and the attribute tags (`uuid`, `string`, ...) declaring the kind `attribute` from their `name` (default scope: the root `<entity>`), the declarations sit in the sibling `<attributes>` section and the reference in `<policy>`, both inside the root. `:titel` is a positioned error on the atom naming `title` as the likely intent, and the editor completes `title` and `body`. With no contract on `accept`, both lower to `["title", "body"]` and nothing is checked.
+- `accept=[:title, :body]` is a list of atoms, and the names are *attributes* of the entity. With `accept` declared `{ type: "atom", ref: "attribute" }` and the attribute tags (`uuid`, `string`, ...) declaring the kind `attribute` from their `name` (default scope: the file), the declarations sit in the sibling `<attributes>` section and the reference in `<policy>`, both in the file scope. `:titel` is a positioned error on the atom naming `title` as the likely intent, and the editor completes `title` and `body`. With no contract on `accept`, both lower to `["title", "body"]` and nothing is checked.
 
 ### Mesh's worked examples
 
@@ -269,7 +269,7 @@ so `string :title` under `attributes` is an attribute visible across the entity,
 </entity>
 ```
 
-`:newTitle` resolves inside `rename` and nowhere else. A reference to it from another action is an error, and a reference to `:title` from inside `rename` resolves to the attribute: the action's scope is searched first, then the root.
+`:newTitle` resolves inside `rename` and nowhere else. A reference to it from another action is an error, and a reference to `:title` from inside `rename` resolves to the attribute: the action's scope is searched first, then the file.
 
 ## Alternatives considered
 
@@ -332,7 +332,7 @@ Settled by the lead on 2026-10-05 in decision 156 addendum 1, on Mesh's review (
 - **Atoms in expressions are public API.** `StringLiteral` with `extra.mxAtom = { span }`, nested cases included (section 2).
 - **The name sugar keeps its atom-ness**, in the IR and as `DataAttr` kind `atom` (sections 2 and 5).
 - **Open atom type**, `values` optional, optional `pattern` (section 4).
-- **Two phases and scope.** Declare then check; `declares.scope` names an ancestor tag, default the root; innermost-first resolution; no tag opens a context (section 4). This replaces the earlier open question "how a context is declared" and refines "the enclosing tag's whole subtree".
+- **Two phases and scope.** Declare then check; `declares.scope` names an ancestor tag, default the file (addendum 7); innermost-first resolution; no tag opens a context (section 4). This replaces the earlier open question "how a context is declared" and refines "the enclosing tag's whole subtree".
 - **Union `ref`.** A list of kinds.
 - **Derived declarations** through `ctx.declare` from `analyze`, not a name transform. This replaces the earlier open question 2(a).
 - **Duplicates** are a positioned core error with both spans; `uniqueWith` is optional.

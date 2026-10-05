@@ -818,7 +818,10 @@ atom-typed `name` is an error. The **name sugar** (`:title`) is the exception
 its string, and `atom` contracts as the atom. A tag's `declares` (`kind`, `from` `"id"`|`"name"`, `scope`, `under`,
 `uniqueWith`) and `ctx.declare` from `analyze` state names; checking is two
 phases (every declaration, then every reference), a reference resolves against
-the enclosing scopes innermost first, `scope` is a tag name or a list (the
+the enclosing scopes innermost first and last the file scope, which is the
+default `scope` of a declaration and the home of a `ctx.declare` outside every
+call (addendum 7); `values`, `pattern` and `ref` are checked on attribute-tag
+attributes at any depth too; `scope` is a tag name or a list (the
 nearest ancestor with one of those names; none is an error, addendum 5), and
 two declarations of one name and kind in a scope are an error carrying both
 spans (`TranslateError.spans`, see below). An unknown name is an error on the atom with a did-you-mean. `ref`

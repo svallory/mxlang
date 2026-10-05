@@ -26,7 +26,7 @@ import type {
   TagCall,
 } from "./custom-tags.ts";
 import { nearestName } from "./did-you-mean.ts";
-import type { Atom, Attr } from "./ir.ts";
+import type { Atom, Attr, AttributeTag } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
 
 /** One custom tag call, with the authored tag instances around it. */
@@ -56,7 +56,11 @@ interface Declaration {
 /** Scope owner -> name -> declarations of that name (one per kind). */
 type Scopes = Map<object, Map<string, Declaration[]>>;
 
-/** The scope of a derived declaration no tag anchors. */
+/**
+ * The file scope: the default owner of a declaration, and the outermost link of
+ * every resolution chain (decision 156 addendum 7). Also where a derived
+ * declaration no tag anchors lands.
+ */
 const FILE_SCOPE = {};
 
 function asList<T>(value: T | readonly T[] | undefined): readonly T[] {
@@ -142,7 +146,7 @@ function pickEntry(
   );
 }
 
-/** The tag instance that owns a declaration: the nearest ancestor named by `scope`, else the root. */
+/** The scope that owns a declaration: the nearest ancestor named by `scope`, else the file. */
 function scopeOwner(
   ctx: Ctx,
   chain: readonly Node[],
@@ -150,7 +154,7 @@ function scopeOwner(
   declared: { kind: string; name: string; span: SourceSpan },
   file: string | undefined,
 ): object {
-  if (scope === undefined) return chain[0] ?? FILE_SCOPE;
+  if (scope === undefined) return FILE_SCOPE;
   const names = asList(scope);
   for (let i = chain.length - 2; i >= 0; i--) {
     if (names.includes(nodeName(chain[i]))) return chain[i] as object;
@@ -268,11 +272,12 @@ function checkAtom(
   ctx: Ctx,
   fact: ContractFact,
   scopes: Scopes,
+  label: string,
   attrName: string,
   declaration: CustomTagAttribute,
   atom: Atom,
 ): void {
-  const owner = `\`<${fact.call.name}>\`: attribute \`${attrName}\``;
+  const owner = `${label}: attribute \`${attrName}\``;
   const file = fact.call.loc.file;
   const { values, pattern, ref } = declaration;
   if (values && !values.includes(atom.name)) {
@@ -294,7 +299,7 @@ function checkAtom(
   }
   if (ref === undefined) return;
   const kinds = asList(ref);
-  const visible = [...fact.chain].reverse();
+  const visible = [...fact.chain].reverse().concat(FILE_SCOPE);
   const candidates: string[] = [];
   for (const scope of visible) {
     const names = scopes.get(scope);
@@ -315,6 +320,75 @@ function checkAtom(
   );
 }
 
+/** Queues a check for every atom of every contract attribute in `attrs`. */
+function queueAttrs(
+  ctx: Ctx,
+  fact: ContractFact,
+  scopes: Scopes,
+  refs: Array<() => void>,
+  label: string,
+  attributes: CustomTag["attributes"],
+  attrs: readonly Attr[],
+): void {
+  if (!attributes) return;
+  for (const attr of attrs) {
+    if (attr.kind === "spread" || !Object.hasOwn(attributes, attr.name)) {
+      continue;
+    }
+    const declaration = attributes[attr.name];
+    if (declaration?.type !== "atom") continue;
+    if (
+      declaration.values === undefined &&
+      declaration.pattern === undefined &&
+      declaration.ref === undefined
+    ) {
+      continue;
+    }
+    for (const atom of atomsOf(attr)) {
+      refs.push(() =>
+        checkAtom(ctx, fact, scopes, label, attr.name, declaration, atom),
+      );
+    }
+  }
+}
+
+/** The same, for every attribute tag at any depth, labelled `<box>`: `<@row>`: .... */
+function queueAttributeTags(
+  ctx: Ctx,
+  fact: ContractFact,
+  scopes: Scopes,
+  refs: Array<() => void>,
+  label: string,
+  declared: CustomTag["attributeTags"],
+  tags: readonly AttributeTag[],
+): void {
+  if (!declared) return;
+  for (const tag of tags) {
+    if (!Object.hasOwn(declared, tag.name)) continue;
+    const declaration = declared[tag.name];
+    if (!declaration) continue;
+    const nested = `${label}: \`<@${tag.name}>\``;
+    queueAttrs(
+      ctx,
+      fact,
+      scopes,
+      refs,
+      nested,
+      declaration.attributes,
+      tag.attrs,
+    );
+    queueAttributeTags(
+      ctx,
+      fact,
+      scopes,
+      refs,
+      nested,
+      declaration.attributeTags,
+      tag.attributeTags,
+    );
+  }
+}
+
 /** Declare every name of the file, then check every atom reference against them. */
 export function checkAtomContracts(ctx: Ctx): void {
   const facts = ctx.contractFacts ? [...ctx.contractFacts.values()] : [];
@@ -323,27 +397,25 @@ export function checkAtomContracts(ctx: Ctx): void {
   const scopes = declare(ctx, facts, derived);
   const refs: Array<() => void> = [];
   for (const fact of facts) {
-    const attributes = fact.definition.attributes;
-    if (!attributes) continue;
-    for (const attr of fact.call.attrs) {
-      if (attr.kind === "spread" || !Object.hasOwn(attributes, attr.name)) {
-        continue;
-      }
-      const declaration = attributes[attr.name];
-      if (declaration?.type !== "atom") continue;
-      if (
-        declaration.values === undefined &&
-        declaration.pattern === undefined &&
-        declaration.ref === undefined
-      ) {
-        continue;
-      }
-      for (const atom of atomsOf(attr)) {
-        refs.push(() =>
-          checkAtom(ctx, fact, scopes, attr.name, declaration, atom),
-        );
-      }
-    }
+    const label = `\`<${fact.call.name}>\``;
+    queueAttrs(
+      ctx,
+      fact,
+      scopes,
+      refs,
+      label,
+      fact.definition.attributes,
+      fact.call.attrs,
+    );
+    queueAttributeTags(
+      ctx,
+      fact,
+      scopes,
+      refs,
+      label,
+      fact.definition.attributeTags,
+      fact.call.attributeTags,
+    );
   }
   for (const check of refs) check();
 }

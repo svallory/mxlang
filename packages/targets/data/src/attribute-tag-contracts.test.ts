@@ -86,3 +86,66 @@ describe("recursive attribute-tag contracts through parseData (decision 138 E4)"
     },
   );
 });
+
+describe("atom contracts on attribute-tag attributes through parseData (decision 156 addendum 7)", () => {
+  const atomTags: Record<string, CustomTag> = {
+    box: {
+      declares: { kind: "node", from: "id" },
+      attributeTags: {
+        row: {
+          repeatable: true,
+          attributes: {
+            mode: { type: "atom", values: ["a", "b"] },
+            to: { type: "atom", ref: "node" },
+          },
+        },
+      },
+    },
+  };
+
+  it("accepts declared names and listed values", () => {
+    const result = parseData("<box#k><@row mode=:a to=:k/></box>", "/a.mx", {
+      customTags: atomTags,
+    });
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it.each([
+    [
+      "<box><@row mode=:zzz/></box>",
+      "`<box>`: `<@row>`: attribute `mode`: `:zzz` is not one of :a, :b",
+      16,
+    ],
+    [
+      "<box><@row to=:nope/></box>",
+      "`<box>`: `<@row>`: attribute `to`: `:nope` is not a declared node here",
+      14,
+    ],
+    [
+      '<box><@row mode="a"/></box>',
+      "`<box>`: `<@row>`: attribute `mode` must be atom, got string",
+      16,
+    ],
+  ])("reports %s at the value", (source, message, column) => {
+    const result = parseData(source, "/a.mx", { customTags: atomTags });
+    expect(result.tree).toBeUndefined();
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]).toMatchObject({
+      severity: "error",
+      message,
+      line: 1,
+      column,
+    });
+  });
+
+  it("top-level siblings share the file scope", () => {
+    const tags: Record<string, CustomTag> = {
+      node: { declares: { kind: "node", from: "id" } },
+      link: { attributes: { to: { type: "atom", ref: "node" } } },
+    };
+    const result = parseData("<node#a/>\n<node#b/>\n<link to=:a/>", "/a.mx", {
+      customTags: tags,
+    });
+    expect(result.diagnostics).toEqual([]);
+  });
+});

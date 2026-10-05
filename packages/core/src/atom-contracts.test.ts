@@ -20,8 +20,12 @@ const declarations: HostDeclarations = {
   resolveDefaultTag: () => "setter",
 };
 
-function compile(source: string, customTags: Record<string, CustomTag>): void {
-  compileSource(source, "/tmp/mx-atom-contracts/page.mx", declarations, {
+function compile(
+  source: string,
+  customTags: Record<string, CustomTag>,
+  host: HostDeclarations = declarations,
+): void {
+  compileSource(source, "/tmp/mx-atom-contracts/page.mx", host, {
     targets,
     customTags,
     tagDiscoveryDirs: [],
@@ -33,9 +37,10 @@ function compile(source: string, customTags: Record<string, CustomTag>): void {
 function fails(
   source: string,
   customTags: Record<string, CustomTag>,
+  host?: HostDeclarations,
 ): TranslateError {
   try {
-    compile(source, customTags);
+    compile(source, customTags, host);
   } catch (cause) {
     expect(cause).toBeInstanceOf(TranslateError);
     return cause as TranslateError;
@@ -53,6 +58,9 @@ function at(source: string, needle: string, nth = 0) {
     column: before[before.length - 1]?.length ?? 0,
   };
 }
+
+/** A host that takes attribute-tag attributes (`attrTags: 2`). */
+const attrTagHost: HostDeclarations = { ...declarations, attrTags: 2 };
 
 // A Mesh-shaped vocabulary: kinds `attribute`, `argument`, `action`,
 // `relationship`, `computed`, declared from `name` under the right parents.
@@ -315,7 +323,11 @@ describe("references", () => {
     expect(() => compile(source, mesh)).not.toThrow();
     const bad = source.replace(":total]", ":title]");
     // `title` is an attribute, not a relationship or computed.
-    expect(() => compile(bad, mesh)).toThrow(/title/);
+    const error = fails(bad, mesh);
+    expect(error.message).toBe(
+      "`<policy>`: attribute `load`: `:title` is not a declared relationship or computed here",
+    );
+    expect(pos(error)).toEqual(at(bad, ":title", 1));
   });
 
   it("the kind of the declaration must match", () => {
@@ -418,7 +430,11 @@ describe("declares", () => {
   </actions>
   <policy accept=:x/>
 </entity>`;
-    expect(() => compile(source, tags)).toThrow(/x/);
+    const error = fails(source, tags);
+    expect(error.message).toBe(
+      "`<policy>`: attribute `accept`: `:x` is not a declared attribute here",
+    );
+    expect(pos(error)).toEqual(at(source, ":x", 1));
     // With no matching parent the general entry applies.
     const general = `<entity :e>
   <attributes><thing :x/></attributes>
@@ -436,9 +452,12 @@ describe("declares", () => {
     expect(() =>
       compile("<root><node#a/><node#b/><link to=:a/></root>", tags),
     ).not.toThrow();
-    expect(() => compile("<root><node#a/><link to=:c/></root>", tags)).toThrow(
-      /c/,
+    const miss = "<root><node#a/><link to=:c/></root>";
+    const error = fails(miss, tags);
+    expect(error.message).toBe(
+      "`<link>`: attribute `to`: `:c` is not a declared node here",
     );
+    expect(pos(error)).toEqual(at(miss, ":c"));
   });
 
   it("an `under` array matches any of the parents", () => {
@@ -473,7 +492,11 @@ describe("declares", () => {
   <actions><field :a/></actions>
   <policy accept=:a/>
 </entity>`;
-    expect(() => compile(source, tags)).toThrow(/a/);
+    const error = fails(source, tags);
+    expect(error.message).toBe(
+      "`<policy>`: attribute `accept`: `:a` is not a declared attribute here",
+    );
+    expect(pos(error)).toEqual(at(source, ":a", 1));
   });
 
   it("resolves innermost scope first across nested scopes", () => {
@@ -490,7 +513,11 @@ describe("declares", () => {
     const ok = "<outer#o><inner><let :x/><use v=:x/></inner></outer>";
     expect(() => compile(ok, tags)).not.toThrow();
     const bad = "<outer#o><inner><let :x/></inner><use v=:x/></outer>";
-    expect(() => compile(bad, tags)).toThrow(/x/);
+    const error = fails(bad, tags);
+    expect(error.message).toBe(
+      "`<use>`: attribute `v`: `:x` is not a declared k here",
+    );
+    expect(pos(error)).toEqual(at(bad, ":x", 1));
   });
 });
 
@@ -660,7 +687,11 @@ describe("derived declarations from analyze (ctx.declare)", () => {
     <action :other><policy require=:implicit/></action>
   </actions>
 </entity>`;
-    expect(() => compile(outside, tags)).toThrow(/implicit/);
+    const error = fails(outside, tags);
+    expect(error.message).toBe(
+      "`<policy>`: attribute `require`: `:implicit` is not a declared attribute or argument here",
+    );
+    expect(pos(error)).toEqual(at(outside, ":implicit"));
   });
 });
 
@@ -724,3 +755,192 @@ describe("registration", () => {
     ).toThrow(/scoped/);
   });
 });
+
+describe("round 3: attribute-tag attributes (decision 156 addendum 7)", () => {
+  const tags: Record<string, CustomTag> = {
+    node: { declares: { kind: "node", from: "id" } },
+    box: {
+      attributeTags: {
+        row: {
+          repeatable: true,
+          attributes: {
+            mode: { type: "atom", values: ["a", "b"] },
+            code: { type: "atom", pattern: "^[a-z]+$" },
+            to: { type: "atom", ref: "node" },
+          },
+          attributeTags: {
+            cell: { attributes: { mode: { type: "atom", values: ["x"] } } },
+          },
+        },
+      },
+    },
+  };
+
+  it("values: a name outside the list is a positioned error with did-you-mean", () => {
+    const source = "<box><@row mode=:zzz/></box>";
+    const error = fails(source, tags, attrTagHost);
+    expect(error.message).toBe(
+      "`<box>`: `<@row>`: attribute `mode`: `:zzz` is not one of :a, :b",
+    );
+    expect({ line: error.line, column: error.column }).toEqual(
+      at(source, ":zzz"),
+    );
+    expect(() =>
+      compile("<box><@row mode=:a/></box>", tags, attrTagHost),
+    ).not.toThrow();
+    expect(fails("<box><@row mode=:c/></box>", tags, attrTagHost).message).toBe(
+      "`<box>`: `<@row>`: attribute `mode`: `:c` is not one of :a, :b",
+    );
+  });
+
+  it("pattern: a name that does not match is a positioned error", () => {
+    const source = "<box><@row code=:A1/></box>";
+    const error = fails(source, tags, attrTagHost);
+    expect(error.message).toBe(
+      "`<box>`: `<@row>`: attribute `code`: `:A1` does not match the pattern /^[a-z]+$/",
+    );
+    expect({ line: error.line, column: error.column }).toEqual(
+      at(source, ":A1"),
+    );
+  });
+
+  it("ref: resolves against the declarations the call can see", () => {
+    expect(() =>
+      compile("<box#b><@row to=:a/></box><node#a/>", tags, attrTagHost),
+    ).not.toThrow();
+    const source = "<node#a/><box><@row to=:nope/></box>";
+    const error = fails(source, tags, attrTagHost);
+    expect(error.message).toBe(
+      "`<box>`: `<@row>`: attribute `to`: `:nope` is not a declared node here",
+    );
+    expect({ line: error.line, column: error.column }).toEqual(
+      at(source, ":nope"),
+    );
+  });
+
+  it("checks a nested attribute tag with the nested owner label", () => {
+    const source = "<box><@row><@cell mode=:y/></@row></box>";
+    const error = fails(source, tags, attrTagHost);
+    expect(error.message).toBe(
+      "`<box>`: `<@row>`: `<@cell>`: attribute `mode`: `:y` is not one of :x",
+    );
+    expect({ line: error.line, column: error.column }).toEqual(
+      at(source, ":y"),
+    );
+  });
+
+  it("checks an atom list on an attribute tag, at the item", () => {
+    const source = "<box><@row mode=[:a, :q]/></box>";
+    const error = fails(source, tags, attrTagHost);
+    expect(error.message).toBe(
+      "`<box>`: `<@row>`: attribute `mode`: `:q` is not one of :a, :b",
+    );
+    expect({ line: error.line, column: error.column }).toEqual(
+      at(source, ":q"),
+    );
+  });
+
+  it("checks every repeated attribute tag", () => {
+    const source = "<box><@row mode=:a/><@row mode=:z/></box>";
+    const error = fails(source, tags, attrTagHost);
+    expect(error.column).toBe(at(source, ":z").column);
+  });
+});
+
+describe("round 3: the default scope is the file (decision 156 addendum 7)", () => {
+  const tags: Record<string, CustomTag> = {
+    node: { declares: { kind: "node", from: "id" } },
+    link: { attributes: { to: { type: "atom", ref: "node" } } },
+    wrap: {},
+  };
+
+  it("top-level siblings see each other, in either order", () => {
+    expect(() =>
+      compile("<node#a/><node#b/><link to=:a/>", tags),
+    ).not.toThrow();
+    expect(() => compile("<link to=:b/><node#b/>", tags)).not.toThrow();
+  });
+
+  it("a declaration in one top-level tag is visible in another", () => {
+    expect(() =>
+      compile("<wrap><node#a/></wrap><wrap><link to=:a/></wrap>", tags),
+    ).not.toThrow();
+  });
+
+  it("a miss still names the kind and position", () => {
+    const source = "<node#a/><link to=:c/>";
+    const error = fails(source, tags);
+    expect(error.message).toBe(
+      "`<link>`: attribute `to`: `:c` is not a declared node here",
+    );
+    expect({ line: error.line, column: error.column }).toEqual(
+      at(source, ":c"),
+    );
+  });
+
+  it("two top-level declarations of one name still clash", () => {
+    const error = fails("<node#a/>\n<node#a/>", tags);
+    expect(error.message).toBe("`a` is already declared as `node` at 1:7");
+    expect(error.line).toBe(2);
+  });
+
+  it("a ctx.declare whose span is outside every call lands in the file scope", () => {
+    const derived: Record<string, CustomTag> = {
+      root: {
+        analyze(_calls, ctx) {
+          ctx.declare("k", "foo", { span: { sourceStart: 0, sourceEnd: 4 } });
+        },
+      },
+      use: { attributes: { v: { type: "atom", ref: "k" } } },
+    };
+    expect(() =>
+      compile("text here\n<root/><use v=:foo/>", derived),
+    ).not.toThrow();
+    const error = fails("text here\n<root/><use v=:bar/>", derived);
+    expect(error.message).toBe(
+      "`<use>`: attribute `v`: `:bar` is not a declared k here",
+    );
+  });
+});
+
+describe("round 3: type errors are positioned at the value", () => {
+  const tags: Record<string, CustomTag> = {
+    box: {
+      attributes: { kind: { type: "atom" } },
+      attributeTags: { row: { attributes: { kind: { type: "atom" } } } },
+    },
+  };
+
+  it("a string where an atom is expected is at the string", () => {
+    const source = '<box kind="title"/>';
+    const error = fails(source, tags, attrTagHost);
+    expect(error.message).toBe(
+      "`<box>`: attribute `kind` must be atom, got string",
+    );
+    expect({ line: error.line, column: error.column }).toEqual(
+      at(source, '"title"'),
+    );
+  });
+
+  it("a number and a dynamic value are at the value", () => {
+    const number = "<box kind=3/>";
+    expect({ ...pos(fails(number, tags)) }).toEqual(at(number, "3"));
+    const fn = "<box kind=() => 1/>";
+    expect({ ...pos(fails(fn, tags)) }).toEqual(at(fn, "() => 1"));
+  });
+
+  it("an attribute tag's string is at the string too", () => {
+    const source = '<box><@row kind="t"/></box>';
+    const error = fails(source, tags, attrTagHost);
+    expect(error.message).toBe(
+      "`<box>`: `<@row>`: attribute `kind` must be atom, got string",
+    );
+    expect({ line: error.line, column: error.column }).toEqual(
+      at(source, '"t"'),
+    );
+  });
+});
+
+function pos(error: TranslateError) {
+  return { line: error.line, column: error.column };
+}

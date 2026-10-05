@@ -31,6 +31,7 @@ function compile(source: string, row: CustomTagAttributeTag): TagCall {
     customTags: {
       card: {
         attributeTags: { row },
+        declares: { kind: "node", from: "id" },
         transform(call) {
           seen = call;
           void call.attributeTags;
@@ -489,6 +490,49 @@ describe("E1 vocabulary on attribute-tag attributes", () => {
       `${owner}attribute \`values\` item 2 must be string, got number`,
       2,
       2,
+    );
+  });
+});
+
+describe("E1 vocabulary on attribute-tag attributes: atoms (decision 156 addendum 7)", () => {
+  const atoms: CustomTagAttributeTag = {
+    attributes: {
+      mode: { type: "atom", values: ["a", "b"] },
+      code: { type: "atom", pattern: "^[a-z]+$" },
+      to: { type: "atom", ref: "node" },
+    },
+  };
+  it.each([
+    "mode=:a",
+    "mode=[:a, :b]",
+    "mode=cond ? :a : :b",
+    "code=:abc",
+    "to=:known",
+    "mode=dynamicValue",
+  ])("accepts %s", (attrs) => {
+    expect(() =>
+      compile(`<card#known><@row ${attrs}/></card>`, atoms),
+    ).not.toThrow();
+  });
+  it.each([
+    ['mode="a"', "attribute `mode` must be atom, got string", 1, 23],
+    ["mode=3", "attribute `mode` must be atom, got number", 1, 23],
+    ["mode=[:a, 2]", "attribute `mode` must be atom, got number", 1, 28],
+    ["mode=:zzz", "attribute `mode`: `:zzz` is not one of :a, :b", 1, 23],
+    [
+      "code=:A1",
+      "attribute `code`: `:A1` does not match the pattern /^[a-z]+$/",
+      1,
+      23,
+    ],
+    ["to=:nope", "attribute `to`: `:nope` is not a declared node here", 1, 21],
+  ])("rejects %s", (attrs, message, line, column) => {
+    fails(
+      `<card#known><@row ${attrs}/></card>`,
+      atoms,
+      owner + message,
+      line,
+      column,
     );
   });
 });
