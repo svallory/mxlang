@@ -105,7 +105,7 @@ It is an error only if the tag already has a default value. This replaces 146's 
 
 ### 6. Invariants
 
-Everything ADR 146 ships keeps its meaning. This table is the test list for the implementation; the left column is the form, the right is what it means before and after atoms (identical, except `x=:b`, `x= :b` and `a ? :b :c`, which are changes). The baseline is main **after decision 146 addendum 4** (branch `name-sugar-default-value`; main itself still has the "sugar takes no value" error in `name-sugar.ts:622`). The 31 of 31 byte-identical run (parser simulation off and on) was measured on main *without* addendum 4, so the addendum-4 rows below (sugar plus `value=x`, sugar plus `value=function`) are **unmeasured**; they are re-measured in Phase B.
+Everything ADR 146 ships keeps its meaning. This table is the test list for the implementation and a regression check, not a Marko parity requirement (decision 157: Marko is the default where MX has no ruling, divergences need a decision and a row); the left column is the form, the right is what it means before and after atoms (identical, except `x=:b`, `x= :b` and `a ? :b :c`, which are changes). The baseline is main **after decision 146 addendum 4** (branch `name-sugar-default-value`; main itself still has the "sugar takes no value" error in `name-sugar.ts:622`). The 31 of 31 byte-identical run (parser simulation off and on) was measured on main *without* addendum 4, so the addendum-4 rows below (sugar plus `value=x`, sugar plus `value=function`) are **unmeasured**; they are re-measured in Phase B.
 
 | form | meaning, before and after |
 |---|---|
@@ -197,7 +197,7 @@ Today htmljs-parser passes every atom through intact in every position (attribut
 | option | what | why not |
 |---|---|---|
 | (a) | a Babel rule in the compiler fork's bundled `@babel/parser` | a Babel patch to maintain through the compiler bundle on every Babel bump; also needs a tokenizer patch for `::`; `a ? :b :c` still mis-splits |
-| **(b′)** | **htmljs fork lexes, same-length stand-in, core converts** | **recommended**: exact positions, fixes `a ? :b :c`, Babel and the compiler fork stay byte-identical to upstream |
+| **(b′)** | **htmljs fork lexes, same-length stand-in, core converts** | **recommended**: exact positions, fixes `a ? :b :c`, Babel and the compiler fork carry no atom code |
 | (b) | the fork pre-scans and hands Babel a string literal | positions shift by one per preceding atom in the same expression |
 | (c) | core rewrites the source text before Babel | decision 151 rejected core re-scanning attribute source; Marko's code frames would show the stand-in; every entry point must rewrite |
 
