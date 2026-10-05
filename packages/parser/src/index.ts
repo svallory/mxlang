@@ -6,10 +6,11 @@ import {
   isMarkoOrMxSpecifier,
 } from "@mxlang/core";
 import {
-  parse as babelParse,
-  parseExpression as babelParseExpression,
+  parse as rawBabelParse,
+  parseExpression as rawBabelParseExpression,
   type ParserOptions,
 } from "./babel/index.ts";
+import { mxHooks } from "./mx/bridge.ts";
 import {
   type AuthoredImport,
   type HoistedDefine,
@@ -52,6 +53,25 @@ export {
 };
 
 export interface MxParseOptions extends ParserOptions {}
+
+/**
+ * The Babel fork imports nothing from this package, so MX syntax reaches it
+ * as the `mxHooks` option. Every entry point here supplies ours whenever the
+ * grammar is on.
+ */
+function withMxHooks(options?: ParserOptions): ParserOptions | undefined {
+  return options?.mx === true && !options.mxHooks
+    ? { ...options, mxHooks }
+    : options;
+}
+
+function babelParse(source: string, options?: ParserOptions) {
+  return rawBabelParse(source, withMxHooks(options));
+}
+
+function babelParseExpression(source: string, options?: ParserOptions) {
+  return rawBabelParseExpression(source, withMxHooks(options));
+}
 
 const MX_DEFAULT_PLUGINS: ParserOptions["plugins"] = ["typescript", "jsx"];
 

@@ -152,6 +152,13 @@ export interface Options {
    * `.ng.mx` lowers a region to an Angular template string — both only text
    * the surrounding grammar can parse.
    */
+  /**
+   * MX FORK: the injected MX grammar hooks (`MxHooks`). Required whenever
+   * `mx` is `true`: the fork imports nothing from the bridge that supplies
+   * them, and `@mxlang/tsx-bridge`'s `parse` fills this in.
+   */
+  mxHooks?: import("./mx-hooks.ts").MxHooks;
+
   mxRegionCompile?: import("./mx-hooks.ts").MxRegionCompile;
 
   /** MX FORK: surrounding module imports pre-collected by `parse`. */
@@ -264,6 +271,7 @@ type KeepOptionalKeys =
   | "mxRegionPositionCheck"
   | "mxRegionFragment"
   | "mxSiblingHints"
+  | "mxHooks"
   | "mxRegionCompile"
   | "mxImportSpecifiers"
   | "mxModuleBindings"
@@ -295,6 +303,8 @@ function createDefaultOptions(): OptionsWithDefaults {
     // MX FORK: same "must default to undefined" reasoning, twice more.
     mxRegionFragment: undefined,
     mxSiblingHints: undefined,
+    // MX FORK: injected grammar hooks; `undefined` so `getOptions` copies them.
+    mxHooks: undefined,
     // MX FORK: same reasoning again — `undefined` here, not omitted, or
     // `getOptions` never copies a caller's hook across.
     mxRegionCompile: undefined,

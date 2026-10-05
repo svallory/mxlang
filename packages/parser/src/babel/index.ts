@@ -14,7 +14,7 @@ export type {
 } from "./typings.ts";
 import Parser, { type PluginsMap } from "./parser/index.ts";
 import type { ParseError as ParseErrorGeneric } from "./parse-error.ts";
-import { MxErrors } from "../mx/errors.ts";
+import type { MxHooks } from "./mx-hooks.ts";
 import { Position } from "./util/location.ts";
 
 import type { ExportedTokenType } from "./tokenizer/types.ts";
@@ -55,7 +55,12 @@ export function parse(
   try {
     return parseProgram(input, { ...options, mxSiblingHints: siblingHints });
   } catch (error) {
-    throw withMultipleRootsError(error, siblingHints, input);
+    throw withMultipleRootsError(
+      error,
+      siblingHints,
+      input,
+      options.mxHooks as MxHooks,
+    );
   }
 }
 
@@ -69,6 +74,7 @@ function withMultipleRootsError(
   error: unknown,
   hints: ReadonlyArray<{ start: number; end: number }>,
   input: string,
+  hooks: MxHooks,
 ): unknown {
   const { pos, syntaxPlugin } = (error ?? {}) as {
     pos?: unknown;
@@ -85,7 +91,7 @@ function withMultipleRootsError(
   const before = input.slice(0, hint.start);
   const line = before.split("\n").length;
   const column = hint.start - (before.lastIndexOf("\n") + 1);
-  return MxErrors.MultipleRoots(new Position(line, column, hint.start), undefined);
+  return hooks.multipleRootsError(new Position(line, column, hint.start));
 }
 
 function parseProgram(
@@ -164,6 +170,12 @@ function getParser(
   options: ParserOptions | undefined | null,
   input: string,
 ): Parser {
+  if (options?.mx === true && !options.mxHooks) {
+    throw new Error(
+      "MX: `mx: true` needs `mxHooks`, which the Babel fork does not supply itself. " +
+        "Parse through @mxlang/tsx-bridge, or pass its `mxHooks` option.",
+    );
+  }
   let cls = Parser;
   const pluginsMap: PluginsMap = new Map();
   if (options?.plugins) {

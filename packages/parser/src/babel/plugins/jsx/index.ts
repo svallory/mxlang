@@ -18,7 +18,7 @@ import type { Position } from "../../util/location.ts";
 import { isNewLine } from "../../util/whitespace.ts";
 import { Errors, ParseErrorEnum } from "../../parse-error.ts";
 import type { Undone } from "../../parser/node.ts";
-import { mxParseElementAt } from "../../../mx/bridge.ts";
+import type { MxHooks, MxParserHost } from "../../mx-hooks.ts";
 
 /* eslint sort-keys: "error" */
 const JsxErrors = ParseErrorEnum`jsx`({
@@ -478,8 +478,8 @@ export default (superClass: typeof Parser) =>
           (this.options as { mxRegionFragment?: boolean }).mxRegionFragment ===
             true)
       ) {
-        return mxParseElementAt(
-          this as unknown as Parameters<typeof mxParseElementAt>[0],
+        return (this.options as { mxHooks: MxHooks }).mxHooks.parseRegion(
+          this as unknown as MxParserHost,
           startLoc,
         ) as N.JSXElement | N.JSXFragment;
       }

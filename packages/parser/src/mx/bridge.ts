@@ -5,6 +5,7 @@ import { MxErrors } from "./errors.ts";
 import type {
   HoistedDefine,
   HoistedImport,
+  MxHooks,
   MxParserHost,
   MxRegionCompile,
 } from "../babel/mx-hooks.ts";
@@ -847,3 +848,13 @@ function parseRegionCode(
     throw firstError;
   }
 }
+
+/**
+ * The hooks the vendored Babel fork calls for MX syntax. Passed as the
+ * `mxHooks` parser option; the fork itself imports nothing from this package.
+ */
+export const mxHooks: MxHooks = {
+  parseRegion: mxParseElementAt,
+  multipleRootsError: (position) =>
+    MxErrors.MultipleRoots(position, undefined),
+};
