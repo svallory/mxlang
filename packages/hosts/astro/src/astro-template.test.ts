@@ -776,8 +776,9 @@ describe("the fence's top-level return does not leak into the template", () => {
  * The `<return>` error disposition used to live in this host's table, which
  * refused a `.astro.mx` file that merely *called* a returning `.mx` tag — the
  * table is consulted while compiling whichever file holds the tag. The call
- * is legal: the unit is a separate module, and Astro's renderer unwraps the
- * `{ value, output }` pair (`server.ts`). Only `/var` is refused: it is a
+ * is legal: the unit is a separate module, and Astro's renderer calls its
+ * default export, which returns the markup alone (`server.ts`; the value is
+ * what `render(input, out)` returns, decision 155). Only `/var` is refused: it is a
  * structural host limit (ruled 2026-09-28, decision-65-style host-cannot),
  * since Astro runs the `---` fence to completion before the template's tags
  * are ever called, leaving no statement position, in either the fence or the
@@ -843,7 +844,9 @@ describe("a tag that returns a value", () => {
         { customTags: { counter } },
       ),
     ).toThrow(
-      /Astro runs the `---` fence before the template renders.*Call the unit directly from the fence instead/s,
+      // The route it names must be one that works since decision 155: the
+      // default export returns markup only, so the value comes from `render`.
+      /Astro runs the `---` fence before the template renders.*Call the unit directly from the fence instead.*import \{ createOut \} from "@mxlang\/html"; const value = \$mx_Counter\d*\.render\(\{ \.\.\. \}, createOut\(\)\)/s,
     );
   });
 });

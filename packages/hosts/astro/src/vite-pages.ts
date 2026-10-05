@@ -43,8 +43,11 @@ import type { Plugin } from "vite";
 // or an imported tag unit inlined by the bundler, would be renamed to
 // `__mxRenderPage` and the real render function left alone. The tail names
 // exactly one function, and the same name must appear in both halves of it.
+// The optional `as …` is the signature `@mxlang/html` restates on the export:
+// the bundler has erased it by the time this post plugin runs, but a caller
+// that hands over the compiled TypeScript itself still sees it.
 const EXPORT_DEFAULT_RENDER_RE =
-  /\n*Object\.defineProperty\(([A-Za-z_$][\w$]*),\s*Symbol\.for\("mx\.component"\),\s*\{\s*value:\s*true\s*\}\);\n*export default \1;\n*$/;
+  /\n*Object\.defineProperty\(([A-Za-z_$][\w$]*),\s*Symbol\.for\("mx\.component"\),\s*\{\s*value:\s*true\s*\}\);\n*export default \1(?: as [^;\n]*)?;\n*$/;
 
 /** The declaration of `name`, as the compiled module writes it. */
 function brandedTailRe(name: string): RegExp {

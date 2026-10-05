@@ -592,7 +592,8 @@ function markoPosition(
  * and Babel backends consume source text, so neither needs special-casing
  * here.
  *
- * `.mx` compiles to a plain `(input) => string` module (or a JSX component
+ * `.mx` compiles to a module whose default export is `(input) => string`,
+ * carrying the sink entry `render(input, out)` as `.render` (decision 155) (or a JSX component
  * module, per the resolved host) via `compileMarko()` — the same whole-file
  * translator `examples/mx-site` and `@mxlang/html/bun` use, so a `.mx`
  * template behaves identically whether it is loaded by Vite or by Bun.

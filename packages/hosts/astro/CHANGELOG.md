@@ -1,5 +1,7 @@
 # Changelog
 
+- **Fix (render-consumers, decision 155):** the renderer calls the unit's default export unchanged (`(input) => string`); the dead `{ output }` unwrap is gone and the `Symbol.for("mx.component")` brand check stays. The Astro type surface keeps `render` visible on the default export, so `Unit.render(...)` and `/var` type under `mx-tsc --astro` instead of falling to an unmapped, silently dropped TS2339. The `/var`-in-`.astro.mx` error hint now shows `X.render({ ... }, createOut())`; it still showed the pre-decision-155 `const { value } = X(...)`. The page-wrapper tail match accepts the typed default export.
+
 - **Fix (render-sink, decision 155):** the page wrapper (`wrapAsPage`) moves the compiled module's `NAME.render = __mxRender;` line along with the rename to `__mxRenderPage`. Without that, an `@mxlang/html` module from decision 155 would reference a removed binding when it loaded.
 
 - **Fix (solid-astro-angular-primitive-attr-parity, decision 149):** dynamic native attributes and spread keys in `.astro.mx` go through `__mxAttrOut`, so primitives render as Marko does: `false` omitted and `true` bare on data/aria/title/value, falsy `class`/`style` omitted and `true` printed as `"true"`, and Astro's boolean-attribute names present for everything but null/undefined/false (presence only, see divergences.md). Static attributes are unchanged.

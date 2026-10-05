@@ -19,8 +19,13 @@
 export function createAstroTypeSurface(code: string): string {
   // The export is named after the file (`card.mx` -> `Card`), so this matches
   // the statement's shape and reads the name back rather than pinning a fixed
-  // `render`.
-  const match = code.match(/export default ([A-Za-z_$][\w$]*);/);
+  // `render`. `@mxlang/html` types it with an `as` restating its signature
+  // (`export default Card as ((input: Input) => string) & { render: … };`);
+  // the whole statement is replaced, so the cast below starts from the bare
+  // binding either way.
+  const match = code.match(
+    /export default ([A-Za-z_$][\w$]*)(?: as [^;\n]*)?;/,
+  );
   if (!match?.[1]) {
     throw new Error(
       "@mxlang/typescript-plugin: the Astro host could not find the compiled MX default export.",
@@ -33,7 +38,12 @@ export function createAstroTypeSurface(code: string): string {
       'type MxAstroInput = "content" extends keyof Input',
       '  ? Omit<Input, "content"> & { children?: unknown }',
       "  : Input;",
-      `const mxAstroRender = ${name} as unknown as (input: MxAstroInput) => string;`,
+      // `render` stays visible: a caller compiled by `@mxlang/html` (an MX
+      // page, another leaf) calls `Name.render(input, out)` and binds `/var`
+      // to its result (decision 155). Hidden, that call is an error on
+      // generated text no source position maps to, so it is dropped and the
+      // binding silently types as the error type.
+      `const mxAstroRender = ${name} as unknown as ((input: MxAstroInput) => string) & { render: typeof __mxRender };`,
       "export default mxAstroRender;",
     ].join("\n"),
   );

@@ -137,16 +137,12 @@ export async function renderToStaticMarkup(
     }
   }
 
-  // A unit that declares `<return>` hands back `{ value, output }` rather
-  // than the output alone (design §3.3). Astro renders the markup and has
-  // nowhere to put the value — an `.astro.mx` template has no statement position
-  // to bind one in, and `/var` there is refused for that reason — so the
-  // output half is what renders. Unwrapped here rather than at the call
-  // site, because Astro calls the component itself.
-  const rendered = Component(input) as string | { output: string };
-  return {
-    html: typeof rendered === "string" ? rendered : (rendered?.output ?? ""),
-  };
+  // The default export always returns the markup (decision 155), including
+  // for a unit that declares `<return>`: its value is what the sink entry
+  // `Component.render(input, out)` returns, and Astro has nowhere to put it —
+  // an `.astro.mx` template has no statement position to bind one in, and
+  // `/var` there is refused for that reason.
+  return { html: Component(input) };
 }
 
 export default { check, renderToStaticMarkup };

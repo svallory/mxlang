@@ -300,13 +300,15 @@ build error naming the construct, the reason, and the line in the `.astro.mx` fi
   called, so there is no statement position left — in the fence (already
   finished) or the template (markup, not statements) — to bind a value into.
   Calling the same tag *without* `/var` already works: Astro's renderer
-  unwraps its `{ value, output }` pair itself (`server.ts`). To use the
-  bound value, call the unit directly from the fence's own TypeScript
-  instead, where it is an ordinary function call:
+  calls its default export, which returns the markup alone (`server.ts`).
+  To use the value, call the unit's sink entry `render(input, out)` from the
+  fence's own TypeScript instead, where it is an ordinary function call that
+  returns the `<return>` value (decision 155):
   ```astro
   ---
   import Counter from "./tags/counter.mx";
-  const { value } = Counter({ start: 1 });
+  import { createOut } from "@mxlang/html";
+  const value = Counter.render({ start: 1 }, createOut());
   ---
   <p>{value}</p>
   ```

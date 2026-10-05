@@ -174,7 +174,8 @@ const TAGS: HostDeclarations["tags"] = {
   // while compiling whichever file contains the tag, so an entry here also
   // refused a `.astro.mx` file that merely *called* a returning `.mx` tag. That
   // call is legal: the unit is a separate module, and `component()` below
-  // unwraps its `{ value, output }` pair.
+  // calls its default export, which returns the markup alone; the value stays
+  // with `render` (decision 155).
   const: {
     kind: "error",
     reason:
@@ -937,13 +938,13 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
         // ruled 2026-09-28 on TODO amx-tag-var): Astro runs the `---` fence
         // to completion before this template's tags are ever lowered or
         // called, so there is no statement position left, in either the
-        // fence or the template, to receive a value into. The unwrap this
-        // emitter does for a plain (no-`/var`) call happens later still,
-        // inside Astro's own render pass in `server.ts`, producing a markup
-        // string — not a place any binding could land. Refused rather than
-        // dropped.
+        // fence or the template, to receive a value into. A plain (no-`/var`)
+        // call is rendered later still, inside Astro's own render pass in
+        // `server.ts`, through the unit's default export, which returns only
+        // the markup string — not a place any binding could land. Refused
+        // rather than dropped.
         fail(
-          `\`/var\` on \`<${node.authoredName ?? name}>\` can't bind in \`.astro.mx\`: Astro runs the \`---\` fence before the template renders, so no statement can receive the value here. Call the unit directly from the fence instead, e.g. \`import ${name} from "./${name}.mx"; const { value } = ${name}({ ... });\`, and use \`value\` in the template.`,
+          `\`/var\` on \`<${node.authoredName ?? name}>\` can't bind in \`.astro.mx\`: Astro runs the \`---\` fence before the template renders, so no statement can receive the value here. Call the unit directly from the fence instead, e.g. \`import ${name} from "./${name}.mx"; import { createOut } from "@mxlang/html"; const value = ${name}.render({ ... }, createOut());\`, and use \`value\` in the template.`,
           node,
         );
       }
