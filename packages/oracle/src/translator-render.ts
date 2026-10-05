@@ -52,6 +52,7 @@ export async function renderTranslator(
   input: unknown,
 ): Promise<string> {
   const escapeEntry = require.resolve("@mxlang/html");
+  const runtimeEntry = require.resolve("@mxlang/html/runtime");
   const scratch = mkdtempSync(join(tmpdir(), "mx-oracle-translator-"));
   try {
     cpSync(dir, scratch, { recursive: true });
@@ -68,7 +69,14 @@ export async function renderTranslator(
           /(from\s+")(\.[^"]+)\.(?:marko|mx)(")/g,
           (_match, prefix, path, suffix) => `${prefix}${path}.ts${suffix}`,
         )
-        .replace('from "@mxlang/html"', `from ${JSON.stringify(escapeEntry)}`);
+        // Every runtime import, not only the first: the emitted module imports
+        // `escape`/`createOut` (decision 155's sink) from the package root, and
+        // a type-only `AttrTag` import or a `/runtime` specifier may follow.
+        .replace(
+          /from "@mxlang\/html(\/runtime)?"/g,
+          (_match, runtime) =>
+            `from ${JSON.stringify(runtime ? runtimeEntry : escapeEntry)}`,
+        );
 
       writeFileSync(withTsExtension(file), rewritten);
     }
