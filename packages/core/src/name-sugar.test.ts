@@ -839,7 +839,9 @@ describe("default value: Angular, bound, naming, position", () => {
 describe("default value: tag-adjacent `=value` is Marko's own default", () => {
   it("<a#x=1 value=2/> is decision 135's warning, not the double-default error", () => {
     const warnings: MxWarning[] = [];
-    expect(() => lowerSource("<a#x=1 value=2/>", undefined, warnings)).not.toThrow();
+    expect(() =>
+      lowerSource("<a#x=1 value=2/>", undefined, warnings),
+    ).not.toThrow();
     expect(warnings.map((w) => w.message)).toEqual([
       expect.stringContaining("duplicate attribute `value`"),
     ]);
@@ -854,11 +856,14 @@ describe("default value: a bound value on a sugar", () => {
     ["<a #x:=y/>", 1, 3],
     ["<a .c:=y/>", 1, 3],
     ["<input type=text :n:=y/>", 1, 17],
-  ])("%s is a positioned error, not a silent value=y", (source, line, column) => {
-    const error = errorOf(source, withMethods);
-    expect(error.message).toBe(
-      "a bound value is not supported on name sugar; write name=... value:=...",
-    );
-    expect([error.line, error.column]).toEqual([line, column]);
-  });
+  ])(
+    "%s is a positioned error, not a silent value=y",
+    (source, line, column) => {
+      const error = errorOf(source, withMethods);
+      expect(error.message).toBe(
+        "a bound value is not supported on name sugar; write name=... value:=...",
+      );
+      expect([error.line, error.column]).toEqual([line, column]);
+    },
+  );
 });
