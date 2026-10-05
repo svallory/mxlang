@@ -9,8 +9,12 @@ specifier included) and calls its lazy `load(core).compileModule` with
 compiler branches remain. The registry itself is cached behind a dynamic
 import; config evaluation loads no registry or heavy compiler. Build startup
 installs the registry's lazy callee readers, not a host index for its side
-effects. The `.solid.mx` path selects the registered `region` pipeline and
-collects its compile dependencies per transform, retaining parser `print()`.
+effects. A region file (`.solid.mx`, or any registered region kind) is lowered
+by the region entry its suffix names (`regionCompileFor`), printed with
+`mx: true`, and collects its compile dependencies per transform, retaining
+parser `print()`. The default `extensions` are the registry's region kinds then
+`.mx` (`defaultExtensions()`), resolved by the async hooks; until then the sync
+hooks match `.mx` alone, which is all `load`/`handleHotUpdate` need.
 
 D1 stays caller-owned: `options.strict ?? false` reaches the descriptor even
 when its `strict` is `"always"`. D2 stays in descriptor option forwarding:
@@ -63,7 +67,8 @@ Historical implementation details below predate table dispatch.
 `@solidjs/vite-plugin`. Both plugins are `enforce: "pre"`, so their relative
 order is their order in the `plugins` array — `mx()` must come first.
 
-`mx()`'s default `extensions` is `[".solid.mx", ".mx"]`: `.mx` (the official
+`mx()`'s default `extensions` is `[".solid.mx", ".mx"]` today (derived from
+the registry, see above): `.mx` (the official
 and only template extension — `.marko` is not accepted, see "`.mx` is the
 only template extension" in `packages/parser/AGENTS.md`) compiles through `compileMarko()` (routing
 to the resolved host's compiler — `@mxlang/html`'s `compile()`,

@@ -2,6 +2,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Changed (bridge-host, decision 154):** the default `extensions` are the registry's region file kinds then `.mx` (`defaultExtensions()`, today `.solid.mx, .mx`), resolved lazily by the async hooks; a user's `extensions` still replaces them. A region file is printed with `mx: true` and lowered by the region entry its suffix names, not by the first region kind. Behaviour change: a user-listed extension no region kind serves (`extensions: [".foo.mx"]`, or an opt-in `".astro.mx"`) used to compile through Solid's region entry; it is now the error `no registered host compiles MX regions for "<file>"`. Region kinds are looked up in the file's project lookup (`lookupFor(policy)`), as the language server does.
+
 - **Added (default-tag-ladder, decision 145):** the package's `defaultTag` reaches the page compile and each `.solid.mx` region.
 
 - **Fix (translate-error-callee-file):** a callee syntax error's build header uses the callee file together with its coordinates, not the caller's authored id. Its message stays compact, carrying one caret reason per frame so an aggregate callee's later reasons are not lost; the overlay frame is built from the callee source. Build-render headers print 1-based columns (#227); the transform/overlay's structured `loc.column` stays 0-based.

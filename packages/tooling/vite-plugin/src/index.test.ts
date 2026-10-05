@@ -1234,8 +1234,11 @@ export default () => <div />;
       writeFileSync(dependency, "export interface Input {}\n");
 
       vi.resetModules();
-      const { builtinFileKinds } = await import("@mxlang/target-registry");
-      const kind = builtinFileKinds.find((kind) => kind.pipeline === "region");
+      // The descriptor's own file kind: dispatch reads the lookup's descriptors.
+      const { builtinTargets } = await import("@mxlang/target-registry");
+      const kind = builtinTargets
+        .flatMap((target) => target.host?.fileKinds ?? [])
+        .find((kind) => kind.compileRegion);
       if (!kind?.compileRegion) throw new Error("missing region compiler");
       const wired = kind as typeof kind & {
         compileRegion: NonNullable<typeof kind.compileRegion>;

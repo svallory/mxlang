@@ -30,24 +30,43 @@ async function regionDefaultTag(file: string): Promise<string> {
   return defaultTagFor(file, resolveTargetPolicy(file, { quiet: true }));
 }
 
+/**
+ * The region compile of the file kind `file`'s suffix names, through the
+ * registry and the file's project lookup (`lookupFor(policy)`): `.solid.mx`
+ * gets Solid's region entry, and every other registered region kind its own
+ * host's. A file no region kind claims (only reachable
+ * when `extensions` lists a suffix no kind serves) is an error naming it.
+ */
 async function loadRegionCompile(
+  file: string,
   dependencies?: Set<string>,
 ): Promise<MxRegionCompile> {
-  const { builtinFileKinds, builtinLookup } = await loadRegistry();
-  const compileRegion = builtinFileKinds.find(
-    (kind) => kind.pipeline === "region",
-  )?.compileRegion;
-  if (!compileRegion) throw new Error("missing region compiler");
-  return (input) => {
-    // Core keeps the parser's hoisted AST nodes opaque to avoid a cycle.
-    const result = compileRegion(input.source, {
-      ...input,
-      targets: builtinLookup(),
-    }) as ReturnType<MxRegionCompile>;
-    for (const dependency of result.dependencies ?? [])
-      dependencies?.add(dependency);
-    return result;
-  };
+  const { lookupFor, regionCompileFor, resolveTargetPolicy } =
+    await loadRegistry();
+  // The file's own project lookup, as the language server uses: the same
+  // answer for a built-in policy, and a loaded target's kinds when it has any.
+  const targets = lookupFor(resolveTargetPolicy(file, { quiet: true }));
+  const compile = regionCompileFor(file, {
+    targets,
+    onDependency: (dependency) => dependencies?.add(dependency),
+  });
+  if (!compile) {
+    throw new Error(
+      `@mxlang/vite-plugin: no registered host compiles MX regions for "${file}"; a region file is \`.<segment>.mx\` for a host file kind with a region entry`,
+    );
+  }
+  // Core keeps the parser's hoisted AST nodes opaque to avoid a cycle.
+  return compile as MxRegionCompile;
+}
+
+/**
+ * The extensions the plugin claims when `extensions` is not given: every
+ * registered region file kind (`.solid.mx`, …) then `.mx`, read from the
+ * registry so a new region host needs no edit here.
+ */
+export async function defaultExtensions(): Promise<string[]> {
+  const { regionFileKinds } = await loadRegistry();
+  return [...regionFileKinds().map((kind) => `.${kind.segment}.mx`), ".mx"];
 }
 
 /** Whole-file compilation selects a target, never the policy's host name. */
@@ -88,7 +107,8 @@ async function compileMarko(
 
 export interface MxPluginOptions {
   /**
-   * File extensions handled by the plugin. Defaults to `.solid.mx` and `.mx`.
+   * File extensions handled by the plugin. Defaults to every registered
+   * region file kind (`.solid.mx`) and `.mx` ({@link defaultExtensions}).
    */
   extensions?: string[];
   /**
@@ -118,8 +138,6 @@ export interface MxPluginOptions {
    */
   customTags?: Record<string, CustomTag>;
 }
-
-const DEFAULT_EXTENSIONS = [".solid.mx", ".mx"];
 
 /** A Marko tag file, compiled when an MX module imports it. */
 const TAG_EXT = ".marko";
@@ -652,9 +670,23 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
   // `.solid.mx` (print()/JSX) — sorting once here makes both `matchExt` and
   // `isMxModule` order-independent regardless of the order `extensions` is
   // given in.
-  const extensions = [...(options.extensions ?? DEFAULT_EXTENSIONS)].sort(
-    (a, b) => b.length - a.length,
-  );
+  const longestFirst = (list: readonly string[]) =>
+    [...list].sort((a, b) => b.length - a.length);
+  // The default comes from the registry, which stays behind its lazy import:
+  // every async hook awaits `ensureExtensions()` first. Until then the sync
+  // hooks (`load`, `handleHotUpdate`) match on `.mx` alone, which is all they
+  // need: they strip the module suffix and read or forget the authored file,
+  // and every registered extension ends in `.mx`. Which branch compiles the
+  // file is decided in `transform`, after the real list is in.
+  let extensions: string[] = options.extensions
+    ? longestFirst(options.extensions)
+    : [".mx"];
+  let extensionsResolved = options.extensions !== undefined;
+  const ensureExtensions = async (): Promise<void> => {
+    if (extensionsResolved) return;
+    extensions = longestFirst(await defaultExtensions());
+    extensionsResolved = true;
+  };
   // A file whose name ends in a multi-dot extension belonging to another MX
   // host is not this plugin's, even when a shorter registered extension is a
   // string suffix of it. Skipped when the caller registered that extension
@@ -891,7 +923,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     },
 
     async buildStart() {
-      await loadRegistry();
+      await ensureExtensions();
     },
 
     /**
@@ -905,6 +937,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     },
 
     async resolveId(id: string, importer: string | undefined) {
+      await ensureExtensions();
       const [path, suffix] = splitId(id);
 
       // `?raw`, `?url`, `?worker`: the caller wants the file itself, not the
@@ -1043,6 +1076,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     },
 
     async transform(code: string, id: string) {
+      await ensureExtensions();
       const [path] = splitId(id);
       const ext = isMxModule(path);
       if (ext === undefined) return null;
@@ -1102,16 +1136,18 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
           return { code: compiled, map: null };
         }
 
-        // `.solid.mx` reaches its host through the parser, which lowers each
-        // MX region with `compileSolidMx`; the registered tags have to travel
-        // with it or a tag registered here is unknown inside a `.solid.mx`.
-        // The parser no longer defaults to this host, so it is supplied
-        // explicitly here, the same as every other `.solid.mx` caller.
+        // A region file (`.solid.mx`, or any other registered region kind)
+        // reaches its host through the parser, which lowers each MX region
+        // with the region entry the registry names for this suffix; the
+        // registered tags have to travel with it or a tag registered here is
+        // unknown inside a region. The parser has no host of its own, so the
+        // compile is supplied explicitly here, the same as every region caller.
         const dependencies = new Set<string>();
         const { code: printed, map } = print(code, source, {
+          mx: true,
           customTags: await tagsFor(source, warn, policyError),
           defaultTag: await regionDefaultTag(source),
-          mxRegionCompile: await loadRegionCompile(dependencies),
+          mxRegionCompile: await loadRegionCompile(source, dependencies),
         });
         recordDependencies(source, [...dependencies]);
         return { code: printed, map };
