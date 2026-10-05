@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import type { TargetLookup } from "@mxlang/core";
-import { readTargetDefaultTag } from "@mxlang/core";
 import { reportScanDiagnostics, scanCached } from "@mxlang/preact";
 import type { BunPlugin } from "bun";
+import { honoDefaultTag } from "./default-tag.ts";
 import { compileHonoMx, honoTargets } from "./index.ts";
 
 /**
@@ -52,7 +52,11 @@ export function createHonoBunPlugin(
           reportedScanDiagnostics,
           (d) => console.warn(`@mxlang/hono: ${d.file}: ${d.message}`),
         );
-        const { value: defaultTag } = readTargetDefaultTag(path, "hono-jsx");
+        const defaultTag = honoDefaultTag(path, scan.customTags, (d) =>
+          console.warn(
+            `@mxlang/hono: ${d.file}:${d.line}:${d.column + 1}: ${d.message}`,
+          ),
+        );
         const { code } = compileHonoMx(source, path, {
           customTags: scan.customTags,
           ...(defaultTag === undefined ? {} : { defaultTag }),

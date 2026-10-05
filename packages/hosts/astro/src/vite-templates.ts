@@ -47,7 +47,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import {
   type CustomTag,
-  readTargetDefaultTag,
   reportScanDiagnostics,
   scanCached,
   type TargetLookup,
@@ -58,6 +57,7 @@ import {
   astroTargets,
   lowerAstroMx,
 } from "./astro-template.ts";
+import { astroDefaultTag } from "./default-tag.ts";
 
 /**
  * The extension an MX-templated Astro component is written with (decision 78).
@@ -174,8 +174,18 @@ export function mxTemplates(
    */
   const reportedScanDiagnostics = new Set<string>();
 
-  const defaultTagOf = (file: string): { defaultTag?: string } => {
-    const { value } = readTargetDefaultTag(file, "astro-html");
+  const defaultTagOf = (
+    file: string,
+    tags: Record<string, CustomTag> | undefined,
+  ): { defaultTag?: string } => {
+    const value = astroDefaultTag(file, tags, (d) => {
+      const key = `${d.file}\0${d.line}\0${d.message}`;
+      if (reportedScanDiagnostics.has(key)) return;
+      reportedScanDiagnostics.add(key);
+      console.warn(
+        `@mxlang/astro: ${d.file}:${d.line}:${d.column + 1}: ${d.message}`,
+      );
+    });
     return value === undefined ? {} : { defaultTag: value };
   };
   const tagsFor = (file: string): Record<string, CustomTag> | undefined => {
@@ -255,13 +265,14 @@ export function mxTemplates(
 
       const source = readFileSync(real, "utf8");
       try {
+        const tags = tagsFor(real);
         return lowerAstroMx(source, real, {
-          customTags: tagsFor(real),
+          customTags: tags,
           // This plugin cannot reach the registry (it depends on this
           // package), so it reads the package's own key and leaves the
           // target's built-in as the fallback. The value is checked by the
           // registry's policy diagnostics wherever those are reported.
-          ...defaultTagOf(real),
+          ...defaultTagOf(real, tags),
           targets,
         }).code;
       } catch (error) {

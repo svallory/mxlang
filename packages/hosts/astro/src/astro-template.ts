@@ -202,7 +202,7 @@ type DelegatedTagData = { kind: "interpolation"; expr: Expr };
 /** Astro's built-in `defaultTag`: the descriptor's field and the ladder's last rung. */
 export const DEFAULT_TAG = "div";
 
-const declarations: HostDeclarations = {
+export const astroTemplateDeclarations: HostDeclarations = {
   name: "@mxlang/astro",
   attrTags: 2,
   // The ladder (decision 145): `mx.<target>.defaultTag`, then the target's
@@ -1068,7 +1068,7 @@ export function lowerAstroMx(
     const ctx = newCtx(
       source,
       (node) => sourceOf(source, node),
-      declarations,
+      astroTemplateDeclarations,
       undefined,
       filename,
       options.targets ?? ownTargets,
