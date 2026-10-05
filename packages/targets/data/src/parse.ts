@@ -26,6 +26,7 @@ import { dataTaglib } from "./taglib.ts";
 import { dataTargetBase } from "./target-base.ts";
 import type { DataDocument } from "./tree.ts";
 
+export type { Atom, MxAtomMark } from "@mxlang/core";
 export { serializeDataDocument } from "./compile.ts";
 export { dataDeclarations, RESERVED_NAMES } from "./declarations.ts";
 export { DATA_TAGLIB_ID, dataTaglib, neutralizations } from "./taglib.ts";

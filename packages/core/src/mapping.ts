@@ -65,7 +65,52 @@ export function mapped(code: string, span: SourceSpan | null): MappedCode {
  * synthesized `Expr`, or a fabricated literal default).
  */
 export function mappedExpr(expr: Expr): MappedCode {
-  return mapped(expr.code, expr.span ?? null);
+  return atomMappings(expr) ?? mapped(expr.code, expr.span ?? null);
+}
+
+/**
+ * Per-atom sub-mappings (decision 156): `code` holds each atom as its string
+ * literal (`:a` is `"a"`, one character longer), so one whole-span mapping
+ * would drift by one per preceding atom. Each atom maps to its literal and the
+ * text between them maps one to one, so a TypeScript error on `type=:emial`
+ * lands on the atom. `undefined` (the whole-span mapping) when the text
+ * between atoms is not the authored text, as when a binding rewrite
+ * (`count` to `count()`) moved it.
+ */
+function atomMappings(expr: Expr): MappedCode | undefined {
+  const span = expr.span;
+  if (!span || !expr.atoms?.length) return undefined;
+  const mappings: GeneratedMapping[] = [];
+  const between = (sourceStart: number, sourceEnd: number, at: number) => {
+    if (sourceEnd > sourceStart) {
+      mappings.push({
+        sourceStart,
+        sourceEnd,
+        generatedStart: at,
+        generatedEnd: at + sourceEnd - sourceStart,
+      });
+    }
+  };
+  let source = span.sourceStart;
+  let generated = 0;
+  for (const atom of expr.atoms) {
+    const text = JSON.stringify(atom.name);
+    const at = generated + atom.span.sourceStart - source;
+    if (expr.code.slice(at, at + text.length) !== text) return undefined;
+    between(source, atom.span.sourceStart, generated);
+    mappings.push({
+      ...atom.span,
+      generatedStart: at,
+      generatedEnd: at + text.length,
+    });
+    source = atom.span.sourceEnd;
+    generated = at + text.length;
+  }
+  if (generated + span.sourceEnd - source !== expr.code.length) {
+    return undefined;
+  }
+  between(source, span.sourceEnd, generated);
+  return { code: expr.code, mappings };
 }
 
 /** Applies one generated-text replacement and keeps non-overlapping mappings aligned. */

@@ -16,12 +16,16 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { TranslateError } from "./core.ts";
 import {
+  installedParserLexesAtoms,
   installedParserSplits,
   parseErrorToSugarError,
+  parserLexesAtoms,
   parserSplitsAfterValue,
   resetInstalledParserProbe,
+  STOCK_ATOM_MESSAGE,
   STOCK_PARSER_MESSAGE,
   SUGAR_AFTER_DEFAULT_MESSAGE,
+  stockAtomError,
   stockParserError,
   sugarAfterDefaultError,
 } from "./stock-parser.ts";
@@ -431,5 +435,64 @@ import(${JSON.stringify(`file://${distEntry}`)}).then(({ parseFragment }) => {
       expect(error?.message).toBe(SUGAR_AFTER_DEFAULT_MESSAGE(":b"));
       expect([error?.line, error?.column]).toEqual([4, 8]);
     }
+  });
+});
+
+// Decision 156 (atoms; decisions 151 §1 and 158 §2): published consumers get a
+// stock htmljs-parser through `@marko/compiler`, which does not lex atoms, so
+// an atom is a positioned "atoms need the MX parser" error there.
+describe("atoms on a stock parser", () => {
+  it("the probe sees the patched parser lex atoms and a stock one not", async () => {
+    resetInstalledParserProbe();
+    expect(installedParserLexesAtoms()).toBe(true);
+    const cjs = createRequire(join(stockDir, "package.json"))(
+      "./dist/index.js",
+    );
+    expect(parserLexesAtoms(cjs)).toBe(false);
+    const esm = await import(
+      pathToFileURL(join(stockDir, "dist/index.mjs")).href
+    );
+    expect(parserLexesAtoms(esm)).toBe(false);
+  });
+
+  const SOURCES: [string, number, number, string][] = [
+    ["<div x=:b/>", 1, 7, ":b"],
+    ["<div x=[:a, :rename-all]/>", 1, 8, ":a"],
+    ["<div x= :b/>", 1, 8, ":b"],
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: an MX placeholder
+    ["<p>${:a}</p>", 1, 5, ":a"],
+    ["div x=f(:a)", 1, 8, ":a"],
+    ["<div\n  x=:b/>", 2, 4, ":b"],
+  ];
+
+  it.each(SOURCES)("%j", (source, line, column, token) => {
+    const failure = markoFailure(source);
+    const error = stockAtomError(failureError(failure), source, false);
+    expect(error).toBeInstanceOf(TranslateError);
+    expect(error?.message).toBe(STOCK_ATOM_MESSAGE(token));
+    expect([error?.line, error?.column]).toEqual([line, column]);
+  });
+
+  it("names the requirement and the way out", () => {
+    const message = STOCK_ATOM_MESSAGE(":rename-all");
+    expect(message).toContain("`:rename-all` is an atom (decision 156)");
+    expect(message).toContain("atoms need the MX parser");
+    expect(message).toContain('`"rename-all"`');
+    expect(message).toContain("divergences.md");
+  });
+
+  it("does nothing on the MX parser, or when the probe could not run", () => {
+    const failure = markoFailure("<div x=:b/>");
+    const error = failureError(failure);
+    expect(stockAtomError(error, "<div x=:b/>", true)).toBeUndefined();
+    expect(stockAtomError(error, "<div x=:b/>", undefined)).toBeUndefined();
+  });
+
+  it("a ternary or type colon is not taken for an atom", () => {
+    const source = "<div x=a ? b :/>";
+    const failure = markoFailure(source);
+    expect(
+      stockAtomError(failureError(failure), source, false),
+    ).toBeUndefined();
   });
 });

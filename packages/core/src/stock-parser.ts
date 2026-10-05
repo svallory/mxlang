@@ -84,10 +84,52 @@ export function installedParserSplits(): boolean | undefined {
   return installedSplits;
 }
 
+/**
+ * Does this `htmljs-parser` lex atoms (decision 156)? MX's parser announces
+ * each one through `onAtom`; a stock parser has no such handler and never
+ * calls it, which makes the handler itself the capability probe.
+ */
+export function parserLexesAtoms(parser: ParserModule): boolean {
+  let lexed = false;
+  parser
+    .createParser({
+      onAtom: () => {
+        lexed = true;
+      },
+      onError: () => {},
+    })
+    .parse("<a x=:b/>");
+  return lexed;
+}
+
+let installedAtoms: boolean | undefined;
+let atomProbeFailed = false;
+
+/**
+ * Whether the `htmljs-parser` that `@marko/compiler` resolves lexes atoms.
+ * Probed once per process, like `installedParserSplits`; `undefined` when the
+ * probe could not run.
+ */
+export function installedParserLexesAtoms(): boolean | undefined {
+  if (installedAtoms !== undefined) return installedAtoms;
+  if (atomProbeFailed) return undefined;
+  try {
+    const parser = markoParser();
+    if (!parser) throw new Error("no parser");
+    installedAtoms = parserLexesAtoms(parser);
+  } catch {
+    atomProbeFailed = true;
+    return undefined;
+  }
+  return installedAtoms;
+}
+
 /** Test seam: forget the probe. */
 export function resetInstalledParserProbe(): void {
   installedSplits = undefined;
   probeFailed = false;
+  installedAtoms = undefined;
+  atomProbeFailed = false;
   markoParserModule = undefined;
 }
 
@@ -105,6 +147,41 @@ function offsetOf(source: string, line: number, column: number): number {
     start = next + 1;
   }
   return start + column;
+}
+
+export const STOCK_ATOM_MESSAGE = (token: string): string =>
+  `\`${token}\` is an atom (decision 156), and atoms need the MX parser: this install's htmljs-parser does not read them, so the \`:\` reaches Babel as a syntax error. Write the string instead (\`${JSON.stringify(token.slice(1))}\`) until the published packages carry the MX parser (decisions 151 and 158). See "atoms" in divergences.md.`;
+
+const ATOM_AT = /:[A-Za-z_$][\w$]*(?:-[\w$]+)*/y;
+
+/**
+ * The positioned MX error for a stock parser's failure on an atom, or
+ * `undefined` when `error` is not that failure or the installed parser lexes
+ * atoms. A stock parser hands `:b` to Babel as written, and Babel fails at
+ * the `:`; that position, on an atom-shaped token, is the signal.
+ *
+ * `lexes` is the probe result; tests inject it.
+ */
+export function stockAtomError(
+  error: unknown,
+  source: string,
+  lexes: boolean | undefined = installedParserLexesAtoms(),
+): TranslateError | undefined {
+  if (lexes !== false || !(error instanceof Error)) return undefined;
+  const candidates = [error as Located, ...((error as Located).errors ?? [])];
+  for (const candidate of candidates) {
+    const at = (candidate as Located | null)?.loc?.start;
+    if (!at) continue;
+    const offset = at.index ?? offsetOf(source, at.line, at.column);
+    if (offset < 0 || source[offset] !== ":" || source[offset - 1] === ":") {
+      continue;
+    }
+    ATOM_AT.lastIndex = offset;
+    const token = ATOM_AT.exec(source)?.[0];
+    if (!token) continue;
+    return new TranslateError(STOCK_ATOM_MESSAGE(token), at.line, at.column);
+  }
+  return undefined;
 }
 
 export const STOCK_PARSER_MESSAGE = (token: string): string =>
@@ -264,6 +341,7 @@ export function parseErrorToSugarError(
   });
   return (
     sugarAfterDefaultError(error, source) ??
-    stockParserError(error, source, splits)
+    stockParserError(error, source, splits) ??
+    stockAtomError(error, source)
   );
 }

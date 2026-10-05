@@ -215,6 +215,15 @@ function dataAttr(attr: Attr): DataAttr {
   switch (attr.kind) {
     case "static": {
       const nameSpan = optionalNameSpan(attr);
+      if (attr.atom) {
+        return {
+          kind: "atom",
+          name: attr.name,
+          value: attr.atom.name,
+          ...(nameSpan ? { nameSpan } : {}),
+          span: attr.atom.span,
+        };
+      }
       return {
         kind: "string",
         name: attr.name,

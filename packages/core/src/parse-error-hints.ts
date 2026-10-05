@@ -14,6 +14,7 @@
  */
 
 import type { HostDeclarations } from "./declarations.ts";
+import { installedParserLexesAtoms } from "./stock-parser.ts";
 
 // With colours on (CI, FORCE_COLOR) Marko wraps the reason in escape codes that
 // run to the end of the line, so allow SGR sequences after the reason.
@@ -100,6 +101,34 @@ function insideBraces(source: string, offset: number): boolean {
   return depth > 0;
 }
 
+const ATOM_TOKEN = /:[A-Za-z_$][\w$]*(?:-[\w$]+)*/y;
+/** Where an atom can start: after an operator or punctuator (decision 156). */
+const EXPECTS_VALUE = /[([{,;=?:!&|+\-*/%<>~^]$/;
+
+/**
+ * The atom a parse error at `offset` is on (`:a` at its `:`) or right after
+ * (`{:a}` fails at the `}`), when the text there is one: a `:` that starts a
+ * name where an expression is expected, never a ternary's or a type's.
+ */
+function atomAt(source: string, offset: number): string | undefined {
+  const tokenAt = (start: number): string | undefined => {
+    if (source[start] !== ":" || source[start - 1] === ":") return undefined;
+    if (!EXPECTS_VALUE.test(source.slice(0, start).trimEnd())) return undefined;
+    ATOM_TOKEN.lastIndex = start;
+    return ATOM_TOKEN.exec(source)?.[0];
+  };
+  const on = tokenAt(offset);
+  if (on) return on;
+  // Right after an atom only where a binding or a key would end (`{:a}`,
+  // `(:a) =>`); `[:a :b]` fails at `:b`, a missing comma, not misuse.
+  if (!/[)}\]=,;]/.test(source[offset] ?? "")) return undefined;
+  const before = source.slice(0, offset).trimEnd();
+  const match = before.match(/:[A-Za-z_$][\w$]*(?:-[\w$]+)*$/);
+  if (!match) return undefined;
+  const found = tokenAt(before.length - match[0].length);
+  return found === match[0] ? found : undefined;
+}
+
 /** Offset of a 1-based line and 0-based column in `source`. */
 function offsetOf(source: string, line: number, column: number): number {
   let start = 0;
@@ -119,6 +148,14 @@ function hintFor(
 ): string | null {
   const offset = at.index ?? offsetOf(source, at.line, at.column);
   if (offset < 0) return null;
+
+  // Decision 156: Babel rejects an atom where a binding, an assignment target
+  // or a shorthand property must stand (its stand-in is a number), at the atom
+  // or right after it; say what the author wrote.
+  const atom = atomAt(source, offset);
+  if (atom && installedParserLexesAtoms() === true) {
+    return `\`${atom}\` is an atom (decision 156): a value, not a binding, an assignment target or a shorthand property`;
+  }
 
   // `<div id= class="a">`: the next attribute's name was read as `id`'s value,
   // so the parser trips on that attribute's own `=`.

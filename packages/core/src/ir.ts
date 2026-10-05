@@ -113,6 +113,34 @@ export interface Expr {
    * not a currently-exercised contract.
    */
   file?: string;
+  /**
+   * The atoms written inside this expression, in source order (decision 156).
+   * Absent when there are none. `code` already holds each as its string
+   * literal; the node holds each as a `StringLiteral` with `extra.mxAtom`.
+   */
+  atoms?: Atom[];
+}
+
+/**
+ * An atom (decision 156): `:name`, a value that represents itself. Its runtime
+ * value is the name as a string literal on every target; the IR keeps it
+ * distinct from a string so a data consumer, a contract check or an editor
+ * can tell `:title` from `"title"`. `span` covers the whole atom, `:` included.
+ */
+export interface Atom {
+  kind: "atom";
+  name: string;
+  span: SourceSpan;
+}
+
+/**
+ * `extra.mxAtom` on the `StringLiteral` an atom becomes inside an expression
+ * (decision 156 addendum 1, item 1): the atom's own span, `:` included. The
+ * node's `value` is the name, so code that reads strings still works; code
+ * that cares checks `node.extra?.mxAtom`. Public API, as stable as the IR.
+ */
+export interface MxAtomMark {
+  span: SourceSpan;
 }
 
 /** The syntax-level value shape known while resolving an expression. */
@@ -166,6 +194,12 @@ export type Attr =
        * the empty range, like Marko.
        */
       nameSpan: SourceSpan;
+      /**
+       * Set when the whole value is one atom (`mode=:strict`, decision 156),
+       * including the `name` the `:name` sugar sets (addendum 1, item 2).
+       * `value` is the atom's name, which is what every target emits.
+       */
+      atom?: Atom;
     } & IrBase &
       AttrSugar)
   /** A bare attribute (`disabled`), HTML's spelling of `true`. */

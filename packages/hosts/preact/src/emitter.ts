@@ -36,6 +36,7 @@ import {
   type IrNode,
   type MappedCode,
   mapped,
+  mappedExpr,
   type Position,
   TranslateError,
   unresolvedCustomTagMessage,
@@ -849,7 +850,7 @@ export class PreactEmitter implements Emitter<string> {
                 "(",
                 JSON.stringify(attr.name),
                 ", ",
-                mapped(attr.value.code, attr.value.span ?? null),
+                mappedExpr(attr.value),
                 ", ",
                 JSON.stringify(tag ?? ""),
                 ")",
@@ -933,11 +934,7 @@ export class PreactEmitter implements Emitter<string> {
       const entries = attrs.flatMap((attr, index) => {
         if (attr.kind === "spread") {
           this.#rejectStringStyle(attr);
-          return [
-            index ? ", " : "",
-            "...",
-            mapped(attr.value.code, attr.value.span ?? null),
-          ];
+          return [index ? ", " : "", "...", mappedExpr(attr.value)];
         }
         const name =
           attr.kind === "event"

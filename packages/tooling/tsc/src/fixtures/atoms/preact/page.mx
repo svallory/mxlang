@@ -1,0 +1,5 @@
+<input type=:email/>
+<input data-x=[:a, :rename-all]/>
+<div>${:hello}</div>
+<field mode=:stirct/>
+<field mode=:loose modes=[:strict, :lose]/>

@@ -18,6 +18,7 @@ import {
   type IrNode,
   type MappedCode,
   mapped,
+  mappedExpr,
   type Position,
   type ReadRewrite,
   rewriteAccessorReads,
@@ -1110,7 +1111,7 @@ function textareaContent(node: Extract<IrNode, { kind: "Element" }>): {
           : attr.kind === "boolean"
             ? concatMapped("true")
             : attr.kind === "dynamic"
-              ? mapped(attr.value.code, attr.value.span ?? null)
+              ? mappedExpr(attr.value)
               : value;
     }
   }

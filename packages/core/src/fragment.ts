@@ -44,7 +44,11 @@ import {
 } from "./custom-tags.ts";
 import { nullPrototypeTags } from "./lookup-safety.ts";
 import { markoCompiler } from "./marko-frontend.ts";
-import { stockParserError, sugarAfterDefaultError } from "./stock-parser.ts";
+import {
+  stockAtomError,
+  stockParserError,
+  sugarAfterDefaultError,
+} from "./stock-parser.ts";
 
 /**
  * A translator that translates nothing: the parse-only configuration.
@@ -419,7 +423,9 @@ export function parseFragment(
     // Decision 151: a stock htmljs-parser cannot read `:name` after a value.
     // The fragment's own coordinates are shifted like Marko's error's.
     const stock =
-      sugarAfterDefaultError(error, source) ?? stockParserError(error, source);
+      sugarAfterDefaultError(error, source) ??
+      stockParserError(error, source) ??
+      stockAtomError(error, source);
     if (stock) {
       const at = { line: stock.line, column: stock.column };
       shiftPosition(at, resolved);

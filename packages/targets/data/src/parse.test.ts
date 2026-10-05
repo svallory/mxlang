@@ -1370,7 +1370,9 @@ describe("round 4 (rev-236-r2)", () => {
       const node = firstTag(ok(source));
       expect(node.name).toBe(tag);
       expect(
-        node.attrs.map((a) => (a.kind === "string" ? [a.name, a.value] : null)),
+        node.attrs.map((a) =>
+          a.kind === "string" || a.kind === "atom" ? [a.name, a.value] : null,
+        ),
       ).toEqual([["name", name]]);
     });
 
@@ -1683,23 +1685,29 @@ describe("name sugar (decision 146)", () => {
   const options = { structural: "reject" } as const;
   const attrNames = (src: string) =>
     firstTag(ok(src, options)).attrs.map((a) =>
-      a.kind === "string" ? `${a.name}=${a.value}` : nameOf(a),
+      a.kind === "string" || a.kind === "atom"
+        ? `${a.name}=${a.value}`
+        : nameOf(a),
     );
 
   it("`entity :Todo table=...` is name=Todo (the Mesh spelling)", () => {
     const entity = firstTag(ok('entity :Todo table="todos"\n', options));
     expect(
       entity.attrs.map((a) =>
-        a.kind === "string" ? [a.name, a.value] : nameOf(a),
+        a.kind === "string" || a.kind === "atom"
+          ? [a.name, a.value]
+          : nameOf(a),
       ),
     ).toEqual([
       ["name", "Todo"],
       ["table", "todos"],
     ]);
-    const name = entity.attrs[0] as Extract<DataAttr, { kind: "string" }>;
-    // The token `:Todo` is the name span; the value span is `Todo`.
+    // Decision 156 addendum 1, item 2: the sugar's `name` is an atom; the
+    // token `:Todo` is both the name span and the atom's span.
+    const name = entity.attrs[0] as Extract<DataAttr, { kind: "atom" }>;
+    expect(name.kind).toBe("atom");
     expect(name.nameSpan).toEqual({ sourceStart: 7, sourceEnd: 12 });
-    expect(name.valueSpan).toEqual({ sourceStart: 8, sourceEnd: 12 });
+    expect(name.span).toEqual({ sourceStart: 7, sourceEnd: 12 });
   });
 
   it("a child line `create :complete ...` works", () => {
@@ -1725,7 +1733,9 @@ describe("name sugar (decision 146)", () => {
     expect(tag.name).toBe("object");
     expect(
       tag.attrs.map((a) =>
-        a.kind === "string" ? [a.name, a.value] : nameOf(a),
+        a.kind === "string" || a.kind === "atom"
+          ? [a.name, a.value]
+          : nameOf(a),
       ),
     ).toEqual([["name", "title"]]);
   });
@@ -1753,7 +1763,9 @@ describe("name sugar on attribute tags", () => {
     expect(
       z?.kind === "attr-tag"
         ? z.attrs.map((a) =>
-            a.kind === "string" ? [a.name, a.value] : nameOf(a),
+            a.kind === "string" || a.kind === "atom"
+              ? [a.name, a.value]
+              : nameOf(a),
           )
         : null,
     ).toEqual([["class", "b"]]);
@@ -1765,7 +1777,9 @@ describe("name sugar on attribute tags", () => {
     expect(
       z?.kind === "attr-tag"
         ? z.attrs.map((a) =>
-            a.kind === "string" ? [a.name, a.value] : nameOf(a),
+            a.kind === "string" || a.kind === "atom"
+              ? [a.name, a.value]
+              : nameOf(a),
           )
         : null,
     ).toEqual([

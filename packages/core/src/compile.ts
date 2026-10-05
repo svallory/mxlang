@@ -39,7 +39,11 @@ import { nullPrototypeTags } from "./lookup-safety.ts";
 import { lower } from "./lower.ts";
 import { markoBabel, markoCompiler } from "./marko-frontend.ts";
 import { hintParseError } from "./parse-error-hints.ts";
-import { stockParserError, sugarAfterDefaultError } from "./stock-parser.ts";
+import {
+  stockAtomError,
+  stockParserError,
+  sugarAfterDefaultError,
+} from "./stock-parser.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
 
 export interface RawSourceMap {
@@ -381,6 +385,7 @@ export function compileSource(
     throw (
       sugarAfterDefaultError(error, source) ??
       stockParserError(error, source) ??
+      stockAtomError(error, source) ??
       error
     );
   } finally {

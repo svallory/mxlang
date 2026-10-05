@@ -56,6 +56,22 @@ export type DataAttr =
       nameSpan?: SourceSpan;
       valueSpan: SourceSpan;
     }
+  /**
+   * An attribute whose entire value is one atom (decision 156 addendum 1,
+   * item 10): `mode=:strict`, and the `name` the `:name` sugar sets
+   * (`<string :title/>`, `<input:email>`). `name` is the attribute's name,
+   * `value` the atom's name, `span` the atom (`:` included). `nameSpan` is the
+   * sugar token for the sugar form. An atom nested in an expression is not
+   * this kind: it stays a `StringLiteral` with `extra.mxAtom = { span }`
+   * inside `DataExpr.node` (`MxAtomMark`, from `@mxlang/core`).
+   */
+  | {
+      kind: "atom";
+      name: string;
+      value: string;
+      nameSpan?: SourceSpan;
+      span: SourceSpan;
+    }
   /** `required`: a bare attribute. */
   | { kind: "boolean"; name: string; nameSpan: SourceSpan }
   /** `values=[...]`, `change=(x) => ...`, `n=1`, `v:=x` (bound). */

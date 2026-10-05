@@ -167,10 +167,18 @@ function sugarAttr(
   valueStart: number,
   value: string,
 ) {
+  const literal = stringLiteral(ctx, value, valueStart, token.end);
+  // Decision 156 addendum 1, item 2: `:name` is an atom standing alone, and
+  // the `name` it sets keeps its atom-ness (span: the whole token, `:` too).
+  if (name === "name" && ctx.source[token.start] === ":") {
+    (literal.extra as Record<string, unknown>).mxAtom = {
+      span: { sourceStart: token.start, sourceEnd: token.end },
+    };
+  }
   return {
     type: "MarkoAttribute",
     name,
-    value: stringLiteral(ctx, value, valueStart, token.end),
+    value: literal,
     modifier: null,
     default: false,
     bound: false,

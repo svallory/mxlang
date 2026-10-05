@@ -37,7 +37,7 @@ import type { CalleeInput } from "./callee-input.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import { nearestHtmlElement, nearestName } from "./did-you-mean.ts";
-import type { Expr, IrNode, Position } from "./ir.ts";
+import type { Atom, Expr, IrNode, Position } from "./ir.ts";
 import { markoBabel } from "./marko-frontend.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
 
@@ -395,6 +395,13 @@ export interface Ctx {
    */
   unnamedTagsResolved?: boolean;
   /**
+   * Every atom in the tree, in source order (decision 156), recorded by
+   * `convertAtoms`; `expr()` splices each one inside an expression's span.
+   */
+  atoms?: Atom[];
+  /** Set by `lower` once the whole template's atoms are converted. */
+  atomsConverted?: boolean;
+  /**
    * Every `/var` a tag call has bound so far, and where.
    *
    * `/var` binds in the call site's own scope only (invariant §7.5-8): MX
@@ -611,11 +618,51 @@ export function expr(ctx: Ctx, node: Node): string {
     );
   }
 
+  // Decision 156: each atom inside the span becomes its string literal. The
+  // slice is the authored text, so the AST-level conversion alone would leave
+  // `:a` in the output; the splice is what makes `code` carry `"a"`.
+  const atoms = atomSplices(ctx, start, end);
   if (ctx.bindings.size === 0) {
-    return ctx.source.slice(start, end);
+    return atoms.length === 0
+      ? ctx.source.slice(start, end)
+      : spliceSource(ctx, start, end, atoms);
   }
 
-  return rewriteReferencesSource(ctx, node, start, end);
+  return rewriteReferencesSource(ctx, node, start, end, atoms);
+}
+
+type Splice = { start: number; end: number; text: string };
+
+/** The atoms inside `[start, end)` as splices of their string literal. */
+function atomSplices(ctx: Ctx, start: number, end: number): Splice[] {
+  const splices: Splice[] = [];
+  for (const atom of ctx.atoms ?? []) {
+    if (atom.span.sourceStart < start || atom.span.sourceEnd > end) continue;
+    splices.push({
+      start: atom.span.sourceStart,
+      end: atom.span.sourceEnd,
+      text: JSON.stringify(atom.name),
+    });
+  }
+  return splices;
+}
+
+/** `ctx.source` over `[start, end)` with every splice applied. */
+function spliceSource(
+  ctx: Ctx,
+  start: number,
+  end: number,
+  splices: Splice[],
+): string {
+  const sorted = [...splices].sort((a, b) => a.start - b.start);
+  let result = "";
+  let lastEnd = start;
+  for (const r of sorted) {
+    result += ctx.source.slice(lastEnd, r.start);
+    result += r.text;
+    lastEnd = r.end;
+  }
+  return result + ctx.source.slice(lastEnd, end);
 }
 
 /**
@@ -713,6 +760,7 @@ function rewriteReferencesSource(
   node: Node,
   exprStart: number,
   exprEnd: number,
+  atoms: Splice[] = [],
 ): string {
   // A bare identifier is never "referenced" as a lone expression to traverse
   // (there is no parent to ask), so it is handled before the walk.
@@ -728,7 +776,9 @@ function rewriteReferencesSource(
     types.program([types.expressionStatement(node as Node)]),
   );
 
-  const rewrites: Array<{ start: number; end: number; text: string }> = [];
+  // Atoms are spliced together with the binding rewrites (decision 156): an
+  // atom is never an identifier, so the two never overlap.
+  const rewrites: Splice[] = [...atoms];
   // Set only when a reference that *would* be rewritten has no position to
   // splice at — never cleared, so one such reference anywhere in the tree
   // forces the AST-clone fallback below rather than a silent partial rewrite
@@ -780,16 +830,7 @@ function rewriteReferencesSource(
     return ctx.source.slice(exprStart, exprEnd);
   }
 
-  rewrites.sort((a, b) => a.start - b.start);
-  let result = "";
-  let lastEnd = exprStart;
-  for (const r of rewrites) {
-    result += ctx.source.slice(lastEnd, r.start);
-    result += r.text;
-    lastEnd = r.end;
-  }
-  result += ctx.source.slice(lastEnd, exprEnd);
-  return result;
+  return spliceSource(ctx, exprStart, exprEnd, rewrites);
 }
 
 /**

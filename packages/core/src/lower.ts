@@ -25,6 +25,7 @@
 
 import { readFileSync } from "node:fs";
 import { freeIdentifiersIn } from "./accessor-reads.ts";
+import { assertNoStandIn, atomOf, atomsIn, convertAtoms } from "./atoms.ts";
 import { attrLabel } from "./attr-label.ts";
 import {
   fallbackAttrTagShape,
@@ -296,13 +297,17 @@ export function exprOf(ctx: Ctx, node: Node): Expr {
       loc: { start: node.errorLoc?.start ?? node.loc?.start },
     });
   }
+  assertNoStandIn(ctx, node);
   const code = expr(ctx, node);
   checkTagVarReads(ctx, code, node);
+  const span = exprSpan(ctx, node);
+  const atoms = span ? atomsIn(ctx, span.sourceStart, span.sourceEnd) : [];
   return {
     code,
     shape: expressionShape(node),
     node,
-    span: exprSpan(ctx, node),
+    span,
+    ...(atoms.length > 0 ? { atoms } : {}),
   };
 }
 
@@ -709,6 +714,10 @@ function lowerAttrNamed(
     return { kind: "boolean", name, nameSpan, loc };
   }
   if (value?.type === "StringLiteral") {
+    // Decision 156: a whole-value atom (`mode=:strict`, or the `name` the
+    // `:name` sugar sets) is still a static string to every target; the IR
+    // marks it so a data consumer or contract can tell it from `"strict"`.
+    const atom = atomOf(value);
     return {
       kind: "static",
       name,
@@ -716,6 +725,7 @@ function lowerAttrNamed(
       valueSpan: exprSpan(ctx, value),
       nameSpan,
       loc,
+      ...(atom ? { atom } : {}),
     };
   }
   // An event attribute is `on<Name>` or `on-<exact>`, and only on a native
@@ -3196,6 +3206,7 @@ export function lowerChildren(ctx: Ctx, children: Node[]): IrNode[] {
   // An external call (not from `lower`) has unresolved unnamed tags; the
   // walk starts with no parents, right for a body lowered on its own.
   if (!ctx.unnamedTagsResolved) {
+    if (!ctx.atomsConverted) convertAtoms(ctx, children);
     resolveUnnamedTags(ctx, children);
     ctx.unnamedTagsResolved = true;
     try {
@@ -3394,6 +3405,11 @@ export function lower(ctx: Ctx, body: Node[]): Ir {
   // Before anything reads a tag name: an unnamed tag has none yet. The flag
   // tells `lowerChildren` the whole tree is already resolved, so only a call
   // from outside this walk resolves (and never re-walks a subtree).
+  // Decision 156: atoms first, so no expression is ever read as its stand-in.
+  if (!ctx.atomsConverted) {
+    convertAtoms(ctx, body);
+    ctx.atomsConverted = true;
+  }
   resolveUnnamedTags(ctx, body);
   const wasResolved = ctx.unnamedTagsResolved;
   ctx.unnamedTagsResolved = true;

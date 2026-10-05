@@ -147,6 +147,7 @@ export {
   type TargetPolicyResolution,
 } from "./host-policy.ts";
 export type {
+  Atom,
   Attr,
   AttributeTag,
   AttributeTagNode,
@@ -161,6 +162,7 @@ export type {
   ForSource,
   Ir,
   IrNode,
+  MxAtomMark,
   Position,
 } from "./ir.ts";
 export { expressionShape, lower, lowerChildren } from "./lower.ts";
@@ -169,6 +171,7 @@ export {
   type GeneratedMapping,
   type MappedCode,
   mapped,
+  mappedExpr,
   replaceMapped,
   type SourceSpan,
 } from "./mapping.ts";
