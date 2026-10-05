@@ -1,5 +1,5 @@
+import { collectMxRegions, print } from "@mxlang/tsx-bridge";
 import { describe, expect, it } from "vitest";
-import { collectMxRegions, print } from "../index.ts";
 import { parseSolid, solidRegionCompile } from "./test-helpers.ts";
 
 /** Walks the AST collecting every node of a given type. */

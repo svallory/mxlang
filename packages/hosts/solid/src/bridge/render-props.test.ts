@@ -3,8 +3,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import generate from "@babel/generator";
 import type { Expression } from "@babel/types";
+import { parseBabel, print } from "@mxlang/tsx-bridge";
 import { describe, expect, it } from "vitest";
-import { parseBabel, print } from "../index.ts";
 import { parseSolid, solidRegionCompile } from "./test-helpers.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));

@@ -1,16 +1,14 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import type { ParserOptions } from "@mxlang/babel";
+import { parseBabel, print } from "@mxlang/tsx-bridge";
 import { describe, expect, it } from "vitest";
-import { parseBabel } from "../index.ts";
-import { print } from "./print.ts";
 import { solidRegionCompile } from "./test-helpers.ts";
 
 const fixtures = fileURLToPath(
-  new URL("../../../../fixtures/", import.meta.url),
+  new URL("../../../../../fixtures/", import.meta.url),
 );
 
-const BABEL_OPTS: ParserOptions = {
+const BABEL_OPTS: NonNullable<Parameters<typeof parseBabel>[1]> = {
   sourceType: "module",
   plugins: ["typescript", "jsx"],
 };

@@ -1,7 +1,7 @@
 import type { File } from "@babel/types";
-import type { MxRegionCompile, MxRegionCompileInput } from "@mxlang/babel";
+import type { MxRegionCompile, MxRegionCompileInput } from "@mxlang/tsx-bridge";
+import { parse, print } from "@mxlang/tsx-bridge";
 import { describe, expect, it } from "vitest";
-import { parse, print } from "../index.ts";
 import { solidRegionCompile } from "./test-helpers.ts";
 
 /**

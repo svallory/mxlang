@@ -2,8 +2,8 @@ import { readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { TemplateBackedTag } from "@mxlang/core";
+import { print } from "@mxlang/tsx-bridge";
 import { describe, expect, it } from "vitest";
-import { print } from "../index.ts";
 import { solidRegionCompile } from "./test-helpers.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));

@@ -1,7 +1,7 @@
 import { parse as parseNpm } from "@babel/parser";
+import { parse, parseBabel } from "@mxlang/tsx-bridge";
 import { describe, expect, it } from "vitest";
-import { parse, parseBabel } from "./index.ts";
-import { parseSolid } from "./mx/test-helpers.ts";
+import { parseSolid } from "./test-helpers.ts";
 
 function caught(run: () => unknown) {
   try {

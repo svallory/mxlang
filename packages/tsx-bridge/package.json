@@ -21,7 +21,6 @@
   },
   "devDependencies": {
     "@mxlang/babel": "workspace:*",
-    "@mxlang/solid": "workspace:*",
     "@types/bun": "1.4.2"
   }
 }

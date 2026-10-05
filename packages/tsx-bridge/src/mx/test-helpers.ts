@@ -1,30 +1,23 @@
 import type { MxRegionCompile } from "@mxlang/babel";
-import { compileSolidMx } from "@mxlang/solid";
 import type { MxParseOptions } from "../index.ts";
 import { parse } from "../index.ts";
 
 /**
- * Adapts `compileSolidMx`'s own `(source, options)` signature to the
- * `MxRegionCompile` shape the bridge calls — the same adaptation every real
- * `.solid.mx` caller (the Vite plugin, the TypeScript plugin, the language
- * server, the oracle) now has to make explicitly, since the parser no
- * longer performs it as a default.
+ * A region compiler that lowers every region to `null`. The bridge package
+ * depends on no host, so its own tests drive the position and scanning logic
+ * with this stub; tests that need a real lowering live in `@mxlang/solid`
+ * (`packages/hosts/solid/src/bridge/`).
  */
-export const solidRegionCompile: MxRegionCompile = ({ source, ...rest }) =>
-  compileSolidMx(source, rest);
+export const stubRegionCompile: MxRegionCompile = () => ({ code: "null" });
 
-/**
- * `parse`, wired up with `compileSolidMx` — the parser no longer defaults to
- * any host, so every in-package test that wants the Solid lowering supplies
- * it explicitly, the same way a real `.solid.mx` caller does.
- */
-export function parseSolid(
+/** `parse` with the stub region compiler (any `options` override it). */
+export function parseStub(
   source: string,
   filename = "test.solid.mx",
   options: MxParseOptions = {},
 ) {
   return parse(source, filename, {
-    mxRegionCompile: solidRegionCompile,
+    mxRegionCompile: stubRegionCompile,
     ...options,
   });
 }
