@@ -7,7 +7,12 @@ time.
 
 MX is Marko's syntax plus the decision 146 name sugar (`#id`, `.class` and
 `:name` anywhere in a tag) and decision 156 atoms (`:name` as a value:
-`default=:draft`, `accept=[:title, :body]`, `self.status === :sent`). The grammar is a vendored snapshot of
+`default=:draft`, `accept=[:title, :body]`, `self.status === :sent`).
+Atoms are `atom` nodes inside attribute values, placeholders, tag and attribute
+arguments and method bodies. One known limit: an atom inside a `${}` of a
+template literal that is itself inside an expression (`` x=`a ${:c}` ``) is
+not recognised and stays plain text there (TODO
+`tree-sitter-atoms-template-placeholder`). The grammar is a vendored snapshot of
 [`marko-js/tree-sitter`](https://github.com/marko-js/tree-sitter) with local
 patches; [`UPSTREAM.md`](./UPSTREAM.md) records the pin, every patch and why.
 The same grammar and `queries/highlights.scm` are what MX's Zed extension

@@ -1,0 +1,32 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Saulo Vallory <saulovallory@gmail.com>
+Date: Mon, 5 Oct 2026 17:20:00 -0300
+Subject: [PATCH] docs(readme): an atom inside a nested template placeholder is
+ not recognised
+
+Patch 0007's known limit, stated where users read: an atom in a `${}` of a template literal inside an expression stays plain text (TODO tree-sitter-atoms-template-placeholder).
+---
+ README.md | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/README.md b/README.md
+index 6bf8c17..5ed06f6 100644
+--- a/README.md
++++ b/README.md
+@@ -7,7 +7,12 @@ time.
+ 
+ MX is Marko's syntax plus the decision 146 name sugar (`#id`, `.class` and
+ `:name` anywhere in a tag) and decision 156 atoms (`:name` as a value:
+-`default=:draft`, `accept=[:title, :body]`, `self.status === :sent`). The grammar is a vendored snapshot of
++`default=:draft`, `accept=[:title, :body]`, `self.status === :sent`).
++Atoms are `atom` nodes inside attribute values, placeholders, tag and attribute
++arguments and method bodies. One known limit: an atom inside a `${}` of a
++template literal that is itself inside an expression (`` x=`a ${:c}` ``) is
++not recognised and stays plain text there (TODO
++`tree-sitter-atoms-template-placeholder`). The grammar is a vendored snapshot of
+ [`marko-js/tree-sitter`](https://github.com/marko-js/tree-sitter) with local
+ patches; [`UPSTREAM.md`](./UPSTREAM.md) records the pin, every patch and why.
+ The same grammar and `queries/highlights.scm` are what MX's Zed extension
+-- 
+2.55.0
+

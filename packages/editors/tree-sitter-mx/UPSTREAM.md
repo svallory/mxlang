@@ -160,6 +160,11 @@ is MX's own (decision 156, atoms):
   (`test/fixtures/mesh-invoice.mx`), the ADR 156 positions and the captures of
   both query copies.
 
+`patches/0008-docs-readme-an-atom-inside-a-nested-template-placeholder-is-not-recognised.patch`
+is MX's own: `README.md` states patch 0007's known limit (an atom in a `${}`
+of a template literal inside an expression is not recognised; TODO
+`tree-sitter-atoms-template-placeholder`).
+
 ## Tests
 
 `bun run test` (`scripts/test.sh`, also `moon run tree-sitter-mx:test` and

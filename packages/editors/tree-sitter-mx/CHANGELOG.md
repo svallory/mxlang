@@ -2,8 +2,8 @@
 
 ## 0.1.0-alpha.2 (unreleased)
 
-Atoms (decision 156) and the tagless `:name=value` line. Two new local
-patches, 0006 and 0007 (see `UPSTREAM.md`).
+Atoms (decision 156) and the tagless `:name=value` line. Three new local
+patches, 0006 to 0008 (see `UPSTREAM.md`).
 
 - Decision 146 addendum 4 (patch 0006): `=` and `(` end a sugar and start the tag's default value: `<input #x=1/>`, `<input :x=input.y/>`, `<input:x=1/>`, `<input .c=1/>` and concise `input #x=1` parse without `ERROR` (they were errors), as Mesh's `boolean #isOverdue({ self }) { return self.x }` and `kind (p) { b } #name` already did. A bound `:=` after a sugar (`<a :n:=y/>`, `#x:=y`, `.c:=y`) stays an error: only `=` and `(` end a sugar. Scanner only; `src/` is unchanged.
   This is the line Mesh's Invoice entity uses under `set` (`:status=:sent`,
@@ -22,7 +22,8 @@ patches, 0006 and 0007 (see `UPSTREAM.md`).
   name sugar). Never inside strings, template text, regexes, comments,
   `static`/`import`/`export` statements, scriptlets or tag parameters. A
   `${}` inside a template literal inside an expression is not scanned for
-  atoms (they stay text there).
+  atoms (they stay text there; README, patch 0008, TODO
+  `tree-sitter-atoms-template-placeholder`).
 - `::name` is one `reserved_atom` node (reserved for a `Symbol.for` sugar,
   decision 156), wherever it appears: `{k::a}` and `a?b::c` are reserved too.
   It is not an `ERROR` node and has no highlight capture; a tool that wants
