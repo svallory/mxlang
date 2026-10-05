@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { printExpression } from "./compile.ts";
 import { type Ctx, type MxWarning, type Node, newCtx } from "./core.ts";
 import type { Policy } from "./declarations.ts";
+import { parseFragment } from "./fragment.ts";
 import type { Attr, Ir, IrNode } from "./ir.ts";
 import { lower } from "./lower.ts";
 import {
@@ -591,5 +592,40 @@ describe("the duplicate-attribute warning names the sugar", () => {
     expect(warningsOf('<input name="a" name="b"/>')).toEqual([
       "duplicate attribute `name`: the later one at 1:17 wins, so this one is dropped",
     ]);
+  });
+});
+
+// A statement tag's text is not attributes. `parseFragment` (the TS plugin's
+// mapping pass) parses without the core taglib, so it reads `static function
+// f(a: number): string {}` as a tag with attributes; the sugar rewrite must
+// leave a statement tag alone (a bare `:` in it is a TypeScript return type).
+describe("statement tags are not rewritten", () => {
+  const lowerFragment = (source: string): void => {
+    const { body } = parseFragment(source, { filename: "/tmp/f.mx" });
+    const ctx = newCtx(
+      source,
+      printExpression,
+      policy(),
+      undefined,
+      "/tmp/f.mx",
+      lookup,
+    );
+    lower(ctx, body);
+  };
+
+  it.each([
+    "static function label(count: number): string { return String(count); }\n",
+    "static const view = cond ? a : b\n",
+    "export const x = y .z\n",
+    "client function f(a: number): string { return a }\n",
+  ])("%j", (source) => {
+    let message = "";
+    try {
+      lowerFragment(source);
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).not.toContain("name sugar");
+    expect(message).not.toContain("one `:name`");
   });
 });

@@ -842,9 +842,30 @@ function rewriteHead(ctx: Ctx, node: Node): void {
 }
 
 /** Rewrites one tag's name sugar, once. */
+/**
+ * Statement tags: their text is code, not attributes (Marko parses it as a
+ * statement). A parse without the core taglib (`parseFragment`, the TS
+ * plugin's mapping pass) still reads `static function f(a: number): string {}`
+ * as a tag with attributes, where a bare `:` is a TypeScript return type.
+ */
+const STATEMENT_TAGS = new Set([
+  "class",
+  "client",
+  "export",
+  "import",
+  "server",
+  "static",
+]);
+
 export function rewriteNameSugar(ctx: Ctx, node: Node): void {
   if (done.has(node) || node?.type !== "MarkoTag") return;
   done.add(node);
+  if (
+    node.name?.type === "StringLiteral" &&
+    STATEMENT_TAGS.has(node.name.value)
+  ) {
+    return;
+  }
   if (!Array.isArray(node.attributes)) return;
   rewriteHead(ctx, node);
   rewriteAttributes(ctx, node);
