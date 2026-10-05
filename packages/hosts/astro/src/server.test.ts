@@ -216,4 +216,16 @@ describe("client:* directives are an error", () => {
     );
     expect(html).toBe("<p>static</p>");
   });
+
+  // An imported `.mx` tag that declares `<return>` reaches Astro as an
+  // ordinary component call, and Astro, not the call site, invokes it: the
+  // renderer is the one place that can drop the value and keep the markup.
+  it("renders the markup of a unit that declares <return>, dropping the value", async () => {
+    const component = await compileComponent(
+      "returns",
+      "<span>${input.start}</span>\n<return value=input.start + 1/>",
+    );
+    const { html } = await renderToStaticMarkup(component, { start: 1 }, {});
+    expect(html).toBe("<span>1</span>");
+  });
 });

@@ -525,6 +525,75 @@ describe("a type-only import does not resolve a tag (decision 114 parity)", () =
   });
 });
 
+describe("an imported .mx tag that declares <return>", () => {
+  const counter = [
+    "export interface Input { start: number }",
+    "<span>${input.start}</span>",
+    "<return value=input.start + 1/>",
+  ].join("\n");
+
+  // Marko 6.3.51 renders the body and drops the value when the call binds no
+  // `/var`; before this the call emitted `__mxOut += Counter({ … })`, which
+  // concatenated the callee's `{ value, output }` pair as "[object Object]".
+  it("renders its body and drops the value without /var", async () => {
+    const html = await renderModules(
+      {
+        "counter.mx": counter,
+        "page.mx":
+          'import Counter from "./counter.mx"\n<div><Counter start=1/></div>',
+      },
+      "page.mx",
+      {},
+      true,
+    );
+    expect(html).toBe("<div><span>1</span></div>");
+  });
+
+  it("emits the same unwrap a discovered tag gets", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-html-imported-return-"));
+    try {
+      writeFileSync(join(dir, "counter.mx"), src(counter));
+      const page = join(dir, "page.mx");
+      const { code } = compile(
+        src('import Counter from "./counter.mx"\n<Counter start=1/>'),
+        page,
+      );
+      expect(code).toContain("Counter({ start: 1 }).output;");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("leaves an imported tag without <return> as a plain call", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-html-imported-plain-"));
+    try {
+      writeFileSync(join(dir, "plain.mx"), src("<b>x</b>"));
+      const { code } = compile(
+        src('import Plain from "./plain.mx"\n<Plain/>'),
+        join(dir, "page.mx"),
+      );
+      expect(code).not.toContain(".output");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("still rejects /var on the imported call, positioned at the call", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-html-imported-var-"));
+    try {
+      writeFileSync(join(dir, "counter.mx"), src(counter));
+      expect(() =>
+        compile(
+          src('import Counter from "./counter.mx"\n<Counter/n start=1/>'),
+          join(dir, "page.mx"),
+        ),
+      ).toThrow(/tag variable `\/n` on `<Counter>` is not supported/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("<try> without a placeholder is a plain try/catch", () => {
   it("lowers the body and its <@catch>", () => {
     const body = "<try><p>b</p><@catch|e|><p>err</p></@catch></try>";
