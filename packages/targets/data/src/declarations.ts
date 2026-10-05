@@ -64,6 +64,7 @@ export const DEFAULT_TAG = "object";
 export const dataDeclarations: HostDeclarations = {
   name: "data",
   attrTags: 2,
+  builtinTags: [DEFAULT_TAG],
   // The ladder (decision 145): the parent's contract `defaultTag`, then
   // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
   // the host override into `configured`). This host permits the contract rung:

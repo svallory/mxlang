@@ -433,22 +433,106 @@ describe("round 2: rule 3 compares host names, not the specifier", () => {
   });
 });
 
-describe("round 2: what a loaded descriptor may not declare", () => {
-  it("host.fileKinds is rejected", () => {
+describe("round 2: file kinds of a loaded descriptor", () => {
+  it("host.fileKinds is accepted and the lookup answers for its segment", () => {
     const { diagnostics, policy } = resolve(
       { target: specifier("file-kinds") },
       ["file-kinds"],
     );
-    expect(policy.target).toBe("page");
-    expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0]).toMatchObject({
-      code: "target-invalid-descriptor",
-      severity: "error",
-      message:
-        'mx.target "@fake/mx-file-kinds" cannot be registered next to the built-in targets: file kinds are supported for built-in targets only (for now). See the TargetDescriptor contract (unstable).',
+    expect(diagnostics).toEqual([]);
+    expect(policy).toMatchObject({
+      target: "fake-file-kinds",
+      host: "fake-fk",
     });
+    expect(policy.descriptor?.host?.fileKinds?.map((k) => k.segment)).toEqual([
+      "fk",
+    ]);
   });
 
+  /** A project whose `mx.target` is a local descriptor module with this `host`. */
+  function withHost(host: unknown, source: core.TargetLookup = lookup) {
+    const project = fakeProject({ mx: { target: "./t/d.cjs" } });
+    mkdirSync(join(project.root, "t"));
+    writeFileSync(
+      join(project.root, "t/d.cjs"),
+      `module.exports = { descriptorVersion: 0, name: "own-fk", packageName: "@t/own-fk", defaultTag: "node", host: ${JSON.stringify(host)} };\n`,
+    );
+    return resolveTargetPolicyDetailed(project.path("a.mx"), source);
+  }
+
+  it.each([
+    ["mx", '"host.fileKinds[0].segment" is "mx"'],
+    ["a.b", '"host.fileKinds[0].segment" is "a.b"'],
+    ["Up", '"host.fileKinds[0].segment" is "Up"'],
+  ])("segment %j is refused at the declaration", (segment, text) => {
+    const { diagnostics, policy } = withHost({
+      name: "own-fk-host",
+      fileKinds: [{ segment, diagnosticSource: "x" }],
+    });
+    expect(policy.target).toBe("page");
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toMatchObject({ severity: "error" });
+    expect(diagnostics[0]?.message).toContain(text);
+  });
+
+  it("a missing diagnosticSource is refused", () => {
+    const { diagnostics } = withHost({
+      name: "own-fk-host",
+      fileKinds: [{ segment: "ok" }],
+    });
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.message).toContain("diagnosticSource");
+  });
+
+  it("a segment another host owns is refused, naming both", () => {
+    const owned = createTargetLookup([
+      {
+        descriptorVersion: 0,
+        name: "page",
+        packageName: "@t/page",
+        defaultTag: "node",
+      },
+      {
+        descriptorVersion: 0,
+        name: "unit-jsx",
+        packageName: "@t/unit",
+        defaultTag: "node",
+        host: {
+          name: "unit",
+          fileKinds: [{ segment: "ok", diagnosticSource: "u" }],
+        },
+      },
+    ]);
+    const { diagnostics, policy } = withHost(
+      {
+        name: "own-fk-host",
+        fileKinds: [{ segment: "ok", diagnosticSource: "x" }],
+      },
+      owned,
+    );
+    expect(policy.target).toBe("page");
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.message).toContain(
+      'file-kind segment "ok" is declared more than once (host "own-fk-host" and host "unit")',
+    );
+  });
+
+  it("the same segment twice in one host is refused", () => {
+    const { diagnostics } = withHost({
+      name: "own-fk-host",
+      fileKinds: [
+        { segment: "ok", diagnosticSource: "x" },
+        { segment: "ok", diagnosticSource: "y" },
+      ],
+    });
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.message).toContain(
+      'file-kind segment "ok" is declared more than once',
+    );
+  });
+});
+
+describe("round 2: what a loaded descriptor may not declare", () => {
   it("a built-in host name cannot be joined", () => {
     const withSolid = createTargetLookup([
       {

@@ -4,18 +4,19 @@
  * an unregistered `.<word>.mx`, and a third-party host on the data target
  * (Mesh's `.mesh.mx`, decision 148).
  */
-import {
-  mkdirSync,
-  mkdtempSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { clearScanCache, type TargetDescriptor } from "@mxlang/core";
+import { clearScanCache } from "@mxlang/core";
 import { builtinLookup, builtinTargets } from "@mxlang/target-registry";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  type MeshGlobals,
+  type MeshOptions,
+  meshProject,
+  setupMesh,
+  teardownMesh,
+} from "../../../../test-fixtures/third-party-targets/mesh.ts";
 import mx, { defaultExtensions, MX_SUFFIX } from "./index.ts";
 
 const dirs: string[] = [];
@@ -30,8 +31,7 @@ afterEach(() => {
   clearScanCache();
   for (const dir of dirs.splice(0))
     rmSync(dir, { recursive: true, force: true });
-  delete (globalThis as MeshGlobals).__mxDataDescriptor;
-  delete (globalThis as MeshGlobals).__mxMeshCompiles;
+  teardownMesh();
 });
 
 type Transform = (
@@ -125,84 +125,40 @@ describe("a file no region kind registers compiles whole-file", () => {
   });
 });
 
-interface MeshGlobals {
-  __mxDataDescriptor?: TargetDescriptor;
-  __mxMeshCompiles?: string[];
-}
-
-/**
- * A faithful Mesh-style host (decision 148): a third-party package selected by
- * `mx.host`, host `mesh` on the data target, no file kinds of its own (a
- * loaded descriptor may not declare any), compiling through the data target's
- * own compile and keeping data's `defaultTag` (`object`). The data descriptor
- * is handed over on `globalThis` because the
- * package is installed in a temp project that cannot resolve `@mxlang/data`.
- */
-const MESH_INDEX = `const data = globalThis.__mxDataDescriptor;
-module.exports = {
-  descriptorVersion: 0,
-  name: "mesh-data",
-  packageName: "@fake/mx-mesh",
-  defaultTag: data.defaultTag,
-  declarations: data.declarations,
-  get parseTranslator() { return data.parseTranslator; },
-  host: { name: "mesh" },
-  load(core) {
-    const compiler = data.load(core);
-    return {
-      compileModule(source, filename, options) {
-        globalThis.__mxMeshCompiles.push(filename);
-        return compiler.compileModule(source, filename, options);
-      },
-    };
-  },
-};
-`;
-
-function meshProject(): string {
-  const data = builtinLookup().target("data");
-  if (!data) throw new Error("missing data descriptor");
-  const globals = globalThis as MeshGlobals;
-  globals.__mxDataDescriptor = data;
-  globals.__mxMeshCompiles = [];
-  const dir = tempDir("mx-vite-mesh-");
-  writeFileSync(
-    join(dir, "package.json"),
-    JSON.stringify({ mx: { host: "@fake/mx-mesh" } }),
-  );
-  const pkg = join(dir, "node_modules", "@fake", "mx-mesh");
-  mkdirSync(pkg, { recursive: true });
-  writeFileSync(
-    join(pkg, "package.json"),
-    JSON.stringify({
-      name: "@fake/mx-mesh",
-      version: "1.0.0",
-      main: "index.cjs",
-    }),
-  );
-  writeFileSync(join(pkg, "index.cjs"), MESH_INDEX);
-  return dir;
-}
+const MESH_KIND = [{ segment: "mesh", diagnosticSource: "mesh" }];
 
 describe(".mesh.mx (a third-party host on the data target)", () => {
-  // No green routing test here: Vite resolves the policy (and refuses this
-  // one, see below) before it picks the whole-file or the region branch, so
-  // a routing assertion could not fail. The language server's test, given
-  // the policy directly, proves `.mesh.mx` compiles whole-file through data
-  // and never reaches a region entry.
-
-  // Known failure, TODO `third-party-host-data-defaulttag` (squad-targets): a
-  // loaded host keeping data's `defaultTag` (`object`, decision 148) is refused
-  // by the registry's descriptor check before Vite compiles. Flips when it lands.
-  it.fails("compiles whole-file through the data target (TODO third-party-host-data-defaulttag)", async () => {
-    const dir = meshProject();
+  const compile = async (options: MeshOptions, source = "<x a=1/>\n") => {
+    setupMesh(builtinLookup().target("data"), options);
+    const dir = meshProject("mx-vite-mesh-", options);
     const file = join(dir, "post.mesh.mx");
-    const result = await transformOf(mx()).call(
-      {},
-      "<x a=1/>\n",
-      file + MX_SUFFIX,
-    );
+    const result = await transformOf(mx()).call({}, source, file + MX_SUFFIX);
+    return { file, result };
+  };
+
+  it("a declared whole-file kind compiles through the data target, not a region entry", async () => {
+    const { file, result } = await compile({ fileKinds: MESH_KIND });
+    expect((globalThis as MeshGlobals).__mxMeshCompiles).toEqual([file]);
+    expect((globalThis as MeshGlobals).__mxMeshDefaultTags).toEqual(["object"]);
+    expect(result?.code).toContain(`"kind": "document"`);
+  });
+
+  it("the host without a file kind compiles the same way", async () => {
+    const { file, result } = await compile({});
     expect((globalThis as MeshGlobals).__mxMeshCompiles).toEqual([file]);
     expect(result?.code).toContain(`"kind": "document"`);
+  });
+
+  it("a real data error surfaces positioned", async () => {
+    await expect(
+      compile({ fileKinds: MESH_KIND }, "<x a=1/>\n<define name=y/>\n"),
+    ).rejects.toThrow(/render-time macro/);
+  });
+
+  it("an invalid host override is refused, not compiled", async () => {
+    await expect(
+      compile({ fileKinds: MESH_KIND, hostDefaultTag: "nonexistent" }),
+    ).rejects.toThrow(/invalid `defaultTag` value/);
+    expect((globalThis as MeshGlobals).__mxMeshCompiles).toEqual([]);
   });
 });

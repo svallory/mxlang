@@ -1,4 +1,4 @@
-// A target declaring host file kinds, which loaded targets do not support yet.
+// A target declaring a whole-file host file kind (`.fk.mx`, no `compileRegion`).
 // `core` is the tool's own @mxlang/core, so errors it throws are the tool's class.
 module.exports = {
   descriptorVersion: 0,

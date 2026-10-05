@@ -18,7 +18,7 @@ import { join } from "node:path";
  *
  * - `ok`        uses the injected core (OQ10)
  * - `ok-ssr`    a second target of `ok`'s host (`fake-host`)
- * - `file-kinds` declares `host.fileKinds` (rejected for loaded targets)
+ * - `file-kinds` declares a whole-file `host.fileKinds` entry (`.fk.mx`)
  * - `join-solid` names the built-in host `solid` (rejected)
  * - `own-core`  imports its own `@mxlang/core` copy (pins the brand check)
  * - `hostless`  valid target with no `host` part (an error under `mx.host`)

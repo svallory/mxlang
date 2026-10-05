@@ -88,6 +88,15 @@ export interface HostDeclarations {
    * unavailable and a contract declaring one a registration error.
    */
   allowContractDefaultTag?: boolean;
+  /**
+   * Tag names the target provides without a taglib entry (data's anonymous
+   * `object`). A `defaultTag` check counts them as reachable and as elements
+   * of the target, for the descriptor's own `defaultTag` and `host.defaultTag`
+   * too, so a descriptor that reuses these declarations (a third-party host
+   * built on the target) keeps the target's built-in without a literal of its
+   * own. Absent means none beyond the descriptor's own `defaultTag`.
+   */
+  builtinTags?: readonly string[];
   /** Human-readable host name used by positioned capability diagnostics. */
   name?: string;
   /** Attribute-tag IR/emission contract implemented by this host. */

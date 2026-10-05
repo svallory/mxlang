@@ -133,6 +133,9 @@ export function lookupFor(policy: TargetPolicy): TargetLookup {
       reservedNames: RESERVED_NAMES,
     });
     projectLookups.set(descriptor, lookup);
+    // A loaded host's callee readers go into this core like the built-ins',
+    // so a component calling a `.<segment>.mx` of its own reads its `Input`.
+    registerCalleeInputReaders(descriptor);
   }
   return lookup;
 }
@@ -290,15 +293,15 @@ export function regionKindCompile(
  * over its own package (`require` inside the function body), so this adds no
  * compile entry to the import graph.
  */
-function registerBuiltinCalleeReaders(): void {
-  for (const kind of builtinTargets.flatMap(
+function registerCalleeInputReaders(...targets: TargetDescriptor[]): void {
+  for (const kind of targets.flatMap(
     (target) => target.host?.fileKinds ?? [],
   )) {
     if (kind.readCalleeInput)
       registerCalleeInputReader(`.${kind.segment}.mx`, kind.readCalleeInput);
   }
 }
-registerBuiltinCalleeReaders();
+registerCalleeInputReaders(...builtinTargets);
 
 // ---- the lookup's own questions, bound to the built-in set ----
 
@@ -394,15 +397,21 @@ export function effectiveDefaultTag(
 }
 
 /**
- * The built-in target a host module file kind (`.solid.mx`, `.ng.mx`,
- * `.astro.mx`) compiles under, which is not the page policy's target.
+ * The target a host module file kind (`.solid.mx`, `.ng.mx`, `.astro.mx`, a
+ * loaded host's own) compiles under, which is not the page policy's target.
  */
-function fileKindTarget(filePath: string): TargetDescriptor | undefined {
-  return builtinTargets.find((target) =>
-    target.host?.fileKinds?.some((kind) =>
-      filePath.endsWith(`.${kind.segment}.mx`),
-    ),
-  );
+function fileKindTarget(
+  filePath: string,
+  lookup: TargetLookup,
+): TargetDescriptor | undefined {
+  return lookup
+    .targetNames()
+    .map((name) => lookup.target(name))
+    .find((target) =>
+      target?.host?.fileKinds?.some((kind) =>
+        filePath.endsWith(`.${kind.segment}.mx`),
+      ),
+    );
 }
 
 /** The target `filePath` compiles under and its `mx.<target>.defaultTag`, validated or not. */
@@ -415,7 +424,7 @@ function configFor(
   at?: NonNullable<TargetPolicy["defaultTagAt"]>;
   diagnostic?: TargetPolicyDiagnostic;
 } {
-  const kind = fileKindTarget(filePath);
+  const kind = fileKindTarget(filePath, lookupFor(policy));
   if (!kind || kind.name === policy.target) {
     return {
       target: policy.target,
@@ -507,11 +516,23 @@ function contractDiagnostics(
   });
 }
 
-/** The built-in names a target lists: its own and its host's override. */
+/**
+ * The built-in names a target lists: its own, its host's override and those
+ * its declarations provide (`builtinTags`).
+ */
 function builtinsOf(descriptor: TargetDescriptor): readonly string[] {
-  return [descriptor.defaultTag, descriptor.host?.defaultTag].filter(
-    (value): value is string => value !== undefined,
-  );
+  return [
+    descriptor.defaultTag,
+    descriptor.host?.defaultTag,
+    ...(declaredBuiltins(descriptor) ?? []),
+  ].filter((value): value is string => value !== undefined);
+}
+
+/** `HostDeclarations.builtinTags` of a descriptor: the vocabulary it is built on. */
+function declaredBuiltins(
+  descriptor: TargetDescriptor,
+): readonly string[] | undefined {
+  return descriptor.declarations?.default.builtinTags;
 }
 
 /**
@@ -573,12 +594,18 @@ function checkDefaultTags(
       ]);
     }
     for (const [name, owner] of own) {
-      // No built-ins: the value is what is being checked, so listing it would
-      // make the reachability question a tautology.
+      // Only what the declarations provide as built-in (`builtinTags`), never
+      // the value itself: listing it would make the reachability question a
+      // tautology.
       const diagnostic = defaultTagDiagnostic(
         name,
         policy.descriptorAt,
-        scopeFor(descriptor, lookup, filePath, []),
+        scopeFor(
+          descriptor,
+          lookup,
+          filePath,
+          declaredBuiltins(descriptor) ?? [],
+        ),
         owner,
       );
       if (diagnostic) diagnostics.push(diagnostic);

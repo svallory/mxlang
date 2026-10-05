@@ -11,6 +11,12 @@ import type { TargetDescriptor } from "@mxlang/core";
 import * as core from "@mxlang/core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  type MeshOptions,
+  meshProject,
+  setupMesh,
+  teardownMesh,
+} from "../../../test-fixtures/third-party-targets/mesh.ts";
+import {
   cleanupProjects,
   type FakeTarget,
   fakeProject,
@@ -23,6 +29,7 @@ import {
   effectiveDefaultTag,
   getCustomTags,
   lookupFor,
+  regionFileKind,
   resolveTargetPolicyDetailed,
 } from "./index.ts";
 
@@ -390,6 +397,80 @@ describe("a loaded descriptor's own values are checked against the target's look
     expect(own[0]?.message).toBe(
       'invalid `defaultTag` value: `<nonexistent>` is not a tag reachable from this package (defaultTag of "fake-bad-default")',
     );
+  });
+});
+
+describe("a third-party host on the data target (decision 148)", () => {
+  afterEach(() => teardownMesh());
+
+  const MESH_KIND = [{ segment: "mesh", diagnosticSource: "mesh" }];
+  const setup = (options: MeshOptions = {}) => {
+    setupMesh(builtinLookup().target("data"), options);
+    const dir = meshProject("mx-registry-mesh-", options);
+    return join(dir, "post.mesh.mx");
+  };
+  const invalid = (file: string) =>
+    resolveTargetPolicyDetailed(file).diagnostics.filter(
+      (d) => d.code === "invalid-default-tag",
+    );
+
+  it("keeps data's built-in `object`: no diagnostic, and it is the rung the compile gets", () => {
+    const file = setup({ fileKinds: MESH_KIND });
+    const { policy, diagnostics } = resolveTargetPolicyDetailed(file);
+    expect(diagnostics).toEqual([]);
+    expect(policy).toMatchObject({ target: "mesh-data", host: "mesh" });
+    expect(defaultTagFor(file, policy)).toBe("object");
+  });
+
+  it("the host's override outranks the built-in; the package's config outranks both", () => {
+    const file = setup({
+      hostDefaultTag: "object",
+      mx: { "mesh-data": { defaultTag: "object" } },
+    });
+    const { policy, diagnostics } = resolveTargetPolicyDetailed(file);
+    expect(diagnostics).toEqual([]);
+    expect(policy.defaultTag).toBe("object");
+    expect(defaultTagFor(file, policy)).toBe("object");
+  });
+
+  it("an override the target cannot reach is still one error at the mx.host value", () => {
+    const file = setup({ hostDefaultTag: "nonexistent" });
+    const own = invalid(file);
+    expect(own).toHaveLength(1);
+    expect(own[0]).toMatchObject({ severity: "error", line: 3 });
+    expect(own[0]?.message).toBe(
+      'invalid `defaultTag` value: `<nonexistent>` is not a tag reachable from this package (host.defaultTag of "mesh-data")',
+    );
+  });
+
+  it("a built-in the declarations do not provide is rejected, not waved through", () => {
+    const file = setup({ defaultTag: "nonexistent" });
+    const own = invalid(file);
+    expect(own).toHaveLength(1);
+    expect(own[0]?.message).toBe(
+      'invalid `defaultTag` value: `<nonexistent>` is not a tag reachable from this package (defaultTag of "mesh-data")',
+    );
+  });
+
+  it("the declared file kind is a whole-file kind of host `mesh`, never a region kind", () => {
+    const file = setup({ fileKinds: MESH_KIND });
+    const { policy } = resolveTargetPolicyDetailed(file);
+    const lookup = lookupFor(policy);
+    expect(lookup.moduleSegments()).toContain("mesh");
+    expect(lookup.hostOf("mesh-data")).toBe("mesh");
+    expect(lookup.hostTarget("mesh")?.target).toBe("mesh-data");
+    expect(regionFileKind(file, lookup)).toBeUndefined();
+    expect(builtinLookup().moduleSegments()).not.toContain("mesh");
+  });
+
+  it("a file kind's key is the one `defaultTagFor` reads for a file of that kind", () => {
+    const file = setup({
+      fileKinds: MESH_KIND,
+      mx: { "mesh-data": { defaultTag: "nonexistent" } },
+    });
+    const own = invalid(file);
+    expect(own).toHaveLength(1);
+    expect(own[0]?.line).toBe(5);
   });
 });
 

@@ -28,6 +28,13 @@ import {
   resolveTargetPolicyDetailed,
 } from "@mxlang/target-registry";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  type MeshGlobals,
+  type MeshOptions,
+  meshProject,
+  setupMesh,
+  teardownMesh,
+} from "../../../../test-fixtures/third-party-targets/mesh.ts";
 import { diagnoseDocument } from "./diagnose.ts";
 
 const dirs: string[] = [];
@@ -42,8 +49,7 @@ afterEach(() => {
   clearScanCache();
   for (const dir of dirs.splice(0))
     rmSync(dir, { recursive: true, force: true });
-  delete (globalThis as MeshGlobals).__mxDataDescriptor;
-  delete (globalThis as MeshGlobals).__mxMeshCompiles;
+  teardownMesh();
 });
 
 /** A test host whose only file kind, `.fake.mx`, has a region entry. */
@@ -124,65 +130,6 @@ describe("an unregistered .<word>.mx is not claimed", () => {
   });
 });
 
-interface MeshGlobals {
-  __mxDataDescriptor?: TargetDescriptor;
-  __mxMeshCompiles?: string[];
-}
-
-/**
- * A faithful Mesh-style host (decision 148): a third-party package selected by
- * `mx.host`, host `mesh` on the data target, no file kinds of its own (a
- * loaded descriptor may not declare any), compiling through the data target's
- * own compile and keeping data's `defaultTag` (`object`). The data descriptor
- * is handed over on `globalThis` because the
- * package is installed in a temp project that cannot resolve `@mxlang/data`.
- */
-const MESH_INDEX = `const data = globalThis.__mxDataDescriptor;
-module.exports = {
-  descriptorVersion: 0,
-  name: "mesh-data",
-  packageName: "@fake/mx-mesh",
-  defaultTag: data.defaultTag,
-  declarations: data.declarations,
-  get parseTranslator() { return data.parseTranslator; },
-  host: { name: "mesh" },
-  load(core) {
-    const compiler = data.load(core);
-    return {
-      compileModule(source, filename, options) {
-        globalThis.__mxMeshCompiles.push(filename);
-        return compiler.compileModule(source, filename, options);
-      },
-    };
-  },
-};
-`;
-
-function meshProject(): string {
-  const data = builtinLookup().target("data");
-  if (!data) throw new Error("missing data descriptor");
-  const globals = globalThis as MeshGlobals;
-  globals.__mxDataDescriptor = data;
-  globals.__mxMeshCompiles = [];
-  const dir = tempDir("mx-ls-mesh-");
-  writeFileSync(
-    join(dir, "package.json"),
-    JSON.stringify({ mx: { host: "@fake/mx-mesh" } }),
-  );
-  const pkg = join(dir, "node_modules", "@fake", "mx-mesh");
-  mkdirSync(pkg, { recursive: true });
-  writeFileSync(
-    join(pkg, "package.json"),
-    JSON.stringify({
-      name: "@fake/mx-mesh",
-      version: "1.0.0",
-      main: "index.cjs",
-    }),
-  );
-  writeFileSync(join(pkg, "index.cjs"), MESH_INDEX);
-  return dir;
-}
-
 /** Spies on every built-in region kind's compile: the region bridge's only way in. */
 function spyRegionBridge() {
   return builtinTargets
@@ -191,29 +138,62 @@ function spyRegionBridge() {
     .map((kind) => vi.spyOn(kind as Required<typeof kind>, "compileRegion"));
 }
 
+const MESH_KIND = [{ segment: "mesh", diagnosticSource: "mesh" }];
+const mesh = (options: MeshOptions = {}) =>
+  setupMesh(builtinLookup().target("data"), options);
+
 describe(".mesh.mx (a third-party host on the data target)", () => {
-  it("has no region kind in its own lookup, compiles whole-file on data, never reaches the region bridge", () => {
-    const dir = meshProject();
+  it("a declared whole-file kind resolves cleanly, compiles on data and never reaches the region bridge", () => {
+    mesh({ fileKinds: MESH_KIND });
+    const dir = meshProject("mx-ls-mesh-", { fileKinds: MESH_KIND });
     const file = join(dir, "post.mesh.mx");
-    const { policy } = resolveTargetPolicyDetailed(file);
+    const { policy, diagnostics } = resolveTargetPolicyDetailed(file);
+    expect(diagnostics).toEqual([]);
     expect(policy).toMatchObject({ target: "mesh-data", host: "mesh" });
-    expect(policy.descriptor?.name).toBe("mesh-data");
+    expect(lookupFor(policy).moduleSegments()).toContain("mesh");
+    // Declared, but with no `compileRegion`: never a region kind.
     expect(regionFileKind(file, lookupFor(policy))).toBeUndefined();
 
     const bridge = spyRegionBridge();
-    // Given the policy directly (its resolution diagnostics are the known
-    // failure below), the file compiles whole-file through data.
     expect(diagnoseDocument("<x a=1/>\n", file, policy)).toEqual([]);
     expect((globalThis as MeshGlobals).__mxMeshCompiles).toEqual([file]);
+    // The host keeps data's `object` as the unnamed tag.
+    expect((globalThis as MeshGlobals).__mxMeshDefaultTags).toEqual(["object"]);
     for (const spy of bridge) expect(spy).not.toHaveBeenCalled();
   });
 
-  // Known failure, TODO `third-party-host-data-defaulttag` (squad-targets): the
-  // registry checks a loaded descriptor's own `defaultTag` with no built-ins,
-  // and data's `isElement` is false for every name, so a host keeping data's
-  // `object` (decision 148) is refused at resolution. Flips when that lands.
-  it.fails("resolves cleanly and compiles whole-file on data (TODO third-party-host-data-defaulttag)", () => {
-    const dir = meshProject();
+  it("a real data error is positioned at its tag", () => {
+    mesh({ fileKinds: MESH_KIND });
+    const dir = meshProject("mx-ls-mesh-", { fileKinds: MESH_KIND });
+    const file = join(dir, "post.mesh.mx");
+    const { policy } = resolveTargetPolicyDetailed(file);
+    const found = diagnoseDocument(
+      "<x a=1/>\n<define name=y/>\n",
+      file,
+      policy,
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]?.message).toContain("render-time macro");
+    expect(found[0]?.range.start.line).toBe(1);
+  });
+
+  it("the host's own defaultTag override is what the compile gets", () => {
+    mesh({ fileKinds: MESH_KIND, hostDefaultTag: "node" });
+    const dir = meshProject("mx-ls-mesh-", {
+      fileKinds: MESH_KIND,
+      hostDefaultTag: "node",
+      files: { "tags/node.mx": "" },
+    });
+    const file = join(dir, "post.mesh.mx");
+    const { policy, diagnostics } = resolveTargetPolicyDetailed(file);
+    expect(diagnostics).toEqual([]);
+    diagnoseDocument("<x/>\n", file, policy);
+    expect((globalThis as MeshGlobals).__mxMeshDefaultTags).toEqual(["node"]);
+  });
+
+  it("without a file kind the host still resolves cleanly (defaultTag alone)", () => {
+    mesh();
+    const dir = meshProject("mx-ls-mesh-");
     const file = join(dir, "post.mesh.mx");
     const { policy, diagnostics } = resolveTargetPolicyDetailed(file);
     expect(diagnostics).toEqual([]);
