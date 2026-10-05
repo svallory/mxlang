@@ -514,6 +514,45 @@ describe("Solid language plugin", () => {
     ]);
   });
 
+  it("reports a type error inside a .hono.mx region at its authored position", () => {
+    const component = "/project/Panel.hono.mx";
+    const consumer = "/project/index.ts";
+    const source = [
+      "export function Panel(props: { count: number; label: string }) {",
+      "  return (",
+      "    <section>",
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax in template source
+      "      <p class={ on: true }>${props.count.toUpperCase()}</p>",
+      "      <label for=props.label.trim().size>x</label>",
+      "    </section>",
+      "  );",
+      "}",
+    ].join("\n");
+    const service = createPluginService(
+      {
+        [component]: source,
+        [consumer]: 'import "./Panel.hono.mx";\n',
+      },
+      [consumer],
+    );
+    service.getSemanticDiagnostics(consumer);
+
+    const errors = service
+      .getSemanticDiagnostics(component)
+      .filter((candidate) => candidate.code === 2339)
+      .map((candidate) => ({
+        start: candidate.start,
+        text: source.slice(
+          candidate.start ?? 0,
+          (candidate.start ?? 0) + (candidate.length ?? 0),
+        ),
+      }));
+    expect(errors).toEqual([
+      { start: source.indexOf("toUpperCase"), text: "toUpperCase" },
+      { start: source.indexOf("size"), text: "size" },
+    ]);
+  });
+
   it("keeps type arguments when rewriting bound identifiers", () => {
     const plugin = createSolidMxLanguagePlugin(ts);
     const source =
@@ -3792,7 +3831,8 @@ function createMutablePluginService(
     getScriptKind: (fileName) =>
       fileName.endsWith(".solid.mx") ||
       fileName.endsWith(".react.mx") ||
-      fileName.endsWith(".preact.mx")
+      fileName.endsWith(".preact.mx") ||
+      fileName.endsWith(".hono.mx")
         ? ts.ScriptKind.TSX
         : fileName.endsWith(".tsx")
           ? ts.ScriptKind.TSX

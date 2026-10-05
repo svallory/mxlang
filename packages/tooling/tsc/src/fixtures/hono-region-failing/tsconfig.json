@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "noEmit": true,
+    "strict": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "target": "esnext",
+    "jsx": "preserve",
+    "jsxImportSource": "hono/jsx",
+    "types": ["node"],
+    "allowImportingTsExtensions": true,
+    "baseUrl": ".",
+    "paths": {
+      "@mxlang/hono": ["../../../../../hosts/hono/src/index.ts"],
+      "@mxlang/preact": ["../../../../../hosts/preact/src/index.ts"],
+      "@mxlang/core": ["../../../../../core/src/index.ts"],
+      "@mxlang/parser": ["../../../../../parser/src/public.d.ts"]
+    },
+    "ignoreDeprecations": "6.0"
+  },
+  "include": ["src"]
+}

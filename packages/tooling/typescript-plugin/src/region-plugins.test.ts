@@ -154,3 +154,36 @@ describe(".preact.mx: the Preact region kind's own plugin", () => {
     expect(text).toContain("class=");
   });
 });
+
+describe(".hono.mx: the Hono region kind's own plugin", () => {
+  const hono = createRegionLanguagePlugins(ts).find(
+    (plugin) => plugin.getLanguageId("/a/x.hono.mx") !== undefined,
+  );
+
+  it("claims .hono.mx as honomx, and no other kind's suffix", () => {
+    expect(hono?.getLanguageId("/a/x.hono.mx")).toBe("honomx");
+    for (const file of ["/a/x.solid.mx", "/a/x.mx", "/a/x.react.mx"])
+      expect(hono?.getLanguageId(file)).toBeUndefined();
+    expect(
+      hono?.typescript?.extraFileExtensions.map((e) => e.extension),
+    ).toEqual(["hono.mx"]);
+  });
+
+  it("lowers a region to Hono JSX in the virtual code", () => {
+    const file = "/a/Panel.hono.mx";
+    const source =
+      'export const view = <label for="n" class={ on: true }>n</label>;\n';
+    const virtual = hono?.createVirtualCode?.(
+      file,
+      "honomx",
+      snapshot(source),
+      noScript,
+    );
+    expect(hono?.getSyntaxError(file)).toBeUndefined();
+    const text = virtual?.snapshot.getText(0, virtual.snapshot.getLength());
+    // Hono's dialect keeps `for` and `class` verbatim, unlike React's
+    // `htmlFor`/`className` above.
+    expect(text).toContain('for="n"');
+    expect(text).toContain("mxClass");
+  });
+});
