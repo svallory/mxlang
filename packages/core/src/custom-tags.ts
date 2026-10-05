@@ -7,6 +7,7 @@
  * custom tag existed.
  */
 
+import { positionAt } from "./atom-contracts.ts";
 import { attrLabel } from "./attr-label.ts";
 import {
   fallbackAttrTagShape,
@@ -61,7 +62,26 @@ export interface CustomTagAttribute {
    * call, member or conditional has no knowable type and is accepted, as for
    * `string` and `number`.
    */
-  type?: "string" | "number" | "boolean" | "expression" | "array" | "function";
+  type?:
+    | "string"
+    | "number"
+    | "boolean"
+    | "expression"
+    | "array"
+    | "function"
+    | "atom";
+  /**
+   * `type: "atom"` only (decision 156): the allowed names, like an enum. An
+   * atom (`:name`), or a list of them, is checked name by name.
+   */
+  values?: string[];
+  /** `type: "atom"` only: a regex source string every atom name must match. */
+  pattern?: string;
+  /**
+   * `type: "atom"` only: the atom must name a declaration of this kind (or one
+   * of these kinds) visible from the reference, in this file.
+   */
+  ref?: string | string[];
   /** The literal element type of an `array` attribute; a non-literal element passes. */
   items?: "string" | "number" | "boolean";
   required?: boolean;
@@ -171,6 +191,38 @@ export interface TagStore {
 export interface AnalyzeContext {
   store: TagStore;
   fail(message: string, at?: Position): never;
+  /**
+   * Declares a name no tag states (a derived one, such as the `listId` a
+   * `belongs-to` adds) in the declare phase, before any reference is checked
+   * (decision 156 addendum 1, item 6). `span` is where an error or go-to for
+   * the name points, normally the tag that caused it; `scope` names an
+   * ancestor of that tag, defaulting to the file's root tag.
+   */
+  declare(
+    kind: string,
+    name: string,
+    options: { span: SourceSpan; scope?: string | string[] },
+  ): void;
+}
+
+/**
+ * One thing a tag's contract declares (decision 156 addendum 1, items 4, 7, 10).
+ * The tag's `name` (including `:name`) or its `#id` becomes a name of `kind`.
+ */
+export interface ContractDeclaration {
+  /** A plain kind name; the same name in two contract modules is one kind. */
+  kind: string;
+  /** Where the name comes from: the `#id` sugar or the `name` attribute. */
+  from: "id" | "name";
+  /**
+   * The nearest ancestor whose tag name is this one (or one of these) owns the
+   * declaration; default the root tag. No such ancestor is a positioned error.
+   */
+  scope?: string | string[];
+  /** Also clash with a same-named declaration of these kinds in the scope. */
+  uniqueWith?: string[];
+  /** Applies only under this parent tag (or one of these). No `under` means any parent. */
+  under?: string | string[];
 }
 
 export interface FinalizeContext {
@@ -433,6 +485,12 @@ export interface CustomTag {
   children?: CustomTagChildren;
   /** Allowed authored direct parents; `#root` is a unit's top level and `@name` an attribute tag. */
   parents?: string[];
+  /**
+   * The names this tag declares for atom references (decision 156). One entry
+   * or an array; the most specific entry whose `under` matches the parent wins,
+   * else the entry without `under`.
+   */
+  declares?: ContractDeclaration | ContractDeclaration[];
   analyze?(calls: readonly TagCall[], ctx: AnalyzeContext): void;
   transform?(call: TagCall, ctx: TransformContext): IrNode[] | TagCall;
   finalize?(ctx: FinalizeContext): IrNode[];
@@ -724,7 +782,7 @@ function buildersFor(
 }
 
 interface LiteralValue {
-  type: "string" | "number" | "boolean";
+  type: "string" | "number" | "boolean" | "atom";
   value: string | number | boolean;
 }
 
@@ -733,13 +791,18 @@ function listEnum(values: readonly string[]): string {
 }
 
 function literalValue(attr: Attr): LiteralValue | null {
-  if (attr.kind === "static") return { type: "string", value: attr.value };
+  if (attr.kind === "static") {
+    return { type: attr.atom ? "atom" : "string", value: attr.value };
+  }
   if (attr.kind === "boolean") return { type: "boolean", value: true };
   if (attr.kind !== "dynamic") return null;
 
   switch (attr.value.node?.type) {
     case "StringLiteral":
-      return { type: "string", value: attr.value.node.value };
+      return {
+        type: attr.value.node.extra?.mxAtom ? "atom" : "string",
+        value: attr.value.node.value,
+      };
     case "NumericLiteral":
       return { type: "number", value: attr.value.node.value };
     case "BooleanLiteral":
@@ -794,6 +857,7 @@ function isLiteralNode(node: Node | null | undefined): boolean {
 function nodeShape(node: Node | null | undefined): string | null {
   switch (node?.type) {
     case "StringLiteral":
+      return node.extra?.mxAtom ? "atom" : "string";
     // A template literal, plain or interpolated, always produces a string.
     case "TemplateLiteral":
       return "string";
@@ -820,7 +884,7 @@ function nodeShape(node: Node | null | undefined): string | null {
 
 /** The written type of an attribute's value, or `null` when it cannot be known. */
 function attrShape(attr: Attr): string | null {
-  if (attr.kind === "static") return "string";
+  if (attr.kind === "static") return attr.atom ? "atom" : "string";
   if (attr.kind === "boolean") return "boolean";
   if (attr.kind !== "dynamic" && attr.kind !== "bound") return null;
   return nodeShape(attr.value.node);
@@ -864,6 +928,46 @@ function checkCompositeAttr(
     failForOwner(
       owner,
       `attribute ${attrLabel(attr)} item ${index + 1} must be ${declaration.items}, got ${got}`,
+      start
+        ? { ...attr.loc, line: start.line, column: start.column }
+        : attr.loc,
+    );
+  }
+}
+
+/**
+ * Checks an `atom` attribute against its written shape (decision 156): an atom
+ * or a literal list of atoms. A string, a number or a function is a type error
+ * at the offending value; an identifier, call, member or conditional has no
+ * knowable type and passes. Which names are allowed is the file-level check's
+ * business (`atom-contracts.ts`).
+ */
+function checkAtomAttr(
+  owner: string,
+  attr: Exclude<Attr, { kind: "spread" }>,
+  locate?: Locate,
+): void {
+  const shape = attrShape(attr);
+  if (shape && shape !== "atom" && shape !== "array") {
+    failForOwner(
+      owner,
+      `attribute ${attrLabel(attr)} must be atom, got ${shape}`,
+      attr.loc,
+    );
+  }
+  if (
+    (attr.kind !== "dynamic" && attr.kind !== "bound") ||
+    attr.value.node?.type !== "ArrayExpression"
+  ) {
+    return;
+  }
+  for (const element of attr.value.node.elements as Array<Node | null>) {
+    const got = nodeShape(element);
+    if (!element || !got || got === "atom") continue;
+    const start = element.loc?.start;
+    failForOwner(
+      owner,
+      `attribute ${attrLabel(attr)} must be atom, got ${got}`,
       start
         ? { ...attr.loc, line: start.line, column: start.column }
         : attr.loc,
@@ -1095,12 +1199,24 @@ export function validateCustomTagChildren(
   }
 }
 
+/** Offset to line and column in the file being compiled. */
+type Locate = (offset: number) => { line: number; column: number };
+
+/** Where a value error points: at a whole-value atom when the offset can be located, else the attribute. */
+function valueAt(attr: Attr, locate?: Locate): Position {
+  if (attr.kind === "static" && attr.atom && locate) {
+    return { ...attr.loc, ...locate(attr.atom.span.sourceStart) };
+  }
+  return attr.loc;
+}
+
 /** One attribute checker for top-level tags and every declared attribute tag. */
 function validateAttributes(
   owner: string,
   attributes: CustomTag["attributes"],
   attrs: readonly Attr[],
   loc: Position,
+  locate?: Locate,
 ): void {
   if (!attributes) return;
   // An empty closed contract rejects named and spread attributes identically.
@@ -1137,7 +1253,12 @@ function validateAttributes(
         attr.loc,
       );
     }
-    if (declaration.type === "array" || declaration.type === "function") {
+    if (declaration.type === "atom") {
+      checkAtomAttr(owner, attr, locate);
+    } else if (
+      declaration.type === "array" ||
+      declaration.type === "function"
+    ) {
       checkCompositeAttr(owner, attr, declaration);
     } else if (
       declaration.type &&
@@ -1148,12 +1269,12 @@ function validateAttributes(
       failForOwner(
         owner,
         `attribute ${attrLabel(attr)} must be ${declaration.type}, got ${literal.type}`,
-        attr.loc,
+        valueAt(attr, locate),
       );
     }
     if (
       declaration.type === "expression" &&
-      (attr.kind === "static" || attr.kind === "boolean")
+      ((attr.kind === "static" && !attr.atom) || attr.kind === "boolean")
     ) {
       failForOwner(
         owner,
@@ -1282,13 +1403,20 @@ function validateAttributeTags(
 export function validateCustomTagCall(
   definition: CustomTag,
   call: TagCall,
+  locate?: Locate,
 ): void {
   const owner = tagLabel(call.name, call.alias);
   validateCustomTagChildren(definition, call, owner);
   if (definition.parseOptions?.openTagOnly && call.content) {
     failForOwner(owner, "does not accept content", call.loc);
   }
-  validateAttributes(owner, definition.attributes, call.attrs, call.loc);
+  validateAttributes(
+    owner,
+    definition.attributes,
+    call.attrs,
+    call.loc,
+    locate,
+  );
   validateAttributeTags(
     owner,
     definition.attributeTags,
@@ -1362,6 +1490,9 @@ const ATTRIBUTE_KEYS = [
   "enum",
   "default",
   "literalOnly",
+  "values",
+  "pattern",
+  "ref",
 ] as const;
 const CHILD_KEYS = ["repeatable", "required"] as const;
 const ATTRIBUTE_TAG_KEYS = [
@@ -1373,6 +1504,57 @@ const ATTRIBUTE_TAG_KEYS = [
 ] as const;
 
 const ITEM_TYPES = ["string", "number", "boolean"] as const;
+
+/** A non-empty string, or a non-empty array of them. */
+function nonEmptyStrings(value: unknown): boolean {
+  const ok = (item: unknown) => typeof item === "string" && item !== "";
+  return Array.isArray(value) ? value.length > 0 && value.every(ok) : ok(value);
+}
+
+const DECLARES_KEYS = ["kind", "from", "scope", "uniqueWith", "under"] as const;
+
+/** Rejects a malformed `declares` at registration, naming the tag and the entry. */
+function rejectInvalidDeclares(tagName: string, definition: CustomTag): void {
+  if (definition.declares === undefined) return;
+  const entries: unknown[] = Array.isArray(definition.declares)
+    ? definition.declares
+    : [definition.declares];
+  const reject = (problem: string): never => {
+    throw new TranslateError(
+      `Invalid \`declares\` of tag "${tagName}": ${problem}`,
+      0,
+      0,
+    );
+  };
+  if (entries.length === 0) reject("it has no entries");
+  for (const entry of entries as Array<Record<string, unknown>>) {
+    if (typeof entry !== "object" || entry === null) {
+      reject("each entry must be an object");
+    }
+    for (const key of Object.keys(entry)) {
+      if (!(DECLARES_KEYS as readonly string[]).includes(key)) {
+        reject(`unknown key "${key}"; allowed: ${DECLARES_KEYS.join(", ")}`);
+      }
+    }
+    if (typeof entry.kind !== "string" || entry.kind === "") {
+      reject("`kind` must be a non-empty kind name");
+    }
+    if (entry.from !== "id" && entry.from !== "name") {
+      reject('`from` must be "id" or "name"');
+    }
+    for (const key of ["scope", "under"] as const) {
+      if (entry[key] !== undefined && !nonEmptyStrings(entry[key])) {
+        reject(`\`${key}\` must be a tag name or an array of tag names`);
+      }
+    }
+    if (
+      entry.uniqueWith !== undefined &&
+      !(Array.isArray(entry.uniqueWith) && nonEmptyStrings(entry.uniqueWith))
+    ) {
+      reject("`uniqueWith` must be an array of kind names");
+    }
+  }
+}
 
 /** Rejects a declaration whose keys contradict each other, at registration. */
 function rejectContradictoryAttribute(
@@ -1393,6 +1575,36 @@ function rejectContradictoryAttribute(
     }
     if (!(ITEM_TYPES as readonly unknown[]).includes(declaration.items)) {
       reject(`\`items\` must be one of ${ITEM_TYPES.join(", ")}`);
+    }
+  }
+  for (const key of ["values", "pattern", "ref"] as const) {
+    if (declaration[key] !== undefined && declaration.type !== "atom") {
+      reject(`\`${key}\` requires \`type: "atom"\``);
+    }
+  }
+  if (declaration.type === "atom") {
+    if (declaration.enum !== undefined) {
+      reject('`enum` cannot be combined with `type: "atom"`; use `values`');
+    }
+    if (
+      declaration.values !== undefined &&
+      !(
+        Array.isArray(declaration.values) &&
+        declaration.values.every((value) => typeof value === "string")
+      )
+    ) {
+      reject("`values` must be an array of strings");
+    }
+    if (declaration.pattern !== undefined) {
+      try {
+        if (typeof declaration.pattern !== "string") throw new TypeError();
+        new RegExp(declaration.pattern);
+      } catch {
+        reject("`pattern` must be a valid regular expression source string");
+      }
+    }
+    if (declaration.ref !== undefined && !nonEmptyStrings(declaration.ref)) {
+      reject("`ref` must be a kind name or an array of kind names");
     }
   }
   if (
@@ -1473,6 +1685,7 @@ export function rejectUnknownDeclarationKeys(
       }
     }
     rejectNonStringDefaultTag(`\`<${tagName}>\``, definition);
+    rejectInvalidDeclares(tagName, definition);
     rejectRecursiveContractKeys(
       `tag "${tagName}"`,
       definition,
@@ -1794,6 +2007,14 @@ export function runAnalyzeHooks(
     const analyzeContext: AnalyzeContext = {
       store: storeFor(ctx, name),
       fail: (message, at) => failAt(name, message, at ?? first.loc),
+      declare: (kind, declaredName, options) => {
+        (ctx.contractDerived ??= []).push({
+          kind,
+          name: declaredName,
+          span: options.span,
+          scope: options.scope,
+        });
+      },
     };
     try {
       analyze(tagCalls, analyzeContext);
@@ -1977,7 +2198,13 @@ export function transformCustomTag(
     );
   }
 
-  validateCustomTagCall(definition, call);
+  validateCustomTagCall(definition, call, (offset) => positionAt(ctx, offset));
+  // Decision 156: remembered for the file-level declare and check phases.
+  (ctx.contractFacts ??= new Map()).set(node, {
+    definition,
+    call,
+    chain: [...(ctx.authoredAncestorNodes ?? [])],
+  });
   const withDefaults: TagCall = {
     ...call,
     attrs: applyCustomTagDefaults(definition, call),

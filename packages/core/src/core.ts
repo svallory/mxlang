@@ -33,12 +33,14 @@
  *   text is sliced back out by `loc` and re-parsed.
  */
 
+import type { ContractFact, DerivedDeclaration } from "./atom-contracts.ts";
 import type { CalleeInput } from "./callee-input.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import { nearestHtmlElement, nearestName } from "./did-you-mean.ts";
 import type { Atom, Expr, IrNode, Position } from "./ir.ts";
 import { markoBabel } from "./marko-frontend.ts";
+import type { SourceSpan } from "./mapping.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
 
 /**
@@ -82,6 +84,12 @@ export class TranslateError extends Error {
    * that can address a second file need read it.
    */
   readonly file?: string;
+  /**
+   * Further source spans the error is about, in file offsets: a duplicate
+   * declaration carries the first and the second (decision 156). The position
+   * (`line`/`column`) is the last one.
+   */
+  spans?: readonly SourceSpan[];
   /**
    * Every callee file the failed compile's `readCalleeInput` had already
    * resolved before the error was raised (decision 106/107). Set by
@@ -233,6 +241,12 @@ export interface BindingRegistry {
 export interface Ctx {
   /** Authored tag ancestors, innermost last; control flow is transparent and units start empty. */
   authoredAncestors?: string[];
+  /** The Marko nodes behind `authoredAncestors`, same order (atom contract scopes). */
+  authoredAncestorNodes?: Node[];
+  /** Every custom tag call of this unit, by node, for the atom contract check. */
+  contractFacts?: Map<Node, ContractFact>;
+  /** Names `analyze` hooks declared with `ctx.declare`. */
+  contractDerived?: DerivedDeclaration[];
   source: string;
   /** Absolute or caller-supplied filename used to resolve injected imports. */
   filename: string;

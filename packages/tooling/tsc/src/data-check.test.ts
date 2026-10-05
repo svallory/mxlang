@@ -592,7 +592,7 @@ describe("mx-tsc on a data package", () => {
       const { status, output } = check(dir);
       expect(status).toBe(1);
       expect(output.replaceAll(dir, "<pkg>")).toBe(
-        'bad.ts(1,1): error TS80001: Unknown key "requried" in the "x" attribute declaration of tag "thing"; allowed: type, items, required, enum, default, literalOnly\n',
+        'bad.ts(1,1): error TS80001: Unknown key "requried" in the "x" attribute declaration of tag "thing"; allowed: type, items, required, enum, default, literalOnly, values, pattern, ref\n',
       );
     });
   });

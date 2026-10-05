@@ -6,6 +6,6 @@ export default {
     children: { attribute: { repeatable: true } },
   },
   attribute: {
-    attributes: { name: { type: "string" }, type: { type: "string" } },
+    attributes: { name: { type: "atom" }, type: { type: "string" } },
   },
 } satisfies ContractMap;

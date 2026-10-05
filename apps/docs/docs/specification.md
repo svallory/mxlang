@@ -2432,7 +2432,7 @@ their existing registration behavior.
 |---|---|
 | `` `<${name}>` is a core-owned custom tag and cannot be shadowed by a registered custom tag of the same name `` | A registered map contains `try`. |
 | `` `<${name}>`: a custom tag that defines only `finalize` has no call site and nothing to collect; add a `transform`, an `analyze` or a template file `` | `finalize` alone. |
-| `` Unknown key "${key}" in the "${attrName}" attribute declaration of tag "${tagName}"; allowed: type, items, required, enum, default, literalOnly `` | Unknown attribute-declaration key. |
+| `` Unknown key "${key}" in the "${attrName}" attribute declaration of tag "${tagName}"; allowed: type, items, required, enum, default, literalOnly, values, pattern, ref `` | Unknown attribute-declaration key. |
 | `` Invalid "${attrName}" attribute declaration of tag "${tagName}": `items` requires `type: "array"` `` | `items` on an attribute whose `type` is not `"array"` (decision 138). |
 | `` Invalid "${attrName}" attribute declaration of tag "${tagName}": `items` must be one of string, number, boolean `` | An `items` value outside the three literal element types. |
 | `` Invalid "${attrName}" attribute declaration of tag "${tagName}": `enum` cannot be combined with `type: "array"` `` | `enum` with `type: "array"` or `type: "function"` (the message names the type). |

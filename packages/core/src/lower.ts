@@ -25,6 +25,7 @@
 
 import { readFileSync } from "node:fs";
 import { freeIdentifiersIn } from "./accessor-reads.ts";
+import { checkAtomContracts } from "./atom-contracts.ts";
 import { assertNoStandIn, atomOf, atomsIn, convertAtoms } from "./atoms.ts";
 import { attrLabel } from "./attr-label.ts";
 import {
@@ -1349,7 +1350,7 @@ function lowerOneAttributeTag(
   node: Node,
   schema: AttrSchema,
 ): AttributeTag {
-  const pop = pushAuthoredAncestor(ctx, `@${attrName(node)}`);
+  const pop = pushAuthoredAncestor(ctx, `@${attrName(node)}`, node);
   try {
     return lowerAuthoredAttributeTag(ctx, node, schema);
   } finally {
@@ -2924,12 +2925,16 @@ function rejectUncalledParameterizedAttributeTag(
 }
 
 /** Stack authored names only, never synthesized transform output; unwind even on errors. */
-function pushAuthoredAncestor(ctx: Ctx, name: string): () => void {
+function pushAuthoredAncestor(ctx: Ctx, name: string, node: Node): () => void {
   ctx.authoredAncestors ??= [];
+  ctx.authoredAncestorNodes ??= [];
   const ancestors = ctx.authoredAncestors;
+  const nodes = ctx.authoredAncestorNodes;
   ancestors.push(name);
+  nodes.push(node);
   return () => {
     ancestors.pop();
+    nodes.pop();
   };
 }
 
@@ -2943,6 +2948,7 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   const pop = pushAuthoredAncestor(
     ctx,
     activeWildcard(ctx, node)?.canonical ?? name,
+    node,
   );
   try {
     return lowerAuthoredTag(ctx, node);
@@ -3514,6 +3520,7 @@ function lowerTemplate(ctx: Ctx, body: Node[]): Ir {
   checkReservedTemplate(ctx, body);
   // Each file/template is its own authored root, including recursive units.
   ctx.authoredAncestors = [];
+  ctx.authoredAncestorNodes = [];
   const ownInputCode: string[] = [];
   const ownInputAux: string[] = [];
   for (const node of body) {
@@ -3645,6 +3652,10 @@ function lowerTemplate(ctx: Ctx, body: Node[]): Ir {
   ir.needsAttrTagImport =
     referencesUnboundAttrTagType(typeUnits) &&
     !ctx.importedNames.has("AttrTag");
+
+  // Decision 156: declare every name of this unit, then check every atom
+  // reference, once the whole body (and every `analyze`) has been seen.
+  checkAtomContracts(ctx);
 
   if (isFileRoot && ctx.customTags) {
     // Prepended as one block, after the body is assembled: a `finalize` node

@@ -89,6 +89,7 @@ export { CORE_TAGLIB } from "./core-taglib.ts";
 export type {
   AnalyzeContext,
   ChildNode,
+  ContractDeclaration,
   ContractMap,
   CustomTag,
   CustomTagAttribute,
