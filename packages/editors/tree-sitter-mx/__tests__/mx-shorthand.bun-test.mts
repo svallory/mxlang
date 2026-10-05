@@ -183,20 +183,52 @@ const CASES: [name: string, src: string, tree: string][] = [
     "<a x=y as T/>",
     "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
   ],
+  // Decision 146 addendum 4: `=` and `(` cannot be part of a sugar, so they end
+  // it and start the tag's default value (or method). Formerly errors.
   [
-    "name with value is an error",
+    "name with a value sets the default value",
     "<input :x=1/>",
-    "(document (ERROR (open_tag_start) (tag_name (tag_name_fragment))))",
+    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (shorthand_name (tag_name_fragment)) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
   ],
   [
-    "tag-adjacent name with value is an error",
+    "name with an expression value",
+    "<input :x=input.y/>",
+    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (shorthand_name (tag_name_fragment)) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
+  ],
+  [
+    "tag-adjacent name with a value",
     "<input:x=1/>",
-    "(document (ERROR (open_tag_start) (tag_name (tag_name_fragment))))",
+    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) shorthand: (shorthand_name (tag_name_fragment)) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
   ],
   [
-    "id with value is an error",
+    "id with a value",
+    "<input #x=1/>",
+    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (shorthand_id (tag_name_fragment)) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
+  ],
+  [
+    "class with a value",
+    "<input .c=1/>",
+    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (shorthand_class (tag_name_fragment)) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
+  ],
+  [
+    "id after an attribute, with a value",
     "<input x=1 #x=1/>",
-    "(ERROR (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)))",
+    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (shorthand_id (tag_name_fragment)) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
+  ],
+  [
+    "concise id with a value",
+    "input #x=1",
+    "(document (element (tag_name (tag_name_fragment)) (shorthand_id (tag_name_fragment)) (attr_value (attr_eq) (attr_value_expr)) (concise_open_tag_end) (element_end)))",
+  ],
+  [
+    "Mesh: id followed by a method",
+    "boolean #isOverdue({ self }) { return self.x }",
+    "(document (element (tag_name (tag_name_fragment)) (shorthand_id (tag_name_fragment)) (args (args_open) (args_expr) (args_close)) (method_body (method_body_open) (method_body_expr) (method_body_close)) (concise_open_tag_end) (element_end)))",
+  ],
+  [
+    "a method first, then the id",
+    "kind (p) { b } #name",
+    "(document (element (tag_name (tag_name_fragment)) (args (args_open) (args_expr) (args_close)) (method_body (method_body_open) (method_body_expr) (method_body_close)) (shorthand_id (tag_name_fragment)) (concise_open_tag_end) (element_end)))",
   ],
   [
     "two tag-adjacent names is an error",

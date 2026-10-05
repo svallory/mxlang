@@ -48,7 +48,8 @@ are regenerated here instead). It adds:
   an identifier start). An attribute value ends at whitespace followed by
   `.ident`, or by `:ident` when no conditional `?` is open
   (`ExprState.cond_depth`, which does not count `??` or `?.`). A value on the
-  sugar (`:x=1`, `#x=1`, `.x=1`) is an error. The new state is serialized.
+  sugar (`:x=1`, `#x=1`, `.x=1`) was an error in this patch; patch 0006 (decision 146
+  addendum 4) removed that rule. The new state is serialized.
 - **Grammar** (`grammar.js`): the `shorthand_name` node. Attribute-position
   shorthands use their own external start tokens and are aliased to the same
   three node names; tag-adjacent shorthands carry a `shorthand` field.
@@ -118,6 +119,19 @@ is MX's own:
 is MX's own: `README.md` becomes the package README (what it is, the `/docmd`
 and root exports, the `web-tree-sitter` dependency, what `prepack` builds).
 
+`patches/0006-feat-grammar-equals-and-paren-end-a-sugar-and-start-the-default-value.patch`
+is MX's own (decision 146 addendum 4):
+
+- `src/scanner.c`: `shorthand_takes_no_value` is gone. `=` and `(` cannot be part
+  of a sugar, so they end it and start the tag's default value or method:
+  `<input #x=1/>`, `<input :x=input.y/>`, `<input:x=1/>`, `input .c=1` parse as
+  the shorthand followed by `attr_value`, as `kind #name({ p }) { b }` and
+  `kind (p) { b } #name` already did (`args` plus `method_body`). No grammar
+  change, so `src/` is unchanged.
+- `__tests__/mx-shorthand.bun-test.mts`: the three "with value is an error" rows
+  flip to trees, and rows are added for the Mesh line, params first, class and
+  concise (51 cases).
+
 ## Tests
 
 `bun run test` (`scripts/test.sh`, also `moon run tree-sitter-mx:test` and
@@ -125,7 +139,7 @@ the root `bun run test:grammar`):
 
 1. `tree-sitter generate`, then `git diff --exit-code -- src/`.
 2. `bun run build:wasm` (tree-sitter-cli 0.26.9 fetches its own wasi-sdk).
-3. `bun test` over `__tests__/mx-shorthand.bun-test.mts` (45) and
+3. `bun test` over `__tests__/mx-shorthand.bun-test.mts` (51) and
    `__tests__/fixtures.bun-test.mts` (374 htmljs-parser fixtures plus one
    consistency check). The fixtures are fetched with git into `.cache/` once.
 4. `tools/check-wasm.mts`: the wasm parses a sample, and both queries load.

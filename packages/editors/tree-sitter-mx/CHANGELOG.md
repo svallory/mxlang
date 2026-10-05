@@ -12,7 +12,7 @@ two local patches (see `UPSTREAM.md`):
   `shorthand` field) and in attribute position, first or after any attribute,
   in html and concise mode. After whitespace, `.ident` and `:ident` (with no
   open conditional `?`) end the previous attribute value. A value on the sugar
-  (`:x=1`) is an error; named modifiers (`class:x`, `style:x`, `value:fn:=x`)
+  (`:x=1`) was an error here until patch 0006 (below); named modifiers (`class:x`, `style:x`, `value:fn:=x`)
   are unchanged. `<style .scss>` (attribute position) no longer selects a
   stylesheet dialect; only the tag-adjacent `<style.scss>` does.
 - The grammar is named `mx` (`tree_sitter_mx`, `source.mx`, file type `mx`),
@@ -29,6 +29,7 @@ two local patches (see `UPSTREAM.md`):
   silently there and tree-sitter dropped the rest of the file with a clean
   tree, where Marko reports "Line has extra indentation at the beginning"
   (patch 0004). The language rule is unchanged.
+- **Fix (name-sugar-default-value, decision 146 addendum 4, patch 0006):** `=` and `(` end a sugar and start the tag's default value: `<input #x=1/>`, `<input :x=input.y/>`, `<input:x=1/>`, `<input .c=1/>` and concise `input #x=1` parse without `ERROR` (they were errors), as Mesh's `boolean #isOverdue({ self }) { return self.x }` and `kind (p) { b } #name` already did. Scanner only; `src/` is unchanged.
 - The injected TypeScript highlights gain `highlight/extra-highlights.scm`:
   names bound by an object pattern (`({ self }) => ...`, a parameter or a
   `const { a } = x`) and a ternary's `?` and `:` had no capture.

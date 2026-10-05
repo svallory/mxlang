@@ -1,0 +1,114 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Saulo Vallory <saulovallory@gmail.com>
+Date: Mon, 5 Oct 2026 14:00:00 -0300
+Subject: [PATCH] feat(grammar): `=` and `(` end a sugar and start the default value
+
+Decision 146 addendum 4. `#x=1`, `.c=1`, `:x=input.y` and `<input:x=1/>` were
+errors (the scanner refused a value right after a shorthand); they now parse
+as the shorthand followed by the tag's default value, as `kind #name({ p }) {
+b }` and `kind (p) { b } #name` already did. `src/scanner.c` drops
+`shorthand_takes_no_value`; `__tests__/mx-shorthand.bun-test.mts` flips the
+three "with value is an error" rows and adds the Mesh and params-first rows.
+
+---
+diff --git a/__tests__/mx-shorthand.bun-test.mts b/__tests__/mx-shorthand.bun-test.mts
+index bb889be7..02cf55df 100644
+--- a/__tests__/mx-shorthand.bun-test.mts
++++ b/__tests__/mx-shorthand.bun-test.mts
+@@ -183,20 +183,52 @@ const CASES: [name: string, src: string, tree: string][] = [
+     "<a x=y as T/>",
+     "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
+   ],
++  // Decision 146 addendum 4: `=` and `(` cannot be part of a sugar, so they end
++  // it and start the tag's default value (or method). Formerly errors.
+   [
+-    "name with value is an error",
++    "name with a value sets the default value",
+     "<input :x=1/>",
+-    "(document (ERROR (open_tag_start) (tag_name (tag_name_fragment))))",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (shorthand_name (tag_name_fragment)) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
+   ],
+   [
+-    "tag-adjacent name with value is an error",
++    "name with an expression value",
++    "<input :x=input.y/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (shorthand_name (tag_name_fragment)) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "tag-adjacent name with a value",
+     "<input:x=1/>",
+-    "(document (ERROR (open_tag_start) (tag_name (tag_name_fragment))))",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) shorthand: (shorthand_name (tag_name_fragment)) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "id with a value",
++    "<input #x=1/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (shorthand_id (tag_name_fragment)) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "class with a value",
++    "<input .c=1/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (shorthand_class (tag_name_fragment)) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
+   ],
+   [
+-    "id with value is an error",
++    "id after an attribute, with a value",
+     "<input x=1 #x=1/>",
+-    "(ERROR (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)))",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (shorthand_id (tag_name_fragment)) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "concise id with a value",
++    "input #x=1",
++    "(document (element (tag_name (tag_name_fragment)) (shorthand_id (tag_name_fragment)) (attr_value (attr_eq) (attr_value_expr)) (concise_open_tag_end) (element_end)))",
++  ],
++  [
++    "Mesh: id followed by a method",
++    "boolean #isOverdue({ self }) { return self.x }",
++    "(document (element (tag_name (tag_name_fragment)) (shorthand_id (tag_name_fragment)) (args (args_open) (args_expr) (args_close)) (method_body (method_body_open) (method_body_expr) (method_body_close)) (concise_open_tag_end) (element_end)))",
++  ],
++  [
++    "a method first, then the id",
++    "kind (p) { b } #name",
++    "(document (element (tag_name (tag_name_fragment)) (args (args_open) (args_expr) (args_close)) (method_body (method_body_open) (method_body_expr) (method_body_close)) (shorthand_id (tag_name_fragment)) (concise_open_tag_end) (element_end)))",
+   ],
+   [
+     "two tag-adjacent names is an error",
+diff --git a/src/scanner.c b/src/scanner.c
+index 277e07fe..c2024d9b 100644
+--- a/src/scanner.c
++++ b/src/scanner.c
+@@ -2645,14 +2645,6 @@ static bool is_attr_shorthand_start(int32_t c, int32_t n1) {
+   }
+ }
+ 
+-// MX: a value on the sugar (`:x=1`, or `#x=1` / `.x=1` in attribute
+-// position) is an error: the sugar is the whole attribute.
+-static bool shorthand_takes_no_value(Scanner *s, int32_t c, int32_t n1) {
+-  if (!s->in_shorthand) return false;
+-  if (s->shorthand_kind != ':' && !s->attr_shorthand) return false;
+-  return c == '=' || (c == ':' && n1 == '=');
+-}
+-
+ // Scan one tag name fragment / shorthand-start / interp-start token.
+ // Returns 0 on failure, 1 when a token was produced, 2 when the name section
+ // ended without producing a token (continue with tag-level dispatch).
+@@ -2736,7 +2728,8 @@ static int scan_tag_name_token(Scanner *s, const bool *valid, EStream *es,
+       *result = TAG_NAME_EMPTY;
+       return valid[TAG_NAME_EMPTY] ? 1 : 0;
+     }
+-    if (shorthand_takes_no_value(s, c, n1)) return 0;
++    // MX (decision 146 addendum 4): `=` and `(` cannot be part of a sugar,
++    // so they end it and start the tag's default value / method.
+     finalize_tag_name(s, c);
+     return 2;
+   }
+@@ -2767,8 +2760,6 @@ static int scan_tag_name_token(Scanner *s, const bool *valid, EStream *es,
+     t->type = classify_tag_name(s);
+   }
+ 
+-  if (shorthand_takes_no_value(s, c, n1)) return 0;
+-
+   if (c != '.' && c != '#' && !(c == ':' && n1 != '=') &&
+       !(c == '$' && n1 == '{')) {
+     finalize_tag_name(s, c);
