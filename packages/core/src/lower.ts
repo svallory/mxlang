@@ -637,7 +637,18 @@ function lowerAttr(
   // only Preact happens to print Marko's own form. The empty string is the one
   // value every host renders as the attribute Marko wrote.
   if (name !== attr.name && value?.type === "BooleanLiteral" && value.value) {
-    return { kind: "static", name, value: "", nameSpan, loc };
+    // The empty value has no characters, but it has a position: the end of
+    // the spelled name. A consumer that slices `valueSpan` (the data tree)
+    // gets a zero-width span instead of an invariant failure.
+    const at = nameSpan.sourceEnd;
+    return {
+      kind: "static",
+      name,
+      value: "",
+      valueSpan: { sourceStart: at, sourceEnd: at },
+      nameSpan,
+      loc,
+    };
   }
   // A bare attribute (`download`, `checked`) is HTML's spelling of `true`.
   if (value?.type === "BooleanLiteral" && value.value === true) {

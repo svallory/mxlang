@@ -1617,3 +1617,43 @@ describe("a warning with no source position is file-level too", () => {
     expect(warnings[0]?.column).toBe(at.column);
   });
 });
+
+describe("valueless default-attribute modifier (Mesh span bug)", () => {
+  const options = { structural: "reject" } as const;
+
+  it("`entity :Todo table=...` does not throw the span invariant", () => {
+    const tree = ok('entity :Todo table="todos"\n', options);
+    const entity = firstTag(tree);
+    const attr = entity.attrs.find((a) => a.name === "value:Todo");
+    expect(attr).toMatchObject({ kind: "string", value: "" });
+  });
+
+  it("a child line `create :complete ...` does not throw either", () => {
+    const tree = ok("entity\n  create :complete done=true\n", options);
+    const create = firstTag(tree).children.find(
+      (c) => c.kind === "tag" && c.name === "create",
+    ) as DataTag;
+    expect(create.attrs.map((a) => a.name)).toContain("value:complete");
+  });
+
+  it.each([
+    ["x:foo", "<a x:foo/>"],
+    ["x:", "<a x:/>"],
+    ["value:foo", "<a value:foo/>"],
+  ])("`%s` valueless modifier carries a zero-width value span", (name, src) => {
+    const attr = firstTag(ok(src, options)).attrs.find((a) => a.name === name);
+    expect(attr).toMatchObject({ kind: "string", value: "" });
+    const span = (attr as Extract<DataAttr, { kind: "string" }>).valueSpan;
+    expect(span.sourceEnd).toBe(span.sourceStart);
+  });
+
+  it("the other modifier forms keep working (`x:=y` bound, `class:x`)", () => {
+    expect(firstTag(ok("<a x:=y/>", options)).attrs[0]).toMatchObject({
+      kind: "expression",
+      name: "x",
+      bound: true,
+    });
+    const classX = firstTag(ok('<a class:x="y"/>', options)).attrs[0];
+    expect(classX?.kind).toBeDefined();
+  });
+});

@@ -3654,6 +3654,19 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
     );
   });
 
+  it("gives the valueless modifier a zero-width valueSpan at the end of its name", () => {
+    // A consumer that slices `valueSpan` (the data tree) needs a span, even
+    // for an empty value; the Mesh bug was an invariant failure on its absence.
+    expect(
+      find(lowerSource("<div :foo/>").body, "Element").attrs,
+    ).toMatchObject([
+      { kind: "static", valueSpan: { sourceStart: 9, sourceEnd: 9 } },
+    ]);
+    expect(find(lowerSource("<div x:/>").body, "Element").attrs).toMatchObject([
+      { kind: "static", valueSpan: { sourceStart: 7, sourceEnd: 7 } },
+    ]);
+  });
+
   it.each([
     ["<div :/>", "value:", 5, 6],
     ["<div x:/>", "x:", 5, 7],
