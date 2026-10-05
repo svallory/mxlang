@@ -112,8 +112,13 @@ none of them emits.
 
 **The shared JSX region engine (`src/region.ts`, decision 154).**
 `compileJsxRegion` compiles one region of a `.<segment>.mx` TSX module for a
-dialect; `@mxlang/react` wraps it (`compileReactRegion`), and the Preact and
-Hono region kinds are meant to be the same thin wrapper. Facts before editing:
+dialect; `@mxlang/react` wraps it (`compileReactRegion`) and this package wraps
+it for `.preact.mx` (`src/region-compile.ts`: `compilePreactRegion`, Preact's
+dialect, `preactRegionDeclarations`, segment `preact`; the descriptor's `preact`
+file kind, language id `preactmx`, requires it lazily). The Hono region kind is
+meant to be the same thin wrapper. Region tests: `src/region*.test.ts` over
+`src/fixtures/region/<name>/` (goldens regenerated with vitest `-u`; they render
+through `preact-render-to-string`, which prints `style` before `class`). Facts before editing:
 
 - The markup is the whole-file emitter's (`createRegionEmitter`, a
   `PreactEmitter` with a region sink); only the module assembly differs.
