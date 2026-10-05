@@ -707,6 +707,18 @@ ordinary component call, not a contract-backed exemption.
 | `<div :foo="x"/>` | attribute `value:foo` = `"x"` | `value:foo="x"` | `value:foo="x"` | `value:foo="x"` | `value:foo="x"` | `value:foo="x"` |
 | `<div :foo=y/>` | attribute `value:foo` = `y` | `value:foo="y"` | `value:foo={y}` | `value:foo={y}` | `value:foo={y}` | `[attr.value:foo]="y"` |
 | `<div :foo/>` | attribute `value:foo` = `""` | `value:foo=""` | `value:foo=""` | `value:foo=""` | `value:foo=""` | `value:foo=""` |
+| `<div prop:foo=y/>` | Solid's own `prop:` opt-in: a DOM **property** write, not an attribute | `prop:foo="y"` | `prop:foo={y}` | `prop:foo={y}` (property `foo`) | `prop:foo={y}` | `prop:foo="y"` |
+
+**Solid's `prop:` is Solid's own meaning, not MX's (lead ruling 47).** MX emits
+the name verbatim on every host — core never rewrites or rejects `prop:` as a
+modifier — and each host's runtime then decides. On Solid only, `prop:foo={y}`
+is Solid's own opt-in namespace and writes the element's **DOM property**
+`foo`, so it does not appear in serialized markup and does not behave like the
+`value:foo` attribute the `:foo` row above produces. On html, preact, react,
+hono and `.astro.mx` the same authored name stays an ordinary
+`prop:foo` attribute/prop, and on Angular it stays a plain attribute binding.
+MX itself is not involved in the difference and does not document one
+meaning for `prop:` across hosts.
 
 The valueless form is HTML's *empty* attribute — `<div value:foo>` and
 `<div value:foo="">` are one thing to every HTML parser — so it lowers to the

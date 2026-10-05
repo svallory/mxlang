@@ -37,6 +37,17 @@ passed render checks but failed eight compiler byte-parity oracle rows; it
 was left out under the lead's scoped-completion instruction rather than
 silencing the oracle. Plain/default-object coercion remains a known gap.
 
+**On Solid, `prop:name` is Solid's own opt-in, and MX emits the name
+verbatim (lead ruling 47).** `<div prop:foo=y/>` compiles to
+`prop:foo={y}`, which Solid 2 treats as a **DOM property write** of `foo` — it
+does not serialize as an attribute and is not the `value:foo` attribute that
+MX's `:foo` sugar produces. Every other host keeps the same authored name as
+an ordinary attribute/prop (`prop:foo` on html, preact, react, hono, `.astro.mx`
+and Angular). MX makes no cross-host promise for the `prop:` prefix: it never
+rewrites or refuses the name, so the meaning is whatever the host runtime does
+with it. Not an approved language divergence from Marko — Solid simply owns
+that spelling.
+
 **Angular is unchanged on every host path**, including `.ng.mx` and generated
 tag classes: ordinary attribute bindings stringify plain objects to
 `[object Object]`, and null-prototype values raise a framework coercion error
