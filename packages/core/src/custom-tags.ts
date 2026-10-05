@@ -1241,10 +1241,10 @@ const ATTRIBUTE_KEYS = [
 const CHILD_KEYS = ["repeatable", "required"] as const;
 const ATTRIBUTE_TAG_KEYS = [
   ...CHILD_KEYS,
-  "defaultTag",
   "attributes",
   "attributeTags",
   "children",
+  "defaultTag",
 ] as const;
 
 const ITEM_TYPES = ["string", "number", "boolean"] as const;

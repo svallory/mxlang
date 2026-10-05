@@ -824,12 +824,12 @@ describe("recursive contract registration", () => {
       register(invalid as unknown as CustomTagAttributeTag),
     ).toThrowError(/"row"|"<@row>"/);
   });
-  it("lists all five allowed attribute-tag keys", () => {
+  it("lists all six allowed attribute-tag keys", () => {
     // SAFETY: deliberately misspelled key exercises registration diagnostics.
     expect(() =>
       register({ typo: true } as unknown as CustomTagAttributeTag),
     ).toThrowError(
-      "allowed: repeatable, required, attributes, attributeTags, children",
+      "allowed: repeatable, required, attributes, attributeTags, children, defaultTag",
     );
   });
   it("does not widen the plain children vocabulary", () => {
