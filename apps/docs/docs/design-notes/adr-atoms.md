@@ -341,9 +341,12 @@ Settled by the lead on 2026-10-05 in decision 156 addendum 1, on Mesh's review (
 
 Known limits, settled by the lead in decision 156 addendum 4 (pinned by tests, not fixed; there is no type parser in the lexer). MX reads a spaced `< >` as comparison:
 
-- **`(a<b> :c)` with no open `?`** takes TypeScript's reading: `a<b>` is type arguments, `:c` is not an atom, and the compile fails. Core's error hint names the ambiguity and points here.
-- **A spaced `c ? a < b > :z`** lexes the atom `:z` (two comparisons), where TypeScript would read `a < b >` as type arguments.
-- **A conditional type inside inline-cast type arguments** (`c ? y as Foo<A extends B ? C : D> :z`) lexes the atom `:z`.
+- **`(a<b> :c)` with no open `?`** takes TypeScript's reading: `a<b>` is type arguments, `:c` is not an atom, and the compile fails, as it did before atoms (Babel: "Did not expect a type annotation here"). Core's hint names the ambiguity: "`a<b> :c` reads `a<b>` as type arguments (TypeScript's reading), so `:c` is not an atom there; this spelling is ambiguous (ADR 156, known limits)".
+- **A spaced `c ? a < b > :z`** lexes the atom `:z` (two comparisons), where TypeScript reads `a < b >` as type arguments and owns the `:`. **This breaks input that compiled before atoms**: a `:name` glued to a colon TypeScript owns.
+- **A conditional type inside inline-cast type arguments** (`c ? y as Foo<A extends B ? C : D> :z`) lexes the atom `:z`, **at the top level of an attribute value as well as inside a group** (the round-4 parser did not lex it at the top level). **This breaks input that compiled before atoms.**
+- **A `<` inside a string or comment within type arguments** (`c ? y as Foo<"<"> :z`, `Foo</* < */T> :z`) unbalances the lexer's scan back, so `:z` is an atom. **This breaks input that compiled before atoms.**
+
+For the last three, the fix is one space after the colon, `: z`, which is also what Prettier prints; it compiles exactly as before atoms. Core's error says so: "`:z` was read as an atom (decision 156), so the ternary has no `:`; if TypeScript owns that `:` (type arguments before it, ADR 156 known limits), write `: z` with a space".
 
 Each has a `divergences.md` row and a case-table row, so a future lexer change is a conscious one.
 

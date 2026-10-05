@@ -58,10 +58,9 @@ describe("atoms (src/template)", () => {
   });
 
   it("parse time grows linearly with the file (no scan to the end of file)", () => {
-    // 10x the input: linear parsing gives ~10, a scan to end of file ~100
-    // (3,135 ms vs 35 ms at 40k tags before the fix). 50 leaves room for a
-    // loaded machine without letting the quadratic case through.
-    expect(parseScaling(mod)).toBeLessThan(50);
+    // 32x the input: linear ~32, the end-of-file scan ~1,000 (see
+    // parseScaling).
+    expect(parseScaling(mod)).toBeLessThan(200);
   }, 60_000);
 
   it("read()'s binary search agrees with a linear stand-in on every range", () => {

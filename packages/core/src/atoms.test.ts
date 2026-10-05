@@ -442,6 +442,51 @@ describe("misuse is a positioned MX error at the atom", () => {
       expect(message).toContain("ADR 156");
     },
   );
+
+  // Review r3 (N1): a valid cast earlier on the line never takes the hint
+  // for an unrelated error.
+  it("a valid cast elsewhere on the line gets no ambiguity hint", () => {
+    const source = "<div x=(c ? y as Array<T> :z) y=(1 +)/>";
+    let message = "";
+    try {
+      lowerSource(source);
+    } catch (error) {
+      hintParseError(error, source);
+      message = (error as Error).message;
+    }
+    expect(message).toContain("Unexpected token");
+    expect(message).not.toContain("type arguments");
+  });
+
+  // Decision 156 addendum 4, classes 2 and 3: TypeScript owned the `:` but
+  // the lexer read an atom. These compiled before atoms; the hint gives the
+  // fix (`: z`, what Prettier prints).
+  it.each([
+    "<div x=(c ? a < b > :z)/>",
+    "<div x=c ? y as Foo<A extends B ? C : D> :z/>",
+    "<div x=(c ? y as Foo<A extends B ? C : D> :z)/>",
+  ])("%j: the missing ternary `:` hint says `: z`", (source) => {
+    let message = "";
+    try {
+      lowerSource(source);
+    } catch (error) {
+      hintParseError(error, source);
+      message = (error as Error).message;
+    }
+    expect(message).toContain(
+      "`:z` was read as an atom (decision 156), so the ternary has no `:`",
+    );
+    expect(message).toContain("write `: z` with a space");
+  });
+
+  it.each([
+    "<div x=(c ? a < b > : z)/>",
+    "<div x=c ? y as Foo<A extends B ? C : D> : z/>",
+    "<div x=(c ? y as Foo<A extends B ? C : D> : z)/>",
+    '<div x=(c ? y as Foo<"<"> : z)/>',
+  ])("%j: the fix, `: z`, compiles as before atoms", (source) => {
+    expect(() => lowerSource(source)).not.toThrow();
+  });
 });
 
 describe("the atom hint names only a lexed atom (review round 2)", () => {

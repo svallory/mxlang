@@ -287,16 +287,11 @@ function assertBaseContract(source: string, base: ParseOptions): ParseRun {
   const whole = parse(doc);
 
   // read() stands each atom in with its same-length numeric stand-in
-  // (`0.` then zeros, decision 156), except for a read that starts at a tag
-  // name: that is the raw open tag, which reads the source.
+  // (`0.` then zeros, decision 156). The raw open tag, which reads the
+  // source, is never a handler range.
   const atoms = based.log
     .filter((e) => e.handler === "onAtom")
     .map((e) => e.ranges[0] as RangePair);
-  const tagNameStarts = new Set(
-    based.log
-      .filter((e) => e.handler === "onOpenTagName")
-      .map((e) => e.ranges[0]?.[0]),
-  );
   const stoodIn = (start: number, end: number): string => {
     let text = "";
     let at = start;
@@ -312,10 +307,10 @@ function assertBaseContract(source: string, base: ParseOptions): ParseRun {
     for (const [start, end] of entry.ranges) {
       // read() reads the parsed string, not the enclosing document.
       const read = based.parser.read({ start, end });
-      assert.ok(
-        read === stoodIn(start, end) ||
-          (tagNameStarts.has(start) && read === source.slice(start, end)),
-        `${entry.handler} ${start}-${end}: read ${JSON.stringify(read)}`,
+      assert.equal(
+        read,
+        stoodIn(start, end),
+        `${entry.handler} ${start}-${end}`,
       );
       // offsetAt is the raw rebasing, and nothing else moves.
       assert.equal(based.parser.offsetAt(start), start + offset);

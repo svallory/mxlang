@@ -147,9 +147,10 @@ function optionalMarkerBefore(
 }
 
 /**
- * The last `word<args> :name` on the error's line starting at or before
- * `offset` whose `:name` the installed parser did not lex as an atom:
- * `[typed, ":name"]` (decision 156 addendum 4).
+ * The `word<args> :name` on the error's line whose `:name` starts exactly at
+ * `offset` (the `:` Babel tripped on) and that the installed parser did not
+ * lex as an atom: `[typed, ":name"]` (decision 156 addendum 4). A match
+ * elsewhere on the line is valid TypeScript and never takes the hint.
  */
 function typeArgsBefore(
   source: string,
@@ -166,6 +167,7 @@ function typeArgsBefore(
     if (lineStart + m.index > offset) break;
     const [written, typed = "", atom = ""] = m;
     const atomStart = lineStart + m.index + written.length - atom.length;
+    if (atomStart !== offset) continue;
     if (atoms?.some((lexed) => lexed.start === atomStart)) continue;
     found = [typed, atom];
   }
@@ -196,6 +198,12 @@ function hintFor(
   // or a shorthand property must stand (its stand-in is a number), at the atom
   // or right after it; say what the author wrote.
   const atom = atomAt(source, offset);
+  // Decision 156 addendum 4: a ternary whose `:` was lexed as an atom because
+  // the lexer read a spaced `< >` as comparison (`c ? a < b > :z`, a
+  // conditional type inside type arguments). TypeScript owned that `:`.
+  if (atom && reason.startsWith('Unexpected token, expected ":"')) {
+    return `\`${atom}\` was read as an atom (decision 156), so the ternary has no \`:\`; if TypeScript owns that \`:\` (type arguments before it, ADR 156 known limits), write \`: ${atom.slice(1)}\` with a space`;
+  }
   if (atom) {
     return `\`${atom}\` is an atom (decision 156): a value, not a binding, an assignment target or a shorthand property`;
   }

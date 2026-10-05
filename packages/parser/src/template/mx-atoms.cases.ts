@@ -251,13 +251,30 @@ export const ATOMS: [string, string][] = [
   [
     "<div x=(n === 0x1f? :a : :b)/>",
     '<div> @x atom(a@20-22) atom(b@25-27) ="(n === 0x1f? 0. : 0.)"',
-  ],  // Decision 156 addendum 4, pinned so a lexer change is a conscious one:
+  ],
+  // Decision 156 addendum 4, pinned so a lexer change is a conscious one:
   // MX reads a spaced `< >` as comparison, so these lex an atom where
   // TypeScript would read type arguments. No type parser.
   ["<div x=(c ? a < b > :z)/>", '<div> @x atom(z@20-22) ="(c ? a < b > 0.)"'],
   [
     "<div x=(c ? y as Foo<A extends B ? C : D> :z)/>",
     '<div> @x atom(z@42-44) ="(c ? y as Foo<A extends B ? C : D> 0.)"',
+  ],
+  // Class 3 at the top level of a value too (round 4 did not lex it there).
+  [
+    "<div x=c ? y as Foo<A extends B ? C : D> :z/>",
+    '<div> @x atom(z@41-43) ="c ? y as Foo<A extends B ? C : D> 0."',
+  ],
+  // Review r3 (N4): a `<` inside a string or comment within type arguments
+  // unbalances the scan back, so these lex an atom too (known limit; the fix
+  // is `: z`).
+  [
+    '<div x=(c ? y as Foo<"<"> :z)/>',
+    '<div> @x atom(z@26-28) ="(c ? y as Foo<\\"<\\"> 0.)"',
+  ],
+  [
+    "<div x=(c ? y as Foo</* < */T> :z)/>",
+    '<div> @x atom(z@31-33) ="(c ? y as Foo</* < */T> 0.)"',
   ],
 ];
 
@@ -662,6 +679,10 @@ export function parseScaling(mod: AtomParserModule): number {
     }
     return min;
   };
-  best(4_000); // warm up
-  return best(40_000) / Math.max(best(4_000), 0.5);
+  // 32x the input: a linear parse gives ~32, the end-of-file scan this
+  // guards against ~1,000 (3,135 ms vs 35 ms at 40k tags before the fix), so
+  // a 200 bound keeps a wide margin both ways even when load inflates one
+  // side several-fold (review r3, N3).
+  best(2_000); // warm up
+  return best(64_000) / Math.max(best(2_000), 0.5);
 }
