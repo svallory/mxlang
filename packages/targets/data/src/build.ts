@@ -692,6 +692,8 @@ export function firstUnknownTag(
   const visitTag = (tag: DelegatedTag<unknown>) => {
     if (
       tag.nameSpan !== undefined &&
+      // A wildcard child (`alias`) was claimed by its parent's contract: known.
+      tag.alias === undefined &&
       !declaredTags.has(tag.name) &&
       (!best || isBefore(tag.loc, best.at))
     ) {

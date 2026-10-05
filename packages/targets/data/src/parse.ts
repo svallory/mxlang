@@ -111,6 +111,8 @@ export interface DataDiagnostic {
   offset: number;
   /** When the diagnostic's position is measured in another file. */
   file?: string;
+  /** The warning's stable code, when core gave it one (`MxWarning.code`). */
+  code?: string;
 }
 
 export interface ParseDataResult {
@@ -201,6 +203,7 @@ function toDiagnostic(
   lineStarts: number[],
   source: string,
   filename: string,
+  code?: string,
 ): DataDiagnostic {
   const foreign = at.file !== undefined && at.file !== filename;
   // Core reports a registration error, and may report a warning, with no
@@ -215,6 +218,7 @@ function toDiagnostic(
     column,
     offset: foreign ? -1 : offsetOf(lineStarts, source, line, column),
     ...(at.file !== undefined ? { file: at.file } : {}),
+    ...(code === undefined ? {} : { code }),
   };
 }
 
@@ -370,6 +374,7 @@ export function parseData(
             lineStarts,
             source,
             filename,
+            warning.code,
           ),
         ),
     };

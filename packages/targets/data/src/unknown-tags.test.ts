@@ -566,3 +566,75 @@ describe("name sugar in the parse-only scan", () => {
     ]);
   });
 });
+
+describe("wildcard children (decision 147) under unknownTags: reject", () => {
+  const tags: Record<string, CustomTag> = {
+    attribute: { attributes: { value: { type: "string" } } },
+    resource: {
+      parents: ["#root"],
+      children: {
+        "*": [
+          { pattern: "[a-z]+", contract: "attribute" },
+          { pattern: "[A-Z]+", attributes: { value: { type: "string" } } },
+        ],
+      },
+    },
+  };
+
+  it("a child a contract claims is known, by reference and inline", () => {
+    const { tree, diagnostics } = parse(
+      "<resource>\n  <title value='a'/>\n  <PORT value='b'/>\n</resource>\n",
+      {},
+      tags,
+    );
+    expect(diagnostics).toEqual([]);
+    expect(tree).toBeDefined();
+  });
+
+  it("a wildcard child is known on the core-error path too", () => {
+    // `<title>` is claimed, so the parse-only scan must not name it; the real
+    // error (a bad attribute on the claimed child) is the one reported.
+    const { diagnostics } = parse(
+      "<resource>\n  <title nope='a'/>\n</resource>\n",
+      {},
+      tags,
+    );
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.message).not.toContain("is not a known tag");
+  });
+
+  it("an unmatched name inside the contract parent is the E2 error", () => {
+    const { diagnostics } = parse(
+      "<resource>\n  <T1 value='a'/>\n</resource>\n",
+      {},
+      tags,
+    );
+    expect(diagnostics[0]?.message).toContain("is not allowed here");
+  });
+
+  it("an unclaimed name outside any contract is still unknown", () => {
+    const { diagnostics } = parse("<title value='a'/>\n", {}, tags);
+    expect(diagnostics[0]?.message).toContain("is not a known tag");
+  });
+
+  it("the guard warning's code reaches the diagnostic", () => {
+    const withNear: Record<string, CustomTag> = {
+      ...tags,
+      resource: {
+        parents: ["#root"],
+        children: {
+          attribute: {},
+          "*": [{ pattern: "[a-z]+", contract: "attribute" }],
+        },
+      },
+    };
+    const { diagnostics } = parse(
+      "<resource>\n  <attribut value='a'/>\n</resource>\n",
+      {},
+      withNear,
+    );
+    expect(diagnostics.some((d) => d.code === "wildcard-near-explicit")).toBe(
+      true,
+    );
+  });
+});

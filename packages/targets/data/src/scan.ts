@@ -13,9 +13,12 @@
 
 import { dirname } from "node:path";
 import {
+  type ContractScope,
   type CustomTag,
   markoCompiler as coreMarkoCompiler,
   type MarkoCompiler,
+  matchWildcardChild,
+  scopeForChildren,
   sugarTagName,
 } from "@mxlang/core";
 import { DEFAULT_TAG, RESERVED_NAMES } from "./declarations.ts";
@@ -154,7 +157,10 @@ export function scanAuthoredTags(
     return null;
   }
   const tags: AuthoredTag[] = [];
-  const visit = (nodes: MarkoNode[] | undefined) => {
+  const visit = (
+    nodes: MarkoNode[] | undefined,
+    scope: ContractScope | undefined,
+  ) => {
     for (const node of nodes ?? []) {
       if (node.type !== "MarkoTag") continue;
       // Marko writes `div` into an unnamed tag (`<#a>`, `.x`) with an empty
@@ -173,18 +179,36 @@ export function scanAuthoredTags(
       const split = written === undefined ? undefined : sugarTagName(written);
       const name = unnamed || split?.unnamed ? defaultTag : split?.tag;
       const start = node.loc?.start;
+      // A tag the enclosing contract's `children["*"]` claims is known
+      // (decision 147); the walk carries the contract in force, as core's does.
+      // No `lookup`: this pass has no target taglib, and the structural names
+      // it would hold are RESERVED already.
+      const claimed =
+        name !== undefined && !unnamed && !split?.unnamed
+          ? matchWildcardChild(node, name, scope, { customTags })
+          : undefined;
       if (
         name !== undefined &&
         start &&
+        !claimed &&
         !name.startsWith("@") &&
         !RESERVED.has(name)
       ) {
         tags.push({ name, line: start.line, column: start.column });
       }
-      visit(node.attributeTags);
-      visit(node.body?.body);
+      const inside =
+        name === undefined
+          ? undefined
+          : scopeForChildren(
+              node,
+              claimed?.canonical ?? name,
+              scope,
+              customTags,
+            );
+      visit(node.attributeTags, inside);
+      visit(node.body?.body, inside);
     }
   };
-  visit(program.body);
+  visit(program.body, undefined);
   return tags;
 }

@@ -4,6 +4,11 @@
 
 - **Changed (decision 159):** `@marko/compiler` is no longer a dependency. The scan and the data taglib use `@mxlang/core`'s `markoCompiler()`, so data parses with core's bundled Marko front end and MX's own template parser: after-value sugar (`<field type="email" :email/>`) works in a registry install. Requires `@mxlang/core` 0.1.0-alpha.3.
 
+## Unreleased
+
+- `unknownTags: "reject"` counts a child claimed by a parent's `children["*"]` as known, on the build path and on the parse-only scan used when core reports an earlier error (decision 147).
+- `DataDiagnostic.code` carries the core warning's code (`wildcard-near-explicit`).
+
 ## 0.1.0-alpha.2
 
 2026-10-05. Identical to alpha.1; republished because the alpha.1 tarballs lacked `dist/` when installed by Bun. No code change.
