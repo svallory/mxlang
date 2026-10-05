@@ -120,6 +120,32 @@ function atomAt(source: string, offset: number): string | undefined {
   return after ? source.slice(after.start, after.end) : undefined;
 }
 
+/**
+ * The last `word? :name` on the error's line starting at or before `offset` whose
+ * `:name` the installed parser did not lex as an atom: `[written, word,
+ * ":name"]`.
+ */
+function optionalMarkerBefore(
+  source: string,
+  offset: number,
+): [string, string, string] | undefined {
+  const lineStart = source.lastIndexOf("\n", offset - 1) + 1;
+  const lineEnd = source.indexOf("\n", offset);
+  const line = source.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
+  const atoms = lexedAtoms(source);
+  let found: [string, string, string] | undefined;
+  for (const m of line.matchAll(
+    /([A-Za-z_$][\w$]*)\?[ \t]+(:[A-Za-z_$][\w$]*(?:-[\w$]+)*)/g,
+  )) {
+    if (lineStart + m.index > offset) break;
+    const [written, word = "", atom = ""] = m;
+    const atomStart = lineStart + m.index + written.length - atom.length;
+    if (atoms?.some((lexed) => lexed.start === atomStart)) continue;
+    found = [written, word, atom];
+  }
+  return found;
+}
+
 /** Offset of a 1-based line and 0-based column in `source`. */
 function offsetOf(source: string, line: number, column: number): number {
   let start = 0;
@@ -146,6 +172,15 @@ function hintFor(
   const atom = atomAt(source, offset);
   if (atom) {
     return `\`${atom}\` is an atom (decision 156): a value, not a binding, an assignment target or a shorthand property`;
+  }
+
+  // Review round 5 (N4): `cond? :yes : :no`. A `?` touching a word is
+  // TypeScript's optional marker, so the parser lexed no atom after it and
+  // Babel trips somewhere past it; name the spelling the author meant.
+  const marker = optionalMarkerBefore(source, offset);
+  if (marker) {
+    const [written, word, atom] = marker;
+    return `\`${written}\` is TypeScript's optional marker (a \`?\` touching \`${word}\`), so \`${atom}\` is not an atom there; write \`${word} ? ${atom}\` for a ternary`;
   }
 
   // `<div id= class="a">`: the next attribute's name was read as `id`'s value,
