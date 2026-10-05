@@ -211,6 +211,17 @@ translator bug** over 43 stock fixtures.
   two forms that do work are covered by the `dynamic-tag-lowercase-import` and
   `nested-layout` fixtures.
 
+## `<textarea value>`: Angular SSR output unverified
+
+Marko renders `<textarea value=x/>` as escaped content. The html and Astro
+targets now do too. `@mxlang/angular` emits a live property binding
+(`<textarea [value]="x">`), which gives the textarea its content on the client;
+spreads on a textarea are rejected there. The server-rendered text is
+unverified, because the repo has no `@angular/platform-server` to render it
+(ruled by mx-squad-parity: leave `[value]`). Astro render tests:
+`packages/hosts/astro/src/textarea-html-comment-render.test.ts`; live Marko
+comparison: `packages/oracle/src/textarea-value.test.ts`.
+
 ## Candidates for MX 2
 
 Not divergences today, and not bugs — behaviour MX could deliberately choose
