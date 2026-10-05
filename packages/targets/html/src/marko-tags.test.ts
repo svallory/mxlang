@@ -32,19 +32,19 @@ describe("tags/*.marko imports", () => {
   test("default import, extension kept, relative to the page", () => {
     const code = emit('<badge label="a"/>');
     expect(code).toContain('import _badge from "./tags/badge.marko"');
-    expect(code).toContain("__mxOut += _badge({");
+    expect(code).toContain("_badge.render({");
   });
 
   test("a hyphenated tag gets a camelCased identifier", () => {
     const code = emit('<fancy-btn label="a"/>');
     expect(code).toContain('import _fancyBtn from "./tags/fancy-btn.marko"');
-    expect(code).toContain("__mxOut += _fancyBtn({");
+    expect(code).toContain("_fancyBtn.render({");
   });
 
   test("a tag called twice is imported once", () => {
     const code = emit('<badge label="a"/><badge label="b"/>');
     expect(code.match(/tags\/badge\.marko/g)).toHaveLength(1);
-    expect(code.match(/_badge\(/g)).toHaveLength(2);
+    expect(code.match(/_badge\.render\(/g)).toHaveLength(2);
   });
 
   test("an identifier already in the source is not reused", () => {

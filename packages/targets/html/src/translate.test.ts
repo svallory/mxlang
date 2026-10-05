@@ -50,6 +50,7 @@ async function renderModules(
             ]
           : [
               `export { escape } from ${JSON.stringify(fileURLToPath(new URL("../../../core/src/index.ts", import.meta.url)))};`,
+              `export { createBufferedOut, createOut } from ${JSON.stringify(fileURLToPath(new URL("./runtime.ts", import.meta.url)))};`,
               `export type { AttrTag } from ${JSON.stringify(fileURLToPath(new URL("./index.ts", import.meta.url)))};`,
             ]
         ).join("\n"),
@@ -223,7 +224,7 @@ describe("an inert tag is inert only in its declared shape", () => {
       src('<p>a</p>\n<lifecycle onMount() { } foo="bar"/>'),
       file,
     );
-    expect(code).toContain('__mxOut += "<p>a</p>"');
+    expect(code).toContain('__mxOut.write("<p>a</p>")');
   });
 
   it("rejects a spread on an inert tag", () => {
@@ -239,7 +240,7 @@ describe("an inert tag is inert only in its declared shape", () => {
       src("<script>console.log(1)</script>\n<p>a</p>"),
       file,
     );
-    expect(code).toContain('__mxOut += "<p>a</p>"');
+    expect(code).toContain('__mxOut.write("<p>a</p>")');
     expect(code).not.toContain("console.log");
   });
 });
@@ -427,7 +428,7 @@ describe("inert constructs (decision 65): accepted, no output", () => {
     ["debug", "<p>a</p>\n<debug/>"],
   ])("accepts <%s> with no emitted output", (_name, body) => {
     const { code } = compile(src(body), file);
-    expect(code).toContain('__mxOut += "<p>a</p>"');
+    expect(code).toContain('__mxOut.write("<p>a</p>")');
     expect(code).not.toContain("console.log");
   });
 
@@ -474,7 +475,9 @@ describe("statement blocks", () => {
   it("accepts <return> in a page, with the same meaning as in a tag", () => {
     const { code } = compile(src("<p>x</p>\n<return=42/>"), file);
 
-    expect(code).toContain("return { value: 42, output: __mxOut };");
+    // Decision 155: the value is `render`'s return value; the output went
+    // to the sink.
+    expect(code).toContain("  return 42;\n}\nexport { __mxRender as render };");
   });
 });
 
@@ -550,6 +553,171 @@ describe("a type-only import does not resolve a tag (decision 114 parity)", () =
   });
 });
 
+/**
+ * Decision 155, the Marko render model: a unit writes into its caller's sink
+ * through `render(input, out)` and `<return>` is `render`'s return value, so a
+ * caller that only holds the default export (a dynamic tag, a `.ts` barrel
+ * re-export) still renders the body and can bind the value.
+ */
+describe("the render sink (decision 155)", () => {
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+  const counter = [
+    "export interface Input { start: number }",
+    "<span>${input.start}</span>",
+    "<return value=input.start + 1/>",
+  ].join("\n");
+  const hello = [
+    "export default function Hello(input: { name: string }): string {",
+    '  return "<b>" + input.name + "</b>";',
+    "}",
+  ].join("\n");
+
+  // TODO dynamic-tag-return-unit-object-object: this rendered
+  // `<div>[object Object]</div>`. Marko 6.3.51 renders the body and drops the
+  // value.
+  it("renders a returning unit reached through a dynamic tag", async () => {
+    const html = await renderModules(
+      {
+        "counter.mx": counter,
+        "page.mx":
+          'import Counter from "./counter.mx"\n<div><${Counter} start=1/></div>',
+      },
+      "page.mx",
+      {},
+      true,
+    );
+    expect(html).toBe("<div><span>1</span></div>");
+  });
+
+  it("renders a returning unit passed in as input to a dynamic tag", async () => {
+    const html = await renderModules(
+      {
+        "counter.mx": counter,
+        "page.mx": "<div><${input.tag} start=3/></div>",
+        "probe.ts": [
+          'import Counter from "./counter.ts";',
+          'import Page from "./page.ts";',
+          "export default () => Page({ tag: Counter });",
+        ].join("\n"),
+      },
+      "probe.ts",
+    );
+    expect(html).toBe("<div><span>3</span></div>");
+  });
+
+  // TODO dynamic-tag-return-unit-object-object, barrel half: the resolver
+  // does not follow a `.ts` re-export, so the call site cannot know the
+  // callee's shape; `.render` is found at run time instead.
+  it("renders a returning unit re-exported through a .ts barrel", async () => {
+    const html = await renderModules(
+      {
+        "counter.mx": counter,
+        "barrel.ts": 'export { default as Counter } from "./counter.ts";',
+        "page.mx":
+          'import { Counter } from "./barrel.ts"\n<div><Counter start=4/></div>',
+      },
+      "page.mx",
+      {},
+      true,
+    );
+    expect(html).toBe("<div><span>4</span></div>");
+  });
+
+  // TODO dynamic-tag-var-silent-drop: `/n` was dropped. Marko 6.3.51 binds a
+  // dynamic tag's return value.
+  it("binds /var on a dynamic tag to the callee's render value", async () => {
+    const html = await renderModules(
+      {
+        "counter.mx": counter,
+        "page.mx":
+          'import Counter from "./counter.mx"\n<${Counter}/n start=1/><p>${n}</p>',
+      },
+      "page.mx",
+      {},
+      true,
+    );
+    expect(html).toBe("<span>1</span><p>2</p>");
+  });
+
+  it("binds /var on a dynamic tag whose callee has no render as undefined", async () => {
+    const html = await renderModules(
+      {
+        "hello.ts": hello,
+        "page.mx":
+          'import Hello from "./hello.ts"\n<${Hello}/n name="x"/><p>${String(n)}</p>',
+      },
+      "page.mx",
+    );
+    expect(html).toBe("<b>x</b><p>undefined</p>");
+  });
+
+  it("keeps a hand-written .ts function tag string-returning", async () => {
+    const html = await renderModules(
+      {
+        "hello.ts": hello,
+        "page.mx":
+          'import Hello from "./hello.ts"\n<div><Hello name="a"/><${Hello} name="b"/></div>',
+      },
+      "page.mx",
+      {},
+      true,
+    );
+    expect(html).toBe("<div><b>a</b><b>b</b></div>");
+  });
+
+  it("keeps the default export (input) => string and exposes render on it", async () => {
+    const result = await renderModules(
+      {
+        "counter.mx": counter,
+        "probe.ts": [
+          'import Counter, { render } from "./counter.ts";',
+          'import { createOut } from "./runtime.ts";',
+          "export default () => {",
+          "  const html = Counter({ start: 1 });",
+          "  const out = createOut();",
+          "  const value = Counter.render({ start: 5 }, out);",
+          "  return JSON.stringify([typeof html, html, Counter.render === render, value, out.toString()]);",
+          "};",
+        ].join("\n"),
+      },
+      "probe.ts",
+    );
+    expect(JSON.parse(result)).toEqual([
+      "string",
+      "<span>1</span>",
+      true,
+      6,
+      "<span>5</span>",
+    ]);
+  });
+
+  // Measured with Marko 6.3.51: the body throws after writing `<b>before</b>`
+  // and Marko renders `<div>caught</div>`. The body renders into a buffered
+  // sub-sink that is dropped on a throw; before decision 155 this host kept
+  // the partial body (`<div><b>before</b>caught</div>`).
+  it("drops a <try> body's partial output when it throws", async () => {
+    const html = await renderModules(
+      {
+        "page.mx":
+          "<div><try><b>before</b>${input.missing.deep}<i>after</i><@catch|e|>caught</@catch></try></div>",
+      },
+      "page.mx",
+    );
+    expect(html).toBe("<div>caught</div>");
+  });
+
+  it("commits a nested <try> into its enclosing <try>", async () => {
+    const html = await renderModules(
+      {
+        "page.mx":
+          "<try><a>1</a><try><b>2</b>${input.missing.deep}<@catch|e|><i>3</i></@catch></try><u>4</u><@catch|e|>outer</@catch></try>",
+      },
+      "page.mx",
+    );
+    expect(html).toBe("<a>1</a><i>3</i><u>4</u>");
+  });
+});
+
 describe("an imported .mx tag that declares <return>", () => {
   const counter = [
     "export interface Input { start: number }",
@@ -558,8 +726,8 @@ describe("an imported .mx tag that declares <return>", () => {
   ].join("\n");
 
   // Marko 6.3.51 renders the body and drops the value when the call binds no
-  // `/var`; before this the call emitted `__mxOut += Counter({ … })`, which
-  // concatenated the callee's `{ value, output }` pair as "[object Object]".
+  // `/var`. The call once concatenated the callee's former `{ value, output }`
+  // pair as "[object Object]"; since decision 155 it renders into the sink.
   it("renders its body and drops the value without /var", async () => {
     const html = await renderModules(
       {
@@ -574,7 +742,7 @@ describe("an imported .mx tag that declares <return>", () => {
     expect(html).toBe("<div><span>1</span></div>");
   });
 
-  it("emits the same unwrap a discovered tag gets", () => {
+  it("emits the same sink call a discovered tag gets", () => {
     const dir = mkdtempSync(join(tmpdir(), "mx-html-imported-return-"));
     try {
       writeFileSync(join(dir, "counter.mx"), src(counter));
@@ -583,13 +751,13 @@ describe("an imported .mx tag that declares <return>", () => {
         src('import Counter from "./counter.mx"\n<Counter start=1/>'),
         page,
       );
-      expect(code).toContain("Counter({ start: 1 }).output;");
+      expect(code).toContain("Counter.render({ start: 1 }, __mxOut);");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it("leaves an imported tag without <return> as a plain call", () => {
+  it("renders an imported tag without <return> through the runtime dispatch", () => {
     const dir = mkdtempSync(join(tmpdir(), "mx-html-imported-plain-"));
     try {
       writeFileSync(join(dir, "plain.mx"), src("<b>x</b>"));
@@ -597,7 +765,9 @@ describe("an imported .mx tag that declares <return>", () => {
         src('import Plain from "./plain.mx"\n<Plain/>'),
         join(dir, "page.mx"),
       );
-      expect(code).not.toContain(".output");
+      // Its shape is not known statically, so `__mxRenderTag` picks
+      // `.render` at run time.
+      expect(code).toContain("__mxRenderTag(__mxOut, Plain)({  });");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -641,7 +811,9 @@ describe("an imported .mx tag that declares <return>", () => {
         src('import Counter from "./counter.mx"\n<Counter/n start=1/>'),
         join(dir, "page.mx"),
       );
-      expect(code).toContain("const n = __mxRet0.value;");
+      expect(code).toContain(
+        "const n = Counter.render({ start: 1 }, __mxOut);",
+      );
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -791,12 +963,12 @@ describe("<try> without a placeholder is a plain try/catch", () => {
   // tag's body uses.
   it("preserves a whitespace-only body", () => {
     const { code } = compile(src("<try>  </try>"), file);
-    expect(code).toContain('__mxOut += " ";');
+    expect(code).toContain('__mxTry0.write(" ");');
   });
 
   it("preserves markup mixed with text in the body", () => {
     const { code } = compile(src("<try>a <b>c</b></try>"), file);
-    expect(code).toContain('__mxOut += "a <b>c</b>";');
+    expect(code).toContain('__mxTry0.write("a <b>c</b>");');
   });
 });
 
@@ -1285,14 +1457,14 @@ describe("dynamic tags", () => {
   it("lowers `<${expr}/>` through the runtime dispatcher", () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
     const { code } = compile(src("<${input.tag}/>"), file);
-    expect(code).toContain("__mxRenderDynamic(input.tag");
+    expect(code).toContain("__mxRenderDynamic(__mxOut, input.tag");
     expect(code).toContain("function __mxRenderDynamic");
   });
 
   it("lowers a bare `${expr}` concise-position line the same way, since this host claims DYNAMIC_TAG for both shapes", () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko concise-mode placeholder/dynamic-tag syntax in template source
     const { code } = compile(src("${input.tag}\n"), file);
-    expect(code).toContain("__mxRenderDynamic(input.tag");
+    expect(code).toContain("__mxRenderDynamic(__mxOut, input.tag");
     expect(code).toContain("function __mxRenderDynamic");
   });
 
@@ -1307,8 +1479,8 @@ describe("dynamic tags", () => {
       src("<${input.comp}><@header>hi</@header></>"),
       file,
     );
-    expect(code).toContain("__mxRenderDynamic(input.comp, { header:");
-    expect(code).not.toContain("__mxRenderDynamic(input.comp, {  });");
+    expect(code).toContain("__mxRenderDynamic(__mxOut, input.comp, { header:");
+    expect(code).not.toContain("__mxRenderDynamic(__mxOut, input.comp, {  });");
   });
 
   it("accepts arguments combined with a body on a dynamic tag (decision 109, Marko parity)", async () => {
@@ -1660,13 +1832,38 @@ describe("the eight-field guard", () => {
 });
 
 describe("module shape", () => {
-  it("imports escape and default-exports the renderer", () => {
+  it("imports the runtime and default-exports the renderer", () => {
     const { code } = compile(src("<p>hi</p>"), file);
     expect(code).toContain(
-      'import { escape as __mxEscape } from "@mxlang/html";',
+      'import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from "@mxlang/html";',
     );
     expect(code).toContain("function Probe(input: Input): string {");
     expect(code).toContain("export default Probe;");
+  });
+
+  // Decision 155: two entries. The default export keeps `(input) => string`;
+  // `render(input, out)` writes to a sink and is reachable from the default
+  // export, so a caller holding only the default export can use it.
+  it("emits the sink entry and reaches it from the default export", () => {
+    const { code } = compile(src("<p>hi</p>"), file);
+    expect(code).toContain(
+      [
+        "function Probe(input: Input): string {",
+        "  const __mxOut = __mxCreateOut();",
+        "  __mxRender(input, __mxOut);",
+        "  return __mxOut.toString();",
+        "}",
+        "Probe.render = __mxRender;",
+      ].join("\n"),
+    );
+    expect(code).toContain(
+      [
+        "function __mxRender(input: Input, __mxOut: __MxOut): void {",
+        '  __mxOut.write("<p>hi</p>");',
+        "}",
+        "export { __mxRender as render };",
+      ].join("\n"),
+    );
   });
 
   it("brands the default export so a host's `check()` can recognize it", () => {
@@ -1823,7 +2020,7 @@ describe("import precedence over registered custom tags", () => {
       customTags: { Panel: marker },
     });
     expect(code).not.toContain("mx-marker");
-    expect(code).toContain("Panel(");
+    expect(code).toContain("__mxRenderTag(__mxOut, Panel)(");
   });
 
   // Round 1 regression: `fileLocalBinding` had no casing guard, so a
@@ -2054,7 +2251,7 @@ describe("a tag template compiles as its own module", () => {
     expect(code).not.toMatch(/import\s+\$mx_Tree\d+\s+from\s+"\.\/tree\.mx"/);
     expect(code).toContain("function Tree(");
     // The call site is the export's own name.
-    expect(code).toMatch(/Tree\(\{/);
+    expect(code).toMatch(/Tree\.render\(\{/);
   });
 });
 
@@ -2081,19 +2278,19 @@ describe("a unit that returns a value", () => {
     template: { filename: counterFile, source: counterSource },
   };
 
-  it("returns { value, output } instead of the output alone", () => {
+  it("returns the value from render and keeps the default export a string", () => {
     const { code } = compile(counterSource, counterFile);
 
-    expect(code).toContain(
-      "return { value: input.start + 1, output: __mxOut };",
-    );
+    expect(code).toContain("  return input.start + 1;\n}");
     // Un-annotated, so the value's type is inferred from the expression —
     // that inference is what types the `/var` binding at the call site.
-    expect(code).toContain("function Counter(input: Input) {");
-    expect(code).not.toContain("function Counter(input: Input): string");
+    expect(code).toContain(
+      "function __mxRender(input: Input, __mxOut: __MxOut) {",
+    );
+    expect(code).toContain("function Counter(input: Input): string {");
   });
 
-  it("binds /var through a temp, then emits the output where the call stood", () => {
+  it("binds /var to the call's render value, writing into the caller's sink", () => {
     const { code } = compile(
       src("<counter/n start=1/>\n<p>${n}</p>"),
       pageFile,
@@ -2102,37 +2299,36 @@ describe("a unit that returns a value", () => {
       },
     );
 
-    // Invariant §7.5-4's sequence: the call bound to a temp, the `/var` read
-    // off it, then the output. The temp is what makes the call evaluate once
-    // while both halves are read.
-    const call = code.indexOf("const __mxRet0 = ");
-    const bind = code.indexOf("const n = __mxRet0.value;");
-    const out = code.indexOf("__mxOut += __mxRet0.output;");
-    expect(call).toBeGreaterThan(-1);
-    expect(bind).toBeGreaterThan(call);
-    expect(out).toBeGreaterThan(bind);
+    // Invariant §7.5-4's sequence: the output lands where the call stood
+    // and the `/var` binds the value, in one evaluation of the call.
+    expect(code).toMatch(
+      /const n = \$mx_\w+\.render\(\{ start: 1 \}, __mxOut\);/,
+    );
     // And the binding is readable after the call.
     expect(code).toContain("__mxEscape(n)");
   });
 
-  it("unwraps the output when the call binds no /var", () => {
+  it("renders into the sink and drops the value when the call binds no /var", () => {
     const { code } = compile(src("<counter start=1/>"), pageFile, {
       customTags: { counter },
     });
 
-    expect(code).toContain(").output;");
-    expect(code).not.toContain("__mxRet");
+    expect(code).toMatch(/\n {2}\$mx_\w+\.render\(\{ start: 1 \}, __mxOut\);/);
   });
 
-  it("gives each /var call site its own temp", () => {
+  it("binds each /var call site to its own call", () => {
     const { code } = compile(
       src("<counter/a start=1/>\n<counter/b start=2/>\n<p>${a}${b}</p>"),
       pageFile,
       { customTags: { counter } },
     );
 
-    expect(code).toContain("const a = __mxRet0.value;");
-    expect(code).toContain("const b = __mxRet1.value;");
+    expect(code).toMatch(
+      /const a = \$mx_\w+\.render\(\{ start: 1 \}, __mxOut\);/,
+    );
+    expect(code).toMatch(
+      /const b = \$mx_\w+\.render\(\{ start: 2 \}, __mxOut\);/,
+    );
   });
 
   it("rejects /var on a tag whose template has no <return>", () => {
@@ -2182,7 +2378,7 @@ describe("a unit that returns a value", () => {
       { customTags: { counter } },
     );
 
-    expect(code).toContain("const n = __mxRet0.value;");
+    expect(code).toMatch(/const n = \$mx_\w+\.render\(/);
   });
 
   it("does not mistake a shadowing tag param for the /var", () => {

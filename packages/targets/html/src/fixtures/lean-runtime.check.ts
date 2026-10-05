@@ -4,9 +4,19 @@
  * the real one.
  */
 import type { escape as coreEscape } from "@mxlang/core";
-import type { AttrTag as RealAttrTag } from "../index.ts";
+import type {
+  AttrTag as RealAttrTag,
+  BufferedOut as RealBufferedOut,
+  Out as RealOut,
+  createBufferedOut as realCreateBufferedOut,
+  createOut as realCreateOut,
+} from "../index.ts";
 import type {
   AttrTag as LeanAttrTag,
+  BufferedOut as LeanBufferedOut,
+  Out as LeanOut,
+  createBufferedOut as leanCreateBufferedOut,
+  createOut as leanCreateOut,
   escape as leanEscape,
 } from "./lean-runtime.ts";
 
@@ -21,6 +31,10 @@ type Renderable = { as: "renderable"; params: [a: number, b?: string] };
 
 export type LeanRuntimeMatchesReal = [
   Assert<Equals<typeof leanEscape, typeof coreEscape>>,
+  Assert<Equals<LeanOut, RealOut>>,
+  Assert<Equals<LeanBufferedOut, RealBufferedOut>>,
+  Assert<Equals<typeof leanCreateOut, typeof realCreateOut>>,
+  Assert<Equals<typeof leanCreateBufferedOut, typeof realCreateBufferedOut>>,
   Assert<Equals<LeanAttrTag, RealAttrTag>>,
   Assert<Equals<LeanAttrTag<Data>, RealAttrTag<Data>>>,
   Assert<Equals<LeanAttrTag<Renderable>, RealAttrTag<Renderable>>>,

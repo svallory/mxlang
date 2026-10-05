@@ -136,9 +136,9 @@ const TAGS: Record<string, Disposition> = {
   // module compiled to `(input) => string` has no parent to return to" — was
   // true only while a tag template was expanded into its caller. Under the
   // unit model (decision 95) a tag is its own module and its caller invokes
-  // it, so there is a caller to return to: the unit's export becomes
-  // `{ value, output }` and the call site unwraps it. The core owns the
-  // grammar, in the tag's own compilation.
+  // it, so there is a caller to return to: the unit's `render(input, out)`
+  // writes into the caller's sink and returns the value (decision 155). The
+  // core owns the grammar, in the tag's own compilation.
 };
 
 /**
@@ -696,10 +696,15 @@ const ESCAPE_COMMENT = `function __mxEscapeComment(__mxValue, __mxEscaped) {
   return __mxEscaped ? __mxText.replace(/>/g, "&gt;") : __mxText;
 }`;
 
-const RENDER_DYNAMIC = `function __mxRenderDynamic(__mxTarget: any, __mxProps: Record<string, any>, __mxArgs?: any[]) {
+// Decision 155: writes into the caller's sink and returns what the callee's
+// \`render\` returns, which is what a \`/var\` on the dynamic tag binds. A
+// compiled template is told apart by its \`.render\` entry, never by the shape
+// of what it returns; any other function returns a string that is written.
+const RENDER_DYNAMIC = `function __mxRenderDynamic(__mxSink: __MxOut, __mxTarget: any, __mxProps: Record<string, any>, __mxArgs?: any[]): any {
   if (__mxTarget === null || __mxTarget === undefined) {
     // decision 116: content renders independently of a missing renderer.
-    return __mxProps.content ? __mxProps.content() : "";
+    if (__mxProps.content) __mxSink.write(__mxProps.content());
+    return;
   }
   if (typeof __mxTarget === "string") {
     // decision 112: args[0] provides native attributes; content stays separate.
@@ -721,13 +726,30 @@ const RENDER_DYNAMIC = `function __mxRenderDynamic(__mxTarget: any, __mxProps: R
       __mxOut += __mxTextareaContent(__mxAttrs.value);
     } else if (__mxProps.content) __mxOut += __mxProps.content();
     // Marko 6.3.51's html/dynamic-tag.ts voidElementsReg, case-sensitive.
-    return /^(?:area|b(?:ase|r)|col|embed|hr|i(?:mg|nput)|link|meta|param|source|track|wbr)$/.test(__mxTarget) ? __mxOut : __mxOut + "</" + __mxTarget + ">";
+    __mxSink.write(/^(?:area|b(?:ase|r)|col|embed|hr|i(?:mg|nput)|link|meta|param|source|track|wbr)$/.test(__mxTarget) ? __mxOut : __mxOut + "</" + __mxTarget + ">");
+    return;
   }
   if (typeof __mxTarget === "object") {
     throw new TypeError("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <\${x.content}/>");
   }
-  if (__mxArgs) return Object.keys(__mxProps).length > 0 ? __mxTarget(...__mxArgs, __mxProps) : __mxTarget(...__mxArgs);
-  return __mxTarget(__mxProps);
+  if (__mxArgs) {
+    __mxSink.write("" + (Object.keys(__mxProps).length > 0 ? __mxTarget(...__mxArgs, __mxProps) : __mxTarget(...__mxArgs)));
+    return;
+  }
+  if (typeof __mxTarget.render === "function") return __mxTarget.render(__mxProps, __mxSink);
+  __mxSink.write("" + __mxTarget(__mxProps));
+}`;
+
+// Decision 155: a statically named tag that is not known to be a compiled
+// template (a hand-written function, or a \`.ts\` barrel re-export of one).
+// Typed as returning the callee itself, so the call site's props are checked
+// as a plain \`Callee(props)\` call, generics included.
+const RENDER_TAG = `function __mxRenderTag<F extends (input: never) => unknown>(__mxSink: __MxOut, __mxTag: F): F {
+  const __mxCallee = __mxTag as unknown as ((input: unknown) => unknown) & { render?: (input: unknown, out: __MxOut) => unknown };
+  return ((__mxInput: unknown) => {
+    if (typeof __mxCallee.render === "function") return __mxCallee.render(__mxInput, __mxSink);
+    __mxSink.write("" + __mxCallee(__mxInput));
+  }) as unknown as F;
 }`;
 
 /**
@@ -736,11 +758,10 @@ const RENDER_DYNAMIC = `function __mxRenderDynamic(__mxTarget: any, __mxProps: R
  * Both `finalizeModule`'s helper injection and `brandRender` key off this exact
  * line, so it is written once rather than twice.
  */
-// The return annotation is optional because a unit that declares `<return>`
-// is emitted without one: its result is `{ value, output }`, left to be
-// *inferred* so the value's type reaches the call site's `/var` binding.
+// Always `: string` since decision 155: a unit that declares `<return>`
+// returns its value from `render`, not from the default export.
 const DEFAULT_EXPORT =
-  /\nexport default function ([A-Za-z_$][\w$]*)\(input: Input(?: & \{ content\?: \(\) => string \})?\)(?:: string)? \{/;
+  /\nexport default function ([A-Za-z_$][\w$]*)\(input: Input(?: & \{ content\?: \(\) => string \})?\): string \{/;
 
 /**
  * The core's emitted default-export line, and the name it declares.
@@ -855,6 +876,7 @@ function moduleHelpers(code: string): string[] {
     [code.includes("__mxTextareaContent(") || dynamic, TEXTAREA_CONTENT],
     [code.includes("__mxEscapeComment("), ESCAPE_COMMENT],
     [dynamic, RENDER_DYNAMIC],
+    [code.includes("__mxRenderTag("), RENDER_TAG],
   ];
   const helpers = candidates.flatMap(([used, source]) =>
     used ? [source] : [],

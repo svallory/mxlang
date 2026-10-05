@@ -103,17 +103,24 @@ interface State {
    */
   moduleHoisted: string[];
   indent: number;
+  /** Serial for local arrays and source temporaries in attribute-tag loops. */
+  attrTagTemp: number;
   /**
-   * Serial for the temps a `/var` call site binds its result to.
+   * The sink the next write goes to (decision 155).
+   *
+   * `__mxOut` everywhere except inside a `<try>` body, which writes to its
+   * own buffered sub-sink so a throw can drop the half-rendered body.
+   */
+  sink: string;
+  /**
+   * Serial for `<try>` sub-sinks.
    *
    * Per emit rather than on the IR: one MX IR is emitted by six host
    * emitters, and a generated name cached on shared IR is exactly the bug
    * Marko paid for by sharing uid counters between its two backends
    * (invariant §7.5-6).
    */
-  returnTemp: number;
-  /** Serial for local arrays and source temporaries in attribute-tag loops. */
-  attrTagTemp: number;
+  tryTemp: number;
 }
 
 export interface StringEmitter extends Emitter<string[]> {
@@ -128,15 +135,16 @@ export interface StringEmitter extends Emitter<string[]> {
  * core's: which helpers exist, and that they are inlined rather than imported
  * to keep the runtime surface at one `escape`, is a property of this target.
  */
-export function createEmitter(): StringEmitter {
+export function createEmitter(selfName?: string): StringEmitter {
   const state: State = {
     body: [],
     bodyMappings: [],
     prelude: [],
     moduleHoisted: [],
     indent: 1,
-    returnTemp: 0,
     attrTagTemp: 0,
+    sink: "__mxOut",
+    tryTemp: 0,
   };
 
   const push = (line: string | MappedCode): void => {
@@ -145,49 +153,59 @@ export function createEmitter(): StringEmitter {
     state.bodyMappings.push(emitted.mappings);
   };
 
+  /** Writes one already-rendered string expression to the current sink. */
+  const write = (code: string | MappedCode): void => {
+    push(concatMapped(`${state.sink}.write(`, code, ");"));
+  };
+
   /**
-   * Appends a run of literal HTML, merging into the preceding `out +=`.
+   * Appends a run of literal HTML, merging into the preceding literal write.
    *
    * An element's tag, attributes and text would otherwise each take a line.
    */
   const literal = (text: string): void => {
     if (text === "") return;
     const last = state.body[state.body.length - 1];
-    const prefix = INDENT.repeat(state.indent);
-    if (last?.startsWith(`${prefix}__mxOut += "`) && last.endsWith('";')) {
-      const existing = JSON.parse(
-        last.slice(prefix.length + "__mxOut += ".length, -1),
-      ) as string;
-      state.body[state.body.length - 1] =
-        `${prefix}__mxOut += ${quote(existing + text)};`;
+    const head = `${INDENT.repeat(state.indent)}${state.sink}.write(`;
+    if (last?.startsWith(`${head}"`) && last.endsWith('");')) {
+      const existing = JSON.parse(last.slice(head.length, -2)) as string;
+      state.body[state.body.length - 1] = `${head}${quote(existing + text)});`;
       return;
     }
-    push(`__mxOut += ${quote(text)};`);
+    write(quote(text));
   };
 
+  // A raw `$!{…}` is written as `"" + (…)`: the same string coercion the
+  // former `out += (…)` applied, now spelled out because `write` takes a
+  // string.
   const expression = (code: string, escaped: boolean): void => {
-    push(`__mxOut += ${escaped ? `__mxEscape(${code})` : `(${code})`};`);
+    write(escaped ? `__mxEscape(${code})` : `"" + (${code})`);
   };
 
   /**
    * Renders a child list as a self-contained `() => string` function.
    *
-   * The body gets its own `out` local, so a block never appends to the
-   * enclosing template's buffer and can be called zero or many times by the
-   * component that receives it.
+   * The body gets its own sink, so a block never writes to the enclosing
+   * template's sink and can be called zero or many times by the component
+   * that receives it. Blocks stay string-returning: `content` and renderable
+   * attribute tags are `() => string` to every callee, hand-written ones
+   * included.
    */
   const blockFunction = (children: IrNode[], params = ""): MappedCode => {
     const outerBody = state.body;
     const outerBodyMappings = state.bodyMappings;
     const outerPrelude = state.prelude;
     const outerIndent = state.indent;
+    const outerSink = state.sink;
     state.body = [];
     state.bodyMappings = [];
     state.prelude = [];
     state.indent = outerIndent + 1;
-    push('let __mxOut = "";');
+    state.sink = "__mxOut";
+    push("const __mxOut = __mxCreateOut();");
     drive(emitter, children);
-    push("return __mxOut;");
+    push("return __mxOut.toString();");
+    state.sink = outerSink;
     const lines = state.body;
     const lineMappings = state.bodyMappings;
     // A statement hoisted from inside this block belongs at *this* function's
@@ -511,7 +529,7 @@ export function createEmitter(): StringEmitter {
       state.indent++;
       push(`const __mxValue = ${source};`);
       push(
-        `if (__mxValue !== "") __mxOut += " ${attr.name}=\\"" + __mxValue + "\\"";`,
+        `if (__mxValue !== "") ${state.sink}.write(" ${attr.name}=\\"" + __mxValue + "\\"");`,
       );
       state.indent--;
       push("}");
@@ -647,7 +665,7 @@ export function createEmitter(): StringEmitter {
     }
     if (only?.kind !== "spread") {
       push(
-        'if (__mxValue !== null && typeof __mxValue === "object" && __mxRaw in __mxValue) { __mxOut += __mxValue[__mxRaw](); continue; }',
+        `if (__mxValue !== null && typeof __mxValue === "object" && __mxRaw in __mxValue) { ${state.sink}.write(__mxValue[__mxRaw]()); continue; }`,
       );
     }
     // A tail `value` is already in `written` (skipped above), so only a
@@ -665,12 +683,12 @@ export function createEmitter(): StringEmitter {
       'const __mxText = __mxKey === "class" ? __mxClassValue(__mxValue) : __mxStyleValue(__mxValue);',
     );
     push(
-      'if (__mxText !== "") __mxOut += " " + __mxKey + "=\\"" + __mxText + "\\"";',
+      `if (__mxText !== "") ${state.sink}.write(" " + __mxKey + "=\\"" + __mxText + "\\"");`,
     );
     push("continue;");
     state.indent--;
     push("}");
-    push(`__mxOut += __mxRenderAttr(__mxKey, __mxValue, ${quote(name)});`);
+    write(`__mxRenderAttr(__mxKey, __mxValue, ${quote(name)})`);
     state.indent--;
     push("}");
     state.indent--;
@@ -791,7 +809,7 @@ export function createEmitter(): StringEmitter {
       elementAttributes("textarea", node.attrs);
       literal(">");
       if (node.children.length > 0) drive(emitter, node.children);
-      else push("__mxOut += __mxTextareaContent(__mxTa);");
+      else write("__mxTextareaContent(__mxTa)");
       literal("</textarea>");
       state.indent--;
       push("}");
@@ -804,7 +822,7 @@ export function createEmitter(): StringEmitter {
     );
     literal(">");
     if (explicit) {
-      push(`__mxOut += __mxTextareaContent(${attributeValueCode(explicit)});`);
+      write(`__mxTextareaContent(${attributeValueCode(explicit)})`);
     } else drive(emitter, node.children);
     literal("</textarea>");
   };
@@ -858,9 +876,13 @@ export function createEmitter(): StringEmitter {
         // `renderDynamic`, emitted into the module rather than imported.
         // `parts` carries spreads in source order too: dropping them here (the
         // shape this replaced) silently lost every spread on a dynamic tag.
+        // The helper writes into the sink and returns the callee's `render`
+        // value, which is what a `/var` on the dynamic tag binds (decision
+        // 155).
         push(
           concatMapped(
-            `__mxOut += __mxRenderDynamic(${target.expr.code}, { `,
+            node.var ? `const ${node.var} = ` : "",
+            `__mxRenderDynamic(${state.sink}, ${target.expr.code}, { `,
             joinedParts,
             " }",
             node.args.length > 0
@@ -909,11 +931,10 @@ export function createEmitter(): StringEmitter {
                   .map((param) => named.get(param) ?? "undefined"),
               ]
             : target.params.map((param) => named.get(param) ?? "undefined");
-        push(
+        write(
           concatMapped(
-            "__mxOut += ",
             mapped(target.name, node.nameSpan),
-            `(${args.join(", ")});`,
+            `(${args.join(", ")})`,
           ),
         );
         return;
@@ -929,36 +950,24 @@ export function createEmitter(): StringEmitter {
           ? mapped("{  }", node.nameSpan)
           : concatMapped("{ ", joinedParts, " }");
 
-      // A unit that declares `<return>` hands back `{ value, output }`, so
-      // the call site unwraps it whether or not it binds the value.
-      if (node.returnsValue) {
-        if (node.var) {
-          // The statement sequence of invariant §7.5-4: the attribute-tag
-          // statements (already pushed by `propsOf`), then the call bound to
-          // a temp, then the `/var`, then the output where the call stood.
-          // The temp exists because the call must be evaluated exactly once
-          // while both of its halves are read.
-          const temp = `__mxRet${state.returnTemp++}`;
-          push(
-            concatMapped(
-              `const ${temp} = `,
-              mapped(callee, node.nameSpan),
-              "(",
-              props,
-              ");",
-            ),
-          );
-          push(`const ${node.var} = ${temp}.value;`);
-          push(`__mxOut += ${temp}.output;`);
-          return;
-        }
+      // Decision 155: a tag call passes this unit's sink down, and `/var`
+      // binds what the callee's `render` returns. A discovered tag, a unit
+      // known to declare `<return>`, or this module's own export (a
+      // self-recursive tag) is a compiled template, so its `render` is called
+      // directly. Anything else may be a hand-written function, a
+      // `.ts` barrel re-export of a template, or a template: `__mxRenderTag`
+      // renders through `.render` when the callee has one and writes the
+      // returned string otherwise. It returns the callee itself as far as
+      // TypeScript can tell, so the props are checked exactly as a plain
+      // `Callee(props)` call would be.
+      if (node.returnsValue || target.binding || callee === selfName) {
         push(
           concatMapped(
-            "__mxOut += ",
+            node.var ? `const ${node.var} = ` : "",
             mapped(callee, node.nameSpan),
-            "(",
+            ".render(",
             props,
-            ").output;",
+            `, ${state.sink});`,
           ),
         );
         return;
@@ -966,9 +975,9 @@ export function createEmitter(): StringEmitter {
 
       push(
         concatMapped(
-          "__mxOut += ",
+          `__mxRenderTag(${state.sink}, `,
           mapped(callee, node.nameSpan),
-          "(",
+          ")(",
           props,
           ");",
         ),
@@ -1123,7 +1132,7 @@ export function createEmitter(): StringEmitter {
             // merged into the surrounding literal so a fully static comment
             // stays one `out +=`.
             if (values.length > 0) {
-              push(`__mxOut += ${values.join(" + ")};`);
+              write(values.join(" + "));
               values.length = 0;
             }
             literal(escapeComment(child.value));
@@ -1140,7 +1149,7 @@ export function createEmitter(): StringEmitter {
         }
         if (values.length > 0) {
           const joined = values.join(" + ");
-          push(`__mxOut += ${hasText ? joined : `(${joined}) || " "`};`);
+          write(hasText ? joined : `(${joined}) || " "`);
         }
         literal("-->");
         return;
@@ -1148,14 +1157,14 @@ export function createEmitter(): StringEmitter {
       case "raw-element": {
         // `<html-script>`/`<html-style>` are Marko's spelling of a literal
         // `<script>`/`<style>` element, since the bare names are core tags.
-        push(`__mxOut += ${quote(`<${data.tag}>`)};`);
+        write(quote(`<${data.tag}>`));
         for (const child of tag.children) {
-          if (child.kind === "Text") push(`__mxOut += ${quote(child.value)};`);
+          if (child.kind === "Text") write(quote(child.value));
           else if (child.kind === "Interpolation") {
             expression(child.expr.code, child.escaped);
           }
         }
-        push(`__mxOut += ${quote(`</${data.tag}>`)};`);
+        write(quote(`</${data.tag}>`));
         return;
       }
       case "style": {
@@ -1167,16 +1176,25 @@ export function createEmitter(): StringEmitter {
           )
           .map((c) => c.value)
           .join("");
-        push(`__mxOut += ${quote(`<style>${text}</style>`)};`);
+        write(quote(`<style>${text}</style>`));
         return;
       }
       case "try": {
         // A `<try>` without a `<@placeholder>` is a plain try/catch: the body
         // renders, and `<@catch>` renders instead if it throws.
+        // The body renders into a buffered sub-sink that is committed only
+        // when it finishes, so a throw drops the half-rendered body and
+        // `<@catch>` renders in its place, as in Marko.
         const katch = tag.attributeTags.find((t) => t.name === "catch");
+        const outerSink = state.sink;
+        const trySink = `__mxTry${state.tryTemp++}`;
+        push(`const ${trySink} = __mxCreateBufferedOut(${outerSink});`);
         push("try {");
         state.indent++;
+        state.sink = trySink;
         drive(emitter, tag.children);
+        state.sink = outerSink;
+        push(`${trySink}.commit();`);
         state.indent--;
         if (katch) {
           push(`} catch (${katch.block.params.join(", ") || "__mxError"}) {`);
@@ -1217,6 +1235,9 @@ export function createEmitter(): StringEmitter {
           // from silently dropping the attribute tag (measured against Marko
           // 6.3.51: attribute tags on a dynamic tag ARE forwarded).
           attributeTags: tag.attributeTags,
+          // `<${Tag}/n/>` binds the callee's `render` value, as Marko 6.3.51
+          // does; dropping it here was `dynamic-tag-var-silent-drop`.
+          var: tag.var,
           attributeTagTree: tag.attributeTagTree,
           attrTagProps: tag.attrTagProps,
           args: tag.args ?? [],
@@ -1233,17 +1254,28 @@ export function createEmitter(): StringEmitter {
 /**
  * Builds the emitted TypeScript module for one resolved template.
  *
- * The module shape is fixed (S3): the escape import, the author's hoisted
- * module scope, their `Input` interface, and one default-exported render
- * function concatenating into a single local.
+ * The module shape is fixed (S3): the runtime import, the author's hoisted
+ * module scope, their `Input` interface, then the two entries of decision 155:
+ *
+ * - the default export, `(input) => string`, named after the file: it creates
+ *   a sink, renders into it, and returns the string;
+ * - `render(input, out)` (declared as `__mxRender`, so it cannot collide with
+ *   an author's own `render`), which writes to `out` and returns the
+ *   `<return>` value. It is also reachable as `<Name>.render`, which is how a
+ *   caller holding only the default export (a dynamic tag, a barrel
+ *   re-export) renders into its own sink.
  */
 export function emitModuleWithMappings(ir: Ir, escapeFrom: string): MappedCode {
-  const emitter = createEmitter();
+  const name = moduleExportName(ir, "@mxlang/html");
+  const emitter = createEmitter(name);
   drive(emitter, ir.body);
   const body = emitter.done();
+  const buffered = body.some((line) => line.includes("__mxCreateBufferedOut("));
 
   const lines: Array<string | MappedCode> = [
-    `import { escape as __mxEscape } from "${escapeFrom}";`,
+    `import { escape as __mxEscape, createOut as __mxCreateOut, ${
+      buffered ? "createBufferedOut as __mxCreateBufferedOut, " : ""
+    }type Out as __MxOut } from "${escapeFrom}";`,
   ];
   if (ir.needsAttrTagImport) {
     lines.push(`import type { AttrTag } from "${escapeFrom}";`);
@@ -1264,22 +1296,23 @@ export function emitModuleWithMappings(ir: Ir, escapeFrom: string): MappedCode {
     // Named after the file, never anonymous: a tag whose template calls its
     // own name resolves to this declaration, so self-recursion needs no
     // self-import (design invariant §7.5-7).
-    // A unit that declares `<return>` hands back `{ value, output }` rather
-    // than the output alone (design §3.3). Two shapes, chosen by the tag and
-    // never by a call site — and because the tag compiles without seeing its
-    // callers, the choice is made once here rather than resolved across them.
-    //
-    // The returning shape is left un-annotated so the value's type is
-    // *inferred* from the `<return>` expression: that inference is what gives
-    // a `/var` binding at the call site its type (C6), and an annotation here
-    // could only widen it.
-    `export default function ${moduleExportName(ir, "@mxlang/html")}(input: ${inputType})${
-      ir.returnValue ? "" : ": string"
+    `export default function ${name}(input: ${inputType}): string {`,
+    `${INDENT}const __mxOut = __mxCreateOut();`,
+    `${INDENT}__mxRender(input, __mxOut);`,
+    `${INDENT}return __mxOut.toString();`,
+    "}",
+    `${name}.render = __mxRender;`,
+    "",
+    // A unit that declares `<return>` returns the value from `render` and
+    // writes its output to the sink, so the value never travels in the
+    // output (decision 155). Its return type is left un-annotated so it is
+    // *inferred* from the `<return>` expression: that inference is what
+    // gives a `/var` binding at the call site its type (C6).
+    `function __mxRender(input: ${inputType}, __mxOut: __MxOut)${
+      ir.returnValue ? "" : ": void"
     } {`,
-    `${INDENT}let __mxOut = "";`,
-    // Hoisted statements precede the body but follow `out`, so a hoisted
-    // declaration may not reference the buffer — which is the point: it is a
-    // declaration, not output.
+    // Hoisted statements precede the body, so a hoisted declaration is in
+    // scope for all of it.
     ...[...ir.prelude.map((node) => node.code), ...emitter.state.prelude].map(
       (code) => INDENT + code,
     ),
@@ -1287,10 +1320,9 @@ export function emitModuleWithMappings(ir: Ir, escapeFrom: string): MappedCode {
       code,
       mappings: emitter.state.bodyMappings[index] ?? [],
     })),
-    ir.returnValue
-      ? `${INDENT}return { value: ${ir.returnValue.code}, output: __mxOut };`
-      : `${INDENT}return __mxOut;`,
+    ...(ir.returnValue ? [`${INDENT}return ${ir.returnValue.code};`] : []),
     "}",
+    "export { __mxRender as render };",
     "",
   );
   return concatMapped(

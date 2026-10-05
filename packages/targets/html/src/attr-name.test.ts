@@ -47,7 +47,7 @@ describe("invalid attribute names (html)", () => {
   // Decision 146: `#ref` is `id="ref"` sugar, not Angular's reference.
   it("reads `#ref` as `id` sugar", () => {
     expect(compile("<div #ref/>", "/fixtures/test.mx").code).toContain(
-      `__mxOut += "<div id=\\"ref\\"></div>";`,
+      `__mxOut.write("<div id=\\"ref\\"></div>");`,
     );
   });
 
@@ -91,26 +91,29 @@ describe("`:modifier` is the attribute `value:modifier` (html)", () => {
 
   it("renders Marko's attribute, for every value kind", () => {
     expect(rendered(`<div value:foo="lit"/>`)).toContain(
-      `__mxOut += "<div value:foo=\\"lit\\"></div>";`,
+      `__mxOut.write("<div value:foo=\\"lit\\"></div>");`,
     );
     expect(rendered(`<div value:foo/>`)).toContain(
-      `__mxOut += "<div value:foo=\\"\\"></div>";`,
+      `__mxOut.write("<div value:foo=\\"\\"></div>");`,
     );
     // Decision 146: the bare spelling is `name` sugar.
     expect(rendered(`<div :foo/>`)).toContain(
-      `__mxOut += "<div name=\\"foo\\"></div>";`,
+      `__mxOut.write("<div name=\\"foo\\"></div>");`,
     );
   });
 
   it.each([
-    ["<div value:/>", '__mxOut += "<div value:=\\"\\"></div>";'],
-    ["<div x:/>", '__mxOut += "<div x:=\\"\\"></div>";'],
-    ['<div x: = "s"/>', '__mxOut += "<div x:=\\"s\\"></div>";'],
+    ["<div value:/>", '__mxOut.write("<div value:=\\"\\"></div>");'],
+    ["<div x:/>", '__mxOut.write("<div x:=\\"\\"></div>");'],
+    ['<div x: = "s"/>', '__mxOut.write("<div x:=\\"s\\"></div>");'],
     [
       '<div value:foo:bar="y"/>',
-      '__mxOut += "<div value:foo:bar=\\"y\\"></div>";',
+      '__mxOut.write("<div value:foo:bar=\\"y\\"></div>");',
     ],
-    ["<div value:foo:bar/>", '__mxOut += "<div value:foo:bar=\\"\\"></div>";'],
+    [
+      "<div value:foo:bar/>",
+      '__mxOut.write("<div value:foo:bar=\\"\\"></div>");',
+    ],
   ])("renders the full colon name: %s", (source, output) => {
     expect(rendered(source)).toContain(output);
   });
@@ -130,7 +133,7 @@ describe("`:modifier` is the attribute `value:modifier` (html)", () => {
       ['="y"', "y"],
     ]) {
       expect(rendered(`<div ${name}${suffix}/>`)).toContain(
-        `__mxOut += ${JSON.stringify(`<div ${name}="${value}"></div>`)};`,
+        `__mxOut.write(${JSON.stringify(`<div ${name}="${value}"></div>`)});`,
       );
     }
     expect(rendered(`<div ${name}=input.x/>`)).toContain(
@@ -327,7 +330,7 @@ describe("`<for>` by=/key= (html)", () => {
 describe("name sugar renders (html)", () => {
   const html = (source: string): string =>
     compile(source, "/fixtures/test.mx").code.match(
-      /__mxOut \+= (".*");/,
+      /__mxOut\.write\((".*")\);/,
     )?.[1] ?? "";
   const rendered = (source: string): string => JSON.parse(html(source));
 

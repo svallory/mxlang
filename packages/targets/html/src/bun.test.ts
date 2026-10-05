@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -11,6 +12,21 @@ import { join } from "node:path";
 import { createTargetLookup, type TargetDescriptor } from "@mxlang/core";
 import markoPlugin, { mxFilter } from "./bun.ts";
 import { htmlTargets } from "./index.ts";
+
+/**
+ * Makes `@mxlang/html` resolvable from a fixture that declares its own
+ * `package.json`, which otherwise ends the self-reference lookup that lets a
+ * file inside this package import the package by name. Every compiled module
+ * imports the runtime (`createOut`, decision 155), so a real consumer has the
+ * package installed; this stands in for that install.
+ */
+function linkRuntime(pkgDir: string): void {
+  mkdirSync(join(pkgDir, "node_modules", "@mxlang"), { recursive: true });
+  symlinkSync(
+    join(import.meta.dirname, ".."),
+    join(pkgDir, "node_modules", "@mxlang", "html"),
+  );
+}
 
 /**
  * Runs under `bun test`, not vitest: it exercises `Bun.plugin` and Bun's
@@ -65,6 +81,37 @@ describe("@mxlang/html/bun", () => {
       expect(render(input)).toContain(input.value);
     } finally {
       rmSync(path);
+    }
+  });
+
+  // Decision 155: the default export keeps `(input) => string`, and the sink
+  // entry is reachable both as `X.render` and as the named `render` export.
+  test("a loaded .mx module exposes render(input, out) beside its default export", async () => {
+    Bun.plugin(markoPlugin);
+
+    // Inside the package tree, for the same bare-specifier reason as above.
+    const dir = mkdtempSync(join(import.meta.dirname, ".render-sink-"));
+    const path = join(dir, "counter.mx");
+    writeFileSync(
+      path,
+      [
+        "export interface Input { start: number }",
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+        "<span>${input.start}</span>",
+        "<return=input.start + 1/>",
+        "",
+      ].join("\n"),
+    );
+    try {
+      const mod = await import(path);
+      const { createOut } = await import("./runtime.ts");
+      expect(mod.default({ start: 1 })).toBe("<span>1</span>");
+      expect(mod.default.render).toBe(mod.render);
+      const out = createOut();
+      expect(mod.default.render({ start: 2 }, out)).toBe(3);
+      expect(out.toString()).toBe("<span>2</span>");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 
@@ -224,6 +271,7 @@ describe("@mxlang/html/bun", () => {
         mx: { tags: [{ dir: "widgets", hosts: ["bogus"] }] },
       }),
     );
+    linkRuntime(pkgDir);
     writeFileSync(
       join(tagsDir, "gizmo.tag.ts"),
       "export default { transform: (_c, ctx) => [ctx.build.element('b', [], [ctx.build.text('nope')])] };\n",
@@ -298,6 +346,7 @@ describe("@mxlang/html/bun", () => {
       join(pkgDir, "package.json"),
       JSON.stringify({ name: "html-dotted-fixture" }),
     );
+    linkRuntime(pkgDir);
     // A foreign host's file kind, and a name no host declares at all.
     writeFileSync(join(tagsDir, "x.ng.mx"), "<span>x</span>\n");
     writeFileSync(join(tagsDir, "icon.small.mx"), "<span>icon</span>\n");

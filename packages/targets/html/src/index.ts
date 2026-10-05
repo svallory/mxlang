@@ -37,6 +37,12 @@ import descriptor from "./descriptor.ts";
 
 export { escape } from "@mxlang/core";
 export { loadMx, type MxOptions, type MxRenderer, mx } from "./helpers.ts";
+export {
+  type BufferedOut,
+  createBufferedOut,
+  createOut,
+  type Out,
+} from "./runtime.ts";
 export { policy, strictPolicy, TranslateError } from "./translate.ts";
 export type { CompileHtmlResult, CompileOptions, CompileResult, RawSourceMap };
 

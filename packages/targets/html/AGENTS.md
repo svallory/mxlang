@@ -2,7 +2,9 @@
 
 `packages/targets/html` (`@mxlang/html`) holds the string target:
 
-- `escape(value)` — the *entire* runtime. Escapes `& < > " '`; `null` and
+- `escape(value)` plus the sink (`createOut`, `createBufferedOut`, the `Out`
+  type; also published as `@mxlang/html/runtime`, `src/runtime.ts`) — the
+  *entire* runtime. `escape` escapes `& < > " '`; `null` and
   `undefined` render as `""`, not their names.
 - `compile(source, filename, options?)` -> `{ code, map }`, driving the
   translator under `@marko/compiler`. `options.strict` swaps in `strictPolicy`
@@ -14,11 +16,27 @@
   lowering, carrying `line`/`column` rather than byte offsets, because that is
   what Marko's nodes have.
 
-Emitted module shape: the `escape` import, the author's hoisted `import`s and
-`static` blocks, their `export interface Input` verbatim, and
+Emitted module shape (decision 155, the Marko render model): one runtime
+import (`escape`, `createOut`, `createBufferedOut` only when a `<try>` uses it,
+and the `Out` type, all from `"@mxlang/html"`, kept in **one** import because
+the oracle and the test harnesses rewrite that specifier once), the author's
+hoisted `import`s and `static` blocks, their `export interface Input`
+verbatim, then two entries:
 `export default function <Name>(input: Input): string` (named after the file —
-see the export-name bullet below) building one local by `out +=`
-concatenation (**not** an array join — the goldens diff this code).
+see the export-name bullet below), which creates a sink, calls `__mxRender` and
+returns the string, followed by `<Name>.render = __mxRender;`; and
+`function __mxRender(input, __mxOut: __MxOut)`, which writes with
+`__mxOut.write(…)` (literals merged into one call — the goldens diff this
+code) and returns the `<return>` value, exported as `render`. The sink entry is
+named `__mxRender` so it cannot collide with an author's `render` binding.
+Tag calls pass `__mxOut` down: `Name.render(props, __mxOut)` for a discovered,
+self-recursive or known-returning callee, `__mxRenderTag(__mxOut, Callee)(props)`
+(run-time `.render` dispatch, typed as `Callee` itself so props are checked as
+before) for anything else, `__mxRenderDynamic(__mxOut, …)` for a dynamic tag.
+Blocks (`content`, `<define>`, renderable attribute tags) stay `() => string`
+with their own sink. Every compiled module imports `createOut` at run time, so
+a test fixture that nests its own `package.json` must make `@mxlang/html`
+resolvable (see `linkRuntime` in `bun.test.ts`).
 
 Whitespace on **every** host, Solid included, is decision 33's rule
 applied once, by Marko's own `onText` before `@mxlang/core`'s resolver ever
@@ -61,13 +79,15 @@ byte-identical against Marko): `<effect>`, `<lifecycle>`, `<script>`, `<id>`,
 hoists like `static`, and its bindings are readable from the template
 (verified: `server const S = 41 + 1` then `${S}` renders `42`). `<return>` is
 **not** an error any more: under the unit model a tag is its own module and
-its caller invokes it, so a returning unit's export hands back
-`{ value, output }` and the call site unwraps it (see the `<return>` bullet in
-`packages/core/AGENTS.md`). **Evaluate initial
+its caller invokes it, so a returning unit's `render(input, out)` writes its
+output to the caller's sink and returns the value, which `/var` binds (decision
+155; see the `<return>` bullet in `packages/core/AGENTS.md`). **Evaluate initial
 value**: `<let>`, `<const>`, `:=`. **Error** — only what the target genuinely
 cannot: `<await>` (Marko itself refuses to render one to a string) and
 `<try>` with a `<@placeholder>` (needs a second pass). A plain `<try>` with
-`<@catch>` lowers to `try`/`catch`.
+`<@catch>` lowers to `try`/`catch` whose body writes into a buffered sub-sink
+(`createBufferedOut`), committed on success and dropped on a throw, as Marko
+does.
 
 **Inert is a shape, not a licence to drop.** An inert row declares the body
 and attributes its own Marko tag definition allows, and anything else is an
