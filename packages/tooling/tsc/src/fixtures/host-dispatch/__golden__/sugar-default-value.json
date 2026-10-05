@@ -1,0 +1,210 @@
+{
+  "files": {
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "preact"
+        },
+        "diagnostics": [],
+        "related": [],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "/** @jsxImportSource preact */\nimport type { JSX as __MxJSX } from \"preact/jsx-runtime\";\ntype __MxM<T extends string, E extends string> = T extends keyof __MxJSX.IntrinsicElements ? { [K in keyof __MxJSX.IntrinsicElements[T] as Lowercase<K & string> extends `on${E}` ? K : never]: __MxJSX.IntrinsicElements[T][K] } : {};\ntype __MxH<T extends string, E extends string> = [keyof __MxM<T, E>] extends [never] ? any : __MxM<T, E>[keyof __MxM<T, E>];\n\nconst __mxAttrValue = ((validate: (name: string, value: unknown, tag?: string) => unknown) => <T,>(name: string, value: T, tag = \"\", direct = true, skipValidation = false): T => {\n  if (!skipValidation) validate(name, value, tag);\n  const reactBooleans = false;\n  const normalized = (): unknown => {\n  const lower = name.toLowerCase();\n  if ((tag === \"select\" || tag === \"textarea\") && name === \"value\") return value;\n  if (name === \"class\" || name === \"className\") {\n    if (value === null || value === undefined || value === false || value === 0 || value === \"\") return undefined;\n    return value === true ? \"true\" : value;\n  }\n  if (name === \"style\") {\n    if (value === null || value === undefined || value === false || value === 0 || value === \"\") return undefined;\n    return value === true ? \"true\" : value;\n  }\n  if (value === null || value === undefined || value === false) return undefined;\n  if (direct && tag === \"input\" && name === \"checked\") return true;\n  const boolean = [\"allowfullscreen\",\"async\",\"autofocus\",\"autoplay\",\"checked\",\"controls\",\"default\",\"defer\",\"disabled\",\"disableremoteplayback\",\"formnovalidate\",\"hidden\",\"inert\",\"ismap\",\"itemscope\",\"loop\",\"multiple\",\"muted\",\"nomodule\",\"novalidate\",\"open\",\"playsinline\",\"readonly\",\"required\",\"reversed\",\"selected\"].includes(lower);\n  if (boolean && !reactBooleans) return value;\n  if (reactBooleans && ([\"async\",\"controls\",\"credentialless\",\"default\",\"defer\",\"disabled\",\"hidden\",\"inert\",\"loop\",\"multiple\",\"muted\",\"open\",\"required\",\"reversed\",\"scoped\",\"seamless\"].includes(lower) || (tag === \"input\" && lower === \"checked\"))) return true;\n  return value === true ? \"\" : value;\n  };\n  return normalized() as T;})((<T,>(name: string, value: T, tag = \"\"): T => {\n  const controlled = (tag === \"input\" && (name === \"checked\" || name === \"checkedValue\"))\n    || ((tag === \"details\" || tag === \"dialog\") && name === \"open\")\n    || ((tag === \"select\" || tag === \"textarea\") && name === \"value\");\n  const ordinary = !controlled && name !== \"class\" && name !== \"style\";\n  if (ordinary && (typeof value === \"function\" || typeof value === \"symbol\")) {\n    throw new Error(\"The `\" + name + \"` attribute cannot be a \" + typeof value + \".\");\n  }\n  if (ordinary && value !== null && typeof value === \"object\") {\n    let text;\n    try { text = `${value}`; } catch { text = \"[object Object]\"; }\n    if (/^\\[object \\w+\\]$/.test(text)) {\n      const description = text === \"[object Object]\"\n        ? \"a plain object (it would render as `[object Object]`)\"\n        : text === \"[object Promise]\"\n          ? \"a promise (use the `<await>` tag to render its resolved value)\"\n          : \"a value that renders as `\" + text + \"`\";\n      throw new Error(\"The `\" + name + \"` attribute cannot be \" + description + \".\");\n    }\n  }\n  return value;\n}));\n\nexport interface Input {}\n\nexport default function Page(props: Input) {\n  const __mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof __mxBody === \"string\" || typeof __mxBody === \"number\"\n        ? __mxBody === \"\"\n          ? undefined\n          : <>{String(__mxBody)}</>\n        : __mxBody,\n  };\n  return (<><input id=\"x\" value={__mxAttrValue(\"value\", input.v, \"input\")} /><input name=\"n\" value={__mxAttrValue(\"value\", input.w, \"input\")} class=\"c\" /><input id=\"p\" value={__mxAttrValue(\"value\", input.q, \"input\")} /></>);\n}\n",
+        "mappings": [
+          {
+            "sourceOffsets": [
+              7
+            ],
+            "generatedOffsets": [
+              3695
+            ],
+            "lengths": [
+              2
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              10
+            ],
+            "generatedOffsets": [
+              3732
+            ],
+            "lengths": [
+              7
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              10
+            ],
+            "generatedOffsets": [
+              3732
+            ],
+            "lengths": [
+              7
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              27
+            ],
+            "generatedOffsets": [
+              3760
+            ],
+            "lengths": [
+              2
+            ],
+            "generatedLengths": [
+              4
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              30
+            ],
+            "generatedOffsets": [
+              3799
+            ],
+            "lengths": [
+              7
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              30
+            ],
+            "generatedOffsets": [
+              3799
+            ],
+            "lengths": [
+              7
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              38
+            ],
+            "generatedOffsets": [
+              3818
+            ],
+            "lengths": [
+              2
+            ],
+            "generatedLengths": [
+              5
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              49
+            ],
+            "generatedOffsets": [
+              3837
+            ],
+            "lengths": [
+              2
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              52
+            ],
+            "generatedOffsets": [
+              3874
+            ],
+            "lengths": [
+              7
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              52
+            ],
+            "generatedOffsets": [
+              3874
+            ],
+            "lengths": [
+              7
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          }
+        ],
+        "compileDiagnostics": [],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "code": "/** @jsxImportSource preact */\n\nconst __mxAttrValue = ((validate: (name: string, value: unknown, tag?: string) => unknown) => <T,>(name: string, value: T, tag = \"\", direct = true, skipValidation = false): T => {\n  if (!skipValidation) validate(name, value, tag);\n  const reactBooleans = false;\n  const normalized = (): unknown => {\n  const lower = name.toLowerCase();\n  if ((tag === \"select\" || tag === \"textarea\") && name === \"value\") return value;\n  if (name === \"class\" || name === \"className\") {\n    if (value === null || value === undefined || value === false || value === 0 || value === \"\") return undefined;\n    return value === true ? \"true\" : value;\n  }\n  if (name === \"style\") {\n    if (value === null || value === undefined || value === false || value === 0 || value === \"\") return undefined;\n    return value === true ? \"true\" : value;\n  }\n  if (value === null || value === undefined || value === false) return undefined;\n  if (direct && tag === \"input\" && name === \"checked\") return true;\n  const boolean = [\"allowfullscreen\",\"async\",\"autofocus\",\"autoplay\",\"checked\",\"controls\",\"default\",\"defer\",\"disabled\",\"disableremoteplayback\",\"formnovalidate\",\"hidden\",\"inert\",\"ismap\",\"itemscope\",\"loop\",\"multiple\",\"muted\",\"nomodule\",\"novalidate\",\"open\",\"playsinline\",\"readonly\",\"required\",\"reversed\",\"selected\"].includes(lower);\n  if (boolean && !reactBooleans) return value;\n  if (reactBooleans && ([\"async\",\"controls\",\"credentialless\",\"default\",\"defer\",\"disabled\",\"hidden\",\"inert\",\"loop\",\"multiple\",\"muted\",\"open\",\"required\",\"reversed\",\"scoped\",\"seamless\"].includes(lower) || (tag === \"input\" && lower === \"checked\"))) return true;\n  return value === true ? \"\" : value;\n  };\n  return normalized() as T;})((<T,>(name: string, value: T, tag = \"\"): T => {\n  const controlled = (tag === \"input\" && (name === \"checked\" || name === \"checkedValue\"))\n    || ((tag === \"details\" || tag === \"dialog\") && name === \"open\")\n    || ((tag === \"select\" || tag === \"textarea\") && name === \"value\");\n  const ordinary = !controlled && name !== \"class\" && name !== \"style\";\n  if (ordinary && (typeof value === \"function\" || typeof value === \"symbol\")) {\n    throw new Error(\"The `\" + name + \"` attribute cannot be a \" + typeof value + \".\");\n  }\n  if (ordinary && value !== null && typeof value === \"object\") {\n    let text;\n    try { text = `${value}`; } catch { text = \"[object Object]\"; }\n    if (/^\\[object \\w+\\]$/.test(text)) {\n      const description = text === \"[object Object]\"\n        ? \"a plain object (it would render as `[object Object]`)\"\n        : text === \"[object Promise]\"\n          ? \"a promise (use the `<await>` tag to render its resolved value)\"\n          : \"a value that renders as `\" + text + \"`\";\n      throw new Error(\"The `\" + name + \"` attribute cannot be \" + description + \".\");\n    }\n  }\n  return value;\n}));\n\nexport interface Input {}\n\nexport default function Page(props: Input) {\n  const __mxBody =\n    (props as { content?: unknown }).content ??\n    (props as { children?: unknown }).children;\n  const input: Input & { content?: unknown } = {\n    ...props,\n    content:\n      typeof __mxBody === \"string\" || typeof __mxBody === \"number\"\n        ? __mxBody === \"\"\n          ? undefined\n          : <>{String(__mxBody)}</>\n        : __mxBody,\n  };\n  return (<><input id=\"x\" value={__mxAttrValue(\"value\", input.v, \"input\")} /><input name=\"n\" value={__mxAttrValue(\"value\", input.w, \"input\")} class=\"c\" /><input id=\"p\" value={__mxAttrValue(\"value\", input.q, \"input\")} /></>);\n}\n",
+        "map": null,
+        "warnings": []
+      }
+    }
+  },
+  "mxTsc": [
+    "<root>/sugar-default-value/page.mx(1,17): error TS2339: Property 'v' does not exist on type 'Input & { content?: unknown; }'.",
+    "<root>/sugar-default-value/page.mx(2,17): error TS2339: Property 'w' does not exist on type 'Input & { content?: unknown; }'.",
+    "<root>/sugar-default-value/page.mx(3,16): error TS2339: Property 'q' does not exist on type 'Input & { content?: unknown; }'."
+  ]
+}

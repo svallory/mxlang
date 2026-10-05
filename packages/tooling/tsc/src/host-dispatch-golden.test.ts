@@ -164,7 +164,12 @@ const ROWS = [
   "sugar-preact",
   "sugar-typed",
   "sugar-second-colon",
+  // Decision 146 addendum 4: `=value` / `(params) { body }` after a sugar sets
+  // the default attribute, so `sugar-value` is now the second-default-value
+  // error (at the second) and `sugar-default-value` the valid forms, on a JSX
+  // host so the mapped value is pinned.
   "sugar-value",
+  "sugar-default-value",
   "sugar-default-attr",
   "sugar-dynamic-shorthand",
   // A bare `:` in attribute position (leader ruling, PR 3 round 2): one error

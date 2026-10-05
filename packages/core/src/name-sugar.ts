@@ -716,7 +716,11 @@ function rewriteAttributes(ctx: Ctx, node: Node): void {
           start,
         );
       }
-      out.push(sugarAttr(ctx, "name", { start, end }, start + 1, word));
+      // The token is `:x`; the attribute's end also covers a value after it.
+      const tokenEnd = start + authoredTokenLength(attr, kind);
+      out.push(
+        sugarAttr(ctx, "name", { start, end: tokenEnd }, start + 1, word),
+      );
       if (defaultAttr) out.push(defaultAttr);
       continue;
     }

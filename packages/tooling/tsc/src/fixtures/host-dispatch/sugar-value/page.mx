@@ -1,1 +1,1 @@
-<a :x=1/>
+<if=input.x #y=1>y</if>

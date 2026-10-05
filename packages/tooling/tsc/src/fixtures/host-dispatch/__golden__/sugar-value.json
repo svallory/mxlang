@@ -9,15 +9,15 @@
           {
             "severity": 1,
             "source": "mxlang",
-            "message": "`:x=1` is name sugar and takes no value; write `name=\"…\"` to give one",
+            "message": "`#y=1` would set the default attribute (`value`), but the tag already has a default value (at offset 3); a sugar followed by `=value` or `(params) { body }` sets it (decision 146 addendum 4), so write `value=…` once",
             "range": {
               "start": {
                 "line": 0,
-                "character": 3
+                "character": 15
               },
               "end": {
                 "line": 0,
-                "character": 4
+                "character": 16
               }
             }
           }
@@ -33,8 +33,8 @@
         "compileDiagnostics": [
           {
             "fileName": "<root>/sugar-value/page.mx",
-            "message": "`:x=1` is name sugar and takes no value; write `name=\"…\"` to give one",
-            "offset": 3,
+            "message": "`#y=1` would set the default attribute (`value`), but the tag already has a default value (at offset 3); a sugar followed by `=value` or `(params) { body }` sets it (decision 146 addendum 4), so write `value=…` once",
+            "offset": 15,
             "category": "error"
           }
         ],
@@ -44,20 +44,20 @@
       "vite": {
         "threw": {
           "name": "TranslateError",
-          "message": "`:x=1` is name sugar and takes no value; write `name=\"…\"` to give one",
+          "message": "`#y=1` would set the default attribute (`value`), but the tag already has a default value (at offset 3); a sugar followed by `=value` or `(params) { body }` sets it (decision 146 addendum 4), so write `value=…` once",
           "id": "<root>/sugar-value/page.mx",
           "loc": {
             "file": "<root>/sugar-value/page.mx",
             "line": 1,
-            "column": 3
+            "column": 15
           },
-          "frame": "1 | <a :x=1/>\n       ^"
+          "frame": "1 | <if=input.x #y=1>y</if>\n                   ^"
         },
         "warnings": []
       }
     }
   },
   "mxTsc": [
-    "<root>/sugar-value/page.mx(1,4): error TS80001: `:x=1` is name sugar and takes no value; write `name=\"…\"` to give one"
+    "<root>/sugar-value/page.mx(1,16): error TS80001: `#y=1` would set the default attribute (`value`), but the tag already has a default value (at offset 3); a sugar followed by `=value` or `(params) { body }` sets it (decision 146 addendum 4), so write `value=…` once"
   ]
 }

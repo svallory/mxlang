@@ -73,3 +73,64 @@ describe("sugar tokens in the TypeScript plugin's mappings", () => {
     ).toHaveLength(2);
   });
 });
+
+// Decision 146 addendum 4 (PR 4): the value after a sugar (`#x=input.v`) is the
+// default attribute's value and keeps its exact source range.
+describe("the default value after a sugar, in the TypeScript plugin's mappings", () => {
+  const dir2 = join(
+    import.meta.dirname,
+    "fixtures",
+    "host-dispatch",
+    "sugar-default-value",
+  );
+  const file2 = join(dir2, "page.mx");
+  const source2 = readFileSync(file2, "utf8");
+
+  function mapped2(): [string, string][] {
+    const plugin = createMxLanguagePlugin(ts) as unknown as {
+      createVirtualCode(
+        fileName: string,
+        languageId: string,
+        snapshot: ts.IScriptSnapshot,
+        ctx: unknown,
+      ): {
+        snapshot: ts.IScriptSnapshot;
+        mappings: {
+          sourceOffsets: number[];
+          lengths: number[];
+          generatedOffsets: number[];
+          generatedLengths?: number[];
+        }[];
+      };
+    };
+    const virtual = plugin.createVirtualCode(
+      file2,
+      "mx",
+      ts.ScriptSnapshot.fromString(source2),
+      {
+        getAssociatedScript: () => undefined,
+      },
+    );
+    const generated = virtual.snapshot.getText(0, virtual.snapshot.getLength());
+    return virtual.mappings.map((mapping) => {
+      const length = mapping.lengths[0] as number;
+      const generatedLength = mapping.generatedLengths?.[0] ?? length;
+      const from = mapping.sourceOffsets[0] as number;
+      const to = mapping.generatedOffsets[0] as number;
+      return [
+        source2.slice(from, from + length),
+        generated.slice(to, to + generatedLength),
+      ];
+    });
+  }
+
+  it("maps the sugar tokens and each value expression", () => {
+    const pairs = mapped2();
+    expect(pairs).toContainEqual(["#x", "id"]);
+    expect(pairs).toContainEqual([":n", "name"]);
+    expect(pairs).toContainEqual([".c", "class"]);
+    expect(pairs).toContainEqual(["input.v", "input.v"]);
+    expect(pairs).toContainEqual(["input.w", "input.w"]);
+    expect(pairs).toContainEqual(["input.q", "input.q"]);
+  });
+});

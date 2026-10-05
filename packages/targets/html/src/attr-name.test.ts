@@ -364,7 +364,6 @@ describe("name sugar renders (html)", () => {
   });
 
   it.each([
-    ["<a :b=1/>", "`:b=1`"],
     ["<a :1/>", "`:1`"],
     ["<a:b.c:d/>", "one `:name`"],
   ])("%s is a positioned error", (source, text) => {
@@ -395,4 +394,44 @@ describe("a literal class beside a `.x` sugar renders like the tag-adjacent clas
     expect(render("<div class=false .b/>")).toBe('<div class="b"></div>');
     expect(render("<div class=0 .b/>")).toBe('<div class="b"></div>');
   });
+});
+
+// Decision 146 addendum 4 (PR 4): a sugar followed by `=value` or
+// `(params) { body }` sets the default attribute (`value`).
+describe("a sugar followed by =value sets the default attribute (html)", () => {
+  const render = (source: string, input: object = {}): string =>
+    mx(source, { filename: "/fixtures/render.mx" })(input);
+
+  it.each([
+    ["<input #x=1/>", '<input value="1" id="x">'],
+    ["<input :x=input.y/>", '<input value="Y" name="x">'],
+    ["<input .c=1/>", '<input value="1" class="c">'],
+    ['<input .c="s"/>', '<input value="s" class="c">'],
+    ['<input type="text" #x=2/>', '<input value="2" type="text" id="x">'],
+    ["input #x=1", '<input value="1" id="x">'],
+    ["input :x=input.y", '<input value="Y" name="x">'],
+    ["<input:x=1/>", '<input value="1" name="x">'],
+    ["<input#x=1/>", '<input value="1" id="x">'],
+  ])("%s", (source, expected) => {
+    expect(render(source, { y: "Y" })).toBe(expected);
+  });
+
+  it("a method has no runtime in a string target, positioned at the `(`", () => {
+    const error = failure("<input #x(e) { e }/>");
+    expect(error.message).toContain("attribute method");
+    expect(error.line).toBe(1);
+  });
+
+  it.each([
+    ["<if=input.a #x=1>y</if>", 1, 15],
+    ["<input=1 #x=2/>", 1, 12],
+    ["input=1 #x=2", 1, 11],
+  ])(
+    "%s: a second default value is a positioned error at the second",
+    (source, line, column) => {
+      const error = failure(source);
+      expect(error.message).toContain("already has a default value");
+      expect([error.line, error.column]).toEqual([line, column]);
+    },
+  );
 });
