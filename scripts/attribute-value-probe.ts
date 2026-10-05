@@ -184,6 +184,59 @@ async function probe(
 }
 
 try {
+  if (process.argv[3] === "--textarea") {
+    // `<textarea value=x/>` renders the value as content in Marko 6.3.51.
+    const textareaValues: Record<string, unknown> = {
+      zero: 0,
+      empty: "",
+      null: null,
+      undefined: undefined,
+      false: false,
+      true: true,
+      str: "hello",
+      special: "a<b>&\"'c",
+      newline: "\nx",
+    };
+    const inputs = Object.fromEntries(
+      Object.entries(textareaValues).map(([value, v]) => [
+        value,
+        { v, tag: "textarea", attrs: { value: v } },
+      ]),
+    );
+    const forms: Record<string, string> = {
+      static: '<textarea value="abc"/>',
+      dynamic: "<textarea value=input.v/>",
+      dynamicOthers: '<textarea value=input.v class="c" name="n"/>',
+      bodyOnly: "<textarea>hi &amp; <b></textarea>",
+      spread: "<textarea ...input.attrs/>",
+      spreadBody: "<textarea ...input.attrs>x</textarea>",
+      spreadThenValue: '<textarea ...{value:"spread"} value=input.v/>',
+      valueThenSpread: "<textarea value=input.v ...input.attrs/>",
+      valueBetweenSpreads:
+        '<textarea ...{value:"a"} value=input.v ...{title:"t"}/>',
+      valueAndBody: "<textarea value=input.v>body</textarea>",
+      dynamicTag: `<\${input.tag} value=input.v/>`,
+      dynamicTagArgs: `<\${input.tag}(input.attrs)/>`,
+    };
+    for (const [form, source] of Object.entries(forms)) {
+      try {
+        await probe(form, source, inputs);
+      } catch (error) {
+        for (const value of Object.keys(textareaValues))
+          results.push({
+            form,
+            value,
+            error: error instanceof Error ? error.message : String(error),
+          });
+      }
+    }
+    // Exit from the write callback: exiting first truncates a piped stdout.
+    process.stdout.write(JSON.stringify(results), () => {
+      rmSync(scratch, { recursive: true, force: true });
+      process.exit(0);
+    });
+    await new Promise(() => {});
+  }
   if (process.argv[3] === "--primitives") {
     const primitives = {
       null: null,

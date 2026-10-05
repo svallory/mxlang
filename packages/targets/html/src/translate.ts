@@ -669,6 +669,14 @@ const RENDER_ATTR = `function __mxRenderAttr(__mxName: string, __mxValue: unknow
   return " " + __mxName + '="' + __mxEscape(__mxAttrValue(__mxName, __mxValue, __mxTag)) + '"';
 }`;
 
+// Marko 6.3.51's html `_textarea_value`: `normalizeStrAttrValue` (nothing for
+// null/undefined/false/true), escaped as text, and a leading newline doubled
+// because the HTML parser drops the first one.
+const TEXTAREA_CONTENT = `function __mxTextareaContent(__mxValue: unknown): string {
+  const __mxText = __mxEscape(__mxValue === null || __mxValue === undefined || __mxValue === false || __mxValue === true ? "" : __mxValue + "");
+  return __mxText[0] === "\\n" ? "\\n" + __mxText : __mxText;
+}`;
+
 const ESCAPE_COMMENT = `function __mxEscapeComment(__mxValue) {
   if (__mxValue === null || __mxValue === undefined) return "";
   return String(__mxValue).replace(/>/g, "&gt;");
@@ -685,6 +693,7 @@ const RENDER_DYNAMIC = `function __mxRenderDynamic(__mxTarget: any, __mxProps: R
     let __mxOut = "<" + __mxTarget;
     for (const [__mxKey, __mxValue] of Object.entries(__mxAttrs)) {
       if (__mxKey === "content") continue;
+      if (__mxTarget === "textarea" && __mxKey === "value") continue;
       if (__mxValue === false || __mxValue === null || __mxValue === undefined) continue;
       if (__mxKey === "class" || __mxKey === "style") {
         const __mxText = __mxKey === "class" ? __mxClassValue(__mxValue) : __mxStyleValue(__mxValue);
@@ -692,7 +701,11 @@ const RENDER_DYNAMIC = `function __mxRenderDynamic(__mxTarget: any, __mxProps: R
       } else __mxOut += __mxRenderAttr(__mxKey, __mxValue, __mxTarget);
     }
     __mxOut += ">";
-    if (__mxProps.content) __mxOut += __mxProps.content();
+    if (__mxTarget === "textarea") {
+      // Marko: a dynamic <textarea> takes \`value\`, never content.
+      if (__mxProps.content) throw new Error("A dynamic tag rendering a \`<textarea>\` cannot have \`content\` and must use the \`value\` attribute instead.");
+      __mxOut += __mxTextareaContent(__mxAttrs.value);
+    } else if (__mxProps.content) __mxOut += __mxProps.content();
     // Marko 6.3.51's html/dynamic-tag.ts voidElementsReg, case-sensitive.
     return /^(?:area|b(?:ase|r)|col|embed|hr|i(?:mg|nput)|link|meta|param|source|track|wbr)$/.test(__mxTarget) ? __mxOut : __mxOut + "</" + __mxTarget + ">";
   }
@@ -825,6 +838,7 @@ function moduleHelpers(code: string): string[] {
     [code.includes("__mxRenderAttr(") || dynamic, RENDER_ATTR],
     [code.includes("__mxClassValue(") || dynamic, CLASS_VALUE],
     [code.includes("__mxStyleValue(") || dynamic, STYLE_VALUE],
+    [code.includes("__mxTextareaContent(") || dynamic, TEXTAREA_CONTENT],
     [code.includes("__mxEscapeComment("), ESCAPE_COMMENT],
     [dynamic, RENDER_DYNAMIC],
   ];

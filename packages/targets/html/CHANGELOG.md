@@ -1,5 +1,7 @@
 # @mxlang/html
 
+- **Fix (html-textarea-value-content, decision 149):** `<textarea value=x/>` renders the value as escaped content (`<textarea>0</textarea>`), as Marko 6.3.51 does, instead of a `value` attribute. `null`/`undefined`/`false`/`true` render nothing, `0` and `""` are kept, a leading newline is doubled, a spread's `value` is content (a body wins over it), a dynamic `<${"textarea"} value=…/>` does the same, and an explicit `value` together with a body is Marko's compile error.
+
 - **Fix (marko-parity-trio, `:modifier`):** `<div :foo="y"/>` compiles and renders as `<div value:foo="y">`, Marko's own attribute (MX previously rejected it).
 
 ## 0.1.0 (unreleased)

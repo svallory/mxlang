@@ -576,6 +576,7 @@ export function createEmitter(): StringEmitter {
    * spread and nothing before it iterates the spread directly.
    */
   const elementAttributes = (name: string, attrs: Attr[]): void => {
+    const isTextarea = name === "textarea";
     let lastSpread = -1;
     attrs.forEach((attr, index) => {
       if (attr.kind === "spread") lastSpread = index;
@@ -595,7 +596,11 @@ export function createEmitter(): StringEmitter {
     const isInput = name === "input";
     const tail = isInput ? [] : attrs.slice(lastSpread + 1);
     const head = isInput ? attrs : attrs.slice(0, lastSpread + 1);
-    for (const attr of tail) attribute(attr, name);
+    for (const attr of tail) {
+      if (isTextarea && attr.kind !== "spread" && attr.name === "value") {
+        push(`__mxTa = ${attributeValueCode(attr)};`);
+      } else attribute(attr, name);
+    }
     const written = tail.flatMap((attr) =>
       attr.kind === "spread" ? [] : [attr.name],
     );
@@ -611,6 +616,11 @@ export function createEmitter(): StringEmitter {
       const parts = head.map((attr) => {
         if (attr.kind === "spread") return `...${attr.value.code}`;
         const key = JSON.stringify(attr.name);
+        // A textarea's `value` is its content, not an attribute: pass the raw
+        // value through the merge so a later spread can still override it.
+        if (isTextarea && attr.name === "value") {
+          return `...{ ${key}: ${attributeValueCode(attr)} }`;
+        }
         if (attr.kind === "boolean" || attr.kind === "static") {
           return `...{ ${key}: { [__mxRaw]: () => ${attributeText(attr, name)} } }`;
         }
@@ -639,6 +649,9 @@ export function createEmitter(): StringEmitter {
       push(
         'if (__mxValue !== null && typeof __mxValue === "object" && __mxRaw in __mxValue) { __mxOut += __mxValue[__mxRaw](); continue; }',
       );
+    }
+    if (isTextarea) {
+      push('if (__mxKey === "value") { __mxTa = __mxValue; continue; }');
     }
     push(
       "if (__mxValue === false || __mxValue === null || __mxValue === undefined) continue;",
@@ -734,6 +747,66 @@ export function createEmitter(): StringEmitter {
     return { parts, named, spreads };
   };
 
+  /** The JS value a (non-spread) attribute carries, for `<textarea value>`. */
+  const attributeValueCode = (
+    attr: Exclude<Attr, { kind: "spread" }>,
+  ): string => {
+    if (attr.kind === "boolean") return "true";
+    if (attr.kind === "static") return quote(attr.value);
+    if (attr.kind === "event") {
+      return fail(
+        `\`${attr.name}\` is an event handler and requires a runtime; @mxlang/html renders once to a string`,
+        attr,
+      );
+    }
+    return attr.value.code;
+  };
+
+  /**
+   * `<textarea>` renders `value` as its content, as Marko does: escaped,
+   * `null`/`undefined`/`false`/`true` as nothing, and a leading newline doubled
+   * (the HTML parser drops the first one). A spread's `value` is content too,
+   * but a body wins over it. An explicit `value` together with a body is the
+   * compile error Marko raises.
+   */
+  const textarea = (node: Extract<IrNode, { kind: "Element" }>): void => {
+    const hasSpread = node.attrs.some((attr) => attr.kind === "spread");
+    const explicit = node.attrs.find(
+      (attr): attr is Exclude<Attr, { kind: "spread" }> =>
+        attr.kind !== "spread" && attr.name === "value",
+    );
+    if (explicit && node.children.length > 0) {
+      fail(
+        "A textarea cannot have both a value attribute and body content.",
+        explicit,
+      );
+    }
+    if (hasSpread) {
+      push("{");
+      state.indent++;
+      push("let __mxTa;");
+      literal("<textarea");
+      elementAttributes("textarea", node.attrs);
+      literal(">");
+      if (node.children.length > 0) drive(emitter, node.children);
+      else push("__mxOut += __mxTextareaContent(__mxTa);");
+      literal("</textarea>");
+      state.indent--;
+      push("}");
+      return;
+    }
+    literal("<textarea");
+    elementAttributes(
+      "textarea",
+      node.attrs.filter((attr) => attr !== explicit),
+    );
+    literal(">");
+    if (explicit) {
+      push(`__mxOut += __mxTextareaContent(${attributeValueCode(explicit)});`);
+    } else drive(emitter, node.children);
+    literal("</textarea>");
+  };
+
   const emitter: StringEmitter = {
     state,
 
@@ -748,6 +821,7 @@ export function createEmitter(): StringEmitter {
     },
 
     element(node) {
+      if (node.name === "textarea") return textarea(node);
       literal(`<${node.name}`);
       elementAttributes(node.name, node.attrs);
       literal(">");
