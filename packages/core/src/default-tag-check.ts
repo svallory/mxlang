@@ -1,0 +1,113 @@
+import { buildMarkoLookup } from "./compile.ts";
+import type { Ctx } from "./core.ts";
+import type { CustomTag } from "./custom-tags.ts";
+import type { HostDeclarations } from "./declarations.ts";
+import {
+  type DefaultTagScope,
+  validateDefaultTag,
+} from "./default-tag-validate.ts";
+import {
+  type PolicyLocation,
+  readTargetDefaultTag,
+  type TargetPolicyDiagnostic,
+} from "./host-policy.ts";
+
+/** What one package's `mx.<target>.defaultTag` came to. */
+export interface CheckedDefaultTag {
+  /** The configured name, validated: use it. Absent when unset or rejected. */
+  value?: string;
+  /** The one error, positioned at the `package.json` value, when it was rejected. */
+  diagnostic?: TargetPolicyDiagnostic;
+}
+
+/** A scope, or a function that builds one (it may throw: see below). */
+export type DefaultTagScopeSource = DefaultTagScope | (() => DefaultTagScope);
+
+/**
+ * The diagnostic for `name` written at `at`, or `undefined` when it is a
+ * usable default tag in `scope`. `owner` names where the value is written
+ * when that is not the package's own `mx.<target>.defaultTag`.
+ *
+ * Building the scope may throw (it scans the package, and a malformed
+ * `mx.contracts` throws): the reachability check is then skipped and the name
+ * accepted, because refusing a custom tag the scan could not read would be a
+ * false error, and the tool's own scan already reports the real one.
+ */
+export function defaultTagDiagnostic(
+  name: string,
+  at: PolicyLocation,
+  source: DefaultTagScopeSource,
+  owner?: string,
+): TargetPolicyDiagnostic | undefined {
+  let scope: DefaultTagScope;
+  try {
+    scope = typeof source === "function" ? source() : source;
+  } catch {
+    return undefined;
+  }
+  const reason = validateDefaultTag(name, scope);
+  if (reason === undefined) return undefined;
+  return {
+    code: "invalid-default-tag",
+    severity: "error",
+    file: at.file,
+    message: `invalid \`defaultTag\` value: ${reason}${owner ? ` (${owner})` : ""}`,
+    line: at.line,
+    column: at.column,
+    length: at.length,
+  };
+}
+
+/**
+ * Reads `mx.<target>.defaultTag` for the package that holds `filePath`, then
+ * validates it: the one path every compile entry shares, so none can diverge
+ * from the registry's. A rejected value comes back as the diagnostic and no
+ * value, so the compile falls to the next rung of the ladder. The scope is
+ * built only when the package sets a value.
+ */
+export function checkConfiguredDefaultTag(
+  filePath: string,
+  target: string,
+  options: { scope: DefaultTagScopeSource },
+): CheckedDefaultTag {
+  const config = readTargetDefaultTag(filePath, target);
+  if (config.diagnostic) return { diagnostic: config.diagnostic };
+  if (config.value === undefined || !config.at) return {};
+  const diagnostic = defaultTagDiagnostic(
+    config.value,
+    config.at,
+    options.scope,
+  );
+  return diagnostic ? { diagnostic } : { value: config.value };
+}
+
+/**
+ * The scope a target's own compile gives a `defaultTag`: its package's custom
+ * tags, Marko's lookup for its translator (parse shape, and its elements
+ * through the host's own `isElement`), and the names it lists as built-in.
+ */
+export function defaultTagScopeFor(input: {
+  /** A directory of the package: the lookup is built as seen from there. */
+  dir: string;
+  translator: unknown;
+  customTags?: Readonly<Record<string, CustomTag>>;
+  declarations?: HostDeclarations;
+  builtins?: readonly string[];
+}): DefaultTagScope {
+  const lookup = buildMarkoLookup(input.dir, input.translator);
+  const declarations = input.declarations;
+  const isElement = declarations?.isElement
+    ? (name: string): boolean =>
+        declarations.isElement(name, {
+          lookup,
+          defines: new Set<string>(),
+          imports: new Set<string>(),
+        } as unknown as Ctx)
+    : undefined;
+  return {
+    ...(input.customTags ? { customTags: input.customTags } : {}),
+    ...(lookup ? { lookup } : {}),
+    ...(input.builtins ? { builtins: input.builtins } : {}),
+    ...(isElement ? { isElement } : {}),
+  };
+}

@@ -102,6 +102,13 @@ export type {
   Policy,
 } from "./declarations.ts";
 export {
+  type CheckedDefaultTag,
+  checkConfiguredDefaultTag,
+  type DefaultTagScopeSource,
+  defaultTagDiagnostic,
+  defaultTagScopeFor,
+} from "./default-tag-check.ts";
+export {
   type DefaultTagLookup,
   type DefaultTagScope,
   validateDefaultTag,

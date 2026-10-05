@@ -64,7 +64,9 @@ describe("defaultTag (decision 145)", () => {
     >;
     const error = invalidField(rest);
     expect(error.field).toBe("defaultTag");
-    expect(error.message).toContain('"defaultTag" is missing');
+    expect(error.message).toBe(
+      "`defaultTag` is missing: the tag `<#id>`/`<.class>` stands for on this target, expected a string",
+    );
   });
 
   it.each([
@@ -76,7 +78,9 @@ describe("defaultTag (decision 145)", () => {
   ])("rejects %j", (value, detail) => {
     const error = invalidField(target({ defaultTag: value }));
     expect(error.field).toBe("defaultTag");
-    expect(error.message).toContain(detail);
+    expect(error.message).toBe(
+      `\`defaultTag\` ${detail}: the tag \`<#id>\`/\`<.class>\` stands for on this target, expected a string`,
+    );
   });
 
   it("accepts any non-empty string, naming no tag itself", () => {

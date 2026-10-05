@@ -445,6 +445,21 @@ function requireName(
   return value;
 }
 
+/** `defaultTag` says what it is for, so a third-party author knows what to supply. */
+function validateTargetDefaultTag(value: unknown): void {
+  if (typeof value === "string" && value !== "") return;
+  const found =
+    value === undefined
+      ? "is missing"
+      : value === ""
+        ? "is an empty string"
+        : `is ${describe(value)}`;
+  throw new TargetDescriptorError(
+    "defaultTag",
+    `\`defaultTag\` ${found}: the tag \`<#id>\`/\`<.class>\` stands for on this target, expected a string`,
+  );
+}
+
 function validateFileKind(value: unknown, path: string): void {
   if (!isObject(value)) throw bad(path, value, "an object");
   const segment = requireString(value, "segment", `${path}.segment`);
@@ -558,7 +573,7 @@ export function validateDescriptor(value: unknown): TargetDescriptor {
 
   requireName(value, "name", "name");
   requireString(value, "packageName", "packageName");
-  requireString(value, "defaultTag", "defaultTag");
+  validateTargetDefaultTag(value.defaultTag);
 
   if (value.legacyHostValues !== undefined)
     validateLegacyHostValues(value.legacyHostValues);

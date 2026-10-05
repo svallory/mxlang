@@ -14,6 +14,14 @@ export interface DefaultTagScope {
   lookup?: DefaultTagLookup;
   /** Names the target itself provides without a taglib entry. */
   builtins?: readonly string[];
+  /**
+   * Whether a lookup tag is an element of the target. Marko's lookup also
+   * holds core and translator tags (plain-parsing, but no target's element);
+   * without this a lookup tag is reachable by being in the lookup. A target
+   * whose elements are not Marko's (data) answers `false`: the lookup then
+   * answers parse-shape questions only.
+   */
+  isElement?: (name: string) => boolean;
 }
 
 interface ParseShape {
@@ -29,7 +37,7 @@ interface ParseShape {
  * continues "invalid `defaultTag` value: ".
  *
  * A `defaultTag` must be a tag reachable from the package (a custom tag, a
- * tag of the target's Marko lookup, or a name the target lists as built-in)
+ * element of the target in its Marko lookup, or a name the target lists as built-in)
  * and must parse as a plain tag. Marko resolved the shorthand's parse options
  * for the placeholder name it wrote, so a void, text, whitespace-preserving,
  * statement or control-flow tag would be parsed under the wrong rules.
@@ -49,11 +57,16 @@ export function validateDefaultTag(
   const known = Object.hasOwn(Object.prototype, name)
     ? undefined
     : scope.lookup?.getTag(name);
-  if (known)
-    return shapeReason(
+  if (known) {
+    const shape = shapeReason(
       name,
       (known as { parseOptions?: unknown }).parseOptions,
     );
+    if (shape !== undefined) return shape;
+    if (!scope.isElement || scope.isElement(name)) return undefined;
+    if (scope.builtins?.includes(name)) return undefined;
+    return `\`<${name}>\` is not an element of this target`;
+  }
   if (scope.builtins?.includes(name)) return undefined;
   return `\`<${name}>\` is not a tag reachable from this package`;
 }

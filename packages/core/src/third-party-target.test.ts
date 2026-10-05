@@ -226,7 +226,7 @@ describe("failures are positioned errors with no fallback (§4.3, OQ2 c)", () =>
         severity: "error",
       });
       expect(diagnostics[0]?.message).toContain(
-        '"defaultTag" is missing, expected a string',
+        "`defaultTag` is missing: the tag `<#id>`/`<.class>` stands for on this target, expected a string",
       );
     },
   );

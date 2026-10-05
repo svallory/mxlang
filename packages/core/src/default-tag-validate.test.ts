@@ -90,3 +90,50 @@ describe("validateDefaultTag", () => {
     expect(validateDefaultTag("y", {})).toContain("not a tag reachable");
   });
 });
+
+describe("validateDefaultTag: only elements of the target are built-ins", () => {
+  // Marko's html lookup also holds core and translator tags (await, try,
+  // define, effect): plain-parsing, but not elements of any target.
+  const mixed = lookupOf({
+    div: { html: true } as never,
+    await: undefined,
+    try: undefined,
+    define: undefined,
+    effect: undefined,
+  });
+  const isElement = (name: string) => name === "div";
+
+  it("accepts an element and rejects a core tag the lookup also holds", () => {
+    const scope = { lookup: mixed, isElement };
+    expect(validateDefaultTag("div", scope)).toBeUndefined();
+    for (const name of ["await", "try", "define", "effect"]) {
+      expect(validateDefaultTag(name, scope)).toBe(
+        `\`<${name}>\` is not an element of this target`,
+      );
+    }
+  });
+
+  it("without a predicate every lookup tag stays reachable", () => {
+    expect(validateDefaultTag("await", { lookup: mixed })).toBeUndefined();
+  });
+
+  it("a target with no elements: reachable means built-ins plus custom tags", () => {
+    const scope = {
+      lookup: mixed,
+      isElement: () => false,
+      builtins: ["object"],
+      customTags: { item: {} },
+    };
+    expect(validateDefaultTag("object", scope)).toBeUndefined();
+    expect(validateDefaultTag("item", scope)).toBeUndefined();
+    for (const name of ["div", "section", "pre", "input"]) {
+      expect(validateDefaultTag(name, scope)).toContain("not");
+    }
+  });
+
+  it("a parse-shape reason outranks the element answer", () => {
+    expect(
+      validateDefaultTag("input", { lookup, isElement: () => false }),
+    ).toBe("`<input>` is a void tag, not a plain tag");
+  });
+});
