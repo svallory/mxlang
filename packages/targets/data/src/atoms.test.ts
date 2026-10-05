@@ -216,7 +216,8 @@ describe("Mesh's syntax-v3 lines", () => {
       expect(result.diagnostics).toEqual([]);
       const tag = tags(ok(source).children).find((t) => t.name !== "x")!;
       const attrs = tag.attrs.map(
-        (a) => `${a.name}=${shape(a).split("=").slice(1).join("=")}`,
+        (a) =>
+          `${"name" in a ? a.name : a.kind}=${shape(a).split("=").slice(1).join("=")}`,
       );
       expect(`${tag.name} ${attrs.join(" ")}`.replace(/=$/, "")).toBe(line);
     },
