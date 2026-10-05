@@ -361,5 +361,5 @@ tag's attributes should instead select an explicit array item. Do not remove
 passes them through.
 
 See [Attribute tags and tag params](/language/attribute-tags-and-params/) for
-the syntax overview and [Errors](/language/errors/#attribute-tag-errors) for
+the syntax overview and [Errors](/language/errors/#errors-attribute-tag-errors) for
 the complete diagnostic catalog.
