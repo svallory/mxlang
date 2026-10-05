@@ -11,8 +11,7 @@ description: "How a parent contract accepts unknown child tag names, validates t
 
 What happens to a tag name nobody declared:
 
-- On the HTML-emitting targets, Marko's rule: a name that is neither a custom tag nor a builtin is a native element (`<foo>` renders `<foo>`; dashed names are custom elements). Never an error.
-- On the data target, `unknownTags: "allow"` (the library default) passes it through with no contract; `"reject"` (what `mx-tsc` uses) is a positioned error with a suggestion. Independently, a parent whose `children` record is closed rejects it (E2).
+- An unknown tag that matches no wildcard entry keeps that target's existing behaviour (decision 151 ruling 7): an error on html and astro-html, a native element on the JSX hosts, Solid and Angular, an error on data. Independently, a parent whose `children` record is closed rejects it (E2). On data, `unknownTags: "allow"` (the library default) passes an unknown tag through with no contract and `"reject"` (what `mx-tsc` uses) is a positioned error with a suggestion.
 
 A vocabulary often wants the middle ground: "any child name is fine here, and every one of them is an *attribute*". Writing
 
@@ -45,7 +44,7 @@ children: {
 - **The child keeps its authored tag name.** `<title>` is the tag `title` in the tree, checked like `attribute`. Only `<:title>` (ADR 146) produces `<attribute name="title">`.
 - In the IR the tag's `name` is the resolved (canonical) contract tag and a new `alias` field carries the authored spelling, its span, and the pattern's named capture groups. Every existing consumer keys on `name`; the data tree exposes both (`tag: "title"`, `contract: "attribute"`).
 - Explicit entries win over `"*"`. With a `"*"` present, matched children are not "unknown" for `unknownTags: "reject"`.
-- "Unknown" is target-neutral: no builtin, no custom tag, no sidecar or `mx.contracts` entry. On an HTML-emitting target the wildcard can only fire inside a contract parent, so native elements outside one are untouched.
+- "Unknown" is target-neutral (decision 147 addendum 1): no built-in of the target, no registered custom tag, no entry in the parent's contract. Inside a contract parent the contract decides: `children["*"]` matches a lowercase child (`title`, `div`) on the JSX hosts, Solid and Angular exactly as on html and data. The host's native-element fallback applies only outside a contract parent. A target's built-ins (Marko core tags such as `let`, `const`, `script`, `style` on the html-family targets) are never matched; the target's own taglib lookup answers what they are, and core keeps no list.
 - Guard: a wildcard child whose name is within did-you-mean distance of an explicit child of the same parent gets a warning (an error under `mx-tsc`'s strict defaults).
 - Registration errors: invalid regex; `contract` naming an unreachable tag; a reference the resolver cannot terminate.
 
