@@ -405,13 +405,16 @@ describe("a host override reaches the compile through defaultTagFor", () => {
     const descriptor = lookupFor(resolution.policy).target(
       resolution.policy.target,
     );
-    const compile = (): string =>
-      (
-        descriptor?.load?.(core).compileModule("", file, {
+    const compile = (): string => {
+      const load = descriptor?.load;
+      if (!load) throw new Error("fixture has no load");
+      return (
+        load(core).compileModule("", file, {
           defaultTag: defaultTagFor(file, resolution.policy),
           targets: lookupFor(resolution.policy),
         }) as { code: string }
       ).code;
+    };
     return { file, resolution, compile };
   };
 

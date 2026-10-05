@@ -2,8 +2,10 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    // `src/parity.test.ts` reads sibling packages' sources by relative path.
-    "rootDir": "..",
+    // `src/parity.test.ts` reads sibling packages' sources by relative path,
+    // and `src/default-tag.test.ts` the shared fake target packages from
+    // /test-fixtures.
+    "rootDir": "../..",
     "types": ["node"],
     "allowImportingTsExtensions": true
   },
