@@ -682,8 +682,16 @@ const TEXTAREA_CONTENT = `function __mxTextareaContent(__mxValue: unknown): stri
 }`;
 
 // Marko 6.3.51's `_escape_comment` / `_unescaped`: falsy renders nothing except
-// `0`, and only `>` is escaped (not at all for `$!{}`).
+// `0`, only `>` is escaped (not at all for `$!{}`), and a value that renders
+// as `[object X]` throws, as Marko's debug build does.
 const ESCAPE_COMMENT = `function __mxEscapeComment(__mxValue, __mxEscaped) {
+  if (typeof __mxValue === "object" && __mxValue !== null) {
+    let __mxCoerced;
+    try { __mxCoerced = \`\${__mxValue}\`; } catch { __mxCoerced = "[object Object]"; }
+    if (/^\\[object \\w+\\]$/.test(__mxCoerced)) {
+      throw new Error("Text content cannot be " + (__mxCoerced === "[object Object]" ? "a plain object (it would render as \`[object Object]\`)" : "a value that renders as \`" + __mxCoerced + "\`") + ".");
+    }
+  }
   const __mxText = __mxValue ? String(__mxValue) : __mxValue === 0 ? "0" : "";
   return __mxEscaped ? __mxText.replace(/>/g, "&gt;") : __mxText;
 }`;
