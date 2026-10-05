@@ -190,7 +190,13 @@ async function expectPluginLoaded(
     // Skipped plugin: TS2307 "Cannot find module './comp.mx'". Loaded: the
     // import resolves and types, so the misuse is the only error.
     expect(diagnostics.map((d) => d.code)).toEqual([2322]);
-    expect(diagnostics[0]?.text).toContain("(input: Input) => string");
+    // The compiled default export carries its sink entry as `Comp.render`
+    // (decision 155), so TypeScript names the type `typeof Comp` rather than
+    // a bare `(input: Input) => string`. Either way it is the real compiled
+    // type: a skipped plugin would have reported TS2307 instead.
+    expect(diagnostics[0]?.text).toContain(
+      "Type 'typeof Comp' is not assignable to type 'number'",
+    );
   } finally {
     server.kill();
   }
