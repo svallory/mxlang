@@ -10,6 +10,8 @@
 
 - **Changed (react-region, decision 154):** the Bun loader declines `.react.mx` (React's region file kind) as it declines `.solid.mx` and `.astro.mx`: such a file is no longer translated as a whole-file `.mx`.
 
+- **Changed (preact-region, decision 154):** the Bun loader declines `.preact.mx` (Preact's region file kind) as it declines `.solid.mx`, `.astro.mx` and `.react.mx`: such a file is no longer translated as a whole-file `.mx`.
+
 - **Changed (bridge-host, decision 154):** the Bun loader's filter is built from its lookup: it declines every host module file kind the lookup registers plus Solid's and Astro's (`mxFilter`, exported for tests); with the package's own lookup it is the same filter as before.
 
 - **Fix (html-comment-escape-falsy, decision 149):** a `<html-comment>` placeholder that is `false`, `null`, `undefined` or `""` renders nothing (it rendered the text `false`), `0` is kept, `true` renders `true`, and a comment with placeholders and no static text that all render empty is `<!-- -->` (Marko's `|| " "` fallback). `$!{}` leaves `>` unescaped, as Marko's `_unescaped` does. Locked by the `html-comment-falsy` oracle fixture.

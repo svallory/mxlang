@@ -1,5 +1,7 @@
 # @mxlang/hono
 
+- **Changed (preact-region, decision 154):** the Bun loader declines `.preact.mx` (Preact's region file kind), as `@mxlang/html`'s does.
+
 - **Changed (react-region, decision 154):** the Bun loader declines `.react.mx` (React's region file kind), as `@mxlang/html`'s does.
 
 - **Changed (bridge-host, decision 154):** the Bun loader's filter is built from its lookup (`mxFilter`), as `@mxlang/html`'s; unchanged with the package's own lookup.

@@ -184,6 +184,23 @@ describe("@mxlang/hono/bun", () => {
     expect(mod.default).toEndWith("Panel.react.mx");
   });
 
+  test("does not claim a .preact.mx path", async () => {
+    Bun.plugin(honoPlugin);
+
+    // A `.preact.mx` is TSX with MX regions (`@mxlang/preact`'s file kind),
+    // compiled by the Vite plugin; claimed here it would be translated as a
+    // whole-file `.mx`. Declined, Bun's default loader returns the path.
+    const dir = mkdtempSync(join(tmpdir(), "mxlang-hono-bun-preact-"));
+    const path = join(dir, "Panel.preact.mx");
+    writeFileSync(
+      path,
+      "export function Panel() {\n  return <p class={ on: true }>x</p>;\n}\n",
+    );
+
+    const mod = await import(path);
+    expect(mod.default).toEndWith("Panel.preact.mx");
+  });
+
   test("does not claim a .solid.mx path", async () => {
     Bun.plugin(honoPlugin);
 
@@ -274,13 +291,16 @@ describe("the onLoad filter (decision 154: hosts claim .<segment>.mx)", () => {
 
   test("with the package's own lookup it is today's filter", () => {
     const filter = mxFilter(honoTargets);
-    expect(filter.source).toBe(String.raw`(?<!\.(?:solid|astro|react))\.mx$`);
+    expect(filter.source).toBe(
+      String.raw`(?<!\.(?:solid|astro|react|preact))\.mx$`,
+    );
     for (const file of ["/a/page.mx", "/a/my.icon.mx", "/a/page.nope.mx"])
       expect(filter.test(file)).toBe(true);
     for (const file of [
       "/a/x.solid.mx",
       "/a/x.astro.mx",
       "/a/x.react.mx",
+      "/a/x.preact.mx",
       "/a/x.fake.mx",
     ])
       expect(filter.test(file)).toBe(file.endsWith(".fake.mx"));
