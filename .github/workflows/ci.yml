@@ -147,6 +147,26 @@ jobs:
       # vendors). `test` and `build` run this themselves; it is a step of its own
       # so a toolchain failure reads as that and not as a docs failure. The docs
       # build fails loudly, never falls back to plain text, when either is missing.
+      # build-ts-grammar.sh clones tree-sitter-typescript at its pinned SHA on a
+      # cold apps/docs/.cache/ts and reuses the cache when its `.pin` matches.
+      # Cache that directory so a warm run does no network clone. The key is
+      # everything the output depends on: the pinned SHA (read from the script,
+      # so bumping the pin is the only way to invalidate by hand), the
+      # tree-sitter-javascript version whose highlights query is concatenated
+      # in, and the tree-sitter-cli version that builds the wasm.
+      - name: TypeScript grammar cache key
+        id: ts-grammar
+        run: |
+          pin="$(sed -n 's/^PIN_SHA="\([0-9a-f]\{40\}\)".*/\1/p' apps/docs/scripts/build-ts-grammar.sh)"
+          js="$(bun -p "require('./apps/docs/package.json').dependencies?.['tree-sitter-javascript'] ?? require('./apps/docs/package.json').devDependencies['tree-sitter-javascript']")"
+          cli="$(bun -p "require('./packages/editors/tree-sitter-mx/package.json').devDependencies['tree-sitter-cli']")"
+          test -n "$pin" -a -n "$js" -a -n "$cli"
+          echo "key=docs-ts-grammar-${pin}-js${js}-cli${cli}" >> "$GITHUB_OUTPUT"
+      # actions/cache v4.2.4
+      - uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+        with:
+          path: apps/docs/.cache/ts
+          key: ${{ steps.ts-grammar.outputs.key }}
       - run: bun run --cwd apps/docs build:wasm
       - run: bun run --cwd apps/docs test
       - run: bun run --cwd apps/docs build
