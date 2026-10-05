@@ -12,7 +12,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import { getCustomTags } from "@mxlang/core";
+import { getCustomTags, scanCached } from "@mxlang/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   configuredDefaultTag,
@@ -137,5 +137,61 @@ describe("configuredDefaultTag (the helper the Bun loader shares)", () => {
   it("is undefined when nothing is configured", () => {
     const { page } = project();
     expect(configuredDefaultTag(page, {}, htmlTargets)).toBeUndefined();
+  });
+});
+
+describe("the contracts' defaultTag, from the paths that scan for themselves (review round 2)", () => {
+  function withContract(value: string) {
+    const dir = mkdtempSync(join(packageRoot, ".mx-default-tag-tmp-"));
+    dirs.push(dir);
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({ mx: { target: "html", contracts: "./contracts.ts" } }),
+    );
+    writeFileSync(
+      join(dir, "contracts.ts"),
+      `export default { "my-list": { defaultTag: "${value}" } };\n`,
+    );
+    writeFileSync(join(dir, "page.mx"), "<my-list><.a>x</></my-list>\n");
+    return join(dir, "page.mx");
+  }
+
+  it("an invalid contract value is the one declaration error, through the loader's channel", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const page = withContract("nope");
+    const scan = scanCached(page, { host: "html", targets: htmlTargets });
+    configuredDefaultTag(page, scan.customTags, htmlTargets, scan.tags);
+    configuredDefaultTag(page, scan.customTags, htmlTargets, scan.tags);
+    const mine = warn.mock.calls
+      .map((c) => String(c[0]))
+      .filter((m) => m.includes("invalid `defaultTag` value"));
+    expect(mine).toHaveLength(1);
+    expect(mine[0]).toContain("contracts.ts:1:1");
+    expect(mine[0]).toContain("`<nope>` is not a tag reachable");
+    expect(mine[0]).toContain("(contract of `<my-list>`)");
+  });
+
+  it("a valid one reports nothing", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const page = withContract("section");
+    const scan = scanCached(page, { host: "html", targets: htmlTargets });
+    configuredDefaultTag(page, scan.customTags, htmlTargets, scan.tags);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("loadMx compiles an invalid `input` contract without emitting <input>, and reports once", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { dir, page } = project();
+    writeFileSync(
+      join(dir, "tags", "my-list.tag.ts"),
+      'export default { defaultTag: "input", transform: (call) => call.content?.children ?? [] };\n',
+    );
+    writeFileSync(join(dir, "page.mx"), "<my-list><.a>x</></my-list>\n");
+    const out = loadMx(page)({});
+    expect(out).not.toContain("<input");
+    expect(out).toContain("<div");
+    expect(
+      warn.mock.calls.filter((c) => String(c[0]).includes("is a void tag")),
+    ).toHaveLength(1);
   });
 });

@@ -1,5 +1,9 @@
 import { dirname } from "node:path";
 import { buildMarkoLookup } from "./compile.ts";
+import {
+  type ContractDefaultTagInput,
+  contractDefaultTagDiagnostics,
+} from "./contract-default-tag.ts";
 import type { Ctx } from "./core.ts";
 import type { CustomTag } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
@@ -88,6 +92,14 @@ export interface OwnDefaultTagInput {
   translator: unknown;
   declarations?: HostDeclarations;
   builtins?: readonly string[];
+  /**
+   * The scan's tags, when this entry scanned for itself: every contract
+   * `defaultTag` is then checked too (the registry's registration check) and
+   * reported through `report`, at the declaration.
+   */
+  tags?: ContractDefaultTagInput["tags"];
+  /** The host's name, for the refusal when its declarations forbid the contract rung. */
+  hostName?: string;
   /** Where a rejected value is reported; once per call, positioned in the `package.json`. */
   report: (diagnostic: TargetPolicyDiagnostic) => void;
 }
@@ -104,17 +116,35 @@ export function ownDefaultTag(
   input: OwnDefaultTagInput,
 ): string | undefined {
   const { value, diagnostic } = checkConfiguredDefaultTag(file, input.target, {
-    scope: () =>
-      defaultTagScopeFor({
-        dir: dirname(file),
-        translator: input.translator,
-        ...(input.customTags ? { customTags: input.customTags } : {}),
-        ...(input.declarations ? { declarations: input.declarations } : {}),
-        ...(input.builtins ? { builtins: input.builtins } : {}),
-      }),
+    scope: () => ownScope(file, input),
   });
   if (diagnostic) input.report(diagnostic);
+  if (input.tags) {
+    const scope = ownScope(file, input);
+    for (const found of contractDefaultTagDiagnostics({
+      tags: input.tags,
+      customTags: scope.customTags ?? {},
+      scope,
+      host: {
+        name: input.hostName ?? input.target,
+        ...(input.declarations?.allowContractDefaultTag === false
+          ? { allowContractDefaultTag: false }
+          : {}),
+      },
+    }))
+      input.report(found);
+  }
   return value;
+}
+
+function ownScope(file: string, input: OwnDefaultTagInput): DefaultTagScope {
+  return buildScope({
+    dir: dirname(file),
+    translator: input.translator,
+    ...(input.customTags ? { customTags: input.customTags } : {}),
+    ...(input.declarations ? { declarations: input.declarations } : {}),
+    ...(input.builtins ? { builtins: input.builtins } : {}),
+  });
 }
 
 /**

@@ -6,6 +6,7 @@
  * and the diagnostic goes to the caller's own channel.
  */
 import {
+  type ContractDefaultTagInput,
   type CustomTag,
   createTranslator,
   ownDefaultTag,
@@ -19,9 +20,12 @@ export function angularDefaultTag(
   customTags: Readonly<Record<string, CustomTag>> | undefined,
   targets: TargetLookup,
   report: (diagnostic: TargetPolicyDiagnostic) => void,
+  tags?: ContractDefaultTagInput["tags"],
 ): string | undefined {
   return ownDefaultTag(file, {
     target: "angular-template",
+    ...(tags ? { tags } : {}),
+    hostName: "angular",
     ...(customTags ? { customTags } : {}),
     translator: createTranslator({
       taglibs: [],

@@ -59,11 +59,11 @@ async function render(file: string, input: unknown): Promise<string> {
  * calls, as Marko does, so nothing is added here.
  */
 function compileWithTags(file: string) {
-  const { customTags } = scanCached(file, {
+  const { customTags, tags } = scanCached(file, {
     host: "html",
     targets: htmlTargets,
   });
-  const defaultTag = configuredDefaultTag(file, customTags, htmlTargets);
+  const defaultTag = configuredDefaultTag(file, customTags, htmlTargets, tags);
   return compileFile(file, {
     customTags,
     ...(defaultTag === undefined ? {} : { defaultTag }),

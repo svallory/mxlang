@@ -250,3 +250,40 @@ describe("the virtual reader reads the package's validated defaultTag (decision 
     expect(own[0]?.message).toContain("`<input>` is a void tag");
   });
 });
+
+describe("the contracts' defaultTag from the Angular paths that scan for themselves (review round 2)", () => {
+  const withBadContract = (value: string) => {
+    const made = project({
+      mx: { host: "angular", contracts: "./contracts.ts" },
+    });
+    made.put(
+      "contracts.ts",
+      `export default { "my-list": { defaultTag: "${value}" } };\n`,
+    );
+    const tag = made.put("tags/my-card.mx", "<div>hi</div>");
+    return { ...made, tag };
+  };
+
+  it("the virtual reader reports an invalid value once, at the contracts module, through its warning sink", () => {
+    const { dir, tag } = withBadContract("nope");
+    const warnings: core.MxWarning[] = [];
+    const read = createVirtualTagModuleReader(dir, { warnings });
+    read(tag);
+    read(tag);
+    const own = warnings.filter((w) =>
+      w.message.includes("invalid `defaultTag` value"),
+    );
+    expect(own).toHaveLength(1);
+    expect(own[0]?.file).toBe(join(dir, "contracts.ts"));
+    expect(own[0]?.message).toContain("`<nope>` is not a tag reachable");
+  });
+
+  it("a valid value reports nothing", () => {
+    const { dir, tag } = withBadContract("section");
+    const warnings: core.MxWarning[] = [];
+    createVirtualTagModuleReader(dir, { warnings })(tag);
+    expect(warnings.filter((w) => w.message.includes("defaultTag"))).toEqual(
+      [],
+    );
+  });
+});

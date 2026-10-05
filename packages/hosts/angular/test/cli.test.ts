@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -1696,5 +1697,28 @@ describe("build: the package's defaultTag (decision 145)", () => {
       file: join(projectDir, "package.json"),
       line: 1,
     });
+  });
+});
+
+describe("build: a contract's invalid defaultTag (decision 145, review round 2)", () => {
+  it("is the one declaration error, through the build's warnings, once for many files", () => {
+    writeProject({
+      "package.json": JSON.stringify({
+        mx: {
+          host: "angular",
+          contracts: "./contracts.ts",
+          angular: { include: ["src/**/*.mx"] },
+        },
+      }),
+      "contracts.ts": 'export default { "my-list": { defaultTag: "nope" } };\n',
+      "src/a.mx": "<div>a</div>",
+      "src/b.mx": "<div>b</div>",
+    });
+    const result = build(projectDir);
+    const own = result.warnings.filter((w) =>
+      w.message.includes("invalid `defaultTag` value"),
+    );
+    expect(own).toHaveLength(1);
+    expect(own[0]?.file).toBe(join(realpathSync(projectDir), "contracts.ts"));
   });
 });

@@ -387,7 +387,18 @@ function contractDiagnostics(
       declarations: descriptor.declarations?.default,
       builtins: builtinsOf(descriptor),
     }),
-    ...(descriptor.host ? { host: descriptor.host } : {}),
+    ...(descriptor.host
+      ? {
+          host: {
+            name: descriptor.host.name,
+            // The descriptor and the host's declarations may each forbid it.
+            allowContractDefaultTag:
+              descriptor.host.allowContractDefaultTag !== false &&
+              descriptor.declarations?.default.allowContractDefaultTag !==
+                false,
+          },
+        }
+      : {}),
   });
 }
 

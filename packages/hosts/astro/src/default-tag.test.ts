@@ -1,7 +1,9 @@
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { scanCached } from "@mxlang/core";
 import { afterEach, describe, expect, it } from "vitest";
+import { astroTargets } from "./astro-template.ts";
 import { astroDefaultTag } from "./default-tag.ts";
 
 const dirs: string[] = [];
@@ -49,5 +51,41 @@ describe("the Astro template Vite plugin's defaultTag", () => {
     expect(astroDefaultTag(file("my-card"), { "my-card": {} }, () => {})).toBe(
       "my-card",
     );
+  });
+});
+
+describe("the contracts' defaultTag from the astro path that scans for itself (review round 2)", () => {
+  function withContract(value: string): string {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-astro-contract-")));
+    dirs.push(dir);
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({ mx: { contracts: "./contracts.ts" } }),
+    );
+    writeFileSync(
+      join(dir, "contracts.ts"),
+      `export default { "my-list": { defaultTag: "${value}" } };\n`,
+    );
+    return join(dir, "a.astro.mx");
+  }
+  const scanOf = (file: string) =>
+    scanCached(file, { host: "astro", targets: astroTargets });
+
+  it("an invalid value is reported once, at the contracts module", () => {
+    const file = withContract("nope");
+    const reports: Array<{ file: string; message: string }> = [];
+    const scan = scanOf(file);
+    astroDefaultTag(file, scan.customTags, (d) => reports.push(d), scan.tags);
+    expect(reports).toHaveLength(1);
+    expect(reports[0]?.file).toBe(join(file, "..", "contracts.ts"));
+    expect(reports[0]?.message).toContain("`<nope>` is not a tag reachable");
+  });
+
+  it("a valid value reports nothing", () => {
+    const file = withContract("section");
+    const reports: unknown[] = [];
+    const scan = scanOf(file);
+    astroDefaultTag(file, scan.customTags, (d) => reports.push(d), scan.tags);
+    expect(reports).toEqual([]);
   });
 });

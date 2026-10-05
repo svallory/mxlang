@@ -52,10 +52,14 @@ export function createHonoBunPlugin(
           reportedScanDiagnostics,
           (d) => console.warn(`@mxlang/hono: ${d.file}: ${d.message}`),
         );
-        const defaultTag = honoDefaultTag(path, scan.customTags, (d) =>
-          console.warn(
-            `@mxlang/hono: ${d.file}:${d.line}:${d.column + 1}: ${d.message}`,
-          ),
+        const defaultTag = honoDefaultTag(
+          path,
+          scan.customTags,
+          (d) =>
+            console.warn(
+              `@mxlang/hono: ${d.file}:${d.line}:${d.column + 1}: ${d.message}`,
+            ),
+          scan.tags,
         );
         const { code } = compileHonoMx(source, path, {
           customTags: scan.customTags,

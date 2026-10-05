@@ -91,17 +91,23 @@ export function createVirtualTagModuleReader(
     // cache entry: an edited config must not serve the old module.
     const defaultTag =
       options.defaultTag ??
-      angularDefaultTag(template, customTags, targets, (diagnostic) => {
-        const key = `${diagnostic.file}\0${diagnostic.line}\0${diagnostic.message}`;
-        if (reported.has(key)) return;
-        reported.add(key);
-        options.warnings?.push({
-          file: diagnostic.file,
-          line: diagnostic.line,
-          column: diagnostic.column,
-          message: diagnostic.message,
-        });
-      });
+      angularDefaultTag(
+        template,
+        customTags,
+        targets,
+        (diagnostic) => {
+          const key = `${diagnostic.file}\0${diagnostic.line}\0${diagnostic.message}`;
+          if (reported.has(key)) return;
+          reported.add(key);
+          options.warnings?.push({
+            file: diagnostic.file,
+            line: diagnostic.line,
+            column: diagnostic.column,
+            message: diagnostic.message,
+          });
+        },
+        scan.tags,
+      );
     const previous = compiled.get(template);
     if (previous?.source === text && previous.defaultTag === defaultTag)
       return previous.result;

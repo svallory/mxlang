@@ -178,14 +178,20 @@ export function mxTemplates(
     file: string,
     tags: Record<string, CustomTag> | undefined,
   ): { defaultTag?: string } => {
-    const value = astroDefaultTag(file, tags, (d) => {
-      const key = `${d.file}\0${d.line}\0${d.message}`;
-      if (reportedScanDiagnostics.has(key)) return;
-      reportedScanDiagnostics.add(key);
-      console.warn(
-        `@mxlang/astro: ${d.file}:${d.line}:${d.column + 1}: ${d.message}`,
-      );
-    });
+    const value = astroDefaultTag(
+      file,
+      tags,
+      (d) => {
+        const key = `${d.file}\0${d.line}\0${d.message}`;
+        if (reportedScanDiagnostics.has(key)) return;
+        reportedScanDiagnostics.add(key);
+        console.warn(
+          `@mxlang/astro: ${d.file}:${d.line}:${d.column + 1}: ${d.message}`,
+        );
+      },
+      // The contracts are the scan's, not the caller-supplied map's.
+      scanCached(file, { host: "astro", targets }).tags,
+    );
     return value === undefined ? {} : { defaultTag: value };
   };
   const tagsFor = (file: string): Record<string, CustomTag> | undefined => {

@@ -128,6 +128,7 @@ import {
   isMarkoOrMxSpecifier,
   isTranslateError,
   type MxWarning,
+  scanCached,
   type TargetLookup,
   TranslateError,
 } from "@mxlang/core";
@@ -500,6 +501,12 @@ function rewriteImports(
  * `.mx` files would otherwise recurse forever before either finishes
  * compiling once.
  */
+/** `loadMx`'s own scan: the package's validated defaultTag, contracts checked too. */
+function scanOwn(abs: string, targets: TargetLookup): string | undefined {
+  const scanned = scanCached(abs, { host: "html", targets });
+  return configuredDefaultTag(abs, scanned.customTags, targets, scanned.tags);
+}
+
 function nestedKey(path: string, defaultTag: string | undefined): string {
   return `${path}\u0000${defaultTag ?? ""}`;
 }
@@ -520,10 +527,12 @@ function loadNestedMx(
 
   // The package's defaultTag shapes the compile, so it is part of the key: a
   // changed `mx.html.defaultTag` must not reuse the module the old one made.
+  const scanned = scanCached(path, { host: "html", targets });
   const defaultTag = configuredDefaultTag(
     path,
-    getCustomTags(path, { host: "html", targets }),
+    scanned.customTags,
     targets,
+    scanned.tags,
   );
   const cacheKey = nestedKey(path, defaultTag);
   const cached = pathCache.get(cacheKey);
@@ -698,11 +707,7 @@ export function loadMx<I = Record<string, unknown>>(
   // the key: an edited config recompiles. An explicit option wins over it.
   const configured =
     options.defaultTag === undefined && existsSync(abs)
-      ? configuredDefaultTag(
-          abs,
-          getCustomTags(abs, { host: "html", targets }),
-          targets,
-        )
+      ? scanOwn(abs, targets)
       : undefined;
   const effective: CompileOptions =
     configured === undefined ? options : { ...options, defaultTag: configured };

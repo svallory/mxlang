@@ -681,3 +681,43 @@ describe("a contract's defaultTag is checked at registration, at the declaration
     expect(found[1]?.message).toContain("fake-forbid-host");
   });
 });
+
+describe("a host that forbids the contract rung, through a compile (review round 2)", () => {
+  afterEach(() => cleanupProjects());
+
+  it("never resolves the unnamed tag through the contract; the next rung answers, and registration still errors", () => {
+    const proj = fakeProject({
+      mx: { target: specifier("forbids-contract") },
+      install: ["forbids-contract"],
+    });
+    mkdirSync(proj.path("tags"));
+    writeFileSync(
+      proj.path("tags/my-list.tag.ts"),
+      'export default { defaultTag: "div", transform: (call) => call.content?.children ?? [] };\n',
+    );
+    const file = proj.path("a.mx");
+    const resolution = resolveTargetPolicyDetailed(file);
+    const registration = resolution.diagnostics.filter(
+      (d) => d.code === "invalid-default-tag",
+    );
+    expect(registration).toHaveLength(1);
+    expect(registration[0]?.message).toContain("fake-forbid-host");
+
+    const descriptor = lookupFor(resolution.policy).target(
+      resolution.policy.target,
+    );
+    const customTags = getCustomTags(file, {
+      targets: lookupFor(resolution.policy),
+    });
+    // The contract says `div`; the config says `main`. A forbidding host
+    // answers the config, never the contract.
+    const out = (
+      descriptor?.load?.(core) as { compileModule: Function }
+    ).compileModule("<my-list><.a>x</></my-list>", file, {
+      customTags,
+      defaultTag: "main",
+      targets: lookupFor(resolution.policy),
+    }) as { code: string };
+    expect(out.code).toBe("elements:main");
+  });
+});

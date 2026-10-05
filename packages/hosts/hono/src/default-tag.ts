@@ -5,6 +5,7 @@
  * built-in answers, and one warning names the `package.json` position.
  */
 import {
+  type ContractDefaultTagInput,
   type CustomTag,
   ownDefaultTag,
   type TargetPolicyDiagnostic,
@@ -17,9 +18,12 @@ export function honoDefaultTag(
   file: string,
   customTags: Readonly<Record<string, CustomTag>> | undefined,
   report: (diagnostic: TargetPolicyDiagnostic) => void,
+  tags?: ContractDefaultTagInput["tags"],
 ): string | undefined {
   return ownDefaultTag(file, {
     target: "hono-jsx",
+    ...(tags ? { tags } : {}),
+    hostName: "hono",
     ...(customTags ? { customTags } : {}),
     translator,
     declarations: honoDeclarations,

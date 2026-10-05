@@ -64,7 +64,12 @@ export function createHtmlBunPlugin(
           reportedScanDiagnostics,
           (d) => console.warn(`@mxlang/html: ${d.file}: ${d.message}`),
         );
-        const defaultTag = configuredDefaultTag(path, scan.customTags, targets);
+        const defaultTag = configuredDefaultTag(
+          path,
+          scan.customTags,
+          targets,
+          scan.tags,
+        );
         const { code } = compile(source, path, {
           customTags: scan.customTags,
           ...(defaultTag === undefined ? {} : { defaultTag }),

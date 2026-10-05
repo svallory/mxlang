@@ -7,6 +7,7 @@
  * package), so it runs the check itself.
  */
 import {
+  type ContractDefaultTagInput,
   type CustomTag,
   ownDefaultTag,
   type TargetPolicyDiagnostic,
@@ -18,9 +19,12 @@ export function astroDefaultTag(
   file: string,
   customTags: Readonly<Record<string, CustomTag>> | undefined,
   report: (diagnostic: TargetPolicyDiagnostic) => void,
+  tags?: ContractDefaultTagInput["tags"],
 ): string | undefined {
   return ownDefaultTag(file, {
     target: "astro-html",
+    ...(tags ? { tags } : {}),
+    hostName: "astro",
     ...(customTags ? { customTags } : {}),
     translator: htmlDescriptor.translator,
     // The target is astro-html, whose declarations are html's: what is an

@@ -307,6 +307,7 @@ function customTagsFor(
         message: d.message,
       });
     },
+    scan.tags,
   );
   return {
     customTags: scan.customTags,

@@ -7,7 +7,12 @@
  * the same check for the tools that reach it; this package cannot (the
  * registry depends on it).
  */
-import { type CustomTag, ownDefaultTag, type TargetLookup } from "@mxlang/core";
+import {
+  type ContractDefaultTagInput,
+  type CustomTag,
+  ownDefaultTag,
+  type TargetLookup,
+} from "@mxlang/core";
 import { createHtmlTranslator } from "./compiler.ts";
 import { DEFAULT_TAG, policy } from "./translate.ts";
 
@@ -23,9 +28,11 @@ export function configuredDefaultTag(
   file: string,
   customTags: Readonly<Record<string, CustomTag>> | undefined,
   targets: TargetLookup,
+  tags?: ContractDefaultTagInput["tags"],
 ): string | undefined {
   return ownDefaultTag(file, {
     target: "html",
+    ...(tags ? { tags } : {}),
     ...(customTags ? { customTags } : {}),
     translator: createHtmlTranslator(targets),
     declarations: policy,
