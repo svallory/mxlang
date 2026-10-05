@@ -12,7 +12,7 @@ description: "Why `:name` in an expression position is a value that represents i
 ADR 146 gave `:name` a meaning in tag position: `<input:email>`, `<input :email>` and `<:email>` set `name="email"`. The same spelling reads naturally somewhere else too: as a value.
 
 ```mx
-<action name="save" accept=["title", "body"]/>
+<policy accept=["title", "body"]/>
 ```
 
 reads as text that must happen to match some declared thing. Written `accept=[:title, :body]` it reads as a reference. Data vocabularies (Mesh's entity files are the first) are full of such references: field names, kinds, modes, flags. Strings carry them today, so a typo is just a different string and an editor cannot tell a name from a sentence.
@@ -30,9 +30,13 @@ Four ways to give the reference reading a spelling were weighed (see Alternative
 | attribute value | `mode=:strict` |
 | placeholder | `${:strict}` |
 | tag arguments | `<if(kind === :primary)>` |
+| function argument, comparison, spread | `f(:a)`, `x === :a`, `...{ k: :a }` |
+| attribute-tag value | `<@opt=:a/>` |
 | inside an array or object in any of the above | `accept=[:title, :body]` |
 
-An atom is never read inside `static`, `import` or script blocks, which stay plain TypeScript, and never inside strings, template literals, regular expressions or comments. `"a :b"` is text, `/:b/` is a regex.
+An atom is never read inside `static`, `import` or script blocks, which stay plain TypeScript, and never inside strings, template literal text (the `${}` parts are scanned), regular expressions or comments. `"a :b"` is text, `/:b/` is a regex.
+
+**Operations on an atom.** An atom is a name, not a value to operate on. Member access, calls and unary operators on it (`:a.length`, `:a(1)`, `-:a`) are positioned errors. Comparison (`x === :a`), array and object elements, spread arguments, template placeholders, function arguments and attribute-tag values are allowed (settled by the lead on 2026-10-05; see Open questions).
 
 A name matches `[A-Za-z_$][\w$]*(-[\w$]+)*`: `:title`, `:rename-all`, `:primary-key`. This is the 146 sugar token without a trailing dash, so `:a-b` is the atom `a-b`, `:a - b` is subtraction, and a trailing `-` is not part of the name. (Proposed by the parser research; decision 156 says only "names may contain `-`".)
 
@@ -71,8 +75,8 @@ The kinds Mesh refers to: an *attribute* (`accept`, `require`, `sort`, the left 
 
 | # | requirement | status |
 |---|---|---|
-| 1 | **Declare by tag set.** An attribute is declared by any of ten type tags (`uuid`, `string`, `integer`, ...) under `attributes`, and a `belongs-to` under `relationships` also declares an attribute (`listId`, derived, not written). `declares` must attach one kind to many tags | proposed here (not in 156): a kind is declared by a *set* of tags; each tag's contract says `declares: "<kind>"`, so any number of tags declare the same kind. The derived `listId` from `belongs-to` is open question 2 |
-| 2 | **Declare by `id` or by `name`.** `declares.from` accepts `"id"` as well as `"name"` | decided by the lead: `from` is `"id"` or `"name"` (the tag's `#id` sugar or its `name`, including `:name`) |
+| 1 | **Declare by tag set.** An attribute is declared by any of ten type tags (`uuid`, `string`, `integer`, ...) under `attributes`, and a `belongs-to` under `relationships` also declares an attribute (`listId`, derived, not written). `declares` must attach one kind to many tags | proposed here (not in 156): a kind is declared by a *set* of tags; each tag's contract says `declares: { kind: "<kind>", from: "id" | "name" }` (defined here once; `from` is decided by the lead, the `declares` field itself is proposed), so any number of tags declare the same kind. The derived `listId` from `belongs-to` is open question 2 |
+| 2 | **Declare by `id` or by `name`.** `declares.from` accepts `"id"` as well as `"name"` | decided by the lead: `declares.from` is `"id"` or `"name"` (the tag's `#id` sugar or its `name`, including `:name`) |
 | 3 | **Scope.** References resolve within the enclosing `entity`, and declarations sit in a sibling section (`attributes` against `actions`), not in an ancestor of the reference | decided by the lead: the scope of a `ref` is the **enclosing tag's whole subtree**, so sibling sections are in scope |
 | 4 | **Cross-entity references** (`belongs-to=Customer`) | out of scope for the single-file checker. A name that is not declared in the enclosing subtree is checked by the vocabulary's own build step (Mesh checks at model build). Core does not resolve across files |
 | 5 | **Union of kinds.** `load` may name a relationship or a computed field, so one attribute must accept either | proposed here: `ref` takes one kind or a list: `{ type: "atom", ref: ["relationship", "computed"] }`. The name must be declared as one of them. Open question 1 |
@@ -101,7 +105,7 @@ It is an error only if the tag already has a default value. This replaces 146's 
 
 ### 6. Invariants
 
-Everything ADR 146 ships keeps its meaning. This table is the test list for the implementation; the left column is the form, the right is what it means before and after atoms (identical, except the last row). The baseline is main **after decision 146 addendum 4** (branch `name-sugar-default-value`; main itself still has the "sugar takes no value" error in `name-sugar.ts:622`). Measured on main with the parser simulation off and on: 31 of 31 forms give byte-identical `@mxlang/html` output or error text.
+Everything ADR 146 ships keeps its meaning. This table is the test list for the implementation; the left column is the form, the right is what it means before and after atoms (identical, except `x=:b`, `x= :b` and `a ? :b :c`, which are changes). The baseline is main **after decision 146 addendum 4** (branch `name-sugar-default-value`; main itself still has the "sugar takes no value" error in `name-sugar.ts:622`). The 31 of 31 byte-identical run (parser simulation off and on) was measured on main *without* addendum 4, so the addendum-4 rows below (sugar plus `value=x`, sugar plus `value=function`) are **unmeasured**; they are re-measured in Phase B.
 
 | form | meaning, before and after |
 |---|---|
@@ -110,8 +114,8 @@ Everything ADR 146 ships keeps its meaning. This table is the test list for the 
 | `<kind :atom>` | tag `kind` with `name="atom"` |
 | `<kind#id:atom.class>` and every order of the three tag-adjacent sugars (`<a.c:b>`, `<a#d:b.c>`, `<:b.c>`) | id, class and name as written |
 | `#id`, `.class`, `:name` in attribute position (first, or after any attribute) | `id`, `class`, `name` |
-| sugar followed by `=value` (`#id=x`, `:name=x`, `.class=x`) | the sugar plus `value=x` (addendum 4) |
-| sugar followed by `(params) { body }` | the sugar plus `value=function` (addendum 4) |
+| sugar followed by `=value` (`#id=x`, `:name=x`, `.class=x`) | the sugar plus `value=x` (addendum 4; unmeasured) |
+| sugar followed by `(params) { body }` | the sugar plus `value=function` (addendum 4; unmeasured) |
 | a bare `:` (no name) | positioned error: `:` needs a name; write `value:` for Marko's attribute |
 | the default-attribute exemption: `<if=a\n .b>`, `<const/x=items\n .filter()/>` | Marko's meaning; sugar right after a default value is not supported |
 | `class:x`, `style:x`, `value:fn:=x` | Marko's named modifiers, untouched |
@@ -126,7 +130,7 @@ Where a form lands on an atom (`:email` standing alone), the atom is consumed as
 
 ### 7. `::name`
 
-Reserved for a future `Symbol.for("name")` sugar. Decision 156 does not give it a meaning; see Open questions.
+Reserved for a future `Symbol.for("name")` sugar (decision 156.5); the error text is in Grammar.
 
 ## Examples
 
@@ -180,11 +184,11 @@ With atoms:
 
 ## Parser approach
 
-**Proposed, pending lead approval.** Source: `scratch/reports/squad-atoms/parser-approach.md` (option b′), measured by a simulation inside the real `@marko/compiler` 5.42.5 with htmljs-parser 5.15.0 patched.
+**Proposed, pending lead approval.** Source: `scratch/reports/squad-atoms/parser-approach.md` (option b′), measured by a simulation inside the real `@marko/compiler` 5.42.5 with htmljs-parser 5.15.0 patched. Main now pins 5.42.10 / 5.18.0; the simulation is **not** re-run on them here and is re-run on 5.18.0 at the start of Phase B.
 
 Today htmljs-parser passes every atom through intact in every position (attribute value, default attribute, `${}`, tag arguments, concise mode, attribute tags), and Babel rejects every one with "Unexpected token". Babel has no parser plugin API: an unknown plugin name is silently ignored. So atoms are lexed where MX already owns the lexer, the htmljs-parser fork of decision 152:
 
-1. The fork's `EXPRESSION` state lexes atoms in value, placeholder, tag-argument and spread ranges only (never statement tags such as `static`, scriptlets or method bodies, which stay TypeScript errors), using the rule in Grammar. It records each atom's span.
+1. The fork's `EXPRESSION` state lexes atoms in value, placeholder, tag-argument, attribute-argument (`<t x(:a)>`) and spread ranges only (never statement tags such as `static`, scriptlets or method bodies, which stay TypeScript errors), using the rule in Grammar. It records each atom's span.
 2. Its `read()` hands Babel a **same-length numeric stand-in** for each atom (`:a` is `0.`, `:rename-all` is `0.000000000`).
 3. Core turns each stand-in back into a `StringLiteral` with `extra.mxAtom`, after checking that the source character at the node's start is `:` (no authored numeric literal starts with `:`, so the check cannot be forged), and keeps the node's `loc` as the atom span.
 
@@ -197,7 +201,7 @@ Today htmljs-parser passes every atom through intact in every position (attribut
 | (b) | the fork pre-scans and hands Babel a string literal | positions shift by one per preceding atom in the same expression |
 | (c) | core rewrites the source text before Babel | decision 151 rejected core re-scanning attribute source; Marko's code frames would show the stand-in; every entry point must rewrite |
 
-**Measured.** 31 of 31 decision-146 forms produce byte-identical output with the simulation on and off. A corpus check over 523 `.mx`/`.marko` files and 864 expression positions found 0 atoms, so no existing parse changes (the 22 intentional error fixtures stop scanning at their first error). Spans are exact (`[:a, :b]` gives atoms at 8-10 and 12-14), and Babel errors land on the offending column. The `.solid.mx` bridge inherits core and needs nothing.
+**Measured** (on 5.42.5 / 5.15.0, main without addendum 4). 31 of 31 decision-146 forms produce byte-identical output with the simulation on and off. A corpus check over 523 `.mx`/`.marko` files and 864 expression positions found 0 atoms, so no existing parse changes (the 22 intentional error fixtures stop scanning at their first error). Spans are exact (for the source `<div x=[:a, :b]/>`, the atoms are at 8-10 and 12-14), and Babel errors land on the offending column. The `.solid.mx` bridge inherits core and needs nothing.
 
 **The typecheck module.** Core's `expr()` emits the *authored source slice*, not a printed AST, so TypeScript type arguments survive. The virtual code for `x=[:a, :rename-all]` therefore holds `[:a, :rename-all]` verbatim, and atoms leak into TypeScript. Phase B splices `JSON.stringify(name)` at each atom's span through `rewriteReferencesSource` (both the no-bindings fast path and the rewrite path), and adds per-atom sub-mappings (`:a` to `"a"`) in `mappedExpr`, so a TypeScript error on `type=:emial` lands on the atom and offsets do not drift by one per atom.
 
@@ -209,10 +213,10 @@ Today htmljs-parser passes every atom through intact in every position (attribut
 
 Decision 156 does not settle these; they are recorded, not decided. The ref scope (the enclosing tag's whole subtree) and `declares.from` accepting `"id"` and `"name"` are decided and are not listed here. The lexer rule and the name token are proposed in Grammar, so they are no longer open.
 
-Settled by the lead on 2026-10-05, when approving the parser research (recorded here, built in Phase B):
+Settled by the lead on 2026-10-05 alongside the parser research; option (b′) itself stays proposed (recorded here, built in Phase B):
 
 - **Stand-in leak.** Accepted: core is the only supported driver of the fork compiler, and core asserts that no stand-in survives its conversion.
-- **Operations on an atom.** Member access, calls and unary operators on an atom (`:a.length`, `:a(1)`, `-:a`) are positioned errors: an atom is a name, not a value to operate on. Comparison (`x === :a`), array and object elements, template placeholders and function arguments are allowed.
+- **Operations on an atom.** Member access, calls and unary operators on an atom (`:a.length`, `:a(1)`, `-:a`) are positioned errors (see "Operations on an atom" in Grammar). Comparison, array and object elements, template placeholders and function arguments are allowed.
 - **Sequencing.** Phase B lands on squad-targets' htmljs-parser fork (`feat/parser-forks`) as one patch series after that PR merges; no second patch file.
 
 Still open:
