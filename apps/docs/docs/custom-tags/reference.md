@@ -238,8 +238,8 @@ Messages begin with the relevant tag name unless the problem belongs to a discov
 | An enum receives a non-literal expression. | `` `<name>`: attribute `x` must be a static value from … `` |
 | An enum receives a non-string literal. | `` `<name>`: attribute `x` must be a string from …, got TYPE `` |
 | An enum string is not a member. | `` `<name>`: attribute `x` must be one of …, got VALUE `` |
-| An explicit atom meets a non-atom type, or a non-atom meets `type: "atom"` (the name sugar's `name` counts as a string for non-atom types). | `` `<name>`: attribute `x` must be atom, got string `` (and `must be string, got atom`) |
-| An atom is outside `values`, fails `pattern`, or names no declaration of its `ref` kind. | `` `<name>`: attribute `x`: `:a` is not one of …`` / `does not match the pattern /…/` / `is not a declared KIND here; did you mean `:b`?` |
+| An explicit atom meets a non-atom type, or a non-atom meets `type: "atom"` (the name sugar's `name` counts as a string for non-atom types). | `` `<name>`: attribute `x` must be atom, got string `` (and `must be string, got atom`); against `values` the message ends `(one of :a, :b)`, against `ref` `(a declared KIND)` |
+| An atom is outside `values`, fails `pattern`, or names no declaration of its `ref` kind. | `` `<name>`: attribute `x`: `:a` is not one of …`` / `does not match the pattern /…/` / `is not a declared KIND here (one of :a, :b +N more); did you mean `:b`?`; the list is sorted and capped at ten |
 | Two declarations of one name and kind (or `uniqueWith` kinds) share a scope. | `` `a` is already declared as `kind` at L:C `` (positioned at the second, `spans` holds both) |
 | A `declares` `scope` has no such ancestor. | `` `a` declares a `kind` scoped to `x` or `y`, but has no such ancestor `` |
 | A required attribute is absent. | `` `<name>`: missing required attribute `x` `` |

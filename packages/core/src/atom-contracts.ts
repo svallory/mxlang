@@ -147,21 +147,31 @@ function pickEntry(
 }
 
 /** The scope that owns a declaration: the nearest ancestor named by `scope`, else the file. */
-function scopeOwner(
-  ctx: Ctx,
+function findScopeOwner(
   chain: readonly Node[],
   scope: string | readonly string[] | undefined,
-  declared: { kind: string; name: string; span: SourceSpan },
-  file: string | undefined,
-): object {
+): object | undefined {
   if (scope === undefined) return FILE_SCOPE;
   const names = asList(scope);
   for (let i = chain.length - 2; i >= 0; i--) {
     if (names.includes(nodeName(chain[i]))) return chain[i] as object;
   }
+  return undefined;
+}
+
+/** `findScopeOwner`, or the positioned error; with no `ctx` (completion) a missing scope just drops the declaration. */
+function scopeOwner(
+  ctx: Ctx | null,
+  chain: readonly Node[],
+  scope: string | readonly string[] | undefined,
+  declared: { kind: string; name: string; span: SourceSpan },
+  file: string | undefined,
+): object | undefined {
+  const owner = findScopeOwner(chain, scope);
+  if (owner || !ctx) return owner;
   throw errorAt(
     ctx,
-    `\`${declared.name}\` declares ${/^[aeiou]/.test(declared.kind) ? "an" : "a"} \`${declared.kind}\` scoped to ${orList(names)}, but has no such ancestor`,
+    `\`${declared.name}\` declares ${/^[aeiou]/.test(declared.kind) ? "an" : "a"} \`${declared.kind}\` scoped to ${orList(asList(scope))}, but has no such ancestor`,
     declared.span,
     file,
   );
@@ -177,7 +187,7 @@ function contains(outer: SourceSpan | undefined, inner: SourceSpan): boolean {
 
 /** Phase 1: every declaration, in source order, into its scope. */
 function declare(
-  ctx: Ctx,
+  ctx: Ctx | null,
   facts: readonly ContractFact[],
   derived: readonly DerivedDeclaration[],
 ): Scopes {
@@ -203,10 +213,8 @@ function declare(
       file,
       uniqueWith: entry.uniqueWith ?? [],
     };
-    pending.push({
-      owner: scopeOwner(ctx, chain, entry.scope, decl, file),
-      decl,
-    });
+    const owner = scopeOwner(ctx, chain, entry.scope, decl, file);
+    if (owner) pending.push({ owner, decl });
   }
   for (const item of derived) {
     // The tag that caused the derivation anchors the scope: the innermost
@@ -233,7 +241,7 @@ function declare(
       : item.scope === undefined
         ? FILE_SCOPE
         : scopeOwner(ctx, [], item.scope, decl, undefined);
-    pending.push({ owner, decl });
+    if (owner) pending.push({ owner, decl });
   }
   pending.sort((a, b) => a.decl.span.sourceStart - b.decl.span.sourceStart);
 
@@ -249,7 +257,8 @@ function declare(
         decl.uniqueWith.includes(other.kind) ||
         other.uniqueWith.includes(decl.kind),
     );
-    if (clash) {
+    if (clash && !ctx) continue;
+    if (clash && ctx) {
       const at = positionAt(ctx, clash.span.sourceStart);
       const label =
         clash.kind === decl.kind
@@ -268,6 +277,65 @@ function declare(
   return scopes;
 }
 
+/** Most candidates a diagnostic lists before it says `+N more`. */
+const CANDIDATE_CAP = 10;
+
+/** `:a, :b, :c`, sorted, at most ten, then ` +N more`. */
+export function atomList(names: readonly string[]): string {
+  const sorted = [...names].sort();
+  const shown = sorted.slice(0, CANDIDATE_CAP).map((name) => `:${name}`);
+  const rest = sorted.length - shown.length;
+  return `${shown.join(", ")}${rest > 0 ? ` +${rest} more` : ""}`;
+}
+
+/** What a contract accepts, for a type error: ` (one of :a, :b)` or ` (a declared kind)`; empty for a bare atom. */
+export function atomExpectation(declaration: {
+  values?: readonly string[];
+  ref?: string | readonly string[];
+}): string {
+  if (declaration.values) return ` (one of ${atomList(declaration.values)})`;
+  if (declaration.ref !== undefined) {
+    return ` (a declared ${asList(declaration.ref).join(" or ")})`;
+  }
+  return "";
+}
+
+/** One name an atom can take, with the kind of its declaration when it is a `ref`. */
+export interface AtomCandidate {
+  name: string;
+  kind?: string;
+}
+
+/** What `compileSource` records of a unit for tooling: its custom tag calls and `ctx.declare`d names. */
+export interface AtomFacts {
+  facts: ContractFact[];
+  derived: DerivedDeclaration[];
+}
+
+/**
+ * The names of `kinds` visible from a call: its authored ancestors innermost
+ * first, the file scope last, each name once (the first kind that declared it).
+ */
+export function visibleNames(
+  scopes: Scopes,
+  chain: readonly Node[],
+  kinds: readonly string[],
+): AtomCandidate[] {
+  const seen = new Set<string>();
+  const found: AtomCandidate[] = [];
+  for (const scope of [...chain].reverse().concat(FILE_SCOPE)) {
+    const names = scopes.get(scope);
+    if (!names) continue;
+    for (const [name, decls] of names) {
+      const decl = decls.find((d) => kinds.includes(d.kind));
+      if (!decl || seen.has(name)) continue;
+      seen.add(name);
+      found.push({ name, kind: decl.kind });
+    }
+  }
+  return found;
+}
+
 function checkAtom(
   ctx: Ctx,
   fact: ContractFact,
@@ -284,7 +352,7 @@ function checkAtom(
     const near = nearestName(atom.name, values);
     throw errorAt(
       ctx,
-      `${owner}: \`:${atom.name}\` is not one of ${values.map((v) => `:${v}`).join(", ")}${near ? `; did you mean \`:${near}\`?` : ""}`,
+      `${owner}: \`:${atom.name}\` is not one of ${atomList(values)}${near ? `; did you mean \`:${near}\`?` : ""}`,
       atom.span,
       file,
     );
@@ -299,22 +367,18 @@ function checkAtom(
   }
   if (ref === undefined) return;
   const kinds = asList(ref);
-  const visible = [...fact.chain].reverse().concat(FILE_SCOPE);
-  const candidates: string[] = [];
-  for (const scope of visible) {
-    const names = scopes.get(scope);
-    if (!names) continue;
-    for (const [name, decls] of names) {
-      if (decls.some((decl) => kinds.includes(decl.kind)))
-        candidates.push(name);
-    }
-  }
+  const candidates = visibleNames(scopes, fact.chain, kinds).map(
+    (candidate) => candidate.name,
+  );
   if (candidates.includes(atom.name)) return;
   const near = nearestName(atom.name, candidates);
   const kindLabel = kinds.join(" or ");
+  const listed = candidates.length
+    ? `one of ${atomList(candidates)}`
+    : "none declared";
   throw errorAt(
     ctx,
-    `${owner}: \`:${atom.name}\` is not a declared ${kindLabel} here${near ? `; did you mean \`:${near}\`?` : ""}`,
+    `${owner}: \`:${atom.name}\` is not a declared ${kindLabel} here (${listed})${near ? `; did you mean \`:${near}\`?` : ""}`,
     atom.span,
     file,
   );
@@ -418,4 +482,106 @@ export function checkAtomContracts(ctx: Ctx): void {
     );
   }
   for (const check of refs) check();
+}
+
+/** The facts of a unit, for tooling (`CompileResult.atomFacts`). */
+export function atomFactsOf(ctx: Ctx): AtomFacts {
+  return {
+    facts: ctx.contractFacts ? [...ctx.contractFacts.values()] : [],
+    derived: ctx.contractDerived ? [...ctx.contractDerived] : [],
+  };
+}
+
+function covers(span: SourceSpan | undefined, offset: number): boolean {
+  return (
+    span !== undefined && span.sourceStart <= offset && offset <= span.sourceEnd
+  );
+}
+
+/** Whether `offset` is where `attr` writes its value, or its sugar name. */
+function inValue(attr: Attr, offset: number): boolean {
+  if (attr.kind === "spread" || attr.kind === "boolean") return false;
+  if (attr.kind === "static" && attr.atom)
+    return covers(attr.atom.span, offset);
+  if (attr.kind === "static") return covers(attr.valueSpan, offset);
+  return (
+    covers(attr.value.span, offset) ||
+    (attr.value.atoms ?? []).some((atom) => covers(atom.span, offset))
+  );
+}
+
+/** The contract of the attribute under `offset`, looking through attribute tags at any depth. */
+function declarationAt(
+  attributes: CustomTag["attributes"],
+  attrs: readonly Attr[],
+  declared: CustomTag["attributeTags"],
+  tags: readonly AttributeTag[],
+  offset: number,
+): CustomTagAttribute | undefined {
+  for (const attr of attrs) {
+    if (attr.kind === "spread" || !attributes) continue;
+    if (!Object.hasOwn(attributes, attr.name) || !inValue(attr, offset)) {
+      continue;
+    }
+    return attributes[attr.name];
+  }
+  if (!declared) return undefined;
+  for (const tag of tags) {
+    const declaration = Object.hasOwn(declared, tag.name)
+      ? declared[tag.name]
+      : undefined;
+    if (!declaration || !covers(tag.span, offset)) continue;
+    const found = declarationAt(
+      declaration.attributes,
+      tag.attrs,
+      declaration.attributeTags,
+      tag.attributeTags,
+      offset,
+    );
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/**
+ * The atoms that can be written at `offset` (UTF-16, into the file the facts
+ * came from): a contract's `values`, or the names of its `ref` kinds visible
+ * from the call, innermost scope first and the file last, each once, with the
+ * kind as `kind`. Empty with no contract, a bare `type: "atom"`, or when
+ * `offset` is not in an attribute value. Never throws: a clash or a scope with
+ * no ancestor drops that declaration instead of reporting it, so it runs on the
+ * facts of a unit whose compile failed (an unknown atom, a clash) as well.
+ */
+export function atomCandidates(
+  facts: readonly ContractFact[],
+  derived: readonly DerivedDeclaration[],
+  offset: number,
+): AtomCandidate[] {
+  let target: ContractFact | undefined;
+  for (const fact of facts) {
+    if (
+      covers(fact.call.span, offset) &&
+      (!target ||
+        (fact.call.span?.sourceStart ?? 0) >=
+          (target.call.span?.sourceStart ?? 0))
+    ) {
+      target = fact;
+    }
+  }
+  if (!target) return [];
+  const declaration = declarationAt(
+    target.definition.attributes,
+    target.call.attrs,
+    target.definition.attributeTags,
+    target.call.attributeTags,
+    offset,
+  );
+  if (declaration?.type !== "atom") return [];
+  if (declaration.values) return declaration.values.map((name) => ({ name }));
+  if (declaration.ref === undefined) return [];
+  return visibleNames(
+    declare(null, facts, derived),
+    target.chain,
+    asList(declaration.ref),
+  );
 }

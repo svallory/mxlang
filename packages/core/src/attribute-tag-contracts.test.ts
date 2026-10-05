@@ -515,9 +515,24 @@ describe("E1 vocabulary on attribute-tag attributes: atoms (decision 156 addendu
     ).not.toThrow();
   });
   it.each([
-    ['mode="a"', "attribute `mode` must be atom, got string", 1, 23],
-    ["mode=3", "attribute `mode` must be atom, got number", 1, 23],
-    ["mode=[:a, 2]", "attribute `mode` must be atom, got number", 1, 28],
+    [
+      'mode="a"',
+      "attribute `mode` must be atom, got string (one of :a, :b)",
+      1,
+      23,
+    ],
+    [
+      "mode=3",
+      "attribute `mode` must be atom, got number (one of :a, :b)",
+      1,
+      23,
+    ],
+    [
+      "mode=[:a, 2]",
+      "attribute `mode` must be atom, got number (one of :a, :b)",
+      1,
+      28,
+    ],
     ["mode=:zzz", "attribute `mode`: `:zzz` is not one of :a, :b", 1, 23],
     [
       "code=:A1",
@@ -525,7 +540,12 @@ describe("E1 vocabulary on attribute-tag attributes: atoms (decision 156 addendu
       1,
       23,
     ],
-    ["to=:nope", "attribute `to`: `:nope` is not a declared node here", 1, 21],
+    [
+      "to=:nope",
+      "attribute `to`: `:nope` is not a declared node here (one of :known)",
+      1,
+      21,
+    ],
   ])("rejects %s", (attrs, message, line, column) => {
     fails(
       `<card#known><@row ${attrs}/></card>`,

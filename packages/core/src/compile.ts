@@ -17,6 +17,7 @@
 
 import { realpathSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { type AtomFacts, atomFactsOf } from "./atom-contracts.ts";
 import { rejectShadowedRegistration } from "./builtin-tags.ts";
 import { annotateCloseTagOpener } from "./close-tag-opener.ts";
 import {
@@ -68,6 +69,8 @@ export interface CompileResult {
    * actually resolves a callee (task 1b wires the resolver in).
    */
   dependencies: string[];
+  /** The unit's custom tag calls and declared names, input of `atomCandidates`. */
+  atomFacts: AtomFacts;
 }
 
 /** The taglib lookup `@marko/compiler` builds for a translator. */
@@ -171,6 +174,7 @@ let current: {
   resolveImport?: (specifier: string, importer: string) => string | undefined;
   targets: TargetLookup;
   dependencies: string[];
+  atomFacts: AtomFacts;
 } | null = null;
 
 /**
@@ -243,6 +247,7 @@ export function createTranslator(host: TranslatorOptions): Translator {
             // the edge matter, and never re-check it when the callee changes
             // again.
             state.dependencies = [...(ctx.dependencies ?? [])];
+            state.atomFacts = atomFactsOf(ctx);
           }
           state.code = state.postEmit ? state.postEmit(code) : code;
           path.node.body = [];
@@ -361,6 +366,7 @@ export function compileSource(
     resolveImport: host.resolveImport,
     targets: host.targets,
     dependencies: [] as string[],
+    atomFacts: { facts: [], derived: [] } as AtomFacts,
     // The lookup is keyed on the translator object, so asking for it here gets
     // exactly the taglibs this host registers plus Marko's own element
     // taglibs — and the tag-discovery directories beside this particular file.
@@ -379,6 +385,7 @@ export function compileSource(
   } catch (error) {
     if (isTranslateError(error)) {
       error.dependencies = state.dependencies;
+      error.atomFacts = state.atomFacts;
       dropCompiledFilePrefix(error, filename);
     }
     annotateCloseTagOpener(error, source);
@@ -401,6 +408,7 @@ export function compileSource(
   return {
     code: state.code,
     dependencies: state.dependencies,
+    atomFacts: state.atomFacts,
     map: {
       version: 3,
       file: filename,

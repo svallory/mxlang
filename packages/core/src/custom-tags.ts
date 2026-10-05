@@ -7,7 +7,7 @@
  * custom tag existed.
  */
 
-import { positionAt } from "./atom-contracts.ts";
+import { atomExpectation, positionAt } from "./atom-contracts.ts";
 import { attrLabel } from "./attr-label.ts";
 import {
   fallbackAttrTagShape,
@@ -964,8 +964,10 @@ function checkCompositeAttr(
 function checkAtomAttr(
   owner: string,
   attr: Exclude<Attr, { kind: "spread" }>,
+  declaration: CustomTagAttribute,
   locate?: Locate,
 ): void {
+  const expected = atomExpectation(declaration);
   const at = valueLoc(attr, locate);
   // An atom, the sugar-derived `name` included, satisfies an atom contract.
   if (attr.kind === "static" && attr.atom) return;
@@ -973,7 +975,7 @@ function checkAtomAttr(
   if (shape && shape !== "atom" && shape !== "array") {
     failForOwner(
       owner,
-      `attribute ${attrLabel(attr)} must be atom, got ${shape}`,
+      `attribute ${attrLabel(attr)} must be atom, got ${shape}${expected}`,
       at,
     );
   }
@@ -989,7 +991,7 @@ function checkAtomAttr(
     const start = element.loc?.start;
     failForOwner(
       owner,
-      `attribute ${attrLabel(attr)} must be atom, got ${got}`,
+      `attribute ${attrLabel(attr)} must be atom, got ${got}${expected}`,
       start
         ? { ...attr.loc, line: start.line, column: start.column }
         : attr.loc,
@@ -1288,7 +1290,7 @@ function validateAttributes(
       );
     }
     if (declaration.type === "atom") {
-      checkAtomAttr(owner, attr, locate);
+      checkAtomAttr(owner, attr, declaration, locate);
     } else if (
       declaration.type === "array" ||
       declaration.type === "function"

@@ -14,6 +14,13 @@ export {
   rewriteAccessorReads,
   rewriteReadsInCode,
 } from "./accessor-reads.ts";
+export {
+  type AtomCandidate,
+  type AtomFacts,
+  atomCandidates,
+  type ContractFact,
+  type DerivedDeclaration,
+} from "./atom-contracts.ts";
 export type {
   AttrTag,
   AttrTagAttrs,

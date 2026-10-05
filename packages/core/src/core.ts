@@ -33,7 +33,11 @@
  *   text is sliced back out by `loc` and re-parsed.
  */
 
-import type { ContractFact, DerivedDeclaration } from "./atom-contracts.ts";
+import type {
+  AtomFacts,
+  ContractFact,
+  DerivedDeclaration,
+} from "./atom-contracts.ts";
 import type { CalleeInput } from "./callee-input.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
@@ -103,6 +107,8 @@ export class TranslateError extends Error {
    * callee's declaration changes again.
    */
   dependencies?: string[];
+  /** The unit's custom tag calls and declared names, for `atomCandidates` (set by `compileSource`). */
+  atomFacts?: AtomFacts;
 
   constructor(message: string, line: number, column: number, file?: string) {
     super(message);

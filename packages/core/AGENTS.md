@@ -1023,3 +1023,8 @@ stable version.
   outside every call is visible too. Attribute-tag attributes (any depth) are
   checked from `call.attributeTags` against `definition.attributeTags`. A call's own atom-vs-string type check stays in
   `validateAttributes` (`checkAtomAttr`), not here.
+  Diagnostics list the candidates through `atomList` (sorted, ten, `+N more`);
+  `atomCandidates(facts, derived, offset)` answers the same for a position,
+  with `declare(null, ...)` non-throwing, from `CompileResult.atomFacts` or
+  `TranslateError.atomFacts` (set by `compileSource`, also on failure). Editor
+  completion on top of it is a TODO (the language server is diagnostics-only).

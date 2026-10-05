@@ -335,7 +335,7 @@ describe("references", () => {
     // `title` is an attribute, not a relationship or computed.
     const error = fails(bad, mesh);
     expect(error.message).toBe(
-      "`<policy>`: attribute `load`: `:title` is not a declared relationship or computed here",
+      "`<policy>`: attribute `load`: `:title` is not a declared relationship or computed here (one of :items, :total)",
     );
     expect(pos(error)).toEqual(at(bad, ":title", 1));
   });
@@ -442,7 +442,7 @@ describe("declares", () => {
 </entity>`;
     const error = fails(source, tags);
     expect(error.message).toBe(
-      "`<policy>`: attribute `accept`: `:x` is not a declared attribute here",
+      "`<policy>`: attribute `accept`: `:x` is not a declared attribute here (none declared)",
     );
     expect(pos(error)).toEqual(at(source, ":x", 1));
     // With no matching parent the general entry applies.
@@ -465,7 +465,7 @@ describe("declares", () => {
     const miss = "<root><node#a/><link to=:c/></root>";
     const error = fails(miss, tags);
     expect(error.message).toBe(
-      "`<link>`: attribute `to`: `:c` is not a declared node here",
+      "`<link>`: attribute `to`: `:c` is not a declared node here (one of :a)",
     );
     expect(pos(error)).toEqual(at(miss, ":c"));
   });
@@ -504,7 +504,7 @@ describe("declares", () => {
 </entity>`;
     const error = fails(source, tags);
     expect(error.message).toBe(
-      "`<policy>`: attribute `accept`: `:a` is not a declared attribute here",
+      "`<policy>`: attribute `accept`: `:a` is not a declared attribute here (none declared)",
     );
     expect(pos(error)).toEqual(at(source, ":a", 1));
   });
@@ -525,7 +525,7 @@ describe("declares", () => {
     const bad = "<outer#o><inner><let :x/></inner><use v=:x/></outer>";
     const error = fails(bad, tags);
     expect(error.message).toBe(
-      "`<use>`: attribute `v`: `:x` is not a declared k here",
+      "`<use>`: attribute `v`: `:x` is not a declared k here (one of :o)",
     );
     expect(pos(error)).toEqual(at(bad, ":x", 1));
   });
@@ -699,7 +699,7 @@ describe("derived declarations from analyze (ctx.declare)", () => {
 </entity>`;
     const error = fails(outside, tags);
     expect(error.message).toBe(
-      "`<policy>`: attribute `require`: `:implicit` is not a declared attribute or argument here",
+      "`<policy>`: attribute `require`: `:implicit` is not a declared attribute or argument here (none declared)",
     );
     expect(pos(error)).toEqual(at(outside, ":implicit"));
   });
@@ -821,7 +821,7 @@ describe("round 3: attribute-tag attributes (decision 156 addendum 7)", () => {
     const source = "<node#a/><box><@row to=:nope/></box>";
     const error = fails(source, tags, attrTagHost);
     expect(error.message).toBe(
-      "`<box>`: `<@row>`: attribute `to`: `:nope` is not a declared node here",
+      "`<box>`: `<@row>`: attribute `to`: `:nope` is not a declared node here (one of :a)",
     );
     expect({ line: error.line, column: error.column }).toEqual(
       at(source, ":nope"),
@@ -881,7 +881,7 @@ describe("round 3: the default scope is the file (decision 156 addendum 7)", () 
     const source = "<node#a/><link to=:c/>";
     const error = fails(source, tags);
     expect(error.message).toBe(
-      "`<link>`: attribute `to`: `:c` is not a declared node here",
+      "`<link>`: attribute `to`: `:c` is not a declared node here (one of :a)",
     );
     expect({ line: error.line, column: error.column }).toEqual(
       at(source, ":c"),
@@ -908,7 +908,7 @@ describe("round 3: the default scope is the file (decision 156 addendum 7)", () 
     ).not.toThrow();
     const error = fails("text here\n<root/><use v=:bar/>", derived);
     expect(error.message).toBe(
-      "`<use>`: attribute `v`: `:bar` is not a declared k here",
+      "`<use>`: attribute `v`: `:bar` is not a declared k here (one of :foo)",
     );
   });
 });

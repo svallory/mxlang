@@ -118,12 +118,12 @@ describe("atom contracts on attribute-tag attributes through parseData (decision
     ],
     [
       "<box><@row to=:nope/></box>",
-      "`<box>`: `<@row>`: attribute `to`: `:nope` is not a declared node here",
+      "`<box>`: `<@row>`: attribute `to`: `:nope` is not a declared node here (one of :k)",
       14,
     ],
     [
       '<box><@row mode="a"/></box>',
-      "`<box>`: `<@row>`: attribute `mode` must be atom, got string",
+      "`<box>`: `<@row>`: attribute `mode` must be atom, got string (one of :a, :b)",
       16,
     ],
   ])("reports %s at the value", (source, message, column) => {
