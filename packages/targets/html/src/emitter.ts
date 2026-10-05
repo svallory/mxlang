@@ -1181,11 +1181,22 @@ export function createEmitter(selfName?: string): StringEmitter {
       }
       case "try": {
         // A `<try>` without a `<@placeholder>` is a plain try/catch: the body
-        // renders, and `<@catch>` renders instead if it throws.
-        // The body renders into a buffered sub-sink that is committed only
-        // when it finishes, so a throw drops the half-rendered body and
-        // `<@catch>` renders in its place, as in Marko.
+        // renders into a buffered sub-sink that is committed only when it
+        // finishes, so a throw drops the half-rendered body and `<@catch>`
+        // renders in its place, as in Marko 6.3.51.
         const katch = tag.attributeTags.find((t) => t.name === "catch");
+        if (!katch) {
+          // Without `<@catch>` Marko rethrows: the error propagates out of the
+          // render (or to an enclosing `<try>`, whose own sub-sink drops this
+          // body's output too). Nothing is caught, so nothing needs buffering;
+          // the block only keeps the body's bindings scoped as before.
+          push("{");
+          state.indent++;
+          drive(emitter, tag.children);
+          state.indent--;
+          push("}");
+          return;
+        }
         const outerSink = state.sink;
         const trySink = `__mxTry${state.tryTemp++}`;
         push(`const ${trySink} = __mxCreateBufferedOut(${outerSink});`);
@@ -1196,15 +1207,11 @@ export function createEmitter(selfName?: string): StringEmitter {
         state.sink = outerSink;
         push(`${trySink}.commit();`);
         state.indent--;
-        if (katch) {
-          push(`} catch (${katch.block.params.join(", ") || "__mxError"}) {`);
-          state.indent++;
-          drive(emitter, katch.block.children);
-          state.indent--;
-          push("}");
-        } else {
-          push("} catch {}");
-        }
+        push(`} catch (${katch.block.params.join(", ") || "__mxError"}) {`);
+        state.indent++;
+        drive(emitter, katch.block.children);
+        state.indent--;
+        push("}");
         return;
       }
       case "dynamic": {

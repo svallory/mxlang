@@ -733,6 +733,8 @@ const RENDER_DYNAMIC = `function __mxRenderDynamic(__mxSink: __MxOut, __mxTarget
     throw new TypeError("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <\${x.content}/>");
   }
   if (__mxArgs) {
+    // Marko 6.3.51 calls a template with its args, so args[0] is its input.
+    if (typeof __mxTarget.render === "function") return __mxTarget.render(__mxArgs[0], __mxSink);
     __mxSink.write("" + (Object.keys(__mxProps).length > 0 ? __mxTarget(...__mxArgs, __mxProps) : __mxTarget(...__mxArgs)));
     return;
   }

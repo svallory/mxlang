@@ -706,6 +706,43 @@ describe("the render sink (decision 155)", () => {
     expect(html).toBe("<div>caught</div>");
   });
 
+  // Measured with Marko 6.3.51: with no `<@catch>`, the error propagates
+  // out of the render. This host used to swallow it (`catch {}`).
+  it("rethrows from a <try> without <@catch>", async () => {
+    await expect(
+      renderModules(
+        { "page.mx": "<p>x</p><try><b>2</b>${input.missing.deep}</try>" },
+        "page.mx",
+      ),
+    ).rejects.toThrow(TypeError);
+  });
+
+  it("drops a catch-less inner <try>'s output when an outer <try> catches", async () => {
+    const html = await renderModules(
+      {
+        "page.mx":
+          "<try><a>1</a><try><b>2</b>${input.missing.deep}</try><@catch|e|>c</@catch></try>",
+      },
+      "page.mx",
+    );
+    expect(html).toBe("c");
+  });
+
+  // Measured with Marko 6.3.51: `<${Counter}/n({start:2})/>` renders
+  // `<span>2</span>` and binds `n` to 3. A template called with tag args
+  // receives args[0] as its input.
+  it("binds /var on a dynamic tag called with args", async () => {
+    const html = await renderModules(
+      {
+        "counter.mx": counter,
+        "page.mx":
+          'import Counter from "./counter.mx"\n<${Counter}/n({start:2})/><p>${n}</p>',
+      },
+      "page.mx",
+    );
+    expect(html).toBe("<span>2</span><p>3</p>");
+  });
+
   it("commits a nested <try> into its enclosing <try>", async () => {
     const html = await renderModules(
       {
@@ -963,12 +1000,12 @@ describe("<try> without a placeholder is a plain try/catch", () => {
   // tag's body uses.
   it("preserves a whitespace-only body", () => {
     const { code } = compile(src("<try>  </try>"), file);
-    expect(code).toContain('__mxTry0.write(" ");');
+    expect(code).toContain('__mxOut.write(" ");');
   });
 
   it("preserves markup mixed with text in the body", () => {
     const { code } = compile(src("<try>a <b>c</b></try>"), file);
-    expect(code).toContain('__mxTry0.write("a <b>c</b>");');
+    expect(code).toContain('__mxOut.write("a <b>c</b>");');
   });
 });
 

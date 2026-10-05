@@ -11,7 +11,7 @@
  *
  * `Out` is deliberately small: it is the seam a streaming implementation will
  * replace later without touching emitted code. Emitted code only ever calls
- * `write`, `toString`, `createOut()` and `createBufferedOut()`.
+ * `createOut()`, `createBufferedOut()`, `write`, `toString` and `commit`.
  *
  * Nothing here depends on the compiler, so a compiled module's runtime stays
  * at `escape` plus these two functions.
@@ -34,7 +34,14 @@ export interface Out {
  * parent up to this point and hold only the buffered part.
  */
 export interface BufferedOut extends Out {
-  /** Writes the buffered output to the parent sink. Call once. */
+  /**
+   * Writes the buffered output to the parent sink.
+   *
+   * Call it once, after the last write. It is not enforced: a second call
+   * writes the buffer again, and a write after the call never reaches the
+   * parent. Emitted code commits exactly once, as the last statement of a
+   * `<try>` body.
+   */
   commit(): void;
 }
 
