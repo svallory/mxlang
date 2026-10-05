@@ -186,9 +186,9 @@ With atoms:
 
 **Proposed, pending lead approval.** Source: `scratch/reports/squad-atoms/parser-approach.md` (option b′), measured by a simulation inside the real `@marko/compiler` 5.42.5 with htmljs-parser 5.15.0 patched. Main now pins 5.42.10 / 5.18.0; the simulation is **not** re-run on them here and is re-run on 5.18.0 at the start of Phase B.
 
-Today htmljs-parser passes every atom through intact in every position (attribute value, default attribute, `${}`, tag arguments, concise mode, attribute tags), and Babel rejects every one with "Unexpected token". Babel has no parser plugin API: an unknown plugin name is silently ignored. So atoms are lexed where MX already owns the lexer, its in-repo copy of htmljs-parser (decision 157 addendum 2):
+Today htmljs-parser passes every atom through intact in every position (attribute value, default attribute, `${}`, tag arguments, concise mode, attribute tags), and Babel rejects every one with "Unexpected token". Babel has no parser plugin API: an unknown plugin name is silently ignored. So atoms are lexed where MX already owns the lexer, htmljs-parser as MX carries it (the root patch today, the in-repo copy for the future; decisions 157 addendum 2 and 158):
 
-1. The `EXPRESSION` state of MX's in-repo copy of htmljs-parser (`packages/parser/src/template/`, decision 157 addendum 2) lexes atoms in value, placeholder, tag-argument, attribute-argument (`<t x(:a)>`) and spread ranges only (never statement tags such as `static`, scriptlets or method bodies, which stay TypeScript errors), using the rule in Grammar. It records each atom's span.
+1. htmljs-parser's `EXPRESSION` state, as MX carries it (the root `patches/htmljs-parser` patch and the in-repo copy in `packages/parser/src/template/`, the same change in both; decision 158) lexes atoms in value, placeholder, tag-argument, attribute-argument (`<t x(:a)>`) and spread ranges only (never statement tags such as `static`, scriptlets or method bodies, which stay TypeScript errors), using the rule in Grammar. It records each atom's span.
 2. Its `read()` hands Babel a **same-length numeric stand-in** for each atom (`:a` is `0.`, `:rename-all` is `0.000000000`).
 3. Core turns each stand-in back into a `StringLiteral` with `extra.mxAtom`, after checking that the source character at the node's start is `:` (no authored numeric literal starts with `:`, so the check cannot be forged), and keeps the node's `loc` as the atom span.
 
@@ -207,7 +207,7 @@ Today htmljs-parser passes every atom through intact in every position (attribut
 
 **`x= :b` is the atom, `x="b"`**, the same as `x=:b` and `x = :b`. Measured: htmljs-parser, stock and patched, runs `consumeWhitespace()` after `=` before it enters the value, so Marko already reads `x= y` as `x=y`; `<t x= :b/>`, `<t x = :b/>` and concise `t x= :b` all give the value `:b`, and under (b′) `<div x= :b/>` gives `x="b"`. The 146 sugar needs a *finished* value before it (`x=a :b` is value `a` plus `name="b"`); reading `x= :b` as sugar would leave `x=` without a value, which no Marko spelling means.
 
-**Misuse errors.** `[:a :b]` ("Did not expect a type annotation here", as `[a :b]` today), `:a = 1`, `(:a) => 1`, `{:a}`, `o.:a` and `:1` are positioned errors at the atom or its neighbour; core rewrites the wording where it can. Delivery lands in `packages/parser/src/template/` once squad-targets' copy-in has merged (decision 157 addendum 2; no GitHub fork, no patch file); a stock parser gives a positioned "atoms need the MX parser" error, detected by a probe in the style of `installedParserSplits`.
+**Misuse errors.** `[:a :b]` ("Did not expect a type annotation here", as `[a :b]` today), `:a = 1`, `(:a) => 1`, `{:a}`, `o.:a` and `:1` are positioned errors at the atom or its neighbour; core rewrites the wording where it can. Delivery lands as the same change in two places (decision 158): the root htmljs-parser patch, so MX 1 consumers get atoms through `@marko/compiler` now, and `packages/parser/src/template/`, the copy-in kept for the MX 2 front end; no GitHub fork; a stock parser gives a positioned "atoms need the MX parser" error, detected by a probe in the style of `installedParserSplits`.
 
 ## Open questions
 
@@ -217,7 +217,7 @@ Settled by the lead on 2026-10-05 alongside the parser research; option (b′) i
 
 - **Stand-in leak.** Accepted: core is the only supported driver of MX's parser, and core asserts that no stand-in survives its conversion.
 - **Operations on an atom.** Member access, calls and unary operators on an atom (`:a.length`, `:a(1)`, `-:a`) are positioned errors (see "Operations on an atom" in Grammar). Comparison, array and object elements, template placeholders and function arguments are allowed.
-- **Sequencing.** The parser change lands in `packages/parser/src/template/` (MX's in-repo copy of htmljs-parser, decision 157 addendum 2) as an MX PR after squad-targets' copy-in merges; no GitHub fork and no patch file.
+- **Sequencing.** Phase B PR 1 opens after squad-targets' copy-in of htmljs-parser merges and carries the parser change twice, identically (decision 158): in the root htmljs-parser patch, which `@marko/compiler` (still the npm dependency) uses so MX 1 consumers get atoms now, and in `packages/parser/src/template/` for the MX 2 front end, until the front end switches to MX's own AST in `@mxlang/babel`. Core's stand-in conversion is the same for both. No GitHub fork.
 
 Still open:
 
