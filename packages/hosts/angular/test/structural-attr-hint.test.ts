@@ -16,7 +16,7 @@ import { describe, expect, it } from "vitest";
 import { compile } from "../src/index.ts";
 import { compileNgMx } from "../src/ng-mx.ts";
 import { compileTagModule } from "../src/tag-module.ts";
-import { attrBinding, attrLet, compileMx, listBinding } from "./helpers.ts";
+import { attrLet, compileMx, listBinding } from "./helpers.ts";
 
 interface Positioned extends Error {
   line: number;
@@ -280,17 +280,17 @@ describe("what must not change", () => {
 
   it("keeps a multiplication in an attribute value, with no hint", () => {
     expect(compileMx("<div a=b *c>y</div>").code).toBe(
-      `${attrLet(0, "b *c")}<div [attr.a]="${attrBinding(0)}">y</div>`,
+      '<div [a]="b *c">y</div>',
     );
     expect(compileMx("<div a=(b * c)>y</div>").code).toBe(
-      `${attrLet(0, "b * c")}<div [attr.a]="${attrBinding(0)}">y</div>`,
+      '<div [a]="b * c">y</div>',
     );
     // No `=` after the name: still a multiplication, still Marko's meaning.
     expect(compileMx("<div a=1 *foo>y</div>").code).toBe(
-      `${attrLet(0, "1 *foo")}<div [attr.a]="${attrBinding(0)}">y</div>`,
+      '<div [a]="1 *foo">y</div>',
     );
     expect(compileMx("<div a=b *ngIf>y</div>").code).toBe(
-      `${attrLet(0, "b *ngIf")}<div [attr.a]="${attrBinding(0)}">y</div>`,
+      '<div [a]="b *ngIf">y</div>',
     );
   });
 
@@ -299,9 +299,7 @@ describe("what must not change", () => {
       componentFile("<div a=b *c>hi</div>"),
       "/p/x.component.ng.mx",
     );
-    expect(code).toContain(
-      `template: \`${attrLet(0, "b *c")}<div [attr.a]="${attrBinding(0)}">hi</div>\``,
-    );
+    expect(code).toContain('template: `<div [a]="b *c">hi</div>`');
   });
 
   it("leaves an unrelated invalid-left-hand-side error byte-for-byte", () => {

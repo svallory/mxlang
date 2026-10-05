@@ -35,6 +35,7 @@ import {
   unresolvedCustomTagMessage,
   warn,
 } from "@mxlang/core";
+import { nativeBinding } from "./dom-schema.ts";
 import { literalSyntaxWarnings } from "./literal-syntax-hint.ts";
 import {
   type AngularMapping,
@@ -596,6 +597,14 @@ function primitiveForm(
   attr: Attr,
   tagName: string | undefined,
 ): PrimitiveForm | null {
+  return primitiveBinding(attr, tagName)?.form ?? null;
+}
+
+/** The form and whether it binds the attribute (`[attr.x]`) or the DOM property (`[x]`). */
+function primitiveBinding(
+  attr: Attr,
+  tagName: string | undefined,
+): { form: PrimitiveForm; attribute: boolean } | null {
   if (attr.kind !== "dynamic") return null;
   const name = attr.name;
   // A dashed tag is an Angular component selector (or a custom element): its
@@ -605,15 +614,34 @@ function primitiveForm(
   if (LOWERCASE_EVENT.test(name) && !NOT_EVENTS.has(name)) return null;
   if (name === "class" || name === "style") {
     const shape = attr.value.shape;
-    return shape === "object" || shape === "array" ? null : "list";
+    return shape === "object" || shape === "array"
+      ? null
+      : { form: "list", attribute: false };
   }
-  if (name === "value") return "text";
-  if (name === "checked") return tagName === "input" ? "present" : "attr";
+  // `data-*`/`aria-*` and colon names have no DOM property to bind.
+  if (NO_PROPERTY_BINDING.test(name)) {
+    return /^[a-z][a-z0-9:_.-]*$/.test(name) && !/^on/.test(name)
+      ? { form: "attr", attribute: true }
+      : null;
+  }
   // A name starting `on` is never bound as an attribute (Angular refuses
-  // `[attr.on*]` for security), so `once`/`onto` keep the property binding.
-  // Only a plain lowercase attribute name: a camelCase name is a DOM property
-  // and an authored `[prop]`/`(event)`/`*directive` spelling is Angular syntax.
-  return /^[a-z][a-z0-9:_.-]*$/.test(name) && !/^on/.test(name) ? "attr" : null;
+  // `[attr.on*]` for security). A camelCase name is a DOM property and an
+  // authored `[prop]`/`(event)`/`*directive` spelling is Angular syntax.
+  if (!/^[a-z][a-z0-9_.-]*$/.test(name) || /^on/.test(name)) return null;
+  // The rest is the compiler's own DOM schema: a property of this element keeps
+  // `[name]` (a real boolean for a boolean property); a name that is a property
+  // only of other elements is an attribute here; a name the schema has never
+  // heard of may be a directive input and keeps `[name]` untouched.
+  const binding = nativeBinding(tagName ?? "", name);
+  if (binding.kind === "property") {
+    return {
+      form: binding.type === "boolean" ? "present" : "text",
+      attribute: false,
+    };
+  }
+  return binding.kind === "attribute"
+    ? { form: "attr", attribute: true }
+    : null;
 }
 
 function primitiveExpression(variable: string, form: PrimitiveForm): string {
@@ -766,13 +794,14 @@ function emitAttrs(
             out.write('"');
           }
         } else if (isElement && lets?.has(attr)) {
-          // Marko prints an attribute, never a property. `[attr.name]` is the
-          // attribute binding; `value`/`checked` on an `<input>` bind the live
-          // property so a typed value is not fought by a stale attribute; a
-          // camelCase name (`innerHTML`, `textContent`) is a DOM property and
-          // keeps the property binding below.
-          const form = primitiveForm(attr, tagName) as PrimitiveForm;
-          out.write(form === "attr" ? " [attr." : " [");
+          // See `primitiveBinding`: a DOM property of the element keeps `[name]`
+          // (so a typed value is not fought by a stale attribute), a name with
+          // no property here is `[attr.name]`.
+          const { form, attribute } = primitiveBinding(
+            attr,
+            tagName,
+          ) as NonNullable<ReturnType<typeof primitiveBinding>>;
+          out.write(attribute ? " [attr." : " [");
           out.writeMapped(name, attr.nameSpan);
           out.write(']="');
           out.write(primitiveExpression(lets.get(attr) as string, form));

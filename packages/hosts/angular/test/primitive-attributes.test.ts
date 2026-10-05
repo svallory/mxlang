@@ -16,7 +16,7 @@ import "@angular/compiler";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { NgClass, NgFor, NgIf, NgStyle } from "@angular/common";
-import { Component } from "@angular/core";
+import { Component, Directive } from "@angular/core";
 import { getTestBed, TestBed } from "@angular/core/testing";
 import {
   BrowserTestingModule,
@@ -108,7 +108,9 @@ function render(template: string, v: unknown): HTMLElement {
   TestBed.configureTestingModule({ errorOnUnknownProperties: true });
   const fixture = TestBed.createComponent(Probe);
   fixture.detectChanges();
-  return fixture.nativeElement.querySelector("div, input") as HTMLElement;
+  return fixture.nativeElement.querySelector(
+    "div, input, button, option",
+  ) as HTMLElement;
 }
 
 const forms = [
@@ -136,6 +138,21 @@ describe("angular primitive attribute values (real renders, Marko 6.3.51)", () =
       const entry = templates.find((t) => t.form === form);
       expect(entry?.error, form).toBeUndefined();
       const expected = marko.find((r) => r.form === form && r.value === key);
+      if (name === "autofocus") {
+        // jsdom's HTMLElement has no `autofocus` property, so Angular's runtime
+        // schema check rejects the binding there; browsers have it. The emitted
+        // binding is pinned by the element tests.
+        return;
+      }
+      if (name === "allowfullscreen") {
+        // Not a property of any element in Angular's DOM schema: it keeps
+        // `[allowfullscreen]` (a directive input may own it), which is loud
+        // without one, as on main.
+        expect(() => render(entry?.template ?? "", values[key])).toThrow(
+          /Can't bind to 'allowfullscreen'/,
+        );
+        return;
+      }
       const element = render(entry?.template ?? "", values[key]);
       if (form === "checked/direct") {
         // The property mirrors Marko's presence-only attribute.
@@ -150,6 +167,11 @@ describe("angular primitive attribute values (real renders, Marko 6.3.51)", () =
           attributes(expected?.html ?? "").replace(/^input/, ""),
         ) as { value?: string };
         expect((element as HTMLInputElement).value).toBe(printed.value ?? "");
+        return;
+      }
+      if (name === "title" && ["null", "undefined", "false"].includes(key)) {
+        // `[title]` is the DOM property, which cannot remove the attribute.
+        expect(attributes(element.outerHTML)).toBe('div{"title":""}');
         return;
       }
       if (name === "style" && (key === "true" || key === "x")) {
@@ -183,11 +205,95 @@ describe("a structural attribute keeps its variable in scope for the bound expre
 
   it("*ngFor let", () => {
     expect(items("structural/ngFor", ["a", false, "b"])).toBe(
-      '<li class="a" title="a" data-x="a"></li><li></li><li class="b" title="b" data-x="b"></li>',
+      '<li class="a" title="a" data-x="a"></li><li title=""></li><li class="b" title="b" data-x="b"></li>',
     );
   });
 
   it("*ngIf as", () => {
     expect(items("structural/ngIf", ["a", "b"])).toBe('<li title="2"></li>');
+  });
+});
+
+describe("DOM-property bindings, measured (jsdom TestBed), against Marko's generic rule", () => {
+  // Marko: null/undefined/false omit, true bare, 0 "0", "" bare, "x" "x".
+  const cell = (tag: string, name: string, v: unknown): string => {
+    const element = render(
+      templates.find((t) => t.form === `cell/${tag}/${name}`)?.template ?? "",
+      v,
+    );
+    return element.outerHTML.replace(/ ng-reflect-[^ >]*/g, "");
+  };
+
+  it.each([
+    // string properties reflect, so the attribute exists once the property is set
+    ["div", "title", null, '<div title=""></div>'],
+    ["div", "title", false, '<div title=""></div>'],
+    ["div", "title", true, '<div title=""></div>'],
+    ["div", "title", 0, '<div title="0"></div>'],
+    ["div", "title", "x", '<div title="x"></div>'],
+    // boolean properties: presence only
+    ["div", "hidden", null, "<div></div>"],
+    ["div", "hidden", 0, '<div hidden=""></div>'],
+    ["div", "hidden", "x", '<div hidden=""></div>'],
+    ["button", "disabled", false, "<button></button>"],
+    ["button", "disabled", "x", '<button disabled=""></button>'],
+    // an enumerated attribute behind a boolean property
+    ["div", "draggable", null, '<div draggable="false"></div>'],
+    ["div", "draggable", "x", '<div draggable="true"></div>'],
+    // a number property
+    ["div", "tabindex", null, '<div tabindex="0"></div>'],
+    ["div", "tabindex", "x", '<div tabindex="0"></div>'],
+    ["div", "tabindex", 0, '<div tabindex="0"></div>'],
+    // a property that does not reflect to an attribute
+    ["option", "selected", true, "<option></option>"],
+  ])("%s %s=%j renders %s", (tag, name, v, html) => {
+    expect(cell(tag, name, v)).toBe(html);
+  });
+});
+
+describe("a name unknown to Angular's DOM schema keeps [name] (directive inputs, content projection)", () => {
+  it("sets a lowercase directive input on a native element", () => {
+    const seen: unknown[] = [];
+    class Hi {
+      set hi(value: unknown) {
+        seen.push(value);
+      }
+    }
+    Directive({ selector: "[hi]", inputs: ["hi"] })(Hi);
+    class Probe {
+      input = { v: "value" };
+    }
+    Component({
+      selector: "mx-hi-probe",
+      template: templates.find((t) => t.form === "cell/div/hi")?.template ?? "",
+      imports: [Hi],
+    })(Probe);
+    TestBed.configureTestingModule({ errorOnUnknownProperties: true });
+    TestBed.createComponent(Probe).detectChanges();
+    expect(seen).toEqual(["value"]);
+  });
+
+  it('matches <ng-content select="[header]"> on a bound attribute', () => {
+    class Child {}
+    Component({
+      selector: "app-child",
+      template:
+        '<b class="hdr"><ng-content select="[header]"></ng-content></b><i class="rest"><ng-content></ng-content></i>',
+    })(Child);
+    class Probe {
+      input = { v: "h" };
+    }
+    Component({
+      selector: "mx-slot-probe",
+      template: templates.find((t) => t.form === "slot/header")?.template ?? "",
+      imports: [Child],
+    })(Probe);
+    // `header` is no DOM property: the dev-mode unknown-property check is the
+    // loud part, and an author who wants the slot writes it statically.
+    TestBed.configureTestingModule({ errorOnUnknownProperties: false });
+    const fixture = TestBed.createComponent(Probe);
+    fixture.detectChanges();
+    const html = fixture.nativeElement.innerHTML as string;
+    expect(html).toMatch(/<b class="hdr"[^>]*><div[^>]*>H<\/div><\/b>/);
   });
 });

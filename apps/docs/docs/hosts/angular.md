@@ -167,23 +167,35 @@ A few of Angular's own idioms:
 | `<for\|k, v\| in=obj>` | `@for (entry of (obj \| keyvalue: null); track entry.key) { @let k = entry.key; @let v = entry.value; ... }` |
 | `<define>` | an `<ng-template>` with `let-` params |
 | a component call | an Angular component element |
-| a dynamic `data-*`/`aria-*` attribute | `[attr.data-x]`/`[attr.aria-x]` (no DOM property to bind) |
-| a dynamic attribute with a plain lowercase name on a native element | `@let __mxAttr = $any(expr);` before the element, then `[attr.x]="__mxAttr == null \|\| __mxAttr === false ? null : __mxAttr === true ? '' : __mxAttr"` (Marko's primitive rules: `null`/`undefined`/`false` omit, `true` is bare, `0` and `""` are kept) |
+| a dynamic `data-*`/`aria-*` attribute on a native element | `@let __mxAttr = $any(expr);` then `[attr.data-x]` with Marko's primitive rules |
+| a dynamic attribute that is a DOM property of its element (`title`, `hidden`, `disabled` on a `<button>`, `<input value>`, …) | `[title]` with the primitive rules folded into the value; a boolean property gets a real boolean |
+| a dynamic attribute that is a DOM property only of *other* elements (`disabled` on a `<div>`) | `[attr.disabled]` with the primitive rules |
 | a dynamic `class`/`style` on a native element | `[class]`/`[style]` with a falsy value omitted and `true` printed as `"true"` |
-| `<input value=v>` / `<input checked=v>` | live property bindings with the same primitive rules (`checked` is presence only) |
-| every other dynamic attribute (a component's or dashed tag's input, a camelCase name such as `innerHTML`, a name starting `on`) | `[x]` |
+| every other dynamic attribute (a name Angular's DOM schema does not know, a component's or dashed tag's input, a camelCase name such as `innerHTML`, a name starting `on`) | `[x]`, untouched |
 
-A misspelled attribute on a **native** element (`<input lable=title>`) is no
-longer an Angular NG8002 error: Marko prints any attribute name, and MX now binds
-it as an attribute (`[attr.lable]`). A dashed tag (`<app-child lable=title>`) is
-an Angular component selector, so its attributes stay input bindings and keep
-NG8001/NG8002 and the "did you mean" hint. A camelCase name still binds a
-property.
+**How a native attribute binds.** Angular's own DOM schema (the compiler's
+`DomElementSchemaRegistry`, the one that raises NG8002) decides, not a list kept
+in MX. A name that is a property of the element binds that property, so a typed
+`value` or a toggled `disabled` is not fought by a stale attribute, and
+Marko's rules (`null`/`undefined`/`false` omit, `true` is bare, `0` and `""` are
+kept) are folded into the value where a property can express them; a property
+cannot remove an attribute, so a string property prints `title=""` for `null`
+(see `divergences.md`). A name the schema knows only on other
+elements has no property here and becomes an attribute binding. A name the
+schema has never heard of keeps `[x]`: it may be a directive input
+(`selector: "[hi]", inputs: ["hi"]`) or a content-projection slot
+(`<ng-content select="[header]">`), and without a directive Angular still reports
+NG8002, as before. A dashed tag is an Angular component selector, so its
+attributes stay input bindings with NG8001/NG8002 and the "did you mean" hint.
+`@angular/compiler` is a dependency of `@mxlang/angular` for this reason.
 
-When an element carries a structural attribute (`*ngFor="let p of xs"`) and a
-dynamic attribute that needs the `@let`, the structural attribute moves to a
-wrapping `<ng-container>` so the `@let` sits inside the directive's template and
-sees its `let`/`as` variables.
+Every normalized attribute binds its authored expression once, in an
+`@let __mxAttr = $any(expr);` written before the element (`__mxAttr1`,
+`__mxAttr2`, … for the next ones), so the expression is evaluated and
+type-checked once, at its authored position. When the element carries a
+structural attribute (`*ngFor="let p of xs"`), the structural attribute moves to
+a wrapping `<ng-container>` so the `@let` sits inside the directive's template
+and sees its `let`/`as` variables.
 
 A structural directive written as an attribute (`*ngIf="x"`, `*ngFor="…"`,
 `*transloco="…"`) passes through to Angular only as the **first** attribute of

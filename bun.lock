@@ -279,6 +279,7 @@
         "mx-angular": "./dist/bin.js",
       },
       "dependencies": {
+        "@angular/compiler": "22.1.7",
         "@jridgewell/sourcemap-codec": "1.6.0",
         "@marko/compiler": "5.42.5",
         "@mxlang/core": "workspace:*",
@@ -287,7 +288,6 @@
       },
       "devDependencies": {
         "@angular/common": "22.1.7",
-        "@angular/compiler": "22.1.7",
         "@angular/core": "22.1.7",
         "@angular/platform-browser": "22.1.7",
         "@types/bun": "1.4.2",

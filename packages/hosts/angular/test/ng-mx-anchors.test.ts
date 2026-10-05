@@ -13,7 +13,7 @@ import {
   rebaseAnchorsThroughEscaping,
 } from "../src/mapping.ts";
 import { compileNgMx } from "../src/ng-mx.ts";
-import { attrBinding, textBinding } from "./helpers.ts";
+import { attrBinding } from "./helpers.ts";
 
 function ngMx(template: string): string {
   return [
@@ -41,8 +41,8 @@ describe("compileNgMx anchors", () => {
     // Emission order: a start tag's anchor closes after its attributes'.
     expect(pairs(ngMx("<div><input lable=title/></div>"))).toEqual([
       ["<div>", "div"],
-      [`[attr.lable]="${attrBinding(0)}"`, "lable=title"],
-      [`<input [attr.lable]="${attrBinding(0)}">`, "input"],
+      ['[lable]="title"', "lable=title"],
+      ['<input [lable]="title">', "input"],
     ]);
   });
 
@@ -56,8 +56,8 @@ describe("compileNgMx anchors", () => {
 
   it("anchors a default attribute at its value, since it has no spelled name", () => {
     expect(pairs(ngMx("<widget=title></widget>"))).toEqual([
-      [`[value]="${textBinding(0)}"`, "title"],
-      [`<widget [value]="${textBinding(0)}">`, "widget"],
+      [`[attr.value]="${attrBinding(0)}"`, "title"],
+      [`<widget [attr.value]="${attrBinding(0)}">`, "widget"],
     ]);
   });
 
@@ -71,7 +71,7 @@ describe("compileNgMx anchors", () => {
     // The escaped backtick and `\${` shifted the module offsets: the anchor
     // still slices the emitted attribute, in full, out of the module.
     expect(result.code.slice(attr.generatedStart, attr.generatedEnd)).toBe(
-      `[attr.lable]="${attrBinding(0)}"`,
+      '[lable]="`a${title}`"'.replaceAll("`", "\\`").replace("${", "\\${"),
     );
   });
 

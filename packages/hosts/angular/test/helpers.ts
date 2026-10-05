@@ -175,3 +175,9 @@ export const textBinding = (n: number): string => {
   const v = attrName(n);
   return `${v} == null || ${v} === false || ${v} === true ? '' : ${v}`;
 };
+
+/** The same for a boolean DOM property: Marko's presence rule as a real boolean. */
+export const presentBinding = (n: number): string => {
+  const v = attrName(n);
+  return `${v} != null && ${v} !== false`;
+};

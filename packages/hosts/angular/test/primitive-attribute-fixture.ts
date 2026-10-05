@@ -41,4 +41,27 @@ for (const [form, source] of Object.entries({
 })) {
   templates.push({ form, template: compile(source, "primitive.mx").code });
 }
+/** DOM-property cells and the unknown-name cases (`tag/name`), see primitive-attributes.test.ts. */
+for (const [tag, name] of [
+  ["div", "title"],
+  ["div", "hidden"],
+  ["div", "draggable"],
+  ["div", "tabindex"],
+  ["button", "disabled"],
+  ["option", "selected"],
+  ["div", "header"],
+  ["div", "hi"],
+]) {
+  templates.push({
+    form: `cell/${tag}/${name}`,
+    template: compile(`<${tag} ${name}=input.v/>`, "primitive.mx").code,
+  });
+}
+templates.push({
+  form: "slot/header",
+  template: compile(
+    "<app-child><div header=input.v>H</div></app-child>",
+    "primitive.mx",
+  ).code,
+});
 process.stdout.write(JSON.stringify(templates));

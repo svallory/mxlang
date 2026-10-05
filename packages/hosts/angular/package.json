@@ -46,9 +46,10 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "build": "rm -rf dist && bun build src/index.ts src/bin.ts src/descriptor.ts --tsconfig-override tsconfig.build.json --outdir dist --target node --format esm --external @marko/compiler --external @mxlang/core && bun build src/runtime.ts --tsconfig-override tsconfig.build.json --outdir dist --target browser --format esm && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist"
+    "build": "rm -rf dist && bun build src/index.ts src/bin.ts src/descriptor.ts --tsconfig-override tsconfig.build.json --outdir dist --target node --format esm --external @angular/compiler --external @marko/compiler --external @mxlang/core && bun build src/runtime.ts --tsconfig-override tsconfig.build.json --outdir dist --target browser --format esm && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist"
   },
   "dependencies": {
+    "@angular/compiler": "22.1.7",
     "@jridgewell/sourcemap-codec": "1.6.0",
     "@marko/compiler": "5.42.5",
     "@mxlang/core": "workspace:*",
@@ -57,7 +58,6 @@
   },
   "devDependencies": {
     "@angular/common": "22.1.7",
-    "@angular/compiler": "22.1.7",
     "@angular/core": "22.1.7",
     "@angular/platform-browser": "22.1.7",
     "@types/bun": "1.4.2",

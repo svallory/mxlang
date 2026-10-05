@@ -22,33 +22,20 @@
     "inputs": [
       {
         "name": "value",
-        "type": 0,
+        "type": 1,
         "securityContext": 0,
         "value": {
           "ast": {
             "condition": {
               "operation": "||",
               "left": {
-                "operation": "||",
+                "operation": "==",
                 "left": {
-                  "operation": "==",
-                  "left": {
-                    "receiver": {},
-                    "name": "__mxAttr"
-                  },
-                  "right": {
-                    "value": null
-                  }
+                  "receiver": {},
+                  "name": "__mxAttr"
                 },
                 "right": {
-                  "operation": "===",
-                  "left": {
-                    "receiver": {},
-                    "name": "__mxAttr"
-                  },
-                  "right": {
-                    "value": false
-                  }
+                  "value": null
                 }
               },
               "right": {
@@ -58,16 +45,31 @@
                   "name": "__mxAttr"
                 },
                 "right": {
-                  "value": true
+                  "value": false
                 }
               }
             },
             "trueExp": {
-              "value": ""
+              "value": null
             },
             "falseExp": {
-              "receiver": {},
-              "name": "__mxAttr"
+              "condition": {
+                "operation": "===",
+                "left": {
+                  "receiver": {},
+                  "name": "__mxAttr"
+                },
+                "right": {
+                  "value": true
+                }
+              },
+              "trueExp": {
+                "value": ""
+              },
+              "falseExp": {
+                "receiver": {},
+                "name": "__mxAttr"
+              }
             }
           }
         },

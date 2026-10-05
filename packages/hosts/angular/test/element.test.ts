@@ -8,6 +8,7 @@ import {
   emit,
   emitWithTags,
   listBinding,
+  presentBinding,
   textBinding,
 } from "./helpers.ts";
 
@@ -33,7 +34,7 @@ describe("Element", () => {
   it("emits a dynamic property binding", () => {
     const out = emit("<a value=expr>x</a>");
     expect(out).toBe(
-      `${attrLet(0, "expr")}<a [value]="${textBinding(0)}">x</a>`,
+      `${attrLet(0, "expr")}<a [attr.value]="${attrBinding(0)}">x</a>`,
     );
     assertAngularParses(out);
   });
@@ -56,6 +57,30 @@ describe("Element", () => {
       { outputs: [{ name: "click", handler: { ast: { receiver: {} } } }] },
     ]);
   });
+
+  // The compiler's own DOM schema decides how a plain lowercase name binds.
+  it.each([
+    ["<div title=t/>", "div", `[title]="${textBinding(0)}"`],
+    ["<button disabled=d/>", "button", `[disabled]="${presentBinding(0)}"`],
+    ["<input checked=c/>", "input", `[checked]="${presentBinding(0)}"`],
+    ["<input value=v/>", "input", `[value]="${textBinding(0)}"`],
+    // A property of another element only: Marko prints it as an attribute.
+    ["<div disabled=d/>", "div", `[attr.disabled]="${attrBinding(0)}"`],
+    ["<div data-x=d/>", "div", `[attr.data-x]="${attrBinding(0)}"`],
+  ])("%s binds as the schema says", (source, tag, binding) => {
+    expect(emit(source)).toBe(
+      `${attrLet(0, source.match(/=(\w+)\//)?.[1] ?? "")}<${tag} ${binding}${tag === "input" ? ">" : `></${tag}>`}`,
+    );
+  });
+
+  // A name the schema has never heard of may be a directive input or an
+  // `<ng-content select="[header]">` slot: it keeps `[name]`, untouched.
+  it.each(["header", "hi", "lable"])(
+    "keeps an unknown name %s as [name]",
+    (name) => {
+      expect(emit(`<div ${name}=x/>`)).toBe(`<div [${name}]="x"></div>`);
+    },
+  );
 
   it("keeps a dashed tag's attributes as inputs, with no primitive normalization", () => {
     const out = emit("<app-child label=title/>");

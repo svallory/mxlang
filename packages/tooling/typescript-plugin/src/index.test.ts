@@ -4047,9 +4047,7 @@ describe(".ng.mx language plugin", () => {
         const attributeError = found.find(
           (d) => d.source === "angular" && d.code === -998002,
         );
-        // `labelText` is camelCase on purpose: a plain lowercase native
-        // attribute is `[attr.x]` and has no NG8002 (apps/docs/docs/hosts/angular.md).
-        expect(attributeError?.start).toBe(source.indexOf("labelText=title"));
+        expect(attributeError?.start).toBe(source.indexOf("lable=title"));
         expect(service.getSyntacticDiagnostics(tag)).toEqual([]);
       } finally {
         project.close();

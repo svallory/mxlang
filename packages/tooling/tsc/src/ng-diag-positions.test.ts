@@ -32,16 +32,14 @@ describe("mx-tsc Angular element and attribute diagnostics", () => {
       expect(result.output).toContain(
         at("[value]=title", "-998002: Can't bind to '[value]'"),
       );
-      // A camelCase attribute (`labelText=title`, emitted `[labelText]`; a plain
-      // lowercase name is `[attr.x]` and has no NG8002, see
-      // apps/docs/docs/hosts/angular.md): the
+      // A plain dynamic attribute (`lable=title`, emitted `[lable]`): the
       // authored name.
       expect(result.output).toContain(
-        at("labelText=title", "-998002: Can't bind to 'labelText'"),
+        at("lable=title", "-998002: Can't bind to 'lable'"),
       );
-      // A plain lowercase dynamic attribute on a native element has no
-      // property to bind: it is `[attr.title]` over an `@let`, so a type error
-      // in its expression is reported once, at the authored expression.
+      // A DOM-property attribute (`title`) binds `[title]` over an `@let`: a
+      // type error in its expression is reported once, at the authored
+      // expression.
       const typeErrors = result.output.split("error TS2339").length - 1;
       expect(typeErrors).toBe(1);
       expect(result.output).toContain(
@@ -77,7 +75,7 @@ describe("mx-tsc Angular element and attribute diagnostics", () => {
         `x.component.ng.mx(${printed(source, "title.nmae")}): error TS2339`,
       );
       expect(result.output).toContain(
-        `x.component.ng.mx(${printed(source, "labelText=title")}): error TS-998002`,
+        `x.component.ng.mx(${printed(source, "lable=title")}): error TS-998002`,
       );
       expect(result.output).not.toContain("approximate location");
     },

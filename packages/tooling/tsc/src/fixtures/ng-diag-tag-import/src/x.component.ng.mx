@@ -4,7 +4,7 @@ import { Component } from "@angular/core";
   selector: "app-x",
   template: <div>
     <user-card title=title/>
-    <input labelText=title/>
+    <input lable=title/>
     <p>${title.nmae}</p>
   </div>,
 })
