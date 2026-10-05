@@ -70,6 +70,7 @@ by workspace-relative path):
 - `examples/mx-vite` — e2e only
 - `examples/preact-app` — e2e only
 - `examples/react-app` — e2e only
+- `examples/react-region-app` — e2e only
 - `examples/todomvc` — e2e only
 - `packages/editors/zed` — grammar and Rust extension (registers
   `@mxlang/language-server`), both build-verified in CI

@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node", "react", "react-dom"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "allowImportingTsExtensions": true,
+    "plugins": [
+      {
+        "name": "@mxlang/typescript-plugin"
+      }
+    ]
+  },
+  "include": ["src", "vite.config.ts", "e2e"]
+}

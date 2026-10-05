@@ -1,0 +1,29 @@
+import { useState } from "react";
+
+type Item = { id: string; name: string };
+
+/**
+ * A `.react.mx` component: hooks in TypeScript, markup in MX regions. The
+ * `<define>` reads `count` from the surrounding component's `useState`.
+ */
+export function Panel(props: { items: Item[] }) {
+  const [count, setCount] = useState(0);
+  const [open, setOpen] = useState(false);
+  return (
+    <main>
+      <h1>MX React regions</h1>
+      <define/Badge|label: string|><span data-testid="badge">${label}: ${count}</span></define>
+      <Badge("clicks")/>
+      <p data-testid="count" class={ even: count % 2 === 0, odd: count % 2 === 1 }>${count}</p>
+      <button type="button" data-testid="inc" onClick() { setCount(count + 1); }>add</button>
+      <if=open>
+        <ul data-testid="list">
+          <for|item| of=props.items by="id"><li>${item.name}</li></for>
+        </ul>
+      </if>
+      <else>
+        <button type="button" data-testid="show" onClick() { setOpen(true); }>show</button>
+      </else>
+    </main>
+  );
+}

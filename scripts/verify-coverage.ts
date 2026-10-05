@@ -80,6 +80,7 @@ const NO_TEST_EXCEPTIONS: Record<string, string> = {
   "examples/mx-vite": "e2e only",
   "examples/preact-app": "e2e only",
   "examples/react-app": "e2e only",
+  "examples/react-region-app": "e2e only",
   "examples/todomvc": "e2e only",
   "packages/editors/zed":
     "grammar and Rust extension, both build-verified in CI (zed-compile-check, zed-compile-check)",

@@ -203,6 +203,27 @@
         "vitest": "3.2.7",
       },
     },
+    "examples/react-region-app": {
+      "name": "@mxlang/example-react-region-app",
+      "version": "0.0.0",
+      "dependencies": {
+        "@mxlang/react": "workspace:*",
+        "react": "19.3.0",
+        "react-dom": "19.3.0",
+      },
+      "devDependencies": {
+        "@mxlang/tsc": "workspace:*",
+        "@mxlang/vite-plugin": "workspace:*",
+        "@types/node": "26.5.1",
+        "@types/react": "19.3.0",
+        "@types/react-dom": "19.3.0",
+        "@vitejs/plugin-react": "6.1.1",
+        "playwright": "1.63.0",
+        "typescript": "5.9.3",
+        "vite": "8.2.2",
+        "vitest": "3.2.7",
+      },
+    },
     "examples/todomvc": {
       "name": "@mxlang/example-todomvc",
       "version": "0.0.0",
@@ -1092,6 +1113,8 @@
     "@mxlang/example-preact-app": ["@mxlang/example-preact-app@workspace:examples/preact-app"],
 
     "@mxlang/example-react-app": ["@mxlang/example-react-app@workspace:examples/react-app"],
+
+    "@mxlang/example-react-region-app": ["@mxlang/example-react-region-app@workspace:examples/react-region-app"],
 
     "@mxlang/example-todomvc": ["@mxlang/example-todomvc@workspace:examples/todomvc"],
 
@@ -2846,6 +2869,8 @@
     "@mxlang/example-preact-app/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@mxlang/example-react-app/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+
+    "@mxlang/example-react-region-app/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@mxlang/example-todomvc/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 

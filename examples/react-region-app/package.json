@@ -1,0 +1,32 @@
+{
+  "name": "@mxlang/example-react-region-app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "mx": {
+    "host": "react"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "node ../../packages/tooling/tsc/dist/bin.cjs --noEmit",
+    "e2e": "vitest run --config e2e/vitest.config.ts"
+  },
+  "dependencies": {
+    "@mxlang/react": "workspace:*",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@mxlang/tsc": "workspace:*",
+    "@mxlang/vite-plugin": "workspace:*",
+    "@types/node": "26.5.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "playwright": "1.63.0",
+    "typescript": "5.9.3",
+    "vite": "8.2.2",
+    "vitest": "3.2.7"
+  }
+}
