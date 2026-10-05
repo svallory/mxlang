@@ -104,6 +104,9 @@ export const PACKED_PACKAGES: PackedPackage[] = [
       "dist/helpers.d.ts",
       "dist/index.d.ts",
       "dist/index.js",
+      // The `./runtime` export (decision 155): the sink compiled modules import.
+      "dist/runtime.d.ts",
+      "dist/runtime.js",
       "dist/translate.d.ts",
     ],
     declarations: true,
