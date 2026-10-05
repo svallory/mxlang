@@ -1,0 +1,890 @@
+From 3e0583417142f9491d6eba18c4950e22c91c5197 Mon Sep 17 00:00:00 2001
+From: Saulo Vallory <me@saulo.engineer>
+Date: Mon, 5 Oct 2026 01:12:52 -0300
+Subject: [PATCH] feat(grammar): parse #id, .class and :name shorthands
+ anywhere in a tag
+
+Implements MX decision 146 (the `:name` sugar):
+
+- Tag-adjacent `:b` is a new `shorthand_name` node, a sibling of
+  `shorthand_id` and `shorthand_class`. The three compose in any order
+  (`<a.c:b>`, `<a#d:b.c>`, `<:b.c>`), so `<a:b>` is now tag `a` with a name
+  shorthand instead of the tag `a:b`. The name shorthand no longer feeds
+  the tag's base name, so `<input:email>` is classified as the void
+  `input` and `</a>` closes `<a:b>`. A second tag-adjacent name is an error,
+  like a second id.
+- `#id`, `.class` and `:name` are also accepted in attribute position, in
+  html and concise mode and inside concise `[ ]` groups: first, or after
+  any attribute (`<input type="email" :email>`, `input x="1" #b .c :d`).
+  They follow whitespace, `,` or `[`; `f(x).b=1` and `...spread` keep
+  their Marko meaning. They use distinct external start tokens and are
+  aliased to the same node names, so queries treat both positions alike.
+- Attribute values end before whitespace followed by `.ident`, or by
+  `:ident` with no open `?` (ADR rule 4). `x=a ? b : c` is unchanged;
+  `x=a.b .c` is now value `a.b` plus class `c`. Only a conditional `?`
+  counts as open: the `?` of `??` and of `?.` (not `?.5`) do not, so
+  `x=a ?? b :c` and `x=a?.[0] :c` split. The rule is whitespace-based,
+  newlines included: `x=foo\n  .bar()` is value `foo` plus class `bar`
+  (keep a chain without the space or in parentheses).
+- A tag variable is not an attribute: `<a/b :c>` keeps `:c` as the tag
+  variable's type annotation.
+- A value on the sugar (`:x=1`, `<input:x=1>`, attribute-position
+  `#x=1`/`.x=1`) is a parse error. Named modifiers (`class:x`,
+  `style:x`, `value:fn:=x`) and `:=` are unchanged.
+
+Tag-adjacent shorthands carry the `shorthand` field; the <style>
+dialect injections match only those, so `<style .scss>` (a class in
+attribute position) stays CSS while `<style.scss>` is SCSS.
+
+Version 0.3.0 (minor): package.json, tree-sitter.json, package-lock.json
+and a CHANGELOG entry, written by hand in the `changeset version` format
+because the configured @changesets/changelog-github needs a pushed commit
+and a GitHub token.
+
+highlights.scm captures `shorthand_name` as @label. The htmljs fixture
+harness maps attribute-position shorthands to the attribute names
+htmljs-parser reads over the same range; __tests__/mx-shorthand.test.mts
+asserts trees for every form, the unchanged modifier forms, and the error
+cases. The README documents the node and both whitespace/tag-var rules.
+
+Claude-Session: https://claude.ai/code/session_01HKTad5c9G1JH1jQTFeHCJi
+---
+ README.md                       |   9 +-
+ __tests__/mx-shorthand.test.mts | 321 ++++++++++++++++++++++++++++++++
+ __tests__/util/tree-events.mts  |  20 +-
+ grammar.js                      |  36 +++-
+ queries/highlights.scm          |   1 +
+ queries/injections.scm          |   4 +-
+ src/scanner.c                   | 135 +++++++++++++-
+ 7 files changed, 512 insertions(+), 14 deletions(-)
+ create mode 100644 __tests__/mx-shorthand.test.mts
+
+diff --git a/README.md b/README.md
+index 6c7ebf3..cd99cae 100644
+--- a/README.md
++++ b/README.md
+@@ -180,7 +180,7 @@ Commonly queried nodes:
+ | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
+ | `element`                                                                                  | a tag in either mode, including its body and close           |
+ | `tag_name`, `tag_name_fragment`                                                            | tag names; interpolated names contain `placeholder` children |
+-| `shorthand_id`, `shorthand_class`                                                          | `#id` / `.class` shorthands                                  |
++| `shorthand_id`, `shorthand_class`, `shorthand_name`                                        | `#id` / `.class` / `:name` shorthands (MX decision 146)      |
+ | `attr_name`, `attr_value`, `attr_bound_value`, `attr_spread`                               | attributes (`x=…`, `x:=…`, `...spread`)                      |
+ | `args`, `method_body`                                                                      | `(…)` arguments and `{ … }` shorthand-method bodies          |
+ | `tag_var` → `var_pattern`, `var_type`                                                      | tag variables: `/pattern` with an optional `: type`          |
+@@ -205,6 +205,13 @@ A few structural notes:
+   punctuation queries can target them.
+ - Whitespace is significant in Marko, so the grammar has no `extras`; text
+   nodes contain their exact whitespace.
++- Shorthands may follow the tag name in any order (`<a#d:b.c>`, carrying
++  the `shorthand` field) or any attribute (`<input x=1 #d .c :b>`). The
++  attribute-position split is whitespace-based, newlines included:
++  `<a x=foo\n  .bar()>` is value `foo` then class `bar`; continue a chain
++  without the space or in parentheses (`x=(foo\n  .bar())`).
++- A tag variable is not an attribute: in `<a/b :c>` the `:c` is the tag
++  variable's type annotation (`var_type`), not a name shorthand.
+ - Invalid input produces an `ERROR` node from the first error onward,
+   matching how Marko itself reports a single error per template rather than
+   guessing at recovery.
+diff --git a/__tests__/mx-shorthand.test.mts b/__tests__/mx-shorthand.test.mts
+new file mode 100644
+index 0000000..7c75e39
+--- /dev/null
++++ b/__tests__/mx-shorthand.test.mts
+@@ -0,0 +1,321 @@
++// MX decision 146: `#id`, `.class` and `:name` shorthands anywhere in a
++// tag: tag-adjacent in any order, and in attribute position (first, or after
++// any attribute) in html and concise mode. htmljs-parser has no `:name`
++// sugar and reads the attribute-position forms differently (see the ADR), so
++// these cases assert trees directly instead of comparing parser events.
++import assert from "node:assert";
++import Parser from "tree-sitter";
++import { createRequire } from "node:module";
++
++const require = createRequire(import.meta.url);
++// eslint-disable-next-line @typescript-eslint/no-var-requires
++const Marko = require("../bindings/node");
++
++function parse(src: string) {
++  const parser = new Parser();
++  parser.setLanguage(Marko);
++  return parser.parse(src).rootNode;
++}
++
++const CASES: [name: string, src: string, tree: string][] = [
++  [
++    "tag-adjacent name",
++    "<a:b/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) shorthand: (shorthand_name (tag_name_fragment)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "tag-adjacent name on the unnamed tag",
++    "<:b/>",
++    "(document (element (open_tag_start) (tag_name) shorthand: (shorthand_name (tag_name_fragment)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "tag-adjacent class then name",
++    "<a.c:b/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) shorthand: (shorthand_class (tag_name_fragment)) shorthand: (shorthand_name (tag_name_fragment)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "tag-adjacent id, name, class",
++    "<a#d:b.c/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) shorthand: (shorthand_id (tag_name_fragment)) shorthand: (shorthand_name (tag_name_fragment)) shorthand: (shorthand_class (tag_name_fragment)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "unnamed tag with name and class",
++    "<:b.c/>",
++    "(document (element (open_tag_start) (tag_name) shorthand: (shorthand_name (tag_name_fragment)) shorthand: (shorthand_class (tag_name_fragment)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "tag-adjacent name with placeholder",
++    "<a:${x}/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) shorthand: (shorthand_name (placeholder (placeholder_start) (placeholder_expr) (placeholder_end))) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "close tag matches the bare name",
++    "<a:b>hi</a>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) shorthand: (shorthand_name (tag_name_fragment)) (open_tag_end) (text) (close_tag (close_tag_start) (close_tag_name) (close_tag_end)) (element_end)))",
++  ],
++  [
++    "close tag matches the full name",
++    "<a:b>hi</a:b>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) shorthand: (shorthand_name (tag_name_fragment)) (open_tag_end) (text) (close_tag (close_tag_start) (close_tag_name) (close_tag_end)) (element_end)))",
++  ],
++  [
++    "void tag keeps its type",
++    "<input:email>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) shorthand: (shorthand_name (tag_name_fragment)) (open_tag_end) (element_end)))",
++  ],
++  [
++    "concise tag-adjacent",
++    "a.c:b #d",
++    "(document (element (tag_name (tag_name_fragment)) shorthand: (shorthand_class (tag_name_fragment)) shorthand: (shorthand_name (tag_name_fragment)) (shorthand_id (tag_name_fragment)) (concise_open_tag_end) (element_end)))",
++  ],
++  [
++    "concise unnamed tag",
++    ":b.c",
++    "(document (element (tag_name) shorthand: (shorthand_name (tag_name_fragment)) shorthand: (shorthand_class (tag_name_fragment)) (concise_open_tag_end) (element_end)))",
++  ],
++  [
++    "name first attribute",
++    "<input :email/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (shorthand_name (tag_name_fragment)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "name after quoted value",
++    "<input type=\"email\" :email/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (shorthand_name (tag_name_fragment)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "id and class after value",
++    "<input x=\"1\" #main .big/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (shorthand_id (tag_name_fragment)) (shorthand_class (tag_name_fragment)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "all three after unquoted value",
++    "<a x=foo :b .c #d/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (shorthand_name (tag_name_fragment)) (shorthand_class (tag_name_fragment)) (shorthand_id (tag_name_fragment)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "after boolean attribute",
++    "<input disabled :email/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (shorthand_name (tag_name_fragment)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "after comma",
++    "<a x=1,:b/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (shorthand_name (tag_name_fragment)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "chained attribute shorthands",
++    "<a x=1 .b.c:d/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (shorthand_class (tag_name_fragment)) (shorthand_class (tag_name_fragment)) (shorthand_name (tag_name_fragment)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "attribute class with placeholder",
++    "<a x=1 .${y}/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (shorthand_class (placeholder (placeholder_start) (placeholder_expr) (placeholder_end))) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "concise after value",
++    "input x=\"1\" #b .c :d",
++    "(document (element (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (shorthand_id (tag_name_fragment)) (shorthand_class (tag_name_fragment)) (shorthand_name (tag_name_fragment)) (concise_open_tag_end) (element_end)))",
++  ],
++  [
++    "concise first attribute",
++    "input :email",
++    "(document (element (tag_name (tag_name_fragment)) (shorthand_name (tag_name_fragment)) (concise_open_tag_end) (element_end)))",
++  ],
++  [
++    "concise attribute group",
++    "div [ x=1 :n .c ]",
++    "(document (element (tag_name (tag_name_fragment)) (attr_group (attr_group_open) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (shorthand_name (tag_name_fragment)) (shorthand_class (tag_name_fragment)) (attr_group_close)) (concise_open_tag_end) (element_end)))",
++  ],
++  [
++    "html across newline",
++    "<a x=1\n  .b/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (shorthand_class (tag_name_fragment)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "member access across whitespace now splits",
++    "<a x=a.b .c/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (shorthand_class (tag_name_fragment)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "ternary keeps its colon",
++    "<a x=a ? b : c/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "ternary without spaces before branch",
++    "<a x=a ? b :c/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "member access without whitespace",
++    "<a x=a.b/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "call then member attribute name",
++    "<a f(x).b=1/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (args (args_open) (args_expr) (args_close)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "spread",
++    "<a ...x/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_spread (attr_value_expr)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "class modifier",
++    "<div class:scoped=\"x\"/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "style modifier",
++    "<div style:x=\"y\"/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "bound value modifier",
++    "<input value:fn:=x/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_bound_value (attr_bound_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "bound default attribute",
++    "<a:=x/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_bound_value (attr_bound_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "as-type value is unchanged",
++    "<a x=y as T/>",
++    "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
++  ],
++  [
++    "name with value is an error",
++    "<input :x=1/>",
++    "(document (ERROR (open_tag_start) (tag_name (tag_name_fragment))))",
++  ],
++  [
++    "tag-adjacent name with value is an error",
++    "<input:x=1/>",
++    "(document (ERROR (open_tag_start) (tag_name (tag_name_fragment))))",
++  ],
++  [
++    "id with value is an error",
++    "<input x=1 #x=1/>",
++    "(ERROR (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)))",
++  ],
++  [
++    "two tag-adjacent names is an error",
++    "<a:b:c/>",
++    "(document (ERROR (open_tag_start) (tag_name (tag_name_fragment)) shorthand: (shorthand_name (tag_name_fragment))))",
++  ],
++];
++
++describe("mx shorthands", () => {
++  for (const [name, src, tree] of CASES) {
++    it(name, () => {
++      assert.strictEqual(parse(src).toString(), tree);
++    });
++  }
++
++  it("splits the value exactly before the shorthand", () => {
++    const values = (src: string) =>
++      parse(src)
++        .descendantsOfType("attr_value_expr")
++        .map((n) => n.text);
++    assert.deepStrictEqual(values("<a x=foo :b .c #d/>"), ["foo"]);
++    assert.deepStrictEqual(values("<a x=a.b .c/>"), ["a.b"]);
++    assert.deepStrictEqual(values("<a x=a ? b :c/>"), ["a ? b :c"]);
++    assert.deepStrictEqual(values("<a x=a ? b : c/>"), ["a ? b : c"]);
++    assert.deepStrictEqual(values("<a x=y as T/>"), ["y as T"]);
++  });
++
++  it("keeps named modifiers as attribute names", () => {
++    const names = (src: string) =>
++      parse(src)
++        .descendantsOfType("attr_name")
++        .map((n) => n.text);
++    assert.deepStrictEqual(names('<div class:scoped="x"/>'), ["class:scoped"]);
++    assert.deepStrictEqual(names('<div style:x="y"/>'), ["style:x"]);
++    assert.deepStrictEqual(names("<input value:fn:=x/>"), ["value:fn"]);
++  });
++
++  it("ends the value only at a `:` with no open conditional `?`", () => {
++    const values = (src: string) =>
++      parse(src)
++        .descendantsOfType("attr_value_expr")
++        .map((n) => n.text);
++    const names = (src: string) =>
++      parse(src)
++        .descendantsOfType("shorthand_name")
++        .map((n) => n.text);
++    for (const [src, value] of [
++      ["<a x=a ?? b :c/>", "a ?? b"],
++      ["<a x=a?.[0] :c/>", "a?.[0]"],
++      ["<a x=a ?.b :c/>", "a ?.b"],
++      ["<a x=a ?? b ? c : d :e/>", "a ?? b ? c : d"],
++      ["<a x=a?.5:1 :c/>", "a?.5:1"],
++    ]) {
++      assert.deepStrictEqual(values(src), [value], src);
++      assert.strictEqual(names(src).length, 1, src);
++      assert.ok(!parse(src).hasError, src);
++    }
++    assert.deepStrictEqual(values("<a x=a ? b : c/>"), ["a ? b : c"]);
++    assert.deepStrictEqual(names("<a x=a ? b : c/>"), []);
++  });
++
++  it("splits a chain continued on the next line (whitespace rule)", () => {
++    const root = parse("<a x=foo\n  .bar()/>");
++    assert.deepStrictEqual(
++      root.descendantsOfType("attr_value_expr").map((n) => n.text),
++      ["foo"],
++    );
++    assert.deepStrictEqual(
++      root.descendantsOfType("shorthand_class").map((n) => n.text),
++      [".bar"],
++    );
++    const kept = parse("<a x=(foo\n  .bar())/>");
++    assert.deepStrictEqual(
++      kept.descendantsOfType("attr_value_expr").map((n) => n.text),
++      ["(foo\n  .bar())"],
++    );
++    assert.deepStrictEqual(kept.descendantsOfType("shorthand_class"), []);
++  });
++
++  it("reads `:` after a tag variable as its type annotation", () => {
++    const root = parse("<a/b :c/>");
++    assert.deepStrictEqual(
++      root.descendantsOfType("var_type").map((n) => n.text),
++      ["c"],
++    );
++    assert.deepStrictEqual(root.descendantsOfType("shorthand_name"), []);
++    assert.deepStrictEqual(
++      parse("<a/b x=1 :c/>")
++        .descendantsOfType("shorthand_name")
++        .map((n) => n.text),
++      [":c"],
++    );
++  });
++
++  it("marks only tag-adjacent shorthands with the shorthand field", () => {
++    const fielded = (src: string) =>
++      parse(src)
++        .firstNamedChild!.childrenForFieldName("shorthand")
++        .map((n) => n.text);
++    assert.deepStrictEqual(fielded("<a#d:b.c x=1 :e .f #g/>"), [
++      "#d",
++      ":b",
++      ".c",
++    ]);
++    assert.deepStrictEqual(fielded("<style .scss>a{}</style>"), []);
++    assert.deepStrictEqual(fielded("style.less x=1 .scss -- c{}"), [".less"]);
++  });
++
++  it("covers the shorthand source exactly", () => {
++    const root = parse("<a#d:b.c x=1 :e .f #g/>");
++    const text = (type: string) =>
++      root.descendantsOfType(type).map((n) => n.text);
++    assert.deepStrictEqual(text("shorthand_id"), ["#d", "#g"]);
++    assert.deepStrictEqual(text("shorthand_class"), [".c", ".f"]);
++    assert.deepStrictEqual(text("shorthand_name"), [":b", ":e"]);
++  });
++});
+diff --git a/__tests__/util/tree-events.mts b/__tests__/util/tree-events.mts
+index 19d5349..cef9397 100644
+--- a/__tests__/util/tree-events.mts
++++ b/__tests__/util/tree-events.mts
+@@ -188,6 +188,12 @@ export function treeEvents(src: string, root: SyntaxNode): Event[] {
+         flushAttr();
+       }
+       switch (part.type) {
++        // MX: attribute-position shorthands (`<a x=1 #b .c :d>`). Where
++        // htmljs-parser accepts them it reads an attribute named `#b`/`.c`/
++        // `:d` over the same range, so they compare as attribute names.
++        case "shorthand_id":
++        case "shorthand_class":
++        case "shorthand_name":
+         case "attr_name":
+           flushAttr();
+           cur = { name: part };
+@@ -313,6 +319,9 @@ export function treeEvents(src: string, root: SyntaxNode): Event[] {
+     };
+ 
+     let tagPartsSeenAttr = false;
++    // End of the tag name and its adjacent shorthands; a shorthand starting
++    // anywhere else is in attribute position.
++    let nameEnd = -1;
+ 
+     for (const child of kids) {
+       switch (child.type) {
+@@ -321,6 +330,7 @@ export function treeEvents(src: string, root: SyntaxNode): Event[] {
+           break;
+         case "tag_name":
+           tagNameNode = child;
++          nameEnd = child.endIndex;
+           addTemplate(
+             "tagName",
+             child.startIndex,
+@@ -330,10 +340,18 @@ export function treeEvents(src: string, root: SyntaxNode): Event[] {
+           break;
+         case "shorthand_id":
+         case "shorthand_class":
++        case "shorthand_name":
++          if (child.startIndex !== nameEnd) {
++            visitTagPart(child); // attribute position
++            break;
++          }
++          nameEnd = child.endIndex;
+           addTemplate(
+             child.type === "shorthand_id"
+               ? "tagShorthandId"
+-              : "tagShorthandClass",
++              : child.type === "shorthand_class"
++                ? "tagShorthandClass"
++                : "tagShorthandName",
+             child.startIndex,
+             child.endIndex,
+             templateParts(child),
+diff --git a/grammar.js b/grammar.js
+index 8526f45..78d2b40 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -48,6 +48,10 @@ module.exports = grammar({
+     $._tag_name_empty, // zero-width: shorthand-only tags like <.foo>
+     $._shorthand_id_start, // "#"
+     $._shorthand_class_start, // "."
++    $._shorthand_name_start, // ":" (MX: name="..." sugar)
++    $._attr_shorthand_id_start, // "#" in attribute position
++    $._attr_shorthand_class_start, // "." in attribute position
++    $._attr_shorthand_name_start, // ":" in attribute position
+     $.statement_expr, // body of statement tags (import/export/static/class)
+     $._tag_var_start, // "/"
+     $.var_pattern, // tag variable binding pattern (before any ": type")
+@@ -117,7 +121,14 @@ module.exports = grammar({
+       seq(
+         optional($.open_tag_start),
+         $.tag_name,
+-        repeat(choice($.shorthand_id, $.shorthand_class)),
++        // `shorthand` marks the tag-adjacent ones, so queries can tell
++        // `<style.scss>` from an attribute-position `<style .scss>`.
++        repeat(
++          field(
++            "shorthand",
++            choice($.shorthand_id, $.shorthand_class, $.shorthand_name),
++          ),
++        ),
+         optional($.statement_expr),
+         repeat($._tag_part),
+         choice($.open_tag_end, $.open_tag_end_self, $.concise_open_tag_end),
+@@ -133,6 +144,28 @@ module.exports = grammar({
+     shorthand_class: ($) =>
+       seq($._shorthand_class_start, repeat($._tag_name_part)),
+ 
++    // `:b` sets name="b" the way `#b` sets id and `.b` sets class.
++    shorthand_name: ($) =>
++      seq($._shorthand_name_start, repeat($._tag_name_part)),
++
++    // The same three shorthands in attribute position (first, or after any
++    // attribute: `<input type="email" :email #main .big>`). Distinct start
++    // tokens keep them apart from the tag-adjacent ones in the LR tables;
++    // they are aliased to the same node names, so queries treat both alike.
++    _attr_shorthand: ($) =>
++      choice(
++        alias($.attr_shorthand_id, $.shorthand_id),
++        alias($.attr_shorthand_class, $.shorthand_class),
++        alias($.attr_shorthand_name, $.shorthand_name),
++      ),
++
++    attr_shorthand_id: ($) =>
++      seq($._attr_shorthand_id_start, repeat($._tag_name_part)),
++    attr_shorthand_class: ($) =>
++      seq($._attr_shorthand_class_start, repeat($._tag_name_part)),
++    attr_shorthand_name: ($) =>
++      seq($._attr_shorthand_name_start, repeat($._tag_name_part)),
++
+     _tag_name_part: ($) =>
+       choice($.tag_name_fragment, alias($.tag_name_placeholder, $.placeholder)),
+ 
+@@ -151,6 +184,7 @@ module.exports = grammar({
+         $.type_args,
+         $.type_params,
+         $.attr_group,
++        $._attr_shorthand,
+         $.attr_name,
+         $.attr_value,
+         $.attr_bound_value,
+diff --git a/queries/highlights.scm b/queries/highlights.scm
+index ad00ec5..9e6e846 100644
+--- a/queries/highlights.scm
++++ b/queries/highlights.scm
+@@ -11,6 +11,7 @@
+ (close_tag_name) @tag
+ (shorthand_id) @constant
+ (shorthand_class) @property
++(shorthand_name) @label
+ 
+ (attr_name) @attribute
+ 
+diff --git a/queries/injections.scm b/queries/injections.scm
+index eeb01ca..733d54f 100644
+--- a/queries/injections.scm
++++ b/queries/injections.scm
+@@ -83,7 +83,7 @@
+ (element
+   (tag_name) @_tag
+   (#eq? @_tag "style")
+-  (shorthand_class (tag_name_fragment) @injection.language)*
++  shorthand: (shorthand_class (tag_name_fragment) @injection.language)*
+   (text) @injection.content
+   (#set! injection.language "css")
+   (#set! injection.combined))
+@@ -106,7 +106,7 @@
+ (element
+   (tag_name) @_tag
+   (#eq? @_tag "style")
+-  (shorthand_class (tag_name_fragment) @injection.language)*
++  shorthand: (shorthand_class (tag_name_fragment) @injection.language)*
+   (html_block
+     (text) @injection.content)
+   (#set! injection.language "css"))
+diff --git a/src/scanner.c b/src/scanner.c
+index 890acec..ce4efcd 100644
+--- a/src/scanner.c
++++ b/src/scanner.c
+@@ -57,6 +57,10 @@ enum TokenType {
+   TAG_NAME_EMPTY,
+   SHORTHAND_ID_START,       // "#"
+   SHORTHAND_CLASS_START,    // "."
++  SHORTHAND_NAME_START,     // ":" (MX: name sugar)
++  ATTR_SHORTHAND_ID_START,     // "#" in attribute position
++  ATTR_SHORTHAND_CLASS_START,  // "." in attribute position
++  ATTR_SHORTHAND_NAME_START,   // ":" in attribute position
+   STATEMENT_EXPR,
+   TAG_VAR_START,            // "/"
+   VAR_PATTERN,
+@@ -110,6 +114,10 @@ static inline bool is_word_code(int32_t c) {
+   return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+          (c >= '0' && c <= '9') || c == '$' || c == '_';
+ }
++static inline bool is_ident_start_code(int32_t c) {
++  return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '$' ||
++         c == '_';
++}
+ static inline bool is_word_or_period_code(int32_t c) {
+   return c == '.' || is_word_code(c);
+ }
+@@ -210,6 +218,9 @@ typedef struct {
+   uint8_t tag_has_args;
+   uint8_t tag_has_params;
+   uint8_t tag_has_shorthand_id;
++  uint8_t tag_has_shorthand_name;
++  uint8_t shorthand_kind;   // '#' | '.' | ':' of the shorthand being scanned
++  uint8_t attr_shorthand;   // that shorthand is in attribute position
+   uint8_t tag_pending_types;   // tag-level <T> awaiting | or (
+   uint8_t types_was_args;      // current <...> is a type-args (adjacent)
+   uint8_t expect_method_open;  // attr-level <T> closed; "(" must follow
+@@ -428,6 +439,7 @@ typedef struct {
+   bool split_at_type_colon;  // stop before the ":" that enters type mode
+   bool resume_lookbehind;    // token resumes a split expression: operator
+                              // lookbehind may cross the token start
++  bool split_at_shorthand;   // MX: ws + `.ident`/`:ident` ends the value
+   uint8_t terminator;
+ } ExprCfg;
+ 
+@@ -436,6 +448,9 @@ typedef struct {
+   uint8_t group[128];
+   uint32_t group_len;
+   int32_t ternary_depth;
++  // MX: open conditional `?`s only. ternary_depth mirrors the parser and
++  // also counts the `?` of `??` and `?.`, which no `:` ever closes.
++  int32_t cond_depth;
+   bool in_type;
+   bool force_type;
+   bool was_comment;
+@@ -738,6 +753,12 @@ static bool check_for_operators(EStream *es, ExprState *e, bool eol) {
+     }
+ 
+     int32_t next_c = es_peek(es, k);
++    if (e->cfg.split_at_shorthand && is_ident_start_code(es_peek(es, k + 1)) &&
++        (next_c == '.' || (next_c == ':' && !e->cond_depth))) {
++      // MX: after whitespace, `.ident` and `:ident` (no open `?`) begin a
++      // shorthand attribute instead of continuing the value.
++      return false;
++    }
+     if (next_c >= 0 && !should_terminate(es, e, next_c, k)) {
+       int64_t consume = look_ahead_for_operator(es, e, k);
+       if (consume != -1) {
+@@ -929,6 +950,12 @@ static bool scan_expr_inner(EStream *es, ExprState *e) {
+         break;
+       case '?':
+         if (e->cfg.operators && !e->group_len) {
++          int32_t q1 = es_peek(es, 1);
++          int32_t q2 = es_peek(es, 2);
++          bool optional_chain = q1 == '.' && !(q2 >= '0' && q2 <= '9');
++          if (q1 != '?' && es_prev_char(es) != '?' && !optional_chain) {
++            e->cond_depth++;
++          }
+           e->ternary_depth++;
+           es_next(es);
+           es_consume_ws(es);
+@@ -940,6 +967,7 @@ static bool scan_expr_inner(EStream *es, ExprState *e) {
+         if (e->cfg.operators && !e->group_len) {
+           if (e->ternary_depth) {
+             e->ternary_depth--;
++            if (e->cond_depth) e->cond_depth--;
+           } else {
+             if (e->cfg.split_at_type_colon && !e->in_type) {
+               // Stop before the ":" that would enter type mode: the caller
+@@ -1204,6 +1232,9 @@ static bool push_tag(Scanner *s, bool concise) {
+   s->tag_has_args = 0;
+   s->tag_has_params = 0;
+   s->tag_has_shorthand_id = 0;
++  s->tag_has_shorthand_name = 0;
++  s->shorthand_kind = 0;
++  s->attr_shorthand = 0;
+   s->tag_pending_types = 0;
+   s->expect_method_open = 0;
+   s->tag_comma_continue = 0;
+@@ -1350,6 +1381,7 @@ static ExprCfg cfg_attr_value(Scanner *s) {
+   ExprCfg cfg;
+   memset(&cfg, 0, sizeof(cfg));
+   cfg.operators = true;
++  cfg.split_at_shorthand = true;
+   cfg.terminated_by_whitespace = true;
+   cfg.terminator = is_concise(s)
+                        ? (s->in_attr_group ? TERM_CONCISE_GROUPED_ATTR_VALUE
+@@ -1437,7 +1469,7 @@ static void accumulate_tag_name_hash(Scanner *s) {
+   if (!s->tag_open) return;
+   TagFrame *t = top_tag(s);
+   if (!t) return;
+-  if (!s->tag_name_done || s->in_shorthand) {
++  if (!s->tag_name_done || (s->in_shorthand && !s->attr_shorthand)) {
+     for (uint32_t i = 0; i < s->buf_len; i++) {
+       int32_t c = (int32_t)(uint8_t)s->buf[i];
+       t->full_hash = hash_push(t->full_hash, c);
+@@ -2548,6 +2580,8 @@ static bool is_tag_name_terminator(Scanner *s, int32_t c, int32_t next) {
+       return next == '=';
+     case ';': case '[':
+       return is_concise(s);
++    case ']':
++      return s->in_attr_group;
+     case '>':
+       return !is_concise(s);
+     default:
+@@ -2562,11 +2596,39 @@ static void finalize_tag_name(Scanner *s, int32_t stop_char) {
+     s->adjacent_lt = stop_char == '<';
+     TagFrame *t = top_tag(s);
+     if (t && t->type == TAG_STATEMENT && stop_char != '.' &&
+-        stop_char != '#') {
++        stop_char != '#' && stop_char != ':') {
+       s->statement_pending = 1;
+     }
+   }
+   s->in_shorthand = 0;
++  s->shorthand_kind = 0;
++  s->attr_shorthand = 0;
++}
++
++// Attribute-position shorthands only follow whitespace, `,` or a concise
++// `[`: `<a f(x).b=1>` keeps `.b` as an attribute name, as in Marko.
++static bool after_attr_separator(int32_t prev) {
++  return prev < 0 || is_ws(prev) || prev == ',' || prev == '[';
++}
++
++static bool is_attr_shorthand_start(int32_t c, int32_t n1) {
++  switch (c) {
++    case '#':
++      return is_word_code(n1) || n1 == '-';
++    case '.':
++    case ':':
++      return is_ident_start_code(n1);
++    default:
++      return false;
++  }
++}
++
++// MX: a value on the sugar (`:x=1`, or `#x=1` / `.x=1` in attribute
++// position) is an error: the sugar is the whole attribute.
++static bool shorthand_takes_no_value(Scanner *s, int32_t c, int32_t n1) {
++  if (!s->in_shorthand) return false;
++  if (s->shorthand_kind != ':' && !s->attr_shorthand) return false;
++  return c == '=' || (c == ':' && n1 == '=');
+ }
+ 
+ // Scan one tag name fragment / shorthand-start / interp-start token.
+@@ -2579,6 +2641,10 @@ static int scan_tag_name_token(Scanner *s, const bool *valid, EStream *es,
+   int32_t c = es_peek(es, 0);
+   int32_t n1 = es_peek(es, 1);
+ 
++  // Attribute-position shorthands (`<a x=1 .b>`) are not part of the tag's
++  // name: they never feed the close-tag hashes.
++  if (s->attr_shorthand) t = NULL;
++
+   if (c == '$' && n1 == '{') {
+     es_next_mark(es);
+     es_next_mark(es);
+@@ -2595,7 +2661,9 @@ static int scan_tag_name_token(Scanner *s, const bool *valid, EStream *es,
+     return valid[INTERP_START] ? 1 : 0;
+   }
+ 
+-  if (c == '.' || c == '#') {
++  // MX: `:` (not `:=`) starts a name shorthand, so `<a:b>` is tag `a` with
++  // name="b" rather than the tag `a:b`.
++  if (c == '.' || c == '#' || (c == ':' && n1 != '=')) {
+     bool had_name_parts =
+         !s->tag_name_done &&
+         (t ? (t->name_len > 0 || (t->flags & TF_NAME_INTERP)) : false);
+@@ -2607,20 +2675,35 @@ static int scan_tag_name_token(Scanner *s, const bool *valid, EStream *es,
+       *result = TAG_NAME_EMPTY;
+       return valid[TAG_NAME_EMPTY] ? 1 : 0;
+     }
++    bool attr = s->attr_shorthand;
+     finalize_tag_name(s, c);
+-    if (c == '#') {
++    if (!attr && c == '#') {
+       if (s->tag_has_shorthand_id) {
+         return 0;  // INVALID_TAG_SHORTHAND: multiple IDs
+       }
+       s->tag_has_shorthand_id = 1;
+     }
++    if (!attr && c == ':') {
++      if (s->tag_has_shorthand_name) return 0;  // multiple names
++      s->tag_has_shorthand_name = 1;
++    }
+     s->in_shorthand = 1;
++    s->shorthand_kind = (uint8_t)c;
++    s->attr_shorthand = attr;
+     es_next_mark(es);
+     if (t) {
+       t->full_hash = hash_push(t->full_hash, c);
+       t->full_len++;
+     }
+-    *result = c == '#' ? SHORTHAND_ID_START : SHORTHAND_CLASS_START;
++    if (attr) {
++      *result = c == '#'   ? ATTR_SHORTHAND_ID_START
++                : c == '.' ? ATTR_SHORTHAND_CLASS_START
++                           : ATTR_SHORTHAND_NAME_START;
++    } else {
++      *result = c == '#'   ? SHORTHAND_ID_START
++                : c == '.' ? SHORTHAND_CLASS_START
++                           : SHORTHAND_NAME_START;
++    }
+     return valid[*result] ? 1 : 0;
+   }
+ 
+@@ -2631,17 +2714,18 @@ static int scan_tag_name_token(Scanner *s, const bool *valid, EStream *es,
+       *result = TAG_NAME_EMPTY;
+       return valid[TAG_NAME_EMPTY] ? 1 : 0;
+     }
++    if (shorthand_takes_no_value(s, c, n1)) return 0;
+     finalize_tag_name(s, c);
+     return 2;
+   }
+ 
+-  // A fragment: consume until a terminator / `.` / `#` / `${`.
++  // A fragment: consume until a terminator / `.` / `#` / `:` / `${`.
+   bool first_part = !s->tag_name_done && t && t->name_len == 0 &&
+                     !(t->flags & TF_NAME_INTERP) && !s->in_shorthand;
+   while (true) {
+     c = es_peek(es, 0);
+     n1 = es_peek(es, 1);
+-    if (c < 0 || c == '.' || c == '#' || (c == '$' && n1 == '{') ||
++    if (c < 0 || c == '.' || c == '#' || c == ':' || (c == '$' && n1 == '{') ||
+         is_line(c) || is_tag_name_terminator(s, c, n1)) {
+       break;
+     }
+@@ -2661,7 +2745,10 @@ static int scan_tag_name_token(Scanner *s, const bool *valid, EStream *es,
+     t->type = classify_tag_name(s);
+   }
+ 
+-  if (c != '.' && c != '#' && !(c == '$' && n1 == '{')) {
++  if (shorthand_takes_no_value(s, c, n1)) return 0;
++
++  if (c != '.' && c != '#' && !(c == ':' && n1 != '=') &&
++      !(c == '$' && n1 == '{')) {
+     finalize_tag_name(s, c);
+   }
+ 
+@@ -3135,6 +3222,28 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
+     }
+   }
+ 
++  // ---- MX: `#id`, `.class` and `:name` shorthands in attribute position.
++  // They begin a fresh attribute after whitespace, `,` or `[`; a bare `#`,
++  // and a `.`/`:` not followed by an identifier start (`...x`, `:=`), keep
++  // their Marko meaning.
++  if (!s->expect_method_open && !s->tag_pending_types &&
++      is_attr_shorthand_start(c, es_peek(es, 1)) &&
++      after_attr_separator(es_prev_char(es))) {
++    s->attr_active = 0;
++    s->attr_stage = ATTR_UNKNOWN;
++    s->attr_has_args = 0;
++    s->attr_has_type_params = 0;
++    s->tag_has_attrs = 1;
++    s->adjacent_lt = 0;
++    s->in_shorthand = 1;
++    s->attr_shorthand = 1;
++    TSSymbol sym = 0;
++    if (scan_tag_name_token(s, valid, es, &sym) != 1) return false;
++    lexer->result_symbol = sym;
++    concise_tag_epilogue(s, lexer);
++    return true;
++  }
++
+   if (s->expect_method_open && c != '(') {
+ #ifdef TSMARKO_DEBUG
+     fprintf(stderr, "[expect_method_open fail c=%c]\n", (char)c);
+@@ -3469,6 +3578,9 @@ unsigned tree_sitter_marko_external_scanner_serialize(void *payload,
+   WRITE(s->tag_has_args);
+   WRITE(s->tag_has_params);
+   WRITE(s->tag_has_shorthand_id);
++  WRITE(s->tag_has_shorthand_name);
++  WRITE(s->shorthand_kind);
++  WRITE(s->attr_shorthand);
+   WRITE(s->tag_pending_types);
+   WRITE(s->types_was_args);
+   WRITE(s->expect_method_open);
+@@ -3524,6 +3636,9 @@ void tree_sitter_marko_external_scanner_deserialize(void *payload,
+     READ(s->tag_has_args);
+     READ(s->tag_has_params);
+     READ(s->tag_has_shorthand_id);
++    READ(s->tag_has_shorthand_name);
++    READ(s->shorthand_kind);
++    READ(s->attr_shorthand);
+     READ(s->tag_pending_types);
+     READ(s->types_was_args);
+     READ(s->expect_method_open);
+@@ -3544,7 +3659,9 @@ static const char *const TOKEN_NAMES[] = {
+     "SCRIPTLET_START_CONCISE", "SCRIPTLET_BLOCK_OPEN", "SCRIPTLET_BLOCK_EXPR",
+     "SCRIPTLET_BLOCK_CLOSE", "SCRIPTLET_EXPR", "BLOCK_OPEN", "BLOCK_CLOSE",
+     "OPEN_TAG_START", "TAG_NAME_FRAGMENT", "TAG_NAME_EMPTY",
+-    "SHORTHAND_ID_START", "SHORTHAND_CLASS_START", "STATEMENT_EXPR",
++    "SHORTHAND_ID_START", "SHORTHAND_CLASS_START", "SHORTHAND_NAME_START",
++    "ATTR_SHORTHAND_ID_START", "ATTR_SHORTHAND_CLASS_START",
++    "ATTR_SHORTHAND_NAME_START", "STATEMENT_EXPR",
+     "TAG_VAR_START", "VAR_PATTERN", "VAR_COLON", "VAR_TYPE", "ARGS_OPEN",
+     "ARGS_EXPR", "ARGS_CLOSE", "PARAMS_OPEN", "PARAM_PATTERN", "PARAM_COLON",
+     "PARAM_TYPE", "PARAM_EQ", "PARAM_DEFAULT", "PARAM_COMMA",

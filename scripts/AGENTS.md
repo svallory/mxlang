@@ -50,7 +50,7 @@ scripts/pre-verify.ts && typecheck && lint && build && test && test:bun && test:
   full path rather than basename is load-bearing: an example and a package
   can share a basename (`examples/angular-app` vs `packages/hosts/angular`),
   and a basename-only match let one satisfy the other's coverage requirement
-  for free. For `tree-sitter-solidmx`/`tree-sitter-amx` only, evidence is
+  for free. For `tree-sitter-solidmx`/`tree-sitter-amx`/`tree-sitter-mx` only, evidence is
   the `.test-ran` marker instead. Every evidence file's mtime must be `>=`
   `.verify-start`'s timestamp, or it's treated as stale and the package
   fails — there is no code path that marks a package as tested without

@@ -226,6 +226,14 @@
         "tree-sitter-cli": "0.24.7",
       },
     },
+    "packages/editors/tree-sitter-mx": {
+      "name": "@mxlang/tree-sitter-mx",
+      "version": "0.1.0",
+      "devDependencies": {
+        "tree-sitter-cli": "0.26.9",
+        "web-tree-sitter": "0.26.9",
+      },
+    },
     "packages/editors/tree-sitter-solidmx": {
       "name": "@mxlang/tree-sitter-solidmx",
       "version": "0.0.0",
@@ -1071,6 +1079,8 @@
     "@mxlang/target-registry": ["@mxlang/target-registry@workspace:packages/target-registry"],
 
     "@mxlang/tree-sitter-amx": ["@mxlang/tree-sitter-amx@workspace:packages/editors/tree-sitter-amx"],
+
+    "@mxlang/tree-sitter-mx": ["@mxlang/tree-sitter-mx@workspace:packages/editors/tree-sitter-mx"],
 
     "@mxlang/tree-sitter-solidmx": ["@mxlang/tree-sitter-solidmx@workspace:packages/editors/tree-sitter-solidmx"],
 
@@ -2644,6 +2654,8 @@
 
     "weak-lru-cache": ["weak-lru-cache@1.2.2", "", {}, "sha512-DEAoo25RfSYMuTGc9vPJzZcZullwIqRDSI9LOy+fkCJPi6hykCnfKaXTuPBDuXAUcqHXyOgFtHNp/kB2FjYHbw=="],
 
+    "web-tree-sitter": ["web-tree-sitter@0.26.9", "", {}, "sha512-YJwSHANl6XFgeEjB8nitgj0qZYt5gkIesJ4w2srS2wcLB4GUa4xcOkM0YaMsU6WNR53YVIkDSY7Ej4pf3IXtCA=="],
+
     "webidl-conversions": ["webidl-conversions@8.0.1", "", {}, "sha512-BMhLD/Sw+GbJC21C/UgyaZX41nPt8bUTg+jWyDeg7e7YN4xOM05YPSIXceACnXVtqyEw/LMClUQMtMZ+PGGpqQ=="],
 
     "whatwg-encoding": ["whatwg-encoding@3.1.1", "", { "dependencies": { "iconv-lite": "0.6.3" } }, "sha512-6qN4hJdMwfYBtE3YBTTHhoeuUrDBPZmbQaxWAqSALV/MeEnR5z1xd8UKud2RAkFoPkmB+hli1TZSnyi84xz1vQ=="],
@@ -2801,6 +2813,8 @@
     "@mxlang/example-react-app/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@mxlang/example-todomvc/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+
+    "@mxlang/tree-sitter-mx/tree-sitter-cli": ["tree-sitter-cli@0.26.9", "", { "bin": { "tree-sitter": "cli.js" } }, "sha512-7l+U1RmazPVe+yA/JiX80GFOILnL/j24GbawamIzNQC8UlINrcyECbaWGaG1wuq4j/m0DQTx7Uu4r0iW9Ao1BQ=="],
 
     "@mxlang/tree-sitter-solidmx/tree-sitter-cli": ["tree-sitter-cli@0.26.9", "", { "bin": { "tree-sitter": "cli.js" } }, "sha512-7l+U1RmazPVe+yA/JiX80GFOILnL/j24GbawamIzNQC8UlINrcyECbaWGaG1wuq4j/m0DQTx7Uu4r0iW9Ao1BQ=="],
 

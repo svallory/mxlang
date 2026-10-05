@@ -3537,7 +3537,7 @@ static bool scan_main(Scanner *s, TSLexer *lexer, const bool *valid) {
     n += sizeof(field);                       \
   } while (0)
 
-void *tree_sitter_marko_external_scanner_create(void) {
+void *tree_sitter_mx_external_scanner_create(void) {
   Scanner *s = (Scanner *)calloc(1, sizeof(Scanner));
   s->cur.line_only_ws = 1;
   s->cur.cur_indent_hash = HASH_INIT;
@@ -3545,13 +3545,13 @@ void *tree_sitter_marko_external_scanner_create(void) {
   return s;
 }
 
-void tree_sitter_marko_external_scanner_destroy(void *payload) {
+void tree_sitter_mx_external_scanner_destroy(void *payload) {
   Scanner *s = (Scanner *)payload;
   free(s->buf);
   free(s);
 }
 
-unsigned tree_sitter_marko_external_scanner_serialize(void *payload,
+unsigned tree_sitter_mx_external_scanner_serialize(void *payload,
                                                       char *buffer) {
   Scanner *s = (Scanner *)payload;
   unsigned n = 0;
@@ -3592,7 +3592,7 @@ unsigned tree_sitter_marko_external_scanner_serialize(void *payload,
   return n;
 }
 
-void tree_sitter_marko_external_scanner_deserialize(void *payload,
+void tree_sitter_mx_external_scanner_deserialize(void *payload,
                                                     const char *buffer,
                                                     unsigned length) {
   Scanner *s = (Scanner *)payload;
@@ -3676,7 +3676,7 @@ static const char *const TOKEN_NAMES[] = {
 };
 #endif
 
-bool tree_sitter_marko_external_scanner_scan(void *payload, TSLexer *lexer,
+bool tree_sitter_mx_external_scanner_scan(void *payload, TSLexer *lexer,
                                              const bool *valid_symbols) {
   Scanner *s = (Scanner *)payload;
   s->buf_len = 0;

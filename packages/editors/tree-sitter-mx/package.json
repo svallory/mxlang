@@ -1,0 +1,17 @@
+{
+  "name": "@mxlang/tree-sitter-mx",
+  "version": "0.1.0",
+  "private": true,
+  "//type": "No \"type\" field on purpose: tree-sitter loads grammar.js as CommonJS, and \"type\": \"module\" makes its require() call fail. Upstream's package.json omits it for the same reason.",
+  "scripts": {
+    "generate": "flock /tmp/mx-zed-generate.lock bunx tree-sitter generate",
+    "build:wasm": "flock /tmp/mx-zed-generate.lock bunx tree-sitter build --wasm -o tree-sitter-mx.wasm",
+    "test": "./scripts/test.sh",
+    "vendor:check": "./scripts/vendor-check.sh",
+    "zed-compile-check": "./scripts/zed-compile-check.sh"
+  },
+  "devDependencies": {
+    "tree-sitter-cli": "0.26.9",
+    "web-tree-sitter": "0.26.9"
+  }
+}

@@ -1,4 +1,4 @@
-// Smoke test for the wasm build: loads tree-sitter-marko.wasm with
+// Smoke test for the wasm build: loads tree-sitter-mx.wasm with
 // web-tree-sitter, parses a sample exercising both modes, and runs the
 // bundled queries against it.
 import fs from "node:fs";
@@ -9,11 +9,11 @@ import { Language, Parser, Query } from "web-tree-sitter";
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 await Parser.init();
-const Marko = await Language.load(path.join(root, "tree-sitter-marko.wasm"));
+const Marko = await Language.load(path.join(root, "tree-sitter-mx.wasm"));
 const parser = new Parser();
 parser.setLanguage(Marko);
 
-const src = `import Button from "./button.marko"
+const src = `import Button from "./button.mx"
 
 <let/count: number = 0/>
 div.panel

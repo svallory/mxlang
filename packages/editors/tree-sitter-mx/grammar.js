@@ -14,7 +14,7 @@
 // @ts-check
 
 module.exports = grammar({
-  name: "marko",
+  name: "mx",
 
   // Whitespace is significant almost everywhere (text content, expression
   // termination, concise indentation), so there are no extras; the external

@@ -15,6 +15,7 @@ on:
     paths:
       - "packages/editors/zed/**"
       - "packages/editors/tree-sitter-solidmx/**"
+      - "packages/editors/tree-sitter-mx/**"
 
 permissions:
   contents: read
@@ -72,8 +73,24 @@ jobs:
             exit 1
           fi
 
+  mx-vendor-matches:
+    # packages/editors/tree-sitter-mx is a snapshot of marko-js/tree-sitter at
+    # a pinned sha plus patches/*.patch. vendor-check.sh re-fetches the pin,
+    # reapplies the patches, and diffs against the committed files, so an
+    # edit to a vendored file that was never captured as a patch fails here.
+    # (Its generated src/ is checked by scripts/test.sh in test-bun-grammar.)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/editors/tree-sitter-mx
+    steps:
+      - uses: actions/checkout@v4
+      - name: vendor-check.sh
+        run: ./scripts/vendor-check.sh
+
   vendored-files-match:
-    # Regenerates languages/solidmx/*.scm (no live upstream HEAD lookup — just
+    # Regenerates languages/{mx,solidmx,ngmx}/*.scm (no live upstream HEAD lookup — just
     # what vendor.sh's normal mode already does) and diffs against what's
     # committed. Catches a hand-edit of those files, which UPSTREAM.md says
     # never to do.
@@ -90,9 +107,9 @@ jobs:
       - uses: actions/checkout@v4
       - run: ./scripts/vendor.sh
       - run: |
-          if ! git diff --exit-code -- languages/solidmx; then
-            echo "languages/solidmx/*.scm doesn't match what vendor.sh generates." >&2
-            echo "Never hand-edit those files — edit overlay/solidmx/*.scm or" >&2
-            echo "base/solidmx/*.scm and rerun vendor.sh." >&2
+          if ! git diff --exit-code -- languages/mx languages/solidmx languages/ngmx; then
+            echo "languages/{mx,solidmx,ngmx}/*.scm doesn't match what vendor.sh generates." >&2
+            echo "Never hand-edit those files — edit overlay/<lang>/*.scm or" >&2
+            echo "base/<lang>/*.scm (or the grammar package's queries/) and rerun vendor.sh." >&2
             exit 1
           fi

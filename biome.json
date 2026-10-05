@@ -23,7 +23,12 @@
       "!packages/editors/tree-sitter-solidmx/test/corpus",
       "!packages/editors/tree-sitter-solidmx/fixtures",
       "!packages/editors/tree-sitter-amx/src",
-      "!packages/editors/tree-sitter-amx/test/corpus"
+      "!packages/editors/tree-sitter-amx/test/corpus",
+      "!packages/editors/tree-sitter-mx/src",
+      "!packages/editors/tree-sitter-mx/grammar.js",
+      "!packages/editors/tree-sitter-mx/tree-sitter.json",
+      "!packages/editors/tree-sitter-mx/__tests__",
+      "!packages/editors/tree-sitter-mx/tools"
     ]
   },
   "formatter": {

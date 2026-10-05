@@ -1,21 +1,6 @@
-import Parser from "tree-sitter";
-import { createRequire } from "node:module";
 import { parseEvents, type Event } from "./events.mts";
+import { parseMx } from "./language.mts";
 import { treeEvents, sortEvents } from "./tree-events.mts";
-
-const require = createRequire(import.meta.url);
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const Marko = require("../../bindings/node");
-
-// A fresh parser per parse: a timed-out parse can poison subsequent parses
-// on the same instance.
-function makeParser() {
-  const parser = new Parser();
-  parser.setLanguage(Marko);
-  // A scanner bug must fail the test, not hang the suite.
-  (parser as any).setTimeoutMicros?.(5_000_000);
-  return parser;
-}
 
 export interface CompareResult {
   ok: boolean;
@@ -41,7 +26,7 @@ export function compare(src: string): CompareResult {
   const expectedAll = parseEvents(src);
   let tree;
   try {
-    tree = makeParser().parse(src);
+    tree = parseMx(src);
   } catch (err) {
     tree = null;
   }

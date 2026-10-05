@@ -1,13 +1,20 @@
-# @marko/tree-sitter
+# @mxlang/tree-sitter-mx
 
-## 0.3.0
+## 0.1.0 (unreleased)
 
-### Minor Changes
+First version. A vendored snapshot of `marko-js/tree-sitter` at
+`7fb20382b9b0c97c8bdbceee0e0641bea11dd00f` (`@marko/tree-sitter` 0.2.0) with
+two local patches (see `UPSTREAM.md`):
 
-- Parse `#id`, `.class` and the new `:name` shorthand (`shorthand_name`) anywhere in a tag (MX decision 146): tag-adjacent in any order (`<a#d:b.c>`, `<:b>`, which now carry the `shorthand` field), and in attribute position, first or after any attribute, in html and concise mode (`<input type="email" :email #main .big>`). After whitespace, `.ident` and `:ident` (with no open conditional `?`) end the previous attribute value. A value on the sugar (`:x=1`) is an error; named modifiers (`class:x`, `style:x`, `value:fn:=x`) are unchanged. `<style .scss>` (attribute position) no longer selects a stylesheet dialect.
-
-## 0.2.0
-
-### Minor Changes
-
-- [#6](https://github.com/marko-js/tree-sitter/pull/6) [`d60112d`](https://github.com/marko-js/tree-sitter/commit/d60112d1bad21fc24fb8a62fec34063164f3ec15) Thanks [@DylanPiercey](https://github.com/DylanPiercey)! - Support comments between concise mode line attributes. `//` line and `/* */` block comments may now appear between comma-prefixed line attributes; they are scanned over and no longer terminate the open tag.
+- Decision 146 name sugar: `#id`, `.class` and the new `:name` shorthand
+  (`shorthand_name`) anywhere in a tag, tag-adjacent in any order (carrying the
+  `shorthand` field) and in attribute position, first or after any attribute,
+  in html and concise mode. After whitespace, `.ident` and `:ident` (with no
+  open conditional `?`) end the previous attribute value. A value on the sugar
+  (`:x=1`) is an error; named modifiers (`class:x`, `style:x`, `value:fn:=x`)
+  are unchanged. `<style .scss>` (attribute position) no longer selects a
+  stylesheet dialect; only the tag-adjacent `<style.scss>` does.
+- The grammar is named `mx` (`tree_sitter_mx`, `source.mx`, file type `mx`),
+  so it never collides with the `marko` grammar of Marko's own Zed extension.
+- Tests run on bun through web-tree-sitter, and compare against htmljs-parser
+  fixtures pinned to v5.12.0 instead of its unpinned HEAD.

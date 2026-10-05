@@ -1,0 +1,469 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Saulo Vallory <saulovallory@gmail.com>
+Date: Mon, 5 Oct 2026 02:00:03 -0300
+Subject: [PATCH] feat(grammar): name the grammar mx and run the tests on bun
+
+- grammar.js, tree-sitter.json, src/scanner.c: grammar name mx
+  (tree_sitter_mx, source.mx, file type mx), so Zed's [grammars.mx]
+  finds its export and never collides with Marko's own marko grammar.
+- __tests__: load the grammar through web-tree-sitter from
+  tree-sitter-mx.wasm instead of the native binding; *.test.mts become
+  *.bun-test.mts so the monorepo's vitest run does not collect them.
+- __tests__/util/htmljs.mts: pin htmljs-parser to v5.12.0 instead of
+  degitting its unpinned HEAD.
+- __tests__/fixtures.bun-test.mts: drop the decision 146 `x .y`
+  snippets from two fixtures before comparing.
+---
+ __tests__/fixtures.bun-test.mts               | 52 ++++++++++++++++
+ __tests__/fixtures.test.mts                   | 27 --------
+ ...and.test.mts => mx-shorthand.bun-test.mts} | 13 ++--
+ __tests__/util/compare.mts                    | 19 +-----
+ __tests__/util/htmljs.mts                     | 61 ++++++++++++-------
+ __tests__/util/language.mts                   | 41 +++++++++++++
+ __tests__/util/tree-events.mts                |  2 +-
+ grammar.js                                    |  2 +-
+ src/scanner.c                                 | 10 +--
+ tools/check-wasm.mts                          |  6 +-
+ tree-sitter.json                              | 20 +++---
+ 11 files changed, 158 insertions(+), 95 deletions(-)
+ create mode 100644 __tests__/fixtures.bun-test.mts
+ delete mode 100644 __tests__/fixtures.test.mts
+ rename __tests__/{mx-shorthand.test.mts => mx-shorthand.bun-test.mts} (97%)
+ create mode 100644 __tests__/util/language.mts
+
+diff --git a/__tests__/fixtures.bun-test.mts b/__tests__/fixtures.bun-test.mts
+new file mode 100644
+index 0000000..86a0bf2
+--- /dev/null
++++ b/__tests__/fixtures.bun-test.mts
+@@ -0,0 +1,52 @@
++import assert from "node:assert";
++import fs from "node:fs";
++import path from "node:path";
++import { compare } from "./util/compare.mts";
++import { fixturesDir } from "./util/htmljs.mts";
++
++const FIXTURES = await fixturesDir();
++
++// MX decision 146 (`apps/docs/docs/design-notes/adr-name-sugar.md`,
++// divergence 4): after whitespace, `.ident` ends the previous attribute value
++// and starts a class shorthand, where htmljs-parser keeps `x .y` as one
++// member expression. These exact snippets are removed from the fixture before
++// the comparison, so the rest of each fixture is still compared event by
++// event. Each snippet must be present: a fixture change under a new
++// HTMLJS_REV fails here instead of silently comparing less.
++const MX_DIVERGENCES: Record<string, string[]> = {
++  "attr-operators-space-before": ["a=x .y a\n", "<a=x .y a/>\n"],
++  "attr-operators-newline-before": ["<a=x\n.y a/>\n"],
++};
++
++describe("tree-sitter-mx fixtures (htmljs-parser)", () => {
++  for (const entry of fs.readdirSync(FIXTURES)) {
++    if (entry.endsWith(".skip")) {
++      it.skip(entry.slice(0, -".skip".length));
++      continue;
++    }
++
++    it(entry, () => {
++      let src = fs.readFileSync(
++        path.join(FIXTURES, entry, "input.marko"),
++        "utf-8",
++      );
++      for (const snippet of MX_DIVERGENCES[entry] ?? []) {
++        assert.ok(
++          src.includes(snippet),
++          `${entry} no longer contains ${JSON.stringify(snippet)}`,
++        );
++        src = src.replace(snippet, "");
++      }
++      const result = compare(src);
++      if (!result.ok) {
++        assert.fail(`${result.message}\n\ntree:\n${result.tree}`);
++      }
++    });
++  }
++
++  it("every MX divergence names an existing fixture", () => {
++    for (const entry of Object.keys(MX_DIVERGENCES)) {
++      assert.ok(fs.existsSync(path.join(FIXTURES, entry)), entry);
++    }
++  });
++});
+diff --git a/__tests__/fixtures.test.mts b/__tests__/fixtures.test.mts
+deleted file mode 100644
+index 4a0053f..0000000
+--- a/__tests__/fixtures.test.mts
++++ /dev/null
+@@ -1,27 +0,0 @@
+-import assert from "node:assert";
+-import fs from "node:fs";
+-import path from "node:path";
+-import { compare } from "./util/compare.mts";
+-import { fixturesDir } from "./util/htmljs.mts";
+-
+-const FIXTURES = await fixturesDir();
+-
+-describe("tree-sitter-marko fixtures", () => {
+-  for (const entry of fs.readdirSync(FIXTURES)) {
+-    if (entry.endsWith(".skip")) {
+-      it.skip(entry.slice(0, -".skip".length));
+-      continue;
+-    }
+-
+-    it(entry, () => {
+-      const src = fs.readFileSync(
+-        path.join(FIXTURES, entry, "input.marko"),
+-        "utf-8",
+-      );
+-      const result = compare(src);
+-      if (!result.ok) {
+-        assert.fail(`${result.message}\n\ntree:\n${result.tree}`);
+-      }
+-    });
+-  }
+-});
+diff --git a/__tests__/mx-shorthand.test.mts b/__tests__/mx-shorthand.bun-test.mts
+similarity index 97%
+rename from __tests__/mx-shorthand.test.mts
+rename to __tests__/mx-shorthand.bun-test.mts
+index 7c75e39..bb889be 100644
+--- a/__tests__/mx-shorthand.test.mts
++++ b/__tests__/mx-shorthand.bun-test.mts
+@@ -4,17 +4,12 @@
+ // sugar and reads the attribute-position forms differently (see the ADR), so
+ // these cases assert trees directly instead of comparing parser events.
+ import assert from "node:assert";
+-import Parser from "tree-sitter";
+-import { createRequire } from "node:module";
+-
+-const require = createRequire(import.meta.url);
+-// eslint-disable-next-line @typescript-eslint/no-var-requires
+-const Marko = require("../bindings/node");
++import { parseMx } from "./util/language.mts";
+ 
+ function parse(src: string) {
+-  const parser = new Parser();
+-  parser.setLanguage(Marko);
+-  return parser.parse(src).rootNode;
++  const tree = parseMx(src);
++  if (!tree) throw new Error(`parse timed out: ${JSON.stringify(src)}`);
++  return tree.rootNode;
+ }
+ 
+ const CASES: [name: string, src: string, tree: string][] = [
+diff --git a/__tests__/util/compare.mts b/__tests__/util/compare.mts
+index 1f712f6..d453301 100644
+--- a/__tests__/util/compare.mts
++++ b/__tests__/util/compare.mts
+@@ -1,22 +1,7 @@
+-import Parser from "tree-sitter";
+-import { createRequire } from "node:module";
+ import { parseEvents, type Event } from "./events.mts";
++import { parseMx } from "./language.mts";
+ import { treeEvents, sortEvents } from "./tree-events.mts";
+ 
+-const require = createRequire(import.meta.url);
+-// eslint-disable-next-line @typescript-eslint/no-var-requires
+-const Marko = require("../../bindings/node");
+-
+-// A fresh parser per parse: a timed-out parse can poison subsequent parses
+-// on the same instance.
+-function makeParser() {
+-  const parser = new Parser();
+-  parser.setLanguage(Marko);
+-  // A scanner bug must fail the test, not hang the suite.
+-  (parser as any).setTimeoutMicros?.(5_000_000);
+-  return parser;
+-}
+-
+ export interface CompareResult {
+   ok: boolean;
+   isErrorCase: boolean;
+@@ -41,7 +26,7 @@ export function compare(src: string): CompareResult {
+   const expectedAll = parseEvents(src);
+   let tree;
+   try {
+-    tree = makeParser().parse(src);
++    tree = parseMx(src);
+   } catch (err) {
+     tree = null;
+   }
+diff --git a/__tests__/util/htmljs.mts b/__tests__/util/htmljs.mts
+index 275d681..53c8db0 100644
+--- a/__tests__/util/htmljs.mts
++++ b/__tests__/util/htmljs.mts
+@@ -1,25 +1,31 @@
+ // Resolves htmljs-parser (the reference implementation the tests compare
+ // against) and its test fixtures. The parser and the fixtures must always be
+ // the *same* htmljs-parser revision, otherwise behavioral differences between
+-// versions show up as spurious test failures. Three layouts are supported:
++// versions show up as spurious test failures.
++//
++// MX: upstream degits htmljs-parser's unpinned HEAD, so its suite fails
++// whenever htmljs-parser moves ahead of the grammar (53 failures against
++// htmljs-parser 5.18.0 at upstream 7fb2038). This copy pins the revision the
++// grammar was released against instead: v5.12.0, tagged the same day as
++// @marko/tree-sitter 0.2.0 and carrying the same "comments between concise
++// mode line attributes" feature. Bump HTMLJS_REV together with a grammar
++// bump, never on its own.
+ //
+-//  - inside the htmljs-parser repository (this directory checked out as
+-//    `tree-sitter/`): the parser sources and fixtures two levels up are used
+-//    directly, so the comparison always tracks the local parser;
+-//  - standalone: the fixtures *and* the parser sources are fetched together
+-//    into `.cache/` with degit, so they share a revision (this is what CI
+-//    uses); the published `htmljs-parser` package is only a last-resort
+-//    fallback;
+ //  - HTMLJS_FIXTURES override: point at any htmljs-parser `src/__tests__/
+ //    fixtures` directory and the adjacent `src` is used as the parser too.
++//  - otherwise the pinned revision is fetched with git into `.cache/`
++//    (gitignored) once, and reused.
++import { execFileSync } from "node:child_process";
+ import fs from "node:fs";
+ import path from "node:path";
+ import { fileURLToPath, pathToFileURL } from "node:url";
+ 
++/** marko-js/htmljs-parser v5.12.0 (2026-06-26). */
++export const HTMLJS_REV = "16f453a6d86502c24578c339d17bc5ba81257539";
++const HTMLJS_REPO = "https://github.com/marko-js/htmljs-parser";
++
+ const here = path.dirname(fileURLToPath(import.meta.url));
+-const LOCAL_SRC = path.join(here, "../../../src");
+-const isLocal = fs.existsSync(path.join(LOCAL_SRC, "index.ts"));
+-const CACHE = path.join(here, "../../.cache/htmljs-parser");
++const CACHE = path.join(here, `../../.cache/htmljs-parser-${HTMLJS_REV}`);
+ 
+ export interface HtmljsApi {
+   createParser: (typeof import("htmljs-parser"))["createParser"];
+@@ -47,22 +53,33 @@ export async function loadHtmljs(): Promise<HtmljsApi> {
+   // __tests__/fixtures`, so the parser is always two levels up from the
+   // fixtures — keeping the reference parser and the fixtures in lockstep.
+   const src = path.join(await fixturesDir(), "../..");
+-  if (fs.existsSync(path.join(src, "index.ts"))) return importSrc(src);
+-  // HTMLJS_FIXTURES pointed somewhere without adjacent sources: fall back to
+-  // the published package.
+-  return (await import("htmljs-parser")) as HtmljsApi;
++  if (!fs.existsSync(path.join(src, "index.ts"))) {
++    throw new Error(`no htmljs-parser sources next to the fixtures at ${src}`);
++  }
++  return importSrc(src);
++}
++
++function fetchPinned() {
++  const tmp = `${CACHE}.tmp-${process.pid}`;
++  fs.rmSync(tmp, { recursive: true, force: true });
++  fs.mkdirSync(tmp, { recursive: true });
++  const git = (...args: string[]) =>
++    execFileSync("git", ["-C", tmp, ...args], { stdio: "pipe" });
++  git("init", "--quiet");
++  git("fetch", "--quiet", "--depth", "1", HTMLJS_REPO, HTMLJS_REV);
++  git("checkout", "--quiet", "FETCH_HEAD");
++  const head = git("rev-parse", "HEAD").toString().trim();
++  if (head !== HTMLJS_REV) {
++    throw new Error(`fetched ${head}, expected htmljs-parser ${HTMLJS_REV}`);
++  }
++  fs.rmSync(path.join(tmp, ".git"), { recursive: true, force: true });
++  fs.renameSync(tmp, CACHE);
+ }
+ 
+ export async function fixturesDir(): Promise<string> {
+   if (process.env.HTMLJS_FIXTURES) return process.env.HTMLJS_FIXTURES;
+ 
+-  const local = path.join(LOCAL_SRC, "__tests__/fixtures");
+-  if (isLocal && fs.existsSync(local)) return local;
+-
+   const cached = path.join(CACHE, "src/__tests__/fixtures");
+-  if (!fs.existsSync(cached)) {
+-    const { default: degit } = await import("degit");
+-    await degit("marko-js/htmljs-parser").clone(CACHE);
+-  }
++  if (!fs.existsSync(cached)) fetchPinned();
+   return cached;
+ }
+diff --git a/__tests__/util/language.mts b/__tests__/util/language.mts
+new file mode 100644
+index 0000000..e9e4985
+--- /dev/null
++++ b/__tests__/util/language.mts
+@@ -0,0 +1,41 @@
++// MX: loads the grammar through web-tree-sitter from `tree-sitter-mx.wasm`
++// (built by `bun run build:wasm`, which scripts/test.sh runs first) instead
++// of upstream's native `tree-sitter` binding. The native route needs node-gyp
++// and a prebuilt addon per platform; the wasm route needs only
++// tree-sitter-cli, which this package already pins for `generate`. Both
++// compile the same src/parser.c and src/scanner.c, so the trees are the same.
++import fs from "node:fs";
++import path from "node:path";
++import { fileURLToPath } from "node:url";
++import { Language, Parser, type Tree } from "web-tree-sitter";
++
++const WASM = path.join(
++  path.dirname(fileURLToPath(import.meta.url)),
++  "../../tree-sitter-mx.wasm",
++);
++
++if (!fs.existsSync(WASM)) {
++  throw new Error(`${WASM} is missing; run \`bun run build:wasm\` first`);
++}
++
++await Parser.init();
++export const MX = await Language.load(WASM);
++
++// A scanner bug must fail the test, not hang the suite. web-tree-sitter has
++// no setTimeoutMicros; a progress callback that returns true aborts the parse.
++const TIMEOUT_MS = 5_000;
++
++// A fresh parser per parse: a timed-out parse can poison subsequent parses
++// on the same instance.
++export function parseMx(src: string): Tree | null {
++  const parser = new Parser();
++  parser.setLanguage(MX);
++  const deadline = Date.now() + TIMEOUT_MS;
++  try {
++    return parser.parse(src, null, {
++      progressCallback: () => Date.now() > deadline,
++    });
++  } finally {
++    parser.delete();
++  }
++}
+diff --git a/__tests__/util/tree-events.mts b/__tests__/util/tree-events.mts
+index cef9397..c49ea6a 100644
+--- a/__tests__/util/tree-events.mts
++++ b/__tests__/util/tree-events.mts
+@@ -1,4 +1,4 @@
+-import type { SyntaxNode } from "tree-sitter";
++import type { Node as SyntaxNode } from "web-tree-sitter";
+ import type { Event } from "./events.mts";
+ 
+ // Tag types follow the tags API / vscode tmLanguage grammar (see
+diff --git a/grammar.js b/grammar.js
+index 78d2b40..7ca4f4d 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -14,7 +14,7 @@
+ // @ts-check
+ 
+ module.exports = grammar({
+-  name: "marko",
++  name: "mx",
+ 
+   // Whitespace is significant almost everywhere (text content, expression
+   // termination, concise indentation), so there are no extras; the external
+diff --git a/src/scanner.c b/src/scanner.c
+index ce4efcd..2092c12 100644
+--- a/src/scanner.c
++++ b/src/scanner.c
+@@ -3537,7 +3537,7 @@ static bool scan_main(Scanner *s, TSLexer *lexer, const bool *valid) {
+     n += sizeof(field);                       \
+   } while (0)
+ 
+-void *tree_sitter_marko_external_scanner_create(void) {
++void *tree_sitter_mx_external_scanner_create(void) {
+   Scanner *s = (Scanner *)calloc(1, sizeof(Scanner));
+   s->cur.line_only_ws = 1;
+   s->cur.cur_indent_hash = HASH_INIT;
+@@ -3545,13 +3545,13 @@ void *tree_sitter_marko_external_scanner_create(void) {
+   return s;
+ }
+ 
+-void tree_sitter_marko_external_scanner_destroy(void *payload) {
++void tree_sitter_mx_external_scanner_destroy(void *payload) {
+   Scanner *s = (Scanner *)payload;
+   free(s->buf);
+   free(s);
+ }
+ 
+-unsigned tree_sitter_marko_external_scanner_serialize(void *payload,
++unsigned tree_sitter_mx_external_scanner_serialize(void *payload,
+                                                       char *buffer) {
+   Scanner *s = (Scanner *)payload;
+   unsigned n = 0;
+@@ -3592,7 +3592,7 @@ unsigned tree_sitter_marko_external_scanner_serialize(void *payload,
+   return n;
+ }
+ 
+-void tree_sitter_marko_external_scanner_deserialize(void *payload,
++void tree_sitter_mx_external_scanner_deserialize(void *payload,
+                                                     const char *buffer,
+                                                     unsigned length) {
+   Scanner *s = (Scanner *)payload;
+@@ -3676,7 +3676,7 @@ static const char *const TOKEN_NAMES[] = {
+ };
+ #endif
+ 
+-bool tree_sitter_marko_external_scanner_scan(void *payload, TSLexer *lexer,
++bool tree_sitter_mx_external_scanner_scan(void *payload, TSLexer *lexer,
+                                              const bool *valid_symbols) {
+   Scanner *s = (Scanner *)payload;
+   s->buf_len = 0;
+diff --git a/tools/check-wasm.mts b/tools/check-wasm.mts
+index 4bdff49..7723783 100644
+--- a/tools/check-wasm.mts
++++ b/tools/check-wasm.mts
+@@ -1,4 +1,4 @@
+-// Smoke test for the wasm build: loads tree-sitter-marko.wasm with
++// Smoke test for the wasm build: loads tree-sitter-mx.wasm with
+ // web-tree-sitter, parses a sample exercising both modes, and runs the
+ // bundled queries against it.
+ import fs from "node:fs";
+@@ -9,11 +9,11 @@ import { Language, Parser, Query } from "web-tree-sitter";
+ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+ 
+ await Parser.init();
+-const Marko = await Language.load(path.join(root, "tree-sitter-marko.wasm"));
++const Marko = await Language.load(path.join(root, "tree-sitter-mx.wasm"));
+ const parser = new Parser();
+ parser.setLanguage(Marko);
+ 
+-const src = `import Button from "./button.marko"
++const src = `import Button from "./button.mx"
+ 
+ <let/count: number = 0/>
+ div.panel
+diff --git a/tree-sitter.json b/tree-sitter.json
+index 1556c6b..d27be24 100644
+--- a/tree-sitter.json
++++ b/tree-sitter.json
+@@ -2,31 +2,31 @@
+   "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
+   "grammars": [
+     {
+-      "name": "marko",
+-      "camelcase": "Marko",
+-      "title": "Marko",
+-      "scope": "source.marko",
++      "name": "mx",
++      "camelcase": "Mx",
++      "title": "MX",
++      "scope": "source.mx",
+       "path": ".",
+       "file-types": [
+-        "marko"
++        "mx"
+       ],
+-      "injection-regex": "^marko$",
++      "injection-regex": "^mx$",
+       "highlights": "queries/highlights.scm",
+       "injections": "queries/injections.scm"
+     }
+   ],
+   "metadata": {
+-    "version": "0.2.0",
++    "version": "0.1.0",
+     "license": "MIT",
+-    "description": "Tree-sitter grammar for the Marko templating language",
++    "description": "Tree-sitter grammar for MX (Marko syntax plus the decision 146 name sugar), vendored from marko-js/tree-sitter",
+     "links": {
+-      "repository": "https://github.com/marko-js/tree-sitter"
++      "repository": "https://github.com/mxlang/mx"
+     }
+   },
+   "bindings": {
+     "c": false,
+     "go": false,
+-    "node": true,
++    "node": false,
+     "python": false,
+     "rust": false,
+     "swift": false

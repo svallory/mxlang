@@ -1,4 +1,4 @@
-import type { SyntaxNode } from "tree-sitter";
+import type { Node as SyntaxNode } from "web-tree-sitter";
 import type { Event } from "./events.mts";
 
 // Tag types follow the tags API / vscode tmLanguage grammar (see

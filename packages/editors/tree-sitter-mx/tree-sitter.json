@@ -2,31 +2,31 @@
   "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
   "grammars": [
     {
-      "name": "marko",
-      "camelcase": "Marko",
-      "title": "Marko",
-      "scope": "source.marko",
+      "name": "mx",
+      "camelcase": "Mx",
+      "title": "MX",
+      "scope": "source.mx",
       "path": ".",
       "file-types": [
-        "marko"
+        "mx"
       ],
-      "injection-regex": "^marko$",
+      "injection-regex": "^mx$",
       "highlights": "queries/highlights.scm",
       "injections": "queries/injections.scm"
     }
   ],
   "metadata": {
-    "version": "0.3.0",
+    "version": "0.1.0",
     "license": "MIT",
-    "description": "Tree-sitter grammar for the Marko templating language",
+    "description": "Tree-sitter grammar for MX (Marko syntax plus the decision 146 name sugar), vendored from marko-js/tree-sitter",
     "links": {
-      "repository": "https://github.com/marko-js/tree-sitter"
+      "repository": "https://github.com/mxlang/mx"
     }
   },
   "bindings": {
     "c": false,
     "go": false,
-    "node": true,
+    "node": false,
     "python": false,
     "rust": false,
     "swift": false

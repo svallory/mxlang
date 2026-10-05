@@ -4,17 +4,12 @@
 // sugar and reads the attribute-position forms differently (see the ADR), so
 // these cases assert trees directly instead of comparing parser events.
 import assert from "node:assert";
-import Parser from "tree-sitter";
-import { createRequire } from "node:module";
-
-const require = createRequire(import.meta.url);
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const Marko = require("../bindings/node");
+import { parseMx } from "./util/language.mts";
 
 function parse(src: string) {
-  const parser = new Parser();
-  parser.setLanguage(Marko);
-  return parser.parse(src).rootNode;
+  const tree = parseMx(src);
+  if (!tree) throw new Error(`parse timed out: ${JSON.stringify(src)}`);
+  return tree.rootNode;
 }
 
 const CASES: [name: string, src: string, tree: string][] = [

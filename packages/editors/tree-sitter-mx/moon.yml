@@ -1,0 +1,38 @@
+# https://moonrepo.dev/docs/config/project
+$schema: "https://moonrepo.dev/schemas/project.json"
+
+language: "javascript"
+
+tasks:
+  # `tree-sitter generate` output is committed (Zed compiles src/parser.c
+  # directly and never runs generate), so there is no build task here; the
+  # test task regenerates and fails if src/ drifted from grammar.js.
+  test:
+    command: "bash"
+    args: ["scripts/test.sh"]
+    inputs:
+      - "grammar.js"
+      - "queries/**/*"
+      - "src/**/*"
+      - "__tests__/**/*"
+      - "tools/**/*"
+      - "scripts/**/*"
+      - "tree-sitter.json"
+
+  # Provenance check: re-fetches marko-js/tree-sitter at the pin, applies
+  # patches/, and diffs the result against the committed files. Wired in
+  # .github/workflows/upstream-check.yml; not a dependency of `test`, since it
+  # needs the network.
+  vendor-check:
+    command: "bash"
+    args: ["scripts/vendor-check.sh"]
+    inputs:
+      - "patches/**/*"
+      - "scripts/vendor-check.sh"
+
+  typecheck:
+    # No TypeScript build: a tree-sitter grammar (JS + C) whose .mts tests
+    # run under bun. The task exists so the root `moon run :typecheck`
+    # aggregate resolves.
+    command: "true"
+    inputs: []
