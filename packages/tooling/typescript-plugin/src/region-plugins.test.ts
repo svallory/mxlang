@@ -123,3 +123,34 @@ describe(".react.mx: the React region kind's own plugin", () => {
     expect(text).toContain("className=");
   });
 });
+
+describe(".preact.mx: the Preact region kind's own plugin", () => {
+  const preact = createRegionLanguagePlugins(ts).find(
+    (plugin) => plugin.getLanguageId("/a/x.preact.mx") !== undefined,
+  );
+
+  it("claims .preact.mx as preactmx, and no other kind's suffix", () => {
+    expect(preact?.getLanguageId("/a/x.preact.mx")).toBe("preactmx");
+    for (const file of ["/a/x.solid.mx", "/a/x.mx", "/a/x.react.mx"])
+      expect(preact?.getLanguageId(file)).toBeUndefined();
+    expect(
+      preact?.typescript?.extraFileExtensions.map((e) => e.extension),
+    ).toEqual(["preact.mx"]);
+  });
+
+  it("lowers a region to Preact JSX in the virtual code", () => {
+    const file = "/a/Panel.preact.mx";
+    const source =
+      'export const view = <label for="n" class={ on: true }>n</label>;\n';
+    const virtual = preact?.createVirtualCode?.(
+      file,
+      "preactmx",
+      snapshot(source),
+      noScript,
+    );
+    expect(preact?.getSyntaxError(file)).toBeUndefined();
+    const text = virtual?.snapshot.getText(0, virtual.snapshot.getLength());
+    expect(text).toContain("for=");
+    expect(text).toContain("class=");
+  });
+});

@@ -1,0 +1,16 @@
+import { useState } from "preact/hooks";
+import Card from "./Card.preact.mx";
+
+export function Page() {
+  const [label] = useState(0);
+  return (
+    <section>
+      <Card>
+        <@row|count|>
+          <strong>${count.toFixed(1)}</strong>
+        </@row>
+      </Card>
+      <p title=String(label)>${label}</p>
+    </section>
+  );
+}
