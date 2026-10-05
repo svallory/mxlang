@@ -26,6 +26,7 @@ import {
   type AttributeTagNode,
   type AttrTagProp,
   concatMapped,
+  contractDefaultTag,
   drive,
   type Emitter,
   type Expr,
@@ -154,11 +155,12 @@ export function createJsxDeclarations(dialectName: string): HostDeclarations {
     name: declarationName,
     attrTags: 2,
     tags: statefulErrors(dialectName),
-    // The ladder (decision 145): `mx.<target>.defaultTag`, then the target's
-    // built-in. A parent contract's rung (PR 3) reads `context.customTags`,
-    // gated by the host's `allowContractDefaultTag`, and goes first.
-    resolveDefaultTag: (_node, _parents, { configured }) =>
-      configured ?? DEFAULT_TAG,
+    // The ladder (decision 145): the parent's contract `defaultTag`, then
+    // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
+    // the host override into `configured`). This host permits the contract rung:
+    // it sets no `allowContractDefaultTag: false`.
+    resolveDefaultTag: (_node, parents, { configured, customTags }) =>
+      contractDefaultTag(parents, customTags) ?? configured ?? DEFAULT_TAG,
     // `<let>` is not this host's state model. Never turn a mutable JS
     // declaration into an immutable `<const>` just to offer a fix.
     scriptletReplacement: (name, keyword) =>

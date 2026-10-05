@@ -10,6 +10,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Added (default-tag-contracts, decision 145):** the parent contract's `defaultTag` is the first rung for the unnamed tag (through `@mxlang/preact`).
+
 - **Added (default-tag-ladder, decision 145):** the descriptor declares `defaultTag: "div"` (shared constant with Preact); `compileReactMx` takes `defaultTag` (`mx.react-jsx.defaultTag`).
 
 - **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.

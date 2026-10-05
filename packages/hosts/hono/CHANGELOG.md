@@ -10,6 +10,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Added (default-tag-contracts, decision 145):** the parent contract's `defaultTag` is the first rung for the unnamed tag (through `@mxlang/preact`).
+
 - **Fix (default-tag-ladder r2):** the Bun loader validates `mx.hono-jsx.defaultTag`; a rejected value is dropped and warned once at the `package.json` value.
 
 - **Added (default-tag-ladder, decision 145):** the descriptor declares `defaultTag: "div"` (shared constant with Preact); `compileHonoMx` takes `defaultTag` and the Bun loader reads `mx.hono-jsx.defaultTag`.

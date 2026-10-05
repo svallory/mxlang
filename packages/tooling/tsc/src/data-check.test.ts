@@ -252,6 +252,69 @@ describe("mx-tsc on a data package", () => {
     });
   });
 
+  describe("a parent contract's defaultTag (decision 145 PR 3)", () => {
+    const withContracts = (
+      contracts: string,
+      files: Record<string, string>,
+    ) => {
+      const dir = emptyPackage({ mx: DATA });
+      writeFileSync(join(dir, "contracts.ts"), contracts);
+      for (const [name, text] of Object.entries(files))
+        writeFileSync(join(dir, name), text);
+      return dir;
+    };
+    const mesh = (extra = "", attribute = "attributes: { id: {}, type: {} }") =>
+      `export default {
+  attributes: { defaultTag: "attribute", children: { attribute: { repeatable: true } }${extra} },
+  attribute: { ${attribute} },
+};\n`;
+
+    it("the Mesh example is clean", () => {
+      const dir = withContracts(mesh(), {
+        "doc.mx": '<attributes><#title type="string"/></attributes>\n',
+      });
+      expect(check(dir)).toEqual({ status: 0, output: "" });
+    });
+
+    it("E2: the resolved name missing from a closed children is positioned at the shorthand", () => {
+      const dir = withContracts(
+        `export default {
+  attributes: { defaultTag: "attribute", children: { other: {} } },
+  attribute: { attributes: { id: {} } },
+  other: {},
+};\n`,
+        { "doc.mx": "<attributes>\n  <#title/>\n</attributes>\n" },
+      );
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      expect(output).toContain("doc.mx(2,3): error TS80001:");
+      expect(output).toContain("`<attribute>` is not allowed here");
+    });
+
+    it("E1: a closed attributes without id is positioned at the shorthand", () => {
+      const dir = withContracts(mesh("", "attributes: { type: {} }"), {
+        "doc.mx": "<attributes>\n  <#title/>\n</attributes>\n",
+      });
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      expect(output).toContain("doc.mx(2,3): error TS80001:");
+      expect(output).toContain("unknown attribute `id`");
+    });
+
+    it("an invalid contract defaultTag is TS80003 at the declaring contracts module", () => {
+      const dir = withContracts(
+        `export default { attributes: { defaultTag: "nope" } };\n`,
+        { "doc.mx": "<attributes/>\n" },
+      );
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      expect(output).toContain("contracts.ts(1,1): error TS80003:");
+      expect(output).toContain(
+        "invalid `defaultTag` value: `<nope>` is not a tag reachable from this package (contract of `<attributes>`)",
+      );
+    });
+  });
+
   it("includes tags/ sidecars in the tag map", () => {
     const dir = emptyPackage({ mx: { target: "data" } });
     mkdirSync(join(dir, "tags"));

@@ -6,6 +6,8 @@ First npm prerelease (dist-tag `alpha`), with everything listed under 0.1.0 belo
 
 ## 0.1.0 (unreleased)
 
+- **Added (default-tag-contracts, decision 145):** a parent contract's `defaultTag` resolves the unnamed tag before `mx.data.defaultTag` and `object`: `<attributes><#title type="string"/></attributes>` with `attributes` declaring `defaultTag: "attribute"` is `<attribute id="title" type="string">`, with E1/E2 positioned at the shorthand.
+
 - **Added (default-tag-ladder, decision 145):** the built-in `object` tag, the data target's `defaultTag`: the anonymous node the unnamed tag (`<#id>`, `<.class>`) resolves to, carrying `id`/`class` as ordinary attributes. Always known (never an unknown-tag error under `unknownTags: "reject"`), no contract needed, replaceable by a declared `object`; a closed parent `children` that lists neither `object` nor a default gives the ordinary E2 error. `ParseDataOptions.defaultTag` (`mx.data.defaultTag`) makes the shorthand that tag with its contract applied (E1 for `class`/`id` when its attributes are closed); the parse-only scan names the shorthand the same way (it read Marko's `div` before). The descriptor declares `defaultTag: "object"` and a lazy `parseTranslator`.
 
 - **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.

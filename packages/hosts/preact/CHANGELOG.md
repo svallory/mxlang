@@ -10,6 +10,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Added (default-tag-contracts, decision 145):** the parent contract's `defaultTag` is the first rung for the unnamed tag (shared with React and Hono).
+
 - **Added (default-tag-ladder, decision 145):** the descriptor declares `defaultTag` (`DEFAULT_TAG`, `div`) and `createJsxDeclarations` answers `mx.<target>.defaultTag` first, then `div`; `compilePreactMx` takes `defaultTag`. Shared with React and Hono. Byte-identical for every existing template.
 
 - **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.

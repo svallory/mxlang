@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Added (default-tag-contracts, decision 145):** data-check rows for a parent contract's `defaultTag` (the Mesh example, E1/E2 at the shorthand, an invalid declaration at its contracts module).
+
 - **Fix (default-tag-ladder r2):** the data check no longer crashes on a malformed `mx.contracts` beside `mx.data.defaultTag` (it prints the positioned contracts error); the `default-tag-invalid` golden has no per-file `target not loaded` pointer.
 
 - **Added (default-tag-ladder, decision 145):** `mx-tsc` on a data package passes `mx.data.defaultTag` to the parse and reports an invalid one as `TS80003` at the `package.json` value (also for html-family packages, through the policy diagnostics). `defaultTag` is a known `mx.data` key. Three dispatch-golden rows pin a configured custom tag, an invalid value and the data check.

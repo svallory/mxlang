@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Added (default-tag-contracts, decision 145):** `resolveTargetPolicyDetailed` checks every contract `defaultTag` once per package at the file that declares it (the contracts module or the sidecar): the shared reasons (not reachable, not an element of the target, not a plain tag), or a refusal naming the host when its descriptor sets `allowContractDefaultTag: false`.
+
 - **Fix (default-tag-ladder r3):** `solid-jsx` (and `.solid.mx`) and third-party targets without declarations reject Marko core tags as `defaultTag`; a malformed `mx.contracts` beside `defaultTag: "input"` is the void-tag error, and only the scan is tolerated.
 
 - **Fix (default-tag-ladder r2):** a failing scan never escapes `resolveTargetPolicyDetailed`; on data, reachable means `object` plus the custom tags (html's elements are no data tags); a loaded descriptor's own `defaultTag`/`host.defaultTag` are checked against the target's lookup; `defaultTagFor(file, policy)` takes the resolved policy; `resolveTargetPolicy` accepts the options.

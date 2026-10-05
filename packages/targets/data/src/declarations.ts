@@ -27,6 +27,7 @@
  */
 
 import {
+  contractDefaultTag,
   DYNAMIC_TAG,
   type HostDeclarations,
   TranslateError,
@@ -63,11 +64,12 @@ export const DEFAULT_TAG = "object";
 export const dataDeclarations: HostDeclarations = {
   name: "data",
   attrTags: 2,
-  // The ladder (decision 145): `mx.data.defaultTag`, then the target's
-  // built-in. A parent contract's rung (PR 3) reads `context.customTags`,
-  // gated by the host's `allowContractDefaultTag`, and goes first.
-  resolveDefaultTag: (_node, _parents, { configured }) =>
-    configured ?? DEFAULT_TAG,
+  // The ladder (decision 145): the parent's contract `defaultTag`, then
+  // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
+  // the host override into `configured`). This host permits the contract rung:
+  // it sets no `allowContractDefaultTag: false`.
+  resolveDefaultTag: (_node, parents, { configured, customTags }) =>
+    contractDefaultTag(parents, customTags) ?? configured ?? DEFAULT_TAG,
   tags: {
     else: { kind: "error", reason: reservedNameMessage("else") },
     "else-if": { kind: "error", reason: reservedNameMessage("else-if") },

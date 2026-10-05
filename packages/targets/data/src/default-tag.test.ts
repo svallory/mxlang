@@ -147,3 +147,118 @@ describe("a configured defaultTag (mx.data.defaultTag)", () => {
     expect(diagnostics[0]?.message).toContain("`<strict>` is not allowed here");
   });
 });
+
+describe("a parent contract's defaultTag (the Mesh case, decision 145 PR 3)", () => {
+  const mesh: Record<string, CustomTag> = {
+    attributes: {
+      defaultTag: "attribute",
+      children: { attribute: { repeatable: true } },
+    },
+    attribute: {
+      attributes: { id: { type: "string" }, type: { type: "string" } },
+    },
+  };
+
+  it('<attributes><#title type="string"/></attributes> is <attribute id="title" type="string">', () => {
+    const source = '<attributes><#title type="string"/></attributes>';
+    const { tree, diagnostics } = parseData(source, "/m.mx", {
+      customTags: mesh,
+    });
+    expect(diagnostics).toEqual([]);
+    const attributes = tree?.children[0] as {
+      name: string;
+      children: unknown[];
+    };
+    expect(attributes.name).toBe("attributes");
+    const attribute = attributes.children[0] as {
+      name: string;
+      attrs: Array<{ name: string; value?: string }>;
+    };
+    expect(attribute.name).toBe("attribute");
+    const byName = Object.fromEntries(
+      attribute.attrs.map((a) => [a.name, a.value]),
+    );
+    expect(byName).toEqual({ type: "string", id: "title" });
+  });
+
+  it("the parent's default beats mx.data.defaultTag; elsewhere the config answers", () => {
+    const tags = { ...mesh, item: { attributes: { id: { type: "string" } } } };
+    const { tree, diagnostics } = parseData(
+      "<attributes><#a/></attributes>\n<#b/>",
+      "/m.mx",
+      { customTags: tags, defaultTag: "item" },
+    );
+    expect(diagnostics).toEqual([]);
+    const names = (tree?.children ?? []).map(
+      (n) => (n as { name: string }).name,
+    );
+    expect(names).toEqual(["attributes", "item"]);
+    const inner = (tree?.children[0] as { children: Array<{ name: string }> })
+      .children[0];
+    expect(inner?.name).toBe("attribute");
+  });
+
+  it("a closed children that does not list the resolved name is E2, at the shorthand", () => {
+    const tags = {
+      ...mesh,
+      attributes: { defaultTag: "attribute", children: { other: {} } },
+    };
+    const { tree, diagnostics } = parseData(
+      "<attributes>\n  <#title/>\n</attributes>",
+      "/m.mx",
+      {
+        customTags: tags,
+      },
+    );
+    expect(tree).toBeUndefined();
+    expect(diagnostics).toMatchObject([
+      {
+        severity: "error",
+        message:
+          "`<attributes>`: `<attribute>` is not allowed here; allowed children: `<other>`",
+        line: 2,
+        column: 2,
+      },
+    ]);
+  });
+
+  it("a closed attributes without id is E1, at the shorthand", () => {
+    const tags = {
+      ...mesh,
+      attribute: { attributes: { type: { type: "string" } } },
+    };
+    const { tree, diagnostics } = parseData(
+      "<attributes>\n  <#title/>\n</attributes>",
+      "/m.mx",
+      {
+        customTags: tags,
+      },
+    );
+    expect(tree).toBeUndefined();
+    expect(diagnostics).toMatchObject([
+      {
+        severity: "error",
+        message: "`<attribute>`: unknown attribute `id`",
+        line: 2,
+        column: 2,
+      },
+    ]);
+  });
+
+  it("an attribute-tag parent reads its own declaration", () => {
+    const tags: Record<string, CustomTag> = {
+      list: { attributeTags: { entries: { defaultTag: "entry" } } },
+      entry: { attributes: { id: { type: "string" } } },
+    };
+    const { tree, diagnostics } = parseData(
+      "<list><@entries><#a/></@entries></list>",
+      "/m.mx",
+      {
+        customTags: tags,
+      },
+    );
+    expect(diagnostics).toEqual([]);
+    const text = JSON.stringify(tree);
+    expect(text).toContain('"name":"entry"');
+  });
+});

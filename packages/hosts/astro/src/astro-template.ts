@@ -17,6 +17,7 @@ import {
   type Ctx,
   type CustomTag,
   checkReservedSource,
+  contractDefaultTag,
   createTargetLookup,
   DYNAMIC_TAG,
   drive,
@@ -205,11 +206,12 @@ export const DEFAULT_TAG = "div";
 export const astroTemplateDeclarations: HostDeclarations = {
   name: "@mxlang/astro",
   attrTags: 2,
-  // The ladder (decision 145): `mx.<target>.defaultTag`, then the target's
-  // built-in. A parent contract's rung (PR 3) reads `context.customTags`,
-  // gated by the host's `allowContractDefaultTag`, and goes first.
-  resolveDefaultTag: (_node, _parents, { configured }) =>
-    configured ?? DEFAULT_TAG,
+  // The ladder (decision 145): the parent's contract `defaultTag`, then
+  // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
+  // the host override into `configured`). This host permits the contract rung:
+  // it sets no `allowContractDefaultTag: false`.
+  resolveDefaultTag: (_node, parents, { configured, customTags }) =>
+    contractDefaultTag(parents, customTags) ?? configured ?? DEFAULT_TAG,
   tags: TAGS,
   isElement: (name) => !isComponentName(name),
   isComponent,

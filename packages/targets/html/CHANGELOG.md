@@ -6,6 +6,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Added (default-tag-contracts, decision 145):** the unnamed tag resolves through the parent's contract `defaultTag` first, then `mx.html.defaultTag`, then `div`.
+
 - **Fix (default-tag-ladder r2):** `loadMx`, `mx` (with a `filename`) and nested tags read the package's validated `mx.html.defaultTag` and put it in their cache keys, so an edited config recompiles; the Bun loader and the example runner validate it (core's `ownDefaultTag`) and warn once at the `package.json` value.
 
 - **Added (default-tag-ladder, decision 145):** the descriptor declares `defaultTag: "div"` and the policy's `resolveDefaultTag` answers `mx.html.defaultTag` first, then `div`; `compile` takes `defaultTag` and the Bun loader reads the package's key. The compile cache fingerprint includes it. Every existing template is byte-identical.
