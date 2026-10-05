@@ -616,7 +616,7 @@ describe("an imported .mx tag that declares <return>", () => {
         src('import Counter from "./counter.mx"\n<Counter/n start=1/>'),
         join(dir, "page.mx"),
       );
-      expect(code).toMatch(/const n = [\s\S]*\.value/);
+      expect(code).toContain("const n = __mxRet0.value;");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -634,6 +634,83 @@ describe("an imported .mx tag that declares <return>", () => {
           join(dir, "page.mx"),
         ),
       ).toThrow(/`n` is read before the `\/var` that binds it/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Marko `references.ts:556-560`: a call's own attributes and body cannot
+  // read the `/var` it declares. Same positioned error as a discovered tag;
+  // before, the imported form compiled to a TDZ crash at render.
+  it("rejects a read of the /var in the call's own attribute, positioned", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-html-imported-var-attr-"));
+    try {
+      writeFileSync(join(dir, "counter.mx"), src(counter));
+      let error: (Error & { line?: number; column?: number }) | undefined;
+      try {
+        compile(
+          src('import Counter from "./counter.mx"\n<Counter/n start=n/>'),
+          join(dir, "page.mx"),
+        );
+      } catch (caught) {
+        error = caught as Error;
+      }
+      expect(error?.message).toMatch(
+        /`n` is read before the `\/var` that binds it/,
+      );
+      expect(error?.line).toBe(2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a read of the /var in the call's own body, positioned", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-html-imported-var-body-"));
+    try {
+      writeFileSync(join(dir, "counter.mx"), src(counter));
+      let error: (Error & { line?: number; column?: number }) | undefined;
+      try {
+        compile(
+          src(
+            'import Counter from "./counter.mx"\n<Counter/n start=1><b>${n}</b></Counter>',
+          ),
+          join(dir, "page.mx"),
+        );
+      } catch (caught) {
+        error = caught as Error;
+      }
+      expect(error?.message).toMatch(
+        /`n` is read before the `\/var` that binds it/,
+      );
+      expect(error?.line).toBe(2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("names the cause when /var is on a missing or non-compiling .mx import", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-html-imported-var-broken-"));
+    try {
+      writeFileSync(join(dir, "broken.mx"), src("<if=>"));
+      const failure = (source: string) => {
+        try {
+          compile(src(source), join(dir, "page.mx"));
+        } catch (caught) {
+          return caught as Error & { line?: number };
+        }
+        return undefined;
+      };
+      const missing = failure('import M from "./missing.mx"\n<M/n/>');
+      expect(missing?.message).toMatch(
+        /`\/n` on `<M>` can't bind: .*missing\.mx could not be resolved/,
+      );
+      expect(missing?.message).not.toContain("not supported");
+      expect(missing?.line).toBe(2);
+      const broken = failure('import B from "./broken.mx"\n<B/n/>');
+      expect(broken?.message).toMatch(
+        /`\/n` on `<B>` can't bind: .*broken\.mx does not compile/,
+      );
+      expect(broken?.line).toBe(2);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

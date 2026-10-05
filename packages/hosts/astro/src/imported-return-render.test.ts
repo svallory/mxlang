@@ -98,11 +98,21 @@ describe("an imported tag that declares <return>, rendered on Astro", () => {
   // with its generic message; `.astro.mx` cannot bind one either way (the
   // fence runs before the template).
   it("still refuses /var on the imported call, positioned", () => {
-    expect(() =>
+    let error: (Error & { line?: number; column?: number }) | undefined;
+    try {
       lowerAstroMx(
         '---\nimport Counter from "./counter.mx";\n---\n<Counter/n start=1/><p>{n}</p>',
         join(dir, "page.astro.mx"),
-      ),
-    ).toThrow(/tag variable `\/n` on `<Counter>` is not supported/);
+      );
+    } catch (caught) {
+      error = caught as Error;
+    }
+    expect(error?.message).toMatch(
+      /tag variable `\/n` on `<Counter>` is not supported/,
+    );
+    expect({ line: error?.line, column: error?.column }).toEqual({
+      line: 4,
+      column: 0,
+    });
   });
 });

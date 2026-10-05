@@ -33,7 +33,7 @@ import { BUILTIN_CUSTOM_TAGS } from "./builtin-tags.ts";
 import {
   type AttrTagDecl,
   type CalleeInput,
-  calleeReturnShape,
+  calleeReturn,
   readCalleeInput,
   readOwnInput,
 } from "./callee-input.ts";
@@ -2618,10 +2618,16 @@ function lowerComponent(ctx: Ctx, node: Node, target: ComponentTarget): IrNode {
   // `/var` binds an imported `.mx` unit's `<return>` the way it does a
   // discovered tag's. Any other target (a `.ts` module, a `<define>`, a
   // dynamic tag) has no return shape the core can read, so it stays refused.
-  const returnShape = calleeReturnShape(target, ctx);
+  const { shape: returnShape, unreadable } = calleeReturn(target, ctx);
   if (node.var && returnShape === "none") {
     fail(
       `\`<${targetName(target)}>\` does not return a value; add \`<return value=…/>\` to the imported file to bind it with \`/var\``,
+      node,
+    );
+  }
+  if (node.var && unreadable) {
+    fail(
+      `\`/${declName(ctx, node.var)}\` on \`<${targetName(target)}>\` can't bind: ${unreadable.path} ${unreadable.reason}`,
       node,
     );
   }
@@ -2648,6 +2654,12 @@ function lowerComponent(ctx: Ctx, node: Node, target: ComponentTarget): IrNode {
   raiseInvalidCalleeInput(ctx, input, owner, loweredTags.flat);
   const children = loweredTags.contentChildren;
   const callVar = node.var ? declName(ctx, node.var) : null;
+  // Lowered before the binding is registered: the call's own attributes and
+  // body cannot read the `/var` it declares (Marko `references.ts:556-560`),
+  // and the emitted order assigns it from the call's own result.
+  const attrs = lowerAttrs(ctx, node, targetName(target), "component");
+  // Same normalized-body presence rule as custom template tags (decision 141).
+  const content = hasContent(children) ? lowerBlock(ctx, node, children) : null;
   // Reaching the call makes the binding readable; see the discovered path.
   if (callVar) {
     ctx.tagVars ??= new Map();
@@ -2661,9 +2673,8 @@ function lowerComponent(ctx: Ctx, node: Node, target: ComponentTarget): IrNode {
     target,
     nameSpan: target.kind === "dynamic" ? null : nodeSpan(ctx, node.name),
     span: exprSpan(ctx, node),
-    attrs: lowerAttrs(ctx, node, targetName(target), "component"),
-    // Same normalized-body presence rule as custom template tags (decision 141).
-    content: hasContent(children) ? lowerBlock(ctx, node, children) : null,
+    attrs,
+    content,
     attributeTags: loweredTags.flat,
     attributeTagTree: loweredTags.tree,
     attrTagProps: loweredTags.props,

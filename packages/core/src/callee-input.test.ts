@@ -26,6 +26,7 @@ import {
   type AttrTagDecl,
   type CalleeInput,
   type CalleeInputResult,
+  calleeReturn,
   calleeReturnShape,
   calleeReturnsValue,
   type ResolveContext,
@@ -1927,6 +1928,27 @@ describe("calleeReturnsValue", () => {
         expect(calleeReturnShape(target, ctx)).toBe("unknown");
         ctx.importSpecifiers = new Map([["Counter", "./missing.mx"]]);
         expect(calleeReturnShape(target, ctx)).toBe("unknown");
+      },
+    );
+  });
+
+  it("calleeReturn says why a .mx callee is unreadable, and nothing for other unknowns", () => {
+    withFiles(
+      {
+        "broken.mx": "<if=>\n",
+        "plain.ts": "export default function Counter() { return 1; }\n",
+      },
+      [["Counter", "./missing.mx"]],
+      (ctx) => {
+        expect(calleeReturn(target, ctx).unreadable?.reason).toBe(
+          "could not be resolved",
+        );
+        ctx.importSpecifiers = new Map([["Counter", "./broken.mx"]]);
+        expect(calleeReturn(target, ctx).unreadable?.reason).toMatch(
+          /^does not compile: /,
+        );
+        ctx.importSpecifiers = new Map([["Counter", "./plain.ts"]]);
+        expect(calleeReturn(target, ctx)).toEqual({ shape: "unknown" });
       },
     );
   });

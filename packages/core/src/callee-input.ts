@@ -427,8 +427,23 @@ export function calleeReturnShape(
   target: ComponentTarget,
   ctx: Ctx,
 ): "returns" | "none" | "unknown" {
-  if (target.kind !== "name") return "unknown";
-  if (target.name === ctx.exportName) return "unknown";
+  return calleeReturn(target, ctx).shape;
+}
+
+/**
+ * `calleeReturnShape` plus, for a `.mx` callee that could not be read, why:
+ * the file is missing or its own compile failed. `/var` on such a call needs
+ * to name that cause; every other `unknown` has no `unreadable` detail.
+ */
+export function calleeReturn(
+  target: ComponentTarget,
+  ctx: Ctx,
+): {
+  shape: "returns" | "none" | "unknown";
+  unreadable?: { path: string; reason: string };
+} {
+  if (target.kind !== "name") return { shape: "unknown" };
+  if (target.name === ctx.exportName) return { shape: "unknown" };
   const resolved = resolveTarget(target, {
     importer: ctx.filename,
     resolveImport: ctx.resolveImport,
@@ -436,13 +451,26 @@ export function calleeReturnShape(
     ctx,
     targets: ctx.targets,
   });
+  if (
+    resolved.kind === "input" &&
+    resolved.input.kind === "unresolved" &&
+    /\.mx$/.test(resolved.input.specifier)
+  ) {
+    return {
+      shape: "unknown",
+      unreadable: {
+        path: resolved.input.specifier,
+        reason: "could not be resolved",
+      },
+    };
+  }
   if (resolved.kind !== "path" || !resolved.path.endsWith(".mx")) {
-    return "unknown";
+    return { shape: "unknown" };
   }
   // A host module file (`card.solid.mx`) is a TypeScript module with a
   // template region, not a template unit: `readInputAt` reads it the same way.
   if (hostModuleSegment(basename(resolved.path), ctx.targets) !== undefined) {
-    return "unknown";
+    return { shape: "unknown" };
   }
   try {
     const { mtimeMs, source } = sourceSnapshot(resolved.path);
@@ -451,12 +479,22 @@ export function calleeReturnShape(
       source,
       mtimeMs,
     });
-    if (metadata.pending === true) return "unknown";
-    return metadata.returnsValue === true ? "returns" : "none";
-  } catch {
-    // An unreadable or non-compiling callee is reported by `readCalleeInput`
-    // at this same call; there is no return shape to act on.
-    return "unknown";
+    if (metadata.pending === true) return { shape: "unknown" };
+    return { shape: metadata.returnsValue === true ? "returns" : "none" };
+  } catch (error) {
+    // Without `/var` an unreadable or non-compiling callee is reported by
+    // `readCalleeInput` at this same call; the cause is handed back so a
+    // `/var` on it can name it too.
+    const missing = (error as NodeJS.ErrnoException).code === "ENOENT";
+    return {
+      shape: "unknown",
+      unreadable: {
+        path: resolved.path,
+        reason: missing
+          ? "does not exist"
+          : `does not compile: ${(error as Error).message}`,
+      },
+    };
   }
 }
 

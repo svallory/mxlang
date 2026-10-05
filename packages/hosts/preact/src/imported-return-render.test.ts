@@ -112,4 +112,19 @@ describe("an imported tag that declares <return>, rendered on Preact", () => {
       rmSync(scratch, { recursive: true, force: true });
     }
   });
+
+  it("rejects the call's own attribute reading its /var, as a discovered tag does", () => {
+    const scratch = mkdtempSync(join(tmpdir(), "mx-preact-imported-self-"));
+    try {
+      writeFileSync(join(scratch, "counter.mx"), COUNTER);
+      expect(() =>
+        compilePreactMx(
+          'import Counter from "./counter.mx"\n<Counter/n start=n/>',
+          join(scratch, "caller.mx"),
+        ),
+      ).toThrow(/`n` is read before the `\/var` that binds it/);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
 });
