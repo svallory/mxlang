@@ -25,6 +25,8 @@ MX is a language first (its targets exist to test it), so the question was treat
 
 Tag-adjacent sugars compose in any order (`<a.c:b>`, `<a#d:b.c>`, `<:b.c>`). The value is the same identifier-like token Marko's shorthand accepts; `:x=1` is a positioned error. After the sugar is resolved, `name` is an ordinary attribute: contracts, duplicate rules and attribute typing apply unchanged.
 
+Two scope rulings (decision 146, addendum 3). The sugars apply on every host, Angular included; the one host-owned exception is attribute-position `#x` on Angular, which stays its template reference, and `<svg:rect>` is the tag `svg` plus a name on every target (wrap in `<svg>`). An attribute tag's name is a property key, not an element, so `<@svg:rect>` is not split, while attribute-position sugar on an attribute tag applies (`<@z .b>` gives `class="b"`).
+
 ## What was measured
 
 All claims below were measured on `@marko/compiler` 5.42.5 (htmljs-parser 5.15) with a capture translator, 2026-10-04.

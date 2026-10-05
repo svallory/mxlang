@@ -103,6 +103,7 @@ import {
   scriptletSentence,
 } from "./parse-error-hints.ts";
 import { checkReservedTemplate } from "./reserved-bindings.ts";
+import { parseErrorToSugarError } from "./stock-parser.ts";
 import { CONTROL_FLOW_TAGS } from "./structural-tags.ts";
 import {
   bindingForDiscoveredModule,
@@ -270,6 +271,10 @@ export function expressionShape(node: Node): ExprShape {
  */
 export function exprOf(ctx: Ctx, node: Node): Expr {
   if (node?.type === "MarkoParseError") {
+    // Decision 151: sugar Marko's parser (stock, or any parser for a default
+    // attribute) cannot read becomes one MX error naming the rule.
+    const sugar = parseErrorToSugarError(node, ctx.source);
+    if (sugar) throw sugar;
     fail(node.label ?? "invalid expression", {
       loc: { start: node.errorLoc?.start ?? node.loc?.start },
     });

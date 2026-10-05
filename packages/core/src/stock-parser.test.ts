@@ -17,6 +17,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { TranslateError } from "./core.ts";
 import {
   installedParserSplits,
+  parseErrorToSugarError,
   parserSplitsAfterValue,
   resetInstalledParserProbe,
   STOCK_PARSER_MESSAGE,
@@ -300,5 +301,92 @@ describe("sugar right after a default value", () => {
     expect(
       stockParserError(failureError(markoFailure(mixed)), mixed, false),
     ).toBeInstanceOf(TranslateError);
+  });
+});
+
+// `parseFragment` (a `.solid.mx` region) asks Marko for an AST, and Marko then
+// keeps a failing attribute value in the tree as a `MarkoParseError` node
+// instead of throwing, so the error reaches the lowerer in `exprOf`. The node's
+// position is shifted by baseLine/baseColumn like every other; the sugar error
+// is built from it and so lands at the shifted `:`. Core's built `dist` runs
+// under the stock parser in a child process.
+describe("parseFragment on a stock parser", () => {
+  const distEntry = join(here, "../dist/index.js");
+
+  function recovered(source: string, base: object, stock = true) {
+    const script = join(work, stock ? "fragment.cjs" : "fragment-patched.cjs");
+    writeFileSync(
+      script,
+      `${stock ? hook(stockDir) : ""}
+import(${JSON.stringify(`file://${distEntry}`)}).then(({ parseFragment }) => {
+  const { body } = parseFragment(${JSON.stringify(source)}, ${JSON.stringify(base)});
+  const bad = [];
+  const walk = (n) => {
+    if (!n || typeof n !== "object") return;
+    if (n.type === "MarkoParseError") bad.push({ label: n.label, errorLoc: n.errorLoc, loc: n.loc });
+    for (const key of ["attributes", "value", "body"]) walk(Array.isArray(n[key]) ? null : n[key]);
+    for (const a of n.attributes ?? []) walk(a);
+    for (const c of n.body?.body ?? []) walk(c);
+  };
+  for (const n of body) walk(n);
+  console.log(JSON.stringify(bad));
+});
+`,
+    );
+    const run = spawnSync(process.execPath, [script], { encoding: "utf8" });
+    if (run.status !== 0) throw new Error(run.stderr);
+    return JSON.parse(run.stdout) as Parameters<
+      typeof parseErrorToSugarError
+    >[0][];
+  }
+
+  it("the failing value is a recovered node, not a throw", () => {
+    expect(recovered('<a x="1" :b/>', {})).toHaveLength(1);
+  });
+
+  it.each([
+    [{}, 1, 9],
+    // The first line shifts by baseColumn as well as baseLine.
+    [{ baseLine: 10, baseColumn: 4, baseOffset: 14 }, 11, 13],
+  ])(
+    "positions the stock error at the shifted `:` (%j)",
+    (base, line, column) => {
+      const source = '<a x="1" :b/>';
+      const [node] = recovered(source, base);
+      // The node's positions are shifted, so the offset is re-derived against a
+      // source that has the base in front of it.
+      const padded = `${"\n".repeat((base as { baseLine?: number }).baseLine ?? 0)}${" ".repeat(
+        (base as { baseColumn?: number }).baseColumn ?? 0,
+      )}${source}`;
+      const error = parseErrorToSugarError(node as never, padded, false);
+      expect(error?.message).toBe(STOCK_PARSER_MESSAGE(":b"));
+      expect([error?.line, error?.column]).toEqual([line, column]);
+    },
+  );
+
+  it("a later line shifts by baseLine only", () => {
+    const source = '<a\n  x="1" :b/>';
+    const [node] = recovered(source, {
+      baseLine: 10,
+      baseColumn: 4,
+      baseOffset: 14,
+    });
+    const padded = `${"\n".repeat(10)}${" ".repeat(4)}${source}`;
+    const error = parseErrorToSugarError(node as never, padded, false);
+    expect([error?.line, error?.column]).toEqual([12, 8]);
+  });
+
+  it("sugar after a default value is the default-attribute error, on either parser", () => {
+    for (const stock of [true, false]) {
+      const [node] = recovered(
+        "<if=x :b>y</if>",
+        { baseLine: 3, baseColumn: 2, baseOffset: 5 },
+        stock,
+      );
+      const padded = `${"\n".repeat(3)}${" ".repeat(2)}<if=x :b>y</if>`;
+      const error = parseErrorToSugarError(node as never, padded);
+      expect(error?.message).toBe(SUGAR_AFTER_DEFAULT_MESSAGE(":b"));
+      expect([error?.line, error?.column]).toEqual([4, 8]);
+    }
   });
 });

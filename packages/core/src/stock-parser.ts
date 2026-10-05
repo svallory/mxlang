@@ -42,23 +42,41 @@ export function parserSplitsAfterValue(parser: ParserModule): boolean {
 }
 
 let installedSplits: boolean | undefined;
+let probeFailed = false;
+
+type MarkoParser = ParserModule & { TagType: Record<string, number> };
+
+let markoParserModule: MarkoParser | undefined;
+
+/** The `htmljs-parser` that `@marko/compiler` resolves, the one that parses MX. */
+export function markoParser(): MarkoParser | undefined {
+  if (markoParserModule) return markoParserModule;
+  try {
+    const here = createRequire(import.meta.url);
+    const marko = createRequire(here.resolve("@marko/compiler"));
+    markoParserModule = marko("htmljs-parser") as MarkoParser;
+  } catch {
+    return undefined;
+  }
+  return markoParserModule;
+}
 
 /**
  * Whether the `htmljs-parser` that `@marko/compiler` resolves splits after a
- * value. Probed once per process; `undefined` when the probe itself fails, in
- * which case nothing is rewritten.
+ * value. Probed once per process, a failed probe included (`undefined`: nothing
+ * is rewritten and the probe is not retried on every error).
  */
 export function installedParserSplits(): boolean | undefined {
   if (installedSplits !== undefined) return installedSplits;
+  if (probeFailed) return undefined;
   try {
-    const here = createRequire(import.meta.url);
     // The copy that matters is the one Marko parses with, not necessarily the
     // one core itself depends on.
-    const marko = createRequire(here.resolve("@marko/compiler"));
-    installedSplits = parserSplitsAfterValue(
-      marko("htmljs-parser") as ParserModule,
-    );
+    const parser = markoParser();
+    if (!parser) throw new Error("no parser");
+    installedSplits = parserSplitsAfterValue(parser);
   } catch {
+    probeFailed = true;
     return undefined;
   }
   return installedSplits;
@@ -67,6 +85,8 @@ export function installedParserSplits(): boolean | undefined {
 /** Test seam: forget the probe. */
 export function resetInstalledParserProbe(): void {
   installedSplits = undefined;
+  probeFailed = false;
+  markoParserModule = undefined;
 }
 
 type Located = Error & {
@@ -130,31 +150,43 @@ function offsetInDefaultValue(
   source: string,
   offset: number,
 ): boolean | undefined {
-  try {
-    const here = createRequire(import.meta.url);
-    const marko = createRequire(here.resolve("@marko/compiler"));
-    const parser = marko("htmljs-parser") as ParserModule & {
-      TagType: Record<string, number>;
-    };
+  const parser = markoParser();
+  if (!parser) return undefined;
+  // `source` can be a whole file with MX regions in it (`.solid.mx`), which is
+  // not a template, so parse from where the tag opens: the nearest `<` before
+  // the offset, else the start of its (trimmed) line, a concise tag.
+  const lineStart = source.lastIndexOf("\n", offset - 1) + 1;
+  const starts = [
+    source.lastIndexOf("<", offset),
+    lineStart +
+      (source.slice(lineStart).length -
+        source.slice(lineStart).trimStart().length),
+  ].filter((at, index, all) => at >= 0 && all.indexOf(at) === index);
+  for (const from of starts) {
+    const slice = source.slice(from);
+    const at = offset - from;
     let emptyName = false;
     let answer: boolean | undefined;
-    parser
-      .createParser({
-        onAttrName: (name: { start: number; end: number }) => {
-          emptyName = name.start === name.end;
-        },
-        onAttrValue: (attr: { value: { start: number; end: number } }) => {
-          if (attr.value.start <= offset && offset < attr.value.end) {
-            answer = emptyName;
-          }
-        },
-        onError: () => {},
-      })
-      .parse(source);
-    return answer;
-  } catch {
-    return undefined;
+    try {
+      parser
+        .createParser({
+          onAttrName: (name: { start: number; end: number }) => {
+            emptyName = name.start === name.end;
+          },
+          onAttrValue: (attr: { value: { start: number; end: number } }) => {
+            if (attr.value.start <= at && at < attr.value.end) {
+              answer = emptyName;
+            }
+          },
+          onError: () => {},
+        })
+        .parse(slice);
+    } catch {
+      continue;
+    }
+    if (answer !== undefined) return answer;
   }
+  return undefined;
 }
 
 export const SUGAR_AFTER_DEFAULT_MESSAGE = (token: string): string =>
@@ -204,5 +236,32 @@ export function stockParserError(
     STOCK_PARSER_MESSAGE(found.token),
     found.at.line,
     found.at.column,
+  );
+}
+
+/**
+ * The same two errors for a recovered parse failure: `parseFragment` asks
+ * Marko for an AST, and Marko then leaves a failing attribute value in the tree
+ * as a `MarkoParseError` node (label + `errorLoc`) instead of throwing, so the
+ * lowerer meets it in `exprOf`. Positions on the node are already shifted into
+ * the file `source` belongs to.
+ */
+export function parseErrorToSugarError(
+  node: {
+    label?: unknown;
+    errorLoc?: { start?: { line: number; column: number; index?: number } };
+    loc?: { start?: { line: number; column: number; index?: number } };
+  },
+  source: string,
+  splits: boolean | undefined = installedParserSplits(),
+): TranslateError | undefined {
+  const label = typeof node.label === "string" ? node.label : "";
+  const error = Object.assign(new Error(label), {
+    label,
+    loc: { start: node.errorLoc?.start ?? node.loc?.start },
+  });
+  return (
+    sugarAfterDefaultError(error, source) ??
+    stockParserError(error, source, splits)
   );
 }

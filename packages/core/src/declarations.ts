@@ -101,6 +101,13 @@ export interface HostDeclarations {
    */
   acceptsForeignAttrNames?: boolean;
   /**
+   * The host owns attribute-position `#x` (Angular's template reference
+   * `#ref`), so the name sugar leaves it alone there. Tag-adjacent `<div#x>`
+   * is the id sugar on every host, and `:name` and `.class` apply in every
+   * position (decision 146, addendum 3).
+   */
+  claimsAttributeHash?: boolean;
+  /**
    * Per-tag-name dispositions: `inert` (accepted, no output, in a declared
    * shape) or `error` (this target cannot express it). Decision 65: never "my
    * code cannot".

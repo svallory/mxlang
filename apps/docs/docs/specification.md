@@ -710,8 +710,12 @@ work in three positions, in HTML and concise mode alike:
 | first attribute | `<input :email type="email">` | `name="email"` first |
 | after any attribute | `<input type="email" :email>`, `<input x="1" #main .big>` | the attribute at its written position |
 
-The value is a static identifier-like token (`[A-Za-z_$][\w$-]*`), exactly what
-Marko's shorthand allows; `name` is then an ordinary attribute, so contracts,
+`:name` takes an identifier (`[A-Za-z_$][\w$-]*`). `#x` and `.x` take exactly what
+Marko's shorthand takes, in every position: a run of characters up to
+whitespace, `=`, `(`, `/`, `|`, `<`, `,` or `>`, with `.` and `#` starting the
+next part (read from htmljs-parser's own rule and probed against it, so
+`<div #1a>` is `<div#1a>` and `.2xl` and `.é` work in both positions; a chain
+such as `.c#m.d` splits like a tag-adjacent one). `name` is then an ordinary attribute, so contracts,
 the duplicate-attribute rule (decision 135) and E1 types all apply.
 
 **Tag-adjacent sugars compose in any order** (23:23 addendum): `<a.c:b>` is class
@@ -719,7 +723,7 @@ the duplicate-attribute rule (decision 135) and E1 types all apply.
 unnamed tag with name `b` and class `c`. A static tag name splits at its first
 `:`; the static part of a shorthand `class`/`id` value splits the same way (a
 dynamic shorthand splits only its static tail: `<a.${x}:b>` is a dynamic class
-and name `b`; `<a.c:b${x}>` keeps `c:b` as class text). **A second `:` in the
+and name `b`; a `:` before a `${…}`, `<a.c:b${x}>`, is a positioned error). **A second `:` in the
 tag head is a positioned error**: a tag takes one name (`<a:b.c:d>`). The split
 is post-parse, so the parser still sees `tag:rest` as the name: in HTML mode a
 void element needs its `/>` (`<input:email type="email"/>`) and the closing tag
@@ -730,15 +734,27 @@ repeats the written name (`</div:x>`) or is `</>`; concise mode is unaffected.
 `<div.a.b#m>`: `.x` values are space-joined, an authored `class=` merges as a
 shorthand does, and `#x` or `:x` repeated or beside an explicit `id=`/`name=`
 follow the duplicate rule (the later one wins, with a warning). A value on the
-sugar (`:x=1`) and a token that is not an identifier are positioned errors.
+sugar (`:x=1`), a `:name` that is not an identifier, and `:b:c` (two names) or
+`:b(x)` (arguments) are positioned errors.
 
 **Left alone:** the named forms (`class:x`, `style:x`, `value:fn:=x`, and the
 explicit `value:x`), a bare `:` (still Marko's `value:`), a dynamic tag name
-(`<${x}>`), an attribute tag's name (`<@svg:rect>`), a bound attribute, and the
+(`<${x}>`), a bound attribute, and the
 **default attribute**: sugar right after a default value (`<if=a .b>`,
-`<const/x=items\n  .filter()/>`) is not supported and keeps Marko's meaning.
-A host with attribute syntax of its own (`acceptsForeignAttrNames`, Angular) does
-not apply the sugar: there `svg:rect` and `#ref` are not ours.
+`<const/x=items\n  .filter()/>`) keeps Marko's meaning, and `:name` there is one
+error ("sugar right after a default value is not supported (decision 151,
+ruling 2); put it before the value or on the tag") on every parser.
+
+**Hosts.** Every host applies the sugar, Angular included (decision 146,
+addendum 3). The one host-owned exception is attribute-position `#x` on Angular,
+which stays Angular's template reference (`<div #ref>`); tag-adjacent `<div#x>`
+is the id sugar there too, and `:name` and `.class` apply in every position.
+`<svg:rect>` is the tag `svg` plus `name="rect"` on every target: Angular's
+`svg:`-prefixed element form is not available in MX (wrap in `<svg>`).
+
+**Attribute tags.** An attribute tag's name is a property key, not an element, so
+`<@svg:rect>` is not split; attribute-position sugar on one does apply
+(`<@z .b>` gives `class="b"`).
 
 **Consumers on a stock parser.** The after-attribute positions need the patched
 `htmljs-parser` (a `patchedDependencies` entry of this repo). On a stock parser

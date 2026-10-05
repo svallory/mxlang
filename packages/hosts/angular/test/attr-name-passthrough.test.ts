@@ -30,18 +30,30 @@ describe("Angular attribute-name passthrough", () => {
  */
 describe("`:modifier` is the attribute `value:modifier` (angular)", () => {
   it("emits Marko's attribute, statically and dynamically", () => {
-    expect(emit(`<div :foo="lit"/>`, "x.ng.mx")).toContain(
-      `<div value:foo="lit">`,
-    );
-    expect(emit(`<div :foo/>`, "x.ng.mx")).toContain(`<div value:foo="">`);
-    expect(emit(`<div :foo=y/>`, "x.ng.mx")).toContain(
-      `<div [attr.value:foo]="y">`,
-    );
-    // The same attribute under its long spelling: Marko compiles
-    // `<div value:foo="y"/>` to the same output as `<div :foo="y"/>`.
     expect(emit(`<div value:foo="lit"/>`, "x.ng.mx")).toContain(
       `<div value:foo="lit">`,
     );
+    expect(emit(`<div value:foo/>`, "x.ng.mx")).toContain(`<div value:foo="">`);
+    expect(emit(`<div value:foo=y/>`, "x.ng.mx")).toContain(
+      `<div [attr.value:foo]="y">`,
+    );
+  });
+
+  // Decision 146, addendum 3: Angular gets the sugar. The one host-owned
+  // exception is attribute-position `#x`, Angular's template reference.
+  it("applies the name sugar in every position but attribute-position `#x`", () => {
+    expect(emit(`<div :foo/>`, "x.ng.mx")).toContain(`<div name="foo">`);
+    expect(emit(`<input:email type="email"/>`, "x.ng.mx")).toContain(
+      `<input name="email" type="email">`,
+    );
+    expect(emit(`<div .b/>`, "x.ng.mx")).toContain(`<div class="b">`);
+    expect(emit(`<div#x:y/>`, "x.ng.mx")).toContain(`<div name="y" id="x">`);
+    expect(emit(`<div #ref>hi</div>`, "x.ng.mx")).toContain(`#ref`);
+    expect(emit(`<div #ref>hi</div>`, "x.ng.mx")).not.toContain(`id="ref"`);
+  });
+
+  it("`<svg:rect>` is the tag `svg` plus a name (no `svg:` element form)", () => {
+    expect(emit(`<svg:rect/>`, "x.ng.mx")).toContain(`<svg name="rect">`);
   });
 
   it.each([

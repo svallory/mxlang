@@ -1,4 +1,5 @@
 import { type Ctx, type Node, TranslateError } from "./core.ts";
+import { markoParser } from "./stock-parser.ts";
 
 /**
  * Decision 146: `:name`, `#id` and `.class` sugar.
@@ -25,8 +26,9 @@ import { type Ctx, type Node, TranslateError } from "./core.ts";
  * default-tag ladder) applies unchanged. A second `:` in the tag head is an
  * error: one name only.
  *
- * Skipped when the host has an attribute syntax of its own
- * (`acceptsForeignAttrNames`): there `svg:rect` and `#ref` are not ours.
+ * Every host applies it (decision 146, addendum 3). The one host-owned
+ * exception is attribute-position `#x` on a host that declares
+ * `claimsAttributeHash` (Angular's template reference).
  */
 
 /**
@@ -231,6 +233,19 @@ function headNamesIn(ctx: Ctx, part: Node, found: HeadName[]): void {
     return;
   }
   if (part?.type === "TemplateLiteral" && Array.isArray(part.quasis)) {
+    // A `:` before a `${…}` is neither a name nor a class character: a
+    // shorthand class or id cannot contain `:` (divergences.md, row 4).
+    for (const quasi of part.quasis.slice(0, -1)) {
+      const before: string = quasi?.value?.raw ?? "";
+      const at = before.indexOf(":");
+      if (at >= 0) {
+        failAt(
+          ctx,
+          'a `:` before a `${…}` in a shorthand class or id is not allowed: a shorthand cannot contain `:` (write the value as `class="…"`)',
+          offsetOfPosition(ctx, quasi.loc.start) + at,
+        );
+      }
+    }
     const tail = part.quasis[part.quasis.length - 1];
     const raw: string = tail?.value?.raw ?? "";
     const idx = raw.indexOf(":");
@@ -405,6 +420,89 @@ function sugarKind(attr: Node): "#" | "." | ":" | undefined {
   return undefined;
 }
 
+const shorthandProbe = new Map<string, boolean>();
+
+/**
+ * Is `word` something Marko's shorthand (`<a.word>`, `<a#word>`) accepts as
+ * one token? Decided by the parser itself: the `htmljs-parser` that
+ * `@marko/compiler` resolves parses `<a{sigil}{word}/>` and the word counts when
+ * it comes back as exactly one shorthand part, with no error and no
+ * placeholder. Its rule (`TAG_NAME` state, `htmljs-parser` 5.15.0): a shorthand
+ * runs to whitespace, `=`, `:=`, `(`, `/`, `|`, `<`, `,` or `>`, and `.`/`#`
+ * start the next part, so `1a`, `2xl`, `é`, `a@b` and `a+b` are all fine. The
+ * pure fallback below mirrors that list for a probe that cannot run.
+ */
+function isShorthandWord(sigil: string, word: string): boolean {
+  const key = `${sigil}${word}`;
+  const known = shorthandProbe.get(key);
+  if (known !== undefined) return known;
+  let answer: boolean;
+  const parser = markoParser();
+  if (parser) {
+    const source = `<a${key}/>`;
+    const seen: string[] = [];
+    let failed = false;
+    const part = (text: {
+      quasis: { start: number; end: number }[];
+      expressions?: unknown[];
+    }) =>
+      seen.push(
+        text.expressions?.length
+          ? "\u0000"
+          : source.slice(text.quasis[0]?.start, text.quasis[0]?.end),
+      );
+    try {
+      parser
+        .createParser({
+          onTagShorthandClass: part,
+          onTagShorthandId: part,
+          onError: () => {
+            failed = true;
+          },
+        })
+        .parse(source);
+    } catch {
+      failed = true;
+    }
+    answer = !failed && seen.length === 1 && seen[0] === word;
+  } else {
+    answer = !/[\s=(/|<,>.#]|:=|\$\{/.test(word);
+  }
+  shorthandProbe.set(key, answer);
+  return answer;
+}
+
+/**
+ * Names Marko's split turns into something that is not the sugar the author
+ * wrote: `:b:c` (name `:b`, modifier `c`) is two names, and `:b(x)` carries
+ * arguments. Say so in the sugar's words (the generic message would name
+ * `:b` or `value:b`, which the author never wrote).
+ */
+function checkNearSugar(ctx: Ctx, attr: Node): void {
+  if (attr?.type !== "MarkoAttribute" || attr.bound) return;
+  const start = startOf(ctx, attr);
+  if (
+    typeof attr.name === "string" &&
+    attr.name.startsWith(":") &&
+    typeof attr.modifier === "string"
+  ) {
+    failAt(ctx, SECOND_NAME, start + attr.name.length);
+  }
+  if (
+    attr.default === true &&
+    attr.name === "value" &&
+    typeof attr.modifier === "string" &&
+    attr.modifier !== "" &&
+    attr.arguments
+  ) {
+    failAt(
+      ctx,
+      `arguments are not allowed on \`:name\`: \`:${attr.modifier}(…)\` is name sugar, not an attribute method`,
+      start,
+    );
+  }
+}
+
 function rewriteAttributes(ctx: Ctx, node: Node): void {
   const attrs: Node[] = node.attributes;
   // Where the shorthand ends: before the first authored attribute.
@@ -420,6 +518,13 @@ function rewriteAttributes(ctx: Ctx, node: Node): void {
   for (const attr of attrs) {
     const kind = sugarKind(attr);
     if (!kind) {
+      checkNearSugar(ctx, attr);
+      out.push(attr);
+      continue;
+    }
+    // Attribute-position `#x` is the host's own on a host that declares it
+    // (Angular's template reference); tag-adjacent `<div#x>` is never skipped.
+    if (kind === "#" && ctx.declarations.claimsAttributeHash) {
       out.push(attr);
       continue;
     }
@@ -435,41 +540,71 @@ function rewriteAttributes(ctx: Ctx, node: Node): void {
         start,
       );
     }
-    // `#x` and `.x` keep their sigil in the parser's attribute name; `:x` has
-    // it in the modifier. A trailing `:y` (`.c:y`, `#d:y`) is a name too.
-    const word: string = kind === ":" ? attr.modifier : attr.name.slice(1);
-    const tail: string | undefined =
-      kind !== ":" && typeof attr.modifier === "string"
-        ? attr.modifier
-        : undefined;
-    if (!SUGAR_TOKEN.test(word)) {
-      failAt(
-        ctx,
-        `${form} is not name sugar; \`${kind}name\` takes an identifier (\`${kind}main\`, \`${kind}first-name\`)`,
-        start,
-      );
-    }
-    const wordStart = start + 1;
-    const wordEnd = wordStart + word.length;
     if (kind === ":") {
-      out.push(sugarAttr(ctx, "name", { start, end }, wordStart, word));
-    } else if (kind === "#") {
-      out.push(sugarAttr(ctx, "id", { start, end: wordEnd }, wordStart, word));
-      sawId = true;
-    } else {
-      if (classAt < 0) classAt = out.length;
-      classTokens.push({ value: word, start: wordStart, end: wordEnd });
+      // `:x` has its word in the modifier and follows the identifier rule.
+      const word: string = attr.modifier;
+      if (!SUGAR_TOKEN.test(word)) {
+        failAt(
+          ctx,
+          `${form} is not name sugar; \`:name\` takes an identifier (\`:email\`, \`:first-name\`)`,
+          start,
+        );
+      }
+      out.push(sugarAttr(ctx, "name", { start, end }, start + 1, word));
+      continue;
     }
-    if (tail !== undefined) {
-      const colon = wordEnd;
-      checkToken(ctx, tail, colon, form);
+    // `#x` and `.x` keep the sigil in the parser's attribute name, and a
+    // chain (`.c#m.d`) is split as the tag-adjacent shorthand splits it. Each
+    // part is exactly what Marko's shorthand accepts (probed against its own
+    // parser); a trailing `:y` (`.c:y`, `#d:y`) is a name too.
+    let cursor = start;
+    for (const part of attr.name.matchAll(/([.#])([^.#]*)/g)) {
+      const sigil = part[1] as string;
+      const word = part[2] as string;
+      const partStart = start + (part.index ?? 0);
+      cursor = partStart + 1 + word.length;
+      if (word.includes(":")) {
+        failAt(ctx, SECOND_NAME, partStart + 1 + word.indexOf(":"));
+      }
+      if (word === "" || !isShorthandWord(sigil, word)) {
+        failAt(
+          ctx,
+          word === ""
+            ? `\`${sigil}\` needs a name after it (\`${sigil}main\`)`
+            : `\`${sigil}${word}\` is not a valid shorthand name`,
+          partStart,
+        );
+      }
+      if (sigil === "#") {
+        out.push(
+          sugarAttr(
+            ctx,
+            "id",
+            { start: partStart, end: partStart + 1 + word.length },
+            partStart + 1,
+            word,
+          ),
+        );
+        sawId = true;
+      } else {
+        if (classAt < 0) classAt = out.length;
+        classTokens.push({
+          value: word,
+          start: partStart + 1,
+          end: partStart + 1 + word.length,
+        });
+      }
+    }
+    if (typeof attr.modifier === "string") {
+      const colon = cursor;
+      checkToken(ctx, attr.modifier, colon, form);
       out.push(
         sugarAttr(
           ctx,
           "name",
-          { start: colon, end: colon + 1 + tail.length },
+          { start: colon, end: colon + 1 + attr.modifier.length },
           colon + 1,
-          tail,
+          attr.modifier,
         ),
       );
     }
@@ -627,7 +762,6 @@ function rewriteHead(ctx: Ctx, node: Node): void {
 export function rewriteNameSugar(ctx: Ctx, node: Node): void {
   if (done.has(node) || node?.type !== "MarkoTag") return;
   done.add(node);
-  if (ctx.declarations.acceptsForeignAttrNames) return;
   if (!Array.isArray(node.attributes)) return;
   rewriteHead(ctx, node);
   rewriteAttributes(ctx, node);

@@ -1713,3 +1713,47 @@ describe("name sugar (decision 146)", () => {
     ).toEqual([["name", "title"]]);
   });
 });
+
+// Decision 146, lead ruling: an attribute tag's name is a property key, not an
+// element, so `<@svg:rect>` is not split; attribute-position sugar on an
+// attribute tag applies (`<@z .b>` gives `class="b"`).
+describe("name sugar on attribute tags", () => {
+  it("`<@svg:rect/>` keeps its colon and gets no name", () => {
+    const tag = firstTag(ok("<a><@svg:rect/></a>\n"));
+    expect(
+      tag.attrTags.map((node) =>
+        node.kind === "attr-tag" ? node.name : node.kind,
+      ),
+    ).toEqual(["svg:rect"]);
+    const rect = tag.attrTags[0];
+    expect(rect?.kind === "attr-tag" ? rect.attrs : null).toEqual([]);
+  });
+
+  it('`<@z .b/>` gives the attribute tag `class="b"`', () => {
+    const tag = firstTag(ok("<a><@z .b/></a>\n"));
+    const z = tag.attrTags[0];
+    expect(z?.kind === "attr-tag" ? z.name : null).toBe("z");
+    expect(
+      z?.kind === "attr-tag"
+        ? z.attrs.map((a) =>
+            a.kind === "string" ? [a.name, a.value] : nameOf(a),
+          )
+        : null,
+    ).toEqual([["class", "b"]]);
+  });
+
+  it("`<@z :b #c/>` gives name and id", () => {
+    const tag = firstTag(ok("<a><@z :b #c/></a>\n"));
+    const z = tag.attrTags[0];
+    expect(
+      z?.kind === "attr-tag"
+        ? z.attrs.map((a) =>
+            a.kind === "string" ? [a.name, a.value] : nameOf(a),
+          )
+        : null,
+    ).toEqual([
+      ["name", "b"],
+      ["id", "c"],
+    ]);
+  });
+});

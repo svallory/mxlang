@@ -42,6 +42,7 @@ static const k = 1
   <for|i| from=0 to=10 step=2><span>\${i}</span></for>
   <const/total=items.length * 2/>
   <ünï-tag a="é😀"/>
+  <ünï:tag b="1"/>
 </card>
 `;
 
@@ -264,6 +265,10 @@ describe("compileModule on every kind of node", () => {
       "static",
     ]);
     expect(JSON.stringify(emitted)).toContain("ünï-tag");
+    // Decision 146: a non-ASCII `tag:name` splits into the tag `ünï` and
+    // `name="tag"`.
+    expect(JSON.stringify(emitted)).toContain('"name":"ünï"');
+    expect(JSON.stringify(emitted)).toContain('"value":"tag"');
     expect(JSON.stringify(emitted)).toContain("é😀");
   });
 

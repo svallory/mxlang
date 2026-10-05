@@ -3934,8 +3934,8 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
   );
 
   it.each([
-    ['<div :foo()="y"/>', "value:foo", 1, 5],
-    ['<div\n  :foo()="y"/>', "value:foo", 2, 2],
+    ['<div value:foo()="y"/>', "value:foo", 1, 5],
+    ['<div\n  value:foo()="y"/>', "value:foo", 2, 2],
     ['<div value:foo:bar()="y"/>', "value:foo:bar", 1, 5],
     ['<div x:foo()="y"/>', "x:foo", 1, 5],
     ['<div x:()="y"/>', "x:", 1, 5],
@@ -4010,7 +4010,7 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
     const seen: Array<{ name: string; modifier: string }> = [];
     expect(() =>
       lowerSource(
-        "<div :foo=y/>\n",
+        "<div value:foo=y/>\n",
         fakeDeclarations({
           acceptsForeignAttrNames: true,
           rejectModifier: () => {},

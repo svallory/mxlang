@@ -179,6 +179,7 @@ export const angularDeclarations: HostDeclarations = {
     keyword === "const" ? `declare a value with \`<const/${name}=…/>\`` : "",
   // `[prop]=`, `#ref`, `*ngIf` are the target's own syntax and pass through.
   acceptsForeignAttrNames: true,
+  claimsAttributeHash: true,
   tags: {
     ...STATEFUL_ERRORS,
     try: { kind: "error", reason: TRY_MESSAGE },

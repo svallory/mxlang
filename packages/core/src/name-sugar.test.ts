@@ -6,6 +6,7 @@ import { type Ctx, type MxWarning, type Node, newCtx } from "./core.ts";
 import type { Policy } from "./declarations.ts";
 import type { Attr, Ir, IrNode } from "./ir.ts";
 import { lower } from "./lower.ts";
+import { sugarTagName } from "./name-sugar.ts";
 import { lookup } from "./test-targets.ts";
 
 /**
@@ -155,8 +156,6 @@ describe("tag-adjacent `:name`", () => {
   it("splits only the static tail of a dynamic shorthand", () => {
     expect(shape("<a.${x}:b/>")).toBe('a name="b" class=<`${x}`>');
     expect(shape("<a.c${x}/>")).toBe("a class=<`c${x}`>");
-    // A colon before an expression is class text, not a name.
-    expect(shape("<a.c:b${x}/>")).toBe("a class=<`c:b${x}`>");
     expect(shape("<a.c.${x}:b/>")).toBe('a name="b" class=<["c", `${x}`]>');
   });
 
@@ -281,7 +280,6 @@ describe("`#id`, `.class` and `:name` in attribute position", () => {
   it.each([
     ["<a :1/>", "`:1`"],
     ["<a :b.c/>", "`:b.c`"],
-    ["<a #1/>", "`#1`"],
   ])("%s: the token must be an identifier", (source, token) => {
     expect(errorOf(source).message).toContain(token);
   });
@@ -325,37 +323,35 @@ describe("`#id`, `.class` and `:name` in attribute position", () => {
   });
 });
 
-describe("a host with its own attribute syntax opts out", () => {
-  const foreign = policy({ acceptsForeignAttrNames: true });
-
-  it("keeps `svg:rect` a tag name and `#ref` an attribute", () => {
-    expect(shape("<svg:rect/>", foreign)).toBe("svg:rect");
-    expect(shape("<a #ref/>", foreign)).toBe("a #ref");
-  });
-});
-
-// The parser reads the tag name before the split, so what it decides from the
-// name (void elements, the closing tag) sees the whole `tag:rest`.
-describe("known limits of the tag-adjacent split", () => {
-  it("a void element written tag-adjacent needs `/>` in HTML mode", () => {
-    expect(() => lowerSource('<input:email type="email">')).toThrow(
-      'Missing ending "input:email" tag',
-    );
-    expect(shape('<input:email type="email"/>')).toBe(
-      'input name="email" type="email"',
-    );
-    // Concise mode has no closing tag to miss.
-    expect(shape('input:email type="email"')).toBe(
-      'input name="email" type="email"',
-    );
+// Decision 146, addendum 3: Angular gets the sugar. The one host-owned
+// exception is attribute-position `#x`, which a host declares with
+// `claimsAttributeHash` (Angular's template reference).
+describe("a host that claims attribute-position `#`", () => {
+  const angular = policy({
+    acceptsForeignAttrNames: true,
+    claimsAttributeHash: true,
   });
 
-  it("the closing tag repeats the written name, or is `</>`", () => {
-    expect(() => lowerSource("<div:x>hi</div>")).toThrow(
-      'The closing "div" tag does not match the corresponding opening "div:x" tag',
+  it("keeps attribute-position `#ref` the host's own", () => {
+    expect(shape("<div #ref/>", angular)).toBe("div #ref");
+  });
+
+  it("everything else is the sugar, as on every host", () => {
+    expect(shape("<svg:rect/>", angular)).toBe('svg name="rect"');
+    expect(shape('<input:email type="email"/>', angular)).toBe(
+      'input name="email" type="email"',
     );
-    expect(shape("<div:x>hi</div:x>")).toBe('div name="x"');
-    expect(shape("<div:x>hi</>")).toBe('div name="x"');
+    expect(shape("<div#x/>", angular)).toBe('div id="x"');
+    expect(shape("<div.b/>", angular)).toBe('div class="b"');
+    expect(shape("<div .b/>", angular)).toBe('div class="b"');
+    expect(shape("<div :b/>", angular)).toBe('div name="b"');
+    expect(shape('<div x="1" :b .c/>', angular)).toBe(
+      'div x="1" name="b" class="c"',
+    );
+  });
+
+  it("a host that does not claim it reads `#ref` as `id`", () => {
+    expect(shape("<div #ref/>")).toBe('div id="ref"');
   });
 });
 
@@ -397,5 +393,92 @@ describe("exact value spans of the rewritten shorthand", () => {
     expect(cls?.valueSpan?.sourceEnd).toBeLessThanOrEqual(
       name?.nameSpan.sourceStart ?? 0,
     );
+  });
+});
+
+// Review finding 5 (leader ruling): in attribute position `#x` and `.x` take
+// exactly Marko's shorthand charset, as the tag-adjacent form does. The charset
+// is read from htmljs-parser's own shorthand rule (probed against the parser
+// Marko resolves), `:name` keeps the identifier rule.
+describe("the shorthand charset, in both positions", () => {
+  it.each([
+    ["<div #1a/>", "<div#1a/>"],
+    ["<div .2xl/>", "<div.2xl/>"],
+    ["<div .é/>", "<div.é/>"],
+    ["<div .a@b/>", "<div.a@b/>"],
+    ["<div .a+b/>", "<div.a+b/>"],
+    ["<div .w-1/2/>", null],
+    ["<div #a-b_c$d/>", "<div#a-b_c$d/>"],
+  ])("%s", (written, adjacent) => {
+    if (adjacent === null) return;
+    expect(shape(written)).toBe(shape(adjacent));
+  });
+
+  it("matches Marko's shorthand, so the two positions never disagree", () => {
+    expect(shape("<div #1a/>")).toBe('div id="1a"');
+    expect(shape("<div .2xl/>")).toBe('div class="2xl"');
+    expect(shape("<div .é/>")).toBe('div class="é"');
+  });
+
+  it("a chain splits at `.` and `#` like a tag-adjacent chain", () => {
+    expect(shape("<div .c.d/>")).toBe(shape("<div.c.d/>"));
+    expect(shape("<div .c#m.d/>")).toBe(shape("<div.c#m.d/>"));
+    expect(shape('<a x="1" .c.d/>')).toBe('a x="1" class="c d"');
+  });
+
+  it("`:name` keeps the identifier rule", () => {
+    expect(errorOf("<div :1a/>").message).toContain("`:1a`");
+    expect(errorOf("<div :é/>").message).toContain("`:é`");
+  });
+
+  it("an empty token is an error", () => {
+    expect(errorOf("<div #/>").message).toContain("needs a name");
+    expect(errorOf("<div ./>").message).toContain("needs a name");
+  });
+});
+
+// Review finding 6: row 4 of divergences.md says a shorthand class or id
+// cannot contain `:`, so a `:` before a `${…}` is an error too.
+describe("a `:` inside a dynamic shorthand", () => {
+  it.each([
+    ["<a.c:b${x}/>", 4],
+    ["<a#i:b${x}/>", 4],
+    ["<a.c.d:b${x}e/>", 6],
+  ])("%s: a `:` before a `${…}` is a positioned error", (source, column) => {
+    const error = errorOf(source);
+    expect(error.message).toContain("before a `${…}`");
+    expect(error.line).toBe(1);
+    expect(error.column).toBe(column);
+  });
+
+  it("the static tail still splits", () => {
+    expect(shape("<a.${x}:b/>")).toBe('a name="b" class=<`${x}`>');
+  });
+});
+
+// Review finding 7: messages name the sugar, not Marko's split of it.
+describe("sugar messages", () => {
+  it("`<div :b:c/>` is the one-name error", () => {
+    const error = errorOf("<div :b:c/>");
+    expect(error.message).toContain("one `:name`");
+    expect(error.column).toBe(7);
+  });
+
+  it("`<div :b(x)/>` says arguments are not allowed on `:name`", () => {
+    const error = errorOf("<div :b(x)/>");
+    expect(error.message).toContain("arguments are not allowed on `:name`");
+    expect(error.column).toBe(5);
+  });
+});
+
+describe("sugarTagName", () => {
+  it.each([
+    ["resource:post", { tag: "resource", unnamed: false }],
+    [":title", { tag: "", unnamed: true }],
+    ["plain", { tag: "plain", unnamed: false }],
+    ["@svg:rect", { tag: "@svg:rect", unnamed: false }],
+    ["ünï:tag", { tag: "ünï", unnamed: false }],
+  ])("%s", (raw, expected) => {
+    expect(sugarTagName(raw)).toEqual(expected);
   });
 });

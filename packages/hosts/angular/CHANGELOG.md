@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Changed (name-sugar-core r2, decision 146 addendum 3):** the `:name`, `#id` and `.class` sugar applies on Angular. Attribute-position `#x` stays Angular's template reference (`claimsAttributeHash: true`); `<svg:rect>` is the tag `svg` plus `name="rect"` (Angular's `svg:`-prefixed element form is not available in MX: wrap in `<svg>`). See the Angular host page.
+
 - **Fix (default-tag-contracts r2):** `build()` and the virtual tag reader report an invalid contract `defaultTag` once at its declaration.
 
 - **Added (default-tag-contracts, decision 145):** the parent contract's `defaultTag` is the first rung for the unnamed tag.

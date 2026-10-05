@@ -190,6 +190,19 @@ lowers to `[ngClass]`/`[ngStyle]`), and write the attribute plainly
 (`data-kind=x`, not `attr:data-kind=x`) — the emitter decides property vs.
 attribute binding for you, per the row above.
 
+## Name sugar
+
+The `:name`, `#id` and `.class` sugar (decision 146) works on Angular as on every
+other host: `<input:email type="email">`, `<input type="email" :email>`, `<div.b>`
+and `<div .b>` compile to the attributes written out. Two Angular facts:
+
+- **Attribute-position `#x` stays Angular's template reference.** `<div #ref>` is
+  the reference, exactly as before. Tag-adjacent `<div#x>` is the `id` sugar here
+  too, and `:name` and `.class` apply in every position.
+- **`<svg:rect>` is the tag `svg` plus `name="rect"`.** Angular's `svg:`-prefixed
+  element form is not available in MX; wrap in `<svg>` and write the child as
+  `<rect>`.
+
 ## Events
 
 An element's `on<Name>=fn` (`onClick`, `onDblClick`), `on-<exact>=fn`

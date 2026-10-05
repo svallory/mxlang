@@ -209,13 +209,13 @@ describe("`:modifier` is the attribute `value:modifier` (html)", () => {
       4,
     ],
     [
-      '<div :foo()="y"/>',
+      '<div value:foo()="y"/>',
       "Unsupported arguments on the `value:foo` attribute.",
       1,
       5,
     ],
     [
-      '<div\n  :foo()="y"/>',
+      '<div\n  value:foo()="y"/>',
       "Unsupported arguments on the `value:foo` attribute.",
       2,
       2,

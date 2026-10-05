@@ -536,7 +536,10 @@ describe("name sugar in the parse-only scan", () => {
   it("the HTML form `<resource:post/>` is the same", () => {
     const { diagnostics } = parse("<resource:post/>\n<relationships/>\n");
     expect(diagnostics).toMatchObject([
-      { message: expect.stringContaining("`<relationships>` must be inside"), line: 2 },
+      {
+        message: expect.stringContaining("`<relationships>` must be inside"),
+        line: 2,
+      },
     ]);
   });
 

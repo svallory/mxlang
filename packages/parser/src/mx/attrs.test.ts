@@ -485,10 +485,9 @@ describe("round 3: attribute order and position (PR #6 review)", () => {
   });
 
   it("carries `value:foo` as the namespaced attribute `value:foo` (Marko)", () => {
-    // Marko's parser fills the empty head of `:foo` with `value`, so this is
-    // one attribute literally named `value:foo` — the same AST shape a JSX
-    // `value:foo={…}` produces. It used to be rejected here as a "malformed
-    // namespaced attribute", which contradicted what Marko compiles.
+    // The explicit `value:foo` is one attribute literally named `value:foo`,
+    // the same AST shape a JSX `value:foo={…}` produces. (Decision 146 made
+    // the bare `:foo` spelling `name="foo"` sugar, so these rows write it out.)
     const attr = attrsOf(`const el = <div value:foo=1>x</div>;`)[0] as {
       name: {
         type: string;
@@ -502,9 +501,10 @@ describe("round 3: attribute order and position (PR #6 review)", () => {
   });
 
   it("gives a valueless `value:foo` the empty value Marko's HTML means", () => {
-    // `<div :foo>` is `<div value:foo>` — an attribute present with an empty
-    // value, which every HTML parser reads the same way. The JSX spelling
-    // carries it as `value:foo=""`, not as `true`.
+    // `<div value:foo>` is an attribute present with an empty value, which
+    // every HTML parser reads the same way. The JSX spelling carries it as
+    // `value:foo=""`, not as `true`. (The bare `<div :foo>` is `name="foo"`
+    // sugar since decision 146.)
     const attr = attrsOf(`const el = <div value:foo>x</div>;`)[0] as {
       name: { namespace: { name: string }; name: { name: string } };
       value: { type: string; value: string };
