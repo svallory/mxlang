@@ -1,6 +1,6 @@
 # Changelog
 
-- **Test (html-imported-return-tag-object-object):** `server.test.ts` renders a unit that declares `<return>` through the renderer and pins that the markup renders and the value is dropped. No code change.
+- **Test (html-imported-return-tag-object-object):** `imported-return-render.test.ts` renders an `.astro.mx` page that imports a `.mx` tag declaring `<return>` and calls it without `/var`, through Astro's compiler, container and the MX renderer: markup rendered, value dropped. `server.test.ts` pins the renderer's own unwrap. No code change.
 
 - **Fix (marko-parity-trio, `:modifier`):** `<div :foo="y"/>` in a template body emits `value:foo={y}`, which the real Astro compiler renders as `value:foo="y"`; MX previously rejected the form.
 

@@ -117,6 +117,21 @@ character references section.
 
 **MX-only warning policy (registration PR 3 round-2 ruling).** Only full-registry tooling validates `mx.tags[].hosts` names. Own-only HTML/Hono Bun loaders, Astro templates, and Angular build/watch/discover leave peer restrictions unresolved without an unknown-name warning. An incomplete lookup cannot establish absence; registry wrappers call the name validator, while direct loaders do not. Shared Angular discovery has an explicit internal `validateHostNames` option, false by default and true only for full-registry callers. Core's public lookup contract is unchanged. Filtering and shape errors remain unchanged, and full-registry unknown bare words still warn. Pins: `packages/hosts/{html,hono,astro}/src/own-host-restrictions.test.ts` and `packages/hosts/angular/test/host-restrictions-r2.test.ts` (`hosts: ["solid"]`, plus registry-backed unknown-name discovery/build/watch with zero files). This policy concerns an MX-only config key, not a change to Marko syntax or render semantics.
 
+### A `<return>` tag reached through a dynamic tag or a `.ts` barrel (known gap)
+
+A `.mx` unit that declares `<return>` returns `{ value, output }`. A direct
+default import (`import Counter from "./counter.mx"`, `<Counter/>`) and a
+discovered tag unwrap it; Marko 6.3.51 renders the body and drops the value in
+every form. A dynamic tag (`<${x}/>`) and a `.ts` barrel re-export
+(`export { default as Counter } from "./counter.mx"`) go through the host's
+runtime dispatch, which does not unwrap, so on `@mxlang/html` the call renders
+`[object Object]`. The shape is not knowable at compile time there, so there is
+no compile-time refusal. Not even a dynamic tag whose expression is a plain
+identifier bound by an import of such a unit can be refused in core: whether
+the dispatch unwraps is a host fact (Solid and Astro render it correctly, the
+html and JSX hosts do not), and core holds nothing host-specific. Use a direct
+`.mx` import or a discovered tag. Runtime fix: TODO `dynamic-tag-return-unit-object-object`.
+
 ## Fixed: undocumented divergence in the bare `${expr}` line
 
 A standalone concise-position `${expr}` line (no attributes, no body) used to

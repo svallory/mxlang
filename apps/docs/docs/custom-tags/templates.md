@@ -125,7 +125,12 @@ A `<return>` in a page is legal and means the same thing — a page is a module 
 
 A tag that declares `<return>` can be called without a `/var`. The call renders the tag's body and drops the value, as Marko does, whether the tag is discovered (`<counter start=1/>`) or imported by its default binding from a `.mx` file (`import Counter from "./lib/counter.mx"`, then `<Counter start=1/>`). The value stays unreachable in both forms, and the imported form cannot bind it at all.
 
-Only a default import that resolves straight to a `.mx` file is recognised. A `.mx` file re-exported through a `.ts` barrel (`export { default as Counter } from "./counter.mx"`) is a dynamic tag, not a static import; the compiler cannot see that its callee returns a value.
+Only a default import that resolves straight to a `.mx` file is recognised. Two other routes to a returning tag are a known gap, because the compiler cannot see the callee's shape:
+
+- a `.mx` file re-exported through a `.ts` barrel (`export { default as Counter } from "./counter.mx"`) is a dynamic tag, not a static import;
+- a dynamic tag (`<${x}/>`) goes through the host's runtime dispatch.
+
+On `@mxlang/html`, both render `[object Object]` instead of the body until the runtime fix lands (TODO `dynamic-tag-return-unit-object-object`). Use a direct `.mx` import or a discovered tag. There is no compile-time error for these: whether a dynamic call unwraps depends on the host (Solid and Astro render it correctly), which the shared compiler does not know.
 
 ### Where `/var` can be written, per host
 
