@@ -197,21 +197,27 @@ describe("class={} object stays on class (no classList in Solid 2)", () => {
       `const el = <div.card class={a: on()}>x</div>;`,
       `const el = <div class=someObj>x</div>;`,
     ]) {
-      const attrs = attrsOf(source) as { name: { name: string } }[];
-      expect(attrs.map((a) => a.name.name)).not.toContain("classList");
+      const attrs = attrsOf(source) as { name?: { name: string } }[];
+      expect(attrs.map((a) => a.name?.name)).not.toContain("classList");
     }
   });
 
-  it("keeps class=someObj as class={someObj}", () => {
+  it("lowers class=someObj through the class prop helper, which passes an object on", () => {
     const attrs = attrsOf(`const el = <div class=someObj>x</div>;`);
     expect(attrs).toHaveLength(1);
     const attr = attrs[0] as {
-      name: { name: string };
-      value: { expression: { type: string; name: string } };
+      type: string;
+      argument: {
+        type: string;
+        callee: { name: string };
+        arguments: { type: string; name: string }[];
+      };
     };
-    expect(attr.name.name).toBe("class");
-    expect(attr.value.expression.type).toBe("Identifier");
-    expect(attr.value.expression.name).toBe("someObj");
+    // Marko omits a falsy class and Solid cannot, so the value is a prop
+    // object that is empty when omitted; an object value is returned as is.
+    expect(attr.type).toBe("JSXSpreadAttribute");
+    expect(attr.argument.callee.name).toBe("__mxClassProp");
+    expect(attr.argument.arguments[0]?.name).toBe("someObj");
   });
 });
 
