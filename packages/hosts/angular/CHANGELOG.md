@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Added (default-tag-ladder, decision 145):** the descriptor declares `defaultTag` (`DEFAULT_TAG`, `div`); `angularDeclarations` answers `mx.angular-template.defaultTag` first, then `div`; `compileNgMx`, `compile` and `compileTagModule` take `defaultTag`, and `build` reads the package's key.
+
 - **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.
 
 - **Fix (range-loop-name-collision):** the `<for of=>` row binding for a destructured param and the `<for in=>` keyvalue entry are `__mxRow`/`__mxEntry`, not `mxRow`/`mxEntry`. Both are bound around the loop body, so a component field of the same name was shadowed inside it. `__mx` is reserved, so the name-avoidance they still run is now defence in depth against generated-vs-generated names. The `for-destructured-object` and `for-in` oracle fixtures' expected templates and AST goldens are updated for the rename; both rows keep their `pass` verdict.

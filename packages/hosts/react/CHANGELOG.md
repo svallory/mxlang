@@ -10,6 +10,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Added (default-tag-ladder, decision 145):** the descriptor declares `defaultTag: "div"` (shared constant with Preact); `compileReactMx` takes `defaultTag` (`mx.react-jsx.defaultTag`).
+
 - **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.
 
 - **Fix (attr-value-parity review):** shared JSX guards are hoisted once per module and reject ordinary function/symbol values with Marko debug text; event handlers and framework props remain exempt.

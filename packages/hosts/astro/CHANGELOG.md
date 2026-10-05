@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Added (default-tag-ladder, decision 145):** the descriptor declares the html target's `defaultTag`; the `.astro.mx` template lowering answers `mx.astro-html.defaultTag` first, then `div` (`lowerAstroMx` takes `defaultTag`; the Vite template plugin reads the package's key, unchecked: it cannot reach the registry's `invalid-default-tag` check).
+
 - **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.
 
 - **Fix (astro-fence-top-level-return):** a top-level `return` in a `.astro.mx` `---` fence — `return Astro.redirect("/")`, the documented Astro redirect — no longer fails with ``syntax error in the `---` fence: 'return' outside of function``. Astro compiles the fence into the component function's body, so the return is legal there; MX parsed the fence as a plain ES module, where it is not. The fence's three parses (`sourceBindings`, `unknownSourceBindings`, core's `checkReservedSource`) now allow it, for the Astro fence only. The relaxation cannot be scoped by wrapping the fence in a function body instead: the fence's imports and top-level `const`s share module scope with the template, so wrapping would strand the template's `${…}` references.

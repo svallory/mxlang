@@ -4,6 +4,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Added (default-tag-ladder, decision 145):** the descriptor declares `defaultTag: "div"` and the policy's `resolveDefaultTag` answers `mx.html.defaultTag` first, then `div`; `compile` takes `defaultTag` and the Bun loader reads the package's key. The compile cache fingerprint includes it. Every existing template is byte-identical.
+
 - **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.
 
 - **Test (range-loop-name-collision):** pinned, with no code change, that this host never had the range-mapper shadowing bug the JSX, Solid and Astro hosts had. A range binds its own `__mxForN` temporaries for `from`/`to` *before* the `for` opens, so no generated binding is ever in scope where an authored expression is evaluated; `step=` is rejected outright. Rendered regressions guard the shape.

@@ -6,6 +6,8 @@
 
 - **Fix (astro-fence-top-level-return):** `sourceBindings` and `unknownSourceBindings` take an optional `allowReturnOutsideFunction` for source a host compiles *inside a function body*, where a top-level `return` is legal — Astro's `---` frontmatter is the case. Default is off, so every other caller (`.solid.mx`, `.ng.mx`, `appendSolidBuiltinImport`) keeps rejecting a stray `return` in real module scope. New export: `SourceBindingsOptions`. `sourceBindings` still reports a parse failure rather than swallowing it.
 
+- **Added (default-tag-ladder, decision 145):** `print`/`parse` accept `defaultTag` (`mxDefaultTag`), forwarded to the host that lowers each MX region as `MxRegionCompileInput.defaultTag`.
+
 - **Fix (reserve-mx-identifiers):** check authored bindings in MX-enabled TypeScript modules before region emission, even when callers supply binding sets. Generated regions are excluded; plain TypeScript and `mx: false` keep upstream behavior.
 
 - **Test fix (jsx-text-lt-unescaped):** `<div><b/> < c</div>` inside a `.solid.mx` region now *parses* — the solid host escapes the authored `<` for JSX, so Babel's old "Unexpected token (1:26)" splice failure is gone and the region prints `<div><b></b> &#60; c</div>;`. The row moved from the "leaves the error alone" table to the "still parses" table in `fragment-region.test.ts`; no parser behavior changed.

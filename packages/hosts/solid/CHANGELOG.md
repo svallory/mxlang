@@ -10,6 +10,8 @@
 
 ## Unreleased
 
+- **Added (default-tag-ladder, decision 145):** the descriptor declares `defaultTag` (`DEFAULT_TAG`, `div`); `solidDeclarations` answers `mx.solid-jsx.defaultTag` first, then `div`, for the page compile, `compileSolidUnit` and each `.solid.mx` region (`HostRegionInput.defaultTag`).
+
 - **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.
 
 - **Fix (range-loop-name-collision):** a `<for step=...>` mapper's counter is named `__mxIndex` instead of `mxIndex`. The row value is derived from the index *inside* Solid's `<Repeat>` callback, so the counter shadowed an authored binding of the same name: `<for|i| from=mxIndex to=mxIndex+4 step=2>` rendered `0, 3, 6` where the author wrote `10, 12, 14`. An unstepped range is unaffected (`from=`/`count=` are evaluated outside the callback) and is pinned as such. The whole-unit wrapper's `$mxProps`/`$mxBody`/`$mxValue`, the `$mxChildren`/`$mxMerge` imports and the hoisted `$mx_Define*` bindings become `__mx`-reserved too; `$mx_Define*` had a reachable silent duplicate declaration against an authored module-scope function of the same name. The `$mxReturn` property protocol is unchanged. Executed SSR and DOM regressions. The `lists` oracle twin and its goldens are regenerated for the rename.

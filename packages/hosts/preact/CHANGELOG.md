@@ -10,6 +10,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Added (default-tag-ladder, decision 145):** the descriptor declares `defaultTag` (`DEFAULT_TAG`, `div`) and `createJsxDeclarations` answers `mx.<target>.defaultTag` first, then `div`; `compilePreactMx` takes `defaultTag`. Shared with React and Hono. Byte-identical for every existing template.
+
 - **Feat (default-tag-core, decision 145):** declares `resolveDefaultTag: () => "div"`, the interim answer for the unnamed tag until the registry ladder lands. Output is byte-identical.
 
 - **Fix (range-loop-name-collision):** a `<for from/to>` mapper's own parameters are named `__mxUnused`/`__mxIndex` instead of `_`/`mxIndex`. Both are in scope for the authored `from`/`to`/`step` expressions written inside the same callback, so an authored `_` or `mxIndex` was shadowed and the loop rendered wrong values silently: `<const/_=5/>` with `<for|i| from=_ to=_+2>` rendered `NaN` three times, and `<const/mxIndex=10/>` with `<for|i| from=mxIndex to=mxIndex+1>` rendered `0, 2`. `until=` alone was never affected (its bound goes into the row count, outside the callback). `__mx` is reserved, so authored code can no longer take either name. Rendered regressions cover Preact, React and Hono. Shared emitter.
