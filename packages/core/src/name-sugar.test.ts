@@ -598,19 +598,31 @@ describe("the duplicate-attribute warning names the sugar", () => {
 // A statement tag's text is not attributes. `parseFragment` (the TS plugin's
 // mapping pass) parses without the core taglib, so it reads `static function
 // f(a: number): string {}` as a tag with attributes; the sugar rewrite must
-// leave a statement tag alone (a bare `:` in it is a TypeScript return type).
+// leave a real statement alone (a bare `:` in it is a TypeScript return type).
+// "Real" is decided by the lookup when there is one
+// (`getTag(name).parseOptions.statement`), else by the core taglib's own
+// `statement` entries: there is no second list (round 3, review A).
 describe("statement tags are not rewritten", () => {
-  const lowerFragment = (source: string): void => {
+  type MarkoLookup = NonNullable<Ctx["lookup"]>;
+  const lowerFragment = (source: string, markoLookup?: MarkoLookup): void => {
     const { body } = parseFragment(source, { filename: "/tmp/f.mx" });
     const ctx = newCtx(
       source,
       printExpression,
       policy(),
-      undefined,
+      markoLookup,
       "/tmp/f.mx",
       lookup,
     );
     lower(ctx, body);
+  };
+  const messageOf = (run: () => void): string => {
+    try {
+      run();
+    } catch (error) {
+      return (error as Error).message;
+    }
+    return "";
   };
 
   it.each([
@@ -618,14 +630,63 @@ describe("statement tags are not rewritten", () => {
     "static const view = cond ? a : b\n",
     "export const x = y .z\n",
     "client function f(a: number): string { return a }\n",
-  ])("%j", (source) => {
-    let message = "";
-    try {
-      lowerFragment(source);
-    } catch (error) {
-      message = (error as Error).message;
-    }
+    "class A { f(a: number): string { return a } }\n",
+  ])("no lookup (the taglib-less path): %j", (source) => {
+    const message = messageOf(() => lowerFragment(source));
     expect(message).not.toContain("name sugar");
     expect(message).not.toContain("one `:name`");
+  });
+
+  it("a lookup decides: a tag it does not call a statement is rewritten", () => {
+    const none = { getTag: () => undefined } as unknown as MarkoLookup;
+    expect(
+      messageOf(() =>
+        lowerFragment("static function f(a: number): string {}\n", none),
+      ),
+    ).toContain("name sugar");
+  });
+
+  it("a lookup decides: a custom tag with parseOptions.statement is left alone", () => {
+    const custom = {
+      getTag: (name: string) =>
+        name === "script-ish"
+          ? { parseOptions: { statement: true } }
+          : undefined,
+    } as unknown as MarkoLookup;
+    expect(
+      messageOf(() =>
+        lowerFragment("script-ish function f(a: number): string {}\n", custom),
+      ),
+    ).not.toContain("name sugar");
+  });
+});
+
+// Round 3, review B: a non-string authored literal folds the way Marko's class
+// value does: `false`, `0`, `null` and `undefined` drop out; other numbers and
+// `true` stringify; a string stays as written. Every row is pinned against the
+// tag-adjacent spelling (`<div.b class=false/>`).
+describe("a literal class folded with a `.x` sugar", () => {
+  it.each([
+    ["<div class=false .b/>", 'div class="b"', "<div.b class=false/>"],
+    ["<div class=0 .b/>", 'div class="b"', "<div.b class=0/>"],
+    ["<div class=null .b/>", 'div class="b"', "<div.b class=null/>"],
+    ["<div class=undefined .b/>", 'div class="b"', "<div.b class=undefined/>"],
+    ["<div .b class=false/>", 'div class="b"', "<div.b class=false/>"],
+    ["<div .b class=0/>", 'div class="b"', "<div.b class=0/>"],
+  ])("%s drops the falsy literal", (source, expected) => {
+    // The tag-adjacent spelling keeps Marko's own array form (the class helper
+    // drops the literal at render time); `@mxlang/html`'s attr-name test pins
+    // that both render the same. Here the sugar folds it away.
+    expect(shape(source)).toBe(expected);
+  });
+
+  it.each([
+    ["<div class=1 .b/>", 'div class="1 b"'],
+    ["<div class=true .b/>", 'div class="true b"'],
+    ["<div .b class=1/>", 'div class="b 1"'],
+    ["<div .b class=true/>", 'div class="b true"'],
+    ['<div class="a" .b/>', 'div class="a b"'],
+  ])("%s stringifies", (source, expected) => {
+    expect(shape(source)).toBe(expected);
   });
 });

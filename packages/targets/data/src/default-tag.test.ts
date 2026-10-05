@@ -422,3 +422,37 @@ describe("the Mesh case with the `:name` sugar (decision 146 PR 3)", () => {
     ]);
   });
 });
+
+// Round 3 (review A): a data vocabulary may name a tag after a statement
+// (`class`); the data taglib makes it an ordinary tag, so the sugar applies.
+describe("name sugar on a data tag named like a statement", () => {
+  type Node = {
+    name?: string;
+    children?: Node[];
+    attrs?: { name: string; value?: string }[];
+  };
+  const classAttrs = (source: string) => {
+    const { tree, diagnostics } = parseData(source, "/c.mx", {});
+    expect(diagnostics).toEqual([]);
+    const find = (nodes: Node[]): Node | undefined => {
+      for (const node of nodes) {
+        if (node.name === "class") return node;
+        const hit = find(node.children ?? []);
+        if (hit) return hit;
+      }
+      return undefined;
+    };
+    return find((tree?.children ?? []) as Node[])?.attrs?.map((a) => [
+      a.name,
+      a.value,
+    ]);
+  };
+
+  it.each([
+    ["<class :User/>\n"],
+    ["<root><class :User/></root>\n"],
+    ["root\n  class :User\n"],
+  ])("%j gives name=User", (source) => {
+    expect(classAttrs(source)).toEqual([["name", "User"]]);
+  });
+});

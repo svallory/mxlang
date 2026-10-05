@@ -334,7 +334,14 @@ export interface Ctx {
      * `undefined` means the tag has no template file (an element, a host
      * taglib tag, a Marko 5 `renderer` tag).
      */
-    getTag(name: string): { taglibId?: string; template?: string } | undefined;
+    getTag(name: string):
+      | {
+          taglibId?: string;
+          template?: string;
+          /** Marko's parse switches for the tag (`statement`: its text is code). */
+          parseOptions?: { statement?: boolean };
+        }
+      | undefined;
   };
   /** Custom tags already discovered and loaded by the calling integration. */
   customTags?: Readonly<Record<string, CustomTag>>;

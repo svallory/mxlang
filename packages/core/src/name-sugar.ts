@@ -1,4 +1,5 @@
 import { type Ctx, type Node, TranslateError } from "./core.ts";
+import { CORE_TAGLIB } from "./core-taglib.ts";
 import { markoParser } from "./stock-parser.ts";
 
 /**
@@ -395,7 +396,17 @@ function mergeClassTokens(
     append(value, first.start < startOf(ctx, existing));
     return;
   }
-  // `class=1 .b`: a primitive literal is the string "1 b" once merged.
+  // A non-string literal folds the way Marko's class value does: `false`,
+  // `0`, `null` and `undefined` drop out; other numbers and `true` stringify.
+  const dropped =
+    (value?.type === "BooleanLiteral" && !value.value) ||
+    (value?.type === "NumericLiteral" && value.value === 0) ||
+    value?.type === "NullLiteral" ||
+    (value?.type === "Identifier" && value.name === "undefined");
+  if (dropped) {
+    existing.value = stringLiteral(ctx, text, first.start, last.end);
+    return;
+  }
   if (value?.type === "NumericLiteral" || value?.type === "BooleanLiteral") {
     const joined =
       first.start < startOf(ctx, existing)
@@ -843,26 +854,38 @@ function rewriteHead(ctx: Ctx, node: Node): void {
 
 /** Rewrites one tag's name sugar, once. */
 /**
- * Statement tags: their text is code, not attributes (Marko parses it as a
- * statement). A parse without the core taglib (`parseFragment`, the TS
- * plugin's mapping pass) still reads `static function f(a: number): string {}`
- * as a tag with attributes, where a bare `:` is a TypeScript return type.
+ * The tags whose text is code, not attributes (`static`, `import`, ...), read
+ * from the core taglib's own `statement` parse options: the one place Marko's
+ * statement tags are listed. Used only when the compile has no lookup to ask.
  */
-const STATEMENT_TAGS = new Set([
-  "class",
-  "client",
-  "export",
-  "import",
-  "server",
-  "static",
-]);
+const CORE_STATEMENT_TAGS: ReadonlySet<string> = new Set(
+  Object.entries(
+    CORE_TAGLIB as Record<string, { parseOptions?: { statement?: boolean } }>,
+  )
+    .filter(([key, tag]) => key.startsWith("<") && tag?.parseOptions?.statement)
+    .map(([key]) => key.slice(1, -1)),
+);
+
+/**
+ * Is `name` a statement tag in THIS parse? A parse without the core taglib
+ * (`parseFragment`, the TS plugin's mapping pass) reads `static function f(a:
+ * number): string {}` as a tag with attributes, where a bare `:` is a
+ * TypeScript return type. The lookup decides when there is one
+ * (`getTag(name).parseOptions.statement`: a data taglib that makes `class` an
+ * ordinary tag keeps the sugar, and a custom tag with `parseOptions.statement`
+ * is left alone); otherwise the core taglib's statement entries do.
+ */
+function isStatementTag(ctx: Ctx, name: string): boolean {
+  if (ctx.lookup) return !!ctx.lookup.getTag(name)?.parseOptions?.statement;
+  return CORE_STATEMENT_TAGS.has(name);
+}
 
 export function rewriteNameSugar(ctx: Ctx, node: Node): void {
   if (done.has(node) || node?.type !== "MarkoTag") return;
   done.add(node);
   if (
     node.name?.type === "StringLiteral" &&
-    STATEMENT_TAGS.has(node.name.value)
+    isStatementTag(ctx, node.name.value)
   ) {
     return;
   }

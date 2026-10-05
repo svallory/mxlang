@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compile } from "./index.ts";
+import { compile, mx } from "./index.ts";
 
 /**
  * Marko 6.3.51 rejects an attribute name outside `[a-z_$][a-z0-9._:-]*`
@@ -366,5 +366,30 @@ describe("name sugar renders (html)", () => {
     ["<a:b.c:d/>", "one `:name`"],
   ])("%s is a positioned error", (source, text) => {
     expect(failure(source).message).toContain(text);
+  });
+});
+
+// Round 3, review B: a falsy literal beside a `.x` sugar renders as the
+// tag-adjacent spelling does (Marko's class helper drops it).
+describe("a literal class beside a `.x` sugar renders like the tag-adjacent class (html)", () => {
+  const render = (source: string): string =>
+    mx(source, { filename: "/fixtures/render.mx" })({});
+
+  it.each([
+    ["<div class=false .b/>", "<div.b class=false/>"],
+    ["<div class=0 .b/>", "<div.b class=0/>"],
+    ["<div class=null .b/>", "<div.b class=null/>"],
+    ["<div .b class=false/>", "<div.b class=false/>"],
+    ["<div class=1 .b/>", "<div.b class=1/>"],
+    ["<div class=true .b/>", "<div.b class=true/>"],
+  ])("%s", (sugar, adjacent) => {
+    const classes = (html: string) =>
+      [...(html.match(/class="([^"]*)"/)?.[1] ?? "").split(" ")].sort();
+    expect(classes(render(sugar))).toEqual(classes(render(adjacent)));
+  });
+
+  it("drops the falsy literal", () => {
+    expect(render("<div class=false .b/>")).toBe('<div class="b"></div>');
+    expect(render("<div class=0 .b/>")).toBe('<div class="b"></div>');
   });
 });
