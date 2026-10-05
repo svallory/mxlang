@@ -537,6 +537,22 @@ function lowerAttr(
   isElement = false,
   tagLoc?: Position,
 ): Attr {
+  const lowered = lowerAttrNamed(ctx, attr, on, isElement, tagLoc);
+  // Name sugar (decision 146): remember the token the author wrote, so a
+  // diagnostic on the attribute can say `:email` (`name`).
+  if (attr?.sugarLabel && lowered.kind !== "spread") {
+    lowered.sugar = attr.sugarLabel;
+  }
+  return lowered;
+}
+
+function lowerAttrNamed(
+  ctx: Ctx,
+  attr: Node,
+  on: "element" | "component" = "element",
+  isElement = false,
+  tagLoc?: Position,
+): Attr {
   // A shorthand `#id`/`.class` attribute has no position of its own in
   // Marko's AST; it belongs to its tag, so an error about it points there
   // instead of at 0:0.

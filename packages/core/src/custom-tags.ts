@@ -759,6 +759,17 @@ function attrShape(attr: Attr): string | null {
 }
 
 /**
+ * An attribute as a diagnostic names it: `name`, or, for one the name sugar
+ * made (decision 146), the token the author wrote and what it stands for,
+ * `:email` (`name`).
+ */
+function attrLabel(attr: Exclude<Attr, { kind: "spread" }>): string {
+  return attr.sugar
+    ? `\`${attr.sugar}\` (\`${attr.name}\`)`
+    : `\`${attr.name}\``;
+}
+
+/**
  * Checks an `array` or `function` attribute against its written shape.
  *
  * Only what is written is knowable: a literal array, a function of any
@@ -776,7 +787,7 @@ function checkCompositeAttr(
   if (shape && shape !== declaration.type) {
     failForOwner(
       owner,
-      `attribute \`${attr.name}\` must be ${declaration.type}, got ${shape}`,
+      `attribute ${attrLabel(attr)} must be ${declaration.type}, got ${shape}`,
       attr.loc,
     );
   }
@@ -795,7 +806,7 @@ function checkCompositeAttr(
     const start = element.loc?.start;
     failForOwner(
       owner,
-      `attribute \`${attr.name}\` item ${index + 1} must be ${declaration.items}, got ${got}`,
+      `attribute ${attrLabel(attr)} item ${index + 1} must be ${declaration.items}, got ${got}`,
       start
         ? { ...attr.loc, line: start.line, column: start.column }
         : attr.loc,
@@ -999,7 +1010,7 @@ function validateAttributes(
         owner,
         acceptsNone
           ? "accepts no attributes"
-          : `unknown attribute \`${attr.name}\``,
+          : `unknown attribute ${attrLabel(attr)}`,
         attr.loc,
       );
     }
@@ -1008,7 +1019,7 @@ function validateAttributes(
     if (declaration.literalOnly && !isLiteralAttr(attr)) {
       failForOwner(
         owner,
-        `attribute \`${attr.name}\` must be a literal`,
+        `attribute ${attrLabel(attr)} must be a literal`,
         attr.loc,
       );
     }
@@ -1022,7 +1033,7 @@ function validateAttributes(
     ) {
       failForOwner(
         owner,
-        `attribute \`${attr.name}\` must be ${declaration.type}, got ${literal.type}`,
+        `attribute ${attrLabel(attr)} must be ${declaration.type}, got ${literal.type}`,
         attr.loc,
       );
     }
@@ -1032,7 +1043,7 @@ function validateAttributes(
     ) {
       failForOwner(
         owner,
-        `attribute \`${attr.name}\` must be an expression`,
+        `attribute ${attrLabel(attr)} must be an expression`,
         attr.loc,
       );
     }
@@ -1040,7 +1051,7 @@ function validateAttributes(
       if (!literal) {
         failForOwner(
           owner,
-          `attribute \`${attr.name}\` must be a static value from ${listEnum(declaration.enum)}`,
+          `attribute ${attrLabel(attr)} must be a static value from ${listEnum(declaration.enum)}`,
           attr.loc,
         );
       }
@@ -1053,14 +1064,14 @@ function validateAttributes(
       ) {
         failForOwner(
           owner,
-          `attribute \`${attr.name}\` must be a string from ${listEnum(declaration.enum)}, got ${literal.type}`,
+          `attribute ${attrLabel(attr)} must be a string from ${listEnum(declaration.enum)}, got ${literal.type}`,
           attr.loc,
         );
       }
       if (!declaration.enum.includes(literal.value)) {
         failForOwner(
           owner,
-          `attribute \`${attr.name}\` must be one of ${listEnum(declaration.enum)}, got ${JSON.stringify(literal.value)}`,
+          `attribute ${attrLabel(attr)} must be one of ${listEnum(declaration.enum)}, got ${JSON.stringify(literal.value)}`,
           attr.loc,
         );
       }

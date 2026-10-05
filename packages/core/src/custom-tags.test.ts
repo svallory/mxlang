@@ -2532,3 +2532,71 @@ describe("array and function attribute types (decision 138, E1)", () => {
     });
   });
 });
+
+// Decision 146 (PR 3): an E1 error on an attribute the sugar made names the
+// sugar the author wrote, with the attribute it stands for.
+describe("E1 errors name the sugar the author wrote", () => {
+  const field: CustomTag = {
+    attributes: {
+      name: { type: "number" },
+      id: { type: "number" },
+      class: { type: "number", literalOnly: true },
+      title: { type: "string" },
+    },
+    transform: () => [],
+  };
+  const closed: CustomTag = {
+    attributes: { title: { type: "string" } },
+    transform: () => [],
+  };
+  const messageOf = (source: string, tags: Record<string, CustomTag>) => {
+    try {
+      lowerWithTags(source, tags);
+    } catch (error) {
+      return error as { message: string; line: number; column: number };
+    }
+    throw new Error("expected an error");
+  };
+
+  it.each([
+    [
+      "\n<field :email/>\n",
+      "`<field>`: attribute `:email` (`name`) must be number, got string",
+    ],
+    [
+      "\n<field #main/>\n",
+      "`<field>`: attribute `#main` (`id`) must be number, got string",
+    ],
+    [
+      '\n<field title="t" :email/>\n',
+      "attribute `:email` (`name`) must be number",
+    ],
+    ["\n<field:email/>\n", "attribute `:email` (`name`) must be number"],
+  ])("%j", (source, text) => {
+    expect(messageOf(source, { field }).message).toContain(text);
+  });
+
+  it("an undeclared sugar attribute is `unknown attribute`, named as written", () => {
+    expect(messageOf("\n<closed :email/>\n", { closed }).message).toContain(
+      "unknown attribute `:email` (`name`)",
+    );
+    expect(messageOf("\n<closed #main/>\n", { closed }).message).toContain(
+      "unknown attribute `#main` (`id`)",
+    );
+  });
+
+  it("is positioned at the sugar token", () => {
+    const error = messageOf('\n<field title="t" :email/>\n', { field });
+    expect(error.line).toBe(2);
+    expect(error.column).toBe(17);
+  });
+
+  it("an attribute written out keeps the plain wording", () => {
+    expect(messageOf('\n<field name="x"/>\n', { field }).message).toContain(
+      "attribute `name` must be number",
+    );
+    expect(messageOf('\n<field name="x"/>\n', { field }).message).not.toContain(
+      "`name` (`name`)",
+    );
+  });
+});

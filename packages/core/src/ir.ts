@@ -116,6 +116,16 @@ export interface IrBase {
 }
 
 /**
+ * The name sugar an attribute came from (decision 146): the token the author
+ * wrote (`:email`, `#main`, `.big`) when the attribute is `name`, `id` or
+ * `class` made from it, so a diagnostic can say `:email` (`name`) and not only
+ * `name`. Absent on an attribute written out.
+ */
+export interface AttrSugar {
+  sugar?: string;
+}
+
+/**
  * One attribute on an element or a component call.
  *
  * `kind` separates the three shapes a host emits differently: a value known at
@@ -142,15 +152,18 @@ export type Attr =
        * the empty range, like Marko.
        */
       nameSpan: SourceSpan;
-    } & IrBase)
+    } & IrBase &
+      AttrSugar)
   /** A bare attribute (`disabled`), HTML's spelling of `true`. */
-  | ({ kind: "boolean"; name: string; nameSpan: SourceSpan } & IrBase)
+  | ({ kind: "boolean"; name: string; nameSpan: SourceSpan } & IrBase &
+      AttrSugar)
   | ({
       kind: "dynamic";
       name: string;
       value: Expr;
       nameSpan: SourceSpan;
-    } & IrBase)
+    } & IrBase &
+      AttrSugar)
   /**
    * `value:=expr`, Marko's two-way binding. Resolved rather than rejected: a
    * host with no update path emits the initial value, which is what Marko's
@@ -161,7 +174,8 @@ export type Attr =
       name: string;
       value: Expr;
       nameSpan: SourceSpan;
-    } & IrBase)
+    } & IrBase &
+      AttrSugar)
   /**
    * An event handler on an *element*: `onClick=fn` or `on-my-event=fn`.
    *
@@ -185,7 +199,8 @@ export type Attr =
       event: string;
       value: Expr;
       nameSpan: SourceSpan;
-    } & IrBase)
+    } & IrBase &
+      AttrSugar)
   | ({ kind: "spread"; value: Expr } & IrBase);
 
 /**
