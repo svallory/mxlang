@@ -369,6 +369,9 @@ describe("validateDescriptor", () => {
     expect(invalidField(kind({ readCalleeInput: "x" })).field).toBe(
       "host.fileKinds[0].readCalleeInput",
     );
+    expect(invalidField(kind({ completeTypecheckModule: {} })).field).toBe(
+      "host.fileKinds[0].completeTypecheckModule",
+    );
   });
 
   it("ignores unknown extra fields, so a newer descriptor of the same version still loads", () => {

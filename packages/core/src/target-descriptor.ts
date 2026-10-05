@@ -100,6 +100,8 @@ export interface HostRegionInput {
   customTags?: Record<string, CustomTag>;
   /** Caller-owned target set for cross-file resolution; unset uses the descriptor's own lookup. */
   targets?: TargetLookup;
+  /** Collects the region's positioned warnings; unset, the host prints them. */
+  warnings?: MxWarning[];
   /** `package.json#mx.<target>.defaultTag` the caller resolved, already validated (decision 145). */
   defaultTag?: string;
   /** Where the region appeared; opaque here. */
@@ -157,6 +159,17 @@ export interface HostFileKind {
    * split the registry).
    */
   readonly readCalleeInput?: CalleeInputReader;
+  /**
+   * Region file only: rewrites the printed module for type-checking, never
+   * for a build. A host whose own compiler stage adds code the type-check
+   * cannot see (imports for names the stage supplies) adds it here, so the
+   * projection resolves what the build resolves. `warning` is positioned in
+   * the authored file.
+   */
+  completeTypecheckModule?(code: string): {
+    code: string;
+    warning?: MxWarning;
+  };
 }
 
 /**
@@ -476,6 +489,11 @@ function validateFileKind(value: unknown, path: string): void {
   }
   optionalFunction(value, "compileRegion", `${path}.compileRegion`);
   optionalFunction(value, "readCalleeInput", `${path}.readCalleeInput`);
+  optionalFunction(
+    value,
+    "completeTypecheckModule",
+    `${path}.completeTypecheckModule`,
+  );
 }
 
 function validateHost(value: unknown): void {
