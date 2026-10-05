@@ -202,15 +202,53 @@ describe("mx-tsc on a data package", () => {
       expect(output).toContain("invalid `defaultTag` value");
     });
 
-    it("a declared contract tag becomes the shorthand's tag, with its contract applied", () => {
+    it("a declared contract tag becomes the shorthand's tag: its parents error is positioned at the shorthand", () => {
       const dir = copyOfFixture();
       writeFileSync(join(dir, "package.json"), manifest("port"));
       // `port` declares parents: ["service"], so at the root the shorthand
-      // is a parent-contract error naming `port`.
-      writeFileSync(join(dir, "shorthand.mx"), '<#a value="x"/>\n');
+      // is a parent-contract error naming `port`, at the shorthand.
+      writeFileSync(join(dir, "shorthand.mx"), '\n<#a value="x"/>\n');
       const { status, output } = check(dir);
       expect(status).toBe(1);
+      expect(output).toContain("shorthand.mx(2,1): error TS80001:");
       expect(output).toContain("`<port>`");
+    });
+
+    it("E1: a class shorthand on a tag whose closed attributes lack `class` is positioned at the shorthand", () => {
+      const dir = copyOfFixture();
+      writeFileSync(join(dir, "package.json"), manifest("port"));
+      writeFileSync(
+        join(dir, "shorthand.mx"),
+        '<service value="s">\n  <.x value="y"/>\n</service>\n',
+      );
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      expect(output).toContain("shorthand.mx(2,3): error TS80001:");
+      expect(output).toContain("`class`");
+    });
+
+    it("E2: a closed parent children that lists neither the default nor anything matching is positioned at the shorthand", () => {
+      const dir = copyOfFixture();
+      writeFileSync(
+        join(dir, "shorthand.mx"),
+        '<service value="s">\n  <#a/>\n</service>\n',
+      );
+      const { status, output } = check(dir);
+      expect(status).toBe(1);
+      expect(output).toContain("shorthand.mx(2,3): error TS80001:");
+      expect(output).toContain("`<service>`: `<object>` is not allowed here");
+    });
+
+    it("a malformed mx.contracts beside defaultTag prints the positioned contracts error, never a stack trace", () => {
+      const dir = copyOfFixture(["clean.mx"]);
+      writeFileSync(
+        join(dir, "package.json"),
+        `{\n  "mx": {\n    "target": "data",\n    "contracts": { "item": {} },\n    "data": { "defaultTag": "object" }\n  }\n}\n`,
+      );
+      const { output } = check(dir);
+      expect(output).not.toMatch(/\n\s+at /);
+      expect(output).toContain("package.json(");
+      expect(output).toMatch(/error TS800\d\d:.*mx\.contracts/);
     });
   });
 

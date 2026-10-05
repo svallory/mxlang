@@ -521,8 +521,12 @@ function lowerAttr(
   attr: Node,
   on: "element" | "component" = "element",
   isElement = false,
+  tagLoc?: Position,
 ): Attr {
-  const loc = posOf(attr);
+  // A shorthand `#id`/`.class` attribute has no position of its own in
+  // Marko's AST; it belongs to its tag, so an error about it points there
+  // instead of at 0:0.
+  const loc = attr?.loc || attr?.start ? posOf(attr) : (tagLoc ?? posOf(attr));
   const nameSpan = attrNameSpan(ctx, attr);
 
   if (attr.type === "MarkoSpreadAttribute") {
@@ -711,7 +715,7 @@ function lowerAttrs(
   const attrs = resolveDuplicateAttrs(
     ctx,
     (node.attributes ?? []).map((attr: Node) =>
-      lowerAttr(ctx, attr, on, isElement),
+      lowerAttr(ctx, attr, on, isElement, posOf(node)),
     ),
   );
   return ctx.declarations.orderAttrs?.(name, attrs, on, ctx) ?? attrs;

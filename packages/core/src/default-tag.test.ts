@@ -370,3 +370,42 @@ describe("the resolver's context", () => {
     expect(configured).toBeUndefined();
   });
 });
+
+describe("a contract error on a shorthand attribute is positioned at its tag", () => {
+  const tag: CustomTag = {
+    attributes: { value: { type: "string" } },
+    transform: () => [],
+  };
+  const run = (source: string) => {
+    let error: unknown;
+    try {
+      lowerSource(
+        source,
+        declarations(() => "box"),
+        { box: tag },
+      );
+    } catch (e) {
+      error = e;
+    }
+    return error as TranslateError;
+  };
+
+  it("`.x` (E1: `class` is not declared) points at the tag, not at 1:0", () => {
+    const error = run('<div>\n  <.x value="y"/>\n</div>');
+    expect(error).toBeInstanceOf(TranslateError);
+    expect(error.message).toContain("unknown attribute `class`");
+    expect([error.line, error.column]).toEqual([2, 2]);
+  });
+
+  it("`#a` (`id` is not declared) points at the tag too", () => {
+    const error = run('<div>\n\n  <#a value="y"/>\n</div>');
+    expect(error.message).toContain("unknown attribute `id`");
+    expect([error.line, error.column]).toEqual([3, 2]);
+  });
+
+  it("an authored attribute keeps its own position", () => {
+    const error = run('<div>\n  <box bogus="y"/>\n</div>');
+    expect(error.message).toContain("unknown attribute `bogus`");
+    expect([error.line, error.column]).toEqual([2, 7]);
+  });
+});
