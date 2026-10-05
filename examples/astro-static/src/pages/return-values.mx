@@ -1,0 +1,29 @@
+import Counter from "../components/counter.mx";
+import { Counter as BarrelCounter } from "../components/index.ts";
+
+static const Dynamic = Counter;
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Return values — astro-static</title>
+  </head>
+  <body>
+    <h1>Return values</h1>
+    <section id="imported">
+      <Counter/next start=1/>
+      <p class="bound">imported /var: ${next}</p>
+    </section>
+    <section id="plain">
+      <Counter start=10/>
+    </section>
+    <section id="dynamic">
+      <${Dynamic}/dynamicNext start=20/>
+      <p class="bound">dynamic /var: ${dynamicNext}</p>
+    </section>
+    <section id="barrel">
+      <BarrelCounter start=30/>
+    </section>
+    <p><a href="/">Home</a></p>
+  </body>
+</html>

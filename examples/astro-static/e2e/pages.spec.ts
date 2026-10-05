@@ -219,6 +219,44 @@ describe("astro-static", () => {
     expect(html).toContain('<p class="roster-hidden">(hidden)</p>');
   });
 
+  it("/return-values: /var binds the <return> value; a plain tag renders only markup", async () => {
+    const response = await page.goto(`${baseUrl}/return-values`);
+    const html = (await response?.text()) ?? "";
+    expect(html).not.toContain("[object Object]");
+
+    // (a) `/var` from an imported unit binds start + 1; the markup renders too.
+    expect(await page.locator("#imported .bound").textContent()).toBe(
+      "imported /var: 2",
+    );
+    expect(await page.locator("#imported .counter").textContent()).toBe("1");
+
+    // (b) a returning unit used as a plain tag contributes only its markup.
+    expect(await page.locator("#plain").innerHTML()).toContain(
+      '<span class="counter">10</span>',
+    );
+    expect(await page.locator("#plain").textContent()).not.toContain("11");
+
+    // (c) a dynamic tag over the same unit renders markup and binds the value.
+    expect(await page.locator("#dynamic .counter").textContent()).toBe("20");
+    expect(await page.locator("#dynamic .bound").textContent()).toBe(
+      "dynamic /var: 21",
+    );
+
+    // (d) a `.ts` barrel re-export used as a tag renders markup.
+    expect(await page.locator("#barrel").innerHTML()).toContain(
+      '<span class="counter">30</span>',
+    );
+    expect(await page.locator("#barrel").textContent()).not.toContain("31");
+  });
+
+  it("/return-in-astro: an Astro page renders a <return> unit as markup only", async () => {
+    const response = await page.goto(`${baseUrl}/return-in-astro`);
+    const html = (await response?.text()) ?? "";
+    expect(html).toContain('<span class="counter">40</span>');
+    expect(html).not.toContain("[object Object]");
+    expect(html).not.toContain("41");
+  });
+
   it("ships no renderer script: the pages are static markup", async () => {
     // The whole claim of this host. An MX component has no runtime, the
     // renderer registers no client entrypoint, and `output: "static"`
@@ -234,6 +272,8 @@ describe("astro-static", () => {
       // `.astro.mx` components lower to Astro template syntax and are
       // compiled by Astro itself, so they ship no client JS either.
       "/templates",
+      "/return-values",
+      "/return-in-astro",
     ]) {
       const response = await page.goto(`${baseUrl}${route}`, {
         waitUntil: "networkidle",
