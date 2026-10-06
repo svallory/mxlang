@@ -25,6 +25,8 @@
 
 ## Unreleased
 
+- **Fix, behaviour change (statement-tags, decision 168):** `server` is a positioned error naming `.astro.mx` (it was misread as an attribute method); `class { … }` is a positioned not-supported error.
+
 - **Fix (unmapped-diagnostics-region-enclosing-spans):** `<for of=…>` maps the spread operand of its list wrapper onto the authored `of` value, so a non-iterable value (TS2488) is reported on that value instead of at 1:1 as MX's bug.
 
 - **Feat (unmapped-diagnostics-region-enclosing-spans):** `astroMxTemplateOffset(source)` (exported from `@mxlang/astro/template`) names where an `.astro.mx` file's template starts, after its `---` fence; the typescript plugin reads authored spans from it.

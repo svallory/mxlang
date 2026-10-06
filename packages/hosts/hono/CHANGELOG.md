@@ -2,11 +2,14 @@
 
 ## Unreleased
 
+- **Fix, behaviour change (statement-tags, decision 168):** statements parse as statements (typed functions, `<T,>`, JSX and atoms in a `static`/`export` line now compile). `server` now fails with a positioned error where it was silently dropped; `client` keeps its error; `class { … }` is a positioned not-supported error. Hono region files behave the same.
+
 - **Fix (jsx-method-shorthand, decision 167):** an attribute method shorthand is emitted as a `function` / `async function` expression, and a body holding `) {` is valid JavaScript again (shared emitter, see `@mxlang/preact`). **Behaviour change:** `this` inside the method is the function's own, not lexical. Render-locked by `method-attr.test.ts`.
 
 - **Fix (jsx-handler-prop-names, decision 161):** handler props are emitted under hono's declared names: `onKeyDown`, `onMouseDown`, `onDoubleClick` (was `onKeydown`, `onMousedown`, `onDblclick`; the types reject those). `hono/jsx/dom` binds them to the same DOM events (`event-runtime.test.ts`). The table holds only hono's declared names: the authored `onDoubleClick` emits `onDoubleClick` (declared), and a DOM event hono's types declare no handler for (`on-toggle`, `on-search`) is a compile error.
 
 - **Fix (native-tag-binding-capture, decision 164):** a lowercase tag is a native element whatever `import` or `<define>` binding of that name is in scope (shared emitter, see `@mxlang/preact`). A warning is raised at the tag.
+
 - **Changed (preact-region, decision 154):** the Bun loader declines `.preact.mx` (Preact's region file kind), as `@mxlang/html`'s does.
 
 - **Added (hono-region, decision 154):** `.hono.mx` region files: TSX with MX regions, as `.solid.mx` is for Solid. The `hono-jsx` descriptor gains the `hono` file kind (`compileRegion`, `readCalleeInput`, language id `honomx`), and `compileHonoRegion` is exported. A region renders what the same markup renders in a whole-file `.mx`; hooks live in the surrounding component. In a region, `<const>` and module-level MX (`import`, `static`, `export`, `Input`, `<return>`) are errors at the statement, and `<let>`/`<effect>`/`<id>`/`<lifecycle>` name only the hook in the surrounding component (`honoRegionDeclarations`).

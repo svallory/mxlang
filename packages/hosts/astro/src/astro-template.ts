@@ -159,6 +159,11 @@ const TAGS: HostDeclarations["tags"] = {
     reason:
       "a `client` block is client-only and requires a runtime; `.astro.mx` renders static markup at build time",
   },
+  server: {
+    kind: "error",
+    reason:
+      "a `server` block runs a statement per render and `.astro.mx` has no render-time statement position; write it in the `---` fence instead",
+  },
   id: {
     kind: "error",
     reason:

@@ -27,6 +27,8 @@
 
 ## Unreleased
 
+- **Fix, behaviour change (statement-tags, decision 168):** `client` and `server` statements are positioned errors (they were emitted as `<client>`/`<server>` elements with the statement text as attributes); `class { … }` is a positioned not-supported error. Typed statements parse as statements.
+
 - **Fix:** the `For` emission copies the node instead of appending to `For.bindings` and rewriting `code` in the shared IR; output unchanged.
 
 

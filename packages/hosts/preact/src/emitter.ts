@@ -91,6 +91,10 @@ function statefulErrors(
       kind: "error",
       reason: `a \`client\` block is Marko's client-runtime split; a ${dialectName} component is already client code`,
     },
+    server: {
+      kind: "error",
+      reason: `a \`server\` block runs only during a server render; a ${dialectName} component has no per-template server pass to run it in — write the statement in the surrounding TypeScript module`,
+    },
     id: {
       kind: "error",
       reason: `\`<id>\` allocates an identifier for Marko's reactive runtime; use ${dialectName}'s \`useId\`${region ? inComponent : ""}`,

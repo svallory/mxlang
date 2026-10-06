@@ -1,5 +1,9 @@
 # @mxlang/html
 
+## Unreleased
+
+- **Changed (statement-tags, decision 168):** `class { … }` is the shared positioned "not supported in MX" error, replacing "Unable to find entry point for custom tag `<class>`".
+
 - **Changed (core-error-recovery, decision 162):** the Bun loader throws the first error of a failing `.mx` file with the file's other errors in its message (`TranslateError.errors` is kept on it).
 
 - **Fix (html-dynamic-target-tag-params-dropped):** a body with tag params on a `${expr}` target (`<${L}|item, i|>…</>`) is emitted as `content: ((item, i) => …) as (...args: any[]) => any`, so `item`/`i` are bound and the callee's `content(item, i)` reaches them; it was `content: () => …` with the params unbound and no warning. The cast gives the unannotated params `any` under strict tsc (the target's type is unknown). A literal string target with a params body (`<${"div"}|x|>`) is a compile error, `Tag does not support parameters.`, as in Marko 6.3.51; a string, `null` or `undefined` that arrives at run time renders as Marko does (the element and the body called with no arguments, or the body alone), measured and pinned. A named or imported component, a body without params and the output of every other shape are unchanged.

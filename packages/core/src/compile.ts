@@ -35,6 +35,7 @@ import {
   rejectUnreachableHooks,
   rejectWildcardReferences,
 } from "./custom-tags.ts";
+import { CORE_TAGLIB, CORE_TAGLIB_ID } from "./core-taglib.ts";
 import type { Policy } from "./declarations.ts";
 import type { Ir } from "./ir.ts";
 import { nullPrototypeTags } from "./lookup-safety.ts";
@@ -209,8 +210,22 @@ export function createTranslator(host: TranslatorOptions): Translator {
   rejectWildcardReferences(host.customTags);
   rejectUnreachableHooks(host.customTags);
   const customTags = customTagTaglib(host.customTags);
+  // Decision 168: core's own taglib is always registered, so `static`,
+  // `import`, `export`, `client`, `server` and `class` are statement tags to
+  // the parser on every target. A host that already lists it (html) keeps its
+  // own entry, and no host names the set.
+  const hostTaglibs = host.taglibs ?? [];
+  const coreTaglib: Array<[string, unknown]> = hostTaglibs.some(
+    ([id]) => id === CORE_TAGLIB_ID,
+  )
+    ? []
+    : [[CORE_TAGLIB_ID, CORE_TAGLIB]];
   return {
-    taglibs: [...(host.taglibs ?? []), ...(customTags ? [customTags] : [])],
+    taglibs: [
+      ...coreTaglib,
+      ...hostTaglibs,
+      ...(customTags ? [customTags] : []),
+    ],
     tagDiscoveryDirs: host.tagDiscoveryDirs ?? [],
     translate: {
       // biome-ignore lint/style/useNamingConvention: a Marko translate visitor key is a node type

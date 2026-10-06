@@ -209,6 +209,24 @@ consequence that costs real debugging time: `start` and `end` are `undefined`
 on these nodes, so the statement text is recovered by slicing on
 `loc` line/column.
 
+**Statement tags on every target (decision 168).** The six statement tags
+(`import`, `static`, `export`, `client`, `server`, `class`) are declared to the
+parser from core's own taglib on every host, so their text is code, never
+attributes: a typed `static function f(a: number): string {…}`, a `<T,>`
+generic, JSX or an atom in a statement reads the same on every target. (The data
+target declares three of the six, its documented exception.)
+
+| Statement | html | Preact / React / Hono | Solid (whole file) | Solid / Preact region | Angular | Astro |
+|---|---|---|---|---|---|---|
+| `import`, `static`, `export` | hoisted | hoisted | hoisted | positioned error: module-level statement in a region | positioned error: no module scope | hoisted into the fence |
+| `client` | dropped | positioned error | positioned error | positioned error | positioned error | positioned error |
+| `server` | runs the statement | positioned error | positioned error | positioned error | positioned error | positioned error |
+| `class` | one positioned "`class { … }` is not supported in MX" error, the same text on every target |||||| 
+
+A `client` or `server` statement is never dropped or emitted as an element on a
+target that cannot honour the split; the error names the statement and the
+target.
+
 ```mx
 import { formatDate } from "./util.ts"
 

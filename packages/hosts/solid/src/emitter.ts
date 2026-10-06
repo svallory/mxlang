@@ -63,6 +63,16 @@ const STATEFUL_ERRORS: HostDeclarations["tags"] = {
     reason:
       "`<script>` is a Marko client-runtime tag; write client code in the surrounding TypeScript module",
   },
+  client: {
+    kind: "error",
+    reason:
+      "a `client` block is Marko's client-runtime split; a Solid component is already client code — write the statement in the surrounding TypeScript module",
+  },
+  server: {
+    kind: "error",
+    reason:
+      "a `server` block runs only during a server render; Solid has no per-template server pass to run it in — write the statement in the surrounding TypeScript module",
+  },
 };
 
 /**

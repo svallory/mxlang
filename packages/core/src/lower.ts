@@ -3509,6 +3509,13 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     case "static":
     case "export":
       return lowerStatement(ctx, node, name);
+    case "class":
+      // Decision 168: `class` is a statement tag so the parser reads its
+      // text as code, but MX has no component class on any target.
+      return fail(
+        "`class { … }` is not supported in MX: a Marko component class has no equivalent on any target — write a function component, or put the state in `<let>`/`static` code",
+        node,
+      );
     case "for":
       return lowerFor(ctx, node);
     case "const":

@@ -7,6 +7,8 @@
 
 ## Unreleased
 
+- **Fix, behaviour change (statement-tags, decision 168):** statements with text the attribute grammar cannot read (typed functions, `<T,>`, JSX, atoms) reach the host's own "no module scope" error instead of a message-less syntax error; `class { … }` is a positioned not-supported error (it emitted a `<class>` element).
+
 - **Fix (angular-method-handler) — visible change:** a method-shorthand handler (`<button onClick() { ... }>`), a `function` expression or a block-bodied arrow in any template expression (handler, interpolation, `<if>`, `<for>`, `<const>`, dynamic attribute, `class`/`style`) used to compile with no warning to a template `parseTemplate` rejects (Angular's expression language has no `function` keyword and no statement bodies). It is now a positioned error naming the construct and the working forms: an arrow with an expression body (`onClick=() => save()`) or a handler reference (`onClick=save`). A page's class is the author's, so hoisting the body into a class member is not available there.
 
 - **Fix:** the tag-module emission works on a copy of the IR instead of rewriting `Expr.node`/`code` in place; output unchanged.

@@ -36,6 +36,7 @@
 import { dirname } from "node:path";
 import { rejectShadowedRegistration } from "./builtin-tags.ts";
 import { type Node, TranslateError } from "./core.ts";
+import { CORE_TAGLIB, CORE_TAGLIB_ID } from "./core-taglib.ts";
 import {
   type CustomTag,
   customTagTaglib,
@@ -57,10 +58,14 @@ import {
  *
  * `@marko/compiler` requires *a* translator and resolves `marko/translator`
  * when none is given. This one registers no taglibs beyond Marko's own
- * built-ins and no `translate` visitors, so `compileSync` parses and stops.
+ * built-ins and core's (decision 168: the statement tags are the language's,
+ * so every parse knows them) and no `translate` visitors, so `compileSync`
+ * parses and stops.
  */
+const CORE_ENTRY: [string, unknown] = [CORE_TAGLIB_ID, CORE_TAGLIB];
+
 const PARSE_ONLY_TRANSLATOR = {
-  taglibs: [],
+  taglibs: [CORE_ENTRY],
   tagDiscoveryDirs: [],
   translate: {},
 };
@@ -88,7 +93,7 @@ function parseOnlyTranslator(
   rejectUnreachableHooks(customTags);
   const taglib = customTagTaglib(customTags);
   return taglib
-    ? { ...PARSE_ONLY_TRANSLATOR, taglibs: [taglib] }
+    ? { ...PARSE_ONLY_TRANSLATOR, taglibs: [CORE_ENTRY, taglib] }
     : PARSE_ONLY_TRANSLATOR;
 }
 
