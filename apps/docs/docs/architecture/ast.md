@@ -578,6 +578,7 @@ Purpose: the three name sugars in any position (decision 146 and addenda).
 | `value` | `MxShorthandValue` | no | the part after the sigil |
 | `operator` | `"=" \| ":=" \| null` | no | what directly follows the token (whitespace allowed): `=`, `:=`, or nothing / a method (decision 146 addendum 4) |
 | `default` | `MxExpression \| MxMethod \| null` | no | decision 146 addendum 4: the value after `=` or `:=`, or the method, in `#name=expr` / `#name(params) { body }`; it sets the tag's default value |
+| `args` | `MxArguments \| null` | no | arguments written right after the sugar with no body (`.c(p)`, `#x(p)`, `:x(p)`); `null` otherwise. Kept on the node with their atoms; PR 2b's `MX_SUGAR_ARGUMENTS` is raised at the sugar (rule 6; decision 163 addendum 11) |
 
 ```ts
 type MxShorthandValue =
@@ -622,7 +623,8 @@ chain is cut into `.`/`#` parts outside any `${…}` by `splitShorthandChain`):
    tag-adjacent", `rewriteAttributes`).
 6. Arguments without a body after a sugar (`#x(p)`, `.c(p)`, `:x(p)`) are an
    `MxParseError` `MX_SUGAR_ARGUMENTS` at the sugar (today `checkNearSugar`,
-   two branches: `#`/`.` and `:`). With a body, `#x(p) { … }` is a method
+   two branches: `#`/`.` and `:`). The arguments are kept on the node
+   (`args`); the error is raised at the sugar. With a body, `#x(p) { … }` is a method
    default (decision 146 addendum 4), `operator: null`.
 7. `:=` after a sugar (`:n:=y`, `.c:=y`, `#x:=y`) is `operator: ":="` and an
    `MxParseError` `MX_SUGAR_BOUND` at the sugar ("a bound value is not
@@ -1893,31 +1895,31 @@ not listed.
 | `MxDocument` | node | §3.1 | 316 |
 | `MxTag` | node | §3.2 | 343 |
 | `MxCloseTag` | field shape | §3.2 | 366 |
-| `MxTagName` | field shape | §3.3 | 423 |
-| `MxPattern`, `MxArguments`, `MxParameterList`, `MxTypeArguments`, `MxTypeParameters` | node (container) | §3.4 span rule; §4.1 types | 463 |
-| `MxAttribute` | node | §3.5 | 482 |
-| `MxMethod` | node | §3.5a | 526 |
-| `MxSpreadAttribute` | node | §3.5b | 548 |
-| `MxShorthand` | node | §3.6 | 563 |
-| `MxShorthandValue` | field shape | §3.6 | 576 |
-| `MxAttributeTag` | node | §3.7 | 649 |
-| `MxText` | node | §3.8 | 677 |
-| `MxPlaceholder` | node | §3.9 | 705 |
-| `MxModuleStatement` | node | §3.10 | 722 |
-| `MxScriptlet` | node | §3.10 | 806 |
-| `MxStatements` | node (container) | §3.10; §4.1 | 818 |
-| `MxComment`, `MxCDATA`, `MxDoctype`, `MxDeclaration` | node | §3.11 | 824 |
-| `MxParseError` | node | §3.13 | 892 |
-| `MxReturn` | node | §3.14 | 1012 |
-| `MxExpressionContainer` | generic base | §4.1 | 1051 |
-| `MxExpression` | node (container) | §4.1 | 1058 |
-| `MxAtom` | node | §4.3 | 1167 |
-| `MxBodyMode` | union | §3.12 | 849 |
-| `MxTagShape` | function type | §3.12 | 849 |
-| `MxStatementKeyword` | union | §3.10 | 778 |
-| `MxFragmentBase` | field shape | §5.3 | 1263 |
-| `MxFrontEndOptions` | helper | §7.1 | 1700 |
-| `MxErrorCode` | union | §3.13 | 897 |
+| `MxTagName` | field shape | §3.3 | 425 |
+| `MxPattern`, `MxArguments`, `MxParameterList`, `MxTypeArguments`, `MxTypeParameters` | node (container) | §3.4 span rule; §4.1 types | 470 |
+| `MxAttribute` | node | §3.5 | 489 |
+| `MxMethod` | node | §3.5a | 533 |
+| `MxSpreadAttribute` | node | §3.5b | 555 |
+| `MxShorthand` | node | §3.6 | 570 |
+| `MxShorthandValue` | field shape | §3.6 | 584 |
+| `MxAttributeTag` | node | §3.7 | 658 |
+| `MxText` | node | §3.8 | 686 |
+| `MxPlaceholder` | node | §3.9 | 714 |
+| `MxModuleStatement` | node | §3.10 | 731 |
+| `MxScriptlet` | node | §3.10 | 821 |
+| `MxStatements` | node (container) | §3.10; §4.1 | 833 |
+| `MxComment`, `MxCDATA`, `MxDoctype`, `MxDeclaration` | node | §3.11 | 839 |
+| `MxParseError` | node | §3.13 | 907 |
+| `MxReturn` | node | §3.14 | 1035 |
+| `MxExpressionContainer` | generic base | §4.1 | 1074 |
+| `MxExpression` | node (container) | §4.1 | 1081 |
+| `MxAtom` | node | §4.3 | 1192 |
+| `MxBodyMode` | union | §3.12 | 864 |
+| `MxTagShape` | function type | §3.12 | 864 |
+| `MxStatementKeyword` | union | §3.10 | 793 |
+| `MxFragmentBase` | field shape | §5.3 | 1288 |
+| `MxFrontEndOptions` | helper | §7.1 | 1725 |
+| `MxErrorCode` | union | §3.13 | 912 |
 | `Span`, `MxNodeBase` | helper | §3.0 | 296 |
 | `MxChild`, `MxNode` | union | §3.0 | 299 |
-| `MxNodeHandle` | opaque handle (not a node) | §6.4 | 1520 |
+| `MxNodeHandle` | opaque handle (not a node) | §6.4 | 1545 |

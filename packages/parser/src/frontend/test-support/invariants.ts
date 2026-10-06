@@ -193,8 +193,11 @@ export function checkInvariants(document: InterimDocument): string[] {
     }
     for (const [key, value] of Object.entries(node)) {
       // A sugar's default has its own span after the token (ast §3.6).
-      if (node.type === "MxShorthand" && key === "default") {
-        if (value) visit(value, `${path}.default`, parent);
+      if (
+        node.type === "MxShorthand" &&
+        (key === "default" || key === "args")
+      ) {
+        if (value) visit(value, `${path}.${key}`, parent);
         continue;
       }
       if (

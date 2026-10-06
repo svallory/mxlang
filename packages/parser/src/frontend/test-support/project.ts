@@ -154,5 +154,6 @@ function sugarLine(node: Node): string {
   const parts = [`sugar ${node.position} ${node.sigil} ${value} ${r(node)}`];
   if (node.operator) parts.push(node.operator);
   if (node.default) parts.push(valueText(node.default));
+  if (node.args) parts.push(`args ${expr(node.args)}`);
   return parts.join(" ");
 }

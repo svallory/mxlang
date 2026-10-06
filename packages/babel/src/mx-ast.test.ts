@@ -519,6 +519,7 @@ it("MxShorthand (ast §3.6: `.c`, and a dynamic `.${x}`)", () => {
     value: { kind: "static", value: "c", span: sp(3, 4) },
     operator: null,
     default: null,
+    args: null,
   } satisfies MxShorthand;
   const dynamic = {
     ...cls,
@@ -811,8 +812,16 @@ const ROWS = {
     nullable: ["name", "operator", "value", "args"],
   },
   MxShorthand: {
-    required: [...BASE, "sigil", "position", "value", "operator", "default"],
-    nullable: ["operator", "default"],
+    required: [
+      ...BASE,
+      "sigil",
+      "position",
+      "value",
+      "operator",
+      "default",
+      "args",
+    ],
+    nullable: ["operator", "default", "args"],
   },
   MxSpreadAttribute: { required: [...BASE, "value"], nullable: [] },
   MxMethod: {
@@ -939,6 +948,7 @@ const SAMPLES: { [K in MxNode["type"]]: NodeOf<K> } = (() => {
       value: { kind: "static", value: "c", span: sp(3, 4) },
       operator: null,
       default: null,
+      args: null,
     },
     MxSpreadAttribute: {
       type: "MxSpreadAttribute",

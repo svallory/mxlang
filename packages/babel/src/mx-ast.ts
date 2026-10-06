@@ -210,6 +210,8 @@ export interface MxShorthand extends MxNodeBase {
   readonly value: MxShorthandValue;
   readonly operator: "=" | ":=" | null;
   readonly default: MxExpression | MxMethod | null;
+  /** Arguments written right after the sugar with no body (`.c(p)`), kept for PR 2b's `MX_SUGAR_ARGUMENTS` (ast §3.6 rule 6). */
+  readonly args: MxArguments | null;
 }
 
 /** One named attribute, or the tag's default value when `name` is null (ast §3.5). */

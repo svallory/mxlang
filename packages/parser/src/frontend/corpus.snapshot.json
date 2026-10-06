@@ -1413,7 +1413,7 @@
   "g0330": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
     "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
-    "  sugar attribute . \"\" [9,10)",
+    "  sugar attribute . \"\" [9,10) args \"b\" [12,13)",
     "  attr \"y\" [15,16) name=[15,16)"
   ],
   "g0331": [
@@ -4996,7 +4996,7 @@
   "g1162": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
     "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
-    "  sugar attribute . \"b\" [9,11)",
+    "  sugar attribute . \"b\" [9,11) args \"c\" [12,13)",
     "  attr \"d\" [15,16) name=[15,16)"
   ],
   "g1163": [

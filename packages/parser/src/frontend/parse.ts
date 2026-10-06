@@ -94,8 +94,6 @@ export interface TagBuilder extends Builder {
   shorthands: Builder[];
   openTag: { start: number; end: number };
   incomplete: boolean;
-  /** Ranges of arguments written directly after a sugar (`#x(p)`), which no node field holds (PR 2b's `MX_SUGAR_ARGUMENTS`). */
-  _sugarArgs: Span[];
   /** The furthest offset any part of this tag reached, for an incomplete end (ast §3.13). */
   _reached: number;
   _closeStart: number | undefined;
@@ -534,7 +532,6 @@ class FrontEnd {
       openTag: { start: this.at(start), end: this.at(headEnd) },
       closeTag: null,
       incomplete: false,
-      _sugarArgs: [],
       _reached: this.at(headEnd),
       _closeStart: undefined,
       _closeName: undefined,
@@ -576,6 +573,7 @@ class FrontEnd {
       },
       operator: null,
       default: null,
+      args: null,
     };
   }
 
@@ -625,6 +623,7 @@ class FrontEnd {
         },
         operator: null,
         default: null,
+        args: null,
       });
     }
     if (colon >= 0 && colon + 1 < template.end) {
@@ -752,10 +751,10 @@ class FrontEnd {
       current.args = this.container("MxArguments", event.value, event);
       current.end = this.at(event.end);
     } else {
-      // No field holds arguments after a sugar; PR 2b reports them
-      // (`MX_SUGAR_ARGUMENTS`), so the range is kept on the tag builder.
-      this.container("MxArguments", event.value, event);
-      this.requireTag()._sugarArgs.push(this.span(event));
+      // Arguments after a sugar (`.c(p)`) are kept on the node, atoms
+      // included; PR 2b raises MX_SUGAR_ARGUMENTS at the sugar (decision
+      // 163 addendum 11, ast §3.6 rule 6).
+      current.args = this.container("MxArguments", event.value, event);
     }
     this.reach(event.end);
   }

@@ -169,6 +169,7 @@ describe("§3.3 MxTagName", () => {
         value: { kind: "static", value: "email", span: span(7, 12) },
         operator: null,
         default: null,
+        args: null,
       },
     ]);
   });
@@ -765,6 +766,25 @@ describe("template parser shapes the catalogue does not name", () => {
     expect(d.errors).toEqual([
       expect.objectContaining({ code: "MISSING_END_TAG", origin: "template" }),
     ]);
+  });
+});
+
+describe("review fix B1 (decision 163 addendum 11)", () => {
+  it("B1: arguments after a sugar are kept on the node, atoms included", () => {
+    const s = first("<div .c(:a)/>").attributes[0];
+    expect(s).toMatchObject({
+      type: "MxShorthand",
+      sigil: ".",
+      start: 5,
+      end: 7,
+      args: {
+        type: "MxArguments",
+        start: 8,
+        end: 10,
+        outer: span(7, 11),
+        atoms: [{ type: "MxAtom", start: 8, end: 10, name: "a" }],
+      },
+    });
   });
 });
 
