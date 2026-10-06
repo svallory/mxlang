@@ -4268,6 +4268,32 @@ describe("a tag call's props errors land on the tag name (html-call-props-mapped
       ]);
     });
 
+    it("pins today's discovered tag: a missing prop has no position (TODO routed-template-call-namespan)", () => {
+      // A discovered tag routes to a generated binding (`$mx_Counter1`) whose
+      // IR call carries no name span (`Component.nameSpan: null`, IR spec
+      // 5.6), so neither the name nor the props braces map: the TS2345 sits
+      // on unmapped text and Volar drops it (decision 161 reports it at 1:1).
+      // TODO routed-template-call-namespan gives the call its authored name
+      // span; then this lands on `counter` like the other forms.
+      mkdirSync(join(dir, "tags"), { recursive: true });
+      writeFileSync(join(dir, "tags", "counter.mx"), COUNTER);
+      try {
+        const page = join(dir, "page.mx");
+        const virtual = createMxLanguagePlugin(ts).createVirtualCode?.(
+          page,
+          MX_LANGUAGE_ID,
+          ts.ScriptSnapshot.fromString("<counter>x</counter>\n"),
+          { getAssociatedScript: () => undefined },
+        );
+        expect(
+          virtual?.snapshot.getText(0, virtual.snapshot.getLength()),
+        ).toMatch(/\$mx_Counter\d+\.render\(/);
+        expect(reported("<counter>x</counter>\n")).toEqual([]);
+      } finally {
+        rmSync(join(dir, "tags"), { recursive: true, force: true });
+      }
+    });
+
     // A unit declaring `<return>` is called through `render` directly, and
     // is the one `/var` binds.
     const importCounter = 'import Counter from "./counter.mx";\n';
