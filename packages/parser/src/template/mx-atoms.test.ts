@@ -20,6 +20,7 @@ import {
   SUGAR_FORMS,
   tagNameReads,
   tsMarkerViolations,
+  unicodeWhitespaceLoopMismatches,
   unicodeWhitespaceMismatches,
 } from "./mx-atoms.cases.ts";
 
@@ -73,7 +74,13 @@ describe("atoms (src/template)", () => {
     expect(bad).toEqual([]);
   });
 
-  it("Unicode whitespace before `:` lexes as main did (review F1)", () => {
+  it("Unicode whitespace in the atom look-behind lexes as an ASCII space (decision 156 addendum 10)", () => {
+    const { total, bad } = unicodeWhitespaceLoopMismatches(mod);
+    expect(total).toBe(1_482);
+    expect(bad).toEqual([]);
+  });
+
+  it("Unicode whitespace before `:` lexes as an ASCII space (decision 156 addendum 10; was review F1)", () => {
     const { total, bad } = unicodeWhitespaceMismatches(mod);
     expect(total).toBe(2_660);
     expect(bad).toEqual([]);

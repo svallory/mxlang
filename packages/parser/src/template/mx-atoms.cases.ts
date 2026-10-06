@@ -1093,6 +1093,139 @@ export const NOT_ATOMS: [string, string][] = [
   ["<div x=(c ? é?.b :z)/>", '<div> @x ="(c ? é?.b :z)"'],
   ["<div x=(c ? é[0]! :z)/>", '<div> @x ="(c ? é[0]! :z)"'],
   ["<div x=(éa, await :b)/>", '<div> @x ="(éa, await :b)"'],
+  // Decision 156 addendum 10: in the atom look-behind, Unicode whitespace
+  // and line terminators behave exactly as ASCII whitespace. These two shapes
+  // lexed an atom on main and compiled (a ternary, a comparison); they now
+  // read as TypeScript does with an ASCII space (each beside its ASCII-space
+  // twin): the optional marker `a?` and type arguments `Array<T>`. Then the
+  // family the rule fixes, `{ a\u00a0:b }` and `{ é\u00a0:a }`, a key.
+  // Every atom position, HTML and concise.
+  ["<div x=(a?\u00a0:b : c)/>", '<div> @x ="(a?\u00a0:b : c)"'],
+  ["<div x=(a? :b : c)/>", '<div> @x ="(a? :b : c)"'],
+  ["div x=(a?\u00a0:b : c)\n", '<div> @x ="(a?\u00a0:b : c)"'],
+  ["div x=(a? :b : c)\n", '<div> @x ="(a? :b : c)"'],
+  ["<t x((a?\u00a0:b : c))/>", '<t> @x aargs:"(a?\u00a0:b : c)"'],
+  ["<t x((a? :b : c))/>", '<t> @x aargs:"(a? :b : c)"'],
+  ["t x((a?\u00a0:b : c))\n", '<t> @x aargs:"(a?\u00a0:b : c)"'],
+  ["t x((a? :b : c))\n", '<t> @x aargs:"(a? :b : c)"'],
+  [
+    "<div x() { return (a?\u00a0:b : c) }/>",
+    '<div> @x method:" return (a?\u00a0:b : c) "',
+  ],
+  [
+    "<div x() { return (a? :b : c) }/>",
+    '<div> @x method:" return (a? :b : c) "',
+  ],
+  [
+    "div x() { return (a?\u00a0:b : c) }\n",
+    '<div> @x method:" return (a?\u00a0:b : c) "',
+  ],
+  [
+    "div x() { return (a? :b : c) }\n",
+    '<div> @x method:" return (a? :b : c) "',
+  ],
+  ["<if((a?\u00a0:b : c))>y</if>", '<if> args:"(a?\u00a0:b : c)"'],
+  ["<if((a? :b : c))>y</if>", '<if> args:"(a? :b : c)"'],
+  ["if((a?\u00a0:b : c))\n", '<if> args:"(a?\u00a0:b : c)"'],
+  ["if((a? :b : c))\n", '<if> args:"(a? :b : c)"'],
+  ["<div>${(a?\u00a0:b : c)}</div>", '<div> ${"(a?\u00a0:b : c)"}'],
+  ["<div>${(a? :b : c)}</div>", '<div> ${"(a? :b : c)"}'],
+  ["-- ${(a?\u00a0:b : c)}\n", '${"(a?\u00a0:b : c)"}'],
+  ["-- ${(a? :b : c)}\n", '${"(a? :b : c)"}'],
+  ["<${(a?\u00a0:b : c)}/>", "<${(a?\u00a0:b : c)}>"],
+  ["<${(a? :b : c)}/>", "<${(a? :b : c)}>"],
+  ["${(a?\u00a0:b : c)}\n", "<${(a?\u00a0:b : c)}>"],
+  ["${(a? :b : c)}\n", "<${(a? :b : c)}>"],
+  ["<div x=`${(a?\u00a0:b : c)}`/>", '<div> @x ="`${(a?\u00a0:b : c)}`"'],
+  ["<div x=`${(a? :b : c)}`/>", '<div> @x ="`${(a? :b : c)}`"'],
+  ["div x=`${(a?\u00a0:b : c)}`\n", '<div> @x ="`${(a?\u00a0:b : c)}`"'],
+  ["div x=`${(a? :b : c)}`\n", '<div> @x ="`${(a? :b : c)}`"'],
+  ["<div x=(Array<T>\u00a0:b)/>", '<div> @x ="(Array<T>\u00a0:b)"'],
+  ["<div x=(Array<T> :b)/>", '<div> @x ="(Array<T> :b)"'],
+  ["div x=(Array<T>\u00a0:b)\n", '<div> @x ="(Array<T>\u00a0:b)"'],
+  ["div x=(Array<T> :b)\n", '<div> @x ="(Array<T> :b)"'],
+  ["<t x((Array<T>\u00a0:b))/>", '<t> @x aargs:"(Array<T>\u00a0:b)"'],
+  ["<t x((Array<T> :b))/>", '<t> @x aargs:"(Array<T> :b)"'],
+  ["t x((Array<T>\u00a0:b))\n", '<t> @x aargs:"(Array<T>\u00a0:b)"'],
+  ["t x((Array<T> :b))\n", '<t> @x aargs:"(Array<T> :b)"'],
+  [
+    "<div x() { return (Array<T>\u00a0:b) }/>",
+    '<div> @x method:" return (Array<T>\u00a0:b) "',
+  ],
+  [
+    "<div x() { return (Array<T> :b) }/>",
+    '<div> @x method:" return (Array<T> :b) "',
+  ],
+  [
+    "div x() { return (Array<T>\u00a0:b) }\n",
+    '<div> @x method:" return (Array<T>\u00a0:b) "',
+  ],
+  [
+    "div x() { return (Array<T> :b) }\n",
+    '<div> @x method:" return (Array<T> :b) "',
+  ],
+  ["<if((Array<T>\u00a0:b))>y</if>", '<if> args:"(Array<T>\u00a0:b)"'],
+  ["<if((Array<T> :b))>y</if>", '<if> args:"(Array<T> :b)"'],
+  ["if((Array<T>\u00a0:b))\n", '<if> args:"(Array<T>\u00a0:b)"'],
+  ["if((Array<T> :b))\n", '<if> args:"(Array<T> :b)"'],
+  ["<div>${(Array<T>\u00a0:b)}</div>", '<div> ${"(Array<T>\u00a0:b)"}'],
+  ["<div>${(Array<T> :b)}</div>", '<div> ${"(Array<T> :b)"}'],
+  ["-- ${(Array<T>\u00a0:b)}\n", '${"(Array<T>\u00a0:b)"}'],
+  ["-- ${(Array<T> :b)}\n", '${"(Array<T> :b)"}'],
+  ["<${(Array<T>\u00a0:b)}/>", "<${(Array<T>\u00a0:b)}>"],
+  ["<${(Array<T> :b)}/>", "<${(Array<T> :b)}>"],
+  ["${(Array<T>\u00a0:b)}\n", "<${(Array<T>\u00a0:b)}>"],
+  ["${(Array<T> :b)}\n", "<${(Array<T> :b)}>"],
+  ["<div x=`${(Array<T>\u00a0:b)}`/>", '<div> @x ="`${(Array<T>\u00a0:b)}`"'],
+  ["<div x=`${(Array<T> :b)}`/>", '<div> @x ="`${(Array<T> :b)}`"'],
+  ["div x=`${(Array<T>\u00a0:b)}`\n", '<div> @x ="`${(Array<T>\u00a0:b)}`"'],
+  ["div x=`${(Array<T> :b)}`\n", '<div> @x ="`${(Array<T> :b)}`"'],
+  ["<div x=({ a\u00a0:b })/>", '<div> @x ="({ a\u00a0:b })"'],
+  ["div x=({ a\u00a0:b })\n", '<div> @x ="({ a\u00a0:b })"'],
+  ["<t x(({ a\u00a0:b }))/>", '<t> @x aargs:"({ a\u00a0:b })"'],
+  ["t x(({ a\u00a0:b }))\n", '<t> @x aargs:"({ a\u00a0:b })"'],
+  [
+    "<div x() { return ({ a\u00a0:b }) }/>",
+    '<div> @x method:" return ({ a\u00a0:b }) "',
+  ],
+  [
+    "div x() { return ({ a\u00a0:b }) }\n",
+    '<div> @x method:" return ({ a\u00a0:b }) "',
+  ],
+  ["<if(({ a\u00a0:b }))>y</if>", '<if> args:"({ a\u00a0:b })"'],
+  ["if(({ a\u00a0:b }))\n", '<if> args:"({ a\u00a0:b })"'],
+  ["<div>${({ a\u00a0:b })}</div>", '<div> ${"({ a\u00a0:b })"}'],
+  ["-- ${({ a\u00a0:b })}\n", '${"({ a\u00a0:b })"}'],
+  ["<${({ a\u00a0:b })}/>", "<${({ a\u00a0:b })}>"],
+  ["${({ a\u00a0:b })}\n", "<${({ a\u00a0:b })}>"],
+  ["<div x=`${({ a\u00a0:b })}`/>", '<div> @x ="`${({ a\u00a0:b })}`"'],
+  ["div x=`${({ a\u00a0:b })}`\n", '<div> @x ="`${({ a\u00a0:b })}`"'],
+  ["<div x=({ \u00e9\u00a0:a })/>", '<div> @x ="({ \u00e9\u00a0:a })"'],
+  ["div x=({ \u00e9\u00a0:a })\n", '<div> @x ="({ \u00e9\u00a0:a })"'],
+  ["<t x(({ \u00e9\u00a0:a }))/>", '<t> @x aargs:"({ \u00e9\u00a0:a })"'],
+  ["t x(({ \u00e9\u00a0:a }))\n", '<t> @x aargs:"({ \u00e9\u00a0:a })"'],
+  [
+    "<div x() { return ({ \u00e9\u00a0:a }) }/>",
+    '<div> @x method:" return ({ \u00e9\u00a0:a }) "',
+  ],
+  [
+    "div x() { return ({ \u00e9\u00a0:a }) }\n",
+    '<div> @x method:" return ({ \u00e9\u00a0:a }) "',
+  ],
+  ["<if(({ \u00e9\u00a0:a }))>y</if>", '<if> args:"({ \u00e9\u00a0:a })"'],
+  ["if(({ \u00e9\u00a0:a }))\n", '<if> args:"({ \u00e9\u00a0:a })"'],
+  ["<div>${({ \u00e9\u00a0:a })}</div>", '<div> ${"({ \u00e9\u00a0:a })"}'],
+  ["-- ${({ \u00e9\u00a0:a })}\n", '${"({ \u00e9\u00a0:a })"}'],
+  ["<${({ \u00e9\u00a0:a })}/>", "<${({ \u00e9\u00a0:a })}>"],
+  ["${({ \u00e9\u00a0:a })}\n", "<${({ \u00e9\u00a0:a })}>"],
+  [
+    "<div x=`${({ \u00e9\u00a0:a })}`/>",
+    '<div> @x ="`${({ \u00e9\u00a0:a })}`"',
+  ],
+  [
+    "div x=`${({ \u00e9\u00a0:a })}`\n",
+    '<div> @x ="`${({ \u00e9\u00a0:a })}`"',
+  ],
 ];
 
 /**
@@ -1549,13 +1682,11 @@ const UNICODE_WHITESPACE = [
 ].map((code) => String.fromCharCode(code));
 
 /**
- * atom-lookbehind-non-ascii review F1: every Unicode whitespace character
- * before a `:` renders exactly as main (`5f4661534`) rendered it. Main read
- * these characters as neither word nor whitespace, the same as `#` in these
- * inputs (checked against main over this whole set: 0 of 2,660 differ), so
- * each input is compared with the same input with `#` in place of the
- * whitespace character; `#` is ASCII, which the fix does not touch. Returns
- * the inputs whose two renderings differ (none expected) and how many ran.
+ * Decision 156 addendum 10 (which replaced review F1's "as main did"): in
+ * the atom look-behind, every Unicode whitespace character renders exactly as
+ * an ASCII space. All 19 are in the Basic Multilingual Plane, one UTF-16 unit
+ * like the space, so offsets never shift. Returns the inputs whose two
+ * renderings differ (none expected) and how many ran.
  */
 export function unicodeWhitespaceMismatches(mod: AtomParserModule): {
   total: number;
@@ -1597,11 +1728,58 @@ export function unicodeWhitespaceMismatches(mod: AtomParserModule): {
       for (const form of forms) {
         total++;
         const code = pre + form.replaceAll("W", ws) + post;
-        const got = renderAtoms(mod, code);
-        const twin = renderAtoms(
-          mod,
-          pre + form.replaceAll("W", "#") + post,
-        ).replaceAll("#", ws);
+        const got = renderAtoms(mod, code).replaceAll(ws, " ");
+        const twin = renderAtoms(mod, pre + form.replaceAll("W", " ") + post);
+        if (got !== twin) bad.push(`${JSON.stringify(code)}: ${got}`);
+      }
+    }
+  }
+  return { total, bad };
+}
+
+/**
+ * Decision 156 addendum 10: the other whitespace the atom look-behind skips,
+ * besides the run right before the `:`: between a run of postfix `!`, before
+ * a contextual keyword (`of`, `await`), and around a comment. Each Unicode
+ * whitespace character renders as an ASCII space in every atom position.
+ */
+export function unicodeWhitespaceLoopMismatches(mod: AtomParserModule): {
+  total: number;
+  bad: string[];
+} {
+  const positions: [string, string][] = [
+    ["<div x=", "/>"],
+    ["div x=", "\n"],
+    ["<div x() { return ", " }/>"],
+    ["<if(", ")>y</if>"],
+    ["<div>${", "}</div>"],
+    ["<div x=`${", "}`/>"],
+  ];
+  // `W` is the whitespace character.
+  const forms = [
+    "(a!W:b)",
+    "(c ? a!W!W:b : d)",
+    "(c ? (a)!W:b : d)",
+    "(c ?Wof :b)",
+    "(eWof :b)",
+    "(x,Wawait :b)",
+    "(x ||Wawait :b)",
+    "[ /* c */W:b]",
+    "[aW/* c */W:b]",
+    "(c ? aW?W:b : d)",
+    "(c ? y as Array<T>W:z)",
+    "(returnW:b)",
+    "(c ?W:b :W:d)",
+  ];
+  let total = 0;
+  const bad: string[] = [];
+  for (const ws of UNICODE_WHITESPACE) {
+    for (const [pre, post] of positions) {
+      for (const form of forms) {
+        total++;
+        const code = pre + form.replaceAll("W", ws) + post;
+        const got = renderAtoms(mod, code).replaceAll(ws, " ");
+        const twin = renderAtoms(mod, pre + form.replaceAll("W", " ") + post);
         if (got !== twin) bad.push(`${JSON.stringify(code)}: ${got}`);
       }
     }
