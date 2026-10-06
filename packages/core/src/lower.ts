@@ -215,6 +215,13 @@ function varBindingsOf(ctx: Ctx, pattern: Node | null | undefined) {
 }
 
 /**
+ * Is this character one of the two sigils a shorthand class or id starts with?
+ */
+function shorthandSigil(char: string | undefined): boolean {
+  return char === "#" || char === ".";
+}
+
+/**
  * The span of an attribute's authored name.
  *
  * A default attribute (`<x="post">`) is `name: "value"` to the parser, but its
@@ -245,12 +252,24 @@ function attrNameSpan(ctx: Ctx, attr: Node): SourceSpan {
     const value = exprSpan(ctx, attr?.value);
     if (value) {
       const sigilAt = value.sourceStart - 1;
-      const sigil = ctx.source[sigilAt];
-      return {
-        sourceStart:
-          sigil === "#" || sigil === "." ? sigilAt : value.sourceStart,
-        sourceEnd: value.sourceEnd,
-      };
+      // A dynamic shorthand (`<a.${x}/>`, `<a#${y}>`) spells its sigil one
+      // step further out: the value the parser reports starts at the
+      // expression inside `${…}`, so the sigil is the character before the
+      // `${`. Same span the static `.c` form reports.
+      const dynSigilAt = sigilAt - 2;
+      const dyn =
+        ctx.source.slice(sigilAt - 1, sigilAt + 1) === "${" &&
+        shorthandSigil(ctx.source[dynSigilAt]);
+      let start = value.sourceStart;
+      let end = value.sourceEnd;
+      if (shorthandSigil(ctx.source[sigilAt])) start = sigilAt;
+      else if (dyn) {
+        start = dynSigilAt;
+        // …and its other end is the `}` closing the `${` the expression sits
+        // in, so the span reads `.${x}` rather than `.${x`.
+        if (ctx.source[end] === "}") end += 1;
+      }
+      return { sourceStart: start, sourceEnd: end };
     }
   }
   const sourceStart = offsetOf(ctx, attr?.loc?.start ?? attr?.start ?? {});

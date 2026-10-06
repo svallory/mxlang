@@ -1802,7 +1802,9 @@ describe("a dynamic shorthand class on data", () => {
     if (cls?.kind !== "expression") throw new Error("expected an expression");
     expect(cls.name).toBe("class");
     expect(cls.value.code).toBe("x");
-    expect(named(cls.nameSpan)).toEqual({ sourceStart: 5, sourceEnd: 6 });
+    // #338: the name span is the sigil plus the token, as the static `.cls`
+    // form reports — for the dynamic shorthand that is `.${x}`, not just `x`.
+    expect(slice(`<a.${D}x}/>`, named(cls.nameSpan))).toBe(`.${D}x}`);
   });
 
   it.each([
