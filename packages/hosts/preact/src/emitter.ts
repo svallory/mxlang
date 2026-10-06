@@ -1191,10 +1191,14 @@ export class PreactEmitter implements Emitter<string> {
    * checks the returned `x`, not the render function. It is applied to each
    * concrete occurrence rather than to a whole singular plan for the same
    * reason, since `test ? a : undefined satisfies T` checks only `undefined`.
+   *
+   * `as any` follows `satisfies` (erased on emit, like it): the expression keeps
+   * the value's own type, so the callee's prop would check, and report, the
+   * same value a second time.
    */
   #satisfying(value: MappedCode, valueType: string | undefined): MappedCode {
     return valueType
-      ? concatMapped("((", value, `) satisfies ${valueType})`)
+      ? concatMapped("(((", value, `) satisfies ${valueType}) as any)`)
       : value;
   }
 
@@ -1209,7 +1213,7 @@ export class PreactEmitter implements Emitter<string> {
     valueType: string | undefined,
   ): MappedCode {
     return valueType
-      ? concatMapped("(", value, ` satisfies ${valueType})`)
+      ? concatMapped("((", value, ` satisfies ${valueType}) as any)`)
       : value;
   }
 
@@ -1412,9 +1416,9 @@ export class PreactEmitter implements Emitter<string> {
       // The explicit accumulator type contextually types object literals in
       // the body, including `(n) =>` content callbacks nested under a loop.
       return concatMapped(
-        `${iterable}.reduce<${arrayType}>((${accumulator}, ${params}) => ${accumulator}.concat((`,
+        `${iterable}.reduce<${arrayType}>((${accumulator}, ${params}) => ${accumulator}.concat(((`,
         body,
-        `) satisfies ${arrayType}), [])`,
+        `) satisfies ${arrayType}) as any), [])`,
       );
     };
     if (source.kind === "of") {
@@ -1470,7 +1474,7 @@ export class PreactEmitter implements Emitter<string> {
         : undefined;
     const value = this.#attributeTagArray(prop.source, prop.as, arrayType);
     return arrayType
-      ? concatMapped("(", value, ` satisfies ${arrayType})`)
+      ? concatMapped("((", value, ` satisfies ${arrayType}) as any)`)
       : value;
   }
 

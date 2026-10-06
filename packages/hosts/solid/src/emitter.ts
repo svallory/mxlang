@@ -1537,7 +1537,7 @@ function satisfying(
   valueType: string | undefined,
 ): MappedCode {
   return valueType
-    ? concatMapped("((", value, `) satisfies ${valueType})`)
+    ? concatMapped("(((", value, `) satisfies ${valueType}) as any)`)
     : value;
 }
 
@@ -1552,7 +1552,7 @@ function satisfyingData(
   valueType: string | undefined,
 ): MappedCode {
   return valueType
-    ? concatMapped("(", value, ` satisfies ${valueType})`)
+    ? concatMapped("((", value, ` satisfies ${valueType}) as any)`)
     : value;
 }
 
@@ -1735,9 +1735,9 @@ function attributeTagFor(
       body.code,
     );
     return concatMapped(
-      `${iterable}.reduce<${arrayType}>((${accumulator}, ${params}) => ${accumulator}.concat((`,
+      `${iterable}.reduce<${arrayType}>((${accumulator}, ${params}) => ${accumulator}.concat(((`,
       body,
-      `) satisfies ${arrayType}), [])`,
+      `) satisfies ${arrayType}) as any), [])`,
     );
   };
   if (source.kind === "of") {
@@ -1787,7 +1787,7 @@ function attributeTagProp(prop: AttrTagProp, owner?: string): MappedCode {
       : undefined;
   const value = attributeTagArray(prop.source, prop.as, arrayType);
   return arrayType
-    ? concatMapped("(", value, ` satisfies ${arrayType})`)
+    ? concatMapped("((", value, ` satisfies ${arrayType}) as any)`)
     : value;
 }
 
