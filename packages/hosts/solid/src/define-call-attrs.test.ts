@@ -194,6 +194,19 @@ describe("solid: a <define> call passes its attributes as the first param", () =
     ).toThrow(/cannot close over `outer`/);
   });
 
+  // The design's `/var` case cannot be a runtime render: core refuses `/var`
+  // on any call target with no readable `<return>` shape (a `<define>`, a
+  // `.ts` module, a dynamic tag) before a host emitter runs, so the emitter's
+  // `/var` IIFE wrapper for a define call is unreachable. The refusal is
+  // host-independent and pre-existing (html pins the same one for a
+  // `<Widget>`); pinned here so the design's case list is accounted for and a
+  // change to the rule is deliberate.
+  it("refuses /var on a define call before the emitter", () => {
+    expect(() =>
+      compile("<define/Row|p|><li>${p.n}</li></define><Row/n n=1/>", ""),
+    ).toThrow(/tag variable `\/n` on `<Row>` is not supported/);
+  });
+
   it("warns on a multi-param define called with attributes, not for one object param", () => {
     const warn = (region: string) => {
       const warnings: Array<{ message: string; line: number; column: number }> =
