@@ -1,5 +1,5 @@
 diff --git a/dist/index.js b/dist/index.js
-index dc727aef1e94c2a42a93d9e897a89cd5518f0907..e9f0ca984f7befb9a41b95bedf0cd101bcf69cac 100644
+index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b3648828e 100644
 --- a/dist/index.js
 +++ b/dist/index.js
 @@ -47,7 +47,23 @@ var Parser = class {
@@ -496,15 +496,6 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..e9f0ca984f7befb9a41b95bedf0cd101
    for (let keyword of keywords) {
      let keywordPos = lookBehindFor(data, pos, keyword);
      if (keywordPos !== -1)
-@@ -1583,7 +1819,7 @@ var HTML_CONTENT = {
-         this.endText(), this.enterState(states_exports.INLINE_SCRIPT), this.pos += 2;
-         return;
-       }
--      if (code === 47 && isWhitespaceCode(data.charCodeAt(this.pos - 1)))
-+      if (code === 47 && isUnicodeWhitespaceCode(data.charCodeAt(this.pos - 1)))
-         switch (data.charCodeAt(this.pos + 1)) {
-           case 47:
-             this.endText(), this.enterState(states_exports.JS_COMMENT_LINE), this.pos += 2;
 @@ -1694,10 +1930,10 @@ function startsTypeName(parser, pos, allowGroup) {
    let code = parser.data.charCodeAt(pos);
    if (code === 123 || code === 42)
@@ -635,7 +626,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..e9f0ca984f7befb9a41b95bedf0cd101
    return code === 62;
  }
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 8afb14db555b8df8a5b9f5e1c29bad5080125709..d3f28d8900ead382a8cf999e639bdc606dd2275b 100644
+index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c4f3025f3 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -20,7 +20,23 @@ var Parser = class {
@@ -1132,15 +1123,6 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..d3f28d8900ead382a8cf999e639bdc60
    for (let keyword of keywords) {
      let keywordPos = lookBehindFor(data, pos, keyword);
      if (keywordPos !== -1)
-@@ -1556,7 +1792,7 @@ var HTML_CONTENT = {
-         this.endText(), this.enterState(states_exports.INLINE_SCRIPT), this.pos += 2;
-         return;
-       }
--      if (code === 47 && isWhitespaceCode(data.charCodeAt(this.pos - 1)))
-+      if (code === 47 && isUnicodeWhitespaceCode(data.charCodeAt(this.pos - 1)))
-         switch (data.charCodeAt(this.pos + 1)) {
-           case 47:
-             this.endText(), this.enterState(states_exports.JS_COMMENT_LINE), this.pos += 2;
 @@ -1667,10 +1903,10 @@ function startsTypeName(parser, pos, allowGroup) {
    let code = parser.data.charCodeAt(pos);
    if (code === 123 || code === 42)

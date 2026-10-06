@@ -10,6 +10,8 @@ import { type AtomParserModule, renderAtoms } from "./mx-atoms.cases.ts";
 import type { NoThrowParserModule } from "./mx-no-throw.cases.ts";
 import {
   asciiMainMismatches,
+  BODY_TEXT_ROWS,
+  bodyTextTwinMismatches,
   CONCISE_DASH_ROWS,
   renderAttrRanges,
   renderWhitespaceEvents,
@@ -62,7 +64,20 @@ describe("non-ASCII identifiers in look-behinds and look-aheads (src/template)",
 
   it("Unicode whitespace in a look-behind renders as an ASCII space (addendum 11)", () => {
     const { total, bad } = unicodeWhitespaceTwinMismatches(wsMod);
-    expect(total).toBe(2_489);
+    expect(total).toBe(2_432);
+    expect(bad).toEqual([]);
+  });
+
+  it.each(BODY_TEXT_ROWS)(
+    "body text before `//` is text after Unicode whitespace (addendum 13): %j",
+    (input, expected) => {
+      expect(renderWhitespaceEvents(wsMod, input)).toBe(expected);
+    },
+  );
+
+  it("body text after Unicode whitespace renders as after a letter (addendum 13)", () => {
+    const { total, bad } = bodyTextTwinMismatches(wsMod);
+    expect(total).toBe(114);
     expect(bad).toEqual([]);
   });
 });

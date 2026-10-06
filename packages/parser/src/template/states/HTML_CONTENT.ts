@@ -1,6 +1,5 @@
 import {
   htmlEOF,
-  isUnicodeWhitespaceCode,
   isWhitespaceCode,
   type Meta,
   Parser,
@@ -138,7 +137,7 @@ export const HTML_CONTENT: StateDefinition<HTMLContentMeta> = {
 
       if (
         code === CODE.FORWARD_SLASH &&
-        isUnicodeWhitespaceCode(data.charCodeAt(this.pos - 1))
+        isWhitespaceCode(data.charCodeAt(this.pos - 1))
       ) {
         switch (data.charCodeAt(this.pos + 1)) {
           case CODE.FORWARD_SLASH:

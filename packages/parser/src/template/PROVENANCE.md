@@ -181,7 +181,7 @@ addendum 12 pair below.
 | `states/EXPRESSION.ts` | `lookBehindForOperator`, `++`/`--` case | `lookBehindWhile(isUnicodeWhitespaceCode, …)` |
 | `states/ATTRIBUTE.ts` | `shouldTerminateHtmlAttrValue` | a Unicode-whitespace-preceded `>=` is a comparison (`<if=count\u00a0>= 10>`) |
 | `states/ATTRIBUTE.ts` | `shouldTerminateConciseAttrValue`, `shouldTerminateConciseAttrName` | a Unicode-whitespace-preceded `--` starts the text block (addendum 12: the attribute's range keeps the trailing whitespace, `1\u00a0` or `x\u00a0`, because an ASCII space ends the attribute by the current-character test, which is unchanged; pinned in `CONCISE_DASH_ROWS`) |
-| `states/HTML_CONTENT.ts` | `HTML_CONTENT.parse` | a Unicode-whitespace-preceded `//` or `/*` in HTML text starts a comment |
+| `states/HTML_CONTENT.ts` | `HTML_CONTENT.parse` | none: addendum 11 is withdrawn here (addendum 13, item 1). Only ASCII whitespace before `//` or `/*` in HTML text starts a comment, as upstream; `<p>Visit\u00a0//cdn.example/x.js</p>` is text. The function is byte-identical to upstream again |
 
 Comments around an operator word (same follow-up; mx-lead, within decision
 156 addendum 8): `isOperatorWord`'s look-back before `of`, `yield` and

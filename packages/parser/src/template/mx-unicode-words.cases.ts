@@ -405,10 +405,8 @@ const WS_TEMPLATES = [
   // `shouldTerminateHtmlAttrValue`: a whitespace-preceded `>=`.
   "<if=countW>= 10>y</if>",
   "<div x=aW>= b>c</div>",
-  // `HTML_CONTENT`: a whitespace-preceded `//` or `/*` comment in text.
-  "<div>aW// c\n</div>",
-  "<div>aW/* c */</div>",
-  "<div>a,W// c\n</div>",
+  // Not `HTML_CONTENT`'s `//` and `/*` in body text: decision 156 addendum
+  // 13 withdrew addendum 11 there, see `BODY_TEXT_FORMS`.
 ];
 
 /**
@@ -644,15 +642,63 @@ export const UNICODE_WHITESPACE_ROWS: [string, string][] = [
     "<div x=a >= b>c</div>",
     '<div> @x ="a >= b" > text:"c" </div> | <div> @x ="a >= b"',
   ],
-  // Decision 156 addendum 11, confirmed by mx-lead: in a tag body, text
-  // after NBSP + `//` is a comment, as after a space (the twin below).
-  [
-    "<div>a\u00a0// c\n</div>",
-    '<div> > text:"a\u00a0" text:"\\n" </div> | <div>',
-  ],
+  // Decision 156 addendum 13 (withdrawing addendum 11's confirmed
+  // consequence at this site): in a tag body only ASCII whitespace before
+  // `//` or `/*` starts a comment, as in Marko. After NBSP the text stays
+  // text; its ASCII-space twin below is the comment.
+  ["<div>a\u00a0// c\n</div>", '<div> > text:"a\u00a0// c\\n" </div> | <div>'],
   ["<div>a // c\n</div>", '<div> > text:"a " text:"\\n" </div> | <div>'],
-  ["<div>a\u00a0/* c */</div>", '<div> > text:"a\u00a0" </div> | <div>'],
+  ["<div>a\u00a0/* c */</div>", '<div> > text:"a\u00a0/* c */" </div> | <div>'],
   ["<div>a /* c */</div>", '<div> > text:"a " </div> | <div>'],
+];
+
+/**
+ * Decision 156 addendum 13, item 1: the body-text inputs where a Unicode
+ * whitespace or line terminator character `W` stands before `//` or `/*`.
+ */
+const BODY_TEXT_FORMS = [
+  "<p>VisitW//cdn.example/x.js</p>",
+  "<p>VisitW//cdn.example/x.js\n</p>",
+  "<div>aW// c\n</div>",
+  "<div>aW/* c */</div>",
+  "<div>a,W// c\n</div>",
+  "<p>aW/* c */ b</p>",
+];
+
+/**
+ * Each `BODY_TEXT_FORMS` input renders as the same input with a letter
+ * where the Unicode whitespace is: no ASCII whitespace, no comment, as in
+ * stock htmljs-parser and Marko. All 19 are one UTF-16 unit, like the
+ * letter, so offsets never shift. Returns the inputs whose renderings
+ * differ (none expected) and how many ran.
+ */
+export function bodyTextTwinMismatches(
+  mod: AtomParserModule & NoThrowParserModule,
+): { total: number; bad: string[] } {
+  let total = 0;
+  const bad: string[] = [];
+  for (const ws of UNICODE_WHITESPACE) {
+    for (const form of BODY_TEXT_FORMS) {
+      total++;
+      const code = form.replaceAll("W", ws);
+      const got = renderWhitespaceEvents(mod, code).replaceAll(ws, "x");
+      const twin = renderWhitespaceEvents(mod, form.replaceAll("W", "x"));
+      if (got !== twin) bad.push(`${JSON.stringify(code)}: ${got}`);
+    }
+  }
+  return { total, bad };
+}
+
+/** The reported input: a URL after a no-break space is text, `</p>` closes. */
+export const BODY_TEXT_ROWS: [string, string][] = [
+  [
+    "<p>Visit\u00a0//cdn.example/x.js</p>",
+    '<p> > text:"Visit\u00a0//cdn.example/x.js" </p> | <p>',
+  ],
+  [
+    "<p>caf\u00e9//cdn.example/x.js</p>",
+    '<p> > text:"caf\u00e9//cdn.example/x.js" </p> | <p>',
+  ],
 ];
 
 /** Each attribute's name and value range, as `@start-end` and `=start-end`. */

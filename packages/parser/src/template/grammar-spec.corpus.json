@@ -19018,10 +19018,8 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-2 \"p\" quasis=[1-2 \"p\"] expressions=[]",
       "OpenTagEnd 2-3 \">\" selfClosed=false",
-      "Text 3-5 \"a\u00a0\"",
-      "Comment 5-9 \"// b\" value=7-9 \" b\"",
       "CloseTagStart 10-12 \"</\"",
-      "Text 9-10 \"\\n\"",
+      "Text 3-10 \"a\u00a0// b\\n\"",
       "CloseTagName 12-13 \"p\"",
       "CloseTagEnd 13-14 \">\""
     ]
@@ -19093,6 +19091,32 @@
       "OpenTagEnd 8-8 \"\" selfClosed=false",
       "Text 11-15 \"text\"",
       "CloseTagEnd 16-16 \"\""
+    ]
+  },
+  {
+    "id": "g1689",
+    "input": "<p>Visit\u00a0//cdn.example/x.js</p>",
+    "expected": [
+      "OpenTagStart 0-1 \"<\"",
+      "OpenTagName 1-2 \"p\" quasis=[1-2 \"p\"] expressions=[]",
+      "OpenTagEnd 2-3 \">\" selfClosed=false",
+      "CloseTagStart 27-29 \"</\"",
+      "Text 3-27 \"Visit\u00a0//cdn.example/x.js\"",
+      "CloseTagName 29-30 \"p\"",
+      "CloseTagEnd 30-31 \">\""
+    ]
+  },
+  {
+    "id": "g1690",
+    "input": "<p>a\u00a0/* b */ c</p>",
+    "expected": [
+      "OpenTagStart 0-1 \"<\"",
+      "OpenTagName 1-2 \"p\" quasis=[1-2 \"p\"] expressions=[]",
+      "OpenTagEnd 2-3 \">\" selfClosed=false",
+      "CloseTagStart 14-16 \"</\"",
+      "Text 3-14 \"a\u00a0/* b */ c\"",
+      "CloseTagName 16-17 \"p\"",
+      "CloseTagEnd 17-18 \">\""
     ]
   }
 ]

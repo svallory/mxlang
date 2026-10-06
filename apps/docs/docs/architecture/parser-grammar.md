@@ -642,14 +642,16 @@ target `import`, `static`, `export`; and today an empty set on the hosts and
 | 7 | `<` followed by `>`, `<` or whitespace | text | g0156 |
 | 8 | `<` followed by anything else | an open tag | g0157 |
 | 9 | `$` followed by whitespace, with only whitespace between it and the previous newline | a scriptlet (E11) | g0158 g0159 |
-| 10 | `//` or `/*`, when the character before it is whitespace, ASCII or Unicode (decision 156, addendum 11) | a JavaScript comment: `//` to the end of the line, `/* */` to its end | g0160 g0161 g0162 g1682 |
+| 10 | `//` or `/*`, when the character before it is ASCII whitespace (as upstream; a Unicode space does not count here, decision 156, addendum 13, which withdrew addendum 11 at this site) | a JavaScript comment: `//` to the end of the line, `/* */` to its end | g0160 g0161 g0162 g1682 g1689 g1690 |
 | 11 | `${`, `$!{`, or backslashes before one | a placeholder or escaped placeholder | g0163 |
 | 12 | anything else | text | g0164 |
 
 | Input | Result | Probes |
 | --- | --- | --- |
 | `<p>a // b\n</p>` | the text `a ` and a comment to the end of the line (row 10) | g0760 |
-| `<p>a\u00a0// b\n</p>` (U+00A0 before `//`) | the text `a\u00a0` and a comment, as with a space (row 10; decision 156, addendum 11) | g1682 g0760 |
+| `<p>a\u00a0// b\n</p>` (U+00A0 before `//`) | text only, `a\u00a0// b\n`: no comment, as upstream and Marko (row 10; decision 156, addendum 13) | g1682 g0760 |
+| `<p>Visit\u00a0//cdn.example/x.js</p>` | text; the tag closes (the reading alpha.7 and alpha.8 got wrong: a comment that swallowed `</p>`) | g1689 |
+| `<p>a\u00a0/* b */ c</p>` | text only: no comment | g1690 |
 | `<p>http://x</p>` | text: no whitespace before the `//` | g0761 |
 
 CDATA sections and declarations parse to events and are rejected in lowering
