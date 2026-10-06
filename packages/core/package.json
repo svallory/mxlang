@@ -1,6 +1,6 @@
 {
   "name": "@mxlang/core",
-  "version": "0.1.0-alpha.4",
+  "version": "0.1.0-alpha.5",
   "description": "MX core: compiles .mx templates on Marko's parser, shared by every target",
   "license": "MIT",
   "repository": {

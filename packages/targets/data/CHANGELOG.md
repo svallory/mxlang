@@ -1,5 +1,13 @@
 # @mxlang/data
 
+## Unreleased
+
+## 0.1.0-alpha.5
+
+- Built on `@mxlang/core` 0.1.0-alpha.5: `parseData` no longer lexes an atom after a non-ASCII identifier where TypeScript owns the colon (`x=({ é:a })`), a silent meaning change in alpha.4 (decision 156 addendum 9).
+- **Added:** `parseData` option `imports: "pass" | "reject"` (default: the effective `structural` value). With `structural: "reject"` and `imports: "pass"`, control flow, `export` and `static` stay rejected and the tree gains `imports: DataImport[]` (`{ code, span }`, each top-level `import` verbatim, file order, UTF-16 spans); those imports leave `statements`. `structural: "pass"` with `imports: "reject"` rejects only imports. `DataImport` is exported; additive.
+- **Added (third-party-data-host, decision 148):** the data declarations list `builtinTags: ["object"]`, so a third-party host built on data (Mesh) that reuses them keeps `object` as its `defaultTag` and may override it per the decision 145 ladder.
+
 ## 0.1.0-alpha.4
 
 - **Feat (wildcard-children-data, decision 147):** a tag claimed by a parent's `children["*"]` entry keeps its authored `name` and gains two optional fields, `contract` (the canonical tag whose contract applied; equal to `name` for an inline contract) and `groups` (the pattern's named captures, omitted when empty). `SerializedDataDocument` and `compileModule`'s emitted literal follow; every tree without a wildcard match is byte-identical. `mx-tsc` host-dispatch rows `data-wildcard`, `data-wildcard-nomatch` and `data-wildcard-guard` pin the data check.
@@ -8,15 +16,6 @@
 - **Added: atoms in `parseData` (decision 156).** An attribute whose whole value is one atom, the sugar-derived `name` included, is `DataAttr { kind: "atom", name, value, nameSpan?, span }`; an atom nested in an expression is a `StringLiteral` with `extra.mxAtom = { span }` in `DataExpr.node`. Atom contracts (`type: "atom"` with `values`, `pattern`, `ref`, and `declares`) are checked; see `@mxlang/core` 0.1.0-alpha.4.
 - **Added:** a sugar after a single-atom default value (`belongs-to=:Customer :customer`, decision 146 addendum 5) and a sugar followed by `=value` or `(params) { body }` (decision 146 addendum 4) parse on the data target.
 - **Fixed:** shorthand attributes carry a real `nameSpan`.
-
-## Unreleased
-
-- **Added:** `parseData` option `imports: "pass" | "reject"` (default: the effective `structural` value). With `structural: "reject"` and `imports: "pass"`, control flow, `export` and `static` stay rejected and the tree gains `imports: DataImport[]` (`{ code, span }`, each top-level `import` verbatim, file order, UTF-16 spans); those imports leave `statements`. `structural: "pass"` with `imports: "reject"` rejects only imports. `DataImport` is exported; additive.
-
-||||||| parent of 3472ce94d (docs(targets): host-author steps for a third-party host on the data target, and changelogs)
-## Unreleased
-
-- **Added (third-party-data-host, decision 148):** the data declarations list `builtinTags: ["object"]`, so a third-party host built on data (Mesh) that reuses them keeps `object` as its `defaultTag` and may override it per the decision 145 ladder.
 
 ## 0.1.0-alpha.3
 
