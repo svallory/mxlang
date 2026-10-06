@@ -7,6 +7,7 @@
     "target": "esnext",
     "jsx": "preserve",
     "types": [],
+    "skipLibCheck": true,
     "allowImportingTsExtensions": true,
     "baseUrl": ".",
     "paths": {
