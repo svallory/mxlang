@@ -39,6 +39,7 @@ function project(label: string, packageName: string) {
   name: "mesh-${label}",
   packageName: "${packageName}",
   defaultTag: "node",
+  declarations: { default: { builtinTags: ["node"] } },
   host: {
     name: "mesh",
     fileKinds: [{
