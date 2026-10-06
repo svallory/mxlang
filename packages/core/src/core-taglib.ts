@@ -28,6 +28,44 @@ export const STATEMENT_TAGLIB: unknown = Object.fromEntries(
 /** The id the statement-only taglib registers under. */
 export const STATEMENT_TAGLIB_ID = "mx-statement-tags";
 
+const withStatements = new WeakMap<object, unknown>();
+
+/**
+ * `translator` with core's statement tags declared (decision 168): the one
+ * generic point every translator passes before Marko builds a lookup from it,
+ * so a translator not built with `createTranslator` (a third-party target's)
+ * still parses `static`, `import`, `export`, `client`, `server` and `class` as
+ * statements. A translator that already lists core's taglib or the statement
+ * taglib, or says `statementTags: false` (data's own three), is returned as it
+ * is. The result is cached per input: Marko keys its lookup on the object.
+ */
+export function withStatementTags(translator: unknown): unknown {
+  if (translator === null || typeof translator !== "object") return translator;
+  const given = translator as {
+    taglibs?: Array<[string, unknown]>;
+    statementTags?: false;
+  };
+  if (!Array.isArray(given.taglibs) || given.statementTags === false) {
+    return translator;
+  }
+  if (
+    given.taglibs.some(
+      ([id]) => id === STATEMENT_TAGLIB_ID || id === CORE_TAGLIB_ID,
+    )
+  ) {
+    return translator;
+  }
+  let wrapped = withStatements.get(translator);
+  if (!wrapped) {
+    wrapped = {
+      ...given,
+      taglibs: [[STATEMENT_TAGLIB_ID, STATEMENT_TAGLIB], ...given.taglibs],
+    };
+    withStatements.set(translator, wrapped);
+  }
+  return wrapped;
+}
+
 /**
  * The names of core's own taglib entries (`let`, `effect`, `script`, ...):
  * core's data, so a question about "a core tag" never needs a host to answer.

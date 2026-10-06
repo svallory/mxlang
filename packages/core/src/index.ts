@@ -92,7 +92,7 @@ export {
   VOID_TAGS,
   warn,
 } from "./core.ts";
-export { CORE_TAGLIB } from "./core-taglib.ts";
+export { CORE_TAGLIB, withStatementTags } from "./core-taglib.ts";
 export type {
   AnalyzeContext,
   ChildNode,

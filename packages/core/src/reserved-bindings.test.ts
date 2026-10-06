@@ -94,23 +94,25 @@ describe("reserved generated-code bindings", () => {
   it("does not treat a decorated method's own name as a binding", () => {
     // A class method name is a property key, not a declaration, so the same
     // check that allows `m(__mxX) {}` allows `__mxX() {}`.
+    // Through the source check directly: a decorator in a statement tag is
+    // Marko's own syntax error since #395 r2, so it never reaches this check
+    // by way of a whole compile.
     expect(() =>
-      compile(
-        "\nstatic function d(){ return (x:any)=>x }\nstatic class A { @d __mxX(){} }\n",
+      checkReservedSource(
+        "function d(){ return (x:any)=>x }\nclass A { @d __mxX(){} }",
+        4,
       ),
     ).not.toThrow();
   });
 
-  it("never invents a rejection from malformed statement text", () => {
+  it("reports malformed statement text as a syntax error, not a reserved binding", () => {
     // A statement's text is code the parser no longer reads as attributes
     // (decision 168), so a malformed one is no longer a Marko syntax error here:
     // it passes through to TypeScript, as on html. This check must not turn it
     // into a reserved-binding rejection.
-    try {
-      compile("\nstatic const = ;\n");
-    } catch (error) {
-      expect((error as Error).message).not.toContain("reserved");
-    }
+    // Now it is Marko's own positioned syntax error (#395 r2), not a reserved-
+    // binding rejection and not a silent pass.
+    expect(() => compile("\nstatic const = ;\n")).toThrow("Unexpected token");
   });
 
   it("does not reject type-only names", () => {

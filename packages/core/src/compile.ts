@@ -32,6 +32,7 @@ import {
   CORE_TAGLIB_ID,
   STATEMENT_TAGLIB,
   STATEMENT_TAGLIB_ID,
+  withStatementTags,
 } from "./core-taglib.ts";
 import {
   type CustomTag,
@@ -154,6 +155,8 @@ export interface HostOptions extends TranslatorOptions {
  */
 export interface Translator {
   taglibs: Array<[string, unknown]>;
+  /** `false`: this translator declares its own statement tags (data). */
+  statementTags?: false;
   tagDiscoveryDirs: string[];
   translate: {
     Program: {
@@ -237,6 +240,7 @@ export function createTranslator(host: TranslatorOptions): Translator {
       ...(customTags ? [customTags] : []),
     ],
     tagDiscoveryDirs: host.tagDiscoveryDirs ?? [],
+    ...(host.statementTags === false ? { statementTags: false as const } : {}),
     translate: {
       // biome-ignore lint/style/useNamingConvention: a Marko translate visitor key is a node type
       Program: {
@@ -350,9 +354,10 @@ export function buildMarkoLookup(
   translator: unknown,
 ): Lookup | undefined {
   const compiler = markoCompiler();
-  const lookup = compiler.taglib.buildLookup(dir, translator) as
-    | Lookup
-    | undefined;
+  const lookup = compiler.taglib.buildLookup(
+    dir,
+    withStatementTags(translator),
+  ) as Lookup | undefined;
   nullPrototypeTags(lookup);
   return lookup;
 }

@@ -998,10 +998,10 @@ const CORE_STATEMENT_TAGS: ReadonlySet<string> = new Set(
 );
 
 /**
- * Is `name` a statement tag in THIS parse? A parse without the core taglib
- * (`parseFragment`, the TS plugin's mapping pass) reads `static function f(a:
- * number): string {}` as a tag with attributes, where a bare `:` is a
- * TypeScript return type. The lookup decides when there is one
+ * Is `name` a statement tag in THIS parse? Every parse declares core's
+ * statement tags (decision 168), so one without a lookup (a unit test lowering
+ * a bare AST) is answered by core's own statement entries. The lookup decides
+ * when there is one
  * (`getTag(name).parseOptions.statement`: a data taglib that makes `class` an
  * ordinary tag keeps the sugar, and a custom tag with `parseOptions.statement`
  * is left alone); otherwise the core taglib's statement entries do.

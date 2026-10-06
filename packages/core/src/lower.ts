@@ -67,7 +67,7 @@ import {
   scopeBindings,
   shadowBindings,
   sliceLoc,
-  type TranslateError,
+  TranslateError,
   VOID_TAGS,
   warn,
 } from "./core.ts";
@@ -2616,11 +2616,56 @@ function statementSpan(ctx: Ctx, node: Node): SourceSpan | undefined {
   return { sourceStart: span.sourceStart, sourceEnd };
 }
 
+/**
+ * Marko parses a statement tag's text as a module body and reports a syntax
+ * error at the offending character; MX did not, so a statement whose text
+ * does not parse (JSX, or a line ending in `>` that swallows the next template
+ * line into one invalid expression) was emitted unchecked and the next line
+ * vanished silently on html, Solid and Astro, and after decision 168 on the
+ * JSX hosts too. Same check, same position: `prefix` is how many characters
+ * of the authored statement come before `code` (`static `).
+ */
+function rejectInvalidStatement(
+  node: Node,
+  code: string,
+  prefix: number,
+): void {
+  try {
+    markoBabel().parse(code, { sourceType: "module", plugins: ["typescript"] });
+  } catch (error) {
+    const at = (error as { loc?: { line: number; column: number } }).loc;
+    const start = posOf(node);
+    const first = !at || at.line === 1;
+    throw new TranslateError(
+      String((error as Error).message)
+        .replace(/\s*\(\d+:\d+\)$/, "")
+        .trim(),
+      start.line + (at ? at.line - 1 : 0),
+      first ? start.column + prefix + (at?.column ?? 0) : (at?.column ?? 0),
+    );
+  }
+}
+
 function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
+  // Decision 168: a statement tag is parsed as a statement (its text is
+  // `rawValue`). One the parser read as attributes came from a translator that
+  // does not declare the statement tags; recovering its text from the source
+  // would hide that, so it is refused.
+  if (typeof node.rawValue !== "string") {
+    fail(
+      `\`${name}\` was parsed as a tag with attributes: this target's translator does not declare the statement tags. Build the translator with \`createTranslator\`, or register core's \`STATEMENT_TAGLIB\` in it`,
+      node,
+    );
+  }
   const line = sliceLoc(ctx, node.loc).trim();
   const loc = posOf(node);
   const end = endPosOf(node);
   const span = statementSpan(ctx, node);
+  rejectInvalidStatement(
+    node,
+    name === "static" ? line.replace(/^static\s+/, "") : line,
+    name === "static" ? (/^static\s+/.exec(line)?.[0].length ?? 0) : 0,
+  );
 
   if (name === "import") {
     const bindings = importBindings(line);

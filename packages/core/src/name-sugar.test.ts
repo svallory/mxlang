@@ -627,8 +627,11 @@ describe("statement tags are not rewritten", () => {
     // the lookup is asked about the name before the colon: one that does not
     // call `static` a statement gets the sugar, not the statement-tag error.
     const none = { getTag: () => undefined } as unknown as MarkoLookup;
-    expect(messageOf(() => lowerFragment("<static:x/>\n", none))).not.toContain(
-      "is not supported on the statement tag",
+    // The sugar ran (no "not supported on the statement tag" error), and the
+    // rewritten `static` tag, parsed as attributes, is then refused by the
+    // statement lowerer: the two together pin the lookup branch.
+    expect(messageOf(() => lowerFragment("<static:x/>\n", none))).toContain(
+      "`static` was parsed as a tag with attributes",
     );
   });
 

@@ -212,9 +212,20 @@ on these nodes, so the statement text is recovered by slicing on
 **Statement tags on every target (decision 168).** The six statement tags
 (`import`, `static`, `export`, `client`, `server`, `class`) are declared to the
 parser from core's own taglib on every host, so their text is code, never
-attributes: a typed `static function f(a: number): string {…}`, a `<T,>`
-generic, JSX or an atom in a statement reads the same on every target. (The data
-target declares three of the six, its documented exception.)
+attributes: a typed `static function f(a: number): string {…}` or a `<T,>`
+generic reads the same on every target. (The data target declares three of the
+six, its documented exception.)
+
+A statement's text is parsed as a TypeScript module body and a syntax error is a
+positioned error on every target, exactly as in Marko 6.3.51 (measured, html and
+DOM output): JSX in a statement (`static const el = <b>hi</b>`) and a decorator
+are errors, as is an atom (`{ k: :name }`). A line ending in an operator or `>`
+continues onto the next line, as in Marko: `static const t = 1 +⏎2` is one valid
+statement, and `static const ok = 2 >⏎<div>…` is the joined expression's own
+error ("Missing semicolon.", at the next line), never a silent drop of that
+line. A translator that does not declare the statement tags is refused with a
+positioned error naming `createTranslator`; core adds the tags to every
+translator it builds a lookup from.
 
 | Statement | html | Preact / React / Hono | Solid (whole file) | Solid / Preact region | Angular | Astro |
 |---|---|---|---|---|---|---|

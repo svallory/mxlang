@@ -534,7 +534,7 @@ export function createHtmlMappings(
     source,
     printExpression,
     mappingDeclarations,
-    compiler.taglib.buildLookup(dirname(fileName), fallback?.translator),
+    core.buildMarkoLookup(dirname(fileName), fallback?.translator),
     fileName,
     targets,
   );

@@ -1,6 +1,6 @@
 // Decision 168: the statement tags are declared to the parser on every
 // target, so a statement whose text the attribute grammar cannot read (a typed
-// return, `<T,>`, JSX, an atom) compiles as the statement it is.
+// return, `<T,>`) compiles as the statement it is.
 import { describe, expect, it } from "vitest";
 import { compilePreactMx, compilePreactRegion } from "./index.ts";
 
@@ -20,12 +20,6 @@ const KINDS: Array<[string, string, string]> = [
     "static const f = <T,>(x: T): T => x",
     "const f = <T,>(x: T): T => x",
   ],
-  ["JSX in a statement", "static const el = <b>hi</b>", "const el = <b>hi</b>"],
-  [
-    "atom text",
-    "static const a = { k: :name, x: .y, z: #w }",
-    "const a = { k: :name, x: .y, z: #w }",
-  ],
   [
     "multi-line import",
     'import {\n  a,\n  b,\n} from "./x"',
@@ -42,6 +36,8 @@ function fail(source: string): { message: string; line: number } {
   }
   throw new Error("expected a compile error");
 }
+
+const ANGULAR = false;
 
 describe("statement tags (preact)", () => {
   for (const [name, source, emitted] of KINDS) {
@@ -72,6 +68,58 @@ describe("statement tags in a `.preact.mx` region", () => {
         compilePreactRegion(source, { filename: "/f/t.preact.mx" }),
       ).toThrow(
         /module-level MX statements cannot appear inside a `.preact.mx`/,
+      );
+    });
+  }
+});
+
+// Marko parses a statement's text and reports its syntax errors at the
+// offending character; MX matches it on every target (#395 r2), so a statement
+// that swallows the next template line, or holds JSX or an atom, is a positioned
+// error and never a silent drop. Valid joins compile, as in Marko.
+describe("statement text is checked like Marko checks it", () => {
+  const REFUSED: Array<[string, string, string, number, number]> = [
+    [
+      "JSX",
+      "static const el = <b>hi</b>\n<div/>",
+      "Unterminated regular expression.",
+      1,
+      25,
+    ],
+    [
+      "export JSX",
+      "export const el = <b>hi</b>\n<div/>",
+      "Unterminated regular expression.",
+      1,
+      25,
+    ],
+    [
+      "a line ending in `>` joins the template line",
+      "static const ok = 2 >\n<div>${ok}</div>",
+      "Missing semicolon.",
+      2,
+      6,
+    ],
+    [
+      "atom text",
+      "static const a = { k: :name }\n<div/>",
+      "Unexpected token",
+      1,
+      22,
+    ],
+  ];
+  for (const [name, source, message, line, column] of REFUSED) {
+    it(`refuses ${name}, positioned`, () => {
+      const error = fail(source);
+      expect(error.message).toBe(message);
+      expect(error.line).toBe(line);
+      expect((error as { column?: number }).column).toBe(column);
+    });
+  }
+  if (!ANGULAR) {
+    it("joins a line ending in an operator when the result is valid", () => {
+      expect(out("static const t = 1 +\n2\n<div>${t}</div>")).toContain(
+        "1 +\n2",
       );
     });
   }
