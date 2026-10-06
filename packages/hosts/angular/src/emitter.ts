@@ -498,6 +498,95 @@ function handlerShape(code: string):
   return { form: "other" };
 }
 
+/**
+ * The first construct in `code` Angular's template expression parser cannot
+ * read: a `function` expression (method shorthand lowers to one) or an arrow
+ * with a block body ("Multi-line arrow functions are not supported"). Read
+ * from the parsed AST, never the text, so a string or comment saying
+ * `function` is not flagged; `undefined` when `code` does not parse as an
+ * expression (the template parser reports that) or holds neither.
+ */
+function statementBodyConstruct(code: string): string | undefined {
+  let root: unknown;
+  try {
+    const babel = markoBabel() as {
+      parseExpression(source: string, options: unknown): unknown;
+    };
+    root = babel.parseExpression(code, { plugins: [["typescript", {}]] });
+  } catch {
+    return undefined;
+  }
+  const stack: unknown[] = [root];
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (Array.isArray(node)) {
+      stack.push(...node);
+    } else if (node && typeof node === "object") {
+      const n = node as { type?: string; body?: { type?: string } };
+      if (n.type === "FunctionExpression") return "a `function` expression";
+      if (
+        n.type === "ArrowFunctionExpression" &&
+        n.body?.type === "BlockStatement"
+      ) {
+        return "an arrow function with a block body";
+      }
+      for (const [key, child] of Object.entries(node)) {
+        if (
+          key !== "loc" &&
+          key !== "extra" &&
+          child &&
+          typeof child === "object"
+        ) {
+          stack.push(child);
+        }
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Angular's template expression language has no `function` keyword and no
+ * statement bodies, so a `function` expression (what method shorthand
+ * `onClick() { ... }` lowers to) or a block-bodied arrow in *any* expression
+ * the template carries (handler, interpolation, `<if>`, `<for>`, `<const>`,
+ * dynamic attribute, `class`/`style` object) would emit a template
+ * `parseTemplate` rejects. A template cannot hold the code and a page's class
+ * is the author's, so each is an error naming the construct and the forms that
+ * work. The IR is walked rather than each emission site patched, so a site
+ * added later is covered; the position is the nearest enclosing node's.
+ */
+function assertTemplateExpressible(root: unknown): void {
+  const seen = new Set<object>();
+  const visit = (value: unknown, at: { loc: Position } | undefined): void => {
+    if (!value || typeof value !== "object" || seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, at);
+      return;
+    }
+    const record = value as Record<string, unknown>;
+    const here =
+      record.loc && typeof record.loc === "object"
+        ? (record as { loc: Position })
+        : at;
+    if (typeof record.code === "string" && "shape" in record) {
+      const construct = statementBodyConstruct(record.code);
+      if (construct && here) {
+        fail(
+          `Angular templates cannot contain ${construct}: a template expression has no statement bodies. Use an arrow with an expression body (\`() => save()\`) or, for an event handler, a handler reference (\`onClick=save\`, a method of the component)`,
+          here,
+        );
+      }
+      return; // an Expr's `node` is the Babel AST, not IR
+    }
+    for (const [key, child] of Object.entries(record)) {
+      if (key !== "loc") visit(child, here);
+    }
+  };
+  visit(root, undefined);
+}
+
 function writeHandlerCall(
   out: TemplateWriter,
   value: Expr,
@@ -2509,6 +2598,7 @@ export function emitTemplate(
   }
 
   const emitter = new AngularEmitter(ctx, filename, ir.imports, selectorPrefix);
+  assertTemplateExpressible(ir.body);
   for (const node of ir.body) emitter.emitNode(node);
   const code = emitter.done();
   if (usedTagsOut) usedTagsOut.push(...emitter.usedTagRefs());
