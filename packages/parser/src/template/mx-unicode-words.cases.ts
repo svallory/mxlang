@@ -770,7 +770,7 @@ export function atomAfterSymbolMismatch(
 /**
  * Characters at or above U+0080 that are no identifier characters: symbols,
  * punctuation, emoji (a surrogate pair), private use, format characters and
- * the two C1 and Zs-lookalike code points TypeScript reads as whitespace,
+ * U+0085 and U+200B (which TypeScript, unlike ECMAScript and Babel, skips),
  * and surrogates that form no pair (a lone high, a lone low, a low before a
  * high).
  */

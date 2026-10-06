@@ -1699,8 +1699,9 @@ export function nonAsciiMarkerViolations(
 }
 
 /**
- * The characters at or above U+0080 that TypeScript reads as whitespace or
- * line terminators. `isLookBehindWordCode` excludes them (review F1).
+ * The characters at or above U+0080 that are ECMAScript WhiteSpace or
+ * LineTerminator (also Babel's set). `isLookBehindWordCode` excludes them
+ * (review F1).
  */
 export const UNICODE_WHITESPACE = [
   0xa0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007,

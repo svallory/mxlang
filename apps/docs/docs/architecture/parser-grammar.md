@@ -219,7 +219,10 @@ These are definitions of terms; the tables that use them carry the rules.
   word characters, and `©`, `×`, `…`, `«`, an emoji and a private-use
   character are not. The excepted characters above are U+00A0, U+1680,
   U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000 and U+FEFF
-  (`isUnicodeSpaceCode`); none of them is a word character. Step 2 of the
+  (`isUnicodeSpaceCode`); none of them is a word character. The set is
+  ECMAScript's WhiteSpace plus LineTerminator above ASCII, which is also
+  Babel's; TypeScript additionally treats U+0085 and U+200B as whitespace, and
+  MX does not. Step 2 of the
   scan and an atom's own name use the ASCII part (`isWordCode`).
 
   | Input | Result | Probes |

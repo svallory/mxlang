@@ -289,7 +289,8 @@ and 8; both dist builds carry the same JavaScript):
   TypeScript's colon, `éin`/`éof`/`étypeof` are names rather than operator
   words, and `(é of :b)` lexes the atom, exactly as the same input with an
   ASCII letter (`asciiTwinMismatches` pins the equivalence). The characters
-  TypeScript reads as whitespace or line terminators (U+00A0, U+1680, U+2000
+  that are ECMAScript WhiteSpace or LineTerminator above ASCII, which is also
+  Babel's set (U+00A0, U+1680, U+2000
   to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF) are not word
   characters: TypeScript cannot own a `:` after one, so `[a,\u00a0:b]` keeps
   its atom. Since decision 156 addendum 10 (template-parser-ascii-only-
@@ -303,7 +304,7 @@ and 8; both dist builds carry the same JavaScript):
   spellings (`divergences.md`). Nowhere else in the template grammar does a
   non-ASCII space change meaning.
   `isWordCode` itself stays ASCII. U+0085 and U+200B, which TypeScript
-  also skips, are not in the set: Babel rejects both.
+  also skips, are not in the set: ECMAScript and Babel reject both.
 
 Non-ASCII identifiers outside the atom path (template-parser-ascii-only-
 lookbehinds, decision 156 addendum 9; both dist builds carry the same

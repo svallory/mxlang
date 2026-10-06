@@ -177,9 +177,10 @@ export function isUnicodeWhitespaceCode(code: number) {
 }
 
 /**
- * The characters at or above U+0080 that TypeScript reads as whitespace
- * (`Zs`, U+FEFF) or as a line terminator (U+2028, U+2029). U+0085 and U+200B,
- * which TypeScript also skips, are left out: Babel rejects both.
+ * The characters at or above U+0080 that are ECMAScript WhiteSpace (`Zs`,
+ * U+FEFF) or LineTerminator (U+2028, U+2029), which is also Babel's set.
+ * TypeScript additionally skips U+0085 and U+200B; they are left out, as
+ * ECMAScript and Babel reject both.
  */
 export function isUnicodeSpaceCode(code: number) {
   return (
