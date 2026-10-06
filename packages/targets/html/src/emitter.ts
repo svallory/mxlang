@@ -1006,9 +1006,9 @@ export function createEmitter(selfName?: string): StringEmitter {
       // directly. Anything else may be a hand-written function, a
       // `.ts` barrel re-export of a template, or a template: `__mxRenderTag`
       // renders through `.render` when the callee has one and writes the
-      // returned string otherwise. It returns the callee itself as far as
-      // TypeScript can tell, so the props are checked exactly as a plain
-      // `Callee(props)` call would be.
+      // returned string otherwise. Its type follows that runtime choice: a
+      // callee with `render` is called with `render`'s Input, and any other
+      // callee is checked exactly as a plain `Callee(props)` call would be.
       if (node.returnsValue || target.binding || callee === selfName) {
         push(
           concatMapped(
