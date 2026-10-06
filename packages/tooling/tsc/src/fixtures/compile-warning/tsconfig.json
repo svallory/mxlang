@@ -8,8 +8,12 @@
     "jsx": "preserve",
     "types": [],
     "baseUrl": ".",
-    "paths": { "@card": ["src/Card.mx"] },
-    "ignoreDeprecations": "6.0"
+    "paths": {
+      "@card": ["src/Card.mx"],
+      "@mxlang/html": ["../../../../../targets/html/src/index.ts"]
+    },
+    "ignoreDeprecations": "6.0",
+    "allowImportingTsExtensions": true
   },
   "include": ["src"]
 }

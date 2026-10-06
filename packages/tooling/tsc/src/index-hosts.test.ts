@@ -389,7 +389,7 @@ describe("mx-tsc", () => {
       // The wording an agent reads when it misuses a unit's default export:
       // its call signature and sink entry, not `typeof Dyn`.
       expect(stripVTControlCharacters(result.output)).toContain(
-        "index.ts(3,14): error TS2322: Type '((input: Input) => string) & { render: (input: Input, __mxOut: __MxOut) => void; }' is not assignable to type 'number'.",
+        "index.ts(3,14): error TS2322: Type '((input: Input) => string) & { render: (input: Input, __mxOut: Out) => void; }' is not assignable to type 'number'.",
       );
     },
     SPAWN_TIMEOUT_MS,

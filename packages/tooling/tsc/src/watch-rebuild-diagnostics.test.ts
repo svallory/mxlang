@@ -48,6 +48,21 @@ it.each([
               moduleResolution: "bundler",
               target: "esnext",
               types: [],
+              allowImportingTsExtensions: true,
+              paths: {
+                "@mxlang/html": [
+                  join(
+                    import.meta.dirname,
+                    "..",
+                    "..",
+                    "..",
+                    "targets",
+                    "html",
+                    "src",
+                    "index.ts",
+                  ),
+                ],
+              },
             },
             include: ["src"],
           }),

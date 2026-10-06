@@ -6,6 +6,9 @@
     "jsxImportSource": "astro",
     "allowImportingTsExtensions": true,
     "types": ["node"],
+    "paths": {
+      "@mxlang/html": ["../../packages/targets/html/src/index.ts"]
+    },
     "plugins": [
       {
         "name": "@mxlang/typescript-plugin",

@@ -6,7 +6,13 @@
     "moduleResolution": "bundler",
     "target": "esnext",
     "jsx": "preserve",
-    "types": []
+    "types": [],
+    "baseUrl": ".",
+    "paths": {
+      "@mxlang/html": ["../../../../../targets/html/src/index.ts"]
+    },
+    "allowImportingTsExtensions": true,
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src"]
 }

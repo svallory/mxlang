@@ -7,7 +7,12 @@
     "target": "esnext",
     "jsx": "preserve",
     "types": [],
-    "ignoreDeprecations": "6.0"
+    "ignoreDeprecations": "6.0",
+    "baseUrl": ".",
+    "paths": {
+      "@mxlang/html": ["../../../../../targets/html/src/index.ts"]
+    },
+    "allowImportingTsExtensions": true
   },
   "include": ["src"]
 }

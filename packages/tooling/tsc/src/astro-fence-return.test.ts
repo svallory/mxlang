@@ -44,10 +44,21 @@ function projectOf(
           types: [],
           module: "ESNext",
           moduleResolution: "Bundler",
+          jsx: "preserve",
+          jsxImportSource: "astro",
+          paths: { "astro/jsx-runtime": ["./astro-jsx-runtime.d.ts"] },
         },
-        files: [name],
+        files: [name, "astro-env.d.ts"],
       }),
     );
+    // Astro's TSX wraps a page in `<Fragment>` and types its elements through
+    // astro's own packages; a temp dir has neither, so state the two things the
+    // generated code needs and keep the diagnostics about the fence alone.
+    writeFileSync(
+      join(dir, "astro-env.d.ts"),
+      "declare const Fragment: any;\ndeclare namespace JSX {\n  interface IntrinsicElements {\n    [tag: string]: unknown;\n  }\n}\n",
+    );
+    writeFileSync(join(dir, "astro-jsx-runtime.d.ts"), "export {};\n");
     writeFileSync(join(dir, name), text);
     const result = runInProcess(
       ["--noEmit", "-p", "tsconfig.json", "--astro", ...extraArgs],

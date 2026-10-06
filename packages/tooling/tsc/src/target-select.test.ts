@@ -33,6 +33,20 @@ it("policy errors alone fail one program; fixing them leaves host warnings non-f
           jsx: "preserve",
           types: [],
           allowImportingTsExtensions: true,
+          paths: {
+            "@mxlang/html": [
+              join(
+                import.meta.dirname,
+                "..",
+                "..",
+                "..",
+                "targets",
+                "html",
+                "src",
+                "index.ts",
+              ),
+            ],
+          },
         },
         include: ["**/*.mx"],
       }),

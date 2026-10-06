@@ -74,12 +74,23 @@ beforeAll(
         types: [],
         allowImportingTsExtensions: true,
         baseUrl: ".",
-        paths: Object.fromEntries(
-          ["preact", "react", "hono"].map((name) => [
-            `@mxlang/${name}`,
-            [join(repoRoot, "packages", "hosts", name, "src", "index.ts")],
-          ]),
-        ),
+        paths: {
+          ...Object.fromEntries(
+            ["preact", "react", "hono"].map((name) => [
+              `@mxlang/${name}`,
+              [join(repoRoot, "packages", "hosts", name, "src", "index.ts")],
+            ]),
+          ),
+          ...Object.fromEntries(
+            ["preact", "react", "hono"].map((name) => [
+              `@mxlang/${name}/runtime`,
+              [join(repoRoot, "packages", "hosts", name, "src", "runtime.ts")],
+            ]),
+          ),
+          "@mxlang/html": [
+            join(repoRoot, "packages", "targets", "html", "src", "index.ts"),
+          ],
+        },
         ignoreDeprecations: "6.0",
       };
       writeFileSync(
