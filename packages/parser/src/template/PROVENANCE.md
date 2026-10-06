@@ -220,14 +220,19 @@ and 8; both dist builds carry the same JavaScript):
 
 - **A non-ASCII character is a word character behind a `:`.** The
   look-behind (`expectsExpression`, `isOperatorWord`, `closesTypeArguments`)
-  classifies characters with `isLookBehindWordCode`: `isWordCode` or any
-  code unit at or above U+0080, as `lexAtom` already treats a non-ASCII
-  character after a name. So `{ é:a }`, `(é :T) => é` and `c ? é :z` keep
+  classifies characters with `isLookBehindWordCode`: `isWordCode`, or any
+  code unit at or above U+0080 except Unicode whitespace
+  (`isUnicodeSpaceCode`), as `lexAtom` already treats a non-ASCII character
+  after a name. So `{ é:a }`, `(é :T) => é` and `c ? é :z` keep
   TypeScript's colon, `éin`/`éof`/`étypeof` are names rather than operator
   words, and `(é of :b)` lexes the atom, exactly as the same input with an
-  ASCII letter (`asciiTwinMismatches` pins the equivalence). Every code unit
-  at or above U+0080 counts, non-ASCII whitespace (U+00A0, U+2028) included:
-  a `:` after one is left to TypeScript, which reports it, rather than
-  lexed as an atom. `isWordCode` itself stays ASCII; its upstream callers
+  ASCII letter (`asciiTwinMismatches` pins the equivalence). The characters
+  TypeScript reads as whitespace or line terminators (U+00A0, U+1680, U+2000
+  to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF) are not word
+  characters: TypeScript cannot own a `:` after one, so `[a,\u00a0:b]` keeps
+  its atom, exactly as before this change (`unicodeWhitespaceMismatches`).
+  The whitespace loops still skip only ASCII whitespace, as upstream does; a
+  Unicode whitespace character is read as punctuation, as it always was.
+  `isWordCode` itself stays ASCII; its upstream callers
   (the expression fast path, `lookBehindForOperator`, `canFollowDivision`,
   `ATTRIBUTE.ts`, `INLINE_SCRIPT.ts`) are unchanged.

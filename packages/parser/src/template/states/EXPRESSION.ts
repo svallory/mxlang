@@ -838,11 +838,31 @@ function isIdentStartCode(code: number) {
  * MX (decision 156 addenda 2 and 8): a word character for the atom
  * look-behind. Every character at or above U+0080 counts, as after an atom's
  * name in `lexAtom`, so a non-ASCII identifier (`{ é:a }`, `(é :T)`, `éin`)
- * is an operand: a `:` TypeScript could own is TypeScript's. `isWordCode`
- * stays ASCII for its upstream callers.
+ * is an operand: a `:` TypeScript could own is TypeScript's. The exception
+ * is what TypeScript reads as whitespace or a line terminator, after which
+ * it cannot own a `:` (`[a,\u00a0:b]` keeps its atom). `isWordCode` stays
+ * ASCII for its upstream callers.
  */
 function isLookBehindWordCode(code: number) {
-  return code >= 0x80 || isWordCode(code);
+  return code >= 0x80 ? !isUnicodeSpaceCode(code) : isWordCode(code);
+}
+
+/**
+ * The characters at or above U+0080 that TypeScript reads as whitespace
+ * (`Zs`, U+FEFF) or as a line terminator (U+2028, U+2029).
+ */
+function isUnicodeSpaceCode(code: number) {
+  return (
+    code === 0xa0 ||
+    code === 0x1680 ||
+    (code >= 0x2000 && code <= 0x200a) ||
+    code === 0x2028 ||
+    code === 0x2029 ||
+    code === 0x202f ||
+    code === 0x205f ||
+    code === 0x3000 ||
+    code === 0xfeff
+  );
 }
 
 /** Whether `at` is the end of the tag or line: `>`, `/>`, a newline or EOF. */
