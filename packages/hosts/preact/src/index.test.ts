@@ -1002,16 +1002,18 @@ describe("component aliases", () => {
     try {
       mkdirSync(join(scratch, "tags"));
       writeFileSync(join(scratch, "package.json"), '{"type":"module"}');
+      mkdirSync(join(scratch, "impl"));
       writeFileSync(
-        join(scratch, "tags", "badge.marko"),
-        "<p>${input.label}</p>",
+        join(scratch, "marko.json"),
+        JSON.stringify({ "<badge>": { template: "./impl/badge.mx" } }),
       );
+      writeFileSync(join(scratch, "impl", "badge.mx"), "<p>${input.label}</p>");
       const { code } = compilePreactMx(
         '<badge label="x"/>',
         join(scratch, "main.mx"),
       );
-      expect(code).toContain('import __mxBadge from "./tags/badge.marko"');
-      expect(code).toContain('<__mxBadge label="x" />');
+      expect(code).toContain('import _badge from "./impl/badge.mx"');
+      expect(code).toContain('<_badge label="x" />');
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }
@@ -1027,10 +1029,12 @@ describe("component aliases", () => {
     try {
       mkdirSync(join(scratch, "tags"));
       writeFileSync(join(scratch, "package.json"), '{"type":"module"}');
+      mkdirSync(join(scratch, "impl"));
       writeFileSync(
-        join(scratch, "tags", "badge.marko"),
-        "<p>${input.label}</p>",
+        join(scratch, "marko.json"),
+        JSON.stringify({ "<badge>": { template: "./impl/badge.mx" } }),
       );
+      writeFileSync(join(scratch, "impl", "badge.mx"), "<p>${input.label}</p>");
       const warnings: MxWarning[] = [];
       const { code } = compilePreactMx(
         'import badge from "./badge.mx"\n<badge label="x"/>',
@@ -1038,8 +1042,8 @@ describe("component aliases", () => {
         { warnings },
       );
       // The taglib tag, under core's binding: never the authored import.
-      expect(code).toContain('import _badge from "./tags/badge.marko"');
-      expect(code.split('"./tags/badge.marko"')).toHaveLength(2);
+      expect(code).toContain('import _badge from "./impl/badge.mx"');
+      expect(code.split('"./impl/badge.mx"')).toHaveLength(2);
       expect(code).toContain('<_badge label="x" />');
       expect(code).not.toContain("__mxBadge");
       expect(code).not.toContain('<badge label="x" />');
@@ -1232,7 +1236,7 @@ describe("import precedence over registered custom tags", () => {
 
   it("resolves an imported PascalCase component over a registered custom tag of the same name", () => {
     const code = compilePreactMx(
-      'import Panel from "./panel.marko"\n<Panel/>\n',
+      'import Panel from "./panel.mx"\n<Panel/>\n',
       "/fixtures/test.mx",
       { customTags: { Panel: marker } },
     ).code;
@@ -1245,7 +1249,7 @@ describe("import precedence over registered custom tags", () => {
   // treats a lowercase name as a component, imported or not.
   it("does not let a lowercase import shadow a registered custom tag of the same name", () => {
     const code = compilePreactMx(
-      'import panel from "./panel.marko"\n<panel/>\n',
+      'import panel from "./panel.mx"\n<panel/>\n',
       "/fixtures/test.mx",
       { customTags: { panel: marker } },
     ).code;

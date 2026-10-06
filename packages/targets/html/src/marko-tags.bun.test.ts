@@ -1,18 +1,12 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { scanCached } from "@mxlang/core";
 import markoPlugin from "./bun.ts";
-import { compileFile, htmlTargets } from "./index.ts";
 
 /**
- * A `.mx` page calling a tag from `tags/*.marko`, compiled and run for real.
- *
- * Marko imports every tag its taglib lookup finds
- * (`import _badge from "./tags/badge.marko"`); the emitted page must do the
- * same, or the bare call throws a `ReferenceError` at run time. These tests
- * execute the rendered module rather than matching emitted text, so they hold
- * whatever the import is spelled.
+ * A `.mx` page calling a tag from `tags/`, compiled and run for real through
+ * the Bun loader. A `.marko` file is no MX input (decision 172): it is never
+ * loaded here, and a call that finds one is a compile error.
  */
 
 // Inside the package, not `tmpdir()`: the emitted modules import `@mxlang/html`
@@ -38,35 +32,17 @@ async function render(
 
 beforeAll(() => {
   Bun.plugin(markoPlugin);
-  // The shipped plugin claims only `.mx`; the `.marko` tag files need a loader.
-  // Scoped to this test's directory: plugins are process-wide, and
-  // `bun.test.ts` asserts that a `.marko` path is NOT claimed.
-  Bun.plugin({
-    name: "mxlang-marko-tags-test",
-    setup(build) {
-      build.onLoad(
-        { filter: /\.tmp-marko-tags-[^/]+\/.*\.marko$/ },
-        ({ path }) => ({
-          contents: compileFile(path, {
-            customTags: scanCached(path, { host: "html", targets: htmlTargets })
-              .customTags,
-          }).code,
-          loader: "ts",
-        }),
-      );
-    },
-  });
 });
 
 afterAll(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-describe("a .mx page calling a tags/*.marko tag", () => {
+describe("a .mx page calling a tags/*.mx tag", () => {
   test("renders input attributes and body content", async () => {
     const dir = "basic";
     write(
-      `${dir}/tags/badge.marko`,
+      `${dir}/tags/badge.mx`,
       `<span class="badge">\${input.label}<\${input.content}/></span>`,
     );
     const page = write(
@@ -80,7 +56,7 @@ describe("a .mx page calling a tags/*.marko tag", () => {
 
   test("a hyphenated tag name and a repeated call", async () => {
     const dir = "hyphen";
-    write(`${dir}/tags/fancy-btn.marko`, `<button>\${input.label}</button>`);
+    write(`${dir}/tags/fancy-btn.mx`, `<button>\${input.label}</button>`);
     const page = write(
       `${dir}/page.mx`,
       `<div><fancy-btn label="a"/><fancy-btn label="b"/></div>`,
@@ -90,28 +66,34 @@ describe("a .mx page calling a tags/*.marko tag", () => {
     );
   });
 
-  test("a directory tag (tags/card/index.marko)", async () => {
-    const dir = "dirtag";
-    write(
-      `${dir}/tags/card/index.marko`,
-      `<div class="card">\${input.title}</div>`,
-    );
+  test("a .marko tag is a compile error naming the file", async () => {
+    const dir = "marko-tag";
+    write(`${dir}/tags/card.marko`, `<div>\${input.title}</div>`);
     const page = write(`${dir}/page.mx`, `<card title="T"/>`);
-    expect(await render(page)).toBe(`<div class="card">T</div>`);
+    await expect(render(page)).rejects.toThrow(
+      "`<card>` resolves to `tags/card.marko`, a `.marko` file",
+    );
+  });
+
+  test("a directory tag (tags/card/index.mx) is a compile error naming the file", async () => {
+    const dir = "dirtag";
+    write(`${dir}/tags/card/index.mx`, `<div>\${input.title}</div>`);
+    const page = write(`${dir}/page.mx`, `<card title="T"/>`);
+    await expect(render(page)).rejects.toThrow("matches `tags/card/index.mx`");
   });
 
   test("tags/ is found up the tree from a nested page directory", async () => {
     const dir = "nested";
-    write(`${dir}/tags/badge.marko`, `<i>\${input.label}</i>`);
+    write(`${dir}/tags/badge.mx`, `<i>\${input.label}</i>`);
     const page = write(`${dir}/a/b/c/page.mx`, `<badge label="deep"/>`);
     expect(await render(page)).toBe(`<i>deep</i>`);
   });
 
   test("the nearest tags/ wins per name, the rest come from further up", async () => {
     const dir = "nearest";
-    write(`${dir}/tags/badge.marko`, `<i>far \${input.label}</i>`);
-    write(`${dir}/tags/other.marko`, `<u>\${input.label}</u>`);
-    write(`${dir}/sub/tags/badge.marko`, `<b>near \${input.label}</b>`);
+    write(`${dir}/tags/badge.mx`, `<i>far \${input.label}</i>`);
+    write(`${dir}/tags/other.mx`, `<u>\${input.label}</u>`);
+    write(`${dir}/sub/tags/badge.mx`, `<b>near \${input.label}</b>`);
     const page = write(
       `${dir}/sub/page.mx`,
       `<div><badge label="x"/><other label="y"/></div>`,
@@ -119,26 +101,15 @@ describe("a .mx page calling a tags/*.marko tag", () => {
     expect(await render(page)).toBe(`<div><b>near x</b><u>y</u></div>`);
   });
 
-  test("a tags/*.mx tag and a tags/*.marko tag used together", async () => {
-    const dir = "mixed";
-    write(`${dir}/tags/from-mx.mx`, `<em>\${input.label}</em>`);
-    write(`${dir}/tags/from-marko.marko`, `<strong>\${input.label}</strong>`);
-    const page = write(
-      `${dir}/page.mx`,
-      `<p><from-mx label="a"/><from-marko label="b"/></p>`,
-    );
-    expect(await render(page)).toBe(`<p><em>a</em><strong>b</strong></p>`);
-  });
-
-  test("a .marko tag calling another .marko tag", async () => {
+  test("a .mx tag calling another .mx tag", async () => {
     const dir = "chain";
-    write(`${dir}/tags/inner.marko`, `<i>\${input.label}</i>`);
-    write(`${dir}/tags/outer.marko`, `<div><inner label=input.label/></div>`);
+    write(`${dir}/tags/inner.mx`, `<i>\${input.label}</i>`);
+    write(`${dir}/tags/outer.mx`, `<div><inner label=input.label/></div>`);
     const page = write(`${dir}/page.mx`, `<outer label="z"/>`);
     expect(await render(page)).toBe(`<div><i>z</i></div>`);
   });
 
-  test("same name as a tags/*.mx tag in the same directory: the .mx tag wins", async () => {
+  test("a same-name tags/*.marko file is never consulted: the .mx tag wins", async () => {
     // Marko has no `.mx`, so this is an mx rule, not a Marko one: registered
     // custom tags are consulted before the taglib lookup.
     const dir = "conflict";
@@ -148,7 +119,7 @@ describe("a .mx page calling a tags/*.marko tag", () => {
     expect(await render(page)).toBe(`<i>mx q</i>`);
   });
 
-  test("a FAR tags/*.mx tag beats a NEAR tags/*.marko tag of the same name", async () => {
+  test("a FAR tags/*.mx tag beats a NEAR tags/*.marko file of the same name", async () => {
     // "Regardless of distance": the .mx tag is in an ancestor's tags/, the
     // .marko one in the page's own directory, and the .mx tag still wins.
     const dir = "far-mx";
@@ -160,19 +131,19 @@ describe("a .mx page calling a tags/*.marko tag", () => {
 
   test("an explicit import of the same name is not shadowed by discovery", async () => {
     const dir = "explicit";
-    write(`${dir}/tags/Badge.marko`, `<i>tags</i>`);
-    write(`${dir}/other.marko`, `<b>explicit</b>`);
+    write(`${dir}/tags/Badge.mx`, `<i>tags</i>`);
+    write(`${dir}/other.mx`, `<b>explicit</b>`);
     const page = write(
       `${dir}/page.mx`,
-      `import Badge from "./other.marko"\n<Badge/>`,
+      `import Badge from "./other.mx"\n<Badge/>`,
     );
     expect(await render(page)).toBe(`<b>explicit</b>`);
   });
-  test("a lowercase taglib tag beats a same-named import or define (decision 164 addendum 1)", async () => {
-    // A lowercase tag never calls a binding, so the registered `tags/row.marko`
+  test("a lowercase registered tag beats a same-named import or define (decision 164 addendum 1)", async () => {
+    // A lowercase tag never calls a binding, so the registered `tags/row.mx`
     // is called, not the authored `./row.mx` import or `<define/row>`.
     const dir = "lowercase-binding";
-    write(`${dir}/tags/row.marko`, `<p>\${input.label}</p>`);
+    write(`${dir}/tags/row.mx`, `<p>\${input.label}</p>`);
     // The authored module declares `<return>` and an `Input`, so a call that
     // read the import's metadata would render nothing or reject the props.
     write(

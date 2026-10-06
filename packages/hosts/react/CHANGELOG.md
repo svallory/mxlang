@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix, behaviour change (unresolved-tags-dir-diagnostic, decision 172):** a tag Marko's lookup resolves to an `.mx` template (a `marko.json` entry) is imported from the path it was found at (`resolveDiscoveredTagModule`), bound as core's `_x` rather than `__mxX`; a `.marko` tag is core's one error, not an import of `./tags/<name>.marko`.
+
 - **Fix (statement-followup, decision 168):** the error for JSX in a `static`/`export` statement is MX's own message at the `<` (was Babel's "Unterminated regular expression."); a decorated `static class` is accepted again.
 
 - **Fix, behaviour change (statement-tags, decision 168):** statements parse as statements (typed functions, `<T,>`, JSX and atoms in a `static`/`export` line now compile). `server` now fails with a positioned error where it was silently dropped; `client` keeps its error; `class { … }` is a positioned not-supported error. React region files behave the same.

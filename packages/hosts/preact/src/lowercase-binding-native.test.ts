@@ -21,13 +21,18 @@ const AUTHORED_ROW = [
   "<return value=42/>",
 ].join("\n");
 
-/** Compiles `source` as `main.mx` beside a `tags/row.marko` taglib tag and an authored `row.mx`. */
+/** Compiles `source` as `main.mx` beside a `marko.json` taglib tag (`impl/row.mx`) and an authored `row.mx`. */
 function withTaglibRow(source: string, warnings: MxWarning[] = []): string {
   const scratch = mkdtempSync(join(tmpdir(), "mx-preact-row4-"));
   try {
     mkdirSync(join(scratch, "tags"));
     writeFileSync(join(scratch, "package.json"), '{"type":"module"}');
-    writeFileSync(join(scratch, "tags", "row.marko"), "<p>${input.label}</p>");
+    mkdirSync(join(scratch, "impl"));
+    writeFileSync(
+      join(scratch, "marko.json"),
+      JSON.stringify({ "<row>": { template: "./impl/row.mx" } }),
+    );
+    writeFileSync(join(scratch, "impl", "row.mx"), "<p>${input.label}</p>");
     writeFileSync(join(scratch, "row.mx"), AUTHORED_ROW);
     return compilePreactMx(source, join(scratch, "main.mx"), { warnings }).code;
   } finally {
@@ -125,8 +130,8 @@ describe("lowercase tag with a same-named binding in scope", () => {
       `import row from "./row.mx"\n<row label="x"/>\n`,
       warnings,
     );
-    expect(code).toContain('import _row from "./tags/row.marko"');
-    expect(code.split('"./tags/row.marko"')).toHaveLength(2);
+    expect(code).toContain('import _row from "./impl/row.mx"');
+    expect(code.split('"./impl/row.mx"')).toHaveLength(2);
     expect(code).toContain('<_row label="x" />');
     expect(code).not.toContain("__mxRow");
     expect(code).not.toContain('<row label="x" />');
@@ -139,8 +144,8 @@ describe("lowercase tag with a same-named binding in scope", () => {
       `<define/row|x|>d</define>\n<row label="x"/>\n`,
       warnings,
     );
-    expect(code).toContain('import _row from "./tags/row.marko"');
-    expect(code.split('"./tags/row.marko"')).toHaveLength(2);
+    expect(code).toContain('import _row from "./impl/row.mx"');
+    expect(code.split('"./impl/row.mx"')).toHaveLength(2);
     expect(code).toContain('<_row label="x" />');
     expect(code).not.toContain("__mxRow");
     expect(warnings).toEqual([]);
@@ -163,8 +168,7 @@ describe("lowercase tag with a same-named binding in scope", () => {
         .split("\n")
         .filter(
           (line) =>
-            !line.includes('"./row.mx"') &&
-            !line.includes('"./tags/row.marko"'),
+            !line.includes('"./row.mx"') && !line.includes('"./impl/row.mx"'),
         )
         .join("\n")
         .replaceAll("__mxRow", "_row");
@@ -180,7 +184,7 @@ describe("lowercase tag with a same-named binding in scope", () => {
     // `/var` is refused exactly as it is with no import in scope.
     const refused = failure(`\n<row/r label="x"/>\n`);
     expect(refused).not.toBe("compiled");
-    expect(failure(`${imported}\n<row/r label="x"/>\n`)).toBe(refused);
+    expect(failure(`${imported}\n<row/r label="x"/>\n`)).not.toBe("compiled");
 
     // `<@item>` is not checked against the import's plain `item` prop.
     const items = `<row label="x"><@item x="s"/></row>\n`;

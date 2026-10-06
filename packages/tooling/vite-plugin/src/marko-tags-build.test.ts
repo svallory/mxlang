@@ -66,12 +66,12 @@ async function render(
   return (await renderRaw(project, entry, input)) as string;
 }
 
-describe("a .mx page calling a tags/*.marko tag, built with vite (audit case h18)", () => {
+describe("a .mx page calling a tags/*.mx tag, built with vite (audit case h18)", () => {
   it("renders input attributes and body content", async () => {
     html("basic");
     write(
       "basic",
-      "src/tags/badge.marko",
+      "src/tags/badge.mx",
       `<span class="badge">\${input.label}<\${input.content}/></span>`,
     );
     write(
@@ -86,14 +86,14 @@ describe("a .mx page calling a tags/*.marko tag, built with vite (audit case h18
 
   it("finds tags/ up the tree from a nested page directory", async () => {
     html("nested");
-    write("nested", "src/tags/badge.marko", `<i>\${input.label}</i>`);
+    write("nested", "src/tags/badge.mx", `<i>\${input.label}</i>`);
     write("nested", "src/pages/a/b/page.mx", `<badge label="deep"/>`);
     expect(await render("nested", "src/pages/a/b/page.mx")).toBe("<i>deep</i>");
   });
 
   it("builds the h18 shape: a typed Input and a tag fed from it", async () => {
     html("h18");
-    write("h18", "src/pages/tags/greet.marko", `<span>hi \${input.who}</span>`);
+    write("h18", "src/pages/tags/greet.mx", `<span>hi \${input.who}</span>`);
     write(
       "h18",
       "src/pages/page.mx",
@@ -106,65 +106,82 @@ describe("a .mx page calling a tags/*.marko tag, built with vite (audit case h18
     ).toBe("<span>hi world</span><span>n=1</span>");
   });
 
-  it("a tags/*.mx and a tags/*.marko tag side by side", async () => {
+  it("two tags/*.mx tags side by side", async () => {
     html("mixed");
-    write("mixed", "src/tags/from-marko.marko", `<b>\${input.label}</b>`);
+    write("mixed", "src/tags/from-first.mx", `<b>\${input.label}</b>`);
     write("mixed", "src/tags/from-mx.mx", `<i>\${input.label}</i>`);
     write(
       "mixed",
       "src/page.mx",
-      `<p><from-marko label="m"/><from-mx label="x"/></p>`,
+      `<p><from-first label="m"/><from-mx label="x"/></p>`,
     );
     expect(await render("mixed", "src/page.mx")).toBe(
       "<p><b>m</b><i>x</i></p>",
     );
   });
 
-  it("a .marko tag that calls another tag", async () => {
+  it("a .mx tag that calls another tag", async () => {
     html("chain");
-    write("chain", "src/tags/inner.marko", `<u>\${input.label}</u>`);
+    write("chain", "src/tags/inner.mx", `<u>\${input.label}</u>`);
     write(
       "chain",
-      "src/tags/outer.marko",
+      "src/tags/outer.mx",
       `<div><inner label=input.label/></div>`,
     );
     write("chain", "src/page.mx", `<outer label="x"/>`);
     expect(await render("chain", "src/page.mx")).toBe("<div><u>x</u></div>");
   });
 
-  it("a directory tag (tags/card/index.marko)", async () => {
+  it("a .marko tag is a build error naming the file (decision 172)", async () => {
+    html("marko-tag");
+    write("marko-tag", "src/tags/card.marko", `<div>\${input.title}</div>`);
+    write("marko-tag", "src/page.mx", `<card title="T"/>`);
+    const error = await render("marko-tag", "src/page.mx").then(
+      () => undefined,
+      (err: Error) => err,
+    );
+    expect(error?.message).toContain(
+      "`<card>` resolves to `tags/card.marko`, a `.marko` file",
+    );
+  });
+
+  it("a directory tag (tags/card/index.mx) is a build error naming the file", async () => {
     html("dirtag");
-    write("dirtag", "src/tags/card/index.marko", `<div>\${input.title}</div>`);
+    write("dirtag", "src/tags/card/index.mx", `<div>\${input.title}</div>`);
     write("dirtag", "src/page.mx", `<card title="T"/>`);
-    expect(await render("dirtag", "src/page.mx")).toBe("<div>T</div>");
+    const error = await render("dirtag", "src/page.mx").then(
+      () => undefined,
+      (err: Error) => err,
+    );
+    expect(error?.message).toContain("matches `tags/card/index.mx`");
   });
 
   it("a broken tag file fails the build naming the tag, not a rolldown parse error", async () => {
     html("broken");
-    write("broken", "src/tags/bad.marko", "<div><span>oops</div>");
+    write("broken", "src/tags/bad.mx", "<div><span>oops</div>");
     write("broken", "src/page.mx", `<bad/>`);
     const error = await render("broken", "src/page.mx").then(
       () => undefined,
       (err: Error) => err,
     );
-    expect(error?.message).toContain("bad.marko");
+    expect(error?.message).toContain("bad.mx");
     expect(error?.message).not.toContain("Unexpected JSX expression");
     // Located at the tag's own line:column (the 1-based column of the closer),
     // with Marko's reason, and not a stack's worth of frames (audit item 19).
-    // The header names the authored tag, not the `.marko.tsx` module id this
+    // The header names the authored tag, not the `.mx.tsx` module id this
     // plugin mints for it (`vite-virtual-tsx-id`).
-    expect(error?.message).toContain("bad.marko:1:16");
-    expect(error?.message).not.toContain("bad.marko.tsx");
+    expect(error?.message).toContain("bad.mx:1:16");
+    expect(error?.message).not.toContain("bad.mx.tsx");
     expect(error?.message).toContain('closing "div" tag does not match');
   });
 });
 
 describe("the same page through the dev server's transform path", () => {
-  it("ssrLoadModule renders a page with a tags/*.marko tag", async () => {
+  it("ssrLoadModule renders a page with a tags/*.mx tag", async () => {
     html("dev");
     write(
       "dev",
-      "src/tags/badge.marko",
+      "src/tags/badge.mx",
       `<b>\${input.label}<\${input.content}/></b>`,
     );
     write("dev", "src/page.mx", `<badge label="L">body</badge>`);
@@ -188,18 +205,17 @@ describe("the same page through the dev server's transform path", () => {
 });
 
 /**
- * The JSX hosts emit the same `import … from "./tags/x.marko"` (#187), so the
- * same fix carries them. A Solid whole-file page does not discover
- * `tags/*.marko` at all (the tag stays a literal `<badge>` element), which is
- * outside this plugin.
+ * The JSX hosts import a discovered `tags/x.mx` the same way. A Solid
+ * whole-file page does not run Marko's lookup (a `.marko` tag there is an
+ * error, decision 172).
  */
-describe("a tags/*.marko tag on the JSX hosts, built with vite", () => {
+describe("a tags/*.mx tag on the JSX hosts, built with vite", () => {
   const page = `<p><badge label="L"/></p>`;
   const tag = `<b>\${input.label}</b>`;
 
   function jsx(project: string, host: string): void {
     write(project, "package.json", JSON.stringify({ name: "p", mx: { host } }));
-    write(project, "src/tags/badge.marko", tag);
+    write(project, "src/tags/badge.mx", tag);
     write(project, "src/page.mx", page);
   }
 

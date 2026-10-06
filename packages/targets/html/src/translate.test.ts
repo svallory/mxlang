@@ -1441,7 +1441,7 @@ describe("attribute-tag v2 values (executed)", () => {
   });
 
   it("names ordinary children `content`, the prop Marko's own tags read", () => {
-    const body = 'import Panel from "./panel.marko"\n<Panel>body</Panel>';
+    const body = 'import Panel from "./panel.mx"\n<Panel>body</Panel>';
     const { code } = compile(src(body), file);
     expect(code).toContain("content: (");
     expect(code).not.toContain("children:");
@@ -1453,9 +1453,9 @@ describe("attribute-tag v2 values (executed)", () => {
   it.each([
     [
       "an attribute tag",
-      'import Panel from "./panel.marko"\n<Panel("a")><@header>H</@header></Panel>',
+      'import Panel from "./panel.mx"\n<Panel("a")><@header>H</@header></Panel>',
     ],
-    ["a body", 'import Panel from "./panel.marko"\n<Panel("a")>body</Panel>'],
+    ["a body", 'import Panel from "./panel.mx"\n<Panel("a")>body</Panel>'],
   ])(
     "still rejects a named custom tag mixing tag-argument form with %s",
     (_case, body) => {
@@ -2201,7 +2201,7 @@ describe("import precedence over registered custom tags", () => {
   };
 
   it("resolves an imported PascalCase component over a registered custom tag of the same name", () => {
-    const body = ['import Panel from "./panel.marko"', "<Panel/>"].join("\n");
+    const body = ['import Panel from "./panel.mx"', "<Panel/>"].join("\n");
     const { code } = compile(src(body), file, {
       customTags: { Panel: marker },
     });
@@ -2216,7 +2216,7 @@ describe("import precedence over registered custom tags", () => {
   // expanded the custom tag; after the regression, it started throwing
   // "Local variables must be in a dynamic tag unless they are PascalCase."
   it("does not let a lowercase import shadow a registered custom tag of the same name", () => {
-    const body = ['import panel from "./panel.marko"', "<panel/>"].join("\n");
+    const body = ['import panel from "./panel.mx"', "<panel/>"].join("\n");
     const { code } = compile(src(body), file, {
       customTags: { panel: marker },
     });

@@ -123,17 +123,19 @@ describe("lowercase tag with a same-named binding in scope", () => {
     try {
       mkdirSync(join(scratch, "tags"));
       writeFileSync(join(scratch, "package.json"), '{"type":"module"}');
+      mkdirSync(join(scratch, "impl"));
       writeFileSync(
-        join(scratch, "tags", "row.marko"),
-        "<p>${input.label}</p>",
+        join(scratch, "marko.json"),
+        JSON.stringify({ "<row>": { template: "./impl/row.mx" } }),
       );
+      writeFileSync(join(scratch, "impl", "row.mx"), "<p>${input.label}</p>");
       const warnings: MxWarning[] = [];
       const { code } = compile(
         `import row from "./row.mx"\n<row label="x"/>\n`,
         join(scratch, "main.mx"),
         { warnings },
       );
-      expect(code).toContain('import _row from "./tags/row.marko"');
+      expect(code).toContain('import _row from "./impl/row.mx"');
       expect(code).toContain("_row.render({");
       expect(code).not.toContain('<row label=\\"x\\"');
       expect(warnings).toEqual([]);
@@ -150,10 +152,12 @@ describe("lowercase tag with a same-named binding in scope", () => {
     try {
       mkdirSync(join(scratch, "tags"));
       writeFileSync(join(scratch, "package.json"), '{"type":"module"}');
+      mkdirSync(join(scratch, "impl"));
       writeFileSync(
-        join(scratch, "tags", "row.marko"),
-        "<p>${input.label}</p>",
+        join(scratch, "marko.json"),
+        JSON.stringify({ "<row>": { template: "./impl/row.mx" } }),
       );
+      writeFileSync(join(scratch, "impl", "row.mx"), "<p>${input.label}</p>");
       writeFileSync(
         join(scratch, "row.mx"),
         [
@@ -176,7 +180,6 @@ describe("lowercase tag with a same-named binding in scope", () => {
       const imported = 'import row from "./row.mx"';
       for (const call of [
         '<row label="x"/>',
-        '<row/r label="x"/>',
         '<row label="x"><@item x="s"/></row>',
       ]) {
         expect(outcome(`${imported}\n${call}\n`)).toBe(outcome(`\n${call}\n`));

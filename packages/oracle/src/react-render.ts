@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { compileReactFile } from "@mxlang/react";
 import type { ComponentType } from "react";
+import { discoveredCustomTags, mxTwins } from "./mx-twins.ts";
 
 /** Compile a fixture tree to React TSX and render its entry with React DOM. */
 export async function renderReact(
@@ -24,10 +25,13 @@ export async function renderReact(
 
   try {
     cpSync(dir, scratch, { recursive: true });
+    mxTwins(scratch);
     linkNodeModules(scratch);
 
     for (const file of markoFiles(scratch)) {
-      const { code } = compileReactFile(file);
+      const { code } = compileReactFile(file, {
+        customTags: discoveredCustomTags(file),
+      });
       const rewritten = code
         .replace(
           /(from\s+")(\.[^"]+)\.(?:marko|mx)(")/g,
@@ -41,7 +45,9 @@ export async function renderReact(
       writeFileSync(withTsxExtension(file), rewritten);
     }
 
-    const entry = withTsxExtension(join(scratch, relative(dir, filename)));
+    const entry = withTsxExtension(
+      join(scratch, relative(dir, filename.replace(/\.marko$/, ".mx"))),
+    );
     const mod = (await import(`${entry}?t=${Date.now()}`)) as {
       default: ComponentType<Record<string, unknown>>;
     };

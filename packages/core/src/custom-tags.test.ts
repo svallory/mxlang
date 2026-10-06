@@ -1440,7 +1440,7 @@ describe("import precedence over registered custom tags (IR-level)", () => {
       transform: (_call, ctx) => [ctx.build.element("mx-marker", [], [])],
     };
     const ir = lowerWithTags(
-      'import panel from "./panel.marko"\n<panel/>\n',
+      'import panel from "./panel.mx"\n<panel/>\n',
       { panel },
       componentPolicy,
     );
@@ -1462,7 +1462,7 @@ describe("import precedence over registered custom tags (IR-level)", () => {
   // AGENTS.md's custom-tags precedence bullet for the same caveat.
   it("would resolve a file-local binding over a host claim of the same PascalCase name (currently unreachable by any real host)", () => {
     const ir = lowerWithTags(
-      'import Boundary from "./boundary.marko"\n<Boundary/>\n',
+      'import Boundary from "./boundary.mx"\n<Boundary/>\n',
       {},
       {
         ...componentPolicy,

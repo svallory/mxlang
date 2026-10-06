@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix, behaviour change (unresolved-tags-dir-diagnostic, decision 172):** a `.marko` tag (`tags/x.marko`, `tags/x/index.marko`, an authored `.marko` import used as a tag) is one positioned error naming the file, no longer rendered through Marko's lookup; `tags/x/index.mx` is a positioned error, not a call to an unbound `x`.
+
 - **Changed (html-own-element-table):** the html target classifies a tag as an element by its own HTML/SVG/MathML table (`src/element-table.ts`) instead of asking Marko's taglib lookup which taglib defined it. `element-table.test.ts` pins the table name-for-name to Marko's `marko-html`, `marko-svg` and `marko-math` taglibs (`@marko/compiler` 5.42.10, now a dev dependency); it found no difference. Emitted output is unchanged. `fixtures-marko/tags-discovery/tags/badge.mx` and `try-child-throw/tags/boom.mx` are twins of the `.marko` tags, with `marko-twins.test.ts` pinning each byte-equal.
 
 - **Added (bound-attribute-refinement):** a refined bound attribute (`<input value:fn:=q/>`) is accepted and renders as the unrefined `value:=q` does, byte for byte: Marko's change handler (`q = fn(next)`) is client-only, and this target renders once. Under `typeCheck` (new `CompileOptions` field, decision 140; the TS plugin passes it through the descriptor, a build never does) the value is `(false && fn(q), q)`, so a misspelled or ill-typed `fn` is reported at the modifier, on a native tag, a `<define>` component call, a dynamic tag and a spread tag. The runtime module never carries it. The Marko-measured `is:raw:=x` primitive-attribute row is restored.

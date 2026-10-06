@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { compile } from "@mxlang/html";
+import { discoveredCustomTags, mxTwins } from "./mx-twins.ts";
 
 /**
  * Renders a stock `.marko` fixture through `@mxlang/html`, by actually
@@ -56,14 +57,16 @@ export async function renderTranslator(
   const scratch = mkdtempSync(join(tmpdir(), "mx-oracle-translator-"));
   try {
     cpSync(dir, scratch, { recursive: true });
+    mxTwins(scratch);
 
     for (const file of markoFiles(scratch)) {
       // Feed content under the virtual `.mx` sibling path — never the real
       // `.marko` filename — so the compiled module is produced exactly as
       // a real `.mx` file in this position would be.
       const source = readFileSync(file, "utf8");
-      const virtualMxPath = withMxExtension(file);
-      const { code } = compile(source, virtualMxPath);
+      const { code } = compile(source, file, {
+        customTags: discoveredCustomTags(file),
+      });
       const rewritten = code
         .replace(
           /(from\s+")(\.[^"]+)\.(?:marko|mx)(")/g,
@@ -81,7 +84,9 @@ export async function renderTranslator(
       writeFileSync(withTsExtension(file), rewritten);
     }
 
-    const entry = withTsExtension(join(scratch, relative(dir, filename)));
+    const entry = withTsExtension(
+      join(scratch, relative(dir, withMxExtension(filename))),
+    );
     const mod = (await import(`${entry}?t=${Date.now()}`)) as {
       default: (input: unknown) => string;
     };
@@ -105,7 +110,7 @@ function markoFiles(dir: string): string[] {
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) {
       results.push(...markoFiles(full));
-    } else if (/\.marko$/.test(entry)) {
+    } else if (/\.mx$/.test(entry)) {
       results.push(full);
     }
   }
@@ -117,5 +122,5 @@ function withMxExtension(file: string): string {
 }
 
 function withTsExtension(file: string): string {
-  return file.replace(/\.marko$/, ".ts");
+  return file.replace(/\.mx$/, ".ts");
 }

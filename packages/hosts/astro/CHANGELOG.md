@@ -25,6 +25,8 @@
 
 ## Unreleased
 
+- **Fix, behaviour change (unresolved-tags-dir-diagnostic, decision 172):** a `.marko` file used as a tag, and a `tags/x/index.mx` directory tag, are one positioned error at the tag naming the file (core's check), not a silent native `<x>`.
+
 - **Fix, behaviour change (statement-followup, decision 168):** JSX in a `static`/`export`/`server` statement (`static const el = <b>hi</b>` followed by a template line) was a silent swallow of the next template line on Astro (the statement ran on into it, leaving an empty template); it is now a positioned error at the `<` naming JSX in a statement. A decorated `static class` is accepted again.
 
 - **Fix, behaviour change (statement-tags, decision 168):** `server` is a positioned error naming `.astro.mx` (it was misread as an attribute method); `class { … }` is a positioned not-supported error.

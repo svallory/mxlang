@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { compilePreactFile } from "@mxlang/preact";
+import { discoveredCustomTags, mxTwins } from "./mx-twins.ts";
 
 /**
  * Renders a stock `.marko` fixture through `@mxlang/preact`, by loading the
@@ -47,10 +48,13 @@ export async function renderPreact(
   const scratch = mkdtempSync(join(tmpdir(), "mx-oracle-preact-"));
   try {
     cpSync(dir, scratch, { recursive: true });
+    mxTwins(scratch);
     linkNodeModules(scratch);
 
     for (const file of markoFiles(scratch)) {
-      const { code } = compilePreactFile(file);
+      const { code } = compilePreactFile(file, {
+        customTags: discoveredCustomTags(file),
+      });
       const rewritten = code
         .replace(
           /(from\s+")(\.[^"]+)\.(?:marko|mx)(")/g,
@@ -68,21 +72,12 @@ export async function renderPreact(
           JSON.stringify(require.resolve("@mxlang/preact/runtime")),
         );
 
-      // A `tags/`-discovered component is called by bare identifier with no
-      // import of its own — that is the point of tag discovery — so one is
-      // synthesized per discovered tag the emitted code actually uses.
-      const imports = discoveredTags(dirname(file))
-        .filter((name) => new RegExp(`<${name}[\\s/>]`).test(rewritten))
-        .map(
-          (name) =>
-            `import ${name} from ${JSON.stringify(withTsxExtension(join(dirname(file), "tags", `${name}.marko`)))};\n`,
-        )
-        .join("");
-
-      writeFileSync(withTsxExtension(file), imports + rewritten);
+      writeFileSync(withTsxExtension(file), rewritten);
     }
 
-    const entry = withTsxExtension(join(scratch, relative(dir, filename)));
+    const entry = withTsxExtension(
+      join(scratch, relative(dir, filename.replace(/\.marko$/, ".mx"))),
+    );
     const mod = (await import(`${entry}?t=${Date.now()}`)) as {
       default: (input: unknown) => unknown;
     };
@@ -138,15 +133,4 @@ function markoFiles(dir: string): string[] {
 
 function withTsxExtension(file: string): string {
   return file.replace(/\.(?:marko|mx)$/, ".tsx");
-}
-
-/** Tag names discoverable from a `tags/` directory beside `dir`, if any. */
-function discoveredTags(dir: string): string[] {
-  try {
-    return readdirSync(join(dir, "tags"))
-      .filter((f) => /\.(?:marko|mx)$/.test(f))
-      .map((f) => f.replace(/\.(?:marko|mx)$/, ""));
-  } catch {
-    return [];
-  }
 }

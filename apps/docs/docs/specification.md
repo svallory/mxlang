@@ -172,10 +172,11 @@ Two narrow exceptions, both outside the product path:
 - **The oracle** keeps 43 stock fixtures as real `.marko` files, because Marko's
   own compiler requires that extension. It feeds them to MX by *content*, under
   a virtual sibling `.mx` filename in the same directory.
-- **`tags/` discovery under `@marko/compiler`.** Its `scanTagsDir` discovers only
-  files whose actual extension is `.marko` (measured in 5.42.5). A `.mx` file in
-  such a directory is not discovered at all. This is Marko's own behavior during
-  a whole-file compile, not an MX entry point.
+
+Marko's own tag lookup (`tags/`, `marko.json`) still runs inside a whole-file
+compile, so it can find a `.marko` file for a tag call. That is not an MX input
+(decision 172): see the rule under "`.marko` files as tags" in §4. The oracle's
+`.marko` fixtures reach MX only as `.mx` twins.
 
 ### Why an `.astro.mx` file cannot be a page
 
@@ -590,14 +591,14 @@ from "@angular/core"` therefore never turns `<input>` into a call of that
 import. The check runs in core, once, before any host's `isComponent` or
 unknown-tag path, and treats a lowercase tag `<x>` whose name equals a binding
 that **can be a tag** (a `<define>` in scope, or a default import whose
-specifier is a tag module, `.mx` or `.marko`) like this; any other import (a
+specifier is a tag module, `.mx`) like this; any other import (a
 value import, or a named import from a tag module) never triggers it and `<x>`
 stays a native element, silently:
 
 | `<x>` is… | Result |
 |---|---|
 | a native element (`<span>` + a define or tag import named `span`) | the native element, with a positioned warning at the tag: "`<span>` is the native element; the `span` defined\|imported at L:C is not called. Rename it `Span` or write `<${span}>`" |
-| a registered custom tag, a contract child, or a Marko taglib tag (`tags/row.marko`) | called as before, whatever is imported; no diagnostic |
+| a registered custom tag, a contract child, or a Marko taglib tag (a `marko.json` entry whose `template` is an `.mx` file) | called as before, whatever is imported; no diagnostic |
 | none of those (`import row from "./row.mx"` + `<row/>`) | a positioned **error** on every target: "`<row>` is not a tag here: `row` is imported from ./row.mx, and a lowercase tag never calls a binding. Write `<Row>` (rename the import) or `<${row}/>`" (a define reads "`row` is defined at L:C" and "(rename the define)") |
 
 A name that starts with `_` or `$` has no capitalized spelling Marko reads as
@@ -2330,19 +2331,22 @@ remains manifest `1:0`.
 | *(warning)* `` `mx.contracts` names an unknown host in `hosts`: ${host}${hint} `` | Manifest key; full-registry name validation only. |
 | *(warning)* `` `package.json` could not be parsed as JSON: ${message}; no `mx.tags` or `mx.contracts` are loaded until the manifest parses `` | Manifest `1:0`; first revision is broken. With a previous valid revision the suffix is `` the previous valid `mx.tags` and `mx.contracts` stay in force `` instead. |
 
-**`tags/*.marko` and `tags/*.mx` together.** The scan above indexes only `.mx` and
-`.tag.ts`; a `tags/x.marko` is found by Marko's own taglib lookup (nearest `tags/`
-per name, up to the package root, ahead of `node_modules` taglibs; in one
-directory `tags/x/index.marko` beats `tags/x.marko`). A host that routes such a
-tag as a plain component call (`@mxlang/html` today) imports it the way Marko
-6.3.51 does: `import _x from "./tags/x.marko"`, a default import, extension kept,
-relative to the calling file, named `_` plus the camelCased tag name (numeric
-suffix on a collision), once per module. It is the optional
-`HostDeclarations.resolveDiscoveredTagModule` hook plus `binding` on the
-`Component` target. **MX-only rule:** a same-name `tags/x.mx` beats
-`tags/x.marko` *regardless of distance* (registered custom tags are consulted
-before the taglib lookup, step 6 above); Marko has no `.mx`, so it has no
-answer here. See `divergences.md`.
+**`.marko` files as tags (decision 172).** A `.marko` file is not an MX input. Where
+any lookup finds one for a tag call (`tags/x.marko`, `tags/x/index.marko`, a
+`marko.json` `tags-dir` or `template`, a `tagDiscoveryDirs` entry), or the file
+imports one (`import X from "./x.marko"`, then `<X/>`), the result is one positioned
+error at the tag, with the same text on every target:
+
+> `<x>` resolves to `tags/x.marko`, a `.marko` file, and MX does not compile `.marko` files. Convert it to `.mx` (`tags/x.mx`).
+
+The file is never compiled as MX, never a silent native element and never an emitted
+`import`. A same-name `tags/x.mx` is a registered custom tag and is consulted first,
+so it still wins. A named import from a `.marko` file is a value, not a tag.
+
+**A `tags/` directory tag MX cannot call is never silent.** A call to `<x>` with
+`tags/x/index.mx` beside it (Marko's lookup knows the directory; MX imports flat
+`tags/<name>.mx` files only) is a positioned error naming the file, not the native
+element `<x>` and not a call to an unbound name.
 
 The config key is **`mx`**, not `mxlang` — a hard rename with no legacy path
 (decision 89a).

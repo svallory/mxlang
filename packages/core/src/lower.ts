@@ -24,6 +24,7 @@
  */
 
 import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { parse as babelParse, type ParserPlugin } from "@babel/parser";
 import { freeIdentifiersIn } from "./accessor-reads.ts";
 import { checkAtomContracts } from "./atom-contracts.ts";
@@ -125,6 +126,11 @@ import {
   registerTemplateMetadataCompiler,
   type TemplateTag,
 } from "./template-tag.ts";
+import {
+  findUncalledTagFile,
+  markoFileTagMessage,
+  uncalledTagFileMessage,
+} from "./uncalled-tag-file.ts";
 import { tagLabel } from "./wildcard-children.ts";
 import {
   type WildcardMatch,
@@ -2316,6 +2322,41 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
 const ELEMENT_TAGLIB_IDS = new Set(["marko-html", "marko-svg", "marko-math"]);
 
 /** A tag Marko's taglib lookup registers (`tags/`, a `marko.json`), not an element. */
+/** One filesystem probe per tag name per compile, not per occurrence. */
+const uncalledTagFiles = new WeakMap<
+  Ctx,
+  Map<string, ReturnType<typeof findUncalledTagFile>>
+>();
+
+function uncalledTagFileOf(ctx: Ctx, name: string) {
+  const known = uncalledTagFiles.get(ctx);
+  const byName = known ?? new Map();
+  if (!known) uncalledTagFiles.set(ctx, byName);
+  if (!byName.has(name)) {
+    byName.set(name, findUncalledTagFile(ctx.filename, name));
+  }
+  return byName.get(name);
+}
+
+function failUncalled(
+  ctx: Ctx,
+  name: string,
+  found: NonNullable<ReturnType<typeof findUncalledTagFile>>,
+  node: Node,
+): never {
+  fail(
+    found.file.endsWith(".marko")
+      ? markoFileTagMessage(ctx.filename, name, found.file)
+      : uncalledTagFileMessage(ctx.filename, name, found),
+    node,
+  );
+}
+
+function registeredTagWithoutTemplate(ctx: Ctx, name: string): boolean {
+  const tag = ctx.lookup?.getTag(name);
+  return isRegisteredTaglibTag(ctx, name) && tag?.template === undefined;
+}
+
 function isRegisteredTaglibTag(ctx: Ctx, name: string): boolean {
   const taglibId = ctx.lookup?.getTag(name)?.taglibId;
   return (
@@ -3829,6 +3870,19 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // registers (`tags/row.marko`) is not a lowercase *binding* call at all: it
   // keeps the host's routing whatever is imported (addendum 1).
   const registeredTag = isRegisteredTaglibTag(ctx, name);
+  // Decision 172: a `.marko` file is no MX input, however the tag was found.
+  const resolvedTemplate = registeredTag
+    ? ctx.lookup?.getTag(name)?.template
+    : undefined;
+  if (!fileLocalBinding && resolvedTemplate?.endsWith(".marko")) {
+    fail(markoFileTagMessage(ctx.filename, name, resolvedTemplate), node);
+  }
+  // A `tags/` file this host cannot call (`tags/x.marko`, `tags/x/index.*`)
+  // would otherwise compile as the native element `<x>`, silently.
+  if (!registeredTag && !fileLocalBinding && !ctx.imports.has(name)) {
+    const found = uncalledTagFileOf(ctx, name);
+    if (found) failUncalled(ctx, name, found, node);
+  }
   const lowercaseBinding =
     !/^[A-Z]/.test(name) &&
     !registeredTag &&
@@ -3891,6 +3945,20 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     fileLocalBinding ||
     (!lowercaseBinding && ctx.declarations.isComponent(name, ctx))
   ) {
+    const importedFrom = ctx.importSpecifiers.get(name);
+    if (
+      ctx.importDefaultFromMarkoOrMx.has(name) &&
+      importedFrom?.endsWith(".marko")
+    ) {
+      fail(
+        markoFileTagMessage(
+          ctx.filename,
+          name,
+          resolve(dirname(ctx.filename), importedFrom),
+        ),
+        node,
+      );
+    }
     const params = ctx.defines.get(name);
     if (params) {
       warnDefineExtraParams(ctx, node, name, params);
@@ -3955,6 +4023,17 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     const modulePath = fileLocalBinding
       ? undefined
       : ctx.declarations.resolveDiscoveredTagModule?.(name, ctx);
+    // Marko's lookup knows the tag but names no template for it (a
+    // `tags/x/index.mx` directory, which Marko discovers and MX cannot
+    // import): the bare call would reference a binding nothing declares.
+    if (
+      !modulePath &&
+      !fileLocalBinding &&
+      registeredTagWithoutTemplate(ctx, name)
+    ) {
+      const found = uncalledTagFileOf(ctx, name);
+      if (found) failUncalled(ctx, name, found, node);
+    }
     const binding = modulePath
       ? bindingForDiscoveredModule(ctx, modulePath, name, posOf(node))
       : undefined;

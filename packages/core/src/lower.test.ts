@@ -506,14 +506,14 @@ describe("one fixture per IR kind", () => {
 
   it("Import and Static are lifted out of the body to module scope", () => {
     const ir = lowerSource(
-      'import Panel from "./panel.marko"\nstatic const G = 1\n<p>x</p>\n',
+      'import Panel from "./panel.mx"\nstatic const G = 1\n<p>x</p>\n',
     );
     expect(ir.imports).toMatchObject([
       {
         kind: "Import",
-        code: 'import Panel from "./panel.marko"',
+        code: 'import Panel from "./panel.mx"',
         loc: { line: 1, column: 0 },
-        end: { line: 1, column: 33 },
+        end: { line: 1, column: 30 },
       },
     ]);
     expect(ir.hoisted).toMatchObject([
@@ -567,7 +567,7 @@ describe("one fixture per IR kind", () => {
 
   it("Component resolves an import binding as its target", () => {
     const ir = lowerSource(
-      'import Panel from "./panel.marko"\n<Panel title="t">body</Panel>\n',
+      'import Panel from "./panel.mx"\n<Panel title="t">body</Panel>\n',
       fakeDeclarations({ isComponent: (name) => name === "Panel" }),
     );
     const component = find(ir.body, "Component");
@@ -601,9 +601,9 @@ describe("one fixture per IR kind", () => {
     expect(component.content).not.toBeNull();
   });
 
-  it("decision 116: a .marko default import still routes to a name Component target", () => {
+  it("decision 116: a .mx default import still routes to a name Component target", () => {
     const ir = lowerSource(
-      'import Panel from "./panel.marko"\n<Panel/>\n',
+      'import Panel from "./panel.mx"\n<Panel/>\n',
       fakeDeclarations({ isComponent: (name) => name === "Panel" }),
     );
     const component = find(ir.body, "Component");
@@ -711,7 +711,7 @@ describe("one fixture per IR kind", () => {
   it("Component collects attribute tags as props, in source order", () => {
     const ir = lowerSource(
       [
-        'import Panel from "./panel.marko"',
+        'import Panel from "./panel.mx"',
         "<Panel>",
         "  <@header>H</@header>",
         "  <@footer|year|>F</@footer>",
@@ -739,9 +739,9 @@ describe("one fixture per IR kind", () => {
   it.each([
     [
       "an attribute tag",
-      'import Panel from "./panel.marko"\n<Panel("a")>\n  <@header>H</@header>\n</Panel>\n',
+      'import Panel from "./panel.mx"\n<Panel("a")>\n  <@header>H</@header>\n</Panel>\n',
     ],
-    ["a body", 'import Panel from "./panel.marko"\n<Panel("a")>body</Panel>\n'],
+    ["a body", 'import Panel from "./panel.mx"\n<Panel("a")>body</Panel>\n'],
   ])(
     "still rejects a named custom tag mixing tag-argument form with %s",
     (_case, source) => {
@@ -771,7 +771,7 @@ describe("one fixture per IR kind", () => {
   it("Component keeps every repeated attribute tag, not just the last", () => {
     const ir = lowerSource(
       [
-        'import Layout from "./layout.marko"',
+        'import Layout from "./layout.mx"',
         "<Layout>",
         "  <@item>1</@item>",
         "  <@item>2</@item>",
@@ -3542,7 +3542,7 @@ describe("duplicate attributes resolve last-wins (decision 135)", () => {
   it("hands a component call and an attribute tag one attribute per name", () => {
     // Marko: `<Card a=1 a=2/>` receives `{a: 2}`; `<@x a=1 a=2>` -> `{a: 2}`.
     const { ir, warnings } = lowerWithWarnings(
-      'import Panel from "./panel.marko"\n<Panel a=1 a=2><@x b=1 b=2/></Panel>\n',
+      'import Panel from "./panel.mx"\n<Panel a=1 a=2><@x b=1 b=2/></Panel>\n',
       panel,
     );
     const component = find(ir.body, "Component");
@@ -3856,7 +3856,7 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
     ['<const/c=1 value:="x"/>', 1, 18],
     ['<return value:="x"/>', 1, 15],
     ['<try value:="x">y</try>', 1, 12],
-    ['import Child from "./child.marko"\n<Child value:="x"/>', 2, 14],
+    ['import Child from "./child.mx"\n<Child value:="x"/>', 2, 14],
     ['<${t}\n  value:="x"/>', 2, 9],
     ['<${t}><for|i| of=o value:="x"><@item/></for></>', 1, 26],
     ['<${t}><if=c value:="x"><@item/></if></>', 1, 19],
@@ -3894,7 +3894,7 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
     ).not.toThrow();
     expect(() =>
       lowerSource(
-        'import Card from "./card.marko"\n<Card value:="x"/>',
+        'import Card from "./card.mx"\n<Card value:="x"/>',
         fakeDeclarations(),
         undefined,
         undefined,
@@ -3966,7 +3966,7 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
   ])("preserves nonempty-suffix component props and methods: %s", (name) => {
     for (const authored of [`${name}="y"`, `${name}() {}`]) {
       const ir = lowerSource(
-        `import Card from "./card.marko"\n<Card ${authored}/>`,
+        `import Card from "./card.mx"\n<Card ${authored}/>`,
         fakeDeclarations({ resolveAttributeMethod: () => true }),
       );
       expect(find(ir.body, "Component").attrs).toMatchObject([{ name }]);
@@ -4016,7 +4016,7 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
     (name) => {
       for (const authored of [`${name}: = input.x`, `${name}:() {}`]) {
         const ir = lowerSource(
-          `import Card from "./card.marko"\n<Card ${authored}/>`,
+          `import Card from "./card.mx"\n<Card ${authored}/>`,
           fakeDeclarations({ resolveAttributeMethod: () => true }),
         );
         expect(find(ir.body, "Component").attrs).toMatchObject([
@@ -4100,7 +4100,7 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
 
   it("carries a component call's `:foo` as the prop `value:foo`", () => {
     const ir = lowerSource(
-      'import Card from "./card.marko"\n<Card value:foo=y/>\n',
+      'import Card from "./card.mx"\n<Card value:foo=y/>\n',
       fakeDeclarations({ isElement: (name) => name !== "Card" }),
     );
     expect(find(ir.body, "Component").attrs).toMatchObject([

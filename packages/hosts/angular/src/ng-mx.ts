@@ -1,3 +1,4 @@
+import { dirname, resolve as resolvePath } from "node:path";
 /**
  * `.ng.mx` — an ordinary TypeScript module whose `@Component` template is MX.
  *
@@ -13,6 +14,7 @@ import {
   type Ir,
   lower,
   type MxWarning,
+  markoFileTagMessage,
   newCtx,
   parseFragment,
   positionRegionSource,
@@ -136,9 +138,6 @@ class AuthoredImportError extends Error {
 
 const MIXED_IMPORT_MESSAGE =
   'an authored `.mx` tag import must be a sole default import (`import A from "./x.mx"`); import other names in a separate statement, or use the discovered `<kebab-name/>` spelling.';
-const MARKO_TAG_MESSAGE =
-  "a `.marko` component cannot be used as a tag in an Angular `.ng.mx` module: it is not an Angular component. Use an MX tag file (`.mx`) instead, imported with a sole default import or through the discovered `<kebab-name/>` spelling.";
-
 /** One region's lowering, keyed by its span in the `.ng.mx` file. */
 export interface NgMxRegion {
   /** The region's `[start, end)` offsets in the source file. */
@@ -356,7 +355,14 @@ function lowerRegion(
       (error as Error).message,
     )?.[1];
     if (tag && markoLocals.has(tag)) {
-      throw new AuthoredImportError(tag, MARKO_TAG_MESSAGE);
+      throw new AuthoredImportError(
+        tag,
+        markoFileTagMessage(
+          filename,
+          tag,
+          resolvePath(dirname(filename), specifiers.get(tag) ?? ""),
+        ),
+      );
     }
     throw error;
   }

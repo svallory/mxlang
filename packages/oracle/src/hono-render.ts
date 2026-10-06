@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { compileHonoFile } from "@mxlang/hono";
+import { discoveredCustomTags, mxTwins } from "./mx-twins.ts";
 
 /** Compile a fixture tree to Hono JSX TSX and render its entry with `hono/jsx`. */
 export async function renderHono(
@@ -27,10 +28,13 @@ export async function renderHono(
 
   try {
     cpSync(dir, scratch, { recursive: true });
+    mxTwins(scratch);
     linkNodeModules(scratch);
 
     for (const file of markoFiles(scratch)) {
-      const { code } = compileHonoFile(file);
+      const { code } = compileHonoFile(file, {
+        customTags: discoveredCustomTags(file),
+      });
       const rewritten = code
         .replace(
           /(from\s+")(\.[^"]+)\.(?:marko|mx)(")/g,
@@ -44,7 +48,9 @@ export async function renderHono(
       writeFileSync(withTsxExtension(file), rewritten);
     }
 
-    const entry = withTsxExtension(join(scratch, relative(dir, filename)));
+    const entry = withTsxExtension(
+      join(scratch, relative(dir, filename.replace(/\.marko$/, ".mx"))),
+    );
     const mod = (await import(`${entry}?t=${Date.now()}`)) as {
       default: (props: Record<string, unknown>) => unknown;
     };

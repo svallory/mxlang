@@ -260,7 +260,7 @@ describe("authored .mx import in a .ng.mx region", () => {
       ),
     );
     expect(err.message).toContain(
-      "a `.marko` component cannot be used as a tag in an Angular `.ng.mx` module",
+      "`<Foo>` resolves to `tags/x.marko`, a `.marko` file, and MX does not compile `.marko` files. Convert it to `.mx` (`tags/x.mx`).",
     );
     expect(at(err)).toBe("2:0");
   });

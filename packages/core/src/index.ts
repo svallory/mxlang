@@ -268,6 +268,7 @@ export {
   type TemplateTag,
   templateCompileCount,
 } from "./template-tag.ts";
+export { markoFileTagMessage } from "./uncalled-tag-file.ts";
 export {
   type ContractScope,
   matchWildcardChild,

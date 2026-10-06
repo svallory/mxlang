@@ -248,6 +248,17 @@ export function createJsxDeclarations(
       if (taglibId !== undefined) return !ELEMENT_TAGLIBS.has(taglibId);
       return false;
     },
+    // The template Marko's lookup resolved a `tags/` tag to, so the import
+    // names the file that exists (`tags/x/index.marko`, a `marko.json`
+    // `tags-dir`), never a path derived from the tag's name.
+    resolveDiscoveredTagModule: (name, ctx) => {
+      if (ctx.defines.has(name) || ctx.imports.has(name)) return undefined;
+      const tag = ctx.lookup?.getTag(name);
+      if (tag?.taglibId === undefined || ELEMENT_TAGLIBS.has(tag.taglibId)) {
+        return undefined;
+      }
+      return tag.template;
+    },
     rejectUnknownTag(name, node, ctx) {
       rawFail(
         unresolvedCustomTagMessage(name, {
