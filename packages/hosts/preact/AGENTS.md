@@ -118,7 +118,9 @@ dialect, `preactRegionDeclarations`, segment `preact`; the descriptor's `preact`
 file kind, language id `preactmx`, requires it lazily). The Hono region kind is
 meant to be the same thin wrapper. Region tests: `src/region*.test.ts` over
 `src/fixtures/region/<name>/` (goldens regenerated with vitest `-u`; they render
-through `preact-render-to-string`, which prints `style` before `class`). Facts before editing:
+through `preact-render-to-string`; `style` prints before `class` because
+`preact/compat`, loaded by `src/runtime.ts`, re-inserts `class` after normalising
+it, so a bare Preact render would print `class` first. The golden is correct). Facts before editing:
 
 - The markup is the whole-file emitter's (`createRegionEmitter`, a
   `PreactEmitter` with a region sink); only the module assembly differs.

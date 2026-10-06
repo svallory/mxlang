@@ -2,8 +2,9 @@
  * The `preact-jsx` target descriptor (decisions 129 and 132; unstable).
  *
  * Importing this module loads `./emitter.ts` (the declarations) only; the
- * compile entry is required by a relative path inside `load`, from
- * `./compile.ts` — a descriptor-free leaf. The descriptor never requires
+ * compile entries are required by relative paths inside the closures, from
+ * `./compile.ts` (whole-file) and `./region-compile.ts` (the `preact` region
+ * kind), both descriptor-free leaves, so a bundler inlines them. The descriptor never requires
  * `./index.ts`: the index imports this module to build the package's own
  * lookup, so a require back would close an entry-point cycle that a bundler
  * answers by silently dropping an entry with exit 0 (rev-245 BUG 1, pinned by

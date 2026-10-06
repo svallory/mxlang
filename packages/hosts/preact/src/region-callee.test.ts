@@ -3,7 +3,7 @@
  * A region calling a `.preact.mx` callee's attribute tag, compiled through
  * `compilePreactRegion` directly — no `@mxlang/target-registry` loaded, so no
  * reader was registered for `.preact.mx`. The entry's own lookup (its
- * `targets` default) declares the `react` file kind's `readCalleeInput`, and
+ * `targets` default) declares the `preact` file kind's `readCalleeInput`, and
  * core reads callee readers from the compile's lookup, so the callee's
  * `Input` contract still reaches the call site as a `satisfies` check.
  */

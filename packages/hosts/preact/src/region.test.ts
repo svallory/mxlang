@@ -4,7 +4,7 @@
  * `fixtures/region/<name>/` is printed through the parser with this host's
  * region entry, the printed module is checked against its golden
  * (`__golden__/output.txt`), and the module is rendered for real with
- * `react-dom/server` and checked against `expected.html`.
+ * `preact-render-to-string` and checked against `expected.html`.
  *
  * A fixture may carry `props.json` (the default export's props) and sibling
  * whole-file `.mx` tags (`counter.mx`, `tags/badge.mx`), which are compiled
