@@ -66,15 +66,16 @@ Sources of truth, in this order:
 The htmljs-parser fixtures and the Marko fixtures are **evidence of the default
 behaviour, not a gate**.
 
-Decision 146 addenda 4 and 5 and atoms (decision 156 with its addenda 1 to 4)
-are implemented on `main` and are described here as they are, not as planned.
-Addendum 4 lives in core; addendum 5 and atoms live in the template parser.
+Decision 146 addenda 4 to 6 and atoms (decision 156 with its addenda 1 to 4
+and 8) are implemented on `main` and are described here as they are, not as planned.
+Addendum 4 lives in core; addenda 5 and 6 and atoms live in the template
+parser.
 
 ### Method: every behavioural rule is read out of the parser source
 
 The subject of this document is **MX's template parser**: the source on `main`
 at `packages/parser/src/template/` (decision 158.3; read for this revision at
-`origin/main` `6e1eb9718`). It began as a copy of `htmljs-parser` 5.18.0 and is
+`origin/main` `5f4661534`). It began as a copy of `htmljs-parser` 5.18.0 and is
 now MX's own code; its `PROVENANCE.md` records every departure from 5.18.0.
 Every statement below about what the parser does is derived from that source
 and names the file and symbol it comes from. Where a rule has more than one
@@ -91,7 +92,7 @@ files on `main` differ from stock, and nothing else does:
 | --- | --- | --- |
 | the after-value rule | `states/ATTRIBUTE.ts` (`attrValue`); `states/EXPRESSION.ts`: the `??`/`?.` branch of `EXPRESSION.parse`, the `:` and `.` rows of `lookAheadForOperator`, `isIdentStartCode`, `isBareColonEnd` | decision 146, divergence 3 and addendum 6 ([E1](#e1--attribute-value-html-mode)) |
 | a single-atom default value | `states/ATTRIBUTE.ts` (`defaultAtom`); `states/EXPRESSION.ts` (`isSingleAtomDefault`) | decision 146, addendum 5 ([E1](#e1--attribute-value-html-mode)) |
-| atoms and the reserved `::` | `states/EXPRESSION.ts` (`lexAtom`, `expectsExpression`, `isOperatorWord`, `closesTypeArguments`, `atomNameEnd`, `rejectReservedName`, the atom guard in `lookBehindForKeyword`); the `atoms = true` sites in `states/ATTRIBUTE.ts`, `OPEN_TAG.ts`, `PLACEHOLDER.ts`, `TAG_NAME.ts`, `TEMPLATE_STRING.ts`; `rejectReservedName` calls in `TAG_NAME.exit` and `ATTRIBUTE.return`; `core/Parser.ts` (`atoms`, `read`, `rawOpenTags`); `util/constants.ts` (`onAtom`); `OPEN_TAG.exit` (`rawOpenTags`) | decision 156 and its addenda 2 to 4 ([Atoms](#atoms)) |
+| atoms and the reserved `::` | `states/EXPRESSION.ts` (`lexAtom`, `expectsExpression`, `isOperatorWord`, `closesTypeArguments`, `atomNameEnd`, `rejectReservedName`, the atom guard in `lookBehindForKeyword`); the `atoms = true` sites in `states/ATTRIBUTE.ts`, `OPEN_TAG.ts`, `PLACEHOLDER.ts`, `TAG_NAME.ts`, `TEMPLATE_STRING.ts`; `rejectReservedName` calls in `TAG_NAME.exit` and `ATTRIBUTE.return`; `core/Parser.ts` (`atoms`, `read`, `rawOpenTags`); `util/constants.ts` (`onAtom`); `OPEN_TAG.exit` (`rawOpenTags`) | decision 156 and its addenda 2 to 4 and 8 ([Atoms](#atoms)) |
 | the base position | `core/Parser.ts` (`ParseOptions`, `parse`, `positionAt`, `offsetAt`); `index.ts` | the parser's API ([Base position](#base-position-for-fragment-parses)) |
 
 The bun patch `patches/htmljs-parser@5.18.0.patch`, which `@marko/compiler`'s
@@ -143,8 +144,8 @@ This document applies it as written and no more strongly:
   not** continue the value past it.
 - Where the spec's rule applies but its outcome turns on a fact only
   TypeScript's grammar supplies, the boundary **may** supply that fact.
-- Where the spec says nothing, the ruling does not decide. The stock default
-  stands under decision 157.3 until mx-lead rules, and the case is listed as not
+- Where the spec says nothing, the ruling does not decide. The default stands
+  under decision 157.3 until mx-lead rules, and the case is listed as not
   settled.
 
 The table in [Where a real TypeScript parser would end the value
@@ -179,7 +180,7 @@ classifies every known difference in those three classes.
   statement tags, text tags and void tags is answered by the consumer's
   `onOpenTagName` handler, which returns a `TagType` (`TAG_NAME.exit`). The
   AST catalogue makes the statement set and the tag shapes inputs supplied
-  per target (decision 163 addenda 1 and 3; `apps/docs/docs/architecture/ast.md`
+  per target (decision 163 addenda 1 and 3; [the AST catalogue](/architecture/ast/)
   §3.10 "Statement keywords per target" and §3.12). This document says "the
   supplied statement set" and "a text tag" for them.
 
@@ -187,7 +188,7 @@ classifies every known difference in those three classes.
 
 The parser reports ranges; it builds no nodes. The node types, their fields
 and their spans belong to the AST catalogue
-(`apps/docs/docs/architecture/ast.md`, decision 163), and this document uses
+([`apps/docs/docs/architecture/ast.md`](/architecture/ast/), decision 163), and this document uses
 its names and does not redefine them. Decision 163, ruling Q10: field names
 follow the AST, and for every expression container the catalogue's span is the
 parser's **`value`** range (the text between the position's delimiters, inner
@@ -210,8 +211,9 @@ here ("the value", "the arguments") is that `value` range.
 | `onAtom` | the whole atom, `:` included; `value` is the name | `MxAtom` in the enclosing container's `atoms` (§4.3) |
 
 A statement tag's code is reported by no event of its own
-([E10](#e10--statement-tags)); the catalogue's `MxModuleStatement` (§3.10)
-takes it from the open-tag ranges.
+([E10](#e10--statement-tags)): the parser reports the name and then
+`onOpenTagEnd` where the statement ends, and the catalogue's
+`MxModuleStatement` (§3.10) takes the statement from that range.
 
 ### Conventions
 
@@ -370,7 +372,7 @@ Four name forms result:
 | Statement tag | `static`, `import`, … | a name in the supplied statement set, for which the consumer returns `TagType.statement` ([E10](#e10--statement-tags)) |
 
 The empty name range is the parser's signal that the tag is unnamed (the
-catalogue's `MxTagName` `kind: "unnamed"`, ast.md §3.3); core resolves it
+catalogue's `MxTagName` `kind: "unnamed"`, [ast.md §3.3](/architecture/ast/)); core resolves it
 through the `defaultTag` ladder ([dialect rule 9](#dialect-rules)).
 `<:email/>` is **not** unnamed at this level: the parser reports the name
 `:email` (observed), and the split below produces the unnamed tag afterwards.
@@ -633,14 +635,14 @@ the parser has no list of its own. The grammar is the same whatever the set
 holds; a name outside the set is an ordinary tag name, so on a target whose set
 lacks `static`, `static const a = 1` is the tag `static` with the attributes
 `const` and `a`, the second with the value `1` (observed). The
-sets are the AST catalogue's (ast.md §3.10, "Statement keywords per target";
+sets are the AST catalogue's ([ast.md §3.10](/architecture/ast/), "Statement keywords per target";
 decision 163, addendum 3): the language's six, `import`, `export`, `static`,
 `server`, `client` and `class`; on the data target the documented exception
 `import`, `static`, `export`; and today, on five hosts and every
 `parseFragment` caller, none at all, which MX1 TODO
 `statement-tags-not-declared-on-five-hosts` removes. Spec §2 "Syntax", spec §2
 "`server` and `client` blocks" and spec §4 "Name sugar" (which lists `class`
-among the core taglib's statement tags) name the six.
+among the core taglib's statement tags) together name the six.
 
 ## Text, comments, CDATA, doctype, declarations and text bodies
 
@@ -777,7 +779,7 @@ Observed: with `{ startOffset: 100, startLine: 4, startColumn: 7 }`, the value
 of `<a x=1/>` is the range `[5, 6)`, `positionAt(5)` is line 4, character 12,
 and `offsetAt(5)` is 105; a tag name on the second line of `code` is at its
 plain column. This is the base the AST catalogue's fragment rule
-(ast.md §5.3) builds on: the catalogue adds `base.offset` to every reported
+([ast.md §5.3](/architecture/ast/)) builds on: the catalogue adds `base.offset` to every reported
 range when it builds a node.
 
 ## Error conditions
@@ -857,7 +859,7 @@ addendum 5); duplicate attributes, which are a warning with the last
 occurrence winning (decision 135); the atom misuses of spec §4 "Atoms" (member
 access, a call, a unary operator, a spread, a non-computed key, an atom where a
 binding or target must stand). `::name` is the template parser's own error
-(row above). The catalogue's list of front-end codes is ast.md §3.13.
+(row above). The catalogue's list of front-end codes is [ast.md §3.13](/architecture/ast/).
 
 ## Expression boundaries
 
@@ -984,7 +986,9 @@ immediately before the whitespace:
 The atom check is in `lookBehindForKeyword`, so it also covers the `!` row's
 keyword test. Observed: concise `div x=:new\n  span` is the value `:new` and a
 child tag `span` (stock: the single value `:new\n  span`, because `new` is a
-unary keyword there).
+unary keyword there), and since the operator exemption of step 4 uses the same
+table, `<div x=:typeof />` is the value `:typeof` and a self-closed tag (stock:
+the value `:typeof /`, then `Missing ending "div" tag`).
 
 `return`, `throw` and `yield` are in neither keyword list. A `/` is not in this
 table: a division continues a value by the character table, a `*/` does not
@@ -1131,7 +1135,7 @@ and hard stop it sets. There are sixteen calls; fifteen are positions.
 
 "`atoms`" in this table is the whole list of positions where atoms are lexed
 (decision 156, addendum 2; the AST catalogue's table "Where the atom lexer
-runs", ast.md §4.3). An attribute's `(` branch opens one position whether the
+runs", [ast.md §4.3](/architecture/ast/)). An attribute's `(` branch opens one position whether the
 attribute turns out to have arguments or to be a method, so a method's
 parameters lex atoms too (decision 163, addendum 1). The tag variable, tag
 parameters, the type lists, statement tags and scriptlets never do.
@@ -1361,7 +1365,7 @@ are not positions; they are read by `TAG_NAME.parse`.
 - **Stops:** the `}` at depth 0. No flags.
 - **Overrides:** the content is a statement list. Atoms: lexed, because a
   method body is an attribute value (lead ruling 2026-10-05, recorded in
-  `PROVENANCE.md` and the catalogue's table, ast.md §4.3): `return :c` reports
+  `PROVENANCE.md` and the catalogue's table, [ast.md §4.3](/architecture/ast/)): `return :c` reports
   the atom `c` (observed).
 
 ### E6 — Tag arguments
@@ -1690,7 +1694,7 @@ the end offset, and each position's hard stops still bound the value.
 An **atom** is `:name` written where an expression is expected, in a position
 that lexes atoms (decision 156; spec §4 "Atoms"). The template parser finds
 atoms, reports them and reserves `::`; it gives them no meaning. The catalogue
-node is `MxAtom` (ast.md §4.3).
+node is `MxAtom` ([ast.md §4.3](/architecture/ast/)).
 
 ### Where atoms are lexed
 
@@ -1703,7 +1707,7 @@ literal inside any of those. Never in attribute names, the tag variable (E9),
 tag parameters (E7), statement tags (E10), scriptlets (E11) or the type lists
 (E14 to E16), and never inside a string, a template literal's text, a regular
 expression or a comment, which are other states. Decision 156.1 and addendum 2
-fix this list; ast.md §4.3 states it per catalogue field.
+fix this list; [ast.md §4.3](/architecture/ast/) states it per catalogue field.
 
 ### At a `:` (`lexAtom`)
 
@@ -1829,7 +1833,7 @@ range rule. It is not reserved where atoms are not lexed: `<let/a::b/>` and
   range's start, `rawOpenTags`) returns the source. The stand-in exists for
   consumers that hand `read()` text to Babel (today `@marko/compiler`); a
   consumer that wants the source slices it. The catalogue's front end builds
-  the atom's `StringLiteral` with `extra.mxAtom` itself (ast.md §4.3, §7).
+  the atom's `StringLiteral` with `extra.mxAtom` itself ([ast.md §4.3](/architecture/ast/), §7).
 
 ## Dialect rules
 
@@ -1870,7 +1874,7 @@ These are MX's own rules. Each says which layer applies it: the template parser
    `input:email` with a default value; `<input :email=1/>` is an attribute named
    `:email` with the value `1`; `<input #main(a) {}/>` is a method named `#main`
    (all observed). The catalogue records the result as `MxShorthand.operator`
-   and `default` (ast.md §3.6).
+   and `default` ([ast.md §3.6](/architecture/ast/)).
 6. **Left alone** (spec §4 "Name sugar", "Left alone"; decision 146, divergence
    2 and addendum 3): the named forms `class:x`, `style:x`, `value:fn:=x` and the
    explicit `value:x`; a dynamic tag name; a bound attribute; the default
