@@ -5,11 +5,14 @@ description: "Draft catalogue of MX2's own syntax tree: Marko's AST as it is tod
 
 # The MX AST
 
-> **Status: draft for review** (decision 158). Owners: mx-lead (IR, lowering)
-> and native-parser (parser, node types). Nothing on this page is implemented
-> yet. Section 1 describes what exists today and cites it; sections 2 to 9 are
-> the proposal. Every statement about Marko, htmljs-parser or the current
-> lowering cites the file and line it was read from, or a probe that was run.
+> **Status: draft for review** (decisions 158 and 163). Owners: mx-lead (IR,
+> lowering) and native-parser (parser, node types). The MX AST, its front end
+> and the ported lowering are not implemented yet. Section 1 describes what
+> exists today; sections 2 to 9 are the proposal, and where they describe
+> today's code (the IR's atoms in §4.3, the shorthand merge in §6.1a, today's
+> statement and error behaviour) they say so. Every statement about Marko,
+> htmljs-parser or the current code cites the file and symbol it was read
+> from (Marko's installed bundle by line), or a probe that was run.
 
 Decision 158 gives MX2 its own syntax tree: node types defined in MX's Babel
 fork (`@mxlang/babel`), built by a front end in `@mxlang/parser` from the
@@ -716,8 +719,8 @@ false`; `expression.span` `[6, 10)`.
 
 ### 3.10 `MxModuleStatement`, `MxScriptlet`, `MxStatements`
 
-`MxModuleStatement` — `import`, `export`, `static`, `server`, `client`,
-`class` written as a concise top-level line.
+`MxModuleStatement` — a statement keyword of the target (see "Statement
+keywords per target" below) written as a concise top-level line.
 
 | Field | Type | Opt. | Meaning |
 |---|---|---|---|
@@ -739,11 +742,24 @@ What lowering takes from where (P2):
 |---|---|
 | `Static.code` | `source.slice(span)` minus the leading `static` and its whitespace (today `line.replace(/^static\s+/, "")`, `lowerStatement`) |
 | `Import.code`, `Export.code`, `InputInterface.code` | `source.slice(span)` |
-| `span` (`Import`/`Export`/`Static`), `loc`, `end` | the node span |
+| `span` (`Import`/`Export`/`Static`), `loc` | the node span (right-trimmed) |
+| `end: Position` (`Import`, `Export`, `Static`, `InputInterface`) | **untrimmed**: the end of htmljs's statement range, as today (below) |
 | `Import.bindings`, the `Input` test | the Babel payload (`code.node`) |
 
 Example: `static const A = 1 // trailing` is `[0, 30)` and `Static.code` is
 `const A = 1 // trailing` (the reviewer's probe d); `code.span` is `[7, 18)`.
+
+**`end` is a separate fact** (decision 163 addendum 1). Today `end` is
+`endPosOf(node)` (`lower.ts`), Marko's `loc.end` of the statement tag, which
+is **not** trimmed: it is the end of htmljs's statement range, trailing
+whitespace and following line breaks included (reviewer's probes: `static const A = 1   ` then
+`<div/>` gives `end` `{ line: 1, column: 21 }` with `span` `[0, 18)`;
+`export const B = 2` followed by two blank lines gives `end` `{ line: 3,
+column: 0 }`). The port reproduces it from the untrimmed range. Two readers
+use it: the TypeScript plugin's block mapping (`mx-language.ts`
+`locateSourceCode`, `item.end`) and Astro's statement mappings
+(`astro-template.ts`, `statement.end`). Whether they depend on it is being
+measured under MX1 TODO `statement-end-untrimmed`.
 
 Invariants: only in `MxDocument.body`; `export interface Input` is an
 `MxModuleStatement { keyword: "export" }` whose payload is a
@@ -751,8 +767,35 @@ Invariants: only in `MxDocument.body`; `export interface Input` is an
 keeping today's asymmetry: `export interface Input` becomes `InputInterface`
 (`lowerStatement`, `lower.ts`), while `export type Input` stays an
 ordinary `Export` in the IR but is still read as the template's own input
-(`lower.ts` `lowerTemplate`, which matches `interface|type`). The keyword list is the one the front end recognizes;
-it is the statement entries of `core-tags.json` (`<import>` through `<class>`).
+(`lower.ts` `lowerTemplate`, which matches `interface|type`).
+
+**Statement keywords per target** (decision 163 addenda 1 and 3). The keyword
+set is an **input to the front end, supplied per target**, beside `tagShape`
+(§7.1). The language's set is the same six on every target, `import`,
+`export`, `static`, `server`, `client` and `class`, with one documented
+exception: on the data target `class`, `client` and `server` are vocabulary
+names, so its set is `import`, `static`, `export`. A keyword outside the
+target's set is an ordinary tag name there: `server` and `client` are
+`MxModuleStatement`s only where the target's set includes them (Q5/P5).
+
+Today, by target:
+
+| Targets | Statement set at parse time | Declared by |
+|---|---|---|
+| html | the six | `targets/html/src/compiler.ts` `host` registers `CORE_TAGLIB` (`core-tags.json`, `<import>` through `<class>`, `parseOptions.statement`) |
+| data | `import`, `static`, `export` | `targets/data/src/taglib.ts` (`"<import>"`, `"<static>"`, `"<export>"` entries; header comment: the host-owned names "stay ordinary data tag names"), registered by `parse.ts` `parseData`, `scan.ts`, `translator.ts` |
+| Preact, React, Hono (`hosts/preact/src/compile.ts` `host`: `tagDiscoveryDirs` only), Angular (`hosts/angular/src/index.ts` and `tag-module.ts`, no `taglibs`), and every `parseFragment` caller (Solid, Astro, the regions; `fragment.ts` `PARSE_ONLY_TRANSLATOR`, custom tags only) | none | — |
+
+On the last row a statement line parses as a tag with attributes (probe:
+`static const a = 1` is the tag `static` with attributes `const`, `a`), and
+lowering recovers `Static`/`Import`/`Export` by name (`lowerAuthoredTag`'s
+switch) and by slicing the source (`lowerStatement`); `isStatementTag`
+(`name-sugar.ts`) answers from the compile's lookup, so the name sugar runs
+on those tags under `compileSource` and does not under `parseFragment`
+(`CORE_STATEMENT_TAGS`). This is an accident, not a rule: MX1 TODO
+`statement-tags-not-declared-on-five-hosts` (decision 163 addendum 3) makes
+those hosts pass the core set before the port, with the moved goldens listed
+in that change, so the port carries nothing.
 
 `MxScriptlet` — `$ stmt` and `$ { block }`.
 
@@ -829,6 +872,12 @@ does today (`targets/data/src/taglib.ts` `neutralizations`). It is **one table w
 readers**: the front end's `tagShape` and decision 145's check that a
 `defaultTag` has a plain parse shape (`adr-default-tag.md` ("Decision")).
 
+**Shape before shadowing** (ruling Q23). `tagShape` answers from the name
+alone, before lowering knows whether a file-local binding shadows that name
+(§3.15, D3). A file-local component named `pre` therefore still has its body
+parsed with whitespace preserved, as today: Marko makes the same choice at the
+same point (`[C]chunk-src.js:6080`, the `tagDef` lookup in `onOpenTagName`).
+
 ### 3.13 `MxParseError` and what a failed parse contains
 
 | Field | Type | Opt. | Meaning |
@@ -856,11 +905,30 @@ Three producers, with different consequences:
    message gets Marko's hint "Attribute values in Marko are plain JavaScript
    expressions, not JSX; remove the wrapping `{ }`" (`withWrappedAttrValueHint`,
    `[C]chunk-src.js:6292-6297`), reworded for MX ("… in MX …").
-3. **Front-end rules** (`MX_*`: second `:` name, `:` before `${…}`, a dynamic
-   attribute-position shorthand, arguments or `:=` on a sugar (§3.6),
-   statement tag in HTML mode, `<%`, attribute tag at the root) are recorded
-   and do not stop the parse. A duplicate default value is not among them: it
-   is lowering's (§3.5).
+3. **Front-end rules** are recorded and do not stop the parse. Each has a
+   code. The ones that exist today as positioned errors in
+   `core/src/name-sugar.ts` (and, for the last three, in Marko's front end)
+   are:
+
+   | Code | Today | Where today |
+   |---|---|---|
+   | `MX_SECOND_NAME` | a second `:name` on a tag (`<a:b:c>`, `<a.c:b:d>`, `:x:y`, `.c:x:y`) | `SECOND_NAME` in `rewriteHead`, `checkNearSugar`, `rewriteAttributes` |
+   | `MX_COLON_BEFORE_DYNAMIC` | a `:` before a `${…}` in a shorthand | `headNamesIn` |
+   | `MX_SUGAR_NAME_MISSING` | a sigil with nothing after it: `:` in a tag name with no name, a bare attribute-position `:`, an empty `.`/`#` part | `checkToken`, `checkNearSugar`, `rewriteAttributes` |
+   | `MX_SUGAR_NAME_INVALID` | a `:name` that is not `[A-Za-z_$][\w$-]*` | `checkToken`, `rewriteAttributes` (`SUGAR_TOKEN`) |
+   | `MX_SHORTHAND_INVALID` | an attribute-position `.x`/`#x` word Marko's shorthand would not accept | `rewriteAttributes` (`isShorthandWord`) |
+   | `MX_SUGAR_DYNAMIC` | a `${…}` in an attribute-position shorthand | `rewriteAttributes` ("a dynamic shorthand works only tag-adjacent") |
+   | `MX_SUGAR_ARGUMENTS` | arguments without a body after a sugar | `checkNearSugar` |
+   | `MX_SUGAR_BOUND` | `:=` after a sugar (front end for `:` and `.`; lowering for `#`, §3.6 rule 7) | `checkNearSugar` (`BOUND_ON_SUGAR`) |
+   | `MX_SUGAR_ON_STATEMENT` | a `:name` on a statement keyword (`<import:x/>`) | `rewriteNameSugar` |
+   | `MX_STATEMENT_IN_HTML_MODE` | `<import …>` written with `<` | Marko, `[C]chunk-src.js:6087` |
+   | `MX_RESERVED_TAG_NAME` | the tag name `%` | Marko, `[C]chunk-src.js:6079` |
+   | `MX_ATTRIBUTE_TAG_AT_ROOT` | an attribute tag with no enclosing tag | Marko, `[C]chunk-src.js:5917` |
+
+   A duplicate default value is not among them: it is lowering's
+   (`MX_DUPLICATE_DEFAULT`, §3.5, §6.1a), as is `MX_SUGAR_BOUND` for `#`.
+   Today every one of them throws, so only the first is reported; as data,
+   all are kept (decision 162).
 
 All three go into one list, `MxDocument.errors`, ordered by `span.start`, with
 the template error (at most one) last even when an earlier-recorded entry
@@ -895,11 +963,13 @@ until a tool can project a partial template, which is a lowering feature.
 **What `compileSource` does with the errors.** `complete === false` implies the
 document is **not lowered**; neither is a document with any entry in
 `errors`. Decision 162 makes compiling report every error as data rather than
-throw the first one, and decision 161 that no diagnostic is dropped. For a
+throw the first one (decision 161 makes the same rule for diagnostics whose
+generated position has no mapping: never dropped). For a
 document with errors, `compileSource` therefore throws `TranslateErrors`, whose
 `.errors: TranslateError[]` holds **every** entry of `errors`, in the order
-above (template error last), and whose `.errors[0]` is today's single error
-with today's frame format, so the 14 host-dispatch goldens
+above (template error last), and whose `.errors[0]` is the first error, in
+today's frame format (today a document with several expression errors throws
+one aggregate, `[C]chunk-src.js:5975-5984`, `:6474`), so the 14 host-dispatch goldens
 (`tooling/tsc/src/fixtures/host-dispatch/__golden__/`, each recording
 `"name": "CompileError"` and Marko's code frame) keep their first message.
 The three post-processors that rewrite Marko's errors today (`compile.ts`,
@@ -987,9 +1057,11 @@ type MxTypeParameters = MxExpressionContainer<TSTypeParameterDeclaration> & { ty
   container's: the container span is htmljs's `value` range, which includes
   inner whitespace (`${ y }` is `[2, 5)` in `${ y }`), while the node covers
   the expression alone (`[3, 4)`). Lowering takes `Expr.span`, `paramSpans`
-  and every `For` param span from the **payload** (`node.start`/`node.end`),
-  as today's `exprSpan` takes them from the Babel node (`lower.ts`
-  `exprSpan`), never from the container (P1).
+  and every `For` param span from the **payload** node, never from the
+  container (P1). Today's `exprSpan` (`lower.ts`) reads the Babel node's
+  `loc` (through `offsetOf`, which prefers `loc.start.index`) and returns
+  `undefined` for a node without `loc`; the payload's `start`/`end` are the
+  same offsets, so the port may read either.
 - **`source`** is kept because lowering prints the authored slice, not the
   generated AST, so TypeScript type arguments survive (`core/src/core.ts` `expr`,
   `expr()`; IR spec §4, `code` row).
@@ -1036,8 +1108,10 @@ means:
   mutate and allows a lowering to share, `Expr.node` and `For.paramNodes`
   (`ir.ts`, `Expr.node`, `For.paramNodes`, `ForHead`) may be the container's
   payload itself; an emitter that edits one copies it first with `cloneIr`.
-  Earlier drafts required a per-`Expr` copy because E21 then forbade sharing;
-  main's E21 (#359) removed that reason.
+  The host test suites freeze the IR, parser nodes included
+  (`ir-readonly.test.ts`), so the port's lowering must not mutate a payload
+  either: anything it changes (the shorthand merge of §6.1a included) it
+  builds as a new node.
 
 What each consumer reads, and why it is unaffected:
 
@@ -1051,7 +1125,7 @@ What each consumer reads, and why it is unaffected:
 
 ### 4.2 Compared with the IR's `Expr`
 
-`Expr` is `{ code, shape, node, span?, file? }` (`packages/core/src/ir.ts`;
+`Expr` is `{ code, shape, node, span?, file?, atoms? }` (`packages/core/src/ir.ts`;
 normative contract in [the IR spec §4](/architecture/ir-spec/),
 `apps/docs/docs/architecture/ir-spec.md`).
 
@@ -1060,7 +1134,7 @@ normative contract in [the IR spec §4](/architecture/ir-spec/),
 | `code` | `source` | `code` is after binding rewrites (decision 70); `source` is authored. Lowering produces `code` from `source` + `node`, as `expr()` does today. |
 | `shape` | derived from `node.type` | `expressionShape` (`lower.ts`) stays in lowering. |
 | `node` | `node` | `Expr.node` is the container's payload (§4.1a); `null` on a synthesized `Expr` (IR spec §2.2). The type is ruled `Node \| null` (Q14, decision 163); `ir.ts` on main still declares `node: Node`. While `Node` is `any` (`core.ts`) the change has no effect on any type check, so it documents intent only |
-| `span?` | `node.start`/`node.end` (the payload), **not** the container's `start`/`end` | lowering writes `{ sourceStart: node.start, sourceEnd: node.end }`, as today's `exprSpan` does; the container span includes inner whitespace and would move every `Expr.span` over `${ x }`, `( a )` or `\| a \|` (P1). For a string literal the span includes the quotes (IR spec §3.3) |
+| `span?` | the payload node's range, **not** the container's `start`/`end` | lowering writes `{ sourceStart: node.start, sourceEnd: node.end }`, the range today's `exprSpan` reads from `node.loc`; the container span includes inner whitespace and would move every `Expr.span` over `${ x }`, `( a )` or `\| a \|` (P1). For a string literal the span includes the quotes (IR spec §3.3) |
 | `atoms?` | the container's `atoms` | one IR `Atom { kind: "atom", name, span }` per `MxAtom`, absent when there are none (`ir.ts`, `Expr.atoms`) |
 | `file?` | (document level) | a container never names another file |
 
@@ -1108,19 +1182,23 @@ literal into `Expr.code` and to fill `Expr.atoms`.
 | Field | Atoms | Where main turns lexing on |
 |---|---|---|
 | `MxAttribute.value` (named, default, bound), `MxSpreadAttribute.value`, `MxShorthand.default` | yes | `ATTRIBUTE.ts` (value) |
-| `MxAttribute.args` | yes | `ATTRIBUTE.ts` (arguments) |
-| `MxMethod.body` | yes (a method body is an attribute value) | `ATTRIBUTE.ts` (method body) |
+| `MxAttribute.args`, `MxMethod.params` | yes: one position. The `(` after an attribute name opens the arguments expression with lexing on, and htmljs learns it was a method only when `{` follows (`ATTR_STAGE.ARGUMENT`, then `BLOCK`), so method parameters lex atoms (`<div onInput(a = :b) { x }/>` reports `:b`). Intended (decision 163 addendum 1) | `ATTRIBUTE.ts` (the `(` branch) |
+| `MxMethod.body` | yes (a method body is an attribute value) | `ATTRIBUTE.ts` (the `{` branch) |
 | `MxTag.args` | yes | `OPEN_TAG.ts` (tag arguments) |
 | `MxPlaceholder.expression`, in every body mode | yes | `PLACEHOLDER.ts` |
-| `${…}` in a dynamic tag name or shorthand | yes | `TAG_NAME.ts` |
+| `${…}` in a dynamic tag name or a tag-adjacent shorthand | yes | `TAG_NAME.ts` (the `${` branch; the tag name state also reads the shorthands) |
 | `${…}` of a template literal inside any of the above | inherited | `TEMPLATE_STRING.ts` |
-| `MxTag.var`, `MxTag.params` (defaults included), `MxMethod.params` | no | — |
-| `MxTag.typeArgs`, `MxTag.typeParams`, `MxMethod.typeParams` | no | — |
+| `MxTag.var`, `MxTag.params` (defaults included) | no | — (`OPEN_TAG.ts` enters them without `atoms`) |
+| `MxTag.typeArgs`, `MxTag.typeParams`, `MxMethod.typeParams` | no | — (`ATTRIBUTE.ts` `<` branch, `OPEN_TAG.ts`: type expressions, no `atoms`) |
 | `MxModuleStatement.code`, `MxScriptlet.code` | no (TypeScript statements, decision 156 addendum 2) | — |
 
 Inside a lexed field, a `:` is an atom only where an expression is expected,
 never as TypeScript's ternary, type or optional marker (decision 156 addenda
 2 and 3; `PROVENANCE.md`, "Behaviour").
+
+```mx
+<input accept=[:title, :rename-all]/>
+```
 
 Offsets: atom `title` `[15, 21)`, atom `rename-all` `[23, 34)` (the `:` included).
 
@@ -1140,8 +1218,8 @@ stores `loc`; the Babel payloads inside containers do, for the reason in §4.1.
 
 What lowering derives: every IR node's `loc` is the **start** of the construct
 as a 1-based line and 0-based column (IR spec §3.1), which is
-`lineColumnAt(node.start)`; the statement kinds' `end: Position` is
-`lineColumnAt(node.end)`; each IR span is the AST span of the node or sub-part
+`lineColumnAt(node.start)`; the statement kinds' `end: Position` is the
+untrimmed statement end of §3.10 (not `lineColumnAt(node.end)`); each IR span is the AST span of the node or sub-part
 the IR spec's §3.3 table names (for example `Attr.nameSpan` ←
 `MxAttribute.nameSpan`, zero-width at the `=` for the default value, which is
 invariant E7; `Interpolation.span` ← `MxPlaceholder` span, delimiters
@@ -1284,7 +1362,11 @@ plain element host; offsets in each input alone):
 |---|---|---|---|---|---|
 | `<div#a.b.c/>` (all static, tag-adjacent) | `static` `"b c"`; `id` `static` `"a"` | `[7, 10)` (first value to last); id `[5, 6)` | `[6, 10)`; id `[4, 6)` (sigil + value) | the tag (`1:0`) | none |
 | `<div.${x}/>` (one dynamic) | `dynamic` `x` | — | `[4, 9)` (`.${x}`) | the tag | none |
-| `<div.a.${x}/>` (several, one dynamic) | `dynamic` `["a", x]` (generator output, §7.1) | — | **`{ NaN, NaN }`: a bug**, MX1 TODO `shorthand-dynamic-class-nan-namespan` (intended: first sigil to the end of the last token); fixed before the port, which carries nothing | the tag | none |
+| `<div.a.${x}/>`, `<div.${x}.${y}/>`, `<div.${x}.a/>`, `<div.a.${x}.b/>`, `<div#i.a.${x}/>` (two or more tag-adjacent classes, at least one dynamic, no authored `class`, no attribute-position `.`) | `dynamic`, an array in written order (`["a", x]`, `[x, y]`, …; generator output, §7.1) | — | **`{ NaN, NaN }`: a bug**, MX1 TODO `shorthand-dynamic-class-nan-namespan` (intended: first sigil to the end of the last token); fixed before the port, which carries nothing | the tag | none |
+| `<div.${x}.a .b/>`, `<div.a.${x} .b/>` (the same, plus an attribute-position `.`) | `dynamic` `[x, "a", "b"]`, `["a", x, "b"]` | — | `[12, 14)` (`.b`) | `1:12` | `".b"` |
+| `<div.a.${x} class="y" .d/>` | `dynamic` `["a", x, "d", "y"]` (the token joins the shorthand part, before the authored value) | — | `[22, 24)` (`.d`) | `1:22` | `".a .d"` |
+| `<div.${x} class="y" .d/>` | `dynamic` `[x, "d", "y"]` | — | `[20, 22)` | `1:20` | `".d"` |
+| `<div.a.b .c/>` | `static` `"a b c"` | `[5, 8)` | `[9, 11)` | `1:9` | `".a .b .c"` |
 | `<div.a.b class="x"/>` (static + authored string) | `dynamic` `` `${"a b"} ${"x"}` `` (generator output) | — | `[9, 14)` (`class`) | the `class` attribute | none |
 | `<div.a class=y/>` (static + authored expression) | `dynamic` `["a", y]` | — | `[7, 12)` (`class`) | the `class` attribute | none |
 | `<div.a.${x} class="y"/>` | `dynamic` `["a", x, "y"]` | — | `[12, 17)` (`class`) | the `class` attribute | none |
@@ -1296,16 +1378,46 @@ plain element host; offsets in each input alone):
 | `<div #x=1/>` | `id` `static` `"x"`; then `value` `dynamic` `1` | `[6, 7)` | `[5, 7)`; `value` `[8, 8)` | `1:5`; `1:8` | `"#x"`; `sugarValueOf` `"#x=…"` |
 
 Rules behind the table (`mergeClassTokens`, `attrNameSpan`,
-`lowerAttrNamed`): an all-static class is one string joined by spaces; any
-dynamic part, or an authored non-string class, makes an array in written
-order; a static shorthand beside an authored string class is Marko's
-template `` `${shorthand} ${class}` ``; an attribute-position token beside
-an authored string literal is appended to the literal (before it when written
-before); beside `false`, `0`, `null` or `undefined` it replaces the value, and beside another number or `true` the two are joined into one string.
-`nameSpan` is the span from the first to the last attribute-position token when such tokens took part, else the authored `class` name, else the value span plus its sigil;
-`loc` is the first attribute-position sugar token, else the authored
-attribute, else the tag. `sugar` is set only when an attribute-position token
-took part.
+`lowerAttrNamed`). Today these are in-place edits of Marko's nodes; the port
+builds each resulting value as a **new** node and never edits a payload
+(§4.1a). Value:
+
+- Tag-adjacent only (Marko's merge, `[C]chunk-src.js:6148-6171`): one part
+  is that part; several all-static parts are one string joined by spaces;
+  otherwise an array of the parts in written order. Beside an authored
+  `class`: both strings gives the template `` `${shorthand} ${class}` ``;
+  anything else an array, shorthand parts first.
+- Attribute-position `.` tokens (all static) are joined by spaces into one
+  string and merged by cases (`mergeClassTokens`): no `class` yet, a new
+  `static` attribute; a shorthand-only `class` (no authored attribute), the
+  string grows when it is one string, else the token is appended to the
+  array (a single expression becomes `[expr, token]`); a `class` that holds
+  shorthand parts beside an authored value, the token joins the last
+  shorthand part (a single string part grows, else the token is inserted after
+  it), so it lands before the authored value; an authored string literal with
+  no shorthand, the token joins the literal on the side it was written; an
+  authored `false`, `0`, `null` or `undefined` is replaced by the token; an
+  authored other number or `true` is joined with the token into one string;
+  any other authored value becomes an array in written order.
+
+`nameSpan`: from the first to the last attribute-position token when such
+tokens took part; else (no own position) the value's span plus the sigil
+before it, `${`/`}` included for a single dynamic part; else the authored
+`class` name. When none of these exists, as for an array merged by Marko with
+no attribute-position token, the span is `NaN` (the bug row above).
+
+`loc`: the first attribute-position token when such tokens took part; else
+the authored attribute; else the tag.
+
+`sugar` (the label), set only when an attribute-position token took part:
+the tag-adjacent words, then the attribute-position tokens, each with its
+`.`. The tag-adjacent words are included only when they are one static
+string (`mergeClassTokens`, `mark`): for a shorthand-only `class`, when the
+merged value is a string literal (`<div.a.b .c/>` gives `.a .b .c`;
+`<div.a.${x} .b/>` gives `.b`); beside an authored value, the words of the
+first shorthand part when it is a string literal (`<div.a.${x} class="y"
+.d/>` gives `.a .d`; `<div.${x} class="y" .d/>` gives `.d`). Dynamic parts
+never appear in it.
 
 ### 6.2 AST node → IR consumers
 
@@ -1356,53 +1468,97 @@ The AST carries, and no IR kind reads:
 | Host **declarations** (`HostDeclarations` hooks), first- and third-party | **parser nodes** today (Marko's); after the port a narrow view built by lowering, never `Mx*` nodes | the table below |
 | The data target's unknown-tag scan (first-party) | Marko's AST directly today (`scanAuthoredTags`, `packages/targets/data/src/scan.ts`); ported to the MX AST in the same change as `lower()` (ruling Q12) | — |
 
-**The view the hooks receive after the port** (ruling Q19, decision 163).
-The hooks are re-typed in the port change, but not to `Mx*` nodes: that would
-make the whole AST public API of `@mxlang/core` through third-party hosts
-(decision 148), and every later AST edit a host-breaking change. Lowering
-builds a narrow, stable view and hands that over:
+**The view the hooks receive after the port** (ruling Q19, decision 163,
+widened by addendum 1). The hooks are re-typed in the port change, but not to
+`Mx*` nodes: that would make the whole AST public API of `@mxlang/core`
+through third-party hosts (decision 148), and every later AST edit a
+host-breaking change. Lowering builds a narrow view, as plain data, and hands
+that over:
 
 ```ts
 interface HostTagView {
-  name: string;          // the tag name; for a module statement, its keyword
+  name: string;                 // the tag name; for a module statement, its keyword
   nameSpan: Span;
-  span: Span;            // the whole tag, or the statement span of §3.10
-  attributes: { name: string; nameSpan: Span; value?: Expr }[];
+  span: Span;                   // the whole tag, or the statement span of §3.10
+  attributes: {
+    name: string;               // before the last `:` (Marko's split, as hooks read it today)
+    modifier: string | null;    // after the last `:`; null without one
+    nameSpan: Span;
+    value?: Expr;
+  }[];
+  var: { span: Span } | null;                   // the tag variable, when written
+  attributeTags: { name: string; span: Span }[]; // `@`-names as written, in source order
+  params: { span: Span; count: number } | null; // the body parameters, when pipes were written
+  dynamicName: Expr | null;                     // the `<${…}>` name expression
+  handle: MxNodeHandle;                         // opaque, below
 }
 ```
 
-An attribute hook receives one entry of `attributes` (`name` with its colons,
-so `class:x`). `server` and `client` are `MxModuleStatement`s in the AST and
-route through the same machinery as tags (ruling Q5/P5): first the host's
-`declarations.tags` disposition (`inert`/`error`, with `rejectInertShape`,
-`lower.ts` `lowerAuthoredTag`, which is how html's `client` disposition,
-`targets/html/src/translate.ts` `TAGS`, applies), then `isDelegatedTag` /
-`resolveDelegatedTag` (`lower.ts` `lowerAuthoredTag`) with the statement's view, so html's
-`server` stays a `DelegatedTag` `{ kind: "statement" }` whose code html slices
-from the view's `span` (today from `node.loc`, `translate.ts` `resolveDelegatedTag`). The
-view is the decision text; its exact TypeScript name is the port's.
+Every field, and the hook that reads it today (opened on main):
 
-The `HostDeclarations` hooks that receive a parser node
-(`packages/core/src/declarations.ts`), and what each receives after the port:
+| Field | Read today by | File, symbol |
+|---|---|---|
+| `name` | every tag hook's message (most hooks also receive it as an argument) | all hosts below |
+| `span` | every `fail`/`rawFail(msg, node)` position; html's `server` code slice | html `translate.ts` `resolveDelegatedTag` (`sliceLoc(ctx, node.loc)`), `rejectComponentTag`, `rejectUnknownTag`; Preact `emitter.ts` `createJsxDeclarations` (`resolveDelegatedTag`, `rejectUnknownTag`; also React and Hono); Solid `emitter.ts` `rejectUnknownTag`, `solidDeclarations.resolveDelegatedTag`; Angular `emitter.ts` `rejectUnknownTag`, `resolveDelegatedTag`; Astro `astro-template.ts` `rejectUnknownTag`, `resolveDelegatedTag`, `rejectComponentTag`; data `declarations.ts` `rejectComponentTag` (`node.loc.start`) |
+| `attributes[].name`, `.modifier` | `rejectModifier` (all five implementations build `name:modifier`; Solid keys its replacement on `name`) | html `translate.ts` `rejectModifier`; Preact `emitter.ts` `createJsxDeclarations`; Solid `emitter.ts` `solidDeclarations`; Angular `emitter.ts` `rejectModifier`; Astro `astro-template.ts` `rejectModifier`, `rejectAttributeMethod` (`attr.name`) |
+| `attributes[].nameSpan` | the position of those errors | as above |
+| `attributes[].value` | html's `<let>`/`<const>` initial value (`attrByName(node, "value") ?? node.attributes[0]`, then `.value`) | html `translate.ts` `resolveDelegatedTag` |
+| `var` | html's `<let>`/`<const>` "without a variable name" check (`!node.var`) | html `translate.ts` `resolveDelegatedTag` |
+| `attributeTags` | the first attribute tag's name and position; html's `<try>` `@placeholder` lookup | html `translate.ts` `policy.rejectElementAttributeTags`, `resolveDelegatedTag` (`<try>`); Astro `astro-template.ts` `rejectElementAttributeTags` |
+| `params` (`count`) | Astro refuses tag params on a component only when there is at least one (`node.body.params.length`) | Astro `astro-template.ts` `rejectComponentTag` |
+| `dynamicName` | the dynamic tag's target expression (`expr(ctx, node.name)`, `node: node.name`, its span) | html `translate.ts` `resolveDelegatedTag` (`DYNAMIC_TAG`); Angular `emitter.ts` `resolveDelegatedTag` |
 
-| Hook | Line | Receives today | Receives after the port | Known readers |
-|---|---|---|---|---|
-| `resolveDelegatedTag(name, node, ctx)` | 156-160 | `MarkoTag` | the tag's view, or a module statement's (`server`) | html reads `node.name` and slices `node.loc` (`targets/html/src/translate.ts`, `resolveDelegatedTag`); Preact passes it to `rawFail` |
-| `rejectModifier(attr, on)` | 169 | `MarkoAttribute` | an attribute entry of the view | Preact reads `attr.name` and **`attr.modifier`** (`hosts/preact/src/emitter.ts`, `rejectModifier`) |
-| `resolveModifier(attr, on)` | 177-180 | `MarkoAttribute` | an attribute entry | |
-| `rejectAttributeMethod`, `resolveAttributeMethod` | 189, 220 | `MarkoAttribute` | an attribute entry | |
-| `resolveDefaultTag(node, parents, context)` | 214-218 | `MarkoTag` (+ `DefaultTagParent.node`) | the tag's view (and its parents' views) | |
-| `rejectElementAttributeTags`, `rejectComponentTag`, `rejectUnknownTag` (`name, node, ctx`) | 229, 240, 268 | `MarkoTag` | the tag's view | |
-| `checkBinding(target, what)` | 293 | a Babel `LVal` | the `MxPattern` payload (a Babel node, not an `Mx*` node) | |
-| `claimsAttributeHash` (flag) | 109 | — | — | decides the `#x` row of §6.1 and the `#` exemptions of §3.6 and §6.1a (P8) |
+`resolveModifier` has no implementation in any host on main; `resolveAttributeMethod`
+is `() => true` wherever it is set (Preact, Solid, Angular, data) and reads
+nothing. `resolveDefaultTag` receives the parents as views: every host passes
+them to core's `contractDefaultTag`, which reads `name`, `attributeTag`, the tag
+definition and, through the handle, the wildcard match (`wildcard-resolve.ts`
+`wildcardMatchOf`).
+
+**The handle.** `MxNodeHandle` is opaque: it has no fields, is not
+serialisable, and is valid only during the hook call. Only core's exported
+helpers can resolve it to the AST node, so a third-party host cannot read
+through it. Hosts keep their call sites: **no check moves**, so error order and
+text are untouched by the port. The reads served through the handle today:
+
+| Read | Helper | Called from |
+|---|---|---|
+| attribute tags (first name and position), tag arguments (presence, first argument's position), tag variable (presence, and its printed text in the message), type arguments and type parameters (presence), body parameters (at least one) | `rejectUnsupportedFields` (`core/src/core.ts`) | html `translate.ts` `resolveDelegatedTag` (`<html-comment>`, `<html-script>`, `<html-style>`, `<style>`, `<let>`/`<const>`); Astro `astro-template.ts` `resolveDelegatedTag` (`<html-comment>`) |
+| the tag variable's pattern (its identifiers, to refuse `input`) | html's own `rejectInputShadowing` (`translate.ts`), which needs a core helper returning the `MxPattern` payload (the same Babel pattern `checkBinding` receives) | html `translate.ts` `resolveDelegatedTag` (`<let>`/`<const>`) |
+| the wildcard match of a parent | `contractDefaultTag` / `wildcardMatchOf` (`core/src/contract-default-tag.ts`, `wildcard-resolve.ts`) | every host's `resolveDefaultTag` |
+
+`server` and `client` are `MxModuleStatement`s in the AST where the target's
+statement set includes them (§3.10), and route through the same machinery as
+tags (ruling Q5/P5): first the host's `declarations.tags` disposition
+(`inert`/`error`, with `rejectInertShape`, `lower.ts` `lowerAuthoredTag`,
+which is how html's `client` disposition, `targets/html/src/translate.ts`
+`TAGS`, applies), then `isDelegatedTag` / `resolveDelegatedTag`
+(`lower.ts` `lowerAuthoredTag`) with the statement's view, so html's `server`
+stays a `DelegatedTag` `{ kind: "statement" }` whose code html slices from the
+view's `span` (today from `node.loc`, `translate.ts` `resolveDelegatedTag`).
+The view's fields are the decision text; its TypeScript names are the port's.
+
+The `HostDeclarations` hooks (`packages/core/src/declarations.ts`
+`HostDeclarations`) and what each receives:
+
+| Hook | Receives today | Receives after the port |
+|---|---|---|
+| `resolveDelegatedTag(name, node, ctx)` | `MarkoTag` | the tag's view, or a module statement's (`server`) |
+| `rejectModifier(attr, on)`, `resolveModifier(attr, on)` | `MarkoAttribute` | an attribute entry of the view |
+| `rejectAttributeMethod`, `resolveAttributeMethod` | `MarkoAttribute` | an attribute entry |
+| `resolveDefaultTag(node, parents, context)` | `MarkoTag` (+ `DefaultTagParent.node`) | the tag's view (and its parents' views) |
+| `rejectElementAttributeTags`, `rejectComponentTag`, `rejectUnknownTag` (`name, node, ctx`) | `MarkoTag` | the tag's view |
+| `checkBinding(target, what)` | a Babel `LVal` | the `MxPattern` payload (a Babel node, not an `Mx*` node) |
+| `claimsAttributeHash` (flag) | — | — (decides the `#x` row of §6.1 and the `#` exemptions of §3.6 and §6.1a, P8) |
 
 Every host `fail`/`rawFail(msg, node)` reads the node's position; after the
-port it takes a view and reports `lineColumnAt(view.span.start)` (or the
-attribute's `nameSpan.start`).
+port it takes a view (or an attribute entry) and reports
+`lineColumnAt(span.start)` (or `nameSpan.start`).
 
-Consequence: the view has no `modifier` (A2, D4), so Preact's
-`rejectModifier` is re-typed to read `attr.name` alone (which already holds
-`class:x`).
+**After the port, possibly.** Moving the checks the handle serves into
+lowering (hosts pass flags, not nodes) would remove the handle. It is not part
+of the port: it can change which error fires first for a tag that breaks two
+rules, so it is its own change with its own goldens, if it is made.
 
 ## 7. Mapping from parser events
 
@@ -1451,7 +1607,7 @@ depend on an input marked "front end" in the last column.
 | `tagDef.parseOptions.openTagOnly` → `TagType.void` | `[C]chunk-src.js:6084` | built-in element taglibs (`marko-html.json` `[C]chunk-src.js:3057`, MathML `:5175`, SVG `:5348`); `core-tags.json` | **front end**, via `tagShape(name)` → `bodyMode: "void"`. Not for custom tags (§3.12) |
 | `tagDef.parseOptions.text` → `TagType.text` | `:6085` | built-in taglibs (`<script>`, `<style>`, `<textarea>`), `core-tags.json`, custom tags (`custom-tags.ts` `customTagTaglib`), the data target's overrides (`targets/data/src/taglib.ts` `neutralizations`) | **front end**, via `tagShape` → `"parsed-text"` / `"parsed-text-preserve"` |
 | `tagDef.parseOptions.preserveWhitespace` | `:6082` | as above (`<pre>`, `<script>`, `<style>`, `<textarea>`; custom tags `custom-tags.ts` `customTagTaglib`; data overrides) | **front end**, via `tagShape` → `"preserve"` / `"parsed-text-preserve"`; decides `MxText.value` |
-| `tagDef.parseOptions.statement` → `TagType.statement` | `:6083` | `core-tags.json` (`<import>` through `<class>`) | **front end**, by rule: the six keywords on a concise top-level line (§3.10). Not configurable |
+| `tagDef.parseOptions.statement` → `TagType.statement` | `:6083` | `core-tags.json` (`<import>` through `<class>`) for html; the data taglib's three; none on the other hosts (§3.10) | **front end**: the statement keyword set, supplied per target (§3.10), on a concise top-level line |
 | `tagDef.parseOptions.rawOpenTag` → `rawValue` | `:6173-6177` | `core-tags.json` statement tags, `<style>` | dropped (A18) |
 | `tagDef.parseOptions.controlFlow` and `tagDef.controlFlow` | `:6196`, `:6200` | `core-tags.json` (`<if>`, `<else>`, `<else-if>`, `<for>`) | moves to **lowering** (attribute tags are not moved, D2) |
 | `tagDef.parser` hook (parse visitors) | `:6184-6191` | none in MX: `core-tags.json` and `customTagTaglib` carry no `parser` | dropped |
@@ -1462,8 +1618,9 @@ depend on an input marked "front end" in the last column.
 | The generator and Babel support packages | `printExpression` (`core/src/compile.ts`, `generator(node, { concise: true })`); `expr()` for loc-less nodes; `declName` | Marko's bundled `@babel/generator`, `@babel/traverse`, `@babel/types` **7.29.7** (`[C]babel.js`; `markoBabel`, `core/src/core.ts`) | **lowering**, not the front end: the port pins `@babel/{types,traverse,generator}` at 7.29.7 with today's generator options (`concise: true`). The generator is part of the byte contract: it prints `Const.name`, `Define`/`Component.var`/`DelegatedTag.var` names, unsliceable `For` params, attribute-method values and dynamic tag names, and rewrites authored text (`<const/{ a,b }=x/>` gives `"{ a, b }"`, the reviewer's probe c). Replacing generator output with source slices is wanted, but as a separate recorded change after the port (TODO `ir-generated-text-to-source-slices`) |
 | `file.___hasParseErrors`, `watchFiles` | `:1028`, `:6190` | internal | dropped (errors are data; dependency tracking is core's) |
 
-So the front end takes exactly one external input, `tagShape(name) →
-bodyMode`, supplied by core from the active target (its element shapes, the
+So the front end takes two external inputs, both supplied per target: the
+statement keyword set (§3.10) and `tagShape(name) → bodyMode`, supplied by
+core from the active target (its element shapes, the
 core tags, the custom tags' `text`/`preserveWhitespace`, and a target's
 overrides such as the data target's). Every other decision Marko made from a
 tag definition moves to lowering or disappears. The element-shape table is
@@ -1551,10 +1708,9 @@ E11), and parsing once in the front end gives every expression error a place
 in `errors` at parse time.
 
 **D11. The AST is read-only and hands its payloads to the IR.** Alternative:
-lowering copies every parser node it puts in the IR (an earlier draft of this
-catalogue, when the IR spec's E21 forbade a lowering to share). Chosen
-because main's E21 makes emitters copy before they mutate (`cloneIr`) and
-allows a lowering to share, so a copy at the seam protects nothing (§4.1a).
+lowering copies every parser node it puts in the IR. Chosen because the IR
+spec's E21 makes emitters copy before they mutate (`cloneIr`) and allows a
+lowering to share, so a copy at the seam protects nothing (§4.1a).
 
 **D12. `MxAttributeTag` is its own node.** Alternative: an `MxTag` with an
 `attributeTag: true` flag. Chosen because its name is a property key with
@@ -1592,23 +1748,26 @@ rulings, with where the text now lives:
 | Q6 | `MxText` span = whole `onText` range, `valueSpan` = trimmed range | §3.8 |
 | Q7 | open-tag comments dropped at lowering | §6.2 (unchanged) |
 | Q8 | default value read as `value` by one lowering adapter, zero-width `nameSpan`; `MX_DUPLICATE_DEFAULT` is lowering's | §3.5, §6.1a |
-| Q9, Q11, Q18, Q23 | as drafted: concise `end`; read `MxComment.kind`; AST keeps `@name`, lowering trims; shape before shadowing | §3.2, §6.1, §5.1, §3.12 |
+| Q9, Q11, Q18, Q23 | as drafted: concise `end`; read `MxComment.kind`; AST keeps `@name`, lowering trims; shape before shadowing | §3.2, §6.1, §5.1, §3.12 ("Shape before shadowing") |
 | Q10 | field names follow the AST; container `span` = htmljs `value` range, `outer` = event range; the grammar document adopts both | §3.4 (unchanged) |
 | Q12 | port `data/src/scan.ts` in the same change; delete the fallback statement list (`CORE_STATEMENT_TAGS`/`isStatementTag`, `core/src/name-sugar.ts`) and the stock-parser probe (`isShorthandWord`'s `markoParser()`, `name-sugar.ts`; `stock-parser.ts`) | §6.4 |
 | Q13 | plain Babel types in payloads; pin `@babel/{types,traverse,generator}` 7.29.7 with today's generator options; sub-parser node shapes equal to today's | §7.1 |
 | Q14 | `Expr.node: Node \| null` | §4.2 |
 | Q15 | IR spec §6 and §3.3 rows corrected to `value:foo` | `ir-spec.md` |
-| Q19 | hooks re-typed in the port to a narrow view, never `Mx*` nodes | §6.4 |
+| Q19 | hooks re-typed in the port to a narrow view, never `Mx*` nodes; addendum 1 widens the view field by field and adds an opaque handle for core's helpers | §6.4 |
 | Q20 | no parser recovery; not lowered when incomplete; `compileSource` reports every error (decisions 161, 162) | §3.13 |
 | Q21 | element-shape table owned by the target descriptor, core default, one table two readers; `<title>`; unnamed tag = `"html"` | §3.12, §7.1 |
 | Q22 | drop `tagDiscoveryDirs` | §7.1 |
 
-Deferred by the rulings, still open:
+Deferred, still open (each after the port, as its own change):
 
 - **Q17.** Drop `loc` from `Expr.node` and `For.paramNodes` payloads (keep only
   `start`/`end`). Deferred: a later, separate IR-contract change, after the
   TypeScript plugin maps through `Expr.span` instead of `node.loc`
   (`mx-language.ts` `locateSourceCode`); until then the payloads keep `loc` (§4.1).
+- **Checks served through the hook handle, moved into lowering** (§6.4,
+  "After the port, possibly"). Not part of the port: it can change which error
+  fires first, so it would be its own change with its own goldens.
 - **Generator output to source slices** (TODO
   `ir-generated-text-to-source-slices`). Deferred: wanted, but as a separate
   recorded change after the port, because it changes emitted text (probe c,
@@ -1623,26 +1782,27 @@ not listed.
 
 | Type | Kind | Defined in | Line |
 |---|---|---|---|
-| `MxDocument` | node | §3.1 | 313 |
-| `MxTag` | node | §3.2 | 340 |
-| `MxCloseTag` | field shape | §3.2 | 363 |
-| `MxTagName` | field shape | §3.3 | 420 |
-| `MxPattern`, `MxArguments`, `MxParameterList`, `MxTypeArguments`, `MxTypeParameters` | node (container) | §3.4 span rule; §4.1 types | 460 |
-| `MxAttribute` | node | §3.5 | 479 |
-| `MxMethod` | node | §3.5a | 523 |
-| `MxSpreadAttribute` | node | §3.5b | 545 |
-| `MxShorthand` | node | §3.6 | 560 |
-| `MxShorthandValue` | field shape | §3.6 | 573 |
-| `MxAttributeTag` | node | §3.7 | 646 |
-| `MxText` | node | §3.8 | 674 |
-| `MxPlaceholder` | node | §3.9 | 702 |
-| `MxModuleStatement` | node | §3.10 | 719 |
-| `MxScriptlet` | node | §3.10 | 757 |
-| `MxStatements` | node (container) | §3.10; §4.1 | 769 |
-| `MxComment`, `MxCDATA`, `MxDoctype`, `MxDeclaration` | node | §3.11 | 775 |
-| `MxParseError` | node | §3.13 | 832 |
-| `MxReturn` | node | §3.14 | 925 |
-| `MxExpressionContainer`, `MxExpression` | node (container) | §4.1 | 964 |
-| `MxAtom` | node | §4.3 | 1073 |
-| `Span`, `MxNodeBase` | helper | §3.0 | 293 |
-| `MxChild`, `MxNode` | union | §3.0 | 296 |
+| `MxDocument` | node | §3.1 | 316 |
+| `MxTag` | node | §3.2 | 343 |
+| `MxCloseTag` | field shape | §3.2 | 366 |
+| `MxTagName` | field shape | §3.3 | 423 |
+| `MxPattern`, `MxArguments`, `MxParameterList`, `MxTypeArguments`, `MxTypeParameters` | node (container) | §3.4 span rule; §4.1 types | 463 |
+| `MxAttribute` | node | §3.5 | 482 |
+| `MxMethod` | node | §3.5a | 526 |
+| `MxSpreadAttribute` | node | §3.5b | 548 |
+| `MxShorthand` | node | §3.6 | 563 |
+| `MxShorthandValue` | field shape | §3.6 | 576 |
+| `MxAttributeTag` | node | §3.7 | 649 |
+| `MxText` | node | §3.8 | 677 |
+| `MxPlaceholder` | node | §3.9 | 705 |
+| `MxModuleStatement` | node | §3.10 | 722 |
+| `MxScriptlet` | node | §3.10 | 800 |
+| `MxStatements` | node (container) | §3.10; §4.1 | 812 |
+| `MxComment`, `MxCDATA`, `MxDoctype`, `MxDeclaration` | node | §3.11 | 818 |
+| `MxParseError` | node | §3.13 | 881 |
+| `MxReturn` | node | §3.14 | 995 |
+| `MxExpressionContainer`, `MxExpression` | node (container) | §4.1 | 1034 |
+| `MxAtom` | node | §4.3 | 1147 |
+| `Span`, `MxNodeBase` | helper | §3.0 | 296 |
+| `MxChild`, `MxNode` | union | §3.0 | 299 |
+| `MxNodeHandle` | opaque handle (not a node) | §6.4 | 1493 |
