@@ -508,6 +508,199 @@ function splitShorthandChain(
 const ALREADY_HAS_DEFAULT = (form: string, first: string): string =>
   `${form} would set the default attribute (\`value\`), but the tag already has a default value (at ${first}); a sugar followed by \`=value\` or \`(params) { body }\` sets it (decision 146 addendum 4), so write \`value=…\` once`;
 
+const TAG_VARIABLE_ERROR = /is not a valid .*tag variable/i;
+
+type ParseErrorLocated = Error & {
+  loc?: { start?: { line: number; column: number; index?: number } };
+  label?: unknown;
+  errors?: unknown[];
+};
+
+function offsetOfSource(source: string, line: number, column: number): number {
+  let start = 0;
+  for (let at = 1; at < line; at++) {
+    const next = source.indexOf("\n", start);
+    if (next === -1) return -1;
+    start = next + 1;
+  }
+  return start + column;
+}
+
+function positionAtOffset(
+  source: string,
+  offset: number,
+): { line: number; column: number } {
+  let line = 1;
+  let lineStart = 0;
+  for (let i = 0; i < offset; i++) {
+    if (source[i] === "\n") {
+      line++;
+      lineStart = i + 1;
+    }
+  }
+  return { line, column: offset - lineStart };
+}
+
+/** Decision 174: Marko's parser rejects `<div.w-1/2/>` during parse with a
+ *  tag-variable error. Rewrite that to MX's class-shorthand diagnostic at the
+ *  `.` so every whole-file host gets the same message core lowering gives the
+ *  bridge path. */
+export function classShorthandParseError(
+  error: unknown,
+  source: string,
+): TranslateError | undefined {
+  if (!(error instanceof Error)) return undefined;
+  const located = error as ParseErrorLocated;
+  const candidates = [
+    located,
+    ...((located.errors ?? []).filter(
+      (e): e is ParseErrorLocated => e instanceof Error,
+    )),
+  ];
+  for (const entry of candidates) {
+    if (typeof entry.message !== "string") continue;
+    const reason =
+      typeof entry.label === "string" ? entry.label : entry.message;
+    if (
+      !TAG_VARIABLE_ERROR.test(reason) &&
+      !TAG_VARIABLE_ERROR.test(entry.message)
+    ) {
+      continue;
+    }
+    const at = entry.loc?.start;
+    if (!at) continue;
+    const offset = at.index ?? offsetOfSource(source, at.line, at.column);
+    if (offset < 0 || source[offset - 1] !== "/") continue;
+    let dot = offset - 2;
+    while (
+      dot >= 0 &&
+      source[dot] !== "." &&
+      source[dot] !== "<" &&
+      !/\s/.test(source.charAt(dot))
+    ) {
+      dot--;
+    }
+    if (dot < 0 || source[dot] !== ".") continue;
+    // Include the var text up to the next tag delimiter.
+    let end = offset;
+    while (
+      end < source.length &&
+      !/[\s<>/|=>]/.test(source[end] ?? "") &&
+      source[end] !== "/"
+    ) {
+      end++;
+    }
+    const token = source.slice(dot, end);
+    const pos = positionAtOffset(source, dot);
+    return new TranslateError(
+      `\`${token}\` cannot hold this class; ${CLASS_HINT}`,
+      pos.line,
+      pos.column,
+    );
+  }
+  return undefined;
+}
+
+
+const CLASS_HINT = 'write it as `class="..."`';
+
+function failClassShorthand(
+  ctx: Ctx,
+  partStart: number,
+  partEnd: number,
+  reason: string,
+): never {
+  const token = ctx.source.slice(partStart, partEnd);
+  failAt(ctx, `\`${token}\` ${reason}; ${CLASS_HINT}`, partStart);
+}
+
+/** Decision 174: class shorthand parts that look like Tailwind arbitrary
+ *  values or fractions are rejected with a hint to use `class="..."`.
+ *  `isFirst` is true for the first class part of the chain; a leading digit on
+ *  the first part (`.2xl`) is what the author wrote, but a digit after a `.`
+ *  split (`.w-1.5` → `.5`) is the silent wrong output. */
+function checkClassShorthandPart(
+  ctx: Ctx,
+  partStart: number,
+  word: string,
+  isFirst: boolean,
+): void {
+  const partEnd = partStart + 1 + word.length;
+  if (word.includes("[") || word.includes("]")) {
+    failClassShorthand(ctx, partStart, partEnd, "cannot hold this class");
+  }
+  if (!isFirst && /^\d/.test(word)) {
+    failClassShorthand(
+      ctx,
+      partStart,
+      partEnd,
+      "cannot start a class shorthand",
+    );
+  }
+  if (word.includes("/")) {
+    failClassShorthand(ctx, partStart, partEnd, "cannot hold this class");
+  }
+}
+
+/** Decision 174: tag-adjacent class shorthand values (`<div.bg-[#fff]/>`,
+ *  `<div.w-1.5/>`) carry the class text as a string literal. Reject the same
+ *  Tailwind-looking patterns the attribute-position check rejects. */
+function checkTagAdjacentClassValue(ctx: Ctx, classAttr: Node): void {
+  const value = classAttr.value;
+  if (value?.type !== "StringLiteral" || typeof value.value !== "string") {
+    return;
+  }
+  const text: string = value.value;
+  const valueStart = startOf(ctx, value);
+  if (!Number.isFinite(valueStart)) return;
+  const dot = valueStart - 1;
+  if (ctx.source[dot] !== ".") return;
+  const parts = text.split(" ");
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i] as string;
+    if (
+      part.includes("[") ||
+      part.includes("]") ||
+      part.includes("/") ||
+      (i > 0 && /^\d/.test(part))
+    ) {
+      failAt(
+        ctx,
+        `this class shorthand cannot hold \`.${part}\`; ${CLASS_HINT}`,
+        dot,
+      );
+    }
+  }
+}
+
+/** Decision 174: `<div.w-1/2/>` parses the `/2` as a tag variable. Catch it
+ *  here and point at the shorthand dot instead of the var. */
+function checkTagAdjacentClassSlash(
+  ctx: Ctx,
+  node: Node,
+  classAttr: Node,
+): void {
+  if (!node.var) return;
+  const varStart = startOf(ctx, node.var);
+  if (!Number.isFinite(varStart) || ctx.source[varStart - 1] !== "/") return;
+  const valueStart = startOf(ctx, classAttr.value);
+  if (!Number.isFinite(valueStart)) return;
+  const dot = valueStart - 1;
+  if (ctx.source[dot] !== ".") return;
+  // The var must not start with an identifier character, otherwise it is a
+  // legitimate tag-variable attempt (`<div.x/y/>`) and keeps Marko's reading.
+  const firstVar = ctx.source[varStart];
+  if (/^[A-Za-z_$]/.test(firstVar ?? "")) return;
+  const end = endOf(ctx, node.var);
+  const token = ctx.source.slice(dot, end);
+  failAt(
+    ctx,
+    `\`${token}\` cannot hold this class; ${CLASS_HINT}`,
+    dot,
+  );
+}
+
+
 /** How many source characters the sugar token itself takes (`#x`, `:x`, `.c#d`, `.c:y`). */
 function authoredTokenLength(attr: Node, kind: "#" | "." | ":"): number {
   if (kind === ":") return 1 + String(attr.modifier).length;
@@ -790,6 +983,9 @@ function rewriteAttributes(ctx: Ctx, node: Node): void {
           partStart,
         );
       }
+      if (sigil === ".") {
+        checkClassShorthandPart(ctx, partStart, word, part.index === 0);
+      }
       if (word === "" || !isShorthandWord(sigil, word)) {
         failAt(
           ctx,
@@ -924,8 +1120,14 @@ function rewriteHead(ctx: Ctx, node: Node): void {
   const classAttr = attrs.find(
     (attr) => attr.type === "MarkoAttribute" && attr.name === "class",
   );
-  if (classAttr)
+  if (classAttr) {
     parts.push(...shorthandClassParts(ctx, classAttr, firstAuthored));
+    // Decision 174: tag-adjacent `.bg-[#fff]`, `.w-1.5`, `.w-1/2`.
+    if (!classAttr.loc) {
+      checkTagAdjacentClassValue(ctx, classAttr);
+      checkTagAdjacentClassSlash(ctx, node, classAttr);
+    }
+  }
   const idAttr = attrs.find(
     (attr) =>
       attr.type === "MarkoAttribute" &&

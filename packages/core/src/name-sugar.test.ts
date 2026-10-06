@@ -920,22 +920,38 @@ describe("default value: tag-adjacent `=value` is Marko's own default", () => {
   });
 });
 
-describe("default value: a bound value on a sugar", () => {
-  const withMethods = policy({ resolveAttributeMethod: () => true });
+describe("decision 174: class shorthand diagnostics", () => {
+  const tagAdjacent = [
+    ["<div.bg-[#fff]/>", 1, 4, "this class shorthand cannot hold `.bg-[`"],
+    ["<div.w-1.5/>", 1, 4, "this class shorthand cannot hold `.5`"],
+    ["<div.w-1/2/>", 1, 4, "`.w-1/2` cannot hold this class"],
+  ] as const;
 
-  it.each([
-    ["<a :n:=y/>", 1, 3],
-    ["<a #x:=y/>", 1, 3],
-    ["<a .c:=y/>", 1, 3],
-    ["<input type=text :n:=y/>", 1, 17],
-  ])(
-    "%s is a positioned error, not a silent value=y",
-    (source, line, column) => {
-      const error = errorOf(source, withMethods);
-      expect(error.message).toBe(
-        "a bound value is not supported on name sugar; write name=... value:=...",
-      );
+  const attributePosition = [
+    ["<div .bg-[#fff]/>", 1, 5, "`.bg-[` cannot hold this class"],
+    ["<div .w-1.5/>", 1, 9, "`.5` cannot start a class shorthand"],
+    ["<div .w-1/2/>", 1, 5, "`.w-1/2` cannot hold this class"],
+  ] as const;
+
+  it.each([...tagAdjacent, ...attributePosition])(
+    "%s is a positioned error with the class hint",
+    (source, line, column, reason) => {
+      const error = errorOf(source);
+      expect(error.message).toContain(reason);
+      expect(error.message).toContain('write it as `class="..."`');
       expect([error.line, error.column]).toEqual([line, column]);
     },
   );
+
+  it.each([
+    "<div.hover:bg-red/>",
+    "<div.a.b#c/>",
+    "<div.w-1/>",
+    "<div .2xl/>",
+    "<div .a.b#c/>",
+    "<div .w-1/>",
+  ])("%s stays valid", (source) => {
+    expect(() => lowerSource(source)).not.toThrow();
+  });
 });
+

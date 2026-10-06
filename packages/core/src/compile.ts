@@ -47,6 +47,7 @@ import { nullPrototypeTags } from "./lookup-safety.ts";
 import { lower } from "./lower.ts";
 import { markoBabel, markoCompiler } from "./marko-frontend.ts";
 import { hintParseError } from "./parse-error-hints.ts";
+import { classShorthandParseError } from "./name-sugar.ts";
 import {
   bareCommaError,
   stockAtomError,
@@ -441,6 +442,7 @@ export function compileSource(
       bareCommaError(error, source) ??
       tagParamError(error, source) ??
       sugarAfterDefaultError(error, source) ??
+      classShorthandParseError(error, source) ??
       stockParserError(error, source) ??
       stockAtomError(error, source) ??
       error;
