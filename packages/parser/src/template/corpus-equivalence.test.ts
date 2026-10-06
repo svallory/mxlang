@@ -135,7 +135,8 @@ describe("source copy vs patched npm htmljs-parser", () => {
     }
     // Files that use atoms on purpose: the ADR's examples, the atoms
     // language page, the atom fixtures of PR 1's tests, the expression-value
-    // mapping fixtures and tree-sitter-mx's Mesh fixture (#339).
+    // mapping fixtures, tree-sitter-mx's Mesh fixture (#339) and the docs
+    // home example, which shows one atom (`type=:search`).
     expect([...new Set(hits)]).toEqual([
       "apps/docs/docs/design-notes/adr-atoms.md#fence3",
       "apps/docs/docs/design-notes/adr-atoms.md#fence4",
@@ -144,6 +145,7 @@ describe("source copy vs patched npm htmljs-parser", () => {
       "apps/docs/docs/language/atoms.md#fence3",
       "apps/docs/docs/language/atoms.md#fence4",
       "apps/docs/docs/language/atoms.md#fence5",
+      "apps/docs/example/home-example.mx",
       "packages/editors/tree-sitter-mx/test/fixtures/mesh-invoice.mx",
       "packages/tooling/tsc/src/fixtures/atoms/preact/page.mx",
       "packages/tooling/tsc/src/fixtures/expression-values/html/page.mx",
