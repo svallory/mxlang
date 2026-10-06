@@ -3123,12 +3123,18 @@ targets only: a third-party target always needs an explicit `mx.target` (or
 `mx.host`) key. The descriptor is cached per resolved file and the target
 package's `package.json` (modification time and content), so its identity is
 stable between calls and a reinstall is picked up. A load that failed is retried on
-every resolution, so fixing any file it loaded is picked up at once. A target
-installed after a `target-not-found` loads on the next resolution, with no
-restart: before reporting not-found for a bare specifier the loader looks for
-`node_modules/<name>/package.json` on disk and resolves the package's own
-`exports`/`main` itself, because both Bun and Node keep a resolver miss for the
-life of the process once the project has a `node_modules`.
+every resolution, so fixing any file it loaded is picked up at once. A bare
+specifier is resolved from the disk on every resolution, by the rules of the
+runtime the tool runs under (Bun or Node): self-reference, then each
+`node_modules` up from that directory, the package's `exports` (the runtime's
+`require` conditions, in the package's key order) or, without `exports`, its
+legacy `main`/`index` lookup with that runtime's extensions. Both runtimes keep
+resolution state for the life of a process (a miss on Bun, a missing
+`package.json` on Node), so asking their resolver would make the answer depend
+on what was resolved before. A target installed after a `target-not-found`
+therefore loads on the next resolution, with no restart, and it is the same
+file a fresh process loads. What no `node_modules` holds (`NODE_PATH`, Yarn
+PnP, a relative or absolute specifier) is left to the runtime's resolver.
 
 A specifier that resolves and then fails to load or validate is an **error with
 no fallback to a guessed target** (the same family as `target-host-mismatch`:
@@ -3140,7 +3146,7 @@ the key's value (quotes included, with `length`):
 | Code | When | Message |
 |---|---|---|
 | `target-not-found` | the specifier does not resolve from the project | `mx.target "@acme/mx-vue" cannot be resolved from /p/app: <first line of the resolver's message>. Install it (bun add -d @acme/mx-vue) or use a built-in target: html, …` (a relative or absolute path says `Check the path` instead of `Install it`) |
-| `target-load-failed` | evaluating the module throws | `mx.target "@acme/mx-vue" failed to load: <message>. (/p/app/node_modules/@acme/mx-vue/dist/index.js)`; a top-level `await`, or a relative import without its extension, adds the reason (the load is synchronous) |
+| `target-load-failed` | evaluating the module throws, or the package's `package.json` cannot be used: an invalid `exports` target (not `./`-relative, or with an empty, `.`, `..` or `node_modules` segment) or config (subpath and condition keys mixed), or, on Node, a `package.json` that is not a JSON object | `mx.target "@acme/mx-vue" failed to load: <message>. (/p/app/node_modules/@acme/mx-vue/dist/index.js)`; a top-level `await`, or a relative import without its extension, adds the reason (the load is synchronous) |
 | `target-invalid-descriptor` | the export is not a descriptor: the **first** failing field only; an unsupported `descriptorVersion`; or it cannot be registered next to the built-in targets (below) | `mx.target "@acme/mx-vue" must export a target descriptor (default export or "mxTarget"): "name" is missing, expected a string. See the TargetDescriptor contract (unstable).`; `… targets descriptor version 1; this mx supports 0.`; `mx.target "@acme/mx-vue" cannot be registered next to the built-in targets: <reason>. See the TargetDescriptor contract (unstable).` |
 | `host-invalid-descriptor` | a specifier under `mx.host` exports a descriptor with no `host` part | `mx.host "@acme/mx-vue" exports a target with no host. Use mx.target "@acme/mx-vue", or give the descriptor a "host" part.` |
 

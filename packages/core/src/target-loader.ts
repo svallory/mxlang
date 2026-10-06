@@ -4,9 +4,10 @@
  * **Unstable** (decision 129), like the contract it loads.
  *
  * This is `loadSidecar`'s mechanism (`scan.ts`) with two changes. It resolves
- * from the *project* (`createRequire` anchored at `fromDir/package.json`), not
- * from core, so a user's installed target package is found with no bundling
- * work. And it does not evict `require.cache` per call: a sidecar is edited
+ * from the *project* (`fromDir`), not from core, so a user's installed target
+ * package is found with no bundling work; a bare specifier is resolved from
+ * the disk by `fresh-resolve.ts`, the rest by `createRequire` anchored at
+ * `fromDir/package.json`. And it does not evict `require.cache` per call: a sidecar is edited
  * constantly, an installed target package is not, and evicting would hand back
  * a new descriptor object on every call. The package is re-evaluated only
  * when the target package's own `package.json` mtime or text changes, which is what
@@ -26,9 +27,10 @@
  */
 
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, parse, resolve, sep } from "node:path";
+import { resolveFresh } from "./fresh-resolve.ts";
 import {
   type TargetDescriptor,
   TargetDescriptorError,
@@ -130,216 +132,6 @@ function packageStamp(file: string): PackageStamp | undefined {
   }
 }
 
-/**
- * The conditions a CommonJS `require` matches, as the running runtime's own
- * resolver does: `bun` only under Bun, never under Node.
- */
-const CONDITIONS: ReadonlySet<string> = new Set([
-  ...("bun" in process.versions ? ["bun"] : []),
-  "node",
-  "require",
-  "default",
-]);
-
-/** A package whose manifest cannot be used: reported as `load-failed`. */
-class InvalidPackage extends Error {
-  readonly kind: "target" | "config";
-  constructor(kind: "target" | "config", detail: string) {
-    super(detail);
-    this.kind = kind;
-  }
-}
-
-/** Node's `invalidSegmentRegEx`, without the percent-encoded spellings. */
-const INVALID_SEGMENT = /^(|\.|\.\.|node_modules)$/i;
-
-/**
- * Resolves `target` (an `exports` value) for a CommonJS `require`, as Node's
- * PACKAGE_TARGET_RESOLVE does: a string must start with `./` and have no
- * empty, `.`, `..` or `node_modules` segment; an array takes the first entry
- * that resolves (an invalid one is remembered and thrown if none does); a
- * condition object takes the first key, in the package's own order, that this
- * runtime matches. `null` is an explicit "not exported".
- */
-function exportsTarget(target: unknown): string | null | undefined {
-  if (typeof target === "string") {
-    if (
-      !target.startsWith("./") ||
-      target
-        .slice(2)
-        .split(/[\\/]/)
-        .some((segment) => INVALID_SEGMENT.test(segment))
-    ) {
-      throw new InvalidPackage("target", `"${target}"`);
-    }
-    return target;
-  }
-  if (target === null || target === undefined) return target;
-  if (Array.isArray(target)) {
-    let invalid: InvalidPackage | undefined;
-    for (const entry of target) {
-      try {
-        const found = exportsTarget(entry);
-        if (found === undefined) continue;
-        if (found === null) {
-          invalid = undefined;
-          continue;
-        }
-        return found;
-      } catch (cause) {
-        if (!(cause instanceof InvalidPackage)) throw cause;
-        invalid = cause;
-      }
-    }
-    if (invalid) throw invalid;
-    return undefined;
-  }
-  if (typeof target === "object") {
-    for (const [condition, value] of Object.entries(target)) {
-      if (!CONDITIONS.has(condition)) continue;
-      const found = exportsTarget(value);
-      if (found !== undefined) return found;
-    }
-    return undefined;
-  }
-  throw new InvalidPackage("target", JSON.stringify(target) ?? String(target));
-}
-
-/**
- * The entry `exports` gives `subpath`, or `undefined` when it exports none.
- * `exports` is a subpath map when its keys start with `.` and a condition map
- * (the main entry's sugar) when none does; a mix is an invalid config, as in
- * Node. A string or array is the main entry's sugar.
- */
-function exportsEntry(exp: unknown, subpath: string): unknown {
-  if (typeof exp === "object" && exp !== null && !Array.isArray(exp)) {
-    const keys = Object.keys(exp);
-    const subpaths = keys.filter((key) => key.startsWith("."));
-    if (subpaths.length > 0 && subpaths.length < keys.length) {
-      throw new InvalidPackage(
-        "config",
-        '"exports" mixes subpath keys with condition keys',
-      );
-    }
-    if (subpaths.length > 0) {
-      return Object.hasOwn(exp, subpath)
-        ? (exp as Record<string, unknown>)[subpath]
-        : undefined;
-    }
-  }
-  return subpath === "." ? exp : undefined;
-}
-
-/** Whether `file` is inside `dir` (a path-segment prefix, not a string one). */
-function isInside(dir: string, file: string): boolean {
-  return file.startsWith(dir.endsWith(sep) ? dir : dir + sep);
-}
-
-/**
- * A fresh resolution of a bare `spec` for when the runtime's resolver reported
- * a miss: both Bun and Node keep a miss once the project has a `node_modules`,
- * so a package installed after it is invisible to `require.resolve` for the
- * life of the process. This walks up from `fromDir` for
- * `node_modules/<name>/package.json` on the real filesystem and applies the
- * package's own `exports` (exact subpath keys; no wildcard patterns) or
- * `main`, which is enough for a target's entry point. An `exports` target is
- * statted verbatim, as Node does; only `main` (and a subpath of a package with
- * no `exports`) gets legacy extension and `index.js` probing. Returns
- * `undefined` when the package is not there, exports nothing for `spec`, or
- * its entry does not exist.
- *
- * Throws `TargetLoadError` `load-failed` for a package that is there but
- * unusable: a manifest that is not a JSON object, an invalid `exports` map, or
- * a target outside the package directory.
- */
-function resolveFresh(spec: string, fromDir: string): string | undefined {
-  if (spec.startsWith(".") || spec.startsWith("/") || /^[a-z]:/i.test(spec)) {
-    return undefined;
-  }
-  const parts = spec.split("/");
-  const nameLength = spec.startsWith("@") ? 2 : 1;
-  if (parts.length < nameLength) return undefined;
-  const name = parts.slice(0, nameLength).join("/");
-  const subpath =
-    parts.length > nameLength ? `./${parts.slice(nameLength).join("/")}` : ".";
-  let dir: string;
-  try {
-    // The ancestors Node walks are those of the real directory.
-    dir = realpathSync(fromDir);
-  } catch {
-    dir = fromDir;
-  }
-  for (;;) {
-    const pkgDir = join(dir, "node_modules", ...name.split("/"));
-    const manifestPath = join(pkgDir, "package.json");
-    if (existsSync(manifestPath)) {
-      const unusable = (reason: string, cause?: unknown) =>
-        new TargetLoadError(
-          "load-failed",
-          `"${spec}" cannot be loaded: ${reason} in ${manifestPath}`,
-          { spec, fromDir, cause },
-        );
-      let manifest: unknown;
-      try {
-        manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-      } catch (cause) {
-        throw unusable(
-          `invalid package config (${summary(messageOf(cause))})`,
-          cause,
-        );
-      }
-      if (
-        manifest === null ||
-        typeof manifest !== "object" ||
-        Array.isArray(manifest)
-      ) {
-        throw unusable("invalid package config (not a JSON object)");
-      }
-      const { exports: exp, main } = manifest as {
-        exports?: unknown;
-        main?: unknown;
-      };
-      let relative: string | null | undefined;
-      let probe = false;
-      try {
-        if (exp !== undefined && exp !== null) {
-          relative = exportsTarget(exportsEntry(exp, subpath));
-        } else if (subpath !== ".") {
-          relative = subpath;
-          probe = true;
-        } else {
-          relative = typeof main === "string" ? main : "index.js";
-          probe = true;
-        }
-      } catch (cause) {
-        if (!(cause instanceof InvalidPackage)) throw cause;
-        throw unusable(`invalid package ${cause.kind} ${cause.message}`, cause);
-      }
-      if (relative === undefined || relative === null) return undefined;
-      const base = resolve(pkgDir, relative);
-      if (!isInside(pkgDir, base)) {
-        throw unusable(
-          `invalid package target "${relative}" leaves the package`,
-        );
-      }
-      const candidates = probe
-        ? [base, `${base}.js`, `${base}.cjs`, join(base, "index.js")]
-        : [base];
-      for (const candidate of candidates) {
-        try {
-          if (statSync(candidate).isFile()) return candidate;
-        } catch {
-          // try the next candidate
-        }
-      }
-      return undefined;
-    }
-    const parent = dirname(dir);
-    if (parent === dir) return undefined;
-    dir = parent;
-  }
-}
-
 /** The constraints of `loadSidecar`, restated for a target package. */
 function loadHint(message: string): string {
   if (message.includes("top-level await")) {
@@ -427,12 +219,12 @@ function isPackageManifest(manifest: string, fromDir: string): boolean {
  * Failures are never cached: a failed load is re-evaluated on every call, so a
  * fix to any file it loaded (the entry, or a module the entry requires) is
  * picked up by the next call. A miss (`not-found`) is never cached by this
- * module either, but the runtime's resolver keeps a miss once the project has a
- * `node_modules` (Bun and Node alike), so a bare specifier it reports missing is
- * re-checked on disk: the package's own `exports`/`main` is applied directly, and
- * a target installed after a `not-found` loads on the next call, with no restart.
+ * module, and a bare specifier is resolved from the disk on every call, the way
+ * the running runtime's resolver does (`fresh-resolve.ts`), so a target installed
+ * after a `not-found` loads on the next call, with no restart, and loads the same
+ * file it would in a fresh process.
  * Throws `TargetLoadError`: `not-found` (does not resolve), `load-failed`
- * (throws while evaluating, or the package's manifest is unusable), `invalid-descriptor` (wrong shape, or a
+ * (throws while evaluating, or its package's `package.json` is unusable: an invalid config on Node, an invalid `exports` target or config), `invalid-descriptor` (wrong shape, or a
  * `descriptorVersion` this mx does not support).
  *
  * @unstable
@@ -444,26 +236,37 @@ export function loadTargetDescriptor(
   fromDir = resolve(fromDir);
   const req = createRequire(join(fromDir, "package.json"));
 
+  // A bare specifier is resolved from the disk first: both runtimes keep
+  // resolution state for the life of the process (a miss on Bun, a missing
+  // `package.json` on Node), so `require.resolve` can report a package
+  // installed since as missing, or as its `index.js`. The runtime is asked
+  // only for what no `node_modules` holds (`NODE_PATH`, Yarn PnP, a relative
+  // or absolute specifier).
+  const fresh = resolveFresh(spec, fromDir);
   let resolved: string;
-  try {
-    resolved = req.resolve(spec);
-  } catch (cause) {
-    // The runtime's resolver may be serving a cached miss for a package
-    // installed since; trust the filesystem before reporting not-found.
-    const fresh = resolveFresh(spec, fromDir);
-    if (fresh === undefined) {
+  if (fresh.kind === "file") {
+    resolved = fresh.path;
+  } else if (fresh.kind === "invalid") {
+    throw new TargetLoadError(
+      "load-failed",
+      `"${spec}" cannot be loaded: ${fresh.reason} in ${fresh.manifest}`,
+      { spec, fromDir },
+    );
+  } else if (fresh.kind === "missing") {
+    throw new TargetLoadError(
+      "not-found",
+      `"${spec}" cannot be resolved from ${fromDir}: Cannot find module '${spec}': ${fresh.reason}`,
+      { spec, fromDir },
+    );
+  } else {
+    try {
+      resolved = req.resolve(spec);
+    } catch (cause) {
       throw new TargetLoadError(
         "not-found",
         `"${spec}" cannot be resolved from ${fromDir}: ${summary(messageOf(cause))}`,
         { spec, fromDir, cause },
       );
-    }
-    // The real path, as `require.resolve` reports it, so the caches agree
-    // whichever resolver found the file (a package manager may symlink).
-    try {
-      resolved = realpathSync(fresh);
-    } catch {
-      resolved = fresh;
     }
   }
 
