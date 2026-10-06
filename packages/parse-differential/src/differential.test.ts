@@ -50,6 +50,19 @@ const SILENT_EOF = new Set([
 /** Errors PR 2b raises at its seam (ast §3.13); today's path throws them. */
 const PR_2B = new Set(["g0234", "g1274", "g1304"]);
 
+/**
+ * The default value's name is zero-width at the method's `(` (ast §3.5,
+ * review item 6); today's sits at `async` or the type parameters' `<`.
+ */
+const DEFAULT_NAME_AT_PAREN = new Set([
+  "g0091",
+  "g0518",
+  "g0721",
+  "g1419",
+  "g1479",
+  "g1494",
+]);
+
 /** A concise head ends at its last non-whitespace character (review item 5). */
 const CONCISE_HEAD_TRIMMED = new Set(["g1259", "g1356"]);
 
@@ -84,6 +97,7 @@ describe("grammar corpus inputs", () => {
         if (outcome.equal) return false;
         return !(
           ASYNC_METHOD_START.has(probe.id) ||
+          DEFAULT_NAME_AT_PAREN.has(probe.id) ||
           CONCISE_HEAD_TRIMMED.has(probe.id) ||
           SILENT_EOF.has(probe.id) ||
           PR_2B.has(probe.id) ||
@@ -105,6 +119,7 @@ describe("grammar corpus inputs", () => {
     for (const { probe, outcome } of results) {
       if (
         ASYNC_METHOD_START.has(probe.id) ||
+        DEFAULT_NAME_AT_PAREN.has(probe.id) ||
         CONCISE_HEAD_TRIMMED.has(probe.id) ||
         SILENT_EOF.has(probe.id) ||
         PR_2B.has(probe.id)
@@ -124,12 +139,12 @@ describe("grammar corpus inputs", () => {
   it("the async-method difference is the attribute start alone", () => {
     const outcome = compare("<div async onClick(a) {b}/>");
     expect(outcome.mx).toEqual([
-      'tag "div" [0,27)',
-      '  · attr "onClick" [5,25) method "async onClick(a) {b}"',
+      'tag "div"@[1,4) [0,27)',
+      '  · attr "onClick" [5,25) name=[11,18) method "async onClick(a) {b}"@[5,25)',
     ]);
     expect(outcome.marko).toEqual([
-      'tag "div" [0,27)',
-      '  · attr "onClick" [11,25) method "async onClick(a) {b}"',
+      'tag "div"@[1,4) [0,27)',
+      '  · attr "onClick" [11,25) name=[11,18) method "async onClick(a) {b}"@[5,25)',
     ]);
   });
 
@@ -138,14 +153,17 @@ describe("grammar corpus inputs", () => {
     // addendum 9), never an element nobody wrote.
     const outcome = compare(",");
     expect(outcome.note).toMatch(/^today's path threw: /);
-    expect(outcome.mx).toEqual(["tag (unnamed) [1,1)"]);
+    expect(outcome.mx).toEqual(["tag (unnamed)@[1,1) [1,1)"]);
   });
 
   it("silent end of input: today's tags carry no position, the front end closes them at the end", () => {
-    expect(compare("div(a").mx).toEqual(['tag "div" [0,5)', '  · args "a"']);
+    expect(compare("div(a").mx).toEqual([
+      'tag "div"@[0,3) [0,5)',
+      '  · args "a"@[4,5)',
+    ]);
     expect(compare("div(a").marko).toEqual([
-      'tag "div" [-1,-1)',
-      '  · args "a"',
+      'tag "div"@[0,3) [-1,-1)',
+      '  · args "a"@[4,5)',
     ]);
     expect(compare("$ {a").mx).toEqual(["scriptlet [0,4)"]);
     expect(compare("$ {a").marko).toEqual(["scriptlet [0,5)"]);

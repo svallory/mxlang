@@ -8,6 +8,7 @@
 import type { MxBodyMode } from "@mxlang/babel/mx-ast";
 import { CORE_TAGLIB, markoCompiler } from "@mxlang/core";
 import {
+  code,
   type NDocument,
   type NLeaf,
   type NNode,
@@ -61,6 +62,8 @@ export interface MarkoResult {
   readonly document: NDocument;
   /** Marko text ranges, for rule `text-runs` (A13). */
   readonly texts: (readonly [number, number])[];
+  /** Ranges of expressions today's tree holds as `MarkoParseError` (no atoms inside). */
+  readonly failed?: readonly Span[];
   /** Set when today's path threw something that is not the template parser's error. */
   readonly crash?: string;
 }
@@ -89,6 +92,7 @@ export function projectMarko(source: string): MarkoResult {
       return {
         document: {
           body: [],
+          atoms: [],
           error: `[${thrown.start},${thrown.end}) ${JSON.stringify(thrown.message)}`,
         },
         texts: [],
@@ -99,15 +103,51 @@ export function projectMarko(source: string): MarkoResult {
         .split("\n")
         .find((l) => l.trim()) ?? "";
     return {
-      document: { body: [], error: null },
+      document: { body: [], atoms: [], error: null },
       texts: [],
       crash: message.trim(),
     };
   }
   const texts: (readonly [number, number])[] = [];
   const ctx = { source, starts, texts };
+  // Atoms (decision 156): today's parser hands Babel a numeric stand-in at
+  // each atom, so an atom is a NumericLiteral whose source starts with `:`.
+  const atoms: { start: number; line: string }[] = [];
+  /** Expressions today's Babel could not parse: their atoms are not in today's tree. */
+  const failed: Span[] = [];
+  const seen = new Set<unknown>();
+  const walk = (value: unknown) => {
+    if (!value || typeof value !== "object" || seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) return value.forEach(walk);
+    const node = value as Node;
+    if (node.type === "MarkoParseError" && node.loc) {
+      failed.push(spanOf(ctx, node));
+    }
+    const at = node.loc?.start?.index;
+    if (
+      node.type === "NumericLiteral" &&
+      typeof at === "number" &&
+      source[at] === ":"
+    ) {
+      const end = node.loc.end.index;
+      atoms.push({
+        start: at,
+        line: `:${source.slice(at + 1, end)}@[${at},${end})`,
+      });
+    }
+    for (const [key, field] of Object.entries(node)) {
+      if (key !== "loc" && key !== "extra") walk(field);
+    }
+  };
+  walk(ast.program);
   return {
-    document: { body: children(ctx, ast.program.body, []), error: null },
+    document: {
+      body: children(ctx, ast.program.body, []),
+      atoms: atoms.sort((x, y) => x.start - y.start).map((x) => x.line),
+      error: null,
+    },
+    failed,
     texts,
   };
 }
@@ -135,11 +175,33 @@ function spanOf(ctx: Ctx, node: Node): Span {
 
 /** The authored text of Babel nodes, from the first to the last, parentheses included. */
 function nodesText(ctx: Ctx, nodes: Node[]): string {
-  if (nodes.length === 0) return "";
+  const range = nodesRange(ctx, nodes);
+  if (!range) return "";
+  return "source" in range
+    ? range.source
+    : ctx.source.slice(range.start, range.end);
+}
+
+/** The authored text of Babel nodes with its span, in the neutral form's `code` shape. */
+function nodesCode(ctx: Ctx, nodes: Node[]): string {
+  const range = nodesRange(ctx, nodes);
+  if (!range) return code("", 0);
+  if ("source" in range) {
+    const [s] = spanOf(ctx, range.node);
+    return code(range.source, s);
+  }
+  return code(ctx.source.slice(range.start, range.end), range.start);
+}
+
+function nodesRange(
+  ctx: Ctx,
+  nodes: Node[],
+): { start: number; end: number } | { source: string; node: Node } | undefined {
+  if (nodes.length === 0) return undefined;
   let start = Number.POSITIVE_INFINITY;
   let end = Number.NEGATIVE_INFINITY;
   for (const node of nodes) {
-    if (node.type === "MarkoParseError") return node.source;
+    if (node.type === "MarkoParseError") return { source: node.source, node };
     // Babel nodes keep `loc.start.index` through Marko's clone, not `start`.
     let s: number = node.start ?? node.loc?.start.index;
     let e: number = node.end ?? node.loc?.end.index;
@@ -158,7 +220,7 @@ function nodesText(ctx: Ctx, nodes: Node[]): string {
     start = Math.min(start, s);
     end = Math.max(end, e);
   }
-  return ctx.source.slice(start, end);
+  return { start, end };
 }
 
 /** Rule `attribute-tags-in-place` (A7): body and moved attribute tags, back in source order. */
@@ -190,7 +252,7 @@ function child(ctx: Ctx, node: Node): NNode | undefined {
       return leaf(
         "placeholder",
         span,
-        `${node.escape === false ? "unescaped " : ""}${text(nodesText(ctx, [node.value]))}`,
+        `${node.escape === false ? "unescaped " : ""}${nodesCode(ctx, [node.value])}`,
       );
     case "MarkoScriptlet":
       return leaf("scriptlet", span);
@@ -224,13 +286,16 @@ function tag(ctx: Ctx, node: Node): NNode {
   let projectedName: string;
   if (name.type === "StringLiteral") {
     const [s, e] = spanOf(ctx, name);
-    if (name.value.startsWith("@")) projectedName = name.value;
+    if (name.value.startsWith("@")) projectedName = `${name.value}@[${s},${e})`;
     else if (s === e && name.value === "div")
-      projectedName = "(unnamed)"; // rule `unnamed-tag` (A5)
+      projectedName = `(unnamed)@[${s},${s})`; // rule `unnamed-tag` (A5)
     else {
       // Rule `split-name-sugar` (A6): the name splits at its first `:`.
       const [value, colon] = splitAtFirstColon(name.value);
-      projectedName = value === "" ? "(unnamed)" : JSON.stringify(value);
+      projectedName =
+        value === ""
+          ? `(unnamed)@[${s},${s})`
+          : `${JSON.stringify(value)}@[${s},${s + value.length})`;
       if (colon) sugar.push(`sugar :${JSON.stringify(colon)}`);
     }
   } else {
@@ -241,7 +306,7 @@ function tag(ctx: Ctx, node: Node): NNode {
   const head: string[] = [];
   const part = (key: string, nodes: Node[] | null | undefined) => {
     const value = nodesText(ctx, nodes ?? []);
-    if (value.trim() !== "") head.push(`${key} ${text(value)}`);
+    if (value.trim() !== "") head.push(`${key} ${nodesCode(ctx, nodes ?? [])}`);
   };
   // A failed sub-parse leaves a `MarkoParseError` (in an array) in place of the node.
   const typeList = (value: Node) =>
@@ -274,7 +339,7 @@ function tag(ctx: Ctx, node: Node): NNode {
       const [s, e] = spanOf(ctx, attr);
       items.push({
         start: s,
-        line: `spread [${s},${e}) ${text(nodesText(ctx, [attr.value]))}`,
+        line: `spread [${s},${e}) ${nodesCode(ctx, [attr.value])}`,
       });
     } else if (!attr.loc) {
       tagSugar.push(...unmerge(ctx, attr)); // rule `unmerge-shorthands` (A4)
@@ -356,9 +421,9 @@ function valueText(ctx: Ctx, value: Node): string {
     return "";
   if (value.type === "FunctionExpression" && !afterEquals(ctx, value)) {
     const [s, e] = spanOf(ctx, value);
-    return ` method ${text(ctx.source.slice(s, e))}`;
+    return ` method ${text(ctx.source.slice(s, e))}@[${s},${e})`;
   }
-  return ` ${text(nodesText(ctx, [value]))}`;
+  return ` ${nodesCode(ctx, [value])}`;
 }
 
 /** One authored Marko attribute: rules `rejoin-attribute-name` (A2), `default-attribute` (A3), `split-name-sugar` (A6). */
@@ -368,40 +433,50 @@ function attribute(ctx: Ctx, attr: Node): { start: number; line: string }[] {
     attr.value?.type === "FunctionExpression" && !afterEquals(ctx, attr.value);
   const operator = attr.bound ? " :=" : attr.value?.loc && !method ? " =" : "";
   const value = valueText(ctx, attr.value);
-  const args = attr.arguments
-    ? ` args ${text(nodesText(ctx, attr.arguments))}`
-    : "";
+  const args = attr.arguments ? ` args ${nodesCode(ctx, attr.arguments)}` : "";
   if (attr.default === true) {
     if (attr.modifier == null) {
       return [
         {
           start: s,
-          line: `attr (default) [${s},${e})${operator}${value}${args}`,
+          line: `attr (default) [${s},${e}) name=[${s},${s})${operator}${value}${args}`,
         },
       ];
     }
-    // `:x` (A3): the attribute-position `:` sugar.
+    // `:x` (A3): the attribute-position `:` sugar, spans from the name.
     const [word, colon] = splitAtFirstColon(attr.modifier);
-    const lines = [`sugar :${JSON.stringify(word)}`];
-    if (colon !== undefined) lines.push(`sugar :${JSON.stringify(colon)}`);
-    lines[lines.length - 1] += `${operator}${value}`;
+    const cut = s + 1 + word.length;
+    const lines = [`sugar :${JSON.stringify(word)}@[${s},${cut})`];
+    if (colon !== undefined) {
+      lines.push(
+        `sugar :${JSON.stringify(colon)}@[${cut},${cut + 1 + colon.length})`,
+      );
+    }
+    lines[lines.length - 1] += `${operator}${value}${args}`; // rule `sugar-arguments`
     return lines.map((line) => ({ start: s, line }));
   }
   const name = rejoinAttributeName(attr.name, attr.modifier);
   if (name.startsWith("#") || name.startsWith(".")) {
     const lines: string[] = [];
+    let at = s;
     for (const part of splitChain(name)) {
       const [word, colon] = splitAtFirstColon(part.word);
-      lines.push(`sugar ${part.sigil}${JSON.stringify(word)}`);
-      if (colon !== undefined) lines.push(`sugar :${JSON.stringify(colon)}`);
+      const cut = at + 1 + word.length;
+      lines.push(`sugar ${part.sigil}${JSON.stringify(word)}@[${at},${cut})`);
+      if (colon !== undefined) {
+        lines.push(
+          `sugar :${JSON.stringify(colon)}@[${cut},${cut + 1 + colon.length})`,
+        );
+      }
+      at += 1 + part.word.length;
     }
-    lines[lines.length - 1] += `${operator}${value}`;
+    lines[lines.length - 1] += `${operator}${value}${args}`; // rule `sugar-arguments`
     return lines.map((line) => ({ start: s, line }));
   }
   return [
     {
       start: s,
-      line: `attr ${JSON.stringify(name)} [${s},${e})${operator}${value}${args}`,
+      line: `attr ${JSON.stringify(name)} [${s},${e}) name=[${s},${s + name.length})${operator}${value}${args}`,
     },
   ];
 }

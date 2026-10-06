@@ -76,10 +76,29 @@ export const RULES: readonly Rule[] = [
     what: "a dynamic name is compared by its authored text",
   },
   {
+    id: "sugar-arguments",
+    row: "A6 (decision 163 addendum 11)",
+    what: "arguments Marko keeps on an attribute named `.c`, `#x` or `:x` are the `args` of that chain's last sugar part",
+  },
+  {
     id: "template-error",
     row: "A10",
     what: "Marko throws the template parser's error with a code frame; its message and range are the MX template error's",
   },
+];
+
+/**
+ * What the differential does not compare, because today's tree does not
+ * carry it (one line each; the front end's own tests assert these):
+ */
+export const NOT_COMPARED: readonly string[] = [
+  "tag-position shorthand spans: Marko merges `#id`/`.class` into loc-less `class`/`id` attributes (A4), so only their text and order within a sigil are compared",
+  "the order of tag-position sugar across sigils: the merge loses it; both sides list ids, then classes, then `:`",
+  "a dynamic tag name's span and container: Marko's whole-template name keeps no position through the clone (A17); compared by text",
+  "a dynamic shorthand's spans: merged without loc (A4); compared by text",
+  "atoms inside an expression Babel could not parse: today's tree holds the raw text (`MarkoParseError`), not the atom",
+  "open and close tag spans, `bodyMode`, `concise`, `selfClosed`: not in today's tree; asserted by `checkInvariants`",
+  "statement `code` spans: today's statement is a raw string (A8)",
 ];
 
 /** A2: Marko splits at the last `:`; the authored name is both halves. */

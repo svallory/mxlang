@@ -39,8 +39,10 @@ describe("rejoin-attribute-name (A2)", () => {
 
 describe("default-attribute (A3)", () => {
   it("Marko's `value` default is the default value; with a modifier the : sugar", () => {
-    expect(marko("<if=a></if>")).toContain('  · attr (default) [3,5) = "a"');
-    expect(marko("<a :mail/>")).toContain('  · sugar :"mail"');
+    expect(marko("<if=a></if>")).toContain(
+      '  · attr (default) [3,5) name=[3,3) = "a"@[4,5)',
+    );
+    expect(marko("<a :mail/>")).toContain('  · sugar :"mail"@[3,8)');
     expect(compare("<if=a></if><a :b=1/>").equal).toBe(true);
   });
 });
@@ -48,7 +50,7 @@ describe("default-attribute (A3)", () => {
 describe("unmerge-shorthands (A4)", () => {
   it("the merged class/id attributes are the tag-position sugar", () => {
     expect(marko("<a#i.b.c/>")).toEqual([
-      'tag "a" [0,10)',
+      'tag "a"@[1,2) [0,10)',
       '  · sugar #"i"',
       '  · sugar ."b"',
       '  · sugar ."c"',
@@ -60,7 +62,7 @@ describe("unmerge-shorthands (A4)", () => {
 
 describe("unnamed-tag (A5)", () => {
   it("Marko's `div` over an empty name span is the unnamed tag", () => {
-    expect(marko("<.c/>")[0]).toBe("tag (unnamed) [0,5)");
+    expect(marko("<.c/>")[0]).toBe("tag (unnamed)@[1,1) [0,5)");
     expect(compare("<.c/><div/>").equal).toBe(true);
   });
 });
@@ -140,6 +142,15 @@ describe("open-tag-comments (A14)", () => {
 describe("dynamic-name (A17)", () => {
   it("a dynamic name compares by its authored text", () => {
     expect(compare("<${x}/><my-${x}/><${a}${b}/>").equal).toBe(true);
+  });
+});
+
+describe("sugar-arguments (A6, decision 163 addendum 11)", () => {
+  it("Marko's arguments on a sugar-named attribute are the last part's args", () => {
+    expect(marko("<div .c(:a)/>")).toContain(
+      '  · sugar ."c"@[5,7) args ":a"@[8,10)',
+    );
+    expect(compare("<div .c(:a)/><div #x.y(1)/><div :n(2)/>").equal).toBe(true);
   });
 });
 

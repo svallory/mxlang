@@ -61,13 +61,27 @@ function dropTexts(nodes: readonly NNode[]): NNode[] {
     );
 }
 
-function textRuns(
+/**
+ * Text runs grouped by their parent, the parent named by its path among
+ * the non-text nodes (`0.2` is the third non-text child of the first
+ * top-level non-text node), so a run under the wrong parent is a difference.
+ */
+function textsByParent(
   nodes: readonly NNode[],
-  out: (readonly [number, number])[] = [],
+  path = "",
+  out = new Map<string, (readonly [number, number])[]>(),
 ) {
+  let index = 0;
   for (const node of nodes) {
-    if (node.kind === "text") out.push(node.span);
-    else if (node.kind === "tag") textRuns(node.children, out);
+    if (node.kind === "text") {
+      const runs = out.get(path) ?? [];
+      runs.push(node.span);
+      out.set(path, runs);
+      continue;
+    }
+    if (node.kind === "tag")
+      textsByParent(node.children, `${path}.${index}`, out);
+    index++;
   }
   return out;
 }
@@ -101,12 +115,33 @@ export function compare(source: string): Outcome {
       text: [],
     };
   }
-  const text = compareTextRuns(source, marko.texts, textRuns(mx.body));
+  // Rule `text-runs` (A13), per parent: today's (trimmed) runs under a tag
+  // must sit in that same tag's MX runs.
+  const mxTexts = textsByParent(mx.body);
+  const markoTexts = textsByParent(marko.document.body);
+  const text: string[] = [];
+  for (const parent of new Set([...mxTexts.keys(), ...markoTexts.keys()])) {
+    for (const problem of compareTextRuns(
+      source,
+      markoTexts.get(parent) ?? [],
+      mxTexts.get(parent) ?? [],
+    )) {
+      text.push(`under ${parent || "the document"}: ${problem}`);
+    }
+  }
+  // Atoms inside an expression today's Babel could not parse are not in
+  // today's tree (it holds the raw text): not compared (rules.ts).
+  const failed = marko.failed ?? [];
+  const inFailed = (line: string) => {
+    const [, s, e] = /@\[(\d+),(\d+)\)$/.exec(line) ?? [];
+    return failed.some(([fs, fe]) => Number(s) >= fs && Number(e) <= fe);
+  };
+  const comparable = { ...mx, atoms: mx.atoms.filter((a) => !inFailed(a)) };
   const strip = (d: NDocument): NDocument => ({
     ...d,
     body: dropTexts(d.body),
   });
-  const a = print(strip(mx));
+  const a = print(strip(comparable));
   const b = print(strip(marko.document));
   return {
     equal: text.length === 0 && JSON.stringify(a) === JSON.stringify(b),

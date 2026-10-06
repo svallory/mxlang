@@ -41,6 +41,8 @@ export type NNode = NTag | NLeaf;
 
 export interface NDocument {
   readonly body: readonly NNode[];
+  /** Every atom, `:name@[s,e)`, sorted by start. */
+  readonly atoms: readonly string[];
   /** `CODE [s,e) "message"` for the template error, or the thrown error of today's path. */
   readonly error: string | null;
 }
@@ -64,6 +66,7 @@ export function print(document: NDocument): string[] {
     );
   };
   for (const node of document.body) visit(node, 0);
+  if (document.atoms.length) out.push(`atoms ${document.atoms.join(" ")}`);
   if (document.error) out.push(`error ${document.error}`);
   return out;
 }
@@ -75,6 +78,16 @@ export function print(document: NDocument): string[] {
  * excludes both, so only the code between them is comparable.
  */
 export const text = (source: string) => JSON.stringify(trimCode(source));
+
+/**
+ * Expression text with the span of the code it compares: `source` starts at
+ * file offset `start`; the span covers `trimCode(source)` inside it.
+ */
+export function code(source: string, start: number): string {
+  const trimmed = trimCode(source);
+  const at = trimmed === "" ? start : start + source.indexOf(trimmed);
+  return `${JSON.stringify(trimmed)}@[${at},${at + trimmed.length})`;
+}
 
 export function trimCode(source: string): string {
   let out = source;
