@@ -45,7 +45,7 @@ export function TodoItem(props: {
             checked=props.todo.completed
             onChange() { props.onToggle(props.todo.id) }
           />
-          <label ondblclick() { startEdit() }>${props.todo.text}</label>
+          <label onDblClick() { startEdit() }>${props.todo.text}</label>
           <button class="destroy" onClick() { props.onDestroy(props.todo.id) }></button>
         </div>
       </if>
