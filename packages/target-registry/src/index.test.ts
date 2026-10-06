@@ -316,6 +316,7 @@ describe("the hostless `data` target", () => {
       "solid",
       "preact",
       "react",
+      "hono",
       "ng",
     ]);
     expect(lookup.moduleSegments()).toEqual([
