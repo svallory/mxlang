@@ -21,22 +21,22 @@ function collect(node: unknown, type: string, out: unknown[] = []): unknown[] {
 const parseMx = (source: string) => parseSolid(source);
 
 describe("MX element parsing", () => {
-  it("lowers an attr method to a block-body arrow", () => {
+  it("lowers an attr method to a block-body function expression (decision 167)", () => {
     const file = parseMx(
       `const el = <button onClick() { setCount(count() + 1) }>\${count()}</button>;`,
     );
-    const arrows = collect(file, "ArrowFunctionExpression") as {
+    const fns = collect(file, "FunctionExpression") as {
       body: { type: string; body: unknown[] };
       params: unknown[];
       async: boolean;
     }[];
-    expect(arrows).toHaveLength(1);
+    expect(fns).toHaveLength(1);
     // The block body is never unwrapped to an expression body, even though it
     // holds a single expression statement.
-    expect(arrows[0]?.body.type).toBe("BlockStatement");
-    expect(arrows[0]?.body.body).toHaveLength(1);
-    expect(arrows[0]?.params).toHaveLength(0);
-    expect(arrows[0]?.async).toBe(false);
+    expect(fns[0]?.body.type).toBe("BlockStatement");
+    expect(fns[0]?.body.body).toHaveLength(1);
+    expect(fns[0]?.params).toHaveLength(0);
+    expect(fns[0]?.async).toBe(false);
   });
 
   it("lowers static, dynamic and boolean attributes", () => {
@@ -96,8 +96,8 @@ describe("MX element parsing", () => {
       typeParameters?: unknown;
     }[];
     // The `<T,>` must stay a generic arrow, not become an element.
-    expect(arrows).toHaveLength(1);
-    expect(arrows[0]?.typeParameters).toBeTruthy();
+    expect(fns).toHaveLength(1);
+    expect(fns[0]?.typeParameters).toBeTruthy();
     expect(collect(file, "JSXElement")).toHaveLength(1);
   });
 

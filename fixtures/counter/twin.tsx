@@ -5,7 +5,7 @@ export function Counter() {
 
   return (
     <button
-      onClick={() => {
+      onClick={function () {
         setCount(count() + 1);
       }}
     >

@@ -327,7 +327,7 @@ describe("ref", () => {
     expect(attr.value.expression.name).toBe("target");
   });
 
-  it("lowers the attr-method form `ref(el) { ... }` to a block-body arrow", () => {
+  it("lowers the attr-method form `ref(el) { ... }` to a block-body function expression (decision 167)", () => {
     const attrs = attrsOf(`const el = <div ref(node) { save(node) }>x</div>;`);
     expect(attrs).toHaveLength(1);
     const attr = attrs[0] as {
@@ -337,7 +337,7 @@ describe("ref", () => {
       };
     };
     expect(attr.name.name).toBe("ref");
-    expect(attr.value.expression.type).toBe("ArrowFunctionExpression");
+    expect(attr.value.expression.type).toBe("FunctionExpression");
     expect(attr.value.expression.params).toHaveLength(1);
     expect(attr.value.expression.body.type).toBe("BlockStatement");
   });
