@@ -10,7 +10,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readCalleeInput } from "@mxlang/core";
 import { afterEach, describe, expect, it } from "vitest";
-import { lookupFor, resolveTargetPolicyDetailed } from "./index.ts";
+import {
+  builtinLookup,
+  lookupFor,
+  resolveTargetPolicyDetailed,
+} from "./index.ts";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -95,7 +99,7 @@ describe("a loaded host's readCalleeInput", () => {
     ]);
   });
 
-  it("is not registered process-wide: a compile under no lookup never sees it", () => {
+  it("is not registered process-wide: a compile under the built-in lookup never sees it", () => {
     const root = project("solo", "@t/mesh-solo");
     read(root);
     const before = calls().length;
@@ -104,6 +108,7 @@ describe("a loaded host's readCalleeInput", () => {
       {
         importer: join(root, "caller.mx"),
         imports: new Map([["W", "./widget"]]),
+        targets: builtinLookup(),
       },
     );
     expect(result.input.kind).toBe("unresolved");

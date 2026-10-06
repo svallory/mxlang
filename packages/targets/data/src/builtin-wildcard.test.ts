@@ -18,7 +18,9 @@ const tags: Record<string, CustomTag> = {
 };
 
 const messages = (source: string) =>
-  parseData(source, { customTags: tags }).diagnostics.map((d) => d.message);
+  parseData(source, "/u.mx", { customTags: tags }).diagnostics.map(
+    (d) => d.message,
+  );
 
 describe("builtinTags and the wildcard", () => {
   it("data declares `object` as a built-in", () => {
