@@ -31,6 +31,7 @@ import {
   SUGAR_FORMS,
   tagNameReads,
   tsMarkerViolations,
+  unicodeWhitespaceMismatches,
 } from "../packages/parser/src/template/mx-atoms.cases.ts";
 
 const isValidTs = (expression: string) => {
@@ -348,6 +349,12 @@ describe.each(builds)("atoms (%s)", (_name, build) => {
   it("a non-ASCII letter before `:` lexes as the same row with an ASCII letter", () => {
     const { total, bad } = asciiTwinMismatches(mod);
     expect(total).toBe(5_040);
+    expect(bad).toEqual([]);
+  });
+
+  it("Unicode whitespace before `:` lexes as main did (review F1)", () => {
+    const { total, bad } = unicodeWhitespaceMismatches(mod);
+    expect(total).toBe(2_660);
     expect(bad).toEqual([]);
   });
 
