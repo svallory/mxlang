@@ -941,7 +941,7 @@ describe("round 2 (rev-236)", () => {
         `<a>x <b/> y</a>\n`,
         [
           { message: STATIC("text"), line: 1, column: 3 },
-          { message: STATIC("text"), line: 1, column: 0 },
+          { message: STATIC("text"), line: 1, column: 10 },
         ],
         {
           structural: "reject",

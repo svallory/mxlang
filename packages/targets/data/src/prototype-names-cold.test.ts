@@ -33,6 +33,13 @@ describe("cold lookup cache", () => {
           column: 0,
           offset: 0,
         },
+        {
+          severity: "error",
+          message: `\`<child>\` must be at the top level; found inside \`<${name}>\` (inside the unknown tag \`<${name}>\`; may resolve once it is declared)`,
+          line: 2,
+          column: 2,
+          offset: 13 + (name.length - "toString".length),
+        },
       ]);
     },
   );

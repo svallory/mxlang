@@ -133,6 +133,10 @@ describe("an unknown prototype-named parent above a contract error", () => {
         message: expect.stringContaining("`<toString>` is not a known tag"),
         line: 1,
       },
+      {
+        message: expect.stringContaining("`<child>` must be at the top level"),
+        line: 2,
+      },
     ]);
   });
 });
