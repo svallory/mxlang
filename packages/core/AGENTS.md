@@ -69,7 +69,8 @@ Five facts worth knowing before editing it:
   tag's value — silently dropping the content Marko's own comment calls
   "fallback content". MX's `<define>` emitters (html, the shared preact/
   react/hono emitter) instead extend their own pre-existing positional
-  named-lookup scheme (used for the no-args call shape): params beyond the
+  named-lookup scheme (args path only; a no-args call passes one attribute
+  object, decision 160): params beyond the
   consumed args are filled from the same named lookup, one value per param.
   Solid needed no emitter change for the dynamic-tag case — its design
   already keeps attrs/attribute-tags/content orthogonal from args (args only

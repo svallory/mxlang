@@ -3563,7 +3563,7 @@ deferred (decision 85).
    this shape wrong for a construct with no `Input` to destructure against.
    (Superseded by decision 160 for html and the JSX hosts: a no-args call
    there passes one attribute object to the first param; the paragraph below
-   still describes the args path everywhere, and the no-args shape on Solid.)
+   still describes the args path everywhere, and the no-args shape on Solid and Angular.)
    MX's `<define>` emitters (html, the shared preact/react/hono emitter)
    instead extend their own pre-existing positional named-lookup scheme
    (already used for the no-args call shape, where `<Row it=x/>` looks up

@@ -1710,7 +1710,7 @@ export class PreactEmitter implements Emitter<string> {
       // trailing props object against — measured against real Marko 6.3.51:
       // its own codegen for this shape binds the object itself to whichever
       // param follows the args, not the attribute tag's value, and silently
-      // drops the content. MX instead extends its own existing positional
+      // drops the content. On this args path MX keeps its positional
       // named-lookup scheme: params beyond the args are filled from the same
       // named lookup, one value per param.
       //

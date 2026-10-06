@@ -115,7 +115,8 @@ export interface HostDeclarations {
    * the define's first param (Marko 6.3.51's shape), so `|p|` and `|{ n }|`
    * both read it. Decision 160 is a language rule for every target; this flag
    * only marks the hosts that already implement it, and is removed when every
-   * host implements decision 160. Core uses it to warn about a multi-param
+   * host implements decision 160 (tracked by TODOs `define-call-attrs-solid`
+   * and `define-call-attrs-angular`). Core uses it to warn about a multi-param
    * define called that way (only the first param receives anything) on those
    * hosts alone; a host behind on the rule keeps its older per-param lookup
    * and gets no warning.

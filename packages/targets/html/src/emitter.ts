@@ -956,12 +956,9 @@ export function createEmitter(selfName?: string): StringEmitter {
         // `{ head: attrTagValue }` object rather than the attribute tag's
         // value, and renders `<div>a</div>`/`<div>[object Object]</div>`
         // silently dropping the content Marko's own comment calls "fallback
-        // content" — so literal parity here would regress MX's already-working
-        // no-args `<define>` attribute-tag binding (the test right above this
-        // one) for no benefit. MX instead extends that same positional
-        // named-lookup scheme args already partially consume: params beyond
-        // the args are filled from `named`, one value per param, exactly as
-        // the no-args path below already does.
+        // content" — so on the args path MX keeps its positional named-lookup
+        // scheme instead: params beyond the args are filled from `named`, one
+        // value per param.
         //
         // Without args the call is Marko's (decision 160): the attributes
         // (spreads included, in source order), attribute tags and `content`
