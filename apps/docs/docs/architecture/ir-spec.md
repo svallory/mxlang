@@ -498,6 +498,10 @@ Its IR, `greeting.ir.json`. `Expr.node` and `For.paramNodes` are elided (section
     "end": {
       "line": 4,
       "column": 1
+    },
+    "span": {
+      "sourceStart": 0,
+      "sourceEnd": 61
     }
   },
   "needsAttrTagImport": false,
