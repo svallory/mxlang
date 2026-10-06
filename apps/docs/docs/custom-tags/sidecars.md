@@ -124,6 +124,101 @@ The reserved contract-vocabulary key `"#text"` permits non-whitespace text and `
 
 Dynamic children (`<${input.tag}/>`), unlisted names, disallowed text, repetitions and missing required children produce positioned errors; compilation stops at the first. The rule runs before children lower and applies equally to transform tags, template tags with declaration-only sidecars and contract-only tags on a target that delegates their names. `children` cannot be combined with `parseOptions.text: true` or `parseOptions.openTagOnly: true`.
 
+### Wildcard children (`children["*"]`)
+
+Some vocabularies do not choose their children's names. Mesh's `<attributes>` holds
+`<title type="string"/>`, `<summary type="string"/>`, whatever the document needs, and every
+one of them is an `attribute`. A closed `children` record cannot say that, so `children` takes
+the key `"*"`: a claim on the names nothing else resolves (decision 147,
+[ADR 147](/design-notes/adr-wildcard-children/)).
+
+```ts
+// contracts.ts, named by "mx": { "target": "data", "contracts": "./contracts.ts" }
+export default {
+  attributes: {
+    children: {
+      id: {},
+      "*": [
+        { pattern: "^[a-z][a-z0-9_]*$", contract: "attribute" },
+        { pattern: "^on_(?<event>[a-z]+)$", contract: "hook" },
+      ],
+    },
+  },
+  attribute: { attributes: { type: { type: "string" } } },
+  hook: {},
+};
+```
+
+An entry is `{ pattern?, contract: "<tag>" }` or an inline `{ pattern?, attributes?, attributeTags?, children?, defaultTag? }`,
+as an object or as an ordered list. `pattern` is a JavaScript regex source, anchored by core as
+`^(?:pattern)$` with no flags, so authors never write `^` or `$`; an entry with no `pattern` is a
+catch-all. Named capture groups land on the match (`^on_(?<event>[a-z]+)$` gives
+`groups: { event: "click" }`).
+
+`contract: "<tag>"` checks the child with that tag's whole contract (attributes, attribute tags,
+children, `defaultTag`). An inline entry is a contract of its own: it validates, its `name` is
+the authored name, and it carries no `transform` — useful where the target delegates (data). On a
+target that needs a transform or a template, a matched inline child is an error naming the
+target:
+
+```text
+`<PORT>` (inline contract): an inline `children["*"]` contract has no transform; on html a matched child needs `contract:` naming a tag with a transform or template
+```
+
+**Check order.** For each authored child: an explicit `children` entry first (never aliased),
+then the `"*"` entries in declaration order, the first whose pattern matches the whole name,
+then the closed record's own error. A tag declared in `customTags` and absent from the explicit
+`children` is rejected even when a pattern matches it; a file-local binding of a PascalCase name
+beats a match; unnamed (`<.x>`) and dynamic tags never match. A name no entry matches is the usual
+E2 error, listing the explicit names and the patterns:
+
+```text
+`<attributes>`: `<Bad-Name>` is not allowed here; allowed children: `<id>`; other names must match `^[a-z][a-z0-9_]*$` or `on_[a-z]+`
+```
+
+**One identity.** `parents`, `children`, duplicate and cardinality rules, did-you-mean and
+`unknownTags` key on the canonical name; the authored spelling is an alias, never a second
+identity. Messages print both, so with `attributes: { children: { "*": { contract: "attribute" } } }`:
+
+```text
+`<title>` (as `attribute`): unknown attribute `kind`
+```
+
+**"Unknown" is target-neutral.** A wildcard claims a name only when nothing else resolves it: no
+built-in of the target, no registered custom tag, no explicit `children` entry. Built-ins are
+built-in on every target — every name of core's own taglib (`let`, `const`, `effect`, `script`,
+`style`, …), a name the host declares a disposition for, and a name the target's taglib holds as a
+non-element — so one `.mx` file validates the same way on html, the JSX hosts, Solid, Angular and
+data. A native element name is not a built-in: inside a contract parent the contract decides, so
+`children["*"]` matches `<title>` or `<div>` on every target. A vocabulary that wants a child
+named `let` lists it explicitly in `children`. Outside a contract parent each target keeps its own
+behaviour, and `unknownTags: "reject"` counts a wildcard-matched child as known.
+
+**The near-miss guard.** A wildcard child whose name is within did-you-mean distance of an explicit
+child of the same parent is an error, on every target and in every tool (core raises it; nothing is
+promoted per tool). With `children: { title: {}, "*": { contract: "attribute" } }`:
+
+```text
+`<titel>` (as `attribute`) matched the wildcard of `<attributes>`; did you mean the explicit child `<title>`?
+```
+
+**Registration errors.** The key is neither an object nor a list of objects; an entry that is not
+an object, carries an unknown key (allowed: `pattern`, `contract`, `attributes`,
+`attributeTags`, `children`, `defaultTag`) or both `contract` and inline keys; a `pattern` that is
+not a string, does not compile, or is not a whole regex on its own (`a)|(?:b` would let its
+anchors bind to one alternative); a `contract` that is not a non-empty tag name, names a tag not
+reachable from the compile, sets `parseOptions.text` or `preserveWhitespace` (parse rules follow
+the name as written, before the wildcard resolves it), or declares `parents` without the parent.
+Recursion by reference terminates, so `contract` may refer back; an inline contract that contains
+itself is refused:
+
+```text
+`<list>`: `children["*"]` holds an inline contract that contains itself; declare it as a tag and refer to it with `contract`
+```
+
+The key works on a tag's `children` and on an attribute-tag declaration's `children`. Marko has no
+children contracts, so this is an mx-only extension.
+
 ### Name the unnamed tag: `defaultTag`
 
 `defaultTag` sits beside `children` and says what `<#id>` and `<.class>`, written

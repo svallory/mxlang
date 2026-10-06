@@ -79,6 +79,36 @@ Expressions are Marko's Babel nodes plus a printed `code` and a UTF-16 `span`. *
 
 `<#id>` and `<.class>` with no tag name resolve to the built-in `object` tag: the anonymous node, with an open contract, carrying `id` and `class` as ordinary attributes. It is always known, so it is never an unknown-tag error. A parent's contract can name another tag (`defaultTag: "attribute"` beside `children`), and `package.json#mx.data.defaultTag` changes the answer everywhere no parent declares one. `<attributes><#title type="string"/></attributes>` with `attributes` declaring `defaultTag: "attribute"` is a tag named `attribute` with `type="string"` and `id="title"`. The ladder, the errors and the invalid-value reasons are in [The unnamed tag](/specification/#the-mx-language-4-elements-and-attributes-the-unnamed-tag) and the `@mxlang/data` README.
 
+## Wildcard children
+
+A parent's `children["*"]` entry claims child names that no explicit entry, registered tag or
+target built-in resolves (decision 147). The tree keeps what was written and says what claimed it,
+on the matched tag:
+
+|field|meaning|
+|---|---|
+|`name`|the authored name, as for every tag; `nameSpan` slices it|
+|`contract`|the canonical tag whose contract applied; for an inline contract it equals `name`|
+|`groups`|the entry pattern's named capture groups; absent without any|
+
+Both fields are absent on every tag no wildcard claimed, so a tree without wildcards serializes
+exactly as before. With
+`attributes: { children: { "*": { pattern: "^[a-z][a-z0-9_]*$", contract: "attribute" } } }`,
+`<attributes><title type="string"/></attributes>` has this `title` tag (`attrs` omitted):
+
+```json
+{ "kind": "tag", "name": "title", "contract": "attribute",
+  "nameSpan": { "sourceStart": 16, "sourceEnd": 21 },
+  "span": { "sourceStart": 15, "sourceEnd": 37 },
+  "args": [], "params": [], "attrTags": [], "children": [] }
+```
+
+A consumer that dispatches on the contract reads `contract`, not `name`. A name no entry matches is
+the closed-`children` error listing the patterns, and one a typo away from an explicit child is the
+did-you-mean guard, both reported at the child's position; `unknownTags: "reject"` counts a claimed
+child as known. The patterns, the check order and the registration errors are in
+[Wildcard children](/custom-tags/sidecars/#wildcard-children-children).
+
 ## What is rejected
 
 Always rejected, each with a positioned message: `<define>` and calls to it, `<return>`, tag variables (`/v`), dynamic tags (`<${x}>`), calls to an imported component, `<!doctype>`, CDATA and XML declarations.
