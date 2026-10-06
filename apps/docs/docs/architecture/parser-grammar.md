@@ -75,7 +75,7 @@ parser.
 
 The subject of this document is **MX's template parser**: the source on `main`
 at `packages/parser/src/template/` (decision 158.3; read for this revision at
-`origin/main` `5f4661534`). It began as a copy of `htmljs-parser` 5.18.0 and is
+`origin/main` `4bafe5983`). It began as a copy of `htmljs-parser` 5.18.0 and is
 now MX's own code; its `PROVENANCE.md` records every departure from 5.18.0.
 Every statement below about what the parser does is derived from that source
 and names the file and symbol it comes from. Where a rule has more than one
@@ -92,7 +92,7 @@ files on `main` differ from stock, and nothing else does:
 | --- | --- | --- |
 | the after-value rule | `states/ATTRIBUTE.ts` (`attrValue`); `states/EXPRESSION.ts`: the `??`/`?.` branch of `EXPRESSION.parse`, the `:` and `.` rows of `lookAheadForOperator`, `isIdentStartCode`, `isBareColonEnd` | decision 146, divergence 3 and addendum 6 ([E1](#e1--attribute-value-html-mode)) |
 | a single-atom default value | `states/ATTRIBUTE.ts` (`defaultAtom`); `states/EXPRESSION.ts` (`isSingleAtomDefault`) | decision 146, addendum 5 ([E1](#e1--attribute-value-html-mode)) |
-| atoms and the reserved `::` | `states/EXPRESSION.ts` (`lexAtom`, `expectsExpression`, `isOperatorWord`, `closesTypeArguments`, `atomNameEnd`, `rejectReservedName`, the atom guard in `lookBehindForKeyword`); the `atoms = true` sites in `states/ATTRIBUTE.ts`, `OPEN_TAG.ts`, `PLACEHOLDER.ts`, `TAG_NAME.ts`, `TEMPLATE_STRING.ts`; `rejectReservedName` calls in `TAG_NAME.exit` and `ATTRIBUTE.return`; `core/Parser.ts` (`atoms`, `read`, `rawOpenTags`); `util/constants.ts` (`onAtom`); `OPEN_TAG.exit` (`rawOpenTags`) | decision 156 and its addenda 2 to 4 and 8 ([Atoms](#atoms)) |
+| atoms and the reserved `::` | `states/EXPRESSION.ts` (`lexAtom`, `expectsExpression`, `isOperatorWord`, `closesTypeArguments`, `isLookBehindWordCode`, `isUnicodeSpaceCode`, `atomNameEnd`, `rejectReservedName`, the atom guard in `lookBehindForKeyword`); the `atoms = true` sites in `states/ATTRIBUTE.ts`, `OPEN_TAG.ts`, `PLACEHOLDER.ts`, `TAG_NAME.ts`, `TEMPLATE_STRING.ts`; `rejectReservedName` calls in `TAG_NAME.exit` and `ATTRIBUTE.return`; `core/Parser.ts` (`atoms`, `read`, `rawOpenTags`); `util/constants.ts` (`onAtom`); `OPEN_TAG.exit` (`rawOpenTags`) | decision 156 and its addenda 2 to 4, 8 and 9 ([Atoms](#atoms)) |
 | the base position | `core/Parser.ts` (`ParseOptions`, `parse`, `positionAt`, `offsetAt`); `index.ts` | the parser's API ([Base position](#base-position-for-fragment-parses)) |
 
 The bun patch `patches/htmljs-parser@5.18.0.patch`, which `@marko/compiler`'s
@@ -172,9 +172,13 @@ classifies every known difference in those three classes.
   newline and carriage return (`isWhitespaceCode`, `util/util.ts`). **Indent
   characters** are space and tab only (`isIndentCode`). A **word character** is
   `A`–`Z`, `a`–`z`, `0`–`9`, `$` or `_` (`isWordCode`); no non-ASCII character is
-  one. (The atom look-behind is ruled otherwise, decision 156, addendum 9; the
-  same ASCII-only reading in the division and keyword look-behinds is TODO
-  `template-parser-ascii-only-lookbehinds` there.)
+  one. The atom look-behind alone uses a wider set (`isLookBehindWordCode`,
+  decision 156, addendum 9; [Atoms](#is-an-expression-expected-expectsexpression)).
+  The division test and the keyword look-behind read ASCII only, so
+  `<div x=é / 2 y/>` reads the `/` as a regular expression's start and
+  `<div x=énew y=1/>` is the single value `énew y=1` (both observed):
+  behaviour today, see defect `template-parser-ascii-only-lookbehinds`
+  ([Recorded defects](#recorded-defects-in-the-default)).
 - **The default** is what the template parser does where no MX departure
   applies, which is what stock does, as confirmed by probe. Decision 157.3
   makes it the normative answer wherever MX has no ruling.
@@ -246,6 +250,22 @@ delimited block under any other concise tag is HTML mode. Every rule below that
 says "in concise mode" means this flag, and it matters at end of input
 ([End of input](#end-of-input), rule 1).
 
+The flag is read by these symbols and by no other part of the parser
+(`util/validators.ts`, which is outside this document, sets and reads it for
+its own parses):
+
+| Read by | What the flag decides | Stated in |
+| --- | --- | --- |
+| `EXPRESSION.parse`, end of input | a position at depth 0 ends silently | [End of input](#end-of-input), rule 1 |
+| `checkForOperators` (two reads) | a newline fails the test and the look-ahead stays on the line (steps 3 and 4); a `</` fails the test in HTML mode only (step 5) | [The continuation test](#the-continuation-test) |
+| `ATTRIBUTE.parse` (four reads) | a newline ends the attribute; which stop function a value and a name get; end of input after a name is silent | [Attributes](#attributes), E1 to E3, [Error conditions](#error-conditions) |
+| `ATTRIBUTE.return` (two reads) | the ambiguous `>` check runs in HTML mode only | [The ambiguous `>` check](#the-ambiguous--check) |
+| `isAsyncMethodPrefix` | after `async`, only spaces and tabs are skipped to find the method name | [Attributes](#attributes) |
+| `OPEN_TAG.enter`, `OPEN_TAG.exit` (three reads) | the tag records its mode; the `onOpenTagEnd` range is empty in concise mode and is the `>` or `/>` in HTML mode; a `TagType.text` tag's body is concise content, not `PARSED_TEXT_CONTENT` | this section; [Text bodies](#text-bodies) |
+| `OPEN_TAG.parse` (four reads) | rows 1 to 6 of the open-tag table; which stop function the tag variable gets; the errors at end of input | [The open tag](#the-open-tag), E9 |
+| `TAG_NAME.parse` | which characters end a name or a shorthand part | [Tag names](#tag-names) |
+| `PARSED_TEXT_CONTENT.parse`, `JS_COMMENT_LINE.parse` | in HTML mode only, a close tag ends a text body, and ends any `//` comment read while the open tag on top of the stack is typed `TagType.text` | [Text bodies](#text-bodies), rows 2 and 3; [The open tag](#the-open-tag), row 9 |
+
 **Mixed mode** (`CONCISE_HTML_CONTENT.parse`, the `<` case; `HTML_CONTENT.parse`,
 the newline branch; `OPEN_TAG.enter`/`OPEN_TAG.exit`; `Parser.closeTagEnd`). A
 concise line that starts with `<` begins an HTML region. The region ends at the
@@ -305,7 +325,7 @@ matching row applies:
 | 6 | `]` | concise | ends the attribute group; outside one it is `Unexpected "]" character within open tag.` |
 | 7 | `>` | HTML | ends the open tag |
 | 8 | `/>` | HTML | ends the open tag, self-closed |
-| 9 | `//`, `/*` | both | a JavaScript comment, reported as an open-tag comment |
+| 9 | `//`, `/*` | both | a JavaScript comment, reported as an open-tag comment. In HTML mode, inside the open tag of a tag typed `TagType.text`, a `//` comment (here or in an attribute value) also ends at that tag's close tag, which is consumed and reported **before** the open tag has ended: `<script // c </script>` reports the close tag, then the comment `// c </script>`, then the open tag's end, and when more input follows (`<script x=1 // </script>\n>a</script>`) the parser **throws** a `TypeError` instead of reporting an error (observed, stock too). Behaviour today, a defect ([Recorded defects](#recorded-defects-in-the-default)) |
 | 10 | `<!--` | both | `An html comment cannot be used within an open tag. Use a JavaScript comment (// or /* */) instead.` |
 | 11 | whitespace | both | skipped |
 | 12 | `,` | both | skipped together with **all** whitespace after it, newlines included, in concise mode too |
@@ -362,7 +382,7 @@ ranged from the `::` to the end of the atom name after it, and the parse stops
 there, so the part is never reported. The name after `::` is read from the
 source, not from the static piece, so a `${` right after it lends its `$`:
 `<a::b${x}/>` reports `` `::b$` `` at 2–6 and `<a::${x}/>` `` `::$` `` at 2–5
-(observed; behaviour today, see defect, [Recorded defects](#recorded-defects-in-the-default)). Observed: `<a::b/>`, `<div.a::b/>` and
+(observed; behaviour today, see defect `template-parser-ascii-only-lookbehinds`, [Recorded defects](#recorded-defects-in-the-default)). Observed: `<a::b/>`, `<div.a::b/>` and
 `<div#a::b/>` are the error (stock: the tag `a::b`, the parts `.a::b`, `#a::b`);
 `<${"a::b"}/>` is the tag `${"a::b"}`, because the `::` is inside the
 interpolation.
@@ -697,7 +717,7 @@ spec §9.3 says a tag declaration's `parseOptions` forwards only `text` and
 | --- | --- | --- |
 | 1 | newline | ends a delimited block when its rules say so; otherwise text |
 | 2 | `<` | in HTML mode, `</>` or `</name>` with exactly the open tag's written name ends the body (`checkForClosingTag`); any other `<` is text |
-| 3 | `//` | text, to the end of the line or to the body's close tag |
+| 3 | `//` | text, to the end of the line or, in HTML mode, to the body's close tag (concise `script -- // a</script> b` is the one text `// a</script> b`, observed) |
 | 4 | `/*` | text, to `*/`; unterminated is `EOF reached while parsing multi-line JavaScript comment` |
 | 5 | a backtick | a template literal, lexed as in an expression, `${…}` included |
 | 6 | `"` or `'` | a string to the **next** same quote, within which placeholders are recognised; unterminated is `EOF reached while parsing string expression`. A backslash does **not** escape the quote: `PARSED_STRING.parse` treats `\` only as a possible placeholder escape, so `"a\"b"` ends after `a\"` |
@@ -891,22 +911,29 @@ then each position's start, stops and overrides.
 A position is created with a start offset, a stop function `shouldTerminate`,
 and these flags, all false unless set (`EXPRESSION.enter`):
 
-| Flag | Meaning |
+| Flag | Meaning, and every place that reads it |
 | --- | --- |
-| `operators` | the continuation test, the ternary counter, the type context and the operator exemption are active |
-| `terminatedByWhitespace` | whitespace and newlines are soft stops |
-| `terminatedByEOL` | newlines are soft stops |
-| `consumeIndentedContent` | a newline followed by a space or tab never ends the value |
-| `inType`, `forceType` | the position starts in a type context; `forceType` keeps it there |
-| `atoms` | `:name` is lexed as an atom where an expression is expected ([Atoms](#atoms)) |
-| `attrValue` | the position is a named attribute's or a spread's value: the after-value rule applies ([E1](#e1--attribute-value-html-mode)) |
-| `defaultAtom` | the position is a default attribute's value: the after-value `:` rule applies while the value is one single atom ([E1](#e1--attribute-value-html-mode)) |
+| `operators` | Six reads: the operator exemption (step 4); the `?`, `:`, `=` and non-type `<` rows of the character table, which keep the ternary counter, enter and leave the type context and consume the whitespace after themselves; and step 1 of the continuation test, which fails without it. The `<` and `>` rows of a type context do not read it |
+| `terminatedByWhitespace` | Two reads: whitespace is a soft stop (step 3) and so is a newline (step 1) |
+| `terminatedByEOL` | Three reads: a newline is a soft stop (step 1); the continuation test fails at a newline and its look-ahead skips spaces and tabs only (steps 3 and 4 of the test, exactly as in concise mode); and end of input at depth 0 is silent ([End of input](#end-of-input), rule 1) |
+| `consumeIndentedContent` | One read: a newline followed by a space or tab never ends the value (step 1, condition 4) |
+| `inType` | the position is in a type context. Nine reads, all listed in [The type context](#the-type-context). Set at creation by the type lists and by a statement or scriptlet that begins with a type keyword; set and cleared during the scan everywhere else |
+| `forceType` | Three reads, each of which stops the type context from being left: the `=>` and `=` cases of the `=` row and the `{` row |
+| `atoms` | Three reads: the `:` row tries `lexAtom` first ([Atoms](#atoms)); `EXPRESSION.return` records where a regular expression ended and each comment, which only the atom look-behind uses; and a template literal's `${…}` copies the flag (`TEMPLATE_STRING.parse`) |
+| `attrValue` | the position is a named attribute's or a spread's value. Three reads in the scan, together the after-value rule ([E1](#e1--attribute-value-html-mode)): the `??`/`?.` case of the `?` row, and the `:` and `.` rows of the look-ahead. `ATTRIBUTE.parse` reads it once more, to set `defaultAtom` to its negation |
+| `defaultAtom` | the position is a default attribute's value. One read: `isSingleAtomDefault`, for the look-ahead's `:` row ([E1](#e1--attribute-value-html-mode)) |
 
-The position also tracks: the group stack (depth); `ternaryDepth`; `inType` and
-`forceType` as they change; `wasComment`, set when a `//` comment has just
-been read and cleared only when a newline is passed; and, when `atoms` is set,
-`atomEnd` (where the last atom lexed in it ends), the comments read so far and
-where the last regular expression ended.
+The position also keeps this state as it scans:
+
+| State | Written by | Every read |
+| --- | --- | --- |
+| the group stack (depth) | the opening and closing bracket rows | steps 1, 3 and 4; the `?`, `:`, `=` and non-type `<` rows; the closing-bracket rows; end of input, rule 1. (The look-ahead's keyword row reads it as well, where it is always 0, and `util/validators.ts` reads it) |
+| `ternaryDepth` | the `?` row (+1) and the `:` row (−1) | three: the `:` row (close a ternary or enter the type context); the look-ahead's `:` row (the after-value split needs 0); the look-ahead's keyword row (`as`/`satisfies` set `forceType` only at 0) ([Ternary depth](#ternary-depth)) |
+| `wasComment` | set when a `//` comment has just been read, cleared when a newline is passed | one: step 1, condition 3 |
+| `atomEnd`, where the last atom lexed in the position ends | `lexAtom` | three: `lookBehindForKeyword` (an atom's name is no unary keyword), `isOperatorWord` (rule 1) and `isSingleAtomDefault` |
+| the comments read so far; where the last regular expression ended | `EXPRESSION.return`, with `atoms` only | one each: the backward scan of `expectsExpression`, and its row 8 |
+
+`hadUnguardedNewline` is kept too, and only `util/validators.ts` reads it.
 
 `EXPRESSION.parse` examines one character at a time. **The first step that
 applies decides**:
@@ -1031,7 +1058,9 @@ in step 4:
 
 When the keyword is `as` or `satisfies` and the position is not already in a
 type context, the look-ahead **enters the type context** and sets `forceType`
-when `ternaryDepth` is 0.
+when `ternaryDepth` is 0. In a position already in one it changes nothing, so
+an `as` after an annotation's `:` does not set `forceType`
+([The type context](#the-type-context), read 7).
 
 The look-ahead table above is stock's. MX changes its `:` row for a named or
 spread attribute's value and for a single-atom default value, and its `.` row
@@ -1057,29 +1086,75 @@ Source: `checkForOperators`, `lookBehindForOperator`, `lookAheadForOperator`,
 
 #### The type context
 
-The type context (`inType`) changes how four things are read: `<` opens a group,
-`>` closes one, a `>` before whitespace is not a look-behind operator, and the
-unary keyword list is the type list. It is **entered** by:
+The type context is the flag `inType`. It is **entered** by:
 
-- a `:` at depth 0 with `ternaryDepth` 0, in a position with `operators`;
-- an `as` or `satisfies` found by the look-ahead, which also sets `forceType`
-  when `ternaryDepth` is 0;
+- a `:` at depth 0 with `ternaryDepth` 0, in a position with `operators`, when
+  `lexAtom` has not consumed the `:`;
+- an `as` or `satisfies` found by the look-ahead while the position is not in a
+  type context, which also sets `forceType` when `ternaryDepth` is 0;
 - the position's own flags (the type lists E14–E16, and a statement or scriptlet
   that begins with a type keyword, E10 and E11), which always set `forceType`.
 
-It is **left** only by the three `=`/`{` cases in the character table, and each
-of them requires `forceType` to be off. Consequences, all observed:
+It is **left** only by the `=>`, `=` and `{` cases in the character table, and
+each of them requires `forceType` to be off.
+
+**What it changes.** `inType` is read in nine places in the parser. This table
+is all of them; each row gives one input observed on each side:
+
+| # | Read by | In a type context | Outside one | Observed |
+| --- | --- | --- | --- | --- |
+| 1 | the `<` row of the character table | opens a group that `>` closes, at any depth, with or without `operators`; no whitespace is consumed after it | with `operators` at depth 0 it is consumed with the whitespace after it; otherwise a plain character | `x=a as Map<K, V> y` is the value `a as Map<K, V>`; concise `div x=a<b, c> d` is the value `a<b` |
+| 2 | the `>` row of the character table | a closing bracket unless the previous character is `=`: it closes a `<` group, and is `Mismatched group` when no group is open or the innermost group expects another closer | a plain character | concise `div x=a as T > b` is the error; concise `div x=a > b` is one value |
+| 3 | the `>` row of the look-behind table | not an operator (an arrow's `>` still is) | an operator | concise `div x=a as T<U>\n  b` ends at the newline; `div x=f<T>\n  b` is one value |
+| 4 | the last row of the look-behind table: the unary keyword list | `async` `await` `class` `function` `new` `typeof` `asserts` `infer` `is` `keyof` `readonly` `unique` | `async` `await` `class` `function` `new` `typeof` `delete` `void` | concise `div x=a as keyof\n  T` is one value and `div x=a as void\n  b` ends at the newline; `div x=void\n  b` is one value and `div x=keyof\n  b` ends at the newline |
+| 5 | the `=` row, at `=>` | left, unless `forceType` is set or the previous non-whitespace character is `)` | nothing to leave | `<div x=a: b => c<d> e/>` is the value `a: b => c<d` and the `>` ends the tag; `<div x=a: (b) => c<d> e/>` is the value `a: (b) => c<d>` |
+| 6 | the `{` row | left, unless `forceType` is set or the previous non-whitespace character is a look-behind operator (reads 3 and 4 apply to that test) | nothing to leave | concise `div x=a: T {b}<c> d` is one value (left at `{`, so the `>` is an operator); `div x=a: keyof {b}<c> d` is the value `a: keyof {b}<c>` and the attribute `d` |
+| 7 | the look-ahead's keyword row, at `as` or `satisfies` | nothing changes: `forceType` is **not** set | the context is entered, and `forceType` set when `ternaryDepth` is 0 | concise `div x=a: T as U = b<c> d` is one value (the `=` leaves the context); `div x=a as U = b<c> d` is the value `a as U = b<c>` and the attribute `d` |
+| 8, 9 | the tag variable's two stop functions, at `<` (E9) | not a hard stop | a hard stop | `<let/x: Map<K,V> = 1/>` is the variable `x: Map<K,V>`; `<let/x<T>=1/>` is the `Unexpected types. …` error |
+
+The `=` row's other case, an `=` not followed by `>`, clears `inType` without
+reading it. Reads 3 and 4 are in the look-behind table, which has four
+callers, so the type context reaches each of them:
+
+- step 2 of the continuation test, at whitespace and at a newline (the inputs
+  of rows 3 and 4);
+- the operator exemption of step 4: `<div x=a as keyof, y/>` is the value
+  `a as keyof,`, `<div x=a as void, y/>` is the value `a as void`, and
+  `<div x=void, y/>` is the value `void,`; concise `div x=a as T<U> ,y=1` stops
+  at the `,` and `div x=f<T> ,y=1` is one value (all observed);
+- the look-behind's own `!` row, whose keyword test uses the same list:
+  concise `div x=a as void!\n  b` ends at the newline and `div x=void!\n  b` is
+  one value (observed);
+- the `{` row (read 6).
+
+Nothing else reads the type context. The look-ahead table's operator rows and
+its keyword list, the after-value rule, the division test, the `?` row,
+`ternaryDepth`, every hard stop other than the tag variable's `<`, and atom
+lexing (`expectsExpression`, the operator words, `closesTypeArguments`) are
+the same inside and outside one.
+
+Which reads can run depends on the position. In a type list (E14 to E16:
+`forceType`, no `operators`, no soft stop) only reads 1 and 2 can. In a
+statement or scriptlet that begins with a type keyword (`forceType`,
+`operators`, a newline soft stop) reads 1 to 4 can. In an attribute value and
+a tag variable all of them can, except reads 8 and 9 in a value. Every other
+position has neither `operators` nor the flag at creation, so it never enters
+the context and no read changes anything there.
+
+Consequences, all observed:
 
 | Input | Result | Why |
 | --- | --- | --- |
 | `x=a as Map<K, V> y` | value `a as Map<K, V>` | `<` is a group in a type context |
 | `x=f<T>(y)` | value `f<T`; the `>` ends the tag | not a type context, so `>` is E1's hard stop. **Recorded defect**, [below](#recorded-defects-in-the-default) |
 | `x=a: T<K> = f<K>(y)` | value `a: T<K> = f<K` | the `=` leaves the context (no `forceType`), then as the row above |
-| `x=a as T = b y`, `x=a as T < b y` | one value up to `b` | `forceType`: the context never ends inside the value |
+| `x=a as T = b y`, `x=a as T < b y` | one value up to `b` | `forceType`: the context never ends inside the value. In the second the look-ahead resumes after the `<`, so no group is opened |
 | `x=a as T {k: T} y=1` | value `a as T {k: T}`, then `y=1` | the look-ahead continues at `{`; with `forceType` the `{` does not leave the context |
 | `x=(a): T => a` | one value | the `:` enters the context; the arrow follows `T`, not `)`, so `=>` leaves it |
 | concise `div x=a as T > b` | `Mismatched group. A closing ">" character was found but it is not matched …` | concise mode has no `>` hard stop, the look-ahead continues at `>`, and in a type context `>` is a closing bracket with no open group. **Valid TypeScript that the default rejects** (OQ 24) |
 | HTML `<div x=a as T > b/>` | `Ambiguous ">" in attribute. …` | the `>` is E1's hard stop; then [the ambiguous `>` check](#the-ambiguous--check) |
+| `<div x=a as T ? (b < c) : d/>`, `<div x=a: T ? (b < c) : d/>` | `Mismatched group. A ")" character was found when ">" was expected.` | reads 1 and 2 apply at any depth: the context entered before the group makes the `<` inside it a group, which the `)` then fails to close. With `>` it is the mirror message: `(b > c)` gives `A ">" character was found when ")" was expected.`, and `[b > c]` the same with `"]"`. `<div x=(a as T) ? (b < c) : d/>` is one value, because an `as` inside a group does not enter the context. **Valid TypeScript that the default rejects** (OQ 24) |
+| `<div x=a as T ? b < c : d/>` | one value | at depth 0 the look-ahead resumes after the spaced `<`, so no group is opened |
 
 #### End of input
 
@@ -1463,9 +1538,13 @@ are not positions; they are read by `TAG_NAME.parse`.
   variable `x\n  + 1`; concise `let/x\n  + 1` is the variable `x` and a child tag
   `+`; concise `let/x as\n  T` is the variable `x as\n  T` (the keyword row of
   E2's table).
-- **Types.** A `:` enters the type context, in which `<` opens a group:
-  `<let/x: Map<K,V> = 1/>` is the variable `x: Map<K,V>` and the default value
-  `1`. Outside a type context `<` is a hard stop and the open tag then reads a
+- **Types.** A `:` enters [the type context](#the-type-context), and every
+  read listed there can run in this position. Two decide most inputs. `<` is
+  then no hard stop and opens a group: `<let/x: Map<K,V> = 1/>` is the variable
+  `x: Map<K,V>` and the default value `1`. And the look-behind's unary keyword
+  list is the type list: concise `let/x: keyof\n  T` is one variable, and
+  `let/x: void\n  T` is the variable `x: void` and a child tag `T`.
+  Outside a type context `<` is a hard stop and the open tag then reads a
   type list, so `<let/x<T>=1/>` is the `Unexpected types. …` error. A `|` is a
   hard stop even inside a type: `<let/x: A | B = 1/>` reports the variable
   `x: A` and then reads tag parameters to the end of the input, which is `EOF
@@ -1526,7 +1605,16 @@ A tag whose name the consumer types `TagType.statement`
   `as` `extends` `instanceof` `in` `satisfies` as a whole word; after `type`
   only, `{` and `*` also count (`import type { A } from "x"`). So
   `static type A = B<C>` and `export type X = { a: 1 }` are read as types, and
-  `type = 1` and `type in x` are not.
+  `type = 1` and `type in x` are not. Such a position is in
+  [the type context](#the-type-context) from its first character to its last
+  (`forceType`), with reads 1 to 4 of that section. Observed:
+  `static type A = B<C>\ndiv` ends at the newline, where `static x = f<T>\ndiv`
+  continues onto the `div` line (a non-type `>` is a look-behind operator);
+  `static type A = void\nB` ends at the newline and `static type A = keyof\nB`
+  continues, the reverse of `static x = void\nB` (continues) and
+  `static x = keyof\nB` (ends); and a comparison inside a group is an error:
+  `static type A = (b > c)` is `Mismatched group. A ">" character was found
+  when ")" was expected.`
 - **Overrides:** none. Atoms are not lexed here (decision 156.1: "never inside
   `static`/`import`/script blocks").
 
@@ -1545,7 +1633,8 @@ A tag whose name the consumer types `TagType.statement`
   only at a newline or end of input; a newline ends it when no group is open and
   either a `//` comment was just read or the character **immediately** before
   the newline is not a look-behind operator. The type-context rule of E10
-  applies. Observed:
+  applies, with the same reads (`$ type A = void\n<b/>` ends at the newline,
+  `$ let x = void\n<b/>` is one scriptlet). Observed:
 
   | Input | Result |
   | --- | --- |
@@ -1649,7 +1738,11 @@ so it can be an error. Observed:
   or after a shorthand, it is E15: `<foo.a<A>/>` is the `Unexpected types. …`
   error (observed).
 - **Flags and stop:** `inType`, `forceType`; hard stop `>` at depth 0. Nested
-  `<…>` are groups. There is no `operators` flag, so the `=` row of the
+  `<…>` are groups. Of the nine reads of
+  [the type context](#the-type-context) only the `<` and `>` rows can run
+  here: with no `operators` flag and no soft stop the look-behind table is
+  never consulted and the look-ahead never runs, and `forceType` switches off
+  the `=>` and `{` reads. There is no `operators` flag, so the `=` row of the
   character table is inert and the `>` of an arrow **is** the hard stop:
   `<foo<() => void>/>` reports the type arguments `() =` (observed), while
   `<foo<(() => void)>/>` is whole. **Valid TypeScript that the default cuts**
@@ -1760,6 +1853,14 @@ step-4 exemption, OQ 17).
 
 ### Is an expression expected? (`expectsExpression`)
 
+A **word character** in this section and the two lists under it is wider
+than elsewhere (`isLookBehindWordCode`; decision 156, addendum 9): `A`–`Z`,
+`a`–`z`, `0`–`9`, `$`, `_`, and every character at or above U+0080 except the
+ones TypeScript reads as whitespace or a line terminator
+(U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF; `isUnicodeSpaceCode`). So a non-ASCII identifier is an operand, and a
+`:` after it is TypeScript's. An atom's own name stays ASCII (`lexAtom`, rows
+3 and 4).
+
 Scan backwards from the character before the `:`, skipping whitespace and each
 comment already read in this position, stopping at the position's start. Let
 `p` be the character reached. The first matching row applies:
@@ -1769,22 +1870,29 @@ comment already read in this position, stopping at the position's start. Let
 | 1 | none: only whitespace and comments lie between the position's start and the `:` | **yes** (`x=:a`, `x= :b`, `${ :a}`) |
 | 2 | `)`, `]`, `}`, `"`, `'` or a backtick | **no**: an expression ended |
 | 3 | `.` | **yes** only when it is the third of `...` (`[...:a]`); otherwise **no** (`a.:b`) |
-| 4 | `?` | if the `?` is the position's first character: **yes**. Otherwise let `o` be the character directly before the `?`. If `o` is a word character: **yes** only when the word ending at `o` starts with a digit (`n === 1? :a : :b`); otherwise **no**, it is TypeScript's optional marker (`(a? :T) => a`). If `o` is `]`, `-` or `+`: **no**. Otherwise **yes** (`c ? :a`) |
-| 5 | `!` | skip back over every `!` and whitespace. If nothing is left: **yes**. Let `o` be the character reached. If `o` is `)`, `]`, `-` or `+`: **no** (postfix). If `o` is not a word character: **yes** (`(!:a)`). Otherwise **yes** only when the word ending at `o` is an operator word (below; `typeof!:a`), otherwise **no** (`a! :b`) |
+| 4 | `?` | if the `?` is the position's first character: **yes**. Otherwise let `o` be the character directly before the `?`. If `o` is a word character: **yes** only when the word ending at `o` starts with a digit (`n === 1? :a : :b`); otherwise **no**, it is TypeScript's optional marker (`(a? :T) => a`, `(é? :T) => a`). If `o` is `]`, `-` or `+`: **no**. Otherwise **yes** (`c ? :a`) |
+| 5 | `!` | skip back over every `!` and whitespace. If nothing is left: **yes**. Let `o` be the character reached. If `o` is `)`, `]`, `-` or `+`: **no** (postfix). If `o` is not a word character: **yes** (`(!:a)`). Otherwise **yes** only when the word ending at `o` is an operator word (below; `typeof!:a`), otherwise **no** (`a! :b`, `é! :b`) |
 | 6 | `>` | **yes** when the character before it is `=` (`a => :b`). Otherwise **no** when the `>` closes a type argument list (below; `y as Array<T> :z`), otherwise **yes** (a comparison or a shift) |
 | 7 | `+` or `-` | **no** when the character before it is the same (`a++ :b`); otherwise **yes** |
 | 8 | `/` | **no** when it is the last character of a regular expression read in this position (`/re/ :b`); otherwise **yes** (`a / :b`) |
-| 9 | any other character that is not a word character | **yes**: an operator or punctuator (`(:a`, `[:a, :b]`, `a + :b`, `{ k: :a }`). The rule (decision 156, addendum 9) counts as a word character here any character at or above U+0080 that is not Unicode whitespace or a line terminator (U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF), so such a character goes to rows 10 and 11; the excepted characters stay in this row (`x=[a,` then U+00A0 then `:b]` lexes the atom, observed). **Behaviour today, see defect `atom-lookbehind-non-ascii`**: the code counts ASCII word characters only, so `x=({ é:a })` and `x=(é :b)` lex the atom (observed) |
-| 10 | a word character directly before the `:`, with no whitespace or comment between | **no**: an object key or a label, keyword or not (`{ new:a }`) |
-| 11 | a word character, with whitespace or a comment between | **yes** only when the word ending at `p` is an operator word; otherwise **no** (`c ? b :c`) |
+| 9 | any other character that is not a word character | **yes**: an operator or punctuator (`(:a`, `[:a, :b]`, `a + :b`, `{ k: :a }`). The 19 excepted Unicode whitespace and line-terminator characters are in this row: `x=[a,` then U+00A0 then `:b]` lexes the atom (observed for each of the 19) |
+| 10 | a word character directly before the `:`, with no whitespace or comment between | **no**: an object key or a label, keyword or not (`{ new:a }`, `{ é:a }`) |
+| 11 | a word character, with whitespace or a comment between | **yes** only when the word ending at `p` is an operator word; otherwise **no** (`c ? b :c`, `(é :b)`) |
+
+The whitespace that this scan, row 5 and rules 4 and 5 below skip is
+`isWhitespaceCode` only (code 32 or lower). One of the 19 excepted characters
+is therefore not skipped: it is `p` itself, in row 9. `x=({ é` then U+00A0
+then `:a })` lexes the atom although TypeScript reads `é` as a key there, and
+so does `x=(a!` U+00A0 `:b)`; `x=(a,` U+00A0 `yield :b)` lexes the atom and
+`x=(x` U+00A0 `of :a)` does not, each the reverse of the same input written
+with a space (all observed). **Behaviour today, see defect
+`template-parser-ascii-only-lookbehinds`**
+([Recorded defects](#recorded-defects-in-the-default)).
 
 **Operator words** (`isOperatorWord`), for rows 5 and 11. The word is the
 maximal run of word characters ending at `p`, not extending before the
-position's start. By the rule of decision 156, addendum 9, word characters
-here include every character at or above U+0080 except Unicode whitespace and
-line terminators (U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF), so in `éin :b` the word is `éin` and no atom lexes. **Behaviour
-today, see defect `atom-lookbehind-non-ascii`**: the word is `in` and the atom
-lexes (observed). In order:
+position's start: in `éin :b` the word is `éin`, which is no operator word,
+and no atom lexes (observed). In order:
 
 1. the word ends where the position's last atom ends (an atom's own name:
    `:delete :b`): **no**;
@@ -1792,12 +1900,14 @@ lexes (observed). In order:
    third dot of a spread, so `[...await :b]` and `[...new :a]` lex no atom
    (observed), although decision 156, addendum 8 makes `await` there the
    operator: behaviour today, see defect
+   `template-parser-ascii-only-lookbehinds`
    ([Recorded defects](#recorded-defects-in-the-default));
 3. the word is not one of `await` `case` `delete` `do` `else` `extends` `in`
    `instanceof` `new` `of` `return` `throw` `typeof` `void` `yield`
    (`atomKeywords`): **no**;
 4. `of`: **yes** only when the character before it, skipping whitespace, is a
-   word character, `)`, `]` or `}` (`for (x of :a)`; `c ? of :b` lexes no atom);
+   word character, `)`, `]` or `}` (`for (x of :a)`, `for (é of :a)`; `c ? of :b`
+   lexes no atom);
 5. `yield` or `await`: **no** when the character before it, skipping
    whitespace, is `?`, `:`, `,` or `(`; otherwise **yes**, at the position's
    start too (but `<div x=yield :b/>` never asks: the after-value rule splits
@@ -1818,7 +1928,7 @@ up and each opening one down. At each character, in order:
 
 1. a `<` that brings the angle count to 0: the `>` closes type arguments
    exactly when no bracket is open between them and the `<` directly follows a
-   word character (`Array<T>`, `a<b >`);
+   word character (`Array<T>`, `É<T>`, `a<b >`);
 2. an opening bracket with no closing one after it: **no**;
 3. `;`: **no**;
 4. `?` or `:` with no bracket open between it and the `>`: **no**;
@@ -1863,17 +1973,21 @@ text (all observed).
   a default attribute too (decision 146, addendum 5;
   [E1](#e1--attribute-value-html-mode)).
 - **Where a value ends.** An atom adds no hard stop and ends no position by
-  itself, but lexing it changes where a value ends through these code paths,
-  each compared with the same input read without atom lexing (stock, which
-  also lacks the after-value rule, is given where it differs):
+  itself, but lexing it changes where a value ends through these five code
+  paths. Each is compared with the same input read **without atom lexing**.
+  That comparison was run on a probe build: main's source with each of its
+  six `atoms = true` assignments set to `false`, which keeps the after-value
+  rule and every other departure. Stock, which has neither atoms nor the
+  after-value rule, gives the same result as the probe build on every input
+  below except those of the first row, where both are given:
 
-  | Code path | Effect | Observed on main | Without atoms |
+  | Code path | Effect | Observed on main | Without atoms (probe build) |
   | --- | --- | --- | --- |
-  | `lexAtom` runs before the ternary counter (`EXPRESSION.parse`, `case CODE.COLON`) | an atom's `:` does not close a `?`, so a later ` :name` is the ternary's `:` | `x=a ? :b :c` one value; `x=c ? :a : :b :d` splits at `:d` | the atom's `:` closes the `?`: `x=a ? :b :c` splits at `:c` (stock: one value) |
-  | the same, at `ternaryDepth` 0 | an atom's `:` does not enter the type context, so `<` and `>` keep their non-type meaning | concise `div x=:a > b`, `div x=:a <b> c`, `div x=:a >\n  b`: one value | the `:` enters the type context and the `>` is `Mismatched group` (stock) |
-  | the atom guard in `lookBehindForKeyword` (continuation test step 2, and the step-4 exemption) | an atom named like a unary keyword is no operator | `x=:new :b` and `x=:typeof :b` split at `:b`; concise `div x=:new\n  span` ends at the newline; `<div x=:typeof />` ends before `/>` | `new`/`typeof` continue the value (stock: `:new :b`, `:new\n  span`, `:typeof /` then `Missing ending "div" tag`) |
-  | `lexAtom` row 1 | `::` is the reserved-token error and the parse stops | `x=::a`, `x=a :: b` | one value (stock) |
-  | `isSingleAtomDefault` (decision 146, addendum 5) | a default value that is one atom splits at ` :name` | `<if=:a :b>` | one value (decision 151, ruling 2; stock) |
+  | `lexAtom` runs before the ternary counter (`EXPRESSION.parse`, `case CODE.COLON`) | an atom's `:` does not close a `?`, so a later ` :name` is the ternary's `:` | `x=a ? :b :c` is one value | the first `:` closes the `?`, so `x=a ? :b :c` is the value `a ? :b` and the attribute `:c`. Stock: one value, because it has no after-value rule to split at `:c` |
+  | the same, at `ternaryDepth` 0 | an atom's `:` does not enter [the type context](#the-type-context), so each of its reads that an attribute value can reach takes its other side. (1) `<` is no group. (2) `>` is a plain character. (3) A `>` before whitespace is a look-behind operator. (4) The unary keyword list is JavaScript's, with `delete` and `void` and without `asserts` `infer` `is` `keyof` `readonly` `unique`, in the continuation test, the operator exemption and the `!` row alike. (7) An `as` or `satisfies` after the atom enters the context, and sets `forceType` when `ternaryDepth` is 0. Reads 5 and 6 have nothing to leave, and 8 and 9 belong to the tag variable, which lexes no atom | (1) concise `div x=:a<b, c> d`: value `:a<b`, then attributes `c>` and `d`; `<div x=:a<b>(c) y/>`: value `:a<b` and the `>` ends the tag. (2) concise `div x=:a > b`, `div x=:a <b> c`: one value. (3) concise `div x=:a<b>\n  c`: one value. (4) concise `div x=:a + void\n  b` and `div x=:a + void!\n  b`: one value; `div x=:a + keyof\n  b`: value `:a + keyof` and a child `b`; `<div x=:a + void, y/>`: value `:a + void,`. (7) concise `div x=:a as T = b<c> d`: value `:a as T = b<c>`, then attribute `d` | the `:` enters the type context. (1) value `:a<b, c>`, then `d`; value `:a<b>(c)`, then `y`. (2) `Mismatched group` for both. (3) value `:a<b>` and a child `c`. (4) value `:a + void` and a child `b`, and the same with `void!`; one value `:a + keyof\n  b`; value `:a + void`. (7) one value `:a as T = b<c> d`: the `as` does not set `forceType`, so the `=` leaves the context |
+  | the atom guard in `lookBehindForKeyword` (continuation test step 2, and the step-4 exemption) | an atom named like a unary keyword is no operator | `x=:new :b` and `x=:typeof :b` split at `:b`; concise `div x=:new\n  span` ends at the newline; `<div x=:typeof />` ends before `/>` | `new`/`typeof` continue the value: `:new :b`, `:new\n  span`, `:typeof /` then `Missing ending "div" tag` |
+  | `lexAtom` row 1 | `::` is the reserved-token error and the parse stops | `x=::a`, `x=a :: b` | one value |
+  | `isSingleAtomDefault` (decision 146, addendum 5) | a default value that is one atom splits at ` :name` | `<if=:a :b>` | one value (decision 151, ruling 2) |
 
   `mx-atoms.cases.ts` pins `<div x=:new :b/>`.
 
@@ -1974,6 +2088,10 @@ These are MX's own rules. Each says which layer applies it: the template parser
   not count.
 - The after-value `:` split requires `ternaryDepth` 0
   ([E1 overrides](#e1--attribute-value-html-mode)).
+- An `as` or `satisfies` found by the look-ahead sets `forceType` only at
+  `ternaryDepth` 0 ([The type context](#the-type-context)). These three reads,
+  the `:` row, the after-value split and this one, are every read of the
+  counter.
 - In a named or spread attribute's value, `??` and `?.` (when no digit follows
   the `.`) do not count. `?:` does: `x=a ?:b` is one value, and on main its
   `:b` is an atom (observed). Not settled (OQ 3).
@@ -2182,7 +2300,9 @@ normative text does not resolve it.
     after `a!` and `a++`, which turns a later compile error into `x` plus a
     boolean attribute `b`; confirm that this is wanted.
 24. **Valid TypeScript that the default rejects or cuts**, beyond OQ 7: concise
-    `div x=a as T > b` (`Mismatched group`); an arrow type at the top level of a
+    `div x=a as T > b` (`Mismatched group`); a comparison inside a group after an
+    `as`, `satisfies` or annotation (`x=a as T ? (b < c) : d`, `Mismatched
+    group`); an arrow type at the top level of a
     type list (`<foo<() => void>>`, `onClick<T extends () => void>(a) {}`); a
     block comment after an operator (`x=a + /* c */ b` ends at the comment); a
     space between a trailing operator and the newline in a scriptlet or
@@ -2227,8 +2347,10 @@ normative text does not resolve it.
 32. **Non-ASCII identifiers before an atom.** *Settled* by decision 156,
     addendum 9: the atom look-behind treats as a word character any character
     at or above U+0080 that is not Unicode whitespace or a line terminator
-    (U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF). Today's code is the defect MX1 TODO `atom-lookbehind-non-ascii`
-    ([Atoms](#atoms), rows 9 to 11).
+    (U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF), and main implements it (`isLookBehindWordCode`;
+    [Atoms](#is-an-expression-expected-expectsexpression), rows 4, 5 and 9 to
+    11). What remains is the whitespace the look-behind skips, which is still
+    ASCII only: defect `template-parser-ascii-only-lookbehinds`.
 
 ### Where a real TypeScript parser would end the value differently
 
@@ -2285,14 +2407,23 @@ These behaviours above are defects, not grammar, and are to be fixed in
   a template literal's `${…}`, raises no error **and drops the owning event**
   (`div.a${b` reports no shorthand, `${x` reports nothing, ``div x=`${a``
   reports no value);
-- the atom look-behind counts ASCII word characters only (`x=({ é:a })`,
-  `x=(é :b)` and `x=(éin :b)` lex an atom), MX1 TODO
-  `atom-lookbehind-non-ascii`;
-- the name in the `::` reserved-name error is read past the static piece
-  (`<a::b${x}/>` reports `::b$` at 2–6, `<div.a::${x}/>` `::$` at 6–9);
-- the third dot of a spread counts as a member dot in the atom look-behind,
-  so `x=[...await :b]` and `x=[...new :a]` lex no atom, against decision 156,
-  addendum 8.
+- a `//` comment inside the open tag of a `TagType.text` tag, in HTML mode,
+  reads that tag's close tag: the close events come before the open tag's
+  end, and `<script x=1 // </script>\n>a</script>` throws a `TypeError`
+  (`JS_COMMENT_LINE.parse`; stock does the same);
+- MX1 TODO `template-parser-ascii-only-lookbehinds`, five behaviours:
+  - the division test counts ASCII word characters only (`<div x=é / 2 y/>`
+    and `${é / 2}` read a regular expression);
+  - the keyword look-behind does too (`<div x=énew y=1/>` is the single value
+    `énew y=1`);
+  - the atom look-behind skips ASCII whitespace only, so a Unicode space
+    between an operand and a `:` is not skipped (`x=({ é` U+00A0 `:a })` lexes
+    an atom);
+  - the name in the `::` reserved-name error is read past the static piece
+    (`<a::b${x}/>` reports `::b$` at 2–6, `<div.a::${x}/>` `::$` at 6–9);
+  - the third dot of a spread counts as a member dot in the atom look-behind,
+    so `x=[...await :b]` and `x=[...new :a]` lex no atom, against decision
+    156, addendum 8.
 
 The behaviours listed in OQ 13 (no `\` escape in a text-body string), OQ 17,
 OQ 24, OQ 25 and OQ 27 look like defects as well and are not filed. An implementer **must not** treat any of them as intended
