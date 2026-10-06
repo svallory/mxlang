@@ -9,7 +9,7 @@ A plain `.mx` file on the Hono host is the whole component. There is no function
 
 **Alpha.** [`.hono.mx`](/hosts/hono/) is the form to start with when you build with Vite. Whole-file `.mx` is the one a Bun server can import directly, which is why it is documented here.
 
-```mx title="App.mx"
+```mx "App.mx"
 export interface Input {
   items: string[];
 }

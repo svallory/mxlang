@@ -9,7 +9,7 @@ A plain `.mx` file on the React host is the whole component. There is no functio
 
 **Alpha.** [`.react.mx`](/hosts/react/) is the form to start with. Whole-file `.mx` exists so that one template can later compile to several hosts; today it trades React's own function for MX's statements, and hooks read less naturally.
 
-```mx title="Counter.mx"
+```mx "Counter.mx"
 import { useState } from "react";
 
 export interface Input {

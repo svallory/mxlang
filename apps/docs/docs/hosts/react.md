@@ -9,7 +9,7 @@ A `.react.mx` file is a React component with MX where the JSX was. The function,
 
 This is one component, in TSX and then in MX. `Table` is a hand-written React component with three props that hold markup.
 
-```tsx title="Team.tsx"
+```tsx "Team.tsx"
 import { useState } from "react";
 import type { Member } from "./members.ts";
 import { Table } from "./Table.tsx";
@@ -60,7 +60,7 @@ export function Team({ members }: { members: Member[] }) {
 }
 ```
 
-```mx title="Team.react.mx"
+```mx "Team.react.mx"
 import { useState } from "react";
 import type { Member } from "./members.ts";
 import { Table } from "./Table.tsx";

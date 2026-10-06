@@ -26,7 +26,7 @@ Page templates have no TypeScript plugin support yet, which is the main reason t
 
 ## MX tags (preview)
 
-```mx title="tags/badge.mx"
+```mx "tags/badge.mx"
 export interface Input { kind: "ok" | "warn" | "error"; label?: string }
 
 <span.badge data-kind=input.kind>
@@ -36,7 +36,7 @@ export interface Input { kind: "ok" | "warn" | "error"; label?: string }
 
 compiles to a standalone component:
 
-```ts title="tags/badge.ts (generated)"
+```ts "tags/badge.ts (generated)"
 @Component({
   selector: "mx-badge",
   standalone: true,

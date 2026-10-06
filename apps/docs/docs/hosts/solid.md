@@ -9,7 +9,7 @@ A `.solid.mx` file is a Solid component with MX where the JSX was. The function,
 
 This is one component, in TSX and then in MX. `Table` is a hand-written Solid component with three props that hold markup.
 
-```tsx title="Team.tsx"
+```tsx "Team.tsx"
 import { createSignal, For, Show } from "solid-js";
 import type { Member } from "./members.ts";
 import { Table } from "./Table.tsx";
@@ -54,7 +54,7 @@ export function Team(props: { members: Member[] }) {
 }
 ```
 
-```mx title="Team.solid.mx"
+```mx "Team.solid.mx"
 import { createSignal } from "solid-js";
 import type { Member } from "./members.ts";
 import { Table } from "./Table.tsx";

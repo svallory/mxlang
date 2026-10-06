@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   fencedBlocks,
   hostExamples,
-  hostsExampleDir,
   hostPage,
+  hostsExampleDir,
   readHostExample,
 } from "./host-examples.ts";
 

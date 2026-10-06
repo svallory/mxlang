@@ -109,7 +109,6 @@
           "title": "React",
           "path": "/hosts/react/",
           "children": [
-            { "title": "Overview", "path": "/hosts/react/" },
             {
               "title": "What MX compiles to",
               "path": "/hosts/react/semantics/"
@@ -124,7 +123,6 @@
           "title": "Preact",
           "path": "/hosts/preact/",
           "children": [
-            { "title": "Overview", "path": "/hosts/preact/" },
             {
               "title": "What MX compiles to",
               "path": "/hosts/preact/semantics/"
@@ -139,7 +137,6 @@
           "title": "Hono",
           "path": "/hosts/hono/",
           "children": [
-            { "title": "Overview", "path": "/hosts/hono/" },
             {
               "title": "What MX compiles to",
               "path": "/hosts/hono/semantics/"
@@ -155,7 +152,6 @@
           "title": "Solid",
           "path": "/hosts/solid/",
           "children": [
-            { "title": "Overview", "path": "/hosts/solid/" },
             {
               "title": "What MX compiles to",
               "path": "/hosts/solid/semantics/"
@@ -166,7 +162,6 @@
           "title": "Astro",
           "path": "/hosts/astro/",
           "children": [
-            { "title": "Overview", "path": "/hosts/astro/" },
             {
               "title": "What MX compiles to",
               "path": "/hosts/astro/semantics/"
@@ -181,7 +176,6 @@
           "title": "Angular",
           "path": "/hosts/angular/",
           "children": [
-            { "title": "Overview", "path": "/hosts/angular/" },
             { "title": ".ng.mx in detail", "path": "/hosts/angular/ng-mx/" },
             {
               "title": "What MX compiles to",

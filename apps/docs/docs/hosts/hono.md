@@ -9,7 +9,7 @@ A `.hono.mx` file is a `hono/jsx` component with MX where the JSX was. The funct
 
 This is one server-rendered component, in TSX and then in MX. `Table` is a hand-written Hono component with three props that hold markup.
 
-```tsx title="Team.tsx"
+```tsx "Team.tsx"
 import type { Member } from "./members.ts";
 import { Table } from "./Table.tsx";
 
@@ -54,7 +54,7 @@ export function Team({ members, query }: { members: Member[]; query: string }) {
 }
 ```
 
-```mx title="Team.hono.mx"
+```mx "Team.hono.mx"
 import type { Member } from "./members.ts";
 import { Table } from "./Table.tsx";
 

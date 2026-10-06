@@ -9,7 +9,7 @@ An `.astro.mx` file is an Astro component with MX under the fence. The `---` fro
 
 This is one component, as `.astro` and then as `.astro.mx`. `Card` is an ordinary Astro component with two named slots.
 
-```astro title="Team.astro"
+```astro "Team.astro"
 ---
 import Card from "./Card.astro";
 import type { Member } from "./members.ts";
@@ -37,7 +37,7 @@ const { members } = Astro.props as Props;
 </Card>
 ```
 
-```mx title="Team.astro.mx"
+```mx "Team.astro.mx"
 ---
 import Card from "./Card.astro";
 import type { Member } from "./members.ts";

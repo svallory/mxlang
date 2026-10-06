@@ -23,11 +23,13 @@ import {
   examplePath,
   exampleSection,
   indexPath,
+  readCards,
   readExample,
   readMarkers,
   siteRoot,
   spliceIndex,
   validate,
+  validateCards,
   validateNodes,
 } from "./home-example.ts";
 
@@ -68,12 +70,14 @@ const SAMPLES = [
       // ship as invalid CSS and nothing else here would notice.
       'style="padding-left:0rem"',
       'style="padding-left:1rem"',
-      'class="card featured"',
-      'class="card"',
-      "<dt>Cheapest</dt>",
-      "<dt>Currency</dt>",
-      '<section class="printed">',
-      "<h3>Concise mode</h3>",
+      // The name sugar and the atom, as the attributes they stand for.
+      '<input name="q" type="search" placeholder="Filter" required class="search">',
+      "<li data-first style",
+      '<span class="badge">New</span>',
+      '<b class="sale">$39.90</b>',
+      "<dt>Cheapest</dt><dd>$9.50</dd>",
+      "<dt>Selected</dt><dd>kettle</dd>",
+      '<footer class="printed"><p>Concise mode',
     ],
   },
   {
@@ -123,10 +127,12 @@ const SAMPLES = [
 const errors: string[] = [];
 const { source, lines } = readExample();
 const markers = readMarkers();
+const cards = readCards();
 
 for (const problem of [
   ...validate(lines, markers),
   ...validateNodes(source, markers),
+  ...validateCards(markers, cards),
 ]) {
   errors.push(problem);
 }
@@ -163,7 +169,7 @@ if (!errors.length) {
   }
 }
 
-const fragment = exampleSection(source, markers);
+const fragment = exampleSection(source, markers, cards);
 const onDisk = readFileSync(indexPath, "utf8");
 const next = spliceIndex(onDisk, fragment);
 
@@ -196,11 +202,11 @@ if (errors.length) {
 
 if (check) {
   console.log(
-    `home page: ${markers.length} markers, ${lines.length - 1} lines of example, anchors resolve, docs/index.md is current`,
+    `home page: ${cards.length} cards, ${markers.length} markers, ${lines.length - 1} lines of example, anchors resolve, docs/index.md is current`,
   );
 } else {
   writeFileSync(indexPath, next);
   console.log(
-    `home page: ${markers.length} markers, ${lines.length - 1} lines of example, docs/index.md updated`,
+    `home page: ${cards.length} cards, ${markers.length} markers, ${lines.length - 1} lines of example, docs/index.md updated`,
   );
 }

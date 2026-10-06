@@ -9,7 +9,7 @@ A `.ng.mx` file is an Angular component module with MX as the value of `template
 
 This is one component, as Angular and then as `.ng.mx`. `Card` is an MX tag with a `title` and a `footer` projection.
 
-```ts title="team.component.ts"
+```ts "team.component.ts"
 import { NgClass } from "@angular/common";
 import { Component, Input } from "@angular/core";
 import { Card } from "./tags/card";
@@ -62,7 +62,7 @@ export class Team {
 }
 ```
 
-```mx title="team.component.ng.mx"
+```mx "team.component.ng.mx"
 import { Component, Input } from "@angular/core";
 import Card from "./tags/card.mx";
 import type { Member } from "./members";

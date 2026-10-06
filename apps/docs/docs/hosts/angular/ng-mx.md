@@ -17,7 +17,7 @@ The MX region is the **direct value of `template:`** in the first argument of `@
 
 A region is one expression, so it has one root. An Angular template may have many; say so with `<>…</>`:
 
-```ts title="sortable-th.component.ng.mx"
+```ts "sortable-th.component.ng.mx"
 @Component({
   selector: "[sortable-th]",
   template: <>

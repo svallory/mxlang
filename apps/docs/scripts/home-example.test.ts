@@ -20,12 +20,14 @@ import {
   END,
   exampleSection,
   indexPath,
+  readCards,
   readExample,
   readMarkers,
   START,
   siteRoot,
   spliceIndex,
   validate,
+  validateCards,
   validateNodes,
 } from "./home-example.ts";
 
@@ -46,9 +48,13 @@ describe("the home page example", () => {
     expect(validateNodes(source, readMarkers())).toEqual([]);
   });
 
+  it("files every marker under a card, and gives every card a marker", () => {
+    expect(validateCards(readMarkers(), readCards())).toEqual([]);
+  });
+
   it("leaves docs/index.md exactly as the generator writes it", () => {
     const { source } = readExample();
-    const fragment = exampleSection(source, readMarkers());
+    const fragment = exampleSection(source, readMarkers(), readCards());
     const onDisk = readFileSync(indexPath, "utf8");
     const start = onDisk.indexOf(START);
     const end = onDisk.indexOf(END);

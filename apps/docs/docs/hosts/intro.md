@@ -9,7 +9,7 @@ A host is a framework MX compiles into. You keep writing that framework's compon
 
 Here is a React component, first in JSX, then with MX where the JSX was.
 
-```tsx title="Invite.tsx"
+```tsx "Invite.tsx"
 import { Dialog } from "./Dialog.tsx";
 
 export function Invite({ team, open, send }: { team: string; open: boolean; send: () => void }) {
@@ -33,7 +33,7 @@ export function Invite({ team, open, send }: { team: string; open: boolean; send
 }
 ```
 
-```mx title="Invite.react.mx"
+```mx "Invite.react.mx"
 import { Dialog } from "./Dialog.tsx";
 
 export function Invite({ team, open, send }: { team: string; open: boolean; send: () => void }) {

@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 import type { MxWarning } from "@mxlang/core";
 import { scanCached } from "@mxlang/core";
 import { compileFile, htmlTargets } from "@mxlang/html";
-import { escapeHtml, parseMx, renderMx } from "@mxlang/tree-sitter-mx/docmd";
+import { classesOf, escapeHtml, parseMx } from "@mxlang/tree-sitter-mx/docmd";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -29,6 +29,7 @@ export const markersPath = join(
   "example",
   "home-example.markers.json",
 );
+export const cardsPath = join(docsRoot, "example", "home-example.cards.json");
 export const indexPath = join(docsRoot, "docs", "index.md");
 /** docmd's output directory — the only place a heading slug is knowable. */
 export const siteRoot = join(docsRoot, "site");
@@ -48,6 +49,9 @@ export interface MarkerRange {
 
 export interface Marker {
   id: string;
+  /** The card (`home-example.cards.json`) this construct is listed under. */
+  card: string;
+  /** The chip's text: the construct as it is written in the example. */
   label: string;
   note: string;
   href: string;
@@ -85,19 +89,22 @@ export interface Marker {
 }
 
 /**
- * Ink colors, cycled across the markers in document order. The set is the
- * marko-ui hero's (`~/work/marko-ui/apps/docs/src/tags/home/home-hero.marko`,
- * commit f62ac76a) plus two docmd-token-adjacent hues; each is checked for
- * contrast against both `--bg-color` values before it is used here.
+ * A card beside the code: one thing MX does, said in a sentence, with a chip
+ * for each marker it comes from. `group` is the heading the card sits under;
+ * the first group in the file is laid out beside the code, the others under it.
  */
-const MARKER_COLORS = [
-  "#ff5467",
-  "#ffd100",
-  "#7ced64",
-  "#38bdf8",
-  "#a78bfa",
-  "#fb923c",
-];
+export interface Card {
+  id: string;
+  group: string;
+  title: string;
+  /** One sentence; `backticks` become `<code>`. */
+  text: string;
+  /**
+   * What the card's lines replace, as the JSX a reader already knows. Shown
+   * as a small labelled snippet; it is an illustration, not compiled.
+   */
+  jsx?: string;
+}
 
 export function readExample(): { source: string; lines: string[] } {
   const source = readFileSync(examplePath, "utf8");
@@ -109,6 +116,14 @@ export function readMarkers(): Marker[] {
     return JSON.parse(readFileSync(markersPath, "utf8")) as Marker[];
   } catch (error) {
     throw new Error(`${markersPath} is not readable JSON: ${String(error)}`);
+  }
+}
+
+export function readCards(): Card[] {
+  try {
+    return JSON.parse(readFileSync(cardsPath, "utf8")) as Card[];
+  } catch (error) {
+    throw new Error(`${cardsPath} is not readable JSON: ${String(error)}`);
   }
 }
 
@@ -164,6 +179,7 @@ export function anchorExists(href: string, siteDir = siteRoot): boolean {
 /** Every marker key this file understands; anything else is a typo. */
 const MARKER_KEYS = new Set([
   "id",
+  "card",
   "label",
   "note",
   "href",
@@ -247,6 +263,44 @@ export function validate(lines: string[], markers: Marker[]): string[] {
           `marker \`${marker.id}\` declares it covers ${JSON.stringify(expected)}, which is not inside its marked text`,
         );
       }
+    }
+  }
+  return errors;
+}
+
+const CARD_KEYS = new Set(["id", "group", "title", "text", "jsx"]);
+
+/**
+ * Every reason the cards and the markers would disagree: a marker filed under
+ * a card that does not exist, a card nothing in the example comes from, or a
+ * card whose markers would leave its chips empty.
+ */
+export function validateCards(markers: Marker[], cards: Card[]): string[] {
+  const errors: string[] = [];
+  const ids = new Set<string>();
+  for (const card of cards) {
+    for (const key of Object.keys(card)) {
+      if (!CARD_KEYS.has(key)) {
+        errors.push(`card \`${card.id}\` has an unknown key \`${key}\``);
+      }
+    }
+    if (!/^[a-z][a-z0-9-]*$/.test(card.id ?? "")) {
+      errors.push(`card id \`${card.id}\` is not a lowercase slug`);
+    }
+    if (ids.has(card.id)) errors.push(`duplicate card id \`${card.id}\``);
+    ids.add(card.id);
+    if (!card.group || !card.title || !card.text) {
+      errors.push(`card \`${card.id}\` needs a group, a title and a text`);
+    }
+    if (!markers.some((marker) => marker.card === card.id)) {
+      errors.push(`card \`${card.id}\` has no marker in the example`);
+    }
+  }
+  for (const marker of markers) {
+    if (!ids.has(marker.card)) {
+      errors.push(
+        `marker \`${marker.id}\` names a card that does not exist: \`${marker.card}\``,
+      );
     }
   }
   return errors;
@@ -353,95 +407,220 @@ export function validateNodes(source: string, markers: Marker[]): string[] {
 }
 
 /**
- * The example, highlighted at build time by the tree-sitter MX grammar — the
- * very `renderMx` an ordinary ```mx fence goes through, so the annotated
- * example and a plain block carry identical spans. Colours come from the
- * `ts-*` classes in `assets/css/home.css`, which resolve against
- * `html[data-theme]`: the theme switch needs no JavaScript and no second copy
- * of the block.
+ * The example as one highlighted `<pre>`, a block per line.
  *
- * The marked regions are wrapped by cutting the capture spans at every marker
- * boundary (`renderMx`'s `ownerAt`): a marker that ends inside a token splits
- * that token, and the wrappers stay well nested.
+ * The spans are the tree-sitter MX grammar's captures (`classesOf`, what an
+ * ordinary ```mx fence is rendered from), so the panel and a plain block carry
+ * identical classes; colours come from the `ts-*` rules in
+ * `assets/css/home.css`.
+ *
+ * Two things are added. Each marked region is wrapped in a `.mk` that names
+ * its marker and its card, cut at every capture boundary so the markup stays
+ * well nested. And each line is a `.mxo-l` that lists the cards with a marker
+ * on it (`data-cards`): a card being pointed at tints its lines as a band,
+ * the way the Mesh overview tints the sections of an entity file.
  */
 export function highlightExample(source: string, markers: Marker[]): string {
   const text = source.replace(/\n$/, "");
-  const starts = lineStarts(text.split("\n"));
-  const owners: string[] = new Array(text.length).fill("");
+  const lines = text.split("\n");
+  const starts = lineStarts(lines);
+  const classes = classesOf(text);
+  const owners: Array<Marker | undefined> = new Array(text.length);
+  const lineCards: string[][] = lines.map(() => []);
   for (const marker of markers) {
-    const open = markerOpen(marker.id);
     for (const range of marker.ranges) {
       const base = starts[range.line - 1] as number;
       for (let at = base + range.from; at < base + range.to; at++) {
-        owners[at] = open;
+        owners[at] = marker;
       }
+      const cards = lineCards[range.line - 1] as string[];
+      if (!cards.includes(marker.card)) cards.push(marker.card);
     }
   }
-  return `<pre class="hljs mx-hl" tabindex="0"><code class="language-mx">${renderMx(text, (at: number) => owners[at] ?? "")}</code></pre>`;
+  const code = lines
+    .map((line, index) => {
+      const from = starts[index] as number;
+      const to = from + line.length;
+      let html = "";
+      let open: Marker | undefined;
+      let at = from;
+      while (at < to) {
+        const owner = owners[at];
+        const cls = classes[at] ?? null;
+        let end = at + 1;
+        while (
+          end < to &&
+          (classes[end] ?? null) === cls &&
+          owners[end] === owner
+        ) {
+          end++;
+        }
+        if (owner !== open) {
+          if (open) html += "</span>";
+          if (owner) html += markerOpen(owner);
+          open = owner;
+        }
+        const chunk = escapeHtml(text.slice(at, end));
+        html += cls ? `<span class="${cls}">${chunk}</span>` : chunk;
+        at = end;
+      }
+      if (open) html += "</span>";
+      const cards = lineCards[index] as string[];
+      const attr = cards.length
+        ? ` data-cards="${escapeHtml(cards.join(" "))}"`
+        : "";
+      // The newline stays inside the line's block, so the text of the panel
+      // is the text of the file (a copy, a screen reader) and an empty line
+      // keeps its height.
+      const newline = index < lines.length - 1 ? "\n" : "";
+      return `<span class="mxo-l"${attr}>${html}${newline}</span>`;
+    })
+    .join("");
+  return `<pre class="hljs mx-hl mxo-code" tabindex="0" aria-label="MX source example"><code class="language-mx">${code}</code></pre>`;
 }
 
-function markerOpen(id: string): string {
-  return `<span class="mk" data-mk="${escapeHtml(id)}" tabindex="0" role="button" aria-describedby="note-${escapeHtml(id)}">`;
+function markerOpen(marker: Marker): string {
+  return `<span class="mk" data-mk="${escapeHtml(marker.id)}" data-card="${escapeHtml(marker.card)}">`;
 }
 
-/** The notes, as real HTML: readable with scripting off. */
-export function notesHtml(markers: Marker[]): string {
-  return markers
-    .map((marker) => {
-      const id = escapeHtml(marker.id);
-      return [
-        `<li class="mx-home-note" id="note-${id}" data-mk="${id}">`,
-        `<span class="mx-home-note-label">${escapeHtml(marker.label)}</span>`,
-        `<span class="mx-home-note-text">${escapeHtml(marker.note)}</span>`,
-        `<a class="mx-home-note-link" href="${escapeHtml(marker.href)}">Read the docs &rarr;</a>`,
-        `</li>`,
-      ].join("");
+/** Prose with `backticks`, as HTML. */
+function inlineCode(text: string): string {
+  return escapeHtml(text).replace(/`([^`]+)`/g, "<code>$1</code>");
+}
+
+/** The cards' groups, in the order they first appear. */
+export function cardGroups(cards: Card[]): string[] {
+  return [...new Set(cards.map((card) => card.group))];
+}
+
+/**
+ * The cards, as real HTML: every sentence and every link is readable with
+ * scripting off. A card is focusable, so the keyboard reaches the same state
+ * the pointer does; each chip is a link to the docs for one construct, and
+ * pointing at a chip lights that construct alone.
+ */
+export function cardsHtml(markers: Marker[], cards: Card[]): string {
+  return cardGroups(cards)
+    .map((group) => {
+      const heading = `<p class="mxo-group" data-group="${escapeHtml(group)}">${escapeHtml(group)}</p>`;
+      const boxes = cards
+        .filter((card) => card.group === group)
+        .map((card) => {
+          const id = escapeHtml(card.id);
+          const chips = markers
+            .filter((marker) => marker.card === card.id)
+            .map(
+              (marker) =>
+                `<a class="mxo-chip" data-mk="${escapeHtml(marker.id)}" href="${escapeHtml(marker.href)}" title="${escapeHtml(marker.note.replace(/`/g, ""))}"><code>${escapeHtml(marker.label)}</code></a>`,
+            )
+            .join(", ");
+          return [
+            `<article class="mxo-card" data-card="${id}" data-group="${escapeHtml(group)}" tabindex="0" aria-labelledby="mxo-card-${id}">`,
+            `<h3 id="mxo-card-${id}">${escapeHtml(card.title)}</h3>`,
+            `<p>${inlineCode(card.text)}</p>`,
+            `<p class="mxo-from">from ${chips}</p>`,
+            // Not a <pre>: the snippet is an aside, and a <pre> here would be
+            // styled as a second code panel.
+            card.jsx
+              ? `<div class="mxo-snip" aria-label="The same in JSX"><span class="mxo-snip-label">in JSX</span><code>${escapeHtml(card.jsx)}</code></div>`
+              : "",
+            `</article>`,
+          ].join("");
+        })
+        .join("");
+      return heading + boxes;
     })
     .join("");
 }
 
 /**
- * The per-marker rules. One `--mx-marker` and one active state each, so the
- * hover/focus/pin states are one attribute (`data-active` on `.mx-home`) and
- * no `:has()` — the interaction degrades to "every note is visible" when the
- * script does not run.
+ * The rules that depend on the data: which lines a card tints, which region a
+ * chip lights, which card a region outlines, and where each card sits on the
+ * wide layout's grid. Generated, so the lists cannot drift from the cards.
+ *
+ * Every state is plain CSS (`:hover`, `:focus-within`, `:has()`): the block
+ * works with scripting off. The page's script only adds `.is-hot` to a card
+ * that was clicked, or that is on top while a phone scrolls.
  */
-export function markerCss(markers: Marker[]): string {
-  return markers
-    .map((marker, index) => {
-      const id = escapeHtml(marker.id);
-      const color = MARKER_COLORS[index % MARKER_COLORS.length] as string;
-      return [
-        `.mx-home .mk[data-mk="${id}"],.mx-home .mx-home-note[data-mk="${id}"]{--mx-marker:${color}}`,
-        `.mx-home[data-active="${id}"] .mk[data-mk="${id}"]::before{inset:0 -0.2em}`,
-        `.mx-home[data-active="${id}"] .mx-home-note[data-mk="${id}"]{border-color:var(--mx-marker);background:color-mix(in oklab,var(--mx-marker) 10%,transparent)}`,
-        `.mx-home[data-active="${id}"] .mx-home-note[data-mk="${id}"] .mx-home-note-label{background:var(--mx-marker);color:#0b0b0c}`,
-      ].join("");
-    })
-    .join("");
+export function overviewCss(markers: Marker[], cards: Card[]): string {
+  const ROOT = ".mxo-grid";
+  const ON = ":is(:hover,:focus-within,.is-hot)";
+  const rules: string[] = [];
+  for (const card of cards) {
+    const id = escapeHtml(card.id);
+    const active = `${ROOT}:has(.mxo-card[data-card="${id}"]${ON})`;
+    rules.push(
+      `${active} .mxo-l[data-cards~="${id}"]{background:var(--mxo-band);box-shadow:inset 3px 0 0 var(--mxo-accent)}`,
+      `${active} .mk[data-card="${id}"]{background:var(--mxo-ink);box-shadow:0 0 0 2px var(--mxo-ink)}`,
+      `${ROOT}:has(.mk[data-card="${id}"]:hover) .mxo-card[data-card="${id}"]{border-color:var(--mxo-accent);box-shadow:0 0 0 3px var(--mxo-ring)}`,
+    );
+  }
+  for (const marker of markers) {
+    const id = escapeHtml(marker.id);
+    rules.push(
+      `${ROOT}:has(.mxo-chip[data-mk="${id}"]:is(:hover,:focus-visible)) .mk:not([data-mk="${id}"]){background:none;box-shadow:none}`,
+      `${ROOT}:has(.mk[data-mk="${id}"]:hover) .mk[data-mk="${id}"]{background:var(--mxo-ink);box-shadow:0 0 0 2px var(--mxo-ink)}`,
+      `${ROOT}:has(.mk[data-mk="${id}"]:hover) .mxo-chip[data-mk="${id}"] code{border-color:var(--mxo-accent);color:var(--mxo-accent)}`,
+    );
+  }
+  // The wide layout: every group beside the file, each card as tall as its
+  // content. The first group takes a card per row; the others, shorter, sit
+  // two to a row. A last flexible row takes whatever height of the file is
+  // left over, so no card is stretched to fill it.
+  const [beside, ...under] = cardGroups(cards);
+  const wide: string[] = [];
+  let row = 1;
+  const place = (group: string, perRow: number) => {
+    wide.push(
+      `${ROOT}>.mxo-group[data-group="${escapeHtml(group)}"]{grid-column:3/5;grid-row:${row}}`,
+    );
+    row++;
+    const own = cards.filter((card) => card.group === group);
+    own.forEach((card, index) => {
+      const column = perRow === 1 ? "3/5" : String(3 + (index % perRow));
+      wide.push(
+        `${ROOT}>.mxo-card[data-card="${escapeHtml(card.id)}"]{grid-column:${column};grid-row:${row + Math.floor(index / perRow)}}`,
+      );
+    });
+    row += Math.ceil(own.length / perRow);
+  };
+  if (beside !== undefined) place(beside, 1);
+  for (const group of under) place(group, 2);
+  wide.push(
+    `${ROOT}{grid-template-rows:repeat(${row - 1},auto) 1fr}`,
+    `${ROOT}>.mxo-file{grid-column:1/3;grid-row:1/${row + 1}}`,
+  );
+  return `${rules.join("")}@media (min-width:1181px){${wide.join("")}}`;
 }
 
 /**
  * The whole generated block for the landing page. No blank lines: markdown-it
  * ends an HTML block at the first one, and this text is written into a
  * markdown file.
+ *
+ * The layout, the bands and the cards with their "from" chips follow the
+ * overview on the Mesh home page.
+ * Credit: Mesh (svallory/mesh), design by the Mesh docs design dev under the
+ * Mesh lead, 2026-10-05.
  */
-export function exampleSection(source: string, markers: Marker[]): string {
-  const code = highlightExample(source, markers);
+export function exampleSection(
+  source: string,
+  markers: Marker[],
+  cards: Card[],
+): string {
   return [
-    `<style id="mx-home-marker-styles">`,
-    markerCss(markers),
+    `<style id="mx-home-overview-styles">`,
+    overviewCss(markers, cards),
     `</style>`,
-    `<section class="mx-home-example" aria-labelledby="mx-home-example-title">`,
-    `<h2 id="mx-home-example-title">Every construct MX ships, in one file</h2>`,
-    `<p class="mx-home-hint">Hover or focus a marked region to light it up; click, or press Enter, to pin its note. This exact file compiles on the <a href="/targets/html/">html target</a> on every docs build.</p>`,
-    `<div class="mx-home-grid">`,
-    `<div class="mx-home-code" tabindex="0" role="group" aria-label="MX source example">`,
-    code,
+    `<section class="mxo" aria-labelledby="mx-home-example-title">`,
+    `<h2 id="mx-home-example-title">One file, and what is in it</h2>`,
+    `<p class="mx-home-hint">Point at a card, or tab to it, to see where it comes from in the file; point at the code to find its card. This exact file compiles on the <a href="/targets/html/">html target</a> on every docs build.</p>`,
+    `<div class="mxo-grid">`,
+    `<div class="mxo-file">`,
+    `<p class="mxo-file-name">home-example.mx</p>`,
+    highlightExample(source, markers),
     `</div>`,
-    `<ol class="mx-home-notes">`,
-    notesHtml(markers),
-    `</ol>`,
+    cardsHtml(markers, cards),
     `</div>`,
     `</section>`,
   ].join("");

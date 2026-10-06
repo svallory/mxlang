@@ -15,7 +15,6 @@ import plugin, {
   captureNames,
   classOf,
   parseMx,
-  renderFence,
   renderMx,
   spansOf,
 } from "@mxlang/tree-sitter-mx/docmd";
@@ -67,14 +66,19 @@ function mergeSpans(html: string): string {
   }
 }
 
-/** Drop the `.mk` marker wrappers, keeping the capture spans inside them. */
+/**
+ * Drop the landing page's wrappers (a `.mk` around a marked region, a
+ * `.mxo-l` around a line), keeping the capture spans inside them.
+ */
 function stripMarkers(html: string): string {
   const stack: boolean[] = [];
   return html.replace(/<span[^>]*>|<\/span>/g, (tag) => {
     if (tag === "</span>") return stack.pop() ? "" : tag;
-    const isMarker = tag.startsWith('<span class="mk"');
-    stack.push(isMarker);
-    return isMarker ? "" : tag;
+    const isWrapper =
+      tag.startsWith('<span class="mk"') ||
+      tag.startsWith('<span class="mxo-l"');
+    stack.push(isWrapper);
+    return isWrapper ? "" : tag;
   });
 }
 
@@ -286,12 +290,29 @@ describe("the landing example and an ordinary fence", () => {
     // A marker that ends inside a token cuts it in two; merged back, the
     // spans are the plain fence's.
     expect(mergeSpans(stripMarkers(inner))).toBe(renderMx(text));
-    expect(highlightExample(source, [])).toBe(
-      renderFence(source).replace(
-        '<pre class="hljs mx-hl">',
-        '<pre class="hljs mx-hl" tabindex="0">',
+    // With no markers the only additions are the line blocks.
+    const bare = highlightExample(source, []);
+    expect(bare).not.toContain('class="mk"');
+    expect(
+      stripMarkers(
+        bare.replace(/^<pre[^>]*><code[^>]*>|<\/code><\/pre>$/g, ""),
       ),
-    );
+    ).toBe(renderMx(text));
+  });
+
+  it("lists on each line the cards that have a marker on it", () => {
+    const markers = readMarkers();
+    const landing = highlightExample(source, markers);
+    const lines = landing.match(/<span class="mxo-l"[^>]*>/g) ?? [];
+    expect(lines).toHaveLength(text.split("\n").length);
+    for (const marker of markers) {
+      for (const range of marker.ranges) {
+        expect(
+          lines[range.line - 1],
+          `${marker.id} line ${range.line}`,
+        ).toMatch(new RegExp(`data-cards="[^"]*\\b${marker.card}\\b`));
+      }
+    }
   });
 
   it("wraps each marker around whole, well-nested spans", () => {

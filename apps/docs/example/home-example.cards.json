@@ -1,0 +1,61 @@
+[
+  {
+    "id": "attr-tags",
+    "group": "Markup",
+    "title": "Attribute tags",
+    "text": "A prop that holds markup is written as markup, inside the call. Pipes make it a function of its parameters.",
+    "jsx": "badge={<span className=\"badge\">New</span>}\nprice={(amount) => (\n  <b className=\"sale\">{money(amount)}</b>\n)}"
+  },
+  {
+    "id": "sugar",
+    "group": "Markup",
+    "title": "Name sugar",
+    "text": "`#id`, `.class` and `:name` sit on the tag, where a selector would put them.",
+    "jsx": "<h1 id=\"store-title\" className=\"title\">\n<input name=\"q\" className=\"search\" />"
+  },
+  {
+    "id": "flow",
+    "group": "Markup",
+    "title": "Control flow",
+    "text": "Conditions and loops are tags with a body: no ternaries, no `.map()`.",
+    "jsx": "{shown.length === 0 ? (…) : filter ? (…) : (…)}\n{shown.map((product, i) => (\n  <li key={product.id}>…</li>\n))}"
+  },
+  {
+    "id": "attrs",
+    "group": "Markup",
+    "title": "Attributes",
+    "text": "A value is any expression, with no braces around it: an atom, a comparison, an object, a spread.",
+    "jsx": "type=\"search\" required\ndata-first={i === 0}\nstyle={{ paddingLeft: `${i}rem` }}\n{...cardAttrs}"
+  },
+  {
+    "id": "text",
+    "group": "Markup",
+    "title": "Text",
+    "text": "`${}` escapes what it prints. `$!{}` inserts markup, and you have to ask for it.",
+    "jsx": "{shown.length} products, one file\ndangerouslySetInnerHTML={{ __html: … }}"
+  },
+  {
+    "id": "values",
+    "group": "Logic",
+    "title": "Values",
+    "text": "`static` runs once per module, `<const>` on every render, and `<let>` is state."
+  },
+  {
+    "id": "tags",
+    "group": "Logic",
+    "title": "Tags you define",
+    "text": "`<define>` names a fragment you call like a tag. A file in `tags/` needs no import and can hand a value back."
+  },
+  {
+    "id": "module",
+    "group": "The file",
+    "title": "A typed module",
+    "text": "Imports are TypeScript's. The exported `Input` is the type every caller is checked against."
+  },
+  {
+    "id": "concise",
+    "group": "The file",
+    "title": "Concise mode, comments",
+    "text": "Drop the angle brackets and indent instead. An HTML comment stays in the source."
+  }
+]

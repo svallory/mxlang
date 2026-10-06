@@ -21,7 +21,7 @@ import Card from "../components/card.mx";
 </Card>
 ```
 
-```mx title="card.mx"
+```mx "card.mx"
 <article.card>
   <h2>${input.title}</h2>
   <div>$!{input.content()}</div>
@@ -41,7 +41,7 @@ A `client:*` directive on an MX component fails the build and names the componen
 
 A `.mx` file under `src/pages` is a page: `src/pages/about.mx` routes to `/about`.
 
-```mx title="src/pages/posts/[slug].mx"
+```mx "src/pages/posts/[slug].mx"
 export const layout = "../../layouts/Base.astro";
 export const getStaticPaths = () => [
   { params: { slug: "first" }, props: { title: "First post" } },

@@ -9,7 +9,7 @@ A `.preact.mx` file is a Preact component with MX where the JSX was. The functio
 
 This is one component, in TSX and then in MX. `Table` is a hand-written Preact component with three props that hold markup.
 
-```tsx title="Team.tsx"
+```tsx "Team.tsx"
 import { useState } from "preact/hooks";
 import type { Member } from "./members.ts";
 import { Table } from "./Table.tsx";
@@ -60,7 +60,7 @@ export function Team({ members }: { members: Member[] }) {
 }
 ```
 
-```mx title="Team.preact.mx"
+```mx "Team.preact.mx"
 import { useState } from "preact/hooks";
 import type { Member } from "./members.ts";
 import { Table } from "./Table.tsx";

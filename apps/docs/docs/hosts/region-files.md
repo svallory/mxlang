@@ -11,7 +11,7 @@ This page is the reference for [React](/hosts/react/), [Preact](/hosts/preact/) 
 
 ## A region is one element
 
-```mx title="Page.react.mx"
+```mx "Page.react.mx"
 import { useState } from "react";
 
 export default function Page() {

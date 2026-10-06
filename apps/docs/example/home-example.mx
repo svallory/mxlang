@@ -2,32 +2,19 @@ import ProductCard from "./tags/product-card.mx";
 import { money } from "./format.ts";
 import type { Product } from "./product.ts";
 
-// Concise mode: a tag on its own line without angle brackets, children
-// nested under it by indentation, a `--` text line for literal text, and no
-// closing tag anywhere in the region.
-section.printed
-  h3
-    -- Concise mode
-  p
-    -- One tag per line, children indented, no closing tags;
-    -- a text line starts with two hyphens.
-
 export interface Input {
   products: Product[];
   currency: string;
   filter?: string;
   emptyHtml?: string;
-  note?: string;
 }
 
 static const MAX_ITEMS = 3;
 
-// A value derived on each render. `<const>` is not a signal.
 <const/shown=input.products.slice(0, MAX_ITEMS)/>
 <const/cardAttrs={ currency: input.currency }/>
-// `<let>` is state: a reactive host re-renders on assignment, the html target
-// reads the initial value once.
 <let/selectedId=shown[0]?.id/>
+<Cheapest/best products=shown/>
 
 <define/Row|{ label, value }|>
   <dt>${label}</dt>
@@ -35,11 +22,8 @@ static const MAX_ITEMS = 3;
 </define>
 
 <!-- A source comment: it never reaches the output. -->
-<h1#store-title.store-title>${shown.length} products, one file</h1>
-
-<form.search role="search">
-  <input#q.q name="q" type="search" placeholder="Filter" required/>
-</form>
+<h1#store-title.title>${shown.length} products, one file</h1>
+<input:q.search type=:search placeholder="Filter" required/>
 
 <if=shown.length === 0>
   <p.empty>$!{input.emptyHtml ?? "No products yet."}</p>
@@ -51,22 +35,21 @@ static const MAX_ITEMS = 3;
   <p.hint>Showing all ${shown.length} products.</p>
 </else>
 
-<ul.store aria-live="polite">
+<ul.store>
   <for|product, i| of=shown>
-    <li class="row" data-high-value=(product.price > 30) style={ "padding-left": `${i}rem` }>
-      <ProductCard product=product featured=(i === 0) ...cardAttrs>
-        <@badge><span.badge>${i === 0 ? "Featured" : "New"}</span></@badge>
+    <li data-first=(i === 0) style={ "padding-left": `${i}rem` }>
+      <ProductCard product=product ...cardAttrs>
+        <@badge><span.badge>New</span></@badge>
         <@price|amount|><b.sale>${money(amount, input.currency)}</b></@price>
       </ProductCard>
     </li>
   </for>
 </ul>
 
-<Cheapest/best products=shown/>
 <dl.summary>
-  <Row label="Currency" value=input.currency/>
   <Row label="Cheapest" value=best ? money(best.price, input.currency) : "—"/>
   <Row label="Selected" value=selectedId ?? "none"/>
 </dl>
 
-<p.printed>$!{input.note ?? "Printed from one <code>.mx</code> file."}</p>
+footer.printed
+  p -- Concise mode: one tag per line, no closing tags.
