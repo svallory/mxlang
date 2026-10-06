@@ -589,7 +589,7 @@ describe("the duplicate-attribute warning names the sugar", () => {
 // `statement` entries: there is no second list (round 3, review A).
 describe("statement tags are not rewritten", () => {
   type MarkoLookup = NonNullable<Ctx["lookup"]>;
-  const lowerFragment = (source: string, markoLookup?: MarkoLookup): void => {
+  const lowerFragment = (source: string, markoLookup?: MarkoLookup): Ir => {
     const { body } = parseFragment(source, { filename: "/tmp/f.mx" });
     const ctx = newCtx(
       source,
@@ -599,7 +599,7 @@ describe("statement tags are not rewritten", () => {
       "/tmp/f.mx",
       lookup,
     );
-    lower(ctx, body);
+    return lower(ctx, body);
   };
   const messageOf = (run: () => void): string => {
     try {
@@ -631,6 +631,25 @@ describe("statement tags are not rewritten", () => {
     ).toContain("name sugar");
   });
 
+  it("a data lookup that makes `class` an ordinary tag keeps the sugar", () => {
+    // The lookup is the branch most likely to regress: a data dialect has no
+    // statements, so `class` is an ordinary tag there and `<class:x/>` is a
+    // tag-adjacent `:name`, not the error the no-lookup rows report. It is the
+    // same source as the `<class:x/>` row in the other block, which reads the
+    // core taglib and does error.
+    const data = {
+      getTag: (name: string) => (name === "class" ? {} : undefined),
+    } as unknown as MarkoLookup;
+    const ir = lowerFragment("<class:x/>\n", data);
+    const tag = ir.body[0];
+    expect(tag?.kind).toBe("Element");
+    if (tag?.kind !== "Element") throw new Error("expected an element");
+    expect(tag.name).toBe("class");
+    expect(
+      tag.attrs.map((attr) => ("name" in attr ? attr.name : null)),
+    ).toContain("name");
+  });
+
   it("a lookup decides: a custom tag with parseOptions.statement is left alone", () => {
     const custom = {
       getTag: (name: string) =>
@@ -659,6 +678,9 @@ describe("a `:name` sugar on a statement tag", () => {
     ["import", "<import:x/>", 7],
     ["export", "<export:x/>", 7],
     ["static", "<static:x/>", 7],
+    ["client", "<client:x/>", 7],
+    ["server", "<server:x/>", 7],
+    ["class", "<class:x/>", 6],
   ])("%s: named at the root", (name, source, column) => {
     const error = errorOf(source);
     expect(error.message).toBe(
@@ -672,6 +694,9 @@ describe("a `:name` sugar on a statement tag", () => {
     ["import", "<div><import:x/></div>", 12],
     ["export", "<div><export:x/></div>", 12],
     ["static", "<div><static:x/></div>", 12],
+    ["client", "<div><client:x/></div>", 12],
+    ["server", "<div><server:x/></div>", 12],
+    ["class", "<div><class:x/></div>", 11],
   ])("%s: nested in a body", (name, source, column) => {
     const error = errorOf(source);
     expect(error.message).toContain(
