@@ -145,6 +145,7 @@ describe("html: what the emitter assumes about the IR (ir-spec 10.2)", () => {
         attrTagProps: [],
         args: [],
         nameSpan: null,
+        loc: { line: 1, column: 0 },
       } satisfies IrNode);
     };
     const bound = emitted("<p>x</p>", withTarget("$mx_Child1"));
