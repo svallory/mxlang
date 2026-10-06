@@ -722,7 +722,9 @@ describe("discovered tag imports inside a region", () => {
   it("still rejects a module-level MX statement the author wrote", () => {
     let error: unknown;
     try {
-      compileRegion(`<import x from "./x.ts"/>`);
+      // Written without angle brackets: `<import …/>` is Marko's own
+      // "a statement, not an html tag" error since decision 168.
+      compileRegion(`import x from "./x.ts"\n<div/>`);
     } catch (caught) {
       error = caught;
     }
