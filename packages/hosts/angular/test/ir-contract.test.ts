@@ -40,6 +40,11 @@ function emitted(source: string, change?: (ir: Ir) => void): string {
   return compile(source, "x.mx").code;
 }
 
+type RangeSource = Extract<
+  Extract<IrNode, { kind: "For" }>["source"],
+  { kind: "range" }
+>;
+
 /** Every node of `kind` in an IR body, depth first. */
 function all<K extends IrNode["kind"]>(
   value: unknown,
@@ -101,5 +106,25 @@ describe("Angular page emitter: what it assumes about the IR (ir-spec 10.2)", ()
     const out = emitted("<!-- shown -->\n// author only\n<p>x</p>");
     expect(out).toContain("<!-- shown -->");
     expect(out).not.toContain("author only");
+  });
+
+  it("E12: a range's from: null starts at 0 and inclusive picks the bound", () => {
+    const source = "<for|i| from=2 to=5><b>${i}</b></for>";
+    const edited = (change: (range: RangeSource) => void) =>
+      emitted(source, (ir) => {
+        for (const node of all(ir.body, "For")) {
+          if (node.source.kind === "range") change(node.source);
+        }
+      });
+    const authored = edited(() => {});
+    const fromNull = edited((range) => {
+      range.from = null;
+    });
+    // Angular has no range loop: bounds are literals, so the count follows them.
+    expect(fromNull).not.toBe(authored);
+    const exclusive = edited((range) => {
+      range.inclusive = false;
+    });
+    expect(exclusive).not.toBe(authored);
   });
 });

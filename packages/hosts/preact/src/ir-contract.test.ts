@@ -40,6 +40,11 @@ function emitted(source: string, change?: (ir: Ir) => void): string {
   return compilePreactMx(source, "/f/x.mx").code;
 }
 
+type RangeSource = Extract<
+  Extract<IrNode, { kind: "For" }>["source"],
+  { kind: "range" }
+>;
+
 /** Every node of `kind` in an IR body, depth first. */
 function all<K extends IrNode["kind"]>(
   value: unknown,
@@ -135,5 +140,26 @@ describe("shared JSX emitter: what it assumes about the IR (ir-spec 10.2)", () =
         } as IrNode);
       }),
     ).toThrow("a hoisted statement cannot be emitted inside a JSX expression");
+  });
+
+  it("E12: a range's from: null starts at 0 and inclusive picks the bound", () => {
+    const source = "<for|i| from=lowbound to=highbound><b>${i}</b></for>";
+    const edited = (change: (range: RangeSource) => void) =>
+      emitted(source, (ir) => {
+        for (const node of all(ir.body, "For")) {
+          if (node.source.kind === "range") change(node.source);
+        }
+      });
+    const authored = edited(() => {});
+    expect(authored).toContain("lowbound");
+    const fromNull = edited((range) => {
+      range.from = null;
+    });
+    expect(fromNull).not.toContain("lowbound");
+    expect(fromNull).toContain("0");
+    const exclusive = edited((range) => {
+      range.inclusive = false;
+    });
+    expect(exclusive).not.toBe(authored);
   });
 });

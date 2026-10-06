@@ -35,6 +35,11 @@ function emitted(source: string, change?: (ir: Ir) => void): string {
   return compileSolidMx(source, { filename: "fixture.solid.mx" }).code;
 }
 
+type RangeSource = Extract<
+  Extract<IrNode, { kind: "For" }>["source"],
+  { kind: "range" }
+>;
+
 /** Every node of `kind` in an IR body, depth first. */
 function all<K extends IrNode["kind"]>(
   value: unknown,
@@ -53,6 +58,18 @@ function all<K extends IrNode["kind"]>(
     if (key !== "node" && key !== "loc") all(child, kind, found);
   }
   return found;
+}
+
+/** Sets every `Expr.node` to null, as a lowering that has no parser nodes would. */
+function dropParserNodes(value: unknown, seen = new Set<object>()): void {
+  if (!value || typeof value !== "object" || seen.has(value)) return;
+  seen.add(value);
+  const record = value as Record<string, unknown>;
+  if (typeof record.code === "string" && "shape" in record) {
+    record.node = null;
+    return;
+  }
+  for (const child of Object.values(record)) dropParserNodes(child, seen);
 }
 
 describe("Solid emitter: what it assumes about the IR (ir-spec 10.2)", () => {
@@ -119,5 +136,52 @@ describe("Solid emitter: what it assumes about the IR (ir-spec 10.2)", () => {
         } as IrNode);
       }),
     ).toThrow("a hoisted statement cannot be emitted inside a JSX expression");
+  });
+
+  it("E12: a range's from: null starts at 0 and inclusive picks the bound", () => {
+    const source = "<for|i| from=lowbound to=highbound><b>${i}</b></for>";
+    const edited = (change: (range: RangeSource) => void) =>
+      emitted(source, (ir) => {
+        for (const node of all(ir.body, "For")) {
+          if (node.source.kind === "range") change(node.source);
+        }
+      });
+    const authored = edited(() => {});
+    expect(authored).toContain("lowbound");
+    const fromNull = edited((range) => {
+      range.from = null;
+    });
+    expect(fromNull).not.toContain("lowbound");
+    expect(fromNull).toContain("0");
+    const exclusive = edited((range) => {
+      range.inclusive = false;
+    });
+    expect(exclusive).not.toBe(authored);
+  });
+
+  it.each([
+    [
+      "a literal range bound folds into a count (numericValue)",
+      "<for|i| from=0 to=3><b>${i}</b></for>",
+    ],
+    [
+      "a static template-literal class folds (staticTemplateValue)",
+      "<div class=`a b`>x</div>",
+    ],
+    [
+      "an authored class array is told from the shorthand fold",
+      '<div class=["a", b]>x</div>',
+    ],
+  ])("E3: Solid reads Expr.node to inspect — %s", (_name, source) => {
+    const authored = emitted(source);
+    let nulled: string | Error;
+    try {
+      nulled = emitted(source, dropParserNodes);
+    } catch (error) {
+      nulled = error as Error;
+    }
+    // With the parser node gone the output changes or the compile fails: the
+    // read is real, which is why section 4 lists it.
+    expect(typeof nulled === "string" ? nulled : "error").not.toBe(authored);
   });
 });

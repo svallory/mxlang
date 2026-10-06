@@ -40,6 +40,11 @@ function emitted(source: string, change?: (ir: Ir) => void): string {
   return compile(source, "/f/x.mx").code;
 }
 
+type RangeSource = Extract<
+  Extract<IrNode, { kind: "For" }>["source"],
+  { kind: "range" }
+>;
+
 /** Every node of `kind` in an IR body, depth first. */
 function all<K extends IrNode["kind"]>(
   value: unknown,
@@ -148,5 +153,44 @@ describe("html: what the emitter assumes about the IR (ir-spec 10.2)", () => {
     const plain = emitted("<p>x</p>", withTarget());
     expect(plain).toContain("__mxRenderTag(__mxOut, Child)");
     expect(plain).not.toContain("$mx_Child1");
+  });
+
+  it("E12: a range's from: null starts at 0 and inclusive picks the bound", () => {
+    const source = "<for|i| from=lowbound to=highbound><b>${i}</b></for>";
+    const edited = (change: (range: RangeSource) => void) =>
+      emitted(source, (ir) => {
+        for (const node of all(ir.body, "For")) {
+          if (node.source.kind === "range") change(node.source);
+        }
+      });
+    const authored = edited(() => {});
+    expect(authored).toContain("lowbound");
+    const fromNull = edited((range) => {
+      range.from = null;
+    });
+    expect(fromNull).not.toContain("lowbound");
+    expect(fromNull).toContain("0");
+    const exclusive = edited((range) => {
+      range.inclusive = false;
+    });
+    expect(exclusive).not.toBe(authored);
+  });
+
+  it("E16: a single attrTagProps value holding a <for> is an internal plan error", () => {
+    const source =
+      "<define/Card|x|>${x}</define>\n<Card(1)><@head>h</@head></Card>";
+    const position = { line: 2, column: 9 };
+    expect(() =>
+      emitted(source, (ir) => {
+        for (const node of all(ir.body, "Component")) {
+          const prop = node.attrTagProps[0];
+          if (!prop) continue;
+          prop.cardinality = "single";
+          prop.source = [
+            { kind: "AttributeTagFor", nodes: [], loc: position } as never,
+          ];
+        }
+      }),
+    ).toThrow("internal attribute-tag plan error");
   });
 });
