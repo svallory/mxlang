@@ -1,5 +1,5 @@
 diff --git a/dist/index.js b/dist/index.js
-index dc727aef1e94c2a42a93d9e897a89cd5518f0907..81e9ee24ee79c71d414779188b2b45b9acb096cd 100644
+index dc727aef1e94c2a42a93d9e897a89cd5518f0907..83d0b3a72221774b8fe182668016e13ba71f8775 100644
 --- a/dist/index.js
 +++ b/dist/index.js
 @@ -47,7 +47,23 @@ var Parser = class {
@@ -72,6 +72,33 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..81e9ee24ee79c71d414779188b2b45b9
            return;
          break;
        }
+@@ -491,7 +512,7 @@ function detectAmbiguousCloseAngleBracket(parser, child) {
+       }
+       return !1;
+     }
+-    if (isWordCode(code)) {
++    if (isUnicodeWordCode(code)) {
+       if (operatorPending) return !1;
+       sawOperand = !0;
+       continue;
+@@ -550,7 +571,7 @@ function isOperandEndCode(code) {
+     case 93:
+       return !0;
+     default:
+-      return isWordCode(code);
++      return isUnicodeWordCode(code);
+   }
+ }
+ function isAsyncMethodPrefix(parser, name) {
+@@ -562,7 +583,7 @@ function isAsyncMethodPrefix(parser, name) {
+   let skip = parser.isConcise ? isIndentCode : isWhitespaceCode, pos = parser.pos;
+   for (; skip(data.charCodeAt(pos)); ) pos++;
+   let code = data.charCodeAt(pos);
+-  return isWordCode(code) || // the method name
++  return isUnicodeWordCode(code) || // the method name
+   code === 40 || // a default attribute method's params
+   // a default attribute method's type params, but not a close tag
+   code === 60 && data.charCodeAt(pos + 1) !== 47;
 @@ -1079,6 +1100,11 @@ var shouldTerminate = () => !1, unaryKeywords = [
        groupStack: [],
        shouldTerminate,
@@ -117,6 +144,24 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..81e9ee24ee79c71d414779188b2b45b9
    }
  };
  function checkForOperators(parser, expression, eol) {
+@@ -1333,7 +1370,7 @@ function lookBehindForOperator(expression, data, pos) {
+         case 96:
+           return -1;
+         default:
+-          return isWordCode(operandCode) && lookBehindForOperator(expression, data, operandEnd + 1) === -1 && lookBehindForKeyword(
++          return isUnicodeWordCode(operandCode) && lookBehindForOperator(expression, data, operandEnd + 1) === -1 && lookBehindForKeyword(
+             expression,
+             data,
+             operandEnd,
+@@ -1345,7 +1382,7 @@ function lookBehindForOperator(expression, data, pos) {
+       return data.charCodeAt(curPos - 1) === 61 ? curPos - 1 : expression.inType ? -1 : curPos;
+     case 46: {
+       let nextPos = lookAheadWhile(isWhitespaceCode, data, pos);
+-      return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
++      return isUnicodeWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
+     }
+     // special case -- and ++
+     case 43:
 @@ -1364,6 +1401,9 @@ function lookBehindForOperator(expression, data, pos) {
        );
    }
@@ -127,7 +172,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..81e9ee24ee79c71d414779188b2b45b9
  function lookAheadForOperator(expression, data, pos) {
    switch (data.charCodeAt(pos)) {
      case 38:
-@@ -1382,11 +1422,13 @@ function lookAheadForOperator(expression, data, pos) {
+@@ -1382,13 +1422,15 @@ function lookAheadForOperator(expression, data, pos) {
      case 40:
      case 62:
      case 63:
@@ -138,11 +183,23 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..81e9ee24ee79c71d414779188b2b45b9
 +      return (expression.attrValue || isSingleAtomDefault(expression, data, pos)) && !expression.ternaryDepth && (isIdentStartCode(data.charCodeAt(pos + 1)) || isBareColonEnd(data, pos + 1)) ? -1 : pos;
      // defers to base expression state to track block groups.
      case 46: {
-+      if (expression.attrValue && isIdentStartCode(data.charCodeAt(pos + 1))) return -1;
++      if (expression.attrValue && isNameStartCode(data.charCodeAt(pos + 1))) return -1;
        let nextPos = lookAheadWhile(isWhitespaceCode, data, pos + 1);
-       return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
+-      return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
++      return isUnicodeWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
      }
-@@ -1432,6 +1474,188 @@ function canFollowDivision(code) {
+     default: {
+       let startCode = data.charCodeAt(pos);
+@@ -1416,7 +1458,7 @@ function lookAheadForOperator(expression, data, pos) {
+   }
+ }
+ function canFollowDivision(code) {
+-  if (isWordCode(code)) return !0;
++  if (isUnicodeWordCode(code)) return !0;
+   switch (code) {
+     case 96:
+     case 39:
+@@ -1432,8 +1474,190 @@ function canFollowDivision(code) {
        return !1;
    }
  }
@@ -153,11 +210,8 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..81e9ee24ee79c71d414779188b2b45b9
 +function isIdentStartCode(code) {
 +  return code >= 65 && code <= 90 || code >= 97 && code <= 122 || code === 36 || code === 95;
 +}
-+function isLookBehindWordCode(code) {
-+  return code >= 128 ? !isUnicodeSpaceCode(code) : isWordCode(code);
-+}
-+function isUnicodeSpaceCode(code) {
-+  return code === 160 || code === 5760 || code >= 8192 && code <= 8202 || code === 8232 || code === 8233 || code === 8239 || code === 8287 || code === 12288 || code === 65279;
++function isNameStartCode(code) {
++  return isUnicodeWordCode(code) && !(code >= 48 && code <= 57);
 +}
 +var atomKeywords = [
 +  "await",
@@ -196,6 +250,9 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..81e9ee24ee79c71d414779188b2b45b9
 +  let { atoms } = parser, last = atoms[atoms.length - 1];
 +  return (!last || last.start < start) && (atoms.push({ start, end }), (_b = (_a = parser.options).onAtom) == null || _b.call(_a, { start, end, value: { start: start + 1, end } })), expression.atomEnd = end, parser.pos = end, !0;
 +}
++function isSpreadEnd(data, at) {
++  return data.charCodeAt(at - 1) === 46 && data.charCodeAt(at - 2) === 46 && data.charCodeAt(at - 3) !== 46;
++}
 +function atomNameEnd(data, pos) {
 +  if (!isIdentStartCode(data.charCodeAt(pos))) return pos;
 +  let end = pos + 1;
@@ -230,9 +287,9 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..81e9ee24ee79c71d414779188b2b45b9
 +    case 63: {
 +      if (i === expression.start) return !0;
 +      let owner = data.charCodeAt(i - 1);
-+      if (isLookBehindWordCode(owner)) {
++      if (isUnicodeWordCode(owner)) {
 +        let wordStart = i - 1;
-+        for (; wordStart > expression.start && isLookBehindWordCode(data.charCodeAt(wordStart - 1)); )
++        for (; wordStart > expression.start && isUnicodeWordCode(data.charCodeAt(wordStart - 1)); )
 +          wordStart--;
 +        let first = data.charCodeAt(wordStart);
 +        return first >= 48 && first <= 57;
@@ -245,7 +302,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..81e9ee24ee79c71d414779188b2b45b9
 +        j--;
 +      if (j < expression.start) return !0;
 +      let owner = data.charCodeAt(j);
-+      return owner === 41 || owner === 93 || owner === 45 || owner === 43 ? !1 : isLookBehindWordCode(owner) ? isOperatorWord(expression, data, j) : !0;
++      return owner === 41 || owner === 93 || owner === 45 || owner === 43 ? !1 : isUnicodeWordCode(owner) ? isOperatorWord(expression, data, j) : !0;
 +    }
 +    case 62:
 +      return data.charCodeAt(i - 1) === 61 || !closesTypeArguments(expression, data, i);
@@ -255,7 +312,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..81e9ee24ee79c71d414779188b2b45b9
 +    case 47:
 +      return i + 1 !== expression.regexEnd;
 +    default: {
-+      return isLookBehindWordCode(code) ? i === pos - 1 ? !1 : isOperatorWord(expression, data, i) : !0;
++      return isUnicodeWordCode(code) ? i === pos - 1 ? !1 : isOperatorWord(expression, data, i) : !0;
 +    }
 +  }
 +}
@@ -266,7 +323,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..81e9ee24ee79c71d414779188b2b45b9
 +  let { data } = parser;
 +  for (let at = range.start; at + 1 < range.end; at++)
 +    if (data.charCodeAt(at) === 58 && data.charCodeAt(at + 1) === 58) {
-+      let end = atomNameEnd(data, at + 2);
++      let end = Math.min(atomNameEnd(data, at + 2), range.end);
 +      return parser.emitError(
 +        { start: at, end },
 +        6,
@@ -285,7 +342,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..81e9ee24ee79c71d414779188b2b45b9
 +        break;
 +      case 60:
 +        if (--angles === 0)
-+          return groups === 0 && j > expression.start && isLookBehindWordCode(data.charCodeAt(j - 1));
++          return groups === 0 && j > expression.start && isUnicodeWordCode(data.charCodeAt(j - 1));
 +        break;
 +      case 41:
 +      case 93:
@@ -314,9 +371,9 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..81e9ee24ee79c71d414779188b2b45b9
 +function isOperatorWord(expression, data, end) {
 +  if (end + 1 === expression.atomEnd) return !1;
 +  let wordStart = end;
-+  for (; wordStart > expression.start && isLookBehindWordCode(data.charCodeAt(wordStart - 1)); )
++  for (; wordStart > expression.start && isUnicodeWordCode(data.charCodeAt(wordStart - 1)); )
 +    wordStart--;
-+  if (wordStart > expression.start && data.charCodeAt(wordStart - 1) === 46)
++  if (wordStart > expression.start && data.charCodeAt(wordStart - 1) === 46 && !isSpreadEnd(data, wordStart - 1))
 +    return !1;
 +  let word = data.slice(wordStart, end + 1);
 +  if (!atomKeywords.includes(word)) return !1;
@@ -324,13 +381,16 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..81e9ee24ee79c71d414779188b2b45b9
 +    let j = wordStart - 1;
 +    for (; j >= expression.start && isWhitespaceCode(data.charCodeAt(j)); ) j--;
 +    let before = j < expression.start ? -1 : data.charCodeAt(j);
-+    return word === "of" ? isLookBehindWordCode(before) || before === 41 || before === 93 || before === 125 : !(before === 63 || before === 58 || before === 44 || before === 40);
++    return word === "of" ? isUnicodeWordCode(before) || before === 41 || before === 93 || before === 125 : !(before === 63 || before === 58 || before === 44 || before === 40);
 +  }
 +  return !0;
 +}
  function isWordOrPeriodCode(code) {
-   return code === 46 || isWordCode(code);
+-  return code === 46 || isWordCode(code);
++  return code === 46 || isUnicodeWordCode(code);
  }
+ function lookAheadWhile(match, data, pos) {
+   let max = data.length;
 @@ -1450,6 +1674,7 @@ function lookBehindWhile(match, data, pos) {
    return 0;
  }
@@ -339,6 +399,19 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..81e9ee24ee79c71d414779188b2b45b9
    for (let keyword of keywords) {
      let keywordPos = lookBehindFor(data, pos, keyword);
      if (keywordPos !== -1)
+@@ -1694,10 +1919,10 @@ function startsTypeName(parser, pos, allowGroup) {
+   let code = parser.data.charCodeAt(pos);
+   if (code === 123 || code === 42)
+     return allowGroup;
+-  if (!isWordCode(code) || code >= 48 && code <= 57)
++  if (!isUnicodeWordCode(code) || code >= 48 && code <= 57)
+     return !1;
+   for (let keyword of binaryKeywords)
+-    if (parser.lookAheadFor(keyword, pos) && !isWordCode(parser.data.charCodeAt(pos + keyword.length)))
++    if (parser.lookAheadFor(keyword, pos) && !isUnicodeWordCode(parser.data.charCodeAt(pos + keyword.length)))
+       return !1;
+   return !0;
+ }
 @@ -1805,9 +2030,9 @@ var OPEN_TAG = {
    },
    exit(tag) {
@@ -408,8 +481,21 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..81e9ee24ee79c71d414779188b2b45b9
              return;
            }
            this.pos++;
+@@ -2670,6 +2906,12 @@ function htmlEOF() {
+ function isWordCode(code) {
+   return code >= 65 && code <= 90 || code >= 97 && code <= 122 || code >= 48 && code <= 57 || code == 36 || code === 95;
+ }
++function isUnicodeWordCode(code) {
++  return code >= 128 ? !isUnicodeSpaceCode(code) : isWordCode(code);
++}
++function isUnicodeSpaceCode(code) {
++  return code === 160 || code === 5760 || code >= 8192 && code <= 8202 || code === 8232 || code === 8233 || code === 8239 || code === 8287 || code === 12288 || code === 65279;
++}
+ function matchesCloseAngleBracket(code) {
+   return code === 62;
+ }
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 8afb14db555b8df8a5b9f5e1c29bad5080125709..46e4366a5d151863db70359dfc0cb05381f00086 100644
+index 8afb14db555b8df8a5b9f5e1c29bad5080125709..a42198b98bb65189aa58ad64d40cc0a52886d5e9 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -20,7 +20,23 @@ var Parser = class {
@@ -482,6 +568,33 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..46e4366a5d151863db70359dfc0cb053
            return;
          break;
        }
+@@ -464,7 +485,7 @@ function detectAmbiguousCloseAngleBracket(parser, child) {
+       }
+       return !1;
+     }
+-    if (isWordCode(code)) {
++    if (isUnicodeWordCode(code)) {
+       if (operatorPending) return !1;
+       sawOperand = !0;
+       continue;
+@@ -523,7 +544,7 @@ function isOperandEndCode(code) {
+     case 93:
+       return !0;
+     default:
+-      return isWordCode(code);
++      return isUnicodeWordCode(code);
+   }
+ }
+ function isAsyncMethodPrefix(parser, name) {
+@@ -535,7 +556,7 @@ function isAsyncMethodPrefix(parser, name) {
+   let skip = parser.isConcise ? isIndentCode : isWhitespaceCode, pos = parser.pos;
+   for (; skip(data.charCodeAt(pos)); ) pos++;
+   let code = data.charCodeAt(pos);
+-  return isWordCode(code) || // the method name
++  return isUnicodeWordCode(code) || // the method name
+   code === 40 || // a default attribute method's params
+   // a default attribute method's type params, but not a close tag
+   code === 60 && data.charCodeAt(pos + 1) !== 47;
 @@ -1052,6 +1073,11 @@ var shouldTerminate = () => !1, unaryKeywords = [
        groupStack: [],
        shouldTerminate,
@@ -527,6 +640,24 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..46e4366a5d151863db70359dfc0cb053
    }
  };
  function checkForOperators(parser, expression, eol) {
+@@ -1306,7 +1343,7 @@ function lookBehindForOperator(expression, data, pos) {
+         case 96:
+           return -1;
+         default:
+-          return isWordCode(operandCode) && lookBehindForOperator(expression, data, operandEnd + 1) === -1 && lookBehindForKeyword(
++          return isUnicodeWordCode(operandCode) && lookBehindForOperator(expression, data, operandEnd + 1) === -1 && lookBehindForKeyword(
+             expression,
+             data,
+             operandEnd,
+@@ -1318,7 +1355,7 @@ function lookBehindForOperator(expression, data, pos) {
+       return data.charCodeAt(curPos - 1) === 61 ? curPos - 1 : expression.inType ? -1 : curPos;
+     case 46: {
+       let nextPos = lookAheadWhile(isWhitespaceCode, data, pos);
+-      return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
++      return isUnicodeWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
+     }
+     // special case -- and ++
+     case 43:
 @@ -1337,6 +1374,9 @@ function lookBehindForOperator(expression, data, pos) {
        );
    }
@@ -537,7 +668,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..46e4366a5d151863db70359dfc0cb053
  function lookAheadForOperator(expression, data, pos) {
    switch (data.charCodeAt(pos)) {
      case 38:
-@@ -1355,11 +1395,13 @@ function lookAheadForOperator(expression, data, pos) {
+@@ -1355,13 +1395,15 @@ function lookAheadForOperator(expression, data, pos) {
      case 40:
      case 62:
      case 63:
@@ -548,11 +679,23 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..46e4366a5d151863db70359dfc0cb053
 +      return (expression.attrValue || isSingleAtomDefault(expression, data, pos)) && !expression.ternaryDepth && (isIdentStartCode(data.charCodeAt(pos + 1)) || isBareColonEnd(data, pos + 1)) ? -1 : pos;
      // defers to base expression state to track block groups.
      case 46: {
-+      if (expression.attrValue && isIdentStartCode(data.charCodeAt(pos + 1))) return -1;
++      if (expression.attrValue && isNameStartCode(data.charCodeAt(pos + 1))) return -1;
        let nextPos = lookAheadWhile(isWhitespaceCode, data, pos + 1);
-       return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
+-      return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
++      return isUnicodeWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
      }
-@@ -1405,6 +1447,188 @@ function canFollowDivision(code) {
+     default: {
+       let startCode = data.charCodeAt(pos);
+@@ -1389,7 +1431,7 @@ function lookAheadForOperator(expression, data, pos) {
+   }
+ }
+ function canFollowDivision(code) {
+-  if (isWordCode(code)) return !0;
++  if (isUnicodeWordCode(code)) return !0;
+   switch (code) {
+     case 96:
+     case 39:
+@@ -1405,8 +1447,190 @@ function canFollowDivision(code) {
        return !1;
    }
  }
@@ -563,11 +706,8 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..46e4366a5d151863db70359dfc0cb053
 +function isIdentStartCode(code) {
 +  return code >= 65 && code <= 90 || code >= 97 && code <= 122 || code === 36 || code === 95;
 +}
-+function isLookBehindWordCode(code) {
-+  return code >= 128 ? !isUnicodeSpaceCode(code) : isWordCode(code);
-+}
-+function isUnicodeSpaceCode(code) {
-+  return code === 160 || code === 5760 || code >= 8192 && code <= 8202 || code === 8232 || code === 8233 || code === 8239 || code === 8287 || code === 12288 || code === 65279;
++function isNameStartCode(code) {
++  return isUnicodeWordCode(code) && !(code >= 48 && code <= 57);
 +}
 +var atomKeywords = [
 +  "await",
@@ -606,6 +746,9 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..46e4366a5d151863db70359dfc0cb053
 +  let { atoms } = parser, last = atoms[atoms.length - 1];
 +  return (!last || last.start < start) && (atoms.push({ start, end }), (_b = (_a = parser.options).onAtom) == null || _b.call(_a, { start, end, value: { start: start + 1, end } })), expression.atomEnd = end, parser.pos = end, !0;
 +}
++function isSpreadEnd(data, at) {
++  return data.charCodeAt(at - 1) === 46 && data.charCodeAt(at - 2) === 46 && data.charCodeAt(at - 3) !== 46;
++}
 +function atomNameEnd(data, pos) {
 +  if (!isIdentStartCode(data.charCodeAt(pos))) return pos;
 +  let end = pos + 1;
@@ -640,9 +783,9 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..46e4366a5d151863db70359dfc0cb053
 +    case 63: {
 +      if (i === expression.start) return !0;
 +      let owner = data.charCodeAt(i - 1);
-+      if (isLookBehindWordCode(owner)) {
++      if (isUnicodeWordCode(owner)) {
 +        let wordStart = i - 1;
-+        for (; wordStart > expression.start && isLookBehindWordCode(data.charCodeAt(wordStart - 1)); )
++        for (; wordStart > expression.start && isUnicodeWordCode(data.charCodeAt(wordStart - 1)); )
 +          wordStart--;
 +        let first = data.charCodeAt(wordStart);
 +        return first >= 48 && first <= 57;
@@ -655,7 +798,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..46e4366a5d151863db70359dfc0cb053
 +        j--;
 +      if (j < expression.start) return !0;
 +      let owner = data.charCodeAt(j);
-+      return owner === 41 || owner === 93 || owner === 45 || owner === 43 ? !1 : isLookBehindWordCode(owner) ? isOperatorWord(expression, data, j) : !0;
++      return owner === 41 || owner === 93 || owner === 45 || owner === 43 ? !1 : isUnicodeWordCode(owner) ? isOperatorWord(expression, data, j) : !0;
 +    }
 +    case 62:
 +      return data.charCodeAt(i - 1) === 61 || !closesTypeArguments(expression, data, i);
@@ -665,7 +808,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..46e4366a5d151863db70359dfc0cb053
 +    case 47:
 +      return i + 1 !== expression.regexEnd;
 +    default: {
-+      return isLookBehindWordCode(code) ? i === pos - 1 ? !1 : isOperatorWord(expression, data, i) : !0;
++      return isUnicodeWordCode(code) ? i === pos - 1 ? !1 : isOperatorWord(expression, data, i) : !0;
 +    }
 +  }
 +}
@@ -676,7 +819,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..46e4366a5d151863db70359dfc0cb053
 +  let { data } = parser;
 +  for (let at = range.start; at + 1 < range.end; at++)
 +    if (data.charCodeAt(at) === 58 && data.charCodeAt(at + 1) === 58) {
-+      let end = atomNameEnd(data, at + 2);
++      let end = Math.min(atomNameEnd(data, at + 2), range.end);
 +      return parser.emitError(
 +        { start: at, end },
 +        6,
@@ -695,7 +838,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..46e4366a5d151863db70359dfc0cb053
 +        break;
 +      case 60:
 +        if (--angles === 0)
-+          return groups === 0 && j > expression.start && isLookBehindWordCode(data.charCodeAt(j - 1));
++          return groups === 0 && j > expression.start && isUnicodeWordCode(data.charCodeAt(j - 1));
 +        break;
 +      case 41:
 +      case 93:
@@ -724,9 +867,9 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..46e4366a5d151863db70359dfc0cb053
 +function isOperatorWord(expression, data, end) {
 +  if (end + 1 === expression.atomEnd) return !1;
 +  let wordStart = end;
-+  for (; wordStart > expression.start && isLookBehindWordCode(data.charCodeAt(wordStart - 1)); )
++  for (; wordStart > expression.start && isUnicodeWordCode(data.charCodeAt(wordStart - 1)); )
 +    wordStart--;
-+  if (wordStart > expression.start && data.charCodeAt(wordStart - 1) === 46)
++  if (wordStart > expression.start && data.charCodeAt(wordStart - 1) === 46 && !isSpreadEnd(data, wordStart - 1))
 +    return !1;
 +  let word = data.slice(wordStart, end + 1);
 +  if (!atomKeywords.includes(word)) return !1;
@@ -734,13 +877,16 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..46e4366a5d151863db70359dfc0cb053
 +    let j = wordStart - 1;
 +    for (; j >= expression.start && isWhitespaceCode(data.charCodeAt(j)); ) j--;
 +    let before = j < expression.start ? -1 : data.charCodeAt(j);
-+    return word === "of" ? isLookBehindWordCode(before) || before === 41 || before === 93 || before === 125 : !(before === 63 || before === 58 || before === 44 || before === 40);
++    return word === "of" ? isUnicodeWordCode(before) || before === 41 || before === 93 || before === 125 : !(before === 63 || before === 58 || before === 44 || before === 40);
 +  }
 +  return !0;
 +}
  function isWordOrPeriodCode(code) {
-   return code === 46 || isWordCode(code);
+-  return code === 46 || isWordCode(code);
++  return code === 46 || isUnicodeWordCode(code);
  }
+ function lookAheadWhile(match, data, pos) {
+   let max = data.length;
 @@ -1423,6 +1647,7 @@ function lookBehindWhile(match, data, pos) {
    return 0;
  }
@@ -749,6 +895,19 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..46e4366a5d151863db70359dfc0cb053
    for (let keyword of keywords) {
      let keywordPos = lookBehindFor(data, pos, keyword);
      if (keywordPos !== -1)
+@@ -1667,10 +1892,10 @@ function startsTypeName(parser, pos, allowGroup) {
+   let code = parser.data.charCodeAt(pos);
+   if (code === 123 || code === 42)
+     return allowGroup;
+-  if (!isWordCode(code) || code >= 48 && code <= 57)
++  if (!isUnicodeWordCode(code) || code >= 48 && code <= 57)
+     return !1;
+   for (let keyword of binaryKeywords)
+-    if (parser.lookAheadFor(keyword, pos) && !isWordCode(parser.data.charCodeAt(pos + keyword.length)))
++    if (parser.lookAheadFor(keyword, pos) && !isUnicodeWordCode(parser.data.charCodeAt(pos + keyword.length)))
+       return !1;
+   return !0;
+ }
 @@ -1778,9 +2003,9 @@ var OPEN_TAG = {
    },
    exit(tag) {
@@ -818,3 +977,16 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..46e4366a5d151863db70359dfc0cb053
              return;
            }
            this.pos++;
+@@ -2643,6 +2879,12 @@ function htmlEOF() {
+ function isWordCode(code) {
+   return code >= 65 && code <= 90 || code >= 97 && code <= 122 || code >= 48 && code <= 57 || code == 36 || code === 95;
+ }
++function isUnicodeWordCode(code) {
++  return code >= 128 ? !isUnicodeSpaceCode(code) : isWordCode(code);
++}
++function isUnicodeSpaceCode(code) {
++  return code === 160 || code === 5760 || code >= 8192 && code <= 8202 || code === 8232 || code === 8233 || code === 8239 || code === 8287 || code === 12288 || code === 65279;
++}
+ function matchesCloseAngleBracket(code) {
+   return code === 62;
+ }

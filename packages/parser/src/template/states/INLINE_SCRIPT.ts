@@ -1,6 +1,6 @@
 import {
   isIndentCode,
-  isWordCode,
+  isUnicodeWordCode,
   matchesCloseCurlyBrace,
   type Meta,
   Parser,
@@ -113,14 +113,17 @@ function startsTypeName(parser: Parser, pos: number, allowGroup: boolean) {
     return allowGroup;
   }
 
-  if (!isWordCode(code) || (code >= CODE.NUMBER_0 && code <= CODE.NUMBER_9)) {
+  if (
+    !isUnicodeWordCode(code) ||
+    (code >= CODE.NUMBER_0 && code <= CODE.NUMBER_9)
+  ) {
     return false;
   }
 
   for (const keyword of binaryKeywords) {
     if (
       parser.lookAheadFor(keyword, pos) &&
-      !isWordCode(parser.data.charCodeAt(pos + keyword.length))
+      !isUnicodeWordCode(parser.data.charCodeAt(pos + keyword.length))
     ) {
       return false;
     }

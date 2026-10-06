@@ -1,7 +1,7 @@
 import {
   isIndentCode,
+  isUnicodeWordCode,
   isWhitespaceCode,
-  isWordCode,
   matchesCloseAngleBracket,
   matchesCloseCurlyBrace,
   matchesCloseParen,
@@ -464,7 +464,7 @@ function detectAmbiguousCloseAngleBracket(parser: Parser, child: Meta) {
       return false;
     }
 
-    if (isWordCode(code)) {
+    if (isUnicodeWordCode(code)) {
       if (operatorPending) return false;
       sawOperand = true;
       continue;
@@ -540,7 +540,7 @@ function isOperandEndCode(code: number) {
     case CODE.CLOSE_SQUARE_BRACKET:
       return true;
     default:
-      return isWordCode(code);
+      return isUnicodeWordCode(code);
   }
 }
 
@@ -568,7 +568,7 @@ function isAsyncMethodPrefix(parser: Parser, name: Range) {
 
   const code = data.charCodeAt(pos);
   return (
-    isWordCode(code) || // the method name
+    isUnicodeWordCode(code) || // the method name
     code === CODE.OPEN_PAREN || // a default attribute method's params
     // a default attribute method's type params, but not a close tag
     (code === CODE.OPEN_ANGLE_BRACKET &&

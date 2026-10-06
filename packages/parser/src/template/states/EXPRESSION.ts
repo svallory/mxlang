@@ -1,6 +1,7 @@
 import {
   isIndentCode,
   isWhitespaceCode,
+  isUnicodeWordCode,
   isWordCode,
   type Meta,
   Parser,
@@ -553,7 +554,7 @@ function lookBehindForOperator(
         case CODE.BACKTICK:
           return -1;
         default:
-          return isWordCode(operandCode) &&
+          return isUnicodeWordCode(operandCode) &&
             lookBehindForOperator(expression, data, operandEnd + 1) === -1 &&
             lookBehindForKeyword(
               expression,
@@ -576,7 +577,7 @@ function lookBehindForOperator(
     case CODE.PERIOD: {
       // Only matches `.` followed by something that could be an identifier.
       const nextPos = lookAheadWhile(isWhitespaceCode, data, pos);
-      return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
+      return isUnicodeWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
     }
 
     // special case -- and ++
@@ -667,12 +668,13 @@ function lookAheadForOperator(
 
     case CODE.PERIOD: {
       // MX: in an attribute value, ` .name` starts a new attribute.
-      if (expression.attrValue && isIdentStartCode(data.charCodeAt(pos + 1))) {
+      // A non-ASCII letter starts a name too (`x=a .é` stays sugar).
+      if (expression.attrValue && isNameStartCode(data.charCodeAt(pos + 1))) {
         return -1;
       }
       // Only matches `.` followed by something that could be an identifier.
       const nextPos = lookAheadWhile(isWhitespaceCode, data, pos + 1);
-      return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
+      return isUnicodeWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
     }
 
     default: {
@@ -720,7 +722,7 @@ function lookAheadForOperator(
 }
 
 function canFollowDivision(code: number) {
-  if (isWordCode(code)) return true;
+  if (isUnicodeWordCode(code)) return true;
   switch (code) {
     case CODE.BACKTICK:
     case CODE.SINGLE_QUOTE:
@@ -738,7 +740,7 @@ function canFollowDivision(code: number) {
 }
 
 function isWordOrPeriodCode(code: number) {
-  return code === CODE.PERIOD || isWordCode(code);
+  return code === CODE.PERIOD || isUnicodeWordCode(code);
 }
 
 function lookAheadWhile(
@@ -825,43 +827,17 @@ function isDigitCode(code: number) {
   return code >= CODE.NUMBER_0 && code <= CODE.NUMBER_9;
 }
 
+/** Whether `code` can start a name: a word character other than a digit. */
+function isNameStartCode(code: number) {
+  return isUnicodeWordCode(code) && !isDigitCode(code);
+}
+
 function isIdentStartCode(code: number) {
   return (
     (code >= CODE.UPPER_A && code <= CODE.UPPER_Z) ||
     (code >= CODE.LOWER_A && code <= CODE.LOWER_Z) ||
     code === CODE.DOLLAR ||
     code === CODE.UNDERSCORE
-  );
-}
-
-/**
- * MX (decision 156 addenda 2 and 8): a word character for the atom
- * look-behind. Every character at or above U+0080 counts, as after an atom's
- * name in `lexAtom`, so a non-ASCII identifier (`{ é:a }`, `(é :T)`, `éin`)
- * is an operand: a `:` TypeScript could own is TypeScript's. The exception
- * is what TypeScript reads as whitespace or a line terminator, after which
- * it cannot own a `:` (`[a,\u00a0:b]` keeps its atom). `isWordCode` stays
- * ASCII for its upstream callers.
- */
-function isLookBehindWordCode(code: number) {
-  return code >= 0x80 ? !isUnicodeSpaceCode(code) : isWordCode(code);
-}
-
-/**
- * The characters at or above U+0080 that TypeScript reads as whitespace
- * (`Zs`, U+FEFF) or as a line terminator (U+2028, U+2029).
- */
-function isUnicodeSpaceCode(code: number) {
-  return (
-    code === 0xa0 ||
-    code === 0x1680 ||
-    (code >= 0x2000 && code <= 0x200a) ||
-    code === 0x2028 ||
-    code === 0x2029 ||
-    code === 0x202f ||
-    code === 0x205f ||
-    code === 0x3000 ||
-    code === 0xfeff
   );
 }
 
@@ -964,7 +940,8 @@ export function rejectReservedName(parser: Parser, range: Range): boolean {
       data.charCodeAt(at) === CODE.COLON &&
       data.charCodeAt(at + 1) === CODE.COLON
     ) {
-      const end = atomNameEnd(data, at + 2);
+      // The name ends at the static piece's end (`<a::b${x}>` is `::b`).
+      const end = Math.min(atomNameEnd(data, at + 2), range.end);
       parser.emitError(
         { start: at, end },
         ErrorCode.INVALID_EXPRESSION,
@@ -992,13 +969,14 @@ function isOperatorWord(
   let wordStart = end;
   while (
     wordStart > expression.start &&
-    isLookBehindWordCode(data.charCodeAt(wordStart - 1))
+    isUnicodeWordCode(data.charCodeAt(wordStart - 1))
   ) {
     wordStart--;
   }
   if (
     wordStart > expression.start &&
-    data.charCodeAt(wordStart - 1) === CODE.PERIOD
+    data.charCodeAt(wordStart - 1) === CODE.PERIOD &&
+    !isSpreadEnd(data, wordStart - 1)
   ) {
     return false;
   }
@@ -1010,7 +988,7 @@ function isOperatorWord(
     const before = j < expression.start ? -1 : data.charCodeAt(j);
     if (word === "of") {
       return (
-        isLookBehindWordCode(before) ||
+        isUnicodeWordCode(before) ||
         before === CODE.CLOSE_PAREN ||
         before === CODE.CLOSE_SQUARE_BRACKET ||
         before === CODE.CLOSE_CURLY_BRACE
@@ -1052,7 +1030,7 @@ function closesTypeArguments(
           return (
             groups === 0 &&
             j > expression.start &&
-            isLookBehindWordCode(data.charCodeAt(j - 1))
+            isUnicodeWordCode(data.charCodeAt(j - 1))
           );
         }
         break;
@@ -1079,6 +1057,18 @@ function closesTypeArguments(
     }
   }
   return false;
+}
+
+/**
+ * Whether the `.` at `at` ends a spread's `...` (decision 156 addendum 8:
+ * `[...await :b]`), not a member access (`a.await`, `a?.typeof`).
+ */
+function isSpreadEnd(data: string, at: number) {
+  return (
+    data.charCodeAt(at - 1) === CODE.PERIOD &&
+    data.charCodeAt(at - 2) === CODE.PERIOD &&
+    data.charCodeAt(at - 3) !== CODE.PERIOD
+  );
 }
 
 /** Where an atom name `[A-Za-z_$][\w$]*(-[\w$]+)*` starting at `pos` ends. */
@@ -1140,11 +1130,11 @@ function expectsExpression(
       // carries a marker (`n === 1? :a : :b`).
       if (i === expression.start) return true;
       const owner = data.charCodeAt(i - 1);
-      if (isLookBehindWordCode(owner)) {
+      if (isUnicodeWordCode(owner)) {
         let wordStart = i - 1;
         while (
           wordStart > expression.start &&
-          isLookBehindWordCode(data.charCodeAt(wordStart - 1))
+          isUnicodeWordCode(data.charCodeAt(wordStart - 1))
         ) {
           wordStart--;
         }
@@ -1179,7 +1169,7 @@ function expectsExpression(
       ) {
         return false;
       }
-      if (!isLookBehindWordCode(owner)) return true;
+      if (!isUnicodeWordCode(owner)) return true;
       return isOperatorWord(expression, data, j);
     }
     case CODE.CLOSE_ANGLE_BRACKET:
@@ -1197,7 +1187,7 @@ function expectsExpression(
     case CODE.FORWARD_SLASH:
       return i + 1 !== expression.regexEnd;
     default: {
-      if (!isLookBehindWordCode(code)) return true;
+      if (!isUnicodeWordCode(code)) return true;
       // A word directly before the `:` is an object key or a label, keyword
       // or not (`{ new:a }`).
       if (i === pos - 1) return false;

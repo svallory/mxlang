@@ -106,6 +106,38 @@ export function isWordCode(code: number) {
   );
 }
 
+/**
+ * MX (decision 156 addendum 9): a word character wherever the parser looks
+ * behind or ahead to decide whether a word starts or ends. Any code unit at
+ * or above U+0080 counts, except what TypeScript reads as whitespace or a
+ * line terminator (`isUnicodeSpaceCode`), so a non-ASCII identifier (`é`,
+ * `名`, a surrogate pair) is a word like an ASCII one: `x=é / 2` divides,
+ * `énew` is no keyword, `é!` is postfix. `isWordCode` stays ASCII for the
+ * callers that only skip ahead over a word.
+ */
+export function isUnicodeWordCode(code: number) {
+  return code >= 0x80 ? !isUnicodeSpaceCode(code) : isWordCode(code);
+}
+
+/**
+ * The characters at or above U+0080 that TypeScript reads as whitespace
+ * (`Zs`, U+FEFF) or as a line terminator (U+2028, U+2029). U+0085 and U+200B,
+ * which TypeScript also skips, are left out: Babel rejects both.
+ */
+export function isUnicodeSpaceCode(code: number) {
+  return (
+    code === 0xa0 ||
+    code === 0x1680 ||
+    (code >= 0x2000 && code <= 0x200a) ||
+    code === 0x2028 ||
+    code === 0x2029 ||
+    code === 0x202f ||
+    code === 0x205f ||
+    code === 0x3000 ||
+    code === 0xfeff
+  );
+}
+
 export function matchesCloseAngleBracket(code: number) {
   return code === CODE.CLOSE_ANGLE_BRACKET;
 }

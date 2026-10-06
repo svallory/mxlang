@@ -155,9 +155,13 @@ An unconverted stand-in reads as a number: anything that compiles through this
 parser without core's conversion turns atoms into numbers silently.
 
 Nothing else differs from `v5.18.0`. To check: extract `git archive v5.18.0 src`
-of upstream and diff; only `states/ATTRIBUTE.ts`, `states/EXPRESSION.ts`,
-`states/OPEN_TAG.ts`, `states/PLACEHOLDER.ts`, `states/TEMPLATE_STRING.ts`,
-`core/Parser.ts` and `util/constants.ts` differ.
+of upstream and diff; only `index.ts`, `core/Parser.ts`,
+`states/ATTRIBUTE.ts`, `states/EXPRESSION.ts`, `states/INLINE_SCRIPT.ts`,
+`states/OPEN_TAG.ts`, `states/PLACEHOLDER.ts`, `states/TAG_NAME.ts`,
+`states/TEMPLATE_STRING.ts`, `util/constants.ts` and `util/util.ts` differ
+(`index.ts` from the base position above, `TAG_NAME.ts` from review round 4,
+`INLINE_SCRIPT.ts` and `util/util.ts` from template-parser-ascii-only-
+lookbehinds; checked against `git archive v5.18.0 src`).
 
 ## Tests
 
@@ -220,7 +224,8 @@ and 8; both dist builds carry the same JavaScript):
 
 - **A non-ASCII character is a word character behind a `:`.** The
   look-behind (`expectsExpression`, `isOperatorWord`, `closesTypeArguments`)
-  classifies characters with `isLookBehindWordCode`: `isWordCode`, or any
+  classifies characters with `isUnicodeWordCode` (`util/util.ts`; named
+  `isLookBehindWordCode` until the next section): `isWordCode`, or any
   code unit at or above U+0080 except Unicode whitespace
   (`isUnicodeSpaceCode`), as `lexAtom` already treats a non-ASCII character
   after a name. So `{ é:a }`, `(é :T) => é` and `c ? é :z` keep
@@ -233,6 +238,40 @@ and 8; both dist builds carry the same JavaScript):
   its atom, exactly as before this change (`unicodeWhitespaceMismatches`).
   The whitespace loops still skip only ASCII whitespace, as upstream does; a
   Unicode whitespace character is read as punctuation, as it always was.
-  `isWordCode` itself stays ASCII; its upstream callers
-  (the expression fast path, `lookBehindForOperator`, `canFollowDivision`,
-  `ATTRIBUTE.ts`, `INLINE_SCRIPT.ts`) are unchanged.
+  `isWordCode` itself stays ASCII. U+0085 and U+200B, which TypeScript
+  also skips, are not in the set: Babel rejects both.
+
+Non-ASCII identifiers outside the atom path (template-parser-ascii-only-
+lookbehinds, decision 156 addendum 9; both dist builds carry the same
+JavaScript). Code that was byte-identical to `v5.18.0` until then looked
+behind or ahead with the ASCII-only `isWordCode`, so a non-ASCII identifier
+read as punctuation. Every site below now uses `isUnicodeWordCode`, moved to
+`util/util.ts` with `isUnicodeSpaceCode` (one definition; the dist builds
+define both after `isWordCode`). Each non-ASCII input renders as its ASCII
+twin (`mx-unicode-words.cases.ts`), and ASCII-only input renders as before
+(`mx-unicode-words.main.json`, recorded from `4bafe5983`).
+
+| Source location | Function | What changed |
+|---|---|---|
+| `states/EXPRESSION.ts` | `canFollowDivision` | a `/` after a non-ASCII identifier is division (`x=é / 2`, `${é / 2}`), not a regular expression |
+| `states/EXPRESSION.ts` | `isWordOrPeriodCode` (`lookBehindForKeyword`) | a name ending in a unary or relational keyword after a non-ASCII letter is no keyword (`x=énew y=1` no longer swallows `y=1`) |
+| `states/EXPRESSION.ts` | `lookBehindForOperator`, `case CODE.EXCLAMATION` | a `!` after a non-ASCII identifier is postfix (`x=é! y=1`) |
+| `states/EXPRESSION.ts` | `lookBehindForOperator`, `case CODE.PERIOD` | a `.` before a non-ASCII identifier continues the member access (`x=a. é`, `x=a.\n  é`) |
+| `states/EXPRESSION.ts` | `lookAheadForOperator`, `case CODE.PERIOD` | the same, looking ahead (`<if=a .é>`, `x=a . é`); the decision 146 ` .name` sugar test uses the new `isNameStartCode` (a word character other than a digit), so `x=a .é` stays sugar |
+| `states/ATTRIBUTE.ts` | `detectAmbiguousCloseAngleBracket`, `isOperandEndCode` | a non-ASCII operand counts, so `<div x=a >é>c</div>` reports the ambiguous `>` |
+| `states/ATTRIBUTE.ts` | `isAsyncMethodPrefix` | a non-ASCII method name after `async` (`<div async é() {…}>`) |
+| `states/INLINE_SCRIPT.ts` | `startsTypeName` | a non-ASCII type alias name (`$ type é = …`), and a name starting with a binary keyword (`type iné`) |
+
+Left ASCII, on purpose: the expression fast path (`if (isWordCode(code))`
+in `EXPRESSION.char`: a non-ASCII character falls through to the same
+result, more slowly), `atomNameEnd`/`isIdentStartCode` (atom names are ASCII
+by decision; `x=a :é` is not split as sugar), the keyword checks that test a
+lowercase ASCII first or last letter (`lookBehindForOperator`'s default case,
+`lookAheadForOperator`'s), `isWhitespaceCode` everywhere outside the atom
+look-behind, and `isIndentCode`.
+
+Same change, two MX-only fixes: `rejectReservedName` ends the name after
+`::` at the static piece's end (`<a::b${x}>` reports `::b`, not `::b$`), and
+`isOperatorWord` reads a word after a spread's `...` as an operator, not a
+member name (`isSpreadEnd`: `[...await :b]` lexes the atom, decision 156
+addendum 8).
