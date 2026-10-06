@@ -1,0 +1,6 @@
+export const view = (
+  <ul>
+    <define/Two|{ n }|><li>${n}</li></define>
+    <Two n=missingAttr/>
+  </ul>
+);

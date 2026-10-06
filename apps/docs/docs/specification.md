@@ -1512,7 +1512,7 @@ native element (§4, decision 164).
 |---|---|
 | `` `<define>` without a name (write `<define/name>`) `` | No `/var`. |
 
-**On html, preact, react and hono, a `<define>` called with attributes and no
+**On html, preact, react, hono and Solid, a `<define>` called with attributes and no
 arguments passes one attribute object to its first parameter (decision 160),**
 like a custom tag's `input`:
 `<Row n=1/>` against `<define/Row|p|>` or `<define/Row|{ n }|>` hands `Row`
@@ -1525,9 +1525,14 @@ hosts that implement the rule, marked by `HostDeclarations.defineCallPassesAttrs
 `` `<Card>` has 2 params, but only the first parameter receives the attributes object; destructure it (`|{ a, b }|`) instead of reading one param per attribute ``.
 A call with tag arguments is unchanged (decision 109), and a define with no
 params still ignores the attributes. Decision 160 is the language rule for every
-target; Solid keeps its own call shape (below) until
-`define-call-attrs-solid` lands, and Angular keeps its own until
-`define-call-attrs-angular` lands.
+target; Angular keeps its own call shape until `define-call-attrs-angular`
+lands.
+
+| Host | `<Row n=1/>` against `\|{ n }\|` | Notes |
+|---|---|---|
+| html, preact, react, hono | one object, `{ n: 1 }` | |
+| Solid | one object, `{ n: 1 }`: `{__mx_DefineRow1({ "n": 1 })}` | a `<define>` exists only in a `.solid.mx` region (hoisted, below); `compileSolidUnit`, a whole-file `.mx` tag unit, still rejects every `<define>`. Spreads are accepted on this path; a spread next to tag arguments is not. |
+| Angular | per-parameter name lookup (`define-call-attrs-angular`) | |
 
 **On Solid, a `<define>` inside a `.solid.mx` region is hoisted to module
 scope (decision 110b).** A region is a JSX expression spliced into someone
@@ -1548,8 +1553,10 @@ captured identifier, not silently wrong code. Both are hard limits, not
 enclosing render function, and no per-row/per-branch scope for a nested one
 to close over either. On Solid, a `<define>` call is a plain function-call
 expression (`{__mx_DefineRowN(...)}`), not a JSX tag — JSX has no
-positional-call syntax — using the named-param binding closed item 9 below
-describes, which only Solid and Angular still use for a no-args call.
+positional-call syntax. With tag arguments it uses the named-param binding
+closed item 9 below describes; without them it passes one attribute object
+(decision 160, above). The capture check binds the names a destructured param
+introduces (`|{ n }, i|` binds `n` and `i`).
 
 ### 5.5 `<let>`
 
@@ -3850,7 +3857,7 @@ deferred (decision 85).
    this shape wrong for a construct with no `Input` to destructure against.
    (Superseded by decision 160 for html and the JSX hosts: a no-args call
    there passes one attribute object to the first param; the paragraph below
-   still describes the args path everywhere, and the no-args shape on Solid and Angular.)
+   still describes the args path everywhere, and the no-args shape on Angular.)
    MX's `<define>` emitters (html, the shared preact/react/hono emitter)
    instead extend their own pre-existing positional named-lookup scheme
    (already used for the no-args call shape, where `<Row it=x/>` looks up

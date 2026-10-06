@@ -523,6 +523,23 @@ function bindingNamesOf(nodes: unknown[]): string[] {
   return out;
 }
 
+/** The names the source text of a `<define>`'s params binds. */
+function paramBindingNames(params: readonly string[]): string[] {
+  try {
+    const file = parseBabel(`(${params.join(", ")}) => 0`, {
+      sourceType: "module",
+      plugins: ["typescript"],
+    }) as unknown as {
+      program: { body: { expression: { params: unknown[] } }[] };
+    };
+    return bindingNamesOf(file.program.body[0]?.expression.params ?? []);
+  } catch {
+    // Unparseable param text: fall back to the raw strings, which only
+    // under-binds (a spurious capture error, never a silent capture).
+    return [...params];
+  }
+}
+
 /** Runs `emit` with `/var` refused, for a body that is lazy or per-row. */
 function inLazyScope<T>(emit: () => T): T {
   const outer = lazyScope;
@@ -696,6 +713,7 @@ export const DEFAULT_TAG = "div";
 export const solidDeclarations: HostDeclarations = {
   name: "@mxlang/solid",
   attrTags: 2,
+  defineCallPassesAttrs: true,
   // The ladder (decision 145): the parent's contract `defaultTag`, then
   // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
   // the host override into `configured`). This host permits the contract rung:
@@ -2169,15 +2187,17 @@ export class SolidEmitter implements Emitter<string> {
    *
    * JSX has no positional-call syntax, so unlike a `"name"`-target
    * component (an ordinary `<Tag .../>` element), a hoisted `<define>` is
-   * called as a **plain function expression**, `{__mx_DefineRow1(...)}` —
-   * exactly `@mxlang/html`'s own `<define>` call shape (decision 109's
-   * named-param binding), because a hoisted `<define>` is, at the JS level,
-   * exactly what html's already is: an ordinary function, not a Solid
-   * component with props. Args fill the declared params positionally; any
-   * remaining params are filled by name from attrs/attribute
-   * tags/`content`, `undefined` where nothing supplies one. A spread has no
-   * meaning here (its keys are only known at run time, and a `<define>` is
-   * called positionally) and is rejected the same way html rejects it.
+   * called as a **plain function expression**, `{__mx_DefineRow1(...)}`,
+   * because a hoisted `<define>` is, at the JS level, exactly what html's
+   * already is: an ordinary function, not a Solid component with props.
+   *
+   * Decision 160: with no tag arguments the attributes (spreads included),
+   * attribute tags and `content` travel as ONE object bound to the first
+   * param, `{}` when the call carries none; a define with no params ignores
+   * them. With tag arguments (decision 109) they fill the params positionally
+   * and any remaining params are filled by name from attrs/attribute
+   * tags/`content`, `undefined` where nothing supplies one; a spread has no
+   * name to look up there and is rejected.
    */
   #defineComponent(
     node: Extract<IrNode, { kind: "Component" }>,
@@ -2201,37 +2221,83 @@ export class SolidEmitter implements Emitter<string> {
       );
     }
 
-    const named = new Map<string, MappedCode>();
-    for (const attr of node.attrs) {
-      if (attr.kind === "spread") {
-        fail(
-          `spreading into \`<${target.name}>\` is not supported: a <define> is called positionally, and a spread's keys are only known at run time`,
-          attr,
-        );
-      }
-      named.set(attr.name, attributeTagAttrValue(attr));
-    }
-    for (const prop of node.attrTagProps) {
-      named.set(prop.name, attributeTagProp(prop));
-    }
-    if (node.content) {
+    const contentValue = (): MappedCode => {
       const body = inLazyScope(() => blockExpression(contentNodes));
-      named.set(
-        "content",
-        node.content.hasParams
-          ? concatMapped(
-              `(${node.content.params.join(", ")}) => `,
-              jsxValue(body),
-            )
-          : jsxValue(body),
-      );
-    }
+      return node.content?.hasParams
+        ? concatMapped(
+            `(${node.content.params.join(", ")}) => `,
+            jsxValue(body),
+          )
+        : jsxValue(body);
+    };
 
-    const positional = node.args.map((arg) => mappedExpr(arg));
-    const named_ = target.params
-      .slice(positional.length)
-      .map((param) => named.get(param) ?? concatMapped("undefined"));
-    const args = [...positional, ...named_];
+    let args: MappedCode[];
+    if (node.args.length === 0) {
+      // Decision 160: without tag arguments the attributes (spreads
+      // included), attribute tags and `content` travel as ONE object bound
+      // to the first param, `{}` when the call carries none (Marko 6.3.51). A
+      // define with no params ignores them.
+      if (target.params.length === 0) {
+        args = [];
+      } else {
+        const parts: MappedCode[] = [];
+        for (const attr of node.attrs) {
+          parts.push(
+            attr.kind === "spread"
+              ? concatMapped("...", mappedExpr(attr.value))
+              : concatMapped(
+                  JSON.stringify(attr.name),
+                  ": ",
+                  attributeTagAttrValue(attr),
+                ),
+          );
+        }
+        for (const prop of node.attrTagProps) {
+          parts.push(
+            concatMapped(
+              JSON.stringify(prop.name),
+              ": ",
+              attributeTagProp(prop),
+            ),
+          );
+        }
+        if (node.content) {
+          parts.push(concatMapped("content: ", contentValue()));
+        }
+        args = [
+          concatMapped(
+            "{ ",
+            ...parts.flatMap((part, i) => (i === 0 ? [part] : [", ", part])),
+            " }",
+          ),
+        ];
+      }
+    } else {
+      // Decision 109: tag arguments fill the params positionally; the rest
+      // are filled by name from attrs/attribute tags/`content`, `undefined`
+      // where nothing supplies one. A spread has no name to look up.
+      const named = new Map<string, MappedCode>();
+      for (const attr of node.attrs) {
+        if (attr.kind === "spread") {
+          fail(
+            `spreading into \`<${target.name}>\` alongside tag arguments is not supported: the remaining params are filled by name, and a spread's keys are only known at run time`,
+            attr,
+          );
+        }
+        named.set(attr.name, attributeTagAttrValue(attr));
+      }
+      for (const prop of node.attrTagProps) {
+        named.set(prop.name, attributeTagProp(prop));
+      }
+      if (node.content) named.set("content", contentValue());
+      const positional = node.args.map((arg) => mappedExpr(arg));
+      args = [
+        ...positional,
+        ...target.params
+          .slice(positional.length)
+          .map((param) => named.get(param) ?? concatMapped("undefined")),
+      ];
+    }
 
     if (node.var) {
       // `/var` on a plain function call has no callback prop to ride: the
@@ -2711,7 +2777,9 @@ export class SolidEmitter implements Emitter<string> {
     const bodyCode = inLazyScope(() =>
       jsxValue(blockExpression(node.children)),
     ).code;
-    const bound = new Set(node.params);
+    // `params` is source text, so `|{ n }, i|` is `"{ n }"` and `"i"`: the
+    // names a pattern binds come from parsing it, not from the strings.
+    const bound = new Set(paramBindingNames(node.params));
     // A call to a sibling define reaches this text as the *gensym'd*
     // binding, not the author's name: `blockExpression` drove the child
     // `<B/>` reference through `#defineComponent`, which already resolved

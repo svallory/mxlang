@@ -1,9 +1,8 @@
 import { expect, it } from "vitest";
 import { solidDeclarations } from "./emitter.ts";
 
-// Decision 160 is not implemented here yet (`define-call-attrs-solid`), so
-// core's multi-param `<define>` warning, which gives advice that is wrong for
-// this host's per-param binding, must stay off.
-it("does not set defineCallPassesAttrs, so the multi-param define warning stays off", () => {
-  expect(solidDeclarations.defineCallPassesAttrs).toBeUndefined();
+// Decision 160 holds on Solid, so core's multi-param `<define>` warning
+// (it advises destructuring the one attribute object) is on for this host.
+it("sets defineCallPassesAttrs, so the multi-param define warning is on", () => {
+  expect(solidDeclarations.defineCallPassesAttrs).toBe(true);
 });

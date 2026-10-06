@@ -814,8 +814,9 @@ describe("<define> hoisted to module scope (decision 110b)", () => {
       `<define/Row|head|>\${head}</define><Row><@head>H</@head></Row>`,
     );
     expect(result.hoistedDefines).toHaveLength(1);
-    // `head` is not a positional arg, so it is filled by name from the
-    // attribute tag, matching decision 109's html/preact named-lookup.
+    // No tag args: the attribute tag travels in ONE object bound to the
+    // first param (decision 160).
+    expect(result.code).toContain('{ "head": ');
     expect(result.code).toContain("H");
   });
 

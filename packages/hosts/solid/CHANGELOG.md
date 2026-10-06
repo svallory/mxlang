@@ -27,6 +27,8 @@
 
 ## Unreleased
 
+- **Fix, behaviour change (define-call-attrs-solid, decision 160):** a `<define>` called with attributes and no tag arguments passes ONE object to its first param, as Marko 6.3.51 does: `<Row n=1/>` against `<define/Row|p|>` or `|{ n }|` hands `Row` `{ n: 1 }` (spreads, attribute tags and `content` included; `{}` when the call carries none). It used to emit `__mx_DefineRow1(undefined)`, and a destructured param (`|{ n }|`, `|{ n }, i|`) failed compile with "cannot close over `n`" because the capture check read the pattern's source text as a name; it now binds the names the pattern introduces. **Behaviour change:** the per-param lookup (`<define/Card|title, head|>` + `<Card title="a"/>` binding `title` to `"a"`) is withdrawn on Solid; such a call now gets one object in `title`, and core warns at the call (`defineCallPassesAttrs` is set) to destructure it (`|{ title, head }|`). A call with tag arguments is unchanged, and a spread is accepted on the object path.
+
 - **Fix, behaviour change (statement-followup, decision 168):** JSX in a `static`/`export`/`server` statement (`static const el = <b>hi</b>` followed by a template line) was a silent swallow of the next template line on Solid (the statement ran on into it, leaving an empty template); it is now a positioned error at the `<` naming JSX in a statement. A decorated `static class` is accepted again.
 
 - **Fix, behaviour change (statement-tags, decision 168):** `client` and `server` statements are positioned errors (they were emitted as `<client>`/`<server>` elements with the statement text as attributes); `class { … }` is a positioned not-supported error. Typed statements parse as statements.

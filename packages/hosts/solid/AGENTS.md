@@ -274,14 +274,18 @@ Three facts worth knowing before touching it:
   .../>` element; JSX has no positional-call syntax, so
   `SolidEmitter.#defineComponent` instead emits `{__mx_DefineRowN(...)}` —
   the same call shape `@mxlang/html`'s `<define>` already uses (decision
-  109). Args fill the declared params positionally; any params beyond the
-  args are filled by name from attrs/attribute tags/`content`
-  (`undefined` where nothing supplies one), mirroring html's own
-  named-lookup scheme exactly, so all four of decision 109's call shapes
-  (no args; args; attribute tags; args plus content and attribute tags)
-  work identically. A spread is rejected the same way html rejects it — a
-  `<define>` is called positionally, so a spread's keys are only known at
-  run time. One difference from html's `content`/attribute-tag values is
+  109). **Decision 160: with no tag arguments the call passes ONE object to
+  the define's first param** (`{__mx_DefineRowN({ "n": 1 })}`: attributes in
+  source order, spreads, attribute tags by name, the body as `content`; `{}`
+  when the call carries none; a define with no params ignores them), as
+  Marko 6.3.51 does, and `HostDeclarations.defineCallPassesAttrs` is set so
+  core warns on a multi-param define. With tag arguments the args fill the
+  declared params positionally and any params beyond them are filled by name
+  from attribute tags/`content` (`undefined` where nothing supplies one),
+  html's decision 109 scheme; a spread there is rejected, since its keys are
+  only known at run time. The capture check binds the names a destructured
+  param introduces (`paramBindingNames`: `Define.params` is source text, so
+  `|{ n }|` is one string), a real capture still errors. One difference from html's `content`/attribute-tag values is
   load-bearing: **Solid's own attribute-tag convention (an accessor,
   `() => JSX`) still applies to a `<define>` call's named-lookup values**,
   since they are resolved through the same `attributeTagProp`/`content`

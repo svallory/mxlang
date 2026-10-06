@@ -1,0 +1,10 @@
+export const view = (
+  <ul>
+    <define/One|p|><li>${p.n}</li></define>
+    <define/Two|{ n }|><li>${n}</li></define>
+    <define/Three|{ n }, i|><li>${n}${i}</li></define>
+    <One n=1/>
+    <Two n=2/>
+    <Three n=3/>
+  </ul>
+);

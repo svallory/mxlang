@@ -53,7 +53,7 @@ Two cases where the html target was more permissive than Marko were implementati
 
 ## Withdrawn MX behaviour
 
-- **`<define>` per-parameter name lookup (4ba13a4ea):** withdrawn by decision 160. This is NOT a Marko divergence: MX now matches Marko 6.3.51 on html, preact, react and hono, where a `<define>` called with attributes receives one attribute object in its first parameter; a define with 2 or more params called that way gets a positioned warning there. Solid and Angular keep their older shape until `define-call-attrs-solid` and `define-call-attrs-angular` land.
+- **`<define>` per-parameter name lookup (4ba13a4ea):** withdrawn by decision 160. This is NOT a Marko divergence: MX now matches Marko 6.3.51 on html, preact, react, hono and Solid, where a `<define>` called with attributes receives one attribute object in its first parameter; a define with 2 or more params called that way gets a positioned warning there. Angular keeps its older shape until `define-call-attrs-angular` lands.
 
 ## Candidates for MX 2
 
