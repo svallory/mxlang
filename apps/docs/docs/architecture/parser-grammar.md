@@ -127,10 +127,11 @@ symbols that carry them:
 | --- | --- | --- |
 | the after-value rule | `states/ATTRIBUTE.ts` (`attrValue`); `states/EXPRESSION.ts`: the `??`/`?.` branch of `EXPRESSION.parse`, the `:` and `.` rows of `lookAheadForOperator`, `isIdentStartCode`, `isNameStartCode`, `isBareColonEnd` | decision 146, divergence 3 and addendum 6 ([E1](#e1--attribute-value-html-mode)) |
 | a single-atom default value | `states/ATTRIBUTE.ts` (`defaultAtom`); `states/EXPRESSION.ts` (`isSingleAtomDefault`) | decision 146, addendum 5 ([E1](#e1--attribute-value-html-mode)) |
-| atoms and the reserved `::` | `states/EXPRESSION.ts` (`lexAtom`, `expectsExpression`, `isOperatorWord`, `closesTypeArguments`, `isSpaceCode`, `isSpreadEnd`, `atomNameEnd`, `rejectReservedName`, the atom guard in `lookBehindForKeyword`); the `atoms = true` sites in `states/ATTRIBUTE.ts`, `OPEN_TAG.ts`, `PLACEHOLDER.ts`, `TAG_NAME.ts`, `TEMPLATE_STRING.ts`; `rejectReservedName` calls in `TAG_NAME.exit` and `ATTRIBUTE.return`; `core/Parser.ts` (`atoms`, `read`, `rawOpenTags`); `util/constants.ts` (`onAtom`); `OPEN_TAG.exit` (`rawOpenTags`) | decision 156 and its addenda 2 to 4 and 8 to 10 ([Atoms](#atoms)) |
+| atoms and the reserved `::` | `states/EXPRESSION.ts` (`lexAtom`, `expectsExpression`, `isOperatorWord`, `closesTypeArguments`, `isUnicodeWhitespaceCode`, `isSpreadEnd`, `atomNameEnd`, `rejectReservedName`, the atom guard in `lookBehindForKeyword`); the `atoms = true` sites in `states/ATTRIBUTE.ts`, `OPEN_TAG.ts`, `PLACEHOLDER.ts`, `TAG_NAME.ts`, `TEMPLATE_STRING.ts`; `rejectReservedName` calls in `TAG_NAME.exit` and `ATTRIBUTE.return`; `core/Parser.ts` (`atoms`, `read`, `rawOpenTags`); `util/constants.ts` (`onAtom`); `OPEN_TAG.exit` (`rawOpenTags`) | decision 156 and its addenda 2 to 4 and 8 to 10 ([Atoms](#atoms)) |
 | the base position | `core/Parser.ts` (`ParseOptions`, `parse`, `positionAt`, `offsetAt`); `index.ts` | the parser's API ([Base position](#base-position-for-fragment-parses)) |
 | non-ASCII word characters where the parser looks behind or ahead | `util/util.ts` (`isUnicodeWordCode`, `isUnicodeSpaceCode`) and its callers in `states/EXPRESSION.ts`, `ATTRIBUTE.ts` and `INLINE_SCRIPT.ts` | decision 156, addenda 9 and 10 ([Vocabulary](#vocabulary)) |
-| a `//` comment in a text tag's open tag; a close tag with no open tag | `states/JS_COMMENT_LINE.ts` (`isInTextBody`); `states/CLOSE_TAG.ts` (`checkForClosingTag`) | the parser does not throw (below) |
+| Unicode whitespace in every look-behind that asks whether a character is whitespace | `util/util.ts` (`isUnicodeWhitespaceCode`) and its callers: `core/Parser.ts` (`getPreviousNonWhitespaceCharCode`); `states/EXPRESSION.ts` (the terminator and `{` look-behinds of `EXPRESSION.parse`, `checkForOperators`, the `++`/`--` row of `lookBehindForOperator`, the atom look-behind); `states/ATTRIBUTE.ts` (`shouldTerminateHtmlAttrValue`, `shouldTerminateConciseAttrValue`, `shouldTerminateConciseAttrName`); `states/HTML_CONTENT.ts` | decision 156, addenda 10 to 12 ([Vocabulary](#vocabulary)) |
+| a `//` comment in a text tag's open tag; a close tag with no open tag, or after a tag that never got its name | `states/JS_COMMENT_LINE.ts` (`isInTextBody`); `states/CLOSE_TAG.ts` (`checkForClosingTag`, `ensureExpectedCloseTag`) | the parser does not throw (below) |
 
 The bun patch `patches/htmljs-parser@5.18.0.patch`, which `@marko/compiler`'s
 npm copy still runs under in this repository, carries the same after-value,
@@ -144,6 +145,7 @@ addendum-5 and atom rules (`PROVENANCE.md`); the corpus and
 | --- | --- | --- |
 | a parse reports its failures through `onError` and returns | holds for the inputs of [Error conditions](#error-conditions); `<div x=(` is one of them | g0678 |
 | the same, for a `//` comment in a text tag's open tag followed by a close tag in the body, which threw a `TypeError` before the fix of TODO `template-parser-comment-in-text-tag-open-crash` | the comment runs to the end of its line and the body is read: `<script x=1 // </script>\n>a</script>` is the value `1 // </script>`, the text `a` and the close tag | g0048 |
+| the same, for a named close tag after a tag that never got its name (`,--/</e>`: the `,` opens one and a concise `--` line follows), which threw a `TypeError` from `ensureExpectedCloseTag` before the look-behinds follow-up | `The closing "e" tag was not expected`, on the close tag | g1683 |
 
 Where the parser's behaviour differs from what a source of truth says, or the
 parser accepts input that is not valid TypeScript, or rejects input that is,
@@ -199,7 +201,13 @@ These are definitions of terms; the tables that use them carry the rules.
 - **Soft stop.** Whitespace or a newline in a position whose flags make it one
   (steps 1 and 3 of the same table).
 - **Whitespace** is a character with code 32 or lower (`isWhitespaceCode`,
-  `util/util.ts`); **indent characters** are space and tab (`isIndentCode`); a
+  `util/util.ts`). Where a look-behind asks whether a character is
+  whitespace, the excepted characters below count as whitespace too
+  (`isUnicodeWhitespaceCode`; decision 156, addenda 10 to 12):
+  `<div x=(é)\u00a0/ 2/>` divides and `<div x=a +\u00a0 y=1/>` is one value,
+  as with a space ([Recorded defects](#recorded-defects-in-the-default)).
+  Current-character and look-ahead tests
+  keep `isWhitespaceCode`; **indent characters** are space and tab (`isIndentCode`); a
   **word character** is `A`–`Z`, `a`–`z`, `0`–`9`, `$`, `_`, or a character at
   or above U+0080 that TypeScript does not read as whitespace or a line
   terminator (`isUnicodeWordCode`, `util/util.ts`; decision 156, addendum 9).
@@ -308,6 +316,7 @@ content reads to the next `>`, and the text between is compared:
 | 3 | equal to the source from the start of the name to the end of its shorthands | closes it | g0689 |
 | 4 | anything else | `The closing "x" tag does not match the corresponding opening "y" tag` | g0238 |
 | — | any, with no open tag | `The closing "x" tag was not expected` | g0237 |
+| — | a named close tag when the open tag never got its name (`,--/</e>`) | `The closing "x" tag was not expected`; `</>` still closes that tag (row 1) | g1683 |
 | — | a close tag on a line under a concise tag | closes the concise tag without error | g0690 |
 
 The literal `div` in row 2 is OQ 25. Spec §3 "Concise mode" describes the last
@@ -349,6 +358,7 @@ What the row order means for some inputs:
 | `<foo (a)/>`, `<foo /x/>` | whitespace before the form (row 11): tag arguments, a tag variable | g0697 g0698 |
 | `div a--b` | the attribute name `a--b`: row 4 is reached where an attribute could begin | g0126 |
 | `div a -- text` | the name `a` and a text block | g0699 |
+| `div x\u00a0-- text` (U+00A0 before `--`) | the name `x\u00a0` and a text block: the name keeps the Unicode space, which ends no name (decision 156, addendum 12) | g1681 |
 | `div a\n  // c\n  ,b` | attributes `a` and `b`: row 1's look-ahead crosses the comment line | g0700 |
 | `<div` | `EOF reached while parsing open tag` | g0221 |
 | `div a` | the tag ends at end of input | g0684 |
@@ -503,7 +513,7 @@ A name is an `EXPRESSION` position with the flag `terminatedByWhitespace`
 | Mode | Hard stops | Source | Probes |
 | --- | --- | --- | --- |
 | HTML | `,` `=` `(` `>` `<`; `:` when the next character is `=`; `/` when the next character is `>` | `shouldTerminateHtmlAttrName` | g0122 g0086 g0010 g0123 |
-| Concise | `,` `=` `(` `;` `<`; `:` when the next character is `=`; `-` when the next character is `-` **and** the previous character is whitespace | `shouldTerminateConciseAttrName` | g0124 g0125 g0126 g0127 |
+| Concise | `,` `=` `(` `;` `<`; `:` when the next character is `=`; `-` when the next character is `-` **and** the previous character is whitespace, ASCII or Unicode (decision 156, addendum 12) | `shouldTerminateConciseAttrName` | g0124 g0125 g0126 g0127 g1681 |
 | Concise, inside `[ … ]` | `,` `=` `(` `]` `<`; `:` when the next character is `=` | `shouldTerminateConciseGroupedAttrName` | g0128 g0129 g0130 g0131 |
 
 | Input | Result | Probes |
@@ -632,13 +642,14 @@ target `import`, `static`, `export`; and today an empty set on the hosts and
 | 7 | `<` followed by `>`, `<` or whitespace | text | g0156 |
 | 8 | `<` followed by anything else | an open tag | g0157 |
 | 9 | `$` followed by whitespace, with only whitespace between it and the previous newline | a scriptlet (E11) | g0158 g0159 |
-| 10 | `//` or `/*`, when the character before it is whitespace | a JavaScript comment: `//` to the end of the line, `/* */` to its end | g0160 g0161 g0162 |
+| 10 | `//` or `/*`, when the character before it is whitespace, ASCII or Unicode (decision 156, addendum 11) | a JavaScript comment: `//` to the end of the line, `/* */` to its end | g0160 g0161 g0162 g1682 |
 | 11 | `${`, `$!{`, or backslashes before one | a placeholder or escaped placeholder | g0163 |
 | 12 | anything else | text | g0164 |
 
 | Input | Result | Probes |
 | --- | --- | --- |
 | `<p>a // b\n</p>` | the text `a ` and a comment to the end of the line (row 10) | g0760 |
+| `<p>a\u00a0// b\n</p>` (U+00A0 before `//`) | the text `a\u00a0` and a comment, as with a space (row 10; decision 156, addendum 11) | g1682 g0760 |
 | `<p>http://x</p>` | text: no whitespace before the `//` | g0761 |
 
 CDATA sections and declarations parse to events and are rejected in lowering
@@ -1184,7 +1195,7 @@ The value starts as in E1. Hard stops:
 | --- | --- | --- | --- |
 | outside `[ … ]` (`shouldTerminateConciseAttrValue`) | `,` | always | g0435 |
 | | `;` | always | g0436 |
-| | `-` | the next character is `-` **and** the previous character is whitespace | g0437 g0438 g0439 |
+| | `-` | the next character is `-` **and** the previous character is whitespace, ASCII or Unicode (decision 156, addendum 12) | g0437 g0438 g0439 g1680 |
 | inside `[ … ]` (`shouldTerminateConciseGroupedAttrValue`) | `,` | always | g0440 |
 | | `]` | always | g0441 |
 
@@ -1193,6 +1204,7 @@ The value starts as in E1. Hard stops:
 | `div x=\n  a` | the value `a`: the whitespace after the `=` includes newlines | g0856 |
 | `div x=a > b`, `div x=a/>` | one value: `>` and `/>` are no stops in concise mode | g0264 g0857 |
 | `div x=a + ,b` | one value: the operator exemption applies as in E1 | g0858 |
+| `div x=1\u00a0-- text`, `div x=1 -- text` | the value `1\u00a0` and a text block; with a space, the value `1` and a text block. The value keeps the Unicode space, which is no soft stop (decision 156, addendum 12) | g1680 g1688 |
 
 Soft stops are as in E1 with the concise-mode steps 3 and 4 of
 [the continuation test](#the-continuation-test). A value continues onto the
@@ -1622,7 +1634,7 @@ at the position's start. `p` is the character reached:
 | 10 | a word character directly before the `:`, with no whitespace or comment between | **no**: an object key or a label, keyword or not (`{ new:a }`, `{ é:a }`) | g0571 g0572 |
 | 11 | a word character, with whitespace or a comment between | **yes** only when the word ending at `p` is an operator word; otherwise **no** (`c ? b :c`, `(é :b)`) | g0573 g0574 g0575 g0576 |
 
-**Unicode whitespace** (decision 156, addendum 10; `isSpaceCode`): in the atom
+**Unicode whitespace** (decision 156, addendum 10; `isUnicodeWhitespaceCode`): in the atom
 look-behind the characters excepted from the word characters behave as ASCII
 whitespace. In this table ` ` stands for the character U+00A0 at that
 place in the input; the second probe of a row is the same input with a space
@@ -2053,7 +2065,7 @@ the normative one.
     at or above U+0080 that is not Unicode whitespace or a line terminator
     (U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF), and decision 156, addendum 10: those excepted
     characters are skipped as ASCII whitespace is. Main implements both
-    (`isUnicodeWordCode`, `isSpaceCode`;
+    (`isUnicodeWordCode`, `isUnicodeWhitespaceCode`;
     [Atoms](#is-an-expression-expected-expectsexpression)).
 
 The inputs the open questions mention:
@@ -2138,8 +2150,8 @@ corpus.
 | a generic call or generic arrow in an HTML-mode value | cut at `>` with no error: `x=f<T>(y)`, `x=<T,>(a) => a` | not filed (OQ 7) | g0353 g0670 |
 | end of input in concise mode in a position whose delimiter the owning state consumed | no error | not filed (OQ 19) | g0368 g0370 g0374 g0375 g0376 g0373 g0377 |
 | end of input in concise mode inside a tag name's, shorthand's or template literal's `${…}` | no error, and the owning event is not reported: no shorthand, no event, no value | not filed (OQ 19) | g0380 g0381 g0382 |
-| `isOperatorWord` skips whitespace, not comments, before `of`, `yield` and `await` | `x=(f(/*c*/ await :b))` lexes an atom; `x=(f( await :b))` lexes none | not filed | g1678 g1679 |
 | fixed on main in #377 (TODOs `template-parser-ascii-only-lookbehinds` and `template-parser-comment-in-text-tag-open-crash`), kept here as regression probes | `<div x=é / 2 y/>` and `${é / 2}` divide; `<div x=énew y=1/>` is the value `énew` and `y=1`; `<div.a::${x}/>` names `::`; `<script // c </script>` no longer closes the tag from inside its open tag | none | g1027 g1028 g1029 g1030 g0047 |
+| fixed in the look-behinds follow-up (TODO `template-parser-lookbehinds-followup`; decision 156, addenda 8, 11 and 12), kept here as regression probes | a comment before `of`, `yield` or `await` is skipped as whitespace is: `x=(f(/*c*/ await :b))` lexes no atom, as `x=(f( await :b))` lexes none; `<if=count\u00a0>= 10>` is the comparison, `<div x=(é)\u00a0/ 2/>` divides and `<div x=a +\u00a0 y=1/>` is one value, each as with a space | none | g1678 g1679 g1686 g1684 g1685 g1687 |
 | the type context at any group depth after `as`, `satisfies` or an annotation | `<div x=a as T ? (b < c) : d/>` is `Mismatched group`. A recorded limit: no action before MX2's TypeScript-aware expression boundary | `as-satisfies-type-context-any-depth` | g0360 |
 
 The behaviours of OQ 13 (no `\` escape in a text-body string), OQ 17, OQ 24,
