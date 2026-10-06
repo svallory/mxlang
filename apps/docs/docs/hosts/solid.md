@@ -89,7 +89,7 @@ export function Team(props: { members: Member[] }) {
 
 What changed:
 
-- **`<@head>`, `<@row|member|>`, `<@empty>` are `Table`'s props.** These are [attribute tags](/language/attribute-tags-and-params/): a prop that holds markup is written as markup. MX wraps each in the accessor Solid needs, so the `() =>` and the `(member) => () =>` are gone, and each is checked against `Table`'s props type.
+- **`<@head>`, `<@row|member|>`, `<@empty>` are `Table`'s props.** These are [attribute tags](/language/attribute-tags-and-params/): a prop that holds markup is written as markup. MX wraps each in the accessor Solid needs, so the `() =>` and the `(member) => () =>` are gone. `Table` declares them with `AttrTag`, so each is checked against its props type.
 - **`<if>` / `<else>` and `<for>`** compile to `<Show>` and `<For>`. You do not import either.
 - **`<section#team.panel>` and `<input:q.search>`** are `id`, `class` and `name`.
 - **`onInput(event) { … }`** is a handler written as a method.
@@ -112,11 +112,18 @@ export default defineConfig({ plugins: [mx(), solid()] });
 ```
 
 ```jsonc
-// tsconfig.json: type errors inside .solid.mx, at the line you wrote
-{ "compilerOptions": { "plugins": [{ "name": "@mxlang/typescript-plugin" }] } }
+// tsconfig.json: Solid's JSX settings, and type errors inside .solid.mx
+{
+  "compilerOptions": {
+    "jsx": "preserve",
+    "jsxImportSource": "@solidjs/web",
+    "allowImportingTsExtensions": true,
+    "plugins": [{ "name": "@mxlang/typescript-plugin" }]
+  }
+}
 ```
 
-In CI, run `mx-tsc --noEmit` where you ran `tsc --noEmit`: plain `tsc` does not open `.solid.mx` files. The host targets **Solid 2**. Add `@mxlang/solid` when you declare attribute tags on your own components.
+In CI, run `mx-tsc --noEmit` where you ran `tsc --noEmit`: plain `tsc` does not open `.solid.mx` files. The host targets **Solid 2**: this assumes `solid-js`, `@solidjs/web` and `@solidjs/vite-plugin` are already in the project. Add `@mxlang/solid` when you declare attribute tags on your own components.
 
 ## What stays Solid, what MX adds
 
@@ -126,7 +133,7 @@ In CI, run `mx-tsc --noEmit` where you ran `tsc --noEmit`: plain `tsc` does not 
 
 ## Two rules to know first
 
-- **A region is one element, and it holds markup only.** `<const>`, `<define>`, `import` and state tags such as `<let>` are errors inside a region, each naming what to write in the TypeScript around it. For several roots, use a TSX fragment `<>…</>`; each child is its own region.
+- **A region is one element, and state stays outside it.** `<const>`, `import` and state tags such as `<let>` are errors inside a region, each naming what to write in the TypeScript around it. A `<define>` is allowed as a direct child of the region. For several roots, use a TSX fragment `<>…</>`; each child is its own region.
 - **Tag params are the child function.** `<Show|user| when=user()>…</Show>` is `<Show when={user()}>{(user) => …}</Show>`, which is how you call any render-prop component.
 
 ## Go deeper

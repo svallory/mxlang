@@ -49,11 +49,11 @@ export function Invite({ team, open, send }: { team: string; open: boolean; send
 
 Three things changed, and they are the same on every host:
 
-- **Attribute tags.** `<@title>` and `<@actions>` are the `title` and `actions` props. A prop that holds markup is written as markup, where it belongs in the tree, and checked against the component's props type.
+- **Attribute tags.** `<@title>` and `<@actions>` are the `title` and `actions` props. A prop that holds markup is written as markup, where it belongs in the tree. When the component declares it with `AttrTag`, as `Dialog` does, it is checked against that type.
 - **Name sugar.** `<input:email#email.field>` is `name="email" id="email" class="field"`. `<button.primary>` is `class="primary"`.
 - **No closing ceremony.** No fragments around a prop's markup, no `{}` around every value, no `className`.
 
-`Dialog` did not change. It is the same hand-written React component in both files.
+`Dialog` did not change. It is the same hand-written React component in both files; its `title` and `actions` props are typed `AttrTag`, which on React is a `ReactNode`.
 
 ## Pick your framework
 
@@ -74,7 +74,7 @@ Each page opens with the same component in the framework's own syntax and in MX,
 - **[Attribute tags](/language/attribute-tags-and-params/).** Named slots and render props as nested markup: `<@header>`, `<@row|item|>`.
 - **[Name sugar](/language/attributes/).** `#id`, `.class` and `:name`, on the tag or among its attributes.
 - **Errors at the line you wrote.** Type errors and MX errors are reported in the `.mx` file, in the [editor](/editors/vscode/) and in [`mx-tsc`](/editors/typescript/).
-- **No MX runtime to adopt.** The output is the framework's own code. Remove MX and you are left with ordinary components.
+- **No MX component model at run time.** The output is the framework's own code, plus a small `/runtime` import on the JSX hosts for class objects and `<try>`.
 
 ## No framework?
 

@@ -28,18 +28,18 @@ Each MX region compiles to Solid 2 JSX at the same position in the file, and Sol
 |---|---|
 | `<for\|item, i\| of=xs()>` | `<For each={xs()}>{(item, i) => …}</For>` |
 | `<for\|item, i\| of=xs() by="id">` | `<For each={xs()} keyed={x => x.id}>…</For>` |
-| `<for\|k, v\| in=obj()>` | `<For each={Object.entries(obj())} keyed={e => e[0]}>…</For>` |
+| `<for\|k, v\| in=obj()>` | `<For each={Object.entries(obj() ?? {})} keyed={e => e[0]}>…</For>` |
 | `<for\|i\| from=a to=b>` | `<Repeat count={(b) - (a) + 1} from={a}>{(i) => …}</Repeat>` |
-| `<for\|i\| from=a until=b>` | `<Repeat count={(b) - (a)}>…</Repeat>` |
+| `<for\|i\| from=a until=b>` | `<Repeat count={(b) - (a)} from={a}>…</Repeat>` |
 | `<for\|i\| from=a to=b step=s>` | `<Repeat count={N}>`, with `i` computed from the row index |
 
 With `by`, Solid hands the row and the index to the child as accessors. You still write `member.name`: MX rewrites each read to call the accessor, so it stays tracked.
 
 Keep `from`, `to`, `until` and `step` pure (a signal, a literal or a memo): they are read like any other Solid attribute. A `step` of `0` at run time renders no rows.
 
-## Children: `props.children` and `input.content`
+## Children
 
-MX passes a component's body as `props.children`, so a hand-written Solid component called from MX, and an MX component called from TSX, both work. Inside a `.solid.mx` component, `input.content` is Marko's name for the same body (an explicit `content=` prop wins over children). `<if=input.content>` is true when a body was passed.
+MX passes a component's body as `props.children`, so a hand-written Solid component called from MX, and a `.solid.mx` component called from TSX, both work. In a `.solid.mx` file you read `props.children`, as in any Solid component.
 
 ## Attribute tags
 
@@ -58,9 +58,9 @@ In TSX, render them with `{props.header()}` and `{props.row("Ada")()}`. In MX, w
 
 ## Events
 
-`onClick=fn` and `onClick() { … }` bind a handler on an element. MX reads the DOM event name (the text after `on`, lowercased) and emits `on` plus that name capitalized: `onDblClick=f` and `on-dblclick=f` are both `onDblclick={f}`, which Solid binds to `dblclick`.
+`onClick=fn` and `onClick() { … }` bind a handler on an element. MX reads the DOM event name (the text after `on`, lowercased) and emits Solid's own prop for it: `onDblClick=f` and `on-dblclick=f` are both `onDblClick={f}`, and `onKeydown=f` is `onKeyDown={f}`.
 
-- **Spell the DOM name.** `onDoubleClick` is not a DOM event, so MX warns and emits it as written.
+- **Spell the DOM name.** `onDoubleClick` is not a DOM event, so MX warns and emits `onDoubleclick`, which binds nothing useful. Write `onDblClick`.
 - **Custom DOM events** (`on-my-event=f`) are a compile error: Solid has no prop for them. Use a `ref` callback that calls `addEventListener`.
 - **On a component**, `onSelect=pick` is an ordinary prop.
 
@@ -71,13 +71,14 @@ The handler receives the DOM event. The shared rules are in [Attributes](/langua
 | Written | Why | Write instead |
 |---|---|---|
 | `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `:=` | State is Solid's | `createSignal`, `createEffect`, an explicit handler, in the TypeScript around the region |
-| `<define>`, `<const>`, `import`, `static` in a region | A region is an expression | Write them in the module |
+| `<const>`, `import`, `static` in a region | A region is an expression | Write them in the module |
+| `<define>` inside `<if>`, `<for>` or an attribute tag, or one that reads a value the region introduced | It is hoisted to module scope | Make it a direct child of the region, and pass what it needs as params |
 | `on:x`, `oncapture:x`, `attr:x`, `bool:x`, `use:x` | Removed in Solid 2 | `onX=fn`; a `ref` callback for capture; the plain attribute; `ref=foo(opts)` |
 | `<if\|u\|=cond>`, `<@name>` on an HTML element, `<fragment>` | Marko rejects them too | A TSX fragment `<>…</>` for a wrapper. See [Divergences](/divergences-and-mx-2/) |
 
 ## Whole-file `.mx` on Solid
 
-A plain `.mx` compiles to a Solid component when `package.json` has `"mx": { "host": "solid" }` (or `mx.target: "solid-jsx"`). `.solid.mx` needs neither: its extension selects the host.
+A plain `.mx` compiles to a Solid component when `package.json` has `"mx": { "host": "solid" }` (or `mx.target: "solid-jsx"`). `.solid.mx` needs neither: its extension selects the host. In a whole-file component the body is `input.content`, Marko's name for it (an explicit `content=` prop wins over children), and `<if=input.content>` is true when a body was passed.
 
 ## How this is checked
 

@@ -51,6 +51,6 @@ The loader compiles `.mx` to TSX and each compiled file carries its own `@jsxImp
 
 ## Selecting the host
 
-A whole-file `.mx` has no host in its name, so `package.json` says which one compiles it: `"mx": { "host": "hono" }`. A project with exactly one `@mxlang/*` host dependency may leave the field out. `mx.target: "hono-jsx"` selects Hono too; if both are given and disagree, the tools report `target-host-mismatch`.
+A whole-file `.mx` has no host in its name, so `package.json` says which one compiles it: `"mx": { "host": "hono" }`. A project whose only `@mxlang/*` host or target package is this one may leave the field out; with `@mxlang/html` installed too, say which. `mx.target: "hono-jsx"` selects Hono too; if both are given and disagree, the tools report `target-host-mismatch`.
 
 Everything in [What MX compiles to](/hosts/hono/semantics/) applies. `examples/hono-app` is a complete app on this route.

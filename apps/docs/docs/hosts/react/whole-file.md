@@ -31,7 +31,7 @@ export interface Input {
 
 ## Selecting the host
 
-A whole-file `.mx` has no host in its name, so `package.json` says which one compiles it: `"mx": { "host": "react" }`. A project with exactly one `@mxlang/*` host dependency may leave the field out. `mx.target: "react-jsx"` selects React too; if both are given and disagree, the tools report `target-host-mismatch`.
+A whole-file `.mx` has no host in its name, so `package.json` says which one compiles it: `"mx": { "host": "react" }`. A project whose only `@mxlang/*` host or target package is this one may leave the field out; with `@mxlang/html` installed too, say which. `mx.target: "react-jsx"` selects React too; if both are given and disagree, the tools report `target-host-mismatch`.
 
 Setup is the same as for [region files](/hosts/react/#react-setup). Everything in [What MX compiles to](/hosts/react/semantics/) applies; a whole-file template also has `<const/x=expr/>` (a `const` in the component body) and `<return>`.
 

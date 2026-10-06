@@ -22,6 +22,12 @@ import Card from "../components/card.mx";
 ```
 
 ```mx "card.mx"
+export interface Input {
+  title: string;
+  content: () => string;
+  footer?: () => string;
+}
+
 <article.card>
   <h2>${input.title}</h2>
   <div>$!{input.content()}</div>
@@ -55,8 +61,6 @@ export const getStaticPaths = () => [
 - **`input`** is the page's props plus `params` and `url`, which are `Astro.params` and `Astro.url`.
 - **`export const layout`** wraps the page in that layout's default slot. Every other top-level `export const` becomes a `frontmatter` key for the layout, as with Astro's Markdown pages.
 - **`getStaticPaths`, `prerender`** and any other export reach Astro's router unchanged.
-
-`.marko` is accepted as a component extension but not as a page.
 
 ## Typing `.mx` imports
 

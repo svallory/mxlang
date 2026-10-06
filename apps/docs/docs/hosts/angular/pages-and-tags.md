@@ -17,7 +17,7 @@ A `.mx` file is a tag when it sits under a `tags/` directory or is listed in `pa
 
 ## Page templates
 
-Keep `x.component.ts` as it is, point `templateUrl` at `./x.component.html`, and write `x.component.mx` beside it. Compared with `.ng.mx`, MX cannot edit your class, so two things are yours:
+Keep `x.component.ts` as it is, point `templateUrl` at `./x.component.html`, write `x.component.mx` beside it, and list it in `mx.angular.include` (for example `src/**/*.mx`): page templates are not found on their own, unlike `.ng.mx` files and tags. Compared with `.ng.mx`, MX cannot edit your class, so two things are yours:
 
 - **Imports.** When the template calls an MX tag or needs a directive, the build warns with the exact `import` and `imports:` entry, and repeats it in the header of the emitted `.html`. Without the entry Angular renders an unknown element as an empty tag, silently.
 - **Event members.** A template that binds a handler needs `__mxOn` and `__mxOnAt` on the class. Extend `MxHandlers`, or `MxHandlersMixin(Base)`, from `@mxlang/angular/runtime`; a missing member is TS2339 at build time under `strictTemplates`.
@@ -36,7 +36,7 @@ export interface Input { kind: "ok" | "warn" | "error"; label?: string }
 
 compiles to a standalone component:
 
-```ts "tags/badge.ts (generated)"
+```ts "tags/badge.ts (generated, template simplified)"
 @Component({
   selector: "mx-badge",
   standalone: true,
@@ -48,6 +48,8 @@ export class Badge {
   @NgInput() label?: string;
 }
 ```
+
+The real template binds `data-kind` through an `@let` that applies the value rules in [Attributes](/hosts/angular/lowering/#angular-what-mx-compiles-to-attributes-property-or-attribute-binding).
 
 - **Inputs** come from `export interface Input`: one `@Input()` per property, `required` unless optional, the type copied as written. The template reads `input.kind`; the emitted template reads `kind`.
 - **Content**: `${input.content()}` is `<ng-content>`. An attribute tag, `${input.header()}` or `<${input.header}/>`, is `<ng-content select="[header]">`.
@@ -88,8 +90,8 @@ Tags and `.ng.mx` files are compiled wherever they are; `include` selects page t
 ## `mx-angular`
 
 ```
-mx-angular build [--project <dir>] [--config <file>]
-mx-angular watch [--project <dir>] [--config <file>] [--once]
+mx-angular build [--project <dir>]
+mx-angular watch [--project <dir>] [--once]
 mx-angular map   <file.html:line:col>
 ```
 
@@ -105,7 +107,7 @@ mx-angular map   <file.html:line:col>
 | `error-template` | Always writes the error template |
 | `delete` | Removes the output. Use it in CI, where a stale template is worse than a missing one |
 
-**`map`** turns a position in an emitted `.html` into the `.mx` position it came from, 1-based on both sides:
+**`map`** turns a position in an emitted `.html` (or the `.ts` of a `.ng.mx`) into the `.mx` position it came from, 1-based on both sides:
 
 ```console
 $ mx-angular map src/greeting.html:2:12
@@ -116,4 +118,4 @@ It maps what came from your source (names, expressions, conditions) to the start
 
 ## Example
 
-`examples/angular-app` is a stock Angular CLI 22 app with a page template per component and the `badge` tag above.
+`examples/angular-app` is a stock Angular CLI 22 app with a page template (`app.component.mx`), a `.ng.mx` component and the `badge` tag above.

@@ -51,7 +51,7 @@ The default is right for unique strings and numbers. It is wrong for a list with
 | `onDblClick=f`, `on-dblclick=f` | `onDoubleClick={f}` |
 | `onFocusIn=f` | `onFocus={f}` |
 
-- **Spell the DOM name.** `onDoubleClick` is not a DOM event (`doubleclick`), so MX warns and emits it as written. Write `onDblClick`.
+- **Spell the DOM name.** `onDoubleClick` is not a DOM event (`doubleclick`), so MX warns and emits `onDoubleclick`, which React does not bind. Write `onDblClick`.
 - **Custom DOM events** (`on-my-event=f`) are a compile error on React, Preact and Hono alike. Use a `ref` callback that calls `addEventListener`.
 - **On a component**, `onSelect=pick` is an ordinary prop.
 - `on:click` is not MX syntax; the error names `onClick`.

@@ -14,7 +14,7 @@ MX compiles to Angular's block syntax (`@if`, `@for`, `@let`), never the older `
 | `<for\|item\| of=items by=(item => item.id)>` | `@for (item of items; track item.id) { … }` |
 | `<for\|k, v\| in=obj>` | `@for` over `obj \| keyvalue`, with `@let k` and `@let v` |
 | `class={ active: isOn }`, `style={ … }` | `[ngClass]`, `[ngStyle]` |
-| `<define/Row\|p\|>` and `<Row/>` | an `<ng-template>` with `let-` params, and `ngTemplateOutlet` |
+| `<define/Row\|p\|>` and `<Row(value)/>` | an `<ng-template>` with `let-` params, and `ngTemplateOutlet` |
 | an MX tag call | the tag's component element |
 | `<@name>` on an MX tag | `<ng-container ngProjectAs="[name]">` |
 | `onClick=f` | `(click)="__mxOn(f, this, $event)"` |
@@ -69,5 +69,5 @@ The expression is evaluated once, in an `@let` before the element. This step loa
 ## What is an error
 
 - **State and effects**: `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `<id>`, `<await>`, `<log>`, `<debug>`, `client` and `server` blocks, and `:=`. State belongs in the component class.
-- **`class:x`, `style:x`, `attr:x`**: not MX syntax. Write an object for `class` or `style`, and the attribute plainly (`data-kind=x`); MX picks the binding.
+- **`class:x`, `style:x`**: not MX syntax. Write an object for `class` or `style`. Angular's `attr.` prefix is not needed either: write the attribute plainly (`data-kind=x`) and MX picks the binding.
 - **`on:click`**: the error names `onClick`.

@@ -95,7 +95,7 @@ export function Team({ members }: { members: Member[] }) {
 
 What changed:
 
-- **`<@head>`, `<@row|member|>`, `<@empty>` are `Table`'s props.** These are [attribute tags](/language/attribute-tags-and-params/): a prop that holds markup is written as markup. The pipes make `row` a function of `member`, the render prop the TSX spells `row={(member) => …}`. Each one is checked against `Table`'s props type.
+- **`<@head>`, `<@row|member|>`, `<@empty>` are `Table`'s props.** These are [attribute tags](/language/attribute-tags-and-params/): a prop that holds markup is written as markup. The pipes make `row` a function of `member`, the render prop the TSX spells `row={(member) => …}`. `Table` declares them with `AttrTag`, so each one is checked against its props type.
 - **`<section#team.panel>` and `<input:q.search>`** are `id`, `className` and `name`. `class` is `class`; MX emits `className`.
 - **`<if>` / `<else>` and `<for>`** replace the ternary and the `.map()`. Every `<for>` row gets a `key`; `by="id"` names the field when the row is an object.
 - **`class={ admin: member.admin }`** takes an object or an array, so there is no `clsx` call.
@@ -107,7 +107,11 @@ What changed:
 // package.json
 {
   "dependencies": { "@mxlang/react": "*", "react": "19.3.0", "react-dom": "19.3.0" },
-  "devDependencies": { "@mxlang/vite-plugin": "*", "@mxlang/tsc": "*" },
+  "devDependencies": {
+    "@mxlang/vite-plugin": "*",
+    "@mxlang/typescript-plugin": "*",
+    "@mxlang/tsc": "*"
+  },
   "mx": { "host": "react" }
 }
 ```
@@ -135,7 +139,7 @@ In CI, run `mx-tsc --noEmit` where you ran `tsc --noEmit`: plain `tsc` does not 
 **MX adds:** the markup syntax above, and three things at build time:
 
 - A `key` on every `<for>` row.
-- A type check of each attribute tag against the callee's props.
+- A type check of each attribute tag the callee declares with `AttrTag`.
 - React's own names: `className`, `htmlFor`, `onDoubleClick` for the DOM's `dblclick`.
 
 The output is TSX. MX adds a few inline helpers for attribute values and imports `mxClass` from `@mxlang/react/runtime` when a class object needs it. There is no MX component model at run time.

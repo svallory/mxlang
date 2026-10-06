@@ -89,7 +89,7 @@ export function Team({ members, query }: { members: Member[]; query: string }) {
 
 What changed:
 
-- **`<@head>`, `<@row|member|>`, `<@empty>` are `Table`'s props.** These are [attribute tags](/language/attribute-tags-and-params/): a prop that holds markup is written as markup. The pipes make `row` a function of `member`, the render prop the TSX spells `row={(member) => …}`. Each one is checked against `Table`'s props type.
+- **`<@head>`, `<@row|member|>`, `<@empty>` are `Table`'s props.** These are [attribute tags](/language/attribute-tags-and-params/): a prop that holds markup is written as markup. The pipes make `row` a function of `member`, the render prop the TSX spells `row={(member) => …}`. `Table` declares them with `AttrTag`, so each one is checked against its props type.
 - **`<section#team.panel>` and `<input:q.search>`** are `id`, `class` and `name`.
 - **`<if>` / `<else>` and `<for>`** replace the ternary and the `.map()`.
 - **`class={ admin: member.admin }`** takes an object or an array.
@@ -102,7 +102,11 @@ Region files compile through the Vite plugin, so this is for a Hono project buil
 // package.json
 {
   "dependencies": { "@mxlang/hono": "*", "hono": "4.6.20" },
-  "devDependencies": { "@mxlang/vite-plugin": "*", "@mxlang/tsc": "*" },
+  "devDependencies": {
+    "@mxlang/vite-plugin": "*",
+    "@mxlang/typescript-plugin": "*",
+    "@mxlang/tsc": "*"
+  },
   "mx": { "host": "hono" }
 }
 ```
@@ -134,7 +138,7 @@ In CI, run `mx-tsc --noEmit` where you ran `tsc --noEmit`.
 
 **Stays Hono:** the app, routes, middleware, `c.html()`, the component function and its props, `hono/jsx`'s own `ErrorBoundary` and `Suspense`, and every component you import.
 
-**MX adds:** the markup syntax above, a `key` on every `<for>` row, and a type check of each attribute tag against the callee's props.
+**MX adds:** the markup syntax above, a `key` on every `<for>` row, and a type check of each attribute tag the callee declares with `AttrTag`.
 
 The output is `hono/jsx` TSX. The server render is plain HTML: no hydration script, no island wrappers, nothing for the browser to run. The only runtime import is `mxClass` from `@mxlang/hono/runtime`, when a class object needs it.
 

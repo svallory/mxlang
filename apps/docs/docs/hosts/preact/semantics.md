@@ -45,7 +45,7 @@ The default is right for unique strings and numbers. It is wrong for a list with
 
 `onClick=fn` and `onClick() { … }` bind a handler on an element. MX reads the DOM event name (the text after `on`, lowercased) and emits `on` plus that name capitalized: `onClick=f` is `onClick={f}`, and `onDblClick=f` and `on-dblclick=f` are both `onDblclick={f}`, which Preact binds to `dblclick`.
 
-- **Spell the DOM name.** `onDoubleClick` is not a DOM event (`doubleclick`), so MX warns and emits it as written. Write `onDblClick`.
+- **Spell the DOM name.** `onDoubleClick` is not a DOM event (`doubleclick`), so MX warns and emits `onDoubleclick`, which binds nothing useful. Write `onDblClick`.
 - **Custom DOM events** (`on-my-event=f`) are a compile error on React, Preact and Hono alike, so one source never works on one and fails on another. Use a `ref` callback that calls `addEventListener`.
 - **On a component**, `onSelect=pick` is an ordinary prop.
 - `on:click` is not MX syntax; the error names `onClick`.

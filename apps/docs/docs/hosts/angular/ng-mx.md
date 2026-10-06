@@ -11,7 +11,7 @@ A `.ng.mx` file is a TypeScript module. One expression in it is MX: the value of
 
 The MX region is the **direct value of `template:`** in the first argument of `@Component({ … })`. Any other position (a wrapping call, a ternary, a nested object, another decorator) is an error that names this rule.
 
-`import`, `static` and `export interface Input` are TypeScript statements here: write them at the top of the module, not in the template.
+Everything outside `template:` is ordinary TypeScript: imports and types go at the top of the module, not in the template.
 
 ## Several roots: a fragment
 
