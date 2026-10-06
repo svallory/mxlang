@@ -95,11 +95,6 @@ describe("a refined bound attribute type-checks under strictTemplates", () => {
       "<for|item| of=items><div appPick v:fn:=item/></for>",
       "item",
     ],
-    [
-      "a @for index",
-      "<for|item, i| of=items><div appPick v:fn:=i/></for>",
-      "i",
-    ],
     ["a @let from <const>", "<const/x=q/><div appPick v:fn:=x/>", "x"],
   ])(
     "reports a non-signal template variable target (%s) at the target",
@@ -111,6 +106,12 @@ describe("a refined bound attribute type-checks under strictTemplates", () => {
       expect(found).toContainEqual(expect.objectContaining({ code: 2339, at }));
     },
   );
+
+  it("rejects a @for index before ngtsc runs, as [(v)] does", () => {
+    expect(() =>
+      check("<for|item, i| of=items><div appPick v:fn:=i/></for>"),
+    ).toThrow(/cannot write `i`.*never a signal/);
+  });
 
   it("accepts a template variable that holds a signal, as [(v)] does", () => {
     expect(check("<for|s| of=sigs><div appPick v:fn:=s/></for>").found).toEqual(

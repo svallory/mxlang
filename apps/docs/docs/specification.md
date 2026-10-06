@@ -1171,7 +1171,7 @@ target with an update path applies it: Angular writes
 helper members read and write a `WritableSignal` (`()` and `.set()`) or a
 plain property exactly as Angular's own `[(v)]` does (a bare template
 variable, such as a `@for` item or a `<const>`, is written with `.set()`, as
-Angular accepts only a signal there), and `fn` maps to the
+Angular accepts only a signal there; a `<for of>` index or a `<for>` range number, which is never a signal, is a positioned Angular error at the attribute, as Angular's own `[(v)]` rejects it), and `fn` maps to the
 modifier (a non-ASCII refinement name is a positioned Angular error, since its
 expression language reads ASCII identifiers only); html renders once and emits
 no handler (Marko's is client-only, so its server output is the same) but

@@ -667,6 +667,12 @@ interface RefineContext {
   source: string;
   /** Is `name` a template variable here (a `@for` param, a `@let`, a `<define>` param)? */
   isLocal(name: string): boolean;
+  /**
+   * What `name` is when it is a template variable that can never hold a
+   * signal (a `@for` index, a `<for>` range number), read from the IR scope it
+   * was declared in; `undefined` for anything that might hold one.
+   */
+  neverSignal(name: string): string | undefined;
 }
 
 /**
@@ -691,7 +697,7 @@ interface RefineContext {
  */
 function writeRefinedWrite(
   out: TemplateWriter,
-  attr: { loc: Position; value: Expr },
+  attr: { loc: Position; name: string; value: Expr },
   refinement: Expr,
   context: RefineContext | undefined,
 ): void {
@@ -702,6 +708,16 @@ function writeRefinedWrite(
   };
   const shape = handlerShape(value.code);
   if (shape.form === "bare" && context?.isLocal(value.code)) {
+    const never = context.neverSignal(value.code);
+    if (never) {
+      // Angular's own `[(v)]` rejects this ("Cannot use a non-signal variable
+      // 'i' in a two-way binding expression"), so the refined form does too,
+      // at the attribute, rather than compiling to a `.set` that throws.
+      fail(
+        `a refined bound attribute (\`${attr.name}:${refinement.code}:=${value.code}\`) cannot write \`${value.code}\`: it is ${never}, which is never a signal, so there is nothing to set. Bind a component member, or a variable that holds a signal`,
+        attr,
+      );
+    }
     out.writeMapped(esc(value.code), value.span);
     out.writeMapped(".set", value.span);
     out.write("(");
@@ -1583,10 +1599,22 @@ class AngularEmitter implements Emitter<string> {
    * Read by a refined bound attribute, which must not write `this.<name>`
    * for a name that is not a component member.
    */
-  private scopes: Set<string>[] = [new Set()];
+  private scopes: Map<string, string | undefined>[] = [new Map()];
 
-  private inScope(names: Iterable<string>, body: () => void): void {
-    this.scopes.push(new Set(names));
+  /**
+   * Run `body` with `names` in scope. `neverSignal` maps a name to what it is
+   * (`` a `@for` index ``) when it can never hold a signal; the others might.
+   */
+  private inScope(
+    names: Iterable<string>,
+    body: () => void,
+    neverSignal: Record<string, string> = {},
+  ): void {
+    const scope = new Map<string, string | undefined>();
+    for (const name of names) scope.set(name, neverSignal[name]);
+    for (const [name, what] of Object.entries(neverSignal))
+      scope.set(name, what);
+    this.scopes.push(scope);
     try {
       body();
     } finally {
@@ -1605,6 +1633,15 @@ class AngularEmitter implements Emitter<string> {
     return {
       source: this.ctx.source,
       isLocal: (name) => scopes.some((scope) => scope.has(name)),
+      // The innermost declaration wins: a signal-holding variable shadowing an
+      // index is the one the write reaches.
+      neverSignal: (name) => {
+        for (let i = scopes.length - 1; i >= 0; i--) {
+          const scope = scopes[i];
+          if (scope?.has(name)) return scope.get(name);
+        }
+        return undefined;
+      },
     };
   }
   private firstLoc: Position | undefined;
@@ -2485,9 +2522,13 @@ class AngularEmitter implements Emitter<string> {
       for (const field of destructure) {
         this.out.write(`@let ${field} = ${row}.${field}; `);
       }
-      this.inScope([...node.bindings, row], () => {
-        for (const child of node.children) this.emitNode(child);
-      });
+      this.inScope(
+        [...node.bindings, row],
+        () => {
+          for (const child of node.children) this.emitNode(child);
+        },
+        second ? { [second]: "a `@for` index" } : {},
+      );
       this.out.write(" }");
       return;
     }
@@ -2516,9 +2557,13 @@ class AngularEmitter implements Emitter<string> {
     const rowNode = node.paramNodes[0];
     const row = this.aliasName(rowNode, "$item");
     this.out.write(`@for (${row} of [${values.join(", ")}]; track $index) { `);
-    this.inScope([...node.bindings, row], () => {
-      for (const child of node.children) this.emitNode(child);
-    });
+    this.inScope(
+      [...node.bindings, row],
+      () => {
+        for (const child of node.children) this.emitNode(child);
+      },
+      { [row]: "a `<for>` range number" },
+    );
     this.out.write(" }");
   }
 
@@ -2550,7 +2595,7 @@ class AngularEmitter implements Emitter<string> {
   }
 
   constant(node: Extract<IrNode, { kind: "Const" }>): void {
-    this.scopes.at(-1)?.add(node.name);
+    this.scopes.at(-1)?.set(node.name, undefined);
     this.out.write(`@let ${node.name} = `);
     this.out.writeMapped(node.init.code, node.init.span);
     this.out.write(";");

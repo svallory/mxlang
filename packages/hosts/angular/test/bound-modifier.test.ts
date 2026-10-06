@@ -31,11 +31,6 @@ describe("a bound attribute's refinement (angular)", () => {
       `@for (item of items; track $index) { <div appPick [v]="__mxGet(item)" (vChange)="item.set(fn($event))"></div> }`,
     ],
     [
-      "a @for index",
-      "<for|item, i| of=items><div appPick v:fn:=i/></for>",
-      `@for (item of items; track $index; let i = $index) { <div appPick [v]="__mxGet(i)" (vChange)="i.set(fn($event))"></div> }`,
-    ],
-    [
       "a destructured @for field",
       "<for|{v}| of=objs><div appPick v:fn:=v/></for>",
       `@for (__mxRow of objs; track $index) { @let v = __mxRow.v; <div appPick [v]="__mxGet(v)" (vChange)="v.set(fn($event))"></div> }`,
@@ -52,6 +47,76 @@ describe("a bound attribute's refinement (angular)", () => {
     ],
   ])("writes %s with .set(), not this.<name>", (_name, mx, out) => {
     expect(emit(mx)).toBe(out);
+  });
+
+  // Angular's own `[(v)]="i"` on a `@for` index is a compile error ("Cannot use
+  // a non-signal variable 'i' in a two-way binding expression"), so the refined
+  // form is one too, at the attribute, decided from the IR scope the variable
+  // was declared in: an index or a range number is never a signal.
+  describe("a variable that is never a signal", () => {
+    function failure(mx: string) {
+      try {
+        emit(mx);
+      } catch (e) {
+        return e as { message: string; line: number; column: number };
+      }
+      throw new Error("expected a compile error");
+    }
+
+    it("rejects a @for index at the attribute, naming the target and why", () => {
+      const error = failure(
+        "<for|item, i| of=items><div appPick v:fn:=i/></for>",
+      );
+      expect(error).toMatchObject({ line: 1, column: 36 });
+      expect(error.message).toContain("`v:fn:=i`");
+      expect(error.message).toContain("cannot write `i`");
+      expect(error.message).toContain(
+        "a `@for` index, which is never a signal",
+      );
+    });
+
+    it("rejects the index under any name, and on a later line", () => {
+      const error = failure(
+        "<for|item, position| of=items>\n  <div appPick v:fn:=position/>\n</for>",
+      );
+      expect(error).toMatchObject({ line: 2, column: 15 });
+      expect(error.message).toContain("cannot write `position`");
+    });
+
+    it("rejects a <for> range number", () => {
+      const error = failure("<for|n| from=0 to=3><div appPick v:fn:=n/></for>");
+      expect(error.message).toContain("a `<for>` range number");
+    });
+
+    it("decides by scope, not by name: `i` outside the loop is the component's", () => {
+      expect(
+        emit("<for|item, i| of=items><b/></for><div appPick v:fn:=i/>"),
+      ).toContain(`(vChange)="__mxSet(this, 'i', fn($event))"`);
+    });
+
+    it("lets the innermost declaration win: a @let that shadows the index may hold a signal", () => {
+      expect(
+        emit(
+          "<for|item, i| of=items><const/i=sig/><div appPick v:fn:=i/></for>",
+        ),
+      ).toContain(`(vChange)="i.set(fn($event))"`);
+    });
+
+    it("keeps a member of the index writable through the object", () => {
+      expect(
+        emit("<for|item, i| of=items><div appPick v:fn:=i.v/></for>"),
+      ).toContain(`(vChange)="__mxSet(i, 'v', fn($event))"`);
+    });
+
+    it("keeps today's .set() for variables that can hold a signal", () => {
+      for (const mx of [
+        "<for|s| of=sigs><div appPick v:fn:=s/></for>",
+        "<for|k, val| in=obj><div appPick v:fn:=val/></for>",
+        "<const/x=sig/><div appPick v:fn:=x/>",
+      ]) {
+        expect(emit(mx)).toContain(".set(fn($event))");
+      }
+    });
   });
 
   it("scopes a template variable to its block", () => {
