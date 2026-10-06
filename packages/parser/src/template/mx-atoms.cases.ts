@@ -298,6 +298,60 @@ export const ATOMS: [string, string][] = [
     "<div x=(c ? y as Foo</* < */T> :z)/>",
     '<div> @x atom(z@31-33) ="(c ? y as Foo</* < */T> 0.)"',
   ],
+  // A non-ASCII operand (atom-lookbehind-non-ascii, decision 156 addenda 2
+  // and 8): a real atom still lexes where TypeScript cannot own the `:`
+  // (after `,`, an operator, an operator keyword, a string, template or
+  // comment holding non-ASCII text), exactly as with an ASCII letter.
+  ["<div x=[é, :b]/>", '<div> @x atom(b@11-13) ="[é, 0.]"'],
+  ["<div x=f(é, :b)/>", '<div> @x atom(b@12-14) ="f(é, 0.)"'],
+  ["<div x=é || :b/>", '<div> @x atom(b@12-14) ="é || 0."'],
+  ["<div x=(é || :b)/>", '<div> @x atom(b@13-15) ="(é || 0.)"'],
+  ['<div x=["é", :b]/>', '<div> @x atom(b@13-15) ="[\\"é\\", 0.]"'],
+  ["<div x=['é', :b]/>", "<div> @x atom(b@13-15) =\"['é', 0.]\""],
+  ["<div x=[`é`, :b]/>", '<div> @x atom(b@13-15) ="[`é`, 0.]"'],
+  ["<div x=[`${é}`, :b]/>", '<div> @x atom(b@16-18) ="[`${é}`, 0.]"'],
+  ["<div x=[ /* é */ :b]/>", '<div> @x atom(b@17-19) ="[ /* é */ 0.]"'],
+  ["<div x=[ // é\n :b]/>", '<div> @x atom(b@15-17) ="[ // é\\n 0.]"'],
+  ["<div x=[é /* é */, :b]/>", '<div> @x atom(b@19-21) ="[é /* é */, 0.]"'],
+  ["<div x=(é in :b)/>", '<div> @x atom(b@13-15) ="(é in 0.)"'],
+  ["<div x=(é instanceof :b)/>", '<div> @x atom(b@21-23) ="(é instanceof 0.)"'],
+  ["<div x={ é: :b }/>", '<div> @x atom(b@12-14) ="{ é: 0. }"'],
+  ["<div x={ é : :b }/>", '<div> @x atom(b@13-15) ="{ é : 0. }"'],
+  ["<div x=[𝑥, :b]/>", '<div> @x atom(b@12-14) ="[𝑥, 0.]"'],
+  ["<div x=[名, :b]/>", '<div> @x atom(b@11-13) ="[名, 0.]"'],
+  ["<div x=(é) => :b/>", '<div> @x atom(b@14-16) ="(é) => 0."'],
+  ["<div x=é => :b/>", '<div> @x atom(b@12-14) ="é => 0."'],
+  ["<div x=é === :b/>", '<div> @x atom(b@13-15) ="é === 0."'],
+  [
+    "<div x=é ? :b : :c/>",
+    '<div> @x atom(b@11-13) atom(c@16-18) ="é ? 0. : 0."',
+  ],
+  ["<div x=(é of :b)/>", '<div> @x atom(b@13-15) ="(é of 0.)"'],
+  ["<div x=(é > :b)/>", '<div> @x atom(b@12-14) ="(é > 0.)"'],
+  ["<div x=(é < b > :c)/>", '<div> @x atom(c@16-18) ="(é < b > 0.)"'],
+  ["<div x=é?.b ?? :c/>", '<div> @x atom(c@15-17) ="é?.b ?? 0."'],
+  ["<div x=[é$, :b]/>", '<div> @x atom(b@12-14) ="[é$, 0.]"'],
+  ["<div x=[_é, :b]/>", '<div> @x atom(b@12-14) ="[_é, 0.]"'],
+  ["<div x=!é || :b/>", '<div> @x atom(b@13-15) ="!é || 0."'],
+  ["<div x=[é, ...:b]/>", '<div> @x atom(b@14-16) ="[é, ...0.]"'],
+  ["<div x=(é, :b)/>", '<div> @x atom(b@11-13) ="(é, 0.)"'],
+  ["<div x=c ? é : :b/>", '<div> @x atom(b@15-17) ="c ? é : 0."'],
+  ["<div x=[é.b, :c]/>", '<div> @x atom(c@13-15) ="[é.b, 0.]"'],
+  ["<div>${[é, :b]}</div>", '<div> atom(b@11-13) ${"[é, 0.]"}'],
+  ["<if(é || :b)>y</if>", '<if> atom(b@9-11) args:"é || 0."'],
+  ["div x=[é, :b]\n", '<div> @x atom(b@10-12) ="[é, 0.]"'],
+  ["<t x(é, :b)/>", '<t> @x atom(b@8-10) aargs:"é, 0."'],
+  [
+    "<div x() { for (const é of :a) {} }/>",
+    '<div> @x atom(a@27-29) method:" for (const é of 0.) {} "',
+  ],
+  [
+    "<div x() { return é ? :a : :b }/>",
+    '<div> @x atom(a@22-24) atom(b@27-29) method:" return é ? 0. : 0. "',
+  ],
+  ["<${é || :b}/>", "atom(b@8-10) <${é || :b}>"],
+  ["<div x=`${[é, :b]}`/>", '<div> @x atom(b@14-16) ="`${[é, 0.]}`"'],
+  ["-- ${é || :b}\n", 'atom(b@10-12) ${"é || 0."}'],
 ];
 
 /** [input, rendered events] — `::name` is reserved: a positioned error. */
@@ -460,6 +514,139 @@ export const NOT_ATOMS: [string, string][] = [
   ["<p>${c ? a!! :b}</p>", '<p> ${"c ? a!! :b"}'],
   ["<div x=(c ? a! ! :z)/>", '<div> @x ="(c ? a! ! :z)"'],
   ["<div x=[c ? a[0]!! :z]/>", '<div> @x ="[c ? a[0]!! :z]"'],
+  // A non-ASCII letter before the `:` (atom-lookbehind-non-ascii, decision
+  // 156 addenda 2 and 8: a `:` TypeScript could own is TypeScript's): the
+  // look-behind takes every character at or above U+0080 as a word
+  // character, as `lexAtom` does after a name. Each expected value is the
+  // same row with an ASCII letter in its place (`asciiTwinMismatches`). The
+  // first 42 rows are the three reported inputs in every atom position, HTML
+  // and concise; then identifier shapes (whole, start, middle, end, outside
+  // the BMP, `$`/`_` neighbours, operator-word suffix and prefix) as keys,
+  // ternary branches and parameter names, before `:` and before ` :`.
+  ["<div x=({ é:a })/>", '<div> @x ="({ é:a })"'],
+  ["div x=({ é:a })\n", '<div> @x ="({ é:a })"'],
+  ["<t x(({ é:a }))/>", '<t> @x aargs:"({ é:a })"'],
+  ["t x(({ é:a }))\n", '<t> @x aargs:"({ é:a })"'],
+  ["<div x() { return ({ é:a }) }/>", '<div> @x method:" return ({ é:a }) "'],
+  ["div x() { return ({ é:a }) }\n", '<div> @x method:" return ({ é:a }) "'],
+  ["<if(({ é:a }))>y</if>", '<if> args:"({ é:a })"'],
+  ["if(({ é:a }))\n", '<if> args:"({ é:a })"'],
+  ["<div>${({ é:a })}</div>", '<div> ${"({ é:a })"}'],
+  ["-- ${({ é:a })}\n", '${"({ é:a })"}'],
+  ["<${({ é:a })}/>", "<${({ é:a })}>"],
+  ["${({ é:a })}\n", "<${({ é:a })}>"],
+  ["<div x=`${({ é:a })}`/>", '<div> @x ="`${({ é:a })}`"'],
+  ["div x=`${({ é:a })}`\n", '<div> @x ="`${({ é:a })}`"'],
+  ["<div x=(é :b)/>", '<div> @x ="(é :b)"'],
+  ["div x=(é :b)\n", '<div> @x ="(é :b)"'],
+  ["<t x((é :b))/>", '<t> @x aargs:"(é :b)"'],
+  ["t x((é :b))\n", '<t> @x aargs:"(é :b)"'],
+  ["<div x() { return (é :b) }/>", '<div> @x method:" return (é :b) "'],
+  ["div x() { return (é :b) }\n", '<div> @x method:" return (é :b) "'],
+  ["<if((é :b))>y</if>", '<if> args:"(é :b)"'],
+  ["if((é :b))\n", '<if> args:"(é :b)"'],
+  ["<div>${(é :b)}</div>", '<div> ${"(é :b)"}'],
+  ["-- ${(é :b)}\n", '${"(é :b)"}'],
+  ["<${(é :b)}/>", "<${(é :b)}>"],
+  ["${(é :b)}\n", "<${(é :b)}>"],
+  ["<div x=`${(é :b)}`/>", '<div> @x ="`${(é :b)}`"'],
+  ["div x=`${(é :b)}`\n", '<div> @x ="`${(é :b)}`"'],
+  ["<div x=(éin :b)/>", '<div> @x ="(éin :b)"'],
+  ["div x=(éin :b)\n", '<div> @x ="(éin :b)"'],
+  ["<t x((éin :b))/>", '<t> @x aargs:"(éin :b)"'],
+  ["t x((éin :b))\n", '<t> @x aargs:"(éin :b)"'],
+  ["<div x() { return (éin :b) }/>", '<div> @x method:" return (éin :b) "'],
+  ["div x() { return (éin :b) }\n", '<div> @x method:" return (éin :b) "'],
+  ["<if((éin :b))>y</if>", '<if> args:"(éin :b)"'],
+  ["if((éin :b))\n", '<if> args:"(éin :b)"'],
+  ["<div>${(éin :b)}</div>", '<div> ${"(éin :b)"}'],
+  ["-- ${(éin :b)}\n", '${"(éin :b)"}'],
+  ["<${(éin :b)}/>", "<${(éin :b)}>"],
+  ["${(éin :b)}\n", "<${(éin :b)}>"],
+  ["<div x=`${(éin :b)}`/>", '<div> @x ="`${(éin :b)}`"'],
+  ["div x=`${(éin :b)}`\n", '<div> @x ="`${(éin :b)}`"'],
+  ["<div x=({ é :a })/>", '<div> @x ="({ é :a })"'],
+  ["<div x=(c ? é :z)/>", '<div> @x ="(c ? é :z)"'],
+  ["<div x=((é :T) => 1)/>", '<div> @x ="((é :T) => 1)"'],
+  ["<div x=({ éa:a })/>", '<div> @x ="({ éa:a })"'],
+  ["<div x=({ éa :a })/>", '<div> @x ="({ éa :a })"'],
+  ["<div x=(c ? éa :z)/>", '<div> @x ="(c ? éa :z)"'],
+  ["<div x=((éa :T) => 1)/>", '<div> @x ="((éa :T) => 1)"'],
+  ["<div x=({ aéb:a })/>", '<div> @x ="({ aéb:a })"'],
+  ["<div x=({ aéb :a })/>", '<div> @x ="({ aéb :a })"'],
+  ["<div x=(c ? aéb :z)/>", '<div> @x ="(c ? aéb :z)"'],
+  ["<div x=((aéb :T) => 1)/>", '<div> @x ="((aéb :T) => 1)"'],
+  ["<div x=({ aé:a })/>", '<div> @x ="({ aé:a })"'],
+  ["<div x=({ aé :a })/>", '<div> @x ="({ aé :a })"'],
+  ["<div x=(c ? aé :z)/>", '<div> @x ="(c ? aé :z)"'],
+  ["<div x=((aé :T) => 1)/>", '<div> @x ="((aé :T) => 1)"'],
+  ["<div x=({ 𝑥:a })/>", '<div> @x ="({ 𝑥:a })"'],
+  ["<div x=({ 𝑥 :a })/>", '<div> @x ="({ 𝑥 :a })"'],
+  ["<div x=(c ? 𝑥 :z)/>", '<div> @x ="(c ? 𝑥 :z)"'],
+  ["<div x=((𝑥 :T) => 1)/>", '<div> @x ="((𝑥 :T) => 1)"'],
+  ["<div x=({ a𝑥:a })/>", '<div> @x ="({ a𝑥:a })"'],
+  ["<div x=({ a𝑥 :a })/>", '<div> @x ="({ a𝑥 :a })"'],
+  ["<div x=(c ? a𝑥 :z)/>", '<div> @x ="(c ? a𝑥 :z)"'],
+  ["<div x=((a𝑥 :T) => 1)/>", '<div> @x ="((a𝑥 :T) => 1)"'],
+  ["<div x=({ 𝑥a:a })/>", '<div> @x ="({ 𝑥a:a })"'],
+  ["<div x=({ 𝑥a :a })/>", '<div> @x ="({ 𝑥a :a })"'],
+  ["<div x=(c ? 𝑥a :z)/>", '<div> @x ="(c ? 𝑥a :z)"'],
+  ["<div x=((𝑥a :T) => 1)/>", '<div> @x ="((𝑥a :T) => 1)"'],
+  ["<div x=({ 名:a })/>", '<div> @x ="({ 名:a })"'],
+  ["<div x=({ 名 :a })/>", '<div> @x ="({ 名 :a })"'],
+  ["<div x=(c ? 名 :z)/>", '<div> @x ="(c ? 名 :z)"'],
+  ["<div x=((名 :T) => 1)/>", '<div> @x ="((名 :T) => 1)"'],
+  ["<div x=({ $é:a })/>", '<div> @x ="({ $é:a })"'],
+  ["<div x=({ $é :a })/>", '<div> @x ="({ $é :a })"'],
+  ["<div x=(c ? $é :z)/>", '<div> @x ="(c ? $é :z)"'],
+  ["<div x=(($é :T) => 1)/>", '<div> @x ="(($é :T) => 1)"'],
+  ["<div x=({ é$:a })/>", '<div> @x ="({ é$:a })"'],
+  ["<div x=({ é$ :a })/>", '<div> @x ="({ é$ :a })"'],
+  ["<div x=(c ? é$ :z)/>", '<div> @x ="(c ? é$ :z)"'],
+  ["<div x=((é$ :T) => 1)/>", '<div> @x ="((é$ :T) => 1)"'],
+  ["<div x=({ _é:a })/>", '<div> @x ="({ _é:a })"'],
+  ["<div x=({ _é :a })/>", '<div> @x ="({ _é :a })"'],
+  ["<div x=(c ? _é :z)/>", '<div> @x ="(c ? _é :z)"'],
+  ["<div x=((_é :T) => 1)/>", '<div> @x ="((_é :T) => 1)"'],
+  ["<div x=({ é_:a })/>", '<div> @x ="({ é_:a })"'],
+  ["<div x=({ é_ :a })/>", '<div> @x ="({ é_ :a })"'],
+  ["<div x=(c ? é_ :z)/>", '<div> @x ="(c ? é_ :z)"'],
+  ["<div x=((é_ :T) => 1)/>", '<div> @x ="((é_ :T) => 1)"'],
+  ["<div x=({ éin:a })/>", '<div> @x ="({ éin:a })"'],
+  ["<div x=({ éin :a })/>", '<div> @x ="({ éin :a })"'],
+  ["<div x=(c ? éin :z)/>", '<div> @x ="(c ? éin :z)"'],
+  ["<div x=((éin :T) => 1)/>", '<div> @x ="((éin :T) => 1)"'],
+  ["<div x=({ éof:a })/>", '<div> @x ="({ éof:a })"'],
+  ["<div x=({ éof :a })/>", '<div> @x ="({ éof :a })"'],
+  ["<div x=(c ? éof :z)/>", '<div> @x ="(c ? éof :z)"'],
+  ["<div x=((éof :T) => 1)/>", '<div> @x ="((éof :T) => 1)"'],
+  ["<div x=({ éas:a })/>", '<div> @x ="({ éas:a })"'],
+  ["<div x=({ éas :a })/>", '<div> @x ="({ éas :a })"'],
+  ["<div x=(c ? éas :z)/>", '<div> @x ="(c ? éas :z)"'],
+  ["<div x=((éas :T) => 1)/>", '<div> @x ="((éas :T) => 1)"'],
+  ["<div x=({ étypeof:a })/>", '<div> @x ="({ étypeof:a })"'],
+  ["<div x=({ étypeof :a })/>", '<div> @x ="({ étypeof :a })"'],
+  ["<div x=(c ? étypeof :z)/>", '<div> @x ="(c ? étypeof :z)"'],
+  ["<div x=((étypeof :T) => 1)/>", '<div> @x ="((étypeof :T) => 1)"'],
+  ["<div x=({ éawait:a })/>", '<div> @x ="({ éawait:a })"'],
+  ["<div x=({ éawait :a })/>", '<div> @x ="({ éawait :a })"'],
+  ["<div x=(c ? éawait :z)/>", '<div> @x ="(c ? éawait :z)"'],
+  ["<div x=((éawait :T) => 1)/>", '<div> @x ="((éawait :T) => 1)"'],
+  ["<div x=({ iné:a })/>", '<div> @x ="({ iné:a })"'],
+  ["<div x=({ iné :a })/>", '<div> @x ="({ iné :a })"'],
+  ["<div x=(c ? iné :z)/>", '<div> @x ="(c ? iné :z)"'],
+  ["<div x=((iné :T) => 1)/>", '<div> @x ="((iné :T) => 1)"'],
+  ["<div x=(c ? é! :z)/>", '<div> @x ="(c ? é! :z)"'],
+  ["<div x=(c ? aé!! :z)/>", '<div> @x ="(c ? aé!! :z)"'],
+  ["<div x=(c ? (é)! :z)/>", '<div> @x ="(c ? (é)! :z)"'],
+  ["<div x=((é? :T) => é)/>", '<div> @x ="((é? :T) => é)"'],
+  ["<div x=((aé?:T) => aé)/>", '<div> @x ="((aé?:T) => aé)"'],
+  ["<div x=(c ? y as Aé<T> :z)/>", '<div> @x ="(c ? y as Aé<T> :z)"'],
+  ["<div x=(c ? y as 名<T> :z)/>", '<div> @x ="(c ? y as 名<T> :z)"'],
+  ["<div x=(c ? f<é>() :z)/>", '<div> @x ="(c ? f<é>() :z)"'],
+  ["<div x=(c ? é?.b :z)/>", '<div> @x ="(c ? é?.b :z)"'],
+  ["<div x=(c ? é[0]! :z)/>", '<div> @x ="(c ? é[0]! :z)"'],
+  ["<div x=(éa, await :b)/>", '<div> @x ="(éa, await :b)"'],
 ];
 
 /**
@@ -707,4 +894,201 @@ export function parseScaling(mod: AtomParserModule): number {
   // side several-fold (review r3, N3).
   best(2_000); // warm up
   return best(64_000) / Math.max(best(2_000), 0.5);
+}
+
+/**
+ * atom-lookbehind-non-ascii: each non-ASCII character used below and its
+ * ASCII stand-in of the same UTF-16 length, so offsets never shift. The
+ * stand-ins appear nowhere else in the inputs, so the swap reverses.
+ */
+const TWINS: [string, string][] = [
+  ["\u{1d465}", "WW"],
+  ["é", "Q"],
+  ["名", "Z"],
+];
+
+const swapTwins = (s: string, back: boolean) =>
+  TWINS.reduce(
+    (out, [wide, ascii]) =>
+      back ? out.replaceAll(ascii, wide) : out.replaceAll(wide, ascii),
+    s,
+  );
+
+/**
+ * The identifiers the non-ASCII sets use: a non-ASCII letter as the whole
+ * name, at its start, middle and end, outside the Basic Multilingual Plane
+ * (a surrogate pair), a CJK letter, `$` and `_` neighbours, and a name that
+ * ends or starts with an operator word.
+ */
+const NON_ASCII_NAMES = [
+  "é",
+  "éa",
+  "aéb",
+  "aé",
+  "\u{1d465}",
+  "a\u{1d465}",
+  "\u{1d465}a",
+  "名",
+  "$é",
+  "é$",
+  "_é",
+  "é_",
+  "éin",
+  "éof",
+  "éas",
+  "étypeof",
+  "éawait",
+  "iné",
+];
+
+/**
+ * atom-lookbehind-non-ascii: the stated equivalence. Every look-behind
+ * input with a non-ASCII character renders exactly as the same input with
+ * an ASCII letter of the same length in its place (`asciiTwin`), in every
+ * atom position, HTML and concise. Returns the inputs whose two renderings
+ * differ (none expected) and how many were compared.
+ */
+export function asciiTwinMismatches(mod: AtomParserModule): {
+  total: number;
+  bad: string[];
+} {
+  // [prefix, suffix]: attribute value, attribute arguments, method body,
+  // tag arguments, placeholder, tag name `${}`, template `${}`; HTML, then
+  // concise.
+  const positions: [string, string][] = [
+    ["<div x=", "/>"],
+    ["div x=", "\n"],
+    ["<t x(", ")/>"],
+    ["t x(", ")\n"],
+    ["<div x() { return ", " }/>"],
+    ["div x() { return ", " }\n"],
+    ["<if(", ")>y</if>"],
+    ["if(", ")\n"],
+    ["<div>${", "}</div>"],
+    ["-- ${", "}\n"],
+    ["<${", "}/>"],
+    ["${", "}\n"],
+    ["<div x=`${", "}`/>"],
+    ["div x=`${", "}`\n"],
+  ];
+  // `K` is the name. TypeScript owns the `:` in the first nine; the rest
+  // hold a real atom after a non-ASCII operand, string, template or comment.
+  const forms = [
+    "({ K:a })",
+    "({ K :a })",
+    "({ K\n:a })",
+    "(c ? K :z)",
+    "((K :T) => 1)",
+    "((K? :T) => 1)",
+    "(c ? K! :z)",
+    "(c ? y as K<T> :z)",
+    "(c ? f<K>() :z)",
+    "[K, :b]",
+    "(K || :b)",
+    "(K in :b)",
+    "(K of :b)",
+    "({ K: :b })",
+    "(K ? :b : :c)",
+    '["K", :b]',
+    "[`K`, :b]",
+    "[`${K}`, :b]",
+    "[ /* K */ :b]",
+    "[K /* K */, :b]",
+  ];
+  let total = 0;
+  const bad: string[] = [];
+  for (const [pre, post] of positions) {
+    for (const form of forms) {
+      for (const name of NON_ASCII_NAMES) {
+        total++;
+        const code = pre + form.replaceAll("K", name) + post;
+        const wide = renderAtoms(mod, code);
+        const ascii = swapTwins(renderAtoms(mod, swapTwins(code, false)), true);
+        if (wide !== ascii) bad.push(`${JSON.stringify(code)}: ${wide}`);
+      }
+    }
+  }
+  return { total, bad };
+}
+
+/**
+ * atom-lookbehind-non-ascii: the systematic set of `tsMarkerViolations`
+ * extended with non-ASCII operands and keys. Each input puts a non-ASCII
+ * name where TypeScript owns the following `:` (a ternary branch, an object
+ * key, a parameter name, optional or not, a postfix `!`, type arguments)
+ * before `:z`, in every wrapper, separator and tail of the ASCII set.
+ * 26 operands × 7 forms × 4 × 10 × 3 = 21,840 inputs. Inputs whose atom-free
+ * expression `isValidTs` rejects are skipped. Returns the inputs that lex
+ * `:z` as an atom (none expected) and how many ran.
+ */
+export function nonAsciiMarkerViolations(
+  mod: AtomParserModule,
+  isValidTs: (expression: string) => boolean,
+): { total: number; ran: number; bad: string[] } {
+  const operands = [
+    ...NON_ASCII_NAMES,
+    "é!",
+    "aé!!",
+    "(é)!",
+    "é[0]!",
+    "y as Aé<T>",
+    "y as 名<K, V>",
+    "f<é>()",
+    "o.é",
+  ];
+  // `O` is the operand, `S` the separator before `:`, `t` the tail after it.
+  const forms: ((o: string, s: string, t: string) => string)[] = [
+    (o, s, t) => `c ? ${o}${s}${t}`,
+    (o, s, t) => `c ?\n${o}${s}${t}`,
+    (o, s, t) => `(c) ? ${o}${s}${t}`,
+    (o, s, t) => `({ ${o}${s}${t} })`,
+    (o, s, t) => `((${o}${s}${t}) => 1)`,
+    (o, s, t) => `((${o}?${s}${t}) => 1)`,
+    (o, s, t) => `c ? ${o}${s}${t} : 1`,
+  ];
+  const seps = [" :", "  :", "\n:", ":"];
+  // [source prefix, source suffix, expression prefix, expression suffix]
+  const wraps: [string, string, string, string][] = [
+    ["<div x=", "/>", "", ""],
+    ["<div x=(", ")/>", "(", ")"],
+    ["<div x=[", "]/>", "[", "]"],
+    ["<p>${", "}</p>", "", ""],
+    ["<if(", ")>a</if>", "", ""],
+    ["<div x=`${", "}`/>", "", ""],
+    ["div x=", "\n", "", ""],
+    ["<div x=f(1, ", ")/>", "f(1, ", ")"],
+    ["<div x() { return ", "}/>", "", ""],
+    ["<div x={k: ", "}/>", "{k: ", "}"],
+  ];
+  const tails = ["z", "z :name", "z === :k"];
+  let total = 0;
+  let ran = 0;
+  const bad: string[] = [];
+  for (const o of operands) {
+    for (const form of forms) {
+      for (const s of seps) {
+        for (const [pre, post, ePre, ePost] of wraps) {
+          for (const t of tails) {
+            total++;
+            const v = form(o, s, t);
+            const expr = v.replace(" :name", "").replace(":k", "k");
+            if (!isValidTs(ePre + expr + ePost)) continue;
+            ran++;
+            const src = pre + v + post;
+            let wrong = false;
+            mod
+              .createParser({
+                onAtom: (a: { start: number; end: number }) => {
+                  if (src.slice(a.start, a.end) === ":z") wrong = true;
+                },
+                onError() {},
+              })
+              .parse(src);
+            if (wrong) bad.push(src);
+          }
+        }
+      }
+    }
+  }
+  return { total, ran, bad };
 }

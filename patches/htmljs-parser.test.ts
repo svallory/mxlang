@@ -20,7 +20,9 @@ import { describe, expect, it } from "vitest";
 import {
   ATOMS,
   type AtomParserModule,
+  asciiTwinMismatches,
   NOT_ATOMS,
+  nonAsciiMarkerViolations,
   parseScaling,
   RESERVED,
   rawOpenTagReads,
@@ -333,6 +335,19 @@ describe.each(builds)("atoms (%s)", (_name, build) => {
     const { total, ran, bad } = tsMarkerViolations(mod, isValidTs);
     expect(total).toBe(11_520);
     expect(ran).toBeGreaterThan(9_000);
+    expect(bad).toEqual([]);
+  });
+
+  it("no non-ASCII operand or key before a TypeScript `:` is followed by an atom", () => {
+    const { total, ran, bad } = nonAsciiMarkerViolations(mod, isValidTs);
+    expect(total).toBe(21_840);
+    expect(ran).toBeGreaterThan(14_000);
+    expect(bad).toEqual([]);
+  });
+
+  it("a non-ASCII letter before `:` lexes as the same row with an ASCII letter", () => {
+    const { total, bad } = asciiTwinMismatches(mod);
+    expect(total).toBe(5_040);
     expect(bad).toEqual([]);
   });
 
