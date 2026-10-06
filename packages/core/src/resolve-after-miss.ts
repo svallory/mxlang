@@ -65,9 +65,12 @@ let spawnSyncLoader: () => SpawnSync = loadSpawnSync;
  * @internal
  */
 export function setSpawnSyncLoaderForTesting(
-  loader: (() => SpawnSync) | undefined,
+  // `() => unknown`, not `() => SpawnSync`: the emitted declarations must not
+  // import `node:child_process` (`pack-hygiene.test.ts`); a test passes
+  // `child_process.spawnSync` or a stand-in with its shape.
+  loader: (() => unknown) | undefined,
 ): void {
-  spawnSyncLoader = loader ?? loadSpawnSync;
+  spawnSyncLoader = (loader as (() => SpawnSync) | undefined) ?? loadSpawnSync;
   answers.clear();
   missed.clear();
 }
