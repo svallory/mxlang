@@ -11,7 +11,8 @@
  * (`parents`/`children`, a bad attribute) is the one error of its kind; under
  * `unknownTags: "reject"` the file's unknown tags are still listed beside it.
  * No input makes `parseData` throw: an error with no position (a bug in this
- * package or core) is reported at 1:0 with an `internal error:` message prefix.
+ * package or core) is reported at 1:0 with an `internal error:` message prefix, and
+ * a user-facing one that has none (a Marko taglib error) with `unpositioned error:`.
  * Warnings (a duplicate attribute, today) are collected and returned alongside
  * the tree.
  */
@@ -25,15 +26,14 @@ import {
   type Ir,
   isTranslateError,
   type MxWarning,
-  type Position,
   TranslateError,
 } from "@mxlang/core";
 import {
   buildDataDocumentAll,
+  labelInside,
   lineStartsOf,
-  samePosition,
+  type UnknownTagRange,
   unknownTagMessage,
-  withoutInside,
 } from "./build.ts";
 import { dataDeclarations } from "./declarations.ts";
 import { scanAuthoredTags } from "./scan.ts";
@@ -254,8 +254,30 @@ function declaredTagNames(
   ]);
 }
 
-/** The prefix of a diagnostic for an error with no source position. */
+/** The prefix of a diagnostic for a bug (ours or core's) with no source position. */
 const INTERNAL_PREFIX = "internal error: ";
+
+/**
+ * The prefix of a diagnostic for a user-facing error that carries no source
+ * position: a Marko `CompileError` (it has a `label`) about the taglib or the
+ * config rather than a syntax error. It is not a bug, so it is not "internal".
+ */
+const UNPOSITIONED_PREFIX = "unpositioned error: ";
+
+function isUnpositionedPrefix(message: string): boolean {
+  return (
+    message.startsWith(INTERNAL_PREFIX) ||
+    message.startsWith(UNPOSITIONED_PREFIX)
+  );
+}
+
+/** The prefix for an error with no position: user-facing (a Marko label) or a bug. */
+function noPositionPrefix(error: unknown): string {
+  const label = (error as { label?: unknown } | null)?.label;
+  return error instanceof Error && typeof label === "string" && label.length > 0
+    ? UNPOSITIONED_PREFIX
+    : INTERNAL_PREFIX;
+}
 
 /**
  * The errors one thrown value stands for. `@marko/compiler` throws a
@@ -289,7 +311,7 @@ function errorDiagnostics(
     const message = errorMessage(error, filename);
     const diagnostic = toDiagnostic(
       "error",
-      at ? message : `${INTERNAL_PREFIX}${message}`,
+      at ? message : `${noPositionPrefix(error)}${message}`,
       at ?? { line: 1, column: 0 },
       lineStarts,
       source,
@@ -301,9 +323,8 @@ function errorDiagnostics(
     out.push(diagnostic);
   }
   // Stable: errors at one position keep the order they were found in; the
-  // internal ones (no position, at 1:0) stay after every positioned error.
-  const rank = (d: DataDiagnostic) =>
-    d.message.startsWith(INTERNAL_PREFIX) ? 1 : 0;
+  // unpositioned ones (at 1:0) stay after every positioned error.
+  const rank = (d: DataDiagnostic) => (isUnpositionedPrefix(d.message) ? 1 : 0);
   return out
     .map((d, i) => ({ d, i }))
     .sort(
@@ -331,7 +352,7 @@ function unknownTagErrors(
   source: string,
   filename: string,
   options: ParseDataOptions,
-): { errors: TranslateError[]; ranges: { at: Position; end?: Position }[] } {
+): { errors: TranslateError[]; ranges: UnknownTagRange[] } {
   const tags = scanAuthoredTags(
     source,
     filename,
@@ -351,6 +372,7 @@ function unknownTagErrors(
         ),
     ),
     ranges: unknown.map((tag) => ({
+      name: tag.name,
       at: { line: tag.line, column: tag.column },
       ...(tag.endLine !== undefined && tag.endColumn !== undefined
         ? { end: { line: tag.endLine, column: tag.endColumn } }
@@ -404,12 +426,7 @@ export function parseData(
     if (options.unknownTags !== "reject") return failed([error]);
     try {
       const { errors, ranges } = unknownTagErrors(source, filename, options);
-      // An unknown tag the core error stands on adds nothing: keep the core's.
-      const beside = errors.filter(
-        (unknown) =>
-          !samePosition(error, { line: unknown.line, column: unknown.column }),
-      );
-      return failed(withoutInside([error, ...beside], ranges));
+      return failed(labelInside([error, ...errors], ranges));
     } catch (scanError) {
       return failed([error, scanError]);
     }
@@ -420,22 +437,26 @@ export function parseData(
     ]);
   }
   const document = ir as Ir;
-  let built: ReturnType<typeof buildDataDocumentAll>;
-  try {
-    built = buildDataDocumentAll(document, source, filename, {
-      structural: options.structural ?? "pass",
-      imports: options.imports ?? options.structural ?? "pass",
-      unknownTags: options.unknownTags ?? "allow",
-      declaredTags: declaredTagNames(options.customTags),
-    });
-  } catch (error) {
-    // The build records what it can; this is a failure outside every
-    // recovery point, an internal one.
-    return failed([error]);
+  // Never throws: the build records every error, even one outside its recovery
+  // points, and returns them with the rest.
+  const built = buildDataDocumentAll(document, source, filename, {
+    structural: options.structural ?? "pass",
+    imports: options.imports ?? options.structural ?? "pass",
+    unknownTags: options.unknownTags ?? "allow",
+    declaredTags: declaredTagNames(options.customTags),
+  });
+  const { tree } = built;
+  if (built.errors.length > 0 || !tree) {
+    // A tree-less result always has errors; if that ever broke, an empty
+    // `diagnostics` would read as success, so report the break itself.
+    return failed(
+      built.errors.length > 0
+        ? built.errors
+        : [new Error("@mxlang/data: build produced no tree and no error")],
+    );
   }
-  if (built.errors.length > 0 || !built.tree) return failed(built.errors);
   return {
-    tree: built.tree,
+    tree,
     diagnostics: warnings
       .slice(firstWarning)
       .map((warning) =>

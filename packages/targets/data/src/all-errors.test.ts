@@ -6,9 +6,18 @@
  * reported only the first hit.
  */
 
-import type { CustomTag } from "@mxlang/core";
+import {
+  type CustomTag,
+  compileSource,
+  createTargetLookup,
+  type Ir,
+} from "@mxlang/core";
 import { describe, expect, it } from "vitest";
+import { buildDataDocument, buildDataDocumentAll } from "./build.ts";
+import { dataDeclarations } from "./declarations.ts";
 import { type ParseDataOptions, parseData } from "./parse.ts";
+import { dataTaglib } from "./taglib.ts";
+import { dataTargetBase } from "./target-base.ts";
 
 const customTags: Record<string, CustomTag> = { a: {} };
 
@@ -92,7 +101,7 @@ describe("every error is reported", () => {
     );
   });
 
-  it("returns every unknown tag, one per unknown call (an unknown tag's body is not walked)", () => {
+  it("returns every unknown tag, the one inside an unknown tag included", () => {
     expect(
       positions("<foo/>\n<bar/>\n<baz><qux/></baz>\n", {
         unknownTags: "reject",
@@ -102,6 +111,7 @@ describe("every error is reported", () => {
       [1, 0],
       [2, 0],
       [3, 0],
+      [3, 5],
     ]);
   });
 
@@ -244,5 +254,173 @@ describe("a clean file is unchanged", () => {
     });
     expect(diagnostics).toEqual([]);
     expect(tree).toBeDefined();
+  });
+});
+
+/** The suffix an error inside the unknown tag `<name>` carries. */
+const inside = (name: string) =>
+  ` (inside the unknown tag \`<${name}>\`; may resolve once it is declared)`;
+const VAR =
+  "`/var` on `<open>` is not supported: it has no template, so it has no `<return>` to bind";
+const UNKNOWN = (name: string) =>
+  `\`<${name}>\` is not a known tag: it has no contract in \`customTags\``;
+
+describe("an error inside an unknown tag is labelled, never dropped (decision 161)", () => {
+  const open: Record<string, CustomTag> = { open: {} };
+  const list = (source: string, options: ParseDataOptions = {}) =>
+    parseData(source, "/t.mx", {
+      unknownTags: "reject",
+      customTags: open,
+      ...options,
+    }).diagnostics.map((d) => `${d.line}:${d.column} ${d.message}`);
+
+  it("keeps an independent error at the root unlabelled", () => {
+    expect(list("<foo/>\n<open/z/>\n")).toEqual([
+      `1:0 ${UNKNOWN("foo")}`,
+      `2:0 ${VAR}`,
+    ]);
+  });
+
+  it("keeps a `/var` inside an unknown tag, labelled", () => {
+    expect(list("<foo>\n  <open/z/>\n</foo>\n<bar/>\n")).toEqual([
+      `1:0 ${UNKNOWN("foo")}`,
+      `2:2 ${VAR}${inside("foo")}`,
+      `4:0 ${UNKNOWN("bar")}`,
+    ]);
+  });
+
+  it("keeps a `<!doctype>` inside an unknown tag, labelled", () => {
+    expect(list("<foo>\n  <!doctype html>\n</foo>\n<bar/>\n")).toEqual([
+      `1:0 ${UNKNOWN("foo")}`,
+      expect.stringMatching(
+        /^2:2 .*<!doctype>.*\(inside the unknown tag `<foo>`; may resolve once it is declared\)$/,
+      ),
+      `4:0 ${UNKNOWN("bar")}`,
+    ]);
+  });
+
+  it("keeps a structural `<if>` inside an unknown tag, labelled", () => {
+    expect(
+      list("<foo>\n  <if=x>t</if>\n</foo>\n<bar/>\n", {
+        structural: "reject",
+      }),
+    ).toEqual([
+      `1:0 ${UNKNOWN("foo")}`,
+      `2:2 the data tree is static; this file's consumer does not evaluate \`<if>\`${inside("foo")}`,
+      `4:0 ${UNKNOWN("bar")}`,
+    ]);
+  });
+
+  it("keeps an unknown attribute on a declared tag inside an unknown tag, labelled", () => {
+    expect(
+      list("<foo>\n  <open bogus=1/>\n</foo>\n", {
+        customTags: { open: { attributes: { label: { type: "string" } } } },
+      }),
+    ).toEqual([
+      `1:0 ${UNKNOWN("foo")}`,
+      `2:8 \`<open>\`: unknown attribute \`bogus\`${inside("foo")}`,
+    ]);
+  });
+
+  it("names the innermost unknown tag", () => {
+    expect(list("<foo>\n  <bar>\n    <baz/>\n  </bar>\n</foo>\n")).toEqual([
+      `1:0 ${UNKNOWN("foo")}`,
+      `2:2 ${UNKNOWN("bar")}${inside("foo")}`,
+      `3:4 ${UNKNOWN("baz")}${inside("bar")}`,
+    ]);
+  });
+
+  it("reappears unlabelled once the tag is declared", () => {
+    expect(
+      list("<foo>\n  <open/z/>\n</foo>\n", {
+        customTags: { ...open, foo: {} },
+      }),
+    ).toEqual([`2:2 ${VAR}`]);
+  });
+
+  it("does not label an error outside the element", () => {
+    expect(list("<foo/>\n<open/z/>\n")[1]).not.toContain("inside the unknown");
+  });
+});
+
+describe("only an identical error is deduplicated", () => {
+  it("keeps two different errors at one position, in discovery order", () => {
+    const { diagnostics } = parseData("<$bad/>", "/t.mx", {
+      unknownTags: "reject",
+      customTags,
+    });
+    expect(diagnostics.map((d) => [d.line, d.column])).toEqual([
+      [1, 0],
+      [1, 0],
+    ]);
+    expect(diagnostics[0]?.message).toContain("not a tag name");
+    expect(diagnostics[1]?.message).toContain("is not a known tag");
+  });
+
+  it("reports an identical error once", () => {
+    const { diagnostics } = parseData("<foo/>", "/t.mx", {
+      unknownTags: "reject",
+      customTags,
+    });
+    expect(diagnostics).toHaveLength(1);
+  });
+});
+
+describe("buildDataDocument throws the first error parseData lists", () => {
+  const targets = createTargetLookup([dataTargetBase]);
+  const SOURCE = "<$bad/>\n<foo/>\n";
+  const lowered = (source: string): Ir => {
+    let captured: Ir | undefined;
+    compileSource(source, "/t.mx", dataDeclarations, {
+      targets,
+      taglibs: [dataTaglib()],
+      tagDiscoveryDirs: [],
+      emitIr: (ir) => {
+        captured = ir;
+        return "";
+      },
+    });
+    if (!captured) throw new Error("no IR captured");
+    return captured;
+  };
+  const options = {
+    structural: "pass",
+    unknownTags: "reject",
+    declaredTags: new Set<string>(),
+  } as const;
+
+  it("is the first of the ordered list", () => {
+    const first = parseData(SOURCE, "/t.mx", {
+      unknownTags: "reject",
+      customTags: {},
+    }).diagnostics[0];
+    expect(() =>
+      buildDataDocument(lowered(SOURCE), SOURCE, "/t.mx", options),
+    ).toThrow(first?.message);
+  });
+
+  it("keeps the problems already collected when a throw escapes every recovery point", () => {
+    // An import with no span records one problem; a `body` that throws then
+    // escapes `attempt`. Both must be returned, none lost behind the throw.
+    const source = 'import x from "./x"\n<a/>\n';
+    const ir = lowered(source);
+    const imported = ir.imports[0];
+    if (!imported) throw new Error("no import");
+    (imported as { span: unknown }).span = undefined;
+    Object.defineProperty(ir, "body", {
+      get() {
+        throw new Error("injected");
+      },
+    });
+    const { tree, errors } = buildDataDocumentAll(ir, source, "/t.mx", {
+      structural: "pass",
+      unknownTags: "allow",
+      declaredTags: new Set(),
+    });
+    expect(tree).toBeUndefined();
+    expect(errors.map((error) => (error as Error).message)).toEqual([
+      expect.stringContaining("`import` statement carries no span"),
+      "injected",
+    ]);
   });
 });

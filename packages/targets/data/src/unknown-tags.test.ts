@@ -58,7 +58,8 @@ describe('unknownTags: "reject"', () => {
       "<open>\n  <deep>\n    <bogus/>\n  </deep>\n</open>",
     );
     expect(tree).toBeUndefined();
-    // `<deep>` is the first unknown; `<bogus>` inside it is not also reported.
+    // `<deep>` is the first unknown; `<bogus>` inside it is reported too,
+    // labelled as following from `<deep>`.
     expect(diagnostics).toMatchObject([
       {
         message:
@@ -66,13 +67,29 @@ describe('unknownTags: "reject"', () => {
         line: 2,
         column: 2,
       },
+      {
+        message:
+          "`<bogus>` is not a known tag: it has no contract in `customTags` (inside the unknown tag `<deep>`; may resolve once it is declared)",
+        line: 3,
+        column: 4,
+      },
     ]);
   });
 
-  it("reports one error per unknown call: the body of an unknown tag is not walked", () => {
+  it("reports every unknown call, the ones inside an unknown tag labelled", () => {
     const { diagnostics } = parse("<bogus>\n  <other/>\n</bogus>");
-    expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0]?.message).toContain("`<bogus>`");
+    expect(diagnostics.map((d) => [d.line, d.column, d.message])).toEqual([
+      [
+        1,
+        0,
+        "`<bogus>` is not a known tag: it has no contract in `customTags`",
+      ],
+      [
+        2,
+        2,
+        "`<other>` is not a known tag: it has no contract in `customTags` (inside the unknown tag `<bogus>`; may resolve once it is declared)",
+      ],
+    ]);
   });
 
   it("finds an unknown tag inside an <if> branch and a <for> body", () => {
@@ -91,10 +108,16 @@ describe('unknownTags: "reject"', () => {
 
   it("lets a known parent's closed children error stand (no unknown tag precedes it)", () => {
     const { diagnostics } = parse("<resource>\n  <bad/>\n</resource>");
-    expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0]?.message).toBe(
-      "`<resource>`: `<bad>` is not allowed here; allowed children: `<attributes>`, `<relationships>`",
-    );
+    // The closed-children error is first; `<bad>` is also an unknown tag, at
+    // the same position, and both stay: two different errors are never merged.
+    expect(diagnostics.map((d) => [d.line, d.column, d.message])).toEqual([
+      [
+        2,
+        2,
+        "`<resource>`: `<bad>` is not allowed here; allowed children: `<attributes>`, `<relationships>`",
+      ],
+      [2, 2, "`<bad>` is not a known tag: it has no contract in `customTags`"],
+    ]);
   });
 
   it("reports an unknown parent before its child's `parents` error (Mesh's typo)", () => {
@@ -111,6 +134,14 @@ describe('unknownTags: "reject"', () => {
         column: 0,
         offset: 0,
       },
+      {
+        severity: "error",
+        message:
+          "`<attributes>` must be inside `<resource>`; found inside `<resourse>` (inside the unknown tag `<resourse>`; may resolve once it is declared)",
+        line: 2,
+        column: 2,
+        offset: 18,
+      },
     ]);
   });
 
@@ -120,6 +151,12 @@ describe('unknownTags: "reject"', () => {
     );
     expect(diagnostics).toMatchObject([
       { message: expect.stringContaining("`<bogus>`"), line: 2, column: 2 },
+      {
+        message:
+          "`<x>` is not a known tag: it has no contract in `customTags` (inside the unknown tag `<bogus>`; may resolve once it is declared)",
+        line: 3,
+        column: 4,
+      },
     ]);
   });
 
@@ -127,10 +164,12 @@ describe('unknownTags: "reject"', () => {
     const { diagnostics } = parse(
       "<resource>\n  <bad/>\n</resource>\n<widget/>",
     );
-    // The core error comes first; the later unknown tag is listed beside it.
-    expect(diagnostics).toHaveLength(2);
+    // The core error comes first, `<bad>` as an unknown tag at the same
+    // position next, and the later unknown tag is listed beside them.
+    expect(diagnostics).toHaveLength(3);
     expect(diagnostics[0]?.message).toContain("`<bad>` is not allowed here");
-    expect(diagnostics[1]).toMatchObject({
+    expect(diagnostics[1]?.message).toContain("`<bad>` is not a known tag");
+    expect(diagnostics[2]).toMatchObject({
       message: expect.stringContaining("`<widget>`"),
       line: 4,
       column: 0,
@@ -167,8 +206,11 @@ describe('unknownTags: "reject"', () => {
       {},
       tags,
     );
-    expect(diagnostics).toHaveLength(1);
+    // The text body's `<foo/>` is not listed: only `<bad>`, as the closed
+    // children error and as an unknown tag at the same position.
+    expect(diagnostics.map((d) => d.line)).toEqual([3, 3]);
     expect(diagnostics[0]?.message).toContain("`<bad>` is not allowed here");
+    expect(diagnostics[1]?.message).toContain("`<bad>` is not a known tag");
   });
 
   it("does not reuse a stale parse lookup across calls with different text tags", () => {
@@ -182,8 +224,9 @@ describe('unknownTags: "reject"', () => {
         {},
         withText(name),
       );
-      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics.map((d) => d.line)).toEqual([3, 3]);
       expect(diagnostics[0]?.message).toContain("`<bad>` is not allowed here");
+      expect(diagnostics[1]?.message).toContain("`<bad>` is not a known tag");
     }
   });
 
@@ -197,8 +240,9 @@ describe('unknownTags: "reject"', () => {
       {},
       tags,
     );
-    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics.map((d) => d.line)).toEqual([3, 3]);
     expect(diagnostics[0]?.message).toContain("`<bad>` is not allowed here");
+    expect(diagnostics[1]?.message).toContain("`<bad>` is not a known tag");
   });
 
   it("keeps the parse shape of a preserveWhitespace tag when listing unknown tags", () => {
@@ -212,11 +256,15 @@ describe('unknownTags: "reject"', () => {
       tags,
     );
     // preserveWhitespace changes whitespace only: `<foo>` is still a tag,
-    // and it opens before the `<bad>` children error. `<bad>` is reported once,
-    // as the closed-children error that stands on it.
+    // and it opens before the `<bad>` children error. `<bad>` is reported
+    // twice, as the closed-children error and as an unknown tag.
     expect(diagnostics).toMatchObject([
       { message: expect.stringContaining("`<foo>`"), line: 2 },
       { message: expect.stringContaining("is not allowed here"), line: 5 },
+      {
+        message: expect.stringContaining("`<bad>` is not a known tag"),
+        line: 5,
+      },
     ]);
   });
 
@@ -226,11 +274,18 @@ describe('unknownTags: "reject"', () => {
       stub: { parseOptions: { openTagOnly: true } },
     };
     // The unknown parent comes first; the trailer's own mistake follows it.
+    const attributes = {
+      message: "`<attributes>` must be inside `<resource>`",
+      line: 2,
+    };
     const trailers: [string, { message: string; line: number }[]][] = [
-      ["stub\n  x\n", [{ message: "`<x>` is not a known tag", line: 4 }]],
+      [
+        "stub\n  x\n",
+        [attributes, { message: "`<x>` is not a known tag", line: 4 }],
+      ],
       // Core stops at its first lowering error (`<attributes>` under the
       // unknown parent), so the `<define>` after it is never reached.
-      ["<define/>\n", []],
+      ["<define/>\n", [attributes]],
     ];
     for (const [trailer, rest] of trailers) {
       const { diagnostics } = parse(
@@ -258,22 +313,31 @@ describe('unknownTags: "reject"', () => {
     expect(diagnostics[0]?.message).not.toContain("not a known tag");
   });
 
-  it("lets the build error win a tie at the same position", () => {
+  it("keeps the build error and the unknown tag at one position, build error first", () => {
     const merged = parse('<widget.a class="b"/>');
-    // `<widget>` is unknown too, but the build error stands on the same
-    // position and is the actionable one: one error there.
+    // `<widget>` is unknown too: two different errors at one position both
+    // stay, in discovery order (the build's first).
     expect(merged.diagnostics).toMatchObject([
       {
         message: expect.stringContaining("shorthand class"),
         line: 1,
         column: 0,
       },
+      {
+        message: expect.stringContaining("`<widget>` is not a known tag"),
+        line: 1,
+        column: 0,
+      },
     ]);
-    expect(merged.diagnostics).toHaveLength(1);
     const bad = parse("<$bad/>");
     expect(bad.diagnostics).toMatchObject([
       {
         message: expect.stringContaining("not a tag name a data file can use"),
+        line: 1,
+        column: 0,
+      },
+      {
+        message: expect.stringContaining("`<$bad>` is not a known tag"),
         line: 1,
         column: 0,
       },
@@ -311,8 +375,11 @@ describe('unknownTags: "reject"', () => {
       { message: expect.stringContaining("`<widget>`"), line: 2, column: 0 },
     ]);
     const name = parse("<open>\n  <$bad/>\n</open>\n<widget/>");
-    expect(name.diagnostics.map((d) => d.line)).toEqual([2, 4]);
+    expect(name.diagnostics.map((d) => d.line)).toEqual([2, 2, 4]);
     expect(name.diagnostics[0]?.message).toContain("not a tag name");
+    expect(name.diagnostics[1]?.message).toContain(
+      "`<$bad>` is not a known tag",
+    );
   });
 
   it("accepts a document of only declared tags", () => {

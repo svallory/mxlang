@@ -728,9 +728,10 @@ export function unknownTagMessage(
 
 /** An unknown authored tag, for `unknownTags: "reject"`. */
 export interface UnknownTagHit {
+  name: string;
   message: string;
   at: Position;
-  /** Where the tag's element ends, to drop the errors inside it. */
+  /** Where the tag's element ends, to label the errors inside it. */
   end?: Position;
 }
 
@@ -756,6 +757,7 @@ export function allUnknownTags(
       !declaredTags.has(tag.name)
     ) {
       found.push({
+        name: tag.name,
         message: unknownTagMessage(tag.name, declaredTags),
         at: tag.loc,
         ...(tag.span && Number.isFinite(tag.span.sourceEnd)
@@ -901,38 +903,63 @@ function allStructural(
   }));
 }
 
-/** Whether `error` is positioned exactly at `at` (same file). */
-export function samePosition(error: unknown, at: Position): boolean {
-  const there = positionOf(error);
-  return (
-    there !== null &&
-    there.file === at.file &&
-    there.line === at.line &&
-    there.column === at.column
-  );
+/** An unknown tag's element: where it opens and (when known) closes. */
+export interface UnknownTagRange {
+  name: string;
+  at: Position;
+  end?: Position;
+}
+
+/** The suffix of an error that sits inside an unknown tag's element. */
+function insideUnknownTagLabel(name: string): string {
+  return ` (inside the unknown tag \`<${name}>\`; may resolve once it is declared)`;
 }
 
 /**
- * The errors that are not inside an unknown tag's element. An unknown tag has
- * no contract, so what is reported inside it (its children's own unknown
- * names, a `parents`/`children` error that is only the symptom of the typo, a
- * build reject in its body) is noise until the tag is fixed: one error per
- * unknown call, at the call. A nested unknown tag is not walked either.
+ * Labels, never drops, the errors strictly inside an unknown tag's element
+ * (decision 161: no diagnostic is dropped). An unknown tag has no contract, so
+ * what is reported inside it (its children's own unknown names, a `parents`/
+ * `children` error that is only the symptom of the typo) may disappear once the
+ * tag is declared, while an independent mistake (a `/var`, a `<!doctype>`, a
+ * structural `<if>`, an unknown attribute on a declared tag) stays; the label
+ * tells an agent which is which without hiding either. The innermost enclosing
+ * unknown tag names the label. An error with no position, or positioned in
+ * another file (an inlined tag template), is not inside this file's element and
+ * is left as is.
  */
-export function withoutInside(
+export function labelInside(
   errors: unknown[],
-  unknown: readonly { at: Position; end?: Position }[],
+  unknown: readonly UnknownTagRange[],
 ): unknown[] {
-  const inside = (at: Position, tag: { at: Position; end?: Position }) =>
+  const inside = (at: Position, tag: UnknownTagRange) =>
     tag.end !== undefined &&
     at.file === undefined &&
     (at.line > tag.at.line ||
       (at.line === tag.at.line && at.column > tag.at.column)) &&
     (at.line < tag.end.line ||
       (at.line === tag.end.line && at.column < tag.end.column));
-  return errors.filter((error) => {
+  return errors.map((error) => {
     const at = positionOf(error);
-    return !at || !unknown.some((tag) => inside(at, tag));
+    if (!at) return error;
+    let innermost: UnknownTagRange | undefined;
+    for (const tag of unknown) {
+      if (!inside(at, tag)) continue;
+      if (
+        !innermost ||
+        tag.at.line > innermost.at.line ||
+        (tag.at.line === innermost.at.line &&
+          tag.at.column > innermost.at.column)
+      ) {
+        innermost = tag;
+      }
+    }
+    if (!innermost) return error;
+    return new TranslateError(
+      `${(error as TranslateError).message}${insideUnknownTagLabel(innermost.name)}`,
+      at.line,
+      at.column,
+      at.file,
+    );
   });
 }
 
@@ -947,10 +974,12 @@ function positionOf(error: unknown): Position | null {
  * Every error of one build, earliest first.
  *
  * The build rejects, the structural hits and the unknown tags are three
- * independent walks of the IR; their errors are merged by position (the
- * build's first on a tie, as a check on a tag is not "inside" it) and an
- * identical error — the same message at the same place — appears once.
- * An error with no position (an internal invariant) goes last.
+ * independent walks of the IR; their errors are merged by file, line and
+ * column (discovery order on a tie, so two different errors at one position
+ * both stay) and only a truly identical error — the same file, position and
+ * message — appears once. This is `parseData`'s order too (`errorDiagnostics`),
+ * so `buildDataDocument`'s first error is `parseData`'s first diagnostic. An
+ * error with no position (an internal invariant) goes last.
  */
 function sortedProblems(all: unknown[]): unknown[] {
   const keyed = all.map((error, index) => ({
@@ -961,14 +990,17 @@ function sortedProblems(all: unknown[]): unknown[] {
   keyed.sort((a, b) => {
     if (!a.at || !b.at) return a.at ? -1 : b.at ? 1 : a.index - b.index;
     return (
-      a.at.line - b.at.line || a.at.column - b.at.column || a.index - b.index
+      (a.at.file ?? "").localeCompare(b.at.file ?? "") ||
+      a.at.line - b.at.line ||
+      a.at.column - b.at.column ||
+      a.index - b.index
     );
   });
   const seen = new Set<string>();
   return keyed
     .filter(({ error, at }) => {
       if (!at) return true;
-      const key = `${at.line}:${at.column}:${(error as Error).message}`;
+      const key = `${at.file ?? ""}:${at.line}:${at.column}:${(error as Error).message}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -986,8 +1018,29 @@ export interface BuildResult {
 /**
  * Builds the tree from a lowered data compile, collecting every error: no
  * `tree` when any was found (no partial tree in v1).
+ *
+ * Never throws. Every recovery point records into `problems`; a throw outside
+ * every one of them (a bug here) is recorded with the rest and returned, so the
+ * errors already collected are never lost behind it.
  */
 export function buildDataDocumentAll(
+  ir: Ir,
+  source: string,
+  filename: string,
+  options: BuildOptions,
+): BuildResult {
+  problems = [];
+  try {
+    return buildAll(ir, source, filename, options);
+  } catch (error) {
+    return {
+      tree: undefined,
+      errors: sortedProblems([...problems, error]),
+    };
+  }
+}
+
+function buildAll(
   ir: Ir,
   source: string,
   filename: string,
@@ -996,7 +1049,6 @@ export function buildDataDocumentAll(
   activeLineStarts = lineStartsOf(source);
   activeSource = source;
   activeSourceLength = source.length;
-  problems = [];
   const stmts = attempt(() => statements(ir)) ?? [];
   const children = dataNodes(ir.body);
   const extra: unknown[] = [];
@@ -1010,16 +1062,12 @@ export function buildDataDocumentAll(
   });
   if (options.unknownTags === "reject") {
     attempt(() => {
-      // An unknown tag that another error already stands on says nothing new:
-      // the other error (a tag variable, a closed `children`) is the actionable one.
-      unknownHits = allUnknownTags(ir, options.declaredTags).filter(
-        (hit) => !problems.some((error) => samePosition(error, hit.at)),
-      );
+      unknownHits = allUnknownTags(ir, options.declaredTags);
       for (const hit of unknownHits) extra.push(asError(hit));
     });
   }
   const errors = sortedProblems(
-    withoutInside([...problems, ...extra], unknownHits),
+    labelInside([...problems, ...extra], unknownHits),
   );
   if (errors.length > 0) return { tree: undefined, errors };
   // `structural: "reject"` with `imports: "pass"`: the imports leave
@@ -1045,8 +1093,10 @@ export function buildDataDocumentAll(
 }
 
 /**
- * `buildDataDocumentAll` for a caller that wants one error: throws the
- * earliest (`TranslateError`, positioned) or returns the tree.
+ * `buildDataDocumentAll` for a caller that wants one error: throws the first of
+ * its ordered list (the earliest positioned error, as labelled inside an
+ * unknown tag; an internal error only when nothing is positioned) or returns
+ * the tree. It is the same error `parseData` lists first for the file.
  */
 export function buildDataDocument(
   ir: Ir,

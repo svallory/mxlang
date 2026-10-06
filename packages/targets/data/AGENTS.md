@@ -46,8 +46,11 @@ the first) decides what any tag or expression means. Design:
   reject, structural hit and unknown tag (`buildDataDocumentAll`: `each`/
   `attempt` in `build.ts` record a reject and go on). Core's lowering stops at
   its first error by design, so a lowering error is alone (plus the unknown
-  tags, from the parse-only scan). `parseData` never throws: a positionless
-  error is an `internal error: ` diagnostic at 1:0. Marko `CompileError`s report their `label`, not the framed `message`.
+  tags, from the parse-only scan). An error inside an unknown tag's element is kept and
+  labelled `(inside the unknown tag `<x>`; may resolve once it is declared)`, never dropped
+  (decision 161); only an identical error (same file, position, message) is deduplicated.
+  `parseData` never throws: a positionless
+  error is an `internal error: ` diagnostic at 1:0 (`unpositioned error: ` for a Marko label). Marko `CompileError`s report their `label`, not the framed `message`.
 - `src/descriptor.ts` + `src/compile.ts` — the `data` `TargetDescriptor`
   (`./descriptor` export) and its `compileModule`, which emits
   `export default <literal> as const`: the tree minus every Babel `node`
