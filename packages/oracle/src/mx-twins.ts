@@ -1,4 +1,5 @@
 import {
+  existsSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -13,7 +14,7 @@ import { htmlTargets } from "@mxlang/html";
  * Turns a scratch copy of a stock `.marko` fixture into the `.mx` project MX
  * actually compiles (decision 172: a `.marko` file is not an MX input).
  *
- * Each `.marko` file is rewritten, by content, to a `.mx` file of the same
+ * A fixture's own committed `.mx` twin wins over a generated one. Otherwise each `.marko` file is rewritten, by content, to a `.mx` file of the same
  * name, with its own `from "./X.marko"` imports pointed at the `.mx` twins,
  * and the `.marko` file is removed from the scratch copy. Marko's own run
  * (`marko-compile-stock.ts`) still reads the real `.marko` files; this only
@@ -22,11 +23,17 @@ import { htmlTargets } from "@mxlang/html";
  */
 export function mxTwins(scratch: string): void {
   for (const file of markoFiles(scratch)) {
+    const twin = file.replace(/\.marko$/, ".mx");
+    // A committed `.mx` twin (the fixture's own) is what MX renders.
+    if (existsSync(twin)) {
+      rmSync(file);
+      continue;
+    }
     const source = readFileSync(file, "utf8").replace(
       /(from\s+["'])(\.[^"']*)\.marko(["'])/g,
       "$1$2.mx$3",
     );
-    writeFileSync(file.replace(/\.marko$/, ".mx"), source);
+    writeFileSync(twin, source);
     rmSync(file);
   }
 }
