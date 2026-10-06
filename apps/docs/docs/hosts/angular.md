@@ -664,6 +664,14 @@ Unlike `.solid.mx`, where `<>` is a TSX fragment, `<>` here is MX syntax: there
 is no TSX to fall back to in an Angular template. A fragment cannot contain
 another fragment, and it must be closed with `</>`.
 
+### No statement bodies in a template
+
+Angular's template expressions have no `function` keyword, no statement bodies
+and no multi-line arrows, so a method attribute (`onClick() { … }`), a
+`function` expression or a block-bodied arrow is a positioned MX error on this
+host. Write an expression-bodied arrow (`onClick=(() => save())`) or a handler
+reference to a member of your class (`onClick=save`).
+
 ### Module-level tags stay in the module
 
 `import`, `static` and `export interface Input` are **not** written inside a
