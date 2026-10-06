@@ -415,6 +415,7 @@ export function parseData(
     compileSource(source, filename, dataDeclarations, {
       targets: dataTargets,
       taglibs: [dataTaglib()],
+      statementTags: false,
       tagDiscoveryDirs: [],
       customTags: options.customTags,
       defaultTag: options.defaultTag,

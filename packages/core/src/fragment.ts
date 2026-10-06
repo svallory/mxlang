@@ -36,7 +36,7 @@
 import { dirname } from "node:path";
 import { rejectShadowedRegistration } from "./builtin-tags.ts";
 import { type Node, TranslateError } from "./core.ts";
-import { CORE_TAGLIB, CORE_TAGLIB_ID } from "./core-taglib.ts";
+import { STATEMENT_TAGLIB, STATEMENT_TAGLIB_ID } from "./core-taglib.ts";
 import {
   type CustomTag,
   customTagTaglib,
@@ -62,10 +62,13 @@ import {
  * so every parse knows them) and no `translate` visitors, so `compileSync`
  * parses and stops.
  */
-const CORE_ENTRY: [string, unknown] = [CORE_TAGLIB_ID, CORE_TAGLIB];
+const STATEMENT_ENTRY: [string, unknown] = [
+  STATEMENT_TAGLIB_ID,
+  STATEMENT_TAGLIB,
+];
 
 const PARSE_ONLY_TRANSLATOR = {
-  taglibs: [CORE_ENTRY],
+  taglibs: [STATEMENT_ENTRY],
   tagDiscoveryDirs: [],
   translate: {},
 };
@@ -93,7 +96,7 @@ function parseOnlyTranslator(
   rejectUnreachableHooks(customTags);
   const taglib = customTagTaglib(customTags);
   return taglib
-    ? { ...PARSE_ONLY_TRANSLATOR, taglibs: [CORE_ENTRY, taglib] }
+    ? { ...PARSE_ONLY_TRANSLATOR, taglibs: [STATEMENT_ENTRY, taglib] }
     : PARSE_ONLY_TRANSLATOR;
 }
 

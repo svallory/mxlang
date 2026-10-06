@@ -16,6 +16,7 @@ import { dataTaglib } from "./taglib.ts";
 export function dataTranslator(targets: TargetLookup): Translator {
   return createTranslator({
     taglibs: [dataTaglib()],
+    statementTags: false,
     tagDiscoveryDirs: [],
     targets,
   });

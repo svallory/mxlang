@@ -73,6 +73,7 @@ function translatorFor(customTags: Record<string, CustomTag> | undefined) {
   if (!translator) {
     translator = {
       taglibs: [dataTaglib(), ...(custom ? [custom] : [])],
+      statementTags: false,
       tagDiscoveryDirs: [],
       translate: {},
     };

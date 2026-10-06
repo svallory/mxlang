@@ -28,7 +28,11 @@ import {
   newCtx,
   type TranslateError,
 } from "./core.ts";
-import { CORE_TAGLIB, CORE_TAGLIB_ID } from "./core-taglib.ts";
+import {
+  CORE_TAGLIB_ID,
+  STATEMENT_TAGLIB,
+  STATEMENT_TAGLIB_ID,
+} from "./core-taglib.ts";
 import {
   type CustomTag,
   customTagTaglib,
@@ -84,6 +88,12 @@ export interface TranslatorOptions {
    * `[id, definition]` form. A host's own core-tag taglib goes here.
    */
   taglibs?: Array<[string, unknown]>;
+  /**
+   * `false` when the host declares its own statement tags in `taglibs` (the
+   * data target's three) and core's six (decision 168) must not be registered
+   * beside them. Unset, every parse registers core's statement tags.
+   */
+  statementTags?: false;
   /**
    * Directories beside a template whose `.marko`/`.mx` files are callable as
    * tags without an import. Marko's own convention is `["tags"]`; a host that
@@ -215,11 +225,11 @@ export function createTranslator(host: TranslatorOptions): Translator {
   // the parser on every target. A host that already lists it (html) keeps its
   // own entry, and no host names the set.
   const hostTaglibs = host.taglibs ?? [];
-  const coreTaglib: Array<[string, unknown]> = hostTaglibs.some(
-    ([id]) => id === CORE_TAGLIB_ID,
-  )
-    ? []
-    : [[CORE_TAGLIB_ID, CORE_TAGLIB]];
+  const coreTaglib: Array<[string, unknown]> =
+    host.statementTags === false ||
+    hostTaglibs.some(([id]) => id === CORE_TAGLIB_ID)
+      ? []
+      : [[STATEMENT_TAGLIB_ID, STATEMENT_TAGLIB]];
   return {
     taglibs: [
       ...coreTaglib,

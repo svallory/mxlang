@@ -101,10 +101,16 @@ describe("reserved generated-code bindings", () => {
     ).not.toThrow();
   });
 
-  it("skips a statement tag it cannot parse rather than rejecting it", () => {
-    // The existing syntax error owns malformed statement source. This check
-    // must never invent a rejection from text it could not parse.
-    expect(() => compile("\nstatic const = ;\n")).toThrow();
+  it("never invents a rejection from malformed statement text", () => {
+    // A statement's text is code the parser no longer reads as attributes
+    // (decision 168), so a malformed one is no longer a Marko syntax error here:
+    // it passes through to TypeScript, as on html. This check must not turn it
+    // into a reserved-binding rejection.
+    try {
+      compile("\nstatic const = ;\n");
+    } catch (error) {
+      expect((error as Error).message).not.toContain("reserved");
+    }
   });
 
   it("does not reject type-only names", () => {

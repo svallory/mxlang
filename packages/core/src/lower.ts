@@ -3511,7 +3511,10 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       return lowerStatement(ctx, node, name);
     case "class":
       // Decision 168: `class` is a statement tag so the parser reads its
-      // text as code, but MX has no component class on any target.
+      // text as code, but MX has no component class on any target. A lookup
+      // that makes `class` an ordinary tag (data) leaves it to the generic path.
+      if (ctx.lookup && !ctx.lookup.getTag("class")?.parseOptions?.statement)
+        break;
       return fail(
         "`class { … }` is not supported in MX: a Marko component class has no equivalent on any target — write a function component, or put the state in `<let>`/`static` code",
         node,

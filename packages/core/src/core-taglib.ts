@@ -13,6 +13,22 @@ export const CORE_TAGLIB: unknown = coreTags;
 export const CORE_TAGLIB_ID = "mx-translator-core";
 
 /**
+ * Only the statement entries of the core taglib (`import`, `static`, `export`,
+ * `client`, `server`, `class`): what every parse registers (decision 168), so
+ * their text is code on every target. The rest of the core taglib (`if`,
+ * `for`, `script`, ...) carries semantics a host opts into, so a host adds
+ * the whole `CORE_TAGLIB` itself (html does).
+ */
+export const STATEMENT_TAGLIB: unknown = Object.fromEntries(
+  Object.entries(
+    coreTags as Record<string, { parseOptions?: { statement?: boolean } }>,
+  ).filter(([key, tag]) => key.startsWith("<") && tag?.parseOptions?.statement),
+);
+
+/** The id the statement-only taglib registers under. */
+export const STATEMENT_TAGLIB_ID = "mx-statement-tags";
+
+/**
  * The names of core's own taglib entries (`let`, `effect`, `script`, ...):
  * core's data, so a question about "a core tag" never needs a host to answer.
  */
