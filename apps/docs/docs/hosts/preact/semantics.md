@@ -43,9 +43,9 @@ The default is right for unique strings and numbers. It is wrong for a list with
 
 ## Events
 
-`onClick=fn` and `onClick() { … }` bind a handler on an element. MX reads the DOM event name (the text after `on`, lowercased) and emits `on` plus that name capitalized: `onClick=f` is `onClick={f}`, and `onDblClick=f` and `on-dblclick=f` are both `onDblclick={f}`, which Preact binds to `dblclick`.
+`onClick=fn` and `onClick() { … }` bind a handler on an element. MX reads the DOM event name (the text after `on`, lowercased) and emits the prop Preact's JSX types declare for it: `onClick=f` is `onClick={f}`, `onKeydown=f` and `on-keydown=f` are both `onKeyDown={f}`, and `onDblClick=f` and `on-dblclick=f` are both `onDblClick={f}`, which Preact binds to `dblclick`.
 
-- **Spell the DOM name.** `onDoubleClick` is not a DOM event (`doubleclick`), so MX warns and emits `onDoubleclick`, which binds nothing useful. Write `onDblClick`.
+- **Only names Preact declares.** A DOM event Preact's types have no handler prop for is a compile error, never a prop the types reject or Preact ignores. That includes `onDoubleClick` (`doubleclick` is not a DOM event; MX also warns): write `onDblClick`. It also includes `on-fullscreenchange`, which only Hono's types declare.
 - **Custom DOM events** (`on-my-event=f`) are a compile error on React, Preact and Hono alike, so one source never works on one and fails on another. Use a `ref` callback that calls `addEventListener`.
 - **On a component**, `onSelect=pick` is an ordinary prop.
 - `on:click` is not MX syntax; the error names `onClick`.

@@ -42,16 +42,17 @@ The default is right for unique strings and numbers. It is wrong for a list with
 
 ## Events
 
-`onClick=fn` and `onClick() { … }` bind a handler on an element. MX reads the DOM event name (the text after `on`, lowercased) and emits React's spelling for it, from React's own event table:
+`onClick=fn` and `onClick() { … }` bind a handler on an element. MX reads the DOM event name (the text after `on`, lowercased) and emits the prop `@types/react` declares for it, each of which react-dom binds:
 
 | Written | Emitted |
 |---|---|
 | `onClick=f` | `onClick={f}` |
 | `onKeydown=f`, `onKeyDown=f` | `onKeyDown={f}` |
 | `onDblClick=f`, `on-dblclick=f` | `onDoubleClick={f}` |
+| `onDoubleClick=f` | `onDoubleClick={f}` (MX also warns: `doubleclick` is not a DOM event) |
 | `onFocusIn=f` | `onFocus={f}` |
 
-- **Spell the DOM name.** `onDoubleClick` is not a DOM event (`doubleclick`), so MX warns and emits `onDoubleclick`, which React does not bind. Write `onDblClick`.
+- **Only names React declares.** A DOM event `@types/react` has no handler prop for is a compile error, even where react-dom binds it (`on-fullscreenchange`), and so is any other unlisted name (`on-search`, `on-gesturestart`).
 - **Custom DOM events** (`on-my-event=f`) are a compile error on React, Preact and Hono alike. Use a `ref` callback that calls `addEventListener`.
 - **On a component**, `onSelect=pick` is an ordinary prop.
 - `on:click` is not MX syntax; the error names `onClick`.

@@ -36,9 +36,9 @@ Every `<for>` row carries a `key`: `by="id"` keys by a field of the row, `by=fn`
 
 ## Events
 
-For components that run in the browser with `hono/jsx/dom`. MX reads the DOM event name (the text after `on`, lowercased) and emits `on` plus that name capitalized: `onClick=f` is `onClick={f}`, and `onDblClick=f` and `on-dblclick=f` are both `onDblclick={f}`, which Hono binds to `dblclick`.
+For components that run in the browser with `hono/jsx/dom`. MX reads the DOM event name (the text after `on`, lowercased) and emits the prop Hono's JSX types declare for it: `onClick=f` is `onClick={f}`, `onKeydown=f` and `on-keydown=f` are both `onKeyDown={f}`, and `onDblClick=f` and `on-dblclick=f` are both `onDoubleClick={f}`, which Hono binds to `dblclick`.
 
-- **Spell the DOM name.** `onDoubleClick` is not a DOM event, so MX warns and emits `onDoubleclick`, which Hono does not bind. Write `onDblClick`.
+- **Only names Hono declares.** Hono's types declare `onDoubleClick`, so the authored `onDoubleClick` emits it too (MX still warns that `doubleclick` is not a DOM event; `onDblClick` is the spelling that works on every host). A DOM event Hono's types have no handler prop for, such as `on-toggle` or `on-search`, is a compile error.
 - **`onChange` fires on every keystroke.** Hono binds it to the `input` event, as React does. Use `onInput` to say so plainly.
 - **Custom DOM events** (`on-my-event=f`) are a compile error on React, Preact and Hono alike. Use a `ref` callback that calls `addEventListener`.
 - **On a component**, `onSelect=pick` is an ordinary prop.

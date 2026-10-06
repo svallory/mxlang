@@ -1212,8 +1212,8 @@ bind the same event. Core lowers the attribute to an `Attr` of kind `event`
 carrying both the source spelling (`name`) and the resolved DOM name (`event`);
 each host recomposes its own form from `event`, so `onDblClick` and
 `on-dblclick` are two spellings that produce identical output on every host —
-on Solid that emission is `onDblclick` (capitalize-first of the DOM name; Solid
-lowercases the prop at bind time). The three shared JSX hosts recompose by
+on Solid that emission is `onDblClick`, the spelling `@solidjs/web`'s
+`jsx.d.ts` declares (Solid lowercases the prop at bind time). The three shared JSX hosts recompose by
 **lookup, not by rule**: each one's prop names are the camelCase handler props
 its own JSX types declare (`@types/react`, `preact`'s `jsx.d.ts`, `hono/jsx`'s
 intrinsic elements), none of which a derivation can reverse (`keydown` →
