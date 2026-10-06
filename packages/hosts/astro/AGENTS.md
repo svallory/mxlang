@@ -179,6 +179,8 @@ Four facts worth knowing before editing `src/astro-template.ts` or
   ordinary function call: `X.render(input, createOut())` returns the value, and
   `createOut` comes from `@mxlang/astro/runtime`.
 
+`@mxlang/astro/typecheck` (`src/typecheck.ts`, `export * from "@mxlang/html"`, declarations only) is what the *type-check* projection of a compiled module imports its runtime types from (`runtimeFrom`, set in `descriptor.ts` for `typeCheck` compiles only), because an isolated install resolves `@mxlang/astro` but not `@mxlang/html`. Never imported at run time; builds still import `@mxlang/html` (`html-resolve.ts`). `typecheck.test.ts` fails when the emitter imports a name it does not export.
+
 The lowering table and the full error list live in
 `packages/hosts/astro/README.md` "AstroMX templates (`.astro.mx`)". Nothing silently
 degrades: every construct this target cannot express is a build error naming

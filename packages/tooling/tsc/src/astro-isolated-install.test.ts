@@ -88,7 +88,35 @@ it("types the sink of Unit.render under an isolated install: a non-Out sink is r
   expect(output).toMatch(/Argument of type '(?:number|42)' is not assignable/);
 });
 
-it("passes a real sink under an isolated install", () => {
+it("types AttrTag, which the emitter imports as a type only: a wrong attribute tag is reported", () => {
+  const dir = isolatedProject();
+  try {
+    writeFileSync(
+      join(dir, "card.mx"),
+      "export interface Input { head: AttrTag }\n<section/>\n",
+    );
+    writeFileSync(
+      join(dir, "page.astro.mx"),
+      [
+        "---",
+        'import Card from "./card.mx";',
+        "Card({ head: 42 });",
+        "---",
+        "<h1>hi</h1>",
+      ].join("\n"),
+    );
+    const result = runInProcess(
+      ["--noEmit", "-p", "tsconfig.json", "--astro"],
+      dir,
+    );
+    const output = stripVTControlCharacters(result.stdout + result.stderr);
+    expect(output).toMatch(/not assignable/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+it("passes a real sink under an isolated install (a false-positive guard, green with or without the fix)", () => {
   const output = check(
     [
       "---",
