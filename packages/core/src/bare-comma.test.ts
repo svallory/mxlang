@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { compileSource } from "./compile.ts";
 import { isTranslateError } from "./core.ts";
+import type { HostDeclarations } from "./declarations.ts";
 import { parseFragment } from "./fragment.ts";
 import { BARE_COMMA_MESSAGE } from "./stock-parser.ts";
 import { lookup } from "./test-targets.ts";
@@ -13,9 +14,9 @@ import { lookup } from "./test-targets.ts";
  * both of core's parse entries.
  */
 
-const host = {
+const host: HostDeclarations = {
   name: "bare-comma-test",
-  attrTags: 0,
+  attrTags: 2,
   tags: {},
   isElement: () => true,
   isComponent: () => false,
