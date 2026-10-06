@@ -1063,8 +1063,21 @@ function resolveDuplicateAttrs(ctx: Ctx, attrs: Attr[]): Attr[] {
   return kept;
 }
 
+/**
+ * A tag param Babel could not read (`<define/Foo|{a=}|>`) arrives in a recovered
+ * parse (`parseFragment`) as a `MarkoParseError` node, which binds no names and
+ * has no source of its own to print. It fails here at the parser's position,
+ * with the parser's reason, rather than lowering as a param that binds nothing.
+ */
+function rejectUnreadableParams(ctx: Ctx, node: Node): void {
+  for (const param of node.body?.params ?? []) {
+    if (param?.type === "MarkoParseError") exprOf(ctx, param);
+  }
+}
+
 /** The tag params of `<for|a, b|>` / `<@name|p|>`, as source text. */
 function paramsOf(ctx: Ctx, node: Node): string[] {
+  rejectUnreadableParams(ctx, node);
   return (node.body?.params ?? []).map((p: Node) => {
     // Babel's generator omits a TypeScript annotation when an Identifier is
     // printed outside its parameter-list context. The Marko node's location
@@ -1110,6 +1123,7 @@ function hasParams(ctx: Ctx, node: Node): boolean {
  * either and so never reaches `fileLocalBinding` at all.
  */
 function paramBindings(ctx: Ctx, node: Node): string[] {
+  rejectUnreadableParams(ctx, node);
   const names = (node.body?.params ?? []).flatMap((p: Node) =>
     bindingIdentifiers(p),
   );

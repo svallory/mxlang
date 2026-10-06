@@ -51,6 +51,7 @@ import {
   stockAtomError,
   stockParserError,
   sugarAfterDefaultError,
+  tagParamError,
 } from "./stock-parser.ts";
 
 /**
@@ -438,6 +439,7 @@ export function parseFragment(
     // The fragment's own coordinates are shifted like Marko's error's.
     const stock =
       bareCommaError(error, source) ??
+      tagParamError(error, source) ??
       sugarAfterDefaultError(error, source) ??
       stockParserError(error, source) ??
       stockAtomError(error, source);

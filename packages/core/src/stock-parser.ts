@@ -410,6 +410,60 @@ export function bareCommaError(
 }
 
 /**
+ * The text Babel gave a failure inside a tag's `|params|`: Marko builds its
+ * `CompileError` with an empty first line, the `at file:line:col` line and a
+ * code frame, so the reason sits on the frame's caret line.
+ */
+const CARET_LINE = /^\s*\|\s*\^+\s*(\S.*)$/m;
+
+/**
+ * The positioned MX error for a parse failure inside a tag's `|params|`
+ * (`<define/Foo|{a=}|>`, `<for|{a=}| of=x>`): Marko throws its own
+ * `CompileError`, whose `line`/`column` are 0 and whose `message` opens with an
+ * empty line. The error is rewritten to a `TranslateError` at Marko's own
+ * position, with the reason Babel gave. `undefined` unless `error` carries a
+ * `loc` that falls inside a params list and a reason on its caret line, so no
+ * other failure is rewritten.
+ */
+export function tagParamError(
+  error: unknown,
+  source: string,
+): TranslateError | undefined {
+  const at = (
+    error as { loc?: { start?: { line?: unknown; column?: unknown } } } | null
+  )?.loc?.start;
+  const message = (error as { message?: unknown } | null)?.message;
+  if (
+    !(error instanceof Error) ||
+    typeof at?.line !== "number" ||
+    typeof at.column !== "number" ||
+    typeof message !== "string"
+  ) {
+    return undefined;
+  }
+  const reason = CARET_LINE.exec(message)?.[1];
+  const parser = markoParser();
+  if (!reason || !parser) return undefined;
+  const lineStart = source.split("\n").slice(0, at.line - 1);
+  const offset =
+    lineStart.reduce((sum, line) => sum + line.length + 1, 0) + at.column;
+  let inParams = false;
+  try {
+    parser
+      .createParser({
+        onTagParams: (range: { start: number; end: number }) => {
+          if (offset >= range.start && offset < range.end) inParams = true;
+        },
+        onError: () => {},
+      })
+      .parse(source);
+  } catch {
+    // A parse that throws still reported the params before it.
+  }
+  return inParams ? new TranslateError(reason, at.line, at.column) : undefined;
+}
+
+/**
  * The same two errors for a recovered parse failure: `parseFragment` asks
  * Marko for an AST, and Marko then leaves a failing attribute value in the tree
  * as a `MarkoParseError` node (label + `errorLoc`) instead of throwing, so the

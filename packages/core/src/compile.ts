@@ -52,6 +52,7 @@ import {
   stockAtomError,
   stockParserError,
   sugarAfterDefaultError,
+  tagParamError,
 } from "./stock-parser.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
 
@@ -438,6 +439,7 @@ export function compileSource(
     // Decision 151: a stock htmljs-parser cannot read `:name` after a value.
     const thrown =
       bareCommaError(error, source) ??
+      tagParamError(error, source) ??
       sugarAfterDefaultError(error, source) ??
       stockParserError(error, source) ??
       stockAtomError(error, source) ??

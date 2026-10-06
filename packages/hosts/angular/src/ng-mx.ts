@@ -1457,6 +1457,54 @@ function locateRegionLiterals(
 }
 
 /**
+ * `parse` over a `.ng.mx` file. Split out so `compileNgMx` can give a region
+ * error the `line`/`column` every other entry's `TranslateError` carries.
+ */
+function parseNgMx(
+  source: string,
+  filename: string,
+  options: CompileNgMxOptions,
+  regionCompile: MxRegionCompile,
+) {
+  return parse(source, filename, {
+    mx: true,
+    // `decorators` is not optional for this file kind: the one legal place
+    // for a region is `@Component({ template: … })`, so a `.ng.mx` file
+    // *always* has a decorator and the parser's default plugin set
+    // (`["typescript", "jsx"]`) cannot read it. Angular uses the modern
+    // proposal, not `decorators-legacy`.
+    plugins: ["typescript", "jsx", "decorators"],
+    mxRegionCompile: regionCompile,
+    mxRegionPositionCheck: ngMxPositionCheck,
+    // `<>…</>` is a region here, not TSX: a template has nothing to lower a
+    // TSX fragment to, so the several roots of a template are written as one.
+    mxRegionFragment: true,
+    mxCustomTags: options.customTags,
+  });
+}
+
+/**
+ * A region's error reaches the caller as the parser's positioned
+ * `SyntaxError`, whose position sits at `loc` only; the whole-file and
+ * tag-module entries throw a `TranslateError` with `line` and `column`. A
+ * caller reading `line`/`column` found nothing and reported 0:0, so the
+ * region error carries them too (1-based line, 0-based column, as there).
+ */
+function withLineColumn(error: unknown): unknown {
+  const at = (error as { loc?: { line?: unknown; column?: unknown } } | null)
+    ?.loc;
+  if (
+    error instanceof Error &&
+    typeof at?.line === "number" &&
+    typeof at.column === "number" &&
+    !(error instanceof TranslateError)
+  ) {
+    Object.assign(error, { line: at.line, column: at.column });
+  }
+  return error;
+}
+
+/**
  * Compiles a `.ng.mx` file to an Angular component module.
  *
  * The file stays an ordinary TypeScript module: the parser finds each MX
@@ -1513,21 +1561,12 @@ export function compileNgMx(
   // `mx: true` because a `.ng.mx` filename never matches the parser's own
   // `.solid.mx` extension test, so without it the grammar stays off and no
   // region is ever discovered.
-  const file = parse(source, filename, {
-    mx: true,
-    // `decorators` is not optional for this file kind: the one legal place
-    // for a region is `@Component({ template: … })`, so a `.ng.mx` file
-    // *always* has a decorator and the parser's default plugin set
-    // (`["typescript", "jsx"]`) cannot read it. Angular uses the modern
-    // proposal, not `decorators-legacy`.
-    plugins: ["typescript", "jsx", "decorators"],
-    mxRegionCompile: regionCompile,
-    mxRegionPositionCheck: ngMxPositionCheck,
-    // `<>…</>` is a region here, not TSX: a template has nothing to lower a
-    // TSX fragment to, so the several roots of a template are written as one.
-    mxRegionFragment: true,
-    mxCustomTags: options.customTags,
-  });
+  let file: ReturnType<typeof parse>;
+  try {
+    file = parseNgMx(source, filename, options, regionCompile);
+  } catch (error) {
+    throw withLineColumn(error);
+  }
 
   if (deferred) {
     throwAtImport(file, source, filename, deferred as AuthoredImportError);

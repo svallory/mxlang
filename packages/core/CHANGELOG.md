@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fixed (define-param-default-empty-error):** a parse failure inside a tag's `|params|` (`<define/Foo|{a=}|>`, `<for|{a=}| of=x>`) is a positioned `TranslateError` at the param with Babel's reason ("Unexpected token"), on every target. Marko threw its `CompileError` at 0:0 with a message that opens with an empty line (whole-file entries), and a region (`parseFragment`) lowered the unreadable param as one that binds nothing.
+
 ## 0.1.0-alpha.10
 
 - **Fixed (regression in 0.1.0-alpha.7 to alpha.9; decision 156 addendum 13):** in a body, text after a non-breaking space (or other Unicode whitespace) followed by `//` or `/*` is text again, as in Marko. `<p>Visit<NBSP>//cdn.example/x.js</p>` had been read as a comment that swallowed `</p>`.

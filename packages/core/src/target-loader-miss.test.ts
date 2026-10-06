@@ -384,6 +384,12 @@ function runCase(runtime: "bun" | "node", caseName: string) {
   }[];
 }
 
+// Each case runs a real child (`runCase`, its own `spawnSync` timeout is 30 s)
+// that spawns the loader's build step; under machine load that passed vitest's
+// 5 s default. Longer than the child's own timeout, so a hung child is
+// reported by `runCase`'s assertion, not by vitest.
+const CHILD_CASE_TIMEOUT = 45_000;
+
 describe.each(["bun", "node"] as const)("after a miss (%s)", (runtime) => {
   it.each(["dist-late", "exports-late"])(
     "%s: an entry built into an existing dist/ loads, with one more spawn",
@@ -393,20 +399,29 @@ describe.each(["bun", "node"] as const)("after a miss (%s)", (runtime) => {
       expect(second).toEqual({ ok: "built", spawns: 2 });
       expect(third).toEqual({ ok: "built", spawns: 2 });
     },
+    CHILD_CASE_TIMEOUT,
   );
 
-  it("a built-in with a slash, from a cwd with no package.json, does not hang", () => {
-    const [result] = runCase(runtime, "builtin");
-    expect(result?.err).toBe("invalid-descriptor");
-  });
+  it(
+    "a built-in with a slash, from a cwd with no package.json, does not hang",
+    () => {
+      const [result] = runCase(runtime, "builtin");
+      expect(result?.err).toBe("invalid-descriptor");
+    },
+    CHILD_CASE_TIMEOUT,
+  );
 
-  it("a child answer that is not an absolute file is not-found, naming it", () => {
-    const [result] = runCase(runtime, "relpath");
-    expect(result?.err).toBe("not-found");
-    expect(result?.message).toMatch(
-      /printed a path that is not an existing absolute file: "x\.js"\)$/,
-    );
-  });
+  it(
+    "a child answer that is not an absolute file is not-found, naming it",
+    () => {
+      const [result] = runCase(runtime, "relpath");
+      expect(result?.err).toBe("not-found");
+      expect(result?.message).toMatch(
+        /printed a path that is not an existing absolute file: "x\.js"\)$/,
+      );
+    },
+    CHILD_CASE_TIMEOUT,
+  );
 });
 
 describe("the re-ask backoff for a kept non-found answer", () => {

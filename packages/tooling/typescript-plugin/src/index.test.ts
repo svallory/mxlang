@@ -3946,7 +3946,12 @@ describe("Astro type surface", () => {
  * attribute-tag value is generated code: a check applied to the wrong
  * expression fails there without anyone seeing it.
  */
-describe("an MX caller types a call the way html's runtime makes it (astro-mx-to-mx-call-types)", () => {
+describe("an MX caller types a call the way html's runtime makes it (astro-mx-to-mx-call-types)", {
+  // Each test builds a TypeScript program from cold (0.5-1.5 s locally, the
+  // hand-written-callee one longest); under machine load that passed
+  // vitest's 5 s default. The assertions are untouched.
+  timeout: 60_000,
+}, () => {
   // `__mxRenderTag` calls the callee's `render` when it has one, so the
   // caller is typed against `render`'s input. Under the astro host the
   // callee's default export carries Astro's props instead (`children`, no
