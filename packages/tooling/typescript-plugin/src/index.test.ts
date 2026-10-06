@@ -4162,13 +4162,20 @@ describe("expression values are mapped for a Solid whole-file page", () => {
     const directory = `${here}/fixtures/solid-policy`;
     const page = `${directory}/expr-page.mx`;
     const consumer = `${directory}/expr-consumer.ts`;
+    // JSX types, or diagnostics decision 161 no longer drops would sit beside
+    // the expression errors this test is about: each element's TS7026, and,
+    // with no `ElementChildrenAttribute`, TS2769 on `<Show>`/`<For>` (their
+    // children never reach the `children` prop) plus the `<for>` param's TS7006.
+    const jsx = `${directory}/expr-jsx.d.ts`;
     const service = createPluginService(
       {
         [page]: PAGE,
         [`${directory}/field.mx`]: FIELD,
         [consumer]: 'import "./expr-page.mx";\n',
+        [jsx]:
+          "declare namespace JSX { interface IntrinsicElements { [tag: string]: unknown } interface ElementChildrenAttribute { children: unknown } }",
       },
-      [consumer],
+      [consumer, jsx],
     );
     service.getSemanticDiagnostics(consumer);
 
