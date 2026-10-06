@@ -22,12 +22,12 @@ describe("mx-tsc", () => {
   afterEach(() => new Promise<void>((resolve) => setImmediate(resolve)));
 
   it.each([
-    ["html", "attr-tag-html-failing", "(3,9)"],
-    ["preact", "attr-tag-preact-failing", "(3,9)"],
-    ["solid", "attr-tag-solid-failing", "(3,29)"],
+    ["html", "attr-tag-html-failing", "(3,9)", "(3,13)"],
+    ["preact", "attr-tag-preact-failing", "(3,9)", "(3,13)"],
+    ["solid", "attr-tag-solid-failing", "(3,29)", "(3,33)"],
   ])(
     "checks %s attribute-tag values against the callee Input",
-    (_host, fixture, tagPosition) => {
+    (_host, fixture, tagPosition, attributePosition) => {
       const result = runFixture(fixture);
 
       expect(result.status).not.toBe(0);
@@ -36,11 +36,35 @@ describe("mx-tsc", () => {
       );
       expect(result.output).toContain("Property 'title' is missing");
       expect(result.output).toContain(
-        `Wrong${fixture.includes("solid") ? ".solid" : ""}.mx${tagPosition}`,
+        `Wrong${fixture.includes("solid") ? ".solid" : ""}.mx${attributePosition}`,
       );
       expect(result.output).toContain(
         "Type 'number' is not assignable to type 'string'",
       );
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
+  // A bad attribute-tag value is checked once, by the `satisfies` the emitter
+  // wraps it in; the enclosing call must not check the same value again (the
+  // `satisfies` expression keeps the value's own type, so the callee's prop
+  // would re-report it, once at the tag and once unmapped).
+  it.each([
+    ["html", "attr-tag-html-failing", "mx", "(3,13)", "(3,9)"],
+    ["preact", "attr-tag-preact-failing", "mx", "(3,13)", "(3,9)"],
+    ["solid", "attr-tag-solid-failing", "solid.mx", "(3,33)", "(3,29)"],
+  ])(
+    "reports one diagnostic per bad %s attribute-tag value, at its authored position",
+    (_host, fixture, extension, attributePosition, tagPosition) => {
+      const result = runFixture(fixture);
+      const errors = (file: string) =>
+        result.output
+          .split("\n")
+          .filter((line) => line.startsWith(`fixtures/${fixture}/src/${file}`))
+          .map((line) => line.slice(line.indexOf("(")).split(":")[0]);
+
+      expect(errors(`Wrong.${extension}`)).toEqual([attributePosition]);
+      expect(errors(`Missing.${extension}`)).toEqual([tagPosition]);
     },
     SPAWN_TIMEOUT_MS,
   );
