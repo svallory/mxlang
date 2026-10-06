@@ -1542,7 +1542,15 @@ export class PreactEmitter implements Emitter<string> {
       // Marko's `content` and JSX's `children` are the same slot; a called
       // unit reads `input.content`, so it is passed under that name.
       const rendered = this.#expression(content);
-      parts.push(`content: () => <>${rendered.code}</>`);
+      // Tag params make the body a render prop, as on a described call (see
+      // `component`): the callee invokes it with the values it passes. The
+      // body stays behind the `content` thunk, which `__mxDynamic` calls and
+      // renders as the callee's children, so with params that thunk returns
+      // the render prop.
+      const params = node.content?.hasParams
+        ? `(${node.content.params.join(", ")}) => `
+        : "";
+      parts.push(`content: () => ${params}<>${rendered.code}</>`);
     }
 
     return `{ ${parts.join(", ")} }`;

@@ -1,0 +1,13 @@
+import type { ComponentChildren } from "preact";
+
+function List(props: { items: string[]; children: (item: string, i: number) => ComponentChildren }) {
+  return <ul><for|x, i| of=props.items><li>${props.children(x, i)}</li></for></ul>;
+}
+
+export default function Page() {
+  const Row = List;
+  return (<>
+    <List|item, i| items=["a", "b"]><b>${item}${i}</b></List>
+    <${Row}|item, i| items=["c"]><i>${item}${i}</i></>
+  </>);
+}
