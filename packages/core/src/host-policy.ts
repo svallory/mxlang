@@ -551,16 +551,26 @@ function registrationVerdict(
     verdict = `file kind segment "${wrong?.segment}" is not the host's name "${host}"; the segment before \`.mx\` is a host name (decision 136)`;
   } else {
     try {
-      createTargetLookup(
-        [
-          ...names.map((name) => lookup.target(name) as TargetDescriptor),
-          descriptor,
-        ],
-        {
-          defaultTarget: lookup.defaultTarget(),
-          reservedNames: lookup.reservedNames?.() ?? [],
-        },
+      // A tool may mask a target from selection (`targetNames`) while the
+      // lookup still answers it (the registry's staged `data`): the target a
+      // descriptor is built on is part of the set it joins either way.
+      const members = names.map(
+        (name) => lookup.target(name) as TargetDescriptor,
       );
+      for (
+        let base =
+          descriptor.builtOn === undefined
+            ? undefined
+            : lookup.target(descriptor.builtOn);
+        base !== undefined && !members.includes(base);
+        base =
+          base.builtOn === undefined ? undefined : lookup.target(base.builtOn)
+      )
+        members.push(base);
+      createTargetLookup([...members, descriptor], {
+        defaultTarget: lookup.defaultTarget(),
+        reservedNames: lookup.reservedNames?.() ?? [],
+      });
     } catch (error) {
       if (!(error instanceof Error)) throw error;
       verdict = error.message;
