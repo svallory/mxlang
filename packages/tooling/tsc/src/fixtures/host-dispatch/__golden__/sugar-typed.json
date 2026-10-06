@@ -18,6 +18,46 @@
         "mappings": [
           {
             "sourceOffsets": [
+              1
+            ],
+            "generatedOffsets": [
+              1000
+            ],
+            "lengths": [
+              5
+            ],
+            "generatedLengths": [
+              10
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              1
+            ],
+            "generatedOffsets": [
+              1012
+            ],
+            "lengths": [
+              5
+            ],
+            "generatedLengths": [
+              1
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
               7
             ],
             "generatedOffsets": [
@@ -28,6 +68,66 @@
             ],
             "generatedLengths": [
               4
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              1
+            ],
+            "generatedOffsets": [
+              1028
+            ],
+            "lengths": [
+              5
+            ],
+            "generatedLengths": [
+              1
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              17
+            ],
+            "generatedOffsets": [
+              1057
+            ],
+            "lengths": [
+              5
+            ],
+            "generatedLengths": [
+              10
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              17
+            ],
+            "generatedOffsets": [
+              1069
+            ],
+            "lengths": [
+              5
+            ],
+            "generatedLengths": [
+              1
             ],
             "data": {
               "verification": true,
@@ -75,6 +175,66 @@
           },
           {
             "sourceOffsets": [
+              17
+            ],
+            "generatedOffsets": [
+              1097
+            ],
+            "lengths": [
+              5
+            ],
+            "generatedLengths": [
+              1
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              43
+            ],
+            "generatedOffsets": [
+              1126
+            ],
+            "lengths": [
+              5
+            ],
+            "generatedLengths": [
+              10
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              43
+            ],
+            "generatedOffsets": [
+              1138
+            ],
+            "lengths": [
+              5
+            ],
+            "generatedLengths": [
+              1
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
               48
             ],
             "generatedOffsets": [
@@ -85,6 +245,26 @@
             ],
             "generatedLengths": [
               4
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              43
+            ],
+            "generatedOffsets": [
+              1154
+            ],
+            "lengths": [
+              5
+            ],
+            "generatedLengths": [
+              1
             ],
             "data": {
               "verification": true,

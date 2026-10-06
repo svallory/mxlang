@@ -15,7 +15,68 @@
       "tsPlugin": {
         "languageId": "typescript",
         "generated": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/html\";\n\nimport $mx_Thing1 from \"./extra-tags/thing.mx\"\n\nexport interface Input {}\n\ntype __MxRenderCall<F> = [F] extends [{ render: (input: infer I, out: never) => unknown }] ? (input: I) => void : F;\n\nfunction __mxRenderTag<F extends (input: never) => unknown>(__mxSink: __MxOut, __mxTag: F): __MxRenderCall<F> {\n  const __mxCallee = __mxTag as unknown as ((input: unknown) => unknown) & { render?: (input: unknown, out: __MxOut) => unknown };\n  return ((__mxInput: unknown) => {\n    if (typeof __mxCallee.render === \"function\") return __mxCallee.render(__mxInput, __mxSink);\n    __mxSink.write(\"\" + __mxCallee(__mxInput));\n  }) as unknown as __MxRenderCall<F>;\n}\n\nfunction Page(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nPage.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxRenderTag(__mxOut, $mx_Thing1)({  });\n}\nexport { __mxRender as render };\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page as ((input: Input) => string) & { render: typeof __mxRender };\n",
-        "mappings": [],
+        "mappings": [
+          {
+            "sourceOffsets": [
+              1
+            ],
+            "generatedOffsets": [
+              1006
+            ],
+            "lengths": [
+              5
+            ],
+            "generatedLengths": [
+              10
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              1
+            ],
+            "generatedOffsets": [
+              1018
+            ],
+            "lengths": [
+              5
+            ],
+            "generatedLengths": [
+              1
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              1
+            ],
+            "generatedOffsets": [
+              1021
+            ],
+            "lengths": [
+              5
+            ],
+            "generatedLengths": [
+              1
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          }
+        ],
         "compileDiagnostics": [],
         "hostPolicyDiagnostics": [],
         "logged": []
