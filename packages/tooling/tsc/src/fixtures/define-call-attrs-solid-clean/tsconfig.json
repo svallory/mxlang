@@ -2,6 +2,7 @@
   "compilerOptions": {
     "noEmit": true,
     "strict": true,
+    "noImplicitAny": false,
     "module": "esnext",
     "moduleResolution": "bundler",
     "target": "esnext",

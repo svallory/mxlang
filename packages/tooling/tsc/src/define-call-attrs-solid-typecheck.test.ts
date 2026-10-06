@@ -8,6 +8,10 @@ import { runInProcess } from "./in-process.ts";
  * with "cannot close over `n`" (the capture check read the pattern's source
  * text as a name), so a clean run here proves the destructured params bind,
  * and an error inside the call's attribute still reaches the authored source.
+ * The fixtures set `noImplicitAny: false` because MX-generated define params
+ * are untyped on every host (Solid's `function __mx_DefineRowN(p)`, the JSX
+ * hosts' `const Row = (p) => …`), which strict would report as TS7006/TS7031
+ * "MX bug" noise; everything else stays strict.
  */
 
 const fixtures = join(import.meta.dirname, "fixtures");
