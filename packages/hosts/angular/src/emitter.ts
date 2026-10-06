@@ -171,6 +171,13 @@ export const DEFAULT_TAG = "div";
 
 export const angularDeclarations: HostDeclarations = {
   name: "@mxlang/angular",
+  // Decision 160: a `<define>` called with attributes and no tag arguments
+  // passes ONE object — the attributes — to its first param, as Marko
+  // 6.3.51 does. Angular has no local component form, so the object rides
+  // `ngTemplateOutlet`'s single context (`emitDefineCall`); setting the flag
+  // also turns on core's multi-param `<define>` warning, whose advice
+  // (destructure the first param) is the shape this host emits.
+  defineCallPassesAttrs: true,
   attrTags: 2,
   // The ladder (decision 145): the parent's contract `defaultTag`, then
   // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
@@ -316,6 +323,11 @@ function escapeText(value: string): string {
 
 function esc(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+}
+
+/** Whether `name` is a bare JavaScript identifier, so it can be an object key or an Angular `let-` binding unquoted. */
+function isIdentifier(name: string): boolean {
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name);
 }
 
 // Phase B of `dom-events` (decision 101): core lowers an element's
@@ -2265,22 +2277,19 @@ class AngularEmitter implements Emitter<string> {
         node,
       );
     }
-    if (node.args.length !== target.params.length) {
-      fail(
-        `\`<${target.name}>\` expects ${target.params.length} argument(s), got ${node.args.length}`,
-        node,
-      );
-    }
-    // The context object is built into the writer piece by piece so each
-    // argument expression keeps its own mapping. `esc()` is applied per
-    // fragment rather than to the joined string: it escapes `&` and `"`
-    // independently of position, so escaping the parts and concatenating
-    // gives the same bytes as escaping the whole.
-    this.out.write(`<ng-container [ngTemplateOutlet]="${target.name}" `);
-    this.out.write('[ngTemplateOutletContext]="');
-    if (target.params.length === 0) {
-      this.out.write(esc("{}"));
-    } else {
+    if (node.args.length > 0) {
+      // Decision 109's positional call, unchanged: the tag arguments fill
+      // the params by position and the outlet context carries one key per
+      // param. Core's `rejectArgsWithProps` has already refused a call that
+      // mixes tag arguments with attributes, attribute tags or a body.
+      if (node.args.length !== target.params.length) {
+        fail(
+          `\`<${target.name}>\` expects ${target.params.length} argument(s), got ${node.args.length}`,
+          node,
+        );
+      }
+      this.out.write(`<ng-container [ngTemplateOutlet]="${target.name}" `);
+      this.out.write('[ngTemplateOutletContext]="');
       this.out.write(esc("{ "));
       target.params.forEach((param, i) => {
         if (i > 0) this.out.write(esc(", "));
@@ -2289,8 +2298,73 @@ class AngularEmitter implements Emitter<string> {
         if (arg) this.out.writeMapped(esc(arg.code), arg.span);
       });
       this.out.write(esc(" }"));
+      this.out.write('"></ng-container>');
+      return;
     }
-    this.out.write('"></ng-container>');
+    // Decision 160: a call without tag arguments hands the define ONE object
+    // — its attributes — as the first param, as Marko 6.3.51 does. A define
+    // with no params still ignores them (`{}`, as before).
+    if (target.params.length === 0) {
+      this.out.write(`<ng-container [ngTemplateOutlet]="${target.name}" `);
+      this.out.write(`[ngTemplateOutletContext]="${esc("{}")}"`);
+      this.out.write(`></ng-container>`);
+      return;
+    }
+    if (node.content !== null) {
+      // Marko passes a call's body as `content`; Angular's outlet context is
+      // a positional argument object, not content projection, so there is
+      // nowhere to put it — a positioned error rather than the silent drop
+      // this host's other content limits get (TODO
+      // `define-call-content-angular`).
+      fail(
+        `body content on \`<${target.name}>\` isn't supported by @mxlang/angular: a \`<define>\` call is projected with \`ngTemplateOutletContext\`, a positional argument object, not content projection — pass the content as an attribute instead`,
+        node,
+      );
+    }
+    this.out.write(`<ng-container [ngTemplateOutlet]="${target.name}" `);
+    this.out.write('[ngTemplateOutletContext]="{ $implicit: { ');
+    node.attrs.forEach((attr, i) => {
+      if (attr.kind === "spread") {
+        // Angular template expressions have no object spread, so the
+        // attributes object cannot be built at render time — a positioned
+        // error at the spread, not a silently dropped attribute.
+        fail(
+          `a spread attribute cannot be passed to \`<${target.name}>\`: Angular template expressions have no object spread, so the attributes object cannot be built at render time. Name the attributes, or pass one object with \`<${target.name}(obj)/>\`.`,
+          attr,
+        );
+      }
+      if (i > 0) this.out.write(esc(", "));
+      // An identifier name is a valid object key bare; every other name
+      // (`data-x`, `aria-label`) is quoted. The key maps onto the authored
+      // attribute name either way.
+      if (isIdentifier(attr.name)) {
+        this.out.writeMapped(esc(attr.name), attr.nameSpan);
+      } else {
+        this.out.writeMapped(esc(JSON.stringify(attr.name)), attr.nameSpan);
+      }
+      this.out.write(esc(": "));
+      switch (attr.kind) {
+        case "static":
+          // A static value is a string literal in the object. Braces are
+          // escaped because Angular interpolates `{{ … }}` inside an
+          // attribute value; JSON.stringify is the JS-literal layer (`"`,
+          // `\`), `esc()` the surrounding HTML attribute layer — two passes
+          // for two nesting layers, the same shape
+          // `emitDynamicComponent`'s static inputs use.
+          this.out.write(esc(escapeBraces(JSON.stringify(attr.value))));
+          break;
+        case "boolean":
+          // A valueless attribute is `true`, as in Marko.
+          this.out.write("true");
+          break;
+        case "dynamic":
+        case "bound":
+        case "event":
+          this.out.writeMapped(esc(attr.value.code), attr.value.span);
+          break;
+      }
+    });
+    this.out.write(esc(" } }\""></ng-container>"));
   }
 
   private emitDynamicComponent(
