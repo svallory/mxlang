@@ -161,7 +161,7 @@ it("MxErrorCode's MX_* members are the front-end rows of ast §3.13", () => {
   const declared = [...source.matchAll(/^ {2}\| "(MX_[A-Z_]+)"/gm)].map(
     (m) => m[1] ?? "",
   );
-  expect(table).toHaveLength(13);
+  expect(table).toHaveLength(14);
   expect(new Set(declared)).toEqual(new Set(table));
   expect(table).toContain("MX_UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE");
 });

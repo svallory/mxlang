@@ -104,7 +104,8 @@ export type MxErrorCode =
   | "MX_STATEMENT_IN_HTML_MODE"
   | "MX_RESERVED_TAG_NAME"
   | "MX_ATTRIBUTE_TAG_AT_ROOT"
-  | "MX_UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE";
+  | "MX_UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE"
+  | "MX_FRONT_END_INTERNAL";
 
 /** `:name` atom found in an expression's source (ast §4.3). */
 export interface MxAtom extends Span {
