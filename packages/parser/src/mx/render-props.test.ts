@@ -143,7 +143,7 @@ describe("attribute tags become props", () => {
     expect(
       result.code.replace(/\s+/g, " ").replace(/__mxDyn\d+/g, "__mxDyn"),
     ).toBe(
-      'import AttrCallee from "./attr-callee.tsx"; const el = (() => {const __mxDyn = AttrCallee;if (__mxDyn !== null && typeof __mxDyn === "object" && (Object.getPrototypeOf(__mxDyn) === Object.prototype || Object.getPrototypeOf(__mxDyn) === null) && Object.prototype.hasOwnProperty.call(__mxDyn, "content")) throw new Error("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <${x.content}/>");return typeof __mxDyn === "string" || typeof __mxDyn === "function" ? <Dynamic component={__mxDyn} item={(() => <>typed</>) satisfies NonNullable<Parameters<typeof AttrCallee>[0]["item"]>} /> : __mxDyn;})();',
+      'import AttrCallee from "./attr-callee.tsx"; const el = (() => {const __mxDyn = AttrCallee;if (__mxDyn !== null && typeof __mxDyn === "object" && (Object.getPrototypeOf(__mxDyn) === Object.prototype || Object.getPrototypeOf(__mxDyn) === null) && Object.prototype.hasOwnProperty.call(__mxDyn, "content")) throw new Error("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <${x.content}/>");return typeof __mxDyn === "string" || typeof __mxDyn === "function" ? <Dynamic component={__mxDyn} item={(() => <>typed</>) satisfies NonNullable<Parameters<typeof AttrCallee>[0]["item"]> as any} /> : __mxDyn;})();',
     );
     expect(() =>
       parseBabel(result.code, {
@@ -184,7 +184,7 @@ describe("attribute tags become props", () => {
     expect(
       result.code.replace(/\s+/g, " ").replace(/__mxDyn\d+/g, "__mxDyn"),
     ).toBe(
-      'import AttrCallee from "./attr-callee.tsx"; const el = (() => {const __mxDyn = AttrCallee; if (__mxDyn !== null && typeof __mxDyn === "object" && (Object.getPrototypeOf(__mxDyn) === Object.prototype || Object.getPrototypeOf(__mxDyn) === null) && Object.prototype.hasOwnProperty.call(__mxDyn, "content")) throw new Error("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <${x.content}/>");return typeof __mxDyn === "string" || typeof __mxDyn === "function" ? <Dynamic component={__mxDyn} item={(() => <strong>typed</strong>) satisfies NonNullable<Parameters<typeof AttrCallee>[0]["item"]>} /> : __mxDyn;})();',
+      'import AttrCallee from "./attr-callee.tsx"; const el = (() => {const __mxDyn = AttrCallee; if (__mxDyn !== null && typeof __mxDyn === "object" && (Object.getPrototypeOf(__mxDyn) === Object.prototype || Object.getPrototypeOf(__mxDyn) === null) && Object.prototype.hasOwnProperty.call(__mxDyn, "content")) throw new Error("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <${x.content}/>");return typeof __mxDyn === "string" || typeof __mxDyn === "function" ? <Dynamic component={__mxDyn} item={(() => <strong>typed</strong>) satisfies NonNullable<Parameters<typeof AttrCallee>[0]["item"]> as any} /> : __mxDyn;})();',
     );
     expect(() =>
       parseBabel(result.code, {
@@ -201,7 +201,7 @@ describe("attribute tags become props", () => {
       mxRegionCompile: solidRegionCompile,
     });
     expect(result.code.replace(/\s+/g, " ")).toContain(
-      '<MutualB b={(() => <>B</>) satisfies NonNullable<Parameters<typeof MutualB>[0]["b"]>} />',
+      '<MutualB b={(() => <>B</>) satisfies NonNullable<Parameters<typeof MutualB>[0]["b"]> as any} />',
     );
     expect(result.dependencies).toEqual([
       join(HERE, "fixtures", "mutual-b.solid.mx"),
