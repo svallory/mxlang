@@ -141,20 +141,15 @@ export function lookupFor(policy: TargetPolicy): TargetLookup {
 }
 
 /**
- * The registered target `descriptor`'s behavior is built on: what its
- * declarations say (`HostDeclarations.baseTarget`, which a host reusing a
- * target's declarations carries along), else its own name. A check that is
+ * The base target of `policy`'s target: the end of its `builtOn` chain (the
+ * lookup resolves and validates it), else the target itself. A check that is
  * specific to a target (`mx-tsc`'s data check) asks this, never the project's
- * `mx.target` string, so a third-party host built on the target gets it
- * without the caller knowing the host.
+ * `mx.target` string, so a third-party host that declares it is built on the
+ * target gets the check without the caller knowing the host.
  */
-export function baseTargetOf(descriptor: TargetDescriptor): string {
-  return descriptor.declarations?.default.baseTarget ?? descriptor.name;
-}
-
-/** {@link baseTargetOf} of the descriptor `policy` compiles through. */
 export function baseTargetOfPolicy(policy: TargetPolicy): string {
-  return baseTargetOf(descriptorFor(policy));
+  const lookup = lookupFor(policy);
+  return lookup.baseTargetOf?.(policy.target) ?? policy.target;
 }
 
 /**
@@ -631,6 +626,42 @@ function checkDefaultTags(
   return diagnostics.length === resolution.diagnostics.length && next === policy
     ? resolution
     : { ...resolution, policy: next, diagnostics };
+}
+
+/**
+ * The base target's own `mx.<base>.defaultTag`, for a target built on another
+ * (`mx.data.defaultTag` on a host built on data), validated against the
+ * target's scope like the target's own key. `target` is the base's name; every
+ * field is absent when the target is its own base or the package sets none. A
+ * rejected value is a diagnostic and no value.
+ */
+export function baseTargetDefaultTag(
+  filePath: string,
+  policy: TargetPolicy,
+): {
+  target?: string;
+  value?: string;
+  at?: NonNullable<TargetPolicy["defaultTagAt"]>;
+  diagnostics: TargetPolicyDiagnostic[];
+} {
+  const base = baseTargetOfPolicy(policy);
+  if (base === policy.target) return { diagnostics: [] };
+  const lookup = lookupFor(policy);
+  const descriptor = lookup.target(policy.target);
+  if (!descriptor) return { diagnostics: [] };
+  const config = readTargetDefaultTag(filePath, base);
+  const diagnostics: TargetPolicyDiagnostic[] = [];
+  if (config.diagnostic) diagnostics.push(config.diagnostic);
+  if (config.value === undefined || !config.at)
+    return { target: base, diagnostics };
+  const rejected = defaultTagDiagnostic(
+    config.value,
+    config.at,
+    scopeFor(descriptor, lookup, filePath, builtinsOf(descriptor)),
+  );
+  if (rejected)
+    return { target: base, diagnostics: [...diagnostics, rejected] };
+  return { target: base, value: config.value, at: config.at, diagnostics };
 }
 
 /**

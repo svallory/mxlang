@@ -304,6 +304,19 @@ export interface TargetDescriptor {
 
   /** Present iff the target belongs to a host. */
   readonly host?: TargetHost;
+
+  /**
+   * The name of the registered target this one is built on (a host that
+   * reuses another target's declarations and compile). `createTargetLookup`
+   * resolves it: an unregistered name, a target built on itself and a loop are
+   * lookup errors, and the end of the chain is the target's *base target*
+   * (`TargetLookup.baseTargetOf`). A tool keys a check that belongs to a
+   * target (`mx-tsc`'s data check) on the base target, never on the project's
+   * `mx.target` string. Declare `builtOn` to inherit the base target's config
+   * checks: a descriptor that copies another target's declarations without it
+   * gets none.
+   */
+  readonly builtOn?: string;
 }
 
 /**
@@ -334,6 +347,13 @@ export interface TargetLookup {
   hostTarget(value: string): { target: string; deprecated?: true } | undefined;
   /** The target's `host.name`, if it has a host. */
   hostOf(target: string): string | undefined;
+  /**
+   * The end of `target`'s `builtOn` chain: the target it is built on, else
+   * itself. Undefined for a name that is not registered. Optional: a
+   * hand-written lookup with no `builtOn` may omit it (every target is its
+   * own base).
+   */
+  baseTargetOf?(target: string): string | undefined;
   /** The value `mx.tags[].hosts` is matched against for `target`; undefined means no restricted entry matches. */
   hostFilterKey(target: string): string | undefined;
   /** Every host file-kind segment. */
@@ -389,7 +409,9 @@ export type TargetLookupRule =
   | "host-default"
   | "host-value-conflict"
   | "segment-conflict"
-  | "reserved-name";
+  | "reserved-name"
+  | "built-on-unknown"
+  | "built-on-loop";
 
 /**
  * A set of descriptors that cannot be one lookup.
@@ -633,6 +655,11 @@ export function validateDescriptor(value: unknown): TargetDescriptor {
     );
   }
 
+  if (value.builtOn !== undefined) {
+    if (typeof value.builtOn !== "string" || !NAME_RE.test(value.builtOn))
+      throw bad("builtOn", value.builtOn, "a target name (a bare word)");
+  }
+
   const declarations = value.declarations;
   if (declarations !== undefined) {
     if (!isObject(declarations))
@@ -659,16 +686,6 @@ export function validateDescriptor(value: unknown): TargetDescriptor {
           );
       });
     }
-    const baseTarget = declarations.default.baseTarget;
-    if (
-      baseTarget !== undefined &&
-      (typeof baseTarget !== "string" || baseTarget === "")
-    )
-      throw bad(
-        "declarations.default.baseTarget",
-        baseTarget,
-        "a non-empty string",
-      );
   }
 
   optionalFunction(value, "load", "load");
@@ -759,6 +776,33 @@ export function createTargetLookup(
         `target "${descriptor.name}" has the same name as a host; a target name must be distinct from every host name`,
       );
     }
+  }
+
+  // `builtOn`: every name is registered, and following the chain ends.
+  const baseTargets = new Map<string, string>();
+  for (const descriptor of descriptors) {
+    const chain = [descriptor.name];
+    for (
+      let next = descriptor.builtOn;
+      next !== undefined;
+      next = targets.get(next)?.builtOn
+    ) {
+      const base = targets.get(next);
+      if (!base) {
+        throw new TargetLookupError(
+          "built-on-unknown",
+          `target "${chain[chain.length - 1]}" is built on "${next}", which is not a registered target (registered: ${[...targets.keys()].join(", ")})`,
+        );
+      }
+      if (chain.includes(next)) {
+        throw new TargetLookupError(
+          "built-on-loop",
+          `target "${descriptor.name}" is built on itself: ${[...chain, next].join(" -> ")}`,
+        );
+      }
+      chain.push(next);
+    }
+    baseTargets.set(descriptor.name, chain[chain.length - 1] as string);
   }
 
   // Package ownership: hostless targets own a package alone; hosted ones share it within one host.
@@ -892,6 +936,7 @@ export function createTargetLookup(
       return entry && { ...entry };
     },
     hostOf: (target) => targets.get(target)?.host?.name,
+    baseTargetOf: (target) => baseTargets.get(target),
     hostFilterKey: (target) => {
       const descriptor = targets.get(target);
       return descriptor && filterKey(descriptor);

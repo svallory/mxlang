@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Added (data-check-keys-on-base-target):** `HostDeclarations.baseTarget?: string`, the registered target a descriptor's behavior is built on; it travels with reused declarations (a host built on data keeps data's). `validateDescriptor` rejects a value that is not a non-empty string (`declarations.default.baseTarget`).
+- **Added (data-check-keys-on-base-target):** `TargetDescriptor.builtOn?: string` (`@unstable`), the registered target a descriptor is built on, and `TargetLookup.baseTargetOf?(target)`, the end of the chain. `createTargetLookup` resolves it: an unregistered name (`built-on-unknown`) and a target built on itself or a loop (`built-on-loop`) are `TargetLookupError`s naming the targets; `validateDescriptor` rejects a `builtOn` that is not a bare word. Any target can be built on any other; core names none.
 
 - **Fix (statement-tags r3, decision 168):** a `server` or `client` statement's text gets the same Marko-matching syntax check as `static`/`import`/`export`, before a host runs, drops or refuses it, so an invalid join can no longer pull the next template line into it silently.
 

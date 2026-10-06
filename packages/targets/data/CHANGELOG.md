@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Added (data-check-keys-on-base-target):** `dataDeclarations.baseTarget` is `"data"`, so a third-party host that reuses data's declarations is recognised as built on data.
+- **Note (data-check-keys-on-base-target):** a third-party host built on data declares `builtOn: "data"` on its descriptor to inherit data's `mx-tsc` check (strict defaults and `mx.data.*`); reusing `dataDeclarations` alone does not.
 
 - **Changed (statement-tags, decision 168):** the data compile passes `statementTags: false` to core, so core's six statement tags are not registered beside the data taglib's own three; `class` stays an ordinary data tag name. No output change.
 

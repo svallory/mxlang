@@ -68,9 +68,6 @@ export const dataDeclarations: HostDeclarations = {
   name: "data",
   attrTags: 2,
   builtinTags: BUILTIN_TAGS,
-  // Travels with these declarations to a host built on data (Mesh), so the
-  // registry's data check keys on this, not on the project's `mx.target`.
-  baseTarget: "data",
   // The ladder (decision 145): the parent's contract `defaultTag`, then
   // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
   // the host override into `configured`). This host permits the contract rung:

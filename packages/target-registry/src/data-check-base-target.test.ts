@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createTargetLookup } from "@mxlang/core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   type MeshOptions,
@@ -9,7 +10,7 @@ import {
   teardownMesh,
 } from "../../../test-fixtures/third-party-targets/mesh.ts";
 import { isDataProject } from "./data-check.ts";
-import { baseTargetOf, builtinLookup, builtinTargets } from "./index.ts";
+import { builtinLookup, builtinTargets } from "./index.ts";
 
 const scratch: string[] = [];
 
@@ -31,28 +32,28 @@ function mesh(options: MeshOptions = {}): string {
   return meshProject("mx-base-target-mesh-", options);
 }
 
-describe("baseTargetOf", () => {
-  it("is `data` for the data target and the target's own name for every other built-in", () => {
+describe("the base target of a lookup", () => {
+  it("is each built-in target's own name, and `data` for a host that declares builtOn", () => {
+    const lookup = builtinLookup();
     expect(
-      Object.fromEntries(builtinTargets.map((t) => [t.name, baseTargetOf(t)])),
-    ).toEqual({
-      html: "html",
-      "astro-html": "astro-html",
-      "solid-jsx": "solid-jsx",
-      "preact-jsx": "preact-jsx",
-      "react-jsx": "react-jsx",
-      "hono-jsx": "hono-jsx",
-      "angular-template": "angular-template",
-      data: "data",
-    });
-  });
-
-  it("follows the declarations a host reuses, not the host's own name", () => {
-    const data = builtinLookup().target("data");
-    if (!data?.declarations) throw new Error("no data declarations");
-    expect(
-      baseTargetOf({ ...data, name: "mesh-data", host: { name: "mesh" } }),
-    ).toBe("data");
+      Object.fromEntries(
+        builtinTargets.map((t) => [t.name, lookup.baseTargetOf?.(t.name)]),
+      ),
+    ).toEqual(Object.fromEntries(builtinTargets.map((t) => [t.name, t.name])));
+    const data = lookup.target("data");
+    if (!data) throw new Error("no data descriptor");
+    const withMesh = createTargetLookup([
+      ...builtinTargets,
+      {
+        ...data,
+        name: "mesh-data",
+        packageName: "@fake/mx-mesh",
+        host: { name: "mesh" },
+        builtOn: "data",
+      },
+    ]);
+    expect(withMesh.baseTargetOf?.("mesh-data")).toBe("data");
+    expect(withMesh.baseTargetOf?.("nope")).toBeUndefined();
   });
 });
 

@@ -330,16 +330,11 @@ describe("validateDescriptor", () => {
     );
   });
 
-  it("rejects a `declarations.default.baseTarget` that is not a non-empty string", () => {
-    const withBase = (baseTarget: unknown) =>
-      invalidField(target({ declarations: { default: { baseTarget } } }));
-    expect(withBase(5).field).toBe("declarations.default.baseTarget");
-    expect(withBase("").field).toBe("declarations.default.baseTarget");
-    expect(() =>
-      validateDescriptor(
-        target({ declarations: { default: { baseTarget: "data" } } }),
-      ),
-    ).not.toThrow();
+  it("rejects a `builtOn` that is not a bare word", () => {
+    expect(invalidField(target({ builtOn: 5 })).field).toBe("builtOn");
+    expect(invalidField(target({ builtOn: "" })).field).toBe("builtOn");
+    expect(invalidField(target({ builtOn: "@a/b" })).field).toBe("builtOn");
+    expect(() => validateDescriptor(target({ builtOn: "data" }))).not.toThrow();
   });
 
   it("rejects a `declarations.default.builtinTags` that is not an array of non-empty strings", () => {
@@ -437,6 +432,62 @@ describe("createTargetLookup", () => {
   });
   const data = target({ name: "data", packageName: "@t/data" });
   const all = [html, data, solid, react];
+
+  describe("builtOn", () => {
+    const built = (name: string, builtOn: string, pkg = `@t/${name}`) =>
+      target({ name, packageName: pkg, builtOn });
+    const message = (descriptors: TargetDescriptor[]): string => {
+      try {
+        createTargetLookup(descriptors);
+      } catch (error) {
+        return (error as Error).message;
+      }
+      throw new Error("expected createTargetLookup to throw");
+    };
+
+    it("resolves the end of the chain as the base target; a target without builtOn is its own", () => {
+      const lookup = createTargetLookup([
+        data,
+        built("mid", "data"),
+        built("top", "mid"),
+        html,
+      ]);
+      expect(lookup.baseTargetOf?.("top")).toBe("data");
+      expect(lookup.baseTargetOf?.("mid")).toBe("data");
+      expect(lookup.baseTargetOf?.("data")).toBe("data");
+      expect(lookup.baseTargetOf?.("html")).toBe("html");
+      expect(lookup.baseTargetOf?.("missing")).toBeUndefined();
+    });
+
+    it("is generic: any target can be built on any other", () => {
+      const lookup = createTargetLookup([html, built("x", "html")]);
+      expect(lookup.baseTargetOf?.("x")).toBe("html");
+    });
+
+    it("rejects an unregistered name, naming both targets", () => {
+      const verdict = [data, built("mesh", "dta")];
+      expect(lookupRule(verdict)).toBe("built-on-unknown");
+      expect(message(verdict)).toBe(
+        'target "mesh" is built on "dta", which is not a registered target (registered: data, mesh)',
+      );
+      expect(message([data, built("a", "b"), built("b", "c")])).toContain(
+        'target "b" is built on "c"',
+      );
+    });
+
+    it("rejects a target built on itself and a loop, naming the chain", () => {
+      expect(lookupRule([built("a", "a")])).toBe("built-on-loop");
+      expect(message([built("a", "a")])).toBe(
+        'target "a" is built on itself: a -> a',
+      );
+      expect(lookupRule([built("a", "b"), built("b", "a")])).toBe(
+        "built-on-loop",
+      );
+      expect(message([built("a", "b"), built("b", "c"), built("c", "a")])).toBe(
+        'target "a" is built on itself: a -> b -> c -> a',
+      );
+    });
+  });
 
   describe("target questions", () => {
     it("answers hasTarget, target and targetNames in registration order", () => {
