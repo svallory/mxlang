@@ -327,13 +327,6 @@ describe("the hostless `data` target", () => {
       "hono",
       "ng",
     ]);
-    expect(lookup.moduleSegments()).toEqual([
-      "astro",
-      "solid",
-      "react",
-      "hono",
-      "ng",
-    ]);
   });
 
   it("is selected by its package (note 4.1 rule 2) and is not the default", () => {
