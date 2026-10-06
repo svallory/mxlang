@@ -372,27 +372,41 @@ export function exprOf(ctx: Ctx, node: Node): Expr {
 }
 
 /**
- * The authored `{ … }` body of a function expression: the block's own range,
- * proven to be braces in the source. `code` may print it differently, so this
- * is the authored side a host diffs the printed body against.
+ * The authored `{ … }` body of an attribute method: the block that follows
+ * its parameter list in the source and closes the authored span. The method
+ * node carries no position below itself, so the body is found in the text.
+ * `code` may print it differently, so this is the authored side a host diffs
+ * the printed body against. `undefined` when the text is not `name(…) { … }`.
  */
 function methodBodySpan(
   ctx: Ctx,
-  node: Node,
+  _node: Node,
   span: SourceSpan,
 ): SourceSpan | undefined {
-  const body = node?.body;
-  if (body?.type !== "BlockStatement" || !body.loc) return undefined;
-  const bodySpan = nodeSpan(ctx, body);
-  if (
-    bodySpan.sourceStart < span.sourceStart ||
-    bodySpan.sourceEnd > span.sourceEnd ||
-    ctx.source[bodySpan.sourceStart] !== "{" ||
-    ctx.source[bodySpan.sourceEnd - 1] !== "}"
-  ) {
+  const text = ctx.source.slice(span.sourceStart, span.sourceEnd);
+  const open = text.indexOf("(");
+  if (open < 0 || !text.endsWith("}")) return undefined;
+  let depth = 0;
+  let quote: string | null = null;
+  let close = -1;
+  for (let at = open; at < text.length && close < 0; at++) {
+    const char = text[at];
+    if (quote) {
+      if (char === "\\") at++;
+      else if (char === quote) quote = null;
+    } else if (char === '"' || char === "'" || char === "`") quote = char;
+    else if (char === "(") depth++;
+    else if (char === ")" && --depth === 0) close = at;
+  }
+  if (close < 0) return undefined;
+  const bodyStart = text.indexOf("{", close);
+  if (bodyStart < 0 || text.slice(close + 1, bodyStart).trim() !== "") {
     return undefined;
   }
-  return bodySpan;
+  return {
+    sourceStart: span.sourceStart + bodyStart,
+    sourceEnd: span.sourceEnd,
+  };
 }
 
 /**

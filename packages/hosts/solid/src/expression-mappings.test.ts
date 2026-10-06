@@ -87,7 +87,7 @@ describe("solid expression values", () => {
       false,
     );
     for (const [authored, generated] of result) {
-      if (authored.length === generated?.length) {
+      if (authored?.length === generated?.length) {
         expect(authored).toBe(generated);
       }
     }

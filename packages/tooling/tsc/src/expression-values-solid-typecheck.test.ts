@@ -128,10 +128,10 @@ describe("mx-tsc on a Solid page", () => {
         /page\.mx\(9,21\): error TS2304: Cannot find name 'missingInMethod'/,
       ),
       expect.stringMatching(
-        /page\.mx\(10,37\): error TS2304: Cannot find name 'missingArr'/,
+        /page\.mx\(10,35\): error TS2304: Cannot find name 'missingArr'/,
       ),
       expect.stringMatching(
-        /page\.mx\(11,37\): error TS2304: Cannot find name 'missingStr'/,
+        /page\.mx\(11,34\): error TS2304: Cannot find name 'missingStr'/,
       ),
       expect.stringMatching(
         /page\.mx\(12,21\): error TS2304: Cannot find name 'missingNoSemi'/,
