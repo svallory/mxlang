@@ -57,6 +57,7 @@ import {
   importTypeOnlyBindings,
   isFunctionLikeValue,
   isMarkoOrMxSpecifier,
+  isTranslateError,
   markoBabel,
   type Node,
   newCtx,
@@ -66,6 +67,7 @@ import {
   scopeBindings,
   shadowBindings,
   sliceLoc,
+  type TranslateError,
   VOID_TAGS,
   warn,
 } from "./core.ts";
@@ -2453,7 +2455,40 @@ function warnLowercaseBinding(ctx: Ctx, node: Node, name: string): void {
 }
 
 /** `<define/name|params|>...</define>` — a reusable block. */
+/**
+ * A `<define>` whose head failed still binds its name, so a later call to it
+ * is not reported as a second error (decision 162: a consequence of an earlier
+ * error is never its own error). Best effort: whatever cannot be read stays
+ * unbound.
+ */
+function bindFailedDefine(ctx: Ctx, node: Node): void {
+  if (!node.var) return;
+  try {
+    const name = declName(ctx, node.var);
+    if (ctx.defines.has(name)) return;
+    let params: string[] = [];
+    try {
+      params = paramsOf(ctx, node);
+    } catch {
+      // The params are what failed; the name alone is still bound.
+    }
+    ctx.defines.set(name, params);
+    ctx.bindingSites.set(name, { kind: "defined", ...posOf(node.var) });
+  } catch {
+    // No readable name to bind.
+  }
+}
+
 function lowerDefine(ctx: Ctx, node: Node): IrNode {
+  try {
+    return lowerDefineChecked(ctx, node);
+  } catch (error) {
+    if (ctx.errors && isTranslateError(error)) bindFailedDefine(ctx, node);
+    throw error;
+  }
+}
+
+function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
   if (!node.var) {
     fail("`<define>` without a name (write `<define/name>`)", node);
   }
@@ -4255,11 +4290,15 @@ function runCustomTagAnalyze(ctx: Ctx, body: Node[]): void {
   scratch.warnings = [];
   // Recovering, so a failing tag does not stop the walk before `analyze` has
   // seen the calls after it; the real walk reports the same errors.
-  scratch.errors = [];
+  const scratchErrors: TranslateError[] = [];
+  scratch.errors = scratchErrors;
   const calls = new Map<string, TagCall[]>();
   scratch.customTagAnalyzePass = { calls };
 
   lowerChildren(scratch, body);
+  // `analyze` is a whole-file check: it never runs over a walk that failed, and
+  // the walk's errors, not the hook's, are the file's (decision 162).
+  if (scratchErrors.length) throw collectedError(scratchErrors);
   runAnalyzeHooks(ctx, customTags, calls);
 }
 

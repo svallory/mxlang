@@ -5,7 +5,6 @@ import {
   reportScanDiagnostics,
   scanCached,
   type TargetLookup,
-  TranslateError,
 } from "@mxlang/core";
 import type { BunPlugin } from "bun";
 import { configuredDefaultTag } from "./default-tag.ts";
@@ -109,14 +108,15 @@ export function createHtmlBunPlugin(
           // ride in its message so one run shows them all.
           const rest = isTranslateError(error) ? otherErrorsText(error) : "";
           if (!isTranslateError(error) || rest === "") throw error;
-          const all = new TranslateError(
-            `${error.message}${rest}`,
-            error.line,
-            error.column,
-            error.file,
-          );
-          all.errors = error.errors;
-          throw all;
+          // In place, so the thrown error stays `errors[0]` and keeps its
+          // stack, `dependencies`, `atomFacts` and `spans`.
+          Object.defineProperty(error, "message", {
+            value: `${error.message}${rest}`,
+            enumerable: false,
+            writable: true,
+            configurable: true,
+          });
+          throw error;
         }
       });
     },

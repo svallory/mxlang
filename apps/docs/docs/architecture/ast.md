@@ -982,9 +982,9 @@ document is **not lowered**; neither is a document with any entry in
 `errors`. Decision 162 makes compiling report every error as data rather than
 throw the first one (decision 161 makes the same rule for diagnostics whose
 generated position has no mapping: never dropped). For a
-document with errors, `compileSource` therefore throws `TranslateErrors`, whose
+document with errors, `compileSource` therefore throws a `TranslateError`, whose
 `.errors: TranslateError[]` holds **every** entry of `errors`, in the order
-above (template error last), and whose `.errors[0]` is the first error, in
+above (template error last), and which is itself `.errors[0]`, the first error, in
 today's frame format (today a document with several expression errors throws
 one aggregate, `[C]chunk-src.js:5975-5984`, `:6474`), so the 14 host-dispatch goldens
 (`tooling/tsc/src/fixtures/host-dispatch/__golden__/`, each recording
@@ -994,10 +994,10 @@ the `catch` around `compileSync`: `annotateCloseTagOpener` from
 `close-tag-opener.ts`, `hintParseError` from `parse-error-hints.ts`, and
 `sugarAfterDefaultError`/`stockParserError`/`stockAtomError` from
 `stock-parser.ts`) key on `MxParseError.code` instead of matching message
-text. **Status on main:** neither decision is implemented yet
-(`TranslateErrors` does not exist; `compileSource` rethrows one error); the
-code is landing under decisions 161 and 162, and this paragraph follows the
-decision text.
+text. **Status on main:** decision 162 is implemented for lowering
+(`TranslateError.errors`, IR spec §13); a Marko parse error still arrives as
+one aggregate, and decision 161 is separate. The rest of this paragraph follows
+the decision text.
 
 Examples: `<div x=(1 +)/>` gives a complete tree, one error `origin:
 "expression"`, `start`/`end` `[11, 11)`, `context` `[7, 12)`, and the attribute's

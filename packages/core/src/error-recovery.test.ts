@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { compileSource } from "./compile.ts";
 import { isTranslateError, type TranslateError } from "./core.ts";
+import type { CustomTag } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import { testTargetLookup } from "./test-targets.ts";
 
@@ -11,20 +12,24 @@ const declarations: HostDeclarations = {
   isComponent: (name, ctx) => ctx.defines.has(name),
 };
 
-function compile(source: string): string {
+function compile(source: string, customTags?: Record<string, CustomTag>) {
   return compileSource(source, "/tmp/mx-error-recovery/page.mx", declarations, {
     targets,
     tagDiscoveryDirs: [],
+    customTags,
     emitIr: () => "emitted",
   }).code;
 }
 
-function errorsOf(source: string): TranslateError[] {
+function errorsOf(
+  source: string,
+  customTags?: Record<string, CustomTag>,
+): TranslateError[] {
   try {
-    compile(source);
+    compile(source, customTags);
   } catch (error) {
     if (!isTranslateError(error)) throw error;
-    return [...(error.errors ?? [])];
+    return [...(error.errors ?? [error])];
   }
   throw new Error("expected the compile to throw");
 }
@@ -106,5 +111,64 @@ describe("per-tag error recovery in lower (decision 162)", () => {
     expect(
       compile("<div>ok</div>\n<if=a><p>x</p></if><else><p>y</p></else>"),
     ).toBe("emitted");
+  });
+
+  describe("a file that uses an analyze tag", () => {
+    const marker: CustomTag = {
+      analyze(calls, ctx) {
+        if (calls.length > 1) throw ctx.fail("only one marker allowed");
+      },
+      transform: (_call, ctx) => [ctx.build.element("span", [], [])],
+    };
+
+    it("keeps the walk's first error as errors[0], not the hook's", () => {
+      const errors = errorsOf("$ const a = 1\n<marker/>\n<marker/>", {
+        marker,
+      });
+      expect(errors).toHaveLength(1);
+      expect(errors[0]?.message).toContain("scriptlets");
+    });
+
+    it("keeps an independent walk error the hook would have hidden", () => {
+      const errors = errorsOf("<marker/>\n<marker/>\n<if></if>", { marker });
+      expect(errors.map((error) => error.line)).toEqual([3]);
+      expect(errors[0]?.message).toContain("without a condition");
+    });
+
+    it("still reports the hook's own error when the walk is clean", () => {
+      const errors = errorsOf("<marker/>\n<marker/>", { marker });
+      expect(errors).toHaveLength(1);
+      expect(errors[0]?.message).toContain("only one marker allowed");
+    });
+  });
+
+  describe("a consequence of an earlier error is not its own error", () => {
+    it("a failed <define> head still binds the name for later calls", () => {
+      const errors = errorsOf("<define/Foo(1)>x</define>\n<Foo/>\n<if></if>");
+      expect(errors.map((error) => error.line)).toEqual([1, 3]);
+      expect(errors[0]?.message).toContain("tag arguments");
+      expect(
+        errors.some((error) => error.message.includes("entry point")),
+      ).toBe(false);
+    });
+
+    it("a nameless <define> is its own error and a later call is too", () => {
+      const errors = errorsOf("<define>x</define>\n<Foo/>");
+      expect(errors.map((error) => error.line)).toEqual([1, 2]);
+    });
+
+    it("a failed <const> or <let> leaves no second error for its readers", () => {
+      for (const tag of ["const", "let"]) {
+        const errors = errorsOf(
+          `<${tag}/x=1 bogus=2/>\n<div>\${x}</div>\n<if></if>`,
+        );
+        expect(errors.map((error) => error.line)).toEqual([1, 3]);
+      }
+    });
+
+    it("an import never fails after binding its name", () => {
+      const errors = errorsOf('import Foo from "./nope.mx"\n<Foo/>\n<if></if>');
+      expect(errors.map((error) => error.line)).toEqual([3]);
+    });
   });
 });

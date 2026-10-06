@@ -2578,7 +2578,7 @@ Errors stop at the first in check order, not source order: authored children are
 
 **Allowed authored children (MX addition, decision 138 E2).** `CustomTag.children` is a record of `{ required?, repeatable? }`, closed once present; omitted, children remain open. The reserved contract-vocabulary key `"#text"` allows non-whitespace text and `${…}` / `$!{…}`. Each non-whitespace text node or interpolation is one occurrence; whitespace-only text never counts. `required` means at least one occurrence on every path; `repeatable: true` permits more than one, including inside a loop. `<if>`, `<else-if>`, `<else if>` / `<else>` and `<for>` are transparent: the minimum is the minimum over branches (an absent final `<else>` supplies an empty branch), and a child inside `<for>` has minimum 0 and maximum infinity. Comments, `<const>` and `<define>` declarations are ignored; a `<define>` call counts by its authored name. Ordinary child tags count once by name, without descending into their own bodies (`<script>` and `<style>` count by name as well).
 
-Core checks authored children before lowering them, so a child's transform output does not change its name or count. The rule applies to transform tags, template tags with declaration-only sidecars, and contract-only delegated tags on every target. A dynamic child is an error in a closed contract. `TagCall.childTree?: ChildNode[]` exposes this authored shape to `analyze` and `transform`: named `ChildTag`, `ChildText`, `ChildDynamic`, `ChildFor.nodes`, and `ChildIf.branches` (each branch has `unconditional` and `nodes`), each node positioned with `loc`. It is syntax metadata, not emitted IR. Contracts report the first error only.
+Core checks authored children before lowering them, so a child's transform output does not change its name or count. The rule applies to transform tags, template tags with declaration-only sidecars, and contract-only delegated tags on every target. A dynamic child is an error in a closed contract. `TagCall.childTree?: ChildNode[]` exposes this authored shape to `analyze` and `transform`: named `ChildTag`, `ChildText`, `ChildDynamic`, `ChildFor.nodes`, and `ChildIf.branches` (each branch has `unconditional` and `nodes`), each node positioned with `loc`. It is syntax metadata, not emitted IR. Contracts report the first error of a tag; the tag is then skipped with its subtree and the file's other tags are still checked (decision 162, IR spec §13).
 
 **Wildcard children (MX addition, decisions 147 and 147 addendum 1).** `children["*"]` is an entry or an ordered list of entries `{ pattern?, contract }` or `{ pattern?, attributes?, attributeTags?, children?, defaultTag? }`. `pattern` is a JavaScript regex source, anchored by core as `^(?:pattern)$` with no flags; an entry with no `pattern` is a catch-all. `contract: "<tag>"` validates the child with that tag's whole contract (E1 attributes, E4 attribute tags, E2 children, 145 `defaultTag`) and the IR node's `name` is that canonical tag; an inline entry is a contract of its own, its `name` is the authored name, and it admits only `attributes`, `attributeTags`, `children` and `defaultTag`. In both forms `alias = { authored, span, groups }` records the match, `groups` being the pattern's named capture groups. The data tree (§13.7.2) shows the match the other way round: a claimed `DataTag` keeps the authored spelling in `name` and gains `contract` (the canonical tag, or the authored name for an inline entry) and `groups`, so a consumer that dispatches on the contract reads `contract`, not `name`. The key works on a tag's `children` and on an attribute-tag declaration's `children`.
 
@@ -2600,7 +2600,7 @@ Core checks authored children before lowering them, so a child's transform outpu
 
 **Allowed authored parents (MX addition, decision 138 E3).** `CustomTag.parents?: string[]` names allowed **direct** parents. Omitted, placement remains unrestricted; an empty list permits no placement. `"#root"` is a reserved key of the contract vocabulary: it means the top level of a file or of a template's own compilation unit, never the template's caller. `<if>`, `<else-if>`, `<else if>` / `<else>` and `<for>` are transparent. `<define>` is not transparent: a tag in a `<define>` body has parent `define`. A dynamic parent reads `<${…}>` in diagnostics and never matches a `parents` list, even one spelling that diagnostic placeholder. Every other authored tag breaks the chain, whether registered or not: `<attributes><div><attribute/></div></attributes>` gives `attribute` the direct parent `div`. An attribute-tag body has that attribute tag as its direct parent, written `"@row"` in a parents list for `<@row>`. A recursive call inside its own template follows the same rule: top-level recursion has parent `#root`, not its own tag name.
 
-Core tracks authored tag ancestors on the lowering context and checks the parent before lowering the custom call's body or invoking its hooks. Synthesized transform output is not authored syntax and is not checked. The rule covers transform tags, templates with declaration-only sidecars and contract-only delegated tags on every target, with no host-specific branch. Parent diagnostics have no colon prefix and stop at the first error:
+Core tracks authored tag ancestors on the lowering context and checks the parent before lowering the custom call's body or invoking its hooks. Synthesized transform output is not authored syntax and is not checked. The rule covers transform tags, templates with declaration-only sidecars and contract-only delegated tags on every target, with no host-specific branch. Parent diagnostics have no colon prefix and report the first error of a tag (the tag is skipped with its subtree, decision 162):
 
 | Message | When |
 |---|---|
@@ -3395,9 +3395,11 @@ parseDataFile(path: string, options?: ParseDataOptions): ParseDataResult
 ```
 
 `parseData` never throws for a source problem: a Marko parse error, a rejected
-construct or a failed contract is **one** error diagnostic and `tree` is
-`undefined`. Parsing is fail-fast (Marko's parser and core's `fail` both stop at
-the first error), so there is never a partial tree. An unrecognized internal
+construct or a failed contract is an error diagnostic, one per error of the
+file, and `tree` is `undefined`. Core recovers per tag (decision 162, IR spec
+§13: a failed tag is skipped with its subtree and lowering goes on), so every
+independent error of the file is reported, each once, in position order; Marko's
+own parse errors still stop the parse. There is never a partial tree. An unrecognized internal
 error that carries no position fields is rethrown; a `TranslateError` at 0:0
 (core's "no position" sentinel) is not that, it is a file-level diagnostic
 (below).
@@ -3417,7 +3419,9 @@ error that carries no position fields is rethrown; a `TranslateError` at 0:0
 
 **Error order under `unknownTags: "reject"`** (decision 131 addendum 3; the
 unknown-tag check runs on a tag before anything inside it, so the first error is
-the root cause). Exactly one error is reported:
+the root cause). Every independent error is reported, once each, in position
+order; the rules below say which error wins where two compete for one tag or one
+position:
 
 1. A source that does not parse reports its Marko parse error.
 2. An error core raises while compiling (a reserved name, `<define>`,
@@ -3435,7 +3439,8 @@ the root cause). Exactly one error is reported:
    the file**: the earliest wins, wherever it sits in the tree, with attribute
    tags and children interleaved in document order. At the same position the
    build reject wins. An unknown tag's own body is never walked, so there is one
-   error per unknown call.
+   error per unknown call. A core error does not stop the unknown-tag scan: the
+   unknown tags are listed beside core's errors (decision 162).
 
 #### 13.7.2 The tree
 
