@@ -127,6 +127,41 @@ function withFenceVerification(
   });
 }
 
+/**
+ * The gensym prefix core gives a custom-tag import (`$mx_Badge1`), and the
+ * same-length stand-in `convertAstroToTsx` hands Astro's `convertToTSX`.
+ *
+ * `convertToTSX` decides element-vs-component from the tag name's first
+ * letter. A `$`-led name is an HTML element, and a self-closing element is
+ * rewritten to `<$mx_Badge1 /{`>`}`: TSX that does not parse. TypeScript then
+ * reports a syntactic error, and tsc prints no semantic diagnostic for the
+ * whole program once one exists. An upper-case first letter makes it a
+ * component. The stand-in has the same length, so no offset in the lowered
+ * text or in Astro's source map moves, and it is swapped back in the TSX.
+ * Only the type-check text is touched; `lowerAstroMx`'s output, which is what
+ * the Vite plugin compiles, is not.
+ */
+const GENSYM_PREFIX = "$mx_";
+const COMPONENT_PREFIX = "Xmx_";
+
+function convertAstroToTsx(
+  lowered: string,
+  fileName: string,
+): ReturnType<typeof convertToTSX> {
+  // A page that already holds the stand-in cannot be swapped back unambiguously.
+  const swap = !lowered.includes(COMPONENT_PREFIX);
+  const converted = convertToTSX(
+    swap ? lowered.replaceAll(GENSYM_PREFIX, COMPONENT_PREFIX) : lowered,
+    { filename: fileName, sourcemap: "external" },
+  );
+  return swap
+    ? {
+        ...converted,
+        code: converted.code.replaceAll(COMPONENT_PREFIX, GENSYM_PREFIX),
+      }
+    : converted;
+}
+
 export interface AmxLanguagePlugin extends MxDiagnosticLanguagePlugin {
   getSyntaxError(fileName: string): MxSyntaxError | undefined;
 }
@@ -191,10 +226,7 @@ export function createAmxLanguagePlugin(
         );
         const { warnings, ...lowered } = result;
         dependencies.set(fileName, lowered.dependencies);
-        const converted = convertToTSX(lowered.code, {
-          filename: fileName,
-          sourcemap: "external",
-        });
+        const converted = convertAstroToTsx(lowered.code, fileName);
         const fenceEnd = fenceEndOffset(source) ?? 0;
         const mappings = withFenceVerification(
           composeAmxMappings(
