@@ -947,7 +947,7 @@ export function createEmitter(
         // the markup string — not a place any binding could land. Refused
         // rather than dropped.
         fail(
-          `\`/var\` on \`<${node.authoredName ?? name}>\` can't bind in \`.astro.mx\`: Astro runs the \`---\` fence before the template renders, so no statement can receive the value here. Call the unit directly from the fence instead, e.g. \`import ${name} from "./${name}.mx"; import { createOut } from "@mxlang/astro/runtime"; const value = ${name}.render({ ... }, createOut());\`, and use \`value\` in the template.`,
+          `\`/var\` on \`<${node.authoredName ?? name}>\` can't bind in \`.astro.mx\`: Astro runs the \`---\` fence before the template renders, so no statement can receive the value here. Call the unit directly from the fence instead, e.g. \`import ${name} from "./${node.authoredName ?? name}.mx"; import { createOut } from "@mxlang/astro/runtime"; const value = ${name}.render({ ... }, createOut());\`, and use \`value\` in the template.`,
           node,
         );
       }
@@ -1278,7 +1278,9 @@ function astroComponentNames(
     ctx.imports.has(candidate) ||
     ctx.defines.has(candidate) ||
     [...names.values()].includes(candidate) ||
-    new RegExp(`(^|[^\\w$])${candidate}([^\\w$]|$)`).test(source);
+    new RegExp(
+      `(^|[^\\w$])${candidate.replaceAll("$", "\\$")}([^\\w$]|$)`,
+    ).test(source);
   for (const statement of imports) {
     if (statement.kind !== "Import" || !statement.synthesized) continue;
     for (const binding of statement.bindings) {

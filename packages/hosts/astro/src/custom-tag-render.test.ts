@@ -104,7 +104,7 @@ describe("a discovered custom tag called from .astro.mx, rendered on Astro", () 
     expect(html).toBe("<div><b>badge:a</b></div>");
   });
 
-  it("renders every call of the same tag and of two tags", async () => {
+  it("renders every call of the same tag, bare and inside an element", async () => {
     const html = await render(
       '---\n---\n<badge label="a"/><p><badge label="b"/></p>',
     );

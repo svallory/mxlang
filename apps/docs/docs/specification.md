@@ -98,7 +98,8 @@ Two carve-outs, neither a binding MX generates:
 tag's injected import binding is minted as `$mx_<tag>_<n>` (`$mx_Icon1`), the
 same shape as a discovered tag's natural name, and is kept out of the `__mx`
 set on purpose — it is name-avoided against the caller's own bindings rather
-than reserved. The same goes for an imported callee, which MX references by
+than reserved. (`@mxlang/astro` re-spells it upper-case-led, `Mx_Icon1`: Astro
+treats a lower- or `$`-led tag as an HTML element.) The same goes for an imported callee, which MX references by
 its real in-scope name. So "`__mx`-reserved" is a rule about bindings MX
 invents, not a claim about every identifier in emitted output.
 
@@ -2434,7 +2435,9 @@ direct and mutual recursion terminate.
 **The injected import is gensym'd and deduped by resolved path.** A discovered
 tag may be named `icon`, which the casing rule will never resolve as a component,
 and the caller may already bind that name — so the local is always generated
-(`$mx_Icon1`). One import per module per tag; if the caller already imports that
+(`$mx_Icon1`; `@mxlang/astro` re-spells it upper-case-led, `Mx_Icon1`, because
+Astro treats a lower- or `$`-led tag as an HTML element, and re-checks the new
+name against the same bindings). One import per module per tag; if the caller already imports that
 same path, its binding is reused and nothing is injected.
 
 Reuse has two guards, each a measured bug:
