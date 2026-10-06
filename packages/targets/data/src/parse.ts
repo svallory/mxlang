@@ -20,7 +20,7 @@ import {
   type MxWarning,
 } from "@mxlang/core";
 import { buildDataDocument, lineStartsOf, unknownTagMessage } from "./build.ts";
-import { DEFAULT_TAG, dataDeclarations } from "./declarations.ts";
+import { dataDeclarations } from "./declarations.ts";
 import { scanAuthoredTags } from "./scan.ts";
 import { dataTaglib } from "./taglib.ts";
 import { dataTargetBase } from "./target-base.ts";
@@ -229,11 +229,14 @@ function toDiagnostic(
   };
 }
 
-/** The names `unknownTags: "reject"` accepts: the built-in `object`, then every `customTags` key. */
+/** The names `unknownTags: "reject"` accepts: the declared built-ins (`object`), then every `customTags` key. */
 function declaredTagNames(
   customTags: Record<string, CustomTag> | undefined,
 ): Set<string> {
-  return new Set([DEFAULT_TAG, ...Object.keys(customTags ?? {})]);
+  return new Set([
+    ...(dataDeclarations.builtinTags ?? []),
+    ...Object.keys(customTags ?? {}),
+  ]);
 }
 
 /**

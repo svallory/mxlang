@@ -132,10 +132,10 @@ export function lookupFor(policy: TargetPolicy): TargetLookup {
     lookup = createTargetLookup([...builtinTargets, descriptor], {
       reservedNames: RESERVED_NAMES,
     });
+    // A loaded host's callee readers are not registered: core reads them from
+    // this lookup's file kinds (`ResolveContext.targets`), so they stay scoped
+    // to the project that loaded the host.
     projectLookups.set(descriptor, lookup);
-    // A loaded host's callee readers go into this core like the built-ins',
-    // so a component calling a `.<segment>.mx` of its own reads its `Input`.
-    registerCalleeInputReaders(descriptor);
   }
   return lookup;
 }

@@ -61,17 +61,21 @@ export function reservedNameMessage(name: string): string {
  */
 export const DEFAULT_TAG = "object";
 
+/** The names the target provides without a taglib entry: what `builtinTags` declares. */
+const BUILTIN_TAGS: readonly string[] = [DEFAULT_TAG];
+
 export const dataDeclarations: HostDeclarations = {
   name: "data",
   attrTags: 2,
-  builtinTags: [DEFAULT_TAG],
+  builtinTags: BUILTIN_TAGS,
   // The ladder (decision 145): the parent's contract `defaultTag`, then
   // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
   // the host override into `configured`). This host permits the contract rung:
   // it sets no `allowContractDefaultTag: false`.
   resolveDefaultTag: (_node, parents, context) =>
-    contractDefaultTag(parents, context, [DEFAULT_TAG]) ??
+    contractDefaultTag(parents, context, BUILTIN_TAGS) ??
     context.configured ??
+    // The target's default tag, which is also its one built-in.
     DEFAULT_TAG,
   tags: {
     else: { kind: "error", reason: reservedNameMessage("else") },
