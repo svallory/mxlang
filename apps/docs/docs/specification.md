@@ -3362,7 +3362,8 @@ All types are in `@mxlang/data/tree`. Every span is core's `SourceSpan`
   Event attributes stay plain expression attributes (`onClick`).
 - **`DataExpr`**: `{ code, shape, span, node }`. `shape` is `"object"`,
   `"array"`, `"string"` or `"other"`. `node` is Marko's own Babel node (offsets at
-  `node.loc.{start,end}.index`). **`code` is the printed form, not the authored
+  `node.loc.{start,end}.index`), or `null` for a value MX synthesized with no
+  authored expression (read `code` and `span` there). **`code` is the printed form, not the authored
   text**: a method shorthand `value({ post }) { … }` has `code` `function ({ post }) { … }`. Slice `span` for what the author wrote.
 
 **Serialized form.** `SerializedDataDocument` is `DataDocument` with every `node`
