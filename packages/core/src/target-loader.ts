@@ -131,31 +131,108 @@ function packageStamp(file: string): PackageStamp | undefined {
 }
 
 /**
- * Resolves `target` (an `exports` value) for a CommonJS `require`: a string,
- * an array (first usable entry), or a condition object (first matching key).
+ * The conditions a CommonJS `require` matches, as the running runtime's own
+ * resolver does: `bun` only under Bun, never under Node.
  */
-function exportsTarget(target: unknown): string | undefined {
-  if (typeof target === "string") return target;
+const CONDITIONS: ReadonlySet<string> = new Set([
+  ...("bun" in process.versions ? ["bun"] : []),
+  "node",
+  "require",
+  "default",
+]);
+
+/** A package whose manifest cannot be used: reported as `load-failed`. */
+class InvalidPackage extends Error {
+  readonly kind: "target" | "config";
+  constructor(kind: "target" | "config", detail: string) {
+    super(detail);
+    this.kind = kind;
+  }
+}
+
+/** Node's `invalidSegmentRegEx`, without the percent-encoded spellings. */
+const INVALID_SEGMENT = /^(|\.|\.\.|node_modules)$/i;
+
+/**
+ * Resolves `target` (an `exports` value) for a CommonJS `require`, as Node's
+ * PACKAGE_TARGET_RESOLVE does: a string must start with `./` and have no
+ * empty, `.`, `..` or `node_modules` segment; an array takes the first entry
+ * that resolves (an invalid one is remembered and thrown if none does); a
+ * condition object takes the first key, in the package's own order, that this
+ * runtime matches. `null` is an explicit "not exported".
+ */
+function exportsTarget(target: unknown): string | null | undefined {
+  if (typeof target === "string") {
+    if (
+      !target.startsWith("./") ||
+      target
+        .slice(2)
+        .split(/[\\/]/)
+        .some((segment) => INVALID_SEGMENT.test(segment))
+    ) {
+      throw new InvalidPackage("target", `"${target}"`);
+    }
+    return target;
+  }
+  if (target === null || target === undefined) return target;
   if (Array.isArray(target)) {
+    let invalid: InvalidPackage | undefined;
     for (const entry of target) {
-      const found = exportsTarget(entry);
+      try {
+        const found = exportsTarget(entry);
+        if (found === undefined) continue;
+        if (found === null) {
+          invalid = undefined;
+          continue;
+        }
+        return found;
+      } catch (cause) {
+        if (!(cause instanceof InvalidPackage)) throw cause;
+        invalid = cause;
+      }
+    }
+    if (invalid) throw invalid;
+    return undefined;
+  }
+  if (typeof target === "object") {
+    for (const [condition, value] of Object.entries(target)) {
+      if (!CONDITIONS.has(condition)) continue;
+      const found = exportsTarget(value);
       if (found !== undefined) return found;
     }
     return undefined;
   }
-  if (target && typeof target === "object") {
-    for (const [condition, value] of Object.entries(target)) {
-      if (!["require", "node", "default", "bun"].includes(condition)) continue;
-      const found = exportsTarget(value);
-      if (found !== undefined) return found;
-    }
-  }
-  return undefined;
+  throw new InvalidPackage("target", JSON.stringify(target) ?? String(target));
 }
 
-/** `exports` is a subpath map when any key starts with `.`. */
-function isSubpathMap(exp: object): boolean {
-  return Object.keys(exp).some((key) => key.startsWith("."));
+/**
+ * The entry `exports` gives `subpath`, or `undefined` when it exports none.
+ * `exports` is a subpath map when its keys start with `.` and a condition map
+ * (the main entry's sugar) when none does; a mix is an invalid config, as in
+ * Node. A string or array is the main entry's sugar.
+ */
+function exportsEntry(exp: unknown, subpath: string): unknown {
+  if (typeof exp === "object" && exp !== null && !Array.isArray(exp)) {
+    const keys = Object.keys(exp);
+    const subpaths = keys.filter((key) => key.startsWith("."));
+    if (subpaths.length > 0 && subpaths.length < keys.length) {
+      throw new InvalidPackage(
+        "config",
+        '"exports" mixes subpath keys with condition keys',
+      );
+    }
+    if (subpaths.length > 0) {
+      return Object.hasOwn(exp, subpath)
+        ? (exp as Record<string, unknown>)[subpath]
+        : undefined;
+    }
+  }
+  return subpath === "." ? exp : undefined;
+}
+
+/** Whether `file` is inside `dir` (a path-segment prefix, not a string one). */
+function isInside(dir: string, file: string): boolean {
+  return file.startsWith(dir.endsWith(sep) ? dir : dir + sep);
 }
 
 /**
@@ -165,8 +242,15 @@ function isSubpathMap(exp: object): boolean {
  * life of the process. This walks up from `fromDir` for
  * `node_modules/<name>/package.json` on the real filesystem and applies the
  * package's own `exports` (exact subpath keys; no wildcard patterns) or
- * `main`, which is enough for a target's entry point. Returns `undefined`
- * when the package is not there, or its entry does not exist.
+ * `main`, which is enough for a target's entry point. An `exports` target is
+ * statted verbatim, as Node does; only `main` (and a subpath of a package with
+ * no `exports`) gets legacy extension and `index.js` probing. Returns
+ * `undefined` when the package is not there, exports nothing for `spec`, or
+ * its entry does not exist.
+ *
+ * Throws `TargetLoadError` `load-failed` for a package that is there but
+ * unusable: a manifest that is not a JSON object, an invalid `exports` map, or
+ * a target outside the package directory.
  */
 function resolveFresh(spec: string, fromDir: string): string | undefined {
   if (spec.startsWith(".") || spec.startsWith("/") || /^[a-z]:/i.test(spec)) {
@@ -178,41 +262,70 @@ function resolveFresh(spec: string, fromDir: string): string | undefined {
   const name = parts.slice(0, nameLength).join("/");
   const subpath =
     parts.length > nameLength ? `./${parts.slice(nameLength).join("/")}` : ".";
-  let dir = fromDir;
+  let dir: string;
+  try {
+    // The ancestors Node walks are those of the real directory.
+    dir = realpathSync(fromDir);
+  } catch {
+    dir = fromDir;
+  }
   for (;;) {
     const pkgDir = join(dir, "node_modules", ...name.split("/"));
     const manifestPath = join(pkgDir, "package.json");
     if (existsSync(manifestPath)) {
-      let manifest: { exports?: unknown; main?: unknown };
+      const unusable = (reason: string, cause?: unknown) =>
+        new TargetLoadError(
+          "load-failed",
+          `"${spec}" cannot be loaded: ${reason} in ${manifestPath}`,
+          { spec, fromDir, cause },
+        );
+      let manifest: unknown;
       try {
         manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-      } catch {
-        return undefined;
+      } catch (cause) {
+        throw unusable(
+          `invalid package config (${summary(messageOf(cause))})`,
+          cause,
+        );
       }
-      let relative: string | undefined;
-      const exp = manifest.exports;
-      if (exp !== undefined && exp !== null) {
-        const entry =
-          typeof exp === "object" && !Array.isArray(exp) && isSubpathMap(exp)
-            ? (exp as Record<string, unknown>)[subpath]
-            : subpath === "."
-              ? exp
-              : undefined;
-        relative = exportsTarget(entry);
-      } else if (subpath !== ".") {
-        relative = subpath;
-      } else {
-        relative =
-          typeof manifest.main === "string" ? manifest.main : "index.js";
+      if (
+        manifest === null ||
+        typeof manifest !== "object" ||
+        Array.isArray(manifest)
+      ) {
+        throw unusable("invalid package config (not a JSON object)");
       }
-      if (relative === undefined) return undefined;
+      const { exports: exp, main } = manifest as {
+        exports?: unknown;
+        main?: unknown;
+      };
+      let relative: string | null | undefined;
+      let probe = false;
+      try {
+        if (exp !== undefined && exp !== null) {
+          relative = exportsTarget(exportsEntry(exp, subpath));
+        } else if (subpath !== ".") {
+          relative = subpath;
+          probe = true;
+        } else {
+          relative = typeof main === "string" ? main : "index.js";
+          probe = true;
+        }
+      } catch (cause) {
+        if (!(cause instanceof InvalidPackage)) throw cause;
+        throw unusable(`invalid package ${cause.kind} ${cause.message}`, cause);
+      }
+      if (relative === undefined || relative === null) return undefined;
       const base = resolve(pkgDir, relative);
-      for (const candidate of [
-        base,
-        `${base}.js`,
-        `${base}.cjs`,
-        join(base, "index.js"),
-      ]) {
+      if (!isInside(pkgDir, base)) {
+        throw unusable(
+          `invalid package target "${relative}" leaves the package`,
+        );
+      }
+      const candidates = probe
+        ? [base, `${base}.js`, `${base}.cjs`, join(base, "index.js")]
+        : [base];
+      for (const candidate of candidates) {
         try {
           if (statSync(candidate).isFile()) return candidate;
         } catch {
@@ -315,11 +428,11 @@ function isPackageManifest(manifest: string, fromDir: string): boolean {
  * fix to any file it loaded (the entry, or a module the entry requires) is
  * picked up by the next call. A miss (`not-found`) is never cached by this
  * module either, but the runtime's resolver keeps a miss once the project has a
- * `node_modules` (Bun and Node alike): after installing a missing target,
- * restart the language server, TS server or dev server (TODO
- * `target-loader-sticky-not-found`).
+ * `node_modules` (Bun and Node alike), so a bare specifier it reports missing is
+ * re-checked on disk: the package's own `exports`/`main` is applied directly, and
+ * a target installed after a `not-found` loads on the next call, with no restart.
  * Throws `TargetLoadError`: `not-found` (does not resolve), `load-failed`
- * (throws while evaluating), `invalid-descriptor` (wrong shape, or a
+ * (throws while evaluating, or the package's manifest is unusable), `invalid-descriptor` (wrong shape, or a
  * `descriptorVersion` this mx does not support).
  *
  * @unstable
@@ -347,7 +460,11 @@ export function loadTargetDescriptor(
     }
     // The real path, as `require.resolve` reports it, so the caches agree
     // whichever resolver found the file (a package manager may symlink).
-    resolved = realpathSync(fresh);
+    try {
+      resolved = realpathSync(fresh);
+    } catch {
+      resolved = fresh;
+    }
   }
 
   const stamped = packageStamp(resolved);

@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Fixed:** a target installed after a `not-found` now loads on the next `loadTargetDescriptor` in the same process (language server, tsserver, `mx-tsc -w`, dev server), in Bun and Node. Both runtimes keep a resolver miss once the project has a `node_modules`; before reporting `not-found` for a bare specifier the loader now looks for `node_modules/<name>/package.json` up from `fromDir` and resolves the package's `exports` (exact subpath keys; `require`/`node`/`bun`/`default` conditions) or `main` itself. The "restart after installing" note is gone.
+- **Fixed:** a target installed after a `not-found` now loads on the next `loadTargetDescriptor` in the same process (language server, tsserver, `mx-tsc -w`, dev server), in Bun and Node. Both runtimes keep a resolver miss once the project has a `node_modules`; before reporting `not-found` for a bare specifier the loader now looks for `node_modules/<name>/package.json` up from `fromDir` and resolves the package's `exports` (exact subpath keys; `require`/`node`/`bun`/`default` conditions) or `main` itself, as Node does: an `exports` target must start with `./` and may not leave the package (`load-failed`, "invalid package target"), a manifest that is not a JSON object or a mixed subpath/condition map is `load-failed` naming the manifest, `bun` is matched only under Bun, and only `main` gets extension probing. The "restart after installing" note is gone.
 
 - **Fix (jsx-handler-prop-names):** the `onDoubleClick` warning suggests `onDblClick`, a host-independent spelling that lowercases to `dblclick` (it named `onDblclick`, a spelling Preact and hono no longer emit).
 

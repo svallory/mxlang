@@ -641,7 +641,7 @@ describe("round 3: a failed load is fixed by fixing any file it loaded", () => {
   });
 });
 
-describe("a target installed after a miss loads without a restart (TODO target-loader-sticky-not-found)", () => {
+describe("a target installed after a miss loads without a restart", () => {
   // Bun and Node both keep a resolver miss once the project has a node_modules
   // (probes D2/D3); the loader checks the filesystem itself. The project gets a
   // node_modules BEFORE the miss: without one Node already sees an install.
