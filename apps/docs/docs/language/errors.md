@@ -141,7 +141,7 @@ when one is clearly nearest:
 | `` `<box>`: attribute `mode`: `:strct` is not one of :strict, :loose; did you mean `:strict`? `` | a name outside `values`, near one of them |
 | `` `<box>`: attribute `mode`: `:zzzzzz` is not one of :strict, :loose `` | a name outside `values`, near none of them |
 | `` `<box>`: attribute `slug`: `:ab-c` does not match the pattern /^[a-z]+$/ `` | a name that fails `pattern` (checked with or without `values`; with both, a name must pass both) |
-| `` `<policy>`: attribute `load`: `:title` is not a declared relationship or computed here `` | an atom where the contract says `ref`, and no declaration of that kind covers the name. A union ref names every kind it accepts |
+| `` `<policy>`: attribute `load`: `:titel` is not a declared relationship or computed here (one of :author, :title); did you mean `:title`? `` | an atom where the contract says `ref`, and no declaration of that kind covers the name. A union ref names every kind it accepts; the list holds the visible names the attribute accepts (sorted, ten, then `+N more`, or `none declared`) |
 
 Every atom of a list is checked at its own position, so
 `mode=[:strict, :lose]` points at `:lose`, not at the attribute. Without a
@@ -155,7 +155,7 @@ at any depth is prefixed `` `<box>`: `<@row>`: ``):
 | Message | Cause |
 | --- | --- |
 | `` attribute `label` must be string, got atom `` | `label` is declared `string` and written `label=:title` |
-| `` attribute `kind` must be atom, got string `` | `kind` is declared `atom` and written `kind="title"`; in a list, the string item itself is the position |
+| `` attribute `kind` must be atom, got string `` | `kind` is declared `atom` and written `kind="title"`; in a list, the string item itself is the position. Against `values` the message ends with ``(one of :a, :b)``; against `ref` with the declared names and the fix: ``(one of :id, :title); write it as `:title` `` |
 
 **The name sugar is the exception** (decision 156 addendum 6): `name` set by the
 sugar satisfies a `string` or `enum` contract as its string and an `atom`

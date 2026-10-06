@@ -234,9 +234,13 @@ any:    { type: "atom" },                               // any atom
   candidates and adds a did-you-mean when one is clearly nearest:
   `` `<box>`: attribute `mode`: `:strct` is not one of :strict, :loose; did you mean `:strict`? ``.
 - A name that no declaration of the `ref` kind covers is an error with the kind in
-  the wording and the same did-you-mean, but no candidate list — the declared
-  names depend on the enclosing scopes:
-  `` `<policy>`: attribute `load`: `:title` is not a declared relationship or computed here ``.
+  the wording, the names visible from that tag (sorted, ten at most, then
+  `+N more`; `none declared` when there are none) and a did-you-mean:
+  `` `<policy>`: attribute `load`: `:titel` is not a declared relationship or computed here (one of :author, :title); did you mean `:title`? ``.
+  The list only holds names the attribute accepts: `pattern` filters it, and
+  with `values` and `ref` together it is their intersection.
+- A plain string where a `ref` atom is expected lists the same names and says what
+  to write: `` attribute `load` must be atom, got string (one of :author, :title); write it as `:title` ``.
 
 A tag states what it **declares** for references with `declares` (one entry or an
 array), and a vocabulary's `analyze` hook adds derived names with
