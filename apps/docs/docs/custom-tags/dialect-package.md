@@ -45,7 +45,7 @@ export default {
 }
 ```
 
-A bare specifier resolves through the consuming package's own `node_modules`, using `require`/`default` export conditions; installed dialect packages must export JavaScript. A relative path resolves against the package directory. The language server, `mx-tsc`, the TypeScript and Vite plugins, and the Bun loaders discover the module without per-tool configuration. Contract-only calls require a target that delegates their names; the data target delegates every non-reserved name. `mx-tsc` checks a data package with this map (see [the data target](/targets/data/#check-a-package-with-mx-tsc)); editor dispatch for data files is tracked separately (`data-target-tooling-dispatch`).
+A bare specifier resolves through the consuming package's own `node_modules`, using `require`/`default` export conditions; installed dialect packages must export JavaScript. A relative path resolves against the package directory. The language server, `mx-tsc`, the TypeScript and Vite plugins, and the Bun loaders discover the module without per-tool configuration. Contract-only calls require a target that delegates their names; the data target delegates every non-reserved name. `mx-tsc` checks a data package with this map (see [the data target](/targets/data/#data-target-check-a-package-with-mx-tsc)); editor dispatch for data files is tracked separately (`data-target-tooling-dispatch`).
 
 ## The data one-liners
 
@@ -118,5 +118,5 @@ If your dialect is assembled from a core vocabulary plus optional extensions —
 ## Limits
 
 - The module is evaluated synchronously on a scan cache miss: no top-level `await`, and relative imports need explicit extensions (`./helper.ts`, not `./helper`). Keep it self-contained: helper-only edits require a restart.
-- The scan tracks the module's mtime and content hash. Under Node, long-lived tools need a restart to reload ESM/TS contracts; Bun reloads them, and CommonJS `.cjs` modules reload on Node too. See [Discovery in the specification](../specification.md#92-discovery).
+- The scan tracks the module's mtime and content hash. Under Node, long-lived tools need a restart to reload ESM/TS contracts; Bun reloads them, and CommonJS `.cjs` modules reload on Node too. See [Discovery in the specification](../specification.md#the-mx-language-9-custom-tags-92-discovery).
 - Contracts buy precise positioned diagnostics. Completions and hover for contract-only tags are a later, separate piece.

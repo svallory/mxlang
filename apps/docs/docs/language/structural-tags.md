@@ -7,7 +7,7 @@ description: "The if/else and for forms that work identically on every host."
 
 MX's structural core is a small set of tags that render exactly the way Marko renders them, on every host. A host may forbid one of these tags outright, but it may never change what one means.
 
-`<try>` is implemented as a [core-owned custom tag](/custom-tags/sidecars/#request-a-host-primitive): the core validates one portable call shape, then requests the active host's `try` primitive. Projects cannot shadow its name.
+`<try>` is implemented as a [core-owned custom tag](/custom-tags/sidecars/#sidecars-request-a-host-primitive): the core validates one portable call shape, then requests the active host's `try` primitive. Projects cannot shadow its name.
 
 ## `<if>` / `<else if>` / `<else>`
 

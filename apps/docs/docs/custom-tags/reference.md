@@ -171,7 +171,7 @@ The exported limits are `MAX_EXPANSION_DEPTH = 64` nested calls and `MAX_EXPANSI
 
 `/var` on a custom tag call (e.g. `<counter/n start=1/>`) binds the value the
 tag's template hands back with `<return>` — see
-[Returning a value](./templates.md#returning-a-value). A tag with no template
+[Returning a value](./templates.md#template-tags-returning-a-value). A tag with no template
 at all (a sidecar that builds IR) has no `<return>` to bind, so `/var` on one
 is a positioned compile error.
 

@@ -13,7 +13,7 @@ Written 2026-09-17 by backfilling the code, `notes/decisions-2026-09-10.md`
 (entries 1–99), `worktrees/main/divergences.md`, `notes/specs/custom-tags.md`,
 `notes/solidmx-spec.md`, and the six docs-site language pages. Where the docs
 site and the code disagreed, **the code won** and the docs claim is recorded in
-[§16 Docs to fix](#16-docs-to-fix) rather than repeated here.
+[§16 Docs to fix](#the-mx-language-16-docs-to-fix) rather than repeated here.
 
 **This file lives in the repo at `apps/docs/docs/specification.md` and is served
 on the docs site at [`/specification/`](https://mx.saulo.tech/specification/).** The
@@ -3746,7 +3746,7 @@ claim was measured **still correct** (it errors) — this section's prior claim
 that it compiles was itself wrong.
 
 Closed 2026-09-28: `<return>`, `/var`, custom-tag units, discovery, and
-sidecars are **already documented**, at `/custom-tags/templates/#returning-a-value`
+sidecars are **already documented**, at `/custom-tags/templates/#template-tags-returning-a-value`
 (`<return>`/`/var`, including the per-host `/var`-scoping table and the
 JSX-hooks restriction), `/custom-tags/index/` and `/custom-tags/templates/`
 (the "compilation unit" model), `/custom-tags/discovery/`, and

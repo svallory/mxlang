@@ -39,7 +39,7 @@ Every deliberate divergence from Marko is recorded in a table — what changed,
 why, and what test guards it — before it ships. Syntax divergences land only
 with the tooling they affect (grammar, formatter, language server). MX 1.0 uses
 Marko syntax unmodified; its one deliberate semantic divergence is the
-consumer-declared [AttrTag value shape](/language/attr-tag/#marko-6-compared-with-mx).
+consumer-declared [AttrTag value shape](/language/attr-tag/#attrtag-marko-6-compared-with-mx).
 Two cases where the html target used to be more permissive than Marko were
 implementation bugs rather than divergences, and both are fixed — the
 Marko-parity oracle now reports no translator bugs.

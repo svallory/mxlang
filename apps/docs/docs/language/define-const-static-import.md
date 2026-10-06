@@ -17,7 +17,7 @@ import { formatDate } from "./util.ts"
 <p>Published ${formatDate(post.date)}</p>
 ```
 
-A `.mx` file compiles to a template — a component, not a module exporting plain helpers like `formatDate` — so import shared helpers from a `.ts` module. Import a `.mx` file itself to call it as a tag, the way [`<define>`](#define) calls work.
+A `.mx` file compiles to a template — a component, not a module exporting plain helpers like `formatDate` — so import shared helpers from a `.ts` module. Import a `.mx` file itself to call it as a tag, the way [`<define>`](#define-const-static-import-define) calls work.
 
 ## `static`
 

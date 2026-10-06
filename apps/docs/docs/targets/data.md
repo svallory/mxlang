@@ -7,13 +7,13 @@ description: "Use a .mx file as data: parseData returns a static tree of tags, a
 
 The **data target** (`@mxlang/data`) reads a `.mx` file as **data**, not UI. `parseData` compiles the source and returns a static tree of what is written: tags, attributes, attribute tags, expressions with their source spans. It never renders and never evaluates. A spec tool, a config loader or a code generator walks the tree and decides what each tag means.
 
-It is a **target**, not a host: it has no framework behind it ([Core and hosts](/architecture/core-and-hosts/)). The normative description is [specification §13.7](/specification/#137-the-data-target).
+It is a **target**, not a host: it has no framework behind it ([Core and hosts](/architecture/core-and-hosts/)). The normative description is [specification §13.7](/specification/#the-mx-language-13-host-semantics-table-137-the-data-target).
 
 ## Status: `mx-tsc` checks, the editor does not yet
 
 `mx-tsc` checks a data package. The editor tools do not (TODO `data-target-tooling-dispatch`):
 
-- **`mx-tsc`** runs the check described [below](#check-a-package-with-mx-tsc). It is the tool for agents and CI.
+- **`mx-tsc`** runs the check described [below](#data-target-check-a-package-with-mx-tsc). It is the tool for agents and CI.
 - The language server, the TypeScript plugin, Vite and the Bun loader do **not** compile data files. For them `mx.target: "data"` in a `package.json` is still a positioned error: `mx.target "data" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead`.
 - `parseData` from `@mxlang/data` works on its own and is the supported entry point for a program.
 
@@ -107,7 +107,7 @@ A consumer that dispatches on the contract reads `contract`, not `name`. A name 
 the closed-`children` error listing the patterns, and one a typo away from an explicit child is the
 did-you-mean guard, both reported at the child's position; `unknownTags: "reject"` counts a claimed
 child as known. The patterns, the check order and the registration errors are in
-[Wildcard children](/custom-tags/sidecars/#wildcard-children-children).
+[Wildcard children](/custom-tags/sidecars/#sidecars-declare-the-call-contract-wildcard-children-children).
 
 ## What is rejected
 
@@ -131,6 +131,6 @@ parseData(source, filename, {
 - **`customTags`** declares a vocabulary: required attributes, attribute types, allowed children and parents. `parseData` does not scan `tags/` or `package.json`; this map is all it knows. See [Writing a dialect package](/custom-tags/dialect-package/) for how to write and share one.
 - **`structural`**: `"pass"` keeps text, `${}`, `<if>`, `<for>`, `<const>`, comments and `import`/`export`/`static` in the tree. `"reject"` makes the first of them an error, so a consumer that only reads tags and attributes cannot silently ignore an `<if>`.
 - **`imports`**: `"pass"` or `"reject"`, defaulting to the effective `structural` value. `"pass"` under `structural: "reject"` lets top-level `import` declarations through while `<if>`, `export` and the rest stay errors; the tree gains `imports: Array<{ code, span }>` (verbatim, file order, UTF-16 spans) in place of those entries in `statements`. With `structural: "pass"` the imports stay in `statements` and `tree.imports` is absent. Each entry is one authored statement line (Marko's statement granularity), so two declarations on one line are one entry. A tag-body `import` is not an import at all: Marko parses it as body text, so `structural: "reject"` rejects it as text and `imports` does not apply. `mx-tsc` reads the same values from `package.json#mx.data.imports`; an invalid value is an error at the value and `"reject"` applies.
-- **`unknownTags`**: `"allow"` accepts a tag with no contract. `"reject"` makes it an error naming the tag, with a nearest-name hint, for a dialect that declares every tag. [Closing the vocabulary](/custom-tags/dialect-package/#closing-the-vocabulary) has an example.
+- **`unknownTags`**: `"allow"` accepts a tag with no contract. `"reject"` makes it an error naming the tag, with a nearest-name hint, for a dialect that declares every tag. [Closing the vocabulary](/custom-tags/dialect-package/#writing-a-dialect-package-closing-the-vocabulary) has an example.
 
 `parseDataFile(path, options)` reads the file for you.
