@@ -1747,14 +1747,16 @@ comment already read in this position, stopping at the position's start. Let
 | 6 | `>` | **yes** when the character before it is `=` (`a => :b`). Otherwise **no** when the `>` closes a type argument list (below; `y as Array<T> :z`), otherwise **yes** (a comparison or a shift) |
 | 7 | `+` or `-` | **no** when the character before it is the same (`a++ :b`); otherwise **yes** |
 | 8 | `/` | **no** when it is the last character of a regular expression read in this position (`/re/ :b`); otherwise **yes** (`a / :b`) |
-| 9 | any other character that is not a word character | **yes**: an operator or punctuator (`(:a`, `[:a, :b]`, `a + :b`, `{ k: :a }`). A non-ASCII letter is not a word character either, so it lands here: `x=({ é:a })` and `x=(é :b)` lex the atom, where `x=({ e:a })` and `x=(e :b)` do not (OQ 32) |
+| 9 | any other character that is not a word character | **yes**: an operator or punctuator (`(:a`, `[:a, :b]`, `a + :b`, `{ k: :a }`). The rule counts any character at or above U+0080 as a word character here, as `lexAtom` does after the name (decision 156 addenda 2 and 8: "a `:` TypeScript could own is TypeScript's"), so such a character goes to rows 10 and 11. **Behaviour today, see defect `atom-lookbehind-non-ascii`**: the code counts ASCII word characters only, so `x=({ é:a })` and `x=(é :b)` lex the atom (observed) |
 | 10 | a word character directly before the `:`, with no whitespace or comment between | **no**: an object key or a label, keyword or not (`{ new:a }`) |
 | 11 | a word character, with whitespace or a comment between | **yes** only when the word ending at `p` is an operator word; otherwise **no** (`c ? b :c`) |
 
 **Operator words** (`isOperatorWord`), for rows 5 and 11. The word is the
 maximal run of word characters ending at `p`, not extending before the
-position's start; word characters are ASCII only, so in `éin :b` the word is
-`in` and the atom lexes (observed; OQ 32). In order:
+position's start. The rule counts any character at or above U+0080 as a word
+character, so in `éin :b` the word is `éin` and no atom lexes. **Behaviour
+today, see defect `atom-lookbehind-non-ascii`**: the word is `in` and the atom
+lexes (observed). In order:
 
 1. the word ends where the position's last atom ends (an atom's own name:
    `:delete :b`): **no**;
@@ -2166,14 +2168,10 @@ None of these is resolved in the normative text.
     its `${…}` is no placeholder and lexes no atom
     (``<script>`${:a}`</script>``). *Recommendation:* confirm that addendum 2
     means placeholders only.
-32. **Non-ASCII identifiers before an atom.** The atom look-behind counts only
-    ASCII word characters, so a non-ASCII letter before the `:` reads as a
-    punctuator: `x=({ é:a })` lexes the atom `a` (TypeScript reads the key
-    `é`), `x=(é :b)` lexes `b`, and `x=(éin :b)` takes `in` as an operator word.
-    Decision 156 addendum 2's principle ("a `:` TypeScript could own is
-    TypeScript's") reads the opposite way. *Recommendation:* treat any
-    character at or above U+0080 as a word character in the look-behind, as
-    `lexAtom` already does after the name.
+32. **Non-ASCII identifiers before an atom.** *Settled* by mx-lead
+    (2026-10-06): the principle is the rule; the atom look-behind treats any
+    character at or above U+0080 as a word character. Today's code is the
+    defect MX1 TODO `atom-lookbehind-non-ascii` ([Atoms](#atoms), rows 9 to 11).
 
 ### Where a real TypeScript parser would end the value differently
 
@@ -2229,7 +2227,10 @@ These behaviours above are defects, not grammar, and are to be fixed in
 - end of input in concise mode inside a tag name's or shorthand's `${…}`, or
   a template literal's `${…}`, raises no error **and drops the owning event**
   (`div.a${b` reports no shorthand, `${x` reports nothing, ``div x=`${a``
-  reports no value).
+  reports no value);
+- the atom look-behind counts ASCII word characters only (`x=({ é:a })`,
+  `x=(é :b)` and `x=(éin :b)` lex an atom), MX1 TODO
+  `atom-lookbehind-non-ascii`.
 
 The behaviours listed in OQ 13 (no `\` escape in a text-body string), OQ 17,
 OQ 24, OQ 25 and OQ 27 look like defects as well and are not filed. An implementer **must not** treat any of them as intended
