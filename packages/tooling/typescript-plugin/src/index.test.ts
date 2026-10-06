@@ -1443,6 +1443,50 @@ describe("MX language plugin", () => {
     expect(elapsed).toBeLessThan(2000);
   });
 
+  it("pins an html call's missing prop with a body at 1:1, until #388 maps the props object (decision 161)", () => {
+    // html maps only the callee name of `__mxRenderTag(sink, Card)({ … })`;
+    // TypeScript anchors the missing prop (TS2345) on the props object, which
+    // no mapping covers, so the seam reports it at 1:1 as MX's. #388
+    // (fix/html-call-props-mapped) maps the object's braces onto the tag
+    // name; then this lands exactly on `Card` with no marker, and this test
+    // flips to that.
+    const directory = `${here}/fixtures/html-tags`;
+    const page = `${directory}/missing-prop-page.mx`;
+    const consumer = `${directory}/missing-prop-consumer.ts`;
+    const source =
+      'import Card from "./missing-prop-card.mx";\n<div>\n  <Card>x</Card>\n</div>\n';
+    const service = createPluginService(
+      {
+        [`${directory}/missing-prop-card.mx`]:
+          "export interface Input { title: string; content?: () => string }\n<p>${input.title}</p>\n",
+        [page]: source,
+        [consumer]: 'import "./missing-prop-page.mx";',
+      },
+      [consumer],
+    );
+    service.getSemanticDiagnostics(consumer);
+
+    expect(
+      service
+        .getSemanticDiagnostics(page)
+        .map((d) => [
+          d.code,
+          d.start,
+          d.length,
+          ts.flattenDiagnosticMessageText(d.messageText, "\n").split("\n")[0],
+        ]),
+    ).toEqual([
+      [
+        2345,
+        0,
+        0,
+        expect.stringMatching(
+          /^Argument of type .* \(in MX-generated code, not yours: an MX bug; generated \d+:\d+\)$/,
+        ),
+      ],
+    ]);
+  });
+
   it("says a diagnostic is MX's bug when the host's emitter wrote the code it is in (decision 161)", () => {
     // A test-only emitter: the html target's module with one defective
     // scaffolding statement appended. It has no spelling in the source, so no
