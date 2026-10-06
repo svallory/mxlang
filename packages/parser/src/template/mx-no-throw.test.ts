@@ -7,7 +7,9 @@ import { describe, expect, it } from "vitest";
 import * as template from "./index.ts";
 import {
   fuzzLineThrows,
+  fuzzNamelessThrows,
   fuzzThrows,
+  NAMELESS_TAG_ROWS,
   NO_THROW_ROWS,
   type NoThrowParserModule,
   renderErrorCodes,
@@ -39,5 +41,22 @@ describe("the template parser never throws (src/template)", () => {
       total: 5_000,
       thrown: [],
     });
+  });
+
+  it.each(NAMELESS_TAG_ROWS)(
+    "a tag that never got its name never throws: %j",
+    (input, expected) => {
+      expect(renderEvents(mod, input)).toBe(expected);
+      expect(renderErrorCodes(mod, input).includes("THROW")).toBe(false);
+    },
+  );
+
+  it("no generated nameless-tag input throws (seeds 1 and 2)", () => {
+    for (const seed of [1, 2]) {
+      expect(fuzzNamelessThrows(mod, seed, 20_000)).toEqual({
+        total: 20_000,
+        thrown: [],
+      });
+    }
   });
 });

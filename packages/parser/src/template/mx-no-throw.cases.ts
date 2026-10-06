@@ -391,3 +391,143 @@ export function fuzzLineThrows(
   }
   return { total: count, thrown };
 }
+
+/**
+ * template-parser-nameless-tag-throw (decision 156 addendum 13, item 5):
+ * [input, rendered events]. A tag that never got its name and is still open
+ * at the end of the input is `MISSING_END_TAG` (22), named as the default
+ * `div`, as `ensureExpectedCloseTag` names it; it used to throw
+ * `range.start` out of `parse()` (`htmlEOF`).
+ */
+export const NAMELESS_TAG_ROWS: [string, string][] = [
+  ["<,>a", '> text:"a" ERR(0-3 Missing ending "div" tag)'],
+  ["--#'!<,\r\n>", `text:"'!" > ERR(5-10 Missing ending "div" tag)`],
+  ["<,>", '> ERR(0-3 Missing ending "div" tag)'],
+  ["<div><,>", '<div> > > ERR(5-8 Missing ending "div" tag)'],
+  ["<,>/>\n  ", '> text:"/>\\n  " ERR(0-3 Missing ending "div" tag)'],
+  ["div\n  <,>x", '<div> > > text:"x" ERR(6-9 Missing ending "div" tag)'],
+  // A tag whose name is EMPTY, not missing, never threw and keeps its message
+  // byte for byte (an empty name reads as ""), the base's reading.
+  ["<#i>", '<> > ERR(0-4 Missing ending "" tag)'],
+  ["<,#i>", '<> > ERR(0-5 Missing ending "" tag)'],
+  ["<,.c>", '<> > ERR(0-5 Missing ending "" tag)'],
+  ["<,/v>a", '<> var:"v" > text:"a" ERR(0-5 Missing ending "" tag)'],
+  ["<,|p|>a", '<> > text:"a" ERR(0-6 Missing ending "" tag)'],
+  ["<,(a)>a", '<> args:"a" > text:"a" ERR(0-6 Missing ending "" tag)'],
+  // Pinned as they were: the shapes that never threw.
+  [",", ">"],
+  ["<,/>", ">"],
+  [",--", ">"],
+  ["</>", 'ERR(0-3 The closing "" tag was not expected)'],
+];
+
+/**
+ * template-parser-nameless-tag-throw (decision 156 addendum 13, item 5): the
+ * tags that never get a name. A `,` line, `<,>`, `<,/>`, a `</>` and head
+ * parts (an attribute, shorthand, argument or variable) before any name, with
+ * a comment before a name, each inside and outside a parent, HTML and
+ * concise.
+ */
+const NAMELESS_PIECES = [
+  ",",
+  ", ",
+  ",,",
+  "<,>",
+  "<,/>",
+  "<,",
+  "<, x=1>",
+  "<,/v>",
+  "<,(a)>",
+  "<,|p|>",
+  "</>",
+  "</,>",
+  "</",
+  "<>",
+  "< >",
+  "<//>",
+  "<.a>",
+  "<#b>",
+  "<:c>",
+  "<x=1>",
+  "<(a)>",
+  "<|p|>",
+  "<=1>",
+  "<// c\n>",
+  "</* c */>",
+  "<!-- c -->",
+  "// c",
+  "/* c */",
+  "x=1",
+  ".a",
+  "#b",
+  "(a)",
+  "/v",
+  "|p|",
+  "=1",
+  "--",
+  "-- t",
+  "--/",
+  ">",
+  "/>",
+  "/",
+  "div",
+  "<div>",
+  "</div>",
+  "<div/>",
+  "a",
+  "<a>",
+  "</a>",
+  "script",
+  "<script>",
+  "</script>",
+  "static",
+  "<static>",
+  "\n",
+  "\n  ",
+  "\n    ",
+  " ",
+  "\t",
+  "${a}",
+  "$ x",
+  ";",
+  "{",
+  "}",
+];
+
+/** Openers that put the nameless piece inside a parent, in both syntaxes. */
+const NAMELESS_PARENTS = [
+  "",
+  "",
+  "<div>",
+  "div\n  ",
+  "<div>\n",
+  "<a><b>",
+  "a\n  b\n    ",
+  "<script>",
+];
+
+/**
+ * Generates `count` inputs of 1 to 8 `NAMELESS_PIECES` after an optional
+ * parent, with `seed`, and returns the ones whose parse throws (none
+ * expected).
+ */
+export function fuzzNamelessThrows(
+  mod: NoThrowParserModule,
+  seed: number,
+  count: number,
+): { total: number; thrown: string[] } {
+  const next = random(seed);
+  const pick = <T>(list: readonly T[]) =>
+    list[Math.floor(next() * list.length)] as T;
+  const thrown: string[] = [];
+  for (let n = 0; n < count; n++) {
+    let code = pick(NAMELESS_PARENTS);
+    const pieces = 1 + Math.floor(next() * 8);
+    for (let k = 0; k < pieces; k++) code += pick(NAMELESS_PIECES);
+    if (next() < 0.2) code += pick(NAMELESS_PIECES);
+    const out = renderEvents(mod, code);
+    const at = out.indexOf("THROW(");
+    if (at !== -1) thrown.push(`${JSON.stringify(code)} ${out.slice(at)}`);
+  }
+  return { total: count, thrown };
+}

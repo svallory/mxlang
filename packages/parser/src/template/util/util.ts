@@ -90,7 +90,12 @@ export function htmlEOF(this: Parser) {
       return this.emitError(
         this.activeTag,
         ErrorCode.MISSING_END_TAG,
-        'Missing ending "' + this.read(this.activeTag.tagName) + '" tag',
+        'Missing ending "' +
+          // A tag that never got its name has no name range at all (`<,>`):
+          // it is the default `div`, as in `ensureExpectedCloseTag`. An empty
+          // name (`<#i>`) keeps reading as "".
+          (this.activeTag.tagName ? this.read(this.activeTag.tagName) : "div") +
+          '" tag',
       );
     }
   }

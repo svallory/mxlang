@@ -1,5 +1,5 @@
 diff --git a/dist/index.js b/dist/index.js
-index dc727aef1e94c2a42a93d9e897a89cd5518f0907..cdb45a33cca35298c1a102d751d3001cc87d33c3 100644
+index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c68222a2a0225cc8b18e251e44d586b06f2adb70 100644
 --- a/dist/index.js
 +++ b/dist/index.js
 @@ -47,7 +47,23 @@ var Parser = class {
@@ -663,7 +663,14 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..cdb45a33cca35298c1a102d751d3001c
              return;
            }
            this.pos++;
-@@ -2670,6 +2936,35 @@ function htmlEOF() {
+@@ -2664,12 +2930,41 @@ function htmlEOF() {
+       return this.emitError(
+         this.activeTag,
+         22,
+-        'Missing ending "' + this.read(this.activeTag.tagName) + '" tag'
++        'Missing ending "' + (this.activeTag.tagName ? this.read(this.activeTag.tagName) : "div") + '" tag'
+       );
+ }
  function isWordCode(code) {
    return code >= 65 && code <= 90 || code >= 97 && code <= 122 || code >= 48 && code <= 57 || code == 36 || code === 95;
  }
@@ -700,7 +707,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..cdb45a33cca35298c1a102d751d3001c
    return code === 62;
  }
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 8afb14db555b8df8a5b9f5e1c29bad5080125709..c31432c2155ec45dcabc7f409edc4598cb6868af 100644
+index 8afb14db555b8df8a5b9f5e1c29bad5080125709..9962f4411cfc08a8e952142b72a86a44f658f0cb 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -20,7 +20,23 @@ var Parser = class {
@@ -1364,7 +1371,14 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..c31432c2155ec45dcabc7f409edc4598
              return;
            }
            this.pos++;
-@@ -2643,6 +2909,35 @@ function htmlEOF() {
+@@ -2637,12 +2903,41 @@ function htmlEOF() {
+       return this.emitError(
+         this.activeTag,
+         22,
+-        'Missing ending "' + this.read(this.activeTag.tagName) + '" tag'
++        'Missing ending "' + (this.activeTag.tagName ? this.read(this.activeTag.tagName) : "div") + '" tag'
+       );
+ }
  function isWordCode(code) {
    return code >= 65 && code <= 90 || code >= 97 && code <= 122 || code >= 48 && code <= 57 || code == 36 || code === 95;
  }

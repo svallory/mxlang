@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Fix, regression of 0.1.0-alpha.7 (decision 156 addendum 13):** in HTML body text, `//` and `/*` start a comment only after ASCII whitespace, as in Marko. `<p>Visit\u00a0//cdn.example/x.js</p>` is text again; alpha.7 and alpha.8 read it as a comment that swallowed `</p>` (`Missing ending "p" tag`). Addendum 11 stays at the expression sites.
+- **Fix (decision 156 addendum 13):**
+  - The word class is exact: a code point at or above U+0080 is a word character where the parser looks behind or ahead only when it is `ID_Continue` or U+200C or U+200D, a surrogate pair read as one code point. `©`, `×`, `…`, `«` and emoji are no longer identifier characters, so valid Marko such as `<div x=a >©>c</div>` parses as Marko reads it instead of failing with `Ambiguous ">"`.
+  - A tag that never got its name and is still open at the end of the input (`<,>a`) is an `onError` (`Missing ending "div" tag`) instead of a `TypeError` out of `parse()`.
+
 - **Fix (template-parser-lookbehinds-followup, decisions 156 addenda 11 and 12, 165):** in the template parser (`src/template/`, which `@mxlang/core` bundles) and the `htmljs-parser` patch:
   - A closing tag after a tag that never got its name (`,--/</e>`) is an `onError` (`EXTRA_CLOSING_TAG`) instead of a `TypeError` out of `parse()`.
   - Unicode whitespace and line terminators behave as ASCII whitespace in every look-behind, so `(é)\u00a0/ 2` divides.

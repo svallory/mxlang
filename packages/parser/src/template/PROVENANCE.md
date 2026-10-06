@@ -211,6 +211,7 @@ JavaScript.
 | `states/JS_COMMENT_LINE.ts` | `JS_COMMENT_LINE.parse`, new `isInTextBody` | the close-tag check runs only for a comment in the text tag's body (`PARSED_TEXT_CONTENT` before any `OPEN_TAG` among its ancestors); a body comment, including one in a body placeholder, closes the tag as before |
 | `states/CLOSE_TAG.ts` | `checkForClosingTag` | returns false when there is no active tag |
 | `states/CLOSE_TAG.ts` | `ensureExpectedCloseTag` | an active tag that never got its name (`,--/</e>`: the `,` opens one, a concise `--` line follows) cannot match a named closing tag: `EXTRA_CLOSING_TAG`, as with no open tag, instead of reading `tagName.end` and throwing; `</>` still closes it (template-parser-lookbehinds-followup) |
+| `util/util.ts` | `htmlEOF` | a tag that never got its name (`<,>a`, `<,>`) and is still open at the end of the input reports `MISSING_END_TAG` named as the default `div` (as `ensureExpectedCloseTag` names it; only when the tag has no name range, an empty name such as `<#i>` keeps `""`) instead of reading the range of a name it never had, which threw a `TypeError` out of `parse()` (decision 156 addendum 13, item 5; both dist builds carry the same JavaScript) |
 
 `JS_COMMENT_BLOCK` runs no close-tag check. `checkForClosingTag`'s only
 other caller, `PARSED_TEXT_CONTENT`, is the text body itself. Tests:
