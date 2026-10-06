@@ -1094,10 +1094,6 @@ Marko oracle are unchanged. Recorded in `divergences.md`.
 - **The data target is not wired into the language server, the TypeScript
   plugin, Vite or the Bun loader yet** (§13.7); `parseData` and `mx-tsc` use
   `mx.data.defaultTag`.
-- **`mx-tsc`'s data check keys on the resolved base target**, never on the
-  project's `mx.target` string: a project that selects a host whose descriptor
-  is built on data (its declarations carry `baseTarget: "data"`) gets data's
-  strict defaults and the `mx.data.*` keys like `mx.target: "data"` does.
 
 ### `class:foo` / `style:foo` modifiers
 
@@ -3359,7 +3355,7 @@ by core, at the key's value (code `unknown-target`):
 The language server and the TypeScript plugin report it as a policy
 error and the Vite plugin fails the transform with it. `mx-tsc` asks the wrapper
 for the unmasked policy when it is run on a package whose own `package.json`
-says `mx.target: "data"` (§13.7.4); in every other run (rule-5 inference, a
+resolves to `data` (§13.7.4); in every other run (rule-5 inference, a
 monorepo root, `-b`/`-w`) it still reports the error like the editor tools. The tools still hand on
 the same fallback as any `unknown-target` (rule 5, else `html`), so later
 diagnostics are not drowned, but the error means no green build. The Bun loader
@@ -3625,6 +3621,20 @@ the value and the strict default applies (for `defaultTag`, the built-in
 `object`). The
 language server, the TypeScript plugin and Vite keep the staged error of §13.5
 until `data-target-tooling-dispatch` lands.
+
+**A host built on data (lead ruling 2026-10-05 21:26, follow-up to #355).** The
+check keys on the project's *resolved base target*, never on its `mx.target`
+string. A project that selects a third-party host with `mx.host` gets the same
+check when the host's descriptor declares `builtOn: "data"` (directly or through
+a chain; `createTargetLookup` resolves and validates it, and the end of the
+chain is the base target, §13.5). It adds to the host: `parseData` runs with the
+strict defaults and the `mx.data.*` keys, and the host's own compile runs on
+the same file with the same tags and the unnamed tag below, so its rules still
+fire (an error both report prints once). The unnamed tag follows the ladder of
+§4: `mx.<host target>.defaultTag`, else `mx.data.defaultTag`, then the host's
+`defaultTag`, the descriptor's, and data's `object`. When both keys are set and
+differ the host's own wins and a warning at `mx.data.defaultTag` names both. A
+host that copies data's declarations without `builtOn` gets none of this.
 
 ### Host selection
 
