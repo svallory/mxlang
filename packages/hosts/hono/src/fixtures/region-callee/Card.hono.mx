@@ -1,0 +1,9 @@
+import type { AttrTag } from "@mxlang/hono";
+
+export interface Input {
+  row?: AttrTag<{ as: "renderable"; params: [count: number] }>;
+}
+
+export default function Card(input: Input) {
+  return <section>${input.row?.(1)}</section>;
+}
