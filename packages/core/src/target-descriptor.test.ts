@@ -320,6 +320,22 @@ describe("validateDescriptor", () => {
     );
   });
 
+  it("rejects a `declarations.default.builtinTags` that is not an array of non-empty strings", () => {
+    const withTags = (builtinTags: unknown) =>
+      invalidField(target({ declarations: { default: { builtinTags } } }));
+    expect(withTags(5).field).toBe("declarations.default.builtinTags");
+    expect(withTags("object").field).toBe("declarations.default.builtinTags");
+    expect(withTags(["object", 1]).field).toBe(
+      "declarations.default.builtinTags[1]",
+    );
+    expect(withTags([""]).field).toBe("declarations.default.builtinTags[0]");
+    expect(() =>
+      validateDescriptor(
+        target({ declarations: { default: { builtinTags: ["object"] } } }),
+      ),
+    ).not.toThrow();
+  });
+
   it("rejects a host part with a bad name, default flag, or file kinds", () => {
     expect(invalidField(target({ host: "solid" })).field).toBe("host");
     expect(invalidField(target({ host: {} })).field).toBe("host.name");

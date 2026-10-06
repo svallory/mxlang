@@ -608,6 +608,23 @@ export function validateDescriptor(value: unknown): TargetDescriptor {
     if (declarations.strict !== undefined && !isObject(declarations.strict)) {
       throw bad("declarations.strict", declarations.strict, "an object");
     }
+    const builtinTags = declarations.default.builtinTags;
+    if (builtinTags !== undefined) {
+      if (!Array.isArray(builtinTags))
+        throw bad(
+          "declarations.default.builtinTags",
+          builtinTags,
+          "an array of non-empty strings",
+        );
+      builtinTags.forEach((tag, i) => {
+        if (typeof tag !== "string" || tag === "")
+          throw bad(
+            `declarations.default.builtinTags[${i}]`,
+            tag,
+            "a non-empty string",
+          );
+      });
+    }
   }
 
   optionalFunction(value, "load", "load");
