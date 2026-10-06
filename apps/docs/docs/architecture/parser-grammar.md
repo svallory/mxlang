@@ -794,10 +794,13 @@ observed unless a symbol is cited instead:
 | `::` where atoms are lexed, or in the static text of a tag name, shorthand part or attribute name | `` `::name` is reserved (decision 156): `::` will be the Symbol.for sugar; write `:name` for an atom `` with the written name ([Atoms](#atoms)) |
 
 End of input inside a **position** is an error only when rule 1 of
-[End of input](#end-of-input) does not apply: always in HTML mode, and in
-concise mode only when a group is open in the position itself. Where rule 1
-applies the position ends silently and no row below is raised (`div(a`,
-`div|a`, `div<A`, `div (a`, `div onClick(a) {b`, `script -- ${b`; observed).
+[End of input](#end-of-input) does not apply, that is, when a group is open in
+the position itself, or when the parser is in HTML mode and the position has no
+`terminatedByEOL` flag. Where rule 1 applies the position ends silently and no
+row below is raised: in concise mode at depth 0 (`div(a`, `div|a`, `div<A`,
+`div (a`, `div onClick(a) {b`, `script -- ${b`), and in either mode for a
+line scriptlet or statement at depth 0 (`<div>\n$ a +` reports the scriptlet
+`a +` and only `Missing ending "div" tag`; all observed).
 For those positions, the message depends on the state that owns the position:
 
 | Condition | Message |
@@ -1744,13 +1747,14 @@ comment already read in this position, stopping at the position's start. Let
 | 6 | `>` | **yes** when the character before it is `=` (`a => :b`). Otherwise **no** when the `>` closes a type argument list (below; `y as Array<T> :z`), otherwise **yes** (a comparison or a shift) |
 | 7 | `+` or `-` | **no** when the character before it is the same (`a++ :b`); otherwise **yes** |
 | 8 | `/` | **no** when it is the last character of a regular expression read in this position (`/re/ :b`); otherwise **yes** (`a / :b`) |
-| 9 | any other character that is not a word character | **yes**: an operator or punctuator (`(:a`, `[:a, :b]`, `a + :b`, `{ k: :a }`) |
+| 9 | any other character that is not a word character | **yes**: an operator or punctuator (`(:a`, `[:a, :b]`, `a + :b`, `{ k: :a }`). A non-ASCII letter is not a word character either, so it lands here: `x=({ é:a })` and `x=(é :b)` lex the atom, where `x=({ e:a })` and `x=(e :b)` do not (OQ 32) |
 | 10 | a word character directly before the `:`, with no whitespace or comment between | **no**: an object key or a label, keyword or not (`{ new:a }`) |
 | 11 | a word character, with whitespace or a comment between | **yes** only when the word ending at `p` is an operator word; otherwise **no** (`c ? b :c`) |
 
 **Operator words** (`isOperatorWord`), for rows 5 and 11. The word is the
 maximal run of word characters ending at `p`, not extending before the
-position's start. In order:
+position's start; word characters are ASCII only, so in `éin :b` the word is
+`in` and the atom lexes (observed; OQ 32). In order:
 
 1. the word ends where the position's last atom ends (an atom's own name:
    `:delete :b`): **no**;
@@ -2162,6 +2166,14 @@ None of these is resolved in the normative text.
     its `${…}` is no placeholder and lexes no atom
     (``<script>`${:a}`</script>``). *Recommendation:* confirm that addendum 2
     means placeholders only.
+32. **Non-ASCII identifiers before an atom.** The atom look-behind counts only
+    ASCII word characters, so a non-ASCII letter before the `:` reads as a
+    punctuator: `x=({ é:a })` lexes the atom `a` (TypeScript reads the key
+    `é`), `x=(é :b)` lexes `b`, and `x=(éin :b)` takes `in` as an operator word.
+    Decision 156 addendum 2's principle ("a `:` TypeScript could own is
+    TypeScript's") reads the opposite way. *Recommendation:* treat any
+    character at or above U+0080 as a word character in the look-behind, as
+    `lexAtom` already does after the name.
 
 ### Where a real TypeScript parser would end the value differently
 
