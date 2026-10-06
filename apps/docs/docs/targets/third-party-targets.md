@@ -77,7 +77,7 @@ resolveDefaultTag(node, parents: readonly DefaultTagParent[], context: DefaultTa
 - `context.contractRung` is `false` when your declarations set `allowContractDefaultTag: false`; `contractDefaultTag` honours it.
 - `context.scope` carries what the compile can say about reachable names (custom tags, Marko's lookup, the host's `isElement`); `contractDefaultTag` uses it to check the contract's value, and returns `undefined` for a rejected one so the next rung answers. `context.onContractRejected` is how the use-site error learns the declaration was the problem.
 
-**`HostDeclarations.builtinTags?`.** Optional list, on `declarations.default`: the tag names your target provides without a taglib entry (the data target's anonymous `object`). The registry counts them as reachable when it checks `defaultTag` and `host.defaultTag`, so a descriptor that reuses a target's declarations keeps the target's built-in with no literal of its own. A name no taglib, custom tag or `builtinTags` entry covers is still an error.
+**`HostDeclarations.builtinTags?`.** Optional list, on `declarations.default`: the tag names your target provides without a taglib entry (the data target's anonymous `object`). The registry counts them as reachable when it checks `defaultTag` and `host.defaultTag`, and a `children["*"]` wildcard never claims them (they are built-ins of the target), so a descriptor that reuses a target's declarations keeps the target's built-in with no literal of its own. A name no taglib, custom tag or `builtinTags` entry covers is still an error. The field is validated at load: an array of non-empty strings.
 
 **`contractDefaultTag(parents, context, builtins?)`** is the exported helper for rung 1: the nearest authored parent's declared `defaultTag` (reading attribute-tag declarations at any depth, skipping control flow by the tag's own definition, never climbing past a parent that declares none), or `undefined`. `builtins` lists names your target provides without a taglib entry. The same module exports `validateDefaultTag(name, scope)` (the reason a value is invalid, or `undefined`), used by the registry for every rung.
 ### A host on the data target
@@ -86,7 +86,7 @@ A host can be built on the [data target](/targets/data/) and name its own file k
 
 ```js
 // @acme/mx-mesh/index.cjs
-const data = require("@mxlang/data").default; // the data target's descriptor
+const data = require("@mxlang/data/descriptor").default; // the data target's descriptor
 
 module.exports = {
   descriptorVersion: 0,
@@ -116,7 +116,8 @@ The project selects it with `mx.host`:
 ```
 
 - **`defaultTag`** keeps data's `object` because `builtinTags` travels with the declarations; a host override (`host.defaultTag`) or `mx.mesh-data.defaultTag` follows the [ladder](#the-unnamed-tag), and an override the target cannot reach is the same positioned error as on any target. Set `allowContractDefaultTag: false` on a copy of the declarations to forbid the parent-contract rung.
-- **`fileKinds`** is checked like a built-in's: a segment is one lowercase word with no dot and never `mx`, needs a `diagnosticSource`, and is refused when another host already owns it (`file-kind segment "x" is declared more than once (host "a" and host "b")`). A kind without `compileRegion` is a **whole-file** kind: `post.mesh.mx` compiles whole-file on the host's target, never through the region bridge. A kind's `readCalleeInput` is registered into the tool's core when the project loads the descriptor.
+- **`fileKinds`** is checked like a built-in's: a segment is one lowercase word with no dot and never `mx`, needs a `diagnosticSource`, and is refused when another host already owns it (`file-kind segment "x" is declared more than once (host "a" and host "b")`). A kind without `compileRegion` is a **whole-file** kind: `post.mesh.mx` compiles whole-file on the host's target, never through the region bridge. A segment must be the host's own `name` (`mesh` declares `mesh`, never `react`): the segment before `.mx` is a host name (decisions 136, 148). A kind's `readCalleeInput` is read from the project's own lookup, so two projects that load different hosts never share readers.
+- **No data check yet.** A host on data does not get `mx-tsc`'s data check (the strict `structural`/`unknownTags` defaults and the `mx.data.*` options): that check runs only for `mx.target: "data"`, until TODO `data-check-keys-on-base-target` lands. Compile and editor diagnostics are unaffected.
 - **Tools.** The registry, language server, Vite plugin, `mx-tsc` and the TypeScript plugin all resolve `post.mesh.mx` through `mx.host`, compile it through the descriptor's `load`, and report data's errors positioned in the file.
 
 ### Use the injected core
