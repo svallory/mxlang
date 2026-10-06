@@ -72,8 +72,6 @@ by workspace-relative path):
 - `examples/react-app` — e2e only
 - `examples/react-region-app` — e2e only
 - `examples/todomvc` — e2e only
-- `packages/babel` — vendored Babel fork, typecheck only; its behaviour is
-  pinned by `@mxlang/tsx-bridge`'s `vendored.test.ts` and the bridge suites
 - `packages/editors/zed` — grammar and Rust extension (registers
   `@mxlang/language-server`), both build-verified in CI
   (`zed-compile-check`, `zed-compile-check`)
