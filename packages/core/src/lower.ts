@@ -221,6 +221,60 @@ function shorthandSigil(char: string | undefined): boolean {
   return char === "#" || char === ".";
 }
 
+/** Does `${` open at this offset? */
+function interpolationAt(source: string, at: number): boolean {
+  return source[at] === "$" && source[at + 1] === "{";
+}
+
+/** The offset after the `${…}` opening at `at`, braces balanced. */
+function skipInterpolation(source: string, at: number): number {
+  let depth = 0;
+  for (let i = at + 1; i < source.length; i++) {
+    if (source[i] === "{") depth++;
+    else if (source[i] === "}" && --depth === 0) return i + 1;
+  }
+  return source.length;
+}
+
+/**
+ * The span of a tag's shorthand `class` or `id` whose value Marko built
+ * (`<div.a.${x}/>`, `<div.a${x}/>`, `<div#a${x}/>`): the first sigil of its
+ * kind to the end of the last token of that kind. Marko gives such a value no
+ * loc, so the run is read from the tag's own source; null when it is not there.
+ */
+function builtShorthandSpan(
+  ctx: Ctx,
+  tagLoc: Position,
+  name: unknown,
+): SourceSpan | null {
+  const sigil = name === "class" ? "." : name === "id" ? "#" : null;
+  if (!sigil) return null;
+  const { source } = ctx;
+  let i = offsetOf(ctx, tagLoc);
+  if (source[i] === "<") i++;
+  // The tag name, up to the first shorthand sigil.
+  while (i < source.length && !shorthandSigil(source[i])) {
+    if (interpolationAt(source, i)) i = skipInterpolation(source, i);
+    else if (/[\s/>=|(]/.test(source[i] as string)) return null;
+    else i++;
+  }
+  let start = -1;
+  let end = -1;
+  while (shorthandSigil(source[i])) {
+    const tokenStart = i++;
+    while (i < source.length && !shorthandSigil(source[i])) {
+      if (interpolationAt(source, i)) i = skipInterpolation(source, i);
+      else if (/[\s/>=|(<,;]/.test(source[i] as string)) break;
+      else i++;
+    }
+    if (source[tokenStart] === sigil) {
+      if (start < 0) start = tokenStart;
+      end = i;
+    }
+  }
+  return start < 0 ? null : { sourceStart: start, sourceEnd: end };
+}
+
 /**
  * The span of an attribute's authored name.
  *
@@ -236,7 +290,7 @@ function shorthandSigil(char: string | undefined): boolean {
  * shorthand in `attr.default`, so the authored name is `:foo` — measured from
  * the attribute's own start, which is the `:`.
  */
-function attrNameSpan(ctx: Ctx, attr: Node): SourceSpan {
+function attrNameSpan(ctx: Ctx, attr: Node, tagLoc?: Position): SourceSpan {
   // A name-sugar attribute (`:b`, `#b`, `.c`) is spelled as one token.
   if (attr?.sugarNameSpan) {
     return {
@@ -250,6 +304,12 @@ function attrNameSpan(ctx: Ctx, attr: Node): SourceSpan {
   // spaced name-sugar form (` .y`) reports.
   if (!attr?.loc && attr?.start == null) {
     const value = exprSpan(ctx, attr?.value);
+    // A merged or interpolated shorthand (`.a.${x}`, `.a${x}`, `#a${x}`) is a
+    // value Marko built, with no loc to measure: read the run off the tag.
+    if (!value && tagLoc) {
+      const built = builtShorthandSpan(ctx, tagLoc, attr?.name);
+      if (built) return built;
+    }
     if (value) {
       const sigilAt = value.sourceStart - 1;
       // A dynamic shorthand (`<a.${x}/>`, `<a#${y}>`) spells its sigil one
@@ -598,9 +658,44 @@ function foreignAttrHint(name: string): string {
   return "an attribute name may use letters, digits and `._:-`";
 }
 
+/** A bound target's authored text (identifier or member chain), or `…`. */
+function boundTargetText(value: Node | undefined): string {
+  if (value?.type === "Identifier") return value.name;
+  if (
+    (value?.type === "MemberExpression" ||
+      value?.type === "OptionalMemberExpression") &&
+    !value.computed &&
+    value.property?.type === "Identifier"
+  ) {
+    const dot = value.type === "OptionalMemberExpression" ? "?." : ".";
+    return `${boundTargetText(value.object)}${dot}${value.property.name}`;
+  }
+  return "…";
+}
+
 /** Marko normalizes bindings before tag-specific validation or lowering. */
 function validateBoundAttributes(node: Node): void {
   for (const attr of node.attributes ?? []) {
+    // Decision 169: a bound attribute's name has no `:`. Marko reads
+    // `v:fn:=q` as a bound `v` whose change handler runs `q = fn(next)`;
+    // lowering would drop the modifier silently, so it is refused at the
+    // colon that starts it, with the explicit form.
+    if (attr.bound && attr.modifier) {
+      const start = attr.loc?.start ?? attr.start ?? { line: 0, column: 0 };
+      const base = attr.default ? "value" : String(attr.name);
+      const target = boundTargetText(attr.value);
+      fail(
+        `A bound attribute name cannot contain \`:\`: \`${attr.default ? "" : base}:${attr.modifier}:=\` would drop \`:${attr.modifier}\`. Bind \`${base}=${target}\` (or \`${base}:=${target}\`) and write the change handler, \`${base}Change(next) { ${target} = ${attr.modifier}(next) }\``,
+        {
+          loc: {
+            start: {
+              line: start.line,
+              column: start.column + (attr.default ? 0 : base.length),
+            },
+          },
+        },
+      );
+    }
     if (
       attr.bound &&
       attr.value?.type !== "Identifier" &&
@@ -678,7 +773,7 @@ function lowerAttrNamed(
     : attr?.loc || attr?.start
       ? posOf(attr)
       : (tagLoc ?? posOf(attr));
-  const nameSpan = attrNameSpan(ctx, attr);
+  const nameSpan = attrNameSpan(ctx, attr, tagLoc);
 
   if (attr.type === "MarkoSpreadAttribute") {
     return { kind: "spread", value: exprOf(ctx, attr.value), loc };
@@ -3567,7 +3662,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
         expr: {
           code: name,
           shape: "other",
-          node: null as unknown as Node,
+          node: null,
         },
         valueImportBinding: name,
       });
@@ -3590,7 +3685,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
         expr: {
           code: name,
           shape: "other",
-          node: null as unknown as Node,
+          node: null,
         },
         valueImportBinding: name,
       });

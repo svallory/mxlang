@@ -1129,7 +1129,7 @@ its target must be an identifier or a member expression (including optional
 members, excluding private members); otherwise core reports Marko's
 `Attributes may only be bound to identifiers or member expressions` at the
 value. For example, `<div :="x"/>` errors at structured line 1, column 7
-(printed 1:8), rather than silently rendering `value="x"`. Host-specific binding
+(printed 1:8), rather than silently rendering `value="x"`. A bound attribute's name has no `:` (decision 169): `v:fn:=q`, `is:raw:=x` and `v:no-update:=q` are one positioned error at the colon that starts the modifier, on every target, naming the explicit form (`v=q` or `v:=q` plus the change handler `vChange(next) { q = fn(next) }`); Marko binds `v` and runs `fn` in the change handler, MX does not lower refinements. A non-bound `v:fn=q` is unchanged. Host-specific binding
 support is unchanged. Validation precedes control-flow lowering, including
 controls containing attribute tags, so an invalid binding cannot be discarded.
 Uncontracted attribute tags follow the same binding-reference rule. Calls

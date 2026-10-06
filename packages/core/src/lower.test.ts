@@ -3735,7 +3735,6 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
   it.each([
     ['<div :="x"/>', 1, 7],
     ['<div\n  :="x"/>', 2, 4],
-    ['<div :foo:="x"/>', 1, 11],
     ["<div value:=f()/>", 1, 12],
     ["<div value:=42/>", 1, 12],
   ])("rejects an invalid binding at its value: %s", (source, line, column) => {
@@ -3747,6 +3746,40 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
         column,
       }),
     );
+  });
+
+  it.each([
+    ["<Foo v:fn:=q/>", 1, 6, "v", "fn", "q"],
+    ["<Foo v:fn:=q.r/>", 1, 6, "v", "fn", "q.r"],
+    ["<Foo\n  v:fn:=q/>", 2, 3, "v", "fn", "q"],
+    ["<Foo a=1 v:fn:=q/>", 1, 10, "v", "fn", "q"],
+    ["<Foo value:fn:=q/>", 1, 10, "value", "fn", "q"],
+    ["<div v:fn:=q/>", 1, 6, "v", "fn", "q"],
+    ["<Foo v:a:b:=q/>", 1, 8, "v:a", "b", "q"],
+    ["<div is:raw:=x/>", 1, 7, "is", "raw", "x"],
+    ["<div v:no-update:=q/>", 1, 6, "v", "no-update", "q"],
+    ["<div v:fn:=q[0]/>", 1, 6, "v", "fn", "…"],
+  ])(
+    "rejects a modifier on a bound attribute at its colon (decision 169): %s",
+    (source, line, column, base, modifier, target) => {
+      expect(() =>
+        lowerSource(source, fakeDeclarations({ isElement: () => false })),
+      ).toThrow(
+        expect.objectContaining({
+          message: `A bound attribute name cannot contain \`:\`: \`${base}:${modifier}:=\` would drop \`:${modifier}\`. Bind \`${base}=${target}\` (or \`${base}:=${target}\`) and write the change handler, \`${base}Change(next) { ${target} = ${modifier}(next) }\``,
+          line,
+          column,
+        }),
+      );
+    },
+  );
+
+  it("still lowers a bound attribute with no modifier", () => {
+    for (const source of ["<Foo v:=q/>", "<Foo :=q/>"]) {
+      expect(() => lowerSource(source, fakeDeclarations())).not.toThrow(
+        /bound attribute/,
+      );
+    }
   });
 
   it.each([

@@ -82,7 +82,7 @@ export interface Position {
 export interface Expr {
   code: string;
   shape: ExprShape;
-  node: Node;
+  node: Node | null;
   /**
    * File-absolute UTF-16 code-unit offsets of this expression's authored
    * source text.

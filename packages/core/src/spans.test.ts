@@ -166,6 +166,38 @@ describe("a tag shorthand attribute's nameSpan", () => {
   });
 });
 
+describe("a built shorthand's nameSpan", () => {
+  // A shorthand class or id with a `${…}` part (or several tokens merged into
+  // one) reaches lowering as a value Marko built, which has no loc. The name
+  // span still runs from the first sigil to the end of the last token.
+  function shorthandName(source: string, name: string): string {
+    const el = irOf(source, elements).body[0];
+    if (el?.kind !== "Element") throw new Error("expected an Element");
+    const span = nameSpanOf(attr(el.attrs, name));
+    expect(Number.isFinite(span.sourceStart)).toBe(true);
+    expect(Number.isFinite(span.sourceEnd)).toBe(true);
+    return slice(source, span);
+  }
+
+  it.each([
+    ["<div.a.${x}/>", "class", ".a.${x}"],
+    ["<div.${x}.${y}/>", "class", ".${x}.${y}"],
+    ["<div.${x}.a/>", "class", ".${x}.a"],
+    ["<div.a.${x}.b/>", "class", ".a.${x}.b"],
+    ["<div.a${x}/>", "class", ".a${x}"],
+    ["<div.${x}a/>", "class", ".${x}a"],
+    ["<div#a${x}/>", "id", "#a${x}"],
+    ["<div.${x}/>", "class", ".${x}"],
+    ["<div#${x}/>", "id", "#${x}"],
+    ["<div.a.${x} k=1/>", "class", ".a.${x}"],
+    ["div.a.${x}", "class", ".a.${x}"],
+    ["<div#i.a.${x}/>", "class", ".a.${x}"],
+    ["<div#i.a.${x}/>", "id", "#i"],
+  ])("%j: %s is spelled %j", (source, name, spelled) => {
+    expect(shorthandName(source, name)).toBe(spelled);
+  });
+});
+
 describe("a static attribute's valueSpan", () => {
   it("covers the string literal, quotes included, like `Expr.span`", () => {
     const source = '<x="post" type="strng">\n</x>\n';

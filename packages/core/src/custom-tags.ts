@@ -636,7 +636,7 @@ function syntheticExpr(code: string): Expr {
     // and this one has none — the code was synthesized, not parsed. Every
     // reader of `node` on an `Expr` checks it before use (position lookups,
     // `emit`, the mapping pass), which is what `shape: "other"` selects.
-    node: null as unknown as Node,
+    node: null,
   };
 }
 
