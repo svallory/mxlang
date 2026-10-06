@@ -95,6 +95,14 @@ export interface CompileOptions {
   /** `package.json#mx.html.defaultTag`, already validated; the unnamed tag's name when set (decision 145). */
   defaultTag?: string;
   /**
+   * The module the emitted code imports `escape`, `createOut` and `Out` from,
+   * in place of `@mxlang/html`. For a caller that only type-checks the module
+   * and whose users cannot resolve the bare name: `@mxlang/astro` points it
+   * at its own subpath, which a project that installed `@mxlang/astro`
+   * always resolves. Never set it for code that runs.
+   */
+  runtimeFrom?: string;
+  /**
    * Collects positioned warnings — constructs that compile while dropping
    * something the author wrote (content a tag template never placed, an
    * attribute tag a transform never read).
@@ -147,7 +155,7 @@ export function compileHtml(
       // export, both of which are properties of this target rather than of
       // the core.
       emitIr: (ir) => {
-        emitted = emitModuleWithMappings(ir, escapeFrom);
+        emitted = emitModuleWithMappings(ir, options.runtimeFrom ?? escapeFrom);
         return emitted.code;
       },
       postEmit: (code) => {

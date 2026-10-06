@@ -37,6 +37,9 @@ function targets(): TargetLookup {
   return ownLookup;
 }
 
+/** What the type-check projection of a compiled module imports its runtime types from. */
+const ASTRO_TYPECHECK_MODULE = "@mxlang/astro/typecheck";
+
 const descriptor: TargetDescriptor = {
   descriptorVersion: 0,
   name: "astro-html",
@@ -62,6 +65,11 @@ const descriptor: TargetDescriptor = {
           strict: options.strict,
           defaultTag: options.defaultTag,
           resolveImport: options.resolveImport,
+          // The type-check projection imports its runtime types from a
+          // subpath of this package: a project's isolated install holds
+          // `@mxlang/astro` but not `@mxlang/html`, so the bare name does
+          // not resolve there. Compiled output for the build is unchanged.
+          runtimeFrom: options.typeCheck ? ASTRO_TYPECHECK_MODULE : undefined,
           targets: options.targets ?? targets(),
         }),
     };

@@ -14,7 +14,8 @@
     "./descriptor": "./src/descriptor.ts",
     "./runtime": "./src/runtime.ts",
     "./server": "./src/server.ts",
-    "./template": "./src/astro-template.ts"
+    "./template": "./src/astro-template.ts",
+    "./typecheck": "./src/typecheck.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

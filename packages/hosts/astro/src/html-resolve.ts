@@ -21,8 +21,8 @@
  * unaffected. Any other importer resolves the package as it did before.
  *
  * This is the bundler half only. TypeScript (`mx-tsc`, the language server)
- * resolves the same specifier from the project's own tree and does not use
- * this resolver (TODO `astro-isolated-install-ts-resolution`).
+ * does not use this resolver: the type-check projection of a compiled module
+ * imports `@mxlang/astro/typecheck` instead (`typecheck.ts`).
  */
 
 import { createRequire } from "node:module";
