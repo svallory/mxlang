@@ -1,0 +1,7 @@
+static const pick = (...a: string[]): number => a.length;
+
+<field mode="loose" modes=[:strict, :lose]/>
+<field mode="loose" count=pick(:a, missingCount)/>
+<input value=pick(:a, missingAttr)/>
+<p>${pick(:t, missingText)}</p>
+<field mode="loose" modes=["strict", 42]/>

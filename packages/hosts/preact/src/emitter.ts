@@ -383,6 +383,18 @@ function methodExpression(expr: Expr): string | null {
   return `${match[1] ?? ""}(${match[2] ?? ""}) => ${match[3] ?? "{}"}`;
 }
 
+/**
+ * An attribute value's JSX text with its authored mapping. A method attribute
+ * rewritten to an arrow function is generated text, not source text, so it
+ * stays unmapped (a mapping whose texts differ is worse than none).
+ */
+function mappedValue(expr: Expr): MappedCode {
+  const method = methodExpression(expr);
+  return method === null || method === expr.code
+    ? mappedExpr(expr)
+    : concatMapped(method);
+}
+
 /** The text of a template literal with no dynamic parts, or null. */
 function staticTemplateValue(expr: Expr): string | null {
   const node = expr.node;
@@ -660,7 +672,7 @@ export class PreactEmitter implements Emitter<string> {
     if (content.length === 1) {
       const only = content[0] as IrNode;
       if (only.kind === "Interpolation" && only.escaped) {
-        return concatMapped(only.expr.code);
+        return mappedExpr(only.expr);
       }
       if (
         only.kind === "Element" ||
@@ -817,7 +829,9 @@ export class PreactEmitter implements Emitter<string> {
               JSON.stringify(tag ?? ""),
               ")",
             )
-          : mapped(this.#attrValue(attr), valueSpan ?? null),
+          : attr.kind === "dynamic" && this.#attrValue(attr) === attr.value.code
+            ? mappedExpr(attr.value)
+            : mapped(this.#attrValue(attr), valueSpan ?? null),
         ")}}",
       );
     }
@@ -825,7 +839,7 @@ export class PreactEmitter implements Emitter<string> {
       case "spread":
         // A native element's spread is merged by `#attrs` (which also runs
         // `#rejectStringStyle`); only a component call reaches this writer.
-        return concatMapped(` {...${attr.value.code}}`);
+        return concatMapped(" {...", mappedExpr(attr.value), "}");
       case "boolean":
         return concatMapped(
           " ",
@@ -895,7 +909,9 @@ export class PreactEmitter implements Emitter<string> {
         return concatMapped(
           " ",
           mapped(name, null),
-          `={${method ?? attr.value.code}}`,
+          "={",
+          mappedValue(attr.value),
+          "}",
         );
       }
       case "dynamic": {
@@ -918,7 +934,9 @@ export class PreactEmitter implements Emitter<string> {
             return concatMapped(
               " ",
               mapped(name, mapName ? attr.nameSpan : null),
-              `={__mxClass(${attr.value.code})}`,
+              "={__mxClass(",
+              mappedExpr(attr.value),
+              ")}",
             );
           }
         }
@@ -949,7 +967,7 @@ export class PreactEmitter implements Emitter<string> {
                 JSON.stringify(tag ?? ""),
                 ")",
               )
-            : concatMapped(methodExpression(attr.value) ?? attr.value.code),
+            : mappedValue(attr.value),
           "}",
         );
       }
@@ -1535,7 +1553,7 @@ export class PreactEmitter implements Emitter<string> {
     if (!node.escaped) {
       fail("raw placeholder (`$!{…}`) must be the only child", node);
     }
-    this.#out.push(concatMapped(`{${node.expr.code}}`));
+    this.#out.push(concatMapped("{", mappedExpr(node.expr), "}"));
   }
 
   element(node: Extract<IrNode, { kind: "Element" }>): void {

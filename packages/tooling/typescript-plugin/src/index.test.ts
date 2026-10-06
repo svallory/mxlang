@@ -4647,3 +4647,67 @@ describe("TS80001 text carries one position base", () => {
     expect(plugin.getSyntaxError(fileName)?.message).not.toMatch(BABEL_SUFFIX);
   });
 });
+
+/**
+ * Expression values reach the editor's language service mapped: an error
+ * inside a component prop value, an attribute expression or a `${}` text
+ * expression lands on exactly the expression the author wrote (offset and
+ * length), including inside a nested atom (decision 156), where the generated
+ * text `"lose"` is one character longer than the source `:lose`.
+ */
+describe("expression values are mapped in the language service", () => {
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+  const FIELD =
+    'export interface Input { mode: "strict" | "loose"; modes?: ("strict" | "loose")[]; count?: number }\n<p>${input.mode}</p>\n';
+  const PAGE = [
+    'import Field from "./field.mx"',
+    "static const pick = (...a: string[]): number => a.length;",
+    "",
+    '<Field mode="loose" modes=[:strict, :lose]/>',
+    '<Field mode="loose" count=pick(:a, missingCount)/>',
+    "<input value=pick(:a, missingAttr)/>",
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+    "<p>${pick(:t, missingText)}</p>",
+    '<Field mode="loose" modes=["strict", 42]/>',
+    "",
+  ].join("\n");
+
+  // [expression the diagnostic must cover, TypeScript code]
+  const EXPECTED: [string, number][] = [
+    [":lose", 2820],
+    ["missingCount", 2304],
+    ["missingAttr", 2304],
+    ["missingText", 2304],
+    ["42", 2322],
+  ];
+
+  it.each(["html", "preact", "react"])("%s", (host) => {
+    const page = `${here}/fixtures/expression-values/${host}/page.mx`;
+    const consumer = `${here}/fixtures/expression-values/${host}/index.ts`;
+    const service = createPluginService(
+      {
+        [page]: PAGE,
+        [`${dirname(page)}/field.mx`]: FIELD,
+        [consumer]: 'import "./page.mx";\n',
+      },
+      [consumer],
+    );
+    service.getSemanticDiagnostics(consumer);
+
+    const found = service
+      .getSemanticDiagnostics(page)
+      .map((diagnostic) => [
+        diagnostic.start,
+        diagnostic.length,
+        diagnostic.code,
+      ]);
+
+    expect(found).toEqual(
+      EXPECTED.map(([expression, code]) => [
+        PAGE.indexOf(expression),
+        expression.length,
+        code,
+      ]),
+    );
+  });
+});

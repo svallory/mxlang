@@ -53,6 +53,7 @@ import {
   type IrNode,
   type MappedCode,
   mapped,
+  mappedExpr,
   moduleExportName,
   propKey,
   quote,
@@ -179,8 +180,12 @@ export function createEmitter(selfName?: string): StringEmitter {
   // A raw `$!{…}` is written as `"" + (…)`: the same string coercion the
   // former `out += (…)` applied, now spelled out because `write` takes a
   // string.
-  const expression = (code: string, escaped: boolean): void => {
-    write(escaped ? `__mxEscape(${code})` : `"" + (${code})`);
+  const expression = (code: string | MappedCode, escaped: boolean): void => {
+    write(
+      escaped
+        ? concatMapped("__mxEscape(", code, ")")
+        : concatMapped('"" + (', code, ")"),
+    );
   };
 
   /**
@@ -236,14 +241,14 @@ export function createEmitter(selfName?: string): StringEmitter {
   const propPartsOfAttrs = (attrs: Attr[]): MappedCode[] =>
     attrs.map((attr) => {
       if (attr.kind === "spread") {
-        return concatMapped(`...${attr.value.code}`);
+        return concatMapped("...", mappedExpr(attr.value));
       }
       const value =
         attr.kind === "boolean"
           ? "true"
           : attr.kind === "static"
             ? quote(attr.value)
-            : attr.value.code;
+            : mappedExpr(attr.value);
       return concatMapped(
         mapped(propKey(attr.name), attr.nameSpan),
         ": ",
@@ -477,9 +482,12 @@ export function createEmitter(selfName?: string): StringEmitter {
    * Interpolating the raw value would emit `[object Object]` — a silently
    * wrong attribute rather than a visible failure.
    */
-  const structured = (name: string, code: string): string | undefined => {
-    if (name === "class") return `__mxClassValue(${code})`;
-    if (name === "style") return `__mxStyleValue(${code})`;
+  const structured = (
+    name: string,
+    code: MappedCode,
+  ): MappedCode | undefined => {
+    if (name === "class") return concatMapped("__mxClassValue(", code, ")");
+    if (name === "style") return concatMapped("__mxStyleValue(", code, ")");
     return undefined;
   };
 
@@ -522,13 +530,13 @@ export function createEmitter(selfName?: string): StringEmitter {
       );
     }
 
-    const source = structured(attr.name, attr.value.code);
+    const source = structured(attr.name, mappedExpr(attr.value));
     if (source) {
       // A structured value renders itself; interpolating it into quotes would
       // double-escape the separators the helper already produced.
       push("{");
       state.indent++;
-      push(`const __mxValue = ${source};`);
+      push(concatMapped("const __mxValue = ", source, ";"));
       push(
         `if (__mxValue !== "") ${state.sink}.write(" ${attr.name}=\\"" + __mxValue + "\\"");`,
       );
@@ -538,7 +546,11 @@ export function createEmitter(selfName?: string): StringEmitter {
     }
 
     expression(
-      `__mxRenderAttr(${quote(attr.name)}, ${attr.value.code}, ${quote(tag)}${tag === "input" && attr.name === "checked" ? ", true" : ""})`,
+      concatMapped(
+        `__mxRenderAttr(${quote(attr.name)}, `,
+        mappedExpr(attr.value),
+        `, ${quote(tag)}${tag === "input" && attr.name === "checked" ? ", true" : ""})`,
+      ),
       false,
     );
   };
@@ -551,23 +563,31 @@ export function createEmitter(selfName?: string): StringEmitter {
   const attributeText = (
     attr: Exclude<Attr, { kind: "spread" }>,
     tag: string,
-  ): string => {
+  ): MappedCode => {
     switch (attr.kind) {
       case "boolean":
-        return quote(` ${attr.name}`);
+        return concatMapped(quote(` ${attr.name}`));
       case "static":
-        return quote(` ${attr.name}="${escape(attr.value)}"`);
+        return concatMapped(quote(` ${attr.name}="${escape(attr.value)}"`));
       case "event":
         return fail(
           `\`${attr.name}\` is an event handler and requires a runtime; @mxlang/html renders once to a string`,
           attr,
         );
       default: {
-        const source = structured(attr.name, attr.value.code);
+        const source = structured(attr.name, mappedExpr(attr.value));
         if (source) {
-          return `((__mxValue) => __mxValue === "" ? "" : ${quote(` ${attr.name}="`)} + __mxValue + "\\"")(${source})`;
+          return concatMapped(
+            `((__mxValue) => __mxValue === "" ? "" : ${quote(` ${attr.name}="`)} + __mxValue + "\\"")(`,
+            source,
+            ")",
+          );
         }
-        return `__mxRenderAttr(${quote(attr.name)}, ${attr.value.code}, ${quote(tag)})`;
+        return concatMapped(
+          `__mxRenderAttr(${quote(attr.name)}, `,
+          mappedExpr(attr.value),
+          `, ${quote(tag)})`,
+        );
       }
     }
   };
@@ -617,7 +637,7 @@ export function createEmitter(selfName?: string): StringEmitter {
     const head = isInput ? attrs : attrs.slice(0, lastSpread + 1);
     for (const attr of tail) {
       if (isTextarea && attr.kind !== "spread" && attr.name === "value") {
-        push(`__mxTa = ${attributeValueCode(attr)};`);
+        push(concatMapped("__mxTa = ", attributeValueCode(attr), ";"));
       } else attribute(attr, name);
     }
     const written = tail.flatMap((attr) =>
@@ -632,29 +652,44 @@ export function createEmitter(selfName?: string): StringEmitter {
       entries = `Object.entries(${only.value.code} ?? {})`;
     } else {
       push("const __mxRaw = Symbol();");
-      const parts = head.map((attr) => {
-        if (attr.kind === "spread") return `...${attr.value.code}`;
+      const parts = head.map((attr): MappedCode => {
+        if (attr.kind === "spread") {
+          return concatMapped("...", mappedExpr(attr.value));
+        }
         const key = JSON.stringify(attr.name);
         // A textarea's `value` is its content, not an attribute: pass the raw
         // value through the merge so a later spread can still override it.
         if (isTextarea && attr.name === "value") {
-          return `...{ ${key}: ${attributeValueCode(attr)} }`;
+          return concatMapped(`...{ ${key}: `, attributeValueCode(attr), " }");
         }
         if (attr.kind === "boolean" || attr.kind === "static") {
-          return `...{ ${key}: { [__mxRaw]: () => ${attributeText(attr, name)} } }`;
+          return concatMapped(
+            `...{ ${key}: { [__mxRaw]: () => `,
+            attributeText(attr, name),
+            " } }",
+          );
         }
         // Evaluate the expression in authored order, but serialize only the
         // surviving merged value. An overwritten object must not throw.
+        // The stand-in is generated text: it carries no span, so it maps
+        // nowhere, while the authored value maps at its evaluation site.
+        const { span: _span, atoms: _atoms, ...standIn } = attr.value;
         const captured = {
           ...attr,
-          value: { ...attr.value, code: "__mxCapturedValue" },
+          value: { ...standIn, code: "__mxCapturedValue" },
         };
-        return `...{ ${key}: ((__mxCapturedValue) => ({ [__mxRaw]: () => ${attributeText(captured, name)} }))(${attr.value.code}) }`;
+        return concatMapped(
+          `...{ ${key}: ((__mxCapturedValue) => ({ [__mxRaw]: () => `,
+          attributeText(captured, name),
+          " }))(",
+          mappedExpr(attr.value),
+          ") }",
+        );
       });
       // One object literal with spread syntax, not `Object.assign`: a spread
       // key such as an own enumerable `__proto__` is then defined as data, as in
       // Marko's own merge, instead of hitting the `[[Set]]` setter.
-      push(`const __mxAttrs = { ${parts.join(", ")} };`);
+      push(concatMapped("const __mxAttrs = { ", joinParts(parts), " };"));
       entries = "Object.entries(__mxAttrs)";
     }
     push(`for (const [__mxKey, __mxValue] of ${entries}) {`);
@@ -732,7 +767,7 @@ export function createEmitter(selfName?: string): StringEmitter {
       switch (attr.kind) {
         case "spread":
           spreads.push(attr.value.code);
-          parts.push(concatMapped(`...${attr.value.code}`));
+          parts.push(concatMapped("...", mappedExpr(attr.value)));
           break;
         case "boolean":
           setNamed(attr.name, "true", attr.nameSpan);
@@ -741,7 +776,7 @@ export function createEmitter(selfName?: string): StringEmitter {
           setNamed(attr.name, quote(attr.value), attr.nameSpan);
           break;
         default:
-          setNamed(attr.name, attr.value.code, attr.nameSpan);
+          setNamed(attr.name, mappedExpr(attr.value), attr.nameSpan);
       }
     }
 
@@ -771,16 +806,16 @@ export function createEmitter(selfName?: string): StringEmitter {
   /** The JS value a (non-spread) attribute carries, for `<textarea value>`. */
   const attributeValueCode = (
     attr: Exclude<Attr, { kind: "spread" }>,
-  ): string => {
-    if (attr.kind === "boolean") return "true";
-    if (attr.kind === "static") return quote(attr.value);
+  ): MappedCode => {
+    if (attr.kind === "boolean") return concatMapped("true");
+    if (attr.kind === "static") return concatMapped(quote(attr.value));
     if (attr.kind === "event") {
       return fail(
         `\`${attr.name}\` is an event handler and requires a runtime; @mxlang/html renders once to a string`,
         attr,
       );
     }
-    return attr.value.code;
+    return mappedExpr(attr.value);
   };
 
   /**
@@ -823,7 +858,9 @@ export function createEmitter(selfName?: string): StringEmitter {
     );
     literal(">");
     if (explicit) {
-      write(`__mxTextareaContent(${attributeValueCode(explicit)})`);
+      write(
+        concatMapped("__mxTextareaContent(", attributeValueCode(explicit), ")"),
+      );
     } else drive(emitter, node.children);
     literal("</textarea>");
   };
@@ -838,7 +875,7 @@ export function createEmitter(selfName?: string): StringEmitter {
     },
 
     interpolation(node) {
-      expression(node.expr.code, node.escaped);
+      expression(mappedExpr(node.expr), node.escaped);
     },
 
     element(node) {
@@ -1162,7 +1199,7 @@ export function createEmitter(selfName?: string): StringEmitter {
         for (const child of tag.children) {
           if (child.kind === "Text") write(quote(child.value));
           else if (child.kind === "Interpolation") {
-            expression(child.expr.code, child.escaped);
+            expression(mappedExpr(child.expr), child.escaped);
           }
         }
         write(quote(`</${data.tag}>`));
