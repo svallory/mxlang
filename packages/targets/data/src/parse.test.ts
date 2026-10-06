@@ -320,12 +320,14 @@ describe("pass-through constructs (the §3 table)", () => {
     const [refined, plain] = tag.attrs;
     if (refined?.kind !== "expression") throw new Error("expected expression");
     expect(refined).toMatchObject({ name: "v", bound: true });
-    expect(refined.refinement).toMatchObject({
+    const { refinement } = refined;
+    if (!refinement) throw new Error("expected a refinement");
+    expect(refinement).toMatchObject({
       code: "fn",
       shape: "other",
       node: null,
     });
-    expect(slice(source, refined.refinement?.span)).toBe("fn");
+    expect(slice(source, refinement.span)).toBe("fn");
     expect(plain).toMatchObject({ name: "w", bound: true });
     expect(plain).not.toHaveProperty("refinement");
   });
