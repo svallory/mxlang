@@ -71,11 +71,11 @@ export const dataDeclarations: HostDeclarations = {
   // The ladder (decision 145): the parent's contract `defaultTag`, then
   // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
   // the host override into `configured`). This host permits the contract rung:
-  // it sets no `allowContractDefaultTag: false`.
+  // it sets no `allowContractDefaultTag: false`. `DEFAULT_TAG` is the
+  // target's default tag, which is also its one built-in.
   resolveDefaultTag: (_node, parents, context) =>
     contractDefaultTag(parents, context, BUILTIN_TAGS) ??
     context.configured ??
-    // The target's default tag, which is also its one built-in.
     DEFAULT_TAG,
   tags: {
     else: { kind: "error", reason: reservedNameMessage("else") },

@@ -67,7 +67,7 @@ function read(root: string) {
   const { policy, diagnostics } = resolveTargetPolicyDetailed(
     join(root, "caller.mx"),
   );
-  expect(diagnostics).toEqual([]);
+  expect(diagnostics.map((d) => d.message)).toEqual([]);
   return readCalleeInput(
     { kind: "name", name: "W" },
     {
