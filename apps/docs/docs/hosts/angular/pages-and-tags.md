@@ -22,9 +22,9 @@ Keep `x.component.ts` as it is, point `templateUrl` at `./x.component.html`, wri
 - **Imports.** When the template calls an MX tag or needs a directive, the build warns with the exact `import` and `imports:` entry, and repeats it in the header of the emitted `.html`. Without the entry Angular renders an unknown element as an empty tag, silently.
 - **Event members.** A template that binds a handler needs `__mxOn` and `__mxOnAt` on the class. Extend `MxHandlers`, or `MxHandlersMixin(Base)`, from `@mxlang/angular/runtime`; a missing member is TS2339 at build time under `strictTemplates`.
 
-Page templates have no TypeScript plugin support yet, which is the main reason to prefer `.ng.mx`.
+With the class in one file and the template in another, `.ng.mx` is the simpler form for a new component; a page template suits a component whose class you do not want to move.
 
-## MX tags (preview)
+## MX tags
 
 ```mx "tags/badge.mx"
 export interface Input { kind: "ok" | "warn" | "error"; label?: string }

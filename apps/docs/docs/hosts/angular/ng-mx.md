@@ -44,7 +44,7 @@ import Card from "./tags/card.mx";
 template: <Card><@title>Team</@title></Card>,
 ```
 
-`<Card>` emits the tag's selector (`<mx-card>`), one `imports:` entry, and the import rewritten to the generated class. A tag under a `tags/` directory can also be called by its discovered name, `<card>`, with no import. The import must be a sole default import: `import A, { b } from "./x.mx"` used as `<A/>` is an error. See [MX tags](/hosts/angular/pages-and-tags/#angular-page-templates-mx-tags-and-the-cli-mx-tags-preview).
+`<Card>` emits the tag's selector (`<mx-card>`), one `imports:` entry, and the import rewritten to the generated class. A tag under a `tags/` directory can also be called by its discovered name, `<card>`, with no import. The import must be a sole default import: `import A, { b } from "./x.mx"` used as `<A/>` is an error. See [MX tags](/hosts/angular/pages-and-tags/#angular-page-templates-mx-tags-and-the-cli-mx-tags).
 
 ## Event handlers
 

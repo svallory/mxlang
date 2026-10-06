@@ -142,11 +142,10 @@ For type errors in the editor, add `{ "name": "@mxlang/typescript-plugin" }` to 
 
 **MX adds:** the template syntax above, compiled to Angular's block syntax (`@if`, `@for`, `@let`), and the `imports:` bookkeeping. There is no MX runtime in the browser.
 
-## Preview: what is not there yet
+## Two rules to know first
 
-- The MX language server does not handle `.ng.mx`. TypeScript and Angular template errors do reach the editor through the TypeScript plugin.
-- Write handlers as a method reference (`onClick=clear`) or an expression arrow (`onClick=(event => save(event))`). Angular templates have no statement bodies, so the method form `onClick() { … }` and a block-bodied arrow are compile errors here.
-- Do not import a name that is also an element. `import { input } from "@angular/core"` makes `<input>` a call of that function; use `@Input()` or alias the import.
+- **Handlers are references or expression arrows.** Write `onClick=clear` or `onClick=(event => save(event))`. Angular templates have no statement bodies, so the method form `onClick() { … }` and a block-bodied arrow are compile errors here.
+- **Do not import a name that is also an element.** `import { input } from "@angular/core"` makes `<input>` a call of that function; use `@Input()` or alias the import.
 
 ## Go deeper
 

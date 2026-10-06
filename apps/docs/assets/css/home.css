@@ -121,6 +121,23 @@
   text-decoration: none;
 }
 
+.mx-home-status {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  margin: 1.25rem 0 0;
+}
+
+.mx-home-status::before {
+  background: #d97706;
+  border-radius: 50%;
+  content: "";
+  display: inline-block;
+  height: 0.5rem;
+  margin-right: 0.55rem;
+  vertical-align: 0.05em;
+  width: 0.5rem;
+}
+
 .mx-home-cta-quiet {
   background: none;
   color: var(--link-color);

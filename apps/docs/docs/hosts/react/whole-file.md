@@ -7,7 +7,7 @@ description: "A .mx file that is the entire React component: the compiler writes
 
 A plain `.mx` file on the React host is the whole component. There is no function to write: MX emits the default-exported function component, and `export interface Input` becomes its props type.
 
-**Alpha.** [`.react.mx`](/hosts/react/) is the form to start with. Whole-file `.mx` exists so that one template can later compile to several hosts; today it trades React's own function for MX's statements, and hooks read less naturally.
+**Alpha.** [`.react.mx`](/hosts/react/) is the form to start with. Whole-file `.mx` suits a template with little logic of its own: it trades React's function for MX's statements, and hooks read less naturally there.
 
 ```mx "Counter.mx"
 import { useState } from "react";

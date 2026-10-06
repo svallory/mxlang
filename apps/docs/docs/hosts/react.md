@@ -103,17 +103,14 @@ What changed:
 
 ## Setup
 
+```bash
+bun add @mxlang/react
+bun add -d @mxlang/vite-plugin @mxlang/typescript-plugin @mxlang/tsc
+```
+
 ```jsonc
-// package.json
-{
-  "dependencies": { "@mxlang/react": "*", "react": "19.3.0", "react-dom": "19.3.0" },
-  "devDependencies": {
-    "@mxlang/vite-plugin": "*",
-    "@mxlang/typescript-plugin": "*",
-    "@mxlang/tsc": "*"
-  },
-  "mx": { "host": "react" }
-}
+// package.json: which host compiles a plain .mx; region files carry it in their name
+{ "mx": { "host": "react" } }
 ```
 
 ```ts

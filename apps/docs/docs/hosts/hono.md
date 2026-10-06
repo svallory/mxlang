@@ -98,17 +98,14 @@ What changed:
 
 Region files compile through the Vite plugin, so this is for a Hono project built with Vite (`@hono/vite-dev-server`, `@hono/vite-build`).
 
+```bash
+bun add @mxlang/hono
+bun add -d @mxlang/vite-plugin @mxlang/typescript-plugin @mxlang/tsc
+```
+
 ```jsonc
-// package.json
-{
-  "dependencies": { "@mxlang/hono": "*", "hono": "4.6.20" },
-  "devDependencies": {
-    "@mxlang/vite-plugin": "*",
-    "@mxlang/typescript-plugin": "*",
-    "@mxlang/tsc": "*"
-  },
-  "mx": { "host": "hono" }
-}
+// package.json: which host compiles a plain .mx; region files carry it in their name
+{ "mx": { "host": "hono" } }
 ```
 
 ```ts

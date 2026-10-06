@@ -55,6 +55,8 @@ Three things changed, and they are the same on every host:
 
 `Dialog` did not change. It is the same hand-written React component in both files; its `title` and `actions` props are typed `AttrTag`, which on React is a `ReactNode`.
 
+> MX is not released yet. These pages describe MX 1.0.
+
 ## Pick your framework
 
 | Host | You write | MX replaces |

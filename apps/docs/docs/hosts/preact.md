@@ -103,17 +103,14 @@ What changed:
 
 ## Setup
 
+```bash
+bun add @mxlang/preact
+bun add -d @mxlang/vite-plugin @mxlang/typescript-plugin @mxlang/tsc
+```
+
 ```jsonc
-// package.json
-{
-  "dependencies": { "@mxlang/preact": "*", "preact": "10.29.8" },
-  "devDependencies": {
-    "@mxlang/vite-plugin": "*",
-    "@mxlang/typescript-plugin": "*",
-    "@mxlang/tsc": "*"
-  },
-  "mx": { "host": "preact" }
-}
+// package.json: which host compiles a plain .mx; region files carry it in their name
+{ "mx": { "host": "preact" } }
 ```
 
 ```ts

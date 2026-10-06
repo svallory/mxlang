@@ -42,7 +42,6 @@ Only open `.ng.mx` files are checked. If `@angular/compiler-cli` is missing or f
 - An unknown element (NG8001) or property (NG8002) is reported at the element name or the attribute.
 - A diagnostic on markup MX generated, not copied from your source, points at the start of the template and is marked "(approximate location)".
 
-## Known limits
+## Known limit
 
 - The editor picks up a change to `package.json` or to a called tag when the `.ng.mx` is next edited or reopened, not at once.
-- The MX language server does not handle `.ng.mx`.
