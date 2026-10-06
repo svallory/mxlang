@@ -49,11 +49,13 @@ import {
   NAMELESS_TAG_ROWS,
   NO_THROW_ROWS,
   type NoThrowParserModule,
+  namelessAsciiMismatches,
   renderErrorCodes,
   renderEvents,
   STRAY_CLOSE_ROWS,
 } from "../packages/parser/src/template/mx-no-throw.cases.ts";
 import {
+  AFTER_VALUE_ON_HOLD_ROWS,
   ATOM_AFTER_SYMBOL_ROWS,
   asciiMainMismatches,
   atomAfterSymbolMismatch,
@@ -438,6 +440,15 @@ describe.each(builds)("atoms (%s)", (_name, build) => {
 
 // template-parser-ascii-only-lookbehinds: the same table the source copy
 // runs (`packages/parser/src/template/mx-unicode-words.test.ts`).
+const namelessMain = JSON.parse(
+  readFileSync(
+    new URL(
+      "../packages/parser/src/template/mx-nameless-ascii.main.json",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+) as Record<string, string>;
 const unicodeWordsMain = JSON.parse(
   readFileSync(
     new URL(
@@ -488,6 +499,13 @@ describe.each(builds)("non-ASCII identifiers (%s)", (_name, build) => {
     expect(total).toBe(2_432);
     expect(bad).toEqual([]);
   });
+
+  it.each(AFTER_VALUE_ON_HOLD_ROWS)(
+    "the after-value identifier start is ASCII, on hold (addendum 15): %j",
+    (input, expected) => {
+      expect(renderAtoms(mod, input, true)).toBe(expected);
+    },
+  );
 
   it.each(NON_WORD_ROWS)(
     "a symbol is no word character, as in stock (addendum 13): %j",
@@ -564,6 +582,12 @@ describe.each(builds)("the parser never throws (%s)", (_name, build) => {
       expect(renderErrorCodes(mod, input).includes("THROW")).toBe(false);
     },
   );
+
+  it("ASCII nameless and empty-name tags render as main did", () => {
+    const { total, bad } = namelessAsciiMismatches(mod, namelessMain);
+    expect(total).toBe(2_903);
+    expect(bad).toEqual([]);
+  });
 
   it("no generated nameless-tag input throws (seeds 1 and 2)", () => {
     for (const seed of [1, 2]) {

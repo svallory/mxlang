@@ -856,6 +856,48 @@ export function extraWordTwinMismatches(mod: AtomParserModule) {
   return classTwinMismatches(mod, EXTRA_WORD_NAMES, "Q");
 }
 
+/**
+ * Decision 156 addendum 15: the after-value `:name` rule's identifier start is
+ * ASCII-only, as on main, and stays so while the operator reconsiders
+ * `:name` after a value ("on hold"). A non-ASCII name leaves one value, so a
+ * later change shows here: `x=1 :é` is one value (a compile error), and an
+ * arrow or function expression return type with a non-ASCII name is one
+ * valid value, as stock reads it. The ASCII twins split (decision 146).
+ */
+export const AFTER_VALUE_ON_HOLD_ROWS: [string, string][] = [
+  ["<div x=1 :e/>", '<div> @x ="1" @:e'],
+  ["<div x=1 :é/>", '<div> @x ="1 :é"'],
+  ["<div x=1 :\u{20bb7}/>", '<div> @x ="1 :\u{20bb7}"'],
+  [
+    "<div x=(a) :T => a/>",
+    '<div> @x ="(a)" @:T ERR(15-15 Missing value for attribute)',
+  ],
+  ["<div x=(a) :É => a/>", '<div> @x ="(a) :É => a"'],
+  ["<div x=(a, b) :é => a/>", '<div> @x ="(a, b) :é => a"'],
+  ["<div x=async (a) :名 => a/>", '<div> @x ="async (a) :名 => a"'],
+  // Function expressions: the ASCII forms split today (stock reads one value).
+  [
+    "<div x=function (a) :T { return a }/>",
+    '<div> @x ="function (a)" @:T @{ return a }',
+  ],
+  [
+    "<div x=function f(a) :T { return a }/>",
+    '<div> @x ="function f(a)" @:T @{ return a }',
+  ],
+  [
+    "<div x=async function (a) :T { return a }/>",
+    '<div> @x ="async function (a)" @:T @{ return a }',
+  ],
+  [
+    "<div x=function* (a) :T { return a }/>",
+    '<div> @x ="function* (a)" @:T @{ return a }',
+  ],
+  [
+    "<div x=function (a) :É { return a }/>",
+    '<div> @x ="function (a) :É { return a }"',
+  ],
+];
+
 /** Each attribute's name and value range, as `@start-end` and `=start-end`. */
 export function renderAttrRanges(mod: AtomParserModule, code: string): string {
   const out: string[] = [];

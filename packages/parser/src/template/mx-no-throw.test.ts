@@ -3,6 +3,7 @@
  * The cases live in `mx-no-throw.cases.ts`; `patches/htmljs-parser.test.ts`
  * runs the same table against the patched npm build.
  */
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import * as template from "./index.ts";
 import {
@@ -12,12 +13,19 @@ import {
   NAMELESS_TAG_ROWS,
   NO_THROW_ROWS,
   type NoThrowParserModule,
+  namelessAsciiMismatches,
   renderErrorCodes,
   renderEvents,
   STRAY_CLOSE_ROWS,
 } from "./mx-no-throw.cases.ts";
 
 const mod = template as unknown as NoThrowParserModule;
+const namelessMain = JSON.parse(
+  readFileSync(
+    new URL("./mx-nameless-ascii.main.json", import.meta.url),
+    "utf8",
+  ),
+) as Record<string, string>;
 
 describe("the template parser never throws (src/template)", () => {
   it.each(NO_THROW_ROWS)("%j", (input, expected) => {
@@ -50,6 +58,12 @@ describe("the template parser never throws (src/template)", () => {
       expect(renderErrorCodes(mod, input).includes("THROW")).toBe(false);
     },
   );
+
+  it("ASCII nameless and empty-name tags render as main did", () => {
+    const { total, bad } = namelessAsciiMismatches(mod, namelessMain);
+    expect(total).toBe(2_903);
+    expect(bad).toEqual([]);
+  });
 
   it("no generated nameless-tag input throws (seeds 1 and 2)", () => {
     for (const seed of [1, 2]) {

@@ -9,6 +9,7 @@ import * as template from "./index.ts";
 import { type AtomParserModule, renderAtoms } from "./mx-atoms.cases.ts";
 import type { NoThrowParserModule } from "./mx-no-throw.cases.ts";
 import {
+  AFTER_VALUE_ON_HOLD_ROWS,
   ATOM_AFTER_SYMBOL_ROWS,
   asciiMainMismatches,
   atomAfterSymbolMismatch,
@@ -72,6 +73,13 @@ describe("non-ASCII identifiers in look-behinds and look-aheads (src/template)",
     expect(total).toBe(2_432);
     expect(bad).toEqual([]);
   });
+
+  it.each(AFTER_VALUE_ON_HOLD_ROWS)(
+    "the after-value identifier start is ASCII, on hold (addendum 15): %j",
+    (input, expected) => {
+      expect(renderAtoms(mod, input, true)).toBe(expected);
+    },
+  );
 
   it.each(NON_WORD_ROWS)(
     "a symbol is no word character, as in stock (addendum 13): %j",

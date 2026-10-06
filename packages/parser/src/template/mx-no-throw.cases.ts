@@ -447,6 +447,12 @@ const NAMELESS_PIECES = [
   "<//>",
   "<.a>",
   "<#b>",
+  "<,#i>",
+  "<,.c>",
+  "<#i/>",
+  "<,#i/>",
+  "#i",
+  ".c",
   "<:c>",
   "<x=1>",
   "<(a)>",
@@ -507,27 +513,64 @@ const NAMELESS_PARENTS = [
 ];
 
 /**
- * Generates `count` inputs of 1 to 8 `NAMELESS_PIECES` after an optional
- * parent, with `seed`, and returns the ones whose parse throws (none
- * expected).
+ * `count` inputs of 1 to 8 `NAMELESS_PIECES` after an optional parent, from
+ * `seed`: tags that never got a name (`<,>`) and tags whose name is empty
+ * (`<#i>`, `<,.c>`), all ASCII.
+ */
+export function namelessInputs(seed: number, count: number): string[] {
+  const next = random(seed);
+  const pick = <T>(list: readonly T[]) =>
+    list[Math.floor(next() * list.length)] as T;
+  const inputs: string[] = [];
+  for (let n = 0; n < count; n++) {
+    let code = pick(NAMELESS_PARENTS);
+    const pieces = 1 + Math.floor(next() * 8);
+    for (let k = 0; k < pieces; k++) code += pick(NAMELESS_PIECES);
+    if (next() < 0.2) code += pick(NAMELESS_PIECES);
+    inputs.push(code);
+  }
+  return inputs;
+}
+
+/**
+ * Parses `namelessInputs(seed, count)` and returns the ones whose parse
+ * throws, with the thrown message (none expected).
  */
 export function fuzzNamelessThrows(
   mod: NoThrowParserModule,
   seed: number,
   count: number,
 ): { total: number; thrown: string[] } {
-  const next = random(seed);
-  const pick = <T>(list: readonly T[]) =>
-    list[Math.floor(next() * list.length)] as T;
   const thrown: string[] = [];
-  for (let n = 0; n < count; n++) {
-    let code = pick(NAMELESS_PARENTS);
-    const pieces = 1 + Math.floor(next() * 8);
-    for (let k = 0; k < pieces; k++) code += pick(NAMELESS_PIECES);
-    if (next() < 0.2) code += pick(NAMELESS_PIECES);
+  for (const code of namelessInputs(seed, count)) {
     const out = renderEvents(mod, code);
     const at = out.indexOf("THROW(");
     if (at !== -1) thrown.push(`${JSON.stringify(code)} ${out.slice(at)}`);
   }
   return { total: count, thrown };
+}
+
+/**
+ * ASCII-only input must not change. The inputs of `mx-nameless-ascii.main.json`
+ * are `namelessInputs(7, 3000)` with the events recorded from main
+ * (`e389c383d`, before the word-class and nameless-tag fixes), biased to the
+ * tags without a name and with an empty name that the corpus and a generic
+ * ASCII fuzz barely reach (the empty-name message of review B1 was missed by
+ * both). Returns the inputs whose events differ from the recording; an input
+ * that threw on main only has to stop throwing.
+ */
+export function namelessAsciiMismatches(
+  mod: NoThrowParserModule,
+  main: Record<string, string>,
+): { total: number; bad: string[] } {
+  const bad: string[] = [];
+  const inputs = Object.keys(main);
+  for (const code of inputs) {
+    const got = renderEvents(mod, code);
+    const was = main[code] as string;
+    if (was.includes("THROW(")) {
+      if (got.includes("THROW(")) bad.push(`${JSON.stringify(code)}: ${got}`);
+    } else if (got !== was) bad.push(`${JSON.stringify(code)}: ${got}`);
+  }
+  return { total: inputs.length, bad };
 }
