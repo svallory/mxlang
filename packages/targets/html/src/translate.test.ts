@@ -313,11 +313,12 @@ describe("bindings may not shadow the input parameter", () => {
   it("carries an attribute tag through a `<define>` call instead of dropping it", async () => {
     // `<define>` has no declared `Input`, so decision 108's untyped-callee
     // fallback applies: `<@head>` carries no attributes, so `head` arrives
-    // renderable (the body itself), read directly with `<${head}/>`.
+    // renderable (the body itself), read directly with `<${head}/>`. The call
+    // passes one attribute object (decision 160), so the define destructures it.
     const html = await renderModules(
       {
         "entry.mx":
-          '<define/Card|title, head|><div>${title}<${head}/></div></define>\n<Card title="a"><@head>H</@head></Card>',
+          '<define/Card|{ title, head }|><div>${title}<${head}/></div></define>\n<Card title="a"><@head>H</@head></Card>',
       },
       "entry.mx",
     );
