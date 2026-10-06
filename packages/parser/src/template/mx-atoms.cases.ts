@@ -792,6 +792,16 @@ export const ATOMS: [string, string][] = [
   ["${\u00a0:b}\n", "atom(b@3-5) <${\u00a0:b}>"],
   ["<div x=`${\u00a0:b}`/>", '<div> @x atom(b@11-13) ="`${\u00a00.}`"'],
   ["div x=`${\u00a0:b}`\n", '<div> @x atom(b@10-12) ="`${\u00a00.}`"'],
+  // Decision 156 addendum 8, comments (template-parser-lookbehinds-
+  // followup): a comment before `of`, `yield` or `await`, or between the
+  // word and the `:`, is skipped exactly as whitespace is. Each row is beside
+  // its twin with the comment replaced by spaces (`commentTwinMismatches`).
+  ["<div x=(a /*c*/ of :b)/>", '<div> @x atom(b@19-21) ="(a /*c*/ of 0.)"'],
+  ["<div x=(a       of :b)/>", '<div> @x atom(b@19-21) ="(a       of 0.)"'],
+  ["<div x=((a)/*c*/ of :b)/>", '<div> @x atom(b@20-22) ="((a)/*c*/ of 0.)"'],
+  ["<div x=((a)      of :b)/>", '<div> @x atom(b@20-22) ="((a)      of 0.)"'],
+  ["div x=(a /*c*/ of :b)\n", '<div> @x atom(b@18-20) ="(a /*c*/ of 0.)"'],
+  ["div x=(a       of :b)\n", '<div> @x atom(b@18-20) ="(a       of 0.)"'],
 ];
 
 /** [input, rendered events] — `::name` is reserved: a positioned error. */
@@ -1226,6 +1236,22 @@ export const NOT_ATOMS: [string, string][] = [
     "div x=`${({ \u00e9\u00a0:a })}`\n",
     '<div> @x ="`${({ \u00e9\u00a0:a })}`"',
   ],
+  // Decision 156 addendum 8, comments (template-parser-lookbehinds-
+  // followup): a comment before `of`, `yield` or `await`, or between the
+  // word and the `:`, is skipped exactly as whitespace is. Each row is beside
+  // its twin with the comment replaced by spaces (`commentTwinMismatches`).
+  ["<div x=f(/*c*/ await :b)/>", '<div> @x ="f(/*c*/ await :b)"'],
+  ["<div x=f(     await :b)/>", '<div> @x ="f(     await :b)"'],
+  ["<div x=f(// c\n await :b)/>", '<div> @x ="f(// c\\n await :b)"'],
+  ["<div x=f(    \n await :b)/>", '<div> @x ="f(    \\n await :b)"'],
+  ["<div x=(/*c*/ yield :b)/>", '<div> @x ="(/*c*/ yield :b)"'],
+  ["<div x=(      yield :b)/>", '<div> @x ="(      yield :b)"'],
+  ["<div x=(c ?/*c*/ await :b : d)/>", '<div> @x ="(c ?/*c*/ await :b : d)"'],
+  ["<div x=(c ?      await :b : d)/>", '<div> @x ="(c ?      await :b : d)"'],
+  ["<div x=f(await /*c*/:b)/>", '<div> @x ="f(await /*c*/:b)"'],
+  ["<div x=f(await      :b)/>", '<div> @x ="f(await      :b)"'],
+  ["<p>${f(/*c*/ await :b)}</p>", '<p> ${"f(/*c*/ await :b)"}'],
+  ["<p>${f(      await :b)}</p>", '<p> ${"f(      await :b)"}'],
 ];
 
 /**
@@ -1786,6 +1812,65 @@ export function unicodeWhitespaceLoopMismatches(mod: AtomParserModule): {
         const got = renderAtoms(mod, code).replaceAll(ws, " ");
         const twin = renderAtoms(mod, pre + form.replaceAll("W", " ") + post);
         if (got !== twin) bad.push(`${JSON.stringify(code)}: ${got}`);
+      }
+    }
+  }
+  return { total, bad };
+}
+
+/**
+ * Decision 156 addendum 8, comments (template-parser-lookbehinds-followup):
+ * a comment between an operator word (`of`, `yield`, `await`) and what comes
+ * before it, or between the word and the `:`, is skipped exactly as
+ * whitespace is. Each input's atoms equal those of the same input with the
+ * comment replaced by spaces of the same length (a line comment keeps its
+ * newline), in every atom position. Returns the mismatches (none expected).
+ */
+export function commentTwinMismatches(mod: AtomParserModule): {
+  total: number;
+  bad: string[];
+} {
+  const positions: [string, string][] = [
+    ["<div x=", "/>"],
+    ["div x=", "\n"],
+    ["<div x() { return ", " }/>"],
+    ["<if(", ")>y</if>"],
+    ["<div>${", "}</div>"],
+    ["<div x=`${", "}`/>"],
+  ];
+  // `C` is the comment.
+  const forms = [
+    "f(C await :b)",
+    "f(Cawait :b)",
+    "(C yield :b)",
+    "(x,C await :b)",
+    "(c ?C await :b : d)",
+    "(c ?C yield :b : d)",
+    "(a C of :b)",
+    "((a)C of :b)",
+    "[aC of :b]",
+    "(c ?C of :b : d)",
+    "f(await C:b)",
+    "(a of C:b)",
+    "(yield C:b)",
+  ];
+  const comments = ["/*c*/", "/* é */", "// c\n", "/*a*/ /*b*/"];
+  const atoms = (code: string) =>
+    renderAtoms(mod, code)
+      .match(/atom\([^)]*\)/g)
+      ?.join(" ") ?? "";
+  let total = 0;
+  const bad: string[] = [];
+  for (const [pre, post] of positions) {
+    for (const form of forms) {
+      for (const comment of comments) {
+        total++;
+        const blank = comment.replace(/[^\n]/g, " ");
+        const code = pre + form.replace("C", comment) + post;
+        const twin = pre + form.replace("C", blank) + post;
+        if (atoms(code) !== atoms(twin)) {
+          bad.push(`${JSON.stringify(code)}: ${atoms(code)}`);
+        }
       }
     }
   }

@@ -27,6 +27,7 @@ import {
   ATOMS,
   type AtomParserModule,
   asciiTwinMismatches,
+  commentTwinMismatches,
   NOT_ATOMS,
   nonAsciiMarkerViolations,
   parseScaling,
@@ -370,6 +371,12 @@ describe.each(builds)("atoms (%s)", (_name, build) => {
     const { total, ran, bad } = nonAsciiMarkerViolations(mod, isValidTs);
     expect(total).toBe(21_840);
     expect(ran).toBeGreaterThan(14_000);
+    expect(bad).toEqual([]);
+  });
+
+  it("a comment around an operator word lexes as whitespace does (decision 156 addendum 8)", () => {
+    const { total, bad } = commentTwinMismatches(mod);
+    expect(total).toBe(312);
     expect(bad).toEqual([]);
   });
 
