@@ -919,12 +919,14 @@ export function attributeTagDiagnosticMappings(
     const name = match[1];
     if (!name || match.index === undefined) continue;
     const sourceStart = match.index + 1;
-    const probe = `${name}={{`;
-    const probeStart = generated.indexOf(
-      probe,
-      generatedCursors.get(name) ?? 0,
-    );
-    if (probeStart < 0) continue;
+    // The value is `{ ... }`, or `(({ ... } satisfies T) as any)` once the
+    // host wraps it in the callee's declared type.
+    const probe = new RegExp(`${escapeRegExp(name)}=\\{\\(*\\{`, "g");
+    probe.lastIndex = generatedCursors.get(name) ?? 0;
+    const probeMatch = probe.exec(generated);
+    if (!probeMatch) continue;
+    const probeStart = probeMatch.index;
+    const objectOpen = probeStart + probeMatch[0].length - 1;
     const generatedStart = probeStart;
     // This tag's *own* closing `} satisfies `, not the first one in the
     // text: a component nested inside this tag's body can itself take an
@@ -935,12 +937,17 @@ export function attributeTagDiagnosticMappings(
     // brace depth from the object literal's own opening `{` (`probeStart +
     // name.length + 2`, right after `={`) finds the marker at depth 0 —
     // this object's own close — regardless of what is nested inside it.
-    const generatedEndMarker = matchingSatisfiesMarker(
-      generated,
-      probeStart + probe.length - 1,
-    );
+    const generatedEndMarker = matchingSatisfiesMarker(generated, objectOpen);
     if (generatedEndMarker < 0) continue;
-    const generatedEnd = generatedEndMarker + 1;
+    // TypeScript reports a failed `satisfies` on the keyword, so the span
+    // reaches over it when the object is wrapped.
+    const keyword = " satisfies";
+    const generatedEnd =
+      generatedEndMarker +
+      1 +
+      (generated.startsWith(keyword, generatedEndMarker + 1)
+        ? keyword.length
+        : 0);
     generatedCursors.set(name, generatedEnd);
     tags.push({
       sourceStart,
@@ -1045,6 +1052,10 @@ function matchingSatisfiesMarker(text: string, objectOpen: number): number {
     }
   }
   return -1;
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function fallbackSpan(
