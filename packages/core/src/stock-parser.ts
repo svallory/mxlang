@@ -363,6 +363,52 @@ export function stockParserError(
   );
 }
 
+export const BARE_COMMA_MESSAGE =
+  "a `,` continues the attributes of the tag above; there is no tag here";
+
+/**
+ * The positioned MX error for a concise line that holds only `,` (or `, --x`)
+ * with no tag above it. The parser ends an open tag that never got a name, and
+ * Marko then reads `tag.name.value` off it and throws a `TypeError` (grammar
+ * probe g1683). `undefined` unless `error` is such a `TypeError` *and* the
+ * parser confirms a nameless tag, so no other failure is rewritten.
+ */
+export function bareCommaError(
+  error: unknown,
+  source: string,
+): TranslateError | undefined {
+  if (!(error instanceof TypeError)) return undefined;
+  const parser = markoParser();
+  if (!parser) return undefined;
+  let named = false;
+  let nameless = -1;
+  try {
+    parser
+      .createParser({
+        onOpenTagName: () => {
+          named = true;
+        },
+        onOpenTagEnd: (range: { start: number }) => {
+          if (!named && nameless < 0) nameless = range.start;
+          named = false;
+        },
+        onError: () => {},
+      })
+      .parse(source);
+  } catch {
+    // A parse that throws still reported the tags before it.
+  }
+  if (nameless < 0) return undefined;
+  const comma = source.lastIndexOf(",", Math.max(nameless - 1, 0));
+  const offset = comma >= 0 ? comma : nameless;
+  const before = source.slice(0, offset).split("\n");
+  return new TranslateError(
+    BARE_COMMA_MESSAGE,
+    before.length,
+    before[before.length - 1]?.length ?? 0,
+  );
+}
+
 /**
  * The same two errors for a recovered parse failure: `parseFragment` asks
  * Marko for an AST, and Marko then leaves a failing attribute value in the tree

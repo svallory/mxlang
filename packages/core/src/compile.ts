@@ -42,6 +42,7 @@ import { lower } from "./lower.ts";
 import { markoBabel, markoCompiler } from "./marko-frontend.ts";
 import { hintParseError } from "./parse-error-hints.ts";
 import {
+  bareCommaError,
   stockAtomError,
   stockParserError,
   sugarAfterDefaultError,
@@ -406,6 +407,7 @@ export function compileSource(
     hintParseError(error, source, policy);
     // Decision 151: a stock htmljs-parser cannot read `:name` after a value.
     const thrown =
+      bareCommaError(error, source) ??
       sugarAfterDefaultError(error, source) ??
       stockParserError(error, source) ??
       stockAtomError(error, source) ??

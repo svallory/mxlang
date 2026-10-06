@@ -46,6 +46,7 @@ import {
 import { nullPrototypeTags } from "./lookup-safety.ts";
 import { markoCompiler } from "./marko-frontend.ts";
 import {
+  bareCommaError,
   stockAtomError,
   stockParserError,
   sugarAfterDefaultError,
@@ -418,13 +419,17 @@ export function parseFragment(
       translator,
       // biome-ignore lint/suspicious/noExplicitAny: the compiler's result type is untyped here
     } as any).ast;
-  } catch (error) {
+  } catch (thrown) {
+    const error = markoPrintCrash(thrown)
+      ? reparseForError(compiler, source, resolved.filename, translator, thrown)
+      : thrown;
     // A thrown error's position is on the exception, never in a tree, so the
     // walk below can never reach it (spike 1, limit 2).
     const positioned = error as PositionedError;
     // Decision 151: a stock htmljs-parser cannot read `:name` after a value.
     // The fragment's own coordinates are shifted like Marko's error's.
     const stock =
+      bareCommaError(error, source) ??
       sugarAfterDefaultError(error, source) ??
       stockParserError(error, source) ??
       stockAtomError(error, source);
@@ -435,13 +440,54 @@ export function parseFragment(
     }
     if (positioned?.loc) {
       shiftPosition(positioned.loc.start, resolved);
-      shiftPosition(positioned.loc.end, resolved);
+      // Marko's `CompileError` for a point error shares one object between
+      // `start` and `end`; shifting it twice would land at `base + base`.
+      if (positioned.loc.end !== positioned.loc.start) {
+        shiftPosition(positioned.loc.end, resolved);
+      }
     }
     throw error;
   }
 
   shiftNode(ast, resolved);
   return { ast, body: ast.program?.body ?? [] };
+}
+
+/**
+ * Marko's `source` output prints the tree it parsed, and a tag it failed to
+ * parse part of (a method's type parameters that are not a type-parameter list,
+ * `x<A<B>>(a) {b}`) leaves a bare array where the printer expects a node, so
+ * the print throws `unknown node of type undefined with constructor "Array"`
+ * before Marko reports the positioned parse error it recorded.
+ */
+function markoPrintCrash(error: unknown): boolean {
+  return (
+    error instanceof ReferenceError &&
+    /unknown node of type undefined with constructor "Array"/.test(
+      error.message,
+    )
+  );
+}
+
+/**
+ * Asks Marko to compile again to a form that reports its recorded parse errors
+ * before printing anything, and returns what it throws (its own positioned
+ * `CompileError`), or `original` when that compile does not fail.
+ */
+function reparseForError(
+  // biome-ignore lint/suspicious/noExplicitAny: the compiler is required untyped here
+  compiler: any,
+  source: string,
+  filename: string,
+  translator: unknown,
+  original: unknown,
+): unknown {
+  try {
+    compiler.compileSync(source, filename, { translator, output: "html" });
+  } catch (error) {
+    return error;
+  }
+  return original;
 }
 
 /**
