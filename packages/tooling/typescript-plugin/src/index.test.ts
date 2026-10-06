@@ -1487,7 +1487,7 @@ describe("MX language plugin", () => {
         ),
       ).toBe(true);
       expect(
-        missingDiagnostics.some((diagnostic) => diagnostic.code === 2322),
+        missingDiagnostics.some((diagnostic) => diagnostic.code === 1360),
       ).toBe(true);
       expect(
         missingDiagnostics.some(
@@ -1826,12 +1826,12 @@ describe("MX language plugin", () => {
 
       project.setFile(callee, required);
 
-      expect(callerErrors(project)).toEqual([{ code: 2322, start: tagName }]);
+      expect(callerErrors(project)).toEqual([{ code: 1360, start: tagName }]);
     });
 
     it("re-checks the caller when the callee's attribute types loosen again", () => {
       const project = projectWith(required);
-      expect(callerErrors(project)).toEqual([{ code: 2322, start: tagName }]);
+      expect(callerErrors(project)).toEqual([{ code: 1360, start: tagName }]);
 
       project.setFile(callee, optional);
 
@@ -1844,7 +1844,7 @@ describe("MX language plugin", () => {
 
       project.setFile(callee, required);
       project.service.getSemanticDiagnostics(callee);
-      expect(callerErrors(project)).toEqual([{ code: 2322, start: tagName }]);
+      expect(callerErrors(project)).toEqual([{ code: 1360, start: tagName }]);
 
       project.setFile(callee, optional);
       project.service.getSemanticDiagnostics(callee);
@@ -2986,10 +2986,10 @@ describe("declared attribute-tag values in the emitted TypeScript", () => {
     const caller = Object.keys(files)[1] as string;
     const checked = emittedDiagnostics(files, caller, host);
 
-    // One mistake, two reports: `satisfies` rejects the value at the
-    // attribute, and the JSX prop then rejects the value it was given.
+    // One mistake, one report: `satisfies` rejects the value at the
+    // attribute, and the JSX prop does not check the same value again.
     expect(checked.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
-      2322, 2322,
+      2322,
     ]);
     expect(
       checked.diagnostics.map((diagnostic) => diagnostic.text).join("\n"),
