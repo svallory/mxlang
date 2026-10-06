@@ -50,7 +50,9 @@ export function rewriteCodes(
     const record = value as Record<string, unknown>;
     const here = isPosition(record.loc) ? record.loc : loc;
     if (typeof record.code === "string" && "shape" in record) {
-      record.code = rewrite(record.code, here, shadowed);
+      const before = record.code;
+      record.code = rewrite(before, here, shadowed);
+      if (record.code !== before) record.unrewrittenCode ??= before;
       return;
     }
 

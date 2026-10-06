@@ -90,6 +90,43 @@ describe("mx-tsc on a Solid page", () => {
     ]);
   }, 60_000);
 
+  // whole-file solid-for/page.mx, 1-based (line,column). The built-ins resolve
+  // (`<For>`, `<Dynamic>`), so a row's type is known; a rewritten read
+  // (`i` to `i()`, `row` to `row()`, a for-in key to `mxEntry()[0]`) keeps the
+  // position of the name after it; the dynamic tag's expression and a method
+  // attribute's body are mapped; a literal `<for in>` source reports nothing
+  // the author did not write (no TS2869 on the generated `?? {}`).
+  //   3  `<for|row| of=list><p>${row.nmae}</p></for>`              `nmae`            (3,28)
+  //   4  `<p>${list[0].nmae}</p>`                                  `nmae`            (4,14)
+  //   5  `<for|row, i| of=list><p>${i + missingIdx}</p></for>`     `missingIdx`      (5,31)
+  //   6  `<for|row| of=list by="id"><p>${row.name + missingKeyed}`  `missingKeyed`    (6,43)
+  //   7  `<for|k, v| in={ a: 1 }><p>${k + v + missingIn}</p>`      `missingIn`       (7,37)
+  //   8  `<${missingDyn}/>`                                        `missingDyn`      (8,4)
+  //   9  `<button onClick() { missingInMethod(); }>go</button>`    `missingInMethod` (9,21)
+  it("whole-file .mx reports errors inside <for>, a dynamic tag and a method body at the authored column", () => {
+    const { status, lines } = check("solid-for", "page.mx");
+    expect(status).not.toBe(0);
+    expect(lines).toEqual([
+      expect.stringMatching(/page\.mx\(3,28\): error TS2339: .*'nmae'/),
+      expect.stringMatching(/page\.mx\(4,14\): error TS2339: .*'nmae'/),
+      expect.stringMatching(
+        /page\.mx\(5,31\): error TS2304: Cannot find name 'missingIdx'/,
+      ),
+      expect.stringMatching(
+        /page\.mx\(6,43\): error TS2304: Cannot find name 'missingKeyed'/,
+      ),
+      expect.stringMatching(
+        /page\.mx\(7,37\): error TS2304: Cannot find name 'missingIn'/,
+      ),
+      expect.stringMatching(
+        /page\.mx\(8,4\): error TS2304: Cannot find name 'missingDyn'/,
+      ),
+      expect.stringMatching(
+        /page\.mx\(9,21\): error TS2304: Cannot find name 'missingInMethod'/,
+      ),
+    ]);
+  }, 60_000);
+
   it("a clean whole-file page stays clean", () => {
     const { status, lines } = check("solid-clean", "page.mx");
     expect(lines).toEqual([]);

@@ -90,10 +90,21 @@ Three facts worth knowing before touching it:
   values, spreads, class merges, `${}`/`$!{}` text, `<if>`/`<for of>`/`<for in>`
   heads and attribute-tag spreads/conditions go through `mappedExpr` (per-atom
   for an atom, decision 156); `compileSolidUnit` maps imports, `static` blocks
-  and `Input` with `mappedStatement`. A value Solid rewrites (a method to an
-  arrow, a `<textarea>` spread wrapped in `__mxOmit`) stays unmapped: a mapping
-  over different text shifts positions. Still unmapped: the `<for from= to=
-  step=>` range arithmetic and attribute-tag `<for>` sources. Pinned by
+  and `Input` with `mappedStatement`. A value Solid rewrites maps what
+  survives: a `<for>` accessor read (`i` to `i()`, `row` to `row()`, a for-in
+  key to `mxEntry()[0]`) maps its unchanged runs one to one and the replaced
+  name as a whole (`Expr.unrewrittenCode`, `mappedExpr`), and a method
+  attribute maps its `{ … }` body when the printer kept the authored text
+  (`Expr.bodySpan`); a mapping over different text shifts positions, so the
+  inserted text stays unmapped. The dynamic tag's own expression is mapped,
+  and a `<for in={ … }>` object-literal source no longer gets a `?? {}`
+  (TS2869). The whole-file virtual code also gets the file kind's
+  `completeTypecheckModule` (`compileMxVirtual`), so `<For>`/`<Show>`/
+  `<Dynamic>` resolve and a row's type is known. Known unmapped: the `<for
+  from= to= step=>` range arithmetic, attribute-tag `<for>` sources, a method
+  body the printer reformatted (`{ go() }` prints as `{ go(); }`), a method's
+  rewritten head, a `<textarea>` spread wrapped in `__mxOmit`, and a dynamic
+  tag's call arguments. Pinned by
   `expression-mappings.test.ts` and `packages/tooling/tsc/src/expression-values-solid-typecheck.test.ts`.
 - **`/var` binds `any` on this host, unlike html/preact/react/hono** (TODO
   `tag-var-type-from-return`, filed from PR #159 round 2; firstmate's ruling

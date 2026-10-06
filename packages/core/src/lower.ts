@@ -349,13 +349,40 @@ export function exprOf(ctx: Ctx, node: Node): Expr {
   checkTagVarReads(ctx, code, node);
   const span = exprSpan(ctx, node);
   const atoms = span ? atomsIn(ctx, span.sourceStart, span.sourceEnd) : [];
+  const bodySpan =
+    node?.type === "FunctionExpression" && span
+      ? methodBodySpan(ctx, code, span)
+      : undefined;
   return {
     code,
     shape: expressionShape(node),
     node,
     span,
     ...(atoms.length > 0 ? { atoms } : {}),
+    ...(bodySpan ? { bodySpan } : {}),
   };
+}
+
+/**
+ * The authored `{ … }` body of a function expression, proven verbatim: the
+ * block that closes `code` is also the text that closes the authored span, so
+ * a host that prints the head differently can map the body alone.
+ */
+function methodBodySpan(
+  ctx: Ctx,
+  code: string,
+  span: SourceSpan,
+): SourceSpan | undefined {
+  const body = code.match(/\)\s*(\{[\s\S]*\})$/)?.[1];
+  if (!body) return undefined;
+  const sourceStart = span.sourceEnd - body.length;
+  if (
+    sourceStart < span.sourceStart ||
+    ctx.source.slice(sourceStart, span.sourceEnd) !== body
+  ) {
+    return undefined;
+  }
+  return { sourceStart, sourceEnd: span.sourceEnd };
 }
 
 /**

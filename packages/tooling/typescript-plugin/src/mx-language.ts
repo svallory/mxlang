@@ -413,8 +413,16 @@ export function createMxLanguagePlugin(
           targets,
           defaultTag,
         );
+    // What the host's own compiler stage adds that the type-check cannot see
+    // (Solid: imports for its auto-imported built-ins). Any file kind of the
+    // target that declares it; appended at the end, so no mapped offset moves.
+    const complete = descriptor.host?.fileKinds?.find(
+      (kind) => kind.completeTypecheckModule,
+    )?.completeTypecheckModule;
+    const completed = complete?.(generated);
+    if (completed?.warning) warnings.push(completed.warning);
     return {
-      generated,
+      generated: completed?.code ?? generated,
       mappings,
       dependencies: compiled.dependencies,
       warnings,

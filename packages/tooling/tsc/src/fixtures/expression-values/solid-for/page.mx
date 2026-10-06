@@ -1,0 +1,9 @@
+static const list = [{ id: 1, name: "a" }];
+
+<for|row| of=list><p>${row.nmae}</p></for>
+<p>${list[0].nmae}</p>
+<for|row, i| of=list><p>${i + missingIdx}</p></for>
+<for|row| of=list by="id"><p>${row.name + missingKeyed}</p></for>
+<for|k, v| in={ a: 1 }><p>${k + v + missingIn}</p></for>
+<${missingDyn}/>
+<button onClick() { missingInMethod(); }>go</button>

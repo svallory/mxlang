@@ -69,11 +69,50 @@ describe("solid expression values", () => {
     }
   });
 
-  it("leaves a method attribute rewritten to an arrow unmapped", () => {
-    const result = pairs(`${IMPORT}<Field onPick() { go() }/>`);
+  it("maps a method attribute's body, not its rewritten head", () => {
+    const result = pairs(`${IMPORT}<Field onPick() { go(); }/>`);
     expect(result.some(([, generated]) => generated?.includes("=>"))).toBe(
       false,
     );
+    expect(result).toContainEqual(["{ go(); }", "{ go(); }"]);
+  });
+
+  it("leaves a method body unmapped when the printer reformatted it", () => {
+    // `{ go() }` prints as `{ go(); }`: not the authored text, so no mapping.
+    const result = pairs(`${IMPORT}<Field onPick() { go() }/>`);
+    expect(result.some(([source]) => source === "{ go() }")).toBe(false);
+  });
+
+  it("maps a dynamic tag's expression", () => {
+    expect(pairs("<${missing}/>")).toContainEqual(["missing", "missing"]);
+  });
+
+  it.each([
+    ["an index read", "<for|r, i| of=xs><p>${i + z}</p></for>", " + z"],
+    ["a row read", '<for|r| of=xs by="id"><p>${r.a + z}</p></for>', ".a + z"],
+    ["a for-in pair", "<for|k, v| in=o><p>${k + v + z}</p></for>", " + z"],
+  ])(
+    "maps the text after a rewritten read in %s one to one",
+    (_name, source, tail) => {
+      expect(pairs(source)).toContainEqual([tail, tail]);
+    },
+  );
+
+  it("maps a replaced read as a whole, so an error on it lands on the authored name", () => {
+    const result = pairs("<for|k, v| in=o><p>${k}</p></for>");
+    expect(result).toContainEqual(["k", "mxEntry()[0]"]);
+  });
+
+  it("drops the `?? {}` fallback after an object literal source", () => {
+    const { code } = compileSolidUnit(
+      "<for|k, v| in={ a: 1 }><p>${k}</p></for>",
+      {
+        filename: "/fixtures/values.mx",
+        customTags: {},
+      },
+    );
+    expect(code).toContain("Object.entries({ a: 1 })");
+    expect(code).not.toContain("?? {}");
   });
 
   it("maps a plain mapping to text equal to its source", () => {

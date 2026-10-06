@@ -902,9 +902,22 @@ function guardValue(
  */
 function mappedValue(expr: Expr): MappedCode {
   const method = methodExpression(expr);
-  return method === null || method === expr.code
-    ? mappedExpr(expr)
-    : concatMapped(method);
+  if (method === null || method === expr.code) return mappedExpr(expr);
+  // Only the head changed (`onClick() {…}` to `() => {…}`): the `{…}` body is
+  // the authored text, so it maps on its own when its length is unchanged.
+  const body = method.slice(method.indexOf("{", method.indexOf("=>")));
+  const bodySpan = expr.bodySpan;
+  if (
+    !bodySpan ||
+    bodySpan.sourceEnd - bodySpan.sourceStart !== body.length ||
+    !method.endsWith(body)
+  ) {
+    return concatMapped(method);
+  }
+  return concatMapped(
+    mapped(method.slice(0, -body.length), null),
+    mapped(body, bodySpan),
+  );
 }
 
 function renderAttr(
@@ -2258,7 +2271,7 @@ export class SolidEmitter implements Emitter<string> {
     ) =>
       concatMapped(
         `{(() => { const ${temp} = `,
-        expr.code,
+        mappedExpr(expr),
         `;${invoke} if (${value} !== null && typeof ${value} === "object" && (Object.getPrototypeOf(${value}) === Object.prototype || Object.getPrototypeOf(${value}) === null) && Object.prototype.hasOwnProperty.call(${value}, "content")) throw new Error("MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <\${x.content}/>"); `,
         // Marko: a runtime-resolved textarea takes `value`, never content.
         node.content && !raw
@@ -2464,7 +2477,9 @@ export class SolidEmitter implements Emitter<string> {
         concatMapped(
           "<For each={Object.entries(",
           mappedExpr(node.source.object),
-          ` ?? {})} keyed={e => e[0]}>{(${entry}) => `,
+          // An object literal is never nullish; TypeScript reports the `??`
+          // on it (TS2869) at the author's own literal.
+          `${node.source.object.shape === "object" ? "" : " ?? {}"})} keyed={e => e[0]}>{(${entry}) => `,
           jsxValue(inLazyScope(() => blockExpression(node.children))),
           "}</For>",
         ),

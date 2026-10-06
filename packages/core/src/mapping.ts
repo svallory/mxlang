@@ -65,7 +65,191 @@ export function mapped(code: string, span: SourceSpan | null): MappedCode {
  * synthesized `Expr`, or a fabricated literal default).
  */
 export function mappedExpr(expr: Expr): MappedCode {
-  return atomMappings(expr) ?? mapped(expr.code, expr.span ?? null);
+  return (
+    atomMappings(expr) ??
+    rewrittenMappings(expr) ??
+    mapped(expr.code, expr.span ?? null)
+  );
+}
+
+/**
+ * An expression whose reads were rewritten (`i` to `i()`) has `code` of a
+ * different length than its authored text, so one whole-span mapping would
+ * shift every position after the first rewrite. The tokens `code` kept map
+ * to the tokens they came from one to one, and text a rewrite put in place
+ * of an authored token maps as a whole to that token. Text a rewrite only
+ * inserted stays unmapped. `undefined` when nothing was rewritten.
+ */
+function rewrittenMappings(expr: Expr): MappedCode | undefined {
+  const before = expr.unrewrittenCode;
+  const span = expr.span;
+  if (before === undefined || !span || before === expr.code) return undefined;
+  // `before` against the authored text: atoms (one character longer) or a
+  // whole-span identity.
+  const base =
+    atomMappings({ ...expr, code: before }) ??
+    mapped(
+      before,
+      span.sourceEnd - span.sourceStart === before.length ? span : null,
+    );
+  const toSource = (start: number, end: number): GeneratedMapping[] => {
+    const out: GeneratedMapping[] = [];
+    for (const piece of base.mappings) {
+      const from = Math.max(start, piece.generatedStart);
+      const to = Math.min(end, piece.generatedEnd);
+      if (to <= from) continue;
+      const wholePiece =
+        piece.generatedEnd - piece.generatedStart ===
+        piece.sourceEnd - piece.sourceStart;
+      out.push({
+        sourceStart: wholePiece
+          ? piece.sourceStart + (from - piece.generatedStart)
+          : piece.sourceStart,
+        sourceEnd: wholePiece
+          ? piece.sourceStart + (to - piece.generatedStart)
+          : piece.sourceEnd,
+        generatedStart: from,
+        generatedEnd: to,
+      });
+    }
+    return out;
+  };
+  const oldTokens = tokenize(before);
+  const newTokens = tokenize(expr.code);
+  const mappings: GeneratedMapping[] = [];
+  // A kept token maps one to one; a replaced run maps as a whole.
+  const emit = (
+    oldStart: number,
+    oldEnd: number,
+    newStart: number,
+    newEnd: number,
+    verbatim: boolean,
+  ) => {
+    const pieces = toSource(oldStart, oldEnd);
+    if (verbatim) {
+      for (const piece of pieces) {
+        mappings.push({
+          ...piece,
+          generatedStart: piece.generatedStart + newStart - oldStart,
+          generatedEnd: piece.generatedEnd + newStart - oldStart,
+        });
+      }
+      return;
+    }
+    const first = pieces[0];
+    const last = pieces[pieces.length - 1];
+    if (!first || !last) return;
+    mappings.push({
+      sourceStart: first.sourceStart,
+      sourceEnd: last.sourceEnd,
+      generatedStart: newStart,
+      generatedEnd: newEnd,
+    });
+  };
+  // Longest common subsequence of tokens.
+  const rows = oldTokens.length + 1;
+  const cols = newTokens.length + 1;
+  const table = new Uint32Array(rows * cols);
+  for (let i = oldTokens.length - 1; i >= 0; i--) {
+    for (let j = newTokens.length - 1; j >= 0; j--) {
+      table[i * cols + j] =
+        oldTokens[i]?.text === newTokens[j]?.text
+          ? (table[(i + 1) * cols + j + 1] ?? 0) + 1
+          : Math.max(
+              table[(i + 1) * cols + j] ?? 0,
+              table[i * cols + j + 1] ?? 0,
+            );
+    }
+  }
+  let i = 0;
+  let j = 0;
+  let gapOld = -1;
+  let gapNew = -1;
+  const flushGap = (oldIndex: number, newIndex: number) => {
+    if (gapOld < 0) return;
+    const oldFirst = oldTokens[gapOld];
+    const oldLast = oldTokens[oldIndex - 1];
+    const newFirst = newTokens[gapNew];
+    const newLast = newTokens[newIndex - 1];
+    gapOld = -1;
+    if (!oldFirst || !oldLast || !newFirst || !newLast) return;
+    // A replaced run keeps its authored name as one span.
+    emit(oldFirst.start, oldLast.end, newFirst.start, newLast.end, false);
+  };
+  while (i < oldTokens.length && j < newTokens.length) {
+    const a = oldTokens[i];
+    const b = newTokens[j];
+    if (a && b && a.text === b.text) {
+      flushGap(i, j);
+      emit(a.start, a.end, b.start, b.end, true);
+      i++;
+      j++;
+    } else {
+      if (gapOld < 0) {
+        gapOld = i;
+        gapNew = j;
+      }
+      if ((table[(i + 1) * cols + j] ?? 0) >= (table[i * cols + j + 1] ?? 0))
+        i++;
+      else j++;
+    }
+  }
+  if (i < oldTokens.length || j < newTokens.length) {
+    if (gapOld < 0) {
+      gapOld = i;
+      gapNew = j;
+    }
+    flushGap(oldTokens.length, newTokens.length);
+  }
+  return { code: expr.code, mappings: mergeAdjacent(mappings) };
+}
+
+interface Token {
+  text: string;
+  start: number;
+  end: number;
+}
+
+/** Identifiers/numbers, whitespace runs, strings, and single punctuation. */
+function tokenize(code: string): Token[] {
+  const tokens: Token[] = [];
+  const pattern = /[\p{ID_Continue}$]+|\s+|./gsu;
+  for (const match of code.matchAll(pattern)) {
+    tokens.push({
+      text: match[0],
+      start: match.index,
+      end: match.index + match[0].length,
+    });
+  }
+  return tokens;
+}
+
+/**
+ * Joins verbatim mappings that touch in both generated and source offsets. A
+ * replaced run (different lengths) stays apart, or the text after it would
+ * shift by the length difference.
+ */
+function mergeAdjacent(mappings: GeneratedMapping[]): GeneratedMapping[] {
+  const out: GeneratedMapping[] = [];
+  for (const mapping of mappings) {
+    const last = out[out.length - 1];
+    const verbatim = (piece: GeneratedMapping) =>
+      piece.generatedEnd - piece.generatedStart ===
+      piece.sourceEnd - piece.sourceStart;
+    if (
+      last &&
+      last.generatedEnd === mapping.generatedStart &&
+      last.sourceEnd === mapping.sourceStart &&
+      verbatim(last) &&
+      verbatim(mapping)
+    ) {
+      last.generatedEnd = mapping.generatedEnd;
+      last.sourceEnd = mapping.sourceEnd;
+    } else {
+      out.push({ ...mapping });
+    }
+  }
+  return out;
 }
 
 /**

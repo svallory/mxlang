@@ -119,6 +119,19 @@ export interface Expr {
    * literal; the node holds each as a `StringLiteral` with `extra.mxAtom`.
    */
   atoms?: Atom[];
+  /**
+   * The text of `code` before a reads rewrite (`rewriteAccessorReads`) changed
+   * it, set only when it did change it. `code` then no longer lines up with
+   * `span`; a host that maps the expression uses this to map the unchanged
+   * runs one to one (`mappedExpr`).
+   */
+  unrewrittenCode?: string;
+  /**
+   * The authored `{ … }` block of a function expression (an attribute method
+   * `onClick() { … }`). Present only for a function expression with a block
+   * body. A host that prints the head differently maps the body alone.
+   */
+  bodySpan?: SourceSpan;
 }
 
 /**
