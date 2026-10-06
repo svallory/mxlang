@@ -2942,29 +2942,40 @@ discarded: the page type-checked clean, `mx-tsc` exited 0, the editor showed
 nothing.
 
 The rule: **a diagnostic whose generated position has no source mapping is
-reported, never dropped.** It is reported at the nearest mapped span of the
-generated module (the tightest mapped range containing it, else the nearest
-before it, else the first after it), so on the source it lands on the closest
-construct the module maps, and its message is suffixed with one of two
-markers (decision 161 addendum 1):
+reported, never dropped.** It is reported on the nearest *enclosing* authored
+construct of the source: the attribute that produced it, else the tag that
+holds it, else the file start (1:1). A preceding sibling's span is never used.
+The generated module follows source order, so the diagnostic came from the
+source between the nearest mapped range before it and the nearest one after
+it; when its text is one identifier or literal the author spelled in that
+stretch, that spelling is where it came from, otherwise the whole stretch is,
+and the smallest attribute or tag that contains it is the position. A source
+that does not parse, or a file kind that does not yet expose its tags and
+attributes, reports at 1:1. The message carries one of two markers, decided
+**per diagnostic range** (decision 161 addendum 1), not per generated line (a
+Solid template is one long line):
 
 ```text
  (position approximate: generated <line>:<col>)
  (in MX-generated code, not yours: an MX bug; generated <line>:<col>)
 ```
 
-The first when the diagnostic's generated line holds authored code (the error
-is the author's, the column is approximate); the second when that line holds
-no authored code at all (the error is in code MX wrote: a host bug to report,
-not something the author can fix). `<line>:<col>` is the 1-based position
-TypeScript reported in the generated module. A module with no mapped span at
-all gets an anchor mapping at its start, so the diagnostic lands at 1:1 with
-the same suffix. Nothing is suppressed: there is no allow-list for generated
-scaffolding, and the repository's own fixtures carry no "MX bug" diagnostic. A
-diagnostic Volar can map is untouched: same position, byte-identical message.
-A mapping may still hide a diagnostic on purpose (its `verification` rejects
-that code: the `.astro.mx` fence's TS1108); that is a host's decision about a
-spurious error, not an unmapped one, and is kept.
+The first when the diagnostic's generated range is inside, or directly next
+to, authored (mapped) code: the error is the author's and the column is
+approximate. The second when that range holds no authored code: the error is
+in code MX wrote, a host bug to report, not something the author can fix.
+Until a host maps a value (a whole-file Solid unit maps none, #362), an error
+in that value has no authored code beside it and carries the second marker.
+`<line>:<col>` is the 1-based position TypeScript reported in the generated
+module. The same goes for each `relatedInformation` entry of a diagnostic
+("'x' is declared here" in generated code), and for the diagnostics of a
+program emit (`mx-tsc` without `--noEmit`, declaration-emit errors). Nothing is
+suppressed: there is no allow-list for generated scaffolding, and the
+repository's own fixtures carry no "MX bug" diagnostic except the one that pins
+it. A diagnostic Volar can map is untouched: same position, byte-identical
+message. A mapping may still hide a diagnostic on purpose (its `verification`
+rejects that code: the `.astro.mx` fence's TS1108); that is a host's decision
+about a spurious error, not an unmapped one, and is kept.
 
 `mx-tsc` and the TypeScript plugin apply the rule at one shared function
 (`approximateUnmapped`, `@mxlang/typescript-plugin`) beneath Volar's own
