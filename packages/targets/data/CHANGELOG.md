@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Fixed (main-differential-crashes):** a top-level concise line holding only `,` is a positioned error from core, not an uncaught `TypeError`; the data target now has a test for it (no code change here).
 - **Changed (decision 162):** `parseData` reads core's `errors` list, so independent errors of one file (a scriptlet, a tag outside its parent, a CDATA section) are all diagnostics, once each, in position order.
 
 ## 0.1.0-alpha.8
