@@ -132,6 +132,13 @@ export interface Expr {
    * body. A host that prints the head differently maps the body alone.
    */
   bodySpan?: SourceSpan;
+  /**
+   * The authored text of `bodySpan`, set with it. `code` may carry the body
+   * reprinted (`{ go() }` as `{ go(); }`) or with reads rewritten, so a host
+   * diffs this against the printed body (`mappedRewrite`) to map it token by
+   * token.
+   */
+  bodySource?: string;
 }
 
 /**

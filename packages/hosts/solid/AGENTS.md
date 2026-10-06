@@ -94,16 +94,17 @@ Three facts worth knowing before touching it:
   survives: a `<for>` accessor read (`i` to `i()`, `row` to `row()`, a for-in
   key to `mxEntry()[0]`) maps its unchanged runs one to one and the replaced
   name as a whole (`Expr.unrewrittenCode`, `mappedExpr`), and a method
-  attribute maps its `{ … }` body when the printer kept the authored text
-  (`Expr.bodySpan`); a mapping over different text shifts positions, so the
+  attribute maps its `{ … }` body token by token against the authored body
+  (`Expr.bodySpan`/`bodySource`, `mappedRewrite`), also when the printer
+  reformatted it; a mapping over different text shifts positions, so the
   inserted text stays unmapped. The dynamic tag's own expression is mapped,
-  and a `<for in={ … }>` object-literal source no longer gets a `?? {}`
-  (TS2869). The whole-file virtual code also gets the file kind's
+  and a `<for in>` literal source (object, array, string, template, number)
+  no longer gets a `?? {}` (TS2869). The whole-file virtual code also gets the file kind's
   `completeTypecheckModule` (`compileMxVirtual`), so `<For>`/`<Show>`/
   `<Dynamic>` resolve and a row's type is known. Known unmapped: the `<for
-  from= to= step=>` range arithmetic, attribute-tag `<for>` sources, a method
-  body the printer reformatted (`{ go() }` prints as `{ go(); }`), a method's
-  rewritten head, a `<textarea>` spread wrapped in `__mxOmit`, and a dynamic
+  from= to= step=>` range arithmetic, attribute-tag `<for>` sources, a method's
+  rewritten head, a rewritten expression past `MAX_DIFF_CELLS` tokens (its
+  changed middle maps as one run), a `<textarea>` spread wrapped in `__mxOmit`, and a dynamic
   tag's call arguments. Pinned by
   `expression-mappings.test.ts` and `packages/tooling/tsc/src/expression-values-solid-typecheck.test.ts`.
 - **`/var` binds `any` on this host, unlike html/preact/react/hono** (TODO

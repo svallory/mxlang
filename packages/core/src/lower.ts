@@ -351,7 +351,7 @@ export function exprOf(ctx: Ctx, node: Node): Expr {
   const atoms = span ? atomsIn(ctx, span.sourceStart, span.sourceEnd) : [];
   const bodySpan =
     node?.type === "FunctionExpression" && span
-      ? methodBodySpan(ctx, code, span)
+      ? methodBodySpan(ctx, node, span)
       : undefined;
   return {
     code,
@@ -359,30 +359,40 @@ export function exprOf(ctx: Ctx, node: Node): Expr {
     node,
     span,
     ...(atoms.length > 0 ? { atoms } : {}),
-    ...(bodySpan ? { bodySpan } : {}),
+    ...(bodySpan
+      ? {
+          bodySpan,
+          bodySource: ctx.source.slice(
+            bodySpan.sourceStart,
+            bodySpan.sourceEnd,
+          ),
+        }
+      : {}),
   };
 }
 
 /**
- * The authored `{ … }` body of a function expression, proven verbatim: the
- * block that closes `code` is also the text that closes the authored span, so
- * a host that prints the head differently can map the body alone.
+ * The authored `{ … }` body of a function expression: the block's own range,
+ * proven to be braces in the source. `code` may print it differently, so this
+ * is the authored side a host diffs the printed body against.
  */
 function methodBodySpan(
   ctx: Ctx,
-  code: string,
+  node: Node,
   span: SourceSpan,
 ): SourceSpan | undefined {
-  const body = code.match(/\)\s*(\{[\s\S]*\})$/)?.[1];
-  if (!body) return undefined;
-  const sourceStart = span.sourceEnd - body.length;
+  const body = node?.body;
+  if (body?.type !== "BlockStatement" || !body.loc) return undefined;
+  const bodySpan = nodeSpan(ctx, body);
   if (
-    sourceStart < span.sourceStart ||
-    ctx.source.slice(sourceStart, span.sourceEnd) !== body
+    bodySpan.sourceStart < span.sourceStart ||
+    bodySpan.sourceEnd > span.sourceEnd ||
+    ctx.source[bodySpan.sourceStart] !== "{" ||
+    ctx.source[bodySpan.sourceEnd - 1] !== "}"
   ) {
     return undefined;
   }
-  return { sourceStart, sourceEnd: span.sourceEnd };
+  return bodySpan;
 }
 
 /**

@@ -103,6 +103,9 @@ describe("mx-tsc on a Solid page", () => {
   //   7  `<for|k, v| in={ a: 1 }><p>${k + v + missingIn}</p>`      `missingIn`       (7,37)
   //   8  `<${missingDyn}/>`                                        `missingDyn`      (8,4)
   //   9  `<button onClick() { missingInMethod(); }>go</button>`    `missingInMethod` (9,21)
+  //  10  `<for|k, v| in=[1, 2]><p>${k + v + missingArr}</p></for>`  `missingArr`      (10,35)
+  //  11  `<for|k, v| in="abc"><p>${k + v + missingStr}</p></for>`   `missingStr`      (11,34)
+  //  12  `<button onClick() { missingNoSemi() }>go</button>`        `missingNoSemi`   (12,21)
   it("whole-file .mx reports errors inside <for>, a dynamic tag and a method body at the authored column", () => {
     const { status, lines } = check("solid-for", "page.mx");
     expect(status).not.toBe(0);
@@ -123,6 +126,15 @@ describe("mx-tsc on a Solid page", () => {
       ),
       expect.stringMatching(
         /page\.mx\(9,21\): error TS2304: Cannot find name 'missingInMethod'/,
+      ),
+      expect.stringMatching(
+        /page\.mx\(10,37\): error TS2304: Cannot find name 'missingArr'/,
+      ),
+      expect.stringMatching(
+        /page\.mx\(11,37\): error TS2304: Cannot find name 'missingStr'/,
+      ),
+      expect.stringMatching(
+        /page\.mx\(12,21\): error TS2304: Cannot find name 'missingNoSemi'/,
       ),
     ]);
   }, 60_000);

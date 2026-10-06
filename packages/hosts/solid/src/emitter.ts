@@ -20,6 +20,7 @@ import {
   type MappedCode,
   mapped,
   mappedExpr,
+  mappedRewrite,
   type Position,
   type ReadRewrite,
   rewriteAccessorReads,
@@ -830,6 +831,14 @@ function methodExpression(expr: Expr): string | null {
   return `${match[1] ?? ""}(${match[2] ?? ""}) => ${match[3] ?? "{}"}`;
 }
 
+/**
+ * An object, array, string, template or number literal: `?? {}` after it is
+ * unreachable (TS2869), so a `<for in>` source of one drops it.
+ */
+function neverNullish(expr: Expr): boolean {
+  return expr.shape !== "other" || expr.node?.type === "NumericLiteral";
+}
+
 /** The guard's tag argument: `null` when the target is not a native element. */
 function nativeTagOf(native: NativeAttrs): string {
   return native.when ? `(${native.when} ? ${native.tag} : null)` : native.tag;
@@ -897,26 +906,22 @@ function guardValue(
 
 /**
  * An attribute value's text with its authored mapping. A method rewritten to
- * an arrow function is generated text, not source text, so it stays unmapped
- * (a mapping whose texts differ is worse than none).
+ * an arrow function has a new head, which is generated text and stays
+ * unmapped. Its `{…}` body is the authored text, possibly reprinted
+ * (`{ go() }` as `{ go(); }`) or with reads rewritten, so it maps token by
+ * token against the authored body (`mappedRewrite`).
  */
 function mappedValue(expr: Expr): MappedCode {
   const method = methodExpression(expr);
   if (method === null || method === expr.code) return mappedExpr(expr);
-  // Only the head changed (`onClick() {…}` to `() => {…}`): the `{…}` body is
-  // the authored text, so it maps on its own when its length is unchanged.
   const body = method.slice(method.indexOf("{", method.indexOf("=>")));
-  const bodySpan = expr.bodySpan;
-  if (
-    !bodySpan ||
-    bodySpan.sourceEnd - bodySpan.sourceStart !== body.length ||
-    !method.endsWith(body)
-  ) {
+  const { bodySpan, bodySource } = expr;
+  if (!bodySpan || bodySource === undefined || !expr.code.endsWith(body)) {
     return concatMapped(method);
   }
   return concatMapped(
     mapped(method.slice(0, -body.length), null),
-    mapped(body, bodySpan),
+    mappedRewrite(body, bodySource, bodySpan),
   );
 }
 
@@ -1148,6 +1153,7 @@ function textareaContent(node: Extract<IrNode, { kind: "Element" }>): {
           // different text would shift the positions inside it.
           span: undefined,
           atoms: undefined,
+          unrewrittenCode: undefined,
         },
       },
     ];
@@ -2477,9 +2483,9 @@ export class SolidEmitter implements Emitter<string> {
         concatMapped(
           "<For each={Object.entries(",
           mappedExpr(node.source.object),
-          // An object literal is never nullish; TypeScript reports the `??`
+          // A literal source is never nullish; TypeScript reports the `??`
           // on it (TS2869) at the author's own literal.
-          `${node.source.object.shape === "object" ? "" : " ?? {}"})} keyed={e => e[0]}>{(${entry}) => `,
+          `${neverNullish(node.source.object) ? "" : " ?? {}"})} keyed={e => e[0]}>{(${entry}) => `,
           jsxValue(inLazyScope(() => blockExpression(node.children))),
           "}</For>",
         ),

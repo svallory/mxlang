@@ -77,10 +77,28 @@ describe("solid expression values", () => {
     expect(result).toContainEqual(["{ go(); }", "{ go(); }"]);
   });
 
-  it("leaves a method body unmapped when the printer reformatted it", () => {
-    // `{ go() }` prints as `{ go(); }`: not the authored text, so no mapping.
-    const result = pairs(`${IMPORT}<Field onPick() { go() }/>`);
-    expect(result.some(([source]) => source === "{ go() }")).toBe(false);
+  it("maps a method body the printer reformatted token by token", () => {
+    // `{ go() }` prints with a `;` the author did not write: the unchanged
+    // tokens map one to one, so `go` lands on the authored `go`.
+    const source = `${IMPORT}<Field onPick() { go() }/>`;
+    const result = pairs(source);
+    expect(result).toContainEqual(["go", "go"]);
+    expect(result.some(([, generated]) => generated?.includes("=>"))).toBe(
+      false,
+    );
+    for (const [authored, generated] of result) {
+      if (authored.length === generated?.length) {
+        expect(authored).toBe(generated);
+      }
+    }
+  });
+
+  it("maps a method body whose reads were rewritten inside <for>", () => {
+    const result = pairs(
+      `${IMPORT}<for|row| of=xs by="id"><Field onPick() { use(row.id) }/></for>`,
+    );
+    expect(result).toContainEqual(["use", "use"]);
+    expect(result).toContainEqual([".id", ".id"]);
   });
 
   it("maps a dynamic tag's expression", () => {
@@ -113,6 +131,29 @@ describe("solid expression values", () => {
     );
     expect(code).toContain("Object.entries({ a: 1 })");
     expect(code).not.toContain("?? {}");
+  });
+
+  it.each([
+    ["an object", "{ a: 1 }"],
+    ["an array", "[1, 2]"],
+    ["a string", '"abc"'],
+    ["a template", "`abc`"],
+    ["a number", "5"],
+  ])("drops the `?? {}` fallback after %s literal source", (_name, literal) => {
+    const { code } = compileSolidUnit(
+      `<for|k, v| in=${literal}><p>\${k}</p></for>`,
+      { filename: "/fixtures/values.mx", customTags: {} },
+    );
+    expect(code).toContain(`Object.entries(${literal})`);
+    expect(code).not.toContain("?? {}");
+  });
+
+  it("keeps the `?? {}` fallback after a non-literal source", () => {
+    const { code } = compileSolidUnit("<for|k, v| in=o><p>${k}</p></for>", {
+      filename: "/fixtures/values.mx",
+      customTags: {},
+    });
+    expect(code).toContain("Object.entries(o ?? {})");
   });
 
   it("maps a plain mapping to text equal to its source", () => {

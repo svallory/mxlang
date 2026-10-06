@@ -92,6 +92,27 @@ function rewrittenMappings(expr: Expr): MappedCode | undefined {
       before,
       span.sourceEnd - span.sourceStart === before.length ? span : null,
     );
+  return mapTokenDiff(base, expr.code);
+}
+
+/**
+ * `after` is `base.code` reprinted or rewritten. Its unchanged tokens map to
+ * the source one to one and a changed run maps as a whole to the authored
+ * run it replaced, so the positions after a change do not shift. Used for a
+ * method body the printer reformatted (`{ go() }` printed as `{ go(); }`) as
+ * well as for rewritten reads.
+ */
+export function mappedRewrite(
+  after: string,
+  before: string,
+  span: SourceSpan,
+): MappedCode {
+  if (after === before) return mapped(after, span);
+  return mapTokenDiff(mapped(before, span), after);
+}
+
+function mapTokenDiff(base: MappedCode, after: string): MappedCode {
+  const before = base.code;
   const toSource = (start: number, end: number): GeneratedMapping[] => {
     const out: GeneratedMapping[] = [];
     for (const piece of base.mappings) {
@@ -115,7 +136,7 @@ function rewrittenMappings(expr: Expr): MappedCode | undefined {
     return out;
   };
   const oldTokens = tokenize(before);
-  const newTokens = tokenize(expr.code);
+  const newTokens = tokenize(after);
   const mappings: GeneratedMapping[] = [];
   // A kept token maps one to one; a replaced run maps as a whole.
   const emit = (
@@ -146,62 +167,108 @@ function rewrittenMappings(expr: Expr): MappedCode | undefined {
       generatedEnd: newEnd,
     });
   };
-  // Longest common subsequence of tokens.
-  const rows = oldTokens.length + 1;
-  const cols = newTokens.length + 1;
-  const table = new Uint32Array(rows * cols);
-  for (let i = oldTokens.length - 1; i >= 0; i--) {
-    for (let j = newTokens.length - 1; j >= 0; j--) {
-      table[i * cols + j] =
-        oldTokens[i]?.text === newTokens[j]?.text
-          ? (table[(i + 1) * cols + j + 1] ?? 0) + 1
-          : Math.max(
-              table[(i + 1) * cols + j] ?? 0,
-              table[i * cols + j + 1] ?? 0,
-            );
-    }
-  }
-  let i = 0;
-  let j = 0;
-  let gapOld = -1;
-  let gapNew = -1;
-  const flushGap = (oldIndex: number, newIndex: number) => {
-    if (gapOld < 0) return;
-    const oldFirst = oldTokens[gapOld];
-    const oldLast = oldTokens[oldIndex - 1];
-    const newFirst = newTokens[gapNew];
-    const newLast = newTokens[newIndex - 1];
-    gapOld = -1;
+  // A replaced run keeps its authored name as one span.
+  const emitGap = (
+    oldFrom: number,
+    oldTo: number,
+    newFrom: number,
+    newTo: number,
+  ) => {
+    const oldFirst = oldTokens[oldFrom];
+    const oldLast = oldTokens[oldTo - 1];
+    const newFirst = newTokens[newFrom];
+    const newLast = newTokens[newTo - 1];
     if (!oldFirst || !oldLast || !newFirst || !newLast) return;
-    // A replaced run keeps its authored name as one span.
     emit(oldFirst.start, oldLast.end, newFirst.start, newLast.end, false);
   };
-  while (i < oldTokens.length && j < newTokens.length) {
-    const a = oldTokens[i];
-    const b = newTokens[j];
-    if (a && b && a.text === b.text) {
-      flushGap(i, j);
-      emit(a.start, a.end, b.start, b.end, true);
-      i++;
-      j++;
-    } else {
-      if (gapOld < 0) {
-        gapOld = i;
-        gapNew = j;
-      }
-      if ((table[(i + 1) * cols + j] ?? 0) >= (table[i * cols + j + 1] ?? 0))
-        i++;
-      else j++;
-    }
+  let i = 0;
+  let j = 0;
+  for (const [matchOld, matchNew] of matchTokens(oldTokens, newTokens)) {
+    if (matchOld > i || matchNew > j) emitGap(i, matchOld, j, matchNew);
+    const a = oldTokens[matchOld];
+    const b = newTokens[matchNew];
+    if (a && b) emit(a.start, a.end, b.start, b.end, true);
+    i = matchOld + 1;
+    j = matchNew + 1;
   }
   if (i < oldTokens.length || j < newTokens.length) {
-    if (gapOld < 0) {
-      gapOld = i;
-      gapNew = j;
-    }
-    flushGap(oldTokens.length, newTokens.length);
+    emitGap(i, oldTokens.length, j, newTokens.length);
   }
-  return { code: expr.code, mappings: mergeAdjacent(mappings) };
+  return { code: after, mappings: mergeAdjacent(mappings) };
+}
+
+/**
+ * The middle of the token diff, after the common prefix and suffix are
+ * trimmed, is a longest-common-subsequence table of `old x new` cells. Past
+ * this many cells (about 2000 x 2000 tokens, whitespace runs included) the
+ * middle is not diffed: it maps as one replaced run, so a very large rewritten
+ * expression loses its per-token columns between its first and last change
+ * but never stalls the editor. Everything before the first change and after
+ * the last one stays exact.
+ */
+export const MAX_DIFF_CELLS = 4_000_000;
+
+/** Index pairs of the tokens the two sequences keep, in order. */
+function matchTokens(
+  oldTokens: Token[],
+  newTokens: Token[],
+): Array<[number, number]> {
+  const pairs: Array<[number, number]> = [];
+  let prefix = 0;
+  const shortest = Math.min(oldTokens.length, newTokens.length);
+  while (
+    prefix < shortest &&
+    oldTokens[prefix]?.text === newTokens[prefix]?.text
+  ) {
+    pairs.push([prefix, prefix]);
+    prefix++;
+  }
+  let suffix = 0;
+  while (
+    suffix < shortest - prefix &&
+    oldTokens[oldTokens.length - 1 - suffix]?.text ===
+      newTokens[newTokens.length - 1 - suffix]?.text
+  ) {
+    suffix++;
+  }
+  const oldEnd = oldTokens.length - suffix;
+  const newEnd = newTokens.length - suffix;
+  const rows = oldEnd - prefix + 1;
+  const cols = newEnd - prefix + 1;
+  if (rows * cols <= MAX_DIFF_CELLS) {
+    // Longest common subsequence of the middle.
+    const table = new Uint32Array(rows * cols);
+    for (let i = rows - 2; i >= 0; i--) {
+      for (let j = cols - 2; j >= 0; j--) {
+        table[i * cols + j] =
+          oldTokens[prefix + i]?.text === newTokens[prefix + j]?.text
+            ? (table[(i + 1) * cols + j + 1] ?? 0) + 1
+            : Math.max(
+                table[(i + 1) * cols + j] ?? 0,
+                table[i * cols + j + 1] ?? 0,
+              );
+      }
+    }
+    let i = 0;
+    let j = 0;
+    while (i < rows - 1 && j < cols - 1) {
+      if (oldTokens[prefix + i]?.text === newTokens[prefix + j]?.text) {
+        pairs.push([prefix + i, prefix + j]);
+        i++;
+        j++;
+      } else if (
+        (table[(i + 1) * cols + j] ?? 0) >= (table[i * cols + j + 1] ?? 0)
+      ) {
+        i++;
+      } else {
+        j++;
+      }
+    }
+  }
+  for (let k = suffix; k > 0; k--) {
+    pairs.push([oldTokens.length - k, newTokens.length - k]);
+  }
+  return pairs;
 }
 
 interface Token {
