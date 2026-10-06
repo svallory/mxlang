@@ -225,7 +225,9 @@ These are definitions of terms; the tables that use them carry the rules.
   (`isUnicodeSpaceCode`); none of them is a word character. The set is
   ECMAScript's WhiteSpace plus LineTerminator above ASCII, which is also
   Babel's; TypeScript additionally treats U+0085 and U+200B as whitespace, and
-  MX does not. Step 2 of the
+  MX does not. [Unicode in the parser](/architecture/unicode-in-the-parser/)
+  lists both classes, the rule at each look-behind and where MX reads as the
+  unpatched parser does. Step 2 of the
   scan and an atom's own name use the ASCII part (`isWordCode`).
 
   | Input | Result | Probes |

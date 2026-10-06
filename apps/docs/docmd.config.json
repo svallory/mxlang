@@ -213,6 +213,10 @@
           "path": "/architecture/parser-grammar/"
         },
         {
+          "title": "Unicode in the parser",
+          "path": "/architecture/unicode-in-the-parser/"
+        },
+        {
           "title": "Declarations and hooks",
           "path": "/architecture/policy-and-hooks/"
         },
