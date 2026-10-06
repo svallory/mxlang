@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.1.0-alpha.6
+
+- **Fixed (template-parser-ascii-only-lookbehinds):** every look-behind in the bundled template parser treats a non-ASCII letter (U+0080 and above, except Unicode whitespace and line terminators) as a word character. `x=é / 2` and `${é / 2}` read `/` as division instead of a regex start, and `<div x=énew y=1/>` no longer swallows the next attribute (`énew` was read as ending in the keyword `new`). Valid TypeScript with non-English identifiers failed to parse before.
+- **Fixed (decision 156 addendum 10):** Unicode whitespace and line terminators behave as ASCII whitespace in the atom look-behind. `({ a<NBSP>:b })` no longer lexes a silent atom. Two shapes that compiled stop compiling, as they already did with an ASCII space (addendum 4): `(a?<NBSP>:b : c)` and `(Array<T><NBSP>:b)`; write `: b`.
+- **Fixed (template-parser-comment-in-text-tag-open-crash):** a `//` or `/* */` comment inside the open tag of a text tag (`script`, `style`, ...) that contains the tag's closing sequence no longer ends the tag or throws; the parser reports through `onError` and never throws there.
+- **Fixed:** the reserved-name error for `::name` covers only the name (`<a::b${x}/>` reported `::b$`), and `[...await :b]` lexes the atom (the spread's third dot was counted as a member dot).
+
 ## 0.1.0-alpha.5
 
 - **Fixed (atom-lookbehind-non-ascii, decision 156 addendum 9):** a non-ASCII letter before a `:` is a word character for the atom look-behind, so `x=({ é:a })`, `x=(é :b)` and `x=(éin :b)` lex no atom (TypeScript owns that colon). alpha.4 lexed an atom there, silently changing the meaning of valid TypeScript with non-English identifiers. Unicode whitespace and line terminators are not word characters.

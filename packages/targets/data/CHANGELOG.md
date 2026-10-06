@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.0-alpha.6
+
+- Depends on `@mxlang/core@0.1.0-alpha.6`: non-ASCII identifiers before `/` and before keywords parse correctly, Unicode whitespace before an atom's `:` behaves as a space, and a comment in a text tag's open tag no longer crashes the parser. No change to the data target's own code.
+
 ## 0.1.0-alpha.5
 
 - Built on `@mxlang/core` 0.1.0-alpha.5: `parseData` no longer lexes an atom after a non-ASCII identifier where TypeScript owns the colon (`x=({ é:a })`), a silent meaning change in alpha.4 (decision 156 addendum 9).
