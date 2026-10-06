@@ -996,8 +996,15 @@ function isOperatorWord(
   const word = data.slice(wordStart, end + 1);
   if (!(atomKeywords as readonly string[]).includes(word)) return false;
   if (word === "of" || word === "yield" || word === "await") {
+    // A comment is skipped exactly as whitespace is (decision 156 addendum
+    // 8): `f(/*c*/ await :b)` reads as `f( await :b)`.
     let j = wordStart - 1;
-    while (j >= expression.start && isUnicodeWhitespaceCode(data.charCodeAt(j))) j--;
+    for (;;) {
+      while (j >= expression.start && isUnicodeWhitespaceCode(data.charCodeAt(j))) j--;
+      const comment = expression.comments?.find((c) => c.end === j + 1);
+      if (!comment) break;
+      j = comment.start - 1;
+    }
     const before = j < expression.start ? -1 : data.charCodeAt(j);
     if (word === "of") {
       return (

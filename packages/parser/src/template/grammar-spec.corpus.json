@@ -18973,8 +18973,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "Atom 22-24 \"0.\" value=23-24 \"b\"",
-      "AttrValue 6-26 \"=(f(/*c*/ await 0.))\" bound=false value=7-26 \"(f(/*c*/ await 0.))\"",
+      "AttrValue 6-26 \"=(f(/*c*/ await :b))\" bound=false value=7-26 \"(f(/*c*/ await :b))\"",
       "OpenTagEnd 26-28 \"/>\" selfClosed=true"
     ]
   },

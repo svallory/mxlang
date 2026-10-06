@@ -183,6 +183,14 @@ addendum 12 pair below.
 | `states/ATTRIBUTE.ts` | `shouldTerminateConciseAttrValue`, `shouldTerminateConciseAttrName` | a Unicode-whitespace-preceded `--` starts the text block (addendum 12: the attribute's range keeps the trailing whitespace, `1\u00a0` or `x\u00a0`, because an ASCII space ends the attribute by the current-character test, which is unchanged; pinned in `CONCISE_DASH_ROWS`) |
 | `states/HTML_CONTENT.ts` | `HTML_CONTENT.parse` | a Unicode-whitespace-preceded `//` or `/*` in HTML text starts a comment |
 
+Comments around an operator word (same follow-up; mx-lead, within decision
+156 addendum 8): `isOperatorWord`'s look-back before `of`, `yield` and
+`await` steps over comments (`expression.comments`) as `expectsExpression`
+already does, so `f(/*c*/ await :b)` reads as `f( await :b)` and
+`(a /*c*/ of :b)` as `(a  of :b)` (`commentTwinMismatches`). The terminator
+look-behind does not step over comments: `x=c ? /*c*/ of :b` still splits
+at the whitespace after the comment (a separate site, not changed).
+
 Left: every current-character and look-ahead whitespace test (a value
 still does not end at a Unicode space; `isSingleAtomDefault`'s and the `.`
 look-aheads), and `detectAmbiguousCloseAngleBracket`'s look-behinds, which a
