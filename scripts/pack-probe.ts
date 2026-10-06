@@ -354,7 +354,16 @@ function smokeMxTsc(): string | undefined {
     label: "tsc-smoke",
     withOptionalPeers: true,
     // `typescript` is a peer of `@mxlang/tsc` (">=5.9.0 <7"); a consumer supplies it.
-    extraDeps: { typescript: "6.0.3" },
+    // `@mxlang/html` is the target the typecheck below selects (`mx.host:
+    // "html"`): a compiled page imports it at run time and for its types, so
+    // an html project depends on it itself (`bun add @mxlang/html`, the
+    // target's docs). Only pinned through `overrides`, it is a transitive
+    // dependency an isolated install does not expose to the project, and the
+    // page's import is TS2307 (decision 161 reports it; Volar dropped it).
+    extraDeps: {
+      typescript: "6.0.3",
+      "@mxlang/html": `file:${tarballOf("@mxlang/html", workspaceDirs["@mxlang/html"] as string)}`,
+    },
     packExtra: ["@mxlang/typescript-plugin", "@mxlang/angular", "@mxlang/html"],
     stubExtra: ["@mxlang/astro"],
   });
