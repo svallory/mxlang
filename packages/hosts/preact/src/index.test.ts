@@ -9,7 +9,7 @@
  * a `<try>` pulls in.
  */
 
-import type { CustomTag } from "@mxlang/core";
+import type { CustomTag, MxWarning } from "@mxlang/core";
 
 const ATTR = "__mxAttrValue";
 const SPREAD = "__mxAttrSpread";
@@ -987,13 +987,24 @@ describe("attribute tag values (executed)", () => {
 });
 
 describe("component aliases", () => {
-  it("renames a lowercase component JSX would read as an element", () => {
-    // JSX decides element-vs-component by case: emitted verbatim, a
-    // `tags/`-discovered `<badge/>` rendered a literal `<badge>` element with
-    // the props as attributes — a silently wrong render, not an error.
-    const code = compile('import badge from "./badge.mx"\n<badge label="x"/>');
-    expect(code).toContain("<__mxBadge");
-    expect(code).toContain("const __mxBadge = badge;");
+  // Decision 164: a lowercase tag is a native element whatever it is bound to
+  // (this used to pin the `__mxBadge` alias for `import badge` + `<badge/>`).
+  it("keeps a lowercase tag a native element when an import of that name is in scope", () => {
+    const warnings: MxWarning[] = [];
+    const { code } = compilePreactMx(
+      'import badge from "./badge.mx"\n<badge label="x"/>',
+      "/fixtures/test.mx",
+      { warnings },
+    );
+    expect(code).toContain('<badge label="x" />');
+    expect(code).not.toContain("MxBadge");
+    expect(warnings.map((w) => [w.line, w.column, w.message])).toEqual([
+      [
+        2,
+        0,
+        `\`<badge>\` is the native element; the \`badge\` imported at 1:1 is not called. Rename it \`Badge\` or write \`<\${badge}>\``,
+      ],
+    ]);
   });
 
   it("leaves a capitalized component name alone", () => {

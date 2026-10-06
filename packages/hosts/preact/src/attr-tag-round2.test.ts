@@ -171,14 +171,25 @@ describe("generated names do not shadow authored bindings", () => {
         ).toBe(expected);
       },
     );
-    it(`${host}: does not collide with an authored MxBadge alias`, async () => {
+    it(`${host}: does not collide with an authored MxBadge binding`, async () => {
+      expect(
+        await renderFixture(host, {
+          "main.mx":
+            'static const MxBadge = 1;\nimport Badge from "./row.mx"\n<Badge label="ok"/>',
+          "row.mx": "<p>${input.label}</p>",
+        }),
+      ).toBe("<p>ok</p>");
+    });
+    // Decision 164: this input used to call the import (`<p>ok</p>`); a
+    // lowercase tag is now the native element.
+    it(`${host}: a lowercase import named like the tag stays a native element`, async () => {
       expect(
         await renderFixture(host, {
           "main.mx":
             'static const MxBadge = 1;\nimport badge from "./row.mx"\n<badge label="ok"/>',
           "row.mx": "<p>${input.label}</p>",
         }),
-      ).toBe("<p>ok</p>");
+      ).toBe('<badge label="ok"></badge>');
     });
     it(`${host}: does not collide with an authored $mx_ret0 temporary`, async () => {
       expect(

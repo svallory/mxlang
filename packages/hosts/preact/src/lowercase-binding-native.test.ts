@@ -1,3 +1,4 @@
+import type { MxWarning } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { compilePreactMx } from "./index.ts";
 
@@ -20,5 +21,21 @@ describe("lowercase tag with a same-named binding in scope", () => {
     );
     expect(code).toContain('<span title="search" />');
     expect(code).not.toContain("span(undefined)");
+  });
+
+  it("warns at the tag, naming the import and where it was bound", () => {
+    const warnings: MxWarning[] = [];
+    compilePreactMx(
+      `import { span } from "./x.ts"\n<span title="search"/>\n`,
+      "/fixtures/a.mx",
+      { warnings },
+    );
+    expect(warnings.map((w) => [w.line, w.column, w.message])).toEqual([
+      [
+        2,
+        0,
+        `\`<span>\` is the native element; the \`span\` imported at 1:1 is not called. Rename it \`Span\` or write \`<\${span}>\``,
+      ],
+    ]);
   });
 });
