@@ -29,7 +29,11 @@ import { dirname, join, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** `apps/docs/site`, where `docmd build` writes; the walk's only input. */
-export const siteRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "site");
+export const siteRoot = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "site",
+);
 
 // `sep` is used to normalize the relative paths in the report to posix.
 
@@ -62,8 +66,8 @@ function isExternal(href: string): boolean {
 export function siteHtmlFiles(siteDir: string): string[] {
   const found: string[] = [];
   const walk = (dir: string) => {
-    for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) =>
-      a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
+    for (const entry of readdirSync(dir, { withFileTypes: true }).sort(
+      (a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
     )) {
       const full = join(dir, entry.name);
       if (entry.isDirectory()) walk(full);
@@ -162,7 +166,10 @@ export function findBrokenAnchors(siteDir: string): BrokenAnchor[] {
         from: relative(siteDir, from).split(sep).join(posix.sep),
         href,
         fragment,
-        to: target === null ? null : relative(siteDir, target).split(sep).join(posix.sep),
+        to:
+          target === null
+            ? null
+            : relative(siteDir, target).split(sep).join(posix.sep),
       });
     }
   }
