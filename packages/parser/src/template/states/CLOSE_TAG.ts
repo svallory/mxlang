@@ -84,7 +84,14 @@ function ensureExpectedCloseTag(parser: Parser, closeTag: Range) {
   const closeTagNameStart = closeTag.start + 2; // strip </
   const closeTagNameEnd = closeTag.end - 1; // strip >
 
-  if (!activeTag) {
+  // MX: a tag that never got its name (`,--/</e>`: the `,` opens one and a
+  // concise `--` line follows) cannot match a named closing tag, which is
+  // then not expected either (the parser never throws). `</>` closes it, as
+  // before.
+  if (
+    !activeTag ||
+    (!activeTag.tagName && closeTagNameStart < closeTagNameEnd)
+  ) {
     parser.emitError(
       closeTag!,
       ErrorCode.EXTRA_CLOSING_TAG,

@@ -1,5 +1,5 @@
 diff --git a/dist/index.js b/dist/index.js
-index dc727aef1e94c2a42a93d9e897a89cd5518f0907..336dc5739a3e198ba1d4978bccfd1e8b09a63685 100644
+index dc727aef1e94c2a42a93d9e897a89cd5518f0907..299c798c6a833322b8b6f32c5fe566d628d2c884 100644
 --- a/dist/index.js
 +++ b/dist/index.js
 @@ -47,7 +47,23 @@ var Parser = class {
@@ -107,6 +107,15 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..336dc5739a3e198ba1d4978bccfd1e8b
      let { tagName } = parser.activeTag, tagNameLen = tagName.end - tagName.start;
      skip += tagNameLen, match = parser.lookAheadFor("/", curPos) && parser.lookAheadFor(">", 1 + curPos + tagNameLen) && parser.matchAtPos(tagName, {
        start: 1 + curPos,
+@@ -813,7 +835,7 @@ function checkForClosingTag(parser) {
+ }
+ function ensureExpectedCloseTag(parser, closeTag) {
+   let activeTag = parser.activeTag, closeTagNameStart = closeTag.start + 2, closeTagNameEnd = closeTag.end - 1;
+-  if (!activeTag)
++  if (!activeTag || !activeTag.tagName && closeTagNameStart < closeTagNameEnd)
+     return parser.emitError(
+       closeTag,
+       0,
 @@ -1079,6 +1101,11 @@ var shouldTerminate = () => !1, unaryKeywords = [
        groupStack: [],
        shouldTerminate,
@@ -537,7 +546,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..336dc5739a3e198ba1d4978bccfd1e8b
    return code === 62;
  }
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 8afb14db555b8df8a5b9f5e1c29bad5080125709..b1c1d5533b3ad9262fc7d0a03096660d90999579 100644
+index 8afb14db555b8df8a5b9f5e1c29bad5080125709..8c5305ed0e1a30ed8bfe77acb7f247d4ba42d623 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -20,7 +20,23 @@ var Parser = class {
@@ -645,6 +654,15 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..b1c1d5533b3ad9262fc7d0a03096660d
      let { tagName } = parser.activeTag, tagNameLen = tagName.end - tagName.start;
      skip += tagNameLen, match = parser.lookAheadFor("/", curPos) && parser.lookAheadFor(">", 1 + curPos + tagNameLen) && parser.matchAtPos(tagName, {
        start: 1 + curPos,
+@@ -786,7 +808,7 @@ function checkForClosingTag(parser) {
+ }
+ function ensureExpectedCloseTag(parser, closeTag) {
+   let activeTag = parser.activeTag, closeTagNameStart = closeTag.start + 2, closeTagNameEnd = closeTag.end - 1;
+-  if (!activeTag)
++  if (!activeTag || !activeTag.tagName && closeTagNameStart < closeTagNameEnd)
+     return parser.emitError(
+       closeTag,
+       0,
 @@ -1052,6 +1074,11 @@ var shouldTerminate = () => !1, unaryKeywords = [
        groupStack: [],
        shouldTerminate,

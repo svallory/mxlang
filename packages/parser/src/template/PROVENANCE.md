@@ -179,13 +179,14 @@ JavaScript.
 |---|---|---|
 | `states/JS_COMMENT_LINE.ts` | `JS_COMMENT_LINE.parse`, new `isInTextBody` | the close-tag check runs only for a comment in the text tag's body (`PARSED_TEXT_CONTENT` before any `OPEN_TAG` among its ancestors); a body comment, including one in a body placeholder, closes the tag as before |
 | `states/CLOSE_TAG.ts` | `checkForClosingTag` | returns false when there is no active tag |
+| `states/CLOSE_TAG.ts` | `ensureExpectedCloseTag` | an active tag that never got its name (`,--/</e>`: the `,` opens one, a concise `--` line follows) cannot match a named closing tag: `EXTRA_CLOSING_TAG`, as with no open tag, instead of reading `tagName.end` and throwing; `</>` still closes it (template-parser-lookbehinds-followup) |
 
 `JS_COMMENT_BLOCK` runs no close-tag check. `checkForClosingTag`'s only
 other caller, `PARSED_TEXT_CONTENT`, is the text body itself. Tests:
 `mx-no-throw.cases.ts` (20 rows and a seeded fuzz of 5,000 inputs; seed 1
-passes). A wider sweep (seeds 1 to 100, 500,000 inputs) still finds one
-different throw, out of this change's scope: a stray close tag after a
-concise `--` line, `,--/</e>`, throws in `ensureExpectedCloseTag`.
+passes) and a line-shaped fuzz (`fuzzLineThrows`, seed 1, 5,000 inputs).
+A 500,000-input sweep (token seeds 1 to 50 and line seeds 1001 to 1050,
+5,000 each) throws 0 times on this copy and both dist builds.
 
 ## Tests
 
