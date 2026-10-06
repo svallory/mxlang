@@ -137,7 +137,10 @@ export interface StringEmitter extends Emitter<string[]> {
  * core's: which helpers exist, and that they are inlined rather than imported
  * to keep the runtime surface at one `escape`, is a property of this target.
  */
-export function createEmitter(selfName?: string): StringEmitter {
+export function createEmitter(
+  selfName?: string,
+  options: { typeCheck?: boolean } = {},
+): StringEmitter {
   const state: State = {
     body: [],
     bodyMappings: [],
@@ -248,7 +251,7 @@ export function createEmitter(selfName?: string): StringEmitter {
           ? "true"
           : attr.kind === "static"
             ? quote(attr.value)
-            : mappedExpr(attr.value);
+            : attributeValue(attr);
       return concatMapped(
         mapped(propKey(attr.name), attr.nameSpan),
         ": ",
@@ -514,12 +517,13 @@ export function createEmitter(selfName?: string): StringEmitter {
   /**
    * An attribute's value expression. A refined bound attribute (`v:fn:=q`)
    * renders as the unrefined one: Marko's change handler (`q = fn(next)`) is
-   * client-only and this target renders once. The type-check projection still
-   * has to see `fn`, so the value is `(false && fn(q), q)`: `fn` applied to the
-   * bound value's type is checked and mapped to the modifier, and never runs.
+   * client-only and this target renders once. Under `typeCheck` (the tooling
+   * projection, decision 140; never the module that runs) the value is
+   * `(false && fn(q), q)`, so `fn` applied to the bound value's type is
+   * checked and mapped to the modifier.
    */
   const attributeValue = (attr: Extract<Attr, { value: Expr }>): MappedCode =>
-    attr.kind === "bound" && attr.refinement
+    options.typeCheck && attr.kind === "bound" && attr.refinement
       ? concatMapped(
           "(false && ",
           mappedExpr(attr.refinement),
@@ -809,7 +813,7 @@ export function createEmitter(selfName?: string): StringEmitter {
           setNamed(attr.name, quote(attr.value), attr.nameSpan);
           break;
         default:
-          setNamed(attr.name, mappedExpr(attr.value), attr.nameSpan);
+          setNamed(attr.name, attributeValue(attr), attr.nameSpan);
       }
     }
 
@@ -1377,9 +1381,13 @@ export function createEmitter(selfName?: string): StringEmitter {
  *   caller holding only the default export (a dynamic tag, a barrel
  *   re-export) renders into its own sink.
  */
-export function emitModuleWithMappings(ir: Ir, escapeFrom: string): MappedCode {
+export function emitModuleWithMappings(
+  ir: Ir,
+  escapeFrom: string,
+  options: { typeCheck?: boolean } = {},
+): MappedCode {
   const name = moduleExportName(ir, "@mxlang/html");
-  const emitter = createEmitter(name);
+  const emitter = createEmitter(name, options);
   drive(emitter, ir.body);
   const body = emitter.done();
   const buffered = body.some((line) => line.includes("__mxCreateBufferedOut("));

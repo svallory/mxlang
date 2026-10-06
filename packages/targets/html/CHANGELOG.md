@@ -1,8 +1,8 @@
 # @mxlang/html
 
-- **Added (bound-attribute-refinement):** a refined bound attribute (`<input value:fn:=q/>`) is accepted and renders as the unrefined `value:=q` does: Marko's change handler (`q = fn(next)`) is client-only, and this target renders once. The emitted code carries a dead `(false && fn(q), q)` so the type-check projection reports a misspelled or ill-typed `fn` at the modifier; it never runs. The Marko-measured `is:raw:=x` primitive-attribute row is restored.
-
 ## Unreleased
+
+- **Added (bound-attribute-refinement):** a refined bound attribute (`<input value:fn:=q/>`) is accepted and renders as the unrefined `value:=q` does, byte for byte: Marko's change handler (`q = fn(next)`) is client-only, and this target renders once. Under `typeCheck` (new `CompileOptions` field, decision 140; the TS plugin passes it through the descriptor, a build never does) the value is `(false && fn(q), q)`, so a misspelled or ill-typed `fn` is reported at the modifier, on a native tag, a `<define>` component call, a dynamic tag and a spread tag. The runtime module never carries it. The Marko-measured `is:raw:=x` primitive-attribute row is restored.
 
 - **Fix, behaviour change (statement-followup, decision 168):** JSX in a `static`/`export`/`server` statement (`static const el = <b>hi</b>` followed by a template line) was a silent swallow of the next template line on html (the statement ran on into it, leaving an empty template); it is now a positioned error at the `<` naming JSX in a statement. A decorated `static class` is accepted again.
 

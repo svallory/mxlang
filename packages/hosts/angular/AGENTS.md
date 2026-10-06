@@ -262,7 +262,7 @@ name). `this` is the component and `element` is `$event.currentTarget` as
 `EventTarget | null` — both recorded in `divergences.md`. The tests check the emitted template with ngtsc
 (`test/event-handler.test.ts`, via `@mxlang/angular-checker`).
 
-A refined bound attribute (`v:fn:=q`) adds two more members the same way, `__mxGet` and `__mxSet` (`REFINE_HELPER_MEMBERS`; `helperMembersFor(text)` picks which a template needs, so a page with handlers alone gets none): `[v]="__mxGet(q)" (vChange)="__mxSet(this, 'q', fn($event))"`. They read and write a `WritableSignal` (`()` / `.set()`) or a plain property as Angular's own `[(v)]` does. `[(v)]="q"` stays byte-identical without a refinement.
+A refined bound attribute (`v:fn:=q`) adds two more members the same way, `__mxGet` and `__mxSet` (`REFINE_HELPER_MEMBERS`; `helperMembersFor(text)` picks which a template needs, so a page with handlers alone gets none): `[v]="__mxGet(q)" (vChange)="__mxSet(this, 'q', fn($event))"`. They read and write a `WritableSignal` (`()` / `.set()`) or a plain property as Angular's own `[(v)]` does. `[(v)]="q"` stays byte-identical without a refinement. A bare target that is a template variable (the `Emitter.scopes` stack: `@for` bindings, `<define>` params, `<const>` `@let`s per block) is written `item.set(fn($event))` instead, never `this.item`; Angular's `[(v)]` accepts a template variable only when it is a signal.
 
 ### Attribute tags (decisions 106–107)
 

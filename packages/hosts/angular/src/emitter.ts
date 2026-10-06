@@ -455,7 +455,7 @@ export const ALL_HELPER_NAMES = [...EVENT_HELPER_NAMES, ...REFINE_HELPER_NAMES];
 export function helperMembersFor(text: string): string[] {
   return [
     ...(text.includes(EVENT_HELPER_MARKER) ? EVENT_HELPER_MEMBERS : []),
-    ...(text.includes(`${REFINE_HELPER_MARKER}(`) ? REFINE_HELPER_MEMBERS : []),
+    ...(text.includes(`${REFINE_GET_MARKER}(`) ? REFINE_HELPER_MEMBERS : []),
   ];
 }
 
@@ -463,7 +463,7 @@ export function helperMembersFor(text: string): string[] {
 export function helperNamesFor(text: string): string[] {
   return [
     ...(text.includes(EVENT_HELPER_MARKER) ? EVENT_HELPER_NAMES : []),
-    ...(text.includes(`${REFINE_HELPER_MARKER}(`) ? REFINE_HELPER_NAMES : []),
+    ...(text.includes(`${REFINE_GET_MARKER}(`) ? REFINE_HELPER_NAMES : []),
   ];
 }
 
@@ -661,23 +661,61 @@ function writeHandlerCall(
   out.write(`, ${shape.form === "bare" ? "this" : "null"}, $event)`);
 }
 
+/** What the attribute emitter needs from its caller to write a refinement. */
+interface RefineContext {
+  /** The `.mx` source, which a sub-span mapping is checked against. */
+  source: string;
+  /** Is `name` a template variable here (a `@for` param, a `@let`, a `<define>` param)? */
+  isLocal(name: string): boolean;
+}
+
 /**
- * The `(object, key)` a refined bound attribute writes through `__mxSet`: a
- * bare name is `this` and its name, `a.b` / `a[k]` is `a` and `'b'` / `k`,
- * read from the parsed AST like `writeHandlerCall`'s receiver.
+ * The handler a refined bound attribute (`v:fn:=q`) runs on `(vChange)`: the
+ * new value through `fn`, written where `[(v)]="q"` would write it.
+ *
+ * - A component member (`q`, `a.b`, `a[k]`) goes through `__mxSet(object,
+ *   key, …)`, which `.set()`s a `WritableSignal` and assigns anything else, as
+ *   Angular's two-way binding does. `a.b` / `a[k]` write through the object,
+ *   whatever scope `a` comes from.
+ * - A bare template variable (a `@for` item or index, a `@let`, a `<define>`
+ *   param; read from the IR scopes the emitter walks, not guessed from the
+ *   name) is never `this.<name>`: Angular's `[(v)]="item"` accepts it only
+ *   when it holds a signal ("Cannot use a non-signal variable 'item' in a
+ *   two-way binding expression. Template variables are read-only."), and
+ *   writes it with `.set()`. So the handler is `item.set(fn($event))`, and a
+ *   non-signal variable is a type error on `.set`, mapped to the target.
+ *
+ * `fn` maps to the modifier, and so does `($event)`, so a diagnostic on the
+ * call (an unknown `fn`, or one whose parameter does not take the value)
+ * lands on the refinement.
  */
-function writeSetTarget(
+function writeRefinedWrite(
   out: TemplateWriter,
-  value: Expr,
-  source: string,
-  at: { loc: Position },
+  attr: { loc: Position; value: Expr },
+  refinement: Expr,
+  context: RefineContext | undefined,
 ): void {
+  const { value } = attr;
+  const call = () => {
+    out.writeMapped(esc(refinement.code), refinement.span);
+    out.writeMapped("($event)", refinement.span);
+  };
   const shape = handlerShape(value.code);
+  if (shape.form === "bare" && context?.isLocal(value.code)) {
+    out.writeMapped(esc(value.code), value.span);
+    out.writeMapped(".set", value.span);
+    out.write("(");
+    call();
+    out.write(")");
+    return;
+  }
   const { span } = value;
   const authored =
     span !== undefined &&
-    source.slice(span.sourceStart, span.sourceEnd) === value.code;
+    context !== undefined &&
+    context.source.slice(span.sourceStart, span.sourceEnd) === value.code;
   if (shape.form === "member") {
+    out.write(`${REFINE_HELPER_MARKER}(`);
     if (span && authored && shape.objectRange) {
       out.writeMapped(esc(shape.object), {
         sourceStart: span.sourceStart + shape.objectRange[0],
@@ -686,18 +724,22 @@ function writeSetTarget(
     } else {
       out.write(esc(shape.object));
     }
-    out.write(`, ${esc(shape.key)}`);
+    out.write(`, ${esc(shape.key)}, `);
+    call();
+    out.write(")");
     return;
   }
   if (shape.form === "bare") {
-    out.write("this, '");
+    out.write(`${REFINE_HELPER_MARKER}(this, '`);
     out.writeMapped(esc(value.code), value.span);
-    out.write("'");
+    out.write("', ");
+    call();
+    out.write(")");
     return;
   }
   fail(
     "a refined bound attribute (`v:fn:=q`) must be bound to a name or a member of one",
-    at,
+    attr,
   );
 }
 
@@ -854,7 +896,7 @@ function emitAttrs(
   isElement = false,
   onHandler?: () => string,
   lets?: Map<Attr, PrimitiveBinding & { variable: string }>,
-  onRefine?: () => string,
+  onRefine?: () => RefineContext,
 ): void {
   for (const attr of attrs) {
     // Marko accepts `value:`, but Angular's literal-attribute tokenizer does
@@ -1025,12 +1067,6 @@ function emitAttrs(
           // nowhere to put `fn`, so it is written as its two halves: the
           // input and the output that applies the refinement. The write goes
           // through `__mxSet`, which does what `[(v)]` does for a signal.
-          out.write(" [");
-          out.writeMapped(attr.name, attr.nameSpan);
-          out.write(`]="${REFINE_GET_MARKER}(`);
-          out.writeMapped(esc(attr.value.code), attr.value.span);
-          out.write(')" (');
-          out.writeMapped(`${attr.name}Change`, attr.nameSpan);
           if (/[\u0080-\u{10ffff}]/u.test(attr.refinement.code)) {
             fail(
               `Angular templates cannot call \`${attr.refinement.code}\`: Angular's expression language reads only ASCII identifiers. Rename the function`,
@@ -1042,11 +1078,25 @@ function emitAttrs(
               },
             );
           }
-          out.write(`)="${REFINE_HELPER_MARKER}(`);
-          writeSetTarget(out, attr.value, onRefine?.() ?? "", attr);
-          out.write(", ");
-          out.writeMapped(esc(attr.refinement.code), attr.refinement.span);
-          out.write('($event))"');
+          // `[v]` and `(vChange)` both stand for the base name `v`, not for
+          // the whole `v:fn` the name span covers.
+          const base: SourceSpan = {
+            sourceStart: attr.nameSpan.sourceStart,
+            sourceEnd: Math.min(
+              attr.nameSpan.sourceEnd,
+              attr.nameSpan.sourceStart + attr.name.length,
+            ),
+          };
+          const refine = onRefine?.();
+          out.write(" [");
+          out.writeMapped(attr.name, base);
+          out.write(`]="${REFINE_GET_MARKER}(`);
+          out.writeMapped(esc(attr.value.code), attr.value.span);
+          out.write(')" (');
+          out.writeMapped(`${attr.name}Change`, base);
+          out.write(')="');
+          writeRefinedWrite(out, attr, attr.refinement, refine);
+          out.write('"');
         } else {
           out.write(" [(");
           out.writeMapped(attr.name, attr.nameSpan);
@@ -1527,6 +1577,36 @@ class AngularEmitter implements Emitter<string> {
   // placeholder.
   private readonly usedTags = new Map<string, Position>();
   private tracklessForCount = 0;
+  /**
+   * The template variables in scope, innermost last: a `@for`'s params, a
+   * `<define>`'s params, and the `@let`s a `<const>` declares in a block.
+   * Read by a refined bound attribute, which must not write `this.<name>`
+   * for a name that is not a component member.
+   */
+  private scopes: Set<string>[] = [new Set()];
+
+  private inScope(names: Iterable<string>, body: () => void): void {
+    this.scopes.push(new Set(names));
+    try {
+      body();
+    } finally {
+      this.scopes.pop();
+    }
+  }
+
+  private refineContext(loc: Position): RefineContext {
+    this.warnOnce(
+      "refineHelper",
+      REFINE_HELPER_ADVICE,
+      loc,
+      REFINE_HELPER_ADVICE_CODE,
+    );
+    const scopes = this.scopes;
+    return {
+      source: this.ctx.source,
+      isLocal: (name) => scopes.some((scope) => scope.has(name)),
+    };
+  }
   private firstLoc: Position | undefined;
   /**
    * Local binding -> the tag module the call site must reference, for every
@@ -1924,15 +2004,7 @@ class AngularEmitter implements Emitter<string> {
         return this.ctx.source;
       },
       lets,
-      () => {
-        this.warnOnce(
-          "refineHelper",
-          REFINE_HELPER_ADVICE,
-          node.loc,
-          REFINE_HELPER_ADVICE_CODE,
-        );
-        return this.ctx.source;
-      },
+      () => this.refineContext(node.loc),
     );
     this.out.write(">");
     this.out.anchor(tagStart, this.out.length, node.nameSpan);
@@ -2067,15 +2139,7 @@ class AngularEmitter implements Emitter<string> {
       false,
       undefined,
       undefined,
-      () => {
-        this.warnOnce(
-          "refineHelper",
-          REFINE_HELPER_ADVICE,
-          node.loc,
-          REFINE_HELPER_ADVICE_CODE,
-        );
-        return this.ctx.source;
-      },
+      () => this.refineContext(node.loc),
     );
     this.out.write(">");
     this.out.anchor(tagStart, this.out.length, node.nameSpan);
@@ -2318,7 +2382,9 @@ class AngularEmitter implements Emitter<string> {
         this.out.writeMapped(branch.condition.code, branch.condition.span);
         this.out.write(") { ");
       }
-      for (const child of branch.children) this.emitNode(child);
+      this.inScope([], () => {
+        for (const child of branch.children) this.emitNode(child);
+      });
       this.out.write(" ");
     });
     this.out.write("}");
@@ -2419,7 +2485,9 @@ class AngularEmitter implements Emitter<string> {
       for (const field of destructure) {
         this.out.write(`@let ${field} = ${row}.${field}; `);
       }
-      for (const child of node.children) this.emitNode(child);
+      this.inScope([...node.bindings, row], () => {
+        for (const child of node.children) this.emitNode(child);
+      });
       this.out.write(" }");
       return;
     }
@@ -2437,7 +2505,9 @@ class AngularEmitter implements Emitter<string> {
       this.out.write(
         ` | keyvalue: null); track ${entry}.key) { @let ${k} = ${entry}.key; @let ${v} = ${entry}.value; `,
       );
-      for (const child of node.children) this.emitNode(child);
+      this.inScope([...node.bindings, k, v], () => {
+        for (const child of node.children) this.emitNode(child);
+      });
       this.out.write(" }");
       return;
     }
@@ -2446,7 +2516,9 @@ class AngularEmitter implements Emitter<string> {
     const rowNode = node.paramNodes[0];
     const row = this.aliasName(rowNode, "$item");
     this.out.write(`@for (${row} of [${values.join(", ")}]; track $index) { `);
-    for (const child of node.children) this.emitNode(child);
+    this.inScope([...node.bindings, row], () => {
+      for (const child of node.children) this.emitNode(child);
+    });
     this.out.write(" }");
   }
 
@@ -2471,11 +2543,14 @@ class AngularEmitter implements Emitter<string> {
       if (i > 0) this.out.write(`="${param}"`);
     });
     this.out.write("> ");
-    for (const child of node.children) this.emitNode(child);
+    this.inScope(node.params, () => {
+      for (const child of node.children) this.emitNode(child);
+    });
     this.out.write(" </ng-template>");
   }
 
   constant(node: Extract<IrNode, { kind: "Const" }>): void {
+    this.scopes.at(-1)?.add(node.name);
     this.out.write(`@let ${node.name} = `);
     this.out.writeMapped(node.init.code, node.init.span);
     this.out.write(";");

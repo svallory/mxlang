@@ -9,7 +9,15 @@ import {
   platformBrowserTesting,
 } from "@angular/platform-browser/testing";
 import ts from "typescript";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { REFINE_HELPER_MEMBERS } from "../src/emitter.ts";
 
 /**
@@ -51,6 +59,9 @@ const MX = [
   "<div appPick v:fn:=sig/>",
   "<div appPick v:fn:=box.v/>",
   "<div appPick v:fn:=box.sig/>",
+  "<for|s| of=sigs><div appPick v:fn:=s/></for>",
+  "<for|item| of=items><div appPick v:fn:=item/></for>",
+  "<for|item, i| of=items><div appPick v:fn:=items[i]/></for>",
 ] as const;
 // The MX compiler needs Node's module resolution, which jsdom's environment
 // replaces, so the templates are emitted in a plain Node process.
@@ -72,6 +83,10 @@ beforeAll(() => {
 
 let pageId = 0;
 interface Page {
+  s: string;
+  item: string;
+  sigs: Array<() => string>;
+  items: string[];
   q: string;
   sig: () => string;
   box: { v: string; sig: () => string };
@@ -106,6 +121,10 @@ async function render(mx: (typeof MX)[number]): Promise<Rendered> {
     "  q = 'start';",
     "  sig = signal('start');",
     "  box = { v: 'start', sig: signal('start') };",
+    "  s = 'field';",
+    "  item = 'field';",
+    "  sigs = [signal('start')];",
+    "  items = ['start'];",
     "  fn(next: string): string { return next.toUpperCase() + '!'; }",
     "}",
   ].join("\n");
@@ -157,6 +176,50 @@ describe("a bound attribute's refinement runs on change (Angular's renderer)", (
     const signal = await render("<div appPick v:fn:=box.sig/>");
     signal.emit("abc");
     expect(signal.page.box.sig()).toBe("ABC!");
+  });
+
+  it("sets a @for variable that holds a signal, never the same-named field", async () => {
+    const r = await render("<for|s| of=sigs><div appPick v:fn:=s/></for>");
+    r.emit("abc");
+    expect(r.page.sigs[0]?.()).toBe("ABC!");
+    expect(r.page.s).toBe("field");
+  });
+
+  it("never writes a same-named field for a non-signal @for variable", async () => {
+    // Angular's own `[(v)]="item"` here is a compile error (template variables
+    // are read-only); the refined form calls `item.set`, which a string lacks,
+    // so the write fails loudly (Angular's ErrorHandler reports the
+    // listener's TypeError) instead of landing on `this.item`.
+    const r = await render(
+      "<for|item| of=items><div appPick v:fn:=item/></for>",
+    );
+    const reported: unknown[] = [];
+    const spy = vi
+      .spyOn(console, "error")
+      .mockImplementation((...args: unknown[]) => {
+        reported.push(...args);
+      });
+    try {
+      r.emit("abc");
+    } catch (error) {
+      reported.push(error);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(String(reported.find((e) => e instanceof Error))).toMatch(
+      /set is not a function/,
+    );
+    expect(r.page.item).toBe("field");
+    expect(r.page.items).toEqual(["start"]);
+  });
+
+  it("writes a loop row through its array: items[i] === fn(next)", async () => {
+    const r = await render(
+      "<for|item, i| of=items><div appPick v:fn:=items[i]/></for>",
+    );
+    r.emit("abc");
+    expect(r.page.items).toEqual(["ABC!"]);
+    expect(r.page.item).toBe("field");
   });
 
   it("writes the new value itself when there is no refinement", async () => {

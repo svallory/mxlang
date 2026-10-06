@@ -71,6 +71,7 @@ const descriptor: TargetDescriptor = {
           customTags: options.customTags,
           warnings: options.warnings,
           strict: options.strict,
+          typeCheck: options.typeCheck,
           defaultTag: options.defaultTag,
           resolveImport: options.resolveImport,
           targets: options.targets ?? targets(),

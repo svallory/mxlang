@@ -1,28 +1,35 @@
 import { join } from "node:path";
 import type { CustomTag } from "@mxlang/core";
+import * as core from "@mxlang/core";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
+import descriptor from "./descriptor.ts";
 import { compile } from "./index.ts";
 
 // A bound attribute's refinement (`v:fn:=q`, Marko's `q = fn(next)` change
 // handler) belongs to a target with an update path. html renders once, like
 // Marko's server html, where the handler is client-only: the attribute renders
 // as the unrefined `v:=q` does, byte for byte.
-// Only the dead type-check projection `(false && fn(q), q)` differs; it never
-// runs, so with it folded back to `q` the code is the unrefined code, byte for
-// byte.
-const projection = /\(false && [\w$]+\(([^()]*)\), \1\)/g;
-
+// The runtime module carries nothing of the refinement: the attribute renders
+// as the unrefined one does, and the code is the unrefined code, byte for byte.
+// The type-check reference to `fn` lives only in the tooling projection
+// (`typeCheck: true`, below).
 describe("a refined bound attribute renders like the unrefined one (html)", () => {
   it.each([
     ["<input value:fn:=q/>", "<input value:=q/>"],
     ["<div is:raw:=x/>", "<div is:=x/>"],
     ["<div data-x:fn:=q/>", "<div data-x:=q/>"],
     ["<div class:fn:=q/>", "<div class:=q/>"],
+    [
+      "<define/Card|input|><b/></define><Card v:fn:=q/>",
+      "<define/Card|input|><b/></define><Card v:=q/>",
+    ],
+    ['<${"div"} v:fn:=q/>', '<${"div"} v:=q/>'],
+    ["<div ...{} v:fn:=q/>", "<div ...{} v:=q/>"],
   ])("%s", (refined, plain) => {
-    const folded = compile(refined, "x.mx").code.replace(projection, "$1");
-    expect(folded).not.toContain("false &&");
-    expect(folded).toBe(compile(plain, "x.mx").code);
+    const code = compile(refined, "x.mx").code;
+    expect(code).not.toContain("(false && fn(");
+    expect(code).toBe(compile(plain, "x.mx").code);
   });
 });
 
@@ -62,7 +69,7 @@ describe("a refinement that is no identifier, wherever it appears (html)", () =>
 // reference in Marko's client output, so the type-check projection must see it:
 // `fn` applied to the bound value's type, mapped to the modifier's span.
 function diagnosticsOf(source: string): Array<{ text: string; at: string }> {
-  const result = compile(source, "x.mx");
+  const result = compile(source, "x.mx", { typeCheck: true });
   const file = join(import.meta.dirname, "bound-modifier.virtual.ts");
   const options: ts.CompilerOptions = {
     strict: true,
@@ -112,11 +119,43 @@ describe("html type-checks a refinement it never emits a handler for", () => {
     expect(found[0]?.text).toContain("Cannot find name 'fnn'");
   });
 
+  it.each([
+    [
+      "a <define> component call",
+      "<define/Card|input|><b/></define><Card v:fnn:=q/>",
+    ],
+    ["a dynamic tag", '<${"div"} v:fnn:=q/>'],
+    ["a tag with a spread", "<div ...{} v:fnn:=q/>"],
+  ])("reports a misspelled refinement on %s", (_shape, mx) => {
+    // Only the refinement's own diagnostic: the fixture's other findings
+    // (an untyped `|input|`, `...{}`) are not this test's subject.
+    const found = diagnosticsOf(`${prelude}${mx}`).filter((d) =>
+      d.text.includes("fnn"),
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({ at: "fnn" });
+    expect(found[0]?.text).toContain("Cannot find name 'fnn'");
+  });
+
   it("reports a refinement that does not take the bound value's type", () => {
     const found = diagnosticsOf(`${prelude}<input value:bad:=q/>`);
     expect(found).toHaveLength(1);
     expect(found[0]?.text).toContain(
       "not assignable to parameter of type 'number'",
     );
+  });
+});
+
+describe("the tooling projection is what the type-check sees", () => {
+  it("the descriptor passes typeCheck through, so the TS plugin's compile references fn", () => {
+    const load = descriptor.load;
+    if (!load) throw new Error("expected a loadable descriptor");
+    const source = "<input value:fn:=q/>";
+    const projected = load(core).compileModule(source, "x.mx", {
+      typeCheck: true,
+    });
+    const runtime = load(core).compileModule(source, "x.mx", {});
+    expect(projected.code).toContain("(false && fn(q), q)");
+    expect(runtime.code).not.toContain("(false && fn(");
   });
 });

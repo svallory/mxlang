@@ -103,6 +103,13 @@ export interface CompileOptions {
    */
   runtimeFrom?: string;
   /**
+   * Type-only projection for tooling (decision 140): the module is
+   * type-checked, never run. Adds checks that have no runtime meaning, such
+   * as a bound attribute's refinement (`v:fn:=q` references `fn`). Build
+   * callers leave it unset.
+   */
+  typeCheck?: boolean;
+  /**
    * Collects positioned warnings — constructs that compile while dropping
    * something the author wrote (content a tag template never placed, an
    * attribute tag a transform never read).
@@ -155,7 +162,11 @@ export function compileHtml(
       // export, both of which are properties of this target rather than of
       // the core.
       emitIr: (ir) => {
-        emitted = emitModuleWithMappings(ir, options.runtimeFrom ?? escapeFrom);
+        emitted = emitModuleWithMappings(
+          ir,
+          options.runtimeFrom ?? escapeFrom,
+          { typeCheck: options.typeCheck },
+        );
         return emitted.code;
       },
       postEmit: (code) => {
