@@ -2984,13 +2984,20 @@ one long line):
 A diagnostic is the **author's** when the narrowing found its text spelled by
 the author, or when its generated range is inside, or directly next to,
 authored (mapped) code. An author's diagnostic carries the first marker: the
-error is theirs and the position is the enclosing construct. In a file kind
-that does not yet expose its tags and attributes (a region file, `.astro.mx`,
-`.ng.mx`), there is no construct to land on: it is reported at 1:1 with the
-second marker, which says so instead of calling 1:1 approximate (enclosing
-spans for those kinds are the follow-up `unmapped-diagnostics-region-enclosing-spans`);
-without spans, the narrowing cannot tell code from text and searches the whole
-stretch. The third marker is for a diagnostic with no authored spelling and no
+error is theirs and the position is the enclosing construct. Every built-in file kind
+exposes its authored tags and attributes: whole-file `.mx` from the Marko parse
+of the file; a region file (`.solid.mx`, `.preact.mx`, `.react.mx`, `.hono.mx`
+and any other `.<host>.mx`) and `.ng.mx` from the parse of each MX region the
+compiler lowered, at the region's own file offset (a `.ng.mx` fragment's
+children, past its `<>`); `.astro.mx` from the parse of its template, the part
+after the `---` fence. The code around a region is TypeScript the generated
+module already maps. Only a virtual code that exposes no spans has no construct
+to land on: a file that fails to compile (its inert stand-in module), or a
+third-party kind whose language plugin sets no `authoredSpans`. A diagnostic
+there is reported at 1:1 with the second marker, which says so instead of
+calling 1:1 approximate; without spans, the narrowing cannot tell code from text
+and searches the whole stretch. A region that does not parse has no spans, and
+a diagnostic inside it falls back to the file start. The third marker is for a diagnostic with no authored spelling and no
 authored code beside it: the error is in code MX wrote, a host bug to report,
 not something the author can fix. A user's typo, a missing required prop or an
 element with no JSX types never carries it.

@@ -1343,8 +1343,8 @@ describe("MX language plugin", () => {
 
   it("never calls the author's own errors MX's, in a whole-file unit or a region file (decision 161)", () => {
     // A name typo, a missing required prop, and elements with no JSX types:
-    // mapped or not, none of them is code MX wrote. A region file exposes no
-    // authored spans, so what it cannot map lands at 1:1 and says so.
+    // mapped or not, none of them is code MX wrote. A region file exposes its
+    // spans too (decision 161), so what it cannot map lands on its tag.
     const directory = `${here}/fixtures/solid-policy`;
     const page = `${directory}/Typos.mx`;
     const region = `${directory}/Typos.solid.mx`;
@@ -1364,6 +1364,8 @@ describe("MX language plugin", () => {
     service.getSemanticDiagnostics(consumer);
     const pageDiagnostics = service.getSemanticDiagnostics(page);
     const regionDiagnostics = service.getSemanticDiagnostics(region);
+    const regionSource =
+      "export default function C() {\n  return <div><p title=missingAttr>${missingName}</p></div>;\n}\n";
     const text = (d: ts.Diagnostic) =>
       ts.flattenDiagnosticMessageText(d.messageText, "\n");
 
@@ -1376,16 +1378,20 @@ describe("MX language plugin", () => {
     for (const d of [...pageDiagnostics, ...regionDiagnostics]) {
       expect(text(d)).not.toContain("not yours");
     }
-    const unknown = regionDiagnostics.filter((d) =>
-      text(d).includes("(position unknown in this file kind: generated"),
+    // Every unmapped diagnostic of the region file is placed approximately, on
+    // a tag, never at 1:1 and never marked as "unknown".
+    const approximate = regionDiagnostics.filter((d) =>
+      text(d).includes("(position approximate: generated"),
     );
-    expect(unknown.length).toBeGreaterThan(0);
-    for (const d of unknown) {
-      expect(text(d)).toMatch(
-        /\(position unknown in this file kind: generated \d+:\d+\)$/,
-      );
+    expect(approximate.length).toBeGreaterThan(0);
+    for (const d of regionDiagnostics) {
+      expect(text(d)).not.toContain("position unknown");
     }
-    for (const d of unknown) expect([d.start, d.length]).toEqual([0, 0]);
+    for (const d of approximate) {
+      expect(
+        regionSource.slice(d.start, (d.start ?? 0) + (d.length ?? 0)),
+      ).toMatch(/^<(div|p)\b/);
+    }
   });
 
   it("reports a wrongly typed attribute with a mapped value on the attribute, as the author's (decision 161)", () => {
@@ -5456,5 +5462,153 @@ describe("expression values are mapped in the language service", () => {
         code,
       ]),
     );
+  });
+});
+
+describe("an unmapped diagnostic lands on its enclosing tag in every file kind (decision 161)", () => {
+  const REGION_KINDS = ["solid", "preact", "react", "hono"] as const;
+  const APPROXIMATE = /\(position approximate: generated \d+:\d+\)$/;
+  const text = (d: ts.Diagnostic) =>
+    ts.flattenDiagnosticMessageText(d.messageText, "\n");
+
+  function regionService(kind: string, source: string, name = "Page") {
+    const directory = `${here}/fixtures/${kind}-policy`;
+    const file = `${directory}/${name}.${kind}.mx`;
+    const consumer = `${directory}/${name}-index.ts`;
+    const { service } = createMutablePluginService(
+      { [file]: source, [consumer]: `import "./${name}.${kind}.mx";` },
+      [consumer],
+    );
+    service.getSemanticDiagnostics(consumer);
+    return { file, diagnostics: () => service.getSemanticDiagnostics(file) };
+  }
+
+  const onSource = (source: string, d: ts.Diagnostic) =>
+    source.slice(d.start, (d.start ?? 0) + (d.length ?? 0));
+
+  it.each(REGION_KINDS)(
+    "a .%s.mx region reports an element with no JSX types on its tag, with no position-unknown text",
+    (kind) => {
+      // No JSX types: each element's TS7026 sits in generated text no mapping
+      // covers. Before, a region file put it at 1:1, "position unknown".
+      const source =
+        "export function C() {\n  return <div><p title=missingAttr>${missingName}</p></div>;\n}\n";
+      const { diagnostics } = regionService(kind, source);
+
+      const all = diagnostics();
+      const elements = all.filter((d) => d.code === 7026);
+      expect(elements.length).toBeGreaterThan(0);
+      expect(all.map(text).join("\n")).not.toContain("position unknown");
+      // Placed on a tag of the source, never at 1:1 (decision 161).
+      for (const d of elements) {
+        expect(onSource(source, d)).toMatch(/^<(div|p)\b/);
+      }
+      // The inner element, whatever order TypeScript reports it in, is on its
+      // own tag and nothing wider.
+      const inner = elements.filter(
+        (d) =>
+          onSource(source, d) === "<p title=missingAttr>${missingName}</p>",
+      );
+      expect(inner.length).toBeGreaterThan(0);
+      for (const d of inner) expect(text(d)).toMatch(APPROXIMATE);
+    },
+  );
+
+  it.each(["solid", "preact", "hono"] as const)(
+    "a .%s.mx region reports a wrongly typed attribute on the attribute",
+    (kind) => {
+      // The attribute value is wrongly typed, and the printer maps the
+      // attribute's value but not its name: the diagnostic lands on the
+      // attribute, as the author's, with the approximate marker.
+      const source = [
+        "declare global { namespace JSX { interface IntrinsicElements { label: { onDblClick?: (event: number) => void; for?: string }; div: object } } }",
+        "export function C() {",
+        "  return <div><label onDblClick=1 for=2>x</label></div>;",
+        "}",
+        "",
+      ].join("\n");
+      const { diagnostics } = regionService(kind, source, "Attr");
+
+      const attribute = diagnostics().find(
+        (d) => d.code === 2322 && onSource(source, d) === "for=2",
+      );
+      expect(attribute).toBeDefined();
+      expect(text(attribute as ts.Diagnostic)).toMatch(APPROXIMATE);
+      expect(
+        diagnostics()
+          .map(text)
+          .filter((message) => message.includes("position unknown")),
+      ).toEqual([]);
+    },
+  );
+
+  it("an .astro.mx page reports a missing prop on its tag", () => {
+    const directory = `${here}/fixtures/astro-policy`;
+    const page = `${directory}/enclosing-page.astro.mx`;
+    const consumer = `${directory}/enclosing-consumer.ts`;
+    const source =
+      '---\nimport Card from "./enclosing-card.mx";\n---\n<div>\n  <Card/>\n</div>\n';
+    const { service } = createMutablePluginService(
+      {
+        [page]: source,
+        [`${directory}/enclosing-card.mx`]:
+          "export interface Input { title: string }\n<p>${input.title}</p>\n",
+        [consumer]: 'import "./enclosing-page.astro.mx";',
+      },
+      [consumer, page],
+      { config: { astro: true } },
+    );
+    service.getSemanticDiagnostics(consumer);
+
+    const diagnostics = service.getSemanticDiagnostics(page);
+    expect(diagnostics.map((d) => [d.code, onSource(source, d)])).toEqual([
+      [2322, "<Card/>"],
+    ]);
+    // A message chain takes the suffix on its first line.
+    expect(text(diagnostics[0] as ts.Diagnostic)).toMatch(
+      /\(position approximate: generated 7:7\)\n/,
+    );
+  });
+
+  it.each(REGION_KINDS)(
+    "places 600 unmapped diagnostics of a .%s.mx region well within a keystroke",
+    (kind) => {
+      const source = `export function C() {\n  return <div>${"<p>x</p>".repeat(300)}</div>;\n}\n`;
+      const { diagnostics } = regionService(kind, source, "Many");
+
+      const started = performance.now();
+      const all = diagnostics();
+      const elapsed = performance.now() - started;
+
+      expect(all.filter((d) => d.code === 7026).length).toBeGreaterThanOrEqual(
+        600,
+      );
+      expect(elapsed).toBeLessThan(2000);
+    },
+  );
+
+  it("places 600 unmapped diagnostics of an .astro.mx page well within a keystroke", () => {
+    const directory = `${here}/fixtures/astro-policy`;
+    const page = `${directory}/many-page.astro.mx`;
+    const consumer = `${directory}/many-consumer.ts`;
+    const source = `---\nimport Card from "./many-card.mx";\n---\n<div>${"<Card/>".repeat(300)}</div>\n`;
+    const { service } = createMutablePluginService(
+      {
+        [page]: source,
+        [`${directory}/many-card.mx`]:
+          "export interface Input { title: string }\n<p>${input.title}</p>\n",
+        [consumer]: 'import "./many-page.astro.mx";',
+      },
+      [consumer, page],
+      { config: { astro: true } },
+    );
+    service.getSemanticDiagnostics(consumer);
+
+    const started = performance.now();
+    const diagnostics = service.getSemanticDiagnostics(page);
+    const elapsed = performance.now() - started;
+
+    expect(diagnostics.length).toBe(300);
+    expect(elapsed).toBeLessThan(2000);
   });
 });

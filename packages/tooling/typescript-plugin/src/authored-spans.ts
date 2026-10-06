@@ -35,12 +35,14 @@ const NOT_CODE = new Set([
  * identifier or literal counts as spelled by the author. Read from the same
  * Marko parse core lowers from, so it agrees with what the compiler saw. A
  * source that does not parse has none, and its diagnostics fall back to the
- * file start.
+ * file start. `baseOffset` shifts every span, for a source that is a slice of
+ * a larger file.
  */
 export function markoAuthoredSpans(
   source: string,
   fileName: string,
   customTags: Record<string, CustomTag> | undefined,
+  baseOffset = 0,
 ): AuthoredSpan[] {
   let body: MarkoNode[];
   try {
@@ -67,7 +69,11 @@ export function markoAuthoredSpans(
   ) => {
     const { start, end } = node?.loc ?? {};
     if (start && end)
-      spans.push({ kind, start: offsetOf(start), end: offsetOf(end) });
+      spans.push({
+        kind,
+        start: baseOffset + offsetOf(start),
+        end: baseOffset + offsetOf(end),
+      });
   };
   const walk = (nodes: readonly MarkoNode[] | undefined) => {
     for (const node of nodes ?? []) {
@@ -91,4 +97,42 @@ export function markoAuthoredSpans(
   };
   walk(body);
   return spans;
+}
+
+/** One piece of MX inside a larger file: its text and where it starts in the file. */
+export interface MxSourceRegion {
+  source: string;
+  baseOffset: number;
+}
+
+/**
+ * The authored spans of every MX region of a file that is not MX throughout
+ * (a `.<host>.mx` region file, `.ng.mx`, the template of `.astro.mx`): each
+ * region parses on its own, as the compiler parsed it, and its spans are
+ * file-absolute. The code around the regions is TypeScript the generated
+ * module already maps.
+ */
+export function regionAuthoredSpans(
+  regions: readonly MxSourceRegion[],
+  fileName: string,
+  customTags: Record<string, CustomTag> | undefined,
+): AuthoredSpan[] {
+  return regions.flatMap((region) =>
+    markoAuthoredSpans(region.source, fileName, customTags, region.baseOffset),
+  );
+}
+
+/**
+ * The MX text of a `.ng.mx` region, from the `[start, end)` span the compile
+ * reports: that span includes the `<>` and `</>` of a fragment region, whose
+ * children are what the compiler parsed.
+ */
+export function ngRegionSource(
+  source: string,
+  region: { start: number; end: number },
+): MxSourceRegion {
+  const text = source.slice(region.start, region.end);
+  return text.startsWith("<>") && text.endsWith("</>")
+    ? { source: text.slice(2, -3), baseOffset: region.start + 2 }
+    : { source: text, baseOffset: region.start };
 }

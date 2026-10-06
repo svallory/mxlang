@@ -41,10 +41,11 @@ export function mxBugSuffix(line: number, column: number): string {
 }
 
 /**
- * The text appended to an author's diagnostic in a file kind that exposes no
- * authored spans (a region file, `.astro.mx`, `.ng.mx`): it is reported at the
- * file start (1:1) because nothing closer is known, which is not a position
- * near the error at all.
+ * The text appended to an author's diagnostic in a virtual code that exposes no
+ * authored spans (a failed module's stand-in, a third-party file kind whose
+ * language plugin sets no `authoredSpans`): it is reported at the file start
+ * (1:1) because nothing closer is known, which is not a position near the
+ * error at all.
  */
 export function unknownPositionSuffix(line: number, column: number): string {
   return ` (position unknown in this file kind: generated ${line}:${column})`;

@@ -1,5 +1,5 @@
 import { convertToTSX } from "@astrojs/compiler/sync";
-import { lowerAstroMx } from "@mxlang/astro/template";
+import { astroMxTemplateOffset, lowerAstroMx } from "@mxlang/astro/template";
 import {
   type GeneratedMapping,
   type MxWarning,
@@ -19,6 +19,7 @@ import type {
 } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
+import { regionAuthoredSpans } from "./authored-spans.ts";
 import { failedModuleStub } from "./failed-module-stub.ts";
 import {
   fileKindForPipeline,
@@ -39,6 +40,10 @@ import {
   warningDiagnostic,
 } from "./language.ts";
 import type { MxSyntaxError } from "./mx-language.ts";
+import type {
+  AuthoredSpan,
+  SpannedVirtualCode,
+} from "./unmapped-diagnostics.ts";
 
 export const AMX_EXTENSION = `${fileKindForPipeline("astro-template").segment}.mx`;
 export const AMX_LANGUAGE_ID =
@@ -213,7 +218,19 @@ export function createAmxLanguagePlugin(
             warningDiagnostic(fileName, source, warning),
           ),
         );
-        return createVirtualCode(typescript, converted.code, mappings);
+        const templateOffset = astroMxTemplateOffset(source);
+        return createVirtualCode(typescript, converted.code, mappings, () =>
+          regionAuthoredSpans(
+            [
+              {
+                source: source.slice(templateOffset),
+                baseOffset: templateOffset,
+              },
+            ],
+            fileName,
+            Object.keys(discovered).length > 0 ? discovered : undefined,
+          ),
+        );
       } catch (cause) {
         const foreign = foreignTemplateError(
           cause,
@@ -376,8 +393,10 @@ function createVirtualCode(
   typescript: typeof ts,
   generated: string,
   mappings: CodeMapping[],
-): VirtualCode {
+  authoredSpans?: () => AuthoredSpan[],
+): SpannedVirtualCode {
   return {
+    ...(authoredSpans ? { authoredSpans } : {}),
     id: "root",
     languageId: "typescriptreact",
     snapshot: typescript.ScriptSnapshot.fromString(generated),

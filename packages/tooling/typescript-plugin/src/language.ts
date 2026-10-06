@@ -34,6 +34,11 @@ import type {
 } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
+import {
+  type MxSourceRegion,
+  ngRegionSource,
+  regionAuthoredSpans,
+} from "./authored-spans.ts";
 import { failedModuleStub } from "./failed-module-stub.ts";
 import {
   fileKindForPipeline,
@@ -41,6 +46,10 @@ import {
   fileKindOf,
 } from "./file-kinds.ts";
 import { createTargetPolicyRecorder } from "./host-policy-diagnostics.ts";
+import type {
+  AuthoredSpan,
+  SpannedVirtualCode,
+} from "./unmapped-diagnostics.ts";
 
 /**
  * The first built-in region file kind's compile (`.solid.mx`), in the
@@ -227,22 +236,29 @@ export function createRegionLanguagePlugin(
           console.warn(`@mxlang/typescript-plugin: ${d.file}: ${d.message}`),
         );
         const discovered = scan.customTags;
+        const regions: MxSourceRegion[] = [];
         const compiled = compileWithDependencies(
           options.readSource,
           dependencies.get(fileName) ?? [],
           () => {
             const warnings: MxWarning[] = [];
+            regions.length = 0;
             const printed = print(source, fileName, {
               mx: isRegionFile(fileName),
               defaultTag: defaultTagFor(
                 fileName,
                 resolveTargetPolicy(fileName, { quiet: true }),
               ),
-              mxRegionCompile: (input) =>
-                regionCompile({
+              mxRegionCompile: (input) => {
+                regions.push({
+                  source: input.source,
+                  baseOffset: input.baseOffset,
+                });
+                return regionCompile({
                   ...input,
                   warnings,
-                }) as ReturnType<MxRegionCompile>,
+                }) as ReturnType<MxRegionCompile>;
+              },
               ...(Object.keys(discovered).length > 0
                 ? { customTags: discovered }
                 : undefined),
@@ -274,6 +290,8 @@ export function createRegionLanguagePlugin(
           source,
           printed.map,
           attributeTagDiagnosticMappings(source, printed.code),
+          "tsx",
+          () => regionAuthoredSpans(regions, fileName, discovered),
         );
       } catch (cause) {
         const foreign = foreignTemplateError(
@@ -497,6 +515,12 @@ export function createNgMxLanguagePlugin(
           result.map,
           result.mappings.map(regionMapping),
           "ts",
+          () =>
+            regionAuthoredSpans(
+              result.regions.map((region) => ngRegionSource(source, region)),
+              fileName,
+              scan.customTags,
+            ),
         );
       } catch (cause) {
         const foreign = foreignTemplateError(
@@ -871,8 +895,10 @@ function createVirtualCode(
   map: RawSourceMap | undefined,
   supplementalMappings: CodeMapping[] = [],
   kind: "tsx" | "ts" = "tsx",
-): VirtualCode {
+  authoredSpans?: () => AuthoredSpan[],
+): SpannedVirtualCode {
   return {
+    ...(authoredSpans ? { authoredSpans } : {}),
     id: "root",
     languageId: kind === "ts" ? "typescript" : "typescriptreact",
     snapshot: typescript.ScriptSnapshot.fromString(generated),

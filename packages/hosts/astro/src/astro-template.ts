@@ -1311,6 +1311,13 @@ function renameSynthesizedImport(
   return { ...statement, code };
 }
 
+/** Where an `.astro.mx` file's template starts: just after its `---` fence, or 0 without one. */
+export function astroMxTemplateOffset(source: string): number {
+  return (
+    source.match(/^---\r?\n([\s\S]*?)\r?\n---[^\S\r\n]*\r?\n?/)?.[0].length ?? 0
+  );
+}
+
 /** Splits an `.astro.mx` file, resolves its MX template, and emits Astro syntax. */
 export function lowerAstroMx(
   source: string,
