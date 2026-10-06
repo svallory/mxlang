@@ -17,13 +17,15 @@ import { dirname, join, relative, resolve } from "node:path";
 
 const TAGS_DIR = "tags";
 const TAG_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
-/** `tags/<name>/index.<ext>`: a directory tag, in any of the template/module forms. */
-const INDEX_FILE = /^index\.(?:marko|mx|tag\.ts)$/;
+/** The file names a directory tag `tags/<name>/` may use: `index.<ext>` or `<name>.<ext>`. */
+const TAG_EXT = "(?:marko|mx|tag\\.ts)";
+const directoryTagFile = (name: string): RegExp =>
+  new RegExp(`^(?:index|${name.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&")})\\.${TAG_EXT}$`);
 
 export interface UncalledTagFile {
   /** Absolute path of the file found. */
   file: string;
-  /** `flat`: `tags/x.marko`. `index`: `tags/x/index.<ext>`. */
+  /** `flat`: `tags/x.marko`. `index`: `tags/x/index.<ext>` or `tags/x/x.<ext>`. */
   shape: "flat" | "index";
 }
 
@@ -51,7 +53,7 @@ export function findUncalledTagFile(
       } catch {
         // Not a directory (a file named like the tag): nothing to report.
       }
-      const index = entries.find((entry) => INDEX_FILE.test(entry));
+      const index = entries.find((entry) => directoryTagFile(name).test(entry));
       if (index) return { file: join(own, index), shape: "index" };
     }
     if (existsSync(join(dir, "package.json"))) return undefined;
@@ -68,7 +70,7 @@ export function uncalledTagFileMessage(
   found: UncalledTagFile,
 ): string {
   const shown = relative(dirname(resolve(filename)), found.file);
-  return `\`<${name}>\` matches \`${shown}\`, which this host cannot call: MX calls flat \`tags/<name>.mx\` files here, and this host does not resolve a \`tags/<name>/\` directory. It would compile as the native element \`<${name}>\`. Write the tag as \`tags/${name}.mx\`, or import it explicitly.`;
+  return `\`<${name}>\` matches \`${shown}\`, which MX cannot call: MX calls flat \`tags/<name>.mx\` files only. Write the tag as \`tags/${name}.mx\`, or import it explicitly.`;
 }
 
 /**
