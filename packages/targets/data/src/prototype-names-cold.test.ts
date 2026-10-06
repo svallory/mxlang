@@ -39,7 +39,7 @@ describe("cold lookup cache", () => {
 
   it.each(NAMES)("scanAuthoredTags lists <%s>", (name) => {
     expect(scanAuthoredTags(`<${name}/>\n`, "/p.mx", undefined)).toEqual([
-      { name, line: 1, column: 0 },
+      { name, line: 1, column: 0, endLine: 1, endColumn: name.length + 3 },
     ]);
   });
 });

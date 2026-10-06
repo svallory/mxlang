@@ -92,7 +92,7 @@ describe("every error is reported", () => {
     );
   });
 
-  it("returns every unknown tag, parents before their children", () => {
+  it("returns every unknown tag, one per unknown call (an unknown tag's body is not walked)", () => {
     expect(
       positions("<foo/>\n<bar/>\n<baz><qux/></baz>\n", {
         unknownTags: "reject",
@@ -102,7 +102,6 @@ describe("every error is reported", () => {
       [1, 0],
       [2, 0],
       [3, 0],
-      [3, 5],
     ]);
   });
 

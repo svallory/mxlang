@@ -127,18 +127,27 @@ describe('unknownTags: "reject"', () => {
     const { diagnostics } = parse(
       "<resource>\n  <bad/>\n</resource>\n<widget/>",
     );
-    expect(diagnostics).toHaveLength(1);
+    // The core error comes first; the later unknown tag is listed beside it.
+    expect(diagnostics).toHaveLength(2);
     expect(diagnostics[0]?.message).toContain("`<bad>` is not allowed here");
+    expect(diagnostics[1]).toMatchObject({
+      message: expect.stringContaining("`<widget>`"),
+      line: 4,
+      column: 0,
+    });
   });
 
   it("reports the earlier of an unknown tag and a structural construct", () => {
     const earlier = parse("<widget/>\n<if=x/>", { structural: "reject" });
+    // Both are reported, in file order.
     expect(earlier.diagnostics).toMatchObject([
       { message: expect.stringContaining("`<widget>`"), line: 1 },
+      { message: expect.stringContaining("does not evaluate `<if>`"), line: 2 },
     ]);
     const later = parse("<if=x/>\n<widget/>", { structural: "reject" });
     expect(later.diagnostics).toMatchObject([
       { message: expect.stringContaining("does not evaluate `<if>`"), line: 1 },
+      { message: expect.stringContaining("`<widget>`"), line: 2 },
     ]);
   });
 
@@ -203,9 +212,11 @@ describe('unknownTags: "reject"', () => {
       tags,
     );
     // preserveWhitespace changes whitespace only: `<foo>` is still a tag,
-    // and it opens before the `<bad>` children error.
+    // and it opens before the `<bad>` children error. `<bad>` is reported once,
+    // as the closed-children error that stands on it.
     expect(diagnostics).toMatchObject([
       { message: expect.stringContaining("`<foo>`"), line: 2 },
+      { message: expect.stringContaining("is not allowed here"), line: 5 },
     ]);
   });
 
@@ -214,7 +225,14 @@ describe('unknownTags: "reject"', () => {
       ...customTags,
       stub: { parseOptions: { openTagOnly: true } },
     };
-    for (const trailer of ["stub\n  x\n", "<define/>\n"]) {
+    // The unknown parent comes first; the trailer's own mistake follows it.
+    const trailers: [string, { message: string; line: number }[]][] = [
+      ["stub\n  x\n", [{ message: "`<x>` is not a known tag", line: 4 }]],
+      // Core stops at its first lowering error (`<attributes>` under the
+      // unknown parent), so the `<define>` after it is never reached.
+      ["<define/>\n", []],
+    ];
+    for (const [trailer, rest] of trailers) {
       const { diagnostics } = parse(
         `resourse="post"\n  attributes\n${trailer}`,
         { structural: "reject" },
@@ -226,6 +244,10 @@ describe('unknownTags: "reject"', () => {
           line: 1,
           column: 0,
         },
+        ...rest.map((r) => ({
+          message: expect.stringContaining(r.message),
+          line: r.line,
+        })),
       ]);
     }
   });
@@ -238,6 +260,8 @@ describe('unknownTags: "reject"', () => {
 
   it("lets the build error win a tie at the same position", () => {
     const merged = parse('<widget.a class="b"/>');
+    // `<widget>` is unknown too, but the build error stands on the same
+    // position and is the actionable one: one error there.
     expect(merged.diagnostics).toMatchObject([
       {
         message: expect.stringContaining("shorthand class"),
@@ -245,6 +269,7 @@ describe('unknownTags: "reject"', () => {
         column: 0,
       },
     ]);
+    expect(merged.diagnostics).toHaveLength(1);
     const bad = parse("<$bad/>");
     expect(bad.diagnostics).toMatchObject([
       {
@@ -262,6 +287,7 @@ describe('unknownTags: "reject"', () => {
     });
     expect(dynamicFirst.diagnostics).toMatchObject([
       { message: expect.stringContaining("a dynamic tag"), line: 1 },
+      { message: expect.stringContaining("does not evaluate `<if>`"), line: 2 },
     ]);
     const structuralFirst = parse("<if=x/>\n<$bad/>", {
       unknownTags: "allow",
@@ -269,6 +295,7 @@ describe('unknownTags: "reject"', () => {
     });
     expect(structuralFirst.diagnostics).toMatchObject([
       { message: expect.stringContaining("does not evaluate `<if>`"), line: 1 },
+      { message: expect.stringContaining("not a tag name"), line: 2 },
     ]);
   });
 
@@ -276,14 +303,16 @@ describe('unknownTags: "reject"', () => {
     const dynamic = parse("<$" + "{x}/>\n<widget/>");
     expect(dynamic.diagnostics).toMatchObject([
       { message: expect.stringContaining("a dynamic tag"), line: 1, column: 0 },
+      { message: expect.stringContaining("`<widget>`"), line: 2, column: 0 },
     ]);
     const doctype = parse("<!doctype html>\n<widget/>");
     expect(doctype.diagnostics).toMatchObject([
       { message: expect.stringContaining("<!doctype>"), line: 1, column: 0 },
+      { message: expect.stringContaining("`<widget>`"), line: 2, column: 0 },
     ]);
     const name = parse("<open>\n  <$bad/>\n</open>\n<widget/>");
-    expect(name.diagnostics).toHaveLength(1);
-    expect(name.diagnostics[0]?.line).toBe(2);
+    expect(name.diagnostics.map((d) => d.line)).toEqual([2, 4]);
+    expect(name.diagnostics[0]?.message).toContain("not a tag name");
   });
 
   it("accepts a document of only declared tags", () => {
@@ -305,8 +334,13 @@ describe('unknownTags: "reject"', () => {
     const { diagnostics } = parse("<open>\n  <if=x><nope/></if>\n</open>", {
       structural: "reject",
     });
+    // The `<if>` is first; `<nope>` inside it is a second, independent error.
     expect(diagnostics).toMatchObject([
-      { message: expect.stringContaining("does not evaluate `<if>`") },
+      { message: expect.stringContaining("does not evaluate `<if>`"), line: 2 },
+      {
+        message: expect.stringContaining("`<nope>` is not a known tag"),
+        line: 2,
+      },
     ]);
   });
 
@@ -377,23 +411,29 @@ describe('unknownTags: "reject"', () => {
     // `<wrap/>` throws core's IR-invariant error under `"allow"` as well; the
     // point here is that `"reject"` does not turn it into an unknown-tag
     // error blaming the authored `<wrap>`.
-    const message = (options: ParseDataOptions) => {
-      try {
-        parseData("<wrap/>", "/u.mx", { customTags: tags, ...options });
-        return "no throw";
-      } catch (error) {
-        return (error as Error).message;
-      }
-    };
+    const message = (options: ParseDataOptions) =>
+      parseData("<wrap/>", "/u.mx", { customTags: tags, ...options })
+        .diagnostics[0]?.message;
     const allowed = message({ unknownTags: "allow" });
     expect(allowed).toContain("`<emitted>`'s name carries no span");
     expect(message({ unknownTags: "reject" })).toBe(allowed);
     // An internal build error is never replaced by an unknown-tag hit, even
     // an earlier one: the transform-output limit is a bug to see, not a source
-    // error to hide (round 3, item 4). Flips with `data-transform-output-tree`.
-    expect(() => parse("<bogus/>\n<wrap/>", {}, tags)).toThrow(
-      "`<emitted>`'s name carries no span",
-    );
+    // error to hide (round 3, item 4). It is reported beside the unknown tag,
+    // under the `internal error:` prefix. Flips with `data-transform-output-tree`.
+    expect(parse("<bogus/>\n<wrap/>", {}, tags).diagnostics).toMatchObject([
+      {
+        message: expect.stringContaining("`<bogus>` is not a known tag"),
+        line: 1,
+      },
+      {
+        message: expect.stringMatching(
+          /^internal error: .*`<emitted>`'s name carries no span/,
+        ),
+        line: 1,
+        column: 0,
+      },
+    ]);
   });
 
   it("rejects every tag when customTags is empty", () => {

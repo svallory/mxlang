@@ -25,12 +25,15 @@ import {
   type Ir,
   isTranslateError,
   type MxWarning,
+  type Position,
   TranslateError,
 } from "@mxlang/core";
 import {
   buildDataDocumentAll,
   lineStartsOf,
+  samePosition,
   unknownTagMessage,
+  withoutInside,
 } from "./build.ts";
 import { dataDeclarations } from "./declarations.ts";
 import { scanAuthoredTags } from "./scan.ts";
@@ -328,25 +331,32 @@ function unknownTagErrors(
   source: string,
   filename: string,
   options: ParseDataOptions,
-): TranslateError[] {
+): { errors: TranslateError[]; ranges: { at: Position; end?: Position }[] } {
   const tags = scanAuthoredTags(
     source,
     filename,
     options.customTags,
     options.defaultTag,
   );
-  if (!tags) return [];
+  if (!tags) return { errors: [], ranges: [] };
   const declared = declaredTagNames(options.customTags);
-  return tags
-    .filter((tag) => !declared.has(tag.name))
-    .map(
+  const unknown = tags.filter((tag) => !declared.has(tag.name));
+  return {
+    errors: unknown.map(
       (tag) =>
         new TranslateError(
           unknownTagMessage(tag.name, declared),
           tag.line,
           tag.column,
         ),
-    );
+    ),
+    ranges: unknown.map((tag) => ({
+      at: { line: tag.line, column: tag.column },
+      ...(tag.endLine !== undefined && tag.endColumn !== undefined
+        ? { end: { line: tag.endLine, column: tag.endColumn } }
+        : {}),
+    })),
+  };
 }
 
 /**
@@ -391,12 +401,18 @@ export function parseData(
       },
     });
   } catch (error) {
-    return failed([
-      error,
-      ...(options.unknownTags === "reject"
-        ? attemptList(() => unknownTagErrors(source, filename, options))
-        : []),
-    ]);
+    if (options.unknownTags !== "reject") return failed([error]);
+    try {
+      const { errors, ranges } = unknownTagErrors(source, filename, options);
+      // An unknown tag the core error stands on adds nothing: keep the core's.
+      const beside = errors.filter(
+        (unknown) =>
+          !samePosition(error, { line: unknown.line, column: unknown.column }),
+      );
+      return failed(withoutInside([error, ...beside], ranges));
+    } catch (scanError) {
+      return failed([error, scanError]);
+    }
   }
   if (!ir) {
     return failed([
@@ -433,15 +449,6 @@ export function parseData(
         ),
       ),
   };
-}
-
-/** `fn`'s list, or the error it threw as a one-item list (never lost). */
-function attemptList<T>(fn: () => T[]): unknown[] {
-  try {
-    return fn();
-  } catch (error) {
-    return [error];
-  }
 }
 
 /** `parseData` over a file on disk. */

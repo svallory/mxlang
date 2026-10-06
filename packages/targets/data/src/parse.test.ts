@@ -39,6 +39,24 @@ function failWith(
   return diagnostic;
 }
 
+/** Every error of a file, in order: no tree, and exactly these diagnostics. */
+function failAll(
+  source: string,
+  expected: { message: string; line: number; column: number }[],
+  options?: Parameters<typeof parseData>[2],
+) {
+  const result = parseData(source, "/t.mx", options);
+  expect(result.tree).toBeUndefined();
+  expect(
+    result.diagnostics.map(({ severity, message, line, column }) => ({
+      severity,
+      message,
+      line,
+      column,
+    })),
+  ).toEqual(expected.map((e) => ({ severity: "error", ...e })));
+}
+
 function firstTag(tree: { children: DataNode[] }): DataTag {
   expect(tree.children[0]?.kind).toBe("tag");
   return tree.children[0] as DataTag;
@@ -540,14 +558,21 @@ describe('structural: "reject"', () => {
   });
 
   it("the earliest construct in document order is reported", () => {
-    failWith(
+    // Both are reported, the earlier first.
+    failAll(
       `<if=c>t</if>\nimport a from "b"\n`,
-      { message: STATIC("`<if>`"), line: 1, column: 0 },
+      [
+        { message: STATIC("`<if>`"), line: 1, column: 0 },
+        { message: STATIC("`import`"), line: 2, column: 0 },
+      ],
       { structural: "reject" },
     );
-    failWith(
+    failAll(
       `import a from "b"\n<if=c>t</if>\n`,
-      { message: STATIC("`import`"), line: 1, column: 0 },
+      [
+        { message: STATIC("`import`"), line: 1, column: 0 },
+        { message: STATIC("`<if>`"), line: 2, column: 0 },
+      ],
       { structural: "reject" },
     );
   });
@@ -912,9 +937,12 @@ describe("round 2 (rev-236)", () => {
           structural: "reject",
         },
       );
-      failWith(
-        `<a>x <b/> y</a>\n`,
-        { message: STATIC("text"), line: 1, column: 3 },
+      failAll(
+        `<a>x<b/>y</a>\n`,
+        [
+          { message: STATIC("text"), line: 1, column: 3 },
+          { message: STATIC("text"), line: 1, column: 8 },
+        ],
         {
           structural: "reject",
         },

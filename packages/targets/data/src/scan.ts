@@ -30,6 +30,9 @@ export interface AuthoredTag {
   /** 1-based line, 0-based column, as core. */
   line: number;
   column: number;
+  /** Where the whole element ends (after its closing tag), when known. */
+  endLine?: number;
+  endColumn?: number;
 }
 
 interface MarkoNode {
@@ -44,7 +47,10 @@ interface MarkoNode {
   };
   body?: { body?: MarkoNode[] };
   attributeTags?: MarkoNode[];
-  loc?: { start: { line: number; column: number } };
+  loc?: {
+    start: { line: number; column: number };
+    end?: { line: number; column: number };
+  };
 }
 
 const RESERVED = new Set<string>(RESERVED_NAMES);
@@ -194,7 +200,13 @@ export function scanAuthoredTags(
         !name.startsWith("@") &&
         !RESERVED.has(name)
       ) {
-        tags.push({ name, line: start.line, column: start.column });
+        const end = node.loc?.end;
+        tags.push({
+          name,
+          line: start.line,
+          column: start.column,
+          ...(end ? { endLine: end.line, endColumn: end.column } : {}),
+        });
       }
       const inside =
         name === undefined

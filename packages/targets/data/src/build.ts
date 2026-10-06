@@ -730,6 +730,8 @@ export function unknownTagMessage(
 export interface UnknownTagHit {
   message: string;
   at: Position;
+  /** Where the tag's element ends, to drop the errors inside it. */
+  end?: Position;
 }
 
 /**
@@ -756,6 +758,9 @@ export function allUnknownTags(
       found.push({
         message: unknownTagMessage(tag.name, declaredTags),
         at: tag.loc,
+        ...(tag.span && Number.isFinite(tag.span.sourceEnd)
+          ? { end: positionOfOffset(tag.span.sourceEnd) }
+          : {}),
       });
     }
     visitAttrTagNodes(tag.attributeTagTree);
@@ -896,6 +901,41 @@ function allStructural(
   }));
 }
 
+/** Whether `error` is positioned exactly at `at` (same file). */
+export function samePosition(error: unknown, at: Position): boolean {
+  const there = positionOf(error);
+  return (
+    there !== null &&
+    there.file === at.file &&
+    there.line === at.line &&
+    there.column === at.column
+  );
+}
+
+/**
+ * The errors that are not inside an unknown tag's element. An unknown tag has
+ * no contract, so what is reported inside it (its children's own unknown
+ * names, a `parents`/`children` error that is only the symptom of the typo, a
+ * build reject in its body) is noise until the tag is fixed: one error per
+ * unknown call, at the call. A nested unknown tag is not walked either.
+ */
+export function withoutInside(
+  errors: unknown[],
+  unknown: readonly { at: Position; end?: Position }[],
+): unknown[] {
+  const inside = (at: Position, tag: { at: Position; end?: Position }) =>
+    tag.end !== undefined &&
+    at.file === undefined &&
+    (at.line > tag.at.line ||
+      (at.line === tag.at.line && at.column > tag.at.column)) &&
+    (at.line < tag.end.line ||
+      (at.line === tag.end.line && at.column < tag.end.column));
+  return errors.filter((error) => {
+    const at = positionOf(error);
+    return !at || !unknown.some((tag) => inside(at, tag));
+  });
+}
+
 /** An error's source position, or `null` for one with none (an internal bug). */
 function positionOf(error: unknown): Position | null {
   return isTranslateError(error)
@@ -960,6 +1000,7 @@ export function buildDataDocumentAll(
   const stmts = attempt(() => statements(ir)) ?? [];
   const children = dataNodes(ir.body);
   const extra: unknown[] = [];
+  let unknownHits: UnknownTagHit[] = [];
   const asError = ({ message, at }: { message: string; at: Position }) =>
     new TranslateError(message, at.line, at.column, at.file);
   attempt(() => {
@@ -969,12 +1010,17 @@ export function buildDataDocumentAll(
   });
   if (options.unknownTags === "reject") {
     attempt(() => {
-      for (const hit of allUnknownTags(ir, options.declaredTags)) {
-        extra.push(asError(hit));
-      }
+      // An unknown tag that another error already stands on says nothing new:
+      // the other error (a tag variable, a closed `children`) is the actionable one.
+      unknownHits = allUnknownTags(ir, options.declaredTags).filter(
+        (hit) => !problems.some((error) => samePosition(error, hit.at)),
+      );
+      for (const hit of unknownHits) extra.push(asError(hit));
     });
   }
-  const errors = sortedProblems([...problems, ...extra]);
+  const errors = sortedProblems(
+    withoutInside([...problems, ...extra], unknownHits),
+  );
   if (errors.length > 0) return { tree: undefined, errors };
   // `structural: "reject"` with `imports: "pass"`: the imports leave
   // `statements` (every other kind was just rejected) for their own list.
