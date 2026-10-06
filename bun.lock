@@ -490,6 +490,7 @@
         "@mxlang/core": "workspace:*",
       },
       "devDependencies": {
+        "@marko/compiler": "5.42.10",
         "@types/bun": "1.4.2",
       },
       "peerDependencies": {

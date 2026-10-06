@@ -47,6 +47,7 @@ import {
   sliceLoc,
   unresolvedCustomTagMessage,
 } from "@mxlang/core";
+import { isKnownElement } from "./element-table.ts";
 
 export { TranslateError } from "@mxlang/core";
 
@@ -192,24 +193,23 @@ export function escapeComment(text: string): string {
 }
 
 /**
- * Whether a tag name is an element, per Marko's own registry.
+ * Whether a tag name is an element, per this package's own element table
+ * (`element-table.ts`: the HTML, SVG and MathML elements Marko's `marko-html`,
+ * `marko-svg` and `marko-math` taglibs define, pinned equal by
+ * `element-table.test.ts`).
  *
- * `marko-html`, `marko-svg` and `marko-math` are the taglibs Marko loads for
- * HTML, SVG and MathML elements; anything they define is an element. A
- * hyphenated name is only a *custom* element when Marko's own taglib lookup
+ * A hyphenated name is only a *custom* element when Marko's own taglib lookup
  * actually resolves it — real Marko errors on an unresolved one ("Unable to
  * find entry point for custom tag `<my-widget>`", verified against
  * `@marko/compiler` 5.42.5 / `marko@6.3.51`; see fixture `unknown-element`),
  * it does not render it as literal HTML. Treating every hyphenated name as
  * automatically legal (the previous behaviour here) was strictly more
  * permissive than Marko, which is exactly the class of divergence decision
- * 67 closes.
+ * 67 closes. The table has no hyphenated name, so such a tag is neither an
+ * element nor (unless discovered) a component.
  */
-const ELEMENT_TAGLIBS = new Set(["marko-html", "marko-svg", "marko-math"]);
-
-function isElement(name: string, ctx: Ctx): boolean {
-  const taglibId = ctx.lookup?.getTag(name)?.taglibId;
-  return taglibId !== undefined && ELEMENT_TAGLIBS.has(taglibId);
+function isElement(name: string, _ctx: Ctx): boolean {
+  return isKnownElement(name);
 }
 
 /**
@@ -235,9 +235,10 @@ function isElement(name: string, ctx: Ctx): boolean {
  */
 function isComponent(name: string, ctx: Ctx): boolean {
   if (ctx.defines.has(name) || ctx.imports.has(name)) return true;
+  if (isKnownElement(name)) return false;
   const taglibId = ctx.lookup?.getTag(name)?.taglibId;
   if (taglibId === undefined) return false;
-  return !ELEMENT_TAGLIBS.has(taglibId) && taglibId !== "mx-translator-core";
+  return taglibId !== "mx-translator-core";
 }
 
 /**
@@ -256,10 +257,7 @@ function resolveDiscoveredTagModule(
   if (ctx.defines.has(name) || ctx.imports.has(name)) return undefined;
   const tag = ctx.lookup?.getTag(name);
   if (tag?.taglibId === undefined) return undefined;
-  if (
-    ELEMENT_TAGLIBS.has(tag.taglibId) ||
-    tag.taglibId === "mx-translator-core"
-  ) {
+  if (isKnownElement(name) || tag.taglibId === "mx-translator-core") {
     return undefined;
   }
   return tag.template;

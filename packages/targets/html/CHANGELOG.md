@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Changed (html-own-element-table):** the html target classifies a tag as an element by its own HTML/SVG/MathML table (`src/element-table.ts`) instead of asking Marko's taglib lookup which taglib defined it. `element-table.test.ts` pins the table name-for-name to Marko's `marko-html`, `marko-svg` and `marko-math` taglibs (`@marko/compiler` 5.42.10, now a dev dependency); it found no difference. Emitted output is unchanged. `fixtures-marko/tags-discovery/tags/badge.mx` and `try-child-throw/tags/boom.mx` are twins of the `.marko` tags, with `marko-twins.test.ts` pinning each byte-equal.
+
 - **Added (bound-attribute-refinement):** a refined bound attribute (`<input value:fn:=q/>`) is accepted and renders as the unrefined `value:=q` does, byte for byte: Marko's change handler (`q = fn(next)`) is client-only, and this target renders once. Under `typeCheck` (new `CompileOptions` field, decision 140; the TS plugin passes it through the descriptor, a build never does) the value is `(false && fn(q), q)`, so a misspelled or ill-typed `fn` is reported at the modifier, on a native tag, a `<define>` component call, a dynamic tag and a spread tag. The runtime module never carries it. The Marko-measured `is:raw:=x` primitive-attribute row is restored.
 
 - **Fix, behaviour change (statement-followup, decision 168):** JSX in a `static`/`export`/`server` statement (`static const el = <b>hi</b>` followed by a template line) was a silent swallow of the next template line on html (the statement ran on into it, leaving an empty template); it is now a positioned error at the `<` naming JSX in a statement. A decorated `static class` is accepted again.
