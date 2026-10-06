@@ -49,7 +49,7 @@ Two rules that this document mentions are implemented today in
 
 | Rule | Today | Under decision 158 |
 | --- | --- | --- |
-| the split of an attribute name at its last `:` with an empty head filled by `value` | `@marko/compiler`'s `onAttrName` (as spec §4 "`:modifier`" describes it) | **removed**: 158.1 says the MX AST has no `value:` modifier split. This document therefore specifies none; an attribute name is the text the parser reports |
+| the split of an attribute name at its last `:` with an empty head filled by `value` | `@marko/compiler`'s `onAttrName` (as spec §4 "`:modifier`" describes it) | **OPEN FOR THE OPERATOR.** Decision 158.1's words are "no `value:` modifier split"; whether the AST carries a `modifier` field is not decided by those words. **removed**: 158.1 says the MX AST has no `value:` modifier split. This document therefore specifies none; an attribute name is the text the parser reports |
 | arguments together with plain attributes are an error (`assertAttributesOrArgs`, decision 109) | `@marko/compiler` | a rule of the layer that builds the call, which is core (158.3); it is not a parser rule either way |
 
 Sources of truth, in this order:
