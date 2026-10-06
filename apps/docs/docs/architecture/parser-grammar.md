@@ -10,9 +10,9 @@ into tags, attributes, values, bodies, placeholders, scriptlets and text, in
 HTML mode, concise mode, and the delimited blocks. It is written to be
 implementable and testable, not to be read as a tutorial.
 
-It is **a draft for review by mx-lead**, who owns language design. Where the
+It is **a draft for review by the language lead**, who owns language design. Where the
 language spec, the decision log and `divergences.md` disagree or are silent, the
-disagreement is recorded in [Open questions for mx-lead](#open-questions-for-mx-lead)
+disagreement is recorded in [Open questions for the language lead](#open-questions-for-the-language-lead)
 rather than resolved here. Nothing in this document decides syntax.
 
 ## Status, sources of truth and method
@@ -119,7 +119,7 @@ now MX's own code; its `PROVENANCE.md` records its departures from 5.18.0.
 Code is cited **by file and symbol**, not by line number.
 
 **Stock** means htmljs-parser 5.18.0 unchanged
-(`/Users/svallory/work/htmljs-parser/src`, the `v5.18.0` tag). It appears as a
+(the v5.18.0 tag of htmljs-parser). It appears as a
 comparison in some cells ("Stock: …"). The departures from stock, with the
 symbols that carry them:
 
@@ -138,7 +138,7 @@ npm copy still runs under in this repository, carries the same after-value,
 addendum-5 and atom rules (`PROVENANCE.md`); the corpus and
 `corpus-equivalence.test.ts` hold the three builds together.
 
-**The parser does not throw** (mx-lead, 2026-10-06, recorded with decision
+**The parser does not throw** (the language lead, 2026-10-06, recorded with decision
 165): an internal failure is reported through `onError`.
 
 | Rule | Result | Probes |
@@ -164,7 +164,7 @@ parser returns where an expression stopped yet (OQ 1).
 
 #### The ruling governing that boundary
 
-mx-lead, who owns language design, ruled on 2026-10-05. The ruling has no
+The language lead, who owns language design, ruled on 2026-10-05. The ruling has no
 decision number yet (OQ 22). Verbatim:
 
 > the language rule is the spec's whitespace rule (146 and its addenda); a
@@ -180,7 +180,7 @@ This document applies it as written and no more strongly:
 - Where the spec's rule applies but its outcome turns on a fact only
   TypeScript's grammar supplies, the boundary **may** supply that fact.
 - Where the spec says nothing, the ruling does not decide. The default stands
-  under decision 157.3 until mx-lead rules, and the case is listed as not
+  under decision 157.3 until the language lead rules, and the case is listed as not
   settled.
 
 The table in [Where a real TypeScript parser would end the value
@@ -312,12 +312,12 @@ content reads to the next `>`, and the text between is compared:
 | # | The text between `</` and `>` | Result | Probes |
 | --- | --- | --- | --- |
 | 1 | empty (`</>`) | closes the open tag, whatever its name | g0155 g0685 |
-| 2 | equal to the open tag's written name, or to the literal `div` when the name range is empty | closes it. `<div:x>` is closed by `</div:x>` and not by `</div>` | g0154 g0686 g0687 g0688 |
+| 2 | equal to the open tag's written name, or to the literal `div` when the name range is empty | closes it. `<div:x>` is closed by `</div:x>` and not by `</div>`. TODO `unnamed-tag-close-compares-literal-div` | g0154 g0686 g0687 g0688 |
 | 3 | equal to the source from the start of the name to the end of its shorthands | closes it | g0689 |
 | 4 | anything else | `The closing "x" tag does not match the corresponding opening "y" tag` | g0238 |
 | — | any, with no open tag | `The closing "x" tag was not expected` | g0237 |
 | — | a named close tag when the open tag never got its name (`,--/</e>`) | `The closing "x" tag was not expected`; `</>` still closes that tag (row 1) | g1683 |
-| — | a close tag on a line under a concise tag | closes the concise tag without error | g0690 |
+| — | a close tag on a line under a concise tag | closes the concise tag without error. TODO `concise-close-tag-closes-concise-tag` | g0690 |
 
 The literal `div` in row 2 is OQ 25. Spec §3 "Concise mode" describes the last
 row as a parse error (OQ 26).
@@ -677,7 +677,7 @@ repository the consumer's set is `html-comment`, `html-script`, `html-style`,
 | --- | --- | --- |
 | `<script>a ${x} <b></script>` | the placeholder `x` and the text ` <b>` | g0762 |
 | `<textarea>don't</textarea>` | `EOF reached while parsing string expression`: a quote must be balanced | g0763 |
-| `<script>var s = "a\"b";</script>`, `<script>var s = 'it\'s';</script>` | the same error for valid JavaScript (row 6; OQ 13) | g0176 g0764 |
+| `<script>var s = "a\"b";</script>`, `<script>var s = 'it\'s';</script>` | the same error for valid JavaScript (row 6; OQ 13). TODO `text-body-string-backslash-escape` | g0176 g0764 |
 
 Spec §3 "CDATA sections and XML declarations" describes a raw-text body as "a
 single `MarkoText`" and lists `<title>` among them; both differ from the rows
@@ -1011,12 +1011,12 @@ Consequences:
 | Input | Result | Why | Probes |
 | --- | --- | --- | --- |
 | `x=a as Map<K, V> y` | value `a as Map<K, V>` | `<` is a group in a type context | g0261 |
-| `x=f<T>(y)` | value `f<T`; the `>` ends the tag | not a type context, so `>` is E1's hard stop. **Recorded defect**, [below](#recorded-defects-in-the-default) | g0353 |
+| `x=f<T>(y)` | value `f<T`; the `>` ends the tag | not a type context, so `>` is E1's hard stop. **Recorded defect**, [below](#recorded-defects-in-the-default). TODO `html-value-generic-call-cut-at-gt` | g0353 |
 | `x=a: T<K> = f<K>(y)` | value `a: T<K> = f<K` | the `=` leaves the context (no `forceType`), then as the row above | g0354 |
 | `x=a as T = b y`, `x=a as T < b y` | one value up to `b` | `forceType`: the context never ends inside the value. In the second the look-ahead resumes after the `<`, so no group is opened | g0355 g0356 |
 | `x=a as T {k: T} y=1` | value `a as T {k: T}`, then `y=1` | the look-ahead continues at `{`; with `forceType` the `{` does not leave the context | g0357 |
 | `x=(a): T => a` | one value | the `:` enters the context; the arrow follows `T`, not `)`, so `=>` leaves it | g0358 |
-| concise `div x=a as T > b` | `Mismatched group. A closing ">" character was found but it is not matched …` | concise mode has no `>` hard stop, the look-ahead continues at `>`, and in a type context `>` is a closing bracket with no open group. **Valid TypeScript that the default rejects** (OQ 24) | g0266 |
+| concise `div x=a as T > b` | `Mismatched group. A closing ">" character was found but it is not matched …` | concise mode has no `>` hard stop, the look-ahead continues at `>`, and in a type context `>` is a closing bracket with no open group. **Valid TypeScript that the default rejects** (OQ 24). TODO `concise-as-type-gt-mismatched-group` | g0266 |
 | HTML `<div x=a as T > b/>` | `Ambiguous ">" in attribute. …` | the `>` is E1's hard stop; then [the ambiguous `>` check](#the-ambiguous--check) | g0359 |
 | `<div x=a as T ? (b < c) : d/>`, `<div x=a: T ? (b < c) : d/>` | `Mismatched group. A ")" character was found when ">" was expected.` | reads 1 and 2 apply at any depth: the context entered before the group makes the `<` inside it a group, which the `)` fails to close. With `>` it is the mirror message (`(b > c)`, `[b > c]`). `<div x=(a as T) ? (b < c) : d/>` is one value: an `as` inside a group does not enter the context. Valid TypeScript that the default rejects. **A recorded limit, TODO `as-satisfies-type-context-any-depth`**: no action before MX2's TypeScript-aware expression boundary | g0360 g0361 g0362 g0363 g0364 |
 | `<div x=a as T ? b < c : d/>` | one value | at depth 0 the look-ahead resumes after the spaced `<`, so no group is opened | g0365 |
@@ -1048,7 +1048,7 @@ Per position:
 | `<div ...(` | HTML | the attribute-value error with `...` | g0367 |
 | `<div onClick(a` | HTML | the attribute-value error for `onClick`: arguments share the owner | g0200 |
 | `<div(a` | HTML | `EOF reached while parsing expression` | g0207 |
-| `div(a` | concise | **no error**; tag arguments `a` are reported | g0368 |
+| `div(a` | concise | **no error**; tag arguments `a` are reported. TODO `concise-eof-open-delimiter-silent` | g0368 |
 | `-- ${a` | HTML block | the placeholder error | g0369 |
 | `static const x = (` | concise | `EOF reached while parsing expression` | g0209 |
 | `$ {a` | concise | **no error**; the scriptlet `a` is reported | g0370 |
@@ -1059,7 +1059,7 @@ Per position:
 | `<div async(a` | HTML | the attribute-name error: with `async` pending, the attribute has no name yet | g0196 |
 | `div onClick(a) {b`, `div\|a`, `div<A`, `div (a` | concise | **no error**; the method, parameters, type arguments or tag arguments are reported | g0373 g0374 g0375 g0376 |
 | `script -- ${b`, `textarea\n  -- ${a` | concise text body | **no error**; the placeholder is reported (compare `div\n  -- ${a`, an HTML-mode block: the placeholder error) | g0377 g0378 g0379 |
-| `div.a${b` | concise | **no error, and no shorthand event**: only the tag `div` is reported | g0380 |
+| `div.a${b` | concise | **no error, and no shorthand event**: only the tag `div` is reported. TODO `concise-eof-interpolation-drops-event` | g0380 |
 | `${x` | concise | **no error and no event at all** | g0381 |
 | ``span\n  div x=`${a`` | concise | **no error, and no value event**: the tags and the name `x` are reported | g0382 |
 
@@ -1123,8 +1123,8 @@ The value starts after the `=` or `:=` and the whitespace that follows it
 | `<div x=a>= b>c</div>` | the value `a` and the body text `= b>c` (rule 4: no whitespace before the `>`) | g0830 |
 | `<div x=a>b>c</div>` | the value `a` (rule 4) | g0831 |
 | `<div x=a + ,b/>` | the single value `a + ,b`: the operator exemption (scan step 4) | g0788 |
-| `<div x=a +/>`, `<div x=a ? />` | `EOF reached while parsing regular expression`: the exempted `/` starts a regular expression (OQ 17) | g0832 g0833 |
-| `<div x=async/>` | the value `async/`, then `Missing ending "div" tag`: an identifier spelled like a unary keyword is a look-behind operator (OQ 17, OQ 24) | g0664 |
+| `<div x=a +/>`, `<div x=a ? />` | `EOF reached while parsing regular expression`: the exempted `/` starts a regular expression (OQ 17). TODO `operator-exemption-consumes-hard-stop` | g0832 g0833 |
+| `<div x=async/>` | the value `async/`, then `Missing ending "div" tag`: an identifier spelled like a unary keyword is a look-behind operator (OQ 17, OQ 24). TODO `operator-exemption-consumes-hard-stop` | g0664 |
 | `<div x=async, y=1/>` | the value `async,`, then `y=1` | g0665 |
 | `<div x=a\n  + b/>`, `<div x=a\n\n  + b/>` | one value: in HTML mode the look-ahead crosses newlines | g0804 g0805 |
 | `<div x=a\n  <span/>` | the single value `a\n  <span` | g0633 |
@@ -1132,7 +1132,7 @@ The value starts after the `=` or `:=` and the whitespace that follows it
 | `<div x=a + // c\n b/>` | the value `a + // c`, then `b` | g0835 |
 | `<div x=a\n  // c\n  y/>` | the value `a\n  // c`, then `y`: `/` is a look-ahead operator, so the comment line is drawn in | g0836 |
 | `<div x=a /* c */ + b/>` | one value | g0837 |
-| `<div x=a + /* c */ b/>` | the value `a + /* c */`, then the attribute `b`: the comment's closing `/` is no look-behind operator (OQ 24) | g0674 |
+| `<div x=a + /* c */ b/>` | the value `a + /* c */`, then the attribute `b`: the comment's closing `/` is no look-behind operator (OQ 24). TODO `value-block-comment-after-operator` | g0674 |
 | `<div x=a  y/>` | the value `a` and the name `y`: the whitespace between belongs to neither | g0838 |
 | `<div x=(a` | an error at end of input ([End of input](#end-of-input)) | g0199 |
 
@@ -1275,7 +1275,7 @@ E2.
 | --- | --- | --- | --- |
 | `<div ... props/>` | spread ` props` (the range includes the space) | look-behind `.` | g0015 |
 | `<div ...  (a)/>`, `<div ... {a}/>`, `<div ... -a/>` | spread, range including the whitespace | look-ahead `(`, `{`, `-` | g0476 g0477 g0478 |
-| `<div ... [a]/>`, `<div ... "s"/>` | `Missing value for attribute` | neither table: **valid TypeScript that the default rejects** (OQ 24) | g0479 g0480 |
+| `<div ... [a]/>`, `<div ... "s"/>` | `Missing value for attribute` | neither table: **valid TypeScript that the default rejects** (OQ 24). TODO `spread-value-starting-with-bracket-or-string` | g0479 g0480 |
 
 | Input | Result | Probes |
 | --- | --- | --- |
@@ -1404,7 +1404,7 @@ the flags of [the inventory](#inventory-of-positions), or at end of input:
 | `div\n  static x = 1` | `"static" can only be used at the root of the template.` | g0235 |
 | `static x = 1 + \ny` | ends at the newline: the look-behind reads the character immediately before it, here a space | g0893 |
 | `static x = 1 +\ny` | continues: `+` is immediately before the newline | g0894 |
-| `static const x = 1\n, y` | an attribute `y`: after the statement, row 1 of [The open tag](#the-open-tag) still runs (OQ 24) | g0895 |
+| `static const x = 1\n, y` | an attribute `y`: after the statement, row 1 of [The open tag](#the-open-tag) still runs (OQ 24). TODO `statement-tag-comma-line-adds-attributes` | g0895 |
 | `static type A = B<C>\ndiv`, `export type X = { a: 1 }\ndiv`, `static declare const x: A<B>\ndiv`, `static interface A<T> {}\ndiv` | each ends at the newline: after `declare`, `interface` or `type` and a type name, the position is in the type context from its start | g0816 g0896 g0897 g0898 |
 | `import type { A } from "x"\ndiv` | ends at the newline: after `type`, `{` and `*` count as a type name | g0899 |
 | `static x = f<T>\ndiv`, `static type = f<T>\ndiv` | each continues onto the `div` line: not a type, so the `>` is a look-behind operator | g0900 g0901 |
@@ -1425,7 +1425,7 @@ and anything else the line form, which has the flags of
 | Input | Result | Probes |
 | --- | --- | --- |
 | `$ const a = 1 +\n  2` | one scriptlet | g0503 |
-| `$ const a = 1 + \n  2` | ends after `+ ` (a space precedes the newline); the next line is then a concise line of its own | g0504 |
+| `$ const a = 1 + \n  2` | ends after `+ ` (a space precedes the newline); the next line is then a concise line of its own. TODO `scriptlet-trailing-space-after-operator` | g0504 |
 | `$ a = b &&\n  c` | one scriptlet | g0505 |
 | `$ a = b\n  && c` | ends at the newline | g0506 |
 | `$ a =\n  1`, `$ a = b ?\n  c : d`, `$ a = b /\n  c` | one scriptlet: the character table consumes the newline | g0507 g0508 g0509 |
@@ -1456,7 +1456,7 @@ of its own or after a concise open tag (row 4 of [The open tag](#the-open-tag)).
 | --- | --- | --- |
 | the run of hyphens | is the delimiter (`--`, `---`, …) | g0915 |
 | the run is followed directly by a newline | a multi-line block | g0916 |
-| otherwise | the one character after the run is skipped without being examined. When only whitespace remains on the line the block is multi-line (`--x\n  a`: the `x` is discarded); otherwise it is single-line, its content starts after the skipped character (`--abc` is the text `bc`) and it ends at the end of its line (OQ 27) | g0181 g0917 g0918 g0777 |
+| otherwise | the one character after the run is skipped without being examined. When only whitespace remains on the line the block is multi-line (`--x\n  a`: the `x` is discarded); otherwise it is single-line, its content starts after the skipped character (`--abc` is the text `bc`) and it ends at the end of its line (OQ 27). TODO `delimiter-next-character-skipped` | g0181 g0917 g0918 g0777 |
 | the content | HTML content: tags and placeholders are parsed | g0919 g0920 |
 | the content, under a text tag | text content | g0921 |
 | a multi-line block's `indent`, hyphens on a line of their own | that line's indentation | g0922 |
@@ -1511,7 +1511,7 @@ flags and the type-context reads are in
 | `<foo<A, B>/>` | type arguments: the `<` is directly after the tag name | g0745 |
 | `<foo.a<A>/>` | `Unexpected types. …`: after a shorthand the list is E15's | g0228 |
 | `<foo<Map<K, V>>/>` | nested `<…>` are groups | g0391 |
-| `<foo<() => void>/>` | the type arguments `() =`: with no `operators` flag the `>` of an arrow is the hard stop. **Valid TypeScript that the default cuts** (OQ 24) | g0677 |
+| `<foo<() => void>/>` | the type arguments `() =`: with no `operators` flag the `>` of an arrow is the hard stop. **Valid TypeScript that the default cuts** (OQ 24). TODO `type-list-arrow-cut` | g0677 |
 | `<foo<(() => void)>/>` | whole | g0932 |
 | `<foo<A> x=1/>`, `<foo<A>>y</foo>`, `<foo<A> \|x\|/>` | type arguments, then an attribute, the body, parameters | g0933 g0934 g0935 |
 | `<foo<A><B>/>` | the second list is read as E15: here `Unexpected types. …` | g0936 |
@@ -1890,7 +1890,7 @@ reports a name and core gives it meaning, both are given.
 | `x=a ?.b :c` | value `a ?.b`, then an attribute named `:c`. Stock: one value | the after-value rule's `?.` case (observed); **not settled**, OQ 3 | g0432 |
 | `div x=a in\n  b` (concise) | one value | default: the look-ahead keyword row (observed); OQ 18 | g0445 |
 
-## Open questions for mx-lead
+## Open questions for the language lead
 
 The numbers are stable across drafts, because the text cites them. An item
 that has been settled says so in place, with the decision or ruling that
@@ -2076,22 +2076,22 @@ The inputs the open questions mention:
 | 4 | `x=a .2xl` | g0626 |
 | 5 | `<div ...props .b/>` | g1025 |
 | 6 | `<foo\|x: A \| B\|/>`, `<let/x: A \| B = 1/>` | g0676 g0890 |
-| 7 | `x=f<T>(y)`, `x=<T,>(a) => a` | g0353 g0670 |
+| 7 | `x=f<T>(y)`, `x=<T,>(a) => a`. TODO `html-value-generic-call-cut-at-gt` | g0353 g0670 |
 | 8 | `<div x=a > b/>` | g0135 |
 | 9 | `x=a ? :b :c` | g0533 |
 | 10 | `div a; b`, `<div a <!-- c -->/>` | g0236 g0049 |
 | 12 | `<div x=$!{a}/>` | g0755 |
-| 13 | `<textarea>don't</textarea>`, `<script>var s = "a\"b";</script>` | g0763 g0176 |
+| 13 | `<textarea>don't</textarea>`, `<script>var s = "a\"b";</script>`. TODO `text-body-string-backslash-escape` | g0763 g0176 |
 | 16 | `<1abc/>` | g0704 |
-| 17 | `<div x=a + ,b/>`, `<div x=a +/>`, `<div x=async/>`, `<div x=async, y=1/>`, concise `div x=async\n  span`, `div x=f<T> ,y=1` | g0788 g0832 g0664 g0665 g0306 g0666 |
+| 17 | `<div x=a + ,b/>`, `<div x=a +/>`, `<div x=async/>`, `<div x=async, y=1/>`, concise `div x=async\n  span`, `div x=f<T> ,y=1`. TODO `operator-exemption-consumes-hard-stop` | g0788 g0832 g0664 g0665 g0306 g0666 |
 | 18 | concise `div x=a instanceof\nB`, `div x=a +\nspan`; `<div x=a\n  <span/>` | g0446 g1026 g0633 |
-| 19 | `div x=(a`, `div(a`, `$ {a`, `div\|a`, `div<A`, `div (a`, `div onClick(a) {b`, `script -- ${b`, `div.a${b`, `${x`, ``span\n  div x=`${a`` | g0366 g0368 g0370 g0374 g0375 g0376 g0373 g0377 g0380 g0381 g0382 |
+| 19 | `div x=(a`, `div(a`, `$ {a`, `div\|a`, `div<A`, `div (a`, `div onClick(a) {b`, `script -- ${b`, `div.a${b`, `${x`, ``span\n  div x=`${a``. TODO `concise-eof-open-delimiter-silent`, `concise-eof-interpolation-drops-event` | g0366 g0368 g0370 g0374 g0375 g0376 g0373 g0377 g0380 g0381 g0382 |
 | 20 | `x=a :: b` | g0522 |
 | 23 | `x=a !b`, `x=a ++b` | g0668 g0669 |
-| 24 | concise `div x=a as T > b`; `<foo<() => void>/>`; `<div onClick<T extends () => void>(a) {x}/>`; `x=a + /* c */ b`; `$ const a = 1 + \n  2`; `<div ... [a]/>`, `<div ... "s"/>`; `<div x=/* c */ a/>`; `static const x = 1\n, y` | g0266 g0677 g0941 g0674 g0504 g0479 g0480 g0667 g0895 |
-| 25 | `<.a></div>` | g0686 |
-| 26 | `div\n  </div>` | g0690 |
-| 27 | `--abc` | g0917 |
+| 24 | concise `div x=a as T > b`; `<foo<() => void>/>`; `<div onClick<T extends () => void>(a) {x}/>`; `x=a + /* c */ b`; `$ const a = 1 + \n  2`; `<div ... [a]/>`, `<div ... "s"/>`; `<div x=/* c */ a/>`; `static const x = 1\n, y`. TODO `concise-as-type-gt-mismatched-group`, `type-list-arrow-cut`, `value-block-comment-after-operator`, `scriptlet-trailing-space-after-operator`, `spread-value-starting-with-bracket-or-string`, `statement-tag-comma-line-adds-attributes` | g0266 g0677 g0941 g0674 g0504 g0479 g0480 g0667 g0895 |
+| 25 | `<.a></div>`. TODO `unnamed-tag-close-compares-literal-div` | g0686 |
+| 26 | `div\n  </div>`. TODO `concise-close-tag-closes-concise-tag` | g0690 |
+| 27 | `--abc`. TODO `delimiter-next-character-skipped` | g0917 |
 | 28 | `x=(a) : T => a` | g0611 |
 | 29 | `x=await :b`, `x=f(await :b)` | g0581 g0589 |
 | 30 | `static const a = 1`, with `static` in the supplied statement set and without | g0758 g0759 |
@@ -2109,7 +2109,7 @@ decision 146 under the 2026-10-05 ruling:
 - **(b)** the spec's rule, in text that exists, decides the input; that result
   stands and the boundary **must not** change it;
 - **(c)** the spec is silent; the default stands under decision 157.3 until
-  mx-lead rules. The last column notes whether TypeScript's reading would
+  the language lead rules. The last column notes whether TypeScript's reading would
   accept anything the spec rejects.
 
 | Input | Default | TypeScript | Class | Basis | Probes |
@@ -2123,7 +2123,7 @@ decision 146 under the 2026-10-05 ruling:
 | concise `div x=a\n  (b)`, `\n  + b`, `\n  ? b : c`, `\n  in b`, `\n  <span/>` | value `a`, then a child | continues across the newline | **(c)** | spec §3 "Concise mode" says a concise tag's "children are the lines indented under it" but says nothing about attribute values, and the default itself continues a value onto such lines in other cases (`div x=a +\n  b`, `div x=a in\n  b`). Whether §3 governs value continuation is OQ 18 | g0454 g0456 g0457 g0458 g0451 |
 | `<div x=async/>`, `<div x=async, y=1/>`, concise `div x=async\n  span` | `async/`, then a missing close tag; `async,` then `y=1`; one value swallowing the child | the identifier `async`, then stops | **(c)** | spec silent. OQ 17 | g0664 g0665 g0306 |
 | concise `div x=f<T> ,y=1` | one value | an instantiation expression `f<T>`, then stops | **(c)** | spec silent. OQ 17 | g0666 |
-| `<div x=/* c */ a/>` | value `/* c */`, then an attribute `a` | the expression `a` after a comment | **(c)** | spec silent. OQ 24 | g0667 |
+| `<div x=/* c */ a/>` | value `/* c */`, then an attribute `a` | the expression `a` after a comment | **(c)** | spec silent. OQ 24. TODO `value-block-comment-after-operator` | g0667 |
 | `x=a [0]` | value `a`, then an attribute named `[0]` | `a[0]` | **(c)** | spec silent. In concise mode `[` begins an attribute group, so continuing would change `div x=a [y=1]` | g0622 |
 | `` x=a `t` `` | value `a`, then an attribute named `` `t` `` | a tagged template, `` a`t` `` | **(c)** | spec silent; accepts nothing the spec rejects | g0625 |
 | `x=a {b}` | one value | stops after `a` | **(c)** | spec silent | g0623 |
@@ -2147,9 +2147,9 @@ corpus.
 
 | Defect | Behaviour today | TODO | Probes |
 | --- | --- | --- | --- |
-| a generic call or generic arrow in an HTML-mode value | cut at `>` with no error: `x=f<T>(y)`, `x=<T,>(a) => a` | not filed (OQ 7) | g0353 g0670 |
-| end of input in concise mode in a position whose delimiter the owning state consumed | no error | not filed (OQ 19) | g0368 g0370 g0374 g0375 g0376 g0373 g0377 |
-| end of input in concise mode inside a tag name's, shorthand's or template literal's `${…}` | no error, and the owning event is not reported: no shorthand, no event, no value | not filed (OQ 19) | g0380 g0381 g0382 |
+| a generic call or generic arrow in an HTML-mode value | cut at `>` with no error: `x=f<T>(y)`, `x=<T,>(a) => a` | `html-value-generic-call-cut-at-gt` (OQ 7) | g0353 g0670 |
+| end of input in concise mode in a position whose delimiter the owning state consumed | no error | `concise-eof-open-delimiter-silent` (OQ 19) | g0368 g0370 g0374 g0375 g0376 g0373 g0377 |
+| end of input in concise mode inside a tag name's, shorthand's or template literal's `${…}` | no error, and the owning event is not reported: no shorthand, no event, no value | `concise-eof-interpolation-drops-event` (OQ 19) | g0380 g0381 g0382 |
 | fixed on main in #377 (TODOs `template-parser-ascii-only-lookbehinds` and `template-parser-comment-in-text-tag-open-crash`), kept here as regression probes | `<div x=é / 2 y/>` and `${é / 2}` divide; `<div x=énew y=1/>` is the value `énew` and `y=1`; `<div.a::${x}/>` names `::`; `<script // c </script>` no longer closes the tag from inside its open tag | none | g1027 g1028 g1029 g1030 g0047 |
 | fixed in the look-behinds follow-up (TODO `template-parser-lookbehinds-followup`; decision 156, addenda 8, 11 and 12), kept here as regression probes | a comment before `of`, `yield` or `await` is skipped as whitespace is: `x=(f(/*c*/ await :b))` lexes no atom, as `x=(f( await :b))` lexes none; `<if=count\u00a0>= 10>` is the comparison, `<div x=(é)\u00a0/ 2/>` divides and `<div x=a +\u00a0 y=1/>` is one value, each as with a space | none | g1678 g1679 g1686 g1684 g1685 g1687 |
 | the type context at any group depth after `as`, `satisfies` or an annotation | `<div x=a as T ? (b < c) : d/>` is `Mismatched group`. A recorded limit: no action before MX2's TypeScript-aware expression boundary | `as-satisfies-type-context-any-depth` | g0360 |
