@@ -300,13 +300,16 @@ function approximateUnmappedInVolar(): void {
   const decorate = createRequire(import.meta.url)(
     "@volar/typescript/lib/node/decorateProgram",
   ) as {
-    decorateProgram: ((language: Language, program: ts.Program) => void) & {
+    decorateProgram: ((
+      language: Language<string>,
+      program: ts.Program,
+    ) => void) & {
       [APPROXIMATE_MARKER]?: true;
     };
   };
   const original = decorate.decorateProgram;
   if (original[APPROXIMATE_MARKER]) return;
-  const patched = (language: Language, program: ts.Program): void => {
+  const patched = (language: Language<string>, program: ts.Program): void => {
     approximateUnmappedDiagnostics(
       program,
       PROGRAM_DIAGNOSTIC_METHODS,
