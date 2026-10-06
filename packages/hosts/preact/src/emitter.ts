@@ -714,8 +714,8 @@ export class PreactEmitter implements Emitter<string> {
         );
       // Phase B of `dom-events` (decision 101): recompose the prop from the
       // DOM event name core resolved — `on` + capitalized (`click` →
-      // `onClick`, `dblclick` → `onDblclick`), with the React dialect's own
-      // irregular spellings (`onDoubleClick`, `onFocus`, `onBlur`) through
+      // `onClick`), with each dialect's own spellings (`keydown` →
+      // `onKeyDown`, React's `onDoubleClick`, `onFocus`, `onBlur`) through
       // `JsxDialect.eventPropNames`. A custom DOM event name JSX cannot spell
       // errors uniformly on all three shared targets.
       case "event": {
@@ -870,7 +870,7 @@ export class PreactEmitter implements Emitter<string> {
       // Phase B of `dom-events` (decision 101): the prop is recomposed from
       // the DOM event name core resolved (`#eventPropName`) — never the
       // authored spelling, so `onDblClick` and `on-dblclick` both emit
-      // `onDblclick`. The recomposed name is deliberately not span-mapped:
+      // the dialect's one spelling. The recomposed name is deliberately not span-mapped:
       // it is generated text, not source text, and a mapping whose texts
       // differ is worse than none.
       //
@@ -999,11 +999,12 @@ export class PreactEmitter implements Emitter<string> {
   /**
    * The JSX prop name for an `event` attribute, recomposed from the DOM
    * event name core resolved (decision 101, design note §7): `on` plus the
-   * capitalized DOM name — `click` → `onClick`, `dblclick` → `onDblclick`.
-   * The React dialect passes its own irregular spellings through
+   * capitalized DOM name — `click` → `onClick` — unless the dialect
+   * names it. Every dialect passes the spellings its JSX types declare through
    * `JsxDialect.eventPropNames` (`dblclick` → `onDoubleClick`, `focusin` →
-   * `onFocus`, `focusout` → `onBlur`), React's own registration table in
-   * `react-dom`, not an MX invention.
+   * `onFocus`, `focusout` → `onBlur`): React's from its own registration
+   * table in `react-dom`, Preact's and hono's from the names their JSX types
+   * declare — none an MX invention.
    *
    * A name JSX cannot spell as one identifier — a custom DOM event such as
    * `my-event` from `on-my-event` — is a uniform error on all three shared

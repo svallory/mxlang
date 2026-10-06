@@ -1212,14 +1212,17 @@ bind the same event. Core lowers the attribute to an `Attr` of kind `event`
 carrying both the source spelling (`name`) and the resolved DOM name (`event`);
 each host recomposes its own form from `event`, so `onDblClick` and
 `on-dblclick` are two spellings that produce identical output on every host —
-on Solid, Preact and hono that emission is `onDblclick` (capitalize-first of
-the DOM name; those runtimes lowercase the prop at bind time). One host
-recomposes by **lookup, not by rule**: React's prop names are camelCase data
-from react-dom's own registration table (`simpleEventPluginEvents`), which no
-derivation can reverse (`keydown` → React's `onKeyDown`, never `onKeydown`), so
-the React target vendors React's list and looks the spelling up. The DOM name
-from `on<Name>`/`on-<exact>` is the input; the React spelling is a lookup in
-React's table.
+on Solid that emission is `onDblclick` (capitalize-first of the DOM name; Solid
+lowercases the prop at bind time). The three shared JSX hosts recompose by
+**lookup, not by rule**: React's prop names are camelCase data from react-dom's
+own registration table (`simpleEventPluginEvents`), and Preact's and hono's are
+the camelCase names their JSX types declare, none of which a derivation can
+reverse (`keydown` → `onKeyDown`, never `onKeydown`; `dblclick` → React's and
+hono's `onDoubleClick`, Preact's `onDblClick`). Preact and hono bound the old
+`onKeydown` spelling at run time, but their types reject it (decision 161), so
+each target looks the spelling up in its own list. The DOM name from
+`on<Name>`/`on-<exact>` is the input; the host's spelling is a lookup in its
+table. A DOM name a host's list does not know falls back to capitalize-first.
 
 A name that is **not** event-shaped — `onclick`, `once`, `on` — is an ordinary
 attribute. `<div on="x">` is data.

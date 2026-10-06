@@ -379,8 +379,10 @@ function handlerTypeNames(source: string): HandlerTypeNames {
  * emit and it declares no value. `Handler<tag, event>` is the host's own
  * handler type for that element and event: the key of
  * `JSX.IntrinsicElements[tag]` whose lowercased name is `on` + the lowercased
- * event. Case-insensitive, because decision 101 emits the lowercase runtime
- * spelling (`onKeydown`) while the host's types declare `onKeyDown`. No hit —
+ * event. Case-insensitive, so the lookup does not depend on the exact
+ * spelling the dialect emits (the dialects emit the spelling their types
+ * declare, `onKeyDown`; a DOM name no dialect table knows falls back to
+ * capitalize-first). No hit —
  * an unknown element or prop — is `any`. The prop's complete declared type is
  * kept, optionality and `undefined`/`null` included, so forwarding an optional
  * callback checks as it does in plain TSX.

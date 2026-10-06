@@ -117,18 +117,15 @@ describe.each(HOSTS)(
         expect(js).toMatch(
           /onClick: \(?\(e\) => \{ e\.preventDefault\(\); \}\)?/,
         );
-        expect(js).toMatch(/onKey[dD]own: \(?\(e\) => e\.key\)?/);
+        expect(js).toMatch(/onKeyDown: \(?\(e\) => e\.key\)?/);
 
         const module = await import(pathToFileURL(out).href);
         const tree = module.default({});
         const found = handlers(tree);
-        const key = Object.keys(found).find((name) =>
-          /^onKeydown$/i.test(name),
+        expect(Object.keys(found)).toContain("onKeyDown");
+        expect((found.onKeyDown as (e: unknown) => unknown)({ key: "k" })).toBe(
+          "k",
         );
-        expect(key).toBeDefined();
-        expect(
-          (found[key as string] as (e: unknown) => unknown)({ key: "k" }),
-        ).toBe("k");
         let prevented = false;
         (found.onClick as (e: unknown) => void)({
           preventDefault: () => {

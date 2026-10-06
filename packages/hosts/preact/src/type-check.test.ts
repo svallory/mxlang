@@ -47,7 +47,7 @@ describe("typeCheck set", () => {
   it("wraps a native element's handler and names the recomposed event", () => {
     const { code } = compile("<input onKeyDown=((e) => e.key)/>", true);
     expect(code).toContain(
-      'onKeydown={((e) => e.key) satisfies __MxH<"input", "keydown">}',
+      'onKeyDown={((e) => e.key) satisfies __MxH<"input", "keydown">}',
     );
   });
 

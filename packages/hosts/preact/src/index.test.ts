@@ -1597,7 +1597,7 @@ describe("event attributes (decision 101, phase B of dom-events)", () => {
   it("collapses onDblClick and on-dblclick byte-identically", () => {
     const a = markup("<button onDblClick=f>x</button>");
     const b = markup("<button on-dblclick=f>x</button>");
-    expect(a).toBe("<button onDblclick={f}>x</button>");
+    expect(a).toBe("<button onDblClick={f}>x</button>");
     expect(a).toBe(b);
   });
 
@@ -1637,15 +1637,19 @@ describe("event attributes (decision 101, phase B of dom-events)", () => {
   });
 });
 
-describe("event name positions and plain-recomposition spellings", () => {
-  it("recomposes multi-word DOM names with capitalize-first (onKeydown), unlike React", () => {
-    // Preact/hono/solid lowercase the prop at bind time, so `onKeydown`
-    // binds `keydown`; only the React dialect looks React's camelCase up.
+describe("event name positions and spellings", () => {
+  it("looks multi-word DOM names up in Preact's camelCase names (onKeyDown)", () => {
+    // Preact lowercases the prop at bind time, so the old `onKeydown` still
+    // bound `keydown`; but the JSX types declare `onKeyDown` only, so the
+    // spelling is the declared one (decision 161).
     expect(markup("<input onKeyDown=handler>")).toBe(
-      "<input onKeydown={handler} />",
+      "<input onKeyDown={handler} />",
     );
     expect(markup("<div onPointerDown=f>x</div>")).toBe(
-      "<div onPointerdown={f}>x</div>",
+      "<div onPointerDown={f}>x</div>",
+    );
+    expect(markup("<div on-mousedown=f>x</div>")).toBe(
+      "<div onMouseDown={f}>x</div>",
     );
   });
 

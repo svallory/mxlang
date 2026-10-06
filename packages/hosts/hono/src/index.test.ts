@@ -283,7 +283,7 @@ describe("event attributes (decision 101, phase B of dom-events)", () => {
   it("collapses onDblClick and on-dblclick byte-identically", () => {
     const a = markup("<button onDblClick=f>x</button>");
     const b = markup("<button on-dblclick=f>x</button>");
-    expect(a).toBe("<button onDblclick={f}>x</button>");
+    expect(a).toBe("<button onDoubleClick={f}>x</button>");
     expect(a).toBe(b);
   });
 
@@ -315,10 +315,13 @@ describe("event attributes (decision 101, phase B of dom-events)", () => {
   });
 });
 
-describe("event name plain-recomposition spellings", () => {
-  it("recomposes multi-word DOM names with capitalize-first (onKeydown), unlike React", () => {
+describe("event name spellings", () => {
+  it("looks multi-word DOM names up in hono's camelCase names (onKeyDown)", () => {
     expect(markup("<input onKeyDown=handler>")).toBe(
-      "<input onKeydown={handler} />",
+      "<input onKeyDown={handler} />",
+    );
+    expect(markup("<div on-mousedown=f>x</div>")).toBe(
+      "<div onMouseDown={f}>x</div>",
     );
   });
 });
