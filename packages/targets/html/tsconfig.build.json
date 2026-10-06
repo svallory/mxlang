@@ -3,5 +3,10 @@
   "compilerOptions": {
     "declarationMap": false
   },
-  "exclude": ["src/**/*.test.ts", "src/**/fixtures/**", "src/example.ts", "src/mx-twins.ts"]
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/fixtures/**",
+    "src/example.ts",
+    "src/mx-twins.ts"
+  ]
 }
