@@ -59,7 +59,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run scripts/pre-verify.ts
       - run: bun run build
-      - run: bun run test -- --shard=${{ matrix.shard }}/2
+      - run: bun run test -- --shard=${{ matrix.shard }}/2 --maxWorkers=2
         env:
           NODE_OPTIONS: --require ${{ github.workspace }}/scripts/lag-probe.cjs
       - name: Collect fresh Vitest evidence

@@ -14,7 +14,9 @@ const t = setInterval(() => {
   const w = globalThis.__vitest_worker__;
   const file = w && w.filepath ? w.filepath.replace(/^.*\/mxlang\/mxlang\//, "") : "-";
   if (drift > (perFile.get(file) || 0)) perFile.set(file, drift);
-  if (drift > 1000) out(`[lag] ${who} file=${file} blockMs=${drift} at=${new Date(now).toISOString()}`);
+  const cur = w && w.current;
+  const phase = cur ? `test=${String(cur.name || (cur.suite && cur.suite.name) || "?").slice(0, 80)}` : "phase=collect-or-idle";
+  if (drift > 1000) out(`[lag] ${who} file=${file} blockMs=${drift} ${phase} at=${new Date(now).toISOString()}`);
   if (drift > winMax) winMax = drift;
   if (isMainThread && now - winStart >= 10000) {
     out(`[lag-main] pid=${process.pid} window10s maxLagMs=${winMax} at=${new Date(now).toISOString()}`);
