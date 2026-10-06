@@ -62,7 +62,7 @@ The expression is evaluated once, in an `@let` before the element. This step loa
 - **Custom events work**: Angular's binding takes any event name, so `on-my-event` is first-class here.
 - **Spell the DOM name.** `onDoubleClick` is not a DOM event; MX warns and emits `(doubleclick)` as written. Write `onDblClick`.
 - **On a component**, `onSelect=pick` binds the input `[onSelect]`. MX does not infer an `@Output()`.
-- **The method form `onClick() { … }` is not supported.** Angular templates have no function bodies; use a method reference or an arrow.
+- **No statement bodies.** Angular templates have no `function` keyword and no block bodies, so the method form `onClick() { … }`, a `function` expression and a block-bodied arrow are positioned errors. Use a method reference or an expression arrow.
 
 `__mxOn` and `__mxOnAt` are two members on the component class. A `.ng.mx` gets them [automatically](/hosts/angular/ng-mx/#angular-ngmx-in-detail-event-handlers); a [page template](/hosts/angular/pages-and-tags/) needs them on its hand-written class. Use `strictTemplates`: without it Angular checks only top-level bindings, and a missing member inside `@if` or `@for` fails at run time instead of at build.
 
