@@ -644,6 +644,8 @@ export const UNICODE_WHITESPACE_ROWS: [string, string][] = [
     "<div x=a >= b>c</div>",
     '<div> @x ="a >= b" > text:"c" </div> | <div> @x ="a >= b"',
   ],
+  // Decision 156 addendum 11, confirmed by mx-lead: in a tag body, text
+  // after NBSP + `//` is a comment, as after a space (the twin below).
   [
     "<div>a\u00a0// c\n</div>",
     '<div> > text:"a\u00a0" text:"\\n" </div> | <div>',

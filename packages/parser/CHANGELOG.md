@@ -8,6 +8,13 @@
 
 ## Unreleased
 
+- **Fix (template-parser-lookbehinds-followup, decisions 156 addenda 11 and 12, 165):** in the template parser (`src/template/`, which `@mxlang/core` bundles) and the `htmljs-parser` patch:
+  - A closing tag after a tag that never got its name (`,--/</e>`) is an `onError` (`EXTRA_CLOSING_TAG`) instead of a `TypeError` out of `parse()`.
+  - Unicode whitespace and line terminators behave as ASCII whitespace in every look-behind, so `(é)\u00a0/ 2` divides.
+  - A comment before `of`/`yield`/`await` is skipped as whitespace is (`f(/*c*/ await :b)` lexes no atom, as `f( await :b)` does not).
+  - **Behaviour change:** text after NBSP + `//` in a body is a comment, as after a space (`<div>a\u00a0// c</div>`).
+  - **Behaviour change (addendum 12):** in concise mode, `--` after Unicode whitespace starts the text block; the attribute's range keeps the trailing whitespace.
+
 - **Types (public-dts-customtags-any):** `PrintOptions.customTags`, `MxRegionCompileInput.customTags` and `MxParseOptions.mxCustomTags` are now `Record<string, CustomTag>` (type-only `@mxlang/core` import; no runtime or declaration cycle). They were `any`/`unknown`, so a loose tag definition that used to typecheck can now fail to build.
 
 - **Fix (astro-fence-top-level-return):** `sourceBindings` and `unknownSourceBindings` take an optional `allowReturnOutsideFunction` for source a host compiles *inside a function body*, where a top-level `return` is legal — Astro's `---` frontmatter is the case. Default is off, so every other caller (`.solid.mx`, `.ng.mx`, `appendSolidBuiltinImport`) keeps rejecting a stray `return` in real module scope. New export: `SourceBindingsOptions`. `sourceBindings` still reports a parse failure rather than swallowing it.
