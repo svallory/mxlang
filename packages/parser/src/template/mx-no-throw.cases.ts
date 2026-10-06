@@ -235,3 +235,159 @@ export function fuzzThrows(
   }
   return { total: count, thrown };
 }
+
+/**
+ * Every `onError` of a parse as `code@start-end`, or `THROW(message)`.
+ */
+export function renderErrorCodes(
+  mod: NoThrowParserModule,
+  code: string,
+): string {
+  const out: string[] = [];
+  const parser = mod.createParser({
+    onError: (e: { code: number; start: number; end: number }) =>
+      out.push(`${e.code}@${e.start}-${e.end}`),
+  });
+  try {
+    parser.parse(code);
+  } catch (e) {
+    out.push(`THROW(${(e as Error).message})`);
+  }
+  return out.join(" ");
+}
+
+/**
+ * template-parser-lookbehinds-followup, item 1: [input, rendered events,
+ * error codes]. A `,` opens a tag that never gets its name, and a concise
+ * `--` line follows; a named closing tag after it used to throw out of
+ * `ensureExpectedCloseTag` (`activeTag.tagName.end`). It is
+ * `EXTRA_CLOSING_TAG` (0), as `-- </e>` already is. The neighbours that did
+ * not throw keep their events: `</>` still closes the nameless tag, and
+ * every other concise text line, stray close tag and open parent is as
+ * before.
+ */
+export const STRAY_CLOSE_ROWS: [string, string, string][] = [
+  [",--/</e>", '> ERR(4-8 The closing "e" tag was not expected)', "0@4-8"],
+  [",--/</e>\n", '> ERR(4-8 The closing "e" tag was not expected)', "0@4-8"],
+  [
+    ",-- /</e>",
+    '> text:"/" ERR(5-9 The closing "e" tag was not expected)',
+    "0@5-9",
+  ],
+  [
+    ",--\n/</e>",
+    '> text:"/" ERR(5-9 The closing "e" tag was not expected)',
+    "0@5-9",
+  ],
+  [
+    ",--/</div>",
+    '> ERR(4-10 The closing "div" tag was not expected)',
+    "0@4-10",
+  ],
+  [
+    ",--/</script>",
+    '> ERR(4-13 The closing "script" tag was not expected)',
+    "0@4-13",
+  ],
+  [",--/</e>/</f>", '> ERR(4-8 The closing "e" tag was not expected)', "0@4-8"],
+  [",,--/</e>", '> ERR(5-9 The closing "e" tag was not expected)', "0@5-9"],
+  [",--/</e>>", '> ERR(4-8 The closing "e" tag was not expected)', "0@4-8"],
+  [", --/</e>", '> ERR(5-9 The closing "e" tag was not expected)', "0@5-9"],
+  [",--/</>", "> </>", ""],
+  [
+    ",-- x\n/</e>",
+    '> text:"x" ERR(6-6 A line in concise mode cannot start with "/" unless it starts a "//" or "/*" comment)',
+    "8@6-6",
+  ],
+  [",--", ">", ""],
+  [",-- x", '> text:"x"', ""],
+  [
+    ";--/</e>",
+    "> ERR(1-1 A semicolon indicates the end of a line. Only comments may follow it.)",
+    "5@1-1",
+  ],
+  [
+    "div\n  ,--/</e>",
+    '<div> > ERR(10-14 The closing "e" tag does not match the corresponding opening "div" tag)',
+    "21@10-14",
+  ],
+  [
+    "<div>,--/</e></div>",
+    '<div> > text:",--/" ERR(9-13 The closing "e" tag does not match the corresponding opening "div" tag)',
+    "21@9-13",
+  ],
+  [
+    "<div>\n,--/</e>\n</div>",
+    '<div> > text:"\\n,--/" ERR(10-14 The closing "e" tag does not match the corresponding opening "div" tag)',
+    "21@10-14",
+  ],
+  ["--/</e>", 'ERR(3-7 The closing "e" tag was not expected)', "0@3-7"],
+  ["-- </e>", 'ERR(3-7 The closing "e" tag was not expected)', "0@3-7"],
+  [
+    ",/</e>",
+    "<> ERR(2-2 A slash was found that was not followed by a variable name or lhs expression)",
+    "23@2-2",
+  ],
+  ["</e>", 'ERR(0-4 The closing "e" tag was not expected)', "0@0-4"],
+  [
+    "div\n  -- a\n</e>",
+    '<div> > text:"a" ERR(11-15 The closing "e" tag was not expected)',
+    "0@11-15",
+  ],
+  [
+    "a,--/</e>",
+    '<a> > ERR(5-9 The closing "e" tag does not match the corresponding opening "a" tag)',
+    "21@5-9",
+  ],
+  ["<a>\n,--/</a>", '<a> > text:"\\n,--/" </a>', ""],
+];
+
+/**
+ * The shapes the stray close tag needs: lines (concise mode) that start with
+ * a separator or a `--` text block, each followed by a few tokens.
+ */
+const LINE_STARTS = [
+  ",",
+  ", ",
+  ",,",
+  ";",
+  "--",
+  "-- ",
+  ",--",
+  ",-- ",
+  "  ",
+  "div",
+  "a,",
+  "-",
+];
+
+/**
+ * Like `fuzzThrows`, but builds each input as 1 to 6 concise lines: an
+ * optional indent, a `LINE_STARTS` entry, then 0 to 8 `TOKENS`.
+ */
+export function fuzzLineThrows(
+  mod: NoThrowParserModule,
+  seed: number,
+  count: number,
+): { total: number; thrown: string[] } {
+  const next = random(seed);
+  const pick = <T>(list: readonly T[]) =>
+    list[Math.floor(next() * list.length)] as T;
+  const thrown: string[] = [];
+  for (let n = 0; n < count; n++) {
+    const lines: string[] = [];
+    const lineCount = 1 + Math.floor(next() * 6);
+    for (let l = 0; l < lineCount; l++) {
+      let line = next() < 0.3 ? "  " : "";
+      line += pick(LINE_STARTS);
+      const tokens = Math.floor(next() * 9);
+      for (let k = 0; k < tokens; k++) line += pick(TOKENS);
+      lines.push(line);
+    }
+    const code = lines.join("\n");
+    const out = renderEvents(mod, code);
+    const at = out.indexOf("THROW(");
+    if (at !== -1) thrown.push(`${JSON.stringify(code)} ${out.slice(at)}`);
+  }
+  return { total: count, thrown };
+}

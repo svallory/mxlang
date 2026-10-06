@@ -42,10 +42,13 @@ import {
 } from "../packages/parser/src/template/mx-atoms.cases.ts";
 
 import {
+  fuzzLineThrows,
   fuzzThrows,
   NO_THROW_ROWS,
   type NoThrowParserModule,
+  renderErrorCodes,
   renderEvents,
+  STRAY_CLOSE_ROWS,
 } from "../packages/parser/src/template/mx-no-throw.cases.ts";
 import {
   asciiMainMismatches,
@@ -455,6 +458,21 @@ describe.each(builds)("the parser never throws (%s)", (_name, build) => {
 
   it("no generated input from the delimiter alphabet throws (seed 1)", () => {
     expect(fuzzThrows(mod, 1, 5_000)).toEqual({ total: 5_000, thrown: [] });
+  });
+
+  it.each(STRAY_CLOSE_ROWS)(
+    "a stray closing tag after a nameless tag: %j",
+    (input, events, codes) => {
+      expect(renderEvents(mod, input)).toBe(events);
+      expect(renderErrorCodes(mod, input)).toBe(codes);
+    },
+  );
+
+  it("no generated concise-line input throws (seed 1)", () => {
+    expect(fuzzLineThrows(mod, 1, 5_000)).toEqual({
+      total: 5_000,
+      thrown: [],
+    });
   });
 });
 
