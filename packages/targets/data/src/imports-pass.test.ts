@@ -71,12 +71,32 @@ describe('imports: "pass" with structural: "reject"', () => {
     expect(result.diagnostics[0]?.line).toBe(2);
   });
 
-  it("an import inside a tag body is still an error", () => {
-    const result = parse(`<x>\n  import a from "a"\n</x>\n`, options);
+  it("an import inside a tag body is body text, not an import", () => {
+    const source = `<x>\n  import a from "a"\n</x>\n`;
+    const result = parse(source, options);
     expect(result.tree).toBeUndefined();
     expect(result.diagnostics).toHaveLength(1);
     expect(result.diagnostics[0]?.severity).toBe("error");
+    expect(result.diagnostics[0]?.message).toBe(STATIC("text"));
     expect(result.diagnostics[0]?.line).toBe(2);
+    // `imports` never sees it: with `structural: "pass"` it is plain text,
+    // even under `imports: "reject"`.
+    const text = parse(source, { imports: "reject" });
+    expect(text.diagnostics).toEqual([]);
+    expect(text.tree?.imports).toBeUndefined();
+  });
+
+  it("keeps import attributes, multi-line and side-effect imports verbatim", () => {
+    const source = `import data from "./d.json" with { type: "json" }\nimport {\n  a,\n  b,\n} from "./m.ts"\nimport "./side.ts"\n<x/>\n`;
+    const imports = parse(source, options).tree?.imports;
+    expect(imports?.map((i) => i.code)).toEqual([
+      `import data from "./d.json" with { type: "json" }`,
+      `import {\n  a,\n  b,\n} from "./m.ts"`,
+      `import "./side.ts"`,
+    ]);
+    for (const entry of imports ?? []) {
+      expect(slice(source, entry.span)).toBe(entry.code);
+    }
   });
 
   it("CRLF: spans slice the authored text, line terminators excluded", () => {

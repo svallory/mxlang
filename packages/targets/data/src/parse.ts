@@ -73,8 +73,9 @@ export interface ParseDataOptions {
    * `structural` value, so nothing changes unless it is set. `"pass"` with
    * `structural: "reject"` keeps control flow, `export` and `static`
    * rejected and returns the imports verbatim as `tree.imports` (file order,
-   * UTF-16 spans); an `import` inside a tag body stays an error. `"reject"`
-   * with `structural: "pass"` rejects only the `import`s.
+   * UTF-16 spans). A tag-body `import` is not an import: Marko parses it as
+   * body text, which `structural: "reject"` rejects. `"reject"` with
+   * `structural: "pass"` rejects only the `import`s.
    */
   imports?: "pass" | "reject";
   /**

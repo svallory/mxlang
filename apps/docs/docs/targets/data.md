@@ -94,13 +94,13 @@ parseData(source, filename, {
   customTags, // contract-only tags by name
   structural: "reject", // "pass" (default) | "reject"
   unknownTags: "reject", // "allow" (default) | "reject"
-  imports: "pass", // default: whatever `structural` is
+  imports: "pass", // optional; default: whatever `structural` is
 });
 ```
 
 - **`customTags`** declares a vocabulary: required attributes, attribute types, allowed children and parents. `parseData` does not scan `tags/` or `package.json`; this map is all it knows. See [Writing a dialect package](/custom-tags/dialect-package/) for how to write and share one.
 - **`structural`**: `"pass"` keeps text, `${}`, `<if>`, `<for>`, `<const>`, comments and `import`/`export`/`static` in the tree. `"reject"` makes the first of them an error, so a consumer that only reads tags and attributes cannot silently ignore an `<if>`.
-- **`imports`**: `"pass"` or `"reject"`, defaulting to the effective `structural` value. `"pass"` under `structural: "reject"` lets top-level `import` declarations through while `<if>`, `export` and the rest stay errors; the tree gains `imports: Array<{ code, span }>` (verbatim, file order, UTF-16 spans) in place of those entries in `statements`. An `import` inside a tag body is still an error. `mx-tsc` reads the same values from `package.json#mx.data.imports`; an invalid value is an error at the value and `"reject"` applies.
+- **`imports`**: `"pass"` or `"reject"`, defaulting to the effective `structural` value. `"pass"` under `structural: "reject"` lets top-level `import` declarations through while `<if>`, `export` and the rest stay errors; the tree gains `imports: Array<{ code, span }>` (verbatim, file order, UTF-16 spans) in place of those entries in `statements`. With `structural: "pass"` the imports stay in `statements` and `tree.imports` is absent. Each entry is one authored statement line (Marko's statement granularity), so two declarations on one line are one entry. A tag-body `import` is not an import at all: Marko parses it as body text, so `structural: "reject"` rejects it as text and `imports` does not apply. `mx-tsc` reads the same values from `package.json#mx.data.imports`; an invalid value is an error at the value and `"reject"` applies.
 - **`unknownTags`**: `"allow"` accepts a tag with no contract. `"reject"` makes it an error naming the tag, with a nearest-name hint, for a dialect that declares every tag. [Closing the vocabulary](/custom-tags/dialect-package/#closing-the-vocabulary) has an example.
 
 `parseDataFile(path, options)` reads the file for you.

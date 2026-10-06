@@ -197,11 +197,11 @@ describe("mx-tsc on a data package", () => {
       expect(output).toContain("does not evaluate `import`");
     });
 
-    it("an invalid value is a positioned error in package.json and stays strict", () => {
+    it("an invalid value is a positioned error in package.json and stays strict, even under structural: pass", () => {
       const dir = emptyPackage({});
       writeFileSync(
         join(dir, "package.json"),
-        `{\n  "mx": {\n    "target": "data",\n    "data": { "unknownTags": "allow", "imports": "yes" }\n  }\n}\n`,
+        `{\n  "mx": {\n    "target": "data",\n    "data": { "unknownTags": "allow", "imports": "yes", "structural": "pass" }\n  }\n}\n`,
       );
       writeFileSync(join(dir, "imp.mx"), source);
       const { status, output } = check(dir);

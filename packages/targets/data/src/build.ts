@@ -810,6 +810,11 @@ function structuralInNodes(nodes: IrNode[]): StructuralHit | null {
   return null;
 }
 
+/** How a top-level `import` is treated: `imports`, else the effective `structural`. */
+function importsMode(options: BuildOptions): "pass" | "reject" {
+  return options.imports ?? options.structural ?? "pass";
+}
+
 /** The earliest structural construct, as a position and message. */
 function firstStructural(
   ir: Ir,
@@ -821,7 +826,7 @@ function firstStructural(
   for (const stmt of stmts) {
     // `imports` decides an `import` on its own; the rest follow `structural`.
     if (stmt.kind === "import") {
-      if ((options.imports ?? options.structural) !== "reject") continue;
+      if (importsMode(options) !== "reject") continue;
     } else if (options.structural !== "reject") {
       continue;
     }
@@ -883,7 +888,7 @@ export function buildDataDocument(
   if (first) fail(first.message, first.at);
   // `structural: "reject"` with `imports: "pass"`: the imports leave
   // `statements` (every other kind was just rejected) for their own list.
-  if (options.structural === "reject" && options.imports === "pass") {
+  if (options.structural === "reject" && importsMode(options) === "pass") {
     return {
       kind: "document",
       filename,

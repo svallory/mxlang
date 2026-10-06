@@ -45,8 +45,9 @@ return `{ tree, diagnostics }`. Options:
   `imports: "pass"`, control flow, `export` and `static` stay rejected and the
   top-level `import`s come back verbatim as `tree.imports`
   (`Array<{ code, span }>`, file order, UTF-16 spans); they are not in
-  `tree.statements` then. An `import` inside a tag body is still an error. With
+  `tree.statements` then. A tag-body `import` is not an import at all: Marko parses it as body text, so `structural: "reject"` rejects it as text and `imports` does not apply. With
   `structural: "pass"` and `imports: "reject"`, only the `import`s are errors.
+  With `structural: "pass"` the imports stay in `statements` and `tree.imports` is absent. Each entry is one authored statement line (Marko's statement granularity), so two declarations on one line are one entry.
 - `unknownTags: "allow" | "reject"` (default `"allow"`). `"reject"` makes a
   tag at any depth with no entry in `customTags` a positioned error naming
   the tag (with a nearest-declared-name hint when one is close), so a typo at
