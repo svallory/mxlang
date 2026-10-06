@@ -7,13 +7,20 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import * as template from "./index.ts";
 import { type AtomParserModule, renderAtoms } from "./mx-atoms.cases.ts";
+import type { NoThrowParserModule } from "./mx-no-throw.cases.ts";
 import {
   asciiMainMismatches,
+  CONCISE_DASH_ROWS,
+  renderAttrRanges,
+  renderWhitespaceEvents,
+  UNICODE_WHITESPACE_ROWS,
   UNICODE_WORD_ROWS,
+  unicodeWhitespaceTwinMismatches,
   unicodeWordTwinMismatches,
 } from "./mx-unicode-words.cases.ts";
 
 const mod = template as unknown as AtomParserModule;
+const wsMod = template as unknown as AtomParserModule & NoThrowParserModule;
 const main = JSON.parse(
   readFileSync(
     new URL("./mx-unicode-words.main.json", import.meta.url),
@@ -35,6 +42,27 @@ describe("non-ASCII identifiers in look-behinds and look-aheads (src/template)",
   it("ASCII-only input renders as main did", () => {
     const { total, bad } = asciiMainMismatches(mod, main);
     expect(total).toBe(983);
+    expect(bad).toEqual([]);
+  });
+
+  it.each(UNICODE_WHITESPACE_ROWS)(
+    "Unicode whitespace in a look-behind (addendum 11): %j",
+    (input, expected) => {
+      expect(renderWhitespaceEvents(wsMod, input)).toBe(expected);
+    },
+  );
+
+  it.each(CONCISE_DASH_ROWS)(
+    "concise `--` after Unicode whitespace (addendum 12): %j",
+    (input, events, ranges) => {
+      expect(renderWhitespaceEvents(wsMod, input)).toBe(events);
+      expect(renderAttrRanges(mod, input)).toBe(ranges);
+    },
+  );
+
+  it("Unicode whitespace in a look-behind renders as an ASCII space (addendum 11)", () => {
+    const { total, bad } = unicodeWhitespaceTwinMismatches(wsMod);
+    expect(total).toBe(2_489);
     expect(bad).toEqual([]);
   });
 });

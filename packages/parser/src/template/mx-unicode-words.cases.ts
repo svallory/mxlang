@@ -14,7 +14,9 @@ import {
   NON_ASCII_NAMES,
   renderAtoms,
   swapTwins,
+  UNICODE_WHITESPACE,
 } from "./mx-atoms.cases.ts";
+import { type NoThrowParserModule, renderEvents } from "./mx-no-throw.cases.ts";
 
 /**
  * [prefix, suffix] around an expression `V`: every expression position, HTML
@@ -351,3 +353,365 @@ export function asciiMainMismatches(
   }
   return { total: sample.length, bad };
 }
+
+/** Events, text and atoms of a parse, for the whitespace twin checks. */
+export function renderWhitespaceEvents(
+  mod: AtomParserModule & NoThrowParserModule,
+  code: string,
+): string {
+  return `${renderEvents(mod, code)} | ${renderAtoms(mod, code, true)}`;
+}
+
+/**
+ * Decision 156 addendum 11: the Unicode whitespace and line terminators
+ * (`isUnicodeSpaceCode`) behave as ASCII whitespace in every look-behind.
+ * Each form puts `W` where a look-behind asks "is this whitespace"; every
+ * code point is one UTF-16 unit, like the space, so offsets never shift.
+ */
+const WS_EXPRESSION_FORMS = [
+  // `getPreviousNonWhitespaceCharCode` → `canFollowDivision`.
+  "(a)W/ 2",
+  "aW/ 2",
+  "(é)W/ 2",
+  "[a]W/ 2",
+  "a / 2W/ 3",
+  // The terminator look-behind (`lookBehindWhile` → `lookBehindForOperator`).
+  "a +W",
+  "a ||W",
+  "a ===W",
+  "a ?W",
+  // The `{` look-behind in a type, `++`/`--`, and `=>` in a type.
+  "y as TW{ a: 1 }",
+  "a++W+ b",
+  "a ++W+b",
+  "(a: T)W=> a",
+  "a as (T)W=> 1",
+];
+
+const WS_POSITIONS: [string, string][] = [
+  ["<div x=", "/>"],
+  ["<div x=", " y=1/>"],
+  ["<div x=", ">b</div>"],
+  ["div x=", "\n"],
+  ["div x=", " y=1\n"],
+  ["<if=", ">y</if>"],
+  ["<if(", ")>y</if>"],
+  ["<div>${", "}</div>"],
+  ["<div x() { return ", " }/>"],
+];
+
+/** Inputs outside expressions; `W` is the whitespace. */
+const WS_TEMPLATES = [
+  // `shouldTerminateHtmlAttrValue`: a whitespace-preceded `>=`.
+  "<if=countW>= 10>y</if>",
+  "<div x=aW>= b>c</div>",
+  // `HTML_CONTENT`: a whitespace-preceded `//` or `/*` comment in text.
+  "<div>aW// c\n</div>",
+  "<div>aW/* c */</div>",
+  "<div>a,W// c\n</div>",
+];
+
+/**
+ * Each input with a Unicode whitespace character in a look-behind position
+ * renders as the same input with an ASCII space there (events, text and
+ * atoms). Returns the inputs whose renderings differ (none expected).
+ */
+export function unicodeWhitespaceTwinMismatches(
+  mod: AtomParserModule & NoThrowParserModule,
+): { total: number; bad: string[] } {
+  const inputs: string[] = [];
+  for (const [pre, post] of WS_POSITIONS) {
+    for (const form of WS_EXPRESSION_FORMS) inputs.push(pre + form + post);
+  }
+  inputs.push(...WS_TEMPLATES);
+  let total = 0;
+  const bad: string[] = [];
+  for (const ws of UNICODE_WHITESPACE) {
+    for (const input of inputs) {
+      total++;
+      const code = input.replaceAll("W", ws);
+      const got = renderWhitespaceEvents(mod, code).replaceAll(ws, " ");
+      const twin = renderWhitespaceEvents(mod, input.replaceAll("W", " "));
+      if (got !== twin) bad.push(`${JSON.stringify(code)}: ${got}`);
+    }
+  }
+  return { total, bad };
+}
+
+/**
+ * Decision 156 addendum 11: [input, events | atoms], each Unicode-whitespace
+ * input (U+00A0) beside its ASCII-space twin. 22 of these changed from the
+ * merge base: division after `)`, a word or a number, the terminator
+ * look-behind after an operator, ` >=`, and a comment in HTML text.
+ */
+export const UNICODE_WHITESPACE_ROWS: [string, string][] = [
+  [
+    "<div x=(\u00e9)\u00a0/ 2/>",
+    '<div> @x ="(\u00e9)\u00a0/ 2" > | <div> @x ="(\u00e9)\u00a0/ 2"',
+  ],
+  [
+    "<div x=(\u00e9) / 2/>",
+    '<div> @x ="(\u00e9) / 2" > | <div> @x ="(\u00e9) / 2"',
+  ],
+  [
+    "<div x=(a)\u00a0/ 2/>",
+    '<div> @x ="(a)\u00a0/ 2" > | <div> @x ="(a)\u00a0/ 2"',
+  ],
+  ["<div x=(a) / 2/>", '<div> @x ="(a) / 2" > | <div> @x ="(a) / 2"'],
+  ["<div x=a\u00a0/ 2/>", '<div> @x ="a\u00a0/ 2" > | <div> @x ="a\u00a0/ 2"'],
+  ["<div x=a / 2/>", '<div> @x ="a / 2" > | <div> @x ="a / 2"'],
+  [
+    "<div x=a / 2\u00a0/ 3/>",
+    '<div> @x ="a / 2\u00a0/ 3" > | <div> @x ="a / 2\u00a0/ 3"',
+  ],
+  ["<div x=a / 2 / 3/>", '<div> @x ="a / 2 / 3" > | <div> @x ="a / 2 / 3"'],
+  [
+    "<div x=a +\u00a0/>",
+    "<div> @x ERR(11-11 EOF reached while parsing regular expression) | <div> @x ERR(11-11 EOF reached while parsing regular expression)",
+  ],
+  [
+    "<div x=a + />",
+    "<div> @x ERR(11-11 EOF reached while parsing regular expression) | <div> @x ERR(11-11 EOF reached while parsing regular expression)",
+  ],
+  [
+    "<div x=a ||\u00a0/>",
+    "<div> @x ERR(12-12 EOF reached while parsing regular expression) | <div> @x ERR(12-12 EOF reached while parsing regular expression)",
+  ],
+  [
+    "<div x=a || />",
+    "<div> @x ERR(12-12 EOF reached while parsing regular expression) | <div> @x ERR(12-12 EOF reached while parsing regular expression)",
+  ],
+  [
+    "<div x=a +\u00a0 y=1/>",
+    '<div> @x ="a +\u00a0 y=1" > | <div> @x ="a +\u00a0 y=1"',
+  ],
+  ["<div x=a +  y=1/>", '<div> @x ="a +  y=1" > | <div> @x ="a +  y=1"'],
+  [
+    "<div x=y as T\u00a0{ a: 1 }/>",
+    '<div> @x ="y as T\u00a0{ a: 1 }" > | <div> @x ="y as T\u00a0{ a: 1 }"',
+  ],
+  [
+    "<div x=y as T { a: 1 }/>",
+    '<div> @x ="y as T { a: 1 }" > | <div> @x ="y as T { a: 1 }"',
+  ],
+  [
+    "<div x=a++\u00a0+ b/>",
+    '<div> @x ="a++\u00a0+ b" > | <div> @x ="a++\u00a0+ b"',
+  ],
+  ["<div x=a++ + b/>", '<div> @x ="a++ + b" > | <div> @x ="a++ + b"'],
+  [
+    "<div x=(a: T)\u00a0=> a/>",
+    '<div> @x ="(a: T)\u00a0=> a" > | <div> @x ="(a: T)\u00a0=> a"',
+  ],
+  [
+    "<div x=(a: T) => a/>",
+    '<div> @x ="(a: T) => a" > | <div> @x ="(a: T) => a"',
+  ],
+  [
+    "div x=(\u00e9)\u00a0/ 2\n",
+    '<div> @x ="(\u00e9)\u00a0/ 2" > | <div> @x ="(\u00e9)\u00a0/ 2"',
+  ],
+  [
+    "div x=(\u00e9) / 2\n",
+    '<div> @x ="(\u00e9) / 2" > | <div> @x ="(\u00e9) / 2"',
+  ],
+  [
+    "div x=(a)\u00a0/ 2\n",
+    '<div> @x ="(a)\u00a0/ 2" > | <div> @x ="(a)\u00a0/ 2"',
+  ],
+  ["div x=(a) / 2\n", '<div> @x ="(a) / 2" > | <div> @x ="(a) / 2"'],
+  ["div x=a\u00a0/ 2\n", '<div> @x ="a\u00a0/ 2" > | <div> @x ="a\u00a0/ 2"'],
+  ["div x=a / 2\n", '<div> @x ="a / 2" > | <div> @x ="a / 2"'],
+  [
+    "div x=a / 2\u00a0/ 3\n",
+    '<div> @x ="a / 2\u00a0/ 3" > | <div> @x ="a / 2\u00a0/ 3"',
+  ],
+  ["div x=a / 2 / 3\n", '<div> @x ="a / 2 / 3" > | <div> @x ="a / 2 / 3"'],
+  [
+    "div x=a +\u00a0\n",
+    '<div> @x ="a +\u00a0\\n" > | <div> @x ="a +\u00a0\\n"',
+  ],
+  ["div x=a + \n", '<div> @x ="a + \\n" > | <div> @x ="a + \\n"'],
+  [
+    "div x=a ||\u00a0\n",
+    '<div> @x ="a ||\u00a0\\n" > | <div> @x ="a ||\u00a0\\n"',
+  ],
+  ["div x=a || \n", '<div> @x ="a || \\n" > | <div> @x ="a || \\n"'],
+  [
+    "div x=a +\u00a0 y=1\n",
+    '<div> @x ="a +\u00a0 y=1" > | <div> @x ="a +\u00a0 y=1"',
+  ],
+  ["div x=a +  y=1\n", '<div> @x ="a +  y=1" > | <div> @x ="a +  y=1"'],
+  [
+    "div x=y as T\u00a0{ a: 1 }\n",
+    '<div> @x ="y as T\u00a0{ a: 1 }" > | <div> @x ="y as T\u00a0{ a: 1 }"',
+  ],
+  [
+    "div x=y as T { a: 1 }\n",
+    '<div> @x ="y as T { a: 1 }" > | <div> @x ="y as T { a: 1 }"',
+  ],
+  [
+    "div x=a++\u00a0+ b\n",
+    '<div> @x ="a++\u00a0+ b" > | <div> @x ="a++\u00a0+ b"',
+  ],
+  ["div x=a++ + b\n", '<div> @x ="a++ + b" > | <div> @x ="a++ + b"'],
+  [
+    "div x=(a: T)\u00a0=> a\n",
+    '<div> @x ="(a: T)\u00a0=> a" > | <div> @x ="(a: T)\u00a0=> a"',
+  ],
+  [
+    "div x=(a: T) => a\n",
+    '<div> @x ="(a: T) => a" > | <div> @x ="(a: T) => a"',
+  ],
+  [
+    "<div>${(\u00e9)\u00a0/ 2}</div>",
+    '<div> > ${"(\u00e9)\u00a0/ 2"} </div> | <div> ${"(\u00e9)\u00a0/ 2"}',
+  ],
+  [
+    "<div>${(\u00e9) / 2}</div>",
+    '<div> > ${"(\u00e9) / 2"} </div> | <div> ${"(\u00e9) / 2"}',
+  ],
+  [
+    "<div>${(a)\u00a0/ 2}</div>",
+    '<div> > ${"(a)\u00a0/ 2"} </div> | <div> ${"(a)\u00a0/ 2"}',
+  ],
+  ["<div>${(a) / 2}</div>", '<div> > ${"(a) / 2"} </div> | <div> ${"(a) / 2"}'],
+  [
+    "<div>${a\u00a0/ 2}</div>",
+    '<div> > ${"a\u00a0/ 2"} </div> | <div> ${"a\u00a0/ 2"}',
+  ],
+  ["<div>${a / 2}</div>", '<div> > ${"a / 2"} </div> | <div> ${"a / 2"}'],
+  [
+    "<div>${a / 2\u00a0/ 3}</div>",
+    '<div> > ${"a / 2\u00a0/ 3"} </div> | <div> ${"a / 2\u00a0/ 3"}',
+  ],
+  [
+    "<div>${a / 2 / 3}</div>",
+    '<div> > ${"a / 2 / 3"} </div> | <div> ${"a / 2 / 3"}',
+  ],
+  [
+    "<div>${a +\u00a0}</div>",
+    '<div> > ${"a +\u00a0"} </div> | <div> ${"a +\u00a0"}',
+  ],
+  ["<div>${a + }</div>", '<div> > ${"a + "} </div> | <div> ${"a + "}'],
+  [
+    "<div>${a ||\u00a0}</div>",
+    '<div> > ${"a ||\u00a0"} </div> | <div> ${"a ||\u00a0"}',
+  ],
+  ["<div>${a || }</div>", '<div> > ${"a || "} </div> | <div> ${"a || "}'],
+  [
+    "<div>${a +\u00a0 y=1}</div>",
+    '<div> > ${"a +\u00a0 y=1"} </div> | <div> ${"a +\u00a0 y=1"}',
+  ],
+  [
+    "<div>${a +  y=1}</div>",
+    '<div> > ${"a +  y=1"} </div> | <div> ${"a +  y=1"}',
+  ],
+  [
+    "<div>${y as T\u00a0{ a: 1 }}</div>",
+    '<div> > ${"y as T\u00a0{ a: 1 }"} </div> | <div> ${"y as T\u00a0{ a: 1 }"}',
+  ],
+  [
+    "<div>${y as T { a: 1 }}</div>",
+    '<div> > ${"y as T { a: 1 }"} </div> | <div> ${"y as T { a: 1 }"}',
+  ],
+  [
+    "<div>${a++\u00a0+ b}</div>",
+    '<div> > ${"a++\u00a0+ b"} </div> | <div> ${"a++\u00a0+ b"}',
+  ],
+  ["<div>${a++ + b}</div>", '<div> > ${"a++ + b"} </div> | <div> ${"a++ + b"}'],
+  [
+    "<div>${(a: T)\u00a0=> a}</div>",
+    '<div> > ${"(a: T)\u00a0=> a"} </div> | <div> ${"(a: T)\u00a0=> a"}',
+  ],
+  [
+    "<div>${(a: T) => a}</div>",
+    '<div> > ${"(a: T) => a"} </div> | <div> ${"(a: T) => a"}',
+  ],
+  [
+    "<if=count\u00a0>= 10>y</if>",
+    '<if> @ ="count\u00a0>= 10" > text:"y" </if> | <if> @ ="count\u00a0>= 10"',
+  ],
+  [
+    "<if=count >= 10>y</if>",
+    '<if> @ ="count >= 10" > text:"y" </if> | <if> @ ="count >= 10"',
+  ],
+  [
+    "<div x=a\u00a0>= b>c</div>",
+    '<div> @x ="a\u00a0>= b" > text:"c" </div> | <div> @x ="a\u00a0>= b"',
+  ],
+  [
+    "<div x=a >= b>c</div>",
+    '<div> @x ="a >= b" > text:"c" </div> | <div> @x ="a >= b"',
+  ],
+  [
+    "<div>a\u00a0// c\n</div>",
+    '<div> > text:"a\u00a0" text:"\\n" </div> | <div>',
+  ],
+  ["<div>a // c\n</div>", '<div> > text:"a " text:"\\n" </div> | <div>'],
+  ["<div>a\u00a0/* c */</div>", '<div> > text:"a\u00a0" </div> | <div>'],
+  ["<div>a /* c */</div>", '<div> > text:"a " </div> | <div>'],
+];
+
+/** Each attribute's name and value range, as `@start-end` and `=start-end`. */
+export function renderAttrRanges(mod: AtomParserModule, code: string): string {
+  const out: string[] = [];
+  mod
+    .createParser({
+      onAttrName: (t: { start: number; end: number }) =>
+        out.push(`@${t.start}-${t.end}`),
+      onAttrValue: (t: { value: { start: number; end: number } }) =>
+        out.push(`=${t.value.start}-${t.value.end}`),
+      onError() {},
+    })
+    .parse(code);
+  return out.join(" ");
+}
+
+/**
+ * Decision 156 addendum 12: in concise mode, `--` after Unicode whitespace
+ * starts the text block, as after an ASCII space, but the attribute's range
+ * keeps the trailing Unicode whitespace (value `1 `, name `x `):
+ * an ASCII space ends the attribute by the current-character test, which is
+ * not a look-behind and is not changed. Not equal to the ASCII-space twin,
+ * by ruling; these stay out of `unicodeWhitespaceTwinMismatches`.
+ * [input, events | atoms, attribute ranges], each beside its twin.
+ */
+export const CONCISE_DASH_ROWS: [string, string, string][] = [
+  [
+    "div x=1\u00a0-- text\n",
+    '<div> @x ="1\u00a0" > text:"text" | <div> @x ="1\u00a0"',
+    "@4-5 =6-8",
+  ],
+  [
+    "div x=1 -- text\n",
+    '<div> @x ="1" > text:"text" | <div> @x ="1"',
+    "@4-5 =6-7",
+  ],
+  [
+    "div x\u00a0-- text\n",
+    '<div> @x\u00a0 > text:"text" | <div> @x\u00a0',
+    "@4-6",
+  ],
+  ["div x -- text\n", '<div> @x > text:"text" | <div> @x', "@4-5"],
+  [
+    "div x=1\u00a0-- text\n  span\n",
+    '<div> @x ="1\u00a0" > text:"text" <span> > | <div> @x ="1\u00a0" <span>',
+    "@4-5 =6-8",
+  ],
+  [
+    "div x=1 -- text\n  span\n",
+    '<div> @x ="1" > text:"text" <span> > | <div> @x ="1" <span>',
+    "@4-5 =6-7",
+  ],
+  [
+    "div x=1\u3000\u00a0-- text\n",
+    '<div> @x ="1\u3000\u00a0" > text:"text" | <div> @x ="1\u3000\u00a0"',
+    "@4-5 =6-9",
+  ],
+  [
+    "div x=1\u3000 -- text\n",
+    '<div> @x ="1\u3000" > text:"text" | <div> @x ="1\u3000"',
+    "@4-5 =6-8",
+  ],
+];
