@@ -138,7 +138,8 @@
   "mxTscDataCheck": {
     "status": 1,
     "output": [
-      "<root>/data-wildcard-nomatch/doc.mx(2,3): error TS80001: `<attributes>`: `<Name>` is not allowed here; allowed children: `<title>`; other names must match `^[a-z][a-z0-9_]*$`"
+      "<root>/data-wildcard-nomatch/doc.mx(2,3): error TS80001: `<attributes>`: `<Name>` is not allowed here; allowed children: `<title>`; other names must match `^[a-z][a-z0-9_]*$`",
+      "<root>/data-wildcard-nomatch/doc.mx(2,3): error TS80001: `<Name>` is not a known tag: it has no contract in `customTags`"
     ]
   }
 }
