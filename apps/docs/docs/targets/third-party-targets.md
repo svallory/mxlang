@@ -143,11 +143,11 @@ A specifier that resolves and then fails is an error with no fallback: the build
 | Code | Cause |
 |---|---|
 | `target-not-found` | the specifier does not resolve from the project |
-| `target-load-failed` | the module threw while it was evaluated, or the package's `package.json` cannot be used: an invalid `exports` target or config, or (on Node) a `package.json` that is not a JSON object |
+| `target-load-failed` | the module threw while it was evaluated, or the runtime rejected the package's `package.json` (an invalid `exports` target or config, or on Node a `package.json` that is not a JSON object) |
 | `target-invalid-descriptor` | the export is not a descriptor (the first failing field is named), its `descriptorVersion` is unsupported, or it cannot be registered next to the built-in targets (see below) |
 | `host-invalid-descriptor` | the package is under `mx.host` but its descriptor has no `host` part: use `mx.target`, or add the part |
 
-A failed load is retried on every resolution, so fixing any file it loaded is picked up at once. A target installed after a `target-not-found` loads on the next resolution, with no restart of the language server, TS server or dev server, and it is the same file a fresh process would load: the package is resolved from the disk on every resolution, by the rules of the runtime the tool runs under.
+A failed load is retried on every resolution, so fixing any file it loaded is picked up at once. A target installed after a `target-not-found` loads on the next resolution, with no restart of the language server, TS server or dev server, and it is the same file a fresh process would load: after a miss, the specifier is resolved again by the same runtime in a child process each time the installed packages change. A package found only through `NODE_PATH` or a global folder still needs a restart.
 
 The language server shows them on the document, linked to the key in `package.json`. `mx-tsc` and the TypeScript plugin report `TS80003` at the key and `TS80001` on each page, and exit non-zero. See [Host and target selection](/specification/#135-host-and-target-selection) for the whole resolution order.
 

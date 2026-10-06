@@ -961,17 +961,21 @@ stable version.
   the config key (`mx.host`/`mx.target`); the caller prefixes that. The
   sidecar constraints hold (no top-level `await`, explicit extensions on
   relative imports) and are restated in the message.
-- **A bare specifier is resolved from the disk, not by `require.resolve`**
-  (`src/fresh-resolve.ts`). Both runtimes keep resolution state per process (a
-  miss on Bun; a missing `package.json` on Node, which then resolves `index.js`
-  and ignores `main`), so the runtime's resolver made the outcome depend on
-  history. `resolveFresh` models the running runtime's CommonJS resolver
-  (self-reference, the `node_modules` walk, `exports` with patterns and
-  conditions, the legacy `main`/`index` lookup with per-runtime extension
-  lists); `require.resolve` is asked only when no `node_modules` holds the
-  package. Every rule is measured, and `src/fresh-resolve.test.ts` pins it as
-  a differential test against each runtime's own `require.resolve` in a clean
-  process, with and without a miss first. A new rule goes in that table first.
+- **After a miss, a specifier is resolved in a fresh child process**
+  (`src/resolve-after-miss.ts`). Both runtimes keep resolution state per
+  process (a miss on Bun; a missing `package.json` on Node, which then
+  resolves `index.js` and ignores `main`), and neither can be told to forget.
+  So the runtime's own `require.resolve` answers until a specifier misses;
+  from then on the same runtime answers in a child (`process.execPath`, its
+  resolution flags, `ELECTRON_RUN_AS_NODE`), at most once per specifier per
+  change to a stamp of the paths an install touches. Do not reintroduce a
+  model of the resolver: review 3 found eight shapes a hand-written one got
+  wrong (`module-sync`, a BOM, Bun's tsconfig `paths`, percent-encoded
+  segments, ...). `src/target-loader-resolve.test.ts` is the oracle: a
+  differential table against each runtime's `require.resolve` in a clean
+  process, with and without a miss first, error kinds included.
+  `node:child_process` is loaded lazily; `setSpawnSyncLoaderForTesting` swaps
+  it in tests.
 - **Caller-owned target lookup (decision 126 addendum).**
   `TargetCompileOptions.targets` and `HostRegionInput.targets` are optional
   generic `TargetLookup` fields. A descriptor forwards the supplied lookup

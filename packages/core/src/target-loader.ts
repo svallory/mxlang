@@ -5,9 +5,9 @@
  *
  * This is `loadSidecar`'s mechanism (`scan.ts`) with two changes. It resolves
  * from the *project* (`fromDir`), not from core, so a user's installed target
- * package is found with no bundling work; a bare specifier is resolved from
- * the disk by `fresh-resolve.ts`, the rest by `createRequire` anchored at
- * `fromDir/package.json`. And it does not evict `require.cache` per call: a sidecar is edited
+ * package is found with no bundling work: `createRequire` anchored at
+ * `fromDir/package.json`, or, for a specifier that has already missed in this
+ * process, the same call in a fresh child process (`resolve-after-miss.ts`). And it does not evict `require.cache` per call: a sidecar is edited
  * constantly, an installed target package is not, and evicting would hand back
  * a new descriptor object on every call. The package is re-evaluated only
  * when the target package's own `package.json` mtime or text changes, which is what
@@ -30,7 +30,7 @@ import { createHash } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, parse, resolve, sep } from "node:path";
-import { resolveFresh } from "./fresh-resolve.ts";
+import { hasMissed, resolveAfterMiss } from "./resolve-after-miss.ts";
 import {
   type TargetDescriptor,
   TargetDescriptorError,
@@ -132,6 +132,37 @@ function packageStamp(file: string): PackageStamp | undefined {
   }
 }
 
+/** Node's codes for a package that is there but cannot be used. */
+const INVALID_PACKAGE = new Set([
+  "ERR_INVALID_PACKAGE_TARGET",
+  "ERR_INVALID_PACKAGE_CONFIG",
+]);
+
+/**
+ * The runtime's resolution error as a `TargetLoadError`: an invalid package
+ * (`ERR_INVALID_PACKAGE_TARGET`/`_CONFIG`) is `load-failed`, anything else
+ * (`MODULE_NOT_FOUND`, `ERR_PACKAGE_PATH_NOT_EXPORTED`, ...) is `not-found`.
+ */
+function resolutionError(
+  spec: string,
+  fromDir: string,
+  code: string,
+  message: string,
+  cause: unknown,
+): TargetLoadError {
+  return INVALID_PACKAGE.has(code)
+    ? new TargetLoadError(
+        "load-failed",
+        `"${spec}" cannot be loaded: ${summary(message)}`,
+        { spec, fromDir, cause },
+      )
+    : new TargetLoadError(
+        "not-found",
+        `"${spec}" cannot be resolved from ${fromDir}: ${summary(message)}`,
+        { spec, fromDir, cause },
+      );
+}
+
 /** The constraints of `loadSidecar`, restated for a target package. */
 function loadHint(message: string): string {
   if (message.includes("top-level await")) {
@@ -219,12 +250,12 @@ function isPackageManifest(manifest: string, fromDir: string): boolean {
  * Failures are never cached: a failed load is re-evaluated on every call, so a
  * fix to any file it loaded (the entry, or a module the entry requires) is
  * picked up by the next call. A miss (`not-found`) is never cached by this
- * module, and a bare specifier is resolved from the disk on every call, the way
- * the running runtime's resolver does (`fresh-resolve.ts`), so a target installed
- * after a `not-found` loads on the next call, with no restart, and loads the same
- * file it would in a fresh process.
+ * module, and once a specifier has missed, the runtime's own resolver is asked
+ * again in a fresh child process whenever the disk changed
+ * (`resolve-after-miss.ts`), so a target installed after a `not-found` loads on
+ * the next call, with no restart, and loads the file a fresh process would.
  * Throws `TargetLoadError`: `not-found` (does not resolve), `load-failed`
- * (throws while evaluating, or its package's `package.json` is unusable: an invalid config on Node, an invalid `exports` target or config), `invalid-descriptor` (wrong shape, or a
+ * (throws while evaluating, or the runtime rejects its package: `ERR_INVALID_PACKAGE_TARGET`/`_CONFIG`), `invalid-descriptor` (wrong shape, or a
  * `descriptorVersion` this mx does not support).
  *
  * @unstable
@@ -236,35 +267,34 @@ export function loadTargetDescriptor(
   fromDir = resolve(fromDir);
   const req = createRequire(join(fromDir, "package.json"));
 
-  // A bare specifier is resolved from the disk first: both runtimes keep
-  // resolution state for the life of the process (a miss on Bun, a missing
-  // `package.json` on Node), so `require.resolve` can report a package
-  // installed since as missing, or as its `index.js`. The runtime is asked
-  // only for what no `node_modules` holds (`NODE_PATH`, Yarn PnP, a relative
-  // or absolute specifier).
-  const fresh = resolveFresh(spec, fromDir);
-  let resolved: string;
-  if (fresh.kind === "file") {
-    resolved = fresh.path;
-  } else if (fresh.kind === "invalid") {
-    throw new TargetLoadError(
-      "load-failed",
-      `"${spec}" cannot be loaded: ${fresh.reason} in ${fresh.manifest}`,
-      { spec, fromDir },
-    );
-  } else if (fresh.kind === "missing") {
-    throw new TargetLoadError(
-      "not-found",
-      `"${spec}" cannot be resolved from ${fromDir}: Cannot find module '${spec}': ${fresh.reason}`,
-      { spec, fromDir },
-    );
-  } else {
+  // The runtime resolves. Once a specifier has missed in this process, its
+  // resolver may be stale (Bun keeps the miss; Node keeps the missing
+  // `package.json` and then resolves `index.js`), so from then on the answer
+  // comes from a fresh child process of the same runtime, at most once per
+  // change on disk (`resolve-after-miss.ts`).
+  let resolved: string | undefined;
+  let cause: unknown;
+  if (!hasMissed(spec, fromDir)) {
     try {
       resolved = req.resolve(spec);
-    } catch (cause) {
+    } catch (error) {
+      cause = error;
+    }
+  }
+  if (resolved === undefined) {
+    const answer = resolveAfterMiss(spec, fromDir);
+    if (answer.kind === "found") {
+      resolved = answer.path;
+    } else if (answer.kind === "error") {
+      throw resolutionError(spec, fromDir, answer.code, answer.message, cause);
+    } else {
+      const message =
+        cause === undefined
+          ? `Cannot find module '${spec}'`
+          : summary(messageOf(cause));
       throw new TargetLoadError(
         "not-found",
-        `"${spec}" cannot be resolved from ${fromDir}: ${summary(messageOf(cause))}`,
+        `"${spec}" cannot be resolved from ${fromDir}: ${message} (${answer.reason})`,
         { spec, fromDir, cause },
       );
     }

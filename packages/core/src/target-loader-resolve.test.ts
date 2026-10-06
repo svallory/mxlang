@@ -13,9 +13,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 // A differential test: for each package shape, the truth is the runtime's own
 // `require.resolve` in a process where the package was installed before it
 // started (an empty resolver cache). `loadTargetDescriptor` must load that
-// same file, or fail when the runtime fails, both in that process and in one
-// where the same specifier missed before the install. Every shape runs on Bun
-// and on Node, so a rule only one runtime follows is pinned per runtime.
+// same file, or fail as the runtime fails (`ERR_INVALID_PACKAGE_TARGET` and
+// `_CONFIG` are `load-failed`, every other code `not-found`), both in that
+// process and in one where the same specifier missed before the install, so
+// its answer came from the child process `resolve-after-miss.ts` spawns. Every
+// shape runs on Bun and on Node; `expect` pins what each runtime does, so the
+// table also records where they differ.
 //
 // Each module file's descriptor `name` encodes its own path, so a loaded
 // descriptor names the file the loader chose.
@@ -23,7 +26,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 const loader = join(import.meta.dirname, "target-loader.ts");
 
 interface Case {
-  /** Files under the case root; the project is `app/`. */
+  /**
+   * Files under the case root; the project is `app/`. An empty module file
+   * gets a descriptor named after its path; `$DESCRIPTOR` in a file's text is
+   * replaced by that descriptor object.
+   */
   files: Record<string, string>;
   spec?: string;
   /** Pinned outcomes: a path under the case root, or `"ERR"`. */
@@ -457,6 +464,120 @@ const cases: Record<string, Case> = {
     },
     expect: { bun: "app/self.cjs", node: "app/self.cjs" },
   },
+  // review 3's shapes
+  "conditions: module-sync (Node's require(esm))": {
+    files: {
+      [`${P}/package.json`]:
+        '{"exports":{"module-sync":"./m.cjs","default":"./d.cjs"}}',
+      [`${P}/m.cjs`]: "",
+      [`${P}/d.cjs`]: "",
+    },
+    expect: { bun: `${P}/d.cjs`, node: `${P}/m.cjs` },
+  },
+  "a package.json with a UTF-8 BOM": {
+    files: {
+      [`${P}/package.json`]: '\ufeff{"main":"m.js"}',
+      [`${P}/m.js`]: "",
+      [`${P}/index.js`]: "",
+    },
+    expect: { bun: `${P}/m.js`, node: `${P}/m.js` },
+  },
+  "tsconfig paths aliasing the package (Bun)": {
+    files: {
+      "app/tsconfig.json":
+        '{"compilerOptions":{"baseUrl":".","paths":{"@fake/p":["./local.cjs"]}}}',
+      "app/local.cjs": "",
+      [`${P}/package.json`]: '{"main":"m.js"}',
+      [`${P}/m.js`]: "",
+    },
+    expect: { bun: "app/local.cjs", node: `${P}/m.js` },
+  },
+  "exports a percent-encoded .. segment": {
+    files: {
+      [`${P}/package.json`]: '{"exports":"./%2e%2e/e.cjs"}',
+      [`${P}/%2e%2e/e.cjs`]: "",
+    },
+    expect: { bun: "ERR", node: "ERR" },
+  },
+  "exports a percent-encoded node_modules segment": {
+    files: {
+      [`${P}/package.json`]: '{"exports":"./%6eode_modules/e.cjs"}',
+      [`${P}/%6eode_modules/e.cjs`]: "",
+    },
+    expect: { bun: "ERR", node: "ERR" },
+  },
+  "a condition map with a numeric key": {
+    files: {
+      [`${P}/package.json`]: '{"exports":{"0":"./a.cjs","require":"./r.cjs"}}',
+      [`${P}/a.cjs`]: "",
+      [`${P}/r.cjs`]: "",
+    },
+    expect: { bun: `${P}/r.cjs`, node: "ERR" },
+  },
+  'main "lib/" beside lib.js': {
+    files: {
+      [`${P}/package.json`]: '{"main":"lib/"}',
+      [`${P}/lib.js`]: "",
+      [`${P}/lib/index.js`]: "",
+    },
+    expect: { bun: `${P}/lib/index.js`, node: `${P}/lib.js` },
+  },
+  "a specifier with a trailing slash": {
+    spec: "@fake/p/",
+    files: {
+      "app/node_modules/@fake/p.js": "",
+      [`${P}/package.json`]: '{"main":"m.js"}',
+      [`${P}/m.js`]: "",
+    },
+    expect: { bun: `${P}/m.js`, node: `${P}/m.js` },
+  },
+  "a built-in module name with a same-named package installed": {
+    spec: "events",
+    files: { "app/node_modules/events/index.js": "" },
+    expect: { bun: "BUILTIN:events", node: "BUILTIN:events" },
+  },
+  "a # import of the project": {
+    spec: "#x",
+    files: {
+      "app/package.json": '{"imports":{"#x":"./x.cjs"}}',
+      "app/x.cjs": "",
+      "app/node_modules/#x/index.js": "",
+    },
+    expect: { bun: "app/x.cjs", node: "app/x.cjs" },
+  },
+  // Not pinned: Bun 1.3.14 normalizes the ".." on Linux and not on macOS.
+  "exports a pattern match that leaves the package": {
+    spec: "@fake/p/../escaped",
+    files: {
+      [`${P}/package.json`]: '{"exports":{"./*":"./*.cjs"}}',
+      [ESCAPED]: "",
+    },
+  },
+  // The module kind this process gives the file the child found.
+  'an ESM main under "type": "module"': {
+    files: {
+      [`${P}/package.json`]: '{"type":"module","main":"index.js"}',
+      [`${P}/index.js`]: "export default $DESCRIPTOR;",
+    },
+    expect: { bun: `${P}/index.js`, node: `${P}/index.js` },
+  },
+  'an ESM require branch under "type": "module"': {
+    files: {
+      [`${P}/package.json`]:
+        '{"type":"module","exports":{"import":"./i.js","require":"./r.js"}}',
+      [`${P}/i.js`]: "export default $DESCRIPTOR;",
+      [`${P}/r.js`]: "export default $DESCRIPTOR;",
+    },
+    expect: { bun: `${P}/r.js`, node: `${P}/r.js` },
+  },
+  'a "type": "commonjs" package in a "type": "module" project': {
+    files: {
+      "app/package.json": '{"type":"module"}',
+      [`${P}/package.json`]: '{"type":"commonjs","main":"index.js"}',
+      [`${P}/index.js`]: "module.exports = $DESCRIPTOR;",
+    },
+    expect: { bun: `${P}/index.js`, node: `${P}/index.js` },
+  },
 };
 
 /** A file's path as a descriptor name, which must be a bare word. */
@@ -469,8 +590,11 @@ const pathOf = (loaded: string) =>
     : Buffer.from(loaded.slice(1), "hex").toString();
 
 /** The descriptor a file holds, named after its path under the case root. */
+const descriptorOf = (path: string) =>
+  `{ descriptorVersion: 0, name: ${JSON.stringify(nameFor(path))}, packageName: "p", defaultTag: "node" }`;
+
 function moduleText(path: string): string {
-  const descriptor = `{ descriptorVersion: 0, name: ${JSON.stringify(nameFor(path))}, packageName: "p", defaultTag: "node" }`;
+  const descriptor = descriptorOf(path);
   if (path.endsWith(".json")) {
     return JSON.stringify({
       descriptorVersion: 0,
@@ -513,7 +637,8 @@ for (const { name, root, spec, files } of plan) {
   if (mode === "native") {
     let runtime;
     try {
-      runtime = createRequire(join(app, "package.json")).resolve(spec).slice(root.length + 1);
+      const found = createRequire(join(app, "package.json")).resolve(spec);
+      runtime = found.startsWith(root + "/") ? found.slice(root.length + 1) : "BUILTIN:" + found;
     } catch (e) {
       runtime = "ERR:" + (e.code ?? e.name);
     }
@@ -530,7 +655,7 @@ console.log(JSON.stringify(out));
 type Native = Record<string, { runtime: string; loader: string }>;
 type Fresh = Record<string, { before: string; loader: string }>;
 
-const base = realpathSync(mkdtempSync(join(tmpdir(), "mx-fresh-resolve-")));
+const base = realpathSync(mkdtempSync(join(tmpdir(), "mx-loader-resolve-")));
 const results: Record<string, { native: Native; fresh: Fresh }> = {};
 
 function prepare(runtime: string, mode: "native" | "fresh") {
@@ -543,7 +668,7 @@ function prepare(runtime: string, mode: "native" | "fresh") {
         ? text.replaceAll("$ROOT", root)
         : text === ""
           ? moduleText(rel)
-          : text;
+          : text.replaceAll("$DESCRIPTOR", descriptorOf(rel));
     }
     // The project and a node_modules (Bun keeps a miss once it has one).
     const skeleton = {
@@ -584,12 +709,18 @@ beforeAll(() => {
       fresh: prepare(runtime, "fresh"),
     };
   }
-}, 120_000);
+}, 300_000);
 
 afterAll(() => rmSync(base, { recursive: true, force: true }));
 
+/** The loader's error kind for the runtime's error code. */
+const kindFor = (code: string) =>
+  /^ERR_INVALID_PACKAGE_(TARGET|CONFIG)$/.test(code)
+    ? "load-failed"
+    : "not-found";
+
 describe.each(["bun", "node"] as const)(
-  "fresh resolution matches %s's own resolver",
+  "the loader resolves as %s's own resolver does",
   (runtime) => {
     it.each(Object.keys(cases))("%s", (name) => {
       const { native, fresh } = results[runtime] as {
@@ -599,7 +730,7 @@ describe.each(["bun", "node"] as const)(
       const { runtime: truth, loader } = native[name] as Native[string];
       const loaded = pathOf(loader);
       const { before, loader: freshLoader } = fresh[name] as Fresh[string];
-      const after = { before, loader: pathOf(freshLoader) };
+      const after = pathOf(freshLoader);
       const pinned = cases[name]?.expect?.[runtime];
       if (pinned !== undefined) {
         expect(
@@ -608,18 +739,22 @@ describe.each(["bun", "node"] as const)(
         ).toBe(pinned);
       }
       // The miss came first, so the specifier was not there yet.
-      expect(after.before).toMatch(/^ERR:/);
-      if (truth.startsWith("ERR")) {
+      expect(before).toMatch(/^ERR:/);
+      if (truth.startsWith("ERR:")) {
+        const kind = kindFor(truth.slice(4));
         expect(loaded, "loader, no miss first").toMatch(
-          /^ERR:(not-found|load-failed):/,
+          new RegExp(`^ERR:${kind}:`),
         );
-        expect(after.loader, "loader, after a miss").toMatch(
-          /^ERR:(not-found|load-failed):/,
+        expect(after, "loader, after a miss").toMatch(
+          new RegExp(`^ERR:${kind}:`),
         );
-        expect(after.loader.split(":")[1]).toBe(loaded.split(":")[1]);
+      } else if (truth.startsWith("BUILTIN:")) {
+        // A built-in module is no descriptor; it is never a package's file.
+        expect(loaded).toMatch(/^ERR:invalid-descriptor:/);
+        expect(after).toMatch(/^ERR:invalid-descriptor:/);
       } else {
         expect(loaded, "loader, no miss first").toBe(truth);
-        expect(after.loader, "loader, after a miss").toBe(truth);
+        expect(after, "loader, after a miss").toBe(truth);
       }
     });
   },

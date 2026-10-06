@@ -5,20 +5,20 @@ import {
   mkdtempSync,
   realpathSync,
   rmSync,
-  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { setSpawnSyncLoaderForTesting } from "./resolve-after-miss.ts";
 import {
   clearTargetDescriptorCache,
   loadTargetDescriptor,
 } from "./target-loader.ts";
 
 // A resolution miss must not stick: the runtime's resolver keeps a miss once
-// the project has a node_modules, so the loader resolves from the filesystem
-// itself. Each case runs in a fresh Bun and a fresh Node process, because the
+// the project has a node_modules, so after a miss the loader asks the same
+// runtime again in a child process. Each case runs in a fresh Bun and a fresh Node process, because the
 // miss is process state: miss, install, load.
 
 const here = import.meta.dirname;
@@ -117,15 +117,25 @@ const named = (name: string) =>
   `module.exports = { descriptorVersion: 0, name: ${JSON.stringify(name)}, packageName: "p", defaultTag: "node" };`;
 
 // Which file each package shape resolves to, on each runtime, is pinned
-// against the runtime itself in fresh-resolve.test.ts.
-describe("the loader around a fresh resolution", () => {
+// against the runtime itself in target-loader-resolve.test.ts.
+describe("the loader around a miss", () => {
+  afterEach(() => setSpawnSyncLoaderForTesting(undefined));
+
   function project() {
     const root = realpathSync(mkdtempSync(join(tmpdir(), "mx-loader-miss-")));
     roots.push(root);
     writeFileSync(join(root, "package.json"), "{}");
+    mkdirSync(join(root, "node_modules", ".bin"), { recursive: true });
     const pkg = join(root, "node_modules", "@fake", "late-target");
-    mkdirSync(pkg, { recursive: true });
-    return { root, pkg };
+    return {
+      root,
+      pkg,
+      install(main = named("late")) {
+        mkdirSync(pkg, { recursive: true });
+        writeFileSync(join(pkg, "package.json"), '{"main":"i.cjs"}');
+        writeFileSync(join(pkg, "i.cjs"), main);
+      },
+    };
   }
 
   const attempt = (spec: string, from: string) => {
@@ -136,55 +146,171 @@ describe("the loader around a fresh resolution", () => {
     }
   };
 
+  const messageOf = (spec: string, from: string) => {
+    try {
+      loadTargetDescriptor(spec, from);
+    } catch (e) {
+      return (e as Error).message;
+    }
+    return "loaded";
+  };
+
+  /** Counts child processes, which still run for real. */
+  function countSpawns() {
+    const counter = { spawns: 0 };
+    setSpawnSyncLoaderForTesting(
+      () =>
+        ((...args: Parameters<typeof spawnSync>) => {
+          counter.spawns++;
+          return spawnSync(...args);
+        }) as typeof spawnSync,
+    );
+    return counter;
+  }
+
+  it("spawns once per change: 100 misses spawn 1, then 0 until an install, then 1", () => {
+    const p = project();
+    const counter = countSpawns();
+    for (let i = 0; i < 100; i++) {
+      expect(attempt("@fake/late-target", p.root)).toBe("not-found");
+    }
+    expect(counter.spawns).toBe(1);
+    p.install();
+    for (let i = 0; i < 100; i++) {
+      expect(attempt("@fake/late-target", p.root)).toBe("late");
+    }
+    expect(counter.spawns).toBe(2);
+  });
+
+  it("an upgrade after the miss is a change: one more spawn, the new file", () => {
+    const p = project();
+    const counter = countSpawns();
+    expect(attempt("@fake/late-target", p.root)).toBe("not-found");
+    p.install();
+    expect(attempt("@fake/late-target", p.root)).toBe("late");
+    writeFileSync(join(p.pkg, "package.json"), '{"main":"v2.cjs"}');
+    writeFileSync(join(p.pkg, "v2.cjs"), named("v2"));
+    expect(attempt("@fake/late-target", p.root)).toBe("v2");
+    expect(attempt("@fake/late-target", p.root)).toBe("v2");
+    expect(counter.spawns).toBe(3);
+  });
+
+  it("a specifier that never missed never spawns", () => {
+    const p = project();
+    p.install();
+    const counter = countSpawns();
+    for (let i = 0; i < 10; i++) {
+      expect(attempt("@fake/late-target", p.root)).toBe("late");
+    }
+    expect(counter.spawns).toBe(0);
+  });
+
+  it.each([
+    [
+      "no node:child_process",
+      () => {
+        throw new Error("Cannot find module 'node:child_process'");
+      },
+      /node:child_process is unavailable \(Cannot find module 'node:child_process'\), so a target installed since the miss needs a restart/,
+    ],
+    [
+      "a child that times out",
+      () =>
+        (() => ({
+          error: Object.assign(new Error("spawnSync ETIMEDOUT"), {
+            code: "ETIMEDOUT",
+          }),
+          status: null,
+          signal: "SIGTERM",
+          stdout: "",
+          stderr: "",
+        })) as unknown as typeof spawnSync,
+      /resolving it in a child process \(.+\) timed out after 15000 ms/,
+    ],
+    [
+      "a child that fails to start",
+      () =>
+        (() => ({
+          error: Object.assign(new Error("spawnSync x ENOENT"), {
+            code: "ENOENT",
+          }),
+          status: null,
+          signal: null,
+          stdout: "",
+          stderr: "",
+        })) as unknown as typeof spawnSync,
+      /resolving it in a child process \(.+\) failed: spawnSync x ENOENT/,
+    ],
+    [
+      "a child that exits non-zero",
+      () =>
+        (() => ({
+          status: 3,
+          signal: null,
+          stdout: "",
+          stderr: "boom\nmore",
+        })) as unknown as typeof spawnSync,
+      /resolving it in a child process \(.+\) exited with status 3: boom\)/,
+    ],
+    [
+      "a child that prints garbage",
+      () =>
+        (() => ({
+          status: 0,
+          signal: null,
+          stdout: "garbage",
+          stderr: "",
+        })) as unknown as typeof spawnSync,
+      /resolving it in a child process \(.+\) printed no answer: garbage\)/,
+    ],
+  ])(
+    "%s: not-found naming the cause, and no other resolver",
+    (_label, loader, reason) => {
+      const p = project();
+      setSpawnSyncLoaderForTesting(loader);
+      expect(attempt("@fake/late-target", p.root)).toBe("not-found");
+      p.install();
+      // Installed, and this process's resolver would now find it (Node): the
+      // target still stays not-found, because only the child may answer.
+      const message = messageOf("@fake/late-target", p.root);
+      expect(message).toMatch(
+        /^"@fake\/late-target" cannot be resolved from .+: Cannot find module '@fake\/late-target'/,
+      );
+      expect(message).toMatch(reason);
+    },
+  );
+
+  it("does not load node:child_process when core loads", () => {
+    const probe = (extra: string) =>
+      spawnSync(
+        "node",
+        [
+          "--input-type=module",
+          "-e",
+          `await import(${JSON.stringify(loader)}); ${extra}
+console.log(process.moduleLoadList.some((m) => m.includes("child_process")));`,
+        ],
+        { encoding: "utf8" },
+      ).stdout.trim();
+    expect(probe("")).toBe("false");
+    // The probe can see it: requiring it shows up.
+    expect(
+      probe(
+        '(await import("node:module")).createRequire(import.meta.url)("node:child_process");',
+      ),
+    ).toBe("true");
+  });
+
   it("a package that throws reports load-failed, not not-found", () => {
     const p = project();
-    writeFileSync(join(p.pkg, "package.json"), '{"main":"i.cjs"}');
-    writeFileSync(join(p.pkg, "i.cjs"), `throw new Error("boom");`);
+    p.install(`throw new Error("boom");`);
     expect(attempt("@fake/late-target", p.root)).toBe("load-failed");
   });
 
-  it("a dangling-symlink entry is not-found", () => {
+  it("an invalid exports target is load-failed with the runtime's reason", () => {
     const p = project();
-    writeFileSync(join(p.pkg, "package.json"), '{"main":"i.cjs"}');
-    symlinkSync(join(p.root, "nowhere.cjs"), join(p.pkg, "i.cjs"));
-    expect(attempt("@fake/late-target", p.root)).toBe("not-found");
-  });
-
-  it("an invalid exports target is load-failed naming the manifest", () => {
-    const p = project();
+    mkdirSync(p.pkg, { recursive: true });
     writeFileSync(join(p.pkg, "package.json"), '{"exports":"../x.cjs"}');
-    expect(() => loadTargetDescriptor("@fake/late-target", p.root)).toThrow(
-      `invalid package target "../x.cjs" in ${join(p.pkg, "package.json")}`,
-    );
-  });
-
-  // Not in fresh-resolve.test.ts: Bun 1.3.14 normalizes `p/../escaped` on
-  // Linux and loads the neighbour's file, but not on macOS. Node rejects it
-  // (ERR_INVALID_MODULE_SPECIFIER); the loader follows Node on both runtimes.
-  it("an exports pattern match that leaves the package is load-failed", () => {
-    const p = project();
-    writeFileSync(join(p.pkg, "package.json"), '{"exports":{"./*":"./*.cjs"}}');
-    writeFileSync(
-      join(p.root, "node_modules", "@fake", "escaped.cjs"),
-      named("x"),
-    );
-    expect(attempt("@fake/late-target/../escaped", p.root)).toBe("load-failed");
-  });
-
-  it("a package that exports nothing for the specifier says so", () => {
-    const p = project();
-    writeFileSync(join(p.pkg, "package.json"), '{"exports":{"./t":"./t.cjs"}}');
-    writeFileSync(join(p.pkg, "t.cjs"), named("t"));
-    expect(attempt("@fake/late-target/t", p.root)).toBe("t");
-    expect(() =>
-      loadTargetDescriptor("@fake/late-target/other", p.root),
-    ).toThrow(/does not export "\.\/other"/);
-  });
-
-  it("a specifier no node_modules holds is still the runtime's not-found", () => {
-    const p = project();
-    expect(() => loadTargetDescriptor("@fake/never", p.root)).toThrow(
-      "Cannot find module '@fake/never'",
-    );
+    expect(attempt("@fake/late-target", p.root)).toBe("load-failed");
   });
 });
