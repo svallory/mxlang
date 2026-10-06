@@ -143,6 +143,12 @@ export const PACKED_PACKAGES: PackedPackage[] = [
       "dist/ambient-types.d.ts",
       "dist/amx-language.d.ts",
       "dist/astro-language.d.ts",
+      // Decision 161: unmapped-diagnostics.d.ts declares the exported seam
+      // (approximateUnmapped, AuthoredSpan, SpannedVirtualCode, the suffix
+      // texts); authored-spans.d.ts is emitted because mx-language.ts imports
+      // it and references only unmapped-diagnostics.d.ts and the declared
+      // @mxlang/core, so it dangles on nothing private.
+      "dist/authored-spans.d.ts",
       "dist/data-check.d.ts",
       "dist/failed-module-stub.d.ts",
       "dist/host-policy-diagnostics.d.ts",
@@ -152,6 +158,7 @@ export const PACKED_PACKAGES: PackedPackage[] = [
       "dist/mx-language.d.ts",
       "dist/ng-worker.cjs",
       "dist/own-location-header.d.ts",
+      "dist/unmapped-diagnostics.d.ts",
     ],
     declarations: true,
   },
