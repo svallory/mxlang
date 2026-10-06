@@ -2352,6 +2352,35 @@ function failUncalled(
   );
 }
 
+/**
+ * Decision 172: a binding imported from a `.marko` file and used as a tag, static
+ * (`<X/>`) or dynamic with that binding directly (`<${X}/>`), is the one error.
+ * A binding that reaches a dynamic tag any other way is a value, left alone.
+ */
+function rejectMarkoImportTag(
+  ctx: Ctx,
+  binding: string,
+  written: string,
+  node: Node,
+): void {
+  const from = ctx.importSpecifiers.get(binding);
+  if (
+    !from?.endsWith(".marko") ||
+    !ctx.importDefaultFromMarkoOrMx.has(binding) ||
+    ctx.tagVarShadowed?.has(binding)
+  ) {
+    return;
+  }
+  fail(
+    markoFileTagMessage(
+      ctx.filename,
+      written,
+      resolve(dirname(ctx.filename), from),
+    ),
+    node,
+  );
+}
+
 function registeredTagWithoutTemplate(ctx: Ctx, name: string): boolean {
   const tag = ctx.lookup?.getTag(name);
   return isRegisteredTaglibTag(ctx, name) && tag?.template === undefined;
@@ -3638,6 +3667,10 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     const isBare =
       (node.attributes ?? []).length === 0 && !node.body?.body?.length;
     const dynamicExpr = exprOf(ctx, node.name);
+    if (/^[A-Za-z_$][\w$]*$/.test(dynamicExpr.code.trim())) {
+      const binding = dynamicExpr.code.trim();
+      rejectMarkoImportTag(ctx, binding, `\${${binding}}`, node);
+    }
     const read = declaredAttributeTagRead(ctx, dynamicExpr.code);
     if (read) {
       if (read.declaration.as === "data" && !read.readsContent) {
@@ -3945,20 +3978,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     fileLocalBinding ||
     (!lowercaseBinding && ctx.declarations.isComponent(name, ctx))
   ) {
-    const importedFrom = ctx.importSpecifiers.get(name);
-    if (
-      ctx.importDefaultFromMarkoOrMx.has(name) &&
-      importedFrom?.endsWith(".marko")
-    ) {
-      fail(
-        markoFileTagMessage(
-          ctx.filename,
-          name,
-          resolve(dirname(ctx.filename), importedFrom),
-        ),
-        node,
-      );
-    }
+    rejectMarkoImportTag(ctx, name, name, node);
     const params = ctx.defines.get(name);
     if (params) {
       warnDefineExtraParams(ctx, node, name, params);
@@ -4033,6 +4053,10 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     ) {
       const found = uncalledTagFileOf(ctx, name);
       if (found) failUncalled(ctx, name, found, node);
+      fail(
+        `\`<${name}>\` is declared by a Marko taglib with no template (a \`renderer\`), which MX cannot call. Write the tag as \`tags/${name}.mx\`, or import it explicitly.`,
+        node,
+      );
     }
     const binding = modulePath
       ? bindingForDiscoveredModule(ctx, modulePath, name, posOf(node))

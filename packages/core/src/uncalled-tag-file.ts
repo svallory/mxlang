@@ -20,7 +20,9 @@ const TAG_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
 /** The file names a directory tag `tags/<name>/` may use: `index.<ext>` or `<name>.<ext>`. */
 const TAG_EXT = "(?:marko|mx|tag\\.ts)";
 const directoryTagFile = (name: string): RegExp =>
-  new RegExp(`^(?:index|${name.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&")})\\.${TAG_EXT}$`);
+  new RegExp(
+    `^(?:index|${name.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&")})\\.${TAG_EXT}$`,
+  );
 
 export interface UncalledTagFile {
   /** Absolute path of the file found. */

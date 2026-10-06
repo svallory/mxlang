@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Fix, behaviour change (unresolved-tags-dir-diagnostic, decision 172):** a tag Marko's lookup resolves to an `.mx` template (a `marko.json` entry) is imported from the path it was found at (`resolveDiscoveredTagModule`), bound as core's `_x` rather than `__mxX`; a `.marko` tag is core's one error, not an import of `./tags/<name>.marko`.
+- **Fix, behaviour change (unresolved-tags-dir-diagnostic, decision 172):** a tag Marko's lookup resolves to an `.mx` template (a `marko.json` entry) is imported from the path it was found at (`resolveDiscoveredTagModule`), bound as core's `_x` rather than `__mxX`; a `.marko` tag is core's one error, not an import of `./tags/<name>.marko`. The `./tags/<name>.marko` import synthesis in `compile.ts` and `region.ts` is gone.
 
 - **Fix (statement-followup, decision 168):** the error for JSX in a `static`/`export` statement is MX's own message at the `<` (was Babel's "Unterminated regular expression."); a decorated `static class` is accepted again.
 

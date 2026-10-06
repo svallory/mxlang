@@ -468,18 +468,13 @@ export function emitModuleWithMappings(
     ...ir.hoisted.map((node) => node.code),
     // A component whose Marko name JSX would read as an element is called
     // under a capitalized alias. Where the author imported the name, the
-    // alias is a local binding; where Marko *discovered* it from a `tags/`
-    // directory there is no import at all — that is the point of discovery —
-    // so one is synthesized against Marko's own convention. The synthesized
-    // path is always `.marko`, never `.mx`: `@marko/compiler`'s own
-    // `scanTagsDir` only discovers files whose extension is literally
-    // `.marko` (see the `tagDiscoveryDirs` doc comment above), so a
-    // discovered tag can only ever be a real `.marko` file on disk.
-    ...[...emitter.aliases].map((name) =>
-      importedNames.has(name)
-        ? `const ${componentAlias(name)} = ${name};`
-        : `import ${componentAlias(name)} from "./tags/${name}.marko";`,
-    ),
+    // alias is a local binding; a tag Marko's lookup discovered is imported by
+    // core under its own binding (`resolveDiscoveredTagModule`), so a name
+    // with neither has nothing to import and is core's error, never an import
+    // synthesized from the tag's name.
+    ...[...emitter.aliases]
+      .filter((name) => importedNames.has(name))
+      .map((name) => `const ${componentAlias(name)} = ${name};`),
     // Private helpers use the language-reserved prefix; public runtime
     // exports retain their names and are imported under private aliases.
     ...attrHelpers,

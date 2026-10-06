@@ -167,16 +167,17 @@ Porting a Marko component that stays inside the MX 1 subset is therefore a
 rename. The reason the alias died: MX supports only the subset, so treating an
 arbitrary `.marko` file as MX would silently claim support MX does not have.
 
-Two narrow exceptions, both outside the product path:
+One narrow exception, outside the product path:
 
 - **The oracle** keeps 43 stock fixtures as real `.marko` files, because Marko's
-  own compiler requires that extension. It feeds them to MX by *content*, under
-  a virtual sibling `.mx` filename in the same directory.
+  own compiler requires that extension. For MX it makes a `.mx` twin of each
+  file in a scratch copy of the fixture directory (the content, with its own
+  `./x.marko` imports pointed at the twins; a fixture's committed `.mx` twin
+  wins). The real `.marko` files are only ever read by Marko's own run.
 
 Marko's own tag lookup (`tags/`, `marko.json`) still runs inside a whole-file
-compile, so it can find a `.marko` file for a tag call. That is not an MX input
-(decision 172): see the rule under "`.marko` files as tags" in §4. The oracle's
-`.marko` fixtures reach MX only as `.mx` twins.
+compile on the hosts that have one, so it can find a `.marko` file for a tag
+call. That is not an MX input (decision 172): see "`.marko` files as tags" in §4.
 
 ### Why an `.astro.mx` file cannot be a page
 
@@ -2332,21 +2333,43 @@ remains manifest `1:0`.
 | *(warning)* `` `package.json` could not be parsed as JSON: ${message}; no `mx.tags` or `mx.contracts` are loaded until the manifest parses `` | Manifest `1:0`; first revision is broken. With a previous valid revision the suffix is `` the previous valid `mx.tags` and `mx.contracts` stay in force `` instead. |
 
 **`.marko` files as tags (decision 172).** A `.marko` file is not an MX input. Where
-any lookup finds one for a tag call (`tags/x.marko`, `tags/x/index.marko`, a
-`marko.json` `tags-dir` or `template`, a `tagDiscoveryDirs` entry), or the file
-imports one (`import X from "./x.marko"`, then `<X/>`), the result is one positioned
-error at the tag, with the same text on every target:
+a tag call resolves to one, the result is one positioned error at the tag, with the
+same text on every target:
 
 > `<x>` resolves to `tags/x.marko`, a `.marko` file, and MX does not compile `.marko` files. Convert it to `.mx` (`tags/x.mx`).
 
-The file is never compiled as MX, never a silent native element and never an emitted
-`import`. A same-name `tags/x.mx` is a registered custom tag and is consulted first,
-so it still wins. A named import from a `.marko` file is a value, not a tag.
+It is never compiled as MX, never a silent native element and never an emitted
+`import`. What counts, per host:
 
-**A `tags/` directory tag MX cannot call is never silent.** A call to `<x>` with
-`tags/x/index.mx` beside it (Marko's lookup knows the directory; MX imports flat
-`tags/<name>.mx` files only) is a positioned error naming the file, not the native
-element `<x>` and not a call to an unbound name.
+- **`tags/x.marko`, `tags/x/index.marko`, `tags/x/x.marko`** (in the page's or an
+  ancestor's `tags/`): every host. On the hosts with no Marko lookup (Solid, Astro,
+  Angular, a `.<host>.mx` region) core finds the file itself.
+- **A `marko.json` `tags-dir` or `template` that resolves to a `.marko` file**: html,
+  Preact, React, Hono and Angular. Solid and Astro never read `marko.json`, so
+  there such a tag stays the native element `<x>` (no lookup of theirs resolves it).
+- **A binding imported from a `.marko` file and used as a tag**, static (`<X/>`) or
+  dynamic with that binding directly (`<${X}/>`): every host, at the tag use. An
+  import that is never used as a tag is left alone, and so is one that reaches a
+  dynamic tag indirectly (through a variable, a ternary or a prop); a named import
+  from a `.marko` file is a value, not a tag.
+- **A `marko.json` tag with no template** (a `renderer`): html and the JSX hosts, as
+  a positioned error that says there is no template to call, never an import.
+
+A same-name `tags/x.mx` is a registered custom tag and is consulted first, so it still
+wins; the `.marko` file beside it is never consulted.
+
+**A `tags/` directory tag MX cannot call is never silent.** `tags/<name>/index.<ext>`
+and `tags/<name>/<name>.<ext>` (`marko`, `mx`, `tag.ts`) are directory tags Marko's
+lookup knows; MX calls flat `tags/<name>.mx` files only. A call to `<x>` with one
+beside it is a positioned error naming the file, not the native element `<x>` and
+not a call to an unbound name. A flat `tags/x.mx` beside it still wins.
+
+**A discovered tag that resolves to an `.mx` template** (a `marko.json` entry) is
+imported the way Marko imports a discovered tag: a default import, extension kept,
+relative to the calling file, named `_` plus the camelCased tag name (numeric suffix
+on a collision), once per module. It is the optional
+`HostDeclarations.resolveDiscoveredTagModule` hook plus `binding` on the `Component`
+target, implemented by html and the JSX hosts (Preact, React, Hono).
 
 The config key is **`mx`**, not `mxlang` — a hard rename with no legacy path
 (decision 89a).

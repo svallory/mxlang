@@ -28,6 +28,8 @@ const SHAPES = [
   ["tags/x.marko", "a `.marko` template"],
   ["tags/x/index.marko", "a `.marko` directory tag"],
   ["tags/x/index.mx", "an `index.mx` directory tag"],
+  ["tags/x/x.marko", "a `<name>.marko` directory tag"],
+  ["tags/x/x.mx", "a `<name>.mx` directory tag"],
 ] as const;
 
 const lower = (source: string, file: string) =>

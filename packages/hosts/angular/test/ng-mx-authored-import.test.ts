@@ -251,7 +251,7 @@ describe("authored .mx import in a .ng.mx region", () => {
     expect(at(err)).toBe("2:0");
   });
 
-  it("rejects a .marko default import used as a tag, at the import", () => {
+  it("rejects a .marko default import used as a tag, at the tag", () => {
     const dir = project({ "tags/x.marko": "<b>x</b>\n" });
     const err = thrown(() =>
       run(
@@ -262,7 +262,38 @@ describe("authored .mx import in a .ng.mx region", () => {
     expect(err.message).toContain(
       "`<Foo>` resolves to `tags/x.marko`, a `.marko` file, and MX does not compile `.marko` files. Convert it to `.mx` (`tags/x.mx`).",
     );
-    expect(at(err)).toBe("2:0");
+    // At the tag (5:17 in the module), not at the import.
+    expect(err).toMatchObject({ loc: { line: 5, column: 17 } });
+  });
+
+  it("rejects a .marko default import used as a direct dynamic tag, at the tag", () => {
+    const dir = project({ "tags/x.marko": "<b>x</b>\n" });
+    const err = thrown(() =>
+      run(
+        dir,
+        ngMx(['import Foo from "./tags/x.marko";'], "<div><${Foo}/></div>"),
+      ),
+    );
+    expect(err.message).toContain(
+      "`<${Foo}>` resolves to `tags/x.marko`, a `.marko` file",
+    );
+    expect(err).toMatchObject({ loc: { line: 5, column: 17 } });
+  });
+
+  it("leaves an unused .marko import, and an indirect dynamic use, alone", () => {
+    const dir = project({ "tags/x.marko": "<b>x</b>\n" });
+    expect(() =>
+      run(dir, ngMx(['import Foo from "./tags/x.marko";'], "<div>hi</div>")),
+    ).not.toThrow();
+    expect(() =>
+      run(
+        dir,
+        ngMx(
+          ['import Foo from "./tags/x.marko";', "const Bar = Foo;"],
+          "<div><${Bar}/></div>",
+        ),
+      ),
+    ).not.toThrow(/resolves to/);
   });
 
   it("emits one import and uses the alias in imports: when aliased", () => {

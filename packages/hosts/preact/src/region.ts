@@ -26,7 +26,6 @@
  * declarations and segment.
  */
 
-import { dirname, resolve } from "node:path";
 import {
   type CustomTag,
   concatMapped,
@@ -278,23 +277,15 @@ export function compileJsxRegion(
   }
   // A component JSX would read as an element is called under a capitalized
   // alias (`componentAlias`). A name the module binds gets a local alias
-  // beside the region's other statements; a `tags/`-discovered `.marko` tag
-  // gets the import a whole-file module synthesizes, hoisted. Its key carries
-  // a suffix so the bridge never swaps the alias for an authored default
-  // import of the same file, whose lowercase name JSX would read as an element.
+  // beside the region's other statements. A region has no Marko lookup, so a
+  // name with no binding never reaches here: core reports it at the tag
+  // (decision 172) rather than importing a file named after it.
   for (const name of emitter.aliases) {
-    const alias = componentAlias(name);
     if (ctx.imports.has(name)) {
-      statements.unshift(concatMapped(`const ${alias} = ${name};`));
-      continue;
+      statements.unshift(
+        concatMapped(`const ${componentAlias(name)} = ${name};`),
+      );
     }
-    const specifier = `./tags/${name}.marko`;
-    hoistedImports.push({
-      code: `import ${alias} from "${specifier}";`,
-      binding: alias,
-      specifier,
-      resolvedPath: `${resolve(dirname(options.filename), specifier)}#mx-alias`,
-    });
   }
   for (const entry of runtimeImports(emitter.runtimeImports, dialect)) {
     hoistedImports.push({

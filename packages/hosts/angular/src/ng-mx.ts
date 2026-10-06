@@ -1,4 +1,3 @@
-import { dirname, resolve as resolvePath } from "node:path";
 /**
  * `.ng.mx` — an ordinary TypeScript module whose `@Component` template is MX.
  *
@@ -14,7 +13,6 @@ import {
   type Ir,
   lower,
   type MxWarning,
-  markoFileTagMessage,
   newCtx,
   parseFragment,
   positionRegionSource,
@@ -316,20 +314,15 @@ function lowerRegion(
   // `import Badge from "./tags/badge.mx"`) resolves instead of hitting
   // Marko's "Unable to find entry point" (LiUNA gap G7).
   //
-  // A `.marko` import is deliberately not seeded: a Marko component is not an
-  // Angular component, so the tag keeps the unresolved-tag error (upgraded
-  // below to a message that says why).
+  // A `.marko` import is seeded like any other: core reports it at the tag
+  // when it is used as one (decision 172), and leaves it alone otherwise.
   const specifiers = base.importSpecifiers ?? new Map<string, string>();
-  const markoLocals = new Set(
-    [...specifiers].filter(([, s]) => s.endsWith(".marko")).map(([n]) => n),
-  );
   for (const [name, specifier] of specifiers) {
-    if (markoLocals.has(name)) continue;
     ctx.importSpecifiers.set(name, specifier);
     ctx.imports.add(name);
   }
   for (const name of base.moduleBindings ?? []) {
-    if (!markoLocals.has(name)) ctx.imports.add(name);
+    ctx.imports.add(name);
   }
   for (const [name, site] of base.importSites ?? []) {
     if (ctx.importSpecifiers.has(name)) {
@@ -337,35 +330,21 @@ function lowerRegion(
     }
   }
   for (const name of base.unknownModuleBindings ?? []) {
-    if (!markoLocals.has(name)) ctx.unknownLocalValue.add(name);
+    ctx.unknownLocalValue.add(name);
   }
   for (const name of base.importDefaultFromMarkoOrMx ?? []) {
-    if (specifiers.get(name)?.endsWith(".mx")) {
+    const from = specifiers.get(name);
+    if (from?.endsWith(".mx") || from?.endsWith(".marko")) {
       ctx.importDefaultFromMarkoOrMx.add(name);
     }
   }
 
-  let ir: ReturnType<typeof lower>;
-  try {
-    // A `*ngIf="…"` after another attribute fails in `lower` with Marko's
-    // message about an assignment; the hint names the cause.
-    ir = withStructuralAttrHint(positionedSource, () => lower(ctx, body));
-  } catch (error) {
-    const tag = /Unable to find entry point for custom tag `<([^>]+)>`/.exec(
-      (error as Error).message,
-    )?.[1];
-    if (tag && markoLocals.has(tag)) {
-      throw new AuthoredImportError(
-        tag,
-        markoFileTagMessage(
-          filename,
-          tag,
-          resolvePath(dirname(filename), specifiers.get(tag) ?? ""),
-        ),
-      );
-    }
-    throw error;
-  }
+  // A `*ngIf="…"` after another attribute fails in `lower` with Marko's
+  // message about an assignment; the hint names the cause.
+  const ir: ReturnType<typeof lower> = withStructuralAttrHint(
+    positionedSource,
+    () => lower(ctx, body),
+  );
 
   // A4 divergence 4, the functional gain of `.ng.mx` over a `.mx` page:
   // module-level MX statements are *hoisted* into the surrounding TypeScript
