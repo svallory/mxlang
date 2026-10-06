@@ -6,7 +6,7 @@ import { createSignal } from "solid-js";
 export function Counter() {
  const [count, setCount] = createSignal(0);
  var _el$ = _tmpl$();
- _el$.$$click = () => {
+ _el$.$$click = function () {
  setCount(count() + 1);
  };
  _$insert(_el$, count);

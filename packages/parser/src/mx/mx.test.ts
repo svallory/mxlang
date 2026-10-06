@@ -96,8 +96,8 @@ describe("MX element parsing", () => {
       typeParameters?: unknown;
     }[];
     // The `<T,>` must stay a generic arrow, not become an element.
-    expect(fns).toHaveLength(1);
-    expect(fns[0]?.typeParameters).toBeTruthy();
+    expect(arrows).toHaveLength(1);
+    expect(arrows[0]?.typeParameters).toBeTruthy();
     expect(collect(file, "JSXElement")).toHaveLength(1);
   });
 
