@@ -2306,7 +2306,7 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
     };
   }
   if (/^export\s+interface\s+Input\b/.test(line)) {
-    return { kind: "InputInterface", code: line, loc, end };
+    return { kind: "InputInterface", code: line, loc, end, span };
   }
   if (name === "export") {
     return { kind: "Export", code: line, loc, end, span };

@@ -1,0 +1,10 @@
+import Field from "./Field.solid.mx";
+
+export const view = (
+  <div>
+    <Field mode="loose" count=missingCount/>
+    <input value=missingAttr/>
+    <p>${missingText}</p>
+    <Field mode="loose" modes=["strict", 42]/>
+  </div>
+);

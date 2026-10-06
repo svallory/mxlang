@@ -687,7 +687,16 @@ export type IrNode =
       span?: SourceSpan;
     } & IrBase)
   /** `export interface Input`, lifted so a host can place it. */
-  | ({ kind: "InputInterface"; code: string; end: Position } & IrBase)
+  | ({
+      kind: "InputInterface";
+      code: string;
+      end: Position;
+      /**
+       * File-absolute UTF-16 code-unit span of the authored statement,
+       * trailing line terminator excluded.
+       */
+      span?: SourceSpan;
+    } & IrBase)
   /** A statement lifted by decision 70's `hoist` hook. */
   | ({ kind: "Hoisted"; code: string; end: Position } & IrBase)
   | ({ kind: "DelegatedTag"; tag: DelegatedTag<unknown> } & IrBase)

@@ -80,6 +80,21 @@ Three facts worth knowing before touching it:
   An earlier version dropped `Input` on the belief that Solid's compiler has no
   TypeScript frontend; that was wrong. AttrTag props are additionally checked
   through a `satisfies` assertion at the call site (decisions 106-108).
+- **Every expression value is recorded as a mapping (`mappedExpr`), and a
+  whole-file unit maps its module statements too** (TODO `solid-mx-tsc-silent`).
+  `descriptor.mappings` is `"merge-recorded"`: the TypeScript plugin does not
+  re-lower a Solid file, so what the emitter does not record is unmapped and a
+  TypeScript error on it is dropped. Before this, a whole-file `.mx` resolved to
+  Solid recorded none, and `mx-tsc` printed nothing (exit 0) for an undeclared
+  name, a prop type error or a `${}` error. Component and native attribute
+  values, spreads, class merges, `${}`/`$!{}` text, `<if>`/`<for of>`/`<for in>`
+  heads and attribute-tag spreads/conditions go through `mappedExpr` (per-atom
+  for an atom, decision 156); `compileSolidUnit` maps imports, `static` blocks
+  and `Input` with `mappedStatement`. A value Solid rewrites (a method to an
+  arrow, a `<textarea>` spread wrapped in `__mxOmit`) stays unmapped: a mapping
+  over different text shifts positions. Still unmapped: the `<for from= to=
+  step=>` range arithmetic and attribute-tag `<for>` sources. Pinned by
+  `expression-mappings.test.ts` and `packages/tooling/tsc/src/expression-values-solid-typecheck.test.ts`.
 - **`/var` binds `any` on this host, unlike html/preact/react/hono** (TODO
   `tag-var-type-from-return`, filed from PR #159 round 2; firstmate's ruling
   2026-09-28: option C). Every JSX host but this one binds `/var` with

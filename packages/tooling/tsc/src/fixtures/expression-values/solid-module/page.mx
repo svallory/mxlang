@@ -1,0 +1,5 @@
+import { nope } from "./nowhere.ts";
+static const bad: number = "s";
+export interface Input { x: Missing }
+
+<p>${input.x}</p>

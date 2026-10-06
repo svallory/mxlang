@@ -1,0 +1,6 @@
+static const pick = (...a: string[]): number => a.length;
+
+<field mode="loose" modes=[:strict, :loose]/>
+<field mode="loose" count=pick(:a, "b")/>
+<input value=pick(:a, "b")/>
+<p>${pick(:t, "u")}</p>

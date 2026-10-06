@@ -3775,6 +3775,76 @@ function emittedDiagnostics(
   };
 }
 
+/**
+ * A whole-file `.mx` resolved to Solid reported no TypeScript error at all:
+ * the Solid emitter recorded no mappings for values and the plugin does not
+ * re-lower a host that records its own, so every diagnostic fell on unmapped
+ * generated text. Each error now lands on exactly the expression the author
+ * wrote (offset and length), including inside a nested atom (decision 156).
+ */
+describe("expression values are mapped for a Solid whole-file page", () => {
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+  const FIELD =
+    'export interface Input { mode: "strict" | "loose"; modes?: ("strict" | "loose")[]; count?: number }\n<p>${input.mode}</p>\n';
+  const PAGE = [
+    'import Field from "./field.mx"',
+    "static const pick = (...a: string[]): number => a.length;",
+    "static const bad: number = 1;",
+    "",
+    '<Field mode="loose" modes=[:strict, :lose]/>',
+    '<Field mode="loose" count=pick(:a, missingCount)/>',
+    "<input value=pick(:a, missingAttr)/>",
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+    "<p>${pick(:t, missingText)}</p>",
+    '<Field mode="loose" modes=["strict", 42]/>',
+    "<if=missingTest><p/></if>",
+    "<for|x| of=missingList><p/></for>",
+    "",
+  ].join("\n");
+
+  // [expression the diagnostic must cover, TypeScript code]
+  const EXPECTED: [string, number][] = [
+    [":lose", 2820],
+    ["missingCount", 2304],
+    ["missingAttr", 2304],
+    ["missingText", 2304],
+    ["42", 2322],
+    ["missingTest", 2304],
+    ["missingList", 2304],
+  ];
+
+  it("reports each error on the expression itself", () => {
+    const directory = `${here}/fixtures/solid-policy`;
+    const page = `${directory}/expr-page.mx`;
+    const consumer = `${directory}/expr-consumer.ts`;
+    const service = createPluginService(
+      {
+        [page]: PAGE,
+        [`${directory}/field.mx`]: FIELD,
+        [consumer]: 'import "./expr-page.mx";\n',
+      },
+      [consumer],
+    );
+    service.getSemanticDiagnostics(consumer);
+
+    const found = service
+      .getSemanticDiagnostics(page)
+      .map((diagnostic) => [
+        diagnostic.start,
+        diagnostic.length,
+        diagnostic.code,
+      ]);
+
+    expect(found).toEqual(
+      EXPECTED.map(([expression, code]) => [
+        PAGE.indexOf(expression),
+        expression.length,
+        code,
+      ]),
+    );
+  });
+});
+
 function createPluginService(
   files: Record<string, string>,
   rootFiles: string[],

@@ -22,7 +22,9 @@ import {
   concatMapped,
   type GeneratedMapping,
   lower,
+  type MappedCode,
   type MxWarning,
+  mapped,
   moduleExportName,
   type Node,
   newCtx,
@@ -434,6 +436,28 @@ export function compileSolidMx(
 }
 
 /**
+ * A module-level statement's text mapped to where the author wrote it. The
+ * IR's `code` can be shorter than its `span` (a `static` block's keyword is
+ * dropped), so the text is located inside the span; unmapped when it is not
+ * found there (a synthesized import has no span at all).
+ */
+function mappedStatement(
+  source: string,
+  node: { code: string; span?: { sourceStart: number; sourceEnd: number } },
+): MappedCode {
+  const { span } = node;
+  const at = span
+    ? source.slice(span.sourceStart, span.sourceEnd).indexOf(node.code)
+    : -1;
+  if (!span || at < 0 || node.code.length === 0) return mapped(node.code, null);
+  const sourceStart = span.sourceStart + at;
+  return mapped(node.code, {
+    sourceStart,
+    sourceEnd: sourceStart + node.code.length,
+  });
+}
+
+/**
  * Compiles a whole `.mx` file to a Solid component module.
  *
  * This is the tag-unit entry point (decision 95): a `tags/icon.mx` is an
@@ -485,8 +509,10 @@ export function compileSolidUnit(
   }
 
   const parts: Array<string | ReturnType<typeof emitSolidWithMappings>> = [];
-  for (const node of ir.imports) parts.push(`${node.code}\n`);
-  for (const node of ir.hoisted) parts.push(`${node.code}\n`);
+  for (const node of ir.imports)
+    parts.push(mappedStatement(source, node), "\n");
+  for (const node of ir.hoisted)
+    parts.push(mappedStatement(source, node), "\n");
   // The author's `export interface Input` is emitted and the component
   // parameter is annotated with it, exactly as `@mxlang/preact` and
   // `@mxlang/html` do, so a caller's `<Card title=1/>` is a JSX props check
@@ -496,7 +522,12 @@ export function compileSolidUnit(
   // `.tsx` id, and Solid's native compiler parses TS and passes the types
   // through for vite's own transform to strip. A component with no `Input`
   // gets an empty one, again as on the other hosts.
-  parts.push(`${ir.inputInterface?.code ?? "export interface Input {}"}\n`);
+  parts.push(
+    ir.inputInterface
+      ? mappedStatement(source, ir.inputInterface)
+      : "export interface Input {}",
+    "\n",
+  );
   if (ir.needsAttrTagImport) {
     parts.unshift(`import type { AttrTag } from "@mxlang/solid";\n`);
   }

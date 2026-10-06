@@ -854,31 +854,57 @@ function isPrimitiveValue(value: Expr): boolean {
  */
 function dynTextareaValue(
   name: string,
-  value: string,
+  value: string | MappedCode,
   native: NativeAttrs | undefined,
-): string {
-  if (name !== "value" || native?.when === undefined) return value;
+): MappedCode {
+  if (name !== "value" || native?.when === undefined) {
+    return concatMapped(value);
+  }
   if (attrGuardUse) attrGuardUse.dynTextarea = true;
-  return `${MX_TEXTAREA_DYN_VALUE_BINDING}(${value}, ${native.tag})`;
+  return concatMapped(
+    `${MX_TEXTAREA_DYN_VALUE_BINDING}(`,
+    value,
+    `, ${native.tag})`,
+  );
 }
 
 /** A spread (or args object) on a runtime-resolved tag, with the same doubling. */
 function dynTextareaSpread(
-  value: string,
+  value: string | MappedCode,
   native: NativeAttrs | undefined,
-): string {
-  if (native?.when === undefined) return value;
+): MappedCode {
+  if (native?.when === undefined) return concatMapped(value);
   if (attrGuardUse) attrGuardUse.dynTextarea = true;
-  return `${MX_TEXTAREA_DYN_SPREAD_BINDING}(${value}, ${native.tag})`;
+  return concatMapped(
+    `${MX_TEXTAREA_DYN_SPREAD_BINDING}(`,
+    value,
+    `, ${native.tag})`,
+  );
 }
 
 function guardValue(
   name: string,
-  value: string,
+  value: string | MappedCode,
   native: NativeAttrs | undefined,
-): string {
-  if (!native) return value;
-  return `${MX_ATTR_VALUE_BINDING}(${JSON.stringify(name)}, ${value}, ${nativeTagOf(native)})`;
+): MappedCode {
+  if (!native) return concatMapped(value);
+  return concatMapped(
+    `${MX_ATTR_VALUE_BINDING}(${JSON.stringify(name)}, `,
+    value,
+    `, ${nativeTagOf(native)})`,
+  );
+}
+
+/**
+ * An attribute value's text with its authored mapping. A method rewritten to
+ * an arrow function is generated text, not source text, so it stays unmapped
+ * (a mapping whose texts differ is worse than none).
+ */
+function mappedValue(expr: Expr): MappedCode {
+  const method = methodExpression(expr);
+  return method === null || method === expr.code
+    ? mappedExpr(expr)
+    : concatMapped(method);
 }
 
 function renderAttr(
@@ -898,16 +924,10 @@ function renderAttr(
   ) {
     const value =
       attr.kind === "static"
-        ? JSON.stringify(attr.value)
+        ? mapped(JSON.stringify(attr.value), attr.valueSpan ?? null)
         : attr.kind === "boolean"
-          ? "true"
-          : (methodExpression(attr.value) ?? attr.value.code);
-    const valueSpan =
-      attr.kind === "static"
-        ? attr.valueSpan
-        : attr.kind === "dynamic"
-          ? attr.value.span
-          : undefined;
+          ? concatMapped("true")
+          : mappedValue(attr.value);
     const guardedColon =
       native !== undefined &&
       attr.kind === "dynamic" &&
@@ -923,21 +943,30 @@ function renderAttr(
       guardedColon && native
         ? concatMapped(
             `${MX_ATTR_VALUE_BINDING}(${JSON.stringify(attr.name)}, `,
-            mapped(value, valueSpan ?? null),
+            value,
             `, ${nativeTagOf(native)})`,
           )
-        : mapped(value, valueSpan ?? null),
+        : value,
       ")}}",
     );
   }
   switch (attr.kind) {
     case "spread": {
       if (native === undefined) {
-        return concatMapped(` {...${attr.value.code}}`);
+        return concatMapped(" {...", mappedExpr(attr.value), "}");
       }
       if (attrGuardUse) attrGuardUse.spread = true;
       return concatMapped(
-        ` {...${dynTextareaSpread(`${MX_ATTR_SPREAD_BINDING}(${attr.value.code}, ${nativeTagOf(native)})`, native)}}`,
+        " {...",
+        dynTextareaSpread(
+          concatMapped(
+            `${MX_ATTR_SPREAD_BINDING}(`,
+            mappedExpr(attr.value),
+            `, ${nativeTagOf(native)})`,
+          ),
+          native,
+        ),
+        "}",
       );
     }
     case "boolean":
@@ -951,7 +980,9 @@ function renderAttr(
         return concatMapped(
           " ",
           mapped(attr.name, mapName ? attr.nameSpan : null),
-          `={${dynTextareaValue("value", JSON.stringify(attr.value), native)}}`,
+          "={",
+          dynTextareaValue("value", JSON.stringify(attr.value), native),
+          "}",
         );
       }
       return concatMapped(
@@ -989,7 +1020,9 @@ function renderAttr(
       return concatMapped(
         " ",
         mapped(prop, null),
-        `={${methodExpression(attr.value) ?? attr.value.code}}`,
+        "={",
+        mappedValue(attr.value),
+        "}",
       );
     }
     case "dynamic": {
@@ -1005,7 +1038,7 @@ function renderAttr(
           `="${escapeAttribute(fixed)}"`,
         );
       }
-      const value = methodExpression(attr.value) ?? attr.value.code;
+      const value = mappedValue(attr.value);
       // Marko omits a falsy primitive class and prints `true`; Solid's own
       // `class={v}` always prints the attribute, so a non-literal class on a
       // native element becomes a one-key prop object that is empty when omitted.
@@ -1020,9 +1053,7 @@ function renderAttr(
         return concatMapped(
           " {...",
           `${MX_CLASS_BINDING}(`,
-          value === attr.value.code
-            ? mappedExpr(attr.value)
-            : mapped(value, attr.value.span ?? null),
+          value,
           `, ${nativeTagOf(native)})}`,
         );
       }
@@ -1038,7 +1069,9 @@ function renderAttr(
         return concatMapped(
           " ",
           mapped(attr.name, mapName ? attr.nameSpan : null),
-          `={(${guardValue(attr.name, value, native)} ?? false) !== false}`,
+          "={(",
+          guardValue(attr.name, value, native),
+          " ?? false) !== false}",
         );
       }
       // A string-shaped value can never render as `[object Object]`, so it
@@ -1052,7 +1085,13 @@ function renderAttr(
       return concatMapped(
         " ",
         mapped(attr.name, mapName ? attr.nameSpan : null),
-        `={${dynTextareaValue(attr.name, guarded ? guardValue(attr.name, value, native) : value, native)}}`,
+        "={",
+        dynTextareaValue(
+          attr.name,
+          guarded ? guardValue(attr.name, value, native) : value,
+          native,
+        ),
+        "}",
       );
     }
   }
@@ -1092,6 +1131,10 @@ function textareaContent(node: Extract<IrNode, { kind: "Element" }>): {
         value: {
           ...attr.value,
           code: `${MX_TEXTAREA_OMIT_BINDING}(${attr.value.code})`,
+          // Generated text wrapped around the author's value: a span over
+          // different text would shift the positions inside it.
+          span: undefined,
+          atoms: undefined,
         },
       },
     ];
@@ -1105,7 +1148,9 @@ function textareaContent(node: Extract<IrNode, { kind: "Element" }>): {
       value = concatMapped(
         `${MX_TEXTAREA_PICK_BINDING}(`,
         value,
-        `, ${attr.value.code})`,
+        ", ",
+        mappedExpr(attr.value),
+        ")",
       );
     } else if (isValue(attr)) {
       value =
@@ -1186,13 +1231,17 @@ function renderAttrs(
         return concatMapped(
           " ",
           mapped("class", mapNames ? attr.nameSpan : null),
-          `={[${JSON.stringify(merged)}, ...${attr.value.code}]}`,
+          `={[${JSON.stringify(merged)}, ...`,
+          mappedExpr(attr.value),
+          "]}",
         );
       }
       return concatMapped(
         " ",
         mapped("class", mapNames ? attr.nameSpan : null),
-        `={[${JSON.stringify(merged)}, ${attr.value.code}]}`,
+        `={[${JSON.stringify(merged)}, `,
+        mappedExpr(attr.value),
+        "]}",
       );
     }),
   );
@@ -1269,7 +1318,7 @@ function escapedBlockValue(expr: Expr): MappedCode {
   const escaped = `__mxEscaped${serial}`;
   return concatMapped(
     `() => { const ${value} = `,
-    expr.code,
+    mappedExpr(expr),
     `; const ${escaped} = ${MX_ESCAPE_BINDING}(${value}); return ${escaped} === undefined ? ${value} : ${escaped}; }`,
   );
 }
@@ -1347,10 +1396,12 @@ function attributeTagAttrValue(
       ) {
         return fail("`style=` with a non-object value", attr);
       }
-      return mapped(
-        methodExpression(attr.value) ?? attr.value.code,
-        attr.value.span ?? attr.nameSpan,
-      );
+      return attr.value.span
+        ? mappedValue(attr.value)
+        : mapped(
+            methodExpression(attr.value) ?? attr.value.code,
+            attr.nameSpan,
+          );
   }
 }
 
@@ -1424,7 +1475,7 @@ function attributeTagValue(
   const parts: Array<string | MappedCode> = [];
   for (const attr of tag.attrs) {
     if (parts.length > 0) parts.push(", ");
-    if (attr.kind === "spread") parts.push(`...${attr.value.code}`);
+    if (attr.kind === "spread") parts.push("...", mappedExpr(attr.value));
     else
       parts.push(
         mapped(JSON.stringify(attr.name), attr.nameSpan),
@@ -1482,7 +1533,7 @@ function attributeTagSingle(
   for (const branch of node.branches) {
     if (branch.test) {
       parts.push(
-        branch.test.code,
+        mappedExpr(branch.test),
         " ? ",
         attributeTagSingle(branch.nodes, as, valueType),
         " : ",
@@ -1535,7 +1586,7 @@ function attributeTagArrayNode(
   for (const branch of node.branches) {
     if (branch.test) {
       parts.push(
-        branch.test.code,
+        mappedExpr(branch.test),
         " ? ",
         attributeTagArray(branch.nodes, as, arrayType),
         " : ",
@@ -1868,7 +1919,7 @@ export class SolidEmitter implements Emitter<string> {
         node,
       );
     }
-    this.#out.push(concatMapped(`{${node.expr.code}}`));
+    this.#out.push(concatMapped("{", mappedExpr(node.expr), "}"));
   }
 
   element(node: Extract<IrNode, { kind: "Element" }>): void {
@@ -1886,9 +1937,11 @@ export class SolidEmitter implements Emitter<string> {
     const attrs = renderAttrs(textarea?.attrs ?? node.attrs, false, {
       tag: JSON.stringify(node.name),
     });
-    const innerHtml = raw ? ` innerHTML={${raw.expr.code}}` : "";
+    const innerHtml = raw
+      ? concatMapped(" innerHTML={", mappedExpr(raw.expr), "}")
+      : concatMapped();
     if (node.void) {
-      this.#out.push(concatMapped(`<${node.name}`, attrs, `${innerHtml} />`));
+      this.#out.push(concatMapped(`<${node.name}`, attrs, innerHtml, " />"));
       return;
     }
     const children = raw
@@ -1900,7 +1953,8 @@ export class SolidEmitter implements Emitter<string> {
       concatMapped(
         `<${node.name}`,
         attrs,
-        `${innerHtml}>`,
+        innerHtml,
+        ">",
         children,
         `</${node.name}>`,
       ),
@@ -1930,7 +1984,9 @@ export class SolidEmitter implements Emitter<string> {
 
     const attrs = renderAttrs(node.attrs, true);
     const tags = attributeTagProps(node.attrTagProps, name);
-    const innerHtml = raw ? ` innerHTML={${raw.expr.code}}` : "";
+    const innerHtml = raw
+      ? concatMapped(" innerHTML={", mappedExpr(raw.expr), "}")
+      : concatMapped();
     // A `/var` on a returning unit rides along as a callback prop, and the
     // JSX stays JSX: this host calls components through JSX, so the value
     // channel has to be a prop rather than a destructured return (§2.4).
@@ -1957,7 +2013,9 @@ export class SolidEmitter implements Emitter<string> {
           mapped(name, node.nameSpan),
           attrs,
           tags,
-          `${returnProp}${innerHtml} />`,
+          returnProp,
+          innerHtml,
+          " />",
         ),
       );
       return;
@@ -2047,7 +2105,7 @@ export class SolidEmitter implements Emitter<string> {
       );
     }
 
-    const positional = node.args.map((arg) => concatMapped(arg.code));
+    const positional = node.args.map((arg) => mappedExpr(arg));
     const named_ = target.params
       .slice(positional.length)
       .map((param) => named.get(param) ?? concatMapped("undefined"));
@@ -2124,7 +2182,9 @@ export class SolidEmitter implements Emitter<string> {
       node.target.kind === "dynamic"
         ? node.target.valueImportBinding
         : undefined;
-    const innerHtml = raw ? ` innerHTML={${raw.expr.code}}` : "";
+    const innerHtml = raw
+      ? concatMapped(" innerHTML={", mappedExpr(raw.expr), "}")
+      : concatMapped();
     if (node.var && lazyScope) {
       fail(
         `\`/var\` on a dynamic tag inside \`<for>\`/\`<if>\` is not supported on Solid yet; bind it at the top level of the template`,
@@ -2225,7 +2285,9 @@ export class SolidEmitter implements Emitter<string> {
               component,
               attrs,
               tagsProps,
-              `${returnProp}${innerHtml} />`,
+              returnProp,
+              innerHtml,
+              " />",
             ),
           value,
         ),
@@ -2285,7 +2347,9 @@ export class SolidEmitter implements Emitter<string> {
       const fallbackAttr =
         next === null ? concatMapped() : concatMapped(" fallback={", next, "}");
       return concatMapped(
-        `<Show when={${branch.condition.code}}`,
+        "<Show when={",
+        mappedExpr(branch.condition),
+        "}",
         fallbackAttr,
         ">",
         inLazyScope(() => blockExpression(branch.children)),
@@ -2305,7 +2369,9 @@ export class SolidEmitter implements Emitter<string> {
     const matches = concatMapped(
       ...conditioned.map((branch) =>
         concatMapped(
-          `<Match when={${branch.condition?.code}}>`,
+          "<Match when={",
+          branch.condition ? mappedExpr(branch.condition) : "",
+          "}>",
           inLazyScope(() => blockExpression(branch.children)),
           "</Match>",
         ),
@@ -2326,6 +2392,7 @@ export class SolidEmitter implements Emitter<string> {
     const [first = "item", second] = node.params;
     if (node.source.kind === "of") {
       let keyed: string;
+      let keyedAttr: MappedCode | undefined;
       if (!node.key) keyed = "";
       else if (node.key.shape === "string") {
         const field =
@@ -2334,7 +2401,10 @@ export class SolidEmitter implements Emitter<string> {
             : node.key.code.replace(/^['"]|['"]$/g, "");
         keyed = ` keyed={x => x.${field}}`;
       } else if (node.key.code.trim() === "identity") keyed = "";
-      else keyed = ` keyed={${node.key.code}}`;
+      else {
+        keyed = ` keyed={${node.key.code}}`;
+        keyedAttr = concatMapped(" keyed={", mappedExpr(node.key), "}");
+      }
 
       // Which parameters Solid hands as accessors follows the keying mode
       // (`solid-js/types/client/flow.d.ts`): with no `keyed` prop the row is
@@ -2349,7 +2419,11 @@ export class SolidEmitter implements Emitter<string> {
       ]);
       this.#out.push(
         concatMapped(
-          `<For each={${node.source.list.code}}${keyed}>{(${params.join(", ")}) => `,
+          "<For each={",
+          mappedExpr(node.source.list),
+          "}",
+          keyedAttr ?? keyed,
+          `>{(${params.join(", ")}) => `,
           jsxValue(inLazyScope(() => blockExpression(node.children))),
           "}</For>",
         ),
@@ -2377,7 +2451,9 @@ export class SolidEmitter implements Emitter<string> {
       );
       this.#out.push(
         concatMapped(
-          `<For each={Object.entries(${node.source.object.code} ?? {})} keyed={e => e[0]}>{(${entry}) => `,
+          "<For each={Object.entries(",
+          mappedExpr(node.source.object),
+          ` ?? {})} keyed={e => e[0]}>{(${entry}) => `,
           jsxValue(inLazyScope(() => blockExpression(node.children))),
           "}</For>",
         ),

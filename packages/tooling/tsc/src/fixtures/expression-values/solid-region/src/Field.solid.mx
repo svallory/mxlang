@@ -1,0 +1,4 @@
+export interface Input { mode: "strict" | "loose"; modes?: ("strict" | "loose")[]; count?: number }
+export default function Field(input: Input): JSX.Element {
+  return <p>${input.mode}</p>;
+}
