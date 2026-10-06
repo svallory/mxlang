@@ -33,6 +33,7 @@ jobs:
       - run: bun run lint
 
   test:
+    name: test (${{ matrix.shard }})
     # Run 37142689080: Vitest alone took 448s. Two complete file shards
     # avoid leaving an eight-minute critical path after the job split.
     # The shards split by project, not by file hash: the mx-tsc tests (53
