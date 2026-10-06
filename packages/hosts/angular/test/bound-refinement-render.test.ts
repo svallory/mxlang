@@ -3,21 +3,14 @@ import "@angular/compiler";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { ErrorHandler } from "@angular/core";
 import { getTestBed, TestBed } from "@angular/core/testing";
 import {
   BrowserTestingModule,
   platformBrowserTesting,
 } from "@angular/platform-browser/testing";
 import ts from "typescript";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { REFINE_HELPER_MEMBERS } from "../src/emitter.ts";
 
 /**
@@ -189,23 +182,23 @@ describe("a bound attribute's refinement runs on change (Angular's renderer)", (
     // Angular's own `[(v)]="item"` here is a compile error (template variables
     // are read-only); the refined form calls `item.set`, which a string lacks,
     // so the write fails loudly (Angular's ErrorHandler reports the
-    // listener's TypeError) instead of landing on `this.item`.
+    // listener's TypeError) instead of landing on `this.item`. The handler
+    // is replaced so the error is collected rather than rethrown out of the
+    // EventEmitter as an uncaught exception.
+    const reported: unknown[] = [];
+    TestBed.configureTestingModule({
+      rethrowApplicationErrors: false,
+      providers: [
+        {
+          provide: ErrorHandler,
+          useValue: { handleError: (error: unknown) => reported.push(error) },
+        },
+      ],
+    });
     const r = await render(
       "<for|item| of=items><div appPick v:fn:=item/></for>",
     );
-    const reported: unknown[] = [];
-    const spy = vi
-      .spyOn(console, "error")
-      .mockImplementation((...args: unknown[]) => {
-        reported.push(...args);
-      });
-    try {
-      r.emit("abc");
-    } catch (error) {
-      reported.push(error);
-    } finally {
-      spy.mockRestore();
-    }
+    r.emit("abc");
     expect(String(reported.find((e) => e instanceof Error))).toMatch(
       /set is not a function/,
     );
