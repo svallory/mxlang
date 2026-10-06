@@ -2264,12 +2264,16 @@ export class SolidEmitter implements Emitter<string> {
         if (node.content) {
           parts.push(concatMapped("content: ", contentValue()));
         }
+        // The params beyond the first are passed as `undefined`: the hoisted
+        // function declares them, and TypeScript counts a missing argument
+        // (TS2554) even though a JS call tolerates it.
         args = [
           concatMapped(
             "{ ",
             ...parts.flatMap((part, i) => (i === 0 ? [part] : [", ", part])),
             " }",
           ),
+          ...target.params.slice(1).map(() => concatMapped("undefined")),
         ];
       }
     } else {

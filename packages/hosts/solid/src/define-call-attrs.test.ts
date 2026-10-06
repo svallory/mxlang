@@ -151,6 +151,16 @@ describe("solid: a <define> call passes its attributes as the first param", () =
     expect(code).not.toContain("(undefined)");
   });
 
+  it("pads the params beyond the first with undefined, for the type checker", () => {
+    const { code, hoistedDefines } = compile(
+      "<define/Row|{ n }, i|><li>${n}</li></define><Row n=1/>",
+      "",
+    );
+    expect(code).toContain(
+      `{${hoistedDefines[0]?.binding}({ "n": 1 }, undefined)}`,
+    );
+  });
+
   it("emits no argument for a define without params", () => {
     const { code, hoistedDefines } = compile(
       "<define/Row>x</define><Row n=1/>",
