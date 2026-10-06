@@ -162,13 +162,12 @@ describe.each(HOSTS)(
 
     it("type-checks the body of a shorthand handler", () => {
       const found = errorsIn(host, "ShorthandBody");
-      expect(found.map((d) => [d.line, d.code])).toEqual([[1, "TS2339"]]);
+      // The body maps to the authored body (decision 167), so the error
+      // lands on `nope` exactly: `<button onClick(e) { e.nope(); }>`, column 24.
+      expect(found.map((d) => [d.line, d.column, d.code])).toEqual([
+        [1, 24, "TS2339"],
+      ]);
       expect(found[0]?.message).toContain("nope");
-      // A shorthand handler has no source span of its own, so its generated
-      // function maps onto the attribute name: the error stays on the
-      // handler's line, inside the attribute name's range.
-      expect(found[0]?.column).toBeGreaterThanOrEqual(9);
-      expect(found[0]?.column).toBeLessThanOrEqual(16);
     });
 
     it("reports an error in an arrow handler's body at main's exact column", () => {

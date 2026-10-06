@@ -58,14 +58,17 @@ describe.each(HOSTS)("handler positions on %s (decision 140)", (host) => {
     expect(toSource(generated.indexOf("satisfies"))).toBe(17);
   });
 
-  it("maps a shorthand handler's parameter and keyword inside the attribute name", () => {
+  it("maps a shorthand handler's keyword to the attribute name and its body to the authored body", () => {
     const { generated, toSource } = virtual(host, shorthand);
     const keyword = toSource(generated.indexOf("satisfies"));
-    const body = toSource(generated.indexOf("e.nope()"));
-    for (const offset of [keyword, body]) {
-      expect(offset).toBeGreaterThanOrEqual(shorthand.indexOf("onClick"));
-      expect(offset).toBeLessThanOrEqual(
-        shorthand.indexOf("onClick") + "onClick".length,
+    expect(keyword).toBeGreaterThanOrEqual(shorthand.indexOf("onClick"));
+    expect(keyword).toBeLessThanOrEqual(
+      shorthand.indexOf("onClick") + "onClick".length,
+    );
+    // Decision 167: the body maps token by token, not onto the attribute name.
+    for (const within of [0, 2, 7]) {
+      expect(toSource(generated.indexOf("e.nope()") + within)).toBe(
+        shorthand.indexOf("e.nope()") + within,
       );
     }
   });

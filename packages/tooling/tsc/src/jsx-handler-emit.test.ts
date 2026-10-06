@@ -123,7 +123,7 @@ describe.each(HOSTS)(
         // Same handlers as the runtime compile, modulo the one paren layer
         // TypeScript keeps around an erased `satisfies` operand.
         expect(js).toMatch(
-          /onClick: \(?\(e\) => \{ e\.preventDefault\(\); \}\)?/,
+          /onClick: \(?function \(e\) \{ e\.preventDefault\(\); \}\)?/,
         );
         expect(js).toMatch(/onKeyDown: \(?\(e\) => e\.key\)?/);
 
