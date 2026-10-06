@@ -441,7 +441,11 @@ export function tagParamError(
   ) {
     return undefined;
   }
-  const reason = CARET_LINE.exec(message)?.[1];
+  // Marko colours its code frame when the terminal allows it (CI does), so
+  // the caret line is matched with the escape sequences removed.
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escapes
+  const plain = message.replace(/\u001b\[[0-9;]*m/g, "");
+  const reason = CARET_LINE.exec(plain)?.[1];
   const parser = markoParser();
   if (!reason || !parser) return undefined;
   const lineStart = source.split("\n").slice(0, at.line - 1);
