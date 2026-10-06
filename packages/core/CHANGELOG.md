@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.1.0-alpha.7
+
+- **Fixed (decision 165):** the bundled template parser no longer throws on a closing tag after a concise tag that never got its name (`,--/</e>`); it reports `EXTRA_CLOSING_TAG` through its error callback. Inherited from htmljs-parser 5.18.0.
+- **Fixed (decision 156 addendum 11):** Unicode whitespace and line terminators behave as ASCII whitespace in every look-behind of the template parser, not only the atom one. `(é)<NBSP>/ 2` divides; before, `/` was read as a regex start.
+- **Fixed (decision 156 addendum 8):** a comment before `of`, `yield` or `await` is skipped as whitespace is, so `f(/*c*/ await :b)` lexes no atom, as `f( await :b)` does not.
+- **Behaviour change (addendum 11):** in a body, text after a non-breaking space and `//` is a line comment, as after an ASCII space (`<div>a<NBSP>// c</div>` no longer renders `// c`).
+- **Behaviour change (addendum 12):** in concise mode, `--` after Unicode whitespace starts the text block instead of being read as an attribute; the attribute's range keeps the trailing whitespace.
+
 ## 0.1.0-alpha.6
 
 - **Fixed (template-parser-ascii-only-lookbehinds):** every look-behind in the bundled template parser treats a non-ASCII letter (U+0080 and above, except Unicode whitespace and line terminators) as a word character. `x=é / 2` and `${é / 2}` read `/` as division instead of a regex start, and `<div x=énew y=1/>` no longer swallows the next attribute (`énew` was read as ending in the keyword `new`). Valid TypeScript with non-English identifiers failed to parse before.

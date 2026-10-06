@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.0-alpha.7
+
+- Depends on `@mxlang/core@0.1.0-alpha.7`: the template parser no longer throws on a stray closing tag after a nameless concise tag, and Unicode whitespace behaves as ASCII whitespace in every look-behind. Two behaviour changes for input containing Unicode whitespace are listed in core's changelog. No change to the data target's own code.
+
 ## 0.1.0-alpha.6
 
 - Depends on `@mxlang/core@0.1.0-alpha.6`: non-ASCII identifiers before `/` and before keywords parse correctly, Unicode whitespace before an atom's `:` behaves as a space, and a comment in a text tag's open tag no longer crashes the parser. No change to the data target's own code.
