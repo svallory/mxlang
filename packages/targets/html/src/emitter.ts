@@ -907,6 +907,17 @@ export function createEmitter(selfName?: string): StringEmitter {
           index === 0 ? [part] : [", ", part],
         ),
       );
+      // The call's props object stands for the tag's attributes and body, so
+      // its braces map onto the tag name, as JSX hosts report a call's props
+      // errors on the name: TypeScript anchors a missing required property
+      // or a props mismatch (TS2345) on the whole object, and Volar maps
+      // that range through its two ends. Only the braces: an attribute's own
+      // mapping inside stays the one an error on that attribute takes.
+      const propsObject = concatMapped(
+        mapped("{", node.nameSpan),
+        parts.length === 0 ? "  " : concatMapped(" ", joinedParts, " "),
+        mapped("}", node.nameSpan),
+      );
 
       if (target.kind === "dynamic") {
         // The value may be a component function, a renderable block, or a tag
@@ -974,7 +985,7 @@ export function createEmitter(selfName?: string): StringEmitter {
                   .map((param) => named.get(param) ?? "undefined"),
               ]
             : target.params.length > 0
-              ? [concatMapped("{ ", joinedParts, " }")]
+              ? [propsObject]
               : [];
         write(
           concatMapped(
@@ -988,16 +999,6 @@ export function createEmitter(selfName?: string): StringEmitter {
         );
         return;
       }
-
-      // No props at all: the call's empty object literal is where
-      // TypeScript anchors a missing-required-property error (`{}` is
-      // the diagnostic's own span). With no attribute to map, fall back
-      // to the tag name so that diagnostic still lands inside the `.mx`
-      // file instead of being dropped as unmapped generated text.
-      const props =
-        parts.length === 0
-          ? mapped("{  }", node.nameSpan)
-          : concatMapped("{ ", joinedParts, " }");
 
       // Decision 155: a tag call passes this unit's sink down, and `/var`
       // binds what the callee's `render` returns. A discovered tag, a unit
@@ -1015,7 +1016,7 @@ export function createEmitter(selfName?: string): StringEmitter {
             node.var ? `const ${node.var} = ` : "",
             mapped(callee, node.nameSpan),
             ".render(",
-            props,
+            propsObject,
             `, ${state.sink});`,
           ),
         );
@@ -1027,7 +1028,7 @@ export function createEmitter(selfName?: string): StringEmitter {
           `__mxRenderTag(${state.sink}, `,
           mapped(callee, node.nameSpan),
           ")(",
-          props,
+          propsObject,
           ");",
         ),
       );

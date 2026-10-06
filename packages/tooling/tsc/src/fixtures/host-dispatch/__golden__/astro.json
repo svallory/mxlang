@@ -200,6 +200,26 @@
           },
           {
             "sourceOffsets": [
+              31
+            ],
+            "generatedOffsets": [
+              1007
+            ],
+            "lengths": [
+              4
+            ],
+            "generatedLengths": [
+              1
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
               38
             ],
             "generatedOffsets": [
@@ -207,6 +227,26 @@
             ],
             "lengths": [
               3
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              31
+            ],
+            "generatedOffsets": [
+              1094
+            ],
+            "lengths": [
+              4
+            ],
+            "generatedLengths": [
+              1
             ],
             "data": {
               "verification": true,

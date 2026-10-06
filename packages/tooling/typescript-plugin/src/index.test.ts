@@ -3,6 +3,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -23,7 +24,15 @@ import {
 import { print } from "@mxlang/parser";
 import { builtinLookup } from "@mxlang/target-registry";
 import ts from "typescript";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import {
   AMX_LANGUAGE_ID,
   composeAmxMappings,
@@ -4194,6 +4203,85 @@ describe("the hosts' ambient types in the editor (TargetHost.ambientTypes)", () 
         .getSemanticDiagnostics(page)
         .map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n")),
     ).toEqual([expect.stringMatching(/^Cannot find name 'Fragment'/)]);
+  });
+});
+
+describe("a tag call's props errors land on the tag name (html-call-props-mapped)", () => {
+  // The call's props object (`{ … }`) maps onto the tag name, as the JSX
+  // hosts report it: a missing required prop (TS2345 on the whole object) is
+  // reported exactly on the name, with no position marker.
+  const CARD =
+    "export interface Input { title: string; content?: () => string }\n<p>${input.title}</p>\n";
+  const COUNTER =
+    "export interface Input { start: number; content?: () => string }\n<span>${input.start}</span>\n<return value=input.start + 1/>\n";
+
+  describe.each(["html", "astro"])("on %s", (host) => {
+    let dir = "";
+    beforeAll(() => {
+      dir = realpathSync(mkdtempSync(join(tmpdir(), `mx-call-props-${host}-`)));
+      writeFileSync(
+        join(dir, "package.json"),
+        JSON.stringify({ name: "t", mx: { host, strict: false } }),
+      );
+      writeFileSync(join(dir, "card.mx"), CARD);
+      writeFileSync(join(dir, "counter.mx"), COUNTER);
+    });
+    afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+    const reported = (source: string) => {
+      const page = join(dir, "page.mx");
+      const consumer = join(dir, "index.ts");
+      const service = createPluginService(
+        {
+          [join(dir, "card.mx")]: CARD,
+          [join(dir, "counter.mx")]: COUNTER,
+          [page]: source,
+          [consumer]: 'import "./page.mx";',
+        },
+        [consumer],
+      );
+      service.getSemanticDiagnostics(consumer);
+      return service
+        .getSemanticDiagnostics(page)
+        .map((d) => [
+          d.code,
+          source.slice(d.start, (d.start ?? 0) + (d.length ?? 0)),
+          ts.flattenDiagnosticMessageText(d.messageText, "\n").split("\n")[0],
+        ]);
+    };
+    const importCard = 'import Card from "./card.mx";\n';
+    it.each([
+      ["with a body", `${importCard}<div>\n  <Card>x</Card>\n</div>\n`],
+      ["without one", `${importCard}<div>\n  <Card/>\n</div>\n`],
+    ])(
+      "a missing required prop %s, on the imported tag's name",
+      (_, source) => {
+        expect(reported(source)).toEqual([
+          [2345, "Card", expect.stringMatching(/^Argument of type .*\.$/)],
+        ]);
+      },
+    );
+
+    it("a wrong prop type, on the attribute", () => {
+      expect(reported(`${importCard}<Card title=1>x</Card>\n`)).toEqual([
+        [2322, "title", "Type 'number' is not assignable to type 'string'."],
+      ]);
+    });
+
+    // A unit declaring `<return>` is called through `render` directly, and
+    // is the one `/var` binds.
+    const importCounter = 'import Counter from "./counter.mx";\n';
+    it.each([
+      [
+        "a unit called through render",
+        `${importCounter}<Counter>x</Counter>\n`,
+      ],
+      ["a /var call", `${importCounter}<Counter/n>x</Counter>\n<p>\${n}</p>\n`],
+    ])("a missing required prop on %s, on its name", (_, source) => {
+      expect(reported(source)).toEqual([
+        [2345, "Counter", expect.stringMatching(/^Argument of type .*\.$/)],
+      ]);
+    });
   });
 });
 
