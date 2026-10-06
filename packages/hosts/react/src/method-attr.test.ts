@@ -143,7 +143,7 @@ describe("a method shorthand's typecheck mapping", () => {
   it.each([
     ["a nested block", "<button onClick() { if (c) { go(c) } }>x</button>"],
     ["an async body", "<button async onClick() { await go(1) }>x</button>"],
-    ["a generic method", "<button onPick<T>(v: T) { go(v) }>x</button>"],
+    ["a generic method", "<button onClick<T>(v: T) { go(v) }>x</button>"],
     ["a reformatted body", "<button onClick() { go(1) }>x</button>"],
   ])("maps the body of %s to the authored body", (_name, source) => {
     const needle = source.match(/go\([^)]*\)/)?.[0] ?? "";
@@ -157,7 +157,7 @@ describe("a method shorthand's typecheck mapping", () => {
   });
 
   it("keeps a generic method's type parameters in the typed output", () => {
-    const { code } = compile("<button onPick<T>(v: T) { go(v) }>x</button>");
+    const { code } = compile("<button onClick<T>(v: T) { go(v) }>x</button>");
     expect(code).toContain("function <T>(v: T) { go(v); }");
   });
 });
