@@ -214,24 +214,24 @@ describe("solid expression values", () => {
   });
 
   it.each([
-    ["`null`", "null", "Object.entries(null)"],
-    ["`undefined`", "undefined", "Object.entries(undefined)"],
+    [
+      "`null`, still defaulted so it renders nothing",
+      "null",
+      "Object.entries(null ?? {})",
+    ],
     ["a comma expression", "(o, { a: 1 })", "Object.entries((o, { a: 1 }))"],
     [
       "a comma expression ending in a name",
       "(a, o)",
       "Object.entries((a, o) ?? {})",
     ],
-  ])(
-    "emits %s as one argument with no unreachable fallback",
-    (_name, source, emitted) => {
-      const { code } = compileSolidUnit(
-        `<for|k, v| in=${source}><p>\${k}</p></for>`,
-        { filename: "/fixtures/values.mx", customTags: {} },
-      );
-      expect(code).toContain(emitted);
-    },
-  );
+  ])("emits %s as one argument", (_name, source, emitted) => {
+    const { code } = compileSolidUnit(
+      `<for|k, v| in=${source}><p>\${k}</p></for>`,
+      { filename: "/fixtures/values.mx", customTags: {} },
+    );
+    expect(code).toContain(emitted);
+  });
 
   it.each([
     ["a member read", "o.x", "Object.entries(o.x ?? {})"],

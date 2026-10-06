@@ -12,3 +12,4 @@ output. Each row means the oracle harness reports the diff as `divergent`
 | attrs | ssr-hydratable | Same reason as `attrs`/`dom`. |
 | todos | dom | `<input value=text()>` is an unknown-typed native attribute, wrapped by the decision 149 guard (`value={__mxAttrValue("value", text(), "input")}`); a hand-written twin has no wrapper. No other row differs. |
 | todos | ssr-hydratable | Same reason as `todos`/`dom`. |
+| counter | dom | A method shorthand `onClick() { … }` is emitted as the `function` expression the compiler printed for it (`onClick={function () { … }}`; lead ruling 2026-10-06, PR #362 split), which keeps Marko's `this`, a named function's binding and a generic method valid in TSX, where the twin writes the idiomatic arrow. Same handler behaviour; only the function form differs. The `ssr-hydratable` variant drops event handlers and still passes. |

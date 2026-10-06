@@ -106,8 +106,7 @@ Three facts worth knowing before touching it:
   `?? {}` (TS2869; `neverNullish` mirrors the checker's syntactic rule: a
   literal, a conditional of two such, a cast or `satisfies` around one), while
   a source binding looser than `??` is parenthesized before it (a comma
-  expression always is); a `null`/`undefined` source gets no `?? {}` either
-  (TS2871). The whole-file virtual code also gets the file kind's
+  expression always is). The whole-file virtual code also gets the file kind's
   `completeTypecheckModule` (`compileMxVirtual`), so `<For>`/`<Show>`/
   `<Dynamic>` resolve and a row's type is known. Known unmapped: the `<for
   from= to= step=>` range arithmetic, attribute-tag `<for>` sources, a method's

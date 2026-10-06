@@ -899,30 +899,19 @@ const LOOSER_THAN_NULLISH = new Set([
 ]);
 
 /**
- * TypeScript reads `node` as always nullish (`null`, `undefined`): `?? {}`
- * after it is TS2871, so it is left off and TypeScript reports the real
- * `Object.entries(null)` error instead.
- */
-function alwaysNullish(node: Node): boolean {
-  return (
-    node?.type === "NullLiteral" ||
-    (node?.type === "Identifier" && node.name === "undefined")
-  );
-}
-
-/**
  * A `<for in>` source inside `Object.entries(…)`, defaulted with `?? {}` unless
- * TypeScript reads it as never nullish (TS2869) or always nullish (TS2871),
- * both reported at the author's own expression. A source that binds looser
- * than `??` is parenthesized first: `a || b ?? {}` is a syntax error and
- * `c ? x : y ?? {}` would default only `y`. A comma expression is
- * parenthesized either way, since bare it is two arguments.
+ * TypeScript reads it as never nullish (it reports the `??` at the author's
+ * own expression, TS2869). A nullish source must render nothing, as in Marko,
+ * so `null`/`undefined` keep the fallback (TypeScript's TS2871 on that is the
+ * author's own degenerate source). A source that binds looser than `??` is
+ * parenthesized first: `a || b ?? {}` is a syntax error and `c ? x : y ?? {}`
+ * would default only `y`. A comma expression is parenthesized either way,
+ * since bare it is two arguments.
  */
 function forInSource(source: Expr): (string | MappedCode)[] {
   const prefix = "<For each={Object.entries(";
   const type = source.node?.type;
-  const fallback =
-    neverNullish(source.node) || alwaysNullish(source.node) ? "" : " ?? {}";
+  const fallback = neverNullish(source.node) ? "" : " ?? {}";
   return fallback === "" && type !== "SequenceExpression"
     ? [prefix, mappedExpr(source)]
     : LOOSER_THAN_NULLISH.has(type)

@@ -1296,8 +1296,12 @@ runtime, so a host with no runtime rejects it:
 An attribute method can arrive in **two shapes** and both must be detected:
 `<button onClick() { … }>` has `arguments` falsy and the method body as the
 attribute's *value* (measured against 5.42.5). Attribute methods lower to
-block-body arrows, never unwrapped (decision 11); a bare arrow is written
-`onClick=(() => f())`.
+block-body functions, never unwrapped (decision 11); a bare arrow is written
+`onClick=(() => f())`. The Preact-family hosts print the method as a
+block-body arrow; Solid emits the `function` expression the compiler printed
+for it (`function (e) { … }`, `async function <T>(…) { … }`; lead ruling
+2026-10-06), which keeps Marko's `this` and stays valid TSX for a generic
+method. An authored `function` expression or arrow is emitted as written.
 
 ### Attribute order
 

@@ -86,7 +86,7 @@ describe("Solid IR lowering", () => {
     [
       "attribute method",
       `<button onClick(e) { run(e) }>go</button>`,
-      ["onClick={(e) => {", "run(e);", "}}"],
+      ["onClick={function (e) {", "run(e);", "}}"],
     ],
     ["prop namespace", `<input prop:value=v>`, ["prop:value={v}"]],
     [
