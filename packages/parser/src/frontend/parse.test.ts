@@ -708,6 +708,21 @@ describe("§3.13 errors", () => {
   });
 });
 
+describe("interim, changes in PR 2b", () => {
+  it("interim, changes in PR 2b: a bare `,` line is an unnamed MxTag (PR 2b records MX_TAG_NAME_MISSING)", () => {
+    // Decision 163 addendum 9: PR 2b turns this into the recorded error
+    // MX_TAG_NAME_MISSING; this row pins the interim shape.
+    const d = doc(",");
+    expect(d.errors).toEqual([]);
+    expect(d.body[0]).toMatchObject({
+      type: "MxTag",
+      name: { kind: "unnamed", span: span(1, 1) },
+      start: 1,
+      end: 1,
+    });
+  });
+});
+
 describe("§3.14 MxReturn", () => {
   it("<return=x/>", () => {
     const tag = first("<return=x/>");

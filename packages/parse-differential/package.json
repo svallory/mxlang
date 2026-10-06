@@ -1,0 +1,16 @@
+{
+  "name": "@mxlang/parse-differential",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "report": "bun run src/report.ts"
+  },
+  "dependencies": {
+    "@mxlang/babel": "workspace:*",
+    "@mxlang/core": "workspace:*",
+    "@mxlang/parser": "workspace:*"
+  }
+}

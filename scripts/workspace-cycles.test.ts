@@ -133,6 +133,9 @@ describe("workspace dependency graph", () => {
   it("points every host at tsx-bridge, never at the parser package", () => {
     for (const [name, deps] of graph) {
       if (name === "@mxlang/parser") continue;
+      // Private test package of the parser port (PR 2 to PR 6): it compares
+      // the parser's front end with today's Marko tree and is never published.
+      if (name === "@mxlang/parse-differential") continue;
       expect(deps, `${name} depends on @mxlang/parser`).not.toContain(
         "@mxlang/parser",
       );

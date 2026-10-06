@@ -780,6 +780,8 @@ class FrontEnd {
       return;
     }
     if (!this.top || this.top._openEnded) {
+      // Interim (decision 163 addendum 9): PR 2b records MX_TAG_NAME_MISSING
+      // here instead; today's path crashes on this input.
       // A concise line that opens a tag with no name (`,` alone): the
       // template parser reports the open tag's end and its close, but no
       // name (parser-grammar, "a named close tag when the open tag never

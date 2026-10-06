@@ -1,0 +1,22 @@
+# https://moonrepo.dev/docs/config/project
+$schema: "https://moonrepo.dev/schemas/project.json"
+
+language: "typescript"
+
+tasks:
+  typecheck:
+    command: "tsc"
+    args: ["--noEmit"]
+    inputs:
+      - "src/**/*"
+      - "tsconfig.json"
+      - "/packages/parser/src/**/*"
+
+  test:
+    command: "vitest"
+    args: ["run", "--root", "../..", "--project", "@mxlang/parse-differential"]
+    inputs:
+      - "src/**/*"
+      - "/vitest.config.ts"
+      - "/packages/parser/src/**/*"
+      - "/packages/core/src/**/*"

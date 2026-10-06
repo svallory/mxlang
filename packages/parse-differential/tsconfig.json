@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    // The front end is not exported from `@mxlang/parser` until PR 3, so
+    // this package reads it by relative path.
+    "rootDir": "../..",
+    "types": ["node"],
+    "allowImportingTsExtensions": true,
+    "noUncheckedIndexedAccess": false
+  },
+  "include": ["src"]
+}

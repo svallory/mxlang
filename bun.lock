@@ -452,6 +452,15 @@
         "react-dom": "19.3.0",
       },
     },
+    "packages/parse-differential": {
+      "name": "@mxlang/parse-differential",
+      "version": "0.0.0",
+      "dependencies": {
+        "@mxlang/babel": "workspace:*",
+        "@mxlang/core": "workspace:*",
+        "@mxlang/parser": "workspace:*",
+      },
+    },
     "packages/parser": {
       "name": "@mxlang/parser",
       "version": "0.0.0",
@@ -1147,6 +1156,8 @@
     "@mxlang/language-server": ["@mxlang/language-server@workspace:packages/tooling/language-server"],
 
     "@mxlang/oracle": ["@mxlang/oracle@workspace:packages/oracle"],
+
+    "@mxlang/parse-differential": ["@mxlang/parse-differential@workspace:packages/parse-differential"],
 
     "@mxlang/parser": ["@mxlang/parser@workspace:packages/parser"],
 
