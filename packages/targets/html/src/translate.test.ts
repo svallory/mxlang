@@ -1700,6 +1700,49 @@ describe("a component body with tag params (`<List|item, i|>`) binds them (execu
     expect(code).toMatch(/content: \(\(item\) => \{/);
   });
 
+  // Measured against Marko 6.3.51 (renderStockMarko): `<${"div"}|x|>` is a
+  // compile error; a string that arrives at run time renders the element and
+  // the body called with no arguments (`<div><b></b></div>`); a null or absent
+  // target renders the body alone (`<b></b>`).
+  it("rejects a literal string target with a params body, as Marko does", () => {
+    for (const target of ['"div"', "'div'", "`div`"]) {
+      expect(() =>
+        compile(
+          src(`<\${${target}}|x|><b>\${x}</b></>`),
+          "/tmp/mx-translator-test/str.mx",
+        ),
+      ).toThrow("Tag does not support parameters.");
+    }
+  });
+
+  it("accepts a literal string target without params", () => {
+    expect(() =>
+      compile(src('<${"div"}><b>x</b></>'), "/tmp/mx-translator-test/ok.mx"),
+    ).not.toThrow();
+  });
+
+  it.each([
+    ["a run-time string", { tag: "div" }, "<div><b></b></div>"],
+    ["null", { tag: null }, "<b></b>"],
+    ["undefined", {}, "<b></b>"],
+  ])(
+    "renders %s target with a params body as Marko does",
+    async (_label, input, html) => {
+      expect(
+        await renderModules(
+          {
+            "entry.mx": [
+              "export interface Input { tag?: string | null }",
+              "<${input.tag}|x|><b>${x}</b></>",
+            ].join("\n"),
+          },
+          "entry.mx",
+          input,
+        ),
+      ).toBe(html);
+    },
+  );
+
   it("a body without params is unchanged", () => {
     const code = compile(
       src("export interface Input { L: any }\n<${input.L}><b>x</b></>"),

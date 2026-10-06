@@ -941,6 +941,17 @@ export function createEmitter(selfName?: string): StringEmitter {
       );
 
       if (target.kind === "dynamic") {
+        // A native element has nothing to call a params body with, so a
+        // literal tag name is Marko 6.3.51's own compile error. A string that
+        // arrives at run time is not an error there: it renders the element
+        // with the body called with no arguments, which `__mxRenderDynamic`
+        // does for a string or an absent target alike.
+        if (
+          node.content?.hasParams &&
+          /^(?:"[^"\\]*"|'[^'\\]*'|`[^`\\$]*`)$/.test(target.expr.code)
+        ) {
+          fail("Tag does not support parameters.", node);
+        }
         // The value may be a component function, a renderable block, or a tag
         // name as a string; all three are resolved at run time by
         // `renderDynamic`, emitted into the module rather than imported.
