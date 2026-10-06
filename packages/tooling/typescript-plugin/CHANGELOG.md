@@ -6,8 +6,6 @@
 
 - **Tests (render-consumers, decision 155):** `tsserver-load.test.ts` pins the signature wording of an html unit's default export in diagnostics again (reverts PR 1's `typeof Comp`).
 
-- **Added (mx-tsc-astro-ambient-types):** `ambientTypeFiles(rootNames, projectDir)`, the built-in hosts' ambient declaration files (`TargetHost.ambientTypes`) a program needs when it holds one of their file kinds; package files resolve from the project, then from the plugin's own install. Names no host.
-
 - **Fix (mx-tsc-astro-ambient-types):** the tsserver plugin adds the hosts' ambient declaration files to the project (`withAmbientTypes` over `getScriptFileNames`), the same files `mx-tsc` adds: with `{ astro: true }`, `Fragment` resolves in `.astro` and `.astro.mx` files without `types: ["astro/env"]`. New exports `ambientTypeFiles(rootNames, projectDir)` (asks every host of the project's lookup, a loaded third-party host included; package files resolve from the project, then from the plugin's install; names no host) and `withAmbientTypes`.
 
 - **Fix (astro-mx-custom-tag-tsx):** an `.astro.mx` page that calls a custom tag no longer projects to unparsable TSX (`TS1005 '>' expected`). The cause was upstream of the projection: `@mxlang/astro` lowered the tag to a `$`-led import (`$mx_Badge1`), which Astro treats as an HTML element, so `convertToTSX` rewrote its `/>` and Astro's own compiler shipped the literal `<$mx_Badge1 />`. The host now emits an upper-case-led binding (`Mx_Badge1`), so runtime and projection agree and the projection needs no swap.
