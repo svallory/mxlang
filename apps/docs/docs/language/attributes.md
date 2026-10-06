@@ -299,7 +299,7 @@ ever fires. MX emits what you wrote and warns:
 <button onDoubleClick=handle>x</button>
 ```
 
-> ``  `onDoubleClick` is not a DOM event; did you mean `onDblclick` ``
+> ``  `onDoubleClick` is not a DOM event; did you mean `onDblClick` ``
 
 The rule is simply this: **if the lowercased `on<Name>` is not a DOM event
 name, MX warns** — and suggests the right spelling when one exists. It never

@@ -574,7 +574,7 @@ const EVENT_ATTR = /^on[A-Z-]/;
  * counterpart, so neither has a spelling to suggest.
  */
 const NON_DOM_EVENT_SPELLINGS: Record<string, string | null> = {
-  onDoubleClick: "onDblclick",
+  onDoubleClick: "onDblClick",
   onDragExit: null,
   onEncrypted: null,
 };

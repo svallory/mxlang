@@ -29,6 +29,7 @@ export const honoDialect: JsxDialect = {
   suspenseName: "Suspense",
   fragmentModule: "hono/jsx",
   eventPropNames: honoEventPropNames,
+  closedEventPropNames: true,
   hookModules: ["hono/jsx"],
 };
 

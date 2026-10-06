@@ -3136,7 +3136,7 @@ describe("event attributes", () => {
     expect(warnings).toEqual([
       {
         message:
-          "`onDoubleClick` is not a DOM event; did you mean `onDblclick`",
+          "`onDoubleClick` is not a DOM event; did you mean `onDblClick`",
         line: 1,
         column: 8,
         file: "test.mx",

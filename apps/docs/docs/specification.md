@@ -1222,7 +1222,7 @@ hono's `onDoubleClick`, Preact's `onDblClick`). Preact and hono bound the old
 `onKeydown` spelling at run time, but their types reject it (decision 161), so
 each target looks the spelling up in its own list. The DOM name from
 `on<Name>`/`on-<exact>` is the input; the host's spelling is a lookup in its
-table. A DOM name a host's list does not know falls back to capitalize-first.
+table. A DOM name a React list does not know falls back to capitalize-first; Preact's and hono's lists are closed, so a name their JSX types declare no handler prop for (`on-fullscreenchange` on Preact, `onDoubleClick` on Preact, `on-search` on hono) is a compile error, never an emitted prop.
 
 A name that is **not** event-shaped — `onclick`, `once`, `on` — is an ordinary
 attribute. `<div on="x">` is data.
@@ -1244,7 +1244,7 @@ that silently means something else is the failure this rule exists to prevent.
 no element fires; core emits it as written and raises a **non-rewriting
 warning** positioned at the attribute name:
 
-> `` `onDoubleClick` is not a DOM event; did you mean `onDblclick` ``
+> `` `onDoubleClick` is not a DOM event; did you mean `onDblClick` ``
 
 **The rule:** a warning is emitted when the lowercased `on<Name>` is not a DOM
 event name. A suggestion is included when a corresponding DOM event exists.
@@ -1253,7 +1253,7 @@ The warning never changes the emitted event name.
 The set of spellings this catches is therefore a consequence of the rule, not
 its definition, and it is small: checked against the event names in
 TypeScript's `lib.dom.d.ts`, only three React spellings lowercase to a
-non-event — `onDoubleClick` (suggesting `onDblclick`), plus `onDragExit` and
+non-event — `onDoubleClick` (suggesting `onDblClick`), plus `onDragExit` and
 `onEncrypted`, which are React-only synthetic events with no DOM counterpart
 and so carry no suggestion. Every other React camelCase spelling —
 `onKeyDown`, `onMouseEnter`, `onFocusIn`, `onPointerDown`, `onTimeUpdate` and

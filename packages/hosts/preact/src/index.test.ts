@@ -1601,12 +1601,12 @@ describe("event attributes (decision 101, phase B of dom-events)", () => {
     expect(a).toBe(b);
   });
 
-  it("emits onDoubleClick as onDoubleclick without rewriting (no aliases)", () => {
-    // Core warns (`onDoubleClick` is not a DOM event) but never rewrites;
-    // the prop is recomposed from the DOM name exactly as written. The
-    // warning itself is pinned in the core's lower tests.
-    expect(markup("<button onDoubleClick=handler>x</button>")).toBe(
-      "<button onDoubleclick={handler}>x</button>",
+  it("rejects onDoubleClick: Preact's types declare no such prop (no aliases)", () => {
+    // Core warns (`onDoubleClick` is not a DOM event) and never rewrites;
+    // the emitter refuses a name the Preact types do not declare rather than
+    // emit `onDoubleclick`. The warning is pinned in the core's lower tests.
+    expect(errorOf("<button onDoubleClick=handler>x</button>")).toContain(
+      "`onDoubleClick` names the DOM event `doubleclick`, which Preact's JSX types declare no handler prop for",
     );
   });
 

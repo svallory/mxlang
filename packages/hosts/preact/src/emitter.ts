@@ -1012,6 +1012,10 @@ export class PreactEmitter implements Emitter<string> {
    * table in `react-dom`, Preact's and hono's from the names their JSX types
    * declare — none an MX invention.
    *
+   * A name the dialect declares no handler prop for (`closedEventPropNames`:
+   * Preact's `onDoubleClick`, hono's `onSearch`) is a compile error too —
+   * never an emitted prop the types reject or the runtime ignores.
+   *
    * A name JSX cannot spell as one identifier — a custom DOM event such as
    * `my-event` from `on-my-event` — is a uniform error on all three shared
    * targets (decision 101 (d)): even where a runtime could bind it, the same
@@ -1026,6 +1030,12 @@ export class PreactEmitter implements Emitter<string> {
       );
     }
     const irregular = this.#dialect.eventPropNames?.[attr.event];
+    if (irregular === undefined && this.#dialect.closedEventPropNames) {
+      fail(
+        `\`${attr.name}\` names the DOM event \`${attr.event}\`, which ${this.#dialect.name}'s JSX types declare no handler prop for; spell the event it fires, or use a \`ref\` to add the listener (\`ref={el => el?.addEventListener("${attr.event}", fn)}\`)`,
+        attr,
+      );
+    }
     const middle =
       irregular ?? attr.event.charAt(0).toUpperCase() + attr.event.slice(1);
     return `on${middle}`;

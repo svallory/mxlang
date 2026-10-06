@@ -105,9 +105,17 @@ export interface JsxDialect {
    * that loop): React's names are camelCase data lowercased for the DOM,
    * which no derivation can reverse (`keydown` → `onKeyDown`, never
    * `onKeydown`). Preact and hono look theirs up in the camelCase names
-   * their JSX types declare ({@link CAMEL_EVENT_NAMES}).
+   * their JSX types declare ({@link preactEventPropNames}, {@link honoEventPropNames}).
    */
   eventPropNames?: Record<string, string>;
+  /**
+   * \`true\` when {@link eventPropNames} is the complete list of handler props
+   * the dialect's JSX types declare: a DOM event name outside it is a compile
+   * error rather than an \`on\` + capitalized guess the type-check (or, under a
+   * plain build, nothing) would reject. Preact and hono; React keeps the
+   * capitalized fallback.
+   */
+  closedEventPropNames?: boolean;
   /**
    * Module specifiers whose hook imports (`use*`) are refused inside a
    * returning unit (`rejectHooksInReturningUnit`, `index.ts`). A returning
@@ -132,10 +140,9 @@ export interface JsxDialect {
 }
 
 /**
- * The camelCase spelling of every DOM event the Preact and Hono JSX types
- * declare a handler prop for (the middle of the prop: `"KeyDown"` →
- * `onKeyDown`), the union of `preact`'s `jsx.d.ts` and `hono/jsx`'s
- * `intrinsic-elements.d.ts`, less `dblclick`, which the two spell differently
+ * The camelCase spelling of every DOM event that both the Preact and the Hono
+ * JSX types declare a handler prop for (the middle of the prop: `"KeyDown"` →
+ * `onKeyDown`), less `dblclick`, which the two spell differently
  * (`onDblClick` / `onDoubleClick`; see {@link preactEventPropNames} and
  * {@link honoEventPropNames}).
  *
@@ -145,32 +152,77 @@ export interface JsxDialect {
  * Preact (it lowercases `onKeydown` to find the DOM property) and hono's DOM
  * renderer both still bound the old spelling at run time, so the bug was in
  * the type-check only; the names are still data to look up, not a rule to
- * derive. `src/event-names.test.ts` compares this list against the installed
+ * derive. Each dialect's table holds only the names its own JSX types declare:
+ * `src/event-names.test.ts` compares both directions against the installed
  * type files.
  */
-export const CAMEL_EVENT_NAMES: readonly string[] = [
-  "Abort",
-  "AnimationCancel",
+const SHARED_EVENT_NAMES: readonly string[] = [
   "AnimationEnd",
   "AnimationIteration",
   "AnimationStart",
   "AuxClick",
   "BeforeInput",
-  "BeforeToggle",
   "Blur",
-  "Cancel",
-  "CanPlay",
-  "CanPlayThrough",
   "Change",
   "Click",
-  "Close",
-  "Command",
   "CompositionEnd",
   "CompositionStart",
   "CompositionUpdate",
   "ContextMenu",
   "Copy",
   "Cut",
+  "Error",
+  "Focus",
+  "FocusIn",
+  "FocusOut",
+  "FormData",
+  "Input",
+  "Invalid",
+  "KeyDown",
+  "KeyPress",
+  "KeyUp",
+  "Load",
+  "MouseDown",
+  "MouseEnter",
+  "MouseLeave",
+  "MouseMove",
+  "MouseOut",
+  "MouseOver",
+  "MouseUp",
+  "Paste",
+  "PointerCancel",
+  "PointerDown",
+  "PointerEnter",
+  "PointerLeave",
+  "PointerMove",
+  "PointerOut",
+  "PointerOver",
+  "PointerUp",
+  "Reset",
+  "Scroll",
+  "ScrollEnd",
+  "Select",
+  "Submit",
+  "TouchCancel",
+  "TouchEnd",
+  "TouchMove",
+  "TouchStart",
+  "TransitionCancel",
+  "TransitionEnd",
+  "TransitionRun",
+  "TransitionStart",
+  "Wheel",
+];
+
+/** Handler props only `preact`'s `jsx.d.ts` declares. */
+const PREACT_ONLY_EVENT_NAMES: readonly string[] = [
+  "Abort",
+  "BeforeToggle",
+  "Cancel",
+  "CanPlay",
+  "CanPlayThrough",
+  "Close",
+  "Command",
   "Drag",
   "DragEnd",
   "DragEnter",
@@ -184,87 +236,67 @@ export const CAMEL_EVENT_NAMES: readonly string[] = [
   "Encrypted",
   "Ended",
   "EnterPictureInPicture",
-  "Error",
-  "Focus",
-  "FocusIn",
-  "FocusOut",
-  "FormData",
-  "FullscreenChange",
-  "FullscreenError",
-  "Input",
-  "Invalid",
-  "KeyDown",
-  "KeyPress",
-  "KeyUp",
   "LeavePictureInPicture",
-  "Load",
   "LoadedData",
   "LoadedMetadata",
   "LoadStart",
-  "MouseDown",
-  "MouseEnter",
-  "MouseLeave",
-  "MouseMove",
-  "MouseOut",
-  "MouseOver",
-  "MouseUp",
-  "MouseWheel",
-  "Paste",
   "Pause",
   "Play",
   "Playing",
-  "PointerCancel",
-  "PointerDown",
-  "PointerEnter",
-  "PointerLeave",
-  "PointerMove",
-  "PointerOut",
-  "PointerOver",
-  "PointerUp",
   "Progress",
   "RateChange",
-  "Reset",
   "Resize",
-  "Scroll",
-  "ScrollEnd",
   "ScrollSnapChange",
   "ScrollSnapChanging",
   "Search",
   "Seeked",
   "Seeking",
-  "Select",
-  "SelectChange",
   "Stalled",
-  "Submit",
   "Suspend",
   "TimeUpdate",
   "Toggle",
-  "TouchCancel",
-  "TouchEnd",
-  "TouchMove",
-  "TouchStart",
-  "TransitionCancel",
-  "TransitionEnd",
-  "TransitionRun",
-  "TransitionStart",
   "VolumeChange",
   "Waiting",
-  "Wheel",
 ];
 
-function eventPropNames(dblclick: string): Record<string, string> {
+/** Handler props only `hono/jsx`'s intrinsic elements declare. */
+const HONO_ONLY_EVENT_NAMES: readonly string[] = [
+  "AnimationCancel",
+  "FullscreenChange",
+  "FullscreenError",
+  "MouseWheel",
+  "SelectChange",
+];
+
+function eventPropNames(
+  dblclick: string,
+  only: readonly string[],
+  doubleclick?: string,
+): Record<string, string> {
   const names: Record<string, string> = { dblclick };
-  for (const name of CAMEL_EVENT_NAMES) names[name.toLowerCase()] = name;
+  if (doubleclick !== undefined) names.doubleclick = doubleclick;
+  for (const name of [...SHARED_EVENT_NAMES, ...only]) {
+    names[name.toLowerCase()] = name;
+  }
   return names;
 }
 
 /** DOM event name → Preact's JSX handler prop middle (`dblclick` → `DblClick`). */
-export const preactEventPropNames: Record<string, string> =
-  eventPropNames("DblClick");
+export const preactEventPropNames: Record<string, string> = eventPropNames(
+  "DblClick",
+  PREACT_ONLY_EVENT_NAMES,
+);
 
-/** DOM event name → Hono's JSX handler prop middle (`dblclick` → `DoubleClick`). */
-export const honoEventPropNames: Record<string, string> =
-  eventPropNames("DoubleClick");
+/**
+ * DOM event name → Hono's JSX handler prop middle (`dblclick` →
+ * `DoubleClick`). Hono declares `onDoubleClick` as written, so the authored
+ * React spelling (`doubleclick`) lands on the same prop.
+ */
+export const honoEventPropNames: Record<string, string> = eventPropNames(
+  "DoubleClick",
+  HONO_ONLY_EVENT_NAMES,
+  "DoubleClick",
+);
 
 /** The Preact dialect. */
 export const preactDialect: JsxDialect = {
@@ -282,5 +314,6 @@ export const preactDialect: JsxDialect = {
   suspenseName: "MxPlaceholder",
   fragmentModule: "preact",
   eventPropNames: preactEventPropNames,
+  closedEventPropNames: true,
   hookModules: ["preact/hooks", "preact/compat", "react"],
 };

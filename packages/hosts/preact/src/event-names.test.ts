@@ -11,8 +11,15 @@
  *   this is a regression guard, not a bug witness.
  */
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -65,8 +72,30 @@ describe.each([
         expect(`on${table[dom]}`, `${dom} → ${name}`).toBe(name);
       }
     });
+
+    it("emits no name its own JSX types do not declare", () => {
+      const declared = new Set(declaredHandlers(types));
+      for (const [dom, middle] of Object.entries(table)) {
+        expect(declared.has(`on${middle}`), `${dom} → on${middle}`).toBe(true);
+      }
+    });
   },
 );
+
+describe("names only one host declares", () => {
+  it("keeps each host's table to its own types", () => {
+    // Preact declares `onToggle`, hono `onFullscreenChange`; neither borrows.
+    expect(preactEventPropNames.toggle).toBe("Toggle");
+    expect(honoEventPropNames.toggle).toBeUndefined();
+    expect(honoEventPropNames.fullscreenchange).toBe("FullscreenChange");
+    expect(preactEventPropNames.fullscreenchange).toBeUndefined();
+  });
+
+  it("the authored onDoubleClick (doubleclick) is hono's declared prop, not Preact's", () => {
+    expect(honoEventPropNames.doubleclick).toBe("DoubleClick");
+    expect(preactEventPropNames.doubleclick).toBeUndefined();
+  });
+});
 
 describe("spellings the two hosts disagree on", () => {
   it("dblclick is onDblClick on Preact and onDoubleClick on hono", () => {
@@ -81,6 +110,18 @@ function markup(source: string): string {
   if (!match) throw new Error("compiled module has no JSX return body");
   return match[1] as string;
 }
+
+describe("undeclared names are diagnostics, never emitted props (Preact)", () => {
+  it.each([
+    ["on-fullscreenchange", "fullscreenchange"],
+    ["onDoubleClick", "doubleclick"],
+    ["on-gesturestart", "gesturestart"],
+  ])("%s fails the compile", (attr, event) => {
+    expect(() => markup(`<div ${attr}=f>x</div>`)).toThrow(
+      `\`${attr}\` names the DOM event \`${event}\`, which Preact's JSX types declare no handler prop for`,
+    );
+  });
+});
 
 describe("emitted spellings (Preact)", () => {
   it.each([
@@ -128,7 +169,11 @@ console.log(JSON.stringify(fired));
 const EVENTS = ["keydown", "keyup", "mousedown", "dblclick"] as const;
 
 beforeAll(() => {
-  scratch = mkdtempSync(join(packageDir, ".event-names-"));
+  // Under the OS temp dir, not the package root (a killed run would leave
+  // untracked files in the worktree); the package's `node_modules` is linked in
+  // so `preact` and `jsdom` still resolve from the scratch files.
+  scratch = mkdtempSync(join(tmpdir(), "mx-event-names-"));
+  symlinkSync(join(packageDir, "node_modules"), join(scratch, "node_modules"));
   componentFile = join(scratch, "case.tsx");
   const source = EVENTS.map(
     (event) =>

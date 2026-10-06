@@ -5,7 +5,8 @@
  * too (the renderer lowercases the name), so this is a regression guard.
  */
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -38,7 +39,11 @@ console.log(JSON.stringify(fired));
 `;
 
 beforeAll(() => {
-  scratch = mkdtempSync(join(packageDir, ".event-runtime-"));
+  // Under the OS temp dir, not the package root (a killed run would leave
+  // untracked files in the worktree); the package's `node_modules` is linked in
+  // so `hono` and `jsdom` still resolve from the scratch files.
+  scratch = mkdtempSync(join(tmpdir(), "mx-event-runtime-"));
+  symlinkSync(join(packageDir, "node_modules"), join(scratch, "node_modules"));
   componentFile = join(scratch, "case.tsx");
   const source = EVENTS.map(
     (event) =>
@@ -57,6 +62,18 @@ describe("the emitted handler props fire (hono)", () => {
     expect(code).toContain("onKeyDown={a}");
     expect(code).toContain("onDoubleClick={b}");
     expect(code).toContain("onMouseDown={c}");
+  });
+
+  it("emits onDoubleClick as declared and rejects names hono does not declare", () => {
+    expect(
+      compileHonoMx("<button onDoubleClick=f>x</button>", "/fixtures/test.mx")
+        .code,
+    ).toContain("onDoubleClick={f}");
+    for (const attr of ["on-toggle", "on-search", "on-play"]) {
+      expect(() =>
+        compileHonoMx(`<div ${attr}=f>x</div>`, "/fixtures/test.mx"),
+      ).toThrow("JSX types declare no handler prop for");
+    }
   });
 
   it("binds keydown, keyup, mousedown and dblclick through hono/jsx/dom", () => {

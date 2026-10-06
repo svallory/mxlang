@@ -161,7 +161,7 @@ describe("Element", () => {
     const own = warnings.filter((w) => !w.message.includes("__mxOn"));
     expect(own).toHaveLength(1);
     expect(own[0]?.message).toBe(
-      "`onDoubleClick` is not a DOM event; did you mean `onDblclick`",
+      "`onDoubleClick` is not a DOM event; did you mean `onDblClick`",
     );
   });
 
