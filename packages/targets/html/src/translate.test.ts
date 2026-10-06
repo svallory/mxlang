@@ -1636,6 +1636,99 @@ describe("dynamic tags", () => {
 // ordinary `import X from "./target.ts"` (or `{ X }`) and an ordinary
 // `<X>`/`<X/>` call — the routing itself, not the `<${expr}>` syntax already
 // covered above.
+describe("a component body with tag params (`<List|item, i|>`) binds them (executed)", () => {
+  // The callee calls `input.content(item, i)`: the body is a params-taking
+  // `content`, the shape Marko 6.3.51 emits and the JSX hosts settled on
+  // (PR #371). A `${expr}` target dropped the params (`content: () => …`), so
+  // `item`/`i` were unbound in the body with no warning.
+  const list = [
+    "export interface Input { items: string[]; content: (item: string, i: number) => unknown }",
+    "<ul><for|item, i| of=input.items><li><${input.content}(item, i)/></li></for></ul>",
+  ].join("\n");
+  const expected = "<ul><li><b>a0</b></li><li><b>b1</b></li></ul>";
+  const items = { items: ["a", "b"] };
+
+  it.each([
+    [
+      "an imported component",
+      'import List from "./list.mx"',
+      "<List|item, i| items=input.items><b>${item}${i}</b></List>",
+    ],
+    [
+      "a dynamic target (imported value)",
+      'import List from "./list.mx"',
+      "<${List}|item, i| items=input.items><b>${item}${i}</b></>",
+    ],
+    [
+      "a dynamic target (explicit close)",
+      'import List from "./list.mx"',
+      "<${List}|item, i| items=input.items><b>${item}${i}</b></${List}>",
+    ],
+  ])("%s", async (_label, header, body) => {
+    const html = await renderModules(
+      {
+        "list.mx": list,
+        "entry.mx": [
+          header,
+          "export interface Input { items: string[] }",
+          "<${List}|item, i| items=input.items><b>${item}${i}</b></>",
+        ].join("\n"),
+      },
+      "entry.mx",
+      items,
+    );
+    expect(html).toBe(expected);
+  });
+
+  it("a dynamic target taken from input emits the params", () => {
+    const entry = compile(
+      src(
+        "export interface Input { L: any; items: string[] }\n<${input.L}|item, i| items=input.items><b>${item}${i}</b></>",
+      ),
+      "/tmp/mx-translator-test/entry.mx",
+    ).code;
+    expect(entry).toMatch(/content: \(\(item, i\) => \{/);
+  });
+
+  it("a dynamic call with args keeps the params", () => {
+    const code = compile(
+      src(
+        "export interface Input { L: any }\n<${input.L}(1)|item| ><b>${item}</b></>",
+      ),
+      "/tmp/mx-translator-test/args.mx",
+    ).code;
+    expect(code).toMatch(/content: \(\(item\) => \{/);
+  });
+
+  it("a body without params is unchanged", () => {
+    const code = compile(
+      src("export interface Input { L: any }\n<${input.L}><b>x</b></>"),
+      "/tmp/mx-translator-test/plain.mx",
+    ).code;
+    expect(code).toMatch(/content: \(\) => \{/);
+  });
+
+  // The imported row is left out: a callee declaring `content` also gets the
+  // preamble's `content?: () => string` intersected into its `Input`, so strict
+  // tsc rejects any params-taking body on a named call (TS2322, not this fix).
+  it("type-checks a dynamic target under strict tsc", async () => {
+    const html = await renderModules(
+      {
+        "list.mx": list,
+        "entry.mx": [
+          'import List from "./list.mx"',
+          "export interface Input { items: string[] }",
+          "<${List}|item, i| items=input.items><b>${item}${i}</b></>",
+        ].join("\n"),
+      },
+      "entry.mx",
+      items,
+      true,
+    );
+    expect(html).toBe(expected);
+  }, 15_000);
+});
+
 describe("decision 116: value import used as a tag", () => {
   it("a string value import renders as a real element", async () => {
     const html = await renderModules(

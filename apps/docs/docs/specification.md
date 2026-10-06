@@ -2004,6 +2004,8 @@ call a framework's own render-prop components with ordinary markup. Params parse
 exactly like `<for>`'s: destructuring and type annotations included; empty pipes
 (`||`) lower to a no-argument function.
 
+On html a body with params is the callee's `content` too: `content: (item, i) => …` for an imported component and for a `${expr}` target alike (the dynamic form once dropped the params), and the callee calls `input.content(item, i)`.
+
 On the JSX hosts (preact, react, hono), a call with params that is routed as a
 props object (an imported component, `<${expr}>`, a call of a `<define>`
 written by name, a `<return>` unit) passes the function as the callee's

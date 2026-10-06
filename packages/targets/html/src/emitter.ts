@@ -749,6 +749,7 @@ export function createEmitter(selfName?: string): StringEmitter {
     attrTagProps: AttrTagProp[],
     content: Block | null,
     ownerType: string | null,
+    untypedCallee = false,
   ): {
     parts: MappedCode[];
     named: Map<string, string>;
@@ -806,9 +807,16 @@ export function createEmitter(selfName?: string): StringEmitter {
     // Ordinary children become `content`, not `children`: that is the prop
     // name Marko's own `<${input.content}/>` reads.
     if (content) {
+      const fn = blockFunction(content.children, content.params.join(", "));
+      // A `${expr}` target has no declared `content` to type the body's tag
+      // params from (`__mxRenderDynamic` takes `Record<string, any>`), so an
+      // unannotated param would be an implicit `any` under strict tsc. The cast
+      // is the contextual type: the params are `any`, as the callee is unknown.
       setNamed(
         "content",
-        blockFunction(content.children, content.params.join(", ")),
+        untypedCallee && content.hasParams
+          ? concatMapped("(", fn, ") as (...args: any[]) => any")
+          : fn,
       );
     }
 
@@ -913,6 +921,7 @@ export function createEmitter(selfName?: string): StringEmitter {
         node.attrTagProps,
         node.content,
         ownerType,
+        node.target.kind === "dynamic",
       );
       const joinedParts = concatMapped(
         ...parts.flatMap((part, index) =>
@@ -1285,8 +1294,11 @@ export function createEmitter(selfName?: string): StringEmitter {
         const content: Block | null =
           tag.children.length > 0
             ? {
-                hasParams: false,
-                params: [],
+                // The body's tag params (`<${L}|item, i|>…</>`) bind in the
+                // content, as they do for a named component call; the callee
+                // calls `content(item, i)`.
+                hasParams: tag.params.length > 0,
+                params: tag.params,
                 children: tag.children,
                 loc: tag.loc,
               }
