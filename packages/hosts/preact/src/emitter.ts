@@ -1196,9 +1196,19 @@ export class PreactEmitter implements Emitter<string> {
    * the value's own type, so the callee's prop would check, and report, the
    * same value a second time.
    */
-  #satisfying(value: MappedCode, valueType: string | undefined): MappedCode {
+  #satisfying(
+    value: MappedCode,
+    valueType: string | undefined,
+    span?: AttributeTag["nameSpan"],
+  ): MappedCode {
     return valueType
-      ? concatMapped("(((", value, `) satisfies ${valueType}) as any)`)
+      ? concatMapped(
+          "(((",
+          value,
+          ") ",
+          mapped("satisfies", span ?? null),
+          ` ${valueType}) as any)`,
+        )
       : value;
   }
 
@@ -1211,9 +1221,16 @@ export class PreactEmitter implements Emitter<string> {
   #satisfyingData(
     value: MappedCode,
     valueType: string | undefined,
+    span?: AttributeTag["nameSpan"],
   ): MappedCode {
     return valueType
-      ? concatMapped("((", value, ` satisfies ${valueType}) as any)`)
+      ? concatMapped(
+          "((",
+          value,
+          " ",
+          mapped("satisfies", span ?? null),
+          ` ${valueType}) as any)`,
+        )
       : value;
   }
 
@@ -1228,7 +1245,9 @@ export class PreactEmitter implements Emitter<string> {
     // A bodiless renderable is `undefined`, which is the absence of a value
     // rather than a value of the declared type.
     if (as === "renderable") {
-      return tag.hasBody ? this.#satisfying(content, valueType) : content;
+      return tag.hasBody
+        ? this.#satisfying(content, valueType, tag.nameSpan)
+        : content;
     }
 
     const parts: Array<string | MappedCode> = [];
@@ -1261,6 +1280,7 @@ export class PreactEmitter implements Emitter<string> {
     return this.#satisfyingData(
       concatMapped(mapped("{", tag.nameSpan), " ", ...parts, " }"),
       valueType,
+      tag.nameSpan,
     );
   }
 

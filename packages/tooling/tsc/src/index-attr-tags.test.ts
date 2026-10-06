@@ -60,7 +60,7 @@ describe("mx-tsc", () => {
       const errors = (file: string) =>
         result.output
           .split("\n")
-          .filter((line) => line.startsWith(`fixtures/${fixture}/src/${file}`))
+          .filter((line) => line.includes(`${fixture}/src/${file}(`))
           .map((line) => line.slice(line.indexOf("(")).split(":")[0]);
 
       expect(errors(`Wrong.${extension}`)).toEqual([attributePosition]);

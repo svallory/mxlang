@@ -1535,9 +1535,16 @@ function attributeTagRenderable(tag: AttributeTag): MappedCode {
 function satisfying(
   value: MappedCode,
   valueType: string | undefined,
+  span?: AttributeTag["nameSpan"],
 ): MappedCode {
   return valueType
-    ? concatMapped("(((", value, `) satisfies ${valueType}) as any)`)
+    ? concatMapped(
+        "(((",
+        value,
+        ") ",
+        mapped("satisfies", span ?? null),
+        ` ${valueType}) as any)`,
+      )
     : value;
 }
 
@@ -1550,9 +1557,16 @@ function satisfying(
 function satisfyingData(
   value: MappedCode,
   valueType: string | undefined,
+  span?: AttributeTag["nameSpan"],
 ): MappedCode {
   return valueType
-    ? concatMapped("((", value, ` satisfies ${valueType}) as any)`)
+    ? concatMapped(
+        "((",
+        value,
+        " ",
+        mapped("satisfies", span ?? null),
+        ` ${valueType}) as any)`,
+      )
     : value;
 }
 
@@ -1565,7 +1579,7 @@ function attributeTagValue(
   // A bodiless renderable is `undefined`, which is the absence of a value
   // rather than a value of the declared type.
   if (as === "renderable") {
-    return tag.hasBody ? satisfying(content, valueType) : content;
+    return tag.hasBody ? satisfying(content, valueType, tag.nameSpan) : content;
   }
 
   const parts: Array<string | MappedCode> = [];
@@ -1588,6 +1602,7 @@ function attributeTagValue(
   return satisfyingData(
     concatMapped(mapped("{", tag.nameSpan), " ", ...parts, " }"),
     valueType,
+    tag.nameSpan,
   );
 }
 

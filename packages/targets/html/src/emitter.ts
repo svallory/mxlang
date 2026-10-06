@@ -289,7 +289,13 @@ export function createEmitter(selfName?: string): StringEmitter {
     );
     if (as === "renderable") {
       return valueType
-        ? concatMapped("(((", content, `) satisfies ${valueType}) as any)`)
+        ? concatMapped(
+            "(((",
+            content,
+            ") ",
+            mapped("satisfies", tag.nameSpan),
+            ` ${valueType}) as any)`,
+          )
         : content;
     }
 
@@ -306,7 +312,13 @@ export function createEmitter(selfName?: string): StringEmitter {
     parts.push(concatMapped("content: ", tag.hasBody ? content : "undefined"));
     const value = concatMapped("{ ", joinParts(parts), " }");
     return valueType
-      ? concatMapped("((", value, ` satisfies ${valueType}) as any)`)
+      ? concatMapped(
+          "((",
+          value,
+          " ",
+          mapped("satisfies", tag.nameSpan),
+          ` ${valueType}) as any)`,
+        )
       : value;
   };
 
