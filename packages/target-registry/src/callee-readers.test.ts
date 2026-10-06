@@ -92,11 +92,12 @@ describe("a loaded host's readCalleeInput", () => {
     const b = project("b", "@t/mesh-b");
     read(a);
     read(b);
+    // Core caches a callee read per file, so this one calls no reader; what
+    // matters is that none of `b`'s ran for `a`, or `a`'s for `b`.
     read(a);
     expect(calls()).toEqual([
       `a:${join(a, "widget.mesh.mx")}`,
       `b:${join(b, "widget.mesh.mx")}`,
-      `a:${join(a, "widget.mesh.mx")}`,
     ]);
   });
 
