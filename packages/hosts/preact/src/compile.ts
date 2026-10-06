@@ -273,12 +273,17 @@ export const MX_DYNAMIC = `function __mxIsHostComponentObject(value: any): boole
     description === "react.lazy"
   );
 }
-function __mxDynamic(target: any, payload: any, content?: any) {
+function __mxDynamic(target: any, payload: any, content?: any, takesParams?: boolean) {
+  const noParams = (): never => { throw new Error("MX: tag params |…| need a component or function target; a native element or rendered content cannot call its body"); };
   if (Array.isArray(payload)) {
     if (typeof target === "function") return target(...payload);
     if (typeof target === "string" || __mxIsHostComponentObject(target)) {
       const Tag: any = target;
       const attrs = payload[0] || {};
+      if (takesParams) {
+        if (typeof target === "string") noParams();
+        return <Tag {...attrs} children={content} />;
+      }
       if (target === "textarea") {
         if (content) throw new Error("A dynamic tag rendering a \`<textarea>\` cannot have \`content\` and must use the \`value\` attribute instead.");
         return <Tag {...__mxTextarea(__mxAttrSpread(attrs, target, ["ref", "key", "dangerouslySetInnerHTML", "className"], true))} />;
@@ -295,6 +300,10 @@ function __mxDynamic(target: any, payload: any, content?: any) {
   ) {
     const Tag: any = target;
     const { content: bodyContent, ...rest } = props;
+    if (takesParams) {
+      if (typeof target === "string") noParams();
+      return <Tag {...rest} children={bodyContent} />;
+    }
     if (target === "textarea") {
       if (bodyContent) throw new Error("A dynamic tag rendering a \`<textarea>\` cannot have \`content\` and must use the \`value\` attribute instead.");
       return <Tag {...__mxTextarea(__mxAttrSpread(rest, target, ["ref", "key", "dangerouslySetInnerHTML", "className"], true))} />;
@@ -312,6 +321,7 @@ function __mxDynamic(target: any, payload: any, content?: any) {
       "MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <\${x.content}/>",
     );
   }
+  if (takesParams) noParams();
   return props.content ? props.content() : target;
 }`;
 

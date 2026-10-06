@@ -1542,15 +1542,16 @@ export class PreactEmitter implements Emitter<string> {
       // Marko's `content` and JSX's `children` are the same slot; a called
       // unit reads `input.content`, so it is passed under that name.
       const rendered = this.#expression(content);
-      // Tag params make the body a render prop, as on a described call (see
-      // `component`): the callee invokes it with the values it passes. The
-      // body stays behind the `content` thunk, which `__mxDynamic` calls and
-      // renders as the callee's children, so with params that thunk returns
-      // the render prop.
+      // Tag params make `content` a function the callee calls with the values
+      // it passes (`input.content(item, i)`, or `<${input.content}(item, i)/>`),
+      // the shape Marko 6.3.51 emits (`content: (item, i) => …`). Without
+      // params `content` is a thunk `__mxDynamic` calls to fill the callee's
+      // children; with them `__mxDynamic` hands the function through as the
+      // callee's `children` (it is told so by its fourth argument).
       const params = node.content?.hasParams
-        ? `(${node.content.params.join(", ")}) => `
-        : "";
-      parts.push(`content: () => ${params}<>${rendered.code}</>`);
+        ? `(${node.content.params.join(", ")})`
+        : "()";
+      parts.push(`content: ${params} => <>${rendered.code}</>`);
     }
 
     return `{ ${parts.join(", ")} }`;
@@ -1689,14 +1690,31 @@ export class PreactEmitter implements Emitter<string> {
       // props object being real content: the no-args form's plain props
       // object already carries `content` under that key, read inside
       // `mxDynamic` itself.
+      // Tag params make the body a function the callee calls with values
+      // (see `#propsObject`). A native element has nothing to call it, so a
+      // literal tag name is Marko's own error, and `__mxDynamic` throws for a
+      // string that arrives at run time rather than render an empty element.
+      const hasParams = hasContent && node.content?.hasParams === true;
+      if (
+        hasParams &&
+        /^(?:"[^"\\]*"|'[^'\\]*'|`[^`\\$]*`)$/.test(node.target.expr.code)
+      ) {
+        fail("Tag does not support parameters.", node);
+      }
+      const paramList = hasParams
+        ? `(${node.content?.params.join(", ")})`
+        : "()";
       const content =
         node.args.length > 0 && hasContent
           ? concatMapped(
-              ", () => <>",
+              `, ${paramList} => <>`,
               this.#expression(node.content!.children),
               "</>",
             )
           : "";
+      const takesParams = hasParams
+        ? `${node.args.length > 0 ? "" : ", undefined"}, true`
+        : "";
       this.#out.push(
         concatMapped(
           "{__mxDynamic(",
@@ -1704,6 +1722,7 @@ export class PreactEmitter implements Emitter<string> {
           ", ",
           payload,
           content,
+          takesParams,
           ")}",
         ),
       );

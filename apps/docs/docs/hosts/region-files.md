@@ -40,6 +40,10 @@ What stays outside, in your TypeScript:
 | `<const/x=…/>` | ``<const> cannot declare a binding inside a `.react.mx` expression; declare it in the surrounding component`` | Write `const x = …` above the `return`. |
 | `import`, `static`, `export`, `<return>` | ``module-level MX statements cannot appear inside a `.react.mx` expression; write them in the surrounding TypeScript module`` | Write them in the module. |
 
+## Tag params on a component
+
+`<Comp|item|>` gives the component a `content` it calls with the item. A hand-written component receives it as its render-prop `children` (`props.children(item)`); an `.mx` component reads `input.content` and calls it with `<${input.content}(item)/>`. This is the shape Marko 6.3.51 emits for `<Comp|item|>`, so a component written for one reads the same on the other. Without `|item|` the body is ordinary children. A native element cannot call its body: `<${"div"}|item|>` is an error (`Tag does not support parameters.`), and so is a dynamic tag that turns out to be a string at run time.
+
 ## `<define>` and tag variables
 
 A `<define>` or a `/var` written directly in the region's markup sees the component's props and hooks, as `Row` reads `label` above. Each call is a plain function call, so a define has no component identity of its own and never remounts.

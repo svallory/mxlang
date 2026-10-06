@@ -1993,6 +1993,12 @@ call a framework's own render-prop components with ordinary markup. Params parse
 exactly like `<for>`'s: destructuring and type annotations included; empty pipes
 (`||`) lower to a no-argument function.
 
+On a call routed through a dynamic tag (an imported component, `<${expr}>`, a
+`<define>`, a `<return>` unit) the function is the callee's `content`: it calls
+`input.content(item, i)`, as in Marko 6.3.51. A target that is a native element
+cannot call it: `<${"div"}|item|>` is the error `Tag does not support
+parameters.`
+
 **Params come before `=value`** (§5.2).
 
 ### Attribute tags: `<@name>`
