@@ -865,6 +865,11 @@ Invariant: in a `parsed-text*` body no `MxTag` appears; `<x>` inside
 `<script>` is text (probe: `MarkoText " <x>"`), and so is `<b>` inside
 `<title>`.
 
+The table also records, for each name it knows, whether that name is an
+element. Today that is the `html` flag of Marko's tag definition, which
+`contractDefaultTag`'s `isStructural` (`core/src/contract-default-tag.ts`)
+reads to treat a known non-element (`await`, `define`) as structure (§6.4).
+
 **Who owns the table.** The element-shape table belongs to the target
 descriptor, with a core default (the html family's void, text and
 preserve-whitespace elements); a target overrides entries, as the data target
@@ -1367,7 +1372,7 @@ plain element host; offsets in each input alone):
 |---|---|---|---|---|---|
 | `<div#a.b.c/>` (all static, tag-adjacent) | `static` `"b c"`; `id` `static` `"a"` | `[7, 10)` (first value to last); id `[5, 6)` | `[6, 10)`; id `[4, 6)` (sigil + value) | the tag (`1:0`) | none |
 | `<div.${x}/>` (one dynamic) | `dynamic` `x` | — | `[4, 9)` (`.${x}`) | the tag | none |
-| A tag-adjacent `class` or `id` whose merged value has **no `loc`**, with no attribute-position token of the same name and no authored attribute of that name. Marko builds such a value in two places: the array it makes from two or more class parts that are not all static (`onOpenTagEnd`, `[C]chunk-src.js:6150-6153`, `arrayExpression` with no `withLoc`), and the template literal it makes for one part that mixes text and `${…}` (`parseTemplateString`, `[C]chunk-src.js:5967-5972`, `parseTemplateLiteral`). Probed examples: `<div.a.${x}/>`, `<div.${x}.${y}/>`, `<div.${x}.a/>`, `<div.a.${x}.b/>`, `<div#i.a.${x}/>` (class), `<div.a${x}/>`, `<div.${x}a/>` (class, one mixed part), `<div#a${x}/>`, `<div#a${x} .b/>` (id) | `dynamic`: an array in written order (`["a", x]`, `[x, y]`, …) or a template (`` `a${x}` ``); generator output, §7.1 | — | **`{ NaN, NaN }`: a bug**, MX1 TODO `shorthand-dynamic-class-nan-namespan` (scope: any merged shorthand value with no `loc`; intended span: first sigil to the end of the last token); fixed before the port, which carries nothing | the tag | none |
+| A tag-adjacent `class` or `id` whose merged value has **no `loc`**, with no attribute-position token of the same name and no authored attribute of that name. Marko builds such a value in two places: the array it makes from two or more class parts that are not all static (`onOpenTagEnd`, `[C]chunk-src.js:6150-6153`, `arrayExpression` with no `withLoc`), and the template literal it makes for one part that is neither plain text nor a single `${…}` alone: text beside a `${…}`, or two or more `${…}` (`parseTemplateString`, `[C]chunk-src.js:5967-5972`, `parseTemplateLiteral`, reached when the part has two or more expressions, or one with a non-empty text part). Probed examples: `<div.a.${x}/>`, `<div.${x}.${y}/>`, `<div.${x}.a/>`, `<div.a.${x}.b/>`, `<div#i.a.${x}/>` (class), `<div.a${x}/>`, `<div.${x}a/>`, `<div.${x}${y}/>` (class, one part), `<div#a${x}/>`, `<div#${x}${y}/>`, `<div#a${x} .b/>` (id) | `dynamic`: an array in written order (`["a", x]`, `[x, y]`, …) or a template (`` `a${x}` ``, `` `${x}${y}` ``); generator output, §7.1 | — | **`{ NaN, NaN }`: a bug**, MX1 TODO `shorthand-dynamic-class-nan-namespan` (scope: any merged shorthand value with no `loc`; intended span: first sigil to the end of the last token); fixed before the port, which carries nothing | the tag | none |
 | Counter-examples, real spans: one part that is a single `${…}` (`<div.${x}/>`, `<div#${x}/>`: the expression itself, which has a `loc`), a single `${"…"}` string (`<div.${"a"}/>`: Marko's `withLoc` wrap, `[C]chunk-src.js:5962-5963`), or the same values with an attribute-position `.` (`<div.a${x} .b/>`) or an authored `class` (`<div.a${x} class="y"/>`) | as their rows | — | `[4, 9)`, `[4, 9)`, `[4, 11)`; `[11, 13)` (`.b`); `[11, 16)` (`class`) | the tag; `1:11`; `1:11` | none; `".b"`; none |
 | `<div.${x}.a .b/>`, `<div.a.${x} .b/>` (the same, plus an attribute-position `.`) | `dynamic` `[x, "a", "b"]`, `["a", x, "b"]` | — | `[12, 14)` (`.b`) | `1:12` | `".b"` |
 | `<div.a.${x} class="y" .d/>` | `dynamic` `["a", x, "d", "y"]` (the token joins the shorthand part, before the authored value) | — | `[22, 24)` (`.d`) | `1:22` | `".a .d"` |
@@ -1549,7 +1554,7 @@ definition and, through the handle, the wildcard match (`wildcard-resolve.ts`
 (`DefaultTagParent.tagDef`), and `isStructural` (`contract-default-tag.ts`)
 reads only its `html` flag: a name the lookup knows that is not an element is
 structure. With Marko dropped it comes from the target's element-shape table
-(§3.12), which therefore also records, per known name, whether it is an
+(§3.12), which records, per known name, whether it is an
 element.
 
 **The handle.** `MxNodeHandle` is opaque: it has no fields, is not
@@ -1561,26 +1566,31 @@ text are untouched by the port. The reads served through the handle today:
 | Read | Helper | Called from |
 |---|---|---|
 | attribute tags (first name and position), tag arguments (presence, first argument's position), tag variable (presence, and its printed text in the message), type arguments and type parameters (presence), body parameters (at least one) | `rejectUnsupportedFields` (`core/src/core.ts`) | html `translate.ts` `resolveDelegatedTag` (`<html-comment>`, `<html-script>`, `<html-style>`, `<style>`, `<let>`/`<const>`); Astro `astro-template.ts` `resolveDelegatedTag` (`<html-comment>`) |
-| whether the tag variable binds a given name | `bindingSpan(handle, name): Span \| null` (decision 163 addendum 4, item 1), the one generic core helper; core has no `input` rule | html's `rejectInputShadowing` (`translate.ts`), from `resolveDelegatedTag` (`<let>`/`<const>`) |
+| whether the tag variable binds a given name | `bindingSpan(target, name): Span \| null` (a handle or a pattern payload) (decision 163 addendum 4, item 1), the one generic core helper; core has no `input` rule | html's `rejectInputShadowing` (`translate.ts`), from `resolveDelegatedTag` (`<let>`/`<const>`) |
 | the wildcard match of a parent | `contractDefaultTag` / `wildcardMatchOf` (`core/src/contract-default-tag.ts`, `wildcard-resolve.ts`) | every host's `resolveDefaultTag` |
 
-**`bindingSpan`.** It returns the span of the binding identifier named
-`name` inside the tag variable's pattern, the first in source order, or `null`
-when the pattern binds no such name. It finds exactly the identifiers html's
+**`bindingSpan(target, name): Span | null`.** `target` is a view's handle
+(the tag variable inside it) or a binding pattern payload (a plain Babel
+pattern, as `checkBinding` receives). It returns the span of the binding
+identifier named `name` inside that pattern, the first in source order, or
+`null` when the pattern binds no such name. It finds exactly the identifiers html's
 `bindingNames` (`translate.ts`) finds today: the pattern itself when it is an
 identifier; in an object pattern, each property's value (shorthand
 `{ input }`, renamed `{ a: input }`) or rest argument (`{ ...input }`); in an
 array pattern, each element, holes skipped; through a default, its left side
 (`{ input = 1 }`, `[input = 1]`); and a rest element's argument. html keeps its
 check, its message and its position: `rejectInputShadowing` uses
-`bindingSpan(handle, "input") !== null` as the presence test and fails at the
-start of the tag-variable pattern, as today (core `fail` reports
-`target.loc.start`, the pattern node's start). That start equals
+`bindingSpan(…, "input") !== null` as the presence test, called with
+whichever it holds (the handle from `resolveDelegatedTag`, the pattern from
+`checkBinding`), and fails at the
+start of the pattern, as today (core `fail` reports `target.loc.start`, the
+pattern node's start). That start equals
 `view.var.span.start`: the view's `var` span is the pattern payload's range,
 which starts at the first character after `/` (probe: `<let/x=1/>`,
 `<let/{ a: input }=1/>` and `<let/[b, input]: T=1/>` all start at offset 5,
 before any type annotation). html's `checkBinding` keeps calling the same
-function on the Babel pattern it already receives. (Addendum 4 item 1, applied
+function on the Babel pattern it already receives, which passes that pattern
+to `bindingSpan` and fails at its start, as today. (Addendum 4 item 1, applied
 as option (a) by the lead under decision 163's frame.)
 
 `server` and `client` are `MxModuleStatement`s in the AST where the target's
@@ -1858,10 +1868,10 @@ not listed.
 | `MxScriptlet` | node | §3.10 | 800 |
 | `MxStatements` | node (container) | §3.10; §4.1 | 812 |
 | `MxComment`, `MxCDATA`, `MxDoctype`, `MxDeclaration` | node | §3.11 | 818 |
-| `MxParseError` | node | §3.13 | 881 |
-| `MxReturn` | node | §3.14 | 1000 |
-| `MxExpressionContainer`, `MxExpression` | node (container) | §4.1 | 1039 |
-| `MxAtom` | node | §4.3 | 1152 |
+| `MxParseError` | node | §3.13 | 886 |
+| `MxReturn` | node | §3.14 | 1005 |
+| `MxExpressionContainer`, `MxExpression` | node (container) | §4.1 | 1044 |
+| `MxAtom` | node | §4.3 | 1157 |
 | `Span`, `MxNodeBase` | helper | §3.0 | 296 |
 | `MxChild`, `MxNode` | union | §3.0 | 299 |
-| `MxNodeHandle` | opaque handle (not a node) | §6.4 | 1504 |
+| `MxNodeHandle` | opaque handle (not a node) | §6.4 | 1509 |
