@@ -508,7 +508,16 @@ function splitShorthandChain(
 const ALREADY_HAS_DEFAULT = (form: string, first: string): string =>
   `${form} would set the default attribute (\`value\`), but the tag already has a default value (at ${first}); a sugar followed by \`=value\` or \`(params) { body }\` sets it (decision 146 addendum 4), so write \`value=…\` once`;
 
+const CLASS_HINT = 'write it as `class="..."`';
+
 const TAG_VARIABLE_ERROR = /is not a valid .*tag variable/i;
+// The parser's own texts for the tag-adjacent bracket shorthands of decision
+// 174 item 1: `.bg-[url('/x.png')]` and `.data-[state=open]:flex` are
+// "Mismatched group", `.w-[calc(100%-2rem)]` is "Identifier directly after
+// number" plus "Mismatched group", `.[&>*]:p-4` is `Missing ending "div"
+// tag`.
+const SHORTHAND_BRACKET_ERROR =
+  /mismatched group|identifier directly after number|missing ending/i;
 
 type ParseErrorLocated = Error & {
   loc?: { start?: { line: number; column: number; index?: number } };
@@ -541,10 +550,103 @@ function positionAtOffset(
   return { line, column: offset - lineStart };
 }
 
-/** Decision 174: Marko's parser rejects `<div.w-1/2/>` during parse with a
- *  tag-variable error. Rewrite that to MX's class-shorthand diagnostic at the
- *  `.` so every whole-file host gets the same message core lowering gives the
- *  bridge path. */
+function shorthandTokenError(
+  source: string,
+  dot: number,
+  end: number,
+): TranslateError {
+  const token = source.slice(dot, end);
+  const pos = positionAtOffset(source, dot);
+  return new TranslateError(
+    `\`${token}\` cannot hold this class; ${CLASS_HINT}`,
+    pos.line,
+    pos.column,
+  );
+}
+
+/** The `.w-1/2` shape: a `/var` Marko rejected right after a class
+ *  shorthand. Points at the shorthand's `.`, token through the var text. */
+function tagVariableShorthand(
+  source: string,
+  offset: number,
+): { dot: number; end: number } | undefined {
+  if (offset <= 0 || source[offset - 1] !== "/") return undefined;
+  let dot = offset - 2;
+  while (
+    dot >= 0 &&
+    source[dot] !== "." &&
+    source[dot] !== "<" &&
+    !/\s/.test(source.charAt(dot))
+  ) {
+    dot--;
+  }
+  if (dot < 0 || source[dot] !== ".") return undefined;
+  // Include the var text up to the next tag delimiter.
+  let end = offset;
+  while (
+    end < source.length &&
+    !/[\s<>/|=>]/.test(source[end] ?? "") &&
+    source[end] !== "/"
+  ) {
+    end++;
+  }
+  return { dot, end };
+}
+
+/** The bracket shorthands of decision 174 item 1 the parser itself rejects
+ *  (`.bg-[url('/x.png')]`, `.w-[calc(100%-2rem)]`, `.[&>*]:p-4`). Finds the
+ *  enclosing tag-open, then the first class part of its shorthand token
+ *  holding a bracket; undefined when the error is not a tag-adjacent
+ *  shorthand's. */
+function bracketShorthand(
+  source: string,
+  offset: number,
+): { dot: number; end: number } | undefined {
+  let open = Math.min(offset, source.length - 1);
+  while (open >= 0 && source[open] !== "<") {
+    if (source[open] === ">") return undefined;
+    open--;
+  }
+  if (open < 0) return undefined;
+  let at = open + 1;
+  while (at < source.length && /[\w-]/.test(source.charAt(at))) at++;
+  const tokenStart = at;
+  // The token runs to whitespace or a tag delimiter; a `/` ends it only as
+  // the self-close `/>`, so `.bg-[url('/x.png')]` keeps its inner slash.
+  while (
+    at < source.length &&
+    !/[\s<>]/.test(source.charAt(at)) &&
+    !(source[at] === "/" && source[at + 1] === ">")
+  ) {
+    at++;
+  }
+  const token = source.slice(tokenStart, at);
+  for (let i = 0; i < token.length; i++) {
+    if (token[i] !== ".") continue;
+    let partEnd = i + 1;
+    while (
+      partEnd < token.length &&
+      token[partEnd] !== "." &&
+      token[partEnd] !== "#"
+    ) {
+      partEnd++;
+    }
+    const part = token.slice(i, partEnd);
+    if (part.includes("[") || part.includes("]")) {
+      // The parse failed inside this part; the whole remainder of the token
+      // is the offending construct (`.bg-[url('/x.png')]` keeps its `.png`).
+      return { dot: tokenStart + i, end: tokenStart + token.length };
+    }
+    i = partEnd - 1;
+  }
+  return undefined;
+}
+
+/** Decision 174: Marko's parser rejects a tag-adjacent class shorthand it
+ *  cannot read — `<div.w-1/2/>` with a tag-variable error, the bracket
+ *  shorthands with "Mismatched group" and friends. Rewrite those to MX's
+ *  class-shorthand diagnostic at the `.` so every whole-file host gets the
+ *  same message core lowering gives the bridge path. */
 export function classShorthandParseError(
   error: unknown,
   source: string,
@@ -561,48 +663,24 @@ export function classShorthandParseError(
     if (typeof entry.message !== "string") continue;
     const reason =
       typeof entry.label === "string" ? entry.label : entry.message;
-    if (
-      !TAG_VARIABLE_ERROR.test(reason) &&
-      !TAG_VARIABLE_ERROR.test(entry.message)
-    ) {
-      continue;
-    }
     const at = entry.loc?.start;
     if (!at) continue;
     const offset = at.index ?? offsetOfSource(source, at.line, at.column);
-    if (offset < 0 || source[offset - 1] !== "/") continue;
-    let dot = offset - 2;
-    while (
-      dot >= 0 &&
-      source[dot] !== "." &&
-      source[dot] !== "<" &&
-      !/\s/.test(source.charAt(dot))
+    if (offset < 0) continue;
+    if (
+      TAG_VARIABLE_ERROR.test(reason) ||
+      TAG_VARIABLE_ERROR.test(entry.message)
     ) {
-      dot--;
+      const found = tagVariableShorthand(source, offset);
+      if (found) return shorthandTokenError(source, found.dot, found.end);
     }
-    if (dot < 0 || source[dot] !== ".") continue;
-    // Include the var text up to the next tag delimiter.
-    let end = offset;
-    while (
-      end < source.length &&
-      !/[\s<>/|=>]/.test(source[end] ?? "") &&
-      source[end] !== "/"
-    ) {
-      end++;
+    if (SHORTHAND_BRACKET_ERROR.test(reason)) {
+      const found = bracketShorthand(source, offset);
+      if (found) return shorthandTokenError(source, found.dot, found.end);
     }
-    const token = source.slice(dot, end);
-    const pos = positionAtOffset(source, dot);
-    return new TranslateError(
-      `\`${token}\` cannot hold this class; ${CLASS_HINT}`,
-      pos.line,
-      pos.column,
-    );
   }
   return undefined;
 }
-
-
-const CLASS_HINT = 'write it as `class="..."`';
 
 function failClassShorthand(
   ctx: Ctx,
@@ -699,7 +777,6 @@ function checkTagAdjacentClassSlash(
     dot,
   );
 }
-
 
 /** How many source characters the sugar token itself takes (`#x`, `:x`, `.c#d`, `.c:y`). */
 function authoredTokenLength(attr: Node, kind: "#" | "." | ":"): number {

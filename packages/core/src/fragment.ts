@@ -46,6 +46,7 @@ import {
 } from "./custom-tags.ts";
 import { nullPrototypeTags } from "./lookup-safety.ts";
 import { markoCompiler } from "./marko-frontend.ts";
+import { classShorthandParseError } from "./name-sugar.ts";
 import {
   bareCommaError,
   stockAtomError,
@@ -441,6 +442,8 @@ export function parseFragment(
       bareCommaError(error, source) ??
       tagParamError(error, source) ??
       sugarAfterDefaultError(error, source) ??
+      // Decision 174: the tag-adjacent bracket shorthands the parser rejects.
+      classShorthandParseError(error, source) ??
       stockParserError(error, source) ??
       stockAtomError(error, source);
     if (stock) {
@@ -491,13 +494,13 @@ function reparseForError(
   filename: string,
   translator: unknown,
   original: unknown,
-): unknown {
+): Error {
   try {
     compiler.compileSync(source, filename, { translator, output: "html" });
   } catch (error) {
-    return error;
+    return error as Error;
   }
-  return original;
+  return original as Error;
 }
 
 /**

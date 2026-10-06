@@ -157,6 +157,12 @@ Tag-adjacent `=value` (`<a#x=1>`) is Marko's own default attribute, not this sug
 | `<a :x=1/>` | `name="x"` plus `value=1`: a sugar followed by `=value` sets the default attribute (see [A sugar followed by a value](#attributes-name-and-id-and-class-after-an-attribute-a-sugar-followed-by-a-value)) |
 | `<div :/>` | an error: `:` is name sugar and needs a name (Marko read a bare `:` as `value:`; write `value:` for that attribute) |
 | `<div :1a/>` | an error: `:name` takes an identifier (`#x` and `.x` take whatever Marko's shorthand takes, so `<div #1a .2xl/>` is `id="1a"`, `class="2xl"`) |
+| `<div.bg-[#fff]/>` | an error at the `.bg-[`: a class shorthand cannot hold a Tailwind bracket value; write `class="bg-[#fff]"` |
+| `<div.w-1.5/>` | an error at `.w-1`: the chain splits at the `.`, and the part `.5` may not start with a digit (it would silently render class `5`); write `class="w-1.5"` |
+| `<div.w-1/2/>` | an error at `.w-1`: `/2` is not part of the class (Marko reads it as a tag variable, which a whole-file parse rejects and a region parse silently drops); write `class="w-1/2"` |
+| `<div .bg-[#fff]/>` | the same errors in attribute position (`<div .w-1.5/>` and `<div .w-1/2/>` too) |
+| `<div.bg-[url('/x.png')]/>` | an error at `.bg-[url('/x.png')]`, not Marko's `Mismatched group`: the parser cannot read the shorthand, so it is rewritten to the class-shorthand diagnostic |
+| `<div.hover:bg-red/>` | class `hover` plus `name="bg-red"`, unchanged — valid shorthands stay valid |
 
 An attribute tag's name (`<@svg:rect>`) is a property key and is not split;
 sugar inside one applies. `<svg:rect>` is the tag `svg` plus `name="rect"`, on

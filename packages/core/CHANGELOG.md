@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Fixed (class-shorthand-diagnostics, decision 174):** a class shorthand Tailwind notation makes unreadable is a positioned `TranslateError` at the part's `.` with the hint ``write it as `class="..."` ``, on every target and in both positions: a bracket value (`<div.bg-[#fff]/>`, `<div .bg-[#fff]/>`), a digit-leading continuation part (`<div.w-1.5/>` splits into `.w-1` and `.5`, which would silently render class `5`) and a fraction (`<div.w-1/2/>`, which Marko reads as a tag variable: the whole-file parse threw "is not a valid tag variable" and a region parse silently dropped `/2`). Where the parser itself cannot read the shorthand (`Mismatched group` for `<div.bg-[url('/x.png')]/>` and `<div.data-[state=open]:flex/>`, `Missing ending "div" tag` for `<div.[&>*]:p-4/>`), its error is rewritten to the same diagnostic at the shorthand's `.`, so whole-file hosts and regions alike name the shorthand instead of the scanner's failure. Valid shorthands (`<div.hover:bg-red/>`, `<div.a.b#c/>`, `<div.w-1/>`, `<div .2xl/>`) are unchanged.
 - **Fixed (define-param-default-empty-error):** a parse failure inside a tag's `|params|` (`<define/Foo|{a=}|>`, `<for|{a=}| of=x>`) is a positioned `TranslateError` at the param with Babel's reason ("Unexpected token"), on every target. Marko threw its `CompileError` at 0:0 with a message that opens with an empty line (whole-file entries), and a region (`parseFragment`) lowered the unreadable param as one that binds nothing.
 
 ## 0.1.0-alpha.10

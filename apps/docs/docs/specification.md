@@ -787,6 +787,26 @@ such as `.c#m.d` splits like a tag-adjacent one; a dynamic shorthand, `.a${x}`,
 works only tag-adjacent: `<div.a${x}>`). `name` is then an ordinary attribute, so contracts,
 the duplicate-attribute rule (decision 135) and E1 types all apply.
 
+**A class part Tailwind notation makes unreadable is a positioned error**
+(decision 174), in both positions. MX lowers a `.x` class to the `class`
+attribute, so a Tailwind spelling that is not a class list once lowered is
+rejected at the part's `.` with the hint ``write it as `class="…"` ``: a bracket
+value (`<div.bg-[#fff]/>` → ``this class shorthand cannot hold `.bg-[` ``), a
+fraction (`.w-1/2`) and, in a chain, a digit-leading continuation part
+(`<div.w-1.5/>` splits into `.w-1` and `.5`, which would silently render class
+`5` → ``.5` cannot start a class shorthand``). The same errors apply in
+attribute position (`<div .bg-[#fff]/>`, `<div .w-1.5/>`). A fraction after a
+tag-adjacent shorthand is its own case: Marko reads `/2` as a tag variable, so
+the whole-file parse throws "is not a valid tag variable" and a region parse
+silently drops it — both are rewritten to `` `.w-1/2` cannot hold this class ``
+at the shorthand's `.`. Where the parser itself cannot read the shorthand text
+(`Mismatched group` for `<div.bg-[url('/x.png')]/>` and
+`<div.data-[state=open]:flex/>`, `Missing ending "div" tag` for
+`<div.[&>*]:p-4/>`), its error is rewritten to the same diagnostic, so whole-file and region
+parses, on every host, name the shorthand instead of the scanner's failure.
+Valid shorthands (`<div.hover:bg-red/>`, `<div.a.b#c/>`, `<div.w-1/>`,
+`<div .2xl/>`) are unchanged.
+
 **Tag-adjacent sugars compose in any order** (23:23 addendum): `<a.c:b>` is class
 `c` and name `b`; `<a#d:b.c>` is id `d`, name `b`, class `c`; `<:b.c>` is the
 unnamed tag with name `b` and class `c`. A static tag name splits at its first

@@ -920,11 +920,30 @@ describe("default value: tag-adjacent `=value` is Marko's own default", () => {
   });
 });
 
+describe("default value: a bound value on a sugar", () => {
+  const withMethods = policy({ resolveAttributeMethod: () => true });
+
+  it.each([
+    ["<a :n:=y/>", 1, 3],
+    ["<a #x:=y/>", 1, 3],
+    ["<a .c:=y/>", 1, 3],
+    ["<input type=text :n:=y/>", 1, 17],
+  ])(
+    "%s is a positioned error, not a silent value=y",
+    (source, line, column) => {
+      const error = errorOf(source, withMethods);
+      expect(error.message).toBe(
+        "a bound value is not supported on name sugar; write name=... value:=...",
+      );
+      expect([error.line, error.column]).toEqual([line, column]);
+    },
+  );
+});
+
 describe("decision 174: class shorthand diagnostics", () => {
   const tagAdjacent = [
     ["<div.bg-[#fff]/>", 1, 4, "this class shorthand cannot hold `.bg-[`"],
     ["<div.w-1.5/>", 1, 4, "this class shorthand cannot hold `.5`"],
-    ["<div.w-1/2/>", 1, 4, "`.w-1/2` cannot hold this class"],
   ] as const;
 
   const attributePosition = [
@@ -952,6 +971,32 @@ describe("decision 174: class shorthand diagnostics", () => {
     "<div .w-1/>",
   ])("%s stays valid", (source) => {
     expect(() => lowerSource(source)).not.toThrow();
+  });
+
+  it("<div.w-1/2/> on the bridge path is the same error at the dot", () => {
+    // A region's parse (parseFragment, `output: "source"`) recovers `/2` as a
+    // MarkoParseError tag variable instead of throwing, so lowering catches
+    // it; the whole-file path rewrites the thrown parse error (decision 174,
+    // shorthand-parse-error.test.ts).
+    const { body } = parseFragment("<div.w-1/2/>");
+    const ctx: Ctx = newCtx(
+      "<div.w-1/2/>",
+      printExpression,
+      policy(),
+      undefined,
+      "test.mx",
+      lookup,
+    );
+    let thrown: unknown;
+    try {
+      lower(ctx, body);
+    } catch (error) {
+      thrown = error;
+    }
+    const error = thrown as { message: string; line: number; column: number };
+    expect(error.message).toContain("`.w-1/2` cannot hold this class");
+    expect(error.message).toContain('write it as `class="..."`');
+    expect([error.line, error.column]).toEqual([1, 4]);
   });
 });
 
