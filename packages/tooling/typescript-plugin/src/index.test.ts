@@ -1443,49 +1443,42 @@ describe("MX language plugin", () => {
     expect(elapsed).toBeLessThan(2000);
   });
 
-  it("pins an html call's missing prop with a body at 1:1, until #388 maps the props object (decision 161)", () => {
-    // html maps only the callee name of `__mxRenderTag(sink, Card)({ … })`;
-    // TypeScript anchors the missing prop (TS2345) on the props object, which
-    // no mapping covers, so the seam reports it at 1:1 as MX's. #388
-    // (fix/html-call-props-mapped) maps the object's braces onto the tag
-    // name; then this lands exactly on `Card` with no marker, and this test
-    // flips to that.
-    const directory = `${here}/fixtures/html-tags`;
-    const page = `${directory}/missing-prop-page.mx`;
-    const consumer = `${directory}/missing-prop-consumer.ts`;
-    const source =
-      'import Card from "./missing-prop-card.mx";\n<div>\n  <Card>x</Card>\n</div>\n';
-    const service = createPluginService(
-      {
-        [`${directory}/missing-prop-card.mx`]:
-          "export interface Input { title: string; content?: () => string }\n<p>${input.title}</p>\n",
-        [page]: source,
-        [consumer]: 'import "./missing-prop-page.mx";',
-      },
-      [consumer],
-    );
-    service.getSemanticDiagnostics(consumer);
-
-    expect(
-      service
+  it.each([
+    ["html", `${here}/fixtures/html-tags`],
+    ["astro", `${here}/fixtures/astro-policy`],
+  ])(
+    "reports a missing prop on a call with a body exactly on the tag name, on %s (decision 161, #388)",
+    (_, directory) => {
+      // TypeScript anchors the missing prop (TS2345) on the call's props
+      // object; #388 maps its braces onto the tag name, so it is mapped and
+      // carries no marker. Before #388 it sat on unmapped text: 1:1, "MX bug".
+      const page = `${directory}/missing-prop-page.mx`;
+      const consumer = `${directory}/missing-prop-consumer.ts`;
+      const source =
+        'import Card from "./missing-prop-card.mx";\n<div>\n  <Card>x</Card>\n</div>\n';
+      const service = createPluginService(
+        {
+          [`${directory}/missing-prop-card.mx`]:
+            "export interface Input { title: string; content?: () => string }\n<p>${input.title}</p>\n",
+          [page]: source,
+          [consumer]: 'import "./missing-prop-page.mx";',
+        },
+        [consumer],
+      );
+      service.getSemanticDiagnostics(consumer);
+      const diagnostics = service
         .getSemanticDiagnostics(page)
         .map((d) => [
           d.code,
-          d.start,
-          d.length,
+          source.slice(d.start, (d.start ?? 0) + (d.length ?? 0)),
           ts.flattenDiagnosticMessageText(d.messageText, "\n").split("\n")[0],
-        ]),
-    ).toEqual([
-      [
-        2345,
-        0,
-        0,
-        expect.stringMatching(
-          /^Argument of type .* \(in MX-generated code, not yours: an MX bug; generated \d+:\d+\)$/,
-        ),
-      ],
-    ]);
-  });
+        ]);
+
+      expect(diagnostics).toEqual([
+        [2345, "Card", expect.stringMatching(/^Argument of type .*\.$/)],
+      ]);
+    },
+  );
 
   it("says a diagnostic is MX's bug when the host's emitter wrote the code it is in (decision 161)", () => {
     // A test-only emitter: the html target's module with one defective
@@ -4348,6 +4341,9 @@ function createMutablePluginService(
       "@mxlang/html": [join(repoRoot, "packages/targets/html/src/index.ts")],
       "@mxlang/preact": [join(repoRoot, "packages/hosts/preact/src/index.ts")],
       "@mxlang/solid": [join(repoRoot, "packages/hosts/solid/src/index.ts")],
+      "@mxlang/astro/typecheck": [
+        join(repoRoot, "packages/hosts/astro/src/typecheck.ts"),
+      ],
       "@mxlang/parser": [join(repoRoot, "packages/parser/src/public.d.ts")],
     },
     ignoreDeprecations: "6.0",
@@ -4557,11 +4553,11 @@ describe("a tag call's props errors land on the tag name (html-call-props-mapped
       ]);
     });
 
-    it("pins today's discovered tag: a missing prop has no position (TODO routed-template-call-namespan)", () => {
+    it("pins today's discovered tag: a missing prop at 1:1, marked MX's (TODO routed-template-call-namespan)", () => {
       // A discovered tag routes to a generated binding (`$mx_Counter1`) whose
       // IR call carries no name span (`Component.nameSpan: null`, IR spec
       // 5.6), so neither the name nor the props braces map: the TS2345 sits
-      // on unmapped text and Volar drops it (decision 161 reports it at 1:1).
+      // on unmapped text, which decision 161 reports at 1:1 marked MX's.
       // TODO routed-template-call-namespan gives the call its authored name
       // span; then this lands on `counter` like the other forms.
       mkdirSync(join(dir, "tags"), { recursive: true });
@@ -4577,7 +4573,40 @@ describe("a tag call's props errors land on the tag name (html-call-props-mapped
         expect(
           virtual?.snapshot.getText(0, virtual.snapshot.getLength()),
         ).toMatch(/\$mx_Counter\d+\.render\(/);
-        expect(reported("<counter>x</counter>\n")).toEqual([]);
+        const consumer = join(dir, "index.ts");
+        const service = createPluginService(
+          {
+            [join(dir, "tags", "counter.mx")]: COUNTER,
+            [page]: "<counter>x</counter>\n",
+            [consumer]: 'import "./page.mx";',
+          },
+          [consumer],
+        );
+        service.getSemanticDiagnostics(consumer);
+        // Wrong for now, pinned so the TODO flips it: the author's missing
+        // prop is reported at 1:1 marked MX's (decision 161 cannot place it,
+        // since nothing of the call is mapped).
+        expect(
+          service
+            .getSemanticDiagnostics(page)
+            .map((d) => [
+              d.code,
+              d.start,
+              d.length,
+              ts
+                .flattenDiagnosticMessageText(d.messageText, "\n")
+                .split("\n")[0],
+            ]),
+        ).toEqual([
+          [
+            2345,
+            0,
+            0,
+            expect.stringMatching(
+              /^Argument of type .* \(in MX-generated code, not yours: an MX bug; generated \d+:\d+\)$/,
+            ),
+          ],
+        ]);
       } finally {
         rmSync(join(dir, "tags"), { recursive: true, force: true });
       }
