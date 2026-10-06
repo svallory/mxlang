@@ -1,6 +1,9 @@
 # @mxlang/data
 
 ## Unreleased
+- **Changed: `parseData` reports every error of a file and never throws.** `diagnostics` already was an array; it now holds one positioned error per independent mistake, earliest first (same message at the same place once): every syntax error Marko's parser recovers from (its `CompileErrors` aggregate used to escape as a raw throw), and, once the file lowers, every build reject (dynamic tag, tag variable, `<!doctype>`, merged shorthand class, ...), every `structural: "reject"` hit and every `unknownTags: "reject"` tag. Core's lowering still stops at its first error, so a lowering error (`parents`/`children`, a bad attribute) is the one error of its kind; the unknown tags are still listed beside it. An error with no source position (a bug in this package or core, e.g. `core IR invariant broken`) used to be rethrown; it is now an error diagnostic at 1:0 whose message starts with `internal error: `. A file with a single error, and a clean file, return exactly what they did. `buildDataDocumentAll` is the new collecting build; `buildDataDocument` still throws the first error. Result shape unchanged.
+
+- **Added:** `parseData` option `imports: "pass" | "reject"` (default: the effective `structural` value). With `structural: "reject"` and `imports: "pass"`, control flow, `export` and `static` stay rejected and the tree gains `imports: DataImport[]` (`{ code, span }`, each top-level `import` verbatim, file order, UTF-16 spans); those imports leave `statements`. `structural: "pass"` with `imports: "reject"` rejects only imports. `DataImport` is exported; additive.
 
 - **Changed (types only):** `DataExpr.node` is `Expression | null`, following core's `Expr.node: Node | null`. An authored expression always has a node; one core built itself has `null`. Narrow before reading it.
 

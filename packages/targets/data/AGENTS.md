@@ -40,8 +40,14 @@ the first) decides what any tag or expression means. Design:
   the `structural: "reject"` walk ("the data tree is static; this file's
   consumer does not evaluate `<if>`").
 - `src/parse.ts` — `parseData`/`parseDataFile` → `{ tree, diagnostics }`.
-  Fail fast: one positioned error and `tree: undefined`, never a partial
-  tree. Marko `CompileError`s report their `label`, not the framed `message`.
+  Every independent error is a positioned diagnostic (earliest first) and
+  `tree: undefined`, never a partial tree: all of Marko's recovered syntax
+  errors (`CompileErrors`, flattened), then, once core lowers, every build
+  reject, structural hit and unknown tag (`buildDataDocumentAll`: `each`/
+  `attempt` in `build.ts` record a reject and go on). Core's lowering stops at
+  its first error by design, so a lowering error is alone (plus the unknown
+  tags, from the parse-only scan). `parseData` never throws: a positionless
+  error is an `internal error: ` diagnostic at 1:0. Marko `CompileError`s report their `label`, not the framed `message`.
 - `src/descriptor.ts` + `src/compile.ts` — the `data` `TargetDescriptor`
   (`./descriptor` export) and its `compileModule`, which emits
   `export default <literal> as const`: the tree minus every Babel `node`

@@ -2,11 +2,18 @@
  * `@mxlang/data` — the data target's public API (decisions 131/132).
  *
  * `parseData` compiles a `.mx` source with the data declarations and the
- * data taglib and projects the IR into the static tree (`tree.ts`). It fails
- * fast: Marko's parser and core's `fail` both stop at the first error, so an
- * error means exactly one positioned diagnostic and `tree: undefined` — no
- * partial tree in v1 (the 131 addendum's item 8). Warnings (a duplicate
- * attribute, today) are collected and returned alongside the tree.
+ * data taglib and projects the IR into the static tree (`tree.ts`). An error
+ * means `tree: undefined` — no partial tree in v1 (the 131 addendum's item 8) —
+ * and every independent error the file has, each positioned, earliest first:
+ * all of Marko's parse errors (its parser recovers and reports several), and,
+ * once the file lowers, every build reject, structural hit and unknown tag.
+ * Core's lowering stops at its first error by design, so a lowering error
+ * (`parents`/`children`, a bad attribute) is the one error of its kind; under
+ * `unknownTags: "reject"` the file's unknown tags are still listed beside it.
+ * No input makes `parseData` throw: an error with no position (a bug in this
+ * package or core) is reported at 1:0 with an `internal error:` message prefix.
+ * Warnings (a duplicate attribute, today) are collected and returned alongside
+ * the tree.
  */
 
 import { readFileSync } from "node:fs";
@@ -18,8 +25,13 @@ import {
   type Ir,
   isTranslateError,
   type MxWarning,
+  TranslateError,
 } from "@mxlang/core";
-import { buildDataDocument, lineStartsOf, unknownTagMessage } from "./build.ts";
+import {
+  buildDataDocumentAll,
+  lineStartsOf,
+  unknownTagMessage,
+} from "./build.ts";
 import { dataDeclarations } from "./declarations.ts";
 import { scanAuthoredTags } from "./scan.ts";
 import { dataTaglib } from "./taglib.ts";
@@ -239,64 +251,111 @@ function declaredTagNames(
   ]);
 }
 
+/** The prefix of a diagnostic for an error with no source position. */
+const INTERNAL_PREFIX = "internal error: ";
+
 /**
- * The unknown authored tag that a core error must yield to, if any.
- *
- * Core raises a contract error (`parents`/`children`) during compile and
- * stops at the first, so an unknown parent's own typo would be hidden behind
- * its child's error. Under `unknownTags: "reject"` the unknown-tag check
- * comes first in document order: scan the authored tags with a parse-only
- * pass (`scan.ts`, no lowering, so a later lowering error cannot interfere)
- * and return the earliest unknown one (by position) when it opens strictly before the core
- * error. An ancestor of the failing tag always does. When the source does not
- * parse there is nothing to list and the original error stands.
- * On this path the build never runs, so an unknown tag wins a tie with a build
- * error at the same position.
+ * The errors one thrown value stands for. `@marko/compiler` throws a
+ * `CompileErrors` aggregate (an `errors` array of positioned `CompileError`s,
+ * no position of its own) when its parser recovered from several syntax
+ * errors; every one of them is a diagnostic.
  */
-function unknownTagBefore(
-  error: DataDiagnostic,
+function flattenErrors(error: unknown): unknown[] {
+  const inner = (error as { errors?: unknown } | null)?.errors;
+  return Array.isArray(inner) && inner.length > 0
+    ? inner.flatMap(flattenErrors)
+    : [error];
+}
+
+/**
+ * One diagnostic per error, earliest first, the same message at the same place
+ * once. An error with no position is not source feedback but a bug here or in
+ * core: it is still reported, at the file start, under {@link INTERNAL_PREFIX}
+ * so a consumer can tell it from the author's mistake.
+ */
+function errorDiagnostics(
+  errors: unknown[],
+  filename: string,
+  lineStarts: number[],
+  source: string,
+): DataDiagnostic[] {
+  const out: DataDiagnostic[] = [];
+  const seen = new Set<string>();
+  for (const error of errors.flatMap(flattenErrors)) {
+    const at = errorPosition(error);
+    const message = errorMessage(error, filename);
+    const diagnostic = toDiagnostic(
+      "error",
+      at ? message : `${INTERNAL_PREFIX}${message}`,
+      at ?? { line: 1, column: 0 },
+      lineStarts,
+      source,
+      filename,
+    );
+    const key = `${diagnostic.file ?? ""}:${diagnostic.line}:${diagnostic.column}:${diagnostic.message}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(diagnostic);
+  }
+  // Stable: errors at one position keep the order they were found in; the
+  // internal ones (no position, at 1:0) stay after every positioned error.
+  const rank = (d: DataDiagnostic) =>
+    d.message.startsWith(INTERNAL_PREFIX) ? 1 : 0;
+  return out
+    .map((d, i) => ({ d, i }))
+    .sort(
+      (a, b) =>
+        rank(a.d) - rank(b.d) ||
+        (a.d.file ?? "").localeCompare(b.d.file ?? "") ||
+        a.d.line - b.d.line ||
+        a.d.column - b.d.column ||
+        a.i - b.i,
+    )
+    .map(({ d }) => d);
+}
+
+/**
+ * Every authored tag with no contract in `customTags`, as errors.
+ *
+ * Core stops lowering at its first error, so a contract error (`parents`/
+ * `children`) would hide an unknown tag elsewhere in the file. Under
+ * `unknownTags: "reject"` the unknown tags are listed from a parse-only pass
+ * (`scan.ts`, no lowering, so a later lowering error cannot interfere) and
+ * reported beside core's error. When the source does not parse there is
+ * nothing to list.
+ */
+function unknownTagErrors(
   source: string,
   filename: string,
   options: ParseDataOptions,
-): { message: string; at: { line: number; column: number } } | null {
-  if (error.file !== undefined && error.file !== filename) return null;
+): TranslateError[] {
   const tags = scanAuthoredTags(
     source,
     filename,
     options.customTags,
     options.defaultTag,
   );
-  if (!tags) return null;
+  if (!tags) return [];
   const declared = declaredTagNames(options.customTags);
-  // The earliest by position, not the first in the scan's walk order (which
-  // visits a tag's attribute tags before its children).
-  let unknown: (typeof tags)[number] | undefined;
-  for (const tag of tags) {
-    if (declared.has(tag.name)) continue;
-    if (
-      !unknown ||
-      tag.line < unknown.line ||
-      (tag.line === unknown.line && tag.column < unknown.column)
-    ) {
-      unknown = tag;
-    }
-  }
-  if (!unknown) return null;
-  const { line, column } = unknown;
-  const before =
-    line < error.line || (line === error.line && column < error.column);
-  return before
-    ? { message: unknownTagMessage(unknown.name, declared), at: unknown }
-    : null;
+  return tags
+    .filter((tag) => !declared.has(tag.name))
+    .map(
+      (tag) =>
+        new TranslateError(
+          unknownTagMessage(tag.name, declared),
+          tag.line,
+          tag.column,
+        ),
+    );
 }
 
 /**
  * Parses one data source into its static tree.
  *
- * Never throws for a source-level problem: a parse error, a rejected
- * construct or a failed contract is the single error diagnostic. An error
- * with no position at all is an internal failure, not source feedback, and
- * is rethrown.
+ * Never throws: every error the file has is a positioned error diagnostic
+ * (see the file header for which are collected together). An error with no
+ * position is an internal failure, not source feedback: it is reported too,
+ * at 1:0 under an `internal error:` prefix.
  */
 export function parseData(
   source: string,
@@ -309,21 +368,13 @@ export function parseData(
   let ir: Ir | null = null;
   // No source pre-scan here any more: a CDATA section and an XML declaration
   // are rejected by core itself, at the `<` of the construct (decision 139),
-  // so `compileSource` raises and `toErrorDiagnostic` reports it like any
-  // other core error. This target adds no rule of its own for them, and needs
-  // none — a construct core drops is a core bug, not a data one.
-  const toErrorDiagnostic = (error: unknown): DataDiagnostic | null => {
-    const at = errorPosition(error);
-    if (!at) return null;
-    return toDiagnostic(
-      "error",
-      errorMessage(error, filename),
-      at,
-      lineStarts,
-      source,
-      filename,
-    );
-  };
+  // so `compileSource` raises and the catch reports it like any other core
+  // error. This target adds no rule of its own for them, and needs none — a
+  // construct core drops is a core bug, not a data one.
+  const failed = (errors: unknown[]): ParseDataResult => ({
+    tree: undefined,
+    diagnostics: errorDiagnostics(errors, filename, lineStarts, source),
+  });
   try {
     compileSource(source, filename, dataDeclarations, {
       targets: dataTargets,
@@ -340,58 +391,56 @@ export function parseData(
       },
     });
   } catch (error) {
-    const diagnostic = toErrorDiagnostic(error);
-    if (!diagnostic) throw error;
-    const unknown =
-      options.unknownTags === "reject"
-        ? unknownTagBefore(diagnostic, source, filename, options)
-        : null;
-    return {
-      tree: undefined,
-      diagnostics: [
-        unknown
-          ? toDiagnostic(
-              "error",
-              unknown.message,
-              unknown.at,
-              lineStarts,
-              source,
-              filename,
-            )
-          : diagnostic,
-      ],
-    };
+    return failed([
+      error,
+      ...(options.unknownTags === "reject"
+        ? attemptList(() => unknownTagErrors(source, filename, options))
+        : []),
+    ]);
   }
   if (!ir) {
-    throw new Error("@mxlang/data: compile produced no IR and no error");
+    return failed([
+      new Error("@mxlang/data: compile produced no IR and no error"),
+    ]);
   }
   const document = ir as Ir;
+  let built: ReturnType<typeof buildDataDocumentAll>;
   try {
-    const tree = buildDataDocument(document, source, filename, {
+    built = buildDataDocumentAll(document, source, filename, {
       structural: options.structural ?? "pass",
       imports: options.imports ?? options.structural ?? "pass",
       unknownTags: options.unknownTags ?? "allow",
       declaredTags: declaredTagNames(options.customTags),
     });
-    return {
-      tree,
-      diagnostics: warnings
-        .slice(firstWarning)
-        .map((warning) =>
-          toDiagnostic(
-            "warning",
-            warning.message,
-            warning,
-            lineStarts,
-            source,
-            filename,
-          ),
-        ),
-    };
   } catch (error) {
-    const diagnostic = toErrorDiagnostic(error);
-    if (!diagnostic) throw error;
-    return { tree: undefined, diagnostics: [diagnostic] };
+    // The build records what it can; this is a failure outside every
+    // recovery point, an internal one.
+    return failed([error]);
+  }
+  if (built.errors.length > 0 || !built.tree) return failed(built.errors);
+  return {
+    tree: built.tree,
+    diagnostics: warnings
+      .slice(firstWarning)
+      .map((warning) =>
+        toDiagnostic(
+          "warning",
+          warning.message,
+          warning,
+          lineStarts,
+          source,
+          filename,
+        ),
+      ),
+  };
+}
+
+/** `fn`'s list, or the error it threw as a one-item list (never lost). */
+function attemptList<T>(fn: () => T[]): unknown[] {
+  try {
+    return fn();
+  } catch (error) {
+    return [error];
   }
 }
 

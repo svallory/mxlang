@@ -75,6 +75,38 @@ function fail(message: string, at: Position): never {
   throw new TranslateError(message, at.line, at.column, at.file);
 }
 
+/**
+ * Every error the build met, in the order met. The build recovers per node,
+ * per attribute and per argument: a reject there is recorded here and the walk
+ * goes on, so one file reports every independent mistake. A non-positioned
+ * `Error` (an internal invariant) is recorded too; `parseData` reports it with
+ * its own prefix. Set per `buildDataDocumentAll` call, like the line tables.
+ */
+let problems: unknown[] = [];
+
+/** `fn`'s result, or `undefined` after recording what it threw. */
+function attempt<T>(fn: () => T): T | undefined {
+  try {
+    return fn();
+  } catch (error) {
+    problems.push(error);
+    return undefined;
+  }
+}
+
+/** `items.map(fn)` minus the items whose `fn` threw, each recorded. */
+function each<T, U>(
+  items: readonly T[],
+  fn: (item: T, index: number) => U,
+): U[] {
+  const out: U[] = [];
+  items.forEach((item, index) => {
+    const built = attempt(() => ({ value: fn(item, index) }));
+    if (built) out.push(built.value);
+  });
+  return out;
+}
+
 function requiredSpan(span: SourceSpan | undefined, what: string): SourceSpan {
   if (!span) {
     throw new Error(
@@ -362,16 +394,23 @@ function wildcardMatch(
 }
 
 function dataTag(tag: DelegatedTag<unknown>): DataTag {
-  checkTagName(tag.name, tag.loc);
-  rejectMergedShorthandClass(tag.attrs, tag.loc);
+  attempt(() => checkTagName(tag.name, tag.loc));
+  // A merged class has no span, so building that tag's attributes would add an
+  // internal "no span" error that is only the same mistake again: skip them.
+  const attrsBuildable = attempt(() => {
+    rejectMergedShorthandClass(tag.attrs, tag.loc);
+    return true;
+  });
   if (tag.var !== null) {
-    fail(
-      `tag variable \`/${tag.var}\` on \`<${tag.name}>\`: the data tree is static; a binding without evaluation means nothing`,
-      tag.loc,
+    attempt(() =>
+      fail(
+        `tag variable \`/${tag.var}\` on \`<${tag.name}>\`: the data tree is static; a binding without evaluation means nothing`,
+        tag.loc,
+      ),
     );
   }
-  const attrs = tag.attrs.map(dataAttr);
-  const args = (tag.args ?? []).map((arg, i) =>
+  const attrs = attrsBuildable ? each(tag.attrs, dataAttr) : [];
+  const args = each(tag.args ?? [], (arg, i) =>
     dataExpr(arg, `argument ${i + 1} of \`<${tag.name}>\``),
   );
   const { attrTags, children } = dataParts(tag.attributeTagTree, tag.children);
@@ -404,20 +443,31 @@ function dataParts(
   const attrTags: DataAttrTagNode[] = [];
   const children: DataNode[] = [];
   for (const part of inSourceOrder(attrTagNodes, childNodes)) {
-    if (part.side === "attr") attrTags.push(dataAttrTagNode(part.node));
-    else children.push(dataNode(part.node));
+    if (part.side === "attr") {
+      const built = attempt(() => dataAttrTagNode(part.node));
+      if (built) attrTags.push(built);
+    } else {
+      const built = attempt(() => dataNode(part.node));
+      if (built) children.push(built);
+    }
   }
   return { attrTags, children };
 }
 
 function dataAttrTag(tag: AttributeTag): DataAttrTagNode {
-  checkTagName(tag.name, tag.loc);
-  rejectMergedShorthandClass(tag.attrs, tag.loc);
-  const attrs = tag.attrs.map(dataAttr);
+  attempt(() => checkTagName(tag.name, tag.loc));
+  const attrsBuildable = attempt(() => {
+    rejectMergedShorthandClass(tag.attrs, tag.loc);
+    return true;
+  });
+  const attrs = attrsBuildable ? each(tag.attrs, dataAttr) : [];
   const { attrTags, children } = dataParts(
     tag.attributeTagTree,
     tag.block.children,
   );
+  // The spans are the last thing read, so a tag with a bad name or attribute
+  // still has its body walked (and its inner errors recorded) before an
+  // internal span invariant stops this one tag.
   return {
     kind: "attr-tag",
     name: tag.name,
@@ -450,11 +500,11 @@ function dataAttrTagNode(node: AttributeTagNode): DataAttrTagNode {
     case "AttributeTagIf":
       return {
         kind: "if",
-        branches: node.branches.map((branch) => ({
+        branches: each(node.branches, (branch) => ({
           test: branch.test
             ? dataExpr(branch.test, "attribute-tag `<if>` condition")
             : null,
-          children: branch.nodes.map(dataAttrTagNode),
+          children: each(branch.nodes, dataAttrTagNode),
           span: branch.span,
         })),
       };
@@ -462,7 +512,7 @@ function dataAttrTagNode(node: AttributeTagNode): DataAttrTagNode {
       return {
         kind: "for",
         head: dataForHead(node.loop, "attribute-tag `<for>`"),
-        children: node.nodes.map(dataAttrTagNode),
+        children: each(node.nodes, dataAttrTagNode),
       };
   }
 }
@@ -577,7 +627,7 @@ function dataNode(node: IrNode): DataNode {
     case "IfChain":
       return {
         kind: "if",
-        branches: node.branches.map(dataBranch),
+        branches: each(node.branches, dataBranch),
         span: requiredSpan(node.span, "`<if>`"),
       };
     case "For":
@@ -621,7 +671,7 @@ function dataNode(node: IrNode): DataNode {
 }
 
 function dataNodes(nodes: IrNode[]): DataNode[] {
-  return nodes.map(dataNode);
+  return each(nodes, dataNode);
 }
 
 function statements(ir: Ir): DataStatement[] {
@@ -682,42 +732,31 @@ export interface UnknownTagHit {
   at: Position;
 }
 
-/** Whether a positioned error opens strictly after `at`. */
-function isAfter(error: TranslateError, at: Position): boolean {
-  return (
-    error.line > at.line || (error.line === at.line && error.column > at.column)
-  );
-}
-
-function isBefore(a: Position, b: Position): boolean {
-  return a.line < b.line || (a.line === b.line && a.column < b.column);
-}
-
 /**
- * The first authored tag, in document order, with no contract in
- * `declaredTags`; `null` when there is none.
+ * Every authored tag, in document order, with no contract in `declaredTags`.
  *
  * Document order is parent first: a tag's opening precedes everything inside
- * it, so an unknown parent is reported before anything in its body, which is
- * the cause where a child's error is the symptom. A tag a declared tag's
- * `transform` emitted has no `nameSpan` (core's marker,
+ * it, so an unknown parent is listed before anything in its body. A tag a
+ * declared tag's `transform` emitted has no `nameSpan` (core's marker,
  * `DelegatedTag.nameSpan`): it is the dialect author's output, not a name the
  * file's author wrote, so it is skipped. `<@name>` is never checked.
  */
-export function firstUnknownTag(
+export function allUnknownTags(
   ir: Ir,
   declaredTags: ReadonlySet<string>,
-): UnknownTagHit | null {
-  let best: { name: string; at: Position } | null = null;
+): UnknownTagHit[] {
+  const found: UnknownTagHit[] = [];
   const visitTag = (tag: DelegatedTag<unknown>) => {
     if (
       tag.nameSpan !== undefined &&
       // A wildcard child (`alias`) was claimed by its parent's contract: known.
       tag.alias === undefined &&
-      !declaredTags.has(tag.name) &&
-      (!best || isBefore(tag.loc, best.at))
+      !declaredTags.has(tag.name)
     ) {
-      best = { name: tag.name, at: tag.loc };
+      found.push({
+        message: unknownTagMessage(tag.name, declaredTags),
+        at: tag.loc,
+      });
     }
     visitAttrTagNodes(tag.attributeTagTree);
     visitNodes(tag.children);
@@ -743,9 +782,7 @@ export function firstUnknownTag(
     }
   };
   visitNodes(ir.body);
-  if (!best) return null;
-  const { name, at } = best as { name: string; at: Position };
-  return { message: unknownTagMessage(name, declaredTags), at };
+  return found;
 }
 
 /** The earliest structural construct, for `structural: "reject"`. */
@@ -764,68 +801,67 @@ function hit(construct: string, at: Position): StructuralHit {
   };
 }
 
-/** The earliest structural construct among a tag's attribute tags and children. */
+/** Every structural construct among a tag's attribute tags and children. */
 function structuralInParts(
   attrTags: AttributeTagNode[],
   children: IrNode[],
-): StructuralHit | null {
+  out: StructuralHit[],
+): void {
   for (const part of inSourceOrder(attrTags, children)) {
-    const found =
-      part.side === "attr"
-        ? structuralInAttrTagNodes([part.node])
-        : structuralInNodes([part.node]);
-    if (found) return found;
+    if (part.side === "attr") structuralInAttrTagNodes([part.node], out);
+    else structuralInNodes([part.node], out);
   }
-  return null;
 }
 
 function structuralInAttrTagNodes(
   nodes: AttributeTagNode[],
-): StructuralHit | null {
+  out: StructuralHit[],
+): void {
   for (const node of nodes) {
-    const found =
-      node.kind === "AttributeTagIf"
-        ? hit("`<if>`", node.loc)
-        : node.kind === "AttributeTagFor"
-          ? hit("`<for>`", node.loc)
-          : structuralInParts(
-              node.tag.attributeTagTree,
-              node.tag.block.children,
-            );
-    if (found) return found;
+    if (node.kind === "AttributeTagIf") out.push(hit("`<if>`", node.loc));
+    else if (node.kind === "AttributeTagFor") {
+      out.push(hit("`<for>`", node.loc));
+    } else {
+      structuralInParts(
+        node.tag.attributeTagTree,
+        node.tag.block.children,
+        out,
+      );
+    }
   }
-  return null;
 }
 
-function structuralInNodes(nodes: IrNode[]): StructuralHit | null {
+/**
+ * Every structural construct in `nodes`. A construct is one hit: what is
+ * written inside an `<if>` or `<for>` body is not walked, since the whole
+ * construct is the thing the consumer does not evaluate.
+ */
+function structuralInNodes(nodes: IrNode[], out: StructuralHit[]): void {
   for (const node of nodes) {
-    let found: StructuralHit | null = null;
     switch (node.kind) {
       case "Text":
-        found = hit("text", textPosition(node.span, node.loc));
+        out.push(hit("text", textPosition(node.span, node.loc)));
         break;
       case "Interpolation":
-        found = hit(`\`\${}\``, node.loc);
+        out.push(hit(`\`\${}\``, node.loc));
         break;
       case "Comment":
-        found = hit("comments", node.loc);
+        out.push(hit("comments", node.loc));
         break;
       case "IfChain":
-        found = hit("`<if>`", node.loc);
+        out.push(hit("`<if>`", node.loc));
         break;
       case "For":
-        found = hit("`<for>`", node.loc);
+        out.push(hit("`<for>`", node.loc));
         break;
       case "Const":
-        found = hit("`<const>`", node.loc);
+        out.push(hit("`<const>`", node.loc));
         break;
       case "DelegatedTag":
-        found = structuralInParts(node.tag.attributeTagTree, node.tag.children);
+        structuralInParts(node.tag.attributeTagTree, node.tag.children, out);
         break;
     }
-    if (found) return found;
   }
-  return null;
 }
 
 /** How a top-level `import` is treated: `imports`, else the effective `structural`. */
@@ -833,14 +869,14 @@ function importsMode(options: BuildOptions): "pass" | "reject" {
   return options.imports ?? options.structural ?? "pass";
 }
 
-/** The earliest structural construct, as a position and message. */
-function firstStructural(
+/** Every structural construct, as a position and message. */
+function allStructural(
   ir: Ir,
   stmts: DataStatement[],
   options: BuildOptions,
-): { message: string; at: Position } | null {
-  let best: StructuralHit | null =
-    options.structural === "reject" ? structuralInNodes(ir.body) : null;
+): { message: string; at: Position }[] {
+  const hits: StructuralHit[] = [];
+  if (options.structural === "reject") structuralInNodes(ir.body, hits);
   for (const stmt of stmts) {
     // `imports` decides an `import` on its own; the rest follow `structural`.
     if (stmt.kind === "import") {
@@ -848,23 +884,123 @@ function firstStructural(
     } else if (options.structural !== "reject") {
       continue;
     }
-    if (!best || stmt.span.sourceStart < best.offset) {
-      best = {
-        construct: `\`${stmt.kind}\``,
-        offset: stmt.span.sourceStart,
-        at: positionOfOffset(stmt.span.sourceStart),
-      };
-    }
+    hits.push({
+      construct: `\`${stmt.kind}\``,
+      offset: stmt.span.sourceStart,
+      at: positionOfOffset(stmt.span.sourceStart),
+    });
   }
-  return best
-    ? { message: structuralMessage(best.construct), at: best.at }
+  return hits.map((best) => ({
+    message: structuralMessage(best.construct),
+    at: best.at,
+  }));
+}
+
+/** An error's source position, or `null` for one with none (an internal bug). */
+function positionOf(error: unknown): Position | null {
+  return isTranslateError(error)
+    ? { line: error.line, column: error.column, file: error.file }
     : null;
 }
 
 /**
- * Builds the tree from a lowered data compile. Throws `TranslateError`
- * (positioned) for every reject above; `parseData` turns it into the single
- * error diagnostic.
+ * Every error of one build, earliest first.
+ *
+ * The build rejects, the structural hits and the unknown tags are three
+ * independent walks of the IR; their errors are merged by position (the
+ * build's first on a tie, as a check on a tag is not "inside" it) and an
+ * identical error — the same message at the same place — appears once.
+ * An error with no position (an internal invariant) goes last.
+ */
+function sortedProblems(all: unknown[]): unknown[] {
+  const keyed = all.map((error, index) => ({
+    error,
+    index,
+    at: positionOf(error),
+  }));
+  keyed.sort((a, b) => {
+    if (!a.at || !b.at) return a.at ? -1 : b.at ? 1 : a.index - b.index;
+    return (
+      a.at.line - b.at.line || a.at.column - b.at.column || a.index - b.index
+    );
+  });
+  const seen = new Set<string>();
+  return keyed
+    .filter(({ error, at }) => {
+      if (!at) return true;
+      const key = `${at.line}:${at.column}:${(error as Error).message}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map(({ error }) => error);
+}
+
+/** What `buildDataDocumentAll` returns: a tree, or every error and no tree. */
+export interface BuildResult {
+  tree: DataDocument | undefined;
+  /** `TranslateError`s, plus an `Error` per internal invariant; earliest first. */
+  errors: unknown[];
+}
+
+/**
+ * Builds the tree from a lowered data compile, collecting every error: no
+ * `tree` when any was found (no partial tree in v1).
+ */
+export function buildDataDocumentAll(
+  ir: Ir,
+  source: string,
+  filename: string,
+  options: BuildOptions,
+): BuildResult {
+  activeLineStarts = lineStartsOf(source);
+  activeSource = source;
+  activeSourceLength = source.length;
+  problems = [];
+  const stmts = attempt(() => statements(ir)) ?? [];
+  const children = dataNodes(ir.body);
+  const extra: unknown[] = [];
+  const asError = ({ message, at }: { message: string; at: Position }) =>
+    new TranslateError(message, at.line, at.column, at.file);
+  attempt(() => {
+    for (const hit of allStructural(ir, stmts, options)) {
+      extra.push(asError(hit));
+    }
+  });
+  if (options.unknownTags === "reject") {
+    attempt(() => {
+      for (const hit of allUnknownTags(ir, options.declaredTags)) {
+        extra.push(asError(hit));
+      }
+    });
+  }
+  const errors = sortedProblems([...problems, ...extra]);
+  if (errors.length > 0) return { tree: undefined, errors };
+  // `structural: "reject"` with `imports: "pass"`: the imports leave
+  // `statements` (every other kind was just rejected) for their own list.
+  if (options.structural === "reject" && importsMode(options) === "pass") {
+    return {
+      tree: {
+        kind: "document",
+        filename,
+        statements: stmts.filter((stmt) => stmt.kind !== "import"),
+        imports: stmts
+          .filter((stmt) => stmt.kind === "import")
+          .map(({ code, span }) => ({ code, span })),
+        children,
+      },
+      errors,
+    };
+  }
+  return {
+    tree: { kind: "document", filename, statements: stmts, children },
+    errors,
+  };
+}
+
+/**
+ * `buildDataDocumentAll` for a caller that wants one error: throws the
+ * earliest (`TranslateError`, positioned) or returns the tree.
  */
 export function buildDataDocument(
   ir: Ir,
@@ -872,55 +1008,7 @@ export function buildDataDocument(
   filename: string,
   options: BuildOptions,
 ): DataDocument {
-  activeLineStarts = lineStartsOf(source);
-  activeSource = source;
-  activeSourceLength = source.length;
-  const stmts = statements(ir);
-  // The two document-wide rejects compete by position, earliest first. A
-  // tags-and-attributes file builds the same under either option.
-  const structural = firstStructural(ir, stmts, options);
-  const unknown =
-    options.unknownTags === "reject"
-      ? firstUnknownTag(ir, options.declaredTags)
-      : null;
-  const first =
-    structural && unknown
-      ? isBefore(unknown.at, structural.at)
-        ? unknown
-        : structural
-      : (structural ?? unknown);
-  let children: DataNode[];
-  try {
-    children = dataNodes(ir.body);
-  } catch (error) {
-    // A build error that comes earlier in the file than the hit (a dynamic
-    // tag name, a doctype, an unusable name) is the first error, and so is
-    // one at the same position: a check on the tag is not "inside" it. An
-    // error that is not a positioned `TranslateError` is an internal bug and
-    // is never replaced by the hit.
-    if (first && isTranslateError(error) && isAfter(error, first.at)) {
-      fail(first.message, first.at);
-    }
-    throw error;
-  }
-  if (first) fail(first.message, first.at);
-  // `structural: "reject"` with `imports: "pass"`: the imports leave
-  // `statements` (every other kind was just rejected) for their own list.
-  if (options.structural === "reject" && importsMode(options) === "pass") {
-    return {
-      kind: "document",
-      filename,
-      statements: stmts.filter((stmt) => stmt.kind !== "import"),
-      imports: stmts
-        .filter((stmt) => stmt.kind === "import")
-        .map(({ code, span }) => ({ code, span })),
-      children,
-    };
-  }
-  return {
-    kind: "document",
-    filename,
-    statements: stmts,
-    children,
-  };
+  const { tree, errors } = buildDataDocumentAll(ir, source, filename, options);
+  if (errors.length > 0 || !tree) throw errors[0];
+  return tree;
 }
