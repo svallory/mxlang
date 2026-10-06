@@ -15,6 +15,7 @@ import {
   type CompileResult,
   type Ctx,
   type CustomTag,
+  cloneIr,
   type Expr,
   type Ir,
   type IrNode,
@@ -953,7 +954,11 @@ export function compileTagModule(
     defaultTag: options.defaultTag,
     targets: options.targets ?? angularOwnTargets,
     warnings,
-    emitIr: (ir: Ir, ctx: Ctx) => {
+    emitIr: (lowered: Ir, ctx: Ctx) => {
+      // `projectSlots` and `rewriteInputReads` replace nodes and edit
+      // `Expr.code` and the parser nodes in place, so they run on a private
+      // copy: the IR is read-only to an emitter (ir-spec E21).
+      const ir = cloneIr(lowered, { nodes: true });
       className = moduleExportName(ir, "@mxlang/angular");
       // `<return>` hands a value to the tag's *caller*, through `/var` on
       // every host whose template can bind one. An Angular component is

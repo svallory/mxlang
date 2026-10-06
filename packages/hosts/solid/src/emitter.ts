@@ -6,6 +6,7 @@ import {
   type AttrTagProp,
   type ComponentTarget,
   type Ctx,
+  cloneIr,
   concatMapped,
   contractDefaultTag,
   destructuredNames,
@@ -2315,7 +2316,10 @@ export class SolidEmitter implements Emitter<string> {
     );
   }
 
-  forLoop(node: Extract<IrNode, { kind: "For" }>): void {
+  forLoop(source: Extract<IrNode, { kind: "For" }>): void {
+    // The rewrites below edit `bindings` and every `code` in the body, so they
+    // run on a private copy: the IR is read-only to an emitter (ir-spec E21).
+    const node = cloneIr(source);
     const [first = "item", second] = node.params;
     if (node.source.kind === "of") {
       let keyed: string;

@@ -43,6 +43,7 @@ export {
   resolveSpecifier,
   withCalleeInputSources,
 } from "./callee-input.ts";
+export { cloneIr } from "./clone-ir.ts";
 export {
   buildMarkoLookup,
   type CompileResult,
