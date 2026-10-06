@@ -1,3 +1,4 @@
+import { parseExpression } from "@babel/parser";
 import type { Expr } from "./ir.ts";
 
 /**
@@ -109,6 +110,43 @@ export function mappedRewrite(
 ): MappedCode {
   if (after === before) return mapped(after, span);
   return mapTokenDiff(mapped(before, span), after);
+}
+
+/**
+ * Where the body of a printed method starts: `code` is the `function`
+ * expression the compiler printed for an attribute method shorthand
+ * (`onClick() { … }` as `function () { … }`), and the parsed function's own
+ * body position splits it (a body may hold its own `) {`). `null` when `code`
+ * is not one function expression.
+ */
+function printedBodyStart(code: string): number | null {
+  let fn: ReturnType<typeof parseExpression>;
+  try {
+    fn = parseExpression(code, { plugins: ["typescript"] });
+  } catch {
+    return null;
+  }
+  if (fn?.type !== "FunctionExpression" || fn.end !== code.length) return null;
+  return fn.body.start ?? null;
+}
+
+/**
+ * The text and mapping of an attribute method shorthand (`onClick() { … }`),
+ * emitted as the `function` expression the compiler printed for it: the
+ * printed head is generated text and stays unmapped, the body maps token by
+ * token against the authored body (`Expr.bodySpan`/`bodySource`), also when
+ * the printer reformatted it or reads were rewritten. `undefined` when `expr`
+ * is not a method shorthand, so the caller maps it as any other expression.
+ */
+export function mappedMethod(expr: Expr): MappedCode | undefined {
+  const { bodySpan, bodySource } = expr;
+  if (!bodySpan || bodySource === undefined) return undefined;
+  const at = printedBodyStart(expr.code);
+  if (at === null) return { code: expr.code, mappings: [] };
+  return concatMapped(
+    mapped(expr.code.slice(0, at), null),
+    mappedRewrite(expr.code.slice(at), bodySource, bodySpan),
+  );
 }
 
 function mapTokenDiff(base: MappedCode, after: string): MappedCode {

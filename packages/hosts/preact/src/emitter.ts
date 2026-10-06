@@ -37,6 +37,7 @@ import {
   type MappedCode,
   mapped,
   mappedExpr,
+  mappedMethod,
   type Position,
   type SourceSpan,
   TranslateError,
@@ -364,36 +365,20 @@ function escapeAttribute(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
 }
 
-/**
- * The source text of a `FunctionExpression` attribute value, as an arrow.
- *
- * Marko's attribute-method shorthand (`onClick() { … }`) parses as a function
- * expression. Emitted verbatim into JSX it is still valid, but an arrow keeps
- * `this` lexical, which is what a Preact author writing the same handler by
- * hand would get.
- */
 /** A tag name the host's `JSX.IntrinsicElements` could declare. */
 const NATIVE_TAG = /^[a-z][a-z0-9]*$/;
 
-function methodExpression(expr: Expr): string | null {
-  if (expr.node?.type !== "FunctionExpression") return null;
-  const match = expr.code.match(
-    /^(async\s+)?function\s*\(([\s\S]*)\)\s*(\{[\s\S]*\})$/,
-  );
-  if (!match) return expr.code;
-  return `${match[1] ?? ""}(${match[2] ?? ""}) => ${match[3] ?? "{}"}`;
-}
-
 /**
- * An attribute value's JSX text with its authored mapping. A method attribute
- * rewritten to an arrow function is generated text, not source text, so it
- * stays unmapped (a mapping whose texts differ is worse than none).
+ * An attribute value's JSX text with its authored mapping. Every function
+ * value is emitted as written: a method shorthand (`onClick() { … }`) as the
+ * `function` expression the compiler printed for it (`async function <T>(…)
+ * { … }`), which keeps Marko's `this`, its type parameters and valid TSX, and
+ * an authored `function` expression or arrow unchanged. A method's printed head
+ * is generated text and stays unmapped; its body maps token by token against
+ * the authored body (`mappedMethod`).
  */
 function mappedValue(expr: Expr): MappedCode {
-  const method = methodExpression(expr);
-  return method === null || method === expr.code
-    ? mappedExpr(expr)
-    : concatMapped(method);
+  return mappedMethod(expr) ?? mappedExpr(expr);
 }
 
 /** The text of a template literal with no dynamic parts, or null. */
@@ -724,7 +709,7 @@ export class PreactEmitter implements Emitter<string> {
         // errors whether the unit is described (`#attr`) or called
         // (`#attrValue`).
         this.#eventPropName(attr);
-        return methodExpression(attr.value) ?? attr.value.code;
+        return attr.value.code;
       }
       case "dynamic": {
         if (attr.name === "class") {
@@ -741,7 +726,7 @@ export class PreactEmitter implements Emitter<string> {
             attr,
           );
         }
-        return methodExpression(attr.value) ?? attr.value.code;
+        return attr.value.code;
       }
     }
   }
@@ -889,25 +874,22 @@ export class PreactEmitter implements Emitter<string> {
       // the duplicate; the unmapped prop used to be dropped).
       case "event": {
         const name = this.#eventPropName(attr);
-        const method = methodExpression(attr.value);
         if (this.#typeCheck && tag !== undefined && NATIVE_TAG.test(tag)) {
           // TypeScript reports a mismatch on the `satisfies` keyword, so that
           // keyword maps to the handler's source span; the generated
-          // parentheses stay unmapped, and a source-backed value keeps the
-          // exact text mapping it has without the wrapper (a coarse mapping
-          // over `(fn)` would shift every position inside the body by the
-          // length of the `(`). A shorthand handler has no span of its own and
-          // maps to the attribute name.
-          const shorthand =
-            method !== null && attr.value.node?.start === undefined;
-          const span = shorthand ? attr.nameSpan : (attr.value.span ?? null);
+          // parentheses stay unmapped, and the value keeps the exact text
+          // mapping it has without the wrapper (a coarse mapping over `(fn)`
+          // would shift every position inside the body by the length of the
+          // `(`). A shorthand handler has no span of its own and maps to the
+          // attribute name.
+          const span = attr.value.bodySpan
+            ? attr.nameSpan
+            : (attr.value.span ?? null);
           return concatMapped(
             " ",
             mapped(name, null),
             "={(",
-            shorthand
-              ? mapped(method, attr.nameSpan)
-              : concatMapped(method ?? attr.value.code),
+            mappedValue(attr.value),
             ") ",
             mapped("satisfies", span),
             ` ${this.#typeCheck}<"${tag}", "${name.slice(2).toLowerCase()}"> as any}`,
@@ -1083,20 +1065,18 @@ export class PreactEmitter implements Emitter<string> {
           tag !== undefined &&
           NATIVE_TAG.test(tag);
         const shorthand =
-          attr.kind === "event" &&
-          methodExpression(attr.value) !== null &&
-          attr.value.node?.start === undefined;
+          attr.kind === "event" && attr.value.bodySpan !== undefined;
         const renderedValue = typedEvent
           ? concatMapped(
               "(",
-              shorthand ? mapped(value, attr.nameSpan) : value,
+              mappedValue(attr.value),
               ") ",
               mapped("satisfies", shorthand ? attr.nameSpan : (span ?? null)),
               ` ${this.#typeCheck}<"${tag}", "${name.slice(2).toLowerCase()}"> as any`,
             )
           : (attr.kind === "dynamic" || attr.kind === "event") &&
               value === attr.value.code
-            ? mappedExpr(attr.value)
+            ? mappedValue(attr.value)
             : mapped(value, span ?? null);
         const nameSpan =
           mapNames &&

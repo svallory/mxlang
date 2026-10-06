@@ -1312,8 +1312,8 @@ block-body functions, never unwrapped (decision 11); a bare arrow is written
 expression on every target (decision 167, amending decision 11's arrow
 wording), built from parser positions, keeping its name, type parameters and
 its own `this` (`function (e) { … }`, `async function <T>(…) { … }`), so a
-generic method stays valid TSX. Solid implements it; the Preact-family hosts
-still print a block-body arrow until they adopt it. An authored `function`
+generic method stays valid TSX. Solid and the Preact-family hosts (Preact,
+React, Hono) implement it. An authored `function`
 expression or arrow is emitted as written.
 
 ### Attribute order

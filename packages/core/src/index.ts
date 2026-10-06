@@ -183,6 +183,7 @@ export {
   type MappedCode,
   mapped,
   mappedExpr,
+  mappedMethod,
   mappedRewrite,
   replaceMapped,
   type SourceSpan,

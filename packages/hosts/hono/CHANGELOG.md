@@ -1,5 +1,9 @@
 # @mxlang/hono
 
+## Unreleased
+
+- **Fix (jsx-method-shorthand, decision 167):** an attribute method shorthand is emitted as a `function` / `async function` expression, and a body holding `) {` is valid JavaScript again (shared emitter, see `@mxlang/preact`). **Behaviour change:** `this` inside the method is the function's own, not lexical. Render-locked by `method-attr.test.ts`.
+
 - **Fix (jsx-handler-prop-names, decision 161):** handler props are emitted under hono's declared names: `onKeyDown`, `onMouseDown`, `onDoubleClick` (was `onKeydown`, `onMousedown`, `onDblclick`; the types reject those). `hono/jsx/dom` binds them to the same DOM events (`event-runtime.test.ts`). The table holds only hono's declared names: the authored `onDoubleClick` emits `onDoubleClick` (declared), and a DOM event hono's types declare no handler for (`on-toggle`, `on-search`) is a compile error.
 
 - **Fix (native-tag-binding-capture, decision 164):** a lowercase tag is a native element whatever `import` or `<define>` binding of that name is in scope (shared emitter, see `@mxlang/preact`). A warning is raised at the tag.

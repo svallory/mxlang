@@ -89,7 +89,7 @@ so a template using no `<try>` and no structured `class` imports nothing.
 | `class="a"` | `class="a"` — Preact's native prop, not `className` |
 | `class={a: cond}`, `class=["x", {…}]` | `class={mxClass(…)}`, joined by the shipped helper: Preact's `class` takes a string, and passing the object through renders `[object Object]` |
 | `style={color: c}` | `style={{ color: c }}` |
-| `onClick() { … }` | `onClick={() => …}` — an arrow, so `this` stays lexical |
+| `onClick() { … }` | `onClick={function () { … }}` — a function expression (`async function` for an async method), keeping the method's own `this` |
 | `...rest` | `{...rest}` |
 | `<if=c>`/`<else-if=c>`/`<else>` | one ternary chain, ending in `null` when there is no `<else>` |
 | `<for|x| of=xs>` | `[...xs].map((x) => <Fragment key={…}>…</Fragment>)` |

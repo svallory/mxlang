@@ -154,9 +154,9 @@ describe("elements and text", () => {
     expect(markup("<p>${input.name}</p>")).toBe("<p>{input.name}</p>");
   });
 
-  it("carries an attribute method as a callable prop", () => {
+  it("carries an attribute method as a callable prop, a function expression", () => {
     expect(markup("<button onClick() { go(); }>x</button>")).toContain(
-      "onClick={() =>",
+      "onClick={function () { go(); }}",
     );
   });
 

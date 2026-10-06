@@ -39,7 +39,7 @@ describe("typeCheck unset (the runtime compile)", () => {
   it("keeps the shorthand handler's TypeScript annotations erased", () => {
     expect(
       compile("<button onClick(e: Event) { e.type; }>x</button>").code,
-    ).toContain("onClick={(e) => {");
+    ).toContain("onClick={function (e) {");
   });
 });
 
@@ -57,7 +57,7 @@ describe("typeCheck set", () => {
       true,
     );
     expect(code).toContain(
-      'onClick={((e: Event) => { e.type; }) satisfies __MxH<"button", "click"> as any}',
+      'onClick={(function (e: Event) { e.type; }) satisfies __MxH<"button", "click"> as any}',
     );
   });
 
@@ -78,16 +78,23 @@ describe("typeCheck set", () => {
     expect(code).toContain("type __MxH<");
   });
 
-  it("maps a shorthand handler to the attribute name and an arrow to nothing of its own", () => {
+  it("maps the `satisfies` of a shorthand handler to the attribute name, and its body to the authored body", () => {
     const source = "<button onClick(e) { e.type; }>x</button>";
     const { code, mappings } = compile(source, true);
-    const wrapped = code.indexOf("(e) => { e.type; }");
-    const mapping = mappings.find(
-      (item) => item.generatedStart <= wrapped && wrapped < item.generatedEnd,
-    );
-    expect(mapping).toBeDefined();
-    expect(source.slice(mapping?.sourceStart, mapping?.sourceEnd)).toBe(
+    const at = (needle: string) => {
+      const start = code.indexOf(needle);
+      return mappings.find(
+        (item) => item.generatedStart <= start && start < item.generatedEnd,
+      );
+    };
+    const keyword = at("satisfies");
+    expect(source.slice(keyword?.sourceStart, keyword?.sourceEnd)).toBe(
       "onClick",
+    );
+    const body = at("e.type");
+    expect(body).toBeDefined();
+    expect(source.slice(body?.sourceStart, body?.sourceEnd)).toContain(
+      "e.type",
     );
   });
 
