@@ -834,6 +834,17 @@ function isIdentStartCode(code: number) {
   );
 }
 
+/**
+ * MX (decision 156 addenda 2 and 8): a word character for the atom
+ * look-behind. Every character at or above U+0080 counts, as after an atom's
+ * name in `lexAtom`, so a non-ASCII identifier (`{ é:a }`, `(é :T)`, `éin`)
+ * is an operand: a `:` TypeScript could own is TypeScript's. `isWordCode`
+ * stays ASCII for its upstream callers.
+ */
+function isLookBehindWordCode(code: number) {
+  return code >= 0x80 || isWordCode(code);
+}
+
 /** Whether `at` is the end of the tag or line: `>`, `/>`, a newline or EOF. */
 function isBareColonEnd(data: string, at: number) {
   const code = data.charCodeAt(at);
@@ -961,7 +972,7 @@ function isOperatorWord(
   let wordStart = end;
   while (
     wordStart > expression.start &&
-    isWordCode(data.charCodeAt(wordStart - 1))
+    isLookBehindWordCode(data.charCodeAt(wordStart - 1))
   ) {
     wordStart--;
   }
@@ -979,7 +990,7 @@ function isOperatorWord(
     const before = j < expression.start ? -1 : data.charCodeAt(j);
     if (word === "of") {
       return (
-        isWordCode(before) ||
+        isLookBehindWordCode(before) ||
         before === CODE.CLOSE_PAREN ||
         before === CODE.CLOSE_SQUARE_BRACKET ||
         before === CODE.CLOSE_CURLY_BRACE
@@ -1021,7 +1032,7 @@ function closesTypeArguments(
           return (
             groups === 0 &&
             j > expression.start &&
-            isWordCode(data.charCodeAt(j - 1))
+            isLookBehindWordCode(data.charCodeAt(j - 1))
           );
         }
         break;
@@ -1109,11 +1120,11 @@ function expectsExpression(
       // carries a marker (`n === 1? :a : :b`).
       if (i === expression.start) return true;
       const owner = data.charCodeAt(i - 1);
-      if (isWordCode(owner)) {
+      if (isLookBehindWordCode(owner)) {
         let wordStart = i - 1;
         while (
           wordStart > expression.start &&
-          isWordCode(data.charCodeAt(wordStart - 1))
+          isLookBehindWordCode(data.charCodeAt(wordStart - 1))
         ) {
           wordStart--;
         }
@@ -1148,7 +1159,7 @@ function expectsExpression(
       ) {
         return false;
       }
-      if (!isWordCode(owner)) return true;
+      if (!isLookBehindWordCode(owner)) return true;
       return isOperatorWord(expression, data, j);
     }
     case CODE.CLOSE_ANGLE_BRACKET:
@@ -1166,7 +1177,7 @@ function expectsExpression(
     case CODE.FORWARD_SLASH:
       return i + 1 !== expression.regexEnd;
     default: {
-      if (!isWordCode(code)) return true;
+      if (!isLookBehindWordCode(code)) return true;
       // A word directly before the `:` is an object key or a label, keyword
       // or not (`{ new:a }`).
       if (i === pos - 1) return false;

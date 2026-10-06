@@ -104,7 +104,7 @@ identical JavaScript for it):
 | `states/EXPRESSION.ts`: `atoms`, `comments`, `regexEnd` on `ExpressionMeta` | `atoms` turns lexing on for one expression; the other two let the look-behind skip comments and see a regex end |
 | `states/EXPRESSION.ts`, `case CODE.COLON`, first | `lexAtom` runs before the ternary/type handling, so an atom's `:` never counts as a ternary's |
 | `states/EXPRESSION.ts`, `return` | records comment and regular-expression children while `atoms` is on |
-| `states/EXPRESSION.ts`, end of file | `atomKeywords`, `lexAtom`, `atomNameEnd`, `expectsExpression` |
+| `states/EXPRESSION.ts`, end of file | `atomKeywords`, `lexAtom`, `atomNameEnd`, `expectsExpression`, `isLookBehindWordCode` |
 | `states/ATTRIBUTE.ts` (value, argument and method-shorthand body `EXPRESSION`; a method body is an attribute value, lead ruling 2026-10-05), `states/OPEN_TAG.ts` (tag arguments), `states/PLACEHOLDER.ts` (`checkForPlaceholder`) | set `atoms = true` |
 | `states/TEMPLATE_STRING.ts` | a template's `${}` inherits `atoms` from the template's own expression |
 | `core/Parser.ts` | `atoms` (reset by `parse`), `read()` stands atoms in, `standInAtoms` |
@@ -214,3 +214,20 @@ Review round 5 on PR #342 (both dist builds carry the same JavaScript):
   rule relied on `inType`, which only a top-level value sets. A number
   before `?` is never TypeScript's optional marker (`n === 1? :a : :b`).
   `:a-é` is no atom, like `:aé`.
+
+Non-ASCII look-behind (atom-lookbehind-non-ascii, decision 156 addenda 2
+and 8; both dist builds carry the same JavaScript):
+
+- **A non-ASCII character is a word character behind a `:`.** The
+  look-behind (`expectsExpression`, `isOperatorWord`, `closesTypeArguments`)
+  classifies characters with `isLookBehindWordCode`: `isWordCode` or any
+  code unit at or above U+0080, as `lexAtom` already treats a non-ASCII
+  character after a name. So `{ é:a }`, `(é :T) => é` and `c ? é :z` keep
+  TypeScript's colon, `éin`/`éof`/`étypeof` are names rather than operator
+  words, and `(é of :b)` lexes the atom, exactly as the same input with an
+  ASCII letter (`asciiTwinMismatches` pins the equivalence). Every code unit
+  at or above U+0080 counts, non-ASCII whitespace (U+00A0, U+2028) included:
+  a `:` after one is left to TypeScript, which reports it, rather than
+  lexed as an atom. `isWordCode` itself stays ASCII; its upstream callers
+  (the expression fast path, `lookBehindForOperator`, `canFollowDivision`,
+  `ATTRIBUTE.ts`, `INLINE_SCRIPT.ts`) are unchanged.
