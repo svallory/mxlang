@@ -168,4 +168,21 @@ describe("a .mx page calling a tags/*.marko tag", () => {
     );
     expect(await render(page)).toBe(`<b>explicit</b>`);
   });
+  test("a lowercase taglib tag beats a same-named import or define (decision 164 addendum 1)", async () => {
+    // A lowercase tag never calls a binding, so the registered `tags/row.marko`
+    // is called, not the authored `./row.mx` import or `<define/row>`.
+    const dir = "lowercase-binding";
+    write(`${dir}/tags/row.marko`, `<p>\${input.label}</p>`);
+    write(`${dir}/row.mx`, `<i>import</i>`);
+    const imported = write(
+      `${dir}/imported.mx`,
+      `import row from "./row.mx"\n<row label="x"/>`,
+    );
+    expect(await render(imported)).toBe(`<p>x</p>`);
+    const defined = write(
+      `${dir}/defined.mx`,
+      `<define/row|y|><i>define</i></define>\n<row label="y"/>`,
+    );
+    expect(await render(defined)).toBe(`<p>y</p>`);
+  });
 });

@@ -1520,7 +1520,7 @@ export class PreactEmitter implements Emitter<string> {
           : undefined
         : node.target.kind === "define"
           ? undefined
-          : componentAlias(node.target.name);
+          : (node.target.binding ?? componentAlias(node.target.name));
     for (const attr of node.attrs) {
       if (attr.kind === "spread") {
         parts.push(`...${attr.value.code}`);
@@ -1739,9 +1739,14 @@ export class PreactEmitter implements Emitter<string> {
 
     // JSX reads a lowercase or hyphenated tag name as a DOM element whatever
     // it is bound to, so a component Marko resolved under such a name is
-    // emitted under a capitalized alias the module binds instead.
-    const name = componentAlias(node.target.name);
-    if (name !== node.target.name) this.#aliases.add(node.target.name);
+    // emitted under a capitalized alias the module binds instead. A target
+    // core already bound (a registered taglib tag whose name an authored
+    // import or define also takes, decision 164 addendum 1) is called by
+    // that binding: aliasing the authored name would call the import.
+    const name = node.target.binding ?? componentAlias(node.target.name);
+    if (!node.target.binding && name !== node.target.name) {
+      this.#aliases.add(node.target.name);
+    }
     const contentNodes = node.content?.children ?? [];
     rejectMixedRaw(contentNodes);
     const raw = node.content ? rawChild(contentNodes) : null;

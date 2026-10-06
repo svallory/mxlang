@@ -9,8 +9,21 @@ import { compilePreactMx } from "./index.ts";
 
 // Decision 164 + addendum 1: a lowercase tag is the native element, or a
 // registered tag, or (when it names a tag binding and is neither) an error.
-const NOT_A_TAG = (name: string, bound: string) =>
-  `\`<${name}>\` is not a tag here: ${bound}, and a lowercase tag never calls a binding. Write \`<${name[0]?.toUpperCase()}${name.slice(1)}>\` (rename the import) or \`<\${${name}}/>\``;
+const NOT_A_TAG = (name: string, bound: string, kind = "import") =>
+  `\`<${name}>\` is not a tag here: ${bound}, and a lowercase tag never calls a binding. Write \`<${name[0]?.toUpperCase()}${name.slice(1)}>\` (rename the ${kind}) or \`<\${${name}}/>\``;
+
+/** Compiles `source` as `main.mx` beside a `tags/row.marko` taglib tag. */
+function withTaglibRow(source: string, warnings: MxWarning[]): string {
+  const scratch = mkdtempSync(join(tmpdir(), "mx-preact-row4-"));
+  try {
+    mkdirSync(join(scratch, "tags"));
+    writeFileSync(join(scratch, "package.json"), '{"type":"module"}');
+    writeFileSync(join(scratch, "tags", "row.marko"), "<p>${input.label}</p>");
+    return compilePreactMx(source, join(scratch, "main.mx"), { warnings }).code;
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
 
 describe("lowercase tag with a same-named binding in scope", () => {
   it("row 1: native + define: `<define/span>` does not capture `<span>`, with a warning", () => {
@@ -71,39 +84,56 @@ describe("lowercase tag with a same-named binding in scope", () => {
   it("row 3: unknown + lowercase define is the same error, naming where it is defined", () => {
     expect(() =>
       compilePreactMx(`<define/row|x|>d</define>\n<row/>\n`, "/fixtures/a.mx"),
-    ).toThrow(NOT_A_TAG("row", "`row` is defined at 1:9"));
+    ).toThrow(NOT_A_TAG("row", "`row` is defined at 1:9", "define"));
   });
 
-  it("a `_`-prefixed tag import gets the same error", () => {
+  it("a `_`-prefixed tag import gets the same error, offering only the dynamic tag", () => {
     expect(() =>
       compilePreactMx(
         `import _row from "./row.mx"\n<_row/>\n`,
         "/fixtures/a.mx",
       ),
-    ).toThrow("is not a tag here");
+    ).toThrow(
+      "`<_row>` is not a tag here: `_row` is imported from ./row.mx, and a lowercase tag never calls a binding. Write `<${_row}/>`",
+    );
   });
 
-  it("row 4: registered + tag import: a taglib tag is still called", () => {
-    const scratch = mkdtempSync(join(tmpdir(), "mx-preact-row4-"));
-    try {
-      mkdirSync(join(scratch, "tags"));
-      writeFileSync(join(scratch, "package.json"), '{"type":"module"}');
-      writeFileSync(
-        join(scratch, "tags", "row.marko"),
-        "<p>${input.label}</p>",
-      );
-      const warnings: MxWarning[] = [];
-      const { code } = compilePreactMx(
-        `import row from "./row.mx"\n<row label="x"/>\n`,
-        join(scratch, "main.mx"),
-        { warnings },
-      );
-      expect(code).not.toContain('<row label="x" />');
-      expect(code).toContain("row");
-      expect(warnings).toEqual([]);
-    } finally {
-      rmSync(scratch, { recursive: true, force: true });
-    }
+  it("a named import from a tag module is a value: native and silent", () => {
+    const warnings: MxWarning[] = [];
+    const { code } = compilePreactMx(
+      `import { span } from "./forms.mx"\n<span title="search"/>\n`,
+      "/fixtures/a.mx",
+      { warnings },
+    );
+    expect(code).toContain('<span title="search" />');
+    expect(warnings).toEqual([]);
+  });
+
+  it("row 4: registered + tag import: the taglib tag is called, not the import", () => {
+    const warnings: MxWarning[] = [];
+    const code = withTaglibRow(
+      `import row from "./row.mx"\n<row label="x"/>\n`,
+      warnings,
+    );
+    expect(code).toContain('import _row from "./tags/row.marko"');
+    expect(code.split('"./tags/row.marko"')).toHaveLength(2);
+    expect(code).toContain('<_row label="x" />');
+    expect(code).not.toContain("__mxRow");
+    expect(code).not.toContain('<row label="x" />');
+    expect(warnings).toEqual([]);
+  });
+
+  it("row 4: registered + lowercase define: the taglib tag is called, imported once", () => {
+    const warnings: MxWarning[] = [];
+    const code = withTaglibRow(
+      `<define/row|x|>d</define>\n<row label="x"/>\n`,
+      warnings,
+    );
+    expect(code).toContain('import _row from "./tags/row.marko"');
+    expect(code.split('"./tags/row.marko"')).toHaveLength(2);
+    expect(code).toContain('<_row label="x" />');
+    expect(code).not.toContain("__mxRow");
+    expect(warnings).toEqual([]);
   });
 
   it("a dynamic tag still calls the binding, with no warning", () => {

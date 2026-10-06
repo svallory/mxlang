@@ -1,5 +1,6 @@
 # @mxlang/preact
 
+- **Fix (native-tag-binding-capture, decision 164 addendum 1):** a registered taglib tag (`tags/row.marko`) that shares its name with an authored import or `<define>` calls the taglib tag through core's binding (`import _row from "./tags/row.marko"`, `<_row …/>`), once, on Preact, React and Hono; it used to alias and call the authored import.
 - **Fix (native-tag-binding-capture, decision 164):** a lowercase tag is a native element whatever `import` or `<define>` binding of that name is in scope (no more `__mxDynamic(span, …)` for an imported `span`); also applies to `@mxlang/react` and `@mxlang/hono`. A warning is raised at the tag.
 - **Added (preact-region, decision 154):** `.preact.mx`, TSX with MX regions on Preact, is a built-in region file kind (segment `preact`, language id `preactmx`, diagnostic source `preactmx`): `compilePreactRegion` (exported; `targets` defaults to the package's own lookup) is the shared `compileJsxRegion` with Preact's dialect and the new `preactRegionDeclarations`, wired through the descriptor's `fileKinds` with the shared `readJsxCalleeInput` reader. **Behaviour change:** a `*.preact.mx` file stops being a whole-file `.mx`; a region renders what the same markup renders in a whole-file Preact `.mx`. Whole-file output is unchanged.
 
