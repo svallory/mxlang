@@ -242,6 +242,13 @@ export type Attr =
       kind: "bound";
       name: string;
       value: Expr;
+      /**
+       * `fn` in `v:fn:=q`: Marko's refinement, a function the change handler
+       * applies to the new value (`q = fn(next)`). An identifier `Expr` over
+       * the modifier's text (`node: null`, `span` on the modifier). Absent
+       * when the attribute has no modifier.
+       */
+      refinement?: Expr;
       nameSpan: SourceSpan;
     } & IrBase &
       AttrSugar)

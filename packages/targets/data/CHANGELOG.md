@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Added:** a bound attribute (`kind: "expression"`, `bound: true`) carries `refinement?: DataExpr`, the `fn` of `v:fn:=q` (Marko's change-handler function; `node: null`, `span` slices the modifier). Absent without a modifier.
+
 - **Note (data-check-keys-on-base-target):** a third-party host built on data declares `builtOn: "data"` on its descriptor to inherit data's `mx-tsc` check (strict defaults and `mx.data.*`); reusing `dataDeclarations` alone does not.
 
 - **Changed (statement-tags, decision 168):** the data compile passes `statementTags: false` to core, so core's six statement tags are not registered beside the data taglib's own three; `class` stays an ordinary data tag name. No output change.

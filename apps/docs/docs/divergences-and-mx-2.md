@@ -35,21 +35,6 @@ render-prop APIs. Code that reads attributes directly from a repeated Marko
 record should select an MX array item explicitly. See the complete
 [AttrTag guide](/language/attr-tag/).
 
-### Modifier on a bound attribute
-
-Decision 169 (with 158.1). Measured against Marko 6.3.51 (`@marko/compiler` 5.42.10, `marko/translator`, html output):
-
-| Input | Marko 6.3.51 | MX |
-| --- | --- | --- |
-| `<div v:fn:=q/>` | binds `v`; client change handler `vChange` runs `q = fn(_new_q)` | one positioned error at the colon |
-| `<div is:raw:=x/>` | binds `is`; handler `x = raw(_new_x)` | same error |
-| `<div v:raw:=q/>`, `<div v:scoped:=q/>` | binds `v`; handler applies `raw` / `scoped` | same error |
-| `<div v:no-update:=q/>` | error: "Bound attribute refinement shorthand must be a valid JavaScript identifier." | same MX error as the others |
-| `<foo v:fn:=q/>` (custom tag) | passes `{ v: q }` in the html output, handler on the client | same error |
-| `<div v:fn=q/>` (not bound) | attribute named `v:fn` | unchanged |
-
-Marko has no fixed modifier list: any identifier is a function applied to the incoming value in the change handler. MX has no refinements, and lowering `v:fn:=q` as a bound `v` would drop the handler silently, so core refuses it and names the explicit form (`v=q` plus `vChange(next) { q = fn(next) }`). The empty modifier `x::=q` is the same error.
-
 ## Deferred to MX 2
 
 | Construct | Why it was wanted | Marko verdict |

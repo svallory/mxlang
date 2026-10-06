@@ -3749,54 +3749,36 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
     );
   });
 
-  /** Decision 169's message: one text for every target and shape. */
-  function boundModifierMessage(
-    base: string,
-    modifier: string,
-    target: string,
-  ): string {
-    const drops = modifier
-      ? `would drop \`:${modifier}\``
-      : "has an empty modifier";
-    const handler = /^[A-Za-z_$][\w$]*$/.test(modifier)
-      ? `, \`${base}Change(next) { ${target} = ${modifier}(next) }\``
-      : "";
-    return `A bound attribute name cannot contain \`:\`: \`${base}:${modifier}:=\` ${drops}. Bind \`${base}=${target}\` and write the change handler${handler}`;
-  }
+  const REFINEMENT_ERROR =
+    "Bound attribute refinement shorthand must be a valid JavaScript identifier.";
 
   it.each([
-    ["<Foo v:fn:=q/>", 1, 6, "v", "fn", "q"],
-    ["<Foo v:fn:=q.r/>", 1, 6, "v", "fn", "q.r"],
-    ["<Foo\n  v:fn:=q/>", 2, 3, "v", "fn", "q"],
-    ["<Foo a=1 v:fn:=q/>", 1, 10, "v", "fn", "q"],
-    ["<Foo value:fn:=q/>", 1, 10, "value", "fn", "q"],
-    ["<div v:fn:=q/>", 1, 6, "v", "fn", "q"],
-    ["<Foo v:a:b:=q/>", 1, 8, "v:a", "b", "q"],
-    ["<div is:raw:=x/>", 1, 7, "is", "raw", "x"],
-    ["<div v:no-update:=q/>", 1, 6, "v", "no-update", "q"],
-    ["<div v:fn:=q[0]/>", 1, 6, "v", "fn", "q[0]"],
-    ["<div x::=q/>", 1, 6, "x", "", "q"],
-    ["<${t} v:fn:=q/>", 1, 7, "v", "fn", "q"],
-    ["<if=c v:fn:=q>x</if>", 1, 7, "v", "fn", "q"],
-    ["<for|i| of=o v:fn:=q>x</for>", 1, 14, "v", "fn", "q"],
+    ["<div x::=q/>", 1, 6],
+    ["<div v:no-update:=q/>", 1, 6],
+    ["<div v:class:=q/>", 1, 6],
+    ["<div v:1a:=q/>", 1, 6],
+    ["<div v:a.b:=q/>", 1, 6],
+    ["<div v:await:=q/>", 1, 6],
+    ["<div v:let:=q/>", 1, 6],
+    ["<div a=1\n  v:no-update:=q/>", 2, 3],
+    ["<Foo a=1 v:no-update:=q/>", 1, 10],
+    ["<${t} v:no-update:=q/>", 1, 7],
+    ["<if=c v:no-update:=q>x</if>", 1, 7],
+    ["<for|i| of=o v:no-update:=q>x</for>", 1, 14],
   ])(
-    "rejects a modifier on a bound attribute at its colon (decision 169): %s",
-    (source, line, column, base, modifier, target) => {
+    "rejects a refinement that is no identifier, at its colon, with Marko's text: %s",
+    (source, line, column) => {
       expect(() =>
         lowerSource(source, fakeDeclarations({ isElement: () => false })),
       ).toThrow(
-        expect.objectContaining({
-          message: boundModifierMessage(base, modifier, target),
-          line,
-          column,
-        }),
+        expect.objectContaining({ message: REFINEMENT_ERROR, line, column }),
       );
     },
   );
 
   // A call to a custom tag registered with a contract skips the generic
   // binding validation, and its attribute tags have a contract too; the
-  // modifier check still runs on both.
+  // refinement check still runs on both.
   const card: Record<string, CustomTag> = {
     card: {
       attributes: { v: { type: "string" } },
@@ -3805,29 +3787,58 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
     },
   };
   it.each([
-    ["<card v:fn:=q/>", 1, 7],
-    ["<card><@row v:fn:=q/></card>", 1, 13],
-    ["<card>\n  <@row a=1 v:fn:=q/>\n</card>", 2, 13],
+    ["<card v:no-update:=q/>", 1, 7],
+    ["<card><@row v:no-update:=q/></card>", 1, 13],
+    ["<card>\n  <@row a=1 v:no-update:=q/>\n</card>", 2, 13],
   ])(
-    "rejects a modifier on a bound attribute of a contracted tag: %s",
+    "rejects a refinement that is no identifier on a contracted tag: %s",
     (source, line, column) => {
       expect(() =>
         lowerSource(source, fakeDeclarations(), undefined, undefined, card),
       ).toThrow(
-        expect.objectContaining({
-          message: boundModifierMessage("v", "fn", "q"),
-          line,
-          column,
-        }),
+        expect.objectContaining({ message: REFINEMENT_ERROR, line, column }),
       );
     },
   );
 
-  it("still lowers a bound attribute with no modifier", () => {
-    for (const source of ["<Foo v:=q/>", "<Foo :=q/>"]) {
-      expect(() => lowerSource(source, fakeDeclarations())).not.toThrow(
-        /bound attribute/,
-      );
+  it.each([
+    ["<div v:fn:=q/>", "v", "fn", 7],
+    ["<div v:a:b:=q/>", "v:a", "b", 9],
+    ["<div is:raw:=x/>", "is", "raw", 8],
+    ["<div v:$a:=q/>", "v", "$a", 7],
+    ["<div v:ünï:=q/>", "v", "ünï", 7],
+  ])(
+    "lowers %s to a bound attribute carrying its refinement",
+    (source, name, modifier, at) => {
+      const attr = find(
+        lowerSource(source, fakeDeclarations({ isElement: () => true })).body,
+        "Element",
+      ).attrs[0];
+      if (attr?.kind !== "bound") throw new Error("expected a bound attr");
+      expect(attr.name).toBe(name);
+      expect(attr.refinement).toMatchObject({
+        code: modifier,
+        shape: "other",
+        node: null,
+        span: { sourceStart: at, sourceEnd: at + modifier.length },
+      });
+      expect(
+        source.slice(
+          attr.refinement?.span?.sourceStart,
+          attr.refinement?.span?.sourceEnd,
+        ),
+      ).toBe(modifier);
+    },
+  );
+
+  it("gives a bound attribute with no modifier no refinement", () => {
+    for (const source of ["<div v:=q/>"]) {
+      const attr = find(
+        lowerSource(source, fakeDeclarations({ isElement: () => true })).body,
+        "Element",
+      ).attrs[0];
+      expect(attr).toMatchObject({ kind: "bound" });
+      expect(attr).not.toHaveProperty("refinement");
     }
   });
 

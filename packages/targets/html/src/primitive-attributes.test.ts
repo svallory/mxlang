@@ -65,19 +65,15 @@ describe("native primitive attribute presence (Marko 6.3.51)", () => {
       for (const form of forms)
         for (const value of values) {
           const row = result(`${name}/${form}`, value);
-          // Decision 169: a modifier on a bound attribute is an error in MX,
-          // where Marko binds the base name (`is:raw:=x` renders `is`).
-          if (name === "is:raw" && form === "bound") {
-            expect(row.error, `${name}/${form}/${value}`).toContain(
-              "A bound attribute name cannot contain `:`",
-            );
-            continue;
-          }
           const structured = name === "class" || name === "style";
           const omitted =
             ["null", "undefined", "false"].includes(value) ||
             (structured && ["zero", "empty", "NaN"].includes(value));
-          const renderedName = name;
+          // `:raw:=` is a binding refinement, not part of the rendered name:
+          // Marko's change handler (`x = raw(next)`) is client-only, and this
+          // target renders once, so only the base name and value appear.
+          const renderedName =
+            name === "is:raw" && form === "bound" ? "is" : name;
           let attribute = "";
           if (!omitted) {
             const checked =

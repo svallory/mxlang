@@ -935,11 +935,24 @@ function emitAttrs(
         break;
       }
       case "bound":
-        out.write(" [(");
-        out.writeMapped(attr.name, attr.nameSpan);
-        out.write(')]="');
-        out.writeMapped(esc(attr.value.code), attr.value.span);
-        out.write('"');
+        if (attr.refinement) {
+          // Marko's `v:fn:=q` runs `q = fn(next)` on every change. `[(v)]` has
+          // nowhere to put `fn`, so it is written as its two halves: the
+          // input and the output that applies the refinement.
+          out.write(" [");
+          out.writeMapped(attr.name, attr.nameSpan);
+          out.write(']="');
+          out.writeMapped(esc(attr.value.code), attr.value.span);
+          out.write(`" (${attr.name}Change)="`);
+          out.writeMapped(esc(attr.value.code), attr.value.span);
+          out.write(` = ${esc(attr.refinement.code)}($event)"`);
+        } else {
+          out.write(" [(");
+          out.writeMapped(attr.name, attr.nameSpan);
+          out.write(')]="');
+          out.writeMapped(esc(attr.value.code), attr.value.span);
+          out.write('"');
+        }
         break;
       case "spread":
         fail(

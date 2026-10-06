@@ -282,6 +282,14 @@ function dataAttr(attr: Attr): DataAttr {
         value: dataExpr(attr.value, `bound attribute \`${attr.name}\``),
         nameSpan: requiredNameSpan(attr, `bound attribute \`${attr.name}\``),
         bound: true,
+        ...(attr.refinement
+          ? {
+              refinement: dataExpr(
+                attr.refinement,
+                `refinement of bound attribute \`${attr.name}\``,
+              ),
+            }
+          : {}),
       };
     case "spread":
       return {

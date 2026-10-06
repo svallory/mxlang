@@ -314,6 +314,35 @@ describe("pass-through constructs (the §3 table)", () => {
     expect(slice(source, attr.value.span)).toBe("({ post }) { return 1 }");
   });
 
+  it("a bound attribute carries its refinement, with a span over the modifier", () => {
+    const source = "<x v:fn:=y w:=z/>\n";
+    const tag = firstTag(ok(source));
+    const [refined, plain] = tag.attrs;
+    if (refined?.kind !== "expression") throw new Error("expected expression");
+    expect(refined).toMatchObject({ name: "v", bound: true });
+    expect(refined.refinement).toMatchObject({
+      code: "fn",
+      shape: "other",
+      node: null,
+    });
+    expect(slice(source, refined.refinement?.span)).toBe("fn");
+    expect(plain).toMatchObject({ name: "w", bound: true });
+    expect(plain).not.toHaveProperty("refinement");
+  });
+
+  it("a refinement that is no identifier is Marko's error at the colon", () => {
+    const result = parseData("<x v:no-update:=y/>\n", "x.mx");
+    expect(result.diagnostics).toMatchObject([
+      {
+        severity: "error",
+        message:
+          "Bound attribute refinement shorthand must be a valid JavaScript identifier.",
+        line: 1,
+        column: 4,
+      },
+    ]);
+  });
+
   it("attribute shapes: string, boolean, expression, bound and spread", () => {
     const source = `<x s="v" required n=1 v:=y ...rest/>\n`;
     const tag = firstTag(ok(source));

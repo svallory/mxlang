@@ -2,32 +2,23 @@ import type { CustomTag } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { compile } from "./index.ts";
 
-// Decision 169: core refuses a modifier on a bound attribute at its colon, with
-// the same text on every target (Marko reads `v:fn:=q` as a bound `v` with a
-// change handler `q = fn(next)`, which MX does not lower).
-describe("a modifier on a bound attribute (html)", () => {
+// A bound attribute's refinement (`v:fn:=q`, Marko's `q = fn(next)` change
+// handler) belongs to a target with an update path. html renders once, like
+// Marko's server html, where the handler is client-only: the attribute renders
+// as the unrefined `v:=q` does, byte for byte.
+describe("a refined bound attribute renders like the unrefined one (html)", () => {
   it.each([
-    ["<div v:fn:=q/>", 1, 6],
-    ["<div is:raw:=x/>", 1, 7],
-    ["<div a=1\n  v:fn:=q/>", 2, 3],
-  ])("is one positioned error at the colon: %j", (source, line, column) => {
-    let error: { message: string; line: number; column: number } | undefined;
-    try {
-      compile(source, "x.mx");
-    } catch (e) {
-      error = e as typeof error;
-    }
-    expect(error).toMatchObject({ line, column });
-    expect(error?.message).toContain(
-      "A bound attribute name cannot contain `:`",
-    );
-    expect(error?.message).toContain("Change(next) {");
+    ["<input value:fn:=q/>", "<input value:=q/>"],
+    ["<div is:raw:=x/>", "<div is:=x/>"],
+    ["<div data-x:fn:=q/>", "<div data-x:=q/>"],
+  ])("%s", (refined, plain) => {
+    const bare = compile(plain, "x.mx");
+    expect(compile(refined, "x.mx").code).toBe(bare.code);
   });
 });
 
-// Every place a bound attribute can appear, not only a native element: a
-// dynamic tag, a contracted custom-tag call and its attribute tags, and an
-// empty modifier (`x::=q`).
+// A refinement that is no identifier is Marko's error, at the colon, on every
+// tag shape: a dynamic tag, a contracted custom-tag call and its attribute tags.
 const card: Record<string, CustomTag> = {
   card: {
     attributes: { v: { type: "string" } },
@@ -36,13 +27,15 @@ const card: Record<string, CustomTag> = {
   },
 };
 
-describe("a modifier on a bound attribute, wherever it appears (html)", () => {
+describe("a refinement that is no identifier, wherever it appears (html)", () => {
   it.each([
-    ["<${t} v:fn:=q/>", 1, 7, "`:fn`"],
-    ["<div x::=q/>", 1, 6, "empty modifier"],
-    ["<card v:fn:=q/>", 1, 7, "`:fn`"],
-    ["<card><@row v:fn:=q/></card>", 1, 13, "`:fn`"],
-  ])("is one positioned error: %j", (source, line, column, drops) => {
+    ["<div v:no-update:=q/>", 1, 6],
+    ["<div x::=q/>", 1, 6],
+    ["<${t} v:no-update:=q/>", 1, 7],
+    ["<card v:no-update:=q/>", 1, 7],
+    ["<card><@row v:no-update:=q/></card>", 1, 13],
+    ["<div a=1\n  v:no-update:=q/>", 2, 3],
+  ])("is Marko's error at the colon: %j", (source, line, column) => {
     let error: { message: string; line: number; column: number } | undefined;
     try {
       compile(source, "x.mx", { customTags: card });
@@ -50,10 +43,8 @@ describe("a modifier on a bound attribute, wherever it appears (html)", () => {
       error = e as typeof error;
     }
     expect(error).toMatchObject({ line, column });
-    expect(error?.message).toContain(
-      "A bound attribute name cannot contain `:`",
+    expect(error?.message).toBe(
+      "Bound attribute refinement shorthand must be a valid JavaScript identifier.",
     );
-    expect(error?.message).toContain(drops);
-    expect(error?.message).not.toContain("v:=q");
   });
 });

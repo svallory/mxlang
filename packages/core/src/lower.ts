@@ -665,43 +665,63 @@ function foreignAttrHint(name: string): string {
   return "an attribute name may use letters, digits and `._:-`";
 }
 
+/** Words Babel's `isValidIdentifier` refuses: keywords and strict-mode (module) reserved words. */
+const RESERVED_WORDS = new Set(
+  (
+    "break case catch continue debugger default do else finally for function if return switch " +
+    "throw try var const while with new this super class extends export import null true false " +
+    "in instanceof typeof void delete enum await implements interface let package private " +
+    "protected public static yield"
+  ).split(" "),
+);
+
+/** Marko's own check for a bound attribute's refinement shorthand (`t.isValidIdentifier`). */
+function isRefinementIdentifier(name: string): boolean {
+  return (
+    /^[\p{ID_Start}$_][\p{ID_Continue}$\u200c\u200d]*$/u.test(name) &&
+    !RESERVED_WORDS.has(name)
+  );
+}
+
 /**
- * Decision 169: a bound attribute's name has no `:`. Marko reads `v:fn:=q` as
- * a bound `v` whose change handler runs `q = fn(next)`; lowering would drop
- * the modifier silently, so it is refused at the colon that starts it, naming
- * the one form that works on every target. Run on every attribute list core
- * lowers: native, dynamic and component tags, contracted custom-tag calls,
- * attribute tags, control tags.
+ * The refinement of a bound attribute: `fn` in `v:fn:=q`. Marko runs it as
+ * `q = fn(next)` in the change handler; the IR carries it as an `Expr` over
+ * the modifier's own text. A modifier that is not a valid JavaScript
+ * identifier (`x::=q`, `v:no-update:=q`) is Marko's error, at the colon that
+ * starts it.
  */
-function rejectBoundModifiers(ctx: Ctx, node: Node): void {
-  for (const attr of node.attributes ?? []) {
-    if (!attr.bound || attr.modifier == null) continue;
-    const modifier = String(attr.modifier);
-    const base = attr.default ? "value" : String(attr.name);
-    const valueSpan = exprSpan(ctx, attr.value);
-    const target = valueSpan
-      ? ctx.source.slice(valueSpan.sourceStart, valueSpan.sourceEnd)
-      : "…";
-    const drops = modifier
-      ? `would drop \`:${modifier}\``
-      : "has an empty modifier";
-    // The handler example only reads as code for a modifier that is a name.
-    const handler = /^[A-Za-z_$][\w$]*$/.test(modifier)
-      ? `, \`${base}Change(next) { ${target} = ${modifier}(next) }\``
-      : "";
-    const message = `A bound attribute name cannot contain \`:\`: \`${attr.default ? "" : base}:${modifier}:=\` ${drops}. Bind \`${base}=${target}\` and write the change handler${handler}`;
-    const start = attr.loc?.start;
+function boundRefinement(ctx: Ctx, attr: Node): Expr | undefined {
+  if (attr.modifier == null) return undefined;
+  const modifier = String(attr.modifier);
+  const start = attr.loc?.start;
+  const nameLength = attr.default ? 0 : String(attr.name).length;
+  if (!isRefinementIdentifier(modifier)) {
+    const message =
+      "Bound attribute refinement shorthand must be a valid JavaScript identifier.";
     if (!start) fail(message, attr);
-    const colon = attr.default ? 0 : base.length;
     fail(message, {
-      loc: { start: { line: start.line, column: start.column + colon } },
+      loc: { start: { line: start.line, column: start.column + nameLength } },
     });
+  }
+  const at = offsetOf(ctx, attr.loc?.start ?? {}) + nameLength + 1;
+  return {
+    code: modifier,
+    shape: "other",
+    node: null,
+    span: { sourceStart: at, sourceEnd: at + modifier.length },
+  };
+}
+
+/** Marko refuses a refinement that is not an identifier before any host sees it. */
+function rejectBadRefinements(ctx: Ctx, node: Node): void {
+  for (const attr of node.attributes ?? []) {
+    if (attr.bound) boundRefinement(ctx, attr);
   }
 }
 
 /** Marko normalizes bindings before tag-specific validation or lowering. */
 function validateBoundAttributes(ctx: Ctx, node: Node): void {
-  rejectBoundModifiers(ctx, node);
+  rejectBadRefinements(ctx, node);
   for (const attr of node.attributes ?? []) {
     if (
       attr.bound &&
@@ -842,11 +862,13 @@ function lowerAttrNamed(
   }
 
   if (attr.bound) {
+    const refinement = boundRefinement(ctx, attr);
     return {
       kind: "bound",
       name: attr.name,
       nameSpan,
       value: exprOf(ctx, attr.value),
+      ...(refinement ? { refinement } : {}),
       loc,
     };
   }
@@ -981,7 +1003,7 @@ function lowerAttrs(
   on: "element" | "component" = "element",
   isElement = false,
 ): Attr[] {
-  rejectBoundModifiers(ctx, node);
+  rejectBadRefinements(ctx, node);
   const attrs = resolveDuplicateAttrs(
     ctx,
     (node.attributes ?? []).map((attr: Node) =>
@@ -1578,7 +1600,7 @@ function lowerAuthoredAttributeTag(
   schema: AttrSchema,
 ): AttributeTag {
   const name = attrName(node);
-  if (schema.customTagContract) rejectBoundModifiers(ctx, node);
+  if (schema.customTagContract) rejectBadRefinements(ctx, node);
   else validateBoundAttributes(ctx, node);
   const declaration = declarationFor(schema, name, node);
   validateParentCollision(node, schema);
@@ -3187,7 +3209,7 @@ function lowerCustomTag(
   isBuiltin = false,
   wildcard?: WildcardMatch,
 ): IrNode[] {
-  rejectBoundModifiers(ctx, node);
+  rejectBadRefinements(ctx, node);
   const alias = wildcard ? aliasOf(ctx, node, wildcard) : undefined;
   const label = tagLabel(name, alias);
   validateCustomTagParents(

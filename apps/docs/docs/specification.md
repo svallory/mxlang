@@ -1161,7 +1161,16 @@ its target must be an identifier or a member expression (including optional
 members, excluding private members); otherwise core reports Marko's
 `Attributes may only be bound to identifiers or member expressions` at the
 value. For example, `<div :="x"/>` errors at structured line 1, column 7
-(printed 1:8), rather than silently rendering `value="x"`. A bound attribute's name has no `:` (decision 169): `v:fn:=q`, `is:raw:=x` and `v:no-update:=q` and the empty-modifier `x::=q` are one positioned error at the colon that starts the modifier, on every target and on every tag shape (native, dynamic, component, contracted custom-tag call, attribute tag, control tag), naming the explicit form (`v=q` plus the change handler `vChange(next) { q = fn(next) }`; `v:=q` is not suggested because five hosts reject it); Marko binds `v` and runs `fn` in the change handler, MX does not lower refinements. A non-bound `v:fn=q` is unchanged. Host-specific binding
+(printed 1:8), rather than silently rendering `value="x"`. A bound attribute may carry a refinement, `v:fn:=q`: Marko binds `v` and its
+change handler runs `q = fn(next)`. The refinement must be a valid JavaScript
+identifier, else core reports Marko's `Bound attribute refinement shorthand
+must be a valid JavaScript identifier.` at the colon that starts it (so does
+the empty `x::=q`). Only a target with an update path applies it: Angular
+writes `[v]="q" (vChange)="q = fn($event)"`, html renders once and ignores it
+(Marko's handler is client-only, so its server output is the same), and the
+data tree records it as `refinement`; the hosts that refuse `:=` report their
+own error on the attribute. A non-bound `v:fn=q` is the attribute named `v:fn`.
+Host-specific binding
 support is unchanged. Validation precedes control-flow lowering, including
 controls containing attribute tags, so an invalid binding cannot be discarded.
 Uncontracted attribute tags follow the same binding-reference rule. Calls
@@ -3530,7 +3539,7 @@ All types are in `@mxlang/data/tree`. Every span is core's `SourceSpan`
   |---|---|---|
   | `string` | `type="string"`, `<x="post">`, shorthand `#id`, `.cls` | `name`, `value`, `valueSpan`, `nameSpan` (absent for shorthand) |
   | `boolean` | `required` | `name`, `nameSpan` |
-  | `expression` | `n=1`, `values=[…]`, `change=(x) => …`, `v:=x`, `onClick=fn` | `name`, `value: DataExpr`, `nameSpan`, `bound?: true` |
+  | `expression` | `n=1`, `values=[…]`, `change=(x) => …`, `v:=x`, `onClick=fn` | `name`, `value: DataExpr`, `nameSpan`, `bound?: true`, `refinement?: DataExpr` (the `fn` of a bound `v:fn:=q`) |
   | `spread` | `...rest` | `value: DataExpr` |
 
   Only a string literal is `string`; `n=1` and `required=true` are `expression`

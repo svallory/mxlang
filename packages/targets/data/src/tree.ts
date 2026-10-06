@@ -83,6 +83,12 @@ export type DataAttr =
       value: DataExpr;
       nameSpan: SourceSpan;
       bound?: true;
+      /**
+       * `fn` in `v:fn:=q`: Marko's refinement, the function its change handler
+       * applies to the new value (`q = fn(next)`). Only on a bound attribute
+       * with a modifier; `node` is `null`, `span` slices the modifier.
+       */
+      refinement?: DataExpr;
     }
   /** `...rest` */
   | { kind: "spread"; value: DataExpr };
