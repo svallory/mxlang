@@ -1,4 +1,4 @@
-import { parse as parseBabel } from "@babel/parser";
+import { parse as parseBabel, parseExpression } from "@babel/parser";
 import {
   type Attr,
   type AttributeTag,
@@ -21,6 +21,7 @@ import {
   mapped,
   mappedExpr,
   mappedRewrite,
+  type Node,
   type Position,
   type ReadRewrite,
   rewriteAccessorReads,
@@ -822,21 +823,113 @@ function staticTemplateValue(expr: Expr): string | null {
   return value;
 }
 
+/**
+ * A method attribute (`onClick(e) { … }`, printed `function (e) { … }`) as an
+ * arrow function: its parameter list (and return type) and its body, sliced
+ * from the parsed function at the parser's own positions. A regex over `code`
+ * cannot tell the parameter list's `) {` from one inside the body
+ * (`{ if (c) { … } }`). `null` when it is not a function or cannot be an arrow
+ * (a generator).
+ */
+function methodParts(expr: Expr): { head: string; body: string } | null {
+  if (expr.node?.type !== "FunctionExpression") return null;
+  const code = expr.code;
+  let fn: Node;
+  try {
+    fn = parseExpression(code, { plugins: ["typescript"] });
+  } catch {
+    return null;
+  }
+  if (fn?.type !== "FunctionExpression" || fn.generator) return null;
+  const listEnd: number = fn.returnType?.start ?? fn.body.start;
+  const open: number =
+    fn.typeParameters?.start ??
+    code.lastIndexOf("(", fn.params[0]?.start ?? listEnd);
+  if (open < 0) return null;
+  const params = code.slice(open, fn.body.start).trimEnd();
+  return {
+    head: `${fn.async ? "async " : ""}${params} => `,
+    body: code.slice(fn.body.start, fn.body.end),
+  };
+}
+
 function methodExpression(expr: Expr): string | null {
   if (expr.node?.type !== "FunctionExpression") return null;
-  const match = expr.code.match(
-    /^(async\s+)?function\s*\(([\s\S]*)\)\s*(\{[\s\S]*\})$/,
-  );
-  if (!match) return expr.code;
-  return `${match[1] ?? ""}(${match[2] ?? ""}) => ${match[3] ?? "{}"}`;
+  const parts = methodParts(expr);
+  return parts ? parts.head + parts.body : expr.code;
 }
 
 /**
- * An object, array, string, template or number literal: `?? {}` after it is
- * unreachable (TS2869), so a `<for in>` source of one drops it.
+ * Whether TypeScript reads `node` as never nullish, so that `?? {}` after it is
+ * unreachable (TS2869). This mirrors the checker's own syntactic rule
+ * (`getSyntacticNullishnessSemantics`, TypeScript 5.6+) on the Babel node:
+ * wrappers (`(…)`, `as`, `satisfies`, `!`, `<T>`) are skipped, a conditional
+ * is never nullish when both branches are, and anything that can produce
+ * `null`/`undefined` (a name, a call, a member read, `??`/`||`/`&&`, `=`)
+ * keeps the operand. Every other expression (a literal, a function, `a + b`)
+ * is never nullish.
  */
-function neverNullish(expr: Expr): boolean {
-  return expr.shape !== "other" || expr.node?.type === "NumericLiteral";
+function neverNullish(node: Node): boolean {
+  switch (node?.type) {
+    case undefined:
+      return false;
+    case "ParenthesizedExpression":
+    case "TSAsExpression":
+    case "TSSatisfiesExpression":
+    case "TSTypeAssertion":
+    case "TSNonNullExpression":
+    case "TSInstantiationExpression":
+      return neverNullish(node.expression);
+    case "ConditionalExpression":
+      return neverNullish(node.consequent) && neverNullish(node.alternate);
+    case "SequenceExpression":
+      return neverNullish(node.expressions.at(-1));
+    case "AssignmentExpression":
+      return !["=", "??=", "||=", "&&="].includes(node.operator);
+    case "Identifier":
+    case "NullLiteral":
+    case "ThisExpression":
+    case "MemberExpression":
+    case "OptionalMemberExpression":
+    case "CallExpression":
+    case "OptionalCallExpression":
+    case "ImportExpression":
+    case "NewExpression":
+    case "TaggedTemplateExpression":
+    case "MetaProperty":
+    case "AwaitExpression":
+    case "YieldExpression":
+    case "LogicalExpression":
+      return false;
+    default:
+      return true;
+  }
+}
+
+/** Binds looser than `??` (or cannot be mixed with it unparenthesized). */
+const LOOSER_THAN_NULLISH = new Set([
+  "ConditionalExpression",
+  "LogicalExpression",
+  "AssignmentExpression",
+  "SequenceExpression",
+  "YieldExpression",
+  "ArrowFunctionExpression",
+]);
+
+/**
+ * A `<for in>` source inside `Object.entries(…)`, defaulted with `?? {}` unless
+ * TypeScript reads it as never nullish (it reports the `??` at the author's
+ * own expression, TS2869). A source that binds looser than `??` is
+ * parenthesized first: `a || b ?? {}` is a syntax error and `c ? x : y ?? {}`
+ * would default only `y`.
+ */
+function forInSource(source: Expr): (string | MappedCode)[] {
+  const prefix = "<For each={Object.entries(";
+  if (neverNullish(source.node)) return [prefix, mappedExpr(source)];
+  const wrap = LOOSER_THAN_NULLISH.has(source.node?.type);
+  return wrap
+    ? [`${prefix}(`, mappedExpr(source), ") ?? {}"]
+    : [prefix, mappedExpr(source), " ?? {}"];
 }
 
 /** The guard's tag argument: `null` when the target is not a native element. */
@@ -912,16 +1005,15 @@ function guardValue(
  * token against the authored body (`mappedRewrite`).
  */
 function mappedValue(expr: Expr): MappedCode {
-  const method = methodExpression(expr);
-  if (method === null || method === expr.code) return mappedExpr(expr);
-  const body = method.slice(method.indexOf("{", method.indexOf("=>")));
+  const parts = methodParts(expr);
+  if (!parts) return mappedExpr(expr);
   const { bodySpan, bodySource } = expr;
-  if (!bodySpan || bodySource === undefined || !expr.code.endsWith(body)) {
-    return concatMapped(method);
+  if (!bodySpan || bodySource === undefined) {
+    return concatMapped(parts.head + parts.body);
   }
   return concatMapped(
-    mapped(method.slice(0, -body.length), null),
-    mappedRewrite(body, bodySource, bodySpan),
+    mapped(parts.head, null),
+    mappedRewrite(parts.body, bodySource, bodySpan),
   );
 }
 
@@ -2481,11 +2573,8 @@ export class SolidEmitter implements Emitter<string> {
       );
       this.#out.push(
         concatMapped(
-          "<For each={Object.entries(",
-          mappedExpr(node.source.object),
-          // A literal source is never nullish; TypeScript reports the `??`
-          // on it (TS2869) at the author's own literal.
-          `${neverNullish(node.source.object) ? "" : " ?? {}"})} keyed={e => e[0]}>{(${entry}) => `,
+          ...forInSource(node.source.object),
+          `)} keyed={e => e[0]}>{(${entry}) => `,
           jsxValue(inLazyScope(() => blockExpression(node.children))),
           "}</For>",
         ),

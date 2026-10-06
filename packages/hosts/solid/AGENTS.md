@@ -98,8 +98,12 @@ Three facts worth knowing before touching it:
   (`Expr.bodySpan`/`bodySource`, `mappedRewrite`), also when the printer
   reformatted it; a mapping over different text shifts positions, so the
   inserted text stays unmapped. The dynamic tag's own expression is mapped,
-  and a `<for in>` literal source (object, array, string, template, number)
-  no longer gets a `?? {}` (TS2869). The whole-file virtual code also gets the file kind's
+  and a `<for in>` source TypeScript reads as never nullish no longer gets a
+  `?? {}` (TS2869; `neverNullish` mirrors the checker's syntactic rule: a
+  literal, a conditional of two such, a cast or `satisfies` around one), while
+  a source binding looser than `??` is parenthesized before it. A method's
+  arrow head and body are sliced at the parsed function's positions
+  (`methodParts`), so a body with its own `) {` keeps its shape. The whole-file virtual code also gets the file kind's
   `completeTypecheckModule` (`compileMxVirtual`), so `<For>`/`<Show>`/
   `<Dynamic>` resolve and a row's type is known. Known unmapped: the `<for
   from= to= step=>` range arithmetic, attribute-tag `<for>` sources, a method's

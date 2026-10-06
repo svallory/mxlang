@@ -351,7 +351,7 @@ export function exprOf(ctx: Ctx, node: Node): Expr {
   const atoms = span ? atomsIn(ctx, span.sourceStart, span.sourceEnd) : [];
   const bodySpan =
     node?.type === "FunctionExpression" && span
-      ? methodBodySpan(ctx, node, span)
+      ? methodBodySpan(ctx, span)
       : undefined;
   return {
     code,
@@ -372,41 +372,39 @@ export function exprOf(ctx: Ctx, node: Node): Expr {
 }
 
 /**
- * The authored `{ … }` body of an attribute method: the block that follows
- * its parameter list in the source and closes the authored span. The method
- * node carries no position below itself, so the body is found in the text.
- * `code` may print it differently, so this is the authored side a host diffs
- * the printed body against. `undefined` when the text is not `name(…) { … }`.
+ * The authored `{ … }` body of an attribute method. The method node carries no
+ * position below itself, so the authored text from its parameter list on is
+ * parsed as an object method and the body's own position is read from that
+ * node (a regex or a bracket scan splits `{ if (c) { … } }` at the wrong
+ * `) {`). Atoms are swapped for same-length identifiers first so the text
+ * parses. `code` may print the body differently, so this is the authored side
+ * a host diffs the printed body against. `undefined` when it does not parse.
  */
-function methodBodySpan(
-  ctx: Ctx,
-  _node: Node,
-  span: SourceSpan,
-): SourceSpan | undefined {
-  const text = ctx.source.slice(span.sourceStart, span.sourceEnd);
-  const open = text.indexOf("(");
-  if (open < 0 || !text.endsWith("}")) return undefined;
-  let depth = 0;
-  let quote: string | null = null;
-  let close = -1;
-  for (let at = open; at < text.length && close < 0; at++) {
-    const char = text[at];
-    if (quote) {
-      if (char === "\\") at++;
-      else if (char === quote) quote = null;
-    } else if (char === '"' || char === "'" || char === "`") quote = char;
-    else if (char === "(") depth++;
-    else if (char === ")" && --depth === 0) close = at;
+function methodBodySpan(ctx: Ctx, span: SourceSpan): SourceSpan | undefined {
+  let text = ctx.source.slice(span.sourceStart, span.sourceEnd);
+  for (const atom of atomsIn(ctx, span.sourceStart, span.sourceEnd)) {
+    const at = atom.span.sourceStart - span.sourceStart;
+    const length = atom.span.sourceEnd - atom.span.sourceStart;
+    text = `${text.slice(0, at)}_${text.slice(at + 1, at + length)}${text.slice(at + length)}`;
   }
-  if (close < 0) return undefined;
-  const bodyStart = text.indexOf("{", close);
-  if (bodyStart < 0 || text.slice(close + 1, bodyStart).trim() !== "") {
+  const open = text.indexOf("(");
+  if (open < 0) return undefined;
+  const prefix = "({ m";
+  let method: Node;
+  try {
+    method = markoBabel().parseExpression(`${prefix}${text.slice(open)} })`, {
+      plugins: [["typescript", {}]],
+    }).properties?.[0];
+  } catch {
     return undefined;
   }
-  return {
-    sourceStart: span.sourceStart + bodyStart,
-    sourceEnd: span.sourceEnd,
-  };
+  const body = method?.type === "ObjectMethod" ? method.body : undefined;
+  if (typeof body?.start !== "number" || typeof body.end !== "number") {
+    return undefined;
+  }
+  const shift = span.sourceStart + open - prefix.length;
+  if (body.end + shift !== span.sourceEnd) return undefined;
+  return { sourceStart: body.start + shift, sourceEnd: body.end + shift };
 }
 
 /**

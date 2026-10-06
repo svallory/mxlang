@@ -106,6 +106,11 @@ describe("mx-tsc on a Solid page", () => {
   //  10  `<for|k, v| in=[1, 2]><p>${k + v + missingArr}</p></for>`  `missingArr`      (10,35)
   //  11  `<for|k, v| in="abc"><p>${k + v + missingStr}</p></for>`   `missingStr`      (11,34)
   //  12  `<button onClick() { missingNoSemi() }>go</button>`        `missingNoSemi`   (12,21)
+  //  13  `<for|k, v| in=list ? { a: 1 } : { b: 2 }>…${k + v + missingCond}`   `missingCond` (13,55)
+  //  14  `<for|k, v| in={ a: 1 } as Record<string, number>>…${k + v + missingAs}` `missingAs` (14,63)
+  //  15  `<button onClick() { if (list) { for (const r of list) { missingNested(r) } } }>`  `missingNested` (15,57)
+  // Lines 13 and 14 report no TS2869: both sources are never nullish, so no `?? {}`.
+  // Line 15's body holds its own `) {`, and its arrow and mapping still split at the parameter list.
   it("whole-file .mx reports errors inside <for>, a dynamic tag and a method body at the authored column", () => {
     const { status, lines } = check("solid-for", "page.mx");
     expect(status).not.toBe(0);
@@ -135,6 +140,15 @@ describe("mx-tsc on a Solid page", () => {
       ),
       expect.stringMatching(
         /page\.mx\(12,21\): error TS2304: Cannot find name 'missingNoSemi'/,
+      ),
+      expect.stringMatching(
+        /page\.mx\(13,55\): error TS2304: Cannot find name 'missingCond'/,
+      ),
+      expect.stringMatching(
+        /page\.mx\(14,63\): error TS2304: Cannot find name 'missingAs'/,
+      ),
+      expect.stringMatching(
+        /page\.mx\(15,57\): error TS2304: Cannot find name 'missingNested'/,
       ),
     ]);
   }, 60_000);

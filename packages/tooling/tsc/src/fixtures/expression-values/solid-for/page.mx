@@ -10,3 +10,6 @@ static const list = [{ id: 1, name: "a" }];
 <for|k, v| in=[1, 2]><p>${k + v + missingArr}</p></for>
 <for|k, v| in="abc"><p>${k + v + missingStr}</p></for>
 <button onClick() { missingNoSemi() }>go</button>
+<for|k, v| in=list ? { a: 1 } : { b: 2 }><p>${k + v + missingCond}</p></for>
+<for|k, v| in={ a: 1 } as Record<string, number>><p>${k + v + missingAs}</p></for>
+<button onClick() { if (list) { for (const r of list) { missingNested(r) } } }>go</button>

@@ -118,6 +118,16 @@ describe("solid expression values", () => {
     expect(authoredAt(source, ".id)")).toBe(".id)");
   });
 
+  it("maps a method body with nested blocks at the authored positions", () => {
+    const source = `${IMPORT}<Field onPick() { if (c) { for (const n of xs) { go(n) } } }/>`;
+    expect(authoredAt(source, "if (c) {")).toBe("if (c) {");
+    expect(authoredAt(source, "go(n)")).toBe("go(n)");
+    const result = pairs(source);
+    expect(result.some(([, generated]) => generated?.includes("=>"))).toBe(
+      false,
+    );
+  });
+
   it("maps a dynamic tag's expression", () => {
     expect(pairs("<${missing}/>")).toContainEqual(["missing", "missing"]);
   });
@@ -151,17 +161,34 @@ describe("solid expression values", () => {
   });
 
   it.each([
-    ["an object", "{ a: 1 }"],
-    ["an array", "[1, 2]"],
-    ["a string", '"abc"'],
-    ["a template", "`abc`"],
-    ["a number", "5"],
-  ])("drops the `?? {}` fallback after %s literal source", (_name, literal) => {
+    ["an object literal", "{ a: 1 }", "{ a: 1 }"],
+    ["an array literal", "[1, 2]", "[1, 2]"],
+    ["a string literal", '"abc"', '"abc"'],
+    ["a template literal", "`abc`", "`abc`"],
+    ["a number literal", "5", "5"],
+    [
+      "a conditional of two literals",
+      "c ? { a: 1 } : { b: 2 }",
+      "c ? { a: 1 } : { b: 2 }",
+    ],
+    [
+      "an `as` cast literal",
+      "{ a: 1 } as Record<string, number>",
+      "{ a: 1 } as Record<string, number>",
+    ],
+    [
+      "a `satisfies` literal",
+      "{ a: 1 } satisfies Record<string, number>",
+      "{ a: 1 } satisfies Record<string, number>",
+    ],
+    ["a parenthesized literal", "({ a: 1 })", "{ a: 1 }"],
+    ["an arithmetic", "n + 1", "n + 1"],
+  ])("drops the `?? {}` fallback after %s source", (_name, source, emitted) => {
     const { code } = compileSolidUnit(
-      `<for|k, v| in=${literal}><p>\${k}</p></for>`,
+      `<for|k, v| in=${source}><p>\${k}</p></for>`,
       { filename: "/fixtures/values.mx", customTags: {} },
     );
-    expect(code).toContain(`Object.entries(${literal})`);
+    expect(code).toContain(`Object.entries(${emitted})`);
     expect(code).not.toContain("?? {}");
   });
 
@@ -172,6 +199,27 @@ describe("solid expression values", () => {
     });
     expect(code).toContain("Object.entries(o ?? {})");
   });
+
+  it.each([
+    ["a member read", "o.x", "Object.entries(o.x ?? {})"],
+    ["a call", "f()", "Object.entries(f() ?? {})"],
+    [
+      "a conditional with a name branch",
+      "c ? o : { b: 2 }",
+      "Object.entries((c ? o : { b: 2 }) ?? {})",
+    ],
+    ["a `||`", "a || b", "Object.entries((a || b) ?? {})"],
+    ["an `as` cast name", "o as object", "Object.entries(o as object ?? {})"],
+  ])(
+    "keeps the `?? {}` fallback after %s, parenthesized when it binds looser",
+    (_name, source, emitted) => {
+      const { code } = compileSolidUnit(
+        `<for|k, v| in=${source}><p>\${k}</p></for>`,
+        { filename: "/fixtures/values.mx", customTags: {} },
+      );
+      expect(code).toContain(emitted);
+    },
+  );
 
   it("maps a plain mapping to text equal to its source", () => {
     for (const [source, generated] of pairs(
