@@ -1841,6 +1841,11 @@ Deferred, still open (each after the port, as its own change):
   `ir-generated-text-to-source-slices`). Deferred: wanted, but as a separate
   recorded change after the port, because it changes emitted text (probe c,
   `{ a,b }` printed as `{ a, b }`); the port keeps the pinned generator (§7.1).
+- **`MxShorthandValue.dynamic` without `quasis`/`expressions`** (§3.6).
+  Deferred: the port keeps both beside `template`; dropping the duplicate is
+  the same later clean-up as ruling C4 made for the dynamic tag name (§3.3),
+  where one container holds the whole name and there is no separate list of
+  quasis or inner expressions.
 
 ## Appendix A. Node types and where each is defined
 
