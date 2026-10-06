@@ -41,7 +41,7 @@ import { Component, Input, signal } from "@angular/core";
   selector: "app-greeter",
   template: <section>
     <h1>${label}</h1>
-    <button onClick() { count.update((n) => n + 1); }>clicked ${count()}</button>
+    <button onClick=(() => count.update((n) => n + 1))>clicked ${count()}</button>
     <if=(count() > 2)><p>That is plenty.</p></if>
     <ul>
       <for|name| of=names by=(name => name.id)><li>${name.text}</li></for>
