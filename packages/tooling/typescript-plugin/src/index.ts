@@ -1,8 +1,9 @@
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { builtinFileKinds } from "@mxlang/target-registry";
 import type {} from "@volar/typescript";
 import { createLanguageServicePlugin } from "@volar/typescript/lib/quickstart/createLanguageServicePlugin";
 import type * as ts from "typescript";
+import { withAmbientTypes } from "./ambient-types.ts";
 import {
   AMX_EXTENSION,
   AMX_LANGUAGE_ID,
@@ -73,6 +74,12 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
   let languagePlugins: Array<AnyMxLanguagePlugin> | undefined;
   let ngDiagnostics: NgDiagnosticsService | undefined;
   const volarFactory = createLanguageServicePlugin((typescript, info) => {
+    // The hosts' ambient declaration files, as `mx-tsc` adds them.
+    withAmbientTypes(info.languageServiceHost, () =>
+      info.project.projectKind === typescript.server.ProjectKind.Configured
+        ? dirname(info.project.getProjectName())
+        : info.project.getCurrentDirectory(),
+    );
     const readSource = createProjectSourceReader(info);
     ngDiagnostics = createEditorNgDiagnostics(typescript, info);
     languagePlugins = createBuiltinLanguagePlugins(
@@ -318,7 +325,7 @@ function withSyntaxDiagnostics(
 }
 
 export type { TargetPolicyDiagnostic } from "@mxlang/core";
-export { ambientTypeFiles } from "./ambient-types.ts";
+export { ambientTypeFiles, withAmbientTypes } from "./ambient-types.ts";
 export {
   composeAmxMappings,
   createAmxLanguagePlugin,

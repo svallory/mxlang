@@ -3140,6 +3140,18 @@ taken). A loaded descriptor may declare `host.fileKinds` (decision 148), checked
 by those same rules: a segment another host already owns is refused, and a kind
 without `compileRegion` is a whole-file kind that compiles on the host's target.
 
+A host may declare `host.ambientTypes({ rootNames, resolve })`
+(mx-tsc-astro-ambient-types): the declaration files a type-check of its files
+needs beyond the project's `tsconfig.json`, as the framework's own tooling adds
+them. `mx-tsc` and the TypeScript plugin ask every host of the project's lookup
+(built-ins and a loaded host alike) for every program they check, add what it
+returns as root files, and the host returns `[]` for a program holding none of
+its files. `resolve("<package>/<file>")` looks in the project's `node_modules`,
+then in the tool's install. The built-in Astro host returns astro's `env.d.ts`
+and `astro-jsx.d.ts` (or `@astrojs/language-server`'s fallback copies) for a
+program holding an `.astro.mx` or `.astro` file, so `Fragment` resolves without
+`types: ["astro/env"]`. A non-function `host.ambientTypes` is a load error.
+
 `mx.host` and `mx.target` agree under rule 3 with a loaded descriptor exactly as
 with a built-in one: they agree when the target's `host.name` is the host the
 other key names. `mx.host` may be a specifier of the same package, of another

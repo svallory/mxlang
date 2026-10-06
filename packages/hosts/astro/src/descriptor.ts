@@ -79,10 +79,13 @@ const descriptor: TargetDescriptor = {
     name: "astro",
     // What Astro's language server (`@astrojs/language-server`,
     // `addAstroTypes`) adds to every program it checks, so `mx-tsc --astro`
-    // types a page the way `astro check` and the editor do: `Fragment`,
+    // and the editor type a page the way `astro check` does: `Fragment`,
     // `Astro` and the `astro/jsx-runtime` JSX namespace. Without an `astro`
     // install, the language server's own fallback copies, as it does itself.
-    ambientTypes(resolve) {
+    // A program holds Astro's files when it has an `.astro.mx` page or a
+    // plain `.astro` one (under `--astro`, or Astro's editor plugin).
+    ambientTypes({ rootNames, resolve }) {
+      if (!rootNames.some((name) => /\.astro(?:\.mx)?$/i.test(name))) return [];
       const own = ["astro/env.d.ts", "astro/astro-jsx.d.ts"].map(resolve);
       if (own.every((file): file is string => file !== undefined)) return own;
       const fallback = [

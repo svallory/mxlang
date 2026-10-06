@@ -19,6 +19,8 @@ import { join } from "node:path";
  * - `ok`        uses the injected core (OQ10)
  * - `ok-ssr`    a second target of `ok`'s host (`fake-host`)
  * - `file-kinds` declares a whole-file `host.fileKinds` entry (`.fk.mx`)
+ * - `ambient-types` a host whose `ambientTypes` adds its `ambient.d.ts` to a
+ *   program holding an `.amb.mx` file
  * - `join-solid` names the built-in host `solid` (rejected)
  * - `own-core`  imports its own `@mxlang/core` copy (pins the brand check)
  * - `hostless`  valid target with no `host` part (an error under `mx.host`)
@@ -38,6 +40,7 @@ export type FakeTarget =
   | "ok"
   | "ok-ssr"
   | "file-kinds"
+  | "ambient-types"
   | "join-solid"
   | "own-core"
   | "hostless"

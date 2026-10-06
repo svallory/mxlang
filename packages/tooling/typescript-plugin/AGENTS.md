@@ -469,9 +469,20 @@ diagnostic; use it for anything about the generated code's types.
   plugin (both are supported together, see that package's `AGENTS.md`)
   closes it.
 
-## Ambient types a host adds (`mx-tsc`, `TargetHost.ambientTypes`)
+## Ambient types a host adds (`TargetHost.ambientTypes`, `mx-tsc` and the editor)
 
-A framework's own tooling adds declaration files to every program it checks that a project's `tsconfig.json` never lists: Astro's language server (`addAstroTypes`) adds `astro/env.d.ts` (which declares `Fragment`) and `astro/astro-jsx.d.ts`, or its own fallback copies without an astro install, by decorating a LanguageServiceHost. Volar's `runTsc` has no such host, so `mx-tsc --astro` used to type-check without them: `Fragment` was TS2304 (an authored `<Fragment>` in a plain `.astro`, and the one an `.astro.mx` projection writes) under Astro's own tsconfig preset, unless the project listed `types: ["astro/env"]`. The fact lives in the host: `TargetHost.ambientTypes(resolve)` (core) returns the files, and `ambientTypeFiles(rootNames, projectDir)` (`src/ambient-types.ts`) asks every built-in host one of whose file kinds is among the root files, resolving `<package>/<file>` from the project's `node_modules`, then from the plugin's install. `mx-tsc` appends the result to `rootNames` in its `runTsc` callback (`addAmbientTypes`, before the program is created). Nothing in tsc or this package names a host. The tsserver plugin does not call it (not measured whether an editor's Astro extension adds them there; `mx-tsc` is what CI runs). Tests: `src/ambient-types.test.ts`, `packages/tooling/tsc/src/astro-ambient-types.test.ts` (real isolated installs, with and without astro), and `examples/astro-static`, which no longer lists `astro/env`.
+A framework's own tooling adds declaration files to every program it checks that a project's `tsconfig.json` never lists. Astro's language server (`addAstroTypes`) adds `astro/env.d.ts` (which declares `Fragment`) and `astro/astro-jsx.d.ts`, or its own fallback copies without an astro install, by decorating a LanguageServiceHost. Neither Volar's `runTsc` nor this plugin's tsserver path did that, so `Fragment` was TS2304 under Astro's own tsconfig preset unless the project listed `types: ["astro/env"]`.
+
+The fact lives in the host: `TargetHost.ambientTypes({ rootNames, resolve })` (core) returns the files for a program, or `[]` when the program holds none of the host's files. Astro answers for `.astro.mx` and plain `.astro` roots. `src/ambient-types.ts` is the one implementation both tools share:
+- `ambientTypeFiles(rootNames, projectDir)` asks every host of the project's lookup (`lookupFor(resolveTargetPolicy(<projectDir>/package.json))`: the built-ins plus a third-party host the project loads). It resolves `<package>/<file>` from the project's `node_modules`, then from the plugin's install.
+- `mx-tsc` appends the result to `rootNames` in its `runTsc` callback (`addAmbientTypes`, before the program is created).
+- The tsserver plugin decorates `info.languageServiceHost.getScriptFileNames` (`withAmbientTypes`, inside the `createLanguageServicePlugin` callback, recomputed only when the root list changes). Its project directory is the configured project's tsconfig directory, else the project's current directory.
+
+Nothing in tsc or this package names a host. Tests:
+- `src/ambient-types.test.ts`, including a third-party fake host (`test-fixtures/third-party-targets/ambient-types`).
+- `index.test.ts` "the hosts' ambient types in the editor": the real plugin with `{ astro: true }` and a plain `.astro` page.
+- `packages/tooling/tsc/src/astro-ambient-types.test.ts`: real isolated installs, with and without astro, `.astro.mx` and plain `.astro` alone.
+- `examples/astro-static`, which no longer lists `astro/env`.
 
 ## TS1108 in the `.astro.mx` fence (`mx-tsc --astro` and the editor)
 

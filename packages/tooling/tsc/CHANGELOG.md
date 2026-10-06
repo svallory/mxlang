@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Fix (mx-tsc-astro-ambient-types):** `mx-tsc` adds each host's ambient types to a program that holds one of its file kinds, as the framework's own tooling does. Under `--astro` that is Astro's `env.d.ts` and `astro-jsx.d.ts` (the language server's fallback copies without an astro install): an authored `<Fragment>` in a plain `.astro` page and the `Fragment` an `.astro.mx` projection writes resolve under Astro's tsconfig preset, without `types: ["astro/env"]`. Before, `Fragment` was TS2304, and `astro/jsx-runtime` TS2875 without astro installed.
+- **Fix (mx-tsc-astro-ambient-types):** `mx-tsc` adds the hosts' ambient declaration files (`TargetHost.ambientTypes`) to every program, as the framework's own tooling does; a host adds them only to a program holding its files. Under `--astro` that is Astro's `env.d.ts` and `astro-jsx.d.ts` (the language server's fallback copies without an astro install) for a program holding an `.astro.mx` or a plain `.astro` file: an authored `<Fragment>` in a plain `.astro` page and the `Fragment` an `.astro.mx` projection writes resolve under Astro's tsconfig preset, without `types: ["astro/env"]`. Before, `Fragment` was TS2304, and `astro/jsx-runtime` TS2875 without astro installed.
 
 - **Tests (render-consumers, decision 155):** a dynamic tag over a `<return>` unit types `/var` as `number` (`undefined` for a plain function), and the diagnostic for an html unit's default export prints `((input: Input) => string) & { render: … }`. Host-dispatch goldens: only the `export default` lines moved.
 

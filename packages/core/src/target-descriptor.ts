@@ -199,19 +199,36 @@ export interface TargetHost {
    */
   readonly defaultTag?: string;
   /**
-   * Declaration files a type-check of this host's file kinds needs in its
-   * program beyond what the project's `tsconfig.json` lists: the ambient
-   * types the framework's own tooling injects into every program it checks
-   * (Astro's language server adds `astro/env.d.ts`, which declares
-   * `Fragment`). `resolve("<package>/<file>")` is the absolute path of a file
-   * of an installed package, looked up from the project first and then from
-   * the tool's own install, or `undefined` when neither has it. Returns
-   * absolute paths. A tool calls it once per program that holds a file of
-   * one of this host's `fileKinds`, and adds what it returns as root files.
+   * The host's ambient declaration files: the declarations a type-check of
+   * the host's files needs in its program beyond what the project's
+   * `tsconfig.json` lists, the way the framework's own tooling adds them to
+   * every program it checks (e.g. a framework's `env.d.ts`). A tool calls it
+   * for every program it type-checks, editor and CLI alike, with that
+   * program's root files; the host decides whether the program holds files
+   * of its own (its `fileKinds`, or the framework files its tooling checks)
+   * and returns `[]` when it does not. `resolve("<package>/<file>")` is the
+   * absolute path of a file of an installed package, looked up from the
+   * project first and then from the tool's own install, or `undefined` when
+   * neither has it. Returns absolute paths, which the tool adds as root
+   * files.
    */
-  readonly ambientTypes?: (
-    resolve: (packageFile: string) => string | undefined,
-  ) => readonly string[];
+  readonly ambientTypes?: (program: AmbientTypesProgram) => readonly string[];
+}
+
+/**
+ * The program a host's `ambientTypes` is asked about.
+ *
+ * @unstable
+ */
+export interface AmbientTypesProgram {
+  /** The program's root files, absolute. */
+  readonly rootNames: readonly string[];
+  /**
+   * The absolute path of `<package>/<file>` in the nearest installed copy of
+   * the package, from the project, then from the tool's install; `undefined`
+   * when neither has the package, or the package lacks the file.
+   */
+  resolve(packageFile: string): string | undefined;
 }
 
 /**

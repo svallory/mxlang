@@ -234,6 +234,7 @@ export {
   scanCached,
 } from "./scan-cache.ts";
 export {
+  type AmbientTypesProgram,
   createTargetLookup,
   type HostFileKind,
   type HostRegionInput,

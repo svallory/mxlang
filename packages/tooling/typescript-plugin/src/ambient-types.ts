@@ -1,33 +1,39 @@
 import { existsSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { builtinTargets } from "@mxlang/target-registry";
+import type { TargetHost } from "@mxlang/core";
+import { lookupFor, resolveTargetPolicy } from "@mxlang/target-registry";
 
 /**
- * The ambient declaration files a program holding `rootNames` needs, beyond
- * its `tsconfig.json`: each built-in host's `ambientTypes`
- * (`TargetHost.ambientTypes`), for a host one of whose file kinds
- * (`.<segment>.mx`) is among the root files. Package files resolve from
- * `projectDir` first, then from this tool's own install. Nothing here names a
- * host. Absolute paths, without duplicates, none already a root file.
+ * The ambient declaration files a program holding `rootNames` needs beyond
+ * its `tsconfig.json`: what each host's `ambientTypes`
+ * (`TargetHost.ambientTypes`) answers for it. The hosts are those of the
+ * project's lookup, the built-ins plus a third-party host the project's
+ * `package.json` loads, as for every other host operation. Package files
+ * resolve from `projectDir` first, then from this tool's own install. Nothing
+ * here names a host. Absolute paths, without duplicates, none already a root
+ * file. `mx-tsc` and the tsserver plugin both call it.
  */
 export function ambientTypeFiles(
   rootNames: readonly string[],
   projectDir: string,
 ): string[] {
   const roots = new Set(rootNames);
-  const lower = rootNames.map((name) => name.toLowerCase());
   const bases = [projectDir, dirname(fileURLToPath(import.meta.url))];
-  const resolve = (packageFile: string) => packageFileIn(packageFile, bases);
+  const program = {
+    rootNames,
+    resolve: (packageFile: string) => packageFileIn(packageFile, bases),
+  };
+  const lookup = lookupFor(
+    resolveTargetPolicy(join(projectDir, "package.json"), { quiet: true }),
+  );
+  const asked = new Set<TargetHost>();
   const added = new Set<string>();
-  for (const target of builtinTargets) {
-    const host = target.host;
-    if (!host?.ambientTypes) continue;
-    const holdsKind = (host.fileKinds ?? []).some((kind) =>
-      lower.some((name) => name.endsWith(`.${kind.segment}.mx`)),
-    );
-    if (!holdsKind) continue;
-    for (const file of host.ambientTypes(resolve)) {
+  for (const name of lookup.targetNames()) {
+    const host = lookup.target(name)?.host;
+    if (!host?.ambientTypes || asked.has(host)) continue;
+    asked.add(host);
+    for (const file of host.ambientTypes(program)) {
       if (!roots.has(file)) added.add(file);
     }
   }
@@ -35,11 +41,39 @@ export function ambientTypeFiles(
 }
 
 /**
- * `<package>/<file>` (`astro/env.d.ts`, `@scope/name/types/x.d.ts`) in the
- * nearest `node_modules` above each base, in order: the first base where the
- * package is installed answers, and `undefined` when the file is not in it. A
- * package's own files, not its `exports`: a declaration file is rarely an
- * exported entry.
+ * Makes `host.getScriptFileNames` (a tsserver project, the language service
+ * host Volar's plugin sees) also list the ambient declaration files of
+ * {@link ambientTypeFiles}, as a framework's own editor tooling adds them.
+ * Recomputed only when the project's root list changes.
+ */
+export function withAmbientTypes(
+  host: { getScriptFileNames(): string[] },
+  projectDir: () => string,
+): void {
+  const original = host.getScriptFileNames.bind(host);
+  let last: { names: readonly string[]; result: string[] } | undefined;
+  host.getScriptFileNames = () => {
+    const names = original();
+    if (
+      !last ||
+      last.names.length !== names.length ||
+      last.names.some((name, index) => name !== names[index])
+    ) {
+      last = {
+        names: [...names],
+        result: [...names, ...ambientTypeFiles(names, projectDir())],
+      };
+    }
+    return last.result;
+  };
+}
+
+/**
+ * `<package>/<file>` (`some-framework/env.d.ts`, `@scope/name/types/x.d.ts`)
+ * in the nearest `node_modules` above each base, in order: the first base
+ * where the package is installed answers, and `undefined` when the file is
+ * not in it. A package's own files, not its `exports`: a declaration file is
+ * rarely an exported entry.
  */
 function packageFileIn(
   packageFile: string,

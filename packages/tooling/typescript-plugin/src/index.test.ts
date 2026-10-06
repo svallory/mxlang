@@ -4020,6 +4020,8 @@ function createMutablePluginService(
     inferredProject?: boolean;
     /** Per-file `isScriptOpen` (test-only); every file is open by default. */
     isOpen?: (fileName: string) => boolean;
+    /** The plugin's `compilerOptions.plugins` entry (`{ astro: true }`). */
+    config?: object;
   } = {},
 ): {
   service: ts.LanguageService;
@@ -4135,7 +4137,7 @@ function createMutablePluginService(
     languageService,
     languageServiceHost: host,
     serverHost: ts.sys,
-    config: {},
+    config: hooks.config ?? {},
     session: {
       change: ({ file }: { file: string }) => {
         versions.set(file, (versions.get(file) ?? 0) + 1);
@@ -4153,6 +4155,47 @@ function createMutablePluginService(
     },
   };
 }
+
+describe("the hosts' ambient types in the editor (TargetHost.ambientTypes)", () => {
+  // `mx-tsc` and the tsserver plugin add the same files (`ambientTypeFiles`):
+  // with `{ astro: true }`, a plain `.astro` page's authored `<Fragment>`
+  // resolves through astro's `env.d.ts` with no `types: ["astro/env"]`.
+  it("resolves Fragment in a plain .astro page with no types entry", () => {
+    const directory = `${here}/fixtures/astro-policy`;
+    const page = `${directory}/editor-fragment.astro`;
+    const consumer = `${directory}/editor-consumer.ts`;
+    const source = "---\nconst a = 1;\n---\n<Fragment><p>{a}</p></Fragment>\n";
+    const { service } = createMutablePluginService(
+      { [page]: source, [consumer]: 'import "./editor-fragment.astro";\n' },
+      // A configured project lists its `.astro` pages as roots (`include`,
+      // with Astro's `extraFileExtensions`), which is what the hook reads.
+      [consumer, page],
+      { config: { astro: true } },
+    );
+    service.getSemanticDiagnostics(consumer);
+
+    expect(
+      service
+        .getSemanticDiagnostics(page)
+        .map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n")),
+    ).toEqual([]);
+  });
+
+  it("adds nothing to a project with no astro file", () => {
+    const page = `${here}/fixtures/astro-policy/editor-plain.ts`;
+    const { service } = createMutablePluginService(
+      { [page]: "export const fragment: typeof Fragment = 1;\n" },
+      [page],
+      { config: { astro: true } },
+    );
+
+    expect(
+      service
+        .getSemanticDiagnostics(page)
+        .map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n")),
+    ).toEqual([expect.stringMatching(/^Cannot find name 'Fragment'/)]);
+  });
+});
 
 describe(".ng.mx language plugin", () => {
   const dir = `${here}/fixtures/angular-ngmx`;

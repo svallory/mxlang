@@ -7,6 +7,11 @@
     "target": "esnext",
     "jsx": "preserve",
     "types": [],
+    // Astro's ambient types (`TargetHost.ambientTypes`) and bun-types both
+    // declare module "*.html" (TS2309 in bun-types' extensions.d.ts). Bun's
+    // types reach this program only because "paths" below maps
+    // @mxlang/html to source that imports "bun", a monorepo artifact no user
+    // install has. Astro's own tsconfig preset sets skipLibCheck too.
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
     "baseUrl": ".",

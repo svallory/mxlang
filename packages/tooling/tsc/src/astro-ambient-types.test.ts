@@ -109,6 +109,17 @@ describe("mx-tsc --astro adds Astro's ambient types", () => {
     expect(status).toBe(0);
   }, 60_000);
 
+  it("in a program holding plain .astro pages and no .astro.mx", () => {
+    const dir = project(true, {
+      extends: "astro/tsconfigs/strict",
+      files: ["plain.astro"],
+    });
+    const { status, output } = check(dir);
+
+    expect(output).not.toMatch(/error TS/);
+    expect(status).toBe(0);
+  }, 60_000);
+
   it("still reports a real error in a plain .astro page", () => {
     const dir = project(true, {
       extends: "astro/tsconfigs/strict",

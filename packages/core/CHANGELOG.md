@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Added (mx-tsc-astro-ambient-types):** `TargetHost.ambientTypes?`, an optional, additive descriptor field: the declaration files a type-check of the host's file kinds needs beyond the project's `tsconfig.json` (the ambient types the framework's own tooling injects), given a `resolve("<package>/<file>")` that looks in the project, then in the tool's install. `validateDescriptor` checks it is a function.
+- **Added (mx-tsc-astro-ambient-types):** `TargetHost.ambientTypes?({ rootNames, resolve })` and its `AmbientTypesProgram` type, an optional, additive descriptor field: a host's ambient declaration files, the ones its framework's tooling adds to every program it checks, answered per program (`[]` for a program holding none of the host's files). `resolve("<package>/<file>")` looks in the project, then in the tool's install. `validateDescriptor` checks it is a function.
 
 - **Added (solid-method-shorthand, decision 167):** `Expr.bodySpan?` and `Expr.bodySource?`, additive optional IR fields. `exprOf` (`lower.ts`, `methodBodySpan`) sets them only for an attribute method shorthand (`onClick() { … }`, `async onClick<T>(…) { … }`), whose `code` is the `function` expression the compiler printed. `bodySpan` is the file-absolute span of the authored `{ … }` body, taken from the method node's own body position (Marko gives the text between the braces; it is widened onto them). `bodySource` is that span's authored text. Both are absent for every other expression, an authored `function` expression included. A host that emits the printed function maps its body against them; Solid does. `mappedRewrite(after, before, span)` is exported for that: it maps reprinted text token by token against the authored text.
 

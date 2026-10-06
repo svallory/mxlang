@@ -56,6 +56,14 @@ The name has to be a tag of your target: the registry checks a loaded descriptor
 
 **`TargetHost.defaultTag?`.** Optional, on the descriptor's `host` part: a host that emits the shorthand as something other than its target's built-in. It outranks the target's `defaultTag` and is outranked by the package's `mx.<target>.defaultTag` and by a parent contract.
 
+**`TargetHost.ambientTypes?`.** Optional function, on the descriptor's `host` part: the declaration files a type-check of your host's files needs beyond what the project's `tsconfig.json` lists, the ones your framework's own tooling adds to every program it checks (the built-in Astro host returns astro's `env.d.ts` and `astro-jsx.d.ts`, which declare `Fragment` and the JSX runtime). Its signature is `ambientTypes({ rootNames, resolve }) => readonly string[]`:
+
+- `mx-tsc` and the TypeScript plugin call it for every program they type-check, with that program's root files. Your host decides whether the program holds files of its own (its `fileKinds`, or the framework files its tooling checks) and returns `[]` when it does not.
+- `resolve("<package>/<file>")` is the absolute path of a file of an installed package. It looks in the project's `node_modules` first, then in the tool's own install, and returns `undefined` when neither has the package or the package lacks the file. It reads the package's own files, not its `exports`.
+- What you return is added to the program as root files: absolute paths, deduplicated, never a file already in it.
+- The hosts asked are those of the project's lookup, the one for the `tsconfig.json` directory's `package.json`: the built-ins plus the host your `mx.target`/`mx.host` loads, as for every other host operation.
+- It is validated at load: `host.ambientTypes` must be a function.
+
 **`HostDeclarations.allowContractDefaultTag?`.** Optional boolean, on `declarations.default`. Absent means `true`. Set it to `false` when your target cannot honour a per-tag default: a contract that declares `defaultTag` is then a registration error naming the host (or the target, if it has no host part), and the contract rung is never consulted. This is the only place the flag lives.
 
 **`HostDeclarations.resolveDefaultTag?(node, parents, context)`.** The hook core calls once per unnamed tag, top-down, after the parse and before lowering; it returns the tag name, which then lowers exactly like an authored tag of that name (`#x` stays `id="x"`, `.a.b` stays `class="a b"`). Without it, using the shorthand is a positioned error ("no default tag is declared…"); the built-in targets all implement it, so a third-party target that wants the ladder implements it too.

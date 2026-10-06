@@ -25,7 +25,7 @@
 
 ## Unreleased
 
-- **Fix (mx-tsc-astro-ambient-types):** the astro host declares its ambient types (`host.ambientTypes`): astro's `env.d.ts` and `astro-jsx.d.ts`, or `@astrojs/language-server`'s fallback copies without an astro install, as Astro's language server adds them. `mx-tsc --astro` now resolves `Fragment` and `astro/jsx-runtime` under Astro's own tsconfig preset, with no `types: ["astro/env"]`; `examples/astro-static` drops that entry.
+- **Fix (mx-tsc-astro-ambient-types):** the astro host declares its ambient types (`host.ambientTypes`): astro's `env.d.ts` and `astro-jsx.d.ts`, or `@astrojs/language-server`'s fallback copies without an astro install, as Astro's language server adds them, for a program holding an `.astro.mx` or a plain `.astro` file. `mx-tsc --astro` and the editor now resolve `Fragment` and `astro/jsx-runtime` under Astro's own tsconfig preset, with no `types: ["astro/env"]`; `examples/astro-static` drops that entry.
 
 - **Fix:** author-only `//` comments are dropped like on every other host; they were emitted as HTML comments.
 
