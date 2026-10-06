@@ -1,4 +1,6 @@
 export interface Input { }
 
-<p>${missingName}</p>
-<p>${1 * "a"}</p>
+<div class="outer">
+  <span title="t">${"first"}</span>
+  <p>${missingName}</p>
+</div>

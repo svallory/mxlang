@@ -3,8 +3,8 @@ import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import {
   ambientTypeFiles,
-  anchorEmptyMappings,
   approximateUnmappedDiagnostics,
+  approximateUnmappedEmit,
   type CompiledNgMx,
   createAmxLanguagePlugin,
   createAstroLanguagePlugin,
@@ -316,6 +316,7 @@ function approximateUnmappedInVolar(): void {
       PROGRAM_DIAGNOSTIC_METHODS,
       () => language,
     );
+    approximateUnmappedEmit(program, () => language);
     original(language, program);
   };
   patched[APPROXIMATE_MARKER] = true;
@@ -373,7 +374,7 @@ function runPatchedTsc(
         }
         plugins.push(createCompoundExtensionResolver(typescript));
         return {
-          languagePlugins: anchorEmptyMappings(plugins),
+          languagePlugins: plugins,
           setup: (language) => {
             // Runs before Volar copies the host and patches `getSourceFile` on
             // that copy, so every edit below lands on the host it copies from.

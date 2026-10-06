@@ -26,32 +26,17 @@ function mxTsc(project: string) {
 }
 
 describe("mx-tsc and a diagnostic with no source mapping", () => {
-  it("fails the run and reports each one at the nearest mapped span", () => {
+  it("fails the run and reports it on the tag that encloses it, not on a sibling or line 1", () => {
     const { status, lines } = mxTsc("unmapped-solid-failing");
 
     expect(status).not.toBe(0);
-    // Page.mx maps only `export interface Input { }` (line 1): both errors
-    // land there, and each names where TypeScript really found it.
+    // Page.mx maps only `export interface Input { }` (line 1) and no value:
+    // `missingName` is spelled inside `<p>` (line 5, column 3), the construct
+    // that holds it. The kind of suffix depends on mapping that value
+    // (#362), so only its presence is pinned here.
     expect(lines).toEqual([
       expect.stringMatching(
-        /Page\.mx\(1,1\): error TS2304: Cannot find name 'missingName'\. \(position approximate: generated \d+:\d+\)$/,
-      ),
-      expect.stringMatching(
-        /Page\.mx\(1,1\): error TS2363: .* \(position approximate: generated \d+:\d+\)$/,
-      ),
-    ]);
-  }, 60_000);
-
-  it("says it is MX's bug when the generated code holds nothing the author wrote", () => {
-    // `Page.mx` is `<p>hi</p>`; the fixture's tsconfig points `@mxlang/html`
-    // nowhere, so the unresolved import MX generates is the error. No authored
-    // code is on its line: it is MX's own scaffolding, at the file start.
-    const { status, lines } = mxTsc("unmapped-scaffolding-failing");
-
-    expect(status).not.toBe(0);
-    expect(lines).toEqual([
-      expect.stringMatching(
-        /Page\.mx\(1,1\): error TS2307: Cannot find module '@mxlang\/html'.* \(in MX-generated code, not yours: an MX bug; generated 1:\d+\)$/,
+        /Page\.mx\(5,3\): error TS2304: Cannot find name 'missingName'\. \((position approximate|in MX-generated code, not yours: an MX bug); generated \d+:\d+\)$/,
       ),
     ]);
   }, 60_000);

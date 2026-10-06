@@ -31,6 +31,7 @@ import {
 import type { CodeMapping, VirtualCode } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
+import { markoAuthoredSpans } from "./authored-spans.ts";
 import { failedModuleStub } from "./failed-module-stub.ts";
 import { fileKindOf } from "./file-kinds.ts";
 import {
@@ -51,6 +52,10 @@ import {
   warningDiagnostic,
 } from "./language.ts";
 import { dropOwnLocationHeader } from "./own-location-header.ts";
+import type {
+  AuthoredSpan,
+  SpannedVirtualCode,
+} from "./unmapped-diagnostics.ts";
 
 /** Thrown inside the compile to skip it when the policy's target failed to load. */
 class TargetNotLoaded extends Error {}
@@ -159,6 +164,7 @@ export function createMxLanguagePlugin(
 
       const source = snapshot.getText(0, snapshot.getLength());
       hostPolicies.source(fileName, source);
+      let tagsUsed: Record<string, CustomTag> | undefined;
       try {
         const result = compileWithDependencies(
           options.readSource,
@@ -176,6 +182,7 @@ export function createMxLanguagePlugin(
               throw new TargetNotLoaded();
             }
             const customTags = tagsFor(fileName, hostPolicy);
+            tagsUsed = customTags;
             // Reuse discovery's policy resolution: resolving it again would
             // repeat deprecation warnings on unchanged non-Angular files.
             // Tag projection belongs to the target's registered template
@@ -208,6 +215,7 @@ export function createMxLanguagePlugin(
           generated,
           mappings,
           result.angularTag,
+          () => markoAuthoredSpans(source, fileName, tagsUsed),
         );
       } catch (cause) {
         if (cause instanceof TargetNotLoaded) {
@@ -460,8 +468,10 @@ function createVirtualCode(
   generated: string,
   mappings: CodeMapping[],
   angularTag = false,
-): VirtualCode {
+  authoredSpans?: () => AuthoredSpan[],
+): SpannedVirtualCode {
   return {
+    ...(authoredSpans ? { authoredSpans } : {}),
     id: angularTag ? "angular-tag" : "root",
     languageId: "typescript",
     snapshot: typescript.ScriptSnapshot.fromString(generated),

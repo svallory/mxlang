@@ -19,6 +19,8 @@ import {
   markoCompiler,
   readCalleeInput,
   resetCalleeInputCache,
+  type TargetCompiler,
+  type TargetDescriptor,
   type TemplateBackedTag,
 } from "@mxlang/core";
 import { print } from "@mxlang/parser";
@@ -1290,17 +1292,17 @@ describe("MX language plugin", () => {
     expect(codes("Good")).toEqual([]);
   });
 
-  it("reports a diagnostic in generated code no mapping covers, at the nearest mapped span (decision 161)", () => {
-    // A whole-file Solid unit maps no expression values: `missingName` and
-    // `"a" * 2` sit in generated text with no source mapping. Volar used to
-    // drop both, so the service reported a clean page. They now arrive on the
-    // first line, the one mapped construct, and say where
-    // they really were.
+  it("reports a diagnostic in generated code no mapping covers on the tag that encloses it (decision 161)", () => {
+    // A whole-file Solid unit maps no expression values: `missingName` sits
+    // in generated text with no source mapping. Volar used to drop it, so the
+    // service reported a clean page. It now arrives on `<p>`, the construct
+    // that holds it: not on line 1 (the interface, the only mapped construct)
+    // and not on the preceding sibling `<span>`.
     const directory = `${here}/fixtures/solid-policy`;
     const page = `${directory}/Unmapped.mx`;
     const consumer = `${directory}/index.ts`;
     const source =
-      'export interface Input { }\n<p>${missingName}</p>\n<p>${1 * "a"}</p>\n';
+      'export interface Input { ok: string }\n<div class="a"><span title=input.ok>${input.ok}</span><p>${missingName}</p></div>\n';
     const service = createPluginService(
       {
         [page]: source,
@@ -1313,23 +1315,64 @@ describe("MX language plugin", () => {
     service.getSemanticDiagnostics(consumer);
     const diagnostics = service.getSemanticDiagnostics(page);
 
-    const text = (diagnostic: ts.Diagnostic) =>
-      ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n");
     const missing = diagnostics.find((d) => d.code === 2304);
-    const arithmetic = diagnostics.find((d) => d.code === 2363);
-    expect(text(missing as ts.Diagnostic)).toMatch(
-      /^Cannot find name 'missingName'\. \(position approximate: generated \d+:\d+\)$/,
+    expect(
+      ts.flattenDiagnosticMessageText(missing?.messageText ?? "", "\n"),
+    ).toMatch(
+      /^Cannot find name 'missingName'\. \((position approximate|in MX-generated code, not yours: an MX bug); generated \d+:\d+\)$/,
     );
-    expect(text(arithmetic as ts.Diagnostic)).toMatch(
-      /\(position approximate: generated \d+:\d+\)$/,
-    );
-    for (const diagnostic of [missing, arithmetic]) {
-      expect(diagnostic?.start).toBe(0);
-      // Somewhere on line 1: the only construct the unit maps.
-      expect(diagnostic?.length).toBeGreaterThan(0);
-      expect(diagnostic?.length).toBeLessThanOrEqual(source.indexOf("\n"));
+    const paragraph = "<p>${missingName}</p>";
+    expect(missing?.start).toBe(source.indexOf(paragraph));
+    expect(missing?.length).toBe(paragraph.length);
+    expect(diagnostics.map((d) => d.code)).toEqual([2304]);
+  });
+
+  it("says a diagnostic is MX's bug when the host's emitter wrote the code it is in (decision 161)", () => {
+    // A test-only emitter: the html target's module with one defective
+    // scaffolding statement appended. It has no spelling in the source, so no
+    // construct encloses it: the file start, marked as MX's.
+    const html = builtinLookup().target("html") as
+      | { load: NonNullable<TargetDescriptor["load"]> }
+      | undefined;
+    if (!html?.load) throw new Error("the html target must be loadable");
+    const load = html.load;
+    const spy = vi.spyOn(html, "load").mockImplementation((core) => {
+      const compiler = load.call(html, core);
+      return {
+        compileModule: (
+          ...args: Parameters<TargetCompiler["compileModule"]>
+        ) => {
+          const compiled = compiler.compileModule(...args);
+          return {
+            ...compiled,
+            code: `${compiled.code}\nconst __mxScaffoldDefect: number = "not a number";\n`,
+          };
+        },
+      };
+    });
+    try {
+      const directory = `${here}/fixtures/expression-values/html`;
+      const page = `${directory}/page.mx`;
+      const consumer = `${directory}/index.ts`;
+      const service = createPluginService(
+        { [page]: "<p>hi</p>\n", [consumer]: 'import "./page.mx";' },
+        [consumer],
+      );
+      service.getSemanticDiagnostics(consumer);
+      const defect = service
+        .getSemanticDiagnostics(page)
+        .find((d) => d.code === 2322);
+
+      expect(
+        ts.flattenDiagnosticMessageText(defect?.messageText ?? "", "\n"),
+      ).toMatch(
+        /\(in MX-generated code, not yours: an MX bug; generated \d+:\d+\)$/,
+      );
+      expect(defect?.start).toBe(0);
+      expect(defect?.length).toBe(0);
+    } finally {
+      spy.mockRestore();
     }
-    expect(diagnostics.map((d) => d.code).sort()).toEqual([2304, 2363]);
   });
 
   it("leaves an exactly mapped diagnostic's message and position untouched (decision 161)", () => {
