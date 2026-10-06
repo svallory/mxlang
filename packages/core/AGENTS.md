@@ -968,7 +968,9 @@ stable version.
   So the runtime's own `require.resolve` answers until a specifier misses;
   from then on the same runtime answers in a child (`process.execPath`, its
   resolution flags, `ELECTRON_RUN_AS_NODE`), at most once per specifier per
-  change to a stamp of the paths an install touches. Do not reintroduce a
+  change to a stamp of the paths an install touches (including the entry files
+  a manifest names, so a build into an existing `dist/` counts), and for a
+  not-found answer also on a 5 s to 60 s backoff. Do not reintroduce a
   model of the resolver: review 3 found eight shapes a hand-written one got
   wrong (`module-sync`, a BOM, Bun's tsconfig `paths`, percent-encoded
   segments, ...). `src/target-loader-resolve.test.ts` is the oracle: a

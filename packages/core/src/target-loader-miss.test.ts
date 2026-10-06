@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { setSpawnSyncLoaderForTesting } from "./resolve-after-miss.ts";
 import {
   clearTargetDescriptorCache,
@@ -312,5 +312,148 @@ console.log(process.moduleLoadList.some((m) => m.includes("child_process")));`,
     mkdirSync(p.pkg, { recursive: true });
     writeFileSync(join(p.pkg, "package.json"), '{"exports":"../x.cjs"}');
     expect(attempt("@fake/late-target", p.root)).toBe("load-failed");
+  });
+});
+
+// Run in fresh Bun and Node processes, each under a timeout, so a regression
+// that loops fails the test instead of hanging the suite.
+const childCaseScript = `
+import { mkdirSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { dirname, join } from "node:path";
+const [loaderPath, missPath, root, caseName] = process.argv.slice(2);
+const { loadTargetDescriptor } = await import(loaderPath);
+const miss = await import(missPath);
+let spawns = 0;
+const fakeOut = (stdout) => () => () => { spawns++; return { status: 0, signal: null, stdout, stderr: "" }; };
+if (caseName === "relpath") {
+  miss.setSpawnSyncLoaderForTesting(fakeOut('\\n@@mx-resolve@@{"path":"x.js"}\\n'));
+} else {
+  miss.setSpawnSyncLoaderForTesting(() => (...a) => { spawns++; return spawnSync(...a); });
+}
+const write = (rel, text) => {
+  mkdirSync(dirname(join(root, rel)), { recursive: true });
+  writeFileSync(join(root, rel), text);
+};
+const D = (name) => "module.exports = { descriptorVersion: 0, name: " + JSON.stringify(name) + ", packageName: 'p', defaultTag: 'node' };";
+const attempt = (spec) => {
+  try {
+    return { ok: loadTargetDescriptor(spec, root).name, spawns };
+  } catch (e) {
+    return { err: e.code, message: e.message, spawns };
+  }
+};
+const pkg = "node_modules/@fake/late-target";
+const out = [];
+if (caseName === "dist-late" || caseName === "exports-late") {
+  write("package.json", "{}");
+  write(pkg + "/package.json", caseName === "dist-late" ? '{"main":"dist/index.js"}' : '{"exports":"./dist/index.js"}');
+  write(pkg + "/dist/types.d.ts", "export {};");
+  out.push(attempt("@fake/late-target"));
+  write(pkg + "/dist/index.js", D("built"));
+  out.push(attempt("@fake/late-target"), attempt("@fake/late-target"));
+} else if (caseName === "builtin") {
+  out.push(attempt("fs/promises"));
+} else if (caseName === "relpath") {
+  write("package.json", "{}");
+  out.push(attempt("@fake/late-target"));
+}
+console.log(JSON.stringify(out));
+`;
+
+function runCase(runtime: "bun" | "node", caseName: string) {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "mx-loader-case-")));
+  roots.push(root);
+  const script = join(root, "..", `${root.split("/").pop()}-probe.mjs`);
+  writeFileSync(script, childCaseScript);
+  roots.push(script);
+  const out = spawnSync(
+    runtime,
+    [script, loader, join(here, "resolve-after-miss.ts"), root, caseName],
+    // The project directory is the cwd, with no package.json above it: a
+    // built-in's walk once looped forever from such a cwd.
+    { encoding: "utf8", cwd: root, timeout: 30_000 },
+  );
+  expect(out.error, "the child timed out or failed to start").toBeUndefined();
+  expect(out.status, out.stderr).toBe(0);
+  return JSON.parse(out.stdout.trim().split("\n").pop() as string) as {
+    ok?: string;
+    err?: string;
+    message?: string;
+    spawns: number;
+  }[];
+}
+
+describe.each(["bun", "node"] as const)("after a miss (%s)", (runtime) => {
+  it.each(["dist-late", "exports-late"])(
+    "%s: an entry built into an existing dist/ loads, with one more spawn",
+    (caseName) => {
+      const [first, second, third] = runCase(runtime, caseName);
+      expect(first).toMatchObject({ err: "not-found", spawns: 1 });
+      expect(second).toEqual({ ok: "built", spawns: 2 });
+      expect(third).toEqual({ ok: "built", spawns: 2 });
+    },
+  );
+
+  it("a built-in with a slash, from a cwd with no package.json, does not hang", () => {
+    const [result] = runCase(runtime, "builtin");
+    expect(result?.err).toBe("invalid-descriptor");
+  });
+
+  it("a child answer that is not an absolute file is not-found, naming it", () => {
+    const [result] = runCase(runtime, "relpath");
+    expect(result?.err).toBe("not-found");
+    expect(result?.message).toMatch(
+      /printed a path that is not an existing absolute file: "x\.js"\)$/,
+    );
+  });
+});
+
+describe("the re-ask backoff for a kept non-found answer", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    setSpawnSyncLoaderForTesting(undefined);
+  });
+
+  it("re-asks at 0, 5, 15, 35, 75 s, then every 60 s; a change resets it", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const start = new Date("2026-10-06T00:00:00Z").getTime();
+    vi.setSystemTime(start);
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "mx-loader-miss-")));
+    roots.push(root);
+    writeFileSync(join(root, "package.json"), "{}");
+    mkdirSync(join(root, "node_modules", ".bin"), { recursive: true });
+    const spawnedAt: number[] = [];
+    setSpawnSyncLoaderForTesting(
+      () =>
+        (() => {
+          spawnedAt.push((Date.now() - start) / 1000);
+          return {
+            status: 0,
+            signal: null,
+            stdout: `\n@@mx-resolve@@${JSON.stringify({ code: "MODULE_NOT_FOUND", message: "Cannot find module '@fake/never'" })}\n`,
+            stderr: "",
+          };
+        }) as unknown as typeof spawnSync,
+    );
+    // Ten minutes of steady lookups, one a second.
+    for (let second = 0; second < 600; second++) {
+      vi.setSystemTime(start + second * 1000);
+      expect(() => loadTargetDescriptor("@fake/never", root)).toThrow(
+        "Cannot find module '@fake/never'",
+      );
+    }
+    expect(spawnedAt).toEqual([
+      0, 5, 15, 35, 75, 135, 195, 255, 315, 375, 435, 495, 555,
+    ]);
+    // A stamp change (the scope directory appears) re-asks at once and
+    // restarts the backoff at 5 s.
+    spawnedAt.length = 0;
+    mkdirSync(join(root, "node_modules", "@fake"));
+    for (let second = 600; second < 620; second++) {
+      vi.setSystemTime(start + second * 1000);
+      expect(() => loadTargetDescriptor("@fake/never", root)).toThrow();
+    }
+    expect(spawnedAt).toEqual([600, 605, 615]);
   });
 });

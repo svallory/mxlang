@@ -3130,16 +3130,22 @@ process (Bun keeps a miss once the project has a `node_modules`; Node keeps a
 missing `package.json`, and after an install resolves the package's `index.js`
 and ignores its `main`), so once a specifier has missed in a process it is
 resolved again by the same runtime in a fresh child process, whose answer
-cannot depend on what was resolved before. The child runs at most once per
-specifier per change to the paths an install touches (each `node_modules`,
-scope and package directory from the project up, the package's
-`package.json`, and the project's `package.json`, `tsconfig.json`,
-`jsconfig.json` and `.pnp.cjs`). A target installed after a `target-not-found`
-therefore loads on the next resolution, with no restart, and it is the file a
-fresh process loads. Limits: a package that only appears through `NODE_PATH`
-or a global folder is not watched and needs a restart; if the child cannot
-run (no `node:child_process`, a timeout after 15 seconds, no answer), the
-specifier stays `target-not-found` and the message names the cause.
+cannot depend on what was resolved before. The child runs once per change to
+the paths an install or a build touches (each `node_modules`, scope and
+package directory from the project up, the package's `package.json`, the
+entry files it names (`main`, the `exports` targets) and their directories,
+and the project's `package.json`, `tsconfig.json`, `jsconfig.json` and
+`.pnp.cjs`). While nothing of that changes, a not-found answer is asked again
+on a backoff: 5 seconds after it, then doubling to at most 60 seconds. A
+target installed or built after a `target-not-found` therefore loads on the
+next resolution, with no restart, and it is the file a fresh process loads
+(within the backoff when the change is one the stamp does not see, such as a
+package that only appears through `NODE_PATH` or a global folder). Limits: if
+the child cannot answer (no `node:child_process`, a timeout after 15 seconds,
+a crash, no answer, or an answer that is not an existing absolute file), the
+specifier stays `target-not-found` and the message names the cause; a tool
+compiled into a single executable (`bun build --compile`) has no runtime to
+run as the child, so it gets that message and needs a restart.
 
 A specifier that resolves and then fails to load or validate is an **error with
 no fallback to a guessed target** (the same family as `target-host-mismatch`:

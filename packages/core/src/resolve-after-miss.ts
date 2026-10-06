@@ -18,15 +18,27 @@
  * `package.json`, the directory's own `package.json`, `tsconfig.json`,
  * `jsconfig.json` and `.pnp.cjs`; for a relative or absolute specifier, the
  * target path and its two parent directories). While the stamp is unchanged
- * the kept answer is reused, a failure included. A package that only appears
- * through `NODE_PATH` or a global folder is not stamped: it needs a restart.
+ * the kept answer is reused, a failure included. Each package's `package.json`
+ * also names its entry paths (`main`, every `exports` target for the
+ * subpath), and each one and its parent directory are stamped too, so a build
+ * that writes `dist/index.js` into an existing `dist/` is a change. The stamp
+ * costs about eight `statSync` calls per directory from `fromDir` up (some
+ * 80 to 100 per lookup at a typical depth), plus one `package.json` read per
+ * package whose stat changed, on every lookup of a specifier that has missed.
+ *
+ * A kept answer that is not "found" is also re-asked on a backoff while the
+ * stamp stays unchanged, for what the stamp cannot see (an entry under a
+ * deeper directory, a Bun tsconfig `paths` target): first 5 seconds after
+ * the answer, then doubling to at most 60 seconds; any stamp change resets
+ * it. A package that only appears through `NODE_PATH` or a global folder is
+ * not stamped: it is found by that backoff.
  *
  * `node:child_process` is loaded on this path only, never when core loads, so
  * an environment without it still imports core: a miss then stays a miss,
  * with a message that says why.
  */
 
-import { statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 
@@ -103,7 +115,20 @@ const key = (spec: string, fromDir: string) => `${fromDir}\0${spec}`;
 /** Specifiers this process's resolver has reported missing. */
 const missed = new Set<string>();
 
-const answers = new Map<string, { stamp: string; answer: MissResolution }>();
+interface Kept {
+  stamp: string;
+  answer: MissResolution;
+  /** The backoff, in milliseconds, before a non-found answer is re-asked. */
+  backoff: number;
+  /** When it may next be re-asked (`Date.now()` milliseconds). */
+  retryAt: number;
+}
+
+const answers = new Map<string, Kept>();
+
+/** The first re-ask of a non-found answer, and the most the backoff grows to. */
+const FIRST_RETRY_MS = 5_000;
+const MAX_RETRY_MS = 60_000;
 
 /** Whether `spec` has missed from `fromDir` in this process. @internal */
 export function hasMissed(spec: string, fromDir: string): boolean {
@@ -129,6 +154,7 @@ function stampedPaths(spec: string, fromDir: string): string[] {
     paths.push(
       pkg,
       join(pkg, "package.json"),
+      ...entryPaths(pkg, parts.slice(name.length).join("/")),
       join(dir, "package.json"),
       join(dir, "tsconfig.json"),
       join(dir, "jsconfig.json"),
@@ -138,6 +164,73 @@ function stampedPaths(spec: string, fromDir: string): string[] {
     if (parent === dir) return paths;
     dir = parent;
   }
+}
+
+/** Parsed manifests, by path and the stat they were read at. */
+const manifests = new Map<string, { stat: string; value: unknown }>();
+
+function readManifest(path: string): unknown {
+  let stat: string;
+  try {
+    const s = statSync(path);
+    stat = `${s.ino}:${s.mtimeMs}:${s.size}`;
+  } catch {
+    manifests.delete(path);
+    return undefined;
+  }
+  const kept = manifests.get(path);
+  if (kept?.stat === stat) return kept.value;
+  let value: unknown;
+  try {
+    value = JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
+  } catch {
+    value = undefined;
+  }
+  manifests.set(path, { stat, value });
+  return value;
+}
+
+/** Every string a value of `exports` holds (targets, at any depth). */
+function targetStrings(value: unknown, out: string[]): string[] {
+  if (typeof value === "string") out.push(value);
+  else if (value !== null && typeof value === "object") {
+    for (const entry of Object.values(value)) targetStrings(entry, out);
+  }
+  return out;
+}
+
+/**
+ * The entry files `pkg`'s manifest names for `subpath` (`""` for the
+ * package itself), with their parent directories: the files a build writes
+ * last. Not a resolution: every candidate a manifest names is stamped, valid
+ * or not, so the stamp only grows.
+ */
+function entryPaths(pkg: string, subpath: string): string[] {
+  const manifest = readManifest(join(pkg, "package.json"));
+  const relative: string[] = [];
+  if (subpath !== "") relative.push(subpath);
+  if (manifest !== null && typeof manifest === "object") {
+    const { main, exports } = manifest as { main?: unknown; exports?: unknown };
+    if (typeof main === "string") relative.push(main);
+    const key = subpath === "" ? "." : `./${subpath}`;
+    const scoped =
+      exports !== null &&
+      typeof exports === "object" &&
+      !Array.isArray(exports) &&
+      Object.keys(exports).some((k) => k.startsWith("."))
+        ? (exports as Record<string, unknown>)[key]
+        : key === "."
+          ? exports
+          : undefined;
+    targetStrings(scoped, relative);
+  }
+  const paths: string[] = [];
+  for (const entry of relative) {
+    if (entry.includes("*")) continue;
+    const file = resolve(pkg, entry);
+    paths.push(file, dirname(file));
+  }
+  return paths;
 }
 
 function stampOf(spec: string, fromDir: string): string {
@@ -201,9 +294,16 @@ function spawnResolve(spec: string, fromDir: string): MissResolution {
     answer = undefined;
   }
   if (isAnswer(answer)) {
-    return "path" in answer
-      ? { kind: "found", path: answer.path }
-      : { kind: "error", code: answer.code, message: answer.message };
+    if (!("path" in answer)) {
+      return { kind: "error", code: answer.code, message: answer.message };
+    }
+    if (isAbsolute(answer.path) && isFile(answer.path)) {
+      return { kind: "found", path: answer.path };
+    }
+    return {
+      kind: "failed",
+      reason: `resolving it in a child process (${runtime}) printed a path that is not an existing absolute file: ${JSON.stringify(answer.path)}`,
+    };
   }
   const detail =
     out.status !== 0
@@ -226,6 +326,14 @@ function isAnswer(
   );
 }
 
+function isFile(path: string): boolean {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
 function firstLine(value: unknown): string {
   const text = value instanceof Error ? value.message : String(value);
   return (text.split("\n", 1)[0] as string).trim();
@@ -233,7 +341,8 @@ function firstLine(value: unknown): string {
 
 /**
  * The runtime's answer for a specifier that has missed in this process, from
- * a fresh child process of the same runtime, at most once per change on disk.
+ * a fresh child process of the same runtime: once per change on disk, and
+ * for a non-found answer also on the backoff (5 s, doubling to 60 s).
  * Marks the specifier missed, so later calls come here too: a hit in this
  * process may be stale (Node's kept `package.json` miss) once it has missed.
  *
@@ -246,9 +355,14 @@ export function resolveAfterMiss(
   const k = key(spec, fromDir);
   missed.add(k);
   const stamp = stampOf(spec, fromDir);
+  const now = Date.now();
   const kept = answers.get(k);
-  if (kept && kept.stamp === stamp) return kept.answer;
+  let backoff = FIRST_RETRY_MS;
+  if (kept && kept.stamp === stamp) {
+    if (kept.answer.kind === "found" || now < kept.retryAt) return kept.answer;
+    backoff = Math.min(kept.backoff * 2, MAX_RETRY_MS);
+  }
   const answer = spawnResolve(spec, fromDir);
-  answers.set(k, { stamp, answer });
+  answers.set(k, { stamp, answer, backoff, retryAt: now + backoff });
   return answer;
 }

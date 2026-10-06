@@ -29,7 +29,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join, parse, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { hasMissed, resolveAfterMiss } from "./resolve-after-miss.ts";
 import {
   type TargetDescriptor,
@@ -106,8 +106,9 @@ export function clearTargetDescriptorCache(): void {
 
 /** The nearest `package.json` at or above `file`, with its mtime and content hash. */
 function packageStamp(file: string): PackageStamp | undefined {
+  // A built-in module (`fs/promises`) has no file and no manifest.
+  if (!isAbsolute(file)) return undefined;
   let dir = dirname(file);
-  const root = parse(dir).root;
   for (;;) {
     const manifest = join(dir, "package.json");
     let mtimeMs: number | undefined;
@@ -127,8 +128,9 @@ function packageStamp(file: string): PackageStamp | undefined {
       }
       return { manifest, mtimeMs, hash };
     }
-    if (dir === root) return undefined;
-    dir = dirname(dir);
+    const parent = dirname(dir);
+    if (parent === dir) return undefined;
+    dir = parent;
   }
 }
 
