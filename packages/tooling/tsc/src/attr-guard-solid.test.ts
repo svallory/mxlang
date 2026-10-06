@@ -21,3 +21,25 @@ it(
   },
   SPAWN_TIMEOUT_MS,
 );
+
+// A spread whose object type is wrong still reports, at the authored attribute
+// (line 5 of the page), not in the generated guard call; the `unknown` spread
+// on line 4 is clean.
+it(
+  "still reports an object spread with a wrongly typed key at the authored attribute",
+  () => {
+    const result = run(mxTsc, [
+      "--noEmit",
+      "-p",
+      join(fixtures, "attr-guard-solid-failing"),
+    ]);
+
+    const lines = result.output
+      .split("\n")
+      .filter((line) => line.includes("error TS"));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/Page\.solid\.mx\(5,\d+\): error TS2322/);
+    expect(result.status).not.toBe(0);
+  },
+  SPAWN_TIMEOUT_MS,
+);

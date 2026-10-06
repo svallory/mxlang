@@ -1,0 +1,8 @@
+export function Page(input: { o: { id: number }; u: unknown }) {
+  return (
+    <div>
+      <p ...input.u/>
+      <p ...input.o/>
+    </div>
+  );
+}
