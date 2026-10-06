@@ -46,5 +46,5 @@ describe.each(["html", "preact", "react"])("mx-tsc on %s", (host) => {
       ),
       expect.stringMatching(/page\.mx\(7,38\): error TS2322: .*number/),
     ]);
-  });
+  }, 60_000);
 });

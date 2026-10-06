@@ -53,7 +53,7 @@ describe("preact expression values", () => {
   it("leaves a method attribute rewritten to an arrow unmapped", () => {
     const source = `${IMPORT}<Field onPick() { go() }/>`;
     const result = pairs(source);
-    expect(result.some(([, generated]) => generated.includes("=>"))).toBe(
+    expect(result.some(([, generated]) => generated?.includes("=>"))).toBe(
       false,
     );
   });

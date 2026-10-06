@@ -79,12 +79,12 @@ describe("mx-tsc reports a misspelled whole-value atom", () => {
       .split("\n")
       .filter((line) => line.includes("page.mx"));
     // 1-based. TypeScript reports a property's type error on the property
-    // name, which maps to the attribute name (4:8). A nested atom in a
-    // component prop (`modes=[:strict, :lose]`, line 5) is not reported: the
-    // shared JSX emitter leaves component prop values unmapped (pre-existing,
-    // not atom-specific; see the PR 1 core report).
+    // name, which maps to the attribute name (4,8). The nested atom in a
+    // component prop (`modes=[:strict, :lose]`, line 5) is reported on the atom
+    // itself (5,36): component prop values are mapped, per atom.
     expect(lines).toEqual([
       expect.stringMatching(/page\.mx\(4,8\): error TS2820: .*"stirct"/),
+      expect.stringMatching(/page\.mx\(5,36\): error TS2820: .*"lose"/),
     ]);
     expect(run.status).not.toBe(0);
   });

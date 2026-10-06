@@ -262,6 +262,23 @@
               "semantic": true,
               "navigation": true
             }
+          },
+          {
+            "sourceOffsets": [
+              71
+            ],
+            "generatedOffsets": [
+              1005
+            ],
+            "lengths": [
+              5
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
           }
         ],
         "compileDiagnostics": [],
