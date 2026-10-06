@@ -274,14 +274,13 @@ export const MX_DYNAMIC = `function __mxIsHostComponentObject(value: any): boole
   );
 }
 function __mxDynamic(target: any, payload: any, content?: any, takesParams?: boolean) {
-  const noParams = (): never => { throw new Error("MX: tag params |…| need a component or function target; a native element or rendered content cannot call its body"); };
   if (Array.isArray(payload)) {
     if (typeof target === "function") return target(...payload);
     if (typeof target === "string" || __mxIsHostComponentObject(target)) {
       const Tag: any = target;
       const attrs = payload[0] || {};
       if (takesParams) {
-        if (typeof target === "string") noParams();
+        if (typeof target === "string") throw new Error("MX: tag params |…| cannot be passed to a native element: a string target has nothing to call its body");
         return <Tag {...attrs} children={content} />;
       }
       if (target === "textarea") {
@@ -301,7 +300,7 @@ function __mxDynamic(target: any, payload: any, content?: any, takesParams?: boo
     const Tag: any = target;
     const { content: bodyContent, ...rest } = props;
     if (takesParams) {
-      if (typeof target === "string") noParams();
+      if (typeof target === "string") throw new Error("MX: tag params |…| cannot be passed to a native element: a string target has nothing to call its body");
       return <Tag {...rest} children={bodyContent} />;
     }
     if (target === "textarea") {
@@ -321,7 +320,6 @@ function __mxDynamic(target: any, payload: any, content?: any, takesParams?: boo
       "MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <\${x.content}/>",
     );
   }
-  if (takesParams) noParams();
   return props.content ? props.content() : target;
 }`;
 

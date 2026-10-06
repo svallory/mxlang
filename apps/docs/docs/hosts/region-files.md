@@ -42,7 +42,7 @@ What stays outside, in your TypeScript:
 
 ## Tag params on a component
 
-`<Comp|item|>` gives the component a `content` it calls with the item. A hand-written component receives it as its render-prop `children` (`props.children(item)`); an `.mx` component reads `input.content` and calls it with `<${input.content}(item)/>`. This is the shape Marko 6.3.51 emits for `<Comp|item|>`, so a component written for one reads the same on the other. Without `|item|` the body is ordinary children. A native element cannot call its body: `<${"div"}|item|>` is an error (`Tag does not support parameters.`), and so is a dynamic tag that turns out to be a string at run time.
+`<Comp|item|>` gives the component a `content` it calls with the item. A hand-written component receives it as its render-prop `children` (`props.children(item)`); an `.mx` component reads `input.content` and calls it with `<${input.content}(item)/>`. This is the shape Marko 6.3.51 emits for `<Comp|item|>`, so a component written for one reads the same on the other. Without `|item|` the body is ordinary children. A native element cannot call its body. `<${"div"}|item|>` is a compile error (`Tag does not support parameters.`), as in Marko. A dynamic tag whose value is a string only at run time throws an MX run-time error (`MX: tag params |…| cannot be passed to a native element`); this is a deliberate divergence, since Marko renders the element with the body. An absent dynamic tag (`null` or `undefined`) renders the body with no arguments, as Marko does.
 
 ## `<define>` and tag variables
 

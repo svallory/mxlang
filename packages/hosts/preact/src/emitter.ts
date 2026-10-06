@@ -1541,17 +1541,7 @@ export class PreactEmitter implements Emitter<string> {
     if (content.length > 0) {
       // Marko's `content` and JSX's `children` are the same slot; a called
       // unit reads `input.content`, so it is passed under that name.
-      const rendered = this.#expression(content);
-      // Tag params make `content` a function the callee calls with the values
-      // it passes (`input.content(item, i)`, or `<${input.content}(item, i)/>`),
-      // the shape Marko 6.3.51 emits (`content: (item, i) => …`). Without
-      // params `content` is a thunk `__mxDynamic` calls to fill the callee's
-      // children; with them `__mxDynamic` hands the function through as the
-      // callee's `children` (it is told so by its fourth argument).
-      const params = node.content?.hasParams
-        ? `(${node.content.params.join(", ")})`
-        : "()";
-      parts.push(`content: ${params} => <>${rendered.code}</>`);
+      parts.push(`content: ${this.#contentFn(node).code}`);
     }
 
     return `{ ${parts.join(", ")} }`;
@@ -1701,16 +1691,9 @@ export class PreactEmitter implements Emitter<string> {
       ) {
         fail("Tag does not support parameters.", node);
       }
-      const paramList = hasParams
-        ? `(${node.content?.params.join(", ")})`
-        : "()";
       const content =
         node.args.length > 0 && hasContent
-          ? concatMapped(
-              `, ${paramList} => <>`,
-              this.#expression(node.content!.children),
-              "</>",
-            )
+          ? concatMapped(", ", this.#contentFn(node))
           : "";
       const takesParams = hasParams
         ? `${node.args.length > 0 ? "" : ", undefined"}, true`
@@ -1869,6 +1852,34 @@ export class PreactEmitter implements Emitter<string> {
   }
 
   /**
+   * A call's body as the `content` function. Without tag params it is a thunk
+   * `__mxDynamic` calls to fill the callee's children. With them it is a
+   * function the callee calls with the values it passes (`input.content(item,
+   * i)`, or `<${input.content}(item, i)/>`), the shape Marko 6.3.51 emits
+   * (`content: (item, i) => …`); `__mxDynamic` hands it through as the
+   * callee's `children` (its fourth argument says so). Shared by every route
+   * that builds a body (`#propsObject`, the dynamic-args third argument and a
+   * `<define>`'s positional `content`) so they cannot drift.
+   *
+   * With params the arrow is asserted to `(...args: any[]) => any`: the
+   * callee is reached through `__mxDynamic`, a `<define>` or a unit whose
+   * `content` may be typed loosely, so the params would otherwise have no
+   * contextual type and `strict` would report an implicit `any` at every
+   * call. The assertion gives them one (`any`, an honest "not checked
+   * against the callee") and is a no-op for annotated or destructured params.
+   */
+  #contentFn(node: Extract<IrNode, { kind: "Component" }>): MappedCode {
+    const rendered = this.#expression(node.content?.children ?? []);
+    if (!node.content?.hasParams)
+      return concatMapped("() => <>", rendered, "</>");
+    return concatMapped(
+      `((${node.content.params.join(", ")}) => <>`,
+      rendered,
+      "</>) as (...args: any[]) => any",
+    );
+  }
+
+  /**
    * The named values a `<define>` call supplies, keyed by name — attributes,
    * attribute tags and (when the body has content) `content`, matching the
    * prop name Marko's own `<${input.content}/>` reads. Shared by
@@ -1898,8 +1909,7 @@ export class PreactEmitter implements Emitter<string> {
     }
     const content = node.content?.children ?? [];
     if (content.length > 0) {
-      const rendered = this.#expression(content);
-      named.set("content", `() => <>${rendered.code}</>`);
+      named.set("content", this.#contentFn(node).code);
     }
     return named;
   }

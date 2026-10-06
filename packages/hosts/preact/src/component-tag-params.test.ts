@@ -47,8 +47,16 @@ export default function List(props: Input) {
   return <ul>{props.items.map((x, i) => <li key={i}>{props.children(x, i) as never}</li>)}</ul>;
 }`;
 
-/** The same callee written in MX: it calls `input.content` with the item. */
-const MX_LIST = `export interface Input { items: string[]; content?: unknown; children?: unknown }
+/**
+ * The same callee written in MX: it calls `input.content` with the item. It
+ * types `children` (the slot a described call fills) as a function, as a TSX
+ * component does, so the caller's params take their types from it under
+ * strict tsc. `content` stays `unknown`: the module preamble assigns the
+ * normalized body to it (space TODO.md,
+ * `jsx-mx-input-typed-content-ts2322`).
+ */
+const MX_BODY = "(item: string, i: number) => unknown";
+const MX_LIST = `export interface Input { items: string[]; content?: unknown; children?: ${MX_BODY} }
 <ul>
   <for|x, i| of=input.items>
     <li><\${input.content}(x, i)/></li>
@@ -67,6 +75,13 @@ interface Case {
   callee?: { file: string; source: string };
   caller: string;
   html: string;
+  /**
+   * A `<define>`'s own declared params are emitted unannotated
+   * (`const Row = (p) => …`), so strict tsc reports them whether or not the
+   * call has tag params (space TODO.md, `jsx-define-params-implicit-any`). Listed here
+   * so the strict test still proves the body's params are bound and typed.
+   */
+  untypedDefineParams?: string[];
 }
 
 const CASES: Record<string, Case> = {
@@ -105,6 +120,28 @@ export interface Input { items: string[] }
 </define>
 <ul><Row|n|><b>\${n}</b></Row></ul>`,
     html: "<ul><li><b>r</b></li></ul>",
+    untypedDefineParams: ["p"],
+  },
+  "a define called with args and a params body": {
+    caller: `export interface Input { items: string[] }
+<define/Row|a, content|>
+  <li>\${a}<\${content}("r")/></li>
+</define>
+<ul><Row("x")|n|><b>\${n}</b></Row></ul>`,
+    html: "<ul><li>x<b>r</b></li></ul>",
+    untypedDefineParams: ["a", "content"],
+  },
+  "a <return> unit": {
+    callee: {
+      file: "unit.mx",
+      source: `export interface Input { items: string[]; content?: unknown; children?: ${MX_BODY} }
+<return=input.items.length/>
+<ul><for|x| of=input.items><li><\${input.content}(x)/></li></for></ul>`,
+    },
+    caller: `import Unit from "./unit.mx"
+export interface Input { items: string[] }
+<Unit|item| items=input.items><b>\${item}</b></Unit>`,
+    html: "<ul><li><b>a</b></li><li><b>b</b></li></ul>",
   },
   "a dynamic target with args": {
     callee: { file: "args.tsx", source: ARGS_FN },
@@ -123,6 +160,10 @@ const STRING_CASES = {
   "a literal string target with args": `export interface Input { items: string[] }
 <\${"div"}("a")|item|>body \${item}</>`,
 };
+
+/** An optional render target: absent, Marko renders the body with no args. */
+const NULLISH_TARGET = `export interface Input { c?: string }
+<\${input.c}|item|>body</>`;
 
 const RUNTIME_STRING = `export interface Input { tag: string }
 <\${input.tag}|item|>body \${item}</>`;
@@ -219,9 +260,6 @@ describe.each(hosts)("%s: tag params on a component call", (host) => {
               noEmit: true,
               skipLibCheck: true,
               strict: true,
-              // The dynamic route's `__mxDynamic` takes `any`, so a body's
-              // params have no contextual type; they are bound, not typed.
-              noImplicitAny: false,
               target: "ESNext",
               types: ["node"],
             },
@@ -233,8 +271,15 @@ describe.each(hosts)("%s: tag params on a component call", (host) => {
           ["-p", join(scratch, "tsconfig.json")],
           { encoding: "utf8" },
         );
-        expect(proc.stdout + proc.stderr).toBe("");
-        expect(proc.status).toBe(0);
+        const errors = (proc.stdout + proc.stderr)
+          .split("\n")
+          .filter(Boolean)
+          .map((line) => line.replace(/^.*?: error /, ""));
+        const expected = (testCase.untypedDefineParams ?? []).map(
+          (name) => `TS7006: Parameter '${name}' implicitly has an 'any' type.`,
+        );
+        expect(errors).toEqual(expected);
+        expect(proc.status).toBe(expected.length === 0 ? 0 : 2);
       } finally {
         rmSync(scratch, { recursive: true, force: true });
       }
@@ -245,11 +290,32 @@ describe.each(hosts)("%s: tag params on a component call", (host) => {
     "%s with a params body is a positioned compile error, as in Marko",
     async (_name, caller) => {
       const compile = await compilerFor(host);
-      expect(() => compile(caller, "/fixtures/t.mx")).toThrow(
-        /Tag does not support parameters/,
-      );
+      let error: unknown;
+      try {
+        compile(caller, "/fixtures/t.mx");
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toMatchObject({
+        message: expect.stringContaining("Tag does not support parameters"),
+        line: 2,
+        column: 0,
+      });
     },
   );
+
+  it("an absent dynamic target renders the body with no args, as Marko does", async () => {
+    const { scratch, compile } = scratchFor(host, { caller: NULLISH_TARGET });
+    try {
+      await compile();
+      const mod = (await import(
+        `${join(scratch, "main.tsx")}?tp=${serial++}`
+      )) as { default: unknown };
+      expect(await renderHtml(host, mod.default, {})).toBe("body");
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
 
   it("a string that arrives at run time throws instead of rendering an empty element", async () => {
     const { scratch, compile } = scratchFor(host, { caller: RUNTIME_STRING });
@@ -285,7 +351,8 @@ describe("tag params leave other emission alone", () => {
       CASES["an imported component"]?.caller as string,
       "/fixtures/t.mx",
     );
-    expect(code).toContain("content: (item, i) => <>");
+    expect(code).toContain("content: ((item, i) => <>");
+    expect(code).toContain("as (...args: any[]) => any");
     expect(code).not.toContain("() => (item, i)");
     expect(code).toContain(", undefined, true)");
   });
@@ -295,8 +362,8 @@ describe("tag params leave other emission alone", () => {
       CASES["a dynamic target with args"]?.caller as string,
       "/fixtures/t.mx",
     );
-    expect(code).toContain("{ content: (item) => <>");
-    expect(code).toContain(", (item) => <>");
+    expect(code).toContain("{ content: ((item) => <>");
+    expect(code).toContain(", ((item) => <>");
     expect(code).toContain(", true)");
   });
 });

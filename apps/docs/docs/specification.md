@@ -1993,11 +1993,19 @@ call a framework's own render-prop components with ordinary markup. Params parse
 exactly like `<for>`'s: destructuring and type annotations included; empty pipes
 (`||`) lower to a no-argument function.
 
-On a call routed through a dynamic tag (an imported component, `<${expr}>`, a
-`<define>`, a `<return>` unit) the function is the callee's `content`: it calls
-`input.content(item, i)`, as in Marko 6.3.51. A target that is a native element
-cannot call it: `<${"div"}|item|>` is the error `Tag does not support
-parameters.`
+On the JSX hosts (preact, react, hono), a call with params that is routed as a
+props object (an imported component, `<${expr}>`, a call of a `<define>`
+written by name, a `<return>` unit) passes the function as the callee's
+`content`, and the callee calls it as `input.content(item, i)`, the shape
+Marko 6.3.51 emits (lead ruling on PR #371, 2026-10-06; it has no decision
+number). A dynamic target that is absent (`null`/`undefined`) renders the
+body called with no arguments, as Marko does. A literal string target
+(`<${"div"}|item|>`) is the compile error `Tag does not support parameters.`,
+Marko's own. A string that only arrives at run time throws an MX run-time
+error (`MX: tag params |…| cannot be passed to a native element`). This is a
+deliberate divergence: Marko renders the element with the body. A `<define>`
+used as a dynamic target value (`<const/R = Row/>` then `<${R}|n|>`) does not
+receive the body yet on these hosts.
 
 **Params come before `=value`** (§5.2).
 
