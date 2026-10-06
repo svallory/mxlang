@@ -2598,8 +2598,10 @@ export function emitTemplate(
   }
 
   const emitter = new AngularEmitter(ctx, filename, ir.imports, selectorPrefix);
-  assertTemplateExpressible(ir.body);
   for (const node of ir.body) emitter.emitNode(node);
+  // After emission, so a construct with its own more specific error (a
+  // block-bodied `by=` arrow) reports that one first.
+  assertTemplateExpressible(ir.body);
   const code = emitter.done();
   if (usedTagsOut) usedTagsOut.push(...emitter.usedTagRefs());
   if (mappingsOut) mappingsOut.push(...emitter.mappings());
