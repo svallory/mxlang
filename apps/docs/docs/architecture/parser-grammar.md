@@ -31,11 +31,13 @@ Decision 158 (2026-10-05) fixes the delivery plan:
   modifier split**", and makes sugars, atoms, attribute tags, wildcard children,
   `defaultTag` and `<return>` first-class nodes with native positions.
 - The Marko compiler front end is **not copied** (158.2, superseding 157
-  addenda 2 and 4 on that point). `@marko/compiler` stays an npm dependency,
-  with the current htmljs patch, only until the MX AST and the ported lowering
-  land. Until then "decision 151 §1 stands" (158.2): the stock-parser
-  diagnostic of decision 151, ruling 1, which 157 addendum 3 had removed, is
-  live again for the interim.
+  addenda 2 and 4 on that point). `@marko/compiler` stays an npm dependency
+  only until the MX AST and the ported lowering land. 158.2 kept "decision 151
+  §1" (the stock-parser diagnostic) for that interim, but decision 159 then
+  made core's build bundle `@marko/compiler`'s parse layer with
+  `htmljs-parser` aliased to the in-repo template parser, so "a registry
+  install of core parses with MX's rules". A published core therefore never
+  reaches the stock-parser diagnostic either (OQ 15).
 - Packages (158.3): `@mxlang/parser` is the template parser (`src/template/`,
   derived from htmljs-parser) and, when it exists, the front end from parser
   events to the MX AST; `@mxlang/babel` is the vendored Babel fork with the MX
@@ -64,50 +66,49 @@ Sources of truth, in this order:
 The htmljs-parser fixtures and the Marko fixtures are **evidence of the default
 behaviour, not a gate**.
 
-Three changes are described here as they **will be**, not as the parser is
-today. Each is marked *planned* where it appears:
-
-- decision 146, addendum 4: a sugar immediately followed by `=value` or
-  `(params) { body }` sets the tag's default attribute;
-- decision 146, addendum 5: a default value that is a single atom does not block
-  the name sugar after it;
-- atoms (decision 156 and its addendum 1): `:name` lexed in expression position,
-  `::` reserved.
+Decision 146 addenda 4 and 5 and atoms (decision 156 with its addenda 1 to 4)
+are implemented on `main` and are described here as they are, not as planned.
+Addendum 4 lives in core; addendum 5 and atoms live in the template parser.
 
 ### Method: every behavioural rule is read out of the parser source
 
-Every statement below about what the parser does today is derived from the
-source of `htmljs-parser` 5.18.0 at `/Users/svallory/work/htmljs-parser/src`
-(read-only) and names the file and symbol it comes from. Where a rule has more
-than one branch, it is written as a table or an ordered list **in the code's own
-branch order**, so that every branch of the cited symbol is either a row or
-explicitly excluded.
+The subject of this document is **MX's template parser**: the source on `main`
+at `packages/parser/src/template/` (decision 158.3; read for this revision at
+`origin/main` `6e1eb9718`). It began as a copy of `htmljs-parser` 5.18.0 and is
+now MX's own code; its `PROVENANCE.md` records every departure from 5.18.0.
+Every statement below about what the parser does is derived from that source
+and names the file and symbol it comes from. Where a rule has more than one
+branch, it is written as a table or an ordered list **in the code's own branch
+order**, so that every branch of the cited symbol is either a row or explicitly
+excluded. Citations are **by file and symbol**, never by line number.
 
-The same source is in this repository on `main` at
-`packages/parser/src/template/` (PR #336; compared for this revision at
-`origin/main` `0cd544d84`): the files cited here are byte-identical to
-upstream, except `states/ATTRIBUTE.ts` and `states/EXPRESSION.ts`, which carry
-the MX patch as ordinary source. This branch does not contain that path.
-Citations are therefore **by file and symbol**, and the symbols exist under the
-same names on `main`. Line numbers, where given, refer **only** to the pinned
-upstream files; they do not hold on `main`, where the two patched files are
-longer.
+**Stock** means htmljs-parser 5.18.0 unchanged (`/Users/svallory/work/htmljs-parser/src`,
+identical to the `v5.18.0` tag). It appears only as a comparison: where a row
+or an example says "Stock: …", the stock parser does something else. These
+files on `main` differ from stock, and nothing else does:
 
-"The patch" means `patches/htmljs-parser@5.18.0.patch`, which is the same change
-as the source difference on `main`: the `attrValue` flag set in
-`ATTRIBUTE.parse`, the `??`/`?.` branch in `EXPRESSION.parse`, and the `:` and
-`.` branches of `lookAheadForOperator` with the helpers `isIdentStartCode` and
-`isBareColonEnd`.
+| Departure | Files and symbols | Source of the rule |
+| --- | --- | --- |
+| the after-value rule | `states/ATTRIBUTE.ts` (`attrValue`); `states/EXPRESSION.ts`: the `??`/`?.` branch of `EXPRESSION.parse`, the `:` and `.` rows of `lookAheadForOperator`, `isIdentStartCode`, `isBareColonEnd` | decision 146, divergence 3 and addendum 6 ([E1](#e1--attribute-value-html-mode)) |
+| a single-atom default value | `states/ATTRIBUTE.ts` (`defaultAtom`); `states/EXPRESSION.ts` (`isSingleAtomDefault`) | decision 146, addendum 5 ([E1](#e1--attribute-value-html-mode)) |
+| atoms and the reserved `::` | `states/EXPRESSION.ts` (`lexAtom`, `expectsExpression`, `isOperatorWord`, `closesTypeArguments`, `atomNameEnd`, `rejectReservedName`, the atom guard in `lookBehindForKeyword`); the `atoms = true` sites in `states/ATTRIBUTE.ts`, `OPEN_TAG.ts`, `PLACEHOLDER.ts`, `TAG_NAME.ts`, `TEMPLATE_STRING.ts`; `rejectReservedName` calls in `TAG_NAME.exit` and `ATTRIBUTE.return`; `core/Parser.ts` (`atoms`, `read`, `rawOpenTags`); `util/constants.ts` (`onAtom`); `OPEN_TAG.exit` (`rawOpenTags`) | decision 156 and its addenda 2 to 4 ([Atoms](#atoms)) |
+| the base position | `core/Parser.ts` (`ParseOptions`, `parse`, `positionAt`, `offsetAt`); `index.ts` | the parser's API ([Base position](#base-position-for-fragment-parses)) |
+
+The bun patch `patches/htmljs-parser@5.18.0.patch`, which `@marko/compiler`'s
+npm copy still runs under in this repository, carries the same after-value,
+addendum-5 and atom rules (`PROVENANCE.md`; the
+`corpus-equivalence.test.ts` test pins identical event streams). This document
+describes the source, not the patch.
 
 Every rule was then attacked by probe: inputs chosen to exercise each branch,
-including inputs the wording might be read to exclude, run through the
-**patched** 5.18.0 build in this repo's `node_modules` and through the **stock**
-source with the same callbacks (`onOpenTagName` returning `TagType.statement`
-for `static`/`import`/`export`/`server`/`client`, `TagType.text` for
-`script`/`style`/`textarea`, `TagType.void` for `input`/`br`). "Observed" below
-means the output of those runs. **Stock and patched agree on every observed
-input unless the text says they differ**, and they differ only where the patch's
-after-value rule applies ([E1 overrides](#e1--attribute-value-html-mode)).
+including inputs the wording might be read to exclude, run through **main's
+template parser source** (`packages/parser/src/template/index.ts`) and through
+the **stock** source with the same callbacks (`onOpenTagName` returning
+`TagType.statement` for `static`/`import`/`export`/`server`/`client`/`class`,
+`TagType.text` for `script`/`style`/`textarea`, `TagType.void` for
+`input`/`br`; `onAtom` recorded). "Observed" below means the output of those
+runs. **Stock and main agree on every observed input unless the text says they
+differ**, and they differ only where one of the departures above applies.
 
 Where the parser's behaviour differs from what a source of truth says, or the
 parser accepts input that is not valid TypeScript, or rejects input that is,
@@ -162,16 +163,55 @@ classifies every known difference in those three classes.
   (`shouldTerminate`) returns true. At depth 0 it ends the value, **except**
   under the operator exemption (step 4 of the scan), which exists only in
   positions that have the `operators` flag. Inside a group it is not examined.
-- **Soft stop.** Whitespace or a newline, in a position that has the
-  `terminatedByWhitespace` or `terminatedByEOL` flag. At depth 0 it ends the
-  value only when the continuation test fails.
+- **Soft stop.** Whitespace other than a newline, in a position that has the
+  `terminatedByWhitespace` flag; a newline, in a position that has
+  `terminatedByWhitespace` or `terminatedByEOL`. At depth 0 it ends the value
+  only when the continuation test fails.
 - **Whitespace** is any character with code 32 or lower, which includes tab,
   newline and carriage return (`isWhitespaceCode`, `util/util.ts`). **Indent
   characters** are space and tab only (`isIndentCode`). A **word character** is
   `A`–`Z`, `a`–`z`, `0`–`9`, `$` or `_` (`isWordCode`); no non-ASCII character is
   one.
-- **The default** is what the stock parser's source does, as confirmed by
-  probe. Decision 157.3 makes it the normative answer wherever MX has no ruling.
+- **The default** is what the template parser does where no MX departure
+  applies, which is what stock does, as confirmed by probe. Decision 157.3
+  makes it the normative answer wherever MX has no ruling.
+- **Supplied sets.** The parser has no list of tag names. Which names are
+  statement tags, text tags and void tags is answered by the consumer's
+  `onOpenTagName` handler, which returns a `TagType` (`TAG_NAME.exit`). The
+  AST catalogue makes the statement set and the tag shapes inputs supplied
+  per target (decision 163 addenda 1 and 3; `apps/docs/docs/architecture/ast.md`
+  §3.10 "Statement keywords per target" and §3.12). This document says "the
+  supplied statement set" and "a text tag" for them.
+
+### Ranges, and the names the AST catalogue gives them
+
+The parser reports ranges; it builds no nodes. The node types, their fields
+and their spans belong to the AST catalogue
+(`apps/docs/docs/architecture/ast.md`, decision 163), and this document uses
+its names and does not redefine them. Decision 163, ruling Q10: field names
+follow the AST, and for every expression container the catalogue's span is the
+parser's **`value`** range (the text between the position's delimiters, inner
+whitespace included, a tag variable's `/` excluded) and its **`outer`** is the
+parser's **event range** (delimiters included). A position's text as written
+here ("the value", "the arguments") is that `value` range.
+
+| Event (`util/constants.ts`) | Range the parser reports | Catalogue field (ast.md section) |
+| --- | --- | --- |
+| `onOpenTagName` | the written name, sugar included; an empty range for the unnamed tag | `MxTag.name` (§3.3), after core's `:` split |
+| `onTagShorthandId`, `onTagShorthandClass` | the part from its `#` or `.`, which may hold a `:name` | `MxShorthand` with `position: "tag"` (§3.6), after core's split |
+| `onTagTypeArgs`, `onTagVar`, `onTagArgs`, `onTagTypeParams`, `onTagParams` | `value`: inside `<…>`, after `/`, inside `(…)`, inside `\|…\|`; event range: with the delimiters | `MxTag.typeArgs`, `var`, `args`, `typeParams`, `params` (§3.4): span = `value`, `outer` = event range |
+| `onAttrName` | the name; empty for the default attribute | `MxAttribute.nameSpan`, or an `MxShorthand` with `position: "attribute"` for `#x`, `.x`, `:x` (§3.5, §3.6) |
+| `onAttrValue` | `value`: from the first character after `=`/`:=` and the whitespace after it | `MxAttribute.value` or `MxShorthand.default` (§3.5) |
+| `onAttrSpread` | `value`: from the character after `...`, whitespace included | `MxSpreadAttribute.value` (§3.5b) |
+| `onAttrArgs` | `value`: inside `(…)` | `MxAttribute.args` (§3.5) |
+| `onAttrMethod` | `params`, `body`, `typeParams`, each with a `value` inside its delimiters | `MxMethod.params`, `body`, `typeParams` (§3.5a) |
+| `onPlaceholder` | `value`: inside `${…}` | `MxPlaceholder.expression` (§3.9) |
+| `onScriptlet` | `value`: the statement, or inside `{…}` for the block form | `MxScriptlet.code` (§3.10) |
+| `onAtom` | the whole atom, `:` included; `value` is the name | `MxAtom` in the enclosing container's `atoms` (§4.3) |
+
+A statement tag's code is reported by no event of its own
+([E10](#e10--statement-tags)); the catalogue's `MxModuleStatement` (§3.10)
+takes it from the open-tag ranges.
 
 ### Conventions
 
@@ -193,6 +233,14 @@ are three content states:
 | **Concise content** (`CONCISE_HTML_CONTENT`) | the start of the file; the end of an HTML region or delimited block | never; it is the root state |
 | **HTML content** (`HTML_CONTENT`) | a concise line whose first character is `<` (mixed mode); a delimited block; the `>` that ends an HTML-mode open tag continues in the enclosing HTML content | the newline rules below; end of input |
 | **Text content** (`PARSED_TEXT_CONTENT`) | the end of the open tag of a tag the consumer typed `TagType.text`, in HTML mode; a delimited block whose enclosing tag is such a tag | its close tag; the end of its delimited block |
+
+**Concise mode is a parser flag, `isConcise`**, and the content states set it:
+`CONCISE_HTML_CONTENT` sets it, `HTML_CONTENT.enter` clears it, and
+`PARSED_TEXT_CONTENT` leaves it as it was. So a delimited block under a concise
+text tag (`script -- …`, `textarea\n  -- …`) is still **concise mode**, while a
+delimited block under any other concise tag is HTML mode. Every rule below that
+says "in concise mode" means this flag, and it matters at end of input
+([End of input](#end-of-input), rule 1).
 
 **Mixed mode** (`CONCISE_HTML_CONTENT.parse`, the `<` case; `HTML_CONTENT.parse`,
 the newline branch; `OPEN_TAG.enter`/`OPEN_TAG.exit`; `Parser.closeTagEnd`). A
@@ -248,7 +296,7 @@ matching row applies:
 | 1 | newline | concise, outside `[ … ]` | look ahead over whitespace (newlines included), `//` comments and `/* */` comments; if the next character is `,` the open tag continues, otherwise the open tag ends at this newline |
 | 2 | newline | HTML, or inside `[ … ]` | skipped |
 | 3 | `;` | concise | the open tag ends. Only whitespace, a `//` or `/* */` comment or an HTML comment may follow on the line, otherwise `A semicolon indicates the end of a line. Only comments may follow it.` This applies inside `[ … ]` too |
-| 4 | `-` | concise | if the next character is not `-`: `"-" not allowed as first character of attribute name`. Inside `[ … ]`: `Attribute group was not properly ended`. Otherwise the open tag ends and a delimited block begins ([E12](#e12--delimited-html-blocks)) |
+| 4 | `-` | concise | first, if the next character is not `-`, in or out of `[ … ]`: `"-" not allowed as first character of attribute name` (`div [a -b]`, observed). Otherwise, inside `[ … ]`: `Attribute group was not properly ended`. Otherwise the open tag ends and a delimited block begins ([E12](#e12--delimited-html-blocks)) |
 | 5 | `[` | concise | begins an attribute group; a second `[` inside one is `Unexpected "[" character within open tag.` |
 | 6 | `]` | concise | ends the attribute group; outside one it is `Unexpected "]" character within open tag.` |
 | 7 | `>` | HTML | ends the open tag |
@@ -301,6 +349,17 @@ character"). `>` is a name character in concise mode (`div>a` is one tag name,
 observed). The loop has no leading-character rule: `<1abc/>` is the tag `1abc`
 (observed), and no source of truth states one (OQ 16).
 
+**`::` is reserved in a name** (decision 156, addenda 2 and 3). When a name or
+shorthand part ends, `TAG_NAME.exit` checks each of its static pieces (the text
+outside every `${…}`) with `rejectReservedName`, **before** it reports the part.
+The first `::` found is the error `` `::b` is reserved (decision 156): `::`
+will be the Symbol.for sugar; write `:b` for an atom `` (`INVALID_EXPRESSION`),
+ranged from the `::` to the end of the atom name after it, and the parse stops
+there, so the part is never reported. Observed: `<a::b/>`, `<div.a::b/>` and
+`<div#a::b/>` are the error (stock: the tag `a::b`, the parts `.a::b`, `#a::b`);
+`<${"a::b"}/>` is the tag `${"a::b"}`, because the `::` is inside the
+interpolation.
+
 Four name forms result:
 
 | Form | Example | Grammar |
@@ -308,10 +367,11 @@ Four name forms result:
 | Static | `div`, `my-widget` | a run of row-5 characters |
 | Interpolated | `<${expr}>`, `<${foo}-bar>`, `<${a}${b}>` | any mix of row-5 characters and `${…}` |
 | Unnamed | `<.card>`, `<#main>` | the name part is empty and a shorthand follows; the name event has an **empty** range (decision 145) |
-| Statement tag | `static`, `import`, … | a name for which the consumer returns `TagType.statement` ([E10](#e10--statement-tags)) |
+| Statement tag | `static`, `import`, … | a name in the supplied statement set, for which the consumer returns `TagType.statement` ([E10](#e10--statement-tags)) |
 
-The empty name range is the parser's signal that the tag is unnamed; core
-resolves it through the `defaultTag` ladder ([dialect rule 9](#dialect-rules)).
+The empty name range is the parser's signal that the tag is unnamed (the
+catalogue's `MxTagName` `kind: "unnamed"`, ast.md §3.3); core resolves it
+through the `defaultTag` ladder ([dialect rule 9](#dialect-rules)).
 `<:email/>` is **not** unnamed at this level: the parser reports the name
 `:email` (observed), and the split below produces the unnamed tag afterwards.
 
@@ -391,8 +451,8 @@ After each part is read (`ATTRIBUTE.return`):
 
 | Part | Result |
 | --- | --- |
-| name | reported, unless it is a pending `async` (below). In HTML mode the ambiguous-`>` check runs ([below](#the-ambiguous--check)) |
-| arguments | if `{` follows, after any whitespace **including newlines in both modes**, the attribute is a method and the arguments are its parameters. Otherwise, if type parameters were read: `An attribute cannot have both type parameters and arguments`. Otherwise the arguments are reported as attribute arguments |
+| name | first, a name that is exactly `async`, read first in its attribute, may be held back (below). Otherwise a `::` anywhere in the name's range is the reserved-token error and the parse stops (`rejectReservedName`; `<div ::b/>` and `<div a::b/>` are the error, observed; stock reports the names). Otherwise the name is reported, unless an `async` is pending, and in HTML mode the ambiguous-`>` check runs ([below](#the-ambiguous--check)) |
+| arguments | if the attribute already has arguments: `An attribute can only have one set of arguments`. Otherwise, if `{` follows, after any whitespace **including newlines in both modes**, the attribute is a method and the arguments are its parameters. Otherwise, if type parameters were read: `An attribute cannot have both type parameters and arguments`. Otherwise the arguments are reported as attribute arguments |
 | method body | the method is reported; the attribute ends |
 | type parameters | `(` **must** follow, after any whitespace; otherwise `Attribute cannot contain type parameters unless it is a shorthand method` |
 | value | an empty value is `Missing value for attribute`. In HTML mode the ambiguous-`>` check runs. The value (or spread) is reported; the attribute ends |
@@ -420,7 +480,8 @@ observed).
 
 A name containing `:` is one name to the parser (`class:x`, `value:fn` in
 `value:fn:=x`, both observed); see the table in
-[Status](#status-sources-of-truth-and-method) for the modifier split.
+[Status](#status-sources-of-truth-and-method) for the modifier split. A name
+containing `::` is the reserved-token error (row "name" above).
 
 ### Attribute names
 
@@ -532,7 +593,12 @@ parse:
 `${expr}` interpolates escaped and `$!{expr}` interpolates raw (spec §3
 "Interpolation"). `checkForPlaceholder` recognises them in HTML content, in text
 content, and inside the quoted strings of text content. It is not consulted in
-concise content, in an open tag, or inside an expression.
+concise content, in an open tag, or inside an expression. A placeholder is an
+atom position wherever it is recognised, a text body's included
+([Atoms](#atoms); decision 156, addendum 2): `<script>${:a}</script>` reports
+the atom `a` (observed). A template literal in a text body is text, not an
+expression, so its `${…}` is no placeholder and lexes no atom:
+``<script>`${:a}`</script>`` reports only the text (observed).
 
 A run of backslashes immediately before the `$` escapes it
 (`checkForPlaceholder`): with an **odd** count the `${…}` is literal text and
@@ -561,13 +627,20 @@ interpolation: `${x} a=1` is the tag `${x}` with an attribute (observed; spec §
 [E11](#e11--scriptlets) and are rejected on every host (spec §3 "Scriptlets").
 
 **Statement tags** are position [E10](#e10--statement-tags). A tag is a
-statement tag when the consumer's `onOpenTagName` returns `TagType.statement`
-(`TAG_NAME.exit`); the parser has no list of its own. In this repository the
-consumer's set is `class`, `client`, `export`, `import`, `server`, `static`
-(`STATEMENT` in `packages/core/src/close-tag-opener.ts`, which its comment says
-reproduces Marko 6.3.51's core taglib parse options). Spec §2 "Syntax" names
-`import`, `static` and `export`, and spec §2 "`server` and `client` blocks"
-names the other two; no spec section names `class`.
+statement tag when its name is in **the supplied statement set**, that is, when
+the consumer's `onOpenTagName` returns `TagType.statement` (`TAG_NAME.exit`);
+the parser has no list of its own. The grammar is the same whatever the set
+holds; a name outside the set is an ordinary tag name, so on a target whose set
+lacks `static`, `static const a = 1` is the tag `static` with the attributes
+`const` and `a`, the second with the value `1` (observed). The
+sets are the AST catalogue's (ast.md §3.10, "Statement keywords per target";
+decision 163, addendum 3): the language's six, `import`, `export`, `static`,
+`server`, `client` and `class`; on the data target the documented exception
+`import`, `static`, `export`; and today, on five hosts and every
+`parseFragment` caller, none at all, which MX1 TODO
+`statement-tags-not-declared-on-five-hosts` removes. Spec §2 "Syntax", spec §2
+"`server` and `client` blocks" and spec §4 "Name sugar" (which lists `class`
+among the core taglib's statement tags) name the six.
 
 ## Text, comments, CDATA, doctype, declarations and text bodies
 
@@ -612,13 +685,15 @@ spec §9.3 says a tag declaration's `parseOptions` forwards only `text` and
 | 3 | `//` | text, to the end of the line or to the body's close tag |
 | 4 | `/*` | text, to `*/`; unterminated is `EOF reached while parsing multi-line JavaScript comment` |
 | 5 | a backtick | a template literal, lexed as in an expression, `${…}` included |
-| 6 | `"` or `'` | a string to the same quote, within which placeholders are recognised; unterminated is `EOF reached while parsing string expression` |
+| 6 | `"` or `'` | a string to the **next** same quote, within which placeholders are recognised; unterminated is `EOF reached while parsing string expression`. A backslash does **not** escape the quote: `PARSED_STRING.parse` treats `\` only as a possible placeholder escape, so `"a\"b"` ends after `a\"` |
 | 7 | `${`, `$!{`, or backslashes before one | a placeholder or escaped placeholder |
 | 8 | anything else | text |
 
 So a text body is text **and placeholders**, and a quote in it must be balanced:
 `<script>a ${x} <b></script>` gives the placeholder `x` and the text ` <b>`;
-`<textarea>don't</textarea>` is the string EOF error (both observed). Spec §3
+`<textarea>don't</textarea>` is the string EOF error, and so are the valid
+JavaScript bodies `<script>var s = "a\"b";</script>` and
+`<script>var s = 'it\'s';</script>` (all observed; OQ 13). Spec §3
 "CDATA sections and XML declarations" describes a raw-text body as "a single
 `MarkoText`" and lists `<title>` among them; both differ from the above (OQ 13).
 
@@ -653,8 +728,8 @@ Step 3 together with the `-` rows means a line inside a text tag must start with
 `--` in practice: `script\n  - foo` is the single-hyphen error and
 `script\n  -- foo` is the text `foo` (both observed).
 
-Rules of the open tag that are specific to concise mode are rows 1, 3, 4, 5, 6
-and 12 of [The open tag](#the-open-tag). The rule for a value that reaches the
+Rules of the open tag that are specific to concise mode are rows 1, 3, 4, 5 and
+6 of [The open tag](#the-open-tag), and the newline behaviour of row 12. The rule for a value that reaches the
 end of a line is in [E2](#e2--attribute-value-concise-mode).
 
 Spec §3 "Concise mode" says these rules are inherited from Marko and fixed by
@@ -680,6 +755,31 @@ the MX layer that takes its place **must** apply them exactly once; decision
 and no decision says more. Core and hosts **must not** re-normalize (spec §3
 "Whitespace").
 
+## Base position for fragment parses
+
+`parse(code, options?)` (`index.ts`, `Parser.parse`) takes an optional base
+position for the case where `code` is a substring of a larger file:
+`startOffset`, `startLine` (zero-based) and `startColumn` (zero-based), each
+defaulting to 0 (`ParseOptions`, `core/Parser.ts`). The options change no
+grammar rule and no range:
+
+- Every range passed to a handler, error ranges included, and every range read
+  back through `read(range)`, stays relative to `code`, exactly as without the
+  options. The parser still scans `code` from index 0.
+- `positionAt(offset)` and `locationAt(range)` take a `code`-relative offset or
+  range and return positions in the enclosing file: `startLine` is added to
+  every line, and `startColumn` to the column on `code`'s first line only.
+- `offsetAt(offset)` returns `offset + startOffset`; `startOffset` affects
+  nothing else.
+- Positions are UTF-16 code units, as all ranges are.
+
+Observed: with `{ startOffset: 100, startLine: 4, startColumn: 7 }`, the value
+of `<a x=1/>` is the range `[5, 6)`, `positionAt(5)` is line 4, character 12,
+and `offsetAt(5)` is 105; a tag name on the second line of `code` is at its
+plain column. This is the base the AST catalogue's fragment rule
+(ast.md §5.3) builds on: the catalogue adds `base.offset` to every reported
+range when it builds a node.
+
 ## Error conditions
 
 Every diagnostic is a positioned error. The template parser's own messages, each
@@ -689,15 +789,34 @@ observed unless a symbol is cited instead:
 | --- | --- |
 | `=`, `:=` or `...` with no value | `Missing value for attribute` |
 | empty `${}` in content, in a tag name or in a template literal | `Invalid placeholder, the expression cannot be missing` |
-| end of input in an attribute name, or in a default attribute's value or arguments | `EOF reached while parsing attribute name for the "<tag>" tag` |
-| end of input in a named attribute's value, arguments, type parameters or method body | `EOF reached while parsing attribute value for the "<name>" attribute` |
+| `::` where atoms are lexed, or in the static text of a tag name, shorthand part or attribute name | `` `::name` is reserved (decision 156): `::` will be the Symbol.for sugar; write `:name` for an atom `` with the written name ([Atoms](#atoms)) |
+
+End of input inside a **position** is an error only when rule 1 of
+[End of input](#end-of-input) does not apply: always in HTML mode, and in
+concise mode only when a group is open in the position itself. Where rule 1
+applies the position ends silently and no row below is raised (`div(a`,
+`div|a`, `div<A`, `div (a`, `div onClick(a) {b`, `script -- ${b`; observed).
+For those positions, the message depends on the state that owns the position:
+
+| Condition | Message |
+| --- | --- |
+| end of input in a position owned by an attribute with no name that is not a spread: an attribute name, a default value or default arguments, and the arguments after a pending `async` (`<div async(a`, observed) | `EOF reached while parsing attribute name for the "<tag>" tag` |
+| end of input in a position owned by a named attribute: its value, arguments, method type parameters or method body | `EOF reached while parsing attribute value for the "<name>" attribute` |
 | end of input in a spread | `EOF reached while parsing attribute value for the ... attribute` |
-| end of input after an attribute name and whitespace, HTML mode | `EOF reached while parsing attribute "<name>" for the "<tag>" tag` |
-| end of input in a tag name's `${…}` | `EOF reached while parsing tag name` |
+| end of input in a tag name's or shorthand's `${…}` | `EOF reached while parsing tag name` |
 | end of input in a placeholder | `EOF reached while parsing placeholder` |
 | end of input in any other position | `EOF reached while parsing expression` |
+
+A template literal's `${…}` is a position owned by the template literal, so it
+falls in the last row (`` <div x=`${a ``, observed). End of input inside the
+opaque spans and outside any position is an error in **both** modes, and so is
+every other condition below:
+
+| Condition | Message |
+| --- | --- |
+| end of input after an attribute name and whitespace, HTML mode | `EOF reached while parsing attribute "<name>" for the "<tag>" tag` |
 | end of input in a string | `EOF reached while parsing string expression` |
-| end of input in a template literal | `EOF reached while parsing template string expression` |
+| end of input in a template literal's text | `EOF reached while parsing template string expression` |
 | end of input in a regular expression | `EOF reached while parsing regular expression` |
 | a newline in a regular expression | `EOL reached while parsing regular expression` (`REGULAR_EXPRESSION.parse`) |
 | end of input in a `/* */` comment | `EOF reached while parsing multi-line JavaScript comment` (`JS_COMMENT_BLOCK.parse`) |
@@ -733,8 +852,12 @@ Rejections raised **outside** the template parser, by core: scriptlets, CDATA
 and declarations (spec §3); a second `:` in a tag head, a bare `:` in attribute
 position, a `:name` that is not an identifier (divergence rows; spec §4 "Name
 sugar"); sugar after a default value (decision 151, ruling 2; spec §4 "Name
-sugar", "Left alone"); duplicate attributes, which are a warning with the last
-occurrence winning (decision 135); `::name` (decision 156.5, planned).
+sugar", "Left alone"), except after a single-atom default value (decision 146,
+addendum 5); duplicate attributes, which are a warning with the last
+occurrence winning (decision 135); the atom misuses of spec §4 "Atoms" (member
+access, a call, a unary operator, a spread, a non-computed key, an atom where a
+binding or target must stand). `::name` is the template parser's own error
+(row above). The catalogue's list of front-end codes is ast.md §3.13.
 
 ## Expression boundaries
 
@@ -755,10 +878,15 @@ and these flags, all false unless set (`EXPRESSION.enter`):
 | `terminatedByEOL` | newlines are soft stops |
 | `consumeIndentedContent` | a newline followed by a space or tab never ends the value |
 | `inType`, `forceType` | the position starts in a type context; `forceType` keeps it there |
+| `atoms` | `:name` is lexed as an atom where an expression is expected ([Atoms](#atoms)) |
+| `attrValue` | the position is a named attribute's or a spread's value: the after-value rule applies ([E1](#e1--attribute-value-html-mode)) |
+| `defaultAtom` | the position is a default attribute's value: the after-value `:` rule applies while the value is one single atom ([E1](#e1--attribute-value-html-mode)) |
 
 The position also tracks: the group stack (depth); `ternaryDepth`; `inType` and
-`forceType` as they change; and `wasComment`, set when a `//` comment has just
-been read and cleared only when a newline is passed.
+`forceType` as they change; `wasComment`, set when a `//` comment has just
+been read and cleared only when a newline is passed; and, when `atoms` is set,
+`atomEnd` (where the last atom lexed in it ends), the comments read so far and
+where the last regular expression ended.
 
 `EXPRESSION.parse` examines one character at a time. **The first step that
 applies decides**:
@@ -785,9 +913,9 @@ applies decides**:
    | Character | Effect |
    | --- | --- |
    | `"`, `'` | a string, to the same quote; `\` escapes one character |
-   | backtick | a template literal, to the closing backtick; `\` escapes one character; each `${` opens a nested position with no flags and the hard stop `}` |
-   | `?` | with `operators` at depth 0: `ternaryDepth` + 1, then **all whitespace after it is consumed, newlines included**. Otherwise a plain character. The patch adds an earlier case, see [E1 overrides](#e1--attribute-value-html-mode) |
-   | `:` | with `operators` at depth 0: if `ternaryDepth` > 0 it is decremented, otherwise the type context is entered (`inType`); then all whitespace after it is consumed. Otherwise a plain character |
+   | backtick | a template literal, to the closing backtick; `\` escapes one character; each `${` opens a nested position with the hard stop `}`, no flags but `atoms`, which it copies from the position the template literal is in (`TEMPLATE_STRING.parse`) |
+   | `?` | first, with `operators` and `attrValue` at depth 0: when the next character is `?`, or is `.` not followed by a digit, both characters are consumed and nothing else happens ([E1 overrides](#e1--attribute-value-html-mode)). Otherwise, with `operators` at depth 0: `ternaryDepth` + 1, then **all whitespace after it is consumed, newlines included**. Otherwise a plain character |
+   | `:` | first, with `atoms`, at any depth: `lexAtom` may consume it as `::` (the reserved-token error, which stops the parse) or as the start of an atom, in which case the atom is consumed and nothing else happens ([Atoms](#atoms)). Otherwise, with `operators` at depth 0: if `ternaryDepth` > 0 it is decremented, otherwise the type context is entered (`inType`); then all whitespace after it is consumed. Otherwise a plain character |
    | `=` | with `operators`, at any depth: if the next character is `>` (an arrow), the type context is left when `inType` is set, `forceType` is not, and the previous non-whitespace character is not `)`; both characters are consumed. If the next character is not `>`, the type context is left unless `forceType` is set or a group is open. Then all whitespace after it is consumed. Without `operators` a plain character |
    | `/` | `//` is a comment to the end of the line; `/*` is a comment to `*/`. Otherwise it is a **division** when the previous non-whitespace character is a word character or one of backtick, `'`, `"`, `%`, `)`, `.`, `<`, `]`, `}`: it is consumed with all whitespace after it. Otherwise it starts a **regular expression**, which runs to the next `/` that is not escaped and not inside `[…]`. This row does not depend on `operators` or on depth |
    | `(`, `[` | opens a group |
@@ -797,8 +925,7 @@ applies decides**:
    | `)`, `]`, `}`, and `>` as a closing bracket | closes the innermost group. With no open group, or when the innermost group expects a different closer, the error `Mismatched group. …` |
    | any other | consumed |
 
-Source: `EXPRESSION.parse`, upstream `EXPRESSION.ts:94-334`; `canFollowDivision`
-for the division test.
+Source: `EXPRESSION.parse`; `canFollowDivision` for the division test.
 
 Four properties of the scan matter in every position:
 
@@ -807,9 +934,11 @@ Four properties of the scan matter in every position:
   characters, so only `(`, `[`, `{`, strings, template literals, regular
   expressions and comments shield its hard stop.
 - **Inside a group nothing ends the value.** Steps 1, 3 and 4 require depth 0.
-  Inside a group, `?` and `:` are plain characters, so a ternary inside a group
-  does not touch `ternaryDepth`, and an `as` or `:` inside a group never enters
-  the type context (`<div x=(a as number > b)/>` is one value, observed).
+  Inside a group, `?` and `:` are plain characters for the ternary counter and
+  the type context, so a ternary inside a group does not touch `ternaryDepth`,
+  and an `as` or `:` inside a group never enters the type context
+  (`<div x=(a as number > b)/>` is one value, observed). Atom lexing is the
+  one exception: it runs at every depth.
 - **`?`, `:`, `=`, a non-type `<` and a division `/` consume the whitespace
   after them themselves**, newlines included, in every mode. After one of them
   the scan never reaches step 1 or step 3 for that whitespace.
@@ -849,8 +978,13 @@ immediately before the whitespace:
 | `>` | yes when the character before it is `=` (an arrow). Otherwise yes outside a type context and no inside one |
 | `.` | yes when the first non-whitespace character after the whitespace is a word character |
 | `+`, `-` | when the character before it is the same character (`++`, `--`): the answer is this table applied to the nearest non-whitespace character before the pair. Otherwise yes |
-| a lowercase letter | yes when a unary keyword ends at `c` as a whole word. Outside a type context the keywords are `async` `await` `class` `function` `new` `typeof` `delete` `void`; inside one they are `async` `await` `class` `function` `new` `typeof` `asserts` `infer` `is` `keyof` `readonly` `unique`. "Whole word" means the keyword starts at the first character of the value, or the character before it is neither a word character nor `.` |
+| a lowercase letter | **no** when `c` is the last character of an atom (the position's `atomEnd`): `:new` and `:delete` are names, not keywords. Otherwise yes when a unary keyword ends at `c` as a whole word. Outside a type context the keywords are `async` `await` `class` `function` `new` `typeof` `delete` `void`; inside one they are `async` `await` `class` `function` `new` `typeof` `asserts` `infer` `is` `keyof` `readonly` `unique`. "Whole word" means the keyword starts at the first character of the value, or the character before it is neither a word character nor `.` |
 | anything else | no |
+
+The atom check is in `lookBehindForKeyword`, so it also covers the `!` row's
+keyword test. Observed: concise `div x=:new\n  span` is the value `:new` and a
+child tag `span` (stock: the single value `:new\n  span`, because `new` is a
+unary keyword there).
 
 `return`, `throw` and `yield` are in neither keyword list. A `/` is not in this
 table: a division continues a value by the character table, a `*/` does not
@@ -871,14 +1005,26 @@ When the keyword is `as` or `satisfies` and the position is not already in a
 type context, the look-ahead **enters the type context** and sets `forceType`
 when `ternaryDepth` is 0.
 
-The patch changes the `:` and `.` rows for a named or spread attribute's value;
-see [E1 overrides](#e1--attribute-value-html-mode). `[`, a backtick, a quote
-and a word character are in neither row, so they never continue a value across
+The look-ahead table above is stock's. MX changes its `:` row for a named or
+spread attribute's value and for a single-atom default value, and its `.` row
+for a named or spread attribute's value; see
+[E1 overrides](#e1--attribute-value-html-mode). `[`, a backtick, a quote and a
+word character are in neither row, so they never continue a value across
 whitespace.
 
+**Two look-ahead rows cross a newline whatever the mode.** Step 4 finds `n` on
+the same line in concise mode, but once `n` is found, the keyword row skips
+**all** whitespace after the keyword, newlines included, to the operand, and
+the `.` row (where it applies) skips all whitespace after the `.` to the word
+character. Scanning resumes there, on the later line, and step 1 never sees the
+newline. Neither row depends on `terminatedByEOL` or on the mode. So in concise
+mode `div x=a in\n  b` is one value, and so is `div x=a instanceof\nB`, whose
+operand is at column 0 ([E2](#e2--attribute-value-concise-mode)).
+
 Source: `checkForOperators`, `lookBehindForOperator`, `lookAheadForOperator`,
-`lookBehindForKeyword`, and the keyword tables at the top of upstream
-`EXPRESSION.ts` (`:35-67`).
+`lookBehindForKeyword`, and the keyword tables at the top of
+`states/EXPRESSION.ts` (`unaryKeywords`, `jsUnaryKeywords`, `tsUnaryKeywords`,
+`binaryKeywords`, `relationalKeywords`).
 
 #### The type context
 
@@ -908,10 +1054,13 @@ of them requires `forceType` to be off. Consequences, all observed:
 
 #### End of input
 
-`EXPRESSION.parse`, after its loop (upstream `EXPRESSION.ts:336-389`):
+`EXPRESSION.parse`, after its loop:
 
-1. If depth is 0 and either the parser is in concise mode or the position has
-   `terminatedByEOL`, the value ends silently at end of input.
+1. If depth is 0 and either the parser is in concise mode (the `isConcise` flag
+   of [Document structure](#document-structure-and-modes), which a text body
+   under a concise tag keeps) or the position has `terminatedByEOL`, the value
+   ends silently at end of input. Depth counts only the groups opened inside
+   the position, never the delimiter that opened it.
 2. Otherwise an error is reported, chosen by the **state that owns the
    position**, not by the position:
 
@@ -941,11 +1090,19 @@ Observed per position:
 | `<div ${a` | HTML | the attribute-name error: after a space, `${` begins an attribute name |
 | `<foo<A` | HTML | `EOF reached while parsing expression` |
 | `` div x=`a `` | concise | `EOF reached while parsing template string expression` (the template literal's own error) |
+| `<div async(a` | HTML | the attribute-name error: with `async` pending, the attribute has no name yet |
+| `div onClick(a) {b`, `div\|a`, `div<A`, `div (a` | concise | **no error**; the method, parameters, type arguments or tag arguments are reported |
+| `script -- ${b`, `textarea\n  -- ${a` | concise text body | **no error**; the placeholder is reported (compare `div\n  -- ${a`, an HTML-mode block: the placeholder error) |
+| `div.a${b` | concise | **no error, and no shorthand event**: only the tag `div` is reported |
+| `${x` | concise | **no error and no event at all** |
+| ``span\n  div x=`${a`` | concise | **no error, and no value event**: the tags and the name `x` are reported |
 
 `div(a` and `$ {a` end silently although a delimiter is open, because the `(`
 and `{` were consumed by the owning state (`OPEN_TAG.parse`,
 `INLINE_SCRIPT.parse`) and are not on the position's group stack, while the `(`
-of `div x=(a` is. Both are **recorded defects**
+of `div x=(a` is. The last three rows are worse: the silent exit happens in a
+position inside a tag name or a template literal, and the event that position
+belonged to is never reported. All of these are **recorded defects**
 ([below](#recorded-defects-in-the-default); OQ 19).
 
 ### Inventory of positions
@@ -955,22 +1112,29 @@ and hard stop it sets. There are sixteen calls; fifteen are positions.
 
 | Call site | Flags | Hard stop | Position |
 | --- | --- | --- | --- |
-| `ATTRIBUTE.parse`, value branch | `operators`, `terminatedByWhitespace` | per mode, see E1/E2 | E1, E2, E3 |
+| `ATTRIBUTE.parse`, value branch | `operators`, `terminatedByWhitespace`, `atoms`; `attrValue` for a named attribute or a spread, `defaultAtom` otherwise | per mode, see E1/E2 | E1, E2, E3 |
 | `ATTRIBUTE.parse`, name branch | `terminatedByWhitespace` | per mode | [attribute name](#attribute-names) |
-| `ATTRIBUTE.parse`, `(` branch | none | `)` | E4 |
-| `ATTRIBUTE.parse`, `{` branch | none | `}` | E5, and the body of E17 |
+| `ATTRIBUTE.parse`, `(` branch | `atoms` | `)` | E4, and the parameters of E5 |
+| `ATTRIBUTE.parse`, `{` branch | `atoms` | `}` | E5, and the body of E17 |
 | `ATTRIBUTE.parse`, `<` branch | `inType`, `forceType` | `>` | E16 |
 | `OPEN_TAG.parse`, `/` case | `operators`, `terminatedByWhitespace` | per mode | E9 |
-| `OPEN_TAG.parse`, `(` case | none | `)` | E6, and the parameters of E17 |
+| `OPEN_TAG.parse`, `(` case | `atoms` | `)` | E6, and the parameters of E17 |
 | `OPEN_TAG.parse`, `\|` case | none | `\|` | E7 |
 | `OPEN_TAG.parse`, `<` case | `inType`, `forceType` | `>` | E14, E15 |
-| `TAG_NAME.parse`, `${` branch | none | `}` | E13 |
+| `TAG_NAME.parse`, `${` branch | `atoms` | `}` | E13 |
 | `TAG_NAME.exit`, statement branch (`prepareStatement`) | `operators`, `terminatedByEOL`, `consumeIndentedContent`; `inType` and `forceType` after a type keyword | none | E10 |
 | `INLINE_SCRIPT.parse`, line form (`prepareScriptlet`) | `operators`, `terminatedByEOL`; `inType` and `forceType` after a type keyword | none | E11, line form |
 | `INLINE_SCRIPT.parse`, block form | none | `}` | E11, block form |
-| `checkForPlaceholder` (`PLACEHOLDER.ts`) | none | `}` | E8 |
-| `TEMPLATE_STRING.parse`, `${` case | none | `}` | a template literal's `${…}`, inside any position |
+| `checkForPlaceholder` (`PLACEHOLDER.ts`) | `atoms` | `}` | E8 |
+| `TEMPLATE_STRING.parse`, `${` case | `atoms` when the position holding the template literal has it | `}` | a template literal's `${…}`, inside any position or a text body |
 | `util/validators.ts` | — | — | **excluded**: a validation helper for callers of the parser's API, not a place in a template |
+
+"`atoms`" in this table is the whole list of positions where atoms are lexed
+(decision 156, addendum 2; the AST catalogue's table "Where the atom lexer
+runs", ast.md §4.3). An attribute's `(` branch opens one position whether the
+attribute turns out to have arguments or to be a method, so a method's
+parameters lex atoms too (decision 163, addendum 1). The tag variable, tag
+parameters, the type lists, statement tags and scriptlets never do.
 
 So the continuation test can succeed only in E1, E2, E3, E9, E10 and the line
 form of E11, the only positions with `operators`. Tag shorthands and tag names
@@ -991,10 +1155,15 @@ are not positions; they are read by `TAG_NAME.parse`.
 
   Each is subject to the operator exemption of step 4: a stop character whose
   preceding non-whitespace character is a look-behind operator is consumed
-  instead. No valid TypeScript puts an operator there, and the results are not
-  consistent: `<div x=a + ,b/>` is the single value `a + ,b`, while
-  `<div x=a +/>` and `<div x=a ? />` are `EOF reached while parsing regular
-  expression` (all observed; OQ 17).
+  instead. The results are not consistent: `<div x=a + ,b/>` is the single
+  value `a + ,b`, while `<div x=a +/>` and `<div x=a ? />` are `EOF reached
+  while parsing regular expression` (all observed; OQ 17). Valid TypeScript
+  does reach the exemption, because the look-behind table counts a legal
+  identifier spelled like a unary keyword (`async`) and a non-type `>` as
+  operators: `<div x=async/>` is the value `async/` and then `Missing ending
+  "div" tag`; `<div x=async, y=1/>` is the value `async,` and then `y=1`; a
+  trailing instantiation expression in concise mode, `div x=f<T> ,y=1`, is one
+  value (all observed; OQ 17, OQ 24).
 
   Observed for the `>` cases: `<div x=>a/>` is `Missing value for attribute`
   (1); `<div x=a => b>c</div>` is the value `a => b` (2);
@@ -1016,23 +1185,28 @@ are not positions; they are read by `TAG_NAME.parse`.
   `<div x=a + /* c */ b/>` is the value `a + /* c */` and then the attribute `b`
   (observed; OQ 24).
 - **End of input:** an error; see [End of input](#end-of-input).
-- **Overrides (the patch).** These apply when the attribute whose value is being
-  read **has a name or is a spread** (`attrValue`, set in `ATTRIBUTE.parse`).
-  They are the after-value rule of divergence row "The parser after-value rule"
-  (decision 146, divergence 3).
+- **Overrides (MX).** These are the after-value rule of divergence row "The
+  parser after-value rule" (decision 146, divergence 3, with addendum 6) and
+  decision 146, addendum 5. They apply when the attribute whose value is being read **has a
+  name or is a spread** (`attrValue`, set in `ATTRIBUTE.parse`), except the
+  last condition of the `:` row, which is addendum 5's and applies to a default
+  attribute's value (`defaultAtom`). The `:` row's condition (c) is decision
+  146, addendum 6: after whitespace, "a `:` starts a new attribute only when it
+  is followed by an identifier start, or is bare before `>`, `/>`, a newline or
+  the end of input"; `x=(a) : T => a` stays one value (observed).
 
-  | Where | Stock | Patched |
+  | Where | Stock | MX |
   | --- | --- | --- |
-  | look-ahead, `n` = `:` | operator | **not** an operator when `ternaryDepth` is 0 and the character after the `:` is `A`–`Z`, `a`–`z`, `$` or `_`, or is `>`, `/>`, a newline or end of input |
-  | look-ahead, `n` = `.` | operator when a word character follows (after whitespace) | **not** an operator when the character directly after the `.` is `A`–`Z`, `a`–`z`, `$` or `_`; otherwise as stock |
-  | character table, `?` with `operators` at depth 0 | opens a ternary | when the next character is `?`, or is `.` not followed by a digit, both characters are consumed and no ternary opens |
+  | look-ahead, `n` = `:` | operator | **not** an operator when (a) `attrValue` is set, **or** `isSingleAtomDefault` holds: `defaultAtom` is set, the value's first character is `:`, the last atom lexed in it is the one that starts there, and only whitespace lies between that atom's end and `n`; and (b) `ternaryDepth` is 0; and (c) the character after the `:` is `A`–`Z`, `a`–`z`, `$` or `_`, or is `>`, `/>`, `\n`, `\r` or end of input (`isBareColonEnd`). Otherwise an operator, as stock |
+  | look-ahead, `n` = `.` | operator when the first non-whitespace character after the `.` is a word character | with `attrValue`: **not** an operator when the character directly after the `.` is `A`–`Z`, `a`–`z`, `$` or `_`; otherwise as stock |
+  | character table, `?` with `operators` at depth 0 | opens a ternary | with `attrValue`: when the next character is `?`, or is `.` not followed by a digit, both characters are consumed and no ternary opens |
 
   Because the first two rows are look-ahead rows, the split happens only when
   the continuation test reaches its step 7: there is whitespace before the `:`
   or `.`, and the character before that whitespace is **not** a look-behind
-  operator. Observed, patched: `x=a :b` is the value `a` and an attribute named
+  operator. Observed: `x=a :b` is the value `a` and an attribute named
   `:b`; `x=a.b .c` is the value `a.b` and an attribute named `.c`; `x=a | :b` is
-  one value; `x=a ? b :c` is one value and `x=a ? b : c :d` splits at `:d`;
+  one value (and `:b` is an atom); `x=a ? b :c` is one value and `x=a ? b : c :d` splits at `:d`;
   `x=a :` before `/>` or `>` is the value `a` and an attribute named `:`;
   `x=a : b` is one value (a space follows the colon); `x=a . b` and `x=a .2xl`
   are one value; `x=a ?? b :c` and `x=a ?.b :c` split at `:c`. In HTML mode the
@@ -1040,15 +1214,23 @@ are not positions; they are read by `TAG_NAME.parse`.
   each of these is one value, except `x=a :` before `/>` (the regular-expression
   EOF error) and before `>` (`Mismatched group`).
 
-  Three parts of the patch have no spec text of their own and are **not
+  Three parts of the rule have no spec text of their own and are **not
   settled**: the `??`/`?.` case, including that `?:` is not excepted (`x=a ?:b`
-  is one value on both parsers) (OQ 3); the digit exclusion (OQ 4); and spreads
-  (OQ 5).
-- **Default attribute.** A value with no name has `attrValue` off, so none of
-  the patch applies: `<if=a .b>` and `<if=a :b>` are one value (observed;
-  decision 151, ruling 2; divergence row "The parser after-value rule"). Core
-  then reports `:name` after a default value as an error (spec §4 "Name sugar",
-  "Left alone").
+  is one value on both parsers; on main the `?` opens a ternary and `:b` is an
+  atom) (OQ 3); the digit exclusion (OQ 4); and spreads (OQ 5).
+- **Default attribute.** A value with no name has `attrValue` off, so only
+  addendum 5's condition can apply: `<if=a .b>` and `<if=a :b>` are one value
+  (observed; decision 151, ruling 2; divergence row "The parser after-value
+  rule"), and core reports `:name` after such a value as an error (spec §4
+  "Name sugar", "Left alone"). When the default value is one single atom, the
+  `:` row splits as for a named attribute (decision 146, addendum 5). Observed:
+  `<if=:a :b>`, `<if= :a :b>`, `<if=:a\n :b>`, concise `if=:a :b` and
+  `<const/x=:a :b/>` are the value `:a` and an attribute named `:b`;
+  `<if=:a :b :c>` adds `:c`; `<if=:a :>` is the value and an attribute named
+  `:`. Each of these is one value on stock. These stay one value on both:
+  `<if=:a .b>` (addendum 5 covers `:` only), `<if=:a.b :c>`, `<if=:a + :b :c>`,
+  `<if=(:a) :b>` (the value is not one atom) and `<if=:a ? :b :c>` (the last
+  atom is `:b`, and a `?` is open).
 - The whitespace that ends a value belongs to neither the value nor the next
   attribute.
 
@@ -1070,16 +1252,20 @@ are not positions; they are read by `TAG_NAME.parse`.
   (observed). The operator exemption applies as in E1.
 - **Soft stops:** whitespace and newlines, as E1, with the two differences
   steps 3 and 4 of the continuation test make in concise mode: at a newline
-  only the look-behind is tried, and at whitespace the look-ahead does not look
-  past the end of the line. So **a value continues onto the next line in
-  exactly these cases**:
+  only the look-behind is tried, and at whitespace the look-ahead finds the
+  next character `n` on the same line only. But once `n` is found, the
+  look-ahead's keyword row and its `.` row skip **all** whitespace after it,
+  newlines included ([the look-ahead table](#the-continuation-test)). So **a
+  value continues onto the next line in exactly these cases**:
 
   | Case | Mechanism |
   | --- | --- |
   | a group is open | step 1.1 of the scan |
   | the character immediately before the newline is a look-behind operator, and no `//` comment precedes the newline | step 1.3 |
   | whitespace before the newline follows a look-behind operator | step 3 of the scan: the continuation test consumes that whitespace and the newline together |
-  | the newline is in the whitespace after `?`, `:`, `=`, a non-type `<` or a division `/` | the character table consumes it |
+  | whitespace, then on the same line `as`, `extends`, `instanceof`, `in` or `satisfies` followed by whitespace that contains the newline, then an operand that is not `:` `,` `=` `/` `>` or `;` | step 7, the keyword row: the scan resumes at the operand, on a later line, at any indentation, column 0 included |
+  | whitespace, then on the same line a `.` followed by whitespace that contains the newline, then a word character | step 7, the `.` row: the scan resumes at that word character |
+  | the newline is in the whitespace after `?`, `:`, `=`, a non-type `<` or a division `/` | the character table consumes it (the look-ahead hands `n` = `?`, `:`, `=` or `/` to the character table) |
   | the newline is inside a string, a template literal or a `/* */` comment | an opaque span; the scan does not see it |
 
   In every other case the newline ends the value and the attribute. The open
@@ -1103,18 +1289,30 @@ are not positions; they are read by `TAG_NAME.parse`.
   | `div x=(a,\n  b)` | one value |
   | ``div x=`a\nb` c``, `div x=a /* \n */ + b` | one value (then the attribute `c` in the first) |
   | `div x=a.\n  b` | one value: the look-behind `.` row |
+  | `div x=a in\n  b`, `div x=a as\n  T`, `div x=a extends\n  b`, `div x=a in \n  b` | one value: the keyword row |
+  | `div x=a instanceof\nB` | one value `a instanceof\nB`: the column-0 line is drawn into it |
+  | `div x=a satisfies\n  T y=1` | value `a satisfies\n  T`, then `y=1` |
+  | `div [x=a in\n  b]` | one value `a in\n  b` |
+  | `div x=a .\nspan`, `div x=a . \n  b` | one value: the `.` row |
+  | `div x=a in\n  ,b`, `div x=a in\n  =b` | value `a`, then an attribute `in`: the operand is `,` or `=`. With `,` the open tag continues with `b`; with `=` the line `=b` is a child, an unnamed tag with a default value |
+  | `div x=a in`, `div x=a in\n` | value `a`, then an attribute `in`: no operand before end of input |
+  | `div x=a .\n  .b` | value `a`, an attribute `.`, then an unnamed child tag with class `b`: after the `.` the next word character is not found |
   | `div x=a\n  ,y=b` | value `a`; the open tag continues with `y=b` |
   | `div x=a + // c\n  b` | value `a + // c`; child tag `b` |
   | `div [x=a\n  .b]` | value `a`; attribute `.b` |
   | `div [x=a +\n  b]` | one value |
 
   A TypeScript parser continues across the newline where the next line begins
-  with `<`, `.`, `(`, a binary operator, `?` or `in` (OQ 18).
+  with `<`, `.`, `(`, a binary operator, `?` or `in` (OQ 18). The default
+  continues where the **current** line ends with a keyword operator or a lone
+  `.`, even onto a line at column 0, which spec §3 "Concise mode" calls a
+  sibling (OQ 18).
 - **End of input:** ends the value silently at depth 0; an error with a group
   open ([End of input](#end-of-input)).
-- **Overrides and default attribute:** as E1. Observed, patched: `div x=a :b`
-  is the value `a` and an attribute named `:b`; `div x=a :` at the end of the
-  line is the value `a` and an attribute named `:`.
+- **Overrides and default attribute:** as E1. Observed: `div x=a :b` is the
+  value `a` and an attribute named `:b`; `div x=a :` at the end of the line is
+  the value `a` and an attribute named `:`; concise `if=:a :b` is the default
+  value `:a` and an attribute named `:b` (stock: one value each).
 
 ### E3 — Spread attribute
 
@@ -1132,7 +1330,8 @@ are not positions; they are read by `TAG_NAME.parse`.
 
 - **Stops, soft stops, end of input:** as E1 in HTML mode and E2 in concise
   mode; it is the same call site.
-- **Overrides:** the patch applies to a spread as to a named attribute:
+- **Atoms:** lexed, as in E1 (`<div ...:a/>` reports the atom `a`, observed).
+- **Overrides:** the after-value rule applies to a spread as to a named attribute:
   `<div ...a .b/>` is the spread `a` and an attribute named `.b`, and
   `<div ...a :b/>` likewise (observed). The spec text does not mention spreads
   (OQ 5).
@@ -1148,9 +1347,11 @@ are not positions; they are read by `TAG_NAME.parse`.
 - **End of input:** an error in HTML mode. In concise mode the arguments end
   silently when no group is open inside them: `div onClick(a` reports the
   arguments `a` with no error (observed; [End of input](#end-of-input)).
-- **Overrides:** none. The patch does not apply (`attrValue` belongs to the
-  value position).
-- **Atoms:** no ruling (OQ 14).
+- **Overrides:** none. The after-value rule does not apply (`attrValue`
+  belongs to the value position).
+- **Atoms:** lexed (`atoms`; decision 163, addendum 1). The same position is a
+  method's parameter list when `{` follows, so `<div x(a = :b) { … }/>`
+  reports the atom `b` (observed).
 
 ### E5 — Attribute method body
 
@@ -1158,8 +1359,10 @@ are not positions; they are read by `TAG_NAME.parse`.
 
 - **Start:** the character immediately after `{`.
 - **Stops:** the `}` at depth 0. No flags.
-- **Overrides:** the content is a statement list. Atoms: the atoms report
-  excludes method bodies; no decision does (OQ 14).
+- **Overrides:** the content is a statement list. Atoms: lexed, because a
+  method body is an attribute value (lead ruling 2026-10-05, recorded in
+  `PROVENANCE.md` and the catalogue's table, ast.md §4.3): `return :c` reports
+  the atom `c` (observed).
 
 ### E6 — Tag arguments
 
@@ -1171,7 +1374,8 @@ are not positions; they are read by `TAG_NAME.parse`.
 - **After it** (`OPEN_TAG.return`): if `{` follows, after any whitespace, this
   is E17. Otherwise, if type parameters were read before the `(`, the
   `Unexpected types. …` error. Otherwise tag arguments are reported.
-- **Atoms:** decision 156.1 names tag arguments as an atom position (planned).
+- **Atoms:** lexed (decision 156.1): `<foo(:a)/>` reports the atom `a`
+  (observed).
 
 ### E7 — Tag parameters
 
@@ -1186,7 +1390,9 @@ are not positions; they are read by `TAG_NAME.parse`.
   optional types and initialisers; spec §8 "Tag params"). A union type or a
   bitwise or at depth 0 ends the list: `<foo|x: A | B|/>` reports the parameters
   `x: A ` and then an attribute named `B|` (observed). **Not settled** (OQ 6).
-  Atoms: no ruling (OQ 14).
+  Atoms: never lexed (`<foo|a = :b|/>` reports no atom, observed; spec §4
+  "Atoms": never in tag params), so `::` is not reserved here either
+  (`<foo|a::b|/>` is accepted, observed).
 
 ### E8 — Placeholder
 
@@ -1195,7 +1401,9 @@ are not positions; they are read by `TAG_NAME.parse`.
 - **Start:** the character immediately after `${` or `$!{`; no whitespace is
   skipped (`${ a }` reports ` a `, observed).
 - **Stops:** the `}` at depth 0. No flags.
-- **Overrides:** decision 156.1 names `${}` as an atom position (planned).
+- **Atoms:** lexed in every placeholder, text bodies included (decision 156.1
+  and addendum 2): `<p>${:a}</p>` and `<script>${:a}</script>` report the atom
+  `a`; `<p>${a::b}</p>` is the reserved-token error (observed).
 
 ### E9 — Tag variable
 
@@ -1224,7 +1432,8 @@ are not positions; they are read by `TAG_NAME.parse`.
   `<div/x + 1 y=1/>` is `x + 1`; `<let/foo : string/>` and concise
   `let/foo : string` are the variable `foo : string`; `<let/x\n  + 1/>` is the
   variable `x\n  + 1`; concise `let/x\n  + 1` is the variable `x` and a child tag
-  `+`.
+  `+`; concise `let/x as\n  T` is the variable `x as\n  T` (the keyword row of
+  E2's table).
 - **Types.** A `:` enters the type context, in which `<` opens a group:
   `<let/x: Map<K,V> = 1/>` is the variable `x: Map<K,V>` and the default value
   `1`. Outside a type context `<` is a hard stop and the open tag then reads a
@@ -1232,11 +1441,14 @@ are not positions; they are read by `TAG_NAME.parse`.
   hard stop even inside a type: `<let/x: A | B = 1/>` reports the variable
   `x: A` and then reads tag parameters to the end of the input, which is `EOF
   reached while parsing expression` (all observed; OQ 6).
-- **Overrides:** the patch does not apply. The value that follows the variable
-  is the default attribute and is exempt from the after-value rule
+- **Overrides:** the after-value rule does not apply. The value that follows
+  the variable is the default attribute and is exempt from the after-value rule
   (`<const/x=items\n .filter(Boolean)/>` is one value, observed; divergence row
-  "The parser after-value rule").
-- **Atoms:** no ruling (OQ 14).
+  "The parser after-value rule"), except after a single atom
+  ([E1](#e1--attribute-value-html-mode)).
+- **Atoms:** never lexed in the variable itself (`<let/a::b/>` is the variable
+  `a::b`, observed); the default value after it is E1/E2 and lexes them
+  (`<let/x=:a/>`, observed).
 
 ### E10 — Statement tags
 
@@ -1323,8 +1535,9 @@ A tag whose name the consumer types `TagType.statement`
   silently at depth 0 in concise content and is `EOF reached while parsing
   expression` in HTML content. With a group open, both forms are that error in
   both modes (`$ {(a`, observed; [End of input](#end-of-input)).
-- **Overrides:** none. Atoms: the atoms report excludes scriptlets; no decision
-  names them (OQ 14).
+- **Overrides:** none. Atoms: never lexed ("script blocks" of decision 156.1
+  are "TypeScript statement blocks (`static`, `import`/`export`, scriptlets)",
+  addendum 2): `$ x = :a` reports no atom (observed).
 
 ### E12 — Delimited HTML blocks
 
@@ -1391,7 +1604,9 @@ so it can be an error. Observed:
 - **Stops:** the `}` at depth 0. No flags.
 - **After it:** an empty value is `Invalid placeholder, the expression cannot be
   missing`; the name or shorthand part continues after the `}`.
-- **Atoms:** no ruling (OQ 14).
+- **Atoms:** lexed (decision 156, addendum 2): `<${:a}/>` and `<div.${:a}/>`
+  report the atom `a` (observed). The atom event comes before the name or
+  shorthand event, because that event is reported when the part ends.
 
 ### E14 — Tag type arguments
 
@@ -1459,8 +1674,8 @@ so it can be an error. Observed:
 - **Body:** position E5; the method is reported with a zero-width name.
 - This is the form a tag-adjacent sugar followed by `(params) { body }` takes at
   parser level: `<input:email(a) { return a; }/>` is the tag `input:email` and a
-  default method (observed). Decision 146, addendum 4 gives it its meaning
-  (planned; [dialect rule 5](#dialect-rules)).
+  default method (observed). Decision 146, addendum 4 gives it its meaning, in
+  core ([dialect rule 5](#dialect-rules)).
 
 ### Types inside the other positions
 
@@ -1469,6 +1684,152 @@ arguments) is not a separate MX position. In the default it is handled only by
 [the type context](#the-type-context), inside the positions that have
 `operators`. In the planned design the TypeScript parser reads it and returns
 the end offset, and each position's hard stops still bound the value.
+
+## Atoms
+
+An **atom** is `:name` written where an expression is expected, in a position
+that lexes atoms (decision 156; spec §4 "Atoms"). The template parser finds
+atoms, reports them and reserves `::`; it gives them no meaning. The catalogue
+node is `MxAtom` (ast.md §4.3).
+
+### Where atoms are lexed
+
+Exactly in the positions whose `EXPRESSION` has the `atoms` flag
+([Inventory of positions](#inventory-of-positions)): attribute values (named,
+bound, default and spread, E1 to E3), attribute arguments and method parameters
+(E4), method bodies (E5), tag arguments (E6), placeholders in every body (E8),
+the `${…}` of a tag name or shorthand (E13), and the `${…}` of a template
+literal inside any of those. Never in attribute names, the tag variable (E9),
+tag parameters (E7), statement tags (E10), scriptlets (E11) or the type lists
+(E14 to E16), and never inside a string, a template literal's text, a regular
+expression or a comment, which are other states. Decision 156.1 and addendum 2
+fix this list; ast.md §4.3 states it per catalogue field.
+
+### At a `:` (`lexAtom`)
+
+In a position with `atoms`, every `:` the scan reaches in its character table
+(step 5, at any depth) goes to `lexAtom` **before** the ternary and type
+handling. The first matching row applies:
+
+| # | At the `:` | Result |
+| --- | --- | --- |
+| 1 | the next character is `:` | the **reserved-token error** (`INVALID_EXPRESSION`): `` `::name` is reserved (decision 156): `::` will be the Symbol.for sugar; write `:name` for an atom ``, with the name read after `::` (with none, the message names `` `::` `` and suggests `:name`), ranged from the first `:` to the end of that name. The parse stops. This row does not look at what precedes the `:`, so `x=a :: b` and `x=(a ? b::c : d)` are the error too (observed) |
+| 2 | no name follows: the next character is not `A`–`Z`, `a`–`z`, `$` or `_` | no atom; the `:` is handled by the rest of the character table |
+| 3 | a character at or above U+0080 directly follows the name | no atom (`:aé`) |
+| 4 | a `-` directly follows the name, then a character at or above U+0080 | no atom (`:a-é`) |
+| 5 | an expression is not expected here (`expectsExpression`, below) | no atom |
+| 6 | otherwise | an **atom**, from the `:` to the end of the name. It is recorded, `onAtom` reports it, the position's `atomEnd` is set to its end, and the scan resumes after it. The `:` touches neither `ternaryDepth` nor the type context, and the whitespace after the atom is not consumed |
+
+A **name** (`atomNameEnd`) is `[A-Za-z_$][\w$]*(-[\w$]+)*`: a `-` belongs to it
+only when a word character follows. `x=:a-` is the atom `:a` and then `-`, and
+`x=:a--b` is the atom `:a` and then `--b` (both observed).
+
+### Is an expression expected? (`expectsExpression`)
+
+Scan backwards from the character before the `:`, skipping whitespace and each
+comment already read in this position, stopping at the position's start. Let
+`p` be the character reached. The first matching row applies:
+
+| # | `p` | Expected? |
+| --- | --- | --- |
+| 1 | none: only whitespace and comments lie between the position's start and the `:` | **yes** (`x=:a`, `x= :b`, `${ :a}`) |
+| 2 | `)`, `]`, `}`, `"`, `'` or a backtick | **no**: an expression ended |
+| 3 | `.` | **yes** only when it is the third of `...` (`[...:a]`); otherwise **no** (`a.:b`) |
+| 4 | `?` | if the `?` is the position's first character: **yes**. Otherwise let `o` be the character directly before the `?`. If `o` is a word character: **yes** only when the word ending at `o` starts with a digit (`n === 1? :a : :b`); otherwise **no**, it is TypeScript's optional marker (`(a? :T) => a`). If `o` is `]`, `-` or `+`: **no**. Otherwise **yes** (`c ? :a`) |
+| 5 | `!` | skip back over every `!` and whitespace. If nothing is left: **yes**. Let `o` be the character reached. If `o` is `)`, `]`, `-` or `+`: **no** (postfix). If `o` is not a word character: **yes** (`(!:a)`). Otherwise **yes** only when the word ending at `o` is an operator word (below; `typeof!:a`), otherwise **no** (`a! :b`) |
+| 6 | `>` | **yes** when the character before it is `=` (`a => :b`). Otherwise **no** when the `>` closes a type argument list (below; `y as Array<T> :z`), otherwise **yes** (a comparison or a shift) |
+| 7 | `+` or `-` | **no** when the character before it is the same (`a++ :b`); otherwise **yes** |
+| 8 | `/` | **no** when it is the last character of a regular expression read in this position (`/re/ :b`); otherwise **yes** (`a / :b`) |
+| 9 | any other character that is not a word character | **yes**: an operator or punctuator (`(:a`, `[:a, :b]`, `a + :b`, `{ k: :a }`) |
+| 10 | a word character directly before the `:`, with no whitespace or comment between | **no**: an object key or a label, keyword or not (`{ new:a }`) |
+| 11 | a word character, with whitespace or a comment between | **yes** only when the word ending at `p` is an operator word; otherwise **no** (`c ? b :c`) |
+
+**Operator words** (`isOperatorWord`), for rows 5 and 11. The word is the
+maximal run of word characters ending at `p`, not extending before the
+position's start. In order:
+
+1. the word ends where the position's last atom ends (an atom's own name:
+   `:delete :b`): **no**;
+2. a `.` directly precedes the word (`a.new :b`): **no**;
+3. the word is not one of `await` `case` `delete` `do` `else` `extends` `in`
+   `instanceof` `new` `of` `return` `throw` `typeof` `void` `yield`
+   (`atomKeywords`): **no**;
+4. `of`: **yes** only when the character before it, skipping whitespace, is a
+   word character, `)`, `]` or `}` (`for (x of :a)`; `c ? of :b` lexes no atom);
+5. `yield` or `await`: **no** when the character before it, skipping
+   whitespace, is `?`, `:`, `,` or `(`; otherwise **yes**, at the position's
+   start too. Decision 156, addendum 8 gives the reason (addendum 2's "a `:`
+   TypeScript could own is TypeScript's"): after `(` or `,` the word can be a
+   parameter name with a type annotation, and after `?` or `:` a ternary
+   operand; elsewhere it can only be the operator. `f(await :b)` and
+   `(a, yield :b)` lex no atom; `x=await :b` and `return await :a` in a method
+   body do;
+6. any other word of the list: **yes** (`return :a`, `x in :a`).
+
+**A type argument list's closing `>`** (`closesTypeArguments`), for row 6.
+Scan backwards from the `>` towards the position's start, counting each `>`
+not preceded by `=` up and each `<` down, and each closing bracket `)` `]` `}`
+up and each opening one down. At each character, in order:
+
+1. a `<` that brings the angle count to 0: the `>` closes type arguments
+   exactly when no bracket is open between them and the `<` directly follows a
+   word character (`Array<T>`, `a<b >`);
+2. an opening bracket with no closing one after it: **no**;
+3. `;`: **no**;
+4. `?` or `:` with no bracket open between it and the `>`: **no**;
+5. `&&` or `||`: **no**;
+6. the position's start reached: **no**.
+
+So `a < b >` (a space before `<`) and `a < b && c >` are comparisons, and
+`c ? a < b > :z` lexes the atom. Decision 156, addendum 4 pins this and
+`(a<b> :c)` with no open `?` as known limits of a lexer without a type parser.
+
+Observed (main; stock reports no atom anywhere):
+
+| Input | Atoms |
+| --- | --- |
+| `x=:a`, `x= :b`, `x=(:a)`, `x=[:a, :b]`, `x=a + :b`, `x=a / :b`, `x=a => :b`, `x=c ? ...:a`, `x=[...:a]`, `x=(!:a)`, `x=(typeof!:a)`, `x=c ? 1? :a : :b`, `x=(return :a)`, `x=(x in :a)`, `x=(for (x of :a))`, `x=await :b`, `x=({ new :a })`, `x=(a ?? :b)`, `x=:a-b` | lexed |
+| `x=(:delete :b)` | only `:delete` |
+| `x=a.:b`, `x=(a? :T) => a`, `x=(a?:b)`, `x=(a! :b)`, `x=(a++ :b)`, `x=(/re/ :b)`, `x=({ new:a })`, `x=(a.new :b)`, `x=c ? of :b`, `x=f(await :b)`, `x=(yield :b)`, `x=(a, yield :b)`, `x=c ? a[0] :b`, `x=c ? "s" :b`, `x=:aé`, `x=:a-é`, `x=:1`, `x=: a`, `x=(a /* c */ :b)`, `x=(a // c\n :b)` | none |
+
+### The reserved `::` outside expressions
+
+`::` is also reserved in the static text of a tag name and each shorthand part
+([Tag names](#tag-names)) and anywhere in an attribute name's range
+([Attributes](#attributes)), by `rejectReservedName`, with the same message and
+range rule. It is not reserved where atoms are not lexed: `<let/a::b/>` and
+`<foo|a::b|/>` are accepted, and `::` inside a string is text (all observed).
+
+### How atoms interact with the other rules
+
+- **Ternary counter and type context:** an atom's `:` counts for neither
+  ([Ternary depth](#ternary-depth)).
+- **Look-behind keywords:** a lowercase letter that ends an atom is never a
+  unary keyword ([the look-behind table](#the-continuation-test)).
+- **The after-value rule** runs at step 7 of the continuation test, before the
+  character table sees the `:`, so a `:name` it splits off is an attribute
+  name, never an atom: `x=:a :b` is the atom value `:a` and an attribute named
+  `:b` (spec §4 "Atoms": "the name sugar is an atom standing alone in
+  attribute position"). A single-atom default value lets the split happen for
+  a default attribute too (decision 146, addendum 5;
+  [E1](#e1--attribute-value-html-mode)).
+- **Stops:** an atom ends no position by itself; hard and soft stops are
+  unchanged.
+
+### What the parser reports
+
+- `onAtom` (`util/constants.ts`), once per atom, in source order, as it is
+  lexed. Its range is the whole atom, `:` included; its `value` is the name.
+  It comes before the event that reports the range holding the atom
+  (`atom ":a"`, then `value ":a"`).
+- `read(range)` (`Parser.read`) returns the source of `range` with every atom
+  wholly inside it replaced by a numeric literal of the same length, `0.`
+  followed by zeros (`:a` is `0.`, `:rename-all` is `0.000000000`). A read of
+  exactly a raw open tag (from the tag name's start to the `onOpenTagEnd`
+  range's start, `rawOpenTags`) returns the source. The stand-in exists for
+  consumers that hand `read()` text to Babel (today `@marko/compiler`); a
+  consumer that wants the source slices it. The catalogue's front end builds
+  the atom's `StringLiteral` with `extra.mxAtom` itself (ast.md §4.3, §7).
 
 ## Dialect rules
 
@@ -1486,36 +1847,40 @@ These are MX's own rules. Each says which layer applies it: the template parser
    class and `name` (spec §4 "Name sugar", "In attribute position").
 3. **Attribute-position sugar after a value.** `#x` after a value is already a
    new attribute in the default, since `#` is in neither operator table. `:x`
-   and `.x` after a value are new attributes only through the patch
-   ([E1 overrides](#e1--attribute-value-html-mode); decision 146, divergence 3).
-   The default attribute's value is exempt (decision 151, ruling 2).
-   *Planned:* when the default value is a single atom, whitespace and `:name`
-   after it is the name sugar (decision 146, addendum 5); the patch does not do
-   this today.
+   and `.x` after a value are new attributes only through MX's after-value
+   rule ([E1 overrides](#e1--attribute-value-html-mode); decision 146,
+   divergence 3). The default attribute's value is exempt (decision 151, ruling
+   2), except that when it is a single atom, whitespace and `:name` after it is
+   the name sugar (decision 146, addendum 5; `isSingleAtomDefault`, E1).
 4. **The sugar's value.** `:name` takes an identifier, `[A-Za-z_$][\w$-]*`;
    `#x` and `.x` take what a shorthand part takes (spec §4 "Name sugar"). The
-   patch's test for a `:` or `.` split is narrower than both: the next character
-   must be `A`–`Z`, `a`–`z`, `$` or `_`. So `x=a .2xl` does not split although
-   `.2xl` is a valid class sugar elsewhere (OQ 4), while `x=a .é` splits on the
+   after-value rule's test for a `:` or `.` split checks only the character
+   right after the sigil, which must be `A`–`Z`, `a`–`z`, `$` or `_`; what
+   follows it is then read as an attribute name, by the name rules. So the test
+   is narrower than the shorthand's rule at the first character (`x=a .2xl`
+   does not split although `.2xl` is a valid class sugar elsewhere, OQ 4) and
+   broader than the identifier rule after it (`x=a :b%c` splits off an
+   attribute named `:b%c`, which core then rejects). `x=a .é` splits on the
    stock parser too, because `é` is not a word character and the value simply
-   ends (observed).
+   ends (all observed).
 5. **A sugar followed by `=value` or `(params) { body }`** sets the tag's
    default attribute; the only error is a tag that already has a default value
-   (decision 146, addendum 4). *Planned in core.* At parser level the forms
-   already parse: `<input:email=1/>` is the tag `input:email` with a default
-   value; `<input :email=1/>` is an attribute named `:email` with the value `1`;
-   `<input #main(a) {}/>` is a method named `#main` (all observed). Spec §4
-   "Name sugar" still lists `:x=1` and `:b(x)` as errors (OQ 11).
+   (decision 146, addendum 4). *Layer:* core (`packages/core/src/name-sugar.ts`).
+   At parser level the forms are ordinary: `<input:email=1/>` is the tag
+   `input:email` with a default value; `<input :email=1/>` is an attribute named
+   `:email` with the value `1`; `<input #main(a) {}/>` is a method named `#main`
+   (all observed). The catalogue records the result as `MxShorthand.operator`
+   and `default` (ast.md §3.6).
 6. **Left alone** (spec §4 "Name sugar", "Left alone"; decision 146, divergence
    2 and addendum 3): the named forms `class:x`, `style:x`, `value:fn:=x` and the
    explicit `value:x`; a dynamic tag name; a bound attribute; the default
    attribute; an attribute tag's own name.
 7. **Repeated sugars** follow the duplicate rule: the later one wins, with a
    warning (decision 135; spec §4 "Name sugar"). The parser reports each:
-   `x=a :b :c` is the value and two attributes (observed, patched).
+   `x=a :b :c` is the value and two attributes (observed; stock: one value).
 8. **A bare `:`** in attribute position is a positioned error from core
-   (divergence row "Bare `:x` is `name="x"`"). The patch ends a value before a
-   bare `:` so that the error can name it ([E1 overrides](#e1--attribute-value-html-mode));
+   (divergence row "Bare `:x` is `name="x"`"). The after-value rule ends a
+   value before a bare `:` so that the error can name it ([E1 overrides](#e1--attribute-value-html-mode));
    `<input :/>` is an attribute named `:` on both parsers (observed).
 9. **The unnamed tag and `defaultTag` (decision 145).** The parser reports an
    empty name range and **must not** write a tag name into it. Core resolves the
@@ -1528,34 +1893,33 @@ These are MX's own rules. Each says which layer applies it: the template parser
 10. **Wildcard children (decision 147)** add no syntax: a child keeps its
     authored tag name, and only `<:att>` yields a child whose `name` is `att`.
     The parser is unaffected.
-11. **Atoms (decision 156 and its addendum 1).** *Planned; not in the parser
-    source at `origin/main` `0cd544d84`.* `:name` in an MX expression position
-    is a value that represents itself, and its runtime value is the name as a
-    string (156.1, 156.2). Decision 156.1 names the positions: "attribute value,
-    placeholder `${}`, tag arguments; never inside `static`/`import`/script
-    blocks". A name may contain `-` (156.1). `::name` is reserved, and "the
-    lexer treats `::` as one token" (156.5). Every other position, and the rule
-    for which preceding token allows an atom, come from the atoms report
-    (`scratch/reports/squad-atoms/parser-approach.md`, §1d and the test table in
-    §5), which is evidence, not a decision (OQ 14).
+11. **Atoms (decision 156 and its addenda 1 to 4).** `:name` in an MX
+    expression position is a value that represents itself; its runtime value
+    is the name as a string (156.1, 156.2). *Layer:* the template parser lexes
+    it and reserves `::` ([Atoms](#atoms)); core gives it meaning and raises
+    the misuse errors of spec §4 "Atoms".
 
 ### Ternary depth
 
 - In a position with `operators`, a `?` at depth 0 adds one to `ternaryDepth`
   and a `:` at depth 0 takes one away; a `:` at `ternaryDepth` 0 enters the
   type context instead ([the character table](#how-a-position-is-scanned)).
+- An atom's `:` does neither: `lexAtom` consumes it first. So `x=a ? :b :c` is
+  one value, `a ? :b` closed by the second `:` (observed; spec §4 "Atoms":
+  "an atom's own `:` is never the ternary's"). This is the only input whose
+  after-value split atoms change (`PROVENANCE.md`, "Atoms").
 - A `?` or `:` inside a group, a string, a template literal or a comment does
   not count.
 - The after-value `:` split requires `ternaryDepth` 0
   ([E1 overrides](#e1--attribute-value-html-mode)).
-- With the patch, in a named or spread attribute's value, `??` and `?.` (when no
-  digit follows the `.`) do not count. `?:` does: `x=a ?:b` is one value
-  (observed). Not settled (OQ 3).
+- In a named or spread attribute's value, `??` and `?.` (when no digit follows
+  the `.`) do not count. `?:` does: `x=a ?:b` is one value, and on main its
+  `:b` is an atom (observed). Not settled (OQ 3).
 
 ## Ambiguous inputs
 
 Each row gives an input and the parse the grammar requires. "Observed" is the
-event stream of the **patched** parser, with the stock parser agreeing unless
+event stream of main's template parser, with the stock parser agreeing unless
 the row says otherwise. Inputs written `x=…` were run as `<div x=…/>` unless a
 tag is shown. Where the parser reports a name and core gives it meaning, both
 are given.
@@ -1567,9 +1931,10 @@ are given.
 | `x=a.b .c` | value `a.b`, then an attribute named `.c` (core: class `c`). Stock: one value | decision 146, divergence 3 (observed) |
 | `x=(a) :T => a` | value `(a)`, then an attribute named `:T` whose value is empty: `Missing value for attribute`. Stock: one value | decision 151, ruling 3; divergence row "The parser after-value rule" (observed) |
 | `x=(a): T => a` | one value | default (observed) |
+| `x=(a) : T => a` | one value: a space follows the `:` | decision 146, addendum 6 (observed) |
 | `x=a ?? b` | one value | default (observed) |
 | `x=a?.b` | one value | default (observed) |
-| `x=a?.b :c` | value `a?.b`, then an attribute named `:c`. Stock: one value | decision 146, divergence 3 for the split; the `?.` handling is the patch, **not settled** (OQ 3) |
+| `x=a?.b :c` | value `a?.b`, then an attribute named `:c`. Stock: one value | decision 146, divergence 3 for the split; the `?.` handling is MX's, **not settled** (OQ 3) |
 | `x=a < b` | one value | default (observed) |
 | `x=f<T>(y)` | observed: value `f<T`; the `>` ends the tag; `(y)/>` is body text. A recorded defect; the required parse is **not settled** | OQ 7 |
 | `<div x=a > b</div>` | value `a`; the tag ends at `>`; body text ` b` | default: E1's `>` stop (observed) |
@@ -1584,13 +1949,16 @@ are given.
 | `x=a {b}` | one value | default (observed); **not settled**, OQ 2 |
 | `x=a: b` | one value | default (observed); OQ 2 |
 | `` x=a `t` `` | value `a`, then an attribute named `` `t` `` | default (observed); **not settled**, OQ 2 |
-| `x=a .2xl` | one value | the patch (observed); **not settled**, OQ 4 |
-| `x=a :b :c` | value `a`, then attributes named `:b` and `:c`; core: the later name wins, with a warning | decision 146, divergence 3; decision 135; spec §4 "Name sugar" (observed) |
-| `x=a ?:b` | one value | default (observed); OQ 3 |
-| `x= :b` | value `:b` | default: the whitespace after `=` is consumed (observed). *Planned:* the atom `b` (decision 156.1; atoms report §3) |
-| `x=a ? :b :c` | observed, patched: value `a ? :b`, then an attribute named `:c`. *Planned:* one value, `a ? "b" : c` (atoms report §5, test-table row 6). **Not settled** | OQ 9 |
-| `x=a :: b` | observed: one value `a :: b`. **Not settled**: decision 156.5 reserves `::name` and says `::` is one token | OQ 20 |
-| `x=::a` | observed: the value `::a`. *Planned:* the reserved-`::` error at the `::` column | decision 156.5; atoms report §5, test-table row 7 |
+| `x=a .2xl` | one value | the after-value rule's digit exclusion (observed); **not settled**, OQ 4 |
+| `x=a :b :c` | value `a`, then attributes named `:b` and `:c`; core: the later name wins, with a warning. Stock: one value | decision 146, divergence 3; decision 135; spec §4 "Name sugar" (observed) |
+| `x=a ?:b` | one value; `:b` is an atom | default for the extent (observed); OQ 3. The atom: decision 156 ([Atoms](#atoms), row 4) |
+| `x= :b` | the value `:b`, which is the atom `b` | decision 156.1; spec §4 "Atoms" (observed) |
+| `x=:a :b` | the atom value `:a`, then an attribute named `:b` (core: `name="b"`). Stock: one value | decision 146, divergence 3; spec §4 "Atoms" (observed) |
+| `x=a ? :b :c` | one value, `a ? :b : c`, with the atom `b`. Stock: one value, no atom | decision 156; spec §4 "Atoms" (observed) |
+| `<if=:a :b>` | the default value `:a` (an atom), then an attribute named `:b`. Stock: one value | decision 146, addendum 5 (observed) |
+| `<if=:a .b>` | one value | decision 151, ruling 2: addendum 5 covers `:` only (observed) |
+| `x=a :: b`, `x=::a`, `x=(a ? b::c : d)` | the reserved-token error at the `::`. Stock: one value | decision 156.5 and addendum 2 (observed) |
+| `x=c ? a < b > :z` | one value with the atom `z` (a spaced `< >` is a comparison) | decision 156, addendum 4: a known limit (observed) |
 | `div x=a\n  <span/>` (concise) | value `a`, then the child tag `span` | default: [E2](#e2--attribute-value-concise-mode) (observed); OQ 18 |
 | `div x=a\n  .b` (concise) | value `a`, then an unnamed child tag with class `b` | same |
 | `div x=a\n  (b)` (concise) | value `a`, then an unnamed child tag with tag arguments `b` | same |
@@ -1602,16 +1970,16 @@ are given.
 | `<input:email/>` | parser: tag name `input:email`. Core: tag `input`, `name="email"` | decision 146, divergence 1 |
 | `<input :email/>` | parser: an attribute named `:email`. Core: `name="email"` | decision 146; spec §4 "Name sugar" |
 | `<input#main:email.big/>` | parser: id part `main:email`, class part `big`. Core: id `main`, name `email`, class `big` | decision 146, addendum of 23:23 |
-| the six orders of the three tag-adjacent sugars | each sugar keeps its meaning | decision 146, addendum of 23:23 |
+| the six orders of the three tag-adjacent sugars: `<input:email.big#main/>`, `<input:email#main.big/>`, `<input.big:email#main/>`, `<input.big#main:email/>`, `<input#main:email.big/>`, `<input#main.big:email/>` | parser: the `:name` stays in the tag name (first two) or in the shorthand part it follows (`.big:email`, `#main:email`). Core: each sugar keeps its meaning | decision 146, addendum of 23:23 (observed) |
 | `<input #main/>`, `<input .big/>` | parser: attributes named `#main`, `.big`. Core: id, class | decision 146; spec §4 "Name sugar" |
 | `<input :email type="email"/>` | parser: attributes `:email`, then `type`. Core: `name` first | decision 146 |
 | `<input x=1 #main .big :email/>` | parser: `x=1`, then attributes named `#main`, `.big`, `:email` | decision 146 (observed) |
 | `<input x=a.b .c/>` | as `x=a.b .c` | decision 146, divergence 3 |
-| `<input:email=1/>` | parser: tag `input:email` with a default value `1`. *Planned:* `name="email"` and the default value | decision 146, addendum 4 |
-| `<input :email=1/>` | parser: an attribute named `:email` with the value `1`. *Planned:* `name="email"` and the default value `1` | decision 146, addendum 4; OQ 11 |
-| `<input:email(a) { return a; }/>` | parser: tag `input:email` with a default method. *Planned:* `name="email"` and a default value that is the function | decision 146, addendum 4 |
-| `<input #main(a) {}/>` | parser: a method named `#main`. *Planned:* id `main` and a default value that is the function | decision 146, addendum 4 |
-| `<input x=1 :/>`, `<input :/>` | parser: an attribute named `:` (the first only with the patch). Core: positioned error, bare `:` | divergence row "Bare `:x` is `name="x"`" |
+| `<input:email=1/>` | parser: tag `input:email` with a default value `1`. Core: `name="email"` and the default value | decision 146, addendum 4 |
+| `<input :email=1/>` | parser: an attribute named `:email` with the value `1`. Core: `name="email"` and the default value `1` | decision 146, addendum 4; spec §4 "Name sugar" |
+| `<input:email(a) { return a; }/>` | parser: tag `input:email` with a default method. Core: `name="email"` and a default value that is the function | decision 146, addendum 4 |
+| `<input #main(a) {}/>` | parser: a method named `#main`. Core: id `main` and a default value that is the function | decision 146, addendum 4 |
+| `<input x=1 :/>`, `<input :/>` | parser: an attribute named `:` (the first not on stock). Core: positioned error, bare `:` | divergence row "Bare `:x` is `name="x"`" |
 | `<a:b:c/>` | parser: tag name `a:b:c`. Core: positioned error, one name per tag | divergence row "A static tag name may not contain `:`"; spec §4 "Name sugar" |
 | `<if=a\n .b>x</if>` | one value: the default attribute is exempt | decision 151, ruling 2 (observed) |
 | `<const/x=items\n .filter(Boolean)/>` | one value | decision 151, ruling 2 (observed) |
@@ -1619,8 +1987,9 @@ are given.
 | `<input value:fn:=x/>` | parser: a bound attribute named `value:fn` | decision 146, divergence 2 (observed) |
 | `<div><@svg:rect/></div>` | parser: a tag named `@svg:rect`, not split. An attribute tag on a native element is then an error | decision 146, addendum 3; spec §8 "Deferred to MX 2" |
 | `x=a ? b :c` | one value | default: `ternaryDepth` is 1 at the `:` (observed) |
-| `x=a ?? b :c` | value `a ?? b`, then an attribute named `:c`. Stock: one value | the patch (observed); **not settled**, OQ 3 |
-| `x=a ?.b :c` | value `a ?.b`, then an attribute named `:c`. Stock: one value | the patch (observed); **not settled**, OQ 3 |
+| `x=a ?? b :c` | value `a ?? b`, then an attribute named `:c`. Stock: one value | the after-value rule's `??` case (observed); **not settled**, OQ 3 |
+| `x=a ?.b :c` | value `a ?.b`, then an attribute named `:c`. Stock: one value | the after-value rule's `?.` case (observed); **not settled**, OQ 3 |
+| `div x=a in\n  b` (concise) | one value | default: the look-ahead keyword row (observed); OQ 18 |
 
 ## Open questions for mx-lead
 
@@ -1635,15 +2004,15 @@ None of these is resolved in the normative text.
    each with its class under the 2026-10-05 ruling. *Recommendation:* rule the
    rows of class (c) one by one; until then the boundary reproduces the default
    for them, as decision 157.3 requires.
-3. **`??`, `?.` and `?:`.** The patch stops `??` and `?.` from opening a
+3. **`??`, `?.` and `?:`.** MX's after-value rule stops `??` and `?.` from opening a
    ternary, and tests pin it, but no spec paragraph or decision states it, and
-   `?:` still counts as a ternary. *Recommendation:* state `??` and `?.` in the
+   `?:` still counts as a ternary (and on main `x=a ?:b` reads `:b` as an atom). *Recommendation:* state `??` and `?.` in the
    spec as what "no open `?`" means, and decide whether `x=a ?:b` is an error.
-4. **`.` followed by a digit.** The patch does not split `x=a .2xl`, while spec
+4. **`.` followed by a digit.** The after-value rule does not split `x=a .2xl`, while spec
    §4 "Name sugar" says `.2xl` works as a class "in both positions".
    *Recommendation:* keep the exclusion and say so in the spec, or align the
    positions.
-5. **Spreads.** The patch applies the after-value rule to a spread
+5. **Spreads.** MX applies the after-value rule to a spread
    (`...props .b` splits); the spec text and divergence row speak of "an
    attribute value". *Recommendation:* rule spreads in explicitly.
 6. **`|` inside tag parameters and tag variables.** `<foo|x: A | B|/>` ends the
@@ -1656,64 +2025,87 @@ None of these is resolved in the normative text.
    stop yields to it.
 8. **The ambiguous `>` error.** *Recommendation:* keep it; a TypeScript parser
    cannot tell `>` the operator from `>` the tag end either.
-9. **Atoms in a ternary.** The atoms report expects `x=a ? :b :c` to be one
-   value; the patch splits it at `:c`. *Recommendation:* the ternary counter
-   skips an atom's `:`.
+9. **Atoms in a ternary.** *Settled* by decision 156 and spec §4 "Atoms" ("an
+   atom's own `:` is never the ternary's"): `x=a ? :b :c` is one value on main
+   ([Ternary depth](#ternary-depth)).
 10. **Wording of the parser's own errors.** Messages such as `A semicolon
     indicates the end of a line. Only comments may follow it.` and the HTML
     comment error are the stock parser's; no MX source says whether MX keeps
     the wording. *Recommendation:* keep them and pin each with a fixture.
-11. **Spec §4 "Name sugar" still lists `:x=1` and `:b(x)` as errors**, which
-    decision 146, addendum 4 replaced. *Recommendation:* update the spec with
-    the addendum-4 change.
+11. **Spec §4 contradicts itself on a bare `:foo`.** Spec §4 "Attribute forms"
+    (row "Namespaced name": `:foo=y` is "Marko's own attribute named
+    `value:foo`") and spec §4 "`:modifier`" (`<div :foo="y"/>` "is one
+    attribute literally named `value:foo`"; `<div :/>` is `value:`) say the
+    opposite of spec §4 "Name sugar" and divergence row "Bare `:x` is
+    `name="x"`", which decision 158.1's "no `value:` modifier split" also
+    supports. (The earlier question here, `:x=1` listed as an error, is settled:
+    spec §4 "Name sugar" now states decision 146 addendum 4.)
+    *Recommendation:* rewrite the two `value:` paragraphs for named heads only
+    (`x:foo`, `value:foo`) and point bare `:foo` at the name sugar.
 12. **`$!{…}` in an attribute value.** The template parser accepts it as value
     text; spec §3 "Interpolation" says "Marko's parser rejects it". Under
     decision 158 there is no Marko compiler; which MX layer raises it?
     *Recommendation:* the expression parse at the boundary, with an MX message.
 13. **Text bodies.** The parser recognises placeholders, strings and template
     literals in a `TagType.text` body, and an unbalanced quote there is an
-    end-of-input error (`<textarea>don't</textarea>`); spec §3 "CDATA sections
+    end-of-input error (`<textarea>don't</textarea>`), and a backslash does not
+    escape a quote there, so valid JavaScript such as `<script>var s =
+    "a\"b";</script>` is that error too; spec §3 "CDATA sections
     and XML declarations" says such a body is "a single `MarkoText`" and lists
     `<title>`, which the consumer's `TEXT` set does not contain.
     *Recommendation:* amend the spec to "text and placeholders", decide whether
-    quotes stay significant in `textarea`, and settle `title`.
-14. **Atoms outside the three ruled positions.** Decision 156.1 names attribute
-    values, `${}` and tag arguments, and excludes `static`/`import`/script
-    blocks. Scriptlets, method bodies, attribute arguments, tag parameters, the
-    tag variable, spreads and tag-name interpolations have no ruling, and
-    "script blocks" is undefined. *Recommendation:* extend 156.1 with the full
-    list.
+    quotes stay significant in `textarea`, honour `\` escapes in a
+    text-body string, and settle `title`.
+14. **Atoms outside the three ruled positions.** *Settled*: decision 156,
+    addendum 2 (every `${}`; "script blocks" are statement blocks), decision
+    163 (ruling C11 and addendum 1: attribute arguments and method parameters,
+    method bodies, and never the tag variable, tag parameters or type lists)
+    and the lead ruling of 2026-10-05 on method bodies. The positions are in
+    [Atoms](#atoms).
 15. **Spec §4 "Consumers on a stock parser"** and divergence row "The parser
     after-value rule" describe the stock-parser diagnostic of decision 151,
-    ruling 1. Decision 157 addendum 3 removed it and decision 158.2 says it
-    stands until `@marko/compiler` is dropped. *Recommendation:* keep the
-    paragraphs, and say in them that they lapse with that drop.
+    ruling 1. Decision 157 addendum 3 removed it, 158.2 kept it for the
+    interim, and decision 159 makes core bundle the in-repo template parser,
+    so a published core no longer reaches it. *Recommendation:* the paragraphs
+    lapse now (decision 159), not at the drop of `@marko/compiler`; keep only
+    the sentence for a caller that bypasses the bundle, as spec §4 "Atoms"
+    already does.
 16. **A tag name's first character.** The parser accepts any character that is
     not a terminator, a leading digit included. *Recommendation:* state the
     terminator rule in the spec, or add a rule and a diagnostic.
 17. **The operator exemption.** A hard stop written directly after an operator
     is consumed (`x=a + ,b` is one value; `x=a +/>` is a regular-expression
-    error). No valid TypeScript is affected. *Recommendation:* make the stop
-    unconditional and let the expression parser report `a +`.
+    error). Valid TypeScript is affected, because the look-behind table counts
+    a legal identifier spelled like a unary keyword and a non-type `>`:
+    `<div x=async/>` is the value `async/`, `<div x=async, y=1/>` the value
+    `async,`, concise `div x=async\n  span` swallows the child, and
+    `div x=f<T> ,y=1` (a trailing instantiation expression) is one value.
+    *Recommendation:* make the stop unconditional and let the expression parser
+    report `a +`.
 18. **Newline continuation.** In concise mode a value continues past a newline
-    only in the cases E2 lists; in HTML mode the look-ahead crosses newlines,
-    which yields values such as `a\n  <span`. *Recommendation:* keep the
-    concise rule, and rule whether HTML mode keeps the look-ahead across a
-    newline.
-19. **End of input with an open delimiter.** `div x=(a` is an error; `div(a`
-    and `$ {a` end silently, because their delimiter is not on the position's
-    group stack. *Recommendation:* an error in all three.
-20. **`::` followed by whitespace.** Decision 156.5 reserves `::name`; today
-    `x=a :: b` is one value. *Recommendation:* reject `::` wherever the atom
-    lexer runs.
-21. **Agreement with the AST catalogue.** MX2 has its own AST (decision 158),
-    catalogued in `apps/docs/docs/architecture/ast.md` on another branch. The
-    two documents must agree on the names of the expression positions and on
-    span rules (for example that argument, parameter and placeholder ranges
-    include the whitespace inside their delimiters, and that a tag variable's
-    range includes the `/`). This document neither depends on nor edits that
-    catalogue. *Recommendation:* whichever lands second adopts the other's
-    names.
+    only in the cases E2 lists. Two of them reach a line that spec §3 "Concise
+    mode" would call a child or a sibling: a keyword operator or a lone `.` at
+    the end of the line draws in the next line at any indentation
+    (`div x=a instanceof\nB` swallows a column-0 line), and so does a trailing
+    look-behind operator (`div x=a +\nspan`). In HTML mode the look-ahead
+    crosses newlines, which yields values such as `a\n  <span`.
+    *Recommendation:* keep the concise rule, and rule whether a continuation may
+    reach a line at column 0, and whether HTML mode keeps the look-ahead across
+    a newline.
+19. **End of input with an open delimiter, in concise mode.** `div x=(a` is an
+    error; `div(a`, `$ {a`, `div|a`, `div<A`, `div (a`, `div onClick(a) {b` and,
+    under a concise text tag, `script -- ${b` end silently, because the
+    delimiter is not on the position's group stack. Three lose an event
+    entirely: `div.a${b` (no shorthand event), `${x` (no event at all) and a
+    template literal's `${` in a concise value (``span\n  div x=`${a``: no value
+    event). *Recommendation:* an error in all of them.
+20. **`::` followed by whitespace.** *Settled* by decision 156, addendum 2
+    ("`::` is the reserved token in every position MX lexes"): on main
+    `x=a :: b` is the reserved-token error ([Atoms](#atoms)).
+21. **Agreement with the AST catalogue.** *Settled* by decision 163, ruling
+    Q10: field names follow the AST; a container's span is the parser's `value`
+    range and `outer` its event range. This document adopts both
+    ([Ranges](#ranges-and-the-names-the-ast-catalogue-gives-them)).
 22. **The 2026-10-05 boundary ruling has no decision number**, so nothing
     outside this document can cite it and `divergences.md` has no row for it.
     *Recommendation:* number it in the entry that fixes the boundary mechanism
@@ -1728,7 +2120,9 @@ None of these is resolved in the normative text.
     type list (`<foo<() => void>>`, `onClick<T extends () => void>(a) {}`); a
     block comment after an operator (`x=a + /* c */ b` ends at the comment); a
     space between a trailing operator and the newline in a scriptlet or
-    statement (`$ a = 1 + ⏎`); `... [a]` and `... "s"`. One oddity on the other
+    statement (`$ a = 1 + ⏎`); `... [a]` and `... "s"`; `<div x=/* c */ a/>`, a block comment at the
+    value's start, is the value `/* c */` and then an attribute `a`; and the
+    exemption cases of OQ 17. One oddity on the other
     side: a `,` line after a statement tag adds attributes to it.
     *Recommendation:* treat each as a defect for the TypeScript-aware boundary
     to remove; none is covered by spec text.
@@ -1744,11 +2138,30 @@ None of these is resolved in the normative text.
 27. **The character after a `--` run.** It is skipped unexamined (`--abc` is the
     text `bc`). *Recommendation:* require whitespace or the end of the line
     after the hyphens.
+28. **Decision 146, divergence 3 and the `:` condition.** *Settled* by decision
+    146, addendum 6: "a `:` starts a new attribute only when it is followed by
+    an identifier start, or is bare before `>`, `/>`, a newline or the end of
+    input", amending the divergence row's wording. `x=(a) : T => a` stays one
+    value ([E1](#e1--attribute-value-html-mode)).
+29. **`await :name`.** *Settled* by decision 156, addendum 8: addendum 3's rule
+    restated by addendum 2's principle, "a `:` TypeScript could own is
+    TypeScript's" ([Atoms](#atoms), operator words, rule 5).
+30. **Statement tags and their "attributes".** Spec §2 "Syntax" says `import`,
+    `static` and `export` parse as tags whose "attributes are the remaining
+    words". With the statement set supplied, the parser reports no attributes
+    for them ([E10](#e10--statement-tags)); only without the set (five hosts
+    today) are the words attributes. *Recommendation:* correct spec §2 when MX1
+    TODO `statement-tags-not-declared-on-five-hosts` lands.
+31. **A template literal's `${}` in a text body.** Decision 156, addendum 2
+    makes "every `${}` placeholder" an atom position, `<script>` bodies
+    included. A template literal inside a text body is text to the parser, so
+    its `${…}` is no placeholder and lexes no atom
+    (``<script>`${:a}`</script>``). *Recommendation:* confirm that addendum 2
+    means placeholders only.
 
 ### Where a real TypeScript parser would end the value differently
 
-Each row is an observed input. "Default" is the stock parser's result, plus the
-patch where the row says so. The class is assigned from the spec text and
+Each row is an observed input. "Default" is main's result. The class is assigned from the spec text and
 decision 146 under the 2026-10-05 ruling:
 
 - **(a)** the spec's rule applies and its outcome turns on a fact only
@@ -1762,12 +2175,16 @@ decision 146 under the 2026-10-05 ruling:
 
 | Input | Default | TypeScript | Class | Basis |
 | --- | --- | --- | --- | --- |
-| `x=a.b .c`, `x=fn(a) .b` | patched: split before `.c` | member access, one expression | **(b)** | divergence row "The parser after-value rule" names both spellings |
-| `x=(a) :T => a` | patched: split before `:T`, then `Missing value for attribute` | an arrow function with a return type | **(b)** | the same row names this input; decision 151, ruling 3 |
+| `x=a.b .c`, `x=fn(a) .b` | split before `.c` / `.b` | member access, one expression | **(b)** | divergence row "The parser after-value rule" names both spellings |
+| `x=(a) :T => a` | split before `:T`, then `Missing value for attribute` | an arrow function with a return type | **(b)** | the same row names this input; decision 151, ruling 3 |
 | `<if=a .b>`, `<const/x=items\n .filter()/>` | one value | one expression | **(b)**, no difference | the same row: the default attribute is exempt |
-| `x=a ?? b :c`, `x=a ?.b :c` | patched: split before `:c` | `??` and `?.` are not ternaries; the expression ends before `:c` | **(a)** | the rule says "`:` … with no open `?`"; whether `??` or `?.` opens one is a fact of TypeScript's grammar. OQ 3 |
-| `x=a ? :b :c` | patched: split before `:c` | with atoms, `:b` is a value and `:c` closes the ternary | **(a)** | the same clause, once atoms exist. OQ 9 |
-| concise `div x=a\n  .b`, `\n  (b)`, `\n  + b`, `\n  ? b : c`, `\n  in b`, `\n  <span/>` | value `a`, then a child | continues across the newline | **(b)** | spec §3 "Concise mode": a concise tag's "children are the lines indented under it" |
+| `x=a ?? b :c`, `x=a ?.b :c` | split before `:c` | `??` and `?.` are not ternaries; the expression ends before `:c` | **(a)** | the rule says "`:` … with no open `?`"; whether `??` or `?.` opens one is a fact of TypeScript's grammar. OQ 3 |
+| `x=a ? :b :c` | one value, with the atom `b` | `a ? :b : c` is no TypeScript; with atoms read as values it is one expression | **(b)**, no difference | spec §4 "Atoms": "an atom's own `:` is never the ternary's, so `a ? :b :c` is `a ? "b" : c`"; divergence row "`a ? :b :c` is one value" |
+| concise `div x=a\n  .b` | value `a`, then an unnamed child tag with class `b` | member access across the newline | **(b)** | divergence row "The parser after-value rule": `.` followed by an identifier after whitespace starts a new attribute, "and across a newline" |
+| concise `div x=a\n  (b)`, `\n  + b`, `\n  ? b : c`, `\n  in b`, `\n  <span/>` | value `a`, then a child | continues across the newline | **(c)** | spec §3 "Concise mode" says a concise tag's "children are the lines indented under it" but says nothing about attribute values, and the default itself continues a value onto such lines in other cases (`div x=a +\n  b`, `div x=a in\n  b`). Whether §3 governs value continuation is OQ 18 |
+| `<div x=async/>`, `<div x=async, y=1/>`, concise `div x=async\n  span` | `async/`, then a missing close tag; `async,` then `y=1`; one value swallowing the child | the identifier `async`, then stops | **(c)** | spec silent. OQ 17 |
+| concise `div x=f<T> ,y=1` | one value | an instantiation expression `f<T>`, then stops | **(c)** | spec silent. OQ 17 |
+| `<div x=/* c */ a/>` | value `/* c */`, then an attribute `a` | the expression `a` after a comment | **(c)** | spec silent. OQ 24 |
 | `x=a [0]` | value `a`, then an attribute named `[0]` | `a[0]` | **(c)** | spec silent. In concise mode `[` begins an attribute group, so continuing would change `div x=a [y=1]` |
 | `` x=a `t` `` | value `a`, then an attribute named `` `t` `` | a tagged template, `` a`t` `` | **(c)** | spec silent; accepts nothing the spec rejects |
 | `x=a {b}` | one value | stops after `a` | **(c)** | spec silent |
@@ -1785,31 +2202,43 @@ decision 146 under the 2026-10-05 ruling:
 
 ### Recorded defects in the default
 
-Two behaviours above are filed defects, not grammar, and are to be fixed in
+These behaviours above are defects, not grammar, and are to be fixed in
 `packages/parser/src/template/`:
 
 - a generic call or generic arrow in an HTML-mode value is cut at `>` with no
   error (`x=f<T>(y)`, `x=<T,>(a) => a`);
-- a concise-mode file that ends inside an open delimiter raises no error
-  (`div(a`, `$ {a`).
+- end of input in concise mode inside a position whose delimiter was consumed
+  by the owning state raises no error (`div(a`, `$ {a`, `div|a`, `div<A`,
+  `div (a`, `div onClick(a) {b`, `script -- ${b`);
+- end of input in concise mode inside a tag name's or shorthand's `${…}`, or
+  a template literal's `${…}`, raises no error **and drops the owning event**
+  (`div.a${b` reports no shorthand, `${x` reports nothing, ``div x=`${a``
+  reports no value).
 
-The behaviours listed in OQ 24, OQ 25 and OQ 27 look like defects as well and
-are not filed. An implementer **must not** treat any of them as intended
+The behaviours listed in OQ 13 (no `\` escape in a text-body string), OQ 17,
+OQ 24, OQ 25 and OQ 27 look like defects as well and are not filed. An implementer **must not** treat any of them as intended
 grammar; each is described here only so that a difference from the default is a
 decision and not an accident.
 
 ## Conformance
 
-The htmljs-parser fixtures cited below are in
-`/Users/svallory/work/htmljs-parser/src/__tests__/fixtures/`, one directory per
-case with an `input.marko` and a snapshot, and are **evidence of the default
-behaviour, not a gate**.
+The htmljs fixtures cited below are upstream's 418 fixture directories, kept
+byte-identical in `packages/parser/src/template/__tests__/fixtures/` (one
+directory per case with an `input.marko` and a snapshot) and run by
+`upstream-suite.test.ts`. They are **evidence of the default behaviour, not a
+gate**. MX's own tests of the template parser sit beside them:
+`mx-after-value.test.ts` (the after-value rule, re-pointed from
+`patches/htmljs-parser.test.ts`, with the same `CHANGED`, `PINNED`,
+`DEFAULT_ATTRIBUTE` and `statement tags` blocks), `mx-atoms.test.ts` over the
+case table `mx-atoms.cases.ts`, `__tests__/base-offset.test.ts`, and
+`corpus-equivalence.test.ts`, which pins identical event streams between this
+source and the patched npm build.
 
 | Section | Exercised by |
 | --- | --- |
 | Tag names, shorthands, the `:` split | `packages/core/src/name-sugar.test.ts`; htmljs fixtures `tag-name-*`, `shorthand-*` |
 | Close tags | htmljs fixtures `empty-closing-tag*`, `shorthand-closing-html*` (`shorthand-closing-html2` is `<#foo>` closed by `</div>`) |
-| Sugars and the after-value rule | `patches/htmljs-parser.test.ts` (`CHANGED`, `PINNED`, `DEFAULT_ATTRIBUTE`); `packages/core/src/name-sugar.test.ts`; `packages/core/src/stock-parser.test.ts`; `packages/targets/html/src/stock-parser.test.ts` |
+| Sugars and the after-value rule, addendum 5 | `packages/parser/src/template/mx-after-value.test.ts`; `patches/htmljs-parser.test.ts` (`CHANGED`, `PINNED`, `DEFAULT_ATTRIBUTE`); `packages/core/src/name-sugar.test.ts`; `packages/core/src/stock-parser.test.ts`; `packages/targets/html/src/stock-parser.test.ts` |
 | Attributes, names, `=` spacing | htmljs fixtures `whitespace-around-equals`, `attr-comma-multiline*`; `packages/targets/html/fixtures-marko/attr-value-modifier` |
 | E1–E3 values and spreads | `patches/htmljs-parser.test.ts`; htmljs fixtures `ts-generic-*`, `attr-ambiguous-right-angle-bracket*`, `attr-eof-spread` |
 | E4, E5, E16, E17 methods | htmljs fixtures `attr-method-*`, `argument-attr-extra-whitespace`, `invalid-attr-type-params`, `invalid-type-params-attr-arg` |
@@ -1824,11 +2253,14 @@ behaviour, not a gate**.
 | Text, comments, doctype | `packages/targets/html/fixtures-marko/{doctype-page,comments-and-html-comment,html-comment-placeholder,elements-text,piped-text}`; htmljs fixture `dtd` |
 | Attribute tags | `packages/targets/html/fixtures-marko/attribute-tags*` |
 | End of input | htmljs fixtures `eof-*`, `attr-eof-*`, `tag-name-placeholder-eof`, including `eof-attr-value-js-comment-comment-concise` and `eof-placeholder-concise` for concise mode |
-| Atoms | **no asset**: the test table in the atoms report (§5) is written, not implemented |
+| Atoms, the reserved `::` | `packages/parser/src/template/mx-atoms.cases.ts` (run by `mx-atoms.test.ts` and by `patches/htmljs-parser.test.ts` against both npm builds); `packages/core/src/atoms.test.ts` |
+| Base position | `packages/parser/src/template/__tests__/base-offset.test.ts` |
+| E2 continuation onto a later line | htmljs fixtures `attr-operators-newline-after` (unary keywords and a lone `.` at the end of a line, operand at column 0) and `attr-operators-newline-before` |
 
 ### Rules no existing test covers
 
-For each rule below, a search of the htmljs fixtures' `input.marko` files and of
+For each rule below, a search of the htmljs fixtures' `input.marko` files,
+`mx-after-value.test.ts`, `mx-atoms.cases.ts`, `base-offset.test.ts` and
 `patches/htmljs-parser.test.ts` for the rule's characteristic input found
 nothing (the patterns searched are in the task report):
 
@@ -1840,11 +2272,14 @@ nothing (the patterns searched are in the task report):
 - a union type inside tag parameters or a tag variable;
 - a trailing operator followed by whitespace before the newline, in a scriptlet
   or statement;
-- hyphens followed directly by a non-space character (`--abc`).
+- hyphens followed directly by a non-space character (`--abc`);
+- a binary keyword (`in`, `as`, `instanceof`, `satisfies`, `extends`) at the end
+  of a concise value's line;
+- `async` before a hard stop (`x=async/>`), and a block comment at a value's
+  start (`x=/* c */ a`).
 
 Not searched, and therefore not claimed either way: the concise newline cases
 of E2 as a set, and close tags inside a concise region.
 
-Not implemented, so untested by construction: decision 146, addenda 4 and 5,
-and atoms. The operator exemption (`x=a + ,b`) should stay unpinned until OQ 17
-is ruled.
+The operator exemption (`x=a + ,b`) should stay unpinned until OQ 17 is
+ruled.
