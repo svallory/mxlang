@@ -20,6 +20,9 @@
 
 ## Unreleased
 
+- **Fix:** author-only `//` comments are dropped like on every other host; they were emitted as HTML comments.
+
+
 - **Fix (default-tag-contracts r3):** a `.astro.mx` template refuses a contract's dashed `defaultTag` (`sl-card`), as `astro-html`'s registration does, so the two agree.
 
 - **Fix (default-tag-contracts r2):** the `.astro.mx` Vite plugin reports an invalid contract `defaultTag` once at its declaration.

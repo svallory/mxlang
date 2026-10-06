@@ -24,6 +24,9 @@
 
 ## Unreleased
 
+- **Fix:** the `For` emission copies the node instead of appending to `For.bindings` and rewriting `code` in the shared IR; output unchanged.
+
+
 - **Fix (default-tag-contracts r2):** the parent contract's `defaultTag` is seen through `if`/`for`/`try`; an invalid value falls through.
 
 - **Added (default-tag-contracts, decision 145):** the parent contract's `defaultTag` is the first rung for the unnamed tag, in the page compile and `.solid.mx` regions.
