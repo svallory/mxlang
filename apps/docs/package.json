@@ -6,8 +6,9 @@
   "scripts": {
     "build:home": "bun scripts/build-home.ts",
     "check:home": "bun scripts/build-home.ts --check",
+    "check:anchors": "bun scripts/check-anchors.ts",
     "dev": "bun run build:wasm && bun run build:home && docmd dev",
-    "build": "bun run build:wasm && bun run build:home && docmd validate && docmd build && bun run check:home",
+    "build": "bun run build:wasm && bun run build:home && docmd validate && docmd build && bun run check:home && bun run check:anchors",
     "validate": "docmd validate",
     "test": "bun run build:wasm && vitest run",
     "preview": "npx serve site",
