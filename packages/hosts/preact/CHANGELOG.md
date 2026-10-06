@@ -20,6 +20,8 @@
 
 ## 0.1.0 (unreleased)
 
+- **Fix (expression-values-unmapped-jsx-html):** the shared JSX emitter maps component prop values, component spreads, class objects, `${}` text and a lone escaped child to their authored source, so TypeScript errors inside them reach the editor and `mx-tsc` (preact, react, hono). Emitted text unchanged.
+
 - **Fix (default-tag-contracts r2):** the parent contract's `defaultTag` is seen through `if`/`for`/`try` (shared with React and Hono); an invalid value falls through.
 
 - **Added (default-tag-contracts, decision 145):** the parent contract's `defaultTag` is the first rung for the unnamed tag (shared with React and Hono).
