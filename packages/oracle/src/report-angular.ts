@@ -31,10 +31,10 @@ import ts from "typescript";
  * each stage one copy per fixture, and those copies used to stay in the OS
  * temp directory after the run (a tmpfs on netcup, which is what filled up).
  */
-const staged: string[] = [];
+const stagedDirs: string[] = [];
 
 process.on("exit", () => {
-  for (const dir of staged.splice(0)) {
+  for (const dir of stagedDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
 });
@@ -139,7 +139,7 @@ interface Row {
 
 /** Registers a staged copy for removal when the run ends. */
 function stageCleanup(dir: string): void {
-  staged.push(dir);
+  stagedDirs.push(dir);
 }
 
 /**
