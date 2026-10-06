@@ -13,6 +13,7 @@ import {
   approximateSuffix,
   approximateUnmapped,
   approximateUnmappedDiagnostics,
+  mxBugSuffix,
   PROGRAM_DIAGNOSTIC_METHODS,
 } from "./unmapped-diagnostics.ts";
 
@@ -37,7 +38,7 @@ const GENERATED = [
   "const gap = oops;",
   "const last = 2;",
 ].join("\n");
-const SOURCE = "<let/first=1/>\n<p>{oops}</p>\n<let/last=2/>\n";
+const SOURCE = "<let/first=1/>\n<p>{ghost}</p>\n<let/last=2/>\n";
 
 const generatedAt = (needle: string) => GENERATED.indexOf(needle);
 const sourceAt = (needle: string) => SOURCE.indexOf(needle);
@@ -145,22 +146,40 @@ describe("approximateUnmapped", () => {
     expect(approximateUnmapped(language, plain)).toBe(plain);
   });
 
-  it("moves an unmapped diagnostic onto the nearest mapped span before it, and says where it really was", () => {
+  it("moves an unmapped diagnostic onto the nearest mapped span before it, and calls code MX wrote an MX bug", () => {
     const language = languageWith(twoMappings);
     const moved = approximateUnmapped(language, diagnosticAt("oops"));
 
+    // Generated line 3 holds no authored code: MX's own scaffolding.
     // `oops` is on generated line 3, column 13 (1-based).
     expect(moved.messageText).toBe(
-      `Cannot find name 'oops'.${approximateSuffix(3, 13)}`,
+      `Cannot find name 'oops'.${mxBugSuffix(3, 13)}`,
     );
     expect(moved.messageText).toBe(
-      "Cannot find name 'oops'. (position approximate: generated 3:13)",
+      "Cannot find name 'oops'. (in MX-generated code, not yours: an MX bug; generated 3:13)",
     );
     // The span of `const first = 1;`, in virtual-file coordinates.
     expect(moved.start).toBe(SOURCE.length + generatedAt("const first = 1;"));
     expect(moved.length).toBe("const first = 1;".length);
     expect(moved.code).toBe(2304);
     expect(moved.category).toBe(ts.DiagnosticCategory.Error);
+  });
+
+  it("says the position is approximate when the generated line holds an authored expression", () => {
+    const language = languageWith([
+      ...twoMappings,
+      // `const gap =` on the diagnostic's own line is authored; `oops` is not.
+      mapping("const gap =", "<p>{", reported),
+    ]);
+    const moved = approximateUnmapped(language, diagnosticAt("oops"));
+
+    expect(moved.messageText).toBe(
+      "Cannot find name 'oops'. (position approximate: generated 3:13)",
+    );
+    expect(moved.messageText).toBe(
+      `Cannot find name 'oops'.${approximateSuffix(3, 13)}`,
+    );
+    expect(moved.start).toBe(SOURCE.length + generatedAt("const gap ="));
   });
 
   it("falls back to the first mapped span after it when nothing maps before", () => {
@@ -172,7 +191,7 @@ describe("approximateUnmapped", () => {
 
   it("treats a range that any mapping covers as mapped", () => {
     const language = languageWith([
-      mapping("const gap = oops;", "<p>{oops}</p>", reported),
+      mapping("const gap = oops;", "<p>{ghost}</p>", reported),
       {
         sourceOffsets: [0],
         generatedOffsets: [0],
@@ -180,7 +199,7 @@ describe("approximateUnmapped", () => {
         generatedLengths: [GENERATED.length],
         data: reported,
       },
-      mapping("oops", "oops", { verification: true }),
+      mapping("oops", "ghost", { verification: true }),
     ]);
     // The range is covered (by the mapping of `oops` itself), so it is mapped
     // and stays exact: nothing moves.
@@ -195,7 +214,7 @@ describe("approximateUnmapped", () => {
     expect(moved.start).toBe(SOURCE.length);
     expect(moved.length).toBe(0);
     expect(moved.messageText).toContain(
-      "(position approximate: generated 3:13)",
+      "(in MX-generated code, not yours: an MX bug; generated 3:13)",
     );
   });
 
@@ -220,7 +239,7 @@ describe("approximateUnmapped", () => {
 
     expect(moved.messageText).toEqual({
       ...chain,
-      messageText: `Type 'a' is not assignable to type 'b'.${approximateSuffix(3, 13)}`,
+      messageText: `Type 'a' is not assignable to type 'b'.${mxBugSuffix(3, 13)}`,
     });
   });
 
@@ -238,7 +257,7 @@ describe("approximateUnmapped", () => {
       verification: { shouldReport: (_source, code) => code !== "1108" },
     };
     const language = languageWith([
-      mapping("const gap = oops;", "<p>{oops}</p>", hiding),
+      mapping("const gap = oops;", "<p>{ghost}</p>", hiding),
     ]);
     const spurious = diagnosticAt("oops", SOURCE.length, { code: 1108 });
 
@@ -307,7 +326,7 @@ describe("approximateUnmappedDiagnostics", () => {
         "token",
       );
       expect(result[0]).toBe(exact);
-      expect(String(result[1]?.messageText)).toContain("position approximate");
+      expect(String(result[1]?.messageText)).toContain("generated 3:13");
     }
     expect(calls).toHaveLength(PROGRAM_DIAGNOSTIC_METHODS.length);
     expect(calls[0]).toEqual([PROGRAM_DIAGNOSTIC_METHODS[0], "sf", "token"]);

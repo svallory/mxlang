@@ -30,6 +30,14 @@ export function approximateSuffix(line: number, column: number): string {
   return ` (position approximate: generated ${line}:${column})`;
 }
 
+/**
+ * The text appended when the diagnostic's generated line holds no authored
+ * code at all: the error is in code MX wrote, not in anything the author did.
+ */
+export function mxBugSuffix(line: number, column: number): string {
+  return ` (in MX-generated code, not yours: an MX bug; generated ${line}:${column})`;
+}
+
 type Diagnostic = ts.Diagnostic;
 
 /** The service script's code, the way Volar's `getServiceScript` finds it. */
@@ -156,18 +164,33 @@ export function approximateUnmapped<T extends Diagnostic>(
   }
 
   const snapshot = serviceScript.code.snapshot;
-  const [line, column] = lineAndColumn(
-    snapshot.getText(0, snapshot.getLength()),
-    generatedStart,
+  const generated = snapshot.getText(0, snapshot.getLength());
+  const [line, column] = lineAndColumn(generated, generatedStart);
+  const ranges = reportedRanges(serviceScript.code.mappings, source, code);
+  // Authored code is on the diagnostic's own generated line(s): inside or
+  // next to a mapped expression, or text the source spells out. Anything else
+  // is MX's own scaffolding.
+  const lineStart = generated.lastIndexOf("\n", generatedStart - 1) + 1;
+  const lineEndAt = generated.indexOf("\n", generatedStart + length);
+  const lineEnd = lineEndAt < 0 ? generated.length : lineEndAt;
+  const spanned = generated
+    .slice(generatedStart, generatedStart + length)
+    .trim();
+  const sourceText = sourceScript.snapshot.getText(
+    0,
+    sourceScript.snapshot.getLength(),
   );
+  const authored =
+    ranges.some((range) => range.end > lineStart && range.start < lineEnd) ||
+    // A unit that maps no expression values at all (a whole-file Solid page)
+    // still carries the author's own text: an error on a token the source
+    // spells out verbatim is the author's.
+    (spanned.length >= 2 && sourceText.includes(spanned));
   const messageText = suffixed(
     diagnostic.messageText,
-    approximateSuffix(line, column),
+    authored ? approximateSuffix(line, column) : mxBugSuffix(line, column),
   );
-  const nearest = nearestRange(
-    reportedRanges(serviceScript.code.mappings, source, code),
-    generatedStart,
-  );
+  const nearest = nearestRange(ranges, generatedStart);
   if (!nearest) {
     // No mapped span at all: the file's start, which `anchorEmptyMappings`
     // gave an empty module a zero-length mapping for.

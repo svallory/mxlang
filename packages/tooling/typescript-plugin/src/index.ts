@@ -389,6 +389,7 @@ export {
   approximateUnmapped,
   approximateUnmappedDiagnostics,
   LANGUAGE_SERVICE_DIAGNOSTIC_METHODS,
+  mxBugSuffix,
   PROGRAM_DIAGNOSTIC_METHODS,
 } from "./unmapped-diagnostics.ts";
 export default pluginFactory;

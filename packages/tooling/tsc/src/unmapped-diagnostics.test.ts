@@ -42,6 +42,20 @@ describe("mx-tsc and a diagnostic with no source mapping", () => {
     ]);
   }, 60_000);
 
+  it("says it is MX's bug when the generated code holds nothing the author wrote", () => {
+    // `Page.mx` is `<p>hi</p>`; the fixture's tsconfig points `@mxlang/html`
+    // nowhere, so the unresolved import MX generates is the error. No authored
+    // code is on its line: it is MX's own scaffolding, at the file start.
+    const { status, lines } = mxTsc("unmapped-scaffolding-failing");
+
+    expect(status).not.toBe(0);
+    expect(lines).toEqual([
+      expect.stringMatching(
+        /Page\.mx\(1,1\): error TS2307: Cannot find module '@mxlang\/html'.* \(in MX-generated code, not yours: an MX bug; generated 1:\d+\)$/,
+      ),
+    ]);
+  }, 60_000);
+
   it("leaves an exactly mapped diagnostic's message and position as they were", () => {
     const { status, lines } = mxTsc("expression-values/html");
 
