@@ -1387,8 +1387,21 @@ describe("MX language plugin", () => {
         [wrongType]: "<counter/n start=1/>\n<p>${n.toUpperCase()}</p>\n",
         [consumer]:
           'import "./good.mx";\nimport "./bad.mx";\nimport "./wrong-type.mx";',
+        [join(dir, "tags", "counter.mx")]: readFileSync(
+          join(dir, "tags", "counter.mx"),
+          "utf8",
+        ),
+        [join(dir, "tags", "plain.mx")]: readFileSync(
+          join(dir, "tags", "plain.mx"),
+          "utf8",
+        ),
+        [join(dir, "jsx.d.ts")]:
+          "declare namespace JSX { interface IntrinsicElements { [tag: string]: unknown } }",
       };
-      const service = createPluginService(files, [consumer]);
+      const service = createPluginService(files, [
+        consumer,
+        join(dir, "jsx.d.ts"),
+      ]);
       service.getSemanticDiagnostics(consumer);
       const diagnose = (fileName: string) => {
         const plugin = createMxLanguagePlugin(ts);
@@ -1465,6 +1478,10 @@ describe("MX language plugin", () => {
           "export function App() {\n  return <div><counter/n start=1/><p>${n.toUpperCase()}</p></div>;\n}\n",
         [consumer]:
           'import "./good.solid.mx";\nimport "./wrong-type.solid.mx";',
+        [join(dir, "tags", "counter.mx")]: readFileSync(
+          join(dir, "tags", "counter.mx"),
+          "utf8",
+        ),
       };
       const service = createPluginService(files, [consumer]);
       service.getSemanticDiagnostics(consumer);
