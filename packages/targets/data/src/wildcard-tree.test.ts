@@ -101,7 +101,8 @@ describe("wildcard-matched tags in the data tree (decision 147)", () => {
   it("serializes and compiles with the fields intact", () => {
     const src = "<resource>\n  <foo_bar type='x'/>\n</resource>\n";
     const { tree: doc } = parseData(src, "/w.mx", { customTags: tags });
-    const json = JSON.parse(JSON.stringify(serializeDataDocument(doc!)));
+    if (!doc) throw new Error("expected a tree");
+    const json = JSON.parse(JSON.stringify(serializeDataDocument(doc)));
     expect(json.children[0].children[0]).toMatchObject({
       name: "foo_bar",
       contract: "attribute",

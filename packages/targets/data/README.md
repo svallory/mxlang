@@ -103,7 +103,7 @@ tree keeps what was written and says what claimed it, on the matched `tag`:
 | field | meaning |
 |---|---|
 | `name` | the authored name (`title`), as for every tag; `nameSpan` slices it |
-| `contract` | the canonical tag whose contract applied (`attribute`); for an inline contract, equal to `name` |
+| `contract` | the canonical tag whose contract applied (`attribute`); for an inline contract, equal to `name` (equality alone does not mean inline: a by-reference entry whose contract tag has the authored name gives the same) |
 | `groups` | the entry pattern's named capture groups; absent without any |
 
 Both fields are absent on every tag no wildcard claimed, so a tree without

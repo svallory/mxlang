@@ -18,7 +18,10 @@ the first) decides what any tag or expression means. Design:
   authored text; `code` is generated). `Text` and the structural nodes carry
   the spans core adds at `feat(core): spans on Text, Comment and structural
   IR nodes` (#234, the 131 addendum's item 7); a text node's `value` is
-  Marko-normalized while its `span` slices the text as authored.
+  Marko-normalized while its `span` slices the text as authored. A tag a
+  parent's `children["*"]` claimed (decision 147) keeps the authored `name`
+  and carries `contract?` (canonical tag) and `groups?`; every other tag has
+  neither, so trees without wildcards serialize as before.
 - `src/taglib.ts` — the data taglib. The 19 HTML parse-rule neutralizations
   (`openTagOnly`/`text`/`preserveWhitespace` to `false`) are **derived from
   Marko's own lookup**, not hand-listed; `taglib.test.ts` pins the measured
