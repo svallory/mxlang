@@ -1037,7 +1037,11 @@ describe("component aliases", () => {
         join(scratch, "main.mx"),
         { warnings },
       );
-      expect(code).toContain("<__mxBadge");
+      // The taglib tag, under core's binding: never the authored import.
+      expect(code).toContain('import _badge from "./tags/badge.marko"');
+      expect(code.split('"./tags/badge.marko"')).toHaveLength(2);
+      expect(code).toContain('<_badge label="x" />');
+      expect(code).not.toContain("__mxBadge");
       expect(code).not.toContain('<badge label="x" />');
       expect(warnings).toEqual([]);
     } finally {
