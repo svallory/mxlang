@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix, behaviour change (statement-followup, decision 168):** JSX in a `static`/`export`/`server` statement (`static const el = <b>hi</b>` followed by a template line) was a silent swallow of the next template line on html (the statement ran on into it, leaving an empty template); it is now a positioned error at the `<` naming JSX in a statement. A decorated `static class` is accepted again.
+
 - **Fix (statement-tags r3, decision 168):** `server const el = <b>hi</b>` (or a `server`/`client` line ending in `>` that swallowed the next template line) is a positioned syntax error at Marko's position; html used to run or drop the joined text unchecked, emptying the template. A valid `server` statement is unchanged.
 
 - **Changed (statement-tags, decision 168):** `class { … }` is the shared positioned "not supported in MX" error, replacing "Unable to find entry point for custom tag `<class>`".

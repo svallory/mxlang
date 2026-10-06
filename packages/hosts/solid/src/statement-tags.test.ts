@@ -83,16 +83,16 @@ describe("statement text is checked like Marko checks it", () => {
     [
       "JSX",
       "static const el = <b>hi</b>\n<div/>",
-      "Unterminated regular expression.",
+      "JSX is not read inside a `static` statement: its text is TypeScript. Write the markup as a tag in the template, or in a `<define>`",
       1,
-      25,
+      18,
     ],
     [
       "export JSX",
       "export const el = <b>hi</b>\n<div/>",
-      "Unterminated regular expression.",
+      "JSX is not read inside a `export` statement: its text is TypeScript. Write the markup as a tag in the template, or in a `<define>`",
       1,
-      25,
+      18,
     ],
     [
       "a line ending in `>` joins the template line",
@@ -117,6 +117,12 @@ describe("statement text is checked like Marko checks it", () => {
       expect((error as { column?: number }).column).toBe(column);
     });
   }
+
+  it("keeps a decorated class intact (decorators are read in a statement)", () => {
+    expect(out("static class K { @d m() {} }\n<div/>")).toContain(
+      "class K { @d m() {} }",
+    );
+  });
   if (!ANGULAR) {
     it("joins a line ending in an operator when the result is valid", () => {
       expect(out("static const t = 1 +\n2\n<div>${t}</div>")).toContain(

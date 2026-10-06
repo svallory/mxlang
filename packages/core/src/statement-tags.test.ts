@@ -79,10 +79,45 @@ describe("a statement is checked like Marko checks it", () => {
     return lower(ctx, body);
   };
 
-  it("refuses JSX where Marko refuses it", () => {
-    expect(() => lowerSource("static const el = <b>hi</b>\n")).toThrow(
-      "Unterminated regular expression.",
+  it("refuses JSX with MX's own message, at the `<`", () => {
+    try {
+      lowerSource("static const el = <b>hi</b>\n");
+    } catch (error) {
+      const e = error as { message: string; line: number; column: number };
+      expect(e.message).toBe(
+        "JSX is not read inside a `static` statement: its text is TypeScript. Write the markup as a tag in the template, or in a `<define>`",
+      );
+      expect([e.line, e.column]).toEqual([1, 18]);
+      return;
+    }
+    throw new Error("expected a compile error");
+  });
+
+  it("finds the `<` of a JSX value that starts on a later line", () => {
+    try {
+      lowerSource("static const el =\n  <b>hi</b>\n");
+    } catch (error) {
+      const e = error as { message: string; line: number; column: number };
+      expect(e.message).toContain(
+        "JSX is not read inside a `static` statement",
+      );
+      expect([e.line, e.column]).toEqual([2, 2]);
+      return;
+    }
+    throw new Error("expected a compile error");
+  });
+
+  it("keeps Babel's own message for a parse error that is not JSX", () => {
+    expect(() => lowerSource("static const a = 1 +\n")).toThrow(
+      "Unexpected token",
     );
+  });
+
+  it("reads a decorated class (decorators-legacy), as before decision 168", () => {
+    const ir = lowerSource(
+      "static function d() { return (x: any) => x }\nstatic class K { @d() m() {} }\n<div/>\n",
+    );
+    expect(ir.hoisted.map((s) => s.code)).toContain("class K { @d() m() {} }");
   });
 
   it("joins a line ending in an operator when the result is valid", () => {

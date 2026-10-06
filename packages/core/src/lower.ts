@@ -24,6 +24,7 @@
  */
 
 import { readFileSync } from "node:fs";
+import { parse as babelParse, type ParserPlugin } from "@babel/parser";
 import { freeIdentifiersIn } from "./accessor-reads.ts";
 import { checkAtomContracts } from "./atom-contracts.ts";
 import { assertNoStandIn, atomOf, atomsIn, convertAtoms } from "./atoms.ts";
@@ -2629,28 +2630,123 @@ function rejectInvalidStatement(
   node: Node,
   code: string,
   prefix: number,
+  keyword: string,
 ): void {
+  const options = {
+    sourceType: "module",
+    // `decorators-legacy` reads `@d m() {}` and `@d() m() {}`, the form a
+    // `static class` carried before decision 168 (#395 follow-up).
+    plugins: ["typescript", "decorators-legacy"],
+    // A top-level `return` is TypeScript's TS1108 to report, with its mapping,
+    // in an Astro fence and a template `static` alike; stock Marko 6.3.51
+    // compiles a template `static return` too.
+    allowReturnOutsideFunction: true,
+  };
+  const start = posOf(node);
+  const place = (at?: { line: number; column: number }) => ({
+    line: start.line + (at ? at.line - 1 : 0),
+    column:
+      !at || at.line === 1
+        ? start.column + prefix + (at?.column ?? 0)
+        : at.column,
+  });
   try {
-    markoBabel().parse(code, {
-      sourceType: "module",
-      plugins: ["typescript"],
-      // A top-level `return` is TypeScript's TS1108 to report, with its mapping,
-      // in an Astro fence and a template `static` alike; stock Marko 6.3.51
-      // compiles a template `static return` too.
-      allowReturnOutsideFunction: true,
-    });
+    markoBabel().parse(code, options);
   } catch (error) {
-    const at = (error as { loc?: { line: number; column: number } }).loc;
-    const start = posOf(node);
-    const first = !at || at.line === 1;
+    // JSX is not read in a statement. Detected by what the failure is: the
+    // text parses once the JSX syntax is on, so the error is the markup's, and
+    // it is reported at the first element's `<` instead of wherever Babel's
+    // tokenizer gave up ("Unterminated regular expression.").
+    const jsx = firstJsxStart(code, options);
+    // A `<` right after a `>` is the join of a line ending in `>` with the
+    // template line below it (`2 >⏎<div>…`), which Marko reports as the
+    // joined expression's own error; that message stays Babel's.
+    if (jsx && !followsGreaterThan(code, jsx)) {
+      const at = place(jsx);
+      throw new TranslateError(
+        `JSX is not read inside a \`${keyword}\` statement: its text is TypeScript. Write the markup as a tag in the template, or in a \`<define>\``,
+        at.line,
+        at.column,
+      );
+    }
+    const at = place((error as { loc?: { line: number; column: number } }).loc);
     throw new TranslateError(
       String((error as Error).message)
         .replace(/\s*\(\d+:\d+\)$/, "")
         .trim(),
-      start.line + (at ? at.line - 1 : 0),
-      first ? start.column + prefix + (at?.column ?? 0) : (at?.column ?? 0),
+      at.line,
+      at.column,
     );
   }
+}
+
+/** Whether the last non-blank character before `at` in `code` is `>`. */
+function followsGreaterThan(
+  code: string,
+  at: { line: number; column: number },
+): boolean {
+  const lines = code.split("\n");
+  let offset = at.column;
+  for (let i = 0; i < at.line - 1; i++) offset += (lines[i]?.length ?? 0) + 1;
+  return code.slice(0, offset).trimEnd().endsWith(">");
+}
+
+/** Where the first JSX element or fragment of `code` starts, when `code` parses only with JSX on. */
+function firstJsxStart(
+  code: string,
+  options: { plugins: string[] },
+): { line: number; column: number } | undefined {
+  const parseWithJsx = (text: string): Node =>
+    // Marko's slim Babel has no `jsx` plugin; core's own `@babel/parser` does.
+    babelParse(text, {
+      sourceType: "module",
+      allowReturnOutsideFunction: true,
+      plugins: [...options.plugins, "jsx"] as ParserPlugin[],
+    });
+  let file: Node;
+  try {
+    file = parseWithJsx(code);
+  } catch (error) {
+    // `<b>hi</b>` followed by the swallowed template line is two adjacent
+    // elements, which Babel will not recover from: the text before where it
+    // gave up is the evidence.
+    const pos = (error as { pos?: number }).pos;
+    if (typeof pos !== "number" || pos <= 0) return undefined;
+    try {
+      file = parseWithJsx(code.slice(0, pos));
+    } catch {
+      return undefined;
+    }
+  }
+  let found: { line: number; column: number } | undefined;
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    const node = value as Node;
+    if (
+      (node.type === "JSXElement" || node.type === "JSXFragment") &&
+      node.loc?.start
+    ) {
+      const at = node.loc.start as { line: number; column: number };
+      if (
+        !found ||
+        at.line < found.line ||
+        (at.line === found.line && at.column < found.column)
+      ) {
+        found = { line: at.line, column: at.column };
+      }
+      return;
+    }
+    for (const key of Object.keys(node)) {
+      if (key === "loc" || key === "extra") continue;
+      visit(node[key]);
+    }
+  };
+  visit(file.program);
+  return found;
 }
 
 function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
@@ -2672,6 +2768,7 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
     node,
     name === "static" ? line.replace(/^static\s+/, "") : line,
     name === "static" ? (/^static\s+/.exec(line)?.[0].length ?? 0) : 0,
+    name,
   );
 
   if (name === "import") {
@@ -3558,7 +3655,12 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   ) {
     const text = sliceLoc(ctx, node.loc).trim();
     const keyword = new RegExp(`^${name}\\s+`).exec(text)?.[0] ?? name;
-    rejectInvalidStatement(node, text.slice(keyword.length), keyword.length);
+    rejectInvalidStatement(
+      node,
+      text.slice(keyword.length),
+      keyword.length,
+      name,
+    );
   }
 
   const disposition = Object.hasOwn(ctx.declarations.tags, name)

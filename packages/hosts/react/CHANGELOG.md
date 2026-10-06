@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix (statement-followup, decision 168):** the error for JSX in a `static`/`export` statement is MX's own message at the `<` (was Babel's "Unterminated regular expression."); a decorated `static class` is accepted again.
+
 - **Fix, behaviour change (statement-tags, decision 168):** statements parse as statements (typed functions, `<T,>`, JSX and atoms in a `static`/`export` line now compile). `server` now fails with a positioned error where it was silently dropped; `client` keeps its error; `class { … }` is a positioned not-supported error. React region files behave the same.
 
 - **Fix (jsx-method-shorthand, decision 167):** an attribute method shorthand is emitted as a `function` / `async function` expression, and a body holding `) {` is valid JavaScript again (shared emitter, see `@mxlang/preact`). **Behaviour change:** `this` inside the method is the function's own, not lexical. Render-locked by `method-attr.test.ts`.

@@ -42,9 +42,9 @@ describe("server and client statement text is checked like Marko", () => {
     [
       "server JSX",
       "server const el = <b>hi</b>\n<div/>",
-      "Unterminated regular expression.",
+      "JSX is not read inside a `server` statement: its text is TypeScript. Write the markup as a tag in the template, or in a `<define>`",
       1,
-      25,
+      18,
     ],
     [
       "server swallowing join",
@@ -81,4 +81,10 @@ describe("server and client statement text is checked like Marko", () => {
     expect(code).toContain("console.log(1)");
     expect(code).toContain("<div></div>");
   });
+});
+
+it("keeps a decorated class intact (decorators are read in a statement)", () => {
+  const { code } = compile("static class K { @d m() {} }\n<div/>", "/f/t.mx");
+  expect(code).toContain("class K { @d m() {} }");
+  expect(code).toContain("<div></div>");
 });

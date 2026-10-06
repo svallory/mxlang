@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix (statement-followup, decision 168):** the error for JSX in a `static`/`export` statement is MX's own message at the `<` (was Babel's "Unterminated regular expression."); a decorated `static class` is accepted again.
+
 - **Fix, behaviour change (statement-tags, decision 168):** statements parse as statements (typed functions, `<T,>`, JSX and atoms in a `static`/`export` line now compile). `server` now fails with a positioned error where it was silently dropped; `client` keeps its error; `class { … }` is a positioned not-supported error. Preact region files behave the same.
 
 - **Fix (jsx-method-shorthand, decision 167):** an attribute method shorthand (`onClick() { … }`) is emitted as the `function` / `async function` expression the compiler printed for it, not an arrow built by a regex over the printed text. That regex split at the last `) {`, so a body holding its own `) {` (`onClick() { if (c) { go() } }`) emitted `() { if (c) => { go(); } }`, which is not JavaScript. A method keeps its own `this` (amends decision 11) and, under `typeCheck`, its type parameters and parameter annotations; a runtime compile erases them as before. The head is unmapped generated text and the body maps token by token to the authored body, as on Solid. Shared emitter: applies to `@mxlang/react` and `@mxlang/hono`. **Behaviour change:** the emitted handler is a function, so `this` is no longer lexical. Render-locked per dialect by `method-attr.test.ts`.

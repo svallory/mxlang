@@ -74,16 +74,16 @@ describe("statement text is checked like Marko checks it", () => {
     [
       "JSX",
       "static const el = <b>hi</b>\n<div/>",
-      "Unterminated regular expression.",
+      "JSX is not read inside a `static` statement: its text is TypeScript. Write the markup as a tag in the template, or in a `<define>`",
       1,
-      25,
+      18,
     ],
     [
       "export JSX",
       "export const el = <b>hi</b>\n<div/>",
-      "Unterminated regular expression.",
+      "JSX is not read inside a `export` statement: its text is TypeScript. Write the markup as a tag in the template, or in a `<define>`",
       1,
-      25,
+      18,
     ],
     [
       "a line ending in `>` joins the template line",
@@ -115,4 +115,10 @@ describe("statement text is checked like Marko checks it", () => {
       );
     });
   }
+
+  it("reads a decorated class as a statement (decorators are read)", () => {
+    expect(fail("static class K { @d m() {} }\n<div/>").message).toMatch(
+      /a `<Static>` cannot be emitted into an Angular template/,
+    );
+  });
 });
