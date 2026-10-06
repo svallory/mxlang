@@ -29,16 +29,22 @@ import { compilePreactMx } from "./index.ts";
 const require = createRequire(import.meta.url);
 const packageDir = fileURLToPath(new URL("..", import.meta.url));
 
-/** Every non-capture `on…` prop name declared in a types file. */
+/**
+ * Every non-capture `on…` prop name declared in a types file. A name ending in
+ * `Capture` is a capture variant only when its base is declared too:
+ * `onGotPointerCapture` is the `gotpointercapture` event, and
+ * `onGotPointerCaptureCapture` its capture variant.
+ */
 function declaredHandlers(file: string): string[] {
   const names = new Set<string>();
   for (const match of readFileSync(file, "utf8").matchAll(
     /^\s+(on[A-Za-z]+)\??:/gm,
   )) {
-    const name = match[1] as string;
-    if (!name.endsWith("Capture")) names.add(name);
+    names.add(match[1] as string);
   }
-  return [...names];
+  return [...names].filter(
+    (name) => !(name.endsWith("Capture") && names.has(name.slice(0, -7))),
+  );
 }
 
 const preactTypes = join(
@@ -81,6 +87,16 @@ describe.each([
     });
   },
 );
+
+describe("pointer-capture events are handlers, not capture variants", () => {
+  it.each([
+    ["Preact", preactEventPropNames],
+    ["hono", honoEventPropNames],
+  ])("%s maps gotpointercapture and lostpointercapture", (_host, table) => {
+    expect(table.gotpointercapture).toBe("GotPointerCapture");
+    expect(table.lostpointercapture).toBe("LostPointerCapture");
+  });
+});
 
 describe("names only one host declares", () => {
   it("keeps each host's table to its own types", () => {

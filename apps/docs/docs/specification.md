@@ -1214,15 +1214,23 @@ each host recomposes its own form from `event`, so `onDblClick` and
 `on-dblclick` are two spellings that produce identical output on every host —
 on Solid that emission is `onDblclick` (capitalize-first of the DOM name; Solid
 lowercases the prop at bind time). The three shared JSX hosts recompose by
-**lookup, not by rule**: React's prop names are camelCase data from react-dom's
-own registration table (`simpleEventPluginEvents`), and Preact's and hono's are
-the camelCase names their JSX types declare, none of which a derivation can
-reverse (`keydown` → `onKeyDown`, never `onKeydown`; `dblclick` → React's and
-hono's `onDoubleClick`, Preact's `onDblClick`). Preact and hono bound the old
-`onKeydown` spelling at run time, but their types reject it (decision 161), so
-each target looks the spelling up in its own list. The DOM name from
+**lookup, not by rule**: each one's prop names are the camelCase handler props
+its own JSX types declare (`@types/react`, `preact`'s `jsx.d.ts`, `hono/jsx`'s
+intrinsic elements), none of which a derivation can reverse (`keydown` →
+`onKeyDown`, never `onKeydown`; `dblclick` → React's and hono's
+`onDoubleClick`, Preact's `onDblClick`; on React also `focusin` → `onFocus`
+and `focusout` → `onBlur`, react-dom's own bindings). Preact and hono bound
+the old `onKeydown` spelling at run time, but their types reject it (decision
+161), so each target looks the spelling up in its own list. The DOM name from
 `on<Name>`/`on-<exact>` is the input; the host's spelling is a lookup in its
-table. A DOM name a React list does not know falls back to capitalize-first; Preact's and hono's lists are closed, so a name their JSX types declare no handler prop for (`on-fullscreenchange` on Preact, `onDoubleClick` on Preact, `on-search` on hono) is a compile error, never an emitted prop.
+table. The lists are closed: a DOM name a host's JSX types declare no handler
+prop for is a positioned compile error, never an emitted prop the types reject
+or the runtime ignores (`on-fullscreenchange` on Preact and React, which
+react-dom binds but `@types/react` does not declare; `on-search` on hono and
+React; `onDoubleClick` on Preact). Where a host declares the authored React
+spelling `onDoubleClick` (React, hono), it emits that prop; core's
+"not a DOM event" warning still fires there, since core does not know the
+host.
 
 A name that is **not** event-shaped — `onclick`, `once`, `on` — is an ordinary
 attribute. `<div on="x">` is data.

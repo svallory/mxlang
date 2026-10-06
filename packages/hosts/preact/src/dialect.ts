@@ -99,21 +99,20 @@ export interface JsxDialect {
    * This dialect's event-prop names, keyed by DOM event name — the value is
    * the middle of the prop (`"KeyDown"` → `onKeyDown`), so the plain
    * `on` + capitalized-DOM-name recomposition is the fallback, not the
-   * rule. React's is a *lookup into React's own registration table*, vendored in
-   * `@mxlang/react`'s `dialect.ts` (`buildReactEventPropNames`, from
-   * react-dom's `simpleEventPluginEvents` plus the registrations outside
-   * that loop): React's names are camelCase data lowercased for the DOM,
-   * which no derivation can reverse (`keydown` → `onKeyDown`, never
-   * `onKeydown`). Preact and hono look theirs up in the camelCase names
-   * their JSX types declare ({@link preactEventPropNames}, {@link honoEventPropNames}).
+   * rule. The names are camelCase data no derivation can reverse
+   * (`keydown` → `onKeyDown`, never `onKeydown`), so every built-in dialect
+   * looks them up in a table holding exactly the handler props its JSX types
+   * declare ({@link preactEventPropNames}, {@link honoEventPropNames}, and
+   * `reactEventPropNames` in `@mxlang/react`'s `dialect.ts`).
    */
   eventPropNames?: Record<string, string>;
   /**
-   * \`true\` when {@link eventPropNames} is the complete list of handler props
+   * `true` when {@link eventPropNames} is the complete list of handler props
    * the dialect's JSX types declare: a DOM event name outside it is a compile
-   * error rather than an \`on\` + capitalized guess the type-check (or, under a
-   * plain build, nothing) would reject. Preact and hono; React keeps the
-   * capitalized fallback.
+   * error rather than an `on` + capitalized guess the type-check would reject
+   * and the runtime might never bind. All three built-in dialects (Preact,
+   * React, hono) set it; a dialect without it keeps the capitalized
+   * fallback.
    */
   closedEventPropNames?: boolean;
   /**
@@ -176,12 +175,14 @@ const SHARED_EVENT_NAMES: readonly string[] = [
   "FocusIn",
   "FocusOut",
   "FormData",
+  "GotPointerCapture",
   "Input",
   "Invalid",
   "KeyDown",
   "KeyPress",
   "KeyUp",
   "Load",
+  "LostPointerCapture",
   "MouseDown",
   "MouseEnter",
   "MouseLeave",

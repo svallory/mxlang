@@ -16,7 +16,9 @@ import { createJsxDeclarations } from "@mxlang/preact/emitter";
  * name MX resolved is the *input*, and React's spelling is a *lookup* in
  * this list — that is the whole rule.
  *
- * Kept as data, not code, so the drift test
+ * This is react-dom's *runtime* table: what it binds, not what MX emits
+ * ({@link reactEventPropNames} is that, from the types). Kept as data, not
+ * code, so the drift test
  * (`src/event-names.test.ts`) can compare it against the installed
  * react-dom and a pin bump cannot silently change React's names.
  */
@@ -97,8 +99,8 @@ export const REACT_SIMPLE_EVENT_NAMES: readonly string[] = [
 ];
 
 /**
- * DOM event name → React's camelCase event name (without the `on` prefix),
- * built from {@link REACT_SIMPLE_EVENT_NAMES} plus everything react-dom
+ * DOM event name → the camelCase event name react-dom registers for it
+ * (without the `on` prefix), built from {@link REACT_SIMPLE_EVENT_NAMES} plus everything react-dom
  * registers outside that loop:
  *
  * - the vendor-prefixed animation/transition events, keyed by their
@@ -109,10 +111,11 @@ export const REACT_SIMPLE_EVENT_NAMES: readonly string[] = [
  *   (`mouseenter` → `MouseEnter`, `beforeinput` → `BeforeInput`,
  *   `compositionstart` → `CompositionStart`, `select` → `Select`, …).
  *
- * `change` is deliberately absent: the shared emitter's plain recomposition
- * already yields `onChange`, and React's `onChange` semantics (binds `input`
- * on text fields) are the documented gotcha, not a name MX should treat as
- * an ordinary rename.
+ * `change` is absent: react-dom's `ChangeEventPlugin` registers `onChange`
+ * separately (binding `input` on text fields, the documented gotcha).
+ *
+ * The runtime side only: the drift test uses it to prove react-dom binds every
+ * name in {@link reactEventPropNames}, which is what the emitter looks up.
  */
 export function buildReactEventPropNames(): Record<string, string> {
   const names: Record<string, string> = {};
@@ -147,6 +150,125 @@ export function buildReactEventPropNames(): Record<string, string> {
   return names;
 }
 
+/**
+ * Every DOM handler prop `@types/react` declares (the middle of the prop:
+ * `"KeyDown"` → `onKeyDown`), capture variants aside: the props of
+ * `DOMAttributes` plus the element-specific `onCancel`/`onClose` (`<dialog>`)
+ * and `onResize` (`<video>`). This, not react-dom's registration table, is
+ * what MX may emit: react-dom also registers `onFullscreenChange` and
+ * `onFullscreenError`, which the types reject (TS2322 under `mx-tsc`).
+ * `src/event-names.test.ts` compares it both ways against the installed
+ * `@types/react`, and checks that react-dom binds every name.
+ */
+export const REACT_DECLARED_EVENT_NAMES: readonly string[] = [
+  "Abort",
+  "AnimationEnd",
+  "AnimationIteration",
+  "AnimationStart",
+  "AuxClick",
+  "BeforeInput",
+  "BeforeToggle",
+  "Blur",
+  "Cancel",
+  "CanPlay",
+  "CanPlayThrough",
+  "Change",
+  "Click",
+  "Close",
+  "CompositionEnd",
+  "CompositionStart",
+  "CompositionUpdate",
+  "ContextMenu",
+  "Copy",
+  "Cut",
+  "DoubleClick",
+  "Drag",
+  "DragEnd",
+  "DragEnter",
+  "DragExit",
+  "DragLeave",
+  "DragOver",
+  "DragStart",
+  "Drop",
+  "DurationChange",
+  "Emptied",
+  "Encrypted",
+  "Ended",
+  "Error",
+  "Focus",
+  "GotPointerCapture",
+  "Input",
+  "Invalid",
+  "KeyDown",
+  "KeyPress",
+  "KeyUp",
+  "Load",
+  "LoadedData",
+  "LoadedMetadata",
+  "LoadStart",
+  "LostPointerCapture",
+  "MouseDown",
+  "MouseEnter",
+  "MouseLeave",
+  "MouseMove",
+  "MouseOut",
+  "MouseOver",
+  "MouseUp",
+  "Paste",
+  "Pause",
+  "Play",
+  "Playing",
+  "PointerCancel",
+  "PointerDown",
+  "PointerEnter",
+  "PointerLeave",
+  "PointerMove",
+  "PointerOut",
+  "PointerOver",
+  "PointerUp",
+  "Progress",
+  "RateChange",
+  "Reset",
+  "Resize",
+  "Scroll",
+  "ScrollEnd",
+  "Seeked",
+  "Seeking",
+  "Select",
+  "Stalled",
+  "Submit",
+  "Suspend",
+  "TimeUpdate",
+  "Toggle",
+  "TouchCancel",
+  "TouchEnd",
+  "TouchMove",
+  "TouchStart",
+  "TransitionCancel",
+  "TransitionEnd",
+  "TransitionRun",
+  "TransitionStart",
+  "VolumeChange",
+  "Waiting",
+  "Wheel",
+];
+
+/**
+ * DOM event name → the middle of the React handler prop MX emits for it: one
+ * entry per {@link REACT_DECLARED_EVENT_NAMES} name, keyed by its lowercase,
+ * plus react-dom's three hand registrations keyed by the DOM event they bind
+ * (`dblclick` → `DoubleClick`, `focusin` → `Focus`, `focusout` → `Blur`).
+ * The authored React spelling `onDoubleClick` (`doubleclick`) therefore lands
+ * on the declared `onDoubleClick`, as on hono. Closed: a DOM name outside it
+ * is a compile error (`JsxDialect.closedEventPropNames`).
+ */
+export const reactEventPropNames: Record<string, string> = Object.assign(
+  Object.fromEntries(
+    REACT_DECLARED_EVENT_NAMES.map((name) => [name.toLowerCase(), name]),
+  ),
+  { dblclick: "DoubleClick", focusin: "Focus", focusout: "Blur" },
+);
+
 /** React vocabulary for the shared Preact/React JSX emitter. */
 export const reactDialect: JsxDialect = {
   name: "React",
@@ -163,11 +285,11 @@ export const reactDialect: JsxDialect = {
   errorBoundaryName: "MxErrorBoundary",
   suspenseName: "MxPlaceholder",
   fragmentModule: "react",
-  // React's own event-prop spellings, keyed by DOM event name — a lookup,
-  // not a derivation (see buildReactEventPropNames). Anything not in the
-  // map falls back to the shared emitter's `on` + capitalized-DOM-name
-  // recomposition, which React tolerates for the names it does not know.
-  eventPropNames: buildReactEventPropNames(),
+  // React's declared event-prop spellings, keyed by DOM event name — a
+  // lookup, not a derivation (see reactEventPropNames). Closed: a DOM name
+  // React's types declare no handler for is a compile error.
+  eventPropNames: reactEventPropNames,
+  closedEventPropNames: true,
   hookModules: ["react"],
 };
 

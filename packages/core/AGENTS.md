@@ -193,17 +193,17 @@ Five facts worth knowing before editing it:
   event, verified against `lib.dom.d.ts`. `on:*`/`oncapture:*` get no meaning
   from core and reach the host through the existing modifier hook, which every
   host rejects with a per-prefix fix-it naming `on-<exact>`.
-  **Phase B emission (each host recomposes from `attr.event`):** Solid and the
-  Preact/hono targets emit `on` + the capitalized DOM name (`click` →
-  `onClick`, `dblclick` → `onDblclick` — capitalize-first, so `onDblClick` and
-  `on-dblclick` are byte-identical there), and those runtimes lowercase the
-  prop at bind time, so `onDblclick` binds `dblclick`. The React target is
-  different in kind: React's prop names are camelCase data from react-dom's
-  own registration table (`simpleEventPluginEvents`), which no derivation can
-  reverse (`keydown` → `onKeyDown`), so the React target vendors the list and
-  looks the spelling up (`buildReactEventPropNames` in
-  `packages/hosts/react/src/dialect.ts`, guarded by a drift test against the
-  installed react-dom). A custom DOM
+  **Phase B emission (each host recomposes from `attr.event`):** every JSX
+  host looks the prop up in the handler props its own JSX types declare,
+  which no derivation can reverse (`keydown` → `onKeyDown`; `dblclick` →
+  Solid's and Preact's `onDblClick`, React's and hono's `onDoubleClick`), so
+  `onDblClick` and `on-dblclick` are byte-identical on each. Solid's table is
+  `packages/hosts/solid/src/event-names.ts`; Preact's and hono's are in
+  `packages/hosts/preact/src/dialect.ts`; React's (`reactEventPropNames`) in
+  `packages/hosts/react/src/dialect.ts`; each is drift-tested against the
+  installed types. Preact, React and hono tables are closed
+  (`JsxDialect.closedEventPropNames`): a DOM name the host's types declare no
+  handler for is a positioned compile error. A custom DOM
   event a JSX prop cannot spell (`on-my-event`) is a uniform positioned error
   on solid/preact/react/hono naming the `ref` route — JSX hosts cannot express
   it, and the same source must not silently do nothing on one host. Angular

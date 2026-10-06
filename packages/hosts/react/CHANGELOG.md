@@ -1,5 +1,7 @@
 # @mxlang/react
 
+- **Fix (jsx-handler-prop-names, decision 161):** handler props come from a closed table of the names `@types/react` declares (`reactEventPropNames`, new export with `REACT_DECLARED_EVENT_NAMES`), checked both ways against the installed types and against react-dom's registrations. **Behaviour change:** a DOM event the types declare no handler for is a compile error instead of an `on` + capitalized prop: `on-fullscreenchange`/`on-fullscreenerror` (react-dom binds them, the types reject them), `on-search`, `on-command`, `on-formdata`, `on-animationcancel`, `onMouseWheel`, `on-scrollsnapchange` and any other unlisted name. The authored `onDoubleClick` emits React's declared `onDoubleClick` (was `onDoubleclick`, which React never bound). Every declared name emits as before. `src/event-names.test.ts` fires keydown/keyup/mousedown/dblclick/focusin at the emitted props through react-dom in jsdom.
+
 - **Fix (jsx-handler-prop-names, decision 161):** the type-check-only handler wrapper ends in `as any`, so a mistyped handler is reported once (TS1360, mapped) instead of also as an unmapped TS2322 on the JSX prop. Emitted output is unchanged.
 
 - **Fix (native-tag-binding-capture, decision 164):** a lowercase tag is a native element whatever `import` or `<define>` binding of that name is in scope (shared emitter, see `@mxlang/preact`). A warning is raised at the tag.

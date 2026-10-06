@@ -279,13 +279,20 @@ describe("event attributes (decision 101, phase B of dom-events)", () => {
     expect(markup("<input on-focusout=i>")).toBe("<input onBlur={i} />");
   });
 
-  it("emits onDoubleClick as onDoubleclick plus core's warning, never a rewrite", () => {
-    // No aliases (decision 101 (c)): the authored `onDoubleClick` lowercases
-    // to `doubleclick`, which React would silently drop; core warns and the
-    // prop is recomposed exactly as written. The warning is pinned in the
-    // core's lower tests.
+  it("emits the authored onDoubleClick as React's declared onDoubleClick", () => {
+    // The authored `onDoubleClick` lowercases to `doubleclick`, which is not
+    // a DOM event (core warns); React's types declare `onDoubleClick` and
+    // react-dom binds it to `dblclick`, so the table maps `doubleclick` to it
+    // rather than emitting the undeclared `onDoubleclick`, which React would
+    // silently drop. The warning is pinned in the core's lower tests.
     expect(markup("<button onDoubleClick=handler>x</button>")).toBe(
-      "<button onDoubleclick={handler}>x</button>",
+      "<button onDoubleClick={handler}>x</button>",
+    );
+  });
+
+  it("rejects a DOM event React's types declare no handler for", () => {
+    expect(() => compile("<div on-fullscreenchange=fn>x</div>")).toThrow(
+      "`on-fullscreenchange` names the DOM event `fullscreenchange`, which React's JSX types declare no handler prop for",
     );
   });
 
