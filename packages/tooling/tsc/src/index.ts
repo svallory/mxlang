@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import {
   ambientTypeFiles,
+  anchorEmptyMappings,
   approximateUnmappedDiagnostics,
   type CompiledNgMx,
   createAmxLanguagePlugin,
@@ -372,7 +373,7 @@ function runPatchedTsc(
         }
         plugins.push(createCompoundExtensionResolver(typescript));
         return {
-          languagePlugins: plugins,
+          languagePlugins: anchorEmptyMappings(plugins),
           setup: (language) => {
             // Runs before Volar copies the host and patches `getSourceFile` on
             // that copy, so every edit below lands on the host it copies from.

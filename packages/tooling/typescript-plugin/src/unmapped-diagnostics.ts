@@ -1,7 +1,9 @@
 import {
   type CodeMapping,
   type Language,
+  type LanguagePlugin,
   shouldReportDiagnostics,
+  type VirtualCode,
 } from "@volar/language-core";
 import type * as ts from "typescript";
 
@@ -118,8 +120,9 @@ function suffixed(
  * `diagnostic`, or — when Volar could not map it back to the source — a copy
  * Volar can: moved onto the nearest mapped span of the generated module and
  * suffixed with {@link approximateSuffix}. A module with no mapped span at all
- * keeps the diagnostic's file but drops its position, which Volar passes
- * through and `tsc` prints as a file-level error.
+ * puts it at the file start (1:1) through the anchor mapping
+ * {@link anchorEmptyMappings} adds; `tsc` cannot print a diagnostic that has a
+ * file but no position.
  */
 export function approximateUnmapped<T extends Diagnostic>(
   language: Language<string>,
@@ -166,7 +169,9 @@ export function approximateUnmapped<T extends Diagnostic>(
     generatedStart,
   );
   if (!nearest) {
-    return { ...diagnostic, start: undefined, length: undefined, messageText };
+    // No mapped span at all: the file's start, which `anchorEmptyMappings`
+    // gave an empty module a zero-length mapping for.
+    return { ...diagnostic, start: leading, length: 0, messageText };
   }
   return {
     ...diagnostic,
@@ -218,3 +223,46 @@ export const LANGUAGE_SERVICE_DIAGNOSTIC_METHODS = [
   "getSemanticDiagnostics",
   "getSuggestionDiagnostics",
 ] as const;
+
+/**
+ * The mapping that lets a diagnostic land at the file start (1:1) when a
+ * module has no mapped span of its own (a failed compile's stub, an empty
+ * template): zero-length, generated offset 0 to source offset 0.
+ */
+const ANCHOR: CodeMapping = {
+  sourceOffsets: [0],
+  generatedOffsets: [0],
+  lengths: [0],
+  generatedLengths: [0],
+  data: { verification: true },
+};
+
+function anchored<T extends VirtualCode>(code: T | undefined): T | undefined {
+  if (code && code.mappings.length === 0) {
+    code.mappings = [ANCHOR];
+  }
+  return code;
+}
+
+/**
+ * Gives every virtual code a plugin creates or updates with no mapping at all
+ * the {@link ANCHOR} mapping, so {@link approximateUnmapped} has a span to put
+ * a diagnostic on. Mutates the plugins' two hooks in place; a code that has
+ * any mapping is untouched.
+ */
+export function anchorEmptyMappings<P extends LanguagePlugin<string>>(
+  plugins: P[],
+): P[] {
+  for (const plugin of plugins) {
+    const { createVirtualCode, updateVirtualCode } = plugin;
+    if (createVirtualCode) {
+      plugin.createVirtualCode = (...args) =>
+        anchored(createVirtualCode.apply(plugin, args));
+    }
+    if (updateVirtualCode) {
+      plugin.updateVirtualCode = (...args) =>
+        anchored(updateVirtualCode.apply(plugin, args)) as VirtualCode;
+    }
+  }
+  return plugins;
+}

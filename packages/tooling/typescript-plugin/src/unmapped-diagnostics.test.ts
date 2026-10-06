@@ -9,6 +9,7 @@ import { transformDiagnostic } from "@volar/typescript/lib/node/transform";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import {
+  anchorEmptyMappings,
   approximateSuffix,
   approximateUnmapped,
   approximateUnmappedDiagnostics,
@@ -85,7 +86,7 @@ function languageWith(
     },
   };
   const language = createLanguage<string>(
-    [plugin],
+    anchorEmptyMappings([plugin]),
     new Map() as never,
     () => undefined,
   );
@@ -187,12 +188,12 @@ describe("approximateUnmapped", () => {
     expect(approximateUnmapped(language, exact)).toBe(exact);
   });
 
-  it("reports a diagnostic in a module with no mapped span at all with no position", () => {
+  it("reports a diagnostic in a module with no mapped span at the file start", () => {
     const language = languageWith([]);
     const moved = approximateUnmapped(language, diagnosticAt("oops"));
 
-    expect(moved.start).toBeUndefined();
-    expect(moved.length).toBeUndefined();
+    expect(moved.start).toBe(SOURCE.length);
+    expect(moved.length).toBe(0);
     expect(moved.messageText).toContain(
       "(position approximate: generated 3:13)",
     );
@@ -268,11 +269,12 @@ describe("the drop path (decision 161)", () => {
     expect(mapped?.length).toBe("<let/first=1/>".length);
   });
 
-  it("keeps a diagnostic in a module with no mapped span (Volar passes a position-less one through)", () => {
+  it("keeps a diagnostic in a module with no mapped span, at 1:1 of the source", () => {
     const language = languageWith([]);
     const moved = approximateUnmapped(language, diagnosticAt("oops"));
+    const mapped = transformDiagnostic(language, moved, undefined, false);
 
-    expect(transformDiagnostic(language, moved, undefined, false)).toBe(moved);
+    expect(mapped?.start).toBe(0);
   });
 });
 

@@ -38,6 +38,7 @@ import {
   type NgDiagnosticsService,
 } from "./ng-diagnostics.ts";
 import {
+  anchorEmptyMappings,
   approximateUnmappedDiagnostics,
   LANGUAGE_SERVICE_DIAGNOSTIC_METHODS,
 } from "./unmapped-diagnostics.ts";
@@ -105,11 +106,13 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
       languagePlugins.push(createAmxLanguagePlugin(typescript, { readSource }));
     }
     return {
-      languagePlugins: createConfiguredLanguagePlugins(
-        typescript,
-        info.config?.astro === true,
-        undefined,
-        languagePlugins,
+      languagePlugins: anchorEmptyMappings(
+        createConfiguredLanguagePlugins(
+          typescript,
+          info.config?.astro === true,
+          undefined,
+          languagePlugins,
+        ),
       ),
       setup: (volarLanguage) => {
         language = volarLanguage;
@@ -381,6 +384,7 @@ export {
   type MxLanguagePluginOptions,
 } from "./mx-language.ts";
 export {
+  anchorEmptyMappings,
   approximateSuffix,
   approximateUnmapped,
   approximateUnmappedDiagnostics,
