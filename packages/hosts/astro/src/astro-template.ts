@@ -1111,6 +1111,8 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
     },
 
     comment(node) {
+      // A `//` comment is author-only on every host; only `<!-- -->` is output.
+      if (!node.html) return;
       write(`<!--${node.value}-->`);
     },
 

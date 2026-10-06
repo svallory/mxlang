@@ -93,8 +93,9 @@ describe("Astro emitter: what it assumes about the IR (ir-spec 10.2)", () => {
     expect(out).toContain("a   b  c");
   });
 
-  it("5.14: an HTML comment is written out as one", () => {
-    const out = emitted("<!-- shown in html -->\n<p>x</p>");
-    expect(out).toContain("<!-- shown in html --><p>x</p>");
+  it("5.14: an HTML comment is written out, a `//` comment is not", () => {
+    const out = emitted("<!-- shown -->\n// author only\n<p>x</p>");
+    expect(out).toContain("<!-- shown --><p>x</p>");
+    expect(out).not.toContain("author only");
   });
 });
