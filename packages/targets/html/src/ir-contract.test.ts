@@ -99,7 +99,6 @@ describe("html: what the emitter assumes about the IR (ir-spec 10.2)", () => {
     const voided = emitted(source, (ir) => {
       for (const node of all(ir.body, "Element")) {
         node.void = true;
-        node.children = [];
       }
     });
     expect(voided).toContain("<section");
@@ -170,10 +169,12 @@ describe("html: what the emitter assumes about the IR (ir-spec 10.2)", () => {
       range.from = null;
     });
     expect(fromNull).not.toContain("lowbound");
-    expect(fromNull).toContain("0");
+    expect(fromNull).toContain("const __mxFor0 = 0;");
     const exclusive = edited((range) => {
       range.inclusive = false;
     });
+    expect(authored).toContain("i <= __mxFor1");
+    expect(exclusive).toContain("i < __mxFor1");
     expect(exclusive).not.toBe(authored);
   });
 

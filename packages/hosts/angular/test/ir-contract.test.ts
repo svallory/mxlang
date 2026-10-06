@@ -87,7 +87,6 @@ describe("Angular page emitter: what it assumes about the IR (ir-spec 10.2)", ()
     const voided = emitted(source, (ir) => {
       for (const node of all(ir.body, "Element")) {
         node.void = true;
-        node.children = [];
       }
     });
     expect(voided).toContain("<section");

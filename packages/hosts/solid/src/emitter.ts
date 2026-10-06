@@ -2319,6 +2319,9 @@ export class SolidEmitter implements Emitter<string> {
   forLoop(source: Extract<IrNode, { kind: "For" }>): void {
     // The rewrites below edit `bindings` and every `code` in the body, so they
     // run on a private copy: the IR is read-only to an emitter (ir-spec E21).
+    // Copies every `For`, including the plain range form that rewrites nothing:
+    // whether a branch rewrites depends on params and keying decided below, so
+    // narrowing the copy is not clearly safe; the cost is one compile-time copy.
     const node = cloneIr(source);
     const [first = "item", second] = node.params;
     if (node.source.kind === "of") {

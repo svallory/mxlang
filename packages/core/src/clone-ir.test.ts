@@ -1,3 +1,4 @@
+import { parseExpression } from "@babel/parser";
 import { describe, expect, it } from "vitest";
 import { cloneIr } from "./index.ts";
 
@@ -64,5 +65,25 @@ describe("cloneIr", () => {
     copy.list.push("b");
     expect(copy.list).toEqual(["a", "b"]);
     expect(frozen.list).toEqual(["a"]);
+  });
+
+  it("copies a real @babel/parser node (a class instance) under { nodes: true }", () => {
+    const node = parseExpression("a.b + c");
+    expect(Object.getPrototypeOf(node)).not.toBe(Object.prototype);
+    const expr = { code: "a.b + c", shape: "other", node };
+    const copy = cloneIr(expr, { nodes: true });
+    expect(copy.node).not.toBe(node);
+    expect(Object.getPrototypeOf(copy.node)).toBe(Object.getPrototypeOf(node));
+    expect(copy.node).toEqual(node);
+    const left = (node as unknown as { left: { object: object; loc: object } })
+      .left;
+    const copyLeft = (
+      copy.node as unknown as { left: { object: object; loc: object } }
+    ).left;
+    expect(copyLeft).not.toBe(left);
+    expect(copyLeft.object).not.toBe(left.object);
+    expect(copyLeft.loc).not.toBe(left.loc);
+    // Without the option the node stays shared.
+    expect(cloneIr(expr).node).toBe(node);
   });
 });

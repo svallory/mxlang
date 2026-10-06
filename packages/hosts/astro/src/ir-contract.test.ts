@@ -83,7 +83,6 @@ describe("Astro emitter: what it assumes about the IR (ir-spec 10.2)", () => {
     const voided = emitted(source, (ir) => {
       for (const node of all(ir.body, "Element")) {
         node.void = true;
-        node.children = [];
       }
     });
     expect(voided).toContain("<section");
@@ -118,10 +117,12 @@ describe("Astro emitter: what it assumes about the IR (ir-spec 10.2)", () => {
       range.from = null;
     });
     expect(fromNull).not.toContain("lowbound");
-    expect(fromNull).toContain("0");
+    expect(fromNull).toContain("(highbound) - (0) + 1");
     const exclusive = edited((range) => {
       range.inclusive = false;
     });
+    expect(authored).toContain("(highbound) - (lowbound) + 1");
+    expect(exclusive).toContain("(highbound) - (lowbound))");
     expect(exclusive).not.toBe(authored);
   });
 });
