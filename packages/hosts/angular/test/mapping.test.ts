@@ -129,15 +129,11 @@ describe("mappings: dynamic component outlet", () => {
 });
 
 describe("mappings: names", () => {
-  // A *discovered* tag call carries no `nameSpan`: core sets it to
-  // `nodeSpan(ctx, node.name)` over the gensym'd binding it minted
-  // (`$mx_Icon1`, `lower.ts`'s Component branch), which the author never
-  // wrote and which has no authored position. The emitter therefore has
-  // nothing to anchor the selector to, and emits it unmapped rather than
-  // pointing at a position the author cannot see. Giving a discovered call
-  // the span of its *call site* is a core change (C4's writer half), not
-  // something this host can do — see the report's open questions.
-  it("emits the selector unmapped for a discovered tag, which carries no authored name span", () => {
+  // A *discovered* tag's call carries the authored tag name's span
+  // (routed-template-call-namespan): core's `routeTemplateCall` passes
+  // `TagCall.nameSpan` through, so the emitter anchors the selector to the
+  // name the author wrote, exactly as it does an imported component's.
+  it("maps a discovered tag's selector onto the authored tag name", () => {
     const dir = scratchProject("mx-angular-map-");
     mkdirSync(join(dir, "tags"), { recursive: true });
     writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "t" }));
@@ -148,15 +144,17 @@ describe("mappings: names", () => {
     const result = compile(page, path, {
       customTags: getCustomTags(path, { targets: angularOwnTargets }) as never,
     });
-    // The selector is emitted correctly; it simply carries no mapping.
+    // The selector is derived from the tag name (`icon` becomes `mx-icon`)
+    // and maps whole-to-whole back to the authored name.
     expect(result.code).toContain("<mx-icon>");
-    expect(
-      result.mappings.some(
-        (mapping) =>
-          result.code.slice(mapping.generatedStart, mapping.generatedEnd) ===
-          "mx-icon",
+    const pairs = result.mappings.map((mapping) => ({
+      generated: result.code.slice(
+        mapping.generatedStart,
+        mapping.generatedEnd,
       ),
-    ).toBe(false);
+      source: page.slice(mapping.sourceStart, mapping.sourceEnd),
+    }));
+    expect(pairs).toContainEqual({ generated: "mx-icon", source: "icon" });
   });
 
   it("maps an attribute name on a component call", () => {
