@@ -30,9 +30,9 @@ import { angularDefaultTag } from "./default-tag.ts";
 import { discoverFiles, isInside } from "./discover.ts";
 import {
   EVENT_HELPER_ADVICE_CODE,
-  EVENT_HELPER_MARKER,
-  EVENT_HELPER_MEMBERS,
-  EVENT_HELPER_NAMES,
+  helperMembersFor,
+  helperNamesFor,
+  REFINE_HELPER_ADVICE_CODE,
 } from "./emitter.ts";
 import { buildHeader, hasGeneratedHeader } from "./header.ts";
 import { compileFile } from "./index.ts";
@@ -56,6 +56,14 @@ export function checkOverwriteGuard(outputPath: string): string | undefined {
   const existing = readFileSync(outputPath, "utf8");
   if (hasGeneratedHeader(existing)) return undefined;
   return `refusing to overwrite \`${outputPath}\`, which MX did not generate; rename the tag file or the existing module.`;
+}
+
+/** Is this warning the paste advice for a helper member the page's class lacks? */
+function isHelperAdvice(warning: MxWarning): boolean {
+  const code = (warning as { code?: string }).code;
+  return (
+    code === EVENT_HELPER_ADVICE_CODE || code === REFINE_HELPER_ADVICE_CODE
+  );
 }
 
 export interface PositionedMessage {
@@ -639,23 +647,18 @@ export function compileOne(
     // The page's own class may already carry the invoker: then neither the
     // warning nor the header's paste advice applies, and when it carries one
     // member only the missing one is advised.
-    let neededNames: readonly string[] = result.code.includes(
-      EVENT_HELPER_MARKER,
-    )
-      ? EVENT_HELPER_NAMES
-      : [];
+    const usedNames = helperNamesFor(result.code);
+    let neededNames: readonly string[] = usedNames;
     let pageWarnings: MxWarning[] = result.warnings;
     if (neededNames.length > 0) {
       const classFile = join(dirname(mxPath), tsFilename);
-      const inspection = inspectPageClass(classFile);
+      const inspection = inspectPageClass(classFile, usedNames);
       if (inspection.status === "provided") {
         neededNames = [];
-        pageWarnings = pageWarnings.filter(
-          (w) => (w as { code?: string }).code !== EVENT_HELPER_ADVICE_CODE,
-        );
+        pageWarnings = pageWarnings.filter((w) => !isHelperAdvice(w));
       } else if (inspection.status === "missing") {
         const lacking = new Set(inspection.classes.flatMap((c) => c.missing));
-        neededNames = EVENT_HELPER_NAMES.filter((n) => lacking.has(n));
+        neededNames = usedNames.filter((n) => lacking.has(n));
         const where = inspection.classes
           .map(
             (c) =>
@@ -663,7 +666,7 @@ export function compileOne(
           )
           .join("; ");
         pageWarnings = pageWarnings.map((w) =>
-          (w as { code?: string }).code === EVENT_HELPER_ADVICE_CODE
+          isHelperAdvice(w)
             ? ({
                 ...w,
                 message: `${w.message} (${inspection.file}: ${where})`,
@@ -677,8 +680,8 @@ export function compileOne(
       tsFilename,
       result.usedTags,
       "html",
-      EVENT_HELPER_MEMBERS.filter((_m, i) =>
-        neededNames.includes(EVENT_HELPER_NAMES[i] as string),
+      helperMembersFor(result.code).filter((_m, i) =>
+        neededNames.includes(usedNames[i] as string),
       ),
     );
     const usedTagNames = result.usedTags.map((t) => t.name);

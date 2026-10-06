@@ -32,13 +32,14 @@ import {
 import MagicString from "magic-string";
 import { directivesFor } from "./directives.ts";
 import {
+  ALL_HELPER_NAMES,
   angularDeclarations,
   EVENT_HELPER_ADVICE_CODE,
-  EVENT_HELPER_MARKER,
-  EVENT_HELPER_MEMBERS,
-  EVENT_HELPER_NAMES,
   emitTemplate,
+  helperMembersFor,
+  helperNamesFor,
   IMPORTS_ADVICE_CODE,
+  REFINE_HELPER_ADVICE_CODE,
   RUNTIME_SPECIFIER,
   type UsedTag,
 } from "./emitter.ts";
@@ -1240,7 +1241,7 @@ function findComponentDecorators(file: unknown): ComponentDecorator[] {
     if (seen.has(klass)) return names;
     seen.add(klass);
     if (extendsRuntime(klass)) {
-      for (const name of EVENT_HELPER_NAMES) names.add(name);
+      for (const name of ALL_HELPER_NAMES) names.add(name);
     }
     const body = Array.isArray(klass.body) ? undefined : klass.body;
     for (const member of (body?.body as NgMxNode[] | undefined) ?? []) {
@@ -1611,13 +1612,11 @@ export function compileNgMx(
     // per class and from the AST: one the class declares (any spelling — a
     // property or a method) or inherits from a base visible in this file is
     // left alone, and only the missing ones are written.
-    if (
-      decorator.classBodyStart !== undefined &&
-      mine.some((region) => region.literal.includes(EVENT_HELPER_MARKER))
-    ) {
-      const missing = EVENT_HELPER_MEMBERS.filter(
-        (_member, index) =>
-          !decorator.members?.has(EVENT_HELPER_NAMES[index] as string),
+    const literals = mine.map((region) => region.literal).join("\n");
+    if (decorator.classBodyStart !== undefined) {
+      const names = helperNamesFor(literals);
+      const missing = helperMembersFor(literals).filter(
+        (_member, index) => !decorator.members?.has(names[index] as string),
       );
       if (missing.length > 0) {
         rewritten.appendLeft(
@@ -1678,7 +1677,8 @@ export function compileNgMx(
     .filter(
       (warning) =>
         (warning as { code?: string }).code !== IMPORTS_ADVICE_CODE &&
-        (warning as { code?: string }).code !== EVENT_HELPER_ADVICE_CODE,
+        (warning as { code?: string }).code !== EVENT_HELPER_ADVICE_CODE &&
+        (warning as { code?: string }).code !== REFINE_HELPER_ADVICE_CODE,
     );
   warnings.push(...moduleWarnings);
   if (options.warnings) options.warnings.push(...warnings);

@@ -50,6 +50,32 @@ const onAt =
   ): R | undefined =>
     owner.__mxOn(object[key], object, event);
 
+/** Reads a refined bound attribute's value: a signal's `()`, a plain value as is. */
+const get = <T>(
+  value: T,
+): T extends { set(value: never): void } & (() => infer U) ? U : T =>
+  (typeof value === "function" &&
+  typeof (value as { set?: unknown }).set === "function"
+    ? (value as () => unknown)()
+    : value) as never;
+
+/** Writes `object[key]`: `.set(next)` when it holds a signal, `=` otherwise. */
+const set = <O, K extends keyof O>(
+  object: O,
+  key: K,
+  next: O[K] extends { set(value: infer T): void } ? T : O[K],
+): void => {
+  const current = object[key] as unknown as
+    | { set?: (value: unknown) => void }
+    | null
+    | undefined;
+  if (typeof current?.set === "function") {
+    current.set(next);
+  } else {
+    object[key] = next as O[K];
+  }
+};
+
 /**
  * Base class carrying the event invoker members.
  *
@@ -75,6 +101,23 @@ export class MxHandlers {
    * @internal Called by generated templates; not part of the authoring API.
    */
   readonly __mxOnAt = onAt(this);
+
+  /**
+   * Writes a refined bound attribute's new value (`v:fn:=q` emits
+   * `(vChange)="__mxSet(this, 'q', fn($event))"`): `.set()` on a signal,
+   * `=` on a plain property, as Angular's own `[(v)]` does.
+   *
+   * @internal Called by generated templates; not part of the authoring API.
+   */
+  readonly __mxSet = set;
+
+  /**
+   * Reads a refined bound attribute's value: a signal's `()`, a plain value
+   * as is.
+   *
+   * @internal Called by generated templates; not part of the authoring API.
+   */
+  readonly __mxGet = get;
 }
 
 /**
@@ -102,5 +145,21 @@ export function MxHandlersMixin<
      * @internal Called by generated templates; not part of the authoring API.
      */
     readonly __mxOnAt = onAt(this);
+
+    /**
+     * Writes a refined bound attribute's new value: `.set()` on a signal,
+     * `=` on a plain property.
+     *
+     * @internal Called by generated templates; not part of the authoring API.
+     */
+    readonly __mxSet = set;
+
+    /**
+     * Reads a refined bound attribute's value: a signal's `()`, a plain
+     * value as is.
+     *
+     * @internal Called by generated templates; not part of the authoring API.
+     */
+    readonly __mxGet = get;
   };
 }

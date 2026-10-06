@@ -10,6 +10,7 @@ import {
 } from "@angular/platform-browser/testing";
 import ts from "typescript";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { REFINE_HELPER_MEMBERS } from "../src/emitter.ts";
 
 /**
  * Marko's `v:fn:=q` runs `q = fn(next)` whenever `v` changes. Rendered through
@@ -44,7 +45,13 @@ beforeAll(() => {
 afterEach(() => TestBed.resetTestingModule());
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-const MX = ["<div appPick v:fn:=q/>", "<div appPick v:=q/>"] as const;
+const MX = [
+  "<div appPick v:fn:=q/>",
+  "<div appPick v:=q/>",
+  "<div appPick v:fn:=sig/>",
+  "<div appPick v:fn:=box.v/>",
+  "<div appPick v:fn:=box.sig/>",
+] as const;
 // The MX compiler needs Node's module resolution, which jsdom's environment
 // replaces, so the templates are emitted in a plain Node process.
 let templates: string[] = [];
@@ -56,6 +63,7 @@ beforeAll(() => {
         "run",
         "--tsconfig-override=tsconfig.build.json",
         join(import.meta.dirname, "bound-refinement-fixture.ts"),
+        JSON.stringify(MX),
       ],
       { cwd: join(import.meta.dirname, ".."), encoding: "utf8" },
     ),
@@ -63,8 +71,14 @@ beforeAll(() => {
 }, 30_000);
 
 let pageId = 0;
+interface Page {
+  q: string;
+  sig: () => string;
+  box: { v: string; sig: () => string };
+}
+
 interface Rendered {
-  page: { q: string };
+  page: Page;
   emit(value: string): void;
 }
 
@@ -73,7 +87,7 @@ async function render(mx: (typeof MX)[number]): Promise<Rendered> {
   const template = templates[MX.indexOf(mx)];
   const name = `page${++pageId}`;
   const source = [
-    'import { Component, Directive, EventEmitter, Input, Output } from "@angular/core";',
+    'import { Component, Directive, EventEmitter, Input, Output, signal } from "@angular/core";',
     "",
     '@Directive({ selector: "[appPick]", standalone: true })',
     "export class Pick {",
@@ -88,13 +102,16 @@ async function render(mx: (typeof MX)[number]): Promise<Rendered> {
     `  template: ${JSON.stringify(template)},`,
     "})",
     "export class Page {",
+    ...REFINE_HELPER_MEMBERS,
     "  q = 'start';",
+    "  sig = signal('start');",
+    "  box = { v: 'start', sig: signal('start') };",
     "  fn(next: string): string { return next.toUpperCase() + '!'; }",
     "}",
   ].join("\n");
   writeModule(join(dir, `${name}.mjs`), source);
   const mod = (await import(/* @vite-ignore */ join(dir, `${name}.mjs`))) as {
-    Page: new () => { q: string };
+    Page: new () => Page;
     Pick: new () => { vChange: { emit(value: string): void } };
   };
   const fixture = TestBed.createComponent(mod.Page as never);
@@ -103,7 +120,7 @@ async function render(mx: (typeof MX)[number]): Promise<Rendered> {
     mod.Pick as never,
   );
   return {
-    page: fixture.componentInstance as { q: string },
+    page: fixture.componentInstance as Page,
     emit: (value) => {
       (pick as { vChange: { emit(value: string): void } }).vChange.emit(value);
       fixture.detectChanges();
@@ -112,7 +129,7 @@ async function render(mx: (typeof MX)[number]): Promise<Rendered> {
 }
 
 describe("a bound attribute's refinement runs on change (Angular's renderer)", () => {
-  it("applies fn to the new value: q === fn(next)", async () => {
+  it("applies fn to the new value on a plain property: q === fn(next)", async () => {
     const r = await render("<div appPick v:fn:=q/>");
     r.emit("abc");
     expect(r.page.q).toBe("ABC!");
@@ -123,6 +140,23 @@ describe("a bound attribute's refinement runs on change (Angular's renderer)", (
     r.emit("a");
     r.emit("b");
     expect(r.page.q).toBe("B!");
+  });
+
+  it("sets a WritableSignal target, as [(v)] does: sig() === fn(next)", async () => {
+    const r = await render("<div appPick v:fn:=sig/>");
+    const before = r.page.sig;
+    r.emit("abc");
+    expect(r.page.sig).toBe(before);
+    expect(r.page.sig()).toBe("ABC!");
+  });
+
+  it("writes a member of an object, plain or signal", async () => {
+    const plain = await render("<div appPick v:fn:=box.v/>");
+    plain.emit("abc");
+    expect(plain.page.box.v).toBe("ABC!");
+    const signal = await render("<div appPick v:fn:=box.sig/>");
+    signal.emit("abc");
+    expect(signal.page.box.sig()).toBe("ABC!");
   });
 
   it("writes the new value itself when there is no refinement", async () => {

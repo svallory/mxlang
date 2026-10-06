@@ -687,8 +687,8 @@ function isRefinementIdentifier(name: string): boolean {
  * The refinement of a bound attribute: `fn` in `v:fn:=q`. Marko runs it as
  * `q = fn(next)` in the change handler; the IR carries it as an `Expr` over
  * the modifier's own text. A modifier that is not a valid JavaScript
- * identifier (`x::=q`, `v:no-update:=q`) is Marko's error, at the colon that
- * starts it.
+ * identifier (`x::=q`, `v:no-update:=q`) is Marko's error, at the
+ * modifier.
  */
 function boundRefinement(ctx: Ctx, attr: Node): Expr | undefined {
   if (attr.modifier == null) return undefined;
@@ -700,7 +700,10 @@ function boundRefinement(ctx: Ctx, attr: Node): Expr | undefined {
       "Bound attribute refinement shorthand must be a valid JavaScript identifier.";
     if (!start) fail(message, attr);
     fail(message, {
-      loc: { start: { line: start.line, column: start.column + nameLength } },
+      // Marko puts it on the modifier's first character, one past the colon.
+      loc: {
+        start: { line: start.line, column: start.column + nameLength + 1 },
+      },
     });
   }
   const at = offsetOf(ctx, attr.loc?.start ?? {}) + nameLength + 1;

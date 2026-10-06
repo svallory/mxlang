@@ -365,6 +365,8 @@ export const IMPORTS_ADVICE_CODE = "angular.imports-advice";
  * `.ng.mx` and tag modules write those members themselves and drop it.
  */
 export const EVENT_HELPER_ADVICE_CODE = "angular.event-helper-advice";
+/** Warning code for the `__mxSet` advice a page gets when its template holds a refined bound attribute. */
+export const REFINE_HELPER_ADVICE_CODE = "angular.refine-helper-advice";
 
 // A1:112-113's exact wording, one per directive — "class" takes "object or
 // array" (both structured shapes route here) while "style" takes only
@@ -425,10 +427,52 @@ export const EVENT_HELPER_NAMES = EVENT_HELPER_MEMBERS.map(
   (member) => /readonly (\w+)/.exec(member)?.[1] as string,
 );
 
+/**
+ * The members a refined bound attribute (`v:fn:=q`) calls:
+ * `[v]="__mxGet(q)" (vChange)="__mxSet(this, 'q', fn($event))"`. Angular's own
+ * `[(v)]="q"` reads and writes a plain property with `=` and a
+ * `WritableSignal` with `()` and `.set()`; a refinement has to apply `fn`
+ * between the output and the write, so it makes the same choice itself.
+ * Both are typed so a signal target takes the signal's value type, and a
+ * plain one its own, under `strictTemplates`. Separate from the event
+ * invokers: a template needs them only when it holds a refinement, so a page
+ * with handlers alone is byte-identical to before.
+ */
+export const REFINE_HELPER_MEMBERS = [
+  '  protected readonly __mxGet = <T>(value: T): T extends { set(value: never): void } & (() => infer U) ? U : T => (typeof value === "function" && typeof (value as { set?: unknown }).set === "function" ? (value as () => unknown)() : value) as never;',
+  '  protected readonly __mxSet = <O, K extends keyof O>(object: O, key: K, next: O[K] extends { set(value: infer T): void } ? T : O[K]): void => { const current = object[key] as unknown as { set?: (value: unknown) => void } | null | undefined; if (typeof current?.set === "function") current.set(next); else object[key] = next as O[K]; };',
+];
+export const REFINE_HELPER_MARKER = "__mxSet";
+const REFINE_GET_MARKER = "__mxGet";
+export const REFINE_HELPER_NAMES = REFINE_HELPER_MEMBERS.map(
+  (member) => /readonly (\w+)/.exec(member)?.[1] as string,
+);
+
+/** Every member name a component may need from `MxHandlers`, event invokers and `__mxSet`. */
+export const ALL_HELPER_NAMES = [...EVENT_HELPER_NAMES, ...REFINE_HELPER_NAMES];
+
+/** The helper members `text` (an emitted template) calls, one class-body line each. */
+export function helperMembersFor(text: string): string[] {
+  return [
+    ...(text.includes(EVENT_HELPER_MARKER) ? EVENT_HELPER_MEMBERS : []),
+    ...(text.includes(`${REFINE_HELPER_MARKER}(`) ? REFINE_HELPER_MEMBERS : []),
+  ];
+}
+
+/** The names of `helperMembersFor(text)`. */
+export function helperNamesFor(text: string): string[] {
+  return [
+    ...(text.includes(EVENT_HELPER_MARKER) ? EVENT_HELPER_NAMES : []),
+    ...(text.includes(`${REFINE_HELPER_MARKER}(`) ? REFINE_HELPER_NAMES : []),
+  ];
+}
+
 /** The second option, appended to the advice in the page header and the warning. */
 export const EVENT_HELPER_RUNTIME_OPTION = `or extend \`MxHandlers\` (or \`MxHandlersMixin(Base)\` when the class already extends another) from "${RUNTIME_SPECIFIER}"`;
 
 const EVENT_HELPER_ADVICE = `this template binds an event handler; add these members to the component class: ${EVENT_HELPER_MEMBERS.map((m) => `\`${m.trim()}\``).join(" and ")}, ${EVENT_HELPER_RUNTIME_OPTION} (app code importing it needs \`@mxlang/angular\` in \`dependencies\`, not \`devDependencies\`; extend \`MxHandlers\`/\`MxHandlersMixin\` directly: \`.ng.mx\` injects the members into an indirect base, and TypeScript then reports a conflict).`;
+
+const REFINE_HELPER_ADVICE = `this template binds a refined bound attribute (\`v:fn:=q\`); add these members to the component class: ${REFINE_HELPER_MEMBERS.map((m) => `\`${m.trim()}\``).join(" and ")}, ${EVENT_HELPER_RUNTIME_OPTION}.`;
 
 interface HandlerNode {
   type: string;
@@ -618,6 +662,46 @@ function writeHandlerCall(
 }
 
 /**
+ * The `(object, key)` a refined bound attribute writes through `__mxSet`: a
+ * bare name is `this` and its name, `a.b` / `a[k]` is `a` and `'b'` / `k`,
+ * read from the parsed AST like `writeHandlerCall`'s receiver.
+ */
+function writeSetTarget(
+  out: TemplateWriter,
+  value: Expr,
+  source: string,
+  at: { loc: Position },
+): void {
+  const shape = handlerShape(value.code);
+  const { span } = value;
+  const authored =
+    span !== undefined &&
+    source.slice(span.sourceStart, span.sourceEnd) === value.code;
+  if (shape.form === "member") {
+    if (span && authored && shape.objectRange) {
+      out.writeMapped(esc(shape.object), {
+        sourceStart: span.sourceStart + shape.objectRange[0],
+        sourceEnd: span.sourceStart + shape.objectRange[1],
+      });
+    } else {
+      out.write(esc(shape.object));
+    }
+    out.write(`, ${esc(shape.key)}`);
+    return;
+  }
+  if (shape.form === "bare") {
+    out.write("this, '");
+    out.writeMapped(esc(value.code), value.span);
+    out.write("'");
+    return;
+  }
+  fail(
+    "a refined bound attribute (`v:fn:=q`) must be bound to a name or a member of one",
+    at,
+  );
+}
+
+/**
  * The authored extent of an attribute, name through value, for the node
  * anchors Angular's attribute-level diagnostics resolve through.
  *
@@ -770,6 +854,7 @@ function emitAttrs(
   isElement = false,
   onHandler?: () => string,
   lets?: Map<Attr, PrimitiveBinding & { variable: string }>,
+  onRefine?: () => string,
 ): void {
   for (const attr of attrs) {
     // Marko accepts `value:`, but Angular's literal-attribute tokenizer does
@@ -938,14 +1023,30 @@ function emitAttrs(
         if (attr.refinement) {
           // Marko's `v:fn:=q` runs `q = fn(next)` on every change. `[(v)]` has
           // nowhere to put `fn`, so it is written as its two halves: the
-          // input and the output that applies the refinement.
+          // input and the output that applies the refinement. The write goes
+          // through `__mxSet`, which does what `[(v)]` does for a signal.
           out.write(" [");
           out.writeMapped(attr.name, attr.nameSpan);
-          out.write(']="');
+          out.write(`]="${REFINE_GET_MARKER}(`);
           out.writeMapped(esc(attr.value.code), attr.value.span);
-          out.write(`" (${attr.name}Change)="`);
-          out.writeMapped(esc(attr.value.code), attr.value.span);
-          out.write(` = ${esc(attr.refinement.code)}($event)"`);
+          out.write(')" (');
+          out.writeMapped(`${attr.name}Change`, attr.nameSpan);
+          if (/[\u0080-\u{10ffff}]/u.test(attr.refinement.code)) {
+            fail(
+              `Angular templates cannot call \`${attr.refinement.code}\`: Angular's expression language reads only ASCII identifiers. Rename the function`,
+              {
+                loc: {
+                  line: attr.loc.line,
+                  column: attr.loc.column + attr.name.length + 1,
+                },
+              },
+            );
+          }
+          out.write(`)="${REFINE_HELPER_MARKER}(`);
+          writeSetTarget(out, attr.value, onRefine?.() ?? "", attr);
+          out.write(", ");
+          out.writeMapped(esc(attr.refinement.code), attr.refinement.span);
+          out.write('($event))"');
         } else {
           out.write(" [(");
           out.writeMapped(attr.name, attr.nameSpan);
@@ -1823,6 +1924,15 @@ class AngularEmitter implements Emitter<string> {
         return this.ctx.source;
       },
       lets,
+      () => {
+        this.warnOnce(
+          "refineHelper",
+          REFINE_HELPER_ADVICE,
+          node.loc,
+          REFINE_HELPER_ADVICE_CODE,
+        );
+        return this.ctx.source;
+      },
     );
     this.out.write(">");
     this.out.anchor(tagStart, this.out.length, node.nameSpan);
@@ -1948,9 +2058,25 @@ class AngularEmitter implements Emitter<string> {
         this.selectorPrefix,
       );
     }
-    emitAttrs(this.out, node.attrs, (directive) => {
-      this.warnOnce(directive, NGCLASS_NGSTYLE_WARNING[directive], node.loc);
-    });
+    emitAttrs(
+      this.out,
+      node.attrs,
+      (directive) => {
+        this.warnOnce(directive, NGCLASS_NGSTYLE_WARNING[directive], node.loc);
+      },
+      false,
+      undefined,
+      undefined,
+      () => {
+        this.warnOnce(
+          "refineHelper",
+          REFINE_HELPER_ADVICE,
+          node.loc,
+          REFINE_HELPER_ADVICE_CODE,
+        );
+        return this.ctx.source;
+      },
+    );
     this.out.write(">");
     this.out.anchor(tagStart, this.out.length, node.nameSpan);
     for (const prop of node.attrTagProps) {

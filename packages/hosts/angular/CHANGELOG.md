@@ -7,6 +7,8 @@
 
 ## Unreleased
 
+- **Added (bound-attribute-refinement) — visible emitted-template change:** a refined bound attribute (`<div appPick v:fn:=q/>`) emits `[v]="__mxGet(q)" (vChange)="__mxSet(this, 'q', fn($event))"` instead of `[(v)]="q"`, so Marko's `q = fn(next)` change handler runs; `[(v)]="q"` is byte-identical without a refinement. `__mxGet`/`__mxSet` are two more helper members (`REFINE_HELPER_MEMBERS`, written into the component only when the template calls them, so a page with event handlers alone is unchanged; also on `MxHandlers`/`MxHandlersMixin`). They do what Angular's own `[(v)]` does: read a `WritableSignal` with `()` and write it with `.set()`, read and assign a plain property, typed for both under `strictTemplates`. `fn` maps to the modifier's authored span, so an Angular diagnostic on it (unknown `fn`, wrong parameter type) lands there; a refinement with a non-ASCII name is a positioned error (Angular's expression language reads only ASCII identifiers); a non-identifier refinement is Marko's error from core.
+
 - **Fix (statement-followup, decision 168):** the error for JSX in a `static`/`export` statement is MX's own message at the `<` (was Babel's "Unterminated regular expression."); a decorated `static class` is accepted again.
 
 - **Fix, behaviour change (statement-tags, decision 168):** statements with text the attribute grammar cannot read (typed functions, `<T,>`, JSX, atoms) reach the host's own "no module scope" error instead of a Babel syntax error from reading the text as attributes; `class { … }` is a positioned not-supported error (it emitted a `<class>` element).

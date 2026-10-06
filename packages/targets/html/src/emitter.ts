@@ -511,6 +511,24 @@ export function createEmitter(selfName?: string): StringEmitter {
    * single-quoted `title='a" onerror="…'` cannot close the attribute early
    * (decision 42). A spread emits a runtime loop that validates each key.
    */
+  /**
+   * An attribute's value expression. A refined bound attribute (`v:fn:=q`)
+   * renders as the unrefined one: Marko's change handler (`q = fn(next)`) is
+   * client-only and this target renders once. The type-check projection still
+   * has to see `fn`, so the value is `(false && fn(q), q)`: `fn` applied to the
+   * bound value's type is checked and mapped to the modifier, and never runs.
+   */
+  const attributeValue = (attr: Extract<Attr, { value: Expr }>): MappedCode =>
+    attr.kind === "bound" && attr.refinement
+      ? concatMapped(
+          "(false && ",
+          mappedExpr(attr.refinement),
+          `(${attr.value.code}), `,
+          mappedExpr(attr.value),
+          ")",
+        )
+      : mappedExpr(attr.value);
+
   const attribute = (attr: Attr, tag = ""): void => {
     // Spreads are written by `elementAttributes`, never one at a time.
     if (attr.kind === "spread") return;
@@ -542,7 +560,8 @@ export function createEmitter(selfName?: string): StringEmitter {
       );
     }
 
-    const source = structured(attr.name, mappedExpr(attr.value));
+    const value = attributeValue(attr);
+    const source = structured(attr.name, value);
     if (source) {
       // A structured value renders itself; interpolating it into quotes would
       // double-escape the separators the helper already produced.
@@ -560,7 +579,7 @@ export function createEmitter(selfName?: string): StringEmitter {
     expression(
       concatMapped(
         `__mxRenderAttr(${quote(attr.name)}, `,
-        mappedExpr(attr.value),
+        value,
         `, ${quote(tag)}${tag === "input" && attr.name === "checked" ? ", true" : ""})`,
       ),
       false,
@@ -587,7 +606,8 @@ export function createEmitter(selfName?: string): StringEmitter {
           attr,
         );
       default: {
-        const source = structured(attr.name, mappedExpr(attr.value));
+        const value = attributeValue(attr);
+        const source = structured(attr.name, value);
         if (source) {
           return concatMapped(
             `((__mxValue) => __mxValue === "" ? "" : ${quote(` ${attr.name}="`)} + __mxValue + "\\"")(`,
@@ -597,7 +617,7 @@ export function createEmitter(selfName?: string): StringEmitter {
         }
         return concatMapped(
           `__mxRenderAttr(${quote(attr.name)}, `,
-          mappedExpr(attr.value),
+          value,
           `, ${quote(tag)})`,
         );
       }

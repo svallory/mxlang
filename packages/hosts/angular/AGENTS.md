@@ -262,6 +262,8 @@ name). `this` is the component and `element` is `$event.currentTarget` as
 `EventTarget | null` — both recorded in `divergences.md`. The tests check the emitted template with ngtsc
 (`test/event-handler.test.ts`, via `@mxlang/angular-checker`).
 
+A refined bound attribute (`v:fn:=q`) adds two more members the same way, `__mxGet` and `__mxSet` (`REFINE_HELPER_MEMBERS`; `helperMembersFor(text)` picks which a template needs, so a page with handlers alone gets none): `[v]="__mxGet(q)" (vChange)="__mxSet(this, 'q', fn($event))"`. They read and write a `WritableSignal` (`()` / `.set()`) or a plain property as Angular's own `[(v)]` does. `[(v)]="q"` stays byte-identical without a refinement.
+
 ### Attribute tags (decisions 106–107)
 
 This host declares `attrTags: 2` and emits component projections only from

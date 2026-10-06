@@ -32,11 +32,11 @@ import {
   angularDeclarations,
   type DynamicComponentData,
   EVENT_HELPER_ADVICE_CODE,
-  EVENT_HELPER_MARKER,
-  EVENT_HELPER_MEMBERS,
   emitTemplate,
+  helperMembersFor,
   isTagModuleImport,
   kebabCase,
+  REFINE_HELPER_ADVICE_CODE,
   selectorDeclarationOf,
   tagBasename,
   type UsedTag,
@@ -1068,7 +1068,11 @@ export function compileTagModule(
   // The members are written below, so the emitter's "add them yourself"
   // advice does not apply to a tag module.
   for (let i = warnings.length - 1; i >= 0; i--) {
-    if ((warnings[i] as { code?: string }).code === EVENT_HELPER_ADVICE_CODE) {
+    const code = (warnings[i] as { code?: string }).code;
+    if (
+      code === EVENT_HELPER_ADVICE_CODE ||
+      code === REFINE_HELPER_ADVICE_CODE
+    ) {
       warnings.splice(i, 1);
     }
   }
@@ -1181,9 +1185,7 @@ export function compileTagModule(
   }
   // The template calls the event invoker on the component instance, so the
   // class must carry it (detected from the emitted text, like directives).
-  if (template.includes(EVENT_HELPER_MARKER)) {
-    lines.push(...EVENT_HELPER_MEMBERS);
-  }
+  lines.push(...helperMembersFor(template));
   lines.push("}", `export default ${className};`, "");
 
   const code = lines.join("\n");

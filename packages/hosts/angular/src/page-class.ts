@@ -17,7 +17,7 @@
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
 import { markoBabel } from "@mxlang/core";
-import { EVENT_HELPER_NAMES, RUNTIME_SPECIFIER } from "./emitter.ts";
+import { ALL_HELPER_NAMES, RUNTIME_SPECIFIER } from "./emitter.ts";
 
 /** One component class in the file, and which invoker members it lacks. */
 export interface PageClassReport {
@@ -68,7 +68,10 @@ function memberName(member: Node): string | undefined {
   return undefined;
 }
 
-export function inspectPageClass(classFile: string): PageClassInspection {
+export function inspectPageClass(
+  classFile: string,
+  needed: readonly string[] = ALL_HELPER_NAMES,
+): PageClassInspection {
   try {
     const source = readFileSync(classFile, "utf8");
     const babel = markoBabel() as {
@@ -78,7 +81,7 @@ export function inspectPageClass(classFile: string): PageClassInspection {
       sourceType: "module",
       plugins: [["typescript", {}], "decorators-legacy"],
     });
-    return inspectFile(file, basename(classFile));
+    return inspectFile(file, basename(classFile), needed);
   } catch {
     return { status: "unknown" };
   }
@@ -114,7 +117,11 @@ function isInstanceMember(member: Node): boolean {
   return true;
 }
 
-function inspectFile(file: unknown, filename: string): PageClassInspection {
+function inspectFile(
+  file: unknown,
+  filename: string,
+  needed: readonly string[],
+): PageClassInspection {
   const program = asNode(asNode(file)?.program);
   const statements = (program?.body as Node[] | undefined) ?? [];
   const runtimeLocals = new Set<string>();
@@ -194,7 +201,7 @@ function inspectFile(file: unknown, filename: string): PageClassInspection {
     const superClass = asNode(klass.superClass);
     if (!superClass) return { names, complete: true };
     if (reachesRuntime(superClass)) {
-      for (const n of EVENT_HELPER_NAMES) names.add(n);
+      for (const n of ALL_HELPER_NAMES) names.add(n);
       return { names, complete: true };
     }
     const base =
@@ -212,7 +219,7 @@ function inspectFile(file: unknown, filename: string): PageClassInspection {
   const reports: PageClassReport[] = [];
   for (const klass of components) {
     const { names, complete } = membersOf(klass);
-    const missing = EVENT_HELPER_NAMES.filter((n) => !names.has(n));
+    const missing = needed.filter((n) => !names.has(n));
     if (missing.length === 0) continue;
     // Cannot see the whole chain: keep the original warning, claim nothing.
     if (!complete) return { status: "unknown" };

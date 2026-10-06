@@ -3753,20 +3753,20 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
     "Bound attribute refinement shorthand must be a valid JavaScript identifier.";
 
   it.each([
-    ["<div x::=q/>", 1, 6],
-    ["<div v:no-update:=q/>", 1, 6],
-    ["<div v:class:=q/>", 1, 6],
-    ["<div v:1a:=q/>", 1, 6],
-    ["<div v:a.b:=q/>", 1, 6],
-    ["<div v:await:=q/>", 1, 6],
-    ["<div v:let:=q/>", 1, 6],
-    ["<div a=1\n  v:no-update:=q/>", 2, 3],
-    ["<Foo a=1 v:no-update:=q/>", 1, 10],
-    ["<${t} v:no-update:=q/>", 1, 7],
-    ["<if=c v:no-update:=q>x</if>", 1, 7],
-    ["<for|i| of=o v:no-update:=q>x</for>", 1, 14],
+    ["<div x::=q/>", 1, 7],
+    ["<div v:no-update:=q/>", 1, 7],
+    ["<div v:class:=q/>", 1, 7],
+    ["<div v:1a:=q/>", 1, 7],
+    ["<div v:a.b:=q/>", 1, 7],
+    ["<div v:await:=q/>", 1, 7],
+    ["<div v:let:=q/>", 1, 7],
+    ["<div a=1\n  v:no-update:=q/>", 2, 4],
+    ["<Foo a=1 v:no-update:=q/>", 1, 11],
+    ["<${t} v:no-update:=q/>", 1, 8],
+    ["<if=c v:no-update:=q>x</if>", 1, 8],
+    ["<for|i| of=o v:no-update:=q>x</for>", 1, 15],
   ])(
-    "rejects a refinement that is no identifier, at its colon, with Marko's text: %s",
+    "rejects a refinement that is no identifier, at the modifier, with Marko's text: %s",
     (source, line, column) => {
       expect(() =>
         lowerSource(source, fakeDeclarations({ isElement: () => false })),
@@ -3787,9 +3787,9 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
     },
   };
   it.each([
-    ["<card v:no-update:=q/>", 1, 7],
-    ["<card><@row v:no-update:=q/></card>", 1, 13],
-    ["<card>\n  <@row a=1 v:no-update:=q/>\n</card>", 2, 13],
+    ["<card v:no-update:=q/>", 1, 8],
+    ["<card><@row v:no-update:=q/></card>", 1, 14],
+    ["<card>\n  <@row a=1 v:no-update:=q/>\n</card>", 2, 14],
   ])(
     "rejects a refinement that is no identifier on a contracted tag: %s",
     (source, line, column) => {
