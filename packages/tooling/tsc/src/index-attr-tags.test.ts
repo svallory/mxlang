@@ -69,6 +69,39 @@ describe("mx-tsc", () => {
     SPAWN_TIMEOUT_MS,
   );
 
+  // Every value shape (declared in `Shapes`), one bad occurrence per file:
+  // exactly one diagnostic, at the authored attribute or tag.
+  const shapes = [
+    ["Extra", "TS2353", ["(3,25)", "(3,45)"]],
+    ["Nested", "TS2322", ["(3,31)", "(3,31)"]],
+    ["NestedMissing", "TS1360", ["(3,11)", "(3,31)"]],
+    ["Array", "TS2322", ["(3,16)", "(3,36)"]],
+    ["Renderable", "TS1360", ["(3,11)", "(3,31)"]],
+  ] as const;
+  it.each(
+    ["html", "preact", "solid"].flatMap((host, hostIndex) =>
+      shapes.map(
+        ([name, code, positions]) =>
+          [host, name, code, positions[hostIndex === 2 ? 1 : 0]] as const,
+      ),
+    ),
+  )(
+    "reports one diagnostic for a bad %s attribute-tag shape: %s",
+    (host, name, code, position) => {
+      const extension = host === "solid" ? "solid.mx" : "mx";
+      const result = runFixture(`attr-tag-${host}-shapes`);
+      const lines = result.output
+        .split("\n")
+        .filter((line) => line.includes(`/src/${name}.${extension}(`));
+
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain(
+        `${name}.${extension}${position}: error ${code}`,
+      );
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
   it(
     // `<Card><@tab title=1/></Card>`: the wrong attribute type is reported
     // on `title` (its own authored column), not on `tab` (the fallback

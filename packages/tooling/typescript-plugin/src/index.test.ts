@@ -1475,25 +1475,22 @@ describe("MX language plugin", () => {
       const wrongDiagnostics = service.getSemanticDiagnostics(wrong);
       const missingDiagnostics = service.getSemanticDiagnostics(missing);
 
-      expect(
-        wrongDiagnostics.some((diagnostic) => diagnostic.code === 2322),
-      ).toBe(true);
-      // A wrong attribute type is reported on the attribute itself
+      // One diagnostic per bad value, each at its authored position. A wrong
+      // attribute type is reported on the attribute itself
       // (`solid-attr-tag-attr-offset`) — every host, `title`, not the tag
       // name it sits on.
       expect(
-        wrongDiagnostics.some(
-          (diagnostic) => diagnostic.start === wrongSource.indexOf("title"),
-        ),
-      ).toBe(true);
+        wrongDiagnostics.map((diagnostic) => [
+          diagnostic.code,
+          diagnostic.start,
+        ]),
+      ).toEqual([[2322, wrongSource.indexOf("title")]]);
       expect(
-        missingDiagnostics.some((diagnostic) => diagnostic.code === 1360),
-      ).toBe(true);
-      expect(
-        missingDiagnostics.some(
-          (diagnostic) => diagnostic.start === missingSource.indexOf("tab"),
-        ),
-      ).toBe(true);
+        missingDiagnostics.map((diagnostic) => [
+          diagnostic.code,
+          diagnostic.start,
+        ]),
+      ).toEqual([[1360, missingSource.indexOf("tab")]]);
     },
   );
 
