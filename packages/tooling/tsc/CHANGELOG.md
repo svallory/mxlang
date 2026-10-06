@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Changed (decision 162):** prints every error of an `.mx` file in one run; host-dispatch goldens gain the errors core used to stop before.
+
 - **Fix (unmapped-diagnostics-region-enclosing-spans, decision 161):** `mx-tsc` places an unmappable diagnostic in a region file (`.solid.mx`, `.preact.mx`, `.react.mx`, `.hono.mx`), `.astro.mx` or `.ng.mx` on its enclosing tag or attribute with `(position approximate: …)`, as it already did for whole-file `.mx`, instead of at 1:1 as `(position unknown in this file kind: …)`.
 
 - **Fix (unmapped-diagnostics-never-dropped, decision 161):** a TypeScript diagnostic whose generated position has no source mapping is no longer dropped by Volar: `mx-tsc` reports it on the nearest enclosing tag or attribute (else 1:1) with `(position approximate: generated <line>:<col>)`, `(position unknown in this file kind: generated <line>:<col>)` (a kind with no authored spans: region, `.astro.mx`, `.ng.mx`) or, only when the author spelled none of it, `(in MX-generated code, not yours: an MX bug; generated <line>:<col>)` appended, per diagnostic range, independent of the order diagnostics arrive in; related locations and `program.emit` diagnostics too, so a page whose errors sit in unmapped generated code (a whole-file Solid unit's expression values) fails the run instead of exiting 0. Exactly mapped diagnostics are byte-identical. Wraps Volar's `decorateProgram` export once per process.

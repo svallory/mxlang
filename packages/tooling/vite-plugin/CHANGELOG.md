@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Changed (decision 162):** a failing transform throws the first error and carries the file's other errors in its message.
+
 - **Fix (third-party-data-host, decision 148):** a file of a third-party host built on the data target (`post.mesh.mx`) transforms through the host's descriptor into data's output instead of being refused for the host's `defaultTag`.
 
 ## 0.1.0 (unreleased)

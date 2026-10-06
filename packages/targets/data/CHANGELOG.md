@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Changed (decision 162):** `parseData` reads core's `errors` list, so independent errors of one file (a scriptlet, a tag outside its parent, a CDATA section) are all diagnostics, once each, in position order.
+
 ## 0.1.0-alpha.8
 
 - **Changed: `parseData` reports every error of a file and never throws.** `diagnostics` already was an array; it now holds one positioned error per independent mistake, earliest first (same message at the same place once): every syntax error Marko's parser recovers from (its `CompileErrors` aggregate used to escape as a raw throw), and, once the file lowers, every build reject (dynamic tag, tag variable, `<!doctype>`, merged shorthand class, ...), every `structural: "reject"` hit and every `unknownTags: "reject"` tag. Core's lowering still stops at its first error, so a lowering error (`parents`/`children`, a bad attribute) is the one error of its kind; the unknown tags are still listed beside it. An error with no source position (a bug in this package or core, e.g. `core IR invariant broken`) used to be rethrown; it is now an error diagnostic at 1:0 whose message starts with `internal error: `. An error inside an unknown tag's element is kept and suffixed `(inside the unknown tag `<x>`; may resolve once it is declared)`, never dropped; two different errors at one position both stay (only an identical file/position/message is deduplicated). A Marko error with a label but no position is prefixed `unpositioned error: ` instead of `internal error: `. A file with a single error, and a clean file, return exactly what they did. `buildDataDocumentAll` is the new collecting build; `buildDataDocument` still throws the first error. Result shape unchanged.

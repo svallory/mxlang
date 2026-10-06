@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Changed (decision 162):** `.mx` compile errors: one diagnostic per entry of core's `TranslateError.errors` (so `mx-tsc` prints them all); `getSyntaxError` stays the first.
+
 - **Fix (unmapped-diagnostics-region-enclosing-spans):** an element diagnostic whose tag starts one character inside the mapped range before it (the printer maps `return <` for the `<` of a fragment it wraps around a root element) now finds that tag, so a preact-family region's root element is reported as the author's (`position approximate`), not as MX's bug.
 
 - **Fix (unmapped-diagnostics-region-enclosing-spans, decision 161):** every built-in file kind now exposes its authored spans, so an unmappable diagnostic in a region file (`.solid.mx`, `.preact.mx`, `.react.mx`, `.hono.mx`), `.astro.mx` or `.ng.mx` lands on its enclosing tag or attribute with `(position approximate: generated <line>:<col>)`, not at 1:1 with `(position unknown in this file kind: …)`. New `regionAuthoredSpans`, `ngRegionSource` and a `baseOffset` parameter on `markoAuthoredSpans` (`authored-spans.ts`); `(position unknown …)` remains only for a failed module's stand-in and a kind whose language plugin sets no `authoredSpans`.
