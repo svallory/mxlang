@@ -28,7 +28,11 @@ Six facts worth knowing before editing it:
   `<badge>` element with the props as attributes. The declarations use the
   taglib lookup and in-scope bindings (the same rule as `@mxlang/html`), and
   `componentAlias` renames such a component in the emitted JSX, binding
-  `MxBadge` beside it.
+  `MxBadge` beside it. Since decision 164 a lowercase `import`/`<define>` is
+  never called as a tag (core skips `isComponent` for it and warns), so only a
+  taglib-discovered lowercase tag still reaches the alias; no test or oracle
+  reaches it today (measured with a throw in the alias branch across the
+  preact/react/hono suites and `oracle:preact`).
   **A capitalized tag resolves only when it genuinely resolves** (decision
   114 parity, `unresolved-tag-jsx-astro-angular`): `isComponent`
   (`emitter.ts`) used to fall back to a bare `isComponentName` (`/^[A-Z]/`)

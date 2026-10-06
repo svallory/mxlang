@@ -224,9 +224,11 @@ JSX decides element-vs-component by **case**: `<badge/>` is the DOM element
 "badge" no matter what `badge` is bound to. Marko decides by **binding**, so a
 `tags/`-discovered `badge.marko` is a component called `<badge/>`.
 
-This host follows Marko's rule — the taglib lookup and the template's own
-imports and `<define>`s, the same as `@mxlang/html` — and renames such a
-component in the emitted JSX, binding `MxBadge` beside it. Emitted verbatim it
+This host follows Marko's rule — the taglib lookup, and the template's own
+PascalCase imports and `<define>`s, the same as `@mxlang/html` — and renames a
+taglib-discovered component in the emitted JSX, binding `MxBadge` beside it.
+A lowercase `import` or `<define>` is never called as a tag (decision 164): a
+lowercase tag is the native element, with a warning. Emitted verbatim it
 rendered a literal `<badge>` element with the props as attributes, which is a
 silently wrong render rather than an error.
 
