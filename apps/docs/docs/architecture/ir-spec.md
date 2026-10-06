@@ -88,8 +88,8 @@ What each span covers is listed with its field. The rule throughout: slicing the
 | Field | Covers |
 | --- | --- |
 | `Expr.span` | The expression's own text. For a string literal, quotes included. |
-| `Attr.nameSpan` (required) | The authored name. Zero-width at the `=` for a default attribute (`<x="post">`), as in Marko (`spans.test.ts` › "a default attribute's nameSpan"). For `:modifier`, the `:modifier` spelling. For a name-sugar attribute, the sugar token. |
-| static `Attr.valueSpan` | The string literal, quotes included; zero-width at the end of the name for a valueless `:modifier` (`lower.test.ts` › "gives the valueless modifier a zero-width valueSpan at the end of its name"). |
+| `Attr.nameSpan` (required) | The authored name. Zero-width at the `=` for a default attribute (`<x="post">`), as in Marko (`spans.test.ts` › "a default attribute's nameSpan"). For a colon name (`value:foo`, `x:`), the whole spelling, colons included (`lower.test.ts` › "`:modifier` is Marko's `value:modifier` attribute, not a modifier"). For a name-sugar attribute, the sugar token. |
+| static `Attr.valueSpan` | The string literal, quotes included; zero-width at the end of the name for a valueless colon name (`value:foo`, `x:`; `lower.test.ts` › "gives the valueless modifier a zero-width valueSpan at the end of its name"). |
 | `Element`/`DelegatedTag`/`AttributeTag` `nameSpan` | The tag name (`x` in `<x>`); for an attribute tag, the name after the `@` (`attributeTagNameSpan`). |
 | `Element`/`Component`/`DelegatedTag`/`AttributeTag`/`For`/`Define`/`Const` `span` | The whole tag: opening tag, body and closing tag, or the self-closed tag. |
 | `Component.nameSpan` | The opening tag name; `null` for a dynamic target and for a routed discovered-tag call (section 5.6). |
@@ -300,7 +300,7 @@ Every non-spread attribute has `name`, `nameSpan` (required), `loc` at the name,
 
 | Kind | Fields | Produced for |
 | --- | --- | --- |
-| `static` | `value: string`, `valueSpan?`, `atom?: Atom` | A string-literal value. Also `<div :foo/>` (Marko's `value:foo`), with `value: ""`. `atom` is set when the whole value is one atom (`mode=:strict`) and on the `name` the `:name` sugar sets (decision 156 addendum 1, item 2); `value` is then the atom's name, which every target emits, and `valueSpan` is the atom's span. |
+| `static` | `value: string`, `valueSpan?`, `atom?: Atom` | A string-literal value. Also a valueless colon name, `<div value:foo/>`, with `value: ""` (bare `:foo` is the name sugar, decision 146). `atom` is set when the whole value is one atom (`mode=:strict`) and on the `name` the `:name` sugar sets (decision 156 addendum 1, item 2); `value` is then the atom's name, which every target emits, and `valueSpan` is the atom's span. |
 | `boolean` | — | A bare attribute (`disabled`), HTML's `true`. |
 | `dynamic` | `value: Expr` | Any other expression value; also a host-resolved modifier (`resolveModifier` returns the name) and every `on*` off a native element. |
 | `bound` | `value: Expr` | `name:=expr`. `name` is the base name (Marko uses the modifier as a value conversion). A host with no update path emits the initial value. |
