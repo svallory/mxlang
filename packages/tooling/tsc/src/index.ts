@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import {
+  ambientTypeFiles,
   type CompiledNgMx,
   createAmxLanguagePlugin,
   createAstroLanguagePlugin,
@@ -304,6 +305,7 @@ function runPatchedTsc(
       resolveTscPath(),
       astro ? ASTRO_SUPPORTED_EXTENSIONS : EXTRA_SUPPORTED_EXTENSIONS,
       (typescript, options) => {
+        addAmbientTypes(options);
         const regionPlugins = createRegionLanguagePlugins(typescript);
         // `retainCompiled`: Angular template diagnostics run over the very
         // compiles the type-check used, not a second pass of them.
@@ -349,6 +351,27 @@ function runPatchedTsc(
     process.exit = exit;
   }
   return tscExitCode;
+}
+
+/**
+ * Adds the ambient declaration files of every host whose file kinds the
+ * program holds (`ambientTypeFiles`: Astro's `astro/env.d.ts`, which declares
+ * `Fragment`) to its root files, as the framework's own tooling adds them to
+ * every program it checks. Runs before the program is created: Volar hands
+ * this callback the very options object `createProgram` then receives.
+ */
+function addAmbientTypes(options: ts.CreateProgramOptions): void {
+  const configFile = options.options.configFilePath;
+  const projectDir =
+    typeof configFile === "string"
+      ? dirname(configFile)
+      : (options.host?.getCurrentDirectory() ?? process.cwd());
+  const extra = ambientTypeFiles(options.rootNames, projectDir);
+  if (extra.length === 0) return;
+  (options as { rootNames: readonly string[] }).rootNames = [
+    ...options.rootNames,
+    ...extra,
+  ];
 }
 
 /**

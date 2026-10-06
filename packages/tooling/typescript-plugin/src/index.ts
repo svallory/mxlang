@@ -318,6 +318,7 @@ function withSyntaxDiagnostics(
 }
 
 export type { TargetPolicyDiagnostic } from "@mxlang/core";
+export { ambientTypeFiles } from "./ambient-types.ts";
 export {
   composeAmxMappings,
   createAmxLanguagePlugin,

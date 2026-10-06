@@ -77,6 +77,23 @@ const descriptor: TargetDescriptor = {
   typeSurface: createAstroTypeSurface,
   host: {
     name: "astro",
+    // What Astro's language server (`@astrojs/language-server`,
+    // `addAstroTypes`) adds to every program it checks, so `mx-tsc --astro`
+    // types a page the way `astro check` and the editor do: `Fragment`,
+    // `Astro` and the `astro/jsx-runtime` JSX namespace. Without an `astro`
+    // install, the language server's own fallback copies, as it does itself.
+    ambientTypes(resolve) {
+      const own = ["astro/env.d.ts", "astro/astro-jsx.d.ts"].map(resolve);
+      if (own.every((file): file is string => file !== undefined)) return own;
+      const fallback = [
+        "@astrojs/language-server/types/env.d.ts",
+        "@astrojs/language-server/types/astro-jsx.d.ts",
+        "@astrojs/language-server/types/jsx-runtime-fallback.d.ts",
+      ].map(resolve);
+      return fallback.every((file): file is string => file !== undefined)
+        ? fallback
+        : [];
+    },
     fileKinds: [
       {
         segment: "astro",

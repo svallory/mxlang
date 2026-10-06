@@ -5,7 +5,7 @@
     "jsx": "preserve",
     "jsxImportSource": "astro",
     "allowImportingTsExtensions": true,
-    "types": ["node", "astro/env"],
+    "types": ["node"],
     "plugins": [
       {
         "name": "@mxlang/typescript-plugin",

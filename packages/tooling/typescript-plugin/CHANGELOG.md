@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- **Added (mx-tsc-astro-ambient-types):** `ambientTypeFiles(rootNames, projectDir)`, the built-in hosts' ambient declaration files (`TargetHost.ambientTypes`) a program needs when it holds one of their file kinds; package files resolve from the project, then from the plugin's own install. Names no host.
+
 - **Fix (astro-mx-custom-tag-tsx):** an `.astro.mx` page that calls a custom tag no longer projects to unparsable TSX (`TS1005 '>' expected`). The cause was upstream of the projection: `@mxlang/astro` lowered the tag to a `$`-led import (`$mx_Badge1`), which Astro treats as an HTML element, so `convertToTSX` rewrote its `/>` and Astro's own compiler shipped the literal `<$mx_Badge1 />`. The host now emits an upper-case-led binding (`Mx_Badge1`), so runtime and projection agree and the projection needs no swap.
 
 - **Tests (third-party-data-host, decision 148):** a third-party host on the data target (`.mesh.mx`) is claimed as a whole-file `.mx`, compiles through the host's descriptor and reports data's errors at their offset. No code change.

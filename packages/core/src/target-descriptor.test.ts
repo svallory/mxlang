@@ -105,6 +105,16 @@ describe("defaultTag (decision 145)", () => {
     }
   });
 
+  it("host.ambientTypes is an optional function", () => {
+    expect(() =>
+      validateDescriptor(hosted("a", "h", {}, { ambientTypes: () => [] })),
+    ).not.toThrow();
+    for (const value of [1, "astro/env.d.ts", ["astro/env.d.ts"]]) {
+      const error = invalidField(hosted("a", "h", {}, { ambientTypes: value }));
+      expect(error.field).toBe("host.ambientTypes");
+    }
+  });
+
   it("createTargetLookup refuses a descriptor without it", () => {
     const { defaultTag: _omitted, ...rest } = target() as unknown as Record<
       string,

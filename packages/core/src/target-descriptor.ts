@@ -198,6 +198,20 @@ export interface TargetHost {
    * (`HostDeclarations.allowContractDefaultTag`).
    */
   readonly defaultTag?: string;
+  /**
+   * Declaration files a type-check of this host's file kinds needs in its
+   * program beyond what the project's `tsconfig.json` lists: the ambient
+   * types the framework's own tooling injects into every program it checks
+   * (Astro's language server adds `astro/env.d.ts`, which declares
+   * `Fragment`). `resolve("<package>/<file>")` is the absolute path of a file
+   * of an installed package, looked up from the project first and then from
+   * the tool's own install, or `undefined` when neither has it. Returns
+   * absolute paths. A tool calls it once per program that holds a file of
+   * one of this host's `fileKinds`, and adds what it returns as root files.
+   */
+  readonly ambientTypes?: (
+    resolve: (packageFile: string) => string | undefined,
+  ) => readonly string[];
 }
 
 /**
@@ -509,6 +523,7 @@ function validateHost(value: unknown): void {
   }
   if (value.defaultTag !== undefined)
     requireString(value, "defaultTag", "host.defaultTag");
+  optionalFunction(value, "ambientTypes", "host.ambientTypes");
   const kinds = value.fileKinds;
   if (kinds !== undefined) {
     if (!Array.isArray(kinds)) throw bad("host.fileKinds", kinds, "an array");

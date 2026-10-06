@@ -140,6 +140,7 @@ export const PACKED_PACKAGES: PackedPackage[] = [
       // @mxlang/angular-checker and @angular/compiler-cli). A stray
       // ng-*.d.ts here means the strip stopped running. file-kinds.d.ts is
       // stripped too: its registry-private pipeline types must not ship.
+      "dist/ambient-types.d.ts",
       "dist/amx-language.d.ts",
       "dist/astro-language.d.ts",
       "dist/data-check.d.ts",
