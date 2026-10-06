@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.0-alpha.9
+
 - **Added:** a bound attribute (`kind: "expression"`, `bound: true`) carries `refinement?: DataExpr`, the `fn` of `v:fn:=q` (Marko's change-handler function; `node: null`, `span` slices the modifier). Absent without a modifier.
 
 - **Note (data-check-keys-on-base-target):** a third-party host built on data declares `builtOn: "data"` on its descriptor to inherit data's `mx-tsc` check (strict defaults and `mx.data.*`); reusing `dataDeclarations` alone does not.
