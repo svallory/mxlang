@@ -5,11 +5,11 @@ import { describe, expect, it } from "vitest";
 import { AMX_LANGUAGE_ID, createAmxLanguagePlugin } from "./amx-language.ts";
 
 /**
- * A custom tag in an `.astro.mx` page lowers to `<$mx_Badge1 />`. Astro's
- * `convertToTSX` decides element-vs-component by the tag name's first letter,
- * so a `$`-led name is an HTML element, and a self-closing one is rewritten to
- * `<$mx_Badge1 /{`>`}`: syntactically invalid TSX. The projection must hand
- * TypeScript text that parses, with the call's tag name unchanged.
+ * Astro's `convertToTSX` decides element-vs-component by the tag name's first
+ * letter, so a `$`-led name is an HTML element, and a self-closing one is
+ * rewritten to `<$mx_Badge1 /{`>`}`: syntactically invalid TSX. `@mxlang/astro`
+ * therefore lowers a custom tag to an upper-case-led binding (`<Mx_Badge1 />`),
+ * and the projection hands TypeScript text that parses with no help of its own.
  */
 const page = join(
   import.meta.dirname,
@@ -62,7 +62,16 @@ describe(".astro.mx custom tag: virtual TSX", () => {
     });
   }
 
-  it("keeps the lowered tag name in the type-check text", () => {
-    expect(virtualTsx(original)).toContain("$mx_Badge1");
+  it("projects the host's upper-case-led tag name unchanged", () => {
+    const tsx = virtualTsx(original);
+    expect(tsx).toContain("Mx_Badge1");
+    expect(tsx).not.toContain("$mx_");
+  });
+
+  it("parses when the page itself mentions the old stand-in spelling", () => {
+    const tsx = virtualTsx(
+      original.replace("<badge/>", "<badge/><!-- Xmx_ -->"),
+    );
+    expect(parseDiagnostics(tsx)).toEqual([]);
   });
 });

@@ -176,6 +176,21 @@ describe("astro-static", () => {
     }
   });
 
+  it("/custom-tag renders a discovered custom tag called from .astro.mx", async () => {
+    // `src/tags/badge.mx` is discovered, not imported. Astro treats a tag whose
+    // name is not upper-case-led as an HTML element, so a `$`-led binding once
+    // shipped the literal `<$mx_Badge1 />` with no diagnostic: this asserts the
+    // tag's own markup in the built page.
+    const response = await page.goto(`${baseUrl}/custom-tag`, {
+      waitUntil: "networkidle",
+    });
+    expect(response?.status()).toBe(200);
+    const html = (await response?.text()) ?? "";
+    expect(html).toContain('<b class="tag-badge">badge:one</b>');
+    expect(html).toContain('<b class="tag-badge">badge:two</b>');
+    expect(html).not.toContain("mx_");
+  });
+
   it("/templates renders .astro.mx components: MX template, Astro semantics", async () => {
     // Decisions 76c/78/134. The route is `templates.astro` (a page cannot be
     // `.astro.mx`, decision 134 addendum); it imports `Templates.astro.mx`,
@@ -277,6 +292,7 @@ describe("astro-static", () => {
       // `.astro.mx` components lower to Astro template syntax and are
       // compiled by Astro itself, so they ship no client JS either.
       "/templates",
+      "/custom-tag",
       "/return-values",
       "/return-in-astro",
     ]) {

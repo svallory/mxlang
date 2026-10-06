@@ -28,6 +28,10 @@ bun run e2e        # headless Chromium against dev server + built output
 `bun run e2e` needs `bunx playwright install chromium` once. It is wired to
 the example's own vitest config (`e2e/vitest.config.ts`) and is deliberately
 outside the root `bun run test`, whose `projects` glob is `packages/*`.
+`examples/astro-static`'s e2e is the exception to "outside CI": the
+`astro-static-e2e` job in `.github/workflows/ci.yml` runs it and is a
+`verify` dependency, because it is the only lane that renders an `.astro.mx`
+page through Astro's own compiler.
 
 `e2e/resolve.spec.ts` is left out of that config and run on demand with
 `vitest run --config e2e/vitest.config.ts e2e/resolve.spec.ts`: all four of its

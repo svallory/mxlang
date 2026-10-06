@@ -4,7 +4,7 @@
 
 ## Unreleased
 
-- **Fix (astro-mx-custom-tag-tsx):** an `.astro.mx` page that calls a custom tag no longer projects to unparsable TSX (`TS1005 '>' expected`). Astro's `convertToTSX` treats a `$`-led tag name (`$mx_Badge1`) as an HTML element and rewrites its self-closing `/>` to `/{`>`}`; the type-check projection now hands it a same-length upper-case stand-in and swaps the name back, so no offset moves. Emitted runtime output is unchanged.
+- **Fix (astro-mx-custom-tag-tsx):** an `.astro.mx` page that calls a custom tag no longer projects to unparsable TSX (`TS1005 '>' expected`). The cause was upstream of the projection: `@mxlang/astro` lowered the tag to a `$`-led import (`$mx_Badge1`), which Astro treats as an HTML element, so `convertToTSX` rewrote its `/>` and Astro's own compiler shipped the literal `<$mx_Badge1 />`. The host now emits an upper-case-led binding (`Mx_Badge1`), so runtime and projection agree and the projection needs no swap.
 
 - **Tests (third-party-data-host, decision 148):** a third-party host on the data target (`.mesh.mx`) is claimed as a whole-file `.mx`, compiles through the host's descriptor and reports data's errors at their offset. No code change.
 

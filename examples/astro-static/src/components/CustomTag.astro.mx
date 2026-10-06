@@ -1,0 +1,9 @@
+---
+// An AstroMX component calling a discovered custom tag (`src/tags/badge.mx`).
+// Astro only treats an upper-case-led tag name as a component, so the host
+// binds the tag under such a name; before that, the page shipped a literal
+// `<$mx_Badge1 />` element and nothing failed.
+---
+<h1>Custom tag</h1>
+<p class="first"><badge label="one"/></p>
+<p class="second"><badge label="two"/></p>

@@ -637,7 +637,10 @@ function emitAttrs(
 }
 
 /** Creates one Astro-template emitter over core's IR. */
-export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
+export function createEmitter(
+  onMappedWrite?: MappedWrite,
+  componentNames: ReadonlyMap<string, string> = new Map(),
+): Emitter<string> {
   const out: string[] = [];
   let length = 0;
   const write = (code: string): void => {
@@ -932,7 +935,7 @@ export function createEmitter(onMappedWrite?: MappedWrite): Emitter<string> {
         );
       }
 
-      const name = node.target.name;
+      const name = componentNames.get(node.target.name) ?? node.target.name;
       if (node.var) {
         // Structural, not a missing feature (decision 65-style host-cannot,
         // ruled 2026-09-28 on TODO amx-tag-var): Astro runs the `---` fence
@@ -1250,6 +1253,62 @@ function fenceSyntaxErrorMessage(error: SourceBindingsError): string {
   return `syntax error in the \`---\` fence: ${text} (${error.line + 1}:${error.column + 1})`;
 }
 
+/**
+ * The Astro-visible name for each import core synthesized for a discovered
+ * tag.
+ *
+ * Astro decides element-vs-component from the tag name's first letter, and
+ * core's binding (`$mx_Badge1`) is `$`-led: Astro's compiler then ships
+ * `<$mx_Badge1 />` as a literal HTML element with no diagnostic, and
+ * `convertToTSX` rewrites its `/>` into a syntax error. The spelling is this
+ * host's concern, so the host renames its own bindings (`Mx_Badge1`), here and
+ * at every call site, rather than core changing a name every host emits.
+ *
+ * Core's collision check ran against the `$`-led name, so the new name is
+ * checked again: against every binding core knows and every identifier the
+ * author wrote, retrying with a trailing `_` until nothing matches.
+ */
+function astroComponentNames(
+  ctx: Ctx,
+  source: string,
+  imports: readonly IrNode[],
+): Map<string, string> {
+  const names = new Map<string, string>();
+  const taken = (candidate: string): boolean =>
+    ctx.imports.has(candidate) ||
+    ctx.defines.has(candidate) ||
+    [...names.values()].includes(candidate) ||
+    new RegExp(`(^|[^\\w$])${candidate}([^\\w$]|$)`).test(source);
+  for (const statement of imports) {
+    if (statement.kind !== "Import" || !statement.synthesized) continue;
+    for (const binding of statement.bindings) {
+      let name = `Mx${binding.replace(/^\$mx(?=_)/, "")}`;
+      if (!/^[A-Z]/.test(name)) name = `Mx_${name}`;
+      while (taken(name)) name += "_";
+      names.set(binding, name);
+    }
+  }
+  return names;
+}
+
+/** Re-emits a synthesized import under its Astro-visible binding name. */
+function renameSynthesizedImport(
+  statement: HoistedStatement,
+  names: ReadonlyMap<string, string>,
+): HoistedStatement {
+  if (statement.kind !== "Import" || !statement.synthesized) return statement;
+  let code = statement.code;
+  for (const binding of statement.bindings) {
+    const name = names.get(binding);
+    if (name === undefined) continue;
+    code = code.replace(
+      new RegExp(`^(import\\s+)${binding.replaceAll("$", "\\$")}\\b`),
+      `$1${name}`,
+    );
+  }
+  return { ...statement, code };
+}
+
 /** Splits an `.astro.mx` file, resolves its MX template, and emits Astro syntax. */
 export function lowerAstroMx(
   source: string,
@@ -1367,8 +1426,11 @@ export function lowerAstroMx(
         at?.column ?? 0,
       );
     }
+    const componentNames = astroComponentNames(ctx, source, ir.imports);
     const statements: HoistedStatement[] = [
-      ...ir.imports,
+      ...ir.imports.map((statement) =>
+        renameSynthesizedImport(statement, componentNames),
+      ),
       ...ir.hoisted,
       ...(ir.inputInterface ? [ir.inputInterface] : []),
       ...ir.prelude,
@@ -1383,7 +1445,7 @@ export function lowerAstroMx(
         generatedStart,
         generatedEnd: generatedStart + code.length,
       });
-    });
+    }, componentNames);
     const templateCode = emit(templateEmitter, ir);
     const helpers: string[] = [];
     if (

@@ -1,0 +1,3 @@
+export interface Input { label: string }
+
+<b class="tag-badge">badge:${input.label}</b>

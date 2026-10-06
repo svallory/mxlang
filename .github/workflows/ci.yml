@@ -194,6 +194,28 @@ jobs:
           bun run scripts/verify-coverage.ts --merge coverage-evidence
           test-1,test-2,test-bun-grammar
 
+  astro-static-e2e:
+    # Renders real pages: `astro build` of examples/astro-static, then headless
+    # Chromium over dist/ plus the two builds that must fail. Nothing else in CI
+    # compiles an `.astro.mx` page through Astro's own compiler, so a runtime
+    # regression in the Astro host (a custom tag shipped as a literal element,
+    # an example that no longer builds) passed every other lane.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      # actions/setup-node v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "26.7.0"
+      # oven-sh/setup-bun v2.0.2
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76
+        with:
+          bun-version: "1.3.14"
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run --cwd examples/astro-static e2e
+
   verify:
     # Preserve the status-check name. always() is essential: a failed or
     # skipped dependency must produce a failed check, not a skipped green.
@@ -204,6 +226,7 @@ jobs:
       - test
       - test-bun-grammar
       - pack-probe-docs
+      - astro-static-e2e
       - coverage
     steps:
       - name: Require every verify lane to succeed

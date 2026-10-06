@@ -139,6 +139,16 @@ Four facts worth knowing before editing `src/astro-template.ts` or
   `.astro.mx`-to-Astro spans with `@astrojs/compiler/sync`'s `convertToTSX` map;
   only intersections surviving both stages become Volar `CodeMapping`s.
   `.astro.mx` is registered only by `{ astro: true }` and `mx-tsc --astro`.
+- **A discovered custom tag is bound under an upper-case-led name, chosen by
+  this host.** Core binds a discovered tag's import as `$mx_Badge1`, and Astro
+  treats a tag whose name does not start with an upper-case letter as an HTML
+  element: its own compiler ships the literal `<$mx_Badge1 />` with no
+  diagnostic, and `convertToTSX` rewrites its `/>` into a syntax error.
+  `astroComponentNames` (`astro-template.ts`) renames every `synthesized`
+  import to `Mx_Badge1` and the emitter renames each call site, re-checking
+  the new name against core's bindings and the author's own identifiers.
+  `custom-tag-render.test.ts` renders it through Astro's real compiler and
+  container; asserting lowered text alone is what let this ship.
 - **The Vite mechanism is forced.** Astro's `astro:build` `transform` filters
   `include: [/\.astro$/, /\.astro\?/]` **and** re-checks
   `if (!parsedId.filename.endsWith(".astro")) return;`, so an `enforce: "pre"`

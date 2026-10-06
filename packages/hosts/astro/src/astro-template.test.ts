@@ -811,7 +811,8 @@ describe("a tag that returns a value", () => {
     );
 
     expect(code).toContain("start={1}");
-    expect(code).toContain('import $mx_Counter1 from "./tags/counter.mx"');
+    expect(code).toContain('import Mx_Counter1 from "./tags/counter.mx"');
+    expect(code).toContain("<Mx_Counter1 start={1} />");
   });
 
   it("rejects the .astro.mx file's own <return>", () => {
@@ -852,7 +853,7 @@ describe("a tag that returns a value", () => {
     ).toThrow(
       // The route it names must be one that works since decision 155: the
       // default export returns markup only, so the value comes from `render`.
-      /Astro runs the `---` fence before the template renders.*Call the unit directly from the fence instead.*import \{ createOut \} from "@mxlang\/astro\/runtime"; const value = \$mx_Counter\d*\.render\(\{ \.\.\. \}, createOut\(\)\)/s,
+      /Astro runs the `---` fence before the template renders.*Call the unit directly from the fence instead.*import \{ createOut \} from "@mxlang\/astro\/runtime"; const value = Mx_Counter\d*\.render\(\{ \.\.\. \}, createOut\(\)\)/s,
     );
   });
 });
