@@ -928,7 +928,7 @@ export function attributeTagDiagnosticMappings(
     const probeMatch = probe.exec(generated);
     if (!probeMatch) continue;
     const probeStart = probeMatch.index;
-    const generatedStart = probeStart;
+    let generatedStart = probeStart;
     const parens = probeMatch[1]?.length ?? 0;
     const valueStart = probeStart + probeMatch[0].length - parens;
     const keyword = " satisfies";
@@ -944,9 +944,23 @@ export function attributeTagDiagnosticMappings(
     let generatedEnd: number;
     if (keywordStart >= 0) {
       generatedEnd = keywordStart + keyword.length;
+      // Only an object or array literal is mapped whole (its properties map
+      // exactly inside it). A renderable's body is real authored code with
+      // its own mappings, which a span over it would shadow, so only the
+      // keyword is anchored on the tag.
+      const opener = valueStart + parens;
+      const close = "{[".includes(generated[opener] ?? "")
+        ? matchingClose(generated, opener)
+        : -1;
+      if (
+        close < 0 ||
+        !/^\)*$/.test(generated.slice(close + 1, keywordStart))
+      ) {
+        generatedStart = keywordStart;
+      }
     } else if (generated[valueStart] === "{") {
       // Untyped object: this tag's *own* closing `}`, not an inner tag's.
-      const close = matchingSatisfiesMarker(generated, valueStart);
+      const close = matchingClose(generated, valueStart);
       if (close < 0) continue;
       generatedEnd = close + 1;
     } else {
@@ -1028,8 +1042,8 @@ export function attributeTagDiagnosticMappings(
 }
 
 /**
- * The index of the `}` that closes the object literal opened at
- * `objectOpen` (the `{` right after an attribute tag's `name={`), found by
+ * The index of the bracket that closes the one opened at `open` (an object
+ * or array literal after an attribute tag's `name={`), found by
  * bracket-depth scanning rather than the first `} satisfies ` in the text —
  * a component nested inside this tag's body can itself take an attribute
  * tag, whose own `{ ... } satisfies ...}` prints *inside* this one and
@@ -1038,10 +1052,10 @@ export function attributeTagDiagnosticMappings(
  * returns to 0 before the text ends (malformed input, defensively refused
  * rather than guessed at).
  */
-function matchingSatisfiesMarker(text: string, objectOpen: number): number {
+function matchingClose(text: string, open: number): number {
   let depth = 0;
   let quote: string | undefined;
-  for (let i = objectOpen; i < text.length; i++) {
+  for (let i = open; i < text.length; i++) {
     const char = text[i];
     if (quote) {
       if (char === "\\") i++;
@@ -1052,7 +1066,7 @@ function matchingSatisfiesMarker(text: string, objectOpen: number): number {
     else if (char === "{" || char === "(" || char === "[") depth++;
     else if (char === "}" || char === ")" || char === "]") {
       depth--;
-      if (depth === 0 && char === "}") return i;
+      if (depth === 0) return i;
     }
   }
   return -1;
@@ -1062,7 +1076,7 @@ function matchingSatisfiesMarker(text: string, objectOpen: number): number {
  * The index of the ` satisfies` that belongs to the value starting at `open`:
  * the first one at bracket depth `depth` (0 when the value is printed bare,
  * 2 inside the emitter's `((value) satisfies T) as any)` wrapper); anything
- * nested in the value sits deeper. Quote-aware like `matchingSatisfiesMarker`;
+ * nested in the value sits deeper. Quote-aware like `matchingClose`;
  * `-1` when the value closes first.
  */
 function satisfiesKeyword(
