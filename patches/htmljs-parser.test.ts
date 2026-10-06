@@ -36,6 +36,12 @@ import {
   unicodeWhitespaceMismatches,
 } from "../packages/parser/src/template/mx-atoms.cases.ts";
 import {
+  fuzzThrows,
+  NO_THROW_ROWS,
+  type NoThrowParserModule,
+  renderEvents,
+} from "../packages/parser/src/template/mx-no-throw.cases.ts";
+import {
   asciiMainMismatches,
   UNICODE_WORD_ROWS,
   unicodeWordTwinMismatches,
@@ -429,5 +435,19 @@ describe.each(builds)("non-ASCII identifiers (%s)", (_name, build) => {
     const { total, bad } = asciiMainMismatches(mod, unicodeWordsMain);
     expect(total).toBe(983);
     expect(bad).toEqual([]);
+  });
+});
+
+// template-parser-comment-in-text-tag-open-crash: the same table the source
+// copy runs (`packages/parser/src/template/mx-no-throw.test.ts`).
+describe.each(builds)("the parser never throws (%s)", (_name, build) => {
+  const mod = build as unknown as NoThrowParserModule;
+
+  it.each(NO_THROW_ROWS)("%j", (input, expected) => {
+    expect(renderEvents(mod, input)).toBe(expected);
+  });
+
+  it("no generated input from the delimiter alphabet throws (seed 1)", () => {
+    expect(fuzzThrows(mod, 1, 5_000)).toEqual({ total: 5_000, thrown: [] });
   });
 });
