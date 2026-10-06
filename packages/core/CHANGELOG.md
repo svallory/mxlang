@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fixed (decision 164):** a lowercase tag is a native element whatever `import` or `<define>` binding of that name is in scope, on every target (an imported `input` no longer turned `<input>` into a component call). Core skips the host `isComponent` for a lowercase name bound only by an import or define and warns at the tag; a PascalCase binding, a dynamic tag, a registered custom tag and a contract child are unchanged. Adds `Ctx.bindingSites`.
+
 ## 0.1.0-alpha.7
 
 - **Fixed (decision 165):** the bundled template parser no longer throws on a closing tag after a concise tag that never got its name (`,--/</e>`); it reports `EXTRA_CLOSING_TAG` through its error callback. Inherited from htmljs-parser 5.18.0.

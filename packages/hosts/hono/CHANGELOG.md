@@ -1,5 +1,6 @@
 # @mxlang/hono
 
+- **Fix (native-tag-binding-capture, decision 164):** a lowercase tag is a native element whatever `import` or `<define>` binding of that name is in scope (shared emitter, see `@mxlang/preact`). A warning is raised at the tag.
 - **Changed (preact-region, decision 154):** the Bun loader declines `.preact.mx` (Preact's region file kind), as `@mxlang/html`'s does.
 
 - **Added (hono-region, decision 154):** `.hono.mx` region files: TSX with MX regions, as `.solid.mx` is for Solid. The `hono-jsx` descriptor gains the `hono` file kind (`compileRegion`, `readCalleeInput`, language id `honomx`), and `compileHonoRegion` is exported. A region renders what the same markup renders in a whole-file `.mx`; hooks live in the surrounding component. In a region, `<const>` and module-level MX (`import`, `static`, `export`, `Input`, `<return>`) are errors at the statement, and `<let>`/`<effect>`/`<id>`/`<lifecycle>` name only the hook in the surrounding component (`honoRegionDeclarations`).

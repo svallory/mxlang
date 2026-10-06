@@ -1,5 +1,6 @@
 # Changelog
 
+- **Fix (native-tag-binding-capture, decision 164):** a module-scope import named like a native element no longer turns that element into `<Dynamic>`; it stays native. A warning is raised at the tag (without the binding's position).
 - **Added (bridge-host, decision 154):** `appendSolidBuiltinImport` (moved from `@mxlang/typescript-plugin`) is Solid's `completeTypecheckModule` on the `.solid.mx` file kind, behind the descriptor's lazy `require`; also exported. Output unchanged.
 
 - **Changed (solid-rename, decision 154):** the Solid file kind's `languageIds` are now `["solidmx", "solid"]` (was `["solidmx", "SolidMX"]`): Zed derives its LSP language id from the lowercased language name, and its language is now `Solid`. The `solidmx` id, `compileSolidMx` and the `.solid.mx` suffix are unchanged.

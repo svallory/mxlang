@@ -550,6 +550,20 @@ the literal text `<![CDATA[ b < c ]]>`, not a CDATA section.
 MX decides element-vs-component by **in-scope binding and case**, which is
 Marko's own rule, not JSX's. The full precedence chain is in §11.
 
+**A lowercase tag is a native element, whatever binding is in scope
+(decision 164).** `import { input } from "@angular/core"` does not turn
+`<input>` into a call of that import, and a lowercase `<define/row>` is not
+called by `<row>`. A local `import` or `<define>` binding is called as a tag
+only when its name is PascalCase, or through a dynamic tag (`<${row}>`).
+Core raises a positioned warning at the tag when its name equals an in-scope
+`import` or `<define>` binding: "`<row>` is the native element; the `row`
+defined at L:C is not called. Rename it `Row` or write `<${row}>`" (on a
+target that never sees the binding's own position, such as a Solid region, the
+`at L:C` part is left out). A registered custom tag or contract child of that
+name is unaffected. A lowercase name that is neither an element nor
+callable stays the host's existing error. This matches Marko 6.3.51, so it is
+not a divergence.
+
 ### Void elements
 
 The HTML void elements —
@@ -1403,6 +1417,11 @@ A named, reusable fragment, callable like any tag, taking the same params and
 attribute tags as any other call. Hoists from inside a `<define>` land on the
 define's own head, not the enclosing render function's.
 
+A `<define>` is called as a tag only by its PascalCase name (`<define/Row>`
+then `<Row/>`) or through a dynamic tag; a lowercase `<define/row>` is called
+as an expression (`${row(...)}` where the host allows it) and `<row>` stays a
+native element (§4, decision 164).
+
 | Message | When |
 |---|---|
 | `` `<define>` without a name (write `<define/name>`) `` | No `/var`. |
@@ -1546,8 +1565,9 @@ The **normative** order, as shipped (decisions 93, 113):
    `define`, `return`, `else`, `else-if` — **never shadowable**
 3. `@`-prefixed names → attribute-tag error
 4. **Built-in custom tags (`try`)** — wins unconditionally
-5. **A file-local binding**, **gated on PascalCase**: an `import`, a
-   `<define>` name, a `<const>` binding, or a `<for>`/`<define>` tag param —
+5. **A file-local binding**, **gated on PascalCase** (a lowercase tag is a
+   native element whatever binding is in scope, with a warning: decision 164):
+   an `import`, a `<define>` name, a `<const>` binding, or a `<for>`/`<define>` tag param —
    each in effect only within its own lexical scope
 6. A registered custom tag
 7. A host claim (`isDelegatedTag`)

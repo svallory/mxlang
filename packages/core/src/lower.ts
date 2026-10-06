@@ -2127,6 +2127,23 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
   };
 }
 
+/**
+ * Decision 164's warning: a lowercase tag whose name an in-scope `import` or
+ * `<define>` binds is the native element, and the binding is not called.
+ */
+function warnLowercaseBinding(ctx: Ctx, node: Node, name: string): void {
+  const site = ctx.bindingSites.get(name);
+  const kind = site?.kind ?? (ctx.defines.has(name) ? "defined" : "imported");
+  const where = site ? ` at ${site.line}:${site.column + 1}` : "";
+  const pascal = name.charAt(0).toUpperCase() + name.slice(1);
+  const at = posOf(node);
+  warn(ctx, {
+    message: `\`<${name}>\` is the native element; the \`${name}\` ${kind}${where} is not called. Rename it \`${pascal}\` or write \`<\${${name}}>\``,
+    line: at.line,
+    column: at.column,
+  });
+}
+
 /** `<define/name|params|>...</define>` — a reusable block. */
 function lowerDefine(ctx: Ctx, node: Node): IrNode {
   if (!node.var) {
@@ -2156,6 +2173,7 @@ function lowerDefine(ctx: Ctx, node: Node): IrNode {
   unscope();
 
   ctx.defines.set(name, params);
+  ctx.bindingSites.set(name, { kind: "defined", ...posOf(node.var ?? node) });
 
   const loc = posOf(node);
   const hoisted: IrNode[] = prelude.map(({ code, node }) => ({
@@ -2276,6 +2294,7 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
     // imported component an unbound capitalized tag.
     for (const binding of bindings) {
       ctx.importedNames.add(binding);
+      ctx.bindingSites.set(binding, { kind: "imported", ...loc });
       // A type-only binding still occupies the name in the module
       // (`importedNames`), but is not a value a tag could resolve to
       // (`imports` — decision 114/115): neither `import type { X }` nor
@@ -3231,7 +3250,17 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // component rule), so it does not recognize a `ctx.tagVarShadowed` name —
   // but `fileLocalBinding` already proved it is a capitalized, in-scope local
   // binding, which is exactly what a component call needs to route on.
-  if (fileLocalBinding || ctx.declarations.isComponent(name, ctx)) {
+  // Decision 164: a lowercase tag is a native element whatever `import` or
+  // `<define>` binding of that name is in scope (Marko 6.3.51: only a
+  // PascalCase name, or a dynamic tag `<${name}>`, calls a local binding).
+  // Hosts' `isComponent` answers `imports.has || defines.has` with no casing
+  // gate, so the lowercase case is cut off here, once, for every host.
+  const lowercaseBinding =
+    /^[a-z]/.test(name) && (ctx.defines.has(name) || ctx.imports.has(name));
+  if (
+    fileLocalBinding ||
+    (!lowercaseBinding && ctx.declarations.isComponent(name, ctx))
+  ) {
     const params = ctx.defines.get(name);
     if (params) {
       warnDefineExtraParams(ctx, node, name, params);
@@ -3326,15 +3355,24 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // the silent-failure mode ADR 0001 names: a core tag the host has no
   // lowering for must be an error, never a literal element.
   if (!ctx.declarations.isElement(name, ctx)) {
+    // A lowercase tag naming an in-scope binding that is no element keeps the
+    // host's own wording for it (Marko: "Local variables must be in a dynamic
+    // tag unless they are PascalCase").
+    if (lowercaseBinding) {
+      ctx.declarations.rejectComponentTag?.(name, node, ctx);
+    }
     // The host's own wording first: a Marko-parity target reports Marko's
     // failure for an unresolved custom tag, which is what its users see and
     // what the fixtures assert. The message below is the fallback.
     ctx.declarations.rejectUnknownTag?.(name, node, ctx);
     fail(
-      `unknown tag \`<${name}>\`: not an HTML element, and no matching import or \`<define>\` is in scope`,
+      lowercaseBinding
+        ? `unknown tag \`<${name}>\`: not an HTML element, and a lowercase tag never calls the \`${name}\` binding in scope. Rename it \`${name.charAt(0).toUpperCase()}${name.slice(1)}\` or write \`<\${${name}}>\``
+        : `unknown tag \`<${name}>\`: not an HTML element, and no matching import or \`<define>\` is in scope`,
       node,
     );
   }
+  if (lowercaseBinding) warnLowercaseBinding(ctx, node, name);
 
   if (node.attributeTags?.length) {
     ctx.declarations.rejectElementAttributeTags?.(name, node, ctx);

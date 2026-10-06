@@ -330,6 +330,16 @@ export interface Ctx {
    * pre-existing direct call.
    */
   unknownLocalValue: Set<string>;
+  /**
+   * Where an `import` local or a `<define>` name was bound, by name — only
+   * for the warning a lowercase tag raises when it names one of them (decision
+   * 164). Absent for a name whose site core never saw (a host folding module
+   * bindings into `imports`, e.g. Solid's `moduleBindings`).
+   */
+  bindingSites: Map<
+    string,
+    { kind: "imported" | "defined"; line: number; column: number }
+  >;
   generate: (node: Node) => string;
   /** What the host declares, as `lower()` consults it (decision 79). */
   declarations: HostDeclarations;
@@ -1373,6 +1383,7 @@ export function newCtx(
     importSpecifiers: new Map(),
     importDefaultFromMarkoOrMx: new Set(),
     unknownLocalValue: new Set(),
+    bindingSites: new Map(),
     generate,
     declarations,
     lookup,
