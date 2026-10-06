@@ -750,15 +750,28 @@ function __mxRenderDynamic(__mxSink: __MxOut, __mxTarget: any, __mxProps: Record
 
 // Decision 155: a statically named tag that is not known to be a compiled
 // template (a hand-written function, or a \`.ts\` barrel re-export of one).
-// Typed as returning the callee itself, so the call site's props are checked
-// as a plain \`Callee(props)\` call, generics included.
-const RENDER_TAG = `function __mxRenderTag<F extends (input: never) => unknown>(__mxSink: __MxOut, __mxTag: F): F {
+// Typed the way the call is made: through \`render\` when the callee has one
+// (a compiled template, whose default export a host may present differently:
+// Astro's type surface gives it Astro's props), else as the callee itself, so
+// the call site's props are checked as a plain \`Callee(props)\` call,
+// generics included.
+const RENDER_TAG = `function __mxRenderTag<F extends (input: never) => unknown>(__mxSink: __MxOut, __mxTag: F): __MxRenderCall<F> {
   const __mxCallee = __mxTag as unknown as ((input: unknown) => unknown) & { render?: (input: unknown, out: __MxOut) => unknown };
   return ((__mxInput: unknown) => {
     if (typeof __mxCallee.render === "function") return __mxCallee.render(__mxInput, __mxSink);
     __mxSink.write("" + __mxCallee(__mxInput));
-  }) as unknown as F;
+  }) as unknown as __MxRenderCall<F>;
 }`;
+
+/** What `__mxRenderTag` returns: `render`'s input when the callee has one. */
+const RENDER_CALL = `type __MxRenderCall<F> = [F] extends [{ render: (input: infer I, out: never) => unknown }] ? (input: I) => void : F;`;
+
+/**
+ * The input an MX call to `F` passes, the way the call is made: `render`'s
+ * input when the callee has one, else its first parameter (`Parameters<F>[0]`).
+ * An attribute tag's value is checked against it.
+ */
+const INPUT_OF = `type __MxInputOf<F> = [F] extends [{ render: (input: infer I, out: never) => unknown }] ? I : F extends (...args: infer P) => unknown ? P[0] : never;`;
 
 /**
  * The core's emitted default export, as text, for the two rewrites below.
@@ -905,7 +918,9 @@ function moduleHelpers(code: string): string[] {
     [code.includes("__mxTextareaContent(") || dynamic, TEXTAREA_CONTENT],
     [code.includes("__mxEscapeComment("), ESCAPE_COMMENT],
     [dynamic, RENDER_DYNAMIC],
+    [code.includes("__mxRenderTag("), RENDER_CALL],
     [code.includes("__mxRenderTag("), RENDER_TAG],
+    [code.includes("__MxInputOf<"), INPUT_OF],
   ];
   const helpers = candidates.flatMap(([used, source]) =>
     used ? [source] : [],

@@ -895,7 +895,7 @@ export function createEmitter(selfName?: string): StringEmitter {
       const callee =
         target.kind === "name" ? (target.binding ?? target.name) : "";
       const ownerType =
-        target.kind === "name" ? `Parameters<typeof ${callee}>[0]` : null;
+        target.kind === "name" ? `__MxInputOf<typeof ${callee}>` : null;
       const { parts, named, spreads } = propsOf(
         node.attrs,
         node.attrTagProps,

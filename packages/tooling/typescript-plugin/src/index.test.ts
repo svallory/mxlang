@@ -3656,6 +3656,155 @@ describe("Astro type surface", () => {
  * attribute-tag value is generated code: a check applied to the wrong
  * expression fails there without anyone seeing it.
  */
+describe("an MX caller types a call the way html's runtime makes it (astro-mx-to-mx-call-types)", () => {
+  // `__mxRenderTag` calls the callee's `render` when it has one, so the
+  // caller is typed against `render`'s input. Under the astro host the
+  // callee's default export carries Astro's props instead (`children`, no
+  // `content`): typed against it, an MX caller passing a body was TS2353.
+  const CARD = [
+    "export interface Input {",
+    "  title: string;",
+    "  content: () => string;",
+    "  footer?: AttrTag<{ attrs: { size: number } }>;",
+    "}",
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+    "<article><h2>${input.title}</h2>$!{input.content()}</article>",
+  ].join("\n");
+  const HOSTS = [
+    ["html", `${here}/fixtures/html-tags`],
+    ["astro", `${here}/fixtures/astro-policy`],
+  ] as const;
+  const errorsOf = (
+    directory: string,
+    caller: string,
+    extra: Record<string, string> = {},
+  ) =>
+    emittedDiagnostics(
+      {
+        [`${directory}/call-card.mx`]: CARD,
+        ...extra,
+        [`${directory}/call-panel.mx`]: caller,
+      },
+      `${directory}/call-panel.mx`,
+      "html",
+    ).diagnostics;
+  describe.each(HOSTS)("on %s", (_, directory) => {
+    const importCard = 'import Card from "./call-card.mx";';
+
+    it("accepts a body and an attribute tag, as panel.mx passes them", () => {
+      expect(
+        errorsOf(
+          directory,
+          [
+            importCard,
+            "export interface Input { title: string; content: () => string }",
+            "<section>",
+            "  <Card title=input.title>",
+            "    $!{input.content()}",
+            "    <@footer size=1/>",
+            "  </Card>",
+            "</section>",
+          ].join("\n"),
+        ),
+      ).toEqual([]);
+    });
+
+    it.each([
+      [
+        "a wrong prop",
+        "<Card title=1>x</Card>",
+        "Type 'number' is not assignable to type 'string'.",
+      ],
+      [
+        "a missing required prop",
+        "<Card>x</Card>",
+        "Argument of type '{ content: () => string; }' is not assignable to parameter of type 'Input & { content?: (() => string) | undefined; }'.",
+      ],
+    ])("still reports %s, once", (_, call, text) => {
+      const errors = errorsOf(directory, `${importCard}\n${call}`);
+
+      // The first line: TS2345 chains the missing property below it.
+      expect(errors.map((error) => error.text.split("\n")[0])).toEqual([text]);
+    });
+
+    it("reports a wrong prop through the service once, on its attribute", () => {
+      const page = `${directory}/call-position.mx`;
+      const consumer = `${directory}/call-position.ts`;
+      const source = `${importCard}\n<Card title=1>x</Card>\n`;
+      const service = createPluginService(
+        {
+          [`${directory}/call-card.mx`]: CARD,
+          [page]: source,
+          [consumer]: 'import "./call-position.mx";',
+        },
+        [consumer],
+      );
+      service.getSemanticDiagnostics(consumer);
+      const diagnostics = service.getSemanticDiagnostics(page);
+
+      expect(
+        diagnostics.map((d) => [
+          d.code,
+          source.slice(d.start, (d.start ?? 0) + (d.length ?? 0)),
+        ]),
+      ).toEqual([[2322, "title"]]);
+    });
+
+    it("still reports a wrong attribute-tag value, once", () => {
+      const errors = errorsOf(
+        directory,
+        `${importCard}\n<Card title="a">x<@footer size="big"/></Card>`,
+      );
+
+      // The value itself, once. The whole tag object is reported a second
+      // time (TS2322 against the tag's type), on main as here: PR #383.
+      expect(
+        errors.filter(
+          (error) =>
+            error.text === "Type 'string' is not assignable to type 'number'.",
+        ),
+      ).toHaveLength(1);
+      expect(errors.every((error) => error.code === 2322)).toBe(true);
+    });
+
+    it("types a hand-written callee without render exactly as its own signature", () => {
+      const helper =
+        "static function Helper(input: { n: number }): string { return String(input.n); }";
+
+      expect(
+        emittedDiagnostics(
+          { [`${directory}/call-panel.mx`]: `${helper}\n<Helper n=1/>` },
+          `${directory}/call-panel.mx`,
+          "html",
+        ).code,
+      ).toContain("__mxRenderTag(__mxOut, Helper)(");
+      expect(errorsOf(directory, `${helper}\n<Helper n=1/>`)).toEqual([]);
+      expect(
+        errorsOf(directory, `${helper}\n<Helper n="x"/>`).map(
+          (error) => error.code,
+        ),
+      ).toEqual([2322]);
+    });
+  });
+
+  it("leaves an Astro caller the Astro props surface of the callee's default export", () => {
+    const directory = `${here}/fixtures/astro-policy`;
+    const astroCaller = (props: string) => ({
+      [`${directory}/call-astro.ts`]: `import Card from "./call-card.mx";\nexport const props: Parameters<typeof Card>[0] = ${props};\n`,
+    });
+    const check = (props: string) =>
+      emittedDiagnostics(
+        { [`${directory}/call-card.mx`]: CARD, ...astroCaller(props) },
+        `${directory}/call-astro.ts`,
+        "html",
+      ).diagnostics.map((error) => error.code);
+
+    expect(check('{ title: "a", children: "body" }')).toEqual([]);
+    // `content` is the renderer's own parameter: an Astro caller never passes it.
+    expect(check('{ title: "a", content: () => "body" }')).toEqual([2353]);
+  });
+});
+
 function emittedDiagnostics(
   files: Record<string, string>,
   caller: string,
@@ -3666,6 +3815,11 @@ function emittedDiagnostics(
   const mx = createMxLanguagePlugin(ts, { readSource });
   const emitted = new Map<string, string>();
   for (const [fileName, source] of Object.entries(files)) {
+    // A hand-written module beside the templates is checked as it is.
+    if (fileName.endsWith(".ts")) {
+      emitted.set(fileName, source);
+      continue;
+    }
     const snapshot = ts.ScriptSnapshot.fromString(source);
     const context = { getAssociatedScript: () => undefined };
     const virtual = fileName.endsWith(".solid.mx")
@@ -3709,6 +3863,10 @@ function emittedDiagnostics(
       "@mxlang/core": [join(repoRoot, "packages/core/src/index.ts")],
       "@mxlang/preact": [join(repoRoot, "packages/hosts/preact/src/index.ts")],
       "@mxlang/solid": [join(repoRoot, "packages/hosts/solid/src/index.ts")],
+      "@mxlang/html": [join(repoRoot, "packages/targets/html/src/index.ts")],
+      "@mxlang/astro/typecheck": [
+        join(repoRoot, "packages/hosts/astro/src/typecheck.ts"),
+      ],
       "@mxlang/parser": [join(repoRoot, "packages/parser/src/public.d.ts")],
     },
     ignoreDeprecations: "6.0",
@@ -3755,7 +3913,7 @@ function emittedDiagnostics(
       };
     });
 
-  const rootName = `${caller}.tsx`;
+  const rootName = emitted.has(caller) ? caller : `${caller}.tsx`;
   const program = ts.createProgram({
     rootNames: [rootName],
     options,
