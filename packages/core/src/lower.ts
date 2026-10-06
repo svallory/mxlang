@@ -46,6 +46,7 @@ import {
   bindingIdentifierNodes,
   bindingIdentifiers,
   type Ctx,
+  collectedError,
   DYNAMIC_TAG,
   declName,
   expr,
@@ -59,6 +60,7 @@ import {
   markoBabel,
   type Node,
   newCtx,
+  recover,
   rejectInertShape,
   rejectUnsupportedFields,
   scopeBindings,
@@ -3824,6 +3826,33 @@ export function lowerChildren(ctx: Ctx, children: Node[]): IrNode[] {
   }
 }
 
+/**
+ * The index just past an `<if>` chain starting at `index`: its `else-if` and
+ * `else` branches, with the layout between them, as `lowerIfChain` walks them.
+ * A chain whose head failed is skipped by this much.
+ */
+function ifChainEnd(children: Node[], index: number): number {
+  let i = index + 1;
+  while (i < children.length) {
+    const child = children[i];
+    if (child.type === "MarkoComment") {
+      i++;
+      continue;
+    }
+    if (child.type === "MarkoText" && child.value.trim() === "") {
+      i++;
+      continue;
+    }
+    const name = child.name?.value;
+    if (child.type !== "MarkoTag" || (name !== "else" && name !== "else-if")) {
+      break;
+    }
+    i++;
+    if (name === "else" && !attrByName(child, "if")) break;
+  }
+  return i;
+}
+
 function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
   // Every `/var` this block declares is registered *before* the walk, at the
   // sibling index it is declared at. A read earlier in the same block then
@@ -3879,95 +3908,104 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
     const child = children[index];
 
     if (child.type === "MarkoTag" && child.name?.value === "if") {
-      const [node, next] = lowerIfChain(ctx, children, index);
-      out.push(node);
-      index = next;
+      const lowered = recover(ctx, () => lowerIfChain(ctx, children, index));
+      if (lowered) {
+        out.push(lowered[0]);
+        index = lowered[1];
+      } else {
+        // The chain's head failed: skip it whole, its `else` branches with it.
+        index = ifChainEnd(children, index);
+      }
       continue;
     }
 
     // A hoist from this child belongs to the enclosing function, so the
     // prelude it appends is drained by whichever scope owns it — the template,
     // or the nearest `<define>`.
-    switch (child.type) {
-      case "MarkoText":
-        // Already decision 33: Marko's own `onText` dropped newline-bearing
-        // whitespace runs and collapsed the rest before we saw them. `value`
-        // carries that normalized text; `span` covers the authored range.
-        out.push({
-          kind: "Text",
-          value: child.value,
-          span: exprSpan(ctx, child),
-          loc: posOf(child),
-        });
-        break;
-      case "MarkoPlaceholder": {
-        const interpolation = exprOf(ctx, child.value);
-        rejectUncalledParameterizedAttributeTag(
-          ctx,
-          interpolation.code,
-          child.value,
-        );
-        out.push({
-          kind: "Interpolation",
-          expr: interpolation,
-          escaped: child.escape,
-          span: exprSpan(ctx, child),
-          loc: posOf(child),
-        });
-        break;
+    // Decision 162: one child's failure is recorded and the child skipped, with
+    // its subtree; the walk goes on to the next sibling.
+    recover(ctx, () => {
+      switch (child.type) {
+        case "MarkoText":
+          // Already decision 33: Marko's own `onText` dropped newline-bearing
+          // whitespace runs and collapsed the rest before we saw them. `value`
+          // carries that normalized text; `span` covers the authored range.
+          out.push({
+            kind: "Text",
+            value: child.value,
+            span: exprSpan(ctx, child),
+            loc: posOf(child),
+          });
+          break;
+        case "MarkoPlaceholder": {
+          const interpolation = exprOf(ctx, child.value);
+          rejectUncalledParameterizedAttributeTag(
+            ctx,
+            interpolation.code,
+            child.value,
+          );
+          out.push({
+            kind: "Interpolation",
+            expr: interpolation,
+            escaped: child.escape,
+            span: exprSpan(ctx, child),
+            loc: posOf(child),
+          });
+          break;
+        }
+        case "MarkoTag": {
+          // A statement the host hoisted stays on `ctx.prelude` and is drained
+          // by the enclosing *function* — `lowerDefine`, or `lower` for the
+          // render function — never here. Draining it at every child list would
+          // trap a hoist from inside an `<if>` in that branch, which is the one
+          // thing decision 70's hoist hook exists to prevent: the declaration
+          // has to outlive the block it was written in.
+          const lowered = lowerTag(ctx, child);
+          if (Array.isArray(lowered)) out.push(...lowered);
+          else out.push(lowered);
+          break;
+        }
+        case "MarkoDocumentType":
+          out.push({
+            kind: "DocumentType",
+            value: child.value,
+            loc: posOf(child),
+          });
+          break;
+        case "MarkoComment":
+          // Marko strips the delimiters, so an HTML comment and a `//` line
+          // comment are indistinguishable by value alone; the source decides.
+          out.push({
+            kind: "Comment",
+            value: child.value,
+            html: sliceLoc(ctx, child.loc).startsWith("<!--"),
+            span: exprSpan(ctx, child),
+            loc: posOf(child),
+          });
+          break;
+        case "MarkoScriptlet":
+          fail(
+            `scriptlets (\`$ statement\`) are not supported in MX (decision 54)${scriptletSentence(declaredVariable(child), ctx.declarations)}`,
+            child,
+          );
+          break;
+        // Decision 139. The IR has no node for either construct, so before this
+        // arm existed both fell off the end of this switch: wrong output and a
+        // green build, on every target. `fail` reports `node.loc.start`, which
+        // is the `<` — the same place Marko's code frame underlines.
+        //
+        // A *raw-text* body (`<script>`, `<style>`, `<textarea>`, `<title>`)
+        // never reaches here: Marko's parser reads those as one `MarkoText`, so
+        // the construct there is text and stays text. That is the parser's call,
+        // not this switch's, which is why nothing here has to special-case them.
+        case "MarkoCDATA":
+          fail(CDATA_MESSAGE, child);
+          break;
+        case "MarkoDeclaration":
+          fail(DECLARATION_MESSAGE, child);
+          break;
       }
-      case "MarkoTag": {
-        // A statement the host hoisted stays on `ctx.prelude` and is drained
-        // by the enclosing *function* — `lowerDefine`, or `lower` for the
-        // render function — never here. Draining it at every child list would
-        // trap a hoist from inside an `<if>` in that branch, which is the one
-        // thing decision 70's hoist hook exists to prevent: the declaration
-        // has to outlive the block it was written in.
-        const lowered = lowerTag(ctx, child);
-        if (Array.isArray(lowered)) out.push(...lowered);
-        else out.push(lowered);
-        break;
-      }
-      case "MarkoDocumentType":
-        out.push({
-          kind: "DocumentType",
-          value: child.value,
-          loc: posOf(child),
-        });
-        break;
-      case "MarkoComment":
-        // Marko strips the delimiters, so an HTML comment and a `//` line
-        // comment are indistinguishable by value alone; the source decides.
-        out.push({
-          kind: "Comment",
-          value: child.value,
-          html: sliceLoc(ctx, child.loc).startsWith("<!--"),
-          span: exprSpan(ctx, child),
-          loc: posOf(child),
-        });
-        break;
-      case "MarkoScriptlet":
-        fail(
-          `scriptlets (\`$ statement\`) are not supported in MX (decision 54)${scriptletSentence(declaredVariable(child), ctx.declarations)}`,
-          child,
-        );
-        break;
-      // Decision 139. The IR has no node for either construct, so before this
-      // arm existed both fell off the end of this switch: wrong output and a
-      // green build, on every target. `fail` reports `node.loc.start`, which
-      // is the `<` — the same place Marko's code frame underlines.
-      //
-      // A *raw-text* body (`<script>`, `<style>`, `<textarea>`, `<title>`)
-      // never reaches here: Marko's parser reads those as one `MarkoText`, so
-      // the construct there is text and stays text. That is the parser's call,
-      // not this switch's, which is why nothing here has to special-case them.
-      case "MarkoCDATA":
-        fail(CDATA_MESSAGE, child);
-        break;
-      case "MarkoDeclaration":
-        fail(DECLARATION_MESSAGE, child);
-        break;
-    }
+    });
     index++;
   }
 
@@ -4081,6 +4119,9 @@ function lowerTemplate(ctx: Ctx, body: Node[]): Ir {
   ctx.tagVars = undefined;
 
   const [nodes, prelude] = withPrelude(ctx, () => lowerChildren(ctx, body));
+  // Decision 162: the walk recorded errors instead of throwing the first. The
+  // checks below need a whole file, so none of them runs on a partial one.
+  if (ctx.errors?.length) throw collectedError(ctx.errors);
 
   const ir: Ir = {
     imports: [],
@@ -4212,6 +4253,9 @@ function runCustomTagAnalyze(ctx: Ctx, body: Node[]): void {
   // again by the real walk, at the same position, and reporting a dropped
   // attribute tag twice would read as two mistakes.
   scratch.warnings = [];
+  // Recovering, so a failing tag does not stop the walk before `analyze` has
+  // seen the calls after it; the real walk reports the same errors.
+  scratch.errors = [];
   const calls = new Map<string, TagCall[]>();
   scratch.customTagAnalyzePass = { calls };
 

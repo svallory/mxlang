@@ -233,6 +233,8 @@ export function createTranslator(host: TranslatorOptions): Translator {
           // default export, so the file has a declaration to name and a tag
           // may call itself without importing itself.
           ctx.emitsModule = true;
+          // Decision 162: report every error of the file, not the first.
+          ctx.errors = [];
           let code: string;
           try {
             code = state.emitIr(lower(ctx, path.node.body), ctx);
@@ -387,6 +389,13 @@ export function compileSource(
       error.dependencies = state.dependencies;
       error.atomFacts = state.atomFacts;
       dropCompiledFilePrefix(error, filename);
+      // The rest of the file's errors travel with the first and carry what it
+      // does (decision 162); Babel only prefixed the one it rethrew.
+      for (const other of error.errors ?? []) {
+        if (other === error) continue;
+        other.dependencies = state.dependencies;
+        other.atomFacts = state.atomFacts;
+      }
     }
     annotateCloseTagOpener(error, source);
     hintParseError(error, source, policy);

@@ -116,6 +116,14 @@ export class TranslateError extends Error {
    * the facts of the last good `CompileResult` instead of partial ones.
    */
   atomFacts?: AtomFacts;
+  /**
+   * Every error the compile found, ordered by position, when this one came
+   * from the lowering's body walk (decision 162). The thrown error is
+   * `errors[0]`, exactly the error a single throw would have been, so a
+   * consumer that never reads this sees what it always saw. Unset on an error
+   * raised outside the walk (a parse error, a failing scan).
+   */
+  errors?: readonly TranslateError[];
 
   constructor(message: string, line: number, column: number, file?: string) {
     super(message);
@@ -498,6 +506,13 @@ export interface Ctx {
    */
   warnings?: MxWarning[];
   /**
+   * The recovery sink (decision 162). When set, an error raised while lowering
+   * one tag is recorded here, the tag and its subtree are skipped, and the walk
+   * continues; `lowerTemplate` then throws them as one error. Unset (a tag
+   * template's own lower, a fragment) means the first error throws at once.
+   */
+  errors?: TranslateError[];
+  /**
    * Per-file, per-tag stores for `analyze` / `transform` / `finalize`.
    *
    * Created by the file-level `lower()` and never by a tag template's nested
@@ -582,6 +597,39 @@ export function warn(ctx: Ctx, warning: MxWarning): void {
   console.warn(
     `${where}${warning.line}:${warning.column + 1}: ${warning.message}`,
   );
+}
+
+/**
+ * Runs `run`, one tag's (or one statement's) lowering. With a recovery sink
+ * (`ctx.errors`) a `TranslateError` is recorded, the binding scope is put back
+ * as it was and `undefined` returns, so the caller skips the construct and its
+ * subtree. Without one, or for any other error, it propagates as before.
+ */
+export function recover<T>(ctx: Ctx, run: () => T): T | undefined {
+  if (!ctx.errors) return run();
+  const restore = scopeBindings(ctx);
+  try {
+    return run();
+  } catch (error) {
+    if (!isTranslateError(error)) throw error;
+    restore();
+    ctx.errors.push(error);
+    return undefined;
+  }
+}
+
+/**
+ * The error a walk that recorded any throws: the first one raised, carrying
+ * every recorded error — that one first, the rest by position.
+ */
+export function collectedError(
+  errors: readonly TranslateError[],
+): TranslateError {
+  const [first, ...rest] = errors;
+  if (!first) throw new Error("@mxlang/core: no recorded error to throw");
+  rest.sort((a, b) => a.line - b.line || a.column - b.column);
+  first.errors = [first, ...rest];
+  return first;
 }
 
 export function fail(message: string, node: Node, file?: string): never {
