@@ -5,6 +5,7 @@ import * as core from "@mxlang/core";
 import {
   type CustomTag,
   isTranslateError,
+  otherErrorsText,
   type TargetPolicyDiagnostic,
 } from "@mxlang/core";
 import type { MxRegionCompile } from "@mxlang/tsx-bridge";
@@ -1186,16 +1187,20 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
               )
             : [];
           const reason = reasons.length > 0 ? reasons.join("\n") : undefined;
+          // A build throws one error; the file's other errors (decision 162)
+          // ride in its message, so a fix-all pass sees them in one run.
+          const rest = otherErrorsText(err);
+          const own =
+            reason ??
+            (err.message.startsWith(prefix)
+              ? err.message.slice(prefix.length)
+              : undefined);
           throw locate(err, {
             file: errorFile,
             line: err.line,
             column: err.column,
             source: errorSource,
-            message:
-              reason ??
-              (err.message.startsWith(prefix)
-                ? err.message.slice(prefix.length)
-                : undefined),
+            message: rest === "" ? own : `${own ?? plain}${rest}`,
           });
         }
 

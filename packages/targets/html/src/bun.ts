@@ -1,8 +1,11 @@
 import { readFileSync } from "node:fs";
 import {
+  isTranslateError,
+  otherErrorsText,
   reportScanDiagnostics,
   scanCached,
   type TargetLookup,
+  TranslateError,
 } from "@mxlang/core";
 import type { BunPlugin } from "bun";
 import { configuredDefaultTag } from "./default-tag.ts";
@@ -94,12 +97,27 @@ export function createHtmlBunPlugin(
           targets,
           scan.tags,
         );
-        const { code } = compile(source, path, {
-          customTags: scan.customTags,
-          ...(defaultTag === undefined ? {} : { defaultTag }),
-          targets,
-        });
-        return { contents: code, loader: "ts" };
+        try {
+          const { code } = compile(source, path, {
+            customTags: scan.customTags,
+            ...(defaultTag === undefined ? {} : { defaultTag }),
+            targets,
+          });
+          return { contents: code, loader: "ts" };
+        } catch (error) {
+          // Bun prints one thrown error: the file's others (decision 162)
+          // ride in its message so one run shows them all.
+          const rest = isTranslateError(error) ? otherErrorsText(error) : "";
+          if (!isTranslateError(error) || rest === "") throw error;
+          const all = new TranslateError(
+            `${error.message}${rest}`,
+            error.line,
+            error.column,
+            error.file,
+          );
+          all.errors = error.errors;
+          throw all;
+        }
       });
     },
   };

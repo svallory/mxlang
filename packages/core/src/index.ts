@@ -81,6 +81,7 @@ export {
   type MxWarning,
   type Node,
   newCtx,
+  otherErrorsText,
   propKey,
   quote,
   rejectUnsupportedFields,

@@ -9,6 +9,7 @@ import {
   type HostDeclarations,
   type Ir,
   type IrNode,
+  isTranslateError,
   type Lookup,
   lower,
   type MxWarning,
@@ -229,29 +230,43 @@ export function createMxLanguagePlugin(
             [],
           );
         }
-        const foreign = foreignTemplateError(
-          cause,
-          fileName,
-          source,
-          options.readSource,
-        );
-        if (foreign) {
-          syntaxErrors.delete(fileName);
-          // See `ForeignTemplateError`'s doc comment (`language.ts`) for the
-          // map-clobber caveat this write is subject to.
-          compileDiagnostics.set(foreign.templateFileName, [
-            foreign.templateDiagnostic,
-          ]);
-          compileDiagnostics.set(fileName, [foreign.callerDiagnostic]);
-          return createVirtualCode(
-            typescript,
-            failedModuleStub(typescript, source),
-            [],
+        // Decision 162: core reports every error of the file, the first one
+        // being the thrown error itself. Each becomes its own diagnostic; the
+        // syntax error the plugin exposes stays the first local one.
+        const causes =
+          isTranslateError(cause) && cause.errors?.length
+            ? cause.errors
+            : [cause];
+        const diagnostics: MxCompileDiagnostic[] = [];
+        const templateDiagnostics = new Map<string, MxCompileDiagnostic[]>();
+        let firstSyntaxError: MxSyntaxError | undefined;
+        for (const each of causes) {
+          const foreign = foreignTemplateError(
+            each,
+            fileName,
+            source,
+            options.readSource,
           );
+          if (foreign) {
+            // See `ForeignTemplateError`'s doc comment (`language.ts`) for the
+            // map-clobber caveat the template write below is subject to.
+            const inTemplate =
+              templateDiagnostics.get(foreign.templateFileName) ?? [];
+            inTemplate.push(foreign.templateDiagnostic);
+            templateDiagnostics.set(foreign.templateFileName, inTemplate);
+            diagnostics.push(foreign.callerDiagnostic);
+            continue;
+          }
+          const error = toSyntaxError(fileName, source, each);
+          firstSyntaxError ??= error;
+          diagnostics.push({ ...error, category: "error" });
         }
-        const error = toSyntaxError(fileName, source, cause);
-        syntaxErrors.set(fileName, error);
-        compileDiagnostics.set(fileName, [{ ...error, category: "error" }]);
+        if (firstSyntaxError) syntaxErrors.set(fileName, firstSyntaxError);
+        else syntaxErrors.delete(fileName);
+        for (const [templateFileName, inTemplate] of templateDiagnostics) {
+          compileDiagnostics.set(templateFileName, inTemplate);
+        }
+        compileDiagnostics.set(fileName, diagnostics);
         return createVirtualCode(
           typescript,
           failedModuleStub(typescript, source),

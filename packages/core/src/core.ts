@@ -632,6 +632,22 @@ export function collectedError(
   return first;
 }
 
+/**
+ * The text a tool that can show only one error appends to it so the others are
+ * not lost: one line per further error of the file (decision 162), 1-based
+ * `line:column` as every tool prints them, preceded by a count. Empty when the
+ * file had no other error.
+ */
+export function otherErrorsText(error: TranslateError): string {
+  const others = (error.errors ?? []).filter((each) => each !== error);
+  if (others.length === 0) return "";
+  const lines = others.map(
+    (each) =>
+      `  ${each.file ? `${each.file}:` : ""}${each.line}:${each.column + 1}: ${each.message}`,
+  );
+  return `\n\n${others.length} more error${others.length === 1 ? "" : "s"} in this file:\n${lines.join("\n")}`;
+}
+
 export function fail(message: string, node: Node, file?: string): never {
   const loc = node?.loc?.start ?? node?.start ?? { line: 0, column: 0 };
   throw new TranslateError(message, loc.line ?? 0, loc.column ?? 0, file);

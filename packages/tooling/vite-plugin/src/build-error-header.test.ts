@@ -140,6 +140,24 @@ describe("a failing vite build names the authored file, not the virtual id", () 
     expect(plain(error.message)).toContain("`<let>` is reactive state");
   });
 
+  it("carries every other error of the file in the message (decision 162)", async () => {
+    // Three independent errors: a scriptlet, an `<if>` without a condition,
+    // CDATA. A build throws one error; the other two ride in its message.
+    const error = await buildError(
+      "recovery",
+      "<div>ok</div>\n$ const a = 1\n<p>fine</p>\n<if></if>\n<![CDATA[raw]]>\n",
+      "html",
+    );
+    const text = plain(error.message);
+    expect(header(error.message)).toBe(
+      `[plugin mx] ${authored("recovery")}:2:1`,
+    );
+    expect(text).toContain("scriptlets");
+    expect(text).toContain("2 more errors in this file");
+    expect(text).toContain("4:1: `<if>` without a condition");
+    expect(text).toContain("5:1: `<![CDATA[");
+  });
+
   /**
    * The dev server needs no hook for this: the plugin's own error reaches it
    * with the authored `id` (Vite's plugin context keeps `id` and drops the

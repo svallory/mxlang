@@ -397,15 +397,23 @@ export function compileSource(
         other.atomFacts = state.atomFacts;
       }
     }
+    // The parse-error rewrites below treat an `errors` list as Marko's own
+    // aggregate of parse errors; this one holds the thrown error itself
+    // (decision 162), so it is set aside for them and put back after.
+    const recorded = isTranslateError(error) ? error.errors : undefined;
+    if (recorded && isTranslateError(error)) error.errors = undefined;
     annotateCloseTagOpener(error, source);
     hintParseError(error, source, policy);
     // Decision 151: a stock htmljs-parser cannot read `:name` after a value.
-    throw (
+    const thrown =
       sugarAfterDefaultError(error, source) ??
       stockParserError(error, source) ??
       stockAtomError(error, source) ??
-      error
-    );
+      error;
+    if (recorded && thrown === error && isTranslateError(error)) {
+      error.errors = recorded;
+    }
+    throw thrown;
   } finally {
     current = previous;
   }

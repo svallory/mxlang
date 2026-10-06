@@ -458,6 +458,21 @@ export function diagnoseDocument(
       for (const dependency of error.dependencies ?? [])
         dependencies?.add(dependency);
     }
+    // Decision 162: core reports every error of the file; the thrown error is
+    // the first of them. Each one is its own diagnostic.
+    const all =
+      isTranslateError(error) && error.errors?.length ? error.errors : [error];
+    const found: Diagnostic[] = [];
+    for (const each of all) {
+      const diagnostics = errorDiagnostics(each);
+      if (diagnostics) found.push(...diagnostics);
+      else onUnexpectedError?.(each);
+    }
+    return [...scanWarnings, ...found];
+  }
+
+  /** One error as the diagnostics it publishes, or `undefined` when it has no position. */
+  function errorDiagnostics(error: unknown): Diagnostic[] | undefined {
     const position = errorPosition(error);
     if (position) {
       // Babel/core lines are 1-based and columns are 0-based. LSP positions
@@ -538,7 +553,6 @@ export function diagnoseDocument(
           diagnostics: [diagnostic],
         });
         return [
-          ...scanWarnings,
           {
             ...diagnostic,
             range: {
@@ -558,11 +572,9 @@ export function diagnoseDocument(
           },
         ];
       }
-      return [...scanWarnings, diagnostic];
+      return [diagnostic];
     }
-
-    onUnexpectedError?.(error);
-    return scanWarnings;
+    return undefined;
   }
 }
 

@@ -115,6 +115,37 @@ describe("@mxlang/html/bun", () => {
     }
   });
 
+  // Decision 162: core reports every error of a file. Bun prints one thrown
+  // error, so the others ride in its message.
+  test("a failing .mx module's error names every error of the file", async () => {
+    Bun.plugin(markoPlugin);
+    const dir = mkdtempSync(join(import.meta.dirname, ".recovery-"));
+    const path = join(dir, "broken.mx");
+    writeFileSync(
+      path,
+      [
+        "<div>ok</div>",
+        "$ const a = 1",
+        "<p>fine</p>",
+        "<if></if>",
+        "<![CDATA[raw]]>",
+        "",
+      ].join("\n"),
+    );
+    try {
+      const error = await import(path).then(
+        () => undefined,
+        (caught: Error) => caught,
+      );
+      expect(error?.message).toContain("scriptlets");
+      expect(error?.message).toContain("2 more errors in this file");
+      expect(error?.message).toContain("4:1: `<if>` without a condition");
+      expect(error?.message).toContain("5:1: `<![CDATA[");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("does not claim a .astro.mx path", async () => {
     Bun.plugin(markoPlugin);
 

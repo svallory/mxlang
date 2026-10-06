@@ -286,6 +286,9 @@ function noPositionPrefix(error: unknown): string {
  * errors; every one of them is a diagnostic.
  */
 function flattenErrors(error: unknown): unknown[] {
+  // Core's own list (decision 162) holds the thrown error as its first entry,
+  // so it is read here, not recursed into.
+  if (isTranslateError(error)) return [...(error.errors ?? [error])];
   const inner = (error as { errors?: unknown } | null)?.errors;
   return Array.isArray(inner) && inner.length > 0
     ? inner.flatMap(flattenErrors)
@@ -341,8 +344,9 @@ function errorDiagnostics(
 /**
  * Every authored tag with no contract in `customTags`, as errors.
  *
- * Core stops lowering at its first error, so a contract error (`parents`/
- * `children`) would hide an unknown tag elsewhere in the file. Under
+ * Core reports every tag's error but a tag with no contract is not one core
+ * raises, so a contract error (`parents`/`children`) would hide an unknown tag
+ * elsewhere in the file. Under
  * `unknownTags: "reject"` the unknown tags are listed from a parse-only pass
  * (`scan.ts`, no lowering, so a later lowering error cannot interfere) and
  * reported beside core's error. When the source does not parse there is
@@ -426,7 +430,7 @@ export function parseData(
     if (options.unknownTags !== "reject") return failed([error]);
     try {
       const { errors, ranges } = unknownTagErrors(source, filename, options);
-      return failed(labelInside([error, ...errors], ranges));
+      return failed(labelInside([...flattenErrors(error), ...errors], ranges));
     } catch (scanError) {
       return failed([error, scanError]);
     }
