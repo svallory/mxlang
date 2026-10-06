@@ -31,16 +31,20 @@ describe("findUncalledTagFile", () => {
     });
   });
 
-  it.each(["index.marko", "index.mx", "index.tag.ts"])(
-    "finds tags/x/%s as the index shape",
-    (index) => {
-      const file = put(`tags/x/${index}`);
-      expect(findUncalledTagFile(join(root, "page.mx"), "x")).toEqual({
-        file,
-        shape: "index",
-      });
-    },
-  );
+  it.each([
+    "index.marko",
+    "index.mx",
+    "index.tag.ts",
+    "x.marko",
+    "x.mx",
+    "x.tag.ts",
+  ])("finds tags/x/%s as the index shape", (index) => {
+    const file = put(`tags/x/${index}`);
+    expect(findUncalledTagFile(join(root, "page.mx"), "x")).toEqual({
+      file,
+      shape: "index",
+    });
+  });
 
   it("walks up from a nested page to the package's tags/", () => {
     const file = put("tags/x.marko");
@@ -99,7 +103,6 @@ describe("messages", () => {
     };
     const message = uncalledTagFileMessage(join(root, "page.mx"), "x", found);
     expect(message).toContain("`<x>` matches `tags/x/index.mx`");
-    expect(message).toContain("does not resolve a `tags/<name>/` directory");
-    expect(message).toContain("native element `<x>`");
+    expect(message).toContain("MX calls flat `tags/<name>.mx` files only");
   });
 });
