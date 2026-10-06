@@ -701,6 +701,161 @@ export const BODY_TEXT_ROWS: [string, string][] = [
   ],
 ];
 
+/**
+ * Decision 156 addendum 13, item 2: a code point at or above U+0080 is a word
+ * character only when it is `ID_Continue`, or U+200C or U+200D; a surrogate
+ * pair is one code point and a lone surrogate is none. Each row is the
+ * reading of stock htmljs-parser 5.18.0 (Marko's), measured on the unpatched
+ * npm build: a symbol is no identifier, so it is no word in any look-behind
+ * or look-ahead.
+ */
+export const NON_WORD_ROWS: [string, string][] = [
+  ["<div x=a >©>c</div>", '<div> @x ="a"'],
+  ["<div x=a >× + b>c</div>", '<div> @x ="a"'],
+  ["<div x=a >\u{1f600}>c</div>", '<div> @x ="a"'],
+  [
+    "<div x=© / 2 y=1/>",
+    '<div> @x ="© / 2 y=1/" ERR(0-18 Missing ending "div" tag)',
+  ],
+  ["<div x=×! y=1/>", '<div> @x ="×! y=1"'],
+  ["<div x=a.©new b/>", '<div> @x ="a.©new b"'],
+  ["<div x=a .© y=1/>", '<div> @x ="a" @.© @y ="1"'],
+  ["<div x=a. … y=1/>", '<div> @x ="a." @… @y ="1"'],
+  [
+    "<if=« / 2>y</if>",
+    '<if> @ ="« / 2>y</if" ERR(0-16 Missing ending "if" tag)',
+  ],
+  [
+    "div x=© / 2 y=1\n",
+    "<div> @x ERR(8-8 EOL reached while parsing regular expression)",
+  ],
+  ["<div async ©() { return 1 }/>", '<div> @async @© method:" return 1 "'],
+  ["$ type © = A\n<div/>", '$"type © = A" <div>'],
+];
+
+/**
+ * An atom after a non-identifier symbol lexes, as after ASCII punctuation
+ * (`%` here); stock reports an error for both forms. Neither input is valid
+ * Marko or JavaScript. Before addendum 13 the symbol was a word character, so
+ * `\u00d7:await` read as a key and no atom lexed. Each is pinned beside its
+ * ASCII twin.
+ */
+export const ATOM_AFTER_SYMBOL_ROWS: [string, string, string][] = [
+  [
+    "=\u00d7:await*/ async</p>",
+    "=%:await*/ async</p>",
+    '<> @ atom(await@2-8) ="X0.0000*/ async</p>"',
+  ],
+  [
+    "=><div\ud800 :a!<\ud800+,",
+    "=><div% :a!<%+,",
+    '<> @ atom(a@8-10) ="><divX 0.!<X+,"',
+  ],
+];
+
+/** Renders `input` and `twin`, the symbol replaced by `X`, and compares both with `expected`. */
+export function atomAfterSymbolMismatch(
+  mod: AtomParserModule,
+  [input, twin, expected]: [string, string, string],
+): string[] {
+  const norm = (t: string) =>
+    t.replace(/[\u0080-\uffff]|\\ud[89a-f][0-9a-f]{2}|%/gi, "X");
+  const got = [
+    norm(renderAtoms(mod, input, true)),
+    norm(renderAtoms(mod, twin, true)),
+  ];
+  return got.filter((g) => g !== expected);
+}
+
+/**
+ * Characters at or above U+0080 that are no identifier characters: symbols,
+ * punctuation, emoji (a surrogate pair), private use, format characters and
+ * the two C1 and Zs-lookalike code points TypeScript reads as whitespace,
+ * and surrogates that form no pair (a lone high, a lone low, a low before a
+ * high).
+ */
+const NON_WORD_SYMBOLS = [
+  "©",
+  "×",
+  "÷",
+  "…",
+  "«",
+  "—",
+  "€",
+  "\u{1f600}",
+  "\u{10ffff}",
+  "",
+  "\u0085",
+  "​",
+  "‎",
+  "⁠",
+  "­",
+  "᠎",
+  "\ud800",
+  "\udc00",
+  "\udc00\ud800",
+  "\ud800a",
+];
+
+/**
+ * Identifier characters beyond the ones `NON_ASCII_NAMES` has: combining
+ * marks, ZWNJ and ZWJ, connector punctuation and `Other_ID_Continue`, a
+ * supplementary letter and a supplementary mark.
+ */
+const EXTRA_WORD_NAMES = [
+  "é",
+  "a‌",
+  "a‍",
+  "a‌b",
+  "‌a",
+  "\u{20bb7}",
+  "\u{1d400}",
+  "\u{e0100}",
+  "a‿",
+  "a·",
+  "aः",
+  "ª",
+  "名前",
+  "กิ",
+];
+
+/**
+ * Each input with `names` where the identifier stands renders as the same
+ * input with the ASCII `twin` in place of every UTF-16 unit of the name, so
+ * offsets never shift (`wide`'s non-ASCII units are mapped to `twin`).
+ */
+function classTwinMismatches(
+  mod: AtomParserModule,
+  names: readonly string[],
+  twin: string,
+): { total: number; bad: string[] } {
+  let total = 0;
+  const bad: string[] = [];
+  for (const code of inputs(names)) {
+    total++;
+    const ascii = code.replace(/[\u0080-\uffff]/g, twin);
+    // `JSON.stringify` writes a lone surrogate as a six character escape.
+    const wide = renderAtoms(mod, code, true).replace(
+      /[\u0080-\uffff]|\\ud[89a-f][0-9a-f]{2}/gi,
+      twin,
+    );
+    if (wide !== renderAtoms(mod, ascii, true)) {
+      bad.push(`${JSON.stringify(code)}: ${wide}`);
+    }
+  }
+  return { total, bad };
+}
+
+/** Each `NON_WORD_SYMBOLS` input renders as with ASCII `@`, a non-word. */
+export function nonWordTwinMismatches(mod: AtomParserModule) {
+  return classTwinMismatches(mod, NON_WORD_SYMBOLS, "@");
+}
+
+/** Each `EXTRA_WORD_NAMES` input renders as with ASCII `Q`, a letter. */
+export function extraWordTwinMismatches(mod: AtomParserModule) {
+  return classTwinMismatches(mod, EXTRA_WORD_NAMES, "Q");
+}
+
 /** Each attribute's name and value range, as `@start-end` and `=start-end`. */
 export function renderAttrRanges(mod: AtomParserModule, code: string): string {
   const out: string[] = [];

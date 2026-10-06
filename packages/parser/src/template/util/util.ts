@@ -106,17 +106,62 @@ export function isWordCode(code: number) {
   );
 }
 
+const ID_CONTINUE = /^\p{ID_Continue}$/u;
+
 /**
- * MX (decision 156 addendum 9): a word character wherever the parser looks
- * behind or ahead to decide whether a word starts or ends. Any code unit at
- * or above U+0080 counts, except what TypeScript reads as whitespace or a
- * line terminator (`isUnicodeSpaceCode`), so a non-ASCII identifier (`é`,
- * `名`, a surrogate pair) is a word like an ASCII one: `x=é / 2` divides,
- * `énew` is no keyword, `é!` is postfix. `isWordCode` stays ASCII for the
+ * MX (decision 156 addendum 13): a word character wherever the parser looks
+ * behind or ahead to decide whether a word starts or ends. `code` is a code
+ * point. At or above U+0080 it is a word character when it is `ID_Continue`
+ * or U+200C or U+200D (ECMAScript's IdentifierPart), so `é`, `名` and `𝑥`
+ * are words (`x=é / 2` divides, `énew` is no keyword, `é!` is postfix) and
+ * `©`, `×`, `…`, emoji and a lone surrogate are not, as in stock
+ * htmljs-parser. The ASCII test stays a comparison and the regex runs only
+ * above it. Use `wordWidthBefore` and `wordWidthAt` on a string, which read
+ * a surrogate pair as one code point. `isWordCode` stays ASCII for the
  * callers that only skip ahead over a word.
  */
 export function isUnicodeWordCode(code: number) {
-  return code >= 0x80 ? !isUnicodeSpaceCode(code) : isWordCode(code);
+  return code >= 0x80 ? isNonAsciiWordCode(code) : isWordCode(code);
+}
+
+function isNonAsciiWordCode(code: number) {
+  if (code === 0x200c || code === 0x200d) return true;
+  // A lone surrogate is no code point.
+  if (code >= 0xd800 && code <= 0xdfff) return false;
+  return ID_CONTINUE.test(String.fromCodePoint(code));
+}
+
+/**
+ * The width in UTF-16 units (1 or 2, 0 for none) of the word character that
+ * ends at index `i` of `data`: a low surrogate is combined with the high
+ * surrogate before it.
+ */
+export function wordWidthBefore(data: string, i: number) {
+  const code = data.charCodeAt(i);
+  if (!(code >= 0x80)) return isWordCode(code) ? 1 : 0;
+  if (code >= 0xdc00 && code <= 0xdfff) {
+    const high = data.charCodeAt(i - 1);
+    if (high >= 0xd800 && high <= 0xdbff) {
+      return isNonAsciiWordCode(
+        ((high - 0xd800) << 10) + (code - 0xdc00) + 0x10000,
+      )
+        ? 2
+        : 0;
+    }
+  }
+  return isNonAsciiWordCode(code) ? 1 : 0;
+}
+
+/**
+ * The width in UTF-16 units (1 or 2, 0 for none) of the word character that
+ * starts at index `i` of `data`: a high surrogate is combined with the low
+ * surrogate after it.
+ */
+export function wordWidthAt(data: string, i: number) {
+  const code = data.charCodeAt(i);
+  if (!(code >= 0x80)) return isWordCode(code) ? 1 : 0;
+  const point = data.codePointAt(i) as number;
+  return isNonAsciiWordCode(point) ? (point > 0xffff ? 2 : 1) : 0;
 }
 
 /**

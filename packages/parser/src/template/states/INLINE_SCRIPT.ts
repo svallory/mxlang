@@ -1,12 +1,12 @@
 import {
   isIndentCode,
-  isUnicodeWordCode,
   matchesCloseCurlyBrace,
   type Meta,
   Parser,
   type Range,
   STATE,
   type StateDefinition,
+  wordWidthAt,
 } from "../internal.ts";
 import * as CODE from "../util/codes.ts";
 import { binaryKeywords } from "./EXPRESSION.ts";
@@ -114,7 +114,7 @@ function startsTypeName(parser: Parser, pos: number, allowGroup: boolean) {
   }
 
   if (
-    !isUnicodeWordCode(code) ||
+    wordWidthAt(parser.data, pos) === 0 ||
     (code >= CODE.NUMBER_0 && code <= CODE.NUMBER_9)
   ) {
     return false;
@@ -123,7 +123,7 @@ function startsTypeName(parser: Parser, pos: number, allowGroup: boolean) {
   for (const keyword of binaryKeywords) {
     if (
       parser.lookAheadFor(keyword, pos) &&
-      !isUnicodeWordCode(parser.data.charCodeAt(pos + keyword.length))
+      wordWidthAt(parser.data, pos + keyword.length) === 0
     ) {
       return false;
     }

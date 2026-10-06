@@ -18492,7 +18492,8 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-14 \"=(a\u200b :b)\" bound=false value=7-14 \"(a\u200b :b)\"",
+      "Atom 11-13 \"0.\" value=12-13 \"b\"",
+      "AttrValue 6-14 \"=(a\u200b 0.)\" bound=false value=7-14 \"(a\u200b 0.)\"",
       "OpenTagEnd 14-16 \"/>\" selfClosed=true"
     ]
   },
@@ -18503,7 +18504,8 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-14 \"=(a\u0085 :b)\" bound=false value=7-14 \"(a\u0085 :b)\"",
+      "Atom 11-13 \"0.\" value=12-13 \"b\"",
+      "AttrValue 6-14 \"=(a\u0085 0.)\" bound=false value=7-14 \"(a\u0085 0.)\"",
       "OpenTagEnd 14-16 \"/>\" selfClosed=true"
     ]
   },
@@ -18514,7 +18516,8 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-13 \"=(a\u180e:b)\" bound=false value=7-13 \"(a\u180e:b)\"",
+      "Atom 10-12 \"0.\" value=11-12 \"b\"",
+      "AttrValue 6-13 \"=(a\u180e0.)\" bound=false value=7-13 \"(a\u180e0.)\"",
       "OpenTagEnd 13-15 \"/>\" selfClosed=true"
     ]
   },
@@ -19117,6 +19120,106 @@
       "Text 3-14 \"a\u00a0/* b */ c\"",
       "CloseTagName 16-17 \"p\"",
       "CloseTagEnd 17-18 \">\""
+    ]
+  },
+  {
+    "id": "g1691",
+    "input": "<div x=a >\u00a9>c</div>",
+    "expected": [
+      "OpenTagStart 0-1 \"<\"",
+      "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+      "AttrName 5-6 \"x\"",
+      "AttrValue 6-8 \"=a\" bound=false value=7-8 \"a\"",
+      "OpenTagEnd 9-10 \">\" selfClosed=false",
+      "CloseTagStart 13-15 \"</\"",
+      "Text 10-13 \"\u00a9>c\"",
+      "CloseTagName 15-18 \"div\"",
+      "CloseTagEnd 18-19 \">\""
+    ]
+  },
+  {
+    "id": "g1692",
+    "input": "<div x=\u00a9 / 2 y=1/>",
+    "expected": [
+      "OpenTagStart 0-1 \"<\"",
+      "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+      "AttrName 5-6 \"x\"",
+      "AttrValue 6-17 \"=\u00a9 / 2 y=1/\" bound=false value=7-17 \"\u00a9 / 2 y=1/\"",
+      "OpenTagEnd 17-18 \">\" selfClosed=false",
+      "Error 0-18 22 \"Missing ending \\\"div\\\" tag\""
+    ]
+  },
+  {
+    "id": "g1693",
+    "input": "<div x=\ud83d\ude00 / 2 y=1/>",
+    "expected": [
+      "OpenTagStart 0-1 \"<\"",
+      "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+      "AttrName 5-6 \"x\"",
+      "AttrValue 6-18 \"=\ud83d\ude00 / 2 y=1/\" bound=false value=7-18 \"\ud83d\ude00 / 2 y=1/\"",
+      "OpenTagEnd 18-19 \">\" selfClosed=false",
+      "Error 0-19 22 \"Missing ending \\\"div\\\" tag\""
+    ]
+  },
+  {
+    "id": "g1694",
+    "input": "<div x=\ud841\udfb7 / 2 y=1/>",
+    "expected": [
+      "OpenTagStart 0-1 \"<\"",
+      "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+      "AttrName 5-6 \"x\"",
+      "AttrValue 6-13 \"=\ud841\udfb7 / 2\" bound=false value=7-13 \"\ud841\udfb7 / 2\"",
+      "AttrName 14-15 \"y\"",
+      "AttrValue 15-17 \"=1\" bound=false value=16-17 \"1\"",
+      "OpenTagEnd 17-19 \"/>\" selfClosed=true"
+    ]
+  },
+  {
+    "id": "g1695",
+    "input": "<div x=a\u200d / 2 y=1/>",
+    "expected": [
+      "OpenTagStart 0-1 \"<\"",
+      "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+      "AttrName 5-6 \"x\"",
+      "AttrValue 6-13 \"=a\u200d / 2\" bound=false value=7-13 \"a\u200d / 2\"",
+      "AttrName 14-15 \"y\"",
+      "AttrValue 15-17 \"=1\" bound=false value=16-17 \"1\"",
+      "OpenTagEnd 17-19 \"/>\" selfClosed=true"
+    ]
+  },
+  {
+    "id": "g1696",
+    "input": "<div x=a\u0301 / 2 y=1/>",
+    "expected": [
+      "OpenTagStart 0-1 \"<\"",
+      "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+      "AttrName 5-6 \"x\"",
+      "AttrValue 6-13 \"=a\u0301 / 2\" bound=false value=7-13 \"a\u0301 / 2\"",
+      "AttrName 14-15 \"y\"",
+      "AttrValue 15-17 \"=1\" bound=false value=16-17 \"1\"",
+      "OpenTagEnd 17-19 \"/>\" selfClosed=true"
+    ]
+  },
+  {
+    "id": "g1697",
+    "input": "<div x=\ud800 / 2 y=1/>",
+    "expected": [
+      "OpenTagStart 0-1 \"<\"",
+      "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+      "AttrName 5-6 \"x\"",
+      "AttrValue 6-17 \"=\\ud800 / 2 y=1/\" bound=false value=7-17 \"\\ud800 / 2 y=1/\"",
+      "OpenTagEnd 17-18 \">\" selfClosed=false",
+      "Error 0-18 22 \"Missing ending \\\"div\\\" tag\""
+    ]
+  },
+  {
+    "id": "g1698",
+    "input": "<div x=a >\ud841\udfb7>c</div>",
+    "expected": [
+      "OpenTagStart 0-1 \"<\"",
+      "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+      "AttrName 5-6 \"x\"",
+      "Error 7-12 29 \"Ambiguous \\\">\\\" in attribute. A \\\">\\\" preceded by whitespace ends the tag. If \\\"a >\ud841\udfb7\\\" was intended as a single expression, wrap it in parentheses, eg \\\"=(a >\ud841\udfb7)\\\". If the tag was instead meant to end at the first \\\">\\\", leaving \\\"\ud841\udfb7>\\\" as body content, remove the whitespace before that \\\">\\\".\""
     ]
   }
 ]

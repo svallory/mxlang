@@ -281,10 +281,11 @@ and 8; both dist builds carry the same JavaScript):
 - **A non-ASCII character is a word character behind a `:`.** The
   look-behind (`expectsExpression`, `isOperatorWord`, `closesTypeArguments`)
   classifies characters with `isUnicodeWordCode` (`util/util.ts`; named
-  `isLookBehindWordCode` until the next section): `isWordCode`, or any
+  `isLookBehindWordCode` until the next section): `isWordCode`, or, since
+  decision 156 addendum 13 (see "The exact word class" below), a code point at
+  or above U+0080 that is `ID_Continue` or U+200C or U+200D; until then any
   code unit at or above U+0080 except Unicode whitespace
-  (`isUnicodeSpaceCode`), as `lexAtom` already treats a non-ASCII character
-  after a name. So `{ é:a }`, `(é :T) => é` and `c ? é :z` keep
+  (`isUnicodeSpaceCode`). So `{ é:a }`, `(é :T) => é` and `c ? é :z` keep
   TypeScript's colon, `éin`/`éof`/`étypeof` are names rather than operator
   words, and `(é of :b)` lexes the atom, exactly as the same input with an
   ASCII letter (`asciiTwinMismatches` pins the equivalence). The characters
@@ -316,14 +317,35 @@ twin (`mx-unicode-words.cases.ts`), and ASCII-only input renders as before
 
 | Source location | Function | What changed |
 |---|---|---|
-| `states/EXPRESSION.ts` | `canFollowDivision` | a `/` after a non-ASCII identifier is division (`x=é / 2`, `${é / 2}`), not a regular expression |
-| `states/EXPRESSION.ts` | `isWordOrPeriodCode` (`lookBehindForKeyword`) | a name ending in a unary or relational keyword after a non-ASCII letter is no keyword (`x=énew y=1` no longer swallows `y=1`) |
+| `states/EXPRESSION.ts` | `canFollowDivision` | (receives a code point from `getPreviousNonWhitespaceCharCode`) a `/` after a non-ASCII identifier is division (`x=é / 2`, `${é / 2}`), not a regular expression |
+| `states/EXPRESSION.ts` | `isWordOrPeriodBefore` (`lookBehindForKeyword`; `isWordOrPeriodCode` until addendum 13) | a name ending in a unary or relational keyword after a non-ASCII letter is no keyword (`x=énew y=1` no longer swallows `y=1`) |
 | `states/EXPRESSION.ts` | `lookBehindForOperator`, `case CODE.EXCLAMATION` | a `!` after a non-ASCII identifier is postfix (`x=é! y=1`) |
 | `states/EXPRESSION.ts` | `lookBehindForOperator`, `case CODE.PERIOD` | a `.` before a non-ASCII identifier continues the member access (`x=a. é`, `x=a.\n  é`) |
-| `states/EXPRESSION.ts` | `lookAheadForOperator`, `case CODE.PERIOD` | the same, looking ahead (`<if=a .é>`, `x=a . é`); the decision 146 ` .name` sugar test uses the new `isNameStartCode` (a word character other than a digit), so `x=a .é` stays sugar |
-| `states/ATTRIBUTE.ts` | `detectAmbiguousCloseAngleBracket`, `isOperandEndCode` | a non-ASCII operand counts, so `<div x=a >é>c</div>` reports the ambiguous `>` |
+| `states/EXPRESSION.ts` | `lookAheadForOperator`, `case CODE.PERIOD` | the same, looking ahead (`<if=a .é>`, `x=a . é`); the decision 146 ` .name` sugar test uses the new `isNameStartAt` (a word character other than a digit; `isNameStartCode` until addendum 13), so `x=a .é` stays sugar |
+| `states/ATTRIBUTE.ts` | `detectAmbiguousCloseAngleBracket`, `isOperandEndAt` (`isOperandEndCode` until addendum 13) | a non-ASCII operand counts, so `<div x=a >é>c</div>` reports the ambiguous `>` |
 | `states/ATTRIBUTE.ts` | `isAsyncMethodPrefix` | a non-ASCII method name after `async` (`<div async é() {…}>`) |
 | `states/INLINE_SCRIPT.ts` | `startsTypeName` | a non-ASCII type alias name (`$ type é = …`), and a name starting with a binary keyword (`type iné`) |
+
+The exact word class (decision 156 addendum 13, item 2; both dist builds
+carry the same JavaScript). `isUnicodeWordCode(code)` takes a code point:
+below U+0080 it is `isWordCode` (the ASCII test stays a comparison); at or
+above, U+200C and U+200D, and otherwise `\p{ID_Continue}` (one module-level
+regex, run only for a non-ASCII code point, never built per call), and a lone
+surrogate is none. A surrogate pair is read as one code point by two
+position-aware helpers in `util/util.ts`, `wordWidthBefore(data, i)` (the
+character ending at `i`: a low surrogate is combined with the high surrogate
+before it) and `wordWidthAt(data, i)` (the character starting at `i`), which
+return its width in UTF-16 units, 0 for none; every site above that took
+`data.charCodeAt(…)` now asks one of them. The loops that step back over a
+word (`wordStartOf`, used by `isOperatorWord` and the `?` case of
+`expectsExpression`) and the forward scan of `detectAmbiguousCloseAngleBracket`
+step by that width. `getPreviousNonWhitespaceCharCode` returns a code point
+(its two callers compare it with ASCII codes or pass it to `canFollowDivision`).
+Before, every code unit at or above U+0080 except the 19 Unicode whitespace and
+line terminator characters counted, about 950,000 code points that are no
+identifier character (©, ×, …, «, emoji); that broke
+`<div x=a >©>c</div>`, which parses in stock htmljs-parser and compiles in
+Marko 6.3.51.
 
 Left ASCII, on purpose: the expression fast path (`if (isWordCode(code))`
 in `EXPRESSION.char`: a non-ASCII character falls through to the same

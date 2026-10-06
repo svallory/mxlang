@@ -313,7 +313,15 @@ export class Parser {
     let behind = start;
     // MX (decision 156 addendum 11): Unicode whitespace too.
     while (isUnicodeWhitespaceCode(this.lookAtCharCodeAhead(behind))) behind--;
-    return this.lookAtCharCodeAhead(behind);
+    const code = this.lookAtCharCodeAhead(behind);
+    // MX (decision 156 addendum 13): a surrogate pair is one code point.
+    if (code >= 0xdc00 && code <= 0xdfff) {
+      const high = this.lookAtCharCodeAhead(behind - 1);
+      if (high >= 0xd800 && high <= 0xdbff) {
+        return ((high - 0xd800) << 10) + (code - 0xdc00) + 0x10000;
+      }
+    }
+    return code;
   }
 
   onlyWhitespaceRemainsOnLine(start: number) {

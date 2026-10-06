@@ -129,7 +129,7 @@ symbols that carry them:
 | a single-atom default value | `states/ATTRIBUTE.ts` (`defaultAtom`); `states/EXPRESSION.ts` (`isSingleAtomDefault`) | decision 146, addendum 5 ([E1](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode)) |
 | atoms and the reserved `::` | `states/EXPRESSION.ts` (`lexAtom`, `expectsExpression`, `isOperatorWord`, `closesTypeArguments`, `isUnicodeWhitespaceCode`, `isSpreadEnd`, `atomNameEnd`, `rejectReservedName`, the atom guard in `lookBehindForKeyword`); the `atoms = true` sites in `states/ATTRIBUTE.ts`, `OPEN_TAG.ts`, `PLACEHOLDER.ts`, `TAG_NAME.ts`, `TEMPLATE_STRING.ts`; `rejectReservedName` calls in `TAG_NAME.exit` and `ATTRIBUTE.return`; `core/Parser.ts` (`atoms`, `read`, `rawOpenTags`); `util/constants.ts` (`onAtom`); `OPEN_TAG.exit` (`rawOpenTags`) | decision 156 and its addenda 2 to 4 and 8 to 10 ([Atoms](#the-parser-grammar-atoms)) |
 | the base position | `core/Parser.ts` (`ParseOptions`, `parse`, `positionAt`, `offsetAt`); `index.ts` | the parser's API ([Base position](#the-parser-grammar-base-position-for-fragment-parses)) |
-| non-ASCII word characters where the parser looks behind or ahead | `util/util.ts` (`isUnicodeWordCode`, `isUnicodeSpaceCode`) and its callers in `states/EXPRESSION.ts`, `ATTRIBUTE.ts` and `INLINE_SCRIPT.ts` | decision 156, addenda 9 and 10 ([Vocabulary](#the-parser-grammar-status-sources-of-truth-and-method-vocabulary)) |
+| non-ASCII word characters where the parser looks behind or ahead | `util/util.ts` (`isUnicodeWordCode`, `wordWidthBefore`, `wordWidthAt`, `isUnicodeSpaceCode`) and its callers in `core/Parser.ts`, `states/EXPRESSION.ts`, `ATTRIBUTE.ts` and `INLINE_SCRIPT.ts` | decision 156, addenda 9, 10 and 13 ([Vocabulary](#the-parser-grammar-status-sources-of-truth-and-method-vocabulary)) |
 | Unicode whitespace in every look-behind that asks whether a character is whitespace | `util/util.ts` (`isUnicodeWhitespaceCode`) and its callers: `core/Parser.ts` (`getPreviousNonWhitespaceCharCode`); `states/EXPRESSION.ts` (the terminator and `{` look-behinds of `EXPRESSION.parse`, `checkForOperators`, the `++`/`--` row of `lookBehindForOperator`, the atom look-behind); `states/ATTRIBUTE.ts` (`shouldTerminateHtmlAttrValue`, `shouldTerminateConciseAttrValue`, `shouldTerminateConciseAttrName`); `states/HTML_CONTENT.ts` | decision 156, addenda 10 to 12 ([Vocabulary](#the-parser-grammar-status-sources-of-truth-and-method-vocabulary)) |
 | a `//` comment in a text tag's open tag; a close tag with no open tag, or after a tag that never got its name | `states/JS_COMMENT_LINE.ts` (`isInTextBody`); `states/CLOSE_TAG.ts` (`checkForClosingTag`, `ensureExpectedCloseTag`) | the parser does not throw (below) |
 
@@ -208,12 +208,30 @@ These are definitions of terms; the tables that use them carry the rules.
   as with a space ([Recorded defects](#the-parser-grammar-open-questions-for-the-language-lead-recorded-defects-in-the-default)).
   Current-character and look-ahead tests
   keep `isWhitespaceCode`; **indent characters** are space and tab (`isIndentCode`); a
-  **word character** is `A`–`Z`, `a`–`z`, `0`–`9`, `$`, `_`, or a character at
-  or above U+0080 that TypeScript does not read as whitespace or a line
-  terminator (`isUnicodeWordCode`, `util/util.ts`; decision 156, addendum 9).
-  Those excepted characters are U+00A0, U+1680, U+2000 to U+200A, U+2028,
-  U+2029, U+202F, U+205F, U+3000 and U+FEFF (`isUnicodeSpaceCode`). Step 2 of
-  the scan and an atom's own name use the ASCII part (`isWordCode`).
+  **word character** is `A`–`Z`, `a`–`z`, `0`–`9`, `$`, `_`, or a code point at
+  or above U+0080 that has the Unicode property `ID_Continue`, or is U+200C or
+  U+200D (`isUnicodeWordCode`, `wordWidthBefore`, `wordWidthAt`,
+  `util/util.ts`; decision 156, addendum 13, which replaced addendum 9's
+  "anything that is not whitespace"). A surrogate pair is one code point, read
+  as one looking back (a low surrogate with the high surrogate before it) and
+  looking ahead (a high surrogate with the low surrogate after it); a lone
+  surrogate is no word character. So `é`, `名`, a combining mark and `𠞷` are
+  word characters, and `©`, `×`, `…`, `«`, an emoji and a private-use
+  character are not. The excepted characters above are U+00A0, U+1680,
+  U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000 and U+FEFF
+  (`isUnicodeSpaceCode`); none of them is a word character. Step 2 of the
+  scan and an atom's own name use the ASCII part (`isWordCode`).
+
+  | Input | Result | Probes |
+  | --- | --- | --- |
+  | `<div x=a >\u00a9>c</div>` (U+00A9 is no word character) | the value `a`, then the text `\u00a9>c`, as stock; no `Ambiguous ">"` error | g1691 |
+  | `<div x=\u00a9 / 2 y=1/>` | the `/` after a non-word character starts a regular expression, which swallows the rest of the tag (stock) | g1692 |
+  | `<div x=😀 / 2 y=1/>` (an emoji, a surrogate pair) | the same | g1693 |
+  | `<div x=\ud800 / 2 y=1/>` (a lone surrogate) | the same | g1697 |
+  | `<div x=𠞷 / 2 y=1/>` (U+20BB7, `ID_Start`, a surrogate pair) | a division: the value is `𠞷 / 2`, then `y=1` | g1694 |
+  | `<div x=a\u200d / 2 y=1/>` (a ZWJ) | a division | g1695 |
+  | `<div x=a\u0301 / 2 y=1/>` (a combining mark) | a division | g1696 |
+  | `<div x=a >𠞷>c</div>` | `Ambiguous ">"`, as with `a >b>c` | g1698 |
 - **The default** is what the template parser does where no MX departure
   applies. Decision 157.3 makes it the normative answer wherever MX has no
   ruling.
@@ -1147,7 +1165,7 @@ or is bare before `>`, `/>`, a newline or the end of input".
 | Where | Stock (informative, not probed) | MX | Probes |
 | --- | --- | --- | --- |
 | look-ahead, `n` = `:` | operator | **not** an operator when (a) `attrValue` is set, **or** `isSingleAtomDefault` holds: `defaultAtom` is set, the value's first character is `:`, the last atom lexed in it is the one that starts there, and only whitespace lies between that atom's end and `n`; and (b) `ternaryDepth` is 0; and (c) the character after the `:` is `A`–`Z`, `a`–`z`, `$` or `_`, or is `>`, `/>`, `\n`, `\r` or end of input (`isBareColonEnd`). Otherwise an operator, as stock | g0422 g0423 g0424 g0425 g0426 g0427 g0428 |
-| look-ahead, `n` = `.` | operator when the first non-whitespace character after the `.` is a word character | with `attrValue`: **not** an operator when the character directly after the `.` is a word character other than a digit (`isNameStartCode`); otherwise as stock | g0429 g0430 g0328 g0327 |
+| look-ahead, `n` = `.` | operator when the first non-whitespace character after the `.` is a word character | with `attrValue`: **not** an operator when the character directly after the `.` is a word character other than a digit (`isNameStartAt`); otherwise as stock | g0429 g0430 g0328 g0327 |
 | character table, `?` with `operators` at depth 0 | opens a ternary | with `attrValue`: when the next character is `?`, or is `.` not followed by a digit, both characters are consumed and no ternary opens | g0431 g0432 g0433 g0434 |
 
 The first two rows are look-ahead rows, so they apply at step 7 of the
@@ -1615,7 +1633,7 @@ A **name** (`atomNameEnd`) is `[A-Za-z_$][\w$]*(-[\w$]+)*`:
 ### Is an expression expected? (`expectsExpression`)
 
 Word characters here are those of [Vocabulary](#the-parser-grammar-status-sources-of-truth-and-method-vocabulary), so a non-ASCII
-identifier is an operand (decision 156, addendum 9). An atom's own name is
+identifier is an operand and a symbol is not (decision 156, addendum 13). An atom's own name is
 ASCII (`lexAtom`, rows 3 and 4).
 
 `expectsExpression` scans backwards from the character before the `:`,
@@ -2063,11 +2081,12 @@ the normative one.
     (``<script>`${:a}`</script>``). *Recommendation:* confirm that addendum 2
     means placeholders only.
 32. **Non-ASCII identifiers before an atom.** *Settled* by decision 156,
-    addendum 9: the atom look-behind treats as a word character any character
-    at or above U+0080 that is not Unicode whitespace or a line terminator
-    (U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF), and decision 156, addendum 10: those excepted
-    characters are skipped as ASCII whitespace is. Main implements both
-    (`isUnicodeWordCode`, `isUnicodeWhitespaceCode`;
+    addendum 13 (which corrected addendum 9): the atom look-behind treats as a
+    word character a code point at or above U+0080 that is `ID_Continue`, or
+    U+200C or U+200D, and decision 156, addendum 10: the characters excepted
+    from the word class (U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029,
+    U+202F, U+205F, U+3000, U+FEFF) are skipped as ASCII whitespace is. Main
+    implements both (`isUnicodeWordCode`, `isUnicodeWhitespaceCode`;
     [Atoms](#the-parser-grammar-atoms-is-an-expression-expected-expectsexpression)).
 
 The inputs the open questions mention:

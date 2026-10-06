@@ -10,6 +10,8 @@ import {
   type Range,
   STATE,
   type StateDefinition,
+  wordWidthAt,
+  wordWidthBefore,
 } from "../internal.ts";
 import * as CODE from "../util/codes.ts";
 import * as ErrorCode from "../util/error-code.ts";
@@ -567,7 +569,7 @@ function lookBehindForOperator(
         case CODE.BACKTICK:
           return -1;
         default:
-          return isUnicodeWordCode(operandCode) &&
+          return wordWidthBefore(data, operandEnd) > 0 &&
             lookBehindForOperator(expression, data, operandEnd + 1) === -1 &&
             lookBehindForKeyword(
               expression,
@@ -590,7 +592,7 @@ function lookBehindForOperator(
     case CODE.PERIOD: {
       // Only matches `.` followed by something that could be an identifier.
       const nextPos = lookAheadWhile(isWhitespaceCode, data, pos);
-      return isUnicodeWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
+      return wordWidthAt(data, nextPos) > 0 ? nextPos : -1;
     }
 
     // special case -- and ++
@@ -682,12 +684,12 @@ function lookAheadForOperator(
     case CODE.PERIOD: {
       // MX: in an attribute value, ` .name` starts a new attribute.
       // A non-ASCII letter starts a name too (`x=a .é` stays sugar).
-      if (expression.attrValue && isNameStartCode(data.charCodeAt(pos + 1))) {
+      if (expression.attrValue && isNameStartAt(data, pos + 1)) {
         return -1;
       }
       // Only matches `.` followed by something that could be an identifier.
       const nextPos = lookAheadWhile(isWhitespaceCode, data, pos + 1);
-      return isUnicodeWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
+      return wordWidthAt(data, nextPos) > 0 ? nextPos : -1;
     }
 
     default: {
@@ -752,8 +754,8 @@ function canFollowDivision(code: number) {
   }
 }
 
-function isWordOrPeriodCode(code: number) {
-  return code === CODE.PERIOD || isUnicodeWordCode(code);
+function isWordOrPeriodBefore(data: string, at: number) {
+  return data.charCodeAt(at) === CODE.PERIOD || wordWidthBefore(data, at) > 0;
 }
 
 function lookAheadWhile(
@@ -800,7 +802,7 @@ function lookBehindForKeyword(
     if (keywordPos !== -1) {
       return keywordPos < expression.start ||
         (keywordPos > expression.start &&
-          isWordOrPeriodCode(data.charCodeAt(keywordPos - 1)))
+          isWordOrPeriodBefore(data, keywordPos - 1))
         ? -1
         : keywordPos;
     }
@@ -840,9 +842,9 @@ function isDigitCode(code: number) {
   return code >= CODE.NUMBER_0 && code <= CODE.NUMBER_9;
 }
 
-/** Whether `code` can start a name: a word character other than a digit. */
-function isNameStartCode(code: number) {
-  return isUnicodeWordCode(code) && !isDigitCode(code);
+/** Whether a name can start at `at`: a word character other than a digit. */
+function isNameStartAt(data: string, at: number) {
+  return wordWidthAt(data, at) > 0 && !isDigitCode(data.charCodeAt(at));
 }
 
 function isIdentStartCode(code: number) {
@@ -979,13 +981,7 @@ function isOperatorWord(
   end: number,
 ): boolean {
   if (end + 1 === expression.atomEnd) return false;
-  let wordStart = end;
-  while (
-    wordStart > expression.start &&
-    isUnicodeWordCode(data.charCodeAt(wordStart - 1))
-  ) {
-    wordStart--;
-  }
+  const wordStart = wordStartOf(data, end, expression.start);
   if (
     wordStart > expression.start &&
     data.charCodeAt(wordStart - 1) === CODE.PERIOD &&
@@ -1008,7 +1004,7 @@ function isOperatorWord(
     const before = j < expression.start ? -1 : data.charCodeAt(j);
     if (word === "of") {
       return (
-        isUnicodeWordCode(before) ||
+        (j >= expression.start && wordWidthBefore(data, j) > 0) ||
         before === CODE.CLOSE_PAREN ||
         before === CODE.CLOSE_SQUARE_BRACKET ||
         before === CODE.CLOSE_CURLY_BRACE
@@ -1050,7 +1046,7 @@ function closesTypeArguments(
           return (
             groups === 0 &&
             j > expression.start &&
-            isUnicodeWordCode(data.charCodeAt(j - 1))
+            wordWidthBefore(data, j - 1) > 0
           );
         }
         break;
@@ -1089,6 +1085,20 @@ function isSpreadEnd(data: string, at: number) {
     data.charCodeAt(at - 2) === CODE.PERIOD &&
     data.charCodeAt(at - 3) !== CODE.PERIOD
   );
+}
+
+/**
+ * Where the word that ends at `end` (inclusive) starts, not before `min`: a
+ * surrogate pair is one character (decision 156 addendum 13).
+ */
+function wordStartOf(data: string, end: number, min: number) {
+  let start = end + 1 - (wordWidthBefore(data, end) || 1);
+  while (start > min) {
+    const width = wordWidthBefore(data, start - 1);
+    if (width === 0) break;
+    start -= width;
+  }
+  return start;
 }
 
 /** Where an atom name `[A-Za-z_$][\w$]*(-[\w$]+)*` starting at `pos` ends. */
@@ -1150,15 +1160,10 @@ function expectsExpression(
       // carries a marker (`n === 1? :a : :b`).
       if (i === expression.start) return true;
       const owner = data.charCodeAt(i - 1);
-      if (isUnicodeWordCode(owner)) {
-        let wordStart = i - 1;
-        while (
-          wordStart > expression.start &&
-          isUnicodeWordCode(data.charCodeAt(wordStart - 1))
-        ) {
-          wordStart--;
-        }
-        return isDigitCode(data.charCodeAt(wordStart));
+      if (wordWidthBefore(data, i - 1) > 0) {
+        return isDigitCode(
+          data.charCodeAt(wordStartOf(data, i - 1, expression.start)),
+        );
       }
       return !(
         owner === CODE.CLOSE_SQUARE_BRACKET ||
@@ -1189,7 +1194,7 @@ function expectsExpression(
       ) {
         return false;
       }
-      if (!isUnicodeWordCode(owner)) return true;
+      if (wordWidthBefore(data, j) === 0) return true;
       return isOperatorWord(expression, data, j);
     }
     case CODE.CLOSE_ANGLE_BRACKET:
@@ -1207,7 +1212,7 @@ function expectsExpression(
     case CODE.FORWARD_SLASH:
       return i + 1 !== expression.regexEnd;
     default: {
-      if (!isUnicodeWordCode(code)) return true;
+      if (wordWidthBefore(data, i) === 0) return true;
       // A word directly before the `:` is an object key or a label, keyword
       // or not (`{ new:a }`).
       if (i === pos - 1) return false;

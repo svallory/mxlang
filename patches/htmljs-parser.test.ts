@@ -52,10 +52,15 @@ import {
   STRAY_CLOSE_ROWS,
 } from "../packages/parser/src/template/mx-no-throw.cases.ts";
 import {
+  ATOM_AFTER_SYMBOL_ROWS,
   asciiMainMismatches,
+  atomAfterSymbolMismatch,
   BODY_TEXT_ROWS,
   bodyTextTwinMismatches,
   CONCISE_DASH_ROWS,
+  extraWordTwinMismatches,
+  NON_WORD_ROWS,
+  nonWordTwinMismatches,
   renderAttrRanges,
   renderWhitespaceEvents,
   UNICODE_WHITESPACE_ROWS,
@@ -479,6 +484,32 @@ describe.each(builds)("non-ASCII identifiers (%s)", (_name, build) => {
   it("Unicode whitespace in a look-behind renders as an ASCII space (addendum 11)", () => {
     const { total, bad } = unicodeWhitespaceTwinMismatches(wsMod);
     expect(total).toBe(2_432);
+    expect(bad).toEqual([]);
+  });
+
+  it.each(NON_WORD_ROWS)(
+    "a symbol is no word character, as in stock (addendum 13): %j",
+    (input, expected) => {
+      expect(renderAtoms(mod, input, true)).toBe(expected);
+    },
+  );
+
+  it.each(ATOM_AFTER_SYMBOL_ROWS)(
+    "an atom after a symbol lexes, as after ASCII punctuation (addendum 13): %j",
+    (input, twin, expected) => {
+      expect(atomAfterSymbolMismatch(mod, [input, twin, expected])).toEqual([]);
+    },
+  );
+
+  it("a symbol renders as an ASCII non-word (addendum 13)", () => {
+    const { total, bad } = nonWordTwinMismatches(mod);
+    expect(total).toBe(6_660);
+    expect(bad).toEqual([]);
+  });
+
+  it("an identifier character renders as an ASCII letter (addendum 13)", () => {
+    const { total, bad } = extraWordTwinMismatches(mod);
+    expect(total).toBe(4_662);
     expect(bad).toEqual([]);
   });
 

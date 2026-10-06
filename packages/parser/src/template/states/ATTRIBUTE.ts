@@ -1,7 +1,6 @@
 import {
   isIndentCode,
   isUnicodeWhitespaceCode,
-  isUnicodeWordCode,
   isWhitespaceCode,
   matchesCloseAngleBracket,
   matchesCloseCurlyBrace,
@@ -12,6 +11,8 @@ import {
   type Ranges,
   STATE,
   type StateDefinition,
+  wordWidthAt,
+  wordWidthBefore,
 } from "../internal.ts";
 import * as CODE from "../util/codes.ts";
 import * as ErrorCode from "../util/error-code.ts";
@@ -444,7 +445,7 @@ function detectAmbiguousCloseAngleBracket(parser: Parser, child: Meta) {
       // Ignore horizontal whitespace between the final operand and the ">".
       let exprEnd = lookPos;
       while (isIndentCode(data.charCodeAt(exprEnd - 1))) exprEnd--;
-      if (sawOperand && isOperandEndCode(data.charCodeAt(exprEnd - 1))) {
+      if (sawOperand && isOperandEndAt(data, exprEnd - 1)) {
         const expression = data.slice(child.start, exprEnd);
         const tail = data
           .slice(pos + 1, lookPos + (code === CODE.FORWARD_SLASH ? 2 : 1))
@@ -465,14 +466,16 @@ function detectAmbiguousCloseAngleBracket(parser: Parser, child: Meta) {
       return false;
     }
 
-    if (isUnicodeWordCode(code)) {
+    const wordWidth = wordWidthAt(data, lookPos);
+    if (wordWidth > 0) {
       if (operatorPending) return false;
       sawOperand = true;
+      lookPos += wordWidth - 1; // a surrogate pair is one character
       continue;
     }
 
     if (isIndentCode(code)) {
-      if (sawOperand && isOperandEndCode(data.charCodeAt(lookPos - 1))) {
+      if (sawOperand && isOperandEndAt(data, lookPos - 1)) {
         operatorPending = true;
       }
       continue;
@@ -492,7 +495,7 @@ function detectAmbiguousCloseAngleBracket(parser: Parser, child: Meta) {
         // (no operand before it) this does not look like a split expression.
         let prevPos = lookPos - 1;
         while (isIndentCode(data.charCodeAt(prevPos))) prevPos--;
-        if (!isOperandEndCode(data.charCodeAt(prevPos))) return false;
+        if (!isOperandEndAt(data, prevPos)) return false;
         operatorPending = false;
         continue;
       }
@@ -535,13 +538,14 @@ function detectAmbiguousCloseAngleBracket(parser: Parser, child: Meta) {
   return false;
 }
 
-function isOperandEndCode(code: number) {
-  switch (code) {
+/** Whether an operand ends at index `at`: `)`, `]` or a word character. */
+function isOperandEndAt(data: string, at: number) {
+  switch (data.charCodeAt(at)) {
     case CODE.CLOSE_PAREN:
     case CODE.CLOSE_SQUARE_BRACKET:
       return true;
     default:
-      return isUnicodeWordCode(code);
+      return wordWidthBefore(data, at) > 0;
   }
 }
 
@@ -569,7 +573,7 @@ function isAsyncMethodPrefix(parser: Parser, name: Range) {
 
   const code = data.charCodeAt(pos);
   return (
-    isUnicodeWordCode(code) || // the method name
+    wordWidthAt(data, pos) > 0 || // the method name
     code === CODE.OPEN_PAREN || // a default attribute method's params
     // a default attribute method's type params, but not a close tag
     (code === CODE.OPEN_ANGLE_BRACKET &&

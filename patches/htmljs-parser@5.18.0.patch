@@ -1,5 +1,5 @@
 diff --git a/dist/index.js b/dist/index.js
-index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b3648828e 100644
+index dc727aef1e94c2a42a93d9e897a89cd5518f0907..cdb45a33cca35298c1a102d751d3001cc87d33c3 100644
 --- a/dist/index.js
 +++ b/dist/index.js
 @@ -47,7 +47,23 @@ var Parser = class {
@@ -27,16 +27,24 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
    }
    positionAt(offset) {
      return getPosition(
-@@ -145,7 +161,7 @@ var Parser = class {
+@@ -145,8 +161,14 @@ var Parser = class {
    }
    getPreviousNonWhitespaceCharCode(start = -1) {
      let behind = start;
 -    for (; isWhitespaceCode(this.lookAtCharCodeAhead(behind)); ) behind--;
+-    return this.lookAtCharCodeAhead(behind);
 +    for (; isUnicodeWhitespaceCode(this.lookAtCharCodeAhead(behind)); ) behind--;
-     return this.lookAtCharCodeAhead(behind);
++    let code = this.lookAtCharCodeAhead(behind);
++    if (code >= 56320 && code <= 57343) {
++      let high = this.lookAtCharCodeAhead(behind - 1);
++      if (high >= 55296 && high <= 56319)
++        return (high - 55296 << 10) + (code - 56320) + 65536;
++    }
++    return code;
    }
    onlyWhitespaceRemainsOnLine(start) {
-@@ -188,7 +204,7 @@ var Parser = class {
+     let maxOffset = this.maxPos - this.pos, ahead = start;
+@@ -188,7 +210,7 @@ var Parser = class {
    }
    parse(data) {
      let maxPos = this.maxPos = data.length;
@@ -45,7 +53,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
        this.activeState.parse.call(this, data, maxPos, this.activeRange);
    }
  };
-@@ -311,10 +327,12 @@ var ATTRIBUTE = {
+@@ -311,10 +333,12 @@ var ATTRIBUTE = {
        if (code === 61 || code === 58 && data.charCodeAt(this.pos + 1) === 61 || code === 46 && this.lookAheadFor("..")) {
          attr.valueStart = this.pos, flushPendingAsync(this, attr), code === 58 ? (ensureAttrName(this, attr), attr.bound = !0, this.pos += 2, this.consumeWhitespace()) : code === 46 ? (attr.spread = !0, this.pos += 3) : (ensureAttrName(this, attr), this.pos++, this.consumeWhitespace()), attr.stage = 2;
          let expr = this.enterState(states_exports.EXPRESSION);
@@ -60,7 +68,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
          return;
        } else if (code === 60 && // A pending `async` leaves the stage UNKNOWN, but type params can
        // still follow it for a default attribute method.
-@@ -324,7 +342,9 @@ var ATTRIBUTE = {
+@@ -324,7 +348,9 @@ var ATTRIBUTE = {
          expr.inType = !0, expr.forceType = !0, expr.shouldTerminate = matchesCloseAngleBracket;
          return;
        } else if (code === 123 && attr.args) {
@@ -71,7 +79,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
          return;
        } else if (attr.stage === 0) {
          if (code === 60)
-@@ -364,7 +384,8 @@ var ATTRIBUTE = {
+@@ -364,7 +390,8 @@ var ATTRIBUTE = {
            attr.async = name, attr.stage = 0;
            return;
          }
@@ -81,34 +89,69 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
            return;
          break;
        }
-@@ -491,7 +512,7 @@ function detectAmbiguousCloseAngleBracket(parser, child) {
+@@ -481,7 +508,7 @@ function detectAmbiguousCloseAngleBracket(parser, child) {
+     if (!groupDepth && (code === 62 || code === 47 && data.charCodeAt(lookPos + 1) === 62)) {
+       let exprEnd = lookPos;
+       for (; isIndentCode(data.charCodeAt(exprEnd - 1)); ) exprEnd--;
+-      if (sawOperand && isOperandEndCode(data.charCodeAt(exprEnd - 1))) {
++      if (sawOperand && isOperandEndAt(data, exprEnd - 1)) {
+         let expression = data.slice(child.start, exprEnd), tail = data.slice(pos + 1, lookPos + (code === 47 ? 2 : 1)).trim();
+         return parser.emitError(
+           { start: child.start, end: exprEnd },
+@@ -491,13 +518,14 @@ function detectAmbiguousCloseAngleBracket(parser, child) {
        }
        return !1;
      }
 -    if (isWordCode(code)) {
-+    if (isUnicodeWordCode(code)) {
++    let wordWidth = wordWidthAt(data, lookPos);
++    if (wordWidth > 0) {
        if (operatorPending) return !1;
-       sawOperand = !0;
+-      sawOperand = !0;
++      sawOperand = !0, lookPos += wordWidth - 1;
        continue;
-@@ -550,7 +571,7 @@ function isOperandEndCode(code) {
+     }
+     if (isIndentCode(code)) {
+-      sawOperand && isOperandEndCode(data.charCodeAt(lookPos - 1)) && (operatorPending = !0);
++      sawOperand && isOperandEndAt(data, lookPos - 1) && (operatorPending = !0);
+       continue;
+     }
+     switch (code) {
+@@ -509,7 +537,7 @@ function detectAmbiguousCloseAngleBracket(parser, child) {
+       case 47: {
+         let prevPos = lookPos - 1;
+         for (; isIndentCode(data.charCodeAt(prevPos)); ) prevPos--;
+-        if (!isOperandEndCode(data.charCodeAt(prevPos))) return !1;
++        if (!isOperandEndAt(data, prevPos)) return !1;
+         operatorPending = !1;
+         continue;
+       }
+@@ -544,13 +572,13 @@ function detectAmbiguousCloseAngleBracket(parser, child) {
+   }
+   return !1;
+ }
+-function isOperandEndCode(code) {
+-  switch (code) {
++function isOperandEndAt(data, at) {
++  switch (data.charCodeAt(at)) {
+     case 41:
      case 93:
        return !0;
      default:
 -      return isWordCode(code);
-+      return isUnicodeWordCode(code);
++      return wordWidthBefore(data, at) > 0;
    }
  }
  function isAsyncMethodPrefix(parser, name) {
-@@ -562,7 +583,7 @@ function isAsyncMethodPrefix(parser, name) {
+@@ -562,7 +590,7 @@ function isAsyncMethodPrefix(parser, name) {
    let skip = parser.isConcise ? isIndentCode : isWhitespaceCode, pos = parser.pos;
    for (; skip(data.charCodeAt(pos)); ) pos++;
    let code = data.charCodeAt(pos);
 -  return isWordCode(code) || // the method name
-+  return isUnicodeWordCode(code) || // the method name
++  return wordWidthAt(data, pos) > 0 || // the method name
    code === 40 || // a default attribute method's params
    // a default attribute method's type params, but not a close tag
    code === 60 && data.charCodeAt(pos + 1) !== 47;
-@@ -601,7 +622,7 @@ function shouldTerminateHtmlAttrValue(code, data, pos) {
+@@ -601,7 +629,7 @@ function shouldTerminateHtmlAttrValue(code, data, pos) {
      case 47:
        return data.charCodeAt(pos + 1) === 62;
      case 62:
@@ -117,7 +160,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
      default:
        return !1;
    }
-@@ -617,7 +638,7 @@ function shouldTerminateConciseAttrName(code, data, pos) {
+@@ -617,7 +645,7 @@ function shouldTerminateConciseAttrName(code, data, pos) {
      case 58:
        return data.charCodeAt(pos + 1) === 61;
      case 45:
@@ -126,7 +169,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
      default:
        return !1;
    }
-@@ -628,7 +649,7 @@ function shouldTerminateConciseAttrValue(code, data, pos) {
+@@ -628,7 +656,7 @@ function shouldTerminateConciseAttrValue(code, data, pos) {
      case 59:
        return !0;
      case 45:
@@ -135,7 +178,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
      default:
        return !1;
    }
-@@ -797,6 +818,7 @@ function checkForClosingTag(parser) {
+@@ -797,6 +825,7 @@ function checkForClosingTag(parser) {
    var _a, _b;
    let curPos = parser.pos + 1, match = !!parser.lookAheadFor("/>"), skip = 3;
    if (!match) {
@@ -143,7 +186,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
      let { tagName } = parser.activeTag, tagNameLen = tagName.end - tagName.start;
      skip += tagNameLen, match = parser.lookAheadFor("/", curPos) && parser.lookAheadFor(">", 1 + curPos + tagNameLen) && parser.matchAtPos(tagName, {
        start: 1 + curPos,
-@@ -813,7 +835,7 @@ function checkForClosingTag(parser) {
+@@ -813,7 +842,7 @@ function checkForClosingTag(parser) {
  }
  function ensureExpectedCloseTag(parser, closeTag) {
    let activeTag = parser.activeTag, closeTagNameStart = closeTag.start + 2, closeTagNameEnd = closeTag.end - 1;
@@ -152,7 +195,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
      return parser.emitError(
        closeTag,
        0,
-@@ -1079,6 +1101,11 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1079,6 +1108,11 @@ var shouldTerminate = () => !1, unaryKeywords = [
        groupStack: [],
        shouldTerminate,
        operators: !1,
@@ -164,7 +207,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
        wasComment: !1,
        hadUnguardedNewline: !1,
        inType: !1,
-@@ -1119,7 +1146,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1119,7 +1153,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
            let wasExpression = !1;
            if (expression.operators) {
              let prevNonWhitespacePos = lookBehindWhile(
@@ -173,7 +216,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
                data,
                this.pos - 1
              );
-@@ -1147,12 +1174,23 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1147,12 +1181,23 @@ var shouldTerminate = () => !1, unaryKeywords = [
            return;
          case 63:
            if (expression.operators && !expression.groupStack.length) {
@@ -197,7 +240,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
            if (expression.operators && !expression.groupStack.length) {
              expression.ternaryDepth ? expression.ternaryDepth-- : expression.inType = !0, this.pos++, this.consumeWhitespace();
              continue;
-@@ -1192,7 +1230,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1192,7 +1237,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
          case 123:
            if (expression.inType && !expression.forceType) {
              let prevPos = lookBehindWhile(
@@ -206,7 +249,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
                data,
                this.pos - 1
              );
-@@ -1277,13 +1315,17 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1277,13 +1322,17 @@ var shouldTerminate = () => !1, unaryKeywords = [
      );
    },
    return(child, expression) {
@@ -226,25 +269,25 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
      return parser.consumeWhitespace(), !0;
    let terminatedByEOL = expression.terminatedByEOL || parser.isConcise;
    if (!(terminatedByEOL && eol)) {
-@@ -1333,7 +1375,7 @@ function lookBehindForOperator(expression, data, pos) {
+@@ -1333,7 +1382,7 @@ function lookBehindForOperator(expression, data, pos) {
          case 96:
            return -1;
          default:
 -          return isWordCode(operandCode) && lookBehindForOperator(expression, data, operandEnd + 1) === -1 && lookBehindForKeyword(
-+          return isUnicodeWordCode(operandCode) && lookBehindForOperator(expression, data, operandEnd + 1) === -1 && lookBehindForKeyword(
++          return wordWidthBefore(data, operandEnd) > 0 && lookBehindForOperator(expression, data, operandEnd + 1) === -1 && lookBehindForKeyword(
              expression,
              data,
              operandEnd,
-@@ -1345,7 +1387,7 @@ function lookBehindForOperator(expression, data, pos) {
+@@ -1345,7 +1394,7 @@ function lookBehindForOperator(expression, data, pos) {
        return data.charCodeAt(curPos - 1) === 61 ? curPos - 1 : expression.inType ? -1 : curPos;
      case 46: {
        let nextPos = lookAheadWhile(isWhitespaceCode, data, pos);
 -      return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
-+      return isUnicodeWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
++      return wordWidthAt(data, nextPos) > 0 ? nextPos : -1;
      }
      // special case -- and ++
      case 43:
-@@ -1353,7 +1395,7 @@ function lookBehindForOperator(expression, data, pos) {
+@@ -1353,7 +1402,7 @@ function lookBehindForOperator(expression, data, pos) {
        return data.charCodeAt(curPos - 1) === code ? lookBehindForOperator(
          expression,
          data,
@@ -253,7 +296,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
        ) : curPos;
      default:
        return code < 97 || code > 122 ? -1 : lookBehindForKeyword(
-@@ -1364,6 +1406,9 @@ function lookBehindForOperator(expression, data, pos) {
+@@ -1364,6 +1413,9 @@ function lookBehindForOperator(expression, data, pos) {
        );
    }
  }
@@ -263,7 +306,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
  function lookAheadForOperator(expression, data, pos) {
    switch (data.charCodeAt(pos)) {
      case 38:
-@@ -1382,13 +1427,15 @@ function lookAheadForOperator(expression, data, pos) {
+@@ -1382,13 +1434,15 @@ function lookAheadForOperator(expression, data, pos) {
      case 40:
      case 62:
      case 63:
@@ -274,14 +317,14 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
 +      return (expression.attrValue || isSingleAtomDefault(expression, data, pos)) && !expression.ternaryDepth && (isIdentStartCode(data.charCodeAt(pos + 1)) || isBareColonEnd(data, pos + 1)) ? -1 : pos;
      // defers to base expression state to track block groups.
      case 46: {
-+      if (expression.attrValue && isNameStartCode(data.charCodeAt(pos + 1))) return -1;
++      if (expression.attrValue && isNameStartAt(data, pos + 1)) return -1;
        let nextPos = lookAheadWhile(isWhitespaceCode, data, pos + 1);
 -      return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
-+      return isUnicodeWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
++      return wordWidthAt(data, nextPos) > 0 ? nextPos : -1;
      }
      default: {
        let startCode = data.charCodeAt(pos);
-@@ -1416,7 +1463,7 @@ function lookAheadForOperator(expression, data, pos) {
+@@ -1416,7 +1470,7 @@ function lookAheadForOperator(expression, data, pos) {
    }
  }
  function canFollowDivision(code) {
@@ -290,10 +333,12 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
    switch (code) {
      case 96:
      case 39:
-@@ -1432,8 +1479,196 @@ function canFollowDivision(code) {
+@@ -1432,8 +1486,201 @@ function canFollowDivision(code) {
        return !1;
    }
  }
+-function isWordOrPeriodCode(code) {
+-  return code === 46 || isWordCode(code);
 +function isBareColonEnd(data, at) {
 +  let code = data.charCodeAt(at);
 +  return code !== code || code === 62 || code === 10 || code === 13 || code === 47 && data.charCodeAt(at + 1) === 62;
@@ -301,8 +346,9 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
 +function isIdentStartCode(code) {
 +  return code >= 65 && code <= 90 || code >= 97 && code <= 122 || code === 36 || code === 95;
 +}
-+function isNameStartCode(code) {
-+  return isUnicodeWordCode(code) && !(code >= 48 && code <= 57);
++function isNameStartAt(data, at) {
++  let code = data.charCodeAt(at);
++  return wordWidthAt(data, at) > 0 && !(code >= 48 && code <= 57);
 +}
 +var atomKeywords = [
 +  "await",
@@ -378,11 +424,8 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
 +    case 63: {
 +      if (i === expression.start) return !0;
 +      let owner = data.charCodeAt(i - 1);
-+      if (isUnicodeWordCode(owner)) {
-+        let wordStart = i - 1;
-+        for (; wordStart > expression.start && isUnicodeWordCode(data.charCodeAt(wordStart - 1)); )
-+          wordStart--;
-+        let first = data.charCodeAt(wordStart);
++      if (wordWidthBefore(data, i - 1) > 0) {
++        let first = data.charCodeAt(wordStartOf(data, i - 1, expression.start));
 +        return first >= 48 && first <= 57;
 +      }
 +      return !(owner === 93 || owner === 45 || owner === 43);
@@ -393,7 +436,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
 +        j--;
 +      if (j < expression.start) return !0;
 +      let owner = data.charCodeAt(j);
-+      return owner === 41 || owner === 93 || owner === 45 || owner === 43 ? !1 : isUnicodeWordCode(owner) ? isOperatorWord(expression, data, j) : !0;
++      return owner === 41 || owner === 93 || owner === 45 || owner === 43 ? !1 : wordWidthBefore(data, j) > 0 ? isOperatorWord(expression, data, j) : !0;
 +    }
 +    case 62:
 +      return data.charCodeAt(i - 1) === 61 || !closesTypeArguments(expression, data, i);
@@ -403,7 +446,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
 +    case 47:
 +      return i + 1 !== expression.regexEnd;
 +    default: {
-+      return isUnicodeWordCode(code) ? i === pos - 1 ? !1 : isOperatorWord(expression, data, i) : !0;
++      return wordWidthBefore(data, i) > 0 ? i === pos - 1 ? !1 : isOperatorWord(expression, data, i) : !0;
 +    }
 +  }
 +}
@@ -433,7 +476,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
 +        break;
 +      case 60:
 +        if (--angles === 0)
-+          return groups === 0 && j > expression.start && isUnicodeWordCode(data.charCodeAt(j - 1));
++          return groups === 0 && j > expression.start && wordWidthBefore(data, j - 1) > 0;
 +        break;
 +      case 41:
 +      case 93:
@@ -459,12 +502,19 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
 +  }
 +  return !1;
 +}
++function wordStartOf(data, end, min) {
++  let start = end + 1 - (wordWidthBefore(data, end) || 1);
++  for (; start > min; ) {
++    let width = wordWidthBefore(data, start - 1);
++    if (width === 0) break;
++    start -= width;
++  }
++  return start;
++}
 +function isOperatorWord(expression, data, end) {
 +  var _a;
 +  if (end + 1 === expression.atomEnd) return !1;
-+  let wordStart = end;
-+  for (; wordStart > expression.start && isUnicodeWordCode(data.charCodeAt(wordStart - 1)); )
-+    wordStart--;
++  let wordStart = wordStartOf(data, end, expression.start);
 +  if (wordStart > expression.start && data.charCodeAt(wordStart - 1) === 46 && !isSpreadEnd(data, wordStart - 1))
 +    return !1;
 +  let word = data.slice(wordStart, end + 1);
@@ -478,17 +528,16 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
 +      j = comment.start - 1;
 +    }
 +    let before = j < expression.start ? -1 : data.charCodeAt(j);
-+    return word === "of" ? isUnicodeWordCode(before) || before === 41 || before === 93 || before === 125 : !(before === 63 || before === 58 || before === 44 || before === 40);
++    return word === "of" ? j >= expression.start && wordWidthBefore(data, j) > 0 || before === 41 || before === 93 || before === 125 : !(before === 63 || before === 58 || before === 44 || before === 40);
 +  }
 +  return !0;
 +}
- function isWordOrPeriodCode(code) {
--  return code === 46 || isWordCode(code);
-+  return code === 46 || isUnicodeWordCode(code);
++function isWordOrPeriodBefore(data, at) {
++  return data.charCodeAt(at) === 46 || wordWidthBefore(data, at) > 0;
  }
  function lookAheadWhile(match, data, pos) {
    let max = data.length;
-@@ -1450,6 +1685,7 @@ function lookBehindWhile(match, data, pos) {
+@@ -1450,10 +1697,11 @@ function lookBehindWhile(match, data, pos) {
    return 0;
  }
  function lookBehindForKeyword(expression, data, pos, keywords) {
@@ -496,20 +545,25 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
    for (let keyword of keywords) {
      let keywordPos = lookBehindFor(data, pos, keyword);
      if (keywordPos !== -1)
-@@ -1694,10 +1930,10 @@ function startsTypeName(parser, pos, allowGroup) {
+-      return keywordPos < expression.start || keywordPos > expression.start && isWordOrPeriodCode(data.charCodeAt(keywordPos - 1)) ? -1 : keywordPos;
++      return keywordPos < expression.start || keywordPos > expression.start && isWordOrPeriodBefore(data, keywordPos - 1) ? -1 : keywordPos;
+   }
+   return -1;
+ }
+@@ -1694,10 +1942,10 @@ function startsTypeName(parser, pos, allowGroup) {
    let code = parser.data.charCodeAt(pos);
    if (code === 123 || code === 42)
      return allowGroup;
 -  if (!isWordCode(code) || code >= 48 && code <= 57)
-+  if (!isUnicodeWordCode(code) || code >= 48 && code <= 57)
++  if (wordWidthAt(parser.data, pos) === 0 || code >= 48 && code <= 57)
      return !1;
    for (let keyword of binaryKeywords)
 -    if (parser.lookAheadFor(keyword, pos) && !isWordCode(parser.data.charCodeAt(pos + keyword.length)))
-+    if (parser.lookAheadFor(keyword, pos) && !isUnicodeWordCode(parser.data.charCodeAt(pos + keyword.length)))
++    if (parser.lookAheadFor(keyword, pos) && wordWidthAt(parser.data, pos + keyword.length) === 0)
        return !1;
    return !0;
  }
-@@ -1744,14 +1980,14 @@ var JS_COMMENT_LINE = {
+@@ -1744,14 +1992,14 @@ var JS_COMMENT_LINE = {
    },
    exit() {
    },
@@ -526,7 +580,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
          this.exitState();
          return;
        } else
-@@ -1764,6 +2000,13 @@ var JS_COMMENT_LINE = {
+@@ -1764,6 +2012,13 @@ var JS_COMMENT_LINE = {
    return() {
    }
  };
@@ -540,7 +594,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
  function getJSCommentRange(comment) {
    return {
      start: comment.start,
-@@ -1805,9 +2048,9 @@ var OPEN_TAG = {
+@@ -1805,9 +2060,9 @@ var OPEN_TAG = {
    },
    exit(tag) {
      var _a, _b;
@@ -553,7 +607,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
        end: this.pos,
        selfClosed
      }), selfClosed ? 2 : tag.type) {
-@@ -1981,7 +2224,9 @@ var OPEN_TAG = {
+@@ -1981,7 +2236,9 @@ var OPEN_TAG = {
                );
                return;
              }
@@ -564,7 +618,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
              return;
            }
            case 124: {
-@@ -2345,7 +2590,9 @@ function checkForPlaceholder(parser, code) {
+@@ -2345,7 +2602,9 @@ function checkForPlaceholder(parser, code) {
            return parser.endText(), parser.pos += extra, parser.startText(), parser.pos += ahead - extra + (escape ? 2 : 3), !0;
          parser.startText(), parser.pos += extra, parser.endText(), parser.pos += extra;
        }
@@ -575,7 +629,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
      }
    }
    return !1;
-@@ -2468,7 +2715,10 @@ var TAG_NAME = {
+@@ -2468,7 +2727,10 @@ var TAG_NAME = {
    exit(tagName) {
      var _a, _b, _c, _d, _e, _f;
      let { start, end, quasis, expressions } = tagName, last = quasis[quasis.length - 1];
@@ -587,7 +641,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
        case 35:
          if (this.activeTag.hasShorthandId)
            return this.emitError(
-@@ -2533,7 +2783,9 @@ var TAG_NAME = {
+@@ -2533,7 +2795,9 @@ var TAG_NAME = {
          return;
        }
        if (code === 36 && data.charCodeAt(this.pos + 1) === 123) {
@@ -598,7 +652,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
          return;
        } else if (isWhitespaceCode(code) || code === 61 || code === 58 && data.charCodeAt(this.pos + 1) === 61 || code === 40 || code === 47 || code === 124 || code === 60 || code === 44 || (this.isConcise ? code === 59 || code === 91 : code === 62)) {
          this.activeTag.shorthandEnd = this.pos, this.exitState();
-@@ -2587,7 +2839,9 @@ var TEMPLATE_STRING = {
+@@ -2587,7 +2851,9 @@ var TEMPLATE_STRING = {
        switch (data.charCodeAt(this.pos)) {
          case 36:
            if (data.charCodeAt(this.pos + 1) === 123) {
@@ -609,12 +663,32 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
              return;
            }
            this.pos++;
-@@ -2670,6 +2924,15 @@ function htmlEOF() {
+@@ -2670,6 +2936,35 @@ function htmlEOF() {
  function isWordCode(code) {
    return code >= 65 && code <= 90 || code >= 97 && code <= 122 || code >= 48 && code <= 57 || code == 36 || code === 95;
  }
++var ID_CONTINUE = /^\p{ID_Continue}$/u;
 +function isUnicodeWordCode(code) {
-+  return code >= 128 ? !isUnicodeSpaceCode(code) : isWordCode(code);
++  return code >= 128 ? isNonAsciiWordCode(code) : isWordCode(code);
++}
++function isNonAsciiWordCode(code) {
++  return code === 8204 || code === 8205 ? !0 : code >= 55296 && code <= 57343 ? !1 : ID_CONTINUE.test(String.fromCodePoint(code));
++}
++function wordWidthBefore(data, i) {
++  let code = data.charCodeAt(i);
++  if (!(code >= 128)) return isWordCode(code) ? 1 : 0;
++  if (code >= 56320 && code <= 57343) {
++    let high = data.charCodeAt(i - 1);
++    if (high >= 55296 && high <= 56319)
++      return isNonAsciiWordCode((high - 55296 << 10) + (code - 56320) + 65536) ? 2 : 0;
++  }
++  return isNonAsciiWordCode(code) ? 1 : 0;
++}
++function wordWidthAt(data, i) {
++  let code = data.charCodeAt(i);
++  if (!(code >= 128)) return isWordCode(code) ? 1 : 0;
++  let point = data.codePointAt(i);
++  return isNonAsciiWordCode(point) ? point > 65535 ? 2 : 1 : 0;
 +}
 +function isUnicodeSpaceCode(code) {
 +  return code === 160 || code === 5760 || code >= 8192 && code <= 8202 || code === 8232 || code === 8233 || code === 8239 || code === 8287 || code === 12288 || code === 65279;
@@ -626,7 +700,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c46d528a839353d57bcc816abaab1f2b
    return code === 62;
  }
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c4f3025f3 100644
+index 8afb14db555b8df8a5b9f5e1c29bad5080125709..c31432c2155ec45dcabc7f409edc4598cb6868af 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -20,7 +20,23 @@ var Parser = class {
@@ -654,16 +728,24 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
    }
    positionAt(offset) {
      return getPosition(
-@@ -118,7 +134,7 @@ var Parser = class {
+@@ -118,8 +134,14 @@ var Parser = class {
    }
    getPreviousNonWhitespaceCharCode(start = -1) {
      let behind = start;
 -    for (; isWhitespaceCode(this.lookAtCharCodeAhead(behind)); ) behind--;
+-    return this.lookAtCharCodeAhead(behind);
 +    for (; isUnicodeWhitespaceCode(this.lookAtCharCodeAhead(behind)); ) behind--;
-     return this.lookAtCharCodeAhead(behind);
++    let code = this.lookAtCharCodeAhead(behind);
++    if (code >= 56320 && code <= 57343) {
++      let high = this.lookAtCharCodeAhead(behind - 1);
++      if (high >= 55296 && high <= 56319)
++        return (high - 55296 << 10) + (code - 56320) + 65536;
++    }
++    return code;
    }
    onlyWhitespaceRemainsOnLine(start) {
-@@ -161,7 +177,7 @@ var Parser = class {
+     let maxOffset = this.maxPos - this.pos, ahead = start;
+@@ -161,7 +183,7 @@ var Parser = class {
    }
    parse(data) {
      let maxPos = this.maxPos = data.length;
@@ -672,7 +754,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
        this.activeState.parse.call(this, data, maxPos, this.activeRange);
    }
  };
-@@ -284,10 +300,12 @@ var ATTRIBUTE = {
+@@ -284,10 +306,12 @@ var ATTRIBUTE = {
        if (code === 61 || code === 58 && data.charCodeAt(this.pos + 1) === 61 || code === 46 && this.lookAheadFor("..")) {
          attr.valueStart = this.pos, flushPendingAsync(this, attr), code === 58 ? (ensureAttrName(this, attr), attr.bound = !0, this.pos += 2, this.consumeWhitespace()) : code === 46 ? (attr.spread = !0, this.pos += 3) : (ensureAttrName(this, attr), this.pos++, this.consumeWhitespace()), attr.stage = 2;
          let expr = this.enterState(states_exports.EXPRESSION);
@@ -687,7 +769,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
          return;
        } else if (code === 60 && // A pending `async` leaves the stage UNKNOWN, but type params can
        // still follow it for a default attribute method.
-@@ -297,7 +315,9 @@ var ATTRIBUTE = {
+@@ -297,7 +321,9 @@ var ATTRIBUTE = {
          expr.inType = !0, expr.forceType = !0, expr.shouldTerminate = matchesCloseAngleBracket;
          return;
        } else if (code === 123 && attr.args) {
@@ -698,7 +780,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
          return;
        } else if (attr.stage === 0) {
          if (code === 60)
-@@ -337,7 +357,8 @@ var ATTRIBUTE = {
+@@ -337,7 +363,8 @@ var ATTRIBUTE = {
            attr.async = name, attr.stage = 0;
            return;
          }
@@ -708,34 +790,69 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
            return;
          break;
        }
-@@ -464,7 +485,7 @@ function detectAmbiguousCloseAngleBracket(parser, child) {
+@@ -454,7 +481,7 @@ function detectAmbiguousCloseAngleBracket(parser, child) {
+     if (!groupDepth && (code === 62 || code === 47 && data.charCodeAt(lookPos + 1) === 62)) {
+       let exprEnd = lookPos;
+       for (; isIndentCode(data.charCodeAt(exprEnd - 1)); ) exprEnd--;
+-      if (sawOperand && isOperandEndCode(data.charCodeAt(exprEnd - 1))) {
++      if (sawOperand && isOperandEndAt(data, exprEnd - 1)) {
+         let expression = data.slice(child.start, exprEnd), tail = data.slice(pos + 1, lookPos + (code === 47 ? 2 : 1)).trim();
+         return parser.emitError(
+           { start: child.start, end: exprEnd },
+@@ -464,13 +491,14 @@ function detectAmbiguousCloseAngleBracket(parser, child) {
        }
        return !1;
      }
 -    if (isWordCode(code)) {
-+    if (isUnicodeWordCode(code)) {
++    let wordWidth = wordWidthAt(data, lookPos);
++    if (wordWidth > 0) {
        if (operatorPending) return !1;
-       sawOperand = !0;
+-      sawOperand = !0;
++      sawOperand = !0, lookPos += wordWidth - 1;
        continue;
-@@ -523,7 +544,7 @@ function isOperandEndCode(code) {
+     }
+     if (isIndentCode(code)) {
+-      sawOperand && isOperandEndCode(data.charCodeAt(lookPos - 1)) && (operatorPending = !0);
++      sawOperand && isOperandEndAt(data, lookPos - 1) && (operatorPending = !0);
+       continue;
+     }
+     switch (code) {
+@@ -482,7 +510,7 @@ function detectAmbiguousCloseAngleBracket(parser, child) {
+       case 47: {
+         let prevPos = lookPos - 1;
+         for (; isIndentCode(data.charCodeAt(prevPos)); ) prevPos--;
+-        if (!isOperandEndCode(data.charCodeAt(prevPos))) return !1;
++        if (!isOperandEndAt(data, prevPos)) return !1;
+         operatorPending = !1;
+         continue;
+       }
+@@ -517,13 +545,13 @@ function detectAmbiguousCloseAngleBracket(parser, child) {
+   }
+   return !1;
+ }
+-function isOperandEndCode(code) {
+-  switch (code) {
++function isOperandEndAt(data, at) {
++  switch (data.charCodeAt(at)) {
+     case 41:
      case 93:
        return !0;
      default:
 -      return isWordCode(code);
-+      return isUnicodeWordCode(code);
++      return wordWidthBefore(data, at) > 0;
    }
  }
  function isAsyncMethodPrefix(parser, name) {
-@@ -535,7 +556,7 @@ function isAsyncMethodPrefix(parser, name) {
+@@ -535,7 +563,7 @@ function isAsyncMethodPrefix(parser, name) {
    let skip = parser.isConcise ? isIndentCode : isWhitespaceCode, pos = parser.pos;
    for (; skip(data.charCodeAt(pos)); ) pos++;
    let code = data.charCodeAt(pos);
 -  return isWordCode(code) || // the method name
-+  return isUnicodeWordCode(code) || // the method name
++  return wordWidthAt(data, pos) > 0 || // the method name
    code === 40 || // a default attribute method's params
    // a default attribute method's type params, but not a close tag
    code === 60 && data.charCodeAt(pos + 1) !== 47;
-@@ -574,7 +595,7 @@ function shouldTerminateHtmlAttrValue(code, data, pos) {
+@@ -574,7 +602,7 @@ function shouldTerminateHtmlAttrValue(code, data, pos) {
      case 47:
        return data.charCodeAt(pos + 1) === 62;
      case 62:
@@ -744,7 +861,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
      default:
        return !1;
    }
-@@ -590,7 +611,7 @@ function shouldTerminateConciseAttrName(code, data, pos) {
+@@ -590,7 +618,7 @@ function shouldTerminateConciseAttrName(code, data, pos) {
      case 58:
        return data.charCodeAt(pos + 1) === 61;
      case 45:
@@ -753,7 +870,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
      default:
        return !1;
    }
-@@ -601,7 +622,7 @@ function shouldTerminateConciseAttrValue(code, data, pos) {
+@@ -601,7 +629,7 @@ function shouldTerminateConciseAttrValue(code, data, pos) {
      case 59:
        return !0;
      case 45:
@@ -762,7 +879,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
      default:
        return !1;
    }
-@@ -770,6 +791,7 @@ function checkForClosingTag(parser) {
+@@ -770,6 +798,7 @@ function checkForClosingTag(parser) {
    var _a, _b;
    let curPos = parser.pos + 1, match = !!parser.lookAheadFor("/>"), skip = 3;
    if (!match) {
@@ -770,7 +887,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
      let { tagName } = parser.activeTag, tagNameLen = tagName.end - tagName.start;
      skip += tagNameLen, match = parser.lookAheadFor("/", curPos) && parser.lookAheadFor(">", 1 + curPos + tagNameLen) && parser.matchAtPos(tagName, {
        start: 1 + curPos,
-@@ -786,7 +808,7 @@ function checkForClosingTag(parser) {
+@@ -786,7 +815,7 @@ function checkForClosingTag(parser) {
  }
  function ensureExpectedCloseTag(parser, closeTag) {
    let activeTag = parser.activeTag, closeTagNameStart = closeTag.start + 2, closeTagNameEnd = closeTag.end - 1;
@@ -779,7 +896,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
      return parser.emitError(
        closeTag,
        0,
-@@ -1052,6 +1074,11 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1052,6 +1081,11 @@ var shouldTerminate = () => !1, unaryKeywords = [
        groupStack: [],
        shouldTerminate,
        operators: !1,
@@ -791,7 +908,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
        wasComment: !1,
        hadUnguardedNewline: !1,
        inType: !1,
-@@ -1092,7 +1119,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1092,7 +1126,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
            let wasExpression = !1;
            if (expression.operators) {
              let prevNonWhitespacePos = lookBehindWhile(
@@ -800,7 +917,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
                data,
                this.pos - 1
              );
-@@ -1120,12 +1147,23 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1120,12 +1154,23 @@ var shouldTerminate = () => !1, unaryKeywords = [
            return;
          case 63:
            if (expression.operators && !expression.groupStack.length) {
@@ -824,7 +941,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
            if (expression.operators && !expression.groupStack.length) {
              expression.ternaryDepth ? expression.ternaryDepth-- : expression.inType = !0, this.pos++, this.consumeWhitespace();
              continue;
-@@ -1165,7 +1203,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1165,7 +1210,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
          case 123:
            if (expression.inType && !expression.forceType) {
              let prevPos = lookBehindWhile(
@@ -833,7 +950,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
                data,
                this.pos - 1
              );
-@@ -1250,13 +1288,17 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1250,13 +1295,17 @@ var shouldTerminate = () => !1, unaryKeywords = [
      );
    },
    return(child, expression) {
@@ -853,25 +970,25 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
      return parser.consumeWhitespace(), !0;
    let terminatedByEOL = expression.terminatedByEOL || parser.isConcise;
    if (!(terminatedByEOL && eol)) {
-@@ -1306,7 +1348,7 @@ function lookBehindForOperator(expression, data, pos) {
+@@ -1306,7 +1355,7 @@ function lookBehindForOperator(expression, data, pos) {
          case 96:
            return -1;
          default:
 -          return isWordCode(operandCode) && lookBehindForOperator(expression, data, operandEnd + 1) === -1 && lookBehindForKeyword(
-+          return isUnicodeWordCode(operandCode) && lookBehindForOperator(expression, data, operandEnd + 1) === -1 && lookBehindForKeyword(
++          return wordWidthBefore(data, operandEnd) > 0 && lookBehindForOperator(expression, data, operandEnd + 1) === -1 && lookBehindForKeyword(
              expression,
              data,
              operandEnd,
-@@ -1318,7 +1360,7 @@ function lookBehindForOperator(expression, data, pos) {
+@@ -1318,7 +1367,7 @@ function lookBehindForOperator(expression, data, pos) {
        return data.charCodeAt(curPos - 1) === 61 ? curPos - 1 : expression.inType ? -1 : curPos;
      case 46: {
        let nextPos = lookAheadWhile(isWhitespaceCode, data, pos);
 -      return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
-+      return isUnicodeWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
++      return wordWidthAt(data, nextPos) > 0 ? nextPos : -1;
      }
      // special case -- and ++
      case 43:
-@@ -1326,7 +1368,7 @@ function lookBehindForOperator(expression, data, pos) {
+@@ -1326,7 +1375,7 @@ function lookBehindForOperator(expression, data, pos) {
        return data.charCodeAt(curPos - 1) === code ? lookBehindForOperator(
          expression,
          data,
@@ -880,7 +997,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
        ) : curPos;
      default:
        return code < 97 || code > 122 ? -1 : lookBehindForKeyword(
-@@ -1337,6 +1379,9 @@ function lookBehindForOperator(expression, data, pos) {
+@@ -1337,6 +1386,9 @@ function lookBehindForOperator(expression, data, pos) {
        );
    }
  }
@@ -890,7 +1007,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
  function lookAheadForOperator(expression, data, pos) {
    switch (data.charCodeAt(pos)) {
      case 38:
-@@ -1355,13 +1400,15 @@ function lookAheadForOperator(expression, data, pos) {
+@@ -1355,13 +1407,15 @@ function lookAheadForOperator(expression, data, pos) {
      case 40:
      case 62:
      case 63:
@@ -901,14 +1018,14 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
 +      return (expression.attrValue || isSingleAtomDefault(expression, data, pos)) && !expression.ternaryDepth && (isIdentStartCode(data.charCodeAt(pos + 1)) || isBareColonEnd(data, pos + 1)) ? -1 : pos;
      // defers to base expression state to track block groups.
      case 46: {
-+      if (expression.attrValue && isNameStartCode(data.charCodeAt(pos + 1))) return -1;
++      if (expression.attrValue && isNameStartAt(data, pos + 1)) return -1;
        let nextPos = lookAheadWhile(isWhitespaceCode, data, pos + 1);
 -      return isWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
-+      return isUnicodeWordCode(data.charCodeAt(nextPos)) ? nextPos : -1;
++      return wordWidthAt(data, nextPos) > 0 ? nextPos : -1;
      }
      default: {
        let startCode = data.charCodeAt(pos);
-@@ -1389,7 +1436,7 @@ function lookAheadForOperator(expression, data, pos) {
+@@ -1389,7 +1443,7 @@ function lookAheadForOperator(expression, data, pos) {
    }
  }
  function canFollowDivision(code) {
@@ -917,10 +1034,12 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
    switch (code) {
      case 96:
      case 39:
-@@ -1405,8 +1452,196 @@ function canFollowDivision(code) {
+@@ -1405,8 +1459,201 @@ function canFollowDivision(code) {
        return !1;
    }
  }
+-function isWordOrPeriodCode(code) {
+-  return code === 46 || isWordCode(code);
 +function isBareColonEnd(data, at) {
 +  let code = data.charCodeAt(at);
 +  return code !== code || code === 62 || code === 10 || code === 13 || code === 47 && data.charCodeAt(at + 1) === 62;
@@ -928,8 +1047,9 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
 +function isIdentStartCode(code) {
 +  return code >= 65 && code <= 90 || code >= 97 && code <= 122 || code === 36 || code === 95;
 +}
-+function isNameStartCode(code) {
-+  return isUnicodeWordCode(code) && !(code >= 48 && code <= 57);
++function isNameStartAt(data, at) {
++  let code = data.charCodeAt(at);
++  return wordWidthAt(data, at) > 0 && !(code >= 48 && code <= 57);
 +}
 +var atomKeywords = [
 +  "await",
@@ -1005,11 +1125,8 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
 +    case 63: {
 +      if (i === expression.start) return !0;
 +      let owner = data.charCodeAt(i - 1);
-+      if (isUnicodeWordCode(owner)) {
-+        let wordStart = i - 1;
-+        for (; wordStart > expression.start && isUnicodeWordCode(data.charCodeAt(wordStart - 1)); )
-+          wordStart--;
-+        let first = data.charCodeAt(wordStart);
++      if (wordWidthBefore(data, i - 1) > 0) {
++        let first = data.charCodeAt(wordStartOf(data, i - 1, expression.start));
 +        return first >= 48 && first <= 57;
 +      }
 +      return !(owner === 93 || owner === 45 || owner === 43);
@@ -1020,7 +1137,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
 +        j--;
 +      if (j < expression.start) return !0;
 +      let owner = data.charCodeAt(j);
-+      return owner === 41 || owner === 93 || owner === 45 || owner === 43 ? !1 : isUnicodeWordCode(owner) ? isOperatorWord(expression, data, j) : !0;
++      return owner === 41 || owner === 93 || owner === 45 || owner === 43 ? !1 : wordWidthBefore(data, j) > 0 ? isOperatorWord(expression, data, j) : !0;
 +    }
 +    case 62:
 +      return data.charCodeAt(i - 1) === 61 || !closesTypeArguments(expression, data, i);
@@ -1030,7 +1147,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
 +    case 47:
 +      return i + 1 !== expression.regexEnd;
 +    default: {
-+      return isUnicodeWordCode(code) ? i === pos - 1 ? !1 : isOperatorWord(expression, data, i) : !0;
++      return wordWidthBefore(data, i) > 0 ? i === pos - 1 ? !1 : isOperatorWord(expression, data, i) : !0;
 +    }
 +  }
 +}
@@ -1060,7 +1177,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
 +        break;
 +      case 60:
 +        if (--angles === 0)
-+          return groups === 0 && j > expression.start && isUnicodeWordCode(data.charCodeAt(j - 1));
++          return groups === 0 && j > expression.start && wordWidthBefore(data, j - 1) > 0;
 +        break;
 +      case 41:
 +      case 93:
@@ -1086,12 +1203,19 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
 +  }
 +  return !1;
 +}
++function wordStartOf(data, end, min) {
++  let start = end + 1 - (wordWidthBefore(data, end) || 1);
++  for (; start > min; ) {
++    let width = wordWidthBefore(data, start - 1);
++    if (width === 0) break;
++    start -= width;
++  }
++  return start;
++}
 +function isOperatorWord(expression, data, end) {
 +  var _a;
 +  if (end + 1 === expression.atomEnd) return !1;
-+  let wordStart = end;
-+  for (; wordStart > expression.start && isUnicodeWordCode(data.charCodeAt(wordStart - 1)); )
-+    wordStart--;
++  let wordStart = wordStartOf(data, end, expression.start);
 +  if (wordStart > expression.start && data.charCodeAt(wordStart - 1) === 46 && !isSpreadEnd(data, wordStart - 1))
 +    return !1;
 +  let word = data.slice(wordStart, end + 1);
@@ -1105,17 +1229,16 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
 +      j = comment.start - 1;
 +    }
 +    let before = j < expression.start ? -1 : data.charCodeAt(j);
-+    return word === "of" ? isUnicodeWordCode(before) || before === 41 || before === 93 || before === 125 : !(before === 63 || before === 58 || before === 44 || before === 40);
++    return word === "of" ? j >= expression.start && wordWidthBefore(data, j) > 0 || before === 41 || before === 93 || before === 125 : !(before === 63 || before === 58 || before === 44 || before === 40);
 +  }
 +  return !0;
 +}
- function isWordOrPeriodCode(code) {
--  return code === 46 || isWordCode(code);
-+  return code === 46 || isUnicodeWordCode(code);
++function isWordOrPeriodBefore(data, at) {
++  return data.charCodeAt(at) === 46 || wordWidthBefore(data, at) > 0;
  }
  function lookAheadWhile(match, data, pos) {
    let max = data.length;
-@@ -1423,6 +1658,7 @@ function lookBehindWhile(match, data, pos) {
+@@ -1423,10 +1670,11 @@ function lookBehindWhile(match, data, pos) {
    return 0;
  }
  function lookBehindForKeyword(expression, data, pos, keywords) {
@@ -1123,20 +1246,25 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
    for (let keyword of keywords) {
      let keywordPos = lookBehindFor(data, pos, keyword);
      if (keywordPos !== -1)
-@@ -1667,10 +1903,10 @@ function startsTypeName(parser, pos, allowGroup) {
+-      return keywordPos < expression.start || keywordPos > expression.start && isWordOrPeriodCode(data.charCodeAt(keywordPos - 1)) ? -1 : keywordPos;
++      return keywordPos < expression.start || keywordPos > expression.start && isWordOrPeriodBefore(data, keywordPos - 1) ? -1 : keywordPos;
+   }
+   return -1;
+ }
+@@ -1667,10 +1915,10 @@ function startsTypeName(parser, pos, allowGroup) {
    let code = parser.data.charCodeAt(pos);
    if (code === 123 || code === 42)
      return allowGroup;
 -  if (!isWordCode(code) || code >= 48 && code <= 57)
-+  if (!isUnicodeWordCode(code) || code >= 48 && code <= 57)
++  if (wordWidthAt(parser.data, pos) === 0 || code >= 48 && code <= 57)
      return !1;
    for (let keyword of binaryKeywords)
 -    if (parser.lookAheadFor(keyword, pos) && !isWordCode(parser.data.charCodeAt(pos + keyword.length)))
-+    if (parser.lookAheadFor(keyword, pos) && !isUnicodeWordCode(parser.data.charCodeAt(pos + keyword.length)))
++    if (parser.lookAheadFor(keyword, pos) && wordWidthAt(parser.data, pos + keyword.length) === 0)
        return !1;
    return !0;
  }
-@@ -1717,14 +1953,14 @@ var JS_COMMENT_LINE = {
+@@ -1717,14 +1965,14 @@ var JS_COMMENT_LINE = {
    },
    exit() {
    },
@@ -1153,7 +1281,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
          this.exitState();
          return;
        } else
-@@ -1737,6 +1973,13 @@ var JS_COMMENT_LINE = {
+@@ -1737,6 +1985,13 @@ var JS_COMMENT_LINE = {
    return() {
    }
  };
@@ -1167,7 +1295,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
  function getJSCommentRange(comment) {
    return {
      start: comment.start,
-@@ -1778,9 +2021,9 @@ var OPEN_TAG = {
+@@ -1778,9 +2033,9 @@ var OPEN_TAG = {
    },
    exit(tag) {
      var _a, _b;
@@ -1180,7 +1308,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
        end: this.pos,
        selfClosed
      }), selfClosed ? 2 : tag.type) {
-@@ -1954,7 +2197,9 @@ var OPEN_TAG = {
+@@ -1954,7 +2209,9 @@ var OPEN_TAG = {
                );
                return;
              }
@@ -1191,7 +1319,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
              return;
            }
            case 124: {
-@@ -2318,7 +2563,9 @@ function checkForPlaceholder(parser, code) {
+@@ -2318,7 +2575,9 @@ function checkForPlaceholder(parser, code) {
            return parser.endText(), parser.pos += extra, parser.startText(), parser.pos += ahead - extra + (escape ? 2 : 3), !0;
          parser.startText(), parser.pos += extra, parser.endText(), parser.pos += extra;
        }
@@ -1202,7 +1330,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
      }
    }
    return !1;
-@@ -2441,7 +2688,10 @@ var TAG_NAME = {
+@@ -2441,7 +2700,10 @@ var TAG_NAME = {
    exit(tagName) {
      var _a, _b, _c, _d, _e, _f;
      let { start, end, quasis, expressions } = tagName, last = quasis[quasis.length - 1];
@@ -1214,7 +1342,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
        case 35:
          if (this.activeTag.hasShorthandId)
            return this.emitError(
-@@ -2506,7 +2756,9 @@ var TAG_NAME = {
+@@ -2506,7 +2768,9 @@ var TAG_NAME = {
          return;
        }
        if (code === 36 && data.charCodeAt(this.pos + 1) === 123) {
@@ -1225,7 +1353,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
          return;
        } else if (isWhitespaceCode(code) || code === 61 || code === 58 && data.charCodeAt(this.pos + 1) === 61 || code === 40 || code === 47 || code === 124 || code === 60 || code === 44 || (this.isConcise ? code === 59 || code === 91 : code === 62)) {
          this.activeTag.shorthandEnd = this.pos, this.exitState();
-@@ -2560,7 +2812,9 @@ var TEMPLATE_STRING = {
+@@ -2560,7 +2824,9 @@ var TEMPLATE_STRING = {
        switch (data.charCodeAt(this.pos)) {
          case 36:
            if (data.charCodeAt(this.pos + 1) === 123) {
@@ -1236,12 +1364,32 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..11358a43762592c79cd9d5872a61ba5c
              return;
            }
            this.pos++;
-@@ -2643,6 +2897,15 @@ function htmlEOF() {
+@@ -2643,6 +2909,35 @@ function htmlEOF() {
  function isWordCode(code) {
    return code >= 65 && code <= 90 || code >= 97 && code <= 122 || code >= 48 && code <= 57 || code == 36 || code === 95;
  }
++var ID_CONTINUE = /^\p{ID_Continue}$/u;
 +function isUnicodeWordCode(code) {
-+  return code >= 128 ? !isUnicodeSpaceCode(code) : isWordCode(code);
++  return code >= 128 ? isNonAsciiWordCode(code) : isWordCode(code);
++}
++function isNonAsciiWordCode(code) {
++  return code === 8204 || code === 8205 ? !0 : code >= 55296 && code <= 57343 ? !1 : ID_CONTINUE.test(String.fromCodePoint(code));
++}
++function wordWidthBefore(data, i) {
++  let code = data.charCodeAt(i);
++  if (!(code >= 128)) return isWordCode(code) ? 1 : 0;
++  if (code >= 56320 && code <= 57343) {
++    let high = data.charCodeAt(i - 1);
++    if (high >= 55296 && high <= 56319)
++      return isNonAsciiWordCode((high - 55296 << 10) + (code - 56320) + 65536) ? 2 : 0;
++  }
++  return isNonAsciiWordCode(code) ? 1 : 0;
++}
++function wordWidthAt(data, i) {
++  let code = data.charCodeAt(i);
++  if (!(code >= 128)) return isWordCode(code) ? 1 : 0;
++  let point = data.codePointAt(i);
++  return isNonAsciiWordCode(point) ? point > 65535 ? 2 : 1 : 0;
 +}
 +function isUnicodeSpaceCode(code) {
 +  return code === 160 || code === 5760 || code >= 8192 && code <= 8202 || code === 8232 || code === 8233 || code === 8239 || code === 8287 || code === 12288 || code === 65279;
