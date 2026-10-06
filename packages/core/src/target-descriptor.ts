@@ -659,6 +659,16 @@ export function validateDescriptor(value: unknown): TargetDescriptor {
           );
       });
     }
+    const baseTarget = declarations.default.baseTarget;
+    if (
+      baseTarget !== undefined &&
+      (typeof baseTarget !== "string" || baseTarget === "")
+    )
+      throw bad(
+        "declarations.default.baseTarget",
+        baseTarget,
+        "a non-empty string",
+      );
   }
 
   optionalFunction(value, "load", "load");

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fixed (data-check-keys-on-base-target):** `isDataProject` and `checkDataPackage` key on the resolved base target (`HostDeclarations.baseTarget`, else the descriptor's name), not on the project's `mx.target` string: an `mx.host` project whose loaded descriptor is built on data (a third-party `.mesh.mx` host) gets data's strict `structural`/`unknownTags` defaults and the `mx.data.*` keys from `mx-tsc`, and a nested package is walked when its base target is data. A project selecting a host not built on data is unchanged. **Added:** `baseTargetOf(descriptor)` and `baseTargetOfPolicy(policy)`.
+
 - **Changed (preact-region, decision 154):** the built-in table has a third region kind, `preact` (`.preact.mx`, from `@mxlang/preact`, registered before `react`); `regionFileKinds()`, `moduleSegments()` and every derived list (Vite default extensions, LS language ids, TS plugin per-kind plugins) include it. A `*.preact.mx` file is no longer a whole-file `.mx`.
 
 - **Changed (hono-region, decision 154):** the built-in table has a third region kind, `hono` (`.hono.mx`, from `@mxlang/hono`); `regionFileKinds()`, `moduleSegments()` and every derived list (Vite default extensions, LS language ids, TS plugin per-kind plugins) include it.

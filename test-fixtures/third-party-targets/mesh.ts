@@ -25,6 +25,11 @@ export interface MeshOptions {
   hostDefaultTag?: string;
   /** The descriptor's own `defaultTag`; default data's. */
   defaultTag?: string;
+  /**
+   * Drop `baseTarget` from the reused declarations: a host that reuses data's
+   * declarations but is not built on data (the data check must not apply).
+   */
+  notBuiltOnData?: boolean;
   /** Set `allowContractDefaultTag: false` on the declarations. */
   forbidContractDefaultTag?: boolean;
   /** `mx` keys of the project's `package.json` besides `host`. */
@@ -49,9 +54,14 @@ module.exports = {
   name: "mesh-data",
   packageName: "@fake/mx-mesh",
   defaultTag: o.defaultTag ?? data.defaultTag,
-  declarations: o.forbidContractDefaultTag
-    ? { default: { ...data.declarations.default, allowContractDefaultTag: false } }
-    : data.declarations,
+  declarations: (() => {
+    const base = { ...data.declarations.default };
+    if (o.forbidContractDefaultTag) base.allowContractDefaultTag = false;
+    if (o.notBuiltOnData) delete base.baseTarget;
+    return o.forbidContractDefaultTag || o.notBuiltOnData
+      ? { default: base }
+      : data.declarations;
+  })(),
   get parseTranslator() { return data.parseTranslator; },
   host: {
     name: "mesh",

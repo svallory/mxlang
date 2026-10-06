@@ -24,7 +24,11 @@ import {
   type TargetPolicyDiagnostic,
 } from "@mxlang/core";
 import { type ParseDataOptions, parseData } from "@mxlang/data";
-import { resolveTargetPolicyDetailed, scanCached } from "./index.ts";
+import {
+  baseTargetOfPolicy,
+  resolveTargetPolicyDetailed,
+  scanCached,
+} from "./index.ts";
 import { lineAndColumn, locateJsonPath } from "./json-locate.ts";
 
 export { lineAndColumn };
@@ -100,20 +104,32 @@ function readManifest(dir: string): Manifest | undefined {
 
 /**
  * Whether `mx-tsc` run on `dir` takes the data path: the directory's own
- * `package.json` says `mx.target: "data"`. Rule-5 inference from an
- * `@mxlang/data` dependency does not (such a package, or a monorepo root with
- * one, keeps its ordinary `tsc` run and the staged error for its data files),
- * and neither does a `package.json` found only in an ancestor.
+ * `package.json` selects a target (`mx.target`) or a host (`mx.host`) whose
+ * resolved base target is `data` (`baseTargetOf`), so a third-party host built
+ * on data (Mesh) gets the check the `data` target gets. The project's own
+ * `mx.target` string is never the key. Rule-5 inference from an `@mxlang/data`
+ * dependency does not qualify (such a package, or a monorepo root with one,
+ * keeps its ordinary `tsc` run and the staged error for its data files), and
+ * neither does a `package.json` found only in an ancestor. A host that fails
+ * to load resolves to the fallback target, not data: the ordinary run reports
+ * the load error.
  */
 export function isDataProject(dir: string): boolean {
   const manifest = readManifest(dir);
   if (!manifest) return false;
   try {
-    const parsed = JSON.parse(manifest.text) as { mx?: { target?: unknown } };
-    return parsed?.mx?.target === "data";
+    const parsed = JSON.parse(manifest.text) as {
+      mx?: { target?: unknown; host?: unknown };
+    } | null;
+    const { target, host } = parsed?.mx ?? {};
+    if (typeof target !== "string" && typeof host !== "string") return false;
   } catch {
     return false;
   }
+  const { policy } = resolveTargetPolicyDetailed(manifest.file, {
+    dataWired: true,
+  });
+  return baseTargetOfPolicy(policy) === "data";
 }
 
 interface DataOptions {
@@ -265,7 +281,7 @@ export function checkDataPackage(dir: string): DataCheckResult {
     const { policy, diagnostics } = resolveTargetPolicyDetailed(manifest.file, {
       dataWired: true,
     });
-    if (!entry && policy.target !== "data") return undefined;
+    if (!entry && baseTargetOfPolicy(policy) !== "data") return undefined;
     for (const d of diagnostics) {
       reportManifest({
         file: d.file,

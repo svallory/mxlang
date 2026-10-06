@@ -97,6 +97,16 @@ export interface HostDeclarations {
    * own. Absent means none beyond the descriptor's own `defaultTag`.
    */
   builtinTags?: readonly string[];
+  /**
+   * The registered target this descriptor's behavior is built on: the name a
+   * tool keys a target-specific check on (`mx-tsc`'s data check), never the
+   * project's own `mx.target` string. A built-in target that is not built on
+   * another leaves it absent (its own name answers). It travels with the
+   * declarations, so a third-party host that reuses a target's declarations
+   * (Mesh on data) is built on that target with no literal of its own, the
+   * way it keeps `builtinTags`.
+   */
+  baseTarget?: string;
   /** Human-readable host name used by positioned capability diagnostics. */
   name?: string;
   /** Attribute-tag IR/emission contract implemented by this host. */

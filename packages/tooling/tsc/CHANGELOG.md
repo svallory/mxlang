@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fixed (data-check-keys-on-base-target):** `mx-tsc` runs data's check on a project whose resolved base target is data, not only on `mx.target: "data"`: a third-party host built on data (`mx.host`) now gets the strict `structural`/`unknownTags` defaults and the `mx.data.*` keys. The check calls `parseData` itself, so the host descriptor's own `load()` does not compile its files on this path.
+
 - **Changed (decision 162):** prints every error of an `.mx` file in one run; host-dispatch goldens gain the errors core used to stop before.
 
 - **Fix (unmapped-diagnostics-region-enclosing-spans, decision 161):** `mx-tsc` places an unmappable diagnostic in a region file (`.solid.mx`, `.preact.mx`, `.react.mx`, `.hono.mx`), `.astro.mx` or `.ng.mx` on its enclosing tag or attribute with `(position approximate: …)`, as it already did for whole-file `.mx`, instead of at 1:1 as `(position unknown in this file kind: …)`.

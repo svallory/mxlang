@@ -330,6 +330,18 @@ describe("validateDescriptor", () => {
     );
   });
 
+  it("rejects a `declarations.default.baseTarget` that is not a non-empty string", () => {
+    const withBase = (baseTarget: unknown) =>
+      invalidField(target({ declarations: { default: { baseTarget } } }));
+    expect(withBase(5).field).toBe("declarations.default.baseTarget");
+    expect(withBase("").field).toBe("declarations.default.baseTarget");
+    expect(() =>
+      validateDescriptor(
+        target({ declarations: { default: { baseTarget: "data" } } }),
+      ),
+    ).not.toThrow();
+  });
+
   it("rejects a `declarations.default.builtinTags` that is not an array of non-empty strings", () => {
     const withTags = (builtinTags: unknown) =>
       invalidField(target({ declarations: { default: { builtinTags } } }));

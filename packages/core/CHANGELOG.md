@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Added (data-check-keys-on-base-target):** `HostDeclarations.baseTarget?: string`, the registered target a descriptor's behavior is built on; it travels with reused declarations (a host built on data keeps data's). `validateDescriptor` rejects a value that is not a non-empty string (`declarations.default.baseTarget`).
+
 - **Fix (statement-tags r3, decision 168):** a `server` or `client` statement's text gets the same Marko-matching syntax check as `static`/`import`/`export`, before a host runs, drops or refuses it, so an invalid join can no longer pull the next template line into it silently.
 
 - **Fix, behaviour change (statement-tags r2, decision 168):** (1) `withStatementTags` (exported) adds the statement entries to any translator `buildMarkoLookup` is given, and `lowerStatement` refuses a `static`/`import`/`export` the parser read as attributes (a translator built without them) with a positioned error naming `createTranslator`; the by-name recovery of such a tag is gone. `Translator.statementTags?: false` marks a translator that declares its own (data). The TS plugin's mapping pass builds its lookup through `buildMarkoLookup`. (2) A statement's text is parsed as TypeScript like Marko does: a syntax error is positioned at the offending character on every target (JSX or a decorator in a statement, `{ k: :name }`), and a line ending in `>` that swallows the next template line is Marko's own error at that line instead of a silent drop; a valid join (`1 +⏎2`) compiles. html, Solid and Astro used to emit such text unchecked.

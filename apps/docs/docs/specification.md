@@ -1094,6 +1094,10 @@ Marko oracle are unchanged. Recorded in `divergences.md`.
 - **The data target is not wired into the language server, the TypeScript
   plugin, Vite or the Bun loader yet** (§13.7); `parseData` and `mx-tsc` use
   `mx.data.defaultTag`.
+- **`mx-tsc`'s data check keys on the resolved base target**, never on the
+  project's `mx.target` string: a project that selects a host whose descriptor
+  is built on data (its declarations carry `baseTarget: "data"`) gets data's
+  strict defaults and the `mx.data.*` keys like `mx.target: "data"` does.
 
 ### `class:foo` / `style:foo` modifiers
 

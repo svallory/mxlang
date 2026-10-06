@@ -141,6 +141,23 @@ export function lookupFor(policy: TargetPolicy): TargetLookup {
 }
 
 /**
+ * The registered target `descriptor`'s behavior is built on: what its
+ * declarations say (`HostDeclarations.baseTarget`, which a host reusing a
+ * target's declarations carries along), else its own name. A check that is
+ * specific to a target (`mx-tsc`'s data check) asks this, never the project's
+ * `mx.target` string, so a third-party host built on the target gets it
+ * without the caller knowing the host.
+ */
+export function baseTargetOf(descriptor: TargetDescriptor): string {
+  return descriptor.declarations?.default.baseTarget ?? descriptor.name;
+}
+
+/** {@link baseTargetOf} of the descriptor `policy` compiles through. */
+export function baseTargetOfPolicy(policy: TargetPolicy): string {
+  return baseTargetOf(descriptorFor(policy));
+}
+
+/**
  * The descriptor `policy` compiles through: the loaded one, else the built-in
  * the policy names.
  */
