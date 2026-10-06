@@ -50,16 +50,19 @@ const honoTypes = join(
 describe.each([
   { host: "Preact", table: preactEventPropNames, types: preactTypes },
   { host: "hono", table: honoEventPropNames, types: honoTypes },
-])("$host event-prop names match the installed JSX types", ({ table, types }) => {
-  it("maps every declared handler's lowercased DOM name back to its spelling", () => {
-    const declared = declaredHandlers(types);
-    expect(declared.length).toBeGreaterThan(50);
-    for (const name of declared) {
-      const dom = name.slice(2).toLowerCase();
-      expect(`on${table[dom]}`, `${dom} → ${name}`).toBe(name);
-    }
-  });
-});
+])(
+  "$host event-prop names match the installed JSX types",
+  ({ table, types }) => {
+    it("maps every declared handler's lowercased DOM name back to its spelling", () => {
+      const declared = declaredHandlers(types);
+      expect(declared.length).toBeGreaterThan(50);
+      for (const name of declared) {
+        const dom = name.slice(2).toLowerCase();
+        expect(`on${table[dom]}`, `${dom} → ${name}`).toBe(name);
+      }
+    });
+  },
+);
 
 describe("spellings the two hosts disagree on", () => {
   it("dblclick is onDblClick on Preact and onDoubleClick on hono", () => {
