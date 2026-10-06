@@ -2945,15 +2945,22 @@ The rule: **a diagnostic whose generated position has no source mapping is
 reported, never dropped.** It is reported at the nearest mapped span of the
 generated module (the tightest mapped range containing it, else the nearest
 before it, else the first after it), so on the source it lands on the closest
-construct the module maps, and its message is suffixed
+construct the module maps, and its message is suffixed with one of two
+markers (decision 161 addendum 1):
 
 ```text
  (position approximate: generated <line>:<col>)
+ (in MX-generated code, not yours: an MX bug; generated <line>:<col>)
 ```
 
-where `<line>:<col>` is the 1-based position TypeScript reported in the
-generated module. A module with no mapped span at all reports the diagnostic
-on the file with no position (`tsc` prints it as a file-level error). A
+The first when the diagnostic's generated line holds authored code (the error
+is the author's, the column is approximate); the second when that line holds
+no authored code at all (the error is in code MX wrote: a host bug to report,
+not something the author can fix). `<line>:<col>` is the 1-based position
+TypeScript reported in the generated module. A module with no mapped span at
+all gets an anchor mapping at its start, so the diagnostic lands at 1:1 with
+the same suffix. Nothing is suppressed: there is no allow-list for generated
+scaffolding, and the repository's own fixtures carry no "MX bug" diagnostic. A
 diagnostic Volar can map is untouched: same position, byte-identical message.
 A mapping may still hide a diagnostic on purpose (its `verification` rejects
 that code: the `.astro.mx` fence's TS1108); that is a host's decision about a
