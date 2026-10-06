@@ -29,6 +29,7 @@
   "copyCode": true,
   "markdown": { "breaks": false },
   "redirects": {
+    "/hosts/": "/hosts/intro/",
     "/hosts/html/": "/targets/html/",
     "/hosts/data/": "/targets/data/",
     "/hosts/third-party-targets/": "/targets/third-party-targets/"
@@ -103,12 +104,96 @@
       "title": "Hosts",
       "icon": "blocks",
       "children": [
-        { "title": "Astro host", "path": "/hosts/astro/" },
-        { "title": "React host", "path": "/hosts/react/" },
-        { "title": "Preact host", "path": "/hosts/preact/" },
-        { "title": "Hono host", "path": "/hosts/hono/" },
-        { "title": "Solid", "path": "/hosts/solid/" },
-        { "title": "Angular host", "path": "/hosts/angular/" }
+        { "title": "Overview", "path": "/hosts/intro/" },
+        {
+          "title": "React",
+          "path": "/hosts/react/",
+          "children": [
+            { "title": "Overview", "path": "/hosts/react/" },
+            {
+              "title": "What MX compiles to",
+              "path": "/hosts/react/semantics/"
+            },
+            {
+              "title": "Whole-file .mx (alpha)",
+              "path": "/hosts/react/whole-file/"
+            }
+          ]
+        },
+        {
+          "title": "Preact",
+          "path": "/hosts/preact/",
+          "children": [
+            { "title": "Overview", "path": "/hosts/preact/" },
+            {
+              "title": "What MX compiles to",
+              "path": "/hosts/preact/semantics/"
+            },
+            {
+              "title": "Whole-file .mx (alpha)",
+              "path": "/hosts/preact/whole-file/"
+            }
+          ]
+        },
+        {
+          "title": "Hono",
+          "path": "/hosts/hono/",
+          "children": [
+            { "title": "Overview", "path": "/hosts/hono/" },
+            {
+              "title": "What MX compiles to",
+              "path": "/hosts/hono/semantics/"
+            },
+            {
+              "title": "Whole-file .mx (alpha)",
+              "path": "/hosts/hono/whole-file/"
+            }
+          ]
+        },
+        { "title": "Region files: the rules", "path": "/hosts/region-files/" },
+        {
+          "title": "Solid",
+          "path": "/hosts/solid/",
+          "children": [
+            { "title": "Overview", "path": "/hosts/solid/" },
+            {
+              "title": "What MX compiles to",
+              "path": "/hosts/solid/semantics/"
+            }
+          ]
+        },
+        {
+          "title": "Astro",
+          "path": "/hosts/astro/",
+          "children": [
+            { "title": "Overview", "path": "/hosts/astro/" },
+            {
+              "title": "What MX compiles to",
+              "path": "/hosts/astro/semantics/"
+            },
+            {
+              "title": ".mx components and pages",
+              "path": "/hosts/astro/mx-files/"
+            }
+          ]
+        },
+        {
+          "title": "Angular",
+          "path": "/hosts/angular/",
+          "children": [
+            { "title": "Overview", "path": "/hosts/angular/" },
+            { "title": ".ng.mx in detail", "path": "/hosts/angular/ng-mx/" },
+            {
+              "title": "What MX compiles to",
+              "path": "/hosts/angular/lowering/"
+            },
+            { "title": "Diagnostics", "path": "/hosts/angular/diagnostics/" },
+            {
+              "title": "Pages, tags and the CLI",
+              "path": "/hosts/angular/pages-and-tags/"
+            }
+          ]
+        }
       ]
     },
     {

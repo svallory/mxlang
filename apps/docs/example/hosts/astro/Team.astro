@@ -1,0 +1,25 @@
+---
+import Card from "./Card.astro";
+import type { Member } from "./members.ts";
+
+export interface Props {
+  members: Member[];
+}
+const { members } = Astro.props as Props;
+---
+<Card>
+  <Fragment slot="title">Team <span class="count">{members.length}</span></Fragment>
+  {members.length ? (
+    <ul class="members">
+      {members.map((member) => (
+        <li class:list={{ admin: member.admin }}>
+          {member.name}
+          {member.teams.map((team) => <span class="tag">{team}</span>)}
+        </li>
+      ))}
+    </ul>
+  ) : (
+    <p class="empty">No members yet.</p>
+  )}
+  <Fragment slot="footer"><a class="button" href="/invite">Invite someone</a></Fragment>
+</Card>

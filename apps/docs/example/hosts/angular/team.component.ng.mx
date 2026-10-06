@@ -1,0 +1,41 @@
+import { Component, Input } from "@angular/core";
+import Card from "./tags/card.mx";
+import type { Member } from "./members";
+
+@Component({
+  selector: "app-team",
+  template: <Card>
+    <@title>Team <span.count>${shown.length}</span></@title>
+    <input:q.search type="search" value=query onInput=search/>
+    <if=shown.length>
+      <ul.members>
+        <for|member| of=shown by=(member => member.id)>
+          <li class={ admin: member.admin }>
+            ${member.name}
+            <for|team| of=member.teams by=(team => team)><span.tag>${team}</span></for>
+          </li>
+        </for>
+      </ul>
+    </if>
+    <else>
+      <p.empty>Nobody matches “${query}”.</p>
+    </else>
+    <@footer><button.button onClick=clear>Clear</button></@footer>
+  </Card>,
+})
+export class Team {
+  @Input() members: Member[] = [];
+  protected query = "";
+
+  protected get shown() {
+    return this.members.filter((member) => member.name.includes(this.query));
+  }
+
+  protected search(event: Event) {
+    this.query = (event.target as HTMLInputElement).value;
+  }
+
+  protected clear() {
+    this.query = "";
+  }
+}

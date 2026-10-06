@@ -1,0 +1,11 @@
+import { Dialog } from "./Dialog.tsx";
+
+export function Invite({ team, open, send }: { team: string; open: boolean; send: () => void }) {
+  return (
+    <Dialog open=open>
+      <@title>Invite to <b>${team}</b></@title>
+      <input:email#email.field type="email" required/>
+      <@actions><button.primary onClick=send>Send invite</button></@actions>
+    </Dialog>
+  );
+}

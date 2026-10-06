@@ -1,14 +1,16 @@
 /**
- * The side-by-side examples at the top of each host page.
+ * The side-by-side examples on the host pages.
  *
- * Every host page opens with the same small component twice: once as the
- * framework's own idiomatic component, once with MX in place of the JSX or
- * template. The pair lives in `example/hosts/<host>/` as real files; the page
- * quotes both verbatim, and `host-examples.test.ts` fails when
+ * Every host page (and the Hosts intro) opens with one component twice: the
+ * framework's own idiomatic version, then the same component with MX in place
+ * of the JSX or template. Both are real files in `example/hosts/<dir>/`, next
+ * to the hand-written component they call; the page quotes them verbatim, and
+ * `host-examples.test.ts` fails when
  *
  *   - the MX file stops compiling through that host's own entry point (so a
  *     docs example cannot outlive the emitter that was supposed to accept it),
- *   - the compile drops a warning, or
+ *   - the compile drops a warning,
+ *   - the output loses one of the constructs the example exists to show, or
  *   - a page's fenced block no longer matches the file it was copied from.
  */
 
@@ -18,10 +20,10 @@ import { fileURLToPath } from "node:url";
 import { compileNgMx } from "@mxlang/angular";
 import { lowerAstroMx } from "@mxlang/astro/template";
 import type { MxWarning } from "@mxlang/core";
-import { compileHonoMx } from "@mxlang/hono";
+import { compileHonoRegion } from "@mxlang/hono";
 import { print } from "@mxlang/parser";
-import { compilePreactMx } from "@mxlang/preact";
-import { compileReactMx } from "@mxlang/react";
+import { compilePreactRegion } from "@mxlang/preact";
+import { compileReactRegion } from "@mxlang/react";
 import { compileSolidMx } from "@mxlang/solid";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -37,62 +39,102 @@ export interface HostExample {
   mx: string;
   /** Compiles the MX file through the host's own entry point. */
   compile: (source: string, filename: string, warnings: MxWarning[]) => string;
+  /** Strings the compiled output must contain: the constructs on show. */
+  emits: string[];
 }
 
-function wholeFile(
-  compile:
-    | typeof compileReactMx
-    | typeof compilePreactMx
-    | typeof compileHonoMx,
-): HostExample["compile"] {
+type RegionCompile =
+  | typeof compileReactRegion
+  | typeof compilePreactRegion
+  | typeof compileHonoRegion
+  | typeof compileSolidMx;
+
+/**
+ * A region file (`.<host>.mx`) is a TypeScript module with MX regions; the
+ * parser finds each region and hands it to the host, as the Vite plugin does.
+ */
+function regionFile(compile: RegionCompile): HostExample["compile"] {
   return (source, filename, warnings) =>
-    compile(source, filename, { warnings }).code;
+    print(source, filename, {
+      mx: true,
+      mxRegionCompile: (input: { source: string }) =>
+        (compile as typeof compileReactRegion)(input.source, {
+          ...input,
+          warnings,
+        }),
+    } as Parameters<typeof print>[2]).code;
 }
+
+/** What the Team example must still lower to on a JSX-shaped host. */
+const TEAM_JSX = [
+  'name="q"',
+  'id="team"',
+  'satisfies NonNullable<Parameters<typeof Table>[0]["row"]>',
+  "Nobody matches",
+];
 
 export const hostExamples: Record<string, HostExample> = {
+  intro: {
+    page: "intro",
+    native: "intro/Invite.tsx",
+    mx: "intro/Invite.react.mx",
+    compile: regionFile(compileReactRegion),
+    emits: ['name="email"', 'id="email"', 'className="field"', '"title":'],
+  },
   react: {
     page: "react",
-    native: "react/Greeter.tsx",
-    mx: "react/Greeter.mx",
-    compile: wholeFile(compileReactMx),
+    native: "react/Team.tsx",
+    mx: "react/Team.react.mx",
+    compile: regionFile(compileReactRegion),
+    emits: [...TEAM_JSX, 'className="panel"', "key={team}"],
   },
   preact: {
     page: "preact",
-    native: "preact/Greeter.tsx",
-    mx: "preact/Greeter.mx",
-    compile: wholeFile(compilePreactMx),
+    native: "preact/Team.tsx",
+    mx: "preact/Team.preact.mx",
+    compile: regionFile(compilePreactRegion),
+    emits: [...TEAM_JSX, 'class="panel"', "key={team}"],
   },
   hono: {
     page: "hono",
-    native: "hono/Greeter.tsx",
-    mx: "hono/Greeter.mx",
-    compile: wholeFile(compileHonoMx),
+    native: "hono/Team.tsx",
+    mx: "hono/Team.hono.mx",
+    compile: regionFile(compileHonoRegion),
+    emits: [...TEAM_JSX, 'class="panel"', "key={team}"],
   },
-  // `.solid.mx` is a TypeScript module with MX regions; the parser finds each
-  // region and hands it to the host, exactly as the Vite plugin does.
   solid: {
     page: "solid",
-    native: "solid/Greeter.tsx",
-    mx: "solid/Greeter.solid.mx",
-    compile: (source, filename, warnings) =>
-      print(source, filename, {
-        mxRegionCompile: (input) =>
-          compileSolidMx(input.source, { ...input, warnings }),
-      } as Parameters<typeof print>[2]).code,
+    native: "solid/Team.tsx",
+    mx: "solid/Team.solid.mx",
+    compile: regionFile(compileSolidMx),
+    emits: [...TEAM_JSX, "<For each={member.teams}>", "<Show when={query()}"],
   },
   astro: {
     page: "astro",
-    native: "astro/Greeter.astro",
-    mx: "astro/Greeter.astro.mx",
+    native: "astro/Team.astro",
+    mx: "astro/Team.astro.mx",
     compile: (source, filename, warnings) =>
       lowerAstroMx(source, filename, { warnings }).code,
+    emits: [
+      '<Fragment slot="title">',
+      '<Fragment slot="footer">',
+      "class:list={{ admin: member.admin }}",
+      "No members yet.",
+    ],
   },
   angular: {
     page: "angular",
-    native: "angular/greeter.component.ts",
-    mx: "angular/greeter.component.ng.mx",
+    native: "angular/team.component.ts",
+    mx: "angular/team.component.ng.mx",
     compile: (source, filename, warnings) =>
       compileNgMx(source, filename, { warnings }).code,
+    emits: [
+      'ngProjectAs="[title]"',
+      "imports: [Card, NgClass]",
+      "@for (member of shown; track member.id)",
+      'name="q"',
+      "} @else {",
+    ],
   },
 };
 

@@ -1,0 +1,10 @@
+export interface Input {
+  title: AttrTag<{ as: "renderable" }>;
+  footer?: AttrTag<{ as: "renderable" }>;
+}
+
+<article.card>
+  <header><${input.title}/></header>
+  ${input.content()}
+  <footer><${input.footer}/></footer>
+</article>

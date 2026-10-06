@@ -9,7 +9,7 @@ noStyle: true
 <nav class="mx-home-nav" aria-label="Site">
 <a href="/introduction/">Introduction</a>
 <a href="/language/structural-tags/">Language</a>
-<a href="/targets/html/">Hosts</a>
+<a href="/hosts/intro/">Hosts</a>
 <a href="https://github.com/mxlang/mx">GitHub</a>
 </nav>
 <button class="mx-home-theme" type="button" aria-label="Switch between light and dark">Theme</button>

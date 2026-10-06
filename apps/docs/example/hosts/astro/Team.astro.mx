@@ -1,0 +1,26 @@
+---
+import Card from "./Card.astro";
+import type { Member } from "./members.ts";
+
+export interface Props {
+  members: Member[];
+}
+const { members } = Astro.props as Props;
+---
+<Card>
+  <@title>Team <span.count>${members.length}</span></@title>
+  <if=members.length>
+    <ul.members>
+      <for|member| of=members>
+        <li class={ admin: member.admin }>
+          ${member.name}
+          <for|team| of=member.teams><span.tag>${team}</span></for>
+        </li>
+      </for>
+    </ul>
+  </if>
+  <else>
+    <p.empty>No members yet.</p>
+  </else>
+  <@footer><a.button href="/invite">Invite someone</a></@footer>
+</Card>

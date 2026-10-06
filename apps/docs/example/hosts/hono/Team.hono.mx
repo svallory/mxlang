@@ -1,0 +1,30 @@
+import type { Member } from "./members.ts";
+import { Table } from "./Table.tsx";
+
+export function Team({ members, query }: { members: Member[]; query: string }) {
+  const shown = members.filter((member) => member.name.includes(query));
+
+  return (
+    <section#team.panel>
+      <form method="get">
+        <input:q.search type="search" value=query/>
+      </form>
+      <Table rows=shown>
+        <@head>
+          <th>Name</th>
+          <th>Teams</th>
+        </@head>
+        <@row|member|>
+          <td class={ admin: member.admin }>${member.name}</td>
+          <td>
+            <for|team| of=member.teams><span.tag>${team}</span></for>
+          </td>
+        </@row>
+        <@empty>
+          <if=query><p.empty>Nobody matches “${query}”.</p></if>
+          <else><p.empty>No members yet.</p></else>
+        </@empty>
+      </Table>
+    </section>
+  );
+}

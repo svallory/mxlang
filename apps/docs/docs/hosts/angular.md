@@ -1,830 +1,156 @@
 ---
 title: "Angular"
-description: "The Angular host — an Angular component with MX in place of its template; a .mx page template compiles to a plain Angular template string, kept in sync by the mx-angular CLI."
+description: "MX in place of the template in an Angular component: <if> and <for> compile to @if and @for, attribute tags to content projection, and MX keeps the imports array for you."
 ---
 
 # Angular
 
-An Angular component with MX in place of the Angular template. In a `.ng.mx` file the component is still an ordinary Angular class: the `@Component` decorator, `@Input()`, signals, injection and the Angular compiler all stay as Angular provides them. MX replaces only the value of `template:`, lowering it to Angular's own template syntax (`@if`, `@for`, `{{ }}`, `(click)`). A plain `.mx` page template does the same for a hand-written component's `templateUrl`; see [the idea](#the-idea).
+A `.ng.mx` file is an Angular component module with MX as the value of `template:`. The class, the decorator, inputs, signals and injection are the TypeScript you already write, and the Angular compiler builds the result. The template changes.
 
-```ts title="greeter.component.ts"
-import { Component, Input, signal } from "@angular/core";
+This is one component, as Angular and then as `.ng.mx`. `Card` is an MX tag with a `title` and a `footer` projection.
+
+```ts title="team.component.ts"
+import { NgClass } from "@angular/common";
+import { Component, Input } from "@angular/core";
+import { Card } from "./tags/card";
+import type { Member } from "./members";
 
 @Component({
-  selector: "app-greeter",
+  selector: "app-team",
+  imports: [Card, NgClass],
   template: `
-    <section>
-      <h1>{{ label }}</h1>
-      <button (click)="count.update((n) => n + 1)">clicked {{ count() }}</button>
-      @if (count() > 2) {
-        <p>That is plenty.</p>
+    <mx-card>
+      <ng-container ngProjectAs="[title]">
+        Team <span class="count">{{ shown.length }}</span>
+      </ng-container>
+      <input name="q" class="search" type="search" [value]="query" (input)="search($event)" />
+      @if (shown.length) {
+        <ul class="members">
+          @for (member of shown; track member.id) {
+            <li [ngClass]="{ admin: member.admin }">
+              {{ member.name }}
+              @for (team of member.teams; track team) {
+                <span class="tag">{{ team }}</span>
+              }
+            </li>
+          }
+        </ul>
+      } @else {
+        <p class="empty">Nobody matches “{{ query }}”.</p>
       }
-      <ul>
-        @for (name of names; track name.id) {
-          <li>{{ name.text }}</li>
-        }
-      </ul>
-    </section>
+      <ng-container ngProjectAs="[footer]">
+        <button class="button" (click)="clear()">Clear</button>
+      </ng-container>
+    </mx-card>
   `,
 })
-export class Greeter {
-  @Input() label = "";
-  @Input() names: { id: number; text: string }[] = [];
-  protected count = signal(0);
+export class Team {
+  @Input() members: Member[] = [];
+  protected query = "";
+
+  protected get shown() {
+    return this.members.filter((member) => member.name.includes(this.query));
+  }
+
+  protected search(event: Event) {
+    this.query = (event.target as HTMLInputElement).value;
+  }
+
+  protected clear() {
+    this.query = "";
+  }
 }
 ```
 
-```mx title="greeter.component.ng.mx"
-import { Component, Input, signal } from "@angular/core";
+```mx title="team.component.ng.mx"
+import { Component, Input } from "@angular/core";
+import Card from "./tags/card.mx";
+import type { Member } from "./members";
 
 @Component({
-  selector: "app-greeter",
-  template: <section>
-    <h1>${label}</h1>
-    <button onClick=(() => count.update((n) => n + 1))>clicked ${count()}</button>
-    <if=(count() > 2)><p>That is plenty.</p></if>
-    <ul>
-      <for|name| of=names by=(name => name.id)><li>${name.text}</li></for>
-    </ul>
-  </section>,
+  selector: "app-team",
+  template: <Card>
+    <@title>Team <span.count>${shown.length}</span></@title>
+    <input:q.search type="search" value=query onInput=search/>
+    <if=shown.length>
+      <ul.members>
+        <for|member| of=shown by=(member => member.id)>
+          <li class={ admin: member.admin }>
+            ${member.name}
+            <for|team| of=member.teams by=(team => team)><span.tag>${team}</span></for>
+          </li>
+        </for>
+      </ul>
+    </if>
+    <else>
+      <p.empty>Nobody matches “${query}”.</p>
+    </else>
+    <@footer><button.button onClick=clear>Clear</button></@footer>
+  </Card>,
 })
-export class Greeter {
-  @Input() label = "";
-  @Input() names: { id: number; text: string }[] = [];
-  protected count = signal(0);
+export class Team {
+  @Input() members: Member[] = [];
+  protected query = "";
+
+  protected get shown() {
+    return this.members.filter((member) => member.name.includes(this.query));
+  }
+
+  protected search(event: Event) {
+    this.query = (event.target as HTMLInputElement).value;
+  }
+
+  protected clear() {
+    this.query = "";
+  }
 }
 ```
 
-**Preview.** This host is not yet a complete "Angular host" by the same bar
-every other host meets: `.ng.mx` has TypeScript semantics in the editor and
-in `mx-tsc`, and both `mx-tsc` and the editor's TypeScript plugin check the
-expressions inside `template:` with Angular's own compiler, but the language
-server does not handle `.ng.mx`, and a
-`.mx` page still gets no TypeScript plugin support, so a page's MX tag imports
-must be hand-maintained in the caller's `.ts` file. What's here — page
-compilation, the `mx-angular` CLI's `build`/`watch`/`map` — is real and
-tested, just not the whole story.
+What changed:
 
-`@mxlang/angular` compiles a `.mx` page template to a plain Angular template
-string: no MX runtime, no Angular dependency in the compiled output. The
-emitted string is exactly what a hand-written `x.component.ts` points its
-`templateUrl` at — Angular itself never sees MX.
+- **No `imports:` array.** MX adds `Card` and `NgClass` to the decorator and writes their `import` lines, because it knows what the template uses.
+- **`<@title>` and `<@footer>`** are [attribute tags](/language/attribute-tags-and-params/): content projected into `Card`'s named slots, without `ngProjectAs`.
+- **`<if>` / `<else>` and `<for>`** compile to `@if`, `@else` and `@for … track`.
+- **`<input:q.search>`, `<span.tag>`** are `name` and `class`. `class={ admin: member.admin }` is `[ngClass]`.
+- **`value=query`, `onInput=search`** are plain attributes; MX picks `[value]` and `(input)`.
+- **The template is not a string.** It is highlighted, formatted and checked like code.
 
-## Selecting the host
-
-`mx.host: "angular"` selects `angular-template`;
-`mx.target: "angular-template"` alone selects Angular behaviour too. If both
-keys are given, the target must belong to Angular; disagreement is a positioned
-`target-host-mismatch` error (decisions 129/132;
-[spec §13.5](/specification/#135-host-and-target-selection)). This selection does
-not wire the preview `.mx` page path into tools that do not yet support it;
-`.ng.mx` keeps its extension-selected pipeline.
-
-## Install
+## Setup
 
 ```bash
 bun add -d @mxlang/angular
 ```
 
-Configure the host and the `mx-angular` CLI in `package.json`:
-
 ```jsonc
+// package.json
 {
-  "mx": {
-    "host": "angular",
-    "angular": {
-      "include": ["src/**/*.mx"],
-      "pageExtension": ".html",      // default
-      "tagExtension": ".ts",         // default
-      "tagSelectorPrefix": "mx-",    // default
-      "onError": "keep-last"         // default
-    }
+  "mx": { "host": "angular" },
+  "scripts": {
+    "start": "mx-angular build && concurrently -k \"mx-angular watch\" \"ng serve\"",
+    "build": "mx-angular build && ng build"
   }
 }
 ```
 
-Run `mx-angular build` before `ng serve`/`ng build` — Angular's own template
-resolution needs the emitted `.html` file to already exist on disk, since
-there is no in-memory hand-off between the two tools. For development, run
-`mx-angular watch` alongside `ng serve`'s own watcher with `concurrently`
-(a devDependency of your app, not of this host) — a plain `&` suffix
-backgrounds the process but doesn't kill it when `ng serve` exits or is
-`Ctrl-C`'d, orphaning it:
+`mx-angular` writes `team.component.ts` beside `team.component.ng.mx`, and Angular compiles that file like any other. Add the emitted files to `.gitignore`. `.ng.mx` files are found anywhere in the project, with no configuration.
 
-```jsonc
-// package.json scripts
-{
-  "mx": "mx-angular watch",
-  "start": "mx-angular build && concurrently -k -n mx,ng -c cyan,red \"mx-angular watch\" \"ng serve\"",
-  "build": "mx-angular build && ng build"
-}
-```
+For type errors in the editor, add `{ "name": "@mxlang/typescript-plugin" }` to `compilerOptions.plugins`; in CI, run `mx-tsc --noEmit`. Both also run Angular's own template checker on every `template:` and report at the line you wrote: see [Diagnostics](/hosts/angular/diagnostics/).
 
-The `mx-angular build &&` prefix guarantees the first pass has already run
-before `ng serve` starts — Angular's own watcher, once started, does pick up
-a template-only change and rebuild without touching the `.ts` file
-(verified against a real `@angular/cli` app). `concurrently`'s `-k` kills
-every process in the group when one exits, so `Ctrl-C` (or `ng serve`
-crashing) stops `mx-angular watch` too, rather than leaving it running.
+## What stays Angular, what MX adds
 
-Emitted `.html` files (and, once tag files compile, emitted `.ts` component
-modules) are **generated artifacts**: `.gitignore` them, and exclude the
-`.mx` **sources** — never the emitted tag `.ts` modules — from
-`tsconfig.json`'s `include`/`exclude` and from `angular.json`'s `assets`
-array if the project copies `src/**` wholesale.
+**Stays Angular:** the class, `@Component` and its other fields, inputs and outputs, signals, dependency injection, the router, `ng build` and `ng serve`. A hand-written component is called by its selector, as in any template: `<app-product-list/>`.
 
-## The idea
+**MX adds:** the template syntax above, compiled to Angular's block syntax (`@if`, `@for`, `@let`), and the `imports:` bookkeeping. There is no MX runtime in the browser.
 
-A file on this host compiles to one of three outputs. The first two are
-`.mx` files, told apart by **discovery, not naming convention** — the same
-rule that decides whether a call resolves to a custom tag anywhere else in
-MX; the third is its own extension:
+## Preview: what is not there yet
 
-| input | output | why |
-|---|---|---|
-| a page template — matched by `include`, not discovered as a tag | `x.component.html` | the body of a `templateUrl` a hand-written `x.component.ts` points at |
-| a tag file — discovered under a `tags/` directory or `package.json#mx.tags` | an Angular component module | a component is a class plus a decorator; there is no template-only form |
-| `x.component.ng.mx` | `x.component.ts` | one file holding both the class and its MX template — see [`.ng.mx`](#ngmx) |
+- The MX language server does not handle `.ng.mx`. TypeScript and Angular template errors do reach the editor through the TypeScript plugin.
+- Write handlers as a method reference (`onClick=clear`) or an arrow (`onClick=(event => save(event))`). The method form `onClick() { … }` is not supported on Angular.
+- Do not import a name that is also an element. `import { input } from "@angular/core"` makes `<input>` a call of that function; use `@Input()` or alias the import.
 
-`mx-angular` compiles `include` ∪ the discovered tag index, so a tag that
-`include` doesn't match (the common case — a `tags/` directory usually sits
-outside a narrowed `include`) is still emitted. A path both `include` and
-the tag index claim is compiled once, as a tag, with a one-time warning.
+## Go deeper
 
-## Lowering (summary)
-
-The structural core lowers to Angular's block-syntax control flow (`@if`,
-`@for`, `@let`), not the older `*ngIf`/`*ngFor` directives — see
-`packages/hosts/angular/README.md` for the full table and a worked example.
-A few of Angular's own idioms:
-
-| Written | Lowers to |
-|---|---|
-| `${expr}` | `{{ expr }}` |
-| `class={active: isOn}` | `[ngClass]="{active: isOn}"` |
-| `<if>`/`<else if>`/`<else>` | `@if (...) { ... } @else if (...) { ... } @else { ... }` |
-| `<for\|item\| of=items by=(item => item.id)>` | `@for (item of items; track item.id) { ... }` |
-| `<for\|k, v\| in=obj>` | `@for (entry of (obj \| keyvalue: null); track entry.key) { @let k = entry.key; @let v = entry.value; ... }` |
-| `<define>` | an `<ng-template>` with `let-` params |
-| a component call | an Angular component element |
-| a dynamic `data-*`/`aria-*` attribute on a native element | `@let __mxAttr = $any(expr);` then `[attr.data-x]` with Marko's primitive rules |
-| a dynamic attribute that is a DOM property of its element (`title`, `hidden`, `disabled` on a `<button>`, `<input value>`, …) | `[title]` with the primitive rules folded into the value; a boolean property gets a real boolean |
-| a dynamic attribute that is a DOM property only of *other* elements (`disabled` on a `<div>`), a real attribute whose DOM property is spelled differently (`maxlength`/`maxLength`, `colspan`, `playsinline`, `contenteditable`, …), or an interface-typed property (`<input files>`, `<table caption>`) | `[attr.disabled]` with the primitive rules |
-| a dynamic `class`/`style` on a native element | `[class]`/`[style]` with a falsy value omitted and `true` printed as `"true"` |
-| every other dynamic attribute (a name Angular's DOM schema does not know, a component's or dashed tag's input, a camelCase name such as `innerHTML`, a name starting `on`) | `[x]`, untouched |
-
-**How a native attribute binds.** Angular's own DOM schema (the compiler's
-`DomElementSchemaRegistry`, the one that raises NG8002) decides, not a list kept
-in MX. A name that is a property of the element binds that property, so a typed
-`value` or a toggled `disabled` is not fought by a stale attribute, and
-Marko's rules (`null`/`undefined`/`false` omit, `true` is bare, `0` and `""` are
-kept) are folded into the value where a property can express them; a property
-cannot remove an attribute, so a string property prints `title=""` for `null`
-(see `divergences.md`). A name the schema knows only on other
-elements has no property here and becomes an attribute binding. HTML attribute
-names are case-insensitive while the schema keys the DOM property's own
-spelling, so a name that misses in its own spelling is looked up again
-case-insensitively: `maxlength` finds `maxLength`, which makes it a real
-attribute, bound as `[attr.maxlength]` exactly as Marko prints it. A property
-whose type is an interface (`<input files>` is a `FileList`, `<table caption>`
-an element) would throw when given a string, so it is an attribute too. A name the
-schema has never heard of keeps `[x]`: it may be a directive input
-(`selector: "[hi]", inputs: ["hi"]`) or a content-projection slot
-(`<ng-content select="[header]">`), and without a directive Angular still reports
-NG8002, as before (`role`, `itemscope`, `popover` and `exportparts` are absent
-from Angular 22's schema in any spelling, so they are in this group). SVG and
-MathML elements are not in the HTML schema: their attributes keep `[x]`, as
-before, except a name the schema knows on some HTML element (`<svg width>`),
-which becomes `[attr.width]`. A dashed tag is an Angular component selector, so its
-attributes stay input bindings with NG8001/NG8002 and the "did you mean" hint.
-`@angular/compiler` is an optional peer dependency of `@mxlang/angular` for this
-reason (`>=22.0.0 <23.0.0`, which every Angular project already has): it is
-resolved from your project, never bundled, and loaded only when a template binds
-a dynamic attribute on a native element. When it is missing or out of range,
-that attribute is a positioned compile error naming the package to install.
-
-Every normalized attribute binds its authored expression once, in an
-`@let __mxAttr = $any(expr);` written before the element (`__mxAttr1`,
-`__mxAttr2`, … for the next ones), so the expression is evaluated and
-type-checked once, at its authored position. When the element carries a
-structural attribute (`*ngFor="let p of xs"`), the structural attribute moves to
-a wrapping `<ng-container>` so the `@let` sits inside the directive's template
-and sees its `let`/`as` variables.
-
-A structural directive written as an attribute (`*ngIf="x"`, `*ngFor="…"`,
-`*transloco="…"`) passes through to Angular only as the **first** attribute of
-its tag. After another attribute, Marko reads ` *ngIf` as a multiplication and
-the `=` that follows makes the parse fail; the error points at the `*` and says
-so. Write `<if=x>…</if>` / `<for|i| of=xs>…</for>`, or move the directive
-first: `<div *ngIf="x" class="a">`. (A directive with no `=`, as in
-`class="a" *ngIf`, is Marko's multiplication and compiles without an error.)
-
-`<let>`, `<effect>`, `<lifecycle>`, `<script>`, `<log>`, `<debug>`, `<id>`,
-`<await>`, `client`/`server` blocks and `:=` are compile errors — this host
-has no reactive runtime of its own; that state belongs in the hand-written
-component class.
-
-`class:`/`style:`/`attr:` attribute modifiers are **not Marko syntax at all**
-(decision 86) and are a compile error naming the replacement, the same as
-every other MX host: write an object/array `class=`/`style=` value (already
-lowers to `[ngClass]`/`[ngStyle]`), and write the attribute plainly
-(`data-kind=x`, not `attr:data-kind=x`) — the emitter decides property vs.
-attribute binding for you, per the row above.
-
-## Name sugar
-
-The `:name`, `#id` and `.class` sugar (decision 146) works on Angular as on every
-other host: `<input:email type="email">`, `<input type="email" :email>`, `<div.b>`
-and `<div .b>` compile to the attributes written out. Two Angular facts:
-
-- **Attribute-position `#x` stays Angular's template reference.** `<div #ref>` is
-  the reference, exactly as before. Tag-adjacent `<div#x>` is the `id` sugar here
-  too, and `:name` and `.class` apply in every position.
-- **`<svg:rect>` is the tag `svg` plus `name="rect"`.** Angular's `svg:`-prefixed
-  element form is not available in MX; wrap in `<svg>` and write the child as
-  `<rect>`.
-
-## Events
-
-An element's `on<Name>=fn` (`onClick`, `onDblClick`), `on-<exact>=fn`
-(`on-my-event`), or a lowercase `onclick=fn` is an event handler. MX derives
-the **DOM event name** — everything after `on` lowercased, or the exact text
-after `on-` — and this host emits an Angular event binding from it:
-`onClick=f` → `(click)="__mxOn(f, this, $event)"`. The handler is called
-*through a typed invoker on the component* (decision 117), because
-`(f)($event)` is TS2554 under `strictTemplates` for a 0-arg handler (`cancel()`),
-which Marko accepts, and Angular's template grammar has no cast (`$any` would
-drop the check). The invoker calls the handler with exactly Marko's
-`(event, element)` and returns its result, so a handler returning `false` still
-calls `preventDefault()`. A falsy handler (`onClick=(cond && f)`, `null`,
-`undefined`, `false`) is a no-op, as in Marko:
-
-| MX | Angular |
-|---|---|
-| `onClick=f` | `(click)="__mxOn(f, this, $event)"` |
-| `onClick=svc.f` | `(click)="__mxOnAt(svc, 'f', $event)"` — `this` is `svc` |
-| `onClick=a().f` / `a[i].f` / `a!.f` | `__mxOnAt(a(), 'f', $event)` etc. — the object is evaluated once |
-| `onClick=(e => handle(e))` | `(click)="__mxOn(e => handle(e), null, $event)"` |
-
-0-arg, 1-arg, 2-arg `(event, element)` and arrow handlers all type-check; a
-handler typed for another event (a `KeyboardEvent` handler on `click`) is still
-an error. Two divergences from Marko: `this` is **the component** (or the
-object of the member), where Marko's is the element, and `element` is
-`$event.currentTarget` typed `EventTarget | null` — `null` for an output whose
-payload is not an event.
-
-**The component needs the invoker members.** `.ng.mx` adds them to the
-decorated class, and a tag module writes them into its generated class. For a
-**page** (a `.mx` beside your own component class) MX cannot edit the class, so
-declare **both** members in every component whose template uses one of these
-handlers (a shared base class is the usual home, so each page component
-`extends` it). The compile warns once per file, and the generated `.html`
-header carries the same text, when the page binds a handler:
-
-```ts
-protected readonly __mxOn = <E, R>(handler: ((event: E, element: EventTarget | null) => R) | null | undefined | false, receiver: unknown, event: E): R | undefined => handler ? handler.call(receiver, event, (event as { currentTarget?: EventTarget | null } | null)?.currentTarget ?? null) : undefined;
-protected readonly __mxOnAt = <K extends PropertyKey, E, R>(object: { [P in K]?: ((event: E, element: EventTarget | null) => R) | null | undefined | false }, key: K, event: E): R | undefined => this.__mxOn(object[key], object, event);
-```
-
-Or skip the paste and take the members from the runtime subpath, which carries
-the same two members (public, marked `@internal`) as a base class or, for a
-component that already extends a class, a mixin:
-
-```ts
-import { MxHandlers, MxHandlersMixin } from "@mxlang/angular/runtime";
-
-@Component({ /* … */ templateUrl: "./form.html" })
-export class FormComponent extends MxHandlers {}
-
-@Component({ /* … */ templateUrl: "./list.html" })
-export class ListComponent extends MxHandlersMixin(PagedBase) {}
-```
-
-`@mxlang/angular/runtime` has no imports, so a browser bundle takes only the
-two members. `.ng.mx` sees the `extends` and does not inject a second copy. The
-warning and the page header name both options.
-
-**Extend `MxHandlers` / `MxHandlersMixin(Base)` directly.** `.ng.mx` recognises
-only `extends MxHandlers`, `extends MxHandlersMixin(...)` and the same through a
-namespace import (`extends rt.MxHandlers`), each imported from
-`@mxlang/angular/runtime`, plus a same-file base class that does. Any indirect
-base (`const B = MxHandlers; extends B`, a base class from another file or a
-re-export, a mixin wrapped in another call) gets the members injected as well,
-and TypeScript then reports the clash (TS2415: the injected `protected` member
-cannot override the inherited public one). A hand-written page has no such
-injection, so there an indirect base works.
-
-**`@mxlang/angular` must then be in `dependencies`, not `devDependencies`.**
-The app's own code imports the subpath at run time, so a production install
-that omits dev dependencies (`npm ci --omit=dev`) would otherwise leave the
-build without it. The package installs its own runtime dependencies too
-(see its `package.json`; they include the compiler); they are installed, not
-bundled. A separate, dependency-free runtime package is a possible follow-up
-(TODO `angular-runtime-package`). Pasting the members adds no dependency.
-
-A component without them fails the build: under `strictTemplates` AOT reports
-`TS2339 Property '__mxOn' does not exist on type 'FormComponent'` (or
-`__mxOnAt`) at the handler, including handlers inside `@if`/`@for`. **Basic
-mode** (`strictTemplates: false`) checks only top-level bindings, so a handler
-that appears only inside `@if`/`@for` is missed at build time and fails at run
-time; JIT has no build step at all. Use `strictTemplates`.
-
-- **No aliases.** `onDoubleClick` lowercases to `doubleclick`, which is not
-  a DOM event: the compiler warns at the attribute and emits
-  `(doubleclick)="__mxOn(f, this, $event)"` exactly as written — never silently
-  `dblclick`. Spell the DOM name (`onDblClick`).
-- **`on-<exact>` works verbatim** — `(my-event)="__mxOn(f, this, $event)"` — which is
-  what makes custom events first-class on this host, the one MX host whose
-  binding syntax takes any event name.
-- **Lowercase `onclick=fn`** (an expression, not a string) maps to
-  `(click)="__mxOn(f, this, $event)"` — the binding an inline handler string would have
-  driven — rather than a dead `[onclick]` property binding.
-- **Static strings** (`onClick="alert(1)"`) are an ordinary attribute and
-  pass through verbatim; MX does not invent a policy against inline handler
-  strings — it only stops creating one from a function.
-- **`on:` / `oncapture:`** are rejected with a fix-it naming `on-<exact>`:
-  `on:click=fn` → `onClick=fn` (or `on-click=fn` for a custom name).
-- On a **component**, an `on*` attribute is an ordinary input prop (`<Row
-  onSelect=pick/>` binds `[onSelect]`), never an output binding — MX does
-  not infer `@Output()`.
-
-`$event` is typed by Angular's own template checker from the event name.
-## `mx-angular`
-
-```
-mx-angular build [--project <dir>] [--config <file>]           # one-shot; CI and prebuild
-mx-angular watch [--project <dir>] [--config <file>] [--once]  # incremental
-mx-angular map   <file.html:line:col>                           # emitted position -> .mx source file
-```
-
-**`build`** compiles every routed file. It writes an output only when its
-compiled bytes differ from what's already on disk, and it refuses to
-overwrite *any* output — page or tag — that doesn't carry the generated
-header comment, so a hand-written file is never clobbered by a compile that
-happens to share its output path. Every warning `compile()` produces (a
-trackless `<for>`, `[ngClass]` usage, the step-1 "this template calls N MX
-tag(s)..." note, and so on) prints to the terminal as `file:line:col
-warning: ...`; a warning never fails the build.
-
-**The header's second line** — `<!-- Add to x.component.ts: ... -->` — only
-appears when the compiled template called at least one MX tag: it names the
-`import`/`imports:` line to add for each one, since step 1 cannot edit the
-caller's TypeScript for you.
-
-**`watch`** runs the initial build, then recompiles incrementally on every
-subsequent change. A changed page recompiles only that page; a changed tag
-(a template `.mx` under `tags/`, or a sidecar `.tag.ts`) recompiles every
-page that depends on it, tracked from each page's own last compile; a
-`package.json` edit, or a new/deleted/moved `.mx` file, triggers a full
-rebuild, since either can change routing itself. Changes are debounced 50ms
-and coalesced, and a write happens only when the compiled bytes differ, so
-an editor's own autosave doesn't retrigger Angular's watcher on a no-op
-save. One line per write/skip/error prints to the terminal, in the same
-`file:line:col message` shape as `build`. `Ctrl-C` exits `0`. `--once` runs
-the initial build only and exits — for CI and tests, where an indefinitely
-running watch process isn't wanted.
-
-**`onError`** decides what a compile error does to a previous good output —
-`keep-last` (default) leaves it in place and prints the error to the
-terminal, except on a cold start (no previous output at all), where it
-writes a visible error template so Angular reports the real problem instead
-of "template not found." `error-template` always writes that error template,
-even over a previous good output. `delete` removes the output entirely — the
-right choice for CI, where a stale template silently shipping is worse than
-a missing one.
-
-**`map`** reads the sidecar written beside every emitted `.html` file and
-resolves a position in that file back to the `.mx` it came from. It takes and
-prints **1-based** line and column, like every other position MX prints and
-like `mx-tsc`'s `file(line,column)`. The sidecar's own coordinates are 0-based
-and are converted at the CLI boundary, so a `0` line or column is rejected
-rather than silently reinterpreted:
-
-```console
-$ mx-angular map src/greeting.html:2:12
-greeting.mx:2:8
-```
-
-`2:12` is the `12`th character of the emitted line — the `u` of
-`{{ user.name }}` — and `2:8` is the 8th character of the `.mx` line it came
-from, the `u` of `${user.name}`.
-
-The emitter records a span for every run of text it takes from the source —
-tag and attribute names, interpolation and event-handler expressions,
-`@if`/`@for`/`@let` conditions, `track` expressions, `[ngClass]`/`[ngStyle]`
-values and dynamic component expressions — and those become the sidecar's
-source map v3 `mappings`.
-
-Two properties worth knowing. A position in text the emitter *invented* —
-the `<` of a tag, the `="` around a binding, the `</div>` after an
-expression — resolves to no line/column, and `map` says so rather than
-fabricating one; only source-derived text is mapped, and literal text runs
-are deliberately not. Each mapped run is bounded on both sides in the
-emitted map, so a position *after* a run does not inherit that run's
-position. And a mapping covers a whole run: a position *inside* an emitted
-expression resolves to the start of that expression in the `.mx`, not to the
-matching character. That is forced by escaping — `&` becomes `&amp;`, `{`
-becomes an interpolation literal, so the two sides do not advance in step —
-and a coarser-but-correct answer beats a precise-looking wrong one.
-
-Angular itself never reads the sidecar — it exists for `mx-angular map`,
-tooling, and editor integration.
-
-## Editors
-
-`.ng.mx` — an ordinary TypeScript module whose `@Component({ template: ... })`
-value is an MX region — is registered in both VS Code and Zed the same way
-`.solid.mx` is: the surrounding TypeScript highlights as TypeScript
-(decorators included), and the MX region inside `template:` highlights as MX.
-Zed's `AngularMX` language reuses `Solid`'s grammar package unchanged (the
-grammar's only MX-specific addition, the opaque `mx_element` token, is
-neither Solid- nor Angular-specific); VS Code's `ngmx` language falls back to
-`source.tsx` highlighting, the same fallback `solidmx` uses. See
-[VS Code](/editors/vscode/) and [Zed](/editors/zed/) for setup. TypeScript
-semantics for `.ng.mx` come from `@mxlang/typescript-plugin` and `mx-tsc`
-(see [`.ng.mx`](#ngmx)); Angular template diagnostics run in `mx-tsc` and in the
-editor through the same plugin (see [Template diagnostics](#ngmx-diagnostics));
-language-server diagnostics are not covered by this editor registration.
-
-## Custom tags (preview)
-
-A `.mx` file under a `tags/` directory, or a `package.json#mx.tags` entry,
-is discovered the same way every MX host discovers one — including a
-`mx.tags` entry's own `hosts` restriction: an entry declaring `"hosts":
-["solid"]` is not claimed by `mx-angular` at all.
-
-On this host a tag file compiles to a **standalone component module**
-(`tags/badge.mx` → `tags/badge.ts`), not a template: an Angular
-component is a class with a decorator, so there is no template-only form.
-
-```mx
-// tags/badge.mx
-export interface Input { kind: "ok" | "warn" | "error"; label?: string }
-<span class="badge" data-kind=input.kind>
-  <if=input.label>${input.label}: </if>${input.content()}
-</span>
-```
-
-```ts
-// tags/badge.ts — generated
-import { Component, Input as NgInput } from "@angular/core";
-
-export interface Input { kind: "ok" | "warn" | "error"; label?: string }
-
-@Component({
-  selector: "mx-badge",
-  standalone: true,
-  imports: [],
-  template: "<span class=\"badge\" [attr.data-kind]=\"kind\">@if (label) { {{ label }}:  }<ng-content></ng-content></span>",
-})
-export class Badge {
-  @NgInput({ required: true }) kind!: "ok" | "warn" | "error";
-  @NgInput() label?: string;
-}
-export default Badge;
-```
-
-The `@Input` decorator is imported under the alias `NgInput`: an
-`export interface Input` — the tag-module contract's own name for the
-props interface — would otherwise collide with `@angular/core`'s own
-`Input` in the same module (`TS2440`).
-
-What the emitted module does with each part:
-
-- **Inputs** come from `export interface Input` — one `@Input()` per
-  property, `required: true` when the property is not optional, and the
-  TypeScript type copied verbatim. No `Input` interface means no inputs.
-  A template reads an input by its **bare name** (`{{ kind }}`), because an
-  Angular template resolves against the component instance.
-- **No `@Output()` inference.** A function-typed property is a plain
-  `@Input()`; a caller passes a callback as an ordinary dynamic attribute
-  (`[onSelect]="handle"`), exactly as on every other MX host.
-- **Content.** `${input.content()}` emits `<ng-content></ng-content>`;
-  `${input.header()}` emits `<ng-content select="[header]"></ng-content>`.
-  Reading the same attribute tag twice is an error — Angular matches each
-  selector once, so the second projection would silently render empty.
-- **Attribute-tag declarations.** Import `AttrTag` from `@mxlang/angular`.
-  It is a `never` marker in TypeScript because projection is not a class
-  property value; core still reads its config from the exported `Input`.
-  `${input.x()}`, `${input.x.content()}`, `<${input.x.content}/>` and a
-  renderable `<${input.x}/>` all become the matching `<ng-content>`. Conditions,
-  pass-throughs, property reads, and other value uses are errors with a render
-  fix-it. Arrays/repeats/loops, attrs, params, nested tags, and bodiless tags
-  are also errors. Mutually exclusive conditional projections are supported.
-  See [AttrTag](/language/attr-tag/) for the cross-host rules.
-- **Selector**: `mx-` plus the kebab-cased file basename
-  (`tags/badge.mx` → `mx-badge`). The fixed prefix guarantees the hyphen
-  Angular requires. Change it project-wide with
-  `mx.angular.tagSelectorPrefix`, or per tag with
-  `export const selector = "liuna-card";`, which wins over both.
-- **`static` / `import`** stay in the tag's own module as ordinary
-  module-level statements, and other `export`s pass through. An
-  `import Child from "./child.mx"` is the exception: MX emits that import
-  itself, pointing at the child's *generated* module, so the author's line
-  is not passed through as well.
-
-### What is an error
-
-A template inside a tag component resolves against the component instance,
-so MX rewrites `input.x` to the bare `x` — including `input?.x`,
-`input["x"]` and `input.a.b`, and leaving alone any read where `input` is
-shadowed (a `<for|input|>` param, a `<const/input=…>`, a function
-parameter). Two cases have no correct rewrite and are reported rather than
-rendered blank:
-
-| Written | Why |
-|---|---|
-| `${input[k]}` | The property is not known until run time, so there is no class member to bind. |
-| `${input.x}` where `x` is also `${input.x()}` | One read wants an `@Input()`, the other a projection; they cannot both hold. |
-| `${input.header(1)}` | `<ng-content>` places nodes and cannot pass them values. |
-| `<child header=input.header/>`, where `child` projects `header` | Angular cannot fill a projection from an attribute — nest a `<@header>` block instead. |
-
-Passing an ordinary input through to a child (`<child label=input.label/>`)
-is fine; only a name the child *projects* is refused.
-
-### Calling a tag
-
-A page that calls a discovered tag emits its element, and MX warns once per
-file with the exact import and `imports:` entry the page's own TypeScript
-needs — in step 1 MX does not edit that file:
-
-```mx
-<div><badge kind="ok">All systems nominal</badge></div>
-```
-
-```html
-<div><mx-badge kind="ok">All systems nominal</mx-badge></div>
-<!-- Add to x.component.ts: `import Badge from "./tags/badge";` and `imports: [Badge]` -->
-```
-
-Without that `imports:` entry Angular renders an unknown element as an inert
-empty tag with no error, which is why the warning exists. **In a
-`.ng.mx` module this obligation disappears** — MX owns the module and injects
-both lines itself.
-
-**Calling a tag through an authored import (`.ng.mx`).** In a `.ng.mx`, `import Badge from "./tags/badge.mx"` followed by `<Badge/>` works, inside or outside `tags/`, and emits exactly what `<badge/>` does: the callee's selector, one `imports:` entry, and the import rewritten to the generated class (`import { Badge as Chip } from "./tags/badge"` when you alias it). The import must be a **sole default import**; `import A, { b } from "./x.mx"` used as `<A/>` is a positioned error (import the tag alone and the other names separately, or use the discovered spelling), a deliberate divergence from Marko (see `divergences.md`). A `.marko` component cannot be used as a tag here.
-
-Hand-written Angular components: use their selector as an element; PascalCase calls are for MX tag files. A `.mx` template can call a plain hand-written
-component (`product-list.component.ts`, `selector: "app-product-list"`)
-exactly as it would in a `.html` template — `<app-product-list/>` — with no
-warning and no `imports:` obligation, because MX never touches that
-component's module; the page's own `.ts` imports it directly, like any
-other Angular component.
-
-## `.ng.mx` {#ngmx}
-
-A `.ng.mx` file is an ordinary TypeScript module whose `@Component`
-template is written in MX. One file holds the class and its template, and
-`mx-angular` emits `x.component.ts` beside it.
-
-```ts title="src/app/product-list/product-list.component.ng.mx"
-import { Component } from "@angular/core";
-
-@Component({
-  selector: "app-product-list",
-  template: <ul>
-    <for|p| of=products by=(p => p.id)>
-      <li><if=p.featured>★ </if>${p.name}</li>
-    </for>
-  </ul>,
-})
-export class ProductList {
-  protected products = [{ id: 1, name: "MX", featured: true }];
-}
-```
-
-Everything outside the region is your own TypeScript, passed through
-untouched. MX replaces the region with the Angular template it lowers to,
-as a template literal.
-
-**MX maintains `imports:` for you.** This is the difference from a page
-template: an MX tag the template calls, and every Angular directive the
-lowering needs (`NgClass`, `NgStyle`, `KeyValuePipe`, `NgComponentOutlet`,
-`NgTemplateOutlet`), is added to the decorator's `imports:` array *and*
-given its `import` statement. A symbol you already listed is left alone. On
-a page template you do this by hand and MX warns; here the warning is gone
-because the edit is made.
-
-The exception is a component declared `standalone: false`. Angular rejects
-`imports:` on it, so MX leaves the decorator alone and does not add the
-`import` statements either. It warns instead, at the template, naming each
-symbol the declaring NgModule must provide (for example `NgClass` from
-`@angular/common`, or a called MX tag component from its emitted module).
-`standalone: true`, or no `standalone` flag, behaves as described above.
-
-### Where a region may appear
-
-Exactly one place: the **direct value of `template:`** in an
-`@Component({ … })` decorator's first argument. Angular has nowhere else to
-put a template, so every other position is an error naming the rule rather
-than something MX tries to lower — a wrapping call, a ternary, an object one
-level deeper, a non-`Component` decorator, no decorator at all, or a second
-decorator argument.
-
-A fragment `<>…</>` is MX syntax in a `.ng.mx` file, not TSX, and it has one
-place too: **as the root of the `template:` region**. Anywhere else (`x = <></>`,
-`f(<>a</>)`) it is an error naming that rule and positioned at the `<>`:
-
-```text
-in a `.ng.mx` file a fragment `<>…</>` is only allowed as the root of the `template:` region of an `@Component({ … })` decorator.
-```
-
-(It used to parse as a TSX fragment and be emitted as raw `<>`, which is not
-valid TypeScript.)
-
-A region is one expression, so it has exactly one root element — the same
-rule a `.solid.mx` region follows. Two bare roots are an error that says so:
-
-```text
-An MX region has exactly one root element. Wrap sibling elements in a fragment, `<>…</>`.
-```
-
-### Several roots: a fragment
-
-An Angular template may have many roots, and `<>…</>` is how a region says so:
-
-```ts title="sortable-th.component.ng.mx"
-@Component({
-  selector: "[sortable-th]",
-  template: <>
-    <ng-content/>
-    <liuna-sort-indicator direction=direction/>
-  </>,
-})
-export class SortableTh {}
-```
-
-The children lower as siblings, exactly as a page template with several roots
-does — no `<ng-container>` (which would add a comment node) and no wrapper
-`<div>` (which would change the DOM and the CSS). That matters most for an
-attribute-selector component like the one above, whose host element is the
-author's and cannot be wrapped at all. `<></>` lowers to an empty template.
-
-Unlike `.solid.mx`, where `<>` is a TSX fragment, `<>` here is MX syntax: there
-is no TSX to fall back to in an Angular template. A fragment cannot contain
-another fragment, and it must be closed with `</>`.
-
-### No statement bodies in a template
-
-Angular's template expressions have no `function` keyword, no statement bodies
-and no multi-line arrows, so a method attribute (`onClick() { … }`), a
-`function` expression or a block-bodied arrow is a positioned MX error on this
-host. Write an expression-bodied arrow (`onClick=(() => save())`) or a handler
-reference to a member of your class (`onClick=save`).
-
-### Module-level tags stay in the module
-
-`import`, `static` and `export interface Input` are **not** written inside a
-region: it sits in TypeScript expression position, where those are statement
-syntax and the parser rejects them before MX sees the file. Write them at
-the top of the module, where they would go anyway. (An import MX mints for a
-discovered tag is different — it never passes through expression position,
-and MX places it for you.)
-
-### Build
-
-`.ng.mx` files are discovered **project-wide**, like the tag index and
-unlike page templates — `include` does not have to match them. A component
-module Angular compiles is not something a narrowed `include` should be
-able to skip silently.
-
-`mx-angular build` and `watch` route `.ng.mx` automatically; the emitted
-`.ts` carries the generated header and a `.map` sidecar, and MX refuses to
-overwrite a module it did not generate. Configure the output extension with
-`mx.angular.ngExtension` (default `.ts`). **Gitignore the emitted `.ts`** —
-it is a build artifact, like the `.html` a page template emits.
-
-### TypeScript semantics
-
-`@mxlang/typescript-plugin` (editor) and `mx-tsc` (CI) treat `.ng.mx` as its
-own file kind, compiled with the same `compileNgMx` the build uses. TypeScript
-errors in the component class, the imports and the rest of the module are
-reported at their position in the `.ng.mx` file, including code below a
-`template:` region. An invalid `package.json#mx.angular` is reported as an
-error at the start of the file rather than silently falling back to defaults.
-
-TypeScript sees a `template:` region as an opaque template literal, so an
-error in a template *expression* (`${user.nmae}`) is not reported by
-TypeScript. Angular's own compiler checks those: see
-[Template diagnostics](#ngmx-diagnostics). The language server does not handle
-`.ng.mx` yet.
-
-**Known limitations.** Angular template diagnostics do not follow edits to
-`package.json` or to a called tag until the `.ng.mx` is next edited, and the
-"save" trigger is a write to the file on disk. Edits to `package.json` (including `mx.angular`) or to a
-called tag file take effect in the editor when the `.ng.mx` is next edited or
-reopened, not immediately: a config error also stays reported until then.
-
-### Template diagnostics {#ngmx-diagnostics}
-
-`mx-tsc` checks the expressions inside every `.ng.mx` `template:` with Angular's
-own compiler (`@angular/compiler-cli`), after the TypeScript pass, and prints
-each finding at its position in the `.ng.mx`. It reports what `ng build` reports:
-the project's `strictTemplates` (and the other `angularCompilerOptions`, read
-through `extends`) is honoured, and unset means compiler-cli's own default, which
-is on in Angular 22. With `strictTemplates: false` templates are still checked in
-basic mode; only the strict-only checks stop being reported. The same applies to
-editors.
-
-```
-src/x.component.ng.mx(5,18): error TS2339: Property 'nmae' does not exist on type '{ name: string; }'.
-```
-
-A template error makes `mx-tsc` exit non-zero. Templates are checked under the
-same tsconfig as the code, chosen by TypeScript's own command-line rules: the one
-named with `-p`/`--project` (also from an `@args.txt` response file), else the
-nearest `tsconfig.json`, and none when input files are named without `-p`. With
-`-b`, the one project named (default `.`); several are an error. An unreadable or malformed one fails the run with its path
-instead of falling back to defaults. A position inside an expression
-resolves to the start of that whole expression. Only Angular's template
-diagnostics are added here; TypeScript's own errors in the module are the
-ones `mx-tsc` already reported.
-
-**`@angular/compiler-cli` comes from your project.** MX never bundles it: it
-resolves `@angular/compiler-cli` from the project that holds the `.ng.mx`, and
-supports `>=22.0.0 <23.0.0`. With `.ng.mx` files present and diagnostics on, a
-missing, unsupported or unloadable compiler-cli **fails `mx-tsc`** with a message
-saying how to fix it (otherwise CI would pass with the templates unchecked). A
-run with no `.ng.mx` files never looks for it.
-
-**Positions.** A problem inside an expression is reported at that expression. An
-unknown element (NG8001) or unknown property (NG8002) is reported at the start of
-the `template:` region, not at the tag, and `mx-tsc` marks it "(approximate
-location)"; pointing these at the tag comes with the editor support.
-
-Template checking needs the modules a template's tags import to exist, so run
-`mx-angular build` first if the template calls discovered MX tags.
-
-**Extended diagnostics.** Angular's extended template checks keep their own
-severity. NG8103 (`*ngIf`/`*ngFor` used without `NgIf`/`NgFor`/`CommonModule`
-imported; the directive is then inert at runtime) is a warning at the directive's
-position and does not fail `mx-tsc`. Promote it in the tsconfig `mx-tsc` runs
-under, as for `ng build`: `angularCompilerOptions.extendedDiagnostics.checks.missingControlFlowDirective`
-set to `"error"` (non-zero exit), `"warning"` or `"suppress"`; `defaultCategory`
-sets every extended check, and a per-check value wins.
-
-Configure it with `package.json#mx.angular.diagnostics`:
-
-| Value | Meaning |
-|---|---|
-| `"idle"` (default) | On. In an editor, checks 1 second after your last edit. `mx-tsc` treats it as on. |
-| `"save"` | On. In an editor, checks when the file is saved. `mx-tsc` treats it as on. |
-| `"off"` | No Angular template diagnostics anywhere, and compiler-cli is never looked for. |
-
-Any other value is a positioned error naming `package.json`.
-
-**In the editor.** The check runs in a separate worker process, one per Angular
-project (the nearest `package.json`), never in the TypeScript server, so typing
-is never blocked. It never runs per keystroke, and the result appears when the
-check finishes: Angular errors for a file are shown only while the file still has
-the text they were computed for, so they disappear while you type and return
-after the next check (in `"save"` mode, after the next save). If an edit arrives
-while a check is still running, the old result is discarded; a run that is still
-going five seconds after it went stale is killed and the worker restarted. The
-worker exits with the editor.
-
-If `@angular/compiler-cli` is missing, out of range or fails to load, the editor
-shows one message per open `.ng.mx` (computed once per project, not repeated on
-every edit) naming the project's tsconfig, saying how to fix it or turn the
-check off; nothing else breaks. After installing compiler-cli, run "TypeScript:
-Restart TS Server" (the unusable state is remembered until then). Only `.ng.mx`
-files that are open in the editor are checked, so a project's closed files cost
-nothing. Compiler option errors and warnings (for example `extendedDiagnostics`
-with `strictTemplates: false`) are shown the same way, prefixed with the
-tsconfig they come from; warnings never fail anything. An error in the
-element or attribute itself (NG8001, NG8002) is located at the element name
-or the attribute you wrote, as in `mx-tsc`. A diagnostic that falls on markup
-MX generated rather than copied from your source is marked "(approximate
-location)" and points at the start of the template.
-
-## Errors
-
-Exit code `0` on a clean build, `1` on any error. Every message is
-positioned: `file:line:col message`.
-
-## Examples
-
-- `examples/angular-app` — a stock Angular CLI 22 app (`@angular/build:application`,
-  no custom builder), three components:
-  - `app.component.mx` — the root shell: text and interpolation,
-    `<if>`/`<else>`, `<for … by=>`, `<const>`, an event binding, and
-    `[ngClass]` (with `NgClass` added to the component's own `imports`, per
-    the warning above); calls the other two components below.
-  - `product-list/product-list.component.mx` — a hand-written component
-    (`selector: "app-product-list"`, called from `app.component.mx` as
-    a plain element) whose template exercises `<for in=>` (Angular's
-    `keyvalue` pipe), `<define>` + a call (`ngTemplateOutlet`), `[ngStyle]`
-    from an object literal, the `attr.`/`class.`/`style.` binding
-    modifiers, and an `<html-comment>`.
-  - `tags/badge.mx` — a discovered custom tag, the same one this page's
-    "Custom tags" section walks through above.
-
-  Every component keeps `templateUrl` pointing at a gitignored,
-  `mx-angular`-emitted `.html` (and `tags/badge.ts` is itself a gitignored,
-  emitted component module). `bun run build` runs `mx-angular build` (via
-  `prebuild`) then `ng build`; `bun run start` runs
-  `bun run prebuild && concurrently -k -n mx,ng "mx-angular watch" "ng serve"`
-  (one process, both `mx-angular watch` and `ng serve` running together) —
-  `mx-angular watch` (in this repo: `bun ../../packages/hosts/angular/dist/bin.js watch`),
-  since a fresh checkout has no `node_modules/.bin/mx-angular` symlink until
-  root `bun run build` produces `dist/`.
+- [`.ng.mx` in detail](/hosts/angular/ng-mx/): where the template goes, fragments for several roots, `imports:` rules, build output.
+- [What MX compiles to](/hosts/angular/lowering/): the table, how an attribute becomes a property or attribute binding, events.
+- [Diagnostics](/hosts/angular/diagnostics/): TypeScript and Angular template errors in `mx-tsc` and the editor.
+- [Page templates, MX tags and the CLI](/hosts/angular/pages-and-tags/): a `.mx` beside a hand-written component, tags such as `Card`, and `mx-angular build`, `watch` and `map`.

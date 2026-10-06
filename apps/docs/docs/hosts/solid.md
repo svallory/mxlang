@@ -1,233 +1,136 @@
 ---
 title: "Solid"
-description: "The .solid.mx host — MX markup in JSX's position inside a Solid component file, lowered to Solid 2 JSX."
+description: "MX in place of JSX inside a Solid component: <if> and <for> compile to <Show> and <For>, attribute tags replace accessor props, and signals stay yours."
 ---
 
 # Solid
 
-A Solid component with MX in place of JSX. In a `.solid.mx` file the component is still a Solid function: signals, props, `For` and `Show` from `solid-js`, and Solid's own compiler all stay as Solid provides them. MX markup goes where JSX would, and the compiler lowers it back to Solid JSX in the same position. Everything outside the markup is your own TypeScript, passed through untouched.
+A `.solid.mx` file is a Solid component with MX where the JSX was. The function, its props, signals, memos and effects are the TypeScript you already write, and Solid's compiler still builds the result. The markup changes.
 
-```tsx title="Greeter.tsx"
+This is one component, in TSX and then in MX. `Table` is a hand-written Solid component with three props that hold markup.
+
+```tsx title="Team.tsx"
 import { createSignal, For, Show } from "solid-js";
+import type { Member } from "./members.ts";
+import { Table } from "./Table.tsx";
 
-export function Greeter(props: {
-  label: string;
-  names: { id: number; text: string }[];
-}) {
-  const [count, setCount] = createSignal(0);
+export function Team(props: { members: Member[] }) {
+  const [query, setQuery] = createSignal("");
+  const shown = () => props.members.filter((member) => member.name.includes(query()));
 
   return (
-    <section>
-      <h1>{props.label}</h1>
-      <button onClick={() => setCount(count() + 1)}>clicked {count()}</button>
-      <Show when={count() > 2}>
-        <p>That is plenty.</p>
-      </Show>
-      <ul>
-        <For each={props.names}>{(name) => <li>{name.text}</li>}</For>
-      </ul>
+    <section id="team" class="panel">
+      <input
+        name="q"
+        class="search"
+        type="search"
+        value={query()}
+        onInput={(event) => setQuery(event.currentTarget.value)}
+      />
+      <Table
+        rows={shown()}
+        head={() => (
+          <>
+            <th>Name</th>
+            <th>Teams</th>
+          </>
+        )}
+        row={(member) => () => (
+          <>
+            <td class={{ admin: member.admin }}>{member.name}</td>
+            <td>
+              <For each={member.teams}>{(team) => <span class="tag">{team}</span>}</For>
+            </td>
+          </>
+        )}
+        empty={() => (
+          <Show when={query()} fallback={<p class="empty">No members yet.</p>}>
+            <p class="empty">Nobody matches “{query()}”.</p>
+          </Show>
+        )}
+      />
     </section>
   );
 }
 ```
 
-```mx title="Greeter.solid.mx"
+```mx title="Team.solid.mx"
 import { createSignal } from "solid-js";
+import type { Member } from "./members.ts";
+import { Table } from "./Table.tsx";
 
-export function Greeter(props: {
-  label: string;
-  names: { id: number; text: string }[];
-}) {
-  const [count, setCount] = createSignal(0);
+export function Team(props: { members: Member[] }) {
+  const [query, setQuery] = createSignal("");
+  const shown = () => props.members.filter((member) => member.name.includes(query()));
 
   return (
-    <section>
-      <h1>${props.label}</h1>
-      <button onClick() { setCount(count() + 1); }>clicked ${count()}</button>
-      <if=(count() > 2)><p>That is plenty.</p></if>
-      <ul>
-        <for|name| of=props.names by="id"><li>${name.text}</li></for>
-      </ul>
+    <section#team.panel>
+      <input:q.search type="search" value=query() onInput(event) { setQuery(event.currentTarget.value); }/>
+      <Table rows=shown()>
+        <@head>
+          <th>Name</th>
+          <th>Teams</th>
+        </@head>
+        <@row|member|>
+          <td class={ admin: member.admin }>${member.name}</td>
+          <td>
+            <for|team| of=member.teams><span.tag>${team}</span></for>
+          </td>
+        </@row>
+        <@empty>
+          <if=query()><p.empty>Nobody matches “${query()}”.</p></if>
+          <else><p.empty>No members yet.</p></else>
+        </@empty>
+      </Table>
     </section>
   );
 }
 ```
 
-Solid (`.solid.mx`) is MX markup written directly inside a Solid component file, in the same position JSX would go, lowered to Solid's own JSX at compile time. A `.solid.mx` file is otherwise an ordinary TypeScript module — imports, functions, hooks — with MX markup wherever an expression is expected.
+What changed:
 
-The Solid host ships as `@mxlang/solid`, the third emitter over `@mxlang/core`'s shared IR alongside the HTML and Astro hosts. The MX parser's vendored Babel fork finds each MX region inside a `.solid.mx` file and hands it to `compileSolidMx`, which resolves the region through the same Marko-syntax core every host shares and emits Solid JSX text back into the surrounding TypeScript module, at the same span — so positions and source maps stay anchored to the original file.
+- **`<@head>`, `<@row|member|>`, `<@empty>` are `Table`'s props.** These are [attribute tags](/language/attribute-tags-and-params/): a prop that holds markup is written as markup. MX wraps each in the accessor Solid needs, so the `() =>` and the `(member) => () =>` are gone, and each is checked against `Table`'s props type.
+- **`<if>` / `<else>` and `<for>`** compile to `<Show>` and `<For>`. You do not import either.
+- **`<section#team.panel>` and `<input:q.search>`** are `id`, `class` and `name`.
+- **`onInput(event) { … }`** is a handler written as a method.
 
-## Selecting the host
+Signals are read the way Solid reads them: `query()` in the markup is a tracked read.
 
-For whole-file `.mx`, `mx.host: "solid"` selects `solid-jsx`.
-`mx.target: "solid-jsx"` alone selects Solid behaviour too. If both keys are
-given, the target must belong to Solid; disagreement is a positioned
-`target-host-mismatch` error (decisions 129/132;
-[spec §13.5](/specification/#135-host-and-target-selection)). `.solid.mx` keeps
-its extension-selected region pipeline.
-
-## Install
+## Setup
 
 ```bash
-bun add -d @mxlang/vite-plugin
+bun add -d @mxlang/vite-plugin @mxlang/typescript-plugin @mxlang/tsc
 ```
 
-`.solid.mx` compiles through the Vite plugin, which must come before Solid's own plugin — both are `enforce: "pre"`, so array order decides:
-
-```typescript
-// vite.config.ts
-import { defineConfig } from "vite";
+```ts
+// vite.config.ts: mx() first, so Solid's plugin receives JSX
 import mx from "@mxlang/vite-plugin";
 import solid from "@solidjs/vite-plugin";
+import { defineConfig } from "vite";
 
-export default defineConfig({
-  plugins: [mx(), solid()],
-});
+export default defineConfig({ plugins: [mx(), solid()] });
 ```
 
-Type-checking uses `mx-tsc --noEmit` rather than `tsc --noEmit`: `tsc` ignores `compilerOptions.plugins`, so a plain `tsc` run would silently miss every error inside a `.solid.mx` file. This host targets **Solid 2 only**.
-
-## The idea
-
-Two rules make MX markup work naturally inside Solid, both applying to any tag, not only Solid's built-in control-flow components:
-
-**The body is `input.content` in a tag unit, `props.children` everywhere else.** A Solid component receives its body as `props.children`, and MX calls are emitted that way, so a hand-written Solid component called from MX, and an MX tag called from plain TSX, both work. A `.solid.mx` tag unit that reads `input.content` (for example `<section><${input.content}/></section>`) gets Marko's name for the same slot: `input.content` is the body (an explicit `content=` prop wins, else `children`), element, text or mixed, and `props.children` is left untouched. It stays reactive, and a text-only body renders as text rather than as a tag name. `<if=input.content>` is true only when a body was passed, except that an empty-string body counts as none.
-
-**Tag params turn children into a function.** `<Tag|p1, p2|>body</Tag>` lowers to `<Tag>{(p1, p2) => body}</Tag>`. This is what lets Solid's own render-prop components be called directly from MX markup:
-
-```html
-<For|item, i| each=xs()>
-  <li>${i}: ${item}</li>
-</For>
-
-<Show|user| when=user()>
-  <p>Hello, ${user.name}</p>
-</Show>
+```jsonc
+// tsconfig.json: type errors inside .solid.mx, at the line you wrote
+{ "compilerOptions": { "plugins": [{ "name": "@mxlang/typescript-plugin" }] } }
 ```
 
-**Attribute tags follow the callee's `AttrTag` declaration.** Solid uses a
-reusable accessor as its renderable: `() => SolidElement`. A data tag receives
-`{ ...attrs, ...nestedTags, content }`, where `content` is that accessor; a
-declared `as: "renderable"` tag receives the accessor directly. Arrays are real
-arrays of those values. For example:
+In CI, run `mx-tsc --noEmit` where you ran `tsc --noEmit`: plain `tsc` does not open `.solid.mx` files. The host targets **Solid 2**. Add `@mxlang/solid` when you declare attribute tags on your own components.
 
-```tsx
-import type { AttrTag } from "@mxlang/solid";
+## What stays Solid, what MX adds
 
-export interface Input {
-  header: AttrTag;
-  row: AttrTag<{ params: [name: string] }>[];
-}
+**Stays Solid:** the component function, `props`, signals, stores, effects, context, Solid's compiler and its fine-grained updates. You can still write `<For>`, `<Show>` and any other Solid component by name in MX markup.
 
-// Data content is reusable through either Solid idiom.
-<Dynamic component={input.header.content} />
-{input.header.content}
+**MX adds:** the markup syntax above, compiled to Solid JSX in the same position, with source maps back to your file. There is no MX runtime: `<if>` is `<Show>`, `<for>` is `<For>`, `<try>` is `<Loading>` and `<Errored>`.
 
-// Params add an outer function. Call it first, then render its accessor.
-<Dynamic component={input.row[0].content("Ada")} />
-```
+## Two rules to know first
 
-The equivalent MX dynamic-tag spelling for params is
-`<${input.row[0].content("Ada")}/>`; the dynamic-tag-arguments spelling
-`<${input.row[0].content}("Ada")/>` is equivalent, while a bare
-`${input.row[0].content}` omits the required argument. The compiler diagnoses a
-statically known parameterized tag used without its arguments. Placeholder-only
-bodies remain reactive and are escaped under SSR; `$!{...}` is still the
-explicit raw-HTML form.
+- **A region is one element, and it holds markup only.** `<const>`, `<define>`, `import` and state tags such as `<let>` are errors inside a region, each naming what to write in the TypeScript around it. For several roots, use a TSX fragment `<>…</>`; each child is its own region.
+- **Tag params are the child function.** `<Show|user| when=user()>…</Show>` is `<Show when={user()}>{(user) => …}</Show>`, which is how you call any render-prop component.
 
-The full cross-host contract, including cardinality, nested tags, fallback
-inference, and the Marko migration table, is in [AttrTag](/language/attr-tag/).
+## Go deeper
 
-## `<for>` lowering
-
-Every `<for>` form lowers to one of Solid's own iteration primitives:
-
-| Written | Lowers to |
-|---|---|
-| `<for\|item, i\| of=xs()>` | `<For each={xs()} keyed={false}>{(item, i) => body}</For>` |
-| `<for\|item, i\| of=xs() by="id">` | `<For each={xs()} keyed={x => x.id}>{(item, i) => body}</For>` |
-| `<for\|k, v\| in=obj()>` | `<For each={Object.entries(obj())} keyed={e => e[0]}>{([k, v]) => body}</For>` |
-| `<for\|i\| from=a to=b>` | `<Repeat count={(b) - (a) + 1} from={a}>{(i) => body}</Repeat>` |
-| `<for\|i\| from=a until=b>` | `<Repeat count={(b) - (a)}>{(i) => body}</Repeat>` |
-| `<for\|i\| from=a to=b step=s>` | `<Repeat count={N}>{(mxIndex) => { const i = (a) + mxIndex * (s); return body; }}</Repeat>` |
-
-`from=`/`to=`/`until=`/`step=` follow the same read-once-per-access discipline as any other Solid JSX attribute — keep them pure (a signal, a literal, or a memo). With `step=` present they are each re-read once per row rather than once for the whole range, and the row count is clamped through `Number.isFinite(...) ? Math.max(0, ...) : 0` when the bounds are not fully literal — so a runtime `step` of `0` renders zero rows instead of looping forever.
-
-## Everything else
-
-| Written | Lowers to |
-|---|---|
-| `text`, `${expr}` | literal text, `{expr}` |
-| `$!{expr}` | `innerHTML={expr}`; must be the sole child |
-| An HTML/SVG/MathML element | a JSX element; void elements self-close |
-| A component | a JSX element, attribute tags as render props, tag params as the child callback |
-| `.cls` / `#id` shorthand | folds into `class="…"` / `id="…"`; with an object `class={...}` it merges to `class={["cls", {...}]}` |
-| `prop:name=value` | kept as `prop:name={value}` |
-| `<if>` / `<else>`, 1–2 conditioned branches | `<Show when fallback>` |
-| `<if>` / `<else>`, 3+ conditioned branches | `<Switch fallback><Match when>…</Match></Switch>` |
-| `<try>` | `<Loading fallback>` wrapped in `<Errored fallback>` when `<@catch>` is present |
-
-```html
-<try>
-  <p>${body()}</p>
-  <@placeholder><p>loading</p></@placeholder>
-  <@catch|err|><p>${err.message}</p></@catch>
-</try>
-```
-
-```tsx
-<Errored fallback={(err) => <p>{err.message}</p>}>
-  <Loading fallback={<p>loading</p>}><p>{body()}</p></Loading>
-</Errored>
-```
-
-The builtins (`For`, `Show`, `Switch`, `Match`, `Loading`, `Errored`, `Repeat`,
-and the rest) are auto-imported by Solid's own compilers. Solid additionally
-hoists `@solidjs/web`'s public `escape` helper only when an escaped lazy body
-needs server-safe insertion.
-
-## Events
-
-An element's `on<Name>=fn` (`onClick`, `onDblClick`) or `on-<exact>=fn`
-(`on-my-event`) is an event handler. MX derives the **DOM event name** —
-everything after `on` lowercased, or the exact text after `on-` — and this
-host emits Solid's prop recomposed from it: `on` plus the capitalized DOM
-name. `onClick=f` → `onClick={f}`; `onDblClick=f` and `on-dblclick=f` both
-→ `onDblclick={f}` (Solid derives the event name from the prop, so it binds `dblclick`).
-
-- **No aliases.** `onDoubleClick` lowercases to `doubleclick`, which is not
-  a DOM event: the compiler warns at the attribute and emits
-  `onDoubleclick={f}` exactly as written — never silently `onDblclick`.
-- **Custom DOM events** (`on-my-event=f`) are a compile error: Solid has no
-  custom-event prop. The error names the escape hatch Solid's own docs give
-  for listener options — a `ref` callback calling
-  `addEventListener("my-event", fn)`.
-- **Static strings** (`onClick="alert(1)"`) are an ordinary attribute and
-  pass through verbatim; MX does not invent a policy against inline handler
-  strings — it only stops creating one from a function.
-- **`on:` / `oncapture:`** keep their removed-in-Solid-2 rejection, with a
-  fix-it naming `on-<exact>`: `on:click=fn` → `onClick=fn` (or `on-click=fn`
-  for a custom name).
-- On a **component**, an `on*` attribute is an ordinary prop (`<Row
-  onSelect=pick/>` passes the callback), never an event.
-
-The handler receives the DOM event, as Solid always delivers it.
-
-## Errors
-
-**Stateful tags.** `<let>`, `<effect>`, `<lifecycle>`, `<script>` and `:=` are compile errors, each naming Solid's own primitive instead — `createSignal`, `createEffect`, the lifecycle primitives, an explicit event handler. State is framework territory, and in a `.solid.mx` file it belongs in the surrounding TypeScript module, which is a real place to put it.
-
-**Removed Solid 2 namespaces.** `on:`, `oncapture:`, `attr:`, `bool:` and `use:` are gone from Solid 2, so each is rejected with its replacement in the message: `on:x=fn` → `onX=fn` or `on-x=fn` for a custom event name, `oncapture:` → `onX=fn` (capture needs a `ref` callback with `{ capture: true }`), `attr:`/`bool:` → the plain attribute, `use:foo=opts` → `ref=foo(opts)`. Only `prop:` survives.
-
-**Wrong scope.** `<define>`, `<const>`, hoisted statements and `<!doctype html>` inside a JSX expression are errors: a `.solid.mx` file is already a TypeScript module, and that is where they belong.
-
-**Not MX 1 at all.** `<if|u|=cond>` (tag params on `<if>`), tag params and `<@name>` attribute tags on native HTML elements, and a `<fragment>` wrapper are rejected by real Marko itself, so the subset rule excludes them. Each is recorded with Marko's exact error in [Divergences & MX 2](/divergences-and-mx-2/). For a fragment wrapper, use a TSX fragment `<>…</>`.
-
-## Verification
-
-`bun run oracle` compiles every fixture two ways — MX, and a hand-written Solid twin — across both Solid 2 backends (the Babel plugin and the native Oxc compiler) and both generate variants, then compares the generated code. Five fixtures × two backends × two variants: **20 rows, all passing.** `bun run oracle -- --strict` is expected to exit 0 too; a skip or a pending fixture fails the run rather than passing quietly.
-
-## Examples
-
-- `examples/counter-app` — a small Solid 2 app whose components are `.solid.mx`.
-- `examples/todomvc` — the full TodoMVC spec in MX: hash-routed filters, localStorage persistence, edit-in-place.
+- [What MX compiles to](/hosts/solid/semantics/): every `<for>` form, `<if>` chains, events, `<try>`, and the errors.
+- [Attribute tags in depth](/language/attr-tag/): declaring them on your own components with `AttrTag`, arrays, nesting.
+- `examples/counter-app` and `examples/todomvc`: a small app and the full TodoMVC, both in `.solid.mx`.

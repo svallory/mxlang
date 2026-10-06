@@ -1,7 +1,9 @@
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   fencedBlocks,
   hostExamples,
+  hostsExampleDir,
   hostPage,
   readHostExample,
 } from "./host-examples.ts";
@@ -9,14 +11,15 @@ import {
 describe.each(Object.entries(hostExamples))("%s host example", (_name, ex) => {
   it("compiles through the host's own entry point and drops nothing", () => {
     const warnings: never[] = [];
+    // The real path: the example imports the hand-written component beside
+    // it, and the compile reads that file's `Input` for the attribute tags.
     const code = ex.compile(
       readHostExample(ex.mx),
-      `/example/${ex.mx}`,
+      join(hostsExampleDir, ex.mx),
       warnings,
     );
     expect(warnings).toEqual([]);
-    expect(code).toContain("That is plenty.");
-    expect(code).toMatch(/name(\(\))?\.text/);
+    for (const emitted of ex.emits) expect(code).toContain(emitted);
   });
 
   it("is quoted verbatim by the host page, beside the native component", () => {
