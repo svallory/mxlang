@@ -5,6 +5,7 @@
 - **Added:** `cloneIr(ir)`, a deep copy of an `Ir` for an emitter that needs to adjust nodes for its own output; emitters must not mutate the IR they are given (IR spec 10.2, pinned by each host's `ir-readonly.test.ts`).
 
 - **Added (jsx-define-call-drops-attrs):** lowering warns, positioned at the call's tag name, when a `<define>` with 2 or more params is called without tag arguments but with attributes, attribute tags or a body: only the first param receives the attributes object (Marko 6.3.51), so `<Card title="a"/>` against `|title, head|` no longer binds `title` to `"a"` on the JSX hosts.
+- **Added (jsx-define-call-drops-attrs, decision 160):** lowering warns, positioned at the call's tag name, when a `<define>` with 2 or more params is called without tag arguments but with attributes, attribute tags or a body: only the first param receives the attributes object (Marko 6.3.51), so `<Card title="a"/>` against `|title, head|` no longer binds `title` to `"a"` on the JSX hosts.
 
 ## 0.1.0-alpha.4
 

@@ -51,6 +51,10 @@ Two cases where the html target was more permissive than Marko were implementati
 - **`unknown-element`**: real Marko treats an unresolved hyphenated tag as a failed custom-element lookup and refuses to compile. The host used to render it as literal HTML unconditionally; it now rejects it with Marko's own wording.
 - **`lowercase-component`**: real Marko rejects a lowercase local-variable tag reference outright. The host was binding-based regardless of case, so it called the import instead of erroring; it now rejects it with Marko's own wording. The forms that do work are `<${layout}/>` and `<Layout/>`.
 
+## Withdrawn MX behaviour
+
+- **`<define>` per-parameter name lookup (4ba13a4ea):** withdrawn by decision 160. This is NOT a Marko divergence: MX now matches Marko 6.3.51, where a `<define>` called with attributes receives one attribute object in its first parameter; a define with 2 or more params called that way gets a positioned warning.
+
 ## Candidates for MX 2
 
 Not divergences today, and not bugs — behaviour MX could deliberately choose to diverge on from MX 2 on, each still needing its own recorded row and the tooling that goes with it before it ships.

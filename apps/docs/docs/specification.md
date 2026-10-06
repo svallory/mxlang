@@ -1406,6 +1406,19 @@ define's own head, not the enclosing render function's.
 |---|---|
 | `` `<define>` without a name (write `<define/name>`) `` | No `/var`. |
 
+**A `<define>` called with attributes and no arguments passes one attribute
+object to its first parameter (decision 160),** like a custom tag's `input`:
+`<Row n=1/>` against `<define/Row|p|>` or `<define/Row|{ n }|>` hands `Row`
+`{ n: 1 }` (spreads, attribute tags and `content` included; `{}` when the call
+carries none), as Marko 6.3.51 does. MX's earlier per-parameter name lookup
+(`<define/Card|title, head|>` + `<Card title="a"/>` binding `title` to `"a"`)
+is withdrawn. When a define with 2 or more params is called that way, lowering
+gives a warning positioned at the call's tag name:
+`` `<Card>` has 2 params, but only the first parameter receives the attributes object; destructure it (`|{ a, b }|`) instead of reading one param per attribute ``.
+A call with tag arguments is unchanged (decision 109), and a define with no
+params still ignores the attributes. Solid's own call shape (below) is not
+changed by this decision.
+
 **On Solid, a `<define>` inside a `.solid.mx` region is hoisted to module
 scope (decision 110b).** A region is a JSX expression spliced into someone
 else's module, so it has no statement position for `const Row = (...) =>
