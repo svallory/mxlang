@@ -110,7 +110,7 @@ it("types AttrTag, which the emitter imports as a type only: a wrong attribute t
       dir,
     );
     const output = stripVTControlCharacters(result.stdout + result.stderr);
-    expect(output).toMatch(/not assignable/);
+    expect(output).toMatch(/TS2559.*no properties in common/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
