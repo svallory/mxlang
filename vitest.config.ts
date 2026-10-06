@@ -10,6 +10,7 @@ export default defineConfig({
       "packages/oracle",
       "packages/parser",
       "packages/parse-differential",
+      "packages/stock-marko",
       "packages/tsx-bridge",
       "packages/target-registry",
       "packages/hosts/*",

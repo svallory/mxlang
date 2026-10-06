@@ -469,6 +469,18 @@
         "@types/bun": "1.4.2",
       },
     },
+    "packages/stock-marko": {
+      "name": "@mxlang/stock-marko",
+      "version": "0.0.0",
+      "dependencies": {
+        "@marko/compiler": "5.42.10",
+        "marko": "6.3.51",
+      },
+      "devDependencies": {
+        "@mxlang/parser": "workspace:*",
+        "@types/bun": "1.4.2",
+      },
+    },
     "packages/target-registry": {
       "name": "@mxlang/target-registry",
       "version": "0.0.0",
@@ -1166,6 +1178,8 @@
     "@mxlang/react": ["@mxlang/react@workspace:packages/hosts/react"],
 
     "@mxlang/solid": ["@mxlang/solid@workspace:packages/hosts/solid"],
+
+    "@mxlang/stock-marko": ["@mxlang/stock-marko@workspace:packages/stock-marko"],
 
     "@mxlang/target-registry": ["@mxlang/target-registry@workspace:packages/target-registry"],
 

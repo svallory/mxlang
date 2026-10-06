@@ -1,0 +1,573 @@
+{
+  "rows": {
+    "after-value-colon": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"a\"",
+        "AttrValue 6-11 \"=b :c\" bound=false value=7-11 \"b :c\"",
+        "OpenTagEnd 11-13 \"/>\" selfClosed=true"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"a\"",
+        "AttrValue 6-8 \"=b\" bound=false value=7-8 \"b\"",
+        "AttrName 9-11 \":c\"",
+        "OpenTagEnd 11-13 \"/>\" selfClosed=true"
+      ]
+    },
+    "after-value-quoted-colon": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-2 \"a\" quasis=[1-2 \"a\"] expressions=[]",
+        "AttrName 3-4 \"x\"",
+        "AttrValue 4-11 \"=\\\"1\\\" :b\" bound=false value=5-11 \"\\\"1\\\" :b\"",
+        "OpenTagEnd 11-13 \"/>\" selfClosed=true"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-2 \"a\" quasis=[1-2 \"a\"] expressions=[]",
+        "AttrName 3-4 \"x\"",
+        "AttrValue 4-8 \"=\\\"1\\\"\" bound=false value=5-8 \"\\\"1\\\"\"",
+        "AttrName 9-11 \":b\"",
+        "OpenTagEnd 11-13 \"/>\" selfClosed=true"
+      ]
+    },
+    "after-value-quoted-dot": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-2 \"a\" quasis=[1-2 \"a\"] expressions=[]",
+        "AttrName 3-4 \"x\"",
+        "AttrValue 4-11 \"=\\\"1\\\" .b\" bound=false value=5-11 \"\\\"1\\\" .b\"",
+        "OpenTagEnd 11-13 \"/>\" selfClosed=true"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-2 \"a\" quasis=[1-2 \"a\"] expressions=[]",
+        "AttrName 3-4 \"x\"",
+        "AttrValue 4-8 \"=\\\"1\\\"\" bound=false value=5-8 \"\\\"1\\\"\"",
+        "AttrName 9-11 \".b\"",
+        "OpenTagEnd 11-13 \"/>\" selfClosed=true"
+      ]
+    },
+    "after-value-dot": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-2 \"a\" quasis=[1-2 \"a\"] expressions=[]",
+        "AttrName 3-4 \"x\"",
+        "AttrValue 4-11 \"=a.b .c\" bound=false value=5-11 \"a.b .c\"",
+        "OpenTagEnd 11-13 \"/>\" selfClosed=true"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-2 \"a\" quasis=[1-2 \"a\"] expressions=[]",
+        "AttrName 3-4 \"x\"",
+        "AttrValue 4-8 \"=a.b\" bound=false value=5-8 \"a.b\"",
+        "AttrName 9-11 \".c\"",
+        "OpenTagEnd 11-13 \"/>\" selfClosed=true"
+      ]
+    },
+    "after-value-call-dot": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-2 \"a\" quasis=[1-2 \"a\"] expressions=[]",
+        "AttrName 3-4 \"x\"",
+        "AttrValue 4-13 \"=fn(a) .b\" bound=false value=5-13 \"fn(a) .b\"",
+        "OpenTagEnd 13-15 \"/>\" selfClosed=true"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-2 \"a\" quasis=[1-2 \"a\"] expressions=[]",
+        "AttrName 3-4 \"x\"",
+        "AttrValue 4-10 \"=fn(a)\" bound=false value=5-10 \"fn(a)\"",
+        "AttrName 11-13 \".b\"",
+        "OpenTagEnd 13-15 \"/>\" selfClosed=true"
+      ]
+    },
+    "after-value-chain-newline": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-19 \"=foo\\n  .bar()\" bound=false value=7-19 \"foo\\n  .bar()\"",
+        "OpenTagEnd 19-21 \"/>\" selfClosed=true"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-10 \"=foo\" bound=false value=7-10 \"foo\"",
+        "AttrName 13-17 \".bar\"",
+        "AttrArgs 17-19 \"()\" value=18-18 \"\"",
+        "OpenTagEnd 19-21 \"/>\" selfClosed=true"
+      ]
+    },
+    "after-value-colon-newline": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-13 \"=a\\n  :b\" bound=false value=7-13 \"a\\n  :b\"",
+        "OpenTagEnd 13-15 \"/>\" selfClosed=true"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-8 \"=a\" bound=false value=7-8 \"a\"",
+        "AttrName 11-13 \":b\"",
+        "OpenTagEnd 13-15 \"/>\" selfClosed=true"
+      ]
+    },
+    "after-value-postfix": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-12 \"=a! .b\" bound=false value=7-12 \"a! .b\"",
+        "OpenTagEnd 12-14 \"/>\" selfClosed=true"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-9 \"=a!\" bound=false value=7-9 \"a!\"",
+        "AttrName 10-12 \".b\"",
+        "OpenTagEnd 12-14 \"/>\" selfClosed=true"
+      ]
+    },
+    "return-type-space-colon": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-18 \"=(a) :T => a\" bound=false value=7-18 \"(a) :T => a\"",
+        "OpenTagEnd 18-20 \"/>\" selfClosed=true"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-10 \"=(a)\" bound=false value=7-10 \"(a)\"",
+        "AttrName 11-13 \":T\"",
+        "Error 15-15 3 \"Missing value for attribute\""
+      ]
+    },
+    "function-return-type-space-colon": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-35 \"=function (a) :T { return a }\" bound=false value=7-35 \"function (a) :T { return a }\"",
+        "OpenTagEnd 35-37 \"/>\" selfClosed=true"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-19 \"=function (a)\" bound=false value=7-19 \"function (a)\"",
+        "AttrName 20-22 \":T\"",
+        "AttrName 23-35 \"{ return a }\"",
+        "OpenTagEnd 35-37 \"/>\" selfClosed=true"
+      ]
+    },
+    "atom-value": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-9 \"=:a\" bound=false value=7-9 \":a\"",
+        "OpenTagEnd 9-11 \"/>\" selfClosed=true"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "Atom 7-9 \"0.\" value=8-9 \"a\"",
+        "AttrValue 6-9 \"=0.\" bound=false value=7-9 \"0.\"",
+        "OpenTagEnd 9-11 \"/>\" selfClosed=true"
+      ]
+    },
+    "atom-ternary": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-16 \"=a ? :b :c\" bound=false value=7-16 \"a ? :b :c\"",
+        "OpenTagEnd 16-18 \"/>\" selfClosed=true"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "Atom 11-13 \"0.\" value=12-13 \"b\"",
+        "AttrValue 6-16 \"=a ? 0. :c\" bound=false value=7-16 \"a ? 0. :c\"",
+        "OpenTagEnd 16-18 \"/>\" selfClosed=true"
+      ]
+    },
+    "atom-array": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-15 \"=[:a, :b]\" bound=false value=7-15 \"[:a, :b]\"",
+        "OpenTagEnd 15-17 \"/>\" selfClosed=true"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "Atom 8-10 \"0.\" value=9-10 \"a\"",
+        "Atom 12-14 \"0.\" value=13-14 \"b\"",
+        "AttrValue 6-15 \"=[0., 0.]\" bound=false value=7-15 \"[0., 0.]\"",
+        "OpenTagEnd 15-17 \"/>\" selfClosed=true"
+      ]
+    },
+    "atom-placeholder": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "OpenTagEnd 4-5 \">\" selfClosed=false",
+        "Placeholder 5-10 \"${:a}\" escape=true value=7-9 \":a\"",
+        "CloseTagStart 10-12 \"</\"",
+        "CloseTagName 12-15 \"div\"",
+        "CloseTagEnd 15-16 \">\""
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "OpenTagEnd 4-5 \">\" selfClosed=false",
+        "Atom 7-9 \"0.\" value=8-9 \"a\"",
+        "Placeholder 5-10 \"${0.}\" escape=true value=7-9 \"0.\"",
+        "CloseTagStart 10-12 \"</\"",
+        "CloseTagName 12-15 \"div\"",
+        "CloseTagEnd 15-16 \">\""
+      ]
+    },
+    "atom-new-key": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-17 \"={ new :a }\" bound=false value=7-17 \"{ new :a }\"",
+        "OpenTagEnd 17-19 \"/>\" selfClosed=true"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "Atom 13-15 \"0.\" value=14-15 \"a\"",
+        "AttrValue 6-17 \"={ new 0. }\" bound=false value=7-17 \"{ new 0. }\"",
+        "OpenTagEnd 17-19 \"/>\" selfClosed=true"
+      ]
+    },
+    "atom-reserved-double-colon": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-10 \"=::a\" bound=false value=7-10 \"::a\"",
+        "OpenTagEnd 10-12 \"/>\" selfClosed=true"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "Error 7-10 6 \"`::a` is reserved (decision 156): `::` will be the Symbol.for sugar; write `:a` for an atom\""
+      ]
+    },
+    "default-single-atom-split": {
+      "stock": [
+        "OpenTagName 0-10 \"belongs-to\" quasis=[0-10 \"belongs-to\"] expressions=[]",
+        "AttrName 10-10 \"\"",
+        "AttrValue 10-30 \"=:Customer :customer\" bound=false value=11-30 \":Customer :customer\"",
+        "OpenTagEnd 30-30 \"\" selfClosed=false",
+        "CloseTagEnd 30-30 \"\""
+      ],
+      "mx": [
+        "OpenTagName 0-10 \"belongs-to\" quasis=[0-10 \"belongs-to\"] expressions=[]",
+        "AttrName 10-10 \"\"",
+        "Atom 11-20 \"0.0000000\" value=12-20 \"Customer\"",
+        "AttrValue 10-20 \"=0.0000000\" bound=false value=11-20 \"0.0000000\"",
+        "AttrName 21-30 \":customer\"",
+        "OpenTagEnd 30-30 \"\" selfClosed=false",
+        "CloseTagEnd 30-30 \"\""
+      ]
+    },
+    "nonascii-division": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-13 \"=é / 2/\" bound=false value=7-13 \"é / 2/\"",
+        "OpenTagEnd 13-14 \">\" selfClosed=false",
+        "Error 0-14 22 \"Missing ending \\\"div\\\" tag\""
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-12 \"=é / 2\" bound=false value=7-12 \"é / 2\"",
+        "OpenTagEnd 12-14 \"/>\" selfClosed=true"
+      ]
+    },
+    "nonascii-keyword-lookbehind": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-15 \"=énew y=1\" bound=false value=7-15 \"énew y=1\"",
+        "OpenTagEnd 15-17 \"/>\" selfClosed=true"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-11 \"=énew\" bound=false value=7-11 \"énew\"",
+        "AttrName 12-13 \"y\"",
+        "AttrValue 13-15 \"=1\" bound=false value=14-15 \"1\"",
+        "OpenTagEnd 15-17 \"/>\" selfClosed=true"
+      ]
+    },
+    "nbsp-division": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-15 \"=(é) / 2/\" bound=false value=7-15 \"(é) / 2/\"",
+        "OpenTagEnd 15-16 \">\" selfClosed=false",
+        "Error 0-16 22 \"Missing ending \\\"div\\\" tag\""
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-14 \"=(é) / 2\" bound=false value=7-14 \"(é) / 2\"",
+        "OpenTagEnd 14-16 \"/>\" selfClosed=true"
+      ]
+    },
+    "nbsp-default-attr": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-3 \"if\" quasis=[1-3 \"if\"] expressions=[]",
+        "AttrName 3-3 \"\"",
+        "AttrValue 3-10 \"=count \" bound=false value=4-10 \"count \"",
+        "OpenTagEnd 10-11 \">\" selfClosed=false",
+        "CloseTagStart 16-18 \"</\"",
+        "Text 11-16 \"= 10>\"",
+        "CloseTagName 18-20 \"if\"",
+        "CloseTagEnd 20-21 \">\""
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-3 \"if\" quasis=[1-3 \"if\"] expressions=[]",
+        "AttrName 3-3 \"\"",
+        "AttrValue 3-15 \"=count >= 10\" bound=false value=4-15 \"count >= 10\"",
+        "OpenTagEnd 15-16 \">\" selfClosed=false",
+        "CloseTagStart 16-18 \"</\"",
+        "CloseTagName 18-20 \"if\"",
+        "CloseTagEnd 20-21 \">\""
+      ]
+    },
+    "spaced-type-args-atom": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-23 \"=(c ? a < b > :z)\" bound=false value=7-23 \"(c ? a < b > :z)\"",
+        "OpenTagEnd 23-25 \"/>\" selfClosed=true"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "Atom 20-22 \"0.\" value=21-22 \"z\"",
+        "AttrValue 6-23 \"=(c ? a < b > 0.)\" bound=false value=7-23 \"(c ? a < b > 0.)\"",
+        "OpenTagEnd 23-25 \"/>\" selfClosed=true"
+      ]
+    },
+    "comment-in-text-tag-open-tag": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-7 \"script\" quasis=[1-7 \"script\"] expressions=[]",
+        "AttrName 8-9 \"x\"",
+        "CloseTagStart 15-17 \"</\"",
+        "CloseTagName 17-23 \"script\"",
+        "CloseTagEnd 23-24 \">\"",
+        "AttrValue 9-24 \"=1 // </script>\" bound=false value=10-24 \"1 // </script>\"",
+        "OpenTagEnd 25-26 \">\" selfClosed=false",
+        "throw TypeError"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-7 \"script\" quasis=[1-7 \"script\"] expressions=[]",
+        "AttrName 8-9 \"x\"",
+        "AttrValue 9-24 \"=1 // </script>\" bound=false value=10-24 \"1 // </script>\"",
+        "OpenTagEnd 25-26 \">\" selfClosed=false",
+        "Text 26-27 \"a\"",
+        "CloseTagStart 27-29 \"</\"",
+        "CloseTagName 29-35 \"script\"",
+        "CloseTagEnd 35-36 \">\""
+      ]
+    },
+    "stray-close-after-nameless": {
+      "stock": [
+        "OpenTagEnd 1-1 \"\" selfClosed=false",
+        "CloseTagStart 4-6 \"</\"",
+        "throw TypeError"
+      ],
+      "mx": [
+        "OpenTagEnd 1-1 \"\" selfClosed=false",
+        "CloseTagStart 4-6 \"</\"",
+        "Error 4-8 0 \"The closing \\\"e\\\" tag was not expected\""
+      ]
+    },
+    "nameless-tag-at-eof": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagEnd 2-3 \">\" selfClosed=false",
+        "Text 3-4 \"a\"",
+        "throw TypeError"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagEnd 2-3 \">\" selfClosed=false",
+        "Text 3-4 \"a\"",
+        "Error 0-3 22 \"Missing ending \\\"div\\\" tag\""
+      ]
+    },
+    "tag-colon": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"a:b\" quasis=[1-4 \"a:b\"] expressions=[]",
+        "OpenTagEnd 4-6 \"/>\" selfClosed=true"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"a:b\" quasis=[1-4 \"a:b\"] expressions=[]",
+        "OpenTagEnd 4-6 \"/>\" selfClosed=true"
+      ]
+    },
+    "bare-sugar": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-7 \":x\"",
+        "OpenTagEnd 7-9 \"/>\" selfClosed=true"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-7 \":x\"",
+        "OpenTagEnd 7-9 \"/>\" selfClosed=true"
+      ]
+    },
+    "shorthand-colon": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-2 \"a\" quasis=[1-2 \"a\"] expressions=[]",
+        "TagShorthandClass 2-10 \".hover:x\" quasis=[3-10 \"hover:x\"] expressions=[]",
+        "OpenTagEnd 10-12 \"/>\" selfClosed=true"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-2 \"a\" quasis=[1-2 \"a\"] expressions=[]",
+        "TagShorthandClass 2-10 \".hover:x\" quasis=[3-10 \"hover:x\"] expressions=[]",
+        "OpenTagEnd 10-12 \"/>\" selfClosed=true"
+      ]
+    },
+    "control-ternary": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-2 \"a\" quasis=[1-2 \"a\"] expressions=[]",
+        "AttrName 3-4 \"x\"",
+        "AttrValue 4-14 \"=1 ? y : z\" bound=false value=5-14 \"1 ? y : z\"",
+        "OpenTagEnd 14-16 \"/>\" selfClosed=true"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-2 \"a\" quasis=[1-2 \"a\"] expressions=[]",
+        "AttrName 3-4 \"x\"",
+        "AttrValue 4-14 \"=1 ? y : z\" bound=false value=5-14 \"1 ? y : z\"",
+        "OpenTagEnd 14-16 \"/>\" selfClosed=true"
+      ]
+    },
+    "control-parenthesized-dot": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-2 \"a\" quasis=[1-2 \"a\"] expressions=[]",
+        "AttrName 3-4 \"x\"",
+        "AttrValue 4-13 \"=(a.b .c)\" bound=false value=5-13 \"(a.b .c)\"",
+        "OpenTagEnd 13-15 \"/>\" selfClosed=true"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-2 \"a\" quasis=[1-2 \"a\"] expressions=[]",
+        "AttrName 3-4 \"x\"",
+        "AttrValue 4-13 \"=(a.b .c)\" bound=false value=5-13 \"(a.b .c)\"",
+        "OpenTagEnd 13-15 \"/>\" selfClosed=true"
+      ]
+    },
+    "copyright-ambiguous-close": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-8 \"=a\" bound=false value=7-8 \"a\"",
+        "OpenTagEnd 9-10 \">\" selfClosed=false",
+        "CloseTagStart 13-15 \"</\"",
+        "Text 10-13 \"©>c\"",
+        "CloseTagName 15-18 \"div\"",
+        "CloseTagEnd 18-19 \">\""
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-8 \"=a\" bound=false value=7-8 \"a\"",
+        "OpenTagEnd 9-10 \">\" selfClosed=false",
+        "CloseTagStart 13-15 \"</\"",
+        "Text 10-13 \"©>c\"",
+        "CloseTagName 15-18 \"div\"",
+        "CloseTagEnd 18-19 \">\""
+      ]
+    },
+    "nbsp-before-comment-in-text": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-2 \"p\" quasis=[1-2 \"p\"] expressions=[]",
+        "OpenTagEnd 2-3 \">\" selfClosed=false",
+        "CloseTagStart 27-29 \"</\"",
+        "Text 3-27 \"Visit //cdn.example/x.js\"",
+        "CloseTagName 29-30 \"p\"",
+        "CloseTagEnd 30-31 \">\""
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-2 \"p\" quasis=[1-2 \"p\"] expressions=[]",
+        "OpenTagEnd 2-3 \">\" selfClosed=false",
+        "CloseTagStart 27-29 \"</\"",
+        "Text 3-27 \"Visit //cdn.example/x.js\"",
+        "CloseTagName 29-30 \"p\"",
+        "CloseTagEnd 30-31 \">\""
+      ]
+    },
+    "control-nonascii-colon": {
+      "stock": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-11 \"=1 :é\" bound=false value=7-11 \"1 :é\"",
+        "OpenTagEnd 11-13 \"/>\" selfClosed=true"
+      ],
+      "mx": [
+        "OpenTagStart 0-1 \"<\"",
+        "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+        "AttrName 5-6 \"x\"",
+        "AttrValue 6-11 \"=1 :é\" bound=false value=7-11 \"1 :é\"",
+        "OpenTagEnd 11-13 \"/>\" selfClosed=true"
+      ]
+    }
+  }
+}
