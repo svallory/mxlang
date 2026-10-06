@@ -349,62 +349,13 @@ export function exprOf(ctx: Ctx, node: Node): Expr {
   checkTagVarReads(ctx, code, node);
   const span = exprSpan(ctx, node);
   const atoms = span ? atomsIn(ctx, span.sourceStart, span.sourceEnd) : [];
-  const bodySpan =
-    node?.type === "FunctionExpression" && span
-      ? methodBodySpan(ctx, span)
-      : undefined;
   return {
     code,
     shape: expressionShape(node),
     node,
     span,
     ...(atoms.length > 0 ? { atoms } : {}),
-    ...(bodySpan
-      ? {
-          bodySpan,
-          bodySource: ctx.source.slice(
-            bodySpan.sourceStart,
-            bodySpan.sourceEnd,
-          ),
-        }
-      : {}),
   };
-}
-
-/**
- * The authored `{ … }` body of an attribute method. The method node carries no
- * position below itself, so the authored text from its parameter list on is
- * parsed as an object method and the body's own position is read from that
- * node (a regex or a bracket scan splits `{ if (c) { … } }` at the wrong
- * `) {`). Atoms are swapped for same-length identifiers first so the text
- * parses. `code` may print the body differently, so this is the authored side
- * a host diffs the printed body against. `undefined` when it does not parse.
- */
-function methodBodySpan(ctx: Ctx, span: SourceSpan): SourceSpan | undefined {
-  let text = ctx.source.slice(span.sourceStart, span.sourceEnd);
-  for (const atom of atomsIn(ctx, span.sourceStart, span.sourceEnd)) {
-    const at = atom.span.sourceStart - span.sourceStart;
-    const length = atom.span.sourceEnd - atom.span.sourceStart;
-    text = `${text.slice(0, at)}_${text.slice(at + 1, at + length)}${text.slice(at + length)}`;
-  }
-  const open = text.indexOf("(");
-  if (open < 0) return undefined;
-  const prefix = "({ m";
-  let method: Node;
-  try {
-    method = markoBabel().parseExpression(`${prefix}${text.slice(open)} })`, {
-      plugins: [["typescript", {}]],
-    }).properties?.[0];
-  } catch {
-    return undefined;
-  }
-  const body = method?.type === "ObjectMethod" ? method.body : undefined;
-  if (typeof body?.start !== "number" || typeof body.end !== "number") {
-    return undefined;
-  }
-  const shift = span.sourceStart + open - prefix.length;
-  if (body.end + shift !== span.sourceEnd) return undefined;
-  return { sourceStart: body.start + shift, sourceEnd: body.end + shift };
 }
 
 /**

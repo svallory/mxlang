@@ -21,25 +21,6 @@ function pairs(source: string): string[][] {
 
 const IMPORT = 'import Field from "./field.mx"\n';
 
-/**
- * The authored text a generated `needle` maps to: the first mapping whose
- * generated text contains it, offset into its source by the same amount
- * (adjacent one-to-one runs are merged, so a token rarely has its own).
- */
-function authoredAt(source: string, needle: string): string | undefined {
-  const { code, mappings } = compileSolidUnit(source, {
-    filename: "/fixtures/values.mx",
-    customTags: {},
-  });
-  for (const m of mappings) {
-    const at = code.slice(m.generatedStart, m.generatedEnd).indexOf(needle);
-    if (at < 0) continue;
-    const start = m.sourceStart + at;
-    return source.slice(start, start + needle.length);
-  }
-  return undefined;
-}
-
 describe("solid expression values", () => {
   it.each([
     ["a component prop value", `${IMPORT}<Field count=n + 1/>`, "n + 1"],
@@ -86,46 +67,6 @@ describe("solid expression values", () => {
     for (const atom of atoms) {
       expect(result).toContainEqual([atom, JSON.stringify(atom.slice(1))]);
     }
-  });
-
-  it("maps a method attribute's body, not its rewritten head", () => {
-    const result = pairs(`${IMPORT}<Field onPick() { go(); }/>`);
-    expect(result.some(([, generated]) => generated?.includes("=>"))).toBe(
-      false,
-    );
-    expect(result).toContainEqual(["{ go(); }", "{ go(); }"]);
-  });
-
-  it("maps a method body the printer reformatted token by token", () => {
-    // `{ go() }` prints with a `;` the author did not write: the unchanged
-    // tokens map one to one, so `go` lands on the authored `go`.
-    const source = `${IMPORT}<Field onPick() { go() }/>`;
-    const result = pairs(source);
-    expect(authoredAt(source, "go()")).toBe("go()");
-    expect(result.some(([, generated]) => generated?.includes("=>"))).toBe(
-      false,
-    );
-    for (const [authored, generated] of result) {
-      if (authored?.length === generated?.length) {
-        expect(authored).toBe(generated);
-      }
-    }
-  });
-
-  it("maps a method body whose reads were rewritten inside <for>", () => {
-    const source = `${IMPORT}<for|row| of=xs by="id"><Field onPick() { use(row.id) }/></for>`;
-    expect(authoredAt(source, "use(")).toBe("use(");
-    expect(authoredAt(source, ".id)")).toBe(".id)");
-  });
-
-  it("maps a method body with nested blocks at the authored positions", () => {
-    const source = `${IMPORT}<Field onPick() { if (c) { for (const n of xs) { go(n) } } }/>`;
-    expect(authoredAt(source, "if (c) {")).toBe("if (c) {");
-    expect(authoredAt(source, "go(n)")).toBe("go(n)");
-    const result = pairs(source);
-    expect(result.some(([, generated]) => generated?.includes("=>"))).toBe(
-      false,
-    );
   });
 
   it("maps a dynamic tag's expression", () => {

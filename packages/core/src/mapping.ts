@@ -96,21 +96,10 @@ function rewrittenMappings(expr: Expr): MappedCode | undefined {
 }
 
 /**
- * `after` is `base.code` reprinted or rewritten. Its unchanged tokens map to
- * the source one to one and a changed run maps as a whole to the authored
- * run it replaced, so the positions after a change do not shift. Used for a
- * method body the printer reformatted (`{ go() }` printed as `{ go(); }`) as
- * well as for rewritten reads.
+ * `after` is `base.code` rewritten. Its unchanged tokens map to the source one
+ * to one and a changed run maps as a whole to the authored run it replaced,
+ * so the positions after a change do not shift.
  */
-export function mappedRewrite(
-  after: string,
-  before: string,
-  span: SourceSpan,
-): MappedCode {
-  if (after === before) return mapped(after, span);
-  return mapTokenDiff(mapped(before, span), after);
-}
-
 function mapTokenDiff(base: MappedCode, after: string): MappedCode {
   const before = base.code;
   const toSource = (start: number, end: number): GeneratedMapping[] => {

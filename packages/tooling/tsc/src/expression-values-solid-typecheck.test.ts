@@ -93,25 +93,21 @@ describe("mx-tsc on a Solid page", () => {
   // whole-file solid-for/page.mx, 1-based (line,column). The built-ins resolve
   // (`<For>`, `<Dynamic>`), so a row's type is known; a rewritten read
   // (`i` to `i()`, `row` to `row()`, a for-in key to `mxEntry()[0]`) keeps the
-  // position of the name after it; the dynamic tag's expression and a method
-  // attribute's body are mapped; a literal `<for in>` source reports nothing
-  // the author did not write (no TS2869 on the generated `?? {}`).
+  // position of the name after it; the dynamic tag's expression is mapped; a
+  // never-nullish `<for in>` source reports nothing the author did not write
+  // (no TS2869 on the generated `?? {}`).
   //   3  `<for|row| of=list><p>${row.nmae}</p></for>`              `nmae`            (3,28)
   //   4  `<p>${list[0].nmae}</p>`                                  `nmae`            (4,14)
   //   5  `<for|row, i| of=list><p>${i + missingIdx}</p></for>`     `missingIdx`      (5,31)
   //   6  `<for|row| of=list by="id"><p>${row.name + missingKeyed}`  `missingKeyed`    (6,43)
   //   7  `<for|k, v| in={ a: 1 }><p>${k + v + missingIn}</p>`      `missingIn`       (7,37)
   //   8  `<${missingDyn}/>`                                        `missingDyn`      (8,4)
-  //   9  `<button onClick() { missingInMethod(); }>go</button>`    `missingInMethod` (9,21)
-  //  10  `<for|k, v| in=[1, 2]><p>${k + v + missingArr}</p></for>`  `missingArr`      (10,35)
-  //  11  `<for|k, v| in="abc"><p>${k + v + missingStr}</p></for>`   `missingStr`      (11,34)
-  //  12  `<button onClick() { missingNoSemi() }>go</button>`        `missingNoSemi`   (12,21)
-  //  13  `<for|k, v| in=list ? { a: 1 } : { b: 2 }>…${k + v + missingCond}`   `missingCond` (13,55)
-  //  14  `<for|k, v| in={ a: 1 } as Record<string, number>>…${k + v + missingAs}` `missingAs` (14,63)
-  //  15  `<button onClick() { if (list) { for (const r of list) { missingNested(r) } } }>`  `missingNested` (15,57)
-  // Lines 13 and 14 report no TS2869: both sources are never nullish, so no `?? {}`.
-  // Line 15's body holds its own `) {`, and its arrow and mapping still split at the parameter list.
-  it("whole-file .mx reports errors inside <for>, a dynamic tag and a method body at the authored column", () => {
+  //   9  `<for|k, v| in=[1, 2]><p>${k + v + missingArr}</p></for>`  `missingArr`      (9,35)
+  //  10  `<for|k, v| in="abc"><p>${k + v + missingStr}</p></for>`   `missingStr`      (10,34)
+  //  11  `<for|k, v| in=list ? { a: 1 } : { b: 2 }>…${k + v + missingCond}`   `missingCond` (11,55)
+  //  12  `<for|k, v| in={ a: 1 } as Record<string, number>>…${k + v + missingAs}` `missingAs` (12,63)
+  // Lines 9 to 12 report no TS2869: every source is never nullish, so no `?? {}`.
+  it("whole-file .mx reports errors inside <for> and a dynamic tag at the authored column", () => {
     const { status, lines } = check("solid-for", "page.mx");
     expect(status).not.toBe(0);
     expect(lines).toEqual([
@@ -130,25 +126,16 @@ describe("mx-tsc on a Solid page", () => {
         /page\.mx\(8,4\): error TS2304: Cannot find name 'missingDyn'/,
       ),
       expect.stringMatching(
-        /page\.mx\(9,21\): error TS2304: Cannot find name 'missingInMethod'/,
+        /page\.mx\(9,35\): error TS2304: Cannot find name 'missingArr'/,
       ),
       expect.stringMatching(
-        /page\.mx\(10,35\): error TS2304: Cannot find name 'missingArr'/,
+        /page\.mx\(10,34\): error TS2304: Cannot find name 'missingStr'/,
       ),
       expect.stringMatching(
-        /page\.mx\(11,34\): error TS2304: Cannot find name 'missingStr'/,
+        /page\.mx\(11,55\): error TS2304: Cannot find name 'missingCond'/,
       ),
       expect.stringMatching(
-        /page\.mx\(12,21\): error TS2304: Cannot find name 'missingNoSemi'/,
-      ),
-      expect.stringMatching(
-        /page\.mx\(13,55\): error TS2304: Cannot find name 'missingCond'/,
-      ),
-      expect.stringMatching(
-        /page\.mx\(14,63\): error TS2304: Cannot find name 'missingAs'/,
-      ),
-      expect.stringMatching(
-        /page\.mx\(15,57\): error TS2304: Cannot find name 'missingNested'/,
+        /page\.mx\(12,63\): error TS2304: Cannot find name 'missingAs'/,
       ),
     ]);
   }, 60_000);

@@ -1,4 +1,4 @@
-import { parse as parseBabel, parseExpression } from "@babel/parser";
+import { parse as parseBabel } from "@babel/parser";
 import {
   type Attr,
   type AttributeTag,
@@ -20,11 +20,11 @@ import {
   type MappedCode,
   mapped,
   mappedExpr,
-  mappedRewrite,
   type Node,
   type Position,
   type ReadRewrite,
   rewriteAccessorReads,
+  type SourceSpan,
   TranslateError,
   unresolvedCustomTagMessage,
 } from "@mxlang/core";
@@ -823,40 +823,13 @@ function staticTemplateValue(expr: Expr): string | null {
   return value;
 }
 
-/**
- * A method attribute (`onClick(e) { … }`, printed `function (e) { … }`) as an
- * arrow function: its parameter list (and return type) and its body, sliced
- * from the parsed function at the parser's own positions. A regex over `code`
- * cannot tell the parameter list's `) {` from one inside the body
- * (`{ if (c) { … } }`). `null` when it is not a function or cannot be an arrow
- * (a generator).
- */
-function methodParts(expr: Expr): { head: string; body: string } | null {
-  if (expr.node?.type !== "FunctionExpression") return null;
-  const code = expr.code;
-  let fn: Node;
-  try {
-    fn = parseExpression(code, { plugins: ["typescript"] });
-  } catch {
-    return null;
-  }
-  if (fn?.type !== "FunctionExpression" || fn.generator) return null;
-  const listEnd: number = fn.returnType?.start ?? fn.body.start;
-  const open: number =
-    fn.typeParameters?.start ??
-    code.lastIndexOf("(", fn.params[0]?.start ?? listEnd);
-  if (open < 0) return null;
-  const params = code.slice(open, fn.body.start).trimEnd();
-  return {
-    head: `${fn.async ? "async " : ""}${params} => `,
-    body: code.slice(fn.body.start, fn.body.end),
-  };
-}
-
 function methodExpression(expr: Expr): string | null {
   if (expr.node?.type !== "FunctionExpression") return null;
-  const parts = methodParts(expr);
-  return parts ? parts.head + parts.body : expr.code;
+  const match = expr.code.match(
+    /^(async\s+)?function\s*\(([\s\S]*)\)\s*(\{[\s\S]*\})$/,
+  );
+  if (!match) return expr.code;
+  return `${match[1] ?? ""}(${match[2] ?? ""}) => ${match[3] ?? "{}"}`;
 }
 
 /**
@@ -999,22 +972,17 @@ function guardValue(
 
 /**
  * An attribute value's text with its authored mapping. A method rewritten to
- * an arrow function has a new head, which is generated text and stays
- * unmapped. Its `{…}` body is the authored text, possibly reprinted
- * (`{ go() }` as `{ go(); }`) or with reads rewritten, so it maps token by
- * token against the authored body (`mappedRewrite`).
+ * an arrow function keeps the mapping it has on main, `methodSpan` (the whole
+ * arrow over the authored span where main maps it, else none); mapping a
+ * method's body is a change of its own.
  */
-function mappedValue(expr: Expr): MappedCode {
-  const parts = methodParts(expr);
-  if (!parts) return mappedExpr(expr);
-  const { bodySpan, bodySource } = expr;
-  if (!bodySpan || bodySource === undefined) {
-    return concatMapped(parts.head + parts.body);
-  }
-  return concatMapped(
-    mapped(parts.head, null),
-    mappedRewrite(parts.body, bodySource, bodySpan),
-  );
+function mappedValue(
+  expr: Expr,
+  methodSpan: SourceSpan | null = null,
+): MappedCode {
+  const method = methodExpression(expr);
+  if (method === null || method === expr.code) return mappedExpr(expr);
+  return mapped(method, methodSpan);
 }
 
 function renderAttr(
@@ -1037,7 +1005,10 @@ function renderAttr(
         ? mapped(JSON.stringify(attr.value), attr.valueSpan ?? null)
         : attr.kind === "boolean"
           ? concatMapped("true")
-          : mappedValue(attr.value);
+          : mappedValue(
+              attr.value,
+              attr.kind === "dynamic" ? (attr.value.span ?? null) : null,
+            );
     const guardedColon =
       native !== undefined &&
       attr.kind === "dynamic" &&
@@ -1508,7 +1479,7 @@ function attributeTagAttrValue(
         return fail("`style=` with a non-object value", attr);
       }
       return attr.value.span
-        ? mappedValue(attr.value)
+        ? mappedValue(attr.value, attr.value.span)
         : mapped(
             methodExpression(attr.value) ?? attr.value.code,
             attr.nameSpan,

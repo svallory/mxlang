@@ -183,7 +183,6 @@ export {
   type MappedCode,
   mapped,
   mappedExpr,
-  mappedRewrite,
   replaceMapped,
   type SourceSpan,
 } from "./mapping.ts";
