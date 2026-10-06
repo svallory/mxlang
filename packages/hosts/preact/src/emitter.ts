@@ -881,6 +881,12 @@ export class PreactEmitter implements Emitter<string> {
       // the value — which is mapped — instead of on the unmapped prop name.
       // `satisfies` is erased on emit, so `mx-tsc` output stays runnable. A shorthand handler has no source span, so its
       // generated function maps to the attribute name.
+      //
+      // The `as any` after it ends the check there: `satisfies` keeps the
+      // value's own type, so without it the JSX prop re-checks the same value
+      // against the same handler type and reports a second error (TS2322)
+      // beside the mapped TS1360, on the unmapped prop (decision 161 surfaced
+      // the duplicate; the unmapped prop used to be dropped).
       case "event": {
         const name = this.#eventPropName(attr);
         const method = methodExpression(attr.value);
@@ -904,7 +910,7 @@ export class PreactEmitter implements Emitter<string> {
               : concatMapped(method ?? attr.value.code),
             ") ",
             mapped("satisfies", span),
-            ` ${this.#typeCheck}<"${tag}", "${name.slice(2).toLowerCase()}">}`,
+            ` ${this.#typeCheck}<"${tag}", "${name.slice(2).toLowerCase()}"> as any}`,
           );
         }
         return concatMapped(
@@ -1076,7 +1082,7 @@ export class PreactEmitter implements Emitter<string> {
               shorthand ? mapped(value, attr.nameSpan) : value,
               ") ",
               mapped("satisfies", shorthand ? attr.nameSpan : (span ?? null)),
-              ` ${this.#typeCheck}<"${tag}", "${name.slice(2).toLowerCase()}">`,
+              ` ${this.#typeCheck}<"${tag}", "${name.slice(2).toLowerCase()}"> as any`,
             )
           : (attr.kind === "dynamic" || attr.kind === "event") &&
               value === attr.value.code

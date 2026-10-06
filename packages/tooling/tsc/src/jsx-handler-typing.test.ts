@@ -72,6 +72,14 @@ beforeAll(() => {
       join(root, "package.json"),
       JSON.stringify({ mx: { host } }, null, 2),
     );
+    // Preact and React have no catch-all for custom tags (hono does): declare
+    // `<my-el>` as a consumer would, since plain TSX needs the same.
+    if (host !== "hono") {
+      writeFileSync(
+        join(root, "src", "custom.d.ts"),
+        `import "${host}"; declare module "${host}" { namespace JSX { interface IntrinsicElements { "my-el": Record<string, unknown>; } } }\n`,
+      );
+    }
     const hostDir = (name: string) =>
       join(repoRoot, "packages", "hosts", name, "src", "index.ts");
     writeFileSync(

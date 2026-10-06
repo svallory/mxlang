@@ -1,5 +1,7 @@
 # @mxlang/hono
 
+- **Fix (jsx-handler-prop-names, decision 161):** handler props are emitted under hono's declared names: `onKeyDown`, `onMouseDown`, `onDoubleClick` (was `onKeydown`, `onMousedown`, `onDblclick`; the types reject those). `hono/jsx/dom` binds them to the same DOM events (`event-runtime.test.ts`).
+
 - **Fix (native-tag-binding-capture, decision 164):** a lowercase tag is a native element whatever `import` or `<define>` binding of that name is in scope (shared emitter, see `@mxlang/preact`). A warning is raised at the tag.
 - **Changed (preact-region, decision 154):** the Bun loader declines `.preact.mx` (Preact's region file kind), as `@mxlang/html`'s does.
 
