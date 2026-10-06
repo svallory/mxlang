@@ -8,6 +8,7 @@ import {
 import { compileSource } from "./compile.ts";
 import type { Ctx, MxWarning, Node } from "./core.ts";
 import { DYNAMIC_TAG, expr, newCtx } from "./core.ts";
+import { STATEMENT_TAGLIB, STATEMENT_TAGLIB_ID } from "./core-taglib.ts";
 import { type CustomTag, customTagTaglib } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
 import type { AttributeTag, Ir, IrNode } from "./ir.ts";
@@ -72,9 +73,10 @@ function lowerSource(
   // `newCtx` plus the compiler's parse is the seam: a
   // translator whose Program visitor lowers instead of emitting.
   const translator = {
-    taglibs: [...(customTags ? [customTagTaglib(customTags)] : [])].filter(
-      (entry): entry is [string, unknown] => entry !== null,
-    ),
+    taglibs: [
+      [STATEMENT_TAGLIB_ID, STATEMENT_TAGLIB],
+      ...(customTags ? [customTagTaglib(customTags)] : []),
+    ].filter((entry): entry is [string, unknown] => entry !== null),
     tagDiscoveryDirs: [] as string[],
     translate: {
       Program: {
@@ -136,7 +138,9 @@ function lowerWithWarnings(
   let thrown: unknown = null;
 
   const translator = {
-    taglibs: [] as Array<[string, unknown]>,
+    taglibs: [[STATEMENT_TAGLIB_ID, STATEMENT_TAGLIB]] as Array<
+      [string, unknown]
+    >,
     tagDiscoveryDirs: [] as string[],
     translate: {
       Program: {
@@ -1734,11 +1738,8 @@ describe("one fixture per IR kind", () => {
         false,
       ],
       ["interface heritage", "export interface Input extends AttrTag {}", true],
-      [
-        "decorated static parse failure",
-        "static @dec class A {}\nexport interface Input { head?: AttrTag }",
-        true,
-      ],
+      // A decorator in a `static` is Marko's own syntax error since #395 r2, so the
+      // old "decorated static parse failure" row can no longer reach this derivation.
       [
         "duplicate static const parse failure",
         "static const x = 1\nstatic const x = 2\nexport interface Input { head?: AttrTag }",

@@ -98,7 +98,8 @@ describe("one extraction path for the exported selector (MED-1)", () => {
       '/*\nexport const selector = "in-comment";\n*/\n<b>!</b>\n',
     "html comment":
       '<!--\nexport const selector = "in-comment";\n-->\n<b>!</b>\n',
-    "text body": 'export const selector = "in-text" is prose\n<b>!</b>\n',
+    // (A "text body" row was dropped in #395 r2: `export const selector = "…" is
+    // prose` is a statement line, and a statement is a syntax error as in Marko.)
     "template string":
       'static const doc = `\nexport const selector = "in-string";\n`\n<b>!</b>\n',
   };

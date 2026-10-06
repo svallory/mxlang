@@ -35,15 +35,12 @@ describe("no atom hint where atoms are not read", () => {
     expect(message).not.toContain("is an atom (decision 156)");
   });
 
-  it("`static`: no atom is read, and html emits the statement verbatim", () => {
-    // html places a `static` statement's authored text without parsing it,
-    // so `:b` reaches the module unconverted (a JS syntax error at load).
-    // Pre-existing for any invalid `static` code; reported, not widened here.
-    const { code } = compile(
-      "static const o = { a: :b };\n<div/>",
-      "/fixtures/atoms.mx",
-    );
-    expect(code).toContain("const o = { a: :b };");
+  it("`static`: no atom is read, and the statement is a positioned syntax error", () => {
+    // A statement's text is TypeScript, parsed as Marko parses it (#395 r2):
+    // `:b` is no atom there, and html no longer emits it unchecked.
+    expect(() =>
+      compile("static const o = { a: :b };\n<div/>", "/fixtures/atoms.mx"),
+    ).toThrow("Unexpected token");
   });
 
   it("`{ new :a }`: keyword plus atom, with a hint that says so", () => {

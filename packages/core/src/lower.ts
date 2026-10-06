@@ -2631,7 +2631,13 @@ function rejectInvalidStatement(
   prefix: number,
 ): void {
   try {
-    markoBabel().parse(code, { sourceType: "module", plugins: ["typescript"] });
+    markoBabel().parse(code, {
+      sourceType: "module",
+      plugins: ["typescript"],
+      // A top-level \`return\` is TypeScript's TS1108 to report, with its
+      // mapping, in an Astro fence and a template \`static\` alike.
+      allowReturnOutsideFunction: true,
+    });
   } catch (error) {
     const at = (error as { loc?: { line: number; column: number } }).loc;
     const start = posOf(node);
