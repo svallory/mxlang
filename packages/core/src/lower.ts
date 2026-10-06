@@ -241,6 +241,8 @@ function skipInterpolation(source: string, at: number): number {
  * (`<div.a.${x}/>`, `<div.a${x}/>`, `<div#a${x}/>`): the first sigil of its
  * kind to the end of the last token of that kind. Marko gives such a value no
  * loc, so the run is read from the tag's own source; null when it is not there.
+ * In a mixed run (`<div.a#b.${x}/>`) the class span crosses the id: it is
+ * the first sigil to the last token, not the union of the class tokens.
  */
 function builtShorthandSpan(
   ctx: Ctx,
@@ -658,44 +660,44 @@ function foreignAttrHint(name: string): string {
   return "an attribute name may use letters, digits and `._:-`";
 }
 
-/** A bound target's authored text (identifier or member chain), or `…`. */
-function boundTargetText(value: Node | undefined): string {
-  if (value?.type === "Identifier") return value.name;
-  if (
-    (value?.type === "MemberExpression" ||
-      value?.type === "OptionalMemberExpression") &&
-    !value.computed &&
-    value.property?.type === "Identifier"
-  ) {
-    const dot = value.type === "OptionalMemberExpression" ? "?." : ".";
-    return `${boundTargetText(value.object)}${dot}${value.property.name}`;
+/**
+ * Decision 169: a bound attribute's name has no `:`. Marko reads `v:fn:=q` as
+ * a bound `v` whose change handler runs `q = fn(next)`; lowering would drop
+ * the modifier silently, so it is refused at the colon that starts it, naming
+ * the one form that works on every target. Run on every attribute list core
+ * lowers: native, dynamic and component tags, contracted custom-tag calls,
+ * attribute tags, control tags.
+ */
+function rejectBoundModifiers(ctx: Ctx, node: Node): void {
+  for (const attr of node.attributes ?? []) {
+    if (!attr.bound || attr.modifier == null) continue;
+    const modifier = String(attr.modifier);
+    const base = attr.default ? "value" : String(attr.name);
+    const valueSpan = exprSpan(ctx, attr.value);
+    const target = valueSpan
+      ? ctx.source.slice(valueSpan.sourceStart, valueSpan.sourceEnd)
+      : "…";
+    const drops = modifier
+      ? `would drop \`:${modifier}\``
+      : "has an empty modifier";
+    // The handler example only reads as code for a modifier that is a name.
+    const handler = /^[A-Za-z_$][\w$]*$/.test(modifier)
+      ? `, \`${base}Change(next) { ${target} = ${modifier}(next) }\``
+      : "";
+    const message = `A bound attribute name cannot contain \`:\`: \`${attr.default ? "" : base}:${modifier}:=\` ${drops}. Bind \`${base}=${target}\` and write the change handler${handler}`;
+    const start = attr.loc?.start;
+    if (!start) fail(message, attr);
+    const colon = attr.default ? 0 : base.length;
+    fail(message, {
+      loc: { start: { line: start.line, column: start.column + colon } },
+    });
   }
-  return "…";
 }
 
 /** Marko normalizes bindings before tag-specific validation or lowering. */
-function validateBoundAttributes(node: Node): void {
+function validateBoundAttributes(ctx: Ctx, node: Node): void {
+  rejectBoundModifiers(ctx, node);
   for (const attr of node.attributes ?? []) {
-    // Decision 169: a bound attribute's name has no `:`. Marko reads
-    // `v:fn:=q` as a bound `v` whose change handler runs `q = fn(next)`;
-    // lowering would drop the modifier silently, so it is refused at the
-    // colon that starts it, with the explicit form.
-    if (attr.bound && attr.modifier) {
-      const start = attr.loc?.start ?? attr.start ?? { line: 0, column: 0 };
-      const base = attr.default ? "value" : String(attr.name);
-      const target = boundTargetText(attr.value);
-      fail(
-        `A bound attribute name cannot contain \`:\`: \`${attr.default ? "" : base}:${attr.modifier}:=\` would drop \`:${attr.modifier}\`. Bind \`${base}=${target}\` (or \`${base}:=${target}\`) and write the change handler, \`${base}Change(next) { ${target} = ${attr.modifier}(next) }\``,
-        {
-          loc: {
-            start: {
-              line: start.line,
-              column: start.column + (attr.default ? 0 : base.length),
-            },
-          },
-        },
-      );
-    }
     if (
       attr.bound &&
       attr.value?.type !== "Identifier" &&
@@ -974,6 +976,7 @@ function lowerAttrs(
   on: "element" | "component" = "element",
   isElement = false,
 ): Attr[] {
+  rejectBoundModifiers(ctx, node);
   const attrs = resolveDuplicateAttrs(
     ctx,
     (node.attributes ?? []).map((attr: Node) =>
@@ -1570,7 +1573,8 @@ function lowerAuthoredAttributeTag(
   schema: AttrSchema,
 ): AttributeTag {
   const name = attrName(node);
-  if (!schema.customTagContract) validateBoundAttributes(node);
+  if (schema.customTagContract) rejectBoundModifiers(ctx, node);
+  else validateBoundAttributes(ctx, node);
   const declaration = declarationFor(schema, name, node);
   validateParentCollision(node, schema);
   const attrs = node.attributes ?? [];
@@ -1697,7 +1701,7 @@ function lowerAttributeIf(
     const branch = siblings[cursor];
     const name = String(branch.name?.value ?? "").replace(/^@/, "");
     if (cursor > index && name !== "else" && name !== "else-if") break;
-    validateBoundAttributes(branch);
+    validateBoundAttributes(ctx, branch);
     const conditionAttr =
       name === "if"
         ? (attrByName(branch, "value") ?? branch.attributes?.[0])
@@ -1931,7 +1935,7 @@ function lowerIfChain(
   index: number,
 ): [IrNode, number] {
   const node = children[index];
-  validateBoundAttributes(node);
+  validateBoundAttributes(ctx, node);
   rejectUnsupportedFields(ctx, node, "`<if>`");
   const cond = attrByName(node, "value") ?? node.attributes?.[0];
   if (!cond?.value) fail("`<if>` without a condition", node);
@@ -1975,7 +1979,7 @@ function lowerIfChain(
       break;
     }
 
-    validateBoundAttributes(child);
+    validateBoundAttributes(ctx, child);
     rejectUnsupportedFields(ctx, child, `\`<${childName}>\``);
     // `<else if=cond>` spells the condition as an `if` attribute; Marko's own
     // `<else-if=cond>` spells it as the tag's first (value) attribute.
@@ -2086,7 +2090,7 @@ function lowerForHead(
   node: Node,
   allowAttributeTags = false,
 ): ForHead {
-  validateBoundAttributes(node);
+  validateBoundAttributes(ctx, node);
   rejectUnsupportedFields(ctx, node, "`<for>`", {
     params: true,
     attributeTags: allowAttributeTags,
@@ -2997,6 +3001,7 @@ function lowerCustomTag(
   isBuiltin = false,
   wildcard?: WildcardMatch,
 ): IrNode[] {
+  rejectBoundModifiers(ctx, node);
   const alias = wildcard ? aliasOf(ctx, node, wildcard) : undefined;
   const label = tagLabel(name, alias);
   validateCustomTagParents(
@@ -3362,7 +3367,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // or "tagged", as before); otherwise core lowers a `Component` with a
   // dynamic target, resolved at run time like any other host.
   if (node.name && node.name.type !== "StringLiteral") {
-    validateBoundAttributes(node);
+    validateBoundAttributes(ctx, node);
     rejectArgsWithProps(node);
     const isBare =
       (node.attributes ?? []).length === 0 && !node.body?.body?.length;
@@ -3436,7 +3441,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       "else-if",
     ].includes(name)
   ) {
-    validateBoundAttributes(node);
+    validateBoundAttributes(ctx, node);
   }
 
   // Builtin identity is independent of host rendering policy: default HTML

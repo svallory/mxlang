@@ -103,7 +103,7 @@ function dataExpr(expr: Expr, what: string): DataExpr {
     code: expr.code,
     shape: expr.shape,
     span: requiredSpan(expr.span, what),
-    node: expr.node as Expression,
+    node: expr.node,
   };
 }
 

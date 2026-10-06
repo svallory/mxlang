@@ -48,7 +48,7 @@ Decision 169 (with 158.1). Measured against Marko 6.3.51 (`@marko/compiler` 5.42
 | `<foo v:fn:=q/>` (custom tag) | passes `{ v: q }` in the html output, handler on the client | same error |
 | `<div v:fn=q/>` (not bound) | attribute named `v:fn` | unchanged |
 
-Marko has no fixed modifier list: any identifier is a function applied to the incoming value in the change handler. MX has no refinements, and lowering `v:fn:=q` as a bound `v` would drop the handler silently, so core refuses it and names the explicit form (`v=q` plus `vChange(next) { q = fn(next) }`).
+Marko has no fixed modifier list: any identifier is a function applied to the incoming value in the change handler. MX has no refinements, and lowering `v:fn:=q` as a bound `v` would drop the handler silently, so core refuses it and names the explicit form (`v=q` plus `vChange(next) { q = fn(next) }`). The empty modifier `x::=q` is the same error.
 
 ## Deferred to MX 2
 

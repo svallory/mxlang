@@ -3748,6 +3748,21 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
     );
   });
 
+  /** Decision 169's message: one text for every target and shape. */
+  function boundModifierMessage(
+    base: string,
+    modifier: string,
+    target: string,
+  ): string {
+    const drops = modifier
+      ? `would drop \`:${modifier}\``
+      : "has an empty modifier";
+    const handler = /^[A-Za-z_$][\w$]*$/.test(modifier)
+      ? `, \`${base}Change(next) { ${target} = ${modifier}(next) }\``
+      : "";
+    return `A bound attribute name cannot contain \`:\`: \`${base}:${modifier}:=\` ${drops}. Bind \`${base}=${target}\` and write the change handler${handler}`;
+  }
+
   it.each([
     ["<Foo v:fn:=q/>", 1, 6, "v", "fn", "q"],
     ["<Foo v:fn:=q.r/>", 1, 6, "v", "fn", "q.r"],
@@ -3758,7 +3773,11 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
     ["<Foo v:a:b:=q/>", 1, 8, "v:a", "b", "q"],
     ["<div is:raw:=x/>", 1, 7, "is", "raw", "x"],
     ["<div v:no-update:=q/>", 1, 6, "v", "no-update", "q"],
-    ["<div v:fn:=q[0]/>", 1, 6, "v", "fn", "…"],
+    ["<div v:fn:=q[0]/>", 1, 6, "v", "fn", "q[0]"],
+    ["<div x::=q/>", 1, 6, "x", "", "q"],
+    ["<${t} v:fn:=q/>", 1, 7, "v", "fn", "q"],
+    ["<if=c v:fn:=q>x</if>", 1, 7, "v", "fn", "q"],
+    ["<for|i| of=o v:fn:=q>x</for>", 1, 14, "v", "fn", "q"],
   ])(
     "rejects a modifier on a bound attribute at its colon (decision 169): %s",
     (source, line, column, base, modifier, target) => {
@@ -3766,7 +3785,36 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
         lowerSource(source, fakeDeclarations({ isElement: () => false })),
       ).toThrow(
         expect.objectContaining({
-          message: `A bound attribute name cannot contain \`:\`: \`${base}:${modifier}:=\` would drop \`:${modifier}\`. Bind \`${base}=${target}\` (or \`${base}:=${target}\`) and write the change handler, \`${base}Change(next) { ${target} = ${modifier}(next) }\``,
+          message: boundModifierMessage(base, modifier, target),
+          line,
+          column,
+        }),
+      );
+    },
+  );
+
+  // A call to a custom tag registered with a contract skips the generic
+  // binding validation, and its attribute tags have a contract too; the
+  // modifier check still runs on both.
+  const card: Record<string, CustomTag> = {
+    card: {
+      attributes: { v: { type: "string" } },
+      attributeTags: { row: { attributes: { v: { type: "string" } } } },
+      transform: () => [],
+    },
+  };
+  it.each([
+    ["<card v:fn:=q/>", 1, 7],
+    ["<card><@row v:fn:=q/></card>", 1, 13],
+    ["<card>\n  <@row a=1 v:fn:=q/>\n</card>", 2, 13],
+  ])(
+    "rejects a modifier on a bound attribute of a contracted tag: %s",
+    (source, line, column) => {
+      expect(() =>
+        lowerSource(source, fakeDeclarations(), undefined, undefined, card),
+      ).toThrow(
+        expect.objectContaining({
+          message: boundModifierMessage("v", "fn", "q"),
           line,
           column,
         }),

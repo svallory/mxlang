@@ -28,14 +28,16 @@ import type { SourceSpan } from "@mxlang/core";
  * `function ({ post }) { … }`. `span` slices the **authored** text out of the
  * file — consumers that need what the author wrote slice by `span`, always.
  * `node` belongs to Marko's own Babel instance; its offsets live at
- * `node.loc.{start,end}.index` (file-absolute, UTF-16).
+ * `node.loc.{start,end}.index` (file-absolute, UTF-16). It is `null` when core
+ * built the expression itself (`Expr.node` is `Node | null`); an authored
+ * expression always has one.
  */
 export interface DataExpr {
   code: string;
   shape: "object" | "array" | "string" | "other";
   /** Required here: a tree expression always has authored source. */
   span: SourceSpan;
-  node: Expression;
+  node: Expression | null;
 }
 
 export type DataAttr =

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Changed (types only):** `DataExpr.node` is `Expression | null`, following core's `Expr.node: Node | null`. An authored expression always has a node; one core built itself has `null`. Narrow before reading it.
+
 ## 0.1.0-alpha.7
 
 - Depends on `@mxlang/core@0.1.0-alpha.7`: the template parser no longer throws on a stray closing tag after a nameless concise tag, and Unicode whitespace behaves as ASCII whitespace in every look-behind. Two behaviour changes for input containing Unicode whitespace are listed in core's changelog. No change to the data target's own code.
