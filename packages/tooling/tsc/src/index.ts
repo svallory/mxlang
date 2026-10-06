@@ -304,7 +304,7 @@ function approximateUnmappedInVolar(): void {
       language: Language<string>,
       program: ts.Program,
     ) => void) & {
-      [APPROXIMATE_MARKER]?: true;
+      [APPROXIMATE_MARKER]?: boolean;
     };
   };
   const original = decorate.decorateProgram;
