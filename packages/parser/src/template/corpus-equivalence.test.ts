@@ -148,6 +148,8 @@ describe("source copy vs patched npm htmljs-parser", () => {
       "packages/tooling/tsc/src/fixtures/expression-values/html/page.mx",
       "packages/tooling/tsc/src/fixtures/expression-values/preact/page.mx",
       "packages/tooling/tsc/src/fixtures/expression-values/react/page.mx",
+      "packages/tooling/tsc/src/fixtures/expression-values/solid-clean/page.mx",
+      "packages/tooling/tsc/src/fixtures/expression-values/solid/page.mx",
     ]);
   });
 });

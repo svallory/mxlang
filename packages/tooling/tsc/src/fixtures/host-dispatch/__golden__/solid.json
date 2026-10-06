@@ -36,6 +36,23 @@
               0
             ],
             "generatedOffsets": [
+              0
+            ],
+            "lengths": [
+              49
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              0
+            ],
+            "generatedOffsets": [
               50
             ],
             "lengths": [
@@ -199,6 +216,23 @@
             ],
             "lengths": [
               29
+            ],
+            "data": {
+              "verification": true,
+              "completion": true,
+              "semantic": true,
+              "navigation": true
+            }
+          },
+          {
+            "sourceOffsets": [
+              0
+            ],
+            "generatedOffsets": [
+              0
+            ],
+            "lengths": [
+              28
             ],
             "data": {
               "verification": true,

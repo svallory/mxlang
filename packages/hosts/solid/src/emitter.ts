@@ -2232,7 +2232,18 @@ export class SolidEmitter implements Emitter<string> {
     if (node.args.length > 0 && attrGuardUse) attrGuardUse.spread = true;
     const stringArgsAttrs =
       node.args.length > 0
-        ? ` {...${dynTextareaSpread(`${MX_ATTR_SPREAD_BINDING}(${node.args[0]?.code} || {}, ${value})`, native)}}`
+        ? concatMapped(
+            " {...",
+            dynTextareaSpread(
+              concatMapped(
+                `${MX_ATTR_SPREAD_BINDING}(`,
+                node.args[0] ? mappedExpr(node.args[0]) : "undefined",
+                ` || {}, ${value})`,
+              ),
+              native,
+            ),
+            "}",
+          )
         : "";
     // decision 116, Marko parity (`runtime-tags/src/html/dynamic-tag.ts`'s
     // `_dynamic_tag`, `normalizeDynamicRenderer`): a target that is neither
