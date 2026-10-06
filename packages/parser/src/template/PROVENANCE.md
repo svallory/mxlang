@@ -235,9 +235,15 @@ and 8; both dist builds carry the same JavaScript):
   TypeScript reads as whitespace or line terminators (U+00A0, U+1680, U+2000
   to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF) are not word
   characters: TypeScript cannot own a `:` after one, so `[a,\u00a0:b]` keeps
-  its atom, exactly as before this change (`unicodeWhitespaceMismatches`).
-  The whitespace loops still skip only ASCII whitespace, as upstream does; a
-  Unicode whitespace character is read as punctuation, as it always was.
+  its atom. Since decision 156 addendum 10 (template-parser-ascii-only-
+  lookbehinds) the look-behind's whitespace loops (`expectsExpression`, its
+  `!` case, `isOperatorWord`) skip them as whitespace too (`isSpaceCode`:
+  `isWhitespaceCode` or `isUnicodeSpaceCode`), so each behaves exactly as an
+  ASCII space (`unicodeWhitespaceMismatches`,
+  `unicodeWhitespaceLoopMismatches`): `{ é\u00a0:a }` is a key, and
+  `(a?\u00a0:b : c)` and `(Array<T>\u00a0:b)` read as their ASCII-space
+  spellings (`divergences.md`). Nowhere else in the template grammar does a
+  non-ASCII space change meaning.
   `isWordCode` itself stays ASCII. U+0085 and U+200B, which TypeScript
   also skips, are not in the set: Babel rejects both.
 

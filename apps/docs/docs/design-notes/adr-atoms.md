@@ -347,6 +347,8 @@ Known limits, settled by the lead in decision 156 addendum 4 (pinned by tests, n
 - **A conditional type inside inline-cast type arguments** (`c ? y as Foo<A extends B ? C : D> :z`) lexes the atom `:z`, **at the top level of an attribute value as well as inside a group** (the round-4 parser did not lex it at the top level). **This breaks input that compiled before atoms.**
 - **A `<` inside a string or comment within type arguments** (`c ? y as Foo<"<"> :z`, `Foo</* < */T> :z`) unbalances the lexer's scan back, so `:z` is an atom. **This breaks input that compiled before atoms.**
 
+Decision 156 addendum 10 (mx-lead, 2026-10-06): in the atom look-behind, Unicode whitespace and line terminators (U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF) behave exactly as ASCII whitespace. `{ é\u00a0:a }` is a key, as `{ é :a }` is. Two shapes that lexed an atom and compiled before now read as their ASCII-space spellings do, and stop compiling: `(a?\u00a0:b : c)` (the optional marker `a?`) and `(Array<T>\u00a0:b)` (type arguments). Nothing else in the template grammar changes where a non-ASCII space is legal.
+
 For the last three, the fix is one space after the colon, `: z`, which is also what Prettier prints; it compiles exactly as before atoms. Core's error says so: "`:z` was read as an atom (decision 156), so the ternary has no `:`; if TypeScript owns that `:` (type arguments before it, ADR 156 known limits), write `: z` with a space".
 
 Each has a `divergences.md` row and a case-table row, so a future lexer change is a conscious one.

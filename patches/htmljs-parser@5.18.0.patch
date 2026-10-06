@@ -1,5 +1,5 @@
 diff --git a/dist/index.js b/dist/index.js
-index dc727aef1e94c2a42a93d9e897a89cd5518f0907..83d0b3a72221774b8fe182668016e13ba71f8775 100644
+index dc727aef1e94c2a42a93d9e897a89cd5518f0907..d57c551591ae119b6c398c02bc632119848eee07 100644
 --- a/dist/index.js
 +++ b/dist/index.js
 @@ -47,7 +47,23 @@ var Parser = class {
@@ -199,7 +199,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..83d0b3a72221774b8fe182668016e13b
    switch (code) {
      case 96:
      case 39:
-@@ -1432,8 +1474,190 @@ function canFollowDivision(code) {
+@@ -1432,8 +1474,193 @@ function canFollowDivision(code) {
        return !1;
    }
  }
@@ -250,6 +250,9 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..83d0b3a72221774b8fe182668016e13b
 +  let { atoms } = parser, last = atoms[atoms.length - 1];
 +  return (!last || last.start < start) && (atoms.push({ start, end }), (_b = (_a = parser.options).onAtom) == null || _b.call(_a, { start, end, value: { start: start + 1, end } })), expression.atomEnd = end, parser.pos = end, !0;
 +}
++function isSpaceCode(code) {
++  return isWhitespaceCode(code) || isUnicodeSpaceCode(code);
++}
 +function isSpreadEnd(data, at) {
 +  return data.charCodeAt(at - 1) === 46 && data.charCodeAt(at - 2) === 46 && data.charCodeAt(at - 3) !== 46;
 +}
@@ -267,7 +270,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..83d0b3a72221774b8fe182668016e13b
 +  var _a;
 +  let i = pos - 1;
 +  for (; ; ) {
-+    for (; i >= expression.start && isWhitespaceCode(data.charCodeAt(i)); ) i--;
++    for (; i >= expression.start && isSpaceCode(data.charCodeAt(i)); ) i--;
 +    let comment = (_a = expression.comments) == null ? void 0 : _a.find((c) => c.end === i + 1);
 +    if (!comment) break;
 +    i = comment.start - 1;
@@ -298,7 +301,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..83d0b3a72221774b8fe182668016e13b
 +    }
 +    case 33: {
 +      let j = i - 1;
-+      for (; j >= expression.start && (data.charCodeAt(j) === 33 || isWhitespaceCode(data.charCodeAt(j))); )
++      for (; j >= expression.start && (data.charCodeAt(j) === 33 || isSpaceCode(data.charCodeAt(j))); )
 +        j--;
 +      if (j < expression.start) return !0;
 +      let owner = data.charCodeAt(j);
@@ -379,7 +382,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..83d0b3a72221774b8fe182668016e13b
 +  if (!atomKeywords.includes(word)) return !1;
 +  if (word === "of" || word === "yield" || word === "await") {
 +    let j = wordStart - 1;
-+    for (; j >= expression.start && isWhitespaceCode(data.charCodeAt(j)); ) j--;
++    for (; j >= expression.start && isSpaceCode(data.charCodeAt(j)); ) j--;
 +    let before = j < expression.start ? -1 : data.charCodeAt(j);
 +    return word === "of" ? isUnicodeWordCode(before) || before === 41 || before === 93 || before === 125 : !(before === 63 || before === 58 || before === 44 || before === 40);
 +  }
@@ -391,7 +394,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..83d0b3a72221774b8fe182668016e13b
  }
  function lookAheadWhile(match, data, pos) {
    let max = data.length;
-@@ -1450,6 +1674,7 @@ function lookBehindWhile(match, data, pos) {
+@@ -1450,6 +1677,7 @@ function lookBehindWhile(match, data, pos) {
    return 0;
  }
  function lookBehindForKeyword(expression, data, pos, keywords) {
@@ -399,7 +402,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..83d0b3a72221774b8fe182668016e13b
    for (let keyword of keywords) {
      let keywordPos = lookBehindFor(data, pos, keyword);
      if (keywordPos !== -1)
-@@ -1694,10 +1919,10 @@ function startsTypeName(parser, pos, allowGroup) {
+@@ -1694,10 +1922,10 @@ function startsTypeName(parser, pos, allowGroup) {
    let code = parser.data.charCodeAt(pos);
    if (code === 123 || code === 42)
      return allowGroup;
@@ -412,7 +415,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..83d0b3a72221774b8fe182668016e13b
        return !1;
    return !0;
  }
-@@ -1805,9 +2030,9 @@ var OPEN_TAG = {
+@@ -1805,9 +2033,9 @@ var OPEN_TAG = {
    },
    exit(tag) {
      var _a, _b;
@@ -425,7 +428,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..83d0b3a72221774b8fe182668016e13b
        end: this.pos,
        selfClosed
      }), selfClosed ? 2 : tag.type) {
-@@ -1981,7 +2206,9 @@ var OPEN_TAG = {
+@@ -1981,7 +2209,9 @@ var OPEN_TAG = {
                );
                return;
              }
@@ -436,7 +439,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..83d0b3a72221774b8fe182668016e13b
              return;
            }
            case 124: {
-@@ -2345,7 +2572,9 @@ function checkForPlaceholder(parser, code) {
+@@ -2345,7 +2575,9 @@ function checkForPlaceholder(parser, code) {
            return parser.endText(), parser.pos += extra, parser.startText(), parser.pos += ahead - extra + (escape ? 2 : 3), !0;
          parser.startText(), parser.pos += extra, parser.endText(), parser.pos += extra;
        }
@@ -447,7 +450,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..83d0b3a72221774b8fe182668016e13b
      }
    }
    return !1;
-@@ -2468,7 +2697,10 @@ var TAG_NAME = {
+@@ -2468,7 +2700,10 @@ var TAG_NAME = {
    exit(tagName) {
      var _a, _b, _c, _d, _e, _f;
      let { start, end, quasis, expressions } = tagName, last = quasis[quasis.length - 1];
@@ -459,7 +462,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..83d0b3a72221774b8fe182668016e13b
        case 35:
          if (this.activeTag.hasShorthandId)
            return this.emitError(
-@@ -2533,7 +2765,9 @@ var TAG_NAME = {
+@@ -2533,7 +2768,9 @@ var TAG_NAME = {
          return;
        }
        if (code === 36 && data.charCodeAt(this.pos + 1) === 123) {
@@ -470,7 +473,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..83d0b3a72221774b8fe182668016e13b
          return;
        } else if (isWhitespaceCode(code) || code === 61 || code === 58 && data.charCodeAt(this.pos + 1) === 61 || code === 40 || code === 47 || code === 124 || code === 60 || code === 44 || (this.isConcise ? code === 59 || code === 91 : code === 62)) {
          this.activeTag.shorthandEnd = this.pos, this.exitState();
-@@ -2587,7 +2821,9 @@ var TEMPLATE_STRING = {
+@@ -2587,7 +2824,9 @@ var TEMPLATE_STRING = {
        switch (data.charCodeAt(this.pos)) {
          case 36:
            if (data.charCodeAt(this.pos + 1) === 123) {
@@ -481,7 +484,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..83d0b3a72221774b8fe182668016e13b
              return;
            }
            this.pos++;
-@@ -2670,6 +2906,12 @@ function htmlEOF() {
+@@ -2670,6 +2909,12 @@ function htmlEOF() {
  function isWordCode(code) {
    return code >= 65 && code <= 90 || code >= 97 && code <= 122 || code >= 48 && code <= 57 || code == 36 || code === 95;
  }
@@ -495,7 +498,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..83d0b3a72221774b8fe182668016e13b
    return code === 62;
  }
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 8afb14db555b8df8a5b9f5e1c29bad5080125709..a42198b98bb65189aa58ad64d40cc0a52886d5e9 100644
+index 8afb14db555b8df8a5b9f5e1c29bad5080125709..7ad7a1560142d1f2a9a1bd681ff84bbc94d108b7 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -20,7 +20,23 @@ var Parser = class {
@@ -695,7 +698,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..a42198b98bb65189aa58ad64d40cc0a5
    switch (code) {
      case 96:
      case 39:
-@@ -1405,8 +1447,190 @@ function canFollowDivision(code) {
+@@ -1405,8 +1447,193 @@ function canFollowDivision(code) {
        return !1;
    }
  }
@@ -746,6 +749,9 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..a42198b98bb65189aa58ad64d40cc0a5
 +  let { atoms } = parser, last = atoms[atoms.length - 1];
 +  return (!last || last.start < start) && (atoms.push({ start, end }), (_b = (_a = parser.options).onAtom) == null || _b.call(_a, { start, end, value: { start: start + 1, end } })), expression.atomEnd = end, parser.pos = end, !0;
 +}
++function isSpaceCode(code) {
++  return isWhitespaceCode(code) || isUnicodeSpaceCode(code);
++}
 +function isSpreadEnd(data, at) {
 +  return data.charCodeAt(at - 1) === 46 && data.charCodeAt(at - 2) === 46 && data.charCodeAt(at - 3) !== 46;
 +}
@@ -763,7 +769,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..a42198b98bb65189aa58ad64d40cc0a5
 +  var _a;
 +  let i = pos - 1;
 +  for (; ; ) {
-+    for (; i >= expression.start && isWhitespaceCode(data.charCodeAt(i)); ) i--;
++    for (; i >= expression.start && isSpaceCode(data.charCodeAt(i)); ) i--;
 +    let comment = (_a = expression.comments) == null ? void 0 : _a.find((c) => c.end === i + 1);
 +    if (!comment) break;
 +    i = comment.start - 1;
@@ -794,7 +800,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..a42198b98bb65189aa58ad64d40cc0a5
 +    }
 +    case 33: {
 +      let j = i - 1;
-+      for (; j >= expression.start && (data.charCodeAt(j) === 33 || isWhitespaceCode(data.charCodeAt(j))); )
++      for (; j >= expression.start && (data.charCodeAt(j) === 33 || isSpaceCode(data.charCodeAt(j))); )
 +        j--;
 +      if (j < expression.start) return !0;
 +      let owner = data.charCodeAt(j);
@@ -875,7 +881,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..a42198b98bb65189aa58ad64d40cc0a5
 +  if (!atomKeywords.includes(word)) return !1;
 +  if (word === "of" || word === "yield" || word === "await") {
 +    let j = wordStart - 1;
-+    for (; j >= expression.start && isWhitespaceCode(data.charCodeAt(j)); ) j--;
++    for (; j >= expression.start && isSpaceCode(data.charCodeAt(j)); ) j--;
 +    let before = j < expression.start ? -1 : data.charCodeAt(j);
 +    return word === "of" ? isUnicodeWordCode(before) || before === 41 || before === 93 || before === 125 : !(before === 63 || before === 58 || before === 44 || before === 40);
 +  }
@@ -887,7 +893,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..a42198b98bb65189aa58ad64d40cc0a5
  }
  function lookAheadWhile(match, data, pos) {
    let max = data.length;
-@@ -1423,6 +1647,7 @@ function lookBehindWhile(match, data, pos) {
+@@ -1423,6 +1650,7 @@ function lookBehindWhile(match, data, pos) {
    return 0;
  }
  function lookBehindForKeyword(expression, data, pos, keywords) {
@@ -895,7 +901,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..a42198b98bb65189aa58ad64d40cc0a5
    for (let keyword of keywords) {
      let keywordPos = lookBehindFor(data, pos, keyword);
      if (keywordPos !== -1)
-@@ -1667,10 +1892,10 @@ function startsTypeName(parser, pos, allowGroup) {
+@@ -1667,10 +1895,10 @@ function startsTypeName(parser, pos, allowGroup) {
    let code = parser.data.charCodeAt(pos);
    if (code === 123 || code === 42)
      return allowGroup;
@@ -908,7 +914,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..a42198b98bb65189aa58ad64d40cc0a5
        return !1;
    return !0;
  }
-@@ -1778,9 +2003,9 @@ var OPEN_TAG = {
+@@ -1778,9 +2006,9 @@ var OPEN_TAG = {
    },
    exit(tag) {
      var _a, _b;
@@ -921,7 +927,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..a42198b98bb65189aa58ad64d40cc0a5
        end: this.pos,
        selfClosed
      }), selfClosed ? 2 : tag.type) {
-@@ -1954,7 +2179,9 @@ var OPEN_TAG = {
+@@ -1954,7 +2182,9 @@ var OPEN_TAG = {
                );
                return;
              }
@@ -932,7 +938,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..a42198b98bb65189aa58ad64d40cc0a5
              return;
            }
            case 124: {
-@@ -2318,7 +2545,9 @@ function checkForPlaceholder(parser, code) {
+@@ -2318,7 +2548,9 @@ function checkForPlaceholder(parser, code) {
            return parser.endText(), parser.pos += extra, parser.startText(), parser.pos += ahead - extra + (escape ? 2 : 3), !0;
          parser.startText(), parser.pos += extra, parser.endText(), parser.pos += extra;
        }
@@ -943,7 +949,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..a42198b98bb65189aa58ad64d40cc0a5
      }
    }
    return !1;
-@@ -2441,7 +2670,10 @@ var TAG_NAME = {
+@@ -2441,7 +2673,10 @@ var TAG_NAME = {
    exit(tagName) {
      var _a, _b, _c, _d, _e, _f;
      let { start, end, quasis, expressions } = tagName, last = quasis[quasis.length - 1];
@@ -955,7 +961,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..a42198b98bb65189aa58ad64d40cc0a5
        case 35:
          if (this.activeTag.hasShorthandId)
            return this.emitError(
-@@ -2506,7 +2738,9 @@ var TAG_NAME = {
+@@ -2506,7 +2741,9 @@ var TAG_NAME = {
          return;
        }
        if (code === 36 && data.charCodeAt(this.pos + 1) === 123) {
@@ -966,7 +972,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..a42198b98bb65189aa58ad64d40cc0a5
          return;
        } else if (isWhitespaceCode(code) || code === 61 || code === 58 && data.charCodeAt(this.pos + 1) === 61 || code === 40 || code === 47 || code === 124 || code === 60 || code === 44 || (this.isConcise ? code === 59 || code === 91 : code === 62)) {
          this.activeTag.shorthandEnd = this.pos, this.exitState();
-@@ -2560,7 +2794,9 @@ var TEMPLATE_STRING = {
+@@ -2560,7 +2797,9 @@ var TEMPLATE_STRING = {
        switch (data.charCodeAt(this.pos)) {
          case 36:
            if (data.charCodeAt(this.pos + 1) === 123) {
@@ -977,7 +983,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..a42198b98bb65189aa58ad64d40cc0a5
              return;
            }
            this.pos++;
-@@ -2643,6 +2879,12 @@ function htmlEOF() {
+@@ -2643,6 +2882,12 @@ function htmlEOF() {
  function isWordCode(code) {
    return code >= 65 && code <= 90 || code >= 97 && code <= 122 || code >= 48 && code <= 57 || code == 36 || code === 95;
  }

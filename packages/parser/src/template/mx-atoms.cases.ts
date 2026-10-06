@@ -1727,6 +1727,11 @@ export function unicodeWhitespaceMismatches(mod: AtomParserModule): {
     for (const [pre, post] of positions) {
       for (const form of forms) {
         total++;
+        // `x=<WS>:b`: the attribute state, not the look-behind, consumes the
+        // whitespace after `=`, and only ASCII whitespace (addendum 10 is the
+        // look-behind only), so the value starts at the Unicode whitespace.
+        // The atom is the same; the 294 rows above pin these events.
+        if (form.startsWith("W") && pre.endsWith("=")) continue;
         const code = pre + form.replaceAll("W", ws) + post;
         const got = renderAtoms(mod, code).replaceAll(ws, " ");
         const twin = renderAtoms(mod, pre + form.replaceAll("W", " ") + post);
