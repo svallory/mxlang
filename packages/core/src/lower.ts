@@ -2634,8 +2634,9 @@ function rejectInvalidStatement(
     markoBabel().parse(code, {
       sourceType: "module",
       plugins: ["typescript"],
-      // A top-level \`return\` is TypeScript's TS1108 to report, with its
-      // mapping, in an Astro fence and a template \`static\` alike.
+      // A top-level `return` is TypeScript's TS1108 to report, with its mapping,
+      // in an Astro fence and a template `static` alike; stock Marko 6.3.51
+      // compiles a template `static return` too.
       allowReturnOutsideFunction: true,
     });
   } catch (error) {
@@ -3544,6 +3545,21 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
         !ctx.declarations.isDelegatedTag?.(name, ctx)));
   if (!fileLocalBinding && compilerValueTag)
     validateBuiltinValueAttributes(node, name);
+
+  // A `server`/`client` statement's text is checked like any statement
+  // (#395 r3), before a host runs it (html's `server`), drops it (html's
+  // `client`) or refuses it: Marko parses it first, so an invalid join that
+  // swallowed the next template line is its syntax error, never a silent
+  // drop. Only a statement-parsed node (`rawValue`); data's ordinary
+  // `client`/`server` tags are not statements.
+  if (
+    (name === "server" || name === "client") &&
+    typeof node.rawValue === "string"
+  ) {
+    const text = sliceLoc(ctx, node.loc).trim();
+    const keyword = new RegExp(`^${name}\\s+`).exec(text)?.[0] ?? name;
+    rejectInvalidStatement(node, text.slice(keyword.length), keyword.length);
+  }
 
   const disposition = Object.hasOwn(ctx.declarations.tags, name)
     ? ctx.declarations.tags[name]

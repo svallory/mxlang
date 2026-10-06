@@ -223,7 +223,10 @@ are errors, as is an atom (`{ k: :name }`). A line ending in an operator or `>`
 continues onto the next line, as in Marko: `static const t = 1 +⏎2` is one valid
 statement, and `static const ok = 2 >⏎<div>…` is the joined expression's own
 error ("Missing semicolon.", at the next line), never a silent drop of that
-line. A translator that does not declare the statement tags is refused with a
+line. The same check runs on a `server` or `client` statement before a target
+runs it (html's `server`), drops it (html's `client`) or refuses it. A top-level
+`return` in a statement is accepted, as Marko accepts it, and left to
+TypeScript. A translator that does not declare the statement tags is refused with a
 positioned error naming `createTranslator`; core adds the tags to every
 translator it builds a lookup from.
 

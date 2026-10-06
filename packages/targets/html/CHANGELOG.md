@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix (statement-tags r3, decision 168):** `server const el = <b>hi</b>` (or a `server`/`client` line ending in `>` that swallowed the next template line) is a positioned syntax error at Marko's position; html used to run or drop the joined text unchecked, emptying the template. A valid `server` statement is unchanged.
+
 - **Changed (statement-tags, decision 168):** `class { … }` is the shared positioned "not supported in MX" error, replacing "Unable to find entry point for custom tag `<class>`".
 
 - **Changed (core-error-recovery, decision 162):** the Bun loader throws the first error of a failing `.mx` file with the file's other errors in its message (`TranslateError.errors` is kept on it).
