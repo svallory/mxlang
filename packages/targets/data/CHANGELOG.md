@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.0-alpha.10
+
+- Depends on `@mxlang/core@0.1.0-alpha.10`, which restores body text after Unicode whitespace followed by `//` (a regression in alpha.7 to alpha.9), makes the parser's non-ASCII word class exact and removes a parser throw on a nameless tag. No change to the data target's own code.
+
 ## 0.1.0-alpha.9
 
 - **Added:** a bound attribute (`kind: "expression"`, `bound: true`) carries `refinement?: DataExpr`, the `fn` of `v:fn:=q` (Marko's change-handler function; `node: null`, `span` slices the modifier). Absent without a modifier.

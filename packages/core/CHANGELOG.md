@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.1.0-alpha.10
+
+- **Fixed (regression in 0.1.0-alpha.7 to alpha.9; decision 156 addendum 13):** in a body, text after a non-breaking space (or other Unicode whitespace) followed by `//` or `/*` is text again, as in Marko. `<p>Visit<NBSP>//cdn.example/x.js</p>` had been read as a comment that swallowed `</p>`.
+- **Fixed (decision 156 addendum 13):** the word class the bundled template parser uses when it looks behind or ahead is exact: a code point at or above U+0080 counts only when it is an identifier character (Unicode `ID_Continue`, U+200C, U+200D; a surrogate pair is one code point). Symbols and emoji (`©`, `×`, `…`) no longer count, so `<div x=a >©>c</div>` parses as in Marko.
+- **Fixed (decision 165):** a tag that never gets a name (`<,>a`) is reported through the parser's error callback instead of throwing.
+- **Unchanged, stated for clarity (decision 156 addendum 15):** the after-value rule's `:name` test stays ASCII-only; `x=(a) :É => a` is one value.
+
 ## 0.1.0-alpha.9
 
 - **Added (bound-attribute-refinement):** `Attr` `bound` carries `refinement?: Expr`, the `fn` of `<Foo v:fn:=q/>`: Marko binds `v` and its change handler runs `q = fn(next)`. The `Expr` is an identifier over the modifier's text (`node: null`, `span` on the modifier). A modifier that is no valid JavaScript identifier (`x::=q`, `v:no-update:=q`, `v:class:=q`) is Marko's error, "Bound attribute refinement shorthand must be a valid JavaScript identifier.", at the modifier, on every tag shape (native, dynamic, component, contracted custom-tag call and its attribute tags, control tags). A host that applies the refinement (Angular: `[v]` plus `(vChange)`) does; html ignores it (render-once, like Marko's server html); the hosts that refuse `:=` refuse the refined form with their own error. Replaces the positioned error alpha.8 raised for a modifier on a bound attribute (decision 169, withdrawn).
