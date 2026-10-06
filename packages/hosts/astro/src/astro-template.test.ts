@@ -121,19 +121,45 @@ describe("source mappings", () => {
     (_kind, template, expression) => {
       const result = lowerAstroMx(template, "Test.astro.mx");
       const sourceStart = template.indexOf(expression);
-      const mapping = result.mappings.find(
+      const candidates = result.mappings.filter(
         (candidate) => candidate.sourceStart === sourceStart,
       );
 
-      expect(mapping).toBeDefined();
-      expect(template.slice(mapping?.sourceStart, mapping?.sourceEnd)).toBe(
-        expression,
-      );
+      expect(candidates.length).toBeGreaterThan(0);
+      for (const mapping of candidates) {
+        expect(template.slice(mapping.sourceStart, mapping.sourceEnd)).toBe(
+          expression,
+        );
+      }
+      // One of them is the expression itself, at its write offset.
       expect(
-        result.code.slice(mapping?.generatedStart, mapping?.generatedEnd),
-      ).toBe(expression);
+        candidates.some(
+          (mapping) =>
+            result.code.slice(mapping.generatedStart, mapping.generatedEnd) ===
+            expression,
+        ),
+      ).toBe(true);
     },
   );
+
+  it("maps the spread operand of a for iterable onto the authored value", () => {
+    // TypeScript reports a non-iterable value (TS2488) on this operand.
+    const template = "<for|item| of=items><p>${item}</p></for>";
+    const result = lowerAstroMx(template, "Test.astro.mx");
+    const at = template.indexOf("items");
+    const operand = result.mappings.find(
+      (mapping) =>
+        mapping.sourceStart === at &&
+        result.code.slice(mapping.generatedStart, mapping.generatedEnd) ===
+          "mxList" &&
+        result.code.slice(
+          mapping.generatedStart - 3,
+          mapping.generatedStart,
+        ) === "...",
+    );
+
+    expect(operand).toBeDefined();
+  });
 
   it("maps a hoisted statement as a whole source block", () => {
     const source = "static const answer: number = 42;\n<p>${answer}</p>";
