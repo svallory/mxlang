@@ -222,13 +222,16 @@ function spellings(
   if (element) {
     if (!authored)
       return tokenOccurrences(sourceText, `<${closing}${element}`, lo, hi);
-    // An opening tag starts in the gap; a closing one ends its tag's span.
+    // An opening tag starts in the gap, or one character before it: a printer
+    // that maps `return <` for the `<` of a fragment it wrapped around the
+    // root element ends the mapped range inside the tag's own first
+    // character. A closing tag ends its tag's span.
     return authored.filter(
       (span) =>
         span.kind === "tag" &&
         (closing
           ? span.end > lo && span.end <= hi
-          : span.start >= lo && span.start < hi) &&
+          : span.start >= lo - 1 && span.start < hi) &&
         isNamed(span, element, sourceText),
     );
   }

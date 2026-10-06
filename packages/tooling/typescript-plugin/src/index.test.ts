@@ -5542,6 +5542,26 @@ describe("an unmapped diagnostic lands on its enclosing tag in every file kind (
     },
   );
 
+  it("an .astro.mx page reports a non-iterable `<for of=…>` value on that value", () => {
+    const directory = `${here}/fixtures/astro-policy`;
+    const page = `${directory}/for-of-page.astro.mx`;
+    const consumer = `${directory}/for-of-consumer.ts`;
+    const source =
+      "---\nconst a = 1;\n---\n<div><for|x| of=1><p>${x}</p></for></div>\n";
+    const { service } = createMutablePluginService(
+      { [page]: source, [consumer]: 'import "./for-of-page.astro.mx";' },
+      [consumer, page],
+      { config: { astro: true } },
+    );
+    service.getSemanticDiagnostics(consumer);
+
+    const diagnostics = service.getSemanticDiagnostics(page);
+    expect(diagnostics.map((d) => [d.code, onSource(source, d)])).toEqual([
+      [2488, "1"],
+    ]);
+    expect(text(diagnostics[0] as ts.Diagnostic)).not.toContain("MX bug");
+  });
+
   it("an .astro.mx page reports a missing prop on its tag", () => {
     const directory = `${here}/fixtures/astro-policy`;
     const page = `${directory}/enclosing-page.astro.mx`;

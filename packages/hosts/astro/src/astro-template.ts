@@ -1022,7 +1022,12 @@ export function createEmitter(
         write(")");
       };
       if (node.source.kind === "of") {
-        write("{((mxList) => mxList ? [...mxList] : [])(");
+        // The spread operand is where TypeScript reports a value that is not
+        // iterable (TS2488); mapping it onto the authored `of` value puts the
+        // error on that value instead of in the wrapper.
+        write("{((mxList) => mxList ? [...");
+        writeMapped("mxList", node.source.list.node);
+        write("] : [])(");
         writeExpr(node.source.list);
         write(").map((");
         writeParam(0);

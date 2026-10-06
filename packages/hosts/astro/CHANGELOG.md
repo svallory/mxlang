@@ -25,6 +25,8 @@
 
 ## Unreleased
 
+- **Fix (unmapped-diagnostics-region-enclosing-spans):** `<for of=…>` maps the spread operand of its list wrapper onto the authored `of` value, so a non-iterable value (TS2488) is reported on that value instead of at 1:1 as MX's bug.
+
 - **Feat (unmapped-diagnostics-region-enclosing-spans):** `astroMxTemplateOffset(source)` (exported from `@mxlang/astro/template`) names where an `.astro.mx` file's template starts, after its `---` fence; the typescript plugin reads authored spans from it.
 
 - **Fix (mx-tsc-astro-ambient-types):** the astro host declares its ambient types (`host.ambientTypes`): astro's `env.d.ts` and `astro-jsx.d.ts`, or `@astrojs/language-server`'s fallback copies without an astro install, as Astro's language server adds them, for a program holding an `.astro.mx` or a plain `.astro` file. `mx-tsc --astro` and the editor now resolve `Fragment` and `astro/jsx-runtime` under Astro's own tsconfig preset, with no `types: ["astro/env"]`; `examples/astro-static` drops that entry.
