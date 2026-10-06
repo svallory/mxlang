@@ -152,12 +152,19 @@ describe("lowercase tag with a same-named binding in scope", () => {
       }
       return "compiled";
     };
-    // Drops the authored import's own line so the two outputs compare.
-    const withoutImport = (code: string) =>
+    // Drops the module import lines and unifies the callee's spelling, so the
+    // two outputs compare: with no import in scope the emitter aliases the
+    // discovered tag itself (`__mxRow`); with one, core binds it (`_row`).
+    const normalize = (code: string) =>
       code
         .split("\n")
-        .filter((line) => !line.includes('"./row.mx"'))
-        .join("\n");
+        .filter(
+          (line) =>
+            !line.includes('"./row.mx"') &&
+            !line.includes('"./tags/row.marko"'),
+        )
+        .join("\n")
+        .replaceAll("__mxRow", "_row");
     const imported = 'import row from "./row.mx"';
 
     // The `.mx` import declares `<return>`; the taglib tag does not, so the
@@ -174,8 +181,8 @@ describe("lowercase tag with a same-named binding in scope", () => {
 
     // `<@item>` is not checked against the import's plain `item` prop.
     const items = `<row label="x"><@item x="s"/></row>\n`;
-    expect(withoutImport(withTaglibRow(`${imported}\n${items}`))).toBe(
-      withTaglibRow(`\n${items}`),
+    expect(normalize(withTaglibRow(`${imported}\n${items}`))).toBe(
+      normalize(withTaglibRow(`\n${items}`)),
     );
   });
 
