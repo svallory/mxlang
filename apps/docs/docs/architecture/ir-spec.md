@@ -153,6 +153,8 @@ interface Atom {
 | `file` | Reserved. Nothing in `packages/core` sets it today; a tag unit compiles under its own `Ctx`, so its spans are already absolute in its own file. |
 | `atoms` | Decision 156: the atoms (`:name`) written inside the expression, in source order; absent when there are none. `code` holds each one as its string literal (`[:a]` is `["a"]`): core splices `JSON.stringify(name)` at each atom's span on both `expr()` paths (`atoms.test.ts`). In `node`, each atom is a `StringLiteral` whose `value` is the name and whose `extra.mxAtom` is `{ span }` (`MxAtomMark`). That node shape is **public API** of `@mxlang/core` and `@mxlang/data` (addendum 1, item 1): a consumer translating an expression recognises an atom by `extra.mxAtom`. `mappedExpr` maps each atom to its literal and the text between one to one, so a type error on a nested atom lands on it. |
 
+**The `node` contract (decision 166, addendum 3).** `Expr.node`, `For.paramNodes` and the tag-author API's `attr.value.node` are expression nodes in `@mxlang/babel`'s vocabulary (Babel 7.29 shapes), with file-absolute positions, and they are read-only: an emitter that edits one copies first with `cloneIr` (E21). A `node` is `null` in two cases only: a value core built itself (section 2.2), and, after the MX2 port, an expression that failed to parse. A host treats `null` as "no structure" and never dereferences it unchecked. No host parses source text to recover structure, and core offers no re-parse helper.
+
 What an emitter may assume:
 
 - `code` is a complete JavaScript/TypeScript expression and may be emitted verbatim inside parentheses.
