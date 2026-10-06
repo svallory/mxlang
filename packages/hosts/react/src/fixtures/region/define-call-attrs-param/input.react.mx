@@ -1,0 +1,8 @@
+export default function Page() {
+  return (
+    <ul>
+      <define/Row|p|><li>${p.n}</li></define>
+      <Row n=1/>
+    </ul>
+  );
+}

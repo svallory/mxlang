@@ -1517,7 +1517,9 @@ export class PreactEmitter implements Emitter<string> {
         ? node.target.valueImportBinding
           ? componentAlias(node.target.valueImportBinding)
           : undefined
-        : componentAlias(node.target.name);
+        : node.target.kind === "define"
+          ? undefined
+          : componentAlias(node.target.name);
     for (const attr of node.attrs) {
       if (attr.kind === "spread") {
         parts.push(`...${attr.value.code}`);
@@ -1708,16 +1710,22 @@ export class PreactEmitter implements Emitter<string> {
       // its own codegen for this shape binds the object itself to whichever
       // param follows the args, not the attribute tag's value, and silently
       // drops the content. MX instead extends its own existing positional
-      // named-lookup scheme (`#defineProps`, unaffected below for the
-      // no-args case): params beyond the args are filled from the same named
-      // lookup, one value per param.
+      // named-lookup scheme: params beyond the args are filled from the same
+      // named lookup, one value per param.
+      //
+      // Without args the call is Marko's: the attributes (spreads included),
+      // attribute tags and `content` travel as ONE object bound to the first
+      // param, `{}` when the call carries none (measured on 6.3.51; `|p|` and
+      // `|{ n }|` both read it). A define with no params ignores them.
       const args =
         node.args.length > 0
           ? [
               ...node.args.map((arg: Expr) => arg.code),
               ...this.#defineTrailingParams(node),
             ].join(", ")
-          : this.#defineProps(node);
+          : node.target.params.length > 0
+            ? this.#propsObject(node)
+            : "";
       this.#out.push(
         concatMapped(
           "{",
@@ -1831,8 +1839,8 @@ export class PreactEmitter implements Emitter<string> {
    * The named values a `<define>` call supplies, keyed by name — attributes,
    * attribute tags and (when the body has content) `content`, matching the
    * prop name Marko's own `<${input.content}/>` reads. Shared by
-   * `#defineProps` (the no-args call shape) and `#defineTrailingParams` (the
-   * args-plus-content/attribute-tag shape, decision 109).
+   * `#defineTrailingParams` (the args-plus-content/attribute-tag shape,
+   * decision 109).
    */
   #defineNamed(
     node: Extract<IrNode, { kind: "Component" }>,
@@ -1863,20 +1871,11 @@ export class PreactEmitter implements Emitter<string> {
     return named;
   }
 
-  /** The props object for a `<define>` called by name rather than positionally. */
-  #defineProps(node: Extract<IrNode, { kind: "Component" }>): string {
-    if (node.target.kind !== "define") return "";
-    const named = this.#defineNamed(node);
-    return node.target.params
-      .map((param) => named.get(param) ?? "undefined")
-      .join(", ");
-  }
-
   /**
    * The positional values for the `<define>` params beyond the tag args
    * (decision 109): a body or attribute tag rides alongside args as
-   * additional positional values, one per remaining param, by the same
-   * named lookup `#defineProps` uses for the no-args shape.
+   * additional positional values, one per remaining param, by named
+   * lookup.
    */
   #defineTrailingParams(
     node: Extract<IrNode, { kind: "Component" }>,

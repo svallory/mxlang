@@ -1,0 +1,8 @@
+export default function Page() {
+  return (
+    <>{(() =>
+      {const Row = (p) => <><li>{p.n}</li></>;
+        return <><ul>
+            {Row({ "n": 1 })}</ul></>;})()}</>);
+
+}

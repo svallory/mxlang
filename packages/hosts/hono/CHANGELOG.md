@@ -6,6 +6,8 @@
 
 - **Changed (hono-region, decision 154):** **behaviour change:** a `*.hono.mx` file is no longer a whole-file `.mx`; it is a region file, and the Bun loader declines it.
 
+- **Fix (jsx-define-call-drops-attrs):** a `<define>` called with attributes (`<Row n=1/>`) hands the define's first param one object of the attributes, spreads, attribute tags and `content`, as Marko 6.3.51 does (`{}` when the call carries none). It used to emit `Row(undefined)`, which compiled clean and crashed at render. Both `|p|` and `|{ n }|` read it, whole-file and in a `.react.mx` region. A call with tag arguments is unchanged (decision 109); a define with no params still ignores the attributes. Render-locked by `define-call-attrs.test.ts`.
+
 - **Changed (react-region, decision 154):** the Bun loader declines `.react.mx` (React's region file kind), as `@mxlang/html`'s does.
 
 - **Changed (bridge-host, decision 154):** the Bun loader's filter is built from its lookup (`mxFilter`), as `@mxlang/html`'s; unchanged with the package's own lookup.

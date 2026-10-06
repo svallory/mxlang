@@ -1,0 +1,8 @@
+export default function Page() {
+  return (
+    <ul>
+      <define/Row|{ a, b, content }|><li>${a}${b}<${content}/></li></define>
+      <Row ...{ a: 1, b: 2 }>t</Row>
+    </ul>
+  );
+}

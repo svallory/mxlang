@@ -237,7 +237,7 @@ export function attributeHelpers(
  * way: a *function* target spreads the whole array as its call arguments
  * (\`target(...payload)\`) whether or not the last element is that trailing
  * object — the callee reads it as its own last positional parameter, the
- * same convention \`#defineProps\`/\`#defineTrailingParams\` use for a
+ * same convention \`#defineTrailingParams\` uses for a
  * \`<define>\` call. A positional call is not an element description, matching
  * \`@mxlang/html\`'s \`renderDynamic\` and \`@mxlang/solid\`'s inline dispatch.
  *
