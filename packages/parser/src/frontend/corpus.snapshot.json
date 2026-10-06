@@ -7422,19 +7422,19 @@
     "error AMBIGUOUS_ATTRIBUTE_VALUE [7,12)"
   ],
   "g1699": ["tag unnamed [1,1) [1,1) open=[1,1) mode=html concise"],
-  "g1700": ["tag unnamed [2,2) [2,4) open=[2,4) mode=html concise self-closed"],
+  "g1700": ["tag unnamed [1,1) [0,4) open=[0,4) mode=html self-closed"],
   "g1701": [
-    "tag unnamed [2,2) [2,4) open=[2,3) mode=html concise incomplete",
+    "tag unnamed [1,1) [0,4) open=[0,3) mode=html incomplete",
     "  text [3,4)",
     "error MISSING_END_TAG [0,3)"
   ],
   "g1702": [
-    "tag unnamed [2,2) [2,3) open=[2,3) mode=html concise incomplete",
+    "tag unnamed [1,1) [0,3) open=[0,3) mode=html incomplete",
     "error MISSING_END_TAG [0,3)"
   ],
   "g1703": [
     "text [3,5)",
-    "tag unnamed [9,9) [9,10) open=[9,10) mode=html concise incomplete",
+    "tag unnamed [6,6) [5,10) open=[5,10) mode=html incomplete",
     "error MISSING_END_TAG [5,10)"
   ],
   "g1704": [
@@ -7455,7 +7455,7 @@
   ],
   "g1708": [
     "tag \"div\" [1,4) [0,8) open=[0,5) mode=html incomplete",
-    "  tag unnamed [7,7) [7,8) open=[7,8) mode=html concise incomplete",
+    "  tag unnamed [6,6) [5,8) open=[5,8) mode=html incomplete",
     "error MISSING_END_TAG [5,8)"
   ],
   "g1709": [

@@ -101,6 +101,8 @@ export interface TagBuilder extends Builder {
   _closeStart: number | undefined;
   _closeName: Range | undefined;
   _openEnded: boolean;
+  /** Opened by `headTag` before any name event; a later name fills it in. */
+  _phantom?: boolean;
 }
 
 /**
@@ -190,7 +192,19 @@ class FrontEnd {
       onCloseTagName: (e: Range) => this.onCloseTagName(e),
       onCloseTagEnd: (e: Range) => this.onCloseTagEnd(e),
     };
-    createParser(handlers).parse(this.source);
+    // Each handler marks that the front end is running, so a throw from the
+    // template parser itself (a defect there: it never throws by contract)
+    // is told apart from one of ours in the internal error's message.
+    const wrapped: Record<string, unknown> = {};
+    for (const [name, handler] of Object.entries(handlers)) {
+      wrapped[name] = (event: never) => {
+        this.inHandler = true;
+        const result = (handler as (e: never) => unknown)(event);
+        this.inHandler = false;
+        return result;
+      };
+    }
+    createParser(wrapped).parse(this.source);
     if (!this.templateError && this.stack.length > 0) {
       // TODO `concise-eof-open-delimiter-silent` and
       // `concise-eof-interpolation-drops-event` (parser-grammar OQ 19): at
@@ -234,11 +248,15 @@ class FrontEnd {
     return this.source.slice(this.clamp(range.start), this.clamp(range.end));
   }
 
+  /**
+   * Records how far the parse got: the innermost open tag's furthest part.
+   * A tag hands its end to its parent when it closes (`close`, `stopAll`),
+   * so this stays constant time however deep the nesting.
+   */
   reach(local: number): void {
     if (local > this.reached) this.reached = local;
-    for (const tag of this.stack) {
-      if (this.at(local) > tag._reached) tag._reached = this.at(local);
-    }
+    const top = this.top;
+    if (top && this.at(local) > top._reached) top._reached = this.at(local);
   }
 
   // --- containers and atoms ------------------------------------------------
@@ -456,15 +474,27 @@ class FrontEnd {
       }
     }
 
-    this.openTag(
-      start,
-      concise,
-      name,
-      type,
-      bodyMode,
-      shorthands,
-      template.end,
-    );
+    const phantom = this.top;
+    if (phantom?._phantom && !phantom._openEnded) {
+      // A concise attribute group (`[/* c */ …`) reports head events before
+      // the name: the tag `headTag` opened for them is this one.
+      phantom._phantom = false;
+      phantom.type = type;
+      phantom.name = name;
+      phantom.bodyMode = bodyMode;
+      phantom.shorthands.push(...shorthands);
+      this.reach(template.end);
+    } else {
+      this.openTag(
+        start,
+        concise,
+        name,
+        type,
+        bodyMode,
+        shorthands,
+        template.end,
+      );
+    }
     switch (bodyMode) {
       case "void":
         return TagType.void;
@@ -556,7 +586,8 @@ class FrontEnd {
    * makes no shorthand for its sigil.
    */
   onTagShorthand(sigil: "#" | ".", template: Ranges.Template): void {
-    const tag = this.requireTag();
+    if (this.statement) return; // a statement's continuation line (g0895)
+    const tag = this.headTag(template.start);
     const quasis = template.quasis.map((q) => ({ ...q }));
     const last = quasis[quasis.length - 1] as Range;
     const colonInLast = this.slice(last).indexOf(":");
@@ -605,9 +636,43 @@ class FrontEnd {
   }
 
   onTagPart(field: string, type: string, event: Ranges.Value): void {
-    const tag = this.requireTag();
+    if (this.statement) return; // a statement's continuation line (g0895)
+    const tag = this.headTag(event.start);
     tag[field] = this.container(type, event.value, event);
     this.reach(event.end);
+  }
+
+  /**
+   * The open tag a head event belongs to. Interim (decision 163 addendum 9):
+   * a concise line that opens a tag with no name (`,` alone, `,// c`) gets
+   * head events and the open tag's end but no `onOpenTagName`
+   * (parser-grammar, "a named close tag when the open tag never got its
+   * name", g1683); the tag is unnamed, at its first head event. PR 2b
+   * records MX_TAG_NAME_MISSING here instead; today's path crashes.
+   */
+  headTag(at: number): TagBuilder {
+    const top = this.top;
+    if (top && !top._openEnded) return top;
+    // In HTML mode (`<,/>`) the tag starts at its pending `<`; the empty
+    // name sits right after it, as for any unnamed tag (ast §3.3).
+    const open = this.openStart;
+    this.openStart = undefined;
+    const nameAt = open === undefined ? at : open + 1;
+    this.openTag(
+      open ?? at,
+      open === undefined,
+      {
+        kind: "unnamed",
+        span: { start: this.at(nameAt), end: this.at(nameAt) },
+      },
+      "MxTag",
+      this.shapeOf(""),
+      [],
+      at,
+    );
+    const tag = this.requireTag();
+    tag._phantom = true;
+    return tag;
   }
 
   requireTag(): TagBuilder {
@@ -623,7 +688,7 @@ class FrontEnd {
     // words as attribute names; they are inside the statement's range,
     // which the statement node covers (g0895).
     if (this.statement) return;
-    const tag = this.requireTag();
+    const tag = this.headTag(range.start);
     const text = this.slice(range);
     const items: Builder[] = [];
     if (text === "") {
@@ -748,7 +813,7 @@ class FrontEnd {
 
   onAttrSpread(event: Ranges.Value): void {
     if (this.statement) return;
-    const tag = this.requireTag();
+    const tag = this.headTag(event.start);
     tag.attributes.push({
       type: "MxSpreadAttribute",
       ...this.span(event),
@@ -760,7 +825,7 @@ class FrontEnd {
 
   onOpenTagComment(event: Ranges.Value): void {
     if (this.statement) return;
-    const tag = this.requireTag();
+    const tag = this.headTag(event.start);
     tag.attributes.push({
       type: "MxComment",
       ...this.span(event),
@@ -779,27 +844,7 @@ class FrontEnd {
       this.pushStatement(statement, event.end);
       return;
     }
-    if (!this.top || this.top._openEnded) {
-      // Interim (decision 163 addendum 9): PR 2b records MX_TAG_NAME_MISSING
-      // here instead; today's path crashes on this input.
-      // A concise line that opens a tag with no name (`,` alone): the
-      // template parser reports the open tag's end and its close, but no
-      // name (parser-grammar, "a named close tag when the open tag never
-      // got its name", g1683). The tag is unnamed, at the open tag's end.
-      this.openTag(
-        event.start,
-        true,
-        {
-          kind: "unnamed",
-          span: { start: this.at(event.start), end: this.at(event.start) },
-        },
-        "MxTag",
-        this.shapeOf(""),
-        [],
-        event.start,
-      );
-    }
-    const tag = this.requireTag();
+    const tag = this.headTag(event.start);
     tag.openTag.end = this.at(event.end);
     tag._openEnded = true;
     tag.selfClosed = event.selfClosed;
@@ -872,7 +917,14 @@ class FrontEnd {
         nameSpan: written ? this.span(name) : null,
       };
     }
-    tag.end = this.at(range.end);
+    // A tag closed without a written close tag (a concise block, or an
+    // HTML-mode tag the parser ends at a dedent) ends at its last
+    // descendant (ast §3.2); the parser's close range can end one short of
+    // it, after a block scriptlet (template parser defect, PR 2 report).
+    tag.end =
+      tag._closeStart === undefined
+        ? Math.max(this.at(range.end), tag._reached)
+        : this.at(range.end);
     this.reach(range.end);
     this.close(tag);
   }
@@ -881,6 +933,8 @@ class FrontEnd {
     if (this.stack.pop() !== tag) {
       throw new Error("closed a tag that is not the innermost open one");
     }
+    const parent = this.top;
+    if (parent && tag.end > parent._reached) parent._reached = tag.end;
     this.runRules(tag);
   }
 
@@ -939,7 +993,9 @@ class FrontEnd {
       end: at,
       code: "MX_FRONT_END_INTERNAL",
       origin: "front-end",
-      message: `The MX front end failed while building the syntax tree (${MX_BUG}): ${raw}`,
+      message: this.inHandler
+        ? `The MX front end failed while building the syntax tree (${MX_BUG}): ${raw}`
+        : `The MX template parser threw instead of reporting an error (${MX_BUG}): ${raw}`,
       context: null,
     });
     this.internal = true;
@@ -951,6 +1007,7 @@ class FrontEnd {
   }
 
   internal = false;
+  inHandler = false;
 
   finish(base: MxFragmentBase): InterimDocument {
     const errors = [...this.errors].sort((a, b) => a.start - b.start);
@@ -969,16 +1026,32 @@ class FrontEnd {
   }
 }
 
-/** Copies a builder tree into fresh plain objects, dropping builder state (`_` keys). */
-function freezeCopy(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(freezeCopy);
-  if (value === null || typeof value !== "object") return value;
-  const out: Record<string, unknown> = {};
-  for (const [key, field] of Object.entries(value)) {
-    if (key.startsWith("_")) continue;
-    out[key] = freezeCopy(field);
+/**
+ * Copies a builder tree into fresh plain objects, dropping builder state
+ * (`_` keys). Iterative, so a deeply nested document cannot overflow the
+ * stack (`scaling.test.ts`, the deep shape).
+ */
+function freezeCopy(root: unknown): unknown {
+  const copyOf = (value: unknown): unknown => {
+    if (value === null || typeof value !== "object") return value;
+    return Array.isArray(value) ? new Array(value.length) : {};
+  };
+  const top = copyOf(root);
+  const work: [unknown, unknown][] = [[root, top]];
+  while (work.length > 0) {
+    const [from, to] = work.pop() as [
+      Record<string, unknown>,
+      Record<string, unknown>,
+    ];
+    if (from === null || typeof from !== "object") continue;
+    for (const [key, field] of Object.entries(from)) {
+      if (key.startsWith("_")) continue;
+      const copy = copyOf(field);
+      to[key] = copy;
+      if (copy !== field) work.push([field, copy]);
+    }
   }
-  return out;
+  return top;
 }
 
 function commentKind(source: string, at: number): "html" | "line" | "block" {

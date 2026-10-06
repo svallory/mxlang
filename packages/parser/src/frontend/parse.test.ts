@@ -723,6 +723,51 @@ describe("interim, changes in PR 2b", () => {
   });
 });
 
+describe("template parser shapes the catalogue does not name", () => {
+  it("a concise attribute group reports a comment before the name: one tag", () => {
+    const d = doc("[/*c*/ div x=1]");
+    expect(d.body).toHaveLength(1);
+    expect(d.body[0]).toMatchObject({
+      type: "MxTag",
+      name: { kind: "static", value: "div" },
+    });
+    expect(d.body[0].attributes.map((a: Any) => a.type)).toEqual([
+      "MxComment",
+      "MxAttribute",
+    ]);
+  });
+
+  it("interim, changes in PR 2b: an HTML-mode tag with no name (<,/>) is unnamed, right after <", () => {
+    // PR 2b records MX_TAG_NAME_MISSING here (decision 163 addendum 9).
+    expect(first("<,/>")).toMatchObject({
+      start: 0,
+      end: 4,
+      name: { kind: "unnamed", span: span(1, 1) },
+    });
+  });
+
+  it("a statement's continuation lines belong to the statement", () => {
+    const d = doc("static const a = 1\n,\n|| x=1");
+    expect(d.body).toHaveLength(1);
+    expect(d.body[0]).toMatchObject({ type: "MxModuleStatement", start: 0 });
+  });
+
+  it("a tag closed without a close tag ends at its last descendant", () => {
+    // The parser's close range ends one short of a block scriptlet here.
+    const tag = first("div\n  $ { a }C");
+    expect(tag.body[0]).toMatchObject({ type: "MxScriptlet", end: 13 });
+    expect(tag.end).toBe(13);
+  });
+
+  it("<,>a reports MISSING_END_TAG since #406 (it threw before)", () => {
+    const d = doc("<,>a");
+    expect(d.complete).toBe(false);
+    expect(d.errors).toEqual([
+      expect.objectContaining({ code: "MISSING_END_TAG", origin: "template" }),
+    ]);
+  });
+});
+
 describe("§3.14 MxReturn", () => {
   it("<return=x/>", () => {
     const tag = first("<return=x/>");
