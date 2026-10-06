@@ -53,6 +53,21 @@
                 "character": 3
               }
             }
+          },
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "`<service>`: custom tag has neither a `transform` nor a template file, so a call has nothing to expand to",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 1
+              }
+            }
           }
         ],
         "related": [
@@ -91,6 +106,12 @@
             "fileName": "<root>/data-check/clean.mx",
             "message": "`<port>`: custom tag has neither a `transform` nor a template file, so a call has nothing to expand to",
             "offset": 16,
+            "category": "error"
+          },
+          {
+            "fileName": "<root>/data-check/clean.mx",
+            "message": "`<service>`: custom tag has neither a `transform` nor a template file, so a call has nothing to expand to",
+            "offset": 0,
             "category": "error"
           },
           {
@@ -311,6 +332,21 @@
                 "character": 3
               }
             }
+          },
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "`<service>`: custom tag has neither a `transform` nor a template file, so a call has nothing to expand to",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 1
+              }
+            }
           }
         ],
         "related": [
@@ -353,6 +389,12 @@
           },
           {
             "fileName": "<root>/data-check/violation.mx",
+            "message": "`<service>`: custom tag has neither a `transform` nor a template file, so a call has nothing to expand to",
+            "offset": 0,
+            "category": "error"
+          },
+          {
+            "fileName": "<root>/data-check/violation.mx",
             "offset": 0,
             "category": "error",
             "message": "target not loaded: see <root>/data-check/package.json(5,15)"
@@ -390,8 +432,10 @@
   },
   "mxTsc": [
     "<root>/data-check/clean.mx(2,3): error TS80001: `<port>`: custom tag has neither a `transform` nor a template file, so a call has nothing to expand to",
+    "<root>/data-check/clean.mx(1,1): error TS80001: `<service>`: custom tag has neither a `transform` nor a template file, so a call has nothing to expand to",
     "<root>/data-check/unknown-tag.mx(1,1): error TS80001: Unable to find entry point for custom tag `<servce>`.",
     "<root>/data-check/violation.mx(2,3): error TS80001: `<port>`: custom tag has neither a `transform` nor a template file, so a call has nothing to expand to",
+    "<root>/data-check/violation.mx(1,1): error TS80001: `<service>`: custom tag has neither a `transform` nor a template file, so a call has nothing to expand to",
     "<root>/data-check/clean.mx(1,1): error TS80001: target not loaded: see <root>/data-check/package.json(5,15)",
     "<root>/data-check/unknown-tag.mx(1,1): error TS80001: target not loaded: see <root>/data-check/package.json(5,15)",
     "<root>/data-check/violation.mx(1,1): error TS80001: target not loaded: see <root>/data-check/package.json(5,15)",

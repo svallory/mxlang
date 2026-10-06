@@ -127,7 +127,9 @@
           }
         ],
         "related": [],
-        "dependencies": [],
+        "dependencies": [
+          "<root>/html-strict/Card.mx"
+        ],
         "unexpected": []
       },
       "tsPlugin": {

@@ -124,7 +124,9 @@
           }
         ],
         "related": [],
-        "dependencies": [],
+        "dependencies": [
+          "<root>/react/Card.mx"
+        ],
         "unexpected": []
       },
       "tsPlugin": {

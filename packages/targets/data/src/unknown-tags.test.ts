@@ -281,11 +281,15 @@ describe('unknownTags: "reject"', () => {
     const trailers: [string, { message: string; line: number }[]][] = [
       [
         "stub\n  x\n",
-        [attributes, { message: "`<x>` is not a known tag", line: 4 }],
+        [
+          attributes,
+          { message: "`<stub>`: does not accept content", line: 3 },
+          { message: "`<x>` is not a known tag", line: 4 },
+        ],
       ],
-      // Core stops at its first lowering error (`<attributes>` under the
-      // unknown parent), so the `<define>` after it is never reached.
-      ["<define/>\n", [attributes]],
+      // Core recovers per tag (decision 162): the `<define>` after the
+      // `<attributes>` error is reached and reports its own.
+      ["<define/>\n", [attributes, { message: "<define>", line: 3 }]],
     ];
     for (const [trailer, rest] of trailers) {
       const { diagnostics } = parse(

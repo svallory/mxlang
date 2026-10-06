@@ -53,6 +53,21 @@
                 "character": 3
               }
             }
+          },
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "`<attributes>`: custom tag has neither a `transform` nor a template file, so a call has nothing to expand to",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 1
+              }
+            }
           }
         ],
         "related": [
@@ -95,6 +110,12 @@
           },
           {
             "fileName": "<root>/data-sugar-e1/doc.mx",
+            "message": "`<attributes>`: custom tag has neither a `transform` nor a template file, so a call has nothing to expand to",
+            "offset": 0,
+            "category": "error"
+          },
+          {
+            "fileName": "<root>/data-sugar-e1/doc.mx",
             "offset": 0,
             "category": "error",
             "message": "target not loaded: see <root>/data-sugar-e1/package.json(5,15)"
@@ -132,6 +153,7 @@
   },
   "mxTsc": [
     "<root>/data-sugar-e1/doc.mx(2,3): error TS80001: `<attribute>`: custom tag has neither a `transform` nor a template file, so a call has nothing to expand to",
+    "<root>/data-sugar-e1/doc.mx(1,1): error TS80001: `<attributes>`: custom tag has neither a `transform` nor a template file, so a call has nothing to expand to",
     "<root>/data-sugar-e1/doc.mx(1,1): error TS80001: target not loaded: see <root>/data-sugar-e1/package.json(5,15)",
     "<root>/data-sugar-e1/package.json(5,15): error TS80003: mx.target \"data\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead"
   ],

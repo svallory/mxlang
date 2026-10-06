@@ -124,7 +124,9 @@
           }
         ],
         "related": [],
-        "dependencies": [],
+        "dependencies": [
+          "<root>/preact/Card.mx"
+        ],
         "unexpected": []
       },
       "tsPlugin": {

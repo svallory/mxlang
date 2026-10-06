@@ -37,7 +37,7 @@ describe("allowed parents under delegate-everything declarations (decision 138 E
       ],
     });
   });
-  it("reports only the first positioned parent error with no partial tree", () => {
+  it("reports every positioned parent error with no partial tree", () => {
     const invalid = parseData(
       '<div>\n  <attribute="status"/>\n  <attribute="other"/>\n</div>',
       "/resource.mx",
@@ -52,6 +52,14 @@ describe("allowed parents under delegate-everything declarations (decision 138 E
         line: 2,
         column: 2,
         offset: 8,
+      },
+      {
+        severity: "error",
+        message:
+          "`<attribute>` must be inside `<attributes>`; found inside `<div>`",
+        line: 3,
+        column: 2,
+        offset: 32,
       },
     ]);
     const root = parseData('<attribute="status"/>', "/resource.mx", {

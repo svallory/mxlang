@@ -124,7 +124,9 @@
           }
         ],
         "related": [],
-        "dependencies": [],
+        "dependencies": [
+          "<root>/hono/Card.mx"
+        ],
         "unexpected": []
       },
       "tsPlugin": {
