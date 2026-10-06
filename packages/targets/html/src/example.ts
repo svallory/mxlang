@@ -5,14 +5,13 @@
  * a compiled module with no runtime but `escape`, and the HTML it produces.
  */
 
-import { readFileSync } from "node:fs";
+import { cpSync, existsSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { scanCached } from "@mxlang/core";
 import { configuredDefaultTag } from "./default-tag.ts";
 import { compileFile, htmlTargets } from "./index.ts";
 import { mxTwins } from "./mx-twins.ts";
-import { cpSync, existsSync, rmSync } from "node:fs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = process.argv[2] ?? "class-object";
