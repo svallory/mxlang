@@ -21,6 +21,25 @@ function pairs(source: string): string[][] {
 
 const IMPORT = 'import Field from "./field.mx"\n';
 
+/**
+ * The authored text a generated `needle` maps to: the first mapping whose
+ * generated text contains it, offset into its source by the same amount
+ * (adjacent one-to-one runs are merged, so a token rarely has its own).
+ */
+function authoredAt(source: string, needle: string): string | undefined {
+  const { code, mappings } = compileSolidUnit(source, {
+    filename: "/fixtures/values.mx",
+    customTags: {},
+  });
+  for (const m of mappings) {
+    const at = code.slice(m.generatedStart, m.generatedEnd).indexOf(needle);
+    if (at < 0) continue;
+    const start = m.sourceStart + at;
+    return source.slice(start, start + needle.length);
+  }
+  return undefined;
+}
+
 describe("solid expression values", () => {
   it.each([
     ["a component prop value", `${IMPORT}<Field count=n + 1/>`, "n + 1"],
@@ -82,7 +101,7 @@ describe("solid expression values", () => {
     // tokens map one to one, so `go` lands on the authored `go`.
     const source = `${IMPORT}<Field onPick() { go() }/>`;
     const result = pairs(source);
-    expect(result).toContainEqual(["go", "go"]);
+    expect(authoredAt(source, "go()")).toBe("go()");
     expect(result.some(([, generated]) => generated?.includes("=>"))).toBe(
       false,
     );
@@ -94,11 +113,9 @@ describe("solid expression values", () => {
   });
 
   it("maps a method body whose reads were rewritten inside <for>", () => {
-    const result = pairs(
-      `${IMPORT}<for|row| of=xs by="id"><Field onPick() { use(row.id) }/></for>`,
-    );
-    expect(result).toContainEqual(["use", "use"]);
-    expect(result).toContainEqual([".id", ".id"]);
+    const source = `${IMPORT}<for|row| of=xs by="id"><Field onPick() { use(row.id) }/></for>`;
+    expect(authoredAt(source, "use(")).toBe("use(");
+    expect(authoredAt(source, ".id)")).toBe(".id)");
   });
 
   it("maps a dynamic tag's expression", () => {
