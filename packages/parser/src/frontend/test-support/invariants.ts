@@ -24,7 +24,14 @@ const CONTAINERS = new Set([
   "MxTypeParameters",
 ]);
 
-export function checkInvariants(document: InterimDocument): string[] {
+/**
+ * `tagShape`, when given, is the one the document was parsed with: each
+ * tag's `bodyMode` must be what it answers for the written name.
+ */
+export function checkInvariants(
+  document: InterimDocument,
+  tagShape?: (name: string) => string,
+): string[] {
   const problems: string[] = [];
   const { source, base } = document;
   const text = (span: Span) =>
@@ -164,7 +171,86 @@ export function checkInvariants(document: InterimDocument): string[] {
         within(`${path}.name`, node.name.span, node);
         const head: Span[] = [];
         for (const key of ["typeArgs", "var", "args", "typeParams", "params"]) {
-          if (node[key]) head.push(node[key].outer);
+          if (node[key]) {
+            head.push(node[key].outer);
+            within(`${path}.${key}.outer`, node[key].outer, node.openTag);
+          }
+        }
+        // The open tag: `>` or `/>` in HTML mode, the head line in concise
+        // mode (right-trimmed); `selfClosed` agrees with the text after the
+        // head's last part (a `/` inside a value is the value's).
+        let lastPart = node.name.span.end;
+        for (const part of [...node.shorthands, ...node.attributes, ...head]) {
+          lastPart = Math.max(lastPart, part.end);
+          for (const inner of [part.default, part.args, part.value]) {
+            if (inner && typeof inner.end === "number") {
+              lastPart = Math.max(lastPart, inner.end);
+            }
+          }
+        }
+        const tail = text({
+          start: lastPart,
+          end: Math.max(lastPart, node.openTag.end),
+        });
+        if (!node.incomplete) {
+          if (!node.concise) {
+            if (!tail.endsWith(">")) {
+              fail(
+                path,
+                `openTag tail ${JSON.stringify(tail)} does not end at > or />`,
+              );
+            }
+            // `/>` closes the tag unless its `/` ends a block comment (`*/>`).
+            const slashClose = tail.endsWith("/>") && !tail.endsWith("*/>");
+            if (node.selfClosed !== slashClose) {
+              fail(path, "selfClosed disagrees with the text");
+            }
+          } else if (/\s$/.test(tail)) {
+            fail(path, "concise openTag keeps trailing whitespace");
+          }
+        }
+        // A concise tag starts at a `<` only when it has no name: a nameless
+        // concise head (`,<T>`, `;<!-- -->`) begins where the next construct's
+        // `<` is (a template parser shape, PR 2 report).
+        const atAngle = source[node.start - base.offset] === "<";
+        const nameless = node.name.kind === "unnamed";
+        if (node.concise ? atAngle && !nameless : !atAngle) {
+          fail(path, "concise disagrees with the `<`");
+        }
+        if (node.closeTag) {
+          const close = text(node.closeTag.span);
+          if (!close.endsWith(">")) fail(path, "closeTag does not end at >");
+          if (
+            node.closeTag.nameSpan &&
+            node.closeTag.nameSpan.start !== node.closeTag.span.start + 2
+          ) {
+            fail(path, "closeTag name does not start right after </");
+          }
+          if (node.end !== node.closeTag.span.end)
+            fail(path, "the tag does not end at its close tag");
+        }
+        if (tagShape) {
+          let expected = "html";
+          if (node.type !== "MxAttributeTag" && node.name.kind !== "dynamic") {
+            const first = node.shorthands[0];
+            // The written name runs on into an adjacent `:` sugar, or a lone
+            // `:` the split left empty (`input:`).
+            const colon =
+              first && first.sigil === ":" && first.start === node.name.span.end
+                ? text(first)
+                : source[node.name.span.end - base.offset] === ":"
+                  ? ":"
+                  : "";
+            const written =
+              (node.name.kind === "static" ? node.name.value : "") + colon;
+            expected = tagShape(written);
+          }
+          if (node.bodyMode !== expected) {
+            fail(
+              path,
+              `bodyMode ${node.bodyMode}, tagShape answered ${expected}`,
+            );
+          }
         }
         ordered(`${path}.shorthands`, node.shorthands);
         ordered(`${path}.attributes`, node.attributes);

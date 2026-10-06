@@ -50,6 +50,9 @@ const SILENT_EOF = new Set([
 /** Errors PR 2b raises at its seam (ast §3.13); today's path throws them. */
 const PR_2B = new Set(["g0234", "g1274", "g1304"]);
 
+/** A concise head ends at its last non-whitespace character (review item 5). */
+const CONCISE_HEAD_TRIMMED = new Set(["g1259", "g1356"]);
+
 /** Today's path crashes (a TypeError, no tree, no parse error). */
 const TODAY_CRASHES = new Set(["g0387", "g1699", "g1700"]);
 
@@ -81,6 +84,7 @@ describe("grammar corpus inputs", () => {
         if (outcome.equal) return false;
         return !(
           ASYNC_METHOD_START.has(probe.id) ||
+          CONCISE_HEAD_TRIMMED.has(probe.id) ||
           SILENT_EOF.has(probe.id) ||
           PR_2B.has(probe.id) ||
           TODAY_CRASHES.has(probe.id)
@@ -101,6 +105,7 @@ describe("grammar corpus inputs", () => {
     for (const { probe, outcome } of results) {
       if (
         ASYNC_METHOD_START.has(probe.id) ||
+        CONCISE_HEAD_TRIMMED.has(probe.id) ||
         SILENT_EOF.has(probe.id) ||
         PR_2B.has(probe.id)
       ) {

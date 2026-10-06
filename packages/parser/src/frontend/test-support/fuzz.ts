@@ -7,7 +7,7 @@
  * concise lines and placeholders. `run` parses each input and checks the span
  * invariant; the long run is `long-fuzz.ts`.
  */
-import { parse } from "../parse.ts";
+import { parse, seams } from "../parse.ts";
 import { checkInvariants } from "./invariants.ts";
 import { OPTIONS } from "./options.ts";
 
@@ -186,8 +186,25 @@ export function run(
   const templateThrows: FuzzResult["templateThrows"] = [];
   for (let seed = firstSeed; seed < firstSeed + count; seed++) {
     const input = generate(seed);
+    const clamps: number[] = [];
+    const clamped = seams.clamped;
+    seams.clamped = (local) => {
+      clamps.push(local);
+    };
     try {
       const document = parse(input, OPTIONS);
+      // The clamp's class (lead, 16:53): only one past the end of input, in
+      // a parse with no template error.
+      const templateError = document.errors.some(
+        (e) => e.origin === "template",
+      );
+      if (clamps.some((local) => local !== input.length + 1 || templateError)) {
+        failures.push({
+          seed,
+          input,
+          problem: `clamp outside its class: ${clamps}`,
+        });
+      }
       const internal = document.errors.find(
         (e) => e.code === "MX_FRONT_END_INTERNAL",
       );
@@ -196,7 +213,7 @@ export function run(
       } else if (internal) {
         failures.push({ seed, input, problem: internal.message });
       }
-      const broken = checkInvariants(document);
+      const broken = checkInvariants(document, OPTIONS.tagShape);
       if (broken.length) {
         failures.push({ seed, input, problem: broken[0] as string });
       }
@@ -206,6 +223,8 @@ export function run(
         input,
         problem: `threw ${(error as Error).message}`,
       });
+    } finally {
+      seams.clamped = clamped;
     }
     if (failures.length > 20) break;
   }

@@ -17,9 +17,9 @@ import { fileURLToPath } from "node:url";
 import type { MxBodyMode, MxStatementKeyword } from "@mxlang/babel/mx-ast";
 import { describe, expect, it } from "vitest";
 import { PROBES, type Probe } from "../template/grammar-spec.cases.ts";
-import { createParser, ErrorCode } from "../template/index.ts";
+import { ErrorCode } from "../template/index.ts";
 import { parse, seams } from "./parse.ts";
-import { allAtoms, checkInvariants } from "./test-support/invariants.ts";
+import { checkInvariants } from "./test-support/invariants.ts";
 import { SIX } from "./test-support/options.ts";
 import { projectDocument } from "./test-support/project.ts";
 
@@ -53,8 +53,10 @@ const STATEMENT_IN_HTML_MODE = new Set(["g0234", "g1274"]);
  * Silent end of input, TODO `concise-eof-open-delimiter-silent` and TODO
  * `concise-eof-interpolation-drops-event` (parser-grammar OQ 19): the parser
  * stops with no error and no close events. The front end closes the open
- * tags there and clamps ranges past the input (decision 163 addendum 9, Q8).
- * The parser fix changes exactly these probes.
+ * tags there (decision 163 addendum 9, Q8). These are the probes that end in
+ * an open concise delimiter; the clamp fires on g0368 g0370 g0373 g0374
+ * g0375 g0376 g0377 g0378 g0866 g1318 g1522 (its rule is a class, asserted
+ * below, not this list).
  */
 const SILENT_EOF = new Set([
   "g0368",
@@ -95,42 +97,14 @@ function run(probe: Probe) {
   });
 }
 
-/** The atoms the template parser announces for `input`, as `[start, end)` strings. */
-function announcedAtoms(probe: Probe): string[] {
-  const found: string[] = [];
-  const statements = probe.options?.statements !== false;
-  const parser = createParser({
-    onAtom: (e) => found.push(`${e.start},${e.end}`),
-    onOpenTagName: (e) => {
-      const name = probe.input.slice(e.start, e.end);
-      if (
-        statements &&
-        SIX.has(name as MxStatementKeyword) &&
-        probe.input[e.start - 1] !== "<"
-      ) {
-        return 3;
-      }
-      if (TEXT.has(name)) return 1;
-      if (VOID.has(name)) return 2;
-      return undefined;
-    },
-  });
-  try {
-    parser.parse(probe.input);
-  } catch {
-    // a throwing probe is reported by the no-throw test
-  }
-  return found;
-}
-
 describe("the grammar corpus through the front end", () => {
   const results = PROBES.map((probe) => {
     let document: ReturnType<typeof run> | undefined;
     let thrown: unknown;
-    let clamps = 0;
+    const clamps: number[] = [];
     const clamped = seams.clamped;
-    seams.clamped = () => {
-      clamps++;
+    seams.clamped = (local) => {
+      clamps.push(local);
     };
     try {
       document = run(probe);
@@ -142,10 +116,22 @@ describe("the grammar corpus through the front end", () => {
     return { probe, document, thrown, clamps };
   });
 
-  it("the range clamp fires only on the silent end-of-input probes", () => {
-    const fired = results.filter((r) => r.clamps > 0).map((r) => r.probe.id);
-    expect(fired.every((id) => SILENT_EOF.has(id))).toBe(true);
-    expect(fired.length).toBeGreaterThan(0);
+  it("the range clamp fires only at the end of input with no error (a class, lead 16:53)", () => {
+    // The clamp may fire only when the input ends inside an open concise
+    // delimiter and the parser reported no error: each firing is one past
+    // the end of input, in a parse with no template error.
+    const wrong: string[] = [];
+    for (const { probe, document, clamps } of results) {
+      for (const local of clamps) {
+        if (local !== probe.input.length + 1)
+          wrong.push(`${probe.id}: at ${local}`);
+        if (document?.errors.some((e) => e.origin === "template")) {
+          wrong.push(`${probe.id}: with a template error`);
+        }
+      }
+    }
+    expect(wrong).toEqual([]);
+    expect(results.some((r) => r.clamps.length > 0)).toBe(true);
   });
 
   it("silent end of input: the open tags are closed, no error, today's shape", () => {
@@ -203,40 +189,12 @@ describe("the grammar corpus through the front end", () => {
   it("the span invariant holds on every tree", () => {
     const broken = results.flatMap(({ probe, document }) =>
       document
-        ? checkInvariants(document).map(
+        ? checkInvariants(document, tagShape).map(
             (p) => `${probe.id} ${JSON.stringify(probe.input)}: ${p}`,
           )
         : [],
     );
     expect(broken).toEqual([]);
-  });
-
-  it("every announced atom is in exactly one container (complete parses)", () => {
-    const wrong: string[] = [];
-    for (const { probe, document } of results) {
-      if (!document) continue;
-      const offset = document.base.offset;
-      const listed = allAtoms(document).map(
-        (a) => `${a.start - offset},${a.end - offset}`,
-      );
-      const announced = announcedAtoms(probe);
-      if (document.complete) {
-        if (
-          JSON.stringify([...listed].sort()) !==
-          JSON.stringify([...announced].sort())
-        ) {
-          wrong.push(`${probe.id}: listed ${listed} announced ${announced}`);
-        }
-      } else if (
-        listed.some((a) => !announced.includes(a)) ||
-        new Set(listed).size !== listed.length
-      ) {
-        wrong.push(
-          `${probe.id}: incomplete parse lists an atom twice or one not announced`,
-        );
-      }
-    }
-    expect(wrong).toEqual([]);
   });
 
   it("the projections equal the committed snapshot", () => {

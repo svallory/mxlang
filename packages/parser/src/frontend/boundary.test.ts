@@ -92,6 +92,36 @@ describe("the PR 2b rules seam", () => {
 });
 
 describe("internal failures", () => {
+  it("a throw out of the template parser itself is told apart (injected: no real input throws since #406)", () => {
+    seams.createParser = () =>
+      ({
+        parse() {
+          throw new Error("injected template parser failure");
+        },
+      }) as unknown as ReturnType<typeof seams.createParser>;
+    const document = parse("<a/>", OPTIONS);
+    expect(document.complete).toBe(false);
+    expect(document.errors).toEqual([
+      expect.objectContaining({
+        code: "MX_FRONT_END_INTERNAL",
+        message:
+          "The MX template parser threw instead of reporting an error (not yours: an MX bug): injected template parser failure",
+      }),
+    ]);
+  });
+
+  it("a throw in the front end after the template parser returned is the front end's", () => {
+    // `div(a` ends silently, so its tag is closed (and its rules run) after
+    // the template parser has returned.
+    seams.frontEndRules = () => {
+      throw new Error("injected after parse");
+    };
+    const document = parse("div(a", OPTIONS);
+    expect(document.errors.at(-1)?.message).toBe(
+      "The MX front end failed while building the syntax tree (not yours: an MX bug): injected after parse",
+    );
+  });
+
   it("a throwing internal step yields MX_FRONT_END_INTERNAL and the partial tree, never a throw", () => {
     seams.frontEndRules = (tag) => {
       if (tag.start === 8) throw new Error("injected\nsecond line");

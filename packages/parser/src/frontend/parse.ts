@@ -73,9 +73,12 @@ export const seams: {
   frontEndRules: (tag: TagBuilder) => readonly MxParseError[];
   /** Called each time a parser range past the end of input is clamped (see `FrontEnd.clamp`). */
   clamped: (local: number) => void;
+  /** The template parser; a test replaces it to make the parser itself throw. */
+  createParser: typeof createParser;
 } = {
   frontEndRules: () => [],
   clamped: () => {},
+  createParser,
 };
 
 // ---------------------------------------------------------------------------
@@ -145,7 +148,9 @@ class FrontEnd {
   openStart: number | undefined;
   /** The attribute-list item(s) the last `onAttrName` produced: value, args and methods attach to the last one. */
   current: Builder | undefined;
-  statement: { keyword: MxStatementKeyword; start: number } | undefined;
+  statement:
+    | { keyword: MxStatementKeyword; start: number; nameEnd: number }
+    | undefined;
   /** The furthest local offset any event reached. */
   reached = 0;
   stopped = false;
@@ -202,7 +207,9 @@ class FrontEnd {
         return result;
       };
     }
-    createParser(wrapped).parse(this.source);
+    this.inTemplate = true;
+    seams.createParser(wrapped).parse(this.source);
+    this.inTemplate = false;
     if (!this.templateError && this.stack.length > 0) {
       // TODO `concise-eof-open-delimiter-silent` and
       // `concise-eof-interpolation-drops-event` (parser-grammar OQ 19): at
@@ -418,6 +425,7 @@ class FrontEnd {
       this.statement = {
         keyword: written as MxStatementKeyword,
         start: template.start,
+        nameEnd: template.end,
       };
       return TagType.statement;
     }
@@ -802,6 +810,13 @@ class FrontEnd {
     };
     if (current.type === "MxAttribute") {
       current.value = method;
+      if (current.name === null) {
+        // The default value's name is zero-width at the `(` (ast §3.5); the
+        // parser's empty name sits at `async` or a type parameter's `<`.
+        const paren = this.at(event.params.start);
+        current.nameSpan = { start: paren, end: paren };
+        current.start = method.start;
+      }
       current.start = Math.min(current.start, method.start);
       current.end = method.end;
     } else {
@@ -844,10 +859,25 @@ class FrontEnd {
       return;
     }
     const tag = this.headTag(event.start);
-    tag.openTag.end = this.at(event.end);
+    // A concise head ends at its last non-whitespace character (ast §3.10:
+    // a span is right-trimmed, as for every node); the parser's range keeps
+    // the whitespace before a `--` or the line end.
+    let headEnd = event.end;
+    if (tag.concise) {
+      // Never back past the last part of the head (`_reached`): a part's
+      // own range may end in whitespace the parser read into it.
+      const lastPart = tag._reached - this.offset;
+      while (
+        headEnd > lastPart &&
+        isTrimmable(this.source.charCodeAt(headEnd - 1))
+      ) {
+        headEnd--;
+      }
+    }
+    tag.openTag.end = this.at(headEnd);
     tag._openEnded = true;
     tag.selfClosed = event.selfClosed;
-    tag.end = this.at(event.end);
+    tag.end = this.at(headEnd);
     this.reach(event.end);
     if (event.selfClosed || tag.bodyMode === "void") {
       this.close(tag);
@@ -966,7 +996,14 @@ class FrontEnd {
   stopAll(at: number): void {
     if (this.stopped) return;
     this.stopped = true;
+    const statement = this.statement;
     this.statement = undefined;
+    if (statement) {
+      // A statement the error cut short is kept (decision 163 addendum 10):
+      // its range runs to the error's start or its last part, whichever is
+      // later; `end` is that range right-trimmed, as for every statement.
+      this.pushStatement(statement, Math.max(at, statement.nameEnd));
+    }
     for (let i = this.stack.length - 1; i >= 0; i--) {
       const tag = this.stack[i] as TagBuilder;
       const end = Math.max(this.at(at), tag._reached);
@@ -992,9 +1029,10 @@ class FrontEnd {
       end: at,
       code: "MX_FRONT_END_INTERNAL",
       origin: "front-end",
-      message: this.inHandler
-        ? `The MX front end failed while building the syntax tree (${MX_BUG}): ${raw}`
-        : `The MX template parser threw instead of reporting an error (${MX_BUG}): ${raw}`,
+      message:
+        !this.inTemplate || this.inHandler
+          ? `The MX front end failed while building the syntax tree (${MX_BUG}): ${raw}`
+          : `The MX template parser threw instead of reporting an error (${MX_BUG}): ${raw}`,
       context: null,
     });
     this.internal = true;
@@ -1006,6 +1044,9 @@ class FrontEnd {
   }
 
   internal = false;
+  /** Inside the template parser's `parse` call. */
+  inTemplate = false;
+  /** Inside one of the front end's handlers (set only while `inTemplate`). */
   inHandler = false;
 
   finish(base: MxFragmentBase): InterimDocument {

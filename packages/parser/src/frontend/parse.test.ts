@@ -14,7 +14,9 @@ type Any = any;
 
 function doc(source: string, options: Partial<ParseOptions> = {}): Any {
   const document = parse(source, { ...OPTIONS, ...options });
-  expect(checkInvariants(document)).toEqual([]);
+  expect(
+    checkInvariants(document, options.tagShape ?? OPTIONS.tagShape),
+  ).toEqual([]);
   return document;
 }
 
@@ -769,7 +771,7 @@ describe("template parser shapes the catalogue does not name", () => {
   });
 });
 
-describe("review fix B1 (decision 163 addendum 11)", () => {
+describe("review fixes (decision 163 addenda 10, 11)", () => {
   it("B1: arguments after a sugar are kept on the node, atoms included", () => {
     const s = first("<div .c(:a)/>").attributes[0];
     expect(s).toMatchObject({
@@ -785,6 +787,52 @@ describe("review fix B1 (decision 163 addendum 11)", () => {
         atoms: [{ type: "MxAtom", start: 8, end: 10, name: "a" }],
       },
     });
+  });
+
+  it("a statement a template error cuts short is kept (addendum 10)", () => {
+    const cases: [string, number, number][] = [
+      // input, end (right-trimmed), untrimmedEnd
+      ["static const x = (", 6, 6],
+      ["static", 6, 6],
+      ['import x from "y', 13, 14],
+      ["export const s = `a", 16, 17],
+      ["server const s = 'a", 16, 17],
+      ["client const c = (1 +", 6, 6],
+      ["class X { m() { return (", 5, 5],
+    ];
+    for (const [input, end, untrimmedEnd] of cases) {
+      const d = doc(input);
+      if (input === "static") {
+        expect(d.complete, input).toBe(true);
+        continue;
+      }
+      expect(d.complete, input).toBe(false);
+      expect(d.body[0], input).toMatchObject({
+        type: "MxModuleStatement",
+        start: 0,
+        end,
+        untrimmedEnd,
+      });
+    }
+  });
+
+  it("the default value's name is zero-width at the `(` of a method (ast §3.5)", () => {
+    expect(first("<foo <A>(a) {x}/>").attributes[0]).toMatchObject({
+      name: null,
+      nameSpan: span(8, 8),
+      start: 5,
+      value: { type: "MxMethod", start: 5 },
+    });
+    expect(first("<div async <T>(a) {b}/>").attributes[0]).toMatchObject({
+      nameSpan: span(14, 14),
+      start: 5,
+    });
+    expect(first("<foo (a) {x}/>").attributes[0].nameSpan).toEqual(span(5, 5));
+  });
+
+  it("a concise head ends at its last non-whitespace character", () => {
+    expect(first("div a -- b").openTag).toEqual(span(0, 5));
+    expect(first("div   \n  p").openTag).toEqual(span(0, 3));
   });
 });
 

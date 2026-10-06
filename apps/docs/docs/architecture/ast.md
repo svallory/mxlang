@@ -359,7 +359,7 @@ The AST does not decide which: resolution is lowering's (spec §7).
 | `bodyMode` | `"html" \| "parsed-text" \| "preserve" \| "parsed-text-preserve" \| "void"` | no | the parse shape `tagShape(name)` answered (§3.12) |
 | `selfClosed` | `boolean` | no | `/>` written |
 | `concise` | `boolean` | no | written in concise mode |
-| `openTag` | `Span` | no | `<` (or the first name character in concise mode) through `>`/`/>` (or end of the head line) |
+| `openTag` | `Span` | no | `<` (or the first name character in concise mode) through `>`/`/>` (or, in concise mode, the head's last non-whitespace character) |
 | `closeTag` | `MxCloseTag \| null` | no | the written closing tag; `null` when none was written (self-closed, void, concise) |
 | `incomplete` | `boolean` | no | `true` when the template parser stopped (§3.13) before this tag's end event |
 
@@ -985,6 +985,11 @@ parser code above, not from what would be desirable):
   run pending at the error is absent. A consumer tells such a part from a
   genuine bare attribute only by the error's `start` falling inside the tag's
   head; the front end does not mark it.
+- A statement the error cuts short (`static const x = (`) is kept as an
+  `MxModuleStatement`: `untrimmedEnd` is the error's `start` or the end of its
+  keyword, whichever is later, and `end` is that range right-trimmed; it has
+  no `incomplete` field, and `complete: false` says the parse stopped
+  (decision 163 addendum 10).
 - Every node whose events arrived is kept, even when it lies after the error's
   `start`: `MISSING_END_TAG` fires at the end of input and is ranged on the
   unclosed open tag, after the events that follow it.
@@ -1910,16 +1915,16 @@ not listed.
 | `MxStatements` | node (container) | §3.10; §4.1 | 833 |
 | `MxComment`, `MxCDATA`, `MxDoctype`, `MxDeclaration` | node | §3.11 | 839 |
 | `MxParseError` | node | §3.13 | 907 |
-| `MxReturn` | node | §3.14 | 1035 |
-| `MxExpressionContainer` | generic base | §4.1 | 1074 |
-| `MxExpression` | node (container) | §4.1 | 1081 |
-| `MxAtom` | node | §4.3 | 1192 |
+| `MxReturn` | node | §3.14 | 1040 |
+| `MxExpressionContainer` | generic base | §4.1 | 1079 |
+| `MxExpression` | node (container) | §4.1 | 1086 |
+| `MxAtom` | node | §4.3 | 1197 |
 | `MxBodyMode` | union | §3.12 | 864 |
 | `MxTagShape` | function type | §3.12 | 864 |
 | `MxStatementKeyword` | union | §3.10 | 793 |
-| `MxFragmentBase` | field shape | §5.3 | 1288 |
-| `MxFrontEndOptions` | helper | §7.1 | 1725 |
+| `MxFragmentBase` | field shape | §5.3 | 1293 |
+| `MxFrontEndOptions` | helper | §7.1 | 1730 |
 | `MxErrorCode` | union | §3.13 | 912 |
 | `Span`, `MxNodeBase` | helper | §3.0 | 296 |
 | `MxChild`, `MxNode` | union | §3.0 | 299 |
-| `MxNodeHandle` | opaque handle (not a node) | §6.4 | 1545 |
+| `MxNodeHandle` | opaque handle (not a node) | §6.4 | 1550 |
