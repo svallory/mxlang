@@ -390,5 +390,6 @@ export {
   mxBugSuffix,
   PROGRAM_DIAGNOSTIC_METHODS,
   type SpannedVirtualCode,
+  unknownPositionSuffix,
 } from "./unmapped-diagnostics.ts";
 export default pluginFactory;

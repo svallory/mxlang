@@ -16,6 +16,7 @@ import {
   mxBugSuffix,
   PROGRAM_DIAGNOSTIC_METHODS,
   type SpannedVirtualCode,
+  unknownPositionSuffix,
 } from "./unmapped-diagnostics.ts";
 
 /**
@@ -65,9 +66,18 @@ class World {
   }
 
   /** The span of the first `needle` in the source, for `authoredSpans`. */
-  span(needle: string, from = 0): AuthoredSpan {
+  span(
+    needle: string,
+    kind: AuthoredSpan["kind"] = needle.startsWith("<") ? "tag" : "attribute",
+    from = 0,
+  ): AuthoredSpan {
     const start = this.src(needle, from);
-    return { start, end: start + needle.length };
+    return { kind, start, end: start + needle.length };
+  }
+
+  /** The span of the first `needle` at or after `from`, as authored code. */
+  code(needle: string, from = 0): AuthoredSpan {
+    return this.span(needle, "code", from);
   }
 
   language(
@@ -176,7 +186,10 @@ const pageMappings = [
 const pageSpans = [
   PAGE.span("<div title=t><span>${a}</span>${oops}</div>"),
   PAGE.span("title=t"),
+  PAGE.code("t", PAGE.src("=t") + 1),
   PAGE.span("<span>${a}</span>"),
+  PAGE.code("a", PAGE.src("${a}")),
+  PAGE.code("oops"),
 ];
 
 describe("approximateUnmapped", () => {
@@ -228,7 +241,9 @@ describe("approximateUnmapped", () => {
         [
           world.span("<div title=missing><b>${x}</b></div>"),
           world.span("title=missing"),
+          world.code("missing"),
           world.span("<b>${x}</b>"),
+          world.code("x"),
         ],
       );
       const placed = world.place(language, world.diagnostic("missing"));
@@ -295,6 +310,194 @@ describe("approximateUnmapped", () => {
       const exact = PAGE.diagnostic('"div"');
 
       expect(approximateUnmapped(language, exact)).toBe(exact);
+    });
+  });
+
+  describe("position: independent of the order diagnostics arrive in", () => {
+    // The review's nested probe: an element diagnostic (TS7026 on the opening
+    // `<p …>`) encloses the generated range of a name diagnostic inside it.
+    const NESTED = new World(
+      "<div><b>${x}</b><p title=missing>y</p></div>",
+      "const b = x;\nconst e = <p title={missing}>y</p>;",
+    );
+    const nestedSpans = [
+      NESTED.span("<div><b>${x}</b><p title=missing>y</p></div>"),
+      NESTED.span("<b>${x}</b>"),
+      NESTED.code("x"),
+      NESTED.span("<p title=missing>y</p>"),
+      NESTED.span("title=missing"),
+      NESTED.code("missing"),
+    ];
+    const outer = () =>
+      NESTED.diagnostic("<p title={missing}>", {
+        code: 7026,
+        messageText: "JSX element implicitly has type 'any'.",
+      });
+    const inner = () => NESTED.diagnostic("missing");
+
+    /** Approximates the whole list first, as both tools do, then maps each. */
+    function placeAll(diagnostics: ts.Diagnostic[]) {
+      const language = NESTED.language(
+        [NESTED.mapping("x;", "x")],
+        nestedSpans,
+      );
+      return diagnostics
+        .map((diagnostic) => approximateUnmapped(language, diagnostic))
+        .map((diagnostic) =>
+          transformDiagnostic(language, diagnostic, undefined, false),
+        )
+        .map((mapped) => ({ start: mapped?.start, length: mapped?.length }));
+    }
+
+    it.each([
+      ["outer first", false],
+      ["inner first", true],
+    ])("places each on its own enclosing construct, %s", (_, innerFirst) => {
+      const placed = placeAll(
+        innerFirst ? [inner(), outer()] : [outer(), inner()],
+      );
+      const [outerPlaced, innerPlaced] = innerFirst
+        ? [placed[1], placed[0]]
+        : [placed[0], placed[1]];
+
+      expect(innerPlaced).toEqual({
+        start: NESTED.src("title=missing"),
+        length: "title=missing".length,
+      });
+      // The element diagnostic lands on the innermost element it names.
+      expect(outerPlaced).toEqual({
+        start: NESTED.src("<p title=missing>y</p>"),
+        length: "<p title=missing>y</p>".length,
+      });
+    });
+  });
+
+  describe("narrowing: only what the author spelled in code", () => {
+    it("ignores a spelling in static text", () => {
+      const world = new World(
+        "<section><p>missingName</p></section><div><b>${missingName}</b></div>",
+        "const v = missingName;",
+      );
+      const language = world.language(
+        [],
+        [
+          world.span("<section><p>missingName</p></section>"),
+          world.span("<p>missingName</p>"),
+          world.span("<div><b>${missingName}</b></div>"),
+          world.span("<b>${missingName}</b>"),
+          world.code("missingName", world.src("${")),
+        ],
+      );
+      const placed = world.place(language, world.diagnostic("missingName"));
+
+      expect(placed?.start).toBe(world.src("<b>"));
+      expect(placed?.length).toBe("<b>${missingName}</b>".length);
+      expect(placed?.messageText).not.toContain("an MX bug");
+    });
+
+    it("never takes a scaffolding name that static text happens to spell for the author's", () => {
+      const world = new World(
+        '<div><p class="input">enter input</p></div>',
+        "const v = __mx(input);",
+      );
+      const language = world.language(
+        [],
+        [
+          world.span('<div><p class="input">enter input</p></div>'),
+          world.span('<p class="input">enter input</p>'),
+          world.span('class="input"'),
+        ],
+      );
+      const placed = world.place(language, world.diagnostic("input"));
+
+      // Neither the text nor the quoted attribute string is code: the whole
+      // gap is the region, and nothing the author wrote is about `input`.
+      expect(placed?.start).toBe(0);
+      expect(placed?.length).toBe(world.source.length);
+      expect(placed?.messageText).toContain("an MX bug");
+    });
+
+    it("narrows to a literal the author wrote", () => {
+      const world = new World(
+        '<ul><li>${input.a}</li><li>${1 * "a"}</li></ul>',
+        'const a = input.a;\nconst b = 1 * "a";',
+      );
+      const language = world.language(
+        [world.mapping("input.a", "input.a")],
+        [
+          world.span('<ul><li>${input.a}</li><li>${1 * "a"}</li></ul>'),
+          world.span("<li>${input.a}</li>"),
+          world.code("input.a"),
+          world.span('<li>${1 * "a"}</li>'),
+          world.code('1 * "a"'),
+        ],
+      );
+      const placed = world.place(
+        language,
+        world.diagnostic('"a"', { code: 2363 }),
+      );
+
+      expect(placed?.start).toBe(world.src('<li>${1 * "a"}</li>'));
+      expect(placed?.length).toBe('<li>${1 * "a"}</li>'.length);
+    });
+  });
+
+  describe("suffix: the author's own errors are never called an MX bug", () => {
+    // Whole-file Solid today: authored values and tags are not mapped at all,
+    // so nothing mapped is near the diagnostic.
+    const TYPO = new World(
+      "<div><p>${missingName}</p><Card/></div>",
+      "const v = () => <div><p>{missingName}</p><Card/></div>;",
+    );
+    const typoSpans = [
+      TYPO.span("<div><p>${missingName}</p><Card/></div>"),
+      TYPO.span("<p>${missingName}</p>"),
+      TYPO.code("missingName"),
+      TYPO.span("<Card/>"),
+    ];
+
+    it.each([
+      ["a name typo", "missingName", 2304, "<p>${missingName}</p>"],
+      ["a missing required prop", "Card", 2741, "<Card/>"],
+      ["an element with no JSX types", "<p>", 7026, "<p>${missingName}</p>"],
+    ])("%s: approximate, on its construct", (_, needle, code, construct) => {
+      const language = TYPO.language([], typoSpans);
+      const placed = TYPO.place(language, TYPO.diagnostic(needle, { code }));
+
+      expect(placed?.start).toBe(TYPO.src(construct));
+      expect(placed?.length).toBe(construct.length);
+      expect(placed?.messageText).toContain("(position approximate:");
+      expect(placed?.messageText).not.toContain("not yours");
+    });
+
+    it("says the position is unknown in a file kind with no authored spans", () => {
+      const region = new World(
+        'import { x } from "./x";\nexport const v = <div><p>{missingName}</p></div>;',
+        'import { x } from "./x";\nexport const v = <div><p>{missingName}</p></div>;\n__scaffold();',
+      );
+      const language = region.language([]);
+      const [line, column] = [2, "export const v = <div><p>{".length + 1];
+
+      for (const [needle, code] of [
+        ["missingName", 2304],
+        ["<p>", 7026],
+      ] as const) {
+        const placed = region.place(
+          language,
+          region.diagnostic(needle, { code }),
+        );
+        expect(placed).toMatchObject({ start: 0, length: 0 });
+        expect(placed?.messageText).not.toContain("not yours");
+        expect(placed?.messageText).toContain(
+          "(position unknown in this file kind: generated",
+        );
+      }
+      expect(
+        region.place(language, region.diagnostic("missingName"))?.messageText,
+      ).toBe(`Cannot find name 'oops'.${unknownPositionSuffix(line, column)}`);
+      expect(
+        region.place(language, region.diagnostic("__scaffold"))?.messageText,
+      ).toContain("an MX bug");
     });
   });
 
@@ -369,7 +572,7 @@ describe("approximateUnmapped", () => {
 
     expect(moved.messageText).toEqual({
       ...chain,
-      messageText: `Type 'a' is not assignable to type 'b'.${mxBugSuffix(4, 18)}`,
+      messageText: `Type 'a' is not assignable to type 'b'.${approximateSuffix(4, 18)}`,
     });
   });
 

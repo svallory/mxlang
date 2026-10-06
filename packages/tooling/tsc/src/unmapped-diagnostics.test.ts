@@ -4,9 +4,10 @@ import { runInProcess } from "./in-process.ts";
 
 /**
  * A diagnostic whose generated position has no source mapping is never
- * dropped (decision 161). A whole-file Solid unit maps no expression values, so
- * `missingName` and `1 * "a"` sit in generated text no mapping covers: Volar
- * used to discard both, and `mx-tsc` exited 0 on a page full of errors.
+ * dropped (decision 161). A whole-file Solid unit maps its values but no tag,
+ * so with no JSX types each element's TS7026 sits in generated text no
+ * mapping covers: Volar used to discard them, and `mx-tsc` reported only the
+ * mapped `missingName`.
  */
 
 const fixtures = join(import.meta.dirname, "fixtures");
@@ -26,19 +27,31 @@ function mxTsc(project: string) {
 }
 
 describe("mx-tsc and a diagnostic with no source mapping", () => {
-  it("fails the run and reports it on the tag that encloses it, not on a sibling or line 1", () => {
+  it("fails the run and reports each on the element that encloses it, as the author's", () => {
     const { status, lines } = mxTsc("unmapped-solid-failing");
+    const element = (at: string) =>
+      expect.stringMatching(
+        new RegExp(
+          `Page\\.mx\\(${at}\\): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX\\.IntrinsicElements' exists\\. \\(position approximate: generated \\d+:\\d+\\)$`,
+        ),
+      );
 
     expect(status).not.toBe(0);
-    // Page.mx maps only `export interface Input { }` (line 1) and no value:
-    // `missingName` is spelled inside `<p>` (line 5, column 3), the construct
-    // that holds it. The kind of suffix depends on mapping that value
-    // (#362), so only its presence is pinned here.
+    // Opening and closing tag of `<div>` (3,1), `<span>` (4,3) and `<p>`
+    // (5,3), each on its own element, never a sibling or line 1; the mapped
+    // `missingName` keeps its exact position and message.
     expect(lines).toEqual([
+      element("3,1"),
+      element("3,1"),
+      element("4,3"),
+      element("4,3"),
+      element("5,3"),
+      element("5,3"),
       expect.stringMatching(
-        /Page\.mx\(5,3\): error TS2304: Cannot find name 'missingName'\. \((position approximate|in MX-generated code, not yours: an MX bug); generated \d+:\d+\)$/,
+        /Page\.mx\(5,8\): error TS2304: Cannot find name 'missingName'\.$/,
       ),
     ]);
+    expect(lines.join("\n")).not.toContain("not yours");
   }, 60_000);
 
   it("leaves an exactly mapped diagnostic's message and position as they were", () => {

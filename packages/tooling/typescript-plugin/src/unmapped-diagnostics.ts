@@ -17,8 +17,10 @@ import type * as ts from "typescript";
  * 0, an editor with no squiggle. This module runs *beneath* Volar — on the
  * raw TypeScript diagnostics — and gives each unmappable one a position Volar
  * can map: the nearest enclosing authored span (attribute, then tag, then the
- * file start), with the message suffixed by {@link approximateSuffix}. A diagnostic Volar can map is returned as the
- * very same object, so exact positions and messages never change.
+ * file start), with the message suffixed by {@link approximateSuffix},
+ * {@link unknownPositionSuffix} or {@link mxBugSuffix}. A diagnostic Volar can
+ * map is returned as the very same object, so exact positions and messages
+ * never change.
  *
  * Both tools run the same function: `mx-tsc` through the program Volar
  * decorates, the tsserver plugin through the language service Volar proxies.
@@ -30,26 +32,45 @@ export function approximateSuffix(line: number, column: number): string {
 }
 
 /**
- * The text appended when the diagnostic's generated line holds no authored
- * code at all: the error is in code MX wrote, not in anything the author did.
+ * The text appended when the diagnostic is about nothing the author wrote:
+ * its text is spelled nowhere in the source it came from, and its generated
+ * range touches no mapped authored code. The error is in code MX wrote.
  */
 export function mxBugSuffix(line: number, column: number): string {
   return ` (in MX-generated code, not yours: an MX bug; generated ${line}:${column})`;
 }
 
+/**
+ * The text appended to an author's diagnostic in a file kind that exposes no
+ * authored spans (a region file, `.astro.mx`, `.ng.mx`): it is reported at the
+ * file start (1:1) because nothing closer is known, which is not a position
+ * near the error at all.
+ */
+export function unknownPositionSuffix(line: number, column: number): string {
+  return ` (position unknown in this file kind: generated ${line}:${column})`;
+}
+
 type Diagnostic = ts.Diagnostic;
 
-/** A source span of authored syntax: a tag or an attribute, file-absolute. */
+/**
+ * A source span of authored syntax, file-absolute. A `tag` or an `attribute`
+ * is a construct a diagnostic can be reported on; `code` (an expression, an
+ * attribute value, a statement) is never a landing place, only where an
+ * author's identifier or literal counts as spelled — static text and quoted
+ * attribute strings are not code.
+ */
 export interface AuthoredSpan {
+  kind: "tag" | "attribute" | "code";
   start: number;
   end: number;
 }
 
 /**
  * A virtual code that can say which authored constructs (tags and
- * attributes) its source holds. A language plugin sets `authoredSpans`; it is
- * read lazily, only when a diagnostic has no mapping. A code without it falls
- * back to the file start (1:1), never to a neighbouring construct.
+ * attributes) and code its source holds. A language plugin sets
+ * `authoredSpans`; it is read lazily, only when a diagnostic has no mapping.
+ * A code without it falls back to the file start (1:1), never to a
+ * neighbouring construct, and says the position is unknown.
  */
 export interface SpannedVirtualCode extends VirtualCode {
   authoredSpans?: () => readonly AuthoredSpan[];
@@ -91,11 +112,18 @@ interface MappedRange {
  */
 const overlayData = new WeakSet<object>();
 
-/** The source span each unmapped generated range was given, per virtual code. */
-const placed = new WeakMap<
-  VirtualCode,
-  Map<string, { start: number; length: number }>
->();
+/**
+ * Where an unmapped generated range is reported, and whether the author
+ * spelled its text in the source it came from.
+ */
+interface Placement {
+  start: number;
+  length: number;
+  spelled: boolean;
+}
+
+/** The placement each unmapped generated range was given, per virtual code. */
+const placed = new WeakMap<VirtualCode, Map<string, Placement>>();
 
 /** Every generated range a diagnostic-reporting authored mapping covers. */
 function reportedRanges(
@@ -122,45 +150,128 @@ function reportedRanges(
   return ranges;
 }
 
-/** `identifier` as a whole word in `text[lo, hi)`: every occurrence. */
-function wordOccurrences(
+/** A token the narrowing can look for: an identifier or a literal. */
+const TOKEN = /^(?:[A-Za-z_$][\w$]*|\d[\w.]*|"[^"\n]*"|'[^'\n]*'|`[^`\n]*`)$/;
+/**
+ * The tag name of a JSX element's opening or closing text: `<p title={x}>`
+ * and `</p>` are both `p`.
+ */
+const ELEMENT = /^<(\/?)([A-Za-z_$][\w$.:-]*)/;
+const isWordChar = (ch: string | undefined) => !!ch && /[\w$]/.test(ch);
+
+/**
+ * Every occurrence of `token` in `text[lo, hi)`, as a token: a word character
+ * at either end of it must not continue into the text around it.
+ */
+function tokenOccurrences(
   text: string,
-  word: string,
+  token: string,
   lo: number,
   hi: number,
 ): AuthoredSpan[] {
   const found: AuthoredSpan[] = [];
-  const isWord = (ch: string | undefined) => !!ch && /[\w$]/.test(ch);
+  const open = isWordChar(token[0]);
+  const close = isWordChar(token[token.length - 1]);
   for (
-    let at = text.indexOf(word, lo);
-    at >= 0 && at + word.length <= hi;
-    at = text.indexOf(word, at + 1)
+    let at = text.indexOf(token, lo);
+    at >= 0 && at + token.length <= hi;
+    at = text.indexOf(token, at + 1)
   ) {
-    if (!isWord(text[at - 1]) && !isWord(text[at + word.length])) {
-      found.push({ start: at, end: at + word.length });
-    }
+    if (open && isWordChar(text[at - 1])) continue;
+    if (close && isWordChar(text[at + token.length])) continue;
+    found.push({ kind: "code", start: at, end: at + token.length });
   }
   return found;
 }
 
+/** Whether a tag (`<name …`) or an attribute (`name=…`) is named `name`. */
+function isNamed(span: AuthoredSpan, name: string, sourceText: string) {
+  const at = span.kind === "tag" ? span.start + 1 : span.start;
+  return (
+    (span.kind === "attribute" || sourceText[span.start] === "<") &&
+    sourceText.startsWith(name, at) &&
+    !/[\w$.:-]/.test(sourceText[at + name.length] ?? "")
+  );
+}
+
 /**
- * The source span an unmappable diagnostic is reported on: the smallest
- * authored construct (an attribute before the tag around it) that encloses
- * where the diagnostic came from. Generated code follows source order, so the
- * diagnostic came from the source *between* the nearest mapped range before it
- * and the nearest one after it. When the diagnostic's text is one identifier
- * the author spelled in that gap, that spelling is where it came from;
- * otherwise (scaffolding) the whole gap is. No enclosing construct, or none
- * known: the file start. A sibling's span is never used.
+ * Where the author spelled what the diagnostic is about, inside the gap
+ * `[lo, hi)`: the tag of an element diagnostic (`<p …>`); for an identifier
+ * or a literal, the name of a tag or attribute, or a spelling in code — an
+ * expression, an attribute value, a statement — never in static text or a
+ * quoted attribute string. A virtual code without authored spans cannot tell
+ * code from text, so there the whole gap is searched.
+ */
+function spellings(
+  authored: readonly AuthoredSpan[] | undefined,
+  lo: number,
+  hi: number,
+  diagnosticText: string,
+  sourceText: string,
+): AuthoredSpan[] {
+  const inGap = (span: AuthoredSpan) => span.start >= lo && span.end <= hi;
+  const [, closing, element] = ELEMENT.exec(diagnosticText) ?? [];
+  if (element) {
+    if (!authored)
+      return tokenOccurrences(sourceText, `<${closing}${element}`, lo, hi);
+    // An opening tag starts in the gap; a closing one ends its tag's span.
+    return authored.filter(
+      (span) =>
+        span.kind === "tag" &&
+        (closing
+          ? span.end > lo && span.end <= hi
+          : span.start >= lo && span.start < hi) &&
+        isNamed(span, element, sourceText),
+    );
+  }
+  if (!TOKEN.test(diagnosticText)) return [];
+  if (!authored) return tokenOccurrences(sourceText, diagnosticText, lo, hi);
+  const named = authored
+    .filter(
+      (span) =>
+        span.kind !== "code" &&
+        inGap(span) &&
+        isNamed(span, diagnosticText, sourceText),
+    )
+    .map((span) => {
+      const start = span.kind === "tag" ? span.start + 1 : span.start;
+      return { ...span, start, end: start + diagnosticText.length };
+    });
+  const inCode = authored
+    .filter((span) => span.kind === "code" && span.end > lo && span.start < hi)
+    .flatMap((span) =>
+      tokenOccurrences(
+        sourceText,
+        diagnosticText,
+        Math.max(lo, span.start),
+        Math.min(hi, span.end),
+      ),
+    );
+  return [...named, ...inCode];
+}
+
+/**
+ * Where an unmappable diagnostic is reported: the smallest authored construct
+ * (an attribute before the tag around it) that encloses where the diagnostic
+ * came from. Generated code follows source order, so the diagnostic came from
+ * the source *between* the nearest mapped range before it and the nearest one
+ * after it. When the author spelled the diagnostic's text there (see
+ * {@link spellings}), those spellings are where it came from, and it is the
+ * author's; otherwise (scaffolding) the whole gap is. No enclosing construct,
+ * or none known: the file start. A sibling's span is never used.
+ *
+ * Computed from the module's own mappings only, never from the overlays added
+ * for other diagnostics, so the answer does not depend on the order
+ * diagnostics arrive in.
  */
 function enclosingSpan(
-  authored: readonly AuthoredSpan[],
+  authored: readonly AuthoredSpan[] | undefined,
   ranges: readonly MappedRange[],
   generatedStart: number,
   generatedEnd: number,
   diagnosticText: string,
   sourceText: string,
-): { start: number; length: number } {
+): Placement {
   let before: MappedRange | undefined;
   let after: MappedRange | undefined;
   for (const range of ranges) {
@@ -174,23 +285,22 @@ function enclosingSpan(
   const to = after?.sourceStart ?? sourceText.length;
   const lo = Math.min(from, to);
   const hi = Math.max(from, to);
-  let regionStart = lo;
-  let regionEnd = hi;
-  if (/^[A-Za-z_$][\w$]*$/.test(diagnosticText)) {
-    const spelled = wordOccurrences(sourceText, diagnosticText, lo, hi);
-    if (spelled.length > 0) {
-      regionStart = Math.min(...spelled.map((span) => span.start));
-      regionEnd = Math.max(...spelled.map((span) => span.end));
-    }
-  }
+  const spelled = spellings(authored, lo, hi, diagnosticText, sourceText);
+  const regionStart =
+    spelled.length > 0 ? Math.min(...spelled.map((span) => span.start)) : lo;
+  const regionEnd =
+    spelled.length > 0 ? Math.max(...spelled.map((span) => span.end)) : hi;
   let best: AuthoredSpan | undefined;
-  for (const span of authored) {
+  for (const span of authored ?? []) {
+    if (span.kind === "code") continue;
     if (span.start > regionStart || span.end < regionEnd) continue;
     if (!best || span.end - span.start < best.end - best.start) best = span;
   }
-  return best
-    ? { start: best.start, length: best.end - best.start }
-    : { start: 0, length: 0 };
+  return {
+    start: best?.start ?? 0,
+    length: best ? best.end - best.start : 0,
+    spelled: spelled.length > 0,
+  };
 }
 
 function suffixed(
@@ -209,6 +319,11 @@ function suffixed(
  * tables on first use and never again, so the two private memo fields are
  * reset after the mapping is added (pinned by the tests; `@volar/source-map`
  * is an exact-pinned dependency of the packages that bundle this).
+ *
+ * Volar takes the first mapping, in array order, that holds both ends of a
+ * diagnostic's range. Overlays therefore stay after the module's own mappings
+ * and are kept shortest first: a diagnostic nested inside another one's range
+ * finds its own overlay before the enclosing one, whichever was placed first.
  */
 function overlay(
   map: { mappings: CodeMapping[] },
@@ -218,13 +333,20 @@ function overlay(
 ): void {
   const data = { verification: true };
   overlayData.add(data);
-  map.mappings.push({
+  const added: CodeMapping = {
     sourceOffsets: [target.start],
     generatedOffsets: [generatedStart],
     lengths: [target.length],
     generatedLengths: [length],
     data,
-  });
+  };
+  const longer = map.mappings.findIndex(
+    (mapping) =>
+      overlayData.has(mapping.data as object) &&
+      (mapping.generatedLengths?.[0] ?? 0) > length,
+  );
+  if (longer < 0) map.mappings.push(added);
+  else map.mappings.splice(longer, 0, added);
   const memos = map as unknown as Record<string, unknown>;
   memos.generatedCodeOffsetsMemo = undefined;
   memos.sourceCodeOffsetsMemo = undefined;
@@ -280,9 +402,9 @@ function approximateLocated<T extends Located>(
     sourceScript.snapshot.getLength(),
   );
   const ranges = reportedRanges(serviceScript.code.mappings, source, code);
+  const spans = (serviceScript.code as SpannedVirtualCode).authoredSpans;
   if (!target) {
-    const authored =
-      (serviceScript.code as SpannedVirtualCode).authoredSpans?.() ?? [];
+    const authored = spans?.();
     target = enclosingSpan(
       authored,
       ranges,
@@ -297,20 +419,23 @@ function approximateLocated<T extends Located>(
     placed.set(serviceScript.code, forCode);
   }
 
-  // Per range, not per line: authored code inside or directly next to the
-  // diagnostic's generated range, else code MX wrote.
-  const touchesAuthored = ranges.some(
-    (range) => range.start <= generatedEnd && range.end >= generatedStart,
-  );
+  // The author's when they spelled its text where it came from, or when
+  // mapped authored code is inside or directly next to its generated range
+  // (per range, not per line); else code MX wrote.
+  const authored =
+    target.spelled ||
+    ranges.some(
+      (range) => range.start <= generatedEnd && range.end >= generatedStart,
+    );
   const [line, column] = lineAndColumn(generated, generatedStart);
+  const suffix = !authored
+    ? mxBugSuffix
+    : spans
+      ? approximateSuffix
+      : unknownPositionSuffix;
   return {
     ...diagnostic,
-    messageText: suffixed(
-      diagnostic.messageText,
-      touchesAuthored
-        ? approximateSuffix(line, column)
-        : mxBugSuffix(line, column),
-    ),
+    messageText: suffixed(diagnostic.messageText, suffix(line, column)),
   };
 }
 
@@ -318,7 +443,8 @@ function approximateLocated<T extends Located>(
  * `diagnostic`, or — when Volar could not map it back to the source — a copy
  * Volar can: the generated range is mapped onto the nearest enclosing authored
  * span (see {@link enclosingSpan}) and the message suffixed with
- * {@link approximateSuffix} or {@link mxBugSuffix}. The same goes for each of
+ * {@link approximateSuffix}, {@link unknownPositionSuffix} or
+ * {@link mxBugSuffix}. The same goes for each of
  * its `relatedInformation` entries, which Volar would otherwise drop one by
  * one. An exactly mapped diagnostic is returned as the same object.
  */

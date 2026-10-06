@@ -1292,39 +1292,95 @@ describe("MX language plugin", () => {
     expect(codes("Good")).toEqual([]);
   });
 
-  it("reports a diagnostic in generated code no mapping covers on the tag that encloses it (decision 161)", () => {
-    // A whole-file Solid unit maps no expression values: `missingName` sits
-    // in generated text with no source mapping. Volar used to drop it, so the
-    // service reported a clean page. It now arrives on `<p>`, the construct
-    // that holds it: not on line 1 (the interface, the only mapped construct)
-    // and not on the preceding sibling `<span>`.
+  it("reports a diagnostic in generated code no mapping covers on the element that encloses it (decision 161)", () => {
+    // A whole-file Solid unit maps its values but no tag: with no JSX types,
+    // each element's TS7026 sits in generated text no mapping covers. Volar
+    // used to drop them, so the service reported only the mapped errors. Each
+    // now arrives on the element it names, as the author's error, and the
+    // nested TS2304 is not captured by the element around it, whichever
+    // TypeScript reports first.
     const directory = `${here}/fixtures/solid-policy`;
     const page = `${directory}/Unmapped.mx`;
     const consumer = `${directory}/index.ts`;
     const source =
-      'export interface Input { ok: string }\n<div class="a"><span title=input.ok>${input.ok}</span><p>${missingName}</p></div>\n';
+      'export interface Input { ok: string }\n<div class="a"><span title=input.ok>${input.ok}</span><p title=missingAttr>y</p></div>\n';
     const service = createPluginService(
-      {
-        [page]: source,
-        [consumer]: 'import "./Unmapped.mx";',
-        [`${directory}/jsx.d.ts`]:
-          "declare namespace JSX { interface IntrinsicElements { [tag: string]: unknown } }",
-      },
-      [consumer, `${directory}/jsx.d.ts`],
+      { [page]: source, [consumer]: 'import "./Unmapped.mx";' },
+      [consumer],
     );
     service.getSemanticDiagnostics(consumer);
     const diagnostics = service.getSemanticDiagnostics(page);
+    const text = (d: ts.Diagnostic) =>
+      ts.flattenDiagnosticMessageText(d.messageText, "\n");
+    const on = (d: ts.Diagnostic) =>
+      source.slice(d.start, (d.start ?? 0) + (d.length ?? 0));
 
-    const missing = diagnostics.find((d) => d.code === 2304);
-    expect(
-      ts.flattenDiagnosticMessageText(missing?.messageText ?? "", "\n"),
-    ).toMatch(
-      /^Cannot find name 'missingName'\. \((position approximate|in MX-generated code, not yours: an MX bug); generated \d+:\d+\)$/,
+    const elements = diagnostics.filter((d) => d.code === 7026);
+    expect(elements.map(on).sort()).toEqual(
+      [
+        '<div class="a"><span title=input.ok>${input.ok}</span><p title=missingAttr>y</p></div>',
+        '<div class="a"><span title=input.ok>${input.ok}</span><p title=missingAttr>y</p></div>',
+        "<span title=input.ok>${input.ok}</span>",
+        "<span title=input.ok>${input.ok}</span>",
+        "<p title=missingAttr>y</p>",
+        "<p title=missingAttr>y</p>",
+      ].sort(),
     );
-    const paragraph = "<p>${missingName}</p>";
-    expect(missing?.start).toBe(source.indexOf(paragraph));
-    expect(missing?.length).toBe(paragraph.length);
-    expect(diagnostics.map((d) => d.code)).toEqual([2304]);
+    for (const element of elements) {
+      expect(text(element)).toMatch(
+        /\(position approximate: generated \d+:\d+\)$/,
+      );
+    }
+    const missing = diagnostics.find((d) => d.code === 2304);
+    expect(text(missing as ts.Diagnostic)).toMatch(
+      /^Cannot find name 'missingAttr'\./,
+    );
+    expect(["missingAttr", "title=missingAttr"]).toContain(
+      on(missing as ts.Diagnostic),
+    );
+    expect(diagnostics.map(text).join("\n")).not.toContain("not yours");
+  });
+
+  it("never calls the author's own errors MX's, in a whole-file unit or a region file (decision 161)", () => {
+    // A name typo, a missing required prop, and elements with no JSX types:
+    // mapped or not, none of them is code MX wrote. A region file exposes no
+    // authored spans, so what it cannot map lands at 1:1 and says so.
+    const directory = `${here}/fixtures/solid-policy`;
+    const page = `${directory}/Typos.mx`;
+    const region = `${directory}/Typos.solid.mx`;
+    const consumer = `${directory}/index.ts`;
+    const service = createPluginService(
+      {
+        [page]:
+          'import Card from "./TyposCard.mx"\n<div><p>${missingName}</p><Card/></div>\n',
+        [region]:
+          "export default function C() {\n  return <div><p title=missingAttr>${missingName}</p></div>;\n}\n",
+        [`${directory}/TyposCard.mx`]:
+          "export interface Input { title: string }\n<div>${input.title}</div>",
+        [consumer]: 'import "./Typos.mx";\nimport "./Typos.solid.mx";',
+      },
+      [consumer],
+    );
+    service.getSemanticDiagnostics(consumer);
+    const pageDiagnostics = service.getSemanticDiagnostics(page);
+    const regionDiagnostics = service.getSemanticDiagnostics(region);
+    const text = (d: ts.Diagnostic) =>
+      ts.flattenDiagnosticMessageText(d.messageText, "\n");
+
+    expect(new Set(pageDiagnostics.map((d) => d.code))).toEqual(
+      new Set([2304, 2741, 7026]),
+    );
+    expect(new Set(regionDiagnostics.map((d) => d.code))).toEqual(
+      new Set([2304, 7026]),
+    );
+    for (const d of [...pageDiagnostics, ...regionDiagnostics]) {
+      expect(text(d)).not.toContain("not yours");
+    }
+    const unknown = regionDiagnostics.filter((d) =>
+      text(d).includes("(position unknown in this file kind: generated"),
+    );
+    expect(unknown.length).toBeGreaterThan(0);
+    for (const d of unknown) expect([d.start, d.length]).toEqual([0, 0]);
   });
 
   it("says a diagnostic is MX's bug when the host's emitter wrote the code it is in (decision 161)", () => {

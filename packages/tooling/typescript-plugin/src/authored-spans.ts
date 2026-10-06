@@ -9,16 +9,33 @@ interface MarkoPosition {
 interface MarkoNode {
   type?: string;
   loc?: { start?: MarkoPosition; end?: MarkoPosition } | null;
+  name?: MarkoNode;
+  value?: MarkoNode;
+  var?: MarkoNode | null;
+  arguments?: MarkoNode[] | null;
   attributes?: MarkoNode[];
-  body?: { body?: MarkoNode[] };
+  body?: { params?: MarkoNode[]; body?: MarkoNode[] };
 }
+
+/** Nodes of a template body that hold no code: text and markup only. */
+const NOT_CODE = new Set([
+  "MarkoText",
+  "MarkoComment",
+  "MarkoCDATA",
+  "MarkoDocumentType",
+  "MarkoDeclaration",
+]);
 
 /**
  * Every tag and attribute of a whole-file `.mx` source, as file-absolute
  * spans: the authored constructs an unmappable diagnostic can be reported on
- * (decision 161). Read from the same Marko parse core lowers from, so it
- * agrees with what the compiler saw. A source that does not parse has none,
- * and its diagnostics fall back to the file start.
+ * (decision 161). Beside them, every piece of code the author wrote (a
+ * placeholder's expression, an attribute value other than a quoted string, a
+ * tag's arguments, variable, parameters or dynamic name, a statement): where an
+ * identifier or literal counts as spelled by the author. Read from the same
+ * Marko parse core lowers from, so it agrees with what the compiler saw. A
+ * source that does not parse has none, and its diagnostics fall back to the
+ * file start.
  */
 export function markoAuthoredSpans(
   source: string,
@@ -44,16 +61,31 @@ export function markoAuthoredSpans(
   const offsetOf = (position: MarkoPosition) =>
     (lineStarts[position.line - 1] ?? source.length) + position.column;
   const spans: AuthoredSpan[] = [];
-  const add = (node: MarkoNode) => {
-    const { start, end } = node.loc ?? {};
+  const add = (
+    kind: AuthoredSpan["kind"],
+    node: MarkoNode | null | undefined,
+  ) => {
+    const { start, end } = node?.loc ?? {};
     if (start && end)
-      spans.push({ start: offsetOf(start), end: offsetOf(end) });
+      spans.push({ kind, start: offsetOf(start), end: offsetOf(end) });
   };
   const walk = (nodes: readonly MarkoNode[] | undefined) => {
     for (const node of nodes ?? []) {
-      if (node.type !== "MarkoTag") continue;
-      add(node);
-      for (const attribute of node.attributes ?? []) add(attribute);
+      if (node.type !== "MarkoTag") {
+        if (node.type === "MarkoPlaceholder") add("code", node.value);
+        else if (!NOT_CODE.has(node.type ?? "")) add("code", node);
+        continue;
+      }
+      add("tag", node);
+      if (node.name?.type !== "StringLiteral") add("code", node.name);
+      add("code", node.var);
+      for (const argument of node.arguments ?? []) add("code", argument);
+      for (const param of node.body?.params ?? []) add("code", param);
+      for (const attribute of node.attributes ?? []) {
+        add("attribute", attribute);
+        if (attribute.value?.type !== "StringLiteral")
+          add("code", attribute.value);
+      }
       walk(node.body?.body);
     }
   };
