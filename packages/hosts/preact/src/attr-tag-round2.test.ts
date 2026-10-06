@@ -676,10 +676,12 @@ export default function Row(props: Input) { return <p>{props.items.map((x, i) =>
     async (host) => {
       // `<define>` has no declared `Input`, so decision 108's untyped-callee
       // fallback applies: `<@head>` carries no attributes, so `head` arrives
-      // renderable (the body itself), read directly with `<${head}/>`.
+      // renderable (the body itself), read directly with `<${head}/>`. As in
+      // Marko the call's one attributes object is the define's first param,
+      // so the define destructures it.
       const html = await renderFixture(host, {
         "main.mx":
-          '<define/Card|title, head|><div>${title}<${head}/></div></define>\n<Card title="a"><@head>H</@head></Card>',
+          '<define/Card|{ title, head }|><div>${title}<${head}/></div></define>\n<Card title="a"><@head>H</@head></Card>',
       });
       expect(html).toBe("<div>aH</div>");
     },

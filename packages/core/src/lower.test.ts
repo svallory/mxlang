@@ -3144,6 +3144,34 @@ describe("event attributes", () => {
     ]);
   });
 
+  describe("a <define> with several params called without arguments", () => {
+    const def = "<define/Card|title, head|><div>${title}</div></define>\n";
+    const message =
+      "`<Card>` has 2 params, but only the first parameter receives the attributes object; destructure it (`|{ a, b }|`) instead of reading one param per attribute";
+
+    it.each([
+      ["an attribute", '<Card title="a"/>'],
+      ["a body", "<Card>text</Card>"],
+      ["an attribute tag", "<Card><@head>H</@head></Card>"],
+    ])("warns at the tag name for %s", (_name, call) => {
+      const { warnings } = lowerWithWarnings(def + call);
+      expect(warnings).toEqual([
+        { message, line: 2, column: 1, file: "test.mx" },
+      ]);
+    });
+
+    it("stays silent for tag arguments, a bare call, one param or no params", () => {
+      for (const source of [
+        `${def}<Card("a")/>`,
+        `${def}<Card/>`,
+        "<define/Card|p|><div>${p.n}</div></define>\n<Card n=1/>",
+        "<define/Card><div/></define>\n<Card n=1/>",
+      ]) {
+        expect(lowerWithWarnings(source).warnings).toEqual([]);
+      }
+    });
+  });
+
   it("does not warn on a camelCase spelling whose lowercase is the DOM name", () => {
     // `onKeyDown`, `onMouseEnter`, `onPointerDown` and the rest of the React
     // surface lowercase to real DOM events (`keydown`, `mouseenter`,

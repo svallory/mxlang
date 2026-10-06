@@ -4,6 +4,8 @@
 
 - **Added:** `cloneIr(ir)`, a deep copy of an `Ir` for an emitter that needs to adjust nodes for its own output; emitters must not mutate the IR they are given (IR spec 10.2, pinned by each host's `ir-readonly.test.ts`).
 
+- **Added (jsx-define-call-drops-attrs):** lowering warns, positioned at the call's tag name, when a `<define>` with 2 or more params is called without tag arguments but with attributes, attribute tags or a body: only the first param receives the attributes object (Marko 6.3.51), so `<Card title="a"/>` against `|title, head|` no longer binds `title` to `"a"` on the JSX hosts.
+
 ## 0.1.0-alpha.4
 
 - Added `children["*"]` wildcard children (decision 147): a parent's `children` accepts an entry or ordered list of `{ pattern?, contract }` / inline-contract entries that claim child names nothing else resolves, validate them by another tag's contract (E1, E4, E2, `defaultTag`), and record the authored name as the additive `alias` (`TagAlias`) on the IR node. Exports `TagAlias`, `CustomTagChildren`, `WildcardChildEntry`, `WildcardChildren`, `isWildcardEligible`, `matchWildcardChild`, `scopeForChildren`, `WILDCARD_NEAR_EXPLICIT`. A name the target's own taglib holds as a built-in is never claimed; core keeps no list of them.

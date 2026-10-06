@@ -1067,6 +1067,35 @@ function rejectArgsWithProps(node: Node, target?: ComponentTarget): void {
   );
 }
 
+/**
+ * A `<define>` call without tag arguments hands the define ONE object (its
+ * attributes, attribute tags and `content`) as its first param; every later
+ * param is `undefined` (Marko 6.3.51). Before that was fixed, MX looked each
+ * param up by name in the call, so `<define/Card|title, head|>` called as
+ * `<Card title="a"/>` bound `title` to `"a"`. The source still compiles and now
+ * binds `title` to the whole object, so the call is flagged at its tag name.
+ */
+function warnDefineExtraParams(
+  ctx: Ctx,
+  node: Node,
+  name: string,
+  params: string[],
+): void {
+  if (params.length < 2 || (node.arguments ?? []).length > 0) return;
+  const carries =
+    (node.attributes ?? []).length > 0 ||
+    containsAttributeTags(node) ||
+    hasContent(node.body?.body ?? []);
+  if (!carries) return;
+  const pos = posOf(node.name ?? node);
+  warn(ctx, {
+    message: `\`<${name}>\` has ${params.length} params, but only the first parameter receives the attributes object; destructure it (\`|{ a, b }|\`) instead of reading one param per attribute`,
+    line: pos.line,
+    column: pos.column,
+    file: ctx.filename,
+  });
+}
+
 function validateParentCollision(node: Node, schema: AttrSchema): void {
   const owner = schema.collisionOwner;
   if (!owner) return;
@@ -3204,6 +3233,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   if (fileLocalBinding || ctx.declarations.isComponent(name, ctx)) {
     const params = ctx.defines.get(name);
     if (params) {
+      warnDefineExtraParams(ctx, node, name, params);
       return lowerComponent(ctx, node, { kind: "define", name, params });
     }
     // decision 116: a capitalized tag bound to a value **import** that is
