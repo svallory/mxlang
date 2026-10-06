@@ -725,7 +725,7 @@ keywords per target" below) written as a concise top-level line.
 | Field | Type | Opt. | Meaning |
 |---|---|---|---|
 | `type` | `"MxModuleStatement"` | no | |
-| `keyword` | `"import" \| "export" \| "static" \| "server" \| "client" \| "class"` | no | the first word |
+| `keyword` | `string`: one of the target's statement keywords (the language's six, `"import" \| "export" \| "static" \| "server" \| "client" \| "class"`, or the target's subset) | no | the first word |
 | `code` | `MxStatements` | no | the whole statement for `import`/`export`/`class`, the part after the keyword for `static`/`server`/`client` |
 
 Spans: the htmljs statement range, right-trimmed of whitespace: `start` at
@@ -927,6 +927,11 @@ Three producers, with different consequences:
 
    A duplicate default value is not among them: it is lowering's
    (`MX_DUPLICATE_DEFAULT`, §3.5, §6.1a), as is `MX_SUGAR_BOUND` for `#`.
+   This table lists front-end errors only. Errors lowering raises (those two,
+   "Cannot have shorthand id and id attribute." of §6.1a, the control-flow
+   attribute-tag error of §3.7, and every error lowering raises today) are
+   out of this document's error table: they keep today's text and position,
+   and coding them is the IR spec's "Errors" section (decision 162).
    Today every one of them throws, so only the first is reported; as data,
    all are kept (decision 162).
 
@@ -1362,7 +1367,8 @@ plain element host; offsets in each input alone):
 |---|---|---|---|---|---|
 | `<div#a.b.c/>` (all static, tag-adjacent) | `static` `"b c"`; `id` `static` `"a"` | `[7, 10)` (first value to last); id `[5, 6)` | `[6, 10)`; id `[4, 6)` (sigil + value) | the tag (`1:0`) | none |
 | `<div.${x}/>` (one dynamic) | `dynamic` `x` | — | `[4, 9)` (`.${x}`) | the tag | none |
-| `<div.a.${x}/>`, `<div.${x}.${y}/>`, `<div.${x}.a/>`, `<div.a.${x}.b/>`, `<div#i.a.${x}/>` (two or more tag-adjacent classes, at least one dynamic, no authored `class`, no attribute-position `.`) | `dynamic`, an array in written order (`["a", x]`, `[x, y]`, …; generator output, §7.1) | — | **`{ NaN, NaN }`: a bug**, MX1 TODO `shorthand-dynamic-class-nan-namespan` (intended: first sigil to the end of the last token); fixed before the port, which carries nothing | the tag | none |
+| A tag-adjacent `class` or `id` whose merged value has **no `loc`**, with no attribute-position token of the same name and no authored attribute of that name. Marko builds such a value in two places: the array it makes from two or more class parts that are not all static (`onOpenTagEnd`, `[C]chunk-src.js:6150-6153`, `arrayExpression` with no `withLoc`), and the template literal it makes for one part that mixes text and `${…}` (`parseTemplateString`, `[C]chunk-src.js:5967-5972`, `parseTemplateLiteral`). Probed examples: `<div.a.${x}/>`, `<div.${x}.${y}/>`, `<div.${x}.a/>`, `<div.a.${x}.b/>`, `<div#i.a.${x}/>` (class), `<div.a${x}/>`, `<div.${x}a/>` (class, one mixed part), `<div#a${x}/>`, `<div#a${x} .b/>` (id) | `dynamic`: an array in written order (`["a", x]`, `[x, y]`, …) or a template (`` `a${x}` ``); generator output, §7.1 | — | **`{ NaN, NaN }`: a bug**, MX1 TODO `shorthand-dynamic-class-nan-namespan` (scope: any merged shorthand value with no `loc`; intended span: first sigil to the end of the last token); fixed before the port, which carries nothing | the tag | none |
+| Counter-examples, real spans: one part that is a single `${…}` (`<div.${x}/>`, `<div#${x}/>`: the expression itself, which has a `loc`), a single `${"…"}` string (`<div.${"a"}/>`: Marko's `withLoc` wrap, `[C]chunk-src.js:5962-5963`), or the same values with an attribute-position `.` (`<div.a${x} .b/>`) or an authored `class` (`<div.a${x} class="y"/>`) | as their rows | — | `[4, 9)`, `[4, 9)`, `[4, 11)`; `[11, 13)` (`.b`); `[11, 16)` (`class`) | the tag; `1:11`; `1:11` | none; `".b"`; none |
 | `<div.${x}.a .b/>`, `<div.a.${x} .b/>` (the same, plus an attribute-position `.`) | `dynamic` `[x, "a", "b"]`, `["a", x, "b"]` | — | `[12, 14)` (`.b`) | `1:12` | `".b"` |
 | `<div.a.${x} class="y" .d/>` | `dynamic` `["a", x, "d", "y"]` (the token joins the shorthand part, before the authored value) | — | `[22, 24)` (`.d`) | `1:22` | `".a .d"` |
 | `<div.${x} class="y" .d/>` | `dynamic` `[x, "d", "y"]` | — | `[20, 22)` | `1:20` | `".d"` |
@@ -1403,8 +1409,10 @@ builds each resulting value as a **new** node and never edits a payload
 `nameSpan`: from the first to the last attribute-position token when such
 tokens took part; else (no own position) the value's span plus the sigil
 before it, `${`/`}` included for a single dynamic part; else the authored
-`class` name. When none of these exists, as for an array merged by Marko with
-no attribute-position token, the span is `NaN` (the bug row above).
+`class` name. When none of these exists, which happens exactly when the value
+Marko merged has no `loc` and nothing else gave the attribute a position, the
+span is `NaN` (the bug row above): `attrNameSpan` then falls through to
+`offsetOf` on an empty position.
 
 `loc`: the first attribute-position token when such tokens took part; else
 the authored attribute; else the tag.
@@ -1480,13 +1488,16 @@ interface HostTagView {
   name: string;                 // the tag name; for a module statement, its keyword
   nameSpan: Span;
   span: Span;                   // the whole tag, or the statement span of §3.10
-  attributes: {
-    name: string;               // before the last `:` (Marko's split, as hooks read it today)
-    modifier: string | null;    // after the last `:`; null without one
-    nameSpan: Span;
-    value?: Expr;
-  }[];
-  var: { span: Span } | null;                   // the tag variable, when written
+  attributes: (                // what lowering produced, in source order
+    | { kind: "attribute";
+        name: string;           // before the last `:` (Marko's split, as hooks read it today);
+                                // "value" for a default value
+        modifier: string | null; // after the last `:`; null without one
+        nameSpan: Span;         // zero-width at the `=` for a default value (Q8)
+        value?: Expr }
+    | { kind: "spread"; span: Span; value: Expr }
+  )[];
+  var: { span: Span } | null;                   // the tag variable's pattern range, when written
   attributeTags: { name: string; span: Span }[]; // `@`-names as written, in source order
   params: { span: Span; count: number } | null; // the body parameters, when pipes were written
   dynamicName: Expr | null;                     // the `<${…}>` name expression
@@ -1508,12 +1519,38 @@ Every field, and the hook that reads it today (opened on main):
 | `params` (`count`) | Astro refuses tag params on a component only when there is at least one (`node.body.params.length`) | Astro `astro-template.ts` `rejectComponentTag` |
 | `dynamicName` | the dynamic tag's target expression (`expr(ctx, node.name)`, `node: node.name`, its span) | html `translate.ts` `resolveDelegatedTag` (`DYNAMIC_TAG`); Angular `emitter.ts` `resolveDelegatedTag` |
 
+What `attributes` holds (decision 163 addendum 4, item 2): what lowering
+produced, as hooks see the post-rewrite node today. A default value is an
+entry named `"value"` with a zero-width `nameSpan` (the Q8 adapter); a spread
+is its own entry kind, in source order, so `attributes[0]` means the first
+authored entry; attributes made from shorthands (`class`, `id`, `name`, a
+sugar's default value) appear as the merge of §6.1a produced them. The one
+hook that reads `node.attributes` on main, html's `<let>`/`<const>` in
+`translate.ts` `resolveDelegatedTag`, reads `attrByName(node, "value") ??
+node.attributes[0]`, then its `.value` (`core.ts` `attrByName` skips
+spreads):
+
+| `<let>` / `<const>` input | Today | With the view |
+|---|---|---|
+| default value (`<let/x=1/>`) | `attrByName` finds it (Marko names it `value`) | the `"value"` entry |
+| `value=1` | found by `attrByName` | the same |
+| a spread first (`<let/x ...y/>`) | no `value`, so `attributes[0]` is the spread and its `.value` (`y`) becomes the initial value; `validateBuiltinValueAttributes` (`lower.ts`) does not reject it for `let`, and rejects any second attribute for `const` | `attributes[0]` is the spread entry, `.value` the same `Expr` |
+| a shorthand (`<let.a/x/>`) | the merged `class` is `attributes[0]` (the post-sugar tree), so its `.value` becomes the initial value | the merged entry, the same |
+| nothing | `"undefined"` | the same |
+
+Probed through `lower()` with a host that claims `let` and makes html's read (`attrByName(node, "value") ?? node.attributes[0]`): `<let/x ...y/>` picks the spread, initial value `y`; `<let.a/x/>` picks `class`, `"a"`; `<let/x=1/>` and `<let/x value=2/>` pick `value`; `<let/x/>` picks nothing.
+
 `resolveModifier` has no implementation in any host on main; `resolveAttributeMethod`
 is `() => true` wherever it is set (Preact, Solid, Angular, data) and reads
 nothing. `resolveDefaultTag` receives the parents as views: every host passes
 them to core's `contractDefaultTag`, which reads `name`, `attributeTag`, the tag
 definition and, through the handle, the wildcard match (`wildcard-resolve.ts`
-`wildcardMatchOf`).
+`wildcardMatchOf`). The tag definition today is Marko's `tagDef`
+(`DefaultTagParent.tagDef`), and `isStructural` (`contract-default-tag.ts`)
+reads only its `html` flag: a name the lookup knows that is not an element is
+structure. With Marko dropped it comes from the target's element-shape table
+(§3.12), which therefore also records, per known name, whether it is an
+element.
 
 **The handle.** `MxNodeHandle` is opaque: it has no fields, is not
 serialisable, and is valid only during the hook call. Only core's exported
@@ -1524,8 +1561,27 @@ text are untouched by the port. The reads served through the handle today:
 | Read | Helper | Called from |
 |---|---|---|
 | attribute tags (first name and position), tag arguments (presence, first argument's position), tag variable (presence, and its printed text in the message), type arguments and type parameters (presence), body parameters (at least one) | `rejectUnsupportedFields` (`core/src/core.ts`) | html `translate.ts` `resolveDelegatedTag` (`<html-comment>`, `<html-script>`, `<html-style>`, `<style>`, `<let>`/`<const>`); Astro `astro-template.ts` `resolveDelegatedTag` (`<html-comment>`) |
-| the tag variable's pattern (its identifiers, to refuse `input`) | html's own `rejectInputShadowing` (`translate.ts`), which needs a core helper returning the `MxPattern` payload (the same Babel pattern `checkBinding` receives) | html `translate.ts` `resolveDelegatedTag` (`<let>`/`<const>`) |
+| whether the tag variable binds a given name | `bindingSpan(handle, name): Span \| null` (decision 163 addendum 4, item 1), the one generic core helper; core has no `input` rule | html's `rejectInputShadowing` (`translate.ts`), from `resolveDelegatedTag` (`<let>`/`<const>`) |
 | the wildcard match of a parent | `contractDefaultTag` / `wildcardMatchOf` (`core/src/contract-default-tag.ts`, `wildcard-resolve.ts`) | every host's `resolveDefaultTag` |
+
+**`bindingSpan`.** It returns the span of the binding identifier named
+`name` inside the tag variable's pattern, the first in source order, or `null`
+when the pattern binds no such name. It finds exactly the identifiers html's
+`bindingNames` (`translate.ts`) finds today: the pattern itself when it is an
+identifier; in an object pattern, each property's value (shorthand
+`{ input }`, renamed `{ a: input }`) or rest argument (`{ ...input }`); in an
+array pattern, each element, holes skipped; through a default, its left side
+(`{ input = 1 }`, `[input = 1]`); and a rest element's argument. html keeps its
+check, its message and its position: `rejectInputShadowing` uses
+`bindingSpan(handle, "input") !== null` as the presence test and fails at the
+start of the tag-variable pattern, as today (core `fail` reports
+`target.loc.start`, the pattern node's start). That start equals
+`view.var.span.start`: the view's `var` span is the pattern payload's range,
+which starts at the first character after `/` (probe: `<let/x=1/>`,
+`<let/{ a: input }=1/>` and `<let/[b, input]: T=1/>` all start at offset 5,
+before any type annotation). html's `checkBinding` keeps calling the same
+function on the Babel pattern it already receives. (Addendum 4 item 1, applied
+as option (a) by the lead under decision 163's frame.)
 
 `server` and `client` are `MxModuleStatement`s in the AST where the target's
 statement set includes them (§3.10), and route through the same machinery as
@@ -1556,9 +1612,11 @@ port it takes a view (or an attribute entry) and reports
 `lineColumnAt(span.start)` (or `nameSpan.start`).
 
 **After the port, possibly.** Moving the checks the handle serves into
-lowering (hosts pass flags, not nodes) would remove the handle. It is not part
-of the port: it can change which error fires first for a tag that breaks two
-rules, so it is its own change with its own goldens, if it is made.
+lowering (hosts pass flags, not nodes) would remove the handle; reporting
+html's `input` collision at the identifier (`bindingSpan`'s span) instead of
+the pattern start would be a better position. Neither is part of the port:
+each changes output (which error fires first, or where), so each is its own
+change with its own goldens, if it is made.
 
 ## 7. Mapping from parser events
 
@@ -1765,9 +1823,10 @@ Deferred, still open (each after the port, as its own change):
   `start`/`end`). Deferred: a later, separate IR-contract change, after the
   TypeScript plugin maps through `Expr.span` instead of `node.loc`
   (`mx-language.ts` `locateSourceCode`); until then the payloads keep `loc` (§4.1).
-- **Checks served through the hook handle, moved into lowering** (§6.4,
-  "After the port, possibly"). Not part of the port: it can change which error
-  fires first, so it would be its own change with its own goldens.
+- **Checks served through the hook handle, moved into lowering**, and
+  **html's `input` collision reported at the identifier** (§6.4, "After the
+  port, possibly"). Not part of the port: each changes output, so each would
+  be its own change with its own goldens.
 - **Generator output to source slices** (TODO
   `ir-generated-text-to-source-slices`). Deferred: wanted, but as a separate
   recorded change after the port, because it changes emitted text (probe c,
@@ -1800,9 +1859,9 @@ not listed.
 | `MxStatements` | node (container) | §3.10; §4.1 | 812 |
 | `MxComment`, `MxCDATA`, `MxDoctype`, `MxDeclaration` | node | §3.11 | 818 |
 | `MxParseError` | node | §3.13 | 881 |
-| `MxReturn` | node | §3.14 | 995 |
-| `MxExpressionContainer`, `MxExpression` | node (container) | §4.1 | 1034 |
-| `MxAtom` | node | §4.3 | 1147 |
+| `MxReturn` | node | §3.14 | 1000 |
+| `MxExpressionContainer`, `MxExpression` | node (container) | §4.1 | 1039 |
+| `MxAtom` | node | §4.3 | 1152 |
 | `Span`, `MxNodeBase` | helper | §3.0 | 296 |
 | `MxChild`, `MxNode` | union | §3.0 | 299 |
-| `MxNodeHandle` | opaque handle (not a node) | §6.4 | 1493 |
+| `MxNodeHandle` | opaque handle (not a node) | §6.4 | 1504 |
