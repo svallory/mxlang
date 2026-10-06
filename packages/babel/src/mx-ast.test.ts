@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import type {
   Expression,
   FunctionParameter,
@@ -7,7 +8,6 @@ import type {
   TSTypeParameterDeclaration,
   TSTypeParameterInstantiation,
 } from "@babel/types";
-import { readFileSync } from "node:fs";
 import { expect, expectTypeOf, it } from "vitest";
 import type {
   MxArguments,
@@ -508,6 +508,7 @@ it("MxSpreadAttribute (ast §3.5b: `<b ...rest/>`)", () => {
   expect([missing, wrong]).toHaveLength(2);
 });
 
+// biome-ignore lint/suspicious/noTemplateCurlyInString: the test name quotes MX dynamic-shorthand syntax
 it("MxShorthand (ast §3.6: `.c`, and a dynamic `.${x}`)", () => {
   const cls = {
     type: "MxShorthand",

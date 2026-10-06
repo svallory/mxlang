@@ -4,6 +4,10 @@
 for the pin and every local modification) plus `src/mx-hooks.ts` and
 `src/internal.ts`, which are ours alone and which `scripts/vendor.sh` keeps.
 
+- Biome ignores only the fork's paths (`biome.json`: `src/{parser,plugins,tokenizer,util,parse-error}`
+  and the fork's top-level files); the MX-owned files (`mx-hooks.ts`, `internal.ts`,
+  `mx-ast.ts`, `mx-ast.test.ts`) are linted and format-checked. A new MX-owned
+  file is covered automatically; a new fork file must be added to the ignore.
 - **No MX logic here.** The fork reaches MX syntax only through `options.mxHooks`
   (`MxHooks`: `parseRegion`, `multipleRootsError`). `@mxlang/tsx-bridge`
   implements them. Never import `@mxlang/tsx-bridge`, a host, or `htmljs-parser`
