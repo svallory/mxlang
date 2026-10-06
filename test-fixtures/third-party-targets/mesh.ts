@@ -32,7 +32,7 @@ export interface MeshOptions {
   notBuiltOnData?: boolean;
   /** `builtOn` in place of `"data"` (a wrong name, a loop). */
   builtOn?: string;
-  /** The host's own rule: its compile throws at 1:0 on a file containing this text. */
+  /** The host's own rule: its compile throws an error at column 0 of every line containing this text. */
   hostRule?: string;
   /** Set `allowContractDefaultTag: false` on the declarations. */
   forbidContractDefaultTag?: boolean;
@@ -76,8 +76,21 @@ module.exports = {
       compileModule(source, filename, options) {
         globalThis.__mxMeshCompiles.push(filename);
         globalThis.__mxMeshDefaultTags.push(options.defaultTag);
-        if (o.hostRule !== undefined && source.includes(o.hostRule))
-          throw new core.TranslateError("mesh rule: " + o.hostRule + " is not allowed", 1, 0);
+        if (o.hostRule !== undefined) {
+          // One error per line that breaks the rule, thrown as one compile
+          // error carrying them all (decision 162's \`errors\`).
+          const errors = source
+            .split("\\n")
+            .flatMap((text, i) =>
+              text.includes(o.hostRule)
+                ? [new core.TranslateError("mesh rule: " + o.hostRule + " is not allowed", i + 1, 0)]
+                : [],
+            );
+          if (errors.length > 0) {
+            if (errors.length > 1) errors[0].errors = errors;
+            throw errors[0];
+          }
+        }
         return compiler.compileModule(source, filename, options);
       },
     };

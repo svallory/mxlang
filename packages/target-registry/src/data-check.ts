@@ -23,7 +23,6 @@ import {
   clearScanCache,
   isTranslateError,
   type MxWarning,
-  type TargetCompileResult,
   type TargetCompiler,
   type TargetPolicyDiagnostic,
 } from "@mxlang/core";
@@ -299,9 +298,8 @@ function runHostCompile(
     return;
   }
   const warnings: MxWarning[] = [];
-  let result: TargetCompileResult | undefined;
   try {
-    result = host.compiler.compileModule(source, file, {
+    host.compiler.compileModule(source, file, {
       ...(options.customTags === undefined
         ? {}
         : { customTags: options.customTags }),
@@ -313,15 +311,11 @@ function runHostCompile(
     });
   } catch (error) {
     if (isTranslateError(error)) {
-      options.report(
-        at(
-          error.line,
-          error.column,
-          error.message,
-          "error",
-          error.file ?? file,
-        ),
-      );
+      // Every error of the file (decision 162), not only the thrown first one.
+      for (const each of error.errors?.length ? error.errors : [error])
+        options.report(
+          at(each.line, each.column, each.message, "error", each.file ?? file),
+        );
     } else {
       options.report(
         at(
@@ -333,7 +327,6 @@ function runHostCompile(
       );
     }
   }
-  void result;
   for (const w of warnings)
     options.report(at(w.line, w.column, w.message, "warning"));
 }

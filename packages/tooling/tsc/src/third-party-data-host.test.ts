@@ -310,6 +310,20 @@ describe("the data check adds to a host built on data; it never replaces the hos
     expect(run.status).toBe(1);
   });
 
+  it("every error the host's compile reports is printed (decision 162)", () => {
+    const run = check(
+      `<object a="${RULE}"/>\n<object/>\n<object b="${RULE}"/>\n`,
+      {
+        fileKinds: MESH_KIND,
+        hostRule: RULE,
+      },
+    );
+    const at = (line: number) =>
+      `${join("src", "post.mesh.mx")}(${line},1): error TS80001: mesh rule: ${RULE} is not allowed\n`;
+    expect(run.output).toBe(at(1) + at(3));
+    expect(run.status).toBe(1);
+  });
+
   it("an error both report is printed once", () => {
     const run = check("<object a=1/>\n<define name=y/>\n", {
       fileKinds: MESH_KIND,
