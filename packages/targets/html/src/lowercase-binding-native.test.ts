@@ -1,3 +1,8 @@
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: MX source uses `${...}` placeholders.
+
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { MxWarning } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { compile } from "./index.ts";
@@ -7,7 +12,7 @@ import { compile } from "./index.ts";
 describe("lowercase tag with a same-named binding in scope", () => {
   it("an imported `span` stays a native element", () => {
     const { code } = compile(
-      `import { span } from "./x.ts"\n<span title="search"/>\n`,
+      `import span from "./span.mx"\n<span title="search"/>\n`,
       "/fixtures/a.mx",
     );
     expect(code).toContain('<span title=\\"search\\"></span>');
@@ -26,7 +31,7 @@ describe("lowercase tag with a same-named binding in scope", () => {
   it("warns at the tag, naming the import and where it was bound", () => {
     const warnings: MxWarning[] = [];
     compile(
-      `import { span } from "./x.ts"\n<span title="search"/>\n`,
+      `import span from "./span.mx"\n<span title="search"/>\n`,
       "/fixtures/a.mx",
       { warnings },
     );
@@ -49,6 +54,75 @@ describe("lowercase tag with a same-named binding in scope", () => {
     expect(warnings[0]?.message).toBe(
       `\`<span>\` is the native element; the \`span\` defined at 1:9 is not called. Rename it \`Span\` or write \`<\${span}>\``,
     );
+  });
+
+  it("a value import never triggers the diagnostic", () => {
+    const warnings: MxWarning[] = [];
+    const { code } = compile(
+      `import { span } from "./x.ts"\n<span title="search"/>\n`,
+      "/fixtures/a.mx",
+      { warnings },
+    );
+    expect(code).toContain('<span title=\\"search\\"></span>');
+    expect(warnings).toEqual([]);
+  });
+
+  it("an unknown lowercase tag naming a tag import is a positioned error on every target", () => {
+    expect(() =>
+      compile(
+        `import row from "./row.mx"\n<row label="x"/>\n`,
+        "/fixtures/a.mx",
+      ),
+    ).toThrow(
+      "`<row>` is not a tag here: `row` is imported from ./row.mx, and a lowercase tag never calls a binding. Write `<Row>` (rename the import) or `<${row}/>`",
+    );
+  });
+
+  it("the same error names where a lowercase `<define>` is defined", () => {
+    expect(() =>
+      compile(`<define/row|x|>d</define>\n<row/>\n`, "/fixtures/a.mx"),
+    ).toThrow(
+      "`<row>` is not a tag here: `row` is defined at 1:9, and a lowercase tag never calls a binding. Write `<Row>` (rename the import) or `<${row}/>`",
+    );
+  });
+
+  it("an out-of-scope define does not warn", () => {
+    const warnings: MxWarning[] = [];
+    compile(
+      `<if=x><define/span|y|>d</define></if>\n<span title="search"/>\n`,
+      "/fixtures/a.mx",
+      { warnings },
+    );
+    expect(warnings).toEqual([]);
+  });
+
+  it("`_` and `$` names follow Marko's tag-name rule", () => {
+    expect(() =>
+      compile(`import _row from "./row.mx"\n<_row/>\n`, "/fixtures/a.mx"),
+    ).toThrow("is not a tag here");
+  });
+
+  it("a registered taglib tag is still called, whatever is imported", () => {
+    const scratch = mkdtempSync(join(tmpdir(), "mx-html-row4-"));
+    try {
+      mkdirSync(join(scratch, "tags"));
+      writeFileSync(join(scratch, "package.json"), '{"type":"module"}');
+      writeFileSync(
+        join(scratch, "tags", "row.marko"),
+        "<p>${input.label}</p>",
+      );
+      const warnings: MxWarning[] = [];
+      const { code } = compile(
+        `import row from "./row.mx"\n<row label="x"/>\n`,
+        join(scratch, "main.mx"),
+        { warnings },
+      );
+      expect(code).not.toContain("is not a tag here");
+      expect(code).not.toContain('<row label=\\"x\\"');
+      expect(warnings).toEqual([]);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
   });
 
   it("a dynamic tag still calls the binding, with no warning", () => {

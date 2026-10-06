@@ -279,6 +279,10 @@ export function mxParseElementAt(
         importSpecifiers: visibleImportSpecifiers(parser),
         moduleBindings: moduleBindings(parser),
         importDefaultFromMarkoOrMx: visibleImportDefaultFromMarkoOrMx(parser),
+        importSites:
+          (parser.options?.mxImportSites as
+            | ReadonlyMap<string, { line: number; column: number }>
+            | undefined) ?? new Map(),
         unknownModuleBindings: unknownModuleBindings(parser),
       });
     const parsedCode = parseRegionCode(code, {

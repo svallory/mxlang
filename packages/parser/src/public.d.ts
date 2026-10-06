@@ -107,6 +107,9 @@ declare module "@mxlang/parser" {
      *  from a `.marko`/`.mx` source — Marko's own statically-resolved
      *  component case (decision 116). */
     importDefaultFromMarkoOrMx: ReadonlySet<string>;
+    /** Where each `importSpecifiers` binding's `import` statement starts
+     *  (1-based line, 0-based column), for decision 164's warning. */
+    importSites?: ReadonlyMap<string, { line: number; column: number }>;
     /** The subset of `moduleBindings`' non-import names whose value is not
      *  statically a function/arrow/class — the local extension of decision
      *  116. */

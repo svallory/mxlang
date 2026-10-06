@@ -1,7 +1,13 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: MX fixture source uses `${...}` placeholders.
 
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -61,6 +67,7 @@ async function renderFixture(
     // Callee declarations must exist before the caller is compiled: core
     // resolves each imported Input from disk.
     for (const [name, source] of Object.entries(files)) {
+      mkdirSync(dirname(join(scratch, name)), { recursive: true });
       writeFileSync(
         join(scratch, name),
         `${name.endsWith(".tsx") ? "/** @jsxRuntime automatic */\n" : ""}${source.replaceAll("HOSTJSX", jsxSources[host])}`,
@@ -92,6 +99,10 @@ async function renderFixture(
         customTags,
       })
         .code.replace(/from "\.\/(\w+)\.mx"/g, 'from "./$1.tsx"')
+        // A taglib tag (`tags/badge.marko`) is imported by the generated code;
+        // `tags/badge.tsx` is its hand-written stand-in, since a `.marko` file
+        // cannot execute here.
+        .replace(/from "\.\/tags\/(\w+)\.marko"/g, 'from "./tags/$1.tsx"')
         .replaceAll(
           `from "@mxlang/${host}/runtime"`,
           `from ${JSON.stringify(fileURLToPath(new URL(`../../${host}/src/runtime.ts`, import.meta.url)))}`,
@@ -180,16 +191,29 @@ describe("generated names do not shadow authored bindings", () => {
         }),
       ).toBe("<p>ok</p>");
     });
-    // Decision 164: this input used to call the import (`<p>ok</p>`); a
-    // lowercase tag is now the native element.
-    it(`${host}: a lowercase import named like the tag stays a native element`, async () => {
+    // The generated alias (`__mxBadge`, a lowercase taglib tag JSX would read
+    // as an element) must not shadow an authored `MxBadge`. A taglib tag is the
+    // only route to the alias since decision 164 (a lowercase import is native).
+    it(`${host}: a lowercase taglib tag's alias does not collide with an authored MxBadge`, async () => {
       expect(
         await renderFixture(host, {
+          "main.mx": 'static const MxBadge = 1;\n<badge label="ok"/>',
+          "tags/badge.marko": "<p>${input.label}</p>",
+          "tags/badge.tsx":
+            "export default function Badge(props: { label: string }) { return <p>{props.label}</p>; }",
+        }),
+      ).toBe("<p>ok</p>");
+    });
+    // Decision 164 addendum 1: `import badge from "./row.mx"` + `<badge/>` is
+    // not a tag, on every target.
+    it(`${host}: a lowercase tag naming a tag import that is no element is an error`, async () => {
+      await expect(
+        renderFixture(host, {
           "main.mx":
             'static const MxBadge = 1;\nimport badge from "./row.mx"\n<badge label="ok"/>',
           "row.mx": "<p>${input.label}</p>",
         }),
-      ).toBe('<badge label="ok"></badge>');
+      ).rejects.toThrow(/`<badge>` is not a tag here/);
     });
     it(`${host}: does not collide with an authored $mx_ret0 temporary`, async () => {
       expect(

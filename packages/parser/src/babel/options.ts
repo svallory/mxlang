@@ -171,6 +171,14 @@ export interface Options {
   mxImportDefaultFromMarkoOrMx?: ReadonlySet<string>;
 
   /**
+   * MX FORK: where each `mxImportSpecifiers` binding's `import` statement
+   * starts (1-based line, 0-based column), pre-collected by `parse`. Read
+   * only for the positioned diagnostic a lowercase tag raises when it names
+   * an import (decision 164). See `MxRegionCompileInput.importSites`.
+   */
+  mxImportSites?: ReadonlyMap<string, { line: number; column: number }>;
+
+  /**
    * MX FORK: the subset of `mxModuleBindings`' non-import names whose value
    * is not statically a function/arrow/class, pre-collected by `parse` — the
    * local extension of decision 116. See
@@ -260,6 +268,7 @@ type KeepOptionalKeys =
   | "mxImportSpecifiers"
   | "mxModuleBindings"
   | "mxImportDefaultFromMarkoOrMx"
+  | "mxImportSites"
   | "mxUnknownModuleBindings";
 export type OptionsWithDefaults = Omit<Required<Options>, KeepOptionalKeys> &
   Pick<Options, KeepOptionalKeys>;
@@ -297,6 +306,8 @@ function createDefaultOptions(): OptionsWithDefaults {
     // MX FORK: same "must default to undefined, not be left out" reasoning
     // as the two above — decision 116's default-import-from-template set.
     mxImportDefaultFromMarkoOrMx: undefined,
+    // MX FORK: same reasoning — decision 164's import positions.
+    mxImportSites: undefined,
     // MX FORK: same reasoning again — the local extension of decision 116's
     // non-function-like module-scope binding set.
     mxUnknownModuleBindings: undefined,

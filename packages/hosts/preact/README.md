@@ -228,9 +228,10 @@ This host follows Marko's rule — the taglib lookup, and the template's own
 PascalCase imports and `<define>`s, the same as `@mxlang/html` — and renames a
 taglib-discovered component in the emitted JSX, binding `MxBadge` beside it.
 A lowercase `import` or `<define>` is never called as a tag (decision 164): a
-lowercase tag is the native element, with a warning. Emitted verbatim it
-rendered a literal `<badge>` element with the props as attributes, which is a
-silently wrong render rather than an error.
+lowercase tag naming one is the native element when it is one (with a
+warning), and a positioned error when it is not and the binding can be a tag
+(`import badge from "./badge.mx"` + `<badge/>`). It used to render a literal
+`<badge>` element with the props as attributes, a silently wrong render.
 
 ## Verification
 

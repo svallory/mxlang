@@ -112,6 +112,8 @@ export interface HostRegionInput {
   moduleBindings: ReadonlySet<string>;
   /** Bindings that are a default import from a `.marko`/`.mx` source. */
   importDefaultFromMarkoOrMx: ReadonlySet<string>;
+  /** Where each import binding's `import` statement starts (1-based line, 0-based column). */
+  importSites?: ReadonlyMap<string, { line: number; column: number }>;
   /** Non-import names whose value is not statically a function, arrow or class. */
   unknownModuleBindings: ReadonlySet<string>;
 }

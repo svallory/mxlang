@@ -550,19 +550,32 @@ the literal text `<![CDATA[ b < c ]]>`, not a CDATA section.
 MX decides element-vs-component by **in-scope binding and case**, which is
 Marko's own rule, not JSX's. The full precedence chain is in §11.
 
-**A lowercase tag is a native element, whatever binding is in scope
-(decision 164).** `import { input } from "@angular/core"` does not turn
-`<input>` into a call of that import, and a lowercase `<define/row>` is not
-called by `<row>`. A local `import` or `<define>` binding is called as a tag
-only when its name is PascalCase, or through a dynamic tag (`<${row}>`).
-Core raises a positioned warning at the tag when its name equals an in-scope
-`import` or `<define>` binding: "`<row>` is the native element; the `row`
-defined at L:C is not called. Rename it `Row` or write `<${row}>`" (on a
-target that never sees the binding's own position, such as a Solid region, the
-`at L:C` part is left out). A registered custom tag or contract child of that
-name is unaffected. A lowercase name that is neither an element nor
-callable stays the host's existing error. This matches Marko 6.3.51, so it is
-not a divergence.
+**A lowercase tag is never a call to a binding (decision 164).** A local
+`import` or `<define>` binding is called as a tag only when its name is not
+lowercase (the exact complement of Marko's `/^[A-Z]/` rule, so `_x` and `$x`
+count as lowercase), or through a dynamic tag (`<${row}>`). `import { input }
+from "@angular/core"` therefore never turns `<input>` into a call of that
+import. The check runs in core, once, before any host's `isComponent` or
+unknown-tag path, and treats a lowercase tag `<x>` whose name equals a binding
+that **can be a tag** (a `<define>` in scope, or an import whose specifier is a
+tag module, `.mx` or `.marko`) like this; any other import (a value import)
+never triggers it and `<x>` stays a native element, silently:
+
+| `<x>` is… | Result |
+|---|---|
+| a native element (`<span>` + a define or tag import named `span`) | the native element, with a positioned warning at the tag: "`<span>` is the native element; the `span` defined\|imported at L:C is not called. Rename it `Span` or write `<${span}>`" |
+| a registered custom tag, a contract child, or a Marko taglib tag (`tags/row.marko`) | called as before, whatever is imported; no diagnostic |
+| none of those (`import row from "./row.mx"` + `<row/>`) | a positioned **error** on every target: "`<row>` is not a tag here: `row` is imported from ./row.mx, and a lowercase tag never calls a binding. Write `<Row>` (rename the import) or `<${row}/>`" (a define reads "`row` is defined at L:C") |
+
+The binding's `L:C` comes from the import or define site on every target. A
+`<define>` is in scope only inside the block that declares it, so one inside
+an `<if>` does not warn for a tag outside it. This is a deliberate,
+same-on-every-target improvement: `@mxlang/html` used to report
+"Unable to find entry point" (or Marko's "Local variables must be in a dynamic
+tag unless they are PascalCase") and the JSX hosts rendered a literal `<row>`
+element; all now raise the one error above. A lowercase tag a host claims
+(`<style>`) returns before the warning, so it is silent. This matches Marko
+6.3.51 for a native element, and is stricter than it for the error case.
 
 ### Void elements
 
@@ -1565,13 +1578,13 @@ The **normative** order, as shipped (decisions 93, 113):
    `define`, `return`, `else`, `else-if` — **never shadowable**
 3. `@`-prefixed names → attribute-tag error
 4. **Built-in custom tags (`try`)** — wins unconditionally
-5. **A file-local binding**, **gated on PascalCase** (a lowercase tag is a
-   native element whatever binding is in scope, with a warning: decision 164):
-   an `import`, a `<define>` name, a `<const>` binding, or a `<for>`/`<define>` tag param —
+5. **A file-local binding**, **gated on PascalCase**: an `import`, a `<define>` name, a `<const>` binding, or a `<for>`/`<define>` tag param —
    each in effect only within its own lexical scope
 6. A registered custom tag
 7. A host claim (`isDelegatedTag`)
-8. `declarations.isComponent`
+8. `declarations.isComponent` — skipped for a lowercase name bound by an
+   `import` or `<define>` (decision 164, §4: a native element with a warning,
+   or an error when the name is no element and the binding can be a tag)
 9. PascalCase with nothing matching → error; else an element if
    `isElement` accepts it; else error
 

@@ -82,7 +82,7 @@ import {
 } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import { invalidDefaultTagHint, resolveUnnamedTags } from "./default-tag.ts";
-import { nearestName } from "./did-you-mean.ts";
+import { HTML_ELEMENTS, nearestName } from "./did-you-mean.ts";
 import { exportNameFor } from "./export-name.ts";
 import { parseFragment } from "./fragment.ts";
 import type {
@@ -2127,13 +2127,66 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
   };
 }
 
+const ELEMENT_TAGLIB_IDS = new Set(["marko-html", "marko-svg", "marko-math"]);
+
+/** A tag Marko's taglib lookup registers (`tags/`, a `marko.json`), not an element. */
+function isRegisteredTaglibTag(ctx: Ctx, name: string): boolean {
+  const taglibId = ctx.lookup?.getTag(name)?.taglibId;
+  return (
+    taglibId !== undefined &&
+    !ELEMENT_TAGLIB_IDS.has(taglibId) &&
+    taglibId !== "mx-translator-core"
+  );
+}
+
+/** An import of a tag module — the only import a lowercase tag could be mistaken to call. */
+function isTagModuleImport(ctx: Ctx, name: string): boolean {
+  const specifier = ctx.importSpecifiers.get(name);
+  return (
+    ctx.imports.has(name) &&
+    specifier !== undefined &&
+    isMarkoOrMxSpecifier(specifier)
+  );
+}
+
+// Elements a taglib lookup cannot vouch for when none is set (the region hosts).
+const EXTRA_NATIVE_ELEMENTS = new Set([
+  "search",
+  "slot",
+  "svg",
+  "path",
+  "circle",
+  "rect",
+  "g",
+  "line",
+  "polygon",
+  "polyline",
+  "ellipse",
+  "text",
+  "defs",
+  "use",
+  "symbol",
+  "mask",
+  "math",
+]);
+
+/** Whether `name` is a native HTML/SVG/MathML element, by lookup or, without one, by list. */
+function isNativeElementName(ctx: Ctx, name: string): boolean {
+  const taglibId = ctx.lookup?.getTag(name)?.taglibId;
+  if (taglibId !== undefined) return ELEMENT_TAGLIB_IDS.has(taglibId);
+  return (
+    (HTML_ELEMENTS as readonly string[]).includes(name) ||
+    EXTRA_NATIVE_ELEMENTS.has(name)
+  );
+}
+
 /**
  * Decision 164's warning: a lowercase tag whose name an in-scope `import` or
  * `<define>` binds is the native element, and the binding is not called.
  */
 function warnLowercaseBinding(ctx: Ctx, node: Node, name: string): void {
   const site = ctx.bindingSites.get(name);
-  const kind = site?.kind ?? (ctx.defines.has(name) ? "defined" : "imported");
+  const kind = site?.kind ?? "imported";
   const where = site ? ` at ${site.line}:${site.column + 1}` : "";
   const pascal = name.charAt(0).toUpperCase() + name.slice(1);
   const at = posOf(node);
@@ -3255,8 +3308,36 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // PascalCase name, or a dynamic tag `<${name}>`, calls a local binding).
   // Hosts' `isComponent` answers `imports.has || defines.has` with no casing
   // gate, so the lowercase case is cut off here, once, for every host.
+  //
+  // Marko's own gate is "not `/^[A-Z]/`" (`fileLocalBinding`'s complement), so
+  // `_x` and `$x` names are lowercase here too. A tag Marko's taglib lookup
+  // registers (`tags/row.marko`) is not a lowercase *binding* call at all: it
+  // keeps the host's routing whatever is imported (addendum 1).
+  const registeredTag = isRegisteredTaglibTag(ctx, name);
   const lowercaseBinding =
-    /^[a-z]/.test(name) && (ctx.defines.has(name) || ctx.imports.has(name));
+    !/^[A-Z]/.test(name) &&
+    !registeredTag &&
+    (ctx.defines.has(name) || ctx.imports.has(name));
+  // The diagnostic fires only for a binding that can be a tag: an in-scope
+  // `<define>`, or an import of a tag module (`.mx`, `.marko`). A value import
+  // (Angular's `input`, any `.ts` helper) is native and silent.
+  const tagBinding =
+    lowercaseBinding &&
+    (ctx.bindingSites.get(name)?.kind === "defined" ||
+      isTagModuleImport(ctx, name));
+  if (tagBinding && !isNativeElementName(ctx, name)) {
+    const site = ctx.bindingSites.get(name);
+    const from = ctx.importSpecifiers.get(name);
+    const pascal = name.charAt(0).toUpperCase() + name.slice(1);
+    const bound =
+      site?.kind === "defined"
+        ? `\`${name}\` is defined at ${site.line}:${site.column + 1}`
+        : `\`${name}\` is imported from ${from}`;
+    fail(
+      `\`<${name}>\` is not a tag here: ${bound}, and a lowercase tag never calls a binding. Write \`<${pascal}>\` (rename the import) or \`<\${${name}}/>\``,
+      node,
+    );
+  }
   if (
     fileLocalBinding ||
     (!lowercaseBinding && ctx.declarations.isComponent(name, ctx))
@@ -3372,7 +3453,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       node,
     );
   }
-  if (lowercaseBinding) warnLowercaseBinding(ctx, node, name);
+  if (tagBinding) warnLowercaseBinding(ctx, node, name);
 
   if (node.attributeTags?.length) {
     ctx.declarations.rejectElementAttributeTags?.(name, node, ctx);

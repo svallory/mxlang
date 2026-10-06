@@ -331,6 +331,11 @@ function lowerRegion(
   for (const name of base.moduleBindings ?? []) {
     if (!markoLocals.has(name)) ctx.imports.add(name);
   }
+  for (const [name, site] of base.importSites ?? []) {
+    if (ctx.importSpecifiers.has(name)) {
+      ctx.bindingSites.set(name, { kind: "imported", ...site });
+    }
+  }
   for (const name of base.unknownModuleBindings ?? []) {
     if (!markoLocals.has(name)) ctx.unknownLocalValue.add(name);
   }

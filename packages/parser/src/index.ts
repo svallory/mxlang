@@ -84,6 +84,8 @@ export function parse(
     options.mxImportDefaultFromMarkoOrMx ??
     moduleScan?.importDefaultFromMarkoOrMx ??
     new Set();
+  const importSites =
+    options.mxImportSites ?? moduleScan?.importSites ?? new Map();
   const unknownModuleBindings =
     options.mxUnknownModuleBindings ??
     moduleScan?.unknownModuleBindings ??
@@ -107,6 +109,7 @@ export function parse(
     mxImportSpecifiers: importSpecifiers,
     mxModuleBindings: moduleBindings,
     mxImportDefaultFromMarkoOrMx: importDefaultFromMarkoOrMx,
+    mxImportSites: importSites,
     mxUnknownModuleBindings: unknownModuleBindings,
   } as ParserOptions) as unknown as File;
   if (mx) checkReservedBindings(file);
@@ -154,6 +157,7 @@ function collectModuleScope(
   importSpecifiers: Map<string, string>;
   moduleBindings: Set<string>;
   importDefaultFromMarkoOrMx: Set<string>;
+  importSites: Map<string, { line: number; column: number }>;
   unknownModuleBindings: Set<string>;
 } {
   // SAFETY: the declaration prepass returns the same standard Babel File as the real parse.
@@ -174,11 +178,14 @@ function collectModuleScope(
   // import (named, namespace, or a default from any other extension) lowers
   // as a dynamic tag on the host side.
   const importDefaultFromMarkoOrMx = new Set<string>();
+  // Where each binding's `import` statement starts (decision 164's warning).
+  const importSites = new Map<string, { line: number; column: number }>();
   // SAFETY: the optional structural fields below cover the Babel statement variants inspected here.
   for (const statement of file.program.body as Array<{
     type?: string;
     importKind?: string;
     source?: { value?: unknown };
+    loc?: { start: { line: number; column: number } };
     specifiers?: Array<{
       type?: string;
       local?: { name?: unknown };
@@ -199,6 +206,12 @@ function collectModuleScope(
       const local = binding.local?.name;
       if (typeof local !== "string") continue;
       imports.set(local, specifier);
+      if (statement.loc) {
+        importSites.set(local, {
+          line: statement.loc.start.line,
+          column: statement.loc.start.column,
+        });
+      }
       if (
         binding.type === "ImportDefaultSpecifier" &&
         isMarkoOrMxSpecifier(specifier)
@@ -213,6 +226,7 @@ function collectModuleScope(
     importSpecifiers: imports,
     moduleBindings,
     importDefaultFromMarkoOrMx,
+    importSites,
     unknownModuleBindings,
   };
 }

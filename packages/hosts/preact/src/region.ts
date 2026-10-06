@@ -68,6 +68,8 @@ export interface CompileJsxRegionOptions {
   moduleBindings?: ReadonlySet<string>;
   /** Bindings that are a default import from a `.marko`/`.mx` source (decision 116). */
   importDefaultFromMarkoOrMx?: ReadonlySet<string>;
+  /** Where each `importSpecifiers` binding's `import` starts (1-based line, 0-based column). */
+  importSites?: ReadonlyMap<string, { line: number; column: number }>;
   /** Non-import names whose value is not statically a function, arrow or class. */
   unknownModuleBindings?: ReadonlySet<string>;
   /** Positioned non-fatal diagnostics collected by editor/build tooling. */
@@ -209,6 +211,11 @@ export function compileJsxRegion(
   if (options.importSpecifiers) {
     ctx.importSpecifiers = new Map(options.importSpecifiers);
     for (const name of options.importSpecifiers.keys()) ctx.imports.add(name);
+  }
+  for (const [name, site] of options.importSites ?? []) {
+    if (ctx.importSpecifiers.has(name)) {
+      ctx.bindingSites.set(name, { kind: "imported", ...site });
+    }
   }
   // The surrounding module's own top-level values resolve a capitalized tag
   // too (decision 114), as in `compileSolidMx`.

@@ -1,3 +1,5 @@
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: MX source and messages use `${...}` placeholders.
+
 /**
  * One test per lowering row and per error, as the brief requires.
  *
@@ -987,24 +989,71 @@ describe("attribute tag values (executed)", () => {
 });
 
 describe("component aliases", () => {
-  // Decision 164: a lowercase tag is a native element whatever it is bound to
-  // (this used to pin the `__mxBadge` alias for `import badge` + `<badge/>`).
-  it("keeps a lowercase tag a native element when an import of that name is in scope", () => {
-    const warnings: MxWarning[] = [];
-    const { code } = compilePreactMx(
-      'import badge from "./badge.mx"\n<badge label="x"/>',
-      "/fixtures/test.mx",
-      { warnings },
+  // Decision 164: a lowercase tag is a native element or a registered tag,
+  // never a call to an imported binding. A lowercase taglib tag is the only
+  // route to the alias, because JSX would read `<badge>` as an element.
+  it("aliases a lowercase taglib tag a JSX element would shadow", async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import(
+      "node:fs"
     );
-    expect(code).toContain('<badge label="x" />');
-    expect(code).not.toContain("MxBadge");
-    expect(warnings.map((w) => [w.line, w.column, w.message])).toEqual([
-      [
-        2,
-        0,
-        `\`<badge>\` is the native element; the \`badge\` imported at 1:1 is not called. Rename it \`Badge\` or write \`<\${badge}>\``,
-      ],
-    ]);
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const scratch = mkdtempSync(join(tmpdir(), "mx-preact-alias-"));
+    try {
+      mkdirSync(join(scratch, "tags"));
+      writeFileSync(join(scratch, "package.json"), '{"type":"module"}');
+      writeFileSync(
+        join(scratch, "tags", "badge.marko"),
+        "<p>${input.label}</p>",
+      );
+      const { code } = compilePreactMx(
+        '<badge label="x"/>',
+        join(scratch, "main.mx"),
+      );
+      expect(code).toContain('import __mxBadge from "./tags/badge.marko"');
+      expect(code).toContain('<__mxBadge label="x" />');
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it("calls a registered taglib tag whatever a same-named import binds", async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import(
+      "node:fs"
+    );
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const scratch = mkdtempSync(join(tmpdir(), "mx-preact-alias-reg-"));
+    try {
+      mkdirSync(join(scratch, "tags"));
+      writeFileSync(join(scratch, "package.json"), '{"type":"module"}');
+      writeFileSync(
+        join(scratch, "tags", "badge.marko"),
+        "<p>${input.label}</p>",
+      );
+      const warnings: MxWarning[] = [];
+      const { code } = compilePreactMx(
+        'import badge from "./badge.mx"\n<badge label="x"/>',
+        join(scratch, "main.mx"),
+        { warnings },
+      );
+      expect(code).toContain("<__mxBadge");
+      expect(code).not.toContain('<badge label="x" />');
+      expect(warnings).toEqual([]);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a lowercase tag that names a tag import and is no element", () => {
+    expect(() =>
+      compilePreactMx(
+        'import badge from "./badge.mx"\n<badge label="x"/>',
+        "/fixtures/test.mx",
+      ),
+    ).toThrow(
+      "`<badge>` is not a tag here: `badge` is imported from ./badge.mx, and a lowercase tag never calls a binding. Write `<Badge>` (rename the import) or `<${badge}/>`",
+    );
   });
 
   it("leaves a capitalized component name alone", () => {

@@ -94,6 +94,8 @@ export interface CompileSolidMxOptions {
    * other extension) lowers as a dynamic tag instead.
    */
   importDefaultFromMarkoOrMx?: ReadonlySet<string>;
+  /** Where each `importSpecifiers` binding's `import` starts (1-based line, 0-based column). */
+  importSites?: ReadonlyMap<string, { line: number; column: number }>;
   /**
    * The subset of `moduleBindings`' *non-import* names (a top-level
    * `const`/`function`/`class` the surrounding module declares) whose value
@@ -275,6 +277,11 @@ export function compileSolidMx(
   if (options.importSpecifiers) {
     ctx.importSpecifiers = new Map(options.importSpecifiers);
     for (const name of options.importSpecifiers.keys()) ctx.imports.add(name);
+  }
+  for (const [name, site] of options.importSites ?? []) {
+    if (ctx.importSpecifiers.has(name)) {
+      ctx.bindingSites.set(name, { kind: "imported", ...site });
+    }
   }
   // A capitalized tag also resolves through the surrounding TypeScript
   // module's own top-level value bindings (decision 114) — not just its

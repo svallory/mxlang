@@ -103,6 +103,12 @@ export interface MxRegionCompileInput {
    */
   importDefaultFromMarkoOrMx: ReadonlySet<string>;
   /**
+   * Where each `importSpecifiers` binding's `import` statement starts (1-based
+   * line, 0-based column), so a host can position decision 164's warning at
+   * the import. A name may be absent; the warning then omits the position.
+   */
+  importSites?: ReadonlyMap<string, { line: number; column: number }>;
+  /**
    * The subset of `moduleBindings`' *non-import* names (a top-level
    * `const`/`function`/`class`) whose value is not statically a
    * function/arrow/class — the local extension of decision 116 (firstmate's

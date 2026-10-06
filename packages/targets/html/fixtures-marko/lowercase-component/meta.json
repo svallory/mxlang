@@ -1,5 +1,5 @@
 {
   "marko": "error",
-  "errorPattern": "unless they are PascalCase\\. Use `<\\$\\{layout\\}/>` or rename to `Layout`\\.",
-  "reason": "real Marko rejects a lowercase local-variable tag reference outright (\"Local variables must be in a dynamic tag unless they are PascalCase. Use `<${layout}/>` or rename to `Layout`.\") -- verified against @marko/compiler 5.42.5 / marko@6.3.51. Fixed: @mxlang/html's emitComponent now rejects the same reference with Marko's own wording. See fixtures dynamic-tag-lowercase-import and nested-layout for the two forms that still work: `<${layout}/>` and `<Layout/>`."
+  "errorPattern": "`<\\$\\{layout\\}/>`",
+  "reason": "real Marko rejects a lowercase local-variable tag reference outright (\"Local variables must be in a dynamic tag unless they are PascalCase. Use `<${layout}/>` or rename to `Layout`.\") -- verified against @marko/compiler 5.42.5 / marko@6.3.51. @mxlang/html rejects the same reference, since decision 164 addendum 1 in core's own words on every target (\"`<layout>` is not a tag here: `layout` is imported from ./layout.marko, ...\"); both sides name the `<${layout}/>` dynamic-tag fix, which is what this pattern matches. See fixtures dynamic-tag-lowercase-import and nested-layout for the two forms that still work: `<${layout}/>` and `<Layout/>`."
 }

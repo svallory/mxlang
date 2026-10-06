@@ -1,5 +1,6 @@
 # @mxlang/parser changelog
 
+- **Added (decision 164):** `MxRegionCompileInput.importSites` (and the `mxImportSites` option `parse` pre-collects): where each import binding's `import` statement starts, so a host can position the lowercase-tag diagnostic at the import.
 - **Changed (bridge-host, decision 154):** the parser names no host and no file suffix. `parse`/`print` turn the MX grammar on when `mx: true` is passed or an `mxRegionCompile` hook is supplied; the `.solid.mx` filename default is gone (a hook-less `parse("x.solid.mx")` is now a plain TSX parse, and every tool passes `mx: true`). `MissingRegionCompile` names the region-entry contract (`HostFileKind.compileRegion`) instead of `compileSolidMx`.
 
 - **Fix:** a host helper hoisted with an identical binding and text by several regions of one file (Solid's attribute guard) is declared once instead of being renamed into a copy per region.

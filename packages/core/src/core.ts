@@ -765,9 +765,16 @@ export function declName(ctx: Ctx, node: Node): string {
 export function scopeBindings(ctx: Ctx): () => void {
   const saved = ctx.bindings.snapshot();
   const savedShadowed = ctx.tagVarShadowed;
+  const savedSites = new Map(ctx.bindingSites);
   return () => {
     ctx.bindings.restore(saved);
     ctx.tagVarShadowed = savedShadowed;
+    // A `<define>` is in scope only inside the block that declares it, so the
+    // positions decision 164's diagnostic reads revert with the block.
+    for (const name of [...ctx.bindingSites.keys()]) {
+      if (!savedSites.has(name)) ctx.bindingSites.delete(name);
+    }
+    for (const [name, site] of savedSites) ctx.bindingSites.set(name, site);
   };
 }
 
