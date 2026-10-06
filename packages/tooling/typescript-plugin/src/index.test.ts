@@ -1380,7 +1380,67 @@ describe("MX language plugin", () => {
       text(d).includes("(position unknown in this file kind: generated"),
     );
     expect(unknown.length).toBeGreaterThan(0);
+    for (const d of unknown) {
+      expect(text(d)).toMatch(
+        /\(position unknown in this file kind: generated \d+:\d+\)$/,
+      );
+    }
     for (const d of unknown) expect([d.start, d.length]).toEqual([0, 0]);
+  });
+
+  it("reports a wrongly typed attribute with a mapped value on the attribute, as the author's (decision 161)", () => {
+    // Whole-file Solid maps the value `1` but not the name `class`, where
+    // TypeScript reports the mismatch.
+    const directory = `${here}/fixtures/solid-policy`;
+    const page = `${directory}/AttrType.mx`;
+    const consumer = `${directory}/index.ts`;
+    const jsx = `${directory}/attr-type-jsx.d.ts`;
+    const source = "<div><p class=1>x</p></div>\n";
+    const service = createPluginService(
+      {
+        [page]: source,
+        [consumer]: 'import "./AttrType.mx";',
+        [jsx]:
+          "declare namespace JSX { interface IntrinsicElements { [tag: string]: { class?: string; children?: unknown } } interface ElementChildrenAttribute { children: unknown } }",
+      },
+      [consumer, jsx],
+    );
+    service.getSemanticDiagnostics(consumer);
+    const diagnostics = service.getSemanticDiagnostics(page);
+
+    expect(diagnostics).toHaveLength(1);
+    const [wrong] = diagnostics as [ts.Diagnostic];
+    expect(wrong.code).toBe(2322);
+    expect(
+      source.slice(wrong.start, (wrong.start ?? 0) + (wrong.length ?? 0)),
+    ).toBe("class=1");
+    expect(ts.flattenDiagnosticMessageText(wrong.messageText, "\n")).toMatch(
+      /^Type 'number' is not assignable to type 'string'\. \(position approximate: generated \d+:\d+\)$/,
+    );
+  });
+
+  it("places 600 unmapped diagnostics in well under the time a keystroke allows (decision 161)", () => {
+    // 300 elements with no JSX types: 602 TS7026, each unmapped. Placing them
+    // one Volar memo rebuild and one source parse at a time took 26 s.
+    const directory = `${here}/fixtures/solid-policy`;
+    const page = `${directory}/Many.mx`;
+    const consumer = `${directory}/index.ts`;
+    const service = createPluginService(
+      {
+        [page]: `<div>${"<p>x</p>".repeat(300)}</div>\n`,
+        [consumer]: 'import "./Many.mx";',
+      },
+      [consumer],
+    );
+    // The consumer's request compiles the page; the page's first request is
+    // where every unmapped diagnostic gets placed.
+    service.getSemanticDiagnostics(consumer);
+    const started = performance.now();
+    const diagnostics = service.getSemanticDiagnostics(page);
+    const elapsed = performance.now() - started;
+
+    expect(diagnostics.filter((d) => d.code === 7026)).toHaveLength(602);
+    expect(elapsed).toBeLessThan(2000);
   });
 
   it("says a diagnostic is MX's bug when the host's emitter wrote the code it is in (decision 161)", () => {

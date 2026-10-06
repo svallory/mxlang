@@ -35,6 +35,7 @@ class World {
   constructor(
     readonly source: string,
     readonly generated: string,
+    readonly file = FILE,
   ) {}
 
   /** Where `needle` is in the source. */
@@ -116,7 +117,7 @@ class World {
       new Map() as never,
       () => undefined,
     );
-    language.scripts.set(FILE, {
+    language.scripts.set(this.file, {
       getText: (start, end) => source.slice(start, end),
       getLength: () => source.length,
       getChangeRange: () => undefined,
@@ -131,7 +132,7 @@ class World {
     leading = this.source.length,
   ): ts.Diagnostic {
     return {
-      file: ts.createSourceFile(FILE, "", ts.ScriptTarget.Latest),
+      file: ts.createSourceFile(this.file, "", ts.ScriptTarget.Latest),
       start: leading + this.gen(needle),
       length: needle.length,
       category: ts.DiagnosticCategory.Error,
@@ -494,11 +495,69 @@ describe("approximateUnmapped", () => {
       }
       expect(
         region.place(language, region.diagnostic("missingName"))?.messageText,
-      ).toBe(`Cannot find name 'oops'.${unknownPositionSuffix(line, column)}`);
+      ).toBe(
+        `Cannot find name 'oops'. (position unknown in this file kind: generated ${line}:${column})`,
+      );
+      expect(unknownPositionSuffix(line, column)).toBe(
+        ` (position unknown in this file kind: generated ${line}:${column})`,
+      );
       expect(
         region.place(language, region.diagnostic("__scaffold"))?.messageText,
       ).toContain("an MX bug");
     });
+  });
+
+  describe("an attribute whose value is mapped", () => {
+    // Since #362 whole-file Solid maps `1` in `<p class=1>` but not `class`:
+    // TypeScript reports the wrong type on the generated name, whose gap ends
+    // at the mapped value, inside the attribute's span.
+    const ATTR = new World(
+      "<div><p class=1>x</p></div>",
+      "const e = <div><p class={1}>x</p></div>;",
+    );
+    const attrSpans = [
+      ATTR.span("<div><p class=1>x</p></div>"),
+      ATTR.span("<p class=1>x</p>"),
+      ATTR.span("class=1"),
+      ATTR.code("1"),
+    ];
+
+    it("lands on the attribute, as the author's error", () => {
+      const language = ATTR.language(
+        [ATTR.mapping("1}", "1")].map((mapping) => ({
+          ...mapping,
+          lengths: [1],
+          generatedLengths: [1],
+        })),
+        attrSpans,
+      );
+      const placed = ATTR.place(
+        language,
+        ATTR.diagnostic("class", {
+          code: 2322,
+          messageText: "Type 'number' is not assignable to type 'string'.",
+        }),
+      );
+
+      expect(placed).toMatchObject({
+        start: ATTR.src("class=1"),
+        length: "class=1".length,
+      });
+      expect(placed?.messageText).toMatch(
+        /\(position approximate: generated \d+:\d+\)$/,
+      );
+    });
+  });
+
+  it("leaves a file that is not compiled from MX to Volar", () => {
+    // A plain `.astro` page under `--astro` is Astro's projection: MX did not
+    // write it, so its unmapped diagnostics are never labelled MX's.
+    const astro = new World(PAGE.source, PAGE.generated, "/p/page.astro");
+    const language = astro.language(pageMappings, pageSpans);
+    const unmapped = astro.diagnostic("__wrap");
+
+    expect(approximateUnmapped(language, unmapped)).toBe(unmapped);
+    expect(astro.place(language, unmapped)).toBeUndefined();
   });
 
   describe("suffix: per generated range", () => {

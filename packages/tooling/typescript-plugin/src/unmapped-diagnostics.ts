@@ -86,16 +86,24 @@ function serviceScriptOf(language: Language<string>, fileName: string) {
   return script && serviceScript ? { script, serviceScript } : undefined;
 }
 
-function lineAndColumn(text: string, offset: number): [number, number] {
-  let line = 1;
-  let lineStart = 0;
-  for (let i = 0; i < offset && i < text.length; i++) {
-    if (text.charCodeAt(i) === 10) {
-      line++;
-      lineStart = i + 1;
-    }
+/** The offset each line of `text` starts at. */
+function lineStartsOf(text: string): number[] {
+  const starts = [0];
+  for (let at = text.indexOf("\n"); at >= 0; at = text.indexOf("\n", at + 1))
+    starts.push(at + 1);
+  return starts;
+}
+
+/** 1-based line and column of `offset`, by binary search in `starts`. */
+function lineAndColumn(starts: readonly number[], offset: number) {
+  let lo = 0;
+  let hi = starts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if ((starts[mid] ?? 0) <= offset) lo = mid;
+    else hi = mid - 1;
   }
-  return [line, offset - lineStart + 1];
+  return [lo + 1, offset - (starts[lo] ?? 0) + 1] as const;
 }
 
 /** A mapped range of the generated module and the source it came from. */
@@ -209,7 +217,6 @@ function spellings(
   diagnosticText: string,
   sourceText: string,
 ): AuthoredSpan[] {
-  const inGap = (span: AuthoredSpan) => span.start >= lo && span.end <= hi;
   const [, closing, element] = ELEMENT.exec(diagnosticText) ?? [];
   if (element) {
     if (!authored)
@@ -226,17 +233,19 @@ function spellings(
   }
   if (!TOKEN.test(diagnosticText)) return [];
   if (!authored) return tokenOccurrences(sourceText, diagnosticText, lo, hi);
+  // Only the name has to lie in the gap: an attribute whose value is mapped
+  // (`class=1`) ends the gap at that value, inside the attribute's span.
   const named = authored
-    .filter(
-      (span) =>
-        span.kind !== "code" &&
-        inGap(span) &&
-        isNamed(span, diagnosticText, sourceText),
-    )
+    .filter((span) => span.kind !== "code")
     .map((span) => {
       const start = span.kind === "tag" ? span.start + 1 : span.start;
-      return { ...span, start, end: start + diagnosticText.length };
-    });
+      return { span, start, end: start + diagnosticText.length };
+    })
+    .filter(
+      ({ span, start, end }) =>
+        start >= lo && end <= hi && isNamed(span, diagnosticText, sourceText),
+    )
+    .map(({ span, start, end }) => ({ ...span, start, end }));
   const inCode = authored
     .filter((span) => span.kind === "code" && span.end > lo && span.start < hi)
     .flatMap((span) =>
@@ -312,44 +321,73 @@ function suffixed(
     : { ...messageText, messageText: messageText.messageText + suffix };
 }
 
+/** A source map's mappings, plus the two private lookup memos it keeps. */
+type MutableMap = { mappings: CodeMapping[] } & Record<string, unknown>;
+
+/** What one virtual code's diagnostics share within one wrapper call. */
+interface CodeState {
+  map: MutableMap;
+  generated: string;
+  sourceText: string;
+  lineStarts: number[];
+  /** Per `source:code` of the diagnostic: which mappings report it. */
+  ranges: Map<string, MappedRange[]>;
+  spans?: readonly AuthoredSpan[];
+  /** Overlays placed in this call, added to `map` when the call ends. */
+  pending: CodeMapping[];
+}
+
 /**
- * Maps `[generatedStart, +length)` onto `target` in the module's source map,
- * as a mapping that only lets the diagnostic through (`verification`): no
- * hover, completion or navigation. `@volar/source-map` builds its lookup
- * tables on first use and never again, so the two private memo fields are
- * reset after the mapping is added (pinned by the tests; `@volar/source-map`
- * is an exact-pinned dependency of the packages that bundle this).
+ * The work of one wrapper call: everything read from a virtual code is read
+ * once, and the overlays for all of its diagnostics are added in one go, so
+ * Volar rebuilds its lookup tables once per call instead of once per
+ * diagnostic (602 unmapped TS7026 took 26 s that way).
+ */
+type Batch = Map<VirtualCode, CodeState>;
+
+/** `authoredSpans()` per virtual code: a code is replaced on every compile. */
+const authoredMemo = new WeakMap<VirtualCode, readonly AuthoredSpan[]>();
+
+function authoredSpansOf(code: SpannedVirtualCode) {
+  if (!code.authoredSpans) return undefined;
+  let spans = authoredMemo.get(code);
+  if (!spans) {
+    spans = code.authoredSpans();
+    authoredMemo.set(code, spans);
+  }
+  return spans;
+}
+
+/**
+ * Adds the overlays placed during a call to their source maps: each maps a
+ * diagnostic's generated range onto its placement, as a mapping that only lets
+ * the diagnostic through (`verification`): no hover, completion or
+ * navigation. `@volar/source-map` builds its lookup tables on first use and
+ * never again, so the two private memo fields are reset after the mappings
+ * change (pinned by the tests; `@volar/source-map` is an exact-pinned
+ * dependency of the packages that bundle this).
  *
  * Volar takes the first mapping, in array order, that holds both ends of a
  * diagnostic's range. Overlays therefore stay after the module's own mappings
  * and are kept shortest first: a diagnostic nested inside another one's range
  * finds its own overlay before the enclosing one, whichever was placed first.
  */
-function overlay(
-  map: { mappings: CodeMapping[] },
-  generatedStart: number,
-  length: number,
-  target: { start: number; length: number },
-): void {
-  const data = { verification: true };
-  overlayData.add(data);
-  const added: CodeMapping = {
-    sourceOffsets: [target.start],
-    generatedOffsets: [generatedStart],
-    lengths: [target.length],
-    generatedLengths: [length],
-    data,
-  };
-  const longer = map.mappings.findIndex(
-    (mapping) =>
-      overlayData.has(mapping.data as object) &&
-      (mapping.generatedLengths?.[0] ?? 0) > length,
-  );
-  if (longer < 0) map.mappings.push(added);
-  else map.mappings.splice(longer, 0, added);
-  const memos = map as unknown as Record<string, unknown>;
-  memos.generatedCodeOffsetsMemo = undefined;
-  memos.sourceCodeOffsetsMemo = undefined;
+function flush(batch: Batch): void {
+  for (const state of batch.values()) {
+    if (state.pending.length === 0) continue;
+    const { map } = state;
+    const own: CodeMapping[] = [];
+    const overlays: CodeMapping[] = [...state.pending];
+    for (const mapping of map.mappings) {
+      (overlayData.has(mapping.data as object) ? overlays : own).push(mapping);
+    }
+    const length = (mapping: CodeMapping) => mapping.generatedLengths?.[0] ?? 0;
+    overlays.sort((a, b) => length(a) - length(b));
+    map.mappings.splice(0, map.mappings.length, ...own, ...overlays);
+    map.generatedCodeOffsetsMemo = undefined;
+    map.sourceCodeOffsetsMemo = undefined;
+    state.pending = [];
+  }
 }
 
 interface Located {
@@ -359,32 +397,66 @@ interface Located {
   messageText: string | ts.DiagnosticMessageChain;
 }
 
+/**
+ * Whether a file is compiled from MX: every MX file kind ends in `.mx`
+ * (`.mx`, `.solid.mx`, `.astro.mx`, `.ng.mx`, a third-party `.<kind>.mx`).
+ * Another language's virtual code (a plain `.astro` file under `--astro`) is
+ * left to Volar: MX did not write it and says nothing about it.
+ */
+const isMxFile = (fileName: string) => /\.mx$/i.test(fileName);
+
 function approximateLocated<T extends Located>(
   language: Language<string>,
   diagnostic: T,
   source: string,
   code: string,
+  batch: Batch,
 ): T {
   const { file, start, length } = diagnostic;
   if (!file || start === undefined || length === undefined) return diagnostic;
+  if (!isMxFile(file.fileName)) return diagnostic;
   const found = serviceScriptOf(language, file.fileName);
   if (!found) return diagnostic;
   const { serviceScript } = found;
+  const virtual = serviceScript.code;
 
-  const sourceScript = language.scripts.fromVirtualCode(serviceScript.code);
+  const sourceScript = language.scripts.fromVirtualCode(virtual);
   const leading = serviceScript.preventLeadingOffset
     ? 0
     : sourceScript.snapshot.getLength();
   const generatedStart = start - leading;
   const generatedEnd = generatedStart + length;
-  const map = language.maps.get(serviceScript.code, sourceScript);
+  let state = batch.get(virtual);
+  if (!state) {
+    const generated = virtual.snapshot.getText(0, virtual.snapshot.getLength());
+    state = {
+      map: language.maps.get(virtual, sourceScript) as unknown as MutableMap,
+      generated,
+      sourceText: sourceScript.snapshot.getText(
+        0,
+        sourceScript.snapshot.getLength(),
+      ),
+      lineStarts: lineStartsOf(generated),
+      ranges: new Map(),
+      spans: authoredSpansOf(virtual as SpannedVirtualCode),
+      pending: [],
+    };
+    batch.set(virtual, state);
+  }
   const key = `${generatedStart}:${length}`;
-  let target = placed.get(serviceScript.code)?.get(key);
+  let target = placed.get(virtual)?.get(key);
   if (!target) {
     // Any authored mapping covering the range settles it, even one whose
     // `verification` rejects this diagnostic: that is a host deliberately
     // hiding a spurious error (the `.astro.mx` fence's TS1108), which Volar
-    // keeps dropping. Only a range no mapping covers is unmapped.
+    // keeps dropping. Only a range no mapping covers is unmapped. Overlays
+    // are filtered out, so the lookup tables built for this call stay valid
+    // while its overlays are pending.
+    const map = state.map as unknown as {
+      toSourceRange: (
+        ...args: [number, number, boolean, (data: unknown) => boolean]
+      ) => Iterable<unknown>;
+    };
     for (const _ of map.toSourceRange(
       generatedStart,
       generatedEnd,
@@ -395,28 +467,33 @@ function approximateLocated<T extends Located>(
     }
   }
 
-  const snapshot = serviceScript.code.snapshot;
-  const generated = snapshot.getText(0, snapshot.getLength());
-  const sourceText = sourceScript.snapshot.getText(
-    0,
-    sourceScript.snapshot.getLength(),
-  );
-  const ranges = reportedRanges(serviceScript.code.mappings, source, code);
-  const spans = (serviceScript.code as SpannedVirtualCode).authoredSpans;
+  const rangesKey = `${source}:${code}`;
+  let ranges = state.ranges.get(rangesKey);
+  if (!ranges) {
+    ranges = reportedRanges(virtual.mappings, source, code);
+    state.ranges.set(rangesKey, ranges);
+  }
   if (!target) {
-    const authored = spans?.();
     target = enclosingSpan(
-      authored,
+      state.spans,
       ranges,
       generatedStart,
       generatedEnd,
-      generated.slice(generatedStart, generatedEnd).trim(),
-      sourceText,
+      state.generated.slice(generatedStart, generatedEnd).trim(),
+      state.sourceText,
     );
-    overlay(map as never, generatedStart, length, target);
-    const forCode = placed.get(serviceScript.code) ?? new Map();
+    const data = { verification: true };
+    overlayData.add(data);
+    state.pending.push({
+      sourceOffsets: [target.start],
+      generatedOffsets: [generatedStart],
+      lengths: [target.length],
+      generatedLengths: [length],
+      data,
+    });
+    const forCode = placed.get(virtual) ?? new Map();
     forCode.set(key, target);
-    placed.set(serviceScript.code, forCode);
+    placed.set(virtual, forCode);
   }
 
   // The author's when they spelled its text where it came from, or when
@@ -427,16 +504,50 @@ function approximateLocated<T extends Located>(
     ranges.some(
       (range) => range.start <= generatedEnd && range.end >= generatedStart,
     );
-  const [line, column] = lineAndColumn(generated, generatedStart);
+  const [line, column] = lineAndColumn(state.lineStarts, generatedStart);
   const suffix = !authored
     ? mxBugSuffix
-    : spans
+    : state.spans
       ? approximateSuffix
       : unknownPositionSuffix;
   return {
     ...diagnostic,
     messageText: suffixed(diagnostic.messageText, suffix(line, column)),
   };
+}
+
+function approximateIn<T extends Diagnostic>(
+  language: Language<string>,
+  diagnostic: T,
+  batch: Batch,
+): T {
+  const source = String(diagnostic.source);
+  const code = String(diagnostic.code);
+  const own = approximateLocated(language, diagnostic, source, code, batch);
+  const related = diagnostic.relatedInformation;
+  if (!related) return own;
+  const mapped = related.map((entry) =>
+    approximateLocated(language, entry, source, code, batch),
+  );
+  return mapped.every((entry, index) => entry === related[index])
+    ? own
+    : { ...own, relatedInformation: mapped };
+}
+
+/**
+ * Every diagnostic of `diagnostics` through {@link approximateUnmapped}, as
+ * one batch: each virtual code is read once and its source map changed once.
+ */
+export function approximateUnmappedAll<T extends Diagnostic>(
+  language: Language<string>,
+  diagnostics: readonly T[],
+): T[] {
+  const batch: Batch = new Map();
+  const result = diagnostics.map((diagnostic) =>
+    approximateIn(language, diagnostic, batch),
+  );
+  flush(batch);
+  return result;
 }
 
 /**
@@ -452,17 +563,7 @@ export function approximateUnmapped<T extends Diagnostic>(
   language: Language<string>,
   diagnostic: T,
 ): T {
-  const source = String(diagnostic.source);
-  const code = String(diagnostic.code);
-  const own = approximateLocated(language, diagnostic, source, code);
-  const related = diagnostic.relatedInformation;
-  if (!related) return own;
-  const mapped = related.map((entry) =>
-    approximateLocated(language, entry, source, code),
-  );
-  return mapped.every((entry, index) => entry === related[index])
-    ? own
-    : { ...own, relatedInformation: mapped };
+  return approximateUnmappedAll(language, [diagnostic])[0] as T;
 }
 
 /**
@@ -484,9 +585,7 @@ export function approximateUnmappedDiagnostics<T extends object>(
       const diagnostics = original.apply(target, args) as readonly Diagnostic[];
       const language = getLanguage();
       return language
-        ? diagnostics.map((diagnostic) =>
-            approximateUnmapped(language, diagnostic),
-          )
+        ? approximateUnmappedAll(language, diagnostics)
         : diagnostics;
     };
   }
@@ -509,9 +608,7 @@ export function approximateUnmappedEmit(
     return language
       ? {
           ...result,
-          diagnostics: result.diagnostics.map((diagnostic) =>
-            approximateUnmapped(language, diagnostic),
-          ),
+          diagnostics: approximateUnmappedAll(language, result.diagnostics),
         }
       : result;
   };

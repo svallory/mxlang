@@ -384,6 +384,7 @@ export {
   type AuthoredSpan,
   approximateSuffix,
   approximateUnmapped,
+  approximateUnmappedAll,
   approximateUnmappedDiagnostics,
   approximateUnmappedEmit,
   LANGUAGE_SERVICE_DIAGNOSTIC_METHODS,
