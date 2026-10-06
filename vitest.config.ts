@@ -5,6 +5,7 @@ export default defineConfig({
     projects: [
       "scripts",
       "patches",
+      "packages/babel",
       "packages/core",
       "packages/oracle",
       "packages/parser",

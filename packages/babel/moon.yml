@@ -12,3 +12,11 @@ tasks:
     inputs:
       - "src/**/*"
       - "tsconfig.json"
+
+  test:
+    command: "vitest"
+    args: ["run", "--root", "../..", "--project", "@mxlang/babel"]
+    inputs:
+      - "src/**/*"
+      - "/apps/docs/docs/architecture/ast.md"
+      - "/vitest.config.ts"

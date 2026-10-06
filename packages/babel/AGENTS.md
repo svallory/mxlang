@@ -14,3 +14,11 @@ for the pin and every local modification) plus `src/mx-hooks.ts` and
 - Typecheck with `bun run typecheck` (relaxed tsconfig, whole package). The tests
   for the fork run in `packages/tsx-bridge` (`vendored.test.ts` pins that,
   without `mx`, it equals npm `@babel/parser`).
+- `src/mx-ast.ts` (subpath `@mxlang/babel/mx-ast`, types only, not re-exported
+  from `index.ts`) holds the MX AST node types, transcribed from
+  `apps/docs/docs/architecture/ast.md`. `src/mx-ast.test.ts` is this package's
+  own vitest project (`bun run test`): it reads ast.md's Appendix A, so adding a
+  type means adding its Appendix row. The one test that needs `@mxlang/parser`
+  (`MxErrorCode` equals the template parser's codes) lives in
+  `packages/parser/src/template/mx-error-code.test.ts`; this package keeps zero
+  workspace dependencies.

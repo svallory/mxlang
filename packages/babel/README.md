@@ -12,6 +12,7 @@ object, `mxHooks` (`src/mx-hooks.ts`, type `MxHooks`), which
   tokenizer context types, `Position`). Not a stable surface for anyone else.
 - `src/mx-hooks.ts` — the contract between the fork and the bridge: `MxHooks`,
   `MxParserHost`, the region compile types and the region-context types.
+- `src/mx-ast.ts` — the MX AST node types (types only), subpath `@mxlang/babel/mx-ast`.
 - `UPSTREAM.md` — the pin, what was dropped, every local modification, and how
   to re-vendor (`scripts/vendor.sh`).
 

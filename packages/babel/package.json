@@ -5,10 +5,12 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./internal": "./src/internal.ts"
+    "./internal": "./src/internal.ts",
+    "./mx-ast": "./src/mx-ast.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@babel/types": "7.29.8"

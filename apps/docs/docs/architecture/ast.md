@@ -258,7 +258,7 @@ the row says "not stated".
 | A7 | Attribute tags are moved out of the body into `tag.attributeTags`, with preceding comments (`[C]chunk-src.js:5915-5927`); a `controlFlow` tag holding attribute tags has its body and `attributeTags` swapped and is moved into the **parent's** `attributeTags`, with `body.attributeTags = true` (`[C]chunk-src.js:6194-6227`). The moved list is then re-sorted by `start` (`attributeTags.sort(sortByStart)`, `[C]chunk-src.js:6213`). Probe: `<Card><@head/><if=a><@item/></if></Card>` puts the `<if>` in `Card.attributeTags`. | Marko's translator compiles attribute tags as input properties of the parent; moving them at parse time saves a pass. | Lowering already re-derives structure: three synchronized views (`attributeTags`, `attributeTagTree`, `attrTagProps`) and source-order merging (`lower.ts` `mergeBySourceOffset`, `lowerAttributeTags`). The AST should show what was written, where it was written. | Attribute tags stay in `body` in source order as `MxAttributeTag` nodes; nothing moves (§3.7, §8 D2). |
 | A8 | Statement tags (`import`, `export`, `static`, `server`, `client`, `class`) are tags whose open tag is kept raw (`rawOpenTag`, `[C]chunk-src.js:6173-6177`) and whose meaning comes from the taglib (`core-tags.json`, `<import>` through `<class>`); without the taglib they parse as tags with garbage attributes (probe, §1.4). MX recovers the statement by slicing the source on `loc` (`lower.ts` `lowerStatement`, `lowerTemplate`) and regexes (`lower.ts` `lowerStatement`). Spec §2 documents the cost (`apps/docs/docs/specification.md` ("Syntax")). | Marko's grammar is tag-shaped at the top level; the translator gives the statement tags meaning. | They are TypeScript statements. MX needs the parsed statement, its keyword and its span. | `MxModuleStatement { keyword, statements }` with a parsed Babel statement list (§3.10). |
 | A9 | `MarkoClass` (`[C]babel.js:8152-8161`), a `Class`-aliased node. | Marko 5's class components. | MX has no class components; `class` is not a statement MX accepts (`lower.ts` `lowerStatement` rejects anything but `import`/`static`/`export`). | No node. `class { }` at the top level is an `MxModuleStatement { keyword: "class" }` that lowering rejects (§3.10), so the error keeps its position. |
-| A10 | `MarkoParseError` is an `Expression` and `Statement` alias (`[C]babel.js:8070-8074`) put in place of the failed expression; `onError` from the template parser **throws** (`[C]chunk-src.js:5975-5984`). Two error channels, neither carries a code. | Lets the translator keep going until it reaches the bad expression, then throw. | Decision 157 addendum 1 asks for structured errors. MX needs every error as data: a code, a span, a message. Several template errors per parse would need parser recovery, which decision 163 rules out for now (Q20). | `MxParseError { code, origin, message, span }` in `MxDocument.errors`, and an `error` field on the expression container that failed (§3.13, §4). Expression and front-end errors no longer throw; a template-parser error still ends the parse (htmljs `emitError`), but the tree built so far is kept (§3.13); `compileSource` lowers no document with errors and reports them all (§3.13, decisions 161-162). |
+| A10 | `MarkoParseError` is an `Expression` and `Statement` alias (`[C]babel.js:8070-8074`) put in place of the failed expression; `onError` from the template parser **throws** (`[C]chunk-src.js:5975-5984`). Two error channels, neither carries a code. | Lets the translator keep going until it reaches the bad expression, then throw. | Decision 157 addendum 1 asks for structured errors. MX needs every error as data: a code, a range, a message. Several template errors per parse would need parser recovery, which decision 163 rules out for now (Q20). | `MxParseError { code, origin, message, start, end }` in `MxDocument.errors`, and an `error` field on the expression container that failed (§3.13, §4). Expression and front-end errors no longer throw; a template-parser error still ends the parse (htmljs `emitError`), but the tree built so far is kept (§3.13); `compileSource` lowers no document with errors and reports them all (§3.13, decisions 161-162). |
 | A11 | Tag params and tag type parameters are stored on **`MarkoTagBody`** (`[C]chunk-src.js:6059`, `:6102`), not on the tag. | `MarkoTagBody` is the Babel scope that binds them (A1). | The params belong to the tag head the author wrote; scope is a lowering concern. | `MxTag.params`, `MxTag.typeParams` (§3.2). The body is a plain child list. |
 | A12 | Positions: Marko nodes get `start`/`end` and a `loc` without `index` (`withLoc`, `[C]chunk-src.js:5909-5914`), then lose `start`/`end` in the clone (`[C]chunk-src.js:6710`, `[C]babel.js:13217-13241`); Babel nodes keep `loc.index`. Position objects are shared between nodes (`packages/core/AGENTS.md`, `parseFragment` bullet). Fragments are shifted by a tree walk afterwards (`fragment.ts` `shiftNode`). `Program.end` is `code.length - 1` (`[C]chunk-src.js:6241`). | Babel's `File`/`loc` model; the clone is how the compiler hands the tree to Babel. | One numeric span on every node, file-relative, in UTF-16 units, with line/column computed on demand (§5). | `start`/`end` on every MX node; no `loc` stored (§5). |
 | A13 | Text is whitespace-normalized in the front end, with neighbour lookahead (`[C]chunk-src.js:5985-6037`); the node's `loc` is moved to the trimmed text. | Marko's HTML output rules. | MX needs both: the normalized value the IR's `Text.value` carries, and the authored span (`ir.ts` `ComponentTarget`). | `MxText { value, raw }` plus span (§3.8, §8 D6). |
@@ -321,7 +321,7 @@ or a region/fragment).
 | Field | Type | Opt. | Meaning |
 |---|---|---|---|
 | `body` | `MxChild[]` | no | top-level children, source order; partial when the template parser stopped at an error (§3.13) |
-| `errors` | `MxParseError[]` | no | one list, every producer (expression, front end, template parser), ordered by `span.start`; the template-parser error, at most one, is always last (§3.13) |
+| `errors` | `MxParseError[]` | no | one list, every producer (expression, front end, template parser), ordered by `start`; the template-parser error, at most one, is always last (§3.13) |
 | `complete` | `boolean` | no | `false` when the template parser reported an error (the parse stopped there) |
 | `source` | `string` | no | the text that was parsed (the fragment, for a fragment parse) |
 | `base` | `{ offset: number; line: number; column: number }` | no | §5.3; `{0, 0, 0}` for a whole file |
@@ -891,8 +891,8 @@ same point (`[C]chunk-src.js:6080`, the `tagDef` lookup in `onOpenTagName`).
 | `code` | `string` | no | a stable code: htmljs codes by name (`INVALID_ATTRIBUTE_VALUE`, `MISMATCHED_CLOSING_TAG`, … `[H]util/error-code.d.ts`, 31 codes, 0-30), `BABEL_<reasonCode>` for an expression sub-parse failure, `MX_<NAME>` for front-end rules |
 | `origin` | `"template" \| "expression" \| "front-end"` | no | which of the three produced it |
 | `message` | `string` | no | one line, no code frame, no ANSI |
-| `span` | `Span` | no | `start`/`end` of the node: what to underline; for an expression error the precise point when Babel reports one (Marko's `errorLoc`, bounded to the source range as `getBoundedRange` does, `[C]chunk-src.js:1040-1050`) |
-| `context` | `Span \| null` | no | the whole construct when it differs from `span` (Marko's `source` range) |
+| `start`, `end` | `number` | no | the node's own range (`MxNodeBase`, §3.0): what to underline; for an expression error the precise point when Babel reports one (Marko's `errorLoc`, bounded to the source range as `getBoundedRange` does, `[C]chunk-src.js:1040-1050`) |
+| `context` | `Span \| null` | no | the whole construct when it differs from `start`/`end` (Marko's `source` range) |
 
 Three producers, with different consequences:
 
@@ -912,7 +912,7 @@ Three producers, with different consequences:
    `[C]chunk-src.js:6292-6297`), reworded for MX ("… in MX …").
 3. **Front-end rules** are recorded and do not stop the parse. Each has a
    code. The ones that exist today as positioned errors in
-   `core/src/name-sugar.ts` (and, for the last three, in Marko's front end)
+   `core/src/name-sugar.ts` (and, for the last four, in Marko's front end)
    are:
 
    | Code | Today | Where today |
@@ -929,6 +929,7 @@ Three producers, with different consequences:
    | `MX_STATEMENT_IN_HTML_MODE` | `<import …>` written with `<` | Marko, `[C]chunk-src.js:6087` |
    | `MX_RESERVED_TAG_NAME` | the tag name `%` | Marko, `[C]chunk-src.js:6079` |
    | `MX_ATTRIBUTE_TAG_AT_ROOT` | an attribute tag with no enclosing tag | Marko, `[C]chunk-src.js:5917` |
+   | `MX_UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE` | `$!{…}` as an attribute value (`<div x=$!{a}/>`) | rejected by `@marko/compiler` today; the port removes that layer (decision 166 item 1, decision 163 addendum 5) |
 
    A duplicate default value is not among them: it is lowering's
    (`MX_DUPLICATE_DEFAULT`, §3.5, §6.1a), as is `MX_SUGAR_BOUND` for `#`.
@@ -940,7 +941,7 @@ Three producers, with different consequences:
    Today every one of them throws, so only the first is reported; as data,
    all are kept (decision 162).
 
-All three go into one list, `MxDocument.errors`, ordered by `span.start`, with
+All three go into one list, `MxDocument.errors`, ordered by `start`, with
 the template error (at most one) last even when an earlier-recorded entry
 starts after it.
 
@@ -963,7 +964,7 @@ parser code above, not from what would be desirable):
 - Nothing exists at or after the error's `start`.
 
 What a consumer such as the language server may rely on: the template error's
-`code`, `message` and `span`; every expression and front-end error before it;
+`code`, `message`, `start` and `end`; every expression and front-end error before it;
 and every complete node. It must not rely on the shape of an `incomplete`
 tag's head or body beyond what is listed, and it gets no diagnostics for the
 text after the error. There is no parser recovery (ruling Q20 (a), decision
@@ -993,9 +994,9 @@ code is landing under decisions 161 and 162, and this paragraph follows the
 decision text.
 
 Examples: `<div x=(1 +)/>` gives a complete tree, one error `origin:
-"expression"`, `span` `[11, 11)`, `context` `[7, 12)`, and the attribute's
+"expression"`, `start`/`end` `[11, 11)`, `context` `[7, 12)`, and the attribute's
 `value` container has `node: null`. `<div></span>` gives `errors` `[{ code:
-"MISMATCHED_CLOSING_TAG", span: [5, 12) }]` (reviewer's probe: `onError
+"MISMATCHED_CLOSING_TAG", start: 5, end: 12 }]` (reviewer's probe: `onError
 [5,12)/21`), `complete: false`, and one `MxTag` `div` `[0, 5)` with
 `incomplete: true`.
 
@@ -1874,9 +1875,14 @@ not listed.
 | `MxStatements` | node (container) | §3.10; §4.1 | 812 |
 | `MxComment`, `MxCDATA`, `MxDoctype`, `MxDeclaration` | node | §3.11 | 818 |
 | `MxParseError` | node | §3.13 | 886 |
-| `MxReturn` | node | §3.14 | 1005 |
-| `MxExpressionContainer`, `MxExpression` | node (container) | §4.1 | 1044 |
-| `MxAtom` | node | §4.3 | 1157 |
+| `MxReturn` | node | §3.14 | 1006 |
+| `MxExpressionContainer`, `MxExpression` | node (container) | §4.1 | 1045 |
+| `MxAtom` | node | §4.3 | 1158 |
+| `MxBodyMode`, `MxTagShape` | union | §3.12 | 843 |
+| `MxStatementKeyword` | union | §3.10 | 772 |
+| `MxFragmentBase` | field shape | §5.3 | 1253 |
+| `MxFrontEndOptions` | helper | §7.1 | 1690 |
+| `MxErrorCode` | union | §3.13 | 891 |
 | `Span`, `MxNodeBase` | helper | §3.0 | 296 |
 | `MxChild`, `MxNode` | union | §3.0 | 299 |
-| `MxNodeHandle` | opaque handle (not a node) | §6.4 | 1509 |
+| `MxNodeHandle` | opaque handle (not a node) | §6.4 | 1510 |
