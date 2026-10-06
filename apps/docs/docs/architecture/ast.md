@@ -293,8 +293,8 @@ returns 0), while unprefixed candidates would collide (`Placeholder` is a Babel
 type in `packages/babel/src/types.ts`, as is `TemplateLiteral`).
 
 ```ts
-interface Span { start: number; end: number }      // §5
-interface MxNodeBase extends Span { type: `Mx${string}` }
+interface Span { readonly start: number; readonly end: number }      // §5
+interface MxNodeBase extends Span { readonly type: `Mx${string}` }
 
 type MxChild =
   | MxTag | MxAttributeTag | MxReturn | MxText | MxPlaceholder
@@ -421,9 +421,9 @@ A field shape of `MxTag` (no `type`).
 
 ```ts
 type MxTagName =
-  | { kind: "static"; value: string; span: Span }
-  | { kind: "dynamic"; expression: MxExpression; span: Span }  // <${x}>, <my-${x}>
-  | { kind: "unnamed"; span: Span };                            // <#a>, <.b>, <:c>, concise #a
+  | { readonly kind: "static"; readonly value: string; readonly span: Span }
+  | { readonly kind: "dynamic"; readonly expression: MxExpression; readonly span: Span }  // <${x}>, <my-${x}>
+  | { readonly kind: "unnamed"; readonly span: Span };                                     // <#a>, <.b>, <:c>, concise #a
 ```
 
 - `static`: the authored name with the head sugar removed. The written name
@@ -574,9 +574,9 @@ Purpose: the three name sugars in any position (decision 146 and addenda).
 
 ```ts
 type MxShorthandValue =
-  | { kind: "static"; value: string; span: Span }
-  | { kind: "dynamic"; template: MxExpression; quasis: Span[];
-      expressions: MxExpression[]; span: Span };   // tag position only: <div.a${x}>
+  | { readonly kind: "static"; readonly value: string; readonly span: Span }
+  | { readonly kind: "dynamic"; readonly template: MxExpression; readonly quasis: readonly Span[];
+      readonly expressions: readonly MxExpression[]; readonly span: Span };   // tag position only: <div.a${x}>
 ```
 
 Spans: `start` = the sigil; `end` = end of `value` (not of `default`, which has
@@ -727,14 +727,17 @@ keywords per target" below) written as a concise top-level line.
 | `type` | `"MxModuleStatement"` | no | |
 | `keyword` | `string`: one of the target's statement keywords (the language's six, `"import" \| "export" \| "static" \| "server" \| "client" \| "class"`, or the target's subset) | no | the first word |
 | `code` | `MxStatements` | no | the whole statement for `import`/`export`/`class`, the part after the keyword for `static`/`server`/`client` |
+| `untrimmedEnd` | `number` | no | the end of htmljs's statement range, trailing whitespace and line breaks included; the source of the IR statement kinds' `end: Position` (below) |
 
-Spans: the htmljs statement range, right-trimmed of whitespace: `start` at
+Spans: the htmljs statement range, right-trimmed of whitespace, as for every
+node (a node's `start`/`end` slice to the node): `start` at
 the keyword, `end` after the last non-whitespace character on the line, so a
 trailing same-line comment is **inside** the span (today's `statementSpan`,
 `lower.ts`, which trims the Marko range whose end sits on the next
 line; IR spec §3.3, `Import`/`Export`/`Static` row). `code.span` is Babel's
 statement range, which ends before such a comment; it is not the source of any
-IR text.
+IR text. The untrimmed end is its own field, `untrimmedEnd` (decision 163
+addendum 6).
 
 What lowering takes from where (P2):
 
@@ -743,7 +746,7 @@ What lowering takes from where (P2):
 | `Static.code` | `source.slice(span)` minus the leading `static` and its whitespace (today `line.replace(/^static\s+/, "")`, `lowerStatement`) |
 | `Import.code`, `Export.code`, `InputInterface.code` | `source.slice(span)` |
 | `span` (`Import`/`Export`/`Static`), `loc` | the node span (right-trimmed) |
-| `end: Position` (`Import`, `Export`, `Static`, `InputInterface`) | **untrimmed**: the end of htmljs's statement range, as today (below) |
+| `end: Position` (`Import`, `Export`, `Static`, `InputInterface`) | **untrimmed**: `lineColumnAt(untrimmedEnd)`, the end of htmljs's statement range, as today (below) |
 | `Import.bindings`, the `Input` test | the Babel payload (`code.node`) |
 
 Example: `static const A = 1 // trailing` is `[0, 30)` and `Static.code` is
@@ -755,7 +758,10 @@ is **not** trimmed: it is the end of htmljs's statement range, trailing
 whitespace and following line breaks included (reviewer's probes: `static const A = 1   ` then
 `<div/>` gives `end` `{ line: 1, column: 21 }` with `span` `[0, 18)`;
 `export const B = 2` followed by two blank lines gives `end` `{ line: 3,
-column: 0 }`). The port reproduces it from the untrimmed range. Two readers
+column: 0 }`). The port reproduces it from `untrimmedEnd`, the untrimmed
+range's end; `end` stays the trimmed extent. This is how "`span` trimmed, `end`
+untrimmed" is realised: it describes the IR, not a second meaning of the
+node's `end`. Two readers
 use it: the TypeScript plugin's block mapping (`mx-language.ts`
 `locateSourceCode`, `item.end`) and Astro's statement mappings
 (`astro-template.ts`, `statement.end`). Whether they depend on it is being
@@ -1043,19 +1049,19 @@ Every field that holds embedded TypeScript is an **expression container**:
 
 ```ts
 interface MxExpressionContainer<N> extends Span {
-  source: string;            // the authored text, source.slice(start, end)
-  outer: Span;               // the span with the position's delimiters (§3.4); equal to the span when none
-  node: N | null;            // the Babel payload; null when the parse failed
-  error: MxParseError | null;
-  atoms: MxAtom[];           // §4.3, empty when none
+  readonly source: string;   // the authored text, source.slice(start, end)
+  readonly outer: Span;      // the span with the position's delimiters (§3.4); equal to the span when none
+  readonly node: N | null;   // the Babel payload; null when the parse failed
+  readonly error: MxParseError | null;
+  readonly atoms: readonly MxAtom[];   // §4.3, empty when none
 }
-type MxExpression    = MxExpressionContainer<Expression>   & { type: "MxExpression" };
-type MxStatements    = MxExpressionContainer<Statement[]>  & { type: "MxStatements" };
-type MxPattern       = MxExpressionContainer<LVal>         & { type: "MxPattern" };
-type MxArguments     = MxExpressionContainer<(Expression | SpreadElement)[]> & { type: "MxArguments" };
-type MxParameterList = MxExpressionContainer<FunctionParameter[]> & { type: "MxParameterList" };
-type MxTypeArguments = MxExpressionContainer<TSTypeParameterInstantiation> & { type: "MxTypeArguments" };
-type MxTypeParameters = MxExpressionContainer<TSTypeParameterDeclaration> & { type: "MxTypeParameters" };
+type MxExpression    = MxExpressionContainer<Expression>   & { readonly type: "MxExpression" };
+type MxStatements    = MxExpressionContainer<Statement[]>  & { readonly type: "MxStatements" };
+type MxPattern       = MxExpressionContainer<LVal>         & { readonly type: "MxPattern" };
+type MxArguments     = MxExpressionContainer<(Expression | SpreadElement)[]> & { readonly type: "MxArguments" };
+type MxParameterList = MxExpressionContainer<FunctionParameter[]> & { readonly type: "MxParameterList" };
+type MxTypeArguments = MxExpressionContainer<TSTypeParameterInstantiation> & { readonly type: "MxTypeArguments" };
+type MxTypeParameters = MxExpressionContainer<TSTypeParameterDeclaration> & { readonly type: "MxTypeParameters" };
 ```
 
 - **Span** is on the original file (§5), exactly the characters the author
@@ -1111,7 +1117,10 @@ means:
   position object between a parent and a child at a coincident boundary
   (`ir.ts`, `Expr.span` comment).
 - **The AST is read-only.** Neither lowering nor anything after it mutates an
-  `Mx*` node or a container's Babel payload. One AST is lowered more than once
+  `Mx*` node or a container's Babel payload. The types enforce it for the
+  nodes: every field is `readonly` and every array a `readonly T[]` (the
+  tables below carry no `readonly` column), while the Babel payloads stay as
+  Babel types them (decision 163 addendum 6). One AST is lowered more than once
   (the custom-tag `analyze` pre-walk lowers the whole body on a scratch `Ctx`
   before the real walk, IR spec §1, step 3; a tool may lower the same parse
   for several hosts), and that is safe only because of this rule.
@@ -1155,7 +1164,7 @@ Decision 156: `:name` in an expression position is an atom. The container
 lists each atom found in its `source`:
 
 ```ts
-interface MxAtom extends Span { type: "MxAtom"; name: string }  // span covers ':' and the name
+interface MxAtom extends Span { readonly type: "MxAtom"; readonly name: string }  // span covers ':' and the name
 ```
 
 The Babel payload holds the atom as a `StringLiteral` whose `value` is the
@@ -1230,7 +1239,7 @@ stores `loc`; the Babel payloads inside containers do, for the reason in §4.1.
 What lowering derives: every IR node's `loc` is the **start** of the construct
 as a 1-based line and 0-based column (IR spec §3.1), which is
 `lineColumnAt(node.start)`; the statement kinds' `end: Position` is the
-untrimmed statement end of §3.10 (not `lineColumnAt(node.end)`); each IR span is the AST span of the node or sub-part
+`lineColumnAt(MxModuleStatement.untrimmedEnd)` (§3.10), not `lineColumnAt(node.end)`; each IR span is the AST span of the node or sub-part
 the IR spec's §3.3 table names (for example `Attr.nameSpan` ←
 `MxAttribute.nameSpan`, zero-width at the `=` for the default value, which is
 invariant E7; `Interpolation.span` ← `MxPlaceholder` span, delimiters
@@ -1240,9 +1249,10 @@ name **after** the `@`, IR spec §3.3, so lowering trims one unit off
 
 ### 5.2 Line and column
 
-Obtained on demand from the document: `MxDocument` keeps (or lazily builds) a
-line-start index, one entry per `\n`, as htmljs's `getLines` does
-(`packages/parser/src/template/util/util.ts`). `lineColumnAt(offset)` returns a **1-based
+Obtained on demand through a front-end function, `lineColumnAt(document, offset)`
+(decision 163 addendum 6): the line-start index, one entry per `\n` as htmljs's
+`getLines` builds it (`packages/parser/src/template/util/util.ts`), is private to
+it, and `MxDocument` stays plain data with no index member. It returns a **1-based
 line and 0-based column** (Babel's convention, and what `TranslateError` and
 the spec's structured fields carry, `apps/docs/docs/specification.md` ("The contract")
 and "One base for every printed position (ruling #227)"). htmljs's own positions are LSP-style, 0-based line and
@@ -1871,18 +1881,20 @@ not listed.
 | `MxText` | node | §3.8 | 677 |
 | `MxPlaceholder` | node | §3.9 | 705 |
 | `MxModuleStatement` | node | §3.10 | 722 |
-| `MxScriptlet` | node | §3.10 | 800 |
-| `MxStatements` | node (container) | §3.10; §4.1 | 812 |
-| `MxComment`, `MxCDATA`, `MxDoctype`, `MxDeclaration` | node | §3.11 | 818 |
-| `MxParseError` | node | §3.13 | 886 |
-| `MxReturn` | node | §3.14 | 1006 |
-| `MxExpressionContainer`, `MxExpression` | node (container) | §4.1 | 1045 |
-| `MxAtom` | node | §4.3 | 1158 |
-| `MxBodyMode`, `MxTagShape` | union | §3.12 | 843 |
-| `MxStatementKeyword` | union | §3.10 | 772 |
-| `MxFragmentBase` | field shape | §5.3 | 1253 |
-| `MxFrontEndOptions` | helper | §7.1 | 1690 |
-| `MxErrorCode` | union | §3.13 | 891 |
+| `MxScriptlet` | node | §3.10 | 806 |
+| `MxStatements` | node (container) | §3.10; §4.1 | 818 |
+| `MxComment`, `MxCDATA`, `MxDoctype`, `MxDeclaration` | node | §3.11 | 824 |
+| `MxParseError` | node | §3.13 | 892 |
+| `MxReturn` | node | §3.14 | 1012 |
+| `MxExpressionContainer` | generic base | §4.1 | 1051 |
+| `MxExpression` | node (container) | §4.1 | 1058 |
+| `MxAtom` | node | §4.3 | 1167 |
+| `MxBodyMode` | union | §3.12 | 849 |
+| `MxTagShape` | function type | §3.12 | 849 |
+| `MxStatementKeyword` | union | §3.10 | 778 |
+| `MxFragmentBase` | field shape | §5.3 | 1263 |
+| `MxFrontEndOptions` | helper | §7.1 | 1700 |
+| `MxErrorCode` | union | §3.13 | 897 |
 | `Span`, `MxNodeBase` | helper | §3.0 | 296 |
 | `MxChild`, `MxNode` | union | §3.0 | 299 |
-| `MxNodeHandle` | opaque handle (not a node) | §6.4 | 1510 |
+| `MxNodeHandle` | opaque handle (not a node) | §6.4 | 1520 |

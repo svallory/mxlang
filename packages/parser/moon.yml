@@ -9,6 +9,7 @@ tasks:
     args: ["--noEmit"]
     inputs:
       - "src/**/*"
+      - "/packages/babel/src/mx-ast.ts"
       - "tsconfig.json"
 
   test:
@@ -16,4 +17,5 @@ tasks:
     args: ["run", "--root", "../..", "--project", "@mxlang/parser"]
     inputs:
       - "src/**/*"
+      - "/packages/babel/src/mx-ast.ts"
       - "/vitest.config.ts"

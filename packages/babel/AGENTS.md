@@ -20,5 +20,5 @@ for the pin and every local modification) plus `src/mx-hooks.ts` and
   own vitest project (`bun run test`): it reads ast.md's Appendix A, so adding a
   type means adding its Appendix row. The one test that needs `@mxlang/parser`
   (`MxErrorCode` equals the template parser's codes) lives in
-  `packages/parser/src/template/mx-error-code.test.ts`; this package keeps zero
+  `packages/parser/src/mx-error-code.test.ts`; this package keeps zero
   workspace dependencies.

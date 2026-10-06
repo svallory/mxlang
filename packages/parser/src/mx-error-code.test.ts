@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import type { MxErrorCode } from "@mxlang/babel/mx-ast";
 import { expect, expectTypeOf, it } from "vitest";
 import * as templateCodes from "./template/util/error-code.ts";
@@ -21,4 +22,19 @@ it("rejects a name the template parser does not define", () => {
   // @ts-expect-error not a template, Babel or MX code
   const bad: MxErrorCode = "NOT_A_CODE";
   expect(bad).toBe("NOT_A_CODE");
+});
+
+it("the two name lists are equal at runtime too", () => {
+  // `@mxlang/babel` cannot import this package, so read the union's text.
+  const source = readFileSync(
+    new URL("../../babel/src/mx-ast.ts", import.meta.url),
+    "utf-8",
+  );
+  const union = source.slice(source.indexOf("export type MxErrorCode"));
+  const declared = [
+    ...union.slice(0, union.indexOf(";\n")).matchAll(/"(\w+)"/g),
+  ]
+    .map((m) => m[1] ?? "")
+    .filter((name) => !name.startsWith("MX_"));
+  expect(declared.sort()).toEqual(Object.keys(templateCodes).sort());
 });

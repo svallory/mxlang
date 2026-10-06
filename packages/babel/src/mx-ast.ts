@@ -10,20 +10,20 @@ import type {
 
 /** Half-open `[start, end)` range of UTF-16 offsets into the original file (ast §3.0, §5.1). */
 export interface Span {
-  start: number;
-  end: number;
+  readonly start: number;
+  readonly end: number;
 }
 
 /** What every MX node carries: a `type` discriminator and a span (ast §3.0). */
 export interface MxNodeBase extends Span {
-  type: `Mx${string}`;
+  readonly type: `Mx${string}`;
 }
 
 /** Origin of a fragment parse: file offset, zero-based line and column (ast §5.3). */
 export interface MxFragmentBase {
-  offset: number;
-  line: number;
-  column: number;
+  readonly offset: number;
+  readonly line: number;
+  readonly column: number;
 }
 
 /** Parse shape `tagShape(name)` answers for a tag (ast §3.12). */
@@ -48,8 +48,8 @@ export type MxStatementKeyword =
 
 /** The two inputs the front end takes from outside the source text (ast §7.1). */
 export interface MxFrontEndOptions {
-  statementKeywords: ReadonlySet<MxStatementKeyword>;
-  tagShape: MxTagShape;
+  readonly statementKeywords: ReadonlySet<MxStatementKeyword>;
+  readonly tagShape: MxTagShape;
 }
 
 /**
@@ -108,213 +108,234 @@ export type MxErrorCode =
 
 /** `:name` atom found in an expression's source (ast §4.3). */
 export interface MxAtom extends Span {
-  type: "MxAtom";
-  name: string;
+  readonly type: "MxAtom";
+  readonly name: string;
 }
 
 /** A parse error recorded as data; `start`/`end` are what to underline (ast §3.13). */
 export interface MxParseError extends MxNodeBase {
-  type: "MxParseError";
-  code: MxErrorCode;
-  origin: "template" | "expression" | "front-end";
-  message: string;
-  context: Span | null;
+  readonly type: "MxParseError";
+  readonly code: MxErrorCode;
+  readonly origin: "template" | "expression" | "front-end";
+  readonly message: string;
+  readonly context: Span | null;
 }
 
 /** Container for embedded TypeScript, generic over the Babel payload (ast §4.1). */
 export interface MxExpressionContainer<N> extends Span {
-  source: string;
-  outer: Span;
-  node: N | null;
-  error: MxParseError | null;
-  atoms: MxAtom[];
+  readonly source: string;
+  readonly outer: Span;
+  readonly node: N | null;
+  readonly error: MxParseError | null;
+  readonly atoms: readonly MxAtom[];
 }
 
 /** Expression container (ast §4.1). */
-export type MxExpression = MxExpressionContainer<Expression> & { type: "MxExpression" };
+export type MxExpression = MxExpressionContainer<Expression> & {
+  readonly type: "MxExpression";
+};
 /** Statements container: module statements, scriptlets, method bodies (ast §3.10, §4.1). */
-export type MxStatements = MxExpressionContainer<Statement[]> & { type: "MxStatements" };
+export type MxStatements = MxExpressionContainer<Statement[]> & {
+  readonly type: "MxStatements";
+};
 /** Binding pattern container, the tag variable (ast §3.4, §4.1). */
-export type MxPattern = MxExpressionContainer<LVal> & { type: "MxPattern" };
+export type MxPattern = MxExpressionContainer<LVal> & {
+  readonly type: "MxPattern";
+};
 /** Arguments container, on a tag or an attribute (ast §3.4, §4.1). */
-export type MxArguments = MxExpressionContainer<(Expression | SpreadElement)[]> & {
-  type: "MxArguments";
+export type MxArguments = MxExpressionContainer<
+  (Expression | SpreadElement)[]
+> & {
+  readonly type: "MxArguments";
 };
 /** Parameter list container, tag `|params|` or method `(params)` (ast §3.4, §4.1). */
 export type MxParameterList = MxExpressionContainer<FunctionParameter[]> & {
-  type: "MxParameterList";
+  readonly type: "MxParameterList";
 };
 /** Type arguments container, `<Tag<T>>` (ast §3.4, §4.1). */
-export type MxTypeArguments = MxExpressionContainer<TSTypeParameterInstantiation> & {
-  type: "MxTypeArguments";
-};
+export type MxTypeArguments =
+  MxExpressionContainer<TSTypeParameterInstantiation> & {
+    readonly type: "MxTypeArguments";
+  };
 /** Type parameters container, `<T>` before params (ast §3.4, §4.1). */
-export type MxTypeParameters = MxExpressionContainer<TSTypeParameterDeclaration> & {
-  type: "MxTypeParameters";
-};
+export type MxTypeParameters =
+  MxExpressionContainer<TSTypeParameterDeclaration> & {
+    readonly type: "MxTypeParameters";
+  };
 
 /** The written closing tag, a field shape of `MxTag` (ast §3.2). */
 export interface MxCloseTag {
-  span: Span;
-  name: string | null;
-  nameSpan: Span | null;
+  readonly span: Span;
+  readonly name: string | null;
+  readonly nameSpan: Span | null;
 }
 
 /** Name of an `MxTag`, a field shape (ast §3.3). */
 export type MxTagName =
-  | { kind: "static"; value: string; span: Span }
-  | { kind: "dynamic"; expression: MxExpression; span: Span }
-  | { kind: "unnamed"; span: Span };
+  | { readonly kind: "static"; readonly value: string; readonly span: Span }
+  | {
+      readonly kind: "dynamic";
+      readonly expression: MxExpression;
+      readonly span: Span;
+    }
+  | { readonly kind: "unnamed"; readonly span: Span };
 
 /** Value of an `MxShorthand`, a field shape (ast §3.6). */
 export type MxShorthandValue =
-  | { kind: "static"; value: string; span: Span }
+  | { readonly kind: "static"; readonly value: string; readonly span: Span }
   | {
-      kind: "dynamic";
-      template: MxExpression;
-      quasis: Span[];
-      expressions: MxExpression[];
-      span: Span;
+      readonly kind: "dynamic";
+      readonly template: MxExpression;
+      readonly quasis: readonly Span[];
+      readonly expressions: readonly MxExpression[];
+      readonly span: Span;
     };
 
 /** Method shorthand `name(params) { body }` as an attribute value (ast §3.5a). */
 export interface MxMethod extends MxNodeBase {
-  type: "MxMethod";
-  async: boolean;
-  typeParams: MxTypeParameters | null;
-  params: MxParameterList;
-  body: MxStatements;
-  source: string;
+  readonly type: "MxMethod";
+  readonly async: boolean;
+  readonly typeParams: MxTypeParameters | null;
+  readonly params: MxParameterList;
+  readonly body: MxStatements;
+  readonly source: string;
 }
 
 /** `#id`, `.class` or `:name` sugar in tag or attribute position (ast §3.6). */
 export interface MxShorthand extends MxNodeBase {
-  type: "MxShorthand";
-  sigil: "#" | "." | ":";
-  position: "tag" | "attribute";
-  value: MxShorthandValue;
-  operator: "=" | ":=" | null;
-  default: MxExpression | MxMethod | null;
+  readonly type: "MxShorthand";
+  readonly sigil: "#" | "." | ":";
+  readonly position: "tag" | "attribute";
+  readonly value: MxShorthandValue;
+  readonly operator: "=" | ":=" | null;
+  readonly default: MxExpression | MxMethod | null;
 }
 
 /** One named attribute, or the tag's default value when `name` is null (ast §3.5). */
 export interface MxAttribute extends MxNodeBase {
-  type: "MxAttribute";
-  name: string | null;
-  nameSpan: Span;
-  operator: "=" | ":=" | null;
-  value: MxExpression | MxMethod | null;
-  args: MxArguments | null;
+  readonly type: "MxAttribute";
+  readonly name: string | null;
+  readonly nameSpan: Span;
+  readonly operator: "=" | ":=" | null;
+  readonly value: MxExpression | MxMethod | null;
+  readonly args: MxArguments | null;
 }
 
 /** `...expr` in the attribute list (ast §3.5b). */
 export interface MxSpreadAttribute extends MxNodeBase {
-  type: "MxSpreadAttribute";
-  value: MxExpression;
+  readonly type: "MxSpreadAttribute";
+  readonly value: MxExpression;
 }
 
 /** Comment, in a child list or among a tag's attributes (ast §3.11). */
 export interface MxComment extends MxNodeBase {
-  type: "MxComment";
-  kind: "html" | "line" | "block";
-  value: string;
-  valueSpan: Span;
+  readonly type: "MxComment";
+  readonly kind: "html" | "line" | "block";
+  readonly value: string;
+  readonly valueSpan: Span;
 }
 
 /** `<![CDATA[ … ]]>` (ast §3.11). */
 export interface MxCDATA extends MxNodeBase {
-  type: "MxCDATA";
-  value: string;
-  valueSpan: Span;
+  readonly type: "MxCDATA";
+  readonly value: string;
+  readonly valueSpan: Span;
 }
 
 /** `<!doctype …>` (ast §3.11). */
 export interface MxDoctype extends MxNodeBase {
-  type: "MxDoctype";
-  value: string;
-  valueSpan: Span;
+  readonly type: "MxDoctype";
+  readonly value: string;
+  readonly valueSpan: Span;
 }
 
 /** `<?xml …?>` (ast §3.11). */
 export interface MxDeclaration extends MxNodeBase {
-  type: "MxDeclaration";
-  value: string;
-  valueSpan: Span;
+  readonly type: "MxDeclaration";
+  readonly value: string;
+  readonly valueSpan: Span;
 }
 
 /** Text run, normalized by the body mode's rule (ast §3.8). */
 export interface MxText extends MxNodeBase {
-  type: "MxText";
-  value: string;
-  raw: string;
-  valueSpan: Span;
+  readonly type: "MxText";
+  readonly value: string;
+  readonly raw: string;
+  readonly valueSpan: Span;
 }
 
 /** `${expr}` / `$!{expr}` (ast §3.9). */
 export interface MxPlaceholder extends MxNodeBase {
-  type: "MxPlaceholder";
-  escape: boolean;
-  expression: MxExpression;
+  readonly type: "MxPlaceholder";
+  readonly escape: boolean;
+  readonly expression: MxExpression;
 }
 
 /** A statement keyword line at the top level (ast §3.10). */
 export interface MxModuleStatement extends MxNodeBase {
-  type: "MxModuleStatement";
-  keyword: MxStatementKeyword;
-  code: MxStatements;
+  readonly type: "MxModuleStatement";
+  readonly keyword: MxStatementKeyword;
+  readonly code: MxStatements;
+  /** End of the statement's template-parser range, untrimmed (ast §3.10); `end` is the trimmed extent. */
+  readonly untrimmedEnd: number;
 }
 
 /** `$ stmt` and `$ { block }` (ast §3.10). */
 export interface MxScriptlet extends MxNodeBase {
-  type: "MxScriptlet";
-  block: boolean;
-  code: MxStatements;
+  readonly type: "MxScriptlet";
+  readonly block: boolean;
+  readonly code: MxStatements;
 }
 
 /** Fields shared by `MxTag`, `MxAttributeTag` and `MxReturn` (ast §3.2, §3.7, §3.14). */
 interface MxTagFields {
-  typeArgs: MxTypeArguments | null;
-  var: MxPattern | null;
-  args: MxArguments | null;
-  typeParams: MxTypeParameters | null;
-  params: MxParameterList | null;
-  shorthands: MxShorthand[];
-  attributes: (MxAttribute | MxShorthand | MxSpreadAttribute | MxComment)[];
-  body: MxChild[] | null;
-  bodyMode: MxBodyMode;
-  selfClosed: boolean;
-  concise: boolean;
-  openTag: Span;
-  closeTag: MxCloseTag | null;
-  incomplete: boolean;
+  readonly typeArgs: MxTypeArguments | null;
+  readonly var: MxPattern | null;
+  readonly args: MxArguments | null;
+  readonly typeParams: MxTypeParameters | null;
+  readonly params: MxParameterList | null;
+  readonly shorthands: readonly MxShorthand[];
+  readonly attributes: readonly (
+    | MxAttribute
+    | MxShorthand
+    | MxSpreadAttribute
+    | MxComment
+  )[];
+  readonly body: readonly MxChild[] | null;
+  readonly bodyMode: MxBodyMode;
+  readonly selfClosed: boolean;
+  readonly concise: boolean;
+  readonly openTag: Span;
+  readonly closeTag: MxCloseTag | null;
+  readonly incomplete: boolean;
 }
 
 /** An element, component call, structural tag, custom tag or dynamic tag (ast §3.2). */
 export interface MxTag extends MxNodeBase, MxTagFields {
-  type: "MxTag";
-  name: MxTagName;
+  readonly type: "MxTag";
+  readonly name: MxTagName;
 }
 
 /** `<@name>`: a property of the nearest enclosing tag (ast §3.7). */
 export interface MxAttributeTag extends MxNodeBase, MxTagFields {
-  type: "MxAttributeTag";
-  name: { value: string; span: Span };
+  readonly type: "MxAttributeTag";
+  readonly name: { readonly value: string; readonly span: Span };
 }
 
 /** `<return=x/>` (ast §3.14). */
 export interface MxReturn extends MxNodeBase, MxTagFields {
-  type: "MxReturn";
-  name: MxTagName;
+  readonly type: "MxReturn";
+  readonly name: MxTagName;
 }
 
 /** Root of a parse (ast §3.1). */
 export interface MxDocument extends MxNodeBase {
-  type: "MxDocument";
-  body: MxChild[];
-  errors: MxParseError[];
-  complete: boolean;
-  source: string;
-  base: MxFragmentBase;
+  readonly type: "MxDocument";
+  readonly body: readonly MxChild[];
+  readonly errors: readonly MxParseError[];
+  readonly complete: boolean;
+  readonly source: string;
+  readonly base: MxFragmentBase;
 }
 
 /** Nodes that appear in a child list (ast §3.0). */
