@@ -522,8 +522,9 @@ const verdicts = new WeakMap<TargetDescriptor, Map<string, string | null>>();
  * Why `descriptor` cannot join `lookup`, or `undefined` if it can. A built-in
  * host is refused for now (TODO `third-party-join-builtin-host`): it is not
  * wired for a loaded target, and silently accepting it would be a silent
- * no-op. The rest is the set rules of `createTargetLookup`, a file-kind
- * segment another host owns included. The verdict is cached per descriptor and per shape
+ * no-op. A file-kind segment must be the host's own name (decisions 136, 148),
+ * so a loaded host cannot take another host's `.<name>.mx`. The rest is the set
+ * rules of `createTargetLookup`, a file-kind segment another host owns included. The verdict is cached per descriptor and per shape
  * of lookup, as resolution runs per file and per keystroke.
  */
 function registrationVerdict(
@@ -540,6 +541,14 @@ function registrationVerdict(
   const host = descriptor.host?.name;
   if (host !== undefined && names.some((n) => lookup.hostOf(n) === host)) {
     verdict = `host "${host}" belongs to the built-in targets; a third-party target cannot join it (for now)`;
+  } else if (
+    host !== undefined &&
+    (descriptor.host?.fileKinds ?? []).some((kind) => kind.segment !== host)
+  ) {
+    const wrong = (descriptor.host?.fileKinds ?? []).find(
+      (kind) => kind.segment !== host,
+    );
+    verdict = `file kind segment "${wrong?.segment}" is not the host's name "${host}"; the segment before \`.mx\` is a host name (decision 136)`;
   } else {
     try {
       createTargetLookup(

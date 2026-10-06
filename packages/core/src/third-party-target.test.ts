@@ -442,7 +442,7 @@ describe("round 2: file kinds of a loaded descriptor", () => {
     expect(diagnostics).toEqual([]);
     expect(policy).toMatchObject({
       target: "fake-file-kinds",
-      host: "fake-fk",
+      host: "fk",
     });
     expect(policy.descriptor?.host?.fileKinds?.map((k) => k.segment)).toEqual([
       "fk",
@@ -466,7 +466,7 @@ describe("round 2: file kinds of a loaded descriptor", () => {
     ["Up", '"host.fileKinds[0].segment" is "Up"'],
   ])("segment %j is refused at the declaration", (segment, text) => {
     const { diagnostics, policy } = withHost({
-      name: "own-fk-host",
+      name: "ok",
       fileKinds: [{ segment, diagnosticSource: "x" }],
     });
     expect(policy.target).toBe("page");
@@ -477,7 +477,7 @@ describe("round 2: file kinds of a loaded descriptor", () => {
 
   it("a missing diagnosticSource is refused", () => {
     const { diagnostics } = withHost({
-      name: "own-fk-host",
+      name: "ok",
       fileKinds: [{ segment: "ok" }],
     });
     expect(diagnostics).toHaveLength(1);
@@ -505,7 +505,7 @@ describe("round 2: file kinds of a loaded descriptor", () => {
     ]);
     const { diagnostics, policy } = withHost(
       {
-        name: "own-fk-host",
+        name: "ok",
         fileKinds: [{ segment: "ok", diagnosticSource: "x" }],
       },
       owned,
@@ -513,13 +513,13 @@ describe("round 2: file kinds of a loaded descriptor", () => {
     expect(policy.target).toBe("page");
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0]?.message).toContain(
-      'file-kind segment "ok" is declared more than once (host "own-fk-host" and host "unit")',
+      'file-kind segment "ok" is declared more than once (host "ok" and host "unit")',
     );
   });
 
   it("the same segment twice in one host is refused", () => {
     const { diagnostics } = withHost({
-      name: "own-fk-host",
+      name: "ok",
       fileKinds: [
         { segment: "ok", diagnosticSource: "x" },
         { segment: "ok", diagnosticSource: "y" },
@@ -528,6 +528,54 @@ describe("round 2: file kinds of a loaded descriptor", () => {
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0]?.message).toContain(
       'file-kind segment "ok" is declared more than once',
+    );
+  });
+  it.each(["react", "html", "preact", "hono", "angular"])(
+    "a segment that is another host's name (%s) is refused, though that host declares none",
+    (segment) => {
+      const owned = createTargetLookup([
+        {
+          descriptorVersion: 0,
+          name: "page",
+          packageName: "@t/page",
+          defaultTag: "node",
+        },
+        {
+          descriptorVersion: 0,
+          name: `${segment}-jsx`,
+          packageName: `@t/${segment}`,
+          defaultTag: "node",
+          host: { name: segment },
+        },
+      ]);
+      const { diagnostics, policy } = withHost(
+        {
+          name: "squatter",
+          fileKinds: [{ segment, diagnosticSource: "x" }],
+        },
+        owned,
+      );
+      expect(policy.target).toBe("page");
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]).toMatchObject({
+        code: "target-invalid-descriptor",
+        severity: "error",
+      });
+      expect(diagnostics[0]?.message).toContain(
+        `file kind segment "${segment}" is not the host's name "squatter"`,
+      );
+    },
+  );
+
+  it("a segment that is merely not the host's own name is refused, even when nobody owns it", () => {
+    const { diagnostics } = withHost({
+      name: "own-fk-host",
+      fileKinds: [{ segment: "ok", diagnosticSource: "x" }],
+    });
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.code).toBe("target-invalid-descriptor");
+    expect(diagnostics[0]?.message).toContain(
+      'file kind segment "ok" is not the host\'s name "own-fk-host"',
     );
   });
 });

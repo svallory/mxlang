@@ -6,7 +6,7 @@ module.exports = {
   packageName: "@fake/mx-file-kinds",
   defaultTag: "div",
   host: {
-    name: "fake-fk",
+    name: "fk",
     fileKinds: [{ segment: "fk", diagnosticSource: "fk" }],
   },
   load(core) {
