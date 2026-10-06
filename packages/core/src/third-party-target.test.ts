@@ -641,12 +641,10 @@ describe("round 3: a failed load is fixed by fixing any file it loaded", () => {
   });
 });
 
-describe("round 3: a resolution miss sticks once the project has a node_modules (KNOWN LIMITATION)", () => {
-  // TODO target-loader-sticky-not-found: Bun and Node both keep a miss once the
-  // project has a node_modules (probes D2/D3). Without one (D1) Node sees a new
-  // install at once, which is why this project gets a node_modules BEFORE the
-  // miss: the D1 shape would not pin the limitation. When the TODO is fixed,
-  // flip these assertions: the install must be found.
+describe("a target installed after a miss loads without a restart (TODO target-loader-sticky-not-found)", () => {
+  // Bun and Node both keep a resolver miss once the project has a node_modules
+  // (probes D2/D3); the loader checks the filesystem itself. The project gets a
+  // node_modules BEFORE the miss: without one Node already sees an install.
   it.each([
     ["node_modules present, scope absent (D3)", false],
     ["node_modules/@fake present with a sibling loaded (D2)", true],
@@ -666,7 +664,7 @@ describe("round 3: a resolution miss sticks once the project has a node_modules 
     ).toBe("target-not-found");
     installFake(project, "ok");
     const after = resolveTargetPolicyDetailed(project.path("a.mx"), lookup);
-    // Current behaviour, pinned: still not found until the process restarts.
-    expect(after.diagnostics[0]?.code).toBe("target-not-found");
+    expect(after.diagnostics).toEqual([]);
+    expect(after.policy.target).toBe("fake-ok");
   });
 });

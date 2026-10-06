@@ -26,7 +26,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, parse, resolve, sep } from "node:path";
 import {
@@ -127,6 +127,103 @@ function packageStamp(file: string): PackageStamp | undefined {
     }
     if (dir === root) return undefined;
     dir = dirname(dir);
+  }
+}
+
+/**
+ * Resolves `target` (an `exports` value) for a CommonJS `require`: a string,
+ * an array (first usable entry), or a condition object (first matching key).
+ */
+function exportsTarget(target: unknown): string | undefined {
+  if (typeof target === "string") return target;
+  if (Array.isArray(target)) {
+    for (const entry of target) {
+      const found = exportsTarget(entry);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  }
+  if (target && typeof target === "object") {
+    for (const [condition, value] of Object.entries(target)) {
+      if (!["require", "node", "default", "bun"].includes(condition)) continue;
+      const found = exportsTarget(value);
+      if (found !== undefined) return found;
+    }
+  }
+  return undefined;
+}
+
+/** `exports` is a subpath map when any key starts with `.`. */
+function isSubpathMap(exp: object): boolean {
+  return Object.keys(exp).some((key) => key.startsWith("."));
+}
+
+/**
+ * A fresh resolution of a bare `spec` for when the runtime's resolver reported
+ * a miss: both Bun and Node keep a miss once the project has a `node_modules`,
+ * so a package installed after it is invisible to `require.resolve` for the
+ * life of the process. This walks up from `fromDir` for
+ * `node_modules/<name>/package.json` on the real filesystem and applies the
+ * package's own `exports` (exact subpath keys; no wildcard patterns) or
+ * `main`, which is enough for a target's entry point. Returns `undefined`
+ * when the package is not there, or its entry does not exist.
+ */
+function resolveFresh(spec: string, fromDir: string): string | undefined {
+  if (spec.startsWith(".") || spec.startsWith("/") || /^[a-z]:/i.test(spec)) {
+    return undefined;
+  }
+  const parts = spec.split("/");
+  const nameLength = spec.startsWith("@") ? 2 : 1;
+  if (parts.length < nameLength) return undefined;
+  const name = parts.slice(0, nameLength).join("/");
+  const subpath =
+    parts.length > nameLength ? `./${parts.slice(nameLength).join("/")}` : ".";
+  let dir = fromDir;
+  for (;;) {
+    const pkgDir = join(dir, "node_modules", ...name.split("/"));
+    const manifestPath = join(pkgDir, "package.json");
+    if (existsSync(manifestPath)) {
+      let manifest: { exports?: unknown; main?: unknown };
+      try {
+        manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+      } catch {
+        return undefined;
+      }
+      let relative: string | undefined;
+      const exp = manifest.exports;
+      if (exp !== undefined && exp !== null) {
+        const entry =
+          typeof exp === "object" && !Array.isArray(exp) && isSubpathMap(exp)
+            ? (exp as Record<string, unknown>)[subpath]
+            : subpath === "."
+              ? exp
+              : undefined;
+        relative = exportsTarget(entry);
+      } else if (subpath !== ".") {
+        relative = subpath;
+      } else {
+        relative =
+          typeof manifest.main === "string" ? manifest.main : "index.js";
+      }
+      if (relative === undefined) return undefined;
+      const base = resolve(pkgDir, relative);
+      for (const candidate of [
+        base,
+        `${base}.js`,
+        `${base}.cjs`,
+        join(base, "index.js"),
+      ]) {
+        try {
+          if (statSync(candidate).isFile()) return candidate;
+        } catch {
+          // try the next candidate
+        }
+      }
+      return undefined;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) return undefined;
+    dir = parent;
   }
 }
 
@@ -238,11 +335,19 @@ export function loadTargetDescriptor(
   try {
     resolved = req.resolve(spec);
   } catch (cause) {
-    throw new TargetLoadError(
-      "not-found",
-      `"${spec}" cannot be resolved from ${fromDir}: ${summary(messageOf(cause))}`,
-      { spec, fromDir, cause },
-    );
+    // The runtime's resolver may be serving a cached miss for a package
+    // installed since; trust the filesystem before reporting not-found.
+    const fresh = resolveFresh(spec, fromDir);
+    if (fresh === undefined) {
+      throw new TargetLoadError(
+        "not-found",
+        `"${spec}" cannot be resolved from ${fromDir}: ${summary(messageOf(cause))}`,
+        { spec, fromDir, cause },
+      );
+    }
+    // The real path, as `require.resolve` reports it, so the caches agree
+    // whichever resolver found the file (a package manager may symlink).
+    resolved = realpathSync(fresh);
   }
 
   const stamped = packageStamp(resolved);

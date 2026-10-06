@@ -3123,9 +3123,12 @@ targets only: a third-party target always needs an explicit `mx.target` (or
 `mx.host`) key. The descriptor is cached per resolved file and the target
 package's `package.json` (modification time and content), so its identity is
 stable between calls and a reinstall is picked up. A load that failed is retried on
-every resolution, so fixing any file it loaded is picked up at once. After installing a missing
-target, restart the language server, TS server or dev server: both Bun and Node
-keep a resolution miss once the project has a `node_modules`.
+every resolution, so fixing any file it loaded is picked up at once. A target
+installed after a `target-not-found` loads on the next resolution, with no
+restart: before reporting not-found for a bare specifier the loader looks for
+`node_modules/<name>/package.json` on disk and resolves the package's own
+`exports`/`main` itself, because both Bun and Node keep a resolver miss for the
+life of the process once the project has a `node_modules`.
 
 A specifier that resolves and then fails to load or validate is an **error with
 no fallback to a guessed target** (the same family as `target-host-mismatch`:

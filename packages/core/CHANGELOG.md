@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fixed:** a target installed after a `not-found` now loads on the next `loadTargetDescriptor` in the same process (language server, tsserver, `mx-tsc -w`, dev server), in Bun and Node. Both runtimes keep a resolver miss once the project has a `node_modules`; before reporting `not-found` for a bare specifier the loader now looks for `node_modules/<name>/package.json` up from `fromDir` and resolves the package's `exports` (exact subpath keys; `require`/`node`/`bun`/`default` conditions) or `main` itself. The "restart after installing" note is gone.
+
 - **Fix (jsx-handler-prop-names):** the `onDoubleClick` warning suggests `onDblClick`, a host-independent spelling that lowercases to `dblclick` (it named `onDblclick`, a spelling Preact and hono no longer emit).
 
 - **Behaviour change (decision 169):** a modifier on a bound attribute (`<Foo v:fn:=q/>`, `<div is:raw:=x/>`, `v:no-update:=q`) is one positioned error at the colon that starts the modifier, with the same text on every target; it used to lower to a bound `v` and drop `fn` silently. The empty modifier (`x::=q`) is the same error, and it holds on every tag shape, a contracted custom-tag call and its attribute tags included. The message names the explicit form that works on every target: `v=q` plus `vChange(next) { q = fn(next) }` (no handler example when the modifier is not an identifier). Marko binds the base name and applies the modifier as a function in the change handler; MX lowers no refinements (divergence recorded in `divergences-and-mx-2.md`). A non-bound `v:fn=q` is unchanged.
