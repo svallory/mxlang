@@ -101,8 +101,9 @@ What each span covers is listed with its field. The rule throughout: slicing the
 | `For.paramSpans`, `Define.paramSpans` | One per param, `undefined` for a param with no `loc`. |
 | `Define.nameSpan` | The define's own name (`Row`). |
 | `Import`/`Export`/`Static` `span` | The authored statement, `static` keyword included, trailing line terminator excluded; a trailing same-line comment included. |
+| `InputInterface.span` (optional) | The authored `export interface Input` statement, trailing line terminator excluded. Pinned by `solid/src/expression-mappings.test.ts` › "the Input interface". |
 
-`InputInterface`, `Hoisted`, `DocumentType` and a synthesized `Import` carry no span. Pinned by `spans.test.ts` (one `describe` per row group).
+`Hoisted`, `DocumentType` and a synthesized `Import` carry no span. Pinned by `spans.test.ts` (one `describe` per row group), except `InputInterface.span` (above).
 
 ### 3.4 Fragments and `baseOffset`
 
@@ -270,7 +271,7 @@ The params shadow host bindings inside `children` only; emitters must not re-sha
 | `Import` | `code`, `bindings`, `end`, `span?`, `synthesized?`, `specifier?`, `resolvedPath?` | `code` is the trimmed statement. `bindings` are its local names. A synthesized import (for a discovered tag) has `synthesized: true` plus `specifier` and `resolvedPath`, no span, and is deduped by resolved path. Only Solid treats the two differently (it hoists synthesized imports out of a region). |
 | `Static` | `code`, `end`, `span?` | `code` has the leading `static ` removed. |
 | `Export` | `code`, `end`, `span?` | Any top-level `export` except `export interface Input`, verbatim. |
-| `InputInterface` | `code`, `end` | `export interface Input …`, verbatim. |
+| `InputInterface` | `code`, `end`, `span?` | `export interface Input …`, verbatim; `span` is the authored statement (section 3.3). |
 | `Hoisted` | `code`, `end` | A statement from `ctx.hoist(code, node)`; positions from `node`. |
 
 Pinned by `lower.test.ts` › "Import and Static are lifted out of the body to module scope" and "Export hoists verbatim and InputInterface is kept apart".

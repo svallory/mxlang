@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Added (solid-mx-tsc-silent, #362):** `Expr.unrewrittenCode?`, an optional, additive IR field: the expression's `code` as it was before a reads rewrite changed it. `rewriteCodes` (`rewriteAccessorReads`, Solid's `i` to `i()`) sets it only when the rewrite changed `code`, and never overwrites an earlier value, so it is absent when no read was rewritten.
+- **Added (#362):** `InputInterface.span?`, an optional, additive IR field: the file-absolute span of the authored `export interface Input` statement, trailing line terminator excluded, as `Import`/`Export`/`Static` already carry. Lowering sets it.
+- **Changed (#362):** `mappedExpr` maps a rewritten expression token by token instead of leaving it unmapped: `unrewrittenCode` is mapped to `span` (through the atom mappings, or one to one), then diffed against `code`; tokens the rewrite kept map one to one, a replaced run maps as a whole to the authored run it replaced, and text the rewrite only inserted stays unmapped, so columns after a rewrite do not shift. The diff trims the common prefix and suffix; past `MAX_DIFF_CELLS` (4,000,000 cells, about 2000 x 2000 tokens; exported from `mapping.ts`, not from the package entry) the changed middle maps as one run instead of being diffed. An expression with no rewrite maps as before.
+
 ## 0.1.0-alpha.8
 
 - **Added (solid-whole-file-typecheck, #362):** two additive optional IR fields: `Expr.unrewrittenCode?`, the text of `code` before a reads rewrite changed it (set only when it did), and `InputInterface.span?`, the authored statement's file-absolute span. `mappedExpr` uses `unrewrittenCode` to map the unchanged runs of a rewritten expression one to one, so a host's typecheck projection keeps positions inside rewritten values.
