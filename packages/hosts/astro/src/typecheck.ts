@@ -16,6 +16,7 @@
 import type * as html from "@mxlang/html";
 
 export type { AttrTag, BufferedOut, Out } from "@mxlang/html";
+// biome-ignore lint/suspicious/noShadowRestrictedNames: the name is the emitted module's import, same as core's `escape`
 export declare const escape: typeof html.escape;
 export declare const createOut: typeof html.createOut;
 export declare const createBufferedOut: typeof html.createBufferedOut;
