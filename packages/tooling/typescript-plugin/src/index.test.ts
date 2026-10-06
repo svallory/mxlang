@@ -1290,6 +1290,71 @@ describe("MX language plugin", () => {
     expect(codes("Good")).toEqual([]);
   });
 
+  it("reports a diagnostic in generated code no mapping covers, at the nearest mapped span (decision 161)", () => {
+    // A whole-file Solid unit maps no expression values: `missingName` and
+    // `"a" * 2` sit in generated text with no source mapping. Volar used to
+    // drop both, so the service reported a clean page. They now arrive on the
+    // first line, the one mapped construct, and say where
+    // they really were.
+    const directory = `${here}/fixtures/solid-policy`;
+    const page = `${directory}/Unmapped.mx`;
+    const consumer = `${directory}/index.ts`;
+    const source =
+      'export interface Input { }\n<p>${missingName}</p>\n<p>${1 * "a"}</p>\n';
+    const service = createPluginService(
+      {
+        [page]: source,
+        [consumer]: 'import "./Unmapped.mx";',
+        [`${directory}/jsx.d.ts`]:
+          "declare namespace JSX { interface IntrinsicElements { [tag: string]: unknown } }",
+      },
+      [consumer, `${directory}/jsx.d.ts`],
+    );
+    service.getSemanticDiagnostics(consumer);
+    const diagnostics = service.getSemanticDiagnostics(page);
+
+    const text = (diagnostic: ts.Diagnostic) =>
+      ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n");
+    const missing = diagnostics.find((d) => d.code === 2304);
+    const arithmetic = diagnostics.find((d) => d.code === 2363);
+    expect(text(missing as ts.Diagnostic)).toMatch(
+      /^Cannot find name 'missingName'\. \(position approximate: generated \d+:\d+\)$/,
+    );
+    expect(text(arithmetic as ts.Diagnostic)).toMatch(
+      /\(position approximate: generated \d+:\d+\)$/,
+    );
+    for (const diagnostic of [missing, arithmetic]) {
+      expect(diagnostic?.start).toBe(0);
+      // Somewhere on line 1: the only construct the unit maps.
+      expect(diagnostic?.length).toBeGreaterThan(0);
+      expect(diagnostic?.length).toBeLessThanOrEqual(source.indexOf("\n"));
+    }
+    expect(diagnostics.map((d) => d.code).sort()).toEqual([2304, 2363]);
+  });
+
+  it("leaves an exactly mapped diagnostic's message and position untouched (decision 161)", () => {
+    const directory = `${here}/fixtures/solid-policy`;
+    const source = 'import Card from "./Card.mx"\n<Card title=1/>';
+    const service = createPluginService(
+      {
+        [`${directory}/Card.mx`]:
+          "export interface Input { title: string }\n<div>${input.title}</div>",
+        [`${directory}/Exact.mx`]: source,
+        [`${directory}/index.ts`]: 'import "./Exact.mx";',
+      },
+      [`${directory}/index.ts`],
+    );
+    service.getSemanticDiagnostics(`${directory}/index.ts`);
+    const exact = service
+      .getSemanticDiagnostics(`${directory}/Exact.mx`)
+      .find((d) => d.code === 2322);
+
+    expect(exact?.start).toBe(source.indexOf("title"));
+    expect(
+      ts.flattenDiagnosticMessageText(exact?.messageText ?? "", "\n"),
+    ).not.toContain("position approximate");
+  });
+
   it("types a whole-file Solid .mx <return> unit's /var, and reports /var on a unit with no <return>", () => {
     // A unit declaring `<return>` widens its parameter with the `$mxReturn`
     // callback prop, so the caller's generated `$mxReturn={...}` type-checks.

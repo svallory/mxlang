@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import {
   ambientTypeFiles,
+  approximateUnmappedDiagnostics,
   type CompiledNgMx,
   createAmxLanguagePlugin,
   createAstroLanguagePlugin,
@@ -15,6 +16,7 @@ import {
   type MxCompileDiagnostic,
   type MxDiagnosticLanguagePlugin,
   moduleFileExtensions,
+  PROGRAM_DIAGNOSTIC_METHODS,
   type TargetPolicyDiagnostic,
 } from "@mxlang/typescript-plugin";
 import type { Language, LanguagePlugin } from "@volar/language-core";
@@ -282,6 +284,46 @@ function virtualFilesInWatchRebuilds(host: ts.CompilerHost | undefined): void {
 }
 
 /**
+ * Makes Volar's program decoration run on diagnostics that already carry an
+ * approximate position, so a diagnostic Volar cannot map is reported at the
+ * nearest mapped span instead of being dropped (decision 161).
+ *
+ * `runTsc` hands the program to Volar's `decorateProgram` inside the patched
+ * `tsc.js`, and `mx-tsc` never holds it, so `decorateProgram` is the one place
+ * to reach the program's raw diagnostics. `proxyCreateProgram` looks it up on
+ * the module's exports at each call, so replacing the export is enough. Done
+ * once per process; a second call finds the marker and does nothing.
+ */
+const APPROXIMATE_MARKER = Symbol.for("mx-tsc.approximate-unmapped");
+
+function approximateUnmappedInVolar(): void {
+  const decorate = createRequire(import.meta.url)(
+    "@volar/typescript/lib/node/decorateProgram",
+  ) as {
+    decorateProgram: ((language: Language, program: ts.Program) => void) & {
+      [APPROXIMATE_MARKER]?: true;
+    };
+  };
+  const original = decorate.decorateProgram;
+  if (original[APPROXIMATE_MARKER]) return;
+  const patched = (language: Language, program: ts.Program): void => {
+    approximateUnmappedDiagnostics(
+      program,
+      PROGRAM_DIAGNOSTIC_METHODS,
+      () => language,
+    );
+    original(language, program);
+  };
+  patched[APPROXIMATE_MARKER] = true;
+  decorate.decorateProgram = patched;
+  if (decorate.decorateProgram !== patched) {
+    throw new Error(
+      "mx-tsc: Volar's decorateProgram could not be wrapped, so a diagnostic with no source mapping would be dropped without a word",
+    );
+  }
+}
+
+/**
  * One run of the real `tsc` entry point (`process.argv` as it stands), with the
  * MX language plugins spliced in. Every plugin it creates is pushed to the given
  * lists. `watchMode` tells the host patches that this run rebuilds on its own,
@@ -294,6 +336,7 @@ function runPatchedTsc(
   watchMode = false,
 ): number {
   let tscExitCode = 0;
+  approximateUnmappedInVolar();
   const exit = process.exit;
   const stopped = Symbol("mx-tsc-exit");
   process.exit = ((code?: number) => {

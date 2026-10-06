@@ -2932,6 +2932,40 @@ records it.
   wrong column inside one file's mappings is still worse than none.
 - **Every integration that scans must surface `ScanResult.diagnostics`** (§9.2).
 
+### A diagnostic with no source mapping is never dropped (decision 161)
+
+The TypeScript layer type-checks the generated module and maps each diagnostic
+back to the `.mx` source. Not every generated span has a source mapping (a
+whole-file Solid unit maps no expression value; an atom inside a region value
+has none; scaffolding never does), and a diagnostic at such a span used to be
+discarded: the page type-checked clean, `mx-tsc` exited 0, the editor showed
+nothing.
+
+The rule: **a diagnostic whose generated position has no source mapping is
+reported, never dropped.** It is reported at the nearest mapped span of the
+generated module (the tightest mapped range containing it, else the nearest
+before it, else the first after it), so on the source it lands on the closest
+construct the module maps, and its message is suffixed
+
+```text
+ (position approximate: generated <line>:<col>)
+```
+
+where `<line>:<col>` is the 1-based position TypeScript reported in the
+generated module. A module with no mapped span at all reports the diagnostic
+on the file with no position (`tsc` prints it as a file-level error). A
+diagnostic Volar can map is untouched: same position, byte-identical message.
+A mapping may still hide a diagnostic on purpose (its `verification` rejects
+that code: the `.astro.mx` fence's TS1108); that is a host's decision about a
+spurious error, not an unmapped one, and is kept.
+
+`mx-tsc` and the TypeScript plugin apply the rule at one shared function
+(`approximateUnmapped`, `@mxlang/typescript-plugin`) beneath Volar's own
+mapping, so they agree. The language server publishes core's compile
+diagnostics only (§12, "A host is not done without its diagnostics"), each of
+which carries its own source position, and type-checks nothing, so it has no
+generated position to map.
+
 ### A host is not done without its diagnostics
 
 Decision 71, and the reason `@mxlang/language-server` exists: Marko's own
@@ -2948,7 +2982,7 @@ place of.
 grammar, they do not produce diagnostics. Host and `strict` are resolved from the
 nearest `package.json` (§13.5).
 
-**Decisions:** 70, 71, 72, 79, 80, 88, 91, 94c, 95(2), 97f, 99.
+**Decisions:** 70, 71, 72, 79, 80, 88, 91, 94c, 95(2), 97f, 99, 161.
 
 ---
 

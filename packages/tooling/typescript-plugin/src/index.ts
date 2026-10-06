@@ -1,5 +1,6 @@
 import { dirname, join } from "node:path";
 import { builtinFileKinds } from "@mxlang/target-registry";
+import type { Language } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import { createLanguageServicePlugin } from "@volar/typescript/lib/quickstart/createLanguageServicePlugin";
 import type * as ts from "typescript";
@@ -36,6 +37,10 @@ import {
   createNgDiagnosticsService,
   type NgDiagnosticsService,
 } from "./ng-diagnostics.ts";
+import {
+  approximateUnmappedDiagnostics,
+  LANGUAGE_SERVICE_DIAGNOSTIC_METHODS,
+} from "./unmapped-diagnostics.ts";
 
 function createBuiltinLanguagePlugins(
   typescript: typeof ts,
@@ -80,6 +85,15 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
         ? dirname(info.project.getProjectName())
         : info.project.getCurrentDirectory(),
     );
+    // Beneath Volar's proxy, so a diagnostic Volar cannot map is moved onto
+    // the nearest mapped span before it would be dropped (decision 161).
+    // Volar proxies `info.languageService` right after this callback returns.
+    let language: Language<string> | undefined;
+    approximateUnmappedDiagnostics(
+      info.languageService,
+      LANGUAGE_SERVICE_DIAGNOSTIC_METHODS,
+      () => language,
+    );
     const readSource = createProjectSourceReader(info);
     ngDiagnostics = createEditorNgDiagnostics(typescript, info);
     languagePlugins = createBuiltinLanguagePlugins(
@@ -97,6 +111,9 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
         undefined,
         languagePlugins,
       ),
+      setup: (volarLanguage) => {
+        language = volarLanguage;
+      },
     };
   });
   const pluginModule = volarFactory(modules);
@@ -363,4 +380,11 @@ export {
   createMxLanguagePlugin,
   type MxLanguagePluginOptions,
 } from "./mx-language.ts";
+export {
+  approximateSuffix,
+  approximateUnmapped,
+  approximateUnmappedDiagnostics,
+  LANGUAGE_SERVICE_DIAGNOSTIC_METHODS,
+  PROGRAM_DIAGNOSTIC_METHODS,
+} from "./unmapped-diagnostics.ts";
 export default pluginFactory;

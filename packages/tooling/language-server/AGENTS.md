@@ -44,6 +44,8 @@ reports nothing for it. `tsserver` cannot fill the gap either: it never opens
 is what `@marko/ts-plugin` and `@mxlang/typescript-plugin` type-check). Full
 research: `notes/research/host-diagnostics.md`.
 
+**No TypeScript diagnostics, so nothing here maps a generated position (decision 161).** The server publishes core's compile diagnostics, each carrying its own source position; it never type-checks a generated module, so the "diagnostic with no source mapping is never dropped" rule (spec §12) has nothing to apply to. A thrown error with no position at all is the one thing it does not publish (it goes to `onUnexpectedError`): that is an internal failure, not a diagnostic about the author's file.
+
 **Scope: diagnostics only.** `textDocumentSync` is the one capability
 advertised. No completion, hover, go-to-definition, or formatting — adding
 any of those would mean re-implementing Marko's own language server, which

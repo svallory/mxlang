@@ -1,5 +1,7 @@
 # @mxlang/typescript-plugin
 
+- **Fix (unmapped-diagnostics-never-dropped, decision 161):** a diagnostic with no source mapping is reported, not dropped: `approximateUnmapped` (new, exported with `approximateUnmappedDiagnostics`) runs beneath Volar's mapping in the tsserver plugin and `mx-tsc`, moving it onto the nearest mapped span and appending `(position approximate: generated <line>:<col>)`. A diagnostic a mapping's `verification` hides on purpose (the `.astro.mx` fence's TS1108) and an exactly mapped one are unchanged.
+
 - **Tests (render-consumers, decision 155):** `tsserver-load.test.ts` pins the signature wording of an html unit's default export in diagnostics again (reverts PR 1's `typeof Comp`).
 
 ## Unreleased

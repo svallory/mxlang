@@ -1,0 +1,4 @@
+export interface Input { }
+
+<p>${missingName}</p>
+<p>${1 * "a"}</p>
