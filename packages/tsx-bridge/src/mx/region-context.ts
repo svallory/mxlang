@@ -6,13 +6,13 @@
  * that appears somewhere it does not support.
  */
 
-import type { MxRegionContext, MxRegionParentFrame } from "../babel/index.ts";
+import type { MxRegionContext, MxRegionParentFrame } from "@mxlang/babel";
 
 export type {
   MxRegionContext,
   MxRegionParentFrame,
   MxRegionPositionCheck,
-} from "../babel/index.ts";
+} from "@mxlang/babel";
 
 /**
  * Computes the `MxRegionContext` for a region about to start, from the

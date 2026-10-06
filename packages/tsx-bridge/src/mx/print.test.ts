@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import type { ParserOptions } from "../babel/index.ts";
+import type { ParserOptions } from "@mxlang/babel";
 import { parseBabel } from "../index.ts";
 import { print } from "./print.ts";
 import { solidRegionCompile } from "./test-helpers.ts";

@@ -1,4 +1,4 @@
-import { ParseErrorEnum } from "../babel/internal.ts";
+import { ParseErrorEnum } from "@mxlang/babel/internal";
 
 /**
  * Parse errors raised while lowering an MX region. These go through Babel's

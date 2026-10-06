@@ -18,7 +18,7 @@
  * is fine).
  */
 
-import type { HoistedDefine, HoistedImport } from "../babel/index.ts";
+import type { HoistedDefine, HoistedImport } from "@mxlang/babel";
 
 export type { HoistedDefine, HoistedImport };
 

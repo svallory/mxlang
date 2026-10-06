@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parse as parseNpm } from "@babel/parser";
 import { describe, expect, it } from "vitest";
-import { parse as parseVendored } from "./babel/index.ts";
+import { parse as parseVendored } from "@mxlang/babel";
 
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const fixturesDir = `${repoRoot}/fixtures`;

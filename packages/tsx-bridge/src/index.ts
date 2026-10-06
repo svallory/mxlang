@@ -9,7 +9,7 @@ import {
   parse as rawBabelParse,
   parseExpression as rawBabelParseExpression,
   type ParserOptions,
-} from "./babel/index.ts";
+} from "@mxlang/babel";
 import { mxHooks } from "./mx/bridge.ts";
 import {
   type AuthoredImport,
@@ -22,7 +22,7 @@ import {
   unknownProgramBindings,
 } from "./mx/source-bindings.ts";
 
-export type { ParseError, ParseResult, ParserOptions } from "./babel/index.ts";
+export type { ParseError, ParseResult, ParserOptions } from "@mxlang/babel";
 export type { PrintOptions, PrintResult, RawSourceMap } from "./mx/print.ts";
 export { print, printAst } from "./mx/print.ts";
 export {

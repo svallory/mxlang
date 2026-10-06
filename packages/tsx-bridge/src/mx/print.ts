@@ -2,7 +2,7 @@ import generate from "@babel/generator";
 import type { File } from "@babel/types";
 import type { CustomTag } from "@mxlang/core";
 import { parse } from "../index.ts";
-import type { MxRegionCompile } from "../babel/index.ts";
+import type { MxRegionCompile } from "@mxlang/babel";
 
 /**
  * A source map in the shape `@babel/generator` produces, which is also the

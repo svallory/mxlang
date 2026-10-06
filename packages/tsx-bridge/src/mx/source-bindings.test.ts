@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parse as babelParse } from "../babel/index.ts";
+import { parse as babelParse } from "@mxlang/babel";
 import {
   programBindings,
   sourceBindings,
