@@ -165,6 +165,29 @@ position above, `TAG_NAME.ts` from review round 4, `INLINE_SCRIPT.ts` and
 and `JS_COMMENT_LINE.ts` from the crash fix below; checked against
 `git archive v5.18.0 src`).
 
+Unicode whitespace in every look-behind (template-parser-lookbehinds-
+followup, decision 156 addenda 11 and 12; both dist builds carry the same
+JavaScript). Wherever a look-behind asks "is this whitespace", the set of
+`isUnicodeSpaceCode` answers as ASCII whitespace does, through the one
+`isUnicodeWhitespaceCode` the atom look-behind uses. Each input renders as
+its ASCII-space twin (`unicodeWhitespaceTwinMismatches`), except the
+addendum 12 pair below.
+
+| Source location | Function | What changed |
+|---|---|---|
+| `core/Parser.ts` | `getPreviousNonWhitespaceCharCode` | skips Unicode whitespace, so `(é)\u00a0/ 2` divides (`canFollowDivision`) and `(a: T)\u00a0=> a` keeps its type reading |
+| `states/EXPRESSION.ts` | `EXPRESSION.char` (the terminator look-behind before `shouldTerminate`; the `{` look-behind in a type) | `lookBehindWhile(isUnicodeWhitespaceCode, …)`: `a +\u00a0` before a terminator continues past the operator |
+| `states/EXPRESSION.ts` | `checkForOperators` | looks behind past a run of Unicode whitespace (`isUnicodeSpaceCode` only, never ASCII) right before the whitespace or newline that triggered it (`a +\u00a0 b`, `a +\u00a0\n`) |
+| `states/EXPRESSION.ts` | `lookBehindForOperator`, `++`/`--` case | `lookBehindWhile(isUnicodeWhitespaceCode, …)` |
+| `states/ATTRIBUTE.ts` | `shouldTerminateHtmlAttrValue` | a Unicode-whitespace-preceded `>=` is a comparison (`<if=count\u00a0>= 10>`) |
+| `states/ATTRIBUTE.ts` | `shouldTerminateConciseAttrValue`, `shouldTerminateConciseAttrName` | a Unicode-whitespace-preceded `--` starts the text block (addendum 12: the attribute's range keeps the trailing whitespace, `1\u00a0` or `x\u00a0`, because an ASCII space ends the attribute by the current-character test, which is unchanged; pinned in `CONCISE_DASH_ROWS`) |
+| `states/HTML_CONTENT.ts` | `HTML_CONTENT.parse` | a Unicode-whitespace-preceded `//` or `/*` in HTML text starts a comment |
+
+Left: every current-character and look-ahead whitespace test (a value
+still does not end at a Unicode space; `isSingleAtomDefault`'s and the `.`
+look-aheads), and `detectAmbiguousCloseAngleBracket`'s look-behinds, which a
+forward scan reaches only after it has rejected a Unicode space.
+
 ## The parser never throws
 
 Rule (mx-lead, template-parser-comment-in-text-tag-open-crash): the
@@ -262,8 +285,9 @@ and 8; both dist builds carry the same JavaScript):
   characters: TypeScript cannot own a `:` after one, so `[a,\u00a0:b]` keeps
   its atom. Since decision 156 addendum 10 (template-parser-ascii-only-
   lookbehinds) the look-behind's whitespace loops (`expectsExpression`, its
-  `!` case, `isOperatorWord`) skip them as whitespace too (`isSpaceCode`:
-  `isWhitespaceCode` or `isUnicodeSpaceCode`), so each behaves exactly as an
+  `!` case, `isOperatorWord`) skip them as whitespace too
+  (`isUnicodeWhitespaceCode` in `util/util.ts`, named `isSpaceCode` until
+  addendum 11: `isWhitespaceCode` or `isUnicodeSpaceCode`), so each behaves exactly as an
   ASCII space (`unicodeWhitespaceMismatches`,
   `unicodeWhitespaceLoopMismatches`): `{ é\u00a0:a }` is a key, and
   `(a?\u00a0:b : c)` and `(Array<T>\u00a0:b)` read as their ASCII-space

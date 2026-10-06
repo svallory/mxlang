@@ -2,6 +2,7 @@ import {
   type ErrorCode,
   getLines,
   getPosition,
+  isUnicodeWhitespaceCode,
   isWhitespaceCode,
   type ParserOptions as Options,
   type Range,
@@ -310,7 +311,8 @@ export class Parser {
 
   getPreviousNonWhitespaceCharCode(start = -1) {
     let behind = start;
-    while (isWhitespaceCode(this.lookAtCharCodeAhead(behind))) behind--;
+    // MX (decision 156 addendum 11): Unicode whitespace too.
+    while (isUnicodeWhitespaceCode(this.lookAtCharCodeAhead(behind))) behind--;
     return this.lookAtCharCodeAhead(behind);
   }
 

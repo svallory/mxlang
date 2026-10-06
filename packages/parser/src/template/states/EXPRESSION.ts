@@ -2,6 +2,7 @@ import {
   isIndentCode,
   isWhitespaceCode,
   isUnicodeSpaceCode,
+  isUnicodeWhitespaceCode,
   isUnicodeWordCode,
   isWordCode,
   type Meta,
@@ -183,7 +184,7 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
           let wasExpression = false;
           if (expression.operators) {
             const prevNonWhitespacePos = lookBehindWhile(
-              isWhitespaceCode,
+              isUnicodeWhitespaceCode,
               data,
               this.pos - 1,
             );
@@ -310,7 +311,7 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
         case CODE.OPEN_CURLY_BRACE:
           if (expression.inType && !expression.forceType) {
             const prevPos = lookBehindWhile(
-              isWhitespaceCode,
+              isUnicodeWhitespaceCode,
               data,
               this.pos - 1,
             );
@@ -471,7 +472,18 @@ function checkForOperators(
   if (!expression.operators) return false;
 
   const { pos, data } = parser;
-  if (lookBehindForOperator(expression, data, pos) !== -1) {
+  // MX (decision 156 addendum 11): Unicode whitespace right before the
+  // whitespace or newline that got here is part of the same run, so look
+  // behind past it (`a +\u00a0 b` and `a +\u00a0\n` read as `a +  b` and
+  // `a + \n`, where the first space looks behind at `+`). Only that set is
+  // skipped, never ASCII whitespace, so ASCII-only input is unchanged.
+  if (
+    lookBehindForOperator(
+      expression,
+      data,
+      lookBehindWhile(isUnicodeSpaceCode, data, pos - 1),
+    ) !== -1
+  ) {
     parser.consumeWhitespace();
     return true;
   }
@@ -590,7 +602,7 @@ function lookBehindForOperator(
         return lookBehindForOperator(
           expression,
           data,
-          lookBehindWhile(isWhitespaceCode, data, curPos - 2),
+          lookBehindWhile(isUnicodeWhitespaceCode, data, curPos - 2),
         );
       }
 
@@ -985,7 +997,7 @@ function isOperatorWord(
   if (!(atomKeywords as readonly string[]).includes(word)) return false;
   if (word === "of" || word === "yield" || word === "await") {
     let j = wordStart - 1;
-    while (j >= expression.start && isSpaceCode(data.charCodeAt(j))) j--;
+    while (j >= expression.start && isUnicodeWhitespaceCode(data.charCodeAt(j))) j--;
     const before = j < expression.start ? -1 : data.charCodeAt(j);
     if (word === "of") {
       return (
@@ -1061,17 +1073,6 @@ function closesTypeArguments(
 }
 
 /**
- * MX (decision 156 addendum 10): whitespace for the atom look-behind. The
- * Unicode whitespace and line terminators of `isUnicodeSpaceCode` behave
- * exactly as ASCII whitespace here (`{ é\u00a0:a }` is a key, as
- * `{ é :a }` is), and only here: elsewhere the template grammar keeps
- * `isWhitespaceCode`.
- */
-function isSpaceCode(code: number) {
-  return isWhitespaceCode(code) || isUnicodeSpaceCode(code);
-}
-
-/**
  * Whether the `.` at `at` ends a spread's `...` (decision 156 addendum 8:
  * `[...await :b]`), not a member access (`a.await`, `a?.typeof`).
  */
@@ -1113,7 +1114,7 @@ function expectsExpression(
 ): boolean {
   let i = pos - 1;
   for (;;) {
-    while (i >= expression.start && isSpaceCode(data.charCodeAt(i))) i--;
+    while (i >= expression.start && isUnicodeWhitespaceCode(data.charCodeAt(i))) i--;
     const comment = expression.comments?.find((c) => c.end === i + 1);
     if (!comment) break;
     i = comment.start - 1;
@@ -1167,7 +1168,7 @@ function expectsExpression(
       while (
         j >= expression.start &&
         (data.charCodeAt(j) === CODE.EXCLAMATION ||
-          isSpaceCode(data.charCodeAt(j)))
+          isUnicodeWhitespaceCode(data.charCodeAt(j)))
       ) {
         j--;
       }

@@ -1,5 +1,6 @@
 import {
   isIndentCode,
+  isUnicodeWhitespaceCode,
   isUnicodeWordCode,
   isWhitespaceCode,
   matchesCloseAngleBracket,
@@ -635,7 +636,7 @@ export function shouldTerminateHtmlAttrValue(
       // comparison operator, since a closed tag would instead put the "=" in
       // its body content, eg `<if=count >= 10>`.
       return !(
-        isWhitespaceCode(data.charCodeAt(pos - 1)) &&
+        isUnicodeWhitespaceCode(data.charCodeAt(pos - 1)) &&
         data.charCodeAt(pos + 1) === CODE.EQUAL
       );
     }
@@ -661,7 +662,7 @@ function shouldTerminateConciseAttrName(
     case CODE.HYPHEN:
       return (
         data.charCodeAt(pos + 1) === CODE.HYPHEN &&
-        isWhitespaceCode(data.charCodeAt(pos - 1))
+        isUnicodeWhitespaceCode(data.charCodeAt(pos - 1))
       );
     default:
       return false;
@@ -680,7 +681,7 @@ export function shouldTerminateConciseAttrValue(
     case CODE.HYPHEN:
       return (
         data.charCodeAt(pos + 1) === CODE.HYPHEN &&
-        isWhitespaceCode(data.charCodeAt(pos - 1))
+        isUnicodeWhitespaceCode(data.charCodeAt(pos - 1))
       );
     default:
       return false;

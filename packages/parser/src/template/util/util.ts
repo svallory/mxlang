@@ -120,6 +120,18 @@ export function isUnicodeWordCode(code: number) {
 }
 
 /**
+ * MX (decision 156 addenda 10 and 11): whitespace wherever the parser looks
+ * behind (the atom look-behind, division or regex, the keyword and operator
+ * look-behinds, ` --` and ` >=`): ASCII whitespace and the Unicode
+ * whitespace and line terminators of `isUnicodeSpaceCode`, which behave
+ * exactly as ASCII whitespace there. Look-aheads and the tag grammar keep
+ * `isWhitespaceCode`.
+ */
+export function isUnicodeWhitespaceCode(code: number) {
+  return isWhitespaceCode(code) || isUnicodeSpaceCode(code);
+}
+
+/**
  * The characters at or above U+0080 that TypeScript reads as whitespace
  * (`Zs`, U+FEFF) or as a line terminator (U+2028, U+2029). U+0085 and U+200B,
  * which TypeScript also skips, are left out: Babel rejects both.
