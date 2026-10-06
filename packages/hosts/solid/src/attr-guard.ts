@@ -1,5 +1,14 @@
 import { ATTRIBUTE_VALUE_EXPRESSION } from "@mxlang/core";
 
+/**
+ * What a spread helper returns to the type checker: the object itself, or `{}`
+ * for a value that is not an object type (`unknown`, string, number, boolean),
+ * which TypeScript cannot spread. The runtime value is unchanged: the helpers
+ * pass a non-object through, and the JSX runtime ignores it. An object type
+ * stays itself, so a wrongly typed key still reports at the authored attribute.
+ */
+const SPREADABLE = "T extends object ? T : {}";
+
 /** Module-scope bindings the emitted native-attribute guard calls. */
 export const MX_ATTR_VALUE_BINDING = "__mxAttrValue";
 export const MX_ATTR_SPREAD_BINDING = "__mxAttrSpread";
@@ -37,10 +46,10 @@ export const ATTR_VALUE_HELPER = `function ${MX_ATTR_VALUE_BINDING}<T,>(name: st
  * `prop:` (a real property write) and ref, children, class, style. Everything
  * else, including `attr:`, `bool:`, `use:`, innerHTML, textContent and
  * classList, is a plain attribute write on Solid and validates like Marko.
- * `<T,>` keeps the helper unconstrained so any spread type-checks (covered by mx-tsc `attr-guard-solid.test.ts`).
+ * `<T,>` keeps the helper unconstrained so any spread type-checks, and {@link SPREADABLE} keeps its result spreadable (covered by mx-tsc `attr-guard-solid.test.ts`).
  */
-export const ATTR_SPREAD_HELPER = String.raw`function ${MX_ATTR_SPREAD_BINDING}<T,>(attrs: T, tag: string | null = ""): T {
-  if (tag === null || attrs === null || typeof attrs !== "object") return attrs;
+export const ATTR_SPREAD_HELPER = String.raw`function ${MX_ATTR_SPREAD_BINDING}<T,>(attrs: T, tag: string | null = ""): ${SPREADABLE} {
+  if (tag === null || attrs === null || typeof attrs !== "object") return attrs as never;
   return new Proxy(attrs as object, {
     get(target, key) {
       const value = Reflect.get(target, key);
@@ -50,7 +59,7 @@ export const ATTR_SPREAD_HELPER = String.raw`function ${MX_ATTR_SPREAD_BINDING}<
     ownKeys(target) {
       return Reflect.ownKeys(target).filter((key) => (key !== "class" && key !== "style") || Boolean(Reflect.get(target, key)));
     },
-  }) as T;
+  }) as never;
 }`;
 
 /** Module-scope bindings the emitted `<textarea>` helpers call. */
@@ -82,14 +91,14 @@ export const TEXTAREA_PICK_HELPER = `function ${MX_TEXTAREA_PICK_BINDING}(previo
  * (see above), never as an attribute. A Proxy, not a copy, so Solid's lazy
  * spread keeps reading the live object.
  */
-export const TEXTAREA_OMIT_HELPER = `function ${MX_TEXTAREA_OMIT_BINDING}<T,>(attrs: T): T {
-  if (attrs === null || typeof attrs !== "object") return attrs;
+export const TEXTAREA_OMIT_HELPER = `function ${MX_TEXTAREA_OMIT_BINDING}<T,>(attrs: T): ${SPREADABLE} {
+  if (attrs === null || typeof attrs !== "object") return attrs as never;
   return new Proxy(attrs as object, {
     get: (target, key) => (key === "value" ? undefined : Reflect.get(target, key)),
     has: (target, key) => key !== "value" && Reflect.has(target, key),
     ownKeys: (target) => Reflect.ownKeys(target).filter((key) => key !== "value"),
     getOwnPropertyDescriptor: (target, key) => (key === "value" ? undefined : Reflect.getOwnPropertyDescriptor(target, key)),
-  }) as T;
+  }) as never;
 }`;
 
 /**
@@ -103,9 +112,9 @@ export const TEXTAREA_DYN_VALUE_HELPER = String.raw`function ${MX_TEXTAREA_DYN_V
 }`;
 
 /** The same doubling for the `value` a spread (or the args object) contributes; a Proxy keeps Solid's lazy spread live. */
-export const TEXTAREA_DYN_SPREAD_HELPER = `function ${MX_TEXTAREA_DYN_SPREAD_BINDING}<T,>(attrs: T, tag: unknown): T {
-  if (tag !== "textarea" || attrs === null || typeof attrs !== "object") return attrs;
+export const TEXTAREA_DYN_SPREAD_HELPER = `function ${MX_TEXTAREA_DYN_SPREAD_BINDING}<T,>(attrs: T, tag: unknown): ${SPREADABLE} {
+  if (tag !== "textarea" || attrs === null || typeof attrs !== "object") return attrs as never;
   return new Proxy(attrs as object, {
     get: (target, key) => (key === "value" ? ${MX_TEXTAREA_DYN_VALUE_BINDING}(Reflect.get(target, key), tag) : Reflect.get(target, key)),
-  }) as T;
+  }) as never;
 }`;
