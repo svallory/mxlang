@@ -2139,35 +2139,141 @@ function isRegisteredTaglibTag(ctx: Ctx, name: string): boolean {
   );
 }
 
-/** An import of a tag module — the only import a lowercase tag could be mistaken to call. */
+/**
+ * A default import of a tag module — the only import a lowercase tag could be
+ * mistaken to call. A named import from a `.mx`/`.marko` file is a value the
+ * module exports, not its tag.
+ */
 function isTagModuleImport(ctx: Ctx, name: string): boolean {
-  const specifier = ctx.importSpecifiers.get(name);
-  return (
-    ctx.imports.has(name) &&
-    specifier !== undefined &&
-    isMarkoOrMxSpecifier(specifier)
-  );
+  return ctx.imports.has(name) && ctx.importDefaultFromMarkoOrMx.has(name);
 }
 
-// Elements a taglib lookup cannot vouch for when none is set (the region hosts).
+/**
+ * The fix a diagnostic offers for a lowercase binding. A name that starts with
+ * a letter can be renamed to its capitalized form; `_row` or `$row` has no
+ * capitalized spelling Marko reads as a binding (its rule is `/^[A-Z]/`), so
+ * only the dynamic tag is offered.
+ */
+function lowercaseBindingFix(
+  name: string,
+  rename: (pascal: string) => string,
+  or: string,
+  close: string,
+): string {
+  const dynamic = `\`<\${${name}}${close}>\``;
+  if (!/^[a-z]/.test(name)) return `Write ${dynamic}`;
+  const pascal = name.charAt(0).toUpperCase() + name.slice(1);
+  return `${rename(pascal)} ${or} ${dynamic}`;
+}
+
+// Elements a taglib lookup cannot vouch for when none is set (the region
+// hosts): `HTML_ELEMENTS` omits these. The SVG and MathML names are Marko's own
+// `marko-svg` and `marko-math` taglibs (@marko/compiler 5.42.10), so a region
+// and a whole file agree on what is native.
 const EXTRA_NATIVE_ELEMENTS = new Set([
   "search",
   "slot",
-  "svg",
-  "path",
+  "animate",
+  "animateColor",
+  "animateMotion",
+  "animateTransform",
   "circle",
-  "rect",
+  "clipPath",
+  "defs",
+  "desc",
+  "ellipse",
+  "feBlend",
+  "feColorMatrix",
+  "feComponentTransfer",
+  "feComposite",
+  "feConvolveMatrix",
+  "feDiffuseLighting",
+  "feDisplacementMap",
+  "feDistantLight",
+  "feFlood",
+  "feFuncA",
+  "feFuncB",
+  "feFuncG",
+  "feFuncR",
+  "feGaussianBlur",
+  "feImage",
+  "feMerge",
+  "feMergeNode",
+  "feMorphology",
+  "feOffset",
+  "fePointLight",
+  "feSpecularLighting",
+  "feSpotLight",
+  "feTile",
+  "feTurbulence",
+  "filter",
+  "foreignObject",
   "g",
+  "image",
   "line",
+  "linearGradient",
+  "marker",
+  "mask",
+  "metadata",
+  "mpath",
+  "path",
+  "pattern",
   "polygon",
   "polyline",
-  "ellipse",
-  "text",
-  "defs",
-  "use",
+  "radialGradient",
+  "rect",
+  "set",
+  "stop",
+  "svg",
+  "switch",
   "symbol",
-  "mask",
+  "text",
+  "textPath",
+  "tspan",
+  "use",
+  "view",
   "math",
+  "maction",
+  "maligngroup",
+  "malignmark",
+  "menclose",
+  "merror",
+  "mfenced",
+  "mfrac",
+  "mglyph",
+  "mi",
+  "mlabeledtr",
+  "mlongdiv",
+  "mmultiscripts",
+  "mn",
+  "mo",
+  "mover",
+  "mpadded",
+  "mphantom",
+  "mroot",
+  "mrow",
+  "ms",
+  "mscarries",
+  "mscarry",
+  "msgroup",
+  "mstack",
+  "msline",
+  "mspace",
+  "msqrt",
+  "msrow",
+  "mstyle",
+  "msub",
+  "msup",
+  "msubsup",
+  "mtable",
+  "mtd",
+  "mtext",
+  "mtr",
+  "munder",
+  "munderover",
+  "semantics",
+  "mprescripts",
+  "none",
 ]);
 
 /** Whether `name` is a native HTML/SVG/MathML element, by lookup or, without one, by list. */
@@ -2188,10 +2294,15 @@ function warnLowercaseBinding(ctx: Ctx, node: Node, name: string): void {
   const site = ctx.bindingSites.get(name);
   const kind = site?.kind ?? "imported";
   const where = site ? ` at ${site.line}:${site.column + 1}` : "";
-  const pascal = name.charAt(0).toUpperCase() + name.slice(1);
+  const fix = lowercaseBindingFix(
+    name,
+    (pascal) => `Rename it \`${pascal}\``,
+    "or write",
+    "",
+  );
   const at = posOf(node);
   warn(ctx, {
-    message: `\`<${name}>\` is the native element; the \`${name}\` ${kind}${where} is not called. Rename it \`${pascal}\` or write \`<\${${name}}>\``,
+    message: `\`<${name}>\` is the native element; the \`${name}\` ${kind}${where} is not called. ${fix}`,
     line: at.line,
     column: at.column,
   });
@@ -3334,13 +3445,19 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   if (tagBinding && !isNativeElementName(ctx, name)) {
     const site = ctx.bindingSites.get(name);
     const from = ctx.importSpecifiers.get(name);
-    const pascal = name.charAt(0).toUpperCase() + name.slice(1);
-    const bound =
-      site?.kind === "defined"
-        ? `\`${name}\` is defined at ${site.line}:${site.column + 1}`
-        : `\`${name}\` is imported from ${from}`;
+    const defined = site?.kind === "defined";
+    const bound = defined
+      ? `\`${name}\` is defined at ${site.line}:${site.column + 1}`
+      : `\`${name}\` is imported from ${from}`;
+    const fix = lowercaseBindingFix(
+      name,
+      (pascal) =>
+        `Write \`<${pascal}>\` (rename the ${defined ? "define" : "import"})`,
+      "or",
+      "/",
+    );
     fail(
-      `\`<${name}>\` is not a tag here: ${bound}, and a lowercase tag never calls a binding. Write \`<${pascal}>\` (rename the import) or \`<\${${name}}/>\``,
+      `\`<${name}>\` is not a tag here: ${bound}, and a lowercase tag never calls a binding. ${fix}`,
       node,
     );
   }

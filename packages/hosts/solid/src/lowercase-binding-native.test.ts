@@ -1,6 +1,7 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: MX source and messages use `${...}` placeholders.
 
 import type { CustomTag, MxWarning } from "@mxlang/core";
+import { parse } from "@mxlang/parser";
 import { describe, expect, it } from "vitest";
 import { compileSolidMx } from "./index.ts";
 
@@ -14,6 +15,9 @@ const region = (source: string, specifier: string, warnings?: MxWarning[]) =>
       ["span", specifier],
       ["row", specifier],
     ]),
+    importDefaultFromMarkoOrMx: specifier.endsWith(".mx")
+      ? new Set(["span", "row"])
+      : new Set<string>(),
     importSites: new Map([
       ["span", { line: 3, column: 0 }],
       ["row", { line: 4, column: 0 }],
@@ -68,5 +72,28 @@ describe("lowercase tag with a same-named binding in scope", () => {
     });
     expect(code).toContain("x");
     expect(code).not.toContain("<row");
+  });
+  it("the import's L:C and default-ness reach the region through the real parser", () => {
+    const warnings: MxWarning[] = [];
+    // biome-ignore lint/suspicious/noExplicitAny: MxRegionCompile shape, avoiding a parser<->solid type cycle in a test
+    const regionCompile = (input: any) =>
+      compileSolidMx(input.source, { ...input, warnings });
+    const source = [
+      'import { createSignal } from "solid-js";',
+      'import span from "./span.mx";',
+      'import { label } from "./forms.mx";',
+      "export function App() {",
+      '  return (<div><span title="search"/><label>x</label></div>);',
+      "}",
+    ].join("\n");
+    parse(source, "app.solid.mx", {
+      // biome-ignore lint/suspicious/noExplicitAny: see regionCompile
+      mxRegionCompile: regionCompile as any,
+    });
+    // `span` is a default `.mx` import: native, with its import site. `label`
+    // is a named import from a tag module, so a value: native and silent.
+    expect(warnings.map((w) => w.message)).toEqual([
+      "`<span>` is the native element; the `span` imported at 2:1 is not called. Rename it `Span` or write `<${span}>`",
+    ]);
   });
 });

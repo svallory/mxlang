@@ -557,15 +557,22 @@ count as lowercase), or through a dynamic tag (`<${row}>`). `import { input }
 from "@angular/core"` therefore never turns `<input>` into a call of that
 import. The check runs in core, once, before any host's `isComponent` or
 unknown-tag path, and treats a lowercase tag `<x>` whose name equals a binding
-that **can be a tag** (a `<define>` in scope, or an import whose specifier is a
-tag module, `.mx` or `.marko`) like this; any other import (a value import)
-never triggers it and `<x>` stays a native element, silently:
+that **can be a tag** (a `<define>` in scope, or a default import whose
+specifier is a tag module, `.mx` or `.marko`) like this; any other import (a
+value import, or a named import from a tag module) never triggers it and `<x>`
+stays a native element, silently:
 
 | `<x>` is… | Result |
 |---|---|
 | a native element (`<span>` + a define or tag import named `span`) | the native element, with a positioned warning at the tag: "`<span>` is the native element; the `span` defined\|imported at L:C is not called. Rename it `Span` or write `<${span}>`" |
 | a registered custom tag, a contract child, or a Marko taglib tag (`tags/row.marko`) | called as before, whatever is imported; no diagnostic |
-| none of those (`import row from "./row.mx"` + `<row/>`) | a positioned **error** on every target: "`<row>` is not a tag here: `row` is imported from ./row.mx, and a lowercase tag never calls a binding. Write `<Row>` (rename the import) or `<${row}/>`" (a define reads "`row` is defined at L:C") |
+| none of those (`import row from "./row.mx"` + `<row/>`) | a positioned **error** on every target: "`<row>` is not a tag here: `row` is imported from ./row.mx, and a lowercase tag never calls a binding. Write `<Row>` (rename the import) or `<${row}/>`" (a define reads "`row` is defined at L:C" and "(rename the define)") |
+
+A name that starts with `_` or `$` has no capitalized spelling Marko reads as
+a binding, so both diagnostics offer only the dynamic tag for it ("Write
+`<${_row}/>`"). Without a taglib lookup (the region hosts), "native" means the
+HTML elements plus Marko's own `marko-svg` and `marko-math` tag lists, so a
+region and a whole file agree.
 
 The binding's `L:C` comes from the import or define site on every target. A
 `<define>` is in scope only inside the block that declares it, so one inside

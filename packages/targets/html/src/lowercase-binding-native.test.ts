@@ -82,7 +82,7 @@ describe("lowercase tag with a same-named binding in scope", () => {
     expect(() =>
       compile(`<define/row|x|>d</define>\n<row/>\n`, "/fixtures/a.mx"),
     ).toThrow(
-      "`<row>` is not a tag here: `row` is defined at 1:9, and a lowercase tag never calls a binding. Write `<Row>` (rename the import) or `<${row}/>`",
+      "`<row>` is not a tag here: `row` is defined at 1:9, and a lowercase tag never calls a binding. Write `<Row>` (rename the define) or `<${row}/>`",
     );
   });
 
@@ -96,10 +96,26 @@ describe("lowercase tag with a same-named binding in scope", () => {
     expect(warnings).toEqual([]);
   });
 
-  it("`_` and `$` names follow Marko's tag-name rule", () => {
+  it("`_` and `$` names follow Marko's tag-name rule, offering only the dynamic tag", () => {
     expect(() =>
       compile(`import _row from "./row.mx"\n<_row/>\n`, "/fixtures/a.mx"),
-    ).toThrow("is not a tag here");
+    ).toThrow(
+      "`<_row>` is not a tag here: `_row` is imported from ./row.mx, and a lowercase tag never calls a binding. Write `<${_row}/>`",
+    );
+    expect(() =>
+      compile(`import $row from "./row.mx"\n<$row/>\n`, "/fixtures/a.mx"),
+    ).toThrow("Write `<${$row}/>`");
+  });
+
+  it("a named import from a tag module is a value: native and silent", () => {
+    const warnings: MxWarning[] = [];
+    const { code } = compile(
+      `import { span } from "./forms.mx"\n<span title="search"/>\n`,
+      "/fixtures/a.mx",
+      { warnings },
+    );
+    expect(code).toContain('<span title=\\"search\\"');
+    expect(warnings).toEqual([]);
   });
 
   it("a registered taglib tag is still called, whatever is imported", () => {
@@ -117,7 +133,8 @@ describe("lowercase tag with a same-named binding in scope", () => {
         join(scratch, "main.mx"),
         { warnings },
       );
-      expect(code).not.toContain("is not a tag here");
+      expect(code).toContain('import _row from "./tags/row.marko"');
+      expect(code).toContain("_row.render({");
       expect(code).not.toContain('<row label=\\"x\\"');
       expect(warnings).toEqual([]);
     } finally {
