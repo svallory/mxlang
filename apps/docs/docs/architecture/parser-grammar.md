@@ -92,7 +92,7 @@ files on `main` differ from stock, and nothing else does:
 | --- | --- | --- |
 | the after-value rule | `states/ATTRIBUTE.ts` (`attrValue`); `states/EXPRESSION.ts`: the `??`/`?.` branch of `EXPRESSION.parse`, the `:` and `.` rows of `lookAheadForOperator`, `isIdentStartCode`, `isBareColonEnd` | decision 146, divergence 3 and addendum 6 ([E1](#e1--attribute-value-html-mode)) |
 | a single-atom default value | `states/ATTRIBUTE.ts` (`defaultAtom`); `states/EXPRESSION.ts` (`isSingleAtomDefault`) | decision 146, addendum 5 ([E1](#e1--attribute-value-html-mode)) |
-| atoms and the reserved `::` | `states/EXPRESSION.ts` (`lexAtom`, `expectsExpression`, `isOperatorWord`, `closesTypeArguments`, `isLookBehindWordCode`, `isUnicodeSpaceCode`, `atomNameEnd`, `rejectReservedName`, the atom guard in `lookBehindForKeyword`); the `atoms = true` sites in `states/ATTRIBUTE.ts`, `OPEN_TAG.ts`, `PLACEHOLDER.ts`, `TAG_NAME.ts`, `TEMPLATE_STRING.ts`; `rejectReservedName` calls in `TAG_NAME.exit` and `ATTRIBUTE.return`; `core/Parser.ts` (`atoms`, `read`, `rawOpenTags`); `util/constants.ts` (`onAtom`); `OPEN_TAG.exit` (`rawOpenTags`) | decision 156 and its addenda 2 to 4, 8 and 9 ([Atoms](#atoms)) |
+| atoms and the reserved `::` | `states/EXPRESSION.ts` (`lexAtom`, `expectsExpression`, `isOperatorWord`, `closesTypeArguments`, `isLookBehindWordCode`, `isUnicodeSpaceCode`, `atomNameEnd`, `rejectReservedName`, the atom guard in `lookBehindForKeyword`); the `atoms = true` sites in `states/ATTRIBUTE.ts`, `OPEN_TAG.ts`, `PLACEHOLDER.ts`, `TAG_NAME.ts`, `TEMPLATE_STRING.ts`; `rejectReservedName` calls in `TAG_NAME.exit` and `ATTRIBUTE.return`; `core/Parser.ts` (`atoms`, `read`, `rawOpenTags`); `util/constants.ts` (`onAtom`); `OPEN_TAG.exit` (`rawOpenTags`) | decision 156 and its addenda 2 to 4 and 8 to 10 ([Atoms](#atoms)) |
 | the base position | `core/Parser.ts` (`ParseOptions`, `parse`, `positionAt`, `offsetAt`); `index.ts` | the parser's API ([Base position](#base-position-for-fragment-parses)) |
 
 The bun patch `patches/htmljs-parser@5.18.0.patch`, which `@marko/compiler`'s
@@ -1875,19 +1875,26 @@ comment already read in this position, stopping at the position's start. Let
 | 6 | `>` | **yes** when the character before it is `=` (`a => :b`). Otherwise **no** when the `>` closes a type argument list (below; `y as Array<T> :z`), otherwise **yes** (a comparison or a shift) |
 | 7 | `+` or `-` | **no** when the character before it is the same (`a++ :b`); otherwise **yes** |
 | 8 | `/` | **no** when it is the last character of a regular expression read in this position (`/re/ :b`); otherwise **yes** (`a / :b`) |
-| 9 | any other character that is not a word character | **yes**: an operator or punctuator (`(:a`, `[:a, :b]`, `a + :b`, `{ k: :a }`). The 19 excepted Unicode whitespace and line-terminator characters are in this row: `x=[a,` then U+00A0 then `:b]` lexes the atom (observed for each of the 19) |
+| 9 | any other character that is not a word character | **yes**: an operator or punctuator (`(:a`, `[:a, :b]`, `a + :b`, `{ k: :a }`). |
 | 10 | a word character directly before the `:`, with no whitespace or comment between | **no**: an object key or a label, keyword or not (`{ new:a }`, `{ é:a }`) |
 | 11 | a word character, with whitespace or a comment between | **yes** only when the word ending at `p` is an operator word; otherwise **no** (`c ? b :c`, `(é :b)`) |
 
-The whitespace that this scan, row 5 and rules 4 and 5 below skip is
-`isWhitespaceCode` only (code 32 or lower). One of the 19 excepted characters
-is therefore not skipped: it is `p` itself, in row 9. `x=({ é` then U+00A0
-then `:a })` lexes the atom although TypeScript reads `é` as a key there, and
-so does `x=(a!` U+00A0 `:b)`; `x=(a,` U+00A0 `yield :b)` lexes the atom and
-`x=(x` U+00A0 `of :a)` does not, each the reverse of the same input written
-with a space (all observed). **Behaviour today, see defect
-`template-parser-ascii-only-lookbehinds`**
-([Recorded defects](#recorded-defects-in-the-default)).
+**Whitespace in this section** (decision 156, addendum 10): the 19 excepted
+characters behave exactly as ASCII whitespace. The backward scan above, row 5
+and rules 4 and 5 below skip them as they skip a space.
+
+**Behaviour today, see defect `template-parser-ascii-only-lookbehinds`**
+([Recorded defects](#recorded-defects-in-the-default)): the code for
+addendum 10 is not on main. Those scans skip `isWhitespaceCode` only (code 32
+or lower), so one of the 19 characters is not skipped and is `p` itself, in
+row 9, where an expression is expected. Written with U+00A0 where the space
+is, `x=({ é :a })`, `x=({ a :b })`, `x=(a! :b)`, `x=(a? :b : c)` and
+`x=(Array<T> :b)` each lex an atom today and lex none with the space;
+`x=(a, yield :b)` lexes one today and none with the space; `x=(x of :a)`
+lexes none today and one with the space (all observed). Under the rule each
+reads as its ASCII-space form. An input whose result does not depend on the
+skip is the same either way: `x=[a,` then U+00A0 then `:b]` lexes the atom
+(observed for each of the 19).
 
 **Operator words** (`isOperatorWord`), for rows 5 and 11. The word is the
 maximal run of word characters ending at `p`, not extending before the
@@ -2068,7 +2075,7 @@ These are MX's own rules. Each says which layer applies it: the template parser
 10. **Wildcard children (decision 147)** add no syntax: a child keeps its
     authored tag name, and only `<:att>` yields a child whose `name` is `att`.
     The parser is unaffected.
-11. **Atoms (decision 156 and its addenda 1 to 4 and 8).** `:name` in an MX
+11. **Atoms (decision 156 and its addenda 1 to 4 and 8 to 10).** `:name` in an MX
     expression position is a value that represents itself; its runtime value
     is the name as a string (156.1, 156.2). *Layer:* the template parser lexes
     it and reserves `::` ([Atoms](#atoms)); core gives it meaning and raises
@@ -2349,8 +2356,9 @@ normative text does not resolve it.
     at or above U+0080 that is not Unicode whitespace or a line terminator
     (U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF), and main implements it (`isLookBehindWordCode`;
     [Atoms](#is-an-expression-expected-expectsexpression), rows 4, 5 and 9 to
-    11). What remains is the whitespace the look-behind skips, which is still
-    ASCII only: defect `template-parser-ascii-only-lookbehinds`.
+    11). Decision 156, addendum 10 adds that the excepted characters are
+    skipped as ASCII whitespace is; that part is not on main: defect
+    `template-parser-ascii-only-lookbehinds`.
 
 ### Where a real TypeScript parser would end the value differently
 
@@ -2416,9 +2424,9 @@ These behaviours above are defects, not grammar, and are to be fixed in
     and `${é / 2}` read a regular expression);
   - the keyword look-behind does too (`<div x=énew y=1/>` is the single value
     `énew y=1`);
-  - the atom look-behind skips ASCII whitespace only, so a Unicode space
-    between an operand and a `:` is not skipped (`x=({ é` U+00A0 `:a })` lexes
-    an atom);
+  - the atom look-behind skips ASCII whitespace only, against decision 156,
+    addendum 10, so a Unicode space between an operand and a `:` is not
+    skipped (`x=({ a` U+00A0 `:b })` lexes an atom);
   - the name in the `::` reserved-name error is read past the static piece
     (`<a::b${x}/>` reports `::b$` at 2–6, `<div.a::${x}/>` `::$` at 6–9);
   - the third dot of a spread counts as a member dot in the atom look-behind,
