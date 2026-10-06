@@ -2936,8 +2936,8 @@ records it.
 
 The TypeScript layer type-checks the generated module and maps each diagnostic
 back to the `.mx` source. Not every generated span has a source mapping (a
-whole-file Solid unit maps no expression value; an atom inside a region value
-has none; scaffolding never does), and a diagnostic at such a span used to be
+whole-file Solid unit maps its values but no tag or attribute name; an atom
+inside a region value has none; scaffolding never does), and a diagnostic at such a span used to be
 discarded: the page type-checked clean, `mx-tsc` exited 0, the editor showed
 nothing.
 
@@ -2947,25 +2947,49 @@ construct of the source: the attribute that produced it, else the tag that
 holds it, else the file start (1:1). A preceding sibling's span is never used.
 The generated module follows source order, so the diagnostic came from the
 source between the nearest mapped range before it and the nearest one after
-it; when its text is one identifier or literal the author spelled in that
-stretch, that spelling is where it came from, otherwise the whole stretch is,
-and the smallest attribute or tag that contains it is the position. A source
-that does not parse, or a file kind that does not yet expose its tags and
-attributes, reports at 1:1. The message carries one of two markers, decided
-**per diagnostic range** (decision 161 addendum 1), not per generated line (a
-Solid template is one long line):
+it. Within that stretch, the narrowing looks for what the author *spelled*:
+
+- an element diagnostic (its text is a JSX opening or closing tag, `<p …>` or
+  `</p>`, e.g. TS7026) is spelled by the tag of that name: an opening tag that
+  starts in the stretch, a closing one whose tag ends in it;
+- an identifier, number or string literal (`missingName`, `"a"`) is spelled by
+  a tag or attribute of that name (a component tag's TS2741, an attribute's
+  TS2322), or by a whole-token occurrence in authored **code**: a placeholder's
+  expression, an attribute value other than a quoted string, a tag's
+  arguments, variable, parameters or dynamic name, a statement. Static text
+  and quoted attribute strings are not code: `enter input` never spells
+  `input`.
+
+The spellings are where the diagnostic came from; with none, the whole stretch
+is. The smallest attribute or tag that contains them is the position, so an
+element diagnostic lands on its own element, never on an outer one. Placement
+reads the module's own mappings only, never what earlier diagnostics were
+given, so it does not depend on the order diagnostics arrive in: a name
+diagnostic nested inside an element diagnostic's range lands on its attribute
+whichever TypeScript reports first. A source that does not parse reports at
+1:1. The message carries one of three markers, decided **per diagnostic
+range** (decision 161 addendum 1), not per generated line (a Solid template is
+one long line):
 
 ```text
  (position approximate: generated <line>:<col>)
+ (position unknown in this file kind: generated <line>:<col>)
  (in MX-generated code, not yours: an MX bug; generated <line>:<col>)
 ```
 
-The first when the diagnostic's generated range is inside, or directly next
-to, authored (mapped) code: the error is the author's and the column is
-approximate. The second when that range holds no authored code: the error is
-in code MX wrote, a host bug to report, not something the author can fix.
-Until a host maps a value (a whole-file Solid unit maps none, #362), an error
-in that value has no authored code beside it and carries the second marker.
+A diagnostic is the **author's** when the narrowing found its text spelled by
+the author, or when its generated range is inside, or directly next to,
+authored (mapped) code. An author's diagnostic carries the first marker: the
+error is theirs and the position is the enclosing construct. In a file kind
+that does not yet expose its tags and attributes (a region file, `.astro.mx`,
+`.ng.mx`), there is no construct to land on: it is reported at 1:1 with the
+second marker, which says so instead of calling 1:1 approximate (enclosing
+spans for those kinds are the follow-up `unmapped-diagnostics-region-enclosing-spans`);
+without spans, the narrowing cannot tell code from text and searches the whole
+stretch. The third marker is for a diagnostic with no authored spelling and no
+authored code beside it: the error is in code MX wrote, a host bug to report,
+not something the author can fix. A user's typo, a missing required prop or an
+element with no JSX types never carries it.
 `<line>:<col>` is the 1-based position TypeScript reported in the generated
 module. The same goes for each `relatedInformation` entry of a diagnostic
 ("'x' is declared here" in generated code), and for the diagnostics of a
