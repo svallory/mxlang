@@ -378,7 +378,9 @@ written, the end of `openTag` for a self-closed or void tag, and for a concise
 block the end of its last descendant (probe on `div.a\n  -- some text
 ${y}\n  span#b`: the tag's `loc` ends at 3:8, the end of `span#b`). For an
 `incomplete` tag, `end` (and `openTag.end`, when `onOpenTagEnd` had not
-arrived) is the `start` of the template-parser error. Sub-spans:
+arrived) is the `start` of the template-parser error or the end of the last
+node or part attached to the tag, whichever is later (§3.13, decision 163
+addendum 8). Sub-spans:
 `name` (§3.3), each head part's own span (§3.4).
 
 Source forms and example:
@@ -434,7 +436,12 @@ type MxTagName =
   contains `:` (`divergences.md`, row "A static tag name may not contain `:`"). An empty part before the `:`
   (`<:email>`) makes the name `unnamed`. Marko splits attribute names at the
   **last** `:` (A2); that rule does not apply here. Attribute tags are not
-  split (§3.7). Because the split happens after htmljs has read the name,
+  split (§3.7). `tagShape` receives the written static name, before the
+  split (`<input:email>` asks `tagShape("input:email")`, `<.x>` asks
+  `tagShape("")`); a dynamic name is not asked and is `"html"`; an attribute
+  tag is not asked either, its body is `"html"`: `tagShape` only sees names
+  that are tags. The statement-keyword test reads the written name too, so
+  `import:x` is a tag (decision 163 addenda 7 and 8). Because the split happens after htmljs has read the name,
   htmljs still sees the written name `input:email` when deciding whether the
   tag is void or may self-close, so `<input:email type="email"/>` needs its
   `/>` in HTML mode and the closing tag repeats the written name
@@ -734,9 +741,13 @@ node (a node's `start`/`end` slice to the node): `start` at
 the keyword, `end` after the last non-whitespace character on the line, so a
 trailing same-line comment is **inside** the span (today's `statementSpan`,
 `lower.ts`, which trims the Marko range whose end sits on the next
-line; IR spec §3.3, `Import`/`Export`/`Static` row). `code.span` is Babel's
-statement range, which ends before such a comment; it is not the source of any
-IR text. The untrimmed end is its own field, `untrimmedEnd` (decision 163
+line; IR spec §3.3, `Import`/`Export`/`Static` row). `code.span` is the
+authored statement text, right-trimmed like the node: from the keyword for
+`import`/`export`/`class`, after the keyword and its whitespace for
+`static`/`server`/`client`, so a trailing comment is inside it too; Babel's
+statement range, which ends before such a comment, is the payload's own range
+(§4.1), not the container's (decision 163 addendum 7). Neither is the source of
+any IR text. The untrimmed end is its own field, `untrimmedEnd` (decision 163
 addendum 6).
 
 What lowering takes from where (P2):
@@ -750,15 +761,17 @@ What lowering takes from where (P2):
 | `Import.bindings`, the `Input` test | the Babel payload (`code.node`) |
 
 Example: `static const A = 1 // trailing` is `[0, 30)` and `Static.code` is
-`const A = 1 // trailing` (the reviewer's probe d); `code.span` is `[7, 18)`.
+`const A = 1 // trailing` (the reviewer's probe d); `code.span` is `[7, 30)`
+and the payload's statement range `[7, 18)`.
 
 **`end` is a separate fact** (decision 163 addendum 1). Today `end` is
 `endPosOf(node)` (`lower.ts`), Marko's `loc.end` of the statement tag, which
 is **not** trimmed: it is the end of htmljs's statement range, trailing
 whitespace and following line breaks included (reviewer's probes: `static const A = 1   ` then
 `<div/>` gives `end` `{ line: 1, column: 21 }` with `span` `[0, 18)`;
-`export const B = 2` followed by two blank lines gives `end` `{ line: 3,
-column: 0 }`). The port reproduces it from `untrimmedEnd`, the untrimmed
+`export const B = 2` followed by two blank lines and `<div/>` gives `end`
+`{ line: 1, column: 18 }`, the range stopping at its own line's end; probed
+on the IR of an html compile, 2026-10-06). The port reproduces it from `untrimmedEnd`, the untrimmed
 range's end; `end` stays the trimmed extent. This is how "`span` trimmed, `end`
 untrimmed" is realised: it describes the IR, not a second meaning of the
 node's `end`. Two readers
@@ -959,8 +972,10 @@ parser code above, not from what would be desirable):
 - Every node whose closing event arrived before `onError` is complete and
   exact.
 - Every tag still open at that point (the error's ancestors) exists with
-  `incomplete: true`, `closeTag: null`, and `end` = the error's `start`; its
-  `body` holds the children completed before the error.
+  `incomplete: true`, `closeTag: null`, and `end` = the error's `start` or the
+  end of the last node or part attached to it, whichever is later; its `body`
+  holds every child whose events arrived before the error (decision 163
+  addendum 8).
 - The construct the parser was inside exists only as far as its events
   arrived: htmljs emits each attribute part when that part ends and a text run
   when the next construct starts, so an attribute whose `onAttrName` arrived
@@ -968,7 +983,9 @@ parser code above, not from what would be desirable):
   run pending at the error is absent. A consumer tells such a part from a
   genuine bare attribute only by the error's `start` falling inside the tag's
   head; the front end does not mark it.
-- Nothing exists at or after the error's `start`.
+- Every node whose events arrived is kept, even when it lies after the error's
+  `start`: `MISSING_END_TAG` fires at the end of input and is ranged on the
+  unclosed open tag, after the events that follow it.
 
 What a consumer such as the language server may rely on: the template error's
 `code`, `message`, `start` and `end`; every expression and front-end error before it;
@@ -1005,7 +1022,10 @@ Examples: `<div x=(1 +)/>` gives a complete tree, one error `origin:
 `value` container has `node: null`. `<div></span>` gives `errors` `[{ code:
 "MISMATCHED_CLOSING_TAG", start: 5, end: 12 }]` (reviewer's probe: `onError
 [5,12)/21`), `complete: false`, and one `MxTag` `div` `[0, 5)` with
-`incomplete: true`.
+`incomplete: true`. `<div><p>x` gives `errors` `[{ code: "MISSING_END_TAG",
+start: 5, end: 8 }]` (the events: `Text [8,9)`, then `onError [5,8)/22`),
+`complete: false`, `div` `[0, 9)` and `p` `[5, 9)`, both `incomplete`, and
+`p`'s text `[8, 9)`.
 
 When the error replaces an expression, the container's `node` is `null` and
 its `error` is the same object as the entry in `errors` (§4).
@@ -1161,8 +1181,10 @@ normative contract in [the IR spec §4](/architecture/ir-spec/),
 
 ### 4.3 `MxAtom`
 
-Decision 156: `:name` in an expression position is an atom. The container
-lists each atom found in its `source`:
+Decision 156: `:name` in an expression position is an atom. A container
+lists each atom found in its `source` and not inside a nested container (the
+`template` of a tag-adjacent dynamic shorthand lists none of the atoms in its
+`expressions`; decision 163 addendum 8):
 
 ```ts
 interface MxAtom extends Span { readonly type: "MxAtom"; readonly name: string }  // span covers ':' and the name
