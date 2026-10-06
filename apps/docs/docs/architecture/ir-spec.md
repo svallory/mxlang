@@ -845,7 +845,7 @@ function __mxRender(input: Input, __mxOut: __MxOut): void {
 export { __mxRender as render };
 Object.defineProperty(Greeting, Symbol.for("mx.component"), { value: true });
 
-export default Greeting;
+export default Greeting as ((input: Input) => string) & { render: typeof __mxRender };
 ```
 
 The default export renders into a fresh sink through `render(input, out)`, the module's sink entry (decision 155). Called with `{ name: "<Ada>", items: ["a", "b"] }` it returns `<h1 class="title">Hello, &lt;Ada&gt;!</h1><ul><li>a</li><li>b</li></ul>`; with an empty `items` it takes the `<else>` branch. The test asserts both.

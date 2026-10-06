@@ -34,4 +34,4 @@ function __mxRender(input: Input, __mxOut: __MxOut): void {
 export { __mxRender as render };
 Object.defineProperty(Greeting, Symbol.for("mx.component"), { value: true });
 
-export default Greeting;
+export default Greeting as ((input: Input) => string) & { render: typeof __mxRender };

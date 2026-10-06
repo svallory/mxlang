@@ -44,7 +44,10 @@ describe("the IR specification's worked example", () => {
       .replace("(input: Input): string", "(input)")
       .replace("(input: Input, __mxOut: __MxOut): void", "(input, __mxOut)")
       .replace("export { __mxRender as render };", "")
-      .replace(/export default Greeting;\s*$/, "return Greeting;");
+      .replace(
+        /export default Greeting(?: as [^;\n]*)?;\s*$/,
+        "return Greeting;",
+      );
     const render = new Function("__mxEscape", "__mxCreateOut", js)(
       htmlEscape,
       createOut,
