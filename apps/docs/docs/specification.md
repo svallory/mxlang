@@ -1406,18 +1406,22 @@ define's own head, not the enclosing render function's.
 |---|---|
 | `` `<define>` without a name (write `<define/name>`) `` | No `/var`. |
 
-**A `<define>` called with attributes and no arguments passes one attribute
-object to its first parameter (decision 160),** like a custom tag's `input`:
+**On html, preact, react and hono, a `<define>` called with attributes and no
+arguments passes one attribute object to its first parameter (decision 160),**
+like a custom tag's `input`:
 `<Row n=1/>` against `<define/Row|p|>` or `<define/Row|{ n }|>` hands `Row`
 `{ n: 1 }` (spreads, attribute tags and `content` included; `{}` when the call
 carries none), as Marko 6.3.51 does. MX's earlier per-parameter name lookup
 (`<define/Card|title, head|>` + `<Card title="a"/>` binding `title` to `"a"`)
-is withdrawn. When a define with 2 or more params is called that way, lowering
-gives a warning positioned at the call's tag name:
+is withdrawn on those hosts. When a define with 2 or more params is called that
+way, lowering gives a warning positioned at the call's tag name (only on the
+hosts that implement the rule, marked by `HostDeclarations.defineCallPassesAttrs`):
 `` `<Card>` has 2 params, but only the first parameter receives the attributes object; destructure it (`|{ a, b }|`) instead of reading one param per attribute ``.
 A call with tag arguments is unchanged (decision 109), and a define with no
-params still ignores the attributes. Solid's own call shape (below) is not
-changed by this decision.
+params still ignores the attributes. Decision 160 is the language rule for every
+target; Solid keeps its own call shape (below) until
+`define-call-attrs-solid` lands, and Angular keeps its own until
+`define-call-attrs-angular` lands.
 
 **On Solid, a `<define>` inside a `.solid.mx` region is hoisted to module
 scope (decision 110b).** A region is a JSX expression spliced into someone
@@ -1438,8 +1442,8 @@ captured identifier, not silently wrong code. Both are hard limits, not
 enclosing render function, and no per-row/per-branch scope for a nested one
 to close over either. On Solid, a `<define>` call is a plain function-call
 expression (`{__mx_DefineRowN(...)}`), not a JSX tag — JSX has no
-positional-call syntax — using the identical named-param binding closed item
-9 below describes for html/preact.
+positional-call syntax — using the named-param binding closed item 9 below
+describes, which only Solid and Angular still use for a no-args call.
 
 ### 5.5 `<let>`
 
@@ -3557,6 +3561,9 @@ deferred (decision 85).
    value, silently dropping the content (`<div>a</div>`, or
    `<div>[object Object]</div>` with no args at all) — Marko itself gets
    this shape wrong for a construct with no `Input` to destructure against.
+   (Superseded by decision 160 for html and the JSX hosts: a no-args call
+   there passes one attribute object to the first param; the paragraph below
+   still describes the args path everywhere, and the no-args shape on Solid.)
    MX's `<define>` emitters (html, the shared preact/react/hono emitter)
    instead extend their own pre-existing positional named-lookup scheme
    (already used for the no-args call shape, where `<Row it=x/>` looks up

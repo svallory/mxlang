@@ -110,6 +110,18 @@ export interface HostDeclarations {
    */
   acceptsForeignAttrNames?: boolean;
   /**
+   * Whether this host implements decision 160: a `<define>` called with
+   * attributes, spreads, attribute tags or a body passes ONE object of them to
+   * the define's first param (Marko 6.3.51's shape), so `|p|` and `|{ n }|`
+   * both read it. Decision 160 is a language rule for every target; this flag
+   * only marks the hosts that already implement it, and is removed when every
+   * host implements decision 160. Core uses it to warn about a multi-param
+   * define called that way (only the first param receives anything) on those
+   * hosts alone; a host behind on the rule keeps its older per-param lookup
+   * and gets no warning.
+   */
+  defineCallPassesAttrs?: true;
+  /**
    * The host owns attribute-position `#x` (Angular's template reference
    * `#ref`), so the name sugar leaves it alone there. Tag-adjacent `<div#x>`
    * is the id sugar on every host, and `:name` and `.class` apply in every

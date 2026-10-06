@@ -25,7 +25,7 @@ ambient `AttrTag` reference in `.mx` emits a type-only import from
 Untyped body-only props use decision 108's bare renderable fallback; one
 attributed or nested occurrence makes the whole fallback property data.
 
-`bun run oracle:react` renders the stock 45 fixtures through
+`bun run oracle:react` renders the stock 60 fixtures through
 `react-dom/server`'s `renderToStaticMarkup`: **32 pass, 13 skipped(reason), 0
 bugs**. React 19 automatically prepends image preload links during static
 rendering; `react-render.ts` strips only those transport hints before the same

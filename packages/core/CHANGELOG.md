@@ -6,6 +6,7 @@
 
 - **Added (jsx-define-call-drops-attrs):** lowering warns, positioned at the call's tag name, when a `<define>` with 2 or more params is called without tag arguments but with attributes, attribute tags or a body: only the first param receives the attributes object (Marko 6.3.51), so `<Card title="a"/>` against `|title, head|` no longer binds `title` to `"a"` on the JSX hosts.
 - **Added (jsx-define-call-drops-attrs, decision 160):** lowering warns, positioned at the call's tag name, when a `<define>` with 2 or more params is called without tag arguments but with attributes, attribute tags or a body: only the first param receives the attributes object (Marko 6.3.51), so `<Card title="a"/>` against `|title, head|` no longer binds `title` to `"a"` on the JSX hosts.
+- **Added (jsx-define-call-drops-attrs, decision 160):** `HostDeclarations.defineCallPassesAttrs?: true`, an optional, additive capability marker (the `acceptsForeignAttrNames` precedent). Decision 160 is a language rule for every target; the flag only marks the hosts that implement it (html, preact, react, hono, regions included) and is removed when every host implements decision 160 (`define-call-attrs-solid`, `define-call-attrs-angular`). The warning above is gated on it, so Solid and Angular, which still bind per param, get none.
 
 ## 0.1.0-alpha.4
 

@@ -43,7 +43,7 @@ broke Hono's `ErrorBoundary` for a non-throwing child with an opaque
 a *throwing* child was also present in the tree. See `examples/hono-app`'s
 `dev`/`e2e` scripts, which run under the example's own `tsconfig.json`.
 
-`bun run oracle:hono` renders the stock 45 fixtures through `hono/jsx`
+`bun run oracle:hono` renders the stock 60 fixtures through `hono/jsx`
 (`String(jsx(Component, input))`, awaited when the tree contains a caught
 error — `ErrorBoundary` resolves asynchronously once its child throws): **32
 pass, 13 skipped(reason), 0 bugs**, identical to `oracle:preact`/

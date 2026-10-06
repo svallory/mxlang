@@ -933,15 +933,17 @@ export function createEmitter(selfName?: string): StringEmitter {
       }
 
       if (target.kind === "define") {
-        if (spreads.length > 0) {
+        // Tag arguments are positional, so a spread's keys (known only at run
+        // time) cannot fill the trailing params; the no-args call hands the
+        // whole object over instead and takes spreads.
+        if (node.args.length > 0 && spreads.length > 0) {
           fail(
             `spreading into \`<${target.name}>\` is not supported: a <define> is called positionally, and a spread's keys are only known at run time`,
             node,
           );
         }
         // `<Row(input.a)/>` — Marko's tag-argument form, and the ordinary way
-        // to call a `<define>` that declares params. Falling back to the
-        // named-prop lookup keeps `<Row it=x/>` working for the same define.
+        // to call a `<define>` that declares params.
         //
         // Decision 109: args now combine with a body/attribute tag (Marko's
         // own lenient dynamic-tag rule, `rejectArgsWithProps`; core has
@@ -960,7 +962,13 @@ export function createEmitter(selfName?: string): StringEmitter {
         // named-lookup scheme args already partially consume: params beyond
         // the args are filled from `named`, one value per param, exactly as
         // the no-args path below already does.
-        const args =
+        //
+        // Without args the call is Marko's (decision 160): the attributes
+        // (spreads included, in source order), attribute tags and `content`
+        // travel as ONE object bound to the first param, `{}` when the call
+        // carries none; rest params stay `undefined`. A define with no params
+        // ignores them.
+        const args: Array<string | MappedCode> =
           node.args.length > 0
             ? [
                 ...node.args.map((a: Expr) => a.code),
@@ -968,11 +976,17 @@ export function createEmitter(selfName?: string): StringEmitter {
                   .slice(node.args.length)
                   .map((param) => named.get(param) ?? "undefined"),
               ]
-            : target.params.map((param) => named.get(param) ?? "undefined");
+            : target.params.length > 0
+              ? [concatMapped("{ ", joinedParts, " }")]
+              : [];
         write(
           concatMapped(
             mapped(target.name, node.nameSpan),
-            `(${args.join(", ")})`,
+            "(",
+            ...args.flatMap((arg, index) =>
+              index === 0 ? [arg] : [", ", arg],
+            ),
+            ")",
           ),
         );
         return;

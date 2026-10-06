@@ -515,6 +515,7 @@ export const DEFAULT_TAG = "div";
 export const policy: Policy = {
   name: "@mxlang/html",
   attrTags: 2,
+  defineCallPassesAttrs: true,
   // The ladder (decision 145): the parent's contract `defaultTag`, then
   // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
   // the host override into `configured`). This host permits the contract rung:

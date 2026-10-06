@@ -200,6 +200,7 @@ export function createJsxDeclarations(
   return {
     name: declarationName,
     attrTags: 2,
+    defineCallPassesAttrs: true,
     tags: statefulErrors(dialectName, region),
     // The ladder (decision 145): the parent's contract `defaultTag`, then
     // `mx.<target>.defaultTag`, then the target's built-in (the registry folds

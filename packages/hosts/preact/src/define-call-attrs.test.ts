@@ -106,4 +106,23 @@ describe("preact: a <define> call passes its attributes as the first param", () 
     expect(code).toContain('{Row({ "n": 1 })}');
     expect(code).not.toContain("Row(undefined)");
   });
+
+  it("warns on a multi-param define called with attributes, and not for one object param", () => {
+    const warn = (source: string) => {
+      const warnings: Array<{ message: string; line: number; column: number }> =
+        [];
+      compilePreactMx(source, "/fixtures/card.mx", { warnings });
+      return warnings;
+    };
+    expect(
+      warn(
+        '<define/Card|title, head|><div>${title}</div></define>\n<Card title="a"/>',
+      ),
+    ).toMatchObject([{ line: 2, column: 1 }]);
+    expect(
+      warn(
+        '<define/Card|{ title, head }|><div>${title}</div></define>\n<Card title="a"/>',
+      ),
+    ).toEqual([]);
+  });
 });

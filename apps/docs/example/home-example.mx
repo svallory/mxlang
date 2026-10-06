@@ -29,7 +29,7 @@ static const MAX_ITEMS = 3;
 // reads the initial value once.
 <let/selectedId=shown[0]?.id/>
 
-<define/Row|label, value|>
+<define/Row|{ label, value }|>
   <dt>${label}</dt>
   <dd>${value}</dd>
 </define>

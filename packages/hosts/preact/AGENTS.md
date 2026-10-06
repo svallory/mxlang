@@ -96,7 +96,7 @@ Six facts worth knowing before editing it:
 
 `bun run oracle:preact` (`packages/oracle/src/report-preact.ts` +
 `preact-render.ts`) compiles every fixture in the stock `.marko` set — the
-same 45 `oracle:marko` uses — renders it with `preact-render-to-string`, and
+same 60 `oracle:marko` uses — renders it with `preact-render-to-string`, and
 compares against `expected.html`: **32 pass, 13 skipped(reason), 0 bugs**. It
 passes `htmlEquals`'s new `attributeOrder: "ignore"` option, since Preact owns
 its serializer and emits props in its own order; `oracle:marko` keeps the

@@ -1,0 +1,13 @@
+<define/A|p|><i>${p.n}</i></define>
+<define/B|{ n }|><b>${n}</b></define>
+<define/C|{ n }|><u>${n === undefined ? "none" : n}</u></define>
+<define/D|{ x, a }|><s>${x}${a}</s></define>
+<define/E|{ n, content }|><em>${n}<${content}/></em></define>
+<define/F|{ item }|><span><${item}/></span></define>
+
+<A n=1/>
+<B n=2/>
+<C/>
+<D x=0 ...input.rest/>
+<E n=3>text</E>
+<F><@item>x</@item></F>

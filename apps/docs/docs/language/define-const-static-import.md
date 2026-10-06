@@ -49,7 +49,7 @@ A non-reactive local binding, computed fresh on each render:
 A named, reusable template fragment, callable like any other tag:
 
 ```html
-<define/Badge|label, color|>
+<define/Badge|{ label, color }|>
   <span style={background: color}>${label}</span>
 </define>
 
@@ -57,7 +57,7 @@ A named, reusable template fragment, callable like any other tag:
 <Badge label="Sale" color="red"/>
 ```
 
-`<define>` fragments take the same tag params and attribute tags as any other tag call.
+`<define>` fragments take the same tag params and attribute tags as any other tag call. A call with attributes passes one attribute object to the first parameter (decision 160), so destructure it as `|{ label, color }|`; a second parameter never receives an attribute.
 
 ## A name that shadows `input`
 

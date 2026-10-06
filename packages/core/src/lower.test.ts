@@ -3146,6 +3146,7 @@ describe("event attributes", () => {
 
   describe("a <define> with several params called without arguments", () => {
     const def = "<define/Card|title, head|><div>${title}</div></define>\n";
+    const flagged = () => fakeDeclarations({ defineCallPassesAttrs: true });
     const message =
       "`<Card>` has 2 params, but only the first parameter receives the attributes object; destructure it (`|{ a, b }|`) instead of reading one param per attribute";
 
@@ -3154,7 +3155,7 @@ describe("event attributes", () => {
       ["a body", "<Card>text</Card>"],
       ["an attribute tag", "<Card><@head>H</@head></Card>"],
     ])("warns at the tag name for %s", (_name, call) => {
-      const { warnings } = lowerWithWarnings(def + call);
+      const { warnings } = lowerWithWarnings(def + call, flagged());
       expect(warnings).toEqual([
         { message, line: 2, column: 1, file: "test.mx" },
       ]);
@@ -3166,8 +3167,20 @@ describe("event attributes", () => {
         `${def}<Card/>`,
         "<define/Card|p|><div>${p.n}</div></define>\n<Card n=1/>",
         "<define/Card><div/></define>\n<Card n=1/>",
+        // The warning's own recommended fix is one param, so it stays silent.
+        '<define/Card|{ title, head }|><div>${title}</div></define>\n<Card title="a"/>',
       ]) {
-        expect(lowerWithWarnings(source).warnings).toEqual([]);
+        expect(lowerWithWarnings(source, flagged()).warnings).toEqual([]);
+      }
+    });
+
+    it("stays silent on a host that does not set defineCallPassesAttrs (Solid, Angular)", () => {
+      for (const call of [
+        '<Card title="a"/>',
+        "<Card>text</Card>",
+        "<Card><@head>H</@head></Card>",
+      ]) {
+        expect(lowerWithWarnings(def + call).warnings).toEqual([]);
       }
     });
   });

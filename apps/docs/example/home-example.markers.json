@@ -185,7 +185,7 @@
     "label": "<define>",
     "note": "`<define>` names a fragment you can call like any other tag.",
     "href": "/language/define-const-static-import/#define-const-static-import-define",
-    "match": "<define/Row|label, value|>\n  <dt>${label}</dt>\n  <dd>${value}</dd>\n</define>",
+    "match": "<define/Row|{ label, value }|>\n  <dt>${label}</dt>\n  <dd>${value}</dd>\n</define>",
     "ranges": [
       {
         "line": 32,
@@ -208,7 +208,7 @@
         "to": 9
       }
     ],
-    "covers": ["<define/Row|label, value|>", "<dt>", "<dd>", "</define>"],
+    "covers": ["<define/Row|{ label, value }|>", "<dt>", "<dd>", "</define>"],
     "node": "element",
     "exact": true,
     "startsIn": "open_tag_start",

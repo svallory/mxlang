@@ -26,7 +26,7 @@ Params are parsed exactly like `<for>`'s own `|item, i|` — destructuring and t
 Inside any tag's body, a child written as `<@name>...</@name>` becomes a named prop on the parent instead of part of its ordinary children:
 
 ```html
-<define/Card|content, header|>
+<define/Card|{ content, header }|>
   <div class="card">
     <div class="card-header">$!{header()}</div>
     <div class="card-body">$!{content()}</div>
@@ -39,7 +39,7 @@ Inside any tag's body, a child written as `<@name>...</@name>` becomes a named p
 </Card>
 ```
 
-This passes `header` as a separate prop from `content` — the ordinary children (`<p>...</p>`) become the parent's `children`/`content`. Add params the same way tag params work: `<@footer|year|>© ${year}</@footer>` becomes a prop that is itself a function of `year`.
+A call passes one attribute object to the first parameter (decision 160), so `|{ content, header }|` destructures it; a second parameter never receives an attribute. This passes `header` as a separate prop from `content` — the ordinary children (`<p>...</p>`) become the parent's `children`/`content`. Add params the same way tag params work: `<@footer|year|>© ${year}</@footer>` becomes a prop that is itself a function of `year`.
 
 Props are emitted in a fixed order: the parent tag's own attributes first, in source order, then its attribute-tag children, in source order.
 

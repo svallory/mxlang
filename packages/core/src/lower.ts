@@ -1081,6 +1081,7 @@ function warnDefineExtraParams(
   name: string,
   params: string[],
 ): void {
+  if (!ctx.declarations.defineCallPassesAttrs) return;
   if (params.length < 2 || (node.arguments ?? []).length > 0) return;
   const carries =
     (node.attributes ?? []).length > 0 ||
