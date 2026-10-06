@@ -197,6 +197,13 @@ export const ATOMS: [string, string][] = [
   // Review round 4 (PR #342): contextual keywords as identifiers, unary `!`,
   // and every `${}` (in raw-text bodies and tag names too, addendum 2).
   ["<div x=f(of, :b)/>", '<div> @x atom(b@13-15) ="f(of, 0.)"'],
+  // template-parser-ascii-only-lookbehinds (decision 156 addendum 8): after
+  // a spread's `...`, `await`, `typeof` and `new` are operators, not member
+  // names, so the atom lexes.
+  ["<div x=[...await :b]/>", '<div> @x atom(b@17-19) ="[...await 0.]"'],
+  ["<div x=[...typeof :b]/>", '<div> @x atom(b@18-20) ="[...typeof 0.]"'],
+  ["<div x=[...new :b]/>", '<div> @x atom(b@15-17) ="[...new 0.]"'],
+  ["<div x=f(...await :b)/>", '<div> @x atom(b@18-20) ="f(...await 0.)"'],
   ["<div x=typeof!:a/>", '<div> @x atom(a@14-16) ="typeof!0."'],
   ["<div x=!:a/>", '<div> @x atom(a@8-10) ="!0."'],
   ["<div x=a => :b/>", '<div> @x atom(b@12-14) ="a => 0."'],
@@ -819,6 +826,10 @@ export const RESERVED: [string, string][] = [
   ["<div.${x}::b/>", `<div> ${reserved("b", "9-12")}`],
   ["<foo-${x}::b/>", reserved("b", "9-12")],
   ["div.a::b", `<div> ${reserved("b", "5-8")}`],
+  // template-parser-ascii-only-lookbehinds: the name after `::` ends at the
+  // static piece; it used to run on into the `${` that follows.
+  ["<a::b${x}/>", reserved("b", "2-5")],
+  ["<div.a::b${x}/>", `<div> ${reserved("b", "6-9")}`],
 ];
 
 /** [input, rendered events] — never atoms (research §5 rows 8, 9). */
@@ -845,6 +856,8 @@ export const NOT_ATOMS: [string, string][] = [
   ["<div x=(a as :b)/>", '<div> @x ="(a as :b)"'],
   ["<div x=(a satisfies :b)/>", '<div> @x ="(a satisfies :b)"'],
   ["<div x=(o.return :a)/>", '<div> @x ="(o.return :a)"'],
+  ["<div x=(a.await :b)/>", '<div> @x ="(a.await :b)"'],
+  ["<div x=(a?.typeof :b)/>", '<div> @x ="(a?.typeof :b)"'],
   // TypeScript's optional marker `x?:` and definite assignment `x!:`.
   ["<div x=(a?: number) => a/>", '<div> @x ="(a?: number) => a"'],
   ["<div x=(a?:number) => a/>", '<div> @x ="(a?:number) => a"'],
@@ -1340,7 +1353,7 @@ const TWINS: [string, string][] = [
   ["名", "Z"],
 ];
 
-const swapTwins = (s: string, back: boolean) =>
+export const swapTwins = (s: string, back: boolean) =>
   TWINS.reduce(
     (out, [wide, ascii]) =>
       back ? out.replaceAll(ascii, wide) : out.replaceAll(wide, ascii),
@@ -1353,7 +1366,7 @@ const swapTwins = (s: string, back: boolean) =>
  * (a surrogate pair), a CJK letter, `$` and `_` neighbours, and a name that
  * ends or starts with an operator word.
  */
-const NON_ASCII_NAMES = [
+export const NON_ASCII_NAMES = [
   "é",
   "éa",
   "aéb",

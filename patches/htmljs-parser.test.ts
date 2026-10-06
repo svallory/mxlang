@@ -13,6 +13,7 @@
  * Events are rendered compactly: `<tag>`, `.cls`/`#id` shorthands,
  * `var:"…"`, `@name`, `="value"`, `..."spread"`, `ERR(…)`.
  */
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { parseExpression as parseBabelExpression } from "@babel/parser";
 import * as esm from "htmljs-parser";
@@ -33,6 +34,11 @@ import {
   tsMarkerViolations,
   unicodeWhitespaceMismatches,
 } from "../packages/parser/src/template/mx-atoms.cases.ts";
+import {
+  asciiMainMismatches,
+  UNICODE_WORD_ROWS,
+  unicodeWordTwinMismatches,
+} from "../packages/parser/src/template/mx-unicode-words.cases.ts";
 
 const isValidTs = (expression: string) => {
   try {
@@ -384,5 +390,37 @@ describe.each(builds)("atoms (%s)", (_name, build) => {
       "<div x=0. y=0.0/>",
     );
     expect(parser.read({ start: 8, end: 9 })).toBe("a");
+  });
+});
+
+// template-parser-ascii-only-lookbehinds: the same table the source copy
+// runs (`packages/parser/src/template/mx-unicode-words.test.ts`).
+const unicodeWordsMain = JSON.parse(
+  readFileSync(
+    new URL(
+      "../packages/parser/src/template/mx-unicode-words.main.json",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+) as Record<string, string>;
+
+describe.each(builds)("non-ASCII identifiers (%s)", (_name, build) => {
+  const mod = build as unknown as AtomParserModule;
+
+  it.each(UNICODE_WORD_ROWS)("%j", (input, expected) => {
+    expect(renderAtoms(mod, input, true)).toBe(expected);
+  });
+
+  it("each non-ASCII input renders as its ASCII twin", () => {
+    const { total, bad } = unicodeWordTwinMismatches(mod);
+    expect(total).toBe(5_994);
+    expect(bad).toEqual([]);
+  });
+
+  it("ASCII-only input renders as main did", () => {
+    const { total, bad } = asciiMainMismatches(mod, unicodeWordsMain);
+    expect(total).toBe(983);
+    expect(bad).toEqual([]);
   });
 });
