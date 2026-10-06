@@ -2953,8 +2953,9 @@ it. Within that stretch, the narrowing looks for what the author *spelled*:
   `</p>`, e.g. TS7026) is spelled by the tag of that name: an opening tag that
   starts in the stretch, a closing one whose tag ends in it;
 - an identifier, number or string literal (`missingName`, `"a"`) is spelled by
-  a tag or attribute of that name (a component tag's TS2741, an attribute's
-  TS2322), or by a whole-token occurrence in authored **code**: a placeholder's
+  a tag or attribute of that name whose *name* lies in the stretch (a
+  component tag's TS2741; an attribute's TS2322, also when its value is mapped
+  and so ends the stretch inside the attribute: `<p class=1>`), or by a whole-token occurrence in authored **code**: a placeholder's
   expression, an attribute value other than a quoted string, a tag's
   arguments, variable, parameters or dynamic name, a statement. Static text
   and quoted attribute strings are not code: `enter input` never spells
@@ -2967,7 +2968,10 @@ reads the module's own mappings only, never what earlier diagnostics were
 given, so it does not depend on the order diagnostics arrive in: a name
 diagnostic nested inside an element diagnostic's range lands on its attribute
 whichever TypeScript reports first. A source that does not parse reports at
-1:1. The message carries one of three markers, decided **per diagnostic
+1:1. Only files compiled from MX (every MX file kind ends in `.mx`) are
+treated this way: another language's projection in the same program (a plain
+`.astro` page under `mx-tsc --astro`) is that tool's business, and MX never
+labels its diagnostics. The message carries one of three markers, decided **per diagnostic
 range** (decision 161 addendum 1), not per generated line (a Solid template is
 one long line):
 
