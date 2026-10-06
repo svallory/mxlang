@@ -62,6 +62,7 @@ import {
   readPackageJsonCached,
 } from "./package-json.ts";
 import {
+  builtOnUnknownMessage,
   createTargetLookup,
   type TargetDescriptor,
   type TargetLookup,
@@ -92,7 +93,10 @@ export interface TargetPolicy {
   descriptor?: TargetDescriptor;
   /**
    * The `mx.<target>.defaultTag` the package configures (decision 145), when
-   * it is a usable string. Whether the name is a reachable, plain-parsing tag
+   * it is a usable string. A registry that knows the target's base target
+   * (`TargetDescriptor.builtOn`) falls back to the base's own key
+   * (`mx.<base>.defaultTag`) when the target's is absent or rejected, and
+   * `defaultTagAt` then points there. Whether the name is a reachable, plain-parsing tag
    * is checked where tags are known; an invalid value is a diagnostic and is
    * never carried here.
    */
@@ -124,7 +128,8 @@ export type TargetPolicyDiagnosticCode =
   | "target-load-failed"
   | "target-invalid-descriptor"
   | "host-invalid-descriptor"
-  | "invalid-default-tag";
+  | "invalid-default-tag"
+  | "default-tag-overridden";
 
 /**
  * One problem found while resolving a target, positioned in the
@@ -553,10 +558,25 @@ function registrationVerdict(
     try {
       // A tool may mask a target from selection (`targetNames`) while the
       // lookup still answers it (the registry's staged `data`): the target a
-      // descriptor is built on is part of the set it joins either way.
+      // descriptor is built on is part of the set it joins either way, and an
+      // unknown name lists every target the lookup answers.
       const members = names.map(
         (name) => lookup.target(name) as TargetDescriptor,
       );
+      if (
+        descriptor.builtOn !== undefined &&
+        descriptor.builtOn !== descriptor.name &&
+        !lookup.target(descriptor.builtOn)
+      ) {
+        throw new Error(
+          builtOnUnknownMessage(
+            descriptor.name,
+            descriptor.builtOn,
+            [...(lookup.allTargetNames?.() ?? names), descriptor.name],
+            lookup.hostTarget(descriptor.builtOn)?.target,
+          ),
+        );
+      }
       for (
         let base =
           descriptor.builtOn === undefined

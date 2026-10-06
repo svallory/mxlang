@@ -23,6 +23,7 @@ import {
 import {
   builtinLookup,
   builtinTargets,
+  defaultTagFor,
   lookupFor,
   regionFileKind,
   resolveTargetPolicyDetailed,
@@ -189,6 +190,21 @@ describe(".mesh.mx (a third-party host on the data target)", () => {
     expect(diagnostics).toEqual([]);
     diagnoseDocument("<x/>\n", file, policy);
     expect((globalThis as MeshGlobals).__mxMeshDefaultTags).toEqual(["node"]);
+  });
+
+  it("mx.data.defaultTag is the shared ladder's rung for a host built on data", () => {
+    const options = {
+      fileKinds: MESH_KIND,
+      files: { "tags/node.mx": "" },
+      mx: { data: { defaultTag: "node" } },
+    };
+    mesh(options);
+    const file = join(meshProject("mx-ls-mesh-", options), "post.mesh.mx");
+    const { policy, diagnostics } = resolveTargetPolicyDetailed(file);
+    expect(diagnostics).toEqual([]);
+    diagnoseDocument("<x/>\n", file, policy);
+    expect((globalThis as MeshGlobals).__mxMeshDefaultTags).toEqual(["node"]);
+    expect(defaultTagFor(file, policy)).toBe("node");
   });
 
   it("without a file kind the host still resolves cleanly (defaultTag alone)", () => {

@@ -10,7 +10,12 @@ import {
   teardownMesh,
 } from "../../../test-fixtures/third-party-targets/mesh.ts";
 import { isDataProject } from "./data-check.ts";
-import { builtinLookup, builtinTargets } from "./index.ts";
+import {
+  builtinLookup,
+  builtinTargets,
+  defaultTagFor,
+  resolveTargetPolicyDetailed,
+} from "./index.ts";
 
 const scratch: string[] = [];
 
@@ -88,6 +93,101 @@ describe("isDataProject keys on the resolved base target", () => {
     expect(isDataProject(manifest({}))).toBe(false);
     expect(isDataProject(join(tmpdir(), "mx-base-target-nonexistent"))).toBe(
       false,
+    );
+  });
+});
+
+describe("the base target's mx.<base>.defaultTag is a rung of the shared ladder", () => {
+  const TAGS = { "tags/node.mx": "", "tags/leaf.mx": "" };
+  const answer = (options: MeshOptions) => {
+    const file = join(mesh({ files: TAGS, ...options }), "post.mesh.mx");
+    const resolution = resolveTargetPolicyDetailed(file);
+    return {
+      tag: defaultTagFor(file, resolution.policy),
+      messages: resolution.diagnostics.map((d) => d.message),
+      codes: resolution.diagnostics.map((d) => d.code),
+    };
+  };
+
+  it("mx.data.defaultTag is read for a host built on data", () => {
+    expect(answer({ mx: { data: { defaultTag: "node" } } })).toEqual({
+      tag: "node",
+      messages: [],
+      codes: [],
+    });
+  });
+
+  it("it outranks the host's override and the descriptor's defaultTag", () => {
+    expect(
+      answer({
+        mx: { data: { defaultTag: "node" } },
+        hostDefaultTag: "leaf",
+        defaultTag: "leaf",
+      }).tag,
+    ).toBe("node");
+  });
+
+  it("the host's own key outranks it, and a differing pair is one warning naming both", () => {
+    expect(
+      answer({
+        mx: {
+          "mesh-data": { defaultTag: "leaf" },
+          data: { defaultTag: "node" },
+        },
+      }),
+    ).toEqual({
+      tag: "leaf",
+      messages: [
+        'mx.data.defaultTag "node" is ignored: mx["mesh-data"].defaultTag "leaf" takes precedence',
+      ],
+      codes: ["default-tag-overridden"],
+    });
+  });
+
+  it("the same value under both keys is silent", () => {
+    expect(
+      answer({
+        mx: {
+          "mesh-data": { defaultTag: "node" },
+          data: { defaultTag: "node" },
+        },
+      }),
+    ).toEqual({ tag: "node", messages: [], codes: [] });
+  });
+
+  it("an invalid mx.data.defaultTag is one error and the next rung answers", () => {
+    const { tag, codes } = answer({
+      mx: { data: { defaultTag: "nonexistent" } },
+      hostDefaultTag: "leaf",
+    });
+    expect(tag).toBe("leaf");
+    expect(codes).toEqual(["invalid-default-tag"]);
+  });
+
+  it("a host not built on data never reads mx.data.defaultTag", () => {
+    expect(
+      answer({ notBuiltOnData: true, mx: { data: { defaultTag: "node" } } }),
+    ).toEqual({ tag: "object", messages: [], codes: [] });
+  });
+});
+
+describe("a host whose builtOn names no registered target", () => {
+  const verdict = (builtOn: string) => {
+    const file = join(mesh({ builtOn }), "post.mesh.mx");
+    return resolveTargetPolicyDetailed(file).diagnostics.map((d) => d.message);
+  };
+
+  it("lists every registered target, the one the registry keeps from selection included", () => {
+    const [message, ...rest] = verdict("dta");
+    expect(rest).toEqual([]);
+    expect(message).toContain(
+      'target "mesh-data" is built on "dta", which is not a registered target (registered: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template, data, mesh-data)',
+    );
+  });
+
+  it("names the target a host name stands for", () => {
+    expect(verdict("solid")[0]).toContain(
+      '"solid" is a host name, and builtOn takes a target name (did you mean "solid-jsx"?)',
     );
   });
 });

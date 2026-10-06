@@ -359,6 +359,12 @@ export interface TargetLookup {
   /** Every host file-kind segment. */
   moduleSegments(): readonly string[];
   /**
+   * Every name `target()` answers, including a target a tool keeps out of
+   * `targetNames()` (not offered for selection yet, but registered: what a
+   * descriptor may be `builtOn`). Optional: absent means `targetNames()`.
+   */
+  allTargetNames?(): readonly string[];
+  /**
    * Names no descriptor may take (`createTargetLookup`'s `reservedNames`).
    * Optional: a hand-written lookup that reserves nothing may omit it. A
    * loader that adds a descriptor to a lookup passes it on, so a loaded
@@ -412,6 +418,25 @@ export type TargetLookupRule =
   | "reserved-name"
   | "built-on-unknown"
   | "built-on-loop";
+
+/**
+ * The `built-on-unknown` message: both targets, the registered names, and,
+ * when `builtOn` is a host name, the target it should have named.
+ *
+ * @internal
+ */
+export function builtOnUnknownMessage(
+  target: string,
+  builtOn: string,
+  registered: readonly string[],
+  hostTarget?: string,
+): string {
+  const hint =
+    hostTarget === undefined
+      ? ""
+      : `; "${builtOn}" is a host name, and builtOn takes a target name (did you mean "${hostTarget}"?)`;
+  return `target "${target}" is built on "${builtOn}", which is not a registered target (registered: ${registered.join(", ")})${hint}`;
+}
 
 /**
  * A set of descriptors that cannot be one lookup.
@@ -791,7 +816,12 @@ export function createTargetLookup(
       if (!base) {
         throw new TargetLookupError(
           "built-on-unknown",
-          `target "${chain[chain.length - 1]}" is built on "${next}", which is not a registered target (registered: ${[...targets.keys()].join(", ")})`,
+          builtOnUnknownMessage(
+            chain[chain.length - 1] as string,
+            next,
+            [...targets.keys()],
+            [...targets.values()].find((d) => d.host?.name === next)?.name,
+          ),
         );
       }
       if (chain.includes(next)) {

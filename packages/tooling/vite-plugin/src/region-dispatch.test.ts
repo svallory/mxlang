@@ -155,6 +155,15 @@ describe(".mesh.mx (a third-party host on the data target)", () => {
     ).rejects.toThrow(/render-time macro/);
   });
 
+  it("mx.data.defaultTag is the shared ladder's rung for a host built on data", async () => {
+    await compile({
+      fileKinds: MESH_KIND,
+      files: { "tags/node.mx": "" },
+      mx: { data: { defaultTag: "node" } },
+    });
+    expect((globalThis as MeshGlobals).__mxMeshDefaultTags).toEqual(["node"]);
+  });
+
   it("an invalid host override is refused, not compiled", async () => {
     await expect(
       compile({ fileKinds: MESH_KIND, hostDefaultTag: "nonexistent" }),

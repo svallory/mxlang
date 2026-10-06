@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Added (data-check-keys-on-base-target):** `TargetDescriptor.builtOn?: string` (`@unstable`), the registered target a descriptor is built on, and `TargetLookup.baseTargetOf?(target)`, the end of the chain. `createTargetLookup` resolves it: an unregistered name (`built-on-unknown`) and a target built on itself or a loop (`built-on-loop`) are `TargetLookupError`s naming the targets; `validateDescriptor` rejects a `builtOn` that is not a bare word. Any target can be built on any other; core names none.
+- **Added (data-check-keys-on-base-target):** `TargetDescriptor.builtOn?: string` (`@unstable`), the registered target a descriptor is built on, and `TargetLookup.baseTargetOf?(target)`, the end of the chain. `createTargetLookup` resolves it: an unregistered name (`built-on-unknown`, with a hint naming the target when the name is a host name) and a target built on itself or a loop (`built-on-loop`) are `TargetLookupError`s naming the targets; `validateDescriptor` rejects a `builtOn` that is not a bare word. Any target can be built on any other; core names none. Also: optional `TargetLookup.allTargetNames?()` (every name `target()` answers, a target kept from selection included), which a loaded descriptor's registration check lists for an unknown `builtOn`; and the policy diagnostic code `default-tag-overridden`. `TargetPolicy.defaultTag` may now come from the base target's key when a registry folds it in.
 
 - **Fix (statement-tags r3, decision 168):** a `server` or `client` statement's text gets the same Marko-matching syntax check as `static`/`import`/`export`, before a host runs, drops or refuses it, so an invalid join can no longer pull the next template line into it silently.
 

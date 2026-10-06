@@ -14,7 +14,11 @@ import {
   setupMesh,
   teardownMesh,
 } from "../../../../test-fixtures/third-party-targets/mesh.ts";
-import { builtinLookup } from "../../../target-registry/src/index.ts";
+import {
+  builtinLookup,
+  defaultTagFor,
+  resolveTargetPolicyDetailed,
+} from "../../../target-registry/src/index.ts";
 import { runInProcess } from "./in-process.ts";
 
 afterEach(() => {
@@ -223,13 +227,25 @@ describe("the unnamed-tag ladder (decision 145) on a host built on data", () => 
     expect(run).toEqual({ status: 0, output: "" });
   });
 
-  it("rung 1: mx.data.defaultTag is read for a host built on data", () => {
-    const run = check(SHORTHAND, {
+  it("rung 1: mx.data.defaultTag is read for a host built on data, and mx-tsc's tag is defaultTagFor's", () => {
+    const options = {
       ...WITH_CONTRACTS,
       mx: mx({ data: { defaultTag: "port" } }),
-    });
+    };
+    const run = check(SHORTHAND, options);
     expect(run.output).toBe(PORT_AT_TOP);
     expect(run.status).toBe(1);
+    // The registry's shared ladder, the one Vite, the LS and the TS plugin use.
+    const dir = (globalThis as MeshGlobals).__mxMeshProjectDir as string;
+    const file = join(dir, "src", "post.mesh.mx");
+    const shared = defaultTagFor(
+      file,
+      resolveTargetPolicyDetailed(file).policy,
+    );
+    expect(shared).toBe("port");
+    expect((globalThis as MeshGlobals).__mxMeshDefaultTags?.at(-1)).toBe(
+      shared,
+    );
   });
 
   it("an invalid mx.data.defaultTag is one positioned error and falls to the next rung", () => {

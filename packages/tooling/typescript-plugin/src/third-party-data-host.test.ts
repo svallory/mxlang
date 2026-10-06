@@ -80,6 +80,36 @@ describe("`.mesh.mx` in the TS plugin", () => {
     expect(diagnostics[0]?.offset).toBe(9);
   });
 
+  it("mx.data.defaultTag is the shared ladder's rung for a host built on data", () => {
+    const { diagnostics, policyDiagnostics } = compile("<x/>\n", {
+      fileKinds: MESH_KIND,
+      files: { "tags/node.mx": "" },
+      mx: { data: { defaultTag: "node" } },
+    });
+    expect(policyDiagnostics).toEqual([]);
+    expect(diagnostics).toEqual([]);
+    expect(
+      (globalThis as { __mxMeshDefaultTags?: string[] }).__mxMeshDefaultTags,
+    ).toEqual(["node"]);
+  });
+
+  it("warns when the host's own key and mx.data.defaultTag differ; the host's wins", () => {
+    const { policyDiagnostics } = compile("<x/>\n", {
+      fileKinds: MESH_KIND,
+      files: { "tags/node.mx": "", "tags/leaf.mx": "" },
+      mx: {
+        "mesh-data": { defaultTag: "leaf" },
+        data: { defaultTag: "node" },
+      },
+    });
+    expect(policyDiagnostics.map((d) => d.message)).toEqual([
+      'mx.data.defaultTag "node" is ignored: mx["mesh-data"].defaultTag "leaf" takes precedence',
+    ]);
+    expect(
+      (globalThis as { __mxMeshDefaultTags?: string[] }).__mxMeshDefaultTags,
+    ).toEqual(["leaf"]);
+  });
+
   it("advertises the `.mx` extension that covers it", () => {
     const plugin = createMxLanguagePlugin(ts);
     expect(

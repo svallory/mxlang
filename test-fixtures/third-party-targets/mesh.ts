@@ -30,6 +30,8 @@ export interface MeshOptions {
    * declaring it is built on data (no base-target checks apply).
    */
   notBuiltOnData?: boolean;
+  /** `builtOn` in place of `"data"` (a wrong name, a loop). */
+  builtOn?: string;
   /** The host's own rule: its compile throws at 1:0 on a file containing this text. */
   hostRule?: string;
   /** Set `allowContractDefaultTag: false` on the declarations. */
@@ -47,6 +49,8 @@ export interface MeshGlobals {
   __mxMeshCompiles?: string[];
   /** The `defaultTag` option each compile received. */
   __mxMeshDefaultTags?: (string | undefined)[];
+  /** The directory the last `meshProject` made. */
+  __mxMeshProjectDir?: string;
 }
 
 const MESH_INDEX = `const data = globalThis.__mxDataDescriptor;
@@ -56,7 +60,7 @@ module.exports = {
   name: "mesh-data",
   packageName: "@fake/mx-mesh",
   defaultTag: o.defaultTag ?? data.defaultTag,
-  ...(o.notBuiltOnData ? {} : { builtOn: "data" }),
+  ...(o.notBuiltOnData ? {} : { builtOn: o.builtOn ?? "data" }),
   declarations: o.forbidContractDefaultTag
     ? { default: { ...data.declarations.default, allowContractDefaultTag: false } }
     : data.declarations,
@@ -103,6 +107,7 @@ export function teardownMesh(): void {
   delete globals.__mxMeshOptions;
   delete globals.__mxMeshCompiles;
   delete globals.__mxMeshDefaultTags;
+  delete globals.__mxMeshProjectDir;
   for (const dir of projects.splice(0))
     rmSync(dir, { recursive: true, force: true });
 }
@@ -111,6 +116,7 @@ export function teardownMesh(): void {
 export function meshProject(prefix: string, options: MeshOptions = {}): string {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), prefix)));
   projects.push(dir);
+  (globalThis as MeshGlobals).__mxMeshProjectDir = dir;
   writeFileSync(
     join(dir, "package.json"),
     JSON.stringify({ mx: { host: "@fake/mx-mesh", ...options.mx } }, null, 2),

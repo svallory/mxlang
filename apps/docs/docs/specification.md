@@ -941,7 +941,7 @@ dynamic name (`<${tag}.a>`) is not either.
 | # | Rung | Where it is set |
 |---|---|---|
 | 1 | the parent's contract `defaultTag` | beside `children`, in a sidecar or `mx.contracts`; honoured only when the target's declarations permit it (the built-in targets do) |
-| 2 | the package's override | `package.json#mx.<target>.defaultTag` (`mx.html`, `mx.solid-jsx`, `mx.data`, …) |
+| 2 | the package's override | `package.json#mx.<target>.defaultTag` (`mx.html`, `mx.solid-jsx`, `mx.data`, …); for a target `builtOn` another (§13.5), the base target's key (`mx.<base>.defaultTag`) when the target's own is absent or rejected. When both are set and differ the target's own wins and a warning at the base key names both (`default-tag-overridden`) |
 | 3 | the host's override | the host's optional `defaultTag` on its descriptor |
 | 4 | the target's built-in | `div` on every html-family target, `object` on the data target; required on every target descriptor |
 
@@ -3292,6 +3292,29 @@ taken). A loaded descriptor may declare `host.fileKinds` (decision 148), checked
 by those same rules: a segment another host already owns is refused, and a kind
 without `compileRegion` is a whole-file kind that compiles on the host's target.
 
+**Base target (`builtOn`; lead ruling 2026-10-05 21:26, follow-up to #355).** A
+descriptor may name the registered target it is built on, `builtOn: "<target
+name>"` (a host that reuses another target's declarations and compile, Mesh's
+on `data`). The lookup resolves it when the descriptor joins: it follows the
+chain (`a` built on `b`, `b` built on `c`) and the end of the chain is the
+target's **base target**; a target with no `builtOn` is its own. `builtOn` is a
+bare target name (a package specifier or another value is the descriptor's
+first failing field), and two set rules join the reasons above, reported as
+`target-invalid-descriptor` at the `mx.host`/`mx.target` value:
+
+| Rule | When | Message |
+|---|---|---|
+| `built-on-unknown` | the name is no registered target | `target "mesh-data" is built on "dta", which is not a registered target (registered: html, …, data, mesh-data)`; when the name is a host name, `; "solid" is a host name, and builtOn takes a target name (did you mean "solid-jsx"?)` |
+| `built-on-loop` | the chain comes back to a target (itself included) | `target "a" is built on itself: a -> b -> a` |
+
+A target a tool keeps from selection is still registered for this (the staged
+`data`, §13.7). Core names no target: any target can be built on any other. A
+check that belongs to a target keys on the project's base target, never on its
+`mx.target` string: `mx-tsc`'s data check (§13.7.4), and the base target's
+`defaultTag` key (§4's ladder, rung 2). **Declare `builtOn` to inherit the base
+target's config checks**: a descriptor that copies another target's
+declarations without it gets none of them.
+
 A host may declare `host.ambientTypes({ rootNames, resolve })`
 (mx-tsc-astro-ambient-types): the declaration files a type-check of its files
 needs beyond the project's `tsconfig.json`, as the framework's own tooling adds
@@ -3626,15 +3649,15 @@ until `data-target-tooling-dispatch` lands.
 check keys on the project's *resolved base target*, never on its `mx.target`
 string. A project that selects a third-party host with `mx.host` gets the same
 check when the host's descriptor declares `builtOn: "data"` (directly or through
-a chain; `createTargetLookup` resolves and validates it, and the end of the
-chain is the base target, §13.5). It adds to the host: `parseData` runs with the
-strict defaults and the `mx.data.*` keys, and the host's own compile runs on
-the same file with the same tags and the unnamed tag below, so its rules still
-fire (an error both report prints once). The unnamed tag follows the ladder of
-§4: `mx.<host target>.defaultTag`, else `mx.data.defaultTag`, then the host's
-`defaultTag`, the descriptor's, and data's `object`. When both keys are set and
-differ the host's own wins and a warning at `mx.data.defaultTag` names both. A
-host that copies data's declarations without `builtOn` gets none of this.
+a chain; see "Base target" in §13.5). It adds to the host: `parseData` runs with
+the strict defaults and the `mx.data.*` keys, and the host's own compile runs on
+the same file with the same tags and the same unnamed tag, so its rules still
+fire (an error both report prints once). The unnamed tag is the registry's
+shared answer, the one Vite, the language server and the TypeScript plugin
+compile with (§4's ladder: `mx.<host target>.defaultTag`, else
+`mx.data.defaultTag`, then the host's `defaultTag`, the descriptor's, and data's
+`object`), so `mx-tsc` checks the tree the build compiles. A host that copies
+data's declarations without `builtOn` gets none of this.
 
 ### Host selection
 

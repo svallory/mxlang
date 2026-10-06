@@ -473,6 +473,9 @@ describe("createTargetLookup", () => {
       expect(message([data, built("a", "b"), built("b", "c")])).toContain(
         'target "b" is built on "c"',
       );
+      expect(message([data, solid, built("mesh", "solid")])).toBe(
+        'target "mesh" is built on "solid", which is not a registered target (registered: data, solid-jsx, mesh); "solid" is a host name, and builtOn takes a target name (did you mean "solid-jsx"?)',
+      );
     });
 
     it("rejects a target built on itself and a loop, naming the chain", () => {

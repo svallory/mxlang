@@ -29,10 +29,9 @@ import {
 } from "@mxlang/core";
 import { type ParseDataOptions, parseData } from "@mxlang/data";
 import {
-  baseTargetDefaultTag,
   baseTargetOfPolicy,
+  defaultTagFor,
   descriptorFor,
-  effectiveDefaultTag,
   lookupFor,
   resolveTargetPolicyDetailed,
   scanCached,
@@ -399,42 +398,11 @@ export function checkDataPackage(dir: string): DataCheckResult {
     }
     const descriptor = descriptorFor(policy);
     const base = baseTargetOfPolicy(policy);
-    let configured = policy.defaultTag;
-    if (base !== policy.target) {
-      const own = baseTargetDefaultTag(manifest.file, policy);
-      for (const d of own.diagnostics) {
-        reportManifest({
-          file: d.file,
-          line: d.line,
-          column: d.column,
-          ...(d.length !== undefined ? { length: d.length } : {}),
-          severity: d.severity ?? "warning",
-          message: policyText(d),
-          origin: "manifest",
-          lfCoordinates: true,
-        });
-      }
-      if (own.value !== undefined && own.at) {
-        if (configured === undefined) configured = own.value;
-        else if (configured !== own.value) {
-          // The host's own key wins; saying nothing would ignore the other.
-          reportManifest({
-            file: own.at.file,
-            line: own.at.line,
-            column: own.at.column,
-            ...(own.at.length !== undefined ? { length: own.at.length } : {}),
-            severity: "warning",
-            message: `mx.${own.target}.defaultTag ${JSON.stringify(own.value)} is ignored: mx[${JSON.stringify(policy.target)}].defaultTag ${JSON.stringify(configured)} takes precedence`,
-            origin: "manifest",
-            lfCoordinates: true,
-          });
-        }
-      }
-    }
-    const defaultTag = effectiveDefaultTag(
-      configured === undefined ? {} : { defaultTag: configured },
-      descriptor,
-    );
+    // The registry's shared ladder, the one every tool compiles with: the
+    // package's key, the base target's key, the host's override, the
+    // descriptor's. Its diagnostics (an invalid value, a differing pair) came
+    // with the policy above.
+    const defaultTag = defaultTagFor(manifest.file, policy);
     let host: Package["host"];
     if (descriptor.name !== base && descriptor.load) {
       let compiler: TargetCompiler | Error;

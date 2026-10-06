@@ -448,6 +448,29 @@ function configFor(
   return { target: kind.name, ...readTargetDefaultTag(filePath, kind.name) };
 }
 
+/**
+ * `mx.<base>.defaultTag` for the base target of `target` (the end of its
+ * `builtOn` chain), when that is another target: the rung a target built on
+ * another reads when its own key is absent (`mx.data.defaultTag` on a host
+ * built on data). Not validated.
+ */
+function baseConfigFor(
+  filePath: string,
+  lookup: TargetLookup,
+  target: string,
+): ({ target: string } & ReturnType<typeof readTargetDefaultTag>) | undefined {
+  const base = lookup.baseTargetOf?.(target) ?? target;
+  if (base === target) return undefined;
+  return { target: base, ...readTargetDefaultTag(filePath, base) };
+}
+
+/** `mx.<target>.defaultTag`, spelled as a JSON path an author can find. */
+function keyPath(target: string): string {
+  return /^[A-Za-z_$][\w$]*$/.test(target)
+    ? `mx.${target}.defaultTag`
+    : `mx[${JSON.stringify(target)}].defaultTag`;
+}
+
 /** The scope a package's `defaultTag` is checked in: its scan, and the lookup the target compiles with. */
 function scopeFor(
   descriptor: TargetDescriptor,
@@ -572,17 +595,40 @@ function checkDefaultTags(
   // own target already reported its own.
   if (config.diagnostic) diagnostics.push(config.diagnostic);
   let next = policy;
+  const scope = scopeFor(descriptor, lookup, filePath, builtinsOf(descriptor));
+  let own: string | undefined;
   if (config.value !== undefined && config.at) {
-    const diagnostic = defaultTagDiagnostic(
-      config.value,
-      config.at,
-      scopeFor(descriptor, lookup, filePath, builtinsOf(descriptor)),
-    );
+    const diagnostic = defaultTagDiagnostic(config.value, config.at, scope);
     if (diagnostic) {
       diagnostics.push(diagnostic);
       if (config.target === policy.target) {
         const { defaultTag: _value, defaultTagAt: _at, ...rest } = next;
         next = rest;
+      }
+    } else own = config.value;
+  }
+  // The base target's own key (a host built on data reads `mx.data.defaultTag`):
+  // the rung below the target's key, checked in the same scope. When both are
+  // set and differ the target's wins, and saying nothing would ignore the other.
+  const base = baseConfigFor(filePath, lookup, config.target);
+  if (base) {
+    if (base.diagnostic) diagnostics.push(base.diagnostic);
+    if (base.value !== undefined && base.at) {
+      const diagnostic = defaultTagDiagnostic(base.value, base.at, scope);
+      if (diagnostic) diagnostics.push(diagnostic);
+      else if (own === undefined) {
+        if (config.target === policy.target)
+          next = { ...next, defaultTag: base.value, defaultTagAt: base.at };
+      } else if (own !== base.value) {
+        diagnostics.push({
+          code: "default-tag-overridden",
+          severity: "warning",
+          file: base.at.file,
+          line: base.at.line,
+          column: base.at.column,
+          ...(base.at.length !== undefined ? { length: base.at.length } : {}),
+          message: `${keyPath(base.target)} ${JSON.stringify(base.value)} is ignored: ${keyPath(config.target)} ${JSON.stringify(own)} takes precedence`,
+        });
       }
     }
   }
@@ -629,45 +675,10 @@ function checkDefaultTags(
 }
 
 /**
- * The base target's own `mx.<base>.defaultTag`, for a target built on another
- * (`mx.data.defaultTag` on a host built on data), validated against the
- * target's scope like the target's own key. `target` is the base's name; every
- * field is absent when the target is its own base or the package sets none. A
- * rejected value is a diagnostic and no value.
- */
-export function baseTargetDefaultTag(
-  filePath: string,
-  policy: TargetPolicy,
-): {
-  target?: string;
-  value?: string;
-  at?: NonNullable<TargetPolicy["defaultTagAt"]>;
-  diagnostics: TargetPolicyDiagnostic[];
-} {
-  const base = baseTargetOfPolicy(policy);
-  if (base === policy.target) return { diagnostics: [] };
-  const lookup = lookupFor(policy);
-  const descriptor = lookup.target(policy.target);
-  if (!descriptor) return { diagnostics: [] };
-  const config = readTargetDefaultTag(filePath, base);
-  const diagnostics: TargetPolicyDiagnostic[] = [];
-  if (config.diagnostic) diagnostics.push(config.diagnostic);
-  if (config.value === undefined || !config.at)
-    return { target: base, diagnostics };
-  const rejected = defaultTagDiagnostic(
-    config.value,
-    config.at,
-    scopeFor(descriptor, lookup, filePath, builtinsOf(descriptor)),
-  );
-  if (rejected)
-    return { target: base, diagnostics: [...diagnostics, rejected] };
-  return { target: base, value: config.value, at: config.at, diagnostics };
-}
-
-/**
  * The name the unnamed tag takes in `filePath`, for a tool to hand to the
- * compile as `defaultTag`: the ladder's registry rungs (config, host override,
- * target built-in) for the target the file compiles under. `policy` is the
+ * compile as `defaultTag`: the ladder's registry rungs (config, then the base
+ * target's config for a target `builtOn` another, host override, target
+ * built-in) for the target the file compiles under. `policy` is the
  * file's resolved policy (the tool has it: this never resolves again), and a
  * rejected user value is already out of it. A host module file kind reads its
  * own target's key, which the registry checks here.
@@ -676,16 +687,25 @@ export function defaultTagFor(filePath: string, policy: TargetPolicy): string {
   const lookup = lookupFor(policy);
   const config = configFor(filePath, policy);
   const descriptor = lookup.target(config.target) ?? descriptorFor(policy);
-  const usable =
-    config.value !== undefined &&
-    (config.target === policy.target ||
-      defaultTagDiagnostic(
-        config.value,
-        config.at as NonNullable<TargetPolicy["defaultTagAt"]>,
-        scopeFor(descriptor, lookup, filePath, builtinsOf(descriptor)),
-      ) === undefined);
+  // The policy's own target: `checkDefaultTags` already validated its key and
+  // folded the base target's in, so the policy is the answer.
+  if (config.target === policy.target)
+    return effectiveDefaultTag(policy, descriptor);
+  // A host module file kind's target: its own key, else its base's, each
+  // checked here.
+  const scope = scopeFor(descriptor, lookup, filePath, builtinsOf(descriptor));
+  const usable = (value?: string, at?: TargetPolicy["defaultTagAt"]) =>
+    value !== undefined &&
+    at !== undefined &&
+    defaultTagDiagnostic(value, at, scope) === undefined;
+  const base = baseConfigFor(filePath, lookup, config.target);
+  const value = usable(config.value, config.at)
+    ? config.value
+    : base && usable(base.value, base.at)
+      ? base.value
+      : undefined;
   return effectiveDefaultTag(
-    usable ? { defaultTag: config.value } : {},
+    value === undefined ? {} : { defaultTag: value },
     descriptor,
   );
 }
@@ -709,6 +729,8 @@ function resolveStaged(
       ...lookup,
       hasTarget: (name) => name !== "data" && lookup.hasTarget(name),
       targetNames: () => lookup.targetNames().filter((name) => name !== "data"),
+      // Still registered: a loaded host may be `builtOn` it.
+      allTargetNames: () => lookup.targetNames(),
     },
     options,
   );
