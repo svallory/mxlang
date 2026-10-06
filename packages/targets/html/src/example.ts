@@ -41,7 +41,9 @@ async function render(file: string, input: unknown): Promise<string> {
   Bun.plugin({
     name: "mxlang-example",
     setup(build) {
-      build.onLoad({ filter: /\.marko$/ }, ({ path }) => ({
+      // `.mx` too: a fixture's `tags/x.mx` twin wins discovery over its
+      // `tags/x.marko` and is imported by that path.
+      build.onLoad({ filter: /\.(marko|mx)$/ }, ({ path }) => ({
         contents: compileWithTags(path).code,
         loader: "ts",
       }));
