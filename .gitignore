@@ -45,3 +45,6 @@ packages/editors/vscode/mxlang.vsix
 packages/tooling/typescript-plugin/bundle/
 packages/tooling/language-server/bundle/
 .pi/
+
+# html Bun example runner scratch copies (src/example.ts)
+packages/targets/html/.scratch-tmp/

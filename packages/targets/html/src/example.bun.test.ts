@@ -85,7 +85,14 @@ function normalizeStderr(stderr: string): string {
     .map((line) => {
       const at = line.indexOf("fixtures-marko/");
       const trimmed = at < 0 ? line : line.slice(at);
-      return trimmed.replace(/(input\.marko):\d+:\d+:/, "$1:L:C:");
+      // Scratch is `.scratch-tmp/<fixture>/` relative to fixtures-marko.
+      let mapped = trimmed
+        .replace(/\.scratch-tmp\/([^/]+)\//g, "fixtures-marko/$1/")
+        .replace(/input\.mx:(\d+):(\d+):/, "input.marko:L:C:");
+      // After mapping, keep only the `fixtures-marko/...` suffix (assertions
+      // never include the absolute machine path prefix).
+      const fixAt = mapped.indexOf("fixtures-marko/");
+      return fixAt < 0 ? mapped : mapped.slice(fixAt);
     })
     .join("\n");
 }

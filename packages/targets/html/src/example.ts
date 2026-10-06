@@ -11,16 +11,28 @@ import { fileURLToPath } from "node:url";
 import { scanCached } from "@mxlang/core";
 import { configuredDefaultTag } from "./default-tag.ts";
 import { compileFile, htmlTargets } from "./index.ts";
+import { mxTwins } from "./mx-twins.ts";
+import { cpSync, existsSync, rmSync } from "node:fs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = process.argv[2] ?? "class-object";
-const dir = join(here, "..", "fixtures-marko", fixture);
-const path = join(dir, "input.marko");
+const fixtureDir = join(here, "..", "fixtures-marko", fixture);
+const scratch = join(here, "..", ".scratch-tmp", fixture);
+if (existsSync(scratch)) rmSync(scratch, { recursive: true, force: true });
+cpSync(fixtureDir, scratch, { recursive: true });
+mxTwins(scratch);
+const dir = scratch;
+const path = join(dir, "input.mx");
 
 const { code } = compileWithTags(path);
-const input = JSON.parse(readFileSync(join(dir, "input.json"), "utf8"));
+let input: unknown;
+try {
+  input = JSON.parse(readFileSync(join(dir, "input.json"), "utf8"));
+} catch (e) {
+  throw new Error(`failed to parse ${join(dir, "input.json")}: ${e}`);
+}
 
-console.log(`--- ${fixture}/input.marko ---`);
+console.log(`--- ${fixture}/input.mx ---`);
 console.log(readFileSync(path, "utf8").trimEnd());
 console.log(`\n--- compiled module ---`);
 console.log(code.trimEnd());
