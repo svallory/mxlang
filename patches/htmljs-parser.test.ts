@@ -19,6 +19,11 @@ import { parseExpression as parseBabelExpression } from "@babel/parser";
 import * as esm from "htmljs-parser";
 import { describe, expect, it } from "vitest";
 import {
+  PORTABLE_PROBES,
+  type ProbeParserModule,
+  renderProbe,
+} from "../packages/parser/src/template/grammar-spec.cases.ts";
+import {
   ATOMS,
   type AtomParserModule,
   asciiTwinMismatches,
@@ -35,6 +40,7 @@ import {
   unicodeWhitespaceLoopMismatches,
   unicodeWhitespaceMismatches,
 } from "../packages/parser/src/template/mx-atoms.cases.ts";
+
 import {
   fuzzThrows,
   NO_THROW_ROWS,
@@ -450,4 +456,18 @@ describe.each(builds)("the parser never throws (%s)", (_name, build) => {
   it("no generated input from the delimiter alphabet throws (seed 1)", () => {
     expect(fuzzThrows(mod, 1, 5_000)).toEqual({ total: 5_000, thrown: [] });
   });
+});
+
+// The parser grammar's probe corpus (decision 165): the same probes the
+// source copy runs, against both builds. Probes that use the base-position
+// API are the source copy's alone.
+describe.each(builds)("parser grammar probes (%s)", (_name, mod) => {
+  it.each(PORTABLE_PROBES.map((probe) => [probe.id, probe] as const))(
+    "%s",
+    (_id, probe) => {
+      expect(renderProbe(mod as unknown as ProbeParserModule, probe)).toEqual(
+        probe.expected,
+      );
+    },
+  );
 });
