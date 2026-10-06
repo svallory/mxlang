@@ -332,7 +332,7 @@ describe("pass-through constructs (the §3 table)", () => {
     expect(plain).not.toHaveProperty("refinement");
   });
 
-  it("a refinement that is no identifier is Marko's error at the colon", () => {
+  it("a refinement that is no identifier is Marko's error at the modifier", () => {
     const result = parseData("<x v:no-update:=y/>\n", "x.mx");
     expect(result.diagnostics).toMatchObject([
       {
@@ -340,7 +340,7 @@ describe("pass-through constructs (the §3 table)", () => {
         message:
           "Bound attribute refinement shorthand must be a valid JavaScript identifier.",
         line: 1,
-        column: 4,
+        column: 5,
       },
     ]);
   });
