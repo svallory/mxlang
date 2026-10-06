@@ -59,7 +59,9 @@ describe.each([
       const declared = declaredHandlers(types);
       expect(declared.length).toBeGreaterThan(50);
       for (const name of declared) {
-        const dom = name.slice(2).toLowerCase();
+        // `onDoubleClick` is hono's spelling of the DOM's `dblclick`.
+        const lowered = name.slice(2).toLowerCase();
+        const dom = lowered === "doubleclick" ? "dblclick" : lowered;
         expect(`on${table[dom]}`, `${dom} → ${name}`).toBe(name);
       }
     });
