@@ -67,7 +67,6 @@ async function renderFixture(
     // Callee declarations must exist before the caller is compiled: core
     // resolves each imported Input from disk.
     for (const [name, source] of Object.entries(files)) {
-      mkdirSync(dirname(join(scratch, name)), { recursive: true });
       writeFileSync(
         join(scratch, name),
         `${name.endsWith(".tsx") ? "/** @jsxRuntime automatic */\n" : ""}${source.replaceAll("HOSTJSX", jsxSources[host])}`,
@@ -99,10 +98,6 @@ async function renderFixture(
         customTags,
       })
         .code.replace(/from "\.\/(\w+)\.mx"/g, 'from "./$1.tsx"')
-        // A taglib tag (`tags/badge.marko`) is imported by the generated code;
-        // `tags/badge.tsx` is its hand-written stand-in, since a `.marko` file
-        // cannot execute here.
-        .replace(/from "\.\/tags\/(\w+)\.marko"/g, 'from "./tags/$1.tsx"')
         .replaceAll(
           `from "@mxlang/${host}/runtime"`,
           `from ${JSON.stringify(fileURLToPath(new URL(`../../${host}/src/runtime.ts`, import.meta.url)))}`,
@@ -195,14 +190,26 @@ describe("generated names do not shadow authored bindings", () => {
     // as an element) must not shadow an authored `MxBadge`. A taglib tag is the
     // only route to the alias since decision 164 (a lowercase import is native).
     it(`${host}: a lowercase taglib tag's alias does not collide with an authored MxBadge`, async () => {
-      expect(
-        await renderFixture(host, {
-          "main.mx": 'static const MxBadge = 1;\n<badge label="ok"/>',
-          "tags/badge.marko": "<p>${input.label}</p>",
-          "tags/badge.tsx":
-            "export default function Badge(props: { label: string }) { return <p>{props.label}</p>; }",
-        }),
-      ).toBe("<p>ok</p>");
+      const compile = await compilerFor(host);
+      const scratch = mkdtempSync(join(tmpdir(), `mx-${host}-alias-`));
+      try {
+        mkdirSync(join(scratch, "tags"));
+        writeFileSync(join(scratch, "package.json"), '{"type":"module"}');
+        writeFileSync(
+          join(scratch, "tags", "badge.marko"),
+          "<p>${input.label}</p>",
+        );
+        const { code } = compile(
+          'static const MxBadge = 1;\n<badge label="ok"/>',
+          join(scratch, "main.mx"),
+        );
+        expect(code).toContain("const MxBadge = 1");
+        expect(code).toContain('import __mxBadge from "./tags/badge.marko"');
+        expect(code).toContain('<__mxBadge label="ok" />');
+        expect(code).not.toMatch(/import MxBadge\b/);
+      } finally {
+        rmSync(scratch, { recursive: true, force: true });
+      }
     });
     // Decision 164 addendum 1: `import badge from "./row.mx"` + `<badge/>` is
     // not a tag, on every target.

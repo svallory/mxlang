@@ -2866,11 +2866,17 @@ function lowerCustomTag(
 }
 
 /** A component call, with its props, children and attribute tags. */
-function lowerComponent(ctx: Ctx, node: Node, target: ComponentTarget): IrNode {
+function lowerComponent(
+  ctx: Ctx,
+  node: Node,
+  target: ComponentTarget,
+  // The call is a registered taglib tag, not the same-named binding in scope.
+  taglibTag = false,
+): IrNode {
   // The host gets first refusal, before any `Component` node exists: a call it
   // will not route must fail here rather than reach an emitter, which no
   // longer has the Marko node to judge it by.
-  if (target.kind === "name") {
+  if (target.kind === "name" && !taglibTag) {
     ctx.declarations.rejectComponentTag?.(target.name, node, ctx);
   }
   if (target.kind !== "dynamic") {
@@ -3336,6 +3342,24 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     fail(
       `\`<${name}>\` is not a tag here: ${bound}, and a lowercase tag never calls a binding. Write \`<${pascal}>\` (rename the import) or \`<\${${name}}/>\``,
       node,
+    );
+  }
+  // A registered taglib tag called `row` is still `row` when a binding of that
+  // name is in scope (addendum 1): call the tag's own template, not the import.
+  if (
+    registeredTag &&
+    !/^[A-Z]/.test(name) &&
+    (ctx.defines.has(name) || ctx.imports.has(name))
+  ) {
+    const template = ctx.lookup?.getTag(name)?.template;
+    const binding = template
+      ? bindingForDiscoveredModule(ctx, template, name, posOf(node))
+      : undefined;
+    return lowerComponent(
+      ctx,
+      node,
+      binding ? { kind: "name", name, binding } : { kind: "name", name },
+      true,
     );
   }
   if (

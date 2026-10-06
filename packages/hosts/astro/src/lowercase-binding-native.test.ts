@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { lowerAstroMx } from "./astro-template.ts";
 
 // Decision 164 + addendum 1. A frontmatter import is never a tag here, so it
-// is native and silent; a lowercase `<define>` is the tag binding.
+// is native and silent; `<define>` is rejected on this host, so there is no define row.
 describe("lowercase tag with a same-named binding in scope", () => {
   it("a frontmatter-imported `span` stays a native element, with no warning", () => {
     const warnings: MxWarning[] = [];
@@ -16,17 +16,5 @@ describe("lowercase tag with a same-named binding in scope", () => {
     );
     expect(JSON.stringify(out)).toContain('<span title=\\"search\\"></span>');
     expect(warnings).toEqual([]);
-  });
-
-  it("row 1: a lowercase define does not capture `<span>`; the warning carries its L:C", () => {
-    const warnings: MxWarning[] = [];
-    lowerAstroMx(
-      `---\n---\n<define/span|x|>d</define>\n<span title="search"/>\n`,
-      "Test.astro.mx",
-      { warnings },
-    );
-    expect(warnings.map((w) => w.message)).toEqual([
-      "`<span>` is the native element; the `span` defined at 3:9 is not called. Rename it `Span` or write `<${span}>`",
-    ]);
   });
 });

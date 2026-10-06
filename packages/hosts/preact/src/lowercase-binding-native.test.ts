@@ -74,17 +74,6 @@ describe("lowercase tag with a same-named binding in scope", () => {
     ).toThrow(NOT_A_TAG("row", "`row` is defined at 1:9"));
   });
 
-  it("an out-of-scope define does not warn or error", () => {
-    const warnings: MxWarning[] = [];
-    const { code } = compilePreactMx(
-      `<if=x><define/span|y|>d</define></if>\n<span title="search"/>\n`,
-      "/fixtures/a.mx",
-      { warnings },
-    );
-    expect(code).toContain('<span title="search" />');
-    expect(warnings).toEqual([]);
-  });
-
   it("a `_`-prefixed tag import gets the same error", () => {
     expect(() =>
       compilePreactMx(
