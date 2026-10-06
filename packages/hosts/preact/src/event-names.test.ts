@@ -39,9 +39,11 @@ const preactTypes = join(
   "src",
   "jsx.d.ts",
 );
+// `hono/jsx` resolves to dist/cjs/jsx/index.js; the types sit beside dist/cjs.
 const honoTypes = join(
-  dirname(require.resolve("hono/package.json")),
-  "dist",
+  dirname(require.resolve("hono/jsx")),
+  "..",
+  "..",
   "types",
   "jsx",
   "intrinsic-elements.d.ts",
