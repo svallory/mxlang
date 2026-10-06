@@ -1,5 +1,7 @@
 # Changelog
 
+- **Fix (routed-template-call-namespan):** a discovered tag's call maps its name span, so a type error on it (a missing required prop) lands on the tag name, not at 1:1 marked MX's. No emitted code changes, only the source map.
+
 - **Fix (astro-isolated-install-ts-resolution):** under an isolated install (bun workspaces, pnpm) a project that lists only `@mxlang/astro` could not resolve the bare `@mxlang/html` that a compiled `.mx` module imports in `mx-tsc --astro` and the TypeScript plugin (the language server does not type-check); the TS2307 sat on unmapped generated text and was dropped, so `escape`, `createOut` and `Out` silently became `any` (a non-`Out` sink passed to `Unit.render(input, sink)` was accepted). The type-check projection now imports them from `@mxlang/astro/typecheck`, a declarations-only subpath (`export * from "@mxlang/html"`, so it cannot drift from what the emitter imports) that resolves from the project (`html`'s `compile` takes `runtimeFrom`; the astro descriptor sets it only for `typeCheck` compiles). Runtime and build output are unchanged: compiled modules still import `@mxlang/html`, resolved by `mxHtmlResolve`. No tsconfig `paths` needed.
 
 - **Fix (native-tag-binding-capture, decision 164):** a frontmatter-imported lowercase name no longer rejects a same-named native element (`<span>` with `import { span }`): it stays a native element, with a warning at the tag.

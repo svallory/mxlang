@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix (routed-template-call-namespan):** a discovered tag's call maps its name span, so a type error on it (a missing required prop) lands on the tag name, not at 1:1 marked MX's. The `render` call's props braces map onto the name. No emitted code changes, only the source map.
+
 - **Fix, behaviour change (unresolved-tags-dir-diagnostic, decision 172):** a `.marko` tag (`tags/x.marko`, `tags/x/index.marko`, an authored `.marko` import used as a tag) is one positioned error naming the file, no longer rendered through Marko's lookup; `tags/x/index.mx` is a positioned error, not a call to an unbound `x`.
 
 - **Changed (html-own-element-table):** the html target classifies a tag as an element by its own HTML/SVG/MathML table (`src/element-table.ts`) instead of asking Marko's taglib lookup which taglib defined it. `element-table.test.ts` pins the table name-for-name to Marko's `marko-html`, `marko-svg` and `marko-math` taglibs (`@marko/compiler` 5.42.10, now a dev dependency); it found no difference. Emitted output is unchanged. `fixtures-marko/tags-discovery/tags/badge.mx` and `try-child-throw/tags/boom.mx` are twins of the `.marko` tags, with `marko-twins.test.ts` pinning each byte-equal.

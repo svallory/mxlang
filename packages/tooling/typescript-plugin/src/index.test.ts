@@ -4568,21 +4568,20 @@ describe("a tag call's props errors land on the tag name (html-call-props-mapped
       ]);
     });
 
-    it("pins today's discovered tag: a missing prop at 1:1, marked MX's (TODO routed-template-call-namespan)", () => {
-      // A discovered tag routes to a generated binding (`$mx_Counter1`) whose
-      // IR call carries no name span (`Component.nameSpan: null`, IR spec
-      // 5.6), so neither the name nor the props braces map: the TS2345 sits
-      // on unmapped text, which decision 161 reports at 1:1 marked MX's.
-      // TODO routed-template-call-namespan gives the call its authored name
-      // span; then this lands on `counter` like the other forms.
+    it("a discovered tag's missing prop, on the tag name", () => {
+      // A discovered tag routes to a generated binding (`$mx_Counter1`), and
+      // its IR call carries the authored name's span (IR spec 5.6), so the
+      // TS2345 on the call's props object lands on `counter`, with no
+      // position marker, as it does for an imported tag.
       mkdirSync(join(dir, "tags"), { recursive: true });
       writeFileSync(join(dir, "tags", "counter.mx"), COUNTER);
       try {
         const page = join(dir, "page.mx");
+        const source = "<div>\n  <counter>x</counter>\n</div>\n";
         const virtual = createMxLanguagePlugin(ts).createVirtualCode?.(
           page,
           MX_LANGUAGE_ID,
-          ts.ScriptSnapshot.fromString("<counter>x</counter>\n"),
+          ts.ScriptSnapshot.fromString(source),
           { getAssociatedScript: () => undefined },
         );
         expect(
@@ -4592,35 +4591,24 @@ describe("a tag call's props errors land on the tag name (html-call-props-mapped
         const service = createPluginService(
           {
             [join(dir, "tags", "counter.mx")]: COUNTER,
-            [page]: "<counter>x</counter>\n",
+            [page]: source,
             [consumer]: 'import "./page.mx";',
           },
           [consumer],
         );
         service.getSemanticDiagnostics(consumer);
-        // Wrong for now, pinned so the TODO flips it: the author's missing
-        // prop is reported at 1:1 marked MX's (decision 161 cannot place it,
-        // since nothing of the call is mapped).
         expect(
           service
             .getSemanticDiagnostics(page)
             .map((d) => [
               d.code,
-              d.start,
-              d.length,
+              source.slice(d.start, (d.start ?? 0) + (d.length ?? 0)),
               ts
                 .flattenDiagnosticMessageText(d.messageText, "\n")
                 .split("\n")[0],
             ]),
         ).toEqual([
-          [
-            2345,
-            0,
-            0,
-            expect.stringMatching(
-              /^Argument of type .* \(in MX-generated code, not yours: an MX bug; generated \d+:\d+\)$/,
-            ),
-          ],
+          [2345, "counter", expect.stringMatching(/^Argument of type .*\.$/)],
         ]);
       } finally {
         rmSync(join(dir, "tags"), { recursive: true, force: true });
@@ -4641,6 +4629,54 @@ describe("a tag call's props errors land on the tag name (html-call-props-mapped
         [2345, "Counter", expect.stringMatching(/^Argument of type .*\.$/)],
       ]);
     });
+  });
+});
+
+describe("a discovered tag's missing prop lands on its name on the JSX hosts and solid (routed-template-call-namespan)", () => {
+  const CARD =
+    "export interface Input { title: string; content?: () => string }\n<p>${input.title}</p>\n";
+  const COUNTER =
+    "export interface Input { start: number; content?: () => string }\n<span>${input.start}</span>\n<return value=input.start + 1/>\n";
+  // `<return>` units are called as `name(props)` on the JSX hosts, which map
+  // neither the name nor the props braces (an imported unit reads the same);
+  // solid calls them as a component, so only solid maps a returning unit.
+  it.each([
+    ["preact", "card", CARD, 2741],
+    ["react", "card", CARD, 2741],
+    ["hono", "card", CARD, 2741],
+    ["solid", "card", CARD, 2741],
+    ["solid", "counter", COUNTER, 2322],
+  ])("on %s, <%s>", (host, unit, template, code) => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), `mx-ns-${host}-`)));
+    try {
+      writeFileSync(
+        join(dir, "package.json"),
+        JSON.stringify({ name: "t", mx: { host, strict: false } }),
+      );
+      mkdirSync(join(dir, "tags"), { recursive: true });
+      const unitFile = join(dir, "tags", `${unit}.mx`);
+      writeFileSync(unitFile, template);
+      const page = join(dir, "page.mx");
+      const source = `<div>\n  <${unit}>x</${unit}>\n</div>\n`;
+      const consumer = join(dir, "index.ts");
+      const service = createPluginService(
+        {
+          [unitFile]: template,
+          [page]: source,
+          [consumer]: 'import "./page.mx";',
+        },
+        [consumer],
+      );
+      service.getSemanticDiagnostics(consumer);
+      expect(
+        service
+          .getSemanticDiagnostics(page)
+          .filter((d) => d.code === code)
+          .map((d) => source.slice(d.start, (d.start ?? 0) + (d.length ?? 0))),
+      ).toEqual([unit]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

@@ -131,6 +131,28 @@ describe("template custom tags as compilation units", () => {
     expect(call?.attributeTags.map((tag) => tag.name)).toEqual(["head"]);
   });
 
+  it("gives the routed call the authored tag name's span (IR spec 5.6)", () => {
+    const box = template("/tmp/mx-template-test/tags/box.mx", "<section/>");
+    // Non-ASCII text before and between the calls: the spans are UTF-16
+    // offsets into the whole file, not into the line.
+    const source =
+      "<p>é</p>\n<box a=1>x</box>\n<box/>\n<div>\n  <box a=2/>\n</div>\n";
+    const calls = components(lowerWithTags(source, { box }).body);
+    expect(calls).toHaveLength(3);
+    for (const call of calls) {
+      expect(call.nameSpan).not.toBeNull();
+      expect(
+        source.slice(call.nameSpan?.sourceStart, call.nameSpan?.sourceEnd),
+      ).toBe("box");
+      expect(call.authoredName).toBe("box");
+    }
+    expect(calls.map((call) => call.nameSpan?.sourceStart)).toEqual([
+      source.indexOf("<box a=1>") + 1,
+      source.indexOf("<box/>") + 1,
+      source.indexOf("<box a=2/>") + 1,
+    ]);
+  });
+
   it("dedupes injected imports by resolved template path", () => {
     const tag = template("/tmp/mx-template-test/tags/icon.mx", "<i/>");
     const ir = lowerWithTags("<icon/><icon/>\n", { icon: tag });

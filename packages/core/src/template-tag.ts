@@ -1009,7 +1009,9 @@ export function routeTemplateCall(
     {
       kind: "Component",
       target: { kind: "name", name: bindingForTemplate(ctx, tag, call) },
-      nameSpan: null,
+      // The call's authored tag name, so a host maps the routed binding's
+      // name as it maps an imported component's.
+      nameSpan: call.nameSpan ?? null,
       attrs: call.attrs,
       content: call.content,
       attributeTags: call.attributeTags,

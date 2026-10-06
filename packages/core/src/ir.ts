@@ -533,8 +533,10 @@ export type IrNode =
       target: ComponentTarget;
       /**
        * The opening tag name. Null for a run-time dynamic target, and for a
-       * discovered template tag's call routed to its generated binding
-       * (`template-tag.ts`), which carries no `span` either.
+       * routed discovered-tag call whose `TagCall` has no source (a
+       * synthesized call). A discovered tag's call routed to its generated
+       * binding (`template-tag.ts`) carries the authored name's span, though
+       * not a `span` of the whole call.
        */
       nameSpan: SourceSpan | null;
       /** File-absolute UTF-16 code-unit span of the whole call, body and closing tag included. */

@@ -1,5 +1,7 @@
 # Changelog
 
+- **Fix (routed-template-call-namespan):** a discovered tag's call maps its name span, so a type error on it (a missing required prop) lands on the tag name, not at 1:1 marked MX's. No emitted code changes, only the source map.
+
 - **Fix (solid-method-shorthand, decision 167):** an attribute method is emitted as written: a method shorthand (`onClick() { … }`) as the `function` expression the compiler printed for it (`function (e) { … }`, `async function () { … }`, `function <T>(e: T) { … }`), and an authored `function` expression or arrow unchanged. The method used to be turned into an arrow by a regex that split at the last `) {`, so `onClick() { if (c) { go() } }` compiled to `() { if (c) => { go(); } }`, which is not JavaScript. A named function lost its binding as an arrow, and a generic method was invalid TSX. The method's body is now mapped token by token against the authored body (`Expr.bodySpan`/`bodySource`), so a TypeScript error inside it, async, generic or nested, reports at its authored column; its printed head stays unmapped. A `<for in>` comma-expression source is parenthesized, so it stays one argument to `Object.entries`. The oracle's `counter` twin (dom) records the function-vs-arrow form as a divergence.
 
 - **Fix (native-tag-binding-capture, decision 164):** a module-scope import named like a native element no longer turns that element into `<Dynamic>`; it stays native. A warning is raised at the tag (without the binding's position).

@@ -92,7 +92,7 @@ What each span covers is listed with its field. The rule throughout: slicing the
 | static `Attr.valueSpan` | The string literal, quotes included; zero-width at the end of the name for a valueless colon name (`value:foo`, `x:`; `lower.test.ts` › "gives the valueless modifier a zero-width valueSpan at the end of its name"). |
 | `Element`/`DelegatedTag`/`AttributeTag` `nameSpan` | The tag name (`x` in `<x>`); for an attribute tag, the name after the `@` (`attributeTagNameSpan`). |
 | `Element`/`Component`/`DelegatedTag`/`AttributeTag`/`For`/`Define`/`Const` `span` | The whole tag: opening tag, body and closing tag, or the self-closed tag. |
-| `Component.nameSpan` | The opening tag name; `null` for a dynamic target and for a routed discovered-tag call (section 5.6). |
+| `Component.nameSpan` | The opening tag name; `null` for a dynamic target and for a synthesized discovered-tag call with no source (section 5.6). |
 | `Text.span` | The authored text, which `value` has normalized. |
 | `Interpolation.span` | The whole `${…}`/`$!{…}`, delimiters included. |
 | `Comment.span` | The whole comment, delimiters included. |
@@ -210,7 +210,7 @@ A module-level kind in a body is a malformed IR: `drive()` throws ("unexpected m
 | Field | Contract |
 | --- | --- |
 | `target` | `ComponentTarget` (5.7). |
-| `nameSpan` | The opening tag name; `null` for a `dynamic` target and for a discovered template-tag call routed to a generated binding (`template-tag.ts`), which carries no span either. |
+| `nameSpan` | The opening tag name; `null` for a `dynamic` target and for a synthesized discovered-tag call with no source. A discovered template-tag call routed to a generated binding (`template-tag.ts`) carries the authored name's span (`TagCall.nameSpan`), so a host maps the binding's name as it maps an imported component's; it carries no `span` of the whole call. |
 | `span?` | Whole call. |
 | `attrs` | Props. `on*` stays `dynamic` here; never `event`. |
 | `content` | The ordinary children as a `Block`, or `null` when the call has no content (comments and empty text do not count, `hasContent`). |
