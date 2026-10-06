@@ -12,13 +12,23 @@ import { compilePreactMx } from "./index.ts";
 const NOT_A_TAG = (name: string, bound: string, kind = "import") =>
   `\`<${name}>\` is not a tag here: ${bound}, and a lowercase tag never calls a binding. Write \`<${name[0]?.toUpperCase()}${name.slice(1)}>\` (rename the ${kind}) or \`<\${${name}}/>\``;
 
-/** Compiles `source` as `main.mx` beside a `tags/row.marko` taglib tag. */
-function withTaglibRow(source: string, warnings: MxWarning[]): string {
+// The authored `./row.mx` differs from the taglib tag in every piece of
+// metadata a call reads: it declares `<return>` and an `Input` whose `item` is
+// a plain prop. Row 4 must take none of it.
+const AUTHORED_ROW = [
+  "export interface Input { label: number; item?: { x: number } }",
+  "<i>${input.label}</i>",
+  "<return value=42/>",
+].join("\n");
+
+/** Compiles `source` as `main.mx` beside a `tags/row.marko` taglib tag and an authored `row.mx`. */
+function withTaglibRow(source: string, warnings: MxWarning[] = []): string {
   const scratch = mkdtempSync(join(tmpdir(), "mx-preact-row4-"));
   try {
     mkdirSync(join(scratch, "tags"));
     writeFileSync(join(scratch, "package.json"), '{"type":"module"}');
     writeFileSync(join(scratch, "tags", "row.marko"), "<p>${input.label}</p>");
+    writeFileSync(join(scratch, "row.mx"), AUTHORED_ROW);
     return compilePreactMx(source, join(scratch, "main.mx"), { warnings }).code;
   } finally {
     rmSync(scratch, { recursive: true, force: true });
@@ -134,6 +144,42 @@ describe("lowercase tag with a same-named binding in scope", () => {
     expect(code).toContain('<_row label="x" />');
     expect(code).not.toContain("__mxRow");
     expect(warnings).toEqual([]);
+  });
+
+  it("row 4: the taglib tag's metadata wins too (return shape, `/var`, `<@item>`)", () => {
+    const failure = (source: string) => {
+      try {
+        withTaglibRow(source);
+      } catch (error) {
+        return (error as Error).message;
+      }
+      return "compiled";
+    };
+    // Drops the authored import's own line so the two outputs compare.
+    const withoutImport = (code: string) =>
+      code
+        .split("\n")
+        .filter((line) => !line.includes('"./row.mx"'))
+        .join("\n");
+    const imported = 'import row from "./row.mx"';
+
+    // The `.mx` import declares `<return>`; the taglib tag does not, so the
+    // call renders the tag rather than reading `.output` of its result.
+    const code = withTaglibRow(`${imported}\n<row label="x"/>\n`);
+    expect(code).toContain('<_row label="x" />');
+    expect(code).not.toContain(".output");
+    expect(code).not.toContain(".value");
+
+    // `/var` is refused exactly as it is with no import in scope.
+    const refused = failure(`\n<row/r label="x"/>\n`);
+    expect(refused).not.toBe("compiled");
+    expect(failure(`${imported}\n<row/r label="x"/>\n`)).toBe(refused);
+
+    // `<@item>` is not checked against the import's plain `item` prop.
+    const items = `<row label="x"><@item x="s"/></row>\n`;
+    expect(withoutImport(withTaglibRow(`${imported}\n${items}`))).toBe(
+      withTaglibRow(`\n${items}`),
+    );
   });
 
   it("a dynamic tag still calls the binding, with no warning", () => {

@@ -142,6 +142,56 @@ describe("lowercase tag with a same-named binding in scope", () => {
     }
   });
 
+  it("row 4: the taglib tag's metadata wins too (return shape, `/var`, `<@item>`)", () => {
+    // The authored `./row.mx` declares `<return>` and an `Input` whose `item`
+    // is a plain prop; the taglib tag declares neither. Every call below must
+    // compile exactly as it does with no import in scope.
+    const scratch = mkdtempSync(join(tmpdir(), "mx-html-row4-meta-"));
+    try {
+      mkdirSync(join(scratch, "tags"));
+      writeFileSync(join(scratch, "package.json"), '{"type":"module"}');
+      writeFileSync(
+        join(scratch, "tags", "row.marko"),
+        "<p>${input.label}</p>",
+      );
+      writeFileSync(
+        join(scratch, "row.mx"),
+        [
+          "export interface Input { label: number; item?: { x: number } }",
+          "<i>${input.label}</i>",
+          "<return value=42/>",
+        ].join("\n"),
+      );
+      const page = join(scratch, "main.mx");
+      const outcome = (source: string) => {
+        try {
+          return compile(source, page)
+            .code.split("\n")
+            .filter((line) => !line.includes('"./row.mx"'))
+            .join("\n");
+        } catch (error) {
+          return `error: ${(error as Error).message}`;
+        }
+      };
+      const imported = 'import row from "./row.mx"';
+      for (const call of [
+        '<row label="x"/>',
+        '<row/r label="x"/>',
+        '<row label="x"><@item x="s"/></row>',
+      ]) {
+        expect(outcome(`${imported}\n${call}\n`)).toBe(outcome(`\n${call}\n`));
+      }
+      // The plain call renders the tag (no `<return>` shape to unwrap), and
+      // `/var` stays refused as it is for any discovered `.marko` tag.
+      expect(outcome(`${imported}\n<row label="x"/>\n`)).toContain(
+        "_row.render({",
+      );
+      expect(outcome(`${imported}\n<row/r label="x"/>\n`)).toMatch(/^error: /);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
   it("a dynamic tag still calls the binding, with no warning", () => {
     const warnings: MxWarning[] = [];
     const { code } = compile(

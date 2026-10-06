@@ -173,7 +173,12 @@ describe("a .mx page calling a tags/*.marko tag", () => {
     // is called, not the authored `./row.mx` import or `<define/row>`.
     const dir = "lowercase-binding";
     write(`${dir}/tags/row.marko`, `<p>\${input.label}</p>`);
-    write(`${dir}/row.mx`, `<i>import</i>`);
+    // The authored module declares `<return>` and an `Input`, so a call that
+    // read the import's metadata would render nothing or reject the props.
+    write(
+      `${dir}/row.mx`,
+      `export interface Input { label: number; item?: { x: number } }\n<i>import</i>\n<return value=42/>`,
+    );
     const imported = write(
       `${dir}/imported.mx`,
       `import row from "./row.mx"\n<row label="x"/>`,

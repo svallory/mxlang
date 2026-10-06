@@ -3472,10 +3472,20 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     const binding = template
       ? bindingForDiscoveredModule(ctx, template, name, posOf(node))
       : undefined;
+    // `resolvedPath` keeps every metadata read (return shape, `Input`,
+    // attribute tags, `/var`) on the taglib tag too: resolved by name, it
+    // would read the authored import the call no longer targets.
     return lowerComponent(
       ctx,
       node,
-      binding ? { kind: "name", name, binding } : { kind: "name", name },
+      template
+        ? {
+            kind: "name",
+            name,
+            resolvedPath: template,
+            ...(binding && { binding }),
+          }
+        : { kind: "name", name },
       true,
     );
   }

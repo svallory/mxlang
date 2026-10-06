@@ -1,5 +1,8 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: MX source and messages use `${...}` placeholders.
 
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { CustomTag, MxWarning } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { compileNgMx } from "../src/ng-mx.ts";
@@ -83,5 +86,57 @@ describe("lowercase tag with a same-named binding in scope", () => {
       { customTags },
     );
     expect(templateOf(code)).toBe("<div>x</div>");
+  });
+  it("row 4: the registered tag's metadata wins too (return shape, `/var`, `<@item>`)", () => {
+    // The authored `./row.mx` declares `<return>` and an `Input` whose `item`
+    // is a plain prop; the registered `row` (a template-backed custom tag)
+    // declares neither. Every call compiles exactly as with no import.
+    const scratch = mkdtempSync(join(tmpdir(), "mx-angular-row4-meta-"));
+    try {
+      writeFileSync(
+        join(scratch, "row.mx"),
+        [
+          "export interface Input { label: number; item?: { x: number } }",
+          "<i>${input.label}</i>",
+          "<return value=42/>",
+        ].join("\n"),
+      );
+      const tagSource = "<p>${input.label}</p>";
+      writeFileSync(join(scratch, "tag-row.mx"), tagSource);
+      const customTags = {
+        row: {
+          template: {
+            filename: join(scratch, "tag-row.mx"),
+            source: tagSource,
+          },
+        } as unknown as CustomTag,
+      };
+      const outcome = (call: string, importLine: string) => {
+        try {
+          return templateOf(
+            compileNgMx(
+              ngMx(importLine, `<div>${call}</div>`),
+              join(scratch, "x.component.ng.mx"),
+              { customTags },
+            ).code,
+          );
+        } catch (error) {
+          return `error: ${(error as Error).message}`;
+        }
+      };
+      // The same line count either way, so positions in a message agree.
+      const imported = 'import row from "./row.mx";';
+      const unrelated = 'import { signal } from "@angular/core";';
+      for (const call of [
+        '<row label="x"/>',
+        '<row/r label="x"/>',
+        '<row label="x"><@item x="s"/></row>',
+      ]) {
+        expect(outcome(call, imported)).toBe(outcome(call, unrelated));
+      }
+      expect(outcome('<row/r label="x"/>', imported)).toMatch(/^error: /);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
   });
 });

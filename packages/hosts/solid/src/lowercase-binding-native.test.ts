@@ -1,5 +1,8 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: MX source and messages use `${...}` placeholders.
 
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { CustomTag, MxWarning } from "@mxlang/core";
 import { parse } from "@mxlang/parser";
 import { describe, expect, it } from "vitest";
@@ -95,5 +98,57 @@ describe("lowercase tag with a same-named binding in scope", () => {
     expect(warnings.map((w) => w.message)).toEqual([
       "`<span>` is the native element; the `span` imported at 2:1 is not called. Rename it `Span` or write `<${span}>`",
     ]);
+  });
+  it("row 4: the registered tag's metadata wins too (return shape, `/var`, `<@item>`)", () => {
+    // The authored `./row.mx` declares `<return>` and an `Input` whose `item`
+    // is a plain prop; the registered `row` (a template-backed custom tag)
+    // declares neither. Every call compiles exactly as with no import.
+    const scratch = mkdtempSync(join(tmpdir(), "mx-solid-row4-meta-"));
+    try {
+      writeFileSync(
+        join(scratch, "row.mx"),
+        [
+          "export interface Input { label: number; item?: { x: number } }",
+          "<i>${input.label}</i>",
+          "<return value=42/>",
+        ].join("\n"),
+      );
+      const tagSource = "<p>${input.label}</p>";
+      writeFileSync(join(scratch, "tag-row.mx"), tagSource);
+      const customTags = {
+        row: {
+          template: {
+            filename: join(scratch, "tag-row.mx"),
+            source: tagSource,
+          },
+        } as unknown as CustomTag,
+      };
+      const outcome = (source: string, withImport: boolean) => {
+        try {
+          return compileSolidMx(source, {
+            filename: join(scratch, "app.solid.mx"),
+            customTags,
+            ...(withImport && {
+              moduleBindings: new Set(["row"]),
+              importSpecifiers: new Map([["row", "./row.mx"]]),
+              importDefaultFromMarkoOrMx: new Set(["row"]),
+            }),
+          }).code;
+        } catch (error) {
+          return `error: ${(error as Error).message}`;
+        }
+      };
+      for (const call of [
+        '<row label="x"/>',
+        '<row/r label="x"/>',
+        '<row label="x"><@item x="s"/></row>',
+      ]) {
+        expect(outcome(call, true)).toBe(outcome(call, false));
+      }
+      expect(outcome('<row label="x"/>', true)).not.toContain("$mxReturn");
+      expect(outcome('<row/r label="x"/>', true)).toMatch(/^error: /);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
   });
 });
