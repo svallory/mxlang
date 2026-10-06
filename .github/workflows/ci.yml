@@ -36,13 +36,10 @@ jobs:
     name: test (${{ matrix.shard }})
     # Run 37142689080: Vitest alone took 448s. Two complete file shards
     # avoid leaving an eight-minute critical path after the job split.
-    # --maxWorkers=2: CI debug runs (#390) showed vitest's main process never
-    # lagged past 1.3 s, but at the default 3 workers one worker (typescript-
-    # plugin/index.test.ts, then angular event-handler) sat in a single
-    # synchronous block of 40-72 s under CPU contention with the mx-tsc child
-    # processes, past birpc's fixed 60 s RPC timeout ("Timeout calling
-    # onTaskUpdate"). Two workers leave the cores to those children; the shard
-    # wall time did not grow (326 s / 315 s vs 346 s / 375 s).
+    # #390: "Timeout calling onTaskUpdate" came from a worker holding the event
+    # loop for 40-72 s (a file of synchronous tests). The two files that did are
+    # fixed with scripts/vitest-yield.ts; the sampler below keeps watching and
+    # prints each shard's five longest blocks.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -61,7 +58,13 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run scripts/pre-verify.ts
       - run: bun run build
-      - run: bun run test -- --shard=${{ matrix.shard }}/2 --maxWorkers=2
+      - run: bun run test -- --shard=${{ matrix.shard }}/2
+        env:
+          MX_LAG_LOG: ${{ runner.temp }}/mx-lag-${{ matrix.shard }}.jsonl
+          NODE_OPTIONS: --require ${{ github.workspace }}/scripts/lag-sampler.cjs
+      - name: Longest synchronous blocks
+        if: always()
+        run: node scripts/lag-top.cjs "${{ runner.temp }}/mx-lag-${{ matrix.shard }}.jsonl"
       - name: Collect fresh Vitest evidence
         run: >-
           bun run scripts/verify-coverage.ts --collect
