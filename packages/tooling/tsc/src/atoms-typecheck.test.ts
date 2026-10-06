@@ -87,5 +87,6 @@ describe("mx-tsc reports a misspelled whole-value atom", () => {
       expect.stringMatching(/page\.mx\(5,36\): error TS2820: .*"lose"/),
     ]);
     expect(run.status).not.toBe(0);
-  });
+    // A whole mx-tsc run: 6.5 s seen under load, past the 5 s default.
+  }, 60_000);
 });

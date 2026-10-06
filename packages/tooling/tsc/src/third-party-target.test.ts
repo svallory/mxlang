@@ -1,6 +1,6 @@
-import { writeFileSync } from "node:fs";
+import { realpathSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import { stripVTControlCharacters } from "node:util";
 import { createMxLanguagePlugin } from "@mxlang/typescript-plugin";
@@ -118,8 +118,18 @@ afterAll(cleanupProjects);
 
 const sourceOf = (name: string): string =>
   CASES.find((c) => c.name === name)?.source ?? "<p>hi</p>\n";
-const norm = (text: string): string =>
-  text.replaceAll(workspace, "<ws>").replaceAll(/(?:\.\.\/)+<ws>/g, "<ws>");
+// tsc prints a path relative to the working directory, any number of `../`
+// deep wherever the temp dir is; the language server prints it absolute.
+// Relative first: it can contain the absolute path's tail.
+const norm = (text: string): string => {
+  let out = text;
+  for (const path of new Set([workspace, realpathSync(workspace)])) {
+    out = out
+      .replaceAll(relative(process.cwd(), path), "<ws>")
+      .replaceAll(path, "<ws>");
+  }
+  return out;
+};
 
 function lsLeg(name: string) {
   const path = file(name);

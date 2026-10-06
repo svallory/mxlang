@@ -142,7 +142,8 @@ const englishSummary = (output: string) =>
 it(
   "mx-tsc -w re-checks a .ng.mx template on every rebuild, at its exact position, in the summary count",
   async () => {
-    const dir = join(tmpdir(), "mx-tsc-watch-ngmx");
+    // Per run: concurrent runs never share (or delete) each other's project.
+    const dir = mkdtempSync(join(tmpdir(), "mx-tsc-watch-ngmx-"));
     let watcher: Watcher | undefined;
     try {
       cpSync(join(fixtures, "ng-diag-failing"), dir, { recursive: true });
@@ -294,7 +295,8 @@ it(
 it(
   "mx-tsc -w says nothing about missed rebuilds on an English run with ordinary TypeScript errors",
   async () => {
-    const dir = join(tmpdir(), "mx-tsc-watch-ngmx-ts-error");
+    // Per run: concurrent runs never share (or delete) each other's project.
+    const dir = mkdtempSync(join(tmpdir(), "mx-tsc-watch-ngmx-ts-error-"));
     let watcher: Watcher | undefined;
     try {
       cpSync(join(fixtures, "ng-diag-failing"), dir, { recursive: true });
@@ -352,7 +354,8 @@ it(
 it(
   "mx-tsc -w says so when a localized tsc's rebuild summary is not the one the pass reads",
   async () => {
-    const dir = join(tmpdir(), "mx-tsc-watch-ngmx-locale");
+    // Per run: concurrent runs never share (or delete) each other's project.
+    const dir = mkdtempSync(join(tmpdir(), "mx-tsc-watch-ngmx-locale-"));
     let watcher: Watcher | undefined;
     try {
       cpSync(join(fixtures, "ng-diag-failing"), dir, { recursive: true });
