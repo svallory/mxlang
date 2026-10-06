@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  type MeshGlobals,
   type MeshOptions,
   meshProject,
   setupMesh,
@@ -20,6 +21,7 @@ afterEach(() => {
   teardownMesh();
 });
 
+const UNKNOWN = `${join("src", "post.mesh.mx")}(1,1): error TS80001: \`<x>\` is not a known tag: it has no contract in \`customTags\`\n`;
 const MESH_KIND = [{ segment: "mesh", diagnosticSource: "mesh" }];
 const TSCONFIG = JSON.stringify({
   compilerOptions: {
@@ -36,7 +38,11 @@ const TSCONFIG = JSON.stringify({
 function check(source: string, options: MeshOptions = {}) {
   const merged = {
     ...options,
-    files: { "tsconfig.json": TSCONFIG, "src/post.mesh.mx": source },
+    files: {
+      ...options.files,
+      "tsconfig.json": TSCONFIG,
+      "src/post.mesh.mx": source,
+    },
   };
   setupMesh(builtinLookup().target("data"), merged);
   const dir = meshProject("mx-tsc-mesh-", merged);
@@ -61,6 +67,9 @@ describe("mx-tsc on a third-party host built on data", () => {
     const { status, output } = check("<object a=1/>\n", options);
     expect(output).toBe("");
     expect(status).toBe(0);
+    expect(
+      (globalThis as { __mxMeshCompiles?: string[] }).__mxMeshCompiles?.length,
+    ).toBeGreaterThan(0);
   });
 
   it("fails on a real data error, positioned in the file", () => {
@@ -84,7 +93,6 @@ describe("mx-tsc on a third-party host built on data", () => {
 
 describe("mx-tsc's data check keys on the resolved base target", () => {
   const FILE = join("src", "post.mesh.mx");
-  const UNKNOWN = `${FILE}(1,1): error TS80001: \`<x>\` is not a known tag: it has no contract in \`customTags\`\n`;
 
   it("gives a host built on data data's strict defaults: an unknown tag is an error", () => {
     const { status, output } = check("<x a=1/>\n", { fileKinds: MESH_KIND });
@@ -140,5 +148,156 @@ describe("mx-tsc's data check keys on the resolved base target", () => {
     expect(
       (globalThis as { __mxMeshCompiles?: string[] }).__mxMeshCompiles?.length,
     ).toBeGreaterThan(0);
+  });
+});
+
+const CONTRACTS = `export default {
+  service: {
+    parents: ["#root"],
+    attributes: {
+      id: { type: "string" },
+      value: { type: "string", required: true },
+    },
+    children: { port: { repeatable: true } },
+  },
+  port: {
+    parents: ["service"],
+    attributes: {
+      id: { type: "string" },
+      value: { type: "string", required: true },
+    },
+  },
+};
+`;
+const WITH_CONTRACTS = {
+  files: { "contracts.ts": CONTRACTS },
+  fileKinds: MESH_KIND,
+};
+const SHORTHAND = '<#a value="x"/>\n';
+const PORT_AT_TOP = `${join("src", "post.mesh.mx")}(1,1): error TS80001: \`<port>\` must be inside \`<service>\`; found at the top level\n`;
+
+describe("the unnamed-tag ladder (decision 145) on a host built on data", () => {
+  const mx = (extra: Record<string, unknown> = {}) => ({
+    contracts: "./contracts.ts",
+    ...extra,
+  });
+
+  it("rung 4: data's `object` when nothing overrides it", () => {
+    const run = check("<#a/>\n", { ...WITH_CONTRACTS, mx: mx() });
+    expect(run).toEqual({ status: 0, output: "" });
+    expect((globalThis as MeshGlobals).__mxMeshDefaultTags?.at(-1)).toBe(
+      "object",
+    );
+  });
+
+  it("rung 3: the descriptor's defaultTag", () => {
+    const run = check(SHORTHAND, {
+      ...WITH_CONTRACTS,
+      mx: mx(),
+      defaultTag: "port",
+    });
+    expect(run.output).toBe(PORT_AT_TOP);
+    expect(run.status).toBe(1);
+  });
+
+  it("rung 2: the host's override outranks the descriptor's", () => {
+    const run = check(SHORTHAND, {
+      ...WITH_CONTRACTS,
+      mx: mx(),
+      defaultTag: "service",
+      hostDefaultTag: "port",
+    });
+    expect(run.output).toBe(PORT_AT_TOP);
+    expect(run.status).toBe(1);
+    expect((globalThis as MeshGlobals).__mxMeshDefaultTags?.at(-1)).toBe(
+      "port",
+    );
+  });
+
+  it("rung 1: the host's own mx key outranks the host override", () => {
+    const run = check(SHORTHAND, {
+      ...WITH_CONTRACTS,
+      mx: mx({ "mesh-data": { defaultTag: "service" } }),
+      hostDefaultTag: "port",
+    });
+    expect(run).toEqual({ status: 0, output: "" });
+  });
+
+  it("rung 1: mx.data.defaultTag is read for a host built on data", () => {
+    const run = check(SHORTHAND, {
+      ...WITH_CONTRACTS,
+      mx: mx({ data: { defaultTag: "port" } }),
+    });
+    expect(run.output).toBe(PORT_AT_TOP);
+    expect(run.status).toBe(1);
+  });
+
+  it("an invalid mx.data.defaultTag is one positioned error and falls to the next rung", () => {
+    const run = check(SHORTHAND, {
+      ...WITH_CONTRACTS,
+      mx: mx({ data: { defaultTag: "nonexistent" } }),
+      hostDefaultTag: "service",
+    });
+    expect(run.output.match(/invalid `defaultTag` value/g)).toHaveLength(1);
+    expect(run.output).toContain("package.json(");
+    expect(run.status).toBe(1);
+  });
+
+  it("the host's own key wins over mx.data.defaultTag, and a differing pair warns naming both", () => {
+    const run = check(SHORTHAND, {
+      ...WITH_CONTRACTS,
+      mx: mx({
+        "mesh-data": { defaultTag: "service" },
+        data: { defaultTag: "port" },
+      }),
+    });
+    expect(run.status).toBe(0);
+    expect(run.output).toMatch(
+      /^package\.json\(\d+,\d+\): warning TS\d+: mx\.data\.defaultTag "port" is ignored: mx\["mesh-data"\]\.defaultTag "service" takes precedence\n$/,
+    );
+  });
+
+  it("the same value under both keys is silent", () => {
+    const run = check(SHORTHAND, {
+      ...WITH_CONTRACTS,
+      mx: mx({
+        "mesh-data": { defaultTag: "service" },
+        data: { defaultTag: "service" },
+      }),
+    });
+    expect(run).toEqual({ status: 0, output: "" });
+  });
+});
+
+describe("the data check adds to a host built on data; it never replaces the host's compile", () => {
+  const RULE = "forbidden";
+
+  it("the host's own rule still fires", () => {
+    const run = check(`<object a="${RULE}"/>\n`, {
+      fileKinds: MESH_KIND,
+      hostRule: RULE,
+    });
+    expect(run.output).toBe(
+      `${join("src", "post.mesh.mx")}(1,1): error TS80001: mesh rule: ${RULE} is not allowed\n`,
+    );
+    expect(run.status).toBe(1);
+  });
+
+  it("data's strict defaults and the host's rule both report, in one run", () => {
+    const run = check(`<x a="${RULE}"/>\n`, {
+      fileKinds: MESH_KIND,
+      hostRule: RULE,
+    });
+    expect(run.output).toBe(
+      `${UNKNOWN}${join("src", "post.mesh.mx")}(1,1): error TS80001: mesh rule: ${RULE} is not allowed\n`,
+    );
+    expect(run.status).toBe(1);
+  });
+
+  it("an error both report is printed once", () => {
+    const run = check("<object a=1/>\n<define name=y/>\n", {
+      fileKinds: MESH_KIND,
+    });
+    expect(run.output.match(/render-time macro/g)).toHaveLength(1);
   });
 });

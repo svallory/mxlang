@@ -26,10 +26,12 @@ export interface MeshOptions {
   /** The descriptor's own `defaultTag`; default data's. */
   defaultTag?: string;
   /**
-   * Drop `baseTarget` from the reused declarations: a host that reuses data's
-   * declarations but is not built on data (the data check must not apply).
+   * Leave `builtOn` off: a host that reuses data's declarations without
+   * declaring it is built on data (no base-target checks apply).
    */
   notBuiltOnData?: boolean;
+  /** The host's own rule: its compile throws at 1:0 on a file containing this text. */
+  hostRule?: string;
   /** Set `allowContractDefaultTag: false` on the declarations. */
   forbidContractDefaultTag?: boolean;
   /** `mx` keys of the project's `package.json` besides `host`. */
@@ -54,14 +56,10 @@ module.exports = {
   name: "mesh-data",
   packageName: "@fake/mx-mesh",
   defaultTag: o.defaultTag ?? data.defaultTag,
-  declarations: (() => {
-    const base = { ...data.declarations.default };
-    if (o.forbidContractDefaultTag) base.allowContractDefaultTag = false;
-    if (o.notBuiltOnData) delete base.baseTarget;
-    return o.forbidContractDefaultTag || o.notBuiltOnData
-      ? { default: base }
-      : data.declarations;
-  })(),
+  ...(o.notBuiltOnData ? {} : { builtOn: "data" }),
+  declarations: o.forbidContractDefaultTag
+    ? { default: { ...data.declarations.default, allowContractDefaultTag: false } }
+    : data.declarations,
   get parseTranslator() { return data.parseTranslator; },
   host: {
     name: "mesh",
@@ -74,6 +72,8 @@ module.exports = {
       compileModule(source, filename, options) {
         globalThis.__mxMeshCompiles.push(filename);
         globalThis.__mxMeshDefaultTags.push(options.defaultTag);
+        if (o.hostRule !== undefined && source.includes(o.hostRule))
+          throw new core.TranslateError("mesh rule: " + o.hostRule + " is not allowed", 1, 0);
         return compiler.compileModule(source, filename, options);
       },
     };

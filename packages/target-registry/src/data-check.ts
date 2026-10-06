@@ -18,14 +18,22 @@ import {
   statSync,
 } from "node:fs";
 import { basename, join } from "node:path";
+import * as core from "@mxlang/core";
 import {
   clearScanCache,
   isTranslateError,
+  type MxWarning,
+  type TargetCompileResult,
+  type TargetCompiler,
   type TargetPolicyDiagnostic,
 } from "@mxlang/core";
 import { type ParseDataOptions, parseData } from "@mxlang/data";
 import {
+  baseTargetDefaultTag,
   baseTargetOfPolicy,
+  descriptorFor,
+  effectiveDefaultTag,
+  lookupFor,
   resolveTargetPolicyDetailed,
   scanCached,
 } from "./index.ts";
@@ -232,8 +240,103 @@ function policyText(diagnostic: TargetPolicyDiagnostic): string {
 interface Package {
   manifest: Manifest | undefined;
   options: DataOptions;
-  /** `mx.data.defaultTag`, after the registry's check (decision 145). */
+  /**
+   * The unnamed tag's name after the decision-145 ladder: the package's key
+   * (`mx.<target>.defaultTag`, else the base target's own, e.g.
+   * `mx.data.defaultTag`), then the host's override, then the descriptor's.
+   */
   defaultTag?: string;
+  /**
+   * The host's own compile when the target differs from its base target (a
+   * host built on data): it runs on every file beside `parseData`, so the
+   * host's checks and transforms are never replaced by the base's.
+   */
+  host?: {
+    compiler: TargetCompiler | Error;
+    targets: ReturnType<typeof lookupFor>;
+  };
+}
+
+/**
+ * Runs a host's own compile on a file the data check also parsed: its
+ * `TranslateError` and warnings are diagnostics of the file (an error the
+ * data parse already reported is deduplicated by the caller's `report`), and
+ * anything else it throws is a diagnostic too, never a crash.
+ */
+function runHostCompile(
+  host: NonNullable<Package["host"]>,
+  source: string,
+  file: string,
+  options: {
+    customTags: Parameters<TargetCompiler["compileModule"]>[2]["customTags"];
+    defaultTag: string | undefined;
+    report: Report;
+  },
+): void {
+  const at = (
+    line: number,
+    column: number,
+    message: string,
+    severity: "error" | "warning",
+    where = file,
+  ): DataCheckDiagnostic => ({
+    file: where,
+    line,
+    column,
+    severity,
+    message,
+    origin: "data",
+    lfCoordinates: true,
+  });
+  if (host.compiler instanceof Error) {
+    options.report(
+      at(
+        1,
+        0,
+        `the host's compile could not be loaded: ${host.compiler.message}`,
+        "error",
+      ),
+    );
+    return;
+  }
+  const warnings: MxWarning[] = [];
+  let result: TargetCompileResult | undefined;
+  try {
+    result = host.compiler.compileModule(source, file, {
+      ...(options.customTags === undefined
+        ? {}
+        : { customTags: options.customTags }),
+      ...(options.defaultTag === undefined
+        ? {}
+        : { defaultTag: options.defaultTag }),
+      warnings,
+      targets: host.targets,
+    });
+  } catch (error) {
+    if (isTranslateError(error)) {
+      options.report(
+        at(
+          error.line,
+          error.column,
+          error.message,
+          "error",
+          error.file ?? file,
+        ),
+      );
+    } else {
+      options.report(
+        at(
+          1,
+          0,
+          `internal error: ${error instanceof Error ? error.message : String(error)}`,
+          "error",
+        ),
+      );
+    }
+  }
+  void result;
+  for (const w of warnings)
+    options.report(at(w.line, w.column, w.message, "warning"));
 }
 
 function errorCode(error: unknown): string {
@@ -294,12 +397,59 @@ export function checkDataPackage(dir: string): DataCheckResult {
         lfCoordinates: true,
       });
     }
+    const descriptor = descriptorFor(policy);
+    const base = baseTargetOfPolicy(policy);
+    let configured = policy.defaultTag;
+    if (base !== policy.target) {
+      const own = baseTargetDefaultTag(manifest.file, policy);
+      for (const d of own.diagnostics) {
+        reportManifest({
+          file: d.file,
+          line: d.line,
+          column: d.column,
+          ...(d.length !== undefined ? { length: d.length } : {}),
+          severity: d.severity ?? "warning",
+          message: policyText(d),
+          origin: "manifest",
+          lfCoordinates: true,
+        });
+      }
+      if (own.value !== undefined && own.at) {
+        if (configured === undefined) configured = own.value;
+        else if (configured !== own.value) {
+          // The host's own key wins; saying nothing would ignore the other.
+          reportManifest({
+            file: own.at.file,
+            line: own.at.line,
+            column: own.at.column,
+            ...(own.at.length !== undefined ? { length: own.at.length } : {}),
+            severity: "warning",
+            message: `mx.${own.target}.defaultTag ${JSON.stringify(own.value)} is ignored: mx[${JSON.stringify(policy.target)}].defaultTag ${JSON.stringify(configured)} takes precedence`,
+            origin: "manifest",
+            lfCoordinates: true,
+          });
+        }
+      }
+    }
+    const defaultTag = effectiveDefaultTag(
+      configured === undefined ? {} : { defaultTag: configured },
+      descriptor,
+    );
+    let host: Package["host"];
+    if (descriptor.name !== base && descriptor.load) {
+      let compiler: TargetCompiler | Error;
+      try {
+        compiler = descriptor.load(core);
+      } catch (error) {
+        compiler = error instanceof Error ? error : new Error(String(error));
+      }
+      host = { compiler, targets: lookupFor(policy) };
+    }
     return {
       manifest,
       options: dataOptions(manifest, reportManifest),
-      ...(policy.defaultTag === undefined
-        ? {}
-        : { defaultTag: policy.defaultTag }),
+      defaultTag,
+      ...(host ? { host } : {}),
     };
   };
 
@@ -431,6 +581,13 @@ export function checkDataPackage(dir: string): DataCheckResult {
         origin: "data",
         // `-1` is "another file's text": the coordinates are the only answer.
         ...(d.offset >= 0 ? { offset: d.offset } : {}),
+      });
+    }
+    if (pkg.host) {
+      runHostCompile(pkg.host, source, file, {
+        customTags: scan.customTags,
+        defaultTag: pkg.defaultTag,
+        report: reportFile,
       });
     }
   }
