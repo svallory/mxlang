@@ -10,6 +10,11 @@ import {
 } from "@mxlang/parser";
 import solidBabelPlugin from "@solidjs/babel-plugin";
 import { beforeAll, describe, expect, it } from "vitest";
+import {
+  ATTR_SPREAD_HELPER,
+  TEXTAREA_DYN_SPREAD_HELPER,
+  TEXTAREA_OMIT_HELPER,
+} from "./attr-guard.ts";
 import { compileSolidMx, compileSolidUnit } from "./index.ts";
 
 const packageRoot = new URL("..", import.meta.url).pathname;
@@ -409,5 +414,23 @@ describe("module assembly", () => {
     });
     expect(code).toContain("function __mxAttrValue");
     expect(code).toContain("function __mxAttrSpread");
+  });
+});
+
+// TypeScript cannot spread `unknown`, string, number or boolean. The guards'
+// declared result is what a native element's `{...guard(x)}` is checked
+// against, so it must be an object type for every input (mx-tsc
+// `attr-guard-solid.test.ts` runs the real check).
+describe("spread guard result type", () => {
+  it.each([
+    ["__mxAttrSpread", ATTR_SPREAD_HELPER],
+    ["__mxTextareaOmit", TEXTAREA_OMIT_HELPER],
+    ["__mxTextareaDynSpread", TEXTAREA_DYN_SPREAD_HELPER],
+  ])("%s returns T for an object and {} otherwise", (name, helper) => {
+    expect(helper).toMatch(
+      new RegExp(
+        `function ${name}<T,>\\([^)]*\\): T extends object \\? T : \\{\\} \\{`,
+      ),
+    );
   });
 });
