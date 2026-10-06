@@ -28,6 +28,7 @@ import {
   newCtx,
   type TranslateError,
 } from "./core.ts";
+import { CORE_TAGLIB, CORE_TAGLIB_ID } from "./core-taglib.ts";
 import {
   type CustomTag,
   customTagTaglib,
@@ -35,7 +36,6 @@ import {
   rejectUnreachableHooks,
   rejectWildcardReferences,
 } from "./custom-tags.ts";
-import { CORE_TAGLIB, CORE_TAGLIB_ID } from "./core-taglib.ts";
 import type { Policy } from "./declarations.ts";
 import type { Ir } from "./ir.ts";
 import { nullPrototypeTags } from "./lookup-safety.ts";
