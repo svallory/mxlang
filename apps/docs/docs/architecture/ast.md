@@ -255,7 +255,7 @@ the row says "not stated".
 | A7 | Attribute tags are moved out of the body into `tag.attributeTags`, with preceding comments (`[C]chunk-src.js:5915-5927`); a `controlFlow` tag holding attribute tags has its body and `attributeTags` swapped and is moved into the **parent's** `attributeTags`, with `body.attributeTags = true` (`[C]chunk-src.js:6194-6227`). The moved list is then re-sorted by `start` (`attributeTags.sort(sortByStart)`, `[C]chunk-src.js:6213`). Probe: `<Card><@head/><if=a><@item/></if></Card>` puts the `<if>` in `Card.attributeTags`. | Marko's translator compiles attribute tags as input properties of the parent; moving them at parse time saves a pass. | Lowering already re-derives structure: three synchronized views (`attributeTags`, `attributeTagTree`, `attrTagProps`) and source-order merging (`lower.ts:1508-1516`, `:1517`). The AST should show what was written, where it was written. | Attribute tags stay in `body` in source order as `MxAttributeTag` nodes; nothing moves (§3.7, §8 D2). |
 | A8 | Statement tags (`import`, `export`, `static`, `server`, `client`, `class`) are tags whose open tag is kept raw (`rawOpenTag`, `[C]chunk-src.js:6173-6177`) and whose meaning comes from the taglib (`core-tags.json:75-90`); without the taglib they parse as tags with garbage attributes (probe, §1.4). MX recovers the statement by slicing the source on `loc` (`lower.ts:2153`, `:3399-3410`) and regexes (`lower.ts:2161`, `:2202`). Spec §2 documents the cost (`apps/docs/docs/specification.md:204-209`). | Marko's grammar is tag-shaped at the top level; the translator gives the statement tags meaning. | They are TypeScript statements. MX needs the parsed statement, its keyword and its span. | `MxModuleStatement { keyword, statements }` with a parsed Babel statement list (§3.10). |
 | A9 | `MarkoClass` (`[C]babel.js:8152-8161`), a `Class`-aliased node. | Marko 5's class components. | MX has no class components; `class` is not a statement MX accepts (`lower.ts:2209-2212` rejects anything but `import`/`static`/`export`). | No node. `class { }` at the top level is an `MxModuleStatement { keyword: "class" }` that lowering rejects (§3.10), so the error keeps its position. |
-| A10 | `MarkoParseError` is an `Expression` and `Statement` alias (`[C]babel.js:8070-8074`) put in place of the failed expression; `onError` from the template parser **throws** (`[C]chunk-src.js:5975-5984`). Two error channels, neither carries a code. | Lets the translator keep going until it reaches the bad expression, then throw. | Decision 157 addendum 1 asks for structured errors. MX needs every error as data: a code, a span, a message. Several template errors per parse would need parser recovery (Q20). | `MxParseError { code, source, message, span }` in `MxDocument.errors`, and an `error` field on the expression container that failed (§3.13, §4). Expression and front-end errors no longer throw; a template-parser error still ends the parse (htmljs `emitError`), but the tree built so far is kept (§3.13). |
+| A10 | `MarkoParseError` is an `Expression` and `Statement` alias (`[C]babel.js:8070-8074`) put in place of the failed expression; `onError` from the template parser **throws** (`[C]chunk-src.js:5975-5984`). Two error channels, neither carries a code. | Lets the translator keep going until it reaches the bad expression, then throw. | Decision 157 addendum 1 asks for structured errors. MX needs every error as data: a code, a span, a message. Several template errors per parse would need parser recovery, which decision 163 rules out for now (Q20). | `MxParseError { code, origin, message, span }` in `MxDocument.errors`, and an `error` field on the expression container that failed (§3.13, §4). Expression and front-end errors no longer throw; a template-parser error still ends the parse (htmljs `emitError`), but the tree built so far is kept (§3.13); `compileSource` lowers no document with errors and reports them all (§3.13, decisions 161-162). |
 | A11 | Tag params and tag type parameters are stored on **`MarkoTagBody`** (`[C]chunk-src.js:6059`, `:6102`), not on the tag. | `MarkoTagBody` is the Babel scope that binds them (A1). | The params belong to the tag head the author wrote; scope is a lowering concern. | `MxTag.params`, `MxTag.typeParams` (§3.2). The body is a plain child list. |
 | A12 | Positions: Marko nodes get `start`/`end` and a `loc` without `index` (`withLoc`, `[C]chunk-src.js:5909-5914`), then lose `start`/`end` in the clone (`[C]chunk-src.js:6710`, `[C]babel.js:13217-13241`); Babel nodes keep `loc.index`. Position objects are shared between nodes (`packages/core/AGENTS.md`, `parseFragment` bullet). Fragments are shifted by a tree walk afterwards (`fragment.ts:229-264`). `Program.end` is `code.length - 1` (`[C]chunk-src.js:6241`). | Babel's `File`/`loc` model; the clone is how the compiler hands the tree to Babel. | One numeric span on every node, file-relative, in UTF-16 units, with line/column computed on demand (§5). | `start`/`end` on every MX node; no `loc` stored (§5). |
 | A13 | Text is whitespace-normalized in the front end, with neighbour lookahead (`[C]chunk-src.js:5985-6037`); the node's `loc` is moved to the trimmed text. | Marko's HTML output rules. | MX needs both: the normalized value the IR's `Text.value` carries, and the authored span (`ir.ts:396-412`). | `MxText { value, raw }` plus span (§3.8, §8 D6). |
@@ -318,7 +318,7 @@ or a region/fragment).
 | Field | Type | Opt. | Meaning |
 |---|---|---|---|
 | `body` | `MxChild[]` | no | top-level children, source order; partial when the template parser stopped at an error (§3.13) |
-| `errors` | `MxParseError[]` | no | expression errors in source order, then at most one template-parser error, last (§3.13) |
+| `errors` | `MxParseError[]` | no | one list, every producer (expression, front end, template parser), ordered by `span.start`; the template-parser error, at most one, is always last (§3.13) |
 | `complete` | `boolean` | no | `false` when the template parser reported an error (the parse stopped there) |
 | `source` | `string` | no | the text that was parsed (the fragment, for a fragment parse) |
 | `base` | `{ offset: number; line: number; column: number }` | no | §5.3; `{0, 0, 0}` for a whole file |
@@ -419,8 +419,7 @@ A field shape of `MxTag` (no `type`).
 ```ts
 type MxTagName =
   | { kind: "static"; value: string; span: Span }
-  | { kind: "dynamic"; expression: MxExpression; quasis: Span[];
-      expressions: MxExpression[]; span: Span }                 // <${x}>, <my-${x}>
+  | { kind: "dynamic"; expression: MxExpression; span: Span }  // <${x}>, <my-${x}>
   | { kind: "unnamed"; span: Span };                            // <#a>, <.b>, <:c>, concise #a
 ```
 
@@ -438,13 +437,19 @@ type MxTagName =
   `/>` in HTML mode and the closing tag repeats the written name
   (`specification.md:729-731`). Which table decides self-closing after
   `@marko/compiler` is dropped (today its `self-closing-tags` dependency,
-  `bun.lock:1050`) is part of Q21.
+  `bun.lock:1050`) belongs to the element-shape table (§3.12, ruling Q21).
 - `dynamic`: htmljs reports a `Template` (`packages/parser/src/template/util/constants.ts:37-40`).
-  `quasis` are its static parts' spans, `expressions` one container per
-  `${…}` (span inside the braces), `expression` the whole name as one
-  container: a Babel `TemplateLiteral`, or the single expression when both
-  quasis are empty (Marko's rule, `[C]chunk-src.js:5954-5973`). `span` covers
-  the written name, `${` and `}` included.
+  `expression` is the whole name as one container, built by Marko's
+  template-string rule (`parseTemplateString`, `[C]chunk-src.js:5954-5973`),
+  which the front end **keeps on purpose** (the "replaced" of A17 does not
+  apply to it): one `${…}` with both quasis empty is that expression, except
+  that a `StringLiteral` result is wrapped in a one-quasi `TemplateLiteral`
+  (`<${"div"}>`, `[C]chunk-src.js:5962-5963`); any other name is a Babel
+  `TemplateLiteral` over the whole written text. It is needed because
+  `Expr.code` for a dynamic name is printed from that node today (`` `my-${x}` ``,
+  `` `div` ``; §7.1, generator row). There is no separate list of quasis or
+  inner expressions: they would re-parse the same text into a second Babel
+  tree. `span` covers the written name, `${` and `}` included.
 - `unnamed` (decision 145): `span` is empty, at the offset right after `<`
   (concise: at the first sugar character). Lowering resolves it through the
   `defaultTag` ladder (spec "The unnamed tag"); the AST never writes `div`.
@@ -481,7 +486,7 @@ Purpose: one named attribute, or the tag's default value.
 | `nameSpan` | `Span` | no | the name (`onAttrName`); zero-width at the `=`/`(` for the default value |
 | `operator` | `"=" \| ":=" \| null` | no | `null` for a bare attribute or a method |
 | `value` | `MxExpression \| MxMethod \| null` | no | `null` for a bare attribute (`disabled`) |
-| `args` | `MxArguments \| null` | no | `name(args)` without a body (Marko's attribute arguments, `onAttrArgs`) |
+| `args` | `MxArguments \| null` | no | `name(args)` without a body: Marko 5's attribute-arguments form (`onAttrArgs`). Kept so lowering can position its error: today lowering only rejects it (`Unsupported arguments on …`) or hands it to the host's `resolveAttributeMethod` (`lowerAttrNamed`, `lower.ts:684-697`) |
 
 Spans, one rule: `start = min(nameSpan.start, value?.start)` and `end =` the
 end of `value`, of `args`, or of `nameSpan`, whichever is last. The `min`
@@ -504,10 +509,14 @@ Offsets:
 - `onInput(e) { set(e) }`: `[42, 63)`; `nameSpan` `[42, 49)`; `value` is an `MxMethod` `[49, 63)`
 
 Invariants: `operator === ":="` implies `value` is an `MxExpression` (bound
-attribute); `value.type === "MxMethod"` implies `operator === null`; a default
-value is written at most once per tag (a second is a front-end
-`MxParseError` `MX_DUPLICATE_DEFAULT`, which is also decision 146 addendum 4's
-"error only if the tag already has a default value"). Bound attributes keep
+attribute); `value.type === "MxMethod"` implies `operator === null`. The AST
+records every default value written, and never decides whether a second one
+is an error: that depends on the host and on the position (an attribute-position
+`#x=1` is no default value on a host that claims `#`, P8), so the rule is
+lowering's (§6.1a, `MX_DUPLICATE_DEFAULT`). Lowering reads a default value
+(`name: null`) as the attribute `value` through one adapter, with the
+zero-width `nameSpan` kept (IR invariant E7): the one Marko convention MX keeps
+on purpose, because every tag reads its default input as `value`. Bound attributes keep
 their full name: `value:=x` is `name: "value"`, because htmljs reports `:=`
 as the operator (`part.bound`, `[C]chunk-src.js:6127`).
 
@@ -557,7 +566,8 @@ Purpose: the three name sugars in any position (decision 146 and addenda).
 | `sigil` | `"#" \| "." \| ":"` | no | which sugar |
 | `position` | `"tag" \| "attribute"` | no | tag-adjacent (in `MxTag.shorthands`) or in the attribute list |
 | `value` | `MxShorthandValue` | no | the part after the sigil |
-| `default` | `MxExpression \| MxMethod \| null` | no | decision 146 addendum 4: `#name=expr` or `#name(params) { body }` sets the tag's default value |
+| `operator` | `"=" \| ":=" \| null` | no | what directly follows the token (whitespace allowed): `=`, `:=`, or nothing / a method (decision 146 addendum 4) |
+| `default` | `MxExpression \| MxMethod \| null` | no | decision 146 addendum 4: the value after `=` or `:=`, or the method, in `#name=expr` / `#name(params) { body }`; it sets the tag's default value |
 
 ```ts
 type MxShorthandValue =
@@ -567,17 +577,22 @@ type MxShorthandValue =
 ```
 
 Spans: `start` = the sigil; `end` = end of `value` (not of `default`, which has
-its own span). `value.span` excludes the sigil.
+its own span). `value.span` excludes the sigil. The node's span is the
+authored token (`#x`, `.c`, `:n`), kept exactly: lowering takes `Attr.sugar`
+and, on a host that claims `#`, the attribute name `#x` from it (P8, §6.1).
 
 What each sigil takes (`specification.md:713-718`): `:name` an identifier,
 `[A-Za-z_$][\w$-]*`; `#x` and `.x` what Marko's shorthand takes, a run up to
 whitespace, `=`, `(`, `/`, `|`, `<`, `,` or `>`, with `.` and `#` starting the
 next part.
 
-**Splitting a shorthand value.** htmljs reports a tag-adjacent `#d:b` as **one**
-`onTagShorthandId` `Template` (reviewer's probe: `[4, 8)` for `<a.c#d:b …>`),
-and an attribute-position `#x`/`.x`/`:x` as an attribute name. The front end
-splits each into `MxShorthand`s (`specification.md:724-728`):
+**Splitting a shorthand value: one rule for both positions.** htmljs reports
+a tag-adjacent `#d:b` as **one** `onTagShorthandId` `Template` (reviewer's
+probe: `[4, 8)` for `<a.c#d:b …>`), and an attribute-position `.c#m.d:y` as
+**one** attribute name. The front end splits each into `MxShorthand`s with the
+same rule (`specification.md:724-728`; today `rewriteHead` and
+`rewriteAttributes` in `core/src/name-sugar.ts`, where the attribute-position
+chain is cut into `.`/`#` parts outside any `${…}` by `splitShorthandChain`):
 
 1. Static value: split at its **first** `:`. `.c:b` gives `.c` and a
    tag-position `:b`. A second `:` anywhere in the tag head is an
@@ -589,7 +604,24 @@ splits each into `MxShorthand`s (`specification.md:724-728`):
 3. A `:` in a static part **before** a `${…}` (`<a.c:b${x}>`) is an
    `MxParseError` `MX_COLON_BEFORE_DYNAMIC` at that `:`.
 4. A value left empty by a split (`<a.:b>`) produces no `MxShorthand` for that
-   sigil (`name-sugar.ts:831-842`).
+   sigil (tag position, `rewriteHead`); in attribute position an empty part
+   (`.`, `#`) is an error, as today (`rewriteAttributes`: "`.` needs a name
+   after it").
+5. A `${…}` in an attribute-position shorthand is an `MxParseError`
+   `MX_SUGAR_DYNAMIC` at its sigil (today: "a dynamic shorthand works only
+   tag-adjacent", `rewriteAttributes`).
+6. Arguments without a body after a sugar (`#x(p)`, `.c(p)`, `:x(p)`) are an
+   `MxParseError` `MX_SUGAR_ARGUMENTS` at the sugar (today `checkNearSugar`,
+   two branches: `#`/`.` and `:`). With a body, `#x(p) { … }` is a method
+   default (decision 146 addendum 4), `operator: null`.
+7. `:=` after a sugar (`:n:=y`, `.c:=y`, `#x:=y`) is `operator: ":="` and an
+   `MxParseError` `MX_SUGAR_BOUND` at the sugar ("a bound value is not
+   supported on name sugar", `checkNearSugar`), except where the sugar is not
+   one: attribute-position `#x` on a host that claims `#` (P8). Because that
+   depends on the host, the front end records `MX_SUGAR_BOUND` for `:` and `.`
+   only, and lowering raises it for `#`. Today, a `:n:=y` whose value cannot
+   be bound (not an identifier or member expression) keeps the ordinary bound
+   value error instead (`checkNearSugar`, `bindable`).
 
 ```mx
 <a.c#d:b title="t" .big :mail/>
@@ -601,7 +633,11 @@ Offsets:
 - `<a.${x}:b>`: `.` `[2, 7)` with `value.span` `[3, 7)` and `template.span` `[5, 6)`; `:b` `[7, 9)`
 
 Invariants: a tag has at most one `:` sugar in its head; `value.kind ===
-"dynamic"` implies `position === "tag"`; order within `shorthands` and within
+"dynamic"` implies `position === "tag"`; `default !== null` implies
+`position === "attribute"` (tag-adjacent `<a#x=1>` is an ordinary default
+attribute, `MxAttribute { name: null }`, because htmljs ends the shorthand
+at `=`); `operator === null` and `default !== null` implies `default` is an
+`MxMethod`; order within `shorthands` and within
 `attributes` is source order, so the spec's class-order rule can be applied by
 lowering without positions. Atoms: `:name` standing alone in attribute
 position **is** this node (decision 156 §4); `:name` inside an expression is
@@ -625,31 +661,43 @@ Invariants: always somewhere under an `MxTag` (Marko throws "@tags must be
 nested within another element", `[C]chunk-src.js:5917`; MX records an
 `MxParseError` `MX_ATTRIBUTE_TAG_AT_ROOT` and keeps the node); never moved: an
 `<if>` holding attribute tags keeps them in its own `body` (§8 D2).
+Because nothing moves, two things Marko's front end did at parse time become
+lowering's, at today's positions (P7): the error "Cannot have attribute tags
+and body content under a control flow tag." (Marko throws it at the first
+body child, `[C]chunk-src.js:6206`; lowering already raises the same message
+for the multi-branch and nested cases, `lower.ts:1555-1561` and
+`:1715-1721`, and takes over the single-tag case at Marko's position), and
+comments directly before an attribute tag, which Marko moves into
+`attributeTags` with it (`[C]chunk-src.js:5918-5926`) and lowering skips as
+layout.
 
 ### 3.8 `MxText`
 
 | Field | Type | Opt. | Meaning |
 |---|---|---|---|
 | `value` | `string` | no | in a `"html"` or `"parsed-text"` body: normalized by Marko's rule (`[C]chunk-src.js:5991-6036`, spec §3 "Whitespace"); in a `"preserve"` or `"parsed-text-preserve"` body: the authored text unchanged, as Marko does when `preserveWhitespace` is on (`[C]chunk-src.js:5987-5989`) |
-| `raw` | `string` | no | `source.slice(start, end)` |
+| `raw` | `string` | no | `source.slice(start, end)`, the authored run |
+| `valueSpan` | `Span` | no | the range `value` was normalized from, which feeds the IR's `Text.span` |
 
-Spans: in a normalizing body, Marko's `withLoc` range
+Spans: the node span is the whole `onText` range, newline-led whitespace
+included (formatters need the authored run). `valueSpan` in a normalizing body is Marko's `withLoc` range
 (`[C]chunk-src.js:6029-6033`): `start = part.start +
 rawValue.indexOf(trimmed)` and `end = start + trimmed.length`, where `trimmed`
 is the text after the newline-led runs at each end were removed and before
-inner whitespace was collapsed into `value`; in a preserving body, the whole
-`onText` range. This keeps
-the IR's `Text.span` exactly what it is today (decision 158 requires every
-golden byte-identical). Concise `--` text lines produce `MxText` too, starting
-after `-- `.
+inner whitespace was collapsed into `value`; in a preserving body it equals
+the node span. Lowering writes `Text.span` from `valueSpan`, which keeps it
+exactly what it is today (the goldens are unchanged). Concise `--` text lines
+produce `MxText` too, starting after `-- `.
 
-Examples: `<p>  a\n  b</p>` gives `value: " a b"`, span `[3, 10)`;
+Examples: `<p>  a\n  b</p>` gives `value: " a b"`, span `[3, 10)`, `valueSpan`
+`[3, 10)`; `<p>\n  a</p>` gives span `[3, 7)` and `valueSpan` `[6, 7)`;
 `<pre>  a\n  b</pre>` gives `value: "  a\n  b"` (probe: Marko keeps the
 newline and the spaces for `<pre>`, which `marko-html.json` marks
 `preserveWhitespace`, `[C]chunk-src.js:3606`).
 
 Invariant: in a normalizing body, a run that normalizes to `""` produces no
-node; `raw` is never empty.
+node (its whitespace is layout, with no node, as in Marko); `raw` is never
+empty; `valueSpan` lies inside the node span.
 
 ### 3.9 `MxPlaceholder`
 
@@ -677,16 +725,33 @@ false`; `expression.span` `[6, 10)`.
 | `keyword` | `"import" \| "export" \| "static" \| "server" \| "client" \| "class"` | no | the first word |
 | `code` | `MxStatements` | no | the whole statement for `import`/`export`/`class`, the part after the keyword for `static`/`server`/`client` |
 
-Spans: `start` at the keyword; `end` at the end of the statement, line
-terminator excluded (the IR already trims it, `lower.ts:2139-2150`).
+Spans: the htmljs statement range, right-trimmed of whitespace: `start` at
+the keyword, `end` after the last non-whitespace character on the line, so a
+trailing same-line comment is **inside** the span (today's `statementSpan`,
+`lower.ts:2215-2226`, which trims the Marko range whose end sits on the next
+line; IR spec §3.3, `Import`/`Export`/`Static` row). `code.span` is Babel's
+statement range, which ends before such a comment; it is not the source of any
+IR text.
 
-Example: `static const GREETING = "Welcome"` is `[0, 33)`; `keyword` `[0, 6)`;
-`code.span` `[7, 33)`.
+What lowering takes from where (P2):
+
+| IR field | Source |
+|---|---|
+| `Static.code` | `source.slice(span)` minus the leading `static` and its whitespace (today `line.replace(/^static\s+/, "")`, `lowerStatement`) |
+| `Import.code`, `Export.code`, `InputInterface.code` | `source.slice(span)` |
+| `span` (`Import`/`Export`/`Static`), `loc`, `end` | the node span |
+| `Import.bindings`, the `Input` test | the Babel payload (`code.node`) |
+
+Example: `static const A = 1 // trailing` is `[0, 30)` and `Static.code` is
+`const A = 1 // trailing` (the reviewer's probe d); `code.span` is `[7, 18)`.
 
 Invariants: only in `MxDocument.body`; `export interface Input` is an
 `MxModuleStatement { keyword: "export" }` whose payload is a
-`TSInterfaceDeclaration` (the IR's `InputInterface` split is a lowering rule,
-`lower.ts:2202-2204`). The keyword list is the one the front end recognizes;
+`TSInterfaceDeclaration`. Splitting it out is lowering's, by payload type,
+keeping today's asymmetry: `export interface Input` becomes `InputInterface`
+(`lowerStatement`, `lower.ts:2278`), while `export type Input` stays an
+ordinary `Export` in the IR but is still read as the template's own input
+(`lower`, `lower.ts:3577`, which matches `interface|type`). The keyword list is the one the front end recognizes;
 it is the statement entries of `core-tags.json:75-90`.
 
 `MxScriptlet` — `$ stmt` and `$ { block }`.
@@ -734,8 +799,8 @@ valueSpan.end)`.
 
 | `bodyMode` | htmljs `TagType` | Text handling | Answered for |
 |---|---|---|---|
-| `"html"` | `html` | normalized | everything not listed below |
-| `"parsed-text"` | `text` | normalized | `parseOptions.text` without `preserveWhitespace` (`<html-comment>`, `core-tags.json`) |
+| `"html"` | `html` | normalized | everything not listed below, and the unnamed tag (`<.x>`: `tagShape("")` answers `"html"`) |
+| `"parsed-text"` | `text` | normalized | `parseOptions.text` without `preserveWhitespace`: `<title>` (Marko's html taglib, `"<title>": { "parse-options": { "text": true } }`, `[C]chunk-src.js:3787`), `<html-comment>` (`core-tags.json`) |
 | `"parsed-text-preserve"` | `text` | authored | `text` + `preserveWhitespace`: `<script>`, `<style>`, `<textarea>` (`[C]chunk-src.js:3645-3747`), `<html-script>`, `<html-style>` (`core-tags.json`) |
 | `"preserve"` | `html` | authored | `preserveWhitespace` alone: `<pre>` (`[C]chunk-src.js:3606`); a custom tag's `parseOptions.preserveWhitespace` (`custom-tags.ts:474-478`) |
 | `"void"` | `void` | — | `openTagOnly` **as the parser receives it today**: the HTML/SVG/MathML void elements of Marko's built-in taglibs (`marko-html.json` starts at `[C]chunk-src.js:3057`; e.g. `<area>` at `:3110`) and the core tags marked `openTagOnly` (`<let>`, `<const>`, `<id>`, `<lifecycle>`, `<log>`, `<debug>`, `<return>`, `core-tags.json`) |
@@ -754,7 +819,15 @@ and `preserveWhitespace` to the parser (`custom-tags.ts:474-485`) and enforces
 `lower.ts:3148`; IR spec §5.5).
 
 Invariant: in a `parsed-text*` body no `MxTag` appears; `<x>` inside
-`<script>` is text (probe: `MarkoText " <x>"`).
+`<script>` is text (probe: `MarkoText " <x>"`), and so is `<b>` inside
+`<title>`.
+
+**Who owns the table.** The element-shape table belongs to the target
+descriptor, with a core default (the html family's void, text and
+preserve-whitespace elements); a target overrides entries, as the data target
+does today (`targets/data/src/taglib.ts:85-100`). It is **one table with two
+readers**: the front end's `tagShape` and decision 145's check that a
+`defaultTag` has a plain parse shape (`adr-default-tag.md:29`).
 
 ### 3.13 `MxParseError` and what a failed parse contains
 
@@ -762,7 +835,7 @@ Invariant: in a `parsed-text*` body no `MxTag` appears; `<x>` inside
 |---|---|---|---|
 | `type` | `"MxParseError"` | no | |
 | `code` | `string` | no | a stable code: htmljs codes by name (`INVALID_ATTRIBUTE_VALUE`, `MISMATCHED_CLOSING_TAG`, … `[H]util/error-code.d.ts`, 31 codes, 0-30), `BABEL_<reasonCode>` for an expression sub-parse failure, `MX_<NAME>` for front-end rules |
-| `source` | `"template" \| "expression" \| "front-end"` | no | which of the three produced it |
+| `origin` | `"template" \| "expression" \| "front-end"` | no | which of the three produced it |
 | `message` | `string` | no | one line, no code frame, no ANSI |
 | `span` | `Span` | no | `start`/`end` of the node: what to underline; for an expression error the precise point when Babel reports one (Marko's `errorLoc`, bounded to the source range as `getBoundedRange` does, `[C]chunk-src.js:1040-1050`) |
 | `context` | `Span \| null` | no | the whole construct when it differs from `span` (Marko's `source` range) |
@@ -783,9 +856,15 @@ Three producers, with different consequences:
    message gets Marko's hint "Attribute values in Marko are plain JavaScript
    expressions, not JSX; remove the wrapping `{ }`" (`withWrappedAttrValueHint`,
    `[C]chunk-src.js:6292-6297`), reworded for MX ("… in MX …").
-3. **Front-end rules** (`MX_*`: second `:` name, `:` before `${…}`, statement
-   tag in HTML mode, `<%`, attribute tag at the root, duplicate default value)
-   are recorded and do not stop the parse.
+3. **Front-end rules** (`MX_*`: second `:` name, `:` before `${…}`, a dynamic
+   attribute-position shorthand, arguments or `:=` on a sugar (§3.6),
+   statement tag in HTML mode, `<%`, attribute tag at the root) are recorded
+   and do not stop the parse. A duplicate default value is not among them: it
+   is lowering's (§3.5).
+
+All three go into one list, `MxDocument.errors`, ordered by `span.start`, with
+the template error (at most one) last even when an earlier-recorded entry
+starts after it.
 
 **What the AST contains when the template parser reports an error** (from the
 parser code above, not from what would be desirable):
@@ -809,11 +888,31 @@ What a consumer such as the language server may rely on: the template error's
 `code`, `message` and `span`; every expression and front-end error before it;
 and every complete node. It must not rely on the shape of an `incomplete`
 tag's head or body beyond what is listed, and it gets no diagnostics for the
-text after the error. Recovery (more than one template error per parse) is a
-parser change; it is open question Q20 for mx-lead and the parser's owner, not
-a property of this AST.
+text after the error. There is no parser recovery (ruling Q20 (a), decision
+163): a parse yields at most one template error, and recovery is not planned
+until a tool can project a partial template, which is a lowering feature.
 
-Examples: `<div x=(1 +)/>` gives a complete tree, one error `source:
+**What `compileSource` does with the errors.** `complete === false` implies the
+document is **not lowered**; neither is a document with any entry in
+`errors`. Decision 162 makes compiling report every error as data rather than
+throw the first one, and decision 161 that no diagnostic is dropped. For a
+document with errors, `compileSource` therefore throws `TranslateErrors`, whose
+`.errors: TranslateError[]` holds **every** entry of `errors`, in the order
+above (template error last), and whose `.errors[0]` is today's single error
+with today's frame format, so the 14 host-dispatch goldens
+(`tooling/tsc/src/fixtures/host-dispatch/__golden__/`, each recording
+`"name": "CompileError"` and Marko's code frame) keep their first message.
+The three post-processors that rewrite Marko's errors today (`compile.ts`,
+the `catch` around `compileSync`: `annotateCloseTagOpener` from
+`close-tag-opener.ts`, `hintParseError` from `parse-error-hints.ts`, and
+`sugarAfterDefaultError`/`stockParserError`/`stockAtomError` from
+`stock-parser.ts`) key on `MxParseError.code` instead of matching message
+text. **Status on main:** neither decision is implemented yet
+(`TranslateErrors` does not exist; `compileSource` rethrows one error); the
+code is landing under decisions 161 and 162, and this paragraph follows the
+decision text.
+
+Examples: `<div x=(1 +)/>` gives a complete tree, one error `origin:
 "expression"`, `span` `[11, 11)`, `context` `[7, 12)`, and the attribute's
 `value` container has `node: null`. `<div></span>` gives `errors` `[{ code:
 "MISMATCHED_CLOSING_TAG", span: [5, 12) }]` (reviewer's probe: `onError
@@ -827,21 +926,26 @@ its `error` is the same object as the entry in `errors` (§4).
 
 Purpose: `<return=x/>` / `<return value=x/>` (decision 155, spec §10).
 
-| Field | Type | Opt. | Meaning |
-|---|---|---|---|
-| `value` | `MxExpression \| null` | no | from the default value or a `value=` attribute; `null` when neither was written |
-| `tag` | `MxTag` | no | the full tag as parsed, so lowering keeps its eleven shape errors (`lower.ts:2279-2330`) |
+Fields: exactly those of `MxTag` (§3.2), with `type: "MxReturn"`; no nested
+tag and no `value` field. Lowering reads the returned value as it reads any
+tag's default value (the `name: null` attribute or `value=`, §3.5), and keeps
+its shape errors (`lowerReturn`).
 
-Spans: those of `tag`. Example: `<return=x/>` is `[0, 11)`, `value.span`
-`[8, 9)`. Invariant: the front end produces `MxReturn` for every
-tag whose static name is `return`; shape validation (no body, no spread, one
-value, top level only, one per template) stays in lowering, as today.
+Spans: as `MxTag`. Example: `<return=x/>` is `[0, 11)`; its default value's
+`value.span` is `[8, 9)`. Invariant: the front end produces `MxReturn` for
+every tag whose static name is `return`; shape validation (no body, no spread,
+one value, top level only, one per template) stays in lowering, as today.
 
 ### 3.15 Things that are not nodes
 
-- **Wildcard children** (decision 147) have no syntax: a child tag keeps its
-  authored name (`MxTagName.static`), and matching it against `children["*"]`
-  patterns is contract validation in lowering. The AST's contribution is the
+- **Wildcard children** (decision 147) have no syntax, so they are not an AST
+  node (ruling C1 of decision 163, which amends decision 158 §1's list). A
+  child tag keeps its authored name (`MxTagName.static`), and matching it
+  against `children["*"]` patterns is contract validation in lowering. The IR
+  records the match as merged in #347/#354: `TagAlias { authored, span?,
+  groups }` (`ir.ts:313-326`) on `Component.alias` and `DelegatedTag.alias`,
+  where `authored` and `span` come from `MxTagName.static`'s `value` and
+  `span` and `groups` from the pattern match. The AST's contribution is the
   invariant that a name is never rewritten and always has a span.
 - **`defaultTag`** (decision 145): `MxTagName.unnamed`; the ladder is
   lowering's.
@@ -879,8 +983,13 @@ type MxTypeParameters = MxExpressionContainer<TSTypeParameterDeclaration> & { ty
   container's `start`, line and column, as Marko already does with
   `startIndex`/`startLine`/`startColumn` (`[C]chunk-src.js:988-1003`). A
   wrapper prefix (`(…)=>{}`, `_(…)`) is compensated the same way Marko's
-  `sourceOffset` does (956-983), so `node.start === container.start` for an
-  expression.
+  `sourceOffset` does (956-983). The payload's own range is **not** the
+  container's: the container span is htmljs's `value` range, which includes
+  inner whitespace (`${ y }` is `[2, 5)` in `${ y }`), while the node covers
+  the expression alone (`[3, 4)`). Lowering takes `Expr.span`, `paramSpans`
+  and every `For` param span from the **payload** (`node.start`/`node.end`),
+  as today's `exprSpan` takes them from the Babel node (`lower.ts`
+  `exprSpan`), never from the container (P1).
 - **`source`** is kept because lowering prints the authored slice, not the
   generated AST, so TypeScript type arguments survive (`core/src/core.ts:617-633`,
   `expr()`; IR spec §4, `code` row).
@@ -888,12 +997,12 @@ type MxTypeParameters = MxExpressionContainer<TSTypeParameterDeclaration> & { ty
   lowering to supply `Expr.node` "positioned, for every authored expression",
   with `loc.start`/`loc.end` as `{ line, column, index? }` (IR spec §4, `node`
   row), because three emitter-side consumers still read it: the TypeScript
-  plugin maps through `node.loc` (`packages/tooling/typescript-plugin/src/mx-language.ts:689`),
+  plugin maps through `node.loc` (`packages/tooling/typescript-plugin/src/mx-language.ts:683-690`),
   Angular's tag module walks `node` and regenerates `code` from it
-  (`packages/hosts/angular/src/tag-module.ts:609-613`), and Preact reads a
-  `by=` key's `node.value` (`packages/hosts/preact/src/emitter.ts:1817-1818`).
+  (`packages/hosts/angular/src/tag-module.ts:595-616`), and Preact reads a
+  `by=` key's `node.value` (`packages/hosts/preact/src/emitter.ts:1941`).
   `For.paramNodes` must also be positioned parser nodes (IR spec §5.9, E11;
-  Angular reads them, `packages/hosts/angular/src/emitter.ts:2171-2180`). So
+  Angular reads them, `packages/hosts/angular/src/emitter.ts:2172-2181`). So
   until mx-lead moves those consumers to `Expr.span`/`Expr.code`, the Babel
   payload of every container keeps Babel's `start`, `end` **and** `loc` with
   `index`, all file-relative. This is the one place the AST stores `loc`
@@ -901,51 +1010,44 @@ type MxTypeParameters = MxExpressionContainer<TSTypeParameterDeclaration> & { ty
 
 ### 4.1a Sharing and copying
 
-Emitters mutate the IR: Solid appends to `For.bindings` and rewrites `code`
-in place (`packages/hosts/solid/src/emitter.ts:1761`), Angular's tag module
-replaces `input.x` members inside `Expr.node` in place by deleting their keys
-(`packages/hosts/angular/src/tag-module.ts:592-596`) and regenerates `code`
-(`:609-613`), and the IR spec forbids a lowering to share one `Expr` between
-two scopes (IR spec §10.2, E21). For the AST this means:
+The IR spec makes the IR read-only to emitters (IR spec §10.2, E21): one
+lowered `Ir` may be emitted more than once, and **a lowering may share an
+object** (an `Expr`, a `loc`) between two places. An emitter that rewrites
+`Expr.code`, `For.bindings` or a parser node first takes a private copy with
+`cloneIr` (`packages/core/src/clone-ir.ts`): Solid copies each `For` it
+rewrites (`packages/hosts/solid/src/emitter.ts:2325`), and Angular's tag module
+copies the whole `Ir`, parser nodes included (`cloneIr(lowered, { nodes: true
+})`, `packages/hosts/angular/src/tag-module.ts:961`), before rewriting
+`input.x` reads in place (`:595-616`). `ir-readonly.test.ts` in every host
+freezes the IR, parser nodes included, so a write throws. For the AST this
+means:
 
 - **Containers never share.** Two containers never hold the same Babel node
   or the same position object; two textually identical expressions get two
   containers and two Babel trees. Inside one payload Babel itself may share a
   position object between a parent and a child at a coincident boundary
-  (`ir.ts:88-91`); the copy below makes that harmless.
-- **The AST is read-only to lowering.** Lowering must not mutate an `Mx*`
-  node or a container's Babel payload.
-- **Lowering copies every parser node it puts in the IR.** Exactly two IR
-  fields carry a parser node: `Expr.node` and `For.paramNodes` (`ir.ts:78`,
-  `:324`, `:495`; `paramNodes` also inside `ForHead` for `AttributeTagFor`).
-  Each gets its own copy of the AST payload, made at the point the `Expr` or
-  the `For` head is created. The copy is required because one AST is lowered
-  more than once: the custom-tag `analyze` pre-walk lowers the whole body on a
-  scratch `Ctx` before the real walk (IR spec §1, step 3), and a tool may
-  lower the same parse for several hosts.
+  (`ir.ts`, `Expr.span` comment).
+- **The AST is read-only.** Neither lowering nor anything after it mutates an
+  `Mx*` node or a container's Babel payload. One AST is lowered more than once
+  (the custom-tag `analyze` pre-walk lowers the whole body on a scratch `Ctx`
+  before the real walk, IR spec §1, step 3; a tool may lower the same parse
+  for several hosts), and that is safe only because of this rule.
+- **No copy is required at the AST/IR seam.** Since E21 forbids emitters to
+  mutate and allows a lowering to share, `Expr.node` and `For.paramNodes`
+  (`ir.ts`, `Expr.node`, `For.paramNodes`, `ForHead`) may be the container's
+  payload itself; an emitter that edits one copies it first with `cloneIr`.
+  Earlier drafts required a per-`Expr` copy because E21 then forbade sharing;
+  main's E21 (#359) removed that reason.
 
-**The copy procedure.** `copy(v)`: a primitive is returned as is; an array is
-mapped through `copy`; an object with numeric `line` and `column` (a Babel
-position) becomes a new `{ line, column }` plus `index` when the source has
-one; any other object becomes a new object with every own enumerable key of
-the source copied through `copy`, including `type`, `start`, `end`, `loc`,
-`extra`, `range` and the comment arrays.
+What each consumer reads, and why it is unaffected:
 
-What each consumer needs, and why the procedure keeps it:
-
-| Consumer | Reads | Kept because |
+| Consumer | Reads | Why sharing is safe |
 |---|---|---|
-| TypeScript plugin | the root node's `loc.start`/`loc.end` `{ line, column }`, then checks `source.slice(…) === code` (`mx-language.ts:689-694`, `offsetAt` at `:722-731`) | `loc` is copied value for value, so the slice and the mapping are identical |
-| `expr()` / lowering's slice | `node.start ?? node.loc?.start.index`, `node.end ?? …` (`core.ts:617-619`) | `start`/`end` are copied (so the same branch is taken as today) |
-| Angular tag module | mutates the copy in place | every object in the copy is new, so the AST and any other `Expr` are untouched |
-| Preact `by=` | `node.type`, `node.value` (`preact/src/emitter.ts:1817-1818`) | primitives copied |
-| Angular `$index` alias | `For.paramNodes[i]` structure (`angular/src/emitter.ts:2171-2180`) | same procedure, per param node |
-
-`@babel/types`' `cloneNode` does **not** satisfy this: it copies only the
-declared fields, never `start`/`end`, and assigns `newNode.loc = node.loc`,
-sharing the position objects (`[C]babel.js:13217-13241`). A structured clone
-(`structuredClone`) would satisfy it for plain Babel data and is an acceptable
-implementation of `copy`.
+| TypeScript plugin | the root node's `loc.start`/`loc.end` `{ line, column }`, then checks `source.slice(…) === code` (`mx-language.ts:683-690`, `offsetAt` at `:716`) | read only |
+| `expr()` / lowering's slice | `node.start ?? node.loc?.start.index`, `node.end ?? …` (`core.ts`, `expr()`) | read only |
+| Angular tag module | mutates parser nodes | on its `cloneIr(…, { nodes: true })` copy |
+| Preact `by=` | `node.type`, `node.value` (`preact/src/emitter.ts:1941`) | read only |
+| Angular `$index` alias | `For.paramNodes[i]` structure (`angular/src/emitter.ts:2172-2181`) | read only |
 
 ### 4.2 Compared with the IR's `Expr`
 
@@ -957,8 +1059,9 @@ normative contract in [the IR spec §4](/architecture/ir-spec/),
 |---|---|---|
 | `code` | `source` | `code` is after binding rewrites (decision 70); `source` is authored. Lowering produces `code` from `source` + `node`, as `expr()` does today. |
 | `shape` | derived from `node.type` | `expressionShape` (`lower.ts:249-261`) stays in lowering. |
-| `node` | `node` | `Expr.node` is a positioned **copy** of the container's payload (§4.1a); `null` on a synthesized `Expr` per IR spec §2.2 (but see Q14) |
-| `span?` | `start`/`end` (required) | lowering writes `{ sourceStart: start, sourceEnd: end }`; same range, same units (IR spec §3.2). For a string literal the span includes the quotes in both (IR spec §3.3) |
+| `node` | `node` | `Expr.node` is the container's payload (§4.1a); `null` on a synthesized `Expr` (IR spec §2.2). The type is ruled `Node \| null` (Q14, decision 163); `ir.ts` on main still declares `node: Node`. While `Node` is `any` (`core.ts`) the change has no effect on any type check, so it documents intent only |
+| `span?` | `node.start`/`node.end` (the payload), **not** the container's `start`/`end` | lowering writes `{ sourceStart: node.start, sourceEnd: node.end }`, as today's `exprSpan` does; the container span includes inner whitespace and would move every `Expr.span` over `${ x }`, `( a )` or `\| a \|` (P1). For a string literal the span includes the quotes (IR spec §3.3) |
+| `atoms?` | the container's `atoms` | one IR `Atom { kind: "atom", name, span }` per `MxAtom`, absent when there are none (`ir.ts`, `Expr.atoms`) |
 | `file?` | (document level) | a container never names another file |
 
 ### 4.3 `MxAtom`
@@ -970,10 +1073,54 @@ lists each atom found in its `source`:
 interface MxAtom extends Span { type: "MxAtom"; name: string }  // span covers ':' and the name
 ```
 
-The Babel payload holds the atom as a `StringLiteral` with `extra.mxAtom =
-true` at the same span, so every Babel-based consumer sees a string (the
-approach measured in `scratch/reports/squad-atoms/parser-approach.md`, §1 and
-§2). `::name` is an `MxParseError` (reserved, decision 156 §5).
+The Babel payload holds the atom as a `StringLiteral` whose `value` is the
+name and whose `extra.mxAtom` is `{ span }`, the atom's own span, `:`
+included (`MxAtomMark`, `ir.ts`; decision 156 addendum 1, item 1, which makes
+that node shape public API of `@mxlang/core` and `@mxlang/data`). Every
+Babel-based consumer sees a string. Today the template parser lexes the atom,
+reports it through `onAtom` and hands Babel a numeric stand-in of the same
+length (`0.`), and core's `convertAtoms` (`core/src/atoms.ts`) turns the
+stand-in into that `StringLiteral`; the front end builds the `StringLiteral`
+directly. `::name` is a template-parser error (`INVALID_EXPRESSION`,
+reserved, decision 156 §5; `packages/parser/src/template/PROVENANCE.md`,
+"Atoms").
+
+What the IR makes of atoms is what shipped (#342, #346, #348, #357):
+
+- `Expr.atoms?: Atom[]`, one per `MxAtom` of the container, and `Expr.code`
+  holds each as its string literal (core splices `JSON.stringify(name)` at
+  each atom's span; IR spec §4, `atoms` row).
+- A whole value that is one atom (`mode=:strict`) is a `static` `Attr` with
+  `atom?: Atom`, `value` the name and `valueSpan` the atom's span; so is the
+  `name` the `:name` sugar sets (decision 156 addendum 1, item 2; `ir.ts`,
+  `Attr`; IR spec §6, `static` row).
+- In `parseData`, such a value is `DataAttr { kind: "atom", name, value,
+  nameSpan?, span }` (`targets/data/src/tree.ts:68-74`), the sugar-derived `name` included; nested atoms stay
+  `StringLiteral` + `extra.mxAtom`.
+
+`MxExpressionContainer.atoms` stays: lowering needs the spans to splice the
+literal into `Expr.code` and to fill `Expr.atoms`.
+
+**Where the atom lexer runs**, per container field (ruling C11 of decision
+163, amended to describe main; `PROVENANCE.md`, "Atoms", and the
+`expr.atoms = true` sites in `packages/parser/src/template/states/`):
+
+| Field | Atoms | Where main turns lexing on |
+|---|---|---|
+| `MxAttribute.value` (named, default, bound), `MxSpreadAttribute.value`, `MxShorthand.default` | yes | `ATTRIBUTE.ts` (value) |
+| `MxAttribute.args` | yes | `ATTRIBUTE.ts` (arguments) |
+| `MxMethod.body` | yes (a method body is an attribute value) | `ATTRIBUTE.ts` (method body) |
+| `MxTag.args` | yes | `OPEN_TAG.ts` (tag arguments) |
+| `MxPlaceholder.expression`, in every body mode | yes | `PLACEHOLDER.ts` |
+| `${…}` in a dynamic tag name or shorthand | yes | `TAG_NAME.ts` |
+| `${…}` of a template literal inside any of the above | inherited | `TEMPLATE_STRING.ts` |
+| `MxTag.var`, `MxTag.params` (defaults included), `MxMethod.params` | no | — |
+| `MxTag.typeArgs`, `MxTag.typeParams`, `MxMethod.typeParams` | no | — |
+| `MxModuleStatement.code`, `MxScriptlet.code` | no (TypeScript statements, decision 156 addendum 2) | — |
+
+Inside a lexed field, a `:` is an atom only where an expression is expected,
+never as TypeScript's ternary, type or optional marker (decision 156 addenda
+2 and 3; `PROVENANCE.md`, "Behaviour").
 
 Offsets: atom `title` `[15, 21)`, atom `rename-all` `[23, 34)` (the `:` included).
 
@@ -1053,15 +1200,20 @@ that tree directly; it must not hand an unnamed tag to the walk" (IR spec §1).
 The MX AST deliberately does **not** produce that tree: it keeps
 `MxShorthand` and `MxTagName.unnamed`, because the default-tag ladder needs
 the host's `resolveDefaultTag` and the ancestor chain, which a parser does not
-have. Step 1 therefore stays in lowering and reads the AST: each
-`MxShorthand` becomes an `Attr` with `sugar` set to its token, and each
-unnamed name is resolved before step 5. Steps 2 to 6 are unchanged.
+have. Step 1 therefore stays in lowering and reads the AST: the
+`MxShorthand`s become `Attr`s by the merge of §6.1a, and each unnamed name is
+resolved before step 5. Steps 2 to 6 are unchanged.
+
+**What the port must reproduce.** The port's contract is byte-identity with
+MX's own output before the port (goldens, oracles), not Marko parity
+(decision 157); a deliberate change of output is allowed only as its own
+recorded change, never inside the port (decision 163).
 
 ### 6.1 IR kind ← AST
 
 | IR | Lowered from | Fields |
 |---|---|---|
-| `Text` | `MxText`; also the empty `Text` `<return>` leaves (`lower.ts:2327-2329`) | `value` ← `value`; `span` ← node span |
+| `Text` | `MxText`; also the empty `Text` `<return>` leaves (`lowerReturn`) and an inert disposition leaves | `value` ← `value`; `span` ← `valueSpan` (§3.8) |
 | `Interpolation` | `MxPlaceholder` | `expr` ← `expression`; `escaped` ← `escape`; `span` ← node span |
 | `Element` | `MxTag` resolved to a native element | `name` ← `name` (static, or unnamed after the ladder); `nameSpan` ← `name.span`; `attrs` ← `attributes` + `shorthands`; `children` ← `body`; `void` ← `VOID_TAGS` in lowering (`core.ts:162`, `lower.ts:3148`), not `bodyMode` (§3.12) |
 | `Component` | `MxTag` resolved to an import, discovered tag, `<define>` or dynamic name | `target` ← `name`; `args` ← `args`; `var` ← `var`; `content.params` ← `params`; `attributeTags*` ← `MxAttributeTag` children (and those inside `if`/`for` children); `content` ← the other children |
@@ -1069,23 +1221,91 @@ unnamed name is resolved before step 5. Steps 2 to 6 are unchanged.
 | `For` | `MxTag` `for` | `source` ← `of`/`in`/`from`/`to`/`until`/`step` attributes; `key` ← `by`; `params`, `paramNodes`, `paramSpans` ← `params` |
 | `Define` | `MxTag` `define` | `name` ← `var`; `params` ← `params` |
 | `Const` | `MxTag` `const` | `name` ← `var`; `init` ← default value |
-| `Static` | `MxModuleStatement` `static` (and `server` on html, spec §2) | `code` ← `code.source`; `span` ← node span |
-| `Import` | `MxModuleStatement` `import` | `code`, `bindings` ← parsed `ImportDeclaration` (no regex) |
-| `Export` | `MxModuleStatement` `export` | `code` |
-| `InputInterface` | `MxModuleStatement` `export` with an `Input` interface/type | `code` |
+| `Static` | `MxModuleStatement` `static` only | `code` ← the statement span's text minus `static ` (§3.10); `span` ← node span |
+| `Import` | `MxModuleStatement` `import` | `code` ← the statement span's text; `bindings` ← parsed `ImportDeclaration` (no regex) |
+| `Export` | `MxModuleStatement` `export`, including `export type Input` | `code` ← the statement span's text |
+| `InputInterface` | `MxModuleStatement` `export` whose payload is a `TSInterfaceDeclaration` named `Input` | `code` ← the statement span's text; no span (IR spec §3.3) |
 | `Hoisted` | none (a host hook's output, decision 70) | — |
-| `DelegatedTag` | `MxTag` claimed by the host (`isDelegatedTag`) | as `Element`, plus `args`, `var`, `params`, attribute tags |
+| `DelegatedTag` | `MxTag` claimed by the host (`isDelegatedTag`); also `MxModuleStatement` `server` on a host that claims it (html: `CLAIMED`, `targets/html/src/translate.ts:405-415`, which returns `{ kind: "statement", code }` sliced from the node, `:469-475`) | as `Element`, plus `args`, `var`, `params`, attribute tags; `alias` from a wildcard match (§3.15) |
 | `DocumentType` | `MxDoctype` | `value` |
 | `Comment` | `MxComment` | `value`; `html` ← `kind === "html"` |
 | `AttributeTag` | `MxAttributeTag` | `name` ← `name.value`; `nameSpan` ← `name.span` minus the `@`; `span` ← node span; `attrs` ← `attributes` + shorthands; `block.params`/`hasParams` ← `params`; `block.children` ← `body` minus nested attribute tags; `hasBody` ← body content (`hasContent`); its own `attributeTags`/`attributeTagTree`/`attrTagProps` ← nested `MxAttributeTag` children, recursively (IR spec §8) |
-| `Attr` `static` | `MxAttribute` with a string-literal value (any name, colons kept); `MxShorthand` with a static value | `valueSpan` ← `value.span` |
+| `Attr` `static` | `MxAttribute` with a string-literal value (any name, colons kept), or whose whole value is one atom (`atom` set); `MxShorthand` with a static value, by the merge of §6.1a | `valueSpan` ← `value.span` |
 | `Attr` `static`, `value: ""` | `MxAttribute`, not bound, `value === null`, whose name contains a `:` that is an ordinary colon name: any colon name on a component, attribute tag or delegated tag, and on a native element any colon name except the reserved `class:`/`style:`/`on:` prefixes (`isOrdinaryColonName`, `lower.ts:241-246`). Today's condition is `name !== attr.name` at `lower.ts:674`, `name` being the rejoined `attr.name:attr.modifier` (`lower.ts:590-593`), so it covers `value:foo`, `x:foo` and the empty-suffix `x:` (`divergences.md:131`) alike | `valueSpan` ← zero-width at `nameSpan.end` (IR spec §3.3) |
 | `Attr` `boolean` | `MxAttribute`, `value === null`, whose name has no `:` (`lower.ts:689-691`; a colon name takes the row above, a reserved-prefix name the `dynamic` row) | |
 | `Attr` `dynamic` / `event` | `MxAttribute` with an expression value or `MxMethod`; also a reserved-prefix colon name on a native element (`class:x`, `style:x`, `on:x`) whose host `resolveModifier` returns a name, any value (`lower.ts:643-653`; refused otherwise, `:658-662`) | `event` derived from `name` (lowering), only on a native element with an expression value |
-| `Attr` `bound` | `MxAttribute` with `operator === ":="` | |
+| `Attr` `bound` | `MxAttribute` with `operator === ":="` and no `:` in its name | `name` ← `name`. A `:` in a bound name (`v:fn:=q`) is a positioned lowering error at the name (ruling C2, decision 163). Main does not raise it yet: today `v:fn:=q` lowers to `bound` `name: "v"` and drops `fn` silently (probe: `nameSpan` `[5, 9)` over `v:fn`), a bug filed as MX1 TODO `bound-name-modifier-silently-dropped` and fixed before the port, so the port has nothing to carry |
+| `Attr` named `#x` (`boolean`, `static`, `dynamic` or `bound` by its value) | `MxShorthand` `#` with `position: "attribute"` on a host that sets `claimsAttributeHash` (Angular's template reference, decision 146 addendum 3) | `name` ← the authored token (`#x`), `nameSpan` ← the node span, **no `sugar`**; its `default`, if any, is this attribute's value, not the tag's default value (today: `rewriteAttributes` leaves the attribute untouched, `name-sugar.ts`, and the host must also set `acceptsForeignAttrNames`; probe: `<div x=1 #r/>` gives `boolean` `#r`, `nameSpan` `[9, 11)`) |
 | `Attr` `spread` | `MxSpreadAttribute` | |
-| `Attr.sugar` | `MxShorthand` | ← the authored token, `source.slice(start, end)` |
-| `Ir.returnValue` | `MxReturn.value` | |
+| `Attr.sugar` | `MxShorthand` | ← the authored tokens, by the merge of §6.1a |
+| `Attr.sugarValueOf` | `MxShorthand` with `default` | on the `value` `Attr` the default makes: the token plus `=…` or `(…)` (`#x=…`), §6.1a |
+| `Ir.returnValue` | `MxReturn`'s default value (§3.14) | |
+
+### 6.1a The shorthand merge, a lowering step
+
+Today Marko's front end merges tag-adjacent shorthands (`onOpenTagEnd`,
+`[C]chunk-src.js:6143-6171`), and `core/src/name-sugar.ts` merges the
+attribute-position ones on top (`rewriteAttributes`, `mergeClassTokens`); the
+`Attr` fields then come from `lowerAttr`/`lowerAttrNamed`/`attrNameSpan`
+(`lower.ts`). With the MX AST the whole merge is lowering's. It reproduces
+main as it is after #338 (`666d0f56e`, real `nameSpan` for a tag's own
+shorthand) and `474258b65` (a dynamic shorthand's `nameSpan` covers
+its sigil), field by field.
+
+Order and grouping:
+
+1. All `.` shorthands of a tag become **one** `class` `Attr`; tag-adjacent `#`
+   becomes one `id` `Attr`. Tag-adjacent `class` comes before `id`
+   (Marko pushes class first, `[C]chunk-src.js:6148-6170`).
+2. Attribute-position `.x` tokens are merged into that `class` (or start one at
+   the first token's position if there is none); attribute-position `#x` is
+   its own `id` `Attr` at its position. Marko's shorthand `class`, when
+   present, is moved before the first attribute-position `id`, and a
+   tag-adjacent `id` beside an attribute-position `#` is moved first
+   (`rewriteAttributes`, end). Duplicates then resolve last-wins with decision
+   135's warning (`<div#a #b/>` keeps `id "b"`).
+3. A tag-adjacent `#x` beside an authored `id=` is an error ("Cannot have
+   shorthand id and id attribute.", `[C]chunk-src.js:6168`).
+4. `:name` becomes a `name` `Attr` at its own position, `static`, with
+   `atom` set (§4.3).
+5. A sugar's `default` becomes a separate default value (`value`) `Attr`
+   right after the sugar's own, with `sugarValueOf` the token plus `=…` or
+   `(…)`, its `nameSpan` zero-width at the value, and `loc` at the value.
+   A second default value on the tag, when at least one comes from a sugar,
+   is the error `MX_DUPLICATE_DEFAULT` at the second ("`#x=…` would set the
+   default attribute (`value`), but the tag already has a default value (at
+   …)", `ALREADY_HAS_DEFAULT`); two authored `value=` stay decision 135's
+   warning; a host that claims `#` exempts attribute-position `#x` (P8).
+
+The `class` value, by case (probed on main from source, `lower()` with a
+plain element host; offsets in each input alone):
+
+| Input | `kind`, value / `code` | `valueSpan` | `nameSpan` | `loc` | `sugar` |
+|---|---|---|---|---|---|
+| `<div#a.b.c/>` (all static, tag-adjacent) | `static` `"b c"`; `id` `static` `"a"` | `[7, 10)` (first value to last); id `[5, 6)` | `[6, 10)`; id `[4, 6)` (sigil + value) | the tag (`1:0`) | none |
+| `<div.${x}/>` (one dynamic) | `dynamic` `x` | — | `[4, 9)` (`.${x}`) | the tag | none |
+| `<div.a.${x}/>` (several, one dynamic) | `dynamic` `["a", x]` (generator output, §7.1) | — | **`{ NaN, NaN }`: a bug**, MX1 TODO `shorthand-dynamic-class-nan-namespan` (intended: first sigil to the end of the last token); fixed before the port, which carries nothing | the tag | none |
+| `<div.a.b class="x"/>` (static + authored string) | `dynamic` `` `${"a b"} ${"x"}` `` (generator output) | — | `[9, 14)` (`class`) | the `class` attribute | none |
+| `<div.a class=y/>` (static + authored expression) | `dynamic` `["a", y]` | — | `[7, 12)` (`class`) | the `class` attribute | none |
+| `<div.a.${x} class="y"/>` | `dynamic` `["a", x, "y"]` | — | `[12, 17)` (`class`) | the `class` attribute | none |
+| `<div.a .b/>` (tag-adjacent + attribute-position) | `static` `"a b"` | `[5, 6)` (the first token only) | `[7, 9)` (the first attribute-position token) | `1:7` | `".a .b"` |
+| `<div.c class="x" .d/>` | `dynamic` `` `${"c d"} ${"x"}` `` | — | `[17, 19)` (`.d`) | `1:17` | `".c .d"` |
+| `<div class="x" .d/>` (authored string + attribute-position) | `static` `"x d"` | `[11, 14)` (the authored literal) | `[15, 17)` | `1:15` | `".d"` |
+| `<div class=y .d/>` | `dynamic` `[y, "d"]` | — | `[13, 15)` | `1:13` | `".d"` |
+| `<div x=1 .c#m.d/>` (attribute-position chain) | `static` `"c d"`; `id` `static` `"m"` | `[10, 15)`; id `[12, 13)` | `[9, 15)`; id `[11, 13)` | `1:9`; id `1:11` | `".c .d"`; `"#m"` |
+| `<div #x=1/>` | `id` `static` `"x"`; then `value` `dynamic` `1` | `[6, 7)` | `[5, 7)`; `value` `[8, 8)` | `1:5`; `1:8` | `"#x"`; `sugarValueOf` `"#x=…"` |
+
+Rules behind the table (`mergeClassTokens`, `attrNameSpan`,
+`lowerAttrNamed`): an all-static class is one string joined by spaces; any
+dynamic part, or an authored non-string class, makes an array in written
+order; a static shorthand beside an authored string class is Marko's
+template `` `${shorthand} ${class}` ``; an attribute-position token beside
+an authored string literal is appended to the literal (before it when written
+before); beside `false`, `0`, `null` or `undefined` it replaces the value, and beside another number or `true` the two are joined into one string.
+`nameSpan` is the span from the first to the last attribute-position token when such tokens took part, else the authored `class` name, else the value span plus its sigil;
+`loc` is the first attribute-position sugar token, else the authored
+attribute, else the tag. `sugar` is set only when an attribute-position token
+took part.
 
 ### 6.2 AST node → IR consumers
 
@@ -1098,12 +1318,12 @@ unnamed name is resolved before step 5. Steps 2 to 6 are unchanged.
 | `MxAttribute`, `MxShorthand`, `MxSpreadAttribute`, `MxMethod` | Attr |
 | `MxText` | Text |
 | `MxPlaceholder` | Interpolation |
-| `MxModuleStatement` | Import, Export, Static, InputInterface, or an error (`client`, `class`) |
+| `MxModuleStatement` | Import, Export, Static, InputInterface; DelegatedTag (`server` on html); nothing (an `inert` disposition) or an error (`client`, `class`) |
 | `MxComment` | Comment (body); none (open-tag position) |
 | `MxDoctype` | DocumentType |
 | `MxScriptlet`, `MxCDATA`, `MxDeclaration` | none: errors (`lower.ts:3339-3359`) |
 | `MxParseError` | none: a diagnostic |
-| `MxAtom` | none today (see below) |
+| `MxAtom` | `Expr.atoms`, `Attr.atom` (§4.3) |
 
 ### 6.3 Gaps
 
@@ -1122,9 +1342,7 @@ The AST carries, and no IR kind reads:
 - `typeArgs`, `typeParams` (rejected today, `core.ts:1127-1132`).
 - `MxTag.openTag`/`closeTag` spans, `concise`, `selfClosed` (tools only).
 - `MxCDATA`, `MxDeclaration`, `MxScriptlet` (errors only).
-- `MxAtom`: decision 156 §1 names an IR node `atom { name, span }`, but
-  `ir.ts` has none (`rg -i atom packages/core/src/ir.ts` returns
-  nothing). See Q3.
+- `MxText.span` beyond `valueSpan` (newline-led whitespace; formatters only).
 
 ### 6.4 Who sees the AST and who sees the IR
 
@@ -1135,37 +1353,66 @@ The AST carries, and no IR kind reads:
 | L3 raw hooks (decision 87(b): Marko's exact signatures, MX 1 only) | would see Marko's AST; **not implemented** | no `raw` field in `custom-tags.ts` (the only `raw` match is a comment at `:417`) |
 | User tag macros (decision 80) | IR in, IR out, by design | decision 80 text |
 | Host **emitters** (`Emitter<Out>`), first- and third-party (decision 148) | IR only | `packages/core/AGENTS.md:9-10` ("A host then emits from that IR and never walks a Marko node"); IR spec §5.13 |
-| Host **declarations** (`HostDeclarations` hooks), first- and third-party | **parser nodes**, today Marko's | the table below |
-| The data target's unknown-tag scan (first-party) | Marko's AST directly | `packages/targets/data/src/scan.ts:140-175` |
+| Host **declarations** (`HostDeclarations` hooks), first- and third-party | **parser nodes** today (Marko's); after the port a narrow view built by lowering, never `Mx*` nodes | the table below |
+| The data target's unknown-tag scan (first-party) | Marko's AST directly today (`scanAuthoredTags`, `packages/targets/data/src/scan.ts:138-175`); ported to the MX AST in the same change as `lower()` (ruling Q12) | — |
+
+**The view the hooks receive after the port** (ruling Q19, decision 163).
+The hooks are re-typed in the port change, but not to `Mx*` nodes: that would
+make the whole AST public API of `@mxlang/core` through third-party hosts
+(decision 148), and every later AST edit a host-breaking change. Lowering
+builds a narrow, stable view and hands that over:
+
+```ts
+interface HostTagView {
+  name: string;          // the tag name; for a module statement, its keyword
+  nameSpan: Span;
+  span: Span;            // the whole tag, or the statement span of §3.10
+  attributes: { name: string; nameSpan: Span; value?: Expr }[];
+}
+```
+
+An attribute hook receives one entry of `attributes` (`name` with its colons,
+so `class:x`). `server` and `client` are `MxModuleStatement`s in the AST and
+route through the same machinery as tags (ruling Q5/P5): first the host's
+`declarations.tags` disposition (`inert`/`error`, with `rejectInertShape`,
+`lower.ts:3098-3105`, which is how html's `client` disposition,
+`targets/html/src/translate.ts:120`, applies), then `isDelegatedTag` /
+`resolveDelegatedTag` (`lower.ts:3194`) with the statement's view, so html's
+`server` stays a `DelegatedTag` `{ kind: "statement" }` whose code html slices
+from the view's `span` (today from `node.loc`, `translate.ts:469-475`). The
+view is the decision text; its exact TypeScript name is the port's.
 
 The `HostDeclarations` hooks that receive a parser node
 (`packages/core/src/declarations.ts`), and what each receives after the port:
 
 | Hook | Line | Receives today | Receives after the port | Known readers |
 |---|---|---|---|---|
-| `resolveDelegatedTag(name, node, ctx)` | 156-160 | `MarkoTag` | `MxTag` | html reads `node.name` (`targets/html/src/translate.ts:429-445`); Preact passes it to `rawFail` (`hosts/preact/src/emitter.ts:216-226`) |
-| `rejectModifier(attr, on)` | 169 | `MarkoAttribute` | `MxAttribute` | Preact reads `attr.name` and **`attr.modifier`** (`hosts/preact/src/emitter.ts:227-246`) |
-| `resolveModifier(attr, on)` | 177-180 | `MarkoAttribute` | `MxAttribute` | |
-| `rejectAttributeMethod`, `resolveAttributeMethod` | 189, 220 | `MarkoAttribute` | `MxAttribute` | |
-| `resolveDefaultTag(node, parents, context)` | 214-218 | `MarkoTag` (+ `DefaultTagParent.node`, `:30-36`) | `MxTag` | |
-| `rejectElementAttributeTags`, `rejectComponentTag`, `rejectUnknownTag` (`name, node, ctx`) | 229, 240, 268 | `MarkoTag` | `MxTag` | |
-| `checkBinding(target, what)` | 293 | a Babel `LVal` | the `MxPattern` payload | |
+| `resolveDelegatedTag(name, node, ctx)` | 156-160 | `MarkoTag` | the tag's view, or a module statement's (`server`) | html reads `node.name` and slices `node.loc` (`targets/html/src/translate.ts`, `resolveDelegatedTag`); Preact passes it to `rawFail` |
+| `rejectModifier(attr, on)` | 169 | `MarkoAttribute` | an attribute entry of the view | Preact reads `attr.name` and **`attr.modifier`** (`hosts/preact/src/emitter.ts`, `rejectModifier`) |
+| `resolveModifier(attr, on)` | 177-180 | `MarkoAttribute` | an attribute entry | |
+| `rejectAttributeMethod`, `resolveAttributeMethod` | 189, 220 | `MarkoAttribute` | an attribute entry | |
+| `resolveDefaultTag(node, parents, context)` | 214-218 | `MarkoTag` (+ `DefaultTagParent.node`) | the tag's view (and its parents' views) | |
+| `rejectElementAttributeTags`, `rejectComponentTag`, `rejectUnknownTag` (`name, node, ctx`) | 229, 240, 268 | `MarkoTag` | the tag's view | |
+| `checkBinding(target, what)` | 293 | a Babel `LVal` | the `MxPattern` payload (a Babel node, not an `Mx*` node) | |
+| `claimsAttributeHash` (flag) | 109 | — | — | decides the `#x` row of §6.1 and the `#` exemptions of §3.6 and §6.1a (P8) |
 
 Every host `fail`/`rawFail(msg, node)` reads the node's position; after the
-port it takes an `Mx*` node and reports `lineColumnAt(node.start)`.
+port it takes a view and reports `lineColumnAt(view.span.start)` (or the
+attribute's `nameSpan.start`).
 
-Consequence: `MxAttribute` has no `modifier` (A2, D4), so Preact's
-`rejectModifier` would print `undefined:undefined` unless it is re-typed to
-read `attr.name` alone (which already holds `class:x`). Re-typing the
-declarations is open question Q19.
+Consequence: the view has no `modifier` (A2, D4), so Preact's
+`rejectModifier` is re-typed to read `attr.name` alone (which already holds
+`class:x`).
 
 ## 7. Mapping from parser events
 
-htmljs-parser 5.18.0 defines 27 handlers (`[H]util/constants.d.ts:64-90`;
-source `packages/parser/src/template/util/constants.ts:79-105`).
+htmljs-parser 5.18.0 defines 27 handlers (`[H]util/constants.d.ts:64-90`); the
+in-repo template parser adds a 28th, `onAtom` (decision 156; source
+`packages/parser/src/template/util/constants.ts:79-113`).
 
 | Event | Payload | MX node or field |
 |---|---|---|
+| `onAtom` | `Value` (range: the whole atom; `value`: its name) | one `MxAtom` in the enclosing container's `atoms`, in source order (§4.3) |
 | `onText` | `Range` | `MxText`; normalized with lookahead as Marko, except in a preserving body (§3.8, §3.12) |
 | `onPlaceholder` | `Placeholder { value, escape }` | `MxPlaceholder` |
 | `onComment` | `Value` | `MxComment` (kind from the source, as `getCommentKind`) |
@@ -1191,7 +1438,7 @@ source `packages/parser/src/template/util/constants.ts:79-105`).
 | `onCloseTagStart` | `Range` | `closeTag.start` |
 | `onCloseTagName` | `Range` | `closeTag.name`/`nameSpan`, the written name with sugar (`</div:x>` → `"div:x"`); for `</>` htmljs emits it with an empty range (`packages/parser/src/template/states/CLOSE_TAG.ts:97-100`, `core/Parser.ts:196`), which gives `name: null`, `nameSpan: null`. Never re-checked: htmljs reports `MISMATCHED_CLOSING_TAG` (21) itself |
 | `onCloseTagEnd` | `Range` | `closeTag.span.end`, `MxTag.end`; ends a preserving body started by this tag; nothing moves |
-| `onError` | `Error { code, message }` | `MxParseError` (`source: "template"`, code by name); the last event of the parse: open tags become `incomplete`, `complete: false` (§3.13) |
+| `onError` | `Error { code, message }` | `MxParseError` (`origin: "template"`, code by name); the last event of the parse: open tags become `incomplete`, `complete: false` (§3.13) |
 
 ### 7.1 Inputs from outside the source text
 
@@ -1209,18 +1456,22 @@ depend on an input marked "front end" in the last column.
 | `tagDef.parseOptions.controlFlow` and `tagDef.controlFlow` | `:6196`, `:6200` | `core-tags.json:4-16` | moves to **lowering** (attribute tags are not moved, D2) |
 | `tagDef.parser` hook (parse visitors) | `:6184-6191` | none in MX: `core-tags.json` and `customTagTaglib` carry no `parser` | dropped |
 | `htmlParseOptions.preserveWhitespace` (file-wide) | `:5898-5899` | not passed by MX (`fragment.ts:468` passes only offsets, in the unused `parseFragmentNative`) | dropped |
-| `tagDiscoveryDirs` (`tags/*.marko` found by Marko's scanner) | taglib lookup | the html target passes `["tags"]` (`targets/html/src/compiler.ts:52-55`) | **not received**; a `.marko` tag's parse options would be lost (Q22) |
+| `tagDiscoveryDirs` (`tags/*.marko` found by Marko's scanner) | taglib lookup | the html target passes `["tags"]` (`targets/html/src/compiler.ts:52-55`) | **dropped** with `@marko/compiler` (ruling Q22): no `marko-tag.json`/`marko.json` exists, and the two discovered `.marko` tags (`targets/html/fixtures-marko/tags-discovery/tags/badge.marko`, `fixtures-marko/try-child-throw/tags/boom.marko`) carry no parse options (a `.marko` file can only get them from a `marko-tag.json`), so nothing depends on it |
 | Babel parser options (`typescript` plugin, `allow*` flags) | `:6699-6705` (`manipulateOptions(opts) {` is at `:6699`) | the compiler | **front end**, fixed configuration of the expression sub-parser |
+| The expression sub-parser itself | `parseExpression` and friends, `[C]chunk-src.js:947-1016` | Marko's bundled `@babel/parser` **7.29.7** (`[C]babel.js`, region `@babel+parser@7.29.7`) | **front end**: MX's Babel fork (`packages/parser/src/babel`, from `@babel/parser` 7.29.8). It must produce node shapes equal to today's, including `extra.raw`, `extra.parenthesized` and comments, or emitted code changes (ruling Q13/P3) |
+| The generator and Babel support packages | `printExpression` (`core/src/compile.ts`, `generator(node, { concise: true })`); `expr()` for loc-less nodes; `declName` | Marko's bundled `@babel/generator`, `@babel/traverse`, `@babel/types` **7.29.7** (`[C]babel.js`; `markoBabel`, `core/src/core.ts`) | **lowering**, not the front end: the port pins `@babel/{types,traverse,generator}` at 7.29.7 with today's generator options (`concise: true`). The generator is part of the byte contract: it prints `Const.name`, `Define`/`Component.var`/`DelegatedTag.var` names, unsliceable `For` params, attribute-method values and dynamic tag names, and rewrites authored text (`<const/{ a,b }=x/>` gives `"{ a, b }"`, the reviewer's probe c). Replacing generator output with source slices is wanted, but as a separate recorded change after the port (TODO `ir-generated-text-to-source-slices`) |
 | `file.___hasParseErrors`, `watchFiles` | `:1028`, `:6190` | internal | dropped (errors are data; dependency tracking is core's) |
 
 So the front end takes exactly one external input, `tagShape(name) →
 bodyMode`, supplied by core from the active target (its element shapes, the
 core tags, the custom tags' `text`/`preserveWhitespace`, and a target's
 overrides such as the data target's). Every other decision Marko made from a
-tag definition moves to lowering or disappears. Who owns the element-shape
-table once `@marko/compiler` is dropped is Q21.
+tag definition moves to lowering or disappears. The element-shape table is
+the target descriptor's, with a core default (§3.12, ruling Q21).
 
-**Events the MX patch adds or changes.** None added. The patch
+**Events the MX patch adds or changes.** One added: `onAtom` (atoms,
+decision 156; `packages/parser/src/template/PROVENANCE.md`, "Atoms"). The
+patch
 (`patches/htmljs-parser@5.18.0.patch`, hunks at `dist/index.js` 311, 1147,
 1382, 1432, mirrored in `index.mjs`; the same rules live as source in
 `packages/parser/src/template/states/ATTRIBUTE.ts:116` and
@@ -1230,9 +1481,11 @@ it marks named-attribute and spread values (`expr.attrValue`), skips `??`
 and `?.` when counting ternary depth, and inside such a value lets a `:`
 followed by an identifier (or a bare `:` at a tag end) and a `.` followed by an
 identifier, after whitespace, terminate the value so `onAttrName` fires for the
-next sugar (decision 146 §3). The atoms approach (`parser-approach.md` §5)
-would add atom recording inside `EXPRESSION`, which this catalogue receives as
-`MxAtom` lists, not as a new event.
+next sugar (decision 146 §3). Atom lexing lives in `EXPRESSION` too
+(`lexAtom`), turned on per expression by the states listed in §4.3, and
+reported through `onAtom`; while it is on, `read()` returns the atom's numeric
+stand-in, so a front end that slices `source` for an expression's text must
+not use `read()` for it.
 
 ## 8. Design choices and alternatives
 
@@ -1271,8 +1524,9 @@ bug source (`packages/core/AGENTS.md`, `parseFragment` bullet).
 **D6. `MxText` carries both normalized `value` and `raw`.** Alternative: raw
 only, normalize in lowering. Chosen because normalization needs neighbour
 lookahead that the front end already has while building the list; `raw`
-keeps the authored run minus Marko's newline-led trim (§3.8), uncollapsed, for
-tools. In a preserving body `value` equals `raw` (§3.8).
+and the node span keep the whole authored run, and `valueSpan` the range
+Marko's trim leaves, which the IR's `Text.span` needs (§3.8). In a preserving
+body `value` equals `raw` (§3.8).
 
 **D7. One `MxModuleStatement` with a `keyword`.** Alternative: *MxImport*,
 *MxExport*, *MxStatic*. Chosen because the payload is a Babel statement list in
@@ -1281,8 +1535,8 @@ still parse to give a positioned error.
 
 **D8. Errors in one list, referenced from the failed container.** Alternative:
 errors only inline (Marko) or only in a list. Chosen so a consumer can report
-all errors without walking, and lowering can still find "this expression
-failed" locally.
+all errors without walking (one list, ordered by position, template error
+last), and lowering can still find "this expression failed" locally.
 
 **D9. Parse shape by callback (`tagShape(name) → "html" | "parsed-text" |
 "parsed-text-preserve" | "preserve" | "void"`).** Alternative: a fixed
@@ -1296,11 +1550,11 @@ requires a positioned `Expr.node` and `For.paramNodes` today (IR spec §4,
 E11), and parsing once in the front end gives every expression error a place
 in `errors` at parse time.
 
-**D11. Lowering copies parser nodes; the AST never shares.** Alternatives:
-the AST hands its own nodes to the IR (breaks the second lowering after an
-emitter mutates them, E21), or the front end pre-makes one copy per future
-`Expr` (it cannot know how many lowerings there will be). Chosen: copy at the
-one point an `Expr` or `For` head is made, with the procedure in §4.1a.
+**D11. The AST is read-only and hands its payloads to the IR.** Alternative:
+lowering copies every parser node it puts in the IR (an earlier draft of this
+catalogue, when the IR spec's E21 forbade a lowering to share). Chosen
+because main's E21 makes emitters copy before they mutate (`cloneIr`) and
+allows a lowering to share, so a copy at the seam protects nothing (§4.1a).
 
 **D12. `MxAttributeTag` is its own node.** Alternative: an `MxTag` with an
 `attributeTag: true` flag. Chosen because its name is a property key with
@@ -1318,110 +1572,47 @@ the enclosing file, and formatters need the authored form.
 
 **D15. A failed template parse returns a partial tree.** Alternative: return
 no tree, as Marko does by throwing. Chosen because the parser's events up to
-the error are exact and the language server benefits from them; the limits are
-stated in §3.13.
+the error are exact and tools can read them; the limits are stated in §3.13.
+Lowering never reads a partial tree (`complete === false` implies not
+lowered).
 
 ## 9. Open questions for mx-lead
 
-Numbers are stable across revisions; resolved items keep their number.
+Decision 163 ruled on Q1 to Q23 (`scratch/reports/mx2/ast-catalogue-rulings.md`
+in the project space). Numbers are stable across revisions. Closed by the
+rulings, with where the text now lives:
 
-- **Q1.** Spec "Name sugar" (`specification.md:742-743`) still lists "a value on
-  the sugar (`:x=1`)" as an error; decision 146 addendum 4 makes `#name=expr`
-  set the default value. Recommendation: follow the decision; `MxShorthand.default`
-  carries it; update the spec.
-- **Q2.** Text bodies: htmljs's `TagType.text` (`[H]util/tag-type.d.ts`) parses
-  placeholders (probe: `<script>`). Is there a text mode with **no**
-  placeholders in MX? Recommendation: no; §3.12 defines none.
-- **Q3.** Atom IR node (decision 156 §1) is absent from `ir.ts` and from the
-  IR spec (§9: "not yet in the IR"). Proposal for mx-lead to decide (not part
-  of this catalogue's normative text): an `atoms?: { name, span }[]` list on
-  `Expr`, as `parser-approach.md` §5 suggests, so `MxAtom` maps one to one.
-- **Q4.** Should `export interface Input` be split in the AST (an *MxInputInterface*)
-  or stay a lowering rule? Recommendation: lowering (today's `lower.ts:2202`).
-- **Q5.** `server`/`client`: spec §2 says `server` runs and hoists like `static` on
-  html, but `lowerStatement` rejects any keyword other than
-  `import`/`static`/`export` (`lower.ts:2208-2212`). Which is current?
-  Recommendation: the AST represents both; lowering decides per host.
-- **Q6.** *Resolved in round 1:* `MxText` span follows Marko's trimming
-  (§3.8), so the IR's `Text.span` is unchanged.
-- **Q7.** Open-tag comments have no IR home. Recommendation: drop them at
-  lowering; keep them in the AST for formatters.
-- **Q8.** Default value on a tag that also has `value=`: today both are
-  `name: "value"` and the duplicate rule applies. With `name: null`, lowering
-  must treat "default value" and `value=` as one key on tags whose input is
-  `value`. Recommendation: lowering maps `null` to `"value"` for every tag;
-  record it as the one place MX keeps Marko's convention.
-- **Q9.** *Resolved in round 1:* concise `MxTag.end` is the `onCloseTagEnd`
-  range end, the last descendant's end (§3.2, probe).
-- **Q10.** Agreement with the parser-grammar document (branch
-  `chore/parser-grammar-spec`, not on `main`): names of expression positions
-  (`var`, `args`, `params`, `typeArgs`, `typeParams`) and span rules (§3.4,
-  §5) must match it. Recommendation: whichever merges second adopts the
-  first's names.
-- **Q11.** `MarkoComment.kind` already exists but lowering re-slices the source
-  (`lower.ts:3334`). Recommendation: read `MxComment.kind` after the port.
-- **Q12.** The data target's scan (`targets/data/src/scan.ts:140-175`) parses
-  with Marko directly. Recommendation: port it to the MX AST in the same
-  change as `lower()`.
-- **Q13.** Babel payloads: should container `node`s come from `@mxlang/babel`
-  with MX node types registered, or plain Babel types only? Recommendation:
-  plain Babel types inside containers; `Mx*` types never nest inside Babel
-  nodes, so Babel's validators stay unpatched (removes A1 entirely).
-- **Q14.** IR spec vs `ir.ts`: the spec says a synthesized `Expr` has `node:
-  null` (IR spec §2.2, §4), but `ir.ts:78` types `node: Node` (not nullable).
-  Recommendation: make the type `Node | null` before the port.
-- **Q15.** IR spec §6 says `<div :foo/>` produces a `static` attr with `value:
-  ""` (Marko's `value:foo`), but decision 146 and `divergences.md:131` make bare
-  `:foo` the name sugar (`name="foo"`), and the IR spec's own §1 step 1 rewrites
-  sugar first. Recommendation: the `value: ""` row applies only to an explicit
-  `value:foo`; correct the spec's example.
-- **Q16.** The IR spec has no node for atoms or wildcard children (IR spec §9).
-  The AST carries `MxAtom` lists (§4.3); per mx-lead's rule nothing here adds
-  an IR field. Q3 is the proposal.
-- **Q17.** `Expr.node` and `For.paramNodes` must stay positioned Babel nodes
-  (IR spec §4, E11), which keeps `loc` alive in the AST's payloads (§4.1).
-  Recommendation: once the TypeScript plugin, Angular and Preact read
-  `Expr.span`/`Expr.code` instead, drop `loc` from payloads and keep only
-  `start`/`end`.
-- **Q18.** Attribute-tag `nameSpan` excludes the `@` in the IR (IR spec §3.3)
-  while Marko's name `loc` includes it (probe) and this draft's
-  `MxAttributeTag.name.span` includes it. Recommendation: keep the AST span
-  over `@name` (what was written) and let lowering trim, as stated in §5.1.
-- **Q19.** Who re-types the `HostDeclarations` hooks that receive parser
-  nodes (§6.4: `resolveDelegatedTag`, `rejectModifier`, `resolveModifier`,
-  `rejectAttributeMethod`, `resolveAttributeMethod`, `resolveDefaultTag`,
-  `rejectElementAttributeTags`, `rejectComponentTag`, `rejectUnknownTag`,
-  `checkBinding`), and in which change? They are public and third-party hosts
-  implement them; Preact's `rejectModifier` reads the removed `modifier` field.
-  Recommendation: the lowering-port change re-types them to `Mx*` nodes in one
-  step, with a `divergences`-style note for third-party hosts; core's
-  descriptor version is still `0`.
-- **Q20.** Template-parser recovery: htmljs stops at the first error (§3.13).
-  Decision 157 addendum 1 asks for structured errors; several per parse needs
-  `emitError` to record and continue. Question for mx-lead and native-parser
-  (the parser's owner). Options: (a) keep one error per parse and the partial
-  tree of §3.13; (b) recovery in `packages/parser/src/template` at the
-  points where htmljs knows how to resynchronize (a closing tag, a new line in
-  concise mode), which changes `complete`/`incomplete` from "after the error"
-  to "around the error". Recommendation: (a) for the port, (b) as its own
-  parser task with its own tests.
-- **Q21.** `tagShape` needs the element-shape table (void, text,
-  preserve-whitespace elements, and which names may self-close in HTML mode,
-  today `@marko/compiler`'s `self-closing-tags` dependency, `bun.lock:1050`) that comes from `@marko/compiler`'s built-in
-  `marko-html.json`/SVG/MathML today (§7.1). When `@marko/compiler` is dropped
-  (decision 158 §2), who owns that table: core (beside `VOID_TAGS`), the
-  target registry, or each target? Recommendation: each target descriptor
-  supplies its shapes, defaulting to an html-family table in core, because
-  the data target already overrides them (`targets/data/src/taglib.ts:85-100`).
-- **Q22.** `tagDiscoveryDirs: ["tags"]` lets Marko read a `tags/*.marko` file's
-  parse options (`targets/html/src/compiler.ts:52-55`). The MX front end does
-  not receive that. Decision 87(a) says no Marko taglib finder in the product
-  path. Recommendation: drop it with `@marko/compiler`; record a divergence if
-  any fixture depends on it.
-- **Q23.** A tag's parse shape is decided by its name before lowering knows
-  whether a file-local binding shadows it (D3). Marko has the same order
-  (`[C]chunk-src.js:6080`). Recommendation: keep it; a shadowed `<pre>`
-  component still parses its body with preserved whitespace, as today.
+| Q | Ruling, in short | Applied in |
+|---|---|---|
+| Q1 | follow decision 146 addendum 4 as merged; `MxShorthand.operator`, `default` only in attribute position | §3.6 |
+| Q2 | no raw text mode | §3.12 (unchanged) |
+| Q3, Q16 | describe atoms as shipped (`Expr.atoms`, `Attr.atom`, `DataAttr` kind `atom`, `extra.mxAtom = { span }`); keep `MxExpressionContainer.atoms` | §4.3, §6.2 |
+| Q4 | `InputInterface` split in lowering, by payload type; `export type Input` stays an `Export` | §3.10, §6.1 |
+| Q5 | AST represents `server`/`client`; they route like tags; html's `server` stays a `DelegatedTag` | §6.1, §6.2, §6.4 |
+| Q6 | `MxText` span = whole `onText` range, `valueSpan` = trimmed range | §3.8 |
+| Q7 | open-tag comments dropped at lowering | §6.2 (unchanged) |
+| Q8 | default value read as `value` by one lowering adapter, zero-width `nameSpan`; `MX_DUPLICATE_DEFAULT` is lowering's | §3.5, §6.1a |
+| Q9, Q11, Q18, Q23 | as drafted: concise `end`; read `MxComment.kind`; AST keeps `@name`, lowering trims; shape before shadowing | §3.2, §6.1, §5.1, §3.12 |
+| Q10 | field names follow the AST; container `span` = htmljs `value` range, `outer` = event range; the grammar document adopts both | §3.4 (unchanged) |
+| Q12 | port `data/src/scan.ts` in the same change; delete the fallback statement list (`CORE_STATEMENT_TAGS`/`isStatementTag`, `core/src/name-sugar.ts`) and the stock-parser probe (`isShorthandWord`'s `markoParser()`, `name-sugar.ts`; `stock-parser.ts`) | §6.4 |
+| Q13 | plain Babel types in payloads; pin `@babel/{types,traverse,generator}` 7.29.7 with today's generator options; sub-parser node shapes equal to today's | §7.1 |
+| Q14 | `Expr.node: Node \| null` | §4.2 |
+| Q15 | IR spec §6 and §3.3 rows corrected to `value:foo` | `ir-spec.md` |
+| Q19 | hooks re-typed in the port to a narrow view, never `Mx*` nodes | §6.4 |
+| Q20 | no parser recovery; not lowered when incomplete; `compileSource` reports every error (decisions 161, 162) | §3.13 |
+| Q21 | element-shape table owned by the target descriptor, core default, one table two readers; `<title>`; unnamed tag = `"html"` | §3.12, §7.1 |
+| Q22 | drop `tagDiscoveryDirs` | §7.1 |
+
+Deferred by the rulings, still open:
+
+- **Q17.** Drop `loc` from `Expr.node` and `For.paramNodes` payloads (keep only
+  `start`/`end`). Deferred: a later, separate IR-contract change, after the
+  TypeScript plugin maps through `Expr.span` instead of `node.loc`
+  (`mx-language.ts:683-690`); until then the payloads keep `loc` (§4.1).
+- **Generator output to source slices** (TODO
+  `ir-generated-text-to-source-slices`). Deferred: wanted, but as a separate
+  recorded change after the port, because it changes emitted text (probe c,
+  `{ a,b }` printed as `{ a, b }`); the port keeps the pinned generator (§7.1).
 
 ## Appendix A. Node types and where each is defined
 
@@ -1432,26 +1623,26 @@ not listed.
 
 | Type | Kind | Defined in | Line |
 |---|---|---|---|
-| `MxDocument` | node | §3.1 | 310 |
-| `MxTag` | node | §3.2 | 338 |
-| `MxCloseTag` | field shape | §3.2 | 361 |
-| `MxTagName` | field shape | §3.3 | 418 |
-| `MxPattern`, `MxArguments`, `MxParameterList`, `MxTypeArguments`, `MxTypeParameters` | node (container) | §3.4 span rule; §4.1 types | 453 |
-| `MxAttribute` | node | §3.5 | 473 |
-| `MxMethod` | node | §3.5a | 513 |
-| `MxSpreadAttribute` | node | §3.5b | 536 |
-| `MxShorthand` | node | §3.6 | 551 |
-| `MxShorthandValue` | field shape | §3.6 | 563 |
-| `MxAttributeTag` | node | §3.7 | 610 |
-| `MxText` | node | §3.8 | 629 |
-| `MxPlaceholder` | node | §3.9 | 654 |
-| `MxModuleStatement` | node | §3.10 | 671 |
-| `MxScriptlet` | node | §3.10 | 692 |
-| `MxStatements` | node (container) | §3.10; §4.1 | 704 |
-| `MxComment`, `MxCDATA`, `MxDoctype`, `MxDeclaration` | node | §3.11 | 710 |
-| `MxParseError` | node | §3.13 | 759 |
-| `MxReturn` | node | §3.14 | 827 |
-| `MxExpressionContainer`, `MxExpression` | node (container) | §4.1 | 861 |
-| `MxAtom` | node | §4.3 | 971 |
-| `Span`, `MxNodeBase` | helper | §3.0 | 290 |
-| `MxChild`, `MxNode` | union | §3.0 | 293 |
+| `MxDocument` | node | §3.1 | 313 |
+| `MxTag` | node | §3.2 | 340 |
+| `MxCloseTag` | field shape | §3.2 | 363 |
+| `MxTagName` | field shape | §3.3 | 420 |
+| `MxPattern`, `MxArguments`, `MxParameterList`, `MxTypeArguments`, `MxTypeParameters` | node (container) | §3.4 span rule; §4.1 types | 460 |
+| `MxAttribute` | node | §3.5 | 479 |
+| `MxMethod` | node | §3.5a | 523 |
+| `MxSpreadAttribute` | node | §3.5b | 545 |
+| `MxShorthand` | node | §3.6 | 560 |
+| `MxShorthandValue` | field shape | §3.6 | 573 |
+| `MxAttributeTag` | node | §3.7 | 646 |
+| `MxText` | node | §3.8 | 674 |
+| `MxPlaceholder` | node | §3.9 | 702 |
+| `MxModuleStatement` | node | §3.10 | 719 |
+| `MxScriptlet` | node | §3.10 | 757 |
+| `MxStatements` | node (container) | §3.10; §4.1 | 769 |
+| `MxComment`, `MxCDATA`, `MxDoctype`, `MxDeclaration` | node | §3.11 | 775 |
+| `MxParseError` | node | §3.13 | 832 |
+| `MxReturn` | node | §3.14 | 925 |
+| `MxExpressionContainer`, `MxExpression` | node (container) | §4.1 | 964 |
+| `MxAtom` | node | §4.3 | 1073 |
+| `Span`, `MxNodeBase` | helper | §3.0 | 293 |
+| `MxChild`, `MxNode` | union | §3.0 | 296 |
