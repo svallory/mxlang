@@ -1,0 +1,7 @@
+export interface Input {
+  tab?: AttrTag<{ attrs: { title: string; sub?: AttrTag<{ attrs: { size: number } }> } }>;
+  rows?: AttrTag<{ attrs: { id: number } }>[];
+  row?: AttrTag<{ as: "renderable"; params: [count: number] }>;
+}
+
+<div/>

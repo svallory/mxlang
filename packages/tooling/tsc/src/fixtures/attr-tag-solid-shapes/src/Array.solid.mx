@@ -1,0 +1,3 @@
+import Shapes from "./Shapes.solid.mx";
+
+export const view = <Shapes><@rows id="x"/><@rows id=2/></Shapes>;

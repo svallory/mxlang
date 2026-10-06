@@ -1,0 +1,3 @@
+import Shapes from "./Shapes.mx"
+
+<Shapes><@tab title="a" extra=1/></Shapes>

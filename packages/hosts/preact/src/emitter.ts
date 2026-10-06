@@ -1323,6 +1323,7 @@ export class PreactEmitter implements Emitter<string> {
           ")[0]",
         ),
         valueType,
+        this.#firstAttributeTag(node.nodes)?.nameSpan,
       );
     }
 

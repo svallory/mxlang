@@ -919,35 +919,39 @@ export function attributeTagDiagnosticMappings(
     const name = match[1];
     if (!name || match.index === undefined) continue;
     const sourceStart = match.index + 1;
-    // The value is `{ ... }`, or `(({ ... } satisfies T) as any)` once the
-    // host wraps it in the callee's declared type.
-    const probe = new RegExp(`${escapeRegExp(name)}=\\{\\(*\\{`, "g");
+    // The value is `{ ... }` while untyped. Once the host wraps it in the
+    // callee's declared type it is `{ ... } satisfies T as any` as printed
+    // into a `.solid.mx` module (an object, an array `[ ... ]` or a renderable
+    // `(fn)`), or `(({ ... } satisfies T) as any)` as the emitter writes it.
+    const probe = new RegExp(`${escapeRegExp(name)}=\\{(\\(*)`, "g");
     probe.lastIndex = generatedCursors.get(name) ?? 0;
     const probeMatch = probe.exec(generated);
     if (!probeMatch) continue;
     const probeStart = probeMatch.index;
-    const objectOpen = probeStart + probeMatch[0].length - 1;
     const generatedStart = probeStart;
-    // This tag's *own* closing `} satisfies `, not the first one in the
-    // text: a component nested inside this tag's body can itself take an
-    // attribute tag, which prints its own `{ ... } satisfies ...}` before
-    // this tag's closes (`<Card><@tab><Inner><@sub .../></Inner></@tab>`
-    // nests `sub`'s wrapper inside `tab`'s). A naive `indexOf` finds the
-    // *inner* tag's marker first, truncating this tag's span. Scanning by
-    // brace depth from the object literal's own opening `{` (`probeStart +
-    // name.length + 2`, right after `={`) finds the marker at depth 0 —
-    // this object's own close — regardless of what is nested inside it.
-    const generatedEndMarker = matchingSatisfiesMarker(generated, objectOpen);
-    if (generatedEndMarker < 0) continue;
-    // TypeScript reports a failed `satisfies` on the keyword, so the span
-    // reaches over it when the object is wrapped.
+    const parens = probeMatch[1]?.length ?? 0;
+    const valueStart = probeStart + probeMatch[0].length - parens;
     const keyword = " satisfies";
-    const generatedEnd =
-      generatedEndMarker +
-      1 +
-      (generated.startsWith(keyword, generatedEndMarker + 1)
-        ? keyword.length
-        : 0);
+    // TypeScript reports a failed `satisfies` on the keyword, so the span
+    // reaches over it: this tag's own, not an inner one's.
+    // `((n) => ...) satisfies T` opens with two parens too, so the wrapped
+    // depth is tried first and the bare one second.
+    let keywordStart = -1;
+    for (const depth of parens >= 2 ? [2, 0] : [0]) {
+      keywordStart = satisfiesKeyword(generated, valueStart, keyword, depth);
+      if (keywordStart >= 0) break;
+    }
+    let generatedEnd: number;
+    if (keywordStart >= 0) {
+      generatedEnd = keywordStart + keyword.length;
+    } else if (generated[valueStart] === "{") {
+      // Untyped object: this tag's *own* closing `}`, not an inner tag's.
+      const close = matchingSatisfiesMarker(generated, valueStart);
+      if (close < 0) continue;
+      generatedEnd = close + 1;
+    } else {
+      continue;
+    }
     generatedCursors.set(name, generatedEnd);
     tags.push({
       sourceStart,
@@ -1050,6 +1054,38 @@ function matchingSatisfiesMarker(text: string, objectOpen: number): number {
       depth--;
       if (depth === 0 && char === "}") return i;
     }
+  }
+  return -1;
+}
+
+/**
+ * The index of the ` satisfies` that belongs to the value starting at `open`:
+ * the first one at bracket depth `depth` (0 when the value is printed bare,
+ * 2 inside the emitter's `((value) satisfies T) as any)` wrapper); anything
+ * nested in the value sits deeper. Quote-aware like `matchingSatisfiesMarker`;
+ * `-1` when the value closes first.
+ */
+function satisfiesKeyword(
+  text: string,
+  open: number,
+  keyword: string,
+  depth: number,
+): number {
+  let level = 0;
+  let quote: string | undefined;
+  for (let i = open; i < text.length; i++) {
+    const char = text[i];
+    if (quote) {
+      if (char === "\\") i++;
+      else if (char === quote) quote = undefined;
+      continue;
+    }
+    if (char === '"' || char === "'" || char === "`") quote = char;
+    else if (char === "{" || char === "(" || char === "[") level++;
+    else if (char === "}" || char === ")" || char === "]") {
+      level--;
+      if (level < 0) return -1;
+    } else if (level === depth && text.startsWith(keyword, i)) return i;
   }
   return -1;
 }

@@ -1638,6 +1638,7 @@ function attributeTagSingle(
     return satisfying(
       concatMapped("(", attributeTagFor(node.loop, node.nodes, as), ")[0]"),
       valueType,
+      firstAttributeTag(node.nodes)?.nameSpan,
     );
   }
   const parts: Array<string | MappedCode> = [];
