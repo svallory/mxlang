@@ -24,7 +24,7 @@ export const JS_COMMENT_LINE: StateDefinition = {
 
   exit() {},
 
-  parse(data, maxPos) {
+  parse(data, maxPos, comment) {
     while (this.pos < maxPos) {
       const code = data.charCodeAt(this.pos);
       if (code === CODE.NEWLINE || code === CODE.CARRIAGE_RETURN) {
@@ -35,6 +35,7 @@ export const JS_COMMENT_LINE: StateDefinition = {
         !this.isConcise &&
         code === CODE.OPEN_ANGLE_BRACKET &&
         this.activeTag?.type === TagType.text &&
+        isInTextBody(comment) &&
         STATE.checkForClosingTag(this)
       ) {
         // We reached the closing tag of a text-only tag (eg "<script>//foo</script>").
@@ -52,6 +53,20 @@ export const JS_COMMENT_LINE: StateDefinition = {
   /* node:coverage ignore next */ // never has child states
   return() {},
 };
+
+/**
+ * MX (template-parser-comment-in-text-tag-open-crash): whether a comment is
+ * in a text tag's body (`<script>// </script>` closes the tag there), not in
+ * an expression of its open tag (`<script x=1 // </script>`), where the
+ * close-tag check used to end the tag inside its own open tag.
+ */
+function isInTextBody(comment: Meta) {
+  for (let range = comment.parent; range; range = range.parent) {
+    if (range.state === STATE.OPEN_TAG) return false;
+    if (range.state === STATE.PARSED_TEXT_CONTENT) return true;
+  }
+  return false;
+}
 
 /**
  * The range of a JavaScript line or block comment that a state returned from,

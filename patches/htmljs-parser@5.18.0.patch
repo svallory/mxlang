@@ -1,5 +1,5 @@
 diff --git a/dist/index.js b/dist/index.js
-index dc727aef1e94c2a42a93d9e897a89cd5518f0907..d57c551591ae119b6c398c02bc632119848eee07 100644
+index dc727aef1e94c2a42a93d9e897a89cd5518f0907..336dc5739a3e198ba1d4978bccfd1e8b09a63685 100644
 --- a/dist/index.js
 +++ b/dist/index.js
 @@ -47,7 +47,23 @@ var Parser = class {
@@ -99,7 +99,15 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..d57c551591ae119b6c398c02bc632119
    code === 40 || // a default attribute method's params
    // a default attribute method's type params, but not a close tag
    code === 60 && data.charCodeAt(pos + 1) !== 47;
-@@ -1079,6 +1100,11 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -797,6 +818,7 @@ function checkForClosingTag(parser) {
+   var _a, _b;
+   let curPos = parser.pos + 1, match = !!parser.lookAheadFor("/>"), skip = 3;
+   if (!match) {
++    if (!parser.activeTag) return !1;
+     let { tagName } = parser.activeTag, tagNameLen = tagName.end - tagName.start;
+     skip += tagNameLen, match = parser.lookAheadFor("/", curPos) && parser.lookAheadFor(">", 1 + curPos + tagNameLen) && parser.matchAtPos(tagName, {
+       start: 1 + curPos,
+@@ -1079,6 +1101,11 @@ var shouldTerminate = () => !1, unaryKeywords = [
        groupStack: [],
        shouldTerminate,
        operators: !1,
@@ -111,7 +119,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..d57c551591ae119b6c398c02bc632119
        wasComment: !1,
        hadUnguardedNewline: !1,
        inType: !1,
-@@ -1147,12 +1173,23 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1147,12 +1174,23 @@ var shouldTerminate = () => !1, unaryKeywords = [
            return;
          case 63:
            if (expression.operators && !expression.groupStack.length) {
@@ -135,7 +143,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..d57c551591ae119b6c398c02bc632119
            if (expression.operators && !expression.groupStack.length) {
              expression.ternaryDepth ? expression.ternaryDepth-- : expression.inType = !0, this.pos++, this.consumeWhitespace();
              continue;
-@@ -1277,7 +1314,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1277,7 +1315,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
      );
    },
    return(child, expression) {
@@ -144,7 +152,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..d57c551591ae119b6c398c02bc632119
    }
  };
  function checkForOperators(parser, expression, eol) {
-@@ -1333,7 +1370,7 @@ function lookBehindForOperator(expression, data, pos) {
+@@ -1333,7 +1371,7 @@ function lookBehindForOperator(expression, data, pos) {
          case 96:
            return -1;
          default:
@@ -153,7 +161,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..d57c551591ae119b6c398c02bc632119
              expression,
              data,
              operandEnd,
-@@ -1345,7 +1382,7 @@ function lookBehindForOperator(expression, data, pos) {
+@@ -1345,7 +1383,7 @@ function lookBehindForOperator(expression, data, pos) {
        return data.charCodeAt(curPos - 1) === 61 ? curPos - 1 : expression.inType ? -1 : curPos;
      case 46: {
        let nextPos = lookAheadWhile(isWhitespaceCode, data, pos);
@@ -162,7 +170,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..d57c551591ae119b6c398c02bc632119
      }
      // special case -- and ++
      case 43:
-@@ -1364,6 +1401,9 @@ function lookBehindForOperator(expression, data, pos) {
+@@ -1364,6 +1402,9 @@ function lookBehindForOperator(expression, data, pos) {
        );
    }
  }
@@ -172,7 +180,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..d57c551591ae119b6c398c02bc632119
  function lookAheadForOperator(expression, data, pos) {
    switch (data.charCodeAt(pos)) {
      case 38:
-@@ -1382,13 +1422,15 @@ function lookAheadForOperator(expression, data, pos) {
+@@ -1382,13 +1423,15 @@ function lookAheadForOperator(expression, data, pos) {
      case 40:
      case 62:
      case 63:
@@ -190,7 +198,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..d57c551591ae119b6c398c02bc632119
      }
      default: {
        let startCode = data.charCodeAt(pos);
-@@ -1416,7 +1458,7 @@ function lookAheadForOperator(expression, data, pos) {
+@@ -1416,7 +1459,7 @@ function lookAheadForOperator(expression, data, pos) {
    }
  }
  function canFollowDivision(code) {
@@ -199,7 +207,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..d57c551591ae119b6c398c02bc632119
    switch (code) {
      case 96:
      case 39:
-@@ -1432,8 +1474,193 @@ function canFollowDivision(code) {
+@@ -1432,8 +1475,193 @@ function canFollowDivision(code) {
        return !1;
    }
  }
@@ -394,7 +402,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..d57c551591ae119b6c398c02bc632119
  }
  function lookAheadWhile(match, data, pos) {
    let max = data.length;
-@@ -1450,6 +1677,7 @@ function lookBehindWhile(match, data, pos) {
+@@ -1450,6 +1678,7 @@ function lookBehindWhile(match, data, pos) {
    return 0;
  }
  function lookBehindForKeyword(expression, data, pos, keywords) {
@@ -402,7 +410,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..d57c551591ae119b6c398c02bc632119
    for (let keyword of keywords) {
      let keywordPos = lookBehindFor(data, pos, keyword);
      if (keywordPos !== -1)
-@@ -1694,10 +1922,10 @@ function startsTypeName(parser, pos, allowGroup) {
+@@ -1694,10 +1923,10 @@ function startsTypeName(parser, pos, allowGroup) {
    let code = parser.data.charCodeAt(pos);
    if (code === 123 || code === 42)
      return allowGroup;
@@ -415,7 +423,38 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..d57c551591ae119b6c398c02bc632119
        return !1;
    return !0;
  }
-@@ -1805,9 +2033,9 @@ var OPEN_TAG = {
+@@ -1744,14 +1973,14 @@ var JS_COMMENT_LINE = {
+   },
+   exit() {
+   },
+-  parse(data, maxPos) {
++  parse(data, maxPos, comment) {
+     var _a;
+     for (; this.pos < maxPos; ) {
+       let code = data.charCodeAt(this.pos);
+       if (code === 10 || code === 13) {
+         this.exitState();
+         return;
+-      } else if (!this.isConcise && code === 60 && ((_a = this.activeTag) == null ? void 0 : _a.type) === 1 && states_exports.checkForClosingTag(this)) {
++      } else if (!this.isConcise && code === 60 && ((_a = this.activeTag) == null ? void 0 : _a.type) === 1 && isInTextBody(comment) && states_exports.checkForClosingTag(this)) {
+         this.exitState();
+         return;
+       } else
+@@ -1764,6 +1993,13 @@ var JS_COMMENT_LINE = {
+   return() {
+   }
+ };
++function isInTextBody(comment) {
++  for (let range = comment.parent; range; range = range.parent) {
++    if (range.state === states_exports.OPEN_TAG) return !1;
++    if (range.state === states_exports.PARSED_TEXT_CONTENT) return !0;
++  }
++  return !1;
++}
+ function getJSCommentRange(comment) {
+   return {
+     start: comment.start,
+@@ -1805,9 +2041,9 @@ var OPEN_TAG = {
    },
    exit(tag) {
      var _a, _b;
@@ -428,7 +467,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..d57c551591ae119b6c398c02bc632119
        end: this.pos,
        selfClosed
      }), selfClosed ? 2 : tag.type) {
-@@ -1981,7 +2209,9 @@ var OPEN_TAG = {
+@@ -1981,7 +2217,9 @@ var OPEN_TAG = {
                );
                return;
              }
@@ -439,7 +478,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..d57c551591ae119b6c398c02bc632119
              return;
            }
            case 124: {
-@@ -2345,7 +2575,9 @@ function checkForPlaceholder(parser, code) {
+@@ -2345,7 +2583,9 @@ function checkForPlaceholder(parser, code) {
            return parser.endText(), parser.pos += extra, parser.startText(), parser.pos += ahead - extra + (escape ? 2 : 3), !0;
          parser.startText(), parser.pos += extra, parser.endText(), parser.pos += extra;
        }
@@ -450,7 +489,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..d57c551591ae119b6c398c02bc632119
      }
    }
    return !1;
-@@ -2468,7 +2700,10 @@ var TAG_NAME = {
+@@ -2468,7 +2708,10 @@ var TAG_NAME = {
    exit(tagName) {
      var _a, _b, _c, _d, _e, _f;
      let { start, end, quasis, expressions } = tagName, last = quasis[quasis.length - 1];
@@ -462,7 +501,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..d57c551591ae119b6c398c02bc632119
        case 35:
          if (this.activeTag.hasShorthandId)
            return this.emitError(
-@@ -2533,7 +2768,9 @@ var TAG_NAME = {
+@@ -2533,7 +2776,9 @@ var TAG_NAME = {
          return;
        }
        if (code === 36 && data.charCodeAt(this.pos + 1) === 123) {
@@ -473,7 +512,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..d57c551591ae119b6c398c02bc632119
          return;
        } else if (isWhitespaceCode(code) || code === 61 || code === 58 && data.charCodeAt(this.pos + 1) === 61 || code === 40 || code === 47 || code === 124 || code === 60 || code === 44 || (this.isConcise ? code === 59 || code === 91 : code === 62)) {
          this.activeTag.shorthandEnd = this.pos, this.exitState();
-@@ -2587,7 +2824,9 @@ var TEMPLATE_STRING = {
+@@ -2587,7 +2832,9 @@ var TEMPLATE_STRING = {
        switch (data.charCodeAt(this.pos)) {
          case 36:
            if (data.charCodeAt(this.pos + 1) === 123) {
@@ -484,7 +523,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..d57c551591ae119b6c398c02bc632119
              return;
            }
            this.pos++;
-@@ -2670,6 +2909,12 @@ function htmlEOF() {
+@@ -2670,6 +2917,12 @@ function htmlEOF() {
  function isWordCode(code) {
    return code >= 65 && code <= 90 || code >= 97 && code <= 122 || code >= 48 && code <= 57 || code == 36 || code === 95;
  }
@@ -498,7 +537,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..d57c551591ae119b6c398c02bc632119
    return code === 62;
  }
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 8afb14db555b8df8a5b9f5e1c29bad5080125709..7ad7a1560142d1f2a9a1bd681ff84bbc94d108b7 100644
+index 8afb14db555b8df8a5b9f5e1c29bad5080125709..b1c1d5533b3ad9262fc7d0a03096660d90999579 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -20,7 +20,23 @@ var Parser = class {
@@ -598,7 +637,15 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..7ad7a1560142d1f2a9a1bd681ff84bbc
    code === 40 || // a default attribute method's params
    // a default attribute method's type params, but not a close tag
    code === 60 && data.charCodeAt(pos + 1) !== 47;
-@@ -1052,6 +1073,11 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -770,6 +791,7 @@ function checkForClosingTag(parser) {
+   var _a, _b;
+   let curPos = parser.pos + 1, match = !!parser.lookAheadFor("/>"), skip = 3;
+   if (!match) {
++    if (!parser.activeTag) return !1;
+     let { tagName } = parser.activeTag, tagNameLen = tagName.end - tagName.start;
+     skip += tagNameLen, match = parser.lookAheadFor("/", curPos) && parser.lookAheadFor(">", 1 + curPos + tagNameLen) && parser.matchAtPos(tagName, {
+       start: 1 + curPos,
+@@ -1052,6 +1074,11 @@ var shouldTerminate = () => !1, unaryKeywords = [
        groupStack: [],
        shouldTerminate,
        operators: !1,
@@ -610,7 +657,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..7ad7a1560142d1f2a9a1bd681ff84bbc
        wasComment: !1,
        hadUnguardedNewline: !1,
        inType: !1,
-@@ -1120,12 +1146,23 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1120,12 +1147,23 @@ var shouldTerminate = () => !1, unaryKeywords = [
            return;
          case 63:
            if (expression.operators && !expression.groupStack.length) {
@@ -634,7 +681,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..7ad7a1560142d1f2a9a1bd681ff84bbc
            if (expression.operators && !expression.groupStack.length) {
              expression.ternaryDepth ? expression.ternaryDepth-- : expression.inType = !0, this.pos++, this.consumeWhitespace();
              continue;
-@@ -1250,7 +1287,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
+@@ -1250,7 +1288,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
      );
    },
    return(child, expression) {
@@ -643,7 +690,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..7ad7a1560142d1f2a9a1bd681ff84bbc
    }
  };
  function checkForOperators(parser, expression, eol) {
-@@ -1306,7 +1343,7 @@ function lookBehindForOperator(expression, data, pos) {
+@@ -1306,7 +1344,7 @@ function lookBehindForOperator(expression, data, pos) {
          case 96:
            return -1;
          default:
@@ -652,7 +699,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..7ad7a1560142d1f2a9a1bd681ff84bbc
              expression,
              data,
              operandEnd,
-@@ -1318,7 +1355,7 @@ function lookBehindForOperator(expression, data, pos) {
+@@ -1318,7 +1356,7 @@ function lookBehindForOperator(expression, data, pos) {
        return data.charCodeAt(curPos - 1) === 61 ? curPos - 1 : expression.inType ? -1 : curPos;
      case 46: {
        let nextPos = lookAheadWhile(isWhitespaceCode, data, pos);
@@ -661,7 +708,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..7ad7a1560142d1f2a9a1bd681ff84bbc
      }
      // special case -- and ++
      case 43:
-@@ -1337,6 +1374,9 @@ function lookBehindForOperator(expression, data, pos) {
+@@ -1337,6 +1375,9 @@ function lookBehindForOperator(expression, data, pos) {
        );
    }
  }
@@ -671,7 +718,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..7ad7a1560142d1f2a9a1bd681ff84bbc
  function lookAheadForOperator(expression, data, pos) {
    switch (data.charCodeAt(pos)) {
      case 38:
-@@ -1355,13 +1395,15 @@ function lookAheadForOperator(expression, data, pos) {
+@@ -1355,13 +1396,15 @@ function lookAheadForOperator(expression, data, pos) {
      case 40:
      case 62:
      case 63:
@@ -689,7 +736,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..7ad7a1560142d1f2a9a1bd681ff84bbc
      }
      default: {
        let startCode = data.charCodeAt(pos);
-@@ -1389,7 +1431,7 @@ function lookAheadForOperator(expression, data, pos) {
+@@ -1389,7 +1432,7 @@ function lookAheadForOperator(expression, data, pos) {
    }
  }
  function canFollowDivision(code) {
@@ -698,7 +745,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..7ad7a1560142d1f2a9a1bd681ff84bbc
    switch (code) {
      case 96:
      case 39:
-@@ -1405,8 +1447,193 @@ function canFollowDivision(code) {
+@@ -1405,8 +1448,193 @@ function canFollowDivision(code) {
        return !1;
    }
  }
@@ -893,7 +940,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..7ad7a1560142d1f2a9a1bd681ff84bbc
  }
  function lookAheadWhile(match, data, pos) {
    let max = data.length;
-@@ -1423,6 +1650,7 @@ function lookBehindWhile(match, data, pos) {
+@@ -1423,6 +1651,7 @@ function lookBehindWhile(match, data, pos) {
    return 0;
  }
  function lookBehindForKeyword(expression, data, pos, keywords) {
@@ -901,7 +948,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..7ad7a1560142d1f2a9a1bd681ff84bbc
    for (let keyword of keywords) {
      let keywordPos = lookBehindFor(data, pos, keyword);
      if (keywordPos !== -1)
-@@ -1667,10 +1895,10 @@ function startsTypeName(parser, pos, allowGroup) {
+@@ -1667,10 +1896,10 @@ function startsTypeName(parser, pos, allowGroup) {
    let code = parser.data.charCodeAt(pos);
    if (code === 123 || code === 42)
      return allowGroup;
@@ -914,7 +961,38 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..7ad7a1560142d1f2a9a1bd681ff84bbc
        return !1;
    return !0;
  }
-@@ -1778,9 +2006,9 @@ var OPEN_TAG = {
+@@ -1717,14 +1946,14 @@ var JS_COMMENT_LINE = {
+   },
+   exit() {
+   },
+-  parse(data, maxPos) {
++  parse(data, maxPos, comment) {
+     var _a;
+     for (; this.pos < maxPos; ) {
+       let code = data.charCodeAt(this.pos);
+       if (code === 10 || code === 13) {
+         this.exitState();
+         return;
+-      } else if (!this.isConcise && code === 60 && ((_a = this.activeTag) == null ? void 0 : _a.type) === 1 && states_exports.checkForClosingTag(this)) {
++      } else if (!this.isConcise && code === 60 && ((_a = this.activeTag) == null ? void 0 : _a.type) === 1 && isInTextBody(comment) && states_exports.checkForClosingTag(this)) {
+         this.exitState();
+         return;
+       } else
+@@ -1737,6 +1966,13 @@ var JS_COMMENT_LINE = {
+   return() {
+   }
+ };
++function isInTextBody(comment) {
++  for (let range = comment.parent; range; range = range.parent) {
++    if (range.state === states_exports.OPEN_TAG) return !1;
++    if (range.state === states_exports.PARSED_TEXT_CONTENT) return !0;
++  }
++  return !1;
++}
+ function getJSCommentRange(comment) {
+   return {
+     start: comment.start,
+@@ -1778,9 +2014,9 @@ var OPEN_TAG = {
    },
    exit(tag) {
      var _a, _b;
@@ -927,7 +1005,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..7ad7a1560142d1f2a9a1bd681ff84bbc
        end: this.pos,
        selfClosed
      }), selfClosed ? 2 : tag.type) {
-@@ -1954,7 +2182,9 @@ var OPEN_TAG = {
+@@ -1954,7 +2190,9 @@ var OPEN_TAG = {
                );
                return;
              }
@@ -938,7 +1016,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..7ad7a1560142d1f2a9a1bd681ff84bbc
              return;
            }
            case 124: {
-@@ -2318,7 +2548,9 @@ function checkForPlaceholder(parser, code) {
+@@ -2318,7 +2556,9 @@ function checkForPlaceholder(parser, code) {
            return parser.endText(), parser.pos += extra, parser.startText(), parser.pos += ahead - extra + (escape ? 2 : 3), !0;
          parser.startText(), parser.pos += extra, parser.endText(), parser.pos += extra;
        }
@@ -949,7 +1027,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..7ad7a1560142d1f2a9a1bd681ff84bbc
      }
    }
    return !1;
-@@ -2441,7 +2673,10 @@ var TAG_NAME = {
+@@ -2441,7 +2681,10 @@ var TAG_NAME = {
    exit(tagName) {
      var _a, _b, _c, _d, _e, _f;
      let { start, end, quasis, expressions } = tagName, last = quasis[quasis.length - 1];
@@ -961,7 +1039,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..7ad7a1560142d1f2a9a1bd681ff84bbc
        case 35:
          if (this.activeTag.hasShorthandId)
            return this.emitError(
-@@ -2506,7 +2741,9 @@ var TAG_NAME = {
+@@ -2506,7 +2749,9 @@ var TAG_NAME = {
          return;
        }
        if (code === 36 && data.charCodeAt(this.pos + 1) === 123) {
@@ -972,7 +1050,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..7ad7a1560142d1f2a9a1bd681ff84bbc
          return;
        } else if (isWhitespaceCode(code) || code === 61 || code === 58 && data.charCodeAt(this.pos + 1) === 61 || code === 40 || code === 47 || code === 124 || code === 60 || code === 44 || (this.isConcise ? code === 59 || code === 91 : code === 62)) {
          this.activeTag.shorthandEnd = this.pos, this.exitState();
-@@ -2560,7 +2797,9 @@ var TEMPLATE_STRING = {
+@@ -2560,7 +2805,9 @@ var TEMPLATE_STRING = {
        switch (data.charCodeAt(this.pos)) {
          case 36:
            if (data.charCodeAt(this.pos + 1) === 123) {
@@ -983,7 +1061,7 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..7ad7a1560142d1f2a9a1bd681ff84bbc
              return;
            }
            this.pos++;
-@@ -2643,6 +2882,12 @@ function htmlEOF() {
+@@ -2643,6 +2890,12 @@ function htmlEOF() {
  function isWordCode(code) {
    return code >= 65 && code <= 90 || code >= 97 && code <= 122 || code >= 48 && code <= 57 || code == 36 || code === 95;
  }

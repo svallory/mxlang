@@ -45,7 +45,9 @@ export function checkForClosingTag(parser: Parser) {
   let skip = 3; // skip the </>
 
   if (!match) {
-    const { tagName } = parser.activeTag!;
+    // MX: no open tag, no closing tag (the parser never throws).
+    if (!parser.activeTag) return false;
+    const { tagName } = parser.activeTag;
     const tagNameLen = tagName.end - tagName.start;
     skip += tagNameLen; // skip <TAG_NAME/>
     match =

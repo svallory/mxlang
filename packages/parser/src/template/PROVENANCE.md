@@ -156,12 +156,36 @@ parser without core's conversion turns atoms into numbers silently.
 
 Nothing else differs from `v5.18.0`. To check: extract `git archive v5.18.0 src`
 of upstream and diff; only `index.ts`, `core/Parser.ts`,
-`states/ATTRIBUTE.ts`, `states/EXPRESSION.ts`, `states/INLINE_SCRIPT.ts`,
-`states/OPEN_TAG.ts`, `states/PLACEHOLDER.ts`, `states/TAG_NAME.ts`,
-`states/TEMPLATE_STRING.ts`, `util/constants.ts` and `util/util.ts` differ
-(`index.ts` from the base position above, `TAG_NAME.ts` from review round 4,
-`INLINE_SCRIPT.ts` and `util/util.ts` from template-parser-ascii-only-
-lookbehinds; checked against `git archive v5.18.0 src`).
+`states/ATTRIBUTE.ts`, `states/CLOSE_TAG.ts`, `states/EXPRESSION.ts`,
+`states/INLINE_SCRIPT.ts`, `states/JS_COMMENT_LINE.ts`, `states/OPEN_TAG.ts`,
+`states/PLACEHOLDER.ts`, `states/TAG_NAME.ts`, `states/TEMPLATE_STRING.ts`,
+`util/constants.ts` and `util/util.ts` differ (`index.ts` from the base
+position above, `TAG_NAME.ts` from review round 4, `INLINE_SCRIPT.ts` and
+`util/util.ts` from template-parser-ascii-only-lookbehinds, `CLOSE_TAG.ts`
+and `JS_COMMENT_LINE.ts` from the crash fix below; checked against
+`git archive v5.18.0 src`).
+
+## The parser never throws
+
+Rule (mx-lead, template-parser-comment-in-text-tag-open-crash): the
+template parser never throws; any internal failure is an `onError`. Stock
+5.18.0 threw on a `//` comment inside a text tag's open tag
+(`<script x=1 // </script>\n>a</script>`): the comment ran the body's
+close-tag check, emitted `</script>` inside the open tag, and a later check
+destructured a missing active tag. Both dist builds carry the same
+JavaScript.
+
+| Source location | Function | What changed |
+|---|---|---|
+| `states/JS_COMMENT_LINE.ts` | `JS_COMMENT_LINE.parse`, new `isInTextBody` | the close-tag check runs only for a comment in the text tag's body (`PARSED_TEXT_CONTENT` before any `OPEN_TAG` among its ancestors); a body comment, including one in a body placeholder, closes the tag as before |
+| `states/CLOSE_TAG.ts` | `checkForClosingTag` | returns false when there is no active tag |
+
+`JS_COMMENT_BLOCK` runs no close-tag check. `checkForClosingTag`'s only
+other caller, `PARSED_TEXT_CONTENT`, is the text body itself. Tests:
+`mx-no-throw.cases.ts` (20 rows and a seeded fuzz of 5,000 inputs; seed 1
+passes). A wider sweep (seeds 1 to 100, 500,000 inputs) still finds one
+different throw, out of this change's scope: a stray close tag after a
+concise `--` line, `,--/</e>`, throws in `ensureExpectedCloseTag`.
 
 ## Tests
 
