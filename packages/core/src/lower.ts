@@ -349,13 +349,56 @@ export function exprOf(ctx: Ctx, node: Node): Expr {
   checkTagVarReads(ctx, code, node);
   const span = exprSpan(ctx, node);
   const atoms = span ? atomsIn(ctx, span.sourceStart, span.sourceEnd) : [];
+  const bodySpan =
+    node?.type === "FunctionExpression" && span
+      ? methodBodySpan(ctx, node, span)
+      : undefined;
   return {
     code,
     shape: expressionShape(node),
     node,
     span,
     ...(atoms.length > 0 ? { atoms } : {}),
+    ...(bodySpan
+      ? {
+          bodySpan,
+          bodySource: ctx.source.slice(
+            bodySpan.sourceStart,
+            bodySpan.sourceEnd,
+          ),
+        }
+      : {}),
   };
+}
+
+/**
+ * The authored `{ … }` body of an attribute method shorthand
+ * (`onClick() { … }`, `async onClick<T>(…) { … }`), read from the parser
+ * node's own body position. `code` prints the method as a `function`
+ * expression, possibly reformatted, so this is the authored side a host diffs
+ * the printed body against. Marko's body position for a method covers only
+ * the text between the braces, so it is widened onto them. `undefined` for an
+ * authored `function` expression (its `code` is its own text, mapped like any
+ * expression) and when the node has no body position or it does not delimit
+ * a block in the source.
+ */
+function methodBodySpan(
+  ctx: Ctx,
+  node: Node,
+  span: SourceSpan,
+): SourceSpan | undefined {
+  const authored = ctx.source.slice(span.sourceStart, span.sourceEnd);
+  if (/^(?:async\s+)?function\b/.test(authored)) return undefined;
+  const body = exprSpan(ctx, node?.body);
+  if (!body) return undefined;
+  const { sourceStart, sourceEnd } = body;
+  if (ctx.source[sourceStart] === "{" && ctx.source[sourceEnd - 1] === "}") {
+    return body;
+  }
+  if (ctx.source[sourceStart - 1] === "{" && ctx.source[sourceEnd] === "}") {
+    return { sourceStart: sourceStart - 1, sourceEnd: sourceEnd + 1 };
+  }
+  return undefined;
 }
 
 /**

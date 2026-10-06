@@ -1,4 +1,4 @@
-import { parse as parseBabel } from "@babel/parser";
+import { parse as parseBabel, parseExpression } from "@babel/parser";
 import {
   type Attr,
   type AttributeTag,
@@ -20,11 +20,11 @@ import {
   type MappedCode,
   mapped,
   mappedExpr,
+  mappedRewrite,
   type Node,
   type Position,
   type ReadRewrite,
   rewriteAccessorReads,
-  type SourceSpan,
   TranslateError,
   unresolvedCustomTagMessage,
 } from "@mxlang/core";
@@ -823,13 +823,22 @@ function staticTemplateValue(expr: Expr): string | null {
   return value;
 }
 
-function methodExpression(expr: Expr): string | null {
-  if (expr.node?.type !== "FunctionExpression") return null;
-  const match = expr.code.match(
-    /^(async\s+)?function\s*\(([\s\S]*)\)\s*(\{[\s\S]*\})$/,
-  );
-  if (!match) return expr.code;
-  return `${match[1] ?? ""}(${match[2] ?? ""}) => ${match[3] ?? "{}"}`;
+/**
+ * Where the body of a printed method starts: `code` is the `function`
+ * expression the compiler printed for an attribute method shorthand
+ * (`onClick() { … }` as `function () { … }`), and the parsed function's own
+ * body position splits it (a body may hold its own `) {`). `null` when `code`
+ * is not one function expression.
+ */
+function printedBodyStart(code: string): number | null {
+  let fn: Node;
+  try {
+    fn = parseExpression(code, { plugins: ["typescript"] });
+  } catch {
+    return null;
+  }
+  if (fn?.type !== "FunctionExpression" || fn.end !== code.length) return null;
+  return fn.body.start;
 }
 
 /**
@@ -890,19 +899,35 @@ const LOOSER_THAN_NULLISH = new Set([
 ]);
 
 /**
+ * TypeScript reads `node` as always nullish (`null`, `undefined`): `?? {}`
+ * after it is TS2871, so it is left off and TypeScript reports the real
+ * `Object.entries(null)` error instead.
+ */
+function alwaysNullish(node: Node): boolean {
+  return (
+    node?.type === "NullLiteral" ||
+    (node?.type === "Identifier" && node.name === "undefined")
+  );
+}
+
+/**
  * A `<for in>` source inside `Object.entries(…)`, defaulted with `?? {}` unless
- * TypeScript reads it as never nullish (it reports the `??` at the author's
- * own expression, TS2869). A source that binds looser than `??` is
- * parenthesized first: `a || b ?? {}` is a syntax error and `c ? x : y ?? {}`
- * would default only `y`.
+ * TypeScript reads it as never nullish (TS2869) or always nullish (TS2871),
+ * both reported at the author's own expression. A source that binds looser
+ * than `??` is parenthesized first: `a || b ?? {}` is a syntax error and
+ * `c ? x : y ?? {}` would default only `y`. A comma expression is
+ * parenthesized either way, since bare it is two arguments.
  */
 function forInSource(source: Expr): (string | MappedCode)[] {
   const prefix = "<For each={Object.entries(";
-  if (neverNullish(source.node)) return [prefix, mappedExpr(source)];
-  const wrap = LOOSER_THAN_NULLISH.has(source.node?.type);
-  return wrap
-    ? [`${prefix}(`, mappedExpr(source), ") ?? {}"]
-    : [prefix, mappedExpr(source), " ?? {}"];
+  const type = source.node?.type;
+  const fallback =
+    neverNullish(source.node) || alwaysNullish(source.node) ? "" : " ?? {}";
+  return fallback === "" && type !== "SequenceExpression"
+    ? [prefix, mappedExpr(source)]
+    : LOOSER_THAN_NULLISH.has(type)
+      ? [`${prefix}(`, mappedExpr(source), `)${fallback}`]
+      : [prefix, mappedExpr(source), fallback];
 }
 
 /** The guard's tag argument: `null` when the target is not a native element. */
@@ -971,18 +996,24 @@ function guardValue(
 }
 
 /**
- * An attribute value's text with its authored mapping. A method rewritten to
- * an arrow function keeps the mapping it has on main, `methodSpan` (the whole
- * arrow over the authored span where main maps it, else none); mapping a
- * method's body is a change of its own.
+ * An attribute value's text with its authored mapping. Every function value
+ * is emitted as written: a method shorthand as the `function` expression the
+ * compiler printed for it (`async function <T>(…) { … }`), which keeps
+ * Marko's `this`, its name semantics and valid TSX, and an authored `function`
+ * expression or arrow unchanged. A method's printed head is generated text
+ * and stays unmapped; its body maps token by token against the authored body
+ * (`Expr.bodySpan`/`bodySource`, `mappedRewrite`), also when the printer
+ * reformatted it or reads were rewritten.
  */
-function mappedValue(
-  expr: Expr,
-  methodSpan: SourceSpan | null = null,
-): MappedCode {
-  const method = methodExpression(expr);
-  if (method === null || method === expr.code) return mappedExpr(expr);
-  return mapped(method, methodSpan);
+function mappedValue(expr: Expr): MappedCode {
+  const { bodySpan, bodySource } = expr;
+  if (!bodySpan || bodySource === undefined) return mappedExpr(expr);
+  const at = printedBodyStart(expr.code);
+  if (at === null) return concatMapped(expr.code);
+  return concatMapped(
+    mapped(expr.code.slice(0, at), null),
+    mappedRewrite(expr.code.slice(at), bodySource, bodySpan),
+  );
 }
 
 function renderAttr(
@@ -1005,10 +1036,7 @@ function renderAttr(
         ? mapped(JSON.stringify(attr.value), attr.valueSpan ?? null)
         : attr.kind === "boolean"
           ? concatMapped("true")
-          : mappedValue(
-              attr.value,
-              attr.kind === "dynamic" ? (attr.value.span ?? null) : null,
-            );
+          : mappedValue(attr.value);
     const guardedColon =
       native !== undefined &&
       attr.kind === "dynamic" &&
@@ -1479,11 +1507,8 @@ function attributeTagAttrValue(
         return fail("`style=` with a non-object value", attr);
       }
       return attr.value.span
-        ? mappedValue(attr.value, attr.value.span)
-        : mapped(
-            methodExpression(attr.value) ?? attr.value.code,
-            attr.nameSpan,
-          );
+        ? mappedValue(attr.value)
+        : mapped(attr.value.code, attr.nameSpan);
   }
 }
 

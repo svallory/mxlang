@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Expr } from "./ir.ts";
-import { type GeneratedMapping, mappedExpr } from "./mapping.ts";
+import { type GeneratedMapping, mappedExpr, mappedRewrite } from "./mapping.ts";
 
 function rewritten(before: string, code: string): Expr {
   return {
@@ -57,5 +57,23 @@ describe("rewritten-read mappings", () => {
     const after = terms(100, "row()");
     const result = mappedExpr(rewritten(before, after));
     expect(sourceOffsetOf(result, ".a77")).toBe(100 + before.indexOf(".a77"));
+  });
+});
+
+describe("mappedRewrite", () => {
+  it("maps reprinted text token by token", () => {
+    const result = mappedRewrite("{ go(); }", "{ go() }", {
+      sourceStart: 10,
+      sourceEnd: 18,
+    });
+    expect(sourceOffsetOf(result, "go(")).toBe(12);
+  });
+
+  it("is a single mapping when nothing changed", () => {
+    const { mappings } = mappedRewrite("{ a }", "{ a }", {
+      sourceStart: 0,
+      sourceEnd: 5,
+    });
+    expect(mappings).toHaveLength(1);
   });
 });

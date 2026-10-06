@@ -126,6 +126,20 @@ export interface Expr {
    * runs one to one (`mappedExpr`).
    */
   unrewrittenCode?: string;
+  /**
+   * The authored `{ … }` block of an attribute method shorthand
+   * (`onClick() { … }`), whose `code` is the equivalent `function` expression
+   * printed by the compiler. Absent for every other expression, an authored
+   * `function` expression included. A host maps the printed body against it.
+   */
+  bodySpan?: SourceSpan;
+  /**
+   * The authored text of `bodySpan`, set with it. `code` may carry the body
+   * reprinted (`{ go() }` as `{ go(); }`) or with reads rewritten, so a host
+   * diffs this against the printed body (`mappedRewrite`) to map it token by
+   * token.
+   */
+  bodySource?: string;
 }
 
 /**

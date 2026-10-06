@@ -93,19 +93,25 @@ Three facts worth knowing before touching it:
   and `Input` with `mappedStatement`. A value Solid rewrites maps what
   survives: a `<for>` accessor read (`i` to `i()`, `row` to `row()`, a for-in
   key to `mxEntry()[0]`) maps its unchanged runs one to one and the replaced
-  name as a whole (`Expr.unrewrittenCode`, `mappedExpr`); a mapping over
-  different text shifts positions, so the inserted text stays unmapped. The
-  dynamic tag's own expression is mapped,
+  name as a whole (`Expr.unrewrittenCode`, `mappedExpr`). Every function
+  value is emitted as written: a method shorthand (`onClick() { … }`) as the
+  `function` expression the compiler printed (`async function <T>(…) { … }`;
+  Marko's `this`, valid TSX), an authored `function` expression or arrow
+  unchanged. A method's printed head stays unmapped and its `{ … }` body maps
+  token by token against the authored body (`Expr.bodySpan`/`bodySource`,
+  `mappedRewrite`), also when the printer
+  reformatted it; a mapping over different text shifts positions, so the
+  inserted text stays unmapped. The dynamic tag's own expression is mapped,
   and a `<for in>` source TypeScript reads as never nullish no longer gets a
   `?? {}` (TS2869; `neverNullish` mirrors the checker's syntactic rule: a
   literal, a conditional of two such, a cast or `satisfies` around one), while
-  a source binding looser than `??` is parenthesized before it. The
-  whole-file virtual code also gets the file kind's
+  a source binding looser than `??` is parenthesized before it (a comma
+  expression always is); a `null`/`undefined` source gets no `?? {}` either
+  (TS2871). The whole-file virtual code also gets the file kind's
   `completeTypecheckModule` (`compileMxVirtual`), so `<For>`/`<Show>`/
   `<Dynamic>` resolve and a row's type is known. Known unmapped: the `<for
-  from= to= step=>` range arithmetic, attribute-tag `<for>` sources, an attribute
-  method rewritten to an arrow (mapped as on main; its body mapping is a
-  separate change), a rewritten expression past `MAX_DIFF_CELLS` tokens (its
+  from= to= step=>` range arithmetic, attribute-tag `<for>` sources, a method's
+  printed head, a rewritten expression past `MAX_DIFF_CELLS` tokens (its
   changed middle maps as one run), a `<textarea>` spread wrapped in `__mxOmit`, and a dynamic
   tag's call arguments. Pinned by
   `expression-mappings.test.ts` and `packages/tooling/tsc/src/expression-values-solid-typecheck.test.ts`.

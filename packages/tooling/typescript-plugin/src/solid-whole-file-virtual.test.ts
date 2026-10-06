@@ -69,6 +69,12 @@ describe("a whole-file Solid unit's virtual code", () => {
     expect(authored).toBe(expected);
   });
 
+  it("maps the body of a method attribute", () => {
+    const source = "<button onClick() { missingInMethod(); }>go</button>";
+    const { authored, expected } = offsetOf(source, "missingInMethod");
+    expect(authored).toBe(expected);
+  });
+
   it("does not add `?? {}` after an object literal in `<for in>`", () => {
     const { generated } = virtual("<for|k, v| in={ a: 1 }><p>${k}</p></for>");
     expect(generated).toContain("Object.entries({ a: 1 })");

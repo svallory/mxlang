@@ -6,7 +6,13 @@ static const list = [{ id: 1, name: "a" }];
 <for|row| of=list by="id"><p>${row.name + missingKeyed}</p></for>
 <for|k, v| in={ a: 1 }><p>${k + v + missingIn}</p></for>
 <${missingDyn}/>
+<button onClick() { missingInMethod(); }>go</button>
 <for|k, v| in=[1, 2]><p>${k + v + missingArr}</p></for>
 <for|k, v| in="abc"><p>${k + v + missingStr}</p></for>
+<button onClick() { missingNoSemi() }>go</button>
 <for|k, v| in=list ? { a: 1 } : { b: 2 }><p>${k + v + missingCond}</p></for>
 <for|k, v| in={ a: 1 } as Record<string, number>><p>${k + v + missingAs}</p></for>
+<button onClick() { if (list) { for (const r of list) { missingNested(r) } } }>go</button>
+<button async onClick() { await missingAwait() }>go</button>
+<button onClick<T>(e: T) { if (e) { missingGeneric(e) } }>go</button>
+<button onClick=function tick(e: MouseEvent) { if (e.detail < 3) { tick(e) } else { missingNamed() } }>go</button>
