@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Changed (statement-tags, decision 168):** the data compile passes `statementTags: false` to core, so core's six statement tags are not registered beside the data taglib's own three; `class` stays an ordinary data tag name. No output change.
+
 - **Fixed (main-differential-crashes):** a top-level concise line holding only `,` is a positioned error from core, not an uncaught `TypeError`; the data target now has a test for it (no code change here).
 - **Changed (decision 162):** `parseData` reads core's `errors` list, so independent errors of one file (a scriptlet, a tag outside its parent, a CDATA section) are all diagnostics, once each, in position order.
 
