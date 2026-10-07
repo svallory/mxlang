@@ -2874,13 +2874,42 @@ export class SolidEmitter implements Emitter<string> {
       this.#out.push(loading);
       return;
     }
-    const params = catchTag.block.params.join(", ");
+    // `<@catch|e|>` must bind the *error*, not Solid's `ErrorAccessor`
+    // function: Marko's `<catch|e|>` hands `<try>`'s fallback the thrown
+    // error itself, while Solid 2's `Errored` fallback receives
+    // `(err: ErrorAccessor, reset)` (`solid-js/types/client/flow.d.ts`), so
+    // passing the params straight through left `${e.message}` rendering
+    // against a function (measured: `${e.constructor.name}` rendered
+    // `Function`). With params, lower the fallback as a block arrow that
+    // calls the accessor once and binds the author's first param pattern to
+    // its result; `reset` and any later param passes through untouched, and
+    // a param-less catch keeps the plain expression arrow.
+    const params = catchTag.block.params;
     const caught = jsxValue(blockExpression(catchTag.block.children));
+    if (params.length === 0) {
+      this.#out.push(
+        concatMapped(
+          `<Errored fallback={() => `,
+          caught,
+          "}>",
+          loading,
+          "</Errored>",
+        ),
+      );
+      return;
+    }
+    // The accessor's gensym avoids the params' own bound names and every
+    // name the catch body references, so it can never shadow either.
+    const used = new Set<string>(paramBindingNames(params));
+    for (const name of freeJsxNames(caught.code)) used.add(name);
+    let accessor = "__mxErr";
+    while (used.has(accessor)) accessor = `${accessor}_2`;
+    const rest = params.slice(1).join(", ");
     this.#out.push(
       concatMapped(
-        `<Errored fallback={(${params}) => `,
+        `<Errored fallback={(${accessor}${rest ? `, ${rest}` : ""}) => { const ${params[0]} = ${accessor}(); return `,
         caught,
-        "}>",
+        "; }}>",
         loading,
         "</Errored>",
       ),

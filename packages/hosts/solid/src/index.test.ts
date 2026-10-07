@@ -256,8 +256,20 @@ describe("Solid IR lowering", () => {
       "try boundary",
       `<try><@placeholder>wait</@placeholder><Risky/><@catch|error, reset|><p>\${error.message}</p></@catch></try>`,
       [
-        "<Errored fallback={(error, reset) => <p>{error.message}</p>}>",
+        "<Errored fallback={(__mxErr, reset) => { const error = __mxErr(); return <p>{error.message}</p>; }}>",
         "<Loading fallback={<>wait</>}><Risky /></Loading>",
+      ],
+      ["Risky"],
+    ],
+    // A param'd `<@catch>` binds the thrown error (the accessor is called
+    // once and its result bound to the author's pattern), while a
+    // param-less one keeps the plain expression arrow.
+    [
+      "try catch param is the error, not the ErrorAccessor",
+      `<try><Risky/><@catch|e|><p>\${e.message}</p></@catch></try>`,
+      [
+        "<Errored fallback={(__mxErr) => { const e = __mxErr(); return <p>{e.message}</p>; }}>",
+        "<Loading><Risky /></Loading>",
       ],
       ["Risky"],
     ],

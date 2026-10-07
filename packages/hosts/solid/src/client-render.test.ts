@@ -364,4 +364,17 @@ describe("Solid client render: live signal updates through the real DOM", () => 
       '<ul><li data-mx-node-id="1">b:2<!----></li><li data-mx-node-id="2">c:3<!----></li></ul>',
     );
   });
+
+  it("binds a <try> catch param to the thrown error on the client, not Solid's ErrorAccessor", () => {
+    // Same accessor-unwrap guard as the SSR suite, but through the client
+    // (DOM) codegen: before the fix, `e.message` on the accessor rendered
+    // empty and `e.constructor.name` rendered `Function` here too.
+    const { snapshots } = renderDomApp(
+      "<try><Risky/><@catch|e|><li>caught: \${e.message}</li></@catch></try>",
+      'function Risky() { throw new Error("client boom"); }',
+      "unused",
+      [],
+    );
+    expect(snapshots[0]).toContain("caught: client boom");
+  });
 });

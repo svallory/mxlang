@@ -308,6 +308,46 @@ describe("Solid SSR render: runtime-resolved <textarea value>", () => {
   });
 });
 
+describe("Solid SSR render: <try> catch params", () => {
+  // `<@catch|e|>` must receive the thrown error itself (as Marko's catch
+  // does), not Solid's `ErrorAccessor` function: before the accessor
+  // unwrap in the `<try>` lowering, `${e.message}` rendered against the
+  // accessor (empty) and `${e.constructor.name}` rendered `Function`.
+  const setup = 'function Risky() { throw new Error("boom from Risky"); }';
+
+  it("binds <@catch|e|> to the thrown error, not the ErrorAccessor", () => {
+    const html = renderApp(
+      `<try><Risky/><@catch|e|><li>caught: \${e.message}</li></@catch></try>`,
+      setup,
+    );
+    expect(html).toContain("caught: boom from Risky");
+  });
+
+  it("binds a destructured catch param to the error's fields", () => {
+    const html = renderApp(
+      `<try><Risky/><@catch|{ message }|><li>msg: \${message}</li></@catch></try>`,
+      setup,
+    );
+    expect(html).toContain("msg: boom from Risky");
+  });
+
+  it("passes <@catch|e, reset|>'s reset param through untouched", () => {
+    const html = renderApp(
+      `<try><Risky/><@catch|e, reset|><li>\${e.message}:\${typeof reset}</li></@catch></try>`,
+      setup,
+    );
+    expect(html).toContain("boom from Risky:function");
+  });
+
+  it("keeps a param-less catch rendering its body", () => {
+    const html = renderApp(
+      `<try><Risky/><@catch><li>failed</li></@catch></try>`,
+      setup,
+    );
+    expect(html).toContain("failed");
+  });
+});
+
 describe("Solid SSR render: <for>", () => {
   it("renders row properties for the unkeyed (no by=) form", () => {
     const html = renderApp(
