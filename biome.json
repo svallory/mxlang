@@ -101,7 +101,9 @@
         "packages/hosts/angular/test/literal-syntax-hint.test.ts",
         "packages/hosts/angular/test/ng-mx-anchors.test.ts",
         "packages/hosts/angular/test/tag-module.test.ts",
-        "packages/hosts/angular/test/text-interpolation.test.ts"
+        "packages/hosts/angular/test/text-interpolation.test.ts",
+        "packages/parser/src/frontend/rules.ts",
+        "packages/parser/src/frontend/rules.test.ts"
       ],
       "linter": {
         "rules": {

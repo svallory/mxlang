@@ -323,7 +323,8 @@ describe("§3.5 MxAttribute", () => {
     const doubled = doc("<a a::y=1/>");
     expect(doubled.errors[0]).toMatchObject({
       code: "INVALID_EXPRESSION",
-      message: "`::y` is reserved (decision 156): `::` will be the Symbol.for sugar; write `:y` for an atom",
+      message:
+        "`::y` is reserved (decision 156): `::` will be the Symbol.for sugar; write `:y` for an atom",
     });
     expect(doubled.body[0].attributes).toEqual([]);
     // Zero colons.
@@ -340,7 +341,7 @@ describe("§3.5 MxAttribute", () => {
     });
   });
 
-  it("a name ending in a colon: modifier \"\" with a zero-width span", () => {
+  it('a name ending in a colon: modifier "" with a zero-width span', () => {
     // `<a x:/>`: the bare attribute `x:`.
     expect(first("<a x:/>").attributes[0]).toMatchObject({
       name: "x:",
@@ -651,11 +652,18 @@ describe("§3.10 MxModuleStatement and MxScriptlet", () => {
     expect(d.body[0]).toMatchObject({ type: "MxTag", incomplete: true });
   });
 
-  it("interim, changes in PR 2b: <import x/> is an MxTag with no error (PR 2b adds MX_STATEMENT_IN_HTML_MODE)", () => {
-    // PR 2b's front-end rule records MX_STATEMENT_IN_HTML_MODE here; this
-    // row pins the interim shape so it cannot ship by accident.
+  it("<import x/> records MX_STATEMENT_IN_HTML_MODE (decision 149, PR 2b)", () => {
+    // A statement tag nested as an html tag: the front end records it, the
+    // tag stays in the tree (ast \u00a73.13).
     const d = doc("<import x/>");
-    expect(d.errors).toEqual([]);
+    expect(d.errors).toEqual([
+      expect.objectContaining({
+        code: "MX_STATEMENT_IN_HTML_MODE",
+        origin: "front-end",
+        start: 1,
+        end: 7,
+      }),
+    ]);
     expect(d.body[0]).toMatchObject({
       type: "MxTag",
       name: { value: "import" },
@@ -808,12 +816,18 @@ describe("§3.13 errors", () => {
   });
 });
 
-describe("interim, changes in PR 2b", () => {
-  it("interim, changes in PR 2b: a bare `,` line is an unnamed MxTag (PR 2b records MX_TAG_NAME_MISSING)", () => {
-    // Decision 163 addendum 9: PR 2b turns this into the recorded error
-    // MX_TAG_NAME_MISSING; this row pins the interim shape.
+describe("PR 2b front-end rules on interim shapes", () => {
+  it("a bare `,` line is an unnamed MxTag beside MX_TAG_NAME_MISSING (decision 163 addendum 9)", () => {
+    // The nameless node stays in the tree beside the recorded error.
     const d = doc(",");
-    expect(d.errors).toEqual([]);
+    expect(d.errors).toEqual([
+      expect.objectContaining({
+        code: "MX_TAG_NAME_MISSING",
+        origin: "front-end",
+        start: 1,
+        end: 1,
+      }),
+    ]);
     expect(d.body[0]).toMatchObject({
       type: "MxTag",
       name: { kind: "unnamed", span: span(1, 1) },
@@ -837,8 +851,16 @@ describe("template parser shapes the catalogue does not name", () => {
     ]);
   });
 
-  it("interim, changes in PR 2b: an HTML-mode tag with no name (<,/>) is unnamed, right after <", () => {
-    // PR 2b records MX_TAG_NAME_MISSING here (decision 163 addendum 9).
+  it("an HTML-mode tag with no name (<,/>) is unnamed, right after <, beside MX_TAG_NAME_MISSING", () => {
+    // Decision 163 addendum 9: the front end records MX_TAG_NAME_MISSING.
+    expect(doc("<,/>").errors).toEqual([
+      expect.objectContaining({
+        code: "MX_TAG_NAME_MISSING",
+        origin: "front-end",
+        start: 1,
+        end: 1,
+      }),
+    ]);
     expect(first("<,/>")).toMatchObject({
       start: 0,
       end: 4,
@@ -860,9 +882,15 @@ describe("template parser shapes the catalogue does not name", () => {
   });
 
   it("<,>a reports MISSING_END_TAG since #406 (it threw before)", () => {
+    // PR 2b adds MX_TAG_NAME_MISSING beside it; the template error still
+    // leads the differential (it is today's parse error).
     const d = doc("<,>a");
     expect(d.complete).toBe(false);
     expect(d.errors).toEqual([
+      expect.objectContaining({
+        code: "MX_TAG_NAME_MISSING",
+        origin: "front-end",
+      }),
       expect.objectContaining({ code: "MISSING_END_TAG", origin: "template" }),
     ]);
   });

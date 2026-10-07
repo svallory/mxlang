@@ -45,7 +45,8 @@ const NONE: ReadonlySet<MxStatementKeyword> = new Set();
  * Decision 163 addendum 7 item 4: the corpus consumer answers "statement"
  * for an HTML-mode `<static …>`, so these probes pin RESERVED_TAG_NAME; the
  * front end answers `tagShape` there and records no template error. PR 2b's
- * MX_STATEMENT_IN_HTML_MODE takes their place.
+ * MX_STATEMENT_IN_HTML_MODE (decision 149) takes their place on the error
+ * list now that the front-end rules are wired in.
  */
 const STATEMENT_IN_HTML_MODE = new Set(["g0234", "g1274"]);
 

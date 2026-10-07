@@ -27,6 +27,10 @@ import type {
   TagType as TagTypeValue,
 } from "../template/internal.ts";
 import type { InterimDocument } from "./interim.ts";
+import {
+  type RuleContext,
+  frontEndRules as realFrontEndRules,
+} from "./rules.ts";
 
 /** Options of `parse`: the two per-target inputs (ast §7.1) and an optional fragment base (ast §5.3). */
 export interface ParseOptions extends MxFrontEndOptions {
@@ -65,18 +69,22 @@ const ERROR_NAMES: ReadonlyMap<number, MxErrorCode> = new Map(
 );
 
 /**
- * Test-only seams. `frontEndRules` is where PR 2b's `MX_*` rules (ast §3.13)
- * will run: it receives each finished tag, in builder form, and returns the
- * errors it found; today it finds none.
+ * Test-only seams. `frontEndRules` is PR 2b's `MX_*` rules (ast §3.13): it
+ * receives each finished tag, its parent (if any), and the rule context, in
+ * document order; tests replace it to silence or observe the rules.
  */
 export const seams: {
-  frontEndRules: (tag: TagBuilder) => readonly MxParseError[];
+  frontEndRules: (
+    tag: TagBuilder,
+    parent: TagBuilder | undefined,
+    ctx: RuleContext,
+  ) => readonly MxParseError[];
   /** Called each time a parser range past the end of input is clamped (see `FrontEnd.clamp`). */
   clamped: (local: number) => void;
   /** The template parser; a test replaces it to make the parser itself throw. */
   createParser: typeof createParser;
 } = {
-  frontEndRules: () => [],
+  frontEndRules: realFrontEndRules,
   clamped: () => {},
   createParser,
 };
@@ -85,8 +93,11 @@ export const seams: {
 // Builders: mutable, private, copied into the read-only tree by `finish`.
 // A key starting with `_` is builder state and is not copied.
 
-// biome-ignore lint/suspicious/noExplicitAny: builders are untyped records copied into the typed tree
-type Builder = Record<string, any>;
+// Builders are untyped records copied into the typed tree by `finish`.
+interface Builder {
+  // biome-ignore lint/suspicious/noExplicitAny: builders are untyped records copied into the typed tree
+  [key: string]: any;
+}
 
 export interface TagBuilder extends Builder {
   type: "MxTag" | "MxAttributeTag" | "MxReturn";
@@ -224,7 +235,7 @@ class FrontEnd {
         if (parent && tag.end > parent._reached) parent._reached = tag.end;
       }
       const open = this.stack.splice(0).reverse();
-      for (const tag of open) this.runRules(tag);
+      for (const tag of open) this.runRules(tag, undefined);
     }
   }
 
@@ -978,11 +989,17 @@ class FrontEnd {
     }
     const parent = this.top;
     if (parent && tag.end > parent._reached) parent._reached = tag.end;
-    this.runRules(tag);
+    this.runRules(tag, parent);
   }
 
-  runRules(tag: TagBuilder): void {
-    this.errors.push(...seams.frontEndRules(tag));
+  runRules(tag: TagBuilder, parent: TagBuilder | undefined): void {
+    this.errors.push(
+      ...seams.frontEndRules(tag, parent, {
+        source: this.source,
+        offset: this.offset,
+        statementKeywords: this.options.statementKeywords,
+      }),
+    );
   }
 
   // --- errors --------------------------------------------------------------
@@ -1029,7 +1046,9 @@ class FrontEnd {
       if (parent && end > parent._reached) parent._reached = end;
     }
     const open = this.stack.splice(0).reverse();
-    for (const tag of open) this.runRules(tag);
+    for (let i = 0; i < open.length; i++) {
+      this.runRules(open[i], open[i + 1]);
+    }
   }
 
   /** A failure of the front end itself (ast §3.13, `MX_FRONT_END_INTERNAL`). */
@@ -1076,7 +1095,8 @@ class FrontEnd {
       source: this.source,
       base: { offset: base.offset, line: base.line, column: base.column },
     };
-    return freezeCopy(document) as InterimDocument;
+    // SAFETY: `freezeCopy` copies the builder tree shape verbatim.
+    return freezeCopy(document) as unknown as InterimDocument;
   }
 }
 
@@ -1085,22 +1105,28 @@ class FrontEnd {
  * (`_` keys). Iterative, so a deeply nested document cannot overflow the
  * stack (`scaling.test.ts`, the deep shape).
  */
-function freezeCopy(root: unknown): unknown {
-  const copyOf = (value: unknown): unknown => {
+/** Anything a builder tree holds: builders, plain arrays, or a leaf value. */
+// SAFETY: the copy keeps leaves verbatim and rebuilds only objects.
+type Copy = null | boolean | number | string | Copy[] | { [key: string]: Copy };
+
+function freezeCopy(root: unknown): Copy {
+  // SAFETY: every leaf is copied verbatim; only objects are fresh copies.
+  const copyOf = (value: Copy): Copy => {
     if (value === null || typeof value !== "object") return value;
     return Array.isArray(value) ? new Array(value.length) : {};
   };
-  const top = copyOf(root);
+  const top = copyOf(root as Copy);
   const work: [unknown, unknown][] = [[root, top]];
   while (work.length > 0) {
-    const [from, to] = work.pop() as [
+    const pair = work.pop() as [
       Record<string, unknown>,
       Record<string, unknown>,
     ];
+    const [from, to] = pair;
     if (from === null || typeof from !== "object") continue;
     for (const [key, field] of Object.entries(from)) {
       if (key.startsWith("_")) continue;
-      const copy = copyOf(field);
+      const copy = copyOf(field as Copy);
       to[key] = copy;
       if (copy !== field) work.push([field, copy]);
     }

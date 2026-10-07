@@ -132,7 +132,10 @@ export function checkInvariants(
           if (node.modifierSpan.end !== node.nameSpan.end) {
             fail(path, "modifierSpan does not end with nameSpan");
           }
-          if (node.modifier === "" && node.modifierSpan.start !== node.modifierSpan.end) {
+          if (
+            node.modifier === "" &&
+            node.modifierSpan.start !== node.modifierSpan.end
+          ) {
             fail(path, "an empty modifier's span is not zero-width");
           }
           within(`${path}.modifierSpan`, node.modifierSpan, node);

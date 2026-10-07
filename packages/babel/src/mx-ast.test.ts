@@ -161,7 +161,7 @@ it("MxErrorCode's MX_* members are the front-end rows of ast §3.13", () => {
   const declared = [...source.matchAll(/^ {2}\| "(MX_[A-Z_]+)"/gm)].map(
     (m) => m[1] ?? "",
   );
-  expect(table).toHaveLength(14);
+  expect(table).toHaveLength(15);
   expect(new Set(declared)).toEqual(new Set(table));
   expect(table).toContain("MX_UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE");
 });
@@ -503,9 +503,17 @@ it('MxAttribute (ast §3.5: `type="email"`, and the default value)', () => {
   const wrong: MxAttribute = { ...named, type: "MxShorthand" };
   // @ts-expect-error `:=` and `=` are the only operators
   const badOp: MxAttribute = { ...named, operator: "==" };
-  expect(
-    [defaulted, modified, trailing, doubled, several, missing, noModifierSpan, wrong, badOp],
-  ).toHaveLength(9);
+  expect([
+    defaulted,
+    modified,
+    trailing,
+    doubled,
+    several,
+    missing,
+    noModifierSpan,
+    wrong,
+    badOp,
+  ]).toHaveLength(9);
 });
 
 it("MxMethod (ast §3.5a: `onInput(e) { set(e) }`)", () => {
