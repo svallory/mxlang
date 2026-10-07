@@ -555,6 +555,7 @@
         "mxlang-language-server": "dist/bin.js",
       },
       "dependencies": {
+        "@mxlang/angular": "workspace:*",
         "@mxlang/core": "workspace:*",
         "@mxlang/target-registry": "workspace:*",
         "@mxlang/tsx-bridge": "workspace:*",

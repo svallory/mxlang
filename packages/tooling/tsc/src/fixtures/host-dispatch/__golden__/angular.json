@@ -5,7 +5,23 @@
         "policy": {
           "host": "angular"
         },
-        "diagnostics": [],
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "a `<InputInterface>` cannot be emitted into an Angular template: an Angular template has no module scope. Move it into the component's TypeScript file, or use `.ng.mx` (step 2), where MX emits the module for you.",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 1
+              }
+            }
+          }
+        ],
         "related": [],
         "dependencies": [],
         "unexpected": []
@@ -38,7 +54,26 @@
         "policy": {
           "host": "angular"
         },
-        "diagnostics": [],
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "Missing ending \"div\" tag",
+            "data": {
+              "codeFrame": "  1 | export interface Input {}\n  2 |\n> 3 | <div>\n    | ^^^^^ Missing ending \"div\" tag\n  4 |"
+            },
+            "range": {
+              "start": {
+                "line": 2,
+                "character": 0
+              },
+              "end": {
+                "line": 2,
+                "character": 1
+              }
+            }
+          }
+        ],
         "related": [],
         "dependencies": [],
         "unexpected": []
@@ -71,9 +106,27 @@
         "policy": {
           "host": "angular"
         },
-        "diagnostics": [],
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "`<let>` is Marko reactive state; use Angular's `signal`/`WritableSignal` in the component class, or a `@Input()`",
+            "range": {
+              "start": {
+                "line": 2,
+                "character": 0
+              },
+              "end": {
+                "line": 2,
+                "character": 1
+              }
+            }
+          }
+        ],
         "related": [],
-        "dependencies": [],
+        "dependencies": [
+          "<root>/angular/Card.mx"
+        ],
         "unexpected": []
       },
       "tsPlugin": {
@@ -104,9 +157,27 @@
         "policy": {
           "host": "angular"
         },
-        "diagnostics": [],
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "a `<Import>` cannot be emitted into an Angular template: an Angular template has no module scope. Move it into the component's TypeScript file, or use `.ng.mx` (step 2), where MX emits the module for you.",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 0
+              },
+              "end": {
+                "line": 0,
+                "character": 1
+              }
+            }
+          }
+        ],
         "related": [],
-        "dependencies": [],
+        "dependencies": [
+          "<root>/angular/Card.mx"
+        ],
         "unexpected": []
       },
       "tsPlugin": {

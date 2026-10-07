@@ -68,7 +68,7 @@ describe("target-table dispatch", () => {
     ).toContain("useState");
   });
 
-  it("does not load a compiler for silent template kinds", () => {
+  it("does not load a page compiler for template kinds", () => {
     const descriptor = builtinLookup().target("html");
     if (!descriptor?.load) throw new Error("missing html descriptor");
     const load = vi.spyOn(descriptor, "load");
@@ -79,15 +79,19 @@ describe("target-table dispatch", () => {
         `/app/file.${kind.segment}.mx`,
         `/app/file.${kind.segment.toUpperCase()}.MX`,
       ]) {
-        expect(
-          diagnoseDocument(
-            "<broken",
-            uri,
-            { target: "html" },
-            undefined,
-            "solidmx",
-          ),
-        ).toEqual([]);
+        const diagnostics = diagnoseDocument(
+          "<broken",
+          uri,
+          { target: "html" },
+          undefined,
+          "solidmx",
+        );
+        // The `.ng.mx` suffix routes to the Angular compile (diagnostics
+        // for the broken text); `.astro.mx` stays silent. Neither ever loads
+        // the *page* compiler of another target.
+        if (kind.segment === "ng")
+          expect(diagnostics.length).toBeGreaterThan(0);
+        else expect(diagnostics).toEqual([]);
       }
     }
     expect(load).not.toHaveBeenCalled();
@@ -119,12 +123,12 @@ describe("target-table dispatch", () => {
     );
   });
 
-  it("keeps an unwired page target silent even without a host field", () => {
+  it("compiles a page target with no host field, now that angular is wired", () => {
     expect(
       diagnoseDocument("<broken", "/app/page.mx", {
         target: "angular-template",
       }),
-    ).toEqual([]);
+    ).toHaveLength(1);
   });
 });
 
@@ -621,9 +625,19 @@ describe("the Hono host", () => {
 });
 
 describe("the Angular host", () => {
-  // The LS does not diagnose Angular-host documents: `mx-tsc` and the TS
-  // plugin own them. Silence is honest; an Error here is a false positive on
-  // every file, clean ones included.
+  /** A `.ng.mx` module with one MX region in its `template:` property. */
+  function ngMx(region: string): string {
+    return [
+      'import { Component } from "@angular/core";',
+      "@Component({",
+      '  selector: "app-x",',
+      "  standalone: true,",
+      `  template: ${region},`,
+      "})",
+      "export class XComponent { user = { name: 'a' }; }",
+    ].join("\n");
+  }
+
   it("reports nothing for a clean whole-file .mx page", () => {
     expect(
       diagnoseDocument(
@@ -637,43 +651,95 @@ describe("the Angular host", () => {
   it("reports nothing for a clean .ng.mx file", () => {
     expect(
       diagnoseDocument(
-        "<div>hi</div>\n",
+        ngMx("<p>${user.name}</p>"),
         "file:///app/greeting.component.ng.mx",
         policy("angular"),
       ),
     ).toEqual([]);
   });
 
-  it("raises no Error for a broken Angular-host file (mx-tsc reports it)", () => {
+  it("reports a compile error for a broken whole-file .mx page at its position", () => {
+    // `<return>` is the one construct whose rejection is Angular-specific
+    // and positioned on the tag itself, so this pins the *Angular* compile
+    // ran — not some other host's.
     const diagnostics = diagnoseDocument(
-      "<div>unclosed\n",
+      "<return value=x/>\n",
+      "file:///app/broken.mx",
+      policy("angular"),
+    );
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.severity).toBe(DiagnosticSeverity.Error);
+    expect(diagnostics[0]?.message).toContain(
+      "`<return>` is not supported on Angular",
+    );
+    expect(diagnostics[0]?.range.start).toEqual({ line: 0, character: 14 });
+  });
+
+  it("reports a translate error inside an MX region of a .ng.mx at its authored position", () => {
+    const diagnostics = diagnoseDocument(
+      ngMx("<p>${user.name +)}</p>"),
       "file:///app/broken.component.ng.mx",
       policy("angular"),
     );
-    expect(
-      diagnostics.filter((d) => d.severity === DiagnosticSeverity.Error),
-    ).toEqual([]);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.severity).toBe(DiagnosticSeverity.Error);
+    expect(diagnostics[0]?.message).toContain("Mismatched group");
+    // Line 1 (0-based) is the `template:` line; column 65 is the expression.
+    expect(diagnostics[0]?.range.start.line).toBe(4);
+    expect(diagnostics[0]?.range.start.character).toBeGreaterThan(10);
   });
 
-  it.each(["react", "solid", "preact", "hono", "html", "astro"] as const)(
-    "never compiles a .ng.mx under the %s host (file kind wins)",
-    (host) => {
-      expect(
-        diagnoseDocument("<@tags/>\n", "file:///app/x.ng.mx", policy(host)),
-      ).toEqual([]);
-    },
-  );
+  it("reports a warning for a whole-file .mx page", () => {
+    // A `<for>` with no `by=` compiles but warns, the class of warning a
+    // build prints — the editor is where the author is looking instead.
+    const diagnostics = diagnoseDocument(
+      "<for|item| of=items><p>x</p></for>\n",
+      "file:///app/loops.mx",
+      policy("angular"),
+    );
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.severity).toBe(DiagnosticSeverity.Warning);
+    expect(diagnostics[0]?.message).toContain("no `by=`");
+  });
+
+  it("reports a warning raised inside an MX region of a .ng.mx", () => {
+    const diagnostics = diagnoseDocument(
+      ngMx("<for|item| of=items><p>x</p></for>"),
+      "file:///app/loops.component.ng.mx",
+      policy("angular"),
+    );
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.severity).toBe(DiagnosticSeverity.Warning);
+    expect(diagnostics[0]?.message).toContain("no `by=`");
+  });
+
+  it("reports an error for a broken .ng.mx under any page host (file kind wins)", () => {
+    // `<@tags/>` is not a TypeScript module: the ng pipeline — not the
+    // react/html page compiler — is what answers, whatever host the resolver
+    // derived. The diagnostic must come from the `.ng.mx` lowering.
+    for (const host of [
+      "react",
+      "solid",
+      "preact",
+      "hono",
+      "html",
+      "astro",
+    ] as const) {
+      const diagnostics = diagnoseDocument(
+        "<@tags/>\n",
+        "file:///app/x.ng.mx",
+        policy(host),
+      );
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]?.severity).toBe(DiagnosticSeverity.Error);
+      expect(diagnostics[0]?.message).not.toContain("@tags");
+    }
+  });
 
   it("matches .NG.mx case-insensitively, like the TS plugin", () => {
     expect(
       diagnoseDocument("<@tags/>\n", "file:///app/X.NG.mx", policy("html")),
-    ).toEqual([]);
-  });
-
-  it("raises no Error for an unknown-host .ng.mx with a react dependency's policy", () => {
-    expect(
-      diagnoseDocument("<@tags/>\n", "file:///app/x.ng.mx", policy("react")),
-    ).toEqual([]);
+    ).toHaveLength(1);
   });
 
   it("still returns host-policy warnings", () => {
@@ -710,10 +776,11 @@ describe("an unknown mx.host", () => {
     column: 13,
   };
 
-  it("a24's shape: an .ng.mx under a derived html host gets the warning only", () => {
+  it("a24's shape: an .ng.mx under a derived html host gets the warning plus its own diagnostics", () => {
     // `@tags` outside an element is an html-compile error (the false error
     // the audit saw for a24); a `.ng.mx` is routed by file kind and never
-    // reaches the html compile, whatever host the resolver derived.
+    // reaches the html compile, whatever host the resolver derived — the
+    // ng pipeline's own diagnostic answers instead.
     const diagnostics = diagnoseDocument(
       "<@tags/>\n",
       "file:///app/x.component.ng.mx",
@@ -725,9 +792,11 @@ describe("an unknown mx.host", () => {
       undefined,
       [unknownHost],
     );
-    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics).toHaveLength(2);
     expect(diagnostics[0]?.severity).toBe(DiagnosticSeverity.Warning);
     expect(diagnostics[0]?.message).toContain('unknown mx.host "angualr"');
+    expect(diagnostics[1]?.severity).toBe(DiagnosticSeverity.Error);
+    expect(diagnostics[1]?.message).not.toContain("@tags");
   });
 
   it("h23's shape: an .mx page compiles under the derived host, plus the warning", () => {

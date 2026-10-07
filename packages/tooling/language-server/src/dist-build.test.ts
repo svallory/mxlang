@@ -23,6 +23,47 @@ it("dispatches every wired page target and the region pipeline from dist under p
       { target: "html" }, unexpected, "solidmx",
     );
     if (region.length !== 0) throw new Error(JSON.stringify(region));
+    // The Angular host is wired like every other: page compile through the
+    // descriptor's load(), .ng.mx through the file kind's compileFile().
+    const ngMx = (region) => [
+      'import { Component } from "@angular/core";',
+      "@Component({",
+      '  selector: "app-x",',
+      "  standalone: true,",
+      "  template: " + region + ",",
+      "})",
+      "export class XComponent {}",
+    ].join("\\n");
+    const page = diagnoseDocument(
+      "<div>\\n  <return value=x/>\\n</div>\\n", "/app/b.mx",
+      { target: "angular-template" }, unexpected,
+    );
+    if (page.length !== 1 || !page[0].message.includes("<return>"))
+      throw new Error("angular page: " + JSON.stringify(page));
+    const clean = diagnoseDocument(
+      ngMx("<p>\${user.name}</p>"), "/app/c.component.ng.mx",
+      { target: "angular-template" }, unexpected,
+    );
+    if (clean.length !== 0) throw new Error("angular clean: " + JSON.stringify(clean));
+    const broken = diagnoseDocument(
+      ngMx("<p>\${user.name +)}</p>"), "/app/d.component.ng.mx",
+      { target: "angular-template" }, unexpected,
+    );
+    if (broken.length !== 1) throw new Error("angular region: " + JSON.stringify(broken));
+    // Ruling 3: @angular/compiler-cli must never load, directly or
+    // transitively — not a dependency, and absent from every module cache.
+    const { createRequire } = await import("node:module");
+    const req = createRequire(${JSON.stringify(join(import.meta.dirname, "../dist/index.js"))});
+    try {
+      req.resolve("@angular/compiler-cli");
+      throw new Error("@angular/compiler-cli is resolvable from the server");
+    } catch (error) {
+      if (!/Cannot find module|MODULE_NOT_FOUND/.test(String(error?.message ?? error)))
+        throw error;
+    }
+    const loaded = Object.keys(req.cache);
+    if (loaded.some((file) => file.includes("@angular/compiler-cli")))
+      throw new Error("@angular/compiler-cli was loaded: " + loaded.join(", "));
     console.log("Node ESM target dispatch passed");
   `;
   const result = spawnSync(

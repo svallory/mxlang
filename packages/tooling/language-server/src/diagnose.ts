@@ -9,6 +9,7 @@
 import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { stripVTControlCharacters } from "node:util";
+import { compile as compileAngular, compileNgMx } from "@mxlang/angular";
 import * as core from "@mxlang/core";
 import {
   type CustomTag,
@@ -402,11 +403,35 @@ export function diagnoseDocument(
       kind?.pipeline === "astro-template" ||
       kind?.pipeline === "ng-template"
     ) {
-      // Template diagnostics belong to mx-tsc and the TS plugin, never the
-      // page compiler. Configuration diagnostics still reach the author.
-      return scanWarnings;
-    }
-    if (kind?.pipeline === "region") {
+      // `.ng.mx` is a TypeScript module whose MX regions need the Angular
+      // host's own parse (decorator regions, module-level hoisting), not the
+      // region bridge — so it compiles whole-file through `compileNgMx`,
+      // routed by suffix whatever host the page policy resolved. `.astro.mx`
+      // has no compile here: those diagnostics belong to mx-tsc and the TS
+      // plugin, never the page compiler, so it stays silent (configuration
+      // diagnostics above still reach the author).
+      if (kind.segment !== "ng") return scanWarnings;
+      compileNgMx(text, path, {
+        customTags,
+        defaultTag: defaultTagFor(path, hostPolicy),
+        targets: lookup,
+        warnings,
+      });
+      // `compileNgMx` reports no callee-dependency list (follow-up): a
+      // watcher edge for a tag module a region imported is not recorded.
+    } else if (hostPolicy.target === "angular-template") {
+      // The Angular host's page target: its descriptor stays unwired (its
+      // pages are template strings, not modules, so `load` would change what
+      // the TS plugin and Vite do with them), but the editor compiles the
+      // page through the host's own `compile` for diagnostics, exactly as it
+      // does for every wired host.
+      compileAngular(text, path, {
+        customTags,
+        defaultTag: defaultTagFor(path, hostPolicy),
+        targets: lookup,
+        warnings,
+      });
+    } else if (kind?.pipeline === "region") {
       // A language id can identify an untitled/mis-suffixed buffer. Supply
       // the registered suffix: the host reads it for diagnostics and for
       // resolving callees, and the registry routes the file by it.
