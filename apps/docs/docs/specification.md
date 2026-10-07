@@ -3807,8 +3807,9 @@ are type-checked against the callee's first parameter (or its `render` input;
 authored attribute, a missing required prop on the tag name (on the `${expr}`
 tag, its start). Body content is passed as `content`, so the callee's input must
 declare it or the call reports TS2353. These stay unchecked: a string, block or
-`any` target, a zero-parameter function, and an overloaded callee whose
-signatures take different inputs (a check against one signature would reject a
+`any` target, a zero-parameter function, a call with tag arguments
+(`<${fn}(x)>`, whose first parameter is the argument), and an overloaded callee
+whose last three signatures take different inputs (a check against one signature would reject a
 call that matches another). The preact, react, hono and solid hosts do not
 check these props yet (solid also reports a spurious TS2322 on the call); astro
 refuses such a binding outright (TS80001).

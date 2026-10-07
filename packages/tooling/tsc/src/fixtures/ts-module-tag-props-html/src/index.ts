@@ -13,4 +13,6 @@ import "./Body.mx";
 import "./OverFirst.mx";
 import "./OverLast.mx";
 import "./Zero.mx";
+import "./Tri.mx";
+import "./Args.mx";
 import "./Maybe.mx";

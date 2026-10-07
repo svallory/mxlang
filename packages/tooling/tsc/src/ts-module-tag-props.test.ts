@@ -75,6 +75,14 @@ describe("mx-tsc on a tag imported from a .ts module", () => {
     expect(result.byFile.has("OverLast")).toBe(false);
   }, 120_000);
 
+  it("stays silent when only the last two of three overloads share an input", () => {
+    expect(result.byFile.has("Tri")).toBe(false);
+  }, 120_000);
+
+  it("leaves a call with tag arguments unchecked", () => {
+    expect(result.byFile.has("Args")).toBe(false);
+  }, 120_000);
+
   it("stays silent for a zero-parameter callee", () => {
     expect(result.byFile.has("Zero")).toBe(false);
   }, 120_000);
