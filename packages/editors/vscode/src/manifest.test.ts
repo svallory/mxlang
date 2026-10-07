@@ -171,10 +171,11 @@ describe("Manifest", () => {
     expect(tsPlugin.languages).toContain("astromx");
   });
 
-  it("selects ngmx for the language server client, now that the LS handles .ng.mx", () => {
+  it("selects ngmx for the file scheme only in the language server client, now that the LS handles .ng.mx", () => {
     // The LS compiles a `.ng.mx` through the file kind's whole-file compile
     // (real compile/translate diagnostics, like every other host), so ngmx
-    // belongs in the selector; astromx stays out until `.astro.mx` is wired.
+    // belongs in the selector for file scheme; the untitled scheme entry for ngmx
+    // has been removed. astromx stays out until `.astro.mx` is wired.
     const source = fs.readFileSync(
       path.join(__dirname, "extension.ts"),
       "utf-8",
@@ -184,5 +185,6 @@ describe("Manifest", () => {
     expect(block).toContain('language: "mx"');
     expect(block).toMatch(/language:\s*"ngmx"/);
     expect(block).not.toMatch(/language:\s*"astromx"/);
+    expect(block).not.toMatch(/scheme:\s*"untitled",\s*language:\s*"ngmx"/);
   });
 });
