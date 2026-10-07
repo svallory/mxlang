@@ -5,7 +5,7 @@ description: "Highlighting for .mx, .solid.mx, .react.mx, .preact.mx, .hono.mx, 
 
 # VS Code
 
-The official `@mxlang/vscode` extension provides highlighting, language server integration, and TypeScript diagnostics for MX. `.ng.mx` gets highlighting and TypeScript semantics; the language server and Angular template diagnostics come later.
+The official `@mxlang/vscode` extension provides highlighting, language server integration, and TypeScript diagnostics for MX. `.ng.mx` gets highlighting, TypeScript semantics, and compile/translate diagnostics from the language server; Angular *template* diagnostics come later.
 
 Since the extension is not yet published to the VS Code Marketplace, you must install it manually from the `.vsix` artifact generated in CI.
 Download `mxlang.vsix` from the latest GitHub Actions run on `main` and run:
@@ -21,7 +21,7 @@ The extension provides:
 - **AstroMX (`.astro.mx`)**: Highlighting for the Astro frontmatter and delegates the body to the Marko grammar.
 - **Solid (`.solid.mx`)**: Highlighting as `source.tsx`. *Note: True grammar injection for MX regions within Solid is not feasible via regex alone, so `.solid.mx` falls back to standard TSX highlighting for now.*
 - **ReactMX (`.react.mx`), PreactMX (`.preact.mx`) and HonoMX (`.hono.mx`)**: Highlighting as `source.tsx`, the same fallback as Solid. Each is a TypeScript module with MX regions (language ids `reactmx`, `preactmx`, `honomx`), and a file of that kind is no longer treated as a plain `.mx`. See [React](/hosts/react/), [Preact](/hosts/preact/) and [Hono](/hosts/hono/).
-- **AngularMX (`.ng.mx`)**: Highlighting as `source.tsx`, the same fallback as Solid — an ordinary TypeScript module whose `@Component` template is MX. The TypeScript plugin compiles it as its own file kind, so TypeScript semantics work: errors in the component class and module are reported at their `.ng.mx` position. Angular template diagnostics (checking the expressions inside `template:`) also appear in the editor: Angular's compiler runs in a background process, 1 second after you stop typing (or on save, or never, per `package.json#mx.angular.diagnostics`), and needs `@angular/compiler-cli` `>=22 <23` in your project. The language server does not handle `.ng.mx` yet.
+- **AngularMX (`.ng.mx`)**: Highlighting as `source.tsx`, the same fallback as Solid — an ordinary TypeScript module whose `@Component` template is MX. The TypeScript plugin compiles it as its own file kind, so TypeScript semantics work: errors in the component class and module are reported at their `.ng.mx` position. Angular template diagnostics (checking the expressions inside `template:`) also appear in the editor: Angular's compiler runs in a background process, 1 second after you stop typing (or on save, or never, per `package.json#mx.angular.diagnostics`), and needs `@angular/compiler-cli` `>=22 <23` in your project. The language server also compiles `.ng.mx` (compile/translate errors and warnings inside MX regions, at their authored position; it never loads `@angular/compiler-cli`).
 
 ## Formatting
 
@@ -50,7 +50,7 @@ are not affected.
 
 ## Diagnostics
 
-The extension automatically starts `@mxlang/language-server` for `.mx`, `.solid.mx`, `.react.mx`, `.preact.mx` and `.hono.mx` files. (Note: The language server does not currently handle `.astro.mx` or `.ng.mx` files.)
+The extension automatically starts `@mxlang/language-server` for `.mx`, `.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx` and `.ng.mx` files. (Note: The language server does not currently handle `.astro.mx` files.)
 
 ### Command Resolution
 The extension looks for the language server in the following order:

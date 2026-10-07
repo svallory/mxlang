@@ -7,14 +7,21 @@
 `diagnoseDocument` selects `lookupFor(policy).target(policy.target)` (the built-in set plus a descriptor loaded from a package specifier), calls its
 lazy `load(core).compileModule`, and takes strictness from
 `descriptor.strict === "always" || policy.strict === true`. No host-name
-compiler branches remain. The registry supplies tag discovery/policy wrappers
+compiler branches remain, with one deliberate exception (Angular, below).
+The registry supplies tag discovery/policy wrappers
 and file kinds; `fileKindOf` matches suffixes and region language ids only.
-The `ng-template` and `astro-template` pipelines are silent by suffix, never
-by language id alone. A `region` pipeline uses its `compileRegion` through
+The `astro-template` pipeline is silent by suffix, never
+by language id alone. The `ng-template` pipeline is served by suffix too, but
+not silently: a `.ng.mx` compiles whole-file through `@mxlang/angular`'s
+`compileNgMx` (direct import; the file is a TS module whose regions need the
+host's own parse, not the region bridge), and a whole-file `.mx` under the
+`angular-template` target compiles through the same package's `compile` — the
+Angular descriptor stays `pending` (no `load`) so the TS plugin and Vite keep
+their phase-2 guards, and the LS supplies the compile itself. A `region` pipeline uses its `compileRegion` through
 parser `print`. Both page and region calls pass `targets: lookupFor(policy)`;
 the descriptors forward it rather than narrowing cross-file `AttrTag` sources
 to their own package (decision 126 addendum). A descriptor without `load`
-stays silent for page compilation too. The registry policy wrapper continues
+stays silent for page compilation too — except that Angular branch. The registry policy wrapper continues
 staging/rejecting the data target. Hand-built policies bypass that staging,
 including a raw data policy; `diagnoseDocument`'s TSDoc documents that such a
 call is outside the supported language-server policy path.
@@ -92,15 +99,21 @@ than throwing, keeping the rest of a mixed workspace diagnosed.
 
 **Angular and unknown hosts.** `diagnoseDocument` routes by file kind before
 host policy: a `.ng.mx` (`hostModuleSegment(basename) === "ng"`, core's helper,
-as `mx-tsc` does) and any `host: "angular"` document return no compile
-diagnostics (never an Error, never loads `@angular/compiler-cli`; `mx-tsc`
-owns those), so a `.ng.mx` never reaches the html compile even under an
-unknown `mx.host` that resolved to the html default. An unknown host on an
+as `mx-tsc` does) compiles whole-file through `compileNgMx` (by suffix, never
+by language id alone, and case-insensitive like the TS plugin's `isNgMx`), so
+a `.ng.mx` never reaches the html compile even under an unknown `mx.host` that
+resolved to the html default — its compile/translate errors and warnings land
+at their authored position, and `@angular/compiler-cli` is never loaded (not
+a dependency; `src/dist-build.test.ts` proves resolution fails and the module
+stays out of the cache after both angular compiles). A whole-file `.mx` under
+`host: "angular"` / `mx.target: "angular-template"` compiles through
+`@mxlang/angular`'s `compile` (the descriptor has no `load`, so the TS plugin
+and Vite are unchanged; wiring their page path is separate scope). A `.ng.mx`
+reports no callee-dependency list yet (`compileNgMx` exposes none), so a
+watcher edge for an imported tag module is a follow-up. An unknown host on an
 `.mx` page compiles under the resolver's host plus the warning; the parity
-test is `packages/tooling/tsc/src/unknown-host-parity.test.ts`. Real Angular
-wiring is TODO `ls-angular-host-wiring`. The `.ng.mx` check is the first
-branch, ahead of every host branch and case-insensitive (like the TS plugin's
-`isNgMx`). An `.astro.mx` file (decision 134) is routed by kind too, before the
+test is `packages/tooling/tsc/src/unknown-host-parity.test.ts`.
+An `.astro.mx` file (decision 134) is routed by kind too, before the
 `.ng.mx` check, and is deliberately silent: the server does not load
 `@mxlang/astro`, so Astro-template diagnostics come from `mx-tsc --astro` and
 the TS plugin, and the file must never reach the `.mx` compile (it ends in

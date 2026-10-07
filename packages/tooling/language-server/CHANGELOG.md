@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Added (ls-angular-host-wiring):** Angular-host documents get real compile/translate diagnostics. A whole-file `.mx` under the `angular-template` target compiles through `@mxlang/angular`'s `compile`; a `.ng.mx` compiles whole-file through `compileNgMx`, routed by suffix (never as html, whatever `mx.host` derived), so errors and warnings inside an MX region land at their authored position. Warnings (e.g. a `<for>` with no `by=`) are published too. `@angular/compiler-cli` is never loaded — not a dependency of anything the server imports, and proven absent by `dist-build.test.ts` (resolution fails and the module cache stays clean after both compiles). Angular *template* diagnostics stay with the TypeScript plugin (separate item). A `.ng.mx` reports no callee-dependency list yet, so a watcher edge for an imported tag module is a follow-up.
+
 - **Changed (decision 162):** one diagnostic per error of the file (core's `TranslateError.errors`).
 
 - **Changed (third-party-data-host, decision 148):** a third-party host on the data target (`.mesh.mx`) resolves with no diagnostics and compiles whole-file through the host's descriptor; data's errors are positioned in the file. `tsconfig.json` roots at the repo for the shared fixtures; the build config keeps `src`.

@@ -8,10 +8,14 @@ Watches `.mx` and `.solid.mx` documents an editor opens or edits
 and publishes one LSP `Diagnostic` for a positioned compile error. A
 successful compile clears any previous diagnostics for that file.
 
-- **Angular-host documents (`.mx` or `.ng.mx`) get no diagnostics from this
-  server.** `mx-tsc` and the TypeScript plugin report them (template
-  diagnostics need `@angular/compiler-cli`, which the server never loads). Host-policy warnings
-  still appear.
+- **Angular-host documents get real compile/translate diagnostics.** A
+  whole-file `.mx` under the Angular host compiles through `@mxlang/angular`'s
+  `compile`; a `.ng.mx` (a TypeScript module with MX regions) compiles
+  whole-file through `compileNgMx`, routed by suffix, so errors and warnings
+  inside an MX region appear at their authored position. Angular *template*
+  diagnostics (checking the emitted template itself) stay with `mx-tsc` and
+  the TypeScript plugin: they need `@angular/compiler-cli`, which this server
+  never loads (proven by test).
 - **A `.ng.mx` file is never compiled as html**, whatever `mx.host` resolves
   to (routed by file kind, as `mx-tsc` does).
 - **An unknown `mx.host`** publishes the host-policy warning; an `.mx` page
