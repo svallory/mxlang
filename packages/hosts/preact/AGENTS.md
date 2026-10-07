@@ -76,7 +76,16 @@ Six facts worth knowing before editing it:
   `preact/compat`'s `Suspense` catches thrown *promises* rather than errors.
   `src/runtime.ts` exports `MxErrorBoundary` (a class, the only form Preact
   gives that hook), `MxPlaceholder` (`Suspense` under one name) and
-  `mxClass`. This does not contradict decision 82: it is Preact code an author
+  `mxClass`. The emitter passes the `<try>` body to the boundary as a thunk
+  (`{() => (<>body</>)}`), which `MxErrorBoundary` evaluates inside a function
+  component (`MxTryBody`): inline children would be evaluated by the parent's
+  render before the boundary exists, where nothing can catch them. The
+  constructor sets `options.errorBoundaries = true`, which
+  `preact-render-to-string` needs to run any boundary during SSR. **It is a
+  process-global flag of the consumer's `preact`**: once an MX `<try>` with
+  `<@catch>` renders, every class component's error boundary works on the
+  server too. The shared emitter (`delegatedTag`) serves React and Hono the
+  same way. This does not contradict decision 82: it is Preact code an author
   would otherwise write by hand, not an MX runtime, and a template that uses
   none of it imports none of it.
 - **`typeCheck` is a tooling-only mode (decision 140).** `compilePreactMx`

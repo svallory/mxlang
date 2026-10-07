@@ -71,6 +71,14 @@ The handler receives React's synthetic event. `onChange` on a text field fires p
 
 `<@catch>` becomes `MxErrorBoundary`, a React class component using `componentDidCatch`; `<@placeholder>` becomes React's `Suspense`. Both come from `@mxlang/react/runtime` and are imported only when used. With both present, the placeholder sits inside the boundary, so a render error reaches the catch.
 
+The body is handed to the boundary as a function, so a throw written directly in the `<try>` body is caught with the real error, on the server too, and none of the partial body is rendered. React's server renderer runs no error boundaries, so a descendant component's throw during a server render goes to the nearest `Suspense`: the boundary wraps its body in one whose fallback is `<@catch>`. The client then renders the real catch. Three differences from Marko follow, all React-only:
+
+- With both `<@catch>` and `<@placeholder>`, a descendant's server-side throw renders `<@placeholder>` in the server HTML, and `<@catch>` after the client renders.
+- With `<@catch>` and no `<@placeholder>`, a body that suspends (`lazy()`, `use(promise)`) shows `<@catch>` while it is pending. Add a `<@placeholder>` for the loading state.
+- A descendant's server-side throw gives `<@catch|e|>` a stand-in `Error`; the client render passes the real one.
+
+A suspension (`use(promise)`, a thrown promise) written in the body is not an error: it reaches the nearest `Suspense`, not `<@catch>`. Hooks written inline in a `<try>` body run in the boundary's body component, so if such a body throws midway on a re-render, `<@catch|e|>` receives React's hook-count error ("Rendered fewer hooks than expected"), not your error; keep hooks in top-level `<const>` tags.
+
 ## Children and `content`
 
 MX calls a component with `children`, the JSX way, so hand-written React components work unchanged. A whole-file `.mx` component that reads Marko's `input.content` receives the same value.

@@ -33,7 +33,7 @@ Rendered HTML is byte-identical except where the old emitter diverged from Marko
 - `/var` on a dynamic tag binds the callee's return value, including when the tag is called with arguments. The old emitter dropped it. **Oracle-locked** by `dynamic-tag-var`.
 - A `<try>` without `<@catch>` now rethrows, as Marko does. The old emitter swallowed the error with `catch {}`. **Locked by a unit test** (`translate.test.ts`, "rethrows from a `<try>` without `<@catch>`") against measured Marko 6.3.51 output. The oracle compares HTML only and cannot express a throw; its `try-no-catch` fixture locks only the path that does not throw.
 
-The fixtures live in `packages/targets/html/fixtures-marko`, and their `expected.html` is Marko's own output. The JSX hosts skip three `try-*` fixtures under TODO `jsx-try-ssr-error-boundary`, and `dynamic-tag-var` because they refuse `/var` on a dynamic tag (TODO `jsx-hosts-return-channel`).
+The fixtures live in `packages/targets/html/fixtures-marko`, and their `expected.html` is Marko's own output. The JSX hosts now run the `try-*` fixtures (TODO `jsx-try-ssr-error-boundary`), and skip `dynamic-tag-var` because they refuse `/var` on a dynamic tag (TODO `jsx-hosts-return-channel`).
 
 ## Alternatives considered
 

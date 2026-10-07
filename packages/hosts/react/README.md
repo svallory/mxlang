@@ -123,7 +123,9 @@ stateful tags are compile errors with React guidance: `<let>` points to
 `@mxlang/react/runtime` exports:
 
 - `MxErrorBoundary`, a React class component using
-  `getDerivedStateFromError` and `componentDidCatch`;
+  `getDerivedStateFromError` and `componentDidCatch`, with an internal
+  `Suspense` so a server render shows `<@catch>` (React's server renderer runs
+  no error boundaries; see `divergences.md` R1-R3);
 - `MxPlaceholder`, React's `Suspense` under the emitter's stable name;
 - `mxClass`, the structured-class string joiner.
 

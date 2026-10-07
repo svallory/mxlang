@@ -20,18 +20,11 @@ forking it. The dialect object owns only vocabulary: JSX import source, native `
 the Fragment module, and the error-boundary module. Structural changes remain
 one implementation and one test surface.
 
-Two knobs on the shared `JsxDialect` exist *because of* Hono, not Preact or React:
-`errorBoundaryFallbackProp` (Hono's built-in `ErrorBoundary` takes
-`fallbackRender`, not `fallback`) and `errorBoundaryFallbackAlwaysFunction`
-(that prop has no non-function form, so a param-less `<@catch>` is still
-wrapped in `() => …`). Both default to Preact's/React's existing `fallback`
-behavior, so neither dialect had to change.
-
-Unlike Preact and React, this host ships **no hand-rolled error boundary
-class**: Hono's `hono/jsx` provides `ErrorBoundary` and `Suspense` natively, so
-`<try><@catch>`/`<@placeholder>` import straight from `hono/jsx` itself.
-`src/runtime.ts` supplies only `mxClass` — the one helper Hono has no
-equivalent for.
+`<try><@catch>` lowers to `MxErrorBoundary` from `@mxlang/hono/runtime`, which wraps
+`hono/jsx`'s async `ErrorBoundary` around the body (passed as a function, so a throw
+written directly in the body is caught too); `<@placeholder>` lowers to `hono/jsx`'s
+`Suspense`, re-exported from the same module. `src/runtime.ts` also supplies `mxClass`,
+the one helper Hono has no equivalent for.
 
 ## Install
 
@@ -82,7 +75,7 @@ with exactly one `@mxlang/*` host dependency may omit it.
 | `<@name>body</@name>` | a named prop; repeated tags become an array |
 | `<const/x=expr/>` | `const x = expr` in the component body |
 | `<define/Row\|p\|>` | a local arrow returning JSX |
-| `<try>` | `hono/jsx`'s `ErrorBoundary` (`fallbackRender`) and, with `<@placeholder>`, its `Suspense` |
+| `<try>` | `MxErrorBoundary` (around `hono/jsx`'s `ErrorBoundary`) and, with `<@placeholder>`, `hono/jsx`'s `Suspense` |
 
 Every `<for>` row gets a `key`, the same rule as Preact/React (see
 `@mxlang/preact`'s README for the full `by=` semantics and the duplicate/object
@@ -112,9 +105,7 @@ points to `useState`, `<effect>` to `useEffect`, and `<id>` to `useId`.
 `<try><@catch|error|>…</@catch></try>` lowers to:
 
 ```tsx
-<ErrorBoundary fallbackRender={(error) => …}>
-  <Risky />
-</ErrorBoundary>
+<MxErrorBoundary fallback={(error) => …}>{() => (<><Risky /></>)}</MxErrorBoundary>
 ```
 
 imported straight from `hono/jsx` — no `@mxlang/hono/runtime` import needed for
@@ -144,8 +135,8 @@ cd examples/hono-app && bun run e2e
 ```
 
 The oracle compiles all 45 stock Marko fixtures, renders through `hono/jsx`
-(`String(jsx(Component, input))`, awaited when the tree contains a caught
-error — Hono's `ErrorBoundary` resolves asynchronously), and compares with the
-html target using semantic HTML normalization: **32 pass, 13 reasoned skips, 0
+(`jsx(Component, input)` rendered and resolved the way `c.html()` does, since
+Hono's `ErrorBoundary` resolves asynchronously), and compares with the
+html target using semantic HTML normalization: **45 pass, 15 reasoned skips, 0
 bugs** — identical to `oracle:preact` and `oracle:react`, since all three
 dialects share the emitter and the skip list.

@@ -64,6 +64,8 @@ The handler receives the DOM event. The shared rules are in [Attributes](/langua
 
 Preact has no error boundary component, so the host ships one: `<@catch>` becomes `MxErrorBoundary`, a class component using `componentDidCatch`, and `<@placeholder>` becomes `MxPlaceholder`, which is `preact/compat`'s `Suspense`. Both come from `@mxlang/preact/runtime` and are imported only when used. With both present, the placeholder sits inside the boundary, so a render error reaches the catch.
 
+The body is handed to the boundary as a function, so a throw written directly in the `<try>` body is caught with the real error, and none of the partial body is rendered. A descendant component's throw is caught during a server render as well: `MxErrorBoundary` sets `options.errorBoundaries`, which `preact-render-to-string` needs before it runs boundaries. That flag is a process-global of your `preact`: once a `<try>` with `<@catch>` renders, it applies to every class component's error boundary, not only MX's.
+
 ## What is an error
 
 Anything Preact cannot express fails the build with the construct and its line; nothing degrades silently.

@@ -159,7 +159,10 @@ this package ships both, in `@mxlang/preact/runtime`:
   `getDerivedStateFromError`, for `<@catch>`. Its `fallback` takes either a
   node or a function of the error, which is what lets `<@catch|error|>` name
   it. A class because that is the only form Preact gives the hook; there is no
-  hook-based equivalent in Preact 10.
+  hook-based equivalent in Preact 10. The emitter passes the `<try>` body as a
+  function so a throw written in it is caught too, and the boundary sets
+  `options.errorBoundaries` (a process-global flag of your `preact`) so
+  descendants' throws are caught during server rendering.
 - **`MxPlaceholder`** — `preact/compat`'s `Suspense` under one name, for
   `<@placeholder>`. Aliased rather than re-implemented, so a body that
   suspends behaves exactly as Preact documents.

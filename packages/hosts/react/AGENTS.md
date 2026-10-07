@@ -11,7 +11,10 @@ lowering is identical, while the dialect object changes the JSX import source,
 The runtime is native React. `src/runtime.ts` imports `Component` and
 `Suspense` from `react`; `MxErrorBoundary` is a class using
 `getDerivedStateFromError`/`componentDidCatch`, and `MxPlaceholder` wraps
-React's own Suspense. Stateful Marko tags remain compile errors with React
+React's own Suspense. React's server renderer runs no error boundaries, so
+`MxErrorBoundary` evaluates the thunk body in `MxTryBody` and wraps it in an
+internal `Suspense` whose fallback is `<@catch>` (`MxServerCatch`, with a
+stand-in `Error`); divergences R1-R3 are in `divergences.md`. Stateful Marko tags remain compile errors with React
 hook guidance. Host selection is `"mx": { "host": "react" }` or a lone
 `@mxlang/react` dependency, through the same resolver used by Vite, the
 language server and the TypeScript plugin.

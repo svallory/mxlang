@@ -1665,6 +1665,21 @@ lowers to an ordinary `try`/`catch` whose body renders into a buffered sub-sink
 renders in its place, as in Marko 6.3.51 (decision 155). A `<try>` with no
 `<@catch>` rethrows, as Marko does.
 
+On Preact, React and Hono the `<try>` body reaches the host's boundary as a thunk
+(`<__mxErrorBoundary fallback={…}>{() => body}</__mxErrorBoundary>`), so a throw
+written directly in the body is caught with the real error and none of the partial
+body, and a throw in a descendant component is caught during a server render too
+(TODO `jsx-try-ssr-error-boundary`; decision 181). Preact sets `options.errorBoundaries`, a
+process-global flag of the consumer's `preact`. React's server renderer runs no
+error boundaries, so its boundary wraps the body in an internal `Suspense` whose
+fallback is `<@catch>`. Three React-only divergences from Marko 6.3.51 remain (decision 181),
+recorded in `divergences.md`: **R1**, with both `<@catch>` and `<@placeholder>`, a
+descendant's server-side throw renders `<@placeholder>` in the server HTML and
+`<@catch>` only after the client renders; **R2**, with `<@catch>` and no
+`<@placeholder>`, a body that suspends shows `<@catch>` while pending; **R3**, a
+descendant's server-side throw gives `<@catch|e|>` a stand-in `Error`, not the real
+one.
+
 **Decisions:** 8, 28, 51, 65, 85, 91, 93.
 
 ---
@@ -3200,7 +3215,7 @@ differences noted), **Astro `.astro.mx`**, **Angular**.
 | `const` | `const x = …` | same | **error** in a region | `const` at component-body top | **error** — declare it in the fence | `@let x = …;` |
 | `let` | initial value only | **error** (strict) | **error** — use `createSignal` | **error** — use `useState` | **error** | error — fixed 2026-09-17, `<let>`-specific message; was **the wrong error** (bug 1, only the generic `/var` field guard fired) |
 | `try` | the body inline in a block; a throw propagates, as in Marko | same | `<Loading>` | body inline | **error** | **error** |
-| `try` + `<@catch>` | `catch` block; the body renders into a buffered sub-sink, so a throw drops its partial output (§13.8) | same | `<Errored fallback>` | `MxErrorBoundary` (Preact/React) / native `ErrorBoundary` with `fallbackRender` (Hono) | error | error |
+| `try` + `<@catch>` | `catch` block; the body renders into a buffered sub-sink, so a throw drops its partial output (§13.8) | same | `<Errored fallback>` | `MxErrorBoundary` (Preact/React/Hono; Hono's wraps `hono/jsx`'s `ErrorBoundary`), body passed as a thunk | error | error |
 | `try` + `<@placeholder>` | **error** — needs a second render pass | error | `<Loading fallback>` | `MxPlaceholder` / `Suspense`, nested **inside** the boundary | error | error |
 | `<return>` + `/var` | `render(input, out)` returns the value; `/var` in **any** scope, dynamic tags included (§13.8) | same | `$mxReturn` callback prop; `/var` top-level only | `{ value, output }`; `/var` top-level only; **hook imports are a compile error** | **error** | error — fixed 2026-09-17 (page level; the tag-unit call site was already an error); was **accepted and silently dropped** (bug 8) |
 

@@ -24,7 +24,7 @@ description: "Each MX construct and the hono/jsx TSX it becomes; event names, ke
 | `<@name>` | the prop `name`; repeated tags become an array |
 | `<@name\|p\|>` | the prop `name` as a function of `p` |
 | `<define/Row\|p\|>` | a local function, called as `Row(p)` |
-| `<try>` | `ErrorBoundary` and `Suspense`, both from `hono/jsx` |
+| `<try>` | `MxErrorBoundary` (around `hono/jsx`'s `ErrorBoundary`) and `Suspense`, both from `@mxlang/hono/runtime` |
 
 ## Element or component?
 
@@ -55,7 +55,7 @@ The shared rules are in [Attributes](/language/attributes/#attributes-event-attr
 </try>
 ```
 
-Hono has both pieces, so MX wraps nothing: `<@catch>` becomes `hono/jsx`'s `ErrorBoundary` with `fallbackRender`, and `<@placeholder>` becomes its `Suspense`. With both present, the placeholder sits inside the boundary. `ErrorBoundary` resolves asynchronously once a child throws, so `await` the render (`await App(props).toString()`) when a tree can throw.
+`<@catch>` becomes `MxErrorBoundary` from `@mxlang/hono/runtime`, which wraps `hono/jsx`'s `ErrorBoundary` around the body (handed over as a function, so a throw written directly in the body is caught like a descendant's, with the real error and none of the partial body), and `<@placeholder>` becomes `hono/jsx`'s `Suspense`. With both present, the placeholder sits inside the boundary. `ErrorBoundary` resolves asynchronously, so render the tree the way `c.html()` does, resolving callbacks (`resolveCallback` from `hono/utils/html`), when it can throw or nest.
 
 ## Attribute tags on your own components
 

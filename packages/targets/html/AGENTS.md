@@ -94,8 +94,8 @@ cannot: `<await>` (Marko itself refuses to render one to a string) and
 does. A `<try>` without `<@catch>` is a plain block: the error propagates, as
 in Marko (locked by a unit test; the oracle cannot express a throw). The
 `try-*` fixtures in `fixtures-marko` lock the partial-output drop; the JSX oracles
-skip three of them (TODO `jsx-try-ssr-error-boundary`, `tryGaps` in
-`packages/oracle/src/report-preact.ts`).
+run them all (the JSX hosts pass the body as a thunk, TODO
+`jsx-try-ssr-error-boundary`; React's remaining divergences are in `divergences.md`).
 
 **Inert is a shape, not a licence to drop.** An inert row declares the body
 and attributes its own Marko tag definition allows, and anything else is an
