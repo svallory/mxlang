@@ -1,0 +1,22 @@
+export function TryCatch() {
+  return (
+    <div>
+      <!-- catch params bind the thrown error, not Solid's ErrorAccessor -->
+      <try><Risky/><@catch|e, reset|><p>caught: ${e.message}:${typeof reset}</p></@catch></try>
+      <!-- destructured catch param -->
+      <try><Risky/><@catch|{ message }|><p>msg: ${message}</p></@catch></try>
+      <!-- param-less catch keeps a plain body fallback -->
+      <try><Risky/><@catch><p>failed</p></@catch></try>
+      <!-- placeholder-only try has no Errored at all -->
+      <try><@placeholder>loading…</@placeholder><Slow/></try>
+    </div>
+  );
+}
+
+function Risky() {
+  return <span>risky</span>;
+}
+
+function Slow() {
+  return <span>slow</span>;
+}
