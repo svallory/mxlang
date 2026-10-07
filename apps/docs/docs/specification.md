@@ -1680,7 +1680,7 @@ descendant's server-side throw renders `<@placeholder>` in the server HTML and
 descendant's server-side throw gives `<@catch|e|>` a stand-in `Error`, not the real
 one.
 
-**Decisions:** 8, 28, 51, 65, 85, 91, 93.
+**Decisions:** 8, 28, 51, 65, 85, 91, 93, 155, 181.
 
 ---
 

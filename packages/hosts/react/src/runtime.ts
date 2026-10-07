@@ -121,6 +121,8 @@ function MxTryBody({ render, fallback }: MxTryBodyProps): ReactNode {
  * (`react-dom@19.3.0`, `cjs/react-dom-client.production.js`).
  */
 const SUSPENSE_EXCEPTION_MESSAGE =
+  // React error #474 (SuspenseyCommitException) is thrown in the commit phase,
+  // never inside a render that MxTryBody wraps, so it is not matched on purpose.
   /^(Suspense Exception:|Minified React error #(460|542);)/;
 
 function isSuspension(value: unknown): boolean {

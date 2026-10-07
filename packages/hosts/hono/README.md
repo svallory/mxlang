@@ -108,13 +108,11 @@ points to `useState`, `<effect>` to `useEffect`, and `<id>` to `useId`.
 <MxErrorBoundary fallback={(error) => …}>{() => (<><Risky /></>)}</MxErrorBoundary>
 ```
 
-imported straight from `hono/jsx` — no `@mxlang/hono/runtime` import needed for
-this. `<@placeholder>` lowers to `hono/jsx`'s `Suspense` the same way. Both are
-Hono's own components; this host adds no wrapper around them.
-
-`@mxlang/hono/runtime` exports only `mxClass`, the structured-class string
-joiner — Hono has no built-in for it. A template using no structured `class`
-imports no helper.
+`MxErrorBoundary` and `Suspense` both import from `@mxlang/hono/runtime`:
+`MxErrorBoundary` wraps `hono/jsx`'s `ErrorBoundary`, and `Suspense` is
+`hono/jsx`'s own, re-exported. The runtime also exports `mxClass`, the
+structured-class string joiner; a template using no structured `class` imports
+no `mxClass`.
 
 ## Bun loader
 
@@ -134,7 +132,7 @@ bun run oracle:hono
 cd examples/hono-app && bun run e2e
 ```
 
-The oracle compiles all 45 stock Marko fixtures, renders through `hono/jsx`
+The oracle compiles all 60 stock Marko fixtures, renders through `hono/jsx`
 (`jsx(Component, input)` rendered and resolved the way `c.html()` does, since
 Hono's `ErrorBoundary` resolves asynchronously), and compares with the
 html target using semantic HTML normalization: **45 pass, 15 reasoned skips, 0
