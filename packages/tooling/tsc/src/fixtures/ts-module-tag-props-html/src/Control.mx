@@ -1,0 +1,4 @@
+export interface Input {
+  title: string;
+}
+<h1>${input.title}</h1>

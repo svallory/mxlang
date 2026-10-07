@@ -703,7 +703,7 @@ const ESCAPE_COMMENT = `function __mxEscapeComment(__mxValue, __mxEscaped) {
 // callee has no \`render\` (a string, null, undefined, false, 0 or a plain function);
 // \`unknown\`, \`object\`, \`{}\` and \`Function\` might be a unit at run time, so
 // they bind \`unknown\`, and \`any\` stays \`any\`.
-const RENDER_DYNAMIC = `function __mxRenderDynamic<T>(__mxSink: __MxOut, __mxTarget: T, __mxProps: Record<string, any>, __mxArgs?: any[]): 0 extends 1 & T ? any : T extends { render: (input: never, out: never) => infer R } ? R : T extends string | null | undefined | false | 0 | ((...__mxA: any) => any) ? undefined : unknown;
+const RENDER_DYNAMIC = `function __mxRenderDynamic<T>(__mxSink: __MxOut, __mxTarget: T, __mxProps: __MxDynamicProps<T>, __mxArgs?: any[]): 0 extends 1 & T ? any : T extends { render: (input: never, out: never) => infer R } ? R : T extends string | null | undefined | false | 0 | ((...__mxA: any) => any) ? undefined : unknown;
 function __mxRenderDynamic(__mxSink: __MxOut, __mxTarget: any, __mxProps: Record<string, any>, __mxArgs?: any[]): any {
   if (!__mxTarget) {
     // Decision 116 + Marko parity: a falsy renderer (null, undefined, false,
@@ -746,6 +746,12 @@ function __mxRenderDynamic(__mxSink: __MxOut, __mxTarget: any, __mxProps: Record
   if (typeof __mxTarget.render === "function") return __mxTarget.render(__mxProps, __mxSink);
   __mxSink.write("" + __mxTarget(__mxProps));
 }`;
+
+// What a dynamic call's props are checked against: a callee with `render` or a
+// plain function (a `.ts` module tag, decision 116's value-import routing) takes
+// its input's type, so a wrong or missing prop is a TypeScript error at the
+// call; a string, block, `any` or anything else stays loose.
+const DYNAMIC_PROPS = `type __MxDynamicProps<T> = 0 extends 1 & T ? Record<string, any> : [T] extends [{ render: (input: infer I, out: never) => unknown }] ? I : [T] extends [(input: infer I, ...__mxA: any) => unknown] ? I : Record<string, any>;`;
 
 // Decision 155: a statically named tag that is not known to be a compiled
 // template (a hand-written function, or a \`.ts\` barrel re-export of one).
@@ -916,6 +922,7 @@ function moduleHelpers(code: string): string[] {
     [code.includes("__mxStyleValue(") || dynamic, STYLE_VALUE],
     [code.includes("__mxTextareaContent(") || dynamic, TEXTAREA_CONTENT],
     [code.includes("__mxEscapeComment("), ESCAPE_COMMENT],
+    [dynamic, DYNAMIC_PROPS],
     [dynamic, RENDER_DYNAMIC],
     [code.includes("__mxRenderTag("), RENDER_CALL],
     [code.includes("__mxRenderTag("), RENDER_TAG],

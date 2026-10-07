@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "noEmit": true,
+    "strict": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "target": "esnext",
+    "jsx": "preserve",
+    "types": ["node"],
+    "allowImportingTsExtensions": true,
+    "baseUrl": ".",
+    "paths": {
+      "@mxlang/html": ["../../../../../targets/html/src/index.ts"],
+      "@mxlang/core": ["../../../../../core/src/index.ts"],
+      "@mxlang/tsx-bridge": ["../../../../../tsx-bridge/src/public.d.ts"]
+    },
+    "ignoreDeprecations": "6.0"
+  },
+  "include": ["src"]
+}

@@ -958,10 +958,26 @@ export function createEmitter(
       // or a props mismatch (TS2345) on the whole object, and Volar maps
       // that range through its two ends. Only the braces: an attribute's own
       // mapping inside stays the one an error on that attribute takes.
+      // A value-import tag (a `.ts` module, decision 116) lowers dynamic and
+      // carries no name span; its written name is the binding, one `<` into
+      // the tag, so the braces map onto that.
+      const braceSpan =
+        node.nameSpan ??
+        (node.target.kind === "dynamic" &&
+        node.target.valueImportBinding &&
+        node.span
+          ? {
+              sourceStart: node.span.sourceStart + 1,
+              sourceEnd:
+                node.span.sourceStart +
+                1 +
+                node.target.valueImportBinding.length,
+            }
+          : null);
       const propsObject = concatMapped(
-        mapped("{", node.nameSpan),
+        mapped("{", braceSpan),
         parts.length === 0 ? "  " : concatMapped(" ", joinedParts, " "),
-        mapped("}", node.nameSpan),
+        mapped("}", braceSpan),
       );
 
       if (target.kind === "dynamic") {
@@ -987,9 +1003,8 @@ export function createEmitter(
         push(
           concatMapped(
             node.var ? `const ${node.var} = ` : "",
-            `__mxRenderDynamic(${state.sink}, ${target.expr.code}, { `,
-            joinedParts,
-            " }",
+            `__mxRenderDynamic(${state.sink}, ${target.expr.code}, `,
+            propsObject,
             node.args.length > 0
               ? `, [${node.args.map((arg) => arg.code).join(", ")}]`
               : "",
