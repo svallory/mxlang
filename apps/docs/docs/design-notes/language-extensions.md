@@ -130,7 +130,7 @@ So Mesh's acceptance test for this note is: pattern-named attribute tags, spanne
 Every item here moved a decision in section 5 or 6. Items that only confirmed a choice are omitted.
 
 - **Spark (Ash's DSL framework).** Spark exposes forty-four extension points, from sections and entities through transformers, persisters and verifiers. The documented pain is duck-typed callbacks, unchecked cross-extension writes, implicit transformer ordering, compile deadlocks, and verifier errors reported as warnings. Mesh's own synthesis of Spark concludes "one typed manifest per extension declares which points it uses" and extensions contribute to each other only through declared contributions. This sets the manifest-first shape, the explicit `extends` contribution (section 5.6) in place of the "entries replace, they do not merge" rule that `mx.contracts` has today, and the rule that a verifier failure is an error, never a warning.
-- **Racket `#lang` and reader extensions.** A Racket module can replace its own reader, which is the most powerful form of language extension and also why no editor follows it without running the reader. MX takes the opposite side: an extension never touches the reader (section 5.1), because the editor grammars work from the grammar alone. Racket also contributes the one good idea: the file's language is stated in a statically visible place. MX puts that statement in the nearest `package.json`, not in the file, because `.mx` files never declare their dialect (section 5.8).
+- **Racket `#lang` and reader extensions.** A Racket module can replace its own reader, which is the most powerful form of language extension and also why no editor follows it without running the reader. That is the sense in which, for a reader extension, tooling equals runtime: nothing can know the file's syntax without executing the module that defines it. MX is not in that category and this note keeps it out: `mx-tsc`, the TypeScript plugin, the language server, tree-sitter and TextMate each lex a `.mx` file without running any user code, and the families rule exists so that an extension never changes that. MX takes the opposite side: an extension never touches the reader (section 5.1), because the editor grammars work from the grammar alone. Racket also contributes the one good idea: the file's language is stated in a statically visible place. MX puts that statement in the nearest `package.json`, not in the file, because `.mx` files never declare their dialect (section 5.8).
 - **Elixir sigils.** `~r/.../`, `~s(...)`, `~D[...]`: one lexer rule reads `~` + name + any of a fixed delimiter set + raw contents + optional modifier letters, and `sigil_r/2` gives the name a meaning. The lexer never knows which sigils exist; the name is inside the shape. This is the model for the sigil-literal family (section 6, rung 2) and for the families principle itself: the shape carries its selector.
 - **Pug filters.** `:markdown` followed by an indented block hands the block's text to a named filter at compile time, and the filter's output is spliced back as HTML. Editors colour the block by the filter name. This is the operator's wish and the block-filter family (section 7.3). Pug's lesson is the cost: a filter's errors point at the filter's own line numbers, not the template's, because Pug kept no offset map. MX's version has to keep one.
 - **Markdown fences, tree-sitter and VS Code injection grammars.** A fenced block carries its language name in the fence line. tree-sitter-markdown injects by capturing that name as `@injection.language`, so a Markdown grammar built years ago colours a language it never heard of. VS Code's `contributes.grammars` lets any extension `injectTo` a scope the host grammar exposes, which is how a mermaid extension colours fences the markdown grammar never listed. Both mechanisms need only that the host grammar leave the name and the body as distinct nodes or scopes. This is why a family that carries its name is enough for editors, and why no manifest has to reach a grammar.
@@ -478,6 +478,68 @@ The operator asked what it would take for someone to write MX templates with Pyt
 
 What stays: the template layer (tags, attributes, concise mode, families), the IR, the contract mechanism, every extension built at rung 0 to 3, and tree-sitter with an injection of Python instead of TypeScript for that file kind. What this proves is that MX's shape is right for the swap (the expression is already text with a span) and that the port is the moment to keep the seam, at the cost of one profile object. Size L end to end; recommended only as a seam kept, not as work scheduled.
 
+### 7.6 A language built on MX: disl
+
+The operator's earlier language, disl (Domain Interaction Specification Language), is the worked example for the mxalt row of section 2.1 that is not a template language. A `.disl` file describes a domain in blocks (`domain`, `context`, `entity`, `concept`, `types`, `enumerations`), a parser turns it into a domain definition object, and a chain of architects and decorators turns that into a project. Four traits of its syntax, each placed on the ladder:
+
+- **Blocks by layout, with English interleaved.** `entity User` opens a block; between tokens the grammar ignores words such as `the`, `a`, `of`, `its`. The block structure is concise-mode territory, which is the file kind's own rule set (section 7.5, rung 6 for the rules). The ignore list is a lexer rule no rung names: a per-file-kind list of words the scanner drops between tokens.
+- **Keyword makers in the name.** `!Name` is an exception, `Name!` an event, `Name?` a command. These are sigils in tag-name position, a family the ladder does not list. `TAG_NAME.ts` treats only `${` specially inside a name today (lines 134 to 137), so `!Name` lexes as a name that happens to contain `!`, and the shorthands `#` and `.` are the only name-position sigils MX has.
+- **Scope prefixes and natural-language operators.** `@id`, `.id`, `:alias` and `^param` are value sigils in the sense of section 5.1, and `:alias` is exactly the atom of decision 156. `when … throw … otherwise`, `with`, `where`, `exists`, `is`, `does not` are an expression language that is not TypeScript: rung 5, a whole-language swap for that file kind (section 7.5).
+- **Comment-directed data.** `@Project` and `@Desc` carry YAML inside comments. A reader over comment text is a slot nothing offers today.
+
+What disl says about the layers. It is not MX plus extensions, and no extension slot in section 5 would get it there; it is a language built with MX's infrastructure: the parser port's states and concise rules, the IR and the emitters, the Volar projection, the editor grammar machinery, and the manifest and claim mechanism for its own vocabulary. It owns its file kind, its expression scanner profile (gap 15), its tag-name rule, its ignore list and its comment reader. Everything it needs that MX lacks is a seam in the port, not a family MX would ship: the tag-name sigil rule (gap 20), the ignore list (gap 21), the comment reader (gap 22). None of these should become an MX rule by this route; each is a decision the language built on MX takes for itself, and MX's part is to leave the seam open and typed, the way gap 15 leaves the expression scanner open. The adoption-constraint column stays empty: an adopter that is not disl parses none of this.
+
+**Cost.** Gaps 20 to 22 are the seams; sizes are in section 8. disl itself is a project on the far side of them, and its value here is as a second acceptance test beside Mesh (section 10, question 13): Mesh exercises the vocabulary layer, disl exercises the file-kind layer, and a design that serves only one of them is narrower than the question the operator asked.
+
+### 7.7 A project-local identifier claim: `$mySymbol`
+
+The wish: a project, not a published package, decides that `$mySymbol` in an expression names a symbol, hoists `const mySymbol = Symbol.for("mySymbol")` once per file, and every use reads the variable.
+
+```mx
+<div data-kind=$mySymbol>${registry.get($mySymbol)}</div>
+```
+
+lowers on the html target as if the author had written:
+
+```mx
+static const mySymbol = Symbol.for("mySymbol");
+<div data-kind=mySymbol>${registry.get(mySymbol)}</div>
+```
+
+**Grammar.** None, and this is the point of the example. `$mySymbol` is a valid TypeScript identifier, so the expression scanner, the projection, tree-sitter and TextMate already lex it as one. It is not the per-extension expression syntax the rejected alternatives refuse, because no scanner changes, and it does not contradict open question 1, where `$` is listed among the characters with a fixed meaning: that meaning is "identifier character" inside an expression and `${` at a placeholder, and the claim here is on an identifier *pattern*, `/^\$\w+$/` over unbound references, evaluated where core already resolves references. The selector is the pattern; the editor needs nothing.
+
+**What exists.** Both halves of the mechanism are decision 70 hooks. `ctx.hoist(code, node)` (`core.ts:291`) lifts a statement to the enclosing function's head and is drained into `Hoisted` IR nodes (`ir.ts:730`), landing on a `<define>`'s head when called inside one (`lower.ts:546`). `ctx.bindings.register(name, rewrite)` (`core.ts:232-252`) rewrites every reference position of a name (`core.ts:784`), saves and restores across shadowing (`core.ts:848-863`), and splices the rewrite into the authored source slice (`rewriteReferencesSource`, `core.ts:876`), so `${count + 1}` becomes `count() + 1` for a host whose state is a getter. A host could implement `$mySymbol` today from `HostDeclarations`, which is where these hooks are reachable.
+
+**What is missing.** Four things, none of them grammar:
+
+1. *A claim channel without a package.* Today only `tags/`, `mx.tags`, `mx.contracts` and the target reach `ctx`, and section 5.5 describes `mx.extensions` entries as packages. Resolving them "the way `mx.target` is resolved" already admits a relative path (`host-policy.ts:367` treats a specifier starting with `.` or `/` as a path), so the gap is to say so and test it: `mx.extensions: ["./mx/symbols.ts"]` loads a project-owned manifest under the sidecar rules (gap 18).
+2. *Reach.* `TransformContext` exposes `hoist` (`custom-tags.ts:481`, wired at `:2316`) and not `bindings`, and both are reachable only inside a tag call. An identifier claim runs at reference resolution, outside any tag, so it needs a hook of its own, with `hoist` and a `bindings.register` scoped to the file (gap 19).
+3. *Once per file.* `hoist` appends; two uses of `$mySymbol` must produce one declaration. The claim is keyed by the hoisted name, and a file that already binds `mySymbol` is a positioned error at the first use, not a silent shadow (gap 19).
+4. *Projection parity.* The TypeScript projection must emit the same hoisted declaration, or `mySymbol` is unbound in the editor and in `mx-tsc` while the html build passes. This is the real cost of the feature: a claim that changes emitted code has two emitters to keep in step, the target's and the projection's, and it is the reason the claim shape below is data plus two small functions rather than a visitor.
+
+In tag position the story differs. `<$mySymbol>` lexes today as a lowercase-start element named `$mySymbol` (`TAG_NAME.ts`; Marko's `TAG_NAME_IDENTIFIER_REG` is `/^[A-Z][a-zA-Z0-9_$]*/`), so a tag-position claim is the tag-name sigil family of section 7.6 (gap 20), a grammar change, and section 6 says what that costs.
+
+**Claim (sketch).** A fifth manifest key beside `values`, `literals`, `filters` and `tags`:
+
+```ts
+export default {
+  extensionVersion: 0,
+  name: "symbols",
+  identifiers: {
+    "$*": {
+      hoist: (name) => `const ${name.slice(1)} = Symbol.for(${JSON.stringify(name.slice(1))});`,
+      rewrite: (name) => name.slice(1),
+    },
+  },
+} satisfies Extension;
+```
+
+`identifiers` is keyed by a glob over unbound identifiers (`$*`), the two functions are pure over the name, and core applies them through `ctx.hoist` and `ctx.bindings.register` once per name per file, on every target and in the projection, with the same conflict rule as section 5.5 (two active claims matching one identifier is an error at the second `mx.extensions` entry). A claim is not a macro: it sees a name, never an expression, and its output is one declaration and one replacement identifier.
+
+**Editors.** Nothing to do; a `$`-prefixed identifier is already an identifier. A theme rule for the prefix is the project's own TextMate injection, by name, as section 5.7 describes.
+
+**Cost.** S for gap 18, M for gap 19 (core plus the projection). Reversible in the same sense as a `tags/` entry: removing the entry makes the files that used it fail to compile, positioned at each use.
+
 ## 8. Gaps and costs
 
 Ordered by what Mesh needs first, then by what the families add. Size is S (a day), M (a week), L (more). "Port" says whether it must land inside the parser port, and "reversible" whether the change can be undone without a language change.
@@ -501,10 +563,15 @@ Ordered by what Mesh needs first, then by what the families add. Size is S (a da
 | 15 | Scanner profile object in the port's `EXPRESSION.ts` (string, comment, operator and continuation tables selected per file kind) | S in the port, L after | **Yes** | Yes (internal) | Section 7.5; the seam for a non-TypeScript expression language |
 | 16 | `modifiers` claim by pattern over `resolveModifier` | S | No | Yes | Rung 4; recorded, not asked for |
 | 17 | `mx.target: "data"` editor dispatch | deferred | No | n/a | Mesh in the editor; operator-deferred and not asked for here |
+| 18 | `mx.extensions` entry as a relative path (`"./mx/symbols.ts"`): a project-owned manifest without a package, stated and tested in section 5.5's resolution | S | No | Yes | Section 7.7; any project-owned syntax |
+| 19 | `identifiers` claim: a glob over unbound identifiers with `hoist` and `rewrite`, applied once per name per file through `ctx.hoist` and `ctx.bindings.register`, on every target and in the projection | M | No | Yes | Section 7.7; `$mySymbol` |
+| 20 | Tag-name sigil family (`!Name`, `Name!`, `Name?`, `<$x>`): a rule in `TAG_NAME.ts` selected per file kind, off for `.mx` | M | **Yes** | Grammar release for `.mx`; internal for a file kind that opts in | Section 7.6; a language with keyword makers; `$x` in tag position |
+| 21 | Per-file-kind ignore list in the scanner (words dropped between tokens) for natural-language DSLs | M in the port | **Yes** | Yes (internal, per file kind) | Section 7.6; recorded, not asked for |
+| 22 | Comment reader: a claim over comment text (`@Project` YAML in a comment) delivered to a hook with a span | S | No | Yes | Section 7.6; recorded, not asked for |
 
-Placement. Gaps 8, 11, 12 and 15 are the ones the parser port's timing governs: each is a lexer rule or a table the port is writing now, S there and L once the language freezes, so each belongs in PR 2b or PR 3 of the port if the operator wants it at all. Gaps 1 through 5 are independent of the port and are Mesh's critical path; they can start now. Gaps 6, 7, 9 and 13 are the extension mechanism proper and depend on nothing in the port. Gap 10 ships with 8. Gap 14 is the only one that overlaps work the operator has deferred, and it is listed so the overlap is visible, not to reopen the deferral.
+Placement. Gaps 8, 11, 12 and 15 are the ones the parser port's timing governs: each is a lexer rule or a table the port is writing now, S there and L once the language freezes, so each belongs in PR 2b or PR 3 of the port if the operator wants it at all. Gaps 1 through 5 are independent of the port and are Mesh's critical path; they can start now. Gaps 6, 7, 9 and 13 are the extension mechanism proper and depend on nothing in the port. Gap 10 ships with 8. Gap 14 is the only one that overlaps work the operator has deferred, and it is listed so the overlap is visible, not to reopen the deferral. Gaps 20 and 21 join the port-timed set: each is a scanner rule and each is selected per file kind, so `.mx` never sees it unless MX decides to. Gaps 18, 19 and 22 are core and tooling only.
 
-Cost of not doing it. Without 8, atoms stay a bespoke lexer hunk and every future sigil repeats the six-place change. Without 11 and 12, a DSL on MX has one surface shape, `:name`, and anything with its own body (SQL, markdown, a schema language) is a string attribute with no highlighting and no positions. Without 13, filters exist and point every error at their first line. Without 1 and 2, every DSL on the data target is contract-only, which is what Mesh has today. Without 6, editors keep executing user modules to learn a child list. Without 14, a language that wants its own file kind builds on a contract MX may break.
+Cost of not doing it. Without 8, atoms stay a bespoke lexer hunk and every future sigil repeats the six-place change. Without 11 and 12, a DSL on MX has one surface shape, `:name`, and anything with its own body (SQL, markdown, a schema language) is a string attribute with no highlighting and no positions. Without 13, filters exist and point every error at their first line. Without 1 and 2, every DSL on the data target is contract-only, which is what Mesh has today. Without 6, editors keep executing user modules to learn a child list. Without 14, a language that wants its own file kind builds on a contract MX may break. Without 18 and 19, a project that wants syntax of its own must publish a package and still cannot reach `hoist` or `bindings` outside a tag call, so the `$mySymbol` wish has no home. Without 20 to 22, a language such as disl forks the parser instead of selecting a profile, and the fork drifts.
 
 ## 9. Where the sketch and the brief are wrong
 
@@ -536,15 +603,19 @@ Everything in sections 5 to 8 is a proposal. These are the rulings it needs.
 7. **Does the port keep the scanner's tables as a profile object (gap 15)?** Recommended: yes, as an internal seam with one profile (TypeScript) and no second one scheduled. It costs almost nothing now and is the difference between "MX could host another expression language" being true and being a rewrite.
 8. **Should a local `tags/x.mx` shadowing an extension's tag become an error?** Recommended: yes, for tags that come from an active extension; the warning stays for `mx.contracts` until that key is folded into `mx.extensions`.
 9. **What may MX force on an adopter?** Section 2.1 proposes: the template layer and the IR, and nothing from this note; every family is claimed per target, every extension is listed per descriptor or per project, and a host with neither is complete. The alternatives are a required minimum (every host must claim `:` so atoms mean the same thing everywhere, which decision 156 already asks for and which would make `:` the one forced family) and no rule at all. The recommendation is the first with 156's atoms as the single named exception, recorded in the spec as such.
+10. **May a project claim without a package?** Section 7.7 asks for `mx.extensions: ["./mx/symbols.ts"]`, a relative path loaded under the sidecar rules. The alternative is packages only, which keeps every claim publishable and reviewable as a dependency, at the cost of a package for every project-local convention. Recommended: allow the path (gap 18); the sidecar rules already govern `tags/*.tag.ts`, which is the same trust boundary.
+11. **May a claim reach `hoist` and `bindings` outside a tag call?** The `identifiers` claim of section 7.7 is the first extension that changes emitted code at a reference rather than at a tag, and the projection has to follow it. The alternatives are: no (identifier rewriting stays a host power, and `$mySymbol` is a host feature or nothing); yes, as the data-plus-two-functions claim sketched there; or yes, as a general hook over references, which is the visitor the rejected alternatives refuse. Recommended: the middle one, sized M, with the projection parity test as its acceptance criterion.
+12. **Is a tag-name sigil family in scope for MX, or only for a language built on MX?** `!Name`, `Name!`, `Name?` and `<$x>` are name-position sigils (section 7.6). On `.mx` they are rung 6: a boundary change every adopter must parse. As a per-file-kind rule in the port they cost `.mx` nothing. Recommended: the seam (gap 20) with the rule off for `.mx`, and no MX family at this time.
+13. **Is disl a second acceptance test beside Mesh?** Mesh exercises the vocabulary layer; disl exercises the file-kind layer (own blocks, own expression language, own name rule). Recommended: yes, as a sketch on the port (follow-ups), not as scheduled work, so that gaps 15 and 20 to 22 are sized against a real language rather than this note's guess.
 
 ### The lead can rule
 
-10. The manifest key name (`mx.extension` in the extension's package, `mx.extensions` in the consumer's) and whether `mx.contracts` is deprecated in favour of an extension with only `tags`.
-11. Whether `origin` goes on every IR node (absent on authored ones) or only on the kinds hooks can build.
-12. The `DataAttr` shape for sigil values (`kind: "atom"` kept with a `valueKind`, or a general `kind: "value"`).
-13. The order of gaps 1 through 5, and whether 1 and 2 are one PR.
-14. Whether `extends` is in the first cut or follows once two real extensions exist.
-15. Whether a filter's `body: "mx"` mode is in the first cut, if filters are taken.
+14. The manifest key name (`mx.extension` in the extension's package, `mx.extensions` in the consumer's) and whether `mx.contracts` is deprecated in favour of an extension with only `tags`.
+15. Whether `origin` goes on every IR node (absent on authored ones) or only on the kinds hooks can build.
+16. The `DataAttr` shape for sigil values (`kind: "atom"` kept with a `valueKind`, or a general `kind: "value"`).
+17. The order of gaps 1 through 5, and whether 1 and 2 are one PR.
+18. Whether `extends` is in the first cut or follows once two real extensions exist.
+19. Whether a filter's `body: "mx"` mode is in the first cut, if filters are taken.
 
 ## Rejected alternatives
 
@@ -582,3 +653,5 @@ If only the vocabulary-layer recommendations are taken (gaps 1 through 10), the 
 - Correct the two docs lines that say `parseData` throws on transform output (`specification.md`, `dialect-package.md`), which the code no longer does.
 - A Mesh extension manifest written against the `Extension` type as the first external consumer, before gap 7 ships, to test the shape on real contracts.
 - A markdown filter package as the first filter, if filters are taken, because it exercises the map, the editors and the fragment builder at once.
+- A disl sketch on the parser port: which states, concise rules, scanner profile and name rule it would reuse or select, to size gaps 15 and 20 to 22 against a real language (section 7.6).
+- A `$mySymbol` probe: the `identifiers` claim of section 7.7 implemented from `HostDeclarations` on the html target, to measure the projection-parity cost before gap 19 is sized for real.
