@@ -24,6 +24,17 @@ export async function renderHono(
       props: Record<string, unknown>,
     ) => { toString(): string | Promise<string> };
   };
+  const { HtmlEscapedCallbackPhase, resolveCallback } = (await import(
+    "hono/utils/html"
+  )) as {
+    HtmlEscapedCallbackPhase: { Stringify: number };
+    resolveCallback: (
+      str: string | Promise<string>,
+      phase: number,
+      preserveCallbacks: boolean,
+      context: object,
+    ) => Promise<string>;
+  };
   const scratch = mkdtempSync(join(tmpdir(), "mx-oracle-hono-"));
 
   try {
@@ -55,8 +66,17 @@ export async function renderHono(
       default: (props: Record<string, unknown>) => unknown;
     };
     const element = jsx(mod.default, input as Record<string, unknown>);
-    const html = element.toString();
-    return typeof html === "string" ? html : await html;
+    // Resolve callbacks the way `c.html()` does: Hono's `ErrorBoundary` is
+    // async, so a nested boundary reaches its parent as a Promise and a plain
+    // `toString` leaves streaming markers in the output.
+    return String(
+      await resolveCallback(
+        await element.toString(),
+        HtmlEscapedCallbackPhase.Stringify,
+        false,
+        {},
+      ),
+    );
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
