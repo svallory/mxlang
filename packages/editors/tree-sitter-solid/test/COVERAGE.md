@@ -410,9 +410,9 @@ This checklist covers every distinct syntactic construct in SolidMX (MX for Soli
 ### 47. `<try>` error boundary tag
 - **Name**: `<try>` tag
 - **Valid in**: `.solid.mx`, expression-position
-- **Spec quote (section 5.3)**: "`<try><@placeholder>…</@placeholder><@catch|e, reset|>…</@catch>…</try>` lowers to `<Errored fallback={(e, reset) => …}><Loading fallback={…}>…</Loading></Errored>`."
+- **Spec quote (section 5.3)**: "`<try><@placeholder>…</@placeholder><@catch|e, reset|>…</@catch>…</try>` lowers to `<Errored fallback={(accessor, reset) => { const e = accessor(); return …; }}><Loading fallback={…}>…</Loading></Errored>`."
 - **Example**: `<try><@placeholder>Loading...</@placeholder><@catch|e|>Error: ${e}</@catch></try>`
-- **Notes**: Lowers to `Errored` + `Loading`. `@catch` params: `e` (error), optional `reset: () => void`.
+- **Notes**: Lowers to `Errored` + `Loading`. `@catch` params: `e` (the thrown error — Solid's `ErrorAccessor` is called once and its result bound to the first param), optional `reset: () => void`.
 
 ### 48. `<try>` with `<@placeholder>` (loading fallback)
 - **Name**: `<try>` placeholder block

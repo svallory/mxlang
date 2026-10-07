@@ -20,7 +20,7 @@ Each MX region compiles to Solid 2 JSX at the same position in the file, and Sol
 | `<@name>` on a component | the prop `name`, as an accessor |
 | `<if>` with one or two branches | `<Show when fallback>` |
 | `<if>` chain with three or more | `<Switch fallback><Match when>…</Match></Switch>` |
-| `<try>` | `<Loading fallback>`, inside `<Errored fallback>` when there is a `<@catch>` |
+| `<try>` | `<Loading fallback>`, inside `<Errored fallback>` when there is a `<@catch>`; Solid's `Errored` fallback receives an `ErrorAccessor` function, so the lowering calls it once and binds the first `<@catch>` param to the thrown error itself (later params, e.g. `reset`, pass through; a param-less catch keeps a plain body fallback) |
 
 ## `<for>`
 
