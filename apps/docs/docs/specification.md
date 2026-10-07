@@ -3801,12 +3801,17 @@ or a hand-written function imported by name) is refused at compile time, as it
 has been since the core extraction: "tag variable `/c` on `<X>` is not
 supported in a standalone template". The workaround is the dynamic form,
 `<${X}/c/>`, which binds the `render` value. On the **html** host the props of
-an imported `.ts` tag are type-checked against the callee's first parameter
-(or its `render` input): a wrong-typed or unknown attribute is reported on the
-authored attribute, a missing required prop on the tag name. A `${expr}` target
-whose type is a string, a block or `any` stays unchecked. The preact, react,
-hono and solid hosts do not check these props yet (solid also reports a
-spurious TS2322 on the call); astro refuses such a binding outright (TS80001).
+an imported `.ts` tag, and of an authored `${expr}` tag whose type is a function,
+are type-checked against the callee's first parameter (or its `render` input;
+`| undefined` is ignored): a wrong-typed or unknown attribute is reported on the
+authored attribute, a missing required prop on the tag name (on the `${expr}`
+tag, its start). Body content is passed as `content`, so the callee's input must
+declare it or the call reports TS2353. These stay unchecked: a string, block or
+`any` target, a zero-parameter function, and an overloaded callee whose
+signatures take different inputs (a check against one signature would reject a
+call that matches another). The preact, react, hono and solid hosts do not
+check these props yet (solid also reports a spurious TS2322 on the call); astro
+refuses such a binding outright (TS80001).
 
 **`<try>` renders its body into a buffered sub-sink**, `createBufferedOut(out)`,
 committed to `out` only when the body finishes. When the body throws, the

@@ -165,7 +165,7 @@ export function compileHtml(
         emitted = emitModuleWithMappings(
           ir,
           options.runtimeFrom ?? escapeFrom,
-          { typeCheck: options.typeCheck },
+          { typeCheck: options.typeCheck, source },
         );
         return emitted.code;
       },

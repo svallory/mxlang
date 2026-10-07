@@ -1,0 +1,3 @@
+import Tpl from "./Control.mx"
+
+<${Tpl} title="x">body</>

@@ -139,7 +139,7 @@ export interface StringEmitter extends Emitter<string[]> {
  */
 export function createEmitter(
   selfName?: string,
-  options: { typeCheck?: boolean } = {},
+  options: { typeCheck?: boolean; source?: string } = {},
 ): StringEmitter {
   const state: State = {
     body: [],
@@ -958,22 +958,23 @@ export function createEmitter(
       // or a props mismatch (TS2345) on the whole object, and Volar maps
       // that range through its two ends. Only the braces: an attribute's own
       // mapping inside stays the one an error on that attribute takes.
-      // A value-import tag (a `.ts` module, decision 116) lowers dynamic and
-      // carries no name span; its written name is the binding, one `<` into
-      // the tag, so the braces map onto that.
-      const braceSpan =
-        node.nameSpan ??
-        (node.target.kind === "dynamic" &&
-        node.target.valueImportBinding &&
-        node.span
-          ? {
-              sourceStart: node.span.sourceStart + 1,
-              sourceEnd:
-                node.span.sourceStart +
-                1 +
-                node.target.valueImportBinding.length,
-            }
-          : null);
+      // A dynamic target carries no name span. A value-import tag (a `.ts`
+      // module, decision 116) is written as its binding: the call's span
+      // starts at its `<` in HTML syntax and at the name in concise syntax,
+      // which only the source tells apart. An authored `${expr}` target maps
+      // onto the expression.
+      const braceSpan = (() => {
+        if (node.nameSpan) return node.nameSpan;
+        if (node.target.kind !== "dynamic") return null;
+        const binding = node.target.valueImportBinding;
+        if (binding && node.span && options.source !== undefined) {
+          const start =
+            node.span.sourceStart +
+            (options.source[node.span.sourceStart] === "<" ? 1 : 0);
+          return { sourceStart: start, sourceEnd: start + binding.length };
+        }
+        return binding ? null : (node.target.expr.span ?? node.span ?? null);
+      })();
       const propsObject = concatMapped(
         mapped("{", braceSpan),
         parts.length === 0 ? "  " : concatMapped(" ", joinedParts, " "),
@@ -1005,6 +1006,9 @@ export function createEmitter(
             node.var ? `const ${node.var} = ` : "",
             `__mxRenderDynamic(${state.sink}, ${target.expr.code}, `,
             propsObject,
+            // With call args the callee's first parameter is an arg, not the
+            // props object, so the props stay loose.
+            node.args.length > 0 ? " as any" : "",
             node.args.length > 0
               ? `, [${node.args.map((arg) => arg.code).join(", ")}]`
               : "",
@@ -1357,6 +1361,7 @@ export function createEmitter(
           kind: "Component",
           target: { kind: "dynamic", expr: data.expr } as ComponentTarget,
           nameSpan: null,
+          ...(tag.span ? { span: tag.span } : {}),
           // Spreads included: `renderDynamic` receives them in source order
           // like any other component call.
           attrs: tag.attrs,
@@ -1399,7 +1404,7 @@ export function createEmitter(
 export function emitModuleWithMappings(
   ir: Ir,
   escapeFrom: string,
-  options: { typeCheck?: boolean } = {},
+  options: { typeCheck?: boolean; source?: string } = {},
 ): MappedCode {
   const name = moduleExportName(ir, "@mxlang/html");
   const emitter = createEmitter(name, options);

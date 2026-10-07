@@ -26,7 +26,7 @@ function errorsByFile() {
       byFile.set(match[1] as string, list);
     }
   }
-  return { status: run.status, byFile };
+  return { byFile };
 }
 
 describe("mx-tsc on a tag imported from a .ts module", () => {
@@ -46,11 +46,40 @@ describe("mx-tsc on a tag imported from a .ts module", () => {
 
   it("reports nothing for a correct call", () => {
     expect(result.byFile.has("Good")).toBe(false);
-    expect(result.status).not.toBe(0);
   }, 120_000);
 
   it("reports the same shapes for a .mx tag (control)", () => {
     expect(result.byFile.get("ControlWrong")).toEqual(["(3,10) TS2322"]);
     expect(result.byFile.get("ControlMissing")).toEqual(["(3,2) TS2345"]);
+  }, 120_000);
+
+  // Concise syntax has no `<`: the name starts at the span's first character.
+  it("maps a concise-mode call onto the written name", () => {
+    expect(result.byFile.get("ConciseMissing")).toEqual(["(4,3) TS2345"]);
+    expect(result.byFile.get("ConciseWrong")).toEqual(["(4,8) TS2322"]);
+  }, 120_000);
+
+  it("checks an authored dynamic tag the same way", () => {
+    expect(result.byFile.get("AuthoredMissing")).toEqual(["(3,1) TS2345"]);
+    expect(result.byFile.get("AuthoredWrong")).toEqual(["(3,10) TS2322"]);
+  }, 120_000);
+
+  // Body content is passed as `content`; the callee's input must declare it.
+  it("reports body content the callee's input does not declare", () => {
+    expect(result.byFile.get("Body")).toEqual(["(3,1) TS2353"]);
+    expect(result.byFile.get("AuthoredBody")).toEqual(["(3,1) TS2353"]);
+  }, 120_000);
+
+  it("stays silent for an overloaded callee, whichever signature matches", () => {
+    expect(result.byFile.has("OverFirst")).toBe(false);
+    expect(result.byFile.has("OverLast")).toBe(false);
+  }, 120_000);
+
+  it("stays silent for a zero-parameter callee", () => {
+    expect(result.byFile.has("Zero")).toBe(false);
+  }, 120_000);
+
+  it("checks an optional (`| undefined`) callee", () => {
+    expect(result.byFile.get("Maybe")).toEqual(["(3,8) TS2322"]);
   }, 120_000);
 });

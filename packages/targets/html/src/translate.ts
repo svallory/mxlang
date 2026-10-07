@@ -750,8 +750,9 @@ function __mxRenderDynamic(__mxSink: __MxOut, __mxTarget: any, __mxProps: Record
 // What a dynamic call's props are checked against: a callee with `render` or a
 // plain function (a `.ts` module tag, decision 116's value-import routing) takes
 // its input's type, so a wrong or missing prop is a TypeScript error at the
-// call; a string, block, `any` or anything else stays loose.
-const DYNAMIC_PROPS = `type __MxDynamicProps<T> = 0 extends 1 & T ? Record<string, any> : [T] extends [{ render: (input: infer I, out: never) => unknown }] ? I : [T] extends [(input: infer I, ...__mxA: any) => unknown] ? I : Record<string, any>;`;
+// call; a string, block, `any`, a zero-parameter function or an overloaded
+// one (the signatures' inputs differ) stays loose.
+const DYNAMIC_PROPS = `type __MxDynamicProps<T> = 0 extends 1 & T ? Record<string, any> : [NonNullable<T>] extends [{ render: (input: infer I, out: never) => unknown }] ? I : [NonNullable<T>] extends [{ (input: infer A, ...__mxA: any): unknown; (input: infer B, ...__mxA: any): unknown }] ? [unknown] extends [A] ? B : [A] extends [B] ? [B] extends [A] ? B : Record<string, any> : Record<string, any> : Record<string, any>;`;
 
 // Decision 155: a statically named tag that is not known to be a compiled
 // template (a hand-written function, or a \`.ts\` barrel re-export of one).

@@ -1,0 +1,3 @@
+import Zero from "./zero.ts"
+
+<Zero anything=1/>

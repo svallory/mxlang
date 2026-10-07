@@ -1,0 +1,3 @@
+import Maybe from "./maybe.ts"
+
+<Maybe title=1/>
