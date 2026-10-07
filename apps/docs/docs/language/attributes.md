@@ -156,7 +156,10 @@ Tag-adjacent `=value` (`<a#x=1>`) is Marko's own default attribute, not this sug
 | `<div value:foo="y"/>` | Marko's attribute `value:foo`, untouched (the explicit `value:x` spelling) |
 | `<a :x=1/>` | `name="x"` plus `value=1`: a sugar followed by `=value` sets the default attribute (see [A sugar followed by a value](#attributes-name-and-id-and-class-after-an-attribute-a-sugar-followed-by-a-value)) |
 | `<div :/>` | an error: `:` is name sugar and needs a name (Marko read a bare `:` as `value:`; write `value:` for that attribute) |
-| `<div :1a/>` | an error: `:name` takes an identifier (`#x` and `.x` take whatever Marko's shorthand takes, so `<div #1a .2xl/>` is `id="1a"`, `class="2xl"`) |
+| `<div :1a/>` | an error: `:name` takes an identifier (`#x` and `.x` take whatever Marko's shorthand takes, so `<div #1a/>` is `id="1a"`) |
+| `<div.bg-[#fff]/>` | an error: a class or id part cannot hold an unbalanced `[` or `]` (it would read as `class="bg-[" id="fff]"`); write `class="…"` |
+| `<div.w-1.5/>` | an error: a class part cannot start with a digit (it would read as `class="w-1 5"`); write `class="…"` |
+| `<div.w-1/2/>` | an error naming the shorthand (not Marko's tag-variable text): a `/` after a shorthand starts a tag variable; write the class as `class="…"` |
 
 An attribute tag's name (`<@svg:rect>`) is a property key and is not split;
 sugar inside one applies. `<svg:rect>` is the tag `svg` plus `name="rect"`, on

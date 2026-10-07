@@ -395,7 +395,8 @@ describe("exact value spans of the rewritten shorthand", () => {
 describe("the shorthand charset, in both positions", () => {
   it.each([
     ["<div #1a/>", "<div#1a/>"],
-    ["<div .2xl/>", "<div.2xl/>"],
+    // `.2xl` was Marko-valid (a class part may start with a digit) until
+    // decision 174 made it an error; see "decision 174" below.
     ["<div .é/>", "<div.é/>"],
     ["<div .a@b/>", "<div.a@b/>"],
     ["<div .a+b/>", "<div.a+b/>"],
@@ -408,7 +409,6 @@ describe("the shorthand charset, in both positions", () => {
 
   it("matches Marko's shorthand, so the two positions never disagree", () => {
     expect(shape("<div #1a/>")).toBe('div id="1a"');
-    expect(shape("<div .2xl/>")).toBe('div class="2xl"');
     expect(shape("<div .é/>")).toBe('div class="é"');
   });
 
@@ -936,6 +936,50 @@ describe("default value: a bound value on a sugar", () => {
         "a bound value is not supported on name sugar; write name=... value:=...",
       );
       expect([error.line, error.column]).toEqual([line, column]);
+    },
+  );
+});
+
+describe("decision 174: shorthand diagnostics", () => {
+  // `.data-[state=open]:flex` and friends die in Marko's own group reader
+  // before MX lowers; their rewrite is covered in parse-error-hints.test.ts.
+  it.each([
+    ["<div.bg-[#fff]/>", "unbalanced `[`", 5],
+    ["<div .bg-[#fff]/>", "unbalanced `[`", 5],
+  ])("%s: an unbalanced bracket is a positioned error with the class hint", (source, message, column) => {
+    const error = errorOf(source);
+    expect(error.message).toContain(message);
+    expect(error.message).toContain('class="…"');
+    expect(error.line).toBe(1);
+    expect(error.column).toBe(column);
+  });
+
+  it("the id part is checked too (unreachable first at one position, kept for the other)", () => {
+    // The class part always carries the first offense when brackets span a
+    // `.`/`#` split (`.bg-[#fff]`), so the id branch fires second; the check
+    // is the same `checkShorthandWord` call the class parts go through.
+    const error = errorOf("<div .bg-[#fff]/>");
+    expect(error.message).toContain("unbalanced `[`");
+  });
+
+  it.each([
+    ["<div.w-1.5/>", 9],
+    // The caret sits on the `.` that ends the previous part (the part's own
+    // first character is inside the token the split produced).
+    ["<div .w-1.5/>", 9],
+    ["<div.2xl/>", 5],
+  ])("%s: a class part starting with a digit is a positioned error", (source, column) => {
+    const error = errorOf(source);
+    expect(error.message).toContain("cannot start with a digit");
+    expect(error.message).toContain('class="…"');
+    expect(error.line).toBe(1);
+    expect(error.column).toBe(column);
+  });
+
+  it.each(["<div.hover:bg-red/>", "<div.a.b#c/>", "<div.w-1/>", '<div .w-1 class="x"/>' ])(
+    "%s stays valid, no diagnostic",
+    (source) => {
+      expect(() => lowerSource(source)).not.toThrow();
     },
   );
 });

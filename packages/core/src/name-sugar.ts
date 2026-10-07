@@ -141,6 +141,76 @@ function failAt(ctx: Ctx, message: string, offset: number): never {
 const SECOND_NAME =
   'a tag takes one `:name`; this one already has a name (write the second as `name="…"`)';
 
+/**
+ * Decision 174: the first bracket in a shorthand part that does not pair up
+ * (`[` with no later `]`, or a `]` with no `[` before it).
+ */
+function bracketOffense(word: string): string | undefined {
+  let depth = 0;
+  for (const char of word) {
+    if (char === "[") depth++;
+    else if (char === "]") {
+      if (depth === 0) return "]";
+      depth--;
+    }
+  }
+  return depth > 0 ? "[" : undefined;
+}
+
+/**
+ * Decision 174: a shorthand part cannot hold an unbalanced `[` or `]`
+ * (`.bg-[#fff]` would read as the class `bg-[` and the id `fff]`), and a class
+ * part cannot start with a digit (`.w-1.5` would read as the classes `w-1`
+ * and `5`). One positioned error per part, with the `class="…"` hint;
+ * `.hover:bg-red`, `.a.b#c` and `.w-1` stay valid.
+ */
+function checkShorthandWord(
+  ctx: Ctx,
+  sigil: string,
+  word: string,
+  at: number,
+): void {
+  const kind = sigil === "#" ? "id" : "class";
+  const offense = bracketOffense(word);
+  if (offense !== undefined) {
+    failAt(
+      ctx,
+      `\`${sigil}${word}\` is not a valid shorthand ${kind}: a ${kind} part cannot hold an unbalanced \`${offense}\` (a part ends at \`.\`, \`#\`, \`/\`, \`(\`, whitespace, \`=\` or \`>\`); use \`class="…"\` for this ${kind}`,
+      at,
+    );
+  }
+  if (sigil === "." && /^[0-9]/.test(word)) {
+    failAt(
+      ctx,
+      `\`.${word}\` is not a valid shorthand class: a class part cannot start with a digit; use \`class="…"\` for this class`,
+      at,
+    );
+  }
+}
+
+/**
+ * The same two checks over a tag-adjacent shorthand part (`<div.bg-[#fff]/>`):
+ * the parser has already merged the parts into one class/id value whose words
+ * are joined with a space exactly where the source had `.`, but the value's
+ * own span starts at the tag name's end, not at the first word. Find each
+ * word in the source instead, from the previous word's end on.
+ */
+function checkShorthandPart(ctx: Ctx, part: Node, sigil: string): void {
+  if (
+    part?.type !== "StringLiteral" ||
+    !part.loc ||
+    typeof part.value !== "string"
+  )
+    return;
+  let cursor = startOf(ctx, part);
+  for (const word of String(part.value).split(" ")) {
+    const at = ctx.source.indexOf(word, cursor);
+    if (at < 0) return;
+    checkShorthandWord(ctx, sigil, word, at);
+    cursor = at + word.length;
+  }
+}
+
 const BOUND_ON_SUGAR =
   "a bound value is not supported on name sugar; write name=... value:=...";
 
@@ -790,6 +860,7 @@ function rewriteAttributes(ctx: Ctx, node: Node): void {
           partStart,
         );
       }
+      checkShorthandWord(ctx, sigil, word, partStart);
       if (word === "" || !isShorthandWord(sigil, word)) {
         failAt(
           ctx,
@@ -925,7 +996,10 @@ function rewriteHead(ctx: Ctx, node: Node): void {
     (attr) => attr.type === "MarkoAttribute" && attr.name === "class",
   );
   if (classAttr)
-    parts.push(...shorthandClassParts(ctx, classAttr, firstAuthored));
+    for (const part of shorthandClassParts(ctx, classAttr, firstAuthored)) {
+      checkShorthandPart(ctx, part, ".");
+      parts.push(part);
+    }
   const idAttr = attrs.find(
     (attr) =>
       attr.type === "MarkoAttribute" &&
@@ -933,7 +1007,10 @@ function rewriteHead(ctx: Ctx, node: Node): void {
       !attr.loc &&
       !attr.sugarNameSpan,
   );
-  if (idAttr?.value) parts.push(idAttr.value);
+  if (idAttr?.value) {
+    checkShorthandPart(ctx, idAttr.value, "#");
+    parts.push(idAttr.value);
+  }
   for (const part of parts) headNamesIn(ctx, part, found);
 
   if (found.length === 0) return;
