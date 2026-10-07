@@ -1512,7 +1512,7 @@ native element (§4, decision 164).
 |---|---|
 | `` `<define>` without a name (write `<define/name>`) `` | No `/var`. |
 
-**On html, preact, react and hono, a `<define>` called with attributes and no
+**On html, preact, react, hono and angular, a `<define>` called with attributes and no
 arguments passes one attribute object to its first parameter (decision 160),**
 like a custom tag's `input`:
 `<Row n=1/>` against `<define/Row|p|>` or `<define/Row|{ n }|>` hands `Row`
@@ -1526,8 +1526,13 @@ hosts that implement the rule, marked by `HostDeclarations.defineCallPassesAttrs
 A call with tag arguments is unchanged (decision 109), and a define with no
 params still ignores the attributes. Decision 160 is the language rule for every
 target; Solid keeps its own call shape (below) until
-`define-call-attrs-solid` lands, and Angular keeps its own until
-`define-call-attrs-angular` lands.
+`define-call-attrs-solid` lands. Angular has no local component form, so it
+rides the one object through `ngTemplateOutlet`'s single context: a plain first
+param binds `$implicit` (`let-p` reading the attributes object), and a
+destructured first param (`|{ n }|`, `|{ n = 3 }|`) expands into a generated
+`let-` plus one `@let` per bound top-level name reading the property off the
+context — rest/nested/array patterns and computed keys are positioned errors
+(spread attributes and body content on such a call are positioned errors too).
 
 **On Solid, a `<define>` inside a `.solid.mx` region is hoisted to module
 scope (decision 110b).** A region is a JSX expression spliced into someone

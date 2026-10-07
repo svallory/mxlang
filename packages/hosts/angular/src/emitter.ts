@@ -2334,48 +2334,51 @@ class AngularEmitter implements Emitter<string> {
     } else {
       this.out.write(esc("{ "));
       node.attrs.forEach((attr, i) => {
-      if (attr.kind === "spread") {
-        // Angular template expressions have no object spread, so the
-        // attributes object cannot be built at render time — a positioned
-        // error at the spread, not a silently dropped attribute.
-        fail(
-          `a spread attribute cannot be passed to \`<${target.name}>\`: Angular template expressions have no object spread, so the attributes object cannot be built at render time. Name the attributes, or pass one object with \`<${target.name}(obj)/>\`.`,
-          attr,
-        );
-      }
-      if (i > 0) this.out.write(esc(", "));
-      // An identifier name is a valid object key bare; every other name
-      // (`data-x`, `aria-label`) is quoted. The key maps onto the authored
-      // attribute name either way.
-      if (isIdentifier(attr.name)) {
-        this.out.writeMapped(esc(attr.name), attr.nameSpan);
-      } else {
-        this.out.writeMapped(esc(JSON.stringify(attr.name)), attr.nameSpan);
-      }
-      this.out.write(esc(": "));
-      switch (attr.kind) {
-        case "static":
-          // A static value is a string literal in the object. Braces are
-          // escaped because Angular interpolates `{{ … }}` inside an
-          // attribute value; JSON.stringify is the JS-literal layer (`"`,
-          // `\`), `esc()` the surrounding HTML attribute layer — two passes
-          // for two nesting layers, the same shape
-          // `emitDynamicComponent`'s static inputs use.
-          this.out.write(esc(escapeBraces(JSON.stringify(attr.value))));
-          break;
-        case "boolean":
-          // A valueless attribute is `true`, as in Marko.
-          this.out.write("true");
-          break;
-        case "dynamic":
-        case "bound":
-        case "event":
-          this.out.writeMapped(esc(attr.value.code), attr.value.span);
-          break;
-      }
+        if (attr.kind === "spread") {
+          // Angular template expressions have no object spread, so the
+          // attributes object cannot be built at render time — a positioned
+          // error at the spread, not a silently dropped attribute.
+          fail(
+            `a spread attribute cannot be passed to \`<${target.name}>\`: Angular template expressions have no object spread, so the attributes object cannot be built at render time. Name the attributes, or pass one object with \`<${target.name}(obj)/>\`.`,
+            attr,
+          );
+        }
+        if (i > 0) this.out.write(esc(", "));
+        // An identifier name is a valid object key bare; every other name
+        // (`data-x`, `aria-label`) is quoted. The key maps onto the authored
+        // attribute name either way.
+        if (isIdentifier(attr.name)) {
+          this.out.writeMapped(esc(attr.name), attr.nameSpan);
+        } else {
+          this.out.writeMapped(esc(JSON.stringify(attr.name)), attr.nameSpan);
+        }
+        this.out.write(esc(": "));
+        switch (attr.kind) {
+          case "static":
+            // A static value is a string literal in the object. Braces are
+            // escaped because Angular interpolates `{{ … }}` inside an
+            // attribute value; JSON.stringify is the JS-literal layer (`"`,
+            // `\`), `esc()` the surrounding HTML attribute layer — two passes
+            // for two nesting layers, the same shape
+            // `emitDynamicComponent`'s static inputs use.
+            this.out.write(esc(escapeBraces(JSON.stringify(attr.value))));
+            break;
+          case "boolean":
+            // A valueless attribute is `true`, as in Marko.
+            this.out.write("true");
+            break;
+          case "dynamic":
+          case "bound":
+          case "event":
+            this.out.writeMapped(esc(attr.value.code), attr.value.span);
+            break;
+        }
       });
-      this.out.write(esc(" } }"));
+      this.out.write(esc(" }"));
     }
+    // The outer object closes for both branches: `{ $implicit: {} }` and
+    // `{ $implicit: { …attrs… } }`.
+    this.out.write(esc(" }"));
     this.out.write('"></ng-container>');
   }
 
@@ -2634,7 +2637,9 @@ class AngularEmitter implements Emitter<string> {
         const read = `${expandFirst.let}${binding.path}`;
         this.out.write(`@let ${binding.name} = `);
         if (binding.default !== undefined) {
-          this.out.write(`${read} === undefined ? ${binding.default} : ${read}; `);
+          this.out.write(
+            `${read} === undefined ? ${binding.default} : ${read}; `,
+          );
         } else {
           this.out.write(`${read}; `);
         }
@@ -2676,7 +2681,10 @@ class AngularEmitter implements Emitter<string> {
     if (node.params.length === 0) return undefined;
 
     const babel = markoBabel() as {
-      parseExpression(source: string, options: unknown): {
+      parseExpression(
+        source: string,
+        options: unknown,
+      ): {
         type: string;
         start: number;
         end: number;
@@ -2708,6 +2716,7 @@ class AngularEmitter implements Emitter<string> {
         value?: ParamNode;
       }[];
       elements?: (ParamNode | null)[];
+      right?: ParamNode;
     };
 
     let pattern: ParamNode;
@@ -2783,10 +2792,11 @@ class AngularEmitter implements Emitter<string> {
         bindings.push({
           name: inner.name!,
           path,
-          // The Babel node spans are offsets into the fed source
-          // `(${param} = 0)`, whose leading `(` shifts every offset by one
-          // against `param` itself.
-          default: param.slice(value.start! - 1, value.end! - 1),
+          // Only the default's expression, not the `name = ` prefix: the
+          // binding name is already emitted before the ternary. `right`'s
+          // spans are offsets into the fed source `(${param} = 0)`, whose
+          // leading `(` shifts every offset by one against `param` itself.
+          default: param.slice(value.right!.start! - 1, value.right!.end! - 1),
         });
       }
     }

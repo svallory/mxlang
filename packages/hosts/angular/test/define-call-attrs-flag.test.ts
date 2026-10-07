@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compile } from "../src/index.ts";
-import { angularDeclarations } from "../src/index.ts";
+import { angularDeclarations, compile } from "../src/index.ts";
 
 // Decision 160: Angular now passes one attributes object to a `<define>`
 // call's first param, so the flag is on and core's multi-param warning —
@@ -13,7 +12,7 @@ it("sets defineCallPassesAttrs, turning core's multi-param define warning on", (
 describe("the multi-param define warning (core, positioned at the call)", () => {
   it("warns when a define with 2+ params is called with attributes", () => {
     const result = compile(
-      "<define/Card|title, head|>${title}</define><Card title=\"a\"/>",
+      '<define/Card|title, head|>${title}</define><Card title="a"/>',
       "x.mx",
     );
     expect(result.warnings.map((w) => w.message)).toEqual([

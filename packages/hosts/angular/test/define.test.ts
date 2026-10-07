@@ -82,7 +82,7 @@ describe("Define call with attributes (decision 160)", () => {
   it("expands a destructured first param into let- plus one @let per bound name", () => {
     const out = emit("<define/Row|{ n }|>${n}</define><Row n=1/>");
     expect(out).toBe(
-      "<ng-template #Row let-__mxArg> @let n = __mxArg.n; {{ n }} </ng-template><ng-container [ngTemplateOutlet]=\"Row\" [ngTemplateOutletContext]=\"{ $implicit: { n: 1 } }\"></ng-container>",
+      '<ng-template #Row let-__mxArg> @let n = __mxArg.n; {{ n }} </ng-template><ng-container [ngTemplateOutlet]="Row" [ngTemplateOutletContext]="{ $implicit: { n: 1 } }"></ng-container>',
     );
     assertAngularParses(out);
   });
@@ -90,7 +90,7 @@ describe("Define call with attributes (decision 160)", () => {
   it("applies a default when the property reads undefined", () => {
     const out = emit("<define/Row|{ n = 3 }|>${n}</define><Row/>");
     expect(out).toBe(
-      "<ng-template #Row let-__mxArg> @let n = __mxArg.n === undefined ? n = 3 : __mxArg.n; {{ n }} </ng-template><ng-container [ngTemplateOutlet]=\"Row\" [ngTemplateOutletContext]=\"{ $implicit: {} }\"></ng-container>",
+      '<ng-template #Row let-__mxArg> @let n = __mxArg.n === undefined ? 3 : __mxArg.n; {{ n }} </ng-template><ng-container [ngTemplateOutlet]="Row" [ngTemplateOutletContext]="{ $implicit: {} }"></ng-container>',
     );
     assertAngularParses(out);
   });
@@ -138,16 +138,14 @@ describe("Define call with attributes (decision 160)", () => {
   });
 
   it("maps each attribute value expression onto the .mx source", () => {
-    const out = emit(
-      "<define/Row|p|>${p.n}</define><const/x = 5/><Row n=${x}/>",
-    );
-    expect(out).toContain('{ $implicit: { n: x } }');
+    const out = emit("<define/Row|p|>${p.n}</define><const/x=5/><Row n=x/>");
+    expect(out).toContain("{ $implicit: { n: x } }");
   });
 
   it("rejects a spread attribute with a positioned error", () => {
-    expect(() =>
-      emit("<define/Row|p|>${p.n}</define><Row ...o/>"),
-    ).toThrow(/a spread attribute cannot be passed to `<Row>`/);
+    expect(() => emit("<define/Row|p|>${p.n}</define><Row ...o/>")).toThrow(
+      /a spread attribute cannot be passed to `<Row>`/,
+    );
   });
 
   it("rejects body content on a call whose define takes a param", () => {
@@ -169,9 +167,9 @@ describe("Define call with attributes (decision 160)", () => {
   });
 
   it("rejects an array pattern in the first param", () => {
-    expect(() =>
-      emit("<define/Row|[a, b]|>${a}</define><Row a=1/>"),
-    ).toThrow(/is an array or unsupported pattern/);
+    expect(() => emit("<define/Row|[a, b]|>${a}</define><Row a=1/>")).toThrow(
+      /is an array or unsupported pattern/,
+    );
   });
 
   it("rejects a computed key in the first param", () => {
