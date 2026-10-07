@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Added (shorthand-class-diagnostics, decision 174):** positioned errors with a `class="…"` hint for the class/id shorthand's silent wrong outputs, on every target. A shorthand part with an unbalanced `[` or `]` (`.bg-[#fff]` read as `class="bg-[" id="fff]"`; `.data-[state=open]:flex`, `.bg-[url('/x.png')]`, `.[&>*]:p-4` and `.w-[calc(100%-2rem)]` died in Marko's group reader with "Mismatched group" or "Missing ending tag") is one error at the part; a class part that starts with a digit (`.w-1.5` read as `class="w-1 5"`) is the same error, and makes `.2xl` an error where it was valid; a `/` right after a shorthand followed by a non-identifier (`.w-1/2`) names the shorthand and `class="…"` instead of Marko's tag-variable text and link. `.hover:bg-red`, `.a.b#c` and `.w-1` stay valid with no diagnostic.
 - **Fixed (define-param-default-empty-error):** a parse failure inside a tag's `|params|` (`<define/Foo|{a=}|>`, `<for|{a=}| of=x>`) is a positioned `TranslateError` at the param with Babel's reason ("Unexpected token"), on every target. Marko threw its `CompileError` at 0:0 with a message that opens with an empty line (whole-file entries), and a region (`parseFragment`) lowered the unreadable param as one that binds nothing.
 
 ## 0.1.0-alpha.10

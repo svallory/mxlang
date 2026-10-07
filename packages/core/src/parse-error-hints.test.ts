@@ -65,3 +65,83 @@ describe("declaredBinding", () => {
     expect(declaredBinding(statement)?.name).toBe(expected);
   });
 });
+
+describe("decision 174: shorthand parse errors", () => {
+  const TAG_VARIABLE =
+    "`2` is not a valid [tag variable](https://markojs.com/docs/reference/language#tag-variables); use a JavaScript identifier or destructuring pattern.";
+
+  function parseError(
+    source: string,
+    label: string,
+    column: number,
+    index = column,
+  ) {
+    const at = `t.mx:1:${column + 1}`;
+    const error = new Error(
+      `\n    at ${at}\n    > 1 | ${source}\n        | ${" ".repeat(column)}^ ${label}`,
+    ) as Error & { label: string; loc: unknown };
+    error.label = label;
+    error.loc = { start: { line: 1, column, index } };
+    return error;
+  }
+
+  it("a `/` before a non-identifier names the class shorthand, not the tag variable", () => {
+    const source = "<div.w-1/2/>";
+    const error = parseError(source, TAG_VARIABLE, 9);
+    hintParseError(error, source);
+    expect(error.label).toContain("`2` is not more class");
+    expect(error.label).toContain('class="…"');
+    expect(error.label).not.toContain("is not a valid [tag variable]");
+    expect(error.message).toContain("`2` is not more class");
+  });
+
+  it("leaves a tag-variable error with no shorthand `/` alone", () => {
+    const source = "<div x/2/>";
+    const error = parseError(source, TAG_VARIABLE, 7);
+    hintParseError(error, source);
+    expect(error.label).toBe(TAG_VARIABLE);
+  });
+
+  it.each([
+    [
+      "<div.data-[state=open]:flex/>",
+      20,
+      'Mismatched group. A closing "]" character was found but it is not matched with a corresponding opening character.',
+    ],
+    ["<div.[&>*]:p-4/>", 0, 'Missing ending "div" tag'],
+  ])("%s: Marko's group text becomes the shorthand message", (source, column, label) => {
+    const error = parseError(source, label, column);
+    hintParseError(error, source);
+    expect(error.label).toContain("a class or id shorthand cannot hold");
+    expect(error.label).toContain('class="…"');
+    expect(error.label).not.toContain("Mismatched");
+    expect(error.label).not.toContain("Missing ending");
+  });
+
+  it("leaves a group error with no shorthand head alone", () => {
+    const source = "<div x=[1]></div>";
+    const label = 'Mismatched group. A closing "]" character was found.';
+    const error = parseError(source, label, 9);
+    hintParseError(error, source);
+    expect(error.label).toBe(label);
+  });
+
+  it("rewrites every entry of an aggregate", () => {
+    const source = "<div.w-[calc(100%-2rem)]/>";
+    const first = parseError(source, "Identifier directly after number.", 19);
+    const second = parseError(
+      source,
+      'Mismatched group. A closing "]" character was found but it is not matched with a corresponding opening character.',
+      23,
+    );
+    const aggregate = new Error(
+      [first.message, second.message].join("\n"),
+    ) as Error & { errors: Error[] };
+    aggregate.errors = [first, second];
+    hintParseError(aggregate, source);
+    expect(first.label).toContain("a class or id shorthand cannot hold");
+    expect(second.label).toContain("a class or id shorthand cannot hold");
+    expect(aggregate.message).not.toContain("Mismatched group");
+    expect(aggregate.message).not.toContain("Identifier directly after number");
+  });
+});

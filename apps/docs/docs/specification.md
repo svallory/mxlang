@@ -782,10 +782,29 @@ work in three positions, in HTML and concise mode alike:
 Marko's shorthand takes, in every position: a run of characters up to
 whitespace, `=`, `(`, `/`, `|`, `<`, `,` or `>`, with `.` and `#` starting the
 next part (read from htmljs-parser's own rule and probed against it, so
-`<div #1a>` is `<div#1a>` and `.2xl` and `.é` work in both positions; a chain
+`<div #1a>` is `<div#1a>` and `.é` works in both positions; a digit-leading class part is decision 174's error (see below); a chain
 such as `.c#m.d` splits like a tag-adjacent one; a dynamic shorthand, `.a${x}`,
 works only tag-adjacent: `<div.a${x}>`). `name` is then an ordinary attribute, so contracts,
 the duplicate-attribute rule (decision 135) and E1 types all apply.
+
+**Decision 174 — two shorthand diagnostics.** The rules above do not change,
+but the silent wrong outputs get positioned errors, each with the way out:
+
+- A part with an unbalanced `[` or `]` (`.bg-[#fff]` would read as the class
+  `bg-[` and the id `fff]`; `.data-[state=open]:flex`, `.bg-[url('/x.png')]`,
+  `.[&>*]:p-4` and `.w-[calc(100%-2rem)]` die in Marko's group reader with
+  "Mismatched group" or "Missing ending tag") is one error at the part:
+  a class or id part cannot hold an unbalanced bracket; use `class="…"`.
+- A class part that starts with a digit (`.w-1.5` would read as the classes
+  `w-1` and `5`) is the same error at the part. (`.2xl` was valid before
+  decision 174; a digit-leading part is now always an error. `#1a` — an id
+  part starting with a digit — stays valid.)
+- A `/` right after a shorthand followed by a non-identifier (`.w-1/2`) keeps
+  its error, but the text names the shorthand instead of Marko's tag-variable
+  read: a `/` after a class or id shorthand starts a tag variable; write the
+  class as `class="…"`.
+
+`.hover:bg-red` stays valid name sugar (decision 146) with no diagnostic.
 
 **Tag-adjacent sugars compose in any order** (23:23 addendum): `<a.c:b>` is class
 `c` and name `b`; `<a#d:b.c>` is id `d`, name `b`, class `c`; `<:b.c>` is the

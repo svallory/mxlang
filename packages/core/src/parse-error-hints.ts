@@ -35,6 +35,10 @@ export type ScriptletDeclaration = {
   keyword: "const" | "let" | "var";
 };
 
+/** Marko's tag-variable reason: `X` is not a valid [tag variable](link); … */
+const TAG_VARIABLE_REASON =
+  /`[^`]*` is not a valid \[tag variable\]\([^)]*\); use a JavaScript identifier or destructuring pattern\.?/;
+
 /**
  * The scriptlet message tail: the sentence every host shares, plus the host's
  * replacement when the statement declares exactly one variable. A call, an
@@ -250,6 +254,65 @@ function hintFor(
 }
 
 /**
+ * Decision 174: a shorthand part with a bracket Marko's own group reader trips
+ * over (`.data-[state=open]:flex` — "Mismatched group", `.[&>*]:p-4` —
+ * "Missing ending tag") dies in Marko's vocabulary before MX lowers anything.
+ * When the failing tag head carries shorthand and a bracket, say what the
+ * author wrote instead: the shorthand cannot hold this class; use `class="…"`.
+ */
+function rewriteShorthandGroup(error: Located, source: string): string | null {
+  const reason = typeof error.label === "string" ? error.label : "";
+  const at = error.loc?.start;
+  if (!at) return null;
+  if (
+    !/^(Mismatched group|Missing ending|Identifier directly after number\.)/.test(
+      reason,
+    )
+  )
+    return null;
+  const offset = at.index ?? offsetOf(source, at.line, at.column);
+  const tagAt = source.lastIndexOf("<", offset);
+  if (tagAt < 0) return null;
+  // A tag-adjacent shorthand (`<div.bg-[…`, `<div.[&>*]…`); attribute-position
+  // sugar dies in MX's own rewrite, never in Marko's group reader. The tag
+  // head may be longer than the slice up to the failure ("Missing ending"
+  // points at the tag's start), so read past it for the sigil check.
+  const head = source.slice(tagAt, offset + 60);
+  if (!/^<[^<>\s]*[.#]/.test(head)) return null;
+  const bracket = head.match(/[[\]]/)?.[0];
+  if (!bracket) return null;
+  const sentence = `a class or id shorthand cannot hold an unbalanced \`${bracket}\` (a part ends at \`.\`, \`#\`, \`/\`, \`(\`, whitespace, \`=\` or \`>\`); use \`class="…"\` for this class`;
+  error.label = sentence;
+  setMessage(error, error.message.replace(reason, sentence));
+  return sentence;
+}
+
+/**
+ * Decision 174: a `/` right after a class or id shorthand followed by a
+ * non-identifier (`<div.w-1/2/>`) is Marko's tag-variable read (`2` is not a
+ * valid tag variable, with a link out of the template). Say what the author
+ * wrote instead: the class shorthand cannot hold it; use `class="…"`.
+ */
+function rewriteTagVariableShorthand(error: Located, source: string): boolean {
+  const reason = typeof error.label === "string" ? error.label : "";
+  const at = error.loc?.start;
+  if (!at || !TAG_VARIABLE_REASON.test(reason)) return false;
+  const offset = at.index ?? offsetOf(source, at.line, at.column);
+  // The offending token sits right after the `/` that ends the shorthand.
+  if (offset < 1 || source[offset - 1] !== "/") return false;
+  const head = source.slice(0, offset - 1);
+  const tagAt = head.lastIndexOf("<");
+  // Only inside a tag head that carries shorthand (`.` or `#`); `/x` after a
+  // plain tag (`<const/x=1/>`) or an identifier (`/item`) keeps Marko's read.
+  if (tagAt < 0 || !/[.#]/.test(head.slice(tagAt))) return false;
+  const token = source.slice(offset).match(/^[^\s=/>]+/)?.[0] ?? "";
+  const sentence = `\`${token}\` is not more class: a \`/\` after a class or id shorthand starts a tag variable; write the class as \`class="…"\``;
+  error.label = reason.replace(TAG_VARIABLE_REASON, sentence);
+  setMessage(error, error.message.replace(TAG_VARIABLE_REASON, sentence));
+  return true;
+}
+
+/**
  * Appends `hint` to the first not-yet-hinted line of `message` that ends with
  * `reason`, searching from the frame that names `at` (`:line:column`, 1-based)
  * when the message has one. A hinted line no longer ends with the bare reason,
@@ -342,6 +405,8 @@ export function hintParseError(
   if (!(error instanceof Error)) return;
   const aggregate = error as Located;
   rewriteKeywordAtom(aggregate, source);
+  rewriteShorthandGroup(aggregate, source);
+  if (rewriteTagVariableShorthand(aggregate, source)) return;
   for (const entry of aggregate.errors ?? []) {
     if (typeof (entry as Located | null)?.message !== "string") continue;
     const sentence = rewriteKeywordAtom(entry as Located, source);
@@ -356,6 +421,14 @@ export function hintParseError(
   for (const entry of aggregate.errors ?? []) {
     if (typeof (entry as Located | null)?.message !== "string") continue;
     const reason = (entry as Located).label;
+    const groupSentence = rewriteShorthandGroup(entry as Located, source);
+    if (groupSentence && typeof reason === "string") {
+      setMessage(
+        aggregate,
+        aggregate.message.replace(reason, groupSentence),
+      );
+    }
+    rewriteTagVariableShorthand(entry as Located, source);
     const hint = hintOne(entry as Located, source, declarations);
     if (hint && typeof reason === "string") {
       setMessage(
