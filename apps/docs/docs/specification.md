@@ -3808,9 +3808,13 @@ authored attribute, a missing required prop on the tag name (on the `${expr}`
 tag, its start). Body content is passed as `content`, so the callee's input must
 declare it or the call reports TS2353. These stay unchecked: a string, block or
 `any` target, a zero-parameter function, a call with tag arguments
-(`<${fn}(x)>`, whose first parameter is the argument), and an overloaded callee
-whose last three signatures take different inputs (a check against one signature would reject a
-call that matches another). The preact, react, hono and solid hosts do not
+(`<${fn}(x)>`, whose first parameter is the argument), and an overloaded
+callee whose last three signatures take different inputs (a check against one
+signature would reject a call that matches another). A callee with more than
+three overloads, or one whose input is a constrained type parameter
+(``<P extends X>(input: P)``), is checked against that last input or the
+constraint, so a call matching an earlier overload, or carrying extra
+attributes, is reported. The preact, react, hono and solid hosts do not
 check these props yet (solid also reports a spurious TS2322 on the call); astro
 refuses such a binding outright (TS80001).
 
