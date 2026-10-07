@@ -7502,5 +7502,13 @@
     "tag unnamed [0,0) [0,11) open=[0,11) mode=html concise",
     "  args \"a\" [1,2)",
     "  sugar attribute : \"É\" [4,6) = value \"> a\" [8,11)"
+  ],
+  "g1716": [
+    "tag \"div\" [1,4) [0,13) open=[0,13) mode=html self-closed",
+    "  attr \"x\" [5,11) name=[5,6) = value \"1 :é\" [7,11)"
+  ],
+  "g1717": [
+    "tag \"div\" [1,4) [0,20) open=[0,20) mode=html self-closed",
+    "  attr \"x\" [5,18) name=[5,6) = value \"(a) :É => a\" [7,18)"
   ]
 }

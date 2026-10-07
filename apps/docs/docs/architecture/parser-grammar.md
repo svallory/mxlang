@@ -389,6 +389,8 @@ What the row order means for some inputs:
 | `div.a\u00a0-- text` (U+00A0 before `--`) | the class `a\u00a0--` and the attribute `text`: the shorthand state stays ASCII, as upstream and Marko (decision 156, addendum 13 item 5) | g1713 |
 | `x=1 :é` | the tag `x` with the single value `1 :é`: a bare input has no after-value context, so the `:` is not split (decision 156, addendum 15) | g1714 |
 | `(a) :É => a` | the tag arguments `(a)`, the attribute `:É` and the value `=> a`: a bare input parses as tag forms, not through the after-value rule (decision 156, addendum 15) | g1715 |
+| `<div x=1 :é/>` | the single value `1 :é`: the after-value rule stays ASCII-only, so the `:é` sugar is not split (decision 156, addendum 15) | g1716 |
+| `<div x=(a) :É => a/>` | the single valid value `(a) :É => a`, as stock and as its ASCII twin without addendum 15's hold (decision 156, addendum 15) | g1717 |
 | `div a\n  // c\n  ,b` | attributes `a` and `b`: row 1's look-ahead crosses the comment line | g0700 |
 | `<div` | `EOF reached while parsing open tag` | g0221 |
 | `div a` | the tag ends at end of input | g0684 |

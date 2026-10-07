@@ -19407,5 +19407,27 @@
       "OpenTagEnd 11-11 \"\" selfClosed=false",
       "CloseTagEnd 11-11 \"\""
     ]
+  },
+  {
+    "id": "g1716",
+    "input": "<div x=1 :\u00e9/>",
+    "expected": [
+      "OpenTagStart 0-1 \"<\"",
+      "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+      "AttrName 5-6 \"x\"",
+      "AttrValue 6-11 \"=1 :\u00e9\" bound=false value=7-11 \"1 :\u00e9\"",
+      "OpenTagEnd 11-13 \"/>\" selfClosed=true"
+    ]
+  },
+  {
+    "id": "g1717",
+    "input": "<div x=(a) :\u00c9 => a/>",
+    "expected": [
+      "OpenTagStart 0-1 \"<\"",
+      "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
+      "AttrName 5-6 \"x\"",
+      "AttrValue 6-18 \"=(a) :\u00c9 => a\" bound=false value=7-18 \"(a) :\u00c9 => a\"",
+      "OpenTagEnd 18-20 \"/>\" selfClosed=true"
+    ]
   }
 ]
