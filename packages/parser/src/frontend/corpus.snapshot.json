@@ -7484,5 +7484,23 @@
     "  args \"a\" [3,4)",
     "  text [6,7)",
     "error MISSING_END_TAG [0,6)"
+  ],
+  "g1712": [
+    "tag \"div --\" [0,6) [0,11) open=[0,11) mode=html concise",
+    "  attr \"text\" [7,11) name=[7,11)"
+  ],
+  "g1713": [
+    "tag \"div\" [0,3) [0,13) open=[0,13) mode=html concise",
+    "  sugar tag . \"a --\" [3,8)",
+    "  attr \"text\" [9,13) name=[9,13)"
+  ],
+  "g1714": [
+    "tag \"x\" [0,1) [0,6) open=[0,6) mode=html concise",
+    "  attr default [1,6) name=[1,1) = value \"1 :é\" [2,6)"
+  ],
+  "g1715": [
+    "tag unnamed [0,0) [0,11) open=[0,11) mode=html concise",
+    "  args \"a\" [1,2)",
+    "  sugar attribute : \"É\" [4,6) = value \"> a\" [8,11)"
   ]
 }

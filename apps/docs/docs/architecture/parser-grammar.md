@@ -385,6 +385,10 @@ What the row order means for some inputs:
 | `div a--b` | the attribute name `a--b`: row 4 is reached where an attribute could begin | g0126 |
 | `div a -- text` | the name `a` and a text block | g0699 |
 | `div x\u00a0-- text` (U+00A0 before `--`) | the name `x\u00a0` and a text block: the name keeps the Unicode space, which ends no name (decision 156, addendum 12) | g1681 |
+| `div\u00a0-- text` (U+00A0 before `--`) | the tag name `div\u00a0--` and the attribute `text`: the tag-name state stays ASCII, as upstream and Marko (decision 156, addendum 13 item 5) | g1712 |
+| `div.a\u00a0-- text` (U+00A0 before `--`) | the class `a\u00a0--` and the attribute `text`: the shorthand state stays ASCII, as upstream and Marko (decision 156, addendum 13 item 5) | g1713 |
+| `x=1 :é` | the tag `x` with the single value `1 :é`: a bare input has no after-value context, so the `:` is not split (decision 156, addendum 15) | g1714 |
+| `(a) :É => a` | the tag arguments `(a)`, the attribute `:É` and the value `=> a`: a bare input parses as tag forms, not through the after-value rule (decision 156, addendum 15) | g1715 |
 | `div a\n  // c\n  ,b` | attributes `a` and `b`: row 1's look-ahead crosses the comment line | g0700 |
 | `<div` | `EOF reached while parsing open tag` | g0221 |
 | `div a` | the tag ends at end of input | g0684 |

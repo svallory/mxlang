@@ -19363,5 +19363,49 @@
       "Text 6-7 \"a\"",
       "Error 0-6 22 \"Missing ending \\\"\\\" tag\""
     ]
+  },
+  {
+    "id": "g1712",
+    "input": "div\u00a0-- text",
+    "expected": [
+      "OpenTagName 0-6 \"div\u00a0--\" quasis=[0-6 \"div\u00a0--\"] expressions=[]",
+      "AttrName 7-11 \"text\"",
+      "OpenTagEnd 11-11 \"\" selfClosed=false",
+      "CloseTagEnd 11-11 \"\""
+    ]
+  },
+  {
+    "id": "g1713",
+    "input": "div.a\u00a0-- text",
+    "expected": [
+      "OpenTagName 0-3 \"div\" quasis=[0-3 \"div\"] expressions=[]",
+      "TagShorthandClass 3-8 \".a\u00a0--\" quasis=[4-8 \"a\u00a0--\"] expressions=[]",
+      "AttrName 9-13 \"text\"",
+      "OpenTagEnd 13-13 \"\" selfClosed=false",
+      "CloseTagEnd 13-13 \"\""
+    ]
+  },
+  {
+    "id": "g1714",
+    "input": "x=1 :\u00e9",
+    "expected": [
+      "OpenTagName 0-1 \"x\" quasis=[0-1 \"x\"] expressions=[]",
+      "AttrName 1-1 \"\"",
+      "AttrValue 1-6 \"=1 :\u00e9\" bound=false value=2-6 \"1 :\u00e9\"",
+      "OpenTagEnd 6-6 \"\" selfClosed=false",
+      "CloseTagEnd 6-6 \"\""
+    ]
+  },
+  {
+    "id": "g1715",
+    "input": "(a) :\u00c9 => a",
+    "expected": [
+      "OpenTagName 0-0 \"\" quasis=[0-0 \"\"] expressions=[]",
+      "TagArgs 0-3 \"(a)\" value=1-2 \"a\"",
+      "AttrName 4-6 \":\u00c9\"",
+      "AttrValue 7-11 \"=> a\" bound=false value=8-11 \"> a\"",
+      "OpenTagEnd 11-11 \"\" selfClosed=false",
+      "CloseTagEnd 11-11 \"\""
+    ]
   }
 ]
