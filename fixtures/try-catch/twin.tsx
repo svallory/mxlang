@@ -2,24 +2,24 @@ export function TryCatch() {
   return (
     <div>
       <Errored
-        fallback={(__mxErr, reset) => {
-          const e = __mxErr();
-          return (
+        fallback={(__mxErr, ...__mxArgs) =>
+          ((e, reset) => (
             <p>
               caught: {e.message}:{typeof reset}
             </p>
-          );
-        }}
+          ))(__mxErr(), ...__mxArgs)
+        }
       >
         <Loading>
           <Risky />
         </Loading>
       </Errored>
       <Errored
-        fallback={(__mxErr) => {
-          const { message } = __mxErr();
-          return <p>msg: {message}</p>;
-        }}
+        fallback={(__mxErr, ...__mxArgs) =>
+          (({ message }) => (
+            <p>msg: {message}</p>
+          ))(__mxErr(), ...__mxArgs)
+        }
       >
         <Loading>
           <Risky />

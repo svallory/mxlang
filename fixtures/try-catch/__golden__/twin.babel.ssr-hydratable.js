@@ -12,13 +12,7 @@ var _tmpl$ = ["<div", "><!--$-->", "<!--/--><!--$-->", "<!--/--><!--$-->", "<!--
 export function TryCatch() {
  var _v$ = _$ssrHydrationKey(),
  _v$2 = _$escape(_$Errored({
- fallback: (__mxErr, reset) => {
- const e = __mxErr();
- var _v$6 = _$ssrHydrationKey(),
- _v$7 = () => _$escape(e.message),
- _v$8 = typeof reset;
- return _$ssr(_tmpl$2, _v$6, _v$7, _v$8);
- },
+ fallback: (__mxErr, ...__mxArgs) => ((e, reset, _v$6, _v$7, _v$8) => (_v$6 = _$ssrHydrationKey(), _v$7 = () => _$escape(e.message), _v$8 = typeof reset, _$ssr(_tmpl$2, _v$6, _v$7, _v$8)))(__mxErr(), ...__mxArgs),
  get children() {
  return _$Loading({
  get children() {
@@ -28,14 +22,12 @@ export function TryCatch() {
  }
  })),
  _v$3 = _$escape(_$Errored({
- fallback: __mxErr => {
- const {
+ fallback: (__mxErr, ...__mxArgs) => (({
  message
- } = __mxErr();
- var _v$9 = _$ssrHydrationKey(),
- _v$0 = _$escape(message);
- return _$ssr(_tmpl$3, _v$9, _v$0);
- },
+ }) => {
+ var _v$9, _v$0;
+ return _v$9 = _$ssrHydrationKey(), _v$0 = _$escape(message), _$ssr(_tmpl$3, _v$9, _v$0);
+ })(__mxErr(), ...__mxArgs),
  get children() {
  return _$Loading({
  get children() {

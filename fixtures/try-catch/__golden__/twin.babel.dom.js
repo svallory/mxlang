@@ -16,8 +16,7 @@ export function TryCatch() {
  _el$4 = _el$3.nextSibling,
  _el$5 = _el$4.nextSibling;
  _$insert(_el$, _$createComponent(_$Errored, {
- fallback: (__mxErr, reset) => {
- const e = __mxErr();
+ fallback: (__mxErr, ...__mxArgs) => ((e, reset) => (() => {
  var _el$6 = _tmpl$2(),
  _el$7 = _el$6.firstChild,
  _el$9 = _el$7.nextSibling,
@@ -26,7 +25,7 @@ export function TryCatch() {
  _$insert(_el$6, () => e.message, _el$9);
  _$insert(_el$6, typeof reset, _el$0);
  return _el$6;
- },
+ })())(__mxErr(), ...__mxArgs),
  get children() {
  return _$createComponent(_$Loading, {
  get children() {
@@ -36,15 +35,14 @@ export function TryCatch() {
  }
  }), _el$2);
  _$insert(_el$, _$createComponent(_$Errored, {
- fallback: __mxErr => {
- const {
+ fallback: (__mxErr, ...__mxArgs) => (({
  message
- } = __mxErr();
+ }) => (() => {
  var _el$1 = _tmpl$3(),
  _el$10 = _el$1.firstChild;
  _$insert(_el$1, message, null);
  return _el$1;
- },
+ })())(__mxErr(), ...__mxArgs),
  get children() {
  return _$createComponent(_$Loading, {
  get children() {
