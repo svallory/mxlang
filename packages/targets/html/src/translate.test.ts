@@ -1486,6 +1486,36 @@ describe("dynamic tags", () => {
     },
   );
 
+  // Stock Marko 6.3.51 renders the body for every falsy tag name (false,
+  // 0, "", null, undefined) and nothing for a self-closing dynamic tag —
+  // measured on the stock toolchain, not from memory. MX previously threw
+  // `__mxTarget is not a function` for false/0 and emitted `<>body</>` for "".
+  it.each([
+    ["false", false],
+    ["0", 0],
+    ['""', ""],
+    ["null", null],
+    ["undefined", undefined],
+  ])(
+    "renders the body when the dynamic tag name is %s (Marko parity)",
+    async (_name, tag) => {
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+      const html = await renderModules(
+        { "entry.mx": "<${input.tag}>body</>" },
+        "entry.mx",
+        { tag },
+      );
+      expect(html).toBe("body");
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+      const selfClosing = await renderModules(
+        { "entry.mx": "<${input.tag}/>" },
+        "entry.mx",
+        { tag },
+      );
+      expect(selfClosing).toBe("");
+    },
+  );
+
   it("rejects arguments combined with a plain attribute (Marko's own rule, MX's own wording)", () => {
     expect(() => compile(src('<${input.fn}("A") foo="bar"/>'), file)).toThrow(
       "Tag does not support arguments when attributes present.",
