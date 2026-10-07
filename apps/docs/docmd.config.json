@@ -256,6 +256,10 @@
           "path": "/design-notes/custom-tags/"
         },
         {
+          "title": "Language extensions",
+          "path": "/design-notes/language-extensions/"
+        },
+        {
           "title": "ADR 145: the unnamed tag and defaultTag",
           "path": "/design-notes/adr-default-tag/"
         },
