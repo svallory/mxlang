@@ -10,7 +10,7 @@ From this directory:
 bunx vitest run --root ../../.. --project @mxlang/tsc
 ```
 
-Needs `bun install` and `bun run build` first (`dist/` of core, parser, the html target and the plugin).
+Needs `bun install` and `bun run build` first (`dist/` of core, parser, the html target and the plugin). `@mxlang/typescript-plugin`'s `dist` bundles `@mxlang/html` (it is not external in its build script), so after editing `packages/targets/html` rebuild the plugin too, or these tests pass on a stale html.
 
 This package's run is slow and sensitive to machine load (TODO `tsc-tests-runtime-2`): the whole project took ~340 s on a busy machine and hit `[vitest-worker]: Timeout calling "onTaskUpdate"`. Run single files with the path filter (`... src/<file>.test.ts`) while iterating.
 

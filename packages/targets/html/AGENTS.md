@@ -1,6 +1,10 @@
 # html — agent instructions
 
-`packages/targets/html` (`@mxlang/html`) holds the string target:
+`packages/targets/html` (`@mxlang/html`) holds the string target.
+
+**After editing this package, rebuild `@mxlang/typescript-plugin` too** (`cd packages/tooling/typescript-plugin && bun run build`): its `dist` bundles `@mxlang/html`, so `mx-tsc` tests (`packages/tooling/tsc`) run the stale html until it is rebuilt.
+
+It contains:
 
 - `escape(value)` plus the sink (`createOut`, `createBufferedOut`, the `Out`
   type; also published as `@mxlang/html/runtime`, `src/runtime.ts`) — the
