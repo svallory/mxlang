@@ -5,9 +5,12 @@
  * a difference no list or rule covers fails the test.
  */
 import { describe, expect, it } from "vitest";
+import { parse as parseMx } from "../../parser/src/frontend/parse.ts";
+import { SIX } from "../../parser/src/frontend/test-support/options.ts";
 import { PROBES } from "../../parser/src/template/grammar-spec.cases.ts";
 import { compare, fixtureInputs, INPUT_GLOB } from "./differential.ts";
-import { projectMarko } from "./marko.ts";
+import { markoTagShape, projectMarko } from "./marko.ts";
+import { lowerToday } from "./today-lower.ts";
 
 /**
  * Attribute start includes `async` (ast §3.5): an async method's attribute
@@ -47,8 +50,7 @@ const SILENT_EOF = new Set([
   "g1522",
 ]);
 
-/** Errors PR 2b raises at its seam (ast §3.13); today's path throws them. */
-const PR_2B = new Set(["g0234", "g1274", "g1304"]);
+/** Errors PR 2b raises at its seam (ast §3.13); today's Marko-front compile throws them, so the error branch matches and no list is needed. */
 
 /**
  * The default value's name is zero-width at the method's `(` (ast §3.5,
@@ -85,6 +87,83 @@ describe(`fixtures (${INPUT_GLOB})`, () => {
   });
 });
 
+/**
+ * Where today's front end throws ITS OWN error before the sugar rule
+ * (ast \u00a73.13 keeps today's text for the rules themselves):
+ * - `:=1` on an empty `:name` (`<div:=1/>`, `<let/x:=1/>`): Marko's Babel
+ *   "Attributes may only be bound to identifiers or member expressions"
+ *   fires before `BOUND_ON_SUGAR`; MX records `MX_SUGAR_BOUND` at the sugar.
+ * - `.` with arguments and no word (`<div x=a . (b) y/>`): today's attr
+ *   with arguments is not sugar at all, so "Invalid attribute name `.`"
+ *   fires instead of `MX_SUGAR_ARGUMENTS`.
+ */
+const TODAY_OWN_FIRST = new Set([
+  "g0062",
+  "g0330",
+  "g0488",
+  "g0489",
+  "g1035",
+  "g1355",
+]);
+
+describe("front-end rules against today's lowering (PR 2b)", () => {
+  // One input: the front end's first `MX_*` error and today's lowering pass.
+  const inputs = [
+    ...PROBES.map((probe) => ({ id: probe.id, source: probe.input })),
+    ...fixtureInputs().map(({ path, source }) => ({ id: path, source })),
+  ];
+  const rows = inputs.map((input) => {
+    // The front end's first error (compare keeps only its own view of it).
+    const document = parseMx(input.source, {
+      statementKeywords: SIX,
+      tagShape: markoTagShape,
+    });
+    const frontEnd = document.errors.find((e) => e.origin === "front-end");
+    const marko = projectMarko(input.source);
+    const parsedToday =
+      marko.crash === undefined && marko.document.error === null;
+    return { input, frontEnd, parsedToday };
+  });
+
+  it("every front-end error is today's first thrown error, same text and position", () => {
+    const wrong: string[] = [];
+    for (const { input, frontEnd, parsedToday } of rows) {
+      if (!frontEnd || !parsedToday) continue;
+      const today = lowerToday(input.source);
+      if (today.ok) {
+        wrong.push(
+          `${input.id}: MX ${frontEnd.code}@${frontEnd.start}, today's lowering accepted it`,
+        );
+        continue;
+      }
+      if (TODAY_OWN_FIRST.has(input.id)) continue;
+      if (
+        today.message !== frontEnd.message ||
+        today.start !== frontEnd.start
+      ) {
+        wrong.push(
+          `${input.id}: MX ${frontEnd.code}@${frontEnd.start} ${JSON.stringify(frontEnd.message)} != today@${today.start} ${JSON.stringify(today.message)}`,
+        );
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it("the named list still differs through today's own earlier error", () => {
+    for (const { input, frontEnd, parsedToday } of rows) {
+      if (!TODAY_OWN_FIRST.has(input.id)) continue;
+      expect(frontEnd, input.id).toBeDefined();
+      expect(parsedToday, input.id).toBe(true);
+      const today = lowerToday(input.source);
+      expect(today.ok, input.id).toBe(false);
+      expect(
+        today.message === frontEnd?.message && today.start === frontEnd?.start,
+        input.id,
+      ).toBe(false);
+    }
+  });
+});
+
 describe("grammar corpus inputs", () => {
   const results = PROBES.map((probe) => ({
     probe,
@@ -100,7 +179,6 @@ describe("grammar corpus inputs", () => {
           DEFAULT_NAME_AT_PAREN.has(probe.id) ||
           CONCISE_HEAD_TRIMMED.has(probe.id) ||
           SILENT_EOF.has(probe.id) ||
-          PR_2B.has(probe.id) ||
           TODAY_CRASHES.has(probe.id)
         );
       })
@@ -121,8 +199,7 @@ describe("grammar corpus inputs", () => {
         ASYNC_METHOD_START.has(probe.id) ||
         DEFAULT_NAME_AT_PAREN.has(probe.id) ||
         CONCISE_HEAD_TRIMMED.has(probe.id) ||
-        SILENT_EOF.has(probe.id) ||
-        PR_2B.has(probe.id)
+        SILENT_EOF.has(probe.id)
       ) {
         expect(outcome.equal, probe.id).toBe(false);
       }

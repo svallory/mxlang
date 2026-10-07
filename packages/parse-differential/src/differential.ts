@@ -104,9 +104,11 @@ export function compare(source: string): Outcome {
   }
   if (marko.document.error !== null || mx.error !== null) {
     // No tree on today's side: compare the error's message and range only.
+    // MX's own template error, or its first front-end error (ast §3.13):
+    // today's path throws those the same way at the same offset.
     const strip = (error: string | null) =>
       error?.replace(/^[A-Z_]+ /, "") ?? "(none)";
-    const a = strip(mx.error);
+    const a = strip(mx.error ?? mx.frontEndError ?? null);
     const b = strip(marko.document.error);
     return {
       equal: a === b,

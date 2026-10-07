@@ -45,6 +45,12 @@ export interface NDocument {
   readonly atoms: readonly string[];
   /** `CODE [s,e) "message"` for the template error, or the thrown error of today's path. */
   readonly error: string | null;
+  /**
+   * The first front-end `MX_*` error (PR 2b, ast \u00a73.13), when there is
+   * one and no template error — compared against today's thrown error only
+   * on the error branch; the tree stays comparable beside it.
+   */
+  readonly frontEndError?: string | null;
 }
 
 const r = (span: Span) => `[${span[0]},${span[1]})`;
