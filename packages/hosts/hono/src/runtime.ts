@@ -1,4 +1,9 @@
+import type { Child } from "hono/jsx";
 import { ErrorBoundary, jsx, Suspense } from "hono/jsx";
+import type { HtmlEscapedString } from "hono/utils/html";
+
+/** Hono's `JSX.Element` (its `JSX` namespace does not re-export it). */
+type HonoJsxElement = HtmlEscapedString | Promise<HtmlEscapedString>;
 
 export { Suspense };
 
@@ -35,12 +40,21 @@ export function mxClass(value: unknown): string {
   return parts.join(" ");
 }
 
-type Fallback = ((error: Error) => unknown) | unknown;
+/**
+ * A plain node, or a `<@catch|error|>` thunk. The function member must stay
+ * visible in the union so the generated `fallback={(error) => ...}` arrow gets
+ * `error: Error` contextually — a `((error: Error) => unknown) | unknown`
+ * union collapses to `unknown` and the arrow's parameter goes implicit-any.
+ */
+type Fallback = Child | ((error: Error) => Child);
 
 interface MxErrorBoundaryProps {
   fallback: Fallback;
-  /** The `<try>` body: the emitter passes a thunk. */
-  children?: unknown;
+  /**
+   * The `<try>` body: the emitter passes a thunk, plain children are accepted
+   * for hand-written use.
+   */
+  children?: Child | (() => Child);
 }
 
 /**
@@ -48,8 +62,12 @@ interface MxErrorBoundaryProps {
  * written directly in the body is caught like a descendant's, and none of the
  * partial body is emitted.
  */
-function MxTryBody({ render }: { render: () => unknown }): unknown {
-  return render();
+function MxTryBody({ render }: { render: () => Child }): HonoJsxElement {
+  // SAFETY: the thunk's return is plain `Child`, but this component must
+  // satisfy Hono's `JSX.Element` (`HtmlEscapedString |
+  // Promise<HtmlEscapedString>`) to stay usable as a JSX component; the
+  // renderer accepts everything `Child` can hold.
+  return render() as unknown as HonoJsxElement;
 }
 
 /**
@@ -60,19 +78,19 @@ function MxTryBody({ render }: { render: () => unknown }): unknown {
 export function MxErrorBoundary({
   fallback,
   children,
-}: MxErrorBoundaryProps): unknown {
+}: MxErrorBoundaryProps): HonoJsxElement {
   const body =
     typeof children === "function"
-      ? jsx(MxTryBody as never, { render: children as () => unknown })
+      ? jsx(MxTryBody, { render: children })
       : children;
+  // SAFETY: as above — `jsx` returns `JSXNode` statically while the runtime
+  // value is what Hono's renderer treats as its `JSX.Element`.
   return jsx(
-    ErrorBoundary as never,
+    ErrorBoundary,
     {
       fallbackRender: (error: Error) =>
-        typeof fallback === "function"
-          ? (fallback as (error: Error) => unknown)(error)
-          : fallback,
+        typeof fallback === "function" ? fallback(error) : (fallback as Child),
     },
     body as never,
-  );
+  ) as unknown as HonoJsxElement;
 }
