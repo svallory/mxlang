@@ -38,12 +38,12 @@ export const EVENT_ROWS: DivergenceRow[] = [
   {
     id: "after-value-quoted-colon",
     input: '<a x="1" :b/>',
-    note: "decision 146: stock continues a quoted value, `\"1\" :b`; MX splits",
+    note: 'decision 146: stock continues a quoted value, `"1" :b`; MX splits',
   },
   {
     id: "after-value-quoted-dot",
     input: '<a x="1" .b/>',
-    note: "decision 146: stock continues a quoted value, `\"1\" .b`; MX splits",
+    note: 'decision 146: stock continues a quoted value, `"1" .b`; MX splits',
   },
   {
     id: "after-value-dot",
@@ -98,6 +98,7 @@ export const EVENT_ROWS: DivergenceRow[] = [
   },
   {
     id: "atom-placeholder",
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the source itself contains Marko placeholder syntax
     input: "<div>${:a}</div>",
     note: "decision 156: atoms in placeholders; stock plain content",
   },
@@ -172,17 +173,17 @@ export const TREE_ROWS: DivergenceRow[] = [
   {
     id: "tag-colon",
     input: "<a:b/>",
-    note: "decision 146: Marko's tree is one tag named `a:b`; MX is the tag `a` plus `name=\"b\"`",
+    note: 'decision 146: Marko\'s tree is one tag named `a:b`; MX is the tag `a` plus `name="b"`',
   },
   {
     id: "bare-sugar",
     input: "<div :x/>",
-    note: "decision 146: Marko's tree is the attribute `value:x` (empty head filled with `value`); MX is `name=\"x\"`",
+    note: 'decision 146: Marko\'s tree is the attribute `value:x` (empty head filled with `value`); MX is `name="x"`',
   },
   {
     id: "shorthand-colon",
     input: "<a.hover:x/>",
-    note: "decision 146: Marko's class is `hover:x`; MX is class `hover` plus `name=\"x\"`",
+    note: 'decision 146: Marko\'s class is `hover:x`; MX is class `hover` plus `name="x"`',
   },
 ];
 

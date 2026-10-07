@@ -9,11 +9,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import {
-  CONTROL_ROWS,
-  EVENT_ROWS,
-  TREE_ROWS,
-} from "./divergence.cases.ts";
+import { CONTROL_ROWS, EVENT_ROWS, TREE_ROWS } from "./divergence.cases.ts";
 import { stockMarkoTree } from "./marko.ts";
 import { mxEvents, stockEvents } from "./stock.ts";
 
@@ -90,9 +86,9 @@ describe("the tree-level divergence table", () => {
   it("tag-colon: stock Marko keeps `a:b` as one tag name", () => {
     const { ok, tree } = stockMarkoTree("<a:b/>");
     expect(ok).toBe(true);
-    const names = [...walk(tree)].filter(
-      (node) => node.type === "MarkoTag",
-    ).map((tag) => (tag.name as { value?: string }).value);
+    const names = [...walk(tree)]
+      .filter((node) => node.type === "MarkoTag")
+      .map((tag) => (tag.name as { value?: string }).value);
     expect(names).toEqual(["a:b"]);
   });
 

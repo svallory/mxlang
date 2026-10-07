@@ -28,9 +28,9 @@ const compiler = require(process.env.MX_MARKO_COMPILER);
 
 function serializeError(error) {
   return {
-    message: String((error && error.message) || error),
-    label: error && error.label ? String(error.label) : undefined,
-    loc: error && error.loc && error.loc.start ? error.loc.start : undefined,
+    message: String(error?.message || error),
+    label: error?.label ? String(error.label) : undefined,
+    loc: error?.loc?.start ? error.loc.start : undefined,
   };
 }
 
@@ -69,7 +69,8 @@ process.stdin.on("end", () => {
             translate: {
               Program: {
                 enter(path) {
-                  if (!tree) tree = JSON.parse(JSON.stringify(path.node, treeReplacer));
+                  if (!tree)
+                    tree = JSON.parse(JSON.stringify(path.node, treeReplacer));
                 },
                 exit(path) {
                   path.node.body = [];
@@ -92,7 +93,9 @@ process.stdin.on("end", () => {
         process.stdout.write(JSON.stringify({ ok: true, code: result.code }));
       }
     } catch (error) {
-      process.stdout.write(JSON.stringify({ ok: false, error: serializeError(error) }));
+      process.stdout.write(
+        JSON.stringify({ ok: false, error: serializeError(error) }),
+      );
     }
   })();
 });

@@ -44,12 +44,10 @@ describe("stockParse", () => {
 describe("stockEvents", () => {
   it("reads `<div a=b :c/>` as one attribute value `b :c`", () => {
     const events = stockEvents("<div a=b :c/>");
-    expect(
-      events.some((line) => line.includes('value=7-11 "b :c"')),
-    ).toBe(true);
-    expect(events.some((line) => line.startsWith("AttrName 9-11"))).toBe(
-      false,
+    expect(events.some((line) => line.includes('value=7-11 "b :c"'))).toBe(
+      true,
     );
+    expect(events.some((line) => line.startsWith("AttrName 9-11"))).toBe(false);
   });
 
   it("reads `<div x=:a/>` as the attribute value `:a`, no atom", () => {
@@ -59,9 +57,7 @@ describe("stockEvents", () => {
   });
 
   it("differs from MX on both", () => {
-    expect(stockEvents("<div a=b :c/>")).not.toEqual(
-      mxEvents("<div a=b :c/>"),
-    );
+    expect(stockEvents("<div a=b :c/>")).not.toEqual(mxEvents("<div a=b :c/>"));
     expect(stockEvents("<div x=:a/>")).not.toEqual(mxEvents("<div x=:a/>"));
   });
 });

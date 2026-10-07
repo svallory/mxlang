@@ -46,9 +46,8 @@ describe("stockMarkoCompile (the compiler runs on the stock parser)", () => {
 
   it("ordinary templates compile", () => {
     expect(stockMarkoCompile("<div/>").ok).toBe(true);
-    expect(
-      stockMarkoCompile("<for|i| of=[1,2]>${i}</for>").ok,
-    ).toBe(true);
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the source itself contains Marko placeholder syntax
+    expect(stockMarkoCompile("<for|i| of=[1,2]>${i}</for>").ok).toBe(true);
   });
 });
 
@@ -68,10 +67,10 @@ describe("stockMarkoTree", () => {
   it("member access across the space is one expression in the tree", () => {
     const { ok, tree } = stockMarkoTree("<div x=a.b .c/>");
     expect(ok).toBe(true);
-    const tag = (tree as { body: Array<{ attributes: unknown[] }> })
-      .body[0];
-    expect(tag?.attributes).toHaveLength(1);
-    const [attribute] = tag?.attributes as Array<{
+    const tag = (tree as { body: Array<{ attributes: unknown[] }> }).body[0];
+    if (!tag) throw new Error("expected a tag");
+    expect(tag.attributes).toHaveLength(1);
+    const [attribute] = tag.attributes as Array<{
       name: string;
       value: { type: string; start: number; end: number };
     }>;
@@ -82,7 +81,9 @@ describe("stockMarkoTree", () => {
 
 describe("isolation: the rest of the repo is untouched", () => {
   it("packages/core resolves the patched parser from the repo root", () => {
-    const coreRequire = createRequire(join(repoRoot, "packages/core/package.json"));
+    const coreRequire = createRequire(
+      join(repoRoot, "packages/core/package.json"),
+    );
     const installed = readFileSync(
       coreRequire.resolve("htmljs-parser"),
       "utf8",

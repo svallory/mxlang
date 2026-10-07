@@ -3,14 +3,13 @@
  */
 import { createRequire } from "node:module";
 import * as mxParser from "@mxlang/parser";
-import { ensureStockParserExtracted } from "./vendor.ts";
-
-// @ts-ignore: import outside rootDir (package references parser internals)
 import {
+  type Probe,
   type ProbeOptions,
   type ProbeParserModule,
   renderProbe,
-} from "../../parser/src/template/grammar-spec.cases.ts";
+} from "./probe-render.ts";
+import { ensureStockParserExtracted } from "./vendor.ts";
 
 export interface StockParser {
   parse(code: string): void;
@@ -27,29 +26,27 @@ export function stockParserModule(): ProbeParserModule {
   return moduleCache;
 }
 
+function probe(input: string, options?: ProbeOptions): Probe {
+  return { id: "", input, options: options ?? {}, expected: [] };
+}
+
 export function stockParse(
   source: string,
-  handlers: Record<string, (e: { start: number; end: number; [k: string]: unknown }) => unknown>,
+  handlers: Record<string, (e: { start: number; end: number }) => unknown>,
 ): StockParser {
-  const parser = (stockParserModule().createParser(handlers) as unknown) as StockParser;
+  const parser = stockParserModule().createParser(handlers);
   parser.parse(source);
   return parser;
 }
 
 export function stockEvents(source: string, options?: ProbeOptions): string[] {
-  return renderProbe(stockParserModule() as unknown as ProbeParserModule, {
-    id: "",
-    input: source,
-    options: (options ?? {}) as ProbeOptions,
-    expected: [],
-  } as import("../../parser/src/template/grammar-spec.cases.ts").Probe);
+  return renderProbe(stockParserModule(), probe(source, options));
 }
 
 export function mxEvents(source: string, options?: ProbeOptions): string[] {
-  return renderProbe(mxParser as unknown as ProbeParserModule, {
-    id: "",
-    input: source,
-    options: (options ?? {}) as ProbeOptions,
-    expected: [],
-  } as import("../../parser/src/template/grammar-spec.cases.ts").Probe);
+  // SAFETY: the MX parser module satisfies the probe's structural subset (createParser/TagType).
+  return renderProbe(
+    mxParser as unknown as ProbeParserModule,
+    probe(source, options),
+  );
 }

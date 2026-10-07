@@ -14,13 +14,13 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   ensureStockParserExtracted,
   PATCH_MARKERS,
-  sha512Base64,
   STOCK_TARBALL_INTEGRITY,
   STOCK_TARBALL_PATH,
+  sha512Base64,
   untar,
 } from "./vendor.ts";
 
