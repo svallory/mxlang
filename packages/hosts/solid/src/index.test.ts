@@ -256,7 +256,7 @@ describe("Solid IR lowering", () => {
       "try boundary",
       `<try><@placeholder>wait</@placeholder><Risky/><@catch|error, reset|><p>\${error.message}</p></@catch></try>`,
       [
-        "<Errored fallback={(__mxErr, reset) => { const error = __mxErr(); return <p>{error.message}</p>; }}>",
+        "<Errored fallback={(__mxErr, ...__mxArgs) => ((error, reset) => <p>{error.message}</p>)(__mxErr(), ...__mxArgs)}>",
         "<Loading fallback={<>wait</>}><Risky /></Loading>",
       ],
       ["Risky"],
@@ -268,7 +268,58 @@ describe("Solid IR lowering", () => {
       "try catch param is the error, not the ErrorAccessor",
       `<try><Risky/><@catch|e|><p>\${e.message}</p></@catch></try>`,
       [
-        "<Errored fallback={(__mxErr) => { const e = __mxErr(); return <p>{e.message}</p>; }}>",
+        "<Errored fallback={(__mxErr, ...__mxArgs) => ((e) => <p>{e.message}</p>)(__mxErr(), ...__mxArgs)}>",
+        "<Loading><Risky /></Loading>",
+      ],
+      ["Risky"],
+    ],
+    // A defaulted first param keeps its default as a real inner-arrow
+    // parameter, so the outer `fallbackErr` is never assigned (H1), and a
+    // rest first param is a real rest element, so the emit stays valid
+    // syntax (L1); the rest receives `[error, reset]` in position order.
+    [
+      "try catch default param does not assign the outer binding",
+      `<try><Risky/><@catch|e = fallbackErr|><p>\${e.message}</p></@catch></try>`,
+      [
+        "<Errored fallback={(__mxErr, ...__mxArgs) => ((e = fallbackErr) => <p>{e.message}</p>)(__mxErr(), ...__mxArgs)}>",
+        "<Loading><Risky /></Loading>",
+      ],
+      ["Risky"],
+    ],
+    [
+      "try catch typed default param with a second param",
+      `<try><Risky/><@catch|e: Error = fallbackErr, reset|><p>\${e.message}:\${reset}</p></@catch></try>`,
+      [
+        "<Errored fallback={(__mxErr, ...__mxArgs) => ((e: Error = fallbackErr, reset) => <p>{e.message}:{reset}</p>)(__mxErr(), ...__mxArgs)}>",
+        "<Loading><Risky /></Loading>",
+      ],
+      ["Risky"],
+    ],
+    [
+      "try catch destructured param with a default",
+      `<try><Risky/><@catch|{ message } = fallbackErr|><p>\${message}</p></@catch></try>`,
+      [
+        "<Errored fallback={(__mxErr, ...__mxArgs) => (({ message } = fallbackErr) => <p>{message}</p>)(__mxErr(), ...__mxArgs)}>",
+        "<Loading><Risky /></Loading>",
+      ],
+      ["Risky"],
+    ],
+    [
+      "try catch rest param receives error and reset in position order",
+      `<try><Risky/><@catch|...args|><p>\${args.length}:\${args[0]}</p></@catch></try>`,
+      [
+        "<Errored fallback={(__mxErr, ...__mxArgs) => ((...args) => <p>{args.length}:{args[0]}</p>)(__mxErr(), ...__mxArgs)}>",
+        "<Loading><Risky /></Loading>",
+      ],
+      ["Risky"],
+    ],
+    // The gensym applies to both introduced names: a body naming `__mxArgs`
+    // renames the rest collector too.
+    [
+      "try catch gensyms both introduced names against the body",
+      `<try><Risky/><@catch|e|><p>\${__mxArgs.length}</p></@catch></try>`,
+      [
+        "<Errored fallback={(__mxErr, ...__mxArgs_2) => ((e) => <p>{__mxArgs.length}</p>)(__mxErr(), ...__mxArgs_2)}>",
         "<Loading><Risky /></Loading>",
       ],
       ["Risky"],

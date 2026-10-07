@@ -346,6 +346,43 @@ describe("Solid SSR render: <try> catch params", () => {
     );
     expect(html).toContain("failed");
   });
+
+  // H1 regression: the authored default must never assign the OUTER
+  // binding — with the round-1 lowering this threw a TypeError on a `const`
+  // outer (assignment to constant) and rendered nothing.
+  it("applies a defaulted first param without assigning the outer binding", () => {
+    const html = renderApp(
+      `<try><Risky/><@catch|e = fallbackErr|><li>caught: \${e.message}</li></@catch></try>`,
+      `${setup}\nconst fallbackErr = new Error("outer default");`,
+    );
+    expect(html).toContain("caught: boom from Risky");
+  });
+
+  it("keeps a typed defaulted param valid alongside a passed-through reset", () => {
+    const html = renderApp(
+      `<try><Risky/><@catch|e: Error = fallbackErr, reset|><li>\${e.message}:\${typeof reset}</li></@catch></try>`,
+      `${setup}\nconst fallbackErr = new Error("outer default");`,
+    );
+    expect(html).toContain("boom from Risky:function");
+  });
+
+  it("binds a destructured param with a default without touching the outer", () => {
+    const html = renderApp(
+      `<try><Risky/><@catch|{ message } = fallbackErr|><li>msg: \${message}</li></@catch></try>`,
+      `${setup}\nconst fallbackErr = new Error("outer default");`,
+    );
+    expect(html).toContain("msg: boom from Risky");
+  });
+
+  // L1 regression: the round-1 lowering emitted `const ...args = __mxErr()`,
+  // a syntax error. The rest receives `[error, reset]` in position order.
+  it("binds a rest first param to the unwrapped values in position order", () => {
+    const html = renderApp(
+      `<try><Risky/><@catch|...args|><li>\${args[0].message}:\${args.length}:\${typeof args[1]}</li></@catch></try>`,
+      setup,
+    );
+    expect(html).toContain("boom from Risky:2:function");
+  });
 });
 
 describe("Solid SSR render: <for>", () => {

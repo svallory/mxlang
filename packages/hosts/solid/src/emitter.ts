@@ -526,8 +526,10 @@ function bindingNamesOf(nodes: unknown[]): string[] {
 /** The names the source text of a `<define>`'s params binds. */
 function paramBindingNames(params: readonly string[]): string[] {
   try {
-    // SAFETY: parseBabel returns Babel's generic File; the expression body
-    // of a parsed arrow function is always `body[0].expression.params`.
+    // SAFETY: `params.join(", ")` wrapped in `(...) => 0` parses as an
+    // arrow expression, so `file.program.body[0]` is its lone statement and
+    // `.expression` the arrow with a `params` array; TypeScript cannot know
+    // the parsed shape of the string we just built.
     const file = parseBabel(`(${params.join(", ")}) => 0`, {
       sourceType: "module",
       plugins: ["typescript"],
@@ -2880,10 +2882,17 @@ export class SolidEmitter implements Emitter<string> {
     // `(err: ErrorAccessor, reset)` (`solid-js/types/client/flow.d.ts`), so
     // passing the params straight through left `${e.message}` rendering
     // against a function (measured: `${e.constructor.name}` rendered
-    // `Function`). With params, lower the fallback as a block arrow that
-    // calls the accessor once and binds the author's first param pattern to
-    // its result; `reset` and any later param passes through untouched, and
-    // a param-less catch keeps the plain expression arrow.
+    // `Function`). With params, keep the author's whole parameter list as
+    // the parameter list of an inner arrow applied to the unwrapped error
+    // (`(params => body)(accessor(), ...rest)`): identifiers, defaults,
+    // type annotations, destructuring and rest all stay real parameters,
+    // exactly as TypeScript accepts them, so no form degrades into an
+    // invalid `const` splice. The outer arrow keeps `length` 1, so
+    // `Errored` still treats the fallback as a function; the accessor is
+    // still called exactly once per fallback evaluation, so reactivity is
+    // unchanged. A rest first param receives `[error, reset]`, which is
+    // Marko's `(err, reset)` shape in position order. A param-less catch
+    // keeps the plain expression arrow.
     const params = catchTag.block.params;
     const caught = jsxValue(blockExpression(catchTag.block.children));
     if (params.length === 0) {
@@ -2898,18 +2907,26 @@ export class SolidEmitter implements Emitter<string> {
       );
       return;
     }
-    // The accessor's gensym avoids the params' own bound names and every
-    // name the catch body references, so it can never shadow either.
+    // The inner arrow's gensym'd names avoid the params' own bound names
+    // and every name the catch body references, so they can never shadow
+    // either.
     const used = new Set<string>(paramBindingNames(params));
     for (const name of freeJsxNames(caught.code)) used.add(name);
-    let accessor = "__mxErr";
-    while (used.has(accessor)) accessor = `${accessor}_2`;
-    const rest = params.slice(1).join(", ");
+    const gensym = (base: string): string => {
+      let name = base;
+      while (used.has(name)) name = `${name}_2`;
+      used.add(name);
+      return name;
+    };
+    const accessor = gensym("__mxErr");
+    const args = gensym("__mxArgs");
     this.#out.push(
       concatMapped(
-        `<Errored fallback={(${accessor}${rest ? `, ${rest}` : ""}) => { const ${params[0]} = ${accessor}(); return `,
+        `<Errored fallback={(${accessor}, ...${args}) => ((${params.join(
+          ", ",
+        )}) => `,
         caught,
-        "; }}>",
+        `)(${accessor}(), ...${args})}>`,
         loading,
         "</Errored>",
       ),

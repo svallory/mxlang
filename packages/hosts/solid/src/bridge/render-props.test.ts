@@ -396,8 +396,8 @@ describe("`<try>` on the generic attribute-tag path", () => {
     const code = printFirstExpression(
       `const el = <try><@catch|e, reset|><p>\${e.message}</p></@catch><@placeholder>Loading…</@placeholder><Body/></try>;`,
     );
-    expect(code).toContain("<Errored fallback={(__mxErr, reset) => {");
-    expect(code).toContain("const e = __mxErr();");
+    expect(code).toContain("<Errored fallback={(__mxErr, ...__mxArgs) => ((e, reset) =>");
+    expect(code).toContain(")(__mxErr(), ...__mxArgs)");
     expect(code).toContain("<Loading fallback={<>Loading…</>}>");
   });
 

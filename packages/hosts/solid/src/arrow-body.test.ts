@@ -306,11 +306,11 @@ describe("Solid: the emitted arrow body is never a bare block", () => {
   });
 
   it("wraps a `<try>` fallback body in a fragment rather than a nested block", () => {
-    // The fallback arrow is itself a block (it binds the catch param to the
-    // unwrapped error first), but the *body* it returns is a fragment, not
-    // an IIFE block like the pre-fragment lowering used.
+    // The fallback arrow applies an inner arrow to the unwrapped error, and
+    // that inner arrow's *body* is a fragment, not an IIFE block like the
+    // pre-fragment lowering used.
     expect(shape("TryFallbackSoleComponent")).toContain(
-      "fallback={(__mxErr) => { const e = __mxErr(); return <>",
+      "fallback={(__mxErr, ...__mxArgs) => ((e) => <>",
     );
   });
 });
