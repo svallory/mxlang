@@ -62,11 +62,13 @@ export function activate(context: ExtensionContext) {
           { scheme: "untitled", language: "preactmx" },
           { scheme: "file", language: "honomx" },
           { scheme: "untitled", language: "honomx" },
-          // astromx and ngmx are intentionally excluded as the LS does not
-          // handle .astro.mx or .ng.mx yet. `.ng.mx` gets TypeScript semantics
-          // through the TS server plugin (see `typescriptServerPlugins` in
-          // package.json); the LS handling and Angular template diagnostics
-          // land later.
+          { scheme: "file", language: "ngmx" },
+          { scheme: "untitled", language: "ngmx" },
+          // astromx is intentionally excluded as the LS does not handle
+          // .astro.mx yet. `.ng.mx` gets compile/translate diagnostics from
+          // the LS (plus TypeScript semantics through the TS server plugin,
+          // `typescriptServerPlugins` in package.json); Angular *template*
+          // diagnostics land later.
         ],
         // biome-ignore lint/suspicious/noExplicitAny: reason
         outputChannel: outputChannel as any,
