@@ -439,7 +439,8 @@ export function parseFragment(
     } as any).ast;
   } catch (thrown) {
     const error = markoPrintCrash(thrown)
-      ? (reparseForError(compiler, source, resolved.filename, translator) ?? thrown)
+      ? (reparseForError(compiler, source, resolved.filename, translator) ??
+        thrown)
       : thrown;
     // A thrown error's position is on the exception, never in a tree, so the
     // walk below can never reach it (spike 1, limit 2).

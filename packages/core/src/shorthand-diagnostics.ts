@@ -83,18 +83,23 @@ function shorthandParts(source: string): ShorthandPart[] {
   const parts: ShorthandPart[] = [];
   const parser = markoParser();
   if (!parser) return parts;
-  const read = (sigil: "." | "#") => (text: { quasis?: { start: number; end: number }[]; expressions?: unknown[] }) => {
-    const quasis = text?.quasis;
-    if (!Array.isArray(quasis) || quasis.length === 0) return;
-    const start = quasis[0]?.start;
-    const end = quasis[quasis.length - 1]?.end;
-    if (typeof start !== "number" || typeof end !== "number") return;
-    const word =
-      (text.expressions?.length ?? 0) > 0
-        ? undefined
-        : source.slice(start, end);
-    parts.push({ sigil, word, start: start - 1, end });
-  };
+  const read =
+    (sigil: "." | "#") =>
+    (text: {
+      quasis?: { start: number; end: number }[];
+      expressions?: unknown[];
+    }) => {
+      const quasis = text?.quasis;
+      if (!Array.isArray(quasis) || quasis.length === 0) return;
+      const start = quasis[0]?.start;
+      const end = quasis[quasis.length - 1]?.end;
+      if (typeof start !== "number" || typeof end !== "number") return;
+      const word =
+        (text.expressions?.length ?? 0) > 0
+          ? undefined
+          : source.slice(start, end);
+      parts.push({ sigil, word, start: start - 1, end });
+    };
   try {
     parser
       .createParser({

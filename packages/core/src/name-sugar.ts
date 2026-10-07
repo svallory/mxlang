@@ -1,10 +1,10 @@
 import { type Ctx, type Node, TranslateError } from "./core.ts";
 import { CORE_TAGLIB } from "./core-taglib.ts";
-import { markoParser } from "./stock-parser.ts";
 import {
   shorthandBracketMessage,
   shorthandDigitMessage,
 } from "./shorthand-diagnostics.ts";
+import { markoParser } from "./stock-parser.ts";
 
 /**
  * Decision 146: `:name`, `#id` and `.class` sugar.
@@ -810,11 +810,7 @@ function rewriteAttributes(ctx: Ctx, node: Node): void {
       if (word.includes("[") || word.includes("]")) {
         failAt(ctx, shorthandBracketMessage(sigil, word), partStart);
       }
-      if (
-        sigil === "." &&
-        /^[0-9]/.test(word) &&
-        !/[A-Za-z]/.test(word)
-      ) {
+      if (sigil === "." && /^[0-9]/.test(word) && !/[A-Za-z]/.test(word)) {
         failAt(ctx, shorthandDigitMessage(word), partStart);
       }
       if (sigil === "#") {

@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { compileSource } from "./compile.ts";
-import { parseFragment } from "./fragment.ts";
-import { lower } from "./lower.ts";
-import { type Ctx, newCtx, type Node } from "./core.ts";
-import { printExpression } from "./compile.ts";
 import type { Policy } from "./declarations.ts";
-import { lookup } from "./test-targets.ts";
+import { parseFragment } from "./fragment.ts";
 import { shorthandDiagnostic } from "./shorthand-diagnostics.ts";
 
 /**
@@ -24,9 +20,11 @@ const POLICY: Policy = {
   resolveDefaultTag: () => "input",
 };
 
-function compileErrorOf(
-  source: string,
-): { message: string; line: number; column: number } {
+function compileErrorOf(source: string): {
+  message: string;
+  line: number;
+  column: number;
+} {
   try {
     compileSource(source, "test.mx", POLICY, {
       // biome-ignore lint/suspicious/noExplicitAny: a minimal host for the parse funnel
@@ -67,7 +65,7 @@ describe("shorthand class diagnostics (decision 174)", () => {
       "<div.bg-[#fff]/>",
       1,
       4,
-      "`.bg-[` is not a valid shorthand class: a shorthand part cannot contain `[` or `]` (write the class as `class=\"…\"`)",
+      '`.bg-[` is not a valid shorthand class: a shorthand part cannot contain `[` or `]` (write the class as `class="…"`)',
     ],
     // The bracket spellings that die in Marko's parser today.
     ["<div.w-[calc(100%-2rem)]/>", 1, 4],
@@ -79,7 +77,7 @@ describe("shorthand class diagnostics (decision 174)", () => {
       "<div.w-1.5/>",
       1,
       8,
-      "`.5` is not a valid shorthand class: a numeric part splits off what precedes it (`.w-1.5` gives `class=\"w-1 5\"`); write the class as `class=\"…\"`",
+      '`.5` is not a valid shorthand class: a numeric part splits off what precedes it (`.w-1.5` gives `class="w-1 5"`); write the class as `class="…"`',
     ],
     // `/` after a shorthand followed by a non-identifier: today Marko's
     // tag-variable message with a link to the Marko docs.
@@ -87,7 +85,7 @@ describe("shorthand class diagnostics (decision 174)", () => {
       "<div.w-1/2/>",
       1,
       8,
-      "`.w-1/2` cannot be written as class shorthand: the `/` after the shorthand starts a tag variable, and `2` is not one; write the class as `class=\"w-1/2\"`",
+      '`.w-1/2` cannot be written as class shorthand: the `/` after the shorthand starts a tag variable, and `2` is not one; write the class as `class="w-1/2"`',
     ],
     // The second part on a later line, and a later tag, are positioned there.
     ["<div.a\n  .w-1.5/>", 2, 6],
@@ -124,9 +122,7 @@ describe("shorthand class diagnostics (decision 174)", () => {
         baseLine: 4,
         baseColumn: 6,
       }),
-    ).toThrowError(
-      expect.objectContaining({ line: 5, column: 14 }),
-    );
+    ).toThrowError(expect.objectContaining({ line: 5, column: 14 }));
   });
 
   it.each([
@@ -149,8 +145,8 @@ describe("attribute-position shorthand diagnostics", () => {
   // checks live in the sugar rewrite (`name-sugar.ts`) and surface through the
   // same compile funnel.
   it.each([
-    ['<div .bg-[#fff]>x</div>', 1, 5],
-    ['<div .w-1.5>x</div>', 1, 9],
+    ["<div .bg-[#fff]>x</div>", 1, 5],
+    ["<div .w-1.5>x</div>", 1, 9],
   ])("%j is a positioned error", (source, line, column) => {
     const error = compileErrorOf(source as string);
     expect([error.line, error.column]).toEqual([line, column]);
