@@ -303,6 +303,9 @@ function escapeBraces(value: string): string {
   return value.replace(/[{}]/g, (char) => `{{ '${char}' }}`);
 }
 
+/** The only shape a parsed template expression's walk needs: a node type tag, plus arbitrary children reached through `Object.entries`. */
+type ParsedExpressionNode = { type?: string; [key: string]: unknown };
+
 /**
  * `{`/`}` -> a single-character interpolation literal; `@` before a lowercase
  * identifier -> `&#64;`.
@@ -563,10 +566,13 @@ function handlerShape(code: string):
  * expression (the template parser reports that) or holds neither.
  */
 function statementBodyConstruct(code: string): string | undefined {
-  let root: unknown;
+  let root: ParsedExpressionNode;
   try {
     const babel = markoBabel() as {
-      parseExpression(source: string, options: unknown): unknown;
+      parseExpression(
+        source: string,
+        options: Record<string, unknown>,
+      ): ParsedExpressionNode;
     };
     root = babel.parseExpression(code, { plugins: [["typescript", {}]] });
   } catch {
@@ -2322,8 +2328,12 @@ class AngularEmitter implements Emitter<string> {
       );
     }
     this.out.write(`<ng-container [ngTemplateOutlet]="${target.name}" `);
-    this.out.write('[ngTemplateOutletContext]="{ $implicit: { ');
-    node.attrs.forEach((attr, i) => {
+    this.out.write('[ngTemplateOutletContext]="{ $implicit: ');
+    if (node.attrs.length === 0) {
+      this.out.write(esc("{}"));
+    } else {
+      this.out.write(esc("{ "));
+      node.attrs.forEach((attr, i) => {
       if (attr.kind === "spread") {
         // Angular template expressions have no object spread, so the
         // attributes object cannot be built at render time — a positioned
@@ -2363,8 +2373,10 @@ class AngularEmitter implements Emitter<string> {
           this.out.writeMapped(esc(attr.value.code), attr.value.span);
           break;
       }
-    });
-    this.out.write(esc(" } }\""></ng-container>"));
+      });
+      this.out.write(esc(" } }"));
+    }
+    this.out.write('"></ng-container>');
   }
 
   private emitDynamicComponent(
@@ -2597,30 +2609,188 @@ class AngularEmitter implements Emitter<string> {
   }
 
   define(node: Extract<IrNode, { kind: "Define" }>): void {
-    // A bare `let-x` binds `$implicit`, so emitting one per param gives every
-    // param the *first* outlet argument — `${v}` reads the key, silently, with
-    // `ng build` green because a `let-` variable is implicitly `any`. The
-    // outlet context is `{ $implicit: first, rest: rest }` (see
-    // `ngTemplateOutlet`'s context below), so only the first param rides
-    // `$implicit`; every later one names its own context key.
+    // A bare `let-x` binds `$implicit`, so the first param rides `$implicit`
+    // and every later one names its own context key (`let-i="i"`), matching
+    // the outlet contexts `emitDefineCall` builds.
     this.out.write(`<ng-template #`);
     this.out.writeMapped(node.name, node.nameSpan);
+    const expandFirst = this.defineFirstParam(node);
     node.params.forEach((param, i) => {
       this.out.write(" ");
       // The `let-` prefix is generated, so the whole `let-x` token maps
       // whole-to-whole onto the param the author wrote.
-      this.out.writeMapped(
-        `let-${param}`,
-        node.paramSpans?.[i],
-        "define-param",
-      );
+      const token =
+        i === 0 && expandFirst ? `let-${expandFirst.let}` : `let-${param}`;
+      this.out.writeMapped(token, node.paramSpans?.[i], "define-param");
       if (i > 0) this.out.write(`="${param}"`);
     });
     this.out.write("> ");
-    this.inScope(node.params, () => {
-      for (const child of node.children) this.emitNode(child);
-    });
+    if (expandFirst) {
+      // Angular's `let-` binds one identifier; a destructuring pattern is
+      // expanded into one `@let` per bound top-level name, reading the
+      // member path off the outlet's `$implicit` object. A default applies
+      // when the property reads `undefined`, as Marko's does.
+      for (const binding of expandFirst.bindings) {
+        const read = `${expandFirst.let}${binding.path}`;
+        this.out.write(`@let ${binding.name} = `);
+        if (binding.default !== undefined) {
+          this.out.write(`${read} === undefined ? ${binding.default} : ${read}; `);
+        } else {
+          this.out.write(`${read}; `);
+        }
+      }
+    }
+    this.inScope(
+      expandFirst
+        ? [expandFirst.let, ...expandFirst.bindings.map((b) => b.name)]
+        : node.params,
+      () => {
+        for (const child of node.children) this.emitNode(child);
+      },
+    );
     this.out.write(" </ng-template>");
+  }
+
+  /**
+   * The expansion for a `<define>`'s first param when it is a destructuring
+   * pattern: a generated `let-` identifier (`undefined` when the param is a
+   * plain identifier and keeps its own name) plus the `@let` bindings that
+   * reconstruct the destructure, since `let-` cannot take a pattern.
+   *
+   * Parsed off the param text with the vendored Babel (`@mxlang/core`'s
+   * `markoBabel`), not scanned, so rename/default/key shapes are told apart
+   * precisely. Supported: an object pattern of shorthand, `key: name` and
+   * defaulted properties. A rest element, a nested pattern, an array pattern
+   * or a computed key has no single member read (`@let` cannot destructure),
+   * so it is a positioned error, not a silently broken template.
+   */
+  private defineFirstParam(node: Extract<IrNode, { kind: "Define" }>):
+    | {
+        let: string;
+        bindings: { name: string; path: string; default?: string }[];
+      }
+    | undefined {
+    const param = node.params[0];
+    if (param === undefined) return undefined;
+    if (isIdentifier(param.trim())) return undefined;
+    if (node.params.length === 0) return undefined;
+
+    const babel = markoBabel() as {
+      parseExpression(source: string, options: unknown): {
+        type: string;
+        start: number;
+        end: number;
+        left?: {
+          type: string;
+          properties?: {
+            type: string;
+            computed?: boolean;
+            key?: { type: string; name?: string; value?: unknown };
+            argument?: ParamNode;
+          }[];
+          elements?: (ParamNode | null)[];
+        };
+      };
+    };
+    type ParamNode = {
+      type: string;
+      start: number;
+      end: number;
+      name?: string;
+      left?: ParamNode;
+      argument?: ParamNode;
+      key?: { type: string; name?: string; value?: unknown };
+      computed?: boolean;
+      properties?: {
+        type: string;
+        computed?: boolean;
+        key?: { type: string; name?: string; value?: unknown };
+        value?: ParamNode;
+      }[];
+      elements?: (ParamNode | null)[];
+    };
+
+    let pattern: ParamNode;
+    try {
+      // A pattern is not an expression on its own; an assignment's left-hand
+      // side is the shape that parses.
+      const parsed = babel.parseExpression(`(${param} = 0)`, {
+        plugins: [["typescript", {}]],
+      });
+      pattern = (parsed.left ?? parsed) as ParamNode;
+    } catch {
+      fail(
+        `\`<define ${node.name}>'s first param \`${param}\` is not a pattern @mxlang/angular can bind: the parameter must be a plain name or an object pattern like \`{ a, b: c }\``,
+        node,
+      );
+    }
+    if (pattern.type !== "ObjectPattern") {
+      fail(
+        `\`<define ${node.name}>'s first param \`${param}\` is an array or unsupported pattern; @mxlang/angular can only bind an object pattern like \`{ a, b: c }\` — bind it whole and read it in the body`,
+        node,
+      );
+    }
+    const arg = this.gensym("__mxArg");
+    const bindings: { name: string; path: string; default?: string }[] = [];
+    for (const property of pattern.properties ?? []) {
+      if (property.type === "RestElement") {
+        fail(
+          `a rest element in \`<define ${node.name}>'s first param has no member read: @mxlang/angular binds each name with a separate \`@let\` reading the property off the attributes object. Bind the object whole (\`|p|\`) and read it in the body`,
+          node,
+        );
+      }
+      const value = property.value;
+      if (!value) continue;
+      if (value.type === "ObjectPattern" || value.type === "ArrayPattern") {
+        fail(
+          `a nested pattern in \`<define ${node.name}>'s first param has no member read: @mxlang/angular binds each top-level name with a separate \`@let\`. Bind the object whole (\`|p|\`) and destructure it in the body`,
+          node,
+        );
+      }
+      if (property.computed) {
+        fail(
+          `a computed key in \`<define ${node.name}>'s first param has no member read: @mxlang/angular binds each top-level name with a separate \`@let\`. Bind the object whole (\`|p|\`) and read it in the body`,
+          node,
+        );
+      }
+      if (value.type !== "Identifier" && value.type !== "AssignmentPattern") {
+        fail(
+          `\`<define ${node.name}>'s first param \`${param}\` binds something @mxlang/angular cannot express as a member read; bind the object whole (\`|p|\`) and read it in the body`,
+          node,
+        );
+      }
+      const key = property.key;
+      if (!key || (key.type !== "Identifier" && key.type !== "StringLiteral")) {
+        fail(
+          `\`<define ${node.name}>'s first param \`${param}\` has a key @mxlang/angular cannot read as a property name; bind the object whole (\`|p|\`) and read it in the body`,
+          node,
+        );
+      }
+      const path =
+        key.type === "Identifier"
+          ? `.${key.name}`
+          : `[${JSON.stringify(key.value)}]`;
+      if (value.type === "Identifier") {
+        bindings.push({ name: value.name!, path });
+      } else {
+        const inner = value.left;
+        if (!inner || inner.type !== "Identifier") {
+          fail(
+            `a default in \`<define ${node.name}>'s first param must bind a plain name on @mxlang/angular; bind the object whole (\`|p|\`) and apply the default in the body`,
+            node,
+          );
+        }
+        bindings.push({
+          name: inner.name!,
+          path,
+          // The Babel node spans are offsets into the fed source
+          // `(${param} = 0)`, whose leading `(` shifts every offset by one
+          // against `param` itself.
+          default: param.slice(value.start! - 1, value.end! - 1),
+        });
+      }
+    }
+    return { let: arg, bindings };
   }
 
   constant(node: Extract<IrNode, { kind: "Const" }>): void {
