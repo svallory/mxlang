@@ -850,3 +850,41 @@ describe("Solid SSR render: JSX-significant text characters", () => {
     );
   });
 });
+
+// Stock Marko 6.3.51 renders the body for every falsy dynamic tag name
+// (false, 0, "", null, undefined) and nothing for a self-closing dynamic
+// tag — measured on the stock toolchain. The emitter's no-content fallback
+// previously passed the falsy value through, so `<${0}/>` rendered "0" as
+// Solid JSX text.
+describe("Solid SSR render: falsy dynamic tag names (Marko parity)", () => {
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+  it.each([
+    ["false", "false"],
+    ["0", "0"],
+    ["an empty string", '""'],
+    ["null", "null"],
+    ["undefined", "undefined"],
+  ])("%s renders the body", async (_label, literal) => {
+    const html = renderApp(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+      "<${t}>body</>",
+      `const t = ${literal};`,
+    );
+    expect(html).toBe("<ul>body</ul>");
+  });
+
+  it.each([
+    ["false", "false"],
+    ["0", "0"],
+    ["an empty string", '""'],
+    ["null", "null"],
+    ["undefined", "undefined"],
+  ])("%s renders nothing self-closing", async (_label, literal) => {
+    const html = renderApp(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
+      "<${t}/>",
+      `const t = ${literal};`,
+    );
+    expect(html).toBe("<ul></ul>");
+  });
+});

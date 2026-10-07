@@ -526,6 +526,8 @@ function bindingNamesOf(nodes: unknown[]): string[] {
 /** The names the source text of a `<define>`'s params binds. */
 function paramBindingNames(params: readonly string[]): string[] {
   try {
+    // SAFETY: parseBabel returns Babel's generic File; the expression body
+    // of a parsed arrow function is always `body[0].expression.params`.
     const file = parseBabel(`(${params.join(", ")}) => 0`, {
       sourceType: "module",
       plugins: ["typescript"],
@@ -2458,7 +2460,7 @@ export class SolidEmitter implements Emitter<string> {
           : "",
         node.args.length > 0
           ? concatMapped(
-              `return typeof ${value} === "string" ? `,
+              `return typeof ${value} === "string" && ${value} !== "" ? `,
               rendered(stringArgsAttrs),
               ` : typeof ${value} === "function" ? `,
               rendered(tags),
@@ -2467,7 +2469,7 @@ export class SolidEmitter implements Emitter<string> {
               `; })()}`,
             )
           : concatMapped(
-              `return typeof ${value} === "string" || typeof ${value} === "function" ? `,
+              `return (typeof ${value} === "string" && ${value} !== "") || typeof ${value} === "function" ? `,
               rendered(tags),
               ` : `,
               fallback,
@@ -2480,6 +2482,10 @@ export class SolidEmitter implements Emitter<string> {
       // resolved value through unchanged, exactly as before decision 116:
       // a caller reading `input.content` and forwarding it as `<${input.content}/>`
       // must still see a real Solid element pass through here, never `null`.
+      // Marko parity: a falsy renderer (null, undefined, false, 0, the
+      // empty string) renders nothing — `{0}` in Solid JSX renders "0" as
+      // text — so the pass-through collapses falsy values to `null`. A
+      // real element or component object is truthy and passes untouched.
       this.#out.push(
         guard(
           (tagsProps) =>
@@ -2492,7 +2498,7 @@ export class SolidEmitter implements Emitter<string> {
               innerHtml,
               " />",
             ),
-          value,
+          `${value} || null`,
         ),
       );
       return;

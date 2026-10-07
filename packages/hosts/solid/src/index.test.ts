@@ -119,7 +119,7 @@ describe("Solid IR lowering", () => {
       `<\${which} n=1>x</>`,
       [
         "= which; if (",
-        '=== "string" || typeof',
+        '(typeof __mxDyn0 === "string" && __mxDyn0 !== "") || typeof',
         '=== "function" ?',
         "<Dynamic component={",
         " n={1}>",

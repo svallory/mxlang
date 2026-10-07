@@ -700,7 +700,7 @@ const ESCAPE_COMMENT = `function __mxEscapeComment(__mxValue, __mxEscaped) {
 // compiled template is told apart by its \`.render\` entry, never by the shape
 // of what it returns; any other function returns a string that is written.
 // The overload types the binding \`undefined\` only when the type proves the
-// callee has no \`render\` (a string, null, undefined or a plain function);
+// callee has no \`render\` (a string, null, undefined, false, 0 or a plain function);
 // \`unknown\`, \`object\`, \`{}\` and \`Function\` might be a unit at run time, so
 // they bind \`unknown\`, and \`any\` stays \`any\`.
 const RENDER_DYNAMIC = `function __mxRenderDynamic<T>(__mxSink: __MxOut, __mxTarget: T, __mxProps: Record<string, any>, __mxArgs?: any[]): 0 extends 1 & T ? any : T extends { render: (input: never, out: never) => infer R } ? R : T extends string | null | undefined | false | 0 | ((...__mxA: any) => any) ? undefined : unknown;
