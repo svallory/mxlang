@@ -16,3 +16,4 @@ import "./Zero.mx";
 import "./Tri.mx";
 import "./Args.mx";
 import "./Maybe.mx";
+import "./ConGoodExtra.mx";

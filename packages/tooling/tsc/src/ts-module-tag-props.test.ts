@@ -79,6 +79,13 @@ describe("mx-tsc on a tag imported from a .ts module", () => {
     expect(result.byFile.has("Tri")).toBe(false);
   }, 120_000);
 
+  // A constrained generic erases to its constraint, and the props object is
+  // fresh, so an extra attribute is reported even though the direct call
+  // `g({ a: "x", b: 1 })` is accepted. Known limit, documented in the spec.
+  it("reports an extra attribute on a constrained-generic callee (known limit)", () => {
+    expect(result.byFile.get("ConGoodExtra")).toEqual(["(3,10) TS2353"]);
+  }, 120_000);
+
   it("leaves a call with tag arguments unchecked", () => {
     expect(result.byFile.has("Args")).toBe(false);
   }, 120_000);
