@@ -2177,25 +2177,26 @@ export class PreactEmitter implements Emitter<string> {
       return;
     }
 
-    // `<@catch|error|>` renders instead of the body when it throws. Preact has
-    // no built-in boundary component, only the `componentDidCatch` hook, so
-    // the package ships the class that wraps it.
+    // `<@catch|error|>` renders instead of the body when it throws. Preact
+    // has no built-in boundary component, only the `componentDidCatch` hook,
+    // so the package ships the class that wraps it.
+    //
+    // The body is a thunk child, not inline children: inline children are
+    // evaluated by the *parent's* render while it builds the element tree,
+    // before the boundary exists, so no boundary could catch a throw written
+    // directly in the body. The runtime evaluates the thunk inside its own
+    // function component, under the boundary.
     this.#runtimeImports.add(this.#dialect.errorBoundaryName);
     const params = catchTag.block.params.join(", ");
     const caught = this.#expression(catchTag.block.children);
-    const fallback = catchTag.block.hasParams
-      ? concatMapped(`(${params}) => `, caught)
-      : this.#dialect.errorBoundaryFallbackAlwaysFunction
-        ? concatMapped("() => ", caught)
-        : caught;
-    const fallbackProp = this.#dialect.errorBoundaryFallbackProp ?? "fallback";
+    const fallback = concatMapped(`(${params}) => `, caught);
     this.#out.push(
       concatMapped(
-        `<__mxErrorBoundary ${fallbackProp}={`,
+        "<__mxErrorBoundary fallback={",
         fallback,
-        "}>",
+        "}>{() => (<>",
         inner,
-        "</__mxErrorBoundary>",
+        "</>)}</__mxErrorBoundary>",
       ),
     );
   }

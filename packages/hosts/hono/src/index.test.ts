@@ -236,25 +236,26 @@ describe("Hono dialect", () => {
     expect(code).toContain("<__mxFragment key={item.id}>");
   });
 
-  it("lowers `<try>` to Hono's built-in ErrorBoundary with fallbackRender", () => {
+  it("lowers `<try>` to the package's MxErrorBoundary with a body thunk", () => {
     const code = compile(
       // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
       'import Risky from "./Risky.mx"\n<try><Risky/><@catch|error|><p>${error.message}</p></@catch></try>',
     );
     expect(code).toContain(
-      'import { ErrorBoundary as __mxErrorBoundary } from "hono/jsx";',
+      'import { MxErrorBoundary as __mxErrorBoundary } from "@mxlang/hono/runtime";',
     );
     expect(code).toContain(
-      "<__mxErrorBoundary fallbackRender={(error) => <p>{error.message}</p>}>",
+      "<__mxErrorBoundary fallback={(error) => <p>{error.message}</p>}>{() => (<><Risky />",
     );
+    expect(code).toContain("</>)}</__mxErrorBoundary>");
   });
 
-  it("wraps a param-less `<@catch>` fallback in a function for Hono", () => {
+  it("emits a param-less `<@catch>` fallback as a function for Hono", () => {
     const code = compile(
       'import Risky from "./Risky.mx"\n<try><Risky/><@catch><p>failed</p></@catch></try>',
     );
     expect(code).toContain(
-      "<__mxErrorBoundary fallbackRender={() => <p>failed</p>}>",
+      "<__mxErrorBoundary fallback={() => <p>failed</p>}>",
     );
   });
 
@@ -263,7 +264,7 @@ describe("Hono dialect", () => {
       'import Risky from "./Risky.mx"\n<try><Risky/><@placeholder><p>loading</p></@placeholder></try>',
     );
     expect(code).toContain(
-      'import { Suspense as __mxSuspense } from "hono/jsx";',
+      'import { Suspense as __mxSuspense } from "@mxlang/hono/runtime";',
     );
     expect(code).toContain("<__mxSuspense fallback={<p>loading</p>}>");
   });

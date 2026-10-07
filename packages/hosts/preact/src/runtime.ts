@@ -32,6 +32,7 @@ import {
   Component,
   type ComponentChildren,
   createElement,
+  options,
   type VNode,
 } from "preact";
 import { Suspense } from "preact/compat";
@@ -86,7 +87,13 @@ export interface MxErrorBoundaryProps {
    * accepted too, for `<@catch>` with no params.
    */
   fallback: ComponentChildren | ((error: unknown) => ComponentChildren);
-  children?: ComponentChildren;
+  /**
+   * The `<try>` body. The emitter passes a thunk, so a throw written directly
+   * in the body is evaluated inside {@link MxTryBody} (under the boundary)
+   * instead of in the parent's render, where nothing could catch it. Plain
+   * children are still accepted for hand-written use.
+   */
+  children?: ComponentChildren | (() => ComponentChildren);
 }
 
 interface MxErrorBoundaryState {
@@ -108,7 +115,21 @@ export class MxErrorBoundary extends Component<
 > {
   state: MxErrorBoundaryState = { error: undefined, caught: false };
 
+  constructor(props: MxErrorBoundaryProps) {
+    super(props);
+    // `preact-render-to-string` runs `getDerivedStateFromError` and
+    // `componentDidCatch` only when this flag is truthy. It is a process-wide
+    // setting of the consumer's `preact`: once a `<try>` with `<@catch>`
+    // renders, every class component's error boundary works during SSR too.
+    // Setting it again is harmless.
+    (options as { errorBoundaries?: boolean }).errorBoundaries = true;
+  }
+
   static getDerivedStateFromError(error: unknown): MxErrorBoundaryState {
+    // `preact-render-to-string` hands a thrown promise (a suspension) to the
+    // nearest class boundary too once `options.errorBoundaries` is set;
+    // rethrow it so it reaches a `Suspense` instead of rendering `<@catch>`.
+    if (isThenable(error)) throw error;
     return { error, caught: true };
   }
 
@@ -117,12 +138,54 @@ export class MxErrorBoundary extends Component<
   }
 
   render(): ComponentChildren {
-    if (!this.state.caught) return this.props.children;
-    const { fallback } = this.props;
-    return typeof fallback === "function"
-      ? (fallback as (error: unknown) => ComponentChildren)(this.state.error)
-      : fallback;
+    const { fallback, children } = this.props;
+    if (this.state.caught) return callFallback(fallback, this.state.error);
+    return typeof children === "function"
+      ? createElement(MxTryBody, {
+          render: children as () => ComponentChildren,
+          fallback,
+        })
+      : children;
   }
+}
+
+function callFallback(
+  fallback: MxErrorBoundaryProps["fallback"],
+  error: unknown,
+): ComponentChildren {
+  return typeof fallback === "function"
+    ? (fallback as (error: unknown) => ComponentChildren)(error)
+    : fallback;
+}
+
+interface MxTryBodyProps {
+  render: () => ComponentChildren;
+  fallback: MxErrorBoundaryProps["fallback"];
+}
+
+/**
+ * Evaluates the `<try>` body thunk inside its own component, so a throw
+ * written directly in the body is caught here with the real error and none of
+ * the partial body, as Marko discards the body's output and renders `<@catch>`.
+ * A function component, so hooks written inline in the body stay legal.
+ */
+function MxTryBody({ render, fallback }: MxTryBodyProps): ComponentChildren {
+  try {
+    return render();
+  } catch (error) {
+    // A suspension is not an error: a thrown promise must reach the nearest
+    // `Suspense` (`<@placeholder>`'s, or an outer one), not `<@catch>`.
+    if (isThenable(error)) throw error;
+    return callFallback(fallback, error);
+  }
+}
+
+function isThenable(value: unknown): boolean {
+  return (
+    (typeof value === "object" || typeof value === "function") &&
+    value !== null &&
+    typeof (value as { then?: unknown }).then === "function"
+  );
 }
 
 export interface MxPlaceholderProps {

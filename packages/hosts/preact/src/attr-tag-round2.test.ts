@@ -152,7 +152,7 @@ describe("generated names do not shadow authored bindings", () => {
       ["mxClass", "<p class={on: true}/>", '<p class="on"></p>'],
       ["Fragment", "<for|x| of=[1]><p>${x}</p></for>", "<p>1</p>"],
       [
-        host === "hono" ? "ErrorBoundary" : "MxErrorBoundary",
+        "MxErrorBoundary",
         "<try><p>ok</p><@catch>bad</@catch></try>",
         "<p>ok</p>",
       ],

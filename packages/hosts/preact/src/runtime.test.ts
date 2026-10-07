@@ -7,27 +7,31 @@
  * `getDerivedStateFromError` would leave the whole lowering looking correct
  * while a thrown error escaped to the caller. These render it for real.
  *
- * ## Where each half is tested, and why
+ * ## What is covered
  *
- * An error boundary is a **client-render** mechanism in Preact.
- * `preact-render-to-string`'s synchronous `render` does not run one: its
- * `catch` rethrows anything without a `.then`, handling only thenables for
- * suspense (`preact-render-to-string@6.7.0`, `src/index.js:99-104`). So a
- * thrown error escapes `render()` rather than reaching `componentDidCatch`,
- * and no assertion made here could prove the boundary catches anything.
+ * The boundary is exercised for real under `preact-render-to-string` and, for
+ * hydration and client rendering, under a jsdom window:
  *
- * The split that follows from that, rather than from preference:
- *
- * - **Here**: that the boundary is transparent when nothing throws, that
- *   `MxPlaceholder` passes its children through, that `mxClass` joins what
- *   the emitter hands it, and — pinned deliberately — that SSR *does* let a
- *   thrown error escape, so the limitation is recorded rather than assumed.
- * - **`examples/preact-app`'s e2e**: the live catch, in a real browser, which
- *   is the only place a boundary actually runs.
+ * - a throw written directly in the `<try>` body reaches the boundary as a
+ *   thunk (`() => body`), so it is caught on the server with the real error
+ *   and none of the partial body;
+ * - a descendant component's throw is caught on the server because the
+ *   boundary switches on `preact-render-to-string`'s `flag.errorBoundaries`
+ *   flag (a process-global of the consumer's `preact`).
  */
 
-import { type ComponentChildren, createElement, type VNode } from "preact";
-import { render } from "preact-render-to-string";
+import {
+  type ComponentChildren,
+  type ComponentType,
+  render as clientRender,
+  createElement,
+  Fragment,
+  hydrate,
+  options,
+  type VNode,
+} from "preact";
+import { useState } from "preact/hooks";
+import { render, renderToStringAsync } from "preact-render-to-string";
 import { describe, expect, it } from "vitest";
 import { MxErrorBoundary, MxPlaceholder, mxClass } from "./runtime.ts";
 
@@ -39,6 +43,40 @@ function Boom({ value }: { value?: unknown }): ComponentChildren {
 function Ok(): ComponentChildren {
   return createElement("p", null, "fine");
 }
+
+/** Installs a jsdom window for `run`, as `region-client.test.ts` does. */
+async function withDom<T>(run: () => Promise<T>): Promise<T> {
+  const { JSDOM } = (await import("jsdom" as string)) as {
+    JSDOM: new (
+      html: string,
+    ) => { window: Window & typeof globalThis & { close(): void } };
+  };
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const globals = { window: dom.window, document: dom.window.document };
+  Object.assign(globalThis, globals);
+  try {
+    return await run();
+  } finally {
+    for (const key of Object.keys(globals)) {
+      delete (globalThis as Record<string, unknown>)[key];
+    }
+    dom.window.close();
+  }
+}
+
+const missing = (): never => {
+  throw new TypeError("inline");
+};
+
+/** The emitted shape: `<__mxErrorBoundary fallback={…}>{() => body}</…>`. */
+function tryOf(
+  fallback: (error: unknown) => ComponentChildren,
+  body: () => ComponentChildren,
+): VNode<never> {
+  return createElement(MxErrorBoundary, { fallback }, body) as VNode<never>;
+}
+
+const flag = options as { errorBoundaries?: boolean };
 
 describe("MxErrorBoundary", () => {
   it("renders its children when nothing throws", () => {
@@ -53,21 +91,199 @@ describe("MxErrorBoundary", () => {
     expect(html).toBe("<p>fine</p>");
   });
 
-  it("does not catch during server rendering, where boundaries do not run", () => {
-    // Pinned rather than worked around. `preact-render-to-string`'s sync
-    // `render` rethrows anything without a `.then` instead of invoking a
-    // boundary, so a `<try>` protects a *client* render only. If a future
-    // Preact release ran boundaries during SSR, this test failing is how we
-    // would find out — and the `<try>` docs would then need revising.
-    expect(() =>
+  it("renders a thunk body when nothing throws", () => {
+    expect(
+      render(
+        tryOf(
+          () => "caught",
+          () => createElement(Ok, null),
+        ),
+      ),
+    ).toBe("<p>fine</p>");
+  });
+
+  it("catches a descendant throw during server rendering", () => {
+    expect(
       render(
         createElement(
           MxErrorBoundary,
-          { fallback: createElement("p", null, "caught") },
+          { fallback: (e: unknown) => `c:${(e as Error).message}` },
           createElement(Boom, { value: new Error("nope") }),
         ),
       ),
-    ).toThrow("nope");
+    ).toBe("c:nope");
+  });
+
+  it("sets the process-global errorBoundaries flag idempotently", () => {
+    flag.errorBoundaries = false;
+    render(createElement(MxErrorBoundary, { fallback: "x" }, "ok"));
+    expect(flag.errorBoundaries).toBe(true);
+    render(createElement(MxErrorBoundary, { fallback: "x" }, "ok"));
+    expect(flag.errorBoundaries).toBe(true);
+  });
+
+  it("catches an inline thunk throw with the real error and no partial output", () => {
+    const html = render(
+      createElement(
+        "div",
+        null,
+        tryOf(
+          (e) => `c:${(e as Error).message}`,
+          () =>
+            createElement(
+              Fragment,
+              null,
+              createElement("b", null, "before"),
+              missing(),
+              createElement("i", null, "after"),
+            ),
+        ),
+      ),
+    );
+
+    expect(html).toBe("<div>c:inline</div>");
+  });
+
+  it("catches a falsy thrown value through the thunk", () => {
+    for (const value of [undefined, null, 0, "", false]) {
+      const html = render(
+        tryOf(
+          (e) => `c:${String(e)}`,
+          () => {
+            throw value;
+          },
+        ),
+      );
+      expect(html).toBe(`c:${String(value)}`);
+    }
+  });
+
+  it("lets a nested <try> catch before the outer one", () => {
+    const html = render(
+      tryOf(
+        () => "outer",
+        () =>
+          createElement(
+            Fragment,
+            null,
+            createElement("a", null, "1"),
+            tryOf(
+              () => createElement("i", null, "3"),
+              () =>
+                createElement(
+                  Fragment,
+                  null,
+                  createElement("b", null, "2"),
+                  missing(),
+                ),
+            ),
+            createElement("u", null, "4"),
+          ),
+      ),
+    );
+
+    expect(html).toBe("<a>1</a><i>3</i><u>4</u>");
+  });
+
+  it("lets the outer <try> catch when the inner has no catch of its own", () => {
+    const html = render(
+      tryOf(
+        () => "outer",
+        () =>
+          createElement(
+            Fragment,
+            null,
+            "x",
+            createElement(Boom as ComponentType, {}),
+          ),
+      ),
+    );
+
+    expect(html).toBe("outer");
+  });
+
+  it("keeps a hook written inline in the body working", () => {
+    // The thunk is evaluated inside `MxTryBody`, a function component, so a
+    // hook called inline stays legal.
+    const html = render(
+      tryOf(
+        () => "caught",
+        () => {
+          const [n] = useState(5);
+          return createElement("p", null, n);
+        },
+      ),
+    );
+    expect(html).toBe("<p>5</p>");
+  });
+
+  it("rethrows an inline thrown thenable instead of catching it", async () => {
+    const make = () => {
+      let done = false;
+      const promise = new Promise<void>((resolve) =>
+        setTimeout(() => {
+          done = true;
+          resolve();
+        }, 5),
+      );
+      return (): ComponentChildren => {
+        if (!done) throw promise;
+        return createElement("p", null, "done");
+      };
+    };
+    // Catch-only, then catch + placeholder, each under an outer Suspense.
+    expect(
+      await renderToStringAsync(
+        createElement(
+          MxPlaceholder,
+          { fallback: "wait" },
+          tryOf(() => "caught", make()),
+        ),
+      ),
+    ).toBe("<p>done</p>");
+    const read = make();
+    expect(
+      await renderToStringAsync(
+        createElement(
+          MxPlaceholder,
+          { fallback: "wait" },
+          tryOf(
+            () => "caught",
+            () => createElement(MxPlaceholder, { fallback: "w2" }, read()),
+          ),
+        ),
+      ),
+    ).toBe("<p>done</p>");
+  });
+
+  it("hydrates a caught server render to the catch", async () => {
+    const view = (): VNode =>
+      createElement(
+        "div",
+        null,
+        tryOf(
+          (e) => `c:${(e as Error).message}`,
+          () => createElement(Fragment, null, "x", missing()),
+        ),
+      );
+    const server = render(view());
+    expect(server).toBe("<div>c:inline</div>");
+
+    const result = await withDom(async () => {
+      const host = document.createElement("div");
+      host.innerHTML = server;
+      document.body.append(host);
+      hydrate(view(), host);
+      await new Promise((r) => setTimeout(r, 20));
+      const csr = document.createElement("div");
+      clientRender(view(), csr);
+      await new Promise((r) => setTimeout(r, 20));
+      return { hydrated: host.innerHTML, csr: csr.innerHTML };
+    });
+    expect(result).toEqual({
+      hydrated: "<div>c:inline</div>",
+      csr: "<div>c:inline</div>",
+    });
   });
 
   it("selects a plain fallback node over a function one", () => {

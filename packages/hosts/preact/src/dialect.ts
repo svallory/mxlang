@@ -67,30 +67,11 @@ export interface JsxDialect {
   errorBoundaryModule: string;
   /**
    * Module `mxClass` is imported from. Defaults to `errorBoundaryModule`
-   * when omitted — Preact's and React's own `/runtime` entry ships both.
-   * Hono needs its own package's `mxClass` (Hono has none built in) while
-   * still importing `ErrorBoundary`/`Suspense` from `hono/jsx` itself, so
-   * this is a separate knob rather than reusing `errorBoundaryModule`.
+   * when omitted; every shipped dialect's `/runtime` entry exports both.
    */
   mxClassModule?: string;
-  /** Named export in that module: a component taking `fallback` and children. */
+  /** Named export in that module: a component taking `fallback` and a body thunk. */
   errorBoundaryName: string;
-  /**
-   * The prop `errorBoundaryName` takes its fallback under. Both Preact's and
-   * React's hand-rolled boundaries take a `fallback` node/function; Hono's
-   * *built-in* `ErrorBoundary` takes a `fallbackRender` function instead
-   * (`(error: Error) => Child`), so this is a dialect knob rather than an
-   * emitter constant. Defaults to `"fallback"` when a dialect omits it, which
-   * is why Preact and React need no change here.
-   */
-  errorBoundaryFallbackProp?: string;
-  /**
-   * When true, `errorBoundaryFallbackProp` always takes a function, even when
-   * `<@catch>` declared no params (Hono's `fallbackRender: (error: Error) =>
-   * Child` has no non-function form). Preact's and React's hand-rolled
-   * boundaries accept either a node or a function, so they omit this.
-   */
-  errorBoundaryFallbackAlwaysFunction?: boolean;
   /** Named export in that module: the `<try>` placeholder/suspense wrapper. */
   suspenseName: string;
   /** Module the JSX `Fragment` is imported from, for an explicit import. */

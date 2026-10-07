@@ -15,17 +15,12 @@ export const honoDialect: JsxDialect = {
   textareaLeadingNewline: "ssr",
   rawHtmlProp: "dangerouslySetInnerHTML",
   rawHtmlValue: (code) => `{ __html: ${code} }`,
-  errorBoundaryModule: "hono/jsx",
-  // Hono ships no `mxClass` equivalent; this package's own runtime supplies
-  // it, the same shape as Preact's/React's `/runtime` but scoped to just this
-  // one helper since Hono needs no error-boundary class of its own.
+  // `<try>` lowers to this package's own `MxErrorBoundary`, which wraps
+  // `hono/jsx`'s async `ErrorBoundary` around the body thunk; `Suspense` is
+  // re-exported from the same module (the emitter imports both from one).
+  errorBoundaryModule: "@mxlang/hono/runtime",
   mxClassModule: "@mxlang/hono/runtime",
-  errorBoundaryName: "ErrorBoundary",
-  // Hono's built-in `ErrorBoundary` takes `fallbackRender`, not `fallback`,
-  // and that prop is always a function — `(error: Error) => Child` — with no
-  // non-function form the way Preact's/React's hand-rolled boundaries allow.
-  errorBoundaryFallbackProp: "fallbackRender",
-  errorBoundaryFallbackAlwaysFunction: true,
+  errorBoundaryName: "MxErrorBoundary",
   suspenseName: "Suspense",
   fragmentModule: "hono/jsx",
   eventPropNames: honoEventPropNames,

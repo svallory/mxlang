@@ -249,8 +249,9 @@ describe("React dialect", () => {
       'import { MxErrorBoundary as __mxErrorBoundary } from "@mxlang/react/runtime";',
     );
     expect(code).toContain(
-      "<__mxErrorBoundary fallback={(error) => <p>{error.message}</p>}>",
+      "<__mxErrorBoundary fallback={(error) => <p>{error.message}</p>}>{() => (<><Risky />",
     );
+    expect(code).toContain("</>)}</__mxErrorBoundary>");
   });
 
   it("rejects Marko state with React-specific guidance", () => {

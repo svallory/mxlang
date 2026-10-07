@@ -29,7 +29,12 @@ export function mxClass(value: unknown): string {
 
 export interface MxErrorBoundaryProps {
   fallback: ReactNode | ((error: unknown) => ReactNode);
-  children?: ReactNode;
+  /**
+   * The `<try>` body. The emitter passes a thunk, so a throw written directly
+   * in the body is evaluated inside {@link MxTryBody} (under the boundary)
+   * instead of in the parent's render, where nothing could catch it.
+   */
+  children?: ReactNode | (() => ReactNode);
 }
 
 interface MxErrorBoundaryState {
@@ -37,7 +42,16 @@ interface MxErrorBoundaryState {
   caught: boolean;
 }
 
-/** React class boundary used by `<try><@catch>`. */
+/**
+ * React class boundary used by `<try><@catch>`.
+ *
+ * React's server renderer never runs error boundaries: a throw below the
+ * boundary is sent to the nearest `Suspense`, and the client re-renders that
+ * subtree, where this class catches it. So the body sits inside an internal
+ * `Suspense` whose fallback is `<@catch>` ({@link MxServerCatch}), which makes
+ * a descendant's throw render `<@catch>` in the server HTML. See the
+ * divergence rows R1-R3 in `divergences.md`.
+ */
 export class MxErrorBoundary extends Component<
   MxErrorBoundaryProps,
   MxErrorBoundaryState
@@ -53,12 +67,91 @@ export class MxErrorBoundary extends Component<
   }
 
   render(): ReactNode {
-    if (!this.state.caught) return this.props.children;
-    const { fallback } = this.props;
-    return typeof fallback === "function"
-      ? fallback(this.state.error)
-      : fallback;
+    const { fallback, children } = this.props;
+    if (this.state.caught) return callFallback(fallback, this.state.error);
+    const body =
+      typeof children === "function"
+        ? createElement(MxTryBody, { render: children, fallback })
+        : children;
+    return createElement(
+      Suspense,
+      { fallback: createElement(MxServerCatch, { fallback }) },
+      body,
+    );
   }
+}
+
+function callFallback(
+  fallback: MxErrorBoundaryProps["fallback"],
+  error: unknown,
+): ReactNode {
+  return typeof fallback === "function" ? fallback(error) : fallback;
+}
+
+interface MxTryBodyProps {
+  render: () => ReactNode;
+  fallback: MxErrorBoundaryProps["fallback"];
+}
+
+/**
+ * Evaluates the `<try>` body thunk inside its own component, so a throw
+ * written directly in the body is caught here with the real error and none of
+ * the partial body. A function component, so hooks written inline in the body
+ * stay legal.
+ */
+function MxTryBody({ render, fallback }: MxTryBodyProps): ReactNode {
+  try {
+    return render();
+  } catch (error) {
+    // A suspension is not an error: it must reach the nearest `Suspense`
+    // (`<@placeholder>`'s, the internal one, or an outer one), not `<@catch>`.
+    if (isSuspension(error)) throw error;
+    return callFallback(fallback, error);
+  }
+}
+
+/**
+ * A thrown thenable (the classic Suspense protocol), or React's
+ * `SuspenseException`, which `use(promise)` throws. React does not export that
+ * class, so match its message. Development builds: `"Suspense Exception: This
+ * is not a real error! …"` (`react-dom@19.3.0`,
+ * `cjs/react-dom-server.node.development.js`). Production builds minify it:
+ * `SuspenseException` is `formatProdErrorMessage(460)` and
+ * `SuspenseActionException` is `(542)`, i.e. `"Minified React error #460; …"`
+ * (`react-dom@19.3.0`, `cjs/react-dom-client.production.js`).
+ */
+const SUSPENSE_EXCEPTION_MESSAGE =
+  /^(Suspense Exception:|Minified React error #(460|542);)/;
+
+function isSuspension(value: unknown): boolean {
+  if (
+    (typeof value === "object" || typeof value === "function") &&
+    value !== null &&
+    typeof (value as { then?: unknown }).then === "function"
+  ) {
+    return true;
+  }
+  return (
+    value instanceof Error && SUSPENSE_EXCEPTION_MESSAGE.test(value.message)
+  );
+}
+
+/**
+ * `<@catch>` for a server render whose body threw below the boundary. React
+ * does not expose that error to the tree, so `<@catch|e|>` receives a
+ * stand-in; the client render passes the real one.
+ */
+function MxServerCatch({
+  fallback,
+}: {
+  fallback: MxErrorBoundaryProps["fallback"];
+}): ReactNode {
+  return callFallback(
+    fallback,
+    new Error(
+      "an error was thrown during a React server render below this <try>; the error itself is only available after the client renders",
+    ),
+  );
 }
 
 export interface MxPlaceholderProps {

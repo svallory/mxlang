@@ -1143,16 +1143,33 @@ describe("<try>", () => {
       'import { MxErrorBoundary as __mxErrorBoundary } from "@mxlang/preact/runtime";',
     );
     expect(code).toContain(
-      "<__mxErrorBoundary fallback={(err) => <p>{err}</p>}>",
+      "<__mxErrorBoundary fallback={(err) => <p>{err}</p>}>{() => (<><Body />",
+    );
+    expect(code).toContain("</>)}</__mxErrorBoundary>");
+  });
+
+  it("passes the body as a thunk so a throw written in it is inside the boundary", () => {
+    expect(
+      markup(
+        'import Body from "./body.mx"\n<try><p>${input.a.b}</p><@catch><p>failed</p></@catch></try>',
+      ),
+    ).toBe(
+      "<__mxErrorBoundary fallback={() => <p>failed</p>}>{() => (<><p>{input.a.b}</p></>)}</__mxErrorBoundary>",
     );
   });
 
-  it("passes a param-less `<@catch>` body as a plain fallback node", () => {
+  it("emits a param-less `<@catch>` fallback as a function", () => {
     expect(
       markup(
         'import Body from "./body.mx"\n<try><Body/><@catch><p>failed</p></@catch></try>',
       ),
-    ).toContain("fallback={<p>failed</p>}");
+    ).toContain("fallback={() => <p>failed</p>}");
+  });
+
+  it("leaves a body without `<@catch>` inline", () => {
+    expect(markup('import Body from "./body.mx"\n<try><Body/></try>')).toBe(
+      "<Body />",
+    );
   });
 
   it("lowers `<@placeholder>` to the suspense wrapper", () => {
