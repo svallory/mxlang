@@ -274,6 +274,16 @@ export const MX_DYNAMIC = `function __mxIsHostComponentObject(value: any): boole
   );
 }
 function __mxDynamic(target: any, payload: any, content?: any, takesParams?: boolean) {
+  if (!target) {
+    // Marko parity: a falsy renderer (null, undefined, false, 0, the empty
+    // string) renders no tag of its own; the body renders independently,
+    // threaded as the third-argument content or the props object's own
+    // content key — and nothing at all renders for a self-closing call
+    // (returning the raw falsy value would let JSX render 0 as text).
+    if (Array.isArray(payload)) return content ? content() : null;
+    const body = content ?? payload.content;
+    return body ? body() : null;
+  }
   if (Array.isArray(payload)) {
     if (typeof target === "function") return target(...payload);
     if (typeof target === "string" || __mxIsHostComponentObject(target)) {

@@ -207,3 +207,31 @@ describe("a body forwarded through <${input.content}/> (preact, Marko parity)", 
     },
   );
 });
+
+// Stock Marko 6.3.51 renders the body for every falsy dynamic tag name
+// (false, 0, "", null, undefined) and nothing for a self-closing dynamic
+// tag — measured on the stock toolchain. `__mxDynamic` previously returned
+// the raw falsy target on its fallback path, so `<${0}/>` rendered "0" as
+// JSX text and `<${false}>body</>` never rendered its body on the
+// args-array path.
+describe("a falsy dynamic tag name (Marko parity)", () => {
+  it.each([
+    ["false", false],
+    ["0", 0],
+    ["an empty string", ""],
+    ["null", null],
+    ["undefined", undefined],
+  ])("%s renders the body and nothing else", async (_label, t) => {
+    expect(await renderPair("<${input.t}>body</>", { t })).toBe("body");
+  });
+
+  it.each([
+    ["false", false],
+    ["0", 0],
+    ["an empty string", ""],
+    ["null", null],
+    ["undefined", undefined],
+  ])("%s renders nothing self-closing", async (_label, t) => {
+    expect(await renderPair("<${input.t}/>", { t })).toBe("");
+  });
+});
