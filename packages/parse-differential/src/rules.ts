@@ -18,7 +18,7 @@ export const RULES: readonly Rule[] = [
   {
     id: "rejoin-attribute-name",
     row: "A2",
-    what: "Marko's `name` + `modifier` (split at the last `:`) are rejoined into the authored name",
+    what: "Marko's `name` + `modifier` (split at the last `:`) are compared field by field against MX's `name`, `modifier` and `modifierSpan` (decision 170); a sugar chain still rejoins (A6)",
   },
   {
     id: "default-attribute",

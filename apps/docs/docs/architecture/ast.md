@@ -250,7 +250,7 @@ the row says "not stated".
 | # | What Marko does | Why (Marko's need) | What MX needs instead | Replaced by |
 |---|---|---|---|---|
 | A1 | The Marko node family lives inside a patched `@babel/types` (`[C]babel.js:8065-8280`), members of Babel's `Node` union (`[C]types.d.ts:381`); `Program` gains `params` (`[C]babel.js:5511`). | Marko's translator is a Babel plugin: it traverses and replaces Marko nodes with Babel's own `NodePath`, scope and builders, so the nodes must be Babel nodes. `MarkoTagBody` is a Babel `Scope`/`FunctionParent` (`[C]babel.js:8201-8207`) so tag params get Babel bindings. | MX never runs Marko's translator. MX needs node types it owns, defined in `@mxlang/babel` without patching Babel's own definitions, and traversable by MX's own walker. | The `Mx*` family (§3), declared as a separate union in `@mxlang/babel`. Babel nodes appear only inside expression containers (§4). |
-| A2 | **OPEN FOR THE OPERATOR.** Decision 158.1's words are "no `value:` modifier split"; whether the AST carries a `modifier` field is not decided by those words. The attribute name is split at the **last** `:` into `name` + `modifier` (`[C]chunk-src.js:6111-6115`). | Marko's translator implements modifiers (`class:x`, `value:fn:=x`, `x:scoped`). | MX gives `:` no general modifier meaning; `class:`/`style:` reach the host through a hook, and every other colon name is an ordinary name rejoined by `lower.ts` `lowerAttrNamed` and explained at `attrNameSpan`. | `MxAttribute.name` is the authored name, colons included. No `modifier` field. A consumer that needs `class:x` splits the string (§8, D4). |
+| A2 | The attribute name is split at the **last** `:` into `name` + `modifier` (`[C]chunk-src.js:6111-6115`). Decision 170 settled the open question: the split is data MX keeps. | Marko's translator implements modifiers (`class:x`, `value:fn:=x`, `x:scoped`). | `class:`/`style:` reach the host through a hook, but every consumer was re-splitting the string (`lower.ts` `isOrdinaryColonName`, `lowerAttrNamed`); carrying the split as fields removes the re-derivation. | `MxAttribute.name` stays the authored name, colons included, **and** carries `modifier` + `modifierSpan` (decision 170, §3.5). The differential compares the split field by field (§8 D4). |
 | A3 | An attribute with an empty head is named `"value"` with `default: true` (`[C]chunk-src.js:6117`), so `<if=a>` and bare `:x` both become `value`; the default attribute's `loc` starts at the `=` and has no name text (`lower.ts` `attrNameSpan`). | Marko's tags read their default input as `input.value`. | `<if=a>` is "the tag's default value", not an attribute named `value`. Bare `:x` is the name sugar (decision 146, divergence `divergences.md`, row "Bare `:x` is `name="x"`"). | `MxAttribute.name: null` for the default attribute (§3.5); bare `:x` is `MxShorthand { sigil: ":" }` (§3.6). |
 | A4 | Tag-adjacent `#id`/`.class` are buffered and merged into `class`/`id` attributes at `onOpenTagEnd` (`[C]chunk-src.js:6148-6171`); several classes become one string, a template, or an array; the merged attributes have **no `loc`** (probe: `MarkoAttribute@noloc`). A shorthand `id` beside an `id` attribute throws (6168). | Marko's output is HTML; merging gives the translator one `class` attribute. | Shorthands are their own syntax with their own spans; MX's name sugar has to recover them (`name-sugar.ts` exists for this; `lower.ts` `lowerAttrNamed` falls back to the tag position). Merging and duplicate rules are language semantics, owned by lowering. | `MxShorthand` nodes, in source order, each with its own span (§3.6). No merge in the AST. |
 | A5 | An empty tag name becomes `"div"` (`[C]chunk-src.js:6078`), leaving the `StringLiteral` with an empty span. | Marko has one host. | Decision 145: an unnamed tag resolved by the `defaultTag` ladder. MX detects it today by an empty-span test (`default-tag.ts` `isUnnamedTag`, `targets/data/src/scan.ts` `scanAuthoredTags`). | `MxTagName { kind: "unnamed" }` (§3.3). |
@@ -494,6 +494,8 @@ Purpose: one named attribute, or the tag's default value.
 |---|---|---|---|
 | `name` | `string \| null` | no | authored name, colons included (`class:x`, `value:fn`); `null` for the default value (`<if=a>`) |
 | `nameSpan` | `Span` | no | the name (`onAttrName`); zero-width at the `=`/`(` for the default value |
+| `modifier` | `string \| null` | no | the text after the **last** `:` of the authored name (`class:x` → `x`), `null` without one; a trailing colon (`x:`) is `""` (decision 170) |
+| `modifierSpan` | `Span \| null` | no | the modifier's own span, colon excluded, ending at `nameSpan.end`; zero-width at `nameSpan.end` for the empty modifier; `null` with `modifier` |
 | `operator` | `"=" \| ":=" \| null` | no | `null` for a bare attribute or a method |
 | `value` | `MxExpression \| MxMethod \| null` | no | `null` for a bare attribute (`disabled`) |
 | `args` | `MxArguments \| null` | no | `name(args)` without a body: Marko 5's attribute-arguments form (`onAttrArgs`). Kept so lowering can position its error: today lowering only rejects it (`Unsupported arguments on …`) or hands it to the host's `resolveAttributeMethod` (`lowerAttrNamed`, `lower.ts`) |
@@ -516,6 +518,7 @@ Offsets:
 - `disabled`: `[7, 15)`, `nameSpan` the same, `operator` and `value` `null`
 - `type="email"`: `[16, 28)`; `nameSpan` `[16, 20)`; `value.span` `[21, 28)` (quotes included, as the IR's string spans)
 - `value:=draft`: `[29, 41)`; `name: "value"`, `operator: ":="`; `value.span` `[36, 41)`
+- `class:x` (a name with a modifier): `modifier: "x"` and `modifierSpan` the last character of `nameSpan` (decision 170); `x:` gives `modifier: ""` and a zero-width `modifierSpan` at `nameSpan.end`
 - `onInput(e) { set(e) }`: `[42, 63)`; `nameSpan` `[42, 49)`; `value` is an `MxMethod` `[49, 63)`
 
 Invariants: `operator === ":="` implies `value` is an `MxExpression` (bound
@@ -528,7 +531,8 @@ lowering's (§6.1a, `MX_DUPLICATE_DEFAULT`). Lowering reads a default value
 zero-width `nameSpan` kept (IR invariant E7): the one Marko convention MX keeps
 on purpose, because every tag reads its default input as `value`. Bound attributes keep
 their full name: `value:=x` is `name: "value"`, because htmljs reports `:=`
-as the operator (`part.bound`, `[C]chunk-src.js:6127`).
+as the operator (`part.bound`, `[C]chunk-src.js:6127`); a bound name with a
+colon (`a:b:=x`) keeps the split `modifier: "b"` for the same reason.
 
 ### 3.5a `MxMethod`
 
@@ -1777,10 +1781,15 @@ name can be shadowed by a file-local binding (spec §7, decision 113), so the
 front end cannot know; `<return>` cannot be shadowed (reserved word) and
 decision 158 names it.
 
-**D4. Attribute names keep their colons.** **OPEN FOR THE OPERATOR.** Decision 158.1's words are "no `value:` modifier split"; whether the AST carries a `modifier` field is not decided by those words. Alternative: keep Marko's
-`modifier` split. Chosen because MX's lowering re-joins the split for every
+**D4. Attribute names keep their colons, and the last-colon split is data.**
+Decision 170: `MxAttribute.name` is the authored name (`class:x`, colons
+included) **and** the node carries `modifier` + `modifierSpan`, the split at
+the last `:` as fields. Alternative: keep Marko's split as the name itself.
+Chosen because MX's lowering re-joins the split for every
 name except the `class:`/`style:`/`on:` prefixes (`lower.ts` `isOrdinaryColonName`,
-`lowerAttrNamed`), so the split encodes Marko's semantics, not MX's.
+`lowerAttrNamed`), so the authored name is what MX means, while the split as
+data removes every consumer's string re-derivation. A trailing colon (`x:`)
+is an empty modifier with a zero-width span.
 
 **D5. Spans only, no stored `loc`.** Alternative: Babel-style `loc` on every
 node. Chosen because offsets are what the IR, Volar and LSP consume, line and

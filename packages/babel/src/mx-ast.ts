@@ -219,6 +219,10 @@ export interface MxAttribute extends MxNodeBase {
   readonly type: "MxAttribute";
   readonly name: string | null;
   readonly nameSpan: Span;
+  /** The text after the LAST `:` of the authored name; `null` without one (decision 170). */
+  readonly modifier: string | null;
+  /** The modifier's own span, colon excluded; `""` for a trailing colon is zero-width at `nameSpan.end`; `null` with `modifier`. */
+  readonly modifierSpan: Span | null;
   readonly operator: "=" | ":=" | null;
   readonly value: MxExpression | MxMethod | null;
   readonly args: MxArguments | null;

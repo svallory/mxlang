@@ -121,6 +121,22 @@ export function checkInvariants(
         if (node.name === null && node.nameSpan.start !== node.nameSpan.end) {
           fail(path, "the default value's nameSpan is not zero-width");
         }
+        // Decision 170: the last-colon split as data.
+        if ((node.modifier === null) !== (node.modifierSpan === null)) {
+          fail(path, "modifier and modifierSpan are not both null or both set");
+        }
+        if (node.modifier !== null && node.modifierSpan !== null) {
+          if (node.modifier !== text(node.modifierSpan)) {
+            fail(path, "modifier is not the modifierSpan's text");
+          }
+          if (node.modifierSpan.end !== node.nameSpan.end) {
+            fail(path, "modifierSpan does not end with nameSpan");
+          }
+          if (node.modifier === "" && node.modifierSpan.start !== node.modifierSpan.end) {
+            fail(path, "an empty modifier's span is not zero-width");
+          }
+          within(`${path}.modifierSpan`, node.modifierSpan, node);
+        }
         within(`${path}.nameSpan`, node.nameSpan, node);
         break;
       case "MxMethod":

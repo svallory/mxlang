@@ -454,9 +454,38 @@ it('MxAttribute (ast §3.5: `type="email"`, and the default value)', () => {
     end: 28,
     name: "type",
     nameSpan: sp(16, 20),
+    modifier: null,
+    modifierSpan: null,
     operator: "=",
     value: expr(21, 28, '"email"'),
     args: null,
+  } satisfies MxAttribute;
+  // Decision 170: the last-colon split as data (`class:x` → modifier `x`).
+  const modified = {
+    ...named,
+    name: "class:x",
+    nameSpan: sp(3, 10),
+    modifier: "x",
+    modifierSpan: sp(9, 10),
+  } satisfies MxAttribute;
+  // `x:` — a trailing colon is an empty modifier, zero-width span.
+  const trailing = {
+    ...named,
+    name: "x:",
+    nameSpan: sp(3, 5),
+    modifier: "",
+    modifierSpan: sp(5, 5),
+  } satisfies MxAttribute;
+  // `x::y` and `a:b:c` split at the last colon.
+  const doubled = {
+    ...named,
+    name: "x::y",
+    modifier: "y",
+  } satisfies MxAttribute;
+  const several = {
+    ...named,
+    name: "a:b:c",
+    modifier: "c",
   } satisfies MxAttribute;
   const defaulted = {
     ...named,
@@ -467,11 +496,16 @@ it('MxAttribute (ast §3.5: `type="email"`, and the default value)', () => {
   const { nameSpan: _n, ...rest } = named;
   // @ts-expect-error missing `nameSpan`
   const missing: MxAttribute = rest;
+  const { modifierSpan: _m, ...noSpan } = named;
+  // @ts-expect-error missing `modifierSpan`
+  const noModifierSpan: MxAttribute = noSpan;
   // @ts-expect-error wrong discriminator
   const wrong: MxAttribute = { ...named, type: "MxShorthand" };
   // @ts-expect-error `:=` and `=` are the only operators
   const badOp: MxAttribute = { ...named, operator: "==" };
-  expect([defaulted, missing, wrong, badOp]).toHaveLength(4);
+  expect(
+    [defaulted, modified, trailing, doubled, several, missing, noModifierSpan, wrong, badOp],
+  ).toHaveLength(9);
 });
 
 it("MxMethod (ast §3.5a: `onInput(e) { set(e) }`)", () => {
@@ -808,8 +842,17 @@ const ROWS = {
     nullable: [],
   },
   MxAttribute: {
-    required: [...BASE, "name", "nameSpan", "operator", "value", "args"],
-    nullable: ["name", "operator", "value", "args"],
+    required: [
+      ...BASE,
+      "name",
+      "nameSpan",
+      "modifier",
+      "modifierSpan",
+      "operator",
+      "value",
+      "args",
+    ],
+    nullable: ["name", "modifier", "modifierSpan", "operator", "value", "args"],
   },
   MxShorthand: {
     required: [
@@ -935,6 +978,8 @@ const SAMPLES: { [K in MxNode["type"]]: NodeOf<K> } = (() => {
       end: 28,
       name: "type",
       nameSpan: sp(16, 20),
+      modifier: null,
+      modifierSpan: null,
       operator: "=",
       value: expr(21, 28, '"email"'),
       args: null,

@@ -455,11 +455,16 @@ function attribute(ctx: Ctx, attr: Node): { start: number; line: string }[] {
     lines[lines.length - 1] += `${operator}${value}${args}`; // rule `sugar-arguments`
     return lines.map((line) => ({ start: s, line }));
   }
-  const name = rejoinAttributeName(attr.name, attr.modifier);
-  if (name.startsWith("#") || name.startsWith(".")) {
+  // Rule A2 (decision 170): the authored name and its last-colon split are
+  // compared field by field — no rejoining. A sugar chain (`.c:y`) still
+  // rejoins here because its parts are A6's, not A2's.
+  const head = attr.name ?? "";
+  const mod = attr.modifier;
+  const authored = rejoinAttributeName(head, mod);
+  if (authored.startsWith("#") || authored.startsWith(".")) {
     const lines: string[] = [];
     let at = s;
-    for (const part of splitChain(name)) {
+    for (const part of splitChain(authored)) {
       const [word, colon] = splitAtFirstColon(part.word);
       const cut = at + 1 + word.length;
       lines.push(`sugar ${part.sigil}${JSON.stringify(word)}@[${at},${cut})`);
@@ -473,10 +478,17 @@ function attribute(ctx: Ctx, attr: Node): { start: number; line: string }[] {
     lines[lines.length - 1] += `${operator}${value}${args}`; // rule `sugar-arguments`
     return lines.map((line) => ({ start: s, line }));
   }
+  // Rule A2: compare the split fields themselves. Marko's `name` is the head
+  // before the last colon and `modifier` the tail; MX carries both plus their
+  // spans, so the neutral line shows the split instead of a rejoined string.
+  const modSpan =
+    mod === null || mod === undefined
+      ? ""
+      : ` mod=${JSON.stringify(mod)}@[${s + head.length + 1},${s + head.length + 1 + mod.length})`;
   return [
     {
       start: s,
-      line: `attr ${JSON.stringify(name)} [${s},${e}) name=[${s},${s + name.length})${operator}${value}${args}`,
+      line: `attr ${JSON.stringify(authored)} [${s},${e}) name=[${s},${s + authored.length})${modSpan}${operator}${value}${args}`,
     },
   ];
 }

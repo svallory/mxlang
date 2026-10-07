@@ -705,6 +705,8 @@ class FrontEnd {
         end: this.at(range.start),
         name: null,
         nameSpan: { start: this.at(range.start), end: this.at(range.start) },
+        modifier: null,
+        modifierSpan: null,
         operator: null,
         value: null,
         args: null,
@@ -719,11 +721,23 @@ class FrontEnd {
         );
       }
     } else {
+      // Decision 170: the last-colon split is kept as data, so no consumer
+      // re-splits the string. A trailing colon is an empty modifier with a
+      // zero-width span at `nameSpan.end`.
+      const colon = text.lastIndexOf(":");
       items.push({
         type: "MxAttribute",
         ...this.span(range),
         name: text,
         nameSpan: this.span(range),
+        modifier: colon < 0 ? null : text.slice(colon + 1),
+        modifierSpan:
+          colon < 0
+            ? null
+            : {
+                start: this.at(range.start + colon + 1),
+                end: this.at(range.end),
+              },
         operator: null,
         value: null,
         args: null,

@@ -134,7 +134,13 @@ function tag(node: Node): NTag {
         const args = item.args
           ? ` args ${code(item.args.source, item.args.start)}`
           : "";
-        return `attr ${name} ${span} name=[${item.nameSpan.start},${item.nameSpan.end})${item.operator ? ` ${item.operator}` : ""}${value(item.value)}${args}`;
+        // Rule A2 (decision 170): MX's own split fields, not a re-derived
+        // slice of `name`.
+        const modSpan =
+          item.modifier === null || item.modifier === undefined
+            ? ""
+            : ` mod=${JSON.stringify(item.modifier)}@[${item.modifierSpan.start},${item.modifierSpan.end})`;
+        return `attr ${name} ${span} name=[${item.nameSpan.start},${item.nameSpan.end})${modSpan}${item.operator ? ` ${item.operator}` : ""}${value(item.value)}${args}`;
       }
     }
   });
