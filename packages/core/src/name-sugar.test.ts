@@ -397,6 +397,7 @@ describe("the shorthand charset, in both positions", () => {
     ["<div #1a/>", "<div#1a/>"],
     // `.2xl` stays Marko-valid: a digit-leading class part is only an error
     // when it is purely numeric (the tail of a split like `.w-1.5`).
+    ["<div .2xl/>", "<div.2xl/>"],
     ["<div .é/>", "<div.é/>"],
     ["<div .a@b/>", "<div.a@b/>"],
     ["<div .a+b/>", "<div.a+b/>"],
@@ -409,6 +410,7 @@ describe("the shorthand charset, in both positions", () => {
 
   it("matches Marko's shorthand, so the two positions never disagree", () => {
     expect(shape("<div #1a/>")).toBe('div id="1a"');
+    expect(shape("<div .2xl/>")).toBe('div class="2xl"');
     expect(shape("<div .é/>")).toBe('div class="é"');
   });
 

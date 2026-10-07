@@ -279,7 +279,9 @@ function rewriteShorthandGroup(error: Located, source: string): string | null {
   // points at the tag's start), so read past it for the sigil check.
   const head = source.slice(tagAt, offset + 60);
   if (!/^<[^<>\s]*[.#]/.test(head)) return null;
-  const bracket = head.match(/[[\]]/)?.[0];
+  // The bracket must sit in the shorthand run itself (up to the first
+  // whitespace), not in a later attribute (`<div.a x=[1]/>`).
+  const bracket = head.match(/^\S*/)?.[0].match(/[[\]]/)?.[0];
   if (!bracket) return null;
   const sentence = `a class or id shorthand cannot hold an unbalanced \`${bracket}\` (a part ends at \`.\`, \`#\`, \`/\`, \`(\`, whitespace, \`=\` or \`>\`); use \`class="…"\` for this class`;
   error.label = sentence;
@@ -302,9 +304,12 @@ function rewriteTagVariableShorthand(error: Located, source: string): boolean {
   if (offset < 1 || source[offset - 1] !== "/") return false;
   const head = source.slice(0, offset - 1);
   const tagAt = head.lastIndexOf("<");
-  // Only inside a tag head that carries shorthand (`.` or `#`); `/x` after a
-  // plain tag (`<const/x=1/>`) or an identifier (`/item`) keeps Marko's read.
-  if (tagAt < 0 || !/[.#]/.test(head.slice(tagAt))) return false;
+  // Only when the `/` ends a tag head that carries shorthand (`.` or `#`),
+  // with no whitespace before it; `/x` after a plain tag (`<const/x=1/>`), an
+  // identifier (`/item`) or an attribute (`<div title="a.b" x/2/>`) keeps
+  // Marko's read.
+  if (tagAt < 0 || !/^<[^<>\s]*[.#][^<>\s]*$/.test(head.slice(tagAt)))
+    return false;
   const token = source.slice(offset).match(/^[^\s=/>]+/)?.[0] ?? "";
   const sentence = `\`${token}\` is not more class: a \`/\` after a class or id shorthand starts a tag variable; write the class as \`class="…"\``;
   error.label = reason.replace(TAG_VARIABLE_REASON, sentence);

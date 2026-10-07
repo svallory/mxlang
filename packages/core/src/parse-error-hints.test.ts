@@ -129,6 +129,21 @@ describe("decision 174: shorthand parse errors", () => {
     expect(error.label).toBe(label);
   });
 
+  it("leaves a group error in an attribute after a valid shorthand alone", () => {
+    const source = "<div.a x=[1]/>";
+    const label = 'Mismatched group. A closing "]" character was found.';
+    const error = parseError(source, label, 11);
+    hintParseError(error, source);
+    expect(error.label).toBe(label);
+  });
+
+  it("leaves a tag-variable error alone when the `.` sits in an attribute value", () => {
+    const source = '<div title="a.b" x/2/>';
+    const error = parseError(source, TAG_VARIABLE, 19);
+    hintParseError(error, source);
+    expect(error.label).toBe(TAG_VARIABLE);
+  });
+
   it("rewrites every entry of an aggregate", () => {
     const source = "<div.w-[calc(100%-2rem)]/>";
     const first = parseError(source, "Identifier directly after number.", 19);
