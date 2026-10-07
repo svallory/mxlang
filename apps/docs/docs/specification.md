@@ -787,6 +787,19 @@ such as `.c#m.d` splits like a tag-adjacent one; a dynamic shorthand, `.a${x}`,
 works only tag-adjacent: `<div.a${x}>`). `name` is then an ordinary attribute, so contracts,
 the duplicate-attribute rule (decision 135) and E1 types all apply.
 
+**The shorthand's errors (decision 174):** three spellings a shorthand part
+cannot hold are positioned errors at the offending part, in every position,
+each advising the same escape hatch — write the value as `class="…"`. The
+shorthand keeps its simple rules (no bracket-aware or Tailwind-aware
+widening); a complex class name goes in `class="…"`:
+
+| You write | Error (positioned at the part) |
+|---|---|
+| `<div.bg-[#fff]/>` | yes: a shorthand part cannot contain `[` or `]` (Marko would silently split it into `class="bg-[" id="fff]"`; the bracket spellings that die in Marko's parser — `.w-[calc(100%-2rem)]`, `.bg-[url('/x.png')]`, `.data-[state=open]:flex`, `.[&>*]:p-4` — get the same error instead of its "Mismatched group" text) |
+| `<div.w-1.5/>` | yes: a numeric part splits off what precedes it (it would silently give `class="w-1 5"`); `.2xl` stays valid — a name the author wrote whole |
+| `<div.w-1/2/>` | yes: the `/` after a shorthand starts a tag variable, and `2` is not one; write `class="w-1/2"` (instead of Marko's tag-variable message and link) |
+| `<div.hover:bg-red/>` | no error: valid name sugar (decision 146) |
+
 **Tag-adjacent sugars compose in any order** (23:23 addendum): `<a.c:b>` is class
 `c` and name `b`; `<a#d:b.c>` is id `d`, name `b`, class `c`; `<:b.c>` is the
 unnamed tag with name `b` and class `c`. A static tag name splits at its first

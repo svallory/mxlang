@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Added (shorthand-class-diagnostics, decision 174):** the class/id shorthand keeps its rules, but three spellings are positioned errors at the offending part, on every target, each advising `class="…"`: a shorthand part containing `[` or `]` (`<div.bg-[#fff]/>` silently emitted `class="bg-[" id="fff]"`, and `.w-[calc(…)]`, `.bg-[url('…')]`, `.data-[state=open]:flex`, `.[&>*]:p-4` died in Marko's parser with its "Mismatched group" text), a bare-numeric class part (`<div.w-1.5/>` silently emitted `class="w-1 5"`; a name like `.2xl` stays valid), and a `/` after a shorthand followed by a non-identifier (`<div.w-1/2/>` now names the class shorthand instead of Marko's tag-variable message). `.hover:bg-red` stays valid name sugar. The tag-adjacent check runs in core's parse funnel before Marko parses (`shorthand-diagnostics.ts`); attribute-position sugar is checked in the sugar rewrite.
+
 - **Fixed (define-param-default-empty-error):** a parse failure inside a tag's `|params|` (`<define/Foo|{a=}|>`, `<for|{a=}| of=x>`) is a positioned `TranslateError` at the param with Babel's reason ("Unexpected token"), on every target. Marko threw its `CompileError` at 0:0 with a message that opens with an empty line (whole-file entries), and a region (`parseFragment`) lowered the unreadable param as one that binds nothing.
 
 ## 0.1.0-alpha.10

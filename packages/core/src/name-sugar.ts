@@ -1,6 +1,10 @@
 import { type Ctx, type Node, TranslateError } from "./core.ts";
 import { CORE_TAGLIB } from "./core-taglib.ts";
 import { markoParser } from "./stock-parser.ts";
+import {
+  shorthandBracketMessage,
+  shorthandDigitMessage,
+} from "./shorthand-diagnostics.ts";
 
 /**
  * Decision 146: `:name`, `#id` and `.class` sugar.
@@ -798,6 +802,20 @@ function rewriteAttributes(ctx: Ctx, node: Node): void {
             : `\`${sigil}${word}\` is not a valid shorthand name`,
           partStart,
         );
+      }
+      // Decision 174: the same two silent wrong classes the tag-adjacent scan
+      // rejects, for the attribute-position spelling (`<div .bg-[#fff]>`):
+      // brackets split the part, a bare number starts a class of its own
+      // (a name like `2xl` stays what the author wrote).
+      if (word.includes("[") || word.includes("]")) {
+        failAt(ctx, shorthandBracketMessage(sigil, word), partStart);
+      }
+      if (
+        sigil === "." &&
+        /^[0-9]/.test(word) &&
+        !/[A-Za-z]/.test(word)
+      ) {
+        failAt(ctx, shorthandDigitMessage(word), partStart);
       }
       if (sigil === "#") {
         out.push(

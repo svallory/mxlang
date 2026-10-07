@@ -47,6 +47,7 @@ import { nullPrototypeTags } from "./lookup-safety.ts";
 import { lower } from "./lower.ts";
 import { markoBabel, markoCompiler } from "./marko-frontend.ts";
 import { hintParseError } from "./parse-error-hints.ts";
+import { shorthandDiagnosticError } from "./shorthand-diagnostics.ts";
 import {
   bareCommaError,
   stockAtomError,
@@ -377,6 +378,11 @@ export function compileSource(
   policy: Policy,
   host: HostOptions,
 ): CompileResult {
+  // Decision 174: a shorthand part the parser would silently split into the
+  // wrong class/id (or die on in Marko's parser) is an error before Marko
+  // parses, positioned at the part, so every target shares it.
+  const shorthand = shorthandDiagnosticError(source);
+  if (shorthand) throw shorthand;
   // Required lazily and by CJS: `@marko/compiler` is a large dependency and
   // only this function needs it, so importing the type surface stays free.
   const compiler = markoCompiler();

@@ -157,6 +157,9 @@ Tag-adjacent `=value` (`<a#x=1>`) is Marko's own default attribute, not this sug
 | `<a :x=1/>` | `name="x"` plus `value=1`: a sugar followed by `=value` sets the default attribute (see [A sugar followed by a value](#attributes-name-and-id-and-class-after-an-attribute-a-sugar-followed-by-a-value)) |
 | `<div :/>` | an error: `:` is name sugar and needs a name (Marko read a bare `:` as `value:`; write `value:` for that attribute) |
 | `<div :1a/>` | an error: `:name` takes an identifier (`#x` and `.x` take whatever Marko's shorthand takes, so `<div #1a .2xl/>` is `id="1a"`, `class="2xl"`) |
+| `<div.bg-[#fff]/>`, `<div .bg-[#fff]>` | an error at the part: a shorthand part cannot contain `[` or `]`, so write the value as `class="…"` (decision 174; the same error replaces Marko's "Mismatched group" for `.w-[calc(…)]`, `.bg-[url('…')]`, `.data-[state=open]:flex` and `.[&>*]:p-4`) |
+| `<div.w-1.5/>` | an error at the part: a numeric part splits off what precedes it (`.w-1.5` would silently give `class="w-1 5"`); `.2xl` stays valid (decision 174) |
+| `<div.w-1/2/>` | an error at the `/`: it starts a tag variable, and `2` is not one; write `class="w-1/2"` (decision 174) |
 
 An attribute tag's name (`<@svg:rect>`) is a property key and is not split;
 sugar inside one applies. `<svg:rect>` is the tag `svg` plus `name="rect"`, on

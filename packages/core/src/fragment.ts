@@ -46,6 +46,7 @@ import {
 } from "./custom-tags.ts";
 import { nullPrototypeTags } from "./lookup-safety.ts";
 import { markoCompiler } from "./marko-frontend.ts";
+import { shorthandDiagnosticError } from "./shorthand-diagnostics.ts";
 import {
   bareCommaError,
   stockAtomError,
@@ -415,6 +416,14 @@ export function parseFragment(
   const compiler = markoCompiler();
   const translator = parseOnlyTranslator(base.customTags);
   prepareLookup(compiler, resolved.filename, translator);
+  // Decision 174: the shorthand diagnostics are source-relative here, so they
+  // are shifted like every other position the fragment reports.
+  const shorthand = shorthandDiagnosticError(source);
+  if (shorthand) {
+    const at = { line: shorthand.line, column: shorthand.column };
+    shiftPosition(at, resolved);
+    throw new TranslateError(shorthand.message, at.line, at.column);
+  }
   let ast: Node;
   try {
     ast = compiler.compileSync(source, resolved.filename, {
@@ -430,7 +439,7 @@ export function parseFragment(
     } as any).ast;
   } catch (thrown) {
     const error = markoPrintCrash(thrown)
-      ? reparseForError(compiler, source, resolved.filename, translator, thrown)
+      ? (reparseForError(compiler, source, resolved.filename, translator) ?? thrown)
       : thrown;
     // A thrown error's position is on the exception, never in a tree, so the
     // walk below can never reach it (spike 1, limit 2).
@@ -490,14 +499,13 @@ function reparseForError(
   source: string,
   filename: string,
   translator: unknown,
-  original: unknown,
-): unknown {
+): Error | undefined {
   try {
     compiler.compileSync(source, filename, { translator, output: "html" });
   } catch (error) {
-    return error;
+    return error instanceof Error ? error : new Error(String(error));
   }
-  return original;
+  return undefined;
 }
 
 /**
