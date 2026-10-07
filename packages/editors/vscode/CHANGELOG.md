@@ -4,7 +4,7 @@
 
 ### Added: the language server handles `.ng.mx` (ls-angular-host-wiring)
 
-`ngmx` joins the language server client's document selector (file and untitled schemes). The server compiles a `.ng.mx` whole-file through `@mxlang/angular`'s `compileNgMx`, routed by suffix, so compile/translate errors and warnings inside MX regions are published at their authored position. `astromx` stays out (the server does not handle `.astro.mx`), and `manifest.test.ts`'s old "keep ngmx out of the selector" gate is inverted to pin this.
+`ngmx` joins the language server client's document selector (file scheme only — untitled ng buffers are not diagnosed, because the server routes by the `.ng.mx` suffix an untitled URI does not have). The server compiles a `.ng.mx` whole-file through `@mxlang/angular`'s `compileNgMx`, routed by suffix, so compile/translate errors and warnings inside MX regions are published at their authored position. `astromx` stays out (the server does not handle `.astro.mx`), and `manifest.test.ts`'s old "keep ngmx out of the selector" gate is inverted to pin this.
 
 ### Added: `.preact.mx` (PreactMX, decision 154)
 

@@ -624,6 +624,13 @@ describe("the Hono host", () => {
   });
 });
 
+/** The lowering error for a stray `)` inside a `.ng.mx` region. */
+const NG_MISMATCHED_GROUP_MESSAGE =
+  'Mismatched group. A closing ")" character was found but it is not matched with a corresponding opening character.';
+/** The lowering error for an MX region outside an `@Component` template. */
+const NG_REGION_NOT_TEMPLATE_MESSAGE =
+  "an MX region in a `.ng.mx` file is only valid as the `template` property of an `@Component({ … })` decorator.";
+
 describe("the Angular host", () => {
   /** A `.ng.mx` module with one MX region in its `template:` property. */
   function ngMx(region: string): string {
@@ -684,9 +691,10 @@ describe("the Angular host", () => {
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0]?.severity).toBe(DiagnosticSeverity.Error);
     expect(diagnostics[0]?.message).toContain("Mismatched group");
-    // Line 1 (0-based) is the `template:` line; column 65 is the expression.
-    expect(diagnostics[0]?.range.start.line).toBe(4);
-    expect(diagnostics[0]?.range.start.character).toBeGreaterThan(10);
+    // The region is on the `template:` line (line 1, 0-based) plus the offset
+    // the region body has inside the module, so the authored position of the
+    // stray `)` is line 4, character 17.
+    expect(diagnostics[0]?.range.start).toEqual({ line: 4, character: 17 });
   });
 
   it("reports a warning for a whole-file .mx page", () => {
@@ -714,9 +722,9 @@ describe("the Angular host", () => {
   });
 
   it("reports an error for a broken .ng.mx under any page host (file kind wins)", () => {
-    // `<@tags/>` is not a TypeScript module: the ng pipeline — not the
-    // react/html page compiler — is what answers, whatever host the resolver
-    // derived. The diagnostic must come from the `.ng.mx` lowering.
+    // The ng pipeline — not the react/html page compiler — is what answers,
+    // whatever host the resolver derived. The diagnostic must come from the
+    // `.ng.mx` lowering: the mismatched-group error at its authored position.
     for (const host of [
       "react",
       "solid",
@@ -726,20 +734,27 @@ describe("the Angular host", () => {
       "astro",
     ] as const) {
       const diagnostics = diagnoseDocument(
-        "<@tags/>\n",
+        ngMx("<p>${user.name +)}</p>"),
         "file:///app/x.ng.mx",
         policy(host),
       );
       expect(diagnostics).toHaveLength(1);
       expect(diagnostics[0]?.severity).toBe(DiagnosticSeverity.Error);
-      expect(diagnostics[0]?.message).not.toContain("@tags");
+      expect(diagnostics[0]?.message).toBe(NG_MISMATCHED_GROUP_MESSAGE);
+      expect(diagnostics[0]?.range.start).toEqual({ line: 4, character: 17 });
     }
   });
 
   it("matches .NG.mx case-insensitively, like the TS plugin", () => {
-    expect(
-      diagnoseDocument("<@tags/>\n", "file:///app/X.NG.mx", policy("html")),
-    ).toHaveLength(1);
+    const diagnostics = diagnoseDocument(
+      ngMx("<p>${user.name +)}</p>"),
+      "file:///app/X.NG.mx",
+      policy("html"),
+    );
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.severity).toBe(DiagnosticSeverity.Error);
+    expect(diagnostics[0]?.message).toBe(NG_MISMATCHED_GROUP_MESSAGE);
+    expect(diagnostics[0]?.range.start).toEqual({ line: 4, character: 17 });
   });
 
   it("still returns host-policy warnings", () => {
@@ -796,7 +811,8 @@ describe("an unknown mx.host", () => {
     expect(diagnostics[0]?.severity).toBe(DiagnosticSeverity.Warning);
     expect(diagnostics[0]?.message).toContain('unknown mx.host "angualr"');
     expect(diagnostics[1]?.severity).toBe(DiagnosticSeverity.Error);
-    expect(diagnostics[1]?.message).not.toContain("@tags");
+    expect(diagnostics[1]?.message).toBe(NG_REGION_NOT_TEMPLATE_MESSAGE);
+    expect(diagnostics[1]?.range.start).toEqual({ line: 0, character: 0 });
   });
 
   it("h23's shape: an .mx page compiles under the derived host, plus the warning", () => {

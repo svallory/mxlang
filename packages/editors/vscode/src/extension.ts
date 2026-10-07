@@ -63,7 +63,8 @@ export function activate(context: ExtensionContext) {
           { scheme: "file", language: "honomx" },
           { scheme: "untitled", language: "honomx" },
           { scheme: "file", language: "ngmx" },
-          { scheme: "untitled", language: "ngmx" },
+          // No untitled `ngmx` entry: the LS routes ng documents by the
+          // `.ng.mx` suffix only, which an untitled buffer has none of.
           // astromx is intentionally excluded as the LS does not handle
           // .astro.mx yet. `.ng.mx` gets compile/translate diagnostics from
           // the LS (plus TypeScript semantics through the TS server plugin,
