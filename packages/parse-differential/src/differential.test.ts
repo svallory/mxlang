@@ -89,7 +89,7 @@ describe(`fixtures (${INPUT_GLOB})`, () => {
 
 /**
  * Where today's front end throws ITS OWN error before the sugar rule
- * (ast \u00a73.13 keeps today's text for the rules themselves). Six inputs;
+ * (ast \u00a73.13 keeps today's text for the rules themselves). Seven inputs;
  * the test below pins each one's exact today-first reason, so a rule change
  * that moves an entry into or out of this list fails there:
  * - `:=1` on an empty `:name` (`<div:=1/>`, `<let/x:=1/>`, `let/x:=1`,
@@ -99,6 +99,9 @@ describe(`fixtures (${INPUT_GLOB})`, () => {
  * - `.` with arguments and no word (`<div x=a . (b) y/>`): today's attr
  *   with arguments is not sugar at all, so "Invalid attribute name `.`"
  *   fires instead of `MX_SUGAR_ARGUMENTS`.
+ * - `=>` after a sugar attribute value (`(a) :É => a`, g1715): today's
+ *   parser itself rejects the value (`Unexpected token` at the `>` of
+ *   `=>`), so its parse error fires before `MX_SUGAR_NAME_INVALID`.
  */
 const TODAY_OWN_FIRST = new Set([
   "g0062",
@@ -107,6 +110,7 @@ const TODAY_OWN_FIRST = new Set([
   "g0489",
   "g1035",
   "g1355",
+  "g1715",
 ]);
 
 /** Each TODAY_OWN_FIRST entry's own expected first error from today (offset + message). */
@@ -140,6 +144,10 @@ const TODAY_OWN_REASON: Record<string, { start: number; message: string }> = {
     start: 9,
     message:
       "Attributes may only be bound to identifiers or member expressions",
+  },
+  g1715: {
+    start: 8,
+    message: "at s.mx:1:9",
   },
 };
 

@@ -73,7 +73,13 @@ export function lowerToday(source: string): LowerOutcome {
   if (thrown === null) return { ok: true, message: "", start: -1 };
   // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping ANSI codes needs the escape byte
   const ansi = /\u001b\[[0-9;]*m/g;
-  const plain = String((thrown as Error)?.message ?? thrown).replace(ansi, "");
+  const plain = String((thrown as Error)?.message ?? thrown)
+    .replace(ansi, "")
+    // Babel parse errors lead with the compile file's location, rendered
+    // relative to the process cwd (../../…/differential/s.mx locally,
+    // ../../differential/s.mx from the repo root). Normalize the prefix so
+    // today-first reason pins are cwd-independent.
+    .replace(/(?:\.\.\/)+differential\/s\.mx/g, "s.mx");
   const message = plain.split("\n").find((l) => l.trim()) ?? "";
   const loc = (thrown as { loc?: unknown }).loc;
   const line =
