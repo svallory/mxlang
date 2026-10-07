@@ -77,6 +77,20 @@ describe("isDerivedFrom (the mapping assertion's derivation list)", () => {
     expect(isDerivedFrom("id", "(p => p.id)", "track")).toBe(false);
   });
 
+  it("accepts a define-pattern only for `let-<context>` over a `{` pattern", () => {
+    const dp = (g: string, src: string, ctx?: string) =>
+      isDerivedFrom(g, src, "define-pattern", ctx);
+    expect(dp("let-__mxArg", "{ a, b }", "__mxArg")).toBe(true);
+    expect(dp("let-__mxArg2", " { a }", "__mxArg2")).toBe(true);
+    // Not an object pattern, a context that is not the emitter's, or a
+    // generated run that is not `let-<context>`.
+    expect(dp("let-__mxArg", "a", "__mxArg")).toBe(false);
+    expect(dp("let-x", "{ a }", "x")).toBe(false);
+    expect(dp("let-__mxArg", "{ a }", "__mxArg2")).toBe(false);
+    expect(dp("__mxArg", "{ a }", "__mxArg")).toBe(false);
+    expect(dp("let-__mxArg", "{ a }")).toBe(false);
+  });
+
   it("requires an exact `<prefix><kebab(source)>` for a selector", () => {
     const sel = (g: string, src: string, prefix?: string) =>
       isDerivedFrom(g, src, "selector", prefix);

@@ -1,0 +1,170 @@
+[
+  {
+    "tagName": "ng-template",
+    "attributes": [],
+    "inputs": [],
+    "outputs": [],
+    "directives": [],
+    "templateAttrs": [],
+    "children": [
+      {
+        "name": "a",
+        "value": {
+          "ast": {
+            "receiver": {
+              "receiver": {},
+              "name": "__mxArg"
+            },
+            "name": "a"
+          }
+        }
+      },
+      {
+        "name": "f",
+        "value": {
+          "ast": {
+            "receiver": {
+              "receiver": {},
+              "name": "__mxArg"
+            },
+            "key": {
+              "value": "d-e"
+            }
+          }
+        }
+      },
+      {
+        "name": "n",
+        "value": {
+          "ast": {
+            "condition": {
+              "operation": "===",
+              "left": {
+                "receiver": {
+                  "receiver": {},
+                  "name": "__mxArg"
+                },
+                "name": "n"
+              },
+              "right": {}
+            },
+            "trueExp": {
+              "value": 5
+            },
+            "falseExp": {
+              "receiver": {
+                "receiver": {},
+                "name": "__mxArg"
+              },
+              "name": "n"
+            }
+          }
+        }
+      },
+      {
+        "value": {
+          "ast": {
+            "strings": [
+              " ",
+              "",
+              "",
+              " "
+            ],
+            "expressions": [
+              {
+                "receiver": {},
+                "name": "a"
+              },
+              {
+                "receiver": {},
+                "name": "f"
+              },
+              {
+                "receiver": {},
+                "name": "n"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "references": [
+      {
+        "name": "Row",
+        "value": ""
+      }
+    ],
+    "variables": [
+      {
+        "name": "__mxArg",
+        "value": ""
+      }
+    ],
+    "isSelfClosing": false
+  },
+  {
+    "name": "ng-container",
+    "attributes": [],
+    "inputs": [
+      {
+        "name": "ngTemplateOutlet",
+        "type": 0,
+        "securityContext": 0,
+        "value": {
+          "ast": {
+            "receiver": {},
+            "name": "Row"
+          }
+        },
+        "unit": null
+      },
+      {
+        "name": "ngTemplateOutletContext",
+        "type": 0,
+        "securityContext": 0,
+        "value": {
+          "ast": {
+            "keys": [
+              {
+                "kind": "property",
+                "key": "$implicit",
+                "quoted": false
+              }
+            ],
+            "values": [
+              {
+                "keys": [
+                  {
+                    "kind": "property",
+                    "key": "a",
+                    "quoted": false
+                  },
+                  {
+                    "kind": "property",
+                    "key": "d-e",
+                    "quoted": true
+                  }
+                ],
+                "values": [
+                  {
+                    "value": "{x}"
+                  },
+                  {
+                    "value": "{{y}}"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "unit": null
+      }
+    ],
+    "outputs": [],
+    "directives": [],
+    "children": [],
+    "references": [],
+    "isSelfClosing": false,
+    "isVoid": false
+  }
+]

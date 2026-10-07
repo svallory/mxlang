@@ -380,6 +380,15 @@ export function isDerivedFrom(
     // A `<define>` param: `x` -> the `let-x` token that binds it.
     case "define-param":
       return generated === `let-${source}`;
+    // A destructured `<define>` first param: the whole `{ … }` pattern ->
+    // the `let-<gensym>` token binding the attributes object.
+    case "define-pattern":
+      return (
+        source.trimStart().startsWith("{") &&
+        deriveContext !== undefined &&
+        /^__mxArg\d*$/.test(deriveContext) &&
+        generated === `let-${deriveContext}`
+      );
     // An `[ngClass]`/`[ngStyle]` directive name, from a `class`/`style` value.
     case "directive":
       return (
