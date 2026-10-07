@@ -11,6 +11,43 @@ This note answers one question: what does MX need so that it is the best languag
 
 The short version. MX extends at three places, and only three: the **reader** (meaning for a sigil-prefixed value that core already lexes), **structure** (tag contracts, which exist today), and **semantics** (lowering and transform hooks, which exist today but synthesize unspanned nodes). An extension is an npm package with a manifest that is plain data; its hooks are code the compiler runs and the editor never needs to. The grammar itself is closed: no extension adds a token, a sigil, or a tag form, because every static tool MX ships (tree-sitter, TextMate, the Marko offer) has to work from the grammar alone. Where this note disagrees with the kickoff sketch, section 8 says so.
 
+The diagram is the whole design on one screen. An extension package touches the pipeline only at lowering, and only through the three slots; the manifest is the one thing the static tools read, and they read it without running anything.
+
+```mermaid
+flowchart TB
+  subgraph ext["extension package (npm)"]
+    direction LR
+    man["manifest (plain data)<br/>values · tags · extends"]
+    hooks["hooks (code)<br/>analyze · transform · finalize"]
+  end
+
+  subgraph slots["the three slots"]
+    direction LR
+    s1["1 reader<br/>meaning for a sigil value<br/>core already lexed"]
+    s2["2 structural<br/>tag contracts"]
+    s3["3 semantic<br/>spanned builders"]
+  end
+
+  subgraph core["@mxlang/core: closed grammar, nothing enters the lexer or parser"]
+    direction LR
+    src[".mx source"] --> lex["lexer"] --> parse["parser"] --> lower["lower"] --> ir["IR: span + origin<br/>on every node"]
+  end
+
+  man --> s1
+  man --> s2
+  hooks --> s3
+  s1 --> lower
+  s2 --> lower
+  s3 --> lower
+
+  ir --> emit["host emitters<br/>html · data · preact · react · hono · solid · astro · angular"]
+  man --> tools["static tools read the manifest, run no code<br/>tree-sitter · TextMate · TS plugin · language server"]
+  lower --> diag["positioned errors · visible expansion"]
+  tools --> diag
+```
+
+Nothing enters the lexer or the parser from an extension. That is the design's one hard rule: an extension gives meaning to shapes core already lexes and never adds a shape.
+
 ## 1. What MX can extend today
 
 Everything below is read from source on this worktree. "Static" means a tool learns it by reading files; "code" means a tool has to `require` the user's module to know it.

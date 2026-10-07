@@ -289,6 +289,7 @@
     }
   ],
   "plugins": {
+    "mermaid": {},
     "@mxlang/tree-sitter-mx/docmd": {},
     "seo": {
       "defaultDescription": "MX is a template language born from Marko: one markup language, many hosts."
