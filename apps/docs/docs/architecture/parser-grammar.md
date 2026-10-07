@@ -28,8 +28,9 @@ Decision 158 (2026-10-05) fixes the delivery plan:
 - MX2 defines **its own AST with its own node types** in `@mxlang/babel`. The
   design removes every accommodation made to fit Marko; decision 158.1 names
   "no `markoTag` family inside a patched `@babel/types`" and "**no `value:`
-  modifier split as the name**" (decision 170: the authored name stays whole
-  and the last-colon split is carried as `modifier` + `modifierSpan` fields),
+  modifier split as the name**" (decision 170, amended by decision 163
+  addendum 12: the split at the last `:` is carried as `modifier` + `modifierSpan`
+  fields, and `name`/`nameSpan` cover the head before that colon),
   and makes sugars, atoms, attribute tags, wildcard children,
   `defaultTag` and `<return>` first-class nodes with native positions.
 - The Marko compiler front end is **not copied** (158.2, superseding 157
@@ -51,7 +52,7 @@ Two rules that this document mentions are implemented today in
 
 | Rule | Today | Under decision 158 |
 | --- | --- | --- |
-| the split of an attribute name at its last `:` with an empty head filled by `value` | `@marko/compiler`'s `onAttrName` (as spec §4 "`:modifier`" describes it) | **split removed from the name, kept as data** (decision 170): the parser still splits at the last `:` because htmljs reports the split halves, but `MxAttribute.name` is the authored text (`class:x`) and the halves are carried as `modifier` + `modifierSpan`; the empty-head fill by `value` is gone (A3: the default value is `name: null`) |
+| the split of an attribute name at its last `:` with an empty head filled by `value` | `@marko/compiler`'s `onAttrName` (as spec §4 "`:modifier`" describes it) | **split removed from the name, kept as data** (decision 170, amended by decision 163 addendum 12): the parser still splits at the last `:` because htmljs reports the split halves, but `MxAttribute.name` is the head before that colon (`class:x` → `class`, `nameSpan` truncated to the head) and the halves are carried as `modifier` + `modifierSpan` (the modifier's span starts after the colon); the empty-head fill by `value` is gone (A3: the default value is `name: null`) |
 | arguments together with plain attributes are an error (`assertAttributesOrArgs`, decision 109) | `@marko/compiler` | a rule of the layer that builds the call, which is core (158.3); it is not a parser rule either way |
 
 Sources of truth, in this order:

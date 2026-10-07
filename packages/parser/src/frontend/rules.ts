@@ -15,6 +15,8 @@
  * policy, lowering), and the decision-174 bracket/numeric shorthand errors
  * (also lowering's today).
  */
+
+import { parseExpression } from "@mxlang/babel";
 import type { MxErrorCode, MxParseError } from "@mxlang/babel/mx-ast";
 import { createParser } from "../template/index.ts";
 import type { TagBuilder } from "./parse.ts";
@@ -210,23 +212,29 @@ function headRules(
       item.name === null &&
       item.start === name?.span?.end,
   );
+  // `<:1/>` / `<:/>` / `<:b:c/>`: an unnamed tag whose head starts with
+  // `:` — the colon is the name's sugar and its word is the tag's name.
+  const unnamedColon =
+    name?.kind === "unnamed" &&
+    sliceSpan(ctx, name.span.start, name.span.start + 1) === ":";
   if (
     tag.type !== "MxAttributeTag" &&
-    name?.kind === "static" &&
-    !boundDefault
+    !boundDefault &&
+    (name?.kind === "static" || unnamedColon)
   ) {
+    const at = unnamedColon ? name.span.start : name.span.end;
     const colonSugar = tagShorthands(tag).find(
-      (s) => s.sigil === ":" && s.start === name.span.end,
+      (s) => s.sigil === ":" && s.start === at,
     );
     // `a:` (a trailing colon) never produced a sugar; its word is empty.
     const afterColon =
       colonSugar !== undefined
         ? String(colonSugar.value?.value ?? "")
-        : sliceSpan(ctx, name.span.end, name.span.end + 1) === ":"
+        : sliceSpan(ctx, at, at + 1) === ":"
           ? ""
           : undefined;
     if (afterColon !== undefined) {
-      const colon = localOf(ctx, name.span.end);
+      const colon = localOf(ctx, at);
       const word = afterColon.split(":")[0] ?? "";
       checkToken(ctx, errs, word, colon, "a tag name");
       found.push({ start: colon, end: colon + 1 + word.length });
@@ -268,6 +276,20 @@ function headRules(
     }
     const text = String(value?.value ?? "");
     headNamesInValue(ctx, errs, text, localOf(ctx, s.start) + 1, found);
+  }
+
+  // `<div.c:/>` / `<div.${x}:/>`: an empty word after a shorthand's `:`
+  // makes no sugar (the split leaves it empty), so read the authored colon
+  // off the source here — today reports it (`calibration` F4).
+  for (const s of tagShorthands(tag)) {
+    if (s.sigil === ":") continue;
+    const at = s.end;
+    if (
+      sliceSpan(ctx, at, at + 1) === ":" &&
+      !tagShorthands(tag).some((t) => t.start === at)
+    ) {
+      checkToken(ctx, errs, "", localOf(ctx, at), "a shorthand class or id");
+    }
   }
 
   // A `:` sugar a dynamic tail or the name split produced (`<a.c${x}:y>`).
@@ -327,41 +349,44 @@ function attrChainRules(
   const textEnd = localOf(ctx, chain.at(-1)?.end ?? first.end);
   const text = ctx.source.slice(textStart, textEnd);
   const lastColon = text.lastIndexOf(":");
-  const fullEnd = // today's `authored` covers a value or arguments after the sugar
-    localOf(
-      ctx,
-      Math.max(
-        chain.at(-1)?.end ?? first.end,
-        (first.args as Any | null)?.end ?? 0,
-        (first.default as Any | null)?.end ?? 0,
-      ),
-    );
+  // Today's `authored` covers a value or arguments after the sugar; the
+  // operator and the value attach to the LAST split item (parse.ts
+  // `onAttrValue`), so every item's args/default counts toward the end.
+  const fullEnd = localOf(
+    ctx,
+    Math.max(
+      chain.at(-1)?.end ?? first.end,
+      ...chain.flatMap((item) => [
+        (item.args as Any | null)?.end ?? 0,
+        (item.default as Any | null)?.end ?? 0,
+      ]),
+    ),
+  );
   const authored = `\`${ctx.source.slice(textStart, Math.max(fullEnd, textEnd))}\``;
 
-  // `:n:=y` / `.c:=y` / `#x:=y`: `:=` is not a sugar value separator.
-  if (first.operator === ":=") {
-    if (first.sigil === ".") {
+  // `:n:=y` / `.c:=y` / `#x:=y`: `:=` is not a sugar value separator. The
+  // operator attaches to the last split item, but the rule reads the
+  // chain's authored sigil (its first character) — today's dot-sugar rule
+  // fires regardless of whether the value is bindable.
+  const bound = chain.find((item) => item.operator === ":=");
+  if (bound) {
+    const startChar = text[0];
+    if (startChar === "#") {
+      return; // `#` is host policy: lowering raises it (ast §3.6 rule 7)
+    }
+    if (startChar === ".") {
       errs.push(point(ctx, "MX_SUGAR_BOUND", BOUND_ON_SUGAR, textStart));
       return;
     }
-    if (first.sigil === ":") {
-      const bindable = BINDABLE.test(
-        sliceSpan(
-          ctx,
-          (first.default as Any)?.start ?? first.end,
-          (first.default as Any)?.end ?? first.end,
-        ),
-      );
-      // `:n:=y` and `<div:=x/>` (an empty `:name`): BOUND. `:n:=1` binds a
-      // non-identifier: Marko's own binding error fires there first today,
-      // lowering's to raise.
-      if (bindable) {
-        errs.push(point(ctx, "MX_SUGAR_BOUND", BOUND_ON_SUGAR, textStart));
-        return;
-      }
-      return; // Marko's own binding error is lowering's to raise
+    // `:n:=y` and `<div:=x/>` (an empty `:name`): BOUND. `:n:=1` binds a
+    // non-identifier: Marko's own binding error fires there first today,
+    // lowering's to raise — decided by parsing the value, exactly as
+    // today's lowering decides it (a real expression node-kind check).
+    if (isBindableValue((bound.default as Any)?.source)) {
+      errs.push(point(ctx, "MX_SUGAR_BOUND", BOUND_ON_SUGAR, textStart));
+      return;
     }
-    return; // `#` is host policy: lowering raises it (ast §3.6 rule 7)
+    return; // Marko's own binding error is lowering's to raise
   }
 
   // Arguments with no body (`:b(x)`, `.c(p)`, `.c:x(p)`): today the attr is
@@ -458,11 +483,10 @@ function attrChainRules(
         }
       }
       const shown = word.slice(0, cut);
-      const nodeName = sliceSpan(
-        ctx,
-        (tag.name as Any)?.span?.start ?? item.start,
-        (tag.name as Any)?.span?.end ?? item.start,
-      );
+      // Today's fallback (`checkNearSugar`): the tag's static name, else
+      // `"div"` — a dynamic or unnamed tag has no string name to show.
+      const name = tag.name as Any;
+      const nodeName = name?.kind === "static" ? (name.value ?? "div") : "div";
       errs.push(
         point(
           ctx,
@@ -496,8 +520,16 @@ function attrChainRules(
   }
 }
 
-/** An identifier or member expression (`a`, `a.b`), the only values a sugar may bind. */
-const BINDABLE = /^\s*[A-Za-z_$][\w$]*(\s*\.\s*[A-Za-z_$][\w$]*)*\s*$/;
+/** A value a sugar may bind: an identifier or member expression, exactly as today's lowering decides it — by parsing the value and looking at the Babel node kind (name-sugar.ts `checkNearSugar`). */
+function isBindableValue(source: string | undefined): boolean {
+  if (!source) return false;
+  try {
+    const node = parseExpression(source);
+    return node.type === "Identifier" || node.type === "MemberExpression";
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Marko's own parse errors the front end reproduces (ast §3.2 A20/A21, and
@@ -587,9 +619,15 @@ export function frontEndRules(
 
   // `import:x` — a `:name` on a statement tag, wherever it sits.
   if (name?.kind === "static" && ctx.statementKeywords.has(name.value)) {
-    const colon = tagShorthands(tag).find(
-      (s) => s.sigil === ":" && s.start === name.span.end,
-    );
+    const colon =
+      tagShorthands(tag).find(
+        (s) => s.sigil === ":" && s.start === name.span.end,
+      ) ??
+      // `<import:/>`: an empty trailing word makes no sugar — read the
+      // authored colon off the source (today reports it, `calibration` F4).
+      (sliceSpan(ctx, name.span.end, name.span.end + 1) === ":"
+        ? { start: name.span.end }
+        : undefined);
     if (colon) {
       errs.push(
         point(

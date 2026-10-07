@@ -482,7 +482,7 @@
   ],
   "g0114": [
     "tag \"div\" [1,4) [0,12) open=[0,12) mode=html self-closed",
-    "  attr \"x:\" [5,10) name=[5,7) = value \"1\" [9,10)"
+    "  attr \"x\" [5,10) name=[5,6) = value \"1\" [9,10)"
   ],
   "g0115": [
     "tag \"div\" [1,4) [0,14) open=[0,14) mode=html self-closed",
@@ -1665,7 +1665,7 @@
   ],
   "g0384": [
     "tag \"div\" [0,3) [0,15) open=[0,11) mode=html concise",
-    "  attr \"a:keyof\" [4,11) name=[4,11)",
+    "  attr \"a\" [4,11) name=[4,5)",
     "  tag \"b\" [14,15) [14,15) open=[14,15) mode=html concise"
   ],
   "g0385": [
@@ -2840,15 +2840,15 @@
   ],
   "g0658": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"class:x\" [5,14) name=[5,12) = value \"1\" [13,14)"
+    "  attr \"class\" [5,14) name=[5,10) = value \"1\" [13,14)"
   ],
   "g0659": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"style:x\" [5,14) name=[5,12) = value \"1\" [13,14)"
+    "  attr \"style\" [5,14) name=[5,10) = value \"1\" [13,14)"
   ],
   "g0660": [
     "tag \"input\" [1,6) [0,20) open=[0,20) mode=void self-closed",
-    "  attr \"value:fn\" [7,18) name=[7,15) := value \"x\" [17,18)"
+    "  attr \"value\" [7,18) name=[7,12) := value \"x\" [17,18)"
   ],
   "g0661": [
     "tag \"div\" [1,4) [0,23) open=[0,5) close=[17,23) \"div\" mode=html",
@@ -3158,7 +3158,7 @@
   ],
   "g0733": [
     "tag \"div\" [1,4) [0,11) open=[0,11) mode=html self-closed",
-    "  attr \"a:\" [5,7) name=[5,7)",
+    "  attr \"a\" [5,7) name=[5,6)",
     "  attr \"b\" [8,9) name=[8,9)"
   ],
   "g0734": [
@@ -3431,7 +3431,7 @@
   ],
   "g0796": [
     "tag \"div\" [0,3) [0,8) open=[0,8) mode=html concise",
-    "  attr \"a:\" [4,6) name=[4,6)",
+    "  attr \"a\" [4,6) name=[4,5)",
     "  attr \"b\" [7,8) name=[7,8)"
   ],
   "g0797": [
@@ -5688,7 +5688,7 @@
   ],
   "g1303": [
     "tag \"div\" [1,4) [0,14) open=[0,14) mode=html self-closed",
-    "  attr \"class:x\" [5,12) name=[5,12)"
+    "  attr \"class\" [5,12) name=[5,10)"
   ],
   "g1304": [
     "attribute-tag @svg:rect [1,10) [0,12) open=[0,12) mode=html self-closed",

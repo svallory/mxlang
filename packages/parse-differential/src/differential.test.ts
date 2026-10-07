@@ -89,10 +89,13 @@ describe(`fixtures (${INPUT_GLOB})`, () => {
 
 /**
  * Where today's front end throws ITS OWN error before the sugar rule
- * (ast \u00a73.13 keeps today's text for the rules themselves):
- * - `:=1` on an empty `:name` (`<div:=1/>`, `<let/x:=1/>`): Marko's Babel
- *   "Attributes may only be bound to identifiers or member expressions"
- *   fires before `BOUND_ON_SUGAR`; MX records `MX_SUGAR_BOUND` at the sugar.
+ * (ast \u00a73.13 keeps today's text for the rules themselves). Six inputs;
+ * the test below pins each one's exact today-first reason, so a rule change
+ * that moves an entry into or out of this list fails there:
+ * - `:=1` on an empty `:name` (`<div:=1/>`, `<let/x:=1/>`, `let/x:=1`,
+ *   `<div :=1/>`, `<let/x :=1/>`): Marko's binding error "Attributes may
+ *   only be bound to identifiers or member expressions" fires before
+ *   `BOUND_ON_SUGAR`; MX records `MX_SUGAR_BOUND` at the sugar.
  * - `.` with arguments and no word (`<div x=a . (b) y/>`): today's attr
  *   with arguments is not sugar at all, so "Invalid attribute name `.`"
  *   fires instead of `MX_SUGAR_ARGUMENTS`.
@@ -105,6 +108,40 @@ const TODAY_OWN_FIRST = new Set([
   "g1035",
   "g1355",
 ]);
+
+/** Each TODAY_OWN_FIRST entry's own expected first error from today (offset + message). */
+const TODAY_OWN_REASON: Record<string, { start: number; message: string }> = {
+  g0062: {
+    start: 6,
+    message:
+      "Attributes may only be bound to identifiers or member expressions",
+  },
+  g0330: {
+    start: 9,
+    message:
+      "Invalid attribute name `.`; Marko rejects it too — an attribute name may use letters, digits and `._:-`",
+  },
+  g0488: {
+    start: 8,
+    message:
+      "Attributes may only be bound to identifiers or member expressions",
+  },
+  g0489: {
+    start: 7,
+    message:
+      "Attributes may only be bound to identifiers or member expressions",
+  },
+  g1035: {
+    start: 7,
+    message:
+      "Attributes may only be bound to identifiers or member expressions",
+  },
+  g1355: {
+    start: 9,
+    message:
+      "Attributes may only be bound to identifiers or member expressions",
+  },
+};
 
 describe("front-end rules against today's lowering (PR 2b)", () => {
   // One input: the front end's first `MX_*` error and today's lowering pass.
@@ -149,18 +186,382 @@ describe("front-end rules against today's lowering (PR 2b)", () => {
     expect(wrong).toEqual([]);
   });
 
-  it("the named list still differs through today's own earlier error", () => {
+  it("the named list differs through today's own earlier error, each for its pinned reason", () => {
     for (const { input, frontEnd, parsedToday } of rows) {
       if (!TODAY_OWN_FIRST.has(input.id)) continue;
       expect(frontEnd, input.id).toBeDefined();
       expect(parsedToday, input.id).toBe(true);
       const today = lowerToday(input.source);
       expect(today.ok, input.id).toBe(false);
+      const reason = TODAY_OWN_REASON[input.id];
+      expect({ start: today.start, message: today.message }, input.id).toEqual(
+        reason,
+      );
       expect(
         today.message === frontEnd?.message && today.start === frontEnd?.start,
         input.id,
       ).toBe(false);
     }
+  });
+});
+
+/**
+ * The curated reverse calibration matrix (review F8): the fixes from the
+ * review — compound bound chains, node-kind bindability, unnamed and
+ * trailing colons, the `div` fallback, nested silent-EOF tags — pinned in
+ * the reverse direction. Each row states today's first error exactly, so a
+ * rule that stops firing (or drifts) fails here even when the corpus never
+ * contained the shape.
+ */
+const REVERSE_MATRIX: readonly {
+  id: string;
+  source: string;
+  /** `null`: no front-end error. */
+  mx: { code: string; start: number; message: string } | null;
+  /** Today's first error; `null`: today accepts it. */
+  today: { start: number; message: string } | null;
+}[] = [
+  {
+    id: "bound-compound-dot",
+    source: "<div .c:n:=x/>",
+    mx: {
+      code: "MX_SUGAR_BOUND",
+      start: 5,
+      message:
+        "a bound value is not supported on name sugar; write name=... value:=...",
+    },
+    today: {
+      start: 5,
+      message:
+        "a bound value is not supported on name sugar; write name=... value:=...",
+    },
+  },
+  {
+    id: "bound-compound-dot-value-ignored",
+    source: "<div .c:n:=1/>",
+    mx: {
+      code: "MX_SUGAR_BOUND",
+      start: 5,
+      message:
+        "a bound value is not supported on name sugar; write name=... value:=...",
+    },
+    today: {
+      start: 5,
+      message:
+        "a bound value is not supported on name sugar; write name=... value:=...",
+    },
+  },
+  {
+    id: "bound-compound-two-shorthands",
+    source: "<div .a.b:=x/>",
+    mx: {
+      code: "MX_SUGAR_BOUND",
+      start: 5,
+      message:
+        "a bound value is not supported on name sugar; write name=... value:=...",
+    },
+    today: {
+      start: 5,
+      message:
+        "a bound value is not supported on name sugar; write name=... value:=...",
+    },
+  },
+  {
+    id: "bindable-computed-member",
+    source: "<div :n:=obj[key]/>",
+    mx: {
+      code: "MX_SUGAR_BOUND",
+      start: 5,
+      message:
+        "a bound value is not supported on name sugar; write name=... value:=...",
+    },
+    today: {
+      start: 5,
+      message:
+        "a bound value is not supported on name sugar; write name=... value:=...",
+    },
+  },
+  {
+    id: "bindable-computed-index",
+    source: "<div :n:=obj[0]/>",
+    mx: {
+      code: "MX_SUGAR_BOUND",
+      start: 5,
+      message:
+        "a bound value is not supported on name sugar; write name=... value:=...",
+    },
+    today: {
+      start: 5,
+      message:
+        "a bound value is not supported on name sugar; write name=... value:=...",
+    },
+  },
+  {
+    id: "bindable-non-ascii",
+    source: "<div :n:=é/>",
+    mx: {
+      code: "MX_SUGAR_BOUND",
+      start: 5,
+      message:
+        "a bound value is not supported on name sugar; write name=... value:=...",
+    },
+    today: {
+      start: 5,
+      message:
+        "a bound value is not supported on name sugar; write name=... value:=...",
+    },
+  },
+  {
+    id: "bindable-parenthesized",
+    source: "<a :n:=(obj.x)/>",
+    mx: {
+      code: "MX_SUGAR_BOUND",
+      start: 3,
+      message:
+        "a bound value is not supported on name sugar; write name=... value:=...",
+    },
+    today: {
+      start: 3,
+      message:
+        "a bound value is not supported on name sugar; write name=... value:=...",
+    },
+  },
+  {
+    id: "not-bindable-true",
+    source: "<a :n:=true/>",
+    mx: null,
+    today: {
+      start: 7,
+      message:
+        "Attributes may only be bound to identifiers or member expressions",
+    },
+  },
+  {
+    id: "not-bindable-this",
+    source: "<a :n:=this/>",
+    mx: null,
+    today: {
+      start: 7,
+      message:
+        "Attributes may only be bound to identifiers or member expressions",
+    },
+  },
+  {
+    id: "unnamed-colon-word",
+    source: "<:1/>",
+    mx: {
+      code: "MX_SUGAR_NAME_INVALID",
+      start: 1,
+      message:
+        "`:1` in a tag name is not a name; `:name` takes an identifier (`:email`, `:first-name`)",
+    },
+    today: {
+      start: 1,
+      message:
+        "`:1` in a tag name is not a name; `:name` takes an identifier (`:email`, `:first-name`)",
+    },
+  },
+  {
+    id: "unnamed-colon-empty",
+    source: "<:/>",
+    mx: {
+      code: "MX_SUGAR_NAME_MISSING",
+      start: 1,
+      message: "`:` in a tag name needs a name after it (`:email`)",
+    },
+    today: {
+      start: 1,
+      message: "`:` in a tag name needs a name after it (`:email`)",
+    },
+  },
+  {
+    id: "unnamed-colon-second",
+    source: "<:b:c/>",
+    mx: {
+      code: "MX_SECOND_NAME",
+      start: 3,
+      message:
+        'a tag takes one `:name`; this one already has a name (write the second as `name="…"`)',
+    },
+    today: {
+      start: 3,
+      message:
+        'a tag takes one `:name`; this one already has a name (write the second as `name="…"`)',
+    },
+  },
+  {
+    id: "shorthand-trailing-colon",
+    source: "<div.c:/>",
+    mx: {
+      code: "MX_SUGAR_NAME_MISSING",
+      start: 6,
+      message:
+        "`:` in a shorthand class or id needs a name after it (`:email`)",
+    },
+    today: {
+      start: 6,
+      message:
+        "`:` in a shorthand class or id needs a name after it (`:email`)",
+    },
+  },
+  {
+    id: "shorthand-trailing-colon-dynamic",
+    source: "<div.${x}:/>",
+    mx: {
+      code: "MX_SUGAR_NAME_MISSING",
+      start: 9,
+      message:
+        "`:` in a shorthand class or id needs a name after it (`:email`)",
+    },
+    today: {
+      start: 9,
+      message:
+        "`:` in a shorthand class or id needs a name after it (`:email`)",
+    },
+  },
+  {
+    id: "statement-empty-colon",
+    source: "<import:/>",
+    mx: {
+      code: "MX_SUGAR_ON_STATEMENT",
+      start: 7,
+      message:
+        "a `:name` is not supported on the statement tag `import`: its text is code, not attributes — write `import …` at the root of the template instead",
+    },
+    today: {
+      start: 7,
+      message:
+        "a `:name` is not supported on the statement tag `import`: its text is code, not attributes — write `import …` at the root of the template instead",
+    },
+  },
+  {
+    id: "dynamic-shorthand-fallback-div",
+    source: "<${t} .a${x}/>",
+    mx: {
+      code: "MX_SUGAR_DYNAMIC",
+      start: 6,
+      message:
+        "a dynamic shorthand works only tag-adjacent (`<div.a${x}>`), not as `.a${x}` after the tag name",
+    },
+    today: {
+      start: 6,
+      message:
+        "a dynamic shorthand works only tag-adjacent (`<div.a${x}>`), not as `.a${x}` after the tag name",
+    },
+  },
+  {
+    id: "authored-range-with-value",
+    source: "<div .c:bad%=1/>",
+    mx: {
+      code: "MX_SUGAR_NAME_INVALID",
+      start: 7,
+      message:
+        "`:bad%` in `.c:bad%=1` is not a name; `:name` takes an identifier (`:email`, `:first-name`)",
+    },
+    today: {
+      start: 7,
+      message:
+        "`:bad%` in `.c:bad%=1` is not a name; `:name` takes an identifier (`:email`, `:first-name`)",
+    },
+  },
+  {
+    id: "nested-silent-eof-attribute-tag",
+    source: "div\n  @slot(a",
+    mx: null,
+    today: {
+      start: 0,
+      message:
+        "attribute tag `@slot` on `<div>`; attribute tags are props of components, so they are only valid directly inside a component call",
+    },
+  },
+  // Concise-mode and fragment-base neighbours: the same rules at different
+  // offsets and with leading content.
+  {
+    id: "concise-bound-compound",
+    source: "div .c:n:=x",
+    mx: {
+      code: "MX_SUGAR_BOUND",
+      start: 4,
+      message:
+        "a bound value is not supported on name sugar; write name=... value:=...",
+    },
+    today: {
+      start: 4,
+      message:
+        "a bound value is not supported on name sugar; write name=... value:=...",
+    },
+  },
+  {
+    id: "fragment-base-bound-compound",
+    source: "<p/>x<div .c:n:=x/>",
+    mx: {
+      code: "MX_SUGAR_BOUND",
+      start: 10,
+      message:
+        "a bound value is not supported on name sugar; write name=... value:=...",
+    },
+    today: {
+      start: 10,
+      message:
+        "a bound value is not supported on name sugar; write name=... value:=...",
+    },
+  },
+  {
+    id: "newline-fragment-bound-compound",
+    source: "x\n<div .c:n:=x/>",
+    mx: {
+      code: "MX_SUGAR_BOUND",
+      start: 7,
+      message:
+        "a bound value is not supported on name sugar; write name=... value:=...",
+    },
+    today: {
+      start: 7,
+      message:
+        "a bound value is not supported on name sugar; write name=... value:=...",
+    },
+  },
+];
+
+describe("the curated reverse calibration matrix (review F8)", () => {
+  it("every row fires exactly the stated front-end error, or none", () => {
+    const wrong: string[] = [];
+    for (const row of REVERSE_MATRIX) {
+      const document = parseMx(row.source, {
+        statementKeywords: SIX,
+        tagShape: markoTagShape,
+      });
+      const frontEnd = document.errors.find((e) => e.origin === "front-end");
+      const got = frontEnd
+        ? {
+            code: frontEnd.code,
+            start: frontEnd.start,
+            message: frontEnd.message,
+          }
+        : null;
+      if (JSON.stringify(got) !== JSON.stringify(row.mx)) {
+        wrong.push(
+          `${row.id}: got ${JSON.stringify(got)} want ${JSON.stringify(row.mx)}`,
+        );
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it("every row's today outcome is the stated one (absent rules drift here)", () => {
+    const wrong: string[] = [];
+    for (const row of REVERSE_MATRIX) {
+      const today = lowerToday(row.source);
+      const got = today.ok
+        ? null
+        : { start: today.start, message: today.message };
+      if (JSON.stringify(got) !== JSON.stringify(row.today)) {
+        wrong.push(
+          `${row.id}: got ${JSON.stringify(got)} want ${JSON.stringify(row.today)}`,
+        );
+      }
+    }
+    expect(wrong).toEqual([]);
   });
 });
 

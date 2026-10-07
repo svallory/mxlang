@@ -455,9 +455,11 @@ function attribute(ctx: Ctx, attr: Node): { start: number; line: string }[] {
     lines[lines.length - 1] += `${operator}${value}${args}`; // rule `sugar-arguments`
     return lines.map((line) => ({ start: s, line }));
   }
-  // Rule A2 (decision 170): the authored name and its last-colon split are
-  // compared field by field — no rejoining. A sugar chain (`.c:y`) still
-  // rejoins here because its parts are A6's, not A2's.
+  // Rule A2 (decision 163 addendum 12): Marko's `name` is the head before
+  // the last colon and `modifier` the tail; MX carries the head in
+  // `name`/`nameSpan` plus the modifier and its own span — the neutral line
+  // shows the split (the authored name, then the head's span) instead of a
+  // rejoined string.
   const head = attr.name ?? "";
   const mod = attr.modifier;
   const authored = rejoinAttributeName(head, mod);
@@ -488,7 +490,7 @@ function attribute(ctx: Ctx, attr: Node): { start: number; line: string }[] {
   return [
     {
       start: s,
-      line: `attr ${JSON.stringify(authored)} [${s},${e}) name=[${s},${s + authored.length})${modSpan}${operator}${value}${args}`,
+      line: `attr ${JSON.stringify(authored)} [${s},${e}) name=[${s},${s + head.length})${modSpan}${operator}${value}${args}`,
     },
   ];
 }

@@ -235,7 +235,11 @@ class FrontEnd {
         if (parent && tag.end > parent._reached) parent._reached = tag.end;
       }
       const open = this.stack.splice(0).reverse();
-      for (const tag of open) this.runRules(tag, undefined);
+      // `open` is outermost-first: each tag's ancestor is the next entry
+      // (mirroring `stopAll`), so the root rule sees real nesting here too.
+      for (let i = 0; i < open.length; i++) {
+        this.runRules(open[i], open[i + 1]);
+      }
     }
   }
 
@@ -732,15 +736,21 @@ class FrontEnd {
         );
       }
     } else {
-      // Decision 170: the last-colon split is kept as data, so no consumer
-      // re-splits the string. A trailing colon is an empty modifier with a
-      // zero-width span at `nameSpan.end`.
+      // Decision 163 addendum 12: the split is kept as data, and the name
+      // is the head before the last colon — `nameSpan` covers the head only.
+      // A trailing colon is an empty modifier with a zero-width span after it.
       const colon = text.lastIndexOf(":");
       items.push({
         type: "MxAttribute",
         ...this.span(range),
-        name: text,
-        nameSpan: this.span(range),
+        name: colon < 0 ? text : text.slice(0, colon),
+        nameSpan:
+          colon < 0
+            ? this.span(range)
+            : {
+                start: this.at(range.start),
+                end: this.at(range.start + colon),
+              },
         modifier: colon < 0 ? null : text.slice(colon + 1),
         modifierSpan:
           colon < 0

@@ -7,7 +7,13 @@
     "rootDir": "../..",
     "types": ["node"],
     "allowImportingTsExtensions": true,
-    "noUncheckedIndexedAccess": false
+    "noUncheckedIndexedAccess": false,
+    // The parser's front-end rules now value-import `@mxlang/babel`
+    // (`parseExpression`), which pulls the vendored parser's sources into
+    // this program; every package whose program includes them
+    // (`packages/babel`, `packages/parser`, `packages/stock-marko`,
+    // `packages/tsx-bridge`) relaxes this flag for them.
+    "strictFunctionTypes": false
   },
   "include": ["src"]
 }

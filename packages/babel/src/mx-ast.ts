@@ -218,11 +218,13 @@ export interface MxShorthand extends MxNodeBase {
 /** One named attribute, or the tag's default value when `name` is null (ast §3.5). */
 export interface MxAttribute extends MxNodeBase {
   readonly type: "MxAttribute";
+  /** The authored name's head before the LAST `:` (`class:x` → `class`); `null` for the default value (decision 163 addendum 12). */
   readonly name: string | null;
+  /** The head's span, ending before the modifier's colon; zero-width at the `=`/`(` for the default value. */
   readonly nameSpan: Span;
   /** The text after the LAST `:` of the authored name; `null` without one (decision 170). */
   readonly modifier: string | null;
-  /** The modifier's own span, colon excluded; `""` for a trailing colon is zero-width at `nameSpan.end`; `null` with `modifier`. */
+  /** The modifier's own span, colon excluded; `""` for a trailing colon is zero-width after the colon (`nameSpan.end + 1`); `null` with `modifier`. */
   readonly modifierSpan: Span | null;
   readonly operator: "=" | ":=" | null;
   readonly value: MxExpression | MxMethod | null;

@@ -121,7 +121,8 @@ export function checkInvariants(
         if (node.name === null && node.nameSpan.start !== node.nameSpan.end) {
           fail(path, "the default value's nameSpan is not zero-width");
         }
-        // Decision 170: the last-colon split as data.
+        // Decision 163 addendum 12: the name is the head before the last
+        // `:`; the modifier's span sits after that colon, colon excluded.
         if ((node.modifier === null) !== (node.modifierSpan === null)) {
           fail(path, "modifier and modifierSpan are not both null or both set");
         }
@@ -129,8 +130,14 @@ export function checkInvariants(
           if (node.modifier !== text(node.modifierSpan)) {
             fail(path, "modifier is not the modifierSpan's text");
           }
-          if (node.modifierSpan.end !== node.nameSpan.end) {
-            fail(path, "modifierSpan does not end with nameSpan");
+          if (
+            text({ start: node.nameSpan.end, end: node.nameSpan.end + 1 }) !==
+            ":"
+          ) {
+            fail(path, "the name's last character is not the modifier's colon");
+          }
+          if (node.modifierSpan.start !== node.nameSpan.end + 1) {
+            fail(path, "modifierSpan does not start after the name's colon");
           }
           if (
             node.modifier === "" &&

@@ -492,10 +492,10 @@ Purpose: one named attribute, or the tag's default value.
 
 | Field | Type | Opt. | Meaning |
 |---|---|---|---|
-| `name` | `string \| null` | no | authored name, colons included (`class:x`, `value:fn`); `null` for the default value (`<if=a>`) |
-| `nameSpan` | `Span` | no | the name (`onAttrName`); zero-width at the `=`/`(` for the default value |
+| `name` | `string \| null` | no | the authored name's head before the **last** `:` (`class:x` → `class`), colons kept before it (`a:b:c` → `a:b`); `null` for the default value (`<if=a>`) (decision 163 addendum 12) |
+| `nameSpan` | `Span` | no | the head (`onAttrName` up to the last colon); zero-width at the `=`/`(` for the default value |
 | `modifier` | `string \| null` | no | the text after the **last** `:` of the authored name (`class:x` → `x`), `null` without one; a trailing colon (`x:`) is `""` (decision 170) |
-| `modifierSpan` | `Span \| null` | no | the modifier's own span, colon excluded, ending at `nameSpan.end`; zero-width at `nameSpan.end` for the empty modifier; `null` with `modifier` |
+| `modifierSpan` | `Span \| null` | no | the modifier's own span, colon excluded, starting at `nameSpan.end + 1`; zero-width there for the empty modifier; `null` with `modifier` |
 | `operator` | `"=" \| ":=" \| null` | no | `null` for a bare attribute or a method |
 | `value` | `MxExpression \| MxMethod \| null` | no | `null` for a bare attribute (`disabled`) |
 | `args` | `MxArguments \| null` | no | `name(args)` without a body: Marko 5's attribute-arguments form (`onAttrArgs`). Kept so lowering can position its error: today lowering only rejects it (`Unsupported arguments on …`) or hands it to the host's `resolveAttributeMethod` (`lowerAttrNamed`, `lower.ts`) |
@@ -582,7 +582,7 @@ Purpose: the three name sugars in any position (decision 146 and addenda).
 | `value` | `MxShorthandValue` | no | the part after the sigil |
 | `operator` | `"=" \| ":=" \| null` | no | what directly follows the token (whitespace allowed): `=`, `:=`, or nothing / a method (decision 146 addendum 4) |
 | `default` | `MxExpression \| MxMethod \| null` | no | decision 146 addendum 4: the value after `=` or `:=`, or the method, in `#name=expr` / `#name(params) { body }`; it sets the tag's default value |
-| `args` | `MxArguments \| null` | no | arguments written right after the sugar with no body (`.c(p)`, `#x(p)`, `:x(p)`); `null` otherwise. Kept on the node with their atoms; PR 2b's `MX_SUGAR_ARGUMENTS` is raised at the sugar (rule 6; decision 163 addendum 11) |
+| `args` | `MxArguments \| null` | no | arguments written right after the sugar with no body (`.c(p)`, `#x(p)`, `:x(p)`); `null` otherwise. Kept on the node with their atoms; `MX_SUGAR_ARGUMENTS` is raised at the sugar (rule 6; decision 163 addendum 11) |
 
 ```ts
 type MxShorthandValue =
@@ -767,13 +767,13 @@ What lowering takes from where (P2):
 | `Import.bindings`, the `Input` test | the Babel payload (`code.node`) |
 
 Example: `static const A = 1 // trailing` is `[0, 30)` and `Static.code` is
-`const A = 1 // trailing` (the reviewer's probe d); `code.span` is `[7, 30)`
+`const A = 1 // trailing` (a direct probe); `code.span` is `[7, 30)`
 and the payload's statement range `[7, 18)`.
 
 **`end` is a separate fact** (decision 163 addendum 1). Today `end` is
 `endPosOf(node)` (`lower.ts`), Marko's `loc.end` of the statement tag, which
 is **not** trimmed: it is the end of htmljs's statement range, trailing
-whitespace and following line breaks included (reviewer's probes: `static const A = 1   ` then
+whitespace and following line breaks included (probes: `static const A = 1   ` then
 `<div/>` gives `end` `{ line: 1, column: 21 }` with `span` `[0, 18)`;
 `export const B = 2` followed by two blank lines and `<div/>` gives `end`
 `{ line: 1, column: 18 }`, the range stopping at its own line's end; probed

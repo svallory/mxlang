@@ -296,24 +296,27 @@ describe("§3.5 MxAttribute", () => {
     });
   });
 
-  it("colon names stay whole (no modifier split)", () => {
+  it("the name is the head before the colon (addendum 12)", () => {
     expect(first("<a class:x=1/>").attributes[0]).toMatchObject({
-      name: "class:x",
+      name: "class",
+      nameSpan: span(3, 8),
+      modifier: "x",
+      modifierSpan: span(9, 10),
     });
   });
 
-  it("the modifier split (decision 170): the last colon, null without one", () => {
+  it("the modifier split (decision 163 addendum 12): the name is the head", () => {
     // `<a a:b=1/>`: one colon.
     expect(first("<a a:b=1/>").attributes[0]).toMatchObject({
-      name: "a:b",
-      nameSpan: span(3, 6),
+      name: "a",
+      nameSpan: span(3, 4),
       modifier: "b",
       modifierSpan: span(5, 6),
     });
     // Several colons: the split is at the last (`a:b:c` → modifier `c`).
     expect(first("<a a:b:c=1/>").attributes[0]).toMatchObject({
-      name: "a:b:c",
-      nameSpan: span(3, 8),
+      name: "a:b",
+      nameSpan: span(3, 6),
       modifier: "c",
       modifierSpan: span(7, 8),
     });
@@ -342,10 +345,11 @@ describe("§3.5 MxAttribute", () => {
   });
 
   it('a name ending in a colon: modifier "" with a zero-width span', () => {
-    // `<a x:/>`: the bare attribute `x:`.
+    // `<a x:/>`: the bare attribute `x:` — the name is the head `x` and the
+    // empty modifier sits after the colon (decision 163 addendum 12).
     expect(first("<a x:/>").attributes[0]).toMatchObject({
-      name: "x:",
-      nameSpan: span(3, 5),
+      name: "x",
+      nameSpan: span(3, 4),
       modifier: "",
       modifierSpan: span(5, 5),
       end: 5,
@@ -356,15 +360,15 @@ describe("§3.5 MxAttribute", () => {
     // `a:b:=1`: the parser reports the name `a:b` and `:=` as the operator
     // (Marko's own split, ast §1.3), so the modifier is `b`.
     expect(first("<a a:b:=1/>").attributes[0]).toMatchObject({
-      name: "a:b",
-      nameSpan: span(3, 6),
+      name: "a",
+      nameSpan: span(3, 4),
       operator: ":=",
       modifier: "b",
       modifierSpan: span(5, 6),
     });
     expect(first("<a a:b:c:=1/>").attributes[0]).toMatchObject({
-      name: "a:b:c",
-      nameSpan: span(3, 8),
+      name: "a:b",
+      nameSpan: span(3, 6),
       modifier: "c",
       modifierSpan: span(7, 8),
     });
@@ -373,8 +377,8 @@ describe("§3.5 MxAttribute", () => {
   it("non-ASCII around the colon", () => {
     // `<a é:ü=1/>`: the spans are UTF-16 offsets.
     expect(first("<a é:ü=1/>").attributes[0]).toMatchObject({
-      name: "é:ü",
-      nameSpan: span(3, 6),
+      name: "é",
+      nameSpan: span(3, 4),
       modifier: "ü",
       modifierSpan: span(5, 6),
     });
@@ -382,17 +386,17 @@ describe("§3.5 MxAttribute", () => {
 
   it("the same split on a component, an attribute tag and a native element", () => {
     expect(first("<Card a:b=1/>").attributes[0]).toMatchObject({
-      name: "a:b",
+      name: "a",
       modifier: "b",
     });
     const attrTag = first("<c><@head a:b=1/></@head></c>");
     expect(attrTag.body[0].attributes[0]).toMatchObject({
-      name: "a:b",
+      name: "a",
       modifier: "b",
       modifierSpan: span(12, 13),
     });
     expect(first("<div a:b=1/>").attributes[0]).toMatchObject({
-      name: "a:b",
+      name: "a",
       modifier: "b",
     });
   });

@@ -9,6 +9,7 @@ import {
   type NTag,
   text,
 } from "./neutral.ts";
+import { rejoinAttributeName } from "./rules.ts";
 
 // biome-ignore lint/suspicious/noExplicitAny: walks every node shape
 type Node = any;
@@ -138,13 +139,17 @@ function tag(node: Node): NTag {
       case "MxComment":
         return `comment ${item.kind} ${span}`;
       default: {
-        const name =
-          item.name === null ? "(default)" : JSON.stringify(item.name);
         const args = item.args
           ? ` args ${code(item.args.source, item.args.start)}`
           : "";
-        // Rule A2 (decision 170): MX's own split fields, not a re-derived
-        // slice of `name`.
+        // Rule A2 (decision 163 addendum 12): MX's own split fields — the
+        // name is the head, and the authored text is the head + colon +
+        // modifier, read from the spans, not from `name`.
+        const authored =
+          item.name === null
+            ? null
+            : rejoinAttributeName(item.name, item.modifier);
+        const name = authored === null ? "(default)" : JSON.stringify(authored);
         const modSpan =
           item.modifier === null || item.modifier === undefined
             ? ""
