@@ -423,10 +423,7 @@ export function hintParseError(
     const reason = (entry as Located).label;
     const groupSentence = rewriteShorthandGroup(entry as Located, source);
     if (groupSentence && typeof reason === "string") {
-      setMessage(
-        aggregate,
-        aggregate.message.replace(reason, groupSentence),
-      );
+      setMessage(aggregate, aggregate.message.replace(reason, groupSentence));
     }
     rewriteTagVariableShorthand(entry as Located, source);
     const hint = hintOne(entry as Located, source, declarations);

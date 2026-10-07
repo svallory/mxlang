@@ -395,8 +395,8 @@ describe("exact value spans of the rewritten shorthand", () => {
 describe("the shorthand charset, in both positions", () => {
   it.each([
     ["<div #1a/>", "<div#1a/>"],
-    // `.2xl` was Marko-valid (a class part may start with a digit) until
-    // decision 174 made it an error; see "decision 174" below.
+    // `.2xl` stays Marko-valid: a digit-leading class part is only an error
+    // when it is purely numeric (the tail of a split like `.w-1.5`).
     ["<div .é/>", "<div.é/>"],
     ["<div .a@b/>", "<div.a@b/>"],
     ["<div .a+b/>", "<div.a+b/>"],
@@ -946,13 +946,16 @@ describe("decision 174: shorthand diagnostics", () => {
   it.each([
     ["<div.bg-[#fff]/>", "unbalanced `[`", 5],
     ["<div .bg-[#fff]/>", "unbalanced `[`", 5],
-  ])("%s: an unbalanced bracket is a positioned error with the class hint", (source, message, column) => {
-    const error = errorOf(source);
-    expect(error.message).toContain(message);
-    expect(error.message).toContain('class="…"');
-    expect(error.line).toBe(1);
-    expect(error.column).toBe(column);
-  });
+  ])(
+    "%s: an unbalanced bracket is a positioned error with the class hint",
+    (source, message, column) => {
+      const error = errorOf(source);
+      expect(error.message).toContain(message);
+      expect(error.message).toContain('class="…"');
+      expect(error.line).toBe(1);
+      expect(error.column).toBe(column);
+    },
+  );
 
   it("the id part is checked too (unreachable first at one position, kept for the other)", () => {
     // The class part always carries the first offense when brackets span a
@@ -967,19 +970,30 @@ describe("decision 174: shorthand diagnostics", () => {
     // The caret sits on the `.` that ends the previous part (the part's own
     // first character is inside the token the split produced).
     ["<div .w-1.5/>", 9],
-    ["<div.2xl/>", 5],
-  ])("%s: a class part starting with a digit is a positioned error", (source, column) => {
-    const error = errorOf(source);
-    expect(error.message).toContain("cannot start with a digit");
-    expect(error.message).toContain('class="…"');
-    expect(error.line).toBe(1);
-    expect(error.column).toBe(column);
-  });
+  ])(
+    "%s: a split-off purely numeric class part is a positioned error",
+    (source, column) => {
+      const error = errorOf(source);
+      expect(error.message).toContain("cannot be purely numeric");
+      expect(error.message).toContain('class="…"');
+      expect(error.line).toBe(1);
+      expect(error.column).toBe(column);
+    },
+  );
 
-  it.each(["<div.hover:bg-red/>", "<div.a.b#c/>", "<div.w-1/>", '<div .w-1 class="x"/>' ])(
-    "%s stays valid, no diagnostic",
+  it.each(["<div.2xl/>", "<div .2xl/>", "<div.2xl.3xl/>"])(
+    "%s: a digit-leading but non-numeric class part stays valid",
     (source) => {
       expect(() => lowerSource(source)).not.toThrow();
     },
   );
+
+  it.each([
+    "<div.hover:bg-red/>",
+    "<div.a.b#c/>",
+    "<div.w-1/>",
+    '<div .w-1 class="x"/>',
+  ])("%s stays valid, no diagnostic", (source) => {
+    expect(() => lowerSource(source)).not.toThrow();
+  });
 });

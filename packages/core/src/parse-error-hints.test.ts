@@ -109,14 +109,17 @@ describe("decision 174: shorthand parse errors", () => {
       'Mismatched group. A closing "]" character was found but it is not matched with a corresponding opening character.',
     ],
     ["<div.[&>*]:p-4/>", 0, 'Missing ending "div" tag'],
-  ])("%s: Marko's group text becomes the shorthand message", (source, column, label) => {
-    const error = parseError(source, label, column);
-    hintParseError(error, source);
-    expect(error.label).toContain("a class or id shorthand cannot hold");
-    expect(error.label).toContain('class="…"');
-    expect(error.label).not.toContain("Mismatched");
-    expect(error.label).not.toContain("Missing ending");
-  });
+  ])(
+    "%s: Marko's group text becomes the shorthand message",
+    (source, column, label) => {
+      const error = parseError(source, label, column);
+      hintParseError(error, source);
+      expect(error.label).toContain("a class or id shorthand cannot hold");
+      expect(error.label).toContain('class="…"');
+      expect(error.label).not.toContain("Mismatched");
+      expect(error.label).not.toContain("Missing ending");
+    },
+  );
 
   it("leaves a group error with no shorthand head alone", () => {
     const source = "<div x=[1]></div>";

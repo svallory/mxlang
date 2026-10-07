@@ -158,7 +158,7 @@ Tag-adjacent `=value` (`<a#x=1>`) is Marko's own default attribute, not this sug
 | `<div :/>` | an error: `:` is name sugar and needs a name (Marko read a bare `:` as `value:`; write `value:` for that attribute) |
 | `<div :1a/>` | an error: `:name` takes an identifier (`#x` and `.x` take whatever Marko's shorthand takes, so `<div #1a/>` is `id="1a"`) |
 | `<div.bg-[#fff]/>` | an error: a class or id part cannot hold an unbalanced `[` or `]` (it would read as `class="bg-[" id="fff]"`); write `class="…"` |
-| `<div.w-1.5/>` | an error: a class part cannot start with a digit (it would read as `class="w-1 5"`); write `class="…"` |
+| `<div.w-1.5/>` | an error: a split-off class part cannot be purely numeric (it would read as `class="w-1 5"`); `<div.2xl/>` is the class `2xl` and stays valid; write `class="…"` |
 | `<div.w-1/2/>` | an error naming the shorthand (not Marko's tag-variable text): a `/` after a shorthand starts a tag variable; write the class as `class="…"` |
 
 An attribute tag's name (`<@svg:rect>`) is a property key and is not split;

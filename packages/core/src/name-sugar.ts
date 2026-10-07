@@ -160,8 +160,8 @@ function bracketOffense(word: string): string | undefined {
 /**
  * Decision 174: a shorthand part cannot hold an unbalanced `[` or `]`
  * (`.bg-[#fff]` would read as the class `bg-[` and the id `fff]`), and a class
- * part cannot start with a digit (`.w-1.5` would read as the classes `w-1`
- * and `5`). One positioned error per part, with the `class="…"` hint;
+ * part cannot hold a purely numeric word (`.w-1.5` would read as the classes
+ * `w-1` and `5`). One positioned error per part, with the `class="…"` hint;
  * `.hover:bg-red`, `.a.b#c` and `.w-1` stay valid.
  */
 function checkShorthandWord(
@@ -179,10 +179,10 @@ function checkShorthandWord(
       at,
     );
   }
-  if (sigil === "." && /^[0-9]/.test(word)) {
+  if (sigil === "." && /^[0-9]+$/.test(word)) {
     failAt(
       ctx,
-      `\`.${word}\` is not a valid shorthand class: a class part cannot start with a digit; use \`class="…"\` for this class`,
+      `\`.${word}\` is not a valid shorthand class: a split-off class part cannot be purely numeric; use \`class="…"\` for this class`,
       at,
     );
   }
