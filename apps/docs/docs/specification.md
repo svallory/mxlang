@@ -1534,6 +1534,34 @@ destructured first param (`|{ n }|`, `|{ n = 3 }|`) expands into a generated
 context — rest/nested/array patterns and computed keys are positioned errors
 (spread attributes and body content on such a call are positioned errors too).
 
+On Angular the call and the define compose as follows:
+
+- **Static values reach the context as authored.** A static attribute value is
+  written as a JavaScript string literal and then HTML-attribute-escaped, and
+  nothing else. Braces (`{x}`, `{{x}}`), JSON text, quotes and backslashes are
+  the value's own characters: Angular does not interpolate inside a string
+  literal in a property binding, so `{{ '{' }}`-style escaping would corrupt
+  the value the define reads.
+- **A bound attribute (`n:=q`, `n:fn:=q`) on such a call is a positioned
+  error.** Marko hands the define `n` and `nChange`, but an
+  `ngTemplateOutletContext` is an object literal and an Angular template has no
+  function literal to build the `nChange` callback; passing the value and a
+  handler attribute is the supported spelling. (A `v:fn:=i` *inside* a define,
+  on an element, is unaffected.)
+- **Every later param stays in scope** for refined bound attributes inside the
+  define when the first param is expanded, so `<define/Row|{ n }, i|>` with
+  `<div v:fn:=i/>` emits `i.set(…)`.
+- **Defaults read the tag's `input` like any expression.** In a tag module,
+  `<define/Row|{ n = input.n }|>` rewrites `input.n` to the class member, with
+  the usual shadowing: a binding named `input` earlier in the same pattern, or
+  as the binding itself, keeps `input` as written. A rewritten read of a name
+  the pattern also binds (`{ n = input.n }`) is emitted as `this.n`, because
+  the generated `@let n` would otherwise read itself.
+- **Mappings.** The generated `let-__mxArgN` maps to the whole first-param
+  pattern as a derivation (`define-pattern`), a quoted key maps only its
+  genuine name, and a default expression maps to its own source text unless a
+  tag-module rewrite changed it.
+
 **On Solid, a `<define>` inside a `.solid.mx` region is hoisted to module
 scope (decision 110b).** A region is a JSX expression spliced into someone
 else's module, so it has no statement position for `const Row = (...) =>

@@ -36,6 +36,7 @@ import {
   unresolvedCustomTagMessage,
   warn,
 } from "@mxlang/core";
+import { defineDefaultRewrites } from "./define-defaults.ts";
 import {
   AngularCompilerUnavailableError,
   nativeBinding,
@@ -2345,33 +2346,50 @@ class AngularEmitter implements Emitter<string> {
         }
         if (i > 0) this.out.write(esc(", "));
         // An identifier name is a valid object key bare; every other name
-        // (`data-x`, `aria-label`) is quoted. The key maps onto the authored
-        // attribute name either way.
+        // (`data-x`, `aria-label`) is quoted. Only the authored name itself
+        // is a copied run: the generated quotes stay unmapped, so the mapped
+        // text un-escapes to exactly the attribute name.
         if (isIdentifier(attr.name)) {
           this.out.writeMapped(esc(attr.name), attr.nameSpan);
         } else {
-          this.out.writeMapped(esc(JSON.stringify(attr.name)), attr.nameSpan);
+          const quoted = JSON.stringify(attr.name);
+          if (quoted.slice(1, -1) === attr.name) {
+            this.out.write(esc('"'));
+            this.out.writeMapped(esc(attr.name), attr.nameSpan);
+            this.out.write(esc('"'));
+          } else {
+            this.out.write(esc(quoted));
+          }
         }
         this.out.write(esc(": "));
         switch (attr.kind) {
           case "static":
-            // A static value is a string literal in the object. Braces are
-            // escaped because Angular interpolates `{{ … }}` inside an
-            // attribute value; JSON.stringify is the JS-literal layer (`"`,
-            // `\`), `esc()` the surrounding HTML attribute layer — two passes
-            // for two nesting layers, the same shape
-            // `emitDynamicComponent`'s static inputs use.
-            this.out.write(esc(escapeBraces(JSON.stringify(attr.value))));
+            // A static value is a string literal in the object. The value
+            // sits inside a property-binding expression, where Angular never
+            // interpolates `{{ … }}`, so braces stay as authored;
+            // JSON.stringify is the JS-literal layer (`"`, `\`), `esc()` the
+            // surrounding HTML attribute layer.
+            this.out.write(esc(JSON.stringify(attr.value)));
             break;
           case "boolean":
             // A valueless attribute is `true`, as in Marko.
             this.out.write("true");
             break;
           case "dynamic":
-          case "bound":
           case "event":
             this.out.writeMapped(esc(attr.value.code), attr.value.span);
             break;
+          case "bound":
+            // Marko hands the define `n` and `nChange` for `n:=q`. The outlet
+            // context is an object literal in a template expression, and
+            // Angular templates have no function literals to build the
+            // `nChange` callback from, so the update half cannot be carried.
+            // Rejected rather than passed as a plain value that silently
+            // never writes back.
+            fail(
+              `a bound attribute (\`${attr.name}${attr.refinement ? `:${attr.refinement.code}` : ""}:=\`) cannot be passed to \`<${target.name}>\` on @mxlang/angular: Marko gives the define \`${attr.name}\` and \`${attr.name}Change\`, but an \`ngTemplateOutletContext\` is an object literal and Angular templates have no function literals to build the \`${attr.name}Change\` callback. Pass the value (\`${attr.name}=…\`) and a handler attribute instead.`,
+              attr,
+            );
         }
       });
       this.out.write(esc(" }"));
@@ -2622,9 +2640,23 @@ class AngularEmitter implements Emitter<string> {
       this.out.write(" ");
       // The `let-` prefix is generated, so the whole `let-x` token maps
       // whole-to-whole onto the param the author wrote.
-      const token =
-        i === 0 && expandFirst ? `let-${expandFirst.let}` : `let-${param}`;
-      this.out.writeMapped(token, node.paramSpans?.[i], "define-param");
+      if (i === 0 && expandFirst) {
+        // A destructuring pattern has no `let-` spelling of its own, so the
+        // token binds the generated name; the run is derived from the whole
+        // pattern, not copied.
+        this.out.writeMapped(
+          `let-${expandFirst.let}`,
+          node.paramSpans?.[i],
+          "define-pattern",
+          expandFirst.let,
+        );
+      } else {
+        this.out.writeMapped(
+          `let-${param}`,
+          node.paramSpans?.[i],
+          "define-param",
+        );
+      }
       if (i > 0) this.out.write(`="${param}"`);
     });
     this.out.write("> ");
@@ -2637,9 +2669,14 @@ class AngularEmitter implements Emitter<string> {
         const read = `${expandFirst.let}${binding.path}`;
         this.out.write(`@let ${binding.name} = `);
         if (binding.default !== undefined) {
-          this.out.write(
-            `${read} === undefined ? ${binding.default} : ${read}; `,
-          );
+          this.out.write(`${read} === undefined ? `);
+          // A default the tag-module pass rewrote (`input.n` -> `n`) is no
+          // longer the authored text, so it stays unmapped; an untouched one
+          // is a copied run of the param and maps to where it was written.
+          const rewritten = defineDefaultRewrites.get(node)?.get(binding.name);
+          if (rewritten !== undefined) this.out.write(rewritten);
+          else this.out.writeMapped(binding.default, binding.defaultSpan);
+          this.out.write(` : ${read}; `);
         } else {
           this.out.write(`${read}; `);
         }
@@ -2647,7 +2684,13 @@ class AngularEmitter implements Emitter<string> {
     }
     this.inScope(
       expandFirst
-        ? [expandFirst.let, ...expandFirst.bindings.map((b) => b.name)]
+        ? [
+            expandFirst.let,
+            ...expandFirst.bindings.map((b) => b.name),
+            // The later params keep their own `let-` names, so they are in
+            // scope too — a refined write to one is `i.set(…)`, not `this`.
+            ...node.params.slice(1),
+          ]
         : node.params,
       () => {
         for (const child of node.children) this.emitNode(child);
@@ -2672,7 +2715,12 @@ class AngularEmitter implements Emitter<string> {
   private defineFirstParam(node: Extract<IrNode, { kind: "Define" }>):
     | {
         let: string;
-        bindings: { name: string; path: string; default?: string }[];
+        bindings: {
+          name: string;
+          path: string;
+          default?: string;
+          defaultSpan?: SourceSpan;
+        }[];
       }
     | undefined {
     const param = node.params[0];
@@ -2740,7 +2788,13 @@ class AngularEmitter implements Emitter<string> {
       );
     }
     const arg = this.gensym("__mxArg");
-    const bindings: { name: string; path: string; default?: string }[] = [];
+    const paramSpan = this.paramTextSpan(node.paramSpans?.[0], param);
+    const bindings: {
+      name: string;
+      path: string;
+      default?: string;
+      defaultSpan?: SourceSpan;
+    }[] = [];
     for (const property of pattern.properties ?? []) {
       if (property.type === "RestElement") {
         fail(
@@ -2797,10 +2851,31 @@ class AngularEmitter implements Emitter<string> {
           // spans are offsets into the fed source `(${param} = 0)`, whose
           // leading `(` shifts every offset by one against `param` itself.
           default: param.slice(value.right!.start! - 1, value.right!.end! - 1),
+          // The same run in the file, when the param span is the param text.
+          defaultSpan: paramSpan
+            ? {
+                sourceStart: paramSpan.sourceStart + value.right!.start! - 1,
+                sourceEnd: paramSpan.sourceStart + value.right!.end! - 1,
+              }
+            : undefined,
         });
       }
     }
     return { let: arg, bindings };
+  }
+
+  /**
+   * The param's span when the source under it is exactly the param text —
+   * the only case where an offset into the text is an offset into the file.
+   */
+  private paramTextSpan(
+    span: SourceSpan | undefined,
+    param: string,
+  ): SourceSpan | undefined {
+    if (!span) return undefined;
+    return this.ctx.source.slice(span.sourceStart, span.sourceEnd) === param
+      ? span
+      : undefined;
   }
 
   constant(node: Extract<IrNode, { kind: "Const" }>): void {

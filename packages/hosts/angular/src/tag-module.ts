@@ -27,6 +27,7 @@ import {
   TranslateError,
   warn,
 } from "@mxlang/core";
+import { defineDefaultRewrites } from "./define-defaults.ts";
 import { directivesFor } from "./directives.ts";
 import {
   angularDeclarations,
@@ -519,6 +520,7 @@ function rewriteInputReads(body: IrNode[], ctx: Ctx): void {
     expr: { code: string; node: unknown } | undefined,
     loc: Position,
     shadowedOuter: boolean,
+    letNames?: ReadonlySet<string>,
   ): void => {
     if (!expr?.node) return;
     let changed = false;
@@ -594,8 +596,18 @@ function rewriteInputReads(body: IrNode[], ctx: Ctx): void {
             // `x`, in place. Any outer member (`input.a.b`) keeps its own
             // shape, so the result is `a.b`.
             for (const key of Object.keys(node)) delete node[key];
-            node.type = "Identifier";
-            node.name = name;
+            if (letNames?.has(name)) {
+              // A define's `@let` of the same name would capture the bare
+              // identifier (and a `@let` cannot read itself), so the read
+              // goes through `this` to reach the component's member.
+              node.type = "MemberExpression";
+              node.object = { type: "ThisExpression" };
+              node.property = { type: "Identifier", name };
+              node.computed = false;
+            } else {
+              node.type = "Identifier";
+              node.name = name;
+            }
             changed = true;
             return;
           }
@@ -614,6 +626,73 @@ function rewriteInputReads(body: IrNode[], ctx: Ctx): void {
       // `code` in the first place, so spelling stays consistent.
       expr.code = ctx.generate(expr.node as Parameters<Ctx["generate"]>[0]);
     }
+  };
+
+  /**
+   * `<define/Row|{ n = input.n }|>`: the defaults live in the param's source
+   * text, so they are parsed here and each one rewritten like any expression.
+   * The emitted `@let`s run in order, so a binding named `input` hides the
+   * tag's input from its own default and every later one — the same rule as
+   * `{ input, n = input.n }` in JS.
+   */
+  const rewriteDefineDefaults = (
+    record: Record<string, unknown>,
+    loc: Position,
+  ): void => {
+    const params = record.params;
+    const param = Array.isArray(params) ? params[0] : undefined;
+    if (typeof param !== "string" || !param.includes("input")) return;
+    let pattern: {
+      type?: string;
+      properties?: {
+        type: string;
+        value?: {
+          type: string;
+          name?: string;
+          left?: { type: string; name?: string };
+          right?: { start: number; end: number };
+        };
+      }[];
+    };
+    try {
+      const babel = markoBabel() as {
+        parseExpression(source: string, options?: unknown): unknown;
+      };
+      pattern = (
+        babel.parseExpression(`(${param} = 0)`, {
+          plugins: ["typescript"],
+        }) as { left: typeof pattern }
+      ).left;
+    } catch {
+      return;
+    }
+    if (pattern?.type !== "ObjectPattern") return;
+    const rewrites = new Map<string, string>();
+    const letNames = new Set<string>();
+    for (const property of pattern.properties ?? []) {
+      const value = property.value;
+      const bound =
+        value?.type === "AssignmentPattern" ? value.left?.name : value?.name;
+      if (bound !== undefined) letNames.add(bound);
+    }
+    let blocked = false;
+    for (const property of pattern.properties ?? []) {
+      const value = property.value;
+      if (!value) continue;
+      const name =
+        value.type === "AssignmentPattern" ? value.left?.name : value.name;
+      if (value.type === "AssignmentPattern" && !blocked && name !== "input") {
+        const right = value.right as unknown as { start: number; end: number };
+        const original = param.slice(right.start - 1, right.end - 1);
+        const expr = { code: original, node: right };
+        rewriteExpr(expr, loc, false, letNames);
+        if (name !== undefined && expr.code !== original) {
+          rewrites.set(name, expr.code);
+        }
+      }
+      if (name === "input") blocked = true;
+    }
+    if (rewrites.size > 0) defineDefaultRewrites.set(record, rewrites);
   };
 
   // Walks the IR, tracking which names the *template* has bound. A `<for>`
@@ -678,6 +757,9 @@ function rewriteInputReads(body: IrNode[], ctx: Ctx): void {
         record.kind === "For"
           ? Array.isArray(record.bindings) && record.bindings.includes("input")
           : definesBindInput(record.params);
+      if (record.kind === "Define" && !shadowed) {
+        rewriteDefineDefaults(record, here);
+      }
       // The iterable/source is evaluated *outside* the loop's own scope, so
       // it keeps the outer meaning of `input`.
       walk(record.source, shadowed, here);

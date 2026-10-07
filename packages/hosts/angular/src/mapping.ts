@@ -52,6 +52,9 @@ import type { GeneratedMapping, SourceSpan } from "@mxlang/core";
  * - `track`: a `by=` expression -> the `track` expression
  *   (`deriveContext` is the loop's row alias)
  * - `define-param`: a `<define>` param -> its `let-<param>` token
+ * - `define-pattern`: a `<define>`'s destructured first param -> the
+ *   `let-<gensym>` token that binds the whole attributes object
+ *   (`deriveContext` is the gensym)
  * - `directive`: a `class`/`style` attribute name -> `ngClass`/`ngStyle`
  */
 export type MappingDerive =
@@ -60,6 +63,7 @@ export type MappingDerive =
   | "event"
   | "track"
   | "define-param"
+  | "define-pattern"
   | "directive";
 
 /**

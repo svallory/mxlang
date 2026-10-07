@@ -1,6 +1,21 @@
 import { parseTemplate } from "@angular/compiler";
 import { describe, expect, it } from "vitest";
+import { compile } from "../src/index.ts";
 import { assertAngularParses, emit } from "./helpers.ts";
+
+/** The evaluated `ngTemplateOutletContext` of the first outlet in `template`. */
+function outletContext(template: string): { $implicit: unknown } {
+  const parsed = parseTemplate(template, "x.html");
+  const container = parsed.nodes.find(
+    (n) => (n as { name?: string }).name === "ng-container",
+  ) as unknown as {
+    inputs: Array<{ name: string; value: { source?: string } }>;
+  };
+  const input = container.inputs.find(
+    (i) => i.name === "ngTemplateOutletContext",
+  );
+  return new Function(`return (${input?.value.source})`)();
+}
 
 describe("Define", () => {
   it("emits an ng-template with a let- param", () => {
@@ -176,5 +191,104 @@ describe("Define call with attributes (decision 160)", () => {
     expect(() =>
       emit("<define/Row|{ [k]: v }|>${v}</define><Row a=1/>"),
     ).toThrow(/a computed key in `<define Row>'s first param/);
+  });
+});
+
+describe("Define call attrs: static values reach the context verbatim", () => {
+  const cases: Array<[string, string]> = [
+    ["a single brace pair", "{x}"],
+    ["a double brace pair", "{{x}}"],
+    ["a JSON string", '{"k":"v"}'],
+    ["an embedded quote", 'say "hi"'],
+    ["an apostrophe", "it's"],
+    ["a backslash", "a\\b"],
+    ["an ampersand entity", "&amp; <b>"],
+  ];
+  for (const [label, value] of cases) {
+    it(`keeps ${label} as authored`, () => {
+      const out = emit(
+        `<define/Row|{ a }|>\${a}</define><Row a=${JSON.stringify(value)}/>`,
+      );
+      assertAngularParses(out);
+      expect(outletContext(out)).toEqual({ $implicit: { a: value } });
+    });
+  }
+
+  it("keeps a brace-bearing quoted key as authored", () => {
+    const out = emit(
+      "<define/Row|{ 'd-e': f }|>${f}</define><Row d-e=\"{x}\"/>",
+    );
+    expect(outletContext(out)).toEqual({ $implicit: { "d-e": "{x}" } });
+  });
+});
+
+describe("Define call attrs: bound attributes", () => {
+  it("rejects a bound attribute with a positioned error", () => {
+    expect(() => emit("<define/Row|{ n }|>${n}</define><Row n:=q/>")).toThrow(
+      /a bound attribute \(`n:=`\) cannot be passed to `<Row>`/,
+    );
+  });
+
+  it("rejects a refined bound attribute too", () => {
+    expect(() =>
+      emit("<define/Row|{ n }|>${n}</define><Row n:fn:=q/>"),
+    ).toThrow(/a bound attribute \(`n:fn:=`\) cannot be passed to `<Row>`/);
+  });
+});
+
+describe("Define: later params stay in scope after an expanded first param", () => {
+  it("lets a refined bound attribute on a later param emit `i.set(…)`", () => {
+    const out = emit(
+      "<define/Row|{ n }, i|><div appPick v:fn:=i/>${n}</define><Row({n:1}, sig)/>",
+    );
+    expect(out).toContain('[v]="__mxGet(i)" (vChange)="i.set(fn($event))"');
+    expect(out).toContain("i: sig");
+    assertAngularParses(out);
+  });
+
+  it("scopes a destructured binding of the first param the same way", () => {
+    const out = emit(
+      "<define/Row|{ n }, i|><div appPick v:fn:=n/></define><Row({n:1}, sig)/>",
+    );
+    expect(out).toContain("n.set(");
+  });
+});
+
+describe("Define: mappings", () => {
+  const slices = (source: string) => {
+    const r = compile(source, "x.mx");
+    return r.mappings.map((m) => ({
+      derive: m.derive,
+      ctx: m.deriveContext,
+      generated: r.code.slice(m.generatedStart, m.generatedEnd),
+      source: source.slice(m.sourceStart, m.sourceEnd),
+    }));
+  };
+
+  it("maps the expanded first param to `let-__mxArg` as a define-pattern derivation", () => {
+    expect(
+      slices("<define/Row|{ a, b }|>${a}</define><Row a=1 b=2/>"),
+    ).toContainEqual({
+      derive: "define-pattern",
+      ctx: "__mxArg",
+      generated: "let-__mxArg",
+      source: "{ a, b }",
+    });
+  });
+
+  it("maps a default expression to its own source text", () => {
+    expect(slices("<define/Row|{ n = 5 }|>${n}</define><Row/>")).toContainEqual(
+      expect.objectContaining({ generated: "5", source: "5" }),
+    );
+  });
+
+  it("maps only the genuine name of a quoted key", () => {
+    const pairs = slices("<define/Row|{ 'd-e': f }|>${f}</define><Row d-e=3/>");
+    expect(pairs).toContainEqual(
+      expect.objectContaining({ generated: "d-e", source: "d-e" }),
+    );
+    for (const p of pairs) {
+      expect(p.generated).not.toContain("&quot;");
+    }
   });
 });

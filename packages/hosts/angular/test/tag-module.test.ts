@@ -616,6 +616,59 @@ describe("compileTagModule: input read shapes (R-b)", () => {
     );
   });
 
+  it("rewrites `input.x` inside a `<define>` param default", () => {
+    const { code } = compileTag(
+      "export interface Input { n: number }\n<define/Row|{ n = input.n }|>${n}</define>\n",
+    );
+
+    expect(templateOf(code)).toBe(
+      "<ng-template #Row let-__mxArg> @let n = __mxArg.n === undefined ? this.n : __mxArg.n; {{ n }} </ng-template>",
+    );
+  });
+
+  it("reads a same-named input through `this`, since a `@let` cannot read itself", () => {
+    const { code } = compileTag(
+      "export interface Input { n: number; m: number }\n<define/Row|{ n = input.n, m = input.n }|>${n}${m}</define>\n",
+    );
+
+    // Both `@let`s sit in the same scope as the `n` the default names.
+    expect(templateOf(code)).toContain(
+      "@let m = __mxArg.m === undefined ? this.n :",
+    );
+  });
+
+  it("rewrites a default that reads another input, keeping the rest of the expression", () => {
+    const { code } = compileTag(
+      "export interface Input { w: number; h: number }\n<define/Box|{ a = input.w * input.h }|>${a}</define>\n",
+    );
+
+    expect(templateOf(code)).toContain("=== undefined ? w * h : ");
+  });
+
+  it("keeps `input` in a default once an earlier binding is named `input`", () => {
+    const { code } = compileTag(
+      "export interface Input { n: number }\n<define/Row|{ input, n = input.n }|>${n}</define>\n",
+    );
+
+    expect(templateOf(code)).toContain("=== undefined ? input.n : ");
+  });
+
+  it("keeps `input` in the default of a binding that is itself named `input`", () => {
+    const { code } = compileTag(
+      "export interface Input { n: number }\n<define/Row|{ input = input.n }|>${input}</define>\n",
+    );
+
+    expect(templateOf(code)).toContain("=== undefined ? input.n : ");
+  });
+
+  it("does not rewrite a default in a define whose own param is `input`", () => {
+    const { code } = compileTag(
+      "export interface Input { n: number }\n<define/Row|input|>${input.n}</define>\n",
+    );
+
+    expect(templateOf(code)).toContain("input.n");
+  });
+
   it("errors on a computed non-literal input read", () => {
     expect(() => compileTag('<const/k="a"/><i>${input[k]}</i>\n')).toThrow(
       "dynamic input access is not supported on Angular",
