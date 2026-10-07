@@ -592,7 +592,10 @@ describe("compileTagModule: input read shapes (R-b)", () => {
     [
       "a destructured `<define>` param",
       "<define/Row|{input}|>${input.label}</define>\n",
-      "<ng-template #Row let-{input}> {{ input.label }} </ng-template>",
+      // `let-` cannot take a pattern: the destructure expands into a
+      // generated `let-` plus an `@let` reading the outlet context's
+      // `$implicit` attributes object (decision 160).
+      "<ng-template #Row let-__mxArg> @let input = __mxArg.input; {{ input.label }} </ng-template>",
     ],
   ])("leaves a read shadowed by %s alone", (_label, source, expected) => {
     // `Define` carries no `bindings` field the way `For` does (`ir.ts`:
