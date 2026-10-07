@@ -3,7 +3,8 @@
  * node, indented by depth, carrying node kind, names, spans, raw text spans,
  * expression source text, attribute order, shorthand parts, statement kind
  * and error code and range. `MxText.value` and expression payloads are not
- * projected (PR 3), nor are the front end's `MX_*` errors (PR 2b).
+ * projected (PR 3); the front end's `MX_*` errors are (PR 2b), so the
+ * snapshot pins their codes and ranges.
  *
  * The tree differential (`packages/tests/parse-differential`) builds the same
  * form from today's Marko tree.
@@ -22,12 +23,6 @@ export function projectDocument(document: InterimDocument): string[] {
   const out: string[] = [];
   for (const child of document.body) projectChild(child, 0, out);
   for (const error of document.errors) {
-    if (
-      error.code.startsWith("MX_") &&
-      error.code !== "MX_FRONT_END_INTERNAL"
-    ) {
-      continue;
-    }
     out.push(`error ${error.code} ${r(error)}`);
   }
   return out;

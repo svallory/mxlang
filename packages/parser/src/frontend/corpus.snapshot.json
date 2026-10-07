@@ -273,7 +273,8 @@
   ],
   "g0062": [
     "tag \"div\" [1,4) [0,9) open=[0,9) mode=html self-closed",
-    "  attr default [4,7) name=[4,4) := value \"1\" [6,7)"
+    "  attr default [4,7) name=[4,4) := value \"1\" [6,7)",
+    "error MX_SUGAR_BOUND [4,5)"
   ],
   "g0063": [
     "tag \"div\" [1,4) [0,9) open=[0,9) mode=html self-closed",
@@ -312,7 +313,8 @@
   ],
   "g0072": [
     "tag \"my-widget\" [1,10) [0,16) open=[0,16) mode=html self-closed",
-    "  sugar tag : \"x@y\" [10,14)"
+    "  sugar tag : \"x@y\" [10,14)",
+    "error MX_SUGAR_NAME_INVALID [10,11)"
   ],
   "g0073": ["tag \"my-widget\" [0,9) [0,9) open=[0,9) mode=html concise"],
   "g0074": [
@@ -979,7 +981,8 @@
   ],
   "g0234": [
     "tag \"static\" [1,7) [0,15) open=[0,15) mode=html self-closed",
-    "  attr \"x\" [8,13) name=[8,9) = value \"1\" [12,13)"
+    "  attr \"x\" [8,13) name=[8,9) = value \"1\" [12,13)",
+    "error MX_STATEMENT_IN_HTML_MODE [1,7)"
   ],
   "g0235": [
     "tag \"div\" [0,3) [0,12) open=[0,3) mode=html concise incomplete",
@@ -1418,7 +1421,8 @@
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
     "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
     "  sugar attribute . \"\" [9,10) args \"b\" [12,13)",
-    "  attr \"y\" [15,16) name=[15,16)"
+    "  attr \"y\" [15,16) name=[15,16)",
+    "error MX_SUGAR_ARGUMENTS [9,10)"
   ],
   "g0331": [
     "tag \"div\" [1,4) [0,17) open=[0,17) mode=html self-closed",
@@ -1806,7 +1810,8 @@
   "g0426": [
     "tag \"div\" [1,4) [0,12) open=[0,12) mode=html self-closed",
     "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
-    "  sugar attribute : \"\" [9,10)"
+    "  sugar attribute : \"\" [9,10)",
+    "error MX_SUGAR_NAME_MISSING [9,10)"
   ],
   "g0427": [
     "tag \"div\" [1,4) [0,13) open=[0,13) mode=html self-closed",
@@ -1958,7 +1963,8 @@
     "  tag \"?\" [10,11) [10,17) open=[10,17) mode=html concise",
     "    attr \"b\" [12,13) name=[12,13)",
     "    sugar attribute : \"\" [14,15)",
-    "    attr \"c\" [16,17) name=[16,17)"
+    "    attr \"c\" [16,17) name=[16,17)",
+    "error MX_SUGAR_NAME_MISSING [14,15)"
   ],
   "g0458": [
     "tag \"div\" [0,3) [0,14) open=[0,7) mode=html concise",
@@ -2034,7 +2040,8 @@
     "  attr \"x\" [4,7) name=[4,5) = value \"a\" [6,7)",
     "  sugar attribute . \"\" [8,9)",
     "  tag unnamed [12,12) [12,14) open=[12,14) mode=html concise",
-    "    sugar tag . \"b\" [12,14)"
+    "    sugar tag . \"b\" [12,14)",
+    "error MX_SUGAR_NAME_MISSING [8,9)"
   ],
   "g0473": [
     "tag \"div\" [0,3) [0,14) open=[0,14) mode=html concise",
@@ -2108,12 +2115,14 @@
   "g0488": [
     "tag \"let\" [1,4) [0,11) open=[0,11) mode=html self-closed",
     "  var \"x\" [5,6)",
-    "  attr default [6,9) name=[6,6) := value \"1\" [8,9)"
+    "  attr default [6,9) name=[6,6) := value \"1\" [8,9)",
+    "error MX_SUGAR_BOUND [6,7)"
   ],
   "g0489": [
     "tag \"let\" [0,3) [0,8) open=[0,8) mode=html concise",
     "  var \"x\" [4,5)",
-    "  attr default [5,8) name=[5,5) := value \"1\" [7,8)"
+    "  attr default [5,8) name=[5,5) := value \"1\" [7,8)",
+    "error MX_SUGAR_BOUND [5,6)"
   ],
   "g0490": [
     "tag \"let\" [1,4) [0,14) open=[0,7) close=[8,14) \"let\" mode=html",
@@ -2806,15 +2815,18 @@
   "g0653": [
     "tag \"input\" [1,6) [0,14) open=[0,14) mode=void self-closed",
     "  attr \"x\" [7,10) name=[7,8) = value \"1\" [9,10)",
-    "  sugar attribute : \"\" [11,12)"
+    "  sugar attribute : \"\" [11,12)",
+    "error MX_SUGAR_NAME_MISSING [11,12)"
   ],
   "g0654": [
     "tag \"input\" [1,6) [0,10) open=[0,10) mode=void self-closed",
-    "  sugar attribute : \"\" [7,8)"
+    "  sugar attribute : \"\" [7,8)",
+    "error MX_SUGAR_NAME_MISSING [7,8)"
   ],
   "g0655": [
     "tag \"a\" [1,2) [0,8) open=[0,8) mode=html self-closed",
-    "  sugar tag : \"b:c\" [2,6)"
+    "  sugar tag : \"b:c\" [2,6)",
+    "error MX_SECOND_NAME [4,5)"
   ],
   "g0656": [
     "tag \"if\" [1,3) [0,16) open=[0,10) close=[11,16) \"if\" mode=html",
@@ -3024,7 +3036,8 @@
   ],
   "g0702": [
     "tag \"div\" [1,4) [0,9) open=[0,9) mode=html self-closed",
-    "  attr default [4,7) name=[4,4) := value \"x\" [6,7)"
+    "  attr default [4,7) name=[4,4) := value \"x\" [6,7)",
+    "error MX_SUGAR_BOUND [4,5)"
   ],
   "g0703": ["tag \"div>a\" [0,5) [0,5) open=[0,5) mode=html concise"],
   "g0704": ["tag \"1abc\" [1,5) [0,7) open=[0,7) mode=html self-closed"],
@@ -3084,7 +3097,8 @@
   ],
   "g0719": [
     "tag \"if\" [1,3) [0,8) open=[0,8) mode=html self-closed",
-    "  attr default [3,6) name=[3,3) := value \"x\" [5,6)"
+    "  attr default [3,6) name=[3,3) := value \"x\" [5,6)",
+    "error MX_SUGAR_BOUND [3,4)"
   ],
   "g0720": [
     "tag \"div\" [1,4) [0,27) open=[0,27) mode=html self-closed",
@@ -3636,6 +3650,7 @@
     "tag \"div\" [1,4) [0,11) open=[0,11) mode=html incomplete",
     "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
     "  sugar attribute : \"\" [9,10)",
+    "error MX_SUGAR_NAME_MISSING [9,10)",
     "error MISSING_END_TAG [0,11)"
   ],
   "g0842": [
@@ -3691,6 +3706,7 @@
     "tag \"if\" [1,3) [0,9) open=[0,9) mode=html incomplete",
     "  attr default [3,6) name=[3,3) = value \":a\" [4,6)",
     "  sugar attribute : \"\" [7,8)",
+    "error MX_SUGAR_NAME_MISSING [7,8)",
     "error MISSING_END_TAG [0,9)"
   ],
   "g0852": [
@@ -3733,7 +3749,8 @@
   "g0860": [
     "tag \"div\" [0,3) [0,9) open=[0,9) mode=html concise",
     "  attr \"x\" [4,7) name=[4,5) = value \"a\" [6,7)",
-    "  sugar attribute : \"\" [8,9)"
+    "  sugar attribute : \"\" [8,9)",
+    "error MX_SUGAR_NAME_MISSING [8,9)"
   ],
   "g0861": [
     "tag \"div\" [1,4) [0,14) open=[0,14) mode=html self-closed",
@@ -4351,7 +4368,8 @@
   "g1019": [
     "tag \"div\" [1,4) [0,15) open=[0,15) mode=html self-closed",
     "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
-    "  sugar attribute : \"b%c\" [9,13)"
+    "  sugar attribute : \"b%c\" [9,13)",
+    "error MX_SUGAR_NAME_INVALID [9,10)"
   ],
   "g1020": [
     "tag \"div\" [1,4) [0,13) open=[0,13) mode=html self-closed",
@@ -4421,7 +4439,8 @@
   ],
   "g1035": [
     "tag \"div\" [1,4) [0,10) open=[0,10) mode=html self-closed",
-    "  attr default [5,8) name=[5,5) := value \"1\" [7,8)"
+    "  attr default [5,8) name=[5,5) := value \"1\" [7,8)",
+    "error MX_SUGAR_BOUND [5,6)"
   ],
   "g1036": [
     "tag \"div\" [1,4) [0,24) open=[0,24) mode=html self-closed",
@@ -5004,7 +5023,8 @@
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
     "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
     "  sugar attribute . \"b\" [9,11) args \"c\" [12,13)",
-    "  attr \"d\" [15,16) name=[15,16)"
+    "  attr \"d\" [15,16) name=[15,16)",
+    "error MX_SUGAR_ARGUMENTS [9,10)"
   ],
   "g1163": [
     "tag \"div\" [1,4) [0,13) open=[0,13) mode=html self-closed",
@@ -5480,7 +5500,8 @@
     "tag \"div\" [1,4) [0,18) open=[0,11) close=[12,18) \"div\" mode=html",
     "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
     "  sugar attribute : \"\" [9,10)",
-    "  text [11,12)"
+    "  text [11,12)",
+    "error MX_SUGAR_NAME_MISSING [9,10)"
   ],
   "g1266": [
     "tag \"div\" [1,4) [0,13) open=[0,13) mode=html self-closed",
@@ -5522,7 +5543,8 @@
   ],
   "g1274": [
     "tag \"static\" [1,7) [0,11) open=[0,11) mode=html self-closed",
-    "  attr \"x\" [8,9) name=[8,9)"
+    "  attr \"x\" [8,9) name=[8,9)",
+    "error MX_STATEMENT_IN_HTML_MODE [1,7)"
   ],
   "g1275": [
     "tag \"div\" [0,3) [0,12) open=[0,3) mode=html concise incomplete",
@@ -5647,7 +5669,8 @@
   "g1299": [
     "tag \"div\" [1,4) [0,12) open=[0,12) mode=html self-closed",
     "  attr \"x\" [5,8) name=[5,6) = value \"1\" [7,8)",
-    "  sugar attribute : \"\" [9,10)"
+    "  sugar attribute : \"\" [9,10)",
+    "error MX_SUGAR_NAME_MISSING [9,10)"
   ],
   "g1300": [
     "tag \"input\" [1,6) [0,28) open=[0,28) mode=void self-closed",
@@ -5668,7 +5691,8 @@
     "  attr \"class:x\" [5,12) name=[5,12)"
   ],
   "g1304": [
-    "attribute-tag @svg:rect [1,10) [0,12) open=[0,12) mode=html self-closed"
+    "attribute-tag @svg:rect [1,10) [0,12) open=[0,12) mode=html self-closed",
+    "error MX_ATTRIBUTE_TAG_AT_ROOT [1,10)"
   ],
   "g1305": [
     "tag dynamic [0,5) \"\\\\${a}\" [0,5) [0,5) open=[0,5) mode=html concise"
@@ -5889,7 +5913,8 @@
   "g1355": [
     "tag \"let\" [1,4) [0,12) open=[0,12) mode=html self-closed",
     "  var \"x\" [5,6)",
-    "  attr default [7,10) name=[7,7) := value \"1\" [9,10)"
+    "  attr default [7,10) name=[7,7) := value \"1\" [9,10)",
+    "error MX_SUGAR_BOUND [7,8)"
   ],
   "g1356": [
     "tag \"let\" [0,3) [0,13) open=[0,5) mode=html concise",
@@ -6592,7 +6617,8 @@
     "tag \"if\" [1,3) [0,15) open=[0,9) close=[10,15) \"if\" mode=html",
     "  attr default [3,6) name=[3,3) = value \":a\" [4,6)",
     "  sugar attribute : \"\" [7,8)",
-    "  text [9,10)"
+    "  text [9,10)",
+    "error MX_SUGAR_NAME_MISSING [7,8)"
   ],
   "g1510": [
     "tag \"if\" [1,3) [0,16) open=[0,10) close=[11,16) \"if\" mode=html",
@@ -7360,6 +7386,7 @@
   ],
   "g1683": [
     "tag unnamed [1,1) [1,4) open=[1,1) mode=html concise incomplete",
+    "error MX_TAG_NAME_MISSING [1,1)",
     "error EXTRA_CLOSING_TAG [4,8)"
   ],
   "g1684": [
@@ -7432,20 +7459,29 @@
     "  attr \"x\" [5,6) name=[5,6)",
     "error AMBIGUOUS_ATTRIBUTE_VALUE [7,12)"
   ],
-  "g1699": ["tag unnamed [1,1) [1,1) open=[1,1) mode=html concise"],
-  "g1700": ["tag unnamed [1,1) [0,4) open=[0,4) mode=html self-closed"],
+  "g1699": [
+    "tag unnamed [1,1) [1,1) open=[1,1) mode=html concise",
+    "error MX_TAG_NAME_MISSING [1,1)"
+  ],
+  "g1700": [
+    "tag unnamed [1,1) [0,4) open=[0,4) mode=html self-closed",
+    "error MX_TAG_NAME_MISSING [1,1)"
+  ],
   "g1701": [
     "tag unnamed [1,1) [0,4) open=[0,3) mode=html incomplete",
     "  text [3,4)",
+    "error MX_TAG_NAME_MISSING [1,1)",
     "error MISSING_END_TAG [0,3)"
   ],
   "g1702": [
     "tag unnamed [1,1) [0,3) open=[0,3) mode=html incomplete",
+    "error MX_TAG_NAME_MISSING [1,1)",
     "error MISSING_END_TAG [0,3)"
   ],
   "g1703": [
     "text [3,5)",
     "tag unnamed [6,6) [5,10) open=[5,10) mode=html incomplete",
+    "error MX_TAG_NAME_MISSING [6,6)",
     "error MISSING_END_TAG [5,10)"
   ],
   "g1704": [
@@ -7467,6 +7503,7 @@
   "g1708": [
     "tag \"div\" [1,4) [0,8) open=[0,5) mode=html incomplete",
     "  tag unnamed [6,6) [5,8) open=[5,8) mode=html incomplete",
+    "error MX_TAG_NAME_MISSING [6,6)",
     "error MISSING_END_TAG [5,8)"
   ],
   "g1709": [
