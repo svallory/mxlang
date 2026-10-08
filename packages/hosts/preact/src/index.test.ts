@@ -1410,13 +1410,24 @@ describe("a unit that returns a value", () => {
       customTags: { counter },
     }).code;
 
-  it("returns { value, output } instead of markup alone", () => {
+  it("returns { value, output } from .render, output alone from the default export", () => {
     const code = compilePreactMx(
       counterSource,
       "/fixtures/tags/counter.mx",
     ).code;
 
+    // Decision 155's model on this host: the body function returns the pair
+    // and binds it as `.render`; the default export returns only the output,
+    // so any caller without static knowledge of the unit (a dynamic tag, a
+    // hand-written TSX import) renders the body, never the pair object.
     expect(code).toContain("return { value: input.start + 1, output: (<>");
+    expect(code).toMatch(
+      /function CounterUnit\(props: Input\) \{[\s\S]*return \{ value:/,
+    );
+    expect(code).toContain("Counter.render = CounterUnit;");
+    expect(code).toContain("function Counter(props: Input) {");
+    expect(code).toContain("return CounterUnit(props).output;");
+    expect(code).toContain("export default Counter;");
   });
 
   it("evaluates the call above the return and binds the /var", () => {
@@ -1425,7 +1436,7 @@ describe("a unit that returns a value", () => {
     // Invariant §7.5-4's sequence, in the one place this target has a
     // statement position: the call, then the binding, then the output where
     // the call stood.
-    const call = code.indexOf("const __mxRet0 = $mx_Counter1(");
+    const call = code.indexOf("const __mxRet0 = $mx_Counter1.render(");
     const bind = code.indexOf("const n = __mxRet0.value;");
     const ret = code.indexOf("return (<>");
     expect(call).toBeGreaterThan(-1);
@@ -1438,7 +1449,7 @@ describe("a unit that returns a value", () => {
   it("unwraps the output when the call binds no /var", () => {
     const code = callerCode("<counter start=1/>");
 
-    expect(code).toContain('{$mx_Counter1({ "start": 1 }).output}');
+    expect(code).toContain('{$mx_Counter1({ "start": 1 })}');
     expect(code).not.toContain("__mxRet");
   });
 
@@ -1471,10 +1482,10 @@ describe("a unit that returns a value", () => {
 
   it("still allows a call with no /var inside <for>", () => {
     // Only the *binding* is refused; the call itself is an ordinary one and
-    // its output renders per row.
+    // its output renders per row (the default export already returns it).
     const code = callerCode("<for|i| of=[1,2]><counter start=i/></for>");
 
-    expect(code).toContain(".output}");
+    expect(code).toContain("$mx_Counter1({ \"start\": i })");
   });
 
   it("rejects a hook in a unit that declares <return>", () => {

@@ -157,15 +157,17 @@ function rejectModuleLevel(
   );
 }
 
-/** `MX_DYNAMIC` as two declarations: the bridge renames only a define's first statement. */
+/** `MX_DYNAMIC` split per binding: the bridge renames only a define's first statement. */
 function dynamicHelpers(): JsxHelper[] {
-  const split = MX_DYNAMIC.indexOf("\nfunction __mxDynamic(");
+  const objectSplit = MX_DYNAMIC.indexOf("\nfunction __mxDynamic(");
+  const pairSplit = MX_DYNAMIC.indexOf("\nfunction __mxDynamicPair(");
   return [
     {
       binding: "__mxIsHostComponentObject",
-      code: MX_DYNAMIC.slice(0, split),
+      code: MX_DYNAMIC.slice(0, objectSplit),
     },
-    { binding: "__mxDynamic", code: MX_DYNAMIC.slice(split + 1) },
+    { binding: "__mxDynamic", code: MX_DYNAMIC.slice(objectSplit + 1, pairSplit) },
+    { binding: "__mxDynamicPair", code: MX_DYNAMIC.slice(pairSplit + 1) },
   ];
 }
 

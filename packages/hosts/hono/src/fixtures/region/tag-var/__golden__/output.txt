@@ -3,8 +3,8 @@ import Counter from "./counter.mx";
 export default function Page() {
   return (
     <>{(() =>
-      {const __mxRet0 = Counter({ "start": 3 });
-        const doubled = __mxRet0.
-        value;return <><div>{__mxRet0.output}<p>doubled {doubled}</p></div></>;})()}</>);
+      {const __mxRet0 = Counter.render({ "start": 3 });
+        const doubled =
+        __mxRet0.value;return <><div>{__mxRet0.output}<p>doubled {doubled}</p></div></>;})()}</>);
 
 }

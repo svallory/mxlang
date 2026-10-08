@@ -7,6 +7,8 @@
 
 ## Unreleased
 
+- **Fix, behaviour change (dynamic-tag-var-silent-drop):** a tag variable on a dynamic tag (`<${Cmp}/n/>`) is a positioned compile error at the `/n`, where it compiled clean and silently dropped the binding. Marko 6.3.51 binds the dynamic tag's return value; `ngComponentOutlet` renders the component but has no binding position for a returned value, so this host refuses — never a silent drop.
+
 - **Fix, behaviour change (unresolved-tags-dir-diagnostic, decision 172):** a `.marko` file used as a tag, and a `tags/x/index.mx` directory tag, are one positioned error at the tag naming the file (core's check), not a silent native `<x>`. In `.ng.mx` the error is at the tag (it was at the import).
 
 - **Fixed (ngmx-region-error-unpositioned):** a core error raised in a `.ng.mx` region (a refinement that is no identifier, `<if>` with no condition, an unreadable tag param) carries `line` and `column` like the whole-file and tag-module entries, not only the parser's `loc`; a caller reading `line`/`column` saw none (0:0).

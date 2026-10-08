@@ -624,8 +624,9 @@ describe("the render sink (decision 155)", () => {
     expect(html).toBe("<div><span>4</span></div>");
   });
 
-  // TODO dynamic-tag-var-silent-drop: `/n` was dropped. Marko 6.3.51 binds a
-  // dynamic tag's return value.
+  // Binds since decision 155's sink; the TODO `dynamic-tag-var-silent-drop`
+  // on html is closed here (the oracle fixture is
+  // `fixtures-marko/dynamic-tag-var`).
   it("binds /var on a dynamic tag to the callee's render value", async () => {
     const html = await renderModules(
       {

@@ -206,6 +206,10 @@ export function createJsxDeclarations(
     name: declarationName,
     attrTags: 2,
     defineCallPassesAttrs: true,
+    // Decision 155's model on this host: the compiled unit exposes `.render`,
+    // and the dynamic dispatch (`__mxDynamicPair`) reaches it, so a `/var` on
+    // a dynamic tag binds instead of being refused.
+    bindsDynamicTagVar: true,
     tags: statefulErrors(dialectName, region),
     // The ladder (decision 145): the parent's contract `defaultTag`, then
     // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
@@ -1735,6 +1739,37 @@ export class PreactEmitter implements Emitter<string> {
       const takesParams = hasParams
         ? `${node.args.length > 0 ? "" : ", undefined"}, true`
         : "";
+      // A `/var` on a dynamic tag binds the callee's render path's value
+      // (decision 155): `__mxDynamicPair` returns the `{ value, output }`
+      // pair a returning unit's `.render` hands back, with `undefined` for
+      // any callee without one. Same statement-position rule as the static
+      // path above: the call hoists to the component body, so a callback
+      // scope is rejected rather than silently relocated.
+      if (node.var) {
+        if (this.#callbackScope) {
+          fail(
+            this.#region
+              ? `\`/var\` on a dynamic tag inside \`<for>\`, \`<if>\`, an attribute-tag body or a \`<define>\` body is not supported in a \`.${this.#region.segment}.mx\` region; bind it directly in the region's markup, outside those bodies`
+              : `\`/var\` on a dynamic tag inside \`<for>\`/\`<if>\` is not supported on ${this.#dialect.name} yet; bind it at the top level of the template`,
+            node,
+          );
+        }
+        if (this.#region) {
+          const bindings = node.varBindings ?? [];
+          for (const { name: bound, span } of bindings) {
+            this.#claimRegionName(this.#region, bound, span, node.loc);
+          }
+        }
+        this.#runtimeImports.add("__mxDynamicPair");
+        const temp = `__mxRet${this.#varSerial.n++}`;
+        this.#varStatements.push(
+          `const ${temp} = __mxDynamicPair(${node.target.expr.code}, ${payload}${content}${takesParams});`,
+        );
+        this.#varStatements.push(`const ${node.var} = ${temp}.value;`);
+        this.#out.push(concatMapped(`{${temp}.output}`));
+        return;
+      }
+      this.#runtimeImports.add("__mxDynamic");
       this.#out.push(
         concatMapped(
           "{__mxDynamic(",
@@ -1835,12 +1870,17 @@ export class PreactEmitter implements Emitter<string> {
           }
         }
         const temp = `__mxRet${this.#varSerial.n++}`;
-        this.#varStatements.push(`const ${temp} = ${name}(${props});`);
+        // The unit's render path (decision 155): `.render` is the compiled
+        // unit's own function returning the `{ value, output }` pair; the
+        // default export returns only the output.
+        this.#varStatements.push(`const ${temp} = ${name}.render(${props});`);
         this.#varStatements.push(`const ${node.var} = ${temp}.value;`);
         this.#out.push(concatMapped(`{${temp}.output}`));
         return;
       }
-      this.#out.push(concatMapped("{", `${name}(${props})`, ".output}"));
+      // No `/var`: only the output is wanted, and the default export already
+      // returns it, so the call stays an expression.
+      this.#out.push(concatMapped("{", `${name}(${props})`, "}"));
       return;
     }
     const rawHtml = raw

@@ -248,6 +248,29 @@ describe("Component dynamic target (via DelegatedTag routing)", () => {
     );
   });
 
+  // dynamic-tag-var-silent-drop: a `/var` on a dynamic tag used to compile
+  // clean and silently drop the binding (`ngComponentOutlet` has no position
+  // to hand a returned value to). Marko 6.3.51 binds the dynamic tag's return
+  // value; this host cannot, so it must refuse — never a silent drop.
+  it("rejects a /var on a dynamic component, positioned at the /var", () => {
+    const fail = (source: string) => {
+      try {
+        emit(source);
+      } catch (caught) {
+        return caught as Error & { line?: number; column?: number };
+      }
+      return undefined;
+    };
+    const error = fail("<${Cmp} a=1/>\n<${Cmp}/n a=1/>");
+    expect(error?.message).toMatch(
+      /tag variable `\/n` on a dynamic tag .* isn't supported by @mxlang\/angular/,
+    );
+    // The `/n` is the second character pair of line 2 (`<${Cmp}/n …>`), so
+    // the caret lands on the binding, not on the tag's `<`.
+    expect(error?.line).toBe(2);
+    expect(error?.column).toBe(8);
+  });
+
   it("escapes a quote in a static input without corrupting the outlet binding", () => {
     // A plain `"${attr.value}"` (no JS-layer escaping) let an unescaped `"`
     // in the attribute value close the JS object literal early, corrupting

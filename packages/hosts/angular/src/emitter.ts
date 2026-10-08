@@ -231,6 +231,18 @@ export const angularDeclarations: HostDeclarations = {
     if (name === "try") return { kind: "try" };
     if (name === "html-comment") return { kind: "html-comment" };
     if (name === DYNAMIC_TAG) {
+      // A `/var` on a dynamic tag must refuse here, at the raw Marko node:
+      // the delegated path's emitter only sees the IR, whose `var` carries a
+      // name but no span. `ngComponentOutlet` renders the component but has
+      // no position to hand a returned value to, so letting the binding
+      // through was a silent drop (Marko 6.3.51 binds the dynamic tag's
+      // return value; this host cannot).
+      if (node.var) {
+        rawFail(
+          "tag variable `/n` on a dynamic tag (`<${…}/n/>`) isn't supported by @mxlang/angular: `ngComponentOutlet` renders the component but has no binding position for a returned value",
+          node.var,
+        );
+      }
       return {
         kind: "dynamic-component",
         expr: {
@@ -550,38 +562,40 @@ function handlerShape(code: string):
  * `function` is not flagged; `undefined` when `code` does not parse as an
  * expression (the template parser reports that) or holds neither.
  */
+/** A node the traversal-only scan of `statementBodyConstruct` inspects. */
+interface ScanNode {
+  type?: string;
+  body?: { type?: string };
+  [key: string]: unknown;
+}
+
 function statementBodyConstruct(code: string): string | undefined {
-  let root: unknown;
+  let root: ScanNode;
   try {
     const babel = markoBabel() as {
-      parseExpression(source: string, options: unknown): unknown;
+      parseExpression(source: string, options: unknown): ScanNode;
     };
     root = babel.parseExpression(code, { plugins: [["typescript", {}]] });
   } catch {
     return undefined;
   }
-  const stack: unknown[] = [root];
+  const stack: ScanNode[] = [root];
   while (stack.length > 0) {
     const node = stack.pop();
+    if (node === undefined) continue;
     if (Array.isArray(node)) {
-      stack.push(...node);
-    } else if (node && typeof node === "object") {
-      const n = node as { type?: string; body?: { type?: string } };
-      if (n.type === "FunctionExpression") return "a `function` expression";
-      if (
-        n.type === "ArrowFunctionExpression" &&
-        n.body?.type === "BlockStatement"
-      ) {
+      // SAFETY: the walker only ever pushes Babel AST nodes (or arrays of
+      // them), so every array entry is already a `ScanNode`; the cast only
+      // restates what the push sites below guarantee.
+      stack.push(...(node as unknown as ScanNode[]));
+    } else if (typeof node === "object") {
+      if (node.type === "FunctionExpression") return "a `function` expression";
+      if (node.type === "ArrowFunctionExpression" && node.body?.type === "BlockStatement") {
         return "an arrow function with a block body";
       }
       for (const [key, child] of Object.entries(node)) {
-        if (
-          key !== "loc" &&
-          key !== "extra" &&
-          child &&
-          typeof child === "object"
-        ) {
-          stack.push(child);
+        if (key !== "loc" && key !== "extra" && child && typeof child === "object") {
+          stack.push(child as ScanNode);
         }
       }
     }

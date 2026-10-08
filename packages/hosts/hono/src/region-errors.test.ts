@@ -179,7 +179,8 @@ describe("region rule", () => {
         "is not supported in a `.hono.mx` region",
       ),
       line: 5,
-      column: 6,
+      // At the `/x` itself, not the tag (dynamic-tag-var-silent-drop).
+      column: 9,
     });
   });
 

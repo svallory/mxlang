@@ -331,6 +331,31 @@ function __mxDynamic(target: any, payload: any, content?: any, takesParams?: boo
     );
   }
   return props.content ? props.content() : target;
+}
+/**
+ * __mxDynamic for a call that binds /var: a target with a render path (a
+ * compiled unit that declares <return>, decision 155) is called through
+ * .render, which hands back the { value, output } pair — the value binds the
+ * /var, the output renders, and the pair object itself never reaches JSX.
+ * Any other callee has no value channel, so value is undefined and the
+ * output is whatever __mxDynamic renders. Typed any on value: the callee's
+ * shape is unknown statically (html's __mxRenderDynamic binds unknown for
+ * the same case), and the binding feeds a JSX child position the host's
+ * element types already accept any node for.
+ */
+function __mxDynamicPair(target: any, payload: any, content?: any, takesParams?: boolean): { value: any; output: any } {
+  if (
+    target !== null &&
+    target !== undefined &&
+    typeof target === "function" &&
+    typeof (target as { render?: unknown }).render === "function"
+  ) {
+    const ret = Array.isArray(payload)
+      ? (target as { render: (...args: any[]) => { value: any; output: any } }).render(...payload)
+      : (target as { render: (props: any) => { value: any; output: any } }).render(payload);
+    return { value: ret.value, output: ret.output };
+  }
+  return { value: undefined, output: __mxDynamic(target, payload, content, takesParams) };
 }`;
 
 /**
@@ -445,6 +470,12 @@ export function emitModuleWithMappings(
 
   drive(emitter, markup);
   const body = emitter.result();
+  // Either dynamic helper inlines the whole MX_DYNAMIC block (`__mxDynamicPair`
+  // calls `__mxDynamic` for any callee without a render path). Read after the
+  // walk: `drive` is what fills `runtimeImports`.
+  const usesDynamicHelpers =
+    emitter.runtimeImports.has("__mxDynamic") ||
+    emitter.runtimeImports.has("__mxDynamicPair");
 
   // A `/var` call site needs its call evaluated above the `return`, and the
   // emitter collects those while walking (see `varStatements`). Appended
@@ -467,7 +498,7 @@ export function emitModuleWithMappings(
   const helperInput = [
     body.code,
     ...statements.map((statement) => statement.code),
-    ...(emitter.runtimeImports.has("__mxDynamic") ? [MX_DYNAMIC] : []),
+    ...(usesDynamicHelpers ? [MX_DYNAMIC] : []),
   ].join("\n");
   const attrHelpers = attributeHelpers(helperInput, dialect).map(
     (helper) => helper.code,
@@ -488,7 +519,7 @@ export function emitModuleWithMappings(
     // Private helpers use the language-reserved prefix; public runtime
     // exports retain their names and are imported under private aliases.
     ...attrHelpers,
-    ...(emitter.runtimeImports.has("__mxDynamic") ? [MX_DYNAMIC] : []),
+    ...(usesDynamicHelpers ? [MX_DYNAMIC] : []),
   ];
   if (hoisted.length > 0) lines.push("", ...hoisted);
 
@@ -539,18 +570,35 @@ export function emitModuleWithMappings(
   const statementCode = concatMapped(
     ...statements.flatMap((statement) => ["  ", statement, "\n"]),
   );
-  // A unit that declares `<return>` hands back `{ value, output }` rather
-  // than its markup alone (design §3.3), so the call site can bind the value
-  // with `/var` and still render the output. `output` is the element, not a
-  // string: on this target that is what "the rendered thing" is.
+  // A unit that declares `<return>` hands back `{ value, output }` through
+  // its **render path**, not through the default export (decision 155's
+  // model, html's `.render` shape adapted to JSX): the emitted module keeps
+  // one body function returning the pair, binds it as `Name.render`, and the
+  // default export returns only the output. Before this shape the default
+  // export returned the pair itself, so any caller without static knowledge
+  // of the unit — a dynamic tag (`<${Counter}/>`), a hand-written TSX
+  // import — rendered or mounted the pair object: Preact rendered empty,
+  // React threw "Objects are not valid as a React child". A `/var` call site
+  // reads the pair off `.render`, exactly as the html host reads its
+  // `.render(input, out)` return value.
   if (ir.returnValue) {
     rejectHooksInReturningUnit(ir, dialect.hookModules);
+    const componentName = moduleExportName(ir, "@mxlang/preact");
+    // Fresh against the whole source, so an author's own binding never
+    // collides with the lifted body function (the `handlerTypeNames` rule).
+    let unit = `${componentName}Unit`;
+    for (let n = 1; source.includes(unit); n++) {
+      unit = `${componentName}Unit${n}`;
+    }
     return concatMapped(
-      prefix,
+      prefix.replace(
+        `export default function ${componentName}(props: Input) {`,
+        `function ${unit}(props: Input) {`,
+      ),
       statementCode,
       `  return { value: ${ir.returnValue.code}, output: (<>`,
       body,
-      "</>) };\n}\n",
+      `</>) };\n}\n\nfunction ${componentName}(props: Input) {\n  return ${unit}(props).output;\n}\n${componentName}.render = ${unit};\n\nexport default ${componentName};\n`,
     );
   }
 

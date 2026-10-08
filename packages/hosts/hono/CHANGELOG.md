@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix, visible emitted-code change (dynamic-tag-return-unit-object-object / dynamic-tag-var-silent-drop):** same as Preact (shared emitter and compiler): a returning unit's `{ value, output }` pair moved from the default export to a `.render(props)` render path, so a dynamic tag (`<${Counter}/>`, directly or through a `.ts` barrel) renders the body where Hono's string resolver failed on the pair object; `/var` reads the pair off `.render`, and a `/var` on a dynamic tag binds through `__mxDynamicPair` (core's `bindsDynamicTagVar` opt-in), refused inside `<for>`/`<if>`.
+
 - **Fix (routed-template-call-namespan):** a discovered tag's call maps its name span, so a type error on it (a missing required prop) lands on the tag name, not at 1:1 marked MX's. Same as Preact (shared emitter). No emitted code changes, only the source map.
 
 - **Fix, behaviour change (unresolved-tags-dir-diagnostic, decision 172):** a tag Marko's lookup resolves to an `.mx` template (a `marko.json` entry) is imported from the path it was found at (`resolveDiscoveredTagModule`), bound as core's `_x` rather than `__mxX`; a `.marko` tag is core's one error, not an import of `./tags/<name>.marko`.

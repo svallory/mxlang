@@ -26,6 +26,8 @@ const COUNTER = [
   "<return value=input.start + 1/>",
 ].join("\n");
 
+const PLAIN = "<b>x</b>";
+
 async function renderCaller(callerSource: string): Promise<string> {
   const { render } = (await import("preact-render-to-string")) as {
     render: (vnode: unknown) => string;
@@ -53,14 +55,28 @@ async function renderCaller(callerSource: string): Promise<string> {
       join(scratch, "lib/counter.tsx"),
       compilePreactMx(COUNTER, join(scratch, "lib/counter.mx")).code,
     );
+    writeFileSync(join(scratch, "lib/plain.mx"), PLAIN);
+    writeFileSync(
+      join(scratch, "lib/plain.tsx"),
+      compilePreactMx(PLAIN, join(scratch, "lib/plain.mx")).code,
+    );
+    // The verifier's second route: the same unit through a `.ts` barrel —
+    // the re-exported default is the same function object, so its render
+    // path travels with it.
+    writeFileSync(
+      join(scratch, "lib/counter-barrel.ts"),
+      'export { default } from "./counter.tsx";\n',
+    );
     const callerPath = join(scratch, "caller.mx");
     const entry = join(scratch, "caller.tsx");
     writeFileSync(
       entry,
       compilePreactMx(
-        `import Counter from "./lib/counter.mx"\n${callerSource}`,
+        `import Counter from "./lib/counter.mx"\nimport Plain from "./lib/plain.mx"\n${callerSource}`,
         callerPath,
-      ).code.replace('"./lib/counter.mx"', '"./lib/counter.tsx"'),
+      ).code
+        .replace('"./lib/counter.mx"', '"./lib/counter.tsx"')
+        .replace('"./lib/plain.mx"', '"./lib/plain.tsx"'),
     );
     const mod = (await import(`${entry}?t=${Date.now()}`)) as {
       default: FunctionComponent<Record<string, unknown>>;
@@ -126,5 +142,42 @@ describe("an imported tag that declares <return>, rendered on Preact", () => {
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }
+  });
+});
+
+describe("a dynamic tag whose callee declares <return>, rendered on Preact", () => {
+  // The verifier's fixture (dynamic-tag-return-unit-object-object): before
+  // decision 155's render path reached this host, `__mxDynamic` passed the
+  // returning unit's `{ value, output }` pair straight through and Preact
+  // rendered empty. The unit's `.render` is now the value channel; the
+  // default export renders the body.
+  it("renders the body and binds /var, reached directly", async () => {
+    expect(
+      await renderCaller("<div><${Counter}/n start=1/><p>${n}</p></div>"),
+    ).toBe("<div><span>1</span><p>2</p></div>");
+  });
+
+  it("renders the body and binds /var through a .ts barrel", async () => {
+    expect(
+      await renderCaller(
+        'import Barrel from "./lib/counter-barrel.ts"\n<div><${Barrel}/n start=1/><p>${n}</p></div>',
+      ),
+    ).toBe("<div><span>1</span><p>2</p></div>");
+  });
+
+  it("renders the body without /var, never the unit object", async () => {
+    expect(await renderCaller("<div><${Counter} start=1/></div>")).toBe(
+      "<div><span>1</span></div>",
+    );
+  });
+
+  it("binds undefined for a callee without <return>, and renders its body", async () => {
+    expect(
+      await renderCaller("<div><${Plain}/n/><p>${String(n)}</p></div>"),
+    ).toBe("<div><b>x</b><p>undefined</p></div>");
+  });
+
+  it("renders a string target as its element, /var or not", async () => {
+    expect(await renderCaller('<${"em"}>i</${"em"}>')).toBe("<em>i</em>");
   });
 });
