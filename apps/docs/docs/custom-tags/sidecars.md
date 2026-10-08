@@ -344,6 +344,8 @@ Discovery reads `parseOptions` without executing the module. Keep the default ex
 
 Build results through `ctx.build`; do not construct IR objects by hand. Its methods are `text`, `interpolation`, `element`, `attr`, `dynamicAttr`, `booleanAttr`, `expr`, `ifChain`, `forLoop`, `block`, `delegatedTag`, and `template`. Every synthetic node receives the appropriate position automatically.
 
+Every builder (except `expr`, which produces no positioned node, and `template`, which routes the template's own positioned output) takes an optional last argument `from`: where the built node's positions come from. Pass an IR node already in the tree, an `AttributeTag`, the `TagCall` itself, or a span object — the call's attribute is the common one (`ctx.build.attr(attr.name, attr.value, attr)`). The built node takes `loc` from it, plus its `span` and `nameSpan` where the source and the built kind have them (a built node with only a name span reports that range as its span). Without `from`, the node is stamped with the call site's position, as before — which is why a node a transform builds used to carry no span of its own and diagnostics on it pointed at the tag.
+
 The fixture's transform validates the one shape its declaration cannot express, obtains a hygienic row name, and builds a real IR loop:
 
 ```ts

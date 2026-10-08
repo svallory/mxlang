@@ -95,6 +95,7 @@ export {
 export { CORE_TAGLIB, withStatementTags } from "./core-taglib.ts";
 export type {
   AnalyzeContext,
+  BuildFrom,
   ChildNode,
   ContractDeclaration,
   ContractMap,

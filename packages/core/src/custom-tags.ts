@@ -518,29 +518,41 @@ export type ContractMap = Record<string, CustomTag>;
 
 /** Builders available to a transform. Module-level IR is deliberately absent. */
 export interface IrBuilders {
-  text(value: string): IrNode;
-  interpolation(expr: Expr, escaped?: boolean): IrNode;
+  /**
+   * Every builder below (except `expr`, which produces no positioned node,
+   * and `template`, which routes the template's own positioned output) takes
+   * an optional last argument `from`: where the built node's positions come
+   * from. See {@link BuildFrom}. Without it the node is stamped with the call
+   * site's position, as before.
+   */
+  text(value: string, from?: BuildFrom): IrNode;
+  interpolation(expr: Expr, escaped?: boolean, from?: BuildFrom): IrNode;
   element(
     name: string,
     attrs?: Attr[],
     children?: IrNode[],
     options?: { void?: boolean },
+    from?: BuildFrom,
   ): IrNode;
-  attr(name: string, value: string): Attr;
-  dynamicAttr(name: string, value: Expr): Attr;
-  booleanAttr(name: string): Attr;
+  attr(name: string, value: string, from?: BuildFrom): Attr;
+  dynamicAttr(name: string, value: Expr, from?: BuildFrom): Attr;
+  booleanAttr(name: string, from?: BuildFrom): Attr;
   expr(code: string): Expr;
   ifChain(
     branches: Array<{ condition: Expr | null; children: IrNode[] }>,
+    from?: BuildFrom,
   ): IrNode;
-  forLoop(options: {
-    source: ForSource;
-    params: string[];
-    bindings?: string[];
-    key?: Expr | null;
-    children: IrNode[];
-  }): IrNode;
-  block(children: IrNode[], params?: string[]): Block;
+  forLoop(
+    options: {
+      source: ForSource;
+      params: string[];
+      bindings?: string[];
+      key?: Expr | null;
+      children: IrNode[];
+    },
+    from?: BuildFrom,
+  ): IrNode;
+  block(children: IrNode[], params?: string[], from?: BuildFrom): Block;
   /**
    * Requests a primitive from the active host without exposing that host.
    * `attrs` are carried on the node as given; omitted means none.
@@ -550,6 +562,7 @@ export interface IrBuilders {
     children: IrNode[],
     attributeTags: AttributeTag[],
     attrs?: Attr[],
+    from?: BuildFrom,
   ): IrNode;
   /**
    * Routes this tag's own template (`tags/x.mx`) as an imported component.
@@ -568,6 +581,29 @@ export interface IrBuilders {
 
 const CUSTOM_TAGLIB_ID = "mx-custom-tags";
 
+/** The built node's `span`: the `from` source's own span, or its name span —
+ * a built node with only a name span reports that range rather than none. */
+function spanOf(spans: FromSpans): { span?: SourceSpan } {
+  const span = spans.span ?? spans.nameSpan;
+  return span ? { span } : {};
+}
+
+/**
+ * An attribute's spans from a `from` source: `nameSpan` when the source
+ * carries one (today's zero span stays when it does not), and for the static
+ * kind a `valueSpan` copied only when the source itself has one.
+ */
+function attrSpansOf(
+  from: BuildFrom | undefined,
+  fallback: Position,
+): { nameSpan: SourceSpan; valueSpan?: SourceSpan } {
+  const spans = spansFrom(from, fallback);
+  return {
+    nameSpan: spans.nameSpan ?? { sourceStart: 0, sourceEnd: 0 },
+    ...(spans.valueSpan ? { valueSpan: spans.valueSpan } : {}),
+  };
+}
+
 function parserTaglibId(
   customTags: Readonly<Record<string, CustomTag>>,
 ): string {
@@ -578,6 +614,76 @@ function parserTaglibId(
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([name, definition]) => [name, definition.parseOptions ?? null]);
   return `${CUSTOM_TAGLIB_ID}:${JSON.stringify(signature)}`;
+}
+
+/**
+ * What a builder's optional trailing `from` argument accepts as the source of
+ * the built node's spans:
+ *
+ * - an `IrNode` already in the tree (its `loc` and `span`, plus `nameSpan` for
+ *   a `DelegatedTag`, read from the node itself);
+ * - an `AttributeTag` (`loc`, `span`, `nameSpan`);
+ * - a `TagCall` (`loc`, `span`, `nameSpan`);
+ * - a plain object naming the spans directly — an attribute of the call is the
+ *   common one, and an `Attr` carries `loc`, `nameSpan` and, for the static
+ *   kind, `valueSpan`.
+ *
+ * When `from` is given, the built node takes its positions from it; when it
+ * is absent, today's stamping (the call site's `loc`, zero `nameSpan`) stays.
+ */
+export type BuildFrom =
+  | IrNode
+  | AttributeTag
+  | TagCall
+  | {
+      loc: Position;
+      span?: SourceSpan;
+      nameSpan?: SourceSpan;
+      valueSpan?: SourceSpan;
+    };
+
+/** The spans a builder reads out of a `from` value (all but `loc` optional). */
+interface FromSpans {
+  loc: Position;
+  span?: SourceSpan;
+  nameSpan?: SourceSpan;
+  valueSpan?: SourceSpan;
+}
+
+/**
+ * Reads a `from` value's spans. Every accepted shape carries `loc`; the rest
+ * are copied only when present, so a source without a span never fabricates
+ * one. A `DelegatedTag` node keeps its spans on the inner tag record, which
+ * this reads through.
+ */
+function spansFrom(from: BuildFrom | undefined, fallback: Position): FromSpans {
+  if (from === undefined) return { loc: fallback };
+  if ("kind" in from) {
+    const inner =
+      from.kind === "DelegatedTag"
+        ? (from.tag as {
+            span?: SourceSpan;
+            nameSpan?: SourceSpan;
+          })
+        : (from as { span?: SourceSpan; nameSpan?: SourceSpan });
+    return {
+      loc: from.loc,
+      ...(inner.span ? { span: inner.span } : {}),
+      ...(inner.nameSpan ? { nameSpan: inner.nameSpan } : {}),
+      // An `Attr` (which has a `kind`) may carry a value span for the built
+      // static attribute; the other positioned shapes have none.
+      ...((inner as { valueSpan?: SourceSpan }).valueSpan
+        ? { valueSpan: (inner as { valueSpan?: SourceSpan }).valueSpan }
+        : {}),
+    };
+  }
+  const source = from as TagCall & { valueSpan?: SourceSpan };
+  return {
+    loc: source.loc,
+    ...(source.span ? { span: source.span } : {}),
+    ...(source.nameSpan ? { nameSpan: source.nameSpan } : {}),
+    ...(source.valueSpan ? { valueSpan: source.valueSpan } : {}),
+  };
 }
 
 /**
@@ -667,64 +773,90 @@ function buildersFor(
   normalizeTemplateCall?: (call: TagCall) => TagCall,
 ): IrBuilders {
   return {
-    text: (value) => ({ kind: "Text", value, loc }),
-    interpolation: (value, escaped = true) => ({
-      kind: "Interpolation",
-      expr: value,
-      escaped,
-      loc,
-    }),
-    element: (name, attrs = [], children = [], options = {}) => ({
-      kind: "Element",
-      name,
-      attrs,
-      children,
-      void: options.void ?? false,
-      loc,
-    }),
-    attr: (name, value) => ({
+    text: (value, from) => {
+      const spans = spansFrom(from, loc);
+      return { kind: "Text", value, loc: spans.loc, ...spanOf(spans) };
+    },
+    interpolation: (value, escaped = true, from) => {
+      const spans = spansFrom(from, loc);
+      return {
+        kind: "Interpolation",
+        expr: value,
+        escaped,
+        loc: spans.loc,
+        ...spanOf(spans),
+      };
+    },
+    element: (name, attrs = [], children = [], options = {}, from) => {
+      const spans = spansFrom(from, loc);
+      return {
+        kind: "Element",
+        name,
+        attrs,
+        children,
+        void: options.void ?? false,
+        loc: spans.loc,
+        ...spanOf(spans),
+      };
+    },
+    attr: (name, value, from) => ({
       kind: "static",
       name,
       value,
-      nameSpan: { sourceStart: 0, sourceEnd: 0 },
-      loc,
+      ...attrSpansOf(from, loc),
+      loc: spansFrom(from, loc).loc,
     }),
-    dynamicAttr: (name, value) => ({
+    dynamicAttr: (name, value, from) => ({
       kind: "dynamic",
       name,
       value,
-      nameSpan: { sourceStart: 0, sourceEnd: 0 },
-      loc,
+      ...attrSpansOf(from, loc),
+      loc: spansFrom(from, loc).loc,
     }),
-    booleanAttr: (name) => ({
+    booleanAttr: (name, from) => ({
       kind: "boolean",
       name,
-      nameSpan: { sourceStart: 0, sourceEnd: 0 },
-      loc,
+      ...attrSpansOf(from, loc),
+      loc: spansFrom(from, loc).loc,
     }),
     expr: syntheticExpr,
-    ifChain: (branches) => ({
-      kind: "IfChain",
-      branches: branches.map((branch): Branch => ({ ...branch, loc })),
-      loc,
-    }),
-    forLoop: (options) => ({
-      kind: "For",
-      source: options.source,
-      params: options.params,
-      paramNodes: [],
-      bindings: options.bindings ?? options.params,
-      key: options.key ?? null,
-      children: options.children,
-      loc,
-    }),
-    block: (children, params = []) => ({
+    ifChain: (branches, from) => {
+      const spans = spansFrom(from, loc);
+      return {
+        kind: "IfChain",
+        branches: branches.map(
+          (branch): Branch => ({
+            ...branch,
+            loc: spans.loc,
+            ...spanOf(spans),
+          }),
+        ),
+        loc: spans.loc,
+        ...spanOf(spans),
+      };
+    },
+    forLoop: (options, from) => {
+      const spans = spansFrom(from, loc);
+      return {
+        kind: "For",
+        source: options.source,
+        params: options.params,
+        paramNodes: [],
+        bindings: options.bindings ?? options.params,
+        key: options.key ?? null,
+        children: options.children,
+        loc: spans.loc,
+        ...spanOf(spans),
+      };
+    },
+    block: (children, params = [], from) => ({
       hasParams: params.length > 0,
       params,
       children,
-      loc,
+      loc: spansFrom(from, loc).loc,
     }),
-    delegatedTag: (name, children, attributeTags, attrs = []) => {
+    delegatedTag: (name, children, attributeTags, attrs = [], from) => {
+      const spans = spansFrom(from, loc);
       if (node === null) {
         return failAt(
           tagName,
@@ -761,6 +893,10 @@ function buildersFor(
         kind: "DelegatedTag",
         tag: {
           name,
+          ...(spans.nameSpan ? { nameSpan: spans.nameSpan } : {}),
+          ...(spans.span || spans.nameSpan
+            ? { span: spans.span ?? spans.nameSpan }
+            : {}),
           attrs,
           children,
           attributeTags,
@@ -769,9 +905,9 @@ function buildersFor(
           params: [],
           var: null,
           data: ctx.declarations.resolveDelegatedTag?.(name, node, ctx),
-          loc,
+          loc: spans.loc,
         },
-        loc,
+        loc: spans.loc,
       };
     },
     template: (call) => {
@@ -1833,7 +1969,11 @@ function rejectRecursiveContractKeys(
   path: Set<object> = new Set([definition]),
 ): void {
   const keys = (
-    declaration: object,
+    declaration:
+      | CustomTagAttribute
+      | CustomTagChild
+      | CustomTagAttributeTag
+      | WildcardChildEntry,
     allowed: readonly string[],
     description: string,
   ): void => {

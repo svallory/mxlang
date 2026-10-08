@@ -2773,3 +2773,135 @@ describe("E1 on the default value a sugar produced names the sugar", () => {
     ).not.toContain("set by");
   });
 });
+
+describe("builders take spans from `from`", () => {
+  // Source: `<wrap a="1" b="2"/>` on line 1; `a` starts at column 7, `b` at 14.
+  const spansTag: CustomTag = {
+    transform(call, ctx) {
+      const first = call.attrs[0];
+      if (first?.kind !== "static") throw ctx.fail("needs static attrs");
+      const second = call.attrs[1];
+      if (second?.kind !== "static") throw ctx.fail("needs static attrs");
+      return [
+        // No `from`: today's stamping — the call site's position, zero spans.
+        ctx.build.element("bare", [ctx.build.attr("x", "1")]),
+        // `from` an authored attribute: its loc, nameSpan, valueSpan.
+        ctx.build.element(
+          "from-attr",
+          [ctx.build.attr("x", first.value, first)],
+          [],
+          {},
+          first,
+        ),
+        // `from` the TagCall: the call's loc, span and nameSpan.
+        ctx.build.element(
+          "from-call",
+          [ctx.build.attr("x", second.value, call)],
+          [],
+          {},
+          call,
+        ),
+        // `from` a node already in the tree: the first built element's spans.
+        ctx.build.element(
+          "from-node",
+          [],
+          [],
+          {},
+          {
+            kind: "Element",
+            name: "bare",
+            attrs: [],
+            children: [],
+            void: false,
+            loc: first.loc,
+            span: first.valueSpan,
+          },
+        ),
+      ];
+    },
+  };
+
+  const ir = lowerWithTags('<wrap a="1" b="2"/>\n', { wrap: spansTag });
+
+  const elementOf = (name: string) => {
+    const element = ir.body.find(
+      (n): n is Extract<IrNode, { kind: "Element" }> =>
+        n.kind === "Element" && n.name === name,
+    );
+    if (!element) throw new Error(`no <${name}> in the IR`);
+    return element;
+  };
+  const staticAttrOf = (element: { attrs: Attr[] }) => {
+    const attr = element.attrs[0];
+    if (attr?.kind !== "static") throw new Error("expected static attr");
+    return attr;
+  };
+
+  it("stamps the call site without `from`", () => {
+    const bareElement = elementOf("bare");
+    // The call starts at column 0; the builder stamped it.
+    expect(bareElement.loc).toEqual({ line: 1, column: 0 });
+    const attr = staticAttrOf(bareElement);
+    expect(attr.nameSpan).toEqual({ sourceStart: 0, sourceEnd: 0 });
+    expect(attr.valueSpan).toBeUndefined();
+    expect(bareElement.span).toBeUndefined();
+  });
+
+  it("takes loc, nameSpan and valueSpan from an attribute", () => {
+    const element = elementOf("from-attr");
+    const attr = staticAttrOf(element);
+    // The authored `a="1"`: the name starts right after `<wrap `.
+    expect(element.loc).toEqual({ line: 1, column: 6 });
+    expect(attr.loc).toEqual({ line: 1, column: 6 });
+    expect(attr.nameSpan).toEqual({
+      sourceStart: "<wrap ".length,
+      sourceEnd: "<wrap a".length,
+    });
+    // The value span covers the quotes: `"1"`.
+    expect(attr.valueSpan).toEqual({
+      sourceStart: "<wrap a=".length,
+      sourceEnd: '<wrap a="1"'.length,
+    });
+    // A node built `from` an attribute has no wider span: its span is the
+    // attribute's name span.
+    expect(element.span).toEqual({ sourceStart: 6, sourceEnd: 7 });
+  });
+
+  it("takes loc, span and nameSpan from the call", () => {
+    const element = elementOf("from-call");
+    const attr = staticAttrOf(element);
+    expect(element.loc).toEqual({ line: 1, column: 0 });
+    expect(element.span).toEqual({
+      sourceStart: 0,
+      sourceEnd: '<wrap a="1" b="2"/>'.length,
+    });
+    expect(attr.nameSpan).toEqual({ sourceStart: 1, sourceEnd: 5 });
+  });
+
+  it("takes spans from an IR node already in the tree", () => {
+    const element = elementOf("from-node");
+    expect(element.loc).toEqual({ line: 1, column: 6 });
+    expect(element.span).toEqual({
+      sourceStart: "<wrap a=".length,
+      sourceEnd: '<wrap a="1"'.length,
+    });
+  });
+
+  it("gives a delegated tag its nameSpan and span from the call", () => {
+    const delegated: CustomTag = {
+      transform: (call, ctx) => [
+        ctx.build.delegatedTag("emitted", [], [], [], call),
+      ],
+    };
+    const inner = lowerWithTags(
+      "<wrap/>\n",
+      { wrap: delegated },
+      fakeDeclarations({ isDelegatedTag: () => true }),
+    );
+    const tag = find(inner.body, "DelegatedTag");
+    expect(tag.tag.name).toBe("emitted");
+    expect(tag.tag.nameSpan).toEqual({ sourceStart: 1, sourceEnd: 5 });
+    expect(tag.tag.span).toEqual({ sourceStart: 0, sourceEnd: 7 });
+    expect(tag.tag.loc).toEqual({ line: 1, column: 0 });
+  });
+});
