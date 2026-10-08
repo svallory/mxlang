@@ -129,7 +129,9 @@ describe("parseFragment parses an <html-comment> body as text", () => {
     // Text mode reads the whole body as one run: stock Marko renders
     // `<!--a <!-- b --&gt; c-->` (measured through packages/stock-marko),
     // so `<!-- b -->` is literal text, not a nested comment node.
-    const { body } = parseFragment("<html-comment>a <!-- b --> c</html-comment>");
+    const { body } = parseFragment(
+      "<html-comment>a <!-- b --> c</html-comment>",
+    );
     const comment = firstTag(body);
     expect(comment.body.body).toHaveLength(1);
     expect((comment.body.body[0] as { value: string }).value).toBe(
