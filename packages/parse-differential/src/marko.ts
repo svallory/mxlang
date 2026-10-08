@@ -62,6 +62,10 @@ export interface MarkoResult {
   readonly document: NDocument;
   /** Marko text ranges, for rule `text-runs` (A13). */
   readonly texts: (readonly [number, number])[];
+  /** Marko text values with their (trimmed) ranges, for the whitespace differential (PR 3). */
+  readonly textNodes: readonly { value: string; start: number; end: number }[];
+  /** Today's tree, for the expression differential (PR 3). */
+  readonly ast?: Node;
   /** Ranges of expressions today's tree holds as `MarkoParseError` (no atoms inside). */
   readonly failed?: readonly Span[];
   /** Set when today's path threw something that is not the template parser's error. */
@@ -96,6 +100,7 @@ export function projectMarko(source: string): MarkoResult {
           error: `[${thrown.start},${thrown.end}) ${JSON.stringify(thrown.message)}`,
         },
         texts: [],
+        textNodes: [],
       };
     }
     const message =
@@ -105,11 +110,12 @@ export function projectMarko(source: string): MarkoResult {
     return {
       document: { body: [], atoms: [], error: null },
       texts: [],
+      textNodes: [],
       crash: message.trim(),
     };
   }
   const texts: (readonly [number, number])[] = [];
-  const ctx = { source, starts, texts };
+  const ctx = { source, starts, texts, values: [] };
   // Atoms (decision 156): today's parser hands Babel a numeric stand-in at
   // each atom, so an atom is a NumericLiteral whose source starts with `:`.
   const atoms: { start: number; line: string }[] = [];
@@ -147,8 +153,10 @@ export function projectMarko(source: string): MarkoResult {
       atoms: atoms.sort((x, y) => x.start - y.start).map((x) => x.line),
       error: null,
     },
+    ast,
     failed,
     texts,
+    textNodes: ctx.values,
   };
 }
 
@@ -156,6 +164,7 @@ interface Ctx {
   source: string;
   starts: number[];
   texts: (readonly [number, number])[];
+  values: { value: string; start: number; end: number }[];
 }
 
 /** Rule `positions-from-loc` (A12). */
@@ -247,6 +256,7 @@ function child(ctx: Ctx, node: Node): NNode | undefined {
       return tag(ctx, node);
     case "MarkoText":
       ctx.texts.push(span);
+      ctx.values.push({ value: node.value, start: span[0], end: span[1] });
       return leaf("text", span);
     case "MarkoPlaceholder":
       return leaf(

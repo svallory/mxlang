@@ -1,7 +1,7 @@
 /**
  * The MX tree in the neutral form (`neutral.ts`).
  */
-import type { InterimDocument } from "../../parser/src/frontend/interim.ts";
+import type { MxDocument } from "@mxlang/babel/mx-ast";
 import {
   code,
   type NDocument,
@@ -16,14 +16,18 @@ type Node = any;
 
 const HEAD = ["typeArgs", "var", "args", "typeParams", "params"] as const;
 
-export function projectMx(document: InterimDocument): NDocument {
+export function projectMx(document: MxDocument): NDocument {
   // The template error is what the tree differential compares (today's
   // parse throws on it). The first front-end error (PR 2b, ast \u00a73.13)
   // rides separately: today's Marko-front compile throws it the same way,
   // so the error branch may compare against it — the tree beside it stays
   // comparable.
-  const template = document.errors.find((e) => e.origin === "template");
-  const front = document.errors.find((e) => e.origin === "front-end");
+  const template = document.errors.find(
+    (e: { origin: string }) => e.origin === "template",
+  );
+  const front = document.errors.find(
+    (e: { origin: string }) => e.origin === "front-end",
+  );
   const atoms: { start: number; line: string }[] = [];
   const walk = (value: unknown) => {
     if (Array.isArray(value)) return value.forEach(walk);

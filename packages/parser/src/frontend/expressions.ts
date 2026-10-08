@@ -189,6 +189,11 @@ export function subParse(
     node = wrapper.statements
       ? (babelParse(code, options).program as { body: unknown }).body
       : parseExpression(code, options);
+    // The fork's result carries the parse's own `comments`/`errors` on the
+    // root; today's tree carries neither on a payload, so neither does ours.
+    const root = node as { comments?: unknown; errors?: unknown };
+    delete root.comments;
+    delete root.errors;
   } catch (error) {
     const babel = error as {
       reasonCode: string;
@@ -290,12 +295,11 @@ export function staticTemplateString(
   };
 }
 
-/** Marko's `templateElement` helper (`tail: true`), a Babel `TemplateElement` node. */
+/** Marko's `templateElement` helper: `tail` also rides inside `value`, as `types.templateElement` builds it today. */
 export function templateElement(raw: string): Record<string, unknown> {
   return {
     type: "TemplateElement",
-    value: { raw, cooked: raw },
-    tail: true,
+    value: { raw, cooked: raw, tail: true },
   };
 }
 
@@ -346,8 +350,8 @@ function errorOf(
  * offsets. The same mutation `core/src/atoms.ts` (`convertAtoms`) performs
  * on today's tree, done here before the payload is ever attached.
  */
-// biome-ignore lint/suspicious/noExplicitAny: walks and rewrites Babel nodes generically
 function convertStandIns(
+  // biome-ignore lint/suspicious/noExplicitAny: walks and rewrites Babel nodes generically
   node: any,
   atoms: readonly SubParseAtom[],
   fileOffset: number,

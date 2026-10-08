@@ -455,10 +455,18 @@ class FrontEnd {
       last.start === last.end
     ) {
       const container = this.container("MxExpression", only.value, only);
-      if (
-        container.node !== null &&
-        (container.node as { type?: string }).type === "StringLiteral"
-      ) {
+      const parsed = container.node as {
+        type?: string;
+        start?: number;
+        end?: number;
+      } | null;
+      const fromAtom = container.atoms.some(
+        (atom: { start: number; end: number }) =>
+          parsed !== null &&
+          atom.start === parsed.start &&
+          atom.end === parsed.end,
+      );
+      if (parsed?.type === "StringLiteral" && !fromAtom) {
         // Marko's quirk: a `${'str'}` name is a template literal with one
         // quasi, not the string itself (`parseTemplateString`).
         const position = this.positionAt(only.value.start);

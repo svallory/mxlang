@@ -71,6 +71,18 @@ const CONCISE_HEAD_TRIMMED = new Set(["g1259", "g1356"]);
 /** Today's path crashes (a TypeError, no tree, no parse error). */
 const TODAY_CRASHES = new Set(["g0387", "g1699", "g1700"]);
 
+/**
+ * PR 3's expression differential: Babel 7.29.8 (MX's fork) ends
+ * `Unexpected token, expected ","` with a period where Marko's bundled
+ * 7.29.7 does not. The only difference on these inputs; the wording goes to
+ * the lead as a decision (brief §1.2.3: version differences are measured,
+ * not mapped away).
+ */
+const BABEL_MESSAGE_PERIOD = new Set([
+  "g0259",
+  "packages/hosts/hono/src/fixtures/region/for-by/input.hono.mx",
+]);
+
 describe(`fixtures (${INPUT_GLOB})`, () => {
   const inputs = fixtureInputs();
   it("are the whole-file .mx sources", () => {
@@ -83,7 +95,11 @@ describe(`fixtures (${INPUT_GLOB})`, () => {
       const outcome = compare(source);
       if (!outcome.equal) differ.push(path);
     }
-    expect(differ.filter((path) => !ASYNC_METHOD_START.has(path))).toEqual([]);
+    expect(
+      differ
+        .filter((path) => !ASYNC_METHOD_START.has(path))
+        .filter((path) => !BABEL_MESSAGE_PERIOD.has(path)),
+    ).toEqual([]);
   });
 });
 
@@ -104,6 +120,10 @@ describe(`fixtures (${INPUT_GLOB})`, () => {
  *   `=>`), so its parse error fires before `MX_SUGAR_NAME_INVALID`.
  */
 const TODAY_OWN_FIRST = new Set([
+  // `<div x=$!{a}/>`: today's Marko-front compile throws the Babel error as
+  // an aggregate frame ("at s.mx:1:10"), not MX's dedicated code with the
+  // same sentence at the same point.
+  "g0755",
   "g0062",
   "g0330",
   "g0488",
@@ -115,6 +135,10 @@ const TODAY_OWN_FIRST = new Set([
 
 /** Each TODAY_OWN_FIRST entry's own expected first error from today (offset + message). */
 const TODAY_OWN_REASON: Record<string, { start: number; message: string }> = {
+  g0755: {
+    start: 9,
+    message: "at s.mx:1:10",
+  },
   g0062: {
     start: 6,
     message:
@@ -588,7 +612,8 @@ describe("grammar corpus inputs", () => {
           DEFAULT_NAME_AT_PAREN.has(probe.id) ||
           CONCISE_HEAD_TRIMMED.has(probe.id) ||
           SILENT_EOF.has(probe.id) ||
-          TODAY_CRASHES.has(probe.id)
+          TODAY_CRASHES.has(probe.id) ||
+          BABEL_MESSAGE_PERIOD.has(probe.id)
         );
       })
       .map(({ probe, outcome }) => ({
@@ -612,6 +637,23 @@ describe("grammar corpus inputs", () => {
       ) {
         expect(outcome.equal, probe.id).toBe(false);
       }
+    }
+  });
+
+  it("the Babel-message-period inputs differ only in that trailing period", () => {
+    for (const id of BABEL_MESSAGE_PERIOD) {
+      const source = id.startsWith("g")
+        ? (PROBES.find((probe) => probe.id === id)?.input as string)
+        : fixtureInputs().find((input) => input.path === id)?.source;
+      expect(source, id).toBeDefined();
+      const outcome = compare(source as string);
+      expect(
+        outcome.expressions.differences.filter(
+          (line: string) => !/ != today ".*(?<!\.)"@/.test(line),
+        ),
+        id,
+      ).toEqual([]);
+      expect(outcome.expressions.differences.length, id).toBeGreaterThan(0);
     }
   });
 

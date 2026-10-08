@@ -6,10 +6,15 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { MxStatementKeyword } from "@mxlang/babel/mx-ast";
 import { parse } from "../../parser/src/frontend/parse.ts";
+import {
+  compareExpressions,
+  mxExpressions,
+  todayExpressions,
+} from "./expressions.ts";
 import { markoTagShape, projectMarko } from "./marko.ts";
 import { projectMx } from "./mx.ts";
 import { type NDocument, type NNode, print } from "./neutral.ts";
-import { compareTextRuns } from "./rules.ts";
+import { compareTextRuns, lineStartsOf } from "./rules.ts";
 
 export const REPO = join(import.meta.dirname, "../../..");
 
@@ -47,6 +52,10 @@ export interface Outcome {
   readonly marko: string[];
   /** Rule `text-runs` (A13) violations. */
   readonly text: string[];
+  /** The whitespace differential (PR 3): text nodes compared, differences. */
+  readonly whitespace: { compared: number; differences: string[] };
+  /** The expression differential (PR 3): containers compared, differences. */
+  readonly expressions: { compared: number; differences: string[] };
   /** Why the input is not compared tree to tree (today's path crashed, or an error PR 2b owns). */
   readonly note?: string;
 }
@@ -99,6 +108,8 @@ export function compare(source: string): Outcome {
       mx: print(mx),
       marko: [],
       text: [],
+      whitespace: { compared: 0, differences: [] },
+      expressions: { compared: 0, differences: [] },
       note: `today's path threw: ${marko.crash}`,
     };
   }
@@ -115,18 +126,23 @@ export function compare(source: string): Outcome {
       mx: [`error ${a}`],
       marko: [`error ${b}`],
       text: [],
+      whitespace: { compared: 0, differences: [] },
+      expressions: { compared: 0, differences: [] },
     };
   }
   // Rule `text-runs` (A13), per parent: today's (trimmed) runs under a tag
   // must sit in that same tag's MX runs.
-  const mxTexts = textsByParent(mx.body);
-  const markoTexts = textsByParent(marko.document.body);
+  const mxRunsByParent = textsByParent(mx.body);
+  const markoRunsByParent = textsByParent(marko.document.body);
   const text: string[] = [];
-  for (const parent of new Set([...mxTexts.keys(), ...markoTexts.keys()])) {
+  for (const parent of new Set([
+    ...mxRunsByParent.keys(),
+    ...markoRunsByParent.keys(),
+  ])) {
     for (const problem of compareTextRuns(
       source,
-      markoTexts.get(parent) ?? [],
-      mxTexts.get(parent) ?? [],
+      markoRunsByParent.get(parent) ?? [],
+      mxRunsByParent.get(parent) ?? [],
     )) {
       text.push(`under ${parent || "the document"}: ${problem}`);
     }
@@ -145,10 +161,71 @@ export function compare(source: string): Outcome {
   });
   const a = print(strip(comparable));
   const b = print(strip(marko.document));
+  // The whitespace differential (PR 3): value and valueSpan of every text
+  // node, against Marko's final `value` and its (trimmed) `withLoc` range.
+  const mxTexts = mxTextNodes(document.body);
+  const whitespace: string[] = [];
+  const markoTexts = marko.textNodes;
+  if (mxTexts.length !== markoTexts.length) {
+    whitespace.push(
+      `${mxTexts.length} MX text nodes != ${markoTexts.length} Marko text nodes`,
+    );
+  }
+  for (let i = 0; i < Math.min(mxTexts.length, markoTexts.length); i++) {
+    const mxText = mxTexts[i] as { value: string; start: number; end: number };
+    const markoText = markoTexts[i] as {
+      value: string;
+      start: number;
+      end: number;
+    };
+    if (mxText.value !== markoText.value)
+      whitespace.push(
+        `text #${i} [${mxText.start},${mxText.end}): ${JSON.stringify(mxText.value)} != ${JSON.stringify(markoText.value)}`,
+      );
+    if (mxText.start !== markoText.start || mxText.end !== markoText.end)
+      whitespace.push(
+        `text #${i} valueSpan [${mxText.start},${mxText.end}) != [${markoText.start},${markoText.end}) (${JSON.stringify(mxText.value)})`,
+      );
+  }
+  // The expression differential (PR 3).
+  const expressions = compareExpressions(
+    mxExpressions(document),
+    todayExpressions(marko.ast, source, lineStartsOf(source)),
+    source,
+  );
   return {
-    equal: text.length === 0 && JSON.stringify(a) === JSON.stringify(b),
+    equal:
+      text.length === 0 &&
+      whitespace.length === 0 &&
+      expressions.differences.length === 0 &&
+      JSON.stringify(a) === JSON.stringify(b),
     mx: a,
     marko: b,
     text,
+    whitespace: { compared: mxTexts.length, differences: whitespace },
+    expressions,
   };
+}
+
+/** The MX text nodes' final `value` and `valueSpan`, in document order. */
+// biome-ignore lint/suspicious/noExplicitAny: walks the MX tree generically
+function mxTextNodes(
+  body: any,
+): { value: string; start: number; end: number }[] {
+  const out: { value: string; start: number; end: number }[] = [];
+  const walk = (nodes: any): void => {
+    for (const node of nodes ?? []) {
+      if (node.type === "MxText") {
+        out.push({
+          value: node.value,
+          start: node.valueSpan.start,
+          end: node.valueSpan.end,
+        });
+        continue;
+      }
+      if (node.body) walk(node.body);
+    }
+  };
+  walk(body);
+  return out;
 }
