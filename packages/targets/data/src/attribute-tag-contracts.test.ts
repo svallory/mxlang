@@ -208,12 +208,20 @@ describe('attributeTags["*"] through parseData (decision 147, for attribute tags
   });
 
   it("an explicit entry wins even when a wildcard entry would reject the attributes", () => {
-    // The `on_.*` entry only allows `event`; `attribute` is explicit, so
-    // `name` is its own and passes.
+    // A dedicated fixture: its wildcard alone matches `attribute` and allows
+    // nothing, so `name` would fail there; the explicit entry supplies it.
+    const namedWinsTags: Record<string, CustomTag> = {
+      resource: {
+        attributeTags: {
+          attribute: { attributes: { name: { type: "string" } } },
+          "*": { pattern: "attribute", attributes: {} },
+        },
+      },
+    };
     const valid = parseData(
       "<resource><@attribute name='x'/></resource>",
       "/resource.mx",
-      { customTags: wildcardTags },
+      { customTags: namedWinsTags },
     );
     expect(valid.diagnostics).toEqual([]);
     expect(valid.tree?.children[0]).toMatchObject({
@@ -264,9 +272,10 @@ describe('attributeTags["*"] through parseData (decision 147, for attribute tags
     expect(valid.diagnostics).toEqual([]);
   });
 
-  it("the same matched name twice inside `<for>` is a repeat", () => {
+  it("one matched name inside `<for>` is a repeat", () => {
+    // The loop iterates: one occurrence repeats at runtime, like core's test.
     const result = parseData(
-      "<resource><for|i| of=[1,2]><@on_click event='tap'/><@on_click event='tap'/></for></resource>",
+      "<resource><for|i| of=[1,2]><@on_click event='tap'/></for></resource>",
       "/resource.mx",
       { customTags: wildcardTags },
     );
