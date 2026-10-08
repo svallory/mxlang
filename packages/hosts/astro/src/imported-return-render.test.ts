@@ -110,9 +110,11 @@ describe("an imported tag that declares <return>, rendered on Astro", () => {
     expect(error?.message).toMatch(
       /tag variable `\/n` on `<Counter>` is not supported/,
     );
+    // At the `/n` itself, not the tag (core's dynamic-tag-var-silent-drop
+    // position change: `rejectUnsupportedFields` reports at `node.var`).
     expect({ line: error?.line, column: error?.column }).toEqual({
       line: 4,
-      column: 0,
+      column: 9,
     });
   });
 });

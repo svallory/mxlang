@@ -238,8 +238,9 @@ export const angularDeclarations: HostDeclarations = {
       // through was a silent drop (Marko 6.3.51 binds the dynamic tag's
       // return value; this host cannot).
       if (node.var) {
+        const name = expr(ctx, node.var);
         rawFail(
-          "tag variable `/n` on a dynamic tag (`<${…}/n/>`) isn't supported by @mxlang/angular: `ngComponentOutlet` renders the component but has no binding position for a returned value",
+          `tag variable \`/${name}\` on a dynamic tag (\`<\${…}/${name}/>\`) isn't supported by @mxlang/angular: \`ngComponentOutlet\` renders the component but has no binding position for a returned value`,
           node.var,
         );
       }

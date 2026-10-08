@@ -271,6 +271,22 @@ describe("Component dynamic target (via DelegatedTag routing)", () => {
     expect(error?.column).toBe(8);
   });
 
+  it("names the authored variable in the refusal, not a hardcoded /n", () => {
+    let error: (Error & { line?: number; column?: number }) | undefined;
+    try {
+      emit("<${Cmp}/count a=1/>");
+    } catch (caught) {
+      error = caught as Error & { line?: number; column?: number };
+    }
+    expect(error?.message).toMatch(
+      /tag variable `\/count` on a dynamic tag \(`<\$\{…}\/count\/>`\) isn't supported/,
+    );
+    expect(error?.message).not.toContain("/n");
+    // `<${Cmp}/count …>`: `count` starts right after the `/`, at column 8.
+    expect(error?.line).toBe(1);
+    expect(error?.column).toBe(8);
+  });
+
   it("escapes a quote in a static input without corrupting the outlet binding", () => {
     // A plain `"${attr.value}"` (no JS-layer escaping) let an unescaped `"`
     // in the attribute value close the JS object literal early, corrupting

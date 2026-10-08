@@ -758,6 +758,9 @@ export class PreactEmitter implements Emitter<string> {
    */
   #rejectStringStyle(attr: Attr): void {
     if (!this.#dialect.reactBooleanAttributes || attr.kind !== "spread") return;
+    // SAFETY: the spread's parsed node comes from the vendored Babel parse of
+    // the attribute expression, so when it parsed it is an AST node; the
+    // cast only narrows the fields this guard reads, all checked before use.
     const node = attr.value.node as unknown as {
       type?: string;
       properties?: {
