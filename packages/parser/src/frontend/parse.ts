@@ -28,6 +28,11 @@ import type {
   TagType as TagTypeValue,
 } from "../template/internal.ts";
 import {
+  type ContainerKind,
+  subParse,
+  wrappedAttrValueHint,
+} from "./expressions.ts";
+import {
   type RuleContext,
   frontEndRules as realFrontEndRules,
 } from "./rules.ts";
@@ -150,7 +155,7 @@ export function parse(source: string, options: ParseOptions): MxDocument {
     line: 0,
     column: 0,
   };
-  const builder = new FrontEnd(source, options, base.offset);
+  const builder = new FrontEnd(source, options, base.offset, base);
   try {
     builder.run();
   } catch (error) {
@@ -180,6 +185,7 @@ class FrontEnd {
     readonly source: string,
     readonly options: ParseOptions,
     readonly offset: number,
+    readonly base: MxFragmentBase,
   ) {}
 
   run(): void {
@@ -275,6 +281,42 @@ class FrontEnd {
     return { start: this.at(range.start), end: this.at(range.end) };
   }
 
+  /** The line starts of this source, as htmljs's `getLines` builds them (only `\n` starts a line). */
+  private lines(): readonly number[] {
+    this._lines ??= (() => {
+      const found = [0];
+      for (
+        let at = this.source.indexOf("\n");
+        at !== -1;
+        at = this.source.indexOf("\n", at + 1)
+      )
+        found.push(at + 1);
+      return found;
+    })();
+    return this._lines;
+  }
+
+  private _lines: readonly number[] | undefined;
+
+  /** The file-absolute 1-based line and 0-based column of a local offset (ast §5.2, §5.3). */
+  positionAt(local: number): { line: number; column: number } {
+    const starts = this.lines();
+    let low = 0;
+    let high = starts.length - 1;
+    while (low < high) {
+      const mid = (low + high + 1) >> 1;
+      if ((starts[mid] as number) <= local) low = mid;
+      else high = mid - 1;
+    }
+    return {
+      line: 1 + this.base.line + low,
+      column:
+        low === 0
+          ? local - (starts[0] as number) + this.base.column
+          : local - (starts[low] as number),
+    };
+  }
+
   slice(range: Range): string {
     return this.source.slice(this.clamp(range.start), this.clamp(range.end));
   }
@@ -298,7 +340,12 @@ class FrontEnd {
    * the pending atoms inside its span, so a nested container built first
    * keeps its own (decision 163 addendum 8: innermost only).
    */
-  container(type: string, value: Range, outer: Range = value): Builder {
+  container(
+    type: ContainerKind,
+    value: Range,
+    outer: Range = value,
+    hints: "attr-value" | null = null,
+  ): Builder {
     const atoms: Builder[] = [];
     const rest: typeof this.atoms = [];
     for (const atom of this.atoms) {
@@ -312,13 +359,57 @@ class FrontEnd {
       } else rest.push(atom);
     }
     this.atoms = rest;
+    const start = this.at(value.start);
+    const end = this.at(value.end);
+    const text = this.slice(value);
+    // The sub-parse (ast §4.1): the container's position carries the fragment
+    // base, so the payload's offsets are file-absolute at creation.
+    const position = this.positionAt(value.start);
+    const result = subParse(
+      type,
+      text,
+      atoms.map((atom: Builder) => ({
+        start: (atom.start as number) - start,
+        end: (atom.end as number) - start,
+        name: atom.name as string,
+      })),
+      { offset: start, line: position.line, column: position.column },
+      end,
+    );
+    let error = result.error;
+    if (error !== null) {
+      if (
+        hints === "attr-value" &&
+        text.startsWith("$!{") &&
+        error.code.startsWith("BABEL_")
+      ) {
+        // Decision 166 item 1: `$!{…}` as an attribute value gets its own
+        // code; the message and position are today's, byte for byte (there
+        // is no dedicated message today — the Babel error is the report).
+        error = { ...error, code: "MX_UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE", origin: "front-end" };
+      } else if (
+        hints === "attr-value" &&
+        /^\{[\s\S]*\}$/.test(text.trim())
+      ) {
+        // Marko's `withWrappedAttrValueHint` (ast §3.13 item 2); the text is
+        // today's, byte for byte, until the lead rules the MX rewording.
+        error = {
+          ...error,
+          message: `${error.message}${error.message.endsWith(".") ? "" : "."}${wrappedAttrValueHint(text, { offset: start, line: position.line, column: position.column }, end)}`,
+        };
+      }
+      if (error !== result.error) this.errors.push(error);
+      else this.errors.push(error);
+    }
     return {
       type,
-      start: this.at(value.start),
-      end: this.at(value.end),
-      source: this.slice(value),
+      start,
+      end,
+      source: text,
       outer: this.span(outer),
       atoms,
+      node: result.node,
+      error,
     };
   }
 
@@ -778,7 +869,11 @@ class FrontEnd {
     this.reach(template.end);
   }
 
-  onTagPart(field: string, type: string, event: Ranges.Value): void {
+  onTagPart(
+    field: string,
+    type: ContainerKind,
+    event: Ranges.Value,
+  ): void {
     if (this.statement) return; // a statement's continuation line (g0895)
     const tag = this.headTag(event.start);
     tag[field] = this.container(type, event.value, event);
@@ -926,7 +1021,7 @@ class FrontEnd {
   onAttrValue(event: Ranges.AttrValue): void {
     if (this.statement) return;
     const current = this.requireCurrent();
-    const value = this.container("MxExpression", event.value);
+    const value = this.container("MxExpression", event.value, event.value, "attr-value");
     const operator = event.bound ? ":=" : "=";
     if (current.type === "MxAttribute") {
       current.operator = operator;
@@ -1244,10 +1339,18 @@ class FrontEnd {
 type Copy = null | boolean | number | string | Copy[] | { [key: string]: Copy };
 
 function freezeCopy(root: unknown): Copy {
-  // SAFETY: every leaf is copied verbatim; only objects are fresh copies.
+  // SAFETY: every leaf is copied verbatim; only objects are fresh copies,
+  // each distinct object copied once so shared references (a container's
+  // error and its entry in `errors`, ast §3.13) stay one object.
+  const copies = new Map<unknown, Copy>();
   const copyOf = (value: Copy): Copy => {
     if (value === null || typeof value !== "object") return value;
-    return Array.isArray(value) ? new Array(value.length) : {};
+    let copy = copies.get(value);
+    if (copy === undefined) {
+      copy = Array.isArray(value) ? new Array(value.length) : {};
+      copies.set(value, copy);
+    }
+    return copy;
   };
   const top = copyOf(root as Copy);
   const work: [unknown, unknown][] = [[root, top]];

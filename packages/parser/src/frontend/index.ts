@@ -4,4 +4,4 @@
  * subpath for it (`frontend/exposure.test.ts` pins both).
  */
 export { lineColumnAt } from "./line-column.ts";
-export { type ParseOptions, parse, TEXT_VALUE_IS_RAW } from "./parse.ts";
+export { type ParseOptions, parse } from "./parse.ts";

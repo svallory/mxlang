@@ -316,7 +316,11 @@ export function checkInvariants(
         key === "valueSpan" ||
         key === "openTag" ||
         key === "outer" ||
-        key === "nameSpan"
+        key === "nameSpan" ||
+        // The Babel payload's own range is not the container's (ast §4.1:
+        // a wrapper's delimiters sit outside it); the span invariant is
+        // about Mx* nodes, never about the payload.
+        key === "node"
       )
         continue;
       if (Array.isArray(value)) {
