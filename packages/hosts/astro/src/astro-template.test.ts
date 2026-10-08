@@ -957,7 +957,7 @@ describe("<html-comment> (Marko 6.3.51 parity)", () => {
       "tag variable",
     );
     expect(() => lower("<html-comment(1)>x</html-comment>")).toThrow(
-      "tag arguments",
+      "Tag does not support arguments.",
     );
   });
 });
