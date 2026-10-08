@@ -401,14 +401,14 @@ class FrontEnd {
         };
       } else if (hints === "attr-value" && /^\{[\s\S]*\}$/.test(text.trim())) {
         // Marko's `withWrappedAttrValueHint` (ast §3.13 item 2); the text is
-        // today's, byte for byte, until the lead rules the MX rewording.
+        // today's, byte for byte (ruling 1 keeps today's wording, hint
+        // appended).
         error = {
           ...error,
           message: `${error.message}${error.message.endsWith(".") ? "" : "."}${wrappedAttrValueHint(text, { offset: start, line: position.line, column: position.column }, end)}`,
         };
       }
-      if (error !== result.error) this.errors.push(error);
-      else this.errors.push(error);
+      this.errors.push(error);
     }
     return {
       type,

@@ -11,8 +11,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@mxlang/babel": "workspace:*"
+  },
   "devDependencies": {
-    "@mxlang/babel": "workspace:*",
     "@types/bun": "1.4.2"
   }
 }

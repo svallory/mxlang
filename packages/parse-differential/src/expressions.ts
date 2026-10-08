@@ -243,7 +243,10 @@ export interface MxEntry {
 }
 
 /** Collects the MX containers that have a counterpart in today's tree, in document order. */
-export function mxExpressions(document: Node): MxEntry[] {
+export function mxExpressions(
+  document: Node,
+  skips: [number, number][] = [],
+): MxEntry[] {
   const out: MxEntry[] = [];
   const KIND = {
     MxExpression: "expression",
@@ -269,6 +272,17 @@ export function mxExpressions(document: Node): MxEntry[] {
       if (node.type === "MxShorthand") {
         visit(node.default);
         visit(node.args);
+        // The sugar value itself is a documented skip (the merged loc-less
+        // shorthands), but a dynamic value's `${…}` containers DO exist in
+        // today's tree at real positions: record the value's range so the
+        // reverse check (below) does not flag them as MX-lacking.
+        const value = node.value as {
+          kind?: string;
+          span?: { start: number; end: number };
+        } | null;
+        if (value?.kind === "dynamic" && value.span) {
+          skips.push([value.span.start, value.span.end]);
+        }
       }
       return;
     }
@@ -322,6 +336,15 @@ export function mxExpressions(document: Node): MxEntry[] {
   };
   visit(document.body);
   return out;
+}
+
+/** Whether `[start,end)` falls inside any documented skip range. */
+export function inSkippedRange(
+  skips: readonly (readonly [number, number])[],
+  start: number,
+  end: number,
+): boolean {
+  return skips.some(([from, to]) => from <= start && end <= to);
 }
 
 const POSITION_KEYS = new Set(["start", "end", "loc"]);
@@ -439,6 +462,7 @@ export function compareExpressions(
   mx: readonly MxEntry[],
   today: readonly TodayEntry[],
   source: string,
+  skips: readonly (readonly [number, number])[] = [],
 ): { compared: number; differences: string[] } {
   const differences: string[] = [];
   let compared = 0;
@@ -507,9 +531,9 @@ export function compareExpressions(
         );
       } else if (
         // Ruling 2026-10-08: Babel 7.29.8's wording (the fork) stands, so a
-        // trailing period is the one accepted message difference.
-        entry.error.message.replace(/\.$/, "") !==
-          pair.error.label.replace(/\.$/, "") ||
+        // trailing period is the one accepted message difference — and only
+        // for the named comma message, never as a blanket allowance.
+        !messagesMatch(entry.error.message, pair.error.label) ||
         entry.error.start !== pair.error.start ||
         entry.error.end !== pair.error.end
       ) {
@@ -539,5 +563,28 @@ export function compareExpressions(
       ),
     );
   }
+  // The reverse direction: today's positioned containers MX never paired
+  // with. Today's loc-less stand-ins (merged shorthands, `NOT_COMPARED`) and
+  // empty containers (`()`, `||` — today's tree holds no entry) are skipped
+  // on both sides alike.
+  for (let i = 0; i < today.length; i++) {
+    if (used.has(i)) continue;
+    const extra = today[i] as TodayEntry;
+    if (extra.start === Number.MAX_SAFE_INTEGER) continue;
+    if (inSkippedRange(skips, extra.start, extra.end)) continue;
+    differences.push(
+      `no MX counterpart: today's ${extra.kind} [${extra.start},${extra.end})${extra.error ? ` (${JSON.stringify(extra.error.label)})` : ""}`,
+    );
+  }
   return { compared, differences };
+}
+
+/**
+ * Ruling 2026-10-08: only the named comma message may differ by a trailing
+ * period (Babel 7.29.8's fork wording); every other message compares exact.
+ */
+function messagesMatch(mx: string, today: string): boolean {
+  if (mx === today) return true;
+  if (!mx.startsWith('Unexpected token, expected ","')) return false;
+  return mx.replace(/\.$/, "") === today.replace(/\.$/, "");
 }

@@ -188,10 +188,12 @@ export function compare(source: string): Outcome {
       );
   }
   // The expression differential (PR 3).
+  const skips: [number, number][] = [];
   const expressions = compareExpressions(
-    mxExpressions(document),
+    mxExpressions(document, skips),
     todayExpressions(marko.ast, source, lineStartsOf(source)),
     source,
+    skips,
   );
   return {
     equal:

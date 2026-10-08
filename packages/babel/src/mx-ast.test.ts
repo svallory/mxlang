@@ -218,6 +218,8 @@ const statements = (start: number, end: number): MxStatements => ({
   node: null,
   error: null,
   atoms: [],
+  directives: [],
+  innerComments: [],
 });
 
 const tagFields: Omit<MxTag, "type" | "name" | "start" | "end"> = {
@@ -885,7 +887,10 @@ const ROWS = {
   },
   MxAtom: { required: [...BASE, "name"], nullable: [] },
   MxExpression: { required: CONTAINER_KEYS, nullable: CONTAINER_NULLABLE },
-  MxStatements: { required: CONTAINER_KEYS, nullable: CONTAINER_NULLABLE },
+  MxStatements: {
+    required: [...CONTAINER_KEYS, "directives", "innerComments"],
+    nullable: CONTAINER_NULLABLE,
+  },
   MxPattern: { required: CONTAINER_KEYS, nullable: CONTAINER_NULLABLE },
   MxArguments: { required: CONTAINER_KEYS, nullable: CONTAINER_NULLABLE },
   MxParameterList: { required: CONTAINER_KEYS, nullable: CONTAINER_NULLABLE },
