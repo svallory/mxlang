@@ -243,8 +243,8 @@ export default {
 An entry is `{ pattern?, repeatable?, attributes?, attributeTags?, children?, defaultTag? }`, as an
 object or as an ordered list, with the same anchored `^(?:pattern)$` matching as `children["*"]`.
 **Check order** is the same: an explicit `attributeTags` entry first, then the `"*"` entries in
-declaration order; an unmatched name is the usual unknown-attribute-tag error, listing the
-explicit names and the patterns. `repeatable` applies per matched name — two `<@row>` under one
+declaration order; an unmatched name is the plain unknown-attribute-tag error
+(`` `<resource>`: unknown attribute tag `<@nope>` ``), with no names or patterns listed. `repeatable` applies per matched name — two `<@row>` under one
 non-repeatable entry is one error naming `row`, while `<@row>` and `<@col>` are both fine.
 `required` is rejected at registration: a wildcard has no single name to require.
 
