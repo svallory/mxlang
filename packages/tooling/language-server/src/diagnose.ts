@@ -292,7 +292,7 @@ function documentPath(uri: string): string {
  * Supply the policy from `@mxlang/target-registry`'s `resolveTargetPolicy` or
  * `resolveTargetPolicyDetailed`. Those wrappers enforce tooling availability,
  * including staging/rejecting the data target. A hand-built policy bypasses
- * that staging: `{ target: "data" }` reaches the data compiler, not HTML or an
+ * that staging: `{ target: "tree" }` reaches the data compiler, not HTML or an
  * unwired-target fallback. Such direct dispatch is outside the supported
  * language-server policy path; this function does not re-resolve the policy.
  *

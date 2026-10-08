@@ -719,7 +719,7 @@ function resolveStaged(
   // registry's staged error and fallback stay the default for every other tool.
   if (options.dataWired)
     return coreResolveTargetPolicyDetailed(filePath, lookup, options);
-  // Decision 131 addendum: explicit data is not yet wired into tooling.
+  // Decision 131 addendum: explicit tree is not yet wired into tooling.
   // Mask selection and suggestions, not registration or package inference,
   // so core's generic unknown-target path positions it and hands on the
   // same fallback without advertising a target that tools cannot use.
@@ -727,21 +727,21 @@ function resolveStaged(
     filePath,
     {
       ...lookup,
-      hasTarget: (name) => name !== "data" && lookup.hasTarget(name),
-      targetNames: () => lookup.targetNames().filter((name) => name !== "data"),
+      hasTarget: (name) => name !== "tree" && lookup.hasTarget(name),
+      targetNames: () => lookup.targetNames().filter((name) => name !== "tree"),
       // Still registered: a loaded host may be `builtOn` it.
       allTargetNames: () => lookup.targetNames(),
     },
     options,
   );
   for (const diagnostic of resolution.diagnostics) {
-    if (diagnostic.code === "unknown-target" && diagnostic.value === "data") {
+    if (diagnostic.code === "unknown-target" && diagnostic.value === "tree") {
       diagnostic.message =
-        'mx.target "data" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead';
+        'mx.target "tree" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead';
     }
   }
   // Preserve the pre-3b staging of rule-2 data inference as well.
-  if (resolution.policy.target !== "data") return resolution;
+  if (resolution.policy.target !== "tree") return resolution;
   const target = lookup.defaultTarget();
   return { ...resolution, policy: { target, host: lookup.hostOf(target) } };
 }

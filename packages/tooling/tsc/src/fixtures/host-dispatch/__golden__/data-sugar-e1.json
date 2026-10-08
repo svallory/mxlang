@@ -9,7 +9,7 @@
           {
             "severity": 1,
             "source": "mxlang",
-            "message": "<root>/data-sugar-e1/package.json:5:15: mx.target \"data\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead",
+            "message": "<root>/data-sugar-e1/package.json:5:15: mx.target \"tree\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead",
             "range": {
               "start": {
                 "line": 0,
@@ -35,7 +35,7 @@
                     }
                   }
                 },
-                "message": "mx.target \"data\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead"
+                "message": "mx.target \"tree\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead"
               }
             ]
           },
@@ -77,7 +77,7 @@
               {
                 "severity": 1,
                 "source": "mxlang",
-                "message": "mx.target \"data\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead",
+                "message": "mx.target \"tree\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead",
                 "range": {
                   "start": {
                     "line": 4,
@@ -125,9 +125,9 @@
           {
             "code": "unknown-target",
             "severity": "error",
-            "value": "data",
+            "value": "tree",
             "file": "<root>/data-sugar-e1/package.json",
-            "message": "mx.target \"data\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead",
+            "message": "mx.target \"tree\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead",
             "line": 5,
             "column": 14,
             "length": 6
@@ -138,14 +138,14 @@
       "vite": {
         "threw": {
           "name": "Error",
-          "message": "<root>/data-sugar-e1/package.json:5:15: mx.target \"data\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead",
+          "message": "<root>/data-sugar-e1/package.json:5:15: mx.target \"tree\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead",
           "id": "<root>/data-sugar-e1/package.json",
           "loc": {
             "file": "<root>/data-sugar-e1/package.json",
             "line": 5,
             "column": 14
           },
-          "frame": "5 |     \"target\": \"data\",\n                  ^"
+          "frame": "5 |     \"target\": \"tree\",\n                  ^"
         },
         "warnings": []
       }
@@ -155,7 +155,7 @@
     "<root>/data-sugar-e1/doc.mx(2,3): error TS80001: `<attribute>`: custom tag has neither a `transform` nor a template file, so a call has nothing to expand to",
     "<root>/data-sugar-e1/doc.mx(1,1): error TS80001: `<attributes>`: custom tag has neither a `transform` nor a template file, so a call has nothing to expand to",
     "<root>/data-sugar-e1/doc.mx(1,1): error TS80001: target not loaded: see <root>/data-sugar-e1/package.json(5,15)",
-    "<root>/data-sugar-e1/package.json(5,15): error TS80003: mx.target \"data\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead"
+    "<root>/data-sugar-e1/package.json(5,15): error TS80003: mx.target \"tree\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead"
   ],
   "mxTscDataCheck": {
     "status": 1,

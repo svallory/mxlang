@@ -86,8 +86,8 @@ describe("target-table page dispatch", () => {
     );
   });
 
-  it("keeps data unreachable through the tooling policy wrapper", () => {
-    expect(compile("data").policyDiagnostics[0]?.message).toContain(
+  it("keeps tree unreachable through the tooling policy wrapper", () => {
+    expect(compile("tree").policyDiagnostics[0]?.message).toContain(
       "not wired into the editor and build tools yet",
     );
   });

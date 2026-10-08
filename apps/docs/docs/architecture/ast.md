@@ -798,7 +798,7 @@ ordinary `Export` in the IR but is still read as the template's own input
 set is an **input to the front end, supplied per target**, beside `tagShape`
 (§7.1). The language's set is the same six on every target, `import`,
 `export`, `static`, `server`, `client` and `class`, with one documented
-exception: on the data target `class`, `client` and `server` are vocabulary
+exception: on the tree target `class`, `client` and `server` are vocabulary
 names, so its set is `import`, `static`, `export`. A keyword outside the
 target's set is an ordinary tag name there: `server` and `client` are
 `MxModuleStatement`s only where the target's set includes them (Q5/P5).
@@ -899,7 +899,7 @@ reads to treat a known non-element (`await`, `define`) as structure (§6.4).
 
 **Who owns the table.** The element-shape table belongs to the target
 descriptor, with a core default (the html family's void, text and
-preserve-whitespace elements); a target overrides entries, as the data target
+preserve-whitespace elements); a target overrides entries, as the tree target
 does today (`targets/data/src/taglib.ts` `neutralizations`). It is **one table with two
 readers**: the front end's `tagShape` and decision 145's check that a
 `defaultTag` has a plain parse shape (`adr-default-tag.md` ("Decision")).
@@ -1528,7 +1528,7 @@ The AST carries, and no IR kind reads:
 | User tag macros (decision 80) | IR in, IR out, by design | decision 80 text |
 | Host **emitters** (`Emitter<Out>`), first- and third-party (decision 148) | IR only | `packages/core/AGENTS.md`, opening section ("A host then emits from that IR and never walks a Marko node"); IR spec §5.13 |
 | Host **declarations** (`HostDeclarations` hooks), first- and third-party | **parser nodes** today (Marko's); after the port a narrow view built by lowering, never `Mx*` nodes | the table below |
-| The data target's unknown-tag scan (first-party) | Marko's AST directly today (`scanAuthoredTags`, `packages/targets/data/src/scan.ts`); ported to the MX AST in the same change as `lower()` (ruling Q12) | — |
+| The tree target's unknown-tag scan (first-party) | Marko's AST directly today (`scanAuthoredTags`, `packages/targets/data/src/scan.ts`); ported to the MX AST in the same change as `lower()` (ruling Q12) | — |
 
 **The view the hooks receive after the port** (ruling Q19, decision 163,
 widened by addendum 1). The hooks are re-typed in the port change, but not to
@@ -1722,7 +1722,7 @@ depend on an input marked "front end" in the last column.
 | Marko input | Read at | Today's sources | MX front end |
 |---|---|---|---|
 | `tagDef.parseOptions.openTagOnly` → `TagType.void` | `[C]chunk-src.js:6084` | built-in element taglibs (`marko-html.json` `[C]chunk-src.js:3057`, MathML `:5175`, SVG `:5348`); `core-tags.json` | **front end**, via `tagShape(name)` → `bodyMode: "void"`. Not for custom tags (§3.12) |
-| `tagDef.parseOptions.text` → `TagType.text` | `:6085` | built-in taglibs (`<script>`, `<style>`, `<textarea>`), `core-tags.json`, custom tags (`custom-tags.ts` `customTagTaglib`), the data target's overrides (`targets/data/src/taglib.ts` `neutralizations`) | **front end**, via `tagShape` → `"parsed-text"` / `"parsed-text-preserve"` |
+| `tagDef.parseOptions.text` → `TagType.text` | `:6085` | built-in taglibs (`<script>`, `<style>`, `<textarea>`), `core-tags.json`, custom tags (`custom-tags.ts` `customTagTaglib`), the tree target's overrides (`targets/data/src/taglib.ts` `neutralizations`) | **front end**, via `tagShape` → `"parsed-text"` / `"parsed-text-preserve"` |
 | `tagDef.parseOptions.preserveWhitespace` | `:6082` | as above (`<pre>`, `<script>`, `<style>`, `<textarea>`; custom tags `custom-tags.ts` `customTagTaglib`; data overrides) | **front end**, via `tagShape` → `"preserve"` / `"parsed-text-preserve"`; decides `MxText.value` |
 | `tagDef.parseOptions.statement` → `TagType.statement` | `:6083` | `core-tags.json` (`<import>` through `<class>`) for html; the data taglib's three; none on the other hosts (§3.10) | **front end**: the statement keyword set, supplied per target (§3.10), on a concise top-level line |
 | `tagDef.parseOptions.rawOpenTag` → `rawValue` | `:6173-6177` | `core-tags.json` statement tags, `<style>` | dropped (A18) |
@@ -1739,7 +1739,7 @@ So the front end takes two external inputs, both supplied per target: the
 statement keyword set (§3.10) and `tagShape(name) → bodyMode`, supplied by
 core from the active target (its element shapes, the
 core tags, the custom tags' `text`/`preserveWhitespace`, and a target's
-overrides such as the data target's). Every other decision Marko made from a
+overrides such as the tree target's). Every other decision Marko made from a
 tag definition moves to lowering or disappears. The element-shape table is
 the target descriptor's, with a core default (§3.12, ruling Q21).
 

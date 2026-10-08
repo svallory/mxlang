@@ -2,7 +2,7 @@
   "name": "data-wildcard-guard-fixture",
   "private": true,
   "mx": {
-    "target": "data",
+    "target": "tree",
     "contracts": "./contracts.ts"
   }
 }

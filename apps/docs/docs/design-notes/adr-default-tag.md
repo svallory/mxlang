@@ -20,9 +20,9 @@ The unnamed tag is resolved through `defaultTag`, in this order:
 1. the parent's contract: `defaultTag` declared alongside `children` (sidecar or `mx.contracts`), honoured only when the target's declarations permit per-tag override (a flag on its declarations; data permits, HTML-emitting hosts default to permit);
 2. the package's user override, `package.json#mx.<target>.defaultTag`;
 3. the host's optional override on its descriptor;
-4. the target's built-in, required on every target descriptor: `div` for the html target (so every HTML-emitting host and every existing template is byte-identical), `object` for the data target.
+4. the target's built-in, required on every target descriptor: `div` for the html target (so every HTML-emitting host and every existing template is byte-identical), `object` for the tree target.
 
-`object` is a built-in tag of the data target: the anonymous node, carrying the shorthand's `id`/`class`, open contract, always known. It is never an unknown-tag error and needs no declaration. A closed parent `children` that lists neither `object` nor a `defaultTag` yields the ordinary E2 error.
+`object` is a built-in tag of the tree target: the anonymous node, carrying the shorthand's `id`/`class`, open contract, always known. It is never an unknown-tag error and needs no declaration. A closed parent `children` that lists neither `object` nor a `defaultTag` yields the ordinary E2 error.
 
 `#x` still becomes `id="x"` and `.a.b` still becomes `class="a b"`, as in Marko. After resolution the tag is ordinary: the parent's closed `children`, its own `attributes` contract (`<.x>` under a tag whose closed attributes lack `class` is an E1 error), attribute tags and everything else apply unchanged.
 
@@ -36,7 +36,7 @@ Marko has no hook that fires before `div` is written: taglib `migrate`, `transfo
 
 | option | rejected because |
 |---|---|
-| keep `div` everywhere | arbitrary on a data target; the choice belonged to HTML, not to the language |
+| keep `div` everywhere | arbitrary on a tree target; the choice belonged to HTML, not to the language |
 | wildcard attribute tags (`<@title type="string"/>`) for named members | forces a parent to re-express a tag contract as attribute tags, which lack some tag capabilities; also what ADR 146 and 147 now cover properly |
 | per-parent default only, no target/host/package levels | `<#x>` at the top of a data file would have had no answer; the ladder gives every position an answer |
 | error when data has no configured default (an earlier draft) | replaced by the built-in `object` tag, so the shorthand always resolves |

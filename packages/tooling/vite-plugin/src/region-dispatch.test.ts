@@ -129,7 +129,7 @@ const MESH_KIND = [{ segment: "mesh", diagnosticSource: "mesh" }];
 
 describe(".mesh.mx (a third-party host on the data target)", () => {
   const compile = async (options: MeshOptions, source = "<x a=1/>\n") => {
-    setupMesh(builtinLookup().target("data"), options);
+    setupMesh(builtinLookup().target("tree"), options);
     const dir = meshProject("mx-vite-mesh-", options);
     const file = join(dir, "post.mesh.mx");
     const result = await transformOf(mx()).call({}, source, file + MX_SUFFIX);
@@ -155,11 +155,11 @@ describe(".mesh.mx (a third-party host on the data target)", () => {
     ).rejects.toThrow(/render-time macro/);
   });
 
-  it("mx.data.defaultTag is the shared ladder's rung for a host built on data", async () => {
+  it("mx.tree.defaultTag is the shared ladder's rung for a host built on tree", async () => {
     await compile({
       fileKinds: MESH_KIND,
       files: { "tags/node.mx": "" },
-      mx: { data: { defaultTag: "node" } },
+      mx: { tree: { defaultTag: "node" } },
     });
     expect((globalThis as MeshGlobals).__mxMeshDefaultTags).toEqual(["node"]);
   });

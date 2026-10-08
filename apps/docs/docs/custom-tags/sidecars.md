@@ -292,7 +292,7 @@ export default {
 - A parent that declares no `defaultTag` answers "none"; the question does not climb to the grandparent, and the next rung of the ladder decides.
 - Each declaration speaks only for its own direct children: `body` does not borrow the `defaultTag` of an attribute tag nested inside it.
 
-The same contract on the data target (Mesh's `attributes` and `attribute`):
+The same contract on the tree target (Mesh's `attributes` and `attribute`):
 
 ```ts
 // contracts.ts, named by "mx": { "target": "data", "contracts": "./contracts.ts" }
@@ -340,7 +340,7 @@ const attribute: CustomTag = {
 
 The reserved contract-vocabulary key `"#root"` permits the top level of a file or of a template's own unit. A recursive call at its template's top level also has parent `#root`. You can combine it with named parents. Omitting `parents` keeps placement open; `parents: []` permits none.
 
-Registration checks both directions for registered tags: it rejects `P.children` listing `C` when `C.parents` omits `P`, and `C.parents` naming `P` when `P.children` is closed and omits `C`. The same check covers attribute-tag parents at every depth: `C.parents: ["@row"]` requires every declared `row` with closed `children` to list `C`; a `row.children` listing `C` requires `"@row"` in `C.parents` if declared. An open or compatible `row` elsewhere does not exempt a conflicting declaration. Attribute-tag diagnostics include the complete owner chain. An omitted contract stays open; `#root` is not a tag. Both messages end with the fix: add the missing entry to one list, or remove the conflicting entry from the other. Placement errors point at the offending tag and name the expected and actual parent, for example: `` `<attribute>` must be inside `<attributes>`; found inside `<div>` ``. The same checks apply to transform, template-sidecar and contract-only tags, including data targets; compilation stops at the first error.
+Registration checks both directions for registered tags: it rejects `P.children` listing `C` when `C.parents` omits `P`, and `C.parents` naming `P` when `P.children` is closed and omits `C`. The same check covers attribute-tag parents at every depth: `C.parents: ["@row"]` requires every declared `row` with closed `children` to list `C`; a `row.children` listing `C` requires `"@row"` in `C.parents` if declared. An open or compatible `row` elsewhere does not exempt a conflicting declaration. Attribute-tag diagnostics include the complete owner chain. An omitted contract stays open; `#root` is not a tag. Both messages end with the fix: add the missing entry to one list, or remove the conflicting entry from the other. Placement errors point at the offending tag and name the expected and actual parent, for example: `` `<attribute>` must be inside `<attributes>`; found inside `<div>` ``. The same checks apply to transform, template-sidecar and contract-only tags, including tree targets; compilation stops at the first error.
 
 ## Change how the caller parses
 

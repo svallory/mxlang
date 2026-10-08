@@ -3,18 +3,18 @@ title: "Data target"
 description: "Use a .mx file as data: parseData returns a static tree of tags, attributes and expressions for config and spec tools."
 ---
 
-# Data target
+# Tree target
 
-The **data target** (`@mxlang/data`) reads a `.mx` file as **data**, not UI. `parseData` compiles the source and returns a static tree of what is written: tags, attributes, attribute tags, expressions with their source spans. It never renders and never evaluates. A spec tool, a config loader or a code generator walks the tree and decides what each tag means.
+The **tree target** (`@mxlang/data`) reads a `.mx` file as **data**, not UI. `parseData` compiles the source and returns a static tree of what is written: tags, attributes, attribute tags, expressions with their source spans. It never renders and never evaluates. A spec tool, a config loader or a code generator walks the tree and decides what each tag means.
 
-It is a **target**, not a host: it has no framework behind it ([Core and hosts](/architecture/core-and-hosts/)). The normative description is [specification §13.7](/specification/#the-mx-language-13-host-semantics-table-137-the-data-target).
+It is a **target**, not a host: it has no framework behind it ([Core and hosts](/architecture/core-and-hosts/)). The normative description is [specification §13.7](/specification/#the-mx-language-13-host-semantics-table-137-the-tree-target).
 
 ## Status: `mx-tsc` checks, the editor does not yet
 
 `mx-tsc` checks a data package. The editor tools do not (TODO `data-target-tooling-dispatch`):
 
-- **`mx-tsc`** runs the check described [below](#data-target-check-a-package-with-mx-tsc). It is the tool for agents and CI.
-- The language server, the TypeScript plugin, Vite and the Bun loader do **not** compile data files. For them `mx.target: "data"` in a `package.json` is still a positioned error: `mx.target "data" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead`.
+- **`mx-tsc`** runs the check described [below](#tree-target-check-a-package-with-mx-tsc). It is the tool for agents and CI.
+- The language server, the TypeScript plugin, Vite and the Bun loader do **not** compile data files. For them `mx.target: "tree"` in a `package.json` is still a positioned error: `mx.target "tree" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead`.
 - `parseData` from `@mxlang/data` works on its own and is the supported entry point for a program.
 
 The split is deliberate: `mx-tsc` is one command with a printed result, while editor support needs positions, hover and completion for a tree that is not UI, which is still being thought through.
@@ -52,7 +52,7 @@ mx-tsc            # from the package directory
 mx-tsc -p <dir>   # or name it
 ```
 
-One command, no tsconfig. When the directory's own `package.json` says `mx.target: "data"`, `mx-tsc` does not build a TypeScript program. (A package that is only inferred as data from an `@mxlang/data` dependency, and a monorepo root, keep their normal `tsc` run, so a TypeScript error is never hidden; name a nested package that declares `mx.target: "data"` with `-p`.) It parses every `.mx` file under the package that the policy assigns to `data` with `parseData`, in full-path order, and prints each diagnostic in the compact positioned shape it uses for host files:
+One command, no tsconfig. When the directory's own `package.json` says `mx.target: "tree"`, `mx-tsc` does not build a TypeScript program. (A package that is only inferred as data from an `@mxlang/data` dependency, and a monorepo root, keep their normal `tsc` run, so a TypeScript error is never hidden; name a nested package that declares `mx.target: "tree"` with `-p`.) It parses every `.mx` file under the package that the policy assigns to `data` with `parseData`, in full-path order, and prints each diagnostic in the compact positioned shape it uses for host files:
 
 ```text
 unknown-tag.mx(1,1): error TS80001: `<servce>` is not a known tag: it has no contract in `customTags`; did you mean `<service>`?

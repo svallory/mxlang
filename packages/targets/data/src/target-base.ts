@@ -12,7 +12,7 @@ import { DEFAULT_TAG, dataDeclarations } from "./declarations.ts";
 
 export const dataTargetBase: TargetDescriptor = {
   descriptorVersion: 0,
-  name: "data",
+  name: "tree",
   packageName: "@mxlang/data",
   defaultTag: DEFAULT_TAG,
   declarations: { default: dataDeclarations },

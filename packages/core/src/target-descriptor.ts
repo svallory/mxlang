@@ -432,9 +432,11 @@ export function builtOnUnknownMessage(
   hostTarget?: string,
 ): string {
   const hint =
-    hostTarget === undefined
-      ? ""
-      : `; "${builtOn}" is a host name, and builtOn takes a target name (did you mean "${hostTarget}"?)`;
+    builtOn === "data"
+      ? '; "data" is reserved for the evaluated tree target (decision 187); the static tree target is "tree"'
+      : hostTarget === undefined
+        ? ""
+        : `; "${builtOn}" is a host name, and builtOn takes a target name (did you mean "${hostTarget}"?)`;
   return `target "${target}" is built on "${builtOn}", which is not a registered target (registered: ${registered.join(", ")})${hint}`;
 }
 

@@ -48,7 +48,7 @@ function check(source: string, options: MeshOptions = {}) {
       "src/post.mesh.mx": source,
     },
   };
-  setupMesh(builtinLookup().target("data"), merged);
+  setupMesh(builtinLookup().target("tree"), merged);
   const dir = meshProject("mx-tsc-mesh-", merged);
   const saved = process.cwd();
   process.chdir(dir);
@@ -227,10 +227,10 @@ describe("the unnamed-tag ladder (decision 145) on a host built on data", () => 
     expect(run).toEqual({ status: 0, output: "" });
   });
 
-  it("rung 1: mx.data.defaultTag is read for a host built on data, and mx-tsc's tag is defaultTagFor's", () => {
+  it("rung 1: mx.tree.defaultTag is read for a host built on tree, and mx-tsc's tag is defaultTagFor's", () => {
     const options = {
       ...WITH_CONTRACTS,
-      mx: mx({ data: { defaultTag: "port" } }),
+      mx: mx({ tree: { defaultTag: "port" } }),
     };
     const run = check(SHORTHAND, options);
     expect(run.output).toBe(PORT_AT_TOP);
@@ -248,10 +248,10 @@ describe("the unnamed-tag ladder (decision 145) on a host built on data", () => 
     );
   });
 
-  it("an invalid mx.data.defaultTag is one positioned error and falls to the next rung", () => {
+  it("an invalid mx.tree.defaultTag is one positioned error and falls to the next rung", () => {
     const run = check(SHORTHAND, {
       ...WITH_CONTRACTS,
-      mx: mx({ data: { defaultTag: "nonexistent" } }),
+      mx: mx({ tree: { defaultTag: "nonexistent" } }),
       hostDefaultTag: "service",
     });
     expect(run.output.match(/invalid `defaultTag` value/g)).toHaveLength(1);
@@ -259,17 +259,17 @@ describe("the unnamed-tag ladder (decision 145) on a host built on data", () => 
     expect(run.status).toBe(1);
   });
 
-  it("the host's own key wins over mx.data.defaultTag, and a differing pair warns naming both", () => {
+  it("the host's own key wins over mx.tree.defaultTag, and a differing pair warns naming both", () => {
     const run = check(SHORTHAND, {
       ...WITH_CONTRACTS,
       mx: mx({
         "mesh-data": { defaultTag: "service" },
-        data: { defaultTag: "port" },
+        tree: { defaultTag: "port" },
       }),
     });
     expect(run.status).toBe(0);
     expect(run.output).toMatch(
-      /^package\.json\(\d+,\d+\): warning TS\d+: mx\.data\.defaultTag "port" is ignored: mx\["mesh-data"\]\.defaultTag "service" takes precedence\n$/,
+      /^package\.json\(\d+,\d+\): warning TS\d+: mx\.tree\.defaultTag "port" is ignored: mx\["mesh-data"\]\.defaultTag "service" takes precedence\n$/,
     );
   });
 
@@ -278,7 +278,7 @@ describe("the unnamed-tag ladder (decision 145) on a host built on data", () => 
       ...WITH_CONTRACTS,
       mx: mx({
         "mesh-data": { defaultTag: "service" },
-        data: { defaultTag: "service" },
+        tree: { defaultTag: "service" },
       }),
     });
     expect(run).toEqual({ status: 0, output: "" });

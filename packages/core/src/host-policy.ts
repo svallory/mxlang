@@ -839,12 +839,16 @@ export function resolveTargetPolicyDetailed(
       typeof value === "string"
         ? nearestHostValue(value, lookup.targetNames())
         : undefined;
+    const dataReserved =
+      value === "data"
+        ? ' "data" is reserved for the evaluated tree target (decision 187); the static tree target is "tree".'
+        : "";
     diagnostics.push({
       code: "unknown-target",
       severity: "error",
       ...(typeof value === "string" ? { value } : {}),
       file,
-      message: `unknown mx.target ${shown}; valid targets: ${lookup.targetNames().join(", ")}.${isHost ? ` ${shown} is a host, not a target: its default target is "${host.target}" (use mx.host ${shown} or mx.target "${host.target}").` : hint ? ` Did you mean "${hint}"?` : ""} Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned.`,
+      message: `unknown mx.target ${shown}; valid targets: ${lookup.targetNames().join(", ")}.${isHost ? ` ${shown} is a host, not a target: its default target is "${host.target}" (use mx.host ${shown} or mx.target "${host.target}").` : hint ? ` Did you mean "${hint}"?` : ""}${dataReserved} Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned.`,
       ...locateMxValue(read.text, "target"),
     });
   }

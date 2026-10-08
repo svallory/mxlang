@@ -18,7 +18,7 @@ import {
  * the registry wrapper still raises (TODO `data-target-tooling-dispatch`).
  * No tsconfig is needed or read: the files are the package's `.mx` files.
  *
- * And only when that directory's own `package.json` says `mx.target: "data"`:
+ * And only when that directory's own `package.json` says `mx.target: "tree"`:
  * a package that is data by rule 5 (an `@mxlang/data` dependency), a monorepo
  * root, or a directory with no manifest of its own keeps its `tsc` run, so a
  * TypeScript error is never swallowed by a data inference.

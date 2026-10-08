@@ -14,7 +14,7 @@ it("policy errors alone fail one program; fixing them leaves host warnings non-f
       { target: "bogus" },
       { host: "solid", target: "html" },
       { target: "@acme/target" },
-      { target: "data" },
+      { target: "tree" },
     ];
     for (const [i, mx] of cases.entries()) {
       const dir = join(root, `p${i}`);

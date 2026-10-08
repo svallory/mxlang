@@ -228,7 +228,7 @@ function dialectProject(source: string): { dir: string; file: string } {
     join(dir, "package.json"),
     JSON.stringify({
       name: "ash-dialect-fixture",
-      mx: { target: "data", contracts: "./contracts.ts" },
+      mx: { target: "tree", contracts: "./contracts.ts" },
     }),
   );
   writeFileSync(join(dir, "contracts.ts"), ASH_CONTRACTS);
@@ -564,7 +564,7 @@ describe("an empty `{}` declaration is a contract on the data path", () => {
       join(dir, "package.json"),
       JSON.stringify({
         name: "empty-declaration-fixture",
-        mx: { target: "data", contracts: "./contracts.ts" },
+        mx: { target: "tree", contracts: "./contracts.ts" },
       }),
     );
     writeFileSync(
@@ -591,7 +591,7 @@ describe("an empty `{}` declaration is a contract on the data path", () => {
     dirs.push(dir);
     writeFileSync(
       join(dir, "package.json"),
-      JSON.stringify({ name: "empty-sidecar-fixture", mx: { target: "data" } }),
+      JSON.stringify({ name: "empty-sidecar-fixture", mx: { target: "tree" } }),
     );
     mkdirSync(join(dir, "tags"));
     writeFileSync(join(dir, "tags", "pub.tag.ts"), "export default {};\n");

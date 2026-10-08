@@ -135,10 +135,10 @@ describe("mx.<target>.defaultTag validation, once per package", () => {
     expect(diagnostics.map((d) => d.code)).toEqual(["invalid-default-tag"]);
   });
 
-  it("on data, reachable means the built-in `object` plus the custom tags", () => {
+  it("on tree, reachable means the built-in `object` plus the custom tags", () => {
     const dataPackage = (name: string) =>
       resolveTargetPolicyDetailed(
-        project({ mx: { target: "data", data: { defaultTag: name } } }),
+        project({ mx: { target: "tree", tree: { defaultTag: name } } }),
         { dataWired: true },
       );
     const accept = dataPackage("object");
@@ -360,7 +360,7 @@ describe("a scan failure never escapes a policy call (reviewer finding 1)", () =
     mx: {
       target,
       contracts: { item: {} },
-      [target]: { defaultTag: target === "data" ? "object" : "section" },
+      [target]: { defaultTag: target === "tree" ? "object" : "section" },
     },
   });
 
@@ -373,8 +373,8 @@ describe("a scan failure never escapes a policy call (reviewer finding 1)", () =
     expect(() => defaultTagFor(file, policy)).not.toThrow();
   });
 
-  it("data: the policy call does not throw either", () => {
-    const file = project(broken("data"));
+  it("tree: the policy call does not throw either", () => {
+    const file = project(broken("tree"));
     expect(() =>
       resolveTargetPolicyDetailed(file, { dataWired: true }),
     ).not.toThrow();
@@ -400,12 +400,12 @@ describe("a loaded descriptor's own values are checked against the target's look
   });
 });
 
-describe("a third-party host on the data target (decision 148)", () => {
+describe("a third-party host on the tree target (decision 148)", () => {
   afterEach(() => teardownMesh());
 
   const MESH_KIND = [{ segment: "mesh", diagnosticSource: "mesh" }];
   const setup = (options: MeshOptions = {}) => {
-    setupMesh(builtinLookup().target("data"), options);
+    setupMesh(builtinLookup().target("tree"), options);
     const dir = meshProject("mx-registry-mesh-", options);
     return join(dir, "post.mesh.mx");
   };
@@ -414,7 +414,7 @@ describe("a third-party host on the data target (decision 148)", () => {
       (d) => d.code === "invalid-default-tag",
     );
 
-  it("keeps data's built-in `object`: no diagnostic, and it is the rung the compile gets", () => {
+  it("keeps tree's built-in `object`: no diagnostic, and it is the rung the compile gets", () => {
     const file = setup({ fileKinds: MESH_KIND });
     const { policy, diagnostics } = resolveTargetPolicyDetailed(file);
     expect(diagnostics).toEqual([]);
@@ -521,7 +521,7 @@ describe("a host override reaches the compile through defaultTagFor", () => {
 describe("Marko core tags are no valid default on any target (round 3)", () => {
   const CORE = ["await", "try", "define", "effect"];
 
-  it.each(builtinTargets.map((t) => t.name).filter((n) => n !== "data"))(
+  it.each(builtinTargets.map((t) => t.name).filter((n) => n !== "tree"))(
     "%s rejects every core tag and the file falls back to the built-in",
     (target) => {
       for (const name of CORE) {
@@ -555,10 +555,10 @@ describe("Marko core tags are no valid default on any target (round 3)", () => {
     }
   });
 
-  it("data rejects them as well (and falls back to object)", () => {
+  it("tree rejects them as well (and falls back to object)", () => {
     for (const name of CORE) {
       const file = project({
-        mx: { target: "data", data: { defaultTag: name } },
+        mx: { target: "tree", tree: { defaultTag: name } },
       });
       const { diagnostics } = resolveTargetPolicyDetailed(file, {
         dataWired: true,
@@ -723,10 +723,10 @@ describe("a contract's defaultTag is checked at registration, at the declaration
     expect(() => resolveTargetPolicyDetailed(file)).not.toThrow();
   });
 
-  it("on data, `object` and declared tags are valid; html elements are not", () => {
+  it("on tree, `object` and declared tags are valid; html elements are not", () => {
     const data = (name: string) =>
       project(
-        { mx: { target: "data", contracts: "./contracts.ts" } },
+        { mx: { target: "tree", contracts: "./contracts.ts" } },
         {
           "contracts.ts": `export default { list: { defaultTag: "${name}" }, item: {} };\n`,
         },
@@ -914,9 +914,9 @@ describe("a dashed custom-element name, per target, as measured (decision 145, r
     },
   );
 
-  it("data rejects it, config and contract", () => {
+  it("tree rejects it, config and contract", () => {
     const config = project({
-      mx: { target: "data", data: { defaultTag: "sl-card" } },
+      mx: { target: "tree", tree: { defaultTag: "sl-card" } },
     });
     expect(
       resolveTargetPolicyDetailed(config, { dataWired: true }).diagnostics.map(
@@ -924,7 +924,7 @@ describe("a dashed custom-element name, per target, as measured (decision 145, r
       ),
     ).toEqual(["invalid-default-tag"]);
     const contract = project(
-      { mx: { target: "data", contracts: "./contracts.ts" } },
+      { mx: { target: "tree", contracts: "./contracts.ts" } },
       {
         "contracts.ts": `export default { list: { defaultTag: "sl-card" } };\n`,
       },
@@ -1016,7 +1016,7 @@ describe("dashed Marko core tags: registration and compile agree on every non-ht
   const NAMES = ["else-if", "html-script", "html-style", "html-comment"];
   const TARGETS = builtinTargets
     .map((t) => t.name)
-    .filter((n) => n !== "html" && n !== "data");
+    .filter((n) => n !== "html" && n !== "tree");
 
   it.each(TARGETS)(
     "%s rejects them as config and as a contract value",

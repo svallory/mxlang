@@ -8,7 +8,7 @@
  *
  * The target is hostless: no `host`, no `legacyHostValues`. It has no file
  * kinds and no `mx.tags[].hosts` filter key, so a project selects it with
- * `mx.target: "data"` or by depending on `@mxlang/data`.
+ * `mx.target: "tree"` or by depending on `@mxlang/data`.
  *
  * A lazy `parseTranslator` for the registry's `defaultTag` check, but no
  * `translator` and no `mappings`: the mapping mode (with the TS plugin's guard for a target that

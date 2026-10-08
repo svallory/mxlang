@@ -79,9 +79,9 @@ describe("light import", () => {
     ).toBe(true);
   });
 
-  it("data compiles a data file through the registry (under Bun, where load() can require)", () => {
+  it("tree compiles a data file through the registry (under Bun, where load() can require)", () => {
     const { value } = probe(
-      `const data = builtinTargets.find((t) => t.name === "data")!;
+      `const data = builtinTargets.find((t) => t.name === "tree")!;
        const out = data.load!({} as never).compileModule("<x a=1/>\\n", ${JSON.stringify(join(work, "d.mx"))}, {});
        return { exported: out.code.startsWith("export default "), dependencies: out.dependencies };`,
     );
@@ -100,7 +100,7 @@ describe("light import", () => {
       "react-jsx",
       "hono-jsx",
       "angular-template",
-      "data",
+      "tree",
     ]);
     expect(loaded).toEqual([]);
   });

@@ -18,9 +18,9 @@ target beats dependency inference, and combining it with `mx.host: "solid"`
 is a positioned `target-host-mismatch` error (decisions 129/132;
 [spec §13.5](/specification/#the-mx-language-13-host-semantics-table-135-host-and-target-selection)).
 
-The other hostless target, `data`, is checked by `mx-tsc` but not wired into the
-editor tools or Vite yet: explicit `mx.target: "data"` errors at its value there
-and names `TODO data-target-tooling-dispatch`. See [the data target](/targets/data/)
+The other hostless target, `tree`, is checked by `mx-tsc` but not wired into the
+editor tools or Vite yet: explicit `mx.target: "tree"` errors at its value there
+and names `TODO data-target-tooling-dispatch`. See [the tree target](/targets/data/)
 (decision 131 addenda).
 
 ## Attribute-tag values

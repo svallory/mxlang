@@ -65,7 +65,7 @@ export const DEFAULT_TAG = "object";
 const BUILTIN_TAGS: readonly string[] = [DEFAULT_TAG];
 
 export const dataDeclarations: HostDeclarations = {
-  name: "data",
+  name: "tree",
   attrTags: 2,
   builtinTags: BUILTIN_TAGS,
   // The ladder (decision 145): the parent's contract `defaultTag`, then

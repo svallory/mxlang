@@ -77,14 +77,14 @@ describe("target-table Vite dispatch", () => {
     );
   });
 
-  it("keeps data unreachable through the policy wrapper", async () => {
-    const descriptor = builtinLookup().target("data");
+  it("keeps tree unreachable through the policy wrapper", async () => {
+    const descriptor = builtinLookup().target("tree");
     if (!descriptor?.load) throw new Error("missing data compiler");
     const wired = descriptor as typeof descriptor & {
       load: NonNullable<typeof descriptor.load>;
     };
     const load = vi.spyOn(wired, "load");
-    await expect(transform("data")).rejects.toThrow(
+    await expect(transform("tree")).rejects.toThrow(
       "not wired into the editor and build tools yet",
     );
     expect(load).not.toHaveBeenCalled();

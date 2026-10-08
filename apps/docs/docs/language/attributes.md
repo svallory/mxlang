@@ -23,7 +23,7 @@ web page:
 <div id="main"><div class="card wide">hello</div></div>
 ```
 
-On the [data target](/specification/#the-mx-language-13-host-semantics-table-137-the-data-target) there is no `div`; the
+On the [tree target](/specification/#the-mx-language-13-host-semantics-table-137-the-tree-target) there is no `div`; the
 unnamed tag is the built-in `object`, a tag with an open contract that carries
 `id` and `class` as ordinary attributes:
 
@@ -138,7 +138,7 @@ boolean #isOverdue ({ self }) { return self.x }
 boolean ({ self }) { return self.x } #isOverdue
 ```
 
-(on the [data target](/specification/#the-mx-language-13-host-semantics-table-137-the-data-target):
+(on the [tree target](/specification/#the-mx-language-13-host-semantics-table-137-the-tree-target):
 a tag `boolean` with `id="isOverdue"` and a function `value`). A tag takes **one**
 default value: `kind=1 #x=2` and `<if=a #x=b>` are errors at the second. A bound
 `value:=y` counts as the default value too. On Angular an attribute-position

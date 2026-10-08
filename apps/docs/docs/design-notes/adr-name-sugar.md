@@ -9,7 +9,7 @@ description: "Why `<input:email>`, `<input :email>` and `<:email>` set `name`, w
 
 ## Context
 
-Marko has two tag-adjacent shorthands borrowed from CSS selectors: `<div#main>` sets `id`, `<div.card>` sets `class`. A great many tags, in HTML (`<input>`, `<select>`, `<button>`, `<slot>`, `<meta>`) and in data vocabularies (attributes, fields, resources, actions), carry a `name` attribute, and there is no shorthand for it. The data target made the gap visible: a vocabulary that declares attributes writes `<attribute name="title" type="string"/>` for every entry.
+Marko has two tag-adjacent shorthands borrowed from CSS selectors: `<div#main>` sets `id`, `<div.card>` sets `class`. A great many tags, in HTML (`<input>`, `<select>`, `<button>`, `<slot>`, `<meta>`) and in data vocabularies (attributes, fields, resources, actions), carry a `name` attribute, and there is no shorthand for it. The tree target made the gap visible: a vocabulary that declares attributes writes `<attribute name="title" type="string"/>` for every entry.
 
 MX is a language first (its targets exist to test it), so the question was treated as one of language design: which spelling, in which positions, at what cost in parser work and divergence from Marko.
 

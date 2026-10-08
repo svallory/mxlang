@@ -5,7 +5,7 @@ description: "Why a compiled html-family unit writes its output into a sink and 
 
 # ADR 155: the render model
 
-**Status:** accepted 2026-10-05 (decision 155 in the decisions log). **Scope:** the html family: the html target, and Astro's `.mx` leaf components and pages, which use its emitter. The data target has no output and is unchanged. The JSX hosts return elements and keep their own `/var` mechanism until the multi-host plan revisits it.
+**Status:** accepted 2026-10-05 (decision 155 in the decisions log). **Scope:** the html family: the html target, and Astro's `.mx` leaf components and pages, which use its emitter. The tree target has no output and is unchanged. The JSX hosts return elements and keep their own `/var` mechanism until the multi-host plan revisits it.
 
 ## Context
 

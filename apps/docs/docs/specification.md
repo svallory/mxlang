@@ -215,7 +215,7 @@ on these nodes, so the statement text is recovered by slicing on
 (`import`, `static`, `export`, `client`, `server`, `class`) are declared to the
 parser from core's own taglib on every host, so their text is code, never
 attributes: a typed `static function f(a: number): string {…}` or a `<T,>`
-generic reads the same on every target. (The data target declares three of the
+generic reads the same on every target. (The tree target declares three of the
 six, its documented exception.)
 
 A statement's text is parsed as a TypeScript module body and a syntax error is a
@@ -379,7 +379,7 @@ therefore supply one-space content, through both imports and discovered
 `tags/*.mx`; `<Wrap>\n  </Wrap>` supplies no content. A comment alone supplies
 none, while `<!--note--> ` supplies a space. All seven hosts preserve that
 text when forwarding the body; Angular uses `&ngsp;` so its own template
-whitespace removal cannot discard the space. The data target's pass-through
+whitespace removal cannot discard the space. The tree target's pass-through
 tree carries the same normalized text, and `structural: "reject"` rejects a
 retained space as text. The rendered parity matrix is
 `test-fixtures/body-whitespace/cases.json`.
@@ -949,7 +949,7 @@ shorthand and no name, `<#main>`, `<.card>`, `<#a.b>`, or concise `#main` and
 `.card`, is an **unnamed tag**. `#x` still becomes `id="x"` and `.a.b` still
 becomes `class="a b"`; what changed from Marko is the tag they sit on. Marko
 always writes `div` there, because it has one host. MX resolves the name by
-vocabulary, so on a target where `div` means nothing (the data target) the
+vocabulary, so on a target where `div` means nothing (the tree target) the
 shorthand is still meaningful.
 
 **The empty-name rule.** Marko's parser writes `div` into the AST but leaves the
@@ -965,7 +965,7 @@ dynamic name (`<${tag}.a>`) is not either.
 | 1 | the parent's contract `defaultTag` | beside `children`, in a sidecar or `mx.contracts`; honoured only when the target's declarations permit it (the built-in targets do) |
 | 2 | the package's override | `package.json#mx.<target>.defaultTag` (`mx.html`, `mx.solid-jsx`, `mx.data`, …); for a target `builtOn` another (§13.5), the base target's key (`mx.<base>.defaultTag`) when the target's own is absent or rejected. When both are set and differ the target's own wins and a warning at the base key names both (`default-tag-overridden`) |
 | 3 | the host's override | the host's optional `defaultTag` on its descriptor |
-| 4 | the target's built-in | `div` on every html-family target, `object` on the data target; required on every target descriptor |
+| 4 | the target's built-in | `div` on every html-family target, `object` on the tree target; required on every target descriptor |
 
 For example, with `package.json#mx.html.defaultTag` set to `"section"` and these
 two tags (`tags/my-list.tag.ts` declares `defaultTag: "li"`,
@@ -1016,7 +1016,7 @@ resolved to.
 (the resolved name missing from it is the usual E2 error, positioned at the
 shorthand), and so does the tag's own `attributes` contract (`<.x>` under a tag
 whose closed attributes lack `class` is the usual E1 error, positioned at the
-shorthand). On the data target, with `attributes` declaring
+shorthand). On the tree target, with `attributes` declaring
 `defaultTag: "attribute"` and `children: { other: {} }`:
 
 ```text
@@ -1091,7 +1091,7 @@ was rejected and the rung that answered instead is not in the parent's closed
 doc.mx(1,13): error TS80001: `<attributes>`: `<object>` is not allowed here; allowed children: `<attribute>` (the parent's `defaultTag` `nope` is invalid; see the declaration)
 ```
 
-**The data target.** `object` is a built-in tag of the data target: the
+**The tree target.** `object` is a built-in tag of the tree target: the
 anonymous node, carrying the shorthand's `id` and `class` as ordinary attributes,
 with an open contract. It is always known, so it is never an unknown-tag error
 under `unknownTags: "reject"` and needs no declaration; an authored
@@ -1113,7 +1113,7 @@ Marko oracle are unchanged. Recorded in `divergences.md`.
   without a registry (the html and hono Bun loaders, the Astro Vite template
   plugin, Angular `build()`); the Vite plugin aborts the build on it, like any
   other policy error, and the other tools compile with the built-in meanwhile.
-- **The data target is not wired into the language server, the TypeScript
+- **The tree target is not wired into the language server, the TypeScript
   plugin, Vite or the Bun loader yet** (§13.7); `parseData` and `mx-tsc` use
   `mx.data.defaultTag`.
 
@@ -3397,11 +3397,11 @@ first failing field), and two set rules join the reasons above, reported as
 
 | Rule | When | Message |
 |---|---|---|
-| `built-on-unknown` | the name is no registered target | `target "mesh-data" is built on "dta", which is not a registered target (registered: html, …, data, mesh-data)`; when the name is a host name, `; "solid" is a host name, and builtOn takes a target name (did you mean "solid-jsx"?)` |
+| `built-on-unknown` | the name is no registered target | `target "mesh-data" is built on "dta", which is not a registered target (registered: html, …, tree, mesh-data)`; when the name is a host name, `; "solid" is a host name, and builtOn takes a target name (did you mean "solid-jsx"?)` |
 | `built-on-loop` | the chain comes back to a target (itself included) | `target "a" is built on itself: a -> b -> a` |
 
 A target a tool keeps from selection is still registered for this (the staged
-`data`, §13.7). Core names no target: any target can be built on any other. A
+`tree`, §13.7). Core names no target: any target can be built on any other. A
 check that belongs to a target keys on the project's base target, never on its
 `mx.target` string: `mx-tsc`'s data check (§13.7.4), and the base target's
 `defaultTag` key (§4's ladder, rung 2). **Declare `builtOn` to inherit the base
@@ -3449,10 +3449,10 @@ A loaded host's name is a valid `mx.tags[].hosts` value for files compiled under
 that target, and its `mx.tags` entries filter by it; no unknown-host warning
 fires for it.
 
-**The data target and its tooling limit (decisions 131 and 132, 131 addenda 1
+**The tree target and its tooling limit (decisions 131 and 132, 131 addenda 1
 and 2).** `data` is a **hostless** target: its descriptor has no `host` part, so
 no `mx.host` value names it and it has no file kinds (§13.7). It is chosen only
-per package, by `mx.target: "data"` (rule 1; a nested `package.json` covers a
+per package, by `mx.target: "tree"` (rule 1; a nested `package.json` covers a
 subtree of a mixed repository) or by rule 5 when `@mxlang/data` is the single
 target package in `dependencies`/`devDependencies`. There is no `x.data.mx` file
 kind: a file kind's segment is a host's name (decision 136) and `data` has none.
@@ -3465,13 +3465,13 @@ Editor dispatch for data files is deferred (TODO
 `data-target-tooling-dispatch`): **the language server, the TypeScript plugin,
 Vite and the Bun loader do not compile data files yet; `mx-tsc` does** (§13.7.4,
 decision 131 addendum 4). Until editor dispatch lands, an explicit
-`mx.target: "data"` is a positioned error raised by the registry wrapper, never
+`mx.target: "tree"` is a positioned error raised by the registry wrapper, never
 by core, at the key's value (code `unknown-target`):
-`mx.target "data" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead`.
+`mx.target "tree" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead`.
 The language server and the TypeScript plugin report it as a policy
 error and the Vite plugin fails the transform with it. `mx-tsc` asks the wrapper
 for the unmasked policy when it is run on a package whose own `package.json`
-resolves to `data` (§13.7.4); in every other run (rule-5 inference, a
+resolves to `tree` (§13.7.4); in every other run (rule-5 inference, a
 monorepo root, `-b`/`-w`) it still reports the error like the editor tools. The tools still hand on
 the same fallback as any `unknown-target` (rule 5, else `html`), so later
 diagnostics are not drowned, but the error means no green build. The Bun loader
@@ -3517,7 +3517,7 @@ does something else, silently.
 | 8 | Angular | **FIXED 2026-09-17** (page level; the tag-unit call site already errored). Was: `<return>` accepted and emitted nothing at the page level, silently dropping the value channel rather than erroring as `.astro.mx` does. |
 | 9 | html | **FIXED 2026-09-26**, decision 104. Dynamic tags receive attribute-tag props. |
 
-### 13.7 The data target
+### 13.7 The tree target
 
 **Decisions 131 (with addenda 1 to 3) and 132.** `@mxlang/data` is MX's first
 **hostless** target (§13.5): a `.mx` file under it is **data**, not UI. It
@@ -3530,7 +3530,7 @@ this section.
 
 **Tooling status.** `mx-tsc` checks a data package (§13.7.4). The language
 server, the TypeScript plugin, Vite and the Bun loader do **not** compile data
-files yet (TODO `data-target-tooling-dispatch`); for them `mx.target: "data"` in
+files yet (TODO `data-target-tooling-dispatch`); for them `mx.target: "tree"` in
 a project is the positioned error quoted in §13.5. **`parseData` is the
 supported entry point for a program.** Nothing in this section depends on tool
 dispatch.
@@ -3700,7 +3700,7 @@ accepts it.
 #### 13.7.4 `mx-tsc` on a data package
 
 **Decision 131, addendum 4.** `mx-tsc` run on a project directory whose own
-`package.json` says `mx.target: "data"` does not build a TypeScript program.
+`package.json` says `mx.target: "tree"` does not build a TypeScript program.
 Rule-5 inference from an `@mxlang/data` dependency does **not** switch it: such
 a package, a monorepo root, and a directory with no manifest of its own keep
 their ordinary `tsc` run and the staged error for their data files, so a
@@ -3741,7 +3741,7 @@ until `data-target-tooling-dispatch` lands.
 **A host built on data (lead ruling 2026-10-05 21:26, follow-up to #355).** The
 check keys on the project's *resolved base target*, never on its `mx.target`
 string. A project that selects a third-party host with `mx.host` gets the same
-check when the host's descriptor declares `builtOn: "data"` (directly or through
+check when the host's descriptor declares `builtOn: "tree"` (directly or through
 a chain; see "Base target" in §13.5). It adds to the host: `parseData` runs with
 the strict defaults and the `mx.data.*` keys, and the host's own compile runs on
 the same file with the same tags and the same unnamed tag, so its rules still

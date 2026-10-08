@@ -30,7 +30,7 @@ export interface MeshOptions {
    * declaring it is built on data (no base-target checks apply).
    */
   notBuiltOnData?: boolean;
-  /** `builtOn` in place of `"data"` (a wrong name, a loop). */
+  /** `builtOn` in place of `"tree"` (a wrong name, a loop). */
   builtOn?: string;
   /** The host's own rule: its compile throws an error at column 0 of every line containing this text. */
   hostRule?: string;
@@ -60,7 +60,7 @@ module.exports = {
   name: "mesh-data",
   packageName: "@fake/mx-mesh",
   defaultTag: o.defaultTag ?? data.defaultTag,
-  ...(o.notBuiltOnData ? {} : { builtOn: o.builtOn ?? "data" }),
+  ...(o.notBuiltOnData ? {} : { builtOn: o.builtOn ?? "tree" }),
   declarations: o.forbidContractDefaultTag
     ? { default: { ...data.declarations.default, allowContractDefaultTag: false } }
     : data.declarations,

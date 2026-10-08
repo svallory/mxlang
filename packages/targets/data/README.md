@@ -1,6 +1,6 @@
 # `@mxlang/data`
 
-MX's data target: a `.mx` file as **data**, not UI. `parseData` compiles a
+MX's tree target: a `.mx` file as **data**, not UI. `parseData` compiles a
 source with `@mxlang/core` and returns a static tree — what is written,
 never what it evaluates to — for consumers like spec and config tools that
 walk tags and attributes rather than render them. The first consumer is the
@@ -9,7 +9,7 @@ Ash-style resource framework (mash); the fixture in
 
 Alpha (`0.1.0-alpha.1`, npm tag `alpha`): the API is unstable. It ships a
 built `dist/` with declarations and needs `@mxlang/core` at the same alpha.
-There is no host: `data` is a hostless target (decision 132).
+There is no host: the target is registered as `tree` (decision 187) and is hostless (decision 132).
 
 ```sh
 bun add @mxlang/core@alpha @mxlang/data@alpha
@@ -131,7 +131,7 @@ away from an explicit child is an error (the did-you-mean guard) on every target
 
 `<#id>`, `<.class>` and concise `#id` / `.class` carry no tag name (decision
 145, [ADR 145](../../../apps/docs/docs/design-notes/adr-default-tag.md)). On the
-data target `div` means nothing, so the name is resolved through `defaultTag`.
+tree target `div` means nothing, so the name is resolved through `defaultTag`.
 The first of these that answers wins:
 
 1. **The parent's contract**: `defaultTag` beside `children`, in a sidecar or

@@ -20,7 +20,7 @@ const NAMES = [
   "react-jsx",
   "hono-jsx",
   "angular-template",
-  "data",
+  "tree",
 ];
 
 const byName = (name: string): TargetDescriptor => {
@@ -30,9 +30,9 @@ const byName = (name: string): TargetDescriptor => {
 };
 
 describe("builtinTargets", () => {
-  it("lists the seven hosts in registration order, then the hostless `data`", () => {
+  it("lists the seven hosts in registration order, then the hostless `tree`", () => {
     expect(builtinTargets.map((t) => t.name)).toEqual(NAMES);
-    expect(lookup.hasTarget("data")).toBe(true);
+    expect(lookup.hasTarget("tree")).toBe(true);
   });
 
   it.each(NAMES)("%s passes validateDescriptor", (name) => {
@@ -55,16 +55,16 @@ describe("builtinTargets", () => {
 });
 
 describe("defaultTag (decision 145)", () => {
-  it("every built-in declares one: `div` for the html family, `object` for data", () => {
+  it("every built-in declares one: `div` for the html family, `object` for tree", () => {
     expect(
       Object.fromEntries(builtinTargets.map((t) => [t.name, t.defaultTag])),
     ).toEqual({
       ...Object.fromEntries(
         builtinTargets
-          .filter((t) => t.name !== "data")
+          .filter((t) => t.name !== "tree")
           .map((t) => [t.name, "div"]),
       ),
-      data: "object",
+      tree: "object",
     });
     expect(builtinTargets.filter((t) => t.defaultTag === "div")).toHaveLength(
       7,
@@ -205,7 +205,7 @@ describe("builtinLookup: packages and host values", () => {
     ["@mxlang/react", "react-jsx"],
     ["@mxlang/hono", "hono-jsx"],
     ["@mxlang/angular", "angular-template"],
-    ["@mxlang/data", "data"],
+    ["@mxlang/data", "tree"],
   ])("fromPackage(%s) is %s", (pkg, name) => {
     expect(lookup.fromPackage(pkg)).toBe(name);
   });
@@ -296,21 +296,21 @@ describe("builtinLookup: packages and host values", () => {
 });
 
 describe("the hostless `data` target", () => {
-  const data = byName("data");
+  const data = byName("tree");
 
   it("has no host, no legacy host values and a data package of its own", () => {
     expect(data.host).toBeUndefined();
     expect(data.legacyHostValues).toBeUndefined();
     expect(data.packageName).toBe("@mxlang/data");
     expect(data.strict).toBeUndefined();
-    expect(data.declarations?.default.name).toBe("data");
+    expect(data.declarations?.default.name).toBe("tree");
     expect(data.declarations?.strict).toBeUndefined();
   });
 
   it("adds no mx.host value, no file-kind segment and no filter key", () => {
-    expect(lookup.hostValues()).not.toContain("data");
-    expect(lookup.hostOf("data")).toBeUndefined();
-    expect(lookup.hostFilterKey("data")).toBeUndefined();
+    expect(lookup.hostValues()).not.toContain("tree");
+    expect(lookup.hostOf("tree")).toBeUndefined();
+    expect(lookup.hostFilterKey("tree")).toBeUndefined();
     expect(builtinFileKinds.map((k) => k.segment)).toEqual([
       "astro",
       "solid",
@@ -330,14 +330,14 @@ describe("the hostless `data` target", () => {
   });
 
   it("is selected by its package (note 4.1 rule 2) and is not the default", () => {
-    expect(lookup.fromPackage("@mxlang/data")).toBe("data");
+    expect(lookup.fromPackage("@mxlang/data")).toBe("tree");
     expect(lookup.defaultTarget()).toBe("html");
   });
 
   it("a registry without it still builds (it is one entry, not a dependency)", () => {
     expect(() =>
       createTargetLookup(
-        builtinTargets.filter((t) => t.name !== "data"),
+        builtinTargets.filter((t) => t.name !== "tree"),
         {
           reservedNames: ["astro-template"],
         },

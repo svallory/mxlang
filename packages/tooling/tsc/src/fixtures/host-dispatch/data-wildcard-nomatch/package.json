@@ -2,7 +2,7 @@
   "name": "data-wildcard-nomatch-fixture",
   "private": true,
   "mx": {
-    "target": "data",
+    "target": "tree",
     "contracts": "./contracts.ts"
   }
 }

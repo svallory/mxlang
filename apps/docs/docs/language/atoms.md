@@ -82,7 +82,7 @@ A name matches `[A-Za-z_$][\w$]*(-[\w$]+)*`: `:title`, `:rename-all`,
 ```
 
 The name keeps its span in the IR, and `parseData` on the
-[data target](/targets/data/) reports an attribute whose whole value is one
+[tree target](/targets/data/) reports an attribute whose whole value is one
 atom as an `atom` attribute (the name sugar's `name` included), and an atom
 nested in an expression as an atom node with its own span — so a tool can tell
 `:title` from `"title"`. See [the IR spec](/architecture/ir-spec/).

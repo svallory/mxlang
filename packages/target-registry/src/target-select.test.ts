@@ -21,12 +21,12 @@ function project(mx: unknown, dependencies = {}) {
   return join(root, "a.mx");
 }
 it.each([{}, { "@mxlang/solid": "1" }])(
-  "explicit data is a positioned registry-only error, with the unknown-target fallback (%j)",
+  "explicit tree is a positioned registry-only error, with the unknown-target fallback (%j)",
   (deps) => {
-    const file = project({ target: "data" }, deps);
+    const file = project({ target: "tree" }, deps);
     const { policy, diagnostics } = resolveTargetPolicyDetailed(file);
     expect(coreResolve(file, builtinLookup())).toMatchObject({
-      policy: { target: "data" },
+      policy: { target: "tree" },
       diagnostics: [],
     });
     expect(policy.target).toBe(Object.keys(deps).length ? "solid-jsx" : "html");
@@ -34,13 +34,13 @@ it.each([{}, { "@mxlang/solid": "1" }])(
       {
         code: "unknown-target",
         severity: "error",
-        value: "data",
+        value: "tree",
         file: join(file, "../package.json"),
         line: 3,
         column: 14,
         length: 6,
         message:
-          'mx.target "data" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead',
+          'mx.target "tree" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead',
       },
     ]);
     const related: Parameters<typeof diagnoseDocument>[6] = [];
@@ -66,18 +66,31 @@ it.each([{}, { "@mxlang/solid": "1" }])(
     });
   },
 );
-it("staged data is neither advertised nor suggested for an unknown target", () => {
+it('mx.target: "data" is refused as the reserved name (decision 187)', () => {
+  const { diagnostics } = resolveTargetPolicyDetailed(
+    project({ target: "data" }, { "@mxlang/solid": "1" }),
+  );
+  expect(diagnostics[0]).toMatchObject({
+    code: "unknown-target",
+    severity: "error",
+    value: "data",
+  });
+  expect(diagnostics[0]?.message).toContain(
+    '"data" is reserved for the evaluated tree target (decision 187); the static tree target is "tree"',
+  );
+});
+it("staged tree is neither advertised nor suggested for an unknown target", () => {
   const { diagnostics } = resolveTargetPolicyDetailed(
     project({ target: "dta" }),
   );
   expect(diagnostics[0]?.message).not.toContain("data");
   expect(diagnostics[0]?.message).not.toContain('Did you mean "data"?');
   // Registration and package inference still know the staged target.
-  expect(builtinLookup().targetNames()).toContain("data");
+  expect(builtinLookup().targetNames()).toContain("tree");
 });
-it("data plus an explicit host uses the host, as unknown-target does", () => {
+it("tree plus an explicit host uses the host, as unknown-target does", () => {
   expect(
-    resolveTargetPolicyDetailed(project({ target: "data", host: "solid" }))
+    resolveTargetPolicyDetailed(project({ target: "tree", host: "solid" }))
       .policy.target,
   ).toBe("solid-jsx");
 });
@@ -104,9 +117,9 @@ it("legacy agreement remains silent; disagreement keeps the explicit target", ()
 it.each([{}, { "@mxlang/solid": "1" }])(
   "dataWired answers the real data policy; the default stays staged (%j)",
   (deps) => {
-    const file = project({ target: "data" }, deps);
+    const file = project({ target: "tree" }, deps);
     expect(resolveTargetPolicyDetailed(file, { dataWired: true })).toEqual({
-      policy: { target: "data", host: undefined },
+      policy: { target: "tree", host: undefined },
       diagnostics: [],
     });
     // The option is opt-in: the same call without it is still the staged error.
@@ -119,5 +132,5 @@ it("dataWired also resolves a dependency-inferred data package (rule 5)", () => 
   expect(resolveTargetPolicyDetailed(file).policy.target).toBe("html");
   expect(
     resolveTargetPolicyDetailed(file, { dataWired: true }).policy.target,
-  ).toBe("data");
+  ).toBe("tree");
 });

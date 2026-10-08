@@ -141,7 +141,7 @@ function spyRegionBridge() {
 
 const MESH_KIND = [{ segment: "mesh", diagnosticSource: "mesh" }];
 const mesh = (options: MeshOptions = {}) =>
-  setupMesh(builtinLookup().target("data"), options);
+  setupMesh(builtinLookup().target("tree"), options);
 
 describe(".mesh.mx (a third-party host on the data target)", () => {
   it("a declared whole-file kind resolves cleanly, compiles on data and never reaches the region bridge", () => {
@@ -192,11 +192,11 @@ describe(".mesh.mx (a third-party host on the data target)", () => {
     expect((globalThis as MeshGlobals).__mxMeshDefaultTags).toEqual(["node"]);
   });
 
-  it("mx.data.defaultTag is the shared ladder's rung for a host built on data", () => {
+  it("mx.tree.defaultTag is the shared ladder's rung for a host built on tree", () => {
     const options = {
       fileKinds: MESH_KIND,
       files: { "tags/node.mx": "" },
-      mx: { data: { defaultTag: "node" } },
+      mx: { tree: { defaultTag: "node" } },
     };
     mesh(options);
     const file = join(meshProject("mx-ls-mesh-", options), "post.mesh.mx");

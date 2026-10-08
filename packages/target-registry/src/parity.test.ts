@@ -154,7 +154,7 @@ describe("mx.host values", () => {
     // non-deprecated legacy `mx.host` value).
     expect(hostValues().filter((value) => value !== "translator")).toEqual(
       builtinTargets
-        .filter((t) => t.name !== "data")
+        .filter((t) => t.name !== "tree")
         .map((t) => t.host?.name ?? "html"),
     );
   });
@@ -234,7 +234,7 @@ describe("mx.host values", () => {
 describe("packages and rule 2 (the single target dependency)", () => {
   it.each(
     builtinTargets
-      .filter((t) => t.name !== "data")
+      .filter((t) => t.name !== "tree")
       .map((t) => [t.name, t.packageName] as const),
   )("a project with only %s's package picks that target", (name, pkg) => {
     expect(lookup.fromPackage(pkg)).toBe(name);
@@ -259,12 +259,12 @@ describe("packages and rule 2 (the single target dependency)", () => {
   });
 
   // target-open-set-resolver: stage inference until data PR 4 adds dispatch
-  // to all tools. Core still selects data; the registry preserves base output.
+  // to all tools. Core still selects tree; the registry preserves base output.
   it("a lone @mxlang/data dependency retains the default until data PR 4", () => {
     const resolved = resolveTargetPolicy(
       project({ dependencies: { "@mxlang/data": "*" } }),
     );
-    expect(lookup.fromPackage("@mxlang/data")).toBe("data");
+    expect(lookup.fromPackage("@mxlang/data")).toBe("tree");
     expect(resolved.target).toBe(defaultTarget());
     expect(resolved.host).toBeUndefined();
   });
@@ -510,10 +510,10 @@ describe("declarations (typescript-plugin/src/mx-language.ts:253-280, createHtml
     },
   );
 
-  it("data lowers under its own declarations and has no translator", () => {
-    expectSame(target("data").declarations?.default, dataDeclarations);
-    expect(target("data").declarations?.strict).toBeUndefined();
-    expect(target("data").translator).toBeUndefined();
+  it("tree lowers under its own declarations and has no translator", () => {
+    expectSame(target("tree").declarations?.default, dataDeclarations);
+    expect(target("tree").declarations?.strict).toBeUndefined();
+    expect(target("tree").translator).toBeUndefined();
   });
 
   it("html's translator is the one the mapping pass uses for every target (D3, mx-language.ts:21)", () => {

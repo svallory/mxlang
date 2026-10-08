@@ -52,7 +52,7 @@ function emptyPackage(manifest: object): string {
   return dir;
 }
 
-const DATA = { target: "data", contracts: "./contracts.ts" };
+const DATA = { target: "tree", contracts: "./contracts.ts" };
 
 /**
  * `mx-tsc -p .` run from `dir`, as an agent runs it: paths print relative to
@@ -134,7 +134,7 @@ describe("mx-tsc on a data package", () => {
 
   it("structural defaults to reject; mx.data.structural: pass keeps it", () => {
     const open = { unknownTags: "allow" };
-    const dir = emptyPackage({ mx: { target: "data", data: open } });
+    const dir = emptyPackage({ mx: { target: "tree", data: open } });
     writeFileSync(
       join(dir, "list.mx"),
       'service="api"\n  <if=true>\n    port="1"\n  </if>\n',
@@ -146,7 +146,7 @@ describe("mx-tsc on a data package", () => {
     writeFileSync(
       join(dir, "package.json"),
       JSON.stringify({
-        mx: { target: "data", data: { ...open, structural: "pass" } },
+        mx: { target: "tree", data: { ...open, structural: "pass" } },
       }),
     );
     expect(check(dir)).toEqual({ status: 0, output: "" });
@@ -166,11 +166,11 @@ describe("mx-tsc on a data package", () => {
   describe("mx.data.imports", () => {
     const source = 'import a from "a"\nservice="api"\n';
     const manifest = (data: object) =>
-      JSON.stringify({ mx: { target: "data", data } });
+      JSON.stringify({ mx: { target: "tree", data } });
 
     it("defaults to reject: a top-level import is the structural error", () => {
       const dir = emptyPackage({
-        mx: { target: "data", data: { unknownTags: "allow" } },
+        mx: { target: "tree", data: { unknownTags: "allow" } },
       });
       writeFileSync(join(dir, "imp.mx"), source);
       const { status, output } = check(dir);
@@ -212,7 +212,7 @@ describe("mx-tsc on a data package", () => {
       const dir = emptyPackage({});
       writeFileSync(
         join(dir, "package.json"),
-        `{\n  "mx": {\n    "target": "data",\n    "data": { "unknownTags": "allow", "imports": "yes", "structural": "pass" }\n  }\n}\n`,
+        `{\n  "mx": {\n    "target": "tree",\n    "data": { "unknownTags": "allow", "imports": "yes", "structural": "pass" }\n  }\n}\n`,
       );
       writeFileSync(join(dir, "imp.mx"), source);
       const { status, output } = check(dir);
@@ -230,7 +230,7 @@ describe("mx-tsc on a data package", () => {
     const dir = copyOfFixture(["clean.mx"]);
     writeFileSync(
       join(dir, "package.json"),
-      `{\n  "mx": {\n    "target": "data",\n    "contracts": "./contracts.ts",\n    "data": { "unknownTags": "maybe" }\n  }\n}\n`,
+      `{\n  "mx": {\n    "target": "tree",\n    "contracts": "./contracts.ts",\n    "data": { "unknownTags": "maybe" }\n  }\n}\n`,
     );
     const { status, output } = check(dir);
     expect(status).toBe(1);
@@ -240,7 +240,7 @@ describe("mx-tsc on a data package", () => {
 
   describe("mx.data.defaultTag (decision 145)", () => {
     const manifest = (value: unknown) =>
-      `{\n  "mx": {\n    "target": "data",\n    "contracts": "./contracts.ts",\n    "data": { "defaultTag": ${JSON.stringify(value)} }\n  }\n}\n`;
+      `{\n  "mx": {\n    "target": "tree",\n    "contracts": "./contracts.ts",\n    "tree": { "defaultTag": ${JSON.stringify(value)} }\n  }\n}\n`;
 
     it("a shorthand with no config is the built-in `object`, known under reject", () => {
       const dir = copyOfFixture();
@@ -317,7 +317,7 @@ describe("mx-tsc on a data package", () => {
       const dir = copyOfFixture(["clean.mx"]);
       writeFileSync(
         join(dir, "package.json"),
-        `{\n  "mx": {\n    "target": "data",\n    "contracts": { "item": {} },\n    "data": { "defaultTag": "object" }\n  }\n}\n`,
+        `{\n  "mx": {\n    "target": "tree",\n    "contracts": { "item": {} },\n    "tree": { "defaultTag": "object" }\n  }\n}\n`,
       );
       const { output } = check(dir);
       expect(output).not.toMatch(/\n\s+at /);
@@ -423,7 +423,7 @@ describe("mx-tsc on a data package", () => {
   });
 
   it("includes tags/ sidecars in the tag map", () => {
-    const dir = emptyPackage({ mx: { target: "data" } });
+    const dir = emptyPackage({ mx: { target: "tree" } });
     mkdirSync(join(dir, "tags"));
     writeFileSync(
       join(dir, "tags", "widget.tag.ts"),
@@ -443,7 +443,7 @@ describe("mx-tsc on a data package", () => {
   });
 
   it("checks files in full-path sorted order, skips node_modules, dot dirs and other targets", () => {
-    const dir = emptyPackage({ mx: { target: "data" } });
+    const dir = emptyPackage({ mx: { target: "tree" } });
     writeFileSync(join(dir, "a-.mx"), "<oops\n");
     for (const sub of ["b", "a", "node_modules/x", ".cache", "html-sub"]) {
       mkdirSync(join(dir, sub), { recursive: true });
@@ -496,7 +496,7 @@ describe("mx-tsc on a data package", () => {
       mkdirSync(data, { recursive: true });
       writeFileSync(
         join(data, "package.json"),
-        JSON.stringify({ mx: { target: "data" } }),
+        JSON.stringify({ mx: { target: "tree" } }),
       );
       writeFileSync(join(data, "clean.mx"), "<oops\n");
       const { status, output } = check(root);
@@ -510,7 +510,7 @@ describe("mx-tsc on a data package", () => {
       mkdirSync(data, { recursive: true });
       writeFileSync(
         join(data, "package.json"),
-        JSON.stringify({ mx: { target: "data" } }),
+        JSON.stringify({ mx: { target: "tree" } }),
       );
       writeFileSync(join(data, "bad.mx"), "<oops\n");
       const run = runInProcess(["-p", data]);
@@ -521,7 +521,7 @@ describe("mx-tsc on a data package", () => {
 
   describe("policy diagnostics of the resolution are printed", () => {
     it("a target/host mismatch is an error even with no .mx file", () => {
-      const dir = emptyPackage({ mx: { target: "data", host: "solid" } });
+      const dir = emptyPackage({ mx: { target: "tree", host: "solid" } });
       const { status, output } = check(dir);
       expect(status).toBe(1);
       expect(output).toMatch(/^package\.json\(\d+,\d+\): error TS80003: /m);
@@ -529,7 +529,7 @@ describe("mx-tsc on a data package", () => {
     });
 
     it("an invalid nested target that falls back to data is reported, once", () => {
-      const dir = emptyPackage({ mx: { target: "data" } });
+      const dir = emptyPackage({ mx: { target: "tree" } });
       mkdirSync(join(dir, "sub"));
       writeFileSync(
         join(dir, "sub", "package.json"),
@@ -547,7 +547,7 @@ describe("mx-tsc on a data package", () => {
     });
 
     it("an unknown mx.host stays a warning, positioned in the manifest", () => {
-      const dir = emptyPackage({ mx: { target: "data", host: "bogus" } });
+      const dir = emptyPackage({ mx: { target: "tree", host: "bogus" } });
       writeFileSync(join(dir, "ok.mx"), "x\n");
       const { output } = check(dir);
       expect(output).toMatch(/^package\.json\(\d+,\d+\): warning TS80003: /m);
@@ -565,7 +565,7 @@ describe("mx-tsc on a data package", () => {
           '    "example": {',
           '      "data": { "unknownTags": "allow" }',
           "    },",
-          '    "target": "data",',
+          '    "target": "tree",',
           '    "data": {',
           '      "unknownTags": "oops"',
           "    }",
@@ -583,7 +583,7 @@ describe("mx-tsc on a data package", () => {
       const dir = emptyPackage({});
       writeFileSync(
         join(dir, "package.json"),
-        '{\n  "mx": {\n    "target": "data",\n    "d\\u0061ta": {\n      "unknownTags": "oops"\n    }\n  }\n}\n',
+        '{\n  "mx": {\n    "target": "tree",\n    "d\\u0061ta": {\n      "unknownTags": "oops"\n    }\n  }\n}\n',
       );
       const { output } = check(dir);
       expect(output).toContain("package.json(5,22): error TS80003:");
@@ -593,7 +593,7 @@ describe("mx-tsc on a data package", () => {
       const dir = emptyPackage({});
       writeFileSync(
         join(dir, "package.json"),
-        '{\n  "mx": {\n    "target": "data",\n    "data": { "unknownTags": "oops" },\n    "data": { "unknownTags": "bad" }\n  }\n}\n',
+        '{\n  "mx": {\n    "target": "tree",\n    "data": { "unknownTags": "oops" },\n    "data": { "unknownTags": "bad" }\n  }\n}\n',
       );
       const { output } = check(dir);
       expect(output).toContain("package.json(5,30): error TS80003:");
@@ -602,7 +602,7 @@ describe("mx-tsc on a data package", () => {
 
     it("a key full of regex metacharacters is an unknown-key warning, not a crash", () => {
       const dir = emptyPackage({
-        mx: { target: "data", data: { "[": true, "(a+)+$": 1, "\\": 2 } },
+        mx: { target: "tree", data: { "[": true, "(a+)+$": 1, "\\": 2 } },
       });
       const { status, output } = check(dir);
       expect(status).toBe(0);
@@ -613,7 +613,7 @@ describe("mx-tsc on a data package", () => {
 
     it("an invalid mx.data is reported for a package with no .mx file", () => {
       const dir = emptyPackage({
-        mx: { target: "data", data: { unknownTags: "typo" } },
+        mx: { target: "tree", data: { unknownTags: "typo" } },
       });
       const { status, output } = check(dir);
       expect(status).toBe(1);
@@ -627,14 +627,14 @@ describe("mx-tsc on a data package", () => {
   describe("discovery failures are diagnostics, never a green empty map", () => {
     it("a missing mx.contracts module is printed at its key, and independent packages still run", () => {
       const dir = emptyPackage({
-        mx: { target: "data", contracts: "./missing.ts" },
+        mx: { target: "tree", contracts: "./missing.ts" },
       });
       writeFileSync(join(dir, "a.mx"), "thing\n");
       const other = join(dir, "other");
       mkdirSync(other);
       writeFileSync(
         join(other, "package.json"),
-        JSON.stringify({ mx: { target: "data" } }),
+        JSON.stringify({ mx: { target: "tree" } }),
       );
       writeFileSync(join(other, "b.mx"), "<oops\n");
       const { status, output } = check(dir);
@@ -656,7 +656,7 @@ describe("mx-tsc on a data package", () => {
 
     it("an invalid contract declaration is printed with its own position", () => {
       const dir = emptyPackage({
-        mx: { target: "data", contracts: "./bad.ts" },
+        mx: { target: "tree", contracts: "./bad.ts" },
       });
       writeFileSync(
         join(dir, "bad.ts"),
@@ -684,7 +684,7 @@ describe("mx-tsc on a data package", () => {
     });
 
     it("a broken or looping .mx link is an error diagnostic and the rest still runs", () => {
-      const dir = emptyPackage({ mx: { target: "data" } });
+      const dir = emptyPackage({ mx: { target: "tree" } });
       symlinkSync("missing", join(dir, "broken.mx"));
       symlinkSync("loop.mx", join(dir, "loop.mx"));
       writeFileSync(join(dir, "z.mx"), "<oops\n");
@@ -696,7 +696,7 @@ describe("mx-tsc on a data package", () => {
     });
 
     it("an unreadable directory is an error diagnostic, not a crash", () => {
-      const dir = emptyPackage({ mx: { target: "data" } });
+      const dir = emptyPackage({ mx: { target: "tree" } });
       mkdirSync(join(dir, "locked"));
       writeFileSync(join(dir, "z.mx"), "<oops\n");
       chmodSync(join(dir, "locked"), 0o000);
@@ -712,7 +712,7 @@ describe("mx-tsc on a data package", () => {
   });
 
   it("a diagnostic in a readable but empty foreign file keeps that file's name", () => {
-    const dir = emptyPackage({ mx: { target: "data", contracts: "./c.ts" } });
+    const dir = emptyPackage({ mx: { target: "tree", contracts: "./c.ts" } });
     writeFileSync(join(dir, "empty.txt"), "");
     writeFileSync(
       join(dir, "c.ts"),
@@ -741,7 +741,7 @@ describe("mx-tsc on a data package", () => {
       const dir = emptyPackage({});
       writeFileSync(
         join(dir, "package.json"),
-        '{\r  "mx": {\n    "target": "data",\n    "data": {\n      "unknownTags": "oops"\n    }\n  }\n}\n',
+        '{\r  "mx": {\n    "target": "tree",\n    "data": {\n      "unknownTags": "oops"\n    }\n  }\n}\n',
       );
       expect(check(dir).output).toContain("package.json(5,22): error TS80003:");
     });
@@ -756,7 +756,7 @@ describe("mx-tsc on a data package", () => {
         manifest(
           "{",
           '  "mx": {',
-          '    "target": "data",',
+          '    "target": "tree",',
           `    "note": "a${sep}b",`,
           '    "data": { "unknownTags": "oops" }',
           "  }",
@@ -771,7 +771,7 @@ describe("mx-tsc on a data package", () => {
       const dir = emptyPackage({});
       writeFileSync(
         join(dir, "package.json"),
-        '{\r\n  "mx": {\r\n    "target": "data",\r\n    "data": { "unknownTags": "oops" }\r\n  }\r\n}\r\n',
+        '{\r\n  "mx": {\r\n    "target": "tree",\r\n    "data": { "unknownTags": "oops" }\r\n  }\r\n}\r\n',
       );
       expect(check(dir).output).toContain("package.json(4,30): error TS80003:");
     });
@@ -782,7 +782,7 @@ describe("mx-tsc on a data package", () => {
     const depth = 12_000;
     writeFileSync(
       join(dir, "package.json"),
-      `{\n  "noise": ${"[".repeat(depth)}${"]".repeat(depth)},\n  "mx": {\n    "target": "data",\n    "data": { "unknownTags": "oops" }\n  }\n}\n`,
+      `{\n  "noise": ${"[".repeat(depth)}${"]".repeat(depth)},\n  "mx": {\n    "target": "tree",\n    "data": { "unknownTags": "oops" }\n  }\n}\n`,
     );
     const { status, output } = check(dir);
     expect(status).toBe(1);
@@ -790,7 +790,7 @@ describe("mx-tsc on a data package", () => {
   });
 
   it("an unreadable entry directory prints `.` as its path", () => {
-    const dir = emptyPackage({ mx: { target: "data" } });
+    const dir = emptyPackage({ mx: { target: "tree" } });
     chmodSync(dir, 0o111);
     try {
       const { status, output } = check(dir);
@@ -835,7 +835,7 @@ describe("mx-tsc on a data package", () => {
     const lines = [
       "{",
       ' "mx": {',
-      '  "target": "data",',
+      '  "target": "tree",',
       '  "host": "solid"',
       " }",
       "}",
@@ -866,7 +866,7 @@ describe("mx-tsc on a data package", () => {
       ["LF", "a\nbbbb\ncccc", 2, 3, "(2,4)"],
       ["CRLF", "a\r\nbbbb\r\ncccc", 2, 3, "(2,4)"],
     ])("%s", (_name, text, line, column, shown) => {
-      const dir = emptyPackage({ mx: { target: "data", contracts: "./c.ts" } });
+      const dir = emptyPackage({ mx: { target: "tree", contracts: "./c.ts" } });
       writeFileSync(join(dir, "foreign.ts"), text);
       writeFileSync(
         join(dir, "c.ts"),
@@ -889,7 +889,7 @@ describe("mx-tsc on a data package", () => {
     const lines = [
       "{",
       ' "mx": {',
-      '  "target": "data",',
+      '  "target": "tree",',
       '  "contracts": "./missing.ts"',
       " }",
       "}",
@@ -906,7 +906,7 @@ describe("mx-tsc on a data package", () => {
         [
           "{",
           ' "mx": {',
-          '  "target": "data",',
+          '  "target": "tree",',
           '  "note": "x\u2028y",',
           '  "contracts": "./missing.ts"',
           " }",

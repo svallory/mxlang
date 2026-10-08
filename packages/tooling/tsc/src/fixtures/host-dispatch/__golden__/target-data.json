@@ -9,7 +9,7 @@
           {
             "severity": 1,
             "source": "mxlang",
-            "message": "<root>/target-data/package.json:3:15: mx.target \"data\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead",
+            "message": "<root>/target-data/package.json:3:15: mx.target \"tree\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead",
             "range": {
               "start": {
                 "line": 0,
@@ -35,7 +35,7 @@
                     }
                   }
                 },
-                "message": "mx.target \"data\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead"
+                "message": "mx.target \"tree\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead"
               }
             ]
           }
@@ -47,7 +47,7 @@
               {
                 "severity": 1,
                 "source": "mxlang",
-                "message": "mx.target \"data\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead",
+                "message": "mx.target \"tree\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead",
                 "range": {
                   "start": {
                     "line": 2,
@@ -81,9 +81,9 @@
           {
             "code": "unknown-target",
             "severity": "error",
-            "value": "data",
+            "value": "tree",
             "file": "<root>/target-data/package.json",
-            "message": "mx.target \"data\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead",
+            "message": "mx.target \"tree\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead",
             "line": 3,
             "column": 14,
             "length": 6
@@ -94,14 +94,14 @@
       "vite": {
         "threw": {
           "name": "Error",
-          "message": "<root>/target-data/package.json:3:15: mx.target \"data\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead",
+          "message": "<root>/target-data/package.json:3:15: mx.target \"tree\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead",
           "id": "<root>/target-data/package.json",
           "loc": {
             "file": "<root>/target-data/package.json",
             "line": 3,
             "column": 14
           },
-          "frame": "3 |     \"target\": \"data\"\n                  ^"
+          "frame": "3 |     \"target\": \"tree\"\n                  ^"
         },
         "warnings": []
       }
@@ -109,6 +109,6 @@
   },
   "mxTsc": [
     "<root>/target-data/page.mx(1,1): error TS80001: target not loaded: see <root>/target-data/package.json(3,15)",
-    "<root>/target-data/package.json(3,15): error TS80003: mx.target \"data\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead"
+    "<root>/target-data/package.json(3,15): error TS80003: mx.target \"tree\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead"
   ]
 }

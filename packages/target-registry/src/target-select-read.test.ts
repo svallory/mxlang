@@ -35,18 +35,18 @@ vi.mock("@mxlang/core", async (importOriginal) => {
 
 import { resolveTargetPolicyDetailed } from "./index.ts";
 
-it("preserves the data error without a second manifest read", () => {
+it("preserves the tree error without a second manifest read", () => {
   const root = mkdtempSync(join(tmpdir(), "mx-registry-no-reread-"));
   try {
-    writeFileSync(join(root, "package.json"), '{"mx":{"target":"data"}}');
+    writeFileSync(join(root, "package.json"), '{"mx":{"target":"tree"}}');
     const { diagnostics } = resolveTargetPolicyDetailed(join(root, "a.mx"));
     expect(diagnostics[0]).toMatchObject({
       code: "unknown-target",
       severity: "error",
-      value: "data",
+      value: "tree",
       length: 6,
       message:
-        'mx.target "data" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead',
+        'mx.target "tree" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead',
     });
     expect(state.secondReads).toBe(0);
   } finally {

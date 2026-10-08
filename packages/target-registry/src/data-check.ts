@@ -1,6 +1,7 @@
 /**
  * `checkDataPackage`: what `mx-tsc` runs on a package that says
- * `mx.target: "data"` (decision 131, addendum 4).
+ * `mx.target: "tree"` (decision 131, addendum 4; the target is named "tree"
+ * since decision 187).
  *
  * The registry wrapper's staged "not wired yet" error stays the answer for
  * the editor tools and Vite (TODO `data-target-tooling-dispatch`); this
@@ -135,7 +136,7 @@ export function isDataProject(dir: string): boolean {
   const { policy } = resolveTargetPolicyDetailed(manifest.file, {
     dataWired: true,
   });
-  return baseTargetOfPolicy(policy) === "data";
+  return baseTargetOfPolicy(policy) === "tree";
 }
 
 interface DataOptions {
@@ -241,7 +242,7 @@ interface Package {
   /**
    * The unnamed tag's name after the decision-145 ladder: the package's key
    * (`mx.<target>.defaultTag`, else the base target's own, e.g.
-   * `mx.data.defaultTag`), then the host's override, then the descriptor's.
+   * `mx.tree.defaultTag`), then the host's override, then the descriptor's.
    */
   defaultTag?: string;
   /**
@@ -376,7 +377,7 @@ export function checkDataPackage(dir: string): DataCheckResult {
     const { policy, diagnostics } = resolveTargetPolicyDetailed(manifest.file, {
       dataWired: true,
     });
-    if (!entry && baseTargetOfPolicy(policy) !== "data") return undefined;
+    if (!entry && baseTargetOfPolicy(policy) !== "tree") return undefined;
     for (const d of diagnostics) {
       reportManifest({
         file: d.file,

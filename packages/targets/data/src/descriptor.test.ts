@@ -21,9 +21,9 @@ describe("the data descriptor", () => {
     expect(validateDescriptor(descriptor)).toBe(descriptor);
   });
 
-  it("is a hostless target named data in @mxlang/data", () => {
+  it("is a hostless target named tree in @mxlang/data", () => {
     expect(descriptor.descriptorVersion).toBe(0);
-    expect(descriptor.name).toBe("data");
+    expect(descriptor.name).toBe("tree");
     expect(descriptor.packageName).toBe("@mxlang/data");
     expect(descriptor.host).toBeUndefined();
     expect(descriptor.legacyHostValues).toBeUndefined();
@@ -66,15 +66,15 @@ describe("the data descriptor", () => {
 describe("the lookup over data", () => {
   it("builds alone, and data is hostless: no host, filter key or mx.host value", () => {
     const lookup = createTargetLookup([descriptor]);
-    expect(lookup.targetNames()).toEqual(["data"]);
-    expect(lookup.defaultTarget()).toBe("data");
-    expect(lookup.hasTarget("data")).toBe(true);
-    expect(lookup.fromPackage("@mxlang/data")).toBe("data");
+    expect(lookup.targetNames()).toEqual(["tree"]);
+    expect(lookup.defaultTarget()).toBe("tree");
+    expect(lookup.hasTarget("tree")).toBe(true);
+    expect(lookup.fromPackage("@mxlang/data")).toBe("tree");
     expect(lookup.attrTagSources()).toEqual(["@mxlang/data"]);
-    expect(lookup.hostOf("data")).toBeUndefined();
-    expect(lookup.hostFilterKey("data")).toBeUndefined();
+    expect(lookup.hostOf("tree")).toBeUndefined();
+    expect(lookup.hostFilterKey("tree")).toBeUndefined();
     expect(lookup.hostValues()).toEqual([]);
-    expect(lookup.hostTarget("data")).toBeUndefined();
+    expect(lookup.hostTarget("tree")).toBeUndefined();
     expect(lookup.moduleSegments()).toEqual([]);
   });
 
@@ -108,7 +108,7 @@ console.log(JSON.stringify({ loaded: compilers(), value }));
   it("importing the descriptor loads no @marko/compiler", () => {
     expect(probe("return descriptor.name;")).toEqual({
       loaded: [],
-      value: "data",
+      value: "tree",
     });
   });
 
