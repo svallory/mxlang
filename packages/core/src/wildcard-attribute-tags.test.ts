@@ -159,6 +159,41 @@ describe('attributeTags["*"] cardinality', () => {
   });
 });
 
+describe('attributeTags["*"] under control flow', () => {
+  it("counts the same matched name inside `<for>` twice as a repeat", () => {
+    const message = error(
+      "<resource><for|i| of=[1,2]><@row/></for></resource>",
+      { "*": { attributes: {} } },
+    ).message;
+    expect(message).toContain("attribute tag `<@row>` may not be repeated");
+  });
+
+  it("repeatable: true allows `<@row>` in each iteration", () => {
+    const call = compile(
+      "<resource><for|i| of=[1,2]><@row/></for></resource>",
+      { "*": { repeatable: true, attributes: {} } },
+    );
+    // The loop iterates at runtime: the tag lowers once, like the source.
+    expect(call.attributeTags).toHaveLength(1);
+  });
+
+  it("`<if>`/`<else>` branches are alternatives, not repeats", () => {
+    const call = compile(
+      "<resource><if=x><@row/></if><else><@row/></else></resource>",
+      { "*": { attributes: {} } },
+    );
+    expect(call.attributeTags.map((tag) => tag.name)).toEqual(["row", "row"]);
+  });
+
+  it("a body-only wildcard contract still rejects control flow inside the tag", () => {
+    const message = error(
+      "<resource><for|i| of=items><@row/></for></resource>",
+      { "*": {} },
+    ).message;
+    expect(message).toContain("may not appear inside `<for>`");
+  });
+});
+
 describe('attributeTags["*"] registration errors', () => {
   it("a value that is neither an object nor a list of objects", () => {
     expect(() =>

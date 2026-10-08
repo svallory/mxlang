@@ -154,11 +154,13 @@ describe('attributeTags["*"] through parseData (decision 147, for attribute tags
   const wildcardTags: Record<string, CustomTag> = {
     resource: {
       attributeTags: {
+        attribute: { attributes: { name: { type: "string" } } },
         "*": [
           { pattern: "on_.*", attributes: { event: { type: "string" } } },
           {
             pattern: "action-.*",
             attributes: { kind: { type: "string", required: true } },
+            attributeTags: { step: {} },
           },
         ],
       },
@@ -202,6 +204,75 @@ describe('attributeTags["*"] through parseData (decision 147, for attribute tags
     expect(result.tree).toBeUndefined();
     expect(result.diagnostics[0]?.message).toContain(
       "unknown attribute tag `<@nope>`",
+    );
+  });
+
+  it("an explicit entry wins even when a wildcard entry would reject the attributes", () => {
+    // The `on_.*` entry only allows `event`; `attribute` is explicit, so
+    // `name` is its own and passes.
+    const valid = parseData(
+      "<resource><@attribute name='x'/></resource>",
+      "/resource.mx",
+      { customTags: wildcardTags },
+    );
+    expect(valid.diagnostics).toEqual([]);
+    expect(valid.tree?.children[0]).toMatchObject({
+      kind: "tag",
+      name: "resource",
+      attrTags: [{ name: "attribute", attrs: [{ name: "name" }] }],
+    });
+  });
+
+  it("a wildcard-matched name accepts its declared nested attribute tags", () => {
+    const valid = parseData(
+      "<resource><@action-save kind='draft'><@step/></@action-save></resource>",
+      "/resource.mx",
+      { customTags: wildcardTags },
+    );
+    expect(valid.diagnostics).toEqual([]);
+    expect(valid.tree?.children[0]).toMatchObject({
+      kind: "tag",
+      name: "resource",
+      attrTags: [
+        {
+          name: "action-save",
+          attrs: [{ name: "kind" }],
+          attrTags: [{ name: "step" }],
+        },
+      ],
+    });
+  });
+
+  it("an unknown nested attribute tag under a wildcard-matched name stays unknown", () => {
+    const result = parseData(
+      "<resource><@action-save kind='draft'><@nope/></@action-save></resource>",
+      "/resource.mx",
+      { customTags: wildcardTags },
+    );
+    expect(result.tree).toBeUndefined();
+    expect(result.diagnostics[0]?.message).toContain(
+      "unknown attribute tag `<@nope>`",
+    );
+  });
+
+  it("a matched name inside `<if>` takes the wildcard entry's contract", () => {
+    const valid = parseData(
+      "<resource><if=enabled><@on_click event='tap'/></if></resource>",
+      "/resource.mx",
+      { customTags: wildcardTags },
+    );
+    expect(valid.diagnostics).toEqual([]);
+  });
+
+  it("the same matched name twice inside `<for>` is a repeat", () => {
+    const result = parseData(
+      "<resource><for|i| of=[1,2]><@on_click event='tap'/><@on_click event='tap'/></for></resource>",
+      "/resource.mx",
+      { customTags: wildcardTags },
+    );
+    expect(result.tree).toBeUndefined();
+    expect(result.diagnostics[0]?.message).toContain(
+      "attribute tag `<@on_click>` may not be repeated",
     );
   });
 });

@@ -10,7 +10,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildMarkoLookup, createTranslator } from "./compile.ts";
-import { contractDefaultTag } from "./contract-default-tag.ts";
+import {
+  contractDefaultTag,
+  contractDefaultTagDiagnostics,
+} from "./contract-default-tag.ts";
 import { type Ctx, type Node, newCtx, TranslateError } from "./core.ts";
 import { CORE_TAGLIB } from "./core-taglib.ts";
 import type { CustomTag, CustomTagAttributeTag } from "./custom-tags.ts";
@@ -394,5 +397,64 @@ describe("DefaultTagParent carries what the helper needs", () => {
       node: {} as Node,
     };
     expect(parent.name).toBe("x");
+  });
+});
+
+describe('contractDefaultTagDiagnostics: the attributeTags["*"] entries', () => {
+  const diagnostics = (
+    attributeTags: CustomTag["attributeTags"],
+    host?: { allowContractDefaultTag?: boolean },
+  ) =>
+    contractDefaultTagDiagnostics({
+      tags: new Map([["resource", { module: "contracts.ts" }]]),
+      customTags: { resource: { attributeTags, transform: () => [] } },
+      scope: { customTags: { item: { transform: () => [] } } },
+      host:
+        host === undefined
+          ? undefined
+          : { name: "html", kind: "host", ...host },
+    });
+
+  it("an invalid defaultTag on a wildcard entry is registered and rejected, naming the entry", () => {
+    const found = diagnostics({ "*": { defaultTag: "not a tag!" } });
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({
+      code: "invalid-default-tag",
+      file: "contracts.ts",
+    });
+    expect(found[0]?.message).toContain('`attributeTags["*"]` entry 1');
+    expect(found[0]?.message).toContain("not a tag reachable");
+  });
+
+  it("each entry of a list is its own declaration", () => {
+    const found = diagnostics({
+      "*": [{ defaultTag: "nope1" }, { pattern: "^row$", defaultTag: "nope2" }],
+    });
+    expect(found).toHaveLength(2);
+    expect(found[0]?.message).toContain('`attributeTags["*"]` entry 1');
+    expect(found[1]?.message).toContain('`attributeTags["*"]` entry 2');
+  });
+
+  it("a valid wildcard defaultTag passes", () => {
+    expect(diagnostics({ "*": { defaultTag: "item" } })).toEqual([]);
+  });
+
+  it("a wildcard defaultTag nested in a named attribute tag names the chain", () => {
+    const found = diagnostics({
+      row: { attributeTags: { "*": { defaultTag: "not a tag!" } } },
+    });
+    expect(found).toHaveLength(1);
+    expect(found[0]?.message).toContain("`<@row>`");
+    expect(found[0]?.message).toContain('`attributeTags["*"]` entry 1');
+  });
+
+  it("a host that forbids the rung refuses a wildcard entry, naming the host", () => {
+    const found = diagnostics(
+      { "*": { defaultTag: "item" } },
+      { allowContractDefaultTag: false },
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]?.message).toContain('`attributeTags["*"]` entry 1');
+    expect(found[0]?.message).toContain("host `html` does not permit");
   });
 });

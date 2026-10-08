@@ -7,7 +7,10 @@ import {
 } from "./default-tag-validate.ts";
 import type { TargetPolicyDiagnostic } from "./host-policy.ts";
 import { CONTROL_FLOW_TAGS } from "./structural-tags.ts";
-import { attributeTagDeclarationFor } from "./wildcard-children.ts";
+import {
+  attributeTagDeclarationFor,
+  attributeTagWildcardEntries,
+} from "./wildcard-children.ts";
 import { wildcardMatchOf } from "./wildcard-resolve.ts";
 
 /**
@@ -192,10 +195,24 @@ export function contractDefaultTagDiagnostics(
           if (attrName === "*" || nested === undefined) continue;
           collect(nested as CustomTagAttributeTag, [...chain, attrName]);
         }
+        // A `"*"` entry is compiled too (`lookupDeclared` matches through it),
+        // so its `defaultTag` is registered and validated the same way. The
+        // chain names it by position: it has no single tag name.
+        attributeTagWildcardEntries(declaration.attributeTags).forEach(
+          (entry, index) => {
+            collect(entry, [...chain, `*#${index + 1}`]);
+          },
+        );
       };
       collect(tag, []);
       for (const { chain, value } of declared) {
-        const owner = `\`<${name}>\`${chain.map((c) => ` \`<@${c}>\``).join("")}`;
+        const owner = `\`<${name}>\`${chain
+          .map((c) =>
+            c.startsWith("*#")
+              ? ` \`attributeTags["*"]\` entry ${c.slice(2)}`
+              : ` \`<@${c}>\``,
+          )
+          .join("")}`;
         const reason = forbidden
           ? `\`defaultTag\` in the contract of ${owner} is not allowed: ${input.host?.kind ?? "host"} \`${input.host?.name}\` does not permit per-tag default tags`
           : validateDefaultTag(value, input.scope);
