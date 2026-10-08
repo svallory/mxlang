@@ -155,6 +155,63 @@ function item(next: () => number, depth: number): string {
   return pick(next, ["text", " ", "\n", "${a}", "$!{b}", "é"]);
 }
 
+const EXPR_PIECES = [
+  "a",
+  "b.c",
+  "(x)",
+  "[1, 2]",
+  "{ k: v }",
+  "f(g(h))",
+  ":atom",
+  ":two-words",
+  "[:a, :b]",
+  "x as const",
+  "a satisfies T",
+  "<T,>(v: T) => v",
+  "obj?.deep?.chain",
+  "a ?? b ?? c",
+  "`t${x}`",
+  "new Map<K, V>()",
+  "!",
+  "(",
+  ")",
+  "{",
+  "}",
+  "[",
+  "]",
+  ",",
+  ";",
+  "=>",
+  "?",
+  ":",
+  "*/",
+];
+
+/** Brief §1.4: an expression-heavy generator — deeply nested, unterminated, with atoms and type syntax. */
+export function expressionHeavy(seed: number): string {
+  const next = random(seed);
+  const expr = (depth: number): string => {
+    let out = "";
+    const count = 1 + Math.floor(next() * 6);
+    for (let i = 0; i < count; i++) {
+      if (depth < 4 && next() < 0.35) out += `(${expr(depth + 1)})`;
+      else out += pick(next, EXPR_PIECES);
+      if (next() < 0.6) out += pick(next, [" + ", " ? ", " : ", ", ", ""]);
+    }
+    return out;
+  };
+  const host = pick(next, [
+    (e: string) => `<div x=${e}/>`,
+    (e: string) => `<div x=[:a, ${e}]/>`,
+    (e: string) => `\${${e}}`,
+    (e: string) => `<Card<T>(${e})/>`,
+    (e: string) => `div/${e} = (${expr(2)})`,
+    (e: string) => `<div on(${e}) { ${e} }/>`,
+    (e: string) => "$ " + expr(0) + ";",
+  ]);
+  return host(expr(0));
+}
+
 export function tokens(seed: number): string {
   const next = random(seed);
   const parts: string[] = [];

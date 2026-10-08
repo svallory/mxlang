@@ -18,6 +18,13 @@ const SHAPES: Record<string, (n: number) => string> = {
   deep: (n) => `${"<div>".repeat(n)}x${"</div>".repeat(n)}`,
   "attribute-heavy": (n) =>
     `<div ${Array.from({ length: n }, (_, i) => `a${i}=[:b, ${i}] .c${i}`).join(" ")}/>`,
+  // PR 3 (brief §1.4): expression parsing on, linear with the same bound.
+  "many-small-expressions": (n) =>
+    `<p>${Array.from({ length: n }, (_, i) => `\${a${i} + b}`).join("")}</p>`,
+  "one-large-expression": (n) =>
+    `<p>\${${Array.from({ length: n }, (_, i) => `(a${i} + ${i})`).join(" + ")}}</p>`,
+  "many-atoms": (n) =>
+    `<div x=[${Array.from({ length: n }, (_, i) => `:a${i}`).join(", ")}]/>`,
 };
 
 function best(source: string): number {
@@ -38,7 +45,8 @@ export function scaling(shape: (n: number) => string, n: number): number {
 describe("linear scaling", () => {
   for (const [name, shape] of Object.entries(SHAPES)) {
     it(`${name}: 10x the input takes at most ~10x the time`, () => {
-      const n = name === "deep" ? 500 : 2_000;
+      const n =
+        name === "deep" ? 500 : name === "one-large-expression" ? 1_000 : 2_000;
       expect(scaling(shape, n)).toBeLessThan(30);
     }, 60_000);
   }

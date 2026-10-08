@@ -58,7 +58,9 @@ export function checkInvariants(
     for (let i = 1; i < list.length; i++) {
       const a = list[i - 1] as Span;
       const b = list[i] as Span;
-      if (b.start < a.end) {
+      // An empty span (a zero-width name marker, ast §3.13) overlaps
+      // nothing: a half-open range `[n, n)` is empty.
+      if (b.start < b.end && b.start < a.end) {
         fail(
           `${path}[${i}]`,
           `[${b.start}, ${b.end}) overlaps or precedes its sibling [${a.start}, ${a.end})`,

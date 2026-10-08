@@ -6,13 +6,14 @@
  *   cd packages/parser
  *   bun run src/frontend/test-support/long-fuzz.ts <seed> <count>
  */
-import { characters, run, tokens } from "./fuzz.ts";
+import { characters, expressionHeavy, run, tokens } from "./fuzz.ts";
 
 const seed = Number(process.argv[2] ?? 1);
 const count = Number(process.argv[3] ?? 500_000);
 for (const [name, generate] of [
   ["characters", (s: number) => characters(s, 40)],
   ["tokens", tokens],
+  ["expression-heavy", expressionHeavy],
 ] as const) {
   const started = performance.now();
   const result = run(generate, seed, count);

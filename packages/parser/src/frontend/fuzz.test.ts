@@ -4,7 +4,12 @@
  * `test-support/long-fuzz.ts`.
  */
 import { describe, expect, it } from "vitest";
-import { characters, run, tokens } from "./test-support/fuzz.ts";
+import {
+  characters,
+  expressionHeavy,
+  run,
+  tokens,
+} from "./test-support/fuzz.ts";
 
 describe("no-throw fuzz", () => {
   it("characters: 3,000 inputs from seed 1", () => {
@@ -15,8 +20,13 @@ describe("no-throw fuzz", () => {
     expect(run(tokens, 1, 3000).failures).toEqual([]);
   });
 
+  it("expression-heavy: 3,000 inputs from seed 1 (PR 3, brief §1.4)", () => {
+    expect(run(expressionHeavy, 1, 3000).failures).toEqual([]);
+  });
+
   it("the generators are deterministic per seed", () => {
     expect(characters(7, 40)).toBe(characters(7, 40));
     expect(tokens(7)).toBe(tokens(7));
+    expect(expressionHeavy(7)).toBe(expressionHeavy(7));
   });
 });
