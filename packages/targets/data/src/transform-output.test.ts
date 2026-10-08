@@ -52,7 +52,6 @@ describe("transform output through parseData", () => {
     // Each built tag sits where the attribute it was built from sits.
     expect(first.span).toEqual({ sourceStart: 6, sourceEnd: 7 });
     expect(first.nameSpan).toEqual({ sourceStart: 6, sourceEnd: 7 });
-    expect(first.nameSpan).toEqual({ sourceStart: 6, sourceEnd: 7 });
     expect(second.span).toEqual({ sourceStart: 12, sourceEnd: 13 });
     expect(second.nameSpan).toEqual({ sourceStart: 12, sourceEnd: 13 });
     // The built attribute carries the original attribute's spans too.
