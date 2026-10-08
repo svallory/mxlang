@@ -79,6 +79,9 @@ export interface SubParseAt {
 export interface SubParseResult {
   readonly node: unknown;
   readonly error: MxParseError | null;
+  /** A statements sub-parse's block `directives` and `innerComments` (ast §4.1, A22). */
+  readonly directives?: readonly unknown[];
+  readonly innerComments?: readonly unknown[];
 }
 
 /** Marko's fixed parser options for a sub-parse (ast §7.1), with the position of this container. */
@@ -185,10 +188,19 @@ export function subParse(
   const code = wrapper.code(parsed);
   const options = parserOptions(at, wrapper.offset);
   let node: unknown;
+  let directives: readonly unknown[] | undefined;
+  let innerComments: readonly unknown[] | undefined;
   try {
-    node = wrapper.statements
-      ? (babelParse(code, options).program as { body: unknown }).body
-      : parseExpression(code, options);
+    if (wrapper.statements) {
+      const program = babelParse(code, options).program as {
+        body: unknown;
+        directives?: readonly unknown[];
+        innerComments?: readonly unknown[];
+      };
+      node = program.body;
+      directives = program.directives;
+      innerComments = program.innerComments;
+    } else node = parseExpression(code, options);
     // The fork's result carries the parse's own `comments`/`errors` on the
     // root; today's tree carries neither on a payload, so neither does ours.
     const root = node as { comments?: unknown; errors?: unknown };
@@ -271,7 +283,7 @@ export function subParse(
       break;
   }
   if (atoms.length > 0) convertStandIns(node, atoms, at.offset);
-  return { node, error: null };
+  return { node, error: null, directives, innerComments };
 }
 
 /** Marko's `parseTemplateString` case 0: a static name's whole text as a `StringLiteral` over the quasi (withLoc'd). */
@@ -395,8 +407,8 @@ function convertStandIns(
 /**
  * Marko's `withWrappedAttrValueHint` (ast §3.13 item 2): an attribute value
  * written `{ … }` that parses once the braces are removed gets the hint
- * appended to its error. Today's text, byte for byte; the catalogue rewords
- * it for MX, which is the lead's to rule (brief §1.2.5).
+ * appended to its error. The MX rewording is the lead's ruling of
+ * 2026-10-08 (brief §1.2.5); the period rule stays Marko's.
  */
 export function wrappedAttrValueHint(
   text: string,
@@ -407,6 +419,6 @@ export function wrappedAttrValueHint(
   const inner = trimmed.slice(1, -1);
   const result = subParse("MxExpression", inner, [], at, end);
   return result.error === null
-    ? " Attribute values in Marko are plain JavaScript expressions, not JSX; remove the wrapping `{ }`."
+    ? " Attribute values in MX are plain TypeScript expressions, not JSX; remove the wrapping `{ }`."
     : "";
 }

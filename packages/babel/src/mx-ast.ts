@@ -1,4 +1,6 @@
 import type {
+  Comment,
+  Directive,
   Expression,
   FunctionParameter,
   LVal,
@@ -139,6 +141,10 @@ export type MxExpression = MxExpressionContainer<Expression> & {
 /** Statements container: module statements, scriptlets, method bodies (ast §3.10, §4.1). */
 export type MxStatements = MxExpressionContainer<Statement[]> & {
   readonly type: "MxStatements";
+  /** The block's directives (`"use strict"` changes semantics; a module statement's program carries them too). */
+  readonly directives: readonly Directive[];
+  /** The block's inner comments, as Babel produces them (ast §2 A22). */
+  readonly innerComments: readonly Comment[];
 };
 /** Binding pattern container, the tag variable (ast §3.4, §4.1). */
 export type MxPattern = MxExpressionContainer<LVal> & {

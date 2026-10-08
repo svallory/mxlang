@@ -87,6 +87,17 @@ describe("payloads", () => {
     expect(scriptlet.code.node[0].type).toBe("VariableDeclaration");
   });
 
+  it("a statements container carries the block's directives and innerComments (A22 ruling)", () => {
+    const tag = doc('<div onClick(a) { "use strict"; b }/>').body[0] as Node;
+    expect(tag.attributes[0].value.body.directives).toHaveLength(1);
+    expect(tag.attributes[0].value.body.directives[0].value.value).toBe(
+      "use strict",
+    );
+    const scriptlet = doc('$ { "}" }').body[0] as Node;
+    expect(scriptlet.code.directives[0].value.value).toBe("}");
+    expect(scriptlet.code.node).toEqual([]);
+  });
+
   it("an attribute value with a ternary keeps the payload Marko parses, parens in extra", () => {
     const attr = (doc("<div x=(a ? b : c)/>").body[0] as Node).attributes[0];
     expect(attr.value.node.type).toBe("ConditionalExpression");
@@ -195,10 +206,10 @@ describe("failures are data", () => {
     expect(attr.value.error.context).toEqual({ start: 15, end: 20 });
   });
 
-  it("the { … } attribute value hint is today's text (the lead rules the MX rewording)", () => {
+  it("the { … } attribute value hint is the lead's MX rewording (2026-10-08), period rule kept", () => {
     const attr = (doc("<div x={a+b}/>").body[0] as Node).attributes[0];
     expect(attr.value.error?.message).toBe(
-      'Unexpected token, expected ",". Attribute values in Marko are plain JavaScript expressions, not JSX; remove the wrapping `{ }`.',
+      'Unexpected token, expected ",". Attribute values in MX are plain TypeScript expressions, not JSX; remove the wrapping `{ }`.',
     );
   });
 

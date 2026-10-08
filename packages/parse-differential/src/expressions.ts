@@ -122,10 +122,24 @@ export function todayExpressions(
     if (attr.arguments) list(attr.arguments, "args");
     const value = attr.value;
     if (value?.type === "FunctionExpression" && !afterEquals(value)) {
-      // Marko's method shorthand: params and body parsed separately.
+      // Marko's method shorthand: params and body parsed separately; the
+      // body is `parseBlock`'s BlockStatement, directives and innerComments
+      // included (A22).
       list(value.params, "params");
       typeList(value.typeParameters, "typeParams");
-      list(value.body?.body ?? [], "statements");
+      const body = value.body?.body ?? [];
+      if (body.length === 1 && body[0]?.type === "MarkoParseError")
+        list(body, "statements");
+      else
+        one(
+          {
+            type: "Block",
+            body,
+            directives: value.body?.directives ?? [],
+            innerComments: value.body?.innerComments ?? [],
+          },
+          "statements",
+        );
       return;
     }
     one(value, "expression");
@@ -161,9 +175,24 @@ export function todayExpressions(
       case "MarkoPlaceholder":
         one(node.value, "expression");
         return;
-      case "MarkoScriptlet":
-        list(node.body ?? [], "statements");
+      case "MarkoScriptlet": {
+        // Marko keeps a scriptlet's block `innerComments` on the scriptlet
+        // and drops its directives (`markoScriptlet(block.body)`); a failed
+        // body is the bare `MarkoParseError`.
+        const body = node.body ?? [];
+        if (body.length === 1 && body[0]?.type === "MarkoParseError")
+          list(body, "statements");
+        else
+          one(
+            {
+              type: "Block",
+              body,
+              innerComments: node.innerComments ?? [],
+            },
+            "statements",
+          );
         return;
+      }
       default:
         return;
     }
@@ -248,7 +277,15 @@ export function mxExpressions(document: Node): MxEntry[] {
         kind: KIND[node.type as keyof typeof KIND],
         start: node.start,
         end: node.end,
-        node: node.node,
+        node:
+          node.type === "MxStatements" && node.error === null
+            ? {
+                type: "Block",
+                body: node.node,
+                directives: node.directives ?? [],
+                innerComments: node.innerComments ?? [],
+              }
+            : node.node,
         error: node.error
           ? {
               message: node.error.message,
@@ -407,15 +444,27 @@ export function compareExpressions(
   let compared = 0;
   const used = new Set<number>();
   for (const entry of mx) {
-    // An empty payload (`()`, `||`, a body of only directives) has nothing
-    // to compare: today's tree holds an empty array with no range.
-    if (
+    // An empty payload (`()`, `||`) has nothing to compare: today's tree
+    // holds an empty array with no range. A statements block with no body
+    // but directives or inner comments does compare.
+    const emptyBlock =
       entry.error === null &&
       Array.isArray(entry.node) &&
-      entry.node.length === 0
-    ) {
+      entry.node.length === 0;
+    const block = entry.node as { body?: unknown[] } | null;
+    const emptyStatements =
+      entry.error === null &&
+      block !== null &&
+      typeof block === "object" &&
+      Array.isArray(block.body) &&
+      block.body.length === 0;
+    if (emptyBlock) continue;
+    if (
+      emptyStatements &&
+      (block as { directives?: unknown[] }).directives?.length === 0 &&
+      (block as { innerComments?: unknown[] }).innerComments?.length === 0
+    )
       continue;
-    }
     let best = -1;
     for (let i = 0; i < today.length; i++) {
       if (used.has(i)) continue;
@@ -457,7 +506,10 @@ export function compareExpressions(
           `MX failed ${entry.kind} [${entry.start},${entry.end}) but today's parse succeeded`,
         );
       } else if (
-        entry.error.message !== pair.error.label ||
+        // Ruling 2026-10-08: Babel 7.29.8's wording (the fork) stands, so a
+        // trailing period is the one accepted message difference.
+        entry.error.message.replace(/\.$/, "") !==
+          pair.error.label.replace(/\.$/, "") ||
         entry.error.start !== pair.error.start ||
         entry.error.end !== pair.error.end
       ) {

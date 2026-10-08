@@ -74,9 +74,10 @@ const TODAY_CRASHES = new Set(["g0387", "g1699", "g1700"]);
 /**
  * PR 3's expression differential: Babel 7.29.8 (MX's fork) ends
  * `Unexpected token, expected ","` with a period where Marko's bundled
- * 7.29.7 does not. The only difference on these inputs; the wording goes to
- * the lead as a decision (brief §1.2.3: version differences are measured,
- * not mapped away).
+ * 7.29.7 does not — the only payload difference found across every input
+ * (2,251 containers compared). Ruling 2026-10-08 (the lead): the fork's
+ * wording stands; the comparison accepts a trailing period, and the row
+ * stays to keep the difference disclosed.
  */
 const BABEL_MESSAGE_PERIOD = new Set([
   "g0259",
@@ -640,20 +641,15 @@ describe("grammar corpus inputs", () => {
     }
   });
 
-  it("the Babel-message-period inputs differ only in that trailing period", () => {
+  it("the Babel-message-period inputs compare equal under the ruling (the fork's wording stands)", () => {
     for (const id of BABEL_MESSAGE_PERIOD) {
       const source = id.startsWith("g")
         ? (PROBES.find((probe) => probe.id === id)?.input as string)
         : fixtureInputs().find((input) => input.path === id)?.source;
       expect(source, id).toBeDefined();
       const outcome = compare(source as string);
-      expect(
-        outcome.expressions.differences.filter(
-          (line: string) => !/ != today ".*(?<!\.)"@/.test(line),
-        ),
-        id,
-      ).toEqual([]);
-      expect(outcome.expressions.differences.length, id).toBeGreaterThan(0);
+      expect(outcome.expressions.differences, id).toEqual([]);
+      expect(outcome.equal, id).toBe(true);
     }
   });
 

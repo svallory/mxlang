@@ -270,7 +270,7 @@ the row says "not stated".
 | A19 | A `{ … }`-wrapped attribute value that fails to parse gets a hint appended to its `MarkoParseError` label: "Attribute values in Marko are plain JavaScript expressions, not JSX; remove the wrapping `{ }`" (`withWrappedAttrValueHint`, `[C]chunk-src.js:6292-6297`, applied at `:6129`). | A common mistake from JSX authors. | The same hint, in MX's words. | The front end applies the same test to an `MxExpression` error and rewords the message (§3.13). |
 | A20 | The tag name `%` throws "`<% scriptlets %>` are no longer supported" (`[C]chunk-src.js:6079`). | Marko 3 scriptlet syntax removed. | MX never had it; a clear error is still better than an unknown `%` tag. | `MxParseError` `MX_RESERVED_TAG_NAME`, recorded, parse continues (§3.2). |
 | A21 | A statement tag written in HTML mode (`<import …>`) throws `statementTagInHTMLModeError` (`[C]chunk-src.js:6087`, message at `:6278-6284`). | Statement tags are top-level concise lines. | The same rule; `import` is an `MxModuleStatement` only on a concise top-level line. | `MxParseError` `MX_STATEMENT_IN_HTML_MODE` with Marko's message, recorded (§3.2). |
-| A22 | Comments inside statement blocks are kept as Babel `innerComments`: a scriptlet's (`[C]chunk-src.js:6067-6069`) and every block `parseBlock` builds, method bodies included (`[C]chunk-src.js:949-951`). Open-tag comments are attached to attributes or the tag (A14). | Babel's comment model. | Comments inside TypeScript belong to the Babel payload. | Kept on the `MxStatements` payload as Babel produces them; no `Mx*` field. |
+| A22 | Comments inside statement blocks are kept as Babel `innerComments`: a scriptlet's (`[C]chunk-src.js:6067-6069`) and every block `parseBlock` builds, method bodies included (`[C]chunk-src.js:949-951`). Open-tag comments are attached to attributes or the tag (A14). | Babel's comment model. | Comments inside TypeScript belong to the Babel payload; a dropped directive changes semantics. | Kept on the `MxStatements` container's `innerComments` (and the block's `directives` with them), as Babel produces them. |
 
 ## 3. MX nodes
 
@@ -835,7 +835,9 @@ is `[0, 14)`, `code.span` `[2, 14)`. MX rejects scriptlets (decision 54,
 `lower.ts` `lowerChildList`); the node exists so the error is positioned.
 
 `MxStatements` — the expression container (§4) for statements:
-`MxExpressionContainer<Statement[]> & { type: "MxStatements" }`. Span: the
+`MxExpressionContainer<Statement[]> & { type: "MxStatements" }`, carrying the
+sub-parse's `directives` (`"use strict"` changes semantics) and
+`innerComments` beside the payload (§4.1). Span: the
 statement text only; for a method body or a scriptlet block, inside the
 braces, with `outer` including them. Used by `MxModuleStatement.code`,
 `MxScriptlet.code`, `MxMethod.body`.
@@ -1089,7 +1091,8 @@ interface MxExpressionContainer<N> extends Span {
   readonly atoms: readonly MxAtom[];   // §4.3, empty when none
 }
 type MxExpression    = MxExpressionContainer<Expression>   & { readonly type: "MxExpression" };
-type MxStatements    = MxExpressionContainer<Statement[]>  & { readonly type: "MxStatements" };
+type MxStatements    = MxExpressionContainer<Statement[]>  & { readonly type: "MxStatements";
+  readonly directives: readonly Directive[]; readonly innerComments: readonly Comment[] };
 type MxPattern       = MxExpressionContainer<LVal>         & { readonly type: "MxPattern" };
 type MxArguments     = MxExpressionContainer<(Expression | SpreadElement)[]> & { readonly type: "MxArguments" };
 type MxParameterList = MxExpressionContainer<FunctionParameter[]> & { readonly type: "MxParameterList" };

@@ -419,6 +419,12 @@ class FrontEnd {
       atoms,
       node: result.node,
       error,
+      ...(type === "MxStatements"
+        ? {
+            directives: result.directives ?? [],
+            innerComments: result.innerComments ?? [],
+          }
+        : {}),
     };
   }
 
