@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Fixed (tree-comments-not-structural, decision 131 addendum 5):** comments are never structural. Under either `structural` value a `//` line or `<!-- -->` stays in the tree as the `Comment` node it already is under `"pass"`; `structural: "reject"` no longer reports it and keeps rejecting `<if>`/`<for>`/`<const>`, `${}`, `export`/`static`, and `import` unless `imports: "pass"`. `mx-tsc`'s strict data check inherits the fix. No new option.
 - **Added (data-attribute-tags-wildcard):** depends on `@mxlang/core` with `attributeTags["*"]` (decision 147 for attribute tags): `parseData` validates a wildcard-matched attribute-tag name against the matched entry's inline contract, the same as an explicit entry, and leaves an unmatched name the usual unknown-attribute-tag error. No change to the data target's own code.
 - **Fixed (`data-transform-output-tree`):** a declared tag's `transform` output reaches the tree through `parseData`. Built tags that carry spans (built `from` a source with a name span — see `@mxlang/core`'s `from` on builders) are projected like authored tags, their positions taken from the source they were built from, and an unknown-tag or build error on a built node points there instead of the call. A built tag whose `from` carries no name span still hits the internal `carries no span` invariant — there is nothing to point at. No change for tags without `transform`.
 

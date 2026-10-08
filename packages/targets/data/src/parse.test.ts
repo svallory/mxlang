@@ -547,12 +547,27 @@ describe('structural: "reject"', () => {
     );
   });
 
-  it("a comment is the fixed positioned error", () => {
-    failWith(
-      `// hi\n<x/>\n`,
-      { message: STATIC("comments"), line: 1, column: 0 },
-      { structural: "reject" },
-    );
+  it("a `//` line comment stays a `Comment` node under reject (decision 131 addendum 5)", () => {
+    const source = "// src/domain/billing/invoice.mesh.mx\nentity :Invoice\n";
+    const tree = ok(source, {
+      structural: "reject",
+      imports: "pass",
+    });
+    expect(tree.children.map((node) => node.kind)).toEqual(["comment", "tag"]);
+    expect(tree.children[0]).toMatchObject({ kind: "comment", html: false });
+  });
+
+  it("an `<!-- -->` comment stays a `Comment` node under reject", () => {
+    const source = "<!-- header -->\nentity :Invoice\n";
+    const tree = ok(source, { structural: "reject" });
+    expect(tree.children.map((node) => node.kind)).toEqual(["comment", "tag"]);
+    expect(tree.children[0]).toMatchObject({ kind: "comment", html: true });
+  });
+
+  it("a comment inside a tag body is a child comment under reject", () => {
+    const tree = ok("<x>\n  // note\n</x>\n", { structural: "reject" });
+    const tag = firstTag(tree);
+    expect(tag.children.map((node) => node.kind)).toEqual(["comment"]);
   });
 
   it.each(["import", "export", "static"])(
@@ -608,7 +623,7 @@ describe('structural: "reject"', () => {
     );
   });
 
-  it("the same constructs pass by default", () => {
+  it("the same constructs pass by default, comments included under reject too", () => {
     const tree = ok(
       `// c\n<if=a>t${D}x}</if><else>u</else>\n<for|i| of=items>v</for>\n<const/n=1/>\n`,
     );

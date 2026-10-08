@@ -81,16 +81,17 @@ describe("every error is reported", () => {
     ]);
   });
 
-  it("returns every structural construct under structural: reject", () => {
+  it("returns every structural construct under structural: reject; comments are not among them", () => {
     const source = `import a from 'b'\n<a>hi</a>\n\${x}\n<!-- c -->\n<if=x><b/></if>\n<for|i| of=l><c/></for>\n<const/y=1/>\nexport const z = 1\n`;
     const { diagnostics } = parseData(source, "/t.mx", {
       structural: "reject",
     });
+    // Line 4 is the comment: never structural, never reported (decision 131
+    // addendum 5).
     expect(diagnostics.map((d) => [d.line, d.column])).toEqual([
       [1, 0],
       [2, 3],
       [3, 0],
-      [4, 0],
       [5, 0],
       [6, 0],
       [7, 0],

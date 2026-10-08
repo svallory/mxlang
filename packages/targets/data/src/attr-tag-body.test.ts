@@ -92,17 +92,25 @@ describe("body content beside attribute tags", () => {
     ]);
   });
 
-  it("structural: reject reports text and comments beside an attribute tag, at their own position", () => {
+  it("structural: reject reports text beside an attribute tag; a comment stays a child comment (decision 131 addendum 5)", () => {
     const text = parseData(HTML.text, "/body.mx", { structural: "reject" });
     expect(text.tree).toBeUndefined();
     expect(text.diagnostics[0]).toMatchObject({ line: 2, column: 2 });
     expect(text.diagnostics[0]?.message).toContain("text");
-    const comment = parseData(HTML.before, "/body.mx", {
-      structural: "reject",
-    });
-    expect(comment.tree).toBeUndefined();
-    expect(comment.diagnostics[0]).toMatchObject({ line: 2, column: 2 });
-    expect(comment.diagnostics[0]?.message).toContain("comment");
+    const comment = parseData(
+      "<loose>\n  <!-- c -->\n  <@m><x/></@m>\n</loose>\n",
+      "/body.mx",
+      { structural: "reject" },
+    );
+    expect(comment.tree).toBeDefined();
+    expect(comment.diagnostics).toEqual([]);
+    expect(
+      shape(
+        root("<loose>\n  <!-- c -->\n  <@m><x/></@m>\n</loose>\n", {
+          structural: "reject",
+        }).children,
+      ),
+    ).toEqual(["comment:c"]);
   });
 
   it("a nested attribute tag's hoisted comment is its child", () => {
@@ -117,15 +125,15 @@ describe("body content beside attribute tags", () => {
     expect(shape(m.children)).toEqual(["comment:c"]);
   });
 
-  it("walk order still holds: the earliest reject wins across attribute tags and children", () => {
+  it("walk order still holds: the earliest reject wins across attribute tags and children; comments are skipped", () => {
     const reject = { structural: "reject" } as const;
     const source =
       "<loose>\n  <!-- c -->\n  <@m><if=x>a</if></@m>\n  <if=y>b</if>\n</loose>\n";
-    // The hoisted comment opens first.
+    // The comment is not a reject, so the attribute tag's `<if>` at line 3 wins.
     expect(parseData(source, "/body.mx", reject).diagnostics[0]).toMatchObject({
-      line: 2,
+      line: 3,
     });
-    // Without it, the attribute tag's `<if>` opens before the child `<if>`.
+    // Without the comment, the same `<if>` still opens first.
     expect(
       parseData(source.replace("  <!-- c -->\n", ""), "/body.mx", reject)
         .diagnostics[0],

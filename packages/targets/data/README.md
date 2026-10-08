@@ -35,8 +35,11 @@ if (!tree) {
 return `{ tree, diagnostics }`. Options:
 
 - `structural: "pass" | "reject"` (default `"pass"`). Pass-through keeps
-  text, `${}`, `<if>`/`<for>`/`<const>`, comments and
+  text, `${}`, `<if>`/`<for>`/`<const>` and
   `import`/`export`/`static` in the tree for the consumer to interpret.
+  Comments are never structural: a `//` line or `<!-- -->` stays in the
+  tree as the `Comment` node it already is under either value (decision 131
+  addendum 5).
   `"reject"` makes each structural construct a positioned error ("the data
   tree is static; this file's consumer does not evaluate `<if>`"), for a
   consumer that wants tags and attributes only.

@@ -77,8 +77,10 @@ the first) decides what any tag or expression means. Design:
 Reserved names (no data tag may use them): core's structural names plus
 `else`, `else-if` and `try`. `<define>` and its calls, `<return>`, tag
 variables and dynamic tags are always rejected; text, `${}`,
-`<if>`/`<for>`/`<const>`, comments and `import`/`export`/`static` pass
-through by default and error under `structural: "reject"`.
+`<if>`/`<for>`/`<const>` and `import`/`export`/`static` pass
+through by default and error under `structural: "reject"` (comments are
+never structural — they stay in the tree under either value, decision 131
+addendum 5).
 
 Tag and attribute-tag names are **not** restricted to plain identifiers:
 XML-style namespaced names (`svg:rect`, `soap:Envelope`) and non-ASCII names

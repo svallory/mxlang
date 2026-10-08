@@ -73,8 +73,10 @@ export interface ParseDataOptions {
   defaultTag?: string;
   /**
    * `"pass"` (default) keeps the structural constructs — text, `${}`,
-   * `<if>`/`<for>`/`<const>`, comments, `import`/`export`/`static` — in the
-   * tree for the consumer to interpret. `"reject"` makes each one a
+   * tree for the consumer to interpret. Comments are never structural:
+   * under either value a `//` line or `<!-- -->` stays in the tree as the
+   * `Comment` node it already is under `"pass"` (decision 131 addendum 5).
+   * `"reject"` makes each structural construct a
    * positioned error ("the data tree is static; this file's consumer does
    * not evaluate `<if>`"), for a consumer that wants tags and attributes
    * only and must not silently ignore an `<if>` its codegen never reads.
@@ -89,7 +91,7 @@ export interface ParseDataOptions {
    * `structural: "reject"` keeps control flow, `export` and `static`
    * rejected and returns the imports verbatim as `tree.imports` (file order,
    * UTF-16 spans). A tag-body `import` is not an import: Marko parses it as
-   * body text, which `structural: "reject"` rejects. `"reject"` with
+   * body text, which `structural: "reject"` rejects as text. `"reject"` with
    * `structural: "pass"` rejects only the `import`s.
    */
   imports?: "pass" | "reject";

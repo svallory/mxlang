@@ -152,6 +152,17 @@ describe("mx-tsc on a data package", () => {
     expect(check(dir)).toEqual({ status: 0, output: "" });
   });
 
+  it("a commented file passes: comments are never structural (decision 131 addendum 5)", () => {
+    const dir = emptyPackage({
+      mx: { target: "data", data: { unknownTags: "allow" } },
+    });
+    writeFileSync(
+      join(dir, "invoice.mx"),
+      "// src/domain/billing/invoice.mesh.mx\nentity :Invoice\n<!-- header -->\n",
+    );
+    expect(check(dir)).toEqual({ status: 0, output: "" });
+  });
+
   describe("mx.data.imports", () => {
     const source = 'import a from "a"\nservice="api"\n';
     const manifest = (data: object) =>

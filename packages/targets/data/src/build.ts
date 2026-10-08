@@ -16,8 +16,8 @@
  * - `<!doctype>`: means nothing in a data file.
  *
  * With `structural: "reject"` the pass-through structural constructs (text,
- * `${}`, `<if>`/`<for>`/`<const>`, comments, `import`/`export`/`static`)
- * each become a positioned error — "the data tree is static; this file's
+ * `${}`, `<if>`/`<for>`/`<const>`, `import`/`export`/`static`) each become a
+ * positioned error — "the data tree is static; this file's
  * consumer does not evaluate `<if>`" — reported at the earliest construct in
  * document order, for a consumer (mash) that wants tags and attributes only.
  */
@@ -859,9 +859,6 @@ function structuralInNodes(nodes: IrNode[], out: StructuralHit[]): void {
         break;
       case "Interpolation":
         out.push(hit(`\`\${}\``, node.loc));
-        break;
-      case "Comment":
-        out.push(hit("comments", node.loc));
         break;
       case "IfChain":
         out.push(hit("`<if>`", node.loc));
