@@ -261,7 +261,7 @@ describe("<html-comment> (astro, rendered)", () => {
   });
 
   it("renders markup in the body as text, as Marko does", async () => {
-    // Stock Marko renders `<!--<b&gt;x</b&gt>-->` (measured through
+    // Stock Marko renders `<!--<b&gt;x</b&gt;-->` (measured through
     // packages/stock-marko): the body is parsed-text, so tags inside are text.
     expect(await render("<html-comment><b>x</b></html-comment>")).toBe(
       "<!--<b&gt;x</b&gt;-->",

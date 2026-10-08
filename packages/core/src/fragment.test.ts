@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { PARSE_OPTIONS_TAGLIB } from "./core-taglib.ts";
 import {
   type Node,
   parseFragment,
@@ -140,6 +141,75 @@ describe("parseFragment parses an <html-comment> body as text", () => {
     expect(() => parseFragment("<html-comment>x <!-- unterminated")).toThrow(
       /Missing ending "html-comment" tag/,
     );
+  });
+});
+
+describe("parseFragment's raw-text taglib slice", () => {
+  /**
+   * `PARSE_OPTIONS_TAGLIB` is the filter over core's taglib that keeps every
+   * `parseOptions.text` tag (`<html-comment>`, `<script>`, `<style>`,
+   * `<html-script>`, `<html-style>`) and drops the rest. Each entry below
+   * pins a choice the filter makes.
+   */
+
+  it("has no controlFlow entry, so <if> stays an ordinary element", () => {
+    // `controlFlow` (on `<if>`/`<else>`/`<else-if>`/`<for>`) is deliberately
+    // left out: it makes the parser treat those tags as non-elements, which
+    // changes `@tag` nesting rules a fragment's host does not opt into. With
+    // it registered, `<if=x><@a/></if>` throws "@tags must be nested within
+    // another element"; without it, today's element shape holds.
+    expect(() => parseFragment("<if=x><@a/></if>")).not.toThrow();
+    expect(Object.keys(PARSE_OPTIONS_TAGLIB as object)).not.toContain("<if>");
+    expect(Object.keys(PARSE_OPTIONS_TAGLIB as object)).not.toContain(
+      "controlFlow",
+    );
+  });
+
+  it("reads <script>'s body as raw text", () => {
+    const { body } = parseFragment("<script>if (a<b) x()</script>");
+    const script = firstTag(body);
+    expect(script.body.body).toHaveLength(1);
+    expect(script.body.body[0].type).toBe("MarkoText");
+    expect((script.body.body[0] as { value: string }).value).toBe(
+      "if (a<b) x()",
+    );
+  });
+
+  it("reads <style>'s body as raw text", () => {
+    const { body } = parseFragment("<style>a>b{}</style>");
+    const style = firstTag(body);
+    expect(style.body.body).toHaveLength(1);
+    expect(style.body.body[0].type).toBe("MarkoText");
+    expect((style.body.body[0] as { value: string }).value).toBe("a>b{}");
+  });
+
+  it("reads <style>'s attributes as attributes despite rawOpenTag", () => {
+    // `<style>` carries `rawOpenTag: true` and `html: false` in core's
+    // taglib; the fragment path now inherits both, and attributes still
+    // surface as attributes on the tag.
+    const { body } = parseFragment("<style media=print>a>b{}</style>");
+    const style = firstTag(body) as unknown as {
+      attributes: Array<{ name: string }>;
+    };
+    expect(style.attributes[0]?.name).toBe("media");
+  });
+
+  it("reads <html-script>'s body as raw text", () => {
+    const { body } = parseFragment("<html-script>if (a<b) x()</html-script>");
+    const script = firstTag(body);
+    expect(script.body.body).toHaveLength(1);
+    expect(script.body.body[0].type).toBe("MarkoText");
+    expect((script.body.body[0] as { value: string }).value).toBe(
+      "if (a<b) x()",
+    );
+  });
+
+  it("reads <html-style>'s body as raw text", () => {
+    const { body } = parseFragment("<html-style>a>b{}</html-style>");
+    const style = firstTag(body);
+    expect(style.body.body).toHaveLength(1);
+    expect(style.body.body[0].type).toBe("MarkoText");
+    expect((style.body.body[0] as { value: string }).value).toBe("a>b{}");
   });
 });
 

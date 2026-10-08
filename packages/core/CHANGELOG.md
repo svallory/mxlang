@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Fix (html-comment-body-markup):** `parseFragment` (every region host's front door) registers core's raw-text parse options itself, through the new `mx-parse-options` taglib (`PARSE_OPTIONS_TAGLIB`), so a tag body the parser must read as text no longer needs a host taglib to reach the parser. `<html-comment>`'s markup body is text (`<html-comment>x <i>z</html-comment>` renders `<!--x <i&gt;z-->`, not Marko's close-tag mismatch), an unterminated `<!--` is Marko's "Missing ending" error, and a nested `<!-- b -->` keeps its surrounding whitespace. The same slice carries `<script>`, `<style>` (`rawOpenTag`, `html: false`), `<html-script>` and `<html-style>`, so their bodies are raw text on the fragment path too, matching Marko; `controlFlow` is deliberately excluded, so `<if=x><@a/></if>` keeps its element shape and `@tag` nesting.
 - **Added (`afterLower` seam):** `Ctx.afterLower`'s default list is seeded in `newCtx`, so the atom-contract check runs on every lowering path — a `.solid.mx`/`.preact.mx` region, a `.ng.mx` or `.astro.mx` template and a template unit's metadata compile enforce an atom contract the same way `compileSource` does. Callers append host hooks to `afterLower`, never replace it.
 - **Added (`productName` option):** diagnostics that name the product read `productOf(ctx)` (now exported), so `productName` renames them too; default output is byte-identical.
 - **Changed (tag-argument messages):** tag-argument diagnostics are Marko-exact.

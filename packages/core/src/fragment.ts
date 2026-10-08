@@ -74,8 +74,7 @@ const STATEMENT_ENTRY: [string, unknown] = [
 ];
 
 // Core's own taglib carries parse-level options for its non-statement tags
-// too (`<html-comment>`'s `parseOptions.text: true`, `<script>`'s raw text,
-// `<let>`'s open-tag-only shape): the parser reads these to shape a body, and
+// too (`<html-comment>`'s `parseOptions.text: true`, `<script>`'s raw text): the parser reads these to shape a body, and
 // a fragment has no host taglib to bring them, so the parse-only translator
 // registers the slice itself. Without it a body like
 // `<html-comment>x <i>z</html-comment>` parses `<i>` as a nested tag and the
