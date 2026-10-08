@@ -28,7 +28,38 @@ export const STATEMENT_TAGLIB: unknown = Object.fromEntries(
 /** The id the statement-only taglib registers under. */
 export const STATEMENT_TAGLIB_ID = "mx-statement-tags";
 
+/**
+ * The *raw-text* entries of the core taglib (`<html-comment>`, `<script>`,
+ * `<style>`, `<html-script>`, `<html-style>`): what the parser itself reads to
+ * shape a body as literal text. `<html-comment>`'s `parseOptions.text: true`
+ * is the case that matters: the fragment front door (`parseFragment`)
+ * registers no host taglib, and without it a markup-looking body parses as
+ * tags and the close tag then mismatches, where stock Marko reads the body as
+ * raw text. `controlFlow` (on `<if>`/`<else>`/`<for>`) is deliberately left
+ * out: it makes the parser treat those tags as non-elements, which changes
+ * `@tag` nesting rules a fragment's host does not opt into.
+ */
+export const PARSE_OPTIONS_TAGLIB: unknown = Object.fromEntries(
+  Object.entries(
+    coreTags as Record<string, { parseOptions?: Record<string, boolean> }>,
+  ).filter(
+    ([key, tag]) =>
+      key.startsWith("<") &&
+      tag?.parseOptions?.text &&
+      !tag.parseOptions.statement,
+  ),
+);
+
+/** The id the parse-options taglib registers under. */
+export const PARSE_OPTIONS_TAGLIB_ID = "mx-parse-options";
+
 const withStatements = new WeakMap<object, unknown>();
+
+/** The shape `withStatementTags` reads and preserves. */
+interface TaglibCarrier {
+  taglibs?: Array<[string, unknown]>;
+  statementTags?: false;
+}
 
 /**
  * `translator` with core's statement tags declared (decision 168): the one
@@ -39,12 +70,9 @@ const withStatements = new WeakMap<object, unknown>();
  * taglib, or says `statementTags: false` (data's own three), is returned as it
  * is. The result is cached per input: Marko keys its lookup on the object.
  */
-export function withStatementTags(translator: unknown): unknown {
+export function withStatementTags<T>(translator: T): T {
   if (translator === null || typeof translator !== "object") return translator;
-  const given = translator as {
-    taglibs?: Array<[string, unknown]>;
-    statementTags?: false;
-  };
+  const given = translator as TaglibCarrier;
   if (!Array.isArray(given.taglibs) || given.statementTags === false) {
     return translator;
   }
@@ -55,12 +83,12 @@ export function withStatementTags(translator: unknown): unknown {
   ) {
     return translator;
   }
-  let wrapped = withStatements.get(translator);
+  let wrapped = withStatements.get(translator) as T | undefined;
   if (!wrapped) {
     wrapped = {
       ...given,
       taglibs: [[STATEMENT_TAGLIB_ID, STATEMENT_TAGLIB], ...given.taglibs],
-    };
+    } as T;
     withStatements.set(translator, wrapped);
   }
   return wrapped;

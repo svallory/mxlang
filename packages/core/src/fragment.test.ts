@@ -110,6 +110,39 @@ describe("parseFragment shifts positions by the base", () => {
   });
 });
 
+describe("parseFragment parses an <html-comment> body as text", () => {
+  // Stock Marko 6.3.51 renders `<!--x <i&gt;z-->` (measured through
+  // packages/stock-marko): the body is parsed-text, markup inside is text.
+  // The fragment path registers only the statement slice of core's taglib,
+  // so `<html-comment>`'s `parseOptions.text: true` must still reach the
+  // parser here, exactly as the whole-file path does.
+  it("keeps markup in the body as text", () => {
+    const { body } = parseFragment("<html-comment>x <i>z</html-comment>");
+    const comment = firstTag(body);
+    expect(comment.body.body).toHaveLength(1);
+    expect(comment.body.body[0].type).toBe("MarkoText");
+    expect((comment.body.body[0] as { value: string }).value).toBe("x <i>z");
+  });
+
+  it("keeps a nested comment and its surrounding whitespace in the raw text", () => {
+    // Text mode reads the whole body as one run: stock Marko renders
+    // `<!--a <!-- b --&gt; c-->` (measured through packages/stock-marko),
+    // so `<!-- b -->` is literal text, not a nested comment node.
+    const { body } = parseFragment("<html-comment>a <!-- b --> c</html-comment>");
+    const comment = firstTag(body);
+    expect(comment.body.body).toHaveLength(1);
+    expect((comment.body.body[0] as { value: string }).value).toBe(
+      "a <!-- b --> c",
+    );
+  });
+
+  it("reports a missing ending tag like Marko", () => {
+    expect(() => parseFragment("<html-comment>x <!-- unterminated")).toThrow(
+      /Missing ending "html-comment" tag/,
+    );
+  });
+});
+
 describe("parseFragment shifts a thrown parse error", () => {
   /**
    * A parse error's position is on the exception object, never in a tree, so

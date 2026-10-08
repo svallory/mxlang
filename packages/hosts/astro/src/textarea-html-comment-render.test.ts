@@ -260,18 +260,23 @@ describe("<html-comment> (astro, rendered)", () => {
     );
   });
 
-  it("refuses markup inside the comment", () => {
-    expect(() =>
-      lowerAstroMx(
-        "---\n---\n<html-comment><b>x</b></html-comment>",
-        join(dir, "markup.astro.mx"),
-      ),
-    ).toThrow();
+  it("renders markup in the body as text, as Marko does", async () => {
+    // Stock Marko renders `<!--<b&gt;x</b&gt>-->` (measured through
+    // packages/stock-marko): the body is parsed-text, so tags inside are text.
+    expect(await render("<html-comment><b>x</b></html-comment>")).toBe(
+      "<!--<b&gt;x</b&gt;-->",
+    );
   });
 
   it("keeps a nested comment as text with its `>` escaped, as Marko does", async () => {
     expect(await render("<html-comment>a<!-- b -->c</html-comment>")).toBe(
       "<!--a<!-- b --&gt;c-->",
+    );
+  });
+
+  it("keeps the whitespace beside a nested comment, as Marko does", async () => {
+    expect(await render("<html-comment>a <!-- b --> c</html-comment>")).toBe(
+      "<!--a <!-- b --&gt; c-->",
     );
   });
 

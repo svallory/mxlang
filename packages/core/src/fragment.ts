@@ -36,7 +36,12 @@
 import { dirname } from "node:path";
 import { rejectShadowedRegistration } from "./builtin-tags.ts";
 import { type Node, TranslateError } from "./core.ts";
-import { STATEMENT_TAGLIB, STATEMENT_TAGLIB_ID } from "./core-taglib.ts";
+import {
+  PARSE_OPTIONS_TAGLIB,
+  PARSE_OPTIONS_TAGLIB_ID,
+  STATEMENT_TAGLIB,
+  STATEMENT_TAGLIB_ID,
+} from "./core-taglib.ts";
 import {
   type CustomTag,
   customTagTaglib,
@@ -68,8 +73,20 @@ const STATEMENT_ENTRY: [string, unknown] = [
   STATEMENT_TAGLIB,
 ];
 
+// Core's own taglib carries parse-level options for its non-statement tags
+// too (`<html-comment>`'s `parseOptions.text: true`, `<script>`'s raw text,
+// `<let>`'s open-tag-only shape): the parser reads these to shape a body, and
+// a fragment has no host taglib to bring them, so the parse-only translator
+// registers the slice itself. Without it a body like
+// `<html-comment>x <i>z</html-comment>` parses `<i>` as a nested tag and the
+// close tag then mismatches, where stock Marko reads the body as raw text.
+const PARSE_OPTIONS_ENTRY: [string, unknown] = [
+  PARSE_OPTIONS_TAGLIB_ID,
+  PARSE_OPTIONS_TAGLIB,
+];
+
 const PARSE_ONLY_TRANSLATOR = {
-  taglibs: [STATEMENT_ENTRY],
+  taglibs: [STATEMENT_ENTRY, PARSE_OPTIONS_ENTRY],
   tagDiscoveryDirs: [],
   translate: {},
 };
@@ -97,7 +114,10 @@ function parseOnlyTranslator(
   rejectUnreachableHooks(customTags);
   const taglib = customTagTaglib(customTags);
   return taglib
-    ? { ...PARSE_ONLY_TRANSLATOR, taglibs: [STATEMENT_ENTRY, taglib] }
+    ? {
+        ...PARSE_ONLY_TRANSLATOR,
+        taglibs: [STATEMENT_ENTRY, PARSE_OPTIONS_ENTRY, taglib],
+      }
     : PARSE_ONLY_TRANSLATOR;
 }
 
@@ -513,7 +533,7 @@ function reparseForError(
     // `as PositionedError` / `instanceof` checks either way.
     return error as Error;
   }
-  return original;
+  return original as Error;
 }
 
 /**
