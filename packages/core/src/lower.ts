@@ -1211,9 +1211,30 @@ function isControl(node: Node): boolean {
   return node?.type === "MarkoTag" && (name === "if" || name === "for");
 }
 
+function isMxAttributeTag(node: Node): boolean {
+  // Hybrid check for transition: MX type or Marko `<@name>` pattern.
+  // Once `lower()` takes MxNode only, the Marko branch goes.
+  return (
+    node?.type === "MxAttributeTag" ||
+    (node?.type === "MarkoTag" && String(node?.name?.value ?? "").startsWith("@"))
+  );
+}
+
+/** Hybrid body read: MX has `body: MxChild[]`, Marko has `body: { body }`. */
+function bodyChildren(node: Node): Node[] {
+  if (!node.body) return [];
+  // MX AST: body is direct child list (no wrapper)
+  if (Array.isArray(node.body)) return node.body;
+  // Marko AST: body.body is the child list
+  return node.body.body ?? [];
+}
+
 function containsAttributeTags(node: Node): boolean {
+  // Hybrid for transition: check Marko `attributeTags` field AND MX body children
   if ((node.attributeTags ?? []).length > 0) return true;
-  return (node.body?.body ?? []).some((child: Node) => {
+  const body = bodyChildren(node);
+  if (body.some(isMxAttributeTag)) return true;
+  return body.some((child: Node) => {
     const name = String(child?.name?.value ?? "");
     return (
       name.startsWith("@") || (isControl(child) && containsAttributeTags(child))
@@ -1684,11 +1705,13 @@ function lowerAuthoredAttributeTag(
   unscope();
 
   if (nested.flat.length > 0) {
+    const body = bodyChildren(node);
+    const firstAttrTag = body.find(isMxAttributeTag);
     requireAttrTagsV2(
       ctx,
       `\`<@${name}>\`: nested attribute tags`,
       "aren't",
-      node.attributeTags?.[0] ?? node,
+      firstAttrTag ?? node,
     );
     if (declaration?.as === "renderable") {
       fail(
@@ -1827,13 +1850,9 @@ function lowerAttributeTags(
     index?: number;
     siblings?: Node[];
   }> = [];
+  // Hybrid for transition: Marko puts attribute tags in `attributeTags` field,
+  // MX puts them as `MxAttributeTag` nodes in body. Process both sources.
   const directTags = node.attributeTags ?? [];
-  // Marko's parser moves a comment written right before an `@tag` into the
-  // parent's `attributeTags`. It is body content, not an attribute tag: it
-  // goes back among the content children, merged by source offset. They are
-  // collected up front: the loop below jumps over an `<if>` chain, and the
-  // chain scan skips layout comments, so a comment collected in the loop
-  // could be skipped with it.
   const hoistedComments: Node[] = directTags.filter(
     (tag: Node) => tag?.type === "MarkoComment",
   );
@@ -1859,11 +1878,11 @@ function lowerAttributeTags(
       });
     }
   }
-  const body = node.body?.body ?? [];
+  const body = bodyChildren(node);
   const consumed = new Set<number>();
   for (let index = 0; index < body.length; index++) {
     const child = body[index];
-    if (String(child?.name?.value ?? "").startsWith("@") && !isControl(child)) {
+    if (isMxAttributeTag(child)) {
       candidates.push({
         offset: nodeSpan(ctx, child).sourceStart,
         kind: "tag",
@@ -1926,14 +1945,14 @@ function lowerAttributeTags(
       )
       .map((candidate) => candidate.index),
   );
-  const bodyChildren = body.filter(
+  const nonAttrChildren = body.filter(
     (_child: Node, index: number) =>
       !controlStarts.has(index) && !consumed.has(index),
   );
   const contentChildren =
     hoistedComments.length === 0
-      ? bodyChildren
-      : mergeBySourceOffset(ctx, hoistedComments, bodyChildren);
+      ? nonAttrChildren
+      : mergeBySourceOffset(ctx, hoistedComments, nonAttrChildren);
   if (inControl && tree.length > 0) {
     const offending = contentChildren.find((child: Node) => !isLayout(child));
     if (offending) {
@@ -4107,7 +4126,8 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   }
   if (tagBinding) warnLowercaseBinding(ctx, node, name);
 
-  if (node.attributeTags?.length) {
+  const body = bodyChildren(node);
+  if (body.some(isMxAttributeTag)) {
     ctx.declarations.rejectElementAttributeTags?.(name, node, ctx);
   }
   rejectUnsupportedFields(ctx, node, `\`<${name}>\``);
