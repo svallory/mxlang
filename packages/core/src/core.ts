@@ -1228,9 +1228,6 @@ function tagArgumentsMessage(ctx: Ctx, node: Node, what: string): string {
   // The written name, not the parsed one: `<else-if>` parses with the node
   // name `if` (the `else-` prefix is part of the same template), and Marko's
   // hint names `else-if`.
-  // The written name, not the parsed one: a `<else-if>`'s args are checked on
-  // a desugared node whose name is `if` (loc pointing into the `else-…`
-  // spelling), and Marko's hint names the written tag.
   const nameLoc: any = node.name?.loc;
   const s = nameLoc?.start;
   const e = nameLoc?.end;

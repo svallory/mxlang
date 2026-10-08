@@ -150,11 +150,6 @@ export interface HostOptions extends TranslatorOptions {
    * keep them. Leave unset for a build.
    */
   stripTypes?: boolean;
-  /**
-   * The product name diagnostics use where core's own wording says "MX"
-   * (decision 183). Unset, diagnostics say `MX`; see {@link TranslatorOptions.productName}.
-   */
-  productName?: string;
   /** Emits the module from the lowered IR (decision 79). */
   emitIr: (ir: Ir, ctx: Ctx) => string;
   /** `package.json#mx.<target>.defaultTag`, handed to the host's `resolveDefaultTag`. */

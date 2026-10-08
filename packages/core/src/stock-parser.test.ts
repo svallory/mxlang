@@ -436,6 +436,30 @@ import(${JSON.stringify(`file://${distEntry}`)}).then(({ parseFragment }) => {
       expect([error?.line, error?.column]).toEqual([4, 8]);
     }
   });
+
+  it("the stock-atom error names the productName through to the message", () => {
+    const source = "<div x=:b/>";
+    const [node] = recovered(source, {});
+    const error = parseErrorToSugarError(
+      node as never,
+      source,
+      undefined,
+      "Acme",
+      false,
+    );
+    expect(error).toBeInstanceOf(TranslateError);
+    expect(error?.message).toBe(STOCK_ATOM_MESSAGE(":b", "Acme"));
+    expect(error?.message).toContain("atoms need the Acme parser");
+    // No product name, the default wording.
+    const unnamed = parseErrorToSugarError(
+      node as never,
+      source,
+      undefined,
+      undefined,
+      false,
+    );
+    expect(unnamed?.message).toBe(STOCK_ATOM_MESSAGE(":b"));
+  });
 });
 
 // Decision 156 (atoms; decisions 151 §1 and 158 §2): published consumers get a

@@ -487,6 +487,8 @@ export function parseErrorToSugarError(
   },
   source: string,
   splits: boolean | undefined = installedParserSplits(),
+  productName?: string,
+  lexes: boolean | undefined = installedParserLexesAtoms(),
 ): TranslateError | undefined {
   const label = typeof node.label === "string" ? node.label : "";
   const error = Object.assign(new Error(label), {
@@ -496,6 +498,6 @@ export function parseErrorToSugarError(
   return (
     sugarAfterDefaultError(error, source) ??
     stockParserError(error, source, splits) ??
-    stockAtomError(error, source)
+    stockAtomError(error, source, lexes, productName)
   );
 }

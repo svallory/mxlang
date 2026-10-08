@@ -411,7 +411,12 @@ export function exprOf(ctx: Ctx, node: Node): Expr {
   if (node?.type === "MarkoParseError") {
     // Decision 151: sugar Marko's parser (stock, or any parser for a default
     // attribute) cannot read becomes one MX error naming the rule.
-    const sugar = parseErrorToSugarError(node, ctx.source);
+    const sugar = parseErrorToSugarError(
+      node,
+      ctx.source,
+      undefined,
+      productOf(ctx),
+    );
     if (sugar) throw sugar;
     fail(node.label ?? "invalid expression", {
       loc: { start: node.errorLoc?.start ?? node.loc?.start },
@@ -4576,7 +4581,7 @@ function lowerTemplate(ctx: Ctx, body: Node[]): Ir {
   // Decision 156: declare every name of this unit, then check every atom
   // reference, once the whole body (and every `analyze`) has been seen.
   // Decision 183: the check now runs as the first `afterLower` hook,
-  // registered by the compile entry, so a language can add its own
+  // seeded by `newCtx`, so a language can add its own
   // post-lowering checks behind it. Behaviour is unchanged: one function,
   // the same `ctx`, at the same point.
   for (const hook of ctx.afterLower ?? []) hook(ctx);
