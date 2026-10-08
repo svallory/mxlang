@@ -9,7 +9,7 @@ description: "Project-scoped syntax extensions through the data-only syntax tabl
 (size M; L after).
 
 Layer 2 lets a project, or a package it depends on, change what the parser
-recognises, through the [syntax table](/design-notes/language-extensions/core/#the-syntax-table)
+recognises, through the [syntax table](/design-notes/language-extensions/core/#the-core-the-syntax-table)
 and nothing else. A syntax module is a sidecar-shaped file (default export,
 no top-level `await`, explicit extensions on relative imports) exporting a
 partial table and the four lowering hooks. It is listed in
