@@ -141,7 +141,9 @@ describe("every error is reported", () => {
       [2, 4],
       [3, 0],
     ]);
-    expect(diagnostics[1]?.message).toContain("tag arguments");
+    expect(diagnostics[1]?.message).toContain(
+      "Tag does not support arguments.",
+    );
   });
 
   it("reports one error once, even when two walks find it", () => {

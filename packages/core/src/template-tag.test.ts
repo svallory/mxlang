@@ -430,6 +430,21 @@ describe("template custom tags as compilation units", () => {
     expect(warnings).toEqual([]);
   });
 
+  it("enforces an atom contract inside a template unit's own source (decision 183: the check is seeded in `newCtx`, not only on the `compileSource` path)", () => {
+    resetTemplateCache();
+    const box: CustomTag = {
+      attributes: { mode: { type: "atom", values: ["strict", "loose"] } },
+      transform: (call) => call.content?.children ?? [],
+    };
+    const rich = template(
+      "/tmp/mx-template-test/tags/rich-contract.mx",
+      "<box mode=:strct/>",
+    );
+    expect(() => lowerWithTags("<rich/>\n", { box, rich })).toThrow(
+      /`<box>`: attribute `mode`: `:strct` is not one of :loose, :strict/,
+    );
+  });
+
   it("recognizes input[dynamicKey] as reading everything", () => {
     resetTemplateCache();
     const panel = template(

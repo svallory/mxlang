@@ -2333,8 +2333,8 @@ export function isContractOnlyDelegated(
  * Validation also rejects what the contract-only path cannot carry, which an
  * unregistered claimed tag accepts: `/var` ("`/var` on `<tag>` is not
  * supported: it has no template, so it has no `<return>` to bind"), tag
- * arguments ("tag arguments `(...)` on `<tag>` are not supported in a
- * standalone template"), and attributes or nested attribute tags on an attribute tag
+ * arguments ("Tag does not support arguments."), and attributes or nested
+ * attribute tags on an attribute tag
  * ("`<tag>`: attribute tag `<@x>` does not support attributes" / "does not
  * support nested attribute tags").
  */

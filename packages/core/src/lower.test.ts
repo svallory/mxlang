@@ -2623,7 +2623,7 @@ describe("<return>", () => {
       /Invalid duplicate value attribute\./,
     ],
     // Marko `error-return-args/`
-    ["arguments", "<return('a') value=1/>\n", /tag arguments/],
+    ["arguments", "<return('a') value=1/>\n", /Tag does not support arguments/],
     // Marko `error-return-params/`
     ["params", "<return|a| value=1></return>\n", /tag params/],
     // Marko `error-return-var/`
@@ -4173,7 +4173,7 @@ describe("tag arguments are reported at the argument", () => {
     const source = marked.replace("§", "");
     expect(() => lowerSource(source)).toThrow(
       expect.objectContaining({
-        message: expect.stringContaining("tag arguments `(...)`"),
+        message: expect.stringContaining("Tag does not support arguments."),
         line: 1,
         column,
       }),
@@ -4193,5 +4193,52 @@ describe("tag arguments are reported at the argument", () => {
   it("points at a non-identifier argument too", () => {
     fails("<button (§a.b)>x</button>");
     fails("<button (§1)>x</button>");
+  });
+});
+
+/**
+ * Decision 183: the tag-argument rejection is Marko 6.4.3's own message,
+ * verbatim (probed against stock marko 6.4.3), so the two languages never
+ * diverge on the same construct. The event-handler hint stays, as a second
+ * sentence after Marko's exact text.
+ */
+describe("tag-argument messages are Marko 6.4.3's own", () => {
+  const messageOf = (source: string, policy = fakeDeclarations()): string => {
+    try {
+      lowerSource(source, policy);
+    } catch (cause) {
+      return (cause as Error).message;
+    }
+    throw new Error(`expected ${JSON.stringify(source)} to fail`);
+  };
+
+  it.each([
+    [
+      "<if(x)>a</if>",
+      "Tag does not support arguments. Write the condition as a value attribute instead: `<if=condition>`.",
+    ],
+    [
+      "<if=c></if><else-if(x)/>",
+      "Tag does not support arguments. Write the condition as a value attribute instead: `<else-if=condition>`.",
+    ],
+    [
+      "<if=c></if><else(x)></else>",
+      "Tag does not support arguments. Write the condition as an attribute instead: `<else if=condition>`.",
+    ],
+    ["<const/foo(x)/>", "Tag does not support arguments."],
+    ['<button (click)="go()"/>', "Tag does not support arguments."],
+  ])("%j", (source, message) => {
+    expect(messageOf(source)).toBe(message);
+  });
+
+  it("appends the event-handler hint as a second sentence on a host that resolves attribute methods", () => {
+    expect(
+      messageOf(
+        '<button (click)="go()"/>',
+        fakeDeclarations({ resolveAttributeMethod: () => true }),
+      ),
+    ).toBe(
+      "Tag does not support arguments. For an event handler write `onClick=go`",
+    );
   });
 });

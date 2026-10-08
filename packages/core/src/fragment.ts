@@ -187,9 +187,16 @@ export interface FragmentBase {
   baseColumn?: number;
   /** Registered custom tags whose parse options affect this fragment. */
   customTags?: Record<string, CustomTag>;
+  /**
+   * The product name diagnostics use where core's own wording says "MX"
+   * (decision 183); see `TranslatorOptions.productName`. Unset, `MX`.
+   */
+  productName?: string;
 }
 
-type ResolvedFragmentBase = Required<Omit<FragmentBase, "customTags">>;
+type ResolvedFragmentBase = Required<
+  Omit<FragmentBase, "customTags" | "productName">
+> & { productName?: string };
 
 export interface FragmentResult {
   /** The parsed program's body: the fragment's top-level nodes. */
@@ -410,6 +417,7 @@ export function parseFragment(
     baseOffset: base.baseOffset ?? 0,
     baseLine: base.baseLine ?? 0,
     baseColumn: base.baseColumn ?? 0,
+    productName: base.productName,
   };
 
   const compiler = markoCompiler();
@@ -430,7 +438,13 @@ export function parseFragment(
     } as any).ast;
   } catch (thrown) {
     const error = markoPrintCrash(thrown)
-      ? reparseForError(compiler, source, resolved.filename, translator, thrown)
+      ? reparseForError(
+          compiler,
+          source,
+          resolved.filename,
+          translator,
+          thrown as Error,
+        )
       : thrown;
     // A thrown error's position is on the exception, never in a tree, so the
     // walk below can never reach it (spike 1, limit 2).
@@ -442,7 +456,7 @@ export function parseFragment(
       tagParamError(error, source) ??
       sugarAfterDefaultError(error, source) ??
       stockParserError(error, source) ??
-      stockAtomError(error, source);
+      stockAtomError(error, source, undefined, base.productName);
     if (stock) {
       const at = { line: stock.line, column: stock.column };
       shiftPosition(at, resolved);
@@ -490,12 +504,14 @@ function reparseForError(
   source: string,
   filename: string,
   translator: unknown,
-  original: unknown,
-): unknown {
+  original: Error,
+): Error {
   try {
     compiler.compileSync(source, filename, { translator, output: "html" });
   } catch (error) {
-    return error;
+    // A `compileSync` throw is an `Error` in practice; callers narrow with
+    // `as PositionedError` / `instanceof` checks either way.
+    return error as Error;
   }
   return original;
 }

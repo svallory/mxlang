@@ -111,6 +111,14 @@ export interface TranslatorOptions {
    */
   warnings?: MxWarning[];
   /**
+   * The product name diagnostics use where core's own wording says "MX"
+   * (decision 183). Unset, diagnostics say `MX`, so every existing message
+   * is byte-identical. A language packaged on top of MX (design note §L3)
+   * passes its own name so its errors never mention a product its authors
+   * did not choose.
+   */
+  productName?: string;
+  /**
    * A synchronous import resolver (decision 107), tried before the built-in
    * relative/`require.resolve` resolution whenever lowering reads a callee
    * file. Lets a tool supply aliases — tsconfig `paths`, Vite
@@ -142,6 +150,11 @@ export interface HostOptions extends TranslatorOptions {
    * keep them. Leave unset for a build.
    */
   stripTypes?: boolean;
+  /**
+   * The product name diagnostics use where core's own wording says "MX"
+   * (decision 183). Unset, diagnostics say `MX`; see {@link TranslatorOptions.productName}.
+   */
+  productName?: string;
   /** Emits the module from the lowered IR (decision 79). */
   emitIr: (ir: Ir, ctx: Ctx) => string;
   /** `package.json#mx.<target>.defaultTag`, handed to the host's `resolveDefaultTag`. */
@@ -187,6 +200,7 @@ let current: {
   customTags?: Readonly<Record<string, CustomTag>>;
   defaultTag?: string;
   warnings?: MxWarning[];
+  productName?: string;
   resolveImport?: (specifier: string, importer: string) => string | undefined;
   targets: TargetLookup;
   dependencies: string[];
@@ -259,7 +273,11 @@ export function createTranslator(host: TranslatorOptions): Translator {
           ctx.customTags = state.customTags;
           ctx.defaultTag = state.defaultTag;
           ctx.warnings = state.warnings;
+          ctx.productName = state.productName;
           ctx.resolveImport = state.resolveImport;
+          // Decision 183: `newCtx` seeds `afterLower` with
+          // `checkAtomContracts`; the compile entry only adds host hooks on
+          // top, so non-`compileSource` lowering paths keep the check too.
           // Every host reaching `compileSource` emits a whole module with a
           // default export, so the file has a declaration to name and a tag
           // may call itself without importing itself.
@@ -397,6 +415,7 @@ export function compileSource(
     customTags: host.customTags,
     defaultTag: host.defaultTag,
     warnings: host.warnings,
+    productName: host.productName,
     resolveImport: host.resolveImport,
     targets: host.targets,
     dependencies: [] as string[],
@@ -442,7 +461,7 @@ export function compileSource(
       tagParamError(error, source) ??
       sugarAfterDefaultError(error, source) ??
       stockParserError(error, source) ??
-      stockAtomError(error, source) ??
+      stockAtomError(error, source, undefined, state.productName) ??
       error;
     if (recorded && thrown === error && isTranslateError(error)) {
       error.errors = recorded;

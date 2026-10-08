@@ -27,7 +27,6 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { parse as babelParse, type ParserPlugin } from "@babel/parser";
 import { freeIdentifiersIn } from "./accessor-reads.ts";
-import { checkAtomContracts } from "./atom-contracts.ts";
 import { assertNoStandIn, atomOf, atomsIn, convertAtoms } from "./atoms.ts";
 import { attrLabel } from "./attr-label.ts";
 import {
@@ -63,6 +62,7 @@ import {
   markoBabel,
   type Node,
   newCtx,
+  productOf,
   recover,
   rejectInertShape,
   rejectUnsupportedFields,
@@ -625,7 +625,10 @@ const ATTR_NAME = /^[a-z_][a-z0-9._:-]*$/i;
  * Bracketed, `#…` and `*…` attribute names (patterns other template languages
  * use) and how to write what they were reaching for, first match wins.
  */
-const FOREIGN_ATTR_HINTS: [RegExp, (m: RegExpMatchArray) => string][] = [
+const FOREIGN_ATTR_HINTS: [
+  RegExp,
+  (m: RegExpMatchArray, product: string) => string,
+][] = [
   [
     /^\[\(([^()[\]]+)\)\]$/,
     (m) => `Marko's two-way binding is \`${m[1]}:=expr\``,
@@ -639,11 +642,14 @@ const FOREIGN_ATTR_HINTS: [RegExp, (m: RegExpMatchArray) => string][] = [
     /^\[(?:attr\.)?([^[\]]+)\]$/,
     (m) => `write \`${m[1]}=\` with the expression as the value`,
   ],
-  [/^#/, () => "`#…` template reference variables have no meaning in MX"],
+  [
+    /^#/,
+    (_m, mx) => `\`#…\` template reference variables have no meaning in ${mx}`,
+  ],
   [
     /^\*/,
-    () =>
-      "`*…` structural directives have no meaning in MX; use `<if=cond>` / `<for|item| of=list>`",
+    (_m, mx) =>
+      `\`*…\` structural directives have no meaning in ${mx}; use \`<if=cond>\` / \`<for|item| of=list>\``,
   ],
 ];
 
@@ -663,10 +669,10 @@ function declaredVariable(scriptlet: Node): ScriptletDeclaration | undefined {
     : undefined;
 }
 
-function foreignAttrHint(name: string): string {
+function foreignAttrHint(name: string, product: string): string {
   for (const [pattern, hint] of FOREIGN_ATTR_HINTS) {
     const match = name.match(pattern);
-    if (match) return hint(match);
+    if (match) return hint(match, product);
   }
   return "an attribute name may use letters, digits and `._:-`";
 }
@@ -824,7 +830,7 @@ function lowerAttrNamed(
     !ATTR_NAME.test(attr.name)
   ) {
     fail(
-      `Invalid attribute name \`${attr.name}\`; Marko rejects it too — ${foreignAttrHint(attr.name)}`,
+      `Invalid attribute name \`${attr.name}\`; Marko rejects it too — ${foreignAttrHint(attr.name, productOf(ctx))}`,
       attr,
     );
   }
@@ -864,7 +870,7 @@ function lowerAttrNamed(
     if (ctx.declarations.resolveAttributeMethod?.(attr, on) !== true) {
       ctx.declarations.rejectAttributeMethod?.(attr, on);
       fail(
-        `attribute method \`${attr.name}(...)\` is an event handler and requires a runtime; standalone MX renders once to a string`,
+        `attribute method \`${attr.name}(...)\` is an event handler and requires a runtime; standalone ${productOf(ctx)} renders once to a string`,
         attr,
       );
     }
@@ -2366,8 +2372,8 @@ function failUncalled(
 ): never {
   fail(
     found.file.endsWith(".marko")
-      ? markoFileTagMessage(ctx.filename, name, found.file)
-      : uncalledTagFileMessage(ctx.filename, name, found),
+      ? markoFileTagMessage(ctx.filename, name, found.file, productOf(ctx))
+      : uncalledTagFileMessage(ctx.filename, name, found, productOf(ctx)),
     node,
   );
 }
@@ -2396,6 +2402,7 @@ function rejectMarkoImportTag(
       ctx.filename,
       written,
       resolve(dirname(ctx.filename), from),
+      productOf(ctx),
     ),
     node,
   );
@@ -3044,7 +3051,7 @@ function lowerReturn(ctx: Ctx, node: Node, nested: boolean): IrNode {
     if (attrName !== "value") {
       fail(
         attrName === "valueChange"
-          ? "`<return>` does not support the `valueChange` attribute; MX returns a value only, with no two-way channel"
+          ? `\`<return>\` does not support the \`valueChange\` attribute; ${productOf(ctx)} returns a value only, with no two-way channel`
           : `\`<return>\` does not support the \`${attrName}\` attribute`,
         attr,
       );
@@ -3818,7 +3825,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       if (ctx.lookup && !ctx.lookup.getTag("class")?.parseOptions?.statement)
         break;
       return fail(
-        "`class { … }` is not supported in MX: a Marko component class has no equivalent on any target — write a function component, or put the state in `<let>`/`static` code",
+        `\`class { … }\` is not supported in ${productOf(ctx)}: a Marko component class has no equivalent on any target — write a function component, or put the state in \`<let>\`/\`static\` code`,
         node,
       );
     case "for":
@@ -3928,7 +3935,10 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     ? ctx.lookup?.getTag(name)?.template
     : undefined;
   if (!fileLocalBinding && resolvedTemplate?.endsWith(".marko")) {
-    fail(markoFileTagMessage(ctx.filename, name, resolvedTemplate), node);
+    fail(
+      markoFileTagMessage(ctx.filename, name, resolvedTemplate, productOf(ctx)),
+      node,
+    );
   }
   // A `tags/` file this host cannot call (`tags/x.marko`, `tags/x/index.*`)
   // would otherwise compile as the native element `<x>`, silently.
@@ -4074,7 +4084,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       const found = uncalledTagFileOf(ctx, name);
       if (found) failUncalled(ctx, name, found, node);
       fail(
-        `\`<${name}>\` is declared by a Marko taglib with no template (a \`renderer\`), which MX cannot call. Write the tag as \`tags/${name}.mx\`, or import it explicitly.`,
+        `\`<${name}>\` is declared by a Marko taglib with no template (a \`renderer\`), which ${productOf(ctx)} cannot call. Write the tag as \`tags/${name}.mx\`, or import it explicitly.`,
         node,
       );
     }
@@ -4370,7 +4380,7 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
           break;
         case "MarkoScriptlet":
           fail(
-            `scriptlets (\`$ statement\`) are not supported in MX (decision 54)${scriptletSentence(declaredVariable(child), ctx.declarations)}`,
+            `scriptlets (\`$ statement\`) are not supported in ${productOf(ctx)} (decision 54)${scriptletSentence(declaredVariable(child), ctx.declarations)}`,
             child,
           );
           break;
@@ -4565,7 +4575,11 @@ function lowerTemplate(ctx: Ctx, body: Node[]): Ir {
 
   // Decision 156: declare every name of this unit, then check every atom
   // reference, once the whole body (and every `analyze`) has been seen.
-  checkAtomContracts(ctx);
+  // Decision 183: the check now runs as the first `afterLower` hook,
+  // registered by the compile entry, so a language can add its own
+  // post-lowering checks behind it. Behaviour is unchanged: one function,
+  // the same `ctx`, at the same point.
+  for (const hook of ctx.afterLower ?? []) hook(ctx);
 
   if (isFileRoot && ctx.customTags) {
     // Prepended as one block, after the body is assembled: a `finalize` node

@@ -1,3 +1,4 @@
+import type { CustomTag } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { compileSolidMx } from "./index.ts";
 
@@ -9,6 +10,23 @@ describe("atoms in a .solid.mx region", () => {
     });
     expect(code).toContain('x="a"');
     expect(code).toContain('["b", "rename-all"]');
+  });
+
+  it("enforces an atom contract inside a region (decision 183: the check is seeded in `newCtx`, not only on the `compileSource` path)", () => {
+    const tags: Record<string, CustomTag> = {
+      box: {
+        attributes: { mode: { type: "atom", values: ["strict", "loose"] } },
+        transform: (call) => call.content?.children ?? [],
+      },
+    };
+    expect(() =>
+      compileSolidMx("<box mode=:strct/>", {
+        filename: "fixture.solid.mx",
+        customTags: tags,
+      }),
+    ).toThrow(
+      /`<box>`: attribute `mode`: `:strct` is not one of :loose, :strict/,
+    );
   });
 
   // Review round 2, finding 4: a `class=` value maps each atom to its literal.

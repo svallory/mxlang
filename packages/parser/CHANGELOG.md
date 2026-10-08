@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Docs (front-end-handler-contract):** the README documents the front-end handler contract: the full table of the 28 `on*` handlers the MX front end installs (stock htmljs-parser 5.18.0's 27 plus `onAtom`), each payload's shape, the fire-and-forget rule, and the single exception where a handler's return value is read (`onOpenTagName` → `TagTypeValue`). No code change.
 - **Fix, regression of 0.1.0-alpha.7 (decision 156 addendum 13):** in HTML body text, `//` and `/*` start a comment only after ASCII whitespace, as in Marko. `<p>Visit\u00a0//cdn.example/x.js</p>` is text again; alpha.7 and alpha.8 read it as a comment that swallowed `</p>` (`Missing ending "p" tag`). Addendum 11 stays at the expression sites.
 - **Fix (decision 156 addendum 13):**
   - The word class is exact: a code point at or above U+0080 is a word character where the parser looks behind or ahead only when it is `ID_Continue` or U+200C or U+200D, a surrogate pair read as one code point. `©`, `×`, `…`, `«` and emoji are no longer identifier characters, so valid Marko such as `<div x=a >©>c</div>` parses as Marko reads it instead of failing with `Ambiguous ">"`.

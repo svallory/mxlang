@@ -38,6 +38,7 @@ import type {
   ContractFact,
   DerivedDeclaration,
 } from "./atom-contracts.ts";
+import { checkAtomContracts } from "./atom-contracts.ts";
 import type { CalleeInput } from "./callee-input.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
@@ -415,6 +416,23 @@ export interface Ctx {
    * of its own to be "standalone". Generic opt-in; nothing host-specific.
    */
   unsupportedIn?: string;
+  /**
+   * The product name diagnostics use where core's own wording says "MX"
+   * (decision 183). Set by the compile entry from the host options;
+   * unset means `MX`, so every existing message is byte-identical. Read
+   * through {@link productOf}, never bare, so the default lives in one
+   * place.
+   */
+  productName?: string;
+  /**
+   * Post-lowering hooks (decision 183): run once the file's body is fully
+   * lowered, in order, each receiving the file's own `Ctx` — the same
+   * context every lower ran under. `newCtx` seeds the list with
+   * `checkAtomContracts` so every lowering path gets it (the compile
+   * entry appends host hooks, never replaces: decision 183). Nothing may read a hook's return
+   * value: a hook reports through `fail`/`warn` or mutates the `Ctx`.
+   */
+  afterLower?: ReadonlyArray<(ctx: Ctx) => void>;
   /** Resolved template path -> default import binding, authored or injected. */
   customTagImports?: Map<string, string>;
   /** Imports synthesized while lowering discovered template calls. */
@@ -1189,6 +1207,50 @@ export function hasContent(children: Node[]): boolean {
  * Marko spelling `onClick=go`; one that does not (`@mxlang/html`) has no form
  * to suggest, so the message stays as it was.
  */
+/**
+ * Marko 6.4.3's own tag-argument messages (probed against stock marko
+ * 6.4.3 / @marko/compiler 5.42.10, decision 183), keyed by the tag name
+ * where Marko's `assertNoArgs` knows a hint. Everything else — and any tag
+ * whose name is not statically known — gets Marko's plain sentence.
+ */
+const TAG_ARGUMENTS_MESSAGES: Record<string, (name: string) => string> = {
+  if: (name) =>
+    `Tag does not support arguments. Write the condition as a value attribute instead: \`<${name}=condition>\`.`,
+  "else-if": (name) =>
+    `Tag does not support arguments. Write the condition as a value attribute instead: \`<${name}=condition>\`.`,
+  else: () =>
+    "Tag does not support arguments. Write the condition as an attribute instead: `<else if=condition>`.",
+  await: (name) =>
+    `Tag does not support arguments. Write the promise as a value attribute and receive the result as a tag parameter instead: \`<${name}|result|=promise>\`.`,
+};
+
+function tagArgumentsMessage(ctx: Ctx, node: Node, what: string): string {
+  // The written name, not the parsed one: `<else-if>` parses with the node
+  // name `if` (the `else-` prefix is part of the same template), and Marko's
+  // hint names `else-if`.
+  // The written name, not the parsed one: a `<else-if>`'s args are checked on
+  // a desugared node whose name is `if` (loc pointing into the `else-…`
+  // spelling), and Marko's hint names the written tag.
+  const nameLoc: any = node.name?.loc;
+  const s = nameLoc?.start;
+  const e = nameLoc?.end;
+  let written = "";
+  if (typeof s?.line === "number" && s.line === e?.line) {
+    const line = ctx.lines?.[s.line - 1] ?? "";
+    let from = s.column;
+    while (from > 0 && /[-\w$]/.test(line[from - 1] ?? "")) from--;
+    let to = e.column;
+    while (to < line.length && /[-\w$]/.test(line[to] ?? "")) to++;
+    written = line.slice(from, to);
+  }
+  const name =
+    written ||
+    /`?<([^`>]+)>`?/.exec(what)?.[1] ||
+    String(node.name?.value ?? "");
+  const message = TAG_ARGUMENTS_MESSAGES[name];
+  return message ? message(name) : "Tag does not support arguments.";
+}
+
 function eventHandlerHint(ctx: Ctx, node: Node): string {
   const args: Node[] | undefined = node.arguments;
   const event =
@@ -1210,12 +1272,21 @@ function eventHandlerHint(ctx: Ctx, node: Node): string {
       : value?.type === "StringLiteral"
         ? /^\s*([A-Za-z_$][\w$]*)\s*\(\s*\)\s*$/.exec(value.value)?.[1]
         : undefined;
-  return `; for an event handler write \`on${event[0].toUpperCase()}${event.slice(1)}=${handler ?? "handler"}\``;
+  return ` For an event handler write \`on${event[0].toUpperCase()}${event.slice(1)}=${handler ?? "handler"}\``;
 }
 
 /** The place {@link rejectUnsupportedFields} names; see `Ctx.unsupportedIn`. */
 function unsupportedIn(ctx: Ctx): string {
   return ctx.unsupportedIn ?? "a standalone template";
+}
+
+/**
+ * The product name diagnostics use where core's own wording says "MX"
+ * (decision 183); see `Ctx.productName`. The default lives here so every
+ * existing message stays byte-identical when the option is unset.
+ */
+export function productOf(ctx: Ctx): string {
+  return ctx.productName ?? "MX";
 }
 
 /**
@@ -1263,8 +1334,11 @@ export function rejectUnsupportedFields(
     // `args.at(-1).loc.end`) — `<button (click)="go()">` puts the caret under
     // `click`, not under `<button`. Reporting at the tag points at the tag name
     // for an error about the arguments next to it.
+    // Decision 183: the message is Marko 6.4.3's own, verbatim, so the two
+    // languages never diverge on the same construct; MX's event-handler hint
+    // stays as a second sentence after it.
     fail(
-      `tag arguments \`(...)\` on ${what} are not supported in ${unsupportedIn(ctx)}${eventHandlerHint(ctx, node)}`,
+      `${tagArgumentsMessage(ctx, node, what)}${eventHandlerHint(ctx, node)}`,
       node.arguments[0] ?? node,
     );
   }
@@ -1460,6 +1534,12 @@ export function newCtx(
     lookup,
     targets,
     customTagGensym: { n: 0 },
+    // Decision 183: the atom contract check is the seeded default so every
+    // `Ctx` gets it — a host building its own context (a `.solid.mx` region,
+    // the metadata compiler) must not silently skip the check the way it did
+    // when only the compile entry registered it. Callers append, never
+    // replace.
+    afterLower: [checkAtomContracts],
   };
   return ctx;
 }

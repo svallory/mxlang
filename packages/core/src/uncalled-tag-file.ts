@@ -70,9 +70,10 @@ export function uncalledTagFileMessage(
   filename: string,
   name: string,
   found: UncalledTagFile,
+  product = "MX",
 ): string {
   const shown = relative(dirname(resolve(filename)), found.file);
-  return `\`<${name}>\` matches \`${shown}\`, which MX cannot call: MX calls flat \`tags/<name>.mx\` files only. Write the tag as \`tags/${name}.mx\`, or import it explicitly.`;
+  return `\`<${name}>\` matches \`${shown}\`, which ${product} cannot call: ${product} calls flat \`tags/<name>.mx\` files only. Write the tag as \`tags/${name}.mx\`, or import it explicitly.`;
 }
 
 /**
@@ -85,8 +86,9 @@ export function markoFileTagMessage(
   filename: string,
   name: string,
   file: string,
+  product = "MX",
 ): string {
   const shown = relative(dirname(resolve(filename)), file);
   const mx = shown.replace(/\.marko$/, ".mx");
-  return `\`<${name}>\` resolves to \`${shown}\`, a \`.marko\` file, and MX does not compile \`.marko\` files. Convert it to \`.mx\` (\`${mx}\`).`;
+  return `\`<${name}>\` resolves to \`${shown}\`, a \`.marko\` file, and ${product} does not compile \`.marko\` files. Convert it to \`.mx\` (\`${mx}\`).`;
 }

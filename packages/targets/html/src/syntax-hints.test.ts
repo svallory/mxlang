@@ -134,7 +134,7 @@ describe("scriptlets (html)", () => {
 describe("event binding syntax (html)", () => {
   it("stays as it was: this host renders once and has no event handlers", () => {
     expect(failure('<button (click)="go()">x</button>').message).toBe(
-      "tag arguments `(...)` on `<button>` are not supported in a standalone template",
+      "Tag does not support arguments.",
     );
   });
 

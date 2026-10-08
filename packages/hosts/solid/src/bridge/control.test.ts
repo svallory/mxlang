@@ -180,7 +180,7 @@ describe("if / else if / else", () => {
 
   it("rejects Marko args form <if(cond)>", () => {
     const err = parseError(`const el = <if(cond())>x</if>;`);
-    expect(err.message).toContain("tag arguments `(...)` on `<if>`");
+    expect(err.message).toContain("Tag does not support arguments.");
   });
 
   it("rejects tag params on <else>", () => {

@@ -1888,7 +1888,7 @@ describe("contract-only custom tags", () => {
     [
       "tag arguments",
       '<attribute(1) value="a" type="string"/>\n',
-      "tag arguments `(...)` on `<attribute>` are not supported in a standalone template",
+      "Tag does not support arguments.",
     ],
     [
       "attributes on an attribute tag",

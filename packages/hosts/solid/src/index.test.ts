@@ -576,7 +576,11 @@ describe("Solid host errors", () => {
     ["dynamic style", `<div style=value/>`, "non-object"],
     ["try params", `<try|value|><p>x</p></try>`, "tag params"],
     ["try variable", `<try/value><p>x</p></try>`, "tag variable"],
-    ["try arguments", `<try(value)><p>x</p></try>`, "tag arguments"],
+    [
+      "try arguments",
+      `<try(value)><p>x</p></try>`,
+      "Tag does not support arguments.",
+    ],
     ["try attrs", `<try foo=1><p>x</p></try>`, "accepts no attributes"],
     [
       "try unknown attribute tag",

@@ -191,8 +191,8 @@ function offsetOf(source: string, line: number, column: number): number {
   return start + column;
 }
 
-export const STOCK_ATOM_MESSAGE = (token: string): string =>
-  `\`${token}\` is an atom (decision 156), and atoms need the MX parser: this install's htmljs-parser does not read them, so the \`:\` reaches Babel as a syntax error. Write the string instead (\`${JSON.stringify(token.slice(1))}\`) until the published packages carry the MX parser (decisions 151 and 158). See "atoms" in divergences.md.`;
+export const STOCK_ATOM_MESSAGE = (token: string, product = "MX"): string =>
+  `\`${token}\` is an atom (decision 156), and atoms need the ${product} parser: this install's htmljs-parser does not read them, so the \`:\` reaches Babel as a syntax error. Write the string instead (\`${JSON.stringify(token.slice(1))}\`) until the published packages carry the ${product} parser (decisions 151 and 158). See "atoms" in divergences.md.`;
 
 const ATOM_AT = /:[A-Za-z_$][\w$]*(?:-[\w$]+)*/y;
 
@@ -208,6 +208,7 @@ export function stockAtomError(
   error: unknown,
   source: string,
   lexes: boolean | undefined = installedParserLexesAtoms(),
+  productName?: string,
 ): TranslateError | undefined {
   if (lexes !== false || !(error instanceof Error)) return undefined;
   const candidates = [error as Located, ...((error as Located).errors ?? [])];
@@ -221,7 +222,11 @@ export function stockAtomError(
     ATOM_AT.lastIndex = offset;
     const token = ATOM_AT.exec(source)?.[0];
     if (!token) continue;
-    return new TranslateError(STOCK_ATOM_MESSAGE(token), at.line, at.column);
+    return new TranslateError(
+      STOCK_ATOM_MESSAGE(token, productName),
+      at.line,
+      at.column,
+    );
   }
   return undefined;
 }

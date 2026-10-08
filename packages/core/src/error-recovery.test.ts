@@ -146,7 +146,7 @@ describe("per-tag error recovery in lower (decision 162)", () => {
     it("a failed <define> head still binds the name for later calls", () => {
       const errors = errorsOf("<define/Foo(1)>x</define>\n<Foo/>\n<if></if>");
       expect(errors.map((error) => error.line)).toEqual([1, 3]);
-      expect(errors[0]?.message).toContain("tag arguments");
+      expect(errors[0]?.message).toContain("Tag does not support arguments");
       expect(
         errors.some((error) => error.message.includes("entry point")),
       ).toBe(false);

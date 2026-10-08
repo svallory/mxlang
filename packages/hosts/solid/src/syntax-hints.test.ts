@@ -48,7 +48,7 @@ describe("event binding syntax (solid)", () => {
   it("s10: names the Marko handler attribute", () => {
     const raised = message(file('<button (click)="go()">x</button>'));
     expect(raised.message).toBe(
-      "tag arguments `(...)` on `<button>` are not supported in a standalone template; for an event handler write `onClick=go`",
+      "Tag does not support arguments. For an event handler write `onClick=go`",
     );
     expect(raised.message).not.toMatch(/\(\d+:\d+\)$/);
     // Marko reports at the argument, so the caret lands on `click` (column 13
