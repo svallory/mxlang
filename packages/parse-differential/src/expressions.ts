@@ -9,11 +9,18 @@
  *
  * Today's tree carries no payload for a module statement's code (it is a
  * Marko tag with attributes; lowering slices the source), so those
- * containers have no counterpart and are skipped (`NOT_COMPARED`).
- * Tag-adjacent shorthand containers and `MxModuleStatement.code` are the
- * two skips; everything else must pair up.
+ * containers have no counterpart and are skipped (`NOT_COMPARED`), and a
+ * dynamic shorthand value's `template` node has no counterpart either (the
+ * merged loc-less shorthands) — that template node alone is the other skip,
+ * by exact span, never its whole value. The value's `${…}` containers are
+ * compared like any other: MX visits `value.expressions`, today collects a
+ * template attribute value's inner expressions as positioned entries (its
+ * wrapper's range comes from its children, a TemplateLiteral has no loc),
+ * and pairing prefers an exact span match before overlap. So a dropped or
+ * misparsed container inside `<a.c-${x}>` goes red in both directions.
+ * `MxModuleStatement.code` and the shorthand `template` node are the two
+ * skips; everything else must pair up.
  */
-import { atomStandIn } from "../../parser/src/frontend/expressions.ts";
 import { lineStartsOf, offsetOf } from "./rules.ts";
 
 // biome-ignore lint/suspicious/noExplicitAny: Marko's and Babel's nodes are untyped here
@@ -140,6 +147,23 @@ export function todayExpressions(
           },
           "statements",
         );
+      return;
+    }
+    if (value?.type === "TemplateLiteral") {
+      // The wrapper's own range comes from its children (a TemplateLiteral
+      // carries no loc of its own); its inner expressions are positioned
+      // containers collected individually, like MX's `value.expressions`.
+      const range = entryRange([
+        ...(value.quasis ?? []),
+        ...(value.expressions ?? []),
+      ]);
+      out.push({
+        kind: "expression",
+        nodes: [value],
+        start: range.start,
+        end: range.end,
+      });
+      list(value.expressions, "expression");
       return;
     }
     one(value, "expression");
@@ -274,14 +298,23 @@ export function mxExpressions(
         visit(node.args);
         // The sugar value itself is a documented skip (the merged loc-less
         // shorthands), but a dynamic value's `${…}` containers DO exist in
-        // today's tree at real positions: record the value's range so the
-        // reverse check (below) does not flag them as MX-lacking.
+        // today's tree at real positions: visit them like any other
+        // container. Only the value's `template` node itself has no
+        // counterpart (the merged loc-less shorthands); its skip, below,
+        // is that one node's span, never the whole value.
         const value = node.value as {
           kind?: string;
           span?: { start: number; end: number };
+          template?: { start?: number; end?: number } | null;
+          expressions?: unknown;
         } | null;
         if (value?.kind === "dynamic" && value.span) {
-          skips.push([value.span.start, value.span.end]);
+          visit(value.expressions);
+          const template = value.template;
+          const start = template?.start;
+          const end = template?.end;
+          if (typeof start === "number" && typeof end === "number")
+            skips.push([start, end]);
         }
       }
       return;
@@ -308,6 +341,23 @@ export function mxExpressions(
             }
           : null,
       });
+      // A template-literal payload's inner expressions are containers in
+      // their own right: today's tree carries each of them positioned, so
+      // they are collected here too (the shorthand branch visits its value's
+      // `expressions` for the same reason).
+      const payload = node.node as { type?: string; expressions?: Node[] };
+      if (node.error === null && payload?.type === "TemplateLiteral") {
+        for (const expr of payload.expressions ?? []) {
+          if (!expr || typeof expr.type !== "string") continue;
+          out.push({
+            kind: "expression",
+            start: expr.start,
+            end: expr.end,
+            node: expr,
+            error: null,
+          });
+        }
+      }
       return;
     }
     // A dynamic name's container rides in `expression` (not the MxExpression key).
@@ -490,15 +540,27 @@ export function compareExpressions(
     )
       continue;
     let best = -1;
+    // An exact span match wins: a template wrapper and its inner expressions
+    // overlap each other, so overlap alone can pair the wrong pair.
     for (let i = 0; i < today.length; i++) {
-      if (used.has(i)) continue;
       const candidate = today[i] as TodayEntry;
-      if (candidate.kind !== entry.kind) continue;
-      const overlaps =
-        candidate.start < entry.end && entry.start < candidate.end + 1;
-      if (overlaps) {
+      if (used.has(i) || candidate.kind !== entry.kind) continue;
+      if (candidate.start === entry.start && candidate.end === entry.end) {
         best = i;
         break;
+      }
+    }
+    if (best < 0) {
+      for (let i = 0; i < today.length; i++) {
+        if (used.has(i)) continue;
+        const candidate = today[i] as TodayEntry;
+        if (candidate.kind !== entry.kind) continue;
+        const overlaps =
+          candidate.start < entry.end && entry.start < candidate.end + 1;
+        if (overlaps) {
+          best = i;
+          break;
+        }
       }
     }
     if (best < 0) {
@@ -571,7 +633,14 @@ export function compareExpressions(
     if (used.has(i)) continue;
     const extra = today[i] as TodayEntry;
     if (extra.start === Number.MAX_SAFE_INTEGER) continue;
-    if (inSkippedRange(skips, extra.start, extra.end)) continue;
+    // A skip suppresses only the exact node it names (a dynamic shorthand
+    // value's `template` node, whose span today's wrapper mirrors): a
+    // narrower today container inside that span — the value's `${…}`
+    // expressions — still needs its own MX counterpart.
+    const exactSkip = skips.some(
+      ([from, to]) => from === extra.start && to === extra.end,
+    );
+    if (exactSkip) continue;
     differences.push(
       `no MX counterpart: today's ${extra.kind} [${extra.start},${extra.end})${extra.error ? ` (${JSON.stringify(extra.error.label)})` : ""}`,
     );

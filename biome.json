@@ -105,6 +105,7 @@
         "packages/hosts/angular/test/text-interpolation.test.ts",
         "packages/parser/src/frontend/rules.ts",
         "packages/parser/src/frontend/rules.test.ts",
+        "packages/parse-differential/src/expressions.test.ts",
         "packages/parse-differential/src/differential.test.ts"
       ],
       "linter": {

@@ -1,10 +1,16 @@
 /** Unit pins for `compareExpressions`' two directions and the period ruling. */
 import { describe, expect, it } from "vitest";
+import { parse as parseMx } from "../../parser/src/frontend/parse.ts";
+import { SIX } from "../../parser/src/frontend/test-support/options.ts";
 import {
   compareExpressions,
   type MxEntry,
+  mxExpressions,
   type TodayEntry,
+  todayExpressions,
 } from "./expressions.ts";
+import { markoTagShape, projectMarko } from "./marko.ts";
+import { lineStartsOf } from "./rules.ts";
 
 const mx = (over: Partial<MxEntry> = {}): MxEntry => ({
   kind: "expression",
@@ -39,6 +45,54 @@ describe("compareExpressions", () => {
     );
     expect(outcome.differences).toEqual([
       expect.stringContaining("no MX counterpart: today's expression [5,8)"),
+    ]);
+  });
+
+  it("compares a dynamic shorthand value's ${\u2026} containers (failing-first: MX dropping the `x` of `<a.c-${x}/>` goes red)", () => {
+    const source = "<a.c-${x}/>";
+    const document = parseMx(source, {
+      statementKeywords: SIX,
+      tagShape: markoTagShape,
+    });
+    const marko = projectMarko(source);
+    expect(marko.crash).toBeUndefined();
+    const today = todayExpressions(marko.ast, source, lineStartsOf(source));
+    // Today's tree really carries the `${x}` container at its position.
+    const todayX = today.find(
+      (entry) =>
+        entry.kind === "expression" &&
+        source.slice(entry.start, entry.end) === "x",
+    );
+    expect(todayX).toBeDefined();
+
+    const skips: [number, number][] = [];
+    const entries = mxExpressions(document, skips);
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        kind: "expression",
+        start: todayX?.start,
+        end: todayX?.end,
+      }),
+    );
+    const full = compareExpressions(entries, today, source, skips);
+    expect(full.differences).toEqual([]);
+
+    // MX's side lacks the container: the reverse check must flag today's.
+    const dropped = entries.filter(
+      (entry) =>
+        entry !==
+        entries.find(
+          (candidate) =>
+            candidate.kind === "expression" &&
+            candidate.start === todayX?.start &&
+            candidate.end === todayX?.end,
+        ),
+    );
+    const outcome = compareExpressions(dropped, today, source, skips);
+    expect(outcome.differences).toEqual([
+      expect.stringContaining(
+        `no MX counterpart: today's expression [${todayX?.start},${todayX?.end})`,
+      ),
     ]);
   });
 
