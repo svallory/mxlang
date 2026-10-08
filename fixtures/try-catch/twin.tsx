@@ -16,9 +16,7 @@ export function TryCatch() {
       </Errored>
       <Errored
         fallback={(__mxErr, ...__mxArgs) =>
-          (({ message }) => (
-            <p>msg: {message}</p>
-          ))(__mxErr(), ...__mxArgs)
+          (({ message }) => <p>msg: {message}</p>)(__mxErr(), ...__mxArgs)
         }
       >
         <Loading>
