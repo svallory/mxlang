@@ -1,7 +1,15 @@
 /**
- * The MX front end's module surface. Internal until PR 3: the package index
- * (`src/template/index.ts`) does not re-export it and `package.json` has no
- * subpath for it (`frontend/exposure.test.ts` pins both).
+ * The MX front end (PR 3 of the parser port; decision 166 addendum 1): the
+ * package's second entry point, beside the template parser. `parse` builds
+ * the MX AST of `apps/docs/docs/architecture/ast.md`; the option types are
+ * re-exported from `@mxlang/babel/mx-ast`, where the AST's types live.
  */
+export type {
+  MxBodyMode,
+  MxFragmentBase,
+  MxFrontEndOptions,
+  MxStatementKeyword,
+  MxTagShape,
+} from "@mxlang/babel/mx-ast";
 export { lineColumnAt } from "./line-column.ts";
 export { type ParseOptions, parse } from "./parse.ts";

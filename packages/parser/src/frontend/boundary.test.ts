@@ -8,7 +8,6 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import type { MxBodyMode, MxStatementKeyword } from "@mxlang/babel/mx-ast";
 import { afterEach, describe, expect, it } from "vitest";
-import * as packageIndex from "../template/index.ts";
 import { lineColumnAt } from "./line-column.ts";
 import { parse, seams } from "./parse.ts";
 import { checkInvariants } from "./test-support/invariants.ts";
@@ -198,22 +197,23 @@ describe("lineColumnAt", () => {
   });
 });
 
-describe("not exposed until PR 3 (decision 166 addendum 1)", () => {
-  it("the package index exports nothing of the front end", () => {
-    expect(Object.keys(packageIndex)).not.toContain("parse");
-    expect(Object.keys(packageIndex)).not.toContain("lineColumnAt");
-    const source = readFileSync(
-      new URL("../template/index.ts", import.meta.url),
-      "utf8",
-    );
-    expect(source).not.toMatch(/frontend/);
+describe("exposed as the package's second entry point (PR 3, decision 166 addendum 1)", () => {
+  it("the frontend subpath exports the front end", async () => {
+    const frontend = (await import("@mxlang/parser/frontend")) as Record<
+      string,
+      unknown
+    >;
+    expect(Object.keys(frontend).sort()).toEqual(["lineColumnAt", "parse"]);
   });
 
-  it("package.json exposes only the template parser", () => {
+  it("package.json exposes the template parser and the front end", () => {
     const manifest = JSON.parse(
       readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
     );
-    expect(manifest.exports).toEqual({ ".": "./src/template/index.ts" });
+    expect(manifest.exports).toEqual({
+      ".": "./src/template/index.ts",
+      "./frontend": "./src/frontend/index.ts",
+    });
     expect(manifest.private).toBe(true);
   });
 
@@ -227,7 +227,7 @@ describe("not exposed until PR 3 (decision 166 addendum 1)", () => {
     const offenders = walk(root).filter(
       (path) =>
         path.endsWith(".ts") &&
-        /from "\.\.\/(\.\.\/)?frontend/.test(readFileSync(path, "utf8")),
+        /from "\.\u002f(\.\u002f)?frontend"/.test(readFileSync(path, "utf8")),
     );
     expect(offenders).toEqual([]);
   });

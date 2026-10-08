@@ -8,8 +8,6 @@
  * attached to its parent (decision 163 addendum 5). Offsets are file-absolute
  * at creation: the fragment base is added when a node is made, never by a
  * later walk (ast §5.3).
- *
- * Not exported from the package index until PR 3 (decision 166 addendum 1).
  */
 import type {
   MxBodyMode,

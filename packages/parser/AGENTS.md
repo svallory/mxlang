@@ -29,10 +29,12 @@ by the repo's lead, who owns the tooling.
 - `parse(source, { statementKeywords, tagShape, base? })` builds the MX AST
   of `apps/docs/docs/architecture/ast.md` (one handler per row of its §7
   table); `lineColumnAt(document, offset)` gives 1-based line, 0-based column.
-- **Not exported** from the package index or `package.json` until PR 3
-  (`boundary.test.ts` pins it). Until then containers carry no payload: the
-  tree is typed by the module-private `interim.ts`. `@mxlang/parse-differential`
-  reads the module by relative path.
+- **Exported** as the package's second entry point since PR 3
+  (`@mxlang/parser/frontend`: `parse`, `lineColumnAt`, `ParseOptions` and the
+  option types re-exported from `@mxlang/babel/mx-ast`; `boundary.test.ts`
+  pins both entry points). Containers carry their Babel payload from
+  `src/frontend/expressions.ts`, which calls `@mxlang/babel` with Marko's
+  fixed configuration and wrappers (ast §7.1).
 - It never throws on input: a template-parser error, an internal failure
   (`MX_FRONT_END_INTERNAL`) and a throw out of the template parser itself all
   come back in `errors` with the partial tree. Missing options are a
@@ -40,7 +42,7 @@ by the repo's lead, who owns the tooling.
 - `seams.frontEndRules` is where PR 2b's `MX_*` rules run (once per tag);
   `seams.clamped` counts the one clamp for the disclosed silent end-of-input
   defects. Tests replace seams and restore them.
-- `corpus.test.ts` runs the 1,688 grammar probes and compares each tree's
+- `corpus.test.ts` runs the 1,717 grammar probes and compares each tree's
   projection with `corpus.snapshot.json`. A deliberate change regenerates it:
   `FRONTEND_SNAPSHOT_UPDATE=1 bunx vitest run --root ../.. --project @mxlang/parser frontend/corpus`,
   then `bunx biome format --write src/frontend/corpus.snapshot.json`, and the
