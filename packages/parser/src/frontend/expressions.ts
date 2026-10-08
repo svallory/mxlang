@@ -19,19 +19,24 @@
  * message and position are today's, byte for byte, with the position bounded
  * to the container's range as Marko's `getBoundedRange` bounds it.
  */
-import { type ParserOptions, parse as babelParse, parseExpression } from "@mxlang/babel";
+
 import type {
   Expression,
   FunctionParameter,
   LVal,
-  Statement,
   SpreadElement,
+  Statement,
   TSTypeParameterDeclaration,
   TSTypeParameterInstantiation,
 } from "@babel/types";
+import {
+  parse as babelParse,
+  type ParserOptions,
+  parseExpression,
+} from "@mxlang/babel";
 import type { MxParseError, Span } from "@mxlang/babel/mx-ast";
 
-/** The seven container types of ast §4.1. */
+/** The seven container types of ast §4.1, plus the template-literal wrapper of a dynamic name or shorthand value (Marko's `parseTemplateLiteral`). */
 export type ContainerKind =
   | "MxExpression"
   | "MxStatements"
@@ -39,23 +44,23 @@ export type ContainerKind =
   | "MxArguments"
   | "MxParameterList"
   | "MxTypeArguments"
-  | "MxTypeParameters";
+  | "MxTypeParameters"
+  | "MxTemplateLiteral";
 
 /** What each container's payload is (ast §4.1). */
-export type ContainerPayload<C extends ContainerKind> =
-  C extends "MxExpression"
-    ? Expression
-    : C extends "MxStatements"
-      ? Statement[]
-      : C extends "MxPattern"
-        ? LVal
-        : C extends "MxArguments"
-          ? (Expression | SpreadElement)[]
-          : C extends "MxParameterList"
-            ? FunctionParameter[]
-            : C extends "MxTypeArguments"
-              ? TSTypeParameterInstantiation
-              : TSTypeParameterDeclaration;
+export type ContainerPayload<C extends ContainerKind> = C extends "MxExpression"
+  ? Expression
+  : C extends "MxStatements"
+    ? Statement[]
+    : C extends "MxPattern"
+      ? LVal
+      : C extends "MxArguments"
+        ? (Expression | SpreadElement)[]
+        : C extends "MxParameterList"
+          ? FunctionParameter[]
+          : C extends "MxTypeArguments"
+            ? TSTypeParameterInstantiation
+            : TSTypeParameterDeclaration;
 
 /** An atom of the container's source, local to the container's text. */
 export interface SubParseAtom {
@@ -103,7 +108,14 @@ function parserOptions(at: SubParseAt, wrapper: number): ParserOptions {
  * the slice one expression, and how many characters of it precede the
  * authored text (`sourceOffset`).
  */
-const WRAPPERS: Record<ContainerKind, { readonly code: (text: string) => string; readonly offset: number; readonly statements?: boolean }> = {
+const WRAPPERS: Record<
+  ContainerKind,
+  {
+    readonly code: (text: string) => string;
+    readonly offset: number;
+    readonly statements?: boolean;
+  }
+> = {
   MxExpression: { code: (t) => t, offset: 0 },
   MxStatements: { code: (t) => t, offset: 0, statements: true },
   MxPattern: { code: (t) => `(${t}\n)=>{}`, offset: 1 },
@@ -111,10 +123,15 @@ const WRAPPERS: Record<ContainerKind, { readonly code: (text: string) => string;
   MxParameterList: { code: (t) => `(${t})=>{}`, offset: 1 },
   MxTypeArguments: { code: (t) => `_<${t}>`, offset: 2 },
   MxTypeParameters: { code: (t) => `<${t}>()=>{}`, offset: 1 },
+  MxTemplateLiteral: { code: (t) => "`" + t + "`", offset: 1 },
 };
 
 /** Marko's `getParseErrorLabel`: two reason codes get their own sentence; every other message loses its `(line:column)` tail. */
-function labelOf(error: { reasonCode: string; message: string; pos: number }, code: string, startIndex: number): string {
+function labelOf(
+  error: { reasonCode: string; message: string; pos: number },
+  code: string,
+  startIndex: number,
+): string {
   switch (error.reasonCode) {
     case "ParseExpressionEmptyInput":
       return "Expected an expression, but found only whitespace or comments.";
@@ -126,7 +143,11 @@ function labelOf(error: { reasonCode: string; message: string; pos: number }, co
 }
 
 /** Marko's `getBoundedRange`: the error's point when it lies in the container, the whole container otherwise. */
-function boundedSpan(loc: { line: number; column: number; index?: number }, at: SubParseAt, end: number): Span {
+function boundedSpan(
+  loc: { line: number; column: number; index?: number },
+  at: SubParseAt,
+  end: number,
+): Span {
   const index = loc.index;
   if (typeof index !== "number") return { start: at.offset, end };
   return index >= at.offset && index <= end
@@ -176,10 +197,7 @@ export function subParse(
       loc: { line: number; column: number; index?: number };
     };
     let label = labelOf(babel, code, at.offset - wrapper.offset);
-    if (
-      kind === "MxPattern" &&
-      /function parameter list/.test(label)
-    ) {
+    if (kind === "MxPattern" && /function parameter list/.test(label)) {
       // Marko's `parseVar` rewrite, byte for byte (the text it embeds is the
       // stand-in slice, as today).
       label = `\`${parsed}\` is not a valid [tag variable](https://markojs.com/docs/reference/language#tag-variables); use a JavaScript identifier or destructuring pattern.`;
@@ -208,6 +226,19 @@ export function subParse(
     case "MxExpression":
     case "MxStatements":
       break;
+    case "MxTemplateLiteral": {
+      // Marko's `parseTemplateLiteral`: a rebuilt `TemplateLiteral`, the
+      // parsed quasis and expressions as its children, the wrapper's own
+      // positions not carried (today's node carries none either).
+      if (anyNode?.type === "TemplateLiteral")
+        node = {
+          type: "TemplateLiteral",
+          quasis: anyNode.quasis,
+          expressions: anyNode.expressions,
+        };
+      else return wrongShape();
+      break;
+    }
     case "MxPattern": {
       const params = anyNode?.params;
       if (anyNode?.type === "ArrowFunctionExpression" && params?.length === 1)
@@ -238,6 +269,58 @@ export function subParse(
   return { node, error: null };
 }
 
+/** Marko's `parseTemplateString` case 0: a static name's whole text as a `StringLiteral` over the quasi (withLoc'd). */
+export function staticTemplateString(
+  text: string,
+  at: SubParseAt,
+  end: number,
+): SubParseResult {
+  return {
+    node: {
+      type: "StringLiteral",
+      value: text,
+      start: at.offset,
+      end,
+      loc: {
+        start: { line: at.line, column: at.column, index: at.offset },
+        end: null,
+      },
+    },
+    error: null,
+  };
+}
+
+/** Marko's `templateElement` helper (`tail: true`), a Babel `TemplateElement` node. */
+export function templateElement(raw: string): Record<string, unknown> {
+  return {
+    type: "TemplateElement",
+    value: { raw, cooked: raw },
+    tail: true,
+  };
+}
+
+/** Marko's `withLoc(templateLiteral([templateElement(v, true)], []))`: a `${'str'}` name. */
+export function stringQuasiTemplate(
+  value: string,
+  at: SubParseAt,
+  end: number,
+): SubParseResult {
+  return {
+    node: {
+      type: "TemplateLiteral",
+      quasis: [templateElement(value)],
+      expressions: [],
+      start: at.offset,
+      end,
+      loc: {
+        start: { line: at.line, column: at.column, index: at.offset },
+        end: null,
+      },
+    },
+    error: null,
+  };
+}
+
 function errorOf(
   code: string,
   message: string,
@@ -264,7 +347,11 @@ function errorOf(
  * on today's tree, done here before the payload is ever attached.
  */
 // biome-ignore lint/suspicious/noExplicitAny: walks and rewrites Babel nodes generically
-function convertStandIns(node: any, atoms: readonly SubParseAtom[], fileOffset: number): void {
+function convertStandIns(
+  node: any,
+  atoms: readonly SubParseAtom[],
+  fileOffset: number,
+): void {
   const spans = new Map(
     atoms.map((atom) => [atom.start + fileOffset, atom] as const),
   );

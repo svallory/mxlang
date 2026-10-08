@@ -27,6 +27,8 @@ import type {
 } from "../template/internal.ts";
 import {
   type ContainerKind,
+  staticTemplateString,
+  stringQuasiTemplate,
   subParse,
   wrappedAttrValueHint,
 } from "./expressions.ts";
@@ -343,6 +345,7 @@ class FrontEnd {
     value: Range,
     outer: Range = value,
     hints: "attr-value" | null = null,
+    subKind: ContainerKind | "MxTemplateLiteral-static" | null = null,
   ): Builder {
     const atoms: Builder[] = [];
     const rest: typeof this.atoms = [];
@@ -363,17 +366,24 @@ class FrontEnd {
     // The sub-parse (ast §4.1): the container's position carries the fragment
     // base, so the payload's offsets are file-absolute at creation.
     const position = this.positionAt(value.start);
-    const result = subParse(
-      type,
-      text,
-      atoms.map((atom: Builder) => ({
-        start: (atom.start as number) - start,
-        end: (atom.end as number) - start,
-        name: atom.name as string,
-      })),
-      { offset: start, line: position.line, column: position.column },
-      end,
-    );
+    const staticTemplate = subKind === "MxTemplateLiteral-static";
+    const result = staticTemplate
+      ? staticTemplateString(
+          text,
+          { offset: start, line: position.line, column: position.column },
+          end,
+        )
+      : subParse(
+          (subKind ?? type) as ContainerKind,
+          text,
+          atoms.map((atom: Builder) => ({
+            start: (atom.start as number) - start,
+            end: (atom.end as number) - start,
+            name: atom.name as string,
+          })),
+          { offset: start, line: position.line, column: position.column },
+          end,
+        );
     let error = result.error;
     if (error !== null) {
       if (
@@ -384,11 +394,12 @@ class FrontEnd {
         // Decision 166 item 1: `$!{…}` as an attribute value gets its own
         // code; the message and position are today's, byte for byte (there
         // is no dedicated message today — the Babel error is the report).
-        error = { ...error, code: "MX_UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE", origin: "front-end" };
-      } else if (
-        hints === "attr-value" &&
-        /^\{[\s\S]*\}$/.test(text.trim())
-      ) {
+        error = {
+          ...error,
+          code: "MX_UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE",
+          origin: "front-end",
+        };
+      } else if (hints === "attr-value" && /^\{[\s\S]*\}$/.test(text.trim())) {
         // Marko's `withWrappedAttrValueHint` (ast §3.13 item 2); the text is
         // today's, byte for byte, until the lead rules the MX rewording.
         error = {
@@ -424,6 +435,17 @@ class FrontEnd {
     const [first] = quasis;
     const last = quasis[quasis.length - 1];
     const only = expressions[0];
+    if (expressions.length === 0) {
+      // Marko's `parseTemplateString` case 0: the whole text as a string
+      // literal over the quasi.
+      return this.container(
+        "MxExpression",
+        first ?? { start: 0, end: 0 },
+        first ?? { start: 0, end: 0 },
+        null,
+        "MxTemplateLiteral-static",
+      );
+    }
     if (
       expressions.length === 1 &&
       only &&
@@ -432,10 +454,35 @@ class FrontEnd {
       first.start === first.end &&
       last.start === last.end
     ) {
-      return this.container("MxExpression", only.value, only);
+      const container = this.container("MxExpression", only.value, only);
+      if (
+        container.node !== null &&
+        (container.node as { type?: string }).type === "StringLiteral"
+      ) {
+        // Marko's quirk: a `${'str'}` name is a template literal with one
+        // quasi, not the string itself (`parseTemplateString`).
+        const position = this.positionAt(only.value.start);
+        const result = stringQuasiTemplate(
+          (container.node as { value: string }).value,
+          {
+            offset: container.start,
+            line: position.line,
+            column: position.column,
+          },
+          container.end,
+        );
+        container.node = result.node;
+      }
+      return container;
     }
     const whole = { start: first?.start ?? 0, end: last?.end ?? 0 };
-    return this.container("MxExpression", whole);
+    return this.container(
+      "MxExpression",
+      whole,
+      whole,
+      null,
+      "MxTemplateLiteral",
+    );
   }
 
   onAtom(event: Ranges.Value): void {
@@ -867,11 +914,7 @@ class FrontEnd {
     this.reach(template.end);
   }
 
-  onTagPart(
-    field: string,
-    type: ContainerKind,
-    event: Ranges.Value,
-  ): void {
+  onTagPart(field: string, type: ContainerKind, event: Ranges.Value): void {
     if (this.statement) return; // a statement's continuation line (g0895)
     const tag = this.headTag(event.start);
     tag[field] = this.container(type, event.value, event);
@@ -1019,7 +1062,12 @@ class FrontEnd {
   onAttrValue(event: Ranges.AttrValue): void {
     if (this.statement) return;
     const current = this.requireCurrent();
-    const value = this.container("MxExpression", event.value, event.value, "attr-value");
+    const value = this.container(
+      "MxExpression",
+      event.value,
+      event.value,
+      "attr-value",
+    );
     const operator = event.bound ? ":=" : "=";
     if (current.type === "MxAttribute") {
       current.operator = operator;

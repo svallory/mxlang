@@ -31,7 +31,12 @@ function containers(document: MxDocument): MxExpression[] {
     }
     if (!value || typeof value !== "object") return;
     const node = value as Node;
-    if (typeof node.type === "string" && node.type.startsWith("Mx") && "source" in node && "outer" in node)
+    if (
+      typeof node.type === "string" &&
+      node.type.startsWith("Mx") &&
+      "source" in node &&
+      "outer" in node
+    )
       out.push(node as MxExpression);
     for (const field of Object.values(node)) walk(field);
   };
@@ -58,14 +63,14 @@ describe("payloads", () => {
   });
 
   it("the tag variable, tag arguments, params and type arguments use today's wrappers", () => {
-    const tag = doc('for|a, b| of=(xs)') .body[0] as Node;
+    const tag = doc("for|a, b| of=(xs)").body[0] as Node;
     expect(tag.var).toBeNull();
     expect(tag.params.node.map((n: Node) => n.type)).toEqual([
       "Identifier",
       "Identifier",
     ]);
     expect(tag.params.node[0].start).toBe(4);
-    const called = doc("div/x = 1") .body[0] as Node;
+    const called = doc("div/x = 1").body[0] as Node;
     expect(called.var.node.type).toBe("Identifier");
     const typed = doc("Card<T>()").body[0] as Node;
     expect(typed.typeArgs.node.type).toBe("TSTypeParameterInstantiation");
@@ -73,7 +78,7 @@ describe("payloads", () => {
   });
 
   it("a method's params and body, and a scriptlet's code, carry payloads", () => {
-    const tag = doc('<div onClick(a: T) { const b = 1; }/>').body[0] as Node;
+    const tag = doc("<div onClick(a: T) { const b = 1; }/>").body[0] as Node;
     const method = tag.attributes[0].value;
     expect(method.params.node[0].type).toBe("Identifier");
     expect(method.params.node[0].typeAnnotation.type).toBe("TSTypeAnnotation");
@@ -161,9 +166,7 @@ describe("failures are data", () => {
       end: 11,
       context: { start: 7, end: 12 },
     });
-    expect(
-      document.errors.map((error) => [error.code, error.start]),
-    ).toEqual([
+    expect(document.errors.map((error) => [error.code, error.start])).toEqual([
       ["BABEL_UnexpectedToken", 11],
       ["BABEL_UnexpectedToken", 19],
     ]);
@@ -287,7 +290,9 @@ describe("the read-only contract (ast §4.1a)", () => {
         (value as Node).type === "NumericLiteral" &&
         document.source[(value as Node).loc?.start?.index] === ":"
       )
-        standIns.push(document.source.slice((value as Node).start, (value as Node).end));
+        standIns.push(
+          document.source.slice((value as Node).start, (value as Node).end),
+        );
       for (const field of Object.values(value)) walk(field);
     };
     for (const container of containers(document)) walk(container.node);
@@ -297,7 +302,7 @@ describe("the read-only contract (ast §4.1a)", () => {
 
 describe("text and expressions together", () => {
   it("a placeholder beside text leaves both in the body", () => {
-    const p = (doc("<p>a ${x} b</p>").body[0] as Node);
+    const p = doc("<p>a ${x} b</p>").body[0] as Node;
     expect(p.body.map((n: Node) => [n.type, n.value ?? null])).toEqual([
       ["MxText", "a "],
       ["MxPlaceholder", null],

@@ -261,13 +261,11 @@
     "  tag \"span\" [8,12) [8,12) open=[8,12) mode=html concise"
   ],
   "g0059": [
-    "tag dynamic [1,7) \"a${b}c\" [1,7) [0,9) open=[0,9) mode=html self-closed",
-    "error BABEL_ParseExpressionExpectsEOF [3,3)"
+    "tag dynamic [1,7) \"a${b}c\" [1,7) [0,9) open=[0,9) mode=html self-closed"
   ],
   "g0060": [
     "tag \"div\" [1,4) [0,13) open=[0,13) mode=html self-closed",
-    "  sugar tag . dynamic [5,11) \"a${x}b\" [5,11) [4,11)",
-    "error BABEL_ParseExpressionExpectsEOF [7,7)"
+    "  sugar tag . dynamic [5,11) \"a${x}b\" [5,11) [4,11)"
   ],
   "g0061": [
     "tag \"div\" [1,4) [0,8) open=[0,8) mode=html self-closed",
@@ -323,12 +321,10 @@
     "tag dynamic [1,8) \"expr\" [3,7) [0,10) open=[0,10) mode=html self-closed"
   ],
   "g0075": [
-    "tag dynamic [1,11) \"${foo}-bar\" [1,11) [0,13) open=[0,13) mode=html self-closed",
-    "error BABEL_ParseExpressionExpectsEOF [2,2)"
+    "tag dynamic [1,11) \"${foo}-bar\" [1,11) [0,13) open=[0,13) mode=html self-closed"
   ],
   "g0076": [
-    "tag dynamic [1,9) \"${a}${b}\" [1,9) [0,11) open=[0,11) mode=html self-closed",
-    "error BABEL_ParseExpressionExpectsEOF [2,2)"
+    "tag dynamic [1,9) \"${a}${b}\" [1,9) [0,11) open=[0,11) mode=html self-closed"
   ],
   "g0077": [
     "tag unnamed [1,1) [0,8) open=[0,8) mode=html self-closed",
@@ -3183,8 +3179,7 @@
   "g0708": ["error INVALID_EXPRESSION [2,4)"],
   "g0709": [
     "tag \"div\" [1,4) [0,13) open=[0,13) mode=html self-closed",
-    "  sugar tag . dynamic [5,11) \"${x}-y\" [5,11) [4,11)",
-    "error BABEL_ParseExpressionExpectsEOF [6,6)"
+    "  sugar tag . dynamic [5,11) \"${x}-y\" [5,11) [4,11)"
   ],
   "g0710": [
     "tag \"div\" [1,4) [0,12) open=[0,12) mode=html self-closed",
@@ -5912,12 +5907,10 @@
     "error MX_ATTRIBUTE_TAG_AT_ROOT [1,10)"
   ],
   "g1305": [
-    "tag dynamic [0,5) \"\\\\${a}\" [0,5) [0,5) open=[0,5) mode=html concise",
-    "error BABEL_MissingUnicodeEscape [1,1)"
+    "tag dynamic [0,5) \"\\\\${a}\" [0,5) [0,5) open=[0,5) mode=html concise"
   ],
   "g1306": [
-    "tag dynamic [0,6) \"\\\\\\\\${a}\" [0,6) [0,6) open=[0,6) mode=html concise",
-    "error BABEL_MissingUnicodeEscape [1,1)"
+    "tag dynamic [0,6) \"\\\\\\\\${a}\" [0,6) [0,6) open=[0,6) mode=html concise"
   ],
   "g1307": ["comment html [0,9) value=[4,6)", "text [9,15)"],
   "g1308": [
@@ -6384,8 +6377,7 @@
   ],
   "g1409": [
     "tag dynamic [1,10) \"${a}-${b}\" [1,10) [0,14) open=[0,14) mode=html self-closed",
-    "  sugar tag . \"c\" [10,12)",
-    "error BABEL_ParseExpressionExpectsEOF [2,2)"
+    "  sugar tag . \"c\" [10,12)"
   ],
   "g1410": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
