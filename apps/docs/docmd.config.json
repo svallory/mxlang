@@ -260,6 +260,22 @@
           "path": "/design-notes/language-extensions/"
         },
         {
+          "title": "Language extensions: the core",
+          "path": "/design-notes/language-extensions/core/"
+        },
+        {
+          "title": "Layer 1: tags and contracts",
+          "path": "/design-notes/language-extensions/layer-1/"
+        },
+        {
+          "title": "Layer 2: syntax",
+          "path": "/design-notes/language-extensions/layer-2/"
+        },
+        {
+          "title": "Layer 3: languages built on MX",
+          "path": "/design-notes/language-extensions/layer-3/"
+        },
+        {
           "title": "ADR 145: the unnamed tag and defaultTag",
           "path": "/design-notes/adr-default-tag/"
         },
