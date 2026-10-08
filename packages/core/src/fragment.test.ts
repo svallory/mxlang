@@ -160,9 +160,11 @@ describe("parseFragment's raw-text taglib slice", () => {
     // another element"; without it, today's element shape holds.
     expect(() => parseFragment("<if=x><@a/></if>")).not.toThrow();
     expect(Object.keys(PARSE_OPTIONS_TAGLIB as object)).not.toContain("<if>");
-    expect(Object.keys(PARSE_OPTIONS_TAGLIB as object)).not.toContain(
-      "controlFlow",
-    );
+    for (const entry of Object.values(
+      PARSE_OPTIONS_TAGLIB as Record<string, { parseOptions?: object }>,
+    )) {
+      expect(entry.parseOptions ?? {}).not.toHaveProperty("controlFlow");
+    }
   });
 
   it("reads <script>'s body as raw text", () => {
