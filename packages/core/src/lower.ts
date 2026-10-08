@@ -3480,11 +3480,19 @@ function lowerComponent(
       node,
     );
   }
+  // A host whose dynamic dispatch reaches a returning unit's render path can
+  // bind `/var` on a dynamic tag at run time (decision 155); the callee's
+  // shape is unknown statically, so the IR carries the binding without
+  // `returnsValue`.
+  const allowVar =
+    returnShape === "returns" ||
+    (target.kind === "dynamic" &&
+      ctx.declarations.bindsDynamicTagVar === true);
   rejectUnsupportedFields(ctx, node, `\`<${targetName(target)}>\``, {
     attributeTags: true,
     args: true,
     params: true,
-    var: returnShape === "returns",
+    var: allowVar,
   });
 
   const input =

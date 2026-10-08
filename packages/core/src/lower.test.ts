@@ -4242,3 +4242,57 @@ describe("tag-argument messages are Marko 6.4.3's own", () => {
     );
   });
 });
+
+describe("a /var a host cannot bind is reported at the /var", () => {
+  // The refusal's text is `rejectUnsupportedFields`'s (a dynamic tag has no
+  // return shape the core can read). This pins the *position*: it used to sit
+  // at the tag, leaving the author to find the `/var` themselves — the same
+  // report-at-the-thing rule the tag-arguments refusals above follow.
+  const fails = (marked: string): void => {
+    const line = marked.split("\n").findIndex((l) => l.includes("§")) + 1;
+    const markedLine = marked.split("\n")[line - 1] ?? "";
+    const column = markedLine.indexOf("§");
+    const source = marked.replace("§", "");
+    expect(() => lowerSource(source)).toThrow(
+      expect.objectContaining({
+        message: expect.stringContaining("tag variable `/n`"),
+        line,
+        column,
+      }),
+    );
+  };
+
+  it("points at the /var on a dynamic tag, not the tag", () => {
+    fails("<div>\n  <${C}/§n/>\n</div>");
+  });
+
+  it("points at the /var with no other content on the line", () => {
+    fails("<div>\n<${C}/§n/>\n</div>");
+  });
+});
+
+describe("a host that binds a dynamic tag's /var opts in", () => {
+  // `HostDeclarations.bindsDynamicTagVar`: the host's dynamic dispatch reaches
+  // a returning unit's render path (decision 155), so core lets the binding
+  // through to the IR instead of refusing it. Without the flag the refusal
+  // above stands.
+  const policy = (): Policy => ({
+    ...fakeDeclarations(),
+    bindsDynamicTagVar: true,
+  });
+
+  it("carries the /var on the Component node", () => {
+    const ir = lowerSource("<${C}/n start=1/>", policy());
+    const component = ir.body[0] as Extract<IrNode, { kind: "Component" }>;
+    expect(component.kind).toBe("Component");
+    expect(component.target).toMatchObject({ kind: "dynamic" });
+    expect(component.var).toBe("n");
+    expect(component.returnsValue).toBeUndefined();
+  });
+
+  it("still refuses /var on a dynamic tag without the opt-in", () => {
+    expect(() => lowerSource("<${C}/n start=1/>")).toThrow(
+      /tag variable `\/n` on `<dynamic tag>`/,
+    );
+  });
+});

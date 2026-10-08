@@ -163,6 +163,14 @@ export interface HostDeclarations {
    */
   isDelegatedTag?(name: string, ctx: Ctx, shape?: "bare" | "tagged"): boolean;
   /**
+   * Whether this host's dynamic-tag dispatch reaches a returning unit's
+   * render path (decision 155's model: the compiled unit exposes `.render`,
+   * which hands back the `{ value, output }` pair), so a `/var` on a dynamic
+   * tag binds at run time instead of being refused. Absent or false, core
+   * refuses the binding at the `/var` — never a silent drop.
+   */
+  bindsDynamicTagVar?: boolean;
+  /**
    * Records whatever this host decided about a claimed tag, into the
    * `DelegatedTag` node's `data` slot.
    *

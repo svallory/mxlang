@@ -1340,9 +1340,13 @@ export function rejectUnsupportedFields(
     );
   }
   if (!allow.var && node.var) {
+    // Reported at the `/var` itself, not the tag: the construct the author
+    // wrote wrong is the binding, and on a long call the tag's start can be
+    // far from it (the same report-at-the-thing rule the tag-arguments
+    // refusal above follows).
     fail(
       `tag variable \`/${expr(ctx, node.var)}\` on ${what} is not supported in ${unsupportedIn(ctx)}`,
-      node,
+      node.var,
     );
   }
   if (node.typeArguments || node.body?.typeParameters) {
