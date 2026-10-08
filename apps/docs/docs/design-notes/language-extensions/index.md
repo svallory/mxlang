@@ -5,9 +5,8 @@ description: "How MX is extended at three layers: tags and contracts (layer 1), 
 
 # Language extensions
 
-**Status:** design proposal (2026-10-07), not released. Layers 1 and 2 are
-planned; layer 3 is an idea kept reachable, not scheduled. Decision numbers
-are assigned when the lead records them.
+**Status:** accepted design (decisions 182 to 184, 2026-10-07), not released.
+Layers 1 and 2 are planned; layer 3 is an idea kept reachable, not scheduled.
 
 MX is extended at three layers. Each one uses the layer below it and adds
 nothing to the parser beyond what the layer below already allows.

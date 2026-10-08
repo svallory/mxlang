@@ -5,7 +5,7 @@ description: "What stays fixed under every extension layer: Marko's grammar on t
 
 # The core
 
-**Status:** design proposal (2026-10-07), not released. Marko behavior below
+**Status:** accepted design (decisions 183 and 184, 2026-10-07), not released. Marko behavior below
 was probed on marko 6.4.0, `@marko/compiler` 5.42.10, htmljs-parser 5.18.0.
 
 The core is what every layer builds on and none may change: the parser and

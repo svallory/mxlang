@@ -5,8 +5,8 @@ description: "Project-scoped syntax extensions through the data-only syntax tabl
 
 # Layer 2: syntax
 
-**Status:** planned. Lands on the parser port before it freezes (size M; L
-after). Decision numbers follow.
+**Status:** planned (decision 182). Lands on the parser port before it freezes
+(size M; L after).
 
 Layer 2 lets a project, or a package it depends on, change what the parser
 recognises, through the [syntax table](/design-notes/language-extensions/core/#the-syntax-table)
