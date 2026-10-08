@@ -1770,7 +1770,8 @@ export class PreactEmitter implements Emitter<string> {
         // is a plain props-object string from `#propsObject`). Interpolating
         // the mapped form emitted "[object Object]" — a syntax error in the
         // generated module — so their code text is taken explicitly.
-        const payloadCode = typeof payload === "string" ? payload : payload.code;
+        const payloadCode =
+          typeof payload === "string" ? payload : payload.code;
         const contentCode =
           typeof content === "string" ? content : (content?.code ?? "");
         this.#varStatements.push(

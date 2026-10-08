@@ -1485,7 +1485,7 @@ describe("a unit that returns a value", () => {
     // its output renders per row (the default export already returns it).
     const code = callerCode("<for|i| of=[1,2]><counter start=i/></for>");
 
-    expect(code).toContain("$mx_Counter1({ \"start\": i })");
+    expect(code).toContain('$mx_Counter1({ "start": i })');
   });
 
   it("rejects a hook in a unit that declares <return>", () => {

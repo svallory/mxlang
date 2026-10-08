@@ -591,11 +591,19 @@ function statementBodyConstruct(code: string): string | undefined {
       stack.push(...(node as unknown as ScanNode[]));
     } else if (typeof node === "object") {
       if (node.type === "FunctionExpression") return "a `function` expression";
-      if (node.type === "ArrowFunctionExpression" && node.body?.type === "BlockStatement") {
+      if (
+        node.type === "ArrowFunctionExpression" &&
+        node.body?.type === "BlockStatement"
+      ) {
         return "an arrow function with a block body";
       }
       for (const [key, child] of Object.entries(node)) {
-        if (key !== "loc" && key !== "extra" && child && typeof child === "object") {
+        if (
+          key !== "loc" &&
+          key !== "extra" &&
+          child &&
+          typeof child === "object"
+        ) {
           stack.push(child as ScanNode);
         }
       }

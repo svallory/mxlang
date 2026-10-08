@@ -3486,8 +3486,7 @@ function lowerComponent(
   // `returnsValue`.
   const allowVar =
     returnShape === "returns" ||
-    (target.kind === "dynamic" &&
-      ctx.declarations.bindsDynamicTagVar === true);
+    (target.kind === "dynamic" && ctx.declarations.bindsDynamicTagVar === true);
   rejectUnsupportedFields(ctx, node, `\`<${targetName(target)}>\``, {
     attributeTags: true,
     args: true,

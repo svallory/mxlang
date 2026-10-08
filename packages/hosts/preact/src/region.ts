@@ -166,7 +166,10 @@ function dynamicHelpers(): JsxHelper[] {
       binding: "__mxIsHostComponentObject",
       code: MX_DYNAMIC.slice(0, objectSplit),
     },
-    { binding: "__mxDynamic", code: MX_DYNAMIC.slice(objectSplit + 1, pairSplit) },
+    {
+      binding: "__mxDynamic",
+      code: MX_DYNAMIC.slice(objectSplit + 1, pairSplit),
+    },
     { binding: "__mxDynamicPair", code: MX_DYNAMIC.slice(pairSplit + 1) },
   ];
 }

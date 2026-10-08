@@ -86,8 +86,8 @@ async function renderCaller(callerSource: string): Promise<string> {
       compileReactMx(
         `import Counter from "./lib/counter.mx"\nimport Plain from "./lib/plain.mx"\nimport BodyCounter from "./lib/body-counter.mx"\n${callerSource}`,
         callerPath,
-      ).code
-        .replace('"./lib/counter.mx"', '"./lib/counter.tsx"')
+      )
+        .code.replace('"./lib/counter.mx"', '"./lib/counter.tsx"')
         .replace('"./lib/plain.mx"', '"./lib/plain.tsx"')
         .replace('"./lib/body-counter.mx"', '"./lib/body-counter.tsx"'),
     );
@@ -133,7 +133,7 @@ describe("an imported tag that declares <return>, rendered on React", () => {
   it("renders a dynamic /var call's body alongside tag arguments", async () => {
     expect(
       await renderCaller(
-        '<div><${BodyCounter}/n({ start: 1 })>body</><p>${n}</p></div>',
+        "<div><${BodyCounter}/n({ start: 1 })>body</><p>${n}</p></div>",
       ),
     ).toBe("<div><span>1</span>body<p>2</p></div>");
   });
