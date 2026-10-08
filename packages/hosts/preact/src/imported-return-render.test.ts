@@ -26,6 +26,12 @@ const COUNTER = [
   "<return value=input.start + 1/>",
 ].join("\n");
 
+const BODY_COUNTER = [
+  "export interface Input { start: number }",
+  "<span>${input.start}</span><${input.content}/>",
+  "<return value=input.start + 1/>",
+].join("\n");
+
 const PLAIN = "<b>x</b>";
 
 async function renderCaller(callerSource: string): Promise<string> {
@@ -55,6 +61,11 @@ async function renderCaller(callerSource: string): Promise<string> {
       join(scratch, "lib/counter.tsx"),
       compilePreactMx(COUNTER, join(scratch, "lib/counter.mx")).code,
     );
+    writeFileSync(join(scratch, "lib/body-counter.mx"), BODY_COUNTER);
+    writeFileSync(
+      join(scratch, "lib/body-counter.tsx"),
+      compilePreactMx(BODY_COUNTER, join(scratch, "lib/body-counter.mx")).code,
+    );
     writeFileSync(join(scratch, "lib/plain.mx"), PLAIN);
     writeFileSync(
       join(scratch, "lib/plain.tsx"),
@@ -72,11 +83,12 @@ async function renderCaller(callerSource: string): Promise<string> {
     writeFileSync(
       entry,
       compilePreactMx(
-        `import Counter from "./lib/counter.mx"\nimport Plain from "./lib/plain.mx"\n${callerSource}`,
+        `import Counter from "./lib/counter.mx"\nimport Plain from "./lib/plain.mx"\nimport BodyCounter from "./lib/body-counter.mx"\n${callerSource}`,
         callerPath,
       ).code
         .replace('"./lib/counter.mx"', '"./lib/counter.tsx"')
-        .replace('"./lib/plain.mx"', '"./lib/plain.tsx"'),
+        .replace('"./lib/plain.mx"', '"./lib/plain.tsx"')
+        .replace('"./lib/body-counter.mx"', '"./lib/body-counter.tsx"'),
     );
     const mod = (await import(`${entry}?t=${Date.now()}`)) as {
       default: FunctionComponent<Record<string, unknown>>;
@@ -112,6 +124,16 @@ describe("an imported tag that declares <return>, rendered on Preact", () => {
         "<Counter/a start=1/><Counter/b start=10/><i>${a}-${b}</i>",
       ),
     ).toBe("<span>1</span><span>10</span><i>2-11</i>");
+  });
+
+  // A dynamic tag with tag arguments AND a body: `__mxDynamicPair` called
+  // `render(...payload)` and never passed `content`, so the body dropped.
+  it("renders a dynamic /var call's body alongside tag arguments", async () => {
+    expect(
+      await renderCaller(
+        '<div><${BodyCounter}/n({ start: 1 })>body</><p>${n}</p></div>',
+      ),
+    ).toBe("<div><span>1</span>body<p>2</p></div>");
   });
 
   it("refuses /var on an imported tag without <return>, at the call", () => {

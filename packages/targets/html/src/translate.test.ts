@@ -976,12 +976,24 @@ describe("an imported .mx tag that declares <return>", () => {
     const dir = mkdtempSync(join(tmpdir(), "mx-html-imported-var-ts-"));
     try {
       writeFileSync(join(dir, "widget.ts"), "export default () => ({})");
-      expect(() =>
+      let error: (Error & { line?: number; column?: number }) | undefined;
+      try {
         compile(
           src('import Widget from "./widget.ts"\n<Widget/n/>'),
           join(dir, "page.mx"),
-        ),
-      ).toThrow(/tag variable `\/n` on `<Widget>` is not supported/);
+        );
+      } catch (caught) {
+        error = caught as Error;
+      }
+      expect(error?.message).toMatch(
+        /tag variable `\/n` on `<Widget>` is not supported/,
+      );
+      // At the `/n` itself, not the tag (core's dynamic-tag-var-silent-drop
+      // position change: `rejectUnsupportedFields` reports at `node.var`).
+      expect({ line: error?.line, column: error?.column }).toEqual({
+        line: 2,
+        column: 8,
+      });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -350,9 +350,28 @@ function __mxDynamicPair(target: any, payload: any, content?: any, takesParams?:
     typeof target === "function" &&
     typeof (target as { render?: unknown }).render === "function"
   ) {
-    const ret = Array.isArray(payload)
-      ? (target as { render: (...args: any[]) => { value: any; output: any } }).render(...payload)
-      : (target as { render: (props: any) => { value: any; output: any } }).render(payload);
+    if (Array.isArray(payload)) {
+      // Tag arguments: without a body the call is Marko's renderer(...args)
+      // shape. With a body the content thunk must reach a compiled unit
+      // through input.content (the key the no-args path reads), so it folds
+      // into the call's props object (the object members of the payload: the
+      // input, the trailing props) before render. render(...payload) handed
+      // the body to the unit's second positional parameter, where nothing
+      // read it.
+      if (content) {
+        const props: Record<string, any> = {};
+        for (const item of payload) {
+          if (item !== null && typeof item === "object") Object.assign(props, item);
+        }
+        props.content = content;
+        const ret = (target as { render: (props: any) => { value: any; output: any } }).render(props);
+        return { value: ret.value, output: ret.output };
+      }
+      const ret = (target as { render: (...args: any[]) => { value: any; output: any } }).render(...payload);
+      return { value: ret.value, output: ret.output };
+    }
+    const props = content ? { ...payload, content } : payload;
+    const ret = (target as { render: (props: any) => { value: any; output: any } }).render(props);
     return { value: ret.value, output: ret.output };
   }
   return { value: undefined, output: __mxDynamic(target, payload, content, takesParams) };

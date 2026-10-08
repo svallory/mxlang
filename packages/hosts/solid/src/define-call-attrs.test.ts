@@ -207,6 +207,26 @@ describe("solid: a <define> call passes its attributes as the first param", () =
     ).toThrow(/tag variable `\/n` on `<Row>` is not supported/);
   });
 
+  // The `/var`-refusal position (core's dynamic-tag-var-silent-drop change:
+  // `rejectUnsupportedFields` reports at `node.var`): at the `/n` on line 2,
+  // not at the tag. Pinned like astro's imported-return-render pin so a move
+  // is deliberate.
+  it("refuses /var on a dynamic tag at the /var, positioned", () => {
+    let error: (Error & { line?: number; column?: number }) | undefined;
+    try {
+      compile("<div>\n  <${C}/n/>\n</div>", "const C = () => null;");
+    } catch (caught) {
+      error = caught as Error;
+    }
+    expect(error?.message).toMatch(
+      /tag variable `\/n` on `<dynamic tag>` is not supported/,
+    );
+    expect({ line: error?.line, column: error?.column }).toEqual({
+      line: 2,
+      column: 8,
+    });
+  });
+
   it("warns on a multi-param define called with attributes, not for one object param", () => {
     const warn = (region: string) => {
       const warnings: Array<{ message: string; line: number; column: number }> =

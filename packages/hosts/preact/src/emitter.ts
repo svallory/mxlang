@@ -1765,8 +1765,16 @@ export class PreactEmitter implements Emitter<string> {
         }
         this.#runtimeImports.add("__mxDynamicPair");
         const temp = `__mxRet${this.#varSerial.n++}`;
+        // `varStatements` is plain strings, while `payload` and `content` are
+        // `MappedCode` whenever tag arguments are present (the no-args shape
+        // is a plain props-object string from `#propsObject`). Interpolating
+        // the mapped form emitted "[object Object]" — a syntax error in the
+        // generated module — so their code text is taken explicitly.
+        const payloadCode = typeof payload === "string" ? payload : payload.code;
+        const contentCode =
+          typeof content === "string" ? content : (content?.code ?? "");
         this.#varStatements.push(
-          `const ${temp} = __mxDynamicPair(${node.target.expr.code}, ${payload}${content}${takesParams});`,
+          `const ${temp} = __mxDynamicPair(${node.target.expr.code}, ${payloadCode}${contentCode}${takesParams});`,
         );
         this.#varStatements.push(`const ${node.var} = ${temp}.value;`);
         this.#out.push(concatMapped(`{${temp}.output}`));

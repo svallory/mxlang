@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix (dynamic-tag-var-silent-drop, core):** a tag variable a host cannot bind (`/n` on a `.ts` component, which html still refuses) is reported at the `/var` itself, not at the whole tag — `<Widget/n/>` on line 2 fails at line 2, column 8 (the `/n`), where the refusal used to sit at the tag. Binding is unchanged (html still binds `/var` on a dynamic tag whose callee has a render path); the refusal's position only.
+
 - **Fix (routed-template-call-namespan):** a discovered tag's call maps its name span, so a type error on it (a missing required prop) lands on the tag name, not at 1:1 marked MX's. The `render` call's props braces map onto the name. No emitted code changes, only the source map.
 
 - **Fix, behaviour change (unresolved-tags-dir-diagnostic, decision 172):** a `.marko` tag (`tags/x.marko`, `tags/x/index.marko`, an authored `.marko` import used as a tag) is one positioned error naming the file, no longer rendered through Marko's lookup; `tags/x/index.mx` is a positioned error, not a call to an unbound `x`.
