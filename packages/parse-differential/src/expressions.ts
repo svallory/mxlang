@@ -19,7 +19,10 @@
  * and pairing prefers an exact span match before overlap. So a dropped or
  * misparsed container inside `<a.c-${x}>` goes red in both directions.
  * `MxModuleStatement.code` and the shorthand `template` node are the two
- * skips; everything else must pair up.
+ * skips; everything else must pair up — except that a dynamic shorthand
+ * value's template payload (its quasis) is not node-compared either: today's
+ * merged loc-less wrapper has no positioned counterpart to pair it against.
+ * Known gap, not a covered skip (TODO: parse-differential-shorthand-quasis).
  */
 import { lineStartsOf, offsetOf } from "./rules.ts";
 
@@ -315,6 +318,10 @@ export function mxExpressions(
           const end = template?.end;
           if (typeof start === "number" && typeof end === "number")
             skips.push([start, end]);
+          // TODO(parse-differential-shorthand-quasis): the template's quasis
+          // are not node-compared — today's merged loc-less wrapper has no
+          // positioned counterpart. Node-compare them once today's wrapper
+          // carries positions or the differential synthesises them.
         }
       }
       return;
@@ -386,15 +393,6 @@ export function mxExpressions(
   };
   visit(document.body);
   return out;
-}
-
-/** Whether `[start,end)` falls inside any documented skip range. */
-export function inSkippedRange(
-  skips: readonly (readonly [number, number])[],
-  start: number,
-  end: number,
-): boolean {
-  return skips.some(([from, to]) => from <= start && end <= to);
 }
 
 const POSITION_KEYS = new Set(["start", "end", "loc"]);
