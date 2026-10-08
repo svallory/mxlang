@@ -131,7 +131,7 @@ import {
   markoFileTagMessage,
   uncalledTagFileMessage,
 } from "./uncalled-tag-file.ts";
-import { tagLabel } from "./wildcard-children.ts";
+import { attributeTagDeclarationFor, tagLabel } from "./wildcard-children.ts";
 import {
   type WildcardMatch,
   wildcardIneligibility,
@@ -3117,10 +3117,7 @@ function validateCustomAttributeTagBodies(
       continue;
     }
     const name = attrName(tag);
-    const declaration =
-      declarations && Object.hasOwn(declarations, name)
-        ? declarations[name]
-        : undefined;
+    const declaration = attributeTagDeclarationFor(declarations, name);
     const extended = hasAttributeTagContract(declaration);
     if (!allowUncontractedTags && !extended) {
       if (controlName) {

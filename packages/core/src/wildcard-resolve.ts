@@ -19,6 +19,7 @@ import type {
 } from "./custom-tags.ts";
 import { CONTROL_FLOW_TAGS } from "./structural-tags.ts";
 import {
+  attributeTagDeclarationFor,
   explicitChildEntries,
   hasExplicitChild,
   matchWildcardEntry,
@@ -204,10 +205,11 @@ export function scopeForChildren(
 ): ContractScope | undefined {
   if (CONTROL_FLOW_TAGS.includes(name)) return scope;
   if (name.startsWith("@")) {
-    const tags = scope?.declaration.attributeTags;
     const attrName = name.slice(1);
-    const declaration =
-      tags && Object.hasOwn(tags, attrName) ? tags[attrName] : undefined;
+    const declaration = attributeTagDeclarationFor(
+      scope?.declaration.attributeTags,
+      attrName,
+    );
     return declaration && scope
       ? { declaration, label: `${scope.label}: \`<${name}>\`` }
       : undefined;

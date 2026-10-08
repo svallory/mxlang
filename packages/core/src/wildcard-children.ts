@@ -9,8 +9,11 @@
  */
 
 import type {
+  CustomTagAttributeTag,
+  CustomTagAttributeTags,
   CustomTagChild,
   CustomTagChildren,
+  WildcardAttributeTagEntry,
   WildcardChildEntry,
 } from "./custom-tags.ts";
 
@@ -66,7 +69,7 @@ export function wildcardEntries(
   return Array.isArray(value) ? value : [value as WildcardChildEntry];
 }
 
-const compiled = new WeakMap<WildcardChildEntry, RegExp>();
+const compiled = new WeakMap<object, RegExp>();
 
 /**
  * The entry's anchored regex: `^(?:pattern)$`, no flags, so an author never
@@ -74,7 +77,9 @@ const compiled = new WeakMap<WildcardChildEntry, RegExp>();
  * Throws the engine's `SyntaxError` for an invalid source; registration calls
  * it first, so a compile never meets one.
  */
-export function entryRegExp(entry: WildcardChildEntry): RegExp | undefined {
+export function entryRegExp(
+  entry: WildcardChildEntry | WildcardAttributeTagEntry,
+): RegExp | undefined {
   if (entry.pattern === undefined) return undefined;
   let regex = compiled.get(entry);
   if (!regex) {
@@ -104,6 +109,59 @@ export function matchWildcardEntry(
     return { entry, groups };
   }
   return undefined;
+}
+
+/** The explicit entries of an `attributeTags` record, `"*"` excluded. */
+export function explicitAttributeTagEntries(
+  attributeTags: CustomTagAttributeTags | undefined,
+): Array<[string, CustomTagAttributeTag]> {
+  if (!attributeTags) return [];
+  return Object.entries(attributeTags).filter(
+    (entry): entry is [string, CustomTagAttributeTag] =>
+      entry[0] !== WILDCARD && entry[1] !== undefined,
+  );
+}
+
+/** The `attributeTags["*"]` entries in declaration order; one object reads as a list of one. */
+export function attributeTagWildcardEntries(
+  attributeTags: CustomTagAttributeTags | undefined,
+): readonly WildcardAttributeTagEntry[] {
+  if (!attributeTags || !Object.hasOwn(attributeTags, WILDCARD)) return [];
+  const value = attributeTags[WILDCARD];
+  if (value === undefined) return [];
+  return Array.isArray(value) ? value : [value as WildcardAttributeTagEntry];
+}
+
+/**
+ * The first `attributeTags["*"]` entry whose pattern matches the whole name;
+ * no pattern matches every name. Explicit entries always win and are never
+ * consulted here; `attributeTagDeclarationFor` does that ordering.
+ */
+export function matchAttributeTagWildcard(
+  attributeTags: CustomTagAttributeTags | undefined,
+  name: string,
+): WildcardAttributeTagEntry | undefined {
+  for (const entry of attributeTagWildcardEntries(attributeTags)) {
+    const regex = entryRegExp(entry);
+    if (!regex || regex.exec(name)) return entry;
+  }
+  return undefined;
+}
+
+/**
+ * The declaration an authored attribute tag validates against: its explicit
+ * `attributeTags` entry, else the first `"*"` entry whose pattern matches
+ * (decision 147 for attribute tags). Undefined, the name is unknown.
+ */
+export function attributeTagDeclarationFor(
+  attributeTags: CustomTagAttributeTags | undefined,
+  name: string,
+): CustomTagAttributeTag | undefined {
+  if (!attributeTags) return undefined;
+  if (name !== WILDCARD && Object.hasOwn(attributeTags, name)) {
+    return attributeTags[name] as CustomTagAttributeTag | undefined;
+  }
+  return matchAttributeTagWildcard(attributeTags, name);
 }
 
 /**

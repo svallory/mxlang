@@ -102,6 +102,7 @@ export type {
   CustomTag,
   CustomTagAttribute,
   CustomTagAttributeTag,
+  CustomTagAttributeTags,
   CustomTagChild,
   CustomTagChildren,
   CustomTagParseOptions,
@@ -110,6 +111,8 @@ export type {
   TagCall,
   TagStore,
   TransformContext,
+  WildcardAttributeTagEntry,
+  WildcardAttributeTags,
   WildcardChildEntry,
   WildcardChildren,
 } from "./custom-tags.ts";

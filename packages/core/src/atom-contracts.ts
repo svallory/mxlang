@@ -29,6 +29,7 @@ import type {
 import { nearestName } from "./did-you-mean.ts";
 import type { Atom, Attr, AttributeTag } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
+import { attributeTagDeclarationFor } from "./wildcard-children.ts";
 
 /** One custom tag call, with the authored tag instances around it. */
 export interface ContractFact {
@@ -559,8 +560,7 @@ function queueAttributeTags(
 ): void {
   if (!declared) return;
   for (const tag of tags) {
-    if (!Object.hasOwn(declared, tag.name)) continue;
-    const declaration = declared[tag.name];
+    const declaration = attributeTagDeclarationFor(declared, tag.name);
     if (!declaration) continue;
     const nested = `${label}: \`<@${tag.name}>\``;
     queueAttrs(
@@ -619,6 +619,8 @@ export function checkAtomContracts(ctx: Ctx): void {
 
 /** The facts of a file with no custom tag call. */
 export function emptyAtomFacts(): AtomFacts {
+  // SAFETY: the empty facts carry only the two always-present arrays; every
+  // reader treats a missing entry as absent.
   return { calls: [], declarations: [] } as unknown as AtomFacts;
 }
 
@@ -631,7 +633,7 @@ export function atomFactsOf(ctx: Ctx): AtomFacts {
   const facts = ctx.contractFacts ? [...ctx.contractFacts.values()] : [];
   const scopes = declare(null, facts, ctx.contractDerived ?? []);
   const ids = new Map<object, number>([[FILE_SCOPE, FILE_SCOPE_ID]]);
-  const idOf = (owner: object): number => {
+  const idOf = <T extends object>(owner: T): number => {
     let id = ids.get(owner);
     if (id === undefined) {
       id = ids.size;
@@ -659,6 +661,8 @@ export function atomFactsOf(ctx: Ctx): AtomFacts {
       }
     }
   }
+  // SAFETY: the built facts always carry both arrays; the interface's optional
+  // fields are for consumers reading partial results.
   return { calls, declarations } as unknown as AtomFacts;
 }
 
@@ -708,9 +712,7 @@ function collectSlots(
   }
   if (!declared) return;
   for (const tag of tags) {
-    const declaration = Object.hasOwn(declared, tag.name)
-      ? declared[tag.name]
-      : undefined;
+    const declaration = attributeTagDeclarationFor(declared, tag.name);
     if (!declaration || !tag.span) continue;
     collectSlots(
       declaration.attributes,

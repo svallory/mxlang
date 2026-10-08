@@ -13,7 +13,7 @@ import { buildMarkoLookup, createTranslator } from "./compile.ts";
 import { contractDefaultTag } from "./contract-default-tag.ts";
 import { type Ctx, type Node, newCtx, TranslateError } from "./core.ts";
 import { CORE_TAGLIB } from "./core-taglib.ts";
-import type { CustomTag } from "./custom-tags.ts";
+import type { CustomTag, CustomTagAttributeTag } from "./custom-tags.ts";
 import type { DefaultTagParent, Policy } from "./declarations.ts";
 import { lower } from "./lower.ts";
 import { scanCustomTags } from "./scan.ts";
@@ -61,8 +61,10 @@ describe("the defaultTag declaration key", () => {
     );
     const tag = scan(dir).customTags.list as CustomTag;
     expect(tag.defaultTag).toBe("item");
-    expect(tag.attributeTags?.items?.defaultTag).toBe("entry");
-    expect(tag.attributeTags?.items?.attributeTags?.sub?.defaultTag).toBe("x");
+    const items = tag.attributeTags?.items as CustomTagAttributeTag;
+    expect(items.defaultTag).toBe("entry");
+    const sub = items.attributeTags?.sub as CustomTagAttributeTag;
+    expect(sub.defaultTag).toBe("x");
   });
 
   it("is accepted in a sidecar, top level and on attribute-tag declarations", () => {
@@ -72,7 +74,8 @@ describe("the defaultTag declaration key", () => {
     });
     const tag = scan(dir).customTags.list as CustomTag;
     expect(tag.defaultTag).toBe("item");
-    expect(tag.attributeTags?.items?.defaultTag).toBe("entry");
+    const items = tag.attributeTags?.items as CustomTagAttributeTag;
+    expect(items.defaultTag).toBe("entry");
   });
 
   it.each([1, null, true, ["a"], {}, ""])(

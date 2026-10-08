@@ -7,6 +7,7 @@ import {
 } from "./default-tag-validate.ts";
 import type { TargetPolicyDiagnostic } from "./host-policy.ts";
 import { CONTROL_FLOW_TAGS } from "./structural-tags.ts";
+import { attributeTagDeclarationFor } from "./wildcard-children.ts";
 import { wildcardMatchOf } from "./wildcard-resolve.ts";
 
 /**
@@ -110,9 +111,10 @@ function lookupDeclared(
       customTags,
     );
     for (const name of chain.reverse()) {
-      const tags: Record<string, CustomTagAttributeTag> | undefined =
-        declaration?.attributeTags;
-      declaration = tags && Object.hasOwn(tags, name) ? tags[name] : undefined;
+      declaration = attributeTagDeclarationFor(
+        declaration?.attributeTags,
+        name,
+      );
     }
     return stringOrUndefined(declaration?.defaultTag);
   }
@@ -186,8 +188,10 @@ export function contractDefaultTagDiagnostics(
           declared.push({ chain, value });
         for (const [attrName, nested] of Object.entries(
           declaration.attributeTags ?? {},
-        ))
-          collect(nested, [...chain, attrName]);
+        )) {
+          if (attrName === "*" || nested === undefined) continue;
+          collect(nested as CustomTagAttributeTag, [...chain, attrName]);
+        }
       };
       collect(tag, []);
       for (const { chain, value } of declared) {

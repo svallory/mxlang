@@ -219,6 +219,48 @@ itself is refused:
 The key works on a tag's `children` and on an attribute-tag declaration's `children`. Marko has no
 children contracts, so this is an mx-only extension.
 
+### Wildcard attribute tags (`attributeTags["*"]`)
+
+The same claim exists for attribute tags: a vocabulary whose `<@on_click>`s and `<@action_save>`s
+do not choose their names ahead of time. `attributeTags` takes the key `"*"`, and an entry is
+always an inline contract — an attribute tag has no transform of its own, so there is no
+`contract:` form and no delegation case (decision 147, for attribute tags):
+
+```ts
+// contracts.ts, named by "mx": { "target": "data", "contracts": "./contracts.ts" }
+export default {
+  resource: {
+    attributeTags: {
+      "*": [
+        { pattern: "^on_(?<event>[a-z]+)$", attributes: { kind: { type: "string" } } },
+        { attributes: {} },
+      ],
+    },
+  },
+};
+```
+
+An entry is `{ pattern?, repeatable?, attributes?, attributeTags?, children?, defaultTag? }`, as an
+object or as an ordered list, with the same anchored `^(?:pattern)$` matching as `children["*"]`.
+**Check order** is the same: an explicit `attributeTags` entry first, then the `"*"` entries in
+declaration order; an unmatched name is the usual unknown-attribute-tag error, listing the
+explicit names and the patterns. `repeatable` applies per matched name — two `<@row>` under one
+non-repeatable entry is one error naming `row`, while `<@row>` and `<@col>` are both fine.
+`required` is rejected at registration: a wildcard has no single name to require.
+
+**Registration errors** mirror `children["*"]`: the key neither an object nor a list of objects;
+an entry that is not an object, carries an unknown key (allowed: `pattern`, `repeatable`,
+`attributes`, `attributeTags`, `children`, `defaultTag`) or a `required`; a `pattern` that is not
+a string, does not compile, or is not a whole regex on its own; an inline entry that contains
+itself:
+
+```text
+`<list>`: `attributeTags["*"]` holds an entry that contains itself
+```
+
+The key works on a tag's `attributeTags` and on an attribute-tag declaration's `attributeTags`.
+Marko has no attribute-tag contracts, so this is an mx-only extension.
+
 ### Name the unnamed tag: `defaultTag`
 
 `defaultTag` sits beside `children` and says what `<#id>` and `<.class>`, written

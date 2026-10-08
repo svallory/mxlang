@@ -149,3 +149,59 @@ describe("atom contracts on attribute-tag attributes through parseData (decision
     expect(result.diagnostics).toEqual([]);
   });
 });
+
+describe('attributeTags["*"] through parseData (decision 147, for attribute tags)', () => {
+  const wildcardTags: Record<string, CustomTag> = {
+    resource: {
+      attributeTags: {
+        "*": [
+          { pattern: "on_.*", attributes: { event: { type: "string" } } },
+          {
+            pattern: "action-.*",
+            attributes: { kind: { type: "string", required: true } },
+          },
+        ],
+      },
+    },
+  };
+
+  it("a matched name takes the wildcard entry's contract", () => {
+    const valid = parseData(
+      "<resource><@on_click event='tap'/><@action-save kind='draft'/></resource>",
+      "/resource.mx",
+      { customTags: wildcardTags },
+    );
+    expect(valid.diagnostics).toEqual([]);
+    expect(valid.tree?.children[0]).toMatchObject({
+      kind: "tag",
+      name: "resource",
+      attrTags: [
+        { name: "on_click", attrs: [{ name: "event" }] },
+        { name: "action-save", attrs: [{ name: "kind" }] },
+      ],
+    });
+  });
+
+  it("an unknown attribute on a wildcard-matched name is a contract error", () => {
+    const result = parseData(
+      "<resource><@on_click nope=1/></resource>",
+      "/resource.mx",
+      { customTags: wildcardTags },
+    );
+    expect(result.tree).toBeUndefined();
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]?.message).toContain(
+      "unknown attribute `nope`",
+    );
+  });
+
+  it("an unmatched name stays unknown", () => {
+    const result = parseData("<resource><@nope/></resource>", "/resource.mx", {
+      customTags: wildcardTags,
+    });
+    expect(result.tree).toBeUndefined();
+    expect(result.diagnostics[0]?.message).toContain(
+      "unknown attribute tag `<@nope>`",
+    );
+  });
+});

@@ -39,10 +39,13 @@ import {
   type TemplateBackedTag,
 } from "./template-tag.ts";
 import {
+  attributeTagWildcardEntries,
   entryRegExp,
+  explicitAttributeTagEntries,
   explicitChildEntries,
   hasExplicitChild,
   INLINE_CONTRACT_KEYS,
+  matchAttributeTagWildcard,
   matchWildcardEntry,
   tagLabel,
   WILDCARD,
@@ -105,10 +108,41 @@ export interface CustomTagAttributeTag {
   required?: boolean;
   /** Closed attributes; omitted attributes remain open on an extended declaration. Defaults are not applied. */
   attributes?: Record<string, CustomTagAttribute>;
-  /** Recursive closed attribute-tag contract. */
-  attributeTags?: Record<string, CustomTagAttributeTag>;
+  /** Recursive closed attribute-tag contract, with the `"*"` wildcard. */
+  attributeTags?: CustomTagAttributeTags;
   /** Closed authored children, with the reserved `#text` class and the `"*"` wildcard. */
   children?: CustomTagChildren;
+}
+
+/**
+ * One `attributeTags["*"]` entry: a named attribute-tag declaration plus an
+ * optional `pattern` (decision 147 for attribute tags, mirroring
+ * `children["*"]`). There is no `contract` key: an entry is always an inline
+ * contract. `repeatable` applies per matched name; `required` has no single
+ * name to require and is rejected at registration.
+ */
+export interface WildcardAttributeTagEntry extends CustomTagAttributeTag {
+  /**
+   * JavaScript regex source matched against the whole attribute-tag name; MX
+   * anchors it (`^(?:pattern)$`, no flags). Omitted, the entry matches every
+   * name.
+   */
+  pattern?: string;
+}
+
+/** `attributeTags["*"]`: one entry, or a list tried in declaration order. */
+export type WildcardAttributeTags =
+  | WildcardAttributeTagEntry
+  | readonly WildcardAttributeTagEntry[];
+
+/**
+ * A closed `attributeTags` record: explicit names, plus the optional `"*"`
+ * entries for names no explicit entry (decision 147 for attribute tags).
+ * Explicit entries win.
+ */
+export interface CustomTagAttributeTags {
+  [name: string]: CustomTagAttributeTag | WildcardAttributeTags | undefined;
+  "*"?: WildcardAttributeTags;
 }
 
 /** Cardinality of an authored plain child (or the reserved `#text` class). */
@@ -132,7 +166,7 @@ export interface WildcardChildEntry {
   /** Inline contract: the child's attributes. */
   attributes?: Record<string, CustomTagAttribute>;
   /** Inline contract: the child's attribute tags. */
-  attributeTags?: Record<string, CustomTagAttributeTag>;
+  attributeTags?: CustomTagAttributeTags;
   /** Inline contract: the child's own children. */
   children?: CustomTagChildren;
   /** Inline contract: the unnamed tag inside the child (decision 145). */
@@ -494,7 +528,7 @@ export interface CustomTag {
   defaultTag?: string;
   parseOptions?: CustomTagParseOptions;
   attributes?: Record<string, CustomTagAttribute>;
-  attributeTags?: Record<string, CustomTagAttributeTag>;
+  attributeTags?: CustomTagAttributeTags;
   /**
    * Closed allowed authored children; `#text` permits non-whitespace text and
    * interpolations, and `"*"` accepts undeclared names (decision 147).
@@ -1521,11 +1555,22 @@ function validateAttributeTags(
   allowUncontractedTags: boolean,
   locate?: Locate,
 ): void {
+  const wildcardMatches = new Map<
+    string,
+    { entry: CustomTagAttributeTag; loc: Position }
+  >();
   for (const tag of tags) {
-    const declaration =
+    const explicitDeclared =
       declaredTags && Object.hasOwn(declaredTags, tag.name)
-        ? declaredTags[tag.name]
+        ? (declaredTags[tag.name] as CustomTagAttributeTag | undefined)
         : undefined;
+    // Check order (decision 147, for attribute tags): an explicit entry, then
+    // the `"*"` entries in order; no match leaves today's unknown-name error.
+    const declaration =
+      explicitDeclared ?? matchAttributeTagWildcard(declaredTags, tag.name);
+    if (declaration && !explicitDeclared) {
+      wildcardMatches.set(tag.name, { entry: declaration, loc: tag.loc });
+    }
     const extended = hasAttributeTagContract(declaration);
     if (!allowUncontractedTags && !extended) {
       if (tag.attrs.length > 0) {
@@ -1567,7 +1612,7 @@ function validateAttributeTags(
       );
     }
   }
-  for (const [name, declaration] of Object.entries(declaredTags ?? {})) {
+  for (const [name, declaration] of explicitAttributeTagEntries(declaredTags)) {
     const range = attributeTagOccurrenceRange(tree, name);
     if (declaration.repeatable !== true && range.max > 1) {
       const occurrences = tags.filter((tag) => tag.name === name);
@@ -1579,6 +1624,21 @@ function validateAttributeTags(
     }
     if (declaration.required && range.min === 0) {
       failForOwner(owner, `missing required attribute tag \`<@${name}>\``, loc);
+    }
+  }
+  // A `"*"` entry's cardinality is per matched name: two `<@row>` under one
+  // non-repeatable entry is one error naming `row` (decision 147, for
+  // attribute tags). `required` cannot apply: a wildcard has no single name
+  // to require, and registration rejects the key.
+  for (const [name, { entry, loc }] of wildcardMatches) {
+    const range = attributeTagOccurrenceRange(tree, name);
+    if (entry.repeatable !== true && range.max > 1) {
+      const occurrences = tags.filter((tag) => tag.name === name);
+      failForOwner(
+        owner,
+        `attribute tag \`<@${name}>\` may not be repeated`,
+        occurrences[1]?.loc ?? occurrences[0]?.loc ?? loc,
+      );
     }
   }
 }
@@ -1686,6 +1746,11 @@ const ATTRIBUTE_TAG_KEYS = [
   "attributeTags",
   "children",
   "defaultTag",
+] as const;
+/** An `attributeTags["*"]` entry: a pattern plus an inline contract; no `contract`, and no `required`. */
+const WILDCARD_ATTRIBUTE_TAG_KEYS = [
+  "pattern",
+  ...ATTRIBUTE_TAG_KEYS.filter((key) => key !== "required"),
 ] as const;
 
 const ITEM_TYPES = ["string", "number", "boolean"] as const;
@@ -1893,11 +1958,13 @@ function rejectAttributeTagParentConflicts(
   declarations: CustomTag["attributeTags"],
 ): void {
   for (const [name, declaration] of Object.entries(declarations ?? {})) {
+    if (name === WILDCARD || declaration === undefined) continue;
     const parentName = `@${name}`;
     const parentLabel = `\`<${parentName}>\``;
     const nestedOwner = `${owner}: ${parentLabel}`;
-    if (declaration.children !== undefined) {
-      for (const [childName] of explicitChildEntries(declaration.children)) {
+    const tagDeclaration = declaration as CustomTagAttributeTag;
+    if (tagDeclaration.children !== undefined) {
+      for (const [childName] of explicitChildEntries(tagDeclaration.children)) {
         const child =
           childName !== "#text" && Object.hasOwn(customTags, childName)
             ? customTags[childName]
@@ -1916,8 +1983,8 @@ function rejectAttributeTagParentConflicts(
       for (const [childName, child] of Object.entries(customTags)) {
         if (
           child.parents?.includes(parentName) &&
-          !hasExplicitChild(declaration.children, childName) &&
-          !wildcardReferences(declaration.children, childName)
+          !hasExplicitChild(tagDeclaration.children, childName) &&
+          !wildcardReferences(tagDeclaration.children, childName)
         ) {
           failAt(
             childName,
@@ -1930,7 +1997,7 @@ function rejectAttributeTagParentConflicts(
     rejectAttributeTagParentConflicts(
       customTags,
       nestedOwner,
-      declaration.attributeTags,
+      tagDeclaration.attributeTags,
     );
   }
 }
@@ -2066,26 +2133,73 @@ function rejectRecursiveContractKeys(
   for (const [name, declaration] of Object.entries(
     definition.attributeTags ?? {},
   )) {
-    keys(
-      declaration,
-      ATTRIBUTE_TAG_KEYS,
-      `"${name}" attribute tag declaration`,
-    );
-    rejectNonStringDefaultTag(`${owner}: \`<@${name}>\``, declaration);
-    if (path.has(declaration)) {
+    if (name === WILDCARD || declaration === undefined) continue;
+    const named = declaration as CustomTagAttributeTag;
+    keys(named, ATTRIBUTE_TAG_KEYS, `"${name}" attribute tag declaration`);
+    rejectNonStringDefaultTag(`${owner}: \`<@${name}>\``, named);
+    if (path.has(named)) {
       fail(
         `${label}: \`<@${name}>\`: an attribute-tag declaration contains itself`,
       );
     }
-    path.add(declaration);
+    path.add(named);
     rejectRecursiveContractKeys(
       `${owner}: "<@${name}>"`,
-      declaration,
+      named,
       `${label}: \`<@${name}>\``,
       root,
       path,
     );
-    path.delete(declaration);
+    path.delete(named);
+  }
+  if (
+    definition.attributeTags &&
+    Object.hasOwn(definition.attributeTags, WILDCARD)
+  ) {
+    const value: unknown = definition.attributeTags[WILDCARD];
+    if (value === null || typeof value !== "object") {
+      fail(
+        `${label}: \`attributeTags["*"]\` must be an entry object or a list of entry objects`,
+      );
+    }
+    const entries = Array.isArray(value) ? value : [value];
+    entries.forEach((entry: unknown, index) => {
+      const at = `\`attributeTags["*"]\` entry ${index + 1}`;
+      if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
+        fail(`${label}: ${at} must be an object`);
+      }
+      const declared = entry as WildcardAttributeTagEntry;
+      keys(declared, WILDCARD_ATTRIBUTE_TAG_KEYS, at);
+      if (declared.pattern !== undefined) {
+        if (typeof declared.pattern !== "string") {
+          fail(`${label}: ${at}: \`pattern\` must be a string`);
+        }
+        try {
+          entryRegExp(declared);
+        } catch (error) {
+          fail(
+            `${label}: ${at} has an invalid \`pattern\` ${JSON.stringify(declared.pattern)}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+      // An entry is always an inline contract (no `contract` key), so the one
+      // cycle registration must refuse is self-containment.
+      if (path.has(declared)) {
+        fail(
+          `${root}: \`attributeTags["*"]\` holds an entry that contains itself`,
+        );
+      }
+      rejectNonStringDefaultTag(`${label}: ${at}`, declared);
+      path.add(declared);
+      rejectRecursiveContractKeys(
+        `${owner}: ${at}`,
+        declared,
+        `${label}: ${at}`,
+        root,
+        path,
+      );
+      path.delete(declared);
+    });
   }
 }
 
@@ -2153,8 +2267,26 @@ export function rejectWildcardReferences(
     for (const [name, nested] of Object.entries(
       declaration.attributeTags ?? {},
     )) {
-      visit(`${label}: \`<@${name}>\``, nested, `@${name}`, seen);
+      if (name === WILDCARD || nested === undefined) continue;
+      visit(
+        `${label}: \`<@${name}>\``,
+        nested as CustomTagAttributeTag,
+        `@${name}`,
+        seen,
+      );
     }
+    // An `attributeTags["*"]` entry is always an inline contract: no name of
+    // its own to check `parents` against, but its nested contracts recurse.
+    attributeTagWildcardEntries(declaration.attributeTags).forEach(
+      (entry, index) => {
+        visit(
+          `${label}: \`attributeTags["*"]\` entry ${index + 1}`,
+          entry,
+          undefined,
+          seen,
+        );
+      },
+    );
   };
   for (const [tagName, definition] of Object.entries(customTags)) {
     visit(`\`<${tagName}>\``, definition, tagName, new Set());
