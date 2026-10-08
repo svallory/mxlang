@@ -65,6 +65,8 @@ function skips(targetName: string): Record<string, string> {
       "same as `html-comment-placeholder`: a rendered HTML comment has no JSX form",
     "comments-and-html-comment":
       "same as `html-comment-placeholder`: a rendered HTML comment has no JSX form",
+    "html-comment-body-markup":
+      "same as `html-comment-placeholder`: a rendered HTML comment has no JSX form",
     "while-loop":
       "`<while>` is an unbounded loop; a JSX expression renders a finite list, and the host has no `.map` form for it",
     "style-object": `${targetName}'s own style serializer appends \`px\` to a numeric value for a dimensional property, so \`style={top: 0}\` renders \`top:0px\` where Marko renders \`top:0\`. Both set the same computed style; the difference is the target renderer's output, not this host's lowering — which passes the object through to the \`style\` prop unchanged (see the \`style-object\` unit test).`,
