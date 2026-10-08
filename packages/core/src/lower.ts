@@ -1216,7 +1216,8 @@ function isMxAttributeTag(node: Node): boolean {
   // Once `lower()` takes MxNode only, the Marko branch goes.
   return (
     node?.type === "MxAttributeTag" ||
-    (node?.type === "MarkoTag" && String(node?.name?.value ?? "").startsWith("@"))
+    (node?.type === "MarkoTag" &&
+      String(node?.name?.value ?? "").startsWith("@"))
   );
 }
 
