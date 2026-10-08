@@ -333,7 +333,19 @@ export const astroTemplateDeclarations: HostDeclarations = {
     );
   },
   rejectElementAttributeTags: (name, node) => {
-    const first = node.attributeTags?.[0];
+    // Hybrid: check Marko field AND MX body children (slice 1 transition)
+    let first = node.attributeTags?.[0];
+    if (!first && node.body) {
+      const body = Array.isArray(node.body)
+        ? node.body
+        : (node.body.body ?? []);
+      first = body.find(
+        (child: any) =>
+          child?.type === "MxAttributeTag" ||
+          (child?.type === "MarkoTag" &&
+            String(child?.name?.value ?? "").startsWith("@")),
+      );
+    }
     const slot = String(first?.name?.value ?? "").replace(/^@/, "");
     fail(
       `attribute tags (\`<@${slot}>\`) lower to Astro named slots, which only a component accepts; \`<${name}>\` is an HTML element`,

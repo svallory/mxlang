@@ -4128,19 +4128,27 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   if (tagBinding) warnLowercaseBinding(ctx, node, name);
 
   const body = bodyChildren(node);
-  if (body.some(isMxAttributeTag)) {
+  // Hybrid: check BOTH Marko field AND MX body children for attribute tags
+  const hasAttributeTags =
+    (node.attributeTags ?? []).length > 0 || body.some(isMxAttributeTag);
+  if (hasAttributeTags) {
     ctx.declarations.rejectElementAttributeTags?.(name, node, ctx);
   }
   rejectUnsupportedFields(ctx, node, `\`<${name}>\``);
 
   const isVoid = VOID_TAGS.has(name);
+  // Filter attribute tags from children — they're processed by lowerAttributeTags,
+  // not as regular children. MX AST has them in body; Marko AST had them separate.
+  const contentChildren = body.filter(
+    (child: Node) => !isMxAttributeTag(child),
+  );
   return {
     kind: "Element",
     name,
     nameSpan: exprSpan(ctx, node.name),
     span: exprSpan(ctx, node),
     attrs: lowerAttrs(ctx, node, name, "element", true),
-    children: isVoid ? [] : lowerChildren(ctx, node.body?.body ?? []),
+    children: isVoid ? [] : lowerChildren(ctx, contentChildren),
     void: isVoid,
     loc: posOf(node),
   };
