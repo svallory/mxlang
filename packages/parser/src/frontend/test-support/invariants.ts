@@ -4,7 +4,7 @@
  * children are in source order, no child leaves its parent, siblings do not
  * overlap. Returns one line per violation; empty means the tree holds.
  */
-import type { InterimDocument } from "../interim.ts";
+import type { MxDocument } from "@mxlang/babel/mx-ast";
 
 // biome-ignore lint/suspicious/noExplicitAny: walks every node shape
 type Node = any;
@@ -29,7 +29,7 @@ const CONTAINERS = new Set([
  * tag's `bodyMode` must be what it answers for the written name.
  */
 export function checkInvariants(
-  document: InterimDocument,
+  document: MxDocument,
   tagShape?: (name: string) => string,
 ): string[] {
   const problems: string[] = [];
@@ -362,7 +362,7 @@ export function checkInvariants(
 }
 
 /** Every atom of every container in the document, in walk order. */
-export function allAtoms(document: InterimDocument): Span[] {
+export function allAtoms(document: MxDocument): Span[] {
   const found: Span[] = [];
   const walk = (value: unknown) => {
     if (Array.isArray(value)) {

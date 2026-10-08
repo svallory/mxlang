@@ -9,7 +9,7 @@
  * The tree differential (`packages/tests/parse-differential`) builds the same
  * form from today's Marko tree.
  */
-import type { InterimDocument } from "../interim.ts";
+import type { MxDocument } from "@mxlang/babel/mx-ast";
 
 // biome-ignore lint/suspicious/noExplicitAny: projects every node shape
 type Node = any;
@@ -19,7 +19,7 @@ const r = (span: { start: number; end: number }) =>
 const q = (text: string) => JSON.stringify(text);
 const expr = (container: Node) => `${q(container.source)} ${r(container)}`;
 
-export function projectDocument(document: InterimDocument): string[] {
+export function projectDocument(document: MxDocument): string[] {
   const out: string[] = [];
   for (const child of document.body) projectChild(child, 0, out);
   for (const error of document.errors) {

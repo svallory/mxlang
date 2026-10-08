@@ -13,6 +13,7 @@
  */
 import type {
   MxBodyMode,
+  MxDocument,
   MxErrorCode,
   MxFragmentBase,
   MxFrontEndOptions,
@@ -26,7 +27,6 @@ import type {
   Ranges,
   TagType as TagTypeValue,
 } from "../template/internal.ts";
-import type { InterimDocument } from "./interim.ts";
 import {
   type RuleContext,
   frontEndRules as realFrontEndRules,
@@ -36,13 +36,6 @@ import {
 export interface ParseOptions extends MxFrontEndOptions {
   readonly base?: MxFragmentBase;
 }
-
-/**
- * PR 3 seam: `MxText.value` is the raw source slice and `valueSpan` the node
- * span until the whitespace layer (ast §3.8) lands. Every `onText` run is a
- * node; PR 3 drops the runs that normalize to "".
- */
-export const TEXT_VALUE_IS_RAW = true;
 
 /** Decision 161's wording for an error that is never the author's. */
 const MX_BUG = "not yours: an MX bug";
@@ -113,9 +106,26 @@ export interface TagBuilder extends Builder {
   _closeStart: number | undefined;
   _closeName: Range | undefined;
   _openEnded: boolean;
+  /** Opened with a preserving body mode; its close ends the preserved run. */
+  _preserves?: boolean;
   /** Opened by `headTag` before any name event; a later name fills it in. */
   _phantom?: boolean;
 }
+
+/**
+ * The whitespace layer of a normalizing body (ast §3.8, decision 166 item
+ * 2): Marko's `onText` rule, reproduced. A pure whitespace run that starts
+ * with a line break is layout and produces no node; otherwise the leading
+ * newline-led run is dropped by what the previous sibling is (a placeholder
+ * keeps it), and the trailing one is settled by what comes next — the
+ * settle runs at the next content push, at a tag close, and at the end of
+ * the parse, exactly where Marko's `onNext` fires. Inner whitespace
+ * collapses to one space in `value`; `valueSpan` covers the trimmed text
+ * before the collapse (Marko's `withLoc` range).
+ */
+const LAYOUT_WHITESPACE = /^(?:[\n\r][ \t\n\r\f]*)?(?:[\n\r][ \t\n\r\f]*)?$/;
+const LEADING_BREAK = /^[\n\r][ \t\n\r\f]*/;
+const TRAILING_BREAK = /[\n\r][ \t\n\r\f]*$/;
 
 /**
  * Parses `source` into the MX AST (ast §3). Never throws on any input: a
@@ -123,7 +133,7 @@ export interface TagBuilder extends Builder {
  * returned in `errors` with the tree built so far (ast §3.13). Throws a
  * `TypeError` only for a missing option, a programming error.
  */
-export function parse(source: string, options: ParseOptions): InterimDocument {
+export function parse(source: string, options: ParseOptions): MxDocument {
   if (typeof source !== "string") {
     throw new TypeError("parse: `source` must be a string");
   }
@@ -241,6 +251,7 @@ class FrontEnd {
         this.runRules(open[i], open[i + 1]);
       }
     }
+    this.settle();
   }
 
   // --- positions -----------------------------------------------------------
@@ -353,6 +364,7 @@ class FrontEnd {
   }
 
   pushChild(node: Builder): void {
+    this.settle(node);
     const top = this.top;
     if (top) {
       if (!top.body) throw new Error("a child arrived for a tag with no body");
@@ -362,8 +374,48 @@ class FrontEnd {
   }
 
   onText(range: Range): void {
-    const span = this.span(range);
     const raw = this.slice(range);
+    const span = this.span(range);
+    if (this.preserving === 0) {
+      if (LAYOUT_WHITESPACE.test(raw)) return;
+      let value = raw;
+      switch (this.previousSibling()?.type) {
+        case "MxPlaceholder":
+          break;
+        case "MxText": {
+          const previous = this.previousSibling() as { value: string };
+          if (/[ \t\n\r\f]$/.test(previous.value))
+            value = value.replace(/^[ \t\n\r\f]+/, "");
+          break;
+        }
+        case "MxTag":
+        case "MxReturn":
+          break;
+        case "MxAttributeTag":
+        case "MxModuleStatement":
+          value = value.replace(LEADING_BREAK, "");
+          break;
+        default:
+          value = value.replace(LEADING_BREAK, "");
+      }
+      if (value === "") return;
+      const node: Builder = {
+        type: "MxText",
+        ...span,
+        value,
+        raw,
+        valueSpan: { ...span },
+      };
+      this.pushChild(node);
+      this.pending = {
+        node,
+        body: (this.top?.body ?? this.body) as Builder[],
+        raw,
+        start: range.start,
+        value,
+      };
+      return;
+    }
     this.pushChild({
       type: "MxText",
       ...span,
@@ -371,6 +423,71 @@ class FrontEnd {
       raw,
       valueSpan: { ...span },
     });
+  }
+
+  /** The last child of the body the next child joins, skipping scriptlets and comments (Marko's `onText` prev scan). */
+  previousSibling(): Builder | undefined {
+    const body = (this.top?.body ?? this.body) as Builder[];
+    for (let at = body.length - 1; at >= 0; at--) {
+      const node = body[at] as Builder;
+      if (node.type === "MxScriptlet" || node.type === "MxComment") continue;
+      return node;
+    }
+    return undefined;
+  }
+
+  /** Open tags whose body preserves whitespace (Marko's `preservingWhitespaceUntil`). */
+  preserving = 0;
+
+  /** A pending text node's settle state (Marko's `onNext` closure). */
+  pending:
+    | {
+        node: Builder;
+        body: Builder[];
+        raw: string;
+        start: number;
+        value: string;
+      }
+    | undefined;
+
+  /**
+   * The whitespace settle of the pending text node (Marko's `onNext`): the
+   * next content node decides the trailing trim; a scriptlet or comment
+   * leaves it pending for the node after. Every pushed child, every tag
+   * close and the end of the parse pass through here.
+   */
+  settle(next?: Builder): void {
+    const pending = this.pending;
+    if (!pending) return;
+    switch (next?.type) {
+      case "MxScriptlet":
+      case "MxComment":
+        return;
+      case "MxPlaceholder":
+      case "MxTag":
+      case "MxReturn":
+        break;
+      case "MxText":
+        if (/^[ \t\n\r\f]/.test((next as { value: string }).value))
+          pending.value = pending.value.replace(/[ \t\n\r\f]+$/, "");
+        break;
+      default:
+        pending.value = pending.value.replace(TRAILING_BREAK, "");
+    }
+    this.pending = undefined;
+    const value = pending.value.replace(/[ \t\n\r\f]+/g, " ");
+    if (value === "") {
+      const at = pending.body.indexOf(pending.node);
+      if (at >= 0) pending.body.splice(at, 1);
+      return;
+    }
+    const trimmedAt = pending.raw.indexOf(pending.value);
+    const start = trimmedAt < 0 ? 0 : pending.start + trimmedAt;
+    pending.node.value = value;
+    pending.node.valueSpan = {
+      start: this.at(start),
+      end: this.at(start + pending.value.length),
+    };
   }
 
   onPlaceholder(event: Ranges.Placeholder): void {
@@ -559,7 +676,11 @@ class FrontEnd {
       _closeStart: undefined,
       _closeName: undefined,
       _openEnded: false,
-    };
+    } as TagBuilder;
+    if (bodyMode === "preserve" || bodyMode === "parsed-text-preserve") {
+      this.preserving++;
+      tag._preserves = true;
+    }
     this.pushChild(tag);
     this.stack.push(tag);
     this.reach(headEnd);
@@ -994,9 +1115,11 @@ class FrontEnd {
   }
 
   close(tag: TagBuilder): void {
+    this.settle();
     if (this.stack.pop() !== tag) {
       throw new Error("closed a tag that is not the innermost open one");
     }
+    if (tag._preserves) this.preserving--;
     const parent = this.top;
     if (parent && tag.end > parent._reached) parent._reached = tag.end;
     this.runRules(tag, parent);
@@ -1037,6 +1160,7 @@ class FrontEnd {
   stopAll(at: number): void {
     if (this.stopped) return;
     this.stopped = true;
+    this.settle();
     const statement = this.statement;
     this.statement = undefined;
     if (statement) {
@@ -1092,7 +1216,7 @@ class FrontEnd {
   /** Inside one of the front end's handlers (set only while `inTemplate`). */
   inHandler = false;
 
-  finish(base: MxFragmentBase): InterimDocument {
+  finish(base: MxFragmentBase): MxDocument {
     const errors = [...this.errors].sort((a, b) => a.start - b.start);
     if (this.templateError) errors.push(this.templateError);
     const document = {
@@ -1106,7 +1230,7 @@ class FrontEnd {
       base: { offset: base.offset, line: base.line, column: base.column },
     };
     // SAFETY: `freezeCopy` copies the builder tree shape verbatim.
-    return freezeCopy(document) as unknown as InterimDocument;
+    return freezeCopy(document) as unknown as MxDocument;
   }
 }
 

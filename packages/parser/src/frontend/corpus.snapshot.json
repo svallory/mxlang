@@ -674,9 +674,7 @@
   ],
   "g0158": [
     "tag \"div\" [1,4) [0,16) open=[0,5) close=[10,16) \"div\" mode=html",
-    "  text [5,6)",
-    "  scriptlet [6,9) \"a\" [8,9)",
-    "  text [9,10)"
+    "  scriptlet [6,9) \"a\" [8,9)"
   ],
   "g0159": [
     "tag \"div\" [1,4) [0,16) open=[0,5) close=[10,16) \"div\" mode=html",
@@ -685,8 +683,7 @@
   "g0160": [
     "tag \"div\" [1,4) [0,17) open=[0,5) close=[11,17) \"div\" mode=html",
     "  text [5,6)",
-    "  comment line [6,10) value=[8,10)",
-    "  text [10,11)"
+    "  comment line [6,10) value=[8,10)"
   ],
   "g0161": [
     "tag \"div\" [1,4) [0,21) open=[0,5) close=[15,21) \"div\" mode=html",
@@ -2194,7 +2191,6 @@
   "g0510": ["scriptlet [0,12) \"foo(\\n  a\\n)\" [2,12)"],
   "g0511": [
     "tag \"p\" [1,2) [0,11) open=[0,3) mode=html incomplete",
-    "  text [3,4)",
     "  scriptlet [4,11) \"a</p>\" [6,11)",
     "error MISSING_END_TAG [0,3)"
   ],
@@ -2938,7 +2934,6 @@
   "g0679": [
     "tag \"a\" [1,2) [0,7) open=[0,3) close=[3,7) \"a\" mode=html",
     "tag \"b\" [8,9) [7,15) open=[7,10) close=[11,15) \"b\" mode=html",
-    "  text [10,11)",
     "tag \"div\" [16,19) [16,19) open=[16,19) mode=html concise"
   ],
   "g0680": [
@@ -3278,8 +3273,7 @@
   "g0760": [
     "tag \"p\" [1,2) [0,14) open=[0,3) close=[10,14) \"p\" mode=html",
     "  text [3,5)",
-    "  comment line [5,9) value=[7,9)",
-    "  text [9,10)"
+    "  comment line [5,9) value=[7,9)"
   ],
   "g0761": [
     "tag \"p\" [1,2) [0,15) open=[0,3) close=[11,15) \"p\" mode=html",
@@ -3338,9 +3332,7 @@
   ],
   "g0774": [
     "tag \"p\" [1,2) [0,14) open=[0,3) close=[10,14) \"p\" mode=html",
-    "  text [3,6)",
-    "  scriptlet [6,9) \"x\" [8,9)",
-    "  text [9,10)"
+    "  scriptlet [6,9) \"x\" [8,9)"
   ],
   "g0775": ["text [3,4)"],
   "g0776": [
@@ -3367,7 +3359,6 @@
   ],
   "g0781": [
     "tag \"a\" [101,102) [100,112) open=[100,103) close=[108,112) \"a\" mode=html",
-    "  text [103,104)",
     "  tag \"b\" [105,106) [104,108) open=[104,108) mode=html self-closed"
   ],
   "g0782": [
@@ -3564,7 +3555,6 @@
   ],
   "g0824": [
     "tag \"div\" [1,4) [0,11) open=[0,5) mode=html incomplete",
-    "  text [5,6)",
     "  scriptlet [6,11) \"a +\" [8,11)",
     "error MISSING_END_TAG [0,5)"
   ],
@@ -3930,9 +3920,7 @@
   ],
   "g0906": [
     "tag \"p\" [1,2) [0,12) open=[0,3) close=[8,12) \"p\" mode=html",
-    "  text [3,4)",
-    "  scriptlet [4,7) \"x\" [6,7)",
-    "  text [7,8)"
+    "  scriptlet [4,7) \"x\" [6,7)"
   ],
   "g0907": [
     "scriptlet block [0,11) \" a; b \" [3,9)",
@@ -3945,7 +3933,6 @@
   "g0909": ["scriptlet [0,5) \"a +\" [2,5)"],
   "g0910": [
     "tag \"p\" [1,2) [0,7) open=[0,3) mode=html incomplete",
-    "  text [3,4)",
     "error INVALID_EXPRESSION [7,7)"
   ],
   "g0911": ["error INVALID_EXPRESSION [3,3)"],
@@ -4920,9 +4907,7 @@
   ],
   "g1139": [
     "tag \"p\" [1,2) [0,19) open=[0,3) close=[15,19) \"p\" mode=html",
-    "  text [3,6)",
-    "  scriptlet block [6,14) \"\\n a \" [9,13)",
-    "  text [14,15)"
+    "  scriptlet block [6,14) \"\\n a \" [9,13)"
   ],
   "g1140": ["scriptlet block [0,8) \" a \" [3,6)"],
   "g1141": ["scriptlet block [0,9) \" a \" [3,6)"],
@@ -5307,9 +5292,7 @@
   "g1223": ["scriptlet [0,8) \"foo\" [5,8)"],
   "g1224": [
     "tag \"p\" [1,2) [0,23) open=[0,3) close=[19,23) \"p\" mode=html",
-    "  text [3,4)",
-    "  scriptlet [4,18) \"const a = 1;\" [6,18)",
-    "  text [18,19)"
+    "  scriptlet [4,18) \"const a = 1;\" [6,18)"
   ],
   "g1225": [
     "tag \"div\" [1,4) [0,15) open=[0,5) close=[9,15) \"div\" mode=html",
@@ -5683,7 +5666,6 @@
   ],
   "g1302": [
     "tag \"p\" [1,2) [0,7) open=[0,3) mode=html incomplete",
-    "  text [3,4)",
     "error INVALID_EXPRESSION [7,7)"
   ],
   "g1303": [
@@ -6286,19 +6268,14 @@
   ],
   "g1438": [
     "tag \"p\" [1,2) [0,16) open=[0,3) close=[12,16) \"p\" mode=html",
-    "  text [3,6)",
-    "  scriptlet block [6,11) \"a\" [9,10)",
-    "  text [11,12)"
+    "  scriptlet block [6,11) \"a\" [9,10)"
   ],
   "g1439": [
     "tag \"p\" [1,2) [0,24) open=[0,3) close=[20,24) \"p\" mode=html",
-    "  text [3,6)",
-    "  scriptlet [6,19) \"x = a +\\n  b\" [8,19)",
-    "  text [19,20)"
+    "  scriptlet [6,19) \"x = a +\\n  b\" [8,19)"
   ],
   "g1440": [
     "tag \"p\" [1,2) [0,22) open=[0,3) close=[18,22) \"p\" mode=html",
-    "  text [3,6)",
     "  scriptlet [6,13) \"x = a\" [8,13)",
     "  text [13,18)"
   ],
@@ -6851,7 +6828,6 @@
   ],
   "g1558": [
     "tag \"p\" [1,2) [0,13) open=[0,3) mode=html incomplete",
-    "  text [3,6)",
     "  scriptlet [6,13) \"x</p>\" [8,13)",
     "error MISSING_END_TAG [0,3)"
   ],
@@ -6978,7 +6954,6 @@
   ],
   "g1587": [
     "tag \"p\" [1,2) [0,15) open=[0,3) mode=html incomplete",
-    "  text [3,4)",
     "  scriptlet [4,15) \"a > b</p>\" [6,15)",
     "error MISSING_END_TAG [0,3)"
   ],

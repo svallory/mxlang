@@ -3,6 +3,5 @@
  * (`src/template/index.ts`) does not re-export it and `package.json` has no
  * subpath for it (`frontend/exposure.test.ts` pins both).
  */
-export type { InterimDocument } from "./interim.ts";
 export { lineColumnAt } from "./line-column.ts";
 export { type ParseOptions, parse, TEXT_VALUE_IS_RAW } from "./parse.ts";

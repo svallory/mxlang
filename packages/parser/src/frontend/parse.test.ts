@@ -535,15 +535,15 @@ describe("§3.7 MxAttributeTag", () => {
   });
 });
 
-describe("§3.8 MxText (PR 3 seam: value is raw)", () => {
-  it("node span and raw are the authored run", () => {
+describe("§3.8 MxText (the whitespace layer, PR 3)", () => {
+  it("node span and raw are the authored run; value is normalized", () => {
     const text = first("<p>  a\n  b</p>").body[0];
     expect(text).toMatchObject({
       type: "MxText",
       start: 3,
       end: 10,
       raw: "  a\n  b",
-      value: "  a\n  b",
+      value: " a b",
     });
     expect(text.valueSpan).toEqual(span(3, 10));
   });
@@ -786,7 +786,8 @@ describe("§3.13 errors", () => {
       end: 5,
     });
     expect(d.body[0]).toMatchObject({ start: 0, end: 24, incomplete: true });
-    expect(d.body[0].body[1]).toMatchObject({
+    // The whitespace-only run `\n  ` before <p> is layout and no node (PR 3).
+    expect(d.body[0].body[0]).toMatchObject({
       type: "MxTag",
       incomplete: false,
       end: 16,

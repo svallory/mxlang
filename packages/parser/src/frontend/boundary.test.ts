@@ -141,7 +141,8 @@ describe("internal failures", () => {
       body: unknown[];
     };
     expect(a.incomplete).toBe(true);
-    expect(a.body).toHaveLength(3);
+    // The `\n` between <b/> and <c/> is layout and no node (PR 3, ast §3.8).
+    expect(a.body).toHaveLength(2);
     expect(checkInvariants(document)).toEqual([]);
   });
 
