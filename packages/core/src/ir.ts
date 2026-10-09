@@ -667,6 +667,19 @@ export type IrNode =
       kind: "Import";
       code: string;
       bindings: string[];
+      /**
+       * The statement's Babel `ImportDeclaration`, as the MX front end parsed
+       * it (the `MxModuleStatement`'s payload, as written: a whole
+       * `import type` and an inline `{ type X }` are still in it, though the
+       * compile strips them from the payload before lowering): a consumer
+       * reads the module specifier and each specifier (`imported`, `local`,
+       * `importKind`) from it instead of parsing `code` again. Typed `Node`,
+       * like `Expr.node`, because this `.d.ts` may not name Babel's types.
+       * Absent for a synthesized import, for an import the Marko front end
+       * parsed (its statement tag carries text only), and when the payload
+       * did not parse to a single `ImportDeclaration`.
+       */
+      declaration?: Node;
       end: Position;
       /**
        * File-absolute UTF-16 code-unit span of the authored statement,

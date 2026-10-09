@@ -222,9 +222,40 @@ export interface DataStatement {
   span: SourceSpan;
 }
 
+/** One name an `import` brings in. */
+export interface DataImportName {
+  /**
+   * The name the module exports: `useState` for both `{ useState }` and
+   * `{ useState as us }`, `"default"` for a default import, `"*"` for a
+   * namespace import (every export is reachable through `local`).
+   */
+  imported: string;
+  /** The binding this file refers to it by (the alias, when there is one). */
+  local: string;
+  kind: "default" | "named" | "namespace";
+  /** Present (`true`) only for an inline `{ type X }` specifier. */
+  typeOnly?: true;
+}
+
+/**
+ * A top-level `import`: the authored statement (`code`, `span`) and what the
+ * front end parsed out of it. `from` and `names` are read from the parsed
+ * `ImportDeclaration`, not from the text, so a quote style, a line break or
+ * a comment inside the statement changes nothing.
+ */
 export interface DataImport {
   code: string;
   span: SourceSpan;
+  /** The module specifier, unquoted: `"./icon.mx"` for `from './icon.mx'`. */
+  from: string;
+  /**
+   * The names in the order written; empty for a side-effect import
+   * (`import "./polyfill"`). A mixed import lists the default first, then the
+   * named ones, as written.
+   */
+  names: DataImportName[];
+  /** Present (`true`) only for a whole `import type … from …`. */
+  typeOnly?: true;
 }
 
 export interface DataDocument {

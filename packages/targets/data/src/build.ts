@@ -22,7 +22,7 @@
  * document order, for a consumer (mash) that wants tags and attributes only.
  */
 
-import type { Expression } from "@babel/types";
+import type { Expression, ImportDeclaration } from "@babel/types";
 import {
   type Attr,
   type AttributeTag,
@@ -46,6 +46,8 @@ import type {
   DataDocument,
   DataExpr,
   DataForHead,
+  DataImport,
+  DataImportName,
   DataNode,
   DataStatement,
   DataTag,
@@ -725,6 +727,63 @@ function statements(ir: Ir): DataStatement[] {
   return out;
 }
 
+/**
+ * The authored imports, in file order, with the module specifier and the
+ * names each brings in. Both come from the Babel `ImportDeclaration` the
+ * front end parsed (`Import.declaration`), never from the statement text.
+ */
+function dataImports(ir: Ir): DataImport[] {
+  const out: DataImport[] = [];
+  for (const node of ir.imports) {
+    if (node.synthesized) continue;
+    const declaration = node.declaration as ImportDeclaration | undefined;
+    if (declaration?.type !== "ImportDeclaration") {
+      throw new Error(
+        "@mxlang/data: core IR invariant broken — an authored `import` carries no parsed declaration",
+      );
+    }
+    out.push({
+      code: node.code,
+      span: requiredSpan(node.span, "`import` statement"),
+      from: declaration.source.value,
+      names: declaration.specifiers.map(importName),
+      ...(declaration.importKind === "type" ? { typeOnly: true as const } : {}),
+    });
+  }
+  out.sort((a, b) => a.span.sourceStart - b.span.sourceStart);
+  return out;
+}
+
+function importName(
+  specifier: ImportDeclaration["specifiers"][number],
+): DataImportName {
+  const typeOnly =
+    specifier.type === "ImportSpecifier" && specifier.importKind === "type"
+      ? { typeOnly: true as const }
+      : {};
+  switch (specifier.type) {
+    case "ImportDefaultSpecifier":
+      return {
+        imported: "default",
+        local: specifier.local.name,
+        kind: "default",
+      };
+    case "ImportNamespaceSpecifier":
+      return { imported: "*", local: specifier.local.name, kind: "namespace" };
+    case "ImportSpecifier":
+      return {
+        // `import { "a-b" as ab }` names the export with a string literal.
+        imported:
+          specifier.imported.type === "StringLiteral"
+            ? specifier.imported.value
+            : specifier.imported.name,
+        local: specifier.local.name,
+        kind: "named",
+        ...typeOnly,
+      };
+  }
+}
+
 /** The error text for an authored tag with no contract in `customTags`. */
 export function unknownTagMessage(
   name: string,
@@ -1083,9 +1142,7 @@ function buildAll(
         kind: "document",
         filename,
         statements: stmts.filter((stmt) => stmt.kind !== "import"),
-        imports: stmts
-          .filter((stmt) => stmt.kind === "import")
-          .map(({ code, span }) => ({ code, span })),
+        imports: dataImports(ir),
         children,
       },
       errors,

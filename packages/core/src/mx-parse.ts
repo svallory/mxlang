@@ -630,6 +630,29 @@ function stripProgram(body: Node[]): Node[] {
   );
 }
 
+/**
+ * Each `import` module statement's Babel `ImportDeclaration`, as the front end
+ * parsed it, copied just before `stripMxTypes` runs. The strip is Marko's
+ * `transform-typescript` (`onlyRemoveTypeImports`): it deletes a whole
+ * `import type` and every `{ type X }` specifier from the payload in place,
+ * and a consumer reading what was imported (`Import.declaration`) needs
+ * exactly what the author wrote, type-only marks included. Keyed on the
+ * `MxModuleStatement`; absent when the document was never stripped (the
+ * payload is then the parsed declaration itself).
+ */
+export const parsedImportDeclarations = new WeakMap<object, Node>();
+
+function recordImportDeclaration(statement: Node): void {
+  if (statement.keyword !== "import") return;
+  const body = statement.code?.node;
+  if (!Array.isArray(body) || body.length !== 1) return;
+  if (body[0]?.type !== "ImportDeclaration") return;
+  parsedImportDeclarations.set(
+    statement,
+    markoBabel().types.cloneNode(body[0], true),
+  );
+}
+
 const TYPE_CONTAINERS = new Set(["MxTypeArguments", "MxTypeParameters"]);
 
 /** Strips TypeScript from every payload of `document`, as Marko's `stripTypes` did. */
@@ -644,6 +667,7 @@ export function stripMxTypes(document: Node): void {
       return;
     }
     if (typeof value.type === "string" && value.type.startsWith("Mx")) {
+      if (value.type === "MxModuleStatement") recordImportDeclaration(value);
       for (const [key, field] of Object.entries(value) as [string, Node][]) {
         if (
           field &&

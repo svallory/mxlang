@@ -137,7 +137,11 @@ import type {
 } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
-import { endOfInputError, pendingFrontEndError } from "./mx-parse.ts";
+import {
+  endOfInputError,
+  parsedImportDeclarations,
+  pendingFrontEndError,
+} from "./mx-parse.ts";
 import {
   declaredBinding,
   type ScriptletDeclaration,
@@ -2984,6 +2988,25 @@ function firstJsxStart(
   return found;
 }
 
+/**
+ * The `declaration` field of an `Import` IR node: the Babel `ImportDeclaration`
+ * an `MxModuleStatement` carries. Read from the copy taken before the
+ * TypeScript strip (`parsedImportDeclarations`, which keeps `import type` and
+ * `{ type X }`), else the payload itself (`code.node`, one statement). A Marko statement tag
+ * has no parsed payload, and a payload that did not parse (`code.node` null)
+ * or is not one import stays absent rather than guessed.
+ */
+function importDeclarationOf(node: Node): { declaration?: Node } {
+  if (node?.type !== "MxModuleStatement") return {};
+  const recorded = parsedImportDeclarations.get(node);
+  if (recorded) return { declaration: recorded };
+  const statements = node.code?.node;
+  if (!Array.isArray(statements) || statements.length !== 1) return {};
+  return statements[0]?.type === "ImportDeclaration"
+    ? { declaration: statements[0] }
+    : {};
+}
+
 function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
   // Decision 168: a statement tag is parsed as a statement (Marko: its text
   // is `rawValue`; MX: an `MxModuleStatement`). One the parser read as
@@ -3040,7 +3063,15 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
       }
     }
     registerAuthoredTemplateImport(ctx, line);
-    return { kind: "Import", code: line, bindings, loc, end, span };
+    return {
+      kind: "Import",
+      code: line,
+      bindings,
+      ...importDeclarationOf(node),
+      loc,
+      end,
+      span,
+    };
   }
   if (name === "static") {
     const code = line.replace(/^static\s+/, "");
