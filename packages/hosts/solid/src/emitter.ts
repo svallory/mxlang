@@ -1,4 +1,4 @@
-import { parse as parseBabel, parseExpression } from "@babel/parser";
+import { parse as parseBabel } from "@babel/parser";
 import {
   type Attr,
   type AttributeTag,
@@ -20,7 +20,7 @@ import {
   type MappedCode,
   mapped,
   mappedExpr,
-  mappedRewrite,
+  mappedMethod,
   type Node,
   type Position,
   type ReadRewrite,
@@ -856,24 +856,6 @@ function staticTemplateValue(expr: Expr): string | null {
 }
 
 /**
- * Where the body of a printed method starts: `code` is the `function`
- * expression the compiler printed for an attribute method shorthand
- * (`onClick() { … }` as `function () { … }`), and the parsed function's own
- * body position splits it (a body may hold its own `) {`). `null` when `code`
- * is not one function expression.
- */
-function printedBodyStart(code: string): number | null {
-  let fn: Node;
-  try {
-    fn = parseExpression(code, { plugins: ["typescript"] });
-  } catch {
-    return null;
-  }
-  if (fn?.type !== "FunctionExpression" || fn.end !== code.length) return null;
-  return fn.body.start;
-}
-
-/**
  * Whether TypeScript reads `node` as never nullish, so that `?? {}` after it is
  * unreachable (TS2869). This mirrors the checker's own syntactic rule
  * (`getSyntacticNullishnessSemantics`, TypeScript 5.6+) on the Babel node:
@@ -1027,14 +1009,7 @@ function guardValue(
  * reformatted it or reads were rewritten.
  */
 function mappedValue(expr: Expr): MappedCode {
-  const { bodySpan, bodySource } = expr;
-  if (!bodySpan || bodySource === undefined) return mappedExpr(expr);
-  const at = printedBodyStart(expr.code);
-  if (at === null) return concatMapped(expr.code);
-  return concatMapped(
-    mapped(expr.code.slice(0, at), null),
-    mappedRewrite(expr.code.slice(at), bodySource, bodySpan),
-  );
+  return mappedMethod(expr) ?? mappedExpr(expr);
 }
 
 function renderAttr(

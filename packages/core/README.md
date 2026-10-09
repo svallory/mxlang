@@ -722,6 +722,15 @@ rather than a fabricated span pointing at unrelated text. `mapping.ts`'s
 `GeneratedMapping`, mirroring `mapped(name, nameSpan)` for the attribute-name
 half of the mapped population; adopting it is per host and out of scope here.
 
+`mappedMethod(expr)` is the sibling for an attribute method shorthand
+(`onClick() { … }`). It returns the `function` expression Marko's printer made
+of it, with the printed head unmapped and the body mapped token by token
+against the authored body (`Expr.bodySource`/`bodySpan`, `mappedRewrite`), also
+when the printer reformatted the body or reads were rewritten. It returns
+`undefined` for anything that is not a method shorthand, so a caller falls back
+to `mappedExpr(expr)`. Callers: the Preact emitter, which the React and Hono
+hosts share, and the Solid emitter, both as `mappedMethod(expr) ?? mappedExpr(expr)`.
+
 `Define.nameSpan`/`paramSpans` and `For.paramSpans` extend the same
 convention to `<define>`'s own name and params and a `<for>`'s params — the
 file-absolute UTF-16 code-unit spans every other source-derived IR run already carried.
