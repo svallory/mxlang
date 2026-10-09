@@ -2,20 +2,6 @@
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    // Typecheck-only (`tsconfig.build.json` pins `rootDir: src` for the
-    // declarations, and the bundle is built by `bun build` with the workspace
-    // deps external). The workspace deps resolve from their src here, so no
-    // typecheck path needs a prebuilt (or fresh) dist; the published `types`
-    // still point at dist. The parser maps to its hand-written `public.d.ts`
-    // (its vendored Babel src needs relaxed flags), as vite-plugin does.
-    // `@mxlang/angular` itself is imported by the oracle report the mapping
-    // test reuses. `rootDir` covers the deps' src (TS6059 otherwise).
-    "rootDir": "../../..",
-    "paths": {
-      "@mxlang/core": ["../../core/src/index.ts"],
-      "@mxlang/tsx-bridge": ["../../tsx-bridge/src/public.d.ts"],
-      "@mxlang/angular": ["./src/index.ts"]
-    },
     "types": ["node", "bun"],
     "allowImportingTsExtensions": true
   },
