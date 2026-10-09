@@ -69,14 +69,14 @@ function exportedNames(file: string): string[] {
 
 describe("@mxlang/tsx-bridge tarball", () => {
   it("declares a `files` allowlist", () => {
-    expect(pkg.files).toEqual(["dist", "README.md"]);
+    expect(pkg.files).toEqual(["dist", "README.md", "CHANGELOG.md"]);
   });
 
   it("packs only dist/, README, LICENSE and package.json", () => {
     const stray = packedFiles().filter(
       (f) =>
         !f.startsWith("dist/") &&
-        !["package.json", "README.md", "LICENSE"].includes(f),
+        !["package.json", "README.md", "CHANGELOG.md", "LICENSE"].includes(f),
     );
     expect(stray).toEqual([]);
   });

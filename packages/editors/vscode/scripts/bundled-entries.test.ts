@@ -48,7 +48,7 @@ describe("the language server's bundled build", () => {
         "utf8",
       ),
     ) as { files: string[] };
-    expect(manifest.files).toEqual(["dist", "README.md"]);
+    expect(manifest.files).toEqual(["dist", "README.md", "CHANGELOG.md"]);
     expect(manifest.files).not.toContain(LS_OUTDIR);
     const gitignore = readFileSync(
       join(import.meta.dirname, "../../../../.gitignore"),
