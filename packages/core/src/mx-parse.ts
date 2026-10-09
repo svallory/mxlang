@@ -642,6 +642,31 @@ function stripProgram(body: Node[]): Node[] {
  */
 export const parsedImportDeclarations = new WeakMap<object, Node>();
 
+/**
+ * Whether an `import` statement's payload holds something the strip cannot
+ * take: a TypeScript `import x = …` (Babel's strip refuses `= require()` with
+ * CommonJS advice that does not apply to MX, and leaves `import x = M.N`
+ * in place) or a Flow `import typeof`. Such a payload is left unstripped, so
+ * lowering refuses it at the statement (`refuseUnsupportedImport`).
+ */
+function leavesImportUnstripped(statement: Node): boolean {
+  const body = statement.code?.node;
+  if (!Array.isArray(body)) return false;
+  return body.some(
+    (node: Node) =>
+      node?.type === "TSImportEqualsDeclaration" ||
+      (node?.type === "ImportDeclaration" && isTypeofImport(node)),
+  );
+}
+
+/** Flow's `import typeof T from "m"` / `import { typeof T } from "m"`. */
+export function isTypeofImport(declaration: Node): boolean {
+  return (
+    declaration.importKind === "typeof" ||
+    (declaration.specifiers ?? []).some((s: Node) => s.importKind === "typeof")
+  );
+}
+
 function recordImportDeclaration(statement: Node): void {
   if (statement.keyword !== "import") return;
   const body = statement.code?.node;
@@ -667,7 +692,10 @@ export function stripMxTypes(document: Node): void {
       return;
     }
     if (typeof value.type === "string" && value.type.startsWith("Mx")) {
-      if (value.type === "MxModuleStatement") recordImportDeclaration(value);
+      if (value.type === "MxModuleStatement") {
+        recordImportDeclaration(value);
+        if (value.keyword === "import" && leavesImportUnstripped(value)) return;
+      }
       for (const [key, field] of Object.entries(value) as [string, Node][]) {
         if (
           field &&

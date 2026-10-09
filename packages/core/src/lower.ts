@@ -139,6 +139,7 @@ import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
 import {
   endOfInputError,
+  isTypeofImport,
   parsedImportDeclarations,
   pendingFrontEndError,
 } from "./mx-parse.ts";
@@ -3007,6 +3008,38 @@ function importDeclarationOf(node: Node): { declaration?: Node } {
     : {};
 }
 
+/**
+ * MX imports are ES imports: one `import … from "…"` declaration per
+ * statement. An `MxModuleStatement` whose payload is anything else is refused
+ * at the statement (`import x = …`, several statements in one `import`), and
+ * so is Flow's `import typeof` (MX is TypeScript; `import type` is the form).
+ * A payload that did not parse is left to `rejectInvalidStatement`.
+ */
+function refuseUnsupportedImport(node: Node): void {
+  if (node?.type !== "MxModuleStatement" || node.code?.error) return;
+  const statements = node.code?.node;
+  // No payload to judge (the front end always parses one; a hand-built node
+  // may carry none): `Import.declaration` stays absent.
+  if (!Array.isArray(statements) || statements.length === 0) return;
+  const declaration =
+    parsedImportDeclarations.get(node) ??
+    (statements.length === 1 && statements[0]?.type === "ImportDeclaration"
+      ? statements[0]
+      : undefined);
+  if (!declaration) {
+    fail(
+      'an `import` statement must be one ES import declaration (`import … from "…"`); `import x = …` and several statements in one `import` are not supported',
+      node,
+    );
+  }
+  if (isTypeofImport(declaration)) {
+    fail(
+      "`import typeof` is Flow syntax; MX is TypeScript. Use `import type` for an import that binds no value",
+      node,
+    );
+  }
+}
+
 function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
   // Decision 168: a statement tag is parsed as a statement (Marko: its text
   // is `rawValue`; MX: an `MxModuleStatement`). One the parser read as
@@ -3023,6 +3056,7 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
   const loc = posOf(ctx, node);
   const end = endPosOf(ctx, node);
   const span = statementSpan(ctx, node);
+  if (name === "import") refuseUnsupportedImport(node);
   rejectInvalidStatement(
     ctx,
     node,

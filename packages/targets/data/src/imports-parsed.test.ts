@@ -146,3 +146,53 @@ describe("DataImport.from / names", () => {
     expect(JSON.parse(JSON.stringify(entries))).toEqual(entries);
   });
 });
+
+describe("DataImport.from: string-literal escapes", () => {
+  it("reads the cooked value, not the source text", () => {
+    const entries = importsOf(
+      `import a from "./a\\"bA.mx"\nimport b from './it\\'s'\n<x/>\n`,
+    );
+    expect(entries.map((e) => e.from)).toEqual(['./a"bA.mx', "./it's"]);
+  });
+});
+
+describe("an import that is not one ES import declaration", () => {
+  const NOT_ES =
+    'an `import` statement must be one ES import declaration (`import … from "…"`); `import x = …` and several statements in one `import` are not supported';
+  const FLOW =
+    "`import typeof` is Flow syntax; MX is TypeScript. Use `import type` for an import that binds no value";
+
+  it.each([
+    ["import-equals", `import x = M.N\n<x/>\n`, NOT_ES, 1],
+    [
+      "two statements on one line",
+      `<x/>\nimport a from "a"; import b from "b"\n`,
+      NOT_ES,
+      2,
+    ],
+    [
+      "a continued line",
+      `import a from "a"\n  import x = M.N\n<x/>\n`,
+      NOT_ES,
+      1,
+    ],
+    ["require on line 2", `<x/>\nimport x = require("y")\n`, NOT_ES, 2],
+    [
+      "type require on line 3",
+      `<x/>\n<x/>\nimport type X = require("y")\n`,
+      NOT_ES,
+      3,
+    ],
+    ["import typeof", `<x/>\nimport typeof T from "m"\n`, FLOW, 2],
+  ])("%s is a positioned error, no tree", (_, source, message, line) => {
+    const result = parseData(source, "/t.mx", options);
+    expect(result.tree).toBeUndefined();
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]).toMatchObject({
+      severity: "error",
+      message,
+      line,
+      column: 0,
+    });
+  });
+});

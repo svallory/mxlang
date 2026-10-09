@@ -76,3 +76,83 @@ describe("Import.declaration", () => {
     );
   });
 });
+
+const NOT_ES =
+  'an `import` statement must be one ES import declaration (`import … from "…"`); `import x = …` and several statements in one `import` are not supported';
+const FLOW =
+  "`import typeof` is Flow syntax; MX is TypeScript. Use `import type` for an import that binds no value";
+
+function refusal(source: string): {
+  message: string;
+  line: number;
+  column: number;
+} {
+  try {
+    irOf(source);
+  } catch (error) {
+    const { message, line, column } = error as {
+      message: string;
+      line: number;
+      column: number;
+    };
+    return { message, line, column };
+  }
+  throw new Error("expected a refusal");
+}
+
+describe("an import that is not one ES import declaration", () => {
+  it.each([
+    ["import-equals with an entity name", `import x = M.N\n<div/>\n`, 1],
+    [
+      "two statements on one line",
+      `<div/>\nimport a from "a"; import b from "b"\n`,
+      2,
+    ],
+    [
+      "an indented line continuing the statement",
+      `import a from "a"\n  import x = M.N\n<div/>\n`,
+      1,
+    ],
+    [
+      "import-equals require, on line 1",
+      `import x = require("y")\n<div/>\n`,
+      1,
+    ],
+    [
+      "import-equals require, on line 2",
+      `<div/>\nimport x = require("y")\n`,
+      2,
+    ],
+    [
+      "import type equals require, on line 3",
+      `<div/>\n<div/>\nimport type X = require("y")\n`,
+      3,
+    ],
+  ])("is refused at the statement: %s", (_, source, line) => {
+    expect(refusal(source)).toEqual({ message: NOT_ES, line, column: 0 });
+  });
+
+  it("refuses import typeof", () => {
+    expect(refusal(`import typeof T from "m"\n<div/>\n`)).toEqual({
+      message: FLOW,
+      line: 1,
+      column: 0,
+    });
+    // Per specifier, the parser already refuses it, positioned.
+    const inline = refusal(`<div/>\nimport { typeof T } from "m"\n`);
+    expect(inline.line).toBe(2);
+    expect(inline.message).toBe("Unexpected keyword 'typeof'.");
+  });
+
+  it("still accepts every ES import form", () => {
+    for (const source of [
+      `import "m"\n<div/>\n`,
+      `import type { T } from "m"\n<div/>\n`,
+      `import d, * as ns from "m"\n<div/>\n`,
+    ]) {
+      expect(irOf(source).imports[0]?.declaration?.type).toBe(
+        "ImportDeclaration",
+      );
+    }
+  });
+});

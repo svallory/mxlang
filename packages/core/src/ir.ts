@@ -675,9 +675,8 @@ export type IrNode =
        * reads the module specifier and each specifier (`imported`, `local`,
        * `importKind`) from it instead of parsing `code` again. Typed `Node`,
        * like `Expr.node`, because this `.d.ts` may not name Babel's types.
-       * Absent for a synthesized import, for an import the Marko front end
-       * parsed (its statement tag carries text only), and when the payload
-       * did not parse to a single `ImportDeclaration`.
+       * Absent for a synthesized import, which has no authored source (lowering
+       * refuses an authored `import` that is not one ES import declaration).
        */
       declaration?: Node;
       end: Position;

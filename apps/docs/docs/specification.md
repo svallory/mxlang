@@ -243,6 +243,14 @@ A `client` or `server` statement is never dropped or emitted as an element on a
 target that cannot honour the split; the error names the statement and the
 target.
 
+**An `import` is one ES import declaration.** `import … from "…"` (default,
+named, namespace, `import type`, a side-effect `import "…"`) is the whole
+grammar: `import x = M.N`, `import x = require("…")`, several statements in one
+`import` (`import a from "a"; import b from "b"`, or an indented line that
+continues the statement) and Flow's `import typeof` are a positioned error at
+the statement, on every target. The error never reaches the host, so no target
+sees a half-read import.
+
 ```mx
 import { formatDate } from "./util.ts"
 
