@@ -147,6 +147,62 @@ describe("every error is reported", () => {
     );
   });
 
+  // An expression that fails to parse does not hide the unknown tags: the
+  // reject scan refuses only a template that does not parse (PR 450 round 2;
+  // values measured on main, 9293794df).
+  const unknown = (name: string) =>
+    `\`<${name}>\` is not a known tag: it has no contract in \`customTags\``;
+  it.each([
+    [
+      "<foo x=a.#b/>",
+      [
+        [unknown("foo"), 1, 0],
+        ["Private name #b is not defined.", 1, 9],
+      ],
+    ],
+    [
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax, not a JS template
+      "<foo>${a +}</foo>",
+      [
+        [unknown("foo"), 1, 0],
+        ["Unexpected token", 1, 10],
+      ],
+    ],
+    [
+      "<div:=this.#x/>",
+      [
+        [unknown("div"), 1, 0],
+        ["Private name #x is not defined.", 1, 11],
+      ],
+    ],
+    [
+      "<foo/>\n<bar x=a.#b/>",
+      [
+        [unknown("foo"), 1, 0],
+        [unknown("bar"), 2, 0],
+        ["Private name #b is not defined.", 2, 9],
+      ],
+    ],
+    [
+      "<foo x=(a b)/>",
+      [
+        [unknown("foo"), 1, 0],
+        ['Unexpected token, expected ","', 1, 10],
+      ],
+    ],
+  ])(
+    "lists the unknown tags beside an expression error: %j",
+    (source, expected) => {
+      const { tree, diagnostics } = parseData(source, "/t.mx", {
+        unknownTags: "reject",
+      });
+      expect(tree).toBeUndefined();
+      expect(diagnostics.map((d) => [d.message, d.line, d.column])).toEqual(
+        expected,
+      );
+    },
+  );
+
   it("reports one error once, even when two walks find it", () => {
     const { diagnostics } = parseData("<a/z/>\n", "/t.mx", {
       structural: "reject",

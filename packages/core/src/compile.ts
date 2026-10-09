@@ -411,9 +411,10 @@ export function buildMarkoLookup(
  * it: the MX front end, with the tag shapes and statement keywords of
  * `translator`'s lookup (`buildMarkoLookup` from the file's directory) and the
  * file's syntax table (`syntax`, else its `package.json#mx.syntax`).
- * `undefined` when the template does not parse, i.e. when `compileSource`
- * would throw a parse error before lowering. A front-end error that lowering
- * raises (`MX_*` rules) does not count: the tree is whole. The node is
+ * `undefined` when the template itself does not parse. An expression error
+ * does not count (it stays on its container, as Marko's parse-only output
+ * kept it in the tree, `parseFragment`'s rule), nor does a front-end error
+ * that lowering raises (`MX_*` rules): the tree is whole. The node is
  * untyped, as everywhere at core's public boundary.
  *
  * @unstable plumbing for `@mxlang/data`'s parse-only scan.
@@ -430,7 +431,7 @@ export function parseMxDocument(
       : resolveSyntax(filename);
   const lookup = buildMarkoLookup(dirname(filename), translator);
   const document = parseMx(source, { syntax: table, lookup });
-  return compileErrorOf(document, filename, { expressionErrors: true })
+  return compileErrorOf(document, filename, { expressionErrors: false })
     ? undefined
     : document;
 }
