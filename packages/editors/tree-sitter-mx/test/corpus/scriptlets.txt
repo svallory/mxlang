@@ -1,0 +1,640 @@
+===============
+root-el
+===============
+var colors=['red', 'green', 'blue']
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+root-els
+===============
+div class="foo"
+span class="bar"
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+scriptlet-block
+===============
+$ {
+    var foo = 123;
+    var bar = 456;
+}
+---------------
+
+(document
+  (scriptlet
+    (scriptlet_start_concise)
+    (scriptlet_block
+      (scriptlet_block_open)
+      (scriptlet_block_expr)
+      (scriptlet_block_close))))
+
+===============
+scriptlet-block-division
+===============
+$ {
+    var foo = 123;
+    var bar = 1/2;
+}
+---------------
+
+(document
+  (scriptlet
+    (scriptlet_start_concise)
+    (scriptlet_block
+      (scriptlet_block_open)
+      (scriptlet_block_expr)
+      (scriptlet_block_close))))
+
+===============
+scriptlet-block-html
+===============
+---
+$ {
+    var foo = 123;
+    var bar = 456;
+}
+---
+---------------
+
+(document
+  (html_block
+    (scriptlet
+      (scriptlet_start)
+      (scriptlet_block
+        (scriptlet_block_open)
+        (scriptlet_block_expr)
+        (scriptlet_block_close)))))
+
+===============
+scriptlet-block-multiline-comment
+===============
+$ {
+    /* foo */
+    var foo = 123;
+}
+---------------
+
+(document
+  (scriptlet
+    (scriptlet_start_concise)
+    (scriptlet_block
+      (scriptlet_block_open)
+      (scriptlet_block_expr)
+      (scriptlet_block_close))))
+
+===============
+scriptlet-block-nested
+===============
+$ {
+    var data = {
+        a:1
+        b:2
+    };
+
+    function foo() {
+        console.log([
+            { hello:'world' }
+        ]);
+
+        return null;
+    }
+
+    foo();
+}
+---------------
+
+(document
+  (scriptlet
+    (scriptlet_start_concise)
+    (scriptlet_block
+      (scriptlet_block_open)
+      (scriptlet_block_expr)
+      (scriptlet_block_close))))
+
+===============
+scriptlet-block-regex
+===============
+$ {
+    var foo = 123;
+    /\d/.test(foo);
+}
+---------------
+
+(document
+  (scriptlet
+    (scriptlet_start_concise)
+    (scriptlet_block
+      (scriptlet_block_open)
+      (scriptlet_block_expr)
+      (scriptlet_block_close))))
+
+===============
+scriptlet-block-single-line-comment
+===============
+$ {
+    // foo
+    var foo = 123;
+}
+---------------
+
+(document
+  (scriptlet
+    (scriptlet_start_concise)
+    (scriptlet_block
+      (scriptlet_block_open)
+      (scriptlet_block_expr)
+      (scriptlet_block_close))))
+
+===============
+scriptlet-block-space-semi-colon
+===============
+$ { x } ;
+---------------
+
+(document
+  (scriptlet
+    (scriptlet_start_concise)
+    (scriptlet_block
+      (scriptlet_block_open)
+      (scriptlet_block_expr)
+      (scriptlet_block_close))))
+
+===============
+scriptlet-block-template-literal-href
+===============
+$ {
+    var href = `https://ebay.com`;
+    console.log(href);
+}
+---------------
+
+(document
+  (scriptlet
+    (scriptlet_start_concise)
+    (scriptlet_block
+      (scriptlet_block_open)
+      (scriptlet_block_expr)
+      (scriptlet_block_close))))
+
+===============
+scriptlet-block-with-semi-colon
+===============
+$ { hello() };
+
+$ { hello() }  ;
+
+$ { hello() };  
+
+
+---------------
+
+(document
+  (scriptlet
+    (scriptlet_start_concise)
+    (scriptlet_block
+      (scriptlet_block_open)
+      (scriptlet_block_expr)
+      (scriptlet_block_close)))
+  (scriptlet
+    (scriptlet_start_concise)
+    (scriptlet_block
+      (scriptlet_block_open)
+      (scriptlet_block_expr)
+      (scriptlet_block_close)))
+  (scriptlet
+    (scriptlet_start_concise)
+    (scriptlet_block
+      (scriptlet_block_open)
+      (scriptlet_block_expr)
+      (scriptlet_block_close))))
+
+===============
+scriptlet-comment
+===============
+$ // +
+a
+---------------
+
+(document
+  (scriptlet
+    (scriptlet_start_concise)
+    (scriptlet_expr))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+scriptlet-eof
+===============
+$ $global.
+
+<header>
+  <img.logo src=logo alt="Marko"/>
+</header>
+
+---------------
+
+(document
+  (scriptlet
+    (scriptlet_start_concise)
+    (scriptlet_expr))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (element
+      (open_tag_start)
+      (tag_name
+        (tag_name_fragment))
+      (shorthand_class
+        (tag_name_fragment))
+      (attr_name)
+      (attr_value
+        (attr_eq)
+        (attr_value_expr))
+      (attr_name)
+      (attr_value
+        (attr_eq)
+        (attr_value_expr))
+      (open_tag_end_self)
+      (element_end))
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+scriptlet-line
+===============
+$ var foo = 123;
+---------------
+
+(document
+  (scriptlet
+    (scriptlet_start_concise)
+    (scriptlet_expr)))
+
+===============
+scriptlet-line-continue
+===============
+$ var foo = () => {
+    return 123;
+};
+---------------
+
+(document
+  (scriptlet
+    (scriptlet_start_concise)
+    (scriptlet_expr)))
+
+===============
+scriptlet-line-continue-chain
+===============
+$ var foo;
+$ if (condition1) {
+    foo = 1;
+} else if (condition2) {
+    foo = 2;
+} else {
+    foo = 3;
+}
+---------------
+
+(document
+  (scriptlet
+    (scriptlet_start_concise)
+    (scriptlet_expr))
+  (scriptlet
+    (scriptlet_start_concise)
+    (scriptlet_expr)))
+
+===============
+scriptlet-line-html
+===============
+---
+$ var foo = 123;
+---
+---------------
+
+(document
+  (html_block
+    (scriptlet
+      (scriptlet_start)
+      (scriptlet_expr))))
+
+===============
+scriptlet-line-multiline-comments
+===============
+$ var str /* test */ = '' /**
+* Test
+*/
+
+<div>
+  Hello
+</div>
+---------------
+
+(document
+  (scriptlet
+    (scriptlet_start_concise)
+    (scriptlet_expr))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+scriptlet-line-no-middle
+===============
+tag $ var foo = 123;
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_name)
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+scriptlet-line-no-middle-html
+===============
+---
+hello $ var foo = 123;
+---
+---------------
+
+(document
+  (html_block
+    (text)))
+
+===============
+scriptlet-line-regex-open-bracket
+===============
+$ var foo = /[[]/;
+---------------
+
+(document
+  (scriptlet
+    (scriptlet_start_concise)
+    (scriptlet_expr)))
+
+===============
+scriptlet-line-regex-open-curly
+===============
+$ var foo = /{/;
+---------------
+
+(document
+  (scriptlet
+    (scriptlet_start_concise)
+    (scriptlet_expr)))
+
+===============
+scriptlet-line-template-literal
+===============
+$ var html = `
+<!doctype html>
+<div>${bar}</div>
+`
+---------------
+
+(document
+  (scriptlet
+    (scriptlet_start_concise)
+    (scriptlet_expr)))
+
+===============
+scriptlet-line-trailing-line-comment
+===============
+$ var str = '' // a string
+
+<div>
+  Hello
+</div>
+---------------
+
+(document
+  (scriptlet
+    (scriptlet_start_concise)
+    (scriptlet_expr))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+scriptlet-terminated-by-semi-colon
+===============
+<div>
+  $ let i = 10;
+  <while(i--)>
+    <test/>
+  </while>
+</div>
+
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (scriptlet
+      (scriptlet_start)
+      (scriptlet_expr))
+    (text)
+    (element
+      (open_tag_start)
+      (tag_name
+        (tag_name_fragment))
+      (args
+        (args_open)
+        (args_expr)
+        (args_close))
+      (open_tag_end)
+      (text)
+      (element
+        (open_tag_start)
+        (tag_name
+          (tag_name_fragment))
+        (open_tag_end_self)
+        (element_end))
+      (text)
+      (close_tag
+        (close_tag_start)
+        (close_tag_name)
+        (close_tag_end))
+      (element_end))
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+semicolon-comments
+===============
+div; /* a */
+span;<!-- b -->
+
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (block_comment)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (html_comment)
+    (element_end)))
+
+===============
+semicolon-concise
+===============
+var pageTitle = 1+2;
+var pageTitle = "hi";
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+var
+===============
+var pageTitle="Marko Templating Engine"
+var currentPage='home'
+
+<!DOCTYPE html>
+html lang="en"
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end))
+  (doctype)
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+var-new-Date
+===============
+var foo = new Date(2000,0,1)
+
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end)))

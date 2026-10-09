@@ -1,0 +1,2883 @@
+===============
+concise-block-whitespace-leading
+===============
+---
+  A ${'B'} C  
+---
+---------------
+
+(document
+  (html_block
+    (text)
+    (placeholder
+      (placeholder_start)
+      (placeholder_expr)
+      (placeholder_end))
+    (text)))
+
+===============
+concise-contentplaceholder-html-start
+===============
+-- ${data.name} some html - <b>bold</b>
+---------------
+
+(document
+  (html_block
+    (placeholder
+      (placeholder_start)
+      (placeholder_expr)
+      (placeholder_end))
+    (text)
+    (element
+      (open_tag_start)
+      (tag_name
+        (tag_name_fragment))
+      (open_tag_end)
+      (text)
+      (close_tag
+        (close_tag_start)
+        (close_tag_name)
+        (close_tag_end))
+      (element_end))))
+
+===============
+concise-contentplaceholder-start
+===============
+-- ${data.name}
+---------------
+
+(document
+  (html_block
+    (placeholder
+      (placeholder_start)
+      (placeholder_expr)
+      (placeholder_end))))
+
+===============
+concise-crlf
+===============
+div;  
+span --
+  text
+span2
+
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (html_block
+      (text))
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+concise-line-whitespace-ending
+===============
+-- ${value} 
+---------------
+
+(document
+  (html_block
+    (placeholder
+      (placeholder_start)
+      (placeholder_expr)
+      (placeholder_end))
+    (text)))
+
+===============
+concise-multiline-content
+===============
+--
+hi
+--
+
+--
+foo
+
+
+---------------
+
+(document
+  (html_block
+    (text))
+  (html_block
+    (text)))
+
+===============
+empty-closing-tag
+===============
+<div>
+    Hello World
+    <span>
+        Hello Universe
+    </>
+</>
+
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (element
+      (open_tag_start)
+      (tag_name
+        (tag_name_fragment))
+      (open_tag_end)
+      (text)
+      (close_tag
+        (close_tag_start)
+        (close_tag_name)
+        (close_tag_end))
+      (element_end))
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+empty-closing-tag2
+===============
+<ul.features>
+    <li for(feature in [])>
+        ${feature}
+    </li>
+</>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (shorthand_class
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (element
+      (open_tag_start)
+      (tag_name
+        (tag_name_fragment))
+      (attr_name)
+      (args
+        (args_open)
+        (args_expr)
+        (args_close))
+      (open_tag_end)
+      (text)
+      (placeholder
+        (placeholder_start)
+        (placeholder_expr)
+        (placeholder_end))
+      (text)
+      (close_tag
+        (close_tag_start)
+        (close_tag_name)
+        (close_tag_end))
+      (element_end))
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+html-block-after-tag
+===============
+span -- Hello <b>test</b>
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (html_block
+      (text)
+      (element
+        (open_tag_start)
+        (tag_name
+          (tag_name_fragment))
+        (open_tag_end)
+        (text)
+        (close_tag
+          (close_tag_start)
+          (close_tag_name)
+          (close_tag_end))
+        (element_end)))
+    (element_end)))
+
+===============
+html-comment-tag
+===============
+<div>
+  <!--123-->
+  <html-comment>abc</html-comment>
+  <!--[if lt IE 9]><script src="..."></script><![endif]-->
+  <html-comment>[if lt IE 9]><script src="..."></script><![endif]</html-comment>
+</div>
+
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (html_comment)
+    (text)
+    (element
+      (open_tag_start)
+      (tag_name
+        (tag_name_fragment))
+      (open_tag_end)
+      (text)
+      (close_tag
+        (close_tag_start)
+        (close_tag_name)
+        (close_tag_end))
+      (element_end))
+    (text)
+    (html_comment)
+    (text)
+    (element
+      (open_tag_start)
+      (tag_name
+        (tag_name_fragment))
+      (open_tag_end)
+      (text)
+      (close_tag
+        (close_tag_start)
+        (close_tag_name)
+        (close_tag_end))
+      (element_end))
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+html-comments
+===============
+<a><!--<b></b>--></a>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (html_comment)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+html-comments-ignore-placeholders
+===============
+<!-- Copyright ${date} -->
+---------------
+
+(document
+  (html_comment))
+
+===============
+html-text-forward-slash
+===============
+<div>a / b</div>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+mixed
+===============
+var colors=['red', 'green', 'blue']
+<div>
+    <span class="foo">
+        Hello ${data.name}!
+        </span>
+</div> <b>This is after the span</b>
+p class="foo"
+    <span>Test</span>
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (element
+      (open_tag_start)
+      (tag_name
+        (tag_name_fragment))
+      (attr_name)
+      (attr_value
+        (attr_eq)
+        (attr_value_expr))
+      (open_tag_end)
+      (text)
+      (placeholder
+        (placeholder_start)
+        (placeholder_expr)
+        (placeholder_end))
+      (text)
+      (close_tag
+        (close_tag_start)
+        (close_tag_name)
+        (close_tag_end))
+      (element_end))
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (text)
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element
+      (open_tag_start)
+      (tag_name
+        (tag_name_fragment))
+      (open_tag_end)
+      (text)
+      (close_tag
+        (close_tag_start)
+        (close_tag_name)
+        (close_tag_end))
+      (element_end))
+    (element_end)))
+
+===============
+mixed-block-root
+===============
+---
+1
+<div>
+    2
+</div>
+3
+<div>
+    4
+</div>
+5
+---
+
+---------------
+
+(document
+  (html_block
+    (text)
+    (text)
+    (element
+      (open_tag_start)
+      (tag_name
+        (tag_name_fragment))
+      (open_tag_end)
+      (text)
+      (text)
+      (close_tag
+        (close_tag_start)
+        (close_tag_name)
+        (close_tag_end))
+      (element_end))
+    (text)
+    (text)
+    (element
+      (open_tag_start)
+      (tag_name
+        (tag_name_fragment))
+      (open_tag_end)
+      (text)
+      (text)
+      (close_tag
+        (close_tag_start)
+        (close_tag_name)
+        (close_tag_end))
+      (element_end))
+    (text)))
+
+===============
+mixed-cdata
+===============
+p class="foo"
+    <![CDATA[Hello World]]> This is after CDATA
+div class="bar" -- <![CDATA[Hello World]]>
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (cdata)
+    (text)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (html_block
+      (cdata))
+    (element_end)))
+
+===============
+mixed-comment
+===============
+p class="foo"
+    <!--
+    A multiline HTML comment
+    should be okay
+    -->
+div class="bar" -- <!-- test -->
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (html_comment)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (html_block
+      (html_comment))
+    (element_end)))
+
+===============
+mixed-invalid
+===============
+var colors=['red', 'green', 'blue']
+<div>
+    <span class="foo">
+        Hello ${data.name}!
+        </span>
+</div> <b>This is not
+    allowed</b>
+p class="foo"
+    <span>Test</span>
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (element
+      (open_tag_start)
+      (tag_name
+        (tag_name_fragment))
+      (attr_name)
+      (attr_value
+        (attr_eq)
+        (attr_value_expr))
+      (open_tag_end)
+      (text)
+      (placeholder
+        (placeholder_start)
+        (placeholder_expr)
+        (placeholder_end))
+      (text)
+      (close_tag
+        (close_tag_start)
+        (close_tag_name)
+        (close_tag_end))
+      (element_end))
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (text)
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element
+      (open_tag_start)
+      (tag_name
+        (tag_name_fragment))
+      (open_tag_end)
+      (text)
+      (close_tag
+        (close_tag_start)
+        (close_tag_name)
+        (close_tag_end))
+      (element_end))
+    (element_end)))
+
+===============
+mixed-open-tag-only
+===============
+var colors=['red', 'green', 'blue']
+<img src="marko.png">
+img src="marko2.png"
+div class="foo"
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+nested-pyramid
+===============
+a
+    b
+        c
+        c2
+    b2
+a2
+
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (element
+      (tag_name
+        (tag_name_fragment))
+      (concise_open_tag_end)
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (concise_open_tag_end)
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (concise_open_tag_end)
+        (element_end))
+      (element_end))
+    (element
+      (tag_name
+        (tag_name_fragment))
+      (concise_open_tag_end)
+      (element_end))
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+nested-siblings
+===============
+div class="foo"
+    span class="bar"
+    span class="baz"
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element
+      (tag_name
+        (tag_name_fragment))
+      (attr_name)
+      (attr_value
+        (attr_eq)
+        (attr_value_expr))
+      (concise_open_tag_end)
+      (element_end))
+    (element
+      (tag_name
+        (tag_name_fragment))
+      (attr_name)
+      (attr_value
+        (attr_eq)
+        (attr_value_expr))
+      (concise_open_tag_end)
+      (element_end))
+    (element_end)))
+
+===============
+nested-tags
+===============
+div class="foo"
+    span class="bar"
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element
+      (tag_name
+        (tag_name_fragment))
+      (attr_name)
+      (attr_value
+        (attr_eq)
+        (attr_value_expr))
+      (concise_open_tag_end)
+      (element_end))
+    (element_end)))
+
+===============
+nested-text
+===============
+div
+    ---
+    This is
+    multi-line text
+    ---
+    span -- This is body text of span
+        -- This is also body text of span
+    -- Hello Universe
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (html_block
+      (text)
+      (text)
+      (text))
+    (element
+      (tag_name
+        (tag_name_fragment))
+      (concise_open_tag_end)
+      (html_block
+        (text))
+      (html_block
+        (text))
+      (element_end))
+    (html_block
+      (text))
+    (element_end)))
+
+===============
+open-tag-comments-concise
+===============
+div /* c */ a=1
+span // d
+
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+open-tag-only
+===============
+<div> A <img src="image1.png"> B <img src="image2.png"> C <img src="image3.png"> D </div>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (element
+      (open_tag_start)
+      (tag_name
+        (tag_name_fragment))
+      (attr_name)
+      (attr_value
+        (attr_eq)
+        (attr_value_expr))
+      (open_tag_end)
+      (element_end))
+    (text)
+    (element
+      (open_tag_start)
+      (tag_name
+        (tag_name_fragment))
+      (attr_name)
+      (attr_value
+        (attr_eq)
+        (attr_value_expr))
+      (open_tag_end)
+      (element_end))
+    (text)
+    (element
+      (open_tag_start)
+      (tag_name
+        (tag_name_fragment))
+      (attr_name)
+      (attr_value
+        (attr_eq)
+        (attr_value_expr))
+      (open_tag_end)
+      (element_end))
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+self-closed-tag
+===============
+<a />
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end_self)
+    (element_end)))
+
+===============
+self-closed-tag-attrs
+===============
+<a foo="bar" baz="</a>"/>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (open_tag_end_self)
+    (element_end)))
+
+===============
+self-closing-open-tag-only
+===============
+<img src="foo.png"/>
+
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (open_tag_end_self)
+    (element_end)))
+
+===============
+stray-special-chars
+===============
+<a>1 < > <> 2<</a>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+tag-name-expression-literal-prefix
+===============
+<foo-${bar}>
+</>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment)
+      (placeholder
+        (placeholder_start)
+        (placeholder_expr)
+        (placeholder_end)))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+tag-name-expression-literal-prefix-attrs
+===============
+<foo-${bar} hello="world">
+</>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment)
+      (placeholder
+        (placeholder_start)
+        (placeholder_expr)
+        (placeholder_end)))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+tag-name-expression-literal-prefix-suffix
+===============
+<foo-${bar}-baz>
+</>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment)
+      (placeholder
+        (placeholder_start)
+        (placeholder_expr)
+        (placeholder_end))
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+tag-name-expression-literal-suffix
+===============
+<${foo}-bar>
+</>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (placeholder
+        (placeholder_start)
+        (placeholder_expr)
+        (placeholder_end))
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+tag-name-expression-shorthand-id
+===============
+<${myTagName}#foo></>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (placeholder
+        (placeholder_start)
+        (placeholder_expr)
+        (placeholder_end)))
+    (shorthand_id
+      (tag_name_fragment))
+    (open_tag_end)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+tag-name-expression-simple
+===============
+<${foo}>
+</${foo}>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (placeholder
+        (placeholder_start)
+        (placeholder_expr)
+        (placeholder_end)))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+tag-name-expression-simple-empty-close
+===============
+<${foo}>
+</>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (placeholder
+        (placeholder_start)
+        (placeholder_expr)
+        (placeholder_end)))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+tag-params-with-type-parameters
+===============
+<foo<A>|data: A|>
+  hi
+</>
+
+<foo<A> |data: A|>
+  hi
+</>
+
+<foo <A>|data: A|>
+  hi
+</>
+
+<foo <A> |data: A|>
+  hi
+</>
+
+<foo<A, B = string>|data: A & B|>
+  hi
+</>
+
+<foo<A, B = string> |data: A & B|>
+  hi
+</>
+
+<foo <A, B = string>|data: A & B|>
+  hi
+</>
+
+<foo <A, B = string> |data: A & B|>
+  hi
+</>
+
+<foo()<A> |data: A|>
+  hi
+</>
+
+<foo/x<A> |data: A|>
+  hi
+</>
+
+<foo<string><A> |data: A|>
+  hi
+</>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (type_args
+      (type_open)
+      (type_expr)
+      (type_close))
+    (params
+      (params_open)
+      (params_expr
+        (param
+          (param_pattern)
+          (param_type)))
+      (params_close))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (type_args
+      (type_open)
+      (type_expr)
+      (type_close))
+    (params
+      (params_open)
+      (params_expr
+        (param
+          (param_pattern)
+          (param_type)))
+      (params_close))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (type_params
+      (type_open)
+      (type_expr)
+      (type_close))
+    (params
+      (params_open)
+      (params_expr
+        (param
+          (param_pattern)
+          (param_type)))
+      (params_close))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (type_params
+      (type_open)
+      (type_expr)
+      (type_close))
+    (params
+      (params_open)
+      (params_expr
+        (param
+          (param_pattern)
+          (param_type)))
+      (params_close))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (type_args
+      (type_open)
+      (type_expr)
+      (type_close))
+    (params
+      (params_open)
+      (params_expr
+        (param
+          (param_pattern)
+          (param_type)))
+      (params_close))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (type_args
+      (type_open)
+      (type_expr)
+      (type_close))
+    (params
+      (params_open)
+      (params_expr
+        (param
+          (param_pattern)
+          (param_type)))
+      (params_close))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (type_params
+      (type_open)
+      (type_expr)
+      (type_close))
+    (params
+      (params_open)
+      (params_expr
+        (param
+          (param_pattern)
+          (param_type)))
+      (params_close))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (type_params
+      (type_open)
+      (type_expr)
+      (type_close))
+    (params
+      (params_open)
+      (params_expr
+        (param
+          (param_pattern)
+          (param_type)))
+      (params_close))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (args
+      (args_open)
+      (args_close))
+    (type_params
+      (type_open)
+      (type_expr)
+      (type_close))
+    (params
+      (params_open)
+      (params_expr
+        (param
+          (param_pattern)
+          (param_type)))
+      (params_close))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)))
+    (type_params
+      (type_open)
+      (type_expr)
+      (type_close))
+    (params
+      (params_open)
+      (params_expr
+        (param
+          (param_pattern)
+          (param_type)))
+      (params_close))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (type_args
+      (type_open)
+      (type_expr)
+      (type_close))
+    (type_params
+      (type_open)
+      (type_expr)
+      (type_close))
+    (params
+      (params_open)
+      (params_expr
+        (param
+          (param_pattern)
+          (param_type)))
+      (params_close))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+tag-type-argument-arrow-function
+===============
+<foo<{ bar: () => void }>/>
+
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (type_args
+      (type_open)
+      (type_expr)
+      (type_close))
+    (open_tag_end_self)
+    (element_end)))
+
+===============
+tag-var-before-concise-text
+===============
+style/style --
+  header {
+    color: green
+  }
+
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)))
+    (concise_open_tag_end)
+    (html_block
+      (text)
+      (text)
+      (text)
+      (text)
+      (text))
+    (element_end)))
+
+===============
+tag-var-comma-concise
+===============
+div/v, a=1
+
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+tag-var-declaration
+===============
+<${foo}/someVar>
+</>
+
+<let/foo/>
+<let/foo=1/>
+<let/foo = 1/>
+<let/foo + 1/>
+<let/foo:string/>
+<let/foo : string/>
+<let/foo: typeof bar extends y ? a : b x=2/>
+<let/{ x, y }/>
+
+<const/fn:any() {
+  console.log("hi");
+}/>
+
+<button/loginButton>
+  login
+</>
+<button/loginButton >
+  login
+</>
+
+<div/ref/>
+<div/ref />
+
+<div#ab.cd/ref/>
+
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (placeholder
+        (placeholder_start)
+        (placeholder_expr)
+        (placeholder_end)))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)))
+    (open_tag_end_self)
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)))
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (open_tag_end_self)
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)))
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (open_tag_end_self)
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)))
+    (open_tag_end_self)
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)
+        (var_type)))
+    (open_tag_end_self)
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)
+        (var_type)))
+    (open_tag_end_self)
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)
+        (var_type)))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (open_tag_end_self)
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)))
+    (open_tag_end_self)
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)
+        (var_type)))
+    (args
+      (args_open)
+      (args_close))
+    (method_body
+      (method_body_open)
+      (method_body_expr)
+      (method_body_close))
+    (open_tag_end_self)
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)))
+    (open_tag_end_self)
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)))
+    (open_tag_end_self)
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (shorthand_id
+      (tag_name_fragment))
+    (shorthand_class
+      (tag_name_fragment))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)))
+    (open_tag_end_self)
+    (element_end)))
+
+===============
+tag-var-type-with-parens
+===============
+let/a:(B | C) = D
+
+let/a: (B | C) = D
+
+let/a : (B | C) = D
+
+let/a :(B | C) = D
+
+let/a: B & (C | D) = D
+
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)
+        (var_type)))
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)
+        (var_type)))
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)
+        (var_type)))
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)
+        (var_type)))
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)
+        (var_type)))
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+tag-var-with-params
+===============
+<foo/var|param|>
+  Hello ${param}
+</foo>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)))
+    (params
+      (params_open)
+      (params_expr
+        (param
+          (param_pattern)))
+      (params_close))
+    (open_tag_end)
+    (text)
+    (placeholder
+      (placeholder_start)
+      (placeholder_expr)
+      (placeholder_end))
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+tag-with-type-arguments
+===============
+<foo<A>>
+  hi
+</>
+
+<foo<A> >
+  hi
+</>
+
+<foo<A, B = string>>
+  hi
+</>
+
+<foo<A, B = string> >
+  hi
+</>
+
+<foo<A>(bar)>
+  hi
+</>
+
+<foo<A> (bar)>
+  hi
+</>
+
+<foo<A, B = string>(bar)>
+  hi
+</>
+
+<foo<A, B = string> (bar)>
+  hi
+</>
+
+
+<foo<A> (bar) {
+  
+}>
+  hi
+</>
+
+<foo <A> (bar) {
+  
+}>
+  hi
+</>
+
+<foo <A>(bar) {
+  
+}>
+  hi
+</>
+
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (type_args
+      (type_open)
+      (type_expr)
+      (type_close))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (type_args
+      (type_open)
+      (type_expr)
+      (type_close))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (type_args
+      (type_open)
+      (type_expr)
+      (type_close))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (type_args
+      (type_open)
+      (type_expr)
+      (type_close))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (type_args
+      (type_open)
+      (type_expr)
+      (type_close))
+    (args
+      (args_open)
+      (args_expr)
+      (args_close))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (type_args
+      (type_open)
+      (type_expr)
+      (type_close))
+    (args
+      (args_open)
+      (args_expr)
+      (args_close))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (type_args
+      (type_open)
+      (type_expr)
+      (type_close))
+    (args
+      (args_open)
+      (args_expr)
+      (args_close))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (type_args
+      (type_open)
+      (type_expr)
+      (type_close))
+    (args
+      (args_open)
+      (args_expr)
+      (args_close))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (type_args
+      (type_open)
+      (type_expr)
+      (type_close))
+    (args
+      (args_open)
+      (args_expr)
+      (args_close))
+    (method_body
+      (method_body_open)
+      (method_body_expr)
+      (method_body_close))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (type_params
+      (type_open)
+      (type_expr)
+      (type_close))
+    (args
+      (args_open)
+      (args_expr)
+      (args_close))
+    (method_body
+      (method_body_open)
+      (method_body_expr)
+      (method_body_close))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (type_params
+      (type_open)
+      (type_expr)
+      (type_close))
+    (args
+      (args_open)
+      (args_expr)
+      (args_close))
+    (method_body
+      (method_body_open)
+      (method_body_expr)
+      (method_body_close))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+ts-function-type
+===============
+<div value=fn as (x: number) => string />
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (open_tag_end_self)
+    (element_end)))
+
+===============
+ts-generic-complex
+===============
+<div value=x as Map<string, Array<Record<K, V>>> />
+<div value=x satisfies Map<string, Array<Record<K, V>>> />
+
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (open_tag_end_self)
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (open_tag_end_self)
+    (element_end)))
+
+===============
+ts-generic-function-type
+===============
+<div value=fn as <T>(x: T) => T />
+<div value=fn as < T >(x: T) => T />
+
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (open_tag_end_self)
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (open_tag_end_self)
+    (element_end)))
+
+===============
+ts-generic-simple
+===============
+<div value=x as Array<T> />
+<div value=x as Array< T > />
+
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (open_tag_end_self)
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (open_tag_end_self)
+    (element_end)))
+
+===============
+ts-intersection-type
+===============
+<div value=x as A & B<T> />
+<div value=x as A & B< T > />
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (open_tag_end_self)
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (open_tag_end_self)
+    (element_end)))
+
+===============
+ts-keyof-typeof
+===============
+<div value=x as keyof typeof T />
+
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (open_tag_end_self)
+    (element_end)))
+
+===============
+ts-nested-generics
+===============
+<div value=x as Promise<Array<Record<string, number>>> />
+<div value=x as Promise< Array< Record< string, number > > > />
+
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (open_tag_end_self)
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (open_tag_end_self)
+    (element_end)))
+
+===============
+ts-statement-function-return-type
+===============
+export function a(): b {
+  return c > d;
+}
+
+static function e<T>(x: T): Array<T> {
+  return x > 0 ? f : g;
+}
+
+export function h(): { i: 1 } {
+  return j > k;
+}
+
+div
+
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (statement_expr)
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (statement_expr)
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (statement_expr)
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+ts-static-const-arrow-function-return-type
+===============
+static const a = (a: number, b: number): string => {
+  if (a < b) {
+    return "foo";
+  } else {
+    return "bar";
+  }
+};
+
+static const b = (a: number, b: number): () => string => () => {
+  if (a < b) {
+    return "foo";
+  } else {
+    return "bar";
+  }
+};
+
+static const c = (a: number, b: number): string => a < b ? "foo" : "bar";
+
+static const d = (a: number, b: number): () => string => () => a < b ? "foo" : "bar";
+
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (statement_expr)
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (statement_expr)
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (statement_expr)
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (statement_expr)
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+ts-static-type
+===============
+static type Foo = Array<
+  Bar
+>
+
+div
+
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (statement_expr)
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+ts-tag-var-type-generic
+===============
+const/foo:Bar<
+  A,
+  B
+> = baz
+
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (tag_var
+      (tag_var_expr
+        (var_pattern)
+        (var_type)))
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+ts-type-statement
+===============
+static interface Foo<
+  A,
+  B,
+> {
+  x: 1
+}
+
+static type Bar<
+  A,
+  B,
+> = A &
+    B
+
+static declare const x: Foo<
+  1,
+  2
+>;
+
+static const x: Foo<
+  1,
+  2
+> = baz;
+
+export interface Foo {
+  bar: () => Baz;
+}
+
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (statement_expr)
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (statement_expr)
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (statement_expr)
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (statement_expr)
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (statement_expr)
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+ts-unary-exression
+===============
+div foo=readonly bar=true
+div foo=val as readonly string[] bar=true
+
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+whitespace-around-equals
+===============
+<div foo = bar></div>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (open_tag_end)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+whitespace-empty-lines
+===============
+foo
+bar
+
+baz
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+whitespace-empty-lines-indent
+===============
+foo
+bar
+
+    baz -- test
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (element
+      (tag_name
+        (tag_name_fragment))
+      (concise_open_tag_end)
+      (html_block
+        (text))
+      (element_end))
+    (element_end)))
+
+===============
+whitespace-newline
+===============
+<div></div>
+
+
+<span>
+
+</span>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+whitespace-newline-indent
+===============
+<div></div>
+
+
+<span>
+
+</span>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+whitespace-only-reset-indent
+===============
+div -- The next line has spaces on it
+   
+span
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (html_block
+      (text))
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+whitespace-preservation
+===============
+span.a -- hi
+
+span.b
+  -- hi
+
+span.c
+  -- hi
+  -- you
+
+span.d --
+  hi
+
+span.e --
+  hi
+  you
+
+span.f
+  --
+  hi
+  --
+
+span.g
+  --
+  hi
+  you
+  --
+
+<span.h>hi</span>
+
+<span.i>
+  hi</span>
+
+<span.j>
+  hi
+</span>
+
+<span.k>
+  hi
+  </span>
+
+<span.l>  
+hi
+</span>
+
+<span.m>
+  hi
+  you
+</span>
+
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (shorthand_class
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (html_block
+      (text))
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (shorthand_class
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (html_block
+      (text))
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (shorthand_class
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (html_block
+      (text))
+    (html_block
+      (text))
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (shorthand_class
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (html_block
+      (text))
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (shorthand_class
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (html_block
+      (text)
+      (text)
+      (text))
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (shorthand_class
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (html_block
+      (text))
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (shorthand_class
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (html_block
+      (text)
+      (text)
+      (text))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (shorthand_class
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (shorthand_class
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (shorthand_class
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (shorthand_class
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (shorthand_class
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (shorthand_class
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))

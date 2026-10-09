@@ -1,0 +1,40 @@
+===============
+whole-value atom
+===============
+<x mode=:strict/>
+
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr
+        (atom)))
+    (open_tag_end_self)
+    (element_end)))
+
+===============
+atom in expression
+===============
+<x mode=(on ? :a : :b)/>
+
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr
+        (atom)
+        (atom)))
+    (open_tag_end_self)
+    (element_end)))

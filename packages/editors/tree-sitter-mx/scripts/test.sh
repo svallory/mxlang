@@ -20,6 +20,8 @@
 #   4d. test/atoms.bun-test.mts — MX's own: decision 156 atoms (the brief's
 #      sample, every line of Mesh's Invoice entity, the ADR positions) and
 #      their captures in both query copies.
+#   4e. test/corpus.bun-test.mts — MX's own: every case in test/corpus parses
+#      with no ERROR/MISSING node; `tree-sitter test` runs the same files.
 #   5. tools/check-wasm.mts — the wasm parses a sample and both queries load.
 #   6. scripts/zed-compile-check.sh — compiles src/ from a clean clone of
 #      HEAD, the same way Zed's file:// dev install does.
@@ -47,7 +49,11 @@ bun run build:wasm
 
 echo
 echo "==> mx shorthand trees, htmljs-parser fixtures, shorthand highlights, atoms"
-bun test ./__tests__/mx-shorthand.bun-test.mts ./__tests__/fixtures.bun-test.mts ./test/highlights.bun-test.mts ./test/indentation.bun-test.mts ./test/atoms.bun-test.mts
+bun test ./__tests__/mx-shorthand.bun-test.mts ./__tests__/fixtures.bun-test.mts ./test/highlights.bun-test.mts ./test/indentation.bun-test.mts ./test/atoms.bun-test.mts ./test/corpus.bun-test.mts
+
+echo
+echo "==> tree-sitter test (test/corpus)"
+flock /tmp/mx-zed-generate.lock bunx tree-sitter test
 
 echo
 echo "==> wasm smoke and queries"

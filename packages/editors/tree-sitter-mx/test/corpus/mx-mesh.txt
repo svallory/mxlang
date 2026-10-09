@@ -1,0 +1,784 @@
+===============
+mesh-invoice
+===============
+// src/domain/billing/invoice.mesh.mx
+import { formatMoney, isStaff } from "./invoice.helpers"
+
+entity :Invoice table="invoices"
+  attributes
+    uuid :id primary-key
+    string :number unique match=/^INV-\d+$/
+    enum :status values=[:draft, :sent, :paid, :cancelled] default=:draft
+    decimal :amount min=0
+    date :issuedOn
+    date :dueOn
+    datetime :paidAt nullable
+    string :notes nullable max=2000
+    boolean :needsReview default=false
+    uuid :paidById nullable
+    timestamp :insertedAt on=:create
+    timestamp :updatedAt on=:update
+
+  relationships
+    belongs-to=:Customer :customer
+    has-many=:InvoiceLine :lines
+    has-one=:Payment :payment
+
+  computed
+    boolean :isOverdue({ self }) {
+      return self.status === :sent && self.dueOn < today()
+    }
+    string :label({ self }) {
+      return self.number + " · " + formatMoney(self.total)
+    }
+    count :lineCount of="lines"
+    sum :total of="lines.amount"
+
+  actions auto=[:read, :destroy] on:load=:visible
+    always types=[:create, :update]
+      validate
+        check :dueAfterIssue [
+          that=({ self }) => self.dueOn >= self.issuedOn
+          code="invalid_dates"
+          message="the due date cannot be before the issue date"
+        ]
+
+    create :create accept=[:number, :customerId, :amount, :issuedOn, :dueOn, :notes]
+
+    update :send
+      validate
+        check :invoiceHasLines [
+          that=({ self }) => self.lineCount > 0
+          code="invalid_state"
+          message="an invoice needs at least one line"
+        ]
+      do
+        set
+          :status=:sent
+
+    update :pay accept=[:paidAt]
+      validate
+        check :invoiceIsSent [
+          that=({ self }) => self.status === :sent
+          code="invalid_state"
+          message="only a sent invoice can be paid"
+        ]
+        check :invoiceHasLines [
+          that=({ self }) => self.lineCount > 0
+          code="invalid_state"
+          message="an invoice needs at least one line"
+        ]
+      do
+        set
+          :status=:paid
+          :paidById=({ actor }) => actor.id
+        when=({ self }) => self.amount > 10000
+          set
+            :needsReview=true
+        load=[:customer]
+
+    update :applyDiscount
+      arguments
+        decimal :percent min=0 max=100
+      do
+        set
+          :amount=({ self, input }) => self.amount * (1 - input.percent / 100)
+
+    read :visible
+      filter=({ self }) => self.status !== :cancelled
+
+    read :overdue
+      filter=({ self }) => self.isOverdue
+      sort=[:dueOn]
+
+    read :forCustomer
+      arguments
+        uuid :customerId
+      filter=({ self, input }) => self.customerId === input.customerId
+
+  policies
+    policy :staffOrOwnerReads types=[:read]
+      authorize-if=({ self, actor }) => isStaff(actor) || self.customer.userId === actor.id
+    policy :staffWrites types=[:create, :update, :destroy]
+      authorize-if=({ actor }) => isStaff(actor)
+    policy :neverDestroyPaid types=[:destroy]
+      forbid-if=({ self }) => self.status === :paid
+
+---------------
+
+(document
+  (line_comment)
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (statement_expr)
+    (concise_open_tag_end)
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (shorthand_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element
+      (tag_name
+        (tag_name_fragment))
+      (concise_open_tag_end)
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (attr_name)
+        (concise_open_tag_end)
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (attr_name)
+        (attr_name)
+        (attr_value
+          (attr_eq)
+          (attr_value_expr))
+        (concise_open_tag_end)
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (attr_name)
+        (attr_value
+          (attr_eq)
+          (attr_value_expr
+            (atom)
+            (atom)
+            (atom)
+            (atom)))
+        (attr_name)
+        (attr_value
+          (attr_eq)
+          (attr_value_expr
+            (atom)))
+        (concise_open_tag_end)
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (attr_name)
+        (attr_value
+          (attr_eq)
+          (attr_value_expr))
+        (concise_open_tag_end)
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (concise_open_tag_end)
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (concise_open_tag_end)
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (attr_name)
+        (concise_open_tag_end)
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (attr_name)
+        (attr_name)
+        (attr_value
+          (attr_eq)
+          (attr_value_expr))
+        (concise_open_tag_end)
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (attr_name)
+        (attr_value
+          (attr_eq)
+          (attr_value_expr))
+        (concise_open_tag_end)
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (attr_name)
+        (concise_open_tag_end)
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (attr_name)
+        (attr_value
+          (attr_eq)
+          (attr_value_expr
+            (atom)))
+        (concise_open_tag_end)
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (attr_name)
+        (attr_value
+          (attr_eq)
+          (attr_value_expr
+            (atom)))
+        (concise_open_tag_end)
+        (element_end))
+      (element_end))
+    (element
+      (tag_name
+        (tag_name_fragment))
+      (concise_open_tag_end)
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (attr_value
+          (attr_eq)
+          (attr_value_expr
+            (atom)))
+        (shorthand_name
+          (tag_name_fragment))
+        (concise_open_tag_end)
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (attr_value
+          (attr_eq)
+          (attr_value_expr
+            (atom)))
+        (shorthand_name
+          (tag_name_fragment))
+        (concise_open_tag_end)
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (attr_value
+          (attr_eq)
+          (attr_value_expr
+            (atom)))
+        (shorthand_name
+          (tag_name_fragment))
+        (concise_open_tag_end)
+        (element_end))
+      (element_end))
+    (element
+      (tag_name
+        (tag_name_fragment))
+      (concise_open_tag_end)
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (args
+          (args_open)
+          (args_expr)
+          (args_close))
+        (method_body
+          (method_body_open)
+          (method_body_expr
+            (atom))
+          (method_body_close))
+        (concise_open_tag_end)
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (args
+          (args_open)
+          (args_expr)
+          (args_close))
+        (method_body
+          (method_body_open)
+          (method_body_expr)
+          (method_body_close))
+        (concise_open_tag_end)
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (attr_name)
+        (attr_value
+          (attr_eq)
+          (attr_value_expr))
+        (concise_open_tag_end)
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (attr_name)
+        (attr_value
+          (attr_eq)
+          (attr_value_expr))
+        (concise_open_tag_end)
+        (element_end))
+      (element_end))
+    (element
+      (tag_name
+        (tag_name_fragment))
+      (attr_name)
+      (attr_value
+        (attr_eq)
+        (attr_value_expr
+          (atom)
+          (atom)))
+      (attr_name)
+      (attr_value
+        (attr_eq)
+        (attr_value_expr
+          (atom)))
+      (concise_open_tag_end)
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (attr_name)
+        (attr_value
+          (attr_eq)
+          (attr_value_expr
+            (atom)
+            (atom)))
+        (concise_open_tag_end)
+        (element
+          (tag_name
+            (tag_name_fragment))
+          (concise_open_tag_end)
+          (element
+            (tag_name
+              (tag_name_fragment))
+            (shorthand_name
+              (tag_name_fragment))
+            (attr_group
+              (attr_group_open)
+              (attr_name)
+              (attr_value
+                (attr_eq)
+                (attr_value_expr))
+              (attr_name)
+              (attr_value
+                (attr_eq)
+                (attr_value_expr))
+              (attr_name)
+              (attr_value
+                (attr_eq)
+                (attr_value_expr))
+              (attr_group_close))
+            (concise_open_tag_end)
+            (element_end))
+          (element_end))
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (attr_name)
+        (attr_value
+          (attr_eq)
+          (attr_value_expr
+            (atom)
+            (atom)
+            (atom)
+            (atom)
+            (atom)
+            (atom)))
+        (concise_open_tag_end)
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (concise_open_tag_end)
+        (element
+          (tag_name
+            (tag_name_fragment))
+          (concise_open_tag_end)
+          (element
+            (tag_name
+              (tag_name_fragment))
+            (shorthand_name
+              (tag_name_fragment))
+            (attr_group
+              (attr_group_open)
+              (attr_name)
+              (attr_value
+                (attr_eq)
+                (attr_value_expr))
+              (attr_name)
+              (attr_value
+                (attr_eq)
+                (attr_value_expr))
+              (attr_name)
+              (attr_value
+                (attr_eq)
+                (attr_value_expr))
+              (attr_group_close))
+            (concise_open_tag_end)
+            (element_end))
+          (element_end))
+        (element
+          (tag_name
+            (tag_name_fragment))
+          (concise_open_tag_end)
+          (element
+            (tag_name
+              (tag_name_fragment))
+            (concise_open_tag_end)
+            (element
+              (tag_name)
+              (shorthand_name
+                (tag_name_fragment))
+              (attr_value
+                (attr_eq)
+                (attr_value_expr
+                  (atom)))
+              (concise_open_tag_end)
+              (element_end))
+            (element_end))
+          (element_end))
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (attr_name)
+        (attr_value
+          (attr_eq)
+          (attr_value_expr
+            (atom)))
+        (concise_open_tag_end)
+        (element
+          (tag_name
+            (tag_name_fragment))
+          (concise_open_tag_end)
+          (element
+            (tag_name
+              (tag_name_fragment))
+            (shorthand_name
+              (tag_name_fragment))
+            (attr_group
+              (attr_group_open)
+              (attr_name)
+              (attr_value
+                (attr_eq)
+                (attr_value_expr
+                  (atom)))
+              (attr_name)
+              (attr_value
+                (attr_eq)
+                (attr_value_expr))
+              (attr_name)
+              (attr_value
+                (attr_eq)
+                (attr_value_expr))
+              (attr_group_close))
+            (concise_open_tag_end)
+            (element_end))
+          (element
+            (tag_name
+              (tag_name_fragment))
+            (shorthand_name
+              (tag_name_fragment))
+            (attr_group
+              (attr_group_open)
+              (attr_name)
+              (attr_value
+                (attr_eq)
+                (attr_value_expr))
+              (attr_name)
+              (attr_value
+                (attr_eq)
+                (attr_value_expr))
+              (attr_name)
+              (attr_value
+                (attr_eq)
+                (attr_value_expr))
+              (attr_group_close))
+            (concise_open_tag_end)
+            (element_end))
+          (element_end))
+        (element
+          (tag_name
+            (tag_name_fragment))
+          (concise_open_tag_end)
+          (element
+            (tag_name
+              (tag_name_fragment))
+            (concise_open_tag_end)
+            (element
+              (tag_name)
+              (shorthand_name
+                (tag_name_fragment))
+              (attr_value
+                (attr_eq)
+                (attr_value_expr
+                  (atom)))
+              (concise_open_tag_end)
+              (element_end))
+            (element
+              (tag_name)
+              (shorthand_name
+                (tag_name_fragment))
+              (attr_value
+                (attr_eq)
+                (attr_value_expr))
+              (concise_open_tag_end)
+              (element_end))
+            (element_end))
+          (element
+            (tag_name
+              (tag_name_fragment))
+            (attr_value
+              (attr_eq)
+              (attr_value_expr))
+            (concise_open_tag_end)
+            (element
+              (tag_name
+                (tag_name_fragment))
+              (concise_open_tag_end)
+              (element
+                (tag_name)
+                (shorthand_name
+                  (tag_name_fragment))
+                (attr_value
+                  (attr_eq)
+                  (attr_value_expr))
+                (concise_open_tag_end)
+                (element_end))
+              (element_end))
+            (element_end))
+          (element
+            (tag_name
+              (tag_name_fragment))
+            (attr_value
+              (attr_eq)
+              (attr_value_expr
+                (atom)))
+            (concise_open_tag_end)
+            (element_end))
+          (element_end))
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (concise_open_tag_end)
+        (element
+          (tag_name
+            (tag_name_fragment))
+          (concise_open_tag_end)
+          (element
+            (tag_name
+              (tag_name_fragment))
+            (shorthand_name
+              (tag_name_fragment))
+            (attr_name)
+            (attr_value
+              (attr_eq)
+              (attr_value_expr))
+            (attr_name)
+            (attr_value
+              (attr_eq)
+              (attr_value_expr))
+            (concise_open_tag_end)
+            (element_end))
+          (element_end))
+        (element
+          (tag_name
+            (tag_name_fragment))
+          (concise_open_tag_end)
+          (element
+            (tag_name
+              (tag_name_fragment))
+            (concise_open_tag_end)
+            (element
+              (tag_name)
+              (shorthand_name
+                (tag_name_fragment))
+              (attr_value
+                (attr_eq)
+                (attr_value_expr))
+              (concise_open_tag_end)
+              (element_end))
+            (element_end))
+          (element_end))
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (concise_open_tag_end)
+        (element
+          (tag_name
+            (tag_name_fragment))
+          (attr_value
+            (attr_eq)
+            (attr_value_expr
+              (atom)))
+          (concise_open_tag_end)
+          (element_end))
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (concise_open_tag_end)
+        (element
+          (tag_name
+            (tag_name_fragment))
+          (attr_value
+            (attr_eq)
+            (attr_value_expr))
+          (concise_open_tag_end)
+          (element_end))
+        (element
+          (tag_name
+            (tag_name_fragment))
+          (attr_value
+            (attr_eq)
+            (attr_value_expr
+              (atom)))
+          (concise_open_tag_end)
+          (element_end))
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (concise_open_tag_end)
+        (element
+          (tag_name
+            (tag_name_fragment))
+          (concise_open_tag_end)
+          (element
+            (tag_name
+              (tag_name_fragment))
+            (shorthand_name
+              (tag_name_fragment))
+            (concise_open_tag_end)
+            (element_end))
+          (element_end))
+        (element
+          (tag_name
+            (tag_name_fragment))
+          (attr_value
+            (attr_eq)
+            (attr_value_expr))
+          (concise_open_tag_end)
+          (element_end))
+        (element_end))
+      (element_end))
+    (element
+      (tag_name
+        (tag_name_fragment))
+      (concise_open_tag_end)
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (attr_name)
+        (attr_value
+          (attr_eq)
+          (attr_value_expr
+            (atom)))
+        (concise_open_tag_end)
+        (element
+          (tag_name
+            (tag_name_fragment))
+          (attr_value
+            (attr_eq)
+            (attr_value_expr))
+          (concise_open_tag_end)
+          (element_end))
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (attr_name)
+        (attr_value
+          (attr_eq)
+          (attr_value_expr
+            (atom)
+            (atom)
+            (atom)))
+        (concise_open_tag_end)
+        (element
+          (tag_name
+            (tag_name_fragment))
+          (attr_value
+            (attr_eq)
+            (attr_value_expr))
+          (concise_open_tag_end)
+          (element_end))
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (shorthand_name
+          (tag_name_fragment))
+        (attr_name)
+        (attr_value
+          (attr_eq)
+          (attr_value_expr
+            (atom)))
+        (concise_open_tag_end)
+        (element
+          (tag_name
+            (tag_name_fragment))
+          (attr_value
+            (attr_eq)
+            (attr_value_expr
+              (atom)))
+          (concise_open_tag_end)
+          (element_end))
+        (element_end))
+      (element_end))
+    (element_end)))

@@ -1,0 +1,78 @@
+===============
+html comment
+===============
+<!-- a -->
+<div/>
+
+---------------
+
+(document
+  (html_comment)
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end_self)
+    (element_end)))
+
+===============
+js line comment in concise attrs
+===============
+div class="a" // note
+
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+js block comment between attributes
+===============
+<div /* c */ class="a"/>
+
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (open_tag_end_self)
+    (element_end)))
+
+===============
+comment inside body
+===============
+<div>
+  <!-- inner -->
+  hi
+</div>
+
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (html_comment)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))

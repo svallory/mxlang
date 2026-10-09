@@ -1,0 +1,1332 @@
+===============
+cdata
+===============
+<![CDATA[[if lt IE 9]><div><![endif]]]>
+---------------
+
+(document
+  (cdata))
+
+===============
+cdata-2
+===============
+<div>
+    BEFORE<![CDATA[<within><!-- just text -->]]>AFTER
+</div>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (cdata)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+cdata-pos
+===============
+test
+    <foo>
+    <![CDATA[[if lt IE 9]><div><![endif]]]>
+    </foo>
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (element
+      (open_tag_start)
+      (tag_name
+        (tag_name_fragment))
+      (open_tag_end)
+      (text)
+      (cdata)
+      (text)
+      (close_tag
+        (close_tag_start)
+        (close_tag_name)
+        (close_tag_end))
+      (element_end))
+    (element_end)))
+
+===============
+comment-concise-js-block
+===============
+p
+  /*
+  This is a
+  multiline comment
+  */
+  -- This is the body of the p tag
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (block_comment)
+    (html_block
+      (text))
+    (element_end)))
+
+===============
+comment-concise-js-line
+===============
+div
+  // This is a single line comment
+  -- This is the body of the div tag
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (line_comment)
+    (html_block
+      (text))
+    (element_end)))
+
+===============
+comment-js-line-eof
+===============
+// foo
+---------------
+
+(document
+  (line_comment))
+
+===============
+comments-within-open-tag
+===============
+<div foo="bar" /*this is a comment*/ hello="world" /* this is another comment */ ></div>
+<div foo="bar" // this is a test
+     hello="world" // this is another test
+></div>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (open_tag_end)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (open_tag_end)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+comments-within-tag-body
+===============
+<div>
+     // This is a comment
+     This is some real text
+     /* But this is a comment */
+     And this is more text
+     <!-- and this is a comment -->
+     But this, this is not a http://comment.com
+     And yet this is a //comment
+     And also /* this is a comment */
+     Because a//comment must be preceded by whitespace.
+</div>
+
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (line_comment)
+    (text)
+    (block_comment)
+    (text)
+    (html_comment)
+    (text)
+    (line_comment)
+    (text)
+    (block_comment)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+css-calc
+===============
+﻿style {
+    .example {
+        margin-left: calc((-100% / 12 - 200px) / 2);
+    }
+}
+
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+css-grid
+===============
+﻿style.scss {
+  .foo {
+    grid: "left right" / 3fr 7fr;
+  }
+}
+
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (shorthand_class
+      (tag_name_fragment))
+    (attr_name)
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+declaration
+===============
+<?xml version="1.0" encoding="UTF-8" ?>
+---------------
+
+(document
+  (declaration))
+
+===============
+division-after-string
+===============
+div a='x'/2
+
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+division-after-template
+===============
+div a=`x`/2
+
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_name)
+    (attr_value
+      (attr_eq)
+      (attr_value_expr))
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+double-hyphen-block
+===============
+<!DOCTYPE html>
+html [lang="en"]
+  body
+    h1 -- Title
+    script
+      ---
+      var a = 'marko';
+      ---
+---------------
+
+(document
+  (doctype)
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_group
+      (attr_group_open)
+      (attr_name)
+      (attr_value
+        (attr_eq)
+        (attr_value_expr))
+      (attr_group_close))
+    (concise_open_tag_end)
+    (element
+      (tag_name
+        (tag_name_fragment))
+      (concise_open_tag_end)
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (concise_open_tag_end)
+        (html_block
+          (text))
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (concise_open_tag_end)
+        (html_block
+          (text))
+        (element_end))
+      (element_end))
+    (element_end)))
+
+===============
+double-hyphen-line
+===============
+<!DOCTYPE html>
+html [lang="en"]
+  body
+    h1 -- Title
+    script -- var a = 'marko';
+---------------
+
+(document
+  (doctype)
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_group
+      (attr_group_open)
+      (attr_name)
+      (attr_value
+        (attr_eq)
+        (attr_value_expr))
+      (attr_group_close))
+    (concise_open_tag_end)
+    (element
+      (tag_name
+        (tag_name_fragment))
+      (concise_open_tag_end)
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (concise_open_tag_end)
+        (html_block
+          (text))
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (concise_open_tag_end)
+        (html_block
+          (text))
+        (element_end))
+      (element_end))
+    (element_end)))
+
+===============
+double-hyphen-line-start
+===============
+<!DOCTYPE html>
+html [lang="en"]
+  body
+    h1 -- Title
+    script
+      -- var a = 'marko';
+---------------
+
+(document
+  (doctype)
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (attr_group
+      (attr_group_open)
+      (attr_name)
+      (attr_value
+        (attr_eq)
+        (attr_value_expr))
+      (attr_group_close))
+    (concise_open_tag_end)
+    (element
+      (tag_name
+        (tag_name_fragment))
+      (concise_open_tag_end)
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (concise_open_tag_end)
+        (html_block
+          (text))
+        (element_end))
+      (element
+        (tag_name
+          (tag_name_fragment))
+        (concise_open_tag_end)
+        (html_block
+          (text))
+        (element_end))
+      (element_end))
+    (element_end)))
+
+===============
+dtd
+===============
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0//EN">
+---------------
+
+(document
+  (doctype))
+
+===============
+multiline-html-block
+===============
+---
+Hello <strong>Frank</strong>
+Line 2
+---
+---------------
+
+(document
+  (html_block
+    (text)
+    (element
+      (open_tag_start)
+      (tag_name
+        (tag_name_fragment))
+      (open_tag_end)
+      (text)
+      (close_tag
+        (close_tag_start)
+        (close_tag_name)
+        (close_tag_end))
+      (element_end))
+    (text)))
+
+===============
+multiline-html-block-blank-line
+===============
+div
+  span --
+    a
+ 
+    b
+
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (element
+      (tag_name
+        (tag_name_fragment))
+      (concise_open_tag_end)
+      (html_block
+        (text)
+        (text)
+        (text)
+        (text))
+      (element_end))
+    (element_end)))
+
+===============
+multiline-html-block-blank-line-crlf
+===============
+div
+  span --
+    a
+ 
+    b
+
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (element
+      (tag_name
+        (tag_name_fragment))
+      (concise_open_tag_end)
+      (html_block
+        (text)
+        (text)
+        (text)
+        (text))
+      (element_end))
+    (element_end)))
+
+===============
+multiline-html-block-empty
+===============
+---
+---
+---------------
+
+(document
+  (html_block))
+
+===============
+multiline-html-block-missing-end
+===============
+div
+    --
+    Hello World
+    Hello Again
+
+script --
+    console.log('foo');
+    alert('bar');
+
+--
+Multi-line text
+Reached EOF
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (html_block
+      (text)
+      (text)
+      (text))
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (html_block
+      (text)
+      (text)
+      (text))
+    (element_end))
+  (html_block
+    (text)
+    (text)))
+
+===============
+multiline-html-block-nested
+===============
+p
+    ---
+    Hello <strong>Frank</strong>
+    Line 2
+    ---
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (html_block
+      (text)
+      (element
+        (open_tag_start)
+        (tag_name
+          (tag_name_fragment))
+        (open_tag_end)
+        (text)
+        (close_tag
+          (close_tag_start)
+          (close_tag_name)
+          (close_tag_end))
+        (element_end))
+      (text)
+      (text))
+    (element_end)))
+
+===============
+multiline-html-block-nested-empty
+===============
+p
+    ---
+    ---
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (html_block)
+    (element_end)))
+
+===============
+multiline-html-block-same-line
+===============
+div --
+    Hello World
+    Hello Again
+    --
+    span --
+         Goodbye
+         --
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (html_block
+      (text)
+      (text)
+      (text))
+    (element
+      (tag_name
+        (tag_name_fragment))
+      (concise_open_tag_end)
+      (html_block
+        (text))
+      (element_end))
+    (element_end)))
+
+===============
+multiline-html-block-trailing-space
+===============
+div
+  span --
+    t
+ 
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (element
+      (tag_name
+        (tag_name_fragment))
+      (concise_open_tag_end)
+      (html_block
+        (text)
+        (text))
+      (element_end))
+    (element_end)))
+
+===============
+multiline-text-block
+===============
+---
+Line 1
+Line 2
+---
+---------------
+
+(document
+  (html_block
+    (text)
+    (text)))
+
+===============
+multiline-text-block-with-hyphens
+===============
+---
+- Line 1
+- Line 2
+---
+---------------
+
+(document
+  (html_block
+    (text)
+    (text)))
+
+===============
+parsed-text-crlf
+===============
+<script>a
+b</script>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+parsed-text-empty-close
+===============
+<script>a</>b
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (text))
+
+===============
+parsed-text-placeholder-in-template-literal-string
+===============
+<script>
+    var foo = `Text 1: ${content}`;
+    // ${foo}
+    /*
+        ${bar}
+    */
+</script>
+
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+parsed-text-style-tag
+===============
+<style>/* block comment within <style> */"string within \"<style>\""'string within \'<style>\''</style>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+script
+===============
+<script>// line comment within <script>
+/* block comment within <script> */"string within \"<script>\""'string within \'<script>\''</script>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+script-concise
+===============
+script
+    ---
+    This is text
+    within the </script> block
+    ---
+    -- This should be okay too
+div
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (html_block
+      (text)
+      (text)
+      (text))
+    (html_block
+      (text))
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+script-empty-concise
+===============
+head
+    script src="http://ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular.min.js"
+    lasso-head
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (element
+      (tag_name
+        (tag_name_fragment))
+      (attr_name)
+      (attr_value
+        (attr_eq)
+        (attr_value_expr))
+      (concise_open_tag_end)
+      (element_end))
+    (element
+      (tag_name
+        (tag_name_fragment))
+      (concise_open_tag_end)
+      (element_end))
+    (element_end)))
+
+===============
+script-escaped-placeholder
+===============
+<script>
+\${test}
+\\${test}
+</script>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (escape)
+    (text)
+    (escape)
+    (placeholder
+      (placeholder_start)
+      (placeholder_expr)
+      (placeholder_end))
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+script-mismatched-close
+===============
+<script>a</b>c</script>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (text)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+script-self-closed
+===============
+<head>
+    <script src="http://ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular.min.js"/>
+    <lasso-head />
+</head>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (element
+      (open_tag_start)
+      (tag_name
+        (tag_name_fragment))
+      (attr_name)
+      (attr_value
+        (attr_eq)
+        (attr_value_expr))
+      (open_tag_end_self)
+      (element_end))
+    (text)
+    (element
+      (open_tag_start)
+      (tag_name
+        (tag_name_fragment))
+      (open_tag_end_self)
+      (element_end))
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+script-single-line-comment
+===============
+<script>// this is a comment</script>
+
+<div>
+  <script>// this is a comment</script>
+  <span>hi</span>
+</div>
+
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end))
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (element
+      (open_tag_start)
+      (tag_name
+        (tag_name_fragment))
+      (open_tag_end)
+      (text)
+      (close_tag
+        (close_tag_start)
+        (close_tag_name)
+        (close_tag_end))
+      (element_end))
+    (text)
+    (element
+      (open_tag_start)
+      (tag_name
+        (tag_name_fragment))
+      (open_tag_end)
+      (text)
+      (close_tag
+        (close_tag_start)
+        (close_tag_name)
+        (close_tag_end))
+      (element_end))
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+script-tag-entities
+===============
+<script>console.log('<div>Hello ${input.name}</div>');</script>
+
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (placeholder
+      (placeholder_start)
+      (placeholder_expr)
+      (placeholder_end))
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+script-with-strings
+===============
+<script>
+  "this is a ${test}"
+  "this is a \${test}"
+  "/*"
+  "//"
+  'this is a ${test}'
+  'this is a \${test}'
+  '/*'
+  '//'
+  `this is a ${test}`
+  `this is a \${test}`
+  `/*`
+  `//`
+</script>
+
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (placeholder
+      (placeholder_start)
+      (placeholder_expr)
+      (placeholder_end))
+    (text)
+    (escape)
+    (text)
+    (placeholder
+      (placeholder_start)
+      (placeholder_expr)
+      (placeholder_end))
+    (text)
+    (escape)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+single-line-text-block
+===============
+-- Line 1
+-- Line 2
+---------------
+
+(document
+  (html_block
+    (text))
+  (html_block
+    (text)))
+
+===============
+single-line-text-block-nested
+===============
+p
+    -- Line 1
+    -- Line 2
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (html_block
+      (text))
+    (html_block
+      (text))
+    (element_end)))
+
+===============
+single-line-text-block-sibling
+===============
+p
+    -- Paragraph: Line 1
+    -- Paragraph: Line 2
+-- Root: Line 1
+-- Root: Line 2
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (html_block
+      (text))
+    (html_block
+      (text))
+    (element_end))
+  (html_block
+    (text))
+  (html_block
+    (text)))
+
+===============
+text-after-tag
+===============
+span -- Hello World
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (html_block
+      (text))
+    (element_end)))
+
+===============
+text-block-eof
+===============
+--
+---------------
+
+(document
+  (html_block))
+
+===============
+text-block-trailing-space
+===============
+div -- 
+  hello
+div2
+
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (html_block
+      (text))
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+text-parse-mode-concise
+===============
+div
+    span
+        -- Hello World
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (element
+      (tag_name
+        (tag_name_fragment))
+      (concise_open_tag_end)
+      (html_block
+        (text))
+      (element_end))
+    (element_end)))
+
+===============
+text-parse-mode-delimited-block
+===============
+div
+    span
+        ---
+        Test
+        <b>Hello World</b>
+        ---
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (element
+      (tag_name
+        (tag_name_fragment))
+      (concise_open_tag_end)
+      (html_block
+        (text)
+        (text)
+        (element
+          (open_tag_start)
+          (tag_name
+            (tag_name_fragment))
+          (open_tag_end)
+          (text)
+          (close_tag
+            (close_tag_start)
+            (close_tag_name)
+            (close_tag_end))
+          (element_end)))
+      (element_end))
+    (element_end)))
+
+===============
+text-parse-mode-html
+===============
+<div>
+    <span>Hello World</span>
+</div>
+---------------
+
+(document
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (element
+      (open_tag_start)
+      (tag_name
+        (tag_name_fragment))
+      (open_tag_end)
+      (text)
+      (close_tag
+        (close_tag_start)
+        (close_tag_name)
+        (close_tag_end))
+      (element_end))
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+textarea
+===============
+textarea -- Hello
+p
+---------------
+
+(document
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (html_block
+      (text))
+    (element_end))
+  (element
+    (tag_name
+      (tag_name_fragment))
+    (concise_open_tag_end)
+    (element_end)))
+
+===============
+xml-declaration
+===============
+<?xml version="1.0" encoding="UTF-8" ?>
+<div>Hello</div>
+---------------
+
+(document
+  (declaration)
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))
+
+===============
+xml-declaration-ill-formed
+===============
+<?xml version="1.0" encoding="UTF-8">
+<div>Hello</div>
+---------------
+
+(document
+  (declaration)
+  (element
+    (open_tag_start)
+    (tag_name
+      (tag_name_fragment))
+    (open_tag_end)
+    (text)
+    (close_tag
+      (close_tag_start)
+      (close_tag_name)
+      (close_tag_end))
+    (element_end)))

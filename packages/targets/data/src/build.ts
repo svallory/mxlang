@@ -226,6 +226,9 @@ function checkTagName(name: string, at: Position): void {
 const MERGED_SHORTHAND_CLASS =
   "a shorthand class (`.a`) together with a `class` attribute is not supported in a data file: write every class in the `class` attribute";
 
+const SYNTHESIZED_SHORTHAND_ID =
+  "a shorthand id with a placeholder (`#a${x}`) is not supported in a data file: write `id=...`";
+
 /**
  * The attribute a shorthand class would have merged into, if core merged one.
  *
@@ -236,6 +239,12 @@ const MERGED_SHORTHAND_CLASS =
 function rejectMergedShorthandClass(attrs: Attr[], at: Position): void {
   for (const attr of attrs) {
     if (attr.kind === "spread") continue;
+    // `#a${x}`: core builds the `id` value as a template literal with no
+    // authored source, so the tree has no span to give it. Positioned reject
+    // instead of the invariant error `dataExpr` would throw.
+    if (attr.name === "id" && attr.kind === "dynamic" && !attr.value.span) {
+      fail(SYNTHESIZED_SHORTHAND_ID, at);
+    }
     if (attr.name !== "class") continue;
     const span =
       attr.kind === "static"
