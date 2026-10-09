@@ -1416,7 +1416,7 @@ is the construct label, always backticked (`` `<if>` ``, `` `<for>` ``, …):
 
 | Message |
 |---|
-| `Tag does not support arguments.` (Marko 6.4.3's own message; for `if`/`else-if`/`else`/`await` Marko appends its own hint, e.g. `` `Tag does not support arguments. Write the condition as a value attribute instead: `<if=condition>`. `` `` |
+| `Tag does not support arguments.` (Marko 6.4.4's own message; for `if`/`else-if`/`else`/`await` Marko appends its own hint, e.g. `` `Tag does not support arguments. Write the condition as a value attribute instead: `<if=condition>`. `` `` |
 | `tag variable \`/${…}\` on ${what} is not supported in a standalone template` |
 | `type arguments on ${what} are not supported in a standalone template` |
 | `tag params \`\|...\|\` on ${what} are not supported in a standalone template` |
@@ -3231,7 +3231,7 @@ differences noted), **Astro `.astro.mx`**, **Angular**.
 | `define` | local render function | same | **error** — no local component form in a JSX expression | `const R = (p) => (<>…</>)` hoisted | **error** — extract to its own `.astro.mx` | `<ng-template #R let-p>` |
 | `const` | `const x = …` | same | **error** in a region | `const` at component-body top | **error** — declare it in the fence | `@let x = …;` |
 | `let` | initial value only | **error** (strict) | **error** — use `createSignal` | **error** — use `useState` | **error** | error — fixed 2026-09-17, `<let>`-specific message; was **the wrong error** (bug 1, only the generic `/var` field guard fired) |
-| `try` | the body inline in a block; a throw propagates, as in Marko | same | `<Loading>` | body inline | **error** | **error** |
+| `try` | **error** (no `<@catch>`; §6) | same | `<Loading>` | body inline | **error** | **error** |
 | `try` + `<@catch>` | `catch` block; the body renders into a buffered sub-sink, so a throw drops its partial output (§13.8) | same | `<Errored fallback>` | `MxErrorBoundary` (Preact/React/Hono; Hono's wraps `hono/jsx`'s `ErrorBoundary`), body passed as a thunk | error | error |
 | `try` + `<@placeholder>` | **error** — needs a second render pass | error | `<Loading fallback>` | `MxPlaceholder` / `Suspense`, nested **inside** the boundary | error | error |
 | `<return>` + `/var` | `render(input, out)` returns the value; `/var` in **any** scope, dynamic tags included (§13.8) | same | `.render(props)` returns `{ value, output }` (§13.3); `/var` top-level only; dynamic tags included (decision 155's render path, `dynamic-tag-var-silent-drop`) | same as Preact | same as Preact | **error** | error — fixed 2026-09-17 (page level; the tag-unit call site was already an error); was **accepted and silently dropped** (bug 8) |
@@ -3869,14 +3869,11 @@ refuses such a binding outright (TS80001).
 committed to `out` only when the body finishes. When the body throws, the
 buffered output is dropped and `<@catch>` renders into `out` instead, so a
 half-rendered body never reaches the page (verified against Marko 6.4.4). A
-nested `<try>` commits into its enclosing one. A `<try>` **without**
-`<@catch>` catches nothing: the error propagates out of the render, or to an
-enclosing `<try>`, as in Marko (it was once swallowed). `<@placeholder>` stays
-an error on this target (§6). The `try-*` fixtures in
+nested `<try>` commits into its enclosing one. A `<try>` without `<@catch>` is
+a compile error on this target (§6). The `try-*` fixtures in
 `packages/targets/html/fixtures-marko` oracle-lock the partial-output drop,
 and `dynamic-tag-var` oracle-locks `/var` on a dynamic tag, with and without
-arguments. The catch-less rethrow is locked by a unit test against measured
-Marko 6.4.4 output; the oracle cannot express a throw.
+arguments.
 
 **Decisions:** 95, 155.
 
