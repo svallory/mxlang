@@ -26,7 +26,9 @@
     "oracle:react": "bun run --tsconfig-override=tsconfig.base.json packages/oracle/src/report-react-cli.ts",
     "oracle:hono": "bun run --tsconfig-override=tsconfig.base.json packages/oracle/src/report-hono-cli.ts",
     "oracle:custom-tags": "bun run --tsconfig-override=tsconfig.base.json packages/oracle/fixtures-custom-tags/run.ts",
-    "oracle:angular": "bun run --tsconfig-override=tsconfig.base.json packages/oracle/src/report-angular.ts"
+    "oracle:angular": "bun run --tsconfig-override=tsconfig.base.json packages/oracle/src/report-angular.ts",
+    "changelog:assemble": "bun run scripts/assemble-changelog.ts",
+    "changelog:check": "bun run scripts/check-changelog-fragment.ts"
   },
   "devDependencies": {
     "@babel/core": "7.29.7",

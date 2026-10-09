@@ -98,6 +98,10 @@ All dependencies in the root `package.json` are pinned to an exact version (no `
 
 Conventional commits: `type(scope): summary`.
 
+## Changelog fragments
+
+A PR that touches `packages/*/src` or `packages/*/package.json` adds a fragment `changes/<branch-slug>.md` (front matter `packages: [short-names]`, `kind: Added | Changed | Fixed | Removed`; body = the changelog entry); CI fails without one unless the PR body has a `no-changelog: <reason>` line. `bun run changelog:assemble [--release <version>]` folds fragments into each package's `## Unreleased` section — never edit a package CHANGELOG directly on a PR.
+
 ## Architecture
 
 A `.mx`/`.solid.mx`/`.ng.mx`/`.astro.mx` template flows through the system as follows:
