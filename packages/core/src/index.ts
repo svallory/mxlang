@@ -71,6 +71,7 @@ export {
   declName,
   expr,
   fail,
+  firstAttributeTag,
   hasContent,
   type ImportedName,
   importBindings,

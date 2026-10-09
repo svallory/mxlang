@@ -46,18 +46,21 @@ import {
   attrByName,
   bindingIdentifierNodes,
   bindingIdentifiers,
+  bodyChildren,
   type Ctx,
   collectedError,
   DYNAMIC_TAG,
   declName,
   expr,
   fail,
+  firstAttributeTag,
   hasContent,
   importBindings,
   importedNames,
   importTypeOnlyBindings,
   isFunctionLikeValue,
   isMarkoOrMxSpecifier,
+  isMxAttributeTag,
   isTranslateError,
   markoBabel,
   type Node,
@@ -1222,7 +1225,18 @@ function attrName(node: Node): string {
   return String(node.name?.value ?? "").replace(/^@/, "");
 }
 
+/**
+ * The span of an attribute tag's name, `@` excluded. Both parsers start the
+ * name's span at the `@`: Marko keeps it in `name.value`, the MX front end
+ * drops it from `value` but not from `name.span` (ast §3.7).
+ */
 function attributeTagNameSpan(ctx: Ctx, node: Node): SourceSpan {
+  if (node.type === "MxAttributeTag") {
+    return {
+      sourceStart: node.name.span.start + 1,
+      sourceEnd: node.name.span.end,
+    };
+  }
   const span = nodeSpan(ctx, node.name);
   return { sourceStart: span.sourceStart + 1, sourceEnd: span.sourceEnd };
 }
@@ -1236,39 +1250,19 @@ function isLayout(node: Node): boolean {
 
 function isControl(node: Node): boolean {
   const name = String(node?.name?.value ?? "").replace(/^@/, "");
-  return node?.type === "MarkoTag" && (name === "if" || name === "for");
-}
-
-function isMxAttributeTag(node: Node): boolean {
-  // Hybrid check for transition: MX type or Marko `<@name>` pattern.
-  // Once `lower()` takes MxNode only, the Marko branch goes.
   return (
-    node?.type === "MxAttributeTag" ||
-    (node?.type === "MarkoTag" &&
-      String(node?.name?.value ?? "").startsWith("@"))
+    (node?.type === "MarkoTag" || node?.type === "MxTag") &&
+    (name === "if" || name === "for")
   );
-}
-
-/** Hybrid body read: MX has `body: MxChild[]`, Marko has `body: { body }`. */
-function bodyChildren(node: Node): Node[] {
-  if (!node.body) return [];
-  // MX AST: body is direct child list (no wrapper)
-  if (Array.isArray(node.body)) return node.body;
-  // Marko AST: body.body is the child list
-  return node.body.body ?? [];
 }
 
 function containsAttributeTags(node: Node): boolean {
   // Hybrid for transition: check Marko `attributeTags` field AND MX body children
   if ((node.attributeTags ?? []).length > 0) return true;
   const body = bodyChildren(node);
-  if (body.some(isMxAttributeTag)) return true;
-  return body.some((child: Node) => {
-    const name = String(child?.name?.value ?? "");
-    return (
-      name.startsWith("@") || (isControl(child) && containsAttributeTags(child))
-    );
-  });
+  return body.some(
+    (c) => isMxAttributeTag(c) || (isControl(c) && containsAttributeTags(c)),
+  );
 }
 
 /**
@@ -1734,13 +1728,12 @@ function lowerAuthoredAttributeTag(
   unscope();
 
   if (nested.flat.length > 0) {
-    const body = bodyChildren(node);
-    const firstAttrTag = body.find(isMxAttributeTag);
+    const firstAttrTag = firstAttributeTag(node) ?? node;
     requireAttrTagsV2(
       ctx,
       `\`<@${name}>\`: nested attribute tags`,
       "aren't",
-      firstAttrTag ?? node,
+      firstAttrTag,
     );
     if (declaration?.as === "renderable") {
       fail(
@@ -1882,6 +1875,9 @@ function lowerAttributeTags(
   // Hybrid for transition: Marko puts attribute tags in `attributeTags` field,
   // MX puts them as `MxAttributeTag` nodes in body. Process both sources.
   const directTags = node.attributeTags ?? [];
+  // collected up front: the loop below jumps over an `<if>` chain, and the
+  // chain scan skips layout comments, so a comment collected in the loop
+  // could be skipped with it.
   const hoistedComments: Node[] = directTags.filter(
     (tag: Node) => tag?.type === "MarkoComment",
   );
@@ -1911,7 +1907,7 @@ function lowerAttributeTags(
   const consumed = new Set<number>();
   for (let index = 0; index < body.length; index++) {
     const child = body[index];
-    if (isMxAttributeTag(child)) {
+    if (isMxAttributeTag(child) && !isControl(child)) {
       candidates.push({
         offset: nodeSpan(ctx, child).sourceStart,
         kind: "tag",

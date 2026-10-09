@@ -7,7 +7,13 @@ import {
 } from "./callee-input.ts";
 import { compileSource } from "./compile.ts";
 import type { Ctx, MxWarning, Node } from "./core.ts";
-import { DYNAMIC_TAG, expr, newCtx } from "./core.ts";
+import {
+  DYNAMIC_TAG,
+  expr,
+  firstAttributeTag,
+  newCtx,
+  TranslateError,
+} from "./core.ts";
 import { STATEMENT_TAGLIB, STATEMENT_TAGLIB_ID } from "./core-taglib.ts";
 import { type CustomTag, customTagTaglib } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
@@ -65,6 +71,7 @@ function lowerSource(
     | ((target: import("./ir.ts").ComponentTarget) => CalleeInput),
   ownInput?: CalleeInput,
   customTags?: Readonly<Record<string, CustomTag>>,
+  reshape?: (body: Node[]) => void,
 ): Ir {
   let ir: Ir | null = null;
   let thrown: unknown = null;
@@ -97,6 +104,7 @@ function lowerSource(
           }
           ctx.ownInput = ownInput;
           ctx.customTags = customTags;
+          reshape?.(path.node.body);
           try {
             ir = lower(ctx, path.node.body);
           } catch (error) {
@@ -1387,6 +1395,26 @@ describe("one fixture per IR kind", () => {
           }),
         ),
       ).toThrowError(`${construct} supported by LegacyHost yet`);
+    });
+
+    it("positions nested attribute-tag error at the first nested tag", () => {
+      let error: unknown;
+      try {
+        lowerSource(
+          "<Panel><@item><@icon/></@item></Panel>",
+          fakeDeclarations({
+            name: "@mxlang/legacy",
+            isComponent: (name) => name === "Panel",
+          }),
+        );
+      } catch (e) {
+        error = e;
+      }
+      expect(error).toBeInstanceOf(TranslateError);
+      const err = error as TranslateError;
+      expect(err.message).toContain("nested attribute tags");
+      expect(err.line).toBe(1);
+      expect(err.column).toBe(14); // <@icon> at column 14 (0-indexed)
     });
 
     it("gates a zero-occurrence declared array on a legacy host", () => {
@@ -4326,3 +4354,175 @@ describe("a host that binds a dynamic tag's /var opts in", () => {
     );
   });
 });
+
+/**
+ * The hybrid attribute-tag paths of PR 4 slice 1, driven with MX-shaped
+ * attribute tags until the MX front end feeds `lower()` (PR 5).
+ *
+ * `toMxAttributeTags` takes the real Marko parse and moves every tag's
+ * `attributeTags` back into its body as the MX AST has them: one child list
+ * (an array, `MxTagFields.body`) in source order, each `<@name>` an
+ * `MxAttributeTag` whose `name` is `{ value, span }` with the `@` dropped from
+ * `value` and kept inside `span` (the MX front end's shape, ast §3.7). The
+ * rest of each node stays Marko-shaped: later slices retype those reads.
+ */
+function toMxAttributeTags(source: string): (body: Node[]) => void {
+  const lineStarts = [0];
+  for (let i = 0; i < source.length; i++) {
+    if (source[i] === "\n") lineStarts.push(i + 1);
+  }
+  const offsetOf = (node: Node): number => {
+    const start = node.loc.start;
+    return (lineStarts[start.line - 1] ?? 0) + start.column;
+  };
+  const visit = (node: Node): Node => {
+    if (node?.type !== "MarkoTag") return node;
+    const children: Node[] = (node.body?.body ?? []).map(visit);
+    const tags: Node[] = (node.attributeTags ?? []).map(visit);
+    if (tags.length > 0) {
+      const merged = [...children, ...tags].sort(
+        (a, b) => offsetOf(a) - offsetOf(b),
+      );
+      // Tag params still live on Marko's body wrapper until slice 3 reads
+      // `MxTagFields.params`, so a body carrying them keeps the wrapper.
+      if (node.body?.params?.length) node.body.body = merged;
+      else node.body = merged;
+      delete node.attributeTags;
+    } else if (node.body) {
+      node.body.body = children;
+    }
+    const name = String(node.name?.value ?? "");
+    if (!name.startsWith("@")) return node;
+    const start = offsetOf(node) + 1;
+    return {
+      ...node,
+      type: "MxAttributeTag",
+      name: {
+        value: name.slice(1),
+        span: { start, end: start + name.length },
+      },
+    };
+  };
+  return (body) => {
+    body.splice(0, body.length, ...body.map(visit));
+  };
+}
+
+describe("hybrid attribute tags, MX-shaped (PR 4 slice 1)", () => {
+  const panel = (overrides: Partial<Policy> = {}) =>
+    fakeDeclarations({
+      attrTags: 2,
+      isComponent: (name) => name === "Panel",
+      ...overrides,
+    });
+  const mx = (source: string, policy: Policy) =>
+    lowerSource(
+      source,
+      policy,
+      undefined,
+      undefined,
+      undefined,
+      toMxAttributeTags(source),
+    );
+
+  it("reshapes the parse into MxAttributeTag children", () => {
+    const source = "<Panel><@item/></Panel>";
+    let seen: Node[] = [];
+    lowerSource(source, panel(), undefined, undefined, undefined, (body) => {
+      toMxAttributeTags(source)(body);
+      seen = body;
+    });
+    const tag = seen.find((node) => node.type === "MarkoTag");
+    expect(tag.attributeTags).toBeUndefined();
+    expect(tag.body).toEqual([
+      expect.objectContaining({
+        type: "MxAttributeTag",
+        // The MX front end's own shape for this input (probe in PR 433's review).
+        name: { value: "item", span: { start: 8, end: 13 } },
+      }),
+    ]);
+  });
+
+  it("puts an attribute tag's nameSpan on the name after the `@`", () => {
+    const source = "<Panel><@item/></Panel>";
+    const ir = mx(source, panel());
+    const component = ir.body.find((node) => node.kind === "Component");
+    if (component?.kind !== "Component") throw new Error("no Component");
+    const span = component.attributeTags[0]?.nameSpan;
+    expect(span).toEqual({ sourceStart: 9, sourceEnd: 13 });
+    expect(source.slice(span?.sourceStart, span?.sourceEnd)).toBe("item");
+  });
+
+  it.each([
+    ["one attribute tag", "<Panel><@item>A</@item></Panel>"],
+    [
+      "attribute tags mixed with content, in source order",
+      "<Panel>\n  lead\n  <@a>A</@a>\n  <span>mid</span>\n  <@b>B</@b>\n  tail\n</Panel>",
+    ],
+    [
+      "nested attribute tags",
+      "<Panel><@item><@icon>I</@icon>T</@item></Panel>",
+    ],
+    [
+      "attribute tags under <if>/<else>",
+      "<Panel><if=x><@a>A</@a></if><else><@b>B</@b></else></Panel>",
+    ],
+    [
+      "an attribute tag under <for>",
+      "<Panel><for|i| of=xs><@row>${i}</@row></for></Panel>",
+    ],
+    [
+      "a comment before an attribute tag",
+      "<Panel>\n  <!-- note -->\n  <@a>A</@a>\n</Panel>",
+    ],
+  ])("lowers %s to the IR the Marko shape lowers to", (_label, source) => {
+    expect(mx(source, panel())).toEqual(lowerSource(source, panel()));
+  });
+
+  it("positions the nested-attribute-tag gate at the nested tag", () => {
+    const source = "<Panel><@item><@icon/></@item></Panel>";
+    const legacy = panel({ attrTags: undefined, name: "@mxlang/legacy" });
+    let error: unknown;
+    try {
+      mx(source, legacy);
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeInstanceOf(TranslateError);
+    const err = error as TranslateError;
+    expect(err.message).toContain("nested attribute tags");
+    expect([err.line, err.column]).toEqual([1, 14]);
+  });
+
+  it("hands an element's hook its first attribute tag", () => {
+    const source = "<div><@a/></div>";
+    const seen: Node[] = [];
+    const policy = fakeDeclarations({
+      rejectElementAttributeTags: (_name, node) => {
+        const first = firstAttributeTag(node);
+        if (first) seen.push(first);
+      },
+    });
+    // The hook only records; core's own field guard then rejects the tag.
+    expect(() => mx(source, policy)).toThrowError(/attribute tag `@a`/);
+    expect(seen.map((node) => [node.type, node.name.value])).toEqual([
+      ["MxAttributeTag", "a"],
+    ]);
+  });
+
+  it("rejects an element's attribute tag when the host has no hook", () => {
+    const source = "<div><@a/></div>";
+    expect(() => mx(source, fakeDeclarations())).toThrowError(
+      lowerSourceError(source, fakeDeclarations()),
+    );
+  });
+});
+
+function lowerSourceError(source: string, policy: Policy): string {
+  try {
+    lowerSource(source, policy);
+  } catch (error) {
+    return (error as Error).message;
+  }
+  throw new Error(`${source} lowered without an error`);
+}

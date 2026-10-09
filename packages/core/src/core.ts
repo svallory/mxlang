@@ -1287,6 +1287,42 @@ export function productOf(ctx: Ctx): string {
 }
 
 /**
+ * Is `node` an attribute tag: an `MxAttributeTag`, or a Marko tag named
+ * `@…`? A name test only; `<@if>`/`<@for>` pass it, and a caller that treats
+ * those as controls (the body scan in `lowerAttributeTags`) checks
+ * `isControl` itself. The Marko branch goes when `lower()` takes the MX AST.
+ */
+export function isMxAttributeTag(node: Node): boolean {
+  return (
+    node?.type === "MxAttributeTag" ||
+    (node?.type === "MarkoTag" &&
+      String(node?.name?.value ?? "").startsWith("@"))
+  );
+}
+
+/** Hybrid body read: MX has `body: MxChild[]`, Marko has `body: { body }`. */
+export function bodyChildren(node: Node): Node[] {
+  if (!node.body) return [];
+  // MX AST: body is direct child list (no wrapper)
+  if (Array.isArray(node.body)) return node.body;
+  // Marko AST: body.body is the child list
+  return node.body.body ?? [];
+}
+
+/**
+ * The first attribute tag a tag carries, for a diagnostic to point at.
+ *
+ * @param node A tag of either AST: Marko keeps attribute tags in its
+ *   `attributeTags` field, the MX AST as `MxAttributeTag` children of `body`.
+ * @returns The first one in source order, or `undefined` when there is none.
+ */
+export function firstAttributeTag(node: Node): Node | undefined {
+  if ((node.attributeTags ?? []).length > 0) return node.attributeTags?.[0];
+  const body = bodyChildren(node);
+  return body.find(isMxAttributeTag);
+}
+
+/**
  * Rejects the node fields this translator does not read.
  *
  * Marko's parser fills in more than the string target lowers: attribute tags,
@@ -1318,12 +1354,12 @@ export function rejectUnsupportedFields(
     args?: boolean;
   } = {},
 ): void {
-  if (!allow.attributeTags && node.attributeTags?.length) {
-    const first = node.attributeTags[0];
+  const first = allow.attributeTags ? undefined : firstAttributeTag(node);
+  if (first) {
     const tagName = String(first?.name?.value ?? "@…").replace(/^@/, "");
     fail(
       `attribute tag \`@${tagName}\` on ${what}; attribute tags are props of components, so they are only valid directly inside a component call`,
-      first ?? node,
+      first,
     );
   }
   if (!allow.args && node.arguments) {
