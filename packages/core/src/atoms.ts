@@ -132,7 +132,16 @@ export function convertAtoms(ctx: Ctx, roots: readonly Node[]): void {
       for (const item of node) visit(item, parent, key);
       return;
     }
-    if (typeof node.type !== "string") return;
+    if (typeof node.type !== "string") {
+      // A typeless MX field shape (a dynamic tag name's `{ kind, expression }`)
+      // is not a syntactic parent: its expressions keep the owner's, as the
+      // Marko tag's `name` did.
+      for (const [childKey, child] of Object.entries(node)) {
+        if (SKIP.has(childKey) || !child || typeof child !== "object") continue;
+        visit(child, parent, key);
+      }
+      return;
+    }
     if (isStandIn(ctx, node)) {
       const [start, end] = offsets(node) as [number, number];
       const name = ctx.source.slice(start + 1, end);

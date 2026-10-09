@@ -182,6 +182,14 @@ function offsetInDefaultValue(
   return undefined;
 }
 
+/**
+ * A concise line that holds only `,` (or `<,/>`) with no tag above it: the
+ * front end's `MX_TAG_NAME_MISSING`. `parseFragment` throws it, as it did
+ * when Marko crashed on the nameless tag (grammar probe g1683).
+ */
+export const BARE_COMMA_MESSAGE =
+  "a `,` continues the attributes of the tag above; there is no tag here";
+
 export const SUGAR_AFTER_DEFAULT_MESSAGE = (token: string): string =>
   `\`${token}\` right after a default value is not supported (decision 151, ruling 2); put it before the value or on the tag (\`<input:email type="email">\`). See "the parser after-value rule" in divergences.md.`;
 

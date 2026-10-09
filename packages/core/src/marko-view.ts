@@ -26,8 +26,10 @@
  * - **every view**: Marko's `loc` (`{ start: { line, column, index }, end }`,
  *   1-based line, 0-based column, from `ctx.lines`) and `start`/`end`.
  *
- * Rules: one view per node (a `WeakMap`, so identity is stable across the
- * several hooks a tag meets), every field computed on first read, the view
+ * Rules: one view per node and `Ctx` (a `WeakMap` per `Ctx`, so identity is
+ * stable across the several hooks a tag meets in one compile, while a second
+ * `Ctx` over another source gets its own view and its own `loc`), every field
+ * computed on first read, the view
  * and its arrays frozen (nothing writes back to the MX tree), no host names,
  * and a node that is not an MX node (a Babel payload, a Marko node, the
  * Marko-shaped records `rewriteMxSugar` builds) is returned as it is.
@@ -63,8 +65,14 @@ import {
   tagVarOf,
 } from "./tag-fields.ts";
 
-/** One view per MX node, for the compile the node belongs to. */
-const views = new WeakMap<object, Node>();
+/**
+ * One view per MX node *per `Ctx`*: a view's `loc` and `attr.value` are read
+ * through the `Ctx` that built it (its `lines`, its bindings), so a node
+ * reached from two compiles (a scratch `analyze` walk, a host that lowers one
+ * fragment twice over different sources) must not hand the second the
+ * first's positions.
+ */
+const views = new WeakMap<Ctx, WeakMap<object, Node>>();
 
 /** The MX node each view stands for (`mxNodeOf`). */
 const sources = new WeakMap<object, Node>();
@@ -102,10 +110,15 @@ function isMxTag(node: Node): boolean {
  */
 export function markoViewOf(ctx: Ctx, node: Node): Node {
   if (!isMxNode(node)) return node;
-  const known = views.get(node);
+  let perCtx = views.get(ctx);
+  if (!perCtx) {
+    perCtx = new WeakMap();
+    views.set(ctx, perCtx);
+  }
+  const known = perCtx.get(node);
   if (known) return known;
   const view = buildView(ctx, node);
-  views.set(node, view);
+  perCtx.set(node, view);
   sources.set(view, node);
   return view;
 }

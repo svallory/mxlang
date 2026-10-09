@@ -1,10 +1,10 @@
 /**
- * `@mxlang/core` — the Marko-node consumer every MX host is built on.
+ * `@mxlang/core` — the MX AST consumer every MX host is built on.
  *
  * See `README.md` for what belongs here and what belongs in a host. The two
- * front doors are `compileSource` (a whole file, through
- * `@marko/compiler`'s `config.translator` seam) and `parseFragment` (a
- * substring of a larger file, positions shifted to the file).
+ * front doors are `compileSource` (a whole file, parsed with the MX front end
+ * and lowered) and `parseFragment` (a substring of a larger file, positions
+ * in the file's offsets).
  */
 
 export {
@@ -51,6 +51,7 @@ export {
   createTranslator,
   type HostOptions,
   type Lookup,
+  parseMxDocument,
   printExpression,
   type RawSourceMap,
   type Translator,

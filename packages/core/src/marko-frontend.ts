@@ -4,11 +4,18 @@
  * that compiler parses with.
  *
  * Since port PR 5 core parses templates with the MX front end
- * (`@mxlang/parser/frontend`, `mx-parse.ts`), not with this layer: what is
- * still loaded here is the taglib lookup (`taglib.buildLookup`), Marko's Babel
- * (printing, `transform-typescript` for `stripTypes`, `codeFrameColumns`) and
- * the error kit (`markoErrorKit`) that rebuilds Marko's `CompileError`s. The
- * whole file goes with the Marko readers in PR 6 (decision 158).
+ * (`@mxlang/parser/frontend`, `mx-parse.ts`), not with this layer, and so
+ * does `@mxlang/data`'s tag scan (`parseMxDocument`): no production call site
+ * compiles or parses a template with `@marko/compiler`. What is still loaded
+ * here is the taglib lookup (`taglib.buildLookup`), Marko's Babel (printing,
+ * `transform-typescript` for `stripTypes`, `codeFrameColumns`), the error kit
+ * (`markoErrorKit`) that rebuilds Marko's `CompileError`s, and the
+ * `htmljs-parser` lexer (`markoHtmljsParser`) that error-path rewrites
+ * (`stock-parser.ts`, `close-tag-opener.ts`) and name sugar's
+ * `isShorthandWord` re-lex the source with. Nothing calls `compileSync`
+ * (`parseFragmentNative` delegates to `parseFragment`). The whole file goes
+ * with the Marko
+ * readers in PR 6 (decision 158).
  *
  * Decision 159. Until then core's build bundles that layer into
  * `dist/marko-frontend.cjs`, with the `htmljs-parser` specifier resolved to

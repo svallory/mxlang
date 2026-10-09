@@ -181,6 +181,33 @@ describe("markoViewOf on a real MX parse", () => {
     expect(mxNodeOf(view)).toBe(tag);
   });
 
+  it("is one view per node and ctx: each ctx's loc is its own source's", () => {
+    // Offset 5 is line 2, column 0 of the first source and line 1, column 5
+    // of the second: one node, two compiles, two positions.
+    const { ctx: first, body } = parsed("<p/>\n<a/>");
+    const tag = body.filter((node) => node.type === "MxTag")[1];
+    const second = newCtx(
+      "  xyz<a/>",
+      printExpression,
+      declarations(),
+      undefined,
+      FILE,
+      lookup,
+    );
+    const one = markoViewOf(first, tag);
+    const two = markoViewOf(second, tag);
+    expect(two).not.toBe(one);
+    expect(locOf(one)).toEqual([2, 0, 2, 4]);
+    expect(locOf(two)).toEqual([1, 5, 1, 9]);
+    expect(one.name.loc.start).toMatchObject({ line: 2, column: 1 });
+    expect(two.name.loc.start).toMatchObject({ line: 1, column: 6 });
+    // Each ctx keeps its own view, in either order of first use.
+    expect(markoViewOf(first, tag)).toBe(one);
+    expect(markoViewOf(second, tag)).toBe(two);
+    expect(mxNodeOf(one)).toBe(tag);
+    expect(mxNodeOf(two)).toBe(tag);
+  });
+
   it("is read-only and never writes to the MX tree", () => {
     const { ctx, body } = parsed(source);
     const tag = body.filter((node) => node.type === "MxTag")[1];

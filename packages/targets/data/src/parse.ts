@@ -359,7 +359,8 @@ function errorDiagnostics(
  * raises, so a contract error (`parents`/`children`) would hide an unknown tag
  * elsewhere in the file. Under
  * `unknownTags: "reject"` the unknown tags are listed from a parse-only pass
- * (`scan.ts`, no lowering, so a later lowering error cannot interfere) and
+ * (`scan.ts`: the MX front end's parse, no lowering, so a later lowering
+ * error cannot interfere) and
  * reported beside core's error. When the source does not parse there is
  * nothing to list.
  */
@@ -373,6 +374,7 @@ function unknownTagErrors(
     filename,
     options.customTags,
     options.defaultTag,
+    options.syntax,
   );
   if (!tags) return { errors: [], ranges: [] };
   const declared = declaredTagNames(options.customTags);

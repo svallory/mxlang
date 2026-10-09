@@ -105,10 +105,16 @@ Five facts worth knowing before editing it:
   `browserslist` (no config file found: MX passes no targets) and leaves out
   `@babel/preset-typescript` (only for a `.cts` Babel config file). A bundle
   that inlines core's dist (the VSIX builds) gets `marko-frontend.cjs` copied
-  beside it by `scripts/bundled-build.ts`. Since PR 5 nothing parses a
-  template with it: it serves the taglib lookup (`taglib.buildLookup`), Marko's
-  Babel (printing, `transform-typescript`, `codeFrameColumns`) and the error
-  kit (`markoErrorKit`). Deleted with the Marko readers (PR 6, decision 158).
+  beside it by `scripts/bundled-build.ts`. Since PR 5 no production call
+  site compiles or parses a template with `@marko/compiler`: it serves the
+  taglib lookup (`taglib.buildLookup`), Marko's Babel (printing,
+  `transform-typescript`, `codeFrameColumns`) and the error kit
+  (`markoErrorKit`). Two leftovers: `markoHtmljsParser()` still re-lexes the
+  source for error-path rewrites (`stock-parser.ts` `lexedAtoms`/
+  `tagParamError`/`sugarAfterDefaultError`, `close-tag-opener.ts`) and for
+  name-sugar's `isShorthandWord` probe (in the dist that is MX's own template
+  parser). The public `parseFragmentNative` now delegates to `parseFragment`.
+  Deleted with the Marko readers (PR 6, decision 158).
 - **Its JS parsers are Marko's own Babel (`markoBabel()`) and `@babel/parser`.**
   `core.ts` used to parse
   an `import` line with `@mxlang/tsx-bridge` — the *Solid parser* package — for a
@@ -233,9 +239,12 @@ Five facts worth knowing before editing it:
   5).** `src/mx-parse.ts` `parseMx` calls `@mxlang/parser/frontend`'s `parse`
   with tag shapes and statement keywords read from the Marko taglib lookup
   (`taglib.buildLookup`, still Marko's until PR 6) and the resolved syntax table; one
-  parse per compile (`mxParses` counts it). Nothing in production calls
-  `@marko/compiler`'s parser; it stays for the IR differential
-  (`packages/parse-differential`) and the oracles. The front end is imported
+  parse per compile (`mxParses` counts it). `parseMxDocument` (`compile.ts`,
+  public, `@unstable`) is the same parse without lowering, `undefined` when
+  the template does not parse; `@mxlang/data`'s `unknownTags: "reject"` scan
+  (`scan.ts`) walks its document. No production call site parses through
+  `@marko/compiler`; it stays for the IR differential (`packages/parse-differential`) and the
+  oracles. The front end is imported
   statically and inlined into `dist/index.js` (462 KB at 9293794df, 1.13 MB
   after): it cannot be `require`d from source (Node's strip-only mode refuses
   its parameter properties and `@mxlang/babel`'s `const enum`s), and its
@@ -254,8 +263,12 @@ Five facts worth knowing before editing it:
   Babel did (`asBabelTransformError`).
   **`FragmentResult.body` is the MX body, `ast` the `MxDocument`**, with
   file-absolute UTF-16 offsets from the fragment's base. An expression error
-  stays on its container (`error`) and `lower` raises it (`payloadOf`), so
-  `parseFragment` throws only for a template error; front-end `MX_*` name-sugar
+  stays on its container (`error`) and `lower` raises it (`payloadOf`).
+  `parseFragment` throws for exactly what it threw for on Marko's path: a
+  template error, a bare `,` line before any template error (`bareCommaOf`),
+  and every expression error when a method's type parameters fail
+  (`methodTypeParamsFail`; Marko's printer failed on that tree). Front-end
+  `MX_*` name-sugar
   errors are raised by `lower`/`lowerChildren` (`pendingFrontEndError`). A
   `:name` right after a default value gets decision 151 ruling 2's text at the
   lowering boundary too (`positionError`). Solid's bridge

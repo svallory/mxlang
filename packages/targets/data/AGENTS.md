@@ -59,7 +59,7 @@ the first) decides what any tag or expression means. Design:
   consumer with no `@mxlang/*` package (this package is source-only and its
   `tree.ts` pulls in `@babel/types` and core). Light import: the descriptor
   imports `declarations.ts` only; `compile.ts` requires `./parse.ts` (and so
-  `@marko/compiler`) inside `compileModule`, on a relative path, so `load()`
+  core's compiler: the MX front end, Marko's taglib lookup and Babel) inside `compileModule`, on a relative path, so `load()`
   loads no compiler. A source error throws one positioned `TranslateError`
   (the `TargetCompiler` contract; no partial tree to emit); warnings go to the
   caller's `options.warnings` as raised, so those before an error are kept.
@@ -117,6 +117,6 @@ run first by the root `build`, right after core), and its `exports` point at
 `dist`, so the workspace consumers (target-registry, the tooling bundles, the
 tsc goldens) read the build: rebuild before trusting them. Its own tests import
 `src/`. Keep `parse.ts` free of any import of `descriptor.ts` (an entry-point
-cycle makes Bun drop `dist/parse.js` silently), and keep `@marko/compiler`
+cycle makes Bun drop `dist/parse.js` silently), and keep core's compiler
 behind a lazy `require` (a static import is hoisted in the bundle and breaks
 the registry's light import). Publishing: the space-level `notes/release-alpha.md` (outside the repo).

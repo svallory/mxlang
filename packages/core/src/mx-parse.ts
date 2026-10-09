@@ -239,6 +239,53 @@ function shorthandIdErrors(body: readonly Node[]): Node[] {
 }
 
 /**
+ * Whether lowering raises `error` (a front-end `MX_*` rule Marko's tree had
+ * lowering raise), not Marko's parser.
+ *
+ * One exception keeps today's text and position (lead ruling, PR 5): the
+ * front end reports `MX_SUGAR_BOUND` on every tag-adjacent `:=` (`<div:=1/>`),
+ * but today's sugar check (`checkNearSugar`) fired only on a bindable value
+ * (an `Identifier` or a `MemberExpression`); any other value reached Marko's
+ * own binding check instead. Such an error is skipped here, so lowering
+ * raises that check ("Attributes may only be bound to identifiers or member
+ * expressions", at the value) or accepts the value (`a?.b`), as today.
+ */
+function isLoweringError(document: Node, error: Node): boolean {
+  if (error.origin !== "front-end" || MARKO_PARSER_RULES.has(error.code)) {
+    return false;
+  }
+  if (error.code !== "MX_SUGAR_BOUND") return true;
+  const bound = defaultBindAt(document.body ?? [], error.start);
+  if (!bound) return true;
+  const type = bound.value?.node?.type;
+  return type === "Identifier" || type === "MemberExpression";
+}
+
+/** The tag-adjacent `:=` (an unnamed bound `MxAttribute`) starting at `offset`. */
+function defaultBindAt(
+  body: readonly Node[],
+  offset: number,
+): Node | undefined {
+  for (const child of body) {
+    for (const attr of child?.attributes ?? []) {
+      if (
+        attr.type === "MxAttribute" &&
+        attr.name === null &&
+        attr.operator === ":=" &&
+        attr.start === offset
+      ) {
+        return attr;
+      }
+    }
+    if (Array.isArray(child?.body)) {
+      const found = defaultBindAt(child.body, offset);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
+/**
  * The first of the document's front-end errors (ast §3.13: the `MX_*` rules,
  * name sugar the token level already refuses) as the `TranslateError`
  * lowering raised for it on Marko's tree, at the same position (ruling of
@@ -248,7 +295,7 @@ function shorthandIdErrors(body: readonly Node[]): Node[] {
 export function frontEndErrorOf(document: Node): TranslateError | undefined {
   const error = (document.errors ?? []).find(
     (each: Node) =>
-      each.origin === "front-end" && !MARKO_PARSER_RULES.has(each.code),
+      each.code !== INPUT_ENDS_IN_DELIMITER && isLoweringError(document, each),
   );
   if (!error) return undefined;
   // A bare `,` line: the front end places the error where the unnamed tag's
@@ -274,9 +321,7 @@ const pendingDocuments = new WeakMap<object, Node>();
  */
 export function registerDocument(document: Node): void {
   if (
-    !(document.errors ?? []).some(
-      (e: Node) => e.origin === "front-end" && !MARKO_PARSER_RULES.has(e.code),
-    )
+    !(document.errors ?? []).some((e: Node) => isLoweringError(document, e))
   ) {
     return;
   }
@@ -302,6 +347,28 @@ export function pendingFrontEndError(
 ): TranslateError | undefined {
   const document = pendingDocuments.get(body);
   return document ? frontEndErrorOf(document) : undefined;
+}
+
+/**
+ * `MX_INPUT_ENDS_IN_DELIMITER` (decision 161): input that ends inside a
+ * concise open delimiter, where Marko's parser was silent. Lowering raises it
+ * last (`endOfInputError`), so whatever main reported for such input (a
+ * lowering error on the cut tag, `Tag does not support arguments.`) still
+ * wins, and it fires only where nothing else would.
+ */
+const INPUT_ENDS_IN_DELIMITER = "MX_INPUT_ENDS_IN_DELIMITER";
+
+/** `body`'s document's `MX_INPUT_ENDS_IN_DELIMITER`, positioned in the file. */
+export function endOfInputError(
+  body: readonly unknown[],
+): TranslateError | undefined {
+  const document = pendingDocuments.get(body);
+  const error = (document?.errors ?? []).find(
+    (each: Node) => each.code === INPUT_ENDS_IN_DELIMITER,
+  );
+  if (!error) return undefined;
+  const { line, column } = filePosition(document, error.start);
+  return new TranslateError(error.message, line, column);
 }
 
 /** 1-based line, 0-based column of a document offset, in file coordinates. */

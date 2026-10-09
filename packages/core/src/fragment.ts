@@ -51,8 +51,17 @@ import {
 } from "./custom-tags.ts";
 import { nullPrototypeTags } from "./lookup-safety.ts";
 import { markoCompiler } from "./marko-frontend.ts";
-import { compileErrorOf, parseMx, registerDocument } from "./mx-parse.ts";
-import { sugarAfterDefaultError, tagParamError } from "./stock-parser.ts";
+import {
+  compileErrorOf,
+  filePosition,
+  parseMx,
+  registerDocument,
+} from "./mx-parse.ts";
+import {
+  BARE_COMMA_MESSAGE,
+  sugarAfterDefaultError,
+  tagParamError,
+} from "./stock-parser.ts";
 import {
   explicitSyntax,
   resolveSyntax,
@@ -90,20 +99,6 @@ const PARSE_ONLY_TRANSLATOR = {
   tagDiscoveryDirs: [],
   translate: {},
 };
-
-/**
- * Builds the lookup `compileSync` is about to ask for (Marko caches it by
- * taglib ids), and makes its tag map prototype-free so a tag named `toString` is an
- * ordinary unknown tag rather than a crash (see `lookup-safety.ts`).
- */
-function prepareLookup(
-  // biome-ignore lint/suspicious/noExplicitAny: the compiler is required untyped here
-  compiler: any,
-  filename: string,
-  translator: unknown,
-): void {
-  nullPrototypeTags(compiler.taglib.buildLookup(dirname(filename), translator));
-}
 
 function parseOnlyTranslator(
   customTags: Record<string, CustomTag> | undefined,
@@ -384,9 +379,26 @@ export function positionRegionSource(
  *
  * Port PR 5: the MX front end parses (offsets are file-absolute at creation,
  * ast §5.3), with the tag shapes Marko's lookup gives. `body` is the
- * `MxDocument`'s body and `ast` the document; `lowerChildren` reads it. A
- * parse error is thrown as the `CompileError` Marko threw for the fragment
- * (its text measured in the fragment), with its `loc` shifted by `base`.
+ * `MxDocument`'s body and `ast` the document; `lowerChildren` reads it.
+ *
+ * It throws for the inputs Marko's parse-only compile threw for, with the
+ * same text, and keeps every other error in the tree:
+ *
+ * - a template error (or a rule Marko's parser checked): the `CompileError`
+ *   Marko threw for the fragment (its text measured in the fragment), with
+ *   its `loc` shifted by `base`;
+ * - a bare `,` line or `<,/>` (`MX_TAG_NAME_MISSING`), when it comes before
+ *   any such error: a `TranslateError` at the `,` (Marko crashed on the
+ *   nameless tag, grammar probe g1683, and MX rewrote the crash);
+ * - a method's type parameters that do not parse (`x<A<B>>(a) {b}`): Marko's
+ *   printer crashed on the recorded error and MX rethrew what a full compile
+ *   reports, every expression error of the fragment (`CompileError`, or a
+ *   `CompileErrors` aggregate), `loc` shifted by `base`.
+ *
+ * Any other expression error stays on its container (`error`) for `lower` to
+ * raise, as Marko left it in the tree; Solid's bridge relies on that to retry
+ * a failed container as TSX (`repairEmbeddedTsx`). Front-end `MX_*` rules
+ * other than the bare `,` are raised by lowering too (`registerDocument`).
  */
 export function parseFragment(
   source: string,
@@ -428,9 +440,21 @@ export function parseFragment(
   if (tableError) throw tableError;
   // Marko's parse-only output never threw on expression errors alone: those
   // stayed in the tree for lowering, as the containers' `error` do now.
-  const error = compileErrorOf(document, resolved.filename, {
+  const parseError = compileErrorOf(document, resolved.filename, {
     expressionErrors: false,
   });
+  // Marko crashed on a nameless tag the moment it closed its open tag, so a
+  // bare `,` before the error Marko's parse threw wins over it.
+  const comma = bareCommaOf(document);
+  if (comma && (!parseError || comma.local < thrownAt(parseError))) {
+    const at = filePosition(document, comma.offset);
+    throw new TranslateError(BARE_COMMA_MESSAGE, at.line, at.column);
+  }
+  const error =
+    parseError ??
+    (methodTypeParamsFail(document.body)
+      ? compileErrorOf(document, resolved.filename, { expressionErrors: true })
+      : undefined);
   if (error) {
     // A thrown error's position is on the exception, never in a tree, so the
     // walk below can never reach it (spike 1, limit 2).
@@ -460,39 +484,69 @@ export function parseFragment(
 }
 
 /**
- * `parseFragment` implemented on the upstream offset API
- * (`docs/upstream/htmljs-parser-offset.patch` +
- * `docs/upstream/marko-compiler-offset.patch`) instead of the post-hoc shift
- * above: `@marko/compiler`'s `htmlParseOptions.{startOffset,startLine,
- * startColumn}` produces already-file-relative positions directly, so there
- * is no tree walk and no `seen` set here.
+ * The document's first `MX_TAG_NAME_MISSING` (a nameless tag: a bare `,`
+ * line or `<,/>`), at the `,` itself: the front end places the error where
+ * the tag's name would start, just past it. `offset` is the file's, `local`
+ * the fragment's own.
+ */
+function bareCommaOf(
+  document: Node,
+): { offset: number; local: number } | undefined {
+  const error = (document.errors ?? []).find(
+    (each: Node) => each.code === "MX_TAG_NAME_MISSING",
+  );
+  if (!error) return undefined;
+  const base: number = document.base?.offset ?? 0;
+  const source: string = document.source;
+  const comma = source.lastIndexOf(",", error.start - base);
+  const local = comma >= 0 ? comma : error.start - base;
+  return { offset: base + local, local };
+}
+
+/**
+ * The fragment-local offset Marko's parse threw at: the single error's, or
+ * the aggregate's last (its template error; the expression errors recorded
+ * before it come first).
+ */
+function thrownAt(error: Error): number {
+  const errors = (error as { errors?: PositionedError[] }).errors ?? [
+    error as PositionedError,
+  ];
+  const last = errors[errors.length - 1];
+  return last?.loc?.start?.index ?? Number.POSITIVE_INFINITY;
+}
+
+/** Whether a method attribute's type parameters, anywhere in `body`, failed to parse. */
+function methodTypeParamsFail(
+  body: readonly Node[] | null | undefined,
+): boolean {
+  for (const child of body ?? []) {
+    for (const attr of child?.attributes ?? []) {
+      if (attr?.value?.type === "MxMethod" && attr.value.typeParams?.error) {
+        return true;
+      }
+    }
+    if (Array.isArray(child?.body) && methodTypeParamsFail(child.body)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * `parseFragment` itself: the two are one implementation now.
  *
- * Not used by any consumer — `docs/upstream/README.md` is the proof that it
- * produces identical results to `parseFragment` for every case the shifted
- * version is tested against. Exists only until the two patches land upstream
- * (or are decided against); at that point this becomes `parseFragment` and
- * the shifting implementation above is deleted.
+ * It was `parseFragment` on the upstream offset API
+ * (`docs/upstream/htmljs-parser-offset.patch` +
+ * `docs/upstream/marko-compiler-offset.patch`), positions file-relative at
+ * creation instead of shifted after a Marko parse. The MX front end creates
+ * file-absolute positions from the base (port PR 5), which is what this
+ * existed to prove, so it delegates. Kept because it is public; same
+ * arguments, same result, same throws.
  */
 export function parseFragmentNative(
   source: string,
   base: FragmentBase = {},
 ): FragmentResult {
-  const filename = base.filename ?? "fragment.mx";
-  assertBaseContract(base, filename);
-  const compiler = markoCompiler();
-  const translator = parseOnlyTranslator(base.customTags);
-  prepareLookup(compiler, filename, translator);
-  const ast: Node = compiler.compileSync(source, filename, {
-    output: "source",
-    ast: true,
-    translator,
-    htmlParseOptions: {
-      startOffset: base.baseOffset ?? 0,
-      startLine: base.baseLine ?? 0,
-      startColumn: base.baseColumn ?? 0,
-    },
-    // biome-ignore lint/suspicious/noExplicitAny: the compiler's result type is untyped here
-  } as any).ast;
-
-  return { ast, body: ast.program?.body ?? [] };
+  return parseFragment(source, base);
 }

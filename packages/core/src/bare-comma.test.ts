@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { compileSource, printExpression } from "./compile.ts";
-import { isTranslateError, newCtx } from "./core.ts";
+import { compileSource } from "./compile.ts";
+import { isTranslateError } from "./core.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import { parseFragment } from "./fragment.ts";
-import { lower } from "./lower.ts";
+import { BARE_COMMA_MESSAGE } from "./stock-parser.ts";
 import { lookup } from "./test-targets.ts";
 
 /**
@@ -11,12 +11,8 @@ import { lookup } from "./test-targets.ts";
  * it. With no tag above, the template parser ends an open tag that never got a
  * name and Marko threw `TypeError: undefined is not an object (evaluating
  * 'tag.name.value')` (grammar probe g1683). It is a positioned error now, on
- * both of core's parse entries: the MX front end's `MX_TAG_NAME_MISSING`,
- * which lowering raises at the `,`.
+ * both of core's parse entries.
  */
-
-const BARE_COMMA_MESSAGE =
-  "a `,` continues the attributes of the tag above; there is no tag here";
 
 const host: HostDeclarations = {
   name: "bare-comma-test",
@@ -28,18 +24,9 @@ const host: HostDeclarations = {
   resolveAttributeMethod: () => true,
 };
 
-/** A region's route: the front end records the error, `lower` raises it. */
 function viaFragment(source: string): unknown {
   try {
-    const ctx = newCtx(
-      source,
-      printExpression,
-      host,
-      undefined,
-      "/tmp/bare-comma.mx",
-      lookup,
-    );
-    lower(ctx, parseFragment(source).body);
+    parseFragment(source);
   } catch (error) {
     return error;
   }
@@ -81,6 +68,12 @@ describe.each(ENTRIES)("a bare `,` line through %s", (_name, run) => {
     expect(error).not.toBeInstanceOf(TypeError);
     expect((error as { message: string }).message).toBe(BARE_COMMA_MESSAGE);
     expect(error).toMatchObject({ line, column });
+  });
+
+  it("names the rule", () => {
+    expect(BARE_COMMA_MESSAGE).toBe(
+      "a `,` continues the attributes of the tag above; there is no tag here",
+    );
   });
 
   it.each([

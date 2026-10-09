@@ -4,23 +4,24 @@
  * `unknownTags: "reject"` has to name an unknown parent even when core's
  * compile stops at an earlier contract error, and a lowering error that comes
  * later in the file (a misused `openTagOnly`, a `<define/>`) must not hide it.
- * So this pass never lowers: it hands `@marko/compiler` the same parse rules
- * the real compile uses — the data taglib's neutralizations plus each custom
- * tag's `text` / `preserveWhitespace` — with a translator that translates
- * nothing, and reads the Marko tree. A parse error here is a parse error in
- * the real compile too, so the caller keeps its own error.
+ * So this pass never lowers: it parses with the MX front end, as the compile
+ * does (core's `parseMxDocument`), under the same parse rules — the data
+ * taglib's neutralizations plus each custom tag's `text` /
+ * `preserveWhitespace` — and the same syntax table, and reads the MX
+ * document. A parse error here is a parse error in the real compile too, so
+ * the caller keeps its own error.
  */
 
-import { dirname } from "node:path";
 import {
   type ContractScope,
   type CustomTag,
-  markoCompiler as coreMarkoCompiler,
-  type MarkoCompiler,
   matchWildcardChild,
+  parseMxDocument,
+  type SyntaxTable,
   scopeForChildren,
   sugarTagName,
 } from "@mxlang/core";
+import { lineStartsOf } from "./build.ts";
 import { DEFAULT_TAG, RESERVED_NAMES } from "./declarations.ts";
 import { dataTaglib } from "./taglib.ts";
 
@@ -35,22 +36,14 @@ export interface AuthoredTag {
   endColumn?: number;
 }
 
-interface MarkoNode {
+/** The fields of an MX child this pass reads (`@mxlang/babel`'s `mx-ast`). */
+interface MxChildNode {
   type: string;
-  name?: {
-    type: string;
-    value?: string;
-    loc?: {
-      start: { line: number; column: number };
-      end: { line: number; column: number };
-    };
-  };
-  body?: { body?: MarkoNode[] };
-  attributeTags?: MarkoNode[];
-  loc?: {
-    start: { line: number; column: number };
-    end?: { line: number; column: number };
-  };
+  /** UTF-16 offsets into the file, `[start, end)`. */
+  start: number;
+  end: number;
+  name?: { kind?: "static" | "dynamic" | "unnamed"; value?: string };
+  body?: readonly MxChildNode[] | null;
 }
 
 const RESERVED = new Set<string>(RESERVED_NAMES);
@@ -84,9 +77,10 @@ function translatorFor(customTags: Record<string, CustomTag> | undefined) {
 
 /**
  * The custom tags' parse switches as a taglib. Only `text` and
- * `preserveWhitespace` cross into Marko's parser (`openTagOnly` is enforced
- * by core's lowerer, which this pass does not run), and a tag without any is
- * left out, like core's own parser taglib does for the open set.
+ * `preserveWhitespace` reach the front end's tag shapes here (`openTagOnly`
+ * is enforced by core's lowerer, which this pass does not run), and a tag
+ * without any is left out, like core's own parser taglib does for the open
+ * set.
  */
 function parseTaglib(
   customTags: Record<string, CustomTag> | undefined,
@@ -108,105 +102,93 @@ function parseTaglib(
   return [`${SCAN_TAGLIB_ID}:${JSON.stringify(signature)}`, definitions];
 }
 
-/**
- * Builds the lookup `compileSync` is about to ask for and makes its tag map
- * prototype-free. Marko's `getTag(name)` is `merged.tags[name]` on a plain
- * object, so a tag named `toString` or `__proto__` resolves to an
- * `Object.prototype` member and Marko throws a raw `TypeError`, which the
- * caller's `catch` would turn into "does not parse". Core does the same for
- * its own compiles (`lookup-safety.ts`); this pass compiles with its own
- * translator, so it hardens its own lookup rather than relying on a core
- * export. `buildLookup` returns the lookup Marko caches by taglib ids, so this
- * runs on a cold or a warm cache alike and is idempotent.
- */
-function hardenLookup(
-  markoCompiler: MarkoCompiler,
-  filename: string,
-  translator: unknown,
-): void {
-  const lookup = markoCompiler.taglib.buildLookup(
-    dirname(filename),
-    // biome-ignore lint/suspicious/noExplicitAny: the translator is an untyped plain object here
-    translator as any,
-  ) as unknown as { merged?: { tags?: object } };
-  const tags = lookup.merged?.tags;
-  if (tags && Object.getPrototypeOf(tags) !== null) {
-    Object.setPrototypeOf(tags, null);
+/** 1-based line, 0-based column of a file offset, as core positions. */
+function positionAt(
+  lineStarts: readonly number[],
+  offset: number,
+): { line: number; column: number } {
+  let low = 0;
+  let high = lineStarts.length - 1;
+  while (low < high) {
+    const mid = (low + high + 1) >> 1;
+    if ((lineStarts[mid] as number) <= offset) low = mid;
+    else high = mid - 1;
   }
+  return { line: low + 1, column: offset - (lineStarts[low] as number) };
 }
+
+const TAG_TYPES = new Set(["MxTag", "MxAttributeTag", "MxReturn"]);
 
 /**
  * The authored tags of `source`, or `null` when it does
  * not parse. Excluded: reserved names (core consumes them), `<@name>`
  * attribute tags (their bodies are still walked) and dynamic tags. The list
- * is in walk order, a tag's attribute tags before its children, not document
- * order: callers take the earliest by position.
+ * is in walk order, not necessarily document order: callers take the
+ * earliest by position.
  */
 export function scanAuthoredTags(
   source: string,
   filename: string,
   customTags: Record<string, CustomTag> | undefined,
   defaultTag: string = DEFAULT_TAG,
+  syntax?: SyntaxTable,
 ): AuthoredTag[] | null {
-  let program: { body: MarkoNode[] };
+  let document: { body: readonly MxChildNode[] } | undefined;
   try {
-    const markoCompiler = coreMarkoCompiler();
-    const translator = translatorFor(customTags);
-    hardenLookup(markoCompiler, filename, translator);
-    const result = markoCompiler.compileSync(source, filename, {
-      output: "source",
-      ast: true,
-      translator,
-      // biome-ignore lint/suspicious/noExplicitAny: the compiler's result type is untyped here
-    } as any) as unknown as { ast: { program: { body: MarkoNode[] } } };
-    program = result.ast.program;
+    document = parseMxDocument(
+      source,
+      filename,
+      translatorFor(customTags),
+      syntax,
+    );
   } catch {
     return null;
   }
+  if (!document) return null;
+  const lineStarts = lineStartsOf(source);
   const tags: AuthoredTag[] = [];
   const visit = (
-    nodes: MarkoNode[] | undefined,
+    nodes: readonly MxChildNode[] | null | undefined,
     scope: ContractScope | undefined,
   ) => {
     for (const node of nodes ?? []) {
-      if (node.type !== "MarkoTag") continue;
-      // Marko writes `div` into an unnamed tag (`<#a>`, `.x`) with an empty
-      // name span; the real compile resolves it, so this pass names it the
-      // same way instead of reporting an unknown `div`.
-      const nameLoc = node.name?.loc;
-      const unnamed =
-        node.name?.type === "StringLiteral" &&
-        nameLoc !== undefined &&
-        nameLoc.start.line === nameLoc.end.line &&
-        nameLoc.start.column === nameLoc.end.column;
-      // Decision 146: `resource:post` is the tag `resource` and `:title` an
-      // unnamed tag; the real compile splits them, so this pass does too.
+      if (!TAG_TYPES.has(node.type)) continue;
+      // An unnamed tag (`<#a>`, `.x`, `<:title>`) is the default tag; the
+      // real compile resolves it, so this pass names it the same way instead
+      // of reporting an unknown tag. Decision 146: `resource:post` is the tag
+      // `resource` (the front end keeps `:post` as a shorthand).
+      const kind = node.name?.kind;
       const written =
-        node.name?.type === "StringLiteral" ? node.name.value : undefined;
+        node.type === "MxAttributeTag"
+          ? `@${node.name?.value ?? ""}`
+          : kind === "static"
+            ? node.name?.value
+            : undefined;
       const split = written === undefined ? undefined : sugarTagName(written);
-      const name = unnamed || split?.unnamed ? defaultTag : split?.tag;
-      const start = node.loc?.start;
+      const unnamed = kind === "unnamed" || split?.unnamed === true;
+      const name = unnamed ? defaultTag : split?.tag;
       // A tag the enclosing contract's `children["*"]` claims is known
       // (decision 147); the walk carries the contract in force, as core's does.
       // No `lookup`: this pass has no target taglib, and the structural names
       // it would hold are RESERVED already.
       const claimed =
-        name !== undefined && !unnamed && !split?.unnamed
+        name !== undefined && !unnamed
           ? matchWildcardChild(node, name, scope, { customTags })
           : undefined;
       if (
         name !== undefined &&
-        start &&
         !claimed &&
         !name.startsWith("@") &&
         !RESERVED.has(name)
       ) {
-        const end = node.loc?.end;
+        const start = positionAt(lineStarts, node.start);
+        const end = positionAt(lineStarts, node.end);
         tags.push({
           name,
           line: start.line,
           column: start.column,
-          ...(end ? { endLine: end.line, endColumn: end.column } : {}),
+          endLine: end.line,
+          endColumn: end.column,
         });
       }
       const inside =
@@ -218,10 +200,9 @@ export function scanAuthoredTags(
               scope,
               customTags,
             );
-      visit(node.attributeTags, inside);
-      visit(node.body?.body, inside);
+      visit(node.body, inside);
     }
   };
-  visit(program.body, undefined);
+  visit(document.body, undefined);
   return tags;
 }

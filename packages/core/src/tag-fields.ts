@@ -39,9 +39,23 @@ export function tagNameOf(node: Node): string | undefined {
   if (isMxTagShape(node)) {
     const resolved = resolvedNames.get(node);
     if (resolved !== undefined) return resolved;
-    return node.name?.kind === "static" ? node.name.value : undefined;
+    if (node.name?.kind === "static") return node.name.value;
+    return stringNameOf(node);
   }
   return node?.name?.value;
+}
+
+/**
+ * A dynamic name whose expression is a `StringLiteral` (`${:a}`: an atom, the
+ * only way to write one, since Marko reads `${"a"}` as a template literal) is
+ * static on Marko's tree: its name node is that literal, so the tag is the
+ * element or tag `a`, as on 9293794df. Read without raising the container's
+ * own error, which lowering raises where it reads the expression.
+ */
+function stringNameOf(node: Node): string | undefined {
+  if (node.name?.kind !== "dynamic") return undefined;
+  const payload = node.name.expression?.node;
+  return payload?.type === "StringLiteral" ? payload.value : undefined;
 }
 
 /** Is the tag's name static (Marko: a `StringLiteral` name node)? */
@@ -50,7 +64,11 @@ export function hasStaticName(node: Node): boolean {
     return true;
   }
   if (isMxTagShape(node)) {
-    return node.name?.kind === "static" || resolvedNames.has(node);
+    return (
+      node.name?.kind === "static" ||
+      resolvedNames.has(node) ||
+      stringNameOf(node) !== undefined
+    );
   }
   return node?.name?.type === "StringLiteral";
 }
@@ -76,9 +94,55 @@ export function tagNameSpanOf(node: Node): Node {
 /** A dynamic tag name's expression, the Babel node `exprOf` reads. */
 export function tagNameExprOf(node: Node): Node {
   if (isMxTagShape(node) && node.name?.kind === "dynamic") {
-    return payloadOf(node.name.expression);
+    const payload = payloadOf(node.name.expression);
+    return isStringQuasiName(payload)
+      ? markoStringName(node.name.expression, payload)
+      : payload;
   }
   return node?.name;
+}
+
+/**
+ * The front end's `${"a"}` name (`stringQuasiTemplate`: Marko's string-name
+ * quirk, a one-quasi `TemplateLiteral` with no `loc.end`).
+ */
+function isStringQuasiName(payload: Node): boolean {
+  return (
+    payload?.type === "TemplateLiteral" &&
+    payload.expressions?.length === 0 &&
+    payload.loc?.end === null
+  );
+}
+
+const markoStringNames = new WeakMap<object, Node>();
+
+/**
+ * The node 9293794df lowered for a `${"a"}` name: the same template literal
+ * with a line/column `loc` over the authored string and no offsets, so
+ * `expr()` prints it (`` `a` ``, byte for byte what Marko's path emitted)
+ * and its span is the string's. A copy, cached per container: lowering never
+ * writes to the MX AST.
+ */
+function markoStringName(container: Node, payload: Node): Node {
+  const cached = markoStringNames.get(container);
+  if (cached) return cached;
+  const start = payload.loc.start;
+  const lines = String(container.source ?? "").split("\n");
+  const last = lines[lines.length - 1] ?? "";
+  const node = {
+    type: "TemplateLiteral",
+    quasis: payload.quasis,
+    expressions: [],
+    loc: {
+      start: { line: start.line, column: start.column },
+      end: {
+        line: start.line + lines.length - 1,
+        column: lines.length === 1 ? start.column + last.length : last.length,
+      },
+    },
+  };
+  markoStringNames.set(container, node);
+  return node;
 }
 
 /** The tag's arguments `(a, b)`; `undefined` when none were written. */

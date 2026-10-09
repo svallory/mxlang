@@ -210,10 +210,49 @@ describe("no input makes parseData throw", () => {
     expect(diagnostics.every((d) => d.line >= 1)).toBe(true);
   });
 
+  it("reports input ending inside a concise open delimiter at the opener", () => {
+    // Marko's parser was silent here and its tree left `<x>` with no
+    // position, which only this target's span invariant caught; the front end
+    // reports it (decision 161: no silent drop).
+    const { tree, diagnostics } = parseData(`x<a x=\`\${<a>`, "/t.mx");
+    expect(tree).toBeUndefined();
+    expect(diagnostics).toEqual([
+      {
+        severity: "error",
+        message: "the input ends inside `<`…`>` opened here",
+        line: 1,
+        column: 1,
+        offset: 1,
+      },
+    ]);
+  });
+
+  // Main's first diagnostic was a real error (kept first, same text and
+  // position) or only the span invariant / nothing (the new error stands).
+  it.each([
+    [
+      "$ {a",
+      "scriptlets (`$ statement`) are not supported in MX (decision 54)",
+      1,
+      0,
+    ],
+    [`script -- \${b`, "EOF reached while parsing placeholder", 1, 12],
+    ["div(a", "the input ends inside `(`…`)` opened here", 1, 3],
+    ["div|a", "the input ends inside `|`…`|` opened here", 1, 3],
+    ["div onClick(a) {b", "the input ends inside `{`…`}` opened here", 1, 15],
+    [`div x=\`\${a`, "the input ends inside `` ` ``…`` ` `` opened here", 1, 6],
+    [`\${x`, `the input ends inside \`\${\`…\`}\` opened here`, 1, 0],
+  ])(
+    "%j at end of input: main's error first, else the new one",
+    (source, message, line, column) => {
+      const { tree, diagnostics } = parseData(source, "/t.mx");
+      expect(tree).toBeUndefined();
+      expect(diagnostics[0]).toMatchObject({ message, line, column });
+    },
+  );
+
   it("reports an internal invariant at the file start under a distinct prefix", () => {
-    // Marko's tree for `x<a x=\`\${<a>` left `<x>` with no position, which
-    // broke the invariant; the MX front end positions it (port PR 5), so the
-    // invariant is broken here by a macro returning a node with no span.
+    // A macro returning a node with no span breaks the invariant.
     const { tree, diagnostics } = parseData("<a/>\n<m/>\n", "/t.mx", {
       customTags: {
         m: {

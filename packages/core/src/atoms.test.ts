@@ -624,10 +624,11 @@ describe("no stand-in survives", () => {
   });
 });
 
-// Port PR 5: production parses with the MX front end, so an atom used as a
-// spread argument is pinned on that path too, through both of core's entries:
+// Port PR 5: production parses with the MX front end, so atom misuse (a
+// spread, an expression position) is pinned on that path too, through both
+// of core's entries:
 // `compileSource`, and `parseFragment` then `lower` (a region's route).
-describe("an atom spread on the MX path", () => {
+describe("atom misuse on the MX path", () => {
   const SPREAD_MESSAGE =
     '`:a` is an atom (decision 156), a name and not a value to operate on: spreading is not allowed on it; write `"a"` for a string you mean to operate on';
 
@@ -674,6 +675,110 @@ describe("an atom spread on the MX path", () => {
         const error = run(source);
         expect(error).toBeInstanceOf(TranslateError);
         expect(error).toMatchObject({ message: SPREAD_MESSAGE, line, column });
+      },
+    );
+
+    // Review round 1, LOW 7: misuse in an expression position, each value
+    // 9293794df's output for the same input (the Marko parse). A line-leading
+    // `${…}` is a concise dynamic tag name; inside a body it is a placeholder.
+    it.each([
+      ["${f(...:a)}", "spreading", 1, 7],
+      ["${:a.b}", "member access", 1, 2],
+      ["${-:a}", "the unary operator `-`", 1, 3],
+      ["<${:a.b}/>", "member access", 1, 3],
+      ["<p>${f(...:a)}</p>", "spreading", 1, 10],
+      ["<p>${:a.b}</p>", "member access", 1, 5],
+      ["<p>${-:a}</p>", "the unary operator `-`", 1, 6],
+    ])(
+      "%j is a positioned TranslateError at the atom",
+      (source, what, line, column) => {
+        const error = run(source);
+        expect(error).toBeInstanceOf(TranslateError);
+        expect(error).toMatchObject({
+          message: `\`:a\` is an atom (decision 156), a name and not a value to operate on: ${what} is not allowed on it; write \`"a"\` for a string you mean to operate on`,
+          line,
+          column,
+        });
+      },
+    );
+
+    it.each([
+      ["${{:a: 1}}", 1, 3],
+      ["<p>${{:a: 1}}</p>", 1, 6],
+    ])("%j: an atom as an object key", (source, line, column) => {
+      const error = run(source);
+      expect(error).toBeInstanceOf(TranslateError);
+      expect(error).toMatchObject({
+        message:
+          "`:a` cannot be an object key: an atom is a value (decision 156); write `a:` for the key, or `[:a]` to compute it from the atom",
+        line,
+        column,
+      });
+    });
+  });
+});
+
+// Review round 1: a dynamic tag name that is one atom is the static name it
+// spells, as on 9293794df (Marko's name node was that `StringLiteral`): the
+// element `a`, its name span the atom's. `${"a"}` stays dynamic there too.
+describe("an atom tag name on the MX path", () => {
+  const FILE = "/tmp/mx-core-test/atom-name.mx";
+
+  function viaCompile(source: string): IrNode[] {
+    let body: IrNode[] = [];
+    compileSource(source, FILE, policy(), {
+      targets: lookup,
+      emitIr: (ir) => {
+        body = ir.body;
+        return "";
+      },
+    });
+    return body;
+  }
+
+  function viaFragment(source: string): IrNode[] {
+    const ctx = newCtx(
+      source,
+      printExpression,
+      policy(),
+      undefined,
+      FILE,
+      lookup,
+    );
+    return lower(ctx, parseFragment(source).body).body;
+  }
+
+  describe.each([
+    ["compileSource", viaCompile],
+    ["parseFragment + lower", viaFragment],
+  ])("%s", (_name, run) => {
+    it.each([
+      ["${:a}", "a", span(2, 4)],
+      ["<${:a}/>", "a", span(3, 5)],
+      ["<${:rename-all}/>", "rename-all", span(3, 14)],
+    ])("%j lowers to an Element", (source, name, nameSpan) => {
+      const [node] = run(source);
+      expect(node).toMatchObject({ kind: "Element", name, nameSpan });
+    });
+
+    // A string name stays dynamic, and its code is the template literal
+    // Marko printed (`` `a` ``), byte for byte: it is emitted code.
+    it.each([
+      ['<${"a"}/>', "`a`", span(3, 6)],
+      ["<${'a'}/>", "`a`", span(3, 6)],
+      ['<${"a b"}/>', "`a b`", span(3, 8)],
+      ['${"a"}', "`a`", span(2, 5)],
+    ])(
+      "%j stays a dynamic tag named by a template literal",
+      (source, code, exprSpan) => {
+        const [node] = run(source);
+        expect(node).toMatchObject({
+          kind: "Component",
+          target: {
+            kind: "dynamic",
+            expr: { code, span: exprSpan, shape: "string" },
+          },
+        });
       },
     );
   });

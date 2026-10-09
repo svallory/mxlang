@@ -137,7 +137,7 @@ import type {
 } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
-import { pendingFrontEndError } from "./mx-parse.ts";
+import { endOfInputError, pendingFrontEndError } from "./mx-parse.ts";
 import {
   declaredBinding,
   type ScriptletDeclaration,
@@ -811,6 +811,15 @@ function validateBoundAttributes(ctx: Ctx, node: Node): void {
   rejectBadRefinements(ctx, node);
   for (const attr of tagAttributesOf(node)) {
     if (!isBoundAttr(attr)) continue;
+    // Marko kept a bound value that failed to parse as its parse-error node
+    // (`this.#x`, `(a b)`), which this check refused at the value before the
+    // parse error was ever read; a compile reports the parse error first.
+    if (attr.type === "MxAttribute" && attr.value?.error) {
+      fail(
+        "Attributes may only be bound to identifiers or member expressions",
+        attr.value,
+      );
+    }
     const value = attrValueOf(ctx, attr);
     if (
       value?.type !== "Identifier" &&
@@ -4306,11 +4315,33 @@ const CDATA_MESSAGE =
 const DECLARATION_MESSAGE =
   "`<?…?>` (an XML declaration or processing instruction) is not supported: remove it";
 
+/** How deep each `Ctx` is in `lower`/`lowerChildren` calls (`lastly`). */
+const loweringDepth = new WeakMap<Ctx, number>();
+
+/**
+ * Runs a lowering entry and, at the outermost one for `ctx` only, raises the
+ * document's `MX_INPUT_ENDS_IN_DELIMITER` after a walk that raised nothing
+ * (decision 161): main reported the cut tag's own lowering error first, and
+ * this error stands only where nothing else fires.
+ */
+function lastly<T>(ctx: Ctx, body: readonly unknown[], run: () => T): T {
+  const depth = loweringDepth.get(ctx) ?? 0;
+  loweringDepth.set(ctx, depth + 1);
+  try {
+    const out = run();
+    const ended = depth === 0 ? endOfInputError(body) : undefined;
+    if (ended) throw ended;
+    return out;
+  } finally {
+    loweringDepth.set(ctx, depth);
+  }
+}
+
 export function lowerChildren(ctx: Ctx, children: readonly Node[]): IrNode[] {
   try {
     const frontEndError = pendingFrontEndError(children);
     if (frontEndError) throw frontEndError;
-    return lowerChildrenOf(ctx, children);
+    return lastly(ctx, children, () => lowerChildrenOf(ctx, children));
   } catch (error) {
     // A lowering boundary (decision 158, PR 4 addendum): an error raised on
     // an MX node leaves positioned.
@@ -4608,7 +4639,7 @@ export function lower(ctx: Ctx, body: readonly Node[]): Ir {
     // tree, with the same text and position.
     const frontEndError = pendingFrontEndError(body);
     if (frontEndError) throw frontEndError;
-    return lowerRoot(ctx, body);
+    return lastly(ctx, body, () => lowerRoot(ctx, body));
   } catch (error) {
     // A lowering boundary (decision 158, PR 4 addendum): an error raised on
     // an MX node leaves positioned.

@@ -407,6 +407,35 @@ export function buildMarkoLookup(
 }
 
 /**
+ * The MX document of `source` as `compileSource` parses it, without lowering
+ * it: the MX front end, with the tag shapes and statement keywords of
+ * `translator`'s lookup (`buildMarkoLookup` from the file's directory) and the
+ * file's syntax table (`syntax`, else its `package.json#mx.syntax`).
+ * `undefined` when the template does not parse, i.e. when `compileSource`
+ * would throw a parse error before lowering. A front-end error that lowering
+ * raises (`MX_*` rules) does not count: the tree is whole. The node is
+ * untyped, as everywhere at core's public boundary.
+ *
+ * @unstable plumbing for `@mxlang/data`'s parse-only scan.
+ */
+export function parseMxDocument(
+  source: string,
+  filename: string,
+  translator: unknown,
+  syntax?: SyntaxTable,
+): Node | undefined {
+  const table =
+    syntax !== undefined
+      ? explicitSyntax(syntax, filename)
+      : resolveSyntax(filename);
+  const lookup = buildMarkoLookup(dirname(filename), translator);
+  const document = parseMx(source, { syntax: table, lookup });
+  return compileErrorOf(document, filename, { expressionErrors: true })
+    ? undefined
+    : document;
+}
+
+/**
  * Compiles one Marko template under `policy`.
  *
  * The returned map is a placeholder identity map: the emitter builds text
