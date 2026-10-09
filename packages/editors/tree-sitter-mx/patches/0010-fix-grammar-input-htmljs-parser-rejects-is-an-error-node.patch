@@ -1,0 +1,119 @@
+From cef900391195f6324d22bf7cbadd5ae48f41ba22 Mon Sep 17 00:00:00 2001
+From: Saulo Vallory <me@saulo.engineer>
+Date: Fri, 9 Oct 2026 15:12:09 -0300
+Subject: [PATCH] fix(grammar): input htmljs-parser rejects is an ERROR node
+
+---
+ src/scanner.c | 46 +++++++++++++++++++++++++++++++++++++++-------
+ 1 file changed, 39 insertions(+), 7 deletions(-)
+
+diff --git a/src/scanner.c b/src/scanner.c
+index 67c6a87..0f86efe 100644
+--- a/src/scanner.c
++++ b/src/scanner.c
+@@ -1291,6 +1291,13 @@ static void es_consume_line_comment(EStream *es) {
+   }
+ }
+ 
++// Consumes the rest of the line (to, not past, the newline) as the span of an
++// ERROR node: the caller emits it as ERROR_SENTINEL, which no state accepts
++// outside recovery (see the indentation case in scan_concise_line).
++static void es_error_line(EStream *es) {
++  while (es_peek(es, 0) >= 0 && !is_line(es_peek(es, 0))) es_next_mark(es);
++}
++
+ // Consume a "/*" comment through its closing "*/"; false at EOF
+ // (MALFORMED_COMMENT).
+ static bool es_consume_block_comment(EStream *es) {
+@@ -2324,7 +2331,8 @@ static bool scan_frame_content(Scanner *s, TSLexer *lexer, const bool *valid,
+               int32_t c2 = es_peek(&es, 0);
+               if (c2 < 0) {
+                 es_free(&es);
+-                return false;  // MALFORMED_COMMENT
++                *result = ERROR_SENTINEL;  // MALFORMED_COMMENT: the unterminated construct is an ERROR node
++                return true;
+               }
+               if (c2 == '-' && es_peek(&es, 1) == '>') {
+                 es_next_mark(&es);
+@@ -2355,7 +2363,8 @@ static bool scan_frame_content(Scanner *s, TSLexer *lexer, const bool *valid,
+               int32_t c2 = es_peek(&es, 0);
+               if (c2 < 0) {
+                 es_free(&es);
+-                return false;  // MALFORMED_CDATA
++                *result = ERROR_SENTINEL;  // MALFORMED_CDATA: the unterminated construct is an ERROR node
++                return true;
+               }
+               if (c2 == ']' && es_peek(&es, 1) == ']' &&
+                   es_peek(&es, 2) == '>') {
+@@ -2379,7 +2388,8 @@ static bool scan_frame_content(Scanner *s, TSLexer *lexer, const bool *valid,
+             int32_t c2 = es_peek(&es, 0);
+             if (c2 < 0) {
+               es_free(&es);
+-              return false;  // MALFORMED_DOCUMENT_TYPE
++              *result = ERROR_SENTINEL;  // MALFORMED_DOCUMENT_TYPE: the unterminated construct is an ERROR node
++              return true;
+             }
+             es_next_mark(&es);
+             if (c2 == '>') break;
+@@ -2399,7 +2409,8 @@ static bool scan_frame_content(Scanner *s, TSLexer *lexer, const bool *valid,
+             int32_t c2 = es_peek(&es, 0);
+             if (c2 < 0) {
+               es_free(&es);
+-              return false;  // MALFORMED_DECLARATION
++              *result = ERROR_SENTINEL;  // MALFORMED_DECLARATION: the unterminated construct is an ERROR node
++              return true;
+             }
+             es_next_mark(&es);
+             if (c2 == '>') break;
+@@ -2702,8 +2713,12 @@ static bool scan_concise(Scanner *s, TSLexer *lexer, const bool *valid,
+   if (c == '-') {
+     if (es_peek(&es, 1) == '-') {
+       ok = valid[BLOCK_OPEN] && scan_block_open(s, &es, result);
++    } else {
++      // INVALID_LINE_START: single hyphen. The line is an ERROR node.
++      es_error_line(&es);
++      *result = ERROR_SENTINEL;
++      ok = true;
+     }
+-    // else: INVALID_LINE_START: single hyphen
+     es_free(&es);
+     return ok;
+   }
+@@ -2733,7 +2748,13 @@ static bool scan_concise(Scanner *s, TSLexer *lexer, const bool *valid,
+       *result = BLOCK_COMMENT;
+       ok = ok && valid[BLOCK_COMMENT];
+     }
+-    // n1 anything else: INVALID_LINE_START
++    else {
++      // INVALID_LINE_START: "/" that starts no comment. The line is an ERROR
++      // node.
++      es_error_line(&es);
++      *result = ERROR_SENTINEL;
++      ok = true;
++    }
+     es_free(&es);
+     return ok;
+   }
+@@ -3775,7 +3796,18 @@ static bool scan_atom_piece(Scanner *s, TSLexer *lexer, const bool *valid) {
+ 
+ static bool scan_main(Scanner *s, TSLexer *lexer, const bool *valid) {
+   if (valid[ERROR_SENTINEL]) return false;  // error recovery: give up
+-  if (s->fail_next) return false;           // deferred error
++  if (s->fail_next) {
++    // INVALID_CHARACTER after a concise comment block: the comment already
++    // parsed, the rest of its line is an ERROR node.
++    s->fail_next = 0;
++    EStream es;
++    es_init(&es, s, lexer, false);
++    mark(s, lexer);
++    es_error_line(&es);
++    es_free(&es);
++    lexer->result_symbol = ERROR_SENTINEL;
++    return true;
++  }
+ 
+   if (!s->started) {
+     if (!at_eof(lexer) && lexer->lookahead == 0xFEFF) skipc(s, lexer);
+-- 
+2.55.0
+

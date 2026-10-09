@@ -12,11 +12,13 @@ export interface CorpusCase {
   file: string;
   name: string;
   source: string;
+  /** The header carries tree-sitter's `:error`: the source must not parse clean. */
+  error: boolean;
 }
 
 export const CORPUS_DIR = path.dirname(fileURLToPath(import.meta.url));
 
-const HEADER = /^={15}\n(.+)\n={15}\n/;
+const HEADER = /^={15}\n(.+)\n((?::[a-z]+\n)*)={15}\n/;
 const DIVIDER = /\n-{15}\n/;
 
 export function parseCorpus(file: string, text: string): CorpusCase[] {
@@ -33,9 +35,14 @@ export function parseCorpus(file: string, text: string): CorpusCase[] {
     if (!divider) throw new Error(`${file}: case ${header[1]} has no divider`);
     const source = rest.slice(0, divider.index);
     rest = rest.slice(divider.index + divider[0].length);
-    const next = /\n={15}\n.+\n={15}\n/.exec(rest);
+    const next = /\n={15}\n.+\n(?::[a-z]+\n)*={15}\n/.exec(rest);
     rest = next ? rest.slice(next.index + 1) : "";
-    cases.push({ file, name: header[1], source });
+    cases.push({
+      file,
+      name: header[1],
+      source,
+      error: header[2].includes(":error\n"),
+    });
   }
   return cases;
 }

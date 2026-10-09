@@ -1,5 +1,7 @@
 // MX's own: every case in test/corpus parses with the wasm grammar with no
-// ERROR or MISSING node, and the reader hands back the source the case holds.
+// ERROR or MISSING node (except the `:error` cases of errors.txt, which must
+// have one: htmljs-parser rejects them), and the reader hands back the source
+// the case holds.
 // packages/targets/data/src/tree-conformance.test.ts runs the same cases
 // through parseData.
 import assert from "node:assert";
@@ -19,11 +21,18 @@ describe("tree-sitter-mx corpus", () => {
     );
   });
 
+  it("keeps the error cases in errors.txt and nowhere else", () => {
+    const errors = CASES.filter((c) => c.error);
+    assert.strictEqual(errors.length, 7);
+    for (const c of errors) assert.strictEqual(c.file, "errors.txt");
+  });
+
   for (const c of CASES) {
     it(`${c.file} ${c.name}`, () => {
       const tree = parseMx(c.source);
       if (!tree) throw new Error("parse timed out");
-      assert.ok(!tree.rootNode.hasError, tree.rootNode.toString());
+      if (c.error) assert.ok(tree.rootNode.hasError, "parsed clean");
+      else assert.ok(!tree.rootNode.hasError, tree.rootNode.toString());
     });
   }
 });

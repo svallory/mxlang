@@ -1,0 +1,63 @@
+===============
+cdata-eof
+:error
+===============
+<![CDATA[oops
+---------------
+
+(document (ERROR))
+
+===============
+eof-doctype
+:error
+===============
+<!DOCTYPE html PUBLIC
+---------------
+
+(document (ERROR))
+
+===============
+eof-xml-declaration
+:error
+===============
+<?xml version="1.0"
+---------------
+
+(document (ERROR))
+
+===============
+html-comment-eof
+:error
+===============
+<!-- oops
+---------------
+
+(document (ERROR))
+
+===============
+invalid-code-after-comment-block
+:error
+===============
+/* c */ x
+
+---------------
+
+(document (block_comment) (ERROR))
+
+===============
+invalid-line-start-hyphen
+:error
+===============
+- foo
+---------------
+
+(document (ERROR))
+
+===============
+invalid-line-start-slash
+:error
+===============
+/foo
+---------------
+
+(document (ERROR))

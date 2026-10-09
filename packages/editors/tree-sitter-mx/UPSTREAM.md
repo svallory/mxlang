@@ -182,6 +182,23 @@ is MX's own (decision 151 ruling 2, decision 146 addendum 5):
 - Tests: `test/atoms.bun-test.mts`, the `default attribute values` block (MX's
   own file, so not in the patch).
 
+`patches/0010-fix-grammar-input-htmljs-parser-rejects-is-an-error-node.patch`
+is MX's own: seven inputs htmljs-parser v5.12.0 rejects were accepted, or
+dropped without a trace (the scanner's `return false` is silent when no tag is
+open, as in patch 0004).
+
+- `src/scanner.c`: EOF inside `<![CDATA[`, `<!...>`, `<?...>` and `<!--` emits
+  the scanned span as `ERROR_SENTINEL` (the parser wraps it in an `ERROR`
+  node). In concise mode a line starting with a single `-` or with a `/` that
+  opens no `//` or `/*` comment is an `ERROR_SENTINEL` line, and the rest of a
+  line after a comment block (`fail_next`, which used to stop the scan with
+  nothing after the comment) is one too. New helper `es_error_line`.
+- Tests: `test/corpus/errors.txt` (tree-sitter `:error` cases; MX's own, not in
+  the patch), `test/corpus.bun-test.mts`.
+- Not changed: the same EOF inside `<!--` after `tag;` and in a
+  `<!--` met in html content (`MALFORMED_COMMENT` at two other sites) is still a
+  silent `return false`; htmljs-parser has no fixture for either.
+
 ## Tests
 
 `bun run test` (`scripts/test.sh`, also `moon run tree-sitter-mx:test` and

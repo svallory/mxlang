@@ -6,7 +6,9 @@ import { parseData } from "./parse.ts";
 /**
  * Every source the `@mxlang/tree-sitter-mx` grammar accepts
  * (`packages/editors/tree-sitter-mx/test/corpus/*.txt`, which the grammar's
- * own `corpus.bun-test.mts` proves parses with no ERROR/MISSING node) goes
+ * own `corpus.bun-test.mts` proves parses with no ERROR/MISSING node; its
+ * `:error` cases, the sources htmljs-parser rejects, are not conformance cases
+ * and are skipped here) goes
  * through `parseData`. A case either parses clean, or sits in exactly one of
  * two lists:
  *
@@ -36,9 +38,9 @@ interface CorpusCase {
 // corpus directory (this package's rootDir cannot import it).
 function readCorpus(): CorpusCase[] {
   const cases: CorpusCase[] = [];
-  const header = /^={15}\n(.+)\n={15}\n/;
+  const header = /^={15}\n(.+)\n((?::[a-z]+\n)*)={15}\n/;
   const divider = /\n-{15}\n/;
-  const next = /\n={15}\n.+\n={15}\n/;
+  const next = /\n={15}\n.+\n(?::[a-z]+\n)*={15}\n/;
   for (const file of fs
     .readdirSync(CORPUS_DIR)
     .filter((f) => f.endsWith(".txt"))
@@ -54,7 +56,8 @@ function readCorpus(): CorpusCase[] {
       rest = rest.slice(d.index + d[0].length);
       const n = next.exec(rest);
       rest = n ? rest.slice(n.index + 1) : "";
-      cases.push({ file, name: h[1] as string, source });
+      if (!(h[2] as string).includes(":error\n"))
+        cases.push({ file, name: h[1] as string, source });
     }
   }
   return cases;

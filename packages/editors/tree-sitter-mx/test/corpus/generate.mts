@@ -26,9 +26,11 @@ const TOPICS: [string, RegExp][] = [
 const topicOf = (name: string) =>
   TOPICS.find(([, re]) => re.test(name))?.[0] ?? "misc";
 
-// Grammar accepts these although htmljs reports an error for them: grammar
-// bugs, kept out of the corpus (listed in scratch/reports).
-const GRAMMAR_BUGS = new Set([
+// htmljs reports an error for these and so must the grammar: each goes to
+// errors.txt and is asserted to parse with an ERROR/MISSING node. (Other
+// fixtures htmljs rejects are not corpus cases: they are not grammar bugs, the
+// grammar is lenient there on purpose or they test htmljs-only recovery.)
+const ERROR_FIXTURES = new Set([
   "cdata-eof",
   "eof-doctype",
   "eof-xml-declaration",
@@ -70,10 +72,20 @@ const EXTRA: Record<string, [string, string][]> = {
 };
 
 const out = new Map<string, string[]>();
-const add = (topic: string, name: string, source: string) => {
+const add = (
+  topic: string,
+  name: string,
+  source: string,
+  tree = "(placeholder)",
+) => {
   const list = out.get(topic) ?? [];
+  // errors.txt holds the cases tree-sitter's `:error` attribute marks: the
+  // source must parse with an ERROR/MISSING node. tree-sitter does not compare
+  // the tree of such a case (and `--update` leaves it alone), so the generator
+  // writes the tree the grammar gives, as documentation.
+  const attr = topic === "errors" ? ":error\n" : "";
   list.push(
-    `===============\n${name}\n===============\n${source}\n---------------\n\n(placeholder)\n`,
+    `===============\n${name}\n${attr}===============\n${source}\n---------------\n\n${tree}\n`,
   );
   out.set(topic, list);
 };
@@ -81,9 +93,17 @@ const add = (topic: string, name: string, source: string) => {
 const D = await fixturesDir();
 let kept = 0;
 for (const entry of fs.readdirSync(D).sort()) {
-  if (GRAMMAR_BUGS.has(entry)) continue;
   const input = path.join(D, entry, "input.marko");
   if (!fs.existsSync(input)) continue;
+  const source = fs.readFileSync(input, "utf-8");
+  const tree = parseMx(source);
+  if (ERROR_FIXTURES.has(entry)) {
+    if (!tree?.rootNode.hasError)
+      throw new Error(`${entry}: htmljs rejects it, the grammar must too`);
+    add("errors", entry, source, tree.rootNode.toString());
+    kept++;
+    continue;
+  }
   const snaps = fs.readdirSync(path.join(D, entry, "__snapshots__"));
   const hasError = snaps.some((s) =>
     fs
@@ -91,8 +111,6 @@ for (const entry of fs.readdirSync(D).sort()) {
       .includes("error("),
   );
   if (hasError) continue;
-  const source = fs.readFileSync(input, "utf-8");
-  const tree = parseMx(source);
   if (!tree || tree.rootNode.hasError) continue;
   add(topicOf(entry), entry, source);
   kept++;
