@@ -4,6 +4,8 @@
 
 - **Changed (release-changelog-in-package):** `CHANGELOG.md` is now part of every published tarball (`files` lists it in all packed packages); `bun pm pack` honours `files` only, so the alpha.11 tarballs carried just `README.md` and `dist`.
 
+- **Fixed (tree-conformance-grammar-corpus):** `parseData` rejects a shorthand id or class with a placeholder (`<x#a${y}/>`, `<x.a${y}/>`) with an error positioned at the sigil, instead of `internal error: … core IR invariant broken — attribute `id` carries no span` (id) or a wrong "together with a `class` attribute" message (class). The grammar package gains `test/corpus/`, 314 tree-sitter corpus cases (htmljs-parser v5.12.0 fixtures the grammar accepts, plus MX's own), and a data-target test that runs every case through `parseData`.
+
 ## 0.1.0-alpha.2 (unreleased)
 
 Atoms (decision 156) and the tagless `:name=value` line. Four new local

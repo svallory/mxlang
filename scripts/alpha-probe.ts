@@ -186,8 +186,11 @@ console.log("after-value sugar:", JSON.stringify({ attrs: sugarAttrs, diagnostic
 if (sugar.diagnostics.length !== 0 || !same(sugarAttrs, ["type", "name"])) {
   fail("<field type=\\"email\\" :email/> did not parse as type + name: " + JSON.stringify({ attrs: sugarAttrs, diagnostics: sugar.diagnostics }));
 }
-const member = parseFragment("<div x=a.b .c/>").body[0].attributes.map((a) => a.name);
-if (!same(member, ["x", ".c"])) fail("x=a.b .c did not split after the value: " + JSON.stringify(member));
+// Since 0.1.0-alpha.13 \`FragmentResult.body\` is the MX AST: the split-off \`.c\` is an \`MxShorthand\` node, not a named attribute.
+const member = parseFragment("<div x=a.b .c/>").body[0].attributes.map((a) => a.type === "MxShorthand" ? "MxShorthand" : a.name);
+if (!same(member, ["x", "MxShorthand"])) fail("x=a.b .c did not split after the value: " + JSON.stringify(member));
+const split = parseData("<div x=a.b .c/>\\n", "/t.mx").tree?.children[0].attrs.map((a) => a.name + "=" + (a.value?.code ?? a.value));
+if (!same(split, ["x=a.b", "class=c"])) fail("x=a.b .c did not reach the data tree as x + class: " + JSON.stringify(split));
 const require = createRequire(import.meta.url);
 const loaded = Object.keys(require.cache);
 console.log("loaded parse layer:", JSON.stringify(loaded.filter((k) => /marko|htmljs/.test(k))));

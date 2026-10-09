@@ -1,6 +1,6 @@
 {
   "name": "@mxlang/data",
-  "version": "0.1.0-alpha.12",
+  "version": "0.1.0-alpha.13",
   "description": "MX's data target: parse a .mx file into a static tree of tags, attributes and text",
   "license": "MIT",
   "repository": {
