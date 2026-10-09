@@ -354,7 +354,7 @@ The AST does not decide which: resolution is lowering's (spec §7).
 | `typeParams` | `MxTypeParameters \| null` | no | `<T>` before params |
 | `params` | `MxParameterList \| null` | no | `\|a, b\|`; `null` means no pipes, an empty list means `\|\|` |
 | `shorthands` | `MxShorthand[]` | no | tag-adjacent `#id`, `.class`, `:name`, source order |
-| `attributes` | `(MxAttribute \| MxShorthand \| MxSpreadAttribute \| MxComment)[]` | no | attribute list in source order, attribute-position sugar and open-tag comments included |
+| `attributes` | `(MxAttribute \| MxShorthand \| MxSpreadAttribute \| MxComment \| MxTrigger)[]` | no | attribute list in source order, attribute-position sugar, open-tag comments and attribute triggers (§4.4) included |
 | `body` | `MxChild[] \| null` | no | `null` for a self-closed tag and for a tag the parser closed at its open tag (`bodyMode: "void"`); children in source order, attribute tags included |
 | `bodyMode` | `"html" \| "parsed-text" \| "preserve" \| "parsed-text-preserve" \| "void"` | no | the parse shape `tagShape(name)` answered (§3.12) |
 | `selfClosed` | `boolean` | no | `/>` written |

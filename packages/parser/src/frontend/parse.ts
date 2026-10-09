@@ -41,9 +41,9 @@ import {
   frontEndRules as realFrontEndRules,
 } from "./rules.ts";
 
-/** Options of `parse`: the two per-target inputs (ast §7.1) and an optional fragment base (ast §5.3). */
 export type { MxTrigger };
 
+/** Options of `parse`: the two per-target inputs (ast §7.1) and an optional fragment base (ast §5.3). */
 export interface ParseOptions extends MxFrontEndOptions {
   readonly base?: MxFragmentBase;
   /**
