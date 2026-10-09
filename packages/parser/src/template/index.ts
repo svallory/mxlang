@@ -4,6 +4,7 @@ import {
   type ParserOptions,
   type Range,
 } from "./internal.ts";
+import { compileSyntax, type SyntaxTable } from "./syntax.ts";
 export {
   ErrorCode,
   getLines,
@@ -17,6 +18,15 @@ export {
   type Ranges,
   TagType,
 } from "./internal.ts";
+export {
+  DEFAULT_SYNTAX,
+  type StandIn,
+  type SyntaxDiagnostic,
+  type SyntaxTable,
+  type Trigger,
+  type TriggerNode,
+  validateSyntaxTable,
+} from "./syntax.ts";
 export { escapeText } from "./util/escape.ts";
 export {
   isValidAttrValue,
@@ -25,12 +35,28 @@ export {
   Validity,
 } from "./util/validators.ts";
 
+/** Options of `createParser`. */
+export interface CreateParserOptions {
+  /**
+   * MX (decision 182): the syntax table this parser reads; omitted means
+   * `DEFAULT_SYNTAX`, today's grammar. Throws a `TypeError` when the table
+   * does not validate (`validateSyntaxTable`).
+   */
+  syntax?: SyntaxTable;
+}
+
 /**
  * Creates a new Marko parser.
  */
-export function createParser(handlers: ParserOptions) {
+export function createParser(
+  handlers: ParserOptions,
+  options?: CreateParserOptions,
+) {
   // Expose a subset of the parser api.
-  const parser = new Parser(handlers);
+  const parser = new Parser(
+    handlers,
+    options?.syntax ? compileSyntax(options.syntax) : undefined,
+  );
 
   return {
     /**

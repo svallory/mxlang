@@ -35,6 +35,7 @@ import {
   parseExpression,
 } from "@mxlang/babel";
 import type { MxParseError, Span } from "@mxlang/babel/mx-ast";
+import { type StandIn, standInText } from "../template/syntax.ts";
 
 /** The seven container types of ast §4.1, plus the template-literal wrapper of a dynamic name or shorthand value (Marko's `parseTemplateLiteral`). */
 export type ContainerKind =
@@ -67,6 +68,14 @@ export interface SubParseAtom {
   readonly start: number;
   readonly end: number;
   readonly name: string;
+}
+
+/** An expression trigger of the container's source (decision 182), local to the container's text. */
+export interface SubParseTrigger {
+  readonly start: number;
+  readonly end: number;
+  readonly id: string;
+  readonly standIn: StandIn;
 }
 
 /** Where the container sits in the file: absolute offset, 1-based line, 0-based column of its first character. */
@@ -166,7 +175,8 @@ export function atomStandIn(name: string): string {
 /**
  * Parses one container. `text` is the authored slice, `atoms` its atoms with
  * local spans, `at` the position of its first character and `end` the
- * file-absolute end of the slice.
+ * file-absolute end of the slice; `triggers` its expression triggers
+ * (decision 182), local spans, disjoint from the atoms.
  */
 export function subParse(
   kind: ContainerKind,
@@ -174,14 +184,36 @@ export function subParse(
   atoms: readonly SubParseAtom[],
   at: SubParseAt,
   end: number,
+  triggers: readonly SubParseTrigger[] = [],
 ): SubParseResult {
-  // The sub-parser sees the numeric stand-ins, exactly as the template
-  // parser's read() hands them to Babel today; the payload converts back.
+  // The sub-parser sees the same-length stand-ins, exactly as the template
+  // parser's read() hands them to Babel today; the payload converts atoms
+  // back and marks triggers.
+  const standIns: { start: number; end: number; text: string }[] = atoms.map(
+    (atom) => ({
+      start: atom.start,
+      end: atom.end,
+      text: atomStandIn(atom.name),
+    }),
+  );
+  if (triggers.length > 0) {
+    for (const trigger of triggers) {
+      standIns.push({
+        start: trigger.start,
+        end: trigger.end,
+        text: standInText(
+          trigger.standIn,
+          text.slice(trigger.start, trigger.end),
+        ),
+      });
+    }
+    standIns.sort((a, b) => a.start - b.start);
+  }
   let parsed = "";
   let last = 0;
-  for (const atom of atoms) {
-    parsed += text.slice(last, atom.start) + atomStandIn(atom.name);
-    last = atom.end;
+  for (const standIn of standIns) {
+    parsed += text.slice(last, standIn.start) + standIn.text;
+    last = standIn.end;
   }
   parsed += text.slice(last);
   const wrapper = WRAPPERS[kind];
@@ -283,6 +315,7 @@ export function subParse(
       break;
   }
   if (atoms.length > 0) convertStandIns(node, atoms, at.offset);
+  if (triggers.length > 0) markTriggers(node, triggers, at.offset);
   return { node, error: null, directives, innerComments };
 }
 
@@ -395,6 +428,51 @@ function convertStandIns(
           },
         };
       }
+    }
+    for (const [key, child] of Object.entries(value)) {
+      if (key === "loc" || key === "extra") continue;
+      visit(child);
+    }
+  };
+  visit(node);
+}
+
+/**
+ * Marks the payload node at exactly each trigger's span (decision 182) with
+ * `extra.mxTrigger`: its id and span. Nothing is converted; lowering
+ * (`lowerTrigger`, core) decides what the trigger builds. A `"keep"`
+ * trigger's text may parse as no single node, and then nothing is marked.
+ */
+function markTriggers(
+  // biome-ignore lint/suspicious/noExplicitAny: walks Babel nodes generically
+  node: any,
+  triggers: readonly SubParseTrigger[],
+  fileOffset: number,
+): void {
+  const spans = new Map(
+    triggers.map((trigger) => [trigger.start + fileOffset, trigger] as const),
+  );
+  const seen = new Set<unknown>();
+  // biome-ignore lint/suspicious/noExplicitAny: walks Babel nodes generically
+  const visit = (value: any): void => {
+    if (!value || typeof value !== "object" || seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (typeof value.type !== "string") return;
+    const start = value.start ?? value.loc?.start?.index;
+    const end = value.end ?? value.loc?.end?.index;
+    const trigger = spans.get(start);
+    if (trigger && end === trigger.end + fileOffset) {
+      value.extra = {
+        ...value.extra,
+        mxTrigger: {
+          id: trigger.id,
+          span: { sourceStart: start, sourceEnd: end },
+        },
+      };
     }
     for (const [key, child] of Object.entries(value)) {
       if (key === "loc" || key === "extra") continue;

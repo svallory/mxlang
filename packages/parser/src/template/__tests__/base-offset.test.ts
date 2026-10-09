@@ -233,7 +233,15 @@ const DECLARED_HANDLERS = [
   "onScriptlet",
   "onPlaceholder",
   "onAtom",
+  "onTrigger",
 ] as const;
+
+/**
+ * MX (decision 182): handlers only a syntax table with triggers can produce.
+ * The default row has none, so neither source here fires them; "table-only
+ * handlers do not fire on the default row" below re-tests that.
+ */
+const TABLE_ONLY_HANDLERS: readonly string[] = ["onTrigger"];
 
 // Compile-time exhaustiveness: if `ParserOptions` ever gains a handler that
 // DECLARED_HANDLERS does not name, this stops typechecking, because
@@ -262,6 +270,7 @@ const CONCISE_UNREACHABLE: Array<
 const CONCISE_HANDLERS = DECLARED_HANDLERS.filter(
   (handler) =>
     handler !== "onError" &&
+    !TABLE_ONLY_HANDLERS.includes(handler) &&
     !CONCISE_UNREACHABLE.some(([unreachable]) => unreachable === handler),
 );
 
@@ -385,11 +394,21 @@ describe("base offset: handler ranges", () => {
     for (const handler of declared) {
       assert.ok(
         handler === "onError" ||
+          TABLE_ONLY_HANDLERS.includes(handler) ||
           html.has(handler) ||
           concise.has(handler) ||
           unreachable.has(handler),
         `${handler} is neither exercised nor listed unreachable`,
       );
+    }
+  });
+
+  it("table-only handlers do not fire on the default row", () => {
+    for (const source of [HTML_SOURCE, CONCISE_SOURCE]) {
+      const seen = new Set(parse(source).log.map((e) => e.handler));
+      for (const handler of TABLE_ONLY_HANDLERS) {
+        assert.ok(!seen.has(handler), `${handler} fired without a table`);
+      }
     }
   });
 

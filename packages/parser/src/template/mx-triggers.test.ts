@@ -1,0 +1,701 @@
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: the cases are MX source, whose `${…}` is a placeholder, not a JS template
+/**
+ * The syntax table (decision 182, PR A) at the template parser: triggers in
+ * expression, attribute and line position, their same-length stand-ins,
+ * `terminatesValue`, validation, and the default row's parity.
+ *
+ * Events are rendered compactly, as the atom cases do (`mx-atoms.cases.ts`):
+ * `<tag>`, `@name`, `="value"` (as `read()` returns it, so stand-ins show),
+ * `atom(name@start-end)`, `trigger(id position "text"@start-end)` with
+ * `="value"` when it has one, and `ERR(start-end message)`.
+ */
+import { describe, expect, it } from "vitest";
+import { PROBES } from "./grammar-spec.cases.ts";
+import {
+  createParser,
+  DEFAULT_SYNTAX,
+  type SyntaxTable,
+  type Trigger,
+  validateSyntaxTable,
+} from "./index.ts";
+
+/** Mesh's member trigger (decision 182 addendum 2), the first table row. */
+const MEMBER: Trigger = {
+  id: "member",
+  chars: "&",
+  match: "&[A-Za-z_$][A-Za-z0-9_$]*",
+  standIn: "identifier",
+  node: { call: "member" },
+};
+
+const table = (patch: Partial<SyntaxTable>): SyntaxTable => ({
+  ...DEFAULT_SYNTAX,
+  ...patch,
+});
+
+/** `&` in all three positions: the test table of the brief (not the default row). */
+const MESH = table({
+  expressionTriggers: [MEMBER],
+  attributeTriggers: [MEMBER],
+  lineTriggers: [MEMBER],
+});
+
+function render(code: string, syntax: SyntaxTable | undefined): string {
+  const out: string[] = [];
+  const show = (r: { start: number; end: number }) =>
+    JSON.stringify(parser.read(r));
+  const parser = createParser(
+    {
+      onError: (e) => out.push(`ERR(${e.start}-${e.end} ${e.message})`),
+      onAtom: (a) =>
+        out.push(
+          `atom(${code.slice(a.value.start, a.value.end)}@${a.start}-${a.end})`,
+        ),
+      onTrigger: (t) =>
+        out.push(
+          `trigger(${t.id} ${t.position} ${JSON.stringify(code.slice(t.text.start, t.text.end))}@${t.start}-${t.end}${t.value ? ` =${show(t.value)}` : ""})`,
+        ),
+      onOpenTagName: (t) => {
+        out.push(`<${code.slice(t.start, t.end)}>`);
+      },
+      onAttrName: (r) => out.push(`@${code.slice(r.start, r.end)}`),
+      onAttrValue: (v) => out.push(`=${show(v.value)}`),
+      onText: (r) => out.push(`text(${show(r)})`),
+      onScriptlet: (s) => out.push(`$${show(s.value)}`),
+      onPlaceholder: (p) => out.push(`\${${show(p.value)}}`),
+    },
+    syntax ? { syntax } : undefined,
+  );
+  parser.parse(code);
+  return out.join(" ");
+}
+
+describe("the & member row (decision 182 addendum 1)", () => {
+  it.each([
+    // Expression position; the atom beside it still lexes as an atom.
+    [
+      "x=() => &status === :sent",
+      '<x> @ trigger(member expression "&status"@8-15) atom(sent@20-25) ="() => _status === 0.000"',
+    ],
+    [
+      "x load=[&customer, &other]",
+      '<x> @load trigger(member expression "&customer"@8-17) trigger(member expression "&other"@19-25) ="[_customer, _other]"',
+    ],
+    // Attribute position, after a kind.
+    ["sort asc &dueOn", '<sort> @asc trigger(member attribute "&dueOn"@9-15)'],
+    // Line position, under a concise block, with and without `=value`.
+    [
+      "entity Order\n  &title\n  &amount=qty * price",
+      '<entity> @Order trigger(member line "&title"@15-21) trigger(member line "&amount"@24-43 ="qty * price")',
+    ],
+  ])("%j", (code, expected) => {
+    expect(render(code, MESH)).toBe(expected);
+  });
+
+  it.each([
+    // `&&` is the logical and; `a &b` (an operand before it) is the bitwise and.
+    ["x=a &&b", '<x> @ ="a &&b"'],
+    ["x=a&&b", '<x> @ ="a&&b"'],
+    ["x=a &b", '<x> @ ="a &b"'],
+    ["x=a&b", '<x> @ ="a&b"'],
+    ["x=(a)&b", '<x> @ ="(a)&b"'],
+    // `&=` and a lone `&` never match.
+    ["x=a &= b", '<x> @ ="a &= b"'],
+    // Statements and scriptlets do not lex atoms, so no expression trigger
+    // is armed there either.
+    ["$ x = &a", '$"x = &a"'],
+    // HTML content is text: line triggers are concise-only.
+    ["<div>&title</div>", '<div> text("&title")'],
+    // In a string, a template quasi or a comment, `&a` is that text.
+    ['x="&a"', '<x> @ ="\\"&a\\""'],
+    ["x=`&a`", '<x> @ ="`&a`"'],
+    ["x=a /* &b */", '<x> @ ="a /* &b */"'],
+  ])("not a trigger: %j", (code, expected) => {
+    expect(render(code, MESH)).toBe(expected);
+  });
+
+  it.each([
+    // Expression triggers in every position atoms are armed in.
+    ["x(&a)", '<x> trigger(member expression "&a"@2-4)'],
+    ["x a(&b)", '<x> @a trigger(member expression "&b"@4-6)'],
+    ["x ...&a", '<x> trigger(member expression "&a"@5-7)'],
+    ["div -- ${&a}", '<div> trigger(member expression "&a"@9-11) ${"_a"}'],
+    ["x=`${&a}`", '<x> @ trigger(member expression "&a"@5-7) ="`${_a}`"'],
+    ["x=!&a", '<x> @ trigger(member expression "&a"@3-5) ="!_a"'],
+    ["x=&a.b", '<x> @ trigger(member expression "&a"@2-4) ="_a.b"'],
+    [
+      "x=c ? &a : &b",
+      '<x> @ trigger(member expression "&a"@6-8) trigger(member expression "&b"@11-13) ="c ? _a : _b"',
+    ],
+    // A trigger's own text is an operand, never a keyword: `:b` after
+    // `&new` is a ternary-less `:`, not an atom.
+    [
+      "x=[&new, :b]",
+      '<x> @ trigger(member expression "&new"@3-7) atom(b@9-11) ="[_new, 0.]"',
+    ],
+  ])("expression position: %j", (code, expected) => {
+    expect(render(code, MESH)).toBe(expected);
+  });
+
+  it.each([
+    // HTML mode, before `/>`, `>` and between attributes.
+    [
+      "<div &a x=1 &b/>",
+      // Without `terminatesValue`, ` &b` after a value is the bitwise and.
+      '<div> trigger(member attribute "&a"@5-7) @x ="1 &b"',
+    ],
+    [
+      "<div &a x=1, &b></div>",
+      '<div> trigger(member attribute "&a"@5-7) @x ="1" trigger(member attribute "&b"@13-15)',
+    ],
+    // An attribute trigger may take a value, lexed as a named attribute's.
+    ["<div &a=x + 1/>", '<div> trigger(member attribute "&a"@5-13 ="x + 1")'],
+    [
+      "field &amount=qty * price",
+      '<field> trigger(member attribute "&amount"@6-25 ="qty * price")',
+    ],
+    // Concise: `,` and `;` end it, and so does an attribute group's `]`.
+    ["x &a, b", '<x> trigger(member attribute "&a"@2-4) @b'],
+    ["x &a;", '<x> trigger(member attribute "&a"@2-4)'],
+    ["x [&a]", '<x> trigger(member attribute "&a"@3-5)'],
+    // A value with an expression trigger in it.
+    [
+      "x &a=&b",
+      '<x> trigger(member expression "&b"@5-7) trigger(member attribute "&a"@2-7 ="_b")',
+    ],
+  ])("attribute position: %j", (code, expected) => {
+    expect(render(code, MESH)).toBe(expected);
+  });
+
+  it.each([
+    // At the root, with CRLF, with whitespace after the value.
+    ["&title", 'trigger(member line "&title"@0-6)'],
+    [
+      "&a\r\n&b=1  \nx",
+      'trigger(member line "&a"@0-2) trigger(member line "&b"@4-8 ="1") <x>',
+    ],
+    // A value runs on through operators and over a line break after one.
+    ["e\n  &a=b +\n    c", '<e> trigger(member line "&a"@4-16 ="b +\\n    c")'],
+    // Expression triggers and atoms inside a line trigger's value.
+    [
+      "&a=[&b, :c]",
+      'trigger(member expression "&b"@4-6) atom(c@8-10) trigger(member line "&a"@0-11 ="[_b, 0.]")',
+    ],
+    // A tag after a trigger line at the same indent is a sibling.
+    ["e\n  &a\n  div", '<e> trigger(member line "&a"@4-6) <div>'],
+  ])("line position: %j", (code, expected) => {
+    expect(render(code, MESH)).toBe(expected);
+  });
+
+  it.each([
+    [
+      "entity\n  &title foo",
+      'ERR(16-16 A "member" trigger line ends after its text; only whitespace may follow it on the line.)',
+    ],
+    [
+      "&a=1 2",
+      'ERR(5-5 A "member" trigger line ends after its text and its value; only whitespace may follow it on the line.)',
+    ],
+    ["&a=", "ERR(3-3 Missing value for attribute)"],
+    [
+      "sort &a(1)",
+      'ERR(5-8 Invalid attribute name. The "member" trigger "&a" must be followed by whitespace, "=" or the end of the tag.)',
+    ],
+    [
+      "<div &a.b/>",
+      '<div> ERR(5-8 Invalid attribute name. The "member" trigger "&a" must be followed by whitespace, "=" or the end of the tag.)',
+    ],
+    [
+      "<div &a=",
+      '<div> ERR(8-8 EOF reached while parsing the value of the "member" trigger)',
+    ],
+  ])("error: %j", (code, expected) => {
+    expect(render(code, MESH)).toContain(expected);
+  });
+});
+
+describe("other trigger shapes", () => {
+  it("a letter trigger is armed only at a word start (the fast path does not skip it)", () => {
+    const words = table({
+      expressionTriggers: [
+        {
+          id: "words",
+          chars: "A-Z",
+          match: "[A-Z][a-z]+(?: [A-Z][a-z]+)+",
+          standIn: "identifier",
+          node: "identifier",
+        },
+      ],
+    });
+    expect(render("x=Order Total + 1", words)).toBe(
+      '<x> @ trigger(words expression "Order Total"@2-13) ="_rder_Total + 1"',
+    );
+    expect(render("x=[myOrder Total]", words)).toBe('<x> @ ="[myOrder Total]"');
+    expect(render("x=[a.Order Total]", words)).toBe('<x> @ ="[a.Order Total]"');
+    // One word only: the matcher does not match.
+    expect(render("x=Order + 1", words)).toBe('<x> @ ="Order + 1"');
+  });
+
+  it("a number stand-in is the atom rule: `0.` then zeros, `0` for one character", () => {
+    const ui = table({
+      expressionTriggers: [
+        {
+          id: "ui",
+          chars: "%",
+          match: "%[a-z.]*",
+          standIn: "number",
+          node: "string",
+        },
+      ],
+    });
+    expect(render("x=[%ui.save, %]", ui)).toBe(
+      '<x> @ trigger(ui expression "%ui.save"@3-11) trigger(ui expression "%"@13-14) ="[0.000000, 0]"',
+    );
+  });
+
+  it("a keep stand-in reads the source", () => {
+    const keep = table({
+      expressionTriggers: [
+        {
+          id: "k",
+          chars: "@",
+          match: "@[a-z]+",
+          standIn: "keep",
+          node: "string",
+        },
+      ],
+    });
+    expect(render("x=@ab", keep)).toBe(
+      '<x> @ trigger(k expression "@ab"@2-5) ="@ab"',
+    );
+  });
+
+  it("a non-ASCII first character arms through the non-ASCII list", () => {
+    const section = table({
+      expressionTriggers: [
+        {
+          id: "s",
+          chars: "§",
+          match: "§[a-z]+",
+          standIn: "identifier",
+          node: "identifier",
+        },
+      ],
+    });
+    expect(render("x=§ab", section)).toBe(
+      '<x> @ trigger(s expression "§ab"@2-5) ="_ab"',
+    );
+  });
+
+  it("terminatesValue: a space and then the trigger ends the preceding value", () => {
+    const ending = table({
+      attributeTriggers: [{ ...MEMBER, terminatesValue: true }],
+    });
+    expect(render("div x=a &b", ending)).toBe(
+      '<div> @x ="a" trigger(member attribute "&b"@8-10)',
+    );
+    expect(render("<div x=a &b/>", ending)).toBe(
+      '<div> @x ="a" trigger(member attribute "&b"@9-11)',
+    );
+    // Not after an operator, not without the space, and not where the
+    // matcher does not match: `&&` stays the logical and.
+    expect(render("div x=a + &b", ending)).toBe('<div> @x ="a + &b"');
+    expect(render("div x=a&b", ending)).toBe('<div> @x ="a&b"');
+    expect(render("div x=a &&b", ending)).toBe('<div> @x ="a &&b"');
+    // Without the property the same input is a bitwise and.
+    expect(render("div x=a &b", MESH)).toBe('<div> @x ="a &b"');
+  });
+});
+
+describe("read() through stand-ins", () => {
+  it("stands in every atom and trigger fully inside the range, same length", () => {
+    const code = "<x y=[&ab, :c, &d]/>";
+    const parser = createParser({}, { syntax: MESH });
+    parser.parse(code);
+    const whole = parser.read({ start: 0, end: code.length });
+    expect(whole).toBe("<x y=[_ab, 0., _d]/>");
+    expect(whole.length).toBe(code.length);
+    // A range that only partly covers a trigger reads the source there.
+    expect(parser.read({ start: 7, end: 13 })).toBe("ab, 0.");
+    expect(parser.read({ start: 7, end: 12 })).toBe("ab, :");
+    expect(parser.read({ start: 6, end: 18 })).toBe("_ab, 0., _d]");
+  });
+
+  it("a raw open tag reads the source", () => {
+    const parser = createParser(
+      {
+        onOpenTagEnd: (e) => {
+          raw = parser.read({ start: 0, end: e.start });
+        },
+      },
+      { syntax: MESH },
+    );
+    let raw = "";
+    parser.parse("style x=&a");
+    expect(raw).toBe("style x=&a");
+  });
+
+  it("a reused parser forgets the previous parse's triggers", () => {
+    const parser = createParser({}, { syntax: MESH });
+    parser.parse("x=&a");
+    parser.parse("x=1a");
+    expect(parser.read({ start: 2, end: 4 })).toBe("1a");
+  });
+});
+
+describe("the default row", () => {
+  it("is deeply frozen and has no triggers", () => {
+    expect(Object.isFrozen(DEFAULT_SYNTAX)).toBe(true);
+    for (const value of Object.values(DEFAULT_SYNTAX)) {
+      if (value && typeof value === "object") {
+        expect(Object.isFrozen(value)).toBe(true);
+      }
+    }
+    expect(DEFAULT_SYNTAX).toEqual({
+      placeholder: { open: "${", close: "}" },
+      inlineScript: { trigger: "$ " },
+      blockTag: null,
+      filter: null,
+      concise: true,
+      expressionTriggers: [],
+      attributeTriggers: [],
+      lineTriggers: [],
+      textTriggers: [],
+      tagTypes: {},
+      expressionLanguage: "ts",
+    });
+    expect(validateSyntaxTable(DEFAULT_SYNTAX)).toEqual([]);
+  });
+
+  it("gives every grammar-corpus probe the event stream of no table at all", () => {
+    const events = (code: string, syntax?: SyntaxTable) => {
+      const out: string[] = [];
+      const handlers = new Proxy(
+        {},
+        {
+          get: (_target, name) =>
+            typeof name === "string" && name.startsWith("on")
+              ? (e: unknown) => {
+                  out.push(`${name} ${JSON.stringify(e)}`);
+                }
+              : undefined,
+        },
+      );
+      const parser = createParser(handlers, syntax ? { syntax } : undefined);
+      try {
+        parser.parse(code);
+      } catch (error) {
+        out.push(`throw ${(error as Error).message}`);
+      }
+      out.push(parser.read({ start: 0, end: code.length }));
+      return out;
+    };
+    expect(PROBES.length).toBeGreaterThan(1_700);
+    const differ = PROBES.filter(
+      (p) =>
+        JSON.stringify(events(p.input)) !==
+        JSON.stringify(events(p.input, DEFAULT_SYNTAX)),
+    ).map((p) => p.id);
+    expect(differ).toEqual([]);
+  });
+
+  it("the & table changes nothing on a probe that has no `&`", () => {
+    const plain = PROBES.filter((p) => !p.input.includes("&"));
+    expect(plain.length).toBeGreaterThan(1_500);
+    const differ = plain
+      .filter((p) => render(p.input, undefined) !== render(p.input, MESH))
+      .map((p) => p.id);
+    expect(differ).toEqual([]);
+  });
+});
+
+describe("validateSyntaxTable", () => {
+  const trigger = (patch: Partial<Trigger>): Trigger => ({
+    ...MEMBER,
+    ...patch,
+  });
+  const cases: [string, unknown, string, RegExp][] = [
+    ["not an object", 42, "", /is an object/],
+    [
+      "placeholder shape",
+      table({ placeholder: { open: "", close: "}" } }),
+      "placeholder",
+      /non-empty strings/,
+    ],
+    [
+      "an opener starting with <",
+      table({ blockTag: { open: "<%", close: "%>" } }),
+      "blockTag.open",
+      /may not start with "<"/,
+    ],
+    [
+      "openers not distinct",
+      table({
+        blockTag: { open: "{%", close: "%}" },
+        filter: { open: "{%", close: "::" },
+      }),
+      "filter.open",
+      /are both "\{%"/,
+    ],
+    [
+      "inlineScript shape",
+      table({ inlineScript: { trigger: "" } }),
+      "inlineScript",
+      /non-empty string/,
+    ],
+    [
+      "concise not boolean",
+      { ...DEFAULT_SYNTAX, concise: "yes" },
+      "concise",
+      /is a boolean/,
+    ],
+    [
+      "expressionLanguage",
+      { ...DEFAULT_SYNTAX, expressionLanguage: "js" },
+      "expressionLanguage",
+      /must be "ts"/,
+    ],
+    [
+      "tagTypes not an object",
+      { ...DEFAULT_SYNTAX, tagTypes: [] },
+      "tagTypes",
+      /is an object/,
+    ],
+    [
+      "a list that is not an array",
+      { ...DEFAULT_SYNTAX, lineTriggers: {} },
+      "lineTriggers",
+      /is an array/,
+    ],
+    [
+      "a trigger that is not an object",
+      table({ lineTriggers: [null as never] }),
+      "lineTriggers[0]",
+      /is an object/,
+    ],
+    [
+      "an empty id",
+      table({ lineTriggers: [trigger({ id: "" })] }),
+      "lineTriggers[0].id",
+      /non-empty string/,
+    ],
+    [
+      "an id twice in one list",
+      table({
+        expressionTriggers: [MEMBER, trigger({ chars: "%", match: "%a" })],
+      }),
+      "expressionTriggers[1].id",
+      /also used by expressionTriggers\[0\]/,
+    ],
+    [
+      "a bad standIn",
+      table({ lineTriggers: [trigger({ standIn: "text" as never })] }),
+      "lineTriggers[0].standIn",
+      /"number", "identifier" or "keep"/,
+    ],
+    [
+      "a bad node",
+      table({ lineTriggers: [trigger({ node: { call: "" } })] }),
+      "lineTriggers[0].node",
+      /or \{ call \}/,
+    ],
+    [
+      "terminatesValue off the attribute list",
+      table({ expressionTriggers: [trigger({ terminatesValue: true })] }),
+      "expressionTriggers[0].terminatesValue",
+      /attribute triggers only/,
+    ],
+    [
+      "chars not a class",
+      table({ lineTriggers: [trigger({ chars: "z-a" })] }),
+      "lineTriggers[0].chars",
+      /body of a character class/,
+    ],
+    [
+      "chars on whitespace",
+      table({ lineTriggers: [trigger({ chars: "& " })] }),
+      "lineTriggers[0].chars",
+      /whitespace/,
+    ],
+    [
+      "an expression trigger on `,`",
+      table({ expressionTriggers: [trigger({ chars: ",", match: ",a" })] }),
+      "expressionTriggers[0].chars",
+      /separates or closes/,
+    ],
+    [
+      "an attribute trigger on `=`",
+      table({ attributeTriggers: [trigger({ chars: "=", match: "=a" })] }),
+      "attributeTriggers[0].chars",
+      /attribute or open-tag syntax/,
+    ],
+    ...(["<", "-", "/", "@", "$"] as const).map(
+      (char): [string, unknown, string, RegExp] => [
+        `a line trigger on ${char}`,
+        table({
+          lineTriggers: [
+            trigger({ chars: char, match: char === "$" ? "\\$a" : `${char}a` }),
+          ],
+        }),
+        "lineTriggers[0].chars",
+        new RegExp(`may not be armed on "\\${char}"`),
+      ],
+    ),
+    [
+      "a number stand-in on an expression token",
+      table({
+        expressionTriggers: [
+          trigger({ chars: "A-Z", match: "[A-Z]+", standIn: "number" }),
+        ],
+      }),
+      "expressionTriggers[0].standIn",
+      /"identifier" or "keep"/,
+    ],
+    [
+      "an empty matcher",
+      table({ lineTriggers: [trigger({ match: "" })] }),
+      "lineTriggers[0].match",
+      /non-empty regex/,
+    ],
+    [
+      "an invalid matcher",
+      table({ lineTriggers: [trigger({ match: "&(" })] }),
+      "lineTriggers[0].match",
+      /not a valid regex/,
+    ],
+    [
+      "a look-ahead",
+      table({ lineTriggers: [trigger({ match: "&a(?!=)" })] }),
+      "lineTriggers[0].match",
+      /look-around/,
+    ],
+    [
+      "a look-behind",
+      table({ lineTriggers: [trigger({ match: "(?<=x)&a" })] }),
+      "lineTriggers[0].match",
+      /look-around/,
+    ],
+    [
+      "a back-reference",
+      table({ lineTriggers: [trigger({ match: "(&)\\1" })] }),
+      "lineTriggers[0].match",
+      /back-reference/,
+    ],
+    [
+      "a matcher matching empty",
+      table({ lineTriggers: [trigger({ match: "&?" })] }),
+      "lineTriggers[0].match",
+      /matches the empty string/,
+    ],
+    [
+      "two triggers on one first character",
+      table({
+        attributeTriggers: [
+          MEMBER,
+          trigger({ id: "other", chars: "%&", match: "[%&]b" }),
+        ],
+      }),
+      "attributeTriggers[1].chars",
+      /both armed on "&"/,
+    ],
+    [
+      "a text trigger on <",
+      table({ textTriggers: [trigger({ chars: "<", match: "<a" })] }),
+      "textTriggers[0].chars",
+      /template syntax/,
+    ],
+    // Allowed by the grammar, not implemented by this parser yet.
+    [
+      "a non-default placeholder",
+      table({ placeholder: { open: "{{", close: "}}" } }),
+      "placeholder",
+      /not supported by this parser yet/,
+    ],
+    [
+      "placeholders off",
+      table({ placeholder: null }),
+      "placeholder",
+      /not supported/,
+    ],
+    [
+      "a non-default inline script",
+      table({ inlineScript: { trigger: "% " } }),
+      "inlineScript",
+      /not supported/,
+    ],
+    [
+      "inline scripts off",
+      table({ inlineScript: null }),
+      "inlineScript",
+      /not supported/,
+    ],
+    [
+      "a blockTag",
+      table({ blockTag: { open: "{%", close: "%}" } }),
+      "blockTag",
+      /not supported/,
+    ],
+    [
+      "a filter",
+      table({ filter: { open: "::", close: "::" } }),
+      "filter",
+      /not supported/,
+    ],
+    ["concise off", table({ concise: false }), "concise", /layer 3/],
+    [
+      "a text trigger",
+      table({ textTriggers: [trigger({ chars: "%", match: "%a" })] }),
+      "textTriggers",
+      /never on the `\.mx` row/,
+    ],
+    [
+      "a tagTypes entry",
+      table({ tagTypes: { div: 0 } }),
+      "tagTypes",
+      /not supported/,
+    ],
+  ];
+
+  it.each(cases)("%s", (_name, input, field, message) => {
+    const found = validateSyntaxTable(input);
+    expect(
+      found.some((d) => d.field === field && message.test(d.message)),
+      JSON.stringify(found),
+    ).toBe(true);
+  });
+
+  it("names the trigger of a trigger problem", () => {
+    expect(
+      validateSyntaxTable(
+        table({ lineTriggers: [{ ...MEMBER, match: "&?" }] }),
+      ),
+    ).toEqual([
+      {
+        field: "lineTriggers[0].match",
+        triggerId: "member",
+        message:
+          "`match` matches the empty string; a trigger consumes at least its first character",
+      },
+    ]);
+  });
+
+  it("accepts the & table, and the same id in several lists", () => {
+    expect(validateSyntaxTable(MESH)).toEqual([]);
+  });
+
+  it("createParser refuses an invalid table with every problem listed", () => {
+    expect(() =>
+      createParser(
+        {},
+        {
+          syntax: table({
+            concise: false,
+            lineTriggers: [{ ...MEMBER, chars: "<" }],
+          }),
+        },
+      ),
+    ).toThrow(
+      /invalid syntax table:\n {2}lineTriggers\[0\]\.chars: .*\n {2}concise: /,
+    );
+  });
+});

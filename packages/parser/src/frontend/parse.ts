@@ -13,6 +13,7 @@ import type {
   MxBodyMode,
   MxDocument,
   MxErrorCode,
+  MxExpression,
   MxFragmentBase,
   MxFrontEndOptions,
   MxParseError,
@@ -25,8 +26,10 @@ import type {
   Ranges,
   TagType as TagTypeValue,
 } from "../template/internal.ts";
+import { compileSyntax, type SyntaxTable } from "../template/syntax.ts";
 import {
   type ContainerKind,
+  type SubParseTrigger,
   staticTemplateString,
   stringQuasiTemplate,
   subParse,
@@ -40,6 +43,36 @@ import {
 /** Options of `parse`: the two per-target inputs (ast §7.1) and an optional fragment base (ast §5.3). */
 export interface ParseOptions extends MxFrontEndOptions {
   readonly base?: MxFragmentBase;
+  /**
+   * The syntax table (decision 182); omitted means `DEFAULT_SYNTAX`, today's
+   * grammar. A table that does not validate is a `TypeError`.
+   */
+  readonly syntax?: SyntaxTable;
+}
+
+/**
+ * A syntax-table trigger (decision 182), built from the template parser's
+ * `onTrigger`. It is not lowered here: core's `lowerTrigger` builds what the
+ * table's `node` rule says. Where it sits follows its position:
+ *
+ * - expression: in the `triggers` list of the innermost container whose
+ *   source holds it, beside that container's `atoms` (the list is present
+ *   only when non-empty). The container's payload parsed the trigger's
+ *   same-length stand-in; the payload node at exactly the trigger's span, if
+ *   any, carries `extra.mxTrigger`.
+ * - attribute: in the tag's `attributes`, in source order.
+ * - line: a child of the enclosing body.
+ *
+ * `start`/`end` cover the whole construct (the text, then `=value` when
+ * there is one); `text` is what the trigger's matcher matched, starting at
+ * `start`.
+ */
+export interface MxTrigger extends Span {
+  readonly type: "MxTrigger";
+  readonly id: string;
+  readonly text: string;
+  /** The `=value` of an attribute or line trigger; null without one, and always for an expression trigger. */
+  readonly value: MxExpression | null;
 }
 
 /** Decision 161's wording for an error that is never the author's. */
@@ -150,6 +183,9 @@ export function parse(source: string, options: ParseOptions): MxDocument {
       "parse: `options.statementKeywords` is required (ast §7.1)",
     );
   }
+  // A bad table is the caller's error, like a missing option: it throws
+  // here, not as an internal failure inside the parse.
+  if (options.syntax !== undefined) compileSyntax(options.syntax);
   const base: MxFragmentBase = options.base ?? {
     offset: 0,
     line: 0,
@@ -171,6 +207,8 @@ class FrontEnd {
   readonly stack: TagBuilder[] = [];
   /** Atoms announced but not yet claimed by a container, in source order (local offsets). */
   atoms: { start: number; end: number; name: string }[] = [];
+  /** Expression triggers announced but not yet claimed by a container, in source order (local offsets). */
+  triggers: (SubParseTrigger & { text: string })[] = [];
   openStart: number | undefined;
   /** The attribute-list item(s) the last `onAttrName` produced: value, args and methods attach to the last one. */
   current: Builder | undefined;
@@ -192,6 +230,7 @@ class FrontEnd {
     const handlers = {
       onError: (e: Ranges.Error) => this.onError(e),
       onAtom: (e: Ranges.Value) => this.onAtom(e),
+      onTrigger: (e: Ranges.Trigger) => this.onTrigger(e),
       onText: (e: Range) => this.onText(e),
       onPlaceholder: (e: Ranges.Placeholder) => this.onPlaceholder(e),
       onComment: (e: Ranges.Value) => this.onComment(e),
@@ -235,7 +274,10 @@ class FrontEnd {
       };
     }
     this.inTemplate = true;
-    seams.createParser(wrapped).parse(this.source);
+    const syntax = this.options.syntax;
+    seams
+      .createParser(wrapped, syntax === undefined ? undefined : { syntax })
+      .parse(this.source);
     this.inTemplate = false;
     if (!this.templateError && this.stack.length > 0) {
       // TODO `concise-eof-open-delimiter-silent` and
@@ -360,6 +402,25 @@ class FrontEnd {
       } else rest.push(atom);
     }
     this.atoms = rest;
+    const triggers: Builder[] = [];
+    const claimed: SubParseTrigger[] = [];
+    if (this.triggers.length > 0) {
+      const pending: typeof this.triggers = [];
+      for (const trigger of this.triggers) {
+        if (trigger.start >= value.start && trigger.end <= value.end) {
+          claimed.push(trigger);
+          triggers.push({
+            type: "MxTrigger",
+            start: this.at(trigger.start),
+            end: this.at(trigger.end),
+            id: trigger.id,
+            text: trigger.text,
+            value: null,
+          });
+        } else pending.push(trigger);
+      }
+      this.triggers = pending;
+    }
     const start = this.at(value.start);
     const end = this.at(value.end);
     const text = this.slice(value);
@@ -383,6 +444,11 @@ class FrontEnd {
           })),
           { offset: start, line: position.line, column: position.column },
           end,
+          claimed.map((trigger) => ({
+            ...trigger,
+            start: this.at(trigger.start) - start,
+            end: this.at(trigger.end) - start,
+          })),
         );
     let error = result.error;
     if (error !== null) {
@@ -417,6 +483,7 @@ class FrontEnd {
       source: text,
       outer: this.span(outer),
       atoms,
+      ...(triggers.length > 0 ? { triggers } : {}),
       node: result.node,
       error,
       ...(type === "MxStatements"
@@ -505,6 +572,47 @@ class FrontEnd {
       end: event.end,
       name: this.slice(event.value),
     });
+  }
+
+  /**
+   * `onTrigger` (decision 182): an expression trigger waits for its
+   * container; an attribute trigger joins its tag's attributes; a line
+   * trigger is a child of the enclosing body. A value's container is built
+   * now, after the atoms and triggers inside it were announced.
+   */
+  onTrigger(event: Ranges.Trigger): void {
+    const text = this.slice(event.text);
+    if (event.position === "expression") {
+      this.triggers.push({
+        start: event.start,
+        end: event.end,
+        id: event.id,
+        standIn: event.standIn,
+        text,
+      });
+      return;
+    }
+    const node: Builder = {
+      type: "MxTrigger",
+      start: this.at(event.start),
+      end: this.at(event.end),
+      id: event.id,
+      text,
+      value: event.value
+        ? this.container("MxExpression", event.value, event.value, "attr-value")
+        : null,
+    };
+    if (event.position === "line") {
+      this.pushChild(node);
+      return;
+    }
+    // A statement's continuation line reports its words as attributes; the
+    // statement node covers them (see `onAttrName`).
+    if (this.statement) return;
+    const tag = this.headTag(event.start);
+    tag.attributes.push(node);
+    this.current = undefined;
+    this.reach(event.end);
   }
 
   // --- children ------------------------------------------------------------

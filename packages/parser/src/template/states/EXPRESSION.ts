@@ -13,6 +13,7 @@ import {
   wordWidthAt,
   wordWidthBefore,
 } from "../internal.ts";
+import { matchTrigger } from "../syntax.ts";
 import * as CODE from "../util/codes.ts";
 import * as ErrorCode from "../util/error-code.ts";
 
@@ -35,7 +36,10 @@ export interface ExpressionMeta extends Meta {
    * never for statement tags or scriptlets.
    */
   atoms: boolean;
-  /** MX: where the last atom lexed in this expression ends (-1: none). */
+  /**
+   * MX: where the last atom, or expression trigger (decision 182), lexed in
+   * this expression ends (-1: none). Its text is an operand, never a keyword.
+   */
   atomEnd: number;
   /** MX: the comments read so far, which atom lexing looks behind past. */
   comments: Meta[] | undefined;
@@ -158,6 +162,17 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
           expression.hadUnguardedNewline = true;
         // checkForOperators may have advanced pos; only advance by len if it didn't
         if (this.pos === prevPos) this.pos += len;
+        continue;
+      }
+
+      // MX (decision 182): a syntax-table expression trigger, armed by its
+      // first character where an operand is expected, in the expressions
+      // that lex atoms. The default row has no trigger set.
+      if (
+        this.syntax.expression !== null &&
+        expression.atoms &&
+        lexTrigger(this, expression, data)
+      ) {
         continue;
       }
 
@@ -398,6 +413,13 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
     switch (parent.state) {
       case STATE.ATTRIBUTE: {
         const attr = parent as STATE.AttrMeta;
+        if (attr.trigger) {
+          return this.emitError(
+            expression,
+            ErrorCode.MALFORMED_OPEN_TAG,
+            `EOF reached while parsing the value of the "${attr.trigger.trigger.id}" trigger`,
+          );
+        }
         if (!attr.spread && !attr.name) {
           return this.emitError(
             expression,
@@ -522,6 +544,17 @@ function checkForOperators(
         expression,
       )
     ) {
+      // MX (decision 182): a space and then an attribute trigger that sets
+      // `terminatesValue` ends an attribute value; decision 146's ` :ident`
+      // and ` .ident` rule as a table property.
+      if (
+        expression.attrValue &&
+        parser.syntax.terminators &&
+        matchTrigger(parser.syntax.attribute!, data, nextNonSpace)?.trigger
+          .terminatesValue
+      ) {
+        return false;
+      }
       const lookAheadPos = lookAheadForOperator(expression, data, nextNonSpace);
       if (lookAheadPos !== -1) {
         parser.pos = lookAheadPos;
@@ -932,6 +965,46 @@ function lexAtom(
   if (!last || last.start < start) {
     atoms.push({ start, end });
     parser.options.onAtom?.({ start, end, value: { start: start + 1, end } });
+  }
+  expression.atomEnd = end;
+  parser.pos = end;
+  return true;
+}
+
+/**
+ * MX (decision 182): at an armed character, lexes an expression trigger when
+ * its matcher matches and an operand is expected here: never inside a word,
+ * never continuing a punctuator of the same character (`a &&b` is a logical
+ * and, not `&` and `&b`), and only where `expectsExpression` holds, the atom
+ * rule. Records the span for `read`, announces it through `onTrigger`, and
+ * returns whether it consumed it.
+ */
+function lexTrigger(
+  parser: Parser,
+  expression: ExpressionMeta,
+  data: string,
+): boolean {
+  const start = parser.pos;
+  const hit = matchTrigger(parser.syntax.expression!, data, start);
+  if (!hit) return false;
+  if (
+    start > expression.start &&
+    (wordWidthBefore(data, start - 1) > 0 ||
+      data.charCodeAt(start - 1) === data.charCodeAt(start))
+  ) {
+    return false;
+  }
+  if (!expectsExpression(expression, data, start)) return false;
+  const { trigger, end } = hit;
+  if (parser.recordTrigger(trigger, start, end)) {
+    parser.options.onTrigger?.({
+      id: trigger.id,
+      position: "expression",
+      standIn: trigger.standIn,
+      start,
+      end,
+      text: { start, end },
+    });
   }
   expression.atomEnd = end;
   parser.pos = end;

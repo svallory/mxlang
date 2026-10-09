@@ -68,6 +68,21 @@ export namespace Ranges {
   export interface OpenTagEnd extends Range {
     selfClosed: boolean;
   }
+
+  /**
+   * MX (decision 182): a syntax-table trigger. `start`/`end` cover the whole
+   * construct: the matched text, plus `=value` for an attribute or line
+   * trigger that has one. `text` is what the matcher matched.
+   */
+  export interface Trigger extends Range {
+    id: string;
+    /** The table list that armed it. */
+    position: "expression" | "attribute" | "line";
+    standIn: "number" | "identifier" | "keep";
+    text: Range;
+    /** The `=value` expression of an attribute or line trigger, `=` excluded. */
+    value?: Range;
+  }
 }
 
 export const ErrorCode = _ErrorCode;
@@ -85,6 +100,12 @@ export interface ParserOptions {
    * name.
    */
   onAtom?(data: Ranges.Value): void;
+  /**
+   * MX (decision 182): a syntax-table trigger was lexed; one call per
+   * trigger, after its `=value` (if any) was lexed. `read()` of its `text`
+   * returns its stand-in.
+   */
+  onTrigger?(data: Ranges.Trigger): void;
   onText?(data: Range): void;
   onPlaceholder?(data: Ranges.Placeholder): void;
   onComment?(data: Ranges.Value): void;

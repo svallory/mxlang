@@ -1,0 +1,5 @@
+---
+packages: [parser]
+kind: Added
+---
+The syntax table (decision 182, parser half, PR A): `SyntaxTable` as plain data, the frozen `DEFAULT_SYNTAX` (the `.mx` row, today's grammar byte for byte) and `validateSyntaxTable(table)` returning `{ field, triggerId?, message }` diagnostics. `createParser(handlers, { syntax })` and the front end's `parse(source, { …, syntax })` arm the table's triggers in expression position (where an operand is expected, in the expressions that lex atoms), on an attribute name's first character (with an optional `=value` and `terminatesValue`, which ends a preceding attribute value) and at a tagless concise line start (with an optional `=value`, decision 182 addendum 1); each is announced through `onTrigger` and read through a same-length stand-in (`number`, `identifier` or `keep`). The front end builds `MxTrigger` nodes: in a container's `triggers`, in a tag's `attributes`, or as a child of the enclosing body. Nothing is lowered yet, and the default row parses every input exactly as before.

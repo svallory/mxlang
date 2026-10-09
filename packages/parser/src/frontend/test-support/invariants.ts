@@ -97,6 +97,34 @@ export function checkInvariants(
           );
         }
         break;
+      case "MxTrigger": {
+        // Decision 182: the span starts with the matched text; `=value`, if
+        // any, follows it after `=` and whitespace, and ends the span.
+        if (!slice.startsWith(node.text) || node.text === "") {
+          fail(
+            path,
+            `span ${JSON.stringify(slice)} does not start with its text`,
+          );
+        }
+        if (node.value === null) {
+          if (slice !== node.text) fail(path, "span is not its text");
+        } else {
+          within(`${path}.value`, node.value, node);
+          if (node.value.end !== node.end)
+            fail(path, "value does not end the span");
+          const between = text({
+            start: node.start + node.text.length,
+            end: node.value.start,
+          });
+          if (!/^=\s*$/.test(between)) {
+            fail(
+              path,
+              `${JSON.stringify(between)} between text and value is not "="`,
+            );
+          }
+        }
+        break;
+      }
       case "MxShorthand": {
         const sigil = slice[0];
         if (sigil !== node.sigil)
@@ -303,6 +331,19 @@ export function checkInvariants(
             fail(path, "source is not the span's text");
           within(`${path}.outer`, node, node.outer);
           ordered(`${path}.atoms`, node.atoms);
+          // Decision 182: present only when non-empty; each trigger is an
+          // operand inside the container, and none overlaps an atom.
+          if ("triggers" in node) {
+            if (node.triggers.length === 0)
+              fail(path, "an empty triggers list");
+            ordered(`${path}.triggers`, node.triggers);
+            ordered(
+              `${path}.atoms+triggers`,
+              [...node.atoms, ...node.triggers].sort(
+                (a: Span, b: Span) => a.start - b.start,
+              ),
+            );
+          }
         }
     }
     for (const [key, value] of Object.entries(node)) {

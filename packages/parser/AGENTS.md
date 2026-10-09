@@ -24,9 +24,22 @@ state files and MX's own patches, so the rule asks every editor to change lines
 that are outside their task and that upstream owns. The exemption was requested
 by the repo's lead, who owns the tooling.
 
+## The syntax table (decision 182)
+
+`src/template/syntax.ts` holds `SyntaxTable` (plain data, no function field),
+`DEFAULT_SYNTAX` (the `.mx` row, today's grammar) and `validateSyntaxTable`;
+`createParser(handlers, { syntax })` and the front end's `parse(source, {
+…, syntax })` take a table (an invalid one is a `TypeError`). Triggers are
+armed in three positions (expression, attribute name, tagless concise line),
+announced through `onTrigger` and stood in by `read()` at the same length;
+the front end builds `MxTrigger` nodes (a type of this package, not of
+`@mxlang/babel/mx-ast`). Atoms and the `:name`/`#id`/`.class` sugars keep
+their own paths until they move onto the table. Nothing is lowered here.
+`src/template/PROVENANCE.md` lists every place the table touches.
+
 ## `src/frontend/` (the MX AST front end)
 
-- `parse(source, { statementKeywords, tagShape, base? })` builds the MX AST
+- `parse(source, { statementKeywords, tagShape, base?, syntax? })` builds the MX AST
   of `apps/docs/docs/architecture/ast.md` (one handler per row of its §7
   table); `lineColumnAt(document, offset)` gives 1-based line, 0-based column.
 - **Exported** as the package's second entry point since PR 3

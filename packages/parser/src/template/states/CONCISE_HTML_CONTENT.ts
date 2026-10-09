@@ -4,6 +4,7 @@ import {
   STATE,
   type StateDefinition,
 } from "../internal.ts";
+import { matchTrigger } from "../syntax.ts";
 import * as CODE from "../util/codes.ts";
 import * as ErrorCode from "../util/error-code.ts";
 import * as TagType from "../util/tag-type.ts";
@@ -147,6 +148,20 @@ export const CONCISE_HTML_CONTENT: StateDefinition = {
               );
               return;
           }
+      }
+
+      // MX (decision 182 addendum 1): a line trigger at a tagless line
+      // start. The default row has no trigger set.
+      if (this.syntax.line !== null) {
+        const hit = matchTrigger(this.syntax.line, data, this.pos);
+        if (hit) {
+          const line = this.enterState(STATE.LINE_TRIGGER);
+          line.trigger = hit.trigger;
+          line.text = { start: this.pos, end: hit.end };
+          line.fresh = this.recordTrigger(hit.trigger, this.pos, hit.end);
+          this.pos = hit.end;
+          return;
+        }
       }
 
       this.enterState(STATE.OPEN_TAG);

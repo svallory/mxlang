@@ -220,6 +220,26 @@ passes) and a line-shaped fuzz (`fuzzLineThrows`, seed 1, 5,000 inputs).
 A 500,000-input sweep (token seeds 1 to 50 and line seeds 1001 to 1050,
 5,000 each) throws 0 times on this copy and both dist builds.
 
+## The syntax table (decision 182)
+
+MX's own, not in the patched npm build: `createParser(handlers, { syntax })`
+reads a `SyntaxTable` (`syntax.ts`, plain data, validated and compiled once
+per table object). `DEFAULT_SYNTAX`, the default, compiles to no trigger
+sets, so every check below is one `null` test and the event stream is the
+npm build's (`corpus-equivalence.test.ts` still pins that). Atoms keep their
+decision-156 path; the triggers are built beside it.
+
+| Source location | What changed |
+|---|---|
+| `syntax.ts` (new) | `SyntaxTable`, `Trigger`, `DEFAULT_SYNTAX`, `validateSyntaxTable`, `compileSyntax` (per-list 128-entry first-character table plus a non-ASCII list, sticky `u` matchers), `matchTrigger`, `standInText` |
+| `core/Parser.ts` | `syntax` (compiled table, a constructor argument), `triggers` and `lastTriggerStart`; `recordTrigger`; `read` goes through `standIn`, the merge of atom and trigger stand-ins, when a trigger was lexed (`standInAtoms` otherwise, unchanged) |
+| `index.ts` | `createParser`'s second argument; exports `DEFAULT_SYNTAX`, `validateSyntaxTable` and the table types |
+| `util/constants.ts` | `onTrigger` and `Ranges.Trigger` |
+| `states/EXPRESSION.ts` | `lexTrigger`, before the word fast path in expressions that lex atoms, where `expectsExpression` holds (never inside a word, never continuing a punctuator of the same character); a trigger's end is recorded in `atomEnd` (its text is an operand, never a keyword); `checkForOperators` ends an attribute value at a space then a `terminatesValue` attribute trigger; the EOF message of a trigger value |
+| `states/ATTRIBUTE.ts`, `states/attr-stage.ts` | `lexAttrTrigger` at a name's first character, an optional `=value` (stage `TRIGGER_VALUE`), `endsAttrTriggerAt`; the value-entry code factored into `enterAttrValue`, used by both |
+| `states/CONCISE_HTML_CONTENT.ts`, `states/LINE_TRIGGER.ts` (new), `states/index.ts` | a line trigger at a tagless concise line start, its optional `=value` (a concise attribute value), nothing but whitespace after it |
+| `__tests__/base-offset.test.ts` | `onTrigger` is a table-only handler: declared, never fired by either default-row source |
+
 ## Tests
 
 - `__tests__/` (upstream, above), via `upstream-suite.test.ts`.
@@ -227,6 +247,10 @@ A 500,000-input sweep (token seeds 1 to 50 and line seeds 1001 to 1050,
   source (vitest).
 - `mx-atoms.test.ts`: atom lexing, from the case table in `mx-atoms.cases.ts`,
   which `patches/htmljs-parser.test.ts` runs against both npm builds too.
+- `mx-triggers.test.ts`: the syntax table: the `&` member row in all three
+  positions, other trigger shapes, `terminatesValue`, `read()` through
+  stand-ins, one negative case per validation rule, and the default row's
+  event-stream parity over the grammar corpus.
 - `corpus-equivalence.test.ts`: event streams of this copy against the patched
   npm build over every tracked `.mx`, `.marko` and `.amx` file and every `mx` /
   `marko` Markdown fence (`onAtom` included); and that the only atoms in that

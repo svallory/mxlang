@@ -14,6 +14,7 @@ import {
   wordWidthAt,
   wordWidthBefore,
 } from "../internal.ts";
+import { type CompiledTrigger, matchTrigger } from "../syntax.ts";
 import * as CODE from "../util/codes.ts";
 import * as ErrorCode from "../util/error-code.ts";
 import { rejectReservedName } from "./EXPRESSION.ts";
@@ -32,6 +33,11 @@ export interface AttrMeta extends Meta {
   async: undefined | Range;
   /** Range of an `async` keyword already confirmed to modify a method. */
   asyncMethod: undefined | Range;
+  /**
+   * MX (decision 182): the attribute trigger this attribute is, its matched
+   * text, and whether it is announced (false on a re-lex).
+   */
+  trigger: undefined | { trigger: CompiledTrigger; text: Range; fresh: boolean };
 }
 
 // We enter STATE.ATTRIBUTE when we see a non-whitespace
@@ -54,6 +60,7 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
       spread: false,
       async: undefined,
       asyncMethod: undefined,
+      trigger: undefined,
     });
   },
 
@@ -114,20 +121,8 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
         }
 
         attr.stage = ATTR_STAGE.VALUE;
-        const expr = this.enterState(STATE.EXPRESSION);
         // MX: a default attribute (no name) is exempt from the after-value rule.
-        expr.attrValue = !!(attr.name || attr.spread);
-        // MX (decision 146 addendum 5): except that a single-atom default
-        // value is followed by name sugar.
-        expr.defaultAtom = !expr.attrValue;
-        expr.atoms = true; // MX: decision 156
-        expr.operators = true;
-        expr.terminatedByWhitespace = true;
-        expr.shouldTerminate = this.isConcise
-          ? this.activeTag!.stage === TAG_STAGE.ATTR_GROUP
-            ? shouldTerminateConciseGroupedAttrValue
-            : shouldTerminateConciseAttrValue
-          : shouldTerminateHtmlAttrValue;
+        enterAttrValue(this, !!(attr.name || attr.spread));
         return;
       } else if (code === CODE.OPEN_PAREN) {
         // With a pending `async` the name is emitted once we know whether this
@@ -178,6 +173,16 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
             ErrorCode.INVALID_ATTRIBUTE_NAME,
             'Invalid attribute name. Attribute name cannot begin with the "<" character.',
           );
+        }
+
+        // MX (decision 182): an attribute trigger, armed by the name's
+        // first character. The default row has no trigger set.
+        if (
+          this.syntax.attribute !== null &&
+          !attr.name &&
+          lexAttrTrigger(this, attr, data)
+        ) {
+          return;
         }
 
         attr.stage = ATTR_STAGE.NAME;
@@ -349,6 +354,24 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
         break;
       }
 
+      case ATTR_STAGE.TRIGGER_VALUE: {
+        if (child.start === child.end) {
+          return this.emitError(
+            child,
+            ErrorCode.INVALID_ATTRIBUTE_VALUE,
+            "Missing value for attribute",
+          );
+        }
+
+        if (!this.isConcise && detectAmbiguousCloseAngleBracket(this, child)) {
+          return;
+        }
+
+        announceAttrTrigger(this, attr, { start: child.start, end: child.end });
+        this.exitState();
+        break;
+      }
+
       case ATTR_STAGE.VALUE: {
         if (child.start === child.end) {
           return this.emitError(
@@ -389,6 +412,106 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
     }
   },
 };
+
+/**
+ * Enters an attribute value's `EXPRESSION` at the current position.
+ * `attrValue` (MX) arms the after-value rule; without it, decision 146
+ * addendum 5's single-atom default value still is followed by name sugar.
+ */
+function enterAttrValue(parser: Parser, attrValue: boolean) {
+  const expr = parser.enterState(STATE.EXPRESSION);
+  expr.attrValue = attrValue;
+  expr.defaultAtom = !attrValue;
+  expr.atoms = true; // MX: decision 156
+  expr.operators = true;
+  expr.terminatedByWhitespace = true;
+  expr.shouldTerminate = parser.isConcise
+    ? parser.activeTag!.stage === TAG_STAGE.ATTR_GROUP
+      ? shouldTerminateConciseGroupedAttrValue
+      : shouldTerminateConciseAttrValue
+    : shouldTerminateHtmlAttrValue;
+}
+
+/**
+ * MX (decision 182): at an attribute name's first character, lexes an
+ * attribute trigger when its matcher matches. The match is the whole name;
+ * `=` after it starts a value lexed exactly as a named attribute's, anything
+ * but the end of the name (whitespace, `,`, the end of the tag or line) is
+ * an error. Returns whether it consumed the trigger.
+ */
+function lexAttrTrigger(parser: Parser, attr: AttrMeta, data: string) {
+  const start = parser.pos;
+  const hit = matchTrigger(parser.syntax.attribute!, data, start);
+  if (!hit) return false;
+  flushPendingAsync(parser, attr);
+  const { trigger, end } = hit;
+  attr.trigger = {
+    trigger,
+    text: { start, end },
+    fresh: parser.recordTrigger(trigger, start, end),
+  };
+  parser.pos = end;
+
+  if (data.charCodeAt(end) === CODE.EQUAL) {
+    attr.valueStart = end;
+    attr.stage = ATTR_STAGE.TRIGGER_VALUE;
+    parser.pos++; // skip =
+    parser.consumeWhitespace();
+    enterAttrValue(parser, true);
+    return true;
+  }
+
+  if (!endsAttrTriggerAt(parser, data, end)) {
+    parser.emitError(
+      { start, end: end + 1 },
+      ErrorCode.INVALID_ATTRIBUTE_NAME,
+      `Invalid attribute name. The "${trigger.id}" trigger "${data.slice(start, end)}" must be followed by whitespace, "=" or the end of the tag.`,
+    );
+    return true;
+  }
+
+  announceAttrTrigger(parser, attr, undefined);
+  parser.exitState();
+  return true;
+}
+
+/** Whether an attribute trigger's text may end at `pos`: whitespace, `,`, EOF, or the end of the tag, line or attribute group. */
+function endsAttrTriggerAt(parser: Parser, data: string, pos: number) {
+  const code = data.charCodeAt(pos);
+  if (code !== code || isWhitespaceCode(code) || code === CODE.COMMA) {
+    return true;
+  }
+  if (parser.isConcise) {
+    return (
+      code === CODE.SEMICOLON ||
+      (code === CODE.CLOSE_SQUARE_BRACKET &&
+        parser.activeTag!.stage === TAG_STAGE.ATTR_GROUP)
+    );
+  }
+  return (
+    code === CODE.CLOSE_ANGLE_BRACKET ||
+    (code === CODE.FORWARD_SLASH &&
+      data.charCodeAt(pos + 1) === CODE.CLOSE_ANGLE_BRACKET)
+  );
+}
+
+function announceAttrTrigger(
+  parser: Parser,
+  attr: AttrMeta,
+  value: Range | undefined,
+) {
+  const { trigger, text, fresh } = attr.trigger!;
+  if (!fresh) return;
+  parser.options.onTrigger?.({
+    id: trigger.id,
+    position: "attribute",
+    standIn: trigger.standIn,
+    start: text.start,
+    end: value ? value.end : text.end,
+    text,
+    ...(value && { value }),
+  });
+}
 
 /**
  * In HTML mode a ">" after an unenclosed attribute always ends the tag, but a

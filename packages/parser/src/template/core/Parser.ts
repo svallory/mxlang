@@ -8,6 +8,12 @@ import {
   type Range,
   STATE,
 } from "../internal.ts";
+import {
+  type CompiledSyntax,
+  type CompiledTrigger,
+  DEFAULT_COMPILED,
+  standInText,
+} from "../syntax.ts";
 import * as CODE from "../util/codes.ts";
 import * as TagType from "../util/tag-type.ts";
 
@@ -50,6 +56,23 @@ export interface StateDefinition<P extends Meta = Meta> {
   return: (this: Parser, child: Meta, activeRange: P) => void;
 }
 
+/** MX (decision 182): a lexed trigger's span and the stand-in `read` gives it. */
+export interface TriggerSpan extends Range {
+  standIn: "number" | "identifier";
+}
+
+/** The index of the first span of a sorted list starting at or after `start` (binary search). */
+function firstAtOrAfter(spans: Range[], start: number) {
+  let lo = 0;
+  let hi = spans.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (spans[mid]!.start < start) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
 export class Parser {
   declare public pos: number;
   declare public maxPos: number;
@@ -74,9 +97,23 @@ export class Parser {
    * a mixed tag name's template (`<foo-${:a}>`) included, gets stand-ins.
    */
   declare public rawOpenTags: Map<number, number>;
+  /**
+   * MX (decision 182): the syntax table's compiled triggers. The default row
+   * compiles to no sets, so every check is one `null` test.
+   */
+  declare public syntax: CompiledSyntax;
+  /**
+   * MX (decision 182): the span and stand-in of every trigger lexed so far
+   * whose stand-in is not `"keep"`, in source order. Disjoint from `atoms`:
+   * neither is lexed inside the other.
+   */
+  declare public triggers: TriggerSpan[];
+  /** MX (decision 182): where the last trigger lexed starts (-1: none). */
+  declare public lastTriggerStart: number;
 
-  constructor(options: Options) {
+  constructor(options: Options, syntax: CompiledSyntax = DEFAULT_COMPILED) {
     this.options = options;
+    this.syntax = syntax;
   }
 
   declare public startOffset: number;
@@ -85,7 +122,60 @@ export class Parser {
 
   read(range: Range) {
     const text = this.data.slice(range.start, range.end);
+    if (this.triggers.length) return this.standIn(text, range);
     return this.atoms.length ? this.standInAtoms(text, range) : text;
+  }
+
+  /**
+   * MX (decision 182): `standInAtoms` generalised to triggers. `text` (the
+   * source of `range`) with every atom and every trigger that lies wholly
+   * inside `range` replaced by its same-length stand-in (`standInText`), so
+   * a sub-parser reads it at the authored offsets. The same raw open tag
+   * rule applies; a partly covered span reads the source.
+   */
+  standIn(text: string, range: Range) {
+    if (this.rawOpenTags.get(range.start) === range.end) return text;
+    const { atoms, triggers } = this;
+    let a = firstAtOrAfter(atoms, range.start);
+    let t = firstAtOrAfter(triggers, range.start);
+    let out = "";
+    let last = range.start;
+    for (;;) {
+      const atom = atoms[a];
+      const trigger = triggers[t];
+      let next: Range | undefined;
+      let replacement: string;
+      if (atom && (!trigger || atom.start < trigger.start)) {
+        next = atom;
+        replacement = standInText("number", ":".repeat(atom.end - atom.start));
+        a++;
+      } else if (trigger) {
+        next = trigger;
+        replacement = standInText(
+          trigger.standIn,
+          this.data.slice(trigger.start, trigger.end),
+        );
+        t++;
+      } else break;
+      if (next.end > range.end) break;
+      out += this.data.slice(last, next.start) + replacement;
+      last = next.end;
+    }
+    return last === range.start ? text : out + this.data.slice(last, range.end);
+  }
+
+  /**
+   * MX (decision 182): records a lexed trigger's span for `read` (unless its
+   * stand-in is `"keep"`). Returns false for a trigger already recorded: a
+   * re-lex never records or announces one twice, as for atoms.
+   */
+  recordTrigger(trigger: CompiledTrigger, start: number, end: number) {
+    if (start <= this.lastTriggerStart) return false;
+    this.lastTriggerStart = start;
+    if (trigger.standIn !== "keep") {
+      this.triggers.push({ start, end, standIn: trigger.standIn });
+    }
+    return true;
   }
 
   /**
@@ -395,6 +485,8 @@ export class Parser {
     this.beginMixedMode = this.endingMixedModeAtEOL = false;
     this.lines = this.activeTag = this.activeAttr = undefined;
     this.atoms = [];
+    this.triggers = [];
+    this.lastTriggerStart = -1;
     this.rawOpenTags = new Map();
     // Drop any state left over from a previous parse so reusing a parser
     // does not chain (and retain) the old state metas via parent references.

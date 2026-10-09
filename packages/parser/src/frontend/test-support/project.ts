@@ -69,9 +69,18 @@ export function projectChild(node: Node, depth: number, out: string[]): void {
         `${pad}${node.type.slice(2).toLowerCase()} ${r(node)} value=${q(node.value)}`,
       );
       return;
+    case "MxTrigger":
+      out.push(`${pad}${triggerLine(node)}`);
+      return;
     default:
       out.push(`${pad}unknown ${node.type}`);
   }
+}
+
+/** A syntax-table trigger (decision 182) in a body or an attribute list. */
+function triggerLine(node: Node): string {
+  const value = node.value ? ` = value ${expr(node.value)}` : "";
+  return `trigger ${node.id} ${q(node.text)} ${r(node)}${value}`;
 }
 
 function tagName(node: Node): string {
@@ -119,6 +128,9 @@ function projectHead(node: Node, depth: number, out: string[]): void {
         break;
       case "MxComment":
         out.push(`${pad}comment ${item.kind} ${r(item)}`);
+        break;
+      case "MxTrigger":
+        out.push(`${pad}${triggerLine(item)}`);
         break;
       default: {
         const name = item.name === null ? "default" : q(item.name);
