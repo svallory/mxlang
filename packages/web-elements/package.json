@@ -1,0 +1,44 @@
+{
+  "name": "@mxlang/web-elements",
+  "version": "0.1.0-alpha.14",
+  "description": "The HTML, SVG and MathML element names and their body parse modes, as plain data",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/svallory/mxlang",
+    "directory": "packages/web-elements"
+  },
+  "keywords": [
+    "mx",
+    "html",
+    "svg",
+    "mathml",
+    "elements"
+  ],
+  "type": "module",
+  "engines": {
+    "node": ">=22.18",
+    "bun": ">=1.3"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  }
+}

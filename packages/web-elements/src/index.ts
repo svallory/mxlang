@@ -1,12 +1,14 @@
 /**
- * The HTML, SVG and MathML elements this target renders as plain elements.
+ * The HTML, SVG and MathML elements, and how each one's body parses.
  *
- * Nothing here is looked up through Marko at run time: the table is this
- * package's own, so classifying a tag does not depend on `@marko/compiler`'s
- * taglib registry. `element-table.test.ts` pins each list equal to Marko's
- * `marko-html`, `marko-svg` and `marko-math` taglibs (`@marko/compiler`
- * 5.42.11, a dev dependency), so a Marko bump that adds or drops an element
- * fails that test instead of silently changing what an element is.
+ * This is plain data with no dependency: a target or host that renders web
+ * elements reads it, and passes it to `@mxlang/core` through its own
+ * declarations, so core itself names no element. The lists equal Marko's
+ * `marko-html`, `marko-svg` and `marko-math` taglibs and the body modes equal
+ * their parse rules (`@marko/compiler` 5.42.11);
+ * `packages/stock-marko/src/web-elements.test.ts` pins both, so a Marko bump
+ * that adds or drops an element, or changes a rule, fails there instead of
+ * silently changing what an element is.
  */
 
 /** HTML elements (Marko's `marko-html` taglib). */
@@ -234,13 +236,83 @@ export const MATHML_ELEMENTS: readonly string[] = [
   "none",
 ];
 
-const ELEMENTS: ReadonlySet<string> = new Set([
-  ...HTML_ELEMENTS,
-  ...SVG_ELEMENTS,
-  ...MATHML_ELEMENTS,
+/** The namespace a web element belongs to. */
+export type WebNamespace = "html" | "svg" | "mathml";
+
+/**
+ * How a tag's body parses: `"html"` is ordinary markup; `"void"` takes no
+ * body or closing tag; `"parsed-text"` is text with placeholders (no tags);
+ * `"preserve"` keeps whitespace as written; `"parsed-text-preserve"` is both.
+ * The same names as `@mxlang/core`'s body modes.
+ */
+export type WebBodyMode =
+  | "html"
+  | "parsed-text"
+  | "preserve"
+  | "parsed-text-preserve"
+  | "void";
+
+/** One web element: its namespace and how its body parses. */
+export interface WebElement {
+  readonly namespace: WebNamespace;
+  readonly body: WebBodyMode;
+}
+
+/** The elements whose body is not `"html"`, with their mode. */
+const BODY_MODES: Readonly<Record<string, WebBodyMode>> = {
+  area: "void",
+  base: "void",
+  br: "void",
+  col: "void",
+  embed: "void",
+  hr: "void",
+  img: "void",
+  input: "void",
+  link: "void",
+  meta: "void",
+  param: "void",
+  source: "void",
+  track: "void",
+  wbr: "void",
+  pre: "preserve",
+  script: "parsed-text-preserve",
+  style: "parsed-text-preserve",
+  textarea: "parsed-text-preserve",
+  title: "parsed-text",
+};
+
+function entries(
+  names: readonly string[],
+  namespace: WebNamespace,
+): [string, WebElement][] {
+  return names.map((name) => [
+    name,
+    Object.freeze({
+      namespace,
+      body: Object.hasOwn(BODY_MODES, name)
+        ? (BODY_MODES[name] as WebBodyMode)
+        : "html",
+    }),
+  ]);
+}
+
+/**
+ * Every web element by name. The three lists are disjoint, as Marko's are,
+ * so a name has one namespace and one body mode: a name SVG shares with HTML
+ * (`a`, `script`, `style`, `title`) is listed once, under HTML.
+ */
+export const WEB_ELEMENTS: ReadonlyMap<string, WebElement> = new Map([
+  ...entries(HTML_ELEMENTS, "html"),
+  ...entries(SVG_ELEMENTS, "svg"),
+  ...entries(MATHML_ELEMENTS, "mathml"),
 ]);
 
 /** Whether `name` is an HTML, SVG or MathML element (exact, case-sensitive match). */
-export function isKnownElement(name: string): boolean {
-  return ELEMENTS.has(name);
+export function isWebElement(name: string): boolean {
+  return WEB_ELEMENTS.has(name);
+}
+
+/** The element named `name`, or `undefined` when it is not a web element. */
+export function webElement(name: string): WebElement | undefined {
+  return WEB_ELEMENTS.get(name);
 }

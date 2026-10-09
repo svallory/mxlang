@@ -55,12 +55,13 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:bun": "bun --tsconfig-override=../../../tsconfig.base.json test src/bun.test.ts src/helpers.bun.test.ts src/example.bun.test.ts src/marko-tags.bun.test.ts src/contracts.bun.test.ts",
-    "build": "rm -rf dist && bun build src/index.ts src/bun.ts src/descriptor.ts src/runtime.ts --outdir dist --target node --format esm --external @babel/parser --external @marko/compiler --external @mxlang/core && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
+    "build": "rm -rf dist && bun build src/index.ts src/bun.ts src/descriptor.ts src/runtime.ts --outdir dist --target node --format esm --external @babel/parser --external @mxlang/web-elements --external @mxlang/core && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
     "example": "bun src/example.ts"
   },
   "dependencies": {
     "@babel/parser": "7.29.8",
-    "@mxlang/core": "workspace:*"
+    "@mxlang/core": "workspace:*",
+    "@mxlang/web-elements": "workspace:*"
   },
   "peerDependencies": {
     "@types/bun": ">=1.3"
@@ -71,7 +72,6 @@
     }
   },
   "devDependencies": {
-    "@marko/compiler": "5.42.11",
     "@types/bun": "1.4.2"
   }
 }

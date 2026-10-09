@@ -110,6 +110,12 @@ console.log(
 );
 const coreTarballPath = packTarball(coreDir);
 console.log(`[consumer-check] packed: ${coreTarballPath}`);
+// `@mxlang/web-elements` (the element table `translate.ts` reads) is a
+// runtime dependency too, and not on the registry yet either.
+const webElementsDir = join(pkgDir, "..", "..", "web-elements");
+console.log("[consumer-check] packing @mxlang/web-elements...");
+const webElementsTarballPath = packTarball(webElementsDir);
+console.log(`[consumer-check] packed: ${webElementsTarballPath}`);
 
 const scratchDir = mkdtempSync(join(tmpdir(), "consumer-check-"));
 console.log(`[consumer-check] scratch project: ${scratchDir}`);
@@ -131,6 +137,7 @@ try {
         type: "module",
         overrides: {
           "@mxlang/core": `file:${coreTarballPath}`,
+          "@mxlang/web-elements": `file:${webElementsTarballPath}`,
         },
       },
       null,
@@ -216,7 +223,8 @@ try {
   rmSync(scratchDir, { recursive: true, force: true });
   rmSync(tarballPath, { force: true });
   rmSync(coreTarballPath, { force: true });
+  rmSync(webElementsTarballPath, { force: true });
   console.log(
-    `[consumer-check] cleaned up ${scratchDir}, ${tarballPath}, ${coreTarballPath}`,
+    `[consumer-check] cleaned up ${scratchDir}, ${tarballPath}, ${coreTarballPath}, ${webElementsTarballPath}`,
   );
 }

@@ -63,6 +63,14 @@ const tsc = join(repoRoot, "node_modules/.bin/tsc");
  * `main` is `src/*.ts`, which no consumer could load). Named, not silent.
  */
 const PACK_PRIVATE = ["@mxlang/core", "@mxlang/tsx-bridge"];
+/**
+ * Publishable packages that are not on the registry yet but are transitive
+ * runtime deps of a probed root (`@mxlang/html` imports
+ * `@mxlang/web-elements`, and html is under the language server and
+ * `@mxlang/tsc`), so every consumer pins them to their tarball like
+ * `PACK_PRIVATE`.
+ */
+const PACK_UNPUBLISHED = ["@mxlang/web-elements"];
 const STUB_PRIVATE = [
   "@mxlang/hono",
   "@mxlang/preact",
@@ -240,7 +248,7 @@ function makeConsumer(opts: ConsumerOptions): string {
   mkdirSync(dir, { recursive: true });
   const rootPkg = readPackageJson(workspaceDirs[opts.root] as string);
   const overrides: Record<string, string> = {};
-  for (const name of PACK_PRIVATE) {
+  for (const name of [...PACK_PRIVATE, ...PACK_UNPUBLISHED]) {
     overrides[name] = `file:${tarballOf(name, workspaceDirs[name] as string)}`;
   }
   // `@mxlang/html` is a dep of the language server: a real tarball.

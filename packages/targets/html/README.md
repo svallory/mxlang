@@ -67,7 +67,7 @@ export default Greeting;
 
 Marko's syntax is the default: MX parses `.mx` with its own front end, and
 where MX has no ruling of its own the answer is Marko's. Its element knowledge
-(HTML, SVG, MathML) is this target's own element table, built to match Marko's;
+(HTML, SVG, MathML) is MX's own element table, `@mxlang/web-elements`, built to match Marko's;
 attribute tags and component calls follow Marko's conventions; and the oracle
 compares this target's output with Marko's own server render, so the bytes
 agree wherever the two languages overlap. What is different is listed in `divergences.md` in the
@@ -319,7 +319,7 @@ just outside `strict`): the explicit-import requirement (Marko's taglib +
 `tags/` discovery works in both policies), the `export interface Input`
 requirement (already optional — Marko allows arbitrary TS), `<fragment>`
 (Marko templates and bodies are multi-root already), and lowercase-by-scope
-tag resolution (replaced by this target's own element table).
+tag resolution (replaced by MX's own element table, `@mxlang/web-elements`).
 
 ## What this proves
 
@@ -463,7 +463,7 @@ of renderables, matching Marko's own server render (verified against Marko
 5.42.5, not assumed). Ordinary children become `input.content`. Component
 resolution goes through Marko's taglib lookup: an `import`, a `<define>`, or
 a `tags/`-discovered `.mx` template. An unknown lowercase tag resolves through
-this target's own element table (HTML, SVG, MathML), and a plain `<!-- -->` comment is
+MX's own element table (`@mxlang/web-elements`: HTML, SVG, MathML), and a plain `<!-- -->` comment is
 stripped, because Marko strips it.
 
 The retired `.mx` dialect (decision 68) made different choices here —

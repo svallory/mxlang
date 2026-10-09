@@ -19,6 +19,7 @@ export default defineConfig({
       "packages/stock-marko",
       "packages/tsx-bridge",
       "packages/target-registry",
+      "packages/web-elements",
       "packages/hosts/*",
       "packages/targets/*",
       "packages/tooling/*",

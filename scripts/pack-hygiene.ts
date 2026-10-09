@@ -78,6 +78,13 @@ export const PACKED_PACKAGES: PackedPackage[] = [
     declarations: true,
   },
   {
+    name: "@mxlang/web-elements",
+    dir: "packages/web-elements",
+    extraTopLevel: [],
+    distFiles: ["dist/index.d.ts", "dist/index.js"],
+    declarations: true,
+  },
+  {
     name: "@mxlang/data",
     dir: "packages/targets/data",
     extraTopLevel: [],
@@ -100,7 +107,6 @@ export const PACKED_PACKAGES: PackedPackage[] = [
       "dist/default-tag.d.ts",
       "dist/descriptor.d.ts",
       "dist/descriptor.js",
-      "dist/element-table.d.ts",
       "dist/emitter.d.ts",
       "dist/helpers.d.ts",
       "dist/index.d.ts",

@@ -489,6 +489,7 @@
       },
       "devDependencies": {
         "@mxlang/parser": "workspace:*",
+        "@mxlang/web-elements": "workspace:*",
         "@types/bun": "1.4.2",
       },
     },
@@ -521,9 +522,9 @@
       "dependencies": {
         "@babel/parser": "7.29.8",
         "@mxlang/core": "workspace:*",
+        "@mxlang/web-elements": "workspace:*",
       },
       "devDependencies": {
-        "@marko/compiler": "5.42.11",
         "@types/bun": "1.4.2",
       },
       "peerDependencies": {
@@ -664,6 +665,10 @@
         "@types/bun": "1.4.2",
         "htmljs-parser": "5.18.0",
       },
+    },
+    "packages/web-elements": {
+      "name": "@mxlang/web-elements",
+      "version": "0.1.0-alpha.14",
     },
   },
   "patchedDependencies": {
@@ -1211,6 +1216,8 @@
     "@mxlang/typescript-plugin": ["@mxlang/typescript-plugin@workspace:packages/tooling/typescript-plugin"],
 
     "@mxlang/vite-plugin": ["@mxlang/vite-plugin@workspace:packages/tooling/vite-plugin"],
+
+    "@mxlang/web-elements": ["@mxlang/web-elements@workspace:packages/web-elements"],
 
     "@mxlang/zed": ["@mxlang/zed@workspace:packages/editors/zed"],
 

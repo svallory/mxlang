@@ -17,6 +17,7 @@
   },
   "devDependencies": {
     "@mxlang/parser": "workspace:*",
+    "@mxlang/web-elements": "workspace:*",
     "@types/bun": "1.4.2"
   }
 }

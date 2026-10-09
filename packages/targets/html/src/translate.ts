@@ -47,7 +47,8 @@ import {
   sliceLoc,
   unresolvedCustomTagMessage,
 } from "@mxlang/core";
-import { isKnownElement } from "./element-table.ts";
+
+import { isWebElement } from "@mxlang/web-elements";
 
 export { TranslateError } from "@mxlang/core";
 
@@ -193,10 +194,9 @@ export function escapeComment(text: string): string {
 }
 
 /**
- * Whether a tag name is an element, per this package's own element table
- * (`element-table.ts`: the HTML, SVG and MathML elements Marko's `marko-html`,
- * `marko-svg` and `marko-math` taglibs define, pinned equal by
- * `element-table.test.ts`).
+ * Whether a tag name is an element, per `@mxlang/web-elements` (the HTML, SVG
+ * and MathML elements Marko's `marko-html`, `marko-svg` and `marko-math`
+ * taglibs define, pinned equal by `packages/stock-marko/src/web-elements.test.ts`).
  *
  * A hyphenated name is only a *custom* element when Marko's own taglib lookup
  * actually resolves it — real Marko errors on an unresolved one ("Unable to
@@ -209,7 +209,7 @@ export function escapeComment(text: string): string {
  * element nor (unless discovered) a component.
  */
 function isElement(name: string, _ctx: Ctx): boolean {
-  return isKnownElement(name);
+  return isWebElement(name);
 }
 
 /**
@@ -235,7 +235,7 @@ function isElement(name: string, _ctx: Ctx): boolean {
  */
 function isComponent(name: string, ctx: Ctx): boolean {
   if (ctx.defines.has(name) || ctx.imports.has(name)) return true;
-  if (isKnownElement(name)) return false;
+  if (isWebElement(name)) return false;
   const taglibId = ctx.lookup?.getTag(name)?.taglibId;
   if (taglibId === undefined) return false;
   return taglibId !== "mx-translator-core";
@@ -257,7 +257,7 @@ function resolveDiscoveredTagModule(
   if (ctx.defines.has(name) || ctx.imports.has(name)) return undefined;
   const tag = ctx.lookup?.getTag(name);
   if (tag?.taglibId === undefined) return undefined;
-  if (isKnownElement(name) || tag.taglibId === "mx-translator-core") {
+  if (isWebElement(name) || tag.taglibId === "mx-translator-core") {
     return undefined;
   }
   return tag.template;
