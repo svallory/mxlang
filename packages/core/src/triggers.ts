@@ -219,9 +219,83 @@ function spanOf(trigger: Node): SourceSpan {
   };
 }
 
-function describeNode(node: unknown): string {
-  const type = (node as Node)?.type;
-  return typeof type === "string" ? `a \`${type}\`` : String(node);
+/** `a`/`an` and the backticked name: "an `Identifier`", "a `MemberExpression`". */
+function named(type: string): string {
+  return `${/^[aeiou]/i.test(type) ? "an" : "a"} \`${type}\``;
+}
+
+/** What a non-node value is, for a message: "`undefined`", "a string", "an object with no `type`". */
+function describeValue(value: unknown): string {
+  if (value === null || value === undefined) return `\`${value}\``;
+  if (Array.isArray(value)) return "an array";
+  if (typeof value === "object") return "an object with no `type`";
+  return named(typeof value).replace(/`/g, "");
+}
+
+/**
+ * Why `value` is not a Babel expression node core can place and print, or
+ * `undefined` when it is one: an expression type, every field valid by
+ * Babel's own validators, all the way down. A field Babel defaults
+ * (`computed: false`) may be left out, as its builders allow; a required
+ * one (`Identifier.name`) may not.
+ */
+function notAnExpression(value: unknown): string | undefined {
+  const t = markoBabel().types;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return describeValue(value);
+  }
+  const type = (value as Node).type;
+  if (typeof type !== "string") return describeValue(value);
+  if (!t.isExpression(value)) return named(type);
+  const seen = new Set<object>();
+  const check = (node: Node): string | undefined => {
+    if (seen.has(node)) return undefined;
+    seen.add(node);
+    const fields: Record<string, { default?: unknown }> | undefined =
+      t.NODE_FIELDS[node.type];
+    if (!fields) return `${named(node.type)}, which is not a Babel node type`;
+    for (const [key, field] of Object.entries(fields)) {
+      const fieldValue = node[key];
+      if (fieldValue === undefined && field.default != null) continue;
+      try {
+        t.validate(node, key, fieldValue);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return `${named(node.type)} whose \`${key}\` is invalid (${message})`;
+      }
+      for (const child of Array.isArray(fieldValue)
+        ? fieldValue
+        : [fieldValue]) {
+        if (
+          child &&
+          typeof child === "object" &&
+          typeof child.type === "string"
+        ) {
+          const problem = check(child);
+          if (problem) return problem;
+        }
+      }
+    }
+    return undefined;
+  };
+  return check(value as Node);
+}
+
+/**
+ * The printed text of a trigger's replacement, for the `code` splice. A
+ * node that passed `notAnExpression` prints; a printer failure still leaves
+ * positioned at the trigger, never as an unpositioned internal error.
+ */
+function printed(ctx: Ctx, node: Node, trigger: Node): string {
+  try {
+    return ctx.generate(node);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return fail(
+      `the \`${trigger.id}\` trigger's replacement does not print: ${message}`,
+      trigger,
+    );
+  }
 }
 
 /** The positioned error for a hook's result that does not fit its position. */
@@ -255,13 +329,10 @@ function callHook(
     position: trigger.position as TriggerPosition,
     value,
     expression(node: object): TriggerExpression {
-      if (
-        !node ||
-        typeof node !== "object" ||
-        !markoBabel().types.isExpression(node)
-      ) {
+      const problem = notAnExpression(node);
+      if (problem) {
         fail(
-          `the \`${trigger.id}\` trigger's \`lowerTrigger\`: \`ctx.expression\` takes a Babel expression node, got ${describeNode(node)}`,
+          `the \`${trigger.id}\` trigger's \`lowerTrigger\`: \`ctx.expression\` takes a Babel expression node, got ${problem}`,
           trigger,
         );
       }
@@ -434,12 +505,16 @@ function markedSite(container: Node, trigger: Node): Site | undefined {
     path.pop();
   };
   // A container's payload is a node, or a list: call arguments
-  // (`MxArguments`) and a method's or statement block's statements
-  // (`MxStatements`); a list's items sit in `container.node`.
+  // (`MxArguments`), a method's parameters (`MxParameterList`) and a
+  // method's or statement block's statements (`MxStatements`). A list's
+  // items sit in `container.node`, and the container heads the path, so
+  // `inBindingPosition` sees a parameter list as the parameters' parent.
   if (Array.isArray(root)) {
+    path.push({ node: container, key: "" });
     root.forEach((item, i) => {
       visit(item, container, "node", i);
     });
+    path.pop();
   } else visit(root, null, "", null);
   return found;
 }
@@ -490,6 +565,10 @@ function inBindingPosition(site: Site): boolean {
         return key === "id";
       case "CatchClause":
         return key === "param";
+      // A method's parameters (`x m(&a) {}`), reached through the pattern
+      // wrappers above; a default value's right side returned already.
+      case "MxParameterList":
+        return true;
       default:
         return FUNCTIONS.has(parent.type) && key === "params";
     }
@@ -606,7 +685,7 @@ function lowerExpressionTriggers(
     // string literal.
     run.splices.push({
       ...spanRange(trigger),
-      text: ctx.generate(replacement),
+      text: printed(ctx, replacement, trigger),
     });
     lowered.add(trigger);
   }
@@ -715,7 +794,7 @@ function attributeNode(ctx: Ctx, trigger: Node, attr: TriggerAttribute): Node {
     ctx.triggerSplices?.push({
       start: text.sourceStart,
       end: text.sourceEnd,
-      text: ctx.generate(node),
+      text: printed(ctx, node, trigger),
     });
     container = containerOf(ctx, node, text.sourceStart, text.sourceEnd);
   } else {

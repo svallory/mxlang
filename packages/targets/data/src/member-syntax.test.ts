@@ -252,6 +252,37 @@ describe("what is not a member", () => {
     );
   });
 
+  it.each([
+    ["x m(&a) {}\n", 4],
+    ["x m(&a = 1) {}\n", 4],
+    ["x m({ a: &a }) {}\n", 9],
+    ["x m([&a]) {}\n", 5],
+    ["x m(...&a) {}\n", 7],
+  ])(
+    "%j: a member in a method's parameters is refused (review 451 r2)",
+    (source, column) => {
+      expect(parse(source).diagnostics).toEqual([
+        expect.objectContaining({
+          severity: "error",
+          message:
+            "`&a` (the `member` trigger) cannot be declared: it lowers to an expression, and a parameter or declaration needs a plain name",
+          line: 1,
+          column,
+        }),
+      ]);
+    },
+  );
+
+  it("`x m(p = &a) {}`: a member as a parameter's default is an operand", () => {
+    const result = parse("x m(p = &a) {}\n");
+    expect(result.diagnostics).toEqual([]);
+    const [x] = tags(result.tree?.children ?? []);
+    const m = attrNamed(x as DataTag, "m");
+    expect(m.kind === "expression" && m.value.code).toBe(
+      "function (p = self.a) {}",
+    );
+  });
+
   it("`(&a) => 1` is refused: a member cannot be declared", () => {
     expect(parse("rule x=((&a) => 1)\n").diagnostics).toEqual([
       expect.objectContaining({

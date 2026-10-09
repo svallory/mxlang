@@ -400,19 +400,57 @@ describe("a hook's result is checked", () => {
     );
   });
 
-  it("`ctx.expression` refuses a node that is not an expression", () => {
-    const statement = moduleWith(rows, {
-      lowerTrigger: (_id, _text, _span, ctx) =>
+  it.each([
+    [
+      "a statement",
+      { type: "ExpressionStatement", expression: { type: "NullLiteral" } },
+      "an `ExpressionStatement`",
+    ],
+    [
+      "an identifier with no name (review 451 r2)",
+      { type: "Identifier" },
+      "an `Identifier` whose `name` is invalid (Property name expected type of string but got undefined)",
+    ],
+    [
+      "a member whose property has no name",
+      {
+        type: "MemberExpression",
+        object: { type: "Identifier", name: "self" },
+        property: { type: "Identifier" },
+      },
+      "an `Identifier` whose `name` is invalid (Property name expected type of string but got undefined)",
+    ],
+    ["an unknown type", { type: "Bogus" }, "a `Bogus`"],
+    ["an object with no type", {}, "an object with no `type`"],
+    ["undefined", undefined, "`undefined`"],
+    ["a string", "self.a", "a string"],
+  ])(
+    "`ctx.expression` refuses %s, positioned at the trigger",
+    (_, node, got) => {
+      const bad = moduleWith(rows, {
+        lowerTrigger: (_id, _text, _span, ctx) =>
+          ctx.expression(node as unknown as object),
+      });
+      const error = caught(() => irOf("rule x=&a\n", undefined, bad));
+      expect(error.message).toBe(
+        `the \`member\` trigger's \`lowerTrigger\`: \`ctx.expression\` takes a Babel expression node, got ${got}`,
+      );
+      expect([error.line, error.column]).toEqual([1, 7]);
+    },
+  );
+
+  it("`ctx.expression` accepts a node that leaves out a field Babel defaults", () => {
+    const lean = moduleWith(rows, {
+      lowerTrigger: (_id, text, _span, ctx) =>
         ctx.expression({
-          type: "ExpressionStatement",
-          expression: { type: "NullLiteral" },
+          type: "MemberExpression",
+          object: { type: "Identifier", name: "self" },
+          property: { type: "Identifier", name: text.slice(1) },
         }),
     });
-    expect(
-      caught(() => irOf("rule x=&a\n", undefined, statement)).message,
-    ).toBe(
-      "the `member` trigger's `lowerTrigger`: `ctx.expression` takes a Babel expression node, got a `ExpressionStatement`",
-    );
+    const [rule] = elements(irOf("rule x=(&a + 1)\n", undefined, lean).body);
+    const x = attr(rule as Element, "x");
+    expect(x.kind === "dynamic" && x.value.code).toBe("self.a + 1");
   });
 
   it("a module-built expression value prints into `code`", () => {
