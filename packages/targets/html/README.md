@@ -168,12 +168,12 @@ at the rate templates are actually edited.
 Decision 68 retired the old `.mx` dialect (required explicit imports,
 `<fragment>`, required `export interface Input`, lowercase-by-scope) — that
 dialect stays dead. Decision 72 re-establishes `.mx` as MX's own *identity*,
-not a revival of the dialect: MX 1.0 is a strict subset of Marko syntax with
-no conventions of its own layered on top, so every `.mx` file is also a
-valid `.marko` file with the same meaning — but the reverse is not true, and
-this package accepts only `.mx`: MX only supports the MX 1.0 subset, so
-treating an arbitrary `.marko` file as MX would silently claim support it
-does not have. `packages/mx-html` no longer exists. Its lowering core and its
+not a revival of the dialect. Under decision 172 Marko's syntax is the default
+where MX has no ruling of its own, and MX makes no subset or superset promise:
+the differences are listed in `divergences.md`, and some `.mx` files are not
+valid `.marko`. This package accepts only `.mx`: a `.marko` file is not an
+MX input (decision 172), and treating one as MX would silently claim support
+it does not have. `packages/mx-html` no longer exists. Its lowering core and its
 `escape` runtime passed through this package and now live in
 [`@mxlang/core`](../core/README.md), which every MX host shares; this package
 is the policy plus the HTML integrations.
@@ -231,8 +231,9 @@ loaders' example apps do this).
 
 ## Editor and formatter support for `.mx`
 
-No packages ship for these — MX 1.0 being a strict Marko subset (decision
-72) means Marko's own tooling already works by aliasing the extension:
+No packages ship for these. Marko's syntax is MX's default (decision 172), so
+Marko's own tooling works on most `.mx` files by aliasing the extension; a
+construct that only MX has (see `divergences.md`) is not understood by it:
 
 - **VS Code**: map `.mx` to the Marko language so the official Marko
   extension's syntax highlighting and language server apply:
@@ -329,15 +330,16 @@ Marko's `html` output *minus the runtime* is already a precompiled template
 language with typed TypeScript expressions and a language server — something
 Pug, Jinja, Handlebars and EJS never had.
 
-This package is that mode, working, on real Marko templates, without forking
-the compiler. The seam is `config.translator`: a translator that supplies only
-`translate` and its taglibs injects nothing else, so the emitted module's
+This package is that mode, working, on `.mx` templates written in Marko's
+syntax, without forking the compiler. The seam is `config.translator`: a
+translator that supplies only `translate` and its taglibs injects nothing else, so the emitted module's
 runtime surface is one `escape` import (plus, only when a template calls for
 it, an inlined `classValue`/`styleValue`/`renderDynamic` helper).
 
 The evidence is `bun run oracle:marko`'s table: every stock `.marko` fixture
 under `fixtures-marko/` rendered both through the real Marko 6 toolchain and
-through this translator, compared for semantic HTML equality.
+through this translator (the oracle compiles each fixture's source as `.mx`),
+compared for semantic HTML equality.
 
 ### Proposal draft
 
@@ -458,7 +460,7 @@ with `<${input.header}/>` — and a *repeated* `<@item>` becomes an **array**
 of renderables, matching Marko's own server render (verified against Marko
 5.42.5, not assumed). Ordinary children become `input.content`. Component
 resolution goes through Marko's taglib lookup: an `import`, a `<define>`, or
-a `tags/`-discovered `.marko` file. An unknown lowercase tag resolves through
+a `tags/`-discovered `.mx` template. An unknown lowercase tag resolves through
 Marko's own HTML/SVG/MathML registry, and a plain `<!-- -->` comment is
 stripped, because Marko strips it.
 
@@ -534,8 +536,9 @@ that nothing failed.
 
 ## Pins
 
-`@marko/compiler` 5.42.11 exactly, matching the rest of the repo. The core taglib
-(`CORE_TAGLIB`, `@mxlang/core`'s `taglib/core-tags.json`) declares the core tags' parse options (statement tags,
-control flow, `openTagOnly`, raw-text bodies) so the compiler parses stock
-Marko the same way it does for `marko/translator`; the HTML, SVG and MathML
-element taglibs load on their own.
+`@marko/compiler` 5.42.11 exactly, matching the rest of the repo. It supplies
+the taglib lookup and the printer; no template is parsed with it. The core
+taglib (`CORE_TAGLIB`, `@mxlang/core`'s `taglib/core-tags.json`) declares the
+core tags' parse options (statement tags, control flow, `openTagOnly`,
+raw-text bodies), which core hands the MX front end as each tag's shape; the
+HTML, SVG and MathML element taglibs load on their own.

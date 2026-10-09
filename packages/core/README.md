@@ -58,7 +58,7 @@ The tag hooks and IR node are named `isDelegatedTag`, `resolveDelegatedTag` and 
 
 `DYNAMIC_TAG` is the sentinel name `isDelegatedTag` receives for `<${expr}/>`;
 match against the exported constant rather than retyping it. A bare
-`${expr}` placeholder and `<${expr}/>` parse to the identical Marko node (no
+`${expr}` placeholder and `<${expr}/>` lower to the identical node (no
 attrs, no body), so `isDelegatedTag`'s third argument carries `"bare"` or
 `"tagged"` — `"bare"` only for the no-attrs-no-body shape, `"tagged"`
 otherwise — letting a host opt out of claiming the bare shape and leave it to
@@ -135,8 +135,9 @@ It is a **subpath export of `@marko/compiler`**, declared in that package's own
 not a semver-stable API. Three reasons that is the right trade here rather than a
 second Babel dependency:
 
-- **The nodes already belong to that instance.** Marko parses with its own
-  bundled Babel and registers `MarkoTag` and friends on it; `traverse` from any
+- **The nodes already belong to that instance.** Marko's compiler uses its own
+  bundled Babel and registers `MarkoTag` and friends on it, and the Marko-shaped
+  views the host hooks receive belong to it; `traverse` from any
   *other* `@babel/traverse` refuses a visitor for those types outright, because
   it snapshots `TYPES` at module load (measured in
   `notes/research/marko-seam-spikes.md` spike 2 — registering Marko's types on a
@@ -152,8 +153,8 @@ second Babel dependency:
   real dependencies buys a second copy of Babel, a second version to keep in
   step, and the cross-instance problem above. `@mxlang/html` used to reach
   for `@mxlang/tsx-bridge` (the *Solid parser* package, a vendored `@babel/parser`
-  fork) for exactly one `parse` call; dropping that is what leaves this package
-  with a single dependency.
+  fork) for exactly one `parse` call; dropping that left core with `@babel/parser` as its only runtime
+  dependency.
 
 If a future `@marko/compiler` removes or reshapes that subpath, the blast radius
 is `markoBabel()` — one function, four named values — and the failure is a
@@ -170,16 +171,20 @@ from the one that parsed the node — before switching to this export.
 
 ## The two front doors
 
-**`compileSource(source, filename, declarations, host)`** — a whole file,
-through `@marko/compiler`'s `config.translator` seam (ADR 0001). `host` is
-required and carries its `emitIr` function plus the
-taglibs to register, the tag-discovery directories, and an optional `postEmit`
-pass over the emitted module text. `createTranslator(host)` is exported
-separately because the taglib lookup is keyed on the translator object, so a
-caller that wants the lookup must hand the compiler the same object.
+**`compileSource(source, filename, declarations, host)`** — a whole file. It
+parses with the MX front end (`@mxlang/parser/frontend`, inlined into the
+dist), reading each tag's shape and the statement keywords from the taglib
+lookup of the host's translator object (ADR 0001), lowers the MX AST, and runs
+the host's `emitIr`. `host` is required and carries its `emitIr` function plus
+the taglibs to register, the tag-discovery directories, and an optional
+`postEmit` pass over the emitted module text. `createTranslator(host)` is
+exported separately because the taglib lookup is keyed on the translator
+object, so a caller that wants the lookup must hand the same object to
+`@marko/compiler`'s `taglib.buildLookup`. No template is parsed by
+`@marko/compiler`.
 
-**`parseFragment(source, { filename, baseOffset, baseLine, baseColumn })`** — a
-Marko *substring* of a larger file, with every position shifted to the
+**`parseFragment(source, { filename, baseOffset, baseLine, baseColumn })`** — an
+MX *substring* of a larger file, with every position shifted to the
 enclosing file. The consumer is a host whose MX lives inside another language
 (Solid's `.solid.mx`). This is the stopgap
 `notes/research/marko-seam-spikes.md` spike 1 measured, not a fix: the fix is an
@@ -188,17 +193,16 @@ Solid's own bridge (`packages/tsx-bridge/src/mx/bridge.ts`) now calls this
 front door for every MX region it finds — see `packages/hosts/solid/README.md`
 for the bridge's own side of that hand-off. Documented limits:
 
-- Marko's own nodes (`MarkoTag`, `MarkoAttribute`, …) carry **no** numeric
-  `start`/`end` at all — only `loc.{line,column}`. Nothing to shift there.
-- The Babel expression nodes nested inside them carry their offset at
-  `loc.*.index`, not at `start`/`end`. Both shapes are shifted.
-- Position objects are **shared** between nodes, so the walk dedupes them: a
-  second shift would land at `base + base` (measured — raw index 16 with
-  `baseOffset: 42` came out at 100 instead of 58).
-- A thrown parse error's position lives on the exception, not in the tree; it
-  is shifted separately and the same error rethrown.
-- Marko never populates Babel's file-level `comments` array; `MarkoComment`
-  nodes in the body shift like any other node.
+- `FragmentResult.body` is the MX body and `FragmentResult.ast` the
+  `MxDocument`. Their nodes carry file-absolute UTF-16 offsets
+  (`start`/`end`, and `span` on field shapes) computed from the fragment's
+  base, so a consumer slices the enclosing file with them directly.
+- The Babel expression nodes nested in a container carry their offset at
+  `loc.*.index`, shifted the same way.
+- An expression error stays on its container and is raised when the fragment
+  is lowered; `parseFragment` itself throws for a template error, a bare `,`
+  line, and any expression error when a method's type parameters fail.
+- Comments are `MxComment` nodes in the body and shift like any other node.
 
 ## Programmatic custom tags
 
@@ -233,7 +237,8 @@ A map passed in this way is the explicit route, used by a caller that builds
 tags itself. The ordinary route is discovery (see below), which fills the same
 map. Either way the core remains synchronous: it injects only each
 definition's `parseOptions` (`text`,
-`preserveWhitespace`, `openTagOnly`) into `@marko/compiler` before parsing,
+`preserveWhitespace`, `openTagOnly`) into the injected taglib, from which the
+MX front end reads the tag's shape (its `tagTypes` entry) before parsing,
 then validates declared `attributes`, `attributeTags`, `children` and `parents` before `transform`.
 Attribute-tag declarations also accept recursive `attributes`, `attributeTags` and `children` maps. The shared attribute checker supports E1 types at every depth; defaults on attribute-tag attributes are not applied. E2's children check runs on each attribute tag's authored body before child lowering, including `#text` and path cardinality. Errors name the owner chain (`` `<card>`: `<@row>`: unknown attribute `bogus` ``) and stop at the first. A declaration with none of these maps keeps the prior no-template shape/control-flow rejection; template `Input` and host capability gates remain unchanged (decision 138 E4).
 `children` closes authored plain child names with `{ required?, repeatable? }` cardinality; the reserved `#text` key permits non-whitespace text and interpolations. Control flow is transparent, declarations and comments are ignored, and dynamic children are errors in a closed contract. The check runs before plain children lower, so transform output cannot change their counted names; `TagCall.childTree` exposes that authored shape to hooks. Children cannot be combined with raw-text or open-tag-only parse options (decision 138 E2).
@@ -281,8 +286,8 @@ Two properties make this usable from every integration:
 - **It is synchronous**, because every consumer is: Bun's `onLoad`, Volar's
   `createVirtualCode`, the language server's `diagnoseDocument` and `mx-tsc`
   all call from positions that cannot await.
-- **It indexes without executing.** `parseOptions` must reach Marko before the
-  *calling* file is parsed, so it is read statically out of the sidecar's
+- **It indexes without executing.** `parseOptions` fix a tag's shape for the
+  MX front end before the *calling* file is parsed, so it is read statically out of the sidecar's
   default export. That export must be an object literal, or an identifier
   bound once at module scope to one; `parseOptions` itself must be an object
   literal of boolean-valued known keys. A spread, a computed key or a value
@@ -592,9 +597,9 @@ MX AST ──lower()──▶ Ir ──drive(emitter)──▶ whatever the host
 differently, and each carries a `loc` (1-based line, 0-based column — the
 shape `TranslateError` reports, which is what an editor squiggle needs):
 
-| Kind | The Marko construct it comes from |
+| Kind | The construct it comes from |
 | --- | --- |
-| `Text` | A literal run, already normalized by Marko's own `onText` (decision 33) |
+| `Text` | A literal run, already whitespace-normalized by the front end (decision 33) |
 | `Interpolation` | `${expr}` and `$!{expr}`; `escaped` is false for the raw form |
 | `Element` | An HTML/SVG/MathML element, with `attrs`, `children` and a `void` flag |
 | `Component` | A component call: target is an import binding, a `<define>`, or `<${expr}/>` |
@@ -608,7 +613,7 @@ shape `TranslateError` reports, which is what an editor squiggle needs):
 | `InputInterface` | `export interface Input`, lifted so a host can place it |
 | `Hoisted` | A statement lifted by decision 70's `hoist` hook |
 | `DelegatedTag` | A tag the host claimed, with attrs/children/attribute tags/params/var resolved, plus its own opaque `data` |
-| `DocumentType` | `<!doctype html>`, delimiters already stripped by Marko |
+| `DocumentType` | `<!doctype html>`, delimiters already stripped by the parser |
 | `Comment` | A comment; `html` distinguishes `<!-- -->` from `//`, which only the source can tell apart |
 
 An expression arrives as `Expr`: the printed `code` (sliced from source if untouched, or rewritten through
