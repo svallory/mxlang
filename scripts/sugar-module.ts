@@ -11,13 +11,27 @@
  *
  *   bun run scripts/sugar-module.ts            # every suite below
  *   bun run scripts/sugar-module.ts <file>...  # some of them (deltas of the others are not checked)
+ *
+ * It needs a build (`bun run build`) and exits 2, naming what is missing,
+ * without one.
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
+
+/**
+ * The built entries the suites load (`@mxlang/core` and `@mxlang/tsx-bridge`
+ * resolve to `dist/`, and the core suites compile through `@mxlang/html`'s).
+ * Without them every test that reaches one fails with "Cannot find module",
+ * which would read as a delta mismatch (Mesh's review of PR 460, F9).
+ */
+const BUILT = [
+  "packages/tsx-bridge/dist/index.js",
+  "packages/core/dist/index.js",
+  "packages/targets/html/dist/index.js",
+];
 
 /** The suites that exercise atoms and the name sugars, built-in today. */
 export const SUITES = [
@@ -54,8 +68,20 @@ const deltas: Delta[] = JSON.parse(
   readFileSync(join(root, "scripts/sugar-module/deltas.json"), "utf8"),
 );
 
+const unbuilt = BUILT.filter((entry) => !existsSync(join(root, entry)));
+if (unbuilt.length > 0) {
+  console.error(
+    `sugar-module: not built (${unbuilt.join(", ")} missing); run \`bun run build\` first.`,
+  );
+  process.exit(2);
+}
+
 const files = process.argv.length > 2 ? process.argv.slice(2) : SUITES;
-const output = join(tmpdir(), `sugar-module-${process.pid}.json`);
+// Under the repo (`node_modules/` is ignored), not the system temp dir: on
+// the shared gate `/tmp` is a small memory filesystem (review 460, F9).
+const scratch = join(root, "node_modules/.cache/sugar-module");
+mkdirSync(scratch, { recursive: true });
+const output = join(scratch, `report-${process.pid}.json`);
 const preload = join(root, "scripts/sugar-module/preload.mjs");
 const run = spawnSync(
   "bun",

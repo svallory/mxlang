@@ -6,7 +6,9 @@
  * - in an expression, `&status` is `self.status`, a `MemberExpression`
  *   marked `extra.mxMember = { span, name }`;
  * - in an attribute list (after a kind, `sort asc &dueOn`), a static
- *   attribute `member` whose value is `{ kind: "member", name: "dueOn" }`;
+ *   attribute `member` whose value is `{ kind: "member", name: "dueOn" }`
+ *   (a value after it, `&dueOn=1` or `&dueOn(x) { … }`, is refused at the
+ *   member);
  * - on a tagless line, a `member` child tag with a static `name` and, for
  *   `&amount=expr`, a dynamic `value`. The tag carries `trigger`
  *   (`{ id: "member", span, text }`), which an authored `<member>` lacks.
@@ -57,6 +59,10 @@ const memberSyntax = {
           extra: { mxMember: { span, name } },
         });
       case "attribute":
+        // After a kind (`sort asc &dueOn`) a member names a field; Mesh's
+        // review of PR 460 (F6) asked for this refusal in the module's words.
+        if (ctx.valueForm !== null)
+          ctx.fail(`\`${text}\` is a member reference and takes no value`);
         return ctx.attribute("member", { kind: "member", name, span });
       case "line":
         return ctx.child("member", [

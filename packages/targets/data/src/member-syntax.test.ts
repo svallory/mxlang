@@ -333,16 +333,18 @@ describe("what is not a member", () => {
     });
   });
 
-  it("`sort asc &a=1`: after a kind a member takes no value", () => {
-    expect(parse("sort asc &a=1\n").diagnostics).toEqual([
-      expect.objectContaining({
-        message:
-          "`&a` takes no `=value` here: the `member` trigger's `lowerTrigger` did not use it",
-        line: 1,
-        column: 12,
-      }),
-    ]);
-  });
+  it.each(["sort asc &a=1\n", "sort asc &a(x) { return 1 }\n"])(
+    "%j: after a kind a member takes no value (review 460 F6)",
+    (source) => {
+      expect(parse(source).diagnostics).toEqual([
+        expect.objectContaining({
+          message: "`&a` is a member reference and takes no value",
+          line: 1,
+          column: 9,
+        }),
+      ]);
+    },
+  );
 });
 
 describe('the `"member"` contract type (decision 182 addendum 4)', () => {

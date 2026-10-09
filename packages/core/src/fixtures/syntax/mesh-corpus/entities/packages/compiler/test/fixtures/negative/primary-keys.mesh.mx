@@ -1,0 +1,4 @@
+entity :Todo
+  attributes
+    uuid :id primary-key
+    uuid :other primary-key

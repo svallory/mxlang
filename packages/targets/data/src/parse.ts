@@ -149,7 +149,11 @@ export interface DataDiagnostic {
    * text is not available to `parseData`, so no offset can be computed.
    */
   offset: number;
-  /** When the diagnostic's position is measured in another file. */
+  /**
+   * The file the position is measured in, present only when that is another
+   * file than the one parsed (a tag template's, a sidecar's, a manifest's).
+   * Never the `filename` given to `parseData`, on any path.
+   */
   file?: string;
   /**
    * A machine-readable code, when the error carries one (`TranslateError.diagnosticCode`):
@@ -249,7 +253,13 @@ function toDiagnostic(
   source: string,
   filename: string,
 ): DataDiagnostic {
-  const foreign = at.file !== undefined && at.file !== filename;
+  // `file` names another file only: core sets it on some errors positioned
+  // in the parsed file too (a syntax module's, a table error's), so it is
+  // dropped when it is `filename`, on every path (review 460 F8).
+  const foreign =
+    at.file !== undefined &&
+    at.file !== filename &&
+    resolve(at.file) !== resolve(filename);
   // Core reports a registration error, and may report a warning, with no
   // source position at 0:0 (or a non-positive line). That is file-level:
   // report it at the start of the file so `line` stays 1-based. `at` is the
@@ -261,7 +271,7 @@ function toDiagnostic(
     line,
     column,
     offset: foreign ? -1 : offsetOf(lineStarts, source, line, column),
-    ...(at.file !== undefined ? { file: at.file } : {}),
+    ...(foreign ? { file: at.file } : {}),
     ...(code !== undefined ? { code } : {}),
   };
 }

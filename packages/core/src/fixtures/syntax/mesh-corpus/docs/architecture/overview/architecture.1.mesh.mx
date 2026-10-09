@@ -1,0 +1,34 @@
+import { List } from "./list.mesh.mx"
+
+entity :Todo table="todos"
+  attributes
+    uuid :id primary-key
+    string :title min=1
+    boolean :done default=false
+    timestamp :insertedAt on=:create
+
+  relationships
+    belongs-to :list entity=List
+
+  computed
+    string :label() {
+      return (&done ? "[x] " : "[ ] ") + &title
+    }
+
+  actions auto=[:read, :destroy]
+    create :create
+      input
+        &title
+        &list
+
+    update :complete
+      do
+        set
+          &done=true
+
+    read :pending
+      filter=() => &done === false
+
+  policies
+    policy :owner
+      authorize-if=({ actor }) => &list.ownerId === actor.id

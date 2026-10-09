@@ -1,0 +1,4 @@
+import { List } from "./missing.mesh.mx"
+entity :Todo
+  attributes
+    uuid :id primary-key

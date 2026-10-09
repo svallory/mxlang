@@ -52,6 +52,7 @@ import type {
   TriggerResult,
   TriggerShorthand,
   TriggerUse,
+  TriggerValueForm,
 } from "./syntax-table.ts";
 
 /** The member a whole-value `StringLiteral` stands for (`extra.mxMember`), or `undefined`. */
@@ -239,10 +240,19 @@ function spanRange(trigger: Node): { start: number; end: number } {
   return { start: span.sourceStart, end: span.sourceEnd };
 }
 
+/**
+ * Where an attribute trigger's text starts, when `async` is written before
+ * it (`async :x(p) { b }`): the trigger's span starts at `async`, its text
+ * after it. Recorded by `lowerAttributeTrigger` from the source.
+ */
+const asyncTextStart = new WeakMap<Node, number>();
+
+/** The trigger's own text (`:x` in `async :x(p) { b }`), never the `async` before it. */
 function spanOf(trigger: Node): SourceSpan {
+  const start = asyncTextStart.get(trigger) ?? trigger.start;
   return {
-    sourceStart: trigger.start,
-    sourceEnd: trigger.start + String(trigger.text).length,
+    sourceStart: start,
+    sourceEnd: start + String(trigger.text).length,
   };
 }
 
@@ -453,7 +463,11 @@ function callHook(
         ? checkPart(ctx, trigger, options.at, "ctx.fail")
         : undefined;
       try {
-        return fail(message, at ?? trigger);
+        // Absent `at`, the trigger's text (after any `async` before it).
+        const own = asyncTextStart.has(trigger)
+          ? { type: "MxTriggerPart", ...spanRange(trigger) }
+          : trigger;
+        return fail(message, at ?? own);
       } catch (error) {
         if (options?.code !== undefined && isTranslateError(error)) {
           (error as { diagnosticCode?: string }).diagnosticCode = String(
@@ -890,12 +904,12 @@ function lowerExpressionTriggers(
 // --- attributes and children ----------------------------------------------
 
 /** How the trigger's own value is written (`ctx.valueForm`). */
-function valueFormOf(
-  trigger: Node,
-): "=" | ":=" | "method" | "arguments" | null {
+function valueFormOf(trigger: Node): TriggerValueForm {
   if (trigger.args) return "arguments";
   if (!trigger.value) return null;
-  if (trigger.value.type === "MxMethod") return "method";
+  if (trigger.value.type === "MxMethod") {
+    return trigger.value.async ? "async-method" : "method";
+  }
   return trigger.operator === ":=" ? ":=" : "=";
 }
 
@@ -922,7 +936,10 @@ function triggerValue(trigger: Node): TriggerExpression | TriggerMethod | null {
   if (!container) return null;
   const result: TriggerExpression | TriggerMethod =
     container.type === "MxMethod"
-      ? Object.freeze({ kind: "method" as const })
+      ? Object.freeze({
+          kind: "method" as const,
+          async: container.async === true,
+        })
       : Object.freeze({
           kind: "expression" as const,
           node: container.node as object,
@@ -1108,10 +1125,11 @@ function shorthandNode(
   const sigil = shorthand.attribute === "id" ? "#" : ".";
   const text = String(trigger.text);
   const at = text.indexOf(`${sigil}${shorthand.name}`, from);
+  const textStart = spanOf(trigger).sourceStart;
   const [start, end] =
     at >= 0
-      ? [trigger.start + at, trigger.start + at + 1 + shorthand.name.length]
-      : [trigger.start, trigger.start + text.length];
+      ? [textStart + at, textStart + at + 1 + shorthand.name.length]
+      : [textStart, textStart + text.length];
   const nameStart = at >= 0 ? start + 1 : start;
   return {
     node: {
@@ -1142,6 +1160,11 @@ function lowerAttributeTrigger(
   trigger: Node,
 ): Node[] {
   const row = rowFor(table, trigger);
+  if (trigger.value?.type === "MxMethod" && trigger.value.async) {
+    // `async` and whitespace come first; the text is the trigger's own.
+    const at = ctx.source.indexOf(String(trigger.text), trigger.start + 5);
+    if (at >= 0) asyncTextStart.set(trigger, at);
+  }
   let results: readonly (TriggerAttribute | TriggerShorthand)[];
   if (row.node === "attribute") {
     refuseUnplaceable(trigger);
@@ -1265,12 +1288,13 @@ function usesValue(
 
 /**
  * A `=value` the hook's result does not carry would vanish from the output
- * with nothing said; it is an error at the trigger instead.
+ * with nothing said; it is an error at the trigger instead. The text is the
+ * user's: it names the trigger, not the hook (review 460 F6).
  */
 function droppedValue(trigger: Node): never {
   const what = trigger.value?.type === "MxMethod" ? "method value" : "`=value`";
   return fail(
-    `\`${trigger.text}\` takes no ${what} here: the \`${trigger.id}\` trigger's \`lowerTrigger\` did not use it`,
+    `\`${trigger.text}\` takes no ${what} here: the \`${trigger.id}\` trigger does not place it`,
     trigger.value ?? trigger,
   );
 }

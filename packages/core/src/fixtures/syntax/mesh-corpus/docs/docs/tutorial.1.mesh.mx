@@ -1,0 +1,29 @@
+import { Todo } from "./todo.mesh.mx"
+
+entity :List table="lists"
+  attributes
+    uuid :id primary-key
+    string :name
+    uuid :ownerId
+    timestamp :insertedAt on=:create
+    timestamp :updatedAt on=:update
+
+  relationships
+    has-many :todos entity=Todo
+
+  computed
+    count :todoCount of="todos"
+
+  actions auto=[:read, :destroy]
+    create :create
+      input
+        &name
+      do
+        set
+          &ownerId=({ actor }) => actor.id
+
+  policies
+    policy :anyoneCreates types=[:create]
+      authorize-if=() => true
+    policy :ownerOnly types=[:read, :destroy]
+      authorize-if=({ actor }) => &ownerId === actor.id

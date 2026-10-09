@@ -481,7 +481,7 @@ describe("the atoms-and-sugars rows through the front end (slice a1)", () => {
     ]);
   });
 
-  it("an async method with type parameters starts at `async`", () => {
+  it("an async method after a trigger starts at its `<`; the trigger covers `async` (review 460 F1)", () => {
     const document = sugarParse("<a async :x<T>(p: T) { await p }/>");
     expect(document.errors).toEqual([]);
     expect(checkInvariants(document, OPTIONS.tagShape)).toEqual([]);
@@ -493,8 +493,22 @@ describe("the atoms-and-sugars rows through the front end (slice a1)", () => {
       ":x",
     ]);
     expect(trigger.value.async).toBe(true);
-    expect(trigger.value.start).toBe(3);
+    expect(trigger.value.start).toBe(11);
+    expect(trigger.value.source).toBe("<T>(p: T) { await p }");
     expect(trigger.value.typeParams.source).toBe("T");
+  });
+
+  it("an async method after a trigger, no type parameters, starts at `(` (review 460 F1)", () => {
+    const document = sugarParse("<a async :x(p) { await p }/>");
+    expect(document.errors).toEqual([]);
+    expect(checkInvariants(document, OPTIONS.tagShape)).toEqual([]);
+    const [trigger] = (document.body[0] as Node).attributes;
+    expect([trigger.start, trigger.end]).toEqual([3, 26]);
+    expect(trigger.value.async).toBe(true);
+    expect([trigger.value.start, trigger.value.source]).toEqual([
+      11,
+      "(p) { await p }",
+    ]);
   });
 
   it("`:=` and arguments with no body (review 460 L1): operator and args", () => {

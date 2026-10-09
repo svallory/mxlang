@@ -1,0 +1,6 @@
+entity :Invoice table="invoices"
+  attributes
+    uuid :id primary-key
+    enum :status values=[:draft, :paid]
+    decimal :amount
+  audit fields=[&status, &amount]

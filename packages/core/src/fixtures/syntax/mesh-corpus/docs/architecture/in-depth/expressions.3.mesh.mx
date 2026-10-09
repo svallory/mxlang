@@ -1,0 +1,7 @@
+computed
+  boolean :isOverdue() {
+    return &status === :sent && &dueOn < today()
+  }
+  string :label() {
+    return &number + " · " + formatMoney(&total)
+  }

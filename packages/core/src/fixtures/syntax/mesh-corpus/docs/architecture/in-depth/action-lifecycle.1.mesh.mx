@@ -1,0 +1,22 @@
+update :pay
+  input
+    &paidAt
+  validate
+    check :invoiceIsSent [
+      that=() => &status === :sent
+      code="invalid_state"
+      message="only a sent invoice can be paid"
+    ]
+    check :invoiceHasLines [
+      that=() => &lineCount > 0
+      code="invalid_state"
+      message="an invoice needs at least one line"
+    ]
+  do
+    set
+      &status=:paid
+      &paidById=({ actor }) => actor.id
+    when=() => &amount > 10000
+      set
+        &needsReview=true
+    load=[&customer]

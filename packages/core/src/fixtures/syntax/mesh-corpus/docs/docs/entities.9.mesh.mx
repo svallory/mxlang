@@ -1,0 +1,22 @@
+import { Todo } from "./todo.mesh.mx"
+
+entity :User
+  attributes
+    uuid :id primary-key
+    string :name min=1
+    enum :plan values=[:free, :paid] default=:free
+
+  relationships
+    has-many :todos entity=Todo
+
+  computed
+    count :todoCount of="todos"
+
+  actions
+    create :create
+      input
+        &name
+
+  policies
+    policy :self types=[:read, :update]
+      authorize-if=({ actor }) => &id === actor.id

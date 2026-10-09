@@ -88,6 +88,12 @@ describe("the reference module lowers exactly as core's built-in path", () => {
     "entity :Invoice table='invoices'\n  enum :status values=[:draft, :sent] default=:draft\n",
     "<input :x=input.y/>",
     "kind :n=1\n",
+    // `async` with no method after a trigger is a plain boolean attribute
+    // (a method value's own `async` is pinned in data, which places methods).
+    "<div async :n/>",
+    "<script async/>",
+    "kind async :n\n",
+    "kind async :n=1\n",
   ])("%s", (source) => {
     expect(json(irOf(source, atomsSugars))).toEqual(json(irOf(source)));
   });
@@ -100,31 +106,37 @@ describe("the reference module lowers exactly as core's built-in path", () => {
     ["<div x=typeof :a/>", "the unary operator `typeof`"],
     ["<div x=[...:a]/>", "spreading"],
     ["<div ...:a/>", "spreading"],
-  ])("atom misuse %s is refused in the built-in words", (source, what) => {
-    if (what === null) {
-      expect(json(irOf(source, atomsSugars))).toEqual(json(irOf(source)));
-      return;
-    }
-    const module = caught(() => irOf(source, atomsSugars));
-    const builtIn = caught(() => irOf(source));
-    expect(module.message).toBe(builtIn.message);
-    expect(module.message).toContain(what);
-    expect([module.line, module.column]).toEqual([
-      builtIn.line,
-      builtIn.column,
-    ]);
-  });
+  ])(
+    "atom misuse %s is refused in the built-in words, less the decision number (review 460 F6)",
+    (source, what) => {
+      if (what === null) {
+        expect(json(irOf(source, atomsSugars))).toEqual(json(irOf(source)));
+        return;
+      }
+      const module = caught(() => irOf(source, atomsSugars));
+      const builtIn = caught(() => irOf(source));
+      expect(module.message).toBe(
+        builtIn.message.replace(" (decision 156)", ""),
+      );
+      expect(module.message).not.toContain("decision");
+      expect(module.message).toContain(what);
+      expect([module.line, module.column]).toEqual([
+        builtIn.line,
+        builtIn.column,
+      ]);
+    },
+  );
 
   it("an atom as an object key is the module's words, not core's", () => {
     const error = caught(() => irOf("<div x={ :a: 1 }/>", atomsSugars));
     expect(error.message).toContain("cannot be an object key");
   });
 
-  it("`::name` is reserved, in the built-in words (raised in lowering, not by the parser)", () => {
+  it("`::name` is reserved, in the built-in words less the decision number (raised in lowering, not by the parser)", () => {
     const reserved =
       "`::a` is reserved (decision 156): `::` will be the Symbol.for sugar; write `:a` for an atom";
     expect(caught(() => irOf("<div x=::a/>", atomsSugars)).message).toBe(
-      reserved,
+      reserved.replace(" (decision 156)", ""),
     );
     let builtIn = "";
     try {
@@ -167,6 +179,21 @@ describe("what the module path refuses or reads differently (decision 183)", () 
   ])("%s", (source, message) => {
     expect(caught(() => irOf(source, atomsSugars)).message).toContain(message);
   });
+
+  it.each([
+    ["kind async :n(p) { b }\n", 1, 11, atomsSugars],
+    ["kind async :n(p) { b }\n", 1, 11, meshSyntax],
+    ["<x async :n<T>(p: T) { b }/>", 1, 9, atomsSugars],
+  ])(
+    "%s: an async method on `:name` is refused, at the `:name` (review 460 F1)",
+    (source, line, column, module) => {
+      const error = caught(() => irOf(source, module));
+      expect(error.message).toBe(
+        "`async :n(…) { … }` is not supported: a `:name` method value cannot be async; remove `async`",
+      );
+      expect([error.line, error.column]).toEqual([line, column]);
+    },
+  );
 
   it("a second default value is refused as on the built-in path", () => {
     expect(caught(() => irOf("kind=1 :x=2\n", atomsSugars)).message).toBe(
@@ -269,6 +296,29 @@ describe("hook contract additions", () => {
       });
       expect(caught(() => irOf(source, module)).message).toBe(message);
       expect(forms).toEqual([form]);
+    },
+  );
+
+  it.each([
+    ["kind !a(p) { b }\n", "method", false, 5],
+    ["kind async !a(p) { b }\n", "async-method", true, 11],
+    ["kind async !a<T>(p: T) { b }\n", "async-method", true, 11],
+  ])(
+    "%j: `ctx.valueForm` is %s, `ctx.value.async` %s, and the text span is the trigger's own (review 460 F1)",
+    (source, form, isAsync, textAt) => {
+      const seen: unknown[] = [];
+      const module = probe((_id, _text, span, ctx) => {
+        seen.push(ctx.valueForm, ctx.value, span);
+        return ctx.fail("stop");
+      });
+      const error = caught(() => irOf(source, module));
+      expect(seen).toEqual([
+        form,
+        { kind: "method", async: isAsync },
+        { sourceStart: textAt, sourceEnd: textAt + 2 },
+      ]);
+      // The default `ctx.fail` position is the trigger's text, not `async`.
+      expect([error.line, error.column]).toEqual([1, textAt]);
     },
   );
 

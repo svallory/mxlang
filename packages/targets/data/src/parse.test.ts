@@ -705,7 +705,7 @@ describe("duplicate attributes", () => {
         line: 1,
         column: 3,
         offset: 3,
-        file: "/t.mx",
+        // No `file`: the warning is in the parsed file (review 460 F8).
       },
     ]);
   });

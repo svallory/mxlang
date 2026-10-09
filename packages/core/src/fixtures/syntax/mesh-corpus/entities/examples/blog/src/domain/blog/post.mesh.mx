@@ -1,0 +1,46 @@
+import { User } from "./user.mesh.mx"
+import { Comment } from "./comment.mesh.mx"
+
+entity :Post table="posts"
+  attributes
+    uuid :id primary-key
+    string :title min=1 max=200
+    string :body nullable
+    integer :views default=0 min=0
+    float :rating nullable
+    decimal :price default=0
+    boolean :featured default=false
+    date :publicationDate nullable
+    datetime :publishedAt nullable
+    enum :state values=[:draft, :published] default=:draft
+    timestamp :insertedAt on=:create
+    timestamp :updatedAt on=:update
+  relationships
+    belongs-to :author entity=User
+    has-many :comments entity=Comment
+  computed
+    string :excerpt() { return (&body ?? "").slice(0, 200) }
+    count :commentCount of="comments"
+  actions auto=[:read, :destroy] on:load=&published
+    create :create
+      input
+        &title
+        &body
+        &author
+    update :publish
+      validate
+        check :titlePresent that=() => &title.length > 0 code="title_required" message="Title is required"
+      do
+        set
+          &state=:published
+        load=[&comments, &excerpt]
+    destroy :archive
+    read :published
+      filter=() => &state === :published
+      sort
+        desc &insertedAt
+  policies
+    policy :public types=[:read]
+      authorize-if=() => &state === :published
+    policy :owner actions=[&publish, &archive]
+      authorize-if=({ actor }) => &author.id === actor.id

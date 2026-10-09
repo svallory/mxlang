@@ -4120,7 +4120,25 @@ UTF-16 range. `ctx` is frozen and offers exactly:
 - `ctx.position`: `"expression"`, `"attribute"` or `"line"`, read-only.
 - `ctx.value`: the trigger's own `=value` as an expression, its own triggers
   already lowered, or `null` when it has none (attribute and line triggers only),
-  read-only.
+  read-only. A method value (`kind :name(p) { b }`) is `{ kind: "method", async }`
+  (`TriggerMethod`): passing it to `ctx.attribute` places the method as a
+  function expression.
+- `ctx.valueForm`: how that value is written, read-only: `"="`, `":="`,
+  `"method"`, `"async-method"`, `"arguments"` (`(args)` with no body) or `null`.
+
+**`async` before a method value** (review 460 F1). In an attribute list,
+`async :name(p) { b }` is the trigger with an async method value: `ctx.value` is
+`{ kind: "method", async: true }` and `ctx.valueForm` is `"async-method"`. The
+trigger's `text` and `span` are its own token (`:name`), never `async`; a
+`ctx.fail` with no `at` is positioned there; and a placed method's span starts at
+its `(` (or its `<` for type parameters), so neither `async` nor the trigger is
+part of the value's text. `async` with no method after it stays an ordinary
+boolean attribute. A module that has no meaning for an async method refuses it
+with `ctx.fail`, naming the form: both reference modules (`syntax/atoms-sugars`
+and `syntax/mesh`, §13.9.8) do, with `` `async :name(…) { … }` is not supported:
+a `:name` method value cannot be async; remove `async` `` at the `:name`. Core's
+built-in `:name` sugar never sees one: there `async` stays an attribute, and a
+contract that does not declare it reports `` `<kind>`: unknown attribute `async` ``.
 - `ctx.expression(node)`: a Babel **expression** node. In an expression it
   replaces the trigger's stand-in; as an attribute value it is that value.
 - `ctx.attribute(name, value)`: a named attribute. `value` is `true` (a bare
@@ -4160,7 +4178,7 @@ row's id and `<text>` for the trigger's text:
 | The hook throws | `` the `<id>` trigger's `lowerTrigger` threw: <message> `` (a `TranslateError` it throws is kept as is) |
 | `ctx.expression` is not given a Babel expression node | `` the `<id>` trigger's `lowerTrigger`: `ctx.expression` takes a Babel expression node, got <what> `` |
 | A bad constructor argument | ``the `<id>` trigger's `lowerTrigger`: `ctx.attribute` takes a non-empty attribute name``; ``the `<id>` trigger's `lowerTrigger`: `ctx.child` takes a non-empty tag name``; ``the `<id>` trigger's `lowerTrigger`: `ctx.child` takes an array of `ctx.attribute` results``; ``the `<id>` trigger's `lowerTrigger`: an attribute value is `true`, a string, a `ctx.expression` result, or `{ kind: "atom" \| "member", name }` `` |
-| The hook ignores the trigger's `=value` | `` `<text>` takes no `=value` here: the `<id>` trigger's `lowerTrigger` did not use it `` (a value that would vanish from the output is an error) |
+| The hook ignores the trigger's `=value` or method value | `` `<text>` takes no `=value` here: the `<id>` trigger does not place it `` (`method value` for a method; a value that would vanish from the output is an error, positioned at the value) |
 | An expression trigger that is not a whole operand, or is a property name (`{ &a }`, `{ &a: 1 }`) | `` `<text>` is not a whole operand here: the `<id>` trigger lowers to an expression; write it where a value stands `` |
 | An expression trigger where a name is declared (`(&a) => 1`, a declarator, a catch parameter, a method parameter) | `` `<text>` (the `<id>` trigger) cannot be declared: it lowers to an expression, and a parameter or declaration needs a plain name `` |
 | The replacement does not print | `` the `<id>` trigger's replacement does not print: <message> `` |
@@ -4230,7 +4248,7 @@ Its row is `{ id: "member", chars: "&", match: <an identifier after &>, standIn:
 | Position | Source | Lowers to |
 |---|---|---|
 | expression | `&status` | `self.status`, a `MemberExpression` marked `extra.mxMember` |
-| attribute | `sort asc &dueOn` | the static attribute `member`, value `{ kind: "member", name: "dueOn" }` |
+| attribute | `sort asc &dueOn` | the static attribute `member`, value `{ kind: "member", name: "dueOn" }`; a value after it (`&dueOn=1`, `&dueOn(x) { … }`) is refused at the member: `` `&dueOn` is a member reference and takes no value `` |
 | tagless line | `&title` | a `member` child tag with a static `name` |
 | tagless line | `&amount=expr` | the same, plus a dynamic `value` |
 

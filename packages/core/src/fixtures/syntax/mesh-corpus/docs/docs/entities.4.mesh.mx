@@ -1,0 +1,12 @@
+import { List } from "./list.mesh.mx"
+import { Comment } from "./comment.mesh.mx"
+import { Attachment } from "./attachment.mesh.mx"
+
+entity :Todo
+  attributes
+    uuid :id primary-key
+
+  relationships
+    belongs-to :list entity=List
+    has-many :comments entity=Comment
+    has-one :attachment entity=Attachment

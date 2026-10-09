@@ -1,0 +1,5 @@
+entity :Todo
+  attributes
+    uuid :id primary-key
+  relationships
+    belongs-to=:List :list

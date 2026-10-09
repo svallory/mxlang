@@ -1,0 +1,8 @@
+entity :User table="users"
+  attributes
+    uuid :id primary-key
+    string :name
+  actions auto=[:read]
+    create :create
+      input
+        &name

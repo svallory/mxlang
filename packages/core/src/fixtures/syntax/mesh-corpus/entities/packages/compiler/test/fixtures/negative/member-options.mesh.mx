@@ -1,0 +1,7 @@
+entity :Todo
+  attributes
+    uuid :id primary-key
+  actions
+    create :create
+      input
+        &id nullable

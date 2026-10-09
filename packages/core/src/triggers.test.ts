@@ -531,9 +531,33 @@ describe("a hook's result is checked", () => {
   ])(
     "%j: a `=value` the hook drops is an error at the value",
     (source, line, column) => {
+      const dropping = moduleWith(rows, {
+        lowerTrigger: (_id, text, span, ctx) =>
+          ctx.attribute("member", {
+            kind: "member",
+            name: text.slice(1),
+            span,
+          }),
+      });
+      const error = caught(() => irOf(source, undefined, dropping));
+      expect(error.message).toBe(
+        "`&a` takes no `=value` here: the `member` trigger does not place it",
+      );
+      expect([error.line, error.column]).toEqual([line, column]);
+    },
+  );
+
+  it.each([
+    ["sort asc &a=1\n", 1, 9],
+    ["sort asc &a = 1\n", 1, 9],
+    ["sort asc &a(x) { return 1 }\n", 1, 9],
+    ["sort asc &a := b\n", 1, 9],
+  ])(
+    "%j: the member module refuses a value after a kind, at the member (review 460 F6)",
+    (source, line, column) => {
       const error = caught(() => irOf(source, undefined, memberSyntax));
       expect(error.message).toBe(
-        "`&a` takes no `=value` here: the `member` trigger's `lowerTrigger` did not use it",
+        "`&a` is a member reference and takes no value",
       );
       expect([error.line, error.column]).toEqual([line, column]);
     },

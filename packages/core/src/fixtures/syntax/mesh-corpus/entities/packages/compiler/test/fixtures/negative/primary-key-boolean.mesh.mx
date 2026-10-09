@@ -1,0 +1,3 @@
+entity :Todo
+  attributes
+    boolean :id primary-key

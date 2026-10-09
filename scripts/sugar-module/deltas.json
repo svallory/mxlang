@@ -95,21 +95,6 @@
     "note": "decision 182 addendum 1 item 3: `kind=:X :x` no longer splits after a single-atom default value"
   },
   {
-    "test": "packages/targets/data/src/parse.test.ts > round 2 (rev-236) finding 1: the path prefix on a relative filename a Marko syntax error is unaffected",
-    "ruling": "non-default-table-error",
-    "note": "not a sugar rule: a parse error under any non-default syntax table comes from the table-error path (a `TranslateError` naming `file`, no Marko `loc`); Mesh's member table on alpha.13 already gets this shape"
-  },
-  {
-    "test": "packages/targets/data/src/parse.test.ts > fail-fast parse (the addendum's item 8) a syntax error returns `tree: undefined` and one positioned error",
-    "ruling": "non-default-table-error",
-    "note": "not a sugar rule: a parse error under any non-default syntax table comes from the table-error path (a `TranslateError` naming `file`, no Marko `loc`); Mesh's member table on alpha.13 already gets this shape"
-  },
-  {
-    "test": "packages/targets/data/src/parse.test.ts > fail-fast parse (the addendum's item 8) the error is positioned on its own line, with the offset derived",
-    "ruling": "non-default-table-error",
-    "note": "not a sugar rule: a parse error under any non-default syntax table comes from the table-error path (a `TranslateError` naming `file`, no Marko `loc`); Mesh's member table on alpha.13 already gets this shape"
-  },
-  {
     "test": "packages/targets/data/src/parse.test.ts > a dynamic shorthand class on data <a.${x} .${y}/> is a positioned diagnostic, not a throw",
     "ruling": "placeholder-in-attribute-sugar",
     "note": "a `${…}` inside a spaced sugar ends the trigger's token; the generic trigger error replaces the dynamic-shorthand message (lead 13:24, Q4)"
@@ -323,5 +308,130 @@
     "test": "packages/core/src/atom-candidates.test.ts > TranslateError.atomFacts is set when the atom check failed, and the facts are complete",
     "ruling": "completion-facts-built-in-only",
     "note": "lead ruling 14:29 (slice a2): `CompileResult.atomFacts` / `atomCandidates` are core's built-in path only; a syntax module that claims the atom contract fields (`contractFields`) leaves the facts empty on a result and unset on an error, so completion has nothing to read. They leave with slice c (decision 196)."
+  },
+  {
+    "test": "packages/targets/data/src/atoms.test.ts > atom errors are positioned diagnostics, never a raw throw \"x y=::a\\n\"",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
+  },
+  {
+    "test": "packages/core/src/atoms.test.ts > atom misuse on the MX path compileSource \"<div ...:a/>\" is a positioned TranslateError at the atom",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
+  },
+  {
+    "test": "packages/core/src/atoms.test.ts > atom misuse on the MX path compileSource \"<div\\n  ...:a/>\" is a positioned TranslateError at the atom",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
+  },
+  {
+    "test": "packages/core/src/atoms.test.ts > atom misuse on the MX path compileSource \"div ...:a\" is a positioned TranslateError at the atom",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
+  },
+  {
+    "test": "packages/core/src/atoms.test.ts > atom misuse on the MX path compileSource \"${f(...:a)}\" is a positioned TranslateError at the atom",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
+  },
+  {
+    "test": "packages/core/src/atoms.test.ts > atom misuse on the MX path compileSource \"${:a.b}\" is a positioned TranslateError at the atom",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
+  },
+  {
+    "test": "packages/core/src/atoms.test.ts > atom misuse on the MX path compileSource \"${-:a}\" is a positioned TranslateError at the atom",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
+  },
+  {
+    "test": "packages/core/src/atoms.test.ts > atom misuse on the MX path compileSource \"<${:a.b}/>\" is a positioned TranslateError at the atom",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
+  },
+  {
+    "test": "packages/core/src/atoms.test.ts > atom misuse on the MX path compileSource \"<p>${f(...:a)}</p>\" is a positioned TranslateError at the atom",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
+  },
+  {
+    "test": "packages/core/src/atoms.test.ts > atom misuse on the MX path compileSource \"<p>${:a.b}</p>\" is a positioned TranslateError at the atom",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
+  },
+  {
+    "test": "packages/core/src/atoms.test.ts > atom misuse on the MX path compileSource \"<p>${-:a}</p>\" is a positioned TranslateError at the atom",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
+  },
+  {
+    "test": "packages/core/src/atoms.test.ts > atom misuse on the MX path compileSource \"${{:a: 1}}\": an atom as an object key",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
+  },
+  {
+    "test": "packages/core/src/atoms.test.ts > atom misuse on the MX path compileSource \"<p>${{:a: 1}}</p>\": an atom as an object key",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
+  },
+  {
+    "test": "packages/core/src/atoms.test.ts > atom misuse on the MX path parseFragment + lower \"<div ...:a/>\" is a positioned TranslateError at the atom",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
+  },
+  {
+    "test": "packages/core/src/atoms.test.ts > atom misuse on the MX path parseFragment + lower \"<div\\n  ...:a/>\" is a positioned TranslateError at the atom",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
+  },
+  {
+    "test": "packages/core/src/atoms.test.ts > atom misuse on the MX path parseFragment + lower \"div ...:a\" is a positioned TranslateError at the atom",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
+  },
+  {
+    "test": "packages/core/src/atoms.test.ts > atom misuse on the MX path parseFragment + lower \"${f(...:a)}\" is a positioned TranslateError at the atom",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
+  },
+  {
+    "test": "packages/core/src/atoms.test.ts > atom misuse on the MX path parseFragment + lower \"${:a.b}\" is a positioned TranslateError at the atom",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
+  },
+  {
+    "test": "packages/core/src/atoms.test.ts > atom misuse on the MX path parseFragment + lower \"${-:a}\" is a positioned TranslateError at the atom",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
+  },
+  {
+    "test": "packages/core/src/atoms.test.ts > atom misuse on the MX path parseFragment + lower \"<${:a.b}/>\" is a positioned TranslateError at the atom",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
+  },
+  {
+    "test": "packages/core/src/atoms.test.ts > atom misuse on the MX path parseFragment + lower \"<p>${f(...:a)}</p>\" is a positioned TranslateError at the atom",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
+  },
+  {
+    "test": "packages/core/src/atoms.test.ts > atom misuse on the MX path parseFragment + lower \"<p>${:a.b}</p>\" is a positioned TranslateError at the atom",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
+  },
+  {
+    "test": "packages/core/src/atoms.test.ts > atom misuse on the MX path parseFragment + lower \"<p>${-:a}</p>\" is a positioned TranslateError at the atom",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
+  },
+  {
+    "test": "packages/core/src/atoms.test.ts > atom misuse on the MX path parseFragment + lower \"${{:a: 1}}\": an atom as an object key",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
+  },
+  {
+    "test": "packages/core/src/atoms.test.ts > atom misuse on the MX path parseFragment + lower \"<p>${{:a: 1}}</p>\": an atom as an object key",
+    "ruling": "module-wording",
+    "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
   }
 ]

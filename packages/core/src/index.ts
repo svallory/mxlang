@@ -272,6 +272,7 @@ export {
   type TriggerResult,
   type TriggerShorthand,
   type TriggerUse,
+  type TriggerValueForm,
 } from "./syntax-table.ts";
 export {
   type AmbientTypesProgram,

@@ -1,0 +1,17 @@
+entity :Invoice
+  attributes
+    uuid :id primary-key
+    date :issuedOn
+    date :dueOn
+
+  actions
+    create :create
+      input
+        &issuedOn
+        &dueOn
+      validate
+        check :dueAfterIssue [
+          that=() => &dueOn >= &issuedOn
+          code="invalid_dates"
+          message="the due date cannot be before the issue date"
+        ]

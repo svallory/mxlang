@@ -1,7 +1,15 @@
 /**
- * Reference syntax module (lang-ext-move-sugars-to-mesh, slice a1; decisions
- * 183 and 196): MX's atoms (decision 156) and name sugars (decision 146) as
- * layer-2 triggers, reproducing what core does for them today:
+ * `@mxlang/core/syntax/atoms-sugars` (@unstable): a reference syntax module
+ * (lang-ext-move-sugars-to-mesh, slice a1; decisions 183 and 196): MX's
+ * atoms (decision 156) and name sugars (decision 146) as layer-2 triggers,
+ * reproducing what core does for them today.
+ *
+ * Lifetime (decision 183 addendum 6): this module and `syntax/mesh` stay
+ * exported, `@unstable`, through the beta, as reference material for
+ * extension authors, not as a host's API. Mesh vendors (copies) them at
+ * the alpha.15 pin and owns its copy from then on.
+ *
+ * What it reads:
  *
  * - `:name` in an expression is an atom: a `StringLiteral` of the name
  *   marked `extra.mxAtom = { span }`. It is a name, not a value to operate
@@ -9,7 +17,9 @@
  *   object key are refused. `::name` is reserved.
  * - `:name` in an attribute list sets `name` to the atom, spelled by its
  *   token (`authored`), once per tag. Followed by `=value` or
- *   `(params) { body }` it also sets the tag's default value.
+ *   `(params) { body }` it also sets the tag's default value. An async
+ *   method (`async :name(p) { b }`, `ctx.valueForm` `"async-method"`) is
+ *   refused: Mesh's contracts accept no async method values.
  * - Spaced `#id` and `.class` (chains such as `#main.big` included) are
  *   shorthands, exactly as Marko's tag-adjacent `#id` / `.class`. They take
  *   no value: the table refuses `=`, `:=` and `(` after them (decision 183).
@@ -19,6 +29,8 @@
  *   this module's (`contractFields`), checked by its `afterLower` from the
  *   unit's public view, with core's built-in wording and positions
  *   (slice a2; see "Atom contracts" below).
+ *
+ * Its messages are the user's: they quote no MX decision numbers.
  *
  * Self-contained: it imports types only, so a manifest's `mx.syntax` can
  * `require` it, and Mesh can copy it (`mesh.ts` combines it with the
@@ -104,17 +116,22 @@ const SECOND_NAME =
 
 /** `{written}` and `{first}` are filled by core (`once`): the later default as written, the earlier one's line:column. */
 const SECOND_DEFAULT =
-  "`{written}` would set the default attribute (`value`), but the tag already has a default value (at {first}); a sugar followed by `=value` or `(params) { body }` sets it (decision 146 addendum 4), so write `value=…` once";
+  "`{written}` would set the default attribute (`value`), but the tag already has a default value (at {first}); a sugar followed by `=value` or `(params) { body }` sets it, so write `value=…` once";
 
 const BOUND =
   "a bound value is not supported on name sugar; write name=... value:=...";
 
+/** `async` written before `:name(…) { … }`: the default value would be an async function. */
+function asyncMethod(name: string): string {
+  return `\`async :${name}(…) { … }\` is not supported: a \`:name\` method value cannot be async; remove \`async\``;
+}
+
 function reserved(name: string): string {
-  return `\`::${name}\` is reserved (decision 156): \`::\` will be the Symbol.for sugar; write \`:${name || "name"}\` for an atom`;
+  return `\`::${name}\` is reserved: \`::\` will be the Symbol.for sugar; write \`:${name || "name"}\` for an atom`;
 }
 
 function misuse(name: string, what: string): string {
-  return `\`:${name}\` is an atom (decision 156), a name and not a value to operate on: ${what} is not allowed on it; write \`"${name}"\` for a string you mean to operate on`;
+  return `\`:${name}\` is an atom, a name and not a value to operate on: ${what} is not allowed on it; write \`"${name}"\` for a string you mean to operate on`;
 }
 
 /** `:name` in an expression: the atom, or the module's refusal of its use. */
@@ -140,7 +157,7 @@ function atom(
       break;
     case "key":
       ctx.fail(
-        `\`:${name}\` cannot be an object key: an atom is a value (decision 156); write \`${name}:\` for the key, or \`[:${name}]\` to compute it from the atom`,
+        `\`:${name}\` cannot be an object key: an atom is a value; write \`${name}:\` for the key, or \`[:${name}]\` to compute it from the atom`,
       );
   }
   return ctx.expression({
@@ -174,6 +191,7 @@ function nameSugar(
     );
   }
   if (ctx.valueForm === ":=") ctx.fail(BOUND, { at });
+  if (ctx.valueForm === "async-method") ctx.fail(asyncMethod(name), { at });
   if (ctx.valueForm === "arguments") {
     ctx.fail(
       `arguments are not allowed on \`:name\`: \`:${name}(…)\` is name sugar, not an attribute method`,

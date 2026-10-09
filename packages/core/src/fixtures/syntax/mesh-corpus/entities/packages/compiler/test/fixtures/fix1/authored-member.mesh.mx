@@ -1,0 +1,8 @@
+entity :Todo
+  attributes
+    uuid :id primary-key
+    string :title
+  actions
+    create :create
+      input
+        member name="title"

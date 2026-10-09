@@ -19,7 +19,8 @@
  *   `colon-colon-after-word` and `colon-colon-in-names` (lead ruling Q4),
  *   `bare-colon-end` (decision 183), `refuse-value` (decision 183, lead
  *   ruling Q5), `placeholder-in-attribute-sugar`, `async-method` (review 460
- *   L2), or `NEW` (no ruling yet; reported to the lead).
+ *   L2), `trigger-announced-on-completion` (review 460 F3), or `NEW` (no
+ *   ruling yet; reported to the lead).
  */
 
 export type SugarRuling =
@@ -30,6 +31,7 @@ export type SugarRuling =
   | "refuse-value"
   | "placeholder-in-attribute-sugar"
   | "async-method"
+  | "trigger-announced-on-completion"
   | "NEW";
 
 export interface SugarDelta {
@@ -286,14 +288,19 @@ export const DELTAS: readonly SugarDelta[] = [
     ruling: "async-method",
     note: "module path: `async` before an attribute trigger's method is the method's modifier, as `<x async(p){}/>` (lead 14:36, review 460 L2)",
   },
-  // NEW: an attribute trigger is announced when complete; its value failed, so the error comes with no `@:T` before it (same error, same position).
+  // trigger-announced-on-completion: review 460 F3. An attribute trigger is
+  // announced once its value is complete; here the value fails, so the
+  // module path reports the same error (code 3, "Missing value for
+  // attribute") at the same offset (13 and 17), with no `@:T` before it.
+  // Confirmed against the parser's raw events: only the `onAttrName` for
+  // `:T` is missing.
   {
     build: "mesh-syntax",
     suite: "after-value",
     input: "<a x=(a) :T => a/>",
     builtIn: '<a> @x ="(a)" @:T ERR(Missing value for attribute)',
     module: '<a> @x ="(a)" ERR(Missing value for attribute)',
-    ruling: "NEW",
+    ruling: "trigger-announced-on-completion",
   },
   {
     build: "mesh-syntax",
@@ -301,6 +308,6 @@ export const DELTAS: readonly SugarDelta[] = [
     input: "<input x=(a) :T => a/>",
     builtIn: '<input> @x ="(a)" @:T ERR(17-17 Missing value for attribute)',
     module: '<input> @x ="(a)" ERR(17-17 Missing value for attribute)',
-    ruling: "NEW",
+    ruling: "trigger-announced-on-completion",
   },
 ];

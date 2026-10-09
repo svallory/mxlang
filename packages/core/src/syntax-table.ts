@@ -111,9 +111,18 @@ export interface TriggerExpression {
  * trigger (`boolean :isOverdue() { … }`): `ctx.value` when the trigger has
  * one. It is opaque: a module places it with `ctx.attribute`, never builds
  * one. @unstable
+ *
+ * `async` is `true` when `async` is written before the trigger
+ * (`kind async :name(p) { b }`): the method is an async function, and
+ * `ctx.valueForm` is `"async-method"`. The `async` keyword is outside the
+ * method's span (it starts at the method's `<` or `(`), so a placed value's
+ * text never covers the trigger's own. A module that does not want async
+ * methods refuses the form with `ctx.fail`; one that places it gets an
+ * async `FunctionExpression`.
  */
 export interface TriggerMethod {
   readonly kind: "method";
+  readonly async: boolean;
 }
 
 /**
@@ -222,6 +231,15 @@ export type TriggerUse =
   | "key"
   | null;
 
+/** How a trigger's own value is written (`ctx.valueForm`). @unstable */
+export type TriggerValueForm =
+  | "="
+  | ":="
+  | "method"
+  | "async-method"
+  | "arguments"
+  | null;
+
 /**
  * What `lowerTrigger` is handed (decision 182 addendum 5): where the trigger
  * sits, its lowered `=value`, and the three constructors, the only way a
@@ -239,12 +257,13 @@ export interface TriggerContext {
   readonly value: TriggerExpression | TriggerMethod | null;
   /**
    * How an attribute or line trigger's own value is written: `=value`,
-   * `:=value` (bound), a method (`(params) { body }`), or `(args)` with no
-   * body; `null` without one. A bound value or arguments cannot be placed:
-   * core refuses them after the hook, which may refuse first in its own
-   * words. @unstable
+   * `:=value` (bound), a method (`(params) { body }`), an async method
+   * (`async` written before the trigger: `async :name(params) { body }`),
+   * or `(args)` with no body; `null` without one. A bound value or
+   * arguments cannot be placed: core refuses them after the hook, which may
+   * refuse first in its own words. @unstable
    */
-  readonly valueForm: "=" | ":=" | "method" | "arguments" | null;
+  readonly valueForm: TriggerValueForm;
   /** How an expression trigger's operand is used (`null` elsewhere). @unstable */
   readonly use: TriggerUse;
   /** The operator when `use` is `"unary"` (`-`, `!`, `typeof`, …); `null` otherwise. @unstable */

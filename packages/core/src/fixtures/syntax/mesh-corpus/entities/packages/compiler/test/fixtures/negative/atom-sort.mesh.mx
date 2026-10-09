@@ -1,0 +1,7 @@
+entity :Todo
+  attributes
+    uuid :id primary-key
+  actions
+    read :read
+      sort
+        asc :id

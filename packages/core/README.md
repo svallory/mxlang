@@ -530,6 +530,15 @@ const result = parseData(source, file, { syntax: meshSyntax });
 Copy it the way the member module is copied (its type imports from
 `../index.ts` become `@mxlang/core`; `mesh.ts` also imports its two siblings).
 
+**Lifetime** (decision 183 addendum 6): both modules are exported, `@unstable`,
+through the beta, as reference material rather than a host's API. Mesh vendors
+them at the alpha.15 pin and owns its copy from then on. `atom`, `name` and
+`member` are Mesh's forms; `id` and `class` are kept for parity with the
+built-in sugars and may be dropped. Mesh's entity files and docs blocks are a
+golden corpus here (`src/fixtures/syntax/mesh-corpus/`, its README, and
+`packages/targets/data/src/mesh-corpus.test.ts`); the deletion of the built-ins
+(slice c) must pass it unchanged.
+
 ### Contract checks in a module: `contractFields`, `checkContract` and `afterLower(unit)`
 
 The atom contract keys (an attribute's `values`, `pattern` and `ref`, a

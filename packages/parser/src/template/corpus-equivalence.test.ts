@@ -31,6 +31,9 @@ const SKIP =
 
 // Documentation pages show atoms on purpose; see the atoms test below.
 const DOCS_PAGES = "apps/docs/docs/";
+// Mesh's golden parse corpus (review 460 F2): Mesh's own entity files and
+// docs blocks, which use atoms by design, like the docs pages.
+const MESH_CORPUS = "packages/core/src/fixtures/syntax/mesh-corpus/";
 
 const tracked = execFileSync("git", ["ls-files"], {
   cwd: root,
@@ -121,10 +124,11 @@ describe("source copy vs patched npm htmljs-parser", () => {
   // below hold an atom or a reserved `::`, so atom lexing changes no existing
   // parse (research §5 row 16). Pages under `apps/docs/docs/` are expected to
   // show atoms and are not listed: a new example there is not a finding.
-  it("lexes atoms only in the docs pages and the listed files", () => {
+  // Nor is Mesh's corpus, whose files are Mesh's syntax.
+  it("lexes atoms only in the docs pages, Mesh's corpus and the listed files", () => {
     const hits: string[] = [];
     for (const { name, text } of inputs) {
-      if (name.startsWith(DOCS_PAGES)) continue;
+      if (name.startsWith(DOCS_PAGES) || name.startsWith(MESH_CORPUS)) continue;
       for (const [event, range] of events(source, text, true) as [
         string,
         { message?: string },

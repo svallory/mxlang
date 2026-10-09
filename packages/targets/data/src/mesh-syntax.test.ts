@@ -45,7 +45,7 @@ const LOADERS: [string, () => [string, ParseDataOptions]][] = [
   ],
 ];
 
-/** An excerpt of `scratch/mesh-syntax-v4.md`'s reference file, every v4 form once. */
+/** An excerpt of Mesh's entity-file reference (its ADR 0050, `0050-entity-file-syntax.md`), every v4 form once. */
 const INVOICE = `import { Customer } from "./customer.mesh.mx"
 
 entity :Invoice table="invoices"
@@ -211,7 +211,6 @@ describe("the module path reuses the built-in texts and positions (review 460)",
     "<x :n=1 value=2/>",
     "<x :n(p){ return p } value=1/>",
     "<x value=1 :n(p){ return p }/>",
-    "<x=1 :n=2/>",
     "<x :a=1 :b=2/>",
     // L1: one name too many, an empty shorthand part.
     "<x :a:b/>",
@@ -224,7 +223,19 @@ describe("the module path reuses the built-in texts and positions (review 460)",
   ])("%s", (source) => {
     const builtIn = firstError(source);
     expect(builtIn).toBeDefined();
-    expect(firstError(source, atomsSugars)).toEqual(builtIn);
+    // The module's texts quote no MX decision numbers (review 460 F6).
+    const message = builtIn?.message.replace(/ \(decision [^)]*\)/g, "");
+    expect(firstError(source, atomsSugars)).toEqual({ ...builtIn, message });
+    expect(message).not.toContain("decision");
+  });
+
+  // Core's own after-value text, raised before any trigger runs, so the same
+  // on both paths: it still quotes decision 151 (not one of the module's
+  // texts; see the sugars-followup report).
+  it("<x=1 :n=2/>", () => {
+    expect(firstError("<x=1 :n=2/>", atomsSugars)).toEqual(
+      firstError("<x=1 :n=2/>"),
+    );
   });
 });
 
@@ -301,7 +312,92 @@ describe("hook-contract guards and carriers (review 460)", () => {
       syntax: module,
     });
     expect(diagnostics[0]?.message).toBe(
-      "`!ab` takes no method value here: the `probe` trigger's `lowerTrigger` did not use it",
+      "`!ab` takes no method value here: the `probe` trigger does not place it",
     );
   });
+
+  it.each([
+    ["<y async !ab(p) { await p }/>", 9, "(p) { await p }"],
+    ["kind async !ab<T>(p: T) { await p }\n", 11, "<T>(p: T) { await p }"],
+  ])(
+    "%j: a placed async method is an async function whose span starts after the trigger (review 460 F1)",
+    (source, triggerStart, valueText) => {
+      const seen: unknown[] = [];
+      const module = probe((_id, text, span, ctx) => {
+        seen.push({ form: ctx.valueForm, value: ctx.value, span });
+        return ctx.attribute(text.slice(1), ctx.value ?? true);
+      });
+      const { tree, diagnostics } = parseData(source, "/v/x.mx", {
+        syntax: module,
+      });
+      expect(diagnostics).toEqual([]);
+      expect(seen).toEqual([
+        {
+          form: "async-method",
+          value: { kind: "method", async: true },
+          span: { sourceStart: triggerStart, sourceEnd: triggerStart + 3 },
+        },
+      ]);
+      const placed = attr(tags(tree?.children ?? [])[0] as DataTag, "ab");
+      if (placed.kind !== "expression") throw new Error(placed.kind);
+      const { sourceStart, sourceEnd } = placed.value.span;
+      expect(source.slice(sourceStart, sourceEnd)).toBe(valueText);
+      expect(placed.value.node).toMatchObject({
+        type: "FunctionExpression",
+        async: true,
+      });
+      expect(placed.value.code).toBe("async function (p) { await p; }");
+    },
+  );
+
+  it("a method without `async` is the `method` form, not async", () => {
+    const seen: unknown[] = [];
+    const module = probe((_id, text, _span, ctx) => {
+      seen.push(ctx.valueForm, ctx.value);
+      return ctx.attribute(text.slice(1), ctx.value ?? true);
+    });
+    const { tree } = parseData("<y !ab(p) { p }/>", "/v/x.mx", {
+      syntax: module,
+    });
+    expect(seen).toEqual(["method", { kind: "method", async: false }]);
+    const placed = attr(tags(tree?.children ?? [])[0] as DataTag, "ab");
+    expect(placed).toMatchObject({ value: { node: { async: false } } });
+  });
+});
+
+describe("`DataDiagnostic.file` names only another file (review 460 F8)", () => {
+  const MEMBER = join(
+    import.meta.dirname,
+    "../../../core/src/syntax/member.ts",
+  );
+  const memberSyntax = (
+    createRequire(import.meta.url)(MEMBER) as { default: SyntaxModule }
+  ).default;
+  const PATHS: [string, ParseDataOptions][] = [
+    ["built-in atoms and sugars", BASE],
+    ["`syntax/member` (alpha.14)", { ...BASE, syntax: memberSyntax }],
+    ["`syntax/mesh` (alpha.15)", { ...BASE, syntax: meshSyntax }],
+  ];
+  const SOURCES = [
+    "enum values=[::x]\n",
+    "<x :a:b/>",
+    "<y x=(/>",
+    "entity :A\n  <for of=[1]|x|>\n  </for>\n",
+  ];
+  it.each(
+    PATHS.flatMap(([path, options]) =>
+      SOURCES.map((source) => [path, source, options] as const),
+    ),
+  )(
+    "%s, %j: a diagnostic in the parsed file has no `file`",
+    (_, source, options) => {
+      for (const file of ["/v/x.mesh.mx", "relative/x.mesh.mx"]) {
+        const { diagnostics } = parseData(source, file, options);
+        expect(diagnostics.length, file).toBeGreaterThan(0);
+        for (const diagnostic of diagnostics) {
+          expect(diagnostic, file).not.toHaveProperty("file");
+        }
+      }
+    },
+  );
 });

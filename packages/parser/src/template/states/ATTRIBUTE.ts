@@ -329,11 +329,16 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
         const params = attr.args as Ranges.Value;
         const end = ++this.pos; // include }
         const { typeParams, asyncMethod } = attr;
-        const start = asyncMethod
-          ? asyncMethod.start
-          : typeParams
-            ? typeParams.start
-            : params.start;
+        // An attribute trigger's method starts at its own `<` or `(`: the
+        // `async` written before the trigger is outside the method's text,
+        // carried by the `async` flag and covered by the trigger's span
+        // (review 460 F1). Elsewhere the method starts at `async`, as Marko's.
+        const start =
+          asyncMethod && !attr.trigger
+            ? asyncMethod.start
+            : typeParams
+              ? typeParams.start
+              : params.start;
 
         const method: Ranges.AttrMethod = {
           start,
@@ -608,7 +613,9 @@ function announceAttrTrigger(
     id: trigger.id,
     position: "attribute",
     standIn: trigger.standIn,
-    start: method ? Math.min(text.start, method.start) : text.start,
+    start: method
+      ? Math.min(text.start, method.start, attr.asyncMethod?.start ?? text.start)
+      : text.start,
     end: method ? method.end : value ? value.end : args ? args.end : text.end,
     text,
     ...(args && { args }),

@@ -1,0 +1,4 @@
+entity :Customer
+  attributes
+    uuid :id primary-key
+    decimal :amount

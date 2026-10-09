@@ -1,0 +1,6 @@
+entity :Todo
+  attributes
+    uuid :id primary-key
+    boolean :done
+  actions
+    read :custom filter=(() => { &done = true; return true })
