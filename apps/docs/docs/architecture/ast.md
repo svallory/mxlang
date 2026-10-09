@@ -20,7 +20,7 @@ template parser's events, and read directly by `lower()` in `@mxlang/core`.
 This page is the catalogue those three pieces are built from.
 
 **Citation shorthand.** `[C]` is the installed compiler,
-`node_modules/.bun/@marko+compiler@5.42.10/node_modules/@marko/compiler/dist/`.
+`node_modules/.bun/@marko+compiler@5.42.11/node_modules/@marko/compiler/dist/`.
 `[H]` is the installed template parser,
 `node_modules/.bun/htmljs-parser@5.18.0/node_modules/htmljs-parser/dist/`.
 Template-parser source is cited in this repository, under
@@ -33,7 +33,7 @@ compiler, kept outside the repo under `~/tmp/mx2-ast/` (`raw.ts`: parse-only
 translator, as `parseFragment` uses; `core.ts`: MX's core taglib registered
 the way `packages/targets/html/src/compiler.ts` `host` registers it).
 
-**Version.** The workspace resolves `@marko/compiler` **5.42.10** (the only
+**Version.** The workspace resolves `@marko/compiler` **5.42.11** (the only
 copy under `node_modules/.bun/`; `bun.lock`, its `@marko/compiler` entries; `packages/core/package.json` `dependencies`)
 and `htmljs-parser` **5.18.0** with the MX patch (root `package.json`: `devDependencies` `htmljs-parser` and `patchedDependencies`).
 The compiler's own `htmljs-parser` link resolves to the same patched 5.18.0

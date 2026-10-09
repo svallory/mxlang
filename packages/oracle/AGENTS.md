@@ -37,8 +37,8 @@ not Solid. Decision 68 retired `.mx`/`@mxlang/html`, so there is one dialect
 and one table: `bun run oracle:marko` (`packages/oracle/src/report-marko.ts`,
 delegating to `report-marko-stock.ts`) renders every fixture under
 `packages/targets/html/fixtures-marko/<name>/{input.marko,input.json,expected.html}`
-two ways — through the real Marko 6 toolchain (`@marko/compiler` 5.42.10 +
-`marko/translator`, exactly matching `marko@6.3.51`'s own dependency) and
+two ways — through the real Marko 6 toolchain (`@marko/compiler` 5.42.11 +
+`marko/translator`, exactly matching `marko@6.4.4`'s own dependency) and
 through `@mxlang/html`'s `compile()` — and compares both against
 `expected.html` for **semantic** equality (`normalize-html.ts`'s
 `htmlEquals`: both sides parsed with `parse5` and compared by decoded
