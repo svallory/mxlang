@@ -164,9 +164,10 @@ it("MxErrorCode's MX_* members are the front-end rows of ast §3.13", () => {
   const declared = [...source.matchAll(/^ {2}\| "(MX_[A-Z_]+)"/gm)].map(
     (m) => m[1] ?? "",
   );
-  expect(table).toHaveLength(16);
+  expect(table).toHaveLength(17);
   expect(new Set(declared)).toEqual(new Set(table));
   expect(table).toContain("MX_UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE");
+  expect(table).toContain("MX_INPUT_ENDS_IN_DELIMITER");
 });
 
 it("MxErrorCode accepts template, Babel and MX codes and nothing else", () => {

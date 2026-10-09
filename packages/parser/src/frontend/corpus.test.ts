@@ -51,13 +51,14 @@ const NONE: ReadonlySet<MxStatementKeyword> = new Set();
 const STATEMENT_IN_HTML_MODE = new Set(["g0234", "g1274"]);
 
 /**
- * Silent end of input, TODO `concise-eof-open-delimiter-silent` and TODO
- * `concise-eof-interpolation-drops-event` (parser-grammar OQ 19): the parser
- * stops with no error and no close events. The front end closes the open
- * tags there (decision 163 addendum 9, Q8). These are the probes that end in
- * an open concise delimiter; the clamp fires on g0368 g0370 g0373 g0374
- * g0375 g0376 g0377 g0378 g0866 g1318 g1522 (its rule is a class, asserted
- * below, not this list).
+ * End of input inside a concise open delimiter (parser-grammar OQ 19): the
+ * template parser stops with no error and no close events. The front end
+ * reports `MX_INPUT_ENDS_IN_DELIMITER` at the opener (decision 161: no silent
+ * drop; supersedes the deferral of decision 163 addendum 9, Q8) and closes
+ * the open tags there. These are the probes that end in an open concise
+ * delimiter; the clamp fires on g0368 g0370 g0373 g0374 g0375 g0376 g0377
+ * g0378 g0866 g1318 g1522 (its rule is a class, asserted below, not this
+ * list).
  */
 const SILENT_EOF = new Set([
   "g0368",
@@ -69,6 +70,7 @@ const SILENT_EOF = new Set([
   "g0377",
   "g0378",
   "g0380",
+  "g0381",
   "g0382",
   "g0866",
   "g1318",
@@ -135,10 +137,24 @@ describe("the grammar corpus through the front end", () => {
     expect(results.some((r) => r.clamps.length > 0)).toBe(true);
   });
 
-  it("silent end of input: the open tags are closed, no error, today's shape", () => {
+  it("end of input in a concise delimiter: one error at the opener, the tags closed", () => {
     for (const { probe, document } of results) {
-      if (!SILENT_EOF.has(probe.id) || !document) continue;
-      expect(document.errors, probe.id).toEqual([]);
+      if (!document) continue;
+      const ended = document.errors.filter(
+        (e) => e.code === "MX_INPUT_ENDS_IN_DELIMITER",
+      );
+      if (!SILENT_EOF.has(probe.id)) {
+        expect(ended, probe.id).toEqual([]);
+        continue;
+      }
+      expect(document.errors, probe.id).toEqual(ended);
+      expect(ended, probe.id).toHaveLength(1);
+      const [error] = ended as [(typeof ended)[number]];
+      expect(error.origin, probe.id).toBe("front-end");
+      expect(error.message, probe.id).toMatch(
+        /^the input ends inside `+ ?(\$\{|.) ?`+…`+ ?. ?`+ opened here$/,
+      );
+      expect(error.end - error.start, probe.id).toBeGreaterThan(0);
       expect(document.complete, probe.id).toBe(true);
       expect(
         document.body.every((c) => c.end <= document.end),

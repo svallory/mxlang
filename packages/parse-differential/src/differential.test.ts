@@ -29,8 +29,12 @@ const ASYNC_METHOD_START = new Set([
 ]);
 
 /**
- * TODO `concise-eof-open-delimiter-silent` / `concise-eof-interpolation-drops-event`
- * (decision 163 addendum 9, Q8): today's tags there carry no position.
+ * End of input inside a concise open delimiter (parser-grammar OQ 19):
+ * today's parser is silent and its tags there carry no position. The front
+ * end reports `MX_INPUT_ENDS_IN_DELIMITER` at the opener and closes the tags
+ * at the end (decision 161: no silent drop; supersedes decision 163 addendum
+ * 9, Q8). TODO `concise-eof-interpolation-drops-event` (the template parser
+ * still reports no event for g0380 g0381 g0382) stays open.
  */
 const SILENT_EOF = new Set([
   "g0368",
@@ -177,6 +181,8 @@ describe("front-end rules against today's lowering (PR 2b)", () => {
     const wrong: string[] = [];
     for (const { input, frontEnd, parsedToday } of rows) {
       if (!frontEnd || !parsedToday) continue;
+      // New in MX (decision 161): today's parser was silent here.
+      if (frontEnd.code === "MX_INPUT_ENDS_IN_DELIMITER") continue;
       const today = lowerToday(input.source);
       if (today.ok) {
         wrong.push(
@@ -195,6 +201,18 @@ describe("front-end rules against today's lowering (PR 2b)", () => {
       }
     }
     expect(wrong).toEqual([]);
+  });
+
+  it("`MX_INPUT_ENDS_IN_DELIMITER` fires exactly on the silent end-of-input probes, where today's parser reported nothing", () => {
+    for (const { input, frontEnd, parsedToday } of rows) {
+      const ended = frontEnd?.code === "MX_INPUT_ENDS_IN_DELIMITER";
+      // g0381 (`${x`): no event and no tag at all, so its tree compares
+      // equal and it is not in `SILENT_EOF`.
+      expect(ended, input.id).toBe(
+        SILENT_EOF.has(input.id) || input.id === "g0381",
+      );
+      if (ended) expect(parsedToday, input.id).toBe(true);
+    }
   });
 
   it("the named list differs through today's own earlier error, each for its pinned reason", () => {
@@ -478,7 +496,13 @@ const REVERSE_MATRIX: readonly {
   {
     id: "nested-silent-eof-attribute-tag",
     source: "div\n  @slot(a",
-    mx: null,
+    // Not the root rule (the tag has its real ancestor); the input ending
+    // inside `(` (decision 161).
+    mx: {
+      code: "MX_INPUT_ENDS_IN_DELIMITER",
+      start: 11,
+      message: "the input ends inside `(`…`)` opened here",
+    },
     today: {
       start: 0,
       message:

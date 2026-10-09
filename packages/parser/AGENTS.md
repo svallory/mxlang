@@ -58,8 +58,14 @@ builds them in core), restarting with any name the scan missed.
   come back in `errors` with the partial tree. Missing options are a
   `TypeError`.
 - `seams.frontEndRules` is where PR 2b's `MX_*` rules run (once per tag);
-  `seams.clamped` counts the one clamp for the disclosed silent end-of-input
-  defects. Tests replace seams and restore them.
+  `seams.clamped` counts the one clamp for the template parser's
+  end-of-input ranges. Tests replace seams and restore them.
+- Input that ends inside a concise open delimiter (`div(a`, `div|a`,
+  ``x<a x=`${<a>``, `$ {a`, `${x`) gets `MX_INPUT_ENDS_IN_DELIMITER` ("the
+  input ends inside `(`…`)` opened here", spanning the outermost opener left
+  open), where the template parser and stock htmljs-parser are silent;
+  the tags are closed at the end and kept (decision 161). Pinned in
+  `input-ends.test.ts` and the corpus.
 - `corpus.test.ts` runs the 1,717 grammar probes and compares each tree's
   projection with `corpus.snapshot.json`. A deliberate change regenerates it:
   `FRONTEND_SNAPSHOT_UPDATE=1 bunx vitest run --root ../.. --project @mxlang/parser frontend/corpus`,

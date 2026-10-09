@@ -1085,7 +1085,7 @@ Per position:
 | `<div ...(` | HTML | the attribute-value error with `...` | g0367 |
 | `<div onClick(a` | HTML | the attribute-value error for `onClick`: arguments share the owner | g0200 |
 | `<div(a` | HTML | `EOF reached while parsing expression` | g0207 |
-| `div(a` | concise | **no error**; tag arguments `a` are reported. TODO `concise-eof-open-delimiter-silent` | g0368 |
+| `div(a` | concise | **no error**; tag arguments `a` are reported (the MX front end reports `MX_INPUT_ENDS_IN_DELIMITER`) | g0368 |
 | `-- ${a` | HTML block | the placeholder error | g0369 |
 | `static const x = (` | concise | `EOF reached while parsing expression` | g0209 |
 | `$ {a` | concise | **no error**; the scriptlet `a` is reported | g0370 |
@@ -1096,7 +1096,7 @@ Per position:
 | `<div async(a` | HTML | the attribute-name error: with `async` pending, the attribute has no name yet | g0196 |
 | `div onClick(a) {b`, `div\|a`, `div<A`, `div (a` | concise | **no error**; the method, parameters, type arguments or tag arguments are reported | g0373 g0374 g0375 g0376 |
 | `script -- ${b`, `textarea\n  -- ${a` | concise text body | **no error**; the placeholder is reported (compare `div\n  -- ${a`, an HTML-mode block: the placeholder error) | g0377 g0378 g0379 |
-| `div.a${b` | concise | **no error, and no shorthand event**: only the tag `div` is reported. TODO `concise-eof-interpolation-drops-event` | g0380 |
+| `div.a${b` | concise | **no error, and no shorthand event**: only the tag `div` is reported (the MX front end reports `MX_INPUT_ENDS_IN_DELIMITER`). TODO `concise-eof-interpolation-drops-event` | g0380 |
 | `${x` | concise | **no error and no event at all** | g0381 |
 | ``span\n  div x=`${a`` | concise | **no error, and no value event**: the tags and the name `x` are reported | g0382 |
 
@@ -2123,7 +2123,7 @@ The inputs the open questions mention:
 | 16 | `<1abc/>` | g0704 |
 | 17 | `<div x=a + ,b/>`, `<div x=a +/>`, `<div x=async/>`, `<div x=async, y=1/>`, concise `div x=async\n  span`, `div x=f<T> ,y=1`. TODO `operator-exemption-consumes-hard-stop` | g0788 g0832 g0664 g0665 g0306 g0666 |
 | 18 | concise `div x=a instanceof\nB`, `div x=a +\nspan`; `<div x=a\n  <span/>` | g0446 g1026 g0633 |
-| 19 | `div x=(a`, `div(a`, `$ {a`, `div\|a`, `div<A`, `div (a`, `div onClick(a) {b`, `script -- ${b`, `div.a${b`, `${x`, ``span\n  div x=`${a``. TODO `concise-eof-open-delimiter-silent`, `concise-eof-interpolation-drops-event` | g0366 g0368 g0370 g0374 g0375 g0376 g0373 g0377 g0380 g0381 g0382 |
+| 19 | `div x=(a`, `div(a`, `$ {a`, `div\|a`, `div<A`, `div (a`, `div onClick(a) {b`, `script -- ${b`, `div.a${b`, `${x`, ``span\n  div x=`${a``. The front end reports `MX_INPUT_ENDS_IN_DELIMITER` for the silent ones (decision 161); TODO `concise-eof-interpolation-drops-event` | g0366 g0368 g0370 g0374 g0375 g0376 g0373 g0377 g0380 g0381 g0382 |
 | 20 | `x=a :: b` | g0522 |
 | 23 | `x=a !b`, `x=a ++b` | g0668 g0669 |
 | 24 | concise `div x=a as T > b`; `<foo<() => void>/>`; `<div onClick<T extends () => void>(a) {x}/>`; `x=a + /* c */ b`; `$ const a = 1 + \n  2`; `<div ... [a]/>`, `<div ... "s"/>`; `<div x=/* c */ a/>`; `static const x = 1\n, y`. TODO `concise-as-type-gt-mismatched-group`, `type-list-arrow-cut`, `value-block-comment-after-operator`, `scriptlet-trailing-space-after-operator`, `spread-value-starting-with-bracket-or-string`, `statement-tag-comma-line-adds-attributes` | g0266 g0677 g0941 g0674 g0504 g0479 g0480 g0667 g0895 |
@@ -2186,8 +2186,8 @@ corpus.
 | Defect | Behaviour today | TODO | Probes |
 | --- | --- | --- | --- |
 | a generic call or generic arrow in an HTML-mode value | cut at `>` with no error: `x=f<T>(y)`, `x=<T,>(a) => a` | `html-value-generic-call-cut-at-gt` (OQ 7) | g0353 g0670 |
-| end of input in concise mode in a position whose delimiter the owning state consumed | no error | `concise-eof-open-delimiter-silent` (OQ 19) | g0368 g0370 g0374 g0375 g0376 g0373 g0377 |
-| end of input in concise mode inside a tag name's, shorthand's or template literal's `${…}` | no error, and the owning event is not reported: no shorthand, no event, no value | `concise-eof-interpolation-drops-event` (OQ 19) | g0380 g0381 g0382 |
+| end of input in concise mode in a position whose delimiter the owning state consumed | no error from the template parser; the MX front end reports `MX_INPUT_ENDS_IN_DELIMITER` at the opener (decision 161) | none (was `concise-eof-open-delimiter-silent`, OQ 19) | g0368 g0370 g0374 g0375 g0376 g0373 g0377 |
+| end of input in concise mode inside a tag name's, shorthand's or template literal's `${…}` | no error, and the owning event is not reported: no shorthand, no event, no value (the MX front end reports `MX_INPUT_ENDS_IN_DELIMITER`, so nothing is dropped silently) | `concise-eof-interpolation-drops-event` (OQ 19) | g0380 g0381 g0382 |
 | fixed on main in #377 (TODOs `template-parser-ascii-only-lookbehinds` and `template-parser-comment-in-text-tag-open-crash`), kept here as regression probes | `<div x=é / 2 y/>` and `${é / 2}` divide; `<div x=énew y=1/>` is the value `énew` and `y=1`; `<div.a::${x}/>` names `::`; `<script // c </script>` no longer closes the tag from inside its open tag | none | g1027 g1028 g1029 g1030 g0047 |
 | fixed in the look-behinds follow-up (TODO `template-parser-lookbehinds-followup`; decision 156, addenda 8, 11 and 12), kept here as regression probes | a comment before `of`, `yield` or `await` is skipped as whitespace is: `x=(f(/*c*/ await :b))` lexes no atom, as `x=(f( await :b))` lexes none; `<if=count\u00a0>= 10>` is the comparison, `<div x=(é)\u00a0/ 2/>` divides and `<div x=a +\u00a0 y=1/>` is one value, each as with a space | none | g1678 g1679 g1686 g1684 g1685 g1687 |
 | the type context at any group depth after `as`, `satisfies` or an annotation | `<div x=a as T ? (b < c) : d/>` is `Mismatched group`. A recorded limit: no action before MX2's TypeScript-aware expression boundary | `as-satisfies-type-context-any-depth` | g0360 |

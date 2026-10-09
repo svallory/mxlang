@@ -87,11 +87,14 @@ describe("MX_ATTRIBUTE_TAG_AT_ROOT", () => {
     ]);
   });
 
-  it("an attribute tag nested in a tag left open by silent end of input: not at root, no error", () => {
+  it("an attribute tag nested in a tag left open by end of input: not at root, only the end-of-input error", () => {
     // `div\n  @slot(a` — the front end finishes the open tags at the end of
     // input with their real ancestor (calibration F5), so the root rule
-    // does not fire on the nested `@slot`.
-    expect(frontEnd(doc("div\n  @slot(a"))).toEqual([]);
+    // does not fire on the nested `@slot`; the input ending inside `(` is
+    // reported (decision 161).
+    expect(frontEnd(doc("div\n  @slot(a"))).toEqual([
+      'MX_INPUT_ENDS_IN_DELIMITER [11,12) "the input ends inside `(`…`)` opened here" ctx=null',
+    ]);
   });
 });
 

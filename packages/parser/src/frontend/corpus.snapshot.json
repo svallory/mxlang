@@ -1638,10 +1638,14 @@
   ],
   "g0368": [
     "tag \"div\" [0,3) [0,5) open=[0,5) mode=html concise",
-    "  args \"a\" [4,5)"
+    "  args \"a\" [4,5)",
+    "error MX_INPUT_ENDS_IN_DELIMITER [3,4)"
   ],
   "g0369": ["error MALFORMED_PLACEHOLDER [5,5)"],
-  "g0370": ["scriptlet block [0,4) \"a\" [3,4)"],
+  "g0370": [
+    "scriptlet block [0,4) \"a\" [3,4)",
+    "error MX_INPUT_ENDS_IN_DELIMITER [2,3)"
+  ],
   "g0371": [
     "tag \"div\" [1,4) [0,5) open=[0,5) mode=html incomplete",
     "error MALFORMED_OPEN_TAG [5,5)"
@@ -1653,38 +1657,48 @@
   ],
   "g0373": [
     "tag \"div\" [0,3) [0,17) open=[0,17) mode=html concise",
-    "  attr \"onClick\" [4,17) name=[4,11) method [11,17) params \"a\" [12,13) body \"b\" [16,17)"
+    "  attr \"onClick\" [4,17) name=[4,11) method [11,17) params \"a\" [12,13) body \"b\" [16,17)",
+    "error MX_INPUT_ENDS_IN_DELIMITER [15,16)"
   ],
   "g0374": [
     "tag \"div\" [0,3) [0,5) open=[0,5) mode=html concise",
-    "  params \"a\" [4,5)"
+    "  params \"a\" [4,5)",
+    "error MX_INPUT_ENDS_IN_DELIMITER [3,4)"
   ],
   "g0375": [
     "tag \"div\" [0,3) [0,5) open=[0,5) mode=html concise",
-    "  typeArgs \"A\" [4,5)"
+    "  typeArgs \"A\" [4,5)",
+    "error MX_INPUT_ENDS_IN_DELIMITER [3,4)"
   ],
   "g0376": [
     "tag \"div\" [0,3) [0,6) open=[0,6) mode=html concise",
-    "  args \"a\" [5,6)"
+    "  args \"a\" [5,6)",
+    "error MX_INPUT_ENDS_IN_DELIMITER [4,5)"
   ],
   "g0377": [
     "tag \"script\" [0,6) [0,13) open=[0,6) mode=parsed-text concise",
-    "  placeholder [10,13) \"b\" [12,13)"
+    "  placeholder [10,13) \"b\" [12,13)",
+    "error MX_INPUT_ENDS_IN_DELIMITER [10,12)"
   ],
   "g0378": [
     "tag \"textarea\" [0,8) [0,17) open=[0,8) mode=parsed-text concise",
-    "  placeholder [14,17) \"a\" [16,17)"
+    "  placeholder [14,17) \"a\" [16,17)",
+    "error MX_INPUT_ENDS_IN_DELIMITER [14,16)"
   ],
   "g0379": [
     "tag \"div\" [0,3) [0,11) open=[0,3) mode=html concise incomplete",
     "error MALFORMED_PLACEHOLDER [11,11)"
   ],
-  "g0380": ["tag \"div\" [0,3) [0,3) open=[0,3) mode=html concise"],
-  "g0381": [],
+  "g0380": [
+    "tag \"div\" [0,3) [0,3) open=[0,3) mode=html concise",
+    "error MX_INPUT_ENDS_IN_DELIMITER [5,7)"
+  ],
+  "g0381": ["error MX_INPUT_ENDS_IN_DELIMITER [0,2)"],
   "g0382": [
     "tag \"span\" [0,4) [0,12) open=[0,4) mode=html concise",
     "  tag \"div\" [7,10) [7,12) open=[7,12) mode=html concise",
-    "    attr \"x\" [11,12) name=[11,12)"
+    "    attr \"x\" [11,12) name=[11,12)",
+    "error MX_INPUT_ENDS_IN_DELIMITER [13,14)"
   ],
   "g0383": [
     "tag \"div\" [0,3) [0,18) open=[0,18) mode=html concise",
@@ -3917,7 +3931,8 @@
   ],
   "g0866": [
     "tag \"div\" [0,3) [0,13) open=[0,13) mode=html concise",
-    "  attr \"onClick\" [4,13) name=[4,11) args \"a\" [12,13)"
+    "  attr \"onClick\" [4,13) name=[4,11) args \"a\" [12,13)",
+    "error MX_INPUT_ENDS_IN_DELIMITER [11,12)"
   ],
   "g0867": [
     "tag \"div\" [1,4) [0,14) open=[0,14) mode=html self-closed",
@@ -5963,7 +5978,8 @@
   "g1318": [
     "tag \"script\" [0,6) [0,17) open=[0,6) mode=parsed-text concise",
     "  text [12,14)",
-    "  placeholder [14,17) \"b\" [16,17)"
+    "  placeholder [14,17) \"b\" [16,17)",
+    "error MX_INPUT_ENDS_IN_DELIMITER [14,16)"
   ],
   "g1319": [
     "tag \"script\" [0,6) [0,17) open=[0,6) mode=parsed-text concise incomplete",
@@ -5990,7 +6006,10 @@
     "tag \"div\" [0,3) [0,4) open=[0,4) mode=html concise incomplete",
     "error MALFORMED_OPEN_TAG [4,4)"
   ],
-  "g1325": ["tag \"div\" [0,3) [0,3) open=[0,3) mode=html concise"],
+  "g1325": [
+    "tag \"div\" [0,3) [0,3) open=[0,3) mode=html concise",
+    "error MX_INPUT_ENDS_IN_DELIMITER [4,6)"
+  ],
   "g1326": [
     "tag \"div\" [1,4) [0,7) open=[0,7) mode=html incomplete",
     "error MALFORMED_OPEN_TAG [7,7)"
@@ -6006,7 +6025,8 @@
   ],
   "g1329": [
     "tag \"div\" [0,3) [0,5) open=[0,5) mode=html concise",
-    "  attr \"x\" [4,5) name=[4,5)"
+    "  attr \"x\" [4,5) name=[4,5)",
+    "error MX_INPUT_ENDS_IN_DELIMITER [6,7)"
   ],
   "g1330": [
     "tag \"div\" [0,3) [0,8) open=[0,8) mode=html concise incomplete",
@@ -6909,7 +6929,8 @@
   ],
   "g1522": [
     "tag \"div\" [0,3) [0,11) open=[0,11) mode=html concise",
-    "  attr \"async\" [4,11) name=[4,9) args \"a\" [10,11)"
+    "  attr \"async\" [4,11) name=[4,9) args \"a\" [10,11)",
+    "error MX_INPUT_ENDS_IN_DELIMITER [9,10)"
   ],
   "g1523": [
     "tag \"div\" [0,3) [0,8) open=[0,8) mode=html concise incomplete",

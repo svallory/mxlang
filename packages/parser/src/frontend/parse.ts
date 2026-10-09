@@ -259,6 +259,60 @@ const TYPE_NAMES: Record<number, string> = {
 /** How many names a parse may add to a table it built before giving up (each restart adds one). */
 const MAX_RESCANS = 64;
 
+/** The closer of each delimiter the input can end inside (`MX_INPUT_ENDS_IN_DELIMITER`). */
+const DELIMITER_CLOSERS: Readonly<Record<string, string>> = {
+  "(": ")",
+  "|": "|",
+  "<": ">",
+  "[": "]",
+  "{": "}",
+  "${": "}",
+  "`": "`",
+  '"': '"',
+  "'": "'",
+};
+
+/**
+ * The outermost delimiter `source` leaves open from `from` to its end, by a
+ * plain bracket count: quotes and template literals hold their text (a
+ * template's `${` opens an expression again), and a closer only closes the
+ * innermost opener it matches (`a > b` inside `(` is no closer). `undefined`
+ * when everything closes.
+ */
+function unclosedOpener(
+  source: string,
+  from: number,
+): { at: number; text: string } | undefined {
+  const stack: { at: number; text: string }[] = [];
+  for (let i = from; i < source.length; i++) {
+    const char = source[i] as string;
+    const top = stack[stack.length - 1]?.text;
+    if (top === '"' || top === "'" || top === "`") {
+      if (char === "\\") i++;
+      else if (char === top) stack.pop();
+      else if (top === "`" && source.startsWith("${", i)) {
+        stack.push({ at: i, text: "${" });
+        i++;
+      }
+      continue;
+    }
+    if (source.startsWith("${", i)) {
+      stack.push({ at: i, text: "${" });
+      i++;
+    } else if (top !== undefined && DELIMITER_CLOSERS[top] === char) {
+      stack.pop();
+    } else if (char in DELIMITER_CLOSERS) {
+      stack.push({ at: i, text: char });
+    }
+  }
+  return stack[0];
+}
+
+/** `text` as Markdown inline code, fenced past any backtick it holds. */
+function inlineCode(text: string): string {
+  return text.includes("`") ? `\`\` ${text} \`\`` : `\`${text}\``;
+}
+
 /** What a restarted parse keeps: the table so far and the answers `tagShape` gave. */
 interface Prior {
   readonly tagTypes: Readonly<Record<string, TagTypeValue>> | undefined;
@@ -293,6 +347,12 @@ class FrontEnd {
     | undefined;
   /** The furthest local offset any event reached. */
   reached = 0;
+  /**
+   * The start of the first event whose range ran past the end of input: the
+   * concise open delimiter the input ended in (`div(a` gives tag arguments
+   * 3-6 on five characters). Local offset.
+   */
+  overrun: number | undefined;
   stopped = false;
 
   constructor(
@@ -349,6 +409,15 @@ class FrontEnd {
     for (const [name, handler] of Object.entries(handlers)) {
       wrapped[name] = (event: never) => {
         this.inHandler = true;
+        const range = event as { start?: unknown; end?: unknown } | undefined;
+        if (
+          this.overrun === undefined &&
+          typeof range?.start === "number" &&
+          typeof range.end === "number" &&
+          range.end > this.source.length
+        ) {
+          this.overrun = range.start;
+        }
         const result = (handler as (e: never) => unknown)(event);
         this.inHandler = false;
         return result;
@@ -374,12 +443,16 @@ class FrontEnd {
     this.inTemplate = true;
     seams.createParser(wrapped, { syntax }).parse(this.source);
     this.inTemplate = false;
+    // At end of input inside a concise open delimiter the template parser
+    // stops with no error and no close events (parser-grammar OQ 19; stock
+    // htmljs-parser 5.18.0 is silent too), or reports a range past the end
+    // (`$ {a`), or reports nothing at all (`${x`). A silent drop is
+    // forbidden (decision 161), so the front end reports
+    // `MX_INPUT_ENDS_IN_DELIMITER` at the opener, then closes the tags there,
+    // keeping the tree; this supersedes the deferral of decision 163
+    // addendum 9 (Q8).
+    if (!this.templateError) this.inputEndsInDelimiter();
     if (!this.templateError && this.stack.length > 0) {
-      // TODO `concise-eof-open-delimiter-silent` and
-      // `concise-eof-interpolation-drops-event` (parser-grammar OQ 19): at
-      // end of input inside a concise open delimiter the template parser
-      // stops with no error and no close events. Close the tags there, as
-      // today's path (Marko) keeps them; decision 163 addendum 9 (Q8).
       for (let i = this.stack.length - 1; i >= 0; i--) {
         const tag = this.stack[i] as TagBuilder;
         tag.end = Math.max(tag._reached, tag.end);
@@ -397,6 +470,38 @@ class FrontEnd {
     this.settle();
   }
 
+  /**
+   * `MX_INPUT_ENDS_IN_DELIMITER`, spanning the outermost delimiter left open
+   * at the end of input (`unclosedOpener`), read from the first event that
+   * ran past the end (`overrun`), else from the innermost unfinished open
+   * tag's last part (the parser dropped the event: ``x<a x=`${<a>``), else
+   * from the furthest point any event reached. Nothing when no tag is left
+   * open, no range ran past the end and the unread tail closes everything.
+   */
+  inputEndsInDelimiter(): void {
+    const open =
+      [...this.stack].reverse().find((tag) => !tag._openEnded) ?? this.top;
+    const from =
+      this.overrun ?? (open ? open._reached - this.offset : this.reached);
+    const opener = unclosedOpener(this.source, this.clamp(from));
+    // With no tag left open and no range past the end, only a tail no event
+    // reached (`${x`) can hold a dropped delimiter.
+    if (!opener && !open && this.overrun === undefined) return;
+    const at = opener?.at ?? this.clamp(from);
+    const text = opener?.text ?? "";
+    this.errors.push({
+      type: "MxParseError",
+      start: this.at(at),
+      end: this.at(at + text.length),
+      code: "MX_INPUT_ENDS_IN_DELIMITER",
+      origin: "front-end",
+      message: opener
+        ? `the input ends inside ${inlineCode(text)}…${inlineCode(DELIMITER_CLOSERS[text] as string)} opened here`
+        : "the input ends inside an open tag here",
+      context: null,
+    });
+  }
+
   // --- positions -----------------------------------------------------------
 
   at(local: number): number {
@@ -404,9 +509,10 @@ class FrontEnd {
   }
 
   /**
-   * The one clamp: TODO `concise-eof-open-delimiter-silent` and TODO
-   * `concise-eof-interpolation-drops-event` report some ranges one past the
-   * end of input (`div(a` gives tag arguments 3-6 on five characters).
+   * The one clamp: at end of input inside a concise open delimiter (reported
+   * as `MX_INPUT_ENDS_IN_DELIMITER`), the template parser reports some
+   * ranges one past the end of input (`div(a` gives tag arguments 3-6 on
+   * five characters).
    */
   clamp(local: number): number {
     if (local <= this.source.length) return local;
