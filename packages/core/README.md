@@ -319,7 +319,7 @@ A tag's name is its filename, case included: `tags/Icon.tag.ts` is `<Icon>`,
 not `<icon>`. A name must start with a letter, digit or underscore and may
 then contain letters, digits, underscores, hyphens and dots; anything else —
 including a dotfile such as `.DS_Store.mx`, and `tags/.mx`, whose empty name
-makes `@marko/compiler` fail *every* file in the package — is skipped or
+makes the taglib lookup (`@marko/compiler`'s) fail *every* file in the package — is skipped or
 reported rather than registered. A `.solid.mx` file in a `tags/` directory is
 a different file kind and is reported, not silently ignored.
 

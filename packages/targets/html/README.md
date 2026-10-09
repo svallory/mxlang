@@ -17,8 +17,8 @@ Project [custom tags](../../../apps/docs/docs/custom-tags/index.md) are
 discovered and expanded to ordinary IR before this host emits, so the same tag
 definition works here and on every other host.
 
-The generic half lives in [`@mxlang/core`](../core/README.md): the Marko-node
-consumer, the structural tag lowerings, the `config.translator` seam and the
+The generic half lives in [`@mxlang/core`](../core/README.md): the MX front end
+and lowerer, the structural tag lowerings, the `config.translator` seam and the
 string-emit model. This package supplies the *policy* — which tags are inert
 and which are errors, component-versus-element resolution, Marko's structured
 `class`/`style` values and attribute order — plus its own integrations: the Bun
@@ -319,7 +319,7 @@ just outside `strict`): the explicit-import requirement (Marko's taglib +
 `tags/` discovery works in both policies), the `export interface Input`
 requirement (already optional — Marko allows arbitrary TS), `<fragment>`
 (Marko templates and bodies are multi-root already), and lowercase-by-scope
-tag resolution (replaced by Marko's own registry).
+tag resolution (replaced by this target's own element table).
 
 ## What this proves
 
@@ -386,7 +386,7 @@ byte-identical with and without the construct.
 | `<log>`, `<debug>` | Write to the console / attach a debugger hook. |
 | `client` blocks | Evaluated only on the client. |
 | `by=` on `<for>` | Reconciler input: which item a DOM node belongs to across re-renders. A one-shot render performs no reconciliation. |
-| `key=` on `<for>` | An error, not a silent drop: Marko's translator refuses it before it reaches any taglib ("The `<for>` tag keys items with the `by=` attribute, not `key=`…"), so MX refuses it the same way, at the attribute, with the fix-it for that loop's form. It is the **translator** that rejects it, not the parser — the parser hands MX both spellings. |
+| `key=` on `<for>` | An error, not a silent drop: Marko's translator refuses it before it reaches any taglib ("The `<for>` tag keys items with the `by=` attribute, not `key=`…"), so MX refuses it the same way, at the attribute, with the fix-it for that loop's form. It is the **translator** that rejects it, not the parser — the front end hands lowering both spellings. |
 
 ### Evaluate initial value
 
@@ -416,7 +416,7 @@ Plain `<!-- -->` comments are **stripped**, because Marko strips them.
 | `<await>` | Suspends on a promise. This target is a synchronous `(input) => string`. Marko itself refuses to render one to a string: *"Cannot consume asynchronous render with 'toString'"*. |
 | `<try>` with `<@placeholder>` | Needs a second render pass over suspended content, with nowhere to schedule it. A `<try>` **without** a placeholder lowers to a plain `try`/`catch`, with `<@catch>` as the catch block. |
 | `<let/input=…>`, `<const/input=…>` | Declares `input` at render scope, where the emitted `function (input: Input)` already binds it — the template's own input would become unreachable. Marko rejects the same thing: *"Duplicate declaration of `input`"*. A tag *param* (`<for|input|>`) is a nested scope and is fine; see below. |
-| A lowercase tag naming a local binding (`import layout from "./layout.marko"` then `<layout>`) | Marko itself refuses this: *"Local variables must be in a dynamic tag unless they are PascalCase. Use `<${layout}/>` or rename to `Layout`."* — a lowercase name is only ever resolved through taglib/`tags/` discovery, never a local variable. Since decision 164 addendum 1 every target raises one positioned error in core instead (*"`<layout>` is not a tag here: `layout` is imported from ./layout.marko, and a lowercase tag never calls a binding. Write `<Layout>` (rename the import) or `<${layout}/>`"*); a name that is also a native element stays native with a warning. `<${layout}/>` (dynamic tag) and `<Layout/>` (PascalCase) both still work — see fixtures `dynamic-tag-lowercase-import` and `nested-layout`. |
+| A lowercase tag naming a local binding (`import layout from "./layout.mx"` then `<layout>`) | Marko itself refuses this: *"Local variables must be in a dynamic tag unless they are PascalCase. Use `<${layout}/>` or rename to `Layout`."* — a lowercase name is only ever resolved through taglib/`tags/` discovery, never a local variable. Since decision 164 addendum 1 every target raises one positioned error in core instead (*"`<layout>` is not a tag here: `layout` is imported from ./layout.mx, and a lowercase tag never calls a binding. Write `<Layout>` (rename the import) or `<${layout}/>`"*); a name that is also a native element stays native with a warning. `<${layout}/>` (dynamic tag) and `<Layout/>` (PascalCase) both still work — see fixtures `dynamic-tag-lowercase-import` and `nested-layout`. |
 | An unresolved hyphenated tag (`<my-widget>` with no taglib entry) | Marko's own failed custom-element lookup: *"Unable to find entry point for custom tag `<my-widget>`."* An unresolved hyphenated name is not literal HTML — matching Marko means erroring, not rendering it as-is. A candidate for a later, deliberate MX 2 divergence; see `divergences.md`. |
 
 A valueless `<const/x/>` is an error, as it is in Marko (*"the `<const>` tag
@@ -440,18 +440,20 @@ compiles at all).
 |---|---|
 | `class:foo` / `style:foo` | *"`class:active` is not a valid attribute, did you mean `class={ active: condition }`?"* — verified for every form: static, dynamic, alone, and beside a plain `class`. The translator errors with Marko's own fix-it rather than inventing a lowering for markup the target does not have. Use the object form, which **is** supported: `class={ active: condition }`. |
 
-### Rejected by Marko's own parser, before this translator runs
+### Rejected before this translator runs
 
-Some constructs need no row of their own, because a `.marko` file containing
-them never compiles far enough to reach a translator. Recorded so their
-absence from the table above is not mistaken for silent tolerance:
+Some constructs need no row of their own, because the MX front end or core
+refuses them before a host emits anything. Recorded so their absence from the
+table above is not mistaken for silent tolerance:
 
-- `key=` on an element — *"`key` is not a valid attribute, did you mean
-  `<for by>`?"*
 - `$!{…}` in an attribute value (`<div title=$!{x}>`) — a raw placeholder is
-  not valid in attribute position; Marko raises a parse error there, and the
-  same error surfaces through `compile()` as a Marko `CompileError` rather
-  than a `TranslateError`.
+  not valid in attribute position; `compile()` throws a positioned
+  `TranslateError` (``Expected a single expression, but found `{` after it.``).
+- A `.marko` file where a tag is looked up (`tags/`, an import used as a tag) —
+  a positioned error telling you to convert it to `.mx` (decision 172).
+
+`key=` on an element is not among them: it is an ordinary attribute and is
+emitted as written. Only `key=` on `<for>` is refused (see the inert table).
 
 ## Attribute tags follow Marko's own convention
 
@@ -461,7 +463,7 @@ of renderables, matching Marko's own server render (verified against Marko
 5.42.5, not assumed). Ordinary children become `input.content`. Component
 resolution goes through Marko's taglib lookup: an `import`, a `<define>`, or
 a `tags/`-discovered `.mx` template. An unknown lowercase tag resolves through
-Marko's own HTML/SVG/MathML registry, and a plain `<!-- -->` comment is
+this target's own element table (HTML, SVG, MathML), and a plain `<!-- -->` comment is
 stripped, because Marko strips it.
 
 The retired `.mx` dialect (decision 68) made different choices here —
@@ -473,8 +475,9 @@ lacks (decision 65), so they did not survive the fold into this package.
 
 ## Why third-party translators are hard to write correctly
 
-Marko's parser fills in more of a node than any one lowering path reads, and
-the fields it fills in are *not* in `body.body`. A translator that walks only
+A tag node carries more than any one lowering path reads (the field names
+below are those of the Marko-shaped node host hooks receive), and the fields it
+fills in are *not* in `body.body`. A translator that walks only
 the body renders none of them — and reports nothing, because from the walker's
 point of view there was nothing there.
 
