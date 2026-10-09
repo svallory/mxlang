@@ -23,6 +23,7 @@ import { type MxTemplateParser, mxTemplateParser } from "./marko-frontend.ts";
 import { filePosition } from "./mx-parse.ts";
 import type { PackageJsonRead } from "./package-json.ts";
 import { loadDefaultExport, mxKeyPosition } from "./scan.ts";
+import { triggerRow } from "./triggers.ts";
 
 /** What the expression parser reads in place of a trigger's text, always of the same length. */
 export type StandIn = "number" | "identifier" | "keep";
@@ -176,6 +177,8 @@ export interface SyntaxModule {
 export interface ResolvedSyntax {
   readonly table: SyntaxTable;
   readonly module?: SyntaxModule;
+  /** The `.mx` default row with no module: nothing to lower. */
+  readonly isDefault?: true;
 }
 
 /** One problem `validateSyntaxTable` reports. */
@@ -295,7 +298,10 @@ function intern(table: SyntaxTable): SyntaxTable {
 }
 
 /** The default row as a resolved syntax: no module. */
-const DEFAULT_RESOLVED: ResolvedSyntax = Object.freeze({ table: DEFAULT_ROW });
+const DEFAULT_RESOLVED: ResolvedSyntax = Object.freeze({
+  table: DEFAULT_ROW,
+  isDefault: true,
+});
 
 /** The hooks and fields a syntax module may export (decision 182 addendum 5). */
 const MODULE_FIELDS = new Set([
@@ -361,13 +367,6 @@ function overlayTable(
   if (problems.length > 0) fail(describeProblems(problems, path));
   return intern(structuredClone(table));
 }
-
-/** The trigger lists, by their `MxTrigger.position`. */
-export const TRIGGER_LISTS = {
-  expression: "expressionTriggers",
-  attribute: "attributeTriggers",
-  line: "lineTriggers",
-} as const;
 
 /** The first `{ call }` trigger of a table, with its field path, in list order. */
 function firstCallTrigger(
@@ -659,16 +658,6 @@ export interface SyntaxSite {
   baseOffset?: number;
   baseLine?: number;
   baseColumn?: number;
-}
-
-/** The table row an `MxTrigger` came from: its id in the list its position names. */
-export function triggerRow(
-  table: SyntaxTable,
-  trigger: { id: string; position: TriggerPosition },
-): Trigger | undefined {
-  return table[TRIGGER_LISTS[trigger.position]].find(
-    (row) => row.id === trigger.id,
-  );
 }
 
 /** Does lowering build this trigger (a built-in node kind, or a `{ call }` with the module's `lowerTrigger`)? */

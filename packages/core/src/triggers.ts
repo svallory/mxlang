@@ -32,19 +32,18 @@ import {
 } from "./core.ts";
 import type { Member, MxMemberMark } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
-import {
-  defaultSyntax,
-  type ResolvedSyntax,
-  type SyntaxModule,
-  type SyntaxTable,
-  type TriggerAttribute,
-  type TriggerAttributeValue,
-  type TriggerChild,
-  type TriggerContext,
-  type TriggerExpression,
-  type TriggerPosition,
-  type TriggerResult,
-  triggerRow,
+import type {
+  ResolvedSyntax,
+  SyntaxModule,
+  SyntaxTable,
+  Trigger,
+  TriggerAttribute,
+  TriggerAttributeValue,
+  TriggerChild,
+  TriggerContext,
+  TriggerExpression,
+  TriggerPosition,
+  TriggerResult,
 } from "./syntax-table.ts";
 
 /** The member a whole-value `StringLiteral` stands for (`extra.mxMember`), or `undefined`. */
@@ -52,6 +51,28 @@ export function memberOf(node: Node): Member | undefined {
   const mark: MxMemberMark | undefined = node?.extra?.mxMember;
   if (node?.type !== "StringLiteral" || !mark) return undefined;
   return { kind: "member", name: mark.name, span: mark.span };
+}
+
+/** The trigger lists, by their `MxTrigger.position`. */
+const TRIGGER_LISTS = {
+  expression: "expressionTriggers",
+  attribute: "attributeTriggers",
+  line: "lineTriggers",
+} as const;
+
+/**
+ * The table row an `MxTrigger` came from: its id in the list its position
+ * names. Here, not in `syntax-table.ts`, so lowering's import graph never
+ * reaches the parser front end (core's sources load under Node's
+ * strip-only mode, which the front end's sources do not).
+ */
+export function triggerRow(
+  table: SyntaxTable,
+  trigger: { id: string; position: TriggerPosition },
+): Trigger | undefined {
+  return table[TRIGGER_LISTS[trigger.position]].find(
+    (row) => row.id === trigger.id,
+  );
 }
 
 /** A document's syntax, by every body array it holds (so a host lowering a nested body finds it). */
@@ -62,7 +83,7 @@ const syntaxRuns = new WeakMap<readonly unknown[], ResolvedSyntax>();
  * nothing: a plain project pays one comparison.
  */
 export function registerSyntax(document: Node, syntax: ResolvedSyntax): void {
-  if (syntax.table === defaultSyntax() && !syntax.module) return;
+  if (syntax.isDefault) return;
   const seen = new Set<unknown>();
   const visit = (value: Node): void => {
     if (value === null || typeof value !== "object" || seen.has(value)) return;
