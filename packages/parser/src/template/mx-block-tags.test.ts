@@ -90,6 +90,28 @@ describe("block tags", () => {
     expect(out).not.toContain("block(");
   });
 
+  it.each([
+    // No escape form: the opener is text in a placeholder or an attribute.
+    ['<p>${"{%"}x</p>', '${"\\"{%\\""} text("x") </>'],
+    ['<p title="{% x %}">a</p>', '<p> @"title" text("a") </>'],
+  ])("the opener is text where content is not parsed: %j", (code, expected) => {
+    expect(render(code, JINJA)).toBe(
+      `<p> ${expected}`.replace("<p> <p>", "<p>"),
+    );
+  });
+
+  it("a block tag or filter cannot start a concise line", () => {
+    expect(render("div\n  {% if x %}", JINJA)).toBe(
+      '<div> ERR(6-6 A block tag cannot start a concise line; write it in a text line ("-- {% … %}") or in HTML content)',
+    );
+    expect(render("::md:: x ::", JINJA)).toBe(
+      'ERR(0-0 A filter cannot start a concise line; write it in a text line ("-- :: … ::") or in HTML content)',
+    );
+    expect(render("div -- {% if x %}", JINJA)).toContain(
+      'block(7-17 " if x ")',
+    );
+  });
+
   it("a text-only tag's body is raw text, never a block tag", () => {
     expect(
       render("<textarea>{% x %}</textarea>", JINJA, (n) =>
@@ -234,6 +256,22 @@ describe("validation of PR B's fields", () => {
       found.some((d) => d.field === field && message.test(d.message)),
       JSON.stringify(found),
     ).toBe(true);
+  });
+
+  it.each([
+    ["/%", "a slash"],
+    [" %", "a space"],
+    ["\n%", "a line break"],
+  ])("refuses an opener starting with %j (%s)", (open) => {
+    for (const field of ["blockTag", "filter"] as const) {
+      const found = validateSyntaxTable(
+        table({ [field]: { open, close: "%}" } }),
+      );
+      expect(found, JSON.stringify(found)).toContainEqual({
+        field: `${field}.open`,
+        message: expect.stringContaining("may not start with whitespace"),
+      });
+    }
   });
 
   it("accepts a block tag, a filter and tag types", () => {

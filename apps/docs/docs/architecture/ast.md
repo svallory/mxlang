@@ -864,9 +864,15 @@ valueSpan.end)`.
 
 ### 3.12 Body modes and `tagShape`
 
-`MxTag.bodyMode` records the parse shape `tagShape(name)` answered at
-`onOpenTagName` (the value the front end returns to htmljs as a `TagType`,
-`[H]util/tag-type.d.ts`):
+`MxTag.bodyMode` records the parse shape `tagShape(name)` answers. The template
+parser takes the matching `TagType` (`[H]util/tag-type.d.ts`) from the syntax
+table's `tagTypes`, computed before the parse and keyed by the full written
+static name (decision 182 addenda 2 and 3; `statement` applies only on a
+concise line); `onOpenTagName` returns nothing. A caller passes the table as
+`ParseOptions.tagTypes`; otherwise the front end builds it from `tagShape`
+and `statementKeywords` by pre-scanning the source (interim until core builds
+it), and checks every tag's `bodyMode` against it (`MX_TAG_TYPES_MISMATCH` for
+a caller's table that disagrees):
 
 | `bodyMode` | htmljs `TagType` | Text handling | Answered for |
 |---|---|---|---|
@@ -959,6 +965,7 @@ Three producers, with different consequences:
    | `MX_ATTRIBUTE_TAG_AT_ROOT` | an attribute tag with no enclosing tag | Marko, `[C]chunk-src.js:5917` |
    | `MX_TAG_NAME_MISSING` | a `,` line or `<,/>` with no tag above: the comma continues the attributes of a tag that was never named; the nameless node stays in the tree beside the error (decision 163 addendum 9) | new (`<,/>` today throws `MISSING_END_TAG` in the template parser) |
    | `MX_UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE` | `$!{…}` as an attribute value (`<div x=$!{a}/>`) | rejected by `@marko/compiler` today; the port removes that layer (decision 166 item 1, decision 163 addendum 5) |
+   | `MX_TAG_TYPES_MISMATCH` | a caller-supplied `tagTypes` (decision 182 addenda 2, 3) gives a static tag a type its `tagShape` body mode does not match; positioned at the tag name, the tag parsed with the table's type | new (decision 182, PR B) |
    | `MX_FRONT_END_INTERNAL` | the front end itself failed (an exception inside a handler): always an MX bug, never the author's. The parse does not throw; the error is recorded with the partial tree, its message a fixed MX sentence ending "not yours: an MX bug" (decision 161's wording) followed by the raw exception message, no stack or code frame | new (decision 163 addendum 7) |
 
    A duplicate default value is not among them: it is lowering's
@@ -1765,7 +1772,7 @@ in-repo template parser adds a 28th, `onAtom` (decision 156; source
 | `onDoctype` | `Value` | `MxDoctype` |
 | `onScriptlet` | `Scriptlet { value, block }` | `MxScriptlet` (keeps `block`) |
 | `onOpenTagStart` | `Range` | `MxTag.start`, `openTag.start` (Marko does not handle it; it derives the start from the name, `[C]chunk-src.js:6075`) |
-| `onOpenTagName` | `Template` | `MxTag.name` (or `MxAttributeTag.name` for `@…`); returns the `TagType` for `tagShape(name)` (§3.12); for a static name, splits at the first `:` (§3.3); records `MX_STATEMENT_IN_HTML_MODE` / `MX_RESERVED_TAG_NAME` (§3.2) |
+| `onOpenTagName` | `Template` | `MxTag.name` (or `MxAttributeTag.name` for `@…`); returns nothing: the type comes from `tagTypes` (§3.12), checked against `tagShape(name)`; for a static name, splits at the first `:` (§3.3); records `MX_STATEMENT_IN_HTML_MODE` / `MX_RESERVED_TAG_NAME` (§3.2) |
 | `onTagShorthandId` / `onTagShorthandClass` | `Template` | one or two `MxShorthand`s in `shorthands` (`position: "tag"`), split per §3.6 "Splitting a shorthand value" |
 | `onTagTypeArgs` | `Value` | `MxTag.typeArgs` |
 | `onTagVar` | `Value` | `MxTag.var` |

@@ -11,7 +11,7 @@ type TemplateMembers = Exclude<MxErrorCode, `BABEL_${string}` | `MX_${string}`>;
 
 it("MxErrorCode lists exactly the template parser's error codes, by name", () => {
   expectTypeOf<TemplateMembers>().toEqualTypeOf<TemplateName>();
-  expect(Object.keys(templateCodes)).toHaveLength(31);
+  expect(Object.keys(templateCodes)).toHaveLength(33);
   for (const name of Object.keys(templateCodes)) {
     const member: MxErrorCode = name as TemplateName;
     expect(member).toBe(name);

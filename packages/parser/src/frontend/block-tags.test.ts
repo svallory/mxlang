@@ -79,9 +79,7 @@ describe("MxBlockTag and MxFilter", () => {
   it("an unclosed block tag is a template error with the partial tree", () => {
     const document = parse("<p>{% x", { ...OPTIONS, syntax: JINJA });
     expect(document.complete).toBe(false);
-    expect(document.errors.map((e) => e.code)).toEqual([
-      "MALFORMED_PLACEHOLDER",
-    ]);
+    expect(document.errors.map((e) => e.code)).toEqual(["MALFORMED_BLOCK_TAG"]);
   });
 });
 
@@ -100,17 +98,30 @@ describe("tagTypes (decision 182 addenda 2 and 3)", () => {
     expect(differ).toEqual([]);
   });
 
-  it("a table that disagrees with tagShape fails loudly, not silently", () => {
+  it("a caller's table that disagrees with tagShape is a positioned caller error", () => {
     const document = parse("<textarea><b></textarea>", {
       ...OPTIONS,
       tagTypes: {},
     });
-    expect(document.errors.map((e) => e.code)).toEqual([
+    // The template parser's own consequence of the html type follows it.
+    expect(document.errors.map((e) => e.code)).not.toContain(
       "MX_FRONT_END_INTERNAL",
-    ]);
-    expect(document.errors[0]?.message).toContain(
-      'tagTypes gives "textarea" type 0, its body mode needs 1',
     );
+    expect(document.errors).toContainEqual(
+      expect.objectContaining({
+        code: "MX_TAG_TYPES_MISMATCH",
+        origin: "front-end",
+        start: 1,
+        end: 9,
+        message:
+          "`tagTypes` gives <textarea> html, but `tagShape` answers text: the caller's table and `tagShape` disagree, so the tag was parsed as html",
+      }),
+    );
+  });
+
+  it("an unclosed filter has its own code", () => {
+    const document = parse("<p>::md::x", { ...OPTIONS, syntax: JINJA });
+    expect(document.errors.map((e) => e.code)).toEqual(["MALFORMED_FILTER"]);
   });
 
   it("an invalid tag type is a TypeError at the call", () => {

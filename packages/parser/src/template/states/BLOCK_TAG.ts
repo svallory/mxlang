@@ -46,7 +46,7 @@ export const BLOCK_TAG: StateDefinition<BlockTagMeta> = {
     if (closeStart === -1 || closeStart + block.close.length > maxPos) {
       return this.emitError(
         { start: block.start, end: maxPos },
-        ErrorCode.MALFORMED_PLACEHOLDER,
+        block.filterName ? ErrorCode.MALFORMED_FILTER : ErrorCode.MALFORMED_BLOCK_TAG,
         `EOF reached while parsing a ${block.filterName ? "filter" : "block tag"}: "${block.close}" closes it`,
       );
     }

@@ -213,6 +213,14 @@ export function parse(source: string, options: ParseOptions): MxDocument {
   }
 }
 
+/** Tag types by value, for messages. */
+const TYPE_NAMES: Record<number, string> = {
+  [TagType.html]: "html",
+  [TagType.text]: "text",
+  [TagType.void]: "void",
+  [TagType.statement]: "statement",
+};
+
 /** How many names a parse may add to a table it built before giving up (each restart adds one). */
 const MAX_RESCANS = 64;
 
@@ -876,7 +884,7 @@ class FrontEnd {
         start: template.start,
         nameEnd: template.end,
       };
-      this.expectType(written, TagType.statement);
+      this.expectType(written, TagType.statement, template);
       return;
     }
 
@@ -959,26 +967,44 @@ class FrontEnd {
           : bodyMode === "parsed-text" || bodyMode === "parsed-text-preserve"
             ? TagType.text
             : TagType.html,
+        template,
       );
     }
   }
 
-  /** The table's type for a written static name (absent: html, a statement word off a concise line: html). */
-  expectType(written: string, expected: TagTypeValue): void {
+  /**
+   * Checks the table's type for a written static name (absent: html, a
+   * statement word off a concise line: html) against the body mode recorded.
+   * A table the front end built restarts the parse on a miss; a caller's
+   * table that disagrees with `tagShape` is the caller's error, positioned at
+   * the tag name (`MX_TAG_TYPES_MISMATCH`), and the parse goes on with the
+   * table's type.
+   */
+  expectType(written: string, expected: TagTypeValue, name: Range): void {
     let listed = this.tagTypes[written] ?? TagType.html;
     // Off a concise line the parser applies a statement word as html.
     if (listed === TagType.statement && expected !== TagType.statement) {
       listed = TagType.html;
     }
-    if (listed !== expected) {
-      // A name the pre-scan missed: `parse` restarts with it added.
-      if (this.built && this.tagTypes[written] === undefined) {
-        this.missed = { name: written, type: expected };
-      }
-      throw new Error(
-        `tagTypes gives ${JSON.stringify(written)} type ${listed}, its body mode needs ${expected}`,
-      );
+    if (listed === expected) return;
+    if (!this.built) {
+      this.errors.push({
+        type: "MxParseError",
+        ...this.span(name),
+        code: "MX_TAG_TYPES_MISMATCH",
+        origin: "front-end",
+        message: `\`tagTypes\` gives <${written}> ${TYPE_NAMES[listed]}, but \`tagShape\` answers ${TYPE_NAMES[expected]}: the caller's table and \`tagShape\` disagree, so the tag was parsed as ${TYPE_NAMES[listed]}`,
+        context: null,
+      });
+      return;
     }
+    // A name the pre-scan missed: `parse` restarts with it added.
+    if (this.tagTypes[written] === undefined) {
+      this.missed = { name: written, type: expected };
+    }
+    throw new Error(
+      `tagTypes gives ${JSON.stringify(written)} type ${listed}, its body mode needs ${expected}`,
+    );
   }
 
   /** The table the template parser reads (built in `run`). */

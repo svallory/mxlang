@@ -29,3 +29,6 @@ export const INVALID_TAG_TYPES = 27;
 export const INVALID_ATTR_TYPE_PARAMS = 28;
 export const AMBIGUOUS_ATTRIBUTE_VALUE = 29;
 export const INVALID_HTML_COMMENT = 30;
+// MX (decision 182): an unclosed syntax-table block tag or filter.
+export const MALFORMED_BLOCK_TAG = 31;
+export const MALFORMED_FILTER = 32;

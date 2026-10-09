@@ -164,6 +164,29 @@ export const CONCISE_HTML_CONTENT: StateDefinition = {
         }
       }
 
+      // MX (decision 182): a block tag or filter opener at a concise line
+      // start would otherwise read as a tag name (`{%`); it goes in a text
+      // line instead.
+      if (
+        this.syntax.contentStops.length &&
+        this.syntax.contentStops.includes(code)
+      ) {
+        const { blockTag, filter } = this.syntax;
+        const opener = blockTag && data.startsWith(blockTag.open, this.pos)
+          ? "block tag"
+          : filter && data.startsWith(filter.open, this.pos)
+            ? "filter"
+            : undefined;
+        if (opener) {
+          this.emitError(
+            this.pos,
+            ErrorCode.INVALID_LINE_START,
+            `A ${opener} cannot start a concise line; write it in a text line ("-- ${opener === "filter" ? filter!.open : blockTag!.open} … ${opener === "filter" ? filter!.close : blockTag!.close}") or in HTML content`,
+          );
+          return;
+        }
+      }
+
       this.enterState(STATE.OPEN_TAG);
       return; // pos stays at current char, OPEN_TAG sees it
     }

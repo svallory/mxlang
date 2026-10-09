@@ -91,6 +91,8 @@ export type MxErrorCode =
   | "INVALID_ATTR_TYPE_PARAMS"
   | "AMBIGUOUS_ATTRIBUTE_VALUE"
   | "INVALID_HTML_COMMENT"
+  | "MALFORMED_BLOCK_TAG"
+  | "MALFORMED_FILTER"
   // Open by design: Babel's reason codes are not enumerated here, and closing
   // the list needs a decision.
   | `BABEL_${string}`
@@ -108,6 +110,7 @@ export type MxErrorCode =
   | "MX_RESERVED_TAG_NAME"
   | "MX_ATTRIBUTE_TAG_AT_ROOT"
   | "MX_UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE"
+  | "MX_TAG_TYPES_MISMATCH"
   | "MX_FRONT_END_INTERNAL";
 
 /** `:name` atom found in an expression's source (ast §4.3). */

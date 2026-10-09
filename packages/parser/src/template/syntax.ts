@@ -55,13 +55,15 @@ export interface SyntaxTable {
   readonly inlineScript: { readonly trigger: string } | null;
   /**
    * Block forms (`{% … %}`) in HTML content: `open`, a raw body, then the
-   * first `close`. Announced by `onBlockTag`; null on the default row.
+   * first `close`. Announced by `onBlockTag`; null on the default row. There
+   * is no escape form: the opener is text inside a placeholder
+   * (`${"{%"}`), an attribute value or a text-only tag's body.
    */
   readonly blockTag: { readonly open: string; readonly close: string } | null;
   /**
    * Filter blocks in HTML content: `open`, a name, `close`, a raw body, then
    * the next `close` (`::markdown:: … ::`). Announced by `onFilter`; null on
-   * the default row.
+   * the default row. No escape form, as for `blockTag`.
    */
   readonly filter: { readonly open: string; readonly close: string } | null;
   /** Concise mode; turned off only by a language (layer 3), never by a project. */
@@ -186,6 +188,11 @@ function validate(
       fail(
         `${field}.open`,
         `\`${field}.open\` may not start with "<", the tag opener`,
+      );
+    } else if (field !== "placeholder" && /^[\s/]/.test(value.open)) {
+      fail(
+        `${field}.open`,
+        `\`${field}.open\` may not start with whitespace, a line break or "/": content never reaches it there (a "/" after a space starts a comment)`,
       );
     } else if (field !== "placeholder" && /^[$\\]/.test(value.open)) {
       fail(
