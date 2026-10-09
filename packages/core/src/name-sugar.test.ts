@@ -1,18 +1,22 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the sources are MX, not JS templates
 import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
-import { printExpression } from "./compile.ts";
+import { type Lookup, printExpression } from "./compile.ts";
 import { type Ctx, type MxWarning, type Node, newCtx } from "./core.ts";
 import type { Policy } from "./declarations.ts";
 import { parseFragment } from "./fragment.ts";
 import type { Attr, Ir, IrNode } from "./ir.ts";
 import { lower } from "./lower.ts";
+import { parseMx } from "./mx-parse.ts";
+import { rewriteMxSugar } from "./mx-sugar.ts";
 import {
   isShorthandWord,
   SHORTHAND_CACHE_LIMIT,
   shorthandCacheSize,
   sugarTagName,
 } from "./name-sugar.ts";
+import { defaultSyntax } from "./syntax-table.ts";
+import { tagAttributesOf } from "./tag-fields.ts";
 import { lookup } from "./test-targets.ts";
 
 /**
@@ -582,26 +586,44 @@ describe("the duplicate-attribute warning names the sugar", () => {
   });
 });
 
-// A statement tag's text is not attributes. `parseFragment` (the TS plugin's
-// mapping pass) parses without the core taglib, so it reads `static function
-// f(a: number): string {}` as a tag with attributes; the sugar rewrite must
-// leave a real statement alone (a bare `:` in it is a TypeScript return type).
-// "Real" is decided by the lookup when there is one
-// (`getTag(name).parseOptions.statement`), else by the core taglib's own
-// `statement` entries: there is no second list (round 3, review A).
+// A statement tag's text is not attributes: the sugar rewrite must leave a
+// real statement alone (a bare `:` in it is a TypeScript return type). Which
+// names are statements is the parse's decision (decision 168: the six
+// statement keywords the lookup marks `statement`; decision 182 addenda 2 and
+// 3), and lowering follows it: it never asks the lookup again.
 describe("statement tags are not rewritten", () => {
-  type MarkoLookup = NonNullable<Ctx["lookup"]>;
-  const lowerFragment = (source: string, markoLookup?: MarkoLookup): Ir => {
+  const lowerFragment = (source: string): Ir => {
     const { body } = parseFragment(source, { filename: "/tmp/f.mx" });
     const ctx = newCtx(
       source,
       printExpression,
       policy(),
-      markoLookup,
+      undefined,
       "/tmp/f.mx",
       lookup,
     );
     return lower(ctx, body);
+  };
+  /**
+   * Parses with `table` deciding the statement keywords, then lowers with no
+   * lookup at all: core's own statement entries would call `static` and
+   * `class` statements, so a lowering that asked again would refuse the
+   * sugar.
+   */
+  const lowerParsedWith = (source: string, table: Lookup): Ir => {
+    const document = parseMx(source, {
+      syntax: defaultSyntax(),
+      lookup: table,
+    });
+    const ctx = newCtx(
+      source,
+      printExpression,
+      policy(),
+      undefined,
+      "/tmp/f.mx",
+      lookup,
+    );
+    return lower(ctx, document.body);
   };
   const messageOf = (run: () => void): string => {
     try {
@@ -624,50 +646,33 @@ describe("statement tags are not rewritten", () => {
     expect(message).not.toContain("one `:name`");
   });
 
-  it("a lookup decides: a tag it does not call a statement is rewritten", () => {
-    // The parse always reads `static` as a statement now (decision 168), so
-    // the lookup is asked about the name before the colon: one that does not
-    // call `static` a statement gets the sugar, not the statement-tag error.
-    const none = { getTag: () => undefined } as unknown as MarkoLookup;
-    // The sugar ran (no "not supported on the statement tag" error), and the
-    // rewritten `static` tag, parsed as attributes, is then refused by the
-    // statement lowerer: the two together pin the lookup branch.
-    expect(messageOf(() => lowerFragment("<static:x/>\n", none))).toContain(
+  it("the parse's table decides: a name it does not call a statement keeps the sugar", () => {
+    // A table that calls nothing a statement: `<static:x/>` is an ordinary tag
+    // with a tag-adjacent `:x`, so the sugar runs (no statement-tag error) and
+    // the rewritten `static` tag is then refused by the statement lowerer.
+    const none = { getTag: () => undefined } as unknown as Lookup;
+    expect(messageOf(() => lowerParsedWith("<static:x/>\n", none))).toContain(
       "`static` was parsed as a tag with attributes",
     );
   });
 
-  it("a data lookup that makes `class` an ordinary tag keeps the sugar", () => {
-    // The lookup is the branch most likely to regress: a data dialect has no
-    // statements, so `class` is an ordinary tag there and `<class:x/>` is a
-    // tag-adjacent `:name`, not the error the no-lookup rows report. It is the
-    // same source as the `<class:x/>` row in the other block, which reads the
-    // core taglib and does error.
+  it("a data table that makes `class` an ordinary tag keeps the sugar", () => {
+    // A data dialect has no `class` statement, so `<class:x/>` is a
+    // tag-adjacent `:name` there, not the error the same source gets from the
+    // core taglib in the next block. (Data walks the tree itself; `lower`
+    // refuses a `class` tag on every target, so the rewrite is driven alone.)
     const data = {
       getTag: (name: string) => (name === "class" ? {} : undefined),
-    } as unknown as MarkoLookup;
-    const ir = lowerFragment("<class:x/>\n", data);
-    const tag = ir.body[0];
-    expect(tag?.kind).toBe("Element");
-    if (tag?.kind !== "Element") throw new Error("expected an element");
-    expect(tag.name).toBe("class");
-    expect(
-      tag.attrs.map((attr) => ("name" in attr ? attr.name : null)),
-    ).toContain("name");
-  });
-
-  it("a lookup decides: a custom tag with parseOptions.statement is left alone", () => {
-    const custom = {
-      getTag: (name: string) =>
-        name === "script-ish"
-          ? { parseOptions: { statement: true } }
-          : undefined,
-    } as unknown as MarkoLookup;
-    expect(
-      messageOf(() =>
-        lowerFragment("script-ish function f(a: number): string {}\n", custom),
-      ),
-    ).not.toContain("name sugar");
+    } as unknown as Lookup;
+    const source = "<class:x/>\n";
+    const document = parseMx(source, { syntax: defaultSyntax(), lookup: data });
+    expect(document.errors).toEqual([]);
+    const tag = document.body[0];
+    rewriteMxSugar(
+      newCtx(source, printExpression, policy(), undefined, "/tmp/f.mx", lookup),
+      tag,
+    );
+    expect(tagAttributesOf(tag).map((attr) => attr.name)).toEqual(["name"]);
   });
 });
 

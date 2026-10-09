@@ -33,6 +33,7 @@ import type {
   TagAlias,
 } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
+import { markoViewOf } from "./marko-view.ts";
 import {
   hasTemplate,
   routeTemplateCall,
@@ -938,7 +939,11 @@ function buildersFor(
           attrTagProps,
           params: [],
           var: null,
-          data: ctx.declarations.resolveDelegatedTag?.(name, node, ctx),
+          data: ctx.declarations.resolveDelegatedTag?.(
+            name,
+            markoViewOf(ctx, node),
+            ctx,
+          ),
           loc: spans.loc,
         },
         loc: spans.loc,
@@ -2487,7 +2492,11 @@ function contractOnlyDelegatedTag(ctx: Ctx, call: TagCall, node: Node): IrNode {
       attrTagProps: call.attrTagProps ?? [],
       params: call.params,
       var: call.var,
-      data: ctx.declarations.resolveDelegatedTag?.(call.name, node, ctx),
+      data: ctx.declarations.resolveDelegatedTag?.(
+        call.name,
+        markoViewOf(ctx, node),
+        ctx,
+      ),
       loc: call.loc,
     },
     loc: call.loc,

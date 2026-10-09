@@ -54,18 +54,6 @@ export function isMethodAttr(attr: Node): boolean {
 }
 
 /**
- * What a host hook (`resolveAttributeMethod`, `rejectAttributeMethod`,
- * `resolveModifier`, `rejectModifier`) receives: the attribute itself, except
- * an MX default value, which hooks read as `value` as Marko named it.
- */
-export function hookAttr(attr: Node): Node {
-  if (attr?.type === "MxAttribute" && attr.name === null) {
-    return { ...attr, name: "value" };
-  }
-  return attr;
-}
-
-/**
  * The attribute's value as Marko held it, a Babel node:
  *
  * - a valueless attribute is Marko's synthesized `true` (no position);
@@ -95,10 +83,16 @@ export function attrValueOf(ctx: Ctx, attr: Node): Node {
  * - the body block's `loc` is the inside of the braces, which is the
  *   `MxStatements` container's own span; a comment-only body keeps its
  *   comments as the block's `innerComments`;
- * - `typeParameters` is `null` when type parameters are written and absent
- *   otherwise: Marko does not keep them, and `expr()` prints the authored
- *   source slice, which does.
+ * - `typeParameters` is the written type parameters' payload; when
+ *   `stripTypes` dropped them it is `null`, as Marko's stripped function
+ *   has it, and absent when none were written.
  */
+/**
+ * The `MxMethod`s whose written type parameters `stripMxTypes` dropped:
+ * Marko's stripped function keeps `typeParameters: null` for them.
+ */
+export const strippedMethodTypeParams = new WeakSet<object>();
+
 export function methodFunctionOf(ctx: Ctx, method: Node): Node {
   const statements = payloadOf(method.body);
   const params = payloadOf(method.params);
@@ -112,7 +106,11 @@ export function methodFunctionOf(ctx: Ctx, method: Node): Node {
     params,
     generator: false,
     async: method.async,
-    ...(method.typeParams ? { typeParameters: null } : {}),
+    ...(method.typeParams
+      ? { typeParameters: payloadOf(method.typeParams) }
+      : strippedMethodTypeParams.has(method)
+        ? { typeParameters: null }
+        : {}),
     id: null,
     body: {
       type: "BlockStatement",

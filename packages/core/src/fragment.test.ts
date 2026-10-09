@@ -1,3 +1,4 @@
+import { lineColumnAt } from "@mxlang/parser/frontend";
 import { describe, expect, it } from "vitest";
 import { PARSE_OPTIONS_TAGLIB } from "./core-taglib.ts";
 import {
@@ -11,48 +12,58 @@ import {
 /**
  * The fragment front door: positions reported against the *enclosing* file.
  *
- * Everything asserted here is measured behaviour of `@marko/compiler` 5.42.5
- * plus the shift, matching `notes/research/marko-seam-spikes.md` spike 1: only
- * `loc.{line,column}` exists on Marko's own nodes, and `loc.*.index` (not
- * `start`/`end`) carries the offset on the Babel expression nodes nested
- * inside them.
+ * Since port PR 5 `parseFragment` returns the MX AST: every node carries
+ * file-relative UTF-16 `start`/`end` offsets (the base already applied), and
+ * a line/column is derived from the document with `lineColumnAt`, which
+ * applies the base column on the fragment's first line only. The Babel
+ * payload inside an expression container carries the same file-relative
+ * positions on its own `loc`.
  */
 
 /** The first tag in a fragment's body. */
-function firstTag(body: Node[]): Node {
-  const tag = body.find((node: Node) => node.type === "MarkoTag");
-  if (!tag) throw new Error("no MarkoTag in fragment body");
+function firstTag(body: readonly Node[]): Node {
+  const tag = body.find((node: Node) => node.type === "MxTag");
+  if (!tag) throw new Error("no MxTag in fragment body");
   return tag;
+}
+
+/** The file line/column of `offset`, the fragment base applied. */
+function at(ast: Node, offset: number): { line: number; column: number } {
+  return lineColumnAt(ast, offset);
 }
 
 describe("parseFragment shifts positions by the base", () => {
   it("shifts a tag on the fragment's first line by line and column", () => {
     // A fragment starting at file line 6, column 8 (spike 1's own numbers).
-    const { body } = parseFragment('<div class="a">x</div>\n', {
+    const { ast, body } = parseFragment('<div class="a">x</div>\n', {
       filename: "Counter.solid.mx",
       baseOffset: 120,
       baseLine: 5,
       baseColumn: 8,
     });
-    expect(firstTag(body).loc.start).toMatchObject({ line: 6, column: 8 });
+    const tag = firstTag(body);
+    expect(tag.start).toBe(120);
+    expect(at(ast, tag.start)).toEqual({ line: 6, column: 8 });
   });
 
   it("shifts a later line's line only, leaving its column alone", () => {
     // Line 2 of the fragment begins at column 0 in the file too, so only the
     // line moves — the base column applies to the first line and nowhere else.
-    const { body } = parseFragment("<div>\n  <span>x</span>\n</div>\n", {
+    const { ast, body } = parseFragment("<div>\n  <span>x</span>\n</div>\n", {
       baseLine: 10,
       baseColumn: 4,
       baseOffset: 200,
     });
     const outer = firstTag(body);
-    const inner = firstTag(outer.body.body);
-    expect(outer.loc.start).toMatchObject({ line: 11, column: 4 });
-    expect(inner.loc.start).toMatchObject({ line: 12, column: 2 });
+    const inner = firstTag(outer.body);
+    expect(outer.start).toBe(200);
+    expect(inner.start).toBe(208);
+    expect(at(ast, outer.start)).toEqual({ line: 11, column: 4 });
+    expect(at(ast, inner.start)).toEqual({ line: 12, column: 2 });
   });
 
-  it("shifts an attribute and the offset index on its value expression", () => {
-    const { body } = parseFragment(
+  it("shifts an attribute and the offset on its value expression", () => {
+    const { ast, body } = parseFragment(
       "<div>\n  <a href=input.url>x</a>\n</div>\n",
       {
         baseLine: 2,
@@ -60,54 +71,61 @@ describe("parseFragment shifts positions by the base", () => {
         baseOffset: 42,
       },
     );
-    const anchor = firstTag(firstTag(body).body.body);
+    const anchor = firstTag(firstTag(body).body);
     const attr = anchor.attributes[0];
+    expect(attr.type).toBe("MxAttribute");
     expect(attr.name).toBe("href");
     // Raw `{ line: 2, column: 5 }`: line shifts, column does not (line 2).
-    expect(attr.loc.start).toMatchObject({ line: 4, column: 5 });
-    // The nested Babel expression is where a numeric offset exists at all, and
-    // it lives inside `loc` rather than on the node (spike 1's second finding).
-    // Raw index of `input.url` is 16; the file's is 16 + 42. Getting 100 here
-    // means a node was shifted twice — the reason `shiftNode` keeps a seen set.
-    expect(attr.value.loc.start.index).toBe(58);
+    expect(at(ast, attr.start)).toEqual({ line: 4, column: 5 });
+    // Raw offset of `input.url` is 16; the file's is 16 + 42, on the
+    // container and on the Babel payload inside it. Getting 100 would mean
+    // the base was applied twice.
+    expect(attr.value.start).toBe(58);
+    expect(attr.value.node.start).toBe(58);
+    expect(attr.value.node.loc.start.index).toBe(58);
   });
 
-  it("shifts loc.end as well as loc.start", () => {
+  it("shifts the end as well as the start", () => {
     // Both ends of a node's range move, and a node that spans lines has its
     // end on a later line where the base column must *not* apply.
-    const { body } = parseFragment("<div>\n  <span>x</span>\n</div>\n", {
+    const { ast, body } = parseFragment("<div>\n  <span>x</span>\n</div>\n", {
       baseLine: 4,
       baseColumn: 3,
       baseOffset: 50,
     });
     const outer = firstTag(body);
-    // Raw: start { line: 1, column: 0 }, end { line: 3, column: 6 }.
-    expect(outer.loc.start).toMatchObject({ line: 5, column: 3 });
-    expect(outer.loc.end).toMatchObject({ line: 7, column: 6 });
-    const inner = firstTag(outer.body.body);
+    // Raw: [0, 29), start { line: 1, column: 0 }, end { line: 3, column: 6 }.
+    expect([outer.start, outer.end]).toEqual([50, 79]);
+    expect(at(ast, outer.start)).toEqual({ line: 5, column: 3 });
+    expect(at(ast, outer.end)).toEqual({ line: 7, column: 6 });
+    const inner = firstTag(outer.body);
     // Raw: start { line: 2, column: 2 }, end { line: 2, column: 16 } — one
     // line, neither end on the fragment's first line, so both columns stand.
-    expect(inner.loc.start).toMatchObject({ line: 6, column: 2 });
-    expect(inner.loc.end).toMatchObject({ line: 6, column: 16 });
+    expect(at(ast, inner.start)).toEqual({ line: 6, column: 2 });
+    expect(at(ast, inner.end)).toEqual({ line: 6, column: 16 });
   });
 
   it("shifts a text node's own position", () => {
-    const { body } = parseFragment("<p>hello</p>\n", {
+    const { ast, body } = parseFragment("<p>hello</p>\n", {
       baseLine: 3,
       baseColumn: 2,
     });
-    const text = firstTag(body).body.body.find(
-      (node: Node) => node.type === "MarkoText",
+    const text = firstTag(body).body.find(
+      (node: Node) => node.type === "MxText",
     );
     expect(text.value).toBe("hello");
+    // No `baseOffset`: offsets stay fragment-relative, line/column shift.
+    expect([text.start, text.end]).toEqual([3, 8]);
     // Raw `{ line: 1, column: 3 }`, on the fragment's first line, so the base
     // column applies: 3 + 2.
-    expect(text.loc.start).toMatchObject({ line: 4, column: 5 });
+    expect(at(ast, text.start)).toEqual({ line: 4, column: 5 });
   });
 
   it("reports file-relative positions with a zero base unchanged", () => {
-    const { body } = parseFragment("<p>x</p>\n");
-    expect(firstTag(body).loc.start).toMatchObject({ line: 1, column: 0 });
+    const { ast, body } = parseFragment("<p>x</p>\n");
+    const tag = firstTag(body);
+    expect([tag.start, tag.end]).toEqual([0, 8]);
+    expect(at(ast, tag.start)).toEqual({ line: 1, column: 0 });
   });
 });
 
@@ -120,9 +138,9 @@ describe("parseFragment parses an <html-comment> body as text", () => {
   it("keeps markup in the body as text", () => {
     const { body } = parseFragment("<html-comment>x <i>z</html-comment>");
     const comment = firstTag(body);
-    expect(comment.body.body).toHaveLength(1);
-    expect(comment.body.body[0].type).toBe("MarkoText");
-    expect((comment.body.body[0] as { value: string }).value).toBe("x <i>z");
+    expect(comment.body).toHaveLength(1);
+    expect(comment.body[0].type).toBe("MxText");
+    expect((comment.body[0] as { value: string }).value).toBe("x <i>z");
   });
 
   it("keeps a nested comment and its surrounding whitespace in the raw text", () => {
@@ -133,10 +151,8 @@ describe("parseFragment parses an <html-comment> body as text", () => {
       "<html-comment>a <!-- b --> c</html-comment>",
     );
     const comment = firstTag(body);
-    expect(comment.body.body).toHaveLength(1);
-    expect((comment.body.body[0] as { value: string }).value).toBe(
-      "a <!-- b --> c",
-    );
+    expect(comment.body).toHaveLength(1);
+    expect((comment.body[0] as { value: string }).value).toBe("a <!-- b --> c");
   });
 
   it("reports a missing ending tag like Marko", () => {
@@ -172,19 +188,17 @@ describe("parseFragment's raw-text taglib slice", () => {
   it("reads <script>'s body as raw text", () => {
     const { body } = parseFragment("<script>if (a<b) x()</script>");
     const script = firstTag(body);
-    expect(script.body.body).toHaveLength(1);
-    expect(script.body.body[0].type).toBe("MarkoText");
-    expect((script.body.body[0] as { value: string }).value).toBe(
-      "if (a<b) x()",
-    );
+    expect(script.body).toHaveLength(1);
+    expect(script.body[0].type).toBe("MxText");
+    expect((script.body[0] as { value: string }).value).toBe("if (a<b) x()");
   });
 
   it("reads <style>'s body as raw text", () => {
     const { body } = parseFragment("<style>a>b{}</style>");
     const style = firstTag(body);
-    expect(style.body.body).toHaveLength(1);
-    expect(style.body.body[0].type).toBe("MarkoText");
-    expect((style.body.body[0] as { value: string }).value).toBe("a>b{}");
+    expect(style.body).toHaveLength(1);
+    expect(style.body[0].type).toBe("MxText");
+    expect((style.body[0] as { value: string }).value).toBe("a>b{}");
   });
 
   it("reads <style>'s attributes as attributes despite rawOpenTag", () => {
@@ -201,19 +215,17 @@ describe("parseFragment's raw-text taglib slice", () => {
   it("reads <html-script>'s body as raw text", () => {
     const { body } = parseFragment("<html-script>if (a<b) x()</html-script>");
     const script = firstTag(body);
-    expect(script.body.body).toHaveLength(1);
-    expect(script.body.body[0].type).toBe("MarkoText");
-    expect((script.body.body[0] as { value: string }).value).toBe(
-      "if (a<b) x()",
-    );
+    expect(script.body).toHaveLength(1);
+    expect(script.body[0].type).toBe("MxText");
+    expect((script.body[0] as { value: string }).value).toBe("if (a<b) x()");
   });
 
   it("reads <html-style>'s body as raw text", () => {
     const { body } = parseFragment("<html-style>a>b{}</html-style>");
     const style = firstTag(body);
-    expect(style.body.body).toHaveLength(1);
-    expect(style.body.body[0].type).toBe("MarkoText");
-    expect((style.body.body[0] as { value: string }).value).toBe("a>b{}");
+    expect(style.body).toHaveLength(1);
+    expect(style.body[0].type).toBe("MxText");
+    expect((style.body[0] as { value: string }).value).toBe("a>b{}");
   });
 });
 
@@ -395,20 +407,24 @@ describe("parseFragment validates the base numbers (padding contract)", () => {
   it("leaves a valid base's positions unchanged", () => {
     // Raw: `href` attr starts at column 3, `input` at index 8, `class` value at
     // index 24. Line +2 and (first line) column +6; every index +42.
-    const { body } = parseFragment('<a href=input.url class="c">x</a>\n', {
+    const { ast, body } = parseFragment('<a href=input.url class="c">x</a>\n', {
       baseOffset: 42,
       baseLine: 2,
       baseColumn: 6,
     });
     const tag = firstTag(body);
-    expect(tag.loc.start).toMatchObject({ line: 3, column: 6 });
-    expect(tag.attributes[0].loc.start).toMatchObject({ line: 3, column: 9 });
-    expect(tag.attributes[0].value.object.loc.start).toMatchObject({
+    expect(tag.start).toBe(42);
+    expect(at(ast, tag.start)).toEqual({ line: 3, column: 6 });
+    expect(tag.attributes[0].start).toBe(45);
+    expect(at(ast, tag.attributes[0].start)).toEqual({ line: 3, column: 9 });
+    expect(tag.attributes[0].value.node.object.loc.start).toMatchObject({
       line: 3,
       column: 14,
       index: 50,
     });
-    expect(tag.attributes[1].value.loc.start).toMatchObject({ index: 66 });
+    expect(tag.attributes[0].value.node.object.start).toBe(50);
+    expect(tag.attributes[1].value.start).toBe(66);
+    expect(tag.attributes[1].value.node.loc.start).toMatchObject({ index: 66 });
   });
 });
 
@@ -502,13 +518,13 @@ describe("positionRegionSource", () => {
 
   it("pre-#176 pad, end to end through parseFragment: attribute name slices wrong, then right", () => {
     const region = '<div class="a" id="b">x</div>';
-    const { body } = parseFragment(region, at);
+    const { ast, body } = parseFragment(region, at);
     const tag = firstTag(body);
     const readNames = (padded: string) =>
       tag.attributes.map((attribute: Node) => {
         // What `sliceLoc`/`offsetOf` do for a line/column-only position:
         // take the file-relative start and read the padded text there.
-        const { line, column } = attribute.loc.start;
+        const { line, column } = lineColumnAt(ast, attribute.start);
         const text = padded.split("\n")[line - 1] ?? "";
         return text.slice(column, column + attribute.name.length);
       });

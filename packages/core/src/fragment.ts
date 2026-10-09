@@ -51,18 +51,13 @@ import {
 } from "./custom-tags.ts";
 import { nullPrototypeTags } from "./lookup-safety.ts";
 import { markoCompiler } from "./marko-frontend.ts";
+import { compileErrorOf, parseMx, registerDocument } from "./mx-parse.ts";
+import { sugarAfterDefaultError, tagParamError } from "./stock-parser.ts";
 import {
-  bareCommaError,
-  stockAtomError,
-  stockParserError,
-  sugarAfterDefaultError,
-  tagParamError,
-} from "./stock-parser.ts";
-import {
-  checkSyntaxUse,
   explicitSyntax,
   resolveSyntax,
   type SyntaxTable,
+  tableParseError,
 } from "./syntax-table.ts";
 
 /**
@@ -269,52 +264,6 @@ function shiftPosition(
 }
 
 /**
- * Deep-walks a tree, shifting every position it carries.
- *
- * `seen` is load-bearing, not defensive: Marko's tree is a graph, not a tree —
- * an attribute's value node is reachable both as `attributes[i].value` and
- * through the tag's own fields, and a node shifted twice lands at
- * `base + base`. Measured: `href=input.url` at raw index 16 with
- * `baseOffset: 42` came out at 100 instead of 58 before this set existed.
- */
-function shiftNode(
-  node: Node,
-  base: ResolvedFragmentBase,
-  seen: Set<object> = new Set(),
-): void {
-  if (!node || typeof node !== "object") return;
-  if (typeof node.line === "number" && typeof node.column === "number") {
-    shiftPosition(node, base, seen);
-    return;
-  }
-  if (seen.has(node)) return;
-  seen.add(node);
-  if (Array.isArray(node)) {
-    for (const item of node) shiftNode(item, base, seen);
-    return;
-  }
-
-  // Babel parse failures embedded in an otherwise valid Marko tree carry
-  // their precise location under a plain `errorLoc` object. It has no node
-  // `type`, so stopping at untyped containers leaves that position relative
-  // to the fragment while every surrounding node is file-relative.
-  if (node.loc) {
-    shiftPosition(node.loc.start, base, seen);
-    shiftPosition(node.loc.end, base, seen);
-  }
-  // Present on plain Babel nodes only; absent on Marko's own.
-  if (typeof node.type === "string") {
-    if (typeof node.start === "number") node.start += base.baseOffset;
-    if (typeof node.end === "number") node.end += base.baseOffset;
-  }
-
-  for (const key of Object.keys(node)) {
-    if (key === "loc" || key === "extra") continue;
-    shiftNode(node[key], base, seen);
-  }
-}
-
-/**
  * Throws, positioned at the fragment's start, when `base` breaks the numeric
  * half of the padding contract documented on `FragmentBase`. O(1): the padded
  * prefix is the host's, and never reaches this function.
@@ -431,11 +380,13 @@ export function positionRegionSource(
 }
 
 /**
- * Parses `source` as a Marko fragment, with every position shifted by `base`.
+ * Parses `source` as an MX fragment, with every position shifted by `base`.
  *
- * Uses `@marko/compiler`'s own parser (`output: "source"`, `ast: true`), so
- * the nodes are the same `MarkoTag`/`MarkoAttribute` shapes the core's
- * emitters consume — ADR 0001's point: one parse layer, no second grammar.
+ * Port PR 5: the MX front end parses (offsets are file-absolute at creation,
+ * ast §5.3), with the tag shapes Marko's lookup gives. `body` is the
+ * `MxDocument`'s body and `ast` the document; `lowerChildren` reads it. A
+ * parse error is thrown as the `CompileError` Marko threw for the fragment
+ * (its text measured in the fragment), with its `loc` shifted by `base`.
  */
 export function parseFragment(
   source: string,
@@ -455,52 +406,44 @@ export function parseFragment(
     base.syntax !== undefined
       ? explicitSyntax(base.syntax, resolved.filename)
       : resolveSyntax(resolved.filename);
-  checkSyntaxUse(source, syntax, {
-    filename: resolved.filename,
-    baseLine: resolved.baseLine,
-    baseColumn: resolved.baseColumn,
-  });
   const compiler = markoCompiler();
   const translator = parseOnlyTranslator(base.customTags);
-  prepareLookup(compiler, resolved.filename, translator);
-  let ast: Node;
-  try {
-    ast = compiler.compileSync(source, resolved.filename, {
-      output: "source",
-      ast: true,
-      // A translator with an empty `translate` is what makes this parse-only.
-      // Without one, `@marko/compiler` resolves its *default* translator
-      // (`marko/translator`, from the `marko` package) before it parses, which
-      // a package that only wants the AST has no reason to depend on — and
-      // `@mxlang/core` does not.
-      translator,
-      // biome-ignore lint/suspicious/noExplicitAny: the compiler's result type is untyped here
-    } as any).ast;
-  } catch (thrown) {
-    const error = markoPrintCrash(thrown)
-      ? reparseForError(
-          compiler,
-          source,
-          resolved.filename,
-          translator,
-          thrown as Error,
-        )
-      : thrown;
+  const lookup = compiler.taglib.buildLookup(
+    dirname(resolved.filename),
+    translator,
+  );
+  nullPrototypeTags(lookup);
+  const document = parseMx(source, {
+    syntax,
+    lookup,
+    base: {
+      offset: resolved.baseOffset,
+      line: resolved.baseLine,
+      column: resolved.baseColumn,
+    },
+  });
+  const tableError = tableParseError(document, syntax, {
+    filename: resolved.filename,
+  });
+  if (tableError) throw tableError;
+  // Marko's parse-only output never threw on expression errors alone: those
+  // stayed in the tree for lowering, as the containers' `error` do now.
+  const error = compileErrorOf(document, resolved.filename, {
+    expressionErrors: false,
+  });
+  if (error) {
     // A thrown error's position is on the exception, never in a tree, so the
     // walk below can never reach it (spike 1, limit 2).
     const positioned = error as PositionedError;
-    // Decision 151: a stock htmljs-parser cannot read `:name` after a value.
-    // The fragment's own coordinates are shifted like Marko's error's.
-    const stock =
-      bareCommaError(error, source) ??
-      tagParamError(error, source) ??
-      sugarAfterDefaultError(error, source) ??
-      stockParserError(error, source) ??
-      stockAtomError(error, source, undefined, base.productName);
-    if (stock) {
-      const at = { line: stock.line, column: stock.column };
+    // A failure inside a tag's `|params|`, and sugar right after a default
+    // value (decision 151, ruling 2), become positioned MX errors; the
+    // fragment's own coordinates are shifted like the parse error's.
+    const rewritten =
+      tagParamError(error, source) ?? sugarAfterDefaultError(error, source);
+    if (rewritten) {
+      const at = { line: rewritten.line, column: rewritten.column };
       shiftPosition(at, resolved);
-      throw new TranslateError(stock.message, at.line, at.column);
+      throw new TranslateError(rewritten.message, at.line, at.column);
     }
     if (positioned?.loc) {
       shiftPosition(positioned.loc.start, resolved);
@@ -512,48 +455,8 @@ export function parseFragment(
     }
     throw error;
   }
-
-  shiftNode(ast, resolved);
-  return { ast, body: ast.program?.body ?? [] };
-}
-
-/**
- * Marko's `source` output prints the tree it parsed, and a tag it failed to
- * parse part of (a method's type parameters that are not a type-parameter list,
- * `x<A<B>>(a) {b}`) leaves a bare array where the printer expects a node, so
- * the print throws `unknown node of type undefined with constructor "Array"`
- * before Marko reports the positioned parse error it recorded.
- */
-function markoPrintCrash(error: unknown): boolean {
-  return (
-    error instanceof ReferenceError &&
-    /unknown node of type undefined with constructor "Array"/.test(
-      error.message,
-    )
-  );
-}
-
-/**
- * Asks Marko to compile again to a form that reports its recorded parse errors
- * before printing anything, and returns what it throws (its own positioned
- * `CompileError`), or `original` when that compile does not fail.
- */
-function reparseForError(
-  // biome-ignore lint/suspicious/noExplicitAny: the compiler is required untyped here
-  compiler: any,
-  source: string,
-  filename: string,
-  translator: unknown,
-  original: Error,
-): Error {
-  try {
-    compiler.compileSync(source, filename, { translator, output: "html" });
-  } catch (error) {
-    // A `compileSync` throw is an `Error` in practice; callers narrow with
-    // `as PositionedError` / `instanceof` checks either way.
-    return error as Error;
-  }
-  return original as Error;
+  registerDocument(document);
+  return { ast: document, body: document.body };
 }
 
 /**

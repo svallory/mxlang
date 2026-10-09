@@ -1065,7 +1065,6 @@ function rewriteHead(ctx: Ctx, node: Node): void {
   );
 }
 
-/** Rewrites one tag's name sugar, once. */
 /**
  * The tags whose text is code, not attributes (`static`, `import`, ...), read
  * from the core taglib's own `statement` parse options: the one place Marko's
@@ -1080,31 +1079,26 @@ const CORE_STATEMENT_TAGS: ReadonlySet<string> = new Set(
 );
 
 /**
- * Is `name` a statement tag in THIS parse? Every parse declares core's
+ * Is `name` a statement tag in THIS Marko parse? Every parse declares core's
  * statement tags (decision 168), so one without a lookup (a unit test lowering
  * a bare AST) is answered by core's own statement entries. The lookup decides
  * when there is one
  * (`getTag(name).parseOptions.statement`: a data taglib that makes `class` an
  * ordinary tag keeps the sugar, and a custom tag with `parseOptions.statement`
  * is left alone); otherwise the core taglib's statement entries do.
+ *
+ * Marko's tree only: on the MX path the parse has already decided (decision
+ * 182 addenda 2 and 3), so `rewriteMxSugar` never asks.
  */
 function isStatementTag(ctx: Ctx, name: string): boolean {
   if (ctx.lookup) return !!ctx.lookup.getTag(name)?.parseOptions?.statement;
   return CORE_STATEMENT_TAGS.has(name);
 }
 
+/** Rewrites one Marko tag's name sugar, once. */
 export function rewriteNameSugar(ctx: Ctx, node: Node): void {
   if (done.has(node) || node?.type !== "MarkoTag") return;
   done.add(node);
-  rewriteSugarTag(ctx, node);
-}
-
-/**
- * The rewrite itself, on a tag in Marko's parsed shape. `rewriteMxSugar`
- * (`mx-sugar.ts`) runs it on a stand-in it builds from an MX tag, so both
- * ASTs share every rule and every diagnostic.
- */
-export function rewriteSugarTag(ctx: Ctx, node: Node): void {
   if (node.name?.type === "StringLiteral") {
     const spelled: string = node.name.value;
     if (isStatementTag(ctx, spelled)) return;
@@ -1127,6 +1121,19 @@ export function rewriteSugarTag(ctx: Ctx, node: Node): void {
       );
     }
   }
+  rewriteSugarTag(ctx, node);
+}
+
+/**
+ * The rewrite itself, on a tag in Marko's parsed shape. `rewriteMxSugar`
+ * (`mx-sugar.ts`) runs it on a stand-in it builds from an MX tag, so both
+ * ASTs share every rule and every diagnostic. Which names are statement tags
+ * is not asked here: on the MX path the parse's statement keywords decided it
+ * (a `:name` on one is the front end's `MX_SUGAR_ON_STATEMENT`, which
+ * lowering raises before any rewrite), and on Marko's tree `rewriteNameSugar`
+ * asks first.
+ */
+export function rewriteSugarTag(ctx: Ctx, node: Node): void {
   if (!Array.isArray(node.attributes)) return;
   rewriteHead(ctx, node);
   rewriteAttributes(ctx, node);

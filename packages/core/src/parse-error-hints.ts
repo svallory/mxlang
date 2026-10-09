@@ -370,9 +370,13 @@ function hintOne(
  * (message and `label`, the two places a caller reads it from). An aggregate
  * error is handled entry by entry, mirroring `annotateCloseTagOpener`.
  */
-/** Marko's hint for a `{…}`-wrapped attribute value whose inside parses. */
+/**
+ * The front end's hint for a `{…}`-wrapped attribute value whose inside
+ * parses: Marko's `withWrappedAttrValueHint`, in the lead's MX rewording
+ * (2026-10-08, `@mxlang/parser` `wrappedAttrValueHint`).
+ */
 const JSX_WRAP_SENTENCE =
-  " Attribute values in Marko are plain JavaScript expressions, not JSX; remove the wrapping `{ }`.";
+  " Attribute values in MX are plain TypeScript expressions, not JSX; remove the wrapping `{ }`.";
 
 /**
  * `x={ new :a }` (decision 156; lead ruling, review round 3): a keyword key

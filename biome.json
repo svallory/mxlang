@@ -105,6 +105,10 @@
         "packages/hosts/angular/test/text-interpolation.test.ts",
         "packages/parser/src/frontend/rules.ts",
         "packages/parser/src/frontend/rules.test.ts",
+        "packages/core/src/name-sugar.ts",
+        "packages/core/src/lower.test.ts",
+        "packages/core/src/syntax-table.test.ts",
+        "packages/tooling/vite-plugin/src/index.test.ts",
         "packages/parse-differential/src/expressions.test.ts",
         "packages/parse-differential/src/differential.test.ts"
       ],

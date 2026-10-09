@@ -89,6 +89,7 @@ function rejectMisuse(name: string, node: Node, parent: Node, key: string) {
       return;
     case "SpreadElement":
     case "MarkoSpreadAttribute":
+    case "MxSpreadAttribute":
       // `f(...:a)`, `[...:a]` and a tag's `<div ...:a/>` alike.
       fail(misuse(name, "spreading"), node);
       return;
@@ -100,6 +101,16 @@ function rejectMisuse(name: string, node: Node, parent: Node, key: string) {
         );
       }
   }
+}
+
+/** An MX expression container (`MxExpression`, `MxStatements`, …; ast §4.1). */
+function isMxContainer(node: Node): boolean {
+  return (
+    typeof node.type === "string" &&
+    node.type.startsWith("Mx") &&
+    "outer" in node &&
+    "node" in node
+  );
 }
 
 /**
@@ -138,12 +149,19 @@ export function convertAtoms(ctx: Ctx, roots: readonly Node[]): void {
     }
     const atom = atomOf(node);
     if (atom) {
+      // The MX front end hands lowering its atoms already converted (ast
+      // §4.3): the misuse checks run on them all the same.
+      rejectMisuse(atom.name, node, parent, key);
       found.set(atom.span.sourceStart, atom);
       return;
     }
+    // An MX expression container is not the payload's syntactic parent: the
+    // payload's parent is the container's owner (`<div ...:a/>`'s spread).
+    const container = isMxContainer(node);
     for (const [childKey, child] of Object.entries(node)) {
       if (SKIP.has(childKey) || !child || typeof child !== "object") continue;
-      visit(child, node, childKey);
+      if (container && childKey === "node") visit(child, parent, key);
+      else visit(child, node, childKey);
     }
   };
   for (const root of roots) visit(root, null, "");

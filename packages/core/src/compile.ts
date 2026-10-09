@@ -47,19 +47,19 @@ import type { Ir } from "./ir.ts";
 import { nullPrototypeTags } from "./lookup-safety.ts";
 import { lower } from "./lower.ts";
 import { markoBabel, markoCompiler } from "./marko-frontend.ts";
+import {
+  compileErrorOf,
+  parseMx,
+  registerDocument,
+  stripMxTypes,
+} from "./mx-parse.ts";
 import { hintParseError } from "./parse-error-hints.ts";
+import { sugarAfterDefaultError, tagParamError } from "./stock-parser.ts";
 import {
-  bareCommaError,
-  stockAtomError,
-  stockParserError,
-  sugarAfterDefaultError,
-  tagParamError,
-} from "./stock-parser.ts";
-import {
-  checkSyntaxUse,
   explicitSyntax,
   resolveSyntax,
   type SyntaxTable,
+  tableParseError,
 } from "./syntax-table.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
 
@@ -182,6 +182,7 @@ export interface Translator {
   statementTags?: false;
   tagDiscoveryDirs: string[];
   translate: {
+    // biome-ignore lint/style/useNamingConvention: a Marko translate visitor key is a node type
     Program: {
       exit(path: { node: { body: Node[] } }): void;
     };
@@ -318,6 +319,21 @@ export function createTranslator(host: TranslatorOptions): Translator {
 }
 
 /**
+ * What Babel's `run` did to an error thrown while translating, which every
+ * caller of `compileSource` saw until port PR 5: the file name in front of
+ * the message, and a `code` when it had none. Kept so no diagnostic changes
+ * text; `dropCompiledFilePrefix` below then removes the prefix from a
+ * `TranslateError`, as it always did.
+ */
+function asBabelTransformError(error: unknown, filename: string): unknown {
+  if (error === null || typeof error !== "object") return error;
+  const decorated = error as { message?: unknown; code?: unknown };
+  decorated.message = `${resolve(filename)}: ${decorated.message}`;
+  if (!decorated.code) decorated.code = "BABEL_TRANSFORM_ERROR";
+  return error;
+}
+
+/**
  * Babel prefixes a translator error's message with `<filename>: `. A
  * `TranslateError` already carries `line`/`column` (and `file` when it is
  * about another file), so the prefix only repeats the compiled file, often as
@@ -411,9 +427,6 @@ export function compileSource(
     host.syntax !== undefined
       ? explicitSyntax(host.syntax, filename)
       : resolveSyntax(filename);
-  checkSyntaxUse(source, syntax, {
-    filename,
-  });
   const compiler = markoCompiler();
   const translator = createTranslator(host);
 
@@ -446,12 +459,24 @@ export function compileSource(
   const previous = current;
   current = state;
   try {
-    compiler.compileSync(source, filename, {
-      translator,
-      output: "html",
-      ...(host.stripTypes === undefined ? {} : { stripTypes: host.stripTypes }),
-      writeVersionComment: false,
+    // Port PR 5: the MX front end parses, with the tag shapes Marko's lookup
+    // gives; its parse errors are thrown as the `CompileError` Marko threw,
+    // and its payloads lose their TypeScript as Marko's did (`stripTypes`
+    // defaults to true for a build). `@marko/compiler` no longer parses.
+    const document = parseMx(source, { syntax, lookup });
+    const tableError = tableParseError(document, syntax, { filename });
+    if (tableError) throw tableError;
+    const parseError = compileErrorOf(document, filename, {
+      expressionErrors: true,
     });
+    if (parseError) throw parseError;
+    if (host.stripTypes !== false) stripMxTypes(document);
+    registerDocument(document);
+    try {
+      translator.translate.Program.exit({ node: { body: document.body } });
+    } catch (error) {
+      throw asBabelTransformError(error, filename);
+    }
   } catch (error) {
     if (isTranslateError(error)) {
       // Past `lower()` nothing knows the source: an MX-node error that got
@@ -477,13 +502,11 @@ export function compileSource(
     if (recorded && isTranslateError(error)) error.errors = undefined;
     annotateCloseTagOpener(error, source);
     hintParseError(error, source, policy);
-    // Decision 151: a stock htmljs-parser cannot read `:name` after a value.
+    // A failure inside a tag's `|params|`, and sugar right after a default
+    // value (decision 151, ruling 2), become positioned MX errors.
     const thrown =
-      bareCommaError(error, source) ??
       tagParamError(error, source) ??
       sugarAfterDefaultError(error, source) ??
-      stockParserError(error, source) ??
-      stockAtomError(error, source, undefined, state.productName) ??
       error;
     if (recorded && thrown === error && isTranslateError(error)) {
       error.errors = recorded;

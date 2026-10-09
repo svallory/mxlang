@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { compileSource } from "./compile.ts";
 import { TranslateError } from "./core.ts";
 import type { HostDeclarations } from "./declarations.ts";
-import { STOCK_ATOM_MESSAGE } from "./stock-parser.ts";
 import { testTargetLookup } from "./test-targets.ts";
 
 /**
@@ -43,14 +42,6 @@ describe("productName (decision 183)", () => {
   it("names the product in the foreign-attribute hints", () => {
     expect(fails("<div *foo/>", "Acme").message).toContain(
       "no meaning in Acme",
-    );
-  });
-
-  it("names the product in the stock-atom message", () => {
-    const message = STOCK_ATOM_MESSAGE(":rename-all", "Acme");
-    expect(message).toContain("atoms need the Acme parser");
-    expect(STOCK_ATOM_MESSAGE(":rename-all")).toContain(
-      "atoms need the MX parser",
     );
   });
 });

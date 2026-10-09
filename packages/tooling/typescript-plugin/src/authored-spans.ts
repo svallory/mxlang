@@ -1,29 +1,42 @@
 import { type CustomTag, parseFragment } from "@mxlang/core";
 import type { AuthoredSpan } from "./unmapped-diagnostics.ts";
 
-interface MarkoPosition {
-  line: number;
-  column: number;
+/** A UTF-16 range into the parsed source (an MX node, field shape or Babel node). */
+interface Range {
+  start: number;
+  end: number;
 }
 
-interface MarkoNode {
-  type?: string;
-  loc?: { start?: MarkoPosition; end?: MarkoPosition } | null;
-  name?: MarkoNode;
-  value?: MarkoNode;
-  var?: MarkoNode | null;
-  arguments?: MarkoNode[] | null;
-  attributes?: MarkoNode[];
-  body?: { params?: MarkoNode[]; body?: MarkoNode[] };
+/** An embedded-code container: its Babel payload, `null` when it did not parse. */
+interface MxContainer extends Range {
+  node?:
+    | (Range & { type?: string; extra?: { mxAtom?: unknown } })
+    | Range[]
+    | null;
+}
+
+/** The fields of the MX AST (`@mxlang/babel`'s `mx-ast`) this walk reads. */
+interface MxNode extends Range {
+  type: string;
+  name?: { kind?: string; expression?: MxContainer } | string | null;
+  nameSpan?: Range;
+  expression?: MxContainer;
+  var?: MxContainer | null;
+  args?: MxContainer | null;
+  params?: MxContainer | null;
+  attributes?: readonly MxNode[];
+  value?: MxContainer | null;
+  default?: MxContainer | null;
+  body?: readonly MxNode[] | null;
 }
 
 /** Nodes of a template body that hold no code: text and markup only. */
 const NOT_CODE = new Set([
-  "MarkoText",
-  "MarkoComment",
-  "MarkoCDATA",
-  "MarkoDocumentType",
-  "MarkoDeclaration",
+  "MxText",
+  "MxComment",
+  "MxCDATA",
+  "MxDoctype",
+  "MxDeclaration",
 ]);
 
 /**
@@ -33,10 +46,17 @@ const NOT_CODE = new Set([
  * placeholder's expression, an attribute value other than a quoted string, a
  * tag's arguments, variable, parameters or dynamic name, a statement): where an
  * identifier or literal counts as spelled by the author. Read from the same
- * Marko parse core lowers from, so it agrees with what the compiler saw. A
+ * MX parse core lowers from, so it agrees with what the compiler saw. A
  * source that does not parse has none, and its diagnostics fall back to the
  * file start. `baseOffset` shifts every span, for a source that is a slice of
  * a larger file.
+ *
+ * The spans are the ones the Marko-tree walk produced before port PR 5,
+ * measured equal over every whole-file `.mx` in the repository: a module
+ * statement is a `tag` (Marko parsed it as a statement tag); an attribute tag
+ * and its body have none (Marko moved them off the body); an attribute starts
+ * at its name (an `async` method's keyword is outside) and a sugar attribute
+ * ends after its default value; an atom value is code, a quoted string is not.
  */
 export function markoAuthoredSpans(
   source: string,
@@ -44,55 +64,71 @@ export function markoAuthoredSpans(
   customTags: Record<string, CustomTag> | undefined,
   baseOffset = 0,
 ): AuthoredSpan[] {
-  let body: MarkoNode[];
+  let body: readonly MxNode[];
   try {
     body = parseFragment(source, { filename: fileName, customTags })
-      .body as MarkoNode[];
+      .body as readonly MxNode[];
   } catch {
     return [];
   }
-  // Marko counts lines from 1 and columns from 0.
-  const lineStarts = [0];
-  for (
-    let at = source.indexOf("\n");
-    at >= 0;
-    at = source.indexOf("\n", at + 1)
-  ) {
-    lineStarts.push(at + 1);
-  }
-  const offsetOf = (position: MarkoPosition) =>
-    (lineStarts[position.line - 1] ?? source.length) + position.column;
   const spans: AuthoredSpan[] = [];
-  const add = (
-    kind: AuthoredSpan["kind"],
-    node: MarkoNode | null | undefined,
-  ) => {
-    const { start, end } = node?.loc ?? {};
-    if (start && end)
+  const add = (kind: AuthoredSpan["kind"], node: Range | null | undefined) => {
+    if (node)
       spans.push({
         kind,
-        start: baseOffset + offsetOf(start),
-        end: baseOffset + offsetOf(end),
+        start: baseOffset + node.start,
+        end: baseOffset + node.end,
       });
   };
-  const walk = (nodes: readonly MarkoNode[] | undefined) => {
+  // A container's Babel node where it parsed, else the container's own text.
+  const code = (container: MxContainer | null | undefined) => {
+    const node = container?.node;
+    add("code", node && !Array.isArray(node) ? node : container);
+  };
+  // A list container (arguments, parameters): one span per parsed item.
+  const each = (container: MxContainer | null | undefined) => {
+    if (Array.isArray(container?.node))
+      for (const item of container.node) add("code", item);
+    else code(container);
+  };
+  const walk = (nodes: readonly MxNode[] | null | undefined) => {
     for (const node of nodes ?? []) {
-      if (node.type !== "MarkoTag") {
-        if (node.type === "MarkoPlaceholder") add("code", node.value);
-        else if (!NOT_CODE.has(node.type ?? "")) add("code", node);
+      if (node.type === "MxAttributeTag") continue;
+      if (node.type === "MxModuleStatement") {
+        add("tag", node);
+        continue;
+      }
+      if (node.type !== "MxTag" && node.type !== "MxReturn") {
+        if (node.type === "MxPlaceholder") code(node.expression);
+        else if (!NOT_CODE.has(node.type)) add("code", node);
         continue;
       }
       add("tag", node);
-      if (node.name?.type !== "StringLiteral") add("code", node.name);
-      add("code", node.var);
-      for (const argument of node.arguments ?? []) add("code", argument);
-      for (const param of node.body?.params ?? []) add("code", param);
+      if (typeof node.name === "object" && node.name?.kind === "dynamic")
+        code(node.name.expression);
+      code(node.var);
+      each(node.args);
+      each(node.params);
       for (const attribute of node.attributes ?? []) {
-        add("attribute", attribute);
-        if (attribute.value?.type !== "StringLiteral")
-          add("code", attribute.value);
+        if (attribute.type === "MxComment" || attribute.type === "MxTrigger")
+          continue;
+        const value =
+          attribute.type === "MxShorthand"
+            ? attribute.default
+            : attribute.value;
+        add("attribute", {
+          start: attribute.nameSpan?.start ?? attribute.start,
+          end: Math.max(attribute.end, value?.end ?? 0),
+        });
+        const valueNode = value?.node;
+        const quoted =
+          valueNode &&
+          !Array.isArray(valueNode) &&
+          valueNode.type === "StringLiteral" &&
+          !valueNode.extra?.mxAtom;
+        if (value && !quoted) code(value);
       }
-      walk(node.body?.body);
+      walk(node.body);
     }
   };
   walk(body);

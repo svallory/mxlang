@@ -32,6 +32,9 @@ const coreDir = path.resolve(import.meta.dirname, "..");
 const distDir = path.join(coreDir, "dist");
 const templateDir = path.resolve(coreDir, "../parser/src/template");
 const templateEntry = path.join(templateDir, "index.ts");
+const fromCompiler = createRequire(
+  createRequire(import.meta.url).resolve("@marko/compiler"),
+);
 
 /** The file `src/marko-frontend.ts` loads, relative to `dist/index.js`. */
 export const FRONTEND_FILE = "marko-frontend.cjs";
@@ -65,6 +68,12 @@ const result = await Bun.build({
       setup(build) {
         build.onResolve({ filter: /^htmljs-parser$/ }, () => ({
           path: templateEntry,
+        }));
+        // The MX front end's parse errors are rendered as Marko's
+        // `CompileError` (`src/mx-parse.ts`), with Marko's own colours:
+        // `kleur` is a dependency of `@marko/compiler`, not hoisted.
+        build.onResolve({ filter: /^kleur\/colors$/ }, () => ({
+          path: fromCompiler.resolve("kleur/colors"),
         }));
         build.onResolve({ filter: STUB_FILTER }, ({ path: id }) => ({
           path: id,

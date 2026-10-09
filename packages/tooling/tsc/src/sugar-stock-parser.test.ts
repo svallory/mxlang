@@ -17,29 +17,19 @@ import { stripVTControlCharacters } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 /**
- * Decision 151, ruling 1, in every tool: on a consumer's stock
- * `htmljs-parser`, `<input type="email" :email>` is one MX error positioned at
- * the `:` (1:20, 0-based column 20), in the language server, the TypeScript
- * plugin, the Vite transform and `mx-tsc` alike. The repo installs the patched
- * parser, so the stock one is rebuilt in a `mkdtemp` copy by reversing the
- * committed patch (plain JS: the gate PATH has no `patch`), and each tool's
- * built `dist` runs against it in a child process. This is why the error has no
- * `host-dispatch` row: the tools cannot reach it in-process.
- *
- * Decision 159: core's dist parses with its bundled Marko front end and MX's
- * own template parser, so a stock `htmljs-parser` in the install no longer
- * reaches any tool (the second `describe`). The decision 151 error is left for
- * a core that bypasses its bundle; `hook` simulates one by resolving core's
- * `./marko-frontend.cjs` to the npm compiler on the stock parser.
+ * Decision 159: core's dist parses with its bundled front end and MX's own
+ * template parser, so a stock `htmljs-parser` in the install reaches no tool:
+ * `<input type="email" :email>` compiles with no diagnostic in the language
+ * server and `mx-tsc`. The stock parser is rebuilt in a `mkdtemp` copy by
+ * reversing the committed patch (plain JS: the gate PATH has no `patch`), and
+ * each tool's built `dist` runs against it in a child process. (Decision 151's
+ * stock-parser error is gone: core never parses MX with a stock parser.)
  */
 
 const here = import.meta.dirname;
 const repo = join(here, "..", "..", "..", "..");
 const require = createRequire(import.meta.url);
 const SOURCE = '<input type="email" :email/>\n';
-
-const MESSAGE_PART =
-  "`:email` after an attribute value needs the patched htmljs-parser";
 
 function reversePatch(dir: string, patchText: string): void {
   for (const section of patchText.split(/^diff --git /m).slice(1)) {
@@ -77,7 +67,6 @@ function makeWritable(dir: string): void {
 let work = "";
 let project = "";
 let page = "";
-let hook = "";
 let stockOnlyHook = "";
 
 beforeAll(() => {
@@ -98,31 +87,6 @@ beforeAll(() => {
 const resolve = Module._resolveFilename;
 Module._resolveFilename = function (request, ...rest) {
   if (request === "htmljs-parser") return ${JSON.stringify(join(stock, "dist/index.js"))};
-  return resolve.call(this, request, ...rest);
-};
-`,
-  );
-  const shim = join(work, "stock-frontend.cjs");
-  const compiler = require.resolve("@marko/compiler", {
-    paths: [dist("core")],
-  });
-  writeFileSync(
-    shim,
-    `module.exports = {
-  compiler: require(${JSON.stringify(compiler)}),
-  babel: require(${JSON.stringify(require.resolve("@marko/compiler/internal/babel", { paths: [dist("core")] }))}),
-  htmljsParser: require("node:module").createRequire(${JSON.stringify(compiler)})("htmljs-parser"),
-};
-`,
-  );
-  hook = join(work, "hook.cjs");
-  writeFileSync(
-    hook,
-    `require(${JSON.stringify(stockOnlyHook)});
-const Module = require("node:module");
-const resolve = Module._resolveFilename;
-Module._resolveFilename = function (request, ...rest) {
-  if (request === "./marko-frontend.cjs") return ${JSON.stringify(shim)};
   return resolve.call(this, request, ...rest);
 };
 `,
@@ -154,7 +118,7 @@ afterAll(() => {
   if (work) rmSync(work, { recursive: true, force: true });
 });
 
-function run(script: string, hookFile = hook): Record<string, unknown> {
+function run(script: string, hookFile: string): Record<string, unknown> {
   const file = join(work, `leg-${Math.random().toString(36).slice(2)}.cjs`);
   writeFileSync(file, `require(${JSON.stringify(hookFile)});\n${script}`);
   const result = spawnSync(process.execPath, [file], {
@@ -166,82 +130,6 @@ function run(script: string, hookFile = hook): Record<string, unknown> {
 }
 
 const dist = (...parts: string[]) => join(repo, "packages", ...parts);
-
-describe("`:name` after an attribute value on a stock htmljs-parser, in every tool", () => {
-  it("language server: one diagnostic at the `:`", () => {
-    const out = run(`
-const lsRequire = require("node:module").createRequire(${JSON.stringify(dist("tooling/language-server/package.json"))});
-Promise.all([
-  import(${JSON.stringify(`file://${dist("tooling/language-server/dist/index.js")}`)}),
-  import("file://" + lsRequire.resolve("@mxlang/target-registry")),
-]).then(([{ diagnoseDocument }, { resolveTargetPolicy }]) => {
-  const policy = resolveTargetPolicy(${JSON.stringify(page)});
-  const diagnostics = diagnoseDocument(${JSON.stringify(SOURCE)}, ${JSON.stringify(`file://${page}`)}, policy, () => {}, "mx");
-  console.log(JSON.stringify({ diagnostics }));
-});`) as {
-      diagnostics: {
-        message: string;
-        range: { start: { line: number; character: number } };
-      }[];
-    };
-    expect(out.diagnostics).toHaveLength(1);
-    expect(out.diagnostics[0]?.message).toContain(MESSAGE_PART);
-    expect(out.diagnostics[0]?.range.start).toEqual({ line: 0, character: 20 });
-  });
-
-  it("TypeScript plugin: one compile diagnostic at offset 20", () => {
-    const out = run(`
-const ts = require(${JSON.stringify(require.resolve("typescript"))});
-const { createMxLanguagePlugin } = require(${JSON.stringify(dist("tooling/typescript-plugin/dist/index.cjs"))});
-const plugin = createMxLanguagePlugin(ts);
-const warn = console.warn; console.warn = () => {};
-plugin.createVirtualCode(${JSON.stringify(page)}, "mx", ts.ScriptSnapshot.fromString(${JSON.stringify(SOURCE)}), { getAssociatedScript: () => undefined });
-const diagnostics = plugin.getCompileDiagnostics(${JSON.stringify(page)}).map(({ source, ...rest }) => rest);
-console.warn = warn;
-console.log(JSON.stringify({ diagnostics }));`) as {
-      diagnostics: { message: string; offset: number }[];
-    };
-    expect(out.diagnostics).toHaveLength(1);
-    expect(out.diagnostics[0]?.message).toContain(MESSAGE_PART);
-    expect(out.diagnostics[0]?.offset).toBe(20);
-  });
-
-  it("Vite transform: an error at 1:20", () => {
-    const out = run(`
-const mxVite = require(${JSON.stringify(dist("tooling/vite-plugin/dist/index.cjs"))});
-const plugin = (mxVite.default ?? mxVite)();
-plugin.transform.call({ warn() {}, error(e) { throw e; } }, ${JSON.stringify(SOURCE)}, ${JSON.stringify(page)} + mxVite.MX_SUFFIX).then(
-  () => console.log(JSON.stringify({ ok: true })),
-  (e) => console.log(JSON.stringify({ message: e.message, loc: e.loc })),
-);`) as { ok?: true; message?: string; loc?: { line: number; column: number } };
-    expect(out.ok).toBeUndefined();
-    expect(out.message).toContain(MESSAGE_PART);
-    expect(out.loc).toMatchObject({ line: 1, column: 20 });
-  });
-
-  it("mx-tsc: TS80001 at (1,21)", () => {
-    const result = spawnSync(
-      process.execPath,
-      [
-        "--require",
-        hook,
-        dist("tooling/tsc/dist/bin.cjs"),
-        "--noEmit",
-        "--pretty",
-        "false",
-        "-p",
-        join(project, "tsconfig.json"),
-      ],
-      { encoding: "utf8", cwd: project },
-    );
-    const output = stripVTControlCharacters(
-      `${result.stdout}\n${result.stderr}`,
-    );
-    expect(result.status).not.toBe(0);
-    expect(output).toContain("page.mx(1,21): error TS80001:");
-    expect(output).toContain(MESSAGE_PART);
-  });
-});
 
 describe("with core's bundled front end, a stock htmljs-parser in the install changes nothing", () => {
   it("language server: no diagnostic", () => {
@@ -280,6 +168,5 @@ Promise.all([
       `${result.stdout}\n${result.stderr}`,
     );
     expect(output).not.toContain("TS80001");
-    expect(output).not.toContain(MESSAGE_PART);
   });
 });

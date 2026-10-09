@@ -185,7 +185,7 @@ object \| null` optional. Built by `createParseError`
 is `MarkoParseError { source: "(1 +)", label: "Unexpected token", errorLoc:
 { start: { line: 1, column: 11, index: 11 } } }`. Read by
 `lower.ts` `exprOf` (`label`, `errorLoc`, `loc`),
-`core/src/stock-parser.ts` `stockParserError`, `hosts/solid/src/compile.ts` `repairEmbeddedTsx` (`source`).
+`hosts/solid/src/compile.ts` `repairEmbeddedTsx` (`source`).
 
 ### 1.3 Marko's front end, handler by handler
 
@@ -1036,8 +1036,9 @@ one aggregate, `[C]chunk-src.js:5975-5984`, `:6474`), so the 14 host-dispatch go
 The three post-processors that rewrite Marko's errors today (`compile.ts`,
 the `catch` around `compileSync`: `annotateCloseTagOpener` from
 `close-tag-opener.ts`, `hintParseError` from `parse-error-hints.ts`, and
-`sugarAfterDefaultError`/`stockParserError`/`stockAtomError` from
-`stock-parser.ts`) key on `MxParseError.code` instead of matching message
+`sugarAfterDefaultError`/`tagParamError` from
+`stock-parser.ts`; decision 151's stock-parser rewrites were deleted in port
+PR 5) key on `MxParseError.code` instead of matching message
 text. **Status on main:** decision 162 is implemented for lowering
 (`TranslateError.errors`, IR spec §13); a Marko parse error still arrives as
 one aggregate, and decision 161 is separate. The rest of this paragraph follows

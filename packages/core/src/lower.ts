@@ -37,7 +37,6 @@ import {
   attrNameOf,
   attrValueOf,
   hasExpressionValue,
-  hookAttr,
   isBoundAttr,
   isDefaultAttr,
   isMethodAttr,
@@ -137,6 +136,8 @@ import type {
   TagAlias,
 } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
+import { markoViewOf } from "./marko-view.ts";
+import { pendingFrontEndError } from "./mx-parse.ts";
 import {
   declaredBinding,
   type ScriptletDeclaration,
@@ -144,7 +145,6 @@ import {
 } from "./parse-error-hints.ts";
 import { payloadOf } from "./payload.ts";
 import { checkReservedTemplate } from "./reserved-bindings.ts";
-import { parseErrorToSugarError } from "./stock-parser.ts";
 import { CONTROL_FLOW_TAGS } from "./structural-tags.ts";
 import {
   hasStaticName,
@@ -455,15 +455,6 @@ export function expressionShape(node: Node): ExprShape {
  */
 export function exprOf(ctx: Ctx, node: Node): Expr {
   if (node?.type === "MarkoParseError") {
-    // Decision 151: sugar Marko's parser (stock, or any parser for a default
-    // attribute) cannot read becomes one MX error naming the rule.
-    const sugar = parseErrorToSugarError(
-      node,
-      ctx.source,
-      undefined,
-      productOf(ctx),
-    );
-    if (sugar) throw sugar;
     fail(node.label ?? "invalid expression", {
       loc: { start: node.errorLoc?.start ?? node.loc?.start },
     });
@@ -957,7 +948,7 @@ function lowerAttrNamed(
   }
 
   if (attrArgsOf(attr) || isMethodAttr(attr)) {
-    const hooked = hookAttr(attr);
+    const hooked = markoViewOf(ctx, attr);
     if (ctx.declarations.resolveAttributeMethod?.(hooked, on) !== true) {
       ctx.declarations.rejectAttributeMethod?.(hooked, on);
       fail(
@@ -985,7 +976,8 @@ function lowerAttrNamed(
   // diagnostic is in its own vocabulary (a Marko-parity target quotes Marko's
   // own fix-it); the core's wording is only the fallback.
   if (attr.modifier != null && name === attr.name) {
-    const resolvedName = ctx.declarations.resolveModifier?.(attr, on);
+    const hookView = markoViewOf(ctx, attr);
+    const resolvedName = ctx.declarations.resolveModifier?.(hookView, on);
     if (resolvedName !== undefined) {
       return {
         kind: "dynamic",
@@ -999,7 +991,7 @@ function lowerAttrNamed(
     // call is a different diagnostic from one on an element, and the pre-IR
     // walk said so ("… on a component call is not supported"). Losing that
     // distinction was a message regression even though both still fail.
-    ctx.declarations.rejectModifier?.(attr, on);
+    ctx.declarations.rejectModifier?.(hookView, on);
     fail(
       `attribute modifier \`${attr.name}:${attr.modifier}\` is not supported in a standalone template`,
       attr,
@@ -1854,6 +1846,9 @@ function lowerAttributeIf(
   }> = [];
   const branchContent: Node[] = [];
   let cursor = index;
+  // Layout after the chain's last branch is not the chain's: a comment
+  // there belongs to the parent's next sibling (Marko moved it out first).
+  let end = index;
   while (cursor < siblings.length) {
     const branch = siblings[cursor];
     const name = String(tagNameOf(branch) ?? "").replace(/^@/, "");
@@ -1879,6 +1874,7 @@ function lowerAttributeIf(
       ...lowered.contentChildren.filter((child: Node) => !isLayout(child)),
     );
     cursor++;
+    end = cursor;
     while (cursor < siblings.length && isLayout(siblings[cursor])) cursor++;
     if (!conditionAttr) break;
   }
@@ -1891,24 +1887,26 @@ function lowerAttributeIf(
       branchContent[0],
     );
   }
-  return [{ kind: "AttributeTagIf", branches, loc: posOf(ctx, first) }, cursor];
+  return [{ kind: "AttributeTagIf", branches, loc: posOf(ctx, first) }, end];
 }
 
 function attributeIfChainEnd(body: Node[], index: number): number {
   let cursor = index + 1;
+  let end = cursor;
   while (cursor < body.length) {
     while (cursor < body.length && isLayout(body[cursor])) cursor++;
     const branch = body[cursor];
     const name = String(tagNameOf(branch) ?? "").replace(/^@/, "");
     if (name !== "else" && name !== "else-if") break;
     cursor++;
+    end = cursor;
     const conditional =
       name === "else-if"
         ? (attrByName(branch, "value") ?? tagAttributesOf(branch)[0])
         : attrByName(branch, "if");
     if (!conditional) break;
   }
-  return cursor;
+  return end;
 }
 
 /** Two source-ordered node lists as one, ordered by where each node opens. */
@@ -3101,7 +3099,11 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
       attrTagProps: loweredTags.props,
       params: paramsOf(ctx, node),
       var: tagVarOf(node) ? declName(ctx, tagVarOf(node)) : null,
-      data: ctx.declarations.resolveDelegatedTag?.(name, node, ctx),
+      data: ctx.declarations.resolveDelegatedTag?.(
+        name,
+        markoViewOf(ctx, node),
+        ctx,
+      ),
       loc,
     },
     loc,
@@ -3226,11 +3228,19 @@ function validateCustomAttributeTagBodies(
           attrs[0],
         );
       }
-      const nested = tag.attributeTags ?? [];
-      if (nested.length > 0) {
+      // Marko's `attributeTags` field, or the MX body's first attribute tag
+      // or control tag holding one (Marko files those under the field too).
+      const nested =
+        tag.attributeTags?.[0] ??
+        bodyChildren(tag).find(
+          (child: Node) =>
+            isMxAttributeTag(child) ||
+            (isControl(child) && containsAttributeTags(child)),
+        );
+      if (nested) {
         fail(
           `${owner}: attribute tag \`<@${name}>\` does not support nested attribute tags`,
-          nested[0]?.name ?? nested[0],
+          tagNameSpanOf(nested) ?? nested.name ?? nested,
         );
       }
     }
@@ -3551,7 +3561,11 @@ function lowerComponent(
   // will not route must fail here rather than reach an emitter, which no
   // longer has the Marko node to judge it by.
   if (target.kind === "name" && !taglibTag) {
-    ctx.declarations.rejectComponentTag?.(target.name, node, ctx);
+    ctx.declarations.rejectComponentTag?.(
+      target.name,
+      markoViewOf(ctx, node),
+      ctx,
+    );
   }
   if (target.kind !== "dynamic") {
     // The dynamic-tag path already ran this check before routing here; a
@@ -4216,7 +4230,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     // find entry point for custom tag `<Name>`"), which is what its users
     // see and what its fixtures assert. The message below is the fallback
     // for a host that supplies none.
-    ctx.declarations.rejectUnknownTag?.(name, node, ctx);
+    ctx.declarations.rejectUnknownTag?.(name, markoViewOf(ctx, node), ctx);
     fail(
       `\`<${name}>\` has no matching import or \`<define>\` in scope; a capitalized tag is always a component call`,
       node,
@@ -4231,12 +4245,12 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     // host's own wording for it (Marko: "Local variables must be in a dynamic
     // tag unless they are PascalCase").
     if (lowercaseBinding) {
-      ctx.declarations.rejectComponentTag?.(name, node, ctx);
+      ctx.declarations.rejectComponentTag?.(name, markoViewOf(ctx, node), ctx);
     }
     // The host's own wording first: a Marko-parity target reports Marko's
     // failure for an unresolved custom tag, which is what its users see and
     // what the fixtures assert. The message below is the fallback.
-    ctx.declarations.rejectUnknownTag?.(name, node, ctx);
+    ctx.declarations.rejectUnknownTag?.(name, markoViewOf(ctx, node), ctx);
     fail(
       lowercaseBinding
         ? `unknown tag \`<${name}>\`: not an HTML element, and a lowercase tag never calls the \`${name}\` binding in scope. Rename it \`${name.charAt(0).toUpperCase()}${name.slice(1)}\` or write \`<\${${name}}>\``
@@ -4251,7 +4265,11 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   const hasAttributeTags =
     (node.attributeTags ?? []).length > 0 || body.some(isMxAttributeTag);
   if (hasAttributeTags) {
-    ctx.declarations.rejectElementAttributeTags?.(name, node, ctx);
+    ctx.declarations.rejectElementAttributeTags?.(
+      name,
+      markoViewOf(ctx, node),
+      ctx,
+    );
   }
   rejectUnsupportedFields(ctx, node, `\`<${name}>\``);
 
@@ -4290,6 +4308,8 @@ const DECLARATION_MESSAGE =
 
 export function lowerChildren(ctx: Ctx, children: readonly Node[]): IrNode[] {
   try {
+    const frontEndError = pendingFrontEndError(children);
+    if (frontEndError) throw frontEndError;
     return lowerChildrenOf(ctx, children);
   } catch (error) {
     // A lowering boundary (decision 158, PR 4 addendum): an error raised on
@@ -4583,6 +4603,11 @@ function lowerChildList(ctx: Ctx, children: readonly MxChild[]): IrNode[] {
  */
 export function lower(ctx: Ctx, body: readonly Node[]): Ir {
   try {
+    // Port PR 5: the name-sugar errors the MX front end already refuses at
+    // token level (its `MX_*` rules) are lowering's errors, as on Marko's
+    // tree, with the same text and position.
+    const frontEndError = pendingFrontEndError(body);
+    if (frontEndError) throw frontEndError;
     return lowerRoot(ctx, body);
   } catch (error) {
     // A lowering boundary (decision 158, PR 4 addendum): an error raised on

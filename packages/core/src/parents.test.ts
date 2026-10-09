@@ -30,26 +30,29 @@ const passthrough: CustomTag = {
 };
 
 // Measure the parsed authored tree independently of the implementation under test.
-// An attribute tag is an authored container too, not its eventual emitted prop.
+// An attribute tag is an authored container too, not its eventual emitted prop:
+// in the MX AST it is an `MxAttributeTag` child in its parent's body, named
+// `@<name>` here as Marko named it.
 function authoredParents(
   nodes: readonly Node[],
   ancestors: string[] = [],
 ): string[] {
   const result: string[] = [];
   for (const node of nodes) {
-    if (node.type !== "MarkoTag") continue;
-    const name = node.name?.value;
+    let name: string | undefined;
+    if (node.type === "MxTag") {
+      name = node.name.kind === "static" ? node.name.value : undefined;
+    } else if (node.type === "MxAttributeTag") {
+      name = `@${node.name.value}`;
+    } else {
+      continue;
+    }
     if (name === "attribute") result.push(ancestors.at(-1) ?? "#root");
-    const transparent = ["if", "else-if", "else", "for"].includes(name);
+    const transparent = ["if", "else-if", "else", "for"].includes(name ?? "");
     result.push(
       ...authoredParents(
-        [
-          ...new Set<Node>([
-            ...(node.body?.body ?? []),
-            ...(node.attributeTags ?? []),
-          ]),
-        ],
-        transparent ? ancestors : [...ancestors, name],
+        node.body ?? [],
+        transparent ? ancestors : [...ancestors, name ?? "#dynamic"],
       ),
     );
   }

@@ -16,7 +16,10 @@
  * entry (`packages/target-registry/src/bundle-smoke.test.ts` pins it).
  */
 
-import { parse as parseBabel } from "@babel/parser";
+import {
+  parse as parseBabel,
+  parseExpression as parseBabelExpression,
+} from "@babel/parser";
 import {
   type CustomTag,
   concatMapped,
@@ -195,40 +198,125 @@ export interface HoistedDefine {
   binding: string;
 }
 
+/** The containers whose TypeScript may hold a nested JSX/MX expression. */
+const REPAIRABLE = new Set(["MxStatements", "MxArguments", "MxParameterList"]);
+
+/** A 1-based line and 0-based column of `offset` in `text`, Babel's units. */
+function lineColumnAt(
+  text: string,
+  offset: number,
+): { line: number; column: number } {
+  let line = 1;
+  let lineStart = 0;
+  for (
+    let at = text.indexOf("\n");
+    at !== -1 && at < offset;
+    at = text.indexOf("\n", at + 1)
+  ) {
+    line++;
+    lineStart = at + 1;
+  }
+  return { line, column: offset - lineStart };
+}
+
 /**
- * Marko parses attribute-method bodies as ordinary TypeScript, where a nested
- * JSX/MX expression is reported as a `MarkoParseError` statement. Solid's
- * surrounding language is TSX, so retry only those statement-shaped failures
- * with Babel's TSX parser. Genuine expression failures remain untouched and
- * are reported by the core with Marko's precise `errorLoc`.
+ * The container's payload reparsed as TSX at its own file position, or
+ * `undefined` when it does not parse that way either. Arguments and
+ * parameters are read inside their one-character delimiter's position (`(`
+ * or `|`), standing in `[…]` and `(…) => {}`, so every offset is the file's.
  */
-function repairEmbeddedTsx(node: Node, seen = new Set<object>()): void {
+function reparseAsTsx(
+  container: Node,
+  text: string,
+  inMethod = false,
+): Node | undefined {
+  const tsx = { plugins: ["typescript", "jsx"] as ("typescript" | "jsx")[] };
+  const at = (offset: number) => {
+    const { line, column } = lineColumnAt(text, offset);
+    return { startIndex: offset, startLine: line, startColumn: column };
+  };
+  const source: string = container.source;
+  try {
+    if (container.type === "MxStatements") {
+      const { program } = parseBabel(source, {
+        ...tsx,
+        ...at(container.start),
+        sourceType: "module",
+        allowReturnOutsideFunction: true,
+      });
+      return { node: program.body, directives: program.directives };
+    }
+    if (container.outer?.start !== container.start - 1) return undefined;
+    if (container.type === "MxArguments") {
+      const array = parseBabelExpression(`[${source}]`, {
+        ...tsx,
+        ...at(container.start - 1),
+      });
+      if (array.type !== "ArrayExpression") return undefined;
+      if (array.elements.some((element) => element === null)) return undefined;
+      return { node: array.elements };
+    }
+    // A method's parameters may declare `this` (`onClick(this: T)`), which
+    // an arrow's may not: a method's list is read as a function's.
+    if (inMethod) {
+      const fn = parseBabelExpression(`function(${source}) {}`, {
+        ...tsx,
+        ...at(container.start - "function(".length),
+      });
+      if (fn.type !== "FunctionExpression") return undefined;
+      return { node: fn.params };
+    }
+    const arrow = parseBabelExpression(`(${source}) => {}`, {
+      ...tsx,
+      ...at(container.start - 1),
+    });
+    if (arrow.type !== "ArrowFunctionExpression") return undefined;
+    return { node: arrow.params };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The MX front end parses a container's code as ordinary TypeScript, where a
+ * nested JSX/MX expression (in an attribute method's body, a scriptlet, a
+ * tag's arguments or parameters) is a parse error on the container. Solid's
+ * surrounding language is TSX, so retry only those containers with Babel's
+ * TSX parser, at the container's file position (`text` is the `Ctx` source,
+ * whose offsets are the file's). A placeholder or attribute value is one
+ * expression and is not retried; a module statement's code is lowering's to
+ * check. Genuine failures keep their `error`, which the core reports at its
+ * precise position.
+ */
+function repairEmbeddedTsx(
+  node: Node,
+  text: string,
+  seen = new Set<object>(),
+  inMethod = false,
+): void {
   if (!node || typeof node !== "object" || seen.has(node)) return;
   seen.add(node);
-  if (Array.isArray(node)) {
-    for (let index = 0; index < node.length; index++) {
-      const item = node[index];
-      if (item?.type === "MarkoParseError" && typeof item.source === "string") {
-        try {
-          const parsed = parseBabel(item.source, {
-            sourceType: "module",
-            plugins: ["typescript", "jsx"],
-            allowReturnOutsideFunction: true,
-          });
-          node.splice(index, 1, ...parsed.program.body);
-          index += parsed.program.body.length - 1;
-          continue;
-        } catch {
-          // The core reports the original MarkoParseError below this pass.
-        }
-      }
-      repairEmbeddedTsx(item, seen);
+  if (node.type === "MxModuleStatement") return;
+  if (
+    REPAIRABLE.has(node.type) &&
+    node.error &&
+    node.node == null &&
+    typeof node.source === "string"
+  ) {
+    const repaired = reparseAsTsx(node, text, inMethod);
+    if (repaired) {
+      Object.assign(node, repaired, { error: null });
+      return;
     }
-    return;
   }
   for (const key of Object.keys(node)) {
     if (key === "loc" || key === "extra") continue;
-    repairEmbeddedTsx(node[key], seen);
+    repairEmbeddedTsx(
+      node[key],
+      text,
+      seen,
+      node.type === "MxMethod" && key === "params",
+    );
   }
 }
 
@@ -262,7 +350,7 @@ export function compileSolidMx(
     ...base,
     customTags: options.customTags,
   });
-  repairEmbeddedTsx(body);
+  repairEmbeddedTsx(body, positionedSource);
   const ctx = newCtx(
     positionedSource,
     printExpression,
@@ -484,7 +572,7 @@ export function compileSolidUnit(
     filename: options.filename,
     customTags: options.customTags,
   });
-  repairEmbeddedTsx(body);
+  repairEmbeddedTsx(body, source);
   const ctx = newCtx(
     source,
     printExpression,

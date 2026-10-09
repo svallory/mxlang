@@ -1,5 +1,6 @@
 import type { MxChild } from "@mxlang/babel/mx-ast";
 import { describe, expect, expectTypeOf, it } from "vitest";
+import { strippedMethodTypeParams } from "./attr-fields.ts";
 import {
   type AttrTagDecl,
   type CalleeInput,
@@ -299,7 +300,6 @@ describe("one fixture per IR kind", () => {
   it("`-- ${expr}` is a text placeholder, not a dynamic tag", () => {
     // A concise-position `${expr}` line is the dynamic-tag shape (see below);
     // `--` is the escape hatch that keeps it text — Marko's own rule.
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
     const ir = lowerSource("-- ${input.a}\n");
     expect(find(ir.body, "Interpolation")).toMatchObject({
       escaped: true,
@@ -308,7 +308,6 @@ describe("one fixture per IR kind", () => {
   });
 
   it("Interpolation records escaped and raw placeholders apart", () => {
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
     const escaped = lowerSource("<p>${input.a}</p>\n");
     expect(find(escaped.body, "Interpolation")).toMatchObject({
       escaped: true,
@@ -349,7 +348,6 @@ describe("one fixture per IR kind", () => {
 
   it("Expr records its parsed value shape during resolution", () => {
     const ir = lowerSource(
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
       '<div object={active: true} array=[1] other=input.value>${"text"}</div>\n',
     );
     const element = find(ir.body, "Element");
@@ -1189,7 +1187,6 @@ describe("one fixture per IR kind", () => {
 
     it("merges a static tag and a for tag in authored order", () => {
       const ir = lowerSource(
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
         "<Panel><@item>S</@item><for|x| of=input.xs><@item>${x}</@item></for></Panel>",
         v2(),
         declaredInput({ item: attrTagDecl({ cardinality: "array" }) }),
@@ -1216,7 +1213,6 @@ describe("one fixture per IR kind", () => {
       ],
       [
         "singular in for",
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
         "<Panel><for|x| of=input.xs><@head>${x}</@head></for></Panel>",
         declaredInput({ head: attrTagDecl() }),
         "may not appear inside `<for>`",
@@ -1453,7 +1449,6 @@ describe("one fixture per IR kind", () => {
     it("gates control-flow attribute tags on a claimed dynamic DelegatedTag", () => {
       expect(() =>
         lowerSource(
-          // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
           "<${input.tag}><if=input.ok><@head/></if></>",
           fakeDeclarations({
             name: "@mxlang/legacy",
@@ -1668,10 +1663,8 @@ describe("one fixture per IR kind", () => {
         ),
       ).toThrowError("declared shape of `<@head>`");
       expect(() =>
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
         lowerSource("<${input.head}/>", v2(), undefined, input),
       ).toThrowError(
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: diagnostic intentionally quotes Marko syntax
         "`input.head` is a data attribute tag; render its body with `<${input.head.content}/>`",
       );
     });
@@ -1682,22 +1675,17 @@ describe("one fixture per IR kind", () => {
         renderable: attrTagDecl({ as: "renderable", hasParams: true }),
       });
       expect(() =>
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
         lowerSource("<${input.data.content}/>", v2(), undefined, input),
       ).toThrowError(
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: diagnostic intentionally quotes Marko syntax
         "`input.data.content` is a parameterized attribute tag; pass its arguments with `<${input.data.content(/* arguments */)}/>`",
       );
       expect(() =>
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
         lowerSource("<${input.renderable}/>", v2(), undefined, input),
       ).toThrowError(
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: diagnostic intentionally quotes Marko syntax
         "`input.renderable` is a parameterized attribute tag; pass its arguments with `<${input.renderable(/* arguments */)}/>`",
       );
       expect(() =>
         lowerSource(
-          // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
           '<${input.data.content}("d")/><${input.renderable}("r")/>',
           v2(),
           undefined,
@@ -1803,7 +1791,6 @@ describe("one fixture per IR kind", () => {
       const templateTag: CustomTag = {
         template: {
           filename,
-          // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
           source: "<${input.h}/>",
         },
       } as CustomTag;
@@ -1836,7 +1823,6 @@ describe("one fixture per IR kind", () => {
         attributeTags: { item: {} },
         template: {
           filename: "/tmp/mx-core-test/tags/list.mx",
-          // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
           source: "<${input.item}/>",
         },
       } as CustomTag;
@@ -1938,7 +1924,6 @@ describe("a dynamic tag's bare shape", () => {
     let error: unknown;
     try {
       lowerSource(
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
         '<${input.fn}("A") foo="bar"/>',
         fakeDeclarations({ attrTags: 2 }),
       );
@@ -1953,9 +1938,7 @@ describe("a dynamic tag's bare shape", () => {
   });
 
   it.each([
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
     ["attribute tags", '<${input.fn}("A")><@x>X</@x></>'],
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
     ["body", '<${input.fn}("A")>body</>'],
   ])(
     "allows arguments combined with %s, matching Marko's lenient dynamic-tag rule",
@@ -1969,7 +1952,6 @@ describe("a dynamic tag's bare shape", () => {
 
   it("retains arguments on a claimed dynamic DelegatedTag", () => {
     const ir = lowerSource(
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
       '<${input.fn}("A", input.n)/>',
       fakeDeclarations({
         isDelegatedTag: (name) => name === DYNAMIC_TAG,
@@ -1984,7 +1966,6 @@ describe("a dynamic tag's bare shape", () => {
 
   it("lowers to a dynamic Component when a host claims DYNAMIC_TAG only for the tagged shape", () => {
     const ir = lowerSource(
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
       "${input.tag}\n",
       fakeDeclarations({
         isDelegatedTag: (name, _ctx, shape) =>
@@ -2020,7 +2001,6 @@ describe("a dynamic tag's bare shape", () => {
   // emitter.
   it("a claimed dynamic tag's DelegatedTag carries its attribute tags", () => {
     const ir = lowerSource(
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
       "<${input.comp}><@header>hi</@header></>\n",
       fakeDeclarations({
         isDelegatedTag: (name) => name === DYNAMIC_TAG,
@@ -2034,7 +2014,6 @@ describe("a dynamic tag's bare shape", () => {
 
   it("reaches the host for the bare shape when the host claims it explicitly", () => {
     const ir = lowerSource(
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
       "${input.tag}\n",
       fakeDeclarations({
         isDelegatedTag: (name) => name === DYNAMIC_TAG,
@@ -2436,10 +2415,8 @@ describe("binding scopes are per JS block", () => {
         "<signal/count=1/>",
         "<if=input.on>",
         "  <const/count=2/>",
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax in template source
         "  <p>${count}</p>",
         "</if>",
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax in template source
         "<p>${count}</p>",
         "",
       ].join("\n"),
@@ -2462,10 +2439,8 @@ describe("binding scopes are per JS block", () => {
         "<signal/count=1/>",
         "<for|item| of=input.xs>",
         "  <const/count=item/>",
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax in template source
         "  <p>${count}</p>",
         "</for>",
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax in template source
         "<p>${count}</p>",
         "",
       ].join("\n"),
@@ -2496,12 +2471,7 @@ describe("binding scopes are per JS block", () => {
      */
     it("keeps a generic call's type arguments when rewriting a registered identifier", () => {
       const ir = lowerSource(
-        [
-          "<signal/count=1/>",
-          // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax in template source
-          "<p>${pick<string>(count)}</p>",
-          "",
-        ].join("\n"),
+        ["<signal/count=1/>", "<p>${pick<string>(count)}</p>", ""].join("\n"),
         signalPolicy,
       );
 
@@ -2513,12 +2483,7 @@ describe("binding scopes are per JS block", () => {
     /** The identifier being rewritten is itself the one carrying type arguments as a callee. */
     it("keeps type arguments when the registered identifier is not itself rewritten", () => {
       const ir = lowerSource(
-        [
-          "<signal/count=1/>",
-          // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax in template source
-          "<p>${pick<string>(other)}</p>",
-          "",
-        ].join("\n"),
+        ["<signal/count=1/>", "<p>${pick<string>(other)}</p>", ""].join("\n"),
         signalPolicy,
       );
 
@@ -2578,14 +2543,9 @@ describe("a claimed tag's children are lowered exactly once", () => {
   it("hoists once for a <const>-like host tag inside a claimed tag's body", () => {
     let hoists = 0;
     const ir = lowerSource(
-      [
-        "<dyn>",
-        "  <signal/inner=1/>",
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax in template source
-        "  <p>${inner}</p>",
-        "</dyn>",
-        "",
-      ].join("\n"),
+      ["<dyn>", "  <signal/inner=1/>", "  <p>${inner}</p>", "</dyn>", ""].join(
+        "\n",
+      ),
       fakeDeclarations({
         isDelegatedTag: (name) => name === "dyn" || name === "signal",
         resolveDelegatedTag: (name, node, ctx) => {
@@ -2788,7 +2748,6 @@ describe("Expr.span", () => {
   });
 
   it("placeholder/interpolation", () => {
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
     const source = "<div>${x.y}</div>\n";
     const ir = lowerSource(source);
     const interpolation = find(
@@ -2864,13 +2823,11 @@ describe("Expr.span", () => {
     );
   });
 
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in the test title
   it("a bare `${expr}` tag (concise mode's dynamic-tag shape)", () => {
     // A top-level `${expr}` with no attributes and no body parses as a
     // `MarkoTag` whose `name` is the expression — concise mode's only shape
     // for it — and lowers to a dynamic-target `Component` through the same
     // `exprOf` call a tagged dynamic tag name would use.
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
     const source = "<${dyn.tag}/>\n";
     const ir = lowerSource(source);
     const component = find(ir.body, "Component");
@@ -2883,7 +2840,6 @@ describe("Expr.span", () => {
   });
 
   it("sibling-sharing case: four byte-identical exprs get four distinct spans", () => {
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
     const source = "<div a=x.y b=x.y>${x.y}${x.y}</div>\n";
     const ir = lowerSource(source);
     const element = find(ir.body, "Element");
@@ -4521,20 +4477,22 @@ function toMxShape(source: string): (body: Node[]) => void {
     const open = source.indexOf("(", start);
     const close = closeParen(open);
     const inner = offsets(fn.body);
-    return {
+    // Marko's `typeParameters: null` is a written list `stripTypes` dropped,
+    // which `stripMxTypes` records the same way on the MX path.
+    const stripped = fn.typeParameters === null;
+    const shaped: Node = {
       type: "MxMethod",
       start,
       end,
       async: fn.async,
-      typeParams:
-        "typeParameters" in fn
-          ? container(
-              "MxTypeParameters",
-              { type: "TSTypeParameterDeclaration", params: [] },
-              { start: start + 1, end: open - 1 },
-              { start, end: open },
-            )
-          : null,
+      typeParams: fn.typeParameters
+        ? container(
+            "MxTypeParameters",
+            fn.typeParameters,
+            { start: start + 1, end: open - 1 },
+            { start, end: open },
+          )
+        : null,
       params: container(
         "MxParameterList",
         fn.params,
@@ -4551,6 +4509,8 @@ function toMxShape(source: string): (body: Node[]) => void {
       },
       source: source.slice(start, end),
     };
+    if (stripped) strippedMethodTypeParams.add(shaped);
+    return shaped;
   };
   /**
    * Slice 4: a named or spread attribute as the MX front end builds it
@@ -5042,9 +5002,11 @@ describe("hybrid attribute tags, MX-shaped (PR 4 slice 1)", () => {
       },
     });
     // The hook only records; core's own field guard then rejects the tag.
+    // Hooks see the Marko-shaped view of the MX node (decision 163 addendum,
+    // `markoViewOf`), so the first attribute tag reads as Marko's.
     expect(() => mx(source, policy)).toThrowError(/attribute tag `@a`/);
     expect(seen.map((node) => [node.type, node.name.value])).toEqual([
-      ["MxAttributeTag", "a"],
+      ["MarkoTag", "@a"],
     ]);
   });
 

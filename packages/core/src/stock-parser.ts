@@ -3,21 +3,19 @@ import { TranslateError } from "./core.ts";
 import { markoHtmljsParser } from "./marko-frontend.ts";
 
 /**
- * Decision 146 PR 1 patches `htmljs-parser` (a bun `patchedDependencies`
- * entry) so that `:name` after an attribute value starts a new attribute. The
- * patch lives in this repo's install; a consumer of the published packages
- * gets a stock `htmljs-parser` through `@marko/compiler`. With a stock parser,
- * `<input type="email" :email>` reads ` :email` as the tail of the previous
- * value and Marko fails on it with a message about "exactly one expression".
+ * Parse-error rewrites that turn a template-parser failure into a positioned
+ * MX error (sugar right after a default value, a failure inside a tag's
+ * `|params|`), and the template-parser reads they and `parse-error-hints.ts`
+ * share (`markoParser`, `lexedAtoms`).
  *
- * Decision 151, ruling 1: core probes the installed parser once and, when it
- * does not split, turns that failure into a positioned MX error that names the
- * rule and says what to do. (`x=a.b .c` is silently member access on a stock
- * parser, and nothing can see that per use: a known limit, documented in the
- * divergence row, not detected.)
+ * Decision 151's stock-parser diagnostics (ruling 1: `:name` after a value,
+ * and the decision 156 "atoms need the MX parser" error) are gone: core parses
+ * with the MX front end (port PR 5), so a stock `htmljs-parser` never parses
+ * MX input. Ruling 2 (the default attribute is exempt from the after-value
+ * rule) holds on the MX parser and is `sugarAfterDefaultError` below.
  */
 
-/** The text of the two spellings of Marko's "more than one expression" failure. */
+/** The text of the two spellings of the "more than one expression" failure. */
 const FOLLOWED_BY_COLON =
   /first expression is followed by the unexpected character `:`|Expected a single expression, but found `:`/;
 
@@ -26,24 +24,6 @@ type ParserModule = {
     parse(source: string): void;
   };
 };
-
-/**
- * Does this `htmljs-parser` start a new attribute at ` :b` after `x=1`? The
- * patched parser reports two attribute names, a stock one reports one.
- */
-export function parserSplitsAfterValue(parser: ParserModule): boolean {
-  const names: unknown[] = [];
-  parser
-    .createParser({
-      onAttrName: (name: unknown) => names.push(name),
-      onError: () => {},
-    })
-    .parse("<a x=1 :b/>");
-  return names.length > 1;
-}
-
-let installedSplits: boolean | undefined;
-let probeFailed = false;
 
 type MarkoParser = ParserModule & { TagType: Record<string, number> };
 
@@ -64,67 +44,6 @@ export function markoParser(): MarkoParser | undefined {
   return markoParserModule;
 }
 
-/**
- * Whether the `htmljs-parser` that `@marko/compiler` resolves splits after a
- * value. Probed once per process, a failed probe included (`undefined`: nothing
- * is rewritten and the probe is not retried on every error).
- */
-export function installedParserSplits(): boolean | undefined {
-  if (installedSplits !== undefined) return installedSplits;
-  if (probeFailed) return undefined;
-  try {
-    // The copy that matters is the one Marko parses with, not necessarily the
-    // one core itself depends on.
-    const parser = markoParser();
-    if (!parser) throw new Error("no parser");
-    installedSplits = parserSplitsAfterValue(parser);
-  } catch {
-    probeFailed = true;
-    return undefined;
-  }
-  return installedSplits;
-}
-
-/**
- * Does this `htmljs-parser` lex atoms (decision 156)? MX's parser announces
- * each one through `onAtom`; a stock parser has no such handler and never
- * calls it, which makes the handler itself the capability probe.
- */
-export function parserLexesAtoms(parser: ParserModule): boolean {
-  let lexed = false;
-  parser
-    .createParser({
-      onAtom: () => {
-        lexed = true;
-      },
-      onError: () => {},
-    })
-    .parse("<a x=:b/>");
-  return lexed;
-}
-
-let installedAtoms: boolean | undefined;
-let atomProbeFailed = false;
-
-/**
- * Whether the `htmljs-parser` that `@marko/compiler` resolves lexes atoms.
- * Probed once per process, like `installedParserSplits`; `undefined` when the
- * probe could not run.
- */
-export function installedParserLexesAtoms(): boolean | undefined {
-  if (installedAtoms !== undefined) return installedAtoms;
-  if (atomProbeFailed) return undefined;
-  try {
-    const parser = markoParser();
-    if (!parser) throw new Error("no parser");
-    installedAtoms = parserLexesAtoms(parser);
-  } catch {
-    atomProbeFailed = true;
-    return undefined;
-  }
-  return installedAtoms;
-}
-
 let lexedFor: { source: string; atoms: { start: number; end: number }[] } = {
   source: "",
   atoms: [],
@@ -133,9 +52,8 @@ let lexedFor: { source: string; atoms: { start: number; end: number }[] } = {
 /**
  * The atoms the installed parser lexes in `source` (decision 156), for a
  * diagnostic that must name only a real atom: never a `:` in a scriptlet, a
- * statement tag or a ternary. Empty on a stock parser; `undefined` when the
- * parser cannot be loaded. Remembers the last source, since one failure may
- * ask more than once.
+ * statement tag or a ternary. `undefined` when the parser cannot be loaded.
+ * Remembers the last source, since one failure may ask more than once.
  */
 export function lexedAtoms(
   source: string,
@@ -166,15 +84,6 @@ export function lexedAtoms(
   return atoms;
 }
 
-/** Test seam: forget the probe. */
-export function resetInstalledParserProbe(): void {
-  installedSplits = undefined;
-  probeFailed = false;
-  installedAtoms = undefined;
-  atomProbeFailed = false;
-  markoParserModule = undefined;
-}
-
 type Located = Error & {
   loc?: { start?: { line: number; column: number; index?: number } };
   label?: unknown;
@@ -191,50 +100,7 @@ function offsetOf(source: string, line: number, column: number): number {
   return start + column;
 }
 
-export const STOCK_ATOM_MESSAGE = (token: string, product = "MX"): string =>
-  `\`${token}\` is an atom (decision 156), and atoms need the ${product} parser: this install's htmljs-parser does not read them, so the \`:\` reaches Babel as a syntax error. Write the string instead (\`${JSON.stringify(token.slice(1))}\`) until the published packages carry the ${product} parser (decisions 151 and 158). See "atoms" in divergences.md.`;
-
-const ATOM_AT = /:[A-Za-z_$][\w$]*(?:-[\w$]+)*/y;
-
-/**
- * The positioned MX error for a stock parser's failure on an atom, or
- * `undefined` when `error` is not that failure or the installed parser lexes
- * atoms. A stock parser hands `:b` to Babel as written, and Babel fails at
- * the `:`; that position, on an atom-shaped token, is the signal.
- *
- * `lexes` is the probe result; tests inject it.
- */
-export function stockAtomError(
-  error: unknown,
-  source: string,
-  lexes: boolean | undefined = installedParserLexesAtoms(),
-  productName?: string,
-): TranslateError | undefined {
-  if (lexes !== false || !(error instanceof Error)) return undefined;
-  const candidates = [error as Located, ...((error as Located).errors ?? [])];
-  for (const candidate of candidates) {
-    const at = (candidate as Located | null)?.loc?.start;
-    if (!at) continue;
-    const offset = at.index ?? offsetOf(source, at.line, at.column);
-    if (offset < 0 || source[offset] !== ":" || source[offset - 1] === ":") {
-      continue;
-    }
-    ATOM_AT.lastIndex = offset;
-    const token = ATOM_AT.exec(source)?.[0];
-    if (!token) continue;
-    return new TranslateError(
-      STOCK_ATOM_MESSAGE(token, productName),
-      at.line,
-      at.column,
-    );
-  }
-  return undefined;
-}
-
-export const STOCK_PARSER_MESSAGE = (token: string): string =>
-  `\`${token}\` after an attribute value needs the patched htmljs-parser (decision 146): this install's parser reads it as part of the previous value, so it is not a new attribute. Put the sugar on the tag instead (\`<input:email type="email">\`), or write \`name="…"\`, \`id="…"\` or \`class="…"\`. See "the parser after-value rule" in divergences.md.`;
-
-/** A `:` after whitespace that Marko's "more than one expression" failure stopped at. */
+/** A `:` after whitespace that the "more than one expression" failure stopped at. */
 function colonFailure(
   error: unknown,
   source: string,
@@ -268,12 +134,10 @@ function colonFailure(
 /**
  * Does the attribute value that holds `offset` belong to the default
  * attribute (`<if=x …>`, `<let/x=1 …>`; no name before its `=`)? Decided with
- * the parser `@marko/compiler` resolves: a default attribute has an empty name
- * and is exempt from the after-value rule on every parser, so a `:` inside its
- * value never starts an attribute — except, on the MX parser, ` :name` after a
- * default value that is one atom (decision 146 addendum 5), which a stock
- * parser never reaches because it lexes no atoms. `undefined` when the probe
- * cannot run.
+ * the template parser: a default attribute has an empty name and is exempt
+ * from the after-value rule, so a `:` inside its value never starts an
+ * attribute — except ` :name` after a default value that is one atom
+ * (decision 146 addendum 5). `undefined` when the probe cannot run.
  */
 function offsetInDefaultValue(
   source: string,
@@ -323,9 +187,9 @@ export const SUGAR_AFTER_DEFAULT_MESSAGE = (token: string): string =>
 
 /**
  * The one MX error for sugar right after a default attribute's value
- * (`<if=x :b>`, `<let/x=1 :b/>`), on any parser: the default attribute is
- * exempt from the after-value rule (decision 151, ruling 2), so Marko fails on
- * the `:` whichever htmljs-parser is installed. Positioned at the sugar token.
+ * (`<if=x :b>`, `<let/x=1 :b/>`): the default attribute is exempt from the
+ * after-value rule (decision 151, ruling 2), so the parse fails on the `:`.
+ * Positioned at the sugar token.
  */
 export function sugarAfterDefaultError(
   error: unknown,
@@ -339,78 +203,6 @@ export function sugarAfterDefaultError(
     SUGAR_AFTER_DEFAULT_MESSAGE(found.token),
     found.at.line,
     found.at.column,
-  );
-}
-
-/**
- * The positioned MX error for a stock parser's failure on ` :name` after an
- * attribute value, or `undefined` when `error` is not that failure (or the
- * installed parser does split, so the failure is something else, or the value
- * is a default attribute's, where the patched parser fails too).
- *
- * `splits` is the probe result; tests inject it. The position is Marko's own:
- * the `:` that ended the first expression.
- */
-export function stockParserError(
-  error: unknown,
-  source: string,
-  splits: boolean | undefined = installedParserSplits(),
-): TranslateError | undefined {
-  if (splits !== false) return undefined;
-  const found = colonFailure(error, source);
-  if (!found || offsetInDefaultValue(source, found.offset) === true) {
-    return undefined;
-  }
-  return new TranslateError(
-    STOCK_PARSER_MESSAGE(found.token),
-    found.at.line,
-    found.at.column,
-  );
-}
-
-export const BARE_COMMA_MESSAGE =
-  "a `,` continues the attributes of the tag above; there is no tag here";
-
-/**
- * The positioned MX error for a concise line that holds only `,` (or `, --x`)
- * with no tag above it. The parser ends an open tag that never got a name, and
- * Marko then reads `tag.name.value` off it and throws a `TypeError` (grammar
- * probe g1683). `undefined` unless `error` is such a `TypeError` *and* the
- * parser confirms a nameless tag, so no other failure is rewritten.
- */
-export function bareCommaError(
-  error: unknown,
-  source: string,
-): TranslateError | undefined {
-  if (!(error instanceof TypeError)) return undefined;
-  const parser = markoParser();
-  if (!parser) return undefined;
-  let named = false;
-  let nameless = -1;
-  try {
-    parser
-      .createParser({
-        onOpenTagName: () => {
-          named = true;
-        },
-        onOpenTagEnd: (range: { start: number }) => {
-          if (!named && nameless < 0) nameless = range.start;
-          named = false;
-        },
-        onError: () => {},
-      })
-      .parse(source);
-  } catch {
-    // A parse that throws still reported the tags before it.
-  }
-  if (nameless < 0) return undefined;
-  const comma = source.lastIndexOf(",", Math.max(nameless - 1, 0));
-  const offset = comma >= 0 ? comma : nameless;
-  const before = source.slice(0, offset).split("\n");
-  return new TranslateError(
-    BARE_COMMA_MESSAGE,
-    before.length,
-    before[before.length - 1]?.length ?? 0,
   );
 }
 
@@ -470,34 +262,4 @@ export function tagParamError(
     // A parse that throws still reported the params before it.
   }
   return inParams ? new TranslateError(reason, at.line, at.column) : undefined;
-}
-
-/**
- * The same two errors for a recovered parse failure: `parseFragment` asks
- * Marko for an AST, and Marko then leaves a failing attribute value in the tree
- * as a `MarkoParseError` node (label + `errorLoc`) instead of throwing, so the
- * lowerer meets it in `exprOf`. Positions on the node are already shifted into
- * the file `source` belongs to.
- */
-export function parseErrorToSugarError(
-  node: {
-    label?: unknown;
-    errorLoc?: { start?: { line: number; column: number; index?: number } };
-    loc?: { start?: { line: number; column: number; index?: number } };
-  },
-  source: string,
-  splits: boolean | undefined = installedParserSplits(),
-  productName?: string,
-  lexes: boolean | undefined = installedParserLexesAtoms(),
-): TranslateError | undefined {
-  const label = typeof node.label === "string" ? node.label : "";
-  const error = Object.assign(new Error(label), {
-    label,
-    loc: { start: node.errorLoc?.start ?? node.loc?.start },
-  });
-  return (
-    sugarAfterDefaultError(error, source) ??
-    stockParserError(error, source, splits) ??
-    stockAtomError(error, source, lexes, productName)
-  );
 }

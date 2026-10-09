@@ -48,25 +48,32 @@ function compile(source: string, row: CustomTagAttributeTag): TagCall {
 }
 
 // Independent authored-body measurement, before changing core's E2 walker.
+// Reads the MX AST: tags are `MxTag` with a static `name.value`, children in
+// `body` (null when the tag has none).
+const tagName = (node: Node | undefined): string | undefined =>
+  node?.type === "MxTag" && node.name.kind === "static"
+    ? node.name.value
+    : undefined;
+
 function range(nodes: readonly Node[]): { min: number; max: number } {
   let min = 0;
   let max = 0;
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
-    if (node.type !== "MarkoTag") continue;
-    const name = node.name?.value;
+    const name = tagName(node);
+    if (name === undefined) continue;
     if (name === "item") {
       min++;
       max++;
     } else if (name === "for") {
-      if (range(node.body.body).max > 0) max = Infinity;
+      if (range(node.body ?? []).max > 0) max = Infinity;
     } else if (name === "if") {
-      const branches = [range(node.body.body)];
+      const branches = [range(node.body ?? [])];
       let exhaustive = false;
-      while (["else", "else-if"].includes(nodes[i + 1]?.name?.value)) {
+      while (["else", "else-if"].includes(tagName(nodes[i + 1]) ?? "")) {
         const branch = nodes[++i];
-        branches.push(range(branch.body.body));
-        exhaustive = branch.name.value === "else" && !branch.attributes?.length;
+        branches.push(range(branch.body ?? []));
+        exhaustive = tagName(branch) === "else" && !branch.attributes?.length;
       }
       if (!exhaustive) branches.push({ min: 0, max: 0 });
       min += Math.min(...branches.map((b) => b.min));
@@ -94,9 +101,12 @@ describe("attribute-tag contracts step 0 (decision 138 E4)", () => {
     "measures authored children in @row: %s",
     (label, body, min, max) => {
       const parsed = parseFragment(`<card><@row>${body}</@row></card>`).body;
-      const card = parsed.find((node: Node) => node.name?.value === "card");
-      const row = card.attributeTags[0];
-      const measured = range(row.body.body);
+      const card = parsed.find((node: Node) => tagName(node) === "card");
+      const row = card.body.find(
+        (node: Node) =>
+          node.type === "MxAttributeTag" && node.name.value === "row",
+      );
+      const measured = range(row.body);
       console.log(
         `STEP 0 @row ${label}: min=${measured.min} max=${measured.max}`,
       );

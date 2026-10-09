@@ -7,6 +7,7 @@ import {
   nativeElementPredicate,
 } from "./default-tag-check.ts";
 import type { DefaultTagScope } from "./default-tag-validate.ts";
+import { markoViewOf } from "./marko-view.ts";
 import { rewriteMxSugar } from "./mx-sugar.ts";
 import { rewriteNameSugar } from "./name-sugar.ts";
 import {
@@ -119,7 +120,7 @@ export function resolveUnnamedTags(ctx: Ctx, body: readonly Node[]): void {
         };
         const resolvedName = resolve.call(
           ctx.declarations,
-          node,
+          markoViewOf(ctx, node),
           parents,
           context,
         );
@@ -143,7 +144,7 @@ export function resolveUnnamedTags(ctx: Ctx, body: readonly Node[]): void {
       const self: DefaultTagParent = {
         name,
         attributeTag,
-        node,
+        node: markoViewOf(ctx, node),
         ...(tagDef ? { tagDef } : {}),
       };
       walk(

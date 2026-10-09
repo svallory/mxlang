@@ -16,18 +16,13 @@ import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 /**
- * Decision 151, ruling 1, end to end: on a consumer's stock `htmljs-parser`,
- * `<input type="email" :email>` is a positioned MX error that names the rule,
- * not Marko's "exactly one expression" failure. The stock parser is rebuilt in
- * a `mkdtemp` copy by reversing the committed patch, and `@mxlang/html`'s built
- * `dist` runs against it in a child process (the repo's own install is
- * patched, so it cannot show the failure in-process).
- *
- * Decision 159: core's dist parses with its bundled Marko front end and MX's
- * own template parser, so a stock `htmljs-parser` in the install no longer
- * reaches it (the last `describe`). The error is left for a core that
- * bypasses its bundle: `stock` runs simulate one by resolving core's
- * `./marko-frontend.cjs` to the npm compiler on the stock parser.
+ * Decision 159, end to end: `@mxlang/html`'s built `dist` parses with core's
+ * bundled front end and MX's own template parser, so a stock `htmljs-parser`
+ * in the install changes nothing. The stock parser is rebuilt in a `mkdtemp`
+ * copy by reversing the committed patch, and the dist runs against it in a
+ * child process. (Decision 151's stock-parser error is gone: core never parses
+ * MX with a stock parser since port PR 5.) Ruling 2 still holds: sugar right
+ * after a default value is one MX error.
  */
 
 const require = createRequire(import.meta.url);
@@ -92,31 +87,14 @@ afterAll(() => {
   if (work) rmSync(work, { recursive: true, force: true });
 });
 
-function compileWith(source: string, stock: boolean, viaBundle = false) {
-  const script = join(
-    work,
-    `run-${stock ? "stock" : "patched"}${viaBundle ? "-bundle" : ""}.cjs`,
-  );
-  const compiler = require.resolve("@marko/compiler", {
-    paths: [join(here, "../../../core")],
-  });
-  const shim = join(work, "stock-frontend.cjs");
-  writeFileSync(
-    shim,
-    `module.exports = {
-  compiler: require(${JSON.stringify(compiler)}),
-  babel: require(${JSON.stringify(require.resolve("@marko/compiler/internal/babel", { paths: [join(here, "../../../core")] }))}),
-  htmljsParser: require("node:module").createRequire(${JSON.stringify(compiler)})("htmljs-parser"),
-};
-`,
-  );
+function compileWith(source: string, stock: boolean) {
+  const script = join(work, `run-${stock ? "stock" : "patched"}.cjs`);
   writeFileSync(
     script,
     `const Module = require("node:module");
 const resolve = Module._resolveFilename;
 Module._resolveFilename = function (request, ...rest) {
   ${stock ? `if (request === "htmljs-parser") return ${JSON.stringify(join(stockDir, "dist/index.js"))};` : ""}
-  ${viaBundle ? "" : `if (request === "./marko-frontend.cjs") return ${JSON.stringify(shim)};`}
   return resolve.call(this, request, ...rest);
 };
 import(${JSON.stringify(`file://${distEntry}`)}).then(({ compile }) => {
@@ -140,51 +118,34 @@ import(${JSON.stringify(`file://${distEntry}`)}).then(({ compile }) => {
   };
 }
 
-describe("`:name` after an attribute value on a stock htmljs-parser", () => {
-  it("is a positioned MX error naming the rule", () => {
-    const result = compileWith('<input type="email" :email/>', true);
-    expect(result.ok).toBeUndefined();
-    expect(result.name).toBe("TranslateError");
-    expect(result.message).toContain("`:email` after an attribute value");
-    expect(result.message).toContain("patched htmljs-parser");
-    expect(result.message).toContain('<input:email type="email">');
-    expect(result.line).toBe(1);
-    expect(result.column).toBe(20);
-  });
-
-  it("compiles on the patched parser", () => {
-    expect(compileWith('<input type="email" :email/>', false).ok).toBe(true);
-  });
-
-  it("keeps the tag-adjacent form working on a stock parser", () => {
-    expect(compileWith('<input:email type="email"/>', true).ok).toBe(true);
-    expect(compileWith("<input.big:email/>", true).ok).toBe(true);
-    expect(compileWith("<input :email/>", true).ok).toBe(true);
-  });
+describe("core's bundled front end ignores a stock htmljs-parser in the install", () => {
+  it.each([
+    ["the patched parser", false],
+    ["a stock parser", true],
+  ])(
+    "compiles `:name` after an attribute value with %s installed",
+    (_name, stock) => {
+      expect(compileWith('<input type="email" :email/>', stock).ok).toBe(true);
+    },
+  );
 
   it.each([
     ["the patched parser", false],
     ["a stock parser", true],
-  ])("sugar after a default value is one MX error on %s", (_name, stock) => {
-    const result = compileWith("<if=input.x :b>y</if>", stock);
-    expect(result.ok).toBeUndefined();
-    expect(result.name).toBe("TranslateError");
-    expect(result.message).toContain("`:b` right after a default value");
-    expect(result.message).not.toContain("patched htmljs-parser");
-    expect(result.line).toBe(1);
-    expect(result.column).toBe(12);
-  });
+  ])(
+    "sugar after a default value is one MX error with %s installed",
+    (_name, stock) => {
+      const result = compileWith("<if=input.x :b>y</if>", stock);
+      expect(result.ok).toBeUndefined();
+      expect(result.name).toBe("TranslateError");
+      expect(result.message).toContain("`:b` right after a default value");
+      expect(result.line).toBe(1);
+      expect(result.column).toBe(12);
+    },
+  );
 
-  it("`<const/x=a .b/>` stays member access on both", () => {
+  it("`<const/x=a .b/>` stays member access", () => {
     expect(compileWith("<const/x=input.a .b/>", true).ok).toBe(true);
     expect(compileWith("<const/x=input.a .b/>", false).ok).toBe(true);
-  });
-});
-
-describe("core's bundled front end ignores a stock htmljs-parser in the install", () => {
-  it("compiles `:name` after an attribute value", () => {
-    expect(compileWith('<input type="email" :email/>', true, true).ok).toBe(
-      true,
-    );
   });
 });

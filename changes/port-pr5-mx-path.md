@@ -1,0 +1,5 @@
+---
+packages: [core, data, parser]
+kind: Changed
+---
+`compileSource`, `parseFragment` and `parseData` now parse with the MX front end (`@mxlang/parser/frontend`, inlined into core's dist) instead of `@marko/compiler`; Marko's parser stays only as a test oracle. One parse per compile: the syntax-table pre-pass is gone, and its "`<id>` trigger has no lowering yet" error comes from the compile's single document. `FragmentResult.body` is the MX body and `FragmentResult.ast` the `MxDocument`; an expression error in a fragment stays on its container and is raised by `lower`, so `parseFragment` throws only for a template error. Host hooks (`resolveDelegatedTag`, `rejectModifier`, `resolveDefaultTag`, …) still receive Marko-shaped nodes, now a read-only view of the MX node. Error text and positions are unchanged, with one exception: the `CompileErrors` aggregate message is Node's form on every runtime (no Bun/JSC stack frames inside `@marko/compiler`). Removed: decision 151's stock-parser diagnostics (a stock `htmljs-parser` never parses MX input).

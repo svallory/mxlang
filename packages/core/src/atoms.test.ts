@@ -2,9 +2,10 @@
 import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
 import { ATOM_STAND_IN_MESSAGE, atomOf, convertAtoms } from "./atoms.ts";
-import { printExpression } from "./compile.ts";
-import { type Ctx, type Node, newCtx } from "./core.ts";
+import { compileSource, printExpression } from "./compile.ts";
+import { type Ctx, type Node, newCtx, TranslateError } from "./core.ts";
 import type { Policy } from "./declarations.ts";
+import { parseFragment } from "./fragment.ts";
 import type { Attr, Expr, Ir, IrNode } from "./ir.ts";
 import { lower } from "./lower.ts";
 import { mappedExpr } from "./mapping.ts";
@@ -620,5 +621,60 @@ describe("no stand-in survives", () => {
       expect(n.type).toBe("StringLiteral");
       expect(n.extra).toEqual(marks[index]);
     });
+  });
+});
+
+// Port PR 5: production parses with the MX front end, so an atom used as a
+// spread argument is pinned on that path too, through both of core's entries:
+// `compileSource`, and `parseFragment` then `lower` (a region's route).
+describe("an atom spread on the MX path", () => {
+  const SPREAD_MESSAGE =
+    '`:a` is an atom (decision 156), a name and not a value to operate on: spreading is not allowed on it; write `"a"` for a string you mean to operate on';
+
+  function viaCompile(source: string): unknown {
+    try {
+      compileSource(source, "/tmp/mx-core-test/spread.mx", policy(), {
+        targets: lookup,
+        emitIr: () => "",
+      });
+    } catch (error) {
+      return error;
+    }
+    return undefined;
+  }
+
+  function viaFragment(source: string): unknown {
+    try {
+      const ctx = newCtx(
+        source,
+        printExpression,
+        policy(),
+        undefined,
+        "/tmp/mx-core-test/spread.mx",
+        lookup,
+      );
+      lower(ctx, parseFragment(source).body);
+    } catch (error) {
+      return error;
+    }
+    return undefined;
+  }
+
+  describe.each([
+    ["compileSource", viaCompile],
+    ["parseFragment + lower", viaFragment],
+  ])("%s", (_name, run) => {
+    it.each([
+      ["<div ...:a/>", 1, 8],
+      ["<div\n  ...:a/>", 2, 5],
+      ["div ...:a", 1, 7],
+    ])(
+      "%j is a positioned TranslateError at the atom",
+      (source, line, column) => {
+        const error = run(source);
+        expect(error).toBeInstanceOf(TranslateError);
+        expect(error).toMatchObject({ message: SPREAD_MESSAGE, line, column });
+      },
+    );
   });
 });

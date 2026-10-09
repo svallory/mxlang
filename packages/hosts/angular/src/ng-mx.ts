@@ -237,13 +237,22 @@ const FRAGMENT_WRAPPER_OPEN = "<${0}>";
 type FragmentBody = ReturnType<typeof parseFragment>["body"];
 
 function unwrapFragment(body: FragmentBody, filename: string): FragmentBody {
-  const [wrapper] = body as Array<{ body?: { body?: FragmentBody } }>;
-  if (body.length !== 1 || !Array.isArray(wrapper?.body?.body)) {
+  // The wrapper is an `MxTag`, whose `body` is its child list (`null` only
+  // for a tag written without one, which the wrapper never is).
+  const [wrapper] = body as Array<{
+    type?: string;
+    body?: FragmentBody | null;
+  }>;
+  if (
+    body.length !== 1 ||
+    wrapper?.type !== "MxTag" ||
+    !Array.isArray(wrapper.body)
+  ) {
     throw new Error(
       `@mxlang/angular internal: a fragment region did not parse to one wrapper node in ${filename}`,
     );
   }
-  return wrapper.body.body;
+  return wrapper.body;
 }
 
 /**

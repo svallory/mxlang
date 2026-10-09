@@ -11,9 +11,10 @@
  */
 import { createHash } from "node:crypto";
 import { dirname, isAbsolute } from "node:path";
-import { TranslateError } from "./core.ts";
+import { type Node, TranslateError } from "./core.ts";
 import { findNearestPackageJson } from "./host-policy.ts";
 import { type MxTemplateParser, mxTemplateParser } from "./marko-frontend.ts";
+import { filePosition } from "./mx-parse.ts";
 import type { PackageJsonRead } from "./package-json.ts";
 import { mxKeyPosition } from "./scan.ts";
 
@@ -303,81 +304,54 @@ export interface SyntaxSite {
   baseColumn?: number;
 }
 
-/** For tests: how many syntax pre-passes have run in this process. */
-export const syntaxPrepasses = { count: 0 };
-
 /**
- * Fails `source` loudly when its table makes the parser produce something
- * core cannot lower yet: the first trigger, block tag or filter is a
- * positioned error ("`<id>` trigger has no lowering yet"), and so is an error
- * the table itself causes in the template parser. A table equal to the
- * default row (by hash) costs nothing: no pre-pass runs. When the pre-pass
- * sees nothing, the default parse that follows is the table's parse, because
- * a table changes nothing until one of those events.
+ * The error a table core cannot lower yet gives a file (decision 182), or
+ * `undefined`: its first trigger, block tag, filter or template error, in
+ * order of appearance, positioned, naming the file. Until port PR 5 a
+ * pre-pass parsed the file a second time to find it; the compile's own parse
+ * now carries the table, so this reads the same events from its document
+ * (one parse per compile). Lowering's seams (`payloadOf`, `lowerChildList`)
+ * refuse the same nodes in the same wording for a caller that lowers a
+ * document itself. The default row costs nothing: nothing is read.
  */
-export function checkSyntaxUse(
-  source: string,
+export function tableParseError(
+  document: Node,
   table: SyntaxTable,
   site: SyntaxSite,
-): void {
+): TranslateError | undefined {
   // The default row by identity first: a plain project pays one comparison.
   if (table === DEFAULT_ROW || syntaxHash(table) === defaultSyntaxHash()) {
-    return;
-  }
-  syntaxPrepasses.count++;
-  const parser = syntaxParser();
-  if (!parser) {
-    throw new TranslateError(NEEDS_MX_PARSER, 1, 0, site.filename);
+    return undefined;
   }
   let found: { start: number; message: string } | undefined;
-  const first = (start: number, message: string) => {
-    found ??= { start, message };
+  const consider = (start: number, message: string) => {
+    if (!found || start < found.start) found = { start, message };
   };
-  parser
-    .createParser(
-      {
-        onTrigger: (event: { id: string; start: number }) =>
-          first(event.start, `\`${event.id}\` trigger has no lowering yet`),
-        onBlockTag: (event: { start: number }) =>
-          first(event.start, "a block tag has no lowering yet"),
-        onFilter: (event: {
-          start: number;
-          name: { start: number; end: number };
-        }) =>
-          first(
-            event.start,
-            `the \`${source.slice(event.name.start, event.name.end)}\` filter has no lowering yet`,
-          ),
-        onError: (event: { start: number; message: string }) =>
-          first(event.start, event.message),
-      },
-      { syntax: table },
-    )
-    .parse(source);
-  if (!found) return;
-  const { line, column } = position(source, found.start, site);
-  throw new TranslateError(found.message, line, column, site.filename);
-}
-
-/** 1-based line, 0-based column of `offset`, shifted by the fragment's base. */
-function position(
-  source: string,
-  offset: number,
-  site: SyntaxSite,
-): { line: number; column: number } {
-  let line = 0;
-  let lineStart = 0;
-  for (
-    let at = source.indexOf("\n");
-    at !== -1 && at < offset;
-    at = source.indexOf("\n", at + 1)
-  ) {
-    line++;
-    lineStart = at + 1;
+  for (const error of document.errors ?? []) {
+    if (error.origin === "template") consider(error.start, error.message);
   }
-  const column = offset - lineStart;
-  return {
-    line: line + 1 + (site.baseLine ?? 0),
-    column: line === 0 ? column + (site.baseColumn ?? 0) : column,
+  const seen = new Set<unknown>();
+  const visit = (value: Node): void => {
+    if (value === null || typeof value !== "object" || seen.has(value)) return;
+    seen.add(value);
+    switch (value.type) {
+      case "MxTrigger":
+        consider(value.start, `\`${value.id}\` trigger has no lowering yet`);
+        break;
+      case "MxBlockTag":
+        consider(value.start, "a block tag has no lowering yet");
+        break;
+      case "MxFilter":
+        consider(
+          value.start,
+          `the \`${value.name}\` filter has no lowering yet`,
+        );
+        break;
+    }
+    for (const field of Object.values(value)) visit(field);
   };
+  visit(document.body);
+  if (!found) return undefined;
+  const { line, column } = filePosition(document, found.start);
+  return new TranslateError(found.message, line, column, site.filename);
 }

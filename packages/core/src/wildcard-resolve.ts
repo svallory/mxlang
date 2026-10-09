@@ -17,6 +17,7 @@ import type {
   CustomTagAttributeTag,
   WildcardChildEntry,
 } from "./custom-tags.ts";
+import { mxNodeOf } from "./marko-view.ts";
 import { CONTROL_FLOW_TAGS } from "./structural-tags.ts";
 import {
   attributeTagDeclarationFor,
@@ -135,7 +136,7 @@ const matches = new WeakMap<
 
 /** The match recorded for this tag node, if a parent's `"*"` claimed it. */
 export function wildcardMatchOf(node: Node): WildcardMatch | undefined {
-  return node ? matches.get(node)?.match : undefined;
+  return node ? matches.get(mxNodeOf(node))?.match : undefined;
 }
 
 /** The contract an entry validates its child with, when it can be reached. */

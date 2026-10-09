@@ -18,6 +18,7 @@ import { compileSource } from "./compile.ts";
 import { TranslateError } from "./core.ts";
 import { parseFragment } from "./fragment.ts";
 import { mxTemplateParser } from "./marko-frontend.ts";
+import { mxParses } from "./mx-parse.ts";
 import {
   defaultSyntax,
   defaultSyntaxHash,
@@ -26,7 +27,6 @@ import {
   type SyntaxTable,
   syntaxHash,
   syntaxHashes,
-  syntaxPrepasses,
   type Trigger,
 } from "./syntax-table.ts";
 import { lookup as targets } from "./test-targets.ts";
@@ -304,23 +304,29 @@ describe("the default row costs nothing", () => {
     expect(syntaxHashes.count).toBe(before + 1);
   });
 
-  it("runs no pre-pass for a project without mx.syntax, or with one equal to the default", () => {
+  it("parses once per compile, whatever the table (port PR 5: no pre-pass)", () => {
     manifest(dir, { tags: "tags" });
     const plain = join(dir, "page.mx");
-    const before = syntaxPrepasses.count;
-    compile("<p>a</p>\n", plain);
-    compile("<p>a</p>\n", "/virtual/page.mx");
-    parseFragment("<p/>", { filename: plain });
-    expect(syntaxPrepasses.count).toBe(before);
+    const once = (run: () => unknown) => {
+      const before = mxParses.count;
+      run();
+      expect(mxParses.count).toBe(before + 1);
+    };
+    once(() => compile("<p>a</p>\n", plain));
+    once(() => compile("<p>a</p>\n", "/virtual/page.mx"));
+    once(() => parseFragment("<p/>", { filename: plain }));
 
     const same = join(dir, "same");
     manifest(same, { syntax: { concise: true } });
-    compile("<p>a</p>\n", join(same, "page.mx"));
-    expect(syntaxPrepasses.count).toBe(before);
+    once(() => compile("<p>a</p>\n", join(same, "page.mx")));
 
     const other = join(dir, "other");
     manifest(other, { syntax: MESH });
-    compile("<p>a</p>\n", join(other, "page.mx"));
-    expect(syntaxPrepasses.count).toBe(before + 1);
+    once(() => compile("<p>a</p>\n", join(other, "page.mx")));
+    once(() =>
+      expect(() => compile("x=&a\n", join(other, "page.mx"))).toThrow(
+        "`member` trigger has no lowering yet",
+      ),
+    );
   });
 });

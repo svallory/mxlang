@@ -1,19 +1,48 @@
 import { describe, expect, it } from "vitest";
-import { parseFragment } from "./fragment.ts";
+import { printExpression } from "./compile.ts";
+import { newCtx, type TranslateError } from "./core.ts";
+import type { HostDeclarations } from "./declarations.ts";
+import { type FragmentBase, parseFragment } from "./fragment.ts";
+import { lower } from "./lower.ts";
+import { lookup } from "./test-targets.ts";
 
 /**
  * `x<A<B>>(a) {b}` is not a method with nested generics: `A<B>` is not a type
  * parameter (a parameter is a name, then `extends`/`=`: `<A extends B<C>>`).
  * Marko records a parse error for it, but its `source` output printed the tree
  * first and threw `unknown node of type undefined with constructor "Array"`,
- * which hid the error. `parseFragment` now surfaces Marko's positioned one.
+ * which hid the error. On the MX front end the type parameters' container
+ * keeps the parse error and lowering raises it, positioned.
  */
 
-function thrown(source: string): { message: string } | undefined {
+const host: HostDeclarations = {
+  name: "method-type-params-test",
+  attrTags: 2,
+  tags: {},
+  isElement: () => true,
+  isComponent: () => false,
+  isDelegatedTag: () => false,
+  resolveAttributeMethod: () => true,
+};
+
+/** `fragment` parsed at `options`' base inside `file`, then lowered. */
+function thrown(
+  fragment: string,
+  file = fragment,
+  options: FragmentBase = {},
+): TranslateError | undefined {
   try {
-    parseFragment(source);
+    const ctx = newCtx(
+      file,
+      printExpression,
+      host,
+      undefined,
+      "/tmp/fragment.mx",
+      lookup,
+    );
+    lower(ctx, parseFragment(fragment, options).body);
   } catch (error) {
-    return error as { message: string };
+    return error as TranslateError;
   }
   return undefined;
 }
@@ -29,7 +58,8 @@ describe("a method's type parameters", () => {
     const error = thrown(source);
     expect(error).toBeDefined();
     expect(error?.message).not.toMatch(/unknown node of type undefined/);
-    expect(error?.message).toMatch(/fragment\.mx:1:\d+/);
+    expect(error?.line).toBe(1);
+    expect(error?.column).toBeGreaterThan(6);
   });
 
   it("points at the offending token", () => {
@@ -48,18 +78,17 @@ describe("a method's type parameters", () => {
     expect(thrown(source)).toBeUndefined();
   });
 
-  it("the error's loc is shifted by the fragment's base", () => {
-    try {
-      parseFragment("<div x<A<B>>(a) {b}/>", {
-        baseOffset: 10,
-        baseLine: 2,
-        baseColumn: 4,
-        filename: "f.mx",
-      });
-      throw new Error("did not throw");
-    } catch (error) {
-      const loc = (error as { loc: { start: { line: number } } }).loc;
-      expect(loc.start.line).toBe(3);
-    }
+  it("the error's position is the file's when the fragment has a base", () => {
+    // Line 3, column 4 is offset 10 of the file: two short lines, then four
+    // spaces before the fragment.
+    const fragment = "<div x<A<B>>(a) {b}/>";
+    const error = thrown(fragment, `ab\ncd\n    ${fragment}`, {
+      baseOffset: 10,
+      baseLine: 2,
+      baseColumn: 4,
+      filename: "f.mx",
+    });
+    expect(error).toMatchObject({ line: 3 });
+    expect(error?.column).toBeGreaterThan(10);
   });
 });

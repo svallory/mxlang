@@ -1,9 +1,10 @@
 /**
- * Decision 182, PR C: with a stock `htmljs-parser` in place of MX's (the
- * case `stock-parser.test.ts` builds in the dist), the default row still
+ * Decision 182, PR C: with a stock `htmljs-parser` in place of MX's
+ * template parser (simulated below), the default row still
  * compiles, and a table other than the default row is refused with "needs
  * MX's template parser" at each place a table enters: the manifest, the
- * explicit option, and the pre-pass.
+ * explicit option. (The compile's own parse is the MX front end since port
+ * PR 5, which always carries a table, so there is no pre-pass to refuse.)
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -24,13 +25,8 @@ vi.mock("./marko-frontend.ts", async (original) => {
 });
 
 const { TranslateError } = await import("./core.ts");
-const {
-  checkSyntaxUse,
-  defaultSyntax,
-  explicitSyntax,
-  normalizeMxSyntax,
-  resolveSyntax,
-} = await import("./syntax-table.ts");
+const { defaultSyntax, explicitSyntax, normalizeMxSyntax, resolveSyntax } =
+  await import("./syntax-table.ts");
 
 const MEMBER = {
   id: "member",
@@ -54,13 +50,10 @@ function caught(run: () => unknown) {
 }
 
 describe("a stock parser", () => {
-  it("the default row needs no parser: resolution and the pre-pass are no-ops", () => {
+  it("the default row needs no parser: resolution is a no-op", () => {
     writeFileSync(join(dir, "package.json"), '{ "name": "x" }');
     const page = join(dir, "page.mx");
     expect(resolveSyntax(page)).toBe(defaultSyntax());
-    expect(() =>
-      checkSyntaxUse("x=&a", defaultSyntax(), { filename: page }),
-    ).not.toThrow();
     // A manifest overlay equal to the default row is the default row.
     expect(
       normalizeMxSyntax({ concise: true }, join(dir, "package.json")),
@@ -83,21 +76,12 @@ describe("a stock parser", () => {
     expect([error.line, error.column]).toEqual([3, 10]);
   });
 
-  it("an explicit table and the pre-pass are refused at the file's start", () => {
+  it("an explicit table is refused at the file's start", () => {
     const page = join(dir, "page.mx");
     const table = Object.freeze({ ...defaultSyntax(), lineTriggers: [MEMBER] });
     const viaOption = caught(() => explicitSyntax(table, page));
     expect(viaOption.message).toContain("the `syntax` option: a syntax table");
     expect([viaOption.file, viaOption.line, viaOption.column]).toEqual([
-      page,
-      1,
-      0,
-    ]);
-    const viaPrepass = caught(() =>
-      checkSyntaxUse("&a\n", table, { filename: page }),
-    );
-    expect(viaPrepass.message).toContain("needs MX's template parser");
-    expect([viaPrepass.file, viaPrepass.line, viaPrepass.column]).toEqual([
       page,
       1,
       0,

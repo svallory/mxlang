@@ -1,9 +1,10 @@
 # core — agent instructions
 
-## `@mxlang/core`: the Marko-node consumer
+## `@mxlang/core`: the MX AST consumer
 
 `packages/core` (`@mxlang/core`, decisions 70 to 72, 79) is the half every MX
-host shares: it consumes Marko's AST through `@marko/compiler`, applies the
+host shares: it parses with the MX front end (`@mxlang/parser/frontend`, port
+PR 5) and lowers the MX AST, applies the
 structural lowerings (`<if>`/`<else>`, every `<for>` form, `<define>`,
 `<const>`, statement tags, the field and inert-shape guards) and **resolves
 them into a host-independent IR** (decision 79). A host then *emits* from that
@@ -104,8 +105,10 @@ Five facts worth knowing before editing it:
   `browserslist` (no config file found: MX passes no targets) and leaves out
   `@babel/preset-typescript` (only for a `.cts` Babel config file). A bundle
   that inlines core's dist (the VSIX builds) gets `marko-frontend.cjs` copied
-  beside it by `scripts/bundled-build.ts`. Deleted with the switch to the MX
-  AST (decision 158).
+  beside it by `scripts/bundled-build.ts`. Since PR 5 nothing parses a
+  template with it: it serves the taglib lookup (`taglib.buildLookup`), Marko's
+  Babel (printing, `transform-typescript`, `codeFrameColumns`) and the error
+  kit (`markoErrorKit`). Deleted with the Marko readers (PR 6, decision 158).
 - **Its JS parsers are Marko's own Babel (`markoBabel()`) and `@babel/parser`.**
   `core.ts` used to parse
   an `import` line with `@mxlang/tsx-bridge` — the *Solid parser* package — for a
@@ -226,20 +229,53 @@ Five facts worth knowing before editing it:
   `ctx.bindings.register(name, rewrite)` (rewrite identifier *references*, so a
   host whose state is a getter emits `count()` for `${count}`). Rewrites apply
   only to reference positions, and emitted-JS scopes restore shadowed names.
-- **`parseFragment` is spike 1's stopgap, with measured limits.** Marko's own
-  nodes carry no numeric `start`/`end` at all (only `loc.{line,column}`); the
-  Babel expression nodes nested inside them carry their offset at
-  `loc.*.index`; **position objects are shared between nodes**, so the walk
-  dedupes them or a second visit lands at `base + base` (measured: raw index 16
-  with `baseOffset: 42` came out at 100 instead of 58); a thrown parse error's
-  position is on the exception, not in the tree, and is shifted separately.
-  `parseFragment` also passes a **parse-only translator stub** (empty
-  `translate`), because `@marko/compiler` otherwise resolves its default
-  `marko/translator` before parsing and fails — the `marko` package is not a
-  dependency here. Solid's own bridge
-  (`packages/tsx-bridge/src/mx/bridge.ts`) now calls `parseFragment` for every MX
-  region it finds; see "`@mxlang/solid`: the Solid host on `@mxlang/core`"
-  in `packages/hosts/solid/AGENTS.md`.
+- **`compileSource` and `parseFragment` parse with the MX front end (port PR
+  5).** `src/mx-parse.ts` `parseMx` calls `@mxlang/parser/frontend`'s `parse`
+  with tag shapes and statement keywords read from the Marko taglib lookup
+  (`taglib.buildLookup`, still Marko's until PR 6) and the resolved syntax table; one
+  parse per compile (`mxParses` counts it). Nothing in production calls
+  `@marko/compiler`'s parser; it stays for the IR differential
+  (`packages/parse-differential`) and the oracles. The front end is imported
+  statically and inlined into `dist/index.js` (462 KB at 9293794df, 1.13 MB
+  after): it cannot be `require`d from source (Node's strip-only mode refuses
+  its parameter properties and `@mxlang/babel`'s `const enum`s), and its
+  `./frontend` export carries a hand-written `types` condition
+  (`packages/parser/src/frontend/public.d.ts`) so core's strict program never
+  type-checks vendored Babel. Parse errors are rebuilt as Marko's
+  `CompileError`/`CompileErrors` (`compileErrorOf`, a port of
+  `@marko/compiler` 5.42.10 `build-code-frame.js` + `merge-errors.js`), so the
+  rewrite chain after it (`hintParseError`, `tagParamError`,
+  `sugarAfterDefaultError`, `dropCompiledFilePrefix`) reads what it always
+  read; the aggregate's message is Node's form on every runtime (decision 151
+  addendum, PR 5). `stripTypes` is `stripMxTypes` (Marko's `transform-typescript`
+  visitor over each payload; tag type arguments/parameters dropped, a
+  method's recorded in `strippedMethodTypeParams`). `compileSource` runs the
+  translator's `Program.exit` itself and decorates a translate-stage throw as
+  Babel did (`asBabelTransformError`).
+  **`FragmentResult.body` is the MX body, `ast` the `MxDocument`**, with
+  file-absolute UTF-16 offsets from the fragment's base. An expression error
+  stays on its container (`error`) and `lower` raises it (`payloadOf`), so
+  `parseFragment` throws only for a template error; front-end `MX_*` name-sugar
+  errors are raised by `lower`/`lowerChildren` (`pendingFrontEndError`). A
+  `:name` right after a default value gets decision 151 ruling 2's text at the
+  lowering boundary too (`positionError`). Solid's bridge
+  (`packages/tsx-bridge/src/mx/bridge.ts`) calls `parseFragment` for every MX
+  region and retries a failed container as TSX (`repairEmbeddedTsx`); see
+  `packages/hosts/solid/AGENTS.md`.
+- **Host hooks get a Marko-shaped view of the MX node (decision 163
+  addendum, PR 5).** `src/marko-view.ts` `markoViewOf(ctx, node)`: a lazy,
+  frozen, WeakMap-cached view (`MarkoTag` with `name`/`var`/`arguments`/
+  `typeArguments`/`attributes`/`attributeTags`/`body.{body,params}`,
+  `MarkoAttribute`/`MarkoSpreadAttribute`, text/placeholder/comment/scriptlet
+  views; Marko-style `loc` from `ctx.lines`); records already Marko-shaped
+  (`rewriteMxSugar`'s) pass through, and `mxNodeOf(view)` maps back. Every
+  `HostDeclarations` call site passes the view, so the public hook contract and
+  every host are unchanged. It is removed when the hooks move to the
+  `MxNodeHandle` hook view (ast §6.4), one PR after PR 6: `resolveDelegatedTag`,
+  `rejectModifier`, `resolveModifier`, `rejectAttributeMethod`,
+  `resolveAttributeMethod`, `resolveDefaultTag` (and `DefaultTagParent.node`),
+  `rejectElementAttributeTags`, `rejectComponentTag`, `rejectUnknownTag`,
+  `checkBinding`.
 - **Programmatic custom tags lower to ordinary IR before a host emits.** Every
   host compiler accepts `customTags: Record<string, CustomTag>`; the core
   validates declared attributes and attribute tags, then calls `transform`.
@@ -386,11 +422,14 @@ Five facts worth knowing before editing it:
   `parseFragment` and `@mxlang/data`'s `parseData` take an explicit
   `syntax` that wins, validated once per frozen object (`explicitSyntax`)
   with the manifest's rules as the caller's error at the file start, naming
-  `syntax.<field>`; a non-empty `tagTypes` is refused there too. `checkSyntaxUse` runs only when the table's hash
-  differs from the default row's (`syntaxPrepasses` counts it): a pre-pass
-  with MX's template parser fails the file at its first trigger, block tag
-  or filter ("`<id>` trigger has no lowering yet") or at an error the table
-  causes; with no such event the default parse that follows is the table's
+  `syntax.<field>`; a non-empty `tagTypes` is refused there too. The table
+  is the front end's parse table (one parse, PR 5): for a non-default table,
+  `tableParseError` reads the first trigger, block tag, filter or
+  table-caused template error from the compile's document, in source order
+  and with `file` ("`<id>` trigger has no lowering yet"); the seams in
+  `payloadOf`/`lowerChildList` are the backstop for callers that lower a
+  document themselves. `MX_SUGAR_ON_STATEMENT` is decided by the parse table
+  alone, never by `ctx.lookup`.
   parse. Core reaches that parser through `mxTemplateParser()`
   (`marko-frontend.ts`): the bundle's parser in the dist, the workspace
   `@mxlang/parser` devDependency by `require` from source (never a static
@@ -798,7 +837,7 @@ Five facts worth knowing before editing it:
   true`) `Import` carry none. Slicing the source with a span yields the
   authored text; tests in `src/spans.test.ts` assert exactly that, including
   under emoji (UTF-16) and CRLF.
-- **Lowering reads both ASTs until PR 5 (parser port PR 4, decision 158).**
+- **Lowering reads both ASTs until PR 6 (parser port PR 4, decision 158).**
   Node kinds are tested through `isTagNode`/`isTextNode`/`isCommentNode`/
   `isAttributeNode`/`isSpreadAttributeNode`/`isMxAttributeTag` (core.ts),
   never a bare `"Marko*"` string, and positions through `posOf(ctx, node)`,
@@ -816,8 +855,10 @@ Five facts worth knowing before editing it:
   path by its keyword (`tagNameOf`), a statement by kind (`isStatementNode`),
   its range to `untrimmedEnd` (`mxSpanOf`). The walk is typed
   `readonly MxChild[]` (a type-only import of the private `@mxlang/babel`,
-  erased from the `.d.ts`); the published `lower`/`lowerChildren` take
-  `readonly Node[]` until PR 5. Tests drive these
+  erased from the `.d.ts`); the published `lower`/`lowerChildren` keep
+  `readonly Node[]`, since `MxChild` lives in the unpublished
+  `@mxlang/babel` and the published `.d.ts` must name neither it nor
+  `@mxlang/parser`. Tests drive these
   paths with `lower.test.ts`'s `toMxShape`, the real Marko parse reshaped into
   the MX AST as far as lowering reads it; each slice extends it.
 - **Cross-file errors carry their origin structurally.** `metadataForTemplate`
@@ -1071,10 +1112,9 @@ stable version.
   the `:name` sugar's `name` gets `extra.mxAtom` in `sugarAttr`. Nested atoms
   are `Expr.atoms`; `mappedExpr` maps each one to its literal. Hosts mapping an
   expression should call `mappedExpr(expr)`, not `mapped(expr.code, expr.span)`.
-- **Stock parser:** `installedParserLexesAtoms` probes `onAtom`; on a stock
-  parser `stockAtomError` turns Babel's failure at a `:name` into the
-  "atoms need the MX parser" error, in `compileSource`, `parseFragment` and
-  `exprOf`'s recovered-parse path.
+- **No stock-parser path.** Core parses with the MX front end (port PR 5), so
+  a stock `htmljs-parser` never lexes MX input; decision 151's stock-parser
+  and "atoms need the MX parser" errors were deleted with it.
 - **Atom contracts are two phases at the end of a unit's lowering**
   (`src/atom-contracts.ts`, decision 156 PR 2). `transformCustomTag` records a
   `ContractFact` (definition, call, authored ancestor nodes) per call in

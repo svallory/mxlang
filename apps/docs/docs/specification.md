@@ -927,9 +927,8 @@ shorthand property must stand (`:a = 1`, `(:a) => 1`, `{:a}`) is a positioned
 parse error naming the atom. `::name` is reserved for a future `Symbol.for`
 sugar (decision 156.5): "`::a` is reserved (decision 156)…", positioned at the
 `::`, in a tag or attribute name too (`<a ::b>`, `<a::b>`; addendum 2). Published `@mxlang/core` parses atoms
-too: it bundles the parse layer with MX's template parser (decision 159). A
-caller that bypasses that bundle with a stock htmljs-parser gets "`:a` is an
-atom (decision 156), and atoms need the MX parser" at the atom.
+too: it parses with the MX front end and MX's template parser (decisions 158,
+159), never a stock htmljs-parser.
 
 **IR and data.** An attribute whose whole value is one atom is a `static`
 attribute carrying `atom: { kind: "atom", name, span }`; in `parseData` it is

@@ -211,13 +211,24 @@ describe("no input makes parseData throw", () => {
   });
 
   it("reports an internal invariant at the file start under a distinct prefix", () => {
-    const { tree, diagnostics } = parseData(`x<a x=\`\${<a>`, "/t.mx");
+    // Marko's tree for `x<a x=\`\${<a>` left `<x>` with no position, which
+    // broke the invariant; the MX front end positions it (port PR 5), so the
+    // invariant is broken here by a macro returning a node with no span.
+    const { tree, diagnostics } = parseData("<a/>\n<m/>\n", "/t.mx", {
+      customTags: {
+        m: {
+          transform: () => [
+            { kind: "Text", value: "x", loc: { line: 2, column: 0 } },
+          ],
+        },
+      },
+    });
     expect(tree).toBeUndefined();
     expect(diagnostics).toEqual([
       {
         severity: "error",
         message:
-          "internal error: @mxlang/data: core IR invariant broken — tag `<x>` carries no span",
+          "internal error: @mxlang/data: core IR invariant broken — text carries no span",
         line: 1,
         column: 0,
         offset: 0,

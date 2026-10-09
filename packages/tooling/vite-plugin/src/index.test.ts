@@ -927,7 +927,6 @@ export default () => <div />;
       mkdirSync(join(dir, "tags"), { recursive: true });
       writeFileSync(
         join(dir, "tags", "icon.mx"),
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax, not a JS template
         '<span class="icon">${input.name}</span>\n',
       );
       const source = `const a = <div><icon name="star"/></div>;\n`;
@@ -1061,18 +1060,13 @@ export default () => <div />;
         writeFileSync(caller, "<p>hi</p>\n");
         const compile = () =>
           transform.call(context, "<p>hi</p>\n", `${caller}${MX_SUFFIX}`);
-        if (dir === broken) {
-          // The html host's Babel pass reads the same package.json for its own
-          // config and throws on it independently of this resolver, so the
-          // compile fails here; the warning must have been issued first.
-          await expect(compile()).rejects.toThrow(/parsing JSON/);
-          await expect(compile()).rejects.toThrow(/parsing JSON/);
-        } else {
-          // A warning, never a failure: the file compiles under the fallback.
-          expect((await compile())?.code).toContain("hi");
-          // Once per problem, not once per compiled file.
-          await compile();
-        }
+        // A warning, never a failure: the file compiles under the fallback.
+        // (Marko's compile also loaded a Babel config, which read the broken
+        // package.json and threw "Error while parsing JSON"; the MX front end
+        // loads none since port PR 5, so the broken file compiles too.)
+        expect((await compile())?.code).toContain("hi");
+        // Once per problem, not once per compiled file.
+        await compile();
       }
 
       // (The scan reports the same broken file in its own words; only the
