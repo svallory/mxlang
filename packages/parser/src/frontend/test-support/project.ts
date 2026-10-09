@@ -72,6 +72,14 @@ export function projectChild(node: Node, depth: number, out: string[]): void {
     case "MxTrigger":
       out.push(`${pad}${triggerLine(node)}`);
       return;
+    case "MxBlockTag":
+      out.push(`${pad}block-tag ${r(node)} value=${r(node.valueSpan)}`);
+      return;
+    case "MxFilter":
+      out.push(
+        `${pad}filter ${q(node.name)} ${r(node)} name=${r(node.nameSpan)} value=${r(node.valueSpan)}`,
+      );
+      return;
     default:
       out.push(`${pad}unknown ${node.type}`);
   }

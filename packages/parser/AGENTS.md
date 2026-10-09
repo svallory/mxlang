@@ -34,11 +34,17 @@ armed in three positions (expression, attribute name, tagless concise line),
 announced through `onTrigger` and stood in by `read()` at the same length;
 the front end builds `MxTrigger` nodes (`@mxlang/babel/mx-ast`, ast §4.4). Atoms and the `:name`/`#id`/`.class` sugars keep
 their own paths until they move onto the table. Nothing is lowered here.
+Block tags and filters (`MxBlockTag`, `MxFilter`, ast §4.5) are raw body
+children in HTML content. Tag types come from the table's `tagTypes`
+(addenda 2 and 3), never from a handler's return: the front end passes
+`ParseOptions.tagTypes`, or builds them before the parse by pre-scanning the
+source with `tagShape` (`src/frontend/tag-types.ts`, interim until PR C
+builds them in core), restarting with any name the scan missed.
 `src/template/PROVENANCE.md` lists every place the table touches.
 
 ## `src/frontend/` (the MX AST front end)
 
-- `parse(source, { statementKeywords, tagShape, base?, syntax? })` builds the MX AST
+- `parse(source, { statementKeywords, tagShape, base?, syntax?, tagTypes? })` builds the MX AST
   of `apps/docs/docs/architecture/ast.md` (one handler per row of its §7
   table); `lineColumnAt(document, offset)` gives 1-based line, 0-based column.
 - **Exported** as the package's second entry point since PR 3

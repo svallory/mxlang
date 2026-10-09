@@ -27,7 +27,7 @@ describe("options", () => {
     expect(() => loose("<a/>")).toThrow(TypeError);
   });
 
-  it("tagShape is asked once per static-named tag, with the written name; never for a dynamic name or an attribute tag", () => {
+  it("tagShape is asked once per distinct name, with the written name; never for an attribute tag (decision 182 addendum 3: the tagTypes pre-scan asks every candidate name)", () => {
     const asked: string[] = [];
     const shape = (name: string): MxBodyMode => {
       asked.push(name);
@@ -37,8 +37,12 @@ describe("options", () => {
       statementKeywords: SIX,
       tagShape: shape,
     });
-    expect(asked).toEqual(["div", "input:email", "", "Card"]);
+    expect(new Set(asked).size).toBe(asked.length);
+    for (const name of ["div", "input:email", "", "Card"]) {
+      expect(asked).toContain(name);
+    }
     expect(asked.some((name) => name.startsWith("@"))).toBe(false);
+    expect(asked.some((name) => name.includes("${"))).toBe(false);
   });
 
   it("the statement test uses the written name: import:x is a tag", () => {

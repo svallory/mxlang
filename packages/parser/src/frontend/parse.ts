@@ -10,10 +10,12 @@
  * later walk (ast §5.3).
  */
 import type {
+  MxBlockTag,
   MxBodyMode,
   MxDocument,
   MxErrorCode,
   MxExpression,
+  MxFilter,
   MxFragmentBase,
   MxFrontEndOptions,
   MxParseError,
@@ -27,7 +29,11 @@ import type {
   Ranges,
   TagType as TagTypeValue,
 } from "../template/internal.ts";
-import { compileSyntax, type SyntaxTable } from "../template/syntax.ts";
+import {
+  compileSyntax,
+  DEFAULT_SYNTAX,
+  type SyntaxTable,
+} from "../template/syntax.ts";
 import {
   type ContainerKind,
   type SubParseTrigger,
@@ -40,8 +46,9 @@ import {
   type RuleContext,
   frontEndRules as realFrontEndRules,
 } from "./rules.ts";
+import { buildTagTypes } from "./tag-types.ts";
 
-export type { MxTrigger };
+export type { MxBlockTag, MxFilter, MxTrigger };
 
 /** Options of `parse`: the two per-target inputs (ast §7.1) and an optional fragment base (ast §5.3). */
 export interface ParseOptions extends MxFrontEndOptions {
@@ -51,6 +58,14 @@ export interface ParseOptions extends MxFrontEndOptions {
    * grammar. A table that does not validate is a `TypeError`.
    */
   readonly syntax?: SyntaxTable;
+  /**
+   * Tag types keyed by the full written static name (decision 182 addenda
+   * 2, 3), the template parser's only source of a tag's type. Omitted, the
+   * table's own `tagTypes` are used when it has any, else they are built
+   * from `tagShape` and `statementKeywords` by pre-scanning the source
+   * (interim until PR C). They must agree with `tagShape`'s body modes.
+   */
+  readonly tagTypes?: Readonly<Record<string, TagTypeValue>>;
 }
 
 /** Decision 161's wording for an error that is never the author's. */
@@ -163,19 +178,48 @@ export function parse(source: string, options: ParseOptions): MxDocument {
   }
   // A bad table is the caller's error, like a missing option: it throws
   // here, not as an internal failure inside the parse.
-  if (options.syntax !== undefined) compileSyntax(options.syntax);
+  if (options.syntax !== undefined || options.tagTypes !== undefined) {
+    compileSyntax({
+      ...(options.syntax ?? DEFAULT_SYNTAX),
+      ...(options.tagTypes ? { tagTypes: options.tagTypes } : {}),
+    });
+  }
   const base: MxFragmentBase = options.base ?? {
     offset: 0,
     line: 0,
     column: 0,
   };
-  const builder = new FrontEnd(source, options, base.offset, base);
-  try {
-    builder.run();
-  } catch (error) {
-    builder.internalError(error);
+  // When the front end builds `tagTypes` itself, a static name its
+  // pre-scan missed (a parser quirk the scan's name contexts do not cover)
+  // restarts the parse with the name added: the table stays the parser's
+  // only source and the tree is the one a complete table gives.
+  let prior: Prior | undefined;
+  for (let attempt = 0; ; attempt++) {
+    const builder = new FrontEnd(source, options, base.offset, base, prior);
+    try {
+      builder.run();
+    } catch (error) {
+      const missed = builder.missed;
+      if (missed && attempt < MAX_RESCANS) {
+        prior = {
+          tagTypes: { ...builder.tagTypes, [missed.name]: missed.type },
+          shapes: builder.shapes,
+        };
+        continue;
+      }
+      builder.internalError(error);
+    }
+    return builder.finish(base);
   }
-  return builder.finish(base);
+}
+
+/** How many names a parse may add to a table it built before giving up (each restart adds one). */
+const MAX_RESCANS = 64;
+
+/** What a restarted parse keeps: the table so far and the answers `tagShape` gave. */
+interface Prior {
+  readonly tagTypes: Readonly<Record<string, TagTypeValue>>;
+  readonly shapes: Map<string, MxBodyMode>;
 }
 
 class FrontEnd {
@@ -202,13 +246,18 @@ class FrontEnd {
     readonly options: ParseOptions,
     readonly offset: number,
     readonly base: MxFragmentBase,
-  ) {}
+    readonly prior?: Prior,
+  ) {
+    if (prior) this.shapes = prior.shapes;
+  }
 
   run(): void {
     const handlers = {
       onError: (e: Ranges.Error) => this.onError(e),
       onAtom: (e: Ranges.Value) => this.onAtom(e),
       onTrigger: (e: Ranges.Trigger) => this.onTrigger(e),
+      onBlockTag: (e: Ranges.Value) => this.onValueNode("MxBlockTag", e),
+      onFilter: (e: Ranges.Filter) => this.onFilter(e),
       onText: (e: Range) => this.onText(e),
       onPlaceholder: (e: Ranges.Placeholder) => this.onPlaceholder(e),
       onComment: (e: Ranges.Value) => this.onComment(e),
@@ -251,11 +300,23 @@ class FrontEnd {
         return result;
       };
     }
+    const base = this.options.syntax ?? DEFAULT_SYNTAX;
+    // The table's tag types: the caller's, else the table's own, else built
+    // from `tagShape` by pre-scanning the source (interim until PR C builds
+    // them in core; see `tag-types.ts`).
+    const given =
+      this.options.tagTypes ??
+      (Object.keys(base.tagTypes).length > 0 ? base.tagTypes : undefined);
+    this.built = given === undefined;
+    this.tagTypes =
+      given ??
+      this.prior?.tagTypes ??
+      buildTagTypes(this.source, this.options.statementKeywords, (name) =>
+        this.shapeOf(name),
+      );
+    const syntax: SyntaxTable = { ...base, tagTypes: this.tagTypes };
     this.inTemplate = true;
-    const syntax = this.options.syntax;
-    seams
-      .createParser(wrapped, syntax === undefined ? undefined : { syntax })
-      .parse(this.source);
+    seams.createParser(wrapped, { syntax }).parse(this.source);
     this.inTemplate = false;
     if (!this.templateError && this.stack.length > 0) {
       // TODO `concise-eof-open-delimiter-silent` and
@@ -763,6 +824,17 @@ class FrontEnd {
     });
   }
 
+  onFilter(event: Ranges.Filter): void {
+    this.pushChild({
+      type: "MxFilter",
+      ...this.span(event),
+      name: this.slice(event.name),
+      nameSpan: this.span(event.name),
+      value: this.slice(event.value),
+      valueSpan: this.span(event.value),
+    });
+  }
+
   onValueNode(type: string, event: Ranges.Value): void {
     this.pushChild({
       type,
@@ -778,7 +850,13 @@ class FrontEnd {
     this.openStart = range.start;
   }
 
-  onOpenTagName(template: Ranges.Template): TagTypeValue {
+  /**
+   * The tag's type is the template parser's, from the table (`tagTypes`,
+   * decision 182 addenda 2 and 3); this handler decides nothing. It checks
+   * that the table agrees with the body mode it records, so a name the
+   * table missed fails loudly instead of parsing with the wrong type.
+   */
+  onOpenTagName(template: Ranges.Template): void {
     const concise = this.openStart === undefined;
     const start = this.openStart ?? template.start;
     this.openStart = undefined;
@@ -798,7 +876,8 @@ class FrontEnd {
         start: template.start,
         nameEnd: template.end,
       };
-      return TagType.statement;
+      this.expectType(written, TagType.statement);
+      return;
     }
 
     let type: TagBuilder["type"] = "MxTag";
@@ -872,16 +951,42 @@ class FrontEnd {
         template.end,
       );
     }
-    switch (bodyMode) {
-      case "void":
-        return TagType.void;
-      case "parsed-text":
-      case "parsed-text-preserve":
-        return TagType.text;
-      default:
-        return TagType.html;
+    if (written !== undefined && type !== "MxAttributeTag") {
+      this.expectType(
+        written,
+        bodyMode === "void"
+          ? TagType.void
+          : bodyMode === "parsed-text" || bodyMode === "parsed-text-preserve"
+            ? TagType.text
+            : TagType.html,
+      );
     }
   }
+
+  /** The table's type for a written static name (absent: html, a statement word off a concise line: html). */
+  expectType(written: string, expected: TagTypeValue): void {
+    let listed = this.tagTypes[written] ?? TagType.html;
+    // Off a concise line the parser applies a statement word as html.
+    if (listed === TagType.statement && expected !== TagType.statement) {
+      listed = TagType.html;
+    }
+    if (listed !== expected) {
+      // A name the pre-scan missed: `parse` restarts with it added.
+      if (this.built && this.tagTypes[written] === undefined) {
+        this.missed = { name: written, type: expected };
+      }
+      throw new Error(
+        `tagTypes gives ${JSON.stringify(written)} type ${listed}, its body mode needs ${expected}`,
+      );
+    }
+  }
+
+  /** The table the template parser reads (built in `run`). */
+  tagTypes: Readonly<Record<string, TagTypeValue>> = {};
+  /** Whether the front end built `tagTypes` (no caller table). */
+  built = false;
+  /** A static name the built table lacked, with the type its body mode needs. */
+  missed: { name: string; type: TagTypeValue } | undefined;
 
   openTag(
     start: number,
@@ -925,15 +1030,21 @@ class FrontEnd {
     this.reach(headEnd);
   }
 
+  /** `tagShape`, asked once per distinct name (the table's pre-scan asks first). */
   shapeOf(written: string): MxBodyMode {
+    const known = this.shapes.get(written);
+    if (known !== undefined) return known;
     const mode = this.options.tagShape(written);
     if (!BODY_MODES.has(mode)) {
       throw new Error(
         `tagShape(${JSON.stringify(written)}) answered ${JSON.stringify(mode)}, not a body mode`,
       );
     }
+    this.shapes.set(written, mode);
     return mode;
   }
+
+  shapes = new Map<string, MxBodyMode>();
 
   /** A shorthand with a static value from `sigilAt` (the sigil) to `end`, local offsets. */
   staticShorthand(

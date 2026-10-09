@@ -41,6 +41,8 @@ export const HTML_CONTENT: StateDefinition<HTMLContentMeta> = {
       return;
     }
 
+    const stops = this.syntax.contentStops;
+    let next: number;
     while (this.pos < maxPos) {
       const code = data.charCodeAt(this.pos);
 
@@ -157,6 +159,12 @@ export const HTML_CONTENT: StateDefinition<HTMLContentMeta> = {
         }
       }
 
+      // MX (decision 182): a syntax table's block tag or filter. The
+      // default row has no opener, so `stops` is empty.
+      if (stops.length && stops.includes(code) && STATE.checkForBlockTag(this)) {
+        return; // checkForBlockTag entered BLOCK_TAG
+      }
+
       if (
         (code === CODE.DOLLAR || code === CODE.BACK_SLASH) &&
         STATE.checkForPlaceholder(this, code)
@@ -170,7 +178,8 @@ export const HTML_CONTENT: StateDefinition<HTMLContentMeta> = {
         this.pos++;
       } while (
         this.pos < maxPos &&
-        !isSpecialHtmlContentCode(data.charCodeAt(this.pos))
+        !isSpecialHtmlContentCode((next = data.charCodeAt(this.pos))) &&
+        !(stops.length && stops.includes(next))
       );
     }
   },

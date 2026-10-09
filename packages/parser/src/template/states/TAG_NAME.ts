@@ -9,6 +9,7 @@ import {
 } from "../internal.ts";
 import * as CODE from "../util/codes.ts";
 import * as ErrorCode from "../util/error-code.ts";
+import type { TagType as TagTypeValue } from "../util/constants.ts";
 import { rejectReservedName } from "./EXPRESSION.ts";
 import * as TagType from "../util/tag-type.ts";
 import { prepareScriptlet } from "./INLINE_SCRIPT.ts";
@@ -74,12 +75,16 @@ export const TAG_NAME: StateDefinition<TagNameMeta> = {
         break;
       default: {
         const tag = this.activeTag!;
-        const tagType = this.options.onOpenTagName?.({
-          start,
-          end,
-          quasis,
-          expressions,
-        });
+        // MX (decision 182 addenda 2, 3): the syntax table's `tagTypes`,
+        // computed before the parse, decides; a handler that still returns
+        // a type (`@marko/compiler`'s taglib, bundled into core) wins.
+        const tagType =
+          this.options.onOpenTagName?.({
+            start,
+            end,
+            quasis,
+            expressions,
+          }) ?? tableTagType(this, tagName, expressions.length > 0);
         tag.tagName = tagName;
 
         if (tagType) {
@@ -208,4 +213,26 @@ export function prepareStatement(
 ) {
   expr.consumeIndentedContent = true;
   prepareScriptlet(expr, parser, pos);
+}
+
+/**
+ * MX (decision 182 addenda 2, 3): a tag's type from the table, keyed by the
+ * full written static name (`input:email` is its own key). A dynamic name
+ * or an attribute tag (`@name`) is never looked up; a name absent is html;
+ * `statement` applies only on a concise line, so the HTML-mode spelling of
+ * a statement word stays html (decision 163 addendum 7).
+ */
+function tableTagType(
+  parser: Parser,
+  name: { start: number; end: number },
+  dynamic: boolean,
+): TagTypeValue | undefined {
+  const { tagTypes } = parser.syntax;
+  if (dynamic || tagTypes.size === 0) return undefined;
+  const written = parser.data.slice(name.start, name.end);
+  if (written[0] === "@") return undefined;
+  const type = tagTypes.get(written);
+  return type === TagType.statement && !parser.activeTag!.concise
+    ? undefined
+    : type;
 }

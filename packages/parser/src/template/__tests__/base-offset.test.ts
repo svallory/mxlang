@@ -234,14 +234,21 @@ const DECLARED_HANDLERS = [
   "onPlaceholder",
   "onAtom",
   "onTrigger",
+  "onBlockTag",
+  "onFilter",
 ] as const;
 
 /**
- * MX (decision 182): handlers only a syntax table with triggers can produce.
+ * MX (decision 182): handlers only a syntax table with triggers, a block tag
+ * or a filter can produce.
  * The default row has none, so neither source here fires them; "table-only
  * handlers do not fire on the default row" below re-tests that.
  */
-const TABLE_ONLY_HANDLERS: readonly string[] = ["onTrigger"];
+const TABLE_ONLY_HANDLERS: readonly string[] = [
+  "onTrigger",
+  "onBlockTag",
+  "onFilter",
+];
 
 // Compile-time exhaustiveness: if `ParserOptions` ever gains a handler that
 // DECLARED_HANDLERS does not name, this stops typechecking, because

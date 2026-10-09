@@ -133,6 +133,31 @@ export interface MxTrigger extends MxNodeBase {
   readonly value: MxExpression | null;
 }
 
+/**
+ * A syntax table's block tag (decision 182; ast §4.5), `{% for x in xs %}`:
+ * a child of the enclosing body. Raw: `value` is the body between the
+ * table's `open` and `close`, untrimmed. Core's `lowerBlockTag` builds IR
+ * from it and pairs openers with closers; the front end does not.
+ */
+export interface MxBlockTag extends MxNodeBase {
+  readonly type: "MxBlockTag";
+  readonly value: string;
+  readonly valueSpan: Span;
+}
+
+/**
+ * A syntax table's filter (decision 182; ast §4.5), `::markdown:: … ::`: a
+ * child of the enclosing body, its name and its raw body. Core's
+ * `lowerFilter` returns IR for it.
+ */
+export interface MxFilter extends MxNodeBase {
+  readonly type: "MxFilter";
+  readonly name: string;
+  readonly nameSpan: Span;
+  readonly value: string;
+  readonly valueSpan: Span;
+}
+
 /** A parse error recorded as data; `start`/`end` are what to underline (ast §3.13). */
 export interface MxParseError extends MxNodeBase {
   readonly type: "MxParseError";
@@ -387,7 +412,9 @@ export type MxChild =
   | MxDoctype
   | MxDeclaration
   | MxModuleStatement
-  | MxTrigger;
+  | MxTrigger
+  | MxBlockTag
+  | MxFilter;
 
 /** Every MX node (ast §3.0). */
 export type MxNode =

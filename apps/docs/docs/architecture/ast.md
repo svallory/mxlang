@@ -299,7 +299,8 @@ interface MxNodeBase extends Span { readonly type: `Mx${string}` }
 type MxChild =
   | MxTag | MxAttributeTag | MxReturn | MxText | MxPlaceholder
   | MxScriptlet | MxComment | MxCDATA | MxDoctype | MxDeclaration
-  | MxModuleStatement | MxTrigger;   // MxTrigger: a line trigger (§4.4)
+  | MxModuleStatement | MxTrigger    // MxTrigger: a line trigger (§4.4)
+  | MxBlockTag | MxFilter;           // §4.5
 
 type MxNode =
   | MxDocument | MxChild
@@ -1298,6 +1299,35 @@ entity Order
 Offsets: line trigger `&title` `[15, 21)`, line trigger `&amount` `[24, 43)`
 with `value` `[32, 43)`.
 
+### 4.5 `MxBlockTag`, `MxFilter`
+
+A syntax table's block tag and filter (decision 182), in HTML content only
+(never in a text-only tag's body, an attribute or a concise head). Both are
+raw: the body is not parsed, and nothing here pairs `{% for %}` with
+`{% endfor %}`; core's `lowerBlockTag` and `lowerFilter` do. The `.mx`
+default row has neither.
+
+```ts
+interface MxBlockTag extends MxNodeBase {
+  readonly type: "MxBlockTag";
+  readonly value: string;      // the body between `blockTag.open` and the first `blockTag.close`
+  readonly valueSpan: Span;
+}
+interface MxFilter extends MxNodeBase {
+  readonly type: "MxFilter";
+  readonly name: string;       // `filter.open`, a name, `filter.close`: the head
+  readonly nameSpan: Span;
+  readonly value: string;      // the body up to the next `filter.close`
+  readonly valueSpan: Span;
+}
+```
+
+```mx
+<ul>{% for x in xs %}<li/>{% endfor %}</ul>
+```
+
+Offsets: block tag `[4, 21)` with `value` `[6, 19)`, block tag `[26, 38)`.
+
 ## 5. Positions
 
 ### 5.1 The rule
@@ -1725,6 +1755,8 @@ in-repo template parser adds a 28th, `onAtom` (decision 156; source
 |---|---|---|
 | `onAtom` | `Value` (range: the whole atom; `value`: its name) | one `MxAtom` in the enclosing container's `atoms`, in source order (§4.3) |
 | `onTrigger` | `Trigger { id, position, standIn, text, value? }` (range: the text, then `=value`) | one `MxTrigger` (§4.4): in the enclosing container's `triggers`, in the tag's `attributes`, or a body child |
+| `onBlockTag` | `Value` (range: the whole form; `value`: its body) | `MxBlockTag`, a body child (§4.5) |
+| `onFilter` | `Filter { name, value }` | `MxFilter`, a body child (§4.5) |
 | `onText` | `Range` | `MxText`; normalized with lookahead as Marko, except in a preserving body (§3.8, §3.12) |
 | `onPlaceholder` | `Placeholder { value, escape }` | `MxPlaceholder` |
 | `onComment` | `Value` | `MxComment` (kind from the source, as `getCommentKind`) |
@@ -1971,7 +2003,8 @@ not listed.
 | `MxExpressionContainer` | generic base | §4.1 | 1079 |
 | `MxExpression` | node (container) | §4.1 | 1086 |
 | `MxAtom` | node | §4.3 | 1197 |
-| `MxTrigger` | node | §4.4 | 1264 |
+| `MxTrigger` | node | §4.4 | 1265 |
+| `MxBlockTag`, `MxFilter` | node | §4.5 | 1302 |
 | `MxBodyMode` | union | §3.12 | 864 |
 | `MxTagShape` | function type | §3.12 | 864 |
 | `MxStatementKeyword` | union | §3.10 | 793 |

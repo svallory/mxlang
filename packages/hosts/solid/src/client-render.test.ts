@@ -370,7 +370,7 @@ describe("Solid client render: live signal updates through the real DOM", () => 
     // (DOM) codegen: before the fix, `e.message` on the accessor rendered
     // empty and `e.constructor.name` rendered `Function` here too.
     const { snapshots } = renderDomApp(
-      "<try><Risky/><@catch|e|><li>caught: \${e.message}</li></@catch></try>",
+      "<try><Risky/><@catch|e|><li>caught: ${e.message}</li></@catch></try>",
       'function Risky() { throw new Error("client boom"); }',
       "unused",
       [],

@@ -794,30 +794,12 @@ describe("validateSyntaxTable", () => {
       "inlineScript",
       /not supported/,
     ],
-    [
-      "a blockTag",
-      table({ blockTag: { open: "{%", close: "%}" } }),
-      "blockTag",
-      /not supported/,
-    ],
-    [
-      "a filter",
-      table({ filter: { open: "::", close: "::" } }),
-      "filter",
-      /not supported/,
-    ],
     ["concise off", table({ concise: false }), "concise", /layer 3/],
     [
       "a text trigger",
       table({ textTriggers: [trigger({ chars: "%", match: "%a" })] }),
       "textTriggers",
       /never on the `\.mx` row/,
-    ],
-    [
-      "a tagTypes entry",
-      table({ tagTypes: { div: 0 } }),
-      "tagTypes",
-      /not supported/,
     ],
   ];
 

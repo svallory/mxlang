@@ -111,6 +111,8 @@ const NODE_TYPES = [
   "MxParseError",
   "MxAtom",
   "MxTrigger",
+  "MxBlockTag",
+  "MxFilter",
   "MxExpression",
   "MxStatements",
   "MxPattern",
@@ -748,6 +750,8 @@ it("MxChild is the child-list members and MxNode adds the rest (ast §3.0)", () 
     | "MxDeclaration"
     | "MxModuleStatement"
     | "MxTrigger"
+    | "MxBlockTag"
+    | "MxFilter"
   >();
   // @ts-expect-error an attribute is never a child
   const notChild: MxChild["type"] = "MxAttribute";
@@ -758,12 +762,12 @@ it("MxChild is the child-list members and MxNode adds the rest (ast §3.0)", () 
 //
 // For each node type: the required-key set (every key of every node is
 // required; ast tables say "Opt.: no" throughout), the nullable keys (those that
-// take `null`), and one sample. Generated assertions per node (26 nodes):
+// take `null`), and one sample. Generated assertions per node (28 nodes):
 //   type level: required keys equal; nullable keys equal; no writable field; no
 //               mutable array field
 //   runtime:    the sample's keys equal the required set; nullable keys are
 //               keys of the sample
-// = 6 assertions per node, 156 in all.
+// = 6 assertions per node, 168 in all.
 
 type Eq<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
@@ -891,6 +895,11 @@ const ROWS = {
   MxTrigger: {
     required: [...BASE, "id", "position", "text", "value"],
     nullable: ["value"],
+  },
+  MxBlockTag: { required: [...BASE, "value", "valueSpan"], nullable: [] },
+  MxFilter: {
+    required: [...BASE, "name", "nameSpan", "value", "valueSpan"],
+    nullable: [],
   },
   MxExpression: { required: CONTAINER_KEYS, nullable: CONTAINER_NULLABLE },
   MxStatements: {
@@ -1049,6 +1058,22 @@ const SAMPLES: { [K in MxNode["type"]]: NodeOf<K> } = (() => {
       text: "&title",
       value: null,
     },
+    MxBlockTag: {
+      type: "MxBlockTag",
+      start: 0,
+      end: 14,
+      value: " if x ",
+      valueSpan: sp(2, 8),
+    },
+    MxFilter: {
+      type: "MxFilter",
+      start: 0,
+      end: 16,
+      name: "md",
+      nameSpan: sp(2, 4),
+      value: "# a",
+      valueSpan: sp(6, 9),
+    },
     MxExpression: expr(3, 4, "y"),
     MxStatements: statements(2, 14),
     MxPattern: container("MxPattern"),
@@ -1063,7 +1088,7 @@ it("every node: required keys, nullable keys, read-only fields and arrays", () =
   // Names every node with a false type-level verdict; none may.
   expectTypeOf<FailingNodes>().toEqualTypeOf<never>();
   const nodes = Object.keys(ROWS) as (keyof Rows)[];
-  expect(nodes).toHaveLength(26);
+  expect(nodes).toHaveLength(28);
   expect(new Set(nodes)).toEqual(new Set(NODE_TYPES));
   let assertions = 0;
   for (const name of nodes) {
@@ -1075,7 +1100,7 @@ it("every node: required keys, nullable keys, read-only fields and arrays", () =
     for (const key of row.nullable) expect(sample, name).toHaveProperty(key);
     assertions += 2;
   }
-  expect(assertions).toBe(52);
+  expect(assertions).toBe(56);
 });
 
 it("nullable fields take null and the others do not (spot checks of the table)", () => {

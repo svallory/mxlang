@@ -12,4 +12,10 @@ export type {
   MxTagShape,
 } from "@mxlang/babel/mx-ast";
 export { lineColumnAt } from "./line-column.ts";
-export { type MxTrigger, type ParseOptions, parse } from "./parse.ts";
+export {
+  type MxBlockTag,
+  type MxFilter,
+  type MxTrigger,
+  type ParseOptions,
+  parse,
+} from "./parse.ts";

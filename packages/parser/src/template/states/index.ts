@@ -1,5 +1,6 @@
 export * from "./ATTRIBUTE.ts";
 export * from "./BEGIN_DELIMITED_HTML_BLOCK.ts";
+export * from "./BLOCK_TAG.ts";
 export * from "./CDATA.ts";
 export * from "./CLOSE_TAG.ts";
 export * from "./CONCISE_HTML_CONTENT.ts";

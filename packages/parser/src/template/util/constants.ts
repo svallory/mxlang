@@ -70,6 +70,14 @@ export namespace Ranges {
   }
 
   /**
+   * MX (decision 182): a syntax table's filter (`::name:: … ::`): the whole
+   * filter, its name, and its raw body as `value`.
+   */
+  export interface Filter extends Value {
+    name: Range;
+  }
+
+  /**
    * MX (decision 182): a syntax-table trigger. `start`/`end` cover the whole
    * construct: the matched text, plus `=value` for an attribute or line
    * trigger that has one. `text` is what the matcher matched.
@@ -106,6 +114,14 @@ export interface ParserOptions {
    * returns its stand-in.
    */
   onTrigger?(data: Ranges.Trigger): void;
+  /**
+   * MX (decision 182): a syntax table's block tag (`{% … %}`) in HTML
+   * content: the whole form, and its raw body (between `open` and `close`)
+   * as `value`.
+   */
+  onBlockTag?(data: Ranges.Value): void;
+  /** MX (decision 182): a syntax table's filter in HTML content. */
+  onFilter?(data: Ranges.Filter): void;
   onText?(data: Range): void;
   onPlaceholder?(data: Ranges.Placeholder): void;
   onComment?(data: Ranges.Value): void;

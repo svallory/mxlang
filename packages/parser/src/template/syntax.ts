@@ -9,7 +9,15 @@
  * (decision 156) and the `:name` / `#id` / `.class` sugars keep their own
  * code paths until `lang-ext-move-sugars-to-mesh` moves them onto the table.
  */
-import type { TagType } from "./util/constants.ts";
+import type { TagType as TagTypeValue } from "./util/constants.ts";
+import * as TagType from "./util/tag-type.ts";
+
+const TAG_TYPES: ReadonlySet<number> = new Set([
+  TagType.html,
+  TagType.text,
+  TagType.void,
+  TagType.statement,
+]);
 
 /**
  * What the expression parser sees in place of a trigger's text, always of
@@ -45,9 +53,16 @@ export interface SyntaxTable {
   } | null;
   /** `$ ` at a concise line start. Only the default is supported by this parser. */
   readonly inlineScript: { readonly trigger: string } | null;
-  /** `{% … %}` block forms; null on the default row (PR B). */
+  /**
+   * Block forms (`{% … %}`) in HTML content: `open`, a raw body, then the
+   * first `close`. Announced by `onBlockTag`; null on the default row.
+   */
   readonly blockTag: { readonly open: string; readonly close: string } | null;
-  /** Filter blocks; null on the default row (PR B). */
+  /**
+   * Filter blocks in HTML content: `open`, a name, `close`, a raw body, then
+   * the next `close` (`::markdown:: … ::`). Announced by `onFilter`; null on
+   * the default row.
+   */
   readonly filter: { readonly open: string; readonly close: string } | null;
   /** Concise mode; turned off only by a language (layer 3), never by a project. */
   readonly concise: boolean;
@@ -59,8 +74,13 @@ export interface SyntaxTable {
   readonly lineTriggers: readonly Trigger[];
   /** Text position; empty on the `.mx` row, always (layer 3 only). */
   readonly textTriggers: readonly Trigger[];
-  /** Tag types computed before the parse (PR B); empty on the default row. */
-  readonly tagTypes: Readonly<Record<string, TagType>>;
+  /**
+   * Tag types computed before the parse, keyed by the full written static
+   * tag name (decision 182 addenda 2 and 3); a name absent is html, a
+   * dynamic or `@` name is never looked up, and `statement` applies only on
+   * a concise line. Empty on the default row.
+   */
+  readonly tagTypes: Readonly<Record<string, TagTypeValue>>;
   /** Reserved: the language of embedded expressions. */
   readonly expressionLanguage: "ts";
 }
@@ -127,6 +147,13 @@ const REFUSED: Record<ListName, { chars: string; why: string }> = {
  * problem; empty means the parser can take the table.
  */
 export function validateSyntaxTable(table: unknown): SyntaxDiagnostic[] {
+  return validate(table, undefined);
+}
+
+function validate(
+  table: unknown,
+  listCache: WeakMap<object, SyntaxDiagnostic[]> | undefined,
+): SyntaxDiagnostic[] {
   const out: SyntaxDiagnostic[] = [];
   const fail = (field: string, message: string, triggerId?: string) =>
     out.push(
@@ -160,6 +187,11 @@ export function validateSyntaxTable(table: unknown): SyntaxDiagnostic[] {
         `${field}.open`,
         `\`${field}.open\` may not start with "<", the tag opener`,
       );
+    } else if (field !== "placeholder" && /^[$\\]/.test(value.open)) {
+      fail(
+        `${field}.open`,
+        `\`${field}.open\` may not start with "$" or "\\", which placeholders and their escapes start with`,
+      );
     }
   };
   pair("placeholder");
@@ -177,10 +209,12 @@ export function validateSyntaxTable(table: unknown): SyntaxDiagnostic[] {
     for (let j = i + 1; j < opens.length; j++) {
       const a = opens[i] as { field: string; open: string };
       const b = opens[j] as { field: string; open: string };
-      if (a.open === b.open) {
+      if (a.open.startsWith(b.open) || b.open.startsWith(a.open)) {
         fail(
           `${b.field}.open`,
-          `\`${a.field}.open\` and \`${b.field}.open\` are both ${JSON.stringify(a.open)}`,
+          a.open === b.open
+            ? `\`${a.field}.open\` and \`${b.field}.open\` are both ${JSON.stringify(a.open)}`
+            : `\`${a.field}.open\` (${JSON.stringify(a.open)}) and \`${b.field}.open\` (${JSON.stringify(b.open)}) start alike; one would hide the other`,
         );
       }
     }
@@ -209,45 +243,21 @@ export function validateSyntaxTable(table: unknown): SyntaxDiagnostic[] {
     );
   }
   if (!isRecord(table.tagTypes)) fail("tagTypes", "`tagTypes` is an object");
+  else {
+    for (const [name, type] of Object.entries(table.tagTypes)) {
+      if (!TAG_TYPES.has(type as number)) {
+        fail(
+          `tagTypes.${name}`,
+          `a tag type is html (${TagType.html}), text (${TagType.text}), void (${TagType.void}) or statement (${TagType.statement})`,
+        );
+      }
+    }
+  }
 
   for (const list of LISTS) {
-    const ids = new Map<string, string>();
-    const triggers = table[list];
-    if (!Array.isArray(triggers)) {
-      fail(list, `\`${list}\` is an array of triggers`);
-      continue;
+    for (const problem of validateList(table[list], list, listCache)) {
+      out.push(problem);
     }
-    const armed: { at: string; id: string; first: RegExp }[] = [];
-    triggers.forEach((trigger: unknown, index) => {
-      const at = `${list}[${index}]`;
-      const problems = validateTrigger(trigger, list, at);
-      const id =
-        isRecord(trigger) && typeof trigger.id === "string"
-          ? trigger.id
-          : undefined;
-      for (const problem of problems) fail(problem.field, problem.message, id);
-      if (id === undefined) return;
-      const seen = ids.get(id);
-      if (seen !== undefined)
-        fail(`${at}.id`, `trigger id "${id}" is also used by ${seen}`, id);
-      else ids.set(id, at);
-      if (problems.length > 0) return;
-      // Two triggers of one list on one first character: their matchers
-      // would compete for the same position. Telling whether two regexes
-      // overlap is not decidable cheaply, so any shared character is refused.
-      const first = classOf((trigger as Trigger).chars) as RegExp;
-      for (const other of armed) {
-        const shared = sharedCharacter(first, other.first);
-        if (shared !== undefined) {
-          fail(
-            `${at}.chars`,
-            `"${id}" and "${other.id}" (${other.at}) are both armed on ${JSON.stringify(shared)}; one first character arms at most one trigger per list`,
-            id,
-          );
-        }
-      }
-      armed.push({ at, id, first });
-    });
   }
 
   // What the grammar allows but this parser does not implement yet; a table
@@ -265,10 +275,6 @@ export function validateSyntaxTable(table: unknown): SyntaxDiagnostic[] {
     unsupported("inlineScript", 'an inline script trigger other than "$ "');
   } else if (table.inlineScript === null)
     unsupported("inlineScript", "turning inline scripts off");
-  if (table.blockTag !== null && table.blockTag !== undefined)
-    unsupported("blockTag", "`blockTag`");
-  if (table.filter !== null && table.filter !== undefined)
-    unsupported("filter", "`filter`");
   if (table.concise === false)
     unsupported(
       "concise",
@@ -280,9 +286,67 @@ export function validateSyntaxTable(table: unknown): SyntaxDiagnostic[] {
       "a text trigger (layer 3 only; never on the `.mx` row)",
     );
   }
-  if (isRecord(table.tagTypes) && Object.keys(table.tagTypes).length > 0) {
-    unsupported("tagTypes", "a precomputed `tagTypes` table");
+  return out;
+}
+
+/**
+ * The problems of one trigger list. `cache` (compileSyntax's) keeps the
+ * result per list object, so a table rebuilt around the same lists (the
+ * front end adds `tagTypes` per parse) is not revalidated.
+ */
+function validateList(
+  triggers: unknown,
+  list: ListName,
+  cache: WeakMap<object, SyntaxDiagnostic[]> | undefined,
+): SyntaxDiagnostic[] {
+  if (cache && Array.isArray(triggers)) {
+    const cached = cache.get(triggers);
+    if (cached) return cached;
   }
+  const out: SyntaxDiagnostic[] = [];
+  const fail = (field: string, message: string, triggerId?: string) =>
+    out.push(
+      triggerId === undefined
+        ? { field, message }
+        : { field, triggerId, message },
+    );
+  const ids = new Map<string, string>();
+  if (!Array.isArray(triggers)) {
+    fail(list, `\`${list}\` is an array of triggers`);
+    return out;
+  }
+  const armed: { at: string; id: string; first: RegExp }[] = [];
+  triggers.forEach((trigger: unknown, index) => {
+    const at = `${list}[${index}]`;
+    const problems = validateTrigger(trigger, list, at);
+    const id =
+      isRecord(trigger) && typeof trigger.id === "string"
+        ? trigger.id
+        : undefined;
+    for (const problem of problems) fail(problem.field, problem.message, id);
+    if (id === undefined) return;
+    const seen = ids.get(id);
+    if (seen !== undefined)
+      fail(`${at}.id`, `trigger id "${id}" is also used by ${seen}`, id);
+    else ids.set(id, at);
+    if (problems.length > 0) return;
+    // Two triggers of one list on one first character: their matchers
+    // would compete for the same position. Telling whether two regexes
+    // overlap is not decidable cheaply, so any shared character is refused.
+    const first = classOf((trigger as Trigger).chars) as RegExp;
+    for (const other of armed) {
+      const shared = sharedCharacter(first, other.first);
+      if (shared !== undefined) {
+        fail(
+          `${at}.chars`,
+          `"${id}" and "${other.id}" (${other.at}) are both armed on ${JSON.stringify(shared)}; one first character arms at most one trigger per list`,
+          id,
+        );
+      }
+    }
+    armed.push({ at, id, first });
+  });
+  if (cache && Array.isArray(triggers)) cache.set(triggers, out);
   return out;
 }
 
@@ -576,9 +640,21 @@ export interface CompiledSyntax {
   readonly line: TriggerSet | null;
   /** Whether any attribute trigger sets `terminatesValue`. */
   readonly terminators: boolean;
+  readonly blockTag: Delimiters | null;
+  readonly filter: Delimiters | null;
+  /** The first characters of `blockTag.open` and `filter.open`, which stop HTML content's text run (empty on the default row). */
+  readonly contentStops: readonly number[];
+  readonly tagTypes: ReadonlyMap<string, TagTypeValue>;
+}
+
+export interface Delimiters {
+  readonly open: string;
+  readonly close: string;
 }
 
 const compiled = new WeakMap<object, CompiledSyntax>();
+const listCache = new WeakMap<object, SyntaxDiagnostic[]>();
+const setCache = new WeakMap<object, TriggerSet | null>();
 
 /** The default row compiles to no trigger sets at all: the parser's checks are one `null` test. */
 export const DEFAULT_COMPILED: CompiledSyntax = Object.freeze({
@@ -586,6 +662,10 @@ export const DEFAULT_COMPILED: CompiledSyntax = Object.freeze({
   attribute: null,
   line: null,
   terminators: false,
+  blockTag: null,
+  filter: null,
+  contentStops: Object.freeze([]),
+  tagTypes: new Map(),
 });
 compiled.set(DEFAULT_SYNTAX, DEFAULT_COMPILED);
 
@@ -597,7 +677,7 @@ compiled.set(DEFAULT_SYNTAX, DEFAULT_COMPILED);
 export function compileSyntax(table: SyntaxTable): CompiledSyntax {
   const cached = compiled.get(table);
   if (cached) return cached;
-  const problems = validateSyntaxTable(table);
+  const problems = validate(table, listCache);
   if (problems.length > 0) {
     throw new TypeError(
       `invalid syntax table:\n${problems.map((p) => `  ${p.field}: ${p.message}`).join("\n")}`,
@@ -605,6 +685,8 @@ export function compileSyntax(table: SyntaxTable): CompiledSyntax {
   }
   const set = (triggers: readonly Trigger[]): TriggerSet | null => {
     if (triggers.length === 0) return null;
+    const cached = setCache.get(triggers);
+    if (cached !== undefined) return cached;
     const ascii: (CompiledTrigger | undefined)[] = new Array(128).fill(
       undefined,
     );
@@ -629,7 +711,9 @@ export function compileSyntax(table: SyntaxTable): CompiledSyntax {
       )
         other.push(entry);
     }
-    return { ascii, other };
+    const result = { ascii, other };
+    setCache.set(triggers, result);
+    return result;
   };
   const result: CompiledSyntax = {
     expression: set(table.expressionTriggers),
@@ -638,6 +722,12 @@ export function compileSyntax(table: SyntaxTable): CompiledSyntax {
     terminators: table.attributeTriggers.some(
       (t) => t.terminatesValue === true,
     ),
+    blockTag: table.blockTag,
+    filter: table.filter,
+    contentStops: [table.blockTag, table.filter].flatMap((d) =>
+      d ? [d.open.charCodeAt(0)] : [],
+    ),
+    tagTypes: new Map(Object.entries(table.tagTypes)),
   };
   compiled.set(table, result);
   return result;

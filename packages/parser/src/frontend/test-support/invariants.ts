@@ -80,6 +80,17 @@ export function checkInvariants(
         if (node.raw !== slice) fail(path, "raw is not the span's text");
         within(`${path}.valueSpan`, node.valueSpan, node);
         break;
+      case "MxFilter":
+        if (node.name !== text(node.nameSpan)) {
+          fail(path, "name is not the nameSpan's text");
+        }
+        within(`${path}.nameSpan`, node.nameSpan, node);
+        if (node.value !== text(node.valueSpan)) {
+          fail(path, "value is not the valueSpan's text");
+        }
+        within(`${path}.valueSpan`, node.valueSpan, node);
+        break;
+      case "MxBlockTag":
       case "MxComment":
       case "MxCDATA":
       case "MxDoctype":
