@@ -97,7 +97,6 @@ import {
   sliceLoc,
   sliceNode,
   TranslateError,
-  VOID_TAGS,
   warn,
 } from "./core.ts";
 import {
@@ -4304,7 +4303,11 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   }
   rejectUnsupportedFields(ctx, node, `\`<${name}>\``);
 
-  const isVoid = VOID_TAGS.has(name);
+  // Void by the same table the parse read (the target's `nativeTags`, else
+  // core's own HTML elements), so a body the parse kept is never dropped.
+  const isVoid =
+    (ctx.declarations.nativeTags ?? coreNativeTags()).get(name)?.body ===
+    "void";
   // Filter attribute tags from children — they're processed by lowerAttributeTags,
   // not as regular children. MX AST has them in body; Marko AST had them separate.
   const contentChildren = body.filter(

@@ -58,7 +58,6 @@ import {
   propKey,
   quote,
   TranslateError,
-  VOID_TAGS,
 } from "@mxlang/core";
 import type { DelegatedTagData } from "./translate.ts";
 import { DYNAMIC, escapeComment } from "./translate.ts";
@@ -927,7 +926,7 @@ export function createEmitter(
       literal(`<${node.name}`);
       elementAttributes(node.name, node.attrs);
       literal(">");
-      if (node.void || VOID_TAGS.has(node.name)) return;
+      if (node.void) return;
       drive(emitter, node.children);
       literal(`</${node.name}>`);
     },

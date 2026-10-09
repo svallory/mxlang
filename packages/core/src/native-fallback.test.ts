@@ -22,9 +22,9 @@ const thirdParty: HostDeclarations = {
   resolveAttributeMethod: () => true,
 };
 
-function irOf(source: string): Ir {
+function irOf(source: string, declarations = thirdParty): Ir {
   let captured: Ir | undefined;
-  compileSource(source, "/tmp/native-fallback.mx", thirdParty, {
+  compileSource(source, "/tmp/native-fallback.mx", declarations, {
     targets: lookup,
     emitIr: (ir) => {
       captured = ir;
@@ -53,7 +53,8 @@ function shape(nodes: readonly IrNode[]): Shape[] {
   return out;
 }
 
-const body = (source: string) => shape(irOf(source).body);
+const body = (source: string, declarations = thirdParty) =>
+  shape(irOf(source, declarations).body);
 
 describe("a target without nativeTags", () => {
   it("parses a void element as having no body", () => {
@@ -86,6 +87,47 @@ describe("a target without nativeTags", () => {
     expect(body("<title><b>x</b></title>")).toEqual([
       { element: "title", children: [{ text: "<b>x</b>" }] },
     ]);
+  });
+});
+
+/**
+ * A target that declares its own `nativeTags` gets exactly that table, in the
+ * parse and in lowering alike: core's fallback does not leak in, and a void
+ * element is the one the table declares void, so the IR never drops a body the
+ * parse kept.
+ */
+describe("a target with its own nativeTags", () => {
+  const custom: HostDeclarations = {
+    ...thirdParty,
+    nativeTags: new Map([
+      ["box", { namespace: "html", body: "void" }],
+      ["p", { namespace: "html", body: "html" }],
+    ]),
+  };
+
+  it("lowers a declared void element as void", () => {
+    expect(body("<box/>", custom)).toEqual([
+      { element: "box", void: true, children: [] },
+    ]);
+    expect(body("<div><box><p>a</p></div>", custom)).toEqual([
+      {
+        element: "div",
+        children: [
+          { element: "box", void: true, children: [] },
+          { element: "p", children: [{ text: "a" }] },
+        ],
+      },
+    ]);
+  });
+
+  it("keeps the body of an HTML void name the table does not declare void", () => {
+    expect(body("<input>x</input>", custom)).toEqual([
+      { element: "input", children: [{ text: "x" }] },
+    ]);
+  });
+
+  it("parses an undeclared HTML void name as needing its end tag", () => {
+    expect(() => body("<embed><p>a</p>", custom)).toThrow("Missing ending");
   });
 });
 
