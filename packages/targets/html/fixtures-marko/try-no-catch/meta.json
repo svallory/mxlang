@@ -1,0 +1,4 @@
+{
+  "marko": "divergence",
+  "reason": "marko-6.4: stock Marko 6.4.4 refuses a <try> with neither <@catch> nor <@placeholder> at compile time (\"The `<try>` tag needs a `<@catch>` to handle errors or a `<@placeholder>` to show while its content is pending. Without either it has no effect, so render its content directly.\"; probed with packages/stock-marko, @marko/compiler 5.42.11 + marko 6.4.4). Marko 6.3.51 rendered it, and MX still does. Implementing the 6.4 compile error is owned by another item; when it lands this fixture becomes marko:\"error\" with an errorPattern."
+}
