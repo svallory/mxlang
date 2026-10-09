@@ -233,3 +233,5 @@ Firstmate's ruling (2026-09-28), filed from PR #159 round 2, option C: the value
   bodies during SSR without sacrificing client reactivity.
 - Diagnose parameterized attribute-tag values rendered without arguments and
   data-shaped values rendered without their `.content` accessor.
+
+- **Changed (solid-use-core-mappedmethod):** - solid: method shorthand attributes (`onClick() { … }`) now map through `@mxlang/core`'s `mappedMethod` instead of a local copy of the same helper. Emitted code and source maps are unchanged.
