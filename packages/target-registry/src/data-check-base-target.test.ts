@@ -55,6 +55,9 @@ describe("the base target of a lookup", () => {
         packageName: "@fake/mx-mesh",
         host: { name: "mesh" },
         builtOn: "tree",
+        // A copy of the tree descriptor reads config under its own name; the
+        // base target's `mx.data` stays the base rung, not this host's key.
+        configKey: undefined,
       },
     ]);
     expect(withMesh.baseTargetOf?.("mesh-data")).toBe("tree");

@@ -398,6 +398,43 @@ describe("the reserved `astro-template` name", () => {
   });
 });
 
+describe("the reserved `data` name (decision 187)", () => {
+  const impostor: TargetDescriptor = {
+    descriptorVersion: 0,
+    name: "data",
+    packageName: "@acme/mx-data",
+    defaultTag: "node",
+  };
+
+  it("the registry's built-in lookup reserves it", () => {
+    expect(lookup.reservedNames?.()).toContain("data");
+  });
+
+  it("a descriptor that takes it is refused beside the built-ins (reserved-name)", () => {
+    let error: unknown;
+    try {
+      createTargetLookup([...builtinTargets, impostor], {
+        reservedNames: lookup.reservedNames?.() ?? [],
+      });
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeInstanceOf(TargetLookupError);
+    expect((error as TargetLookupError).rule).toBe("reserved-name");
+  });
+
+  it("without the reservation core's config-key rule still refuses it beside the built-ins (it would read the tree target's mx.data)", () => {
+    let error: unknown;
+    try {
+      createTargetLookup([...builtinTargets, impostor]);
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeInstanceOf(TargetLookupError);
+    expect((error as TargetLookupError).rule).toBe("config-key-conflict");
+  });
+});
+
 describe("builtinFileKinds", () => {
   it("tags solid, preact, react and hono with the region pipeline, ng with ng-template and astro with astro-template", () => {
     expect(

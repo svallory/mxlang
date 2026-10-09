@@ -1,6 +1,6 @@
 # data — agent instructions
 
-## `@mxlang/data`: the hostless data target
+## `@mxlang/data`: the hostless tree target (package `@mxlang/data`)
 
 `packages/targets/data` (`@mxlang/data`) is MX's first **hostless** target
 (decision 132: a target with no `host` part; `targets/` holds hostless

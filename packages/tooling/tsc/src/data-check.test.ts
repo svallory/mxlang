@@ -154,7 +154,7 @@ describe("mx-tsc on a data package", () => {
 
   it("a commented file passes: comments are never structural (decision 131 addendum 5)", () => {
     const dir = emptyPackage({
-      mx: { target: "data", data: { unknownTags: "allow" } },
+      mx: { target: "tree", data: { unknownTags: "allow" } },
     });
     writeFileSync(
       join(dir, "invoice.mx"),

@@ -87,8 +87,8 @@ export const builtinTargets: readonly TargetDescriptor[] = [
   data,
 ].filter(resolved);
 
-/** Names no descriptor may take: outputs a built-in host may add later (07 Q5). */
-const RESERVED_NAMES: readonly string[] = ["astro-template"];
+/** Names no descriptor may take: outputs a built-in host may add later (07 Q5), and `data`, reserved for the future evaluated tree target (decision 187). */
+const RESERVED_NAMES: readonly string[] = ["astro-template", "data"];
 
 let cachedLookup: TargetLookup | undefined;
 

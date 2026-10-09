@@ -427,7 +427,8 @@ export type TargetLookupRule =
   | "segment-conflict"
   | "reserved-name"
   | "built-on-unknown"
-  | "built-on-loop";
+  | "built-on-loop"
+  | "config-key-conflict";
 
 /**
  * The `built-on-unknown` message: both targets, the registered names, and,
@@ -761,6 +762,8 @@ export function validateDescriptor(value: unknown): TargetDescriptor {
  * - a target name may equal no host name and no other target's name;
  * - a `packageName` is unique for a hostless target, and shared only between
  *   targets of the same `host.name`;
+ * - a config key (a target's `configKey`, else its name) belongs to one
+ *   target (`config-key-conflict`, on the descriptor that loaded second);
  * - a host with several targets has exactly one `host.default` (implied for one);
  * - `mx.host` values (host names and legacy values) each select one target;
  * - a file-kind segment belongs to one host.
@@ -810,6 +813,26 @@ export function createTargetLookup(
     }
     targets.set(descriptor.name, descriptor);
     if (descriptor.host) hostNames.add(descriptor.host.name);
+  }
+
+  // Config keys: `mx[<key>]` is one config block, so a key (a target's
+  // `configKey`, else its name) may belong to one target only. The descriptor
+  // that loaded second is the one that took an already-claimed key.
+  const configKeyOf = (d: TargetDescriptor): string => d.configKey ?? d.name;
+  for (let i = 0; i < descriptors.length; i++) {
+    const later = descriptors[i] as TargetDescriptor;
+    for (let j = 0; j < i; j++) {
+      const earlier = descriptors[j] as TargetDescriptor;
+      if (
+        configKeyOf(later) === configKeyOf(earlier) ||
+        configKeyOf(later) === earlier.name
+      ) {
+        throw new TargetLookupError(
+          "config-key-conflict",
+          `target "${later.name}" reads mx.${configKeyOf(later)}, which is target "${earlier.name}"'s config block (its name or its configKey); a config key belongs to one target`,
+        );
+      }
+    }
   }
   for (const descriptor of descriptors) {
     if (hostNames.has(descriptor.name)) {

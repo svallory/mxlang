@@ -1,5 +1,6 @@
 /**
- * The `data` target descriptor (decisions 129 and 132; unstable).
+ * The tree target's descriptor (package `@mxlang/data`; decisions 129 and
+ * 132; unstable).
  *
  * Importing this module loads `./target-base.ts` (and through it `./declarations.ts`) only (it imports
  * `@mxlang/core` and nothing that compiles). The compile module is required by

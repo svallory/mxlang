@@ -433,6 +433,79 @@ describe("createTargetLookup", () => {
   const data = target({ name: "data", packageName: "@t/data" });
   const all = [html, data, solid, react];
 
+  describe("configKey", () => {
+    const keyed = target({
+      name: "tree",
+      packageName: "@t/tree",
+      configKey: "data",
+    });
+
+    it("defaults to the target's name: no configKey, no new rule", () => {
+      expect(() => createTargetLookup(all)).not.toThrow();
+    });
+
+    it("a configKey equal to another target's name is refused, on the descriptor that loaded second", () => {
+      const impostor = target({
+        name: "other",
+        packageName: "@t/other",
+        configKey: "data",
+      });
+      expect(lookupRule([keyed, impostor])).toBe("config-key-conflict");
+      // The reverse order blames the other one: whoever loads second took the
+      // already-claimed key.
+      expect(
+        lookupRule([
+          target({ name: "plain", packageName: "@t/plain", configKey: "data" }),
+          keyed,
+        ]),
+      ).toBe("config-key-conflict");
+    });
+
+    it("a configKey equal to another target's configKey is refused", () => {
+      expect(
+        lookupRule([
+          keyed,
+          target({
+            name: "other",
+            packageName: "@t/other",
+            configKey: "data",
+          }),
+        ]),
+      ).toBe("config-key-conflict");
+    });
+
+    it("a target whose name equals an earlier target's configKey is the one refused", () => {
+      const named = target({ name: "data", packageName: "@t/named" });
+      expect(lookupRule([keyed, named])).toBe("config-key-conflict");
+    });
+
+    it("a configKey equal to the target's own name is accepted (it is the default)", () => {
+      expect(
+        createTargetLookup([
+          ...all,
+          target({
+            name: "self",
+            packageName: "@t/self",
+            configKey: "self",
+          }),
+        ]),
+      ).toBeTypeOf("object");
+    });
+
+    it("distinct configKeys are accepted", () => {
+      expect(
+        createTargetLookup([
+          keyed,
+          target({
+            name: "other",
+            packageName: "@t/other",
+            configKey: "other",
+          }),
+        ]),
+      ).toBeTypeOf("object");
+    });
+  });
+
   describe("builtOn", () => {
     const built = (name: string, builtOn: string, pkg = `@t/${name}`) =>
       target({ name, packageName: pkg, builtOn });

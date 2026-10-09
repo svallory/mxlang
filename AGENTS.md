@@ -149,7 +149,7 @@ Packages and examples with their own `AGENTS.md` (each has a sibling `CLAUDE.md`
 | `packages/parser/AGENTS.md` | `@mxlang/parser`: the htmljs-parser-derived template parser and the MX AST front end (`src/frontend`, internal until PR 3) |
 | `packages/parse-differential/AGENTS.md` | `@mxlang/parse-differential`: private test package of the parser port, the tree differential against today's Marko tree |
 | `packages/core/AGENTS.md` | `@mxlang/core`: IR, lowering, custom tags, `<try>`, tag discovery |
-| `packages/targets/data/AGENTS.md` | `@mxlang/data`: the hostless data target; static tree, `parseData` |
+| `packages/targets/data/AGENTS.md` | `@mxlang/data`: the hostless tree target (package `@mxlang/data`); static tree, `parseData` |
 | `packages/targets/html/AGENTS.md` | `@mxlang/html`: string target, policy table, Bun loader, `.mx` import typing |
 | `packages/hosts/solid/AGENTS.md` | `@mxlang/solid` |
 | `packages/hosts/preact/AGENTS.md` | `@mxlang/preact` |
