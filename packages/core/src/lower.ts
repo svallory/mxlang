@@ -3754,7 +3754,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   const name = String(node.name.value);
   if (!TAG_NAME.test(name) && !NOT_A_NAME_SHAPE.test(name)) {
     fail(
-      `Invalid tag name \`${name}\`; Marko rejects it too — a tag name may use letters, digits and \`-._:\``,
+      `Invalid tag name \`${name}\`; Marko rejects it too — a tag name may use letters (any script), digits and \`-._:$\``,
       node.name,
     );
   }
