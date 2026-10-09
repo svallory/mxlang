@@ -12,10 +12,7 @@ import ts from "typescript";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { compile } from "./index.ts";
 
-const MODULE = join(
-  import.meta.dirname,
-  "../../../core/src/fixtures/syntax/member-syntax.ts",
-);
+const MODULE = join(import.meta.dirname, "../../../core/src/syntax/member.ts");
 
 let dir: string;
 beforeAll(() => {

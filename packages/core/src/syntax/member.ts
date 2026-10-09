@@ -1,23 +1,36 @@
 /**
- * Test-only syntax module (decision 182 addendum 5 item 4): Mesh's `&`
- * member sigil, in all three trigger lists, lowered to the four shapes the
- * Mesh lead confirmed (`notes/mesh/language-extensions-for-mesh.md`, updates
- * 03:10, 03:40, 03:42):
+ * `@mxlang/core/syntax/member`: a reference syntax module for extension
+ * authors (decision 182 addendum 5): Mesh's `&` member sigil, in all three
+ * trigger lists, lowered to four shapes:
  *
  * - in an expression, `&status` is `self.status`, a `MemberExpression`
  *   marked `extra.mxMember = { span, name }`;
  * - in an attribute list (after a kind, `sort asc &dueOn`), a static
  *   attribute `member` whose value is `{ kind: "member", name: "dueOn" }`;
  * - on a tagless line, a `member` child tag with a static `name` and, for
- *   `&amount=expr`, a dynamic `value`.
+ *   `&amount=expr`, a dynamic `value`. The tag carries `trigger`
+ *   (`{ id: "member", span, text }`), which an authored `<member>` lacks.
  *
- * Mesh copies this file as its layer-2 module. It loads through Node's
- * strip-only `require` from a manifest's `mx.syntax`, so it imports types
- * only.
+ * This is a reference, not a host: core stays host-agnostic and knows no
+ * "member". The module is built on the public hook API only (`SyntaxModule`,
+ * `Trigger` and the `ctx` constructors) and imports types only, so it is
+ * either used as is,
+ *
+ * ```ts
+ * import memberSyntax from "@mxlang/core/syntax/member";
+ * parseData(source, file, { syntax: memberSyntax });
+ * ```
+ *
+ * or copied into a project and renamed (the sigil, the `member` id, the
+ * `self` receiver and the `member` tag are this file's choices, not core's):
+ * change the type import below to `@mxlang/core`, give the row your own `id`
+ * and `chars`, and point `package.json#mx.syntax` at the copy. It loads
+ * through Node's strip-only `require`, so keep it free of enums and
+ * parameter properties.
  */
-import type { SyntaxModule, Trigger } from "../../syntax-table.ts";
+import type { SyntaxModule, Trigger } from "../index.ts";
 
-/** The member row (the parser half's test row). */
+/** The member row in all three trigger lists. */
 export const MEMBER: Trigger = Object.freeze({
   id: "member",
   chars: "&",

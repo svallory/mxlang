@@ -489,6 +489,32 @@ to route the call to the adjacent template unit; `ctx.build.template(call)`
 does the same. A sidecar with `attributes`/`parseOptions` and no `transform`
 routes the call to the template as an L1-only tag does, now validated.
 
+## A reference syntax module: `@mxlang/core/syntax/member`
+
+Core ships one syntax module as a reference for extension authors: Mesh's `&`
+member sigil (`&status` in an expression, `sort asc &dueOn` in an attribute
+list, `&title` on a tagless line). It is not a host and core knows no
+"member"; it is built on the public hook API only (`SyntaxModule`, `Trigger`
+and the `lowerTrigger` context), so it doubles as a worked example of all
+three trigger positions. A tag built from a tagless line carries
+`trigger: { id, span, text }`; an authored `<member>` does not.
+
+Use it as is, as the `syntax` option or through `package.json#mx.syntax`:
+
+```ts
+import memberSyntax from "@mxlang/core/syntax/member";
+
+const result = parseData(source, file, { syntax: memberSyntax });
+```
+
+or copy `src/syntax/member.ts` into your project and rename it. The sigil
+(`chars` and `match`), the row `id` (`member` here; `productName` in a
+product's own copy), the `self` receiver and the child tag name are that
+file's choices. Change its one type import from `../index.ts` to
+`@mxlang/core`, edit the row, and point `mx.syntax` at your copy. It loads
+through Node's strip-only `require`: types-only imports, no enums or
+parameter properties.
+
 ## Host-policy resolution
 
 **`resolveTargetPolicy(filePath)`** (`src/host-policy.ts`) answers which host a

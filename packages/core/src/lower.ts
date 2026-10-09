@@ -136,6 +136,7 @@ import type {
   Member,
   Position,
   TagAlias,
+  TagTrigger,
 } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
@@ -3193,6 +3194,7 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
     kind: "DelegatedTag",
     tag: {
       name,
+      ...triggerOf(node),
       nameSpan:
         name === DYNAMIC_TAG ? undefined : exprSpan(ctx, tagNameSpanOf(node)),
       span: exprSpan(ctx, node),
@@ -3407,6 +3409,15 @@ function activeWildcard(ctx: Ctx, node: Node): WildcardMatch | undefined {
   return bound ? undefined : match;
 }
 
+/** `{ trigger }` for a tag a syntax module's `ctx.child` built, else nothing. */
+function triggerOf(node: Node): { trigger: TagTrigger } | undefined {
+  const mark = node.mxTrigger;
+  if (!mark) return undefined;
+  return {
+    trigger: { id: mark.id, span: mark.span, text: mark.text },
+  };
+}
+
 function aliasOf(ctx: Ctx, node: Node, match: WildcardMatch): TagAlias {
   const span = exprSpan(ctx, tagNameSpanOf(node));
   return {
@@ -3609,6 +3620,7 @@ function lowerCustomTag(
   const call: TagCall = {
     name,
     ...(alias ? { alias } : {}),
+    ...triggerOf(node),
     nameSpan: exprSpan(ctx, tagNameSpanOf(node)),
     span: exprSpan(ctx, node),
     loc: posOf(ctx, node),
@@ -3744,6 +3756,7 @@ function lowerComponent(
   return {
     kind: "Component",
     target,
+    ...triggerOf(node),
     nameSpan:
       target.kind === "dynamic" ? null : nodeSpan(ctx, tagNameSpanOf(node)),
     span: exprSpan(ctx, node),
@@ -4389,6 +4402,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   return {
     kind: "Element",
     name,
+    ...triggerOf(node),
     nameSpan: exprSpan(ctx, tagNameSpanOf(node)),
     span: exprSpan(ctx, node),
     attrs: lowerAttrs(ctx, node, name, "element", true),

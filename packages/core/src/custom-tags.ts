@@ -31,6 +31,7 @@ import type {
   IrNode,
   Position,
   TagAlias,
+  TagTrigger,
 } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
@@ -297,6 +298,8 @@ export interface TagCall {
    * (decision 147): `name` is then the canonical tag.
    */
   alias?: TagAlias;
+  /** Set when a syntax module's `lowerTrigger` built the call (`ctx.child`). */
+  trigger?: TagTrigger;
   /** UTF-16 span of the whole call, body and closing tag included. */
   span?: SourceSpan;
   content: Block | null;
@@ -2545,6 +2548,7 @@ function contractOnlyDelegatedTag(ctx: Ctx, call: TagCall, node: Node): IrNode {
     tag: {
       name: call.name,
       ...(call.alias ? { alias: call.alias } : {}),
+      ...(call.trigger ? { trigger: call.trigger } : {}),
       nameSpan: call.nameSpan,
       span: call.span,
       attrs: call.attrs,

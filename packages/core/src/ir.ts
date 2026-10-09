@@ -387,8 +387,26 @@ export interface TagAlias {
   groups: Record<string, string>;
 }
 
+/**
+ * Where a hook-synthesized tag came from: the layer-2 trigger a syntax
+ * module's `lowerTrigger` turned into a child tag (`ctx.child`). The same
+ * facts `extra.mxTrigger` carries on an expression stand-in, so a consumer
+ * can tell `&title` from an authored `<member name="title"/>` without
+ * comparing spans. Absent on every authored tag. Core names no trigger.
+ */
+export interface TagTrigger {
+  /** The trigger row's `id` in the syntax table. */
+  id: string;
+  /** File-absolute UTF-16 code-unit span of the trigger's authored text. */
+  span: SourceSpan;
+  /** The authored text (`&title`). */
+  text: string;
+}
+
 export interface DelegatedTag<Data = unknown> extends IrBase {
   name: string;
+  /** Set only on a tag a syntax module's `lowerTrigger` built with `ctx.child`. */
+  trigger?: TagTrigger;
   /** The authored spelling, when a wildcard child resolved to `name` (decision 147). */
   alias?: TagAlias;
   /**
@@ -553,6 +571,8 @@ export type IrNode =
   | ({
       kind: "Element";
       name: string;
+      /** Set only on a tag a syntax module's `lowerTrigger` built with `ctx.child`. */
+      trigger?: TagTrigger;
       /** File-absolute UTF-16 code-unit span of the tag name; `undefined` if synthesized. */
       nameSpan?: SourceSpan;
       /** File-absolute UTF-16 code-unit span of the whole tag, body and closing tag included. */
@@ -565,6 +585,8 @@ export type IrNode =
   | ({
       kind: "Component";
       target: ComponentTarget;
+      /** Set only on a tag a syntax module's `lowerTrigger` built with `ctx.child`. */
+      trigger?: TagTrigger;
       /**
        * The opening tag name. Null for a run-time dynamic target, and for a
        * routed discovered-tag call whose `TagCall` has no source (a

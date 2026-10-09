@@ -25,6 +25,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./syntax/member": {
+      "types": "./dist/syntax/member.d.ts",
+      "default": "./dist/syntax/member.js"
     }
   },
   "files": [
@@ -36,7 +40,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external @marko/compiler --external @babel/parser --external htmljs-parser --define MX_MARKO_FRONTEND='\"./marko-frontend.cjs\"' && bun build/frontend.ts && bun build/third-party-notices.ts && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
+    "build": "rm -rf dist && bun build src/index.ts src/syntax/member.ts --outdir dist --target node --format esm --external @marko/compiler --external @babel/parser --external htmljs-parser --define MX_MARKO_FRONTEND='\"./marko-frontend.cjs\"' && bun build/frontend.ts && bun build/third-party-notices.ts && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

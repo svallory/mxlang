@@ -943,7 +943,7 @@ function lowerLineTrigger(
     openTag: { start: trigger.start, end: trigger.end },
     closeTag: null,
     incomplete: false,
-    mxTrigger: { id: trigger.id, span: text },
+    mxTrigger: { id: trigger.id, span: text, text: String(trigger.text) },
   };
 }
 

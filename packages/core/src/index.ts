@@ -184,6 +184,7 @@ export type {
   MxMemberMark,
   Position,
   TagAlias,
+  TagTrigger,
 } from "./ir.ts";
 export { expressionShape, lower, lowerChildren } from "./lower.ts";
 export {

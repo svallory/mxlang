@@ -2,7 +2,7 @@
  * The `&` member shapes on the tree target (decision 182 addenda 4 and 5;
  * `notes/mesh/language-extensions-for-mesh.md` updates 03:10, 03:40, 03:42),
  * through `parseData` with core's test-only member module
- * (`packages/core/src/fixtures/syntax/member-syntax.ts`, which Mesh copies)
+ * (`packages/core/src/syntax/member.ts`, which Mesh copies)
  * loaded two ways: a temp manifest naming it in `mx.syntax`, and the
  * `syntax` option. Then the cases that must not be members, and the
  * `"member"` contract type's acceptance matrix.
@@ -16,10 +16,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type ParseDataOptions, parseData } from "./parse.ts";
 import type { DataAttr, DataTag } from "./tree.ts";
 
-const MODULE = join(
-  import.meta.dirname,
-  "../../../core/src/fixtures/syntax/member-syntax.ts",
-);
+const MODULE = join(import.meta.dirname, "../../../core/src/syntax/member.ts");
 
 /**
  * Loaded the way a manifest loads it (Node's strip-only `require`), not
@@ -170,6 +167,29 @@ describe.each(LOADERS)("the five Mesh cases, via %s", (_, load) => {
         valueSpan: { sourceStart: 10, sourceEnd: 15 },
       },
     ]);
+  });
+
+  it("`&title`: the child carries `trigger` (id, span, text); an authored `<member>` has none", () => {
+    const [file, options] = load();
+    const source = 'entity\n  &title\n  <member name="x"/>\n';
+    const [entity] = tags(tree(source, file, options).children);
+    const [line, authored] = tags((entity as DataTag).children);
+    expect(line?.trigger).toEqual({
+      id: "member",
+      span: { sourceStart: 9, sourceEnd: 15 },
+      text: "&title",
+    });
+    expect(source.slice(9, 15)).toBe("&title");
+    expect(authored?.name).toBe("member");
+    expect(authored && "trigger" in authored).toBe(false);
+  });
+
+  it("`&amount=expr`: `trigger.text` is the trigger alone, not its `=value`", () => {
+    const [file, options] = load();
+    const source = "set\n  &amount=qty\n";
+    const [set] = tags(tree(source, file, options).children);
+    const [amount] = tags((set as DataTag).children);
+    expect(amount?.trigger).toMatchObject({ id: "member", text: "&amount" });
   });
 
   it("`&amount=qty * price` under a concise block: a dynamic `value`, marks inside it", () => {

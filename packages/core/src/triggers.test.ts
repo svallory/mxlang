@@ -19,10 +19,10 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { compileSource } from "./compile.ts";
 import { type Ctx, newCtx, TranslateError } from "./core.ts";
-import memberSyntax, { MEMBER } from "./fixtures/syntax/member-syntax.ts";
 import { parseFragment } from "./fragment.ts";
 import type { Attr, Ir, IrNode } from "./ir.ts";
 import { lowerChildren } from "./lower.ts";
+import memberSyntax, { MEMBER } from "./syntax/member.ts";
 import {
   resolveSyntaxOf,
   type SyntaxModule,
@@ -30,7 +30,7 @@ import {
 } from "./syntax-table.ts";
 import { lookup as targets } from "./test-targets.ts";
 
-const FIXTURE = join(import.meta.dirname, "fixtures/syntax/member-syntax.ts");
+const FIXTURE = join(import.meta.dirname, "syntax/member.ts");
 
 const declarations = {
   tags: {},
@@ -160,6 +160,20 @@ describe("the member module through the `syntax` option", () => {
         span: { sourceStart: 9, sourceEnd: 15 },
       },
     });
+  });
+
+  it("a line trigger's child carries `trigger` (id, span, text); an authored tag has none", () => {
+    const source = 'div\n  &title\n  <member name="x"/>\n';
+    const [div] = elements(irOf(source, undefined, memberSyntax).body);
+    const [line, authored] = elements((div as Element).children);
+    expect(line?.trigger).toEqual({
+      id: "member",
+      span: { sourceStart: 6, sourceEnd: 12 },
+      text: "&title",
+    });
+    expect(source.slice(6, 12)).toBe("&title");
+    expect(authored?.name).toBe("member");
+    expect(authored && "trigger" in authored).toBe(false);
   });
 
   it("a line trigger is a child tag through the normal tag path", () => {

@@ -464,6 +464,7 @@ function dataTag(tag: DelegatedTag<unknown>): DataTag {
     // canonical tag whose contract matched, exposed as `contract` (decision 147).
     name: tag.alias?.authored ?? tag.name,
     ...wildcardMatch(tag),
+    ...(tag.trigger ? { trigger: tag.trigger } : {}),
     nameSpan: requiredSpan(tag.nameSpan, `tag \`<${tag.name}>\`'s name`),
     span: withoutTrailingNewline(
       requiredSpan(tag.span, `tag \`<${tag.name}>\``),
@@ -788,6 +789,24 @@ function dataImports(ir: Ir): DataImport[] {
   return out;
 }
 
+/** The source span of a parsed identifier or string literal in an import specifier. */
+function nodeSpan(node: {
+  loc?: {
+    start: { line: number; column: number };
+    end: { line: number; column: number };
+  } | null;
+}): SourceSpan {
+  if (!node.loc) {
+    throw new Error(
+      "@mxlang/data: core IR invariant broken — an import specifier carries no location",
+    );
+  }
+  return {
+    sourceStart: offsetOfPosition(node.loc.start.line, node.loc.start.column),
+    sourceEnd: offsetOfPosition(node.loc.end.line, node.loc.end.column),
+  };
+}
+
 function importName(
   specifier: ImportDeclaration["specifiers"][number],
 ): DataImportName {
@@ -801,20 +820,30 @@ function importName(
         imported: "default",
         local: specifier.local.name,
         kind: "default",
+        span: nodeSpan(specifier.local),
       };
     case "ImportNamespaceSpecifier":
-      return { imported: "*", local: specifier.local.name, kind: "namespace" };
-    case "ImportSpecifier":
+      return {
+        imported: "*",
+        local: specifier.local.name,
+        kind: "namespace",
+        span: nodeSpan(specifier.local),
+      };
+    case "ImportSpecifier": {
+      const imported = specifier.imported;
+      const local = specifier.local.name;
+      const name =
+        imported.type === "StringLiteral" ? imported.value : imported.name;
       return {
         // `import { "a-b" as ab }` names the export with a string literal.
-        imported:
-          specifier.imported.type === "StringLiteral"
-            ? specifier.imported.value
-            : specifier.imported.name,
-        local: specifier.local.name,
+        imported: name,
+        local,
         kind: "named",
+        span: nodeSpan(imported),
+        ...(local !== name ? { localSpan: nodeSpan(specifier.local) } : {}),
         ...typeOnly,
       };
+    }
   }
 }
 

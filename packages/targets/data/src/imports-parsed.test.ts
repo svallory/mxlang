@@ -20,7 +20,7 @@ describe("DataImport.from / names", () => {
   it("default import", () => {
     const [entry] = importsOf(`import Icon from "./icon.mx"\n<x/>\n`);
     expect(entry?.from).toBe("./icon.mx");
-    expect(entry?.names).toEqual([
+    expect(entry?.names).toMatchObject([
       { imported: "default", local: "Icon", kind: "default" },
     ]);
     expect(entry && "typeOnly" in entry).toBe(false);
@@ -29,7 +29,7 @@ describe("DataImport.from / names", () => {
   it("named imports, with and without an alias", () => {
     const [entry] = importsOf(`import { a, b as c } from "m"\n<x/>\n`);
     expect(entry?.from).toBe("m");
-    expect(entry?.names).toEqual([
+    expect(entry?.names).toMatchObject([
       { imported: "a", local: "a", kind: "named" },
       { imported: "b", local: "c", kind: "named" },
     ]);
@@ -37,20 +37,20 @@ describe("DataImport.from / names", () => {
 
   it("namespace import", () => {
     const [entry] = importsOf(`import * as ns from "m"\n<x/>\n`);
-    expect(entry?.names).toEqual([
+    expect(entry?.names).toMatchObject([
       { imported: "*", local: "ns", kind: "namespace" },
     ]);
   });
 
   it("mixed: default first, then the named ones, in written order", () => {
     const [entry] = importsOf(`import d, { z, a as b } from "m"\n<x/>\n`);
-    expect(entry?.names).toEqual([
+    expect(entry?.names).toMatchObject([
       { imported: "default", local: "d", kind: "default" },
       { imported: "z", local: "z", kind: "named" },
       { imported: "a", local: "b", kind: "named" },
     ]);
     const [withNamespace] = importsOf(`import d, * as ns from "m"\n<x/>\n`);
-    expect(withNamespace?.names).toEqual([
+    expect(withNamespace?.names).toMatchObject([
       { imported: "default", local: "d", kind: "default" },
       { imported: "*", local: "ns", kind: "namespace" },
     ]);
@@ -61,12 +61,12 @@ describe("DataImport.from / names", () => {
       `import type { T, U as V } from "t"\nimport { type W, x } from "t"\n<x/>\n`,
     );
     expect(whole?.typeOnly).toBe(true);
-    expect(whole?.names).toEqual([
+    expect(whole?.names).toMatchObject([
       { imported: "T", local: "T", kind: "named" },
       { imported: "U", local: "V", kind: "named" },
     ]);
     expect(inline && "typeOnly" in inline).toBe(false);
-    expect(inline?.names).toEqual([
+    expect(inline?.names).toMatchObject([
       { imported: "W", local: "W", kind: "named", typeOnly: true },
       { imported: "x", local: "x", kind: "named" },
     ]);
@@ -77,11 +77,11 @@ describe("DataImport.from / names", () => {
       `import type D from "t"\nimport type * as N from "t"\n<x/>\n`,
     );
     expect(def?.typeOnly).toBe(true);
-    expect(def?.names).toEqual([
+    expect(def?.names).toMatchObject([
       { imported: "default", local: "D", kind: "default" },
     ]);
     expect(ns?.typeOnly).toBe(true);
-    expect(ns?.names).toEqual([
+    expect(ns?.names).toMatchObject([
       { imported: "*", local: "N", kind: "namespace" },
     ]);
   });
@@ -113,14 +113,14 @@ describe("DataImport.from / names", () => {
   it("side-effect import has no names", () => {
     const [entry] = importsOf(`import "./side.ts"\n<x/>\n`);
     expect(entry?.from).toBe("./side.ts");
-    expect(entry?.names).toEqual([]);
+    expect(entry?.names).toMatchObject([]);
   });
 
   it("string-literal export name and import attributes", () => {
     const [str, json] = importsOf(
       `import { "a-b" as ab } from "m"\nimport data from "./d.json" with { type: "json" }\n<x/>\n`,
     );
-    expect(str?.names).toEqual([
+    expect(str?.names).toMatchObject([
       { imported: "a-b", local: "ab", kind: "named" },
     ]);
     expect(json?.from).toBe("./d.json");
@@ -134,8 +134,19 @@ describe("DataImport.from / names", () => {
         span: { sourceStart: 0, sourceEnd: 29 },
         from: "m",
         names: [
-          { imported: "default", local: "d", kind: "default" },
-          { imported: "a", local: "b", kind: "named" },
+          {
+            imported: "default",
+            local: "d",
+            kind: "default",
+            span: { sourceStart: 7, sourceEnd: 8 },
+          },
+          {
+            imported: "a",
+            local: "b",
+            kind: "named",
+            span: { sourceStart: 12, sourceEnd: 13 },
+            localSpan: { sourceStart: 17, sourceEnd: 18 },
+          },
         ],
       },
     ]);
@@ -144,6 +155,90 @@ describe("DataImport.from / names", () => {
   it("is plain data: JSON round-trips and carries no Babel node", () => {
     const entries = importsOf(`import d, { type a } from "m"\n<x/>\n`);
     expect(JSON.parse(JSON.stringify(entries))).toEqual(entries);
+  });
+});
+
+/** The text a name's span slices out of `source`. */
+function slice(
+  source: string,
+  span: { sourceStart: number; sourceEnd: number },
+) {
+  return source.slice(span.sourceStart, span.sourceEnd);
+}
+
+describe("DataImportName.span / localSpan", () => {
+  it("default: the binding", () => {
+    const source = `import Icon from "./icon.mx"\n<x/>\n`;
+    const [entry] = importsOf(source);
+    const [name] = entry?.names ?? [];
+    expect(slice(source, name?.span as never)).toBe("Icon");
+    expect(name && "localSpan" in name).toBe(false);
+  });
+
+  it("named: the imported name, no localSpan without an alias", () => {
+    const source = `import { a,  b } from "m"\n<x/>\n`;
+    const [entry] = importsOf(source);
+    expect(entry?.names.map((n) => slice(source, n.span))).toEqual(["a", "b"]);
+    expect(entry?.names.some((n) => "localSpan" in n)).toBe(false);
+  });
+
+  it("aliased: span is the imported name, localSpan the alias", () => {
+    const source = `import { first as one,\n  second as two } from "m"\n<x/>\n`;
+    const [entry] = importsOf(source);
+    expect(
+      entry?.names.map((n) => [
+        slice(source, n.span),
+        n.localSpan && slice(source, n.localSpan),
+      ]),
+    ).toEqual([
+      ["first", "one"],
+      ["second", "two"],
+    ]);
+  });
+
+  it("an alias spelled like the name is not an alias", () => {
+    const source = `import { a as a } from "m"\n<x/>\n`;
+    const [entry] = importsOf(source);
+    const [name] = entry?.names ?? [];
+    expect(slice(source, name?.span as never)).toBe("a");
+    expect(name && "localSpan" in name).toBe(false);
+  });
+
+  it("namespace: the binding after `* as`", () => {
+    const source = `import * as ns from "m"\n<x/>\n`;
+    const [entry] = importsOf(source);
+    expect(slice(source, entry?.names[0]?.span as never)).toBe("ns");
+  });
+
+  it("mixed default and namespace", () => {
+    const source = `import d, * as ns from "m"\n<x/>\n`;
+    const [entry] = importsOf(source);
+    expect(entry?.names.map((n) => slice(source, n.span))).toEqual(["d", "ns"]);
+  });
+
+  it("`type` specifiers: the span leaves the keyword out", () => {
+    const source = `import { type W, type U as V } from "t"\nimport type T from "t"\nimport type * as N from "t"\n<x/>\n`;
+    const [inline, whole, ns] = importsOf(source);
+    expect(inline?.names.map((n) => slice(source, n.span))).toEqual(["W", "U"]);
+    expect(slice(source, inline?.names[1]?.localSpan as never)).toBe("V");
+    expect(slice(source, whole?.names[0]?.span as never)).toBe("T");
+    expect(slice(source, ns?.names[0]?.span as never)).toBe("N");
+  });
+
+  it("string-literal export name: the literal, quotes included", () => {
+    const source = `import { "a-b" as ab } from "m"\n<x/>\n`;
+    const [entry] = importsOf(source);
+    const [name] = entry?.names ?? [];
+    expect(slice(source, name?.span as never)).toBe('"a-b"');
+    expect(slice(source, name?.localSpan as never)).toBe("ab");
+  });
+
+  it("offsets are UTF-16 and file-absolute after earlier lines and emoji", () => {
+    const source = `<x/>\n// 😀\nimport { é as ü } from "m"\n`;
+    const [entry] = importsOf(source);
+    const [name] = entry?.names ?? [];
+    expect(slice(source, name?.span as never)).toBe("é");
+    expect(slice(source, name?.localSpan as never)).toBe("ü");
   });
 });
 

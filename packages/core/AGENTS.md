@@ -459,8 +459,11 @@ Five facts worth knowing before editing it:
   `lowerChildList` and `tableParseError` refuse only what nothing lowered.
   A whole-value member is a static `Attr` with `member` (`memberOf`, mirror
   of `atomOf`); `type: "member"` is checked in `custom-tags.ts`
-  (`checkMemberAttr`). The test module is `src/fixtures/syntax/member-syntax.ts`
-  (Mesh's `&`); it imports types only so a manifest can `require` it.
+  (`checkMemberAttr`). The reference module is `src/syntax/member.ts`
+  (Mesh's `&`), published as `@mxlang/core/syntax/member` (its own build
+  entry, `dist/syntax/member.js` + `.d.ts`); it imports types only so a
+  manifest can `require` it or a project can copy it. Its tests stay in
+  `src/triggers.test.ts` and the html/data `member-syntax.test.ts`.
   parse. Core reaches that parser through `mxTemplateParser()`
   (`marko-frontend.ts`): the bundle's parser in the dist, the workspace
   `@mxlang/parser` devDependency by `require` from source (never a static

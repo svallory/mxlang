@@ -138,6 +138,14 @@ export interface DataTag {
    * match whose pattern has at least one named group that participated.
    */
   groups?: Record<string, string>;
+  /**
+   * Set only on a tag a syntax module's `lowerTrigger` built with `ctx.child`
+   * (a tagless-line trigger such as Mesh's `&title`): the trigger's `id` from
+   * the syntax table, the source span of its authored text and that text.
+   * Absent on every authored tag, so `&title` and an authored
+   * `<member name="title"/>` are told apart by this field, not by span.
+   */
+  trigger?: { id: string; span: SourceSpan; text: string };
   nameSpan: SourceSpan;
   /** The whole tag: opening tag, body and closing tag included. */
   span: SourceSpan;
@@ -251,6 +259,16 @@ export interface DataImportName {
   /** The binding this file refers to it by (the alias, when there is one). */
   local: string;
   kind: "default" | "named" | "namespace";
+  /**
+   * The name as written, in the source (UTF-16 offsets): the imported name for
+   * a named specifier (`b` in `{ b as c }`, the quotes included for
+   * `{ "a-b" as ab }`), the binding for a default (`Icon`) or namespace
+   * (`ns` in `* as ns`) import, which write no separate exported name. An
+   * inline `type` keyword is not part of it.
+   */
+  span: SourceSpan;
+  /** The alias (`c` in `{ b as c }`); present only when `local` differs from `imported`. */
+  localSpan?: SourceSpan;
   /** Present (`true`) only for an inline `{ type X }` specifier. */
   typeOnly?: true;
 }
