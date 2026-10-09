@@ -117,7 +117,9 @@ may set. An inline object stays a table only. A trigger whose `node` is
   `null`). Three constructors, one per position, are the only way to build
   anything:
   - `ctx.expression(node)`: a Babel node that replaces the trigger's stand-in
-    in the expression's payload. The authored text and every offset stay.
+    in the expression's payload. The expression's emitted code carries the
+    node printed (`&status` becomes `self.status`), as it carries an atom's
+    string literal; offsets still slice the authored text.
   - `ctx.attribute(name, value)`: a named attribute. `value` is `true`, a
     string, a `ctx.expression` result, or a whole-value
     `{ kind: "atom" | "member", name }`.
@@ -126,8 +128,9 @@ may set. An inline object stays a table only. A trigger whose `node` is
     contracts apply to it.
 
   Core positions the result from the trigger. A result that does not fit
-  the position, a `=value` the hook leaves out, and a trigger written where
-  a name is declared (`(&a) => 1`) are positioned errors. The built-in
+  the position, a `=value` the hook leaves out, a trigger written where a
+  name is declared (`(&a) => 1`), and a trigger used as a property name
+  (`{ &a }`, `{ &a: 1 }`) are positioned errors. The built-in
   `node` kinds lower in core with no hook: in an expression, `"string"` (a
   string literal of the text) and `"identifier"`; in an attribute list,
   `"attribute"` (an attribute named by the text after its sigil, bare or

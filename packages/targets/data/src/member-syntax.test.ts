@@ -75,7 +75,9 @@ describe.each(LOADERS)("the five Mesh cases, via %s", (_, load) => {
     const [rule] = tags(tree(source, file, options).children);
     const check = attrNamed(rule as DataTag, "check");
     if (check.kind !== "expression") throw new Error(check.kind);
-    expect(check.value.code).toBe('() => &status === "sent"');
+    // `code` is spliced, like the atom; the span still slices the authored text.
+    expect(check.value.code).toBe('() => self.status === "sent"');
+    expect(source.slice(12, 35)).toBe("() => &status === :sent");
     expect(check.value.span).toEqual({ sourceStart: 12, sourceEnd: 35 });
     expect(check.value.node).toMatchObject({
       type: "ArrowFunctionExpression",
@@ -181,7 +183,7 @@ describe.each(LOADERS)("the five Mesh cases, via %s", (_, load) => {
     const value = attrNamed(amount, "value");
     if (value.kind !== "expression") throw new Error(value.kind);
     expect(value.nameSpan).toEqual({ sourceStart: 22, sourceEnd: 22 });
-    expect(value.value.code).toBe("qty * &price");
+    expect(value.value.code).toBe("qty * self.price");
     expect(value.value.node).toMatchObject({
       type: "BinaryExpression",
       left: { type: "Identifier", name: "qty" },
@@ -219,6 +221,35 @@ describe("what is not a member", () => {
       kind: "string",
       value: "&b",
     });
+  });
+
+  it.each([
+    ["`{ &a }`", "rule v=({ &a })\n", 10],
+    ["`{ &a: 1 }`", "rule v=({ &a: 1 })\n", 10],
+    ["`{ &a() {} }`", "rule v=({ &a() {} })\n", 10],
+  ])(
+    "%s: a member is no property name (review 451 r1)",
+    (_, source, column) => {
+      expect(parse(source).diagnostics).toEqual([
+        expect.objectContaining({
+          severity: "error",
+          message:
+            "`&a` is not a whole operand here: the `member` trigger lowers to an expression; write it where a value stands",
+          line: 1,
+          column,
+        }),
+      ]);
+    },
+  );
+
+  it("`{ [&a]: 1 }` and `{ k: &a }` are operands", () => {
+    const result = parse("rule v=({ [&a]: 1, k: &b })\n");
+    expect(result.diagnostics).toEqual([]);
+    const [rule] = tags(result.tree?.children ?? []);
+    const v = attrNamed(rule as DataTag, "v");
+    expect(v.kind === "expression" && v.value.code).toBe(
+      "{ [self.a]: 1, k: self.b }",
+    );
   });
 
   it("`(&a) => 1` is refused: a member cannot be declared", () => {

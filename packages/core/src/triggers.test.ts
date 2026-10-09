@@ -110,7 +110,8 @@ describe("the member module through the `syntax` option", () => {
     const check = attr(rule as Element, "check");
     expect(check.kind).toBe("dynamic");
     if (check.kind !== "dynamic") return;
-    expect(check.value.code).toBe('() => &status === "sent"');
+    // Spliced like the atom beside it (review 451 r1): emitting targets read `code`.
+    expect(check.value.code).toBe('() => self.status === "sent"');
     const body = (
       check.value.node as { body: { left: unknown; right: unknown } }
     ).body;
@@ -173,7 +174,7 @@ describe("the member module through the `syntax` option", () => {
     });
     const value = attr(children[1] as Element, "value");
     if (value.kind !== "dynamic") throw new Error(value.kind);
-    expect(value.value.code).toBe("qty * &price");
+    expect(value.value.code).toBe("qty * self.price");
     expect(value.value.node).toMatchObject({
       type: "BinaryExpression",
       right: {
@@ -397,6 +398,41 @@ describe("a hook's result is checked", () => {
     expect(caught(() => irOf(source, undefined, wrong)).message).toBe(
       `the \`member\` trigger's \`lowerTrigger\` must return \`${want}\` for a trigger in ${where}`,
     );
+  });
+
+  it("`ctx.expression` refuses a node that is not an expression", () => {
+    const statement = moduleWith(rows, {
+      lowerTrigger: (_id, _text, _span, ctx) =>
+        ctx.expression({
+          type: "ExpressionStatement",
+          expression: { type: "NullLiteral" },
+        }),
+    });
+    expect(
+      caught(() => irOf("rule x=&a\n", undefined, statement)).message,
+    ).toBe(
+      "the `member` trigger's `lowerTrigger`: `ctx.expression` takes a Babel expression node, got a `ExpressionStatement`",
+    );
+  });
+
+  it("a module-built expression value prints into `code`", () => {
+    const built = moduleWith(rows, {
+      lowerTrigger: (_id, text, _span, ctx) =>
+        ctx.attribute(
+          "of",
+          ctx.expression({
+            type: "MemberExpression",
+            object: { type: "Identifier", name: "self" },
+            property: { type: "Identifier", name: text.slice(1) },
+            computed: false,
+          }),
+        ),
+    });
+    const [sort] = elements(irOf("sort &dueOn\n", undefined, built).body);
+    expect(attr(sort as Element, "of")).toMatchObject({
+      kind: "dynamic",
+      value: { code: "self.dueOn", span: { sourceStart: 5, sourceEnd: 11 } },
+    });
   });
 
   it("a hand-made result is refused", () => {

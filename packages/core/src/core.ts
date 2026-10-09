@@ -503,6 +503,12 @@ export interface Ctx {
    * `convertAtoms`; `expr()` splices each one inside an expression's span.
    */
   atoms?: Atom[];
+  /**
+   * Each lowered syntax-table trigger's span and printed replacement
+   * (decision 182 addendum 5), spliced into `code` by `expr()` beside the
+   * atoms. Set by the trigger pass from the document's registered syntax.
+   */
+  triggerSplices?: { start: number; end: number; text: string }[];
   /** Set by `lower` once the whole template's atoms are converted. */
   atomsConverted?: boolean;
   /**
@@ -896,7 +902,10 @@ export function expr(ctx: Ctx, node: Node): string {
 
 type Splice = { start: number; end: number; text: string };
 
-/** The atoms inside `[start, end)` as splices of their string literal. */
+/**
+ * The atoms inside `[start, end)` as splices of their string literal, and
+ * the lowered syntax-table triggers as splices of their printed replacement.
+ */
 function atomSplices(ctx: Ctx, start: number, end: number): Splice[] {
   const splices: Splice[] = [];
   for (const atom of ctx.atoms ?? []) {
@@ -906,6 +915,10 @@ function atomSplices(ctx: Ctx, start: number, end: number): Splice[] {
       end: atom.span.sourceEnd,
       text: JSON.stringify(atom.name),
     });
+  }
+  // Decision 182 addendum 5: a lowered trigger prints as its replacement.
+  for (const splice of ctx.triggerSplices ?? []) {
+    if (splice.start >= start && splice.end <= end) splices.push(splice);
   }
   return splices;
 }

@@ -27,6 +27,7 @@ import {
   type Ctx,
   fail,
   isTranslateError,
+  markoBabel,
   type Node,
   positionAtOffset,
 } from "./core.ts";
@@ -76,7 +77,18 @@ export function triggerRow(
 }
 
 /** A document's syntax, by every body array it holds (so a host lowering a nested body finds it). */
-const syntaxRuns = new WeakMap<readonly unknown[], ResolvedSyntax>();
+const syntaxRuns = new WeakMap<readonly unknown[], SyntaxRun>();
+
+/**
+ * A registered document's syntax and the text each lowered trigger prints
+ * as: `expr()` splices it into an expression's `code` (`&status` becomes
+ * `self.status`), as it splices atoms. Per document, not per `Ctx`, so a
+ * scratch walk (`analyze`) and the real one share it.
+ */
+interface SyntaxRun {
+  readonly syntax: ResolvedSyntax;
+  readonly splices: { start: number; end: number; text: string }[];
+}
 
 /**
  * Records a parsed document's syntax for lowering. The default row records
@@ -84,6 +96,7 @@ const syntaxRuns = new WeakMap<readonly unknown[], ResolvedSyntax>();
  */
 export function registerSyntax(document: Node, syntax: ResolvedSyntax): void {
   if (syntax.isDefault) return;
+  const run: SyntaxRun = { syntax, splices: [] };
   const seen = new Set<unknown>();
   const visit = (value: Node): void => {
     if (value === null || typeof value !== "object" || seen.has(value)) return;
@@ -94,11 +107,11 @@ export function registerSyntax(document: Node, syntax: ResolvedSyntax): void {
     }
     if (typeof value.type !== "string") return;
     if (Array.isArray(value.body)) {
-      syntaxRuns.set(value.body, syntax);
+      syntaxRuns.set(value.body, run);
       visit(value.body);
     }
   };
-  syntaxRuns.set(document.body, syntax);
+  syntaxRuns.set(document.body, run);
   visit(document.body);
 }
 
@@ -143,9 +156,10 @@ const applied = new WeakSet<Ctx>();
  * calls no hook twice.
  */
 export function lowerTriggers(ctx: Ctx, roots: readonly Node[]): void {
-  const syntax = syntaxRuns.get(roots);
-  if (!syntax) return;
-  const { table, module } = syntax;
+  const run = syntaxRuns.get(roots);
+  if (!run) return;
+  const { table, module } = run.syntax;
+  ctx.triggerSplices = run.splices;
   ctx.syntaxModule = module;
   if (module && !applied.has(ctx)) {
     applied.add(ctx);
@@ -167,7 +181,7 @@ export function lowerTriggers(ctx: Ctx, roots: readonly Node[]): void {
     }
     if (typeof value.type !== "string") return;
     if (isContainer(value)) {
-      lowerExpressionTriggers(table, module, value);
+      lowerExpressionTriggers(ctx, run, value);
       return;
     }
     // A tag's attributes before its body, in source order.
@@ -193,11 +207,21 @@ function isContainer(node: Node): boolean {
   );
 }
 
+function spanRange(trigger: Node): { start: number; end: number } {
+  const span = spanOf(trigger);
+  return { start: span.sourceStart, end: span.sourceEnd };
+}
+
 function spanOf(trigger: Node): SourceSpan {
   return {
     sourceStart: trigger.start,
     sourceEnd: trigger.start + String(trigger.text).length,
   };
+}
+
+function describeNode(node: unknown): string {
+  const type = (node as Node)?.type;
+  return typeof type === "string" ? `a \`${type}\`` : String(node);
 }
 
 /** The positioned error for a hook's result that does not fit its position. */
@@ -234,10 +258,10 @@ function callHook(
       if (
         !node ||
         typeof node !== "object" ||
-        typeof (node as Node).type !== "string"
+        !markoBabel().types.isExpression(node)
       ) {
         fail(
-          `the \`${trigger.id}\` trigger's \`lowerTrigger\`: \`ctx.expression\` takes a Babel expression node`,
+          `the \`${trigger.id}\` trigger's \`lowerTrigger\`: \`ctx.expression\` takes a Babel expression node, got ${describeNode(node)}`,
           trigger,
         );
       }
@@ -485,11 +509,43 @@ function replaceAt(container: Node, site: Site, replacement: Node): void {
   }
 }
 
+/**
+ * Is the marked node a property's name rather than a value: a non-computed
+ * key, or a shorthand property (`{ &a }`, whose key and value are one token)?
+ */
+function inKeyPosition(site: Site): boolean {
+  const parent = site.parent;
+  if (!parent) return false;
+  switch (parent.type) {
+    case "ObjectProperty":
+      return (
+        parent.shorthand === true || (site.key === "key" && !parent.computed)
+      );
+    case "ObjectMethod":
+    case "ClassProperty":
+    case "ClassMethod":
+    case "ClassAccessorProperty":
+    case "TSPropertySignature":
+    case "TSMethodSignature":
+      return site.key === "key" && !parent.computed;
+    default:
+      return false;
+  }
+}
+
+function notWholeOperand(trigger: Node): never {
+  return fail(
+    `\`${trigger.text}\` is not a whole operand here: the \`${trigger.id}\` trigger lowers to an expression; write it where a value stands`,
+    trigger,
+  );
+}
+
 function lowerExpressionTriggers(
-  table: SyntaxTable,
-  module: SyntaxModule | undefined,
+  ctx: Ctx,
+  run: SyntaxRun,
   container: Node,
 ): void {
+  const { table, module } = run.syntax;
   for (const trigger of container.triggers ?? []) {
     if (lowered.has(trigger)) continue;
     const row = rowFor(table, trigger);
@@ -499,12 +555,7 @@ function lowerExpressionTriggers(
       noLowering(trigger);
     }
     const site = markedSite(container.node, trigger);
-    if (!site) {
-      fail(
-        `\`${trigger.text}\` (the \`${trigger.id}\` trigger) is not a whole operand here, so it cannot be lowered; write it where a value stands`,
-        trigger,
-      );
-    }
+    if (!site) notWholeOperand(trigger);
     const at = site as Site;
     if (inBindingPosition(at)) {
       fail(
@@ -512,6 +563,9 @@ function lowerExpressionTriggers(
         trigger,
       );
     }
+    // A property name (`{ &a: 1 }`, `{ &a }`) is no operand: an expression
+    // there is an invalid key, and a shorthand would keep the stand-in.
+    if (inKeyPosition(at)) notWholeOperand(trigger);
     const mark = at.node.extra?.mxTrigger;
     let replacement: Node;
     if (row.node === "string") {
@@ -539,6 +593,13 @@ function lowerExpressionTriggers(
       replacement = (result as TriggerExpression).node as Node;
     }
     replaceAt(container, at, positioned(replacement, at.node));
+    // The expression's `code` is spliced from the source: the trigger's
+    // text becomes the replacement's printed code, as an atom becomes its
+    // string literal.
+    run.splices.push({
+      ...spanRange(trigger),
+      text: ctx.generate(replacement),
+    });
     lowered.add(trigger);
   }
 }
@@ -632,19 +693,23 @@ function attributeNode(ctx: Ctx, trigger: Node, attr: TriggerAttribute): Node {
         ? [text.sourceStart + at, text.sourceStart + at + value.length]
         : [text.sourceStart, text.sourceEnd];
     container = containerOf(ctx, literal(ctx, value, start, end), start, end);
+  } else if (ownValue) {
+    container = ownValue;
   } else if (value.kind === "expression") {
-    container =
-      ownValue ??
-      containerOf(
-        ctx,
-        positioned(value.node as Node, {
-          start: text.sourceStart,
-          end: text.sourceEnd,
-          loc: locOf(ctx, text.sourceStart, text.sourceEnd),
-        }),
-        text.sourceStart,
-        text.sourceEnd,
-      );
+    // A module-built expression spans the trigger's text, and its `code` is
+    // the expression printed (spliced over that text, like an expression
+    // trigger's replacement).
+    const node = positioned(value.node as Node, {
+      start: text.sourceStart,
+      end: text.sourceEnd,
+      loc: locOf(ctx, text.sourceStart, text.sourceEnd),
+    });
+    ctx.triggerSplices?.push({
+      start: text.sourceStart,
+      end: text.sourceEnd,
+      text: ctx.generate(node),
+    });
+    container = containerOf(ctx, node, text.sourceStart, text.sourceEnd);
   } else {
     const span = value.span ?? text;
     const mark =

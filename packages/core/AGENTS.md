@@ -451,7 +451,9 @@ Five facts worth knowing before editing it:
   (`registerSyntax`), and `lower`/`lowerChildren` run `lowerTriggers` right
   after `convertAtoms`: hooks in source order (a tag's attributes before its
   body, a value's triggers before its owner), stand-ins replaced inside the
-  payload, attribute and line triggers kept as synthesized `MxAttribute`/
+  payload (each replacement's printed text spliced into `code` by `expr()`
+  through `ctx.triggerSplices`, per document, as atoms are), attribute and
+  line triggers kept as synthesized `MxAttribute`/
   `MxTag` nodes in WeakMaps that `tagAttributesOf`, `bodyChildren` and
   `lowerChildList` read, so the tree stays as parsed. `payloadOf`,
   `lowerChildList` and `tableParseError` refuse only what nothing lowered.
