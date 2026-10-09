@@ -2230,6 +2230,50 @@ describe("ctx.build.element's void default", () => {
       ]),
     ).toEqual({ br: false, "mx-icon": true });
   });
+
+  // Every emitter drops a void element's children (IR spec E8), so a void
+  // element built with children is an error at the tag, not a silent drop.
+  const voidWithChildren = (name: string) =>
+    expect.objectContaining({
+      name: "TranslateError",
+      message: expect.stringContaining(
+        `\`<built>\`: \`<${name}>\` is void and takes no children; pass { void: false } to emit an end tag`,
+      ),
+      line: 2,
+      column: 3,
+    });
+  const lowerBuilt = (transform: CustomTag["transform"]) =>
+    lowerWithTags("\n<p><built/></p>\n", { built: { transform } });
+
+  it("rejects children on an element void by default", () => {
+    expect(() =>
+      lowerBuilt((_call, ctx) => [
+        ctx.build.element("br", [], [ctx.build.text("x")]),
+      ]),
+    ).toThrowError(voidWithChildren("br"));
+  });
+
+  it("rejects children on an element marked `{ void: true }`", () => {
+    expect(() =>
+      lowerBuilt((_call, ctx) => [
+        ctx.build.element("mx-icon", [], [ctx.build.text("x")], {
+          void: true,
+        }),
+      ]),
+    ).toThrowError(voidWithChildren("mx-icon"));
+  });
+
+  it("keeps the children of a void name marked `{ void: false }`", () => {
+    const ir = lowerBuilt((_call, ctx) => [
+      ctx.build.element("br", [], [ctx.build.text("x")], { void: false }),
+    ]);
+    expect(find(ir.body, "Element").children[0]).toMatchObject({
+      kind: "Element",
+      name: "br",
+      void: false,
+      children: [{ kind: "Text", value: "x" }],
+    });
+  });
 });
 
 describe("array and function attribute types (decision 138, E1)", () => {

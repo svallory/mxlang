@@ -586,7 +586,8 @@ export interface IrBuilders {
    * A native element. `options.void` marks it void (no children, no close
    * tag); absent, it is void exactly when an authored element of that name
    * is: the target's `nativeTags` declares it void, else core's own HTML void
-   * elements (`<br>`, `<img>`, ...).
+   * elements (`<br>`, `<img>`, ...). A void element given `children` is a
+   * compile error at the tag; pass `{ void: false }` for an end tag.
    */
   element(
     name: string,
@@ -850,14 +851,25 @@ export function buildersFor(
     },
     element: (name, attrs = [], children = [], options = {}, from) => {
       const spans = spansFrom(from, loc);
+      // Absent, void follows the target's table, as an authored element's
+      // does (`<br>` is void, `<box>` is when the target declares it).
+      const isVoid =
+        options.void ?? isNativeVoid(ctx.declarations.nativeTags, name);
+      // Every emitter drops a void element's children (IR spec E8), so
+      // building one with children is an error, never a silent drop.
+      if (isVoid && children.length > 0) {
+        return failAt(
+          tagName,
+          `\`<${name}>\` is void and takes no children; pass { void: false } to emit an end tag`,
+          loc,
+        );
+      }
       return {
         kind: "Element",
         name,
         attrs,
         children,
-        // Absent, void follows the target's table, as an authored element's
-        // does (`<br>` is void, `<box>` is when the target declares it).
-        void: options.void ?? isNativeVoid(ctx.declarations.nativeTags, name),
+        void: isVoid,
         loc: spans.loc,
         ...spanOf(spans),
       };
