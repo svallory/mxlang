@@ -1166,10 +1166,10 @@ describe("<try>", () => {
     ).toContain("fallback={() => <p>failed</p>}");
   });
 
-  it("leaves a body without `<@catch>` inline", () => {
-    expect(markup('import Body from "./body.mx"\n<try><Body/></try>')).toBe(
-      "<Body />",
-    );
+  it("rejects a `<try>` with neither `<@catch>` nor `<@placeholder>`", () => {
+    expect(
+      errorOf('import Body from "./body.mx"\n<try><Body/></try>'),
+    ).toContain("needs a `<@catch>`");
   });
 
   it("lowers `<@placeholder>` to the suspense wrapper", () => {

@@ -67,7 +67,12 @@ const cases = [
     "<b>!</b>",
     ["div"],
   ],
-  ["try body", `<div><try>${text}</try></div>`, decoded, ["div"]],
+  [
+    "try body",
+    `<div><try>${text}<@catch>x</@catch></try></div>`,
+    decoded,
+    ["div"],
+  ],
   ["component children", `<Row>${text}</Row>`, decoded, ["section"]],
   [
     "switch match",

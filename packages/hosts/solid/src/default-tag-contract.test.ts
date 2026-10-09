@@ -46,7 +46,9 @@ describe("the parent contract's defaultTag on Solid (decision 145 PR 3)", () => 
         defaultTag: "section",
         targets: solidTargets,
       }).code;
-    expect(run("<my-list><try><.a>x</></try></my-list>")).toContain("<article");
+    expect(
+      run("<my-list><try><.a>x</><@catch>x</@catch></try></my-list>"),
+    ).toContain("<article");
   });
 
   it("an invalid contract value falls through to the next rung: no <input>, the config answers", () => {

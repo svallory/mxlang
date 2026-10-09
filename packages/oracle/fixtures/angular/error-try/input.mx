@@ -1,1 +1,1 @@
-<try>x</try>
+<try>x<@catch>y</@catch></try>

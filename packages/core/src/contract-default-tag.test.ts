@@ -243,7 +243,7 @@ describe("contractDefaultTag: the nearest authored parent's contract", () => {
   it("skips try, await and their attribute tags", () => {
     expect(
       asked(
-        "<my-list><try><@catch|e|><.a/></@catch></try><await|v|=p><@then><.b/></@then></await></my-list>",
+        "<my-list><try>x<@catch|e|><.a/></@catch></try><await|v|=p><@then><.b/></@then></await></my-list>",
       ),
     ).toEqual(["item", "item"]);
   });
@@ -278,7 +278,7 @@ describe("contractDefaultTag: the nearest authored parent's contract", () => {
   it("skips if, else, for and try on a lookup that has no core taglib", () => {
     expect(
       asked(
-        "<my-list><if=x><.a/></if><else><.b/></else><for|i| of=xs><.c/></for><try><.d/></try></my-list>",
+        "<my-list><if=x><.a/></if><else><.b/></else><for|i| of=xs><.c/></for><try>x<.d/><@catch>x</@catch></try></my-list>",
         customTags,
         { bare: true },
       ),

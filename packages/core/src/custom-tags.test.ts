@@ -1227,11 +1227,114 @@ describe("core-owned custom tags", () => {
     );
   });
 
-  it("lowers a plain `<try>` to the host's `try` primitive with no attribute tags", () => {
-    const ir = lowerWithTags("<try><p>x</p></try>\n", {}, tryDeclarations);
+  it("lowers `<try>` with only a `<@catch>` to the host's `try` primitive", () => {
+    const ir = lowerWithTags(
+      "<try><p>x</p><@catch>oops</@catch></try>\n",
+      {},
+      tryDeclarations,
+    );
     const delegatedTag = find(ir.body, "DelegatedTag");
     expect(delegatedTag.tag).toMatchObject({ name: "try" });
-    expect(delegatedTag.tag.attributeTags).toEqual([]);
+    expect(delegatedTag.tag.attributeTags.map((tag) => tag.name)).toEqual([
+      "catch",
+    ]);
+  });
+
+  it("lowers `<try>` with only a `<@placeholder>`", () => {
+    const ir = lowerWithTags(
+      "<try><p>x</p><@placeholder>wait</@placeholder></try>\n",
+      {},
+      tryDeclarations,
+    );
+    const delegatedTag = find(ir.body, "DelegatedTag");
+    expect(delegatedTag.tag.attributeTags.map((tag) => tag.name)).toEqual([
+      "placeholder",
+    ]);
+  });
+
+  it("lowers `<try>` around a control-flow body", () => {
+    const ir = lowerWithTags(
+      "<try><if=input.ok><p>x</p></if><@catch>oops</@catch></try>\n",
+      {},
+      tryDeclarations,
+    );
+    expect(find(ir.body, "DelegatedTag").tag).toMatchObject({ name: "try" });
+  });
+
+  // Marko 6.4.4 (`translator/core/try.ts`): the three refusals below, in its
+  // order. Probed on stock Marko, each at the `<try>` name.
+  it.each([
+    ["text body", "<try>hi</try>\n"],
+    ["markup body", "<try><p>x</p></try>\n"],
+    ["whitespace-only body", "<try> </try>\n"],
+  ])(
+    "rejects `<try>` with neither `<@catch>` nor `<@placeholder>` (%s)",
+    (_case, source) => {
+      expect(() => lowerWithTags(source, {}, tryDeclarations)).toThrowError(
+        "needs a `<@catch>` to handle errors or a `<@placeholder>` to show while its content is pending",
+      );
+    },
+  );
+
+  it.each([
+    ["no children", "<try></try>\n"],
+    ["only `<@catch>`", "<try><@catch>oops</@catch></try>\n"],
+    ["only `<@placeholder>`", "<try><@placeholder>wait</@placeholder></try>\n"],
+    [
+      "both attribute tags, indented",
+      "<try>\n  <@placeholder>wait</@placeholder>\n  <@catch>oops</@catch>\n</try>\n",
+    ],
+  ])("rejects `<try>` without body content (%s)", (_case, source) => {
+    expect(() => lowerWithTags(source, {}, tryDeclarations)).toThrowError(
+      "requires body content",
+    );
+  });
+
+  // Marko: "needs its `<@catch>` written directly inside it, not within
+  // control flow such as `<if>` or `<for>`". Already enforced by the generic
+  // attribute-tag body check, at the misplaced tag, on legacy and v2 hosts.
+  it.each([
+    ["catch", "<try><if=input.x><@catch>a</@catch></if>b</try>\n", 18],
+    [
+      "placeholder",
+      "<try><for|i| of=input.l><@placeholder>a</@placeholder></for>b</try>\n",
+      25,
+    ],
+    [
+      "catch",
+      "<try><@placeholder>p</@placeholder><if=input.x><p/></if><else><@catch>a</@catch></else>b</try>\n",
+      63,
+    ],
+  ])("rejects `<@%s>` written under control flow", (name, source, column) => {
+    const policies: Policy[] = [
+      tryDeclarations,
+      { ...tryDeclarations, attrTags: 2 },
+    ];
+    for (const declarations of policies) {
+      let error: unknown;
+      try {
+        lowerWithTags(source, {}, declarations);
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toMatchObject({
+        message: expect.stringContaining(`attribute tag \`<@${name}>\``),
+        line: 1,
+        column,
+      });
+    }
+  });
+
+  it("positions the missing-content errors at the `<try>` tag", () => {
+    for (const source of ["<try></try>\n", "<try>hi</try>\n"]) {
+      let error: unknown;
+      try {
+        lowerWithTags(source, {}, tryDeclarations);
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toMatchObject({ line: 1 });
+    }
   });
 
   it("passes `<@catch>`/`<@placeholder>` through as the host tag's attribute tags", () => {
@@ -1367,7 +1470,11 @@ describe("core-owned custom tags", () => {
   // Decision 141 also keeps retained normalized spaces on ordinary tags;
   // built-ins still bypass the presence gate entirely.
   it("preserves a whitespace-only `<try>` body rather than dropping it", () => {
-    const ir = lowerWithTags("<try>  </try>\n", {}, tryDeclarations);
+    const ir = lowerWithTags(
+      "<try>  <@catch>oops</@catch></try>\n",
+      {},
+      tryDeclarations,
+    );
     const delegatedTag = find(ir.body, "DelegatedTag");
     expect(delegatedTag.tag.children).toEqual([
       expect.objectContaining({ kind: "Text", value: " " }),
@@ -1375,7 +1482,11 @@ describe("core-owned custom tags", () => {
   });
 
   it("preserves markup mixed with text in a `<try>` body", () => {
-    const ir = lowerWithTags("<try>a <b>c</b></try>\n", {}, tryDeclarations);
+    const ir = lowerWithTags(
+      "<try>a <b>c</b><@catch>oops</@catch></try>\n",
+      {},
+      tryDeclarations,
+    );
     const delegatedTag = find(ir.body, "DelegatedTag");
     expect(delegatedTag.tag.children).toMatchObject([
       { kind: "Text", value: "a " },

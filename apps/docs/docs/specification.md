@@ -1659,6 +1659,9 @@ Errors, all carrying the `` `<try>`:  `` prefix:
 | `` `<try>`: tag params (`\|a, b\|`) on `<try>` `` | Params on `<try>` itself. |
 | `` `<try>`: tag variable (`/name`) on `<try>` `` | A `/var` on `<try>`. |
 | `` `<try>`: tag params (`\|a, b\|`) on `<@placeholder>` `` | `<@placeholder>` declared its own params. |
+| `` `<try>`: requires body content `` | No body besides the attribute tags (`<try></try>`, or only `<@catch>`/`<@placeholder>`). Whitespace that survives normalization counts as content. Marko 6.4.4 words it "requires body content". |
+| `` `<try>`: needs a `<@catch>` to handle errors or a `<@placeholder>` to show while its content is pending; … `` | Neither attribute tag is present, so the `<try>` would have no effect. Checked after the body-content rule, as Marko does. |
+| `` `<try>`: attribute tag `<@catch>` may not appear inside `<if>`… `` | `<@catch>`/`<@placeholder>` written under `<if>`/`<for>` rather than directly inside `<try>`; positioned at the misplaced tag (Marko positions at `<try>`). |
 
 And from the host-primitive request:
 
@@ -1670,8 +1673,8 @@ Per-host lowering is in §13. Notably `<try>` with `<@placeholder>` is an error 
 the html target (it needs a second render pass), while `<try>` with only `<@catch>`
 lowers to an ordinary `try`/`catch` whose body renders into a buffered sub-sink
 (§13.8): when the body throws, its partial output is dropped and `<@catch>`
-renders in its place, as in Marko 6.3.51 (decision 155). A `<try>` with no
-`<@catch>` rethrows, as Marko does.
+renders in its place, as in Marko 6.3.51 (decision 155). A `<try>` with neither
+`<@catch>` nor `<@placeholder>` is a compile error (below), as in Marko 6.4.
 
 On Preact, React and Hono the `<try>` body reaches the host's boundary as a thunk
 (`<__mxErrorBoundary fallback={…}>{() => body}</__mxErrorBoundary>`), so a throw

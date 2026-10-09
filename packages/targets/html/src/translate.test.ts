@@ -711,26 +711,14 @@ describe("the render sink (decision 155)", () => {
     expect(html).toBe("<div>caught</div>");
   });
 
-  // Measured with Marko 6.3.51: with no `<@catch>`, the error propagates
-  // out of the render. This host used to swallow it (`catch {}`).
-  it("rethrows from a <try> without <@catch>", async () => {
-    await expect(
-      renderModules(
-        { "page.mx": "<p>x</p><try><b>2</b>${input.missing.deep}</try>" },
-        "page.mx",
-      ),
-    ).rejects.toThrow(TypeError);
-  });
-
-  it("drops a catch-less inner <try>'s output when an outer <try> catches", async () => {
-    const html = await renderModules(
-      {
-        "page.mx":
-          "<try><a>1</a><try><b>2</b>${input.missing.deep}</try><@catch|e|>c</@catch></try>",
-      },
-      "page.mx",
-    );
-    expect(html).toBe("c");
+  // Marko 6.3.51 rethrew from a `<try>` with no `<@catch>`, and this host
+  // used to swallow it (`catch {}`). Marko 6.4 refuses the shape at compile
+  // time ("without either it has no effect"), so a catch-less `<try>` can no
+  // longer reach render; `<@placeholder>` is not supported on this host.
+  it("refuses a <try> without <@catch> at compile time", () => {
+    expect(() =>
+      compile(src("<try><b>2</b>${input.missing.deep}</try>"), file),
+    ).toThrowError("needs a `<@catch>`");
   });
 
   // Measured with Marko 6.3.51: `<${Counter}/n({start:2})/>` renders
@@ -1016,13 +1004,16 @@ describe("<try> without a placeholder is a plain try/catch", () => {
   // rather than being dropped by the `hasContent` gate an ordinary custom
   // tag's body uses.
   it("preserves a whitespace-only body", () => {
-    const { code } = compile(src("<try>  </try>"), file);
-    expect(code).toContain('__mxOut.write(" ");');
+    const { code } = compile(src("<try>  <@catch|e|>x</@catch></try>"), file);
+    expect(code).toContain('__mxTry0.write(" ");');
   });
 
   it("preserves markup mixed with text in the body", () => {
-    const { code } = compile(src("<try>a <b>c</b></try>"), file);
-    expect(code).toContain('__mxOut.write("a <b>c</b>");');
+    const { code } = compile(
+      src("<try>a <b>c</b><@catch|e|>x</@catch></try>"),
+      file,
+    );
+    expect(code).toContain('__mxTry0.write("a <b>c</b>");');
   });
 });
 

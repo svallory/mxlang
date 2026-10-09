@@ -49,6 +49,20 @@ function tryTransform(call: TagCall, ctx: TransformContext): IrNode[] {
     );
   }
 
+  // Marko 6.4's `<try>` analysis, after the placement rule (`<@catch>` and
+  // `<@placeholder>` directly inside `<try>`, enforced for every custom tag by
+  // `validateCustomAttributeTagBodies` before this runs): the body must have
+  // content, and one of the two must be present, since without either `<try>`
+  // has no effect.
+  if ((call.content?.children.length ?? 0) === 0) {
+    ctx.fail("requires body content");
+  }
+  if (call.attributeTags.length === 0) {
+    ctx.fail(
+      "needs a `<@catch>` to handle errors or a `<@placeholder>` to show while its content is pending; without either it has no effect, so render its content directly",
+    );
+  }
+
   return [
     ctx.build.delegatedTag(
       "try",

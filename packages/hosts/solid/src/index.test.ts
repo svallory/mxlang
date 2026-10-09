@@ -328,11 +328,15 @@ describe("Solid IR lowering", () => {
     // unchanged, matching `lowerDelegatedTag`'s old unconditional lowering,
     // rather than being gated on `hasContent` the way an ordinary
     // (template-authored) custom tag's body is.
-    ["try whitespace-only body", `<try>  </try>`, ["<Loading> </Loading>"]],
+    [
+      "try whitespace-only body",
+      `<try>  <@placeholder>w</@placeholder></try>`,
+      ["<Loading fallback={<>w</>}> </Loading>"],
+    ],
     [
       "try mixed text and markup body",
-      `<try>a <b>c</b></try>`,
-      ["<Loading>a <b>c</b></Loading>"],
+      `<try>a <b>c</b><@placeholder>w</@placeholder></try>`,
+      ["<Loading fallback={<>w</>}>a <b>c</b></Loading>"],
     ],
     // attribute-tag-silent-drops B1: a repeated `<@item>` used to emit the
     // `item=` prop twice (JSX last-wins), losing every occurrence but the

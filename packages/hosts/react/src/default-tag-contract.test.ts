@@ -21,7 +21,7 @@ describe("the parent contract's defaultTag on react (decision 145 PR 3)", () => 
 
   it("skips control flow between the parent and the unnamed tag (if, else, for, try)", () => {
     const out = run(
-      "<my-list><if=x><.a>1</></if><else><.b>2</></else><for|i| of=xs><.c>3</></for><try><.d>4</></try></my-list>",
+      "<my-list><if=x><.a>1</></if><else><.b>2</></else><for|i| of=xs><.c>3</></for><try><.d>4</><@catch>x</@catch></try></my-list>",
     );
     expect(out.match(/<article/g)?.length).toBe(4);
     expect(out).not.toContain("<section");
