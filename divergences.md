@@ -179,6 +179,17 @@ HTML-syntax body (`<div>${x}</div>`) is unaffected — it parses as
 |---|---|---|---|
 | `<>…</>` as a fragment region in `.ng.mx` | An Angular template may have several roots, and a region is one expression with one root. | Marko has no expression-position templates: a template or tag body has many root nodes natively, and `<fragment>` is rejected (above). `<>` is host syntax here, as TSX `<>` is in `.solid.mx`; decision 72 lets a host add no syntax to a *file*, and a region is the host's own expression grammar. Output is the plain sibling nodes Marko would produce for several roots. | `packages/hosts/angular/test/ng-mx.test.ts` — `compileNgMx: fragment regions (G9)` |
 
+## Module syntax: an `import` is one ES import declaration (decision 193)
+
+Probed on stock Marko 6.4.4 / `@marko/compiler` 5.42.11 (`packages/stock-marko`).
+
+| Construct | Why it was wanted | Marko verdict | Test |
+|---|---|---|---|
+| `import x = M.N` (TypeScript import-equals with an entity name) | Nobody wanted it: it is not an ES import, and the tree target (`DataDocument.imports`) and every host read an `import` as `import … from "…"`. | Accepted: compiles to `var x = M.N;`. | `packages/core/src/import-declaration.test.ts`, `packages/targets/data/src/imports-parsed.test.ts` — `an import that is not one ES import declaration` (positioned error at the statement, line and column pinned) |
+| `import typeof T from "m"` (Flow) | Same; MX is TypeScript, and `import type` is the form that binds no value. | Accepted: emitted verbatim (`import typeof T from "m";`). | same tests |
+
+Not divergences, only a different error: `import x = require("y")` (Marko refuses it with Babel's CommonJS-transform advice; MX refuses it at the statement without that advice) and several statements in one `import` (Marko: "The `<import>` tag takes a single import statement."; MX: the decision 193 message).
+
 ## Deferred to MX 2
 
 | Construct | Why it was wanted | Marko verdict | Test |

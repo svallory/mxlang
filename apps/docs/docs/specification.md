@@ -248,7 +248,8 @@ named, namespace, `import type`, a side-effect `import "…"`) is the whole
 grammar: `import x = M.N`, `import x = require("…")`, several statements in one
 `import` (`import a from "a"; import b from "b"`, or an indented line that
 continues the statement) and Flow's `import typeof` are a positioned error at
-the statement, on every target. The error never reaches the host, so no target
+the statement, on every target (decision 193; Marko accepts `import x = M.N` and
+`import typeof`, recorded in `divergences.md`). The error never reaches the host, so no target
 sees a half-read import.
 
 ```mx
