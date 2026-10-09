@@ -1,5 +1,5 @@
 /**
- * `stockMarkoTree` / `stockMarkoCompile`: `@marko/compiler` 5.42.10 run
+ * `stockMarkoTree` / `stockMarkoCompile`: `@marko/compiler` 5.42.11 run
  * with the stock htmljs-parser 5.18.0 — the Marko this workspace cannot
  * otherwise run, because the install patches every `htmljs-parser` it
  * resolves.
@@ -85,7 +85,7 @@ function run(
 
 /**
  * Does stock Marko compile `source`? Runs `@marko/compiler` with Marko
- * 6.3.51's real translator over the stock parser; on failure the error
+ * 6.4.4's real translator over the stock parser; on failure the error
  * carries the compiler's message, label and range (`loc`).
  */
 export function stockMarkoCompile(

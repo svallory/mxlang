@@ -12,8 +12,8 @@
     "probe": "bun run src/probe.ts"
   },
   "dependencies": {
-    "@marko/compiler": "5.42.10",
-    "marko": "6.3.51"
+    "@marko/compiler": "5.42.11",
+    "marko": "6.4.4"
   },
   "devDependencies": {
     "@mxlang/parser": "workspace:*",

@@ -3,7 +3,7 @@
  *
  * Prints, side by side: the stock htmljs-parser 5.18.0 event stream, the
  * MX template parser event stream, and whether stock Marko
- * (@marko/compiler 5.42.10 + marko 6.3.51's translator, wired to the
+ * (@marko/compiler 5.42.11 + marko 6.4.4's translator, wired to the
  * stock parser) compiles the source.
  *
  * Every report that cites this probe must say which parser its "Marko"
@@ -20,7 +20,7 @@ if (source === undefined) {
 }
 
 console.log(
-  `This probe's "Marko" is @marko/compiler 5.42.10 + marko 6.3.51 running on STOCK htmljs-parser ${STOCK_PARSER_VERSION} (vendored tarball, ${STOCK_TARBALL_INTEGRITY}), NOT this repo's patched install. The MX column is packages/parser's template parser (the patched rules).`,
+  `This probe's "Marko" is @marko/compiler 5.42.11 + marko 6.4.4 running on STOCK htmljs-parser ${STOCK_PARSER_VERSION} (vendored tarball, ${STOCK_TARBALL_INTEGRITY}), NOT this repo's patched install. The MX column is packages/parser's template parser (the patched rules).`,
 );
 
 console.log("\n== stock htmljs-parser events ==");
