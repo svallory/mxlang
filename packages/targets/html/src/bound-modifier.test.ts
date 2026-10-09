@@ -26,6 +26,9 @@ describe("a refined bound attribute renders like the unrefined one (html)", () =
     ],
     ['<${"div"} v:fn:=q/>', '<${"div"} v:=q/>'],
     ["<div ...{} v:fn:=q/>", "<div ...{} v:=q/>"],
+    // Marko accepts an optional-chain target, refined or not; the refinement
+    // is client-only, so html renders the same `q?.a` attribute for both.
+    ["<input value:fn:=q?.a/>", "<input value:=q?.a/>"],
   ])("%s", (refined, plain) => {
     const code = compile(refined, "x.mx").code;
     expect(code).not.toContain("(false && fn(");

@@ -3867,6 +3867,30 @@ describe("`:modifier` is Marko's `value:modifier` attribute, not a modifier", ()
     }
   });
 
+  // Marko accepts an optional-chain target, refined or not: core lowers both
+  // as a bound attribute whose value is `q?.a`, and only the refinement differs.
+  it.each([
+    ["<div v:=q?.a/>", undefined],
+    ["<div v:fn:=q?.a/>", "fn"],
+  ])("lowers %s with an optional-chain target", (source, modifier) => {
+    const attr = find(
+      lowerSource(source, fakeDeclarations({ isElement: () => true })).body,
+      "Element",
+    ).attrs[0];
+    expect(attr).toMatchObject({
+      kind: "bound",
+      name: "v",
+      value: { code: "q?.a" },
+    });
+    if (modifier === undefined) {
+      expect(attr).not.toHaveProperty("refinement");
+    } else {
+      expect(attr).toMatchObject({
+        refinement: { code: modifier, shape: "other" },
+      });
+    }
+  });
+
   it.each([
     ['<${t} value:="x"/>', 1, 13],
     ['<for|i| of=o value:="x">y</for>', 1, 20],
