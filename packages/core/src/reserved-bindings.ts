@@ -1,11 +1,13 @@
 import { type ParserOptions, parse } from "@babel/parser";
 import {
+  bodyChildren,
   type Ctx,
   isTagNode,
   type Node,
   sliceNode,
   TranslateError,
 } from "./core.ts";
+import { tagNameOf, tagParamsOf, tagVarOf } from "./tag-fields.ts";
 
 /** Shared diagnostic for authored bindings, including host-only code regions. */
 export function reservedBindingMessage(name: string): string {
@@ -67,7 +69,12 @@ export function checkReservedBindings(tree: unknown): void {
     // The parser stamps lowered MX regions. Core already checks their authored
     // bindings; walking the generated replacement would reject our own helpers.
     if (node.extra?.mx) return;
-    if (isTagNode(node)) check(node.var);
+    const tag = isTagNode(node) || node.type === "MxAttributeTag";
+    if (tag) check(tagVarOf(node));
+    // An MX tag's params are an `MxParameterList` container, not the array
+    // Marko keeps on its body wrapper (which the line below reaches).
+    if (tag && node.params?.type === "MxParameterList")
+      for (const p of tagParamsOf(node)) check(p);
     if (Array.isArray(node.params) && !skipParams)
       for (const p of node.params) check(p);
     if (
@@ -152,7 +159,7 @@ export function checkReservedTemplate(ctx: Ctx, body: Node[]): void {
   const visit = (nodes: Node[]): void => {
     for (const node of nodes) {
       if (!isTagNode(node)) continue;
-      const name = node.name?.value;
+      const name = tagNameOf(node) as string;
       if (["import", "export", "static", "server", "client"].includes(name)) {
         let source = sliceNode(ctx, node);
         if (name === "static" || name === "server" || name === "client") {
@@ -174,7 +181,7 @@ export function checkReservedTemplate(ctx: Ctx, body: Node[]): void {
         }
         checkReservedBindings(parsed);
       }
-      visit(node.body?.body ?? []);
+      visit(bodyChildren(node));
       visit(node.attributeTags ?? []);
     }
   };

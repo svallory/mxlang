@@ -15,6 +15,7 @@ import {
   firstAttributeTag,
   newCtx,
   positionError,
+  rejectUnsupportedFields,
   TranslateError,
 } from "./core.ts";
 import { STATEMENT_TAGLIB, STATEMENT_TAGLIB_ID } from "./core-taglib.ts";
@@ -4366,7 +4367,7 @@ describe("a host that binds a dynamic tag's /var opts in", () => {
 
 /**
  * The real Marko parse, reshaped into the MX AST as far as `lower()` reads it
- * so far (PR 4 slices 1 and 2), so its hybrid paths run until the MX front
+ * so far (PR 4 slices 1 to 3), so its hybrid paths run until the MX front
  * end feeds `lower()` (PR 5).
  *
  * - Slice 1: each tag's `attributeTags` move back into its body as the MX AST
@@ -4377,13 +4378,19 @@ describe("a host that binds a dynamic tag's /var opts in", () => {
  *   offsets (`start`/`end`, `valueSpan`) and loses `loc`: text, placeholder,
  *   comment, doctype, CDATA, declaration, scriptlet and attribute tag.
  *
+ * - Slice 3: every tag becomes an `MxTag` (`MxReturn` for `<return>`): the
+ *   `MxTagName` field shape (static, dynamic with its `${…}` span, unnamed
+ *   for Marko's empty-span `div`), `var`/`args`/`params`/`typeArgs`/
+ *   `typeParams` as expression containers around Marko's Babel payloads, and
+ *   `body` as the child array, attribute tags merged in source order.
+ *
  * - Slice 5: a placeholder's expression is an `MxExpression` container and a
  *   scriptlet's statements an `MxStatements` one (`node` the Babel payload,
  *   `error: null`, document offsets), with Marko's `value`/`body` gone; a
  *   comment's `kind` comes from its delimiter.
  *
- * Fields a later slice retypes stay Marko-shaped: a tag stays a `MarkoTag`
- * (slice 3).
+ * Fields a later slice retypes stay Marko-shaped: a tag's attributes and
+ * shorthand fields (slice 4).
  */
 function toMxShape(source: string): (body: Node[]) => void {
   const lineStarts = [0];
@@ -4485,35 +4492,82 @@ function toMxShape(source: string): (body: Node[]) => void {
         return node;
     }
   };
+  /** A tag field's container around Marko's payload, its span over `nodes`. */
+  const wrap = (type: string, payload: Node, nodes: Node[]): Node => {
+    const located = nodes.filter((each) => each?.loc);
+    const first = located[0];
+    const last = located[located.length - 1];
+    const inner = {
+      start: first ? at(first.loc.start) : 0,
+      end: last ? at(last.loc.end) : 0,
+    };
+    return container(type, payload, inner, inner);
+  };
+  const tagName = (node: Node): Node => {
+    const name = node.name;
+    if (name?.type === "StringLiteral") {
+      const span = offsets(name);
+      // Marko writes `div` into an unnamed tag's empty-span name node.
+      return span.start === span.end
+        ? { kind: "unnamed", span }
+        : { kind: "static", value: name.value, span };
+    }
+    const expression = wrap("MxExpression", name, [name]);
+    return {
+      kind: "dynamic",
+      expression,
+      span: { start: expression.start - 2, end: expression.end + 1 },
+    };
+  };
   const visit = (node: Node): Node => {
     if (node?.type !== "MarkoTag") return leaf(node);
     const children: Node[] = (node.body?.body ?? []).map(visit);
     const tags: Node[] = (node.attributeTags ?? []).map(visit);
-    if (tags.length > 0) {
-      const merged = [...children, ...tags].sort(
-        (a, b) => startOf(a) - startOf(b),
-      );
-      // Tag params still live on Marko's body wrapper until slice 3 reads
-      // `MxTagFields.params`, so a body carrying them keeps the wrapper.
-      if (node.body?.params?.length) node.body.body = merged;
-      else node.body = merged;
-      delete node.attributeTags;
-    } else if (node.body) {
-      node.body.body = children;
-    }
-    const name = String(node.name?.value ?? "");
-    if (!name.startsWith("@")) return node;
+    const body = [...children, ...tags].sort((a, b) => startOf(a) - startOf(b));
+    const params: Node[] = node.body?.params ?? [];
+    const {
+      loc: _loc,
+      name: _name,
+      arguments: args,
+      var: pattern,
+      typeArguments,
+      attributeTags: _attributeTags,
+      body: _body,
+      ...rest
+    } = node;
     const { start, end } = offsets(node);
-    const { loc: _loc, ...rest } = node;
-    return {
+    const fields = {
       ...rest,
-      type: "MxAttributeTag",
-      name: {
-        value: name.slice(1),
-        span: { start: start + 1, end: start + 1 + name.length },
-      },
+      typeArgs: typeArguments
+        ? wrap("MxTypeArguments", typeArguments, [typeArguments])
+        : null,
+      var: pattern ? wrap("MxPattern", pattern, [pattern]) : null,
+      args: args ? wrap("MxArguments", args, args) : null,
+      typeParams: node.body?.typeParameters
+        ? wrap("MxTypeParameters", node.body.typeParameters, [
+            node.body.typeParameters,
+          ])
+        : null,
+      params: params.length ? wrap("MxParameterList", params, params) : null,
+      body,
       start,
       end,
+    };
+    const name = String(node.name?.value ?? "");
+    if (name.startsWith("@")) {
+      return {
+        ...fields,
+        type: "MxAttributeTag",
+        name: {
+          value: name.slice(1),
+          span: { start: start + 1, end: start + 1 + name.length },
+        },
+      };
+    }
+    return {
+      ...fields,
+      type: name === "return" ? "MxReturn" : "MxTag",
+      name: tagName(node),
     };
   };
   return (body) => {
@@ -4545,7 +4599,7 @@ describe("hybrid attribute tags, MX-shaped (PR 4 slice 1)", () => {
       toMxShape(source)(body);
       seen = body;
     });
-    const tag = seen.find((node) => node.type === "MarkoTag");
+    const tag = seen.find((node) => node.type === "MxTag");
     expect(tag.attributeTags).toBeUndefined();
     expect(tag.body).toEqual([
       expect.objectContaining({
@@ -4685,12 +4739,12 @@ describe("hybrid node kinds and spans, MX-shaped (PR 4 slice 2)", () => {
       start: 0,
       end: 10,
     });
-    const div = seen.find((node) => node.type === "MarkoTag");
-    expect(div.body.body.map((n: Node) => [n.type, n.start, n.end])).toEqual([
+    const div = seen.find((node) => node.type === "MxTag");
+    expect(div.body.map((n: Node) => [n.type, n.start, n.end])).toEqual([
       ["MxText", 16, 19],
       ["MxPlaceholder", 19, 23],
     ]);
-    expect(div.body.body.some((n: Node) => "loc" in n)).toBe(false);
+    expect(div.body.some((n: Node) => "loc" in n)).toBe(false);
   });
 
   it.each([
@@ -4896,7 +4950,7 @@ describe("hybrid text, placeholders, comments and payloads, MX-shaped (PR 4 slic
     } catch {
       // The scriptlet is refused; the reshaped body is what is checked.
     }
-    const placeholder = seen[0].body.body[0];
+    const placeholder = seen[0].body[0];
     expect(placeholder).not.toHaveProperty("value");
     expect(placeholder.expression).toMatchObject({
       type: "MxExpression",
@@ -5079,5 +5133,292 @@ describe("hybrid text, placeholders, comments and payloads, MX-shaped (PR 4 slic
       column: 0,
     });
     expect(parsed.message).toMatch(/scriptlets .*; /);
+  });
+});
+
+describe("hybrid tags, MX-shaped (PR 4 slice 3)", () => {
+  const reshaped =
+    (source: string, extra?: (body: Node[]) => void) => (body: Node[]) => {
+      toMxShape(source)(body);
+      extra?.(body);
+    };
+  /** What a lowering produced: its IR, or the error as a reporter reads it. */
+  const outcome = (run: () => Ir) => {
+    try {
+      return { ir: run() };
+    } catch (error) {
+      const e = error as TranslateError;
+      return { message: e.message, line: e.line, column: e.column };
+    }
+  };
+  const both = (source: string, policy = fakeDeclarations()) => [
+    outcome(() =>
+      lowerSource(
+        source,
+        policy,
+        undefined,
+        undefined,
+        undefined,
+        reshaped(source),
+      ),
+    ),
+    outcome(() => lowerSource(source, policy)),
+  ];
+
+  it("reshapes tags into MxTag/MxReturn with containers and no loc", () => {
+    const source = "<${C}/v(a, b)|p|>t</>\n<return=1/>";
+    let seen: Node[] = [];
+    try {
+      lowerSource(source, undefined, undefined, undefined, undefined, (b) => {
+        toMxShape(source)(b);
+        seen = [...b];
+      });
+    } catch {
+      // Only the shape matters here.
+    }
+    const [tag] = seen;
+    const ret = seen.find((node) => node.type === "MxReturn");
+    expect(tag).toMatchObject({
+      type: "MxTag",
+      // The MX front end's own spans for this input.
+      name: {
+        kind: "dynamic",
+        expression: { type: "MxExpression", start: 3, end: 4 },
+        span: { start: 1, end: 5 },
+      },
+      var: { type: "MxPattern", start: 6, end: 7 },
+      args: { type: "MxArguments", start: 8, end: 12 },
+      params: { type: "MxParameterList", start: 14, end: 15 },
+      body: [expect.objectContaining({ type: "MxText" })],
+    });
+    expect("loc" in tag).toBe(false);
+    expect(ret).toMatchObject({
+      type: "MxReturn",
+      name: { kind: "static", value: "return", span: { start: 23, end: 29 } },
+    });
+  });
+
+  it.each([
+    ["a static element with a body", "<div><span>a</span></div>"],
+    ["a self-closed element", "<input/>\n<br/>"],
+    ["a dynamic tag", "<${input.as} x=1>y</>"],
+    ["a dynamic tag with a body only", "<${input.as}>y</>"],
+    [
+      "<const> with a tag variable",
+      "<const/doubled=input.n * 2/>\n<p>${doubled}</p>",
+    ],
+    ["<let> with a tag variable", "<let/count=0/>\n<p>${count}</p>"],
+    ["a destructured <const>", "<const/{ a, b }=input/>\n<p>${a}${b}</p>"],
+    [
+      "<define> with params, called with args",
+      "<define/Row|item|><li>${item}</li></define>\n<Row('a')/>",
+    ],
+    [
+      "a <for> with params",
+      "<ul><for|item, i| of=input.xs><li>${i}</li></for></ul>",
+    ],
+    [
+      "an <if>/<else-if>/<else> chain",
+      "<if=input.a>A</if><else-if=input.b>B</else-if><else>C</else>",
+    ],
+    ["<return>", "<return=1/>"],
+    ["an attribute tag with params", "<Panel><@row|r|>${r}</@row></Panel>"],
+    ["arguments on an element (refused)", "<div\n  (x)/>"],
+    ["arguments and attributes on a tag", "<Panel(a) b=1/>"],
+    ["a tag variable on an element (refused)", "<div/x/>"],
+    ["params on an element (refused)", "<div|x|>y</div>"],
+    [
+      "typed params on an element (refused for the params)",
+      "<div<T>|x: T|>y</div>",
+    ],
+    ["a /var on a dynamic tag (refused)", "<${C}/n start=1/>"],
+  ])("lowers %s as the Marko shape does", (_label, source) => {
+    const policy = fakeDeclarations({
+      attrTags: 2,
+      isComponent: (name) => name === "Panel",
+    });
+    const [mx, marko] = both(source, policy);
+    expect(mx).toEqual(marko);
+  });
+
+  it("refuses an unnamed tag with no default tag as the Marko shape does", () => {
+    const [mx, marko] = both("<div>\n  <.c/>\n</div>");
+    expect(marko).toMatchObject({ message: /no default tag is declared/ });
+    expect(mx).toEqual(marko);
+  });
+
+  it("resolves an unnamed tag's default tag as the Marko shape does", () => {
+    const policy = fakeDeclarations({ resolveDefaultTag: () => "span" });
+    const [mx, marko] = both("<div><.c>x</></div>", policy);
+    expect(marko).toHaveProperty("ir");
+    expect(mx).toEqual(marko);
+  });
+
+  it("drops a comment in the attribute list, as Marko never had one", () => {
+    const source = "<input x=1/>";
+    const comment = {
+      type: "MxComment",
+      kind: "block",
+      value: " c ",
+      valueSpan: { start: 9, end: 12 },
+      start: 7,
+      end: 14,
+    };
+    const ir = outcome(() =>
+      lowerSource(
+        source,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        reshaped(source, (body) => {
+          body[0].attributes = [comment, ...body[0].attributes];
+        }),
+      ),
+    );
+    expect(ir).toEqual(outcome(() => lowerSource(source)));
+  });
+
+  it("fails a tag variable container's parse error at the error", () => {
+    const source = "<const/[=1/>";
+    const error = {
+      type: "MxParseError",
+      code: "INVALID_EXPRESSION",
+      origin: "expression",
+      message: "bad pattern",
+      context: null,
+      start: 7,
+      end: 8,
+    };
+    const run = () =>
+      lowerSource(
+        "<const/x=1/>",
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        reshaped("<const/x=1/>", (body) => {
+          body[0].var = { ...body[0].var, node: null, error };
+        }),
+      );
+    expect(outcome(run)).toMatchObject({
+      message: "bad pattern",
+      line: 1,
+      column: 7,
+    });
+    expect(source.slice(error.start, error.end)).toBe("[");
+  });
+
+  it.each([
+    ["a <for> param", "<for|__mxA| of=input.xs>${__mxA}</for>"],
+    ["a <define> param", "<define/Row|__mxP|>${__mxP}</define>\n<Row/>"],
+    ["an attribute tag param", "<Panel><@row|__mxR|>${__mxR}</@row></Panel>"],
+    ["a tag variable (control)", "<let/__mxB=1/>"],
+  ])(
+    "refuses a reserved name in %s as the Marko shape does",
+    (_label, source) => {
+      const policy = fakeDeclarations({
+        attrTags: 2,
+        isComponent: (name) => name === "Panel",
+      });
+      const [mx, marko] = both(source, policy);
+      expect(marko).toMatchObject({ message: /"__mx" are reserved/ });
+      expect(mx).toEqual(marko);
+    },
+  );
+
+  describe("refuses MX type arguments and type parameters", () => {
+    const policy = fakeDeclarations({
+      attrTags: 2,
+      isComponent: (name) => name === "Panel",
+    });
+    const typeArgs = {
+      type: "MxTypeArguments",
+      node: { type: "TSTypeParameterInstantiation", params: [] },
+      error: null,
+      atoms: [],
+      start: 1,
+      end: 2,
+    };
+    const typeParams = { ...typeArgs, type: "MxTypeParameters" };
+    it.each([
+      ["typeArgs", "an element", "<div/>", "`<div>`"],
+      ["typeArgs", "a component", "<Panel/>", "`<Panel>`"],
+      ["typeArgs", "a control tag", "<for|i| of=input.xs>${i}</for>", "for"],
+      ["typeParams", "an element", "<div>x</div>", "`<div>`"],
+      ["typeParams", "a component", "<Panel>x</Panel>", "`<Panel>`"],
+      ["typeParams", "a control tag", "<for|i| of=input.xs>${i}</for>", "for"],
+    ])("%s on %s", (field, _label, source, what) => {
+      const container = field === "typeArgs" ? typeArgs : typeParams;
+      const run = () =>
+        lowerSource(
+          source,
+          policy,
+          undefined,
+          undefined,
+          undefined,
+          reshaped(source, (body) => {
+            body[0][field] = container;
+          }),
+        );
+      expect(() => run()).toThrowError(
+        new RegExp(`type arguments on .*${what}.* are not supported`),
+      );
+      // The same source with no container lowers.
+      expect(both(source, policy)[0]).toHaveProperty("ir");
+    });
+  });
+
+  it("keeps an unnamed MX tag's name as parsed after resolving it", () => {
+    const source = "<div><.c>x</></div>";
+    const policy = fakeDeclarations({ resolveDefaultTag: () => "span" });
+    let seen: Node[] = [];
+    lowerSource(
+      source,
+      policy,
+      undefined,
+      undefined,
+      undefined,
+      reshaped(source, (body) => {
+        seen = body;
+      }),
+    );
+    expect(seen[0].body[0].name).toEqual({
+      kind: "unnamed",
+      span: expect.any(Object),
+    });
+  });
+
+  it("names the written tag in the arguments refusal from the MX name span", () => {
+    const source = "<if=input.a>A</if><else-if(input.b)>B</else-if>";
+    const messages: string[] = [];
+    const refuse = (body: Node[], ctx: Ctx) => {
+      try {
+        rejectUnsupportedFields(ctx, body[1], "this tag");
+      } catch (error) {
+        messages.push((error as Error).message);
+      }
+      throw new Error("stop");
+    };
+    const stop = (reshape: (body: Node[], ctx: Ctx) => void) =>
+      expect(() =>
+        lowerSource(
+          source,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          reshape,
+        ),
+      ).toThrow("stop");
+    stop(refuse);
+    stop((body, ctx) => {
+      toMxShape(source)(body);
+      // A parsed name that differs from the source: only the span names it.
+      body[1].name = { ...body[1].name, value: "zz" };
+      refuse(body, ctx);
+    });
+    expect(messages[0]).toContain("<else-if=condition>");
+    expect(messages[1]).toEqual(messages[0]);
   });
 });

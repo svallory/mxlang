@@ -131,6 +131,16 @@ import { checkReservedTemplate } from "./reserved-bindings.ts";
 import { parseErrorToSugarError } from "./stock-parser.ts";
 import { CONTROL_FLOW_TAGS } from "./structural-tags.ts";
 import {
+  hasStaticName,
+  tagArgsOf,
+  tagAttributesOf,
+  tagNameExprOf,
+  tagNameOf,
+  tagNameSpanOf,
+  tagParamsOf,
+  tagVarOf,
+} from "./tag-fields.ts";
+import {
   bindingForDiscoveredModule,
   hasTemplate,
   inputMember,
@@ -767,7 +777,7 @@ function boundRefinement(ctx: Ctx, attr: Node): Expr | undefined {
 
 /** Marko refuses a refinement that is not an identifier before any host sees it. */
 function rejectBadRefinements(ctx: Ctx, node: Node): void {
-  for (const attr of node.attributes ?? []) {
+  for (const attr of tagAttributesOf(node)) {
     if (attr.bound) boundRefinement(ctx, attr);
   }
 }
@@ -775,7 +785,7 @@ function rejectBadRefinements(ctx: Ctx, node: Node): void {
 /** Marko normalizes bindings before tag-specific validation or lowering. */
 function validateBoundAttributes(ctx: Ctx, node: Node): void {
   rejectBadRefinements(ctx, node);
-  for (const attr of node.attributes ?? []) {
+  for (const attr of tagAttributesOf(node)) {
     if (
       attr.bound &&
       attr.value?.type !== "Identifier" &&
@@ -796,7 +806,7 @@ function validateBoundAttributes(ctx: Ctx, node: Node): void {
 /** Marko's builtin value checks run before any host can drop or claim a tag. */
 function validateBuiltinValueAttributes(node: Node, name: string): void {
   if (name === "const" || name === "id") {
-    if ((node.attributes?.length ?? 0) > 1) {
+    if (tagAttributesOf(node).length > 1) {
       fail(
         `The [\`<${name}>\` tag](https://markojs.com/docs/reference/core-tag#${name}) only supports the [\`value=\` attribute](https://markojs.com/docs/reference/language#shorthand-value).`,
         node.name,
@@ -804,7 +814,7 @@ function validateBuiltinValueAttributes(node: Node, name: string): void {
     }
   } else if (name === "let" || name === "return") {
     let seen = false;
-    for (const attr of node.attributes ?? []) {
+    for (const attr of tagAttributesOf(node)) {
       if (!isAttributeNode(attr) || (!attr.default && attr.name !== "value"))
         continue;
       if (seen) fail("Invalid duplicate value attribute.", attr);
@@ -1056,7 +1066,7 @@ function lowerAttrs(
   rejectBadRefinements(ctx, node);
   const attrs = resolveDuplicateAttrs(
     ctx,
-    (node.attributes ?? []).map((attr: Node) =>
+    tagAttributesOf(node).map((attr: Node) =>
       lowerAttr(ctx, attr, on, isElement, posOf(ctx, node)),
     ),
   );
@@ -1117,7 +1127,7 @@ function resolveDuplicateAttrs(ctx: Ctx, attrs: Attr[]): Attr[] {
  * with the parser's reason, rather than lowering as a param that binds nothing.
  */
 function rejectUnreadableParams(ctx: Ctx, node: Node): void {
-  for (const param of node.body?.params ?? []) {
+  for (const param of tagParamsOf(node)) {
     if (param?.type === "MarkoParseError") exprOf(ctx, param);
   }
 }
@@ -1125,7 +1135,7 @@ function rejectUnreadableParams(ctx: Ctx, node: Node): void {
 /** The tag params of `<for|a, b|>` / `<@name|p|>`, as source text. */
 function paramsOf(ctx: Ctx, node: Node): string[] {
   rejectUnreadableParams(ctx, node);
-  return (node.body?.params ?? []).map((p: Node) => {
+  return tagParamsOf(node).map((p: Node) => {
     // Babel's generator omits a TypeScript annotation when an Identifier is
     // printed outside its parameter-list context. The Marko node's location
     // covers the complete authored pattern, so use that exact source text for
@@ -1148,12 +1158,12 @@ export function paramSpansOf(
   ctx: Ctx,
   node: Node,
 ): Array<SourceSpan | undefined> {
-  return (node.body?.params ?? []).map((p: Node) => exprSpan(ctx, p));
+  return tagParamsOf(node).map((p: Node) => exprSpan(ctx, p));
 }
 
 /** Marko keeps non-empty params as nodes but represents both absent and `||` as `[]`. */
 function hasParams(ctx: Ctx, node: Node): boolean {
-  if ((node.body?.params ?? []).length > 0) return true;
+  if (tagParamsOf(node).length > 0) return true;
   const source = sliceNode(ctx, node);
   const openEnd = source.indexOf(">");
   return (openEnd < 0 ? source : source.slice(0, openEnd)).includes("||");
@@ -1171,9 +1181,7 @@ function hasParams(ctx: Ctx, node: Node): boolean {
  */
 function paramBindings(ctx: Ctx, node: Node): string[] {
   rejectUnreadableParams(ctx, node);
-  const names = (node.body?.params ?? []).flatMap((p: Node) =>
-    bindingIdentifiers(p),
-  );
+  const names = tagParamsOf(node).flatMap((p: Node) => bindingIdentifiers(p));
   for (const name of names) ctx.unknownLocalValue.add(name);
   return names;
 }
@@ -1185,7 +1193,7 @@ function paramBindings(ctx: Ctx, node: Node): string[] {
  * `<@footer|year|>`, `year` is the parameter, not any host binding of the same
  * name. Restored on the way out.
  */
-function lowerBlock(ctx: Ctx, node: Node, body = node.body?.body ?? []): Block {
+function lowerBlock(ctx: Ctx, node: Node, body = bodyChildren(node)): Block {
   // A block is its own JS scope: both the params it shadows *and* anything a
   // `<const>` inside it unregisters are confined to it.
   const unscope = scopeBindings(ctx);
@@ -1232,7 +1240,7 @@ function requireAttrTagsV2(
 }
 
 function attrName(node: Node): string {
-  return String(node.name?.value ?? "").replace(/^@/, "");
+  return String(tagNameOf(node) ?? "").replace(/^@/, "");
 }
 
 /**
@@ -1247,7 +1255,7 @@ function attributeTagNameSpan(ctx: Ctx, node: Node): SourceSpan {
       sourceEnd: node.name.span.end,
     };
   }
-  const span = nodeSpan(ctx, node.name);
+  const span = nodeSpan(ctx, tagNameSpanOf(node));
   return { sourceStart: span.sourceStart + 1, sourceEnd: span.sourceEnd };
 }
 
@@ -1256,7 +1264,7 @@ function isLayout(node: Node): boolean {
 }
 
 function isControl(node: Node): boolean {
-  const name = String(node?.name?.value ?? "").replace(/^@/, "");
+  const name = String(tagNameOf(node) ?? "").replace(/^@/, "");
   return isTagNode(node) && (name === "if" || name === "for");
 }
 
@@ -1283,26 +1291,26 @@ function containsAttributeTags(node: Node): boolean {
  * `"dynamic"`/`"define"`, takes this lenient rule; `"name"` stays strict.
  */
 function rejectArgsWithProps(node: Node, target?: ComponentTarget): void {
-  if ((node.arguments ?? []).length === 0) return;
+  if ((tagArgsOf(node) ?? []).length === 0) return;
   const lenient =
     !target || target.kind === "dynamic" || target.kind === "define";
   if (lenient) {
-    if ((node.attributes ?? []).length === 0) return;
+    if (tagAttributesOf(node).length === 0) return;
     fail(
       "Tag does not support arguments when attributes present.",
-      node.name ?? node,
+      tagNameSpanOf(node) ?? node,
     );
   }
   if (
-    (node.attributes ?? []).length === 0 &&
+    tagAttributesOf(node).length === 0 &&
     !containsAttributeTags(node) &&
-    !hasContent(node.body?.body ?? [])
+    !hasContent(bodyChildren(node))
   ) {
     return;
   }
   fail(
     "Tag does not support arguments when attributes or body present.",
-    node.name ?? node,
+    tagNameSpanOf(node) ?? node,
   );
 }
 
@@ -1321,13 +1329,13 @@ function warnDefineExtraParams(
   params: string[],
 ): void {
   if (!ctx.declarations.defineCallPassesAttrs) return;
-  if (params.length < 2 || (node.arguments ?? []).length > 0) return;
+  if (params.length < 2 || (tagArgsOf(node) ?? []).length > 0) return;
   const carries =
-    (node.attributes ?? []).length > 0 ||
+    tagAttributesOf(node).length > 0 ||
     containsAttributeTags(node) ||
-    hasContent(node.body?.body ?? []);
+    hasContent(bodyChildren(node));
   if (!carries) return;
-  const pos = posOf(ctx, node.name ?? node);
+  const pos = posOf(ctx, tagNameSpanOf(node) ?? node);
   warn(ctx, {
     message: `\`<${name}>\` has ${params.length} params, but only the first parameter receives the attributes object; destructure it (\`|{ a, b }|\`) instead of reading one param per attribute`,
     line: pos.line,
@@ -1340,7 +1348,7 @@ function validateParentCollision(node: Node, schema: AttrSchema): void {
   const owner = schema.collisionOwner;
   if (!owner) return;
   const parentAttrs = new Set(
-    (owner.attributes ?? [])
+    tagAttributesOf(owner)
       .filter((attr: Node) => !isSpreadAttributeNode(attr))
       .map((attr: Node) => attr.name),
   );
@@ -1348,7 +1356,7 @@ function validateParentCollision(node: Node, schema: AttrSchema): void {
   if (parentAttrs.has(name)) {
     fail(
       `attribute tag \`@${name}\` collides with attribute \`${name}\``,
-      node.name ?? node,
+      tagNameSpanOf(node) ?? node,
     );
   }
 }
@@ -1464,13 +1472,13 @@ function declarationFor(
   if (schema.otherProps?.has(name)) {
     fail(
       `\`${name}\` is declared as a plain prop; declare it \`AttrTag\` to pass it as \`<@${name}>\``,
-      node.name ?? node,
+      tagNameSpanOf(node) ?? node,
     );
   }
   if (schema.declarations && !schema.open) {
     fail(
       `\`<${schema.owner}>\` declares no attribute tag \`${name}\``,
-      node.name ?? node,
+      tagNameSpanOf(node) ?? node,
     );
   }
   return undefined;
@@ -1675,7 +1683,7 @@ function lowerAuthoredAttributeTag(
   else validateBoundAttributes(ctx, node);
   const declaration = declarationFor(schema, name, node);
   validateParentCollision(node, schema);
-  const attrs = node.attributes ?? [];
+  const attrs = tagAttributesOf(node);
   const contentAttr = attrs.find(
     (attr: Node) => !isSpreadAttributeNode(attr) && attr.name === "content",
   );
@@ -1696,7 +1704,7 @@ function lowerAuthoredAttributeTag(
   if (declaration?.as === "renderable" && attrs.length > 0) {
     fail(
       `\`<@${name}>\` is renderable in \`<${schema.owner}>\`; it can't take attributes`,
-      node.name ?? node,
+      tagNameSpanOf(node) ?? node,
     );
   }
   const hasParamsAtCall = hasParams(ctx, node);
@@ -1705,7 +1713,7 @@ function lowerAuthoredAttributeTag(
       declaration.hasParams
         ? `\`<@${name}>\` declares params in \`<${schema.owner}>\`; add \`|…|\``
         : `\`<@${name}>\` declares no params in \`<${schema.owner}>\`; remove \`|…|\``,
-      node.name ?? node,
+      tagNameSpanOf(node) ?? node,
     );
   }
 
@@ -1741,7 +1749,7 @@ function lowerAuthoredAttributeTag(
     if (declaration?.as === "renderable") {
       fail(
         `\`<@${name}>\` is renderable in \`<${schema.owner}>\`; it can't take attributes or nested attribute tags`,
-        node.name ?? node,
+        tagNameSpanOf(node) ?? node,
       );
     }
   }
@@ -1797,14 +1805,14 @@ function lowerAttributeIf(
   let cursor = index;
   while (cursor < siblings.length) {
     const branch = siblings[cursor];
-    const name = String(branch.name?.value ?? "").replace(/^@/, "");
+    const name = String(tagNameOf(branch) ?? "").replace(/^@/, "");
     if (cursor > index && name !== "else" && name !== "else-if") break;
     validateBoundAttributes(ctx, branch);
     const conditionAttr =
       name === "if"
-        ? (attrByName(branch, "value") ?? branch.attributes?.[0])
+        ? (attrByName(branch, "value") ?? tagAttributesOf(branch)[0])
         : name === "else-if"
-          ? (attrByName(branch, "value") ?? branch.attributes?.[0])
+          ? (attrByName(branch, "value") ?? tagAttributesOf(branch)[0])
           : attrByName(branch, "if");
     const unscope = scopeBindings(ctx);
     const lowered = lowerAttributeTags(ctx, branch, schema, true, false);
@@ -1838,12 +1846,12 @@ function attributeIfChainEnd(body: Node[], index: number): number {
   while (cursor < body.length) {
     while (cursor < body.length && isLayout(body[cursor])) cursor++;
     const branch = body[cursor];
-    const name = String(branch?.name?.value ?? "").replace(/^@/, "");
+    const name = String(tagNameOf(branch) ?? "").replace(/^@/, "");
     if (name !== "else" && name !== "else-if") break;
     cursor++;
     const conditional =
       name === "else-if"
-        ? (attrByName(branch, "value") ?? branch.attributes?.[0])
+        ? (attrByName(branch, "value") ?? tagAttributesOf(branch)[0])
         : attrByName(branch, "if");
     if (!conditional) break;
   }
@@ -1895,7 +1903,7 @@ function lowerAttributeTags(
         index,
         siblings: directTags,
       });
-      if (String(tag.name?.value ?? "").replace(/^@/, "") === "if") {
+      if (String(tagNameOf(tag) ?? "").replace(/^@/, "") === "if") {
         index = attributeIfChainEnd(directTags, index) - 1;
       }
     } else {
@@ -1921,9 +1929,9 @@ function lowerAttributeTags(
     }
     if (!isControl(child)) continue;
     const chainEnd =
-      child.name?.value === "if" ? attributeIfChainEnd(body, index) : index + 1;
+      tagNameOf(child) === "if" ? attributeIfChainEnd(body, index) : index + 1;
     const hasAttributeTags =
-      child.name?.value === "if"
+      tagNameOf(child) === "if"
         ? body
             .slice(index, chainEnd)
             .some(
@@ -1947,7 +1955,7 @@ function lowerAttributeTags(
       const tag = lowerOneAttributeTag(ctx, candidate.node, activeSchema);
       tree.push({ kind: "AttributeTag", tag, loc: tag.loc });
     } else if (
-      String(candidate.node.name?.value ?? "").replace(/^@/, "") === "for"
+      String(tagNameOf(candidate.node) ?? "").replace(/^@/, "") === "for"
     ) {
       tree.push(lowerAttributeFor(ctx, candidate.node, activeSchema));
     } else {
@@ -2034,14 +2042,14 @@ function lowerIfChain(
   const node = children[index];
   validateBoundAttributes(ctx, node);
   rejectUnsupportedFields(ctx, node, "`<if>`");
-  const cond = attrByName(node, "value") ?? node.attributes?.[0];
+  const cond = attrByName(node, "value") ?? tagAttributesOf(node)[0];
   if (!cond?.value) fail("`<if>` without a condition", node);
 
   // Each branch is its own JS block: a `<const>` declared inside one does not
   // shadow the host's binding for the code that follows the chain.
   const branchChildren = (branchNode: Node): IrNode[] => {
     const unscope = scopeBindings(ctx);
-    const children = lowerChildren(ctx, branchNode.body?.body ?? []);
+    const children = lowerChildren(ctx, bodyChildren(branchNode));
     unscope();
     return children;
   };
@@ -2068,7 +2076,7 @@ function lowerIfChain(
       i++;
       continue;
     }
-    const childName = child.name?.value;
+    const childName = tagNameOf(child);
     if (
       !isTagNode(child) ||
       (childName !== "else" && childName !== "else-if")
@@ -2082,7 +2090,7 @@ function lowerIfChain(
     // `<else-if=cond>` spells it as the tag's first (value) attribute.
     const ifAttr =
       childName === "else-if"
-        ? (attrByName(child, "value") ?? child.attributes?.[0])
+        ? (attrByName(child, "value") ?? tagAttributesOf(child)[0])
         : attrByName(child, "if");
     branches.push({
       condition: ifAttr ? exprOf(ctx, ifAttr.value) : null,
@@ -2160,7 +2168,7 @@ function findLoopParamRead(
 function rejectLoopParamInBy(node: Node, by: Node): void {
   const { types } = markoBabel();
   const names = new Set<string>();
-  for (const param of node.body?.params ?? []) {
+  for (const param of tagParamsOf(node)) {
     for (const name of Object.keys(types.getBindingIdentifiers(param))) {
       names.add(name);
     }
@@ -2300,7 +2308,7 @@ function lowerForHead(
   return {
     source,
     params,
-    paramNodes: [...(node.body?.params ?? [])],
+    paramNodes: [...tagParamsOf(node)],
     bindings,
     paramSpans: paramSpansOf(ctx, node),
     key: by ? exprOf(ctx, by.value) : null,
@@ -2312,7 +2320,7 @@ function lowerFor(ctx: Ctx, node: Node): IrNode {
   // The loop body is a JS block, so a `<const>` inside it is confined to it.
   const unscope = scopeBindings(ctx);
   const restore = shadowBindings(ctx, head.bindings);
-  const children = lowerChildren(ctx, node.body?.body ?? []);
+  const children = lowerChildren(ctx, bodyChildren(node));
   restore();
   unscope();
 
@@ -2327,7 +2335,7 @@ function lowerFor(ctx: Ctx, node: Node): IrNode {
 
 /** `<const/name=expr/>` — a binding at render scope. */
 function lowerConst(ctx: Ctx, node: Node): IrNode {
-  if (!node.var) {
+  if (!tagVarOf(node)) {
     fail(
       "`<const>` without a variable name (write `<const/name=value/>`)",
       node,
@@ -2337,11 +2345,11 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
   // Dispatched by the core, before any host sees the tag, so the binding check
   // has to happen here or a host's rule would silently apply to `<let>` and not
   // to `<const>`.
-  ctx.declarations.checkBinding?.(node.var, "`<const>`");
-  const value = attrByName(node, "value") ?? node.attributes?.[0];
+  ctx.declarations.checkBinding?.(tagVarOf(node), "`<const>`");
+  const value = attrByName(node, "value") ?? tagAttributesOf(node)[0];
   if (!value?.value) fail("`<const>` without a value", node);
 
-  const name = declName(ctx, node.var);
+  const name = declName(ctx, tagVarOf(node));
   // The initializer is evaluated *before* the binding exists, so a registered
   // name on the right-hand side is still the host's: `<const/count=count + 1>`
   // resolves to `const count = count() + 1`. Shadowing takes effect only
@@ -2352,10 +2360,13 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
   // routes dynamic when later used as a tag — a destructuring pattern
   // (`<const/{a,b}=...>`) never names a single PascalCase tag binding, so it
   // is left out of this check entirely rather than guessed at.
-  if (node.var?.type === "Identifier" && !isFunctionLikeValue(value.value)) {
+  if (
+    tagVarOf(node)?.type === "Identifier" &&
+    !isFunctionLikeValue(value.value)
+  ) {
     ctx.unknownLocalValue.add(name);
   }
-  shadowBindings(ctx, bindingIdentifiers(node.var));
+  shadowBindings(ctx, bindingIdentifiers(tagVarOf(node)));
 
   return {
     kind: "Const",
@@ -2620,9 +2631,9 @@ function warnLowercaseBinding(ctx: Ctx, node: Node, name: string): void {
  * unbound.
  */
 function bindFailedDefine(ctx: Ctx, node: Node): void {
-  if (!node.var) return;
+  if (!tagVarOf(node)) return;
   try {
-    const name = declName(ctx, node.var);
+    const name = declName(ctx, tagVarOf(node));
     if (ctx.defines.has(name)) return;
     let params: string[] = [];
     try {
@@ -2631,7 +2642,10 @@ function bindFailedDefine(ctx: Ctx, node: Node): void {
       // The params are what failed; the name alone is still bound.
     }
     ctx.defines.set(name, params);
-    ctx.bindingSites.set(name, { kind: "defined", ...posOf(ctx, node.var) });
+    ctx.bindingSites.set(name, {
+      kind: "defined",
+      ...posOf(ctx, tagVarOf(node)),
+    });
   } catch {
     // No readable name to bind.
   }
@@ -2647,12 +2661,12 @@ function lowerDefine(ctx: Ctx, node: Node): IrNode {
 }
 
 function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
-  if (!node.var) {
+  if (!tagVarOf(node)) {
     fail("`<define>` without a name (write `<define/name>`)", node);
   }
   rejectUnsupportedFields(ctx, node, "`<define>`", { var: true, params: true });
 
-  const name = declName(ctx, node.var);
+  const name = declName(ctx, tagVarOf(node));
   const params = paramsOf(ctx, node);
 
   // The params shadow the host's bindings inside the body only, and a
@@ -2668,7 +2682,7 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
   const unscope = scopeBindings(ctx);
   const restore = shadowBindings(ctx, paramBindings(ctx, node));
   const [children, prelude] = withPrelude(ctx, () =>
-    lowerChildren(ctx, node.body?.body ?? []),
+    lowerChildren(ctx, bodyChildren(node)),
   );
   restore();
   unscope();
@@ -2676,7 +2690,7 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
   ctx.defines.set(name, params);
   ctx.bindingSites.set(name, {
     kind: "defined",
-    ...posOf(ctx, node.var ?? node),
+    ...posOf(ctx, tagVarOf(node) ?? node),
   });
 
   const loc = posOf(ctx, node);
@@ -2689,7 +2703,7 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
   return {
     kind: "Define",
     name,
-    nameSpan: exprSpan(ctx, node.var),
+    nameSpan: exprSpan(ctx, tagVarOf(node)),
     span: exprSpan(ctx, node),
     params,
     paramSpans: paramSpansOf(ctx, node),
@@ -2995,7 +3009,7 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
   const loc = posOf(ctx, node);
   const target: ComponentTarget =
     name === DYNAMIC_TAG
-      ? { kind: "dynamic", expr: exprOf(ctx, node.name) }
+      ? { kind: "dynamic", expr: exprOf(ctx, tagNameExprOf(node)) }
       : { kind: "name", name };
   const resolvedInput =
     ctx.calleeInputFor?.(target) ?? readCalleeInput(target, ctx).input;
@@ -3020,10 +3034,11 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
     kind: "DelegatedTag",
     tag: {
       name,
-      nameSpan: name === DYNAMIC_TAG ? undefined : exprSpan(ctx, node.name),
+      nameSpan:
+        name === DYNAMIC_TAG ? undefined : exprSpan(ctx, tagNameSpanOf(node)),
       span: exprSpan(ctx, node),
       attrs: lowerAttrs(ctx, node, name),
-      args: (node.arguments ?? []).map((argument: Node) =>
+      args: (tagArgsOf(node) ?? []).map((argument: Node) =>
         exprOf(ctx, argument),
       ),
       children,
@@ -3031,7 +3046,7 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
       attributeTagTree: loweredTags.tree,
       attrTagProps: loweredTags.props,
       params: paramsOf(ctx, node),
-      var: node.var ? declName(ctx, node.var) : null,
+      var: tagVarOf(node) ? declName(ctx, tagVarOf(node)) : null,
       data: ctx.declarations.resolveDelegatedTag?.(name, node, ctx),
       loc,
     },
@@ -3058,18 +3073,18 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
 function lowerReturn(ctx: Ctx, node: Node, nested: boolean): IrNode {
   rejectUnsupportedFields(ctx, node, "`<return>`");
 
-  if (node.body?.body?.length) {
+  if (bodyChildren(node).length) {
     fail("`<return>` does not support body content", node);
   }
 
-  for (const attr of node.attributes ?? []) {
+  for (const attr of tagAttributesOf(node)) {
     if (isSpreadAttributeNode(attr)) {
       fail("`<return>` does not support spread attributes", attr);
     }
   }
 
   let valueAttr: Node | undefined;
-  for (const attr of node.attributes ?? []) {
+  for (const attr of tagAttributesOf(node)) {
     if (!isAttributeNode(attr)) continue;
     // The parser spells `<return=x/>` as the `default` attribute and
     // `<return value=x/>` as `value`; both are the same authored thing.
@@ -3119,12 +3134,12 @@ function validateCustomAttributeTagBodies(
   allowUncontractedTags: boolean,
   controlName?: string,
 ): void {
-  const children = node.body?.body ?? [];
+  const children = bodyChildren(node);
   const directTags = [
     ...new Set<Node>([
       ...(node.attributeTags ?? []),
       ...children.filter((child: Node) =>
-        String(child.name?.value ?? "").startsWith("@"),
+        String(tagNameOf(child) ?? "").startsWith("@"),
       ),
     ]),
   ];
@@ -3147,10 +3162,10 @@ function validateCustomAttributeTagBodies(
       if (controlName) {
         fail(
           `${owner}: attribute tag \`<@${name}>\` may not appear inside \`<${controlName}>\`; registered custom tags cannot preserve attribute-tag control flow`,
-          tag.name ?? tag,
+          tagNameSpanOf(tag) ?? tag,
         );
       }
-      const attrs = tag.attributes ?? [];
+      const attrs = tagAttributesOf(tag);
       if (attrs.length > 0) {
         fail(
           `${owner}: attribute tag \`<@${name}>\` does not support attributes`,
@@ -3172,7 +3187,7 @@ function validateCustomAttributeTagBodies(
         {
           name: `@${name}`,
           loc: posOf(ctx, tag),
-          childTree: authoredChildTree(ctx, tag.body?.body ?? []),
+          childTree: authoredChildTree(ctx, bodyChildren(tag)),
         },
         nestedOwner,
       );
@@ -3189,7 +3204,7 @@ function validateCustomAttributeTagBodies(
   for (const child of children) {
     if (
       isTagNode(child) &&
-      CONTROL_FLOW_TAGS.includes(child.name?.value) &&
+      CONTROL_FLOW_TAGS.includes(tagNameOf(child) as string) &&
       !directTags.includes(child)
     ) {
       validateCustomAttributeTagBodies(
@@ -3198,7 +3213,7 @@ function validateCustomAttributeTagBodies(
         child,
         declarations,
         allowUncontractedTags,
-        child.name?.value === "for" ? "for" : "if",
+        tagNameOf(child) === "for" ? "for" : "if",
       );
     }
   }
@@ -3222,7 +3237,7 @@ function activeWildcard(ctx: Ctx, node: Node): WildcardMatch | undefined {
 }
 
 function aliasOf(ctx: Ctx, node: Node, match: WildcardMatch): TagAlias {
-  const span = exprSpan(ctx, node.name);
+  const span = exprSpan(ctx, tagNameSpanOf(node));
   return {
     authored: match.authored,
     ...(span ? { span } : {}),
@@ -3262,24 +3277,24 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
     ) {
       tree.push({ kind: "ChildText", loc });
     } else if (isTagNode(node)) {
-      if (node.name?.type !== "StringLiteral") {
+      if (!hasStaticName(node)) {
         tree.push({ kind: "ChildDynamic", loc });
         continue;
       }
-      const name = node.name.value;
+      const name = tagNameOf(node) as string;
       if (name === "const" || name === "define" || name.startsWith("@"))
         continue;
       if (name === "for") {
         tree.push({
           kind: "ChildFor",
-          nodes: authoredChildTree(ctx, node.body?.body ?? []),
+          nodes: authoredChildTree(ctx, bodyChildren(node)),
           loc,
         });
       } else if (name === "if") {
         const branches = [
           {
             unconditional: false,
-            nodes: authoredChildTree(ctx, node.body?.body ?? []),
+            nodes: authoredChildTree(ctx, bodyChildren(node)),
           },
         ];
         let cursor = index + 1;
@@ -3289,7 +3304,7 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
             cursor++;
             continue;
           }
-          const branchName = branch.name?.value;
+          const branchName = tagNameOf(branch);
           if (
             !isTagNode(branch) ||
             (branchName !== "else" && branchName !== "else-if")
@@ -3299,7 +3314,7 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
             branchName === "else" && !attrByName(branch, "if");
           branches.push({
             unconditional,
-            nodes: authoredChildTree(ctx, branch.body?.body ?? []),
+            nodes: authoredChildTree(ctx, bodyChildren(branch)),
           });
           index = cursor++;
           if (unconditional) break;
@@ -3312,7 +3327,7 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
           branches: [
             {
               unconditional: false,
-              nodes: authoredChildTree(ctx, node.body?.body ?? []),
+              nodes: authoredChildTree(ctx, bodyChildren(node)),
             },
           ],
           loc,
@@ -3380,7 +3395,7 @@ function lowerCustomTag(
   //
   // A core-owned built-in is exempt: it validates `/var` itself, with its
   // own wording, inside its `transform`.
-  if (!isBuiltin && node.var && !hasTemplate(definition)) {
+  if (!isBuiltin && tagVarOf(node) && !hasTemplate(definition)) {
     fail(
       `\`/var\` on ${label} is not supported: it has no template, so it has no \`<return>\` to bind`,
       node,
@@ -3423,7 +3438,7 @@ function lowerCustomTag(
   const call: TagCall = {
     name,
     ...(alias ? { alias } : {}),
-    nameSpan: exprSpan(ctx, node.name),
+    nameSpan: exprSpan(ctx, tagNameSpanOf(node)),
     span: exprSpan(ctx, node),
     loc: posOf(ctx, node),
     // A contract-only call on a claimed name becomes a DelegatedTag, so its
@@ -3443,8 +3458,8 @@ function lowerCustomTag(
     attributeTagTree: loweredTags.tree,
     attrTagProps: loweredTags.props,
     params: paramsOf(ctx, node),
-    var: node.var ? declName(ctx, node.var) : null,
-    varBindings: varBindingsOf(ctx, node.var),
+    var: tagVarOf(node) ? declName(ctx, tagVarOf(node)) : null,
+    varBindings: varBindingsOf(ctx, tagVarOf(node)),
   };
   // The binding was pre-registered by `lowerChildList` at its sibling index;
   // reaching the call is what makes it readable, so its sequence drops to
@@ -3495,15 +3510,15 @@ function lowerComponent(
   // discovered tag's. Any other target (a `.ts` module, a `<define>`, a
   // dynamic tag) has no return shape the core can read, so it stays refused.
   const { shape: returnShape, unreadable } = calleeReturn(target, ctx);
-  if (node.var && returnShape === "none") {
+  if (tagVarOf(node) && returnShape === "none") {
     fail(
       `\`<${targetName(target)}>\` does not return a value; add \`<return value=…/>\` to the imported file to bind it with \`/var\``,
       node,
     );
   }
-  if (node.var && unreadable) {
+  if (tagVarOf(node) && unreadable) {
     fail(
-      `\`/${declName(ctx, node.var)}\` on \`<${targetName(target)}>\` can't bind: ${unreadable.path} ${unreadable.reason}`,
+      `\`/${declName(ctx, tagVarOf(node))}\` on \`<${targetName(target)}>\` can't bind: ${unreadable.path} ${unreadable.reason}`,
       node,
     );
   }
@@ -3525,7 +3540,7 @@ function lowerComponent(
     ctx.calleeInputFor?.(target) ?? readCalleeInput(target, ctx).input;
   const owner = targetName(target);
   if (input.kind === "unresolved" && containsAttributeTags(node)) {
-    const pos = posOf(ctx, node.name ?? node);
+    const pos = posOf(ctx, tagNameSpanOf(node) ?? node);
     warn(ctx, {
       message: `couldn't read \`<${owner}>\`'s Input (\`${input.specifier}\` not resolvable); attribute-tag shape inferred from this call`,
       line: pos.line,
@@ -3536,7 +3551,7 @@ function lowerComponent(
   const loweredTags = lowerAttributeTags(ctx, node, schemaFor(input, owner));
   raiseInvalidCalleeInput(ctx, input, owner, loweredTags.flat);
   const children = loweredTags.contentChildren;
-  const callVar = node.var ? declName(ctx, node.var) : null;
+  const callVar = tagVarOf(node) ? declName(ctx, tagVarOf(node)) : null;
   // Lowered before the binding is registered: the call's own attributes and
   // body cannot read the `/var` it declares (Marko `references.ts:556-560`),
   // and the emitted order assigns it from the call's own result.
@@ -3554,19 +3569,20 @@ function lowerComponent(
   return {
     kind: "Component",
     target,
-    nameSpan: target.kind === "dynamic" ? null : nodeSpan(ctx, node.name),
+    nameSpan:
+      target.kind === "dynamic" ? null : nodeSpan(ctx, tagNameSpanOf(node)),
     span: exprSpan(ctx, node),
     attrs,
     content,
     attributeTags: loweredTags.flat,
     attributeTagTree: loweredTags.tree,
     attrTagProps: loweredTags.props,
-    args: (node.arguments ?? []).map((a: Node) => exprOf(ctx, a)),
+    args: (tagArgsOf(node) ?? []).map((a: Node) => exprOf(ctx, a)),
     // An imported `.mx` unit that declares `<return>` hands back
     // `{ value, output }`; a discovered one already says so through
     // `routeTemplateCall`, which also carries the `/var` the emitters bind.
     var: callVar,
-    varBindings: varBindingsOf(ctx, node.var),
+    varBindings: varBindingsOf(ctx, tagVarOf(node)),
     ...(returnShape === "returns" ? { returnsValue: true } : {}),
     loc: posOf(ctx, node),
   };
@@ -3704,8 +3720,7 @@ function strayAttributeTagMessage(name: string): string {
 }
 
 function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
-  const name =
-    node.name?.type === "StringLiteral" ? String(node.name.value) : `\${…}`;
+  const name = hasStaticName(node) ? String(tagNameOf(node)) : `\${…}`;
   // If/else branches lower through lowerIfChain; for lowers through this entry.
   if (name === "for") return lowerAuthoredTag(ctx, node);
   // One identity per tag (decision 147): a wildcard child is its canonical
@@ -3729,12 +3744,12 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // tags: when a host claims DYNAMIC_TAG it gets the DelegatedTag (shape "bare"
   // or "tagged", as before); otherwise core lowers a `Component` with a
   // dynamic target, resolved at run time like any other host.
-  if (node.name && node.name.type !== "StringLiteral") {
+  if (node.name && !hasStaticName(node)) {
     validateBoundAttributes(ctx, node);
     rejectArgsWithProps(node);
     const isBare =
-      (node.attributes ?? []).length === 0 && !node.body?.body?.length;
-    const dynamicExpr = exprOf(ctx, node.name);
+      tagAttributesOf(node).length === 0 && !bodyChildren(node).length;
+    const dynamicExpr = exprOf(ctx, tagNameExprOf(node));
     if (/^[A-Za-z_$][\w$]*$/.test(dynamicExpr.code.trim())) {
       const binding = dynamicExpr.code.trim();
       rejectMarkoImportTag(ctx, binding, `\${${binding}}`, node);
@@ -3752,7 +3767,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       ctx,
       dynamicExpr.code,
       node.name,
-      (node.arguments ?? []).length,
+      (tagArgsOf(node) ?? []).length,
     );
     const claimed = ctx.declarations.isDelegatedTag?.(
       DYNAMIC_TAG,
@@ -3766,7 +3781,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     });
   }
 
-  const name = String(node.name.value);
+  const name = String(tagNameOf(node));
   if (!TAG_NAME.test(name) && !NOT_A_NAME_SHAPE.test(name)) {
     fail(
       `Invalid tag name \`${name}\`; Marko rejects it too — a tag name may use letters (any script), digits and \`-._:$\``,
@@ -4198,7 +4213,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   return {
     kind: "Element",
     name,
-    nameSpan: exprSpan(ctx, node.name),
+    nameSpan: exprSpan(ctx, tagNameSpanOf(node)),
     span: exprSpan(ctx, node),
     attrs: lowerAttrs(ctx, node, name, "element", true),
     children: isVoid ? [] : lowerChildren(ctx, contentChildren),
@@ -4292,7 +4307,7 @@ function ifChainEnd(children: Node[], index: number): number {
       i++;
       continue;
     }
-    const name = child.name?.value;
+    const name = tagNameOf(child);
     if (!isTagNode(child) || (name !== "else" && name !== "else-if")) {
       break;
     }
@@ -4316,7 +4331,7 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
   const importsName = (tagName: string): boolean => {
     siblingImports ??= new Set(
       children.flatMap((child) =>
-        isTagNode(child) && child.name?.value === "import"
+        isTagNode(child) && tagNameOf(child) === "import"
           ? importBindings(sliceNode(ctx, child).trim())
           : [],
       ),
@@ -4324,12 +4339,12 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
     return siblingImports.has(tagName);
   };
   for (const child of children) {
-    if (!isTagNode(child) || !child.var) continue;
+    if (!isTagNode(child) || !tagVarOf(child)) continue;
     // Only a *custom tag call* binds a `/var` from a unit's `<return>`.
     // `<let>`, `<const>` and every other core construct that takes a `/var`
     // declares an ordinary binding whose scope rules already work, and
     // pre-registering those made a legal read of one report as out of scope.
-    const tagName = child.name?.value;
+    const tagName = tagNameOf(child);
     const discovered =
       typeof tagName === "string" &&
       ctx.customTags !== undefined &&
@@ -4342,7 +4357,7 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
     ) {
       continue;
     }
-    const name = declName(ctx, child.var);
+    const name = declName(ctx, tagVarOf(child));
     ctx.tagVars ??= new Map();
     ctx.tagVars.set(name, {
       block: [...(ctx.tagVarBlock ?? [])],
@@ -4356,7 +4371,7 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
   while (index < children.length) {
     const child = children[index];
 
-    if (isTagNode(child) && child.name?.value === "if") {
+    if (isTagNode(child) && tagNameOf(child) === "if") {
       const lowered = recover(ctx, () => lowerIfChain(ctx, children, index));
       if (lowered) {
         out.push(lowered[0]);
@@ -4537,8 +4552,8 @@ function lowerTemplate(ctx: Ctx, body: Node[]): Ir {
   const ownInputCode: string[] = [];
   const ownInputAux: string[] = [];
   for (const node of body) {
-    if (!isTagNode(node) || node.name?.type !== "StringLiteral") continue;
-    const statementName = node.name.value as string;
+    if (!isTagNode(node) || !hasStaticName(node)) continue;
+    const statementName = tagNameOf(node) as string;
     if (
       statementName !== "import" &&
       statementName !== "static" &&

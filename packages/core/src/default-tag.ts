@@ -1,5 +1,5 @@
 import { dirname } from "node:path";
-import { type Ctx, isTagNode, type Node, TranslateError } from "./core.ts";
+import { bodyChildren, type Ctx, fail, isTagNode, type Node } from "./core.ts";
 import type { DefaultTagContext, DefaultTagParent } from "./declarations.ts";
 import {
   elementPredicate,
@@ -8,6 +8,12 @@ import {
 } from "./default-tag-check.ts";
 import type { DefaultTagScope } from "./default-tag-validate.ts";
 import { rewriteNameSugar } from "./name-sugar.ts";
+import {
+  hasStaticName,
+  resolveUnnamedTag,
+  tagNameOf,
+  tagNameSpanOf,
+} from "./tag-fields.ts";
 import {
   type ContractScope,
   matchWildcardChild,
@@ -22,7 +28,9 @@ import {
  * has; that is the one reliable mark of the unnamed tag.
  */
 function isUnnamedTag(node: Node): boolean {
-  if (!isTagNode(node) || node.name?.type !== "StringLiteral") {
+  // The MX AST says so itself (`MxTagName` kind `unnamed`).
+  if (isTagNode(node) && node.name?.kind === "unnamed") return true;
+  if (!isTagNode(node) || !hasStaticName(node)) {
     return false;
   }
   const loc = node.name.loc;
@@ -82,11 +90,9 @@ export function resolveUnnamedTags(ctx: Ctx, body: readonly Node[]): void {
         resolved.add(node);
         const resolve = ctx.declarations.resolveDefaultTag;
         if (!resolve) {
-          const at = node.name.loc.start;
-          throw new TranslateError(
+          fail(
             "no default tag is declared, so `#id`/`.class` cannot be used without a tag name; write the tag name explicitly",
-            at.line,
-            at.column,
+            tagNameSpanOf(node),
           );
         }
         const context: DefaultTagContext = {
@@ -107,15 +113,19 @@ export function resolveUnnamedTags(ctx: Ctx, body: readonly Node[]): void {
             ? {}
             : { customTags: ctx.customTags }),
         };
-        node.name.value = resolve.call(
+        const resolvedName = resolve.call(
           ctx.declarations,
           node,
           parents,
           context,
         );
+        // The MX tree stays as parsed; Marko's name node is rewritten.
+        if (node.name?.kind === "unnamed")
+          resolveUnnamedTag(node, resolvedName);
+        else node.name.value = resolvedName;
       }
-      const named = node.name?.type === "StringLiteral";
-      const authored = String(node.name?.value ?? "");
+      const named = hasStaticName(node);
+      const authored = String(tagNameOf(node) ?? "");
       // An unnamed tag has no authored spelling to alias, and a dynamic name
       // no spelling at all: neither is a wildcard child.
       const match =
@@ -133,7 +143,7 @@ export function resolveUnnamedTags(ctx: Ctx, body: readonly Node[]): void {
         ...(tagDef ? { tagDef } : {}),
       };
       walk(
-        [...(node.body?.body ?? []), ...(node.attributeTags ?? [])],
+        [...bodyChildren(node), ...(node.attributeTags ?? [])],
         [self, ...parents],
         named ? scopeForChildren(node, name, scope, ctx.customTags) : undefined,
       );

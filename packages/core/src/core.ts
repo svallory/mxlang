@@ -46,6 +46,15 @@ import { nearestHtmlElement, nearestName } from "./did-you-mean.ts";
 import type { Atom, Expr, IrNode, Position } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { markoBabel } from "./marko-frontend.ts";
+import {
+  hasTypeArguments,
+  tagArgsOf,
+  tagAttributesOf,
+  tagNameOf,
+  tagNameSpanOf,
+  tagParamsOf,
+  tagVarOf,
+} from "./tag-fields.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
 
 /**
@@ -1317,7 +1326,14 @@ function tagArgumentsMessage(ctx: Ctx, node: Node, what: string): string {
   // The written name, not the parsed one: `<else-if>` parses with the node
   // name `if` (the `else-` prefix is part of the same template), and Marko's
   // hint names `else-if`.
-  const nameLoc: any = node.name?.loc;
+  const nameNode = tagNameSpanOf(node);
+  const span = nameNode?.loc ? undefined : mxSpanOf(nameNode);
+  const nameLoc: any = span
+    ? {
+        start: positionAtOffset(ctx, span.sourceStart),
+        end: positionAtOffset(ctx, span.sourceEnd),
+      }
+    : nameNode?.loc;
   const s = nameLoc?.start;
   const e = nameLoc?.end;
   let written = "";
@@ -1332,13 +1348,13 @@ function tagArgumentsMessage(ctx: Ctx, node: Node, what: string): string {
   const name =
     written ||
     /`?<([^`>]+)>`?/.exec(what)?.[1] ||
-    String(node.name?.value ?? "");
+    String(tagNameOf(node) ?? "");
   const message = TAG_ARGUMENTS_MESSAGES[name];
   return message ? message(name) : "Tag does not support arguments.";
 }
 
 function eventHandlerHint(ctx: Ctx, node: Node): string {
-  const args: Node[] | undefined = node.arguments;
+  const args: Node[] | undefined = tagArgsOf(node);
   const event =
     args?.length === 1 && args[0]?.type === "Identifier"
       ? args[0].name
@@ -1349,7 +1365,7 @@ function eventHandlerHint(ctx: Ctx, node: Node): string {
   ) {
     return "";
   }
-  const value: Node | undefined = node.attributes?.find(
+  const value: Node | undefined = tagAttributesOf(node).find(
     (attr: Node) => attr.default,
   )?.value;
   const handler =
@@ -1416,8 +1432,7 @@ export function isSpreadAttributeNode(node: Node): boolean {
 export function isMxAttributeTag(node: Node): boolean {
   return (
     node?.type === "MxAttributeTag" ||
-    (node?.type === "MarkoTag" &&
-      String(node?.name?.value ?? "").startsWith("@"))
+    (node?.type === "MarkoTag" && String(tagNameOf(node) ?? "").startsWith("@"))
   );
 }
 
@@ -1477,13 +1492,13 @@ export function rejectUnsupportedFields(
 ): void {
   const first = allow.attributeTags ? undefined : firstAttributeTag(node);
   if (first) {
-    const tagName = String(first?.name?.value ?? "@…").replace(/^@/, "");
+    const tagName = String(tagNameOf(first) ?? "@…").replace(/^@/, "");
     fail(
       `attribute tag \`@${tagName}\` on ${what}; attribute tags are props of components, so they are only valid directly inside a component call`,
       first,
     );
   }
-  if (!allow.args && node.arguments) {
+  if (!allow.args && tagArgsOf(node)) {
     // Marko reports at the **argument** (`assertNoArgs`: `args[0].loc.start`,
     // `args.at(-1).loc.end`) — `<button (click)="go()">` puts the caret under
     // `click`, not under `<button`. Reporting at the tag points at the tag name
@@ -1493,26 +1508,26 @@ export function rejectUnsupportedFields(
     // stays as a second sentence after it.
     fail(
       `${tagArgumentsMessage(ctx, node, what)}${eventHandlerHint(ctx, node)}`,
-      node.arguments[0] ?? node,
+      tagArgsOf(node)?.[0] ?? node,
     );
   }
-  if (!allow.var && node.var) {
+  if (!allow.var && tagVarOf(node)) {
     // Reported at the `/var` itself, not the tag: the construct the author
     // wrote wrong is the binding, and on a long call the tag's start can be
     // far from it (the same report-at-the-thing rule the tag-arguments
     // refusal above follows).
     fail(
-      `tag variable \`/${expr(ctx, node.var)}\` on ${what} is not supported in ${unsupportedIn(ctx)}`,
-      node.var,
+      `tag variable \`/${expr(ctx, tagVarOf(node))}\` on ${what} is not supported in ${unsupportedIn(ctx)}`,
+      tagVarOf(node),
     );
   }
-  if (node.typeArguments || node.body?.typeParameters) {
+  if (hasTypeArguments(node)) {
     fail(
       `type arguments on ${what} are not supported in ${unsupportedIn(ctx)}`,
       node,
     );
   }
-  if (!allow.params && node.body?.params?.length) {
+  if (!allow.params && tagParamsOf(node).length) {
     fail(
       `tag params \`|...|\` on ${what} are not supported in ${unsupportedIn(ctx)}`,
       node,
@@ -1547,7 +1562,7 @@ export function rejectInertShape(
     var: true,
   });
 
-  for (const attr of node.attributes ?? []) {
+  for (const attr of tagAttributesOf(node)) {
     if (isSpreadAttributeNode(attr)) {
       fail(
         `spread attributes on \`<${name}>\` are not supported: the tag emits nothing, so a spread's keys would be silently discarded`,
@@ -1567,7 +1582,7 @@ export function rejectInertShape(
   }
 
   if (disposition.body === "text") return;
-  if (hasContent(node.body?.body ?? [])) {
+  if (hasContent(bodyChildren(node))) {
     fail(
       `\`<${name}>\` does not support body content; it emits nothing, so the body would be silently discarded`,
       node,
@@ -1576,7 +1591,7 @@ export function rejectInertShape(
 }
 
 export function attrByName(node: Node, name: string): Node | undefined {
-  return (node.attributes ?? []).find(
+  return tagAttributesOf(node).find(
     (a: Node) => isAttributeNode(a) && a.name === name,
   );
 }

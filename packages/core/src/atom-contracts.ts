@@ -29,6 +29,7 @@ import type {
 import { nearestName } from "./did-you-mean.ts";
 import type { Atom, Attr, AttributeTag } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
+import { hasStaticName, tagNameOf } from "./tag-fields.ts";
 import { attributeTagDeclarationFor } from "./wildcard-children.ts";
 
 /** One custom tag call, with the authored tag instances around it. */
@@ -71,7 +72,7 @@ function asList<T>(value: T | readonly T[] | undefined): readonly T[] {
 }
 
 function nodeName(node: Node): string {
-  return node?.name?.type === "StringLiteral" ? String(node.name.value) : "";
+  return hasStaticName(node) ? String(tagNameOf(node)) : "";
 }
 
 /** "`a`", "`a` or `b`", "`a`, `b` or `c`". */
