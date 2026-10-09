@@ -1,3 +1,4 @@
+import { WEB_ELEMENTS } from "@mxlang/web-elements";
 import { describe, expect, it } from "vitest";
 import { annotateCloseTagOpener } from "./close-tag-opener.ts";
 import { compileSource } from "./compile.ts";
@@ -5,11 +6,12 @@ import { compileSource } from "./compile.ts";
 /** Compiles `source` and returns the thrown message minus ANSI colour. */
 function failure(source: string): string {
   try {
-    // The parse fails before policy or host are read.
+    // The parse fails before the rest of the policy or the host is read;
+    // only the web elements' parse rules (`<br>` is void) matter.
     (compileSource as (...args: unknown[]) => unknown)(
       source,
       "/fixtures/x.mx",
-      {},
+      { nativeTags: WEB_ELEMENTS },
       {},
     );
   } catch (error) {

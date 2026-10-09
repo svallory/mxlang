@@ -8,14 +8,17 @@ import { afterAll, describe, expect, it } from "vitest";
 // Importing the registry must load no compiler. The probe runs in a fresh
 // `bun` process (the repo's Bun-first tooling loads every `@mxlang/*` source
 // file the way the VSIX bundle inlines it) and lists the modules the process
-// loaded that belong to `@marko/compiler` or `@astrojs/compiler`.
+// loaded that belong to a compiler: `@marko/compiler`, `@astrojs/compiler`,
+// or the Babel core lowers and prints with (`@babel/core`, `generator`,
+// `traverse`; `@babel/parser` is light and loads on import). Since decision
+// 197 slice S3a a compile loads no `@marko/compiler`, so Babel shows one ran.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const work = mkdtempSync(join(tmpdir(), "mx-registry-light-"));
 afterAll(() => rmSync(work, { recursive: true, force: true }));
 
 /** Bun's install layout nests a package as `.bun/@marko+compiler@x/node_modules/@marko/compiler`. */
-const COMPILERS = String.raw`/node_modules\/(\.bun\/)?(@marko[+/]compiler|@astrojs[+/]compiler)|\/marko-frontend\.cjs$/`;
+const COMPILERS = String.raw`/node_modules\/(\.bun\/)?(@marko[+/]compiler|@astrojs[+/]compiler|@babel[+/](core|generator|traverse)[@/])|\/marko-frontend\.cjs$/`;
 
 /**
  * A host's compile entry: `src/index.ts` of a source-loaded host, or
@@ -72,11 +75,7 @@ describe("light import", () => {
        html.load!({} as never).compileModule("<p>hi</p>", ${JSON.stringify(page)}, {});
        return null;`,
     );
-    expect(
-      loaded.some(
-        (k) => k.includes("@marko") || k.endsWith("marko-frontend.cjs"),
-      ),
-    ).toBe(true);
+    expect(loaded.some((k) => k.includes("@babel"))).toBe(true);
   });
 
   it("tree compiles a data file through the registry (under Bun, where load() can require)", () => {

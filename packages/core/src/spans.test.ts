@@ -1,3 +1,4 @@
+import { WEB_ELEMENTS } from "@mxlang/web-elements";
 import { describe, expect, it } from "vitest";
 import { compileSource } from "./compile.ts";
 import type { HostDeclarations } from "./declarations.ts";
@@ -26,6 +27,7 @@ const elements: HostDeclarations = {
   name: "spans-test",
   attrTags: 2,
   tags: {},
+  nativeTags: WEB_ELEMENTS,
   isElement: () => true,
   isComponent: (name, ctx) => ctx.defines.has(name),
   resolveAttributeMethod: () => true,

@@ -85,10 +85,13 @@ describe("the lookup over data", () => {
 });
 
 describe("light import", () => {
-  // A fresh `bun` process lists the compiler modules left in `require.cache`.
-  // The npm compiler (core from source) or core's bundled one (core's dist,
-  // decision 159).
-  const COMPILERS = String.raw`/node_modules\/(\.bun\/)?@marko[+/]compiler\/|\/marko-frontend\.cjs$/`;
+  // A fresh `bun` process lists the compiler modules left in `require.cache`:
+  // the npm Marko compiler (core from source), core's bundled one (core's
+  // dist, decision 159), or the Babel core lowers and prints with (`@babel/core`,
+  // `generator`, `traverse`; `@babel/parser` is light and loads on import).
+  // Since decision 197 slice S3a a compile loads no Marko compiler, so Babel
+  // shows one ran.
+  const COMPILERS = String.raw`/node_modules\/(\.bun\/)?(@marko[+/]compiler\/|@babel[+/](core|generator|traverse)[@/])|\/marko-frontend\.cjs$/`;
 
   function probe(body: string): { loaded: string[]; value: unknown } {
     const file = join(work, `probe-${Math.random().toString(36).slice(2)}.ts`);
@@ -121,10 +124,6 @@ console.log(JSON.stringify({ loaded: compilers(), value }));
     const { loaded } = probe(
       `descriptor.load!({} as never).compileModule("<x a=1/>\\n", "a.mx", {}); return null;`,
     );
-    expect(
-      loaded.some(
-        (k) => k.includes("@marko") || k.endsWith("marko-frontend.cjs"),
-      ),
-    ).toBe(true);
+    expect(loaded.some((k) => k.includes("@babel"))).toBe(true);
   });
 });

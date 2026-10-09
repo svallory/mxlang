@@ -1,3 +1,4 @@
+import { WEB_ELEMENTS } from "@mxlang/web-elements";
 import { describe, expect, it } from "vitest";
 import { compileSource } from "./compile.ts";
 import type { MxWarning } from "./core.ts";
@@ -8,10 +9,14 @@ import { testTargetLookup } from "./test-targets.ts";
 
 const targets = testTargetLookup();
 
-/** A data-like host: every name is delegated, the unnamed tag is `node`. */
+/**
+ * A data-like host: every name is delegated, the unnamed tag is `node`. It
+ * keeps the web elements' parse rules (data neutralizes them in its taglib).
+ */
 const delegating: HostDeclarations = {
   attrTags: 2,
   tags: {},
+  nativeTags: WEB_ELEMENTS,
   isElement: () => false,
   isComponent: () => false,
   isDelegatedTag: (name) => name !== "$dynamic",
@@ -406,7 +411,7 @@ describe('children["*"] by contract reference (decision 147)', () => {
 
   it("parse rules follow the name as written: a raw-text name keeps a raw-text body", () => {
     // Marko parses before the wildcard resolves anything, so `<title>`'s body
-    // is text wherever the target's lookup says so (the data target
+    // is text wherever the target's tag table says so (the data target
     // neutralizes these rules; html keeps them).
     const ir = compile(
       "<attributes><title>a <b/> c</title></attributes>\n",
