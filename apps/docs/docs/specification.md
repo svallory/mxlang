@@ -65,7 +65,7 @@ TypeScript) uses the same check. The error points at the binding:
 Property names, strings and references are not declarations. Public helper
 exports retain their names; generated imports use private aliases.
 
-This is stricter than Marko 6.3.51, which accepts `__mxX`, `_x`, `__x`, `$x`
+This is stricter than Marko 6.4.4, which accepts `__mxX`, `_x`, `__x`, `$x`
 and `$mxX` bindings (tag variables and `static` declarations). It is an
 MX-only safety restriction (reserve-mx-identifiers; decision 72's explicit
 stricter-validation policy), not a `$`- or `_`-prefix reservation.
@@ -219,7 +219,7 @@ generic reads the same on every target. (The tree target declares three of the
 six, its documented exception.)
 
 A statement's text is parsed as a TypeScript module body and a syntax error is a
-positioned error on every target, exactly as in Marko 6.3.51 (measured, html and
+positioned error on every target, exactly as in Marko 6.4.4 (measured, html and
 DOM output): JSX in a statement (`static const el = <b>hi</b>`) and a decorator
 are errors, as is an atom (`{ k: :name }`). A line ending in an operator or `>`
 continues onto the next line, as in Marko: `static const t = 1 +⏎2` is one valid
@@ -370,7 +370,7 @@ leading/trailing CR/LF plus indentation; a whitespace-only run beginning with
 CR/LF is dropped by `onText` before a node is created. `preserveWhitespace`
 parse options bypass that normalization.
 
-Consequences, measured against Marko 6.3.51:
+Consequences, measured against Marko 6.4.4:
 
 - A whitespace-only body **beginning with a newline**, such as `"\n  "` or
   `"\r\n\t  "`, is dropped — ordinary indentation contributes nothing.
@@ -567,7 +567,7 @@ mode is built or killed.
 | `` `<![CDATA[…]]>` is not supported: write the text inline, as `${"…"}` when it must stay raw, or in an attribute value `` | A `MarkoCDATA` appears in any child list. |
 | `` `<?…?>` (an XML declaration or processing instruction) is not supported: remove it `` | A `MarkoDeclaration` appears in any child list. |
 
-Marko 6.3.51 rejects both (`runtime-tags/src/translator/visitors/cdata.ts`,
+Marko 6.4.4 rejects both (`runtime-tags/src/translator/visitors/cdata.ts`,
 `visitors/declaration.ts`); its `__tests__/fixtures/cdata` snapshot puts the
 error on the `<` of the construct, which is where MX puts it too. MX keeps
 Marko's meaning and names the fix in the message.
@@ -625,7 +625,7 @@ same-on-every-target improvement: `@mxlang/html` used to report
 tag unless they are PascalCase") and the JSX hosts rendered a literal `<row>`
 element; all now raise the one error above. A lowercase tag a host claims
 (`<style>`) returns before the warning, so it is silent. This matches Marko
-6.3.51 for a native element, and is stricter than it for the error case.
+6.4.4 for a native element, and is stricter than it for the error case.
 
 ### Void elements
 
@@ -661,7 +661,7 @@ On the html target, native `null`, `undefined` and `false` values omit the
 attribute; `true` emits an empty attribute, and `0`, `""` and `NaN` are
 retained. This applies to direct expressions, colon names, bindings, merged
 spreads, computed spread keys and string-valued dynamic tags, including
-`aria-*` and `data-*` (Marko 6.3.51 omits `aria-hidden=false` too).
+`aria-*` and `data-*` (Marko 6.4.4 omits `aria-hidden=false` too).
 `class`/`style` omit falsy primitive values and stringify `true` as `"true"`.
 A direct or bound `<input checked=…>` emits presence for any value other
 than `null`, `undefined` or `false`; with spreads or a dynamic tag, `checked`
@@ -674,7 +674,7 @@ remain host-specific compatibility gaps.
 
 On html, Preact, React, Hono and Astro, an ordinary native attribute
 whose object value cannot be coerced to a useful string fails **at render
-time**, matching Marko 6.3.51's debug-runtime assertion. This always-on guard
+time**, matching Marko 6.4.4's debug-runtime assertion. This always-on guard
 is stricter than optimized Marko output, which renders plain objects as
 `[object Object]` rather than running the debug assertion:
 
@@ -709,7 +709,7 @@ Within one tag, the **last** occurrence of an attribute name wins, on every
 host and target (decision 135). `@mxlang/core` resolves it during lowering: the
 IR carries one attribute per resolved name, the last one with its own spans, so
 no host emitter or delegated-tag consumer ever sees a duplicate. This is
-stock Marko 6.3.51's behavior, probed: `<div class="a" id="x" class="b">`
+stock Marko 6.4.4's behavior, probed: `<div class="a" id="x" class="b">`
 compiles to `<div id=x class=b>` (the survivor keeps **its own** position),
 the dropped value is never evaluated (`<div title=f() title=g()>` calls only
 `g`), and `class`/`style` are not merged.
@@ -748,7 +748,7 @@ spellings on `<let>` and `<return>` fail with Marko's
 `Invalid duplicate value attribute.` at the second value's authored name.
 The equivalent `<const>` / `<id>` duplicates retain their tag-specific linked
 “only supports the `value=` attribute” diagnostic at the tag name, matching
-live Marko 6.3.51 rather than ordinary last-wins normalization. Delegated
+live Marko 6.4.4 rather than ordinary last-wins normalization. Delegated
 vocabulary names such as a data tag named `id` are not compiler builtins and
 retain ordinary attribute normalization.
 
@@ -1247,7 +1247,7 @@ one is carried through verbatim.
 Core does not treat `prop:`, `oncapture:`, `attr:`, `bool:` or `use:` names as
 modifiers: they preserve their complete names instead of being refused as
 invalid Marko syntax. This corrects decision 10's namespace-removal policy
-against live Marko 6.3.51; a host runtime/compiler still owns how an emitted
+against live Marko 6.4.4; a host runtime/compiler still owns how an emitted
 name is interpreted (for example Solid's own `prop:` namespace and Astro's
 `set:`/`is:` directives).
 
@@ -1352,7 +1352,7 @@ know about. `on-` with no name after the dash is an error.
 
 **Native `on:*` is reserved; lowercase `oncapture:*` is an ordinary attribute.**
 Only `on:*` reaches the host's modifier hook for a positioned refusal/fix-it
-(decision 101b, corrected against live Marko 6.3.51). `oncapture:click` retains
+(decision 101b, corrected against live Marko 6.4.4). `oncapture:click` retains
 its complete name and is neither an event nor a capture-mode alias. Core does
 not rewrite either spelling or warn.
 
@@ -1547,7 +1547,7 @@ arguments passes one attribute object to its first parameter (decision 160),**
 like a custom tag's `input`:
 `<Row n=1/>` against `<define/Row|p|>` or `<define/Row|{ n }|>` hands `Row`
 `{ n: 1 }` (spreads, attribute tags and `content` included; `{}` when the call
-carries none), as Marko 6.3.51 does. MX's earlier per-parameter name lookup
+carries none), as Marko 6.4.4 does. MX's earlier per-parameter name lookup
 (`<define/Card|title, head|>` + `<Card title="a"/>` binding `title` to `"a"`)
 is withdrawn on those hosts. When a define with 2 or more params is called that
 way, lowering gives a warning positioned at the call's tag name (only on the
@@ -1673,7 +1673,7 @@ Per-host lowering is in §13. Notably `<try>` with `<@placeholder>` is an error 
 the html target (it needs a second render pass), while `<try>` with only `<@catch>`
 lowers to an ordinary `try`/`catch` whose body renders into a buffered sub-sink
 (§13.8): when the body throws, its partial output is dropped and `<@catch>`
-renders in its place, as in Marko 6.3.51 (decision 155). A `<try>` with neither
+renders in its place, as in Marko 6.4.4 (decision 155). A `<try>` with neither
 `<@catch>` nor `<@placeholder>` is a compile error (above), as in Marko 6.4.
 
 On Preact, React and Hono the `<try>` body reaches the host's boundary as a thunk
@@ -1683,7 +1683,7 @@ body, and a throw in a descendant component is caught during a server render too
 (TODO `jsx-try-ssr-error-boundary`; decision 181). Preact sets `options.errorBoundaries`, a
 process-global flag of the consumer's `preact`. React's server renderer runs no
 error boundaries, so its boundary wraps the body in an internal `Suspense` whose
-fallback is `<@catch>`. Three React-only divergences from Marko 6.3.51 remain (decision 181),
+fallback is `<@catch>`. Three React-only divergences from Marko 6.4.4 remain (decision 181),
 recorded in `divergences.md`: **R1**, with both `<@catch>` and `<@placeholder>`, a
 descendant's server-side throw renders `<@placeholder>` in the server HTML and
 `<@catch>` only after the client renders; **R2**, with `<@catch>` and no
@@ -1726,7 +1726,7 @@ shared a name with an unrelated lowercase import in the same file.
 **Decision 113: a `<const>` binding and a `<for>`/`<define>` tag param also
 shadow a registered custom tag of the same name, scoped exactly to where the
 binding is in effect** (decision 113, `custom-tags-local-bindings`). Measured
-against Marko 6.3.51's own translator (`normalizeTag`,
+against Marko 6.4.4's own translator (`normalizeTag`,
 `@marko/runtime-tags/dist/translator/index.js:5852-5860`): Marko rewrites a
 capitalized tag name to a local-variable reference whenever
 `tag.scope.getBinding(tagName)` finds a binding in scope — a single,
@@ -1758,7 +1758,7 @@ as an MX 2 candidate.
 
 **Decision 114: an unresolved PascalCase tag is Marko's own compile error too,
 on every host, including Solid.** Verified against `@marko/compiler` 5.42.5 /
-`marko@6.3.51`, by source (`tag-name-type.ts`'s `analyzeTagNameType`: a
+`marko@6.4.4`, by source (`tag-name-type.ts`'s `analyzeTagNameType`: a
 PascalCase name with no scope binding and no resolvable child file sets
 `tagNameUnresolved = true`; `dynamic-tag.ts:135` throws `tagNotFoundError`,
 `custom-tag.ts:398-429`'s positioned `` Unable to find entry point for custom
@@ -1904,7 +1904,7 @@ row in §13.1's dynamic-tag entry.
 
 **Decision 116: a capitalized value import that isn't a `.marko`/`.mx`
 default import lowers as a dynamic tag, not a direct call.** Measured (TODO
-`value-import-as-tag-parity`): Marko 6.3.51 compiles *every* capitalized
+`value-import-as-tag-parity`): Marko 6.4.4 compiles *every* capitalized
 local-import tag to `_dynamic_tag`, regardless of source. At runtime, a
 string renders as an element and a real Marko-template value is invoked as a
 component; anything else — a plain function, a plain object, `undefined`,
@@ -2108,13 +2108,13 @@ call a framework's own render-prop components with ordinary markup. Params parse
 exactly like `<for>`'s: destructuring and type annotations included; empty pipes
 (`||`) lower to a no-argument function.
 
-On html a body with params is the callee's `content` too: `content: (item, i) => …` for an imported component and for a `${expr}` target alike (the dynamic form once dropped the params), and the callee calls `input.content(item, i)`. A literal string target (`<${"div"}|x|>`) is the compile error `Tag does not support parameters.`; a string that arrives at run time renders the element with the body called with no arguments, and a falsy target (`null`, `undefined`, `false`, `0`, the empty string) renders the body alone, as Marko 6.3.51 does for a value that arrives at run time (a literal `<${""}>` compiles in Marko to a nameless `<>` element, which MX instead renders as the body alone), all as Marko does at run time (the JSX hosts throw for the run-time string, below).
+On html a body with params is the callee's `content` too: `content: (item, i) => …` for an imported component and for a `${expr}` target alike (the dynamic form once dropped the params), and the callee calls `input.content(item, i)`. A literal string target (`<${"div"}|x|>`) is the compile error `Tag does not support parameters.`; a string that arrives at run time renders the element with the body called with no arguments, and a falsy target (`null`, `undefined`, `false`, `0`, the empty string) renders the body alone, as Marko 6.4.4 does for a value that arrives at run time (a literal `<${""}>` compiles in Marko to a nameless `<>` element, which MX instead renders as the body alone), all as Marko does at run time (the JSX hosts throw for the run-time string, below).
 
 On the JSX hosts (preact, react, hono), a call with params that is routed as a
 props object (an imported component, `<${expr}>`, a call of a `<define>`
 written by name, a `<return>` unit) passes the function as the callee's
 `content`, and the callee calls it as `input.content(item, i)`, the shape
-Marko 6.3.51 emits (lead ruling on PR #371, 2026-10-06; it has no decision
+Marko 6.4.4 emits (lead ruling on PR #371, 2026-10-06; it has no decision
 number). A dynamic target that is falsy (`null`, `undefined`, `false`, `0`,
 the empty string) renders the body called with no arguments, as Marko
 does. A literal string target
@@ -2433,7 +2433,7 @@ Names must match `/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/`; dotfiles are skipped.
 or `mx.tags` directory, a file `<base>.<word>.mx` is never callable as a tag:
 the tag form `<base.word/>` and the concise form `base.word` both parse as tag
 `base` with shorthand class `word`, so no syntax reaches such an entry and
-indexing it would create a dead tag (measured on Marko 6.3.51, which indexes
+indexing it would create a dead tag (measured on Marko 6.4.4, which indexes
 `tags/my.icon.marko` silently under the name `my.icon` — an mx-only lint, see
 `divergences.md`). Such a file is excluded from the tag map with a positioned
 diagnostic, in one of two forms:
@@ -3835,7 +3835,7 @@ return value of `render`:
 |---|---|
 | Discovered tag, self-recursive tag, or an imported `.mx` unit known to declare `<return>` | `Name.render(props, out)`; with `/var`, `const n = Name.render(props, out)` |
 | Any other statically named tag (an imported `.mx` unit without `<return>`, a hand-written function, a `.ts` barrel re-export) | Run-time dispatch: `.render(props, out)` when the callee has it, otherwise the callee is called and its string written |
-| Dynamic tag `<${x}/>` | The same run-time dispatch; `/var` binds the `render` value (`undefined` for a callee without `.render`). Called with tag arguments (`<${x}(a)/>`), a callee with `.render` receives `a` (args[0]) as its input, as Marko 6.3.51 does, and `/var` still binds its return value |
+| Dynamic tag `<${x}/>` | The same run-time dispatch; `/var` binds the `render` value (`undefined` for a callee without `.render`). Called with tag arguments (`<${x}(a)/>`), a callee with `.render` receives `a` (args[0]) as its input, as Marko 6.4.4 does, and `/var` still binds its return value |
 | `<define>` call, `content`, a renderable attribute tag | Unchanged: a block is `(…params) => string`, rendered into its own sink and written |
 
 A hand-written `.ts` function used as a tag keeps returning a string; it never
@@ -3868,7 +3868,7 @@ refuses such a binding outright (TS80001).
 **`<try>` renders its body into a buffered sub-sink**, `createBufferedOut(out)`,
 committed to `out` only when the body finishes. When the body throws, the
 buffered output is dropped and `<@catch>` renders into `out` instead, so a
-half-rendered body never reaches the page (verified against Marko 6.3.51). A
+half-rendered body never reaches the page (verified against Marko 6.4.4). A
 nested `<try>` commits into its enclosing one. A `<try>` **without**
 `<@catch>` catches nothing: the error propagates out of the render, or to an
 enclosing `<try>`, as in Marko (it was once swallowed). `<@placeholder>` stays
@@ -3876,7 +3876,7 @@ an error on this target (§6). The `try-*` fixtures in
 `packages/targets/html/fixtures-marko` oracle-lock the partial-output drop,
 and `dynamic-tag-var` oracle-locks `/var` on a dynamic tag, with and without
 arguments. The catch-less rethrow is locked by a unit test against measured
-Marko 6.3.51 output; the oracle cannot express a throw.
+Marko 6.4.4 output; the oracle cannot express a throw.
 
 **Decisions:** 95, 155.
 
@@ -4324,7 +4324,7 @@ deferred (decision 85).
    Marko's own codegen for `renderer(...args, propsObject)` works because a
    named custom tag's callee has a declared `Input` to destructure that
    object against; a `<define>` has none — its params are ordinary
-   positional identifiers. Measured against real Marko 6.3.51: its own
+   positional identifiers. Measured against real Marko 6.4.4: its own
    codegen for `<Card('a')><@head>H</@head></Card>` against
    `<define/Card|title, head|>` binds the *whole* trailing props object to
    whichever param follows the args (`head` here), not the attribute tag's
@@ -4358,7 +4358,7 @@ deferred (decision 85).
    and the shared preact/react/hono `mxDynamic` helper ignored `args`
    entirely for a string target, rendering the call's own (empty, per
    `rejectArgsWithProps`) attributes or its attribute-tag props instead.
-   Measured against real Marko 6.3.51 (`runtime-tags/src/html/
+   Measured against real Marko 6.4.4 (`runtime-tags/src/html/
    dynamic-tag.ts`'s `_dynamic_tag`, `typeof renderer === "string"` branch,
    and the identical dom `_dynamic_tag` in `dom/control-flow.ts`): `const
    input = (inputIsArgs ? args[0] : ...) || {}` — `args[0]`, not the call
