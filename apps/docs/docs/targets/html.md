@@ -100,11 +100,11 @@ const { code } = compile(source, "greeting.mx");
 - `Out` — the sink type: `write(html: string)` and `toString()`
 - `TranslateError` — thrown for a construct with no lowering, carrying `line`/`column`
 
-The package is also a plain `@marko/compiler` translator, so the compiler's own entry points work directly:
+`compile` is the supported entry. The package also exports a named `translator` (a Marko translator object) for a caller that drives `@marko/compiler` itself:
 
 ```typescript
 import { compileSync } from "@marko/compiler";
-import translator from "@mxlang/html";
+import { translator } from "@mxlang/html";
 
 compileSync(source, filename, { translator, output: "html" });
 ```

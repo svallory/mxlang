@@ -10,7 +10,7 @@ noStyle: true
 <a href="/introduction/">Introduction</a>
 <a href="/language/structural-tags/">Language</a>
 <a href="/hosts/intro/">Hosts</a>
-<a href="https://github.com/mxlang/mx">GitHub</a>
+<a href="https://github.com/svallory/mxlang">GitHub</a>
 </nav>
 <button class="mx-home-theme" type="button" aria-label="Switch between light and dark">Theme</button>
 </header>

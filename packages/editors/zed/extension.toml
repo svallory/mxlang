@@ -4,7 +4,7 @@ description = "MX (.mx, Marko syntax), AstroMX (.astro.mx, Marko syntax in an As
 version = "0.2.0"
 schema_version = 1
 authors = ["Saulo Vallory <me@saulo.engineer>"]
-repository = "https://github.com/mxlang/mx"
+repository = "https://github.com/svallory/mxlang"
 
 [grammars.mx]
 # MX (`.mx`) rides MX's own grammar, packages/editors/tree-sitter-mx: a

@@ -5,7 +5,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mxlang/mx",
+    "url": "https://github.com/svallory/mxlang",
     "directory": "packages/tooling/language-server"
   },
   "keywords": [

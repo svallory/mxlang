@@ -83,16 +83,25 @@ then, so the two never drift out of sync.
 
 ## Usage
 
-The package is a Marko translator, so the compiler's own entry points work:
+`compile` is the supported entry; it drives the compiler for you:
+
+```ts
+import { compile } from "@mxlang/html";
+
+const { code, map } = compile("<p>${input.name}</p>", "/views/page.mx");
+```
+
+The package also exports a named `translator` (a Marko translator object) for a
+caller that drives `@marko/compiler` itself, as the oracle does:
 
 ```ts
 import { compileSync } from "@marko/compiler";
-import translator from "@mxlang/html";
+import { translator } from "@mxlang/html";
 
 compileSync(source, filename, { translator, output: "html" });
 ```
 
-Or use the convenience wrappers, which drive the compiler for you:
+The wrappers:
 
 - `compile(source, filename)` → `{ code, map }`
 - `compileFile(filename)` → `{ code, map }`

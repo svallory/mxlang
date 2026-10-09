@@ -82,6 +82,15 @@ for (const p of PACKED_PACKAGES) {
       );
     });
 
+    // A private package is never published, so it needs no licence file; every
+    // package that can be published ships its MIT text (npm adds `LICENSE`
+    // to a tarball whatever `files` says, so only the file's existence counts).
+    if (!(pkg as { private?: boolean }).private) {
+      it("packs a LICENSE", () => {
+        expect(packed).toContain("LICENSE");
+      });
+    }
+
     it("packs only package.json, README, dist/** and its named extras", () => {
       const stray = packed.filter((f) => {
         if (allowedTop.has(f) || shippedTop.includes(f)) return false;

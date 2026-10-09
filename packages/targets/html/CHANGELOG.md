@@ -57,8 +57,6 @@
 
 - **Changed (release-changelog-in-package):** `CHANGELOG.md` is now part of every published tarball (`files` lists it in all packed packages); `bun pm pack` honours `files` only, so the alpha.11 tarballs carried just `README.md` and `dist`.
 
-## 0.1.0 (unreleased)
-
 - **Fix (expression-values-unmapped-jsx-html):** component prop values, spreads, attribute expressions (incl. structured `class`/`style`, the spread-merge form, `<textarea value>`) and `${}`/`$!{}` text are mapped to their authored source with `mappedExpr`, so a TypeScript error inside them (e.g. a misspelled atom in `modes=[:strict, :lose]`) reaches the editor and `mx-tsc` at its position. Emitted text unchanged.
 
 - **Changed (name-sugar-default-value, decision 146 addendum 4):** `<input #x=1/>` renders `id="x"` plus `value="1"` (a sugar followed by `=value` sets the default attribute); a method value needs a runtime, as before; a second default value is a positioned error.
