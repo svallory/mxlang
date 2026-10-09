@@ -1,5 +1,7 @@
 # @mxlang/tsx-bridge changelog
 
+## Unreleased
+
 - **Changed (parser-split, decision 158):** this package is what `@mxlang/parser` was before the split, minus the vendored Babel fork and the htmljs-parser template parser. The fork moved to `@mxlang/babel` (`packages/babel`) and the template parser stays in `@mxlang/parser`. The public surface (`parse`, `print`, `printAst`, `sourceBindings`, …) and `dist/index.d.ts` are unchanged apart from the module name, `@mxlang/tsx-bridge`; every in-repo importer moved with it. The bridge now injects the MX grammar into the fork through the `mxHooks` option (`bridge.ts`'s `mxHooks`) instead of the fork importing it. Solid-lowering tests moved to `@mxlang/solid` (`src/bridge/`), so the package depends on no host. Earlier entries below were written under the old package name.
 
 - **Added (decision 164):** `MxRegionCompileInput.importSites` (and the `mxImportSites` option `parse` pre-collects): where each import binding's `import` statement starts, so a host can position the lowercase-tag diagnostic at the import.

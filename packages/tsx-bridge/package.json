@@ -1,15 +1,30 @@
 {
   "name": "@mxlang/tsx-bridge",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0-alpha.1",
+  "description": "Finds MX regions inside TypeScript modules and splices their compiled output back in (the .solid.mx / .preact.mx / .react.mx bridge)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/svallory/mxlang",
+    "directory": "packages/tsx-bridge"
+  },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "files": [
     "dist",
     "README.md",
     "CHANGELOG.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
