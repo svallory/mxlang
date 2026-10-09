@@ -480,6 +480,7 @@ The fact lives in the host: `TargetHost.ambientTypes({ rootNames, resolve })` (c
 - `ambientTypeFiles(rootNames, projectDir)` asks every host of the project's lookup (`lookupFor(resolveTargetPolicy(<projectDir>/package.json))`: the built-ins plus a third-party host the project loads). It resolves `<package>/<file>` from the project's `node_modules`, then from the plugin's install.
 - `mx-tsc` appends the result to `rootNames` in its `runTsc` callback (`addAmbientTypes`, before the program is created).
 - The tsserver plugin decorates `info.languageServiceHost.getScriptFileNames` (`withAmbientTypes`, inside the `createLanguageServicePlugin` callback, recomputed only when the root list changes). Its project directory is the configured project's tsconfig directory, else the project's current directory.
+- A throwing `ambientTypes` never aborts the run. `ambientTypeFiles` catches it, drops that host's files, and collects `host <packageName>: ambientTypes threw: <message>`; `mx-tsc` prints each as `error TS80004` and exits 1, and the tsserver plugin reports it as a project-level diagnostic (`ambientTypeDiagnostics`, code 80004, no file). Other hosts' files still resolve. Tests: `src/ambient-types.test.ts` and `packages/tooling/tsc/src/ambient-types-throw.test.ts`, fake host `test-fixtures/third-party-targets/ambient-types-throws`.
 
 Nothing in tsc or this package names a host. Tests:
 - `src/ambient-types.test.ts`, including a third-party fake host (`test-fixtures/third-party-targets/ambient-types`).

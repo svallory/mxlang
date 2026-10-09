@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import {
+  ambientTypeDiagnostics,
   ambientTypeFiles,
   approximateUnmappedDiagnostics,
   approximateUnmappedEmit,
@@ -402,6 +403,14 @@ function runPatchedTsc(
 }
 
 /**
+ * The messages of hosts whose `ambientTypes` threw in this run, each once
+ * (`ambientTypeFiles`). Reported after the run's programs are created: a
+ * program built with its stderr swallowed (the `.ng.mx` listing) still
+ * counts.
+ */
+const ambientTypeErrors = new Set<string>();
+
+/**
  * Adds the hosts' ambient declaration files for this program
  * (`ambientTypeFiles`, `TargetHost.ambientTypes`) to its root files, as a
  * framework's own tooling adds them to every program it checks. Runs before
@@ -414,7 +423,9 @@ function addAmbientTypes(options: ts.CreateProgramOptions): void {
     typeof configFile === "string"
       ? dirname(configFile)
       : (options.host?.getCurrentDirectory() ?? process.cwd());
-  const extra = ambientTypeFiles(options.rootNames, projectDir);
+  const errors: string[] = [];
+  const extra = ambientTypeFiles(options.rootNames, projectDir, errors);
+  for (const message of errors) ambientTypeErrors.add(message);
   if (extra.length === 0) return;
   (options as { rootNames: readonly string[] }).rootNames = [
     ...options.rootNames,
@@ -549,6 +560,7 @@ function runMxTscBody(): number {
 }
 
 function runMxTscChecks(): number {
+  ambientTypeErrors.clear();
   const astro = consumeAstroFlag(process.argv);
   // A package that compiles as `data` is not a TypeScript program: its
   // `.mx` files go to `@mxlang/data` and nothing else runs (decision 131,
@@ -636,6 +648,10 @@ function runMxTscChecks(): number {
   ];
   reportTargetPolicyDiagnostics(policyDiagnostics);
   const hasPolicyError = policyDiagnostics.some((d) => d.severity === "error");
+  // A host whose `ambientTypes` threw: one error, the run went on without
+  // that host's ambient files, and it fails.
+  reportAmbientTypeErrors([...ambientTypeErrors]);
+  const hasAmbientTypeError = ambientTypeErrors.size > 0;
   const hasCompileError = diagnostics.some(
     (diagnostic) => diagnostic.category === "error",
   );
@@ -654,7 +670,12 @@ function runMxTscChecks(): number {
   reportNgDiagnostics(angular);
   const hasAngularError = countNgErrors(angular) > 0;
 
-  return hasCompileError || hasPolicyError || hasAngularError ? 1 : tscExitCode;
+  return hasCompileError ||
+    hasPolicyError ||
+    hasAmbientTypeError ||
+    hasAngularError
+    ? 1
+    : tscExitCode;
 }
 
 /**
@@ -849,6 +870,23 @@ export function reportTargetPolicyDiagnostics(
     },
   );
   process.stderr.write(formatted);
+}
+
+/**
+ * Prints the `ambientTypes` errors file-level, in `tsc`'s shape with no
+ * position: `error TS80004: host <package>: ambientTypes threw: <message>`.
+ */
+export function reportAmbientTypeErrors(messages: readonly string[]): void {
+  if (messages.length === 0) return;
+  const require = createRequire(import.meta.url);
+  const typescript = require("typescript") as typeof import("typescript");
+  process.stderr.write(
+    typescript.formatDiagnostics(ambientTypeDiagnostics(typescript, messages), {
+      getCanonicalFileName: (fileName) => fileName,
+      getCurrentDirectory: () => process.cwd(),
+      getNewLine: () => "\n",
+    }),
+  );
 }
 
 /** Removes mx-tsc's own flag before TypeScript parses its command line. */

@@ -4,7 +4,7 @@ import type { Language } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import { createLanguageServicePlugin } from "@volar/typescript/lib/quickstart/createLanguageServicePlugin";
 import type * as ts from "typescript";
-import { withAmbientTypes } from "./ambient-types.ts";
+import { ambientTypeDiagnostics, withAmbientTypes } from "./ambient-types.ts";
 import {
   AMX_EXTENSION,
   AMX_LANGUAGE_ID,
@@ -79,12 +79,26 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
   let languagePlugins: Array<AnyMxLanguagePlugin> | undefined;
   let ngDiagnostics: NgDiagnosticsService | undefined;
   const volarFactory = createLanguageServicePlugin((typescript, info) => {
-    // The hosts' ambient declaration files, as `mx-tsc` adds them.
-    withAmbientTypes(info.languageServiceHost, () =>
-      info.project.projectKind === typescript.server.ProjectKind.Configured
-        ? dirname(info.project.getProjectName())
-        : info.project.getCurrentDirectory(),
+    // The hosts' ambient declaration files, as `mx-tsc` adds them. A host
+    // whose `ambientTypes` throws is reported project-wide, with the
+    // compiler-option diagnostics, and the project goes on without its files.
+    const ambientErrors: string[] = [];
+    withAmbientTypes(
+      info.languageServiceHost,
+      () =>
+        info.project.projectKind === typescript.server.ProjectKind.Configured
+          ? dirname(info.project.getProjectName())
+          : info.project.getCurrentDirectory(),
+      ambientErrors,
     );
+    const compilerOptionsDiagnostics =
+      info.languageService.getCompilerOptionsDiagnostics.bind(
+        info.languageService,
+      );
+    info.languageService.getCompilerOptionsDiagnostics = () => [
+      ...compilerOptionsDiagnostics(),
+      ...ambientTypeDiagnostics(typescript, ambientErrors),
+    ];
     // Beneath Volar's proxy, so a diagnostic Volar cannot map is moved onto
     // the nearest mapped span before it would be dropped (decision 161).
     // Volar proxies `info.languageService` right after this callback returns.
@@ -342,7 +356,11 @@ function withSyntaxDiagnostics(
 }
 
 export type { TargetPolicyDiagnostic } from "@mxlang/core";
-export { ambientTypeFiles, withAmbientTypes } from "./ambient-types.ts";
+export {
+  ambientTypeDiagnostics,
+  ambientTypeFiles,
+  withAmbientTypes,
+} from "./ambient-types.ts";
 export {
   composeAmxMappings,
   createAmxLanguagePlugin,

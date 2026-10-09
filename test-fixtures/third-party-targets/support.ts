@@ -21,6 +21,7 @@ import { join } from "node:path";
  * - `file-kinds` declares a whole-file `host.fileKinds` entry (`.fk.mx`)
  * - `ambient-types` a host whose `ambientTypes` adds its `ambient.d.ts` to a
  *   program holding an `.amb.mx` file
+ * - `ambient-types-throws` a host whose `ambientTypes` throws for every program
  * - `join-solid` names the built-in host `solid` (rejected)
  * - `own-core`  imports its own `@mxlang/core` copy (pins the brand check)
  * - `hostless`  valid target with no `host` part (an error under `mx.host`)
@@ -41,6 +42,7 @@ export type FakeTarget =
   | "ok-ssr"
   | "file-kinds"
   | "ambient-types"
+  | "ambient-types-throws"
   | "join-solid"
   | "own-core"
   | "hostless"
