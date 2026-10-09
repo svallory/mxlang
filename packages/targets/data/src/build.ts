@@ -229,30 +229,45 @@ const MERGED_SHORTHAND_CLASS =
 const SYNTHESIZED_SHORTHAND_ID =
   "a shorthand id with a placeholder (`#a${x}`) is not supported in a data file: write `id=...`";
 
+const SYNTHESIZED_SHORTHAND_CLASS =
+  "a shorthand class with a placeholder (`.a${x}`) is not supported in a data file: write `class=...`";
+
 /**
- * The attribute a shorthand class would have merged into, if core merged one.
+ * The two rejects for a shorthand `id`/`class` whose value has no source span.
  *
- * Only `class` is special: a shorthand is `#id` or `.class`, core rejects a
- * shorthand `#id` beside an authored `id` itself (positioned), and `class` is
- * the one name where core silently merges instead.
+ * Core builds the value of a shorthand with a placeholder (`#a${x}`,
+ * `.${x}-b`) as a synthesized template literal with no authored source, so the
+ * tree has no span to give it: a positioned reject, at the `#`/`.` when the
+ * attribute's name span starts there, instead of the invariant error
+ * `dataExpr` would throw. The same spanless value arises when a shorthand
+ * class and an authored `class` attribute merge (`<x.a class="b"/>`; the name
+ * span then starts at the authored `class`): a different mistake, so a
+ * different message. Only `class` merges silently; core rejects a shorthand
+ * `#id` beside an authored `id` itself (positioned).
  */
-function rejectMergedShorthandClass(attrs: Attr[], at: Position): void {
+function rejectSpanlessShorthand(attrs: Attr[], at: Position): void {
   for (const attr of attrs) {
     if (attr.kind === "spread") continue;
-    // `#a${x}`: core builds the `id` value as a template literal with no
-    // authored source, so the tree has no span to give it. Positioned reject
-    // instead of the invariant error `dataExpr` would throw.
-    if (attr.name === "id" && attr.kind === "dynamic" && !attr.value.span) {
-      fail(SYNTHESIZED_SHORTHAND_ID, at);
-    }
-    if (attr.name !== "class") continue;
+    if (attr.name !== "id" && attr.name !== "class") continue;
     const span =
       attr.kind === "static"
         ? attr.valueSpan
         : attr.kind === "boolean"
           ? undefined
           : attr.value.span;
-    if (!span) fail(MERGED_SHORTHAND_CLASS, at);
+    if (span) continue;
+    const nameSpan = optionalNameSpan(attr);
+    const sigil = nameSpan ? activeSource[nameSpan.sourceStart] : undefined;
+    const where = nameSpan
+      ? { ...at, ...positionOfOffset(nameSpan.sourceStart) }
+      : at;
+    if (attr.name === "id" && sigil === "#") {
+      fail(SYNTHESIZED_SHORTHAND_ID, where);
+    }
+    if (attr.name === "class" && sigil === ".") {
+      fail(SYNTHESIZED_SHORTHAND_CLASS, where);
+    }
+    if (attr.name === "class") fail(MERGED_SHORTHAND_CLASS, at);
   }
 }
 
@@ -417,7 +432,7 @@ function dataTag(tag: DelegatedTag<unknown>): DataTag {
   // A merged class has no span, so building that tag's attributes would add an
   // internal "no span" error that is only the same mistake again: skip them.
   const attrsBuildable = attempt(() => {
-    rejectMergedShorthandClass(tag.attrs, tag.loc);
+    rejectSpanlessShorthand(tag.attrs, tag.loc);
     return true;
   });
   if (tag.var !== null) {
@@ -476,7 +491,7 @@ function dataParts(
 function dataAttrTag(tag: AttributeTag): DataAttrTagNode {
   attempt(() => checkTagName(tag.name, tag.loc));
   const attrsBuildable = attempt(() => {
-    rejectMergedShorthandClass(tag.attrs, tag.loc);
+    rejectSpanlessShorthand(tag.attrs, tag.loc);
     return true;
   });
   const attrs = attrsBuildable ? each(tag.attrs, dataAttr) : [];

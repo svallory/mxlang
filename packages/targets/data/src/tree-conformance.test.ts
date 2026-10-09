@@ -61,7 +61,7 @@ function readCorpus(): CorpusCase[] {
 }
 
 const INTENDED: Record<string, { pattern: RegExp; cases: string[] }> = {
-  // decision 54: MX has no scriptlets
+  // decision 54: MX has no scriptlets (`$ stmt` is refused)
   scriptlets: {
     pattern: /scriptlets \(/,
     cases: [
@@ -89,12 +89,13 @@ const INTENDED: Record<string, { pattern: RegExp; cases: string[] }> = {
       "scriptlet-terminated-by-semi-colon",
     ],
   },
-  // the data target refuses CDATA (build.ts)
+  // decision 139: non-tag prologue syntax (CDATA) is refused at the construct
   cdata: {
     pattern: /CDATA/,
     cases: ["cdata", "cdata-2", "cdata-pos", "mixed-cdata"],
   },
-  // a doctype means nothing in a data file (build.ts)
+  // a doctype means nothing in a data file (build.ts); same group of non-tag
+  // prologue syntax as CDATA, so decision 139 is cited for it too
   doctype: {
     pattern: /doctype/,
     cases: [
@@ -105,12 +106,12 @@ const INTENDED: Record<string, { pattern: RegExp; cases: string[] }> = {
       "var",
     ],
   },
-  // an XML declaration or processing instruction is refused (build.ts)
+  // decision 139: an XML declaration or processing instruction is refused
   xmlDeclaration: {
     pattern: /XML declaration/,
     cases: ["declaration", "xml-declaration", "xml-declaration-ill-formed"],
   },
-  // a dynamic tag has no name in a static tree (build.ts)
+  // decision 131 addendum, ruling 3: a dynamic tag has no name in a static tree
   dynamicTag: {
     pattern: /dynamic tag/,
     cases: [
@@ -126,7 +127,9 @@ const INTENDED: Record<string, { pattern: RegExp; cases: string[] }> = {
       "tag-name-expression-simple-empty-close",
     ],
   },
-  // a tag variable binds without evaluating (build.ts)
+  // decision 131 addendum, ruling 3: a tag variable binds without evaluating.
+  // tag-var-declaration also carries Marko's own `foo + 1 is not a valid tag
+  // variable` (Marko refuses `<let/foo + 1/>` too); both match this pattern.
   tagVariable: {
     pattern: /tag variable/,
     cases: [
@@ -137,20 +140,18 @@ const INTENDED: Record<string, { pattern: RegExp; cases: string[] }> = {
       "tag-var-type-with-parens",
     ],
   },
-  // core merges a shorthand class and a class attribute into a synthesized
-  // class with no span (build.ts)
+  // decision 131 addendum, ruling 3 (build.ts): core merges a shorthand class
+  // and a class attribute into a synthesized class with no span
   shorthandClassBesideClass: {
     pattern: /shorthand class/,
     cases: [
       "attr-grouped-3",
       "attr-grouped-4",
       "attr-grouped-multiple",
-      "shorthand-class-dynamic-literal-prefix",
-      "shorthand-class-dynamic-literal-suffix",
       "shorthand-closing-html",
     ],
   },
-  // a bound value is not supported on name sugar
+  // decision 146: a bound value is not supported on name sugar
   boundOnSugar: { pattern: /bound value/, cases: ["attr-bound"] },
   // a tag with no argument contract takes none
   tagArguments: {
@@ -176,7 +177,8 @@ const INTENDED: Record<string, { pattern: RegExp; cases: string[] }> = {
       "unary-as-member-expression",
     ],
   },
-  // a newline inside a quoted string is a JS syntax error
+  // the JS string rule: a newline inside a quoted string is a syntax error
+  // (stock Marko refuses it too)
   newlineInString: {
     pattern: /Unterminated string constant/,
     cases: ["attr-multi-line-string", "placeholder-within-string-newlines"],
@@ -209,9 +211,10 @@ const KNOWN_GAPS: Record<string, string[]> = {
     "attr-without-delimiters",
   ],
   // Open-tag-only void tags (`<img>`), raw-text `<script>`/`<style>`, an
-  // html-comment tag and a regexp attribute: the data taglib switches the
-  // HTML parse rules off, so these bodies parse as tags ("Missing ending",
-  // "closing X does not match").
+  // html-comment tag and a regexp attribute ("Missing ending", "closing X does
+  // not match"). REVISIT THE DECISION, not a bug: decision 131 addendum,
+  // ruling 1 switches the HTML parse rules (openTagOnly, text) off on purpose,
+  // so these bodies parse as tags. Fixing means reversing that ruling.
   "open-tag-only-and-raw-text": [
     "attr-regexp",
     "html-comment-tag",
@@ -222,9 +225,13 @@ const KNOWN_GAPS: Record<string, string[]> = {
     "script-concise",
     "script-mismatched-close",
   ],
-  // `#a${x}`: core builds the id value with no authored span. Rejected
-  // positioned (build.ts); it used to be an `internal error`.
-  "shorthand-id-placeholder": [
+  // `#a${x}` and `.a${x}`: core builds the value with no authored span. Stock
+  // Marko compiles them. Rejected positioned at the sigil (build.ts); the id
+  // case used to be an `internal error`, the class case a wrong "class
+  // attribute" message.
+  "shorthand-placeholder": [
+    "shorthand-class-dynamic-literal-prefix",
+    "shorthand-class-dynamic-literal-suffix",
     "shorthand-id-dynamic-literal-prefix",
     "shorthand-id-dynamic-literal-suffix",
   ],
@@ -274,6 +281,11 @@ describe("tree-sitter-mx corpus through parseData", () => {
         );
         expect(errors.length).toBeGreaterThan(0);
         const allowed = Object.values(INTENDED).map((i) => i.pattern);
+        // Refused for the case's own reason, and for no unlisted one.
+        expect(
+          errors.some((e) => intended.pattern.test(e.message)),
+          errors.map((e) => e.message).join("\n"),
+        ).toBe(true);
         for (const e of errors) {
           expect(
             allowed.some((p) => p.test(e.message)),
@@ -289,7 +301,7 @@ describe("tree-sitter-mx corpus through parseData", () => {
         // Fixed? Delete this case from KNOWN_GAPS.
         expect(errors.length).toBeGreaterThan(0);
         expect(errors.map((e) => e.message).join("\n")).not.toMatch(
-          /^internal error/,
+          /^internal error/m,
         );
       });
     } else {
@@ -304,13 +316,26 @@ describe("tree-sitter-mx corpus through parseData", () => {
   }
 });
 
-describe("a shorthand id with a placeholder", () => {
-  it("is one positioned reject, not an internal error", () => {
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax, not a template literal
-    const { tree, diagnostics } = run("<x#a${y}/>\n");
+describe("a shorthand with a placeholder", () => {
+  it.each([
+    ["<x#a${y}/>\n", /shorthand id with a placeholder/, 2],
+    ["<x.a${y}/>\n", /shorthand class with a placeholder/, 2],
+    ["<x.${y}-b/>\n", /shorthand class with a placeholder/, 2],
+    ["\n<x.a${y}.b/>\n", /shorthand class with a placeholder/, 2],
+  ])("%j is one positioned reject at the sigil", (source, message, column) => {
+    const { tree, diagnostics } = run(source);
     expect(tree).toBeUndefined();
     expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0]?.message).toMatch(/shorthand id with a placeholder/);
-    expect(diagnostics[0]?.line).toBe(1);
+    expect(diagnostics[0]?.message).toMatch(message);
+    expect(diagnostics[0]?.line).toBe(source.startsWith("\n") ? 2 : 1);
+    expect(diagnostics[0]?.column).toBe(column);
+  });
+
+  it("keeps the merged-class message for a shorthand beside a class attribute", () => {
+    const { diagnostics } = run('<x.a class="b"/>\n');
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.message).toMatch(
+      /together with a `class` attribute/,
+    );
   });
 });
