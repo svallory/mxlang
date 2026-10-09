@@ -32,8 +32,7 @@ by the repo's lead, who owns the tooling.
 …, syntax })` take a table (an invalid one is a `TypeError`). Triggers are
 armed in three positions (expression, attribute name, tagless concise line),
 announced through `onTrigger` and stood in by `read()` at the same length;
-the front end builds `MxTrigger` nodes (a type of this package, not of
-`@mxlang/babel/mx-ast`). Atoms and the `:name`/`#id`/`.class` sugars keep
+the front end builds `MxTrigger` nodes (`@mxlang/babel/mx-ast`, ast §4.4). Atoms and the `:name`/`#id`/`.class` sugars keep
 their own paths until they move onto the table. Nothing is lowered here.
 `src/template/PROVENANCE.md` lists every place the table touches.
 

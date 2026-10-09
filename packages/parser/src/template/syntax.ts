@@ -422,7 +422,108 @@ function re2Problem(source: string): string | undefined {
       }
     }
   }
-  return undefined;
+  return nestedQuantifier(source)
+    ? "`match` nests an unbounded quantifier inside another (`(a+)+`), which backtracks exponentially in JavaScript"
+    : undefined;
+}
+
+/**
+ * Whether an unbounded quantifier (`*`, `+`, `{n,}`) applies to a group that
+ * itself holds one: the classic exponential backtracking shape (`(a+)+`).
+ * One shape is allowed, because each repetition is delimited and the match
+ * stays linear: the group starts with a literal character that none of its
+ * inner unbounded atoms can match (`(?:-[a-z]+)*`, the atom-name shape). This
+ * keeps the common blow-up out; it does not prove linear time in JavaScript
+ * (an overlapping alternation, `(a|a)+`, still backtracks). A native lexer
+ * running RE2 is linear for any matcher the subset admits.
+ */
+function nestedQuantifier(source: string): boolean {
+  interface Group {
+    /** Sources of the unbounded atoms inside; null once one is a group (not checked by character). */
+    inner: string[] | null;
+    /** The group's first atom when it is one literal character, unquantified. */
+    lead: string | undefined;
+    atoms: number;
+  }
+  const open = (): Group => ({ inner: [], lead: undefined, atoms: 0 });
+  const groups: Group[] = [open()];
+  /** The quantifier at `at` (if any): its length and whether it is unbounded. */
+  const quantifier = (at: number): { length: number; unbounded: boolean } => {
+    const char = source[at];
+    let length = 0;
+    let unbounded = false;
+    if (char === "*" || char === "+") {
+      length = 1;
+      unbounded = true;
+    } else if (char === "?") length = 1;
+    else if (char === "{") {
+      const brace = /^\{(\d+)(,(\d*))?\}/.exec(source.slice(at));
+      if (brace) {
+        length = brace[0].length;
+        unbounded = brace[2] !== undefined && brace[3] === "";
+      }
+    }
+    if (length > 0 && source[at + length] === "?") length++; // lazy
+    return { length, unbounded };
+  };
+  const matchesChar = (atom: string, char: string): boolean => {
+    try {
+      return new RegExp(`^(?:${atom})$`, "u").test(char);
+    } catch {
+      return true;
+    }
+  };
+  for (let i = 0; i < source.length; i++) {
+    const char = source[i];
+    let atomEnd = i + 1;
+    let closed: Group | undefined;
+    if (char === "\\") atomEnd = i + 2;
+    else if (char === "[") {
+      let j = i + 1;
+      if (source[j] === "^") j++;
+      if (source[j] === "]") j++;
+      for (; j < source.length && source[j] !== "]"; j++) {
+        if (source[j] === "\\") j++;
+      }
+      atomEnd = j + 1;
+    } else if (char === "(") {
+      groups.push(open());
+      // Skip the group's `?:`, `?<name>` prefix.
+      const prefix = /^\(\?(?::|<[A-Za-z_]\w*>|P<[A-Za-z_]\w*>)/.exec(
+        source.slice(i),
+      );
+      if (prefix) i += prefix[0].length - 1;
+      continue;
+    } else if (char === ")") {
+      closed = groups.pop();
+    } else if (char === "|" || char === "^" || char === "$") continue;
+    const { length, unbounded } = quantifier(atomEnd);
+    const top = groups[groups.length - 1] as Group;
+    if (closed) {
+      const holds = closed.inner === null || closed.inner.length > 0;
+      if (unbounded && holds) {
+        const lead = closed.lead;
+        const delimited =
+          lead !== undefined &&
+          closed.inner !== null &&
+          closed.inner.every((atom) => !matchesChar(atom, lead));
+        if (!delimited) return true;
+      }
+      if (holds || unbounded) top.inner = null;
+    } else {
+      const atom = source.slice(i, atomEnd);
+      if (top.atoms === 0 && length === 0 && atom !== "." && char !== "[") {
+        top.lead = atom.length === 2 ? (atom[1] as string) : atom;
+        if (atom.length === 2 && /[dDwWsSbB]/.test(atom[1] as string)) {
+          top.lead = undefined;
+        }
+      }
+      if (unbounded && top.inner !== null) top.inner.push(atom);
+    }
+    top.atoms++;
+    i = atomEnd + length - 1;
+  }
+  return false;
 }
 
 /** The first character of `class` (a `RegExp` for one character) that `other` also matches, scanning ASCII then the BMP. */
@@ -520,7 +621,12 @@ export function compileSyntax(table: SyntaxTable): CompiledSyntax {
       for (let code = 0; code < 128; code++) {
         if (first.test(String.fromCharCode(code))) ascii[code] = entry;
       }
-      if (sharedCharacter(first, /[^\0-\x7f]/u) !== undefined)
+      // Astral first characters are not in the BMP scan; a class written
+      // with one, a `\u{…}` escape or a property escape may hold them.
+      if (
+        sharedCharacter(first, /[^\0-\x7f]/u) !== undefined ||
+        /[\u{10000}-\u{10ffff}]|\\u\{|\\[pP]/u.test(trigger.chars)
+      )
         other.push(entry);
     }
     return { ascii, other };

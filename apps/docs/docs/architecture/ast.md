@@ -299,12 +299,12 @@ interface MxNodeBase extends Span { readonly type: `Mx${string}` }
 type MxChild =
   | MxTag | MxAttributeTag | MxReturn | MxText | MxPlaceholder
   | MxScriptlet | MxComment | MxCDATA | MxDoctype | MxDeclaration
-  | MxModuleStatement;
+  | MxModuleStatement | MxTrigger;   // MxTrigger: a line trigger (§4.4)
 
 type MxNode =
   | MxDocument | MxChild
   | MxAttribute | MxShorthand | MxSpreadAttribute | MxMethod
-  | MxParseError | MxAtom
+  | MxParseError | MxAtom | MxTrigger
   // expression containers (§4)
   | MxExpression | MxStatements | MxPattern | MxArguments
   | MxParameterList | MxTypeArguments | MxTypeParameters;
@@ -1089,6 +1089,7 @@ interface MxExpressionContainer<N> extends Span {
   readonly node: N | null;   // the Babel payload; null when the parse failed
   readonly error: MxParseError | null;
   readonly atoms: readonly MxAtom[];   // §4.3, empty when none
+  readonly triggers?: readonly MxTrigger[];   // §4.4, present only when there are any
 }
 type MxExpression    = MxExpressionContainer<Expression>   & { readonly type: "MxExpression" };
 type MxStatements    = MxExpressionContainer<Statement[]>  & { readonly type: "MxStatements";
@@ -1259,6 +1260,43 @@ never as TypeScript's ternary, type or optional marker (decision 156 addenda
 ```
 
 Offsets: atom `title` `[15, 21)`, atom `rename-all` `[23, 34)` (the `:` included).
+
+### 4.4 `MxTrigger`
+
+A syntax-table trigger (decision 182; design note
+`language-extensions/core.md`, "The syntax table"). Only a table with
+triggers produces one; the `.mx` default row has none, so no default-row
+tree contains this node.
+
+```ts
+interface MxTrigger extends MxNodeBase {
+  readonly type: "MxTrigger";
+  readonly id: string;                                       // the table row's id
+  readonly position: "expression" | "attribute" | "line";    // the list that armed it
+  readonly text: string;                                     // the authored text the matcher matched, from `start`
+  readonly value: MxExpression | null;                       // `=value` of an attribute or line trigger
+}
+```
+
+Where it sits follows its position: an expression trigger is in the
+`triggers` of the innermost container whose source holds it (beside its
+`atoms`; the key is present only when non-empty); an attribute trigger is in
+the tag's `attributes`, in source order; a line trigger (a tagless concise
+line, decision 182 addendum 1) is a child of the enclosing body. The span
+covers the text and, when there is one, `=value`. A container's payload is
+parsed from the trigger's same-length stand-in (`&status` reads as
+`_status`), and the one payload node at exactly the trigger's span carries
+`extra.mxTrigger: { id, span, text }`. The front end lowers nothing: core's
+`lowerTrigger` builds what the row's `node` rule says.
+
+```mx
+entity Order
+  &title
+  &amount=qty * price
+```
+
+Offsets: line trigger `&title` `[15, 21)`, line trigger `&amount` `[24, 43)`
+with `value` `[32, 43)`.
 
 ## 5. Positions
 
@@ -1686,6 +1724,7 @@ in-repo template parser adds a 28th, `onAtom` (decision 156; source
 | Event | Payload | MX node or field |
 |---|---|---|
 | `onAtom` | `Value` (range: the whole atom; `value`: its name) | one `MxAtom` in the enclosing container's `atoms`, in source order (§4.3) |
+| `onTrigger` | `Trigger { id, position, standIn, text, value? }` (range: the text, then `=value`) | one `MxTrigger` (§4.4): in the enclosing container's `triggers`, in the tag's `attributes`, or a body child |
 | `onText` | `Range` | `MxText`; normalized with lookahead as Marko, except in a preserving body (§3.8, §3.12) |
 | `onPlaceholder` | `Placeholder { value, escape }` | `MxPlaceholder` |
 | `onComment` | `Value` | `MxComment` (kind from the source, as `getCommentKind`) |
@@ -1932,6 +1971,7 @@ not listed.
 | `MxExpressionContainer` | generic base | §4.1 | 1079 |
 | `MxExpression` | node (container) | §4.1 | 1086 |
 | `MxAtom` | node | §4.3 | 1197 |
+| `MxTrigger` | node | §4.4 | 1264 |
 | `MxBodyMode` | union | §3.12 | 864 |
 | `MxTagShape` | function type | §3.12 | 864 |
 | `MxStatementKeyword` | union | §3.10 | 793 |

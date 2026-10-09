@@ -18,6 +18,7 @@ import type {
   MxFrontEndOptions,
   MxParseError,
   MxStatementKeyword,
+  MxTrigger,
   Span,
 } from "@mxlang/babel/mx-ast";
 import { createParser, ErrorCode, TagType } from "../template/index.ts";
@@ -41,6 +42,8 @@ import {
 } from "./rules.ts";
 
 /** Options of `parse`: the two per-target inputs (ast §7.1) and an optional fragment base (ast §5.3). */
+export type { MxTrigger };
+
 export interface ParseOptions extends MxFrontEndOptions {
   readonly base?: MxFragmentBase;
   /**
@@ -48,31 +51,6 @@ export interface ParseOptions extends MxFrontEndOptions {
    * grammar. A table that does not validate is a `TypeError`.
    */
   readonly syntax?: SyntaxTable;
-}
-
-/**
- * A syntax-table trigger (decision 182), built from the template parser's
- * `onTrigger`. It is not lowered here: core's `lowerTrigger` builds what the
- * table's `node` rule says. Where it sits follows its position:
- *
- * - expression: in the `triggers` list of the innermost container whose
- *   source holds it, beside that container's `atoms` (the list is present
- *   only when non-empty). The container's payload parsed the trigger's
- *   same-length stand-in; the payload node at exactly the trigger's span, if
- *   any, carries `extra.mxTrigger`.
- * - attribute: in the tag's `attributes`, in source order.
- * - line: a child of the enclosing body.
- *
- * `start`/`end` cover the whole construct (the text, then `=value` when
- * there is one); `text` is what the trigger's matcher matched, starting at
- * `start`.
- */
-export interface MxTrigger extends Span {
-  readonly type: "MxTrigger";
-  readonly id: string;
-  readonly text: string;
-  /** The `=value` of an attribute or line trigger; null without one, and always for an expression trigger. */
-  readonly value: MxExpression | null;
 }
 
 /** Decision 161's wording for an error that is never the author's. */
@@ -208,7 +186,7 @@ class FrontEnd {
   /** Atoms announced but not yet claimed by a container, in source order (local offsets). */
   atoms: { start: number; end: number; name: string }[] = [];
   /** Expression triggers announced but not yet claimed by a container, in source order (local offsets). */
-  triggers: (SubParseTrigger & { text: string })[] = [];
+  triggers: (SubParseTrigger & { position: "expression" })[] = [];
   openStart: number | undefined;
   /** The attribute-list item(s) the last `onAttrName` produced: value, args and methods attach to the last one. */
   current: Builder | undefined;
@@ -414,6 +392,7 @@ class FrontEnd {
             start: this.at(trigger.start),
             end: this.at(trigger.end),
             id: trigger.id,
+            position: "expression",
             text: trigger.text,
             value: null,
           });
@@ -587,6 +566,7 @@ class FrontEnd {
         start: event.start,
         end: event.end,
         id: event.id,
+        position: "expression",
         standIn: event.standIn,
         text,
       });
@@ -597,6 +577,7 @@ class FrontEnd {
       start: this.at(event.start),
       end: this.at(event.end),
       id: event.id,
+      position: event.position,
       text,
       value: event.value
         ? this.container("MxExpression", event.value, event.value, "attr-value")

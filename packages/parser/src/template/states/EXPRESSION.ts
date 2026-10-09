@@ -173,6 +173,7 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
         expression.atoms &&
         lexTrigger(this, expression, data)
       ) {
+        if (this.pos > maxPos) return; // an error was reported
         continue;
       }
 
@@ -548,8 +549,8 @@ function checkForOperators(
       // `terminatesValue` ends an attribute value; decision 146's ` :ident`
       // and ` .ident` rule as a table property.
       if (
-        expression.attrValue &&
         parser.syntax.terminators &&
+        valueMayEndAt(expression, data, nextNonSpace) &&
         matchTrigger(parser.syntax.attribute!, data, nextNonSpace)?.trigger
           .terminatesValue
       ) {
@@ -677,6 +678,24 @@ function isSingleAtomDefault(
   );
 }
 
+/**
+ * MX: whether an attribute value may end at `pos`, the start of the next
+ * token after whitespace: a named attribute's (or spread's) value, or a
+ * single-atom default value (decision 146 addendum 5), with no `?` open (a
+ * ` :x` there is the ternary's). The guard of decision 146's ` :name` rule,
+ * shared with the syntax table's `terminatesValue` (decision 182).
+ */
+function valueMayEndAt(
+  expression: ExpressionMeta,
+  data: string,
+  pos: number,
+): boolean {
+  return (
+    (expression.attrValue || isSingleAtomDefault(expression, data, pos)) &&
+    !expression.ternaryDepth
+  );
+}
+
 function lookAheadForOperator(
   expression: ExpressionMeta,
   data: string,
@@ -706,9 +725,7 @@ function lookAheadForOperator(
     case CODE.COLON:
       // MX: in an attribute value, ` :name` (no open `?`) or a bare `:` before
       // the end of the tag or line starts a new attribute.
-      return (expression.attrValue ||
-        isSingleAtomDefault(expression, data, pos)) &&
-        !expression.ternaryDepth &&
+      return valueMayEndAt(expression, data, pos) &&
         (isIdentStartCode(data.charCodeAt(pos + 1)) ||
           isBareColonEnd(data, pos + 1))
         ? -1
@@ -994,8 +1011,27 @@ function lexTrigger(
   ) {
     return false;
   }
-  if (!expectsExpression(expression, data, start)) return false;
+  // A `?` before the trigger is a ternary's (`c?&a:&b`), never the
+  // TypeScript optional marker the atom rule guards against (`a?:T`).
+  if (
+    !afterQuestion(expression, data, start) &&
+    !expectsExpression(expression, data, start)
+  ) {
+    return false;
+  }
   const { trigger, end } = hit;
+  // The stand-in must end where the trigger does: text that continues the
+  // token (`&façade` matched as `&fa` by an ASCII matcher, or `0` then `.`
+  // for a one-character number stand-in) would merge into it.
+  const continued = trigger.standIn !== "keep" && continuesToken(data, start, end, trigger.standIn);
+  if (continued) {
+    parser.emitError(
+      { start, end: end + continued },
+      ErrorCode.INVALID_EXPRESSION,
+      `The "${trigger.id}" trigger "${data.slice(start, end)}" is followed by "${data.slice(end, end + continued)}", which would continue its token; its matcher must take the whole token.`,
+    );
+    return true;
+  }
   if (parser.recordTrigger(trigger, start, end)) {
     parser.options.onTrigger?.({
       id: trigger.id,
@@ -1009,6 +1045,34 @@ function lexTrigger(
   expression.atomEnd = end;
   parser.pos = end;
   return true;
+}
+
+/** Whether the last non-whitespace character before `pos` in the expression is `?`. */
+function afterQuestion(expression: ExpressionMeta, data: string, pos: number) {
+  let i = pos - 1;
+  while (i >= expression.start && isUnicodeWhitespaceCode(data.charCodeAt(i))) i--;
+  return i >= expression.start && data.charCodeAt(i) === CODE.QUESTION;
+}
+
+/**
+ * How many characters at `end` would continue a stand-in's token: an
+ * identifier character (Unicode-aware, a surrogate pair is one), or a `.`
+ * after a one-character number stand-in (`0.` would read as one literal).
+ * Zero when the token ends at `end`.
+ */
+function continuesToken(
+  data: string,
+  start: number,
+  end: number,
+  standIn: "number" | "identifier",
+) {
+  const width = wordWidthAt(data, end);
+  if (width > 0) return width;
+  return standIn === "number" &&
+    end - start === 1 &&
+    data.charCodeAt(end) === CODE.PERIOD
+    ? 1
+    : 0;
 }
 
 /** MX (decision 156): the error for the reserved `::name` token. */

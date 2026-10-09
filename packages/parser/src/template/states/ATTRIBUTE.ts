@@ -452,10 +452,15 @@ function lexAttrTrigger(parser: Parser, attr: AttrMeta, data: string) {
   };
   parser.pos = end;
 
-  if (data.charCodeAt(end) === CODE.EQUAL) {
-    attr.valueStart = end;
+  // `&a = 1`: whitespace before the `=`, exactly as after a name (in
+  // concise mode a line break ends the attribute).
+  const skip = parser.isConcise ? isIndentCode : isWhitespaceCode;
+  let at = end;
+  while (at < parser.maxPos && skip(data.charCodeAt(at))) at++;
+  if (data.charCodeAt(at) === CODE.EQUAL) {
+    attr.valueStart = at;
     attr.stage = ATTR_STAGE.TRIGGER_VALUE;
-    parser.pos++; // skip =
+    parser.pos = at + 1; // skip =
     parser.consumeWhitespace();
     enterAttrValue(parser, true);
     return true;

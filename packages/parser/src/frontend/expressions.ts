@@ -76,6 +76,8 @@ export interface SubParseTrigger {
   readonly end: number;
   readonly id: string;
   readonly standIn: StandIn;
+  /** The authored text (the payload holds the stand-in). */
+  readonly text: string;
 }
 
 /** Where the container sits in the file: absolute offset, 1-based line, 0-based column of its first character. */
@@ -438,10 +440,14 @@ function convertStandIns(
 }
 
 /**
- * Marks the payload node at exactly each trigger's span (decision 182) with
- * `extra.mxTrigger`: its id and span. Nothing is converted; lowering
- * (`lowerTrigger`, core) decides what the trigger builds. A `"keep"`
- * trigger's text may parse as no single node, and then nothing is marked.
+ * Marks one payload node per trigger (decision 182) with `extra.mxTrigger`:
+ * its id, span and authored text (the node holds the stand-in, `_status`).
+ * Several nodes can share the span (`x() { &a }`: the statement and the
+ * identifier; `{ &a }`: the property, its key and its value); the mark goes
+ * to the deepest, and among equals the last visited, which is the operand
+ * itself (the shorthand's value, not its key). Nothing is converted;
+ * lowering (`lowerTrigger`, core) decides what the trigger builds. A
+ * `"keep"` trigger's text may parse as no single node; then none is marked.
  */
 function markTriggers(
   // biome-ignore lint/suspicious/noExplicitAny: walks Babel nodes generically
@@ -452,13 +458,15 @@ function markTriggers(
   const spans = new Map(
     triggers.map((trigger) => [trigger.start + fileOffset, trigger] as const),
   );
+  // biome-ignore lint/suspicious/noExplicitAny: Babel nodes, generically
+  const best = new Map<SubParseTrigger, { node: any; depth: number }>();
   const seen = new Set<unknown>();
   // biome-ignore lint/suspicious/noExplicitAny: walks Babel nodes generically
-  const visit = (value: any): void => {
+  const visit = (value: any, depth: number): void => {
     if (!value || typeof value !== "object" || seen.has(value)) return;
     seen.add(value);
     if (Array.isArray(value)) {
-      for (const item of value) visit(item);
+      for (const item of value) visit(item, depth);
       return;
     }
     if (typeof value.type !== "string") return;
@@ -466,20 +474,27 @@ function markTriggers(
     const end = value.end ?? value.loc?.end?.index;
     const trigger = spans.get(start);
     if (trigger && end === trigger.end + fileOffset) {
-      value.extra = {
-        ...value.extra,
-        mxTrigger: {
-          id: trigger.id,
-          span: { sourceStart: start, sourceEnd: end },
-        },
-      };
+      const found = best.get(trigger);
+      if (!found || depth >= found.depth)
+        best.set(trigger, { node: value, depth });
     }
     for (const [key, child] of Object.entries(value)) {
       if (key === "loc" || key === "extra") continue;
-      visit(child);
+      visit(child, depth + 1);
     }
   };
-  visit(node);
+  visit(node, 0);
+  for (const [trigger, { node: marked }] of best) {
+    const start = trigger.start + fileOffset;
+    marked.extra = {
+      ...marked.extra,
+      mxTrigger: {
+        id: trigger.id,
+        span: { sourceStart: start, sourceEnd: trigger.end + fileOffset },
+        text: trigger.text,
+      },
+    };
+  }
 }
 
 /**

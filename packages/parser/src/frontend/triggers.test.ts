@@ -21,7 +21,7 @@ import { projectDocument } from "./test-support/project.ts";
 const MEMBER: Trigger = {
   id: "member",
   chars: "&",
-  match: "&[A-Za-z_$][A-Za-z0-9_$]*",
+  match: "&[\\p{L}\\p{Nl}_$][\\p{L}\\p{Nl}\\p{Mn}\\p{Mc}\\p{Nd}\\p{Pc}_$]*",
   standIn: "identifier",
   node: { call: "member" },
 };
@@ -61,6 +61,7 @@ describe("the & member row through the front end", () => {
         start: 8,
         end: 15,
         id: "member",
+        position: "expression",
         text: "&status",
         value: null,
       },
@@ -73,7 +74,11 @@ describe("the & member row through the front end", () => {
       end: 15,
       name: "_status",
       extra: {
-        mxTrigger: { id: "member", span: { sourceStart: 8, sourceEnd: 15 } },
+        mxTrigger: {
+          id: "member",
+          span: { sourceStart: 8, sourceEnd: 15 },
+          text: "&status",
+        },
       },
     });
     expect(value.node.body.right).toMatchObject({
@@ -93,6 +98,7 @@ describe("the & member row through the front end", () => {
         start: 8,
         end: 17,
         id: "member",
+        position: "expression",
         text: "&customer",
         value: null,
       },
@@ -101,6 +107,7 @@ describe("the & member row through the front end", () => {
         start: 19,
         end: 25,
         id: "member",
+        position: "expression",
         text: "&other",
         value: null,
       },
@@ -127,6 +134,7 @@ describe("the & member row through the front end", () => {
       start: 9,
       end: 15,
       id: "member",
+      position: "attribute",
       text: "&dueOn",
       value: null,
     });
@@ -148,6 +156,7 @@ describe("the & member row through the front end", () => {
       start: 15,
       end: 21,
       id: "member",
+      position: "line",
       text: "&title",
       value: null,
     });
@@ -156,6 +165,7 @@ describe("the & member row through the front end", () => {
       start: 24,
       end: 43,
       id: "member",
+      position: "line",
       text: "&amount",
       value: {
         type: "MxExpression",
@@ -184,6 +194,65 @@ describe("the & member row through the front end", () => {
       ["&b", 4],
     ]);
     expect(line.value.atoms.map((a: Node) => a.name)).toEqual(["c"]);
+  });
+
+  it("marks only the operand: not the statement in a method body (Mesh 3)", () => {
+    const document = meshParse("x() { &a }");
+    expect(document.errors).toEqual([]);
+    const method = (document.body[0] as Node).attributes[0].value;
+    const statement = method.body.node[0];
+    expect(statement.type).toBe("ExpressionStatement");
+    expect(statement.extra?.mxTrigger).toBeUndefined();
+    expect(statement.expression).toMatchObject({
+      type: "Identifier",
+      name: "_a",
+      extra: {
+        mxTrigger: {
+          id: "member",
+          span: { sourceStart: 6, sourceEnd: 8 },
+          text: "&a",
+        },
+      },
+    });
+  });
+
+  it("marks only the shorthand's value, not the property or its key (Mesh 3)", () => {
+    const document = meshParse("x={ &a }");
+    expect(document.errors).toEqual([]);
+    const [property] = (document.body[0] as Node).attributes[0].value.node
+      .properties;
+    expect(property.shorthand).toBe(true);
+    expect(property.extra?.mxTrigger).toBeUndefined();
+    expect(property.key.extra?.mxTrigger).toBeUndefined();
+    expect(property.value.extra.mxTrigger).toEqual({
+      id: "member",
+      span: { sourceStart: 4, sourceEnd: 6 },
+      text: "&a",
+    });
+  });
+
+  it("a Unicode identifier is one trigger and one payload node of the same span (Opus B1)", () => {
+    const document = meshParse("x=&façade");
+    expect(document.errors).toEqual([]);
+    const value = (document.body[0] as Node).attributes[0].value;
+    expect(value.triggers).toEqual([
+      {
+        type: "MxTrigger",
+        start: 2,
+        end: 9,
+        id: "member",
+        position: "expression",
+        text: "&façade",
+        value: null,
+      },
+    ]);
+    expect(value.node).toMatchObject({
+      type: "Identifier",
+      start: 2,
+      end: 9,
+      name: "_fa_ade",
+      extra: { mxTrigger: { text: "&façade" } },
+    });
   });
 
   it("a fragment base offsets every trigger", () => {

@@ -116,6 +116,23 @@ export interface MxAtom extends Span {
   readonly name: string;
 }
 
+/**
+ * A syntax-table trigger (decision 182; ast §4.4): `&status` in an expression
+ * (in its container's `triggers`), an attribute (in `attributes`) or a
+ * tagless concise line (a child). Not lowered by the front end.
+ */
+export interface MxTrigger extends MxNodeBase {
+  readonly type: "MxTrigger";
+  /** The table row's id. */
+  readonly id: string;
+  /** The table list that armed it. */
+  readonly position: "expression" | "attribute" | "line";
+  /** The authored text the matcher matched, starting at `start`. */
+  readonly text: string;
+  /** The `=value` of an attribute or line trigger; null without one, and always for an expression trigger. */
+  readonly value: MxExpression | null;
+}
+
 /** A parse error recorded as data; `start`/`end` are what to underline (ast §3.13). */
 export interface MxParseError extends MxNodeBase {
   readonly type: "MxParseError";
@@ -132,6 +149,8 @@ export interface MxExpressionContainer<N> extends Span {
   readonly node: N | null;
   readonly error: MxParseError | null;
   readonly atoms: readonly MxAtom[];
+  /** Expression triggers inside (decision 182, ast §4.4); present only when there are any. */
+  readonly triggers?: readonly MxTrigger[];
 }
 
 /** Expression container (ast §4.1). */
@@ -316,6 +335,7 @@ interface MxTagFields {
     | MxShorthand
     | MxSpreadAttribute
     | MxComment
+    | MxTrigger
   )[];
   readonly body: readonly MxChild[] | null;
   readonly bodyMode: MxBodyMode;
@@ -366,7 +386,8 @@ export type MxChild =
   | MxCDATA
   | MxDoctype
   | MxDeclaration
-  | MxModuleStatement;
+  | MxModuleStatement
+  | MxTrigger;
 
 /** Every MX node (ast §3.0). */
 export type MxNode =
@@ -378,6 +399,7 @@ export type MxNode =
   | MxMethod
   | MxParseError
   | MxAtom
+  | MxTrigger
   | MxExpression
   | MxStatements
   | MxPattern

@@ -19,13 +19,23 @@ import {
   validateSyntaxTable,
 } from "./index.ts";
 
-/** Mesh's member trigger (decision 182 addendum 2), the first table row. */
+/**
+ * Mesh's member trigger (decision 182 addendum 2), the first table row. Its
+ * matcher takes the identifier charset of names (Unicode letters, marks,
+ * digits, connectors; review 439 B1), so it ends where the token does.
+ */
 const MEMBER: Trigger = {
   id: "member",
   chars: "&",
-  match: "&[A-Za-z_$][A-Za-z0-9_$]*",
+  match: "&[\\p{L}\\p{Nl}_$][\\p{L}\\p{Nl}\\p{Mn}\\p{Mc}\\p{Nd}\\p{Pc}_$]*",
   standIn: "identifier",
   node: { call: "member" },
+};
+
+/** The same row with an ASCII-only matcher, which stops inside `&façade`. */
+const ASCII_MEMBER: Trigger = {
+  ...MEMBER,
+  match: "&[A-Za-z_$][A-Za-z0-9_$]*",
 };
 
 const table = (patch: Partial<SyntaxTable>): SyntaxTable => ({
@@ -63,6 +73,9 @@ function render(code: string, syntax: SyntaxTable | undefined): string {
       onText: (r) => out.push(`text(${show(r)})`),
       onScriptlet: (s) => out.push(`$${show(s.value)}`),
       onPlaceholder: (p) => out.push(`\${${show(p.value)}}`),
+      onComment: (c) => out.push(`comment(${c.start}-${c.end})`),
+      onOpenTagComment: (c) => out.push(`tag-comment(${c.start}-${c.end})`),
+      onAttrMethod: (m) => out.push(`method{${show(m.body.value)}}`),
     },
     syntax ? { syntax } : undefined,
   );
@@ -211,6 +224,146 @@ describe("the & member row (decision 182 addendum 1)", () => {
     ],
   ])("error: %j", (code, expected) => {
     expect(render(code, MESH)).toContain(expected);
+  });
+});
+
+describe("review 439 round 1", () => {
+  it.each([
+    // Compact ternaries: a `?` before a trigger is never TypeScript's
+    // optional marker (Mesh 1).
+    [
+      "x=c?&a:&b",
+      '<x> @ trigger(member expression "&a"@4-6) trigger(member expression "&b"@7-9) ="c?_a:_b"',
+    ],
+    [
+      "x=c? &a : &b",
+      '<x> @ trigger(member expression "&a"@5-7) trigger(member expression "&b"@10-12) ="c? _a : _b"',
+    ],
+    [
+      "x=[c]?&a:&b",
+      '<x> @ trigger(member expression "&a"@6-8) trigger(member expression "&b"@9-11) ="[c]?_a:_b"',
+    ],
+    ["x=a?.&b", '<x> @ ="a?.&b"'],
+    // A comment after a tagless trigger line, as after a concise tag line
+    // (Mesh 2).
+    ["&title // c", 'trigger(member line "&title"@0-6) comment(7-11)'],
+    ["&title /* c */", 'trigger(member line "&title"@0-6) comment(7-14)'],
+    [
+      "e\n  &a // c\n  &b",
+      '<e> trigger(member line "&a"@4-6) comment(7-11) trigger(member line "&b"@14-16)',
+    ],
+    // After a value the comment is the value's, as `div a=1 // c` (below).
+    ["&a=1 // c", 'trigger(member line "&a"@0-9 ="1 // c")'],
+    // Spaces around `=` follow the attribute-value rule (lead ruling).
+    ["&a = 1", 'trigger(member line "&a"@0-6 ="1")'],
+    ["x &a = 1", '<x> trigger(member attribute "&a"@2-8 ="1")'],
+    ["<x &a = 1/>", '<x> trigger(member attribute "&a"@3-9 ="1")'],
+    // Positions Mesh found untested.
+    ["x() { &a }", '<x> @ trigger(member expression "&a"@6-8) method{" _a "}'],
+    ["x=a && &b", '<x> @ trigger(member expression "&b"@7-9) ="a && _b"'],
+    [
+      "&f=() => &a",
+      'trigger(member expression "&a"@9-11) trigger(member line "&f"@0-11 ="() => _a")',
+    ],
+    [
+      "x [\n  &a\n  b=&c\n]",
+      '<x> trigger(member attribute "&a"@6-8) @b trigger(member expression "&c"@13-15) ="_c"',
+    ],
+    // A Unicode identifier is one trigger (Opus B1).
+    ["x=&façade", '<x> @ trigger(member expression "&façade"@2-9) ="_fa_ade"'],
+    // `&a&&&b`: the third `&` continues the `&&` run, so it is not armed;
+    // the value is `_a&&&b`, which Babel rejects. Write `&a && &b` (L4).
+    ["x=&a&&&b", '<x> @ trigger(member expression "&a"@2-4) ="_a&&&b"'],
+  ])("%j", (code, expected) => {
+    expect(render(code, MESH)).toBe(expected);
+  });
+
+  it("the attribute-value rule the line trigger follows", () => {
+    expect(render("div a=1 // c", undefined)).toBe('<div> @a ="1 // c"');
+    expect(render("div a = 1", undefined)).toBe('<div> @a ="1"');
+    expect(render("div // c", undefined)).toBe("<div> tag-comment(4-8)");
+  });
+
+  it("text after a block comment on a trigger line is an error", () => {
+    expect(render("&title /* c */ x", MESH)).toBe(
+      'trigger(member line "&title"@0-6) comment(7-14) ERR(15-15 In concise mode a javascript comment block can only be followed by whitespace characters and a newline.)',
+    );
+  });
+
+  it("a stand-in never merges with what follows the match (Opus B1)", () => {
+    const ascii = table({ expressionTriggers: [ASCII_MEMBER] });
+    expect(render("x=&façade", ascii)).toBe(
+      '<x> @ ERR(2-6 The "member" trigger "&fa" is followed by "ç", which would continue its token; its matcher must take the whole token.)',
+    );
+    const narrow = table({
+      expressionTriggers: [{ ...MEMBER, match: "&[a-z]+" }],
+    });
+    expect(render("x=&fooBar + 1", narrow)).toBe(
+      '<x> @ ERR(2-7 The "member" trigger "&foo" is followed by "B", which would continue its token; its matcher must take the whole token.)',
+    );
+    const hash = table({
+      expressionTriggers: [
+        {
+          id: "n",
+          chars: "#",
+          match: "#[a-z]*",
+          standIn: "number",
+          node: "string",
+        },
+      ],
+    });
+    expect(render("x=#.toString()", hash)).toBe(
+      '<x> @ ERR(2-4 The "n" trigger "#" is followed by ".", which would continue its token; its matcher must take the whole token.)',
+    );
+    // Two characters read `0.` and then `.x`: a member of the literal.
+    expect(render("x=#a.x", hash)).toBe(
+      '<x> @ trigger(n expression "#a"@2-4) ="0..x"',
+    );
+    // A keep stand-in is the text itself: nothing to merge.
+    const keep = table({
+      expressionTriggers: [{ ...ASCII_MEMBER, standIn: "keep" }],
+    });
+    expect(render("x=&façade", keep)).toBe(
+      '<x> @ trigger(member expression "&fa"@2-5) ="&façade"',
+    );
+  });
+
+  it("terminatesValue keeps decision 146's ternary guard (Opus B2)", () => {
+    const name = table({
+      attributeTriggers: [
+        {
+          id: "name",
+          chars: ":",
+          match: ":[A-Za-z_$][\\w$]*",
+          standIn: "identifier",
+          node: "attribute",
+          terminatesValue: true,
+        },
+      ],
+    });
+    expect(render("x y=a ? b :c", name)).toBe('<x> @y ="a ? b :c"');
+    expect(render("<x y=a ? b :c/>", name)).toBe('<x> @y ="a ? b :c"');
+    expect(render("x y=a :c", name)).toBe(
+      '<x> @y ="a" trigger(name attribute ":c"@6-8)',
+    );
+  });
+
+  it("an astral first character arms a trigger (Opus L2)", () => {
+    const emoji = table({
+      expressionTriggers: [
+        {
+          id: "e",
+          chars: "😀",
+          match: "😀[a-z]+",
+          standIn: "identifier",
+          node: "identifier",
+        },
+      ],
+    });
+    expect(validateSyntaxTable(emoji)).toEqual([]);
+    expect(render("x=😀ab + 1", emoji)).toBe(
+      '<x> @ trigger(e expression "😀ab"@2-6) ="__ab + 1"',
+    );
   });
 });
 
@@ -582,6 +735,18 @@ describe("validateSyntaxTable", () => {
       /back-reference/,
     ],
     [
+      "a nested unbounded quantifier",
+      table({ lineTriggers: [trigger({ match: "&(a+)+b" })] }),
+      "lineTriggers[0].match",
+      /nests an unbounded quantifier/,
+    ],
+    [
+      "a nested unbounded quantifier in a counted repeat",
+      table({ lineTriggers: [trigger({ match: "&(?:aa*){2,}" })] }),
+      "lineTriggers[0].match",
+      /nests an unbounded quantifier/,
+    ],
+    [
       "a matcher matching empty",
       table({ lineTriggers: [trigger({ match: "&?" })] }),
       "lineTriggers[0].match",
@@ -681,6 +846,19 @@ describe("validateSyntaxTable", () => {
 
   it("accepts the & table, and the same id in several lists", () => {
     expect(validateSyntaxTable(MESH)).toEqual([]);
+  });
+
+  it("accepts a delimited repeat, the atom-name shape (Opus L3)", () => {
+    for (const match of [
+      "&[A-Za-z_$][\\w$]*(?:-[\\w$]+)*",
+      "&(?:-[a-z]+)*",
+      "&(a+){2}",
+    ]) {
+      expect(
+        validateSyntaxTable(table({ lineTriggers: [{ ...MEMBER, match }] })),
+        match,
+      ).toEqual([]);
+    }
   });
 
   it("createParser refuses an invalid table with every problem listed", () => {
