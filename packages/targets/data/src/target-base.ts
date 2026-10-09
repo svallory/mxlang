@@ -13,6 +13,10 @@ import { DEFAULT_TAG, dataDeclarations } from "./declarations.ts";
 export const dataTargetBase: TargetDescriptor = {
   descriptorVersion: 0,
   name: "tree",
+  // The target is named "tree" but its config key stays "data" (decision
+  // 187): `mx.data.*` — `defaultTag` today, the data check's keys — is
+  // unchanged by the rename, and `mx.tree.*` is read by no tool.
+  configKey: "data",
   packageName: "@mxlang/data",
   defaultTag: DEFAULT_TAG,
   declarations: { default: dataDeclarations },

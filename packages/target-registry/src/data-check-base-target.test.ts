@@ -109,9 +109,17 @@ describe("the base target's mx.<base>.defaultTag is a rung of the shared ladder"
     };
   };
 
-  it("mx.tree.defaultTag is read for a host built on tree", () => {
-    expect(answer({ mx: { tree: { defaultTag: "node" } } })).toEqual({
+  it("mx.data.defaultTag is read for a host built on tree", () => {
+    expect(answer({ mx: { data: { defaultTag: "node" } } })).toEqual({
       tag: "node",
+      messages: [],
+      codes: [],
+    });
+  });
+
+  it("the target's own name is never its config key: mx.tree.defaultTag is not read", () => {
+    expect(answer({ mx: { tree: { defaultTag: "node" } } })).toEqual({
+      tag: "object",
       messages: [],
       codes: [],
     });
@@ -120,7 +128,7 @@ describe("the base target's mx.<base>.defaultTag is a rung of the shared ladder"
   it("it outranks the host's override and the descriptor's defaultTag", () => {
     expect(
       answer({
-        mx: { tree: { defaultTag: "node" } },
+        mx: { data: { defaultTag: "node" } },
         hostDefaultTag: "leaf",
         defaultTag: "leaf",
       }).tag,
@@ -132,13 +140,13 @@ describe("the base target's mx.<base>.defaultTag is a rung of the shared ladder"
       answer({
         mx: {
           "mesh-data": { defaultTag: "leaf" },
-          tree: { defaultTag: "node" },
+          data: { defaultTag: "node" },
         },
       }),
     ).toEqual({
       tag: "leaf",
       messages: [
-        'mx.tree.defaultTag "node" is ignored: mx["mesh-data"].defaultTag "leaf" takes precedence',
+        'mx.data.defaultTag "node" is ignored: mx["mesh-data"].defaultTag "leaf" takes precedence',
       ],
       codes: ["default-tag-overridden"],
     });
@@ -149,24 +157,24 @@ describe("the base target's mx.<base>.defaultTag is a rung of the shared ladder"
       answer({
         mx: {
           "mesh-data": { defaultTag: "node" },
-          tree: { defaultTag: "node" },
+          data: { defaultTag: "node" },
         },
       }),
     ).toEqual({ tag: "node", messages: [], codes: [] });
   });
 
-  it("an invalid mx.tree.defaultTag is one error and the next rung answers", () => {
+  it("an invalid mx.data.defaultTag is one error and the next rung answers", () => {
     const { tag, codes } = answer({
-      mx: { tree: { defaultTag: "nonexistent" } },
+      mx: { data: { defaultTag: "nonexistent" } },
       hostDefaultTag: "leaf",
     });
     expect(tag).toBe("leaf");
     expect(codes).toEqual(["invalid-default-tag"]);
   });
 
-  it("a host not built on tree never reads mx.tree.defaultTag", () => {
+  it("a host not built on tree never reads mx.data.defaultTag", () => {
     expect(
-      answer({ notBuiltOnData: true, mx: { tree: { defaultTag: "node" } } }),
+      answer({ notBuiltOnData: true, mx: { data: { defaultTag: "node" } } }),
     ).toEqual({ tag: "object", messages: [], codes: [] });
   });
 });
@@ -186,10 +194,25 @@ describe("a host whose builtOn names no registered target", () => {
   });
 
   it('refuses the reserved literal "data" with the decision-187 hint', () => {
-    const [message] = verdict("data");
+    const [message, ...rest] = verdict("data");
+    expect(rest).toEqual([]);
     expect(message).toContain(
       '"data" is reserved for the evaluated tree target (decision 187); the static tree target is "tree"',
     );
+  });
+
+  it('refuses the reserved literal "data" at the mx.host value that loaded the descriptor', () => {
+    const file = join(mesh({ builtOn: "data" }), "post.mesh.mx");
+    const [diagnostic] = resolveTargetPolicyDetailed(file).diagnostics;
+    expect(diagnostic).toMatchObject({
+      code: "target-invalid-descriptor",
+      severity: "error",
+      // The range of the `mx.host` value, `"@fake/mx-mesh"` in package.json
+      // line 3, where the descriptor with the offending `builtOn` came from.
+      line: 3,
+      column: 12,
+      length: 15,
+    });
   });
 
   it("names the target a host name stands for", () => {

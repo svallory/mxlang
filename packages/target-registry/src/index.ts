@@ -31,7 +31,6 @@ import {
   type HostRegionResult,
   hostRestrictionDiagnostics,
   type MxWarning,
-  type PolicyLocation,
   readTargetDefaultTag,
   registerCalleeInputReader,
   type ScanDiagnostic,
@@ -445,7 +444,10 @@ function configFor(
         : { value: policy.defaultTag, at: policy.defaultTagAt }),
     };
   }
-  return { target: kind.name, ...readTargetDefaultTag(filePath, kind.name) };
+  return {
+    target: kind.name,
+    ...readTargetDefaultTag(filePath, kind.name, kind.configKey),
+  };
 }
 
 /**
@@ -461,14 +463,18 @@ function baseConfigFor(
 ): ({ target: string } & ReturnType<typeof readTargetDefaultTag>) | undefined {
   const base = lookup.baseTargetOf?.(target) ?? target;
   if (base === target) return undefined;
-  return { target: base, ...readTargetDefaultTag(filePath, base) };
+  return {
+    target: base,
+    ...readTargetDefaultTag(filePath, base, lookup.target(base)?.configKey),
+  };
 }
 
-/** `mx.<target>.defaultTag`, spelled as a JSON path an author can find. */
-function keyPath(target: string): string {
-  return /^[A-Za-z_$][\w$]*$/.test(target)
-    ? `mx.${target}.defaultTag`
-    : `mx[${JSON.stringify(target)}].defaultTag`;
+/** `mx.<config key>.defaultTag`, spelled as a JSON path an author can find. */
+function keyPath(target: string, configKey?: string): string {
+  const key = configKey ?? target;
+  return /^[A-Za-z_$][\w$]*$/.test(key)
+    ? `mx.${key}.defaultTag`
+    : `mx[${JSON.stringify(key)}].defaultTag`;
 }
 
 /** The scope a package's `defaultTag` is checked in: its scan, and the lookup the target compiles with. */
@@ -627,7 +633,7 @@ function checkDefaultTags(
           line: base.at.line,
           column: base.at.column,
           ...(base.at.length !== undefined ? { length: base.at.length } : {}),
-          message: `${keyPath(base.target)} ${JSON.stringify(base.value)} is ignored: ${keyPath(config.target)} ${JSON.stringify(own)} takes precedence`,
+          message: `${keyPath(base.target, lookup.target(base.target)?.configKey)} ${JSON.stringify(base.value)} is ignored: ${keyPath(config.target, lookup.target(config.target)?.configKey)} ${JSON.stringify(own)} takes precedence`,
         });
       }
     }

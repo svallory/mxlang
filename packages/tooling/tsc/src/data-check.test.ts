@@ -240,7 +240,7 @@ describe("mx-tsc on a data package", () => {
 
   describe("mx.data.defaultTag (decision 145)", () => {
     const manifest = (value: unknown) =>
-      `{\n  "mx": {\n    "target": "tree",\n    "contracts": "./contracts.ts",\n    "tree": { "defaultTag": ${JSON.stringify(value)} }\n  }\n}\n`;
+      `{\n  "mx": {\n    "target": "tree",\n    "contracts": "./contracts.ts",\n    "data": { "defaultTag": ${JSON.stringify(value)} }\n  }\n}\n`;
 
     it("a shorthand with no config is the built-in `object`, known under reject", () => {
       const dir = copyOfFixture();
@@ -317,7 +317,7 @@ describe("mx-tsc on a data package", () => {
       const dir = copyOfFixture(["clean.mx"]);
       writeFileSync(
         join(dir, "package.json"),
-        `{\n  "mx": {\n    "target": "tree",\n    "contracts": { "item": {} },\n    "tree": { "defaultTag": "object" }\n  }\n}\n`,
+        `{\n  "mx": {\n    "target": "tree",\n    "contracts": { "item": {} },\n    "data": { "defaultTag": "object" }\n  }\n}\n`,
       );
       const { output } = check(dir);
       expect(output).not.toMatch(/\n\s+at /);

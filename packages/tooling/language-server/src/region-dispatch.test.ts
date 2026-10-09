@@ -5,13 +5,7 @@
  * whole-file under the page policy, and a third-party host on the data target
  * (Mesh's `.mesh.mx`, decision 148) is never routed to the region bridge.
  */
-import {
-  mkdirSync,
-  mkdtempSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -192,11 +186,11 @@ describe(".mesh.mx (a third-party host on the data target)", () => {
     expect((globalThis as MeshGlobals).__mxMeshDefaultTags).toEqual(["node"]);
   });
 
-  it("mx.tree.defaultTag is the shared ladder's rung for a host built on tree", () => {
+  it("mx.data.defaultTag is the shared ladder's rung for a host built on tree", () => {
     const options = {
       fileKinds: MESH_KIND,
       files: { "tags/node.mx": "" },
-      mx: { tree: { defaultTag: "node" } },
+      mx: { data: { defaultTag: "node" } },
     };
     mesh(options);
     const file = join(meshProject("mx-ls-mesh-", options), "post.mesh.mx");

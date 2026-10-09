@@ -3296,9 +3296,13 @@ lookup; tools use `@mxlang/target-registry`'s built-in wrapper.
 
 1. `mx.target` names a registered target directly: `html`, `astro-html`,
    `solid-jsx`, `preact-jsx`, `react-jsx`, `hono-jsx`, `angular-template`, or
-   `data` (subject to the tooling limit below). A host name here is an
+   `tree` (subject to the tooling limit below). A host name here is an
    `unknown-target` **error** with its default target in the hint; other unknown
-   names get a nearest-target suggestion when within two edits. A package
+   names get a nearest-target suggestion when within two edits. The literal
+   `data` is refused the same way, with a hint instead of a suggestion:
+   `"data" is reserved for the evaluated tree target (decision 187); the static
+   tree target is "tree"` — the name is kept for a future evaluated target, and
+   what ships today reads `mx.target: "tree"` (decision 187). A package
    specifier (containing `/` or starting with `@`, `.` or `/`) is not a built-in
    name: it is loaded from the project as a third-party target (below).
 2. `mx.host` selects that host's default target. `mx.host: "html"` is accepted
@@ -3397,7 +3401,7 @@ first failing field), and two set rules join the reasons above, reported as
 
 | Rule | When | Message |
 |---|---|---|
-| `built-on-unknown` | the name is no registered target | `target "mesh-data" is built on "dta", which is not a registered target (registered: html, …, tree, mesh-data)`; when the name is a host name, `; "solid" is a host name, and builtOn takes a target name (did you mean "solid-jsx"?)` |
+| `built-on-unknown` | the name is no registered target | `target "mesh-data" is built on "dta", which is not a registered target (registered: html, …, tree, mesh-data)`; when the name is a host name, `; "solid" is a host name, and builtOn takes a target name (did you mean "solid-jsx"?)`; when the name is the reserved literal `"data"`, `; "data" is reserved for the evaluated tree target (decision 187); the static tree target is "tree"` |
 | `built-on-loop` | the chain comes back to a target (itself included) | `target "a" is built on itself: a -> b -> a` |
 
 A target a tool keeps from selection is still registered for this (the staged

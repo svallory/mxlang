@@ -155,11 +155,11 @@ describe(".mesh.mx (a third-party host on the data target)", () => {
     ).rejects.toThrow(/render-time macro/);
   });
 
-  it("mx.tree.defaultTag is the shared ladder's rung for a host built on tree", async () => {
+  it("mx.data.defaultTag is the shared ladder's rung for a host built on tree", async () => {
     await compile({
       fileKinds: MESH_KIND,
       files: { "tags/node.mx": "" },
-      mx: { tree: { defaultTag: "node" } },
+      mx: { data: { defaultTag: "node" } },
     });
     expect((globalThis as MeshGlobals).__mxMeshDefaultTags).toEqual(["node"]);
   });

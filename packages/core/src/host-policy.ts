@@ -683,22 +683,24 @@ export interface DefaultTagConfig {
   diagnostic?: TargetPolicyDiagnostic;
 }
 
-/** Reads `mx[target].defaultTag` from an already-read manifest; see {@link readTargetDefaultTag}. */
+/** Reads `mx[<config key>].defaultTag` from an already-read manifest; see {@link readTargetDefaultTag}. */
 function readDefaultTagConfig(
   read: PackageJsonRead,
   file: string,
   target: string,
+  configKey?: string,
 ): DefaultTagConfig {
+  const key = configKey ?? target;
   const mx =
     isObject(read.manifest) && isObject(read.manifest.mx)
       ? read.manifest.mx
       : undefined;
-  const configured = mx?.[target];
+  const configured = mx?.[key];
   if (!isObject(configured) || configured.defaultTag === undefined) return {};
   const value = configured.defaultTag;
   const at = {
     file,
-    ...locateMxValue(read.text, [target, "defaultTag"]),
+    ...locateMxValue(read.text, [key, "defaultTag"]),
   };
   if (typeof value === "string" && value !== "") return { value, at };
   return {
@@ -706,7 +708,7 @@ function readDefaultTagConfig(
       code: "invalid-default-tag",
       severity: "error",
       file,
-      message: `invalid \`defaultTag\` value: mx.${target}.defaultTag is ${value === "" ? "an empty string" : describeJson(value)}, expected a tag name string`,
+      message: `invalid \`defaultTag\` value: mx.${key}.defaultTag is ${value === "" ? "an empty string" : describeJson(value)}, expected a tag name string`,
       line: at.line,
       column: at.column,
       length: at.length,
@@ -715,20 +717,22 @@ function readDefaultTagConfig(
 }
 
 /**
- * The `mx.<target>.defaultTag` of the package that holds `filePath`, for a
+ * The `mx.<config key>.defaultTag` of the package that holds `filePath`, for a
  * target other than the one the package's policy selects (a host module file
- * kind compiles under its own target). `value` is a usable string; a value of
- * any other type comes back as the one `invalid-default-tag` diagnostic. A
- * package that cannot be read says nothing here: the policy walk already
- * reported it.
+ * kind compiles under its own target). The key is the target's descriptor
+ * `configKey` when it has one, else its name. `value` is a usable string; a
+ * value of any other type comes back as the one `invalid-default-tag`
+ * diagnostic. A package that cannot be read says nothing here: the policy walk
+ * already reported it.
  */
 export function readTargetDefaultTag(
   filePath: string,
   target: string,
+  configKey?: string,
 ): DefaultTagConfig {
   const found = findNearestPackageJson(dirname(filePath));
   if (!found || found.read.error || !isObject(found.read.manifest)) return {};
-  return readDefaultTagConfig(found.read, found.file, target);
+  return readDefaultTagConfig(found.read, found.file, target, configKey);
 }
 
 /**
@@ -794,7 +798,12 @@ export function resolveTargetPolicyDetailed(
     const key = loaded.target ? "target" : "host";
     resolved.policy.descriptorAt = { file, ...locateMxValue(read.text, key) };
   }
-  const config = readDefaultTagConfig(read, file, resolved.policy.target);
+  const config = readDefaultTagConfig(
+    read,
+    file,
+    resolved.policy.target,
+    lookup.target(resolved.policy.target)?.configKey,
+  );
   if (config.value !== undefined) {
     resolved.policy.defaultTag = config.value;
     resolved.policy.defaultTagAt = config.at;

@@ -74,6 +74,10 @@ it('mx.target: "data" is refused as the reserved name (decision 187)', () => {
     code: "unknown-target",
     severity: "error",
     value: "data",
+    // The range of the `mx.target` value, `"data"` in package.json line 3.
+    line: 3,
+    column: 14,
+    length: 6,
   });
   expect(diagnostics[0]?.message).toContain(
     '"data" is reserved for the evaluated tree target (decision 187); the static tree target is "tree"',

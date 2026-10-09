@@ -317,6 +317,16 @@ export interface TargetDescriptor {
    * gets none.
    */
   readonly builtOn?: string;
+
+  /**
+   * The `package.json` key this target's per-target config lives under,
+   * `mx[configKey]` (`defaultTag` today), when it is not the target's own
+   * `name`. A renamed target keeps its historical config key so user config
+   * survives the rename: the tree target reads `mx.data.*` (decision 187).
+   * Every `mx[<name>]` config read goes through it, in core and in the
+   * registry. A bare word, like a target name. Default: the target's `name`.
+   */
+  readonly configKey?: string;
 }
 
 /**
@@ -685,6 +695,11 @@ export function validateDescriptor(value: unknown): TargetDescriptor {
   if (value.builtOn !== undefined) {
     if (typeof value.builtOn !== "string" || !NAME_RE.test(value.builtOn))
       throw bad("builtOn", value.builtOn, "a target name (a bare word)");
+  }
+
+  if (value.configKey !== undefined) {
+    if (typeof value.configKey !== "string" || !NAME_RE.test(value.configKey))
+      throw bad("configKey", value.configKey, "a config key (a bare word)");
   }
 
   const declarations = value.declarations;

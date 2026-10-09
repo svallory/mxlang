@@ -80,11 +80,11 @@ describe("`.mesh.mx` in the TS plugin", () => {
     expect(diagnostics[0]?.offset).toBe(9);
   });
 
-  it("mx.tree.defaultTag is the shared ladder's rung for a host built on tree", () => {
+  it("mx.data.defaultTag is the shared ladder's rung for a host built on tree", () => {
     const { diagnostics, policyDiagnostics } = compile("<x/>\n", {
       fileKinds: MESH_KIND,
       files: { "tags/node.mx": "" },
-      mx: { tree: { defaultTag: "node" } },
+      mx: { data: { defaultTag: "node" } },
     });
     expect(policyDiagnostics).toEqual([]);
     expect(diagnostics).toEqual([]);
@@ -93,17 +93,17 @@ describe("`.mesh.mx` in the TS plugin", () => {
     ).toEqual(["node"]);
   });
 
-  it("warns when the host's own key and mx.tree.defaultTag differ; the host's wins", () => {
+  it("warns when the host's own key and mx.data.defaultTag differ; the host's wins", () => {
     const { policyDiagnostics } = compile("<x/>\n", {
       fileKinds: MESH_KIND,
       files: { "tags/node.mx": "", "tags/leaf.mx": "" },
       mx: {
         "mesh-data": { defaultTag: "leaf" },
-        tree: { defaultTag: "node" },
+        data: { defaultTag: "node" },
       },
     });
     expect(policyDiagnostics.map((d) => d.message)).toEqual([
-      'mx.tree.defaultTag "node" is ignored: mx["mesh-data"].defaultTag "leaf" takes precedence',
+      'mx.data.defaultTag "node" is ignored: mx["mesh-data"].defaultTag "leaf" takes precedence',
     ]);
     expect(
       (globalThis as { __mxMeshDefaultTags?: string[] }).__mxMeshDefaultTags,

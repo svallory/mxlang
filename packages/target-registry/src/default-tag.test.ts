@@ -138,7 +138,7 @@ describe("mx.<target>.defaultTag validation, once per package", () => {
   it("on tree, reachable means the built-in `object` plus the custom tags", () => {
     const dataPackage = (name: string) =>
       resolveTargetPolicyDetailed(
-        project({ mx: { target: "tree", tree: { defaultTag: name } } }),
+        project({ mx: { target: "tree", data: { defaultTag: name } } }),
         { dataWired: true },
       );
     const accept = dataPackage("object");
@@ -558,7 +558,7 @@ describe("Marko core tags are no valid default on any target (round 3)", () => {
   it("tree rejects them as well (and falls back to object)", () => {
     for (const name of CORE) {
       const file = project({
-        mx: { target: "tree", tree: { defaultTag: name } },
+        mx: { target: "tree", data: { defaultTag: name } },
       });
       const { diagnostics } = resolveTargetPolicyDetailed(file, {
         dataWired: true,
@@ -916,7 +916,7 @@ describe("a dashed custom-element name, per target, as measured (decision 145, r
 
   it("tree rejects it, config and contract", () => {
     const config = project({
-      mx: { target: "tree", tree: { defaultTag: "sl-card" } },
+      mx: { target: "tree", data: { defaultTag: "sl-card" } },
     });
     expect(
       resolveTargetPolicyDetailed(config, { dataWired: true }).diagnostics.map(

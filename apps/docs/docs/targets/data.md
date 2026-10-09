@@ -9,6 +9,8 @@ The **tree target** (`@mxlang/data`) reads a `.mx` file as **data**, not UI. `pa
 
 It is a **target**, not a host: it has no framework behind it ([Core and hosts](/architecture/core-and-hosts/)). The normative description is [specification §13.7](/specification/#the-mx-language-13-host-semantics-table-137-the-tree-target).
 
+The target's registered name is `tree` (decision 187): `mx.target: "tree"` selects it, a host's `builtOn: "tree"` builds on it, and diagnostics name `tree`. The name `data` is **reserved** for a future evaluated tree target and is refused wherever a target name is taken — `mx.target: "data"` and `builtOn: "data"` are errors with the hint `"data" is reserved for the evaluated tree target (decision 187); the static tree target is "tree"`. The package (`@mxlang/data`), the entry point (`parseData`) and the config keys (`mx.data.*`, including `defaultTag`) are unchanged by the rename: `mx.data.defaultTag` is read as before, and `mx.tree.defaultTag` is read by no tool.
+
 ## Status: `mx-tsc` checks, the editor does not yet
 
 `mx-tsc` checks a data package. The editor tools do not (TODO `data-target-tooling-dispatch`):

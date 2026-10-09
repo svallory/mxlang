@@ -197,6 +197,9 @@ function dataOptions(manifest: Manifest, report: Report): DataOptions {
       typeof value === "string" &&
       (allowed as readonly string[]).includes(value)
     ) {
+      // SAFETY: `key` is one of `spec`'s literal keys (`structural`,
+      // `unknownTags`, `imports`), each a declared string field of `options`;
+      // the record cast only sidesteps the lack of a mapped index signature.
       (options as unknown as Record<string, string>)[key] = value;
     } else {
       // An invalid `imports` is strict too, whatever `structural` says.
@@ -241,8 +244,8 @@ interface Package {
   options: DataOptions;
   /**
    * The unnamed tag's name after the decision-145 ladder: the package's key
-   * (`mx.<target>.defaultTag`, else the base target's own, e.g.
-   * `mx.tree.defaultTag`), then the host's override, then the descriptor's.
+   * (`mx.<config key>.defaultTag`, else the base target's own, e.g.
+   * `mx.data.defaultTag`), then the host's override, then the descriptor's.
    */
   defaultTag?: string;
   /**

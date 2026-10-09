@@ -1,7 +1,7 @@
 {
   "mx": {
     "target": "tree",
-    "tree": {
+    "data": {
       "defaultTag": "nope"
     }
   }

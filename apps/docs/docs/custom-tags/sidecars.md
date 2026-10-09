@@ -133,7 +133,7 @@ the key `"*"`: a claim on the names nothing else resolves (decision 147,
 [ADR 147](/design-notes/adr-wildcard-children/)).
 
 ```ts
-// contracts.ts, named by "mx": { "target": "data", "contracts": "./contracts.ts" }
+// contracts.ts, named by "mx": { "target": "tree", "contracts": "./contracts.ts" }
 export default {
   attributes: {
     children: {
@@ -227,7 +227,7 @@ always an inline contract — an attribute tag has no transform of its own, so t
 `contract:` form and no delegation case (decision 147, for attribute tags):
 
 ```ts
-// contracts.ts, named by "mx": { "target": "data", "contracts": "./contracts.ts" }
+// contracts.ts, named by "mx": { "target": "tree", "contracts": "./contracts.ts" }
 export default {
   resource: {
     attributeTags: {
@@ -295,7 +295,7 @@ export default {
 The same contract on the tree target (Mesh's `attributes` and `attribute`):
 
 ```ts
-// contracts.ts, named by "mx": { "target": "data", "contracts": "./contracts.ts" }
+// contracts.ts, named by "mx": { "target": "tree", "contracts": "./contracts.ts" }
 export default {
   attributes: {
     defaultTag: "attribute",

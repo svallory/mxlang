@@ -61,18 +61,19 @@ export function defaultTagDiagnostic(
 }
 
 /**
- * Reads `mx.<target>.defaultTag` for the package that holds `filePath`, then
- * validates it: the one path every compile entry shares, so none can diverge
- * from the registry's. A rejected value comes back as the diagnostic and no
- * value, so the compile falls to the next rung of the ladder. The scope is
- * built only when the package sets a value.
+ * Reads `mx.<config key>.defaultTag` for the package that holds `filePath`,
+ * then validates it: the one path every compile entry shares, so none can
+ * diverge from the registry's. The key is the target's descriptor `configKey`
+ * when it has one, else its name. A rejected value comes back as the
+ * diagnostic and no value, so the compile falls to the next rung of the
+ * ladder. The scope is built only when the package sets a value.
  */
 export function checkConfiguredDefaultTag(
   filePath: string,
   target: string,
-  options: { scope: DefaultTagScopeSource },
+  options: { scope: DefaultTagScopeSource; configKey?: string },
 ): CheckedDefaultTag {
-  const config = readTargetDefaultTag(filePath, target);
+  const config = readTargetDefaultTag(filePath, target, options.configKey);
   if (config.diagnostic) return { diagnostic: config.diagnostic };
   if (config.value === undefined || !config.at) return {};
   const diagnostic = defaultTagDiagnostic(
@@ -85,8 +86,10 @@ export function checkConfiguredDefaultTag(
 
 /** What a compile entry that scans for itself knows about its target. */
 export interface OwnDefaultTagInput {
-  /** The target whose `mx.<target>.defaultTag` this compile reads. */
+  /** The target whose `mx.<config key>.defaultTag` this compile reads. */
   target: string;
+  /** The target's descriptor `configKey`, when it is not the target's `name`. */
+  configKey?: string;
   /** The custom tags this compile scanned for the file, or the scan (see `defaultTagScopeFor`). */
   customTags?: DefaultTagScopeInput["customTags"];
   /** The Marko translator the target compiles with. */
@@ -106,7 +109,7 @@ export interface OwnDefaultTagInput {
 }
 
 /**
- * The validated `mx.<target>.defaultTag` for `file`, or `undefined`, for a
+ * The validated `mx.<config key>.defaultTag` for `file`, or `undefined`, for a
  * compile entry that reads the config itself because it scans for itself: the
  * Bun loaders, the Astro Vite template plugin, Angular's `build()`, `loadMx`.
  * It is the registry's check, over this entry's own scan and translator. A
@@ -118,6 +121,7 @@ export function ownDefaultTag(
 ): string | undefined {
   const { value, diagnostic } = checkConfiguredDefaultTag(file, input.target, {
     scope: () => ownScope(file, input),
+    configKey: input.configKey,
   });
   if (diagnostic) input.report(diagnostic);
   if (input.tags) {
@@ -246,6 +250,9 @@ export function elementPredicate(
 ): (name: string) => boolean {
   const flagged = (name: string): boolean =>
     (lookup?.getTag(name) as { html?: unknown } | undefined)?.html === true;
+  // SAFETY: the object below is cast `as unknown as Ctx`; `Ctx` is a
+  // compiler-internal type and `isElement` only reads `lookup`, `defines`
+  // and `imports` from it, so no field it touches is missing at runtime.
   return (name) =>
     (!declarations?.isElement ||
       declarations.isElement(name, {
@@ -265,6 +272,9 @@ export function nativeElementPredicate(
   lookup: { getTag(name: string): object | undefined } | undefined,
   declarations: HostDeclarations | undefined,
 ): (name: string) => boolean {
+  // SAFETY: the object below is cast `as unknown as Ctx`; `Ctx` is a
+  // compiler-internal type and `isElement` only reads `lookup`, `defines`
+  // and `imports` from it, so no field it touches is missing at runtime.
   return (name) =>
     !!declarations?.isElement &&
     declarations.isElement(name, {

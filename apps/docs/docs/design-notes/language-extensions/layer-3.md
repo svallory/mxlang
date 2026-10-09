@@ -48,7 +48,7 @@ interface LanguageDescriptor extends TargetDescriptor {
   declarations: "./declarations.ts";
   tags?: "./tags";
   contracts?: "./contracts.ts";
-  target: "html" | "data" | "preact-jsx" | ...;   // or its own emitter via load()
+  target: "html" | "tree" | "preact-jsx" | ...;   // or its own emitter via load()
   allowProjectSyntax?: boolean;                   // default false
   editor?: { languageId: "disl"; grammar: "./editor/disl.tmLanguage.json" };
 }
