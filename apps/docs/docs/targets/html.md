@@ -100,14 +100,7 @@ const { code } = compile(source, "greeting.mx");
 - `Out` — the sink type: `write(html: string)` and `toString()`
 - `TranslateError` — thrown for a construct with no lowering, carrying `line`/`column`
 
-`compile` is the supported entry. The package also exports a named `translator` (a Marko translator object) for a caller that drives `@marko/compiler` itself:
-
-```typescript
-import { compileSync } from "@marko/compiler";
-import { translator } from "@mxlang/html";
-
-compileSync(source, filename, { translator, output: "html" });
-```
+`compile` is the supported entry. The package also exports a named `translator`, but it works only inside `compile`, `compileFile` and `build`; passing it to `@marko/compiler`'s `compileSync` directly throws "no compile in flight".
 
 ## `mx(source)`/`loadMx(path)`: no bundler, no manual caching
 

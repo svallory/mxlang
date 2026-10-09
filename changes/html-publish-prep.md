@@ -1,5 +1,5 @@
 ---
-packages: [core, html]
+packages: [core, html, angular, language-server, angular-checker]
 kind: Fixed
 ---
 
