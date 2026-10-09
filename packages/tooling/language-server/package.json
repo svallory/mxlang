@@ -1,6 +1,7 @@
 {
   "name": "@mxlang/language-server",
   "version": "0.1.0",
+  "private": true,
   "description": "Diagnostics-only LSP server for MX hosts (decision 71)",
   "license": "MIT",
   "repository": {
