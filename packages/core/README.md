@@ -507,11 +507,11 @@ import memberSyntax from "@mxlang/core/syntax/member";
 const result = parseData(source, file, { syntax: memberSyntax });
 ```
 
-or copy `src/syntax/member.ts` into your project and rename it. The sigil
+or copy `dist/syntax/member.js` from the package (or the source, `packages/core/src/syntax/member.ts` in the mxlang repo) into your project and rename it. The sigil
 (`chars` and `match`), the row `id` (`member` here; `productName` in a
 product's own copy), the `self` receiver and the child tag name are that
-file's choices. Change its one type import from `../index.ts` to
-`@mxlang/core`, edit the row, and point `mx.syntax` at your copy. It loads
+file's choices. In the source, change its one type import from `../index.ts` to
+`@mxlang/core`; edit the row, and point `mx.syntax` at your copy. It loads
 through Node's strip-only `require`: types-only imports, no enums or
 parameter properties.
 

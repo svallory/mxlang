@@ -267,7 +267,7 @@ export interface DataImportName {
    * inline `type` keyword is not part of it.
    */
   span: SourceSpan;
-  /** The alias (`c` in `{ b as c }`); present only when `local` differs from `imported`. */
+  /** The alias (`c` in `{ b as c }`); present whenever an `as` clause is written, even `{ a as a }`, never for `{ a }`. */
   localSpan?: SourceSpan;
   /** Present (`true`) only for an inline `{ type X }` specifier. */
   typeOnly?: true;

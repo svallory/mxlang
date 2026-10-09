@@ -196,12 +196,24 @@ describe("DataImportName.span / localSpan", () => {
     ]);
   });
 
-  it("an alias spelled like the name is not an alias", () => {
-    const source = `import { a as a } from "m"\n<x/>\n`;
+  it("an alias spelled like the name still has a localSpan; no `as` has none", () => {
+    const source = `import { a as a, "b" as b, c } from "m"\n<x/>\n`;
     const [entry] = importsOf(source);
-    const [name] = entry?.names ?? [];
-    expect(slice(source, name?.span as never)).toBe("a");
-    expect(name && "localSpan" in name).toBe(false);
+    const names = entry?.names ?? [];
+    expect(
+      names.map((n) => [
+        slice(source, n.span),
+        n.localSpan && slice(source, n.localSpan),
+      ]),
+    ).toEqual([
+      ["a", "a"],
+      ['"b"', "b"],
+      ["c", undefined],
+    ]);
+    expect(names[0]?.localSpan?.sourceStart).not.toBe(
+      names[0]?.span.sourceStart,
+    );
+    expect(names[2] && "localSpan" in names[2]).toBe(false);
   });
 
   it("namespace: the binding after `* as`", () => {

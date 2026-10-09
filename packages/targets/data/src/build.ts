@@ -834,13 +834,17 @@ function importName(
       const local = specifier.local.name;
       const name =
         imported.type === "StringLiteral" ? imported.value : imported.name;
+      const span = nodeSpan(imported);
+      const localSpan = nodeSpan(specifier.local);
       return {
         // `import { "a-b" as ab }` names the export with a string literal.
         imported: name,
         local,
         kind: "named",
-        span: nodeSpan(imported),
-        ...(local !== name ? { localSpan: nodeSpan(specifier.local) } : {}),
+        span,
+        // Babel gives `local` the imported node's own range when no alias is
+        // written, so differing spans mean an `as` clause (`{ a as a }` too).
+        ...(localSpan.sourceStart !== span.sourceStart ? { localSpan } : {}),
         ...typeOnly,
       };
     }
