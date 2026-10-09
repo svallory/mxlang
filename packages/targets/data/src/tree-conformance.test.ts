@@ -95,7 +95,7 @@ const INTENDED: Record<string, { pattern: RegExp; cases: string[] }> = {
     cases: ["cdata", "cdata-2", "cdata-pos", "mixed-cdata"],
   },
   // a doctype means nothing in a data file (build.ts); same group of non-tag
-  // prologue syntax as CDATA, so decision 139 is cited for it too
+  // prologue syntax as CDATA: decision 139 addendum 2026-10-09
   doctype: {
     pattern: /doctype/,
     cases: [
@@ -140,7 +140,7 @@ const INTENDED: Record<string, { pattern: RegExp; cases: string[] }> = {
       "tag-var-type-with-parens",
     ],
   },
-  // decision 131 addendum, ruling 3 (build.ts): core merges a shorthand class
+  // PR #236 (the message's origin, bc76fdcd2): core merges a shorthand class
   // and a class attribute into a synthesized class with no span
   shorthandClassBesideClass: {
     pattern: /shorthand class/,
@@ -153,7 +153,8 @@ const INTENDED: Record<string, { pattern: RegExp; cases: string[] }> = {
   },
   // decision 146: a bound value is not supported on name sugar
   boundOnSugar: { pattern: /bound value/, cases: ["attr-bound"] },
-  // a tag with no argument contract takes none
+  // decision 172 (Marko behaviour is the default): a tag with no argument
+  // contract takes none, as in stock Marko
   tagArguments: {
     pattern: /Tag does not support arguments/,
     cases: [
@@ -163,7 +164,8 @@ const INTENDED: Record<string, { pattern: RegExp; cases: string[] }> = {
       "argument-tag-nested-parens",
     ],
   },
-  // not an attribute name; Marko rejects it too
+  // decision 172 (Marko behaviour is the default): not an attribute name;
+  // stock Marko refuses each
   invalidAttributeName: {
     pattern: /Invalid attribute name/,
     cases: [
@@ -177,8 +179,8 @@ const INTENDED: Record<string, { pattern: RegExp; cases: string[] }> = {
       "unary-as-member-expression",
     ],
   },
-  // the JS string rule: a newline inside a quoted string is a syntax error
-  // (stock Marko refuses it too)
+  // decision 172 (Marko behaviour is the default), the JS string rule: a
+  // newline inside a quoted string is a syntax error; stock Marko refuses it
   newlineInString: {
     pattern: /Unterminated string constant/,
     cases: ["attr-multi-line-string", "placeholder-within-string-newlines"],
