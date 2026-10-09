@@ -5,7 +5,7 @@
  * package's own, so classifying a tag does not depend on `@marko/compiler`'s
  * taglib registry. `element-table.test.ts` pins each list equal to Marko's
  * `marko-html`, `marko-svg` and `marko-math` taglibs (`@marko/compiler`
- * 5.42.10, a dev dependency), so a Marko bump that adds or drops an element
+ * 5.42.11, a dev dependency), so a Marko bump that adds or drops an element
  * fails that test instead of silently changing what an element is.
  */
 

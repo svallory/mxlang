@@ -82,8 +82,7 @@ async function renderStockMarkoIn(
  * under the OS tmpdir, which has no `node_modules` ancestor, so a bare
  * specifier there falls through to Bun's auto-install and fetches
  * `marko@latest` instead of the pinned runtime the translator was built
- * against (6.4.x lacks `_serialize_if`, which 6.3.51's translator emits).
- * Resolving up front keeps the scratch dir hermetic; relative specifiers
+ * against. Resolving up front keeps the scratch dir hermetic; relative specifiers
  * (`./x.mjs`) are left alone.
  */
 function pinBareSpecifiers(code: string): string {
