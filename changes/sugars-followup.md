@@ -22,8 +22,10 @@ type `TriggerValueForm`).
 - core: the two reference modules' messages no longer quote MX decision
   numbers. `syntax/member` refuses a value after an attribute member
   (`&dueOn=1`, `&dueOn(x) { … }`) as "`&dueOn` is a member reference and takes
-  no value". Core's generic error for a trigger value the hook drops now
-  reads "`<text>` takes no `=value` here: the `<id>` trigger does not place
+  no value". That refusal is reported at the member, not at the value (it
+  was at the value before: column 12 for `sort asc &a=1`, now column 9),
+  because a hook gets no span for a method or argument value. Core's
+  generic error for a trigger value the hook drops now reads "`<text>` takes no `=value` here: the `<id>` trigger does not place
   it", at the value, and no longer names `lowerTrigger`.
 - data: `DataDiagnostic.file` is set only when the diagnostic is in another
   file than the one parsed, on the built-in and the module path alike. A

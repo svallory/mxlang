@@ -4125,20 +4125,6 @@ UTF-16 range. `ctx` is frozen and offers exactly:
   function expression.
 - `ctx.valueForm`: how that value is written, read-only: `"="`, `":="`,
   `"method"`, `"async-method"`, `"arguments"` (`(args)` with no body) or `null`.
-
-**`async` before a method value** (review 460 F1). In an attribute list,
-`async :name(p) { b }` is the trigger with an async method value: `ctx.value` is
-`{ kind: "method", async: true }` and `ctx.valueForm` is `"async-method"`. The
-trigger's `text` and `span` are its own token (`:name`), never `async`; a
-`ctx.fail` with no `at` is positioned there; and a placed method's span starts at
-its `(` (or its `<` for type parameters), so neither `async` nor the trigger is
-part of the value's text. `async` with no method after it stays an ordinary
-boolean attribute. A module that has no meaning for an async method refuses it
-with `ctx.fail`, naming the form: both reference modules (`syntax/atoms-sugars`
-and `syntax/mesh`, §13.9.8) do, with `` `async :name(…) { … }` is not supported:
-a `:name` method value cannot be async; remove `async` `` at the `:name`. Core's
-built-in `:name` sugar never sees one: there `async` stays an attribute, and a
-contract that does not declare it reports `` `<kind>`: unknown attribute `async` ``.
 - `ctx.expression(node)`: a Babel **expression** node. In an expression it
   replaces the trigger's stand-in; as an attribute value it is that value.
 - `ctx.attribute(name, value)`: a named attribute. `value` is `true` (a bare
@@ -4152,6 +4138,20 @@ There is no other way to build anything. The hook must return what a constructor
 built, and the constructor matching `ctx.position`: an expression for
 `"expression"`, an attribute for `"attribute"`, a child for `"line"`. Core gives
 the result its positions from the trigger.
+
+**`async` before a method value** (decision 183 addendum 6). In an attribute list,
+`async :name(p) { b }` is the trigger with an async method value: `ctx.value` is
+`{ kind: "method", async: true }` and `ctx.valueForm` is `"async-method"`. The
+trigger's `text` and `span` are its own token (`:name`), never `async`; a
+`ctx.fail` with no `at` is positioned there; and a placed method's span starts at
+its `(` (or its `<` for type parameters), so neither `async` nor the trigger is
+part of the value's text. `async` with no method after it stays an ordinary
+boolean attribute. A module that has no meaning for an async method refuses it
+with `ctx.fail`, naming the form: both reference modules (`syntax/atoms-sugars`
+and `syntax/mesh`, §13.9.8) do, with `` `async :name(…) { … }` is not supported:
+a `:name` method value cannot be async; remove `async` `` at the `:name`. Core's
+built-in `:name` sugar never sees one: there `async` stays an attribute, and a
+contract that does not declare it reports `` `<kind>`: unknown attribute `async` ``.
 
 **One pass, in source order.** All of a document's triggers lower in one pass
 before anything reads the tree (right after the atom conversion, before name
