@@ -187,6 +187,9 @@ function markoHead(ctx: Ctx, tag: Node) {
         if (current.sigil === "#") idPart = current.node;
         else classParts[classParts.length - 1] = current.node;
       } else {
+        // Joins the static or unnamed name only: the front end folds a `:b`
+        // after a dynamic name into its expression (`<${x}:b>`, pinned in
+        // `@mxlang/parser`'s parse.test.ts), so none reaches here.
         nameNode = stringLiteral(
           ctx,
           `${nameNode.value}:${shorthand.value.value}`,
@@ -334,13 +337,14 @@ export function rewriteMxSugar(ctx: Ctx, tag: Node): void {
     return;
   }
   const { nameNode, classParts, idPart } = markoHead(ctx, tag);
-  const origin = new Map<Node, { attr: Node; value: string }>();
+  // The authored attribute and its shaped record as built, before the rewrite.
+  const origin = new Map<Node, { attr: Node; shaped: string }>();
   const attributes: Node[] = [];
   for (let i = 0; i < authored.length; i++) {
     const attr = authored[i] as Node;
     if (attr.type !== "MxShorthand") {
       const shaped = markoAttribute(ctx, attr);
-      origin.set(shaped, { attr, value: JSON.stringify(shaped.value) });
+      origin.set(shaped, { attr, shaped: JSON.stringify(shaped) });
       attributes.push(shaped);
       continue;
     }
@@ -370,12 +374,12 @@ export function rewriteMxSugar(ctx: Ctx, tag: Node): void {
   recordSugarAttributes(
     tag,
     stand.attributes.map((record: Node) => {
+      // Untouched means the whole record is as built: a rewrite that set any
+      // field on it (a `sugarLabel`, a changed value) keeps the record.
       const from = origin.get(record);
-      const untouched =
-        from &&
-        record.sugarLabel === undefined &&
-        JSON.stringify(record.value) === from.value;
-      return untouched ? from.attr : record;
+      return from && JSON.stringify(record) === from.shaped
+        ? from.attr
+        : record;
     }),
   );
 }

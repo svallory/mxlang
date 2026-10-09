@@ -477,6 +477,22 @@ describe("§3.6 MxShorthand", () => {
     });
   });
 
+  // Core's `markoHead` (mx-sugar.ts) relies on this: no tag-position `:name`
+  // ever follows a dynamic name, so it only appends one to a static or
+  // unnamed name (PR 4 slice 6).
+  it("<${x}:b>: a :name after a dynamic name stays in its expression", () => {
+    const tag = first("<${x}:b.c/>");
+    expect(tag.name.kind).toBe("dynamic");
+    expect(tag.name.expression).toMatchObject({
+      source: "${x}:b",
+      start: 1,
+      end: 7,
+    });
+    expect(tag.shorthands.map((s: Any) => [s.sigil, s.value.value])).toEqual([
+      [".", "c"],
+    ]);
+  });
+
   it("a value left empty by the split makes no shorthand (<a.:b>)", () => {
     const tag = first("<a.:b/>");
     expect(tag.shorthands.map((s: Any) => s.sigil)).toEqual([":"]);
