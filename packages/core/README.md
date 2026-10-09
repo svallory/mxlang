@@ -726,9 +726,10 @@ half of the mapped population; adopting it is per host and out of scope here.
 (`onClick() { … }`). It returns the `function` expression Marko's printer made
 of it, with the printed head unmapped and the body mapped token by token
 against the authored body (`Expr.bodySource`/`bodySpan`, `mappedRewrite`), also
-when the printer reformatted the body or reads were rewritten. It returns
-`undefined` for anything that is not a method shorthand, so a caller falls back
-to `mappedExpr(expr)`. Callers: the Preact emitter, which the React and Hono
+when the printer reformatted the body or reads were rewritten. When the printed
+code is not a single function expression, it returns the whole value unmapped,
+with no mappings. It returns `undefined` only when `expr` has no authored body
+(`bodySpan`/`bodySource` absent), so a caller falls back to `mappedExpr(expr)`. Callers: the Preact emitter, which the React and Hono
 hosts share, and the Solid emitter, both as `mappedMethod(expr) ?? mappedExpr(expr)`.
 
 `Define.nameSpan`/`paramSpans` and `For.paramSpans` extend the same

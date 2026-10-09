@@ -1005,7 +1005,7 @@ function guardValue(
  * Marko's `this`, its name semantics and valid TSX, and an authored `function`
  * expression or arrow unchanged. A method's printed head is generated text
  * and stays unmapped; its body maps token by token against the authored body
- * (`Expr.bodySpan`/`bodySource`, `mappedRewrite`), also when the printer
+ * (`Expr.bodySpan`/`bodySource`, core's `mappedMethod`), also when the printer
  * reformatted it or reads were rewritten.
  */
 function mappedValue(expr: Expr): MappedCode {
