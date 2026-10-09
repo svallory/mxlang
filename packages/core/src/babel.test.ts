@@ -8,7 +8,7 @@
  * The comparison side (`markoBabel()`) is a devDependency of core only until
  * slice S5 deletes `marko-frontend.ts`; the differential goes with it.
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { coreBabel } from "./babel.ts";
@@ -88,9 +88,13 @@ describe("coreBabel's generator prints as Marko's did", () => {
     let compared = 0;
     const differences: string[] = [];
     for (const file of files) {
-      const source = readFileSync(file, "utf8");
+      // Other test files write and delete `.mx` fixtures under `packages/`
+      // while this one runs (angular-checker's `virtual-tags-*` dirs), so a
+      // file listed at collection can be gone by now.
+      if (!existsSync(file)) continue;
       let document: unknown;
       try {
+        const source = readFileSync(file, "utf8");
         document = parseMx(source, {
           syntax: defaultSyntax(),
           lookup: undefined,
