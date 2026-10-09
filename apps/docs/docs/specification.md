@@ -3639,11 +3639,18 @@ All types are in `@mxlang/data/tree`. Every span is core's `SourceSpan`
 
   | `kind` | Source | Fields |
   |---|---|---|
-  | `string` | `type="string"`, `<x="post">`, shorthand `#id`, `.cls` | `name`, `value`, `valueSpan`, `nameSpan` (absent for shorthand) |
-  | `boolean` | `required` | `name`, `nameSpan` |
-  | `expression` | `n=1`, `values=[…]`, `change=(x) => …`, `v:=x`, `onClick=fn` | `name`, `value: DataExpr`, `nameSpan`, `bound?: true`, `refinement?: DataExpr` (the `fn` of a bound `v:fn:=q`) |
+  | `string` | `type="string"`, `<x="post">`, shorthand `#id`, `.cls` | `name`, `value`, `valueSpan`, `nameSpan` (absent for shorthand), `args?` |
+  | `boolean` | `required`, `a(b)` | `name`, `nameSpan`, `args?: DataExpr[]` |
+  | `expression` | `n=1`, `values=[…]`, `change=(x) => …`, `v:=x`, `onClick=fn` | `name`, `value: DataExpr`, `nameSpan`, `bound?: true`, `refinement?: DataExpr` (the `fn` of a bound `v:fn:=q`), `args?` |
   | `spread` | `...rest` | `value: DataExpr` |
   | `member` | a whole-value member a syntax module produced: `sort asc &dueOn` (§13.9.6) | `name`, `value` (the member's name, without its sigil), `span` (the token, sigil included); no `nameSpan` |
+
+  `args` is on every kind but `spread` (the `atom` and `member` variants too).
+  It holds the arguments written after the name (`a(b, c)`), built like
+  `DataTag.args`, and is present only when the parentheses were written:
+  `a()` gives `[]`, and an attribute without parentheses has no `args` key. A
+  method shorthand (`isOverdue() { … }`) is a function-expression `value`, never
+  `args`.
 
   Only a string literal is `string`; `n=1` and `required=true` are `expression`
   (the tree does not evaluate). A default attribute (`<resource="post">`) is a
