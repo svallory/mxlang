@@ -92,10 +92,14 @@ function canonical(value: unknown): string {
 /** Hashes already computed, per table object (tables are frozen data). */
 const hashes = new WeakMap<object, string>();
 
+/** For tests: how many tables have been hashed (cache misses) in this process. */
+export const syntaxHashes = { count: 0 };
+
 /** A table's identity: the sha256 of its canonical JSON. Two tables with the same content hash alike. */
 export function syntaxHash(table: SyntaxTable): string {
   let hash = hashes.get(table);
   if (hash === undefined) {
+    syntaxHashes.count++;
     hash = createHash("sha256").update(canonical(table)).digest("hex");
     if (Object.isFrozen(table)) hashes.set(table, hash);
   }
@@ -252,11 +256,15 @@ export function explicitSyntax(
   filename: string,
 ): SyntaxTable {
   if (table === DEFAULT_ROW || validExplicit.has(table)) return table;
+  // `null` is not "omitted" (that is `undefined`, which resolves the
+  // manifest): it is refused like any other value that is not a table.
   const fail = (message: string): never => {
     throw new TranslateError(message, 1, 0, filename);
   };
   if (!table || typeof table !== "object" || Array.isArray(table)) {
-    fail("the `syntax` option must be a syntax table object");
+    fail(
+      `the \`syntax\` option must be a syntax table object, not ${table === null ? "null" : Array.isArray(table) ? "an array" : typeof table}; omit it to use the file's \`package.json#mx.syntax\``,
+    );
   }
   if (
     table.tagTypes &&

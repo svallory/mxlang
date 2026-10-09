@@ -153,7 +153,7 @@ describe("workspace dependency graph", () => {
       // the parser's front end and is never published.
       if (name === "@mxlang/stock-marko") continue;
       // Decision 182 (PR C): core may use the parser as a devDependency
-      // only, pinned by the next test.
+      // only; "lets core use the parser as a devDependency only" pins it.
       if (name === "@mxlang/core") continue;
       expect(deps, `${name} depends on @mxlang/parser`).not.toContain(
         "@mxlang/parser",

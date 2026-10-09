@@ -450,9 +450,11 @@ export function parseFragment(
     productName: base.productName,
   };
 
-  const syntax = base.syntax
-    ? explicitSyntax(base.syntax, resolved.filename)
-    : resolveSyntax(resolved.filename);
+  // Only an absent option resolves from the manifest: `null` is refused.
+  const syntax =
+    base.syntax !== undefined
+      ? explicitSyntax(base.syntax, resolved.filename)
+      : resolveSyntax(resolved.filename);
   checkSyntaxUse(source, syntax, {
     filename: resolved.filename,
     baseLine: resolved.baseLine,

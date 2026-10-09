@@ -405,9 +405,11 @@ export function compileSource(
 ): CompileResult {
   // Required lazily and by CJS: `@marko/compiler` is a large dependency and
   // only this function needs it, so importing the type surface stays free.
-  const syntax = host.syntax
-    ? explicitSyntax(host.syntax, filename)
-    : resolveSyntax(filename);
+  // Only an absent option resolves from the manifest: `null` is refused.
+  const syntax =
+    host.syntax !== undefined
+      ? explicitSyntax(host.syntax, filename)
+      : resolveSyntax(filename);
   checkSyntaxUse(source, syntax, {
     filename,
   });

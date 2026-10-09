@@ -58,6 +58,15 @@ describe("parseData's syntax option", () => {
     expect(result.diagnostics[0]).toMatchObject({ line: 1, column: 0 });
   });
 
+  it("an explicit null is a diagnostic, not read as omitted", () => {
+    const result = parseData("div\n", "/v/a.mx", {
+      syntax: null as unknown as SyntaxTable,
+    });
+    expect(result.diagnostics.map((d) => d.message)).toEqual([
+      "the `syntax` option must be a syntax table object, not null; omit it to use the file's `package.json#mx.syntax`",
+    ]);
+  });
+
   it("the default row is frozen and has no triggers", () => {
     const row = defaultSyntax();
     expect(Object.isFrozen(row)).toBe(true);

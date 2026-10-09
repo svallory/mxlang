@@ -430,7 +430,7 @@ export function parseData(
       tagDiscoveryDirs: [],
       customTags: options.customTags,
       defaultTag: options.defaultTag,
-      ...(options.syntax ? { syntax: options.syntax } : {}),
+      ...(options.syntax !== undefined ? { syntax: options.syntax } : {}),
       warnings,
       emitIr: (lowered) => {
         ir = lowered;

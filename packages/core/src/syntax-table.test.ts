@@ -20,10 +20,12 @@ import { parseFragment } from "./fragment.ts";
 import { mxTemplateParser } from "./marko-frontend.ts";
 import {
   defaultSyntax,
+  defaultSyntaxHash,
   normalizeMxSyntax,
   resolveSyntax,
   type SyntaxTable,
   syntaxHash,
+  syntaxHashes,
   syntaxPrepasses,
   type Trigger,
 } from "./syntax-table.ts";
@@ -224,6 +226,30 @@ describe("a table core cannot lower yet fails the file loudly", () => {
     expect(fragment.message).toBe(error.message);
   });
 
+  it("an explicit null is refused, not read as omitted (review 442/443 verify)", () => {
+    manifest(dir, { syntax: MESH });
+    const page = join(dir, "page.mx");
+    const error = caught(() =>
+      compileSource("<p/>\n", page, declarations, {
+        targets,
+        emitIr: () => "ok",
+        syntax: null as unknown as SyntaxTable,
+      }),
+    );
+    expect(error.message).toBe(
+      "the `syntax` option must be a syntax table object, not null; omit it to use the file's `package.json#mx.syntax`",
+    );
+    expect([error.file, error.line, error.column]).toEqual([page, 1, 0]);
+    expect(
+      caught(() =>
+        parseFragment("<p/>", {
+          filename: page,
+          syntax: null as unknown as SyntaxTable,
+        }),
+      ).message,
+    ).toBe(error.message);
+  });
+
   it("an explicit table's tagTypes is refused, as in a manifest", () => {
     const page = join(dir, "page.mx");
     const typed = { ...defaultSyntax(), tagTypes: { div: 2 as const } };
@@ -256,6 +282,28 @@ describe("a table core cannot lower yet fails the file loudly", () => {
 });
 
 describe("the default row costs nothing", () => {
+  it("hashes the default row zero times, and a frozen custom table once", () => {
+    defaultSyntaxHash(); // the process's one hash of the default row
+    const plain = join(dir, "plain");
+    manifest(plain, { tags: "tags" });
+    const before = syntaxHashes.count;
+    for (let i = 0; i < 3; i++) {
+      compile("<p>a</p>\n", join(plain, "page.mx"));
+      compile("<p>a</p>\n", "/virtual/page.mx", defaultSyntax());
+      parseFragment("<p/>", { filename: join(plain, "page.mx") });
+    }
+    expect(syntaxHashes.count).toBe(before);
+
+    const custom = Object.freeze({
+      ...defaultSyntax(),
+      blockTag: Object.freeze({ open: "{%", close: "%}" }),
+    });
+    for (let i = 0; i < 3; i++) {
+      compile("<p>a</p>\n", join(plain, "page.mx"), custom);
+    }
+    expect(syntaxHashes.count).toBe(before + 1);
+  });
+
   it("runs no pre-pass for a project without mx.syntax, or with one equal to the default", () => {
     manifest(dir, { tags: "tags" });
     const plain = join(dir, "page.mx");
