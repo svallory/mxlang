@@ -85,6 +85,14 @@ describe("mx-tsc with a host whose ambientTypes returns no iterable of files", (
       `${prefix} ambientTypes returned undefined, expected an iterable of files`,
     ],
     ["generator", `${prefix} ambientTypes threw: generator failed`],
+    [
+      "undefined-entry",
+      `${prefix} ambientTypes returned a non-path entry (undefined), expected an iterable of files`,
+    ],
+    [
+      "number-entry",
+      `${prefix} ambientTypes returned a non-path entry (number 42), expected an iterable of files`,
+    ],
   ])(
     "reports %s as one file-level error instead of crashing",
     (mode, diagnostic) => {

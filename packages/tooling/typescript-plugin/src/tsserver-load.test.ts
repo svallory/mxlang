@@ -344,7 +344,7 @@ describe.skipIf(!built)("Angular tag calls through a real tsserver", () => {
 });
 
 describe.skipIf(!built)(
-  "a throwing ambientTypes host through a real tsserver",
+  "a misbehaving ambientTypes host through a real tsserver",
   () => {
     it("reports TS80004 on the project and keeps type-checking", async () => {
       const root = realpathSync(makePluginInstall());
@@ -414,6 +414,81 @@ describe.skipIf(!built)(
         rmSync(root, { recursive: true, force: true });
       }
     }, 50_000);
+
+    // `[resolve(<a file the package lacks>)]` is `[undefined]`: an entry tsc
+    // cannot take as a root file, which used to crash the language service.
+    it.each([
+      ["undefined-entry", "undefined"],
+      ["number-entry", "number 42"],
+    ])(
+      "reports a non-path entry (%s) as TS80004 and keeps type-checking",
+      async (mode, entry) => {
+        const root = realpathSync(makePluginInstall());
+        let server: ReturnType<typeof startTsserver> | undefined;
+        try {
+          const project = fakeProject({
+            root,
+            mx: { target: specifier("ambient-types-misbehaves") },
+            install: ["ambient-types-misbehaves"],
+            files: {
+              "tsconfig.json": JSON.stringify({
+                compilerOptions: {
+                  strict: true,
+                  module: "esnext",
+                  target: "es2022",
+                  types: [],
+                  plugins: [{ name: "@mxlang/typescript-plugin" }],
+                },
+                files: ["index.ts", `${mode}.ts`],
+              }),
+              "index.ts": "export const answer: number = 'forty-two';\n",
+              [`${mode}.ts`]: "export {};\n",
+            },
+          });
+          const file = project.path("index.ts");
+          const log = project.path("tsserver.log");
+          server = startTsserver(
+            [
+              "--pluginProbeLocations",
+              root,
+              "--logFile",
+              log,
+              "--disableAutomaticTypingAcquisition",
+            ],
+            root,
+            log,
+          );
+          await server.request("open", { file });
+
+          const semantic = (await server.request("semanticDiagnosticsSync", {
+            file,
+          })) as { code: number }[];
+          expect(semantic.map((d) => d.code)).toEqual([2322]);
+          const projectDiagnostics = (await server.request(
+            "compilerOptionsDiagnostics-full",
+            {
+              projectFileName: project.path("tsconfig.json"),
+            },
+          )) as {
+            code: number;
+            category: string;
+            source?: string;
+            message: string;
+          }[];
+          expect(projectDiagnostics.filter((d) => d.code === 80004)).toEqual([
+            expect.objectContaining({
+              category: "error",
+              source: "mxlang",
+              message: `host @fake/mx-ambient-types-misbehaves: ambientTypes returned a non-path entry (${entry}), expected an iterable of files`,
+            }),
+          ]);
+        } finally {
+          server?.kill();
+          rmSync(root, { recursive: true, force: true });
+        }
+      },
+      50_000,
+    );
   },
 );
 

@@ -6,8 +6,9 @@ import { lookupFor, resolveTargetPolicy } from "@mxlang/target-registry";
 import type * as ts from "typescript";
 
 /**
- * The diagnostic code of a host whose `ambientTypes` throws (file-less, an
- * error). Next to `TS80001`-`TS80003` (`mx-tsc`'s own codes).
+ * The diagnostic code of a host whose `ambientTypes` misbehaves: it throws,
+ * or returns anything but an iterable of file paths (file-less, an error).
+ * Next to `TS80001`-`TS80003` (`mx-tsc`'s own codes).
  */
 export const AMBIENT_TYPES_THREW_CODE = 80004;
 
@@ -18,15 +19,20 @@ export const AMBIENT_TYPES_THREW_CODE = 80004;
  * file's own lookup (`resolveTargetPolicy` from the file, as every other host
  * operation resolves it: the built-ins plus a third-party host the nearest
  * `package.json` above the file loads), then of `projectDir`'s. Each host's
- * package files resolve from the directory of the first root file whose lookup
- * holds it, then from `projectDir`, then from this tool's own install. Nothing
+ * package files resolve from the directory of the first root file whose
+ * policy selects that host (the target it compiles under is the host's), else
+ * from `projectDir`; then from `projectDir`, then from this tool's own
+ * install. So a host present in every lookup (a built-in) resolves from a
+ * package that uses it, never from whichever root file comes first. Nothing
  * here names a host. Absolute paths, without duplicates, none already a root
  * file. `mx-tsc` and the tsserver plugin both call it.
  *
  * A host whose `ambientTypes` throws, or returns something that is not an
- * iterable of files, contributes nothing, and one message is pushed onto
- * `errors`: `host <package>: ambientTypes threw: <message>`, or `host
- * <package>: ambientTypes returned <type>, expected an iterable of files`.
+ * iterable of file paths, contributes nothing, and one message is pushed onto
+ * `errors`: `host <package>: ambientTypes threw: <message>`, `host <package>:
+ * ambientTypes returned <type>, expected an iterable of files`, or `host
+ * <package>: ambientTypes returned a non-path entry (<entry>), expected an
+ * iterable of files`.
  * The run goes on without that host's files; the caller reports the message
  * (see {@link ambientTypeDiagnostics}).
  */
@@ -37,15 +43,21 @@ export function ambientTypeFiles(
 ): string[] {
   const roots = new Set(rootNames);
   const toolDir = dirname(fileURLToPath(import.meta.url));
-  // Each host once, with the directory its package files resolve from first.
-  const hosts = new Map<TargetHost, { label: string; base: string }>();
-  const collect = (policyFile: string, base: string) => {
-    const lookup = lookupFor(resolveTargetPolicy(policyFile, { quiet: true }));
+  // Each host once, with its label; and the directory its package files
+  // resolve from first: that of the first root file whose policy selects it.
+  const hosts = new Map<TargetHost, string>();
+  const selectedFrom = new Map<TargetHost, string>();
+  const collect = (policyFile: string, dir: string) => {
+    const policy = resolveTargetPolicy(policyFile, { quiet: true });
+    const lookup = lookupFor(policy);
+    const selected = lookup.target(policy.target)?.host;
+    if (selected && !selectedFrom.has(selected))
+      selectedFrom.set(selected, dir);
     for (const name of lookup.targetNames()) {
       const descriptor = lookup.target(name);
       const host = descriptor?.host;
       if (!host?.ambientTypes || hosts.has(host)) continue;
-      hosts.set(host, { label: descriptor?.packageName ?? name, base });
+      hosts.set(host, descriptor?.packageName ?? name);
     }
   };
   const asked = new Set<string>();
@@ -57,7 +69,8 @@ export function ambientTypeFiles(
   }
   collect(join(projectDir, "package.json"), projectDir);
   const added = new Set<string>();
-  for (const [host, { label, base }] of hosts) {
+  for (const [host, label] of hosts) {
+    const base = selectedFrom.get(host) ?? projectDir;
     const bases = [...new Set([base, projectDir, toolDir])];
     const program = {
       rootNames,
@@ -75,7 +88,19 @@ export function ambientTypeFiles(
         continue;
       }
       // Read inside the guard: a generator can throw while it is iterated.
-      files = [...returned] as string[];
+      const entries = [...returned];
+      // An entry tsc cannot take as a root file (`[resolve(...)]` of a file
+      // the package lacks is `[undefined]`) would crash the program.
+      const bad = entries.findIndex(
+        (entry) => typeof entry !== "string" || entry === "",
+      );
+      if (bad !== -1) {
+        errors.push(
+          `host ${label}: ambientTypes returned a non-path entry (${entryName(entries[bad])}), expected an iterable of files`,
+        );
+        continue;
+      }
+      files = entries as string[];
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       errors.push(`host ${label}: ambientTypes threw: ${message}`);
@@ -104,6 +129,17 @@ function isIterable(value: unknown): value is Iterable<unknown> {
 /** `null`, or the `typeof` of `value` (`undefined`, `number`, `object`, …). */
 function typeName(value: unknown): string {
   return value === null ? "null" : typeof value;
+}
+
+/**
+ * An entry that is no file path, named for the message: `undefined`, `null`,
+ * `empty string`, `number 42`, `object`, ….
+ */
+function entryName(entry: unknown): string {
+  if (entry === "") return "empty string";
+  if (typeof entry === "number" || typeof entry === "boolean")
+    return `${typeof entry} ${entry}`;
+  return typeName(entry);
 }
 
 /**

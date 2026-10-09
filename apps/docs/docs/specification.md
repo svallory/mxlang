@@ -3431,13 +3431,17 @@ lookup (the file's policy, resolved from the nearest `package.json` above it as
 for every other host operation; built-ins and a loaded host alike), then of the
 `tsconfig.json` directory's, each host once, for every program they check, add
 what it returns as root files, and the host returns `[]` for a program holding
-none of its files (ambient-types-host-lookup-tsconfig-dir).
-`resolve("<package>/<file>")` looks in the `node_modules` above the directory
-of the first root file whose lookup holds the host, then above the
-`tsconfig.json` directory, then in the tool's install. A host whose
-`ambientTypes` throws, or returns anything but an iterable of files, adds
-nothing and is one file-less `TS80004` error naming its package; the check goes
-on. The built-in Astro host returns astro's `env.d.ts`
+none of its files. So a package below a monorepo's root `tsconfig.json` gets
+its host's types, though the directory holding the tsconfig has no
+`package.json`. `resolve("<package>/<file>")` looks in the `node_modules` above
+the directory of the first root file whose policy selects the host (its target
+is the host's; else the `tsconfig.json` directory), then above the
+`tsconfig.json` directory, then in the tool's install, so the order of the root
+files never picks which install answers. A host whose `ambientTypes` throws,
+returns anything but an iterable, or returns an entry that is not a non-empty
+string (as `[resolve(...)]` of a file the package lacks is `[undefined]`), adds
+nothing and is one file-less `TS80004` error naming its package and the
+offending value; the check goes on. The built-in Astro host returns astro's `env.d.ts`
 and `astro-jsx.d.ts` (or `@astrojs/language-server`'s fallback copies) for a
 program holding an `.astro.mx` or `.astro` file, so `Fragment` resolves without
 `types: ["astro/env"]`. A non-function `host.ambientTypes` is a load error.

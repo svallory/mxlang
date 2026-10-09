@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import ts from "typescript";
 import { afterEach, describe, expect, it } from "vitest";
@@ -168,6 +168,46 @@ describe("ambientTypeFiles, a host resolved from the file, not the tsconfig", ()
   });
 });
 
+describe("ambientTypeFiles, a built-in host resolved from a package that uses it", () => {
+  // A workspace (no root package.json) whose `docs` package has its own copy
+  // of astro but compiles nothing under it, and whose `app` package compiles
+  // under astro with another copy. Every lookup holds the built-in astro host,
+  // so the root order must not pick which copy answers.
+  const installAstro = (dir: string) => {
+    const astro = join(dir, "node_modules/astro");
+    mkdirSync(astro, { recursive: true });
+    writeFileSync(join(astro, "package.json"), '{ "name": "astro" }');
+    for (const file of ["env.d.ts", "astro-jsx.d.ts"]) {
+      writeFileSync(join(astro, file), "export {};\n");
+    }
+  };
+
+  it.each([
+    ["docs first", true],
+    ["app first", false],
+  ])(
+    "resolves astro's files from the package that selects it (%s)",
+    (_, docsFirst) => {
+      const workspace = fakeWorkspace();
+      const docs = fakeProject({ root: join(workspace, "docs"), mx: {} });
+      const app = fakeProject({
+        root: join(workspace, "app"),
+        mx: { target: "astro-html" },
+      });
+      installAstro(docs.root);
+      installAstro(app.root);
+      const roots = [docs.path("readme.ts"), app.path("page.astro.mx")];
+
+      expect(
+        ambientTypeFiles(docsFirst ? roots : roots.reverse(), workspace, []),
+      ).toEqual([
+        join(app.root, "node_modules/astro/env.d.ts"),
+        join(app.root, "node_modules/astro/astro-jsx.d.ts"),
+      ]);
+    },
+  );
+});
+
 describe("ambientTypeFiles, a host returning no iterable of files", () => {
   const misbehaving = () =>
     fakeProject({
@@ -201,6 +241,16 @@ describe("ambientTypeFiles, a host returning no iterable of files", () => {
       "generator",
       "a generator that throws while read",
       `${prefix} threw: generator failed`,
+    ],
+    [
+      "undefined-entry",
+      "[resolve() of a file the package lacks]",
+      `${prefix} returned a non-path entry (undefined), expected an iterable of files`,
+    ],
+    [
+      "number-entry",
+      "[42]",
+      `${prefix} returned a non-path entry (number 42), expected an iterable of files`,
     ],
   ])(
     "reports %s (%s) as one error and adds nothing",

@@ -23,7 +23,8 @@ import { join } from "node:path";
  *   program holding an `.amb.mx` file
  * - `ambient-types-throws` a host whose `ambientTypes` throws for every program
  * - `ambient-types-misbehaves` a host whose `ambientTypes` throws, returns a
- *   non-iterable, or returns a generator that throws, picked by a root file
+ *   non-iterable, an iterable holding a non-path entry (`undefined`, `42`), or
+ *   a generator that throws, picked by a root file
  *   named `<mode>.ts` (see its `index.cjs`); `[]` otherwise
  * - `join-solid` names the built-in host `solid` (rejected)
  * - `own-core`  imports its own `@mxlang/core` copy (pins the brand check)
