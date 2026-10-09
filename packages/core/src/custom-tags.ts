@@ -70,9 +70,11 @@ export interface CustomTagAttribute {
    * call, member or conditional has no knowable type and is accepted, as for
    * `string` and `number`.
    *
-   * `member` (decision 182 addendum 4) accepts exactly a whole-value member
-   * a syntax module produced (`asc &dueOn` in Mesh) and nothing else; an
-   * `expression` slot accepts a member too, an `atom` slot refuses it.
+   * `member` (decision 182 addendum 4) accepts exactly a member a syntax
+   * module produced, in either form: the static value after a kind
+   * (`asc &dueOn` in Mesh) or a dynamic value that is one marked member
+   * (`on:load=&visible`); nothing else. An `expression` slot accepts a
+   * member too, an `atom` slot refuses both forms.
    * Membership checks are the module's `afterLower` job: `values`, `pattern`
    * and `ref` stay atom-only.
    */
@@ -1163,8 +1165,8 @@ function checkAtomAttr(
   const at = valueLoc(attr, locate);
   // An atom, the sugar-derived `name` included, satisfies an atom contract.
   if (attr.kind === "static" && attr.atom) return;
-  // Decision 182 addendum 4: a member is not an atom.
-  if (attr.kind === "static" && attr.member) {
+  // Decision 182 addendum 4: a member is not an atom, in either form.
+  if (isMemberValue(attr)) {
     failForOwner(
       owner,
       `attribute ${attrLabel(attr)} must be an atom, got a member${expected}`,
@@ -1205,16 +1207,28 @@ function checkAtomAttr(
 }
 
 /**
+ * A member value, in both forms the `"member"` type accepts (decision 182
+ * addendum 4, lead ruling on Mesh's M5): the static value after a kind
+ * (`asc &dueOn`), and a dynamic attribute whose value is exactly one marked
+ * member (`on:load=&visible`).
+ */
+function isMemberValue(attr: Attr): boolean {
+  if (attr.kind === "static") return attr.member !== undefined;
+  return attr.kind === "dynamic" && !!attr.value.node?.extra?.mxMember;
+}
+
+/**
  * A `type: "member"` slot (decision 182 addendum 4) takes exactly a
- * whole-value member a syntax module produced; an atom, a string, a bare
- * attribute or an expression is refused, naming what was written.
+ * member a syntax module produced, in either form (`isMemberValue`); an
+ * atom, a string, a bare attribute or any other expression is refused,
+ * naming what was written.
  */
 function checkMemberAttr(
   owner: string,
   attr: Exclude<Attr, { kind: "spread" }>,
   locate?: Locate,
 ): void {
-  if (attr.kind === "static" && attr.member) return;
+  if (isMemberValue(attr)) return;
   const got =
     attr.kind === "static"
       ? attr.atom && !attr.sugar

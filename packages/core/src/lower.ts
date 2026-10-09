@@ -133,6 +133,7 @@ import type {
   ForSource,
   Ir,
   IrNode,
+  Member,
   Position,
   TagAlias,
 } from "./ir.ts";
@@ -1127,13 +1128,38 @@ function lowerAttrs(
   isElement = false,
 ): Attr[] {
   rejectBadRefinements(ctx, node);
-  const attrs = resolveDuplicateAttrs(
-    ctx,
-    tagAttributesOf(node).map((attr: Node) =>
-      lowerAttr(ctx, attr, on, isElement, posOf(ctx, node)),
-    ),
+  const lowered = tagAttributesOf(node).map((attr: Node) =>
+    lowerAttr(ctx, attr, on, isElement, posOf(ctx, node)),
   );
+  rejectSecondMember(lowered);
+  const attrs = resolveDuplicateAttrs(ctx, lowered);
   return ctx.declarations.orderAttrs?.(name, attrs, on, ctx) ?? attrs;
+}
+
+/**
+ * A second member in one name slot (`sort asc &c &d`) is an error, not a
+ * duplicate dropped with a warning (decision 182, lead ruling on PR 451):
+ * a syntax module's attribute name is a slot, and two members in it is a
+ * mistake the author must see. Positioned at the second member.
+ */
+function rejectSecondMember(attrs: readonly Attr[]): void {
+  const first = new Map<string, Member>();
+  for (const attr of attrs) {
+    if (attr.kind !== "static" || !attr.member) continue;
+    const held = first.get(attr.name);
+    if (!held) {
+      first.set(attr.name, attr.member);
+      continue;
+    }
+    fail(
+      `one member per slot: \`${attr.name}\` already holds \`${held.name}\`, so this member cannot also set it`,
+      {
+        type: "MxTrigger",
+        start: attr.member.span.sourceStart,
+        end: attr.member.span.sourceEnd,
+      },
+    );
+  }
 }
 
 /**

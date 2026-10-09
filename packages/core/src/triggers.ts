@@ -401,7 +401,8 @@ interface Site {
 }
 
 /** The payload node the parser marked for `trigger` (`extra.mxTrigger`), with where it sits. */
-function markedSite(root: Node, trigger: Node): Site | undefined {
+function markedSite(container: Node, trigger: Node): Site | undefined {
+  const root = container.node;
   let found: Site | undefined;
   const path: { node: Node; key: string }[] = [];
   const visit = (
@@ -432,7 +433,14 @@ function markedSite(root: Node, trigger: Node): Site | undefined {
     }
     path.pop();
   };
-  visit(root, null, "", null);
+  // A container's payload is a node, or a list: call arguments
+  // (`MxArguments`) and a method's or statement block's statements
+  // (`MxStatements`); a list's items sit in `container.node`.
+  if (Array.isArray(root)) {
+    root.forEach((item, i) => {
+      visit(item, container, "node", i);
+    });
+  } else visit(root, null, "", null);
   return found;
 }
 
@@ -554,7 +562,7 @@ function lowerExpressionTriggers(
     if (typeof row.node === "object" && !module?.lowerTrigger) {
       noLowering(trigger);
     }
-    const site = markedSite(container.node, trigger);
+    const site = markedSite(container, trigger);
     if (!site) notWholeOperand(trigger);
     const at = site as Site;
     if (inBindingPosition(at)) {

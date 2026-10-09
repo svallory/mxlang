@@ -68,8 +68,9 @@ what used to be MX core:
   in an expression `&status` lowers to `self.status` marked
   `extra.mxMember = { span, name }` (`[&a, &b]` is an array of marked
   members); after a kind (`sort asc &dueOn`) it is a static value
-  `{ kind: "member", name: "dueOn" }`, checked by the contract type
-  `type: "member"`; on a tagless line (`&title`, `&amount=qty * price`) it is
+  `{ kind: "member", name: "dueOn" }`, one per name slot, checked by the
+  contract type `type: "member"` (which also takes a value that is one
+  member, `load=&visible`); on a tagless line (`&title`, `&amount=qty * price`) it is
   a `member` child tag with a static `name` and a dynamic `value`. `&&`,
   `a &b` and `&=` stay operators.
 

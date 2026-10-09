@@ -378,3 +378,87 @@ describe("the unknown-tag scan takes the module too (PR 450's parseMxDocument)",
     expect(messages[1]).toContain("`<foo>`");
   });
 });
+
+describe("Mesh review of PR 451 (M1, M4, M5, one member per slot)", () => {
+  const parse = (source: string, options: ParseDataOptions = {}) =>
+    parseData(source, "/v/entity.mx", { syntax: memberSyntax, ...options });
+  const codeOf = (source: string, pick: (tag: DataTag) => unknown) => {
+    const result = parse(source);
+    expect(result.diagnostics).toEqual([]);
+    return pick(tags(result.tree?.children ?? [])[0] as DataTag);
+  };
+
+  it.each([
+    [
+      "a computed method body",
+      "total() { return &qty * &price }\n",
+      "function () { return self.qty * self.price; }",
+    ],
+    [
+      "nested arrays in a method",
+      "rule total() { return [[&a], &b] }\n",
+      "function () { return [[self.a], self.b]; }",
+    ],
+  ])("M1: %s lowers every member", (_, source, code) => {
+    expect(
+      codeOf(source, (tag) => {
+        const attr = tag.attrs[0];
+        return attr?.kind === "expression" && attr.value.code;
+      }),
+    ).toBe(code);
+  });
+
+  it("M1: tag arguments lower their members", () => {
+    expect(
+      codeOf("x(&a, [&b])\n", (tag) => tag.args.map((arg) => arg.code)),
+    ).toEqual(["self.a", "[self.b]"]);
+  });
+
+  it("M4: an `&` line beside an unrelated expression error reports only that error", () => {
+    const result = parse("set\n  &title\n  rule x=(a b)\n", {
+      unknownTags: "reject",
+      customTags: {
+        set: {},
+        member: { attributes: { name: { type: "string" } } },
+        rule: { attributes: { x: { type: "expression" } } },
+      },
+    });
+    const messages = result.diagnostics.map((d) => d.message);
+    expect(messages).toHaveLength(1);
+    expect(messages.join("\n")).not.toContain("is not a known tag");
+  });
+
+  const slot = (type: "member" | "atom", source: string) =>
+    parse(source, {
+      customTags: { sort: { attributes: { load: { type } } } },
+    }).diagnostics.map((d) => d.message);
+
+  it("M5: a `member` slot accepts a dynamic value that is one member", () => {
+    expect(slot("member", "sort load=&visible\n")).toEqual([]);
+  });
+
+  it("M5: a `member` slot refuses an expression around a member", () => {
+    expect(slot("member", "sort load=(&visible && x)\n")).toEqual([
+      expect.stringContaining(
+        "attribute `load` must be a member, got an expression",
+      ),
+    ]);
+  });
+
+  it("M5: an `atom` slot refuses the dynamic form too", () => {
+    expect(slot("atom", "sort load=&visible\n")).toEqual([
+      expect.stringContaining("attribute `load` must be an atom, got a member"),
+    ]);
+  });
+
+  it("a second member in one name slot is an error at the second", () => {
+    expect(parse("sort asc &c &d\n").diagnostics).toEqual([
+      expect.objectContaining({
+        message:
+          "one member per slot: `member` already holds `c`, so this member cannot also set it",
+        line: 1,
+        column: 12,
+      }),
+    ]);
+  });
+});
