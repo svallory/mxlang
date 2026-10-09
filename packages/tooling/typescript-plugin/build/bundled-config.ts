@@ -16,12 +16,20 @@ export const BUNDLED_OUTDIR = "bundle";
 
 /**
  * Left external AND shipped beside the plugin (copied with their dependency
- * closure): they read files next to themselves (`@astrojs/compiler`'s wasm),
- * so they cannot be inlined. The Marko parse layer is not here: it comes with
- * `@mxlang/core`'s dist as `marko-frontend.cjs` (decision 159), which
- * `scripts/bundled-build.ts` copies into the bundle directory.
+ * closure): `@astrojs/compiler` reads files next to itself (its wasm), so it
+ * cannot be inlined, and the Babel packages are the ones `@mxlang/core`
+ * requires at run time (`src/babel.ts`; decision 197, PR 6 slice S1). The
+ * Marko parse layer is not here: it comes with `@mxlang/core`'s dist as
+ * `marko-frontend.cjs` (decision 159), which `scripts/bundled-build.ts`
+ * copies into the bundle directory.
  */
-export const BUNDLED_INSTALLED = ["@astrojs/compiler"] as const;
+export const BUNDLED_INSTALLED = [
+  "@astrojs/compiler",
+  "@babel/code-frame",
+  "@babel/core",
+  "@babel/generator",
+  "@babel/plugin-transform-typescript",
+] as const;
 
 /**
  * Left external and NOT shipped: resolved from the user's project (the Angular

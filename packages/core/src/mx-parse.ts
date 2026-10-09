@@ -477,10 +477,17 @@ const cyan = sgr(36, 39);
 const yellow = sgr(33, 39);
 
 /**
- * `@marko/compiler/modules`' `cwd`: `process.cwd()` when the process has one,
- * read once at load (file names in a frame are relative to it).
+ * `@marko/compiler/modules`' `cwd`, read once at load (file names in a frame
+ * are relative to it): `"/"` when a DOM global exists or `BUNDLE` is set
+ * (Marko's browser mode), else `process.cwd()` when the process has one.
  */
 const CWD = (() => {
+  if (
+    (typeof process !== "undefined" && process.env?.BUNDLE) ||
+    typeof (globalThis as { document?: unknown }).document === "object"
+  ) {
+    return "/";
+  }
   try {
     return typeof process?.cwd === "function" ? process.cwd() : "/";
   } catch {

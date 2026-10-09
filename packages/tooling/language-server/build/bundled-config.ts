@@ -21,11 +21,18 @@ export const BUNDLED_MAIN = "bin.cjs";
 
 /**
  * Left external AND shipped beside the server (copied with their dependency
- * closure). None: the Marko parse layer comes with `@mxlang/core`'s dist as
+ * closure): the Babel packages `@mxlang/core` requires at run time
+ * (`src/babel.ts`; decision 197, PR 6 slice S1). `@babel/parser` is inlined.
+ * The Marko parse layer comes with `@mxlang/core`'s dist as
  * `marko-frontend.cjs` (decision 159), which `scripts/bundled-build.ts`
  * copies into the bundle directory.
  */
-export const BUNDLED_INSTALLED = [] as const;
+export const BUNDLED_INSTALLED = [
+  "@babel/code-frame",
+  "@babel/core",
+  "@babel/generator",
+  "@babel/plugin-transform-typescript",
+] as const;
 
 /**
  * Left external and NOT shipped: resolved from the user's project at run time.

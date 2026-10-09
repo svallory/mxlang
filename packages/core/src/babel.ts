@@ -34,8 +34,7 @@ export interface Babel {
 const require = createRequire(import.meta.url);
 
 /** A CommonJS module's default export (`exports.default` when it has one). */
-function defaultOf<T>(id: string): T {
-  const loaded = require(id) as { __esModule?: boolean; default?: T } & T;
+function defaultOf<T>(loaded: { __esModule?: boolean; default?: T } & T): T {
   return loaded.__esModule && loaded.default !== undefined
     ? loaded.default
     : loaded;
@@ -43,7 +42,12 @@ function defaultOf<T>(id: string): T {
 
 let loaded: Babel | undefined;
 
-/** The one Babel instance core uses, loaded on first call. */
+/**
+ * The one Babel instance core uses, loaded on first call. Every package is
+ * required with a literal specifier: a bundle that inlines core (the VSIX
+ * builds) leaves them external and ships them, and `check-vsix` finds each
+ * one by its `require("…")`.
+ */
 export function coreBabel(): Babel {
   if (loaded) return loaded;
   const core = require("@babel/core") as {
@@ -56,15 +60,15 @@ export function coreBabel(): Babel {
     parseExpression: parseExpression as Babel["parseExpression"],
     traverse: core.traverse,
     types: core.types,
-    generator: defaultOf<Babel["generator"]>("@babel/generator"),
+    generator: defaultOf(require("@babel/generator")),
     codeFrameColumns: (
       require("@babel/code-frame") as {
         codeFrameColumns: Babel["codeFrameColumns"];
       }
     ).codeFrameColumns,
     File: core.File,
-    pluginTransformTypeScript: defaultOf<Babel["pluginTransformTypeScript"]>(
-      "@babel/plugin-transform-typescript",
+    pluginTransformTypeScript: defaultOf(
+      require("@babel/plugin-transform-typescript"),
     ),
   };
   return loaded;

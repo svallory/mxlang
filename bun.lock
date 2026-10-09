@@ -265,8 +265,6 @@
         "@babel/generator": "7.29.8",
         "@babel/parser": "7.29.8",
         "@babel/plugin-transform-typescript": "7.29.7",
-        "@babel/traverse": "7.29.8",
-        "@babel/types": "7.29.8",
       },
       "devDependencies": {
         "@marko/compiler": "5.42.11",
@@ -656,7 +654,7 @@
     },
     "packages/tsx-bridge": {
       "name": "@mxlang/tsx-bridge",
-      "version": "0.0.0",
+      "version": "0.1.0-alpha.1",
       "dependencies": {
         "@babel/types": "7.29.8",
         "@mxlang/core": "workspace:*",

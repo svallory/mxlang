@@ -48,7 +48,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts src/syntax/member.ts src/syntax/atoms-sugars.ts src/syntax/mesh.ts --outdir dist --target node --format esm --external @marko/compiler --external @babel/code-frame --external @babel/core --external @babel/generator --external @babel/parser --external @babel/plugin-transform-typescript --external @babel/traverse --external @babel/types --external htmljs-parser --define MX_MARKO_FRONTEND='\"./marko-frontend.cjs\"' && bun build/frontend.ts && bun build/third-party-notices.ts && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
+    "build": "rm -rf dist && bun build src/index.ts src/syntax/member.ts src/syntax/atoms-sugars.ts src/syntax/mesh.ts --outdir dist --target node --format esm --external @marko/compiler --external @babel/code-frame --external @babel/core --external @babel/generator --external @babel/parser --external @babel/plugin-transform-typescript --external htmljs-parser --define MX_MARKO_FRONTEND='\"./marko-frontend.cjs\"' && bun build/frontend.ts && bun build/third-party-notices.ts && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
@@ -57,9 +57,7 @@
     "@babel/core": "7.29.7",
     "@babel/generator": "7.29.8",
     "@babel/parser": "7.29.8",
-    "@babel/plugin-transform-typescript": "7.29.7",
-    "@babel/traverse": "7.29.8",
-    "@babel/types": "7.29.8"
+    "@babel/plugin-transform-typescript": "7.29.7"
   },
   "devDependencies": {
     "@marko/compiler": "5.42.11",
