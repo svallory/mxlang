@@ -10,15 +10,16 @@
  *   `mesh-syntax` loads the member row, the atom row and the three
  *   attribute sugars (Mesh's combined shape).
  * - `suite`: `atoms`, `reserved`, `not-atoms`, `sugar-forms`
- *   (`mx-atoms.cases.ts`) or `after-value` (`mx-after-value.test.ts`).
+ *   (`mx-atoms.cases.ts`), `module-forms` (`mx-sugar-module.test.ts`) or
+ *   `after-value` (`mx-after-value.test.ts`).
  * - `builtIn` / `module`: the rendering of each path, in the suite's
  *   own format (the module's triggers rendered as built-in events by
  *   `test-support/sugar-module.ts`).
  * - `ruling`: `single-atom-default` (decision 182 addendum 1),
  *   `colon-colon-after-word` and `colon-colon-in-names` (lead ruling Q4),
  *   `bare-colon-end` (decision 183), `refuse-value` (decision 183, lead
- *   ruling Q5), `placeholder-in-attribute-sugar`, or `NEW` (no ruling yet;
- *   reported to the lead).
+ *   ruling Q5), `placeholder-in-attribute-sugar`, `async-method` (review 460
+ *   L2), or `NEW` (no ruling yet; reported to the lead).
  */
 
 export type SugarRuling =
@@ -28,6 +29,7 @@ export type SugarRuling =
   | "bare-colon-end"
   | "refuse-value"
   | "placeholder-in-attribute-sugar"
+  | "async-method"
   | "NEW";
 
 export interface SugarDelta {
@@ -37,11 +39,14 @@ export interface SugarDelta {
     | "reserved"
     | "not-atoms"
     | "sugar-forms"
+    | "module-forms"
     | "after-value";
   readonly input: string;
   readonly builtIn: string;
   readonly module: string;
   readonly ruling: SugarRuling;
+  /** Why the ruling applies, where the ruling's own name does not say. */
+  readonly note?: string;
 }
 
 export const DELTAS: readonly SugarDelta[] = [
@@ -254,6 +259,32 @@ export const DELTAS: readonly SugarDelta[] = [
     builtIn: '<input> @#main method:" return a; "',
     module: "<input> ERR(12-13 The `#main` shorthand takes no value.)",
     ruling: "refuse-value",
+  },
+  {
+    build: "mesh-syntax",
+    suite: "module-forms",
+    input: "<x #i:=y/>",
+    builtIn: '<x> @#i ="y"',
+    module: "<x> ERR(5-7 The `#i` shorthand takes no value.)",
+    ruling: "refuse-value",
+  },
+  {
+    build: "mesh-syntax",
+    suite: "module-forms",
+    input: "<x .c(p)/>",
+    builtIn: '<x> @.c aargs:"p"',
+    module: "<x> ERR(5-6 The `.c` shorthand takes no value.)",
+    ruling: "refuse-value",
+  },
+  // async-method: review 460 L2.
+  {
+    build: "mesh-syntax",
+    suite: "module-forms",
+    input: "<x async :n(p) { b }/>",
+    builtIn: '<x> @async @:n method:" b "',
+    module: '<x> @:n method:" b "',
+    ruling: "async-method",
+    note: "module path: `async` before an attribute trigger's method is the method's modifier, as `<x async(p){}/>` (lead 14:36, review 460 L2)",
   },
   // NEW: an attribute trigger is announced when complete; its value failed, so the error comes with no `@:T` before it (same error, same position).
   {

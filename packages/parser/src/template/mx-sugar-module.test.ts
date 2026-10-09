@@ -52,6 +52,27 @@ const BUILDS: [SugarDelta["build"], AtomParserModule][] = [
   ["mesh-syntax", sugarBuild(MESH_SYNTAX) as unknown as AtomParserModule],
 ];
 
+/**
+ * Attribute-trigger forms the corpora above lack (review 460 r1): a value
+ * after `:=`, `(args)` with no body, and `async` before a method. The
+ * built-in path reads them as sugar plus a value, arguments or a method,
+ * which core diagnoses; the module path announces the same parts.
+ */
+const MODULE_FORMS = [
+  "<x :n:=y/>",
+  "<x :n := y/>",
+  "div :n:=a.b c",
+  "<x :a(p)/>",
+  "<x :a(:p)/>",
+  "div :b(x) y",
+  "<x :a(p)=1/>",
+  "<x :a(p) := q/>",
+  "<x :n(p) { b }/>",
+  "<x async :n(p) { b }/>",
+  "<x #i:=y/>",
+  "<x .c(p)/>",
+];
+
 type Suite = Exclude<SugarDelta["suite"], "after-value">;
 const SUITES: [Suite, [string, string][], boolean][] = [
   ["atoms", ATOMS, false],
@@ -60,6 +81,11 @@ const SUITES: [Suite, [string, string][], boolean][] = [
   [
     "sugar-forms",
     SUGAR_FORMS.map((input) => [input, renderAtoms(BUILT_IN, input)]),
+    false,
+  ],
+  [
+    "module-forms",
+    MODULE_FORMS.map((input) => [input, renderAtoms(BUILT_IN, input)]),
     false,
   ],
 ];

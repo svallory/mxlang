@@ -91,8 +91,12 @@ const IDENTIFIER = /^[A-Za-z_$][\w$-]*$/;
 const SECOND_NAME =
   'a tag takes one `:name`; this one already has a name (write the second as `name="…"`)';
 
+/** `{written}` and `{first}` are filled by core (`once`): the later default as written, the earlier one's line:column. */
 const SECOND_DEFAULT =
-  "a `:name` followed by `=value` or `(params) { body }` sets the default attribute (`value`), but the tag already has a default value; write `value=…` once";
+  "`{written}` would set the default attribute (`value`), but the tag already has a default value (at {first}); a sugar followed by `=value` or `(params) { body }` sets it (decision 146 addendum 4), so write `value=…` once";
+
+const BOUND =
+  "a bound value is not supported on name sugar; write name=... value:=...";
 
 function reserved(name: string): string {
   return `\`::${name}\` is reserved (decision 156): \`::\` will be the Symbol.for sugar; write \`:${name || "name"}\` for an atom`;
@@ -135,27 +139,40 @@ function atom(
   });
 }
 
-/** `:name` in an attribute list: `name` set to the atom, and the default value when one follows. */
+/**
+ * `:name` in an attribute list: `name` set to the atom, and the default
+ * value when one follows. `at` is the `:name` token's span.
+ */
 function nameSugar(
   name: string,
   ctx: TriggerContext,
-  at?: SourceSpan,
+  at: SourceSpan,
 ): TriggerAttribute[] {
   if (name.startsWith(":")) ctx.fail(reserved(name.slice(1)));
-  if (name.includes(":")) ctx.fail(SECOND_NAME);
+  const second = name.indexOf(":");
+  if (second >= 0) {
+    // At the second `:name`, as core's own check put it.
+    const from = at.sourceStart + 1 + second;
+    ctx.fail(SECOND_NAME, {
+      at: { sourceStart: from, sourceEnd: at.sourceEnd },
+    });
+  }
   if (!IDENTIFIER.test(name)) {
     ctx.fail(
       `\`:${name}\` is not name sugar; \`:name\` takes an identifier (\`:email\`, \`:first-name\`)`,
     );
   }
+  if (ctx.valueForm === ":=") ctx.fail(BOUND, { at });
+  if (ctx.valueForm === "arguments") {
+    ctx.fail(
+      `arguments are not allowed on \`:name\`: \`:${name}(…)\` is name sugar, not an attribute method`,
+      { at },
+    );
+  }
   // A second spaced `:name` follows the duplicate rule (last wins, with a
   // warning), as any attribute; only `:a:b` in one token is refused above.
   const attrs = [
-    ctx.attribute(
-      "name",
-      { kind: "atom", name },
-      { authored: true, ...(at ? { at } : {}) },
-    ),
+    ctx.attribute("name", { kind: "atom", name }, { authored: true, at }),
   ];
   if (ctx.value) {
     attrs.push(
@@ -174,11 +191,13 @@ function shorthands(
   const colon = text.indexOf(":");
   const chain = colon < 0 ? text : text.slice(0, colon);
   const parts: (TriggerAttribute | TriggerShorthand)[] = [];
-  for (const [, sigil, word] of chain.matchAll(/([#.])([^#.]*)/g)) {
+  for (const part of chain.matchAll(/([#.])([^#.]*)/g)) {
+    const [, sigil, word] = part;
     if (word === "") {
-      ctx.fail(
-        `\`${sigil}\` is shorthand for ${sigil === "#" ? "`id`" : "`class`"} and needs a name after it`,
-      );
+      const from = span.sourceStart + (part.index ?? 0);
+      ctx.fail(`\`${sigil}\` needs a name after it (\`${sigil}main\`)`, {
+        at: { sourceStart: from, sourceEnd: from + 1 },
+      });
     }
     parts.push(ctx.shorthand(sigil === "#" ? "id" : "class", word as string));
   }
@@ -187,6 +206,8 @@ function shorthands(
       sourceStart: span.sourceStart + colon,
       sourceEnd: span.sourceEnd,
     };
+    // After a chain, core's check puts a second name at the `:name` part.
+    if (text.indexOf(":", colon + 1) > colon + 1) ctx.fail(SECOND_NAME, { at });
     parts.push(...nameSugar(text.slice(colon + 1), ctx, at));
   }
   return parts;
@@ -202,7 +223,7 @@ const atomsSugars = {
       case "atom":
         return atom(text, span, ctx);
       case "name":
-        return nameSugar(text.slice(1), ctx);
+        return nameSugar(text.slice(1), ctx, span);
       default:
         return shorthands(text, span, ctx);
     }

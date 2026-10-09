@@ -91,6 +91,17 @@ export namespace Ranges {
     /** The `=value` expression of an attribute or line trigger, `=` excluded. */
     value?: Range;
     /**
+     * With `value`: its operator, `"="`, or `":="` (an attribute trigger
+     * that does not refuse a value). Absent without a value.
+     */
+    operator?: "=" | ":=";
+    /**
+     * The `(args)` written right after an attribute trigger with no
+     * `{ body }` (`:a(p)`), parentheses included, lexed as a named
+     * attribute's arguments; `value` may follow them.
+     */
+    args?: Value;
+    /**
      * The method value of an attribute trigger (`:x(p) { b }`), lexed as a
      * named attribute's method shorthand; never with `value`.
      */

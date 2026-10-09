@@ -894,8 +894,8 @@ const ROWS = {
   },
   MxAtom: { required: [...BASE, "name"], nullable: [] },
   MxTrigger: {
-    required: [...BASE, "id", "position", "text", "value"],
-    nullable: ["value"],
+    required: [...BASE, "id", "position", "text", "operator", "value", "args"],
+    nullable: ["operator", "value", "args"],
   },
   MxBlockTag: { required: [...BASE, "value", "valueSpan"], nullable: [] },
   MxFilter: {
@@ -1057,7 +1057,9 @@ const SAMPLES: { [K in MxNode["type"]]: NodeOf<K> } = (() => {
       id: "member",
       position: "line",
       text: "&title",
+      operator: null,
       value: null,
+      args: null,
     },
     MxBlockTag: {
       type: "MxBlockTag",

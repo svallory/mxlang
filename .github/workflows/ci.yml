@@ -149,6 +149,10 @@ jobs:
       - run: bun run scripts/pre-verify.ts
       - run: bun run build
       - run: bun run test:bun
+      # Slice a1 of lang-ext-move-sugars-to-mesh: the atom and sugar suites
+      # through the reference syntax module; failures must equal
+      # scripts/sugar-module/deltas.json exactly (review 460 B2).
+      - run: bun run test:sugar-module
       # Includes --force for both moon tasks: cached results are not evidence.
       - run: bun run test:grammar
       - name: Collect fresh grammar evidence

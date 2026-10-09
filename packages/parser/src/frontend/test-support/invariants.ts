@@ -137,20 +137,28 @@ export function checkInvariants(
             `span ${JSON.stringify(slice)} does not start with its text`,
           );
         }
+        // `(args)` with no body follow the text after whitespace; a value
+        // follows the text, or the args, after `=` or `:=` (its operator).
+        let head = node.start + node.text.length;
+        if (node.args !== null) {
+          within(`${path}.args`, node.args.outer, node);
+          if (!/^\s*$/.test(text({ start: head, end: node.args.outer.start })))
+            fail(path, "text before the args");
+          head = node.args.outer.end;
+        }
         if (node.value === null) {
-          if (slice !== node.text) fail(path, "span is not its text");
+          if (node.operator !== null) fail(path, "an operator with no value");
+          if (head !== node.end) fail(path, "span is not its text and args");
         } else {
           within(`${path}.value`, node.value, node);
           if (node.value.end !== node.end)
             fail(path, "value does not end the span");
-          const between = text({
-            start: node.start + node.text.length,
-            end: node.value.start,
-          });
-          if (!/^=\s*$/.test(between)) {
+          const between = text({ start: head, end: node.value.start });
+          const operator = /^\s*(:?=)\s*$/.exec(between)?.[1];
+          if (operator === undefined || operator !== node.operator) {
             fail(
               path,
-              `${JSON.stringify(between)} between text and value is not "="`,
+              `${JSON.stringify(between)} between text and value is not its operator ${JSON.stringify(node.operator)}`,
             );
           }
         }

@@ -87,10 +87,11 @@ export function projectChild(node: Node, depth: number, out: string[]): void {
 
 /** A syntax-table trigger (decision 182) in a body or an attribute list. */
 function triggerLine(node: Node): string {
+  const args = node.args ? ` args ${expr(node.args)}` : "";
   const value = node.value
-    ? `${node.value.type === "MxMethod" ? "" : " ="} ${valueText(node.value)}`
+    ? `${node.operator ? ` ${node.operator}` : ""} ${valueText(node.value)}`
     : "";
-  return `trigger ${node.id} ${q(node.text)} ${r(node)}${value}`;
+  return `trigger ${node.id} ${q(node.text)} ${r(node)}${args}${value}`;
 }
 
 function tagName(node: Node): string {

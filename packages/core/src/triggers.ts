@@ -336,16 +336,19 @@ function positionPhrase(position: TriggerPosition): string {
  * `TranslateError` as is, anything else wrapped.
  */
 function callHook(
+  ctx: Ctx,
   module: SyntaxModule,
   trigger: Node,
   value: TriggerExpression | TriggerMethod | null,
   use: TriggerUse = null,
   operator: string | null = null,
 ): TriggerResult {
+  const valueForm = valueFormOf(trigger);
   const hook = module.lowerTrigger as NonNullable<SyntaxModule["lowerTrigger"]>;
   const context: TriggerContext = Object.freeze({
     position: trigger.position as TriggerPosition,
     value,
+    valueForm,
     use,
     operator,
     expression(node: object): TriggerExpression {
@@ -373,7 +376,7 @@ function callHook(
       }
       checkAttributeValue(trigger, attrValue);
       checkAttributeOptions(trigger, options);
-      if (options?.at) checkPart(trigger, options.at, "ctx.attribute");
+      if (options?.at) checkPart(ctx, trigger, options.at, "ctx.attribute");
       const result = Object.freeze({
         kind: "attribute" as const,
         name,
@@ -436,13 +439,15 @@ function callHook(
         );
       }
       const at = options?.at
-        ? checkPart(trigger, options.at, "ctx.fail")
+        ? checkPart(ctx, trigger, options.at, "ctx.fail")
         : undefined;
       try {
         return fail(message, at ?? trigger);
       } catch (error) {
         if (options?.code !== undefined && isTranslateError(error)) {
-          (error as { code?: string }).code = String(options.code);
+          (error as { diagnosticCode?: string }).diagnosticCode = String(
+            options.code,
+          );
         }
         throw error;
       }
@@ -474,16 +479,28 @@ function callHook(
   return result;
 }
 
-/** A module's span as a positioned node, refused unless it lies in the trigger's own line of source. */
-function checkPart(trigger: Node, at: SourceSpan, where: string): Node {
+/**
+ * A module's `at` span as a positioned node: inside the document
+ * (`0 <= sourceStart <= sourceEnd <= source.length`), else the hook-contract
+ * error at the trigger.
+ */
+function checkPart(
+  ctx: Ctx,
+  trigger: Node,
+  at: SourceSpan,
+  where: string,
+): Node {
   if (
     !at ||
-    typeof at.sourceStart !== "number" ||
-    typeof at.sourceEnd !== "number" ||
-    at.sourceStart > at.sourceEnd
+    typeof at !== "object" ||
+    !Number.isInteger(at.sourceStart) ||
+    !Number.isInteger(at.sourceEnd) ||
+    at.sourceStart < 0 ||
+    at.sourceStart > at.sourceEnd ||
+    at.sourceEnd > ctx.source.length
   ) {
     return fail(
-      `the \`${trigger.id}\` trigger's \`lowerTrigger\`: \`${where}\`'s \`at\` is a \`{ sourceStart, sourceEnd }\` span`,
+      `the \`${trigger.id}\` trigger's \`lowerTrigger\`: \`${where}\`'s \`at\` is a \`{ sourceStart, sourceEnd }\` span inside the document (0 to ${ctx.source.length})`,
       trigger,
     );
   }
@@ -829,6 +846,7 @@ function lowerExpressionTriggers(
       badKind(trigger, "attribute");
     } else {
       const result = callHook(
+        ctx,
         module as SyntaxModule,
         trigger,
         null,
@@ -859,6 +877,33 @@ function lowerExpressionTriggers(
 }
 
 // --- attributes and children ----------------------------------------------
+
+/** How the trigger's own value is written (`ctx.valueForm`). */
+function valueFormOf(
+  trigger: Node,
+): "=" | ":=" | "method" | "arguments" | null {
+  if (trigger.args) return "arguments";
+  if (!trigger.value) return null;
+  if (trigger.value.type === "MxMethod") return "method";
+  return trigger.operator === ":=" ? ":=" : "=";
+}
+
+/** A bound value or arguments after an attribute trigger: nothing can place them. */
+function refuseUnplaceable(trigger: Node): void {
+  const form = valueFormOf(trigger);
+  if (form === ":=") {
+    fail(
+      `\`${trigger.text}\` takes no bound value (\`:=\`): the \`${trigger.id}\` trigger cannot place one`,
+      trigger.value ?? trigger,
+    );
+  }
+  if (form === "arguments") {
+    fail(
+      `\`${trigger.text}\` takes no arguments: the \`${trigger.id}\` trigger cannot place them`,
+      trigger.args ?? trigger,
+    );
+  }
+}
 
 /** The value behind a trigger's `=value` container, or its method value (`:x() { … }`). */
 function triggerValue(trigger: Node): TriggerExpression | TriggerMethod | null {
@@ -1031,6 +1076,11 @@ function attributeNode(ctx: Ctx, trigger: Node, attr: TriggerAttribute): Node {
           }
         : {}),
     ...(attr.options?.once ? { mxOnce: attr.options.once } : {}),
+    // A default value the trigger's own value sets is written from the
+    // trigger through the value (`:n=2`), as `once`'s `{written}` names it.
+    ...(attr.name === null && ownValue
+      ? { mxWritten: { start: trigger.start, end: ownValue.end } }
+      : {}),
   };
 }
 
@@ -1083,6 +1133,7 @@ function lowerAttributeTrigger(
   const row = rowFor(table, trigger);
   let results: readonly (TriggerAttribute | TriggerShorthand)[];
   if (row.node === "attribute") {
+    refuseUnplaceable(trigger);
     const value = triggerValue(trigger);
     if (value?.kind === "method") {
       return fail(
@@ -1102,7 +1153,7 @@ function lowerAttributeTrigger(
   } else if (typeof row.node === "object") {
     if (!module?.lowerTrigger) noLowering(trigger);
     const value = triggerValue(trigger);
-    const result = callHook(module as SyntaxModule, trigger, value);
+    const result = callHook(ctx, module as SyntaxModule, trigger, value);
     const list = Array.isArray(result) ? result : [result];
     if (
       list.some(
@@ -1113,6 +1164,7 @@ function lowerAttributeTrigger(
       wrongResult(trigger, "ctx.attribute(name, value)");
     }
     results = list as (TriggerAttribute | TriggerShorthand)[];
+    refuseUnplaceable(trigger);
     const attrs = results.filter(
       (item): item is TriggerAttribute => item.kind === "attribute",
     );
@@ -1132,30 +1184,39 @@ function lowerAttributeTrigger(
 
 /**
  * `ctx.attribute(…, { once })`: a second attribute of that name on the tag,
- * written or built, is the module's error, at the later of the two.
+ * written or built, is the module's error, at the later of the two. The
+ * default value is one name however it is written (`<x=1>`, `value=1`,
+ * `value:=y`; Marko's default attribute is `value`). In the message,
+ * `{written}` is the later attribute as written (a built default value from
+ * its trigger through its value) and `{first}` the earlier one's
+ * `line:column`.
  */
-function checkOnce(attributes: readonly Node[]): void {
-  for (const [index, attr] of attributes.entries()) {
+function checkOnce(ctx: Ctx, attributes: readonly Node[]): void {
+  const isDefault = (node: Node) =>
+    node.name === null ||
+    (node.name === "value" && (node.modifier == null || node.modifier === ""));
+  const sameName = (a: Node, b: Node) =>
+    a.name === b.name || (isDefault(a) && isDefault(b));
+  for (const attr of attributes) {
     if (!attr?.mxOnce) continue;
-    const other = attributes.findIndex(
-      (candidate, at) =>
-        at !== index &&
+    const other = attributes.find(
+      (candidate) =>
+        candidate !== attr &&
         candidate?.type === "MxAttribute" &&
-        candidate.name === attr.name,
+        sameName(candidate, attr),
     );
-    if (other < 0) continue;
-    const later = attributes[Math.max(index, other)] as Node;
+    if (!other) continue;
+    const [first, later] =
+      other.start <= attr.start ? [other, attr] : [attr, other];
+    const written = later.mxWritten ?? { start: later.start, end: later.end };
+    const at = positionAtOffset(ctx, first.start);
     fail(
-      attr.mxOnce,
-      later.mxTrigger ? { ...later, ...spanOfMark(later) } : later,
+      String(attr.mxOnce)
+        .replaceAll("{written}", ctx.source.slice(written.start, written.end))
+        .replaceAll("{first}", `${at.line}:${at.column + 1}`),
+      later,
     );
   }
-}
-
-/** A built attribute positioned at its trigger's text. */
-function spanOfMark(node: Node): { start: number; end: number } {
-  const span = node.mxTrigger.span as SourceSpan;
-  return { start: span.sourceStart, end: span.sourceEnd };
 }
 
 function mapAttributes(
@@ -1172,7 +1233,7 @@ function mapAttributes(
       ? lowerAttributeTrigger(ctx, table, module, attr)
       : [attr],
   );
-  checkOnce(lowered);
+  checkOnce(ctx, lowered);
   triggerAttributes.set(tag, lowered);
 }
 
@@ -1196,8 +1257,9 @@ function usesValue(
  * with nothing said; it is an error at the trigger instead.
  */
 function droppedValue(trigger: Node): never {
+  const what = trigger.value?.type === "MxMethod" ? "method value" : "`=value`";
   return fail(
-    `\`${trigger.text}\` takes no \`=value\` here: the \`${trigger.id}\` trigger's \`lowerTrigger\` did not use it`,
+    `\`${trigger.text}\` takes no ${what} here: the \`${trigger.id}\` trigger's \`lowerTrigger\` did not use it`,
     trigger.value ?? trigger,
   );
 }
@@ -1213,7 +1275,7 @@ function lowerLineTrigger(
   if (typeof row.node !== "object") return badKind(trigger, row.node);
   if (!module?.lowerTrigger) noLowering(trigger);
   const value = triggerValue(trigger);
-  const result = callHook(module as SyntaxModule, trigger, value);
+  const result = callHook(ctx, module as SyntaxModule, trigger, value);
   if (Array.isArray(result) || (result as { kind: string }).kind !== "child")
     wrongResult(trigger, "ctx.child(tagName, attrs)");
   const child = result as TriggerChild;

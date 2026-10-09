@@ -143,7 +143,7 @@ function announce(
       start: text.start,
       end: value ? value.end : text.end,
       text,
-      ...(value && { value }),
+      ...(value && { value, operator: "=" as const }),
     });
   }
 }

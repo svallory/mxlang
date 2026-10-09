@@ -72,7 +72,7 @@ function render(
         ),
       onTrigger: (t) =>
         out.push(
-          `trigger(${t.id} ${t.position} ${JSON.stringify(code.slice(t.text.start, t.text.end))}@${t.start}-${t.end}${t.value ? ` =${show(t.value)}` : ""}${t.method ? ` ${t.method.async ? "async " : ""}${t.method.typeParams ? `<${show(t.method.typeParams.value)}>` : ""}(${show(t.method.params.value)}) method{${show(t.method.body.value)}}` : ""})`,
+          `trigger(${t.id} ${t.position} ${JSON.stringify(code.slice(t.text.start, t.text.end))}@${t.start}-${t.end}${t.args ? ` args(${show(t.args.value)})` : ""}${t.value ? ` ${t.operator}${show(t.value)}` : ""}${t.method ? ` ${t.method.async ? "async " : ""}${t.method.typeParams ? `<${show(t.method.typeParams.value)}>` : ""}(${show(t.method.params.value)}) method{${show(t.method.body.value)}}` : ""})`,
         ),
       onOpenTagName: (t) => {
         out.push(`<${code.slice(t.start, t.end)}>`);
@@ -219,11 +219,6 @@ describe("the & member row (decision 182 addendum 1)", () => {
       'ERR(5-5 A "member" trigger line ends after its text and its value; only whitespace may follow it on the line.)',
     ],
     ["&a=", "ERR(3-3 Missing value for attribute)"],
-    // `(…)` after an attribute trigger is a method's: a body must follow.
-    [
-      "sort &a(1)",
-      'ERR(5-8 Invalid attribute name. The "member" trigger "&a" must be followed by whitespace, "=", a method or the end of the tag.)',
-    ],
     [
       "<div &a.b/>",
       '<div> ERR(5-8 Invalid attribute name. The "member" trigger "&a" must be followed by whitespace, "=", a method or the end of the tag.)',
@@ -477,6 +472,41 @@ describe("a method value after an attribute trigger (a1 item 2, T1)", () => {
     expect(render(code, SUGARS)).toBe(expected);
   });
 
+  it.each([
+    // Review 460 r1 (L1): `(args)` with no body are announced with the
+    // trigger (core refuses them through the hook), as a named attribute's
+    // arguments are lexed; a value may follow them.
+    ["sort &a(1)", '<sort> trigger(member attribute "&a"@5-10 args("1"))'],
+    ["div :b(x) y", '<div> trigger(name attribute ":b"@4-9 args("x")) @y'],
+    [
+      "<a :b(:c)/>",
+      '<a> trigger(atom expression ":c"@6-8) trigger(name attribute ":b"@3-9 args("0."))',
+    ],
+    [
+      "<a :b(p)=1 y/>",
+      '<a> trigger(name attribute ":b"@3-10 args("p") ="1") @y',
+    ],
+    [
+      "<a :b(p) := q/>",
+      '<a> trigger(name attribute ":b"@3-13 args("p") :="q")',
+    ],
+    // `async` before arguments with no body is an attribute.
+    [
+      "<a async :b(p)/>",
+      '<a> @async trigger(name attribute ":b"@9-14 args("p"))',
+    ],
+    // `:=` after a non-refusing trigger: a value lexed as for `=`.
+    ["<a :n:=y/>", '<a> trigger(name attribute ":n"@3-8 :="y")'],
+    ["div :n := a.b c", '<div> trigger(name attribute ":n"@4-13 :="a.b") @c'],
+    [
+      "x &a:=&b",
+      '<x> trigger(member expression "&b"@6-8) trigger(member attribute "&a"@2-8 :="_b")',
+    ],
+    ["<a :n=y/>", '<a> trigger(name attribute ":n"@3-7 ="y")'],
+  ])("arguments and `:=` (review 460 L1): %j", (code, expected) => {
+    expect(render(code, SUGARS)).toBe(expected);
+  });
+
   it("`async` with no method after the trigger stays an attribute", () => {
     expect(render("<script async :x/>", SUGARS)).toBe(
       '<script> @async trigger(name attribute ":x"@14-16)',
@@ -487,15 +517,6 @@ describe("a method value after an attribute trigger (a1 item 2, T1)", () => {
   });
 
   it.each([
-    // Arguments with no body.
-    [
-      "div :b(x)",
-      '<div> ERR(4-7 Invalid attribute name. The "name" trigger ":b" must be followed by whitespace, "=", a method or the end of the tag.)',
-    ],
-    [
-      "<a :b(:c)/>",
-      '<a> trigger(atom expression ":c"@6-8) ERR(3-6 Invalid attribute name. The "name" trigger ":b" must be followed by whitespace, "=", a method or the end of the tag.)',
-    ],
     // `</` and `<!--` right after it are no type parameters.
     [
       "<a :x</a>",

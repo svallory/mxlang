@@ -244,9 +244,33 @@ describe("hook contract additions", () => {
   it("an unused method value is refused (a used one is pinned in data)", () => {
     const drops = probe((_id, _text, _span, ctx) => ctx.attribute("x", true));
     expect(caught(() => irOf("kind !a() { b }\n", drops)).message).toContain(
-      "takes no `=value` here",
+      "takes no method value here",
     );
   });
+
+  it.each([
+    [
+      "<div !a:=x/>",
+      ":=",
+      "`!a` takes no bound value (`:=`): the `probe` trigger cannot place one",
+    ],
+    [
+      "<div !a(x)/>",
+      "arguments",
+      "`!a` takes no arguments: the `probe` trigger cannot place them",
+    ],
+  ])(
+    "%s: `ctx.valueForm` is %s and core refuses what nothing can place",
+    (source, form, message) => {
+      const forms: unknown[] = [];
+      const module = probe((_id, _text, _span, ctx) => {
+        forms.push(ctx.valueForm);
+        return ctx.attribute("x", true);
+      });
+      expect(caught(() => irOf(source, module)).message).toBe(message);
+      expect(forms).toEqual([form]);
+    },
+  );
 
   it("`ctx.fail` takes a span inside the trigger and a code", () => {
     const module = probe((_id, _text, span, ctx) =>
@@ -257,7 +281,7 @@ describe("hook contract additions", () => {
     );
     const error = caught(() => irOf("<div !ab/>", module));
     expect(error.message).toBe("here");
-    expect(error.code).toBe("MESH_X");
+    expect(error.diagnosticCode).toBe("MESH_X");
     expect([error.line, error.column]).toEqual([1, 6]);
   });
 

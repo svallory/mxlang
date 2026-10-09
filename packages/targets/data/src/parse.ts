@@ -151,6 +151,12 @@ export interface DataDiagnostic {
   offset: number;
   /** When the diagnostic's position is measured in another file. */
   file?: string;
+  /**
+   * A machine-readable code, when the error carries one (`TranslateError.diagnosticCode`):
+   * today a syntax module's `ctx.fail(message, { code })`. Core's own
+   * diagnostics gain codes in a follow-up. @unstable
+   */
+  code?: string;
 }
 
 export interface ParseDataResult {
@@ -238,6 +244,7 @@ function toDiagnostic(
   severity: "error" | "warning",
   message: string,
   at: { line: number; column: number; file?: string },
+  code: string | undefined,
   lineStarts: number[],
   source: string,
   filename: string,
@@ -255,6 +262,7 @@ function toDiagnostic(
     column,
     offset: foreign ? -1 : offsetOf(lineStarts, source, line, column),
     ...(at.file !== undefined ? { file: at.file } : {}),
+    ...(code !== undefined ? { code } : {}),
   };
 }
 
@@ -330,6 +338,10 @@ function errorDiagnostics(
       "error",
       at ? message : `${noPositionPrefix(error)}${message}`,
       at ?? { line: 1, column: 0 },
+      // Only a `TranslateError`'s: a Babel or system error's `code` is not ours.
+      isTranslateError(error) && typeof error.diagnosticCode === "string"
+        ? error.diagnosticCode
+        : undefined,
       lineStarts,
       source,
       filename,
@@ -486,6 +498,7 @@ export function parseData(
           "warning",
           warning.message,
           warning,
+          undefined,
           lineStarts,
           source,
           filename,

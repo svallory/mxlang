@@ -110,11 +110,12 @@ export class TranslateError extends Error {
    */
   spans?: readonly SourceSpan[];
   /**
-   * A machine-readable code for the error, when its raiser gave one: today a
-   * syntax module's `ctx.fail(message, { code })`. Core's own diagnostics
-   * gain codes in a follow-up. @unstable
+   * The MX diagnostic code, when its raiser gave one: today a syntax module's
+   * `ctx.fail(message, { code })`. Core's own diagnostics gain codes in a
+   * follow-up. Not `code`: Babel's convention sets that on every error a
+   * translator throws (`BABEL_TRANSFORM_ERROR`). @unstable
    */
-  code?: string;
+  diagnosticCode?: string;
   /**
    * Where the error is, in UTF-16 offsets into `file` (the file being
    * compiled when unset), when it was raised on an MX AST node. Such a node

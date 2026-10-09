@@ -179,3 +179,129 @@ describe("what the module refuses (decision 183)", () => {
     expect(diagnostics[0]).toMatchObject({ message, offset });
   });
 });
+
+const ATOMS_SUGARS = join(
+  import.meta.dirname,
+  "../../../core/src/syntax/atoms-sugars.ts",
+);
+const atomsSugars = (
+  createRequire(import.meta.url)(ATOMS_SUGARS) as { default: SyntaxModule }
+).default;
+
+/** The first diagnostic's text and position, built-in path or module path. */
+function firstError(source: string, syntax?: SyntaxModule) {
+  const { diagnostics } = parseData(source, "/v/x.mx", {
+    ...(syntax ? { syntax } : {}),
+  });
+  const [first] = diagnostics;
+  return (
+    first && {
+      message: first.message,
+      line: first.line,
+      column: first.column,
+    }
+  );
+}
+
+describe("the module path reuses the built-in texts and positions (review 460)", () => {
+  it.each([
+    // B1: a second default value against a written `value`, both orders.
+    "<x value=1 :n=2/>",
+    "<x value:=y :n=1/>",
+    "<x :n=1 value=2/>",
+    "<x :n(p){ return p } value=1/>",
+    "<x value=1 :n(p){ return p }/>",
+    "<x=1 :n=2/>",
+    "<x :a=1 :b=2/>",
+    // L1: one name too many, an empty shorthand part.
+    "<x :a:b/>",
+    "<x #a:b:c/>",
+    "<x .a..b/>",
+    // L1: the built-in fix-its for arguments and a bound value.
+    "<x :a(p)/>",
+    "<x :n:=y/>",
+    "<x #a##b/>",
+  ])("%s", (source) => {
+    const builtIn = firstError(source);
+    expect(builtIn).toBeDefined();
+    expect(firstError(source, atomsSugars)).toEqual(builtIn);
+  });
+});
+
+describe("hook-contract guards and carriers (review 460)", () => {
+  /** A module whose `!` attribute row calls `hook`. */
+  const probe = (
+    hook: NonNullable<SyntaxModule["lowerTrigger"]>,
+  ): SyntaxModule => ({
+    table: {
+      attributeTriggers: [
+        {
+          id: "probe",
+          chars: "!",
+          match: "![a-z]+",
+          standIn: "keep",
+          node: { call: "probe" },
+        },
+      ],
+    },
+    lowerTrigger: hook,
+  });
+
+  it.each([
+    [{ sourceStart: -5, sourceEnd: -1 }],
+    [{ sourceStart: 500, sourceEnd: 600 }],
+    [{ sourceStart: 3, sourceEnd: 2 }],
+  ])(
+    "`ctx.fail`'s `at` %j outside the document is the hook-contract error at the trigger",
+    (at) => {
+      const module = probe((_id, _text, _span, ctx) => ctx.fail("x", { at }));
+      const { diagnostics } = parseData("<y !ab/>", "/v/x.mx", {
+        syntax: module,
+      });
+      expect(diagnostics[0]).toMatchObject({
+        message: expect.stringContaining(
+          "`ctx.fail`'s `at` is a `{ sourceStart, sourceEnd }` span inside the document (0 to 8)",
+        ),
+        line: 1,
+        column: 3,
+        offset: 3,
+      });
+    },
+  );
+
+  it("`ctx.attribute`'s `at` outside the document is refused too", () => {
+    const module = probe((_id, _text, _span, ctx) =>
+      ctx.attribute("a", true, { at: { sourceStart: -5, sourceEnd: -1 } }),
+    );
+    const { diagnostics } = parseData("<y !ab/>", "/v/x.mx", {
+      syntax: module,
+    });
+    expect(diagnostics[0]?.message).toContain(
+      "`ctx.attribute`'s `at` is a `{ sourceStart, sourceEnd }` span inside the document",
+    );
+  });
+
+  it("`ctx.fail`'s `code` reaches `DataDiagnostic.code`", () => {
+    const module = probe((_id, _text, _span, ctx) =>
+      ctx.fail("nope", { code: "MESH001" }),
+    );
+    const { diagnostics } = parseData("<y !ab/>", "/v/x.mx", {
+      syntax: module,
+    });
+    expect(diagnostics[0]).toMatchObject({ message: "nope", code: "MESH001" });
+    // A diagnostic with no code carries none.
+    expect(
+      parseData("<y x=(/>", "/v/x.mx", {}).diagnostics[0],
+    ).not.toHaveProperty("code");
+  });
+
+  it("a method value the hook drops is named a method value", () => {
+    const module = probe((_id, _text, _span, ctx) => ctx.attribute("a", true));
+    const { diagnostics } = parseData("<y !ab(p) { b }/>", "/v/x.mx", {
+      syntax: module,
+    });
+    expect(diagnostics[0]?.message).toBe(
+      "`!ab` takes no method value here: the `probe` trigger's `lowerTrigger` did not use it",
+    );
+  });
+});

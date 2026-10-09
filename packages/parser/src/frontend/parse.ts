@@ -617,7 +617,9 @@ class FrontEnd {
             id: trigger.id,
             position: "expression",
             text: trigger.text,
+            operator: null,
             value: null,
+            args: null,
           });
         } else pending.push(trigger);
       }
@@ -804,6 +806,7 @@ class FrontEnd {
       id: event.id,
       position: event.position,
       text,
+      operator: event.operator ?? null,
       value: event.method
         ? this.method(event.method)
         : event.value
@@ -814,6 +817,9 @@ class FrontEnd {
               "attr-value",
             )
           : null,
+      args: event.args
+        ? this.container("MxArguments", event.args.value, event.args)
+        : null,
     };
     if (event.position === "line") {
       this.pushChild(node);

@@ -35,9 +35,18 @@ export interface AttrMeta extends Meta {
   asyncMethod: undefined | Range;
   /**
    * MX (decision 182): the attribute trigger this attribute is, its matched
-   * text, and whether it is announced (false on a re-lex).
+   * text, whether it is announced (false on a re-lex), its `(args)` (written
+   * with no body), and whether `onTrigger` was called for it already.
    */
-  trigger: undefined | { trigger: CompiledTrigger; text: Range; fresh: boolean };
+  trigger:
+    | undefined
+    | {
+        trigger: CompiledTrigger;
+        text: Range;
+        fresh: boolean;
+        args: Ranges.Value | undefined;
+        announced: boolean;
+      };
 }
 
 // We enter STATE.ATTRIBUTE when we see a non-whitespace
@@ -68,6 +77,11 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
     // Catches the paths that leave the attribute without resolving a pending
     // `async`, notably EOF part way through typing `<div async onCl`.
     flushPendingAsync(this, attr);
+    // MX (decision 182): a trigger with `(args)` and no value ends with the
+    // attribute, as a named attribute's arguments do.
+    if (attr.trigger && !attr.trigger.announced) {
+      announceAttrTrigger(this, attr, undefined, undefined);
+    }
     this.activeAttr = undefined;
   },
 
@@ -105,6 +119,12 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
       ) {
         attr.valueStart = this.pos;
         flushPendingAsync(this, attr); // a value means no method follows
+
+        // MX (decision 182): `=` or `:=` after a trigger's `(args)`.
+        if (attr.trigger && code !== CODE.PERIOD) {
+          enterTriggerValue(this, attr, code === CODE.COLON);
+          return;
+        }
 
         if (code === CODE.COLON) {
           ensureAttrName(this, attr);
@@ -258,22 +278,6 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
           );
           return;
         }
-        if (attr.trigger) {
-          // MX (decision 182): `(params)` after an attribute trigger is a
-          // method value's, so a body must follow.
-          const end = this.pos + 1; // include )
-          if (!lookAheadForBody(this, end)) {
-            flushPendingAsync(this, attr);
-            const { trigger, text } = attr.trigger;
-            this.emitError(
-              { start: text.start, end: text.end + 1 },
-              ErrorCode.INVALID_ATTRIBUTE_NAME,
-              triggerFollowMessage(this, trigger, text),
-            );
-            return;
-          }
-        }
-
         const start = child.start - 1; // include (
         const end = ++this.pos; // include )
         const value = {
@@ -307,11 +311,16 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
         } else {
           flushPendingAsync(this, attr); // args without a body is not a method
           attr.args = true;
-          this.options.onAttrArgs?.({
-            start,
-            end,
-            value,
-          });
+          // MX (decision 182): an attribute trigger's arguments are announced
+          // with it (core decides what they mean).
+          if (attr.trigger) attr.trigger.args = { start, end, value };
+          else {
+            this.options.onAttrArgs?.({
+              start,
+              end,
+              value,
+            });
+          }
         }
 
         break;
@@ -461,12 +470,14 @@ function enterAttrValue(parser: Parser, attrValue: boolean) {
 /**
  * MX (decision 182): at an attribute name's first character, lexes an
  * attribute trigger when its matcher matches. The match is the whole name.
- * After it (and optional whitespace, as after a name): `=` starts a value
- * lexed exactly as a named attribute's; `(params) { body }`, or
- * `<T>(params) { body }`, is a method value lexed as a named attribute's
- * method shorthand (an `async` before the trigger modifies it); anything
- * but the end of the name (whitespace, `,`, the end of the tag or line) is
- * an error. A row with `value: "refuse"` takes no value: `=`, `:=` or `(`
+ * After it (and optional whitespace, as after a name): `=` or `:=` starts a
+ * value lexed exactly as a named attribute's (announced with its
+ * `operator`); `(params) { body }`, or `<T>(params) { body }`, is a method
+ * value lexed as a named attribute's method shorthand (an `async` before
+ * the trigger modifies it); `(args)` with no body are its `args`, as a named
+ * attribute's arguments (an `=` / `:=` value may follow them, and the
+ * trigger is announced when the attribute ends); anything but the end of
+ * the name (whitespace, `,`, the end of the tag or line) is an error. A row with `value: "refuse"` takes no value: `=`, `:=` or `(`
  * there is an error positioned at it. Returns whether it consumed the
  * trigger.
  */
@@ -479,6 +490,8 @@ function lexAttrTrigger(parser: Parser, attr: AttrMeta, data: string) {
     trigger,
     text: { start, end },
     fresh: parser.recordTrigger(trigger, start, end),
+    args: undefined,
+    announced: false,
   };
   parser.pos = end;
 
@@ -488,8 +501,7 @@ function lexAttrTrigger(parser: Parser, attr: AttrMeta, data: string) {
   let at = end;
   while (at < parser.maxPos && skip(data.charCodeAt(at))) at++;
   const code = data.charCodeAt(at);
-  const bound =
-    code === CODE.COLON && data.charCodeAt(at + 1) === CODE.EQUAL;
+  const bound = code === CODE.COLON && data.charCodeAt(at + 1) === CODE.EQUAL;
 
   if (
     trigger.refusesValue &&
@@ -520,12 +532,10 @@ function lexAttrTrigger(parser: Parser, attr: AttrMeta, data: string) {
   }
 
   flushPendingAsync(parser, attr);
-  if (code === CODE.EQUAL) {
+  if (code === CODE.EQUAL || bound) {
     attr.valueStart = at;
-    attr.stage = ATTR_STAGE.TRIGGER_VALUE;
-    parser.pos = at + 1; // skip =
-    parser.consumeWhitespace();
-    enterAttrValue(parser, true);
+    parser.pos = at;
+    enterTriggerValue(parser, attr, bound);
     return true;
   }
 
@@ -552,12 +562,16 @@ function triggerFollowMessage(
   return `Invalid attribute name. The "${trigger.id}" trigger "${parser.data.slice(text.start, text.end)}" must be followed by whitespace, "="${trigger.refusesValue ? "" : ", a method"} or the end of the tag.`;
 }
 
-/** Whether `{` follows `pos` after optional whitespace, as a method body's opener (`consumeWhitespaceIfBefore`'s test, without moving). */
-function lookAheadForBody(parser: Parser, pos: number) {
-  const { data } = parser;
-  let at = pos;
-  while (isWhitespaceCode(data.charCodeAt(at))) at++;
-  return data.charCodeAt(at) === CODE.OPEN_CURLY_BRACE;
+/**
+ * At an attribute trigger's `=` or `:=` (`bound`): enters its value, lexed
+ * exactly as a named attribute's (stage `TRIGGER_VALUE`).
+ */
+function enterTriggerValue(parser: Parser, attr: AttrMeta, bound: boolean) {
+  attr.bound = bound;
+  attr.stage = ATTR_STAGE.TRIGGER_VALUE;
+  parser.pos += bound ? 2 : 1; // skip = or :=
+  parser.consumeWhitespace();
+  enterAttrValue(parser, true);
 }
 
 /** Whether an attribute trigger's text may end at `pos`: whitespace, `,`, EOF, or the end of the tag, line or attribute group. */
@@ -586,16 +600,19 @@ function announceAttrTrigger(
   value: Range | undefined,
   method: Ranges.AttrMethod | undefined,
 ) {
-  const { trigger, text, fresh } = attr.trigger!;
+  const state = attr.trigger!;
+  state.announced = true;
+  const { trigger, text, fresh, args } = state;
   if (!fresh) return;
   parser.options.onTrigger?.({
     id: trigger.id,
     position: "attribute",
     standIn: trigger.standIn,
     start: method ? Math.min(text.start, method.start) : text.start,
-    end: method ? method.end : value ? value.end : text.end,
+    end: method ? method.end : value ? value.end : args ? args.end : text.end,
     text,
-    ...(value && { value }),
+    ...(args && { args }),
+    ...(value && { value, operator: attr.bound ? ":=" : "=" }),
     ...(method && { method }),
   });
 }

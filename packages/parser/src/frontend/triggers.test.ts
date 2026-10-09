@@ -64,7 +64,9 @@ describe("the & member row through the front end", () => {
         id: "member",
         position: "expression",
         text: "&status",
+        operator: null,
         value: null,
+        args: null,
       },
     ]);
     // The payload parsed `_status`, the same length, and is marked.
@@ -101,7 +103,9 @@ describe("the & member row through the front end", () => {
         id: "member",
         position: "expression",
         text: "&customer",
+        operator: null,
         value: null,
+        args: null,
       },
       {
         type: "MxTrigger",
@@ -110,7 +114,9 @@ describe("the & member row through the front end", () => {
         id: "member",
         position: "expression",
         text: "&other",
+        operator: null,
         value: null,
+        args: null,
       },
     ]);
     expect(
@@ -137,7 +143,9 @@ describe("the & member row through the front end", () => {
       id: "member",
       position: "attribute",
       text: "&dueOn",
+      operator: null,
       value: null,
+      args: null,
     });
   });
 
@@ -159,7 +167,9 @@ describe("the & member row through the front end", () => {
       id: "member",
       position: "line",
       text: "&title",
+      operator: null,
       value: null,
+      args: null,
     });
     expect(shape(amount)).toEqual({
       type: "MxTrigger",
@@ -168,6 +178,8 @@ describe("the & member row through the front end", () => {
       id: "member",
       position: "line",
       text: "&amount",
+      operator: "=",
+      args: null,
       value: {
         type: "MxExpression",
         start: 32,
@@ -244,7 +256,9 @@ describe("the & member row through the front end", () => {
         id: "member",
         position: "expression",
         text: "&façade",
+        operator: null,
         value: null,
+        args: null,
       },
     ]);
     expect(value.node).toMatchObject({
@@ -434,6 +448,8 @@ describe("the atoms-and-sugars rows through the front end (slice a1)", () => {
       id: "name",
       position: "attribute",
       text: ":isOverdue",
+      operator: null,
+      args: null,
     });
     const method = trigger.value;
     expect(method.type).toBe("MxMethod");
@@ -453,7 +469,9 @@ describe("the atoms-and-sugars rows through the front end (slice a1)", () => {
         id: "atom",
         position: "expression",
         text: ":sent",
+        operator: null,
         value: null,
+        args: null,
       },
     ]);
     expect(method.body.error).toBeNull();
@@ -477,6 +495,44 @@ describe("the atoms-and-sugars rows through the front end (slice a1)", () => {
     expect(trigger.value.async).toBe(true);
     expect(trigger.value.start).toBe(3);
     expect(trigger.value.typeParams.source).toBe("T");
+  });
+
+  it("`:=` and arguments with no body (review 460 L1): operator and args", () => {
+    const document = sugarParse("<x :n:=y :a(p) :b(q) = 1/>");
+    expect(document.errors).toEqual([]);
+    expect(checkInvariants(document, OPTIONS.tagShape)).toEqual([]);
+    const [bound, args, both] = (document.body[0] as Node).attributes;
+    const parts = (node: Node) => ({
+      text: node.text,
+      span: [node.start, node.end],
+      operator: node.operator,
+      value: node.value && [node.value.type, node.value.source],
+      args: node.args && [node.args.type, node.args.source, node.args.outer],
+    });
+    expect(parts(bound)).toEqual({
+      text: ":n",
+      span: [3, 8],
+      operator: ":=",
+      value: ["MxExpression", "y"],
+      args: null,
+    });
+    expect(parts(args)).toEqual({
+      text: ":a",
+      span: [9, 14],
+      operator: null,
+      value: null,
+      args: ["MxArguments", "p", { start: 11, end: 14 }],
+    });
+    expect(parts(both)).toEqual({
+      text: ":b",
+      span: [15, 24],
+      operator: "=",
+      value: ["MxExpression", "1"],
+      args: ["MxArguments", "q", { start: 17, end: 20 }],
+    });
+    expect(projectDocument(document)[1]).toBe(
+      '  trigger name ":n" [3,8) := value "y" [7,8)',
+    );
   });
 
   it("a refused value is a template MxParseError at the `=`", () => {

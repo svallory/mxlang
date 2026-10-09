@@ -11,7 +11,8 @@
  *   as the built-in error does, it ends the parse (no later event is
  *   delivered);
  * - a `name`, `id` or `class` trigger is `onAttrName` over its text, then
- *   its value's `onAttrValue` or `onAttrMethod`; a `::` in its text is the
+ *   its arguments' `onAttrArgs` and its value's `onAttrValue` (`bound` for
+ *   `:=`) or `onAttrMethod`; a `::` in its text is the
  *   reserved-token error `rejectReservedName` gives today, and ends the
  *   parse;
  * - any other trigger (the member row) is passed to `onTrigger`.
@@ -37,6 +38,8 @@ interface TriggerEvent extends Range {
   position: "expression" | "attribute" | "line";
   text: Range;
   value?: Range;
+  operator?: "=" | ":=";
+  args?: Range;
   method?: Range;
 }
 
@@ -108,14 +111,19 @@ export function sugarBuild(syntax: SyntaxTable): SugarBuild {
         const atoms = held;
         held = [];
         call("onAttrName", { start: event.text.start, end: event.text.end });
-        held = atoms;
+        // Its arguments' atoms, its arguments, then its value's atoms.
+        const args = event.args;
+        held = args ? atoms.filter((atom) => atom.start < args.end) : atoms;
+        flush();
+        held = args ? atoms.filter((atom) => atom.start >= args.end) : [];
+        if (args) call("onAttrArgs", args);
         flush();
         if (event.method) call("onAttrMethod", event.method);
         else if (event.value) {
           call("onAttrValue", {
             start: event.text.end,
             end: event.end,
-            bound: false,
+            bound: event.operator === ":=",
             value: event.value,
           });
         }

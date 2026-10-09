@@ -134,11 +134,24 @@ export interface MxTrigger extends MxNodeBase {
   /** The authored text the matcher matched, starting at `start`. */
   readonly text: string;
   /**
-   * The `=value` of an attribute or line trigger, or an attribute trigger's
-   * method value (`:isOverdue(p) { … }`, lexed as a method shorthand); null
-   * without one, and always for an expression trigger.
+   * The operator before an expression `value`: `"="`, or `":="` (an
+   * attribute trigger whose row does not refuse a value); null without
+   * one, and for a method value.
+   */
+  readonly operator: "=" | ":=" | null;
+  /**
+   * The `=value` / `:=value` of an attribute or line trigger, or an
+   * attribute trigger's method value (`:isOverdue(p) { … }`, lexed as a
+   * method shorthand); null without one, and always for an expression
+   * trigger.
    */
   readonly value: MxExpression | MxMethod | null;
+  /**
+   * `(args)` written right after an attribute trigger with no `{ body }`
+   * (`:a(p)`), lexed as a named attribute's arguments; null otherwise.
+   * The front end and the parser accept them; core decides what they mean.
+   */
+  readonly args: MxArguments | null;
 }
 
 /**

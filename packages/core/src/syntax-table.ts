@@ -129,7 +129,10 @@ export type TriggerAttributeValue =
  *   (decision 156 addendum 6). On the default value the trigger's own value
  *   sets, a contract's error says which trigger set it (`set by \`:n=…\``).
  * - `once`: a second attribute of the same name on the tag, written or
- *   built, is a positioned error with this message.
+ *   built, is a positioned error with this message, at the later one. The
+ *   default value is one name however it is written (`<x=1>`, `value=1`,
+ *   `value:=y`). `{written}` in the message is the later attribute as
+ *   written, `{first}` the earlier one's `line:column`.
  * - `at`: the part of the trigger's text that spells the attribute, where
  *   one trigger builds several (`#main.big:name`).
  */
@@ -142,9 +145,9 @@ export interface TriggerAttributeOptions {
 
 /** How `ctx.fail` raises its error (all optional). @unstable */
 export interface TriggerFailOptions {
-  /** Where the error is; the trigger's own span when absent. */
+  /** Where the error is, inside the document; the trigger's own span when absent. */
   readonly at?: SourceSpan;
-  /** A machine-readable code, carried on the error as `code`. */
+  /** A machine-readable code, carried on the error as `diagnosticCode` (and on a data diagnostic as `code`). */
   readonly code?: string;
 }
 
@@ -221,6 +224,14 @@ export interface TriggerContext {
    * without one.
    */
   readonly value: TriggerExpression | TriggerMethod | null;
+  /**
+   * How an attribute or line trigger's own value is written: `=value`,
+   * `:=value` (bound), a method (`(params) { body }`), or `(args)` with no
+   * body; `null` without one. A bound value or arguments cannot be placed:
+   * core refuses them after the hook, which may refuse first in its own
+   * words. @unstable
+   */
+  readonly valueForm: "=" | ":=" | "method" | "arguments" | null;
   /** How an expression trigger's operand is used (`null` elsewhere). @unstable */
   readonly use: TriggerUse;
   /** The operator when `use` is `"unary"` (`-`, `!`, `typeof`, …); `null` otherwise. @unstable */
