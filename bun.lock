@@ -653,6 +653,7 @@
       "devDependencies": {
         "@mxlang/babel": "workspace:*",
         "@types/bun": "1.4.2",
+        "htmljs-parser": "5.18.0",
       },
     },
   },

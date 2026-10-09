@@ -9,10 +9,10 @@
  * compiles or parses a template with `@marko/compiler`. What is still loaded
  * here is the taglib lookup (`taglib.buildLookup`), Marko's Babel (printing,
  * `transform-typescript` for `stripTypes`, `codeFrameColumns`), the error kit
- * (`markoErrorKit`) that rebuilds Marko's `CompileError`s, and the
- * `htmljs-parser` lexer (`markoHtmljsParser`) that error-path rewrites
- * (`stock-parser.ts`, `close-tag-opener.ts`) and name sugar's
- * `isShorthandWord` re-lex the source with. Nothing calls `compileSync`
+ * (`markoErrorKit`) that rebuilds Marko's `CompileError`s, and, in the
+ * dist only, the bundle's copy of MX's template parser for the syntax table
+ * (`mxTemplateParser`). The error-path re-lexes use `@mxlang/parser/lexer`
+ * directly (PR 6 slice S2). Nothing calls `compileSync`
  * (`parseFragmentNative` delegates to `parseFragment`). The whole file goes
  * with the Marko
  * readers in PR 6 (decision 158).
@@ -76,18 +76,11 @@ export interface MarkoBabel {
   pluginTransformTypeScript: (api: Node, options: Node) => Node;
 }
 
-/** The `htmljs-parser` module Marko parses with. */
-export interface HtmljsParser {
-  createParser(handlers: Record<string, unknown>): {
-    parse(source: string): void;
-  };
-  TagType: Record<string, number>;
-}
-
 interface Frontend {
   compiler: MarkoCompiler;
   babel: MarkoBabel;
-  htmljsParser: HtmljsParser;
+  /** MX's template parser: `build/frontend.ts` resolves `htmljs-parser` to it. */
+  htmljsParser: unknown;
   kleur: MarkoColors;
   markoModules: { cwd: string };
 }
@@ -127,11 +120,6 @@ export function markoBabel(): MarkoBabel {
     : (require("@marko/compiler/internal/babel") as MarkoBabel);
 }
 
-/**
- * The `htmljs-parser` that {@link markoCompiler} parses with: resolved from
- * the compiler, not from core, because the copy that matters is the one Marko
- * parses with.
- */
 /**
  * MX's own template parser with its syntax-table API (decision 182):
  * `createParser(handlers, { syntax })`, `validateSyntaxTable`,
@@ -186,12 +174,4 @@ export function markoErrorKit(): {
         ) as MarkoColors,
         cwd: (require("@marko/compiler/modules") as { cwd: string }).cwd,
       };
-}
-
-export function markoHtmljsParser(): HtmljsParser {
-  return typeof MX_MARKO_FRONTEND === "string"
-    ? bundledFrontend(MX_MARKO_FRONTEND).htmljsParser
-    : (createRequire(require.resolve("@marko/compiler"))(
-        "htmljs-parser",
-      ) as HtmljsParser);
 }

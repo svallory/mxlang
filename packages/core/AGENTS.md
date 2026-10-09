@@ -89,9 +89,9 @@ Five facts worth knowing before editing it:
   their own positioned errors, unrelated to and unaffected by this change.
 
 - **Marko's parse layer is loaded in one place, `src/marko-frontend.ts`, and
-  bundled into the dist (decision 159).** `markoCompiler()`, `markoBabel()`
-  and `markoHtmljsParser()` (all public) are the only way core, the hosts,
-  data and the tools reach `@marko/compiler`, its Babel or its parser: never
+  bundled into the dist (decision 159).** `markoCompiler()` and `markoBabel()`
+  (both public) are the only way core, the hosts, data and the tools reach
+  `@marko/compiler` or its Babel: never
   `require("@marko/compiler...")` elsewhere, or a second compiler instance
   loads (separate taglib caches, compile state and Babel nodes). From source
   they resolve the workspace's `@marko/compiler` (patched npm `htmljs-parser`).
@@ -109,11 +109,11 @@ Five facts worth knowing before editing it:
   site compiles or parses a template with `@marko/compiler`: it serves the
   taglib lookup (`taglib.buildLookup`), Marko's Babel (printing,
   `transform-typescript`, `codeFrameColumns`) and the error kit
-  (`markoErrorKit`). Two leftovers: `markoHtmljsParser()` still re-lexes the
-  source for error-path rewrites (`stock-parser.ts` `lexedAtoms`/
-  `tagParamError`/`sugarAfterDefaultError`, `close-tag-opener.ts`) and for
-  name-sugar's `isShorthandWord` probe (in the dist that is MX's own template
-  parser). The public `parseFragmentNative` now delegates to `parseFragment`.
+  (`markoErrorKit`). The error-path re-lexes (`stock-parser.ts` `lexedAtoms`/
+  `tagParamError`/`sugarAfterDefaultError`, `close-tag-opener.ts`) and
+  name-sugar's `isShorthandWord` probe import MX's template lexer,
+  `@mxlang/parser/lexer` (typed by its `public.d.ts`), from source and in the
+  dist alike (PR 6 slice S2). The public `parseFragmentNative` now delegates to `parseFragment`.
   Deleted with the Marko readers (PR 6, decision 158).
 - **Its JS parsers are Marko's own Babel (`markoBabel()`) and `@babel/parser`.**
   `core.ts` used to parse

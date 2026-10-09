@@ -205,12 +205,10 @@ export {
  * compiler loads per process.
  */
 export {
-  type HtmljsParser,
   type MarkoBabel,
   type MarkoCompiler,
   markoBabel,
   markoCompiler,
-  markoHtmljsParser,
 } from "./marko-frontend.ts";
 export { sugarTagName } from "./name-sugar.ts";
 export { dropOwnParserPosition } from "./parse-error-position.ts";

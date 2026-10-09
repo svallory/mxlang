@@ -5,6 +5,10 @@
   "type": "module",
   "exports": {
     ".": "./src/template/index.ts",
+    "./lexer": {
+      "types": "./src/template/public.d.ts",
+      "default": "./src/template/index.ts"
+    },
     "./frontend": {
       "types": "./src/frontend/public.d.ts",
       "default": "./src/frontend/index.ts"

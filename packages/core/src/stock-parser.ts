@@ -1,6 +1,6 @@
+import { createParser, TagType } from "@mxlang/parser/lexer";
 import { STATEMENT, TEXT } from "./close-tag-opener.ts";
 import { TranslateError } from "./core.ts";
-import { markoHtmljsParser } from "./marko-frontend.ts";
 
 /**
  * Parse-error rewrites that turn a template-parser failure into a positioned
@@ -19,29 +19,29 @@ import { markoHtmljsParser } from "./marko-frontend.ts";
 const FOLLOWED_BY_COLON =
   /first expression is followed by the unexpected character `:`|Expected a single expression, but found `:`/;
 
-type ParserModule = {
+/**
+ * The slice of MX's template lexer (`@mxlang/parser/lexer`) these replays
+ * call, declared here so no emitted `.d.ts` names the private parser package.
+ */
+type TemplateLexer = {
   createParser(handlers: Record<string, unknown>): {
     parse(source: string): void;
   };
+  TagType: { readonly text: number; readonly statement: number };
 };
 
-type MarkoParser = ParserModule & { TagType: Record<string, number> };
-
-let markoParserModule: MarkoParser | undefined;
+const templateLexer: TemplateLexer = { createParser, TagType } as TemplateLexer;
 
 /**
- * The `htmljs-parser` that `@marko/compiler` parses with, the one that parses
- * MX: MX's own template parser in core's dist (decision 159), the workspace's
- * patched npm copy from source.
+ * The template lexer these rewrites and `parse-error-hints.ts` replay the
+ * source with: MX's own (`@mxlang/parser/lexer`), on every run. Always
+ * defined; the `undefined` arm is kept for the callers' fallbacks.
+ *
+ * TODO(pr6): rename to `templateLexer` once move-sugars a1 merges
+ * (`name-sugar.ts` imports this name).
  */
-export function markoParser(): MarkoParser | undefined {
-  if (markoParserModule) return markoParserModule;
-  try {
-    markoParserModule = markoHtmljsParser();
-  } catch {
-    return undefined;
-  }
-  return markoParserModule;
+export function markoParser(): TemplateLexer | undefined {
+  return templateLexer;
 }
 
 let lexedFor: { source: string; atoms: { start: number; end: number }[] } = {
@@ -50,7 +50,7 @@ let lexedFor: { source: string; atoms: { start: number; end: number }[] } = {
 };
 
 /**
- * The atoms the installed parser lexes in `source` (decision 156), for a
+ * The atoms MX's template lexer lexes in `source` (decision 156), for a
  * diagnostic that must name only a real atom: never a `:` in a scriptlet, a
  * statement tag or a ternary. `undefined` when the parser cannot be loaded.
  * Remembers the last source, since one failure may ask more than once.

@@ -210,12 +210,16 @@ describe("exposed as the package's second entry point (PR 3, decision 166 addend
     expect(Object.keys(frontend).sort()).toEqual(["lineColumnAt", "parse"]);
   });
 
-  it("package.json exposes the template parser and the front end", () => {
+  it("package.json exposes the template parser, its lexer types and the front end", () => {
     const manifest = JSON.parse(
       readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
     );
     expect(manifest.exports).toEqual({
       ".": "./src/template/index.ts",
+      "./lexer": {
+        types: "./src/template/public.d.ts",
+        default: "./src/template/index.ts",
+      },
       "./frontend": {
         types: "./src/frontend/public.d.ts",
         default: "./src/frontend/index.ts",

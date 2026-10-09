@@ -1,11 +1,11 @@
-import type * as HtmljsParser from "htmljs-parser";
-import { markoHtmljsParser } from "./marko-frontend.ts";
+import { createParser, TagType } from "@mxlang/parser/lexer";
 
 /**
- * htmljs-parser (through `@marko/compiler`) reports a mismatched closing tag
- * at the closer and names both tags, but never says where the opener is, so
- * an author has to hunt for the unclosed `<p>`. Marko 6.3.51's error carries
- * no second location either, so MX finds it by replaying the source.
+ * The template parser reports a mismatched closing tag at the closer and
+ * names both tags, but never says where the opener is, so an author has to
+ * hunt for the unclosed `<p>`. Marko 6.3.51's error carries no second
+ * location either, so MX finds it by replaying the source with its own
+ * template lexer (`@mxlang/parser/lexer`).
  */
 // With colours on (CI, FORCE_COLOR) Marko wraps the reason in escape codes that
 // run to the end of the line, so allow SGR sequences between the reason and the
@@ -76,7 +76,7 @@ export const TEXT = new Set([
 class Found extends Error {}
 
 /**
- * Offset of the innermost unclosed tag's `<` at the point htmljs-parser first
+ * Offset of the innermost unclosed tag's `<` at the point the lexer first
  * reports `message` ending at `closerStart`, or null when the replay does not
  * reproduce that exact error (so a wrong opener is never named).
  */
@@ -88,9 +88,6 @@ function findOpener(
   const stack: { name: string; start: number }[] = [];
   let pending: { name: string; start: number } | null = null;
   let opener: number | null = null;
-  // The parser Marko parses with (decision 159: MX's own in core's dist).
-  const { createParser, TagType } =
-    markoHtmljsParser() as unknown as typeof HtmljsParser;
   const parser = createParser({
     onOpenTagStart(range) {
       pending = { name: "", start: range.start };
