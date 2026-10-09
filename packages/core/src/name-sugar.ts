@@ -79,6 +79,11 @@ function positionAt(ctx: Ctx, offset: number) {
   };
 }
 
+/** A Babel `loc` (line, column and index) for a source range. */
+export function sugarLoc(ctx: Ctx, start: number, end: number) {
+  return loc(ctx, start, end);
+}
+
 function loc(ctx: Ctx, start: number, end: number) {
   return {
     start: { ...positionAt(ctx, start), index: start },
@@ -1091,6 +1096,15 @@ function isStatementTag(ctx: Ctx, name: string): boolean {
 export function rewriteNameSugar(ctx: Ctx, node: Node): void {
   if (done.has(node) || node?.type !== "MarkoTag") return;
   done.add(node);
+  rewriteSugarTag(ctx, node);
+}
+
+/**
+ * The rewrite itself, on a tag in Marko's parsed shape. `rewriteMxSugar`
+ * (`mx-sugar.ts`) runs it on a stand-in it builds from an MX tag, so both
+ * ASTs share every rule and every diagnostic.
+ */
+export function rewriteSugarTag(ctx: Ctx, node: Node): void {
   if (node.name?.type === "StringLiteral") {
     const spelled: string = node.name.value;
     if (isStatementTag(ctx, spelled)) return;

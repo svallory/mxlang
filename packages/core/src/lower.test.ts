@@ -4556,8 +4556,240 @@ function toMxShape(source: string): (body: Node[]) => void {
    * `operator`. Name sugar (`#x`, `.x`, `:x`) and the tag's own shorthand
    * stay Marko-shaped.
    */
-  const attribute = (attr: Node): Node => {
+  /**
+   * Slice 4, family 3: name sugar as the MX front end splits it (probed):
+   * a chain of `.`/`#`/`:` tokens read from the source, each an
+   * `MxShorthand`; a `${…}` part is dynamic, its payloads Marko's own nodes
+   * found by offset in the value Marko merged them into.
+   */
+  const babelAt = new Map<string, Node>();
+  const index = (node: Node): void => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const each of node) index(each);
+      return;
+    }
+    // Marko's template part has no `loc` of its own; its quasis do.
+    const quasis = node.type === "TemplateLiteral" ? node.quasis : undefined;
+    const range = node.loc
+      ? offsets(node)
+      : quasis?.[0]?.loc
+        ? {
+            start: offsets(quasis[0]).start,
+            end: offsets(quasis[quasis.length - 1]).end,
+          }
+        : undefined;
+    if (range && typeof node.type === "string") {
+      const key = `${range.start}-${range.end}`;
+      if (!babelAt.has(key)) babelAt.set(key, node);
+      if (quasis) babelAt.set(`template@${range.start}`, node);
+    }
+    for (const [key, value] of Object.entries(node)) {
+      if (key !== "loc" && key !== "extra") index(value);
+    }
+  };
+  const payloadAt = (span: { start: number; end: number }): Node => {
+    // A template part is parsed with its backticks around it.
+    const node =
+      babelAt.get(`${span.start}-${span.end}`) ??
+      babelAt.get(`${span.start - 1}-${span.end + 1}`);
+    const template = babelAt.get(`template@${span.start}`);
+    if (!node && template) {
+      // `.c${x}:b` is one Marko part; the front end's part stops before
+      // the `:b`, which is a shorthand of its own.
+      const part = structuredClone(template);
+      const tail = part.quasis[part.quasis.length - 1];
+      const colon = tail.value.raw.indexOf(":");
+      tail.value.raw = tail.value.raw.slice(0, colon);
+      tail.value.cooked = tail.value.raw;
+      tail.loc.end = positionAt(span.end);
+      return part;
+    }
+    // Marko turns `${"s"}` into a one-quasi template; the front end keeps
+    // the string literal.
+    if (
+      node?.type === "TemplateLiteral" &&
+      node.expressions.length === 0 &&
+      /^["'`]/.test(source[span.start] ?? "")
+    ) {
+      return { type: "StringLiteral", value: node.quasis[0].value.cooked };
+    }
+    return node;
+  };
+  const positionAt = (offset: number) => {
+    let line = lineStarts.length;
+    while ((lineStarts[line - 1] ?? 0) > offset) line--;
+    return {
+      line,
+      column: offset - (lineStarts[line - 1] ?? 0),
+      index: offset,
+    };
+  };
+  const expression = (span: { start: number; end: number }): Node =>
+    container("MxExpression", payloadAt(span), span, span);
+  const scanChain = (from: number, position: "tag" | "attribute") => {
+    const tokens: Node[] = [];
+    let pos = from;
+    // `:=` is the bound operator, not a `:name`.
+    while (
+      ".#:".includes(source[pos] ?? "x") &&
+      source.slice(pos, pos + 2) !== ":="
+    ) {
+      const start = pos++;
+      const wordStart = pos;
+      const quasis: { start: number; end: number }[] = [];
+      const expressions: { start: number; end: number }[] = [];
+      let quasiStart = pos;
+      while (pos < source.length) {
+        const char = source[pos] as string;
+        if (char === "$" && source[pos + 1] === "{") {
+          quasis.push({ start: quasiStart, end: pos });
+          let depth = 0;
+          let close = pos + 1;
+          for (; close < source.length; close++) {
+            if (source[close] === "{") depth++;
+            else if (source[close] === "}" && --depth === 0) break;
+          }
+          expressions.push({ start: pos + 2, end: close });
+          pos = close + 1;
+          quasiStart = pos;
+          continue;
+        }
+        if (/[.#:\s/>=(|<,]/.test(char)) break;
+        pos++;
+      }
+      const span = { start: wordStart, end: pos };
+      let value: Node;
+      if (expressions.length === 0) {
+        value = { kind: "static", value: source.slice(start + 1, pos), span };
+      } else {
+        quasis.push({ start: quasiStart, end: pos });
+        const bare =
+          expressions.length === 1 &&
+          quasis.every((quasi) => quasi.start === quasi.end);
+        value = {
+          kind: "dynamic",
+          template: expression(bare ? (expressions[0] as typeof span) : span),
+          quasis,
+          expressions: expressions.map(expression),
+          span,
+        };
+      }
+      tokens.push({
+        type: "MxShorthand",
+        sigil: source[start],
+        position,
+        value,
+        operator: null,
+        default: null,
+        args: null,
+        start,
+        end: pos,
+      });
+    }
+    return tokens;
+  };
+  const isSugarAttr = (attr: Node): boolean =>
+    attr.type === "MarkoAttribute" &&
+    Boolean(attr.loc) &&
+    (/^[#.]/.test(attr.name) || (attr.default && Boolean(attr.modifier)));
+  /** An attribute-position sugar run, its value on the last token. */
+  const sugarRun = (attr: Node): Node[] => {
+    index(attr.value);
+    const tokens = scanChain(offsets(attr).start, "attribute");
+    const last = tokens[tokens.length - 1] as Node;
+    const value: Node = attr.value;
+    if (value?.type === "FunctionExpression") last.default = method(value);
+    else if (value?.loc) {
+      last.operator = attr.bound ? ":=" : "=";
+      last.default = wrap("MxExpression", value, [value]);
+    }
+    if (attr.arguments) {
+      last.args = wrap("MxArguments", attr.arguments, attr.arguments);
+    }
+    return tokens;
+  };
+  /**
+   * The tag head: the name before any sugar, the shorthand tokens after it,
+   * and the attribute list without what Marko's parser added for them (the
+   * loc-less `class`/`id`, the shorthand merged into an authored `class`).
+   */
+  const sugarHead = (node: Node) => {
+    const name = node.name;
+    if (
+      name?.type !== "StringLiteral" ||
+      !name.loc ||
+      String(name.value).startsWith("@")
+    ) {
+      return undefined;
+    }
+    const nameStart = offsets(name).start;
+    let nameEnd = nameStart;
+    while (
+      nameEnd < source.length &&
+      !/[.#:\s/>=(|<,]/.test(source[nameEnd] as string)
+    ) {
+      nameEnd++;
+    }
+    for (const attr of node.attributes ?? []) index(attr.value);
+    const shorthands = scanChain(nameEnd, "tag");
+    if (shorthands.length === 0) return undefined;
+    const attributes: Node[] = [];
+    for (const attr of node.attributes ?? []) {
+      if (!attr.loc) continue;
+      if (attr.type === "MarkoAttribute" && attr.name === "class") {
+        const attrStart = offsets(attr).start;
+        const before = (each: Node) =>
+          each?.loc ? offsets(each).start < attrStart : true;
+        const value: Node = attr.value;
+        if (
+          value?.type === "TemplateLiteral" &&
+          value.expressions.length === 2 &&
+          value.quasis[1]?.value.raw === " " &&
+          before(value.expressions[0])
+        ) {
+          attributes.push({ ...attr, value: value.expressions[1] });
+          continue;
+        }
+        if (value?.type === "ArrayExpression" && before(value.elements[0])) {
+          const rest = value.elements.filter((each: Node) => !before(each));
+          // An authored array was flattened into Marko's; rebuild it.
+          const open = source.indexOf("[", attrStart);
+          attributes.push({
+            ...attr,
+            value:
+              rest.length === 1
+                ? rest[0]
+                : {
+                    type: "ArrayExpression",
+                    elements: rest,
+                    loc: {
+                      start: positionAt(open),
+                      end: positionAt(offsets(attr).end),
+                    },
+                  },
+          });
+          continue;
+        }
+      }
+      attributes.push(attr);
+    }
+    return {
+      name:
+        nameEnd > nameStart
+          ? {
+              kind: "static",
+              value: source.slice(nameStart, nameEnd),
+              span: { start: nameStart, end: nameEnd },
+            }
+          : { kind: "unnamed", span: { start: nameStart, end: nameStart } },
+      shorthands,
+      attributes,
+    };
+  };
+  const attribute = (attr: Node): Node | Node[] => {
     if (!attr.loc) return attr;
+    if (isSugarAttr(attr)) return sugarRun(attr);
     const { start, end } = offsets(attr);
     if (attr.type === "MarkoSpreadAttribute") {
       return {
@@ -4636,6 +4868,7 @@ function toMxShape(source: string): (body: Node[]) => void {
       ...rest
     } = node;
     const { start, end } = offsets(node);
+    const head = sugarHead(node);
     const fields = {
       ...rest,
       typeArgs: typeArguments
@@ -4649,7 +4882,10 @@ function toMxShape(source: string): (body: Node[]) => void {
           ])
         : null,
       params: params.length ? wrap("MxParameterList", params, params) : null,
-      attributes: (node.attributes ?? []).map(attribute),
+      attributes: (head?.attributes ?? node.attributes ?? []).flatMap(
+        attribute,
+      ),
+      shorthands: head?.shorthands ?? [],
       body,
       start,
       end,
@@ -4668,7 +4904,7 @@ function toMxShape(source: string): (body: Node[]) => void {
     return {
       ...fields,
       type: name === "return" ? "MxReturn" : "MxTag",
-      name: tagName(node),
+      name: head?.name ?? tagName(node),
     };
   };
   return (body) => {
@@ -5819,5 +6055,349 @@ describe("hybrid attributes, MX-shaped (PR 4 slice 4)", () => {
       };
     });
     expect(result).toEqual({ message: "Unexpected token", line: 1, column: 8 });
+  });
+});
+
+/**
+ * Every source of `name-sugar.test.ts` the MX front end accepts (121 of 178;
+ * the other 57 fail there at token level, before lowering, with an
+ * `MX_SUGAR_*`/`MX_SECOND_NAME`/`MX_SHORTHAND_INVALID`/`MX_COLON_BEFORE_DYNAMIC`
+ * code).
+ */
+const SUGAR_SOURCES: readonly string[] = [
+  "<input:email/>",
+  "<a.c:b/>",
+  "<a#d:b.c/>",
+  "<a.c:b#d/>",
+  "<a:b.c#d/>",
+  "<a:b#d/>",
+  "<a.hover:x/>",
+  "<a.c.d:b/>",
+  "<a.c:b.d/>",
+  "<a.c-d:first-name/>",
+  "<:email/>",
+  "<:b.c/>",
+  "<:b#d.c/>",
+  "<a.${x}:b/>",
+  "<a.c${x}/>",
+  "<a.c.${x}:b/>",
+  "<${x}:b/>",
+  "<a :b/>",
+  "<a x=1 :b/>",
+  "<a x=1 ? y : z :b/>",
+  "<a #b/>",
+  "<a x=1 #b/>",
+  "<a .b/>",
+  "<a x=a.b .c/>",
+  "<a x=(a.b .c)/>",
+  "<a .b .c/>",
+  "<a.d .b/>",
+  "<a.d.e .b .c/>",
+  "<a .b:c/>",
+  "<a #b:c/>",
+  "<div.a #m .b/>",
+  "<div.a.b#m/>",
+  "<div.a class={a: true} .b/>",
+  "<div.a.b class={a: true}/>",
+  "<div.${y} class=x .d/>",
+  "<div.${y}.d class=x/>",
+  "<a class=x .b/>",
+  "<a #b #c/>",
+  "<a :b :c/>",
+  "<a#d #e/>",
+  "<a:b :c/>",
+  "<a x:foo/>",
+  "<a value:foo/>",
+  "<a value:/>",
+  "<div #ref/>",
+  "<svg:rect/>",
+  "<div#x/>",
+  "<div.b/>",
+  "<div .b/>",
+  "<div :b/>",
+  "<a#d:b/>",
+  "<a.c #m .b/>",
+  "<div #1a/>",
+  "<div#1a/>",
+  "<div .2xl/>",
+  "<div.2xl/>",
+  "<div .\u00e9/>",
+  "<div.\u00e9/>",
+  "<div .a@b/>",
+  "<div.a@b/>",
+  "<div .a+b/>",
+  "<div.a+b/>",
+  "<div #a-b_c$d/>",
+  "<div#a-b_c$d/>",
+  "<div .c.d/>",
+  "<div.c.d/>",
+  "<div .c#m.d/>",
+  "<div.c#m.d/>",
+  "<div.a${x}/>",
+  "<div x:/>",
+  "<field #a #b/>",
+  "<input :a :b/>",
+  "<div><@svg:rect/></div>",
+  "<div.b class=false/>",
+  "<div class=false .b/>",
+  "<div class=0 .b/>",
+  "<div.b class=0/>",
+  "<div class=null .b/>",
+  "<div.b class=null/>",
+  "<div class=undefined .b/>",
+  "<div.b class=undefined/>",
+  "<div .b class=false/>",
+  "<div .b class=0/>",
+  "<div class=1 .b/>",
+  "<div class=true .b/>",
+  "<div .b class=1/>",
+  "<div .b class=true/>",
+  "<a #x=1/>",
+  "<a :x=input.y/>",
+  "<a .c=1/>",
+  "<a x=1 #y=2/>",
+  "<a #x=1 y=2/>",
+  "<a:x=1/>",
+  "<a#x=1/>",
+  "<a.c=1/>",
+  "<kind #name(p){b}/>",
+  "<kind (p){b} #name/>",
+  "<a #x=input.y/>",
+  "<if=input.a #x=1>y</if>",
+  "<a #x=1 #y=2/>",
+  "<a value=1 #x=2/>",
+  "<a:x=1 #y=2/>",
+  "<a=input.o .c/>",
+  "<input value=1 value=2 #r=x/>",
+  "<input :n=1/>",
+  "<input value=1 :n=2/>",
+  "<a value:=y #x=1/>",
+  "<a #x=1 value:=y/>",
+  "<a value:=y :n=1/>",
+  "<input\n  value=1\n  #x=2/>",
+  "<a#x=1 value=2/> is decision 135's warning, not the double-default error",
+  "<a#x=1 value=2/>",
+  "<a #x:=y/>",
+  "<div.bg-[#fff]/>",
+  "<div .bg-[#fff]/>",
+  "<div.w-1.5/>",
+  "<div .w-1.5/>",
+  "<div.2xl.3xl/>",
+  "<div.hover:bg-red/>",
+  "<div.a.b#c/>",
+  "<div.w-1/>",
+];
+
+/**
+ * Shapes the corpus does not reach: a templated part with a `:name`,
+ * attribute tags (sugar on one, in one), a method after a sugar, a comment
+ * between sugars, merged arrays, default-value order, a control-flow body.
+ */
+const SUGAR_EDGE_SOURCES: readonly string[] = [
+  "<a.c${x}:b/>",
+  "<a.c${x}d:b/>",
+  "<Panel><@row .x/></Panel>",
+  "<Panel><@row.x/></Panel>",
+  "<Panel><@row><div.a/></@row></Panel>",
+  "<Panel><@row><:email/></@row></Panel>",
+  "<a .c(p){ p }/>",
+  "<a :n(p){ p }/>",
+  "<div#x id=y/>",
+  '<div.a class="b" .c #d/>',
+  "<if=x><div.a :b/></if>",
+  "<for|i| of=input.xs><li.item:row #r/></for>",
+  "<div.a/* c */ .b/>",
+  "<div.a.b class=[x, y]/>",
+  "<div .a=1 value=2/>",
+  "<div value=1 .a=2/>",
+  "<a .c=x .d=y/>",
+  "<a #x .y :z/>",
+  "<Foo:bar.baz/>",
+];
+
+describe("hybrid name sugar, MX-shaped (PR 4 slice 4, family 3)", () => {
+  const reshaped =
+    (source: string, extra?: (body: Node[]) => void) => (body: Node[]) => {
+      toMxShape(source)(body);
+      extra?.(body);
+    };
+  const outcome = (run: () => Ir) => {
+    try {
+      return { ir: run() };
+    } catch (error) {
+      const e = error as TranslateError;
+      return { message: e.message, line: e.line, column: e.column };
+    }
+  };
+  const sugar = (overrides: Partial<Policy> = {}) =>
+    fakeDeclarations({ resolveDefaultTag: () => "input", ...overrides });
+  const angular = sugar({
+    acceptsForeignAttrNames: true,
+    claimsAttributeHash: true,
+  });
+  const both = (
+    source: string,
+    policy: Policy,
+    extra?: (body: Node[]) => void,
+  ) => [
+    outcome(() =>
+      lowerSource(
+        source,
+        policy,
+        undefined,
+        undefined,
+        undefined,
+        reshaped(source, extra),
+      ),
+    ),
+    outcome(() => lowerSource(source, policy)),
+  ];
+
+  it.each([...SUGAR_SOURCES, ...SUGAR_EDGE_SOURCES])(
+    "lowers %j as the Marko shape does",
+    (source) => {
+      const [mx, marko] = both(source, sugar());
+      expect(mx).toEqual(marko);
+    },
+  );
+
+  it.each([...SUGAR_SOURCES, ...SUGAR_EDGE_SOURCES])(
+    "lowers %j as the Marko shape does on a host claiming `#`",
+    (source) => {
+      const [mx, marko] = both(source, angular);
+      expect(mx).toEqual(marko);
+    },
+  );
+
+  it.each([
+    "<Panel><@row .x/></Panel>",
+    "<Panel><@row.x :y/></Panel>",
+    "<Panel><@row><div.a :b/></@row></Panel>",
+    "<Panel><@row><:email/></@row></Panel>",
+  ])("lowers %j inside a component's attribute tags", (source) => {
+    const policy = sugar({
+      attrTags: 2,
+      isComponent: (name) => name === "Panel",
+    });
+    const [mx, marko] = both(source, policy);
+    expect(marko).toHaveProperty("ir");
+    expect(mx).toEqual(marko);
+  });
+
+  it.each([
+    "<div.a.b#m class=x .c :n/>",
+    '<div.a class="b" .c=1/>',
+    "<a.${x}:b/>",
+    "<a.c${x}:b/>",
+    "<a value=1 #i/>",
+  ])("leaves the MX tree of %j as parsed", (source) => {
+    let before = "";
+    let tree: Node[] = [];
+    const run = () =>
+      lowerSource(
+        source,
+        sugar(),
+        undefined,
+        undefined,
+        undefined,
+        reshaped(source, (body) => {
+          tree = body;
+          before = JSON.stringify(body);
+        }),
+      );
+    expect(outcome(run)).toEqual(outcome(() => lowerSource(source, sugar())));
+    expect(JSON.stringify(tree)).toBe(before);
+  });
+
+  it("reshapes sugar as the front end splits it", () => {
+    const shapes = (source: string) => {
+      const body: Node[] = [];
+      // Only the reshape is under test; whatever lowering makes of it.
+      outcome(() =>
+        lowerSource(source, sugar(), undefined, undefined, undefined, (b) => {
+          toMxShape(source)(b);
+          body.push(...b);
+        }),
+      );
+      const tag = body[0];
+      const brief = (each: Node) => ({
+        sigil: each.sigil,
+        position: each.position,
+        value: each.value.kind === "static" ? each.value.value : "dynamic",
+        start: each.start,
+        end: each.end,
+        operator: each.operator,
+      });
+      return {
+        name: tag.name,
+        shorthands: tag.shorthands.map(brief),
+        attributes: tag.attributes.map((each: Node) =>
+          each.type === "MxShorthand" ? brief(each) : each.type,
+        ),
+      };
+    };
+    // The front end's own split, probed (see the PR 4 report's table).
+    expect(shapes("<input:email/>")).toMatchObject({
+      name: { kind: "static", value: "input", span: { start: 1, end: 6 } },
+      shorthands: [{ sigil: ":", position: "tag", start: 6, end: 12 }],
+      attributes: [],
+    });
+    expect(shapes("<:title/>")).toMatchObject({
+      name: { kind: "unnamed", span: { start: 1, end: 1 } },
+      shorthands: [{ sigil: ":", value: "title", start: 1, end: 7 }],
+    });
+    expect(shapes("<a.c:b#d/>").shorthands).toEqual([
+      {
+        sigil: ".",
+        position: "tag",
+        value: "c",
+        start: 2,
+        end: 4,
+        operator: null,
+      },
+      {
+        sigil: ":",
+        position: "tag",
+        value: "b",
+        start: 4,
+        end: 6,
+        operator: null,
+      },
+      {
+        sigil: "#",
+        position: "tag",
+        value: "d",
+        start: 6,
+        end: 8,
+        operator: null,
+      },
+    ]);
+    expect(shapes('<div.a .b class="c"/>')).toMatchObject({
+      shorthands: [{ sigil: ".", value: "a", start: 4, end: 6 }],
+      attributes: [
+        { sigil: ".", position: "attribute", value: "b", start: 7, end: 9 },
+        "MxAttribute",
+      ],
+    });
+    expect(shapes("<Foo .c=x/>").attributes).toEqual([
+      {
+        sigil: ".",
+        position: "attribute",
+        value: "c",
+        start: 5,
+        end: 7,
+        operator: "=",
+      },
+    ]);
+    expect(shapes("<div.${x}/>").shorthands).toEqual([
+      {
+        sigil: ".",
+        position: "tag",
+        value: "dynamic",
+        start: 4,
+        end: 9,
+        operator: null,
+      },
+    ]);
   });
 });

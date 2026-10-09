@@ -1863,7 +1863,9 @@ function lowerAttributeIf(
     const lowered = lowerAttributeTags(ctx, branch, schema, true, false);
     unscope();
     branches.push({
-      ...(conditionAttr ? { test: exprOf(ctx, attrValueOf(ctx, conditionAttr)) } : {}),
+      ...(conditionAttr
+        ? { test: exprOf(ctx, attrValueOf(ctx, conditionAttr)) }
+        : {}),
       span: nodeSpan(ctx, branch),
       nodes: lowered.tree,
     });

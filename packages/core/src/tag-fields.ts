@@ -104,5 +104,18 @@ export function hasTypeArguments(node: Node): boolean {
 export function tagAttributesOf(node: Node): Node[] {
   const attributes: Node[] = node?.attributes ?? [];
   if (!isMxTagShape(node)) return attributes;
-  return attributes.filter((attr) => attr?.type !== "MxComment");
+  return (
+    sugarAttributes.get(node) ??
+    attributes.filter((attr) => attr?.type !== "MxComment")
+  );
+}
+
+/**
+ * An MX tag's attributes after the name-sugar rewrite (`rewriteMxSugar`):
+ * kept beside the tree, which stays as parsed.
+ */
+const sugarAttributes = new WeakMap<Node, Node[]>();
+
+export function recordSugarAttributes(node: Node, attributes: Node[]): void {
+  sugarAttributes.set(node, attributes);
 }
