@@ -627,6 +627,23 @@ function warnOnNonDomEventSpelling(ctx: Ctx, attr: Node, name: string): void {
 const ATTR_NAME = /^[a-z_][a-z0-9._:-]*$/i;
 
 /**
+ * The characters a tag name may use: letters (any script), digits, marks and
+ * `-._:$`. Stock Marko lexes any other name (`&title`) and fails later, in its
+ * translator ("Unable to find entry point for custom tag"), so rejecting here,
+ * at the name, is earlier wording of the same refusal rather than a
+ * divergence.
+ */
+const TAG_NAME = /^[\p{L}\p{N}\p{M}_$:.-]+$/u;
+
+/**
+ * A name Marko's concise mode reads off a `$…` scriptlet line, a `!…` line or
+ * a `${…}` placeholder: those are not tag names and keep their own, more
+ * specific diagnostics (the data target's "a dynamic tag has no name"), so the
+ * charset check leaves them alone.
+ */
+const NOT_A_NAME_SHAPE = /^[$!]|[{}]/;
+
+/**
  * Bracketed, `#…` and `*…` attribute names (patterns other template languages
  * use) and how to write what they were reaching for, first match wins.
  */
@@ -3735,6 +3752,12 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   }
 
   const name = String(node.name.value);
+  if (!TAG_NAME.test(name) && !NOT_A_NAME_SHAPE.test(name)) {
+    fail(
+      `Invalid tag name \`${name}\`; Marko rejects it too — a tag name may use letters, digits and \`-._:\``,
+      node.name,
+    );
+  }
   // A parent's `children["*"]` claimed this tag (decision 147): it is a call
   // of the matched contract, under the canonical name, ahead of every
   // host-specific reading of the authored name (disposition, claim, element).
