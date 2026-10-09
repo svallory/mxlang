@@ -21,7 +21,7 @@ describe("invalid tag names (tree target)", () => {
       column: 2,
     });
     expect(diagnostics[0]?.message).toContain(
-      "Invalid tag name `&title`; Marko rejects it too — a tag name may use letters, digits and `-._:`",
+      "Invalid tag name `&title`; Marko rejects it too — a tag name may use letters (any script), digits and `-._:$`",
     );
   });
 

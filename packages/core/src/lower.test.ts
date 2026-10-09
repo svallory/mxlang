@@ -2104,7 +2104,7 @@ describe("errors keep their message and position", () => {
         caught = error as { message: string; line?: number; column?: number };
       }
       expect(caught?.message).toContain(
-        `Invalid tag name \`${name}\`; Marko rejects it too — a tag name may use letters, digits and \`-._:\``,
+        `Invalid tag name \`${name}\`; Marko rejects it too — a tag name may use letters (any script), digits and \`-._:$\``,
       );
       expect(caught?.column).toBe(column);
     },
