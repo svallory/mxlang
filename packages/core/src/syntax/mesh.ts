@@ -3,7 +3,9 @@
  * (lang-ext-move-sugars-to-mesh, slice a1): the member sigil `&`
  * (`member.ts`) plus atoms and the name sugars (`atoms-sugars.ts`).
  * One row per first character in each list, so the two never compete.
- * Types only, like its parts, so a manifest can `require` it.
+ * The atom contract checks (`contractFields`, `checkContract`,
+ * `afterLower`) are the atoms module's (slice a2). Types only, like its
+ * parts, so a manifest can `require` it.
  */
 import type { SyntaxModule } from "../index.ts";
 import atomsSugars, {
@@ -34,6 +36,9 @@ const meshSyntax = {
       ctx,
     );
   },
+  contractFields: atomsSugars.contractFields,
+  checkContract: atomsSugars.checkContract,
+  afterLower: atomsSugars.afterLower,
 } satisfies SyntaxModule;
 
 export default Object.freeze(meshSyntax) as SyntaxModule;

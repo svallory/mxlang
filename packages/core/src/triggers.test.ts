@@ -18,10 +18,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { compileSource } from "./compile.ts";
-import { type Ctx, newCtx, TranslateError } from "./core.ts";
+import { newCtx, TranslateError } from "./core.ts";
 import { parseFragment } from "./fragment.ts";
 import type { Attr, Ir, IrNode } from "./ir.ts";
 import { lowerChildren } from "./lower.ts";
+import type { LoweredUnit } from "./lowered-unit.ts";
 import memberSyntax, { MEMBER } from "./syntax/member.ts";
 import {
   resolveSyntaxOf,
@@ -624,34 +625,44 @@ describe("block tags and filters", () => {
 });
 
 describe("`afterLower` and `productName`", () => {
-  it("the module's `afterLower` joins the list once and sees its `productName`", () => {
-    const seen: (string | undefined)[] = [];
-    const syntax: SyntaxModule = {
-      ...memberSyntax,
-      productName: "Mesh",
-      afterLower: (ctx: Ctx) => {
-        seen.push(ctx.productName);
+  it("the module's `afterLower` runs once, with the unit's view, and its `productName` names the language", () => {
+    const seen: string[] = [];
+    const names: (string | undefined)[] = [];
+    const file = join(dir, "page.mx");
+    compileSource("sort asc &a\n", file, declarations, {
+      targets,
+      syntax: {
+        ...memberSyntax,
+        productName: "Mesh",
+        afterLower: (unit: LoweredUnit) => {
+          seen.push(unit.file);
+        },
       },
-    };
-    irOf("sort asc &a\n", undefined, syntax);
-    expect(seen).toEqual(["Mesh"]);
+      emitIr: (_ir, ctx) => {
+        names.push(ctx.productName);
+        return "";
+      },
+    });
+    expect(seen).toEqual([file]);
+    expect(names).toEqual(["Mesh"]);
   });
 
   it("the host's `productName` wins", () => {
-    const seen: (string | undefined)[] = [];
+    const names: (string | undefined)[] = [];
     compileSource("div\n", join(dir, "page.mx"), declarations, {
       targets,
       productName: "Host",
       syntax: {
         ...memberSyntax,
         productName: "Mesh",
-        afterLower: (ctx: Ctx) => {
-          seen.push(ctx.productName);
-        },
+        afterLower: () => {},
       },
-      emitIr: () => "",
+      emitIr: (_ir, ctx) => {
+        names.push(ctx.productName);
+        return "";
+      },
     });
-    expect(seen).toEqual(["Host"]);
+    expect(names).toEqual(["Host"]);
   });
 });
 

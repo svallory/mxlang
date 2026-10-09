@@ -32,6 +32,7 @@ import {
   positionAtOffset,
 } from "./core.ts";
 import type { Member, MxMemberMark } from "./ir.ts";
+import { loweredUnitOf } from "./lowered-unit.ts";
 import type { SourceSpan } from "./mapping.ts";
 import type {
   ResolvedSyntax,
@@ -168,8 +169,13 @@ export function lowerTriggers(ctx: Ctx, roots: readonly Node[]): boolean {
   ctx.syntaxModule = module;
   if (module && !applied.has(ctx)) {
     applied.add(ctx);
-    if (module.afterLower) {
-      ctx.afterLower = [...(ctx.afterLower ?? []), module.afterLower];
+    const afterLower = module.afterLower;
+    if (afterLower) {
+      // The module sees the unit through its public view, never the `Ctx`.
+      ctx.afterLower = [
+        ...(ctx.afterLower ?? []),
+        (unit) => afterLower(loweredUnitOf(unit)),
+      ];
     }
     if (module.productName && ctx.productName === undefined) {
       ctx.productName = module.productName;

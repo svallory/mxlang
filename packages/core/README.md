@@ -552,6 +552,71 @@ const result = parseData(source, file, { syntax: meshSyntax });
 Copy it the way the member module is copied (its type imports from
 `../index.ts` become `@mxlang/core`; `mesh.ts` also imports its two siblings).
 
+### Contract checks in a module: `contractFields`, `checkContract` and `afterLower(unit)`
+
+The atom contract keys (an attribute's `values`, `pattern` and `ref`, a
+tag's `declares`) are checked by the atoms module too, not by core, once the
+module is loaded. Three `@unstable` parts of `SyntaxModule` carry this, and
+none names atoms:
+
+- `contractFields: { attribute?: string[], tag?: string[] }` lists the
+  contract keys the module owns. Core accepts a listed key at registration
+  as opaque data, in `customTags`, `mx.contracts` and tag sidecars alike, and
+  never checks it. A key that no core rule knows and no module lists is
+  still a registration error. Of core's own keys only those four can be
+  listed. Core keeps the whole-value shape check (`type: "atom"` or
+  `"member"`) and `ctx.declare` in `analyze`.
+- `checkContract(tag, contract, ctx)` runs at registration for every
+  contract that uses a listed key, at any depth, called or not. `contract`
+  is plain data (`attributes`, `attributeTags`, `children` and the listed
+  tag keys). `ctx.fail(message, { code? })` raises the error where core's
+  own registration error lands: in the sidecar, in the `mx.contracts`
+  module at 1:0, or with no position for the `customTags` option.
+- `afterLower(unit)` runs once per unit, after core's own checks. `unit` is
+  a frozen `LoweredUnit`:
+  - `calls`: every custom tag call with its contract (the listed tag keys
+    included), its attributes as written (`string`, `atom`, `member`,
+    `boolean`, `expression`, `spread`), its attribute tags at any depth, and
+    its authored ancestors with an opaque `scope` per tag instance.
+  - `declared`: what `analyze` hooks declared.
+  - `fail(message, { at?, code?, also? })` and `warn(message, at?)`.
+
+```ts
+import type { LoweredUnit, SyntaxModule } from "@mxlang/core";
+
+const checks: Partial<SyntaxModule> = {
+  contractFields: { attribute: ["unique"] },
+  afterLower(unit: LoweredUnit) {
+    for (const call of unit.calls) {
+      for (const attr of call.attrs) {
+        if (attr.kind === "spread") continue;
+        const declared = call.contract.attributes?.[attr.name];
+        if (declared?.unique && attr.kind === "atom") {
+          // A positioned error; `code` reaches `DataDiagnostic.code`.
+          unit.fail(`\`:${attr.value}\` must be unique`, {
+            at: attr.span,
+            code: "UNIQUE",
+          });
+        }
+      }
+    }
+  },
+};
+```
+
+The atoms module's diagnostics are core's built-in ones, word for word and
+at the same positions: shape problems from its `checkContract`, uses from
+its `afterLower`.
+
+Which module claims the keys follows the file's syntax. A discovery scan
+(`tags/`, `mx.tags`, `mx.contracts`) reads the nearest
+`package.json#mx.syntax`; it cannot see an explicit `syntax` option. So a
+scanned contract that uses a key only the option's module claims is refused
+at the scan, positioned in the sidecar or the contracts module. Contracts
+passed as `customTags` follow the explicit option. One thing is the built-in path's only: completion
+facts (`CompileResult.atomFacts`, `atomCandidates`) are empty for a unit
+whose module takes over the atom keys.
+
 ## Host-policy resolution
 
 **`resolveTargetPolicy(filePath)`** (`src/host-policy.ts`) answers which host a

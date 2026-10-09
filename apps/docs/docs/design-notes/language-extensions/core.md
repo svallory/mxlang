@@ -113,7 +113,7 @@ descriptor (layer 3).
 A **syntax module** is what `package.json#mx.syntax` names when its value is a
 string (a package name, or a path relative to the manifest, resolved like
 `mx.contracts`); its default export is
-`{ table, lowerTrigger?, lowerBlockTag?, lowerFilter?, afterLower?, productName? }`.
+`{ table, lowerTrigger?, lowerBlockTag?, lowerFilter?, afterLower?, contractFields?, checkContract?, productName? }`.
 `table` overlays the `.mx` default row with the fields an inline `mx.syntax`
 may set. An inline object stays a table only. A trigger whose `node` is
 `{ call }` needs the module's `lowerTrigger`: a `{ call }` in an inline
@@ -169,8 +169,66 @@ may set. An inline object stays a table only. A trigger whose `node` is
 - `lowerFilter(name, body, span, ctx)` returns IR for a filter block, through
   `ctx.build`. A block tag or filter whose module has no hook for it stays a
   "has no lowering yet" error.
-- `afterLower(ctx)` runs once per unit after lowering, before emit, after
-  core's own checks.
+- `afterLower(unit)` runs once per unit after lowering, before `finalize` and
+  emit, after core's own checks. `unit` is a frozen, read-only view
+  (`LoweredUnit`), never core's internal context:
+  - `file` and `source`; every span is a UTF-16 offset into `source`.
+  - `calls`: every custom tag call that has a declaration, in the order core
+    lowered them. A call (`ContractCall`) has `tag` (the canonical name),
+    `span`, `nameSpan`, `contract` (the declaration's `attributes`,
+    `attributeTags` and `children` as registered, plus the module's claimed
+    tag keys),
+    `attrs`, `attributeTags` and `ancestors`.
+  - An attribute (`ContractAttr`) has the kinds `@mxlang/data`'s `DataAttr`
+    names: `string`, `atom` and `member` with `value` and `span`; `boolean`;
+    `expression` with the lowered `node`, `code`, `span` and `bound`;
+    `spread`. Each named one carries `nameSpan`, `label` (how core's
+    diagnostics name it) and `authored` (the sugar that wrote it).
+  - `attributeTags` nest to any depth. Each carries the declaration its
+    parent's contract has for it, wildcards resolved, as `contract`.
+  - `ancestors` are the authored tags around the call, outermost first,
+    ending with the call itself: `{ tag, span, scope }`. `scope` is an
+    opaque, frozen identity, one per tag instance, so it can key a map of
+    what that instance owns.
+  - `declared`: what `analyze` hooks declared with `ctx.declare(kind, name,
+    { span, scope })`, in call order.
+  - `fail(message, { at?, code?, also? })` throws the positioned error
+    lowering reports. `at` is a span inside the document; without it the
+    error is file-level (no position, as a registration error). `code` is
+    carried as `diagnosticCode`, and `also` as the error's `spans` (a
+    duplicate's first site). It is fatal, as core's own checks are.
+  - `warn(message, at?)` records a warning.
+- `contractFields: { attribute?, tag? }` lists the contract keys the module
+  owns. A key core does not know is a registration error unless the file's
+  module lists it. A listed key passes registration untouched, in
+  `customTags`, `mx.contracts` and sidecars alike, and reaches
+  `afterLower` on `ContractCall.contract`. Core never checks a listed key:
+  - Of core's own keys only the atom contract's can be listed: `values`,
+    `pattern`, `ref` (attribute) and `declares` (tag).
+  - Listing one turns core's registration check and its file-level check
+    of that key off.
+  - Core keeps the whole-value shape check (`type: "atom"`, `"member"`,
+    decision 156 addendum 6) and `ctx.declare`.
+  - The reference module `@mxlang/core/syntax/atoms-sugars` claims all four.
+    It checks their shape in `checkContract` and their use in `afterLower`,
+    word for word and at the positions core gives.
+  - The claim follows the file's syntax. A discovery scan (`tags/`,
+    `mx.tags`, `mx.contracts`) reads it from the file's nearest
+    `package.json#mx.syntax`: an explicit `syntax` option is invisible to
+    the scan. A scanned contract with a key only that option's module claims
+    is refused at the scan, positioned like any registration error (the
+    sidecar's file, or the contracts module at 1:0). Contracts passed as
+    `customTags` follow the explicit option.
+  - Completion facts (`CompileResult.atomFacts`, `atomCandidates`) stay on
+    core's built-in path. A unit whose module claims the atom keys has none.
+- `checkContract(tag, contract, ctx)` checks, at registration, every
+  contract that uses a key the module claims, at any depth (attribute tags
+  and inline `children["*"]` contracts included), whether the file calls the
+  tag or not. `contract` is the same plain data `ContractCall.contract`
+  carries. `ctx.fail(message, { code? })` raises a registration error where
+  core's own lands: the sidecar's file, an `mx.contracts` module at 1:0, no
+  position for the `customTags` option. It runs where core checks
+  `declares`, before core's walk of the attribute declarations.
 - `productName` names the language in every diagnostic, unless the host
   names one.
 

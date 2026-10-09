@@ -50,6 +50,11 @@ import {
 import { createRequire } from "node:module";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { BUILTIN_CUSTOM_TAGS } from "./builtin-tags.ts";
+import {
+  type ClaimedFields,
+  claimedFields,
+  claimedFieldsOf,
+} from "./contract-fields.ts";
 import { isTranslateError, TranslateError } from "./core.ts";
 import {
   type ContractMap,
@@ -312,6 +317,25 @@ export interface ScanDiagnostic {
  * offending file and carry that file's own position, which is what lets the
  * language server point an author at the real problem.
  */
+/** Project-wide discovery has no one file, so no syntax module claims keys. */
+const NO_CLAIM = claimedFields(undefined);
+
+/**
+ * Runs `place`, which rethrows a registration error at its file, keeping the
+ * `diagnosticCode` a syntax module's `checkContract` gave it.
+ */
+function withCodeOf(cause: unknown, place: () => never): never {
+  try {
+    return place();
+  } catch (placed) {
+    const code = isTranslateError(cause) ? cause.diagnosticCode : undefined;
+    if (code !== undefined && isTranslateError(placed)) {
+      placed.diagnosticCode = code;
+    }
+    throw placed;
+  }
+}
+
 function failIn(file: string, message: string, line = 1, column = 0): never {
   throw new TranslateError(message, line, column, file);
 }
@@ -888,7 +912,7 @@ export function loadSidecar(file: string): CustomTag {
  * that loads the sidecar once, so a project with fifty tags evaluates only
  * the modules a file actually calls.
  */
-function lazyTag(tag: DiscoveredTag): CustomTag {
+function lazyTag(tag: DiscoveredTag, claimed: ClaimedFields): CustomTag {
   const definition: CustomTag = {};
   if (tag.parseOptions) definition.parseOptions = tag.parseOptions;
 
@@ -928,11 +952,11 @@ function lazyTag(tag: DiscoveredTag): CustomTag {
     // A paired template makes a finalize-only sidecar reachable.
     try {
       const own = { [tag.name]: candidate };
-      rejectUnknownDeclarationKeys(own);
+      rejectUnknownDeclarationKeys(own, claimed);
       if (!tag.template) rejectUnreachableHooks(own);
     } catch (cause) {
       if (isTranslateError(cause) && cause.file === undefined)
-        failIn(sidecar, cause.message);
+        withCodeOf(cause, () => failIn(sidecar, cause.message));
       throw cause;
     }
     loaded = candidate;
@@ -950,6 +974,14 @@ function lazyTag(tag: DiscoveredTag): CustomTag {
       enumerable: true,
       configurable: true,
       get: () => load()[key],
+    });
+  }
+  // The keys the file's syntax module claims are its data: carried as written.
+  for (const key of claimed.tag) {
+    Object.defineProperty(definition, key, {
+      enumerable: true,
+      configurable: true,
+      get: () => (load() as Record<string, unknown>)[key],
     });
   }
   for (const key of ["analyze", "transform", "finalize"] as const) {
@@ -1191,10 +1223,11 @@ function applyHostFilter(
 /** Builds the lazy `customTags` map a compiler consumes from a tag map. */
 function buildCustomTags(
   tags: Map<string, DiscoveredTag>,
+  claimed: ClaimedFields,
 ): Record<string, CustomTag> {
   const customTags: Record<string, CustomTag> = Object.create(null);
   for (const [name, tag] of tags)
-    customTags[name] = tag.contract ?? lazyTag(tag);
+    customTags[name] = tag.contract ?? lazyTag(tag, claimed);
   return customTags;
 }
 
@@ -1215,6 +1248,7 @@ function indexMxTagsEntries(
   dottedTagFiles: DottedTagFile[],
   hostRestrictions: HostRestriction[],
   host: ScanOptions["host"],
+  claimed: ClaimedFields,
 ): void {
   const manifest = readManifest(packageJson, diagnostics);
   const entries = normalizeMxTags(manifest?.mx?.tags, packageDir, packageJson);
@@ -1257,6 +1291,7 @@ function indexMxTagsEntries(
     diagnostics,
     hostRestrictions,
     host,
+    claimed,
   );
 }
 
@@ -1270,6 +1305,7 @@ function indexMxContractsEntries(
   diagnostics: ScanDiagnostic[],
   hostRestrictions: HostRestriction[],
   host: ScanOptions["host"],
+  claimed: ClaimedFields,
 ): void {
   if (value === undefined) return;
   let position: ReturnType<typeof contractsPosition> | undefined;
@@ -1326,7 +1362,8 @@ function indexMxContractsEntries(
               "parents",
               "defaultTag",
               "analyze",
-            ].includes(key)
+            ].includes(key) &&
+            !claimed.tag.has(key)
           ) {
             failContracts(
               file,
@@ -1348,13 +1385,15 @@ function indexMxContractsEntries(
         }
         contracts[name] = definition as CustomTag;
       }
-      rejectUnknownDeclarationKeys(contracts);
+      rejectUnknownDeclarationKeys(contracts, claimed);
       rejectUnreachableHooks(contracts);
     } catch (cause) {
       if (isTranslateError(cause) && cause.file !== undefined) throw cause;
-      failContracts(
-        file,
-        cause instanceof Error ? cause.message : String(cause),
+      withCodeOf(cause, () =>
+        failContracts(
+          file,
+          cause instanceof Error ? cause.message : String(cause),
+        ),
       );
     }
     // Keep validation and stamps for all modules, but only applicable entries
@@ -1428,6 +1467,7 @@ export function scanCustomTags(
   const diagnostics: ScanDiagnostic[] = [];
   const hostRestrictions: HostRestriction[] = [];
   const dottedTagFiles: DottedTagFile[] = [];
+  const claimed = claimedFieldsOf(resolve(filePath));
 
   return withScanDependencies(files, packageFiles, () => {
     let dir = dirname(resolve(filePath));
@@ -1465,6 +1505,7 @@ export function scanCustomTags(
         dottedTagFiles,
         hostRestrictions,
         options.host,
+        claimed,
       );
     }
 
@@ -1472,7 +1513,7 @@ export function scanCustomTags(
 
     return {
       tags,
-      customTags: buildCustomTags(tags),
+      customTags: buildCustomTags(tags, claimed),
       directories,
       packageFiles,
       files,
@@ -1647,6 +1688,7 @@ export function discoverProjectTags(
         dottedTagFiles,
         hostRestrictions,
         options.host,
+        NO_CLAIM,
       );
     }
 
@@ -1654,7 +1696,7 @@ export function discoverProjectTags(
 
     return {
       tags,
-      customTags: buildCustomTags(tags),
+      customTags: buildCustomTags(tags, NO_CLAIM),
       directories,
       packageFiles,
       files,

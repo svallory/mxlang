@@ -480,6 +480,54 @@ Five facts worth knowing before editing it:
   `scripts/sugar-module/deltas.json`, each with its ruling. Many sugar unit
   tests lower through Marko's compiler (`name-sugar.test.ts`) and never reach
   syntax resolution; the suites listed in the script are the ones that do.
+  **Atom contracts in a module: `afterLower(unit)` and `contractFields`
+  (slice a2).** A module's `afterLower` gets `LoweredUnit`
+  (`src/lowered-unit.ts`), never the `Ctx`: `lowerTriggers` appends
+  `ctx => module.afterLower(loweredUnitOf(ctx))` to `ctx.afterLower`. The
+  view is cached per `Ctx` and frozen. Its `calls` and `declared` are built
+  on first read from `ctx.contractFacts` and `ctx.contractDerived`.
+  `ancestors[].scope` is one frozen object per authored node (a WeakMap).
+  `ContractCall.contract` (`contractData` in `contract-fields.ts`:
+  `attributes`, `attributeTags`, `children`, claimed tag keys) holds the
+  registered declaration objects, not copies. `fail` without `at` is
+  file-level (0:0, no `file`).
+  `SyntaxModule.checkContract` is the module's registration check:
+  `rejectUnknownDeclarationKeys` calls `checkClaimedContract` per tag,
+  where `rejectInvalidDeclares` runs, when the contract uses a claimed key
+  at any depth (`usesClaimed`: attributes, attribute tags named and `"*"`,
+  inline `children["*"]`). Its `ctx.fail` throws core's registration shape
+  (0:0, no file), so the sidecar path (`failIn`) and `mx.contracts`
+  (`failContracts`) place it as core's own; `withCodeOf` keeps its
+  `diagnosticCode` through that re-throw. A non-`TranslateError` throw is
+  named ("`checkContract` threw on tag ..."). Because it runs before core's
+  `rejectRecursiveContractKeys`, a contract with both a claimed-key problem
+  and an unknown key reports the claimed one first, where the built-in path
+  reports whichever its walk meets first.
+  `SyntaxModule.contractFields` (`src/contract-fields.ts`, `claimedFields`)
+  lists the contract keys the module owns; only `values`, `pattern`, `ref`
+  and `declares` of core's own keys can be claimed (`checkContractFields`).
+  The claim is threaded into registration with the file's resolved module:
+  - `compileSource` (`translatorClaiming`) and `parseFragment`
+    (`parseOnlyTranslator`), after they resolve the syntax;
+  - the scan (`scanCustomTags` -> `claimedFieldsOf(filePath)`, the nearest
+    manifest's `mx.syntax`): `mx.contracts` accepts a claimed tag key, and
+    `lazyTag` exposes a sidecar's claimed tag keys. `scan.ts` does not import
+    `syntax-table.ts` (that would pull the parser into `scan-cache.ts`, which
+    `contracts.test.ts` loads under Node's strip-only mode): `syntax-table.ts`
+    registers `resolveSyntaxOf` with `registerSyntaxResolver` as it loads;
+  - `discoverProjectTags` has no file and claims nothing.
+  A claimed key is skipped by `rejectInvalidDeclares`,
+  `rejectContradictoryAttribute` and the unknown-key check, and by
+  `checkAtomContracts` (`unclaimed`, and `declare` returns no scopes when
+  `declares` is claimed). `checkAtomAttr` keeps the shape check and still
+  quotes claimed `values`/`ref` in its message (`atomExpectation` reads them
+  defensively). `ctx.atomFacts` is not set when the module claims an atom
+  key: completion facts are the built-in path's only (lead ruling 14:29).
+  `atoms-sugars.ts` claims all four, checks their shape in `checkContract`
+  and ports `atom-contracts.ts` onto the view in `afterLower`, word for
+  word; `lowered-unit.test.ts` pins built-in vs module on
+  every diagnostic, and `test:sugar-module` lists the `atom-candidates`
+  tests as `completion-facts-built-in-only` deltas.
   parse. Core reaches that parser through `mxTemplateParser()`
   (`marko-frontend.ts`): the bundle's parser in the dist, the workspace
   `@mxlang/parser` devDependency by `require` from source (never a static

@@ -13,14 +13,27 @@ import { createHash } from "node:crypto";
 import { statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, isAbsolute, resolve } from "node:path";
-import type { Ctx, Node } from "./core.ts";
+import {
+  type ContractCheckContext,
+  type ContractFields,
+  checkContractFields,
+  registerSyntaxResolver,
+} from "./contract-fields.ts";
+import type { Node } from "./core.ts";
 import { TranslateError } from "./core.ts";
 import type { IrBuilders } from "./custom-tags.ts";
 import { findNearestPackageJson } from "./host-policy.ts";
 import type { IrNode } from "./ir.ts";
+import type { ContractData, LoweredUnit } from "./lowered-unit.ts";
 import type { SourceSpan } from "./mapping.ts";
 
-export type { SourceSpan };
+export type {
+  ContractCheckContext,
+  ContractData,
+  ContractFields,
+  LoweredUnit,
+  SourceSpan,
+};
 
 import { type MxTemplateParser, mxTemplateParser } from "./marko-frontend.ts";
 import { filePosition } from "./mx-parse.ts";
@@ -287,8 +300,33 @@ export interface SyntaxModule {
     span: SourceSpan,
     ctx: SyntaxBuildContext,
   ) => IrNode | readonly IrNode[];
-  /** Joins the unit's `afterLower` list, after core's own hooks. */
-  readonly afterLower?: (ctx: Ctx) => void;
+  /**
+   * Runs once per lowered unit, after core's own checks (every `transform`
+   * done, before `finalize`), with a read-only view of the unit: its custom
+   * tag calls, what `analyze` hooks declared, and `fail` / `warn`.
+   * @unstable
+   */
+  readonly afterLower?: (unit: LoweredUnit) => void;
+  /**
+   * Contract keys this module owns: accepted at registration as opaque data
+   * (a key core does not know is otherwise an error), handed to `afterLower`
+   * on `ContractCall.contract`, and never checked by core. Of core's own
+   * keys only `values`, `pattern`, `ref` (attribute) and `declares` (tag)
+   * can be claimed. @unstable
+   */
+  readonly contractFields?: ContractFields;
+  /**
+   * Checks, at registration, a contract that uses a key the module claims
+   * (`contractFields`), at any depth: `customTags`, `mx.contracts` modules
+   * and sidecars alike, called tag or not. `ctx.fail` raises the error where
+   * core's own registration error lands (the sidecar's file, the contracts
+   * module at 1:0, no position for the `customTags` option). @unstable
+   */
+  readonly checkContract?: (
+    tag: string,
+    contract: ContractData,
+    ctx: ContractCheckContext,
+  ) => void;
   /** Names the language where core's diagnostics say "MX", unless the host sets one. */
   readonly productName?: string;
 }
@@ -430,6 +468,8 @@ const MODULE_FIELDS = new Set([
   "lowerBlockTag",
   "lowerFilter",
   "afterLower",
+  "contractFields",
+  "checkContract",
   "productName",
 ]);
 
@@ -438,6 +478,7 @@ const MODULE_HOOKS = [
   "lowerBlockTag",
   "lowerFilter",
   "afterLower",
+  "checkContract",
 ] as const;
 
 /** Each problem as `` `<path>.<field>` (trigger "<id>"): <message> ``, joined. */
@@ -539,6 +580,7 @@ function checkModuleShape(
   ) {
     fail(`\`${path}productName\` must be a non-empty string`);
   }
+  checkContractFields(value.contractFields, path, fail);
   return value as unknown as SyntaxModule;
 }
 
@@ -704,6 +746,10 @@ function resolveManifestSyntax(filename: string): ResolvedSyntax {
   });
   return resolved;
 }
+
+// The discovery scan reads the claimed contract keys of a file's module
+// through this, without importing the syntax table itself.
+registerSyntaxResolver((filePath) => resolveSyntaxOf(filePath).module);
 
 /**
  * The syntax table for `filename` (see {@link resolveSyntaxOf}, which also

@@ -35,6 +35,7 @@
 
 import { dirname } from "node:path";
 import { rejectShadowedRegistration } from "./builtin-tags.ts";
+import { type ClaimedFields, claimedFields } from "./contract-fields.ts";
 import { type Node, TranslateError } from "./core.ts";
 import {
   PARSE_OPTIONS_TAGLIB,
@@ -104,9 +105,10 @@ const PARSE_ONLY_TRANSLATOR = {
 
 function parseOnlyTranslator(
   customTags: Record<string, CustomTag> | undefined,
+  claimed: ClaimedFields,
 ) {
   rejectShadowedRegistration(customTags);
-  rejectUnknownDeclarationKeys(customTags);
+  rejectUnknownDeclarationKeys(customTags, claimed);
   rejectWildcardReferences(customTags);
   rejectUnreachableHooks(customTags);
   const taglib = customTagTaglib(customTags);
@@ -423,7 +425,10 @@ export function parseFragment(
       : resolveSyntaxOf(resolved.filename);
   const syntax = resolvedSyntax.table;
   const compiler = markoCompiler();
-  const translator = parseOnlyTranslator(base.customTags);
+  const translator = parseOnlyTranslator(
+    base.customTags,
+    claimedFields(resolvedSyntax.module),
+  );
   const lookup = compiler.taglib.buildLookup(
     dirname(resolved.filename),
     translator,

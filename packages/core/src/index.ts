@@ -187,6 +187,16 @@ export type {
   TagTrigger,
 } from "./ir.ts";
 export { expressionShape, lower, lowerChildren } from "./lower.ts";
+export type {
+  ContractAncestor,
+  ContractAttr,
+  ContractAttributeTag,
+  ContractCall,
+  ContractData,
+  DeclaredName,
+  LoweredUnit,
+  LoweredUnitFailOptions,
+} from "./lowered-unit.ts";
 export {
   concatMapped,
   type GeneratedMapping,
@@ -243,6 +253,8 @@ export {
   scanCached,
 } from "./scan-cache.ts";
 export {
+  type ContractCheckContext,
+  type ContractFields,
   defaultSyntax,
   normalizeMxSyntax,
   resolveSyntax,

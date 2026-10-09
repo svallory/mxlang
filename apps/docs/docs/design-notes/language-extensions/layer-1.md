@@ -43,7 +43,9 @@ structural tags, element resolution) is the core and is not extensible.
 
 ## Hooks shared with layer 2
 
-`afterLower(ir, ctx)` runs once per unit after lowering. The first user is
-the Mesh contract checker (atom contracts), which moves out of core behind
-it. A layer-1 package may use it for whole-unit checks that `finalize`
-cannot do, because `finalize` sees one tag's calls, not the unit.
+`afterLower(unit)` runs once per unit after lowering, with a read-only view
+of the unit (`LoweredUnit`, see "Hooks" on the core page). The first user is
+the atom contract checker, which a syntax module carries from slice a2 of
+the move to Mesh on (`contractFields`). A layer-1 package may use it for
+whole-unit checks that `finalize` cannot do, because `finalize` sees one
+tag's calls, not the unit.

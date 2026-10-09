@@ -1,9 +1,10 @@
 /**
- * The slice-a1 proof of `lang-ext-move-sugars-to-mesh` (decisions 183, 196):
- * runs the existing atom and name-sugar suites a second time with every
- * file that declares no `mx.syntax` resolved to the reference module
- * (`packages/core/src/syntax/mesh.ts`, atoms and sugars as
- * layer-2 triggers plus Mesh's `&`), and requires the failures to be
+ * The slice-a1 and a2 proof of `lang-ext-move-sugars-to-mesh` (decisions
+ * 183, 196): runs the existing atom, name-sugar and atom-contract suites a
+ * second time with every file that declares no `mx.syntax` resolved to the
+ * reference module (`packages/core/src/syntax/mesh.ts`, atoms and sugars as
+ * layer-2 triggers, their contract checks as its `afterLower`, plus Mesh's
+ * `&`), and requires the failures to be
  * exactly the checked-in deltas (`sugar-module/deltas.json`), each naming
  * the ruling that changes it. An unlisted failure, or a listed test that
  * passes, fails the run.
@@ -37,6 +38,8 @@ export const SUITES = [
   "packages/core/src/fragment.test.ts",
   "packages/targets/data/src/unknown-tags.test.ts",
   "packages/targets/data/src/attribute-tag-contracts.test.ts",
+  // Slice a2: the atom contract checks run from the module's `afterLower`.
+  "packages/targets/data/src/contracts.test.ts",
 ];
 
 interface Delta {

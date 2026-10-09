@@ -17,6 +17,11 @@ import {
   fallbackAttrTagShape,
   unifyNestedAttrTagPlanGroups,
 } from "./attr-tag.ts";
+import {
+  type ClaimedFields,
+  checkClaimedContract,
+  claimedFields,
+} from "./contract-fields.ts";
 import type { Ctx, Node } from "./core.ts";
 import { isTranslateError, TranslateError, warn } from "./core.ts";
 import type {
@@ -1883,6 +1888,7 @@ function rejectContradictoryAttribute(
   owner: string,
   attrName: string,
   declaration: CustomTagAttribute,
+  claimed: ReadonlySet<string>,
 ): void {
   const reject = (problem: string): never => {
     throw new TranslateError(
@@ -1900,6 +1906,7 @@ function rejectContradictoryAttribute(
     }
   }
   for (const key of ["values", "pattern", "ref"] as const) {
+    if (claimed.has(key)) continue;
     if (declaration[key] !== undefined && declaration.type !== "atom") {
       reject(`\`${key}\` requires \`type: "atom"\``);
     }
@@ -1909,6 +1916,7 @@ function rejectContradictoryAttribute(
       reject('`enum` cannot be combined with `type: "atom"`; use `values`');
     }
     if (
+      !claimed.has("values") &&
       declaration.values !== undefined &&
       !(
         Array.isArray(declaration.values) &&
@@ -1917,7 +1925,7 @@ function rejectContradictoryAttribute(
     ) {
       reject("`values` must be an array of strings");
     }
-    if (declaration.pattern !== undefined) {
+    if (!claimed.has("pattern") && declaration.pattern !== undefined) {
       try {
         if (typeof declaration.pattern !== "string") throw new TypeError();
         new RegExp(declaration.pattern);
@@ -1925,7 +1933,11 @@ function rejectContradictoryAttribute(
         reject("`pattern` must be a valid regular expression source string");
       }
     }
-    if (declaration.ref !== undefined && !nonEmptyStrings(declaration.ref)) {
+    if (
+      !claimed.has("ref") &&
+      declaration.ref !== undefined &&
+      !nonEmptyStrings(declaration.ref)
+    ) {
       reject("`ref` must be a kind name or an array of kind names");
     }
   }
@@ -1951,6 +1963,7 @@ function rejectContradictoryAttribute(
  */
 export function rejectUnknownDeclarationKeys(
   customTags: Readonly<Record<string, CustomTag>> | undefined,
+  claimed: ClaimedFields = claimedFields(undefined),
 ): void {
   if (!customTags) return;
   for (const [tagName, definition] of Object.entries(customTags)) {
@@ -2007,11 +2020,18 @@ export function rejectUnknownDeclarationKeys(
       }
     }
     rejectNonStringDefaultTag(`\`<${tagName}>\``, definition);
-    rejectInvalidDeclares(tagName, definition);
+    // A key the file's syntax module claims is its data, not core's to
+    // check: the module's `checkContract` checks it here, at registration.
+    if (!claimed.tag.has("declares"))
+      rejectInvalidDeclares(tagName, definition);
+    checkClaimedContract(tagName, definition, claimed);
     rejectRecursiveContractKeys(
       `tag "${tagName}"`,
       definition,
       `\`<${tagName}>\``,
+      undefined,
+      undefined,
+      claimed.attribute,
     );
   }
   for (const [tagName, definition] of Object.entries(customTags)) {
@@ -2106,6 +2126,7 @@ function rejectRecursiveContractKeys(
   label = owner,
   root = label,
   path: Set<object> = new Set([definition]),
+  claimed: ReadonlySet<string> = new Set(),
 ): void {
   const keys = (
     declaration:
@@ -2132,8 +2153,12 @@ function rejectRecursiveContractKeys(
   for (const [attrName, declaration] of Object.entries(
     definition.attributes ?? {},
   )) {
-    keys(declaration, ATTRIBUTE_KEYS, `"${attrName}" attribute declaration`);
-    rejectContradictoryAttribute(owner, attrName, declaration);
+    keys(
+      declaration,
+      claimed.size === 0 ? ATTRIBUTE_KEYS : [...ATTRIBUTE_KEYS, ...claimed],
+      `"${attrName}" attribute declaration`,
+    );
+    rejectContradictoryAttribute(owner, attrName, declaration, claimed);
   }
   for (const [childName, declaration] of explicitChildEntries(
     definition.children,
@@ -2198,6 +2223,7 @@ function rejectRecursiveContractKeys(
         `${label}: ${at}`,
         root,
         path,
+        claimed,
       );
       path.delete(declared);
     });
@@ -2221,6 +2247,7 @@ function rejectRecursiveContractKeys(
       `${label}: \`<@${name}>\``,
       root,
       path,
+      claimed,
     );
     path.delete(named);
   }
@@ -2269,6 +2296,7 @@ function rejectRecursiveContractKeys(
         `${label}: ${at}`,
         root,
         path,
+        claimed,
       );
       path.delete(declared);
     });

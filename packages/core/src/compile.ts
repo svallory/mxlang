@@ -20,6 +20,7 @@ import { dirname, resolve } from "node:path";
 import { type AtomFacts, emptyAtomFacts } from "./atom-contracts.ts";
 import { rejectShadowedRegistration } from "./builtin-tags.ts";
 import { annotateCloseTagOpener } from "./close-tag-opener.ts";
+import { type ClaimedFields, claimedFields } from "./contract-fields.ts";
 import {
   assertPositioned,
   type Ctx,
@@ -246,8 +247,20 @@ export function printExpression(node: Node): string {
  * `compileSync`.
  */
 export function createTranslator(host: TranslatorOptions): Translator {
+  return translatorClaiming(host, claimedFields(undefined));
+}
+
+/**
+ * `createTranslator` for one file, whose syntax module claims `claimed`
+ * contract keys (`SyntaxModule.contractFields`): registration accepts them
+ * as the module's data and leaves them unchecked.
+ */
+function translatorClaiming(
+  host: TranslatorOptions,
+  claimed: ClaimedFields,
+): Translator {
   rejectShadowedRegistration(host.customTags);
-  rejectUnknownDeclarationKeys(host.customTags);
+  rejectUnknownDeclarationKeys(host.customTags, claimed);
   rejectWildcardReferences(host.customTags);
   rejectUnreachableHooks(host.customTags);
   const customTags = customTagTaglib(host.customTags);
@@ -464,7 +477,10 @@ export function compileSource(
       : resolveSyntaxOf(filename);
   const syntax = resolvedSyntax.table;
   const compiler = markoCompiler();
-  const translator = createTranslator(host);
+  const translator = translatorClaiming(
+    host,
+    claimedFields(resolvedSyntax.module),
+  );
 
   const lookup = compiler.taglib.buildLookup(dirname(filename), translator) as
     | Lookup

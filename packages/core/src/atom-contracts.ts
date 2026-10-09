@@ -19,6 +19,11 @@
  */
 
 import { attrLabel } from "./attr-label.ts";
+import {
+  type ClaimedFields,
+  claimedFields,
+  claimsAtomFields,
+} from "./contract-fields.ts";
 import { type Ctx, type Node, TranslateError } from "./core.ts";
 import type {
   ContractDeclaration,
@@ -194,6 +199,10 @@ function declare(
   facts: readonly ContractFact[],
   derived: readonly DerivedDeclaration[],
 ): Scopes {
+  // A syntax module that claims `declares` declares the names itself.
+  if (ctx && claimedFields(ctx.syntaxModule).tag.has("declares")) {
+    return new Map();
+  }
   const pending: Array<{ owner: object; decl: Declaration }> = [];
   for (const { definition, call, chain } of facts) {
     if (!definition.declares) continue;
@@ -296,9 +305,17 @@ export function atomExpectation(declaration: {
   values?: readonly string[];
   ref?: string | readonly string[];
 }): string {
-  if (declaration.values) return ` (one of ${atomList(declaration.values)})`;
-  if (declaration.ref !== undefined) {
-    return ` (a declared ${asList(declaration.ref).join(" or ")})`;
+  // A syntax module that claims `values` or `ref` (`contractFields`) gets
+  // them unchecked: quote them only in the shape core gives them.
+  const { values, ref } = declaration;
+  if (Array.isArray(values) && values.every((v) => typeof v === "string")) {
+    return ` (one of ${atomList(values)})`;
+  }
+  if (
+    typeof ref === "string" ||
+    (Array.isArray(ref) && ref.every((kind) => typeof kind === "string"))
+  ) {
+    return ` (a declared ${asList(ref).join(" or ")})`;
   }
   return "";
 }
@@ -509,6 +526,17 @@ function checkStringForRef(
     : new TranslateError(message, attr.loc.line, attr.loc.column, file);
 }
 
+/** `declaration` without the keys the file's syntax module claims (`contractFields`). */
+function unclaimed(
+  declaration: CustomTagAttribute,
+  claimed: ClaimedFields,
+): CustomTagAttribute {
+  if (claimed.attribute.size === 0) return declaration;
+  const own = { ...declaration } as Record<string, unknown>;
+  for (const key of claimed.attribute) delete own[key];
+  return own as CustomTagAttribute;
+}
+
 /** Queues a check for every atom of every contract attribute in `attrs`. */
 function queueAttrs(
   ctx: Ctx,
@@ -524,8 +552,9 @@ function queueAttrs(
     if (attr.kind === "spread" || !Object.hasOwn(attributes, attr.name)) {
       continue;
     }
-    const declaration = attributes[attr.name];
-    if (declaration?.type !== "atom") continue;
+    const written = attributes[attr.name];
+    if (written?.type !== "atom") continue;
+    const declaration = unclaimed(written, claimedFields(ctx.syntaxModule));
     if (
       declaration.values === undefined &&
       declaration.pattern === undefined &&
@@ -588,7 +617,11 @@ function queueAttributeTags(
 /** Declare every name of the file, then check every atom reference against them. */
 export function checkAtomContracts(ctx: Ctx): void {
   // From here the facts are complete: every call of the unit has been seen.
-  ctx.atomFacts = atomFactsOf(ctx);
+  // Completion facts are core's built-in path only (lead ruling 14:29): a
+  // syntax module that takes over the atom fields has none.
+  if (!claimsAtomFields(claimedFields(ctx.syntaxModule))) {
+    ctx.atomFacts = atomFactsOf(ctx);
+  }
   const facts = ctx.contractFacts ? [...ctx.contractFacts.values()] : [];
   const derived = ctx.contractDerived ?? [];
   if (facts.length === 0 && derived.length === 0) return;

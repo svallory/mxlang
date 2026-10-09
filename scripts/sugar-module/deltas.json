@@ -218,5 +218,110 @@
     "test": "packages/targets/data/src/sugar-default-value.test.ts > contracts see the default value a closed contract without `value` rejects the sugar's value at it",
     "ruling": "refuse-value",
     "note": "decision 183 (146 addendum 4 withdrawn): `#x=…`, `.x=…`, `#x(p) { b }` are refused at the operator by the row's `value: \"refuse\"`"
+  },
+  {
+    "test": "packages/core/src/atom-candidates.test.ts > atomCandidates: values lists the contract's values with no kind",
+    "ruling": "completion-facts-built-in-only",
+    "note": "lead ruling 14:29 (slice a2): `CompileResult.atomFacts` / `atomCandidates` are core's built-in path only; a syntax module that claims the atom contract fields (`contractFields`) leaves the facts empty on a result and unset on an error, so completion has nothing to read. They leave with slice c (decision 196)."
+  },
+  {
+    "test": "packages/core/src/atom-candidates.test.ts > atomCandidates: values completes inside a list and mid-word",
+    "ruling": "completion-facts-built-in-only",
+    "note": "lead ruling 14:29 (slice a2): `CompileResult.atomFacts` / `atomCandidates` are core's built-in path only; a syntax module that claims the atom contract fields (`contractFields`) leaves the facts empty on a result and unset on an error, so completion has nothing to read. They leave with slice c (decision 196)."
+  },
+  {
+    "test": "packages/core/src/atom-candidates.test.ts > atomCandidates: ref lists the declared names of the kind with it as detail, each once",
+    "ruling": "completion-facts-built-in-only",
+    "note": "lead ruling 14:29 (slice a2): `CompileResult.atomFacts` / `atomCandidates` are core's built-in path only; a syntax module that claims the atom contract fields (`contractFields`) leaves the facts empty on a result and unset on an error, so completion has nothing to read. They leave with slice c (decision 196)."
+  },
+  {
+    "test": "packages/core/src/atom-candidates.test.ts > atomCandidates: ref takes several kinds and keeps each name once (the first kind that declared it)",
+    "ruling": "completion-facts-built-in-only",
+    "note": "lead ruling 14:29 (slice a2): `CompileResult.atomFacts` / `atomCandidates` are core's built-in path only; a syntax module that claims the atom contract fields (`contractFields`) leaves the facts empty on a result and unset on an error, so completion has nothing to read. They leave with slice c (decision 196)."
+  },
+  {
+    "test": "packages/core/src/atom-candidates.test.ts > atomCandidates: ref puts the innermost scope first and the file scope last",
+    "ruling": "completion-facts-built-in-only",
+    "note": "lead ruling 14:29 (slice a2): `CompileResult.atomFacts` / `atomCandidates` are core's built-in path only; a syntax module that claims the atom contract fields (`contractFields`) leaves the facts empty on a result and unset on an error, so completion has nothing to read. They leave with slice c (decision 196)."
+  },
+  {
+    "test": "packages/core/src/atom-candidates.test.ts > atomCandidates: ref includes a declaration scoped to an ancestor (`under` and `scope`)",
+    "ruling": "completion-facts-built-in-only",
+    "note": "lead ruling 14:29 (slice a2): `CompileResult.atomFacts` / `atomCandidates` are core's built-in path only; a syntax module that claims the atom contract fields (`contractFields`) leaves the facts empty on a result and unset on an error, so completion has nothing to read. They leave with slice c (decision 196)."
+  },
+  {
+    "test": "packages/core/src/atom-candidates.test.ts > atomCandidates: ref includes names an analyze hook declared with ctx.declare",
+    "ruling": "completion-facts-built-in-only",
+    "note": "lead ruling 14:29 (slice a2): `CompileResult.atomFacts` / `atomCandidates` are core's built-in path only; a syntax module that claims the atom contract fields (`contractFields`) leaves the facts empty on a result and unset on an error, so completion has nothing to read. They leave with slice c (decision 196)."
+  },
+  {
+    "test": "packages/core/src/atom-candidates.test.ts > atomCandidates: ref does not throw on a clash; the duplicate shows once",
+    "ruling": "completion-facts-built-in-only",
+    "note": "lead ruling 14:29 (slice a2): `CompileResult.atomFacts` / `atomCandidates` are core's built-in path only; a syntax module that claims the atom contract fields (`contractFields`) leaves the facts empty on a result and unset on an error, so completion has nothing to read. They leave with slice c (decision 196)."
+  },
+  {
+    "test": "packages/core/src/atom-candidates.test.ts > atomCandidates: ref works from the facts of a compile that failed its atom check",
+    "ruling": "completion-facts-built-in-only",
+    "note": "lead ruling 14:29 (slice a2): `CompileResult.atomFacts` / `atomCandidates` are core's built-in path only; a syntax module that claims the atom contract fields (`contractFields`) leaves the facts empty on a result and unset on an error, so completion has nothing to read. They leave with slice c (decision 196)."
+  },
+  {
+    "test": "packages/core/src/atom-candidates.test.ts > atomCandidates: ref works for an attribute-tag attribute",
+    "ruling": "completion-facts-built-in-only",
+    "note": "lead ruling 14:29 (slice a2): `CompileResult.atomFacts` / `atomCandidates` are core's built-in path only; a syntax module that claims the atom contract fields (`contractFields`) leaves the facts empty on a result and unset on an error, so completion has nothing to read. They leave with slice c (decision 196)."
+  },
+  {
+    "test": "packages/core/src/atom-candidates.test.ts > atomCandidates: the name sugar completes `name` of the default tag a `set` body writes",
+    "ruling": "completion-facts-built-in-only",
+    "note": "lead ruling 14:29 (slice a2): `CompileResult.atomFacts` / `atomCandidates` are core's built-in path only; a syntax module that claims the atom contract fields (`contractFields`) leaves the facts empty on a result and unset on an error, so completion has nothing to read. They leave with slice c (decision 196)."
+  },
+  {
+    "test": "packages/core/src/atom-candidates.test.ts > atomCandidates: the name sugar completes the `:name` after an unnamed-tag default",
+    "ruling": "completion-facts-built-in-only",
+    "note": "lead ruling 14:29 (slice a2): `CompileResult.atomFacts` / `atomCandidates` are core's built-in path only; a syntax module that claims the atom contract fields (`contractFields`) leaves the facts empty on a result and unset on an error, so completion has nothing to read. They leave with slice c (decision 196)."
+  },
+  {
+    "test": "packages/core/src/atom-candidates.test.ts > atomCandidates: nothing to offer has no candidates without a contract, or with a bare atom type",
+    "ruling": "completion-facts-built-in-only",
+    "note": "lead ruling 14:29 (slice a2): `CompileResult.atomFacts` / `atomCandidates` are core's built-in path only; a syntax module that claims the atom contract fields (`contractFields`) leaves the facts empty on a result and unset on an error, so completion has nothing to read. They leave with slice c (decision 196)."
+  },
+  {
+    "test": "packages/core/src/atom-candidates.test.ts > atomCandidates: nothing to offer has no candidates outside any tag or attribute value",
+    "ruling": "completion-facts-built-in-only",
+    "note": "lead ruling 14:29 (slice a2): `CompileResult.atomFacts` / `atomCandidates` are core's built-in path only; a syntax module that claims the atom contract fields (`contractFields`) leaves the facts empty on a result and unset on an error, so completion has nothing to read. They leave with slice c (decision 196)."
+  },
+  {
+    "test": "packages/core/src/atom-candidates.test.ts > the candidates never offer a name the checker rejects filters ref names by the pattern",
+    "ruling": "completion-facts-built-in-only",
+    "note": "lead ruling 14:29 (slice a2): `CompileResult.atomFacts` / `atomCandidates` are core's built-in path only; a syntax module that claims the atom contract fields (`contractFields`) leaves the facts empty on a result and unset on an error, so completion has nothing to read. They leave with slice c (decision 196)."
+  },
+  {
+    "test": "packages/core/src/atom-candidates.test.ts > the candidates never offer a name the checker rejects filters values by the pattern",
+    "ruling": "completion-facts-built-in-only",
+    "note": "lead ruling 14:29 (slice a2): `CompileResult.atomFacts` / `atomCandidates` are core's built-in path only; a syntax module that claims the atom contract fields (`contractFields`) leaves the facts empty on a result and unset on an error, so completion has nothing to read. They leave with slice c (decision 196)."
+  },
+  {
+    "test": "packages/core/src/atom-candidates.test.ts > the candidates never offer a name the checker rejects intersects values with ref",
+    "ruling": "completion-facts-built-in-only",
+    "note": "lead ruling 14:29 (slice a2): `CompileResult.atomFacts` / `atomCandidates` are core's built-in path only; a syntax module that claims the atom contract fields (`contractFields`) leaves the facts empty on a result and unset on an error, so completion has nothing to read. They leave with slice c (decision 196)."
+  },
+  {
+    "test": "packages/core/src/atom-candidates.test.ts > the candidates never offer a name the checker rejects intersects values with ref, then filters by the pattern",
+    "ruling": "completion-facts-built-in-only",
+    "note": "lead ruling 14:29 (slice a2): `CompileResult.atomFacts` / `atomCandidates` are core's built-in path only; a syntax module that claims the atom contract fields (`contractFields`) leaves the facts empty on a result and unset on an error, so completion has nothing to read. They leave with slice c (decision 196)."
+  },
+  {
+    "test": "packages/core/src/atom-candidates.test.ts > the candidates never offer a name the checker rejects offers nothing for a pattern alone",
+    "ruling": "completion-facts-built-in-only",
+    "note": "lead ruling 14:29 (slice a2): `CompileResult.atomFacts` / `atomCandidates` are core's built-in path only; a syntax module that claims the atom contract fields (`contractFields`) leaves the facts empty on a result and unset on an error, so completion has nothing to read. They leave with slice c (decision 196)."
+  },
+  {
+    "test": "packages/core/src/atom-candidates.test.ts > the candidates never offer a name the checker rejects every candidate passes the checker",
+    "ruling": "completion-facts-built-in-only",
+    "note": "lead ruling 14:29 (slice a2): `CompileResult.atomFacts` / `atomCandidates` are core's built-in path only; a syntax module that claims the atom contract fields (`contractFields`) leaves the facts empty on a result and unset on an error, so completion has nothing to read. They leave with slice c (decision 196)."
+  },
+  {
+    "test": "packages/core/src/atom-candidates.test.ts > TranslateError.atomFacts is set when the atom check failed, and the facts are complete",
+    "ruling": "completion-facts-built-in-only",
+    "note": "lead ruling 14:29 (slice a2): `CompileResult.atomFacts` / `atomCandidates` are core's built-in path only; a syntax module that claims the atom contract fields (`contractFields`) leaves the facts empty on a result and unset on an error, so completion has nothing to read. They leave with slice c (decision 196)."
   }
 ]
