@@ -48,6 +48,7 @@ Consequences a project accepts by declaring a syntax module:
 | `filter` | `::markdown:: … ::` | `lowerFilter` returns IR |
 | `expressionTriggers` | `:draft` (atoms), `%ui.save`, `Order Total` as one identifier | `lowerTrigger`; stand-in keeps the projection one-to-one |
 | `attributeTriggers` | `:email` sets `name`, spaced `#id` and `.class` | `lowerTrigger` with `node: "attribute"` |
+| `lineTriggers` | `&title`, `&amount=qty * price` at the start of a tagless line | `lowerTrigger` with `{ call }`; the result is a child tag of the enclosing block |
 | `textTriggers` | `%ui.save` in text | `lowerTrigger`; empty on `.mx`, for languages |
 | `concise` | off | none |
 
@@ -85,6 +86,10 @@ what used to be MX core:
   trigger's error. Tag-adjacent `tag#id=123` is Marko already. The trigger
   sets `terminatesValue`, so ` .class` after an attribute value ends the value
   rather than continuing a member expression.
+
+Mesh's syntax needs no "`:name` after a value" form (`belongs-to=:List :list`):
+the member sigil `&` covers the reference in all three positions, so that
+parser rule has no layer-2 user (decision 182, addendum 1).
 
 Order of work: the table lands, MX's own atoms and sugars move onto it with no
 behavior change, then the entries move to the Mesh package. The parser's

@@ -1,7 +1,7 @@
 {
   "name": "@mxlang/core",
   "version": "0.1.0-alpha.14",
-  "description": "MX core: compiles .mx templates on Marko's parser, shared by every target",
+  "description": "MX core: parses and lowers .mx templates to a host-independent IR, shared by every target",
   "license": "MIT",
   "repository": {
     "type": "git",

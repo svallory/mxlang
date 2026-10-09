@@ -51,6 +51,7 @@ interface SyntaxTable {
   concise: boolean;                                      // true on the default row
   expressionTriggers: Trigger[];                         // empty on the default row
   attributeTriggers: Trigger[];                          // empty on the default row
+  lineTriggers: Trigger[];                               // empty on the default row; start of a tagless concise line
   textTriggers: Trigger[];                               // empty on the default row, always
   tagTypes: Record<string, TagType>;                     // from the taglib and discovered parseOptions
   expressionLanguage: "ts";                              // reserved
@@ -66,6 +67,13 @@ interface Trigger {
 }
 ```
 
+`lineTriggers` (decision 182, addendum 1) arm at the start of a tagless
+concise line, with or without an `=value` after the matched text, and lower
+through `lowerTrigger` to a `{ call }` node: a child tag of the enclosing
+block. They generalise `inlineScript` (the `$ ` line). Validation refuses a
+line trigger armed on `<`, `-`, `/`, `@` or `$`, because those start a tag, a
+delimited block, a comment, an attribute tag and an inline script.
+
 **Not in the table, on purpose:** the tag-open character, the tag-name
 grammar, attribute syntax beyond the first character of a name, string and
 comment forms. Each is wired into every parser state, both tree-sitter
@@ -77,7 +85,8 @@ parser.
 cached by hash. A dependency's files use the dependency's manifest.
 
 **Validation**, positioned at the manifest or descriptor that contributed the
-entry: two triggers on one first character with overlapping matchers; a
+entry: two triggers of one list on one first character (any shared first
+character is refused, since overlap of two matchers is not decidable cheaply); a
 trigger starting on an expression token (`$`, `_`, a letter, a digit, a quote,
 a bracket) without `standIn: "identifier"` or `"keep"`; `placeholder.open`,
 `blockTag.open`, `filter.open` not pairwise distinct, or starting with `<`; a

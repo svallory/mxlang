@@ -1,17 +1,26 @@
 # `@mxlang/core`
 
-The Marko-node consumer every MX host is built on.
+The MX front end and lowerer every MX host is built on.
 
-MX is a template language born from Marko: Marko's syntax, brought to wherever
-JSX lives today (see `notes/mx-vision.md`). MX itself defines the markup and the
-**structural** tags — `<if>` / `<else if>` / `<else>`, `<for>` in all its forms,
-attribute tags, tag params, `<define>`, `<const>`, `static`, `import` — and each
-**host** decides what state, reactivity and output mean. This package is the
-half that is the same for every host: it consumes Marko's AST through
-`@marko/compiler`, lowers the structural forms into an IR, and asks
+MX is a template language born from Marko: Marko's syntax is the default row,
+brought to wherever JSX lives today (see `notes/mx-vision.md`). MX itself defines
+the markup and the **structural** tags — `<if>` / `<else if>` / `<else>`, `<for>`
+in all its forms, attribute tags, tag params, `<define>`, `<const>`, `static`,
+`import` — and each **host** decides what state, reactivity and output mean. This
+package is the half that is the same for every host: it parses a template with
+its own front end (the MX AST), lowers the structural forms into an IR, and asks
 `HostDeclarations` for everything host-specific.
 
-It depends on `@marko/compiler` and nothing else.
+Marko is the default syntax, not the parser: no template is parsed with
+`@marko/compiler`, and a `.marko` file is not an input. Where MX has no ruling of
+its own the answer is Marko's, and every difference is listed in
+`divergences.md` in the repository. A project can change the syntax with a
+syntax table or a syntax module (`package.json#mx.syntax`; see "A reference
+syntax module" below).
+
+The only runtime dependency is `@babel/parser`. The published bundle inlines the
+MX front end and a copy of the Marko compiler core uses for taglib lookup and
+code printing, so installing core installs no `@marko/*` package.
 
 ## Core versus host
 
@@ -570,11 +579,11 @@ project.
 
 ## The IR, and what a host implements (decision 79)
 
-The core **lowers** a Marko template into a small host-independent tree, and
-a host **emits** from that tree. No host walks a Marko node.
+The core **lowers** an MX template into a small host-independent tree, and
+a host **emits** from that tree. No host walks a parser node.
 
 ```
-Marko AST ──lower()──▶ Ir ──drive(emitter)──▶ whatever the host emits
+MX AST ──lower()──▶ Ir ──drive(emitter)──▶ whatever the host emits
              ▲                                  (strings, JSX nodes, …)
              └─ HostDeclarations: the questions the lowerer asks
 ```

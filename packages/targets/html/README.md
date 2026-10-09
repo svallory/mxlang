@@ -1,11 +1,12 @@
 # @mxlang/html
 
 MX (Markup eXtended) is a template language born from Marko: it takes
-Marko's syntax and brings it to wherever JSX lives today, MX 1.0 being a
-strict subset of Marko so every borrowed Marko tool keeps working. `.mx` is
-MX's only extension — MX only supports the MX 1.0 subset of Marko syntax, so
-a real `.marko` file is not treated as MX; porting a Marko component that
-stays within the subset is a rename.
+Marko's syntax and brings it to wherever JSX lives today. Marko's syntax is the
+default where MX has no ruling of its own, and MX does not promise to be a
+superset or a subset of it. `.mx` is MX's only extension: a `.marko` file is
+not an input (a `.marko` file found where a tag is looked up is a positioned
+error telling you to convert it), and porting a Marko component is a rename
+plus the differences listed in `divergences.md`.
 
 `@mxlang/html` is **the vanilla host on `@mxlang/core`**: it compiles an
 MX (`.mx`) template to a pure function — a JS/TS module
@@ -64,10 +65,14 @@ export default Greeting;
 
 (Helpers such as `__mxClassValue` are omitted.) The default export is `(input) => string`. `render(input, out)` is the sink entry: it writes into `out` and returns the template's `<return>` value. The sink comes from `@mxlang/html/runtime` (decision 155).
 
-This is **stock Marko**, not a dialect: tag discovery through taglibs and
-`tags/` directories, Marko's own HTML/SVG/MathML element registry, Marko's
-attribute-tag and component conventions. A template written for Marko compiles
-here unchanged, and renders the same bytes Marko's own server render produces.
+Marko's syntax is the default: MX parses `.mx` with its own front end, and
+where MX has no ruling of its own the answer is Marko's. Its element knowledge
+(HTML, SVG, MathML) is this target's own element table, built to match Marko's;
+attribute tags and component calls follow Marko's conventions; and the oracle
+compares this target's output with Marko's own server render, so the bytes
+agree wherever the two languages overlap. What is different is listed in `divergences.md` in the
+repository, and `.marko` files are not an input: a tag is an `.mx` template in a
+`tags/` directory (or a sidecar), never a `.marko` file.
 
 ## Install
 

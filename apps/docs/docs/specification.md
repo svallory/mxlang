@@ -3576,7 +3576,8 @@ error that carries no position fields is rethrown; a `TranslateError` at 0:0
 |---|---|---|
 | `customTags` | `Record<string, CustomTag>` | contract-only custom tags by call name (decisions 130 and 138): required attributes, attribute types, `children`, `parents`. `parseData` does **not** scan `tags/` or `package.json`; this map is the whole vocabulary it knows. An entry whose `transform` emits tags is not supported yet: `parseData` throws on its output, an internal error rather than a source diagnostic (TODO `data-transform-output-tree`) (see [Writing a dialect package](/custom-tags/dialect-package/) for producing it) |
 | `structural` | `"pass"` (default), `"reject"` | `"pass"` keeps the structural constructs in the tree (§13.7.3). `"reject"` makes the first one, in document order, a positioned error: ``the data tree is static; this file's consumer does not evaluate `<if>` `` (the construct is named: text, `${}`, `<if>`, `<for>`, `<const>`, `import`, `export`, `static`; comments are **never** structural — a `//` line or `<!-- -->` stays in the tree as the `Comment` node it already is under either value, decision 131 addendum 5). For a consumer that wants tags and attributes only |
-| `imports` | `"pass"`, `"reject"` (default: the effective `structural`) | Decides a top-level `import` on its own. `"pass"` with `structural: "reject"` keeps every other structural construct rejected and returns the imports verbatim as `tree.imports` (`{ code, span }`, file order, UTF-16 spans; not repeated in `statements`; with `structural: "pass"` they stay in `statements` and `tree.imports` is absent; one entry per authored statement line). A tag-body `import` is not an import at all: Marko parses it as body text, so `structural: "reject"` rejects it as text and `imports` does not apply. `"reject"` with `structural: "pass"` rejects only the `import`s. `mx-tsc` reads `package.json#mx.data.imports`. |
+| `imports` | `"pass"`, `"reject"` (default: the effective `structural`) | Decides a top-level `import` on its own. `"pass"` with `structural: "reject"` keeps every other structural construct rejected and returns the imports as `tree.imports` (file order; not repeated in `statements`; with `structural: "pass"` they stay in `statements` and `tree.imports` is absent; one entry per authored statement line). An entry is `{ code, span, from, names, typeOnly? }`: `code` and `span` (UTF-16) are the statement as written, `from` is the unquoted specifier and `names` the bound names in written order (`{ imported, local, kind: "default" \| "named" \| "namespace", span, localSpan?, typeOnly? }`; empty for `import "x"`), all read from the parsed `ImportDeclaration`, never from the text; `typeOnly` marks `import type` and an inline `{ type X }`. A tag-body `import` is not an import at all: Marko parses it as body text, so `structural: "reject"` rejects it as text and `imports` does not apply. `"reject"` with `structural: "pass"` rejects only the `import`s. `mx-tsc` reads `package.json#mx.data.imports`. |
+| `syntax` | `SyntaxTable` or `SyntaxModule` | the syntax of this file, for a consumer that builds its own (Mesh passes its module, hooks included). Omitted, the file's nearest `package.json#mx.syntax` applies. A trigger, block tag or filter nothing lowers is a positioned diagnostic (§13.9) |
 | `unknownTags` | `"allow"` (default), `"reject"` | `"allow"` is the open set of decision 131: a tag with no entry in `customTags` is accepted. `"reject"` (131 addendum 3) makes any authored tag, at any depth, whose name has no entry in `customTags` a positioned error at the tag: ``` `<opem>` is not a known tag: it has no contract in `customTags`; did you mean `<open>`? ``` (the hint appears when one declared name is clearly nearest). Reserved names never reach the check (core consumes them first) and `<@name>` attribute tags are governed by the parent's `attributeTags`, not by this option. |
 | `warnings` | `MxWarning[]` | a sink for core's warnings, pushed as raised, so those raised before a later error stay in the caller's array |
 
@@ -3623,6 +3624,8 @@ All types are in `@mxlang/data/tree`. Every span is core's `SourceSpan`
   `children["*"]` claimed (decision 147), `contract?` (the canonical tag whose
   contract applied) and `groups?` (the pattern's named captures, absent when
   empty). On such a tag `name` is the authored spelling, not the contract tag.
+  A tag a syntax module's `lowerTrigger` built with `ctx.child` carries
+  `trigger?: { id, span, text }` (§13.9.7); an authored tag has none.
 - **`DataAttrTag`** (`kind: "attr-tag"`): a `<@y>`; the same fields except
   `args`, with `name` without the `@`. `attrTags` is the tree form of a tag's attribute tags, with
   `<if>`/`<for>` among them kept (those nodes carry no `span`, unlike the body
@@ -3640,6 +3643,7 @@ All types are in `@mxlang/data/tree`. Every span is core's `SourceSpan`
   | `boolean` | `required` | `name`, `nameSpan` |
   | `expression` | `n=1`, `values=[…]`, `change=(x) => …`, `v:=x`, `onClick=fn` | `name`, `value: DataExpr`, `nameSpan`, `bound?: true`, `refinement?: DataExpr` (the `fn` of a bound `v:fn:=q`) |
   | `spread` | `...rest` | `value: DataExpr` |
+  | `member` | a whole-value member a syntax module produced: `sort asc &dueOn` (§13.9.6) | `name`, `value` (the member's name, without its sigil), `span` (the token, sigil included); no `nameSpan` |
 
   Only a string literal is `string`; `n=1` and `required=true` are `expression`
   (the tree does not evaluate). A default attribute (`<resource="post">`) is a
@@ -3869,6 +3873,373 @@ Marko 6.3.51 output; the oracle cannot express a throw.
 
 **Decisions:** 95, 155.
 
+### 13.9 Syntax tables and syntax modules (layer 2)
+
+**Decision 182 and its addenda 1 to 7.** A project can change what the parser
+recognises, and what the new forms mean, without touching core: the parser reads
+one plain-data **syntax table** per parse, and a **syntax module** lowers what the
+table's triggers, block tags and filters produce. This is *layer 2* of the
+language-extension design ([design notes](/design-notes/language-extensions/));
+it is not the "L2" of §9.1, which names a custom tag's sidecar. The design pages
+stay as the argument; this section states what is.
+
+**Atoms and the name sugars are not rows of this table.** `:name` as a value,
+`:name` and the spaced `#id`/`.class` on a tag are core today (§4). Decisions 183
+and 196 move them to Mesh's syntax module before the beta; until that lands they
+are specified where they are, and a table cannot express them.
+
+#### 13.9.1 The table
+
+```ts
+interface SyntaxTable {
+  placeholder: { open: string; close: string } | null; // "${" and "}"
+  inlineScript: { trigger: string } | null;            // "$ " at line start
+  blockTag: { open: string; close: string } | null;    // null on the default row
+  filter: { open: string; close: string } | null;      // null on the default row
+  concise: boolean;                                    // true on the default row
+  expressionTriggers: Trigger[];
+  attributeTriggers: Trigger[];
+  lineTriggers: Trigger[];                             // addendum 1
+  textTriggers: Trigger[];
+  tagTypes: Record<string, 0 | 1 | 2 | 3>;            // html, text, void, statement
+  expressionLanguage: "ts";                            // reserved
+}
+
+interface Trigger {
+  id: string;
+  chars: string;            // the first characters that arm it: ":" or "A-Z"
+  match: string;            // anchored regex source, RE2 subset
+  standIn: "number" | "identifier" | "keep";
+  node: "string" | "identifier" | "attribute" | { call: string };
+  terminatesValue?: boolean;
+}
+```
+
+**The default row** is a constant equal to the `.mx` grammar byte for byte:
+`placeholder` `${`/`}`, `inlineScript` `"$ "`, no block tag, no filter, `concise`
+on, every trigger list and `tagTypes` empty. A file with no `mx.syntax` parses
+with it. The Marko parity claim holds on this row only; a project that declares
+a table is outside it.
+
+A **trigger** is a first-character class (`chars`) plus an anchored matcher
+(`match`). The matcher decides the trigger's extent. The **stand-in** is the
+same-length text the expression parser reads in place of the trigger so offsets
+stay one-to-one: `"number"` (a numeric literal), `"identifier"` (an identifier) or
+`"keep"` (the text itself). `node` says what core builds from it (§13.9.5).
+`terminatesValue` (attribute triggers only) makes a space followed by the
+trigger end the attribute value before it, instead of continuing it as an
+expression.
+
+A trigger lists where it sits by the list that holds it:
+
+| List | Armed | Result |
+|---|---|---|
+| `expressionTriggers` | inside an expression (an attribute value, a placeholder, a method body) | a Babel expression replaces the stand-in |
+| `attributeTriggers` | in a tag's attribute list, where an attribute name would start; with or without an `=value` | an attribute |
+| `lineTriggers` | at the start of a tagless concise line; with or without an `=value` | a child tag of the enclosing block. Generalises `inlineScript` |
+| `textTriggers` | in text | reserved: refused on every table today (below) |
+
+**Block tags and filters.** A table with `blockTag: { open, close }` reads
+`open … close` in HTML content as one raw **block tag**: its body is the text
+between the delimiters, with `<`, `${`, quotes and comments inert, and there is
+no escape form. A table with `filter: { open, close }` reads `open name close
+body close` as one **filter**: a name, then a raw body up to the next `close`. A
+name missing, or no `close` right after it, is plain text. Both are armed in
+HTML content and in a concise text line (`div -- a {% x %}`), never inside an
+attribute value, a string, a concise tag head or a text-only tag's body. An
+opener at the start of a concise line is the error `A block tag cannot start a
+concise line; write it in a text line ("-- {% … %}") or in HTML content` (a
+filter says `A filter cannot start a concise line; …`). An unclosed block tag is
+`EOF reached while parsing a block tag: "%}" closes it` and an unclosed filter
+`EOF reached while parsing a filter: "::" closes it`, each with its own error
+code (`MALFORMED_BLOCK_TAG`, `MALFORMED_FILTER`), not the placeholder's.
+
+**Tag types.** `tagTypes` is keyed by the **full written static name**; a name
+absent from it is `html`; dynamic names and `@name` are never looked up. The
+parser applies `statement` only on a concise line: the HTML-mode spelling of a
+statement word stays `html` and keeps its own diagnostic (decision 182 addenda 2
+and 3). `tagTypes` is taglib-owned: core computes it from the tags and their
+`parseOptions`, so a project cannot set it (below).
+
+**Not in the table.** The `<` tag opener, the tag-name grammar, attribute syntax
+beyond the first character of a name, strings and comments. Each is wired into
+every parser state and both editor grammars; changing one is a different parser.
+Replacing TypeScript inside expressions is reserved by `expressionLanguage: "ts"`
+and not designed.
+
+**Validation.** A table is validated as data; every problem is reported, naming
+the field path and, for a trigger, its `id`:
+
+- `placeholder`, `blockTag` and `filter` are `null` or `{ open, close }` of
+  non-empty strings; `open` may not start with `<`; a `blockTag` or `filter`
+  `open` may not start with whitespace, a line break, `/`, `$` or `\`; the
+  three `open` strings may not be equal or one a prefix of another.
+- `concise` is a boolean, `inlineScript` is `null` or `{ trigger }` with a
+  non-empty string, `expressionLanguage` is `"ts"`.
+- A trigger is an object with a non-empty `id` (unique within its list), a valid
+  `standIn`, a valid `node` (`{ call }` carries a non-empty string), and a
+  `terminatesValue` that is a boolean and sits in `attributeTriggers`.
+- `chars` is a character-class body, never armed on whitespace or a line break,
+  and never on a character the list refuses: expression triggers `, ; ) ] }`,
+  attribute triggers `< > / = , ; ( ) [ ]`, line triggers `< - / @ $` (a tag, a
+  delimited block, a comment, an attribute tag, the inline script), text triggers
+  `< $ / \`. An expression trigger armed on an expression token (`$ _`, a
+  letter, a digit, a quote, a bracket) takes `standIn` `"identifier"` or
+  `"keep"`, never `"number"`.
+- Two triggers of one list may not share a first character: whether two
+  matchers overlap is not decidable cheaply, so any shared character is refused.
+- `match` is a non-empty RE2-subset regex: look-around and back-references are
+  refused, and so is a matcher that matches the empty string, because a trigger
+  consumes at least its first character.
+- What the grammar allows but the parser does not implement is refused rather
+  than parsed as the default, each with "is not supported by this parser yet": a
+  `placeholder` other than `${`/`}` or `null`, an `inlineScript` trigger other
+  than `"$ "` or `null`, `concise: false`, and any `textTriggers` entry.
+
+#### 13.9.2 `package.json#mx.syntax`
+
+The nearest `package.json` above a file decides its syntax, for every MX file
+under it of any file kind; the file kind supplies only the default row. A
+dependency's files parse with the dependency's manifest, as `mx.tags` resolves.
+A file with a relative or virtual name, or no manifest above it, gets the default
+row.
+
+`mx.syntax` is one of:
+
+- **An object**: table fields overlaid on the default row. Only these fields
+  may be set: `placeholder`, `inlineScript`, `blockTag`, `filter`, `concise`,
+  `expressionTriggers`, `attributeTriggers`, `lineTriggers`, `textTriggers`,
+  `expressionLanguage`. An inline object is a table only (below).
+- **A string**: a syntax module (§13.9.3).
+
+Absent means the default row. Every problem is a `TranslateError` in the manifest
+at the `mx.syntax` key, naming the field path (the `mx.tags` and `mx.contracts`
+precedent):
+
+| Problem | Message |
+|---|---|
+| Not an object or a string | `` `mx.syntax` must be an object overlaying the syntax table, or a string naming a syntax module `` |
+| `tagTypes` set | `` `mx.syntax.tagTypes` is not a manifest field: tag types are taglib-owned, computed from the tags and their parseOptions `` |
+| An unknown field | `` `mx.syntax.<key>` is not a syntax table field (…) `` |
+| A table that fails validation | `` `mx.syntax.<field>` (trigger "<id>"): <reason> ``, one per problem, joined by `; ` |
+| A `{ call }` trigger in an inline object | `` `mx.syntax.<list>[<i>]` (trigger "<id>"): a `{ call }` node is lowered by a syntax module's `lowerTrigger`, and an inline `mx.syntax` is a table only; move the table into a module and name it (`"syntax": "./syntax.ts"`) `` |
+
+**The `syntax` option.** `compileSource` (`HostOptions.syntax`), `parseFragment`
+and `parseData` (`ParseDataOptions.syntax`) take an explicit table or syntax
+module, which wins over the manifest. It is validated with the manifest's rules as
+the caller's error, a `TranslateError` at the start of the file naming
+`syntax.<field>`. A non-empty `tagTypes` is refused there too. `null` is not
+"omitted" (that is `undefined`, which resolves the manifest): it is refused like
+any value that is not a table (``the `syntax` option must be a syntax table
+object, not null; omit it to use the file's `package.json#mx.syntax` ``).
+
+**Identity.** A resolved table is deep-frozen and interned by its **hash**: the
+sha256 of its canonical JSON (keys sorted at every level, `undefined` fields
+dropped), so two tables with equal content hash alike and share one frozen object
+for the process. A table whose content equals the default row resolves to the
+default row itself, and a default-row project runs no extra parse and pays one
+comparison. An explicit table is validated once per frozen object. A manifest
+read is resolved once; an unchanged manifest is not re-validated, and a syntax
+module is reloaded when its file's mtime changes.
+
+#### 13.9.3 Syntax modules
+
+A **syntax module** is the default export of the file a string `mx.syntax` names
+(a package name, or a path relative to the manifest, resolved like
+`mx.contracts`), or the object passed as the `syntax` option:
+
+```ts
+interface SyntaxModule {
+  table: Partial<Omit<SyntaxTable, "tagTypes">>;  // overlays the default row
+  lowerTrigger?(id: string, text: string, span: SourceSpan, ctx: TriggerContext): TriggerResult;
+  lowerBlockTag?(text: string, span: SourceSpan, ctx: SyntaxBuildContext): IrNode | IrNode[];
+  lowerFilter?(name: string, body: string, span: SourceSpan, ctx: SyntaxBuildContext): IrNode | IrNode[];
+  afterLower?(ctx: Ctx): void;
+  productName?: string;
+}
+```
+
+The file loads like a sidecar (§9.3): Node's strip-only `require`, no top-level
+`await`, explicit extensions on relative imports. Its `table` is validated as in
+§13.9.2, naming `table.<field>`. A module that fails to load, or whose shape is
+wrong, is an error in the module file at 1:0: a field outside the six above, a
+missing `table`, a hook that is not a function, an empty `productName`. A
+specifier that does not resolve is an error at the `mx.syntax` key
+(`` `mx.syntax` could not resolve `<spec>` from <dir> ``).
+
+**A `{ call }` trigger needs the module's `lowerTrigger`.** A module whose table
+has one and no hook is an error at the `mx.syntax` key (`` `mx.syntax` (<spec>):
+`table.<list>[<i>]` (trigger "<id>") has a `{ call }` node, and the module exports
+no `lowerTrigger` ``). The `syntax` option accepts that combination, and lowering
+reports it at the trigger (§13.9.5).
+
+**Block tags, filters, `afterLower`, `productName`.** `lowerBlockTag` receives the
+raw text between a block tag's delimiters and `lowerFilter` a filter's name and
+raw body; each returns IR built through `ctx.build`, the builders a custom tag's
+`transform` gets. A block tag in a table whose module has no `lowerBlockTag` is
+the positioned error `a block tag has no lowering yet`; a filter with no
+`lowerFilter`, `` the `<name>` filter has no lowering yet``. `afterLower` joins the
+unit's `afterLower` list, after core's own hooks, and runs once per unit after
+lowering and before emit. `productName` names the language where core's
+diagnostics say "MX", unless the host sets one.
+
+#### 13.9.4 Where the table is read
+
+The table is the front end's parse table: the file is parsed once, with it. For a
+table other than the default row, core reads the first table-caused error from
+that document before lowering (§13.9.5), in source order, positioned and naming
+the file. A caller that lowers a document itself still meets the same refusals at
+lowering's seams (`payloadOf`, the child and attribute lists), in the same words.
+Core computes `tagTypes` from the taglib lookup and the tags' `parseOptions`
+(§9.3) before the parse; the written name is the key.
+
+#### 13.9.5 Triggers
+
+**What a trigger becomes.** `node` is what core builds:
+
+| `node` | In an expression | In an attribute list | On a tagless line |
+|---|---|---|---|
+| `"string"` | a string literal of the trigger's text | error | error |
+| `"identifier"` | an identifier named by the text | error | error |
+| `"attribute"` | error | an attribute named by the text after its first character (the sigil), bare or with its `=value` | error |
+| `{ call }` | `lowerTrigger` | `lowerTrigger` | `lowerTrigger` |
+
+The built-in kinds lower in core with no hook. A kind in a position where it has
+no meaning is a positioned error: `` the `<id>` trigger's `node: "<kind>"` has no
+meaning in <an expression | an attribute list | a tagless line>; use `{ call }` and a
+syntax module's `lowerTrigger` ``.
+
+**`lowerTrigger(id, text, span, ctx)`** builds what a `{ call }` trigger
+produces. `text` is the trigger's authored text and `span` its file-absolute
+UTF-16 range. `ctx` is frozen and offers exactly:
+
+- `ctx.position`: `"expression"`, `"attribute"` or `"line"`, read-only.
+- `ctx.value`: the trigger's own `=value` as an expression, its own triggers
+  already lowered, or `null` when it has none (attribute and line triggers only),
+  read-only.
+- `ctx.expression(node)`: a Babel **expression** node. In an expression it
+  replaces the trigger's stand-in; as an attribute value it is that value.
+- `ctx.attribute(name, value)`: a named attribute. `value` is `true` (a bare
+  attribute), a string, a `ctx.expression` result, or a whole-value
+  `{ kind: "atom" | "member", name, span? }`.
+- `ctx.child(tagName, attrs)`: a child tag of the enclosing block, built from
+  `ctx.attribute` results. It goes through the normal tag path, so contracts and
+  host declarations apply to it.
+
+There is no other way to build anything. The hook must return what a constructor
+built, and the constructor matching `ctx.position`: an expression for
+`"expression"`, an attribute for `"attribute"`, a child for `"line"`. Core gives
+the result its positions from the trigger.
+
+**One pass, in source order.** All of a document's triggers lower in one pass
+before anything reads the tree (right after the atom conversion, before name
+sugar and before contracts are checked), and a trigger lowers once: a second walk over the same document (the
+scratch walk that runs a custom tag's `analyze`) calls no hook twice. Order is
+source order, a tag's attributes before its body, and a trigger's own `=value`
+before the trigger that owns it. The parsed tree stays as parsed. The lowered
+results live beside it and are what attribute, child and expression readers see,
+so `Expr.code` and `Expr.text` differ: an expression trigger's replacement is
+**printed and spliced into `code`** at the trigger's span (`&status` becomes
+`self.status`), as an atom becomes its string literal, so emitting hosts emit
+valid code, while `text` and every offset stay the authored text. The stand-in
+node the parser hands the expression parser carries `extra.mxTrigger = { id, span }`,
+and core's built-in string and identifier replacements keep it.
+
+**Positioned errors.** Each is raised at the trigger. Quoted with `<id>` for the
+row's id and `<text>` for the trigger's text:
+
+| Case | Message |
+|---|---|
+| A `{ call }` trigger and no `lowerTrigger` | `` `<id>` trigger has no lowering yet `` |
+| The hook returns the wrong kind | `` the `<id>` trigger's `lowerTrigger` must return `ctx.expression(node)` for a trigger in an expression `` (likewise `ctx.attribute(name, value)` for an attribute list and `ctx.child(tagName, attrs)` for a tagless line) |
+| The hook returns an object it did not build | `` the `<id>` trigger's `lowerTrigger` must return what `ctx.expression`, `ctx.attribute` or `ctx.child` built `` |
+| The hook throws | `` the `<id>` trigger's `lowerTrigger` threw: <message> `` (a `TranslateError` it throws is kept as is) |
+| `ctx.expression` is not given a Babel expression node | `` the `<id>` trigger's `lowerTrigger`: `ctx.expression` takes a Babel expression node, got <what> `` |
+| A bad constructor argument | `ctx.attribute` takes a non-empty attribute name; `ctx.child` takes a non-empty tag name and an array of `ctx.attribute` results; an attribute value is `true`, a string, a `ctx.expression` result, or `{ kind: "atom" \| "member", name }` |
+| The hook ignores the trigger's `=value` | `` `<text>` takes no `=value` here: the `<id>` trigger's `lowerTrigger` did not use it `` (a value that would vanish from the output is an error) |
+| An expression trigger that is not a whole operand, or is a property name (`{ &a }`, `{ &a: 1 }`) | `` `<text>` is not a whole operand here: the `<id>` trigger lowers to an expression; write it where a value stands `` |
+| An expression trigger where a name is declared (`(&a) => 1`, a declarator, a catch parameter, a method parameter) | `` `<text>` (the `<id>` trigger) cannot be declared: it lowers to an expression, and a parameter or declaration needs a plain name `` |
+| The replacement does not print | `` the `<id>` trigger's replacement does not print: <message> `` |
+
+A `=value` is also lowered as an expression with its own triggers, and a member
+in a method body or in call arguments lowers like any other expression position.
+
+#### 13.9.6 The `"member"` contract type
+
+A member is the whole-value reference a syntax module produces for a sigil like
+Mesh's `&`: not text, not an atom. Core knows no sigil; it knows the **shape**.
+
+- In an expression, a member is whatever Babel node the module handed
+  `ctx.expression`, marked `extra.mxMember = { span, name }` (`MxMemberMark`);
+  `span` covers the authored token, sigil included.
+- As a whole attribute value it is one of two forms: the static value `ctx.attribute`
+  builds with `{ kind: "member", name, span? }` (Mesh's `sort asc &dueOn`), lowered
+  to a static `Attr` whose `member` field is `{ kind: "member", name, span }`
+  (`Member`); or a **dynamic** attribute whose value is exactly one marked member
+  (`on:load=&visible`).
+
+`CustomTagAttribute.type` gains `"member"`, a sibling of `"atom"`. It accepts
+**both** forms and nothing else; against a member value:
+
+| Declared `type` | A member | An atom |
+|---|---|---|
+| `"member"` | accepted | refused: ``attribute `x` must be a member, got an atom`` (a string, a bare attribute or any other expression is named the same way) |
+| `"atom"` | refused: ``attribute `x` must be an atom, got a member`` | accepted |
+| `"expression"` | accepted | accepted |
+
+`values`, `pattern` and `ref` stay atom-only; whether a member names something that
+exists is the module's `afterLower` check, not the contract's. There is no union
+type: a kind with an atom slot and a member slot declares two slots.
+
+**One member per name slot.** A second member in the same name slot (`sort asc &c
+&d`) is a positioned error, not a duplicate-attribute warning: ``one member per
+slot: `sort` already holds `c`, so this member cannot also set it``.
+
+In the data tree (§13.7.2) a whole-value member is a `DataAttr` of `kind: "member"`:
+`{ name, value, nameSpan?, span }`, where `value` is the member's name without its
+sigil and `nameSpan` is absent because the name is not written. A member inside an
+expression is not that kind.
+
+#### 13.9.7 Provenance of a built child: `trigger`
+
+A tag a `lowerTrigger` builds with `ctx.child` carries `trigger: { id, span, text
+}` in the IR (`TagTrigger`, on its `Element`, `Component` or `DelegatedTag`) and, in the data tree,
+`DataTag.trigger`: the row's `id`, the file-absolute span of the trigger's
+authored text, and that text. An authored tag has none, so a consumer tells
+`&title` from an authored `<member name="title"/>` without comparing spans. Core
+names no trigger.
+
+#### 13.9.8 The reference module
+
+`@mxlang/core/syntax/member` is a syntax module shipped as a reference for
+extension authors: Mesh's member sigil `&` in all three lists, built on the public
+hook API only, importing types only.
+
+```ts
+import memberSyntax from "@mxlang/core/syntax/member";
+parseData(source, file, { syntax: memberSyntax });
+```
+
+Its row is `{ id: "member", chars: "&", match: <an identifier after &>, standIn:
+"identifier", node: { call: "member" } }`, and it lowers to four shapes:
+
+| Position | Source | Lowers to |
+|---|---|---|
+| expression | `&status` | `self.status`, a `MemberExpression` marked `extra.mxMember` |
+| attribute | `sort asc &dueOn` | the static attribute `member`, value `{ kind: "member", name: "dueOn" }` |
+| tagless line | `&title` | a `member` child tag with a static `name` |
+| tagless line | `&amount=expr` | the same, plus a dynamic `value` |
+
+The sigil, the `member` id, the `self` receiver and the `member` tag are this
+file's choices, not core's. A project may copy the module, rename them, and point
+`mx.syntax` at the copy. Mesh's `&` replaces the "`:name` after a value" form
+(`belongs-to=:List :list`), which no layer-2 user needs (addendum 1).
+
+**Errors this section does not own.** Positions for all of the above follow §12.
+A syntax table changes which files are valid, not what a valid file's diagnostics
+say: a `{ call }` trigger, block tag or filter nothing lowers is always the "has no
+lowering yet" error, and never silently dropped.
+
 ---
 
 ## 14. What MX 2 reserves
@@ -4047,6 +4418,7 @@ custom-tags build spec is also on the site at `/design-notes/custom-tags/`.
 - [`/design-notes/custom-tags/`](https://mx.saulo.tech/design-notes/custom-tags/) — the custom-tags feature spec
 - `notes/solidmx-spec.md` — Solid (note §5.1's `<if=cond|u|>` is wrong; see §5.2)
 - `packages/core/src/{lower,core,custom-tags,builtin-tags,template-tag,scan,ir}.ts`
+- `packages/core/src/{syntax-table,triggers}.ts`, `packages/core/src/syntax/member.ts`, `packages/parser/src/template/syntax.ts` — the syntax table (§13.9, decision 182 and addenda)
 - `packages/hosts/*/README.md` and their emitters
 - `apps/docs/docs/language/*.md` — six user-facing pages
 - htmljs-parser `src/states/CONCISE_HTML_CONTENT.ts` — concise-mode line rules
