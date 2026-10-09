@@ -49,7 +49,10 @@ async function renderModules(
               `export * from ${JSON.stringify(fileURLToPath(new URL("./fixtures/lean-runtime.ts", import.meta.url)))};`,
             ]
           : [
-              `export { escape } from ${JSON.stringify(fileURLToPath(new URL("../../../core/src/index.ts", import.meta.url)))};`,
+              // `escape.ts`, not core's index: the index's source graph
+              // includes the MX front end and its vendored Babel (port PR 5),
+              // whose first load passed vitest's 5 s under a full run.
+              `export { escape } from ${JSON.stringify(fileURLToPath(new URL("../../../core/src/escape.ts", import.meta.url)))};`,
               `export { createBufferedOut, createOut } from ${JSON.stringify(fileURLToPath(new URL("./runtime.ts", import.meta.url)))};`,
               `export type { AttrTag } from ${JSON.stringify(fileURLToPath(new URL("./index.ts", import.meta.url)))};`,
             ]

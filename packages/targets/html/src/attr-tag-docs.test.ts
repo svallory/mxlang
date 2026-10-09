@@ -44,7 +44,7 @@ async function renderGroup(group: string, input: unknown): Promise<string> {
     writeFileSync(
       join(dir, "runtime.ts"),
       [
-        `export { escape } from ${JSON.stringify(fileURLToPath(new URL("../../../core/src/index.ts", import.meta.url)))};`,
+        `export { escape } from ${JSON.stringify(fileURLToPath(new URL("../../../core/src/escape.ts", import.meta.url)))};`,
         `export { createBufferedOut, createOut } from ${JSON.stringify(fileURLToPath(new URL("./runtime.ts", import.meta.url)))};`,
         `export type { AttrTag } from ${JSON.stringify(fileURLToPath(new URL("./index.ts", import.meta.url)))};`,
       ].join("\n"),
