@@ -17,6 +17,7 @@ import type {
   CustomTagAttributeTag,
   WildcardChildEntry,
 } from "./custom-tags.ts";
+import { handleNode } from "./host-handle.ts";
 import { mxNodeOf } from "./marko-view.ts";
 import { CONTROL_FLOW_TAGS } from "./structural-tags.ts";
 import {
@@ -134,9 +135,14 @@ const matches = new WeakMap<
   { scope: ContractScope["declaration"]; match: WildcardMatch }
 >();
 
-/** The match recorded for this tag node, if a parent's `"*"` claimed it. */
+/**
+ * The match recorded for this tag node, if a parent's `"*"` claimed it. Takes
+ * the node, its Marko-shaped view, or a host view or its handle.
+ */
 export function wildcardMatchOf(node: Node): WildcardMatch | undefined {
-  return node ? matches.get(mxNodeOf(node))?.match : undefined;
+  return node
+    ? matches.get(handleNode(node) ?? mxNodeOf(node))?.match
+    : undefined;
 }
 
 /** The contract an entry validates its child with, when it can be reached. */

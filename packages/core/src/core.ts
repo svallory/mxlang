@@ -46,6 +46,7 @@ import type { CalleeInput } from "./callee-input.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import { nearestHtmlElement, nearestName } from "./did-you-mean.ts";
+import { handleNode } from "./host-handle.ts";
 import type { Atom, Expr, IrNode, Position } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
@@ -1563,6 +1564,8 @@ export function rejectUnsupportedFields(
     args?: boolean;
   } = {},
 ): void {
+  // A host view (or its handle) stands for its MX node (ast §6.4).
+  node = handleNode(node) ?? node;
   const first = allow.attributeTags ? undefined : firstAttributeTag(node);
   if (first) {
     const tagName = String(tagNameOf(first) ?? "@…").replace(/^@/, "");
