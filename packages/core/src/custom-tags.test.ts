@@ -1325,17 +1325,22 @@ describe("core-owned custom tags", () => {
     }
   });
 
-  it("positions the missing-content errors at the `<try>` tag", () => {
-    for (const source of ["<try></try>\n", "<try>hi</try>\n"]) {
+  it.each([
+    ["no children", "<try></try>\n", 1, 0],
+    ["no catch or placeholder", "<try>hi</try>\n", 1, 0],
+    ["indented and nested", "<div>\n  <try>hi</try>\n</div>\n", 2, 2],
+  ])(
+    "positions the missing-content error at the `<try>` tag (%s)",
+    (_case, source, line, column) => {
       let error: unknown;
       try {
         lowerWithTags(source, {}, tryDeclarations);
       } catch (caught) {
         error = caught;
       }
-      expect(error).toMatchObject({ line: 1 });
-    }
-  });
+      expect(error).toMatchObject({ line, column });
+    },
+  );
 
   it("passes `<@catch>`/`<@placeholder>` through as the host tag's attribute tags", () => {
     const ir = lowerWithTags(

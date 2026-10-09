@@ -1648,8 +1648,8 @@ validator (§13.3).
 
 `<try>` is lowered with `isBuiltin`, which exempts it from the `hasContent`
 gate ordinary custom tags get: it is a structural pass-through wrapper and
-must reproduce the caller's body unchanged. `<try>  </try>` keeps its normalized
-space; decision 141 also retains that space on ordinary component/custom-tag
+must reproduce the caller's body unchanged. `<try>  <@catch>…</@catch></try>` keeps its
+normalized space; decision 141 also retains that space on ordinary component/custom-tag
 calls, rather than treating it as an absent body.
 
 Errors, all carrying the `` `<try>`:  `` prefix:
@@ -1674,7 +1674,7 @@ the html target (it needs a second render pass), while `<try>` with only `<@catc
 lowers to an ordinary `try`/`catch` whose body renders into a buffered sub-sink
 (§13.8): when the body throws, its partial output is dropped and `<@catch>`
 renders in its place, as in Marko 6.3.51 (decision 155). A `<try>` with neither
-`<@catch>` nor `<@placeholder>` is a compile error (below), as in Marko 6.4.
+`<@catch>` nor `<@placeholder>` is a compile error (above), as in Marko 6.4.
 
 On Preact, React and Hono the `<try>` body reaches the host's boundary as a thunk
 (`<__mxErrorBoundary fallback={…}>{() => body}</__mxErrorBoundary>`), so a throw
