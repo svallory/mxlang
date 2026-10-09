@@ -955,6 +955,9 @@ function lazyTag(tag: DiscoveredTag, claimed: ClaimedFields): CustomTag {
       rejectUnknownDeclarationKeys(own, claimed);
       if (!tag.template) rejectUnreachableHooks(own);
     } catch (cause) {
+      // The file's syntax module did not resolve: that is the error, not a
+      // key it might have claimed.
+      if (claimed.failure !== undefined) throw claimed.failure;
       if (isTranslateError(cause) && cause.file === undefined)
         withCodeOf(cause, () => failIn(sidecar, cause.message));
       throw cause;
@@ -1388,6 +1391,9 @@ function indexMxContractsEntries(
       rejectUnknownDeclarationKeys(contracts, claimed);
       rejectUnreachableHooks(contracts);
     } catch (cause) {
+      // The file's syntax module did not resolve: that is the error, not a
+      // key it might have claimed.
+      if (claimed.failure !== undefined) throw claimed.failure;
       if (isTranslateError(cause) && cause.file !== undefined) throw cause;
       withCodeOf(cause, () =>
         failContracts(

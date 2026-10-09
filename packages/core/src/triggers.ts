@@ -31,6 +31,7 @@ import {
   type Node,
   positionAtOffset,
 } from "./core.ts";
+import { raiseDeferredContractErrors } from "./custom-tags.ts";
 import type { Member, MxMemberMark } from "./ir.ts";
 import { loweredUnitOf } from "./lowered-unit.ts";
 import type { SourceSpan } from "./mapping.ts";
@@ -176,6 +177,10 @@ export function lowerTriggers(ctx: Ctx, roots: readonly Node[]): boolean {
         ...(ctx.afterLower ?? []),
         (unit) => afterLower(loweredUnitOf(unit)),
       ];
+    }
+    if (module.contractFields) {
+      // Core's own errors on claimed keys, behind the module's hook.
+      ctx.afterLower = [...(ctx.afterLower ?? []), raiseDeferredContractErrors];
     }
     if (module.productName && ctx.productName === undefined) {
       ctx.productName = module.productName;

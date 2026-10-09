@@ -541,6 +541,27 @@ function checkContractAttributes(
   }
 }
 
+/**
+ * The module's `describeAttribute`: what a declaration accepts, for core's
+ * whole-value shape error (` (one of :a, :b)`, ` (a declared attribute)`),
+ * as core words it on its built-in path.
+ */
+function describeAttribute(
+  declaration: Readonly<Record<string, unknown>>,
+): string {
+  const { values, ref } = declaration as AtomDeclaration;
+  if (Array.isArray(values) && values.every((v) => typeof v === "string")) {
+    return ` (one of ${atomList(values)})`;
+  }
+  if (
+    typeof ref === "string" ||
+    (Array.isArray(ref) && ref.every((kind) => typeof kind === "string"))
+  ) {
+    return ` (a declared ${asList(ref).join(" or ")})`;
+  }
+  return "";
+}
+
 /** The module's `checkContract`: the claimed keys of one registered contract. */
 function checkContract(
   tag: string,
@@ -987,6 +1008,7 @@ const atomsSugars = {
   },
   contractFields: CONTRACT_FIELDS,
   checkContract,
+  describeAttribute,
   afterLower: checkAtomContracts,
 } satisfies SyntaxModule;
 

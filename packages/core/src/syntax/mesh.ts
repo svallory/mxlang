@@ -38,6 +38,7 @@ const meshSyntax = {
   },
   contractFields: atomsSugars.contractFields,
   checkContract: atomsSugars.checkContract,
+  describeAttribute: atomsSugars.describeAttribute,
   afterLower: atomsSugars.afterLower,
 } satisfies SyntaxModule;
 

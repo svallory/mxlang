@@ -20,9 +20,9 @@
 
 import { attrLabel } from "./attr-label.ts";
 import {
-  type ClaimedFields,
   claimedFields,
   claimsAtomFields,
+  unclaimedAttribute,
 } from "./contract-fields.ts";
 import { type Ctx, type Node, TranslateError } from "./core.ts";
 import type {
@@ -145,7 +145,14 @@ function pickEntry(
   declares: CustomTag["declares"],
   parent: string,
 ): ContractDeclaration | undefined {
-  const entries = asList(declares);
+  // Only well-formed entries: a claimed `declares` reaches here unchecked.
+  const entries = asList(declares).filter(
+    (entry) =>
+      !!entry &&
+      typeof entry === "object" &&
+      typeof entry.kind === "string" &&
+      typeof entry.from === "string",
+  );
   return (
     entries.find(
       (entry) =>
@@ -199,9 +206,16 @@ function declare(
   facts: readonly ContractFact[],
   derived: readonly DerivedDeclaration[],
 ): Scopes {
-  // A syntax module that claims `declares` declares the names itself.
-  if (ctx && claimedFields(ctx.syntaxModule).tag.has("declares")) {
-    return new Map();
+  if (ctx) {
+    const claimed = claimedFields(ctx.syntaxModule);
+    // A module that claims `declares` owns its errors (clashes, scopes). Core
+    // still resolves an unclaimed `ref` itself, so it reads the names then,
+    // leniently, raising nothing (claims are per key and independent).
+    if (claimed.tag.has("declares")) {
+      return claimed.attribute.has("ref")
+        ? new Map()
+        : declare(null, facts, derived);
+    }
   }
   const pending: Array<{ owner: object; decl: Declaration }> = [];
   for (const { definition, call, chain } of facts) {
@@ -223,7 +237,7 @@ function declare(
       name: stated.name,
       span: stated.span,
       file,
-      uniqueWith: entry.uniqueWith ?? [],
+      uniqueWith: Array.isArray(entry.uniqueWith) ? entry.uniqueWith : [],
     };
     const owner = scopeOwner(ctx, chain, entry.scope, decl, file);
     if (owner) pending.push({ owner, decl });
@@ -526,17 +540,6 @@ function checkStringForRef(
     : new TranslateError(message, attr.loc.line, attr.loc.column, file);
 }
 
-/** `declaration` without the keys the file's syntax module claims (`contractFields`). */
-function unclaimed(
-  declaration: CustomTagAttribute,
-  claimed: ClaimedFields,
-): CustomTagAttribute {
-  if (claimed.attribute.size === 0) return declaration;
-  const own = { ...declaration } as Record<string, unknown>;
-  for (const key of claimed.attribute) delete own[key];
-  return own as CustomTagAttribute;
-}
-
 /** Queues a check for every atom of every contract attribute in `attrs`. */
 function queueAttrs(
   ctx: Ctx,
@@ -554,7 +557,10 @@ function queueAttrs(
     }
     const written = attributes[attr.name];
     if (written?.type !== "atom") continue;
-    const declaration = unclaimed(written, claimedFields(ctx.syntaxModule));
+    const declaration = unclaimedAttribute(
+      written,
+      claimedFields(ctx.syntaxModule),
+    );
     if (
       declaration.values === undefined &&
       declaration.pattern === undefined &&

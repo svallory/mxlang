@@ -564,14 +564,19 @@ none names atoms:
   as opaque data, in `customTags`, `mx.contracts` and tag sidecars alike, and
   never checks it. A key that no core rule knows and no module lists is
   still a registration error. Of core's own keys only those four can be
-  listed. Core keeps the whole-value shape check (`type: "atom"` or
-  `"member"`) and `ctx.declare` in `analyze`.
+  listed. Claims are per key and independent. Core keeps the whole-value
+  shape check (`type: "atom"` or `"member"`) and `ctx.declare` in
+  `analyze`, and never reads a claimed key to word its shape error.
 - `checkContract(tag, contract, ctx)` runs at registration for every
   contract that uses a listed key, at any depth, called or not. `contract`
   is plain data (`attributes`, `attributeTags`, `children` and the listed
   tag keys). `ctx.fail(message, { code? })` raises the error where core's
   own registration error lands: in the sidecar, in the `mx.contracts`
   module at 1:0, or with no position for the `customTags` option.
+- `describeAttribute(declaration)` words what a declaration that uses a
+  listed key accepts, for core's shape error (`" (one of :a, :b)"`).
+- Contract data handed to a module is a deep-frozen copy; an expression's
+  `node` is core's live node, read-only by contract.
 - `afterLower(unit)` runs once per unit, after core's own checks. `unit` is
   a frozen `LoweredUnit`:
   - `calls`: every custom tag call with its contract (the listed tag keys

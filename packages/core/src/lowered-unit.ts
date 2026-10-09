@@ -8,8 +8,10 @@
  * here, from the public API only, so the module can live outside core.
  *
  * The view is built once per unit, when the first module hook runs, and is
- * frozen. Contract declarations (`ContractCall.contract`) are the
- * registered objects themselves: plain data, to be read, never written.
+ * frozen. Contract declarations (`ContractCall.contract`) are deep-frozen
+ * copies of the registered plain data, so a module cannot change a contract
+ * for the next compile; an expression's `node` is core's live node, to be
+ * read, never written.
  */
 
 import { positionAt } from "./atom-contracts.ts";
@@ -88,7 +90,11 @@ export type ContractAttr =
   | (ContractAttrBase & { readonly kind: "boolean" })
   | (ContractAttrBase & {
       readonly kind: "expression";
-      /** The lowered expression node; `null` for one with no source. */
+      /**
+       * The lowered expression node; `null` for one with no source. It is
+       * core's live node, shared with the IR the host emits: read it, never
+       * write it (it is not frozen).
+       */
       readonly node: object | null;
       readonly code: string;
       readonly span?: SourceSpan;
@@ -217,6 +223,7 @@ function attributeTagsOf(
   tags: readonly AttributeTag[],
   declared: CustomTagAttributeTags | undefined,
   tagFields: ReadonlySet<string>,
+  memo: WeakMap<object, unknown>,
 ): readonly ContractAttributeTag[] {
   return freezeAll(
     tags.map((tag) => {
@@ -231,9 +238,10 @@ function attributeTagsOf(
           tag.attributeTags,
           declaration?.attributeTags,
           tagFields,
+          memo,
         ),
         ...(declaration
-          ? { contract: contractData(declaration, tagFields) }
+          ? { contract: contractData(declaration, tagFields, memo) }
           : {}),
       });
     }),
@@ -286,6 +294,8 @@ export function loweredUnitOf(ctx: Ctx): LoweredUnit {
     get calls(): readonly ContractCall[] {
       if (calls) return calls;
       const { tag: tagFields } = claimedFields(ctx.syntaxModule);
+      // One copy per registered object across the unit's calls.
+      const memo = new WeakMap<object, unknown>();
       calls = freezeAll(
         [...(ctx.contractFacts?.values() ?? [])].map(
           ({ definition, call, chain }) =>
@@ -293,12 +303,13 @@ export function loweredUnitOf(ctx: Ctx): LoweredUnit {
               tag: call.name,
               span: call.span,
               nameSpan: call.nameSpan,
-              contract: contractData(definition, tagFields),
+              contract: contractData(definition, tagFields, memo),
               attrs: freezeAll(call.attrs.map(attrOf)),
               attributeTags: attributeTagsOf(
                 call.attributeTags,
                 definition.attributeTags,
                 tagFields,
+                memo,
               ),
               ancestors: freezeAll(chain.map(ancestorOf)),
             }),

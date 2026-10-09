@@ -25,6 +25,14 @@ export interface ClaimedFields {
   readonly tag: ReadonlySet<string>;
   /** The module's registration check of a contract that uses a claimed key. */
   readonly check?: SyntaxModule["checkContract"];
+  /** The module's wording of an attribute declaration that uses a claimed key. */
+  readonly describe?: SyntaxModule["describeAttribute"];
+  /**
+   * Why the file's syntax module could not be resolved (a discovery scan's
+   * `claimedFieldsOf`): raised instead of a refusal of a contract key, which
+   * that module might have claimed.
+   */
+  readonly failure?: unknown;
 }
 
 /** What `SyntaxModule.checkContract` is handed besides the contract. @unstable */
@@ -84,27 +92,86 @@ export function claimedFields(module: SyntaxModule | undefined): ClaimedFields {
     attribute: new Set(fields.attribute ?? []),
     tag: new Set(fields.tag ?? []),
     ...(module.checkContract ? { check: module.checkContract } : {}),
+    ...(module.describeAttribute ? { describe: module.describeAttribute } : {}),
   };
   byModule.set(module, claimed);
   return claimed;
 }
 
+/** Is `value` a plain object or array (data, not a function or class instance)? */
+function isPlainData(value: unknown): value is object {
+  if (!value || typeof value !== "object") return false;
+  if (Array.isArray(value)) return true;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+/**
+ * A deep-frozen copy of plain data (objects and arrays; anything else is
+ * kept as is), so a module cannot change a registered contract through the
+ * copy. `memo` keeps a shared or cyclic object one copy.
+ */
+function frozenCopy(value: unknown, memo: WeakMap<object, unknown>): unknown {
+  if (!isPlainData(value)) return value;
+  const known = memo.get(value);
+  if (known !== undefined) return known;
+  const copy: Record<string, unknown> | unknown[] = Array.isArray(value)
+    ? []
+    : Object.create(Object.getPrototypeOf(value));
+  memo.set(value, copy);
+  for (const [key, item] of Object.entries(value)) {
+    (copy as Record<string, unknown>)[key] = frozenCopy(item, memo);
+  }
+  return Object.freeze(copy);
+}
+
+/** A deep-frozen copy of plain data (see `contractData`). */
+export function frozenData<T>(value: T): T {
+  return frozenCopy(value, new WeakMap()) as T;
+}
+
+/** An attribute declaration without the keys `claimed` lists: what core may read of it. */
+export function unclaimedAttribute<T extends object>(
+  declaration: T,
+  claimed: ClaimedFields,
+): T {
+  if (![...claimed.attribute].some((key) => Object.hasOwn(declaration, key))) {
+    return declaration;
+  }
+  const own = { ...declaration } as Record<string, unknown>;
+  for (const key of claimed.attribute) delete own[key];
+  return own as T;
+}
+
+/** The contract keys a module reads besides the ones it claims. */
+const CONTRACT_DATA_KEYS = [
+  "attributes",
+  "attributeTags",
+  "children",
+  "declares",
+];
+
 /**
  * A contract's declarations as plain data, as a module reads them:
- * `attributes`, `attributeTags`, `children` and the claimed tag keys it
- * states. The declaration objects are the registered ones, not copies.
+ * `attributes`, `attributeTags`, `children`, `declares` and the claimed tag
+ * keys it states, deep-frozen copies of the registered objects (which stay
+ * as they are). Pass one `memo` per unit so a contract several calls share
+ * is copied once.
  */
 export function contractData(
   declaration: object,
   tagFields: ReadonlySet<string>,
+  memo: WeakMap<object, unknown> = new WeakMap(),
 ): ContractData {
   const source = declaration as Record<string, unknown>;
   const data: Record<string, unknown> = {};
-  for (const key of ["attributes", "attributeTags", "children"]) {
-    if (source[key] !== undefined) data[key] = source[key];
+  for (const key of CONTRACT_DATA_KEYS) {
+    if (source[key] !== undefined) data[key] = frozenCopy(source[key], memo);
   }
   for (const key of tagFields) {
-    if (Object.hasOwn(declaration, key)) data[key] = source[key];
+    if (Object.hasOwn(declaration, key)) {
+      data[key] = frozenCopy(source[key], memo);
+    }
   }
   return Object.freeze(data);
 }
@@ -207,16 +274,17 @@ export function registerSyntaxResolver(
 
 /**
  * The keys `filePath`'s syntax module claims (its nearest
- * `package.json#mx.syntax`), for registration in a discovery scan. A
- * manifest whose `mx.syntax` does not resolve claims nothing here; the
- * compile of the file reports that error itself.
+ * `package.json#mx.syntax`), for registration in a discovery scan. When
+ * that module does not resolve, nothing is claimed and the resolution error
+ * rides along as `failure`: the scan raises it in place of refusing a
+ * contract key the module might have claimed.
  */
 export function claimedFieldsOf(filePath: string): ClaimedFields {
   if (!moduleOfFile) return NONE;
   try {
     return claimedFields(moduleOfFile(filePath));
-  } catch {
-    return NONE;
+  } catch (failure) {
+    return { ...NONE, failure };
   }
 }
 

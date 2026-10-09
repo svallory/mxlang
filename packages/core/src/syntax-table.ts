@@ -327,6 +327,16 @@ export interface SyntaxModule {
     contract: ContractData,
     ctx: ContractCheckContext,
   ) => void;
+  /**
+   * Words what an attribute declaration that uses a key the module claims
+   * accepts, for core's whole-value shape error (`` attribute `mode` must be
+   * atom, got string ``): the text appended to it, such as
+   * `" (one of :a, :b)"`, or `""`. Core never reads a claimed key itself;
+   * without this hook its message names only what it knows. @unstable
+   */
+  readonly describeAttribute?: (
+    declaration: Readonly<Record<string, unknown>>,
+  ) => string;
   /** Names the language where core's diagnostics say "MX", unless the host sets one. */
   readonly productName?: string;
 }
@@ -470,6 +480,7 @@ const MODULE_FIELDS = new Set([
   "afterLower",
   "contractFields",
   "checkContract",
+  "describeAttribute",
   "productName",
 ]);
 
@@ -479,6 +490,7 @@ const MODULE_HOOKS = [
   "lowerFilter",
   "afterLower",
   "checkContract",
+  "describeAttribute",
 ] as const;
 
 /** Each problem as `` `<path>.<field>` (trigger "<id>"): <message> ``, joined. */

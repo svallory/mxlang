@@ -300,6 +300,11 @@ export interface Ctx {
   contractFacts?: Map<Node, ContractFact>;
   /** Names `analyze` hooks declared with `ctx.declare`. */
   contractDerived?: DerivedDeclaration[];
+  /**
+   * Errors core queues behind the syntax module's `afterLower` (a shape
+   * error on a key the module claims): raised, the first, once it ran.
+   */
+  deferredContractErrors?: TranslateError[];
   /** The unit's atom facts, set when the atom check starts (every call has been seen). */
   atomFacts?: AtomFacts;
   source: string;

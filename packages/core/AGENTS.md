@@ -517,11 +517,26 @@ Five facts worth knowing before editing it:
     registers `resolveSyntaxOf` with `registerSyntaxResolver` as it loads;
   - `discoverProjectTags` has no file and claims nothing.
   A claimed key is skipped by `rejectInvalidDeclares`,
-  `rejectContradictoryAttribute` and the unknown-key check, and by
-  `checkAtomContracts` (`unclaimed`, and `declare` returns no scopes when
-  `declares` is claimed). `checkAtomAttr` keeps the shape check and still
-  quotes claimed `values`/`ref` in its message (`atomExpectation` reads them
-  defensively). `ctx.atomFacts` is not set when the module claims an atom
+  `rejectContradictoryAttribute` and the unknown-key check (its "allowed:"
+  list deduplicated), and by `checkAtomContracts` (`unclaimedAttribute`).
+  Claims are independent: with `declares` claimed and `ref` not, `declare`
+  reads the names leniently (`declare(null, …)`, no clash or scope errors,
+  ill-formed entries dropped by `pickEntry`) so core's own `ref` resolves;
+  with both claimed it returns no scopes. `contractData` always carries
+  `declares` too, deep-frozen copies (`frozenCopy`, one memo per unit), so a
+  module claiming `ref` alone can still resolve it.
+  `checkAtomAttr` (review 466 r1): its suffix comes from `expectationOf`,
+  which never reads a claimed key; a declaration using a claimed `values`
+  or `ref` is worded by the module's `describeAttribute`, else from the
+  unclaimed keys. A plain string against a claimed `ref` (B1) is no longer
+  a silent return: `validateCustomTagCall`'s `ClaimContext.defer` queues
+  core's shape error on `ctx.deferredContractErrors`, raised by
+  `raiseDeferredContractErrors`, which `lowerTriggers` appends to
+  `ctx.afterLower` behind the module's hook whenever the module has
+  `contractFields`.
+  A scan whose file's `mx.syntax` fails to resolve carries the error
+  (`ClaimedFields.failure`) and raises it in place of any contract-key
+  refusal (`mx.contracts`, sidecar validation). `ctx.atomFacts` is not set when the module claims an atom
   key: completion facts are the built-in path's only (lead ruling 14:29).
   `atoms-sugars.ts` claims all four, checks their shape in `checkContract`
   and ports `atom-contracts.ts` onto the view in `afterLower`, word for

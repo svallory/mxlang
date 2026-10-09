@@ -33,7 +33,11 @@ import type { HostDeclarations } from "./declarations.ts";
 import type { ContractAttr, LoweredUnit } from "./lowered-unit.ts";
 import { scanCustomTags } from "./scan.ts";
 import meshSyntax from "./syntax/mesh.ts";
-import { defaultSyntax, type SyntaxModule } from "./syntax-table.ts";
+import {
+  defaultSyntax,
+  resolveSyntaxOf,
+  type SyntaxModule,
+} from "./syntax-table.ts";
 import { testTargetLookup } from "./test-targets.ts";
 
 const targets = testTargetLookup();
@@ -176,6 +180,7 @@ const vocab: Record<string, CustomTag> = {
   set: { defaultTag: "setter" },
   box: {
     attributes: {
+      any: { type: "atom" },
       mode: { type: "atom", values: ["strict", "loose"] },
       slug: { type: "atom", pattern: "^[a-z]+$" },
       both: { type: "atom", values: ["a1", "b2"], pattern: "^[a-z]\\d$" },
@@ -298,6 +303,13 @@ const FAILING: readonly string[] = [
   "<box><@row><@cell k=[:x, :w]/></@row></box>",
   `${nodes(["n"])}<box><@col-1 to=:nn/></box>`,
   `${nodes(["n"])}<box><@col-1 to="n"/></box>`,
+  // Review 466 B1: a plain string against a `ref` atom, alone, after a
+  // module error, and with no declarations; a bare atom and a `values` atom.
+  '<link to="red"/>',
+  `${nodes(["a"])}<link to=:zz/><link to="red"/>`,
+  `${nodes(["a"])}<link to="red"/><link to=:zz/>`,
+  '<box any="red"/>',
+  '<box mode="red"/>',
 ];
 
 /** Sources the built-in path accepts. */
@@ -372,6 +384,10 @@ const REGISTRATION: ReadonlyArray<
   [
     "declares uniqueWith",
     { box: { declares: { kind: "k", from: "id", uniqueWith: "x" } } },
+  ],
+  [
+    "unknown key beside the claimed ones",
+    { box: { attributes: { a: { type: "atom", bogus: 1 } } } },
   ],
   [
     "inline children contract",
@@ -560,7 +576,9 @@ describe("the `LoweredUnit` view", () => {
     const [row, col] = box?.attributeTags ?? [];
     expect(row?.name).toBe("row");
     const declared = vocab.box?.attributeTags?.row as CustomTag | undefined;
-    expect(row?.contract?.attributes).toBe(declared?.attributes);
+    // A deep-frozen copy: the registered object stays the caller's.
+    expect(row?.contract?.attributes).toEqual(declared?.attributes);
+    expect(row?.contract?.attributes).not.toBe(declared?.attributes);
     expect(row?.attrs[0]).toMatchObject({ kind: "atom", value: "a" });
     const [cell] = row?.attributeTags ?? [];
     expect(cell?.name).toBe("cell");
@@ -729,6 +747,107 @@ describe("`unit.fail` and `unit.warn`", () => {
   });
 });
 
+/** Every subset of the four atom keys, as `contractFields`. */
+const CLAIMS = Array.from({ length: 16 }, (_, bits) => {
+  const attribute = ["values", "pattern", "ref"].filter(
+    (_, i) => bits & (1 << i),
+  );
+  const tag = bits & 8 ? ["declares"] : [];
+  return { attribute, tag };
+});
+
+describe("review 466 r1: core keeps its checks beside a module's claims", () => {
+  const claimOnly = (fields = CLAIMS[15]): SyntaxModule => ({
+    table: {},
+    contractFields: fields,
+  });
+
+  it("B1: a plain string against a claimed `ref` is still core's shape error, behind the module's hook", () => {
+    const source = '<link to="red"/>';
+    const builtIn = caught(() => compile(source, vocab, defaultSyntax()));
+    expect(builtIn.message).toBe(
+      "`<link>`: attribute `to` must be atom, got string (none declared); write it as `:red`",
+    );
+    // A module that claims the keys and checks nothing: core's error.
+    const plain = caught(() => compile(source, vocab, claimOnly()));
+    expect(plain.message).toBe(
+      "`<link>`: attribute `to` must be atom, got string",
+    );
+    expect([plain.line, plain.column]).toEqual([builtIn.line, builtIn.column]);
+    // The same with mesh's hooks but no `afterLower`: worded by the module.
+    const { afterLower: _, ...noAfterLower } = meshSyntax;
+    expect(
+      caught(() => compile(source, vocab, noAfterLower as SyntaxModule))
+        .message,
+    ).toBe(
+      "`<link>`: attribute `to` must be atom, got string (a declared node)",
+    );
+    // The mesh module's own message comes first, byte for byte.
+    expect(outcome(source, vocab, meshSyntax)).toEqual(
+      outcome(source, vocab, defaultSyntax()),
+    );
+  });
+
+  it("B1: a module error earlier in the file keeps its place", () => {
+    const source = '<node#a/><link to=:zz/><link to="red"/>';
+    expect(caught(() => compile(source, vocab, meshSyntax)).message).toMatch(
+      /`:zz` is not a declared node here/,
+    );
+  });
+
+  it.each(CLAIMS)(
+    "L3: valid input passes under the partial claim %o",
+    (fields) => {
+      const partial = { ...meshSyntax, contractFields: fields };
+      for (const source of [...PASSING, "<node#a/><link to=:a/>"]) {
+        expect(outcome(source, vocab, partial)).toEqual({
+          ok: true,
+          warnings: [],
+        });
+        expect(outcome(source, vocab, claimOnly(fields))).toEqual({
+          ok: true,
+          warnings: [],
+        });
+      }
+    },
+  );
+
+  it.each(CLAIMS)(
+    "L3: invalid input still fails under the partial claim %o",
+    (fields) => {
+      const partial = { ...meshSyntax, contractFields: fields };
+      for (const source of FAILING) {
+        expect(outcome(source, vocab, partial)).toHaveProperty("message");
+      }
+    },
+  );
+
+  it("L4: the view's contracts are deep-frozen copies; the registered contract is untouched", () => {
+    const tags: Record<string, CustomTag> = {
+      box: { attributes: { b: { type: "atom", values: ["x"] } } },
+    };
+    const errors: unknown[] = [];
+    for (let run = 0; run < 2; run++) {
+      compile("<box b=:x/>", tags, {
+        ...meshSyntax,
+        afterLower: (unit) => {
+          const values = unit.calls[0]?.contract.attributes?.b
+            ?.values as string[];
+          try {
+            values.push("y");
+          } catch (error) {
+            errors.push(error);
+          }
+        },
+      });
+    }
+    expect(errors).toHaveLength(2);
+    expect(errors[0]).toBeInstanceOf(TypeError);
+    expect(tags.box?.attributes?.b?.values).toEqual(["x"]);
+    expect(Object.isFrozen(tags.box?.attributes?.b)).toBe(false);
+  });
+});
+
 describe("`contractFields`", () => {
   const claiming = (
     fields: SyntaxModule["contractFields"],
@@ -819,18 +938,48 @@ describe("`contractFields`", () => {
     expect(() => compile("<node/>", bad, declares)).not.toThrow();
   });
 
-  it("core keeps the whole-value shape check, quoting claimed `values` as it always did", () => {
+  it("core keeps the whole-value shape check, and reads no claimed key to word it", () => {
     const tags: Record<string, CustomTag> = {
       box: { attributes: { mode: { type: "atom", values: ["b", "a"] } } },
     };
+    const builtIn =
+      "`<box>`: attribute `mode` must be atom, got string (one of :a, :b)";
+    expect(
+      caught(() => compile("<box mode='s'/>", tags, defaultSyntax())).message,
+    ).toBe(builtIn);
+    // A module that claims `values` and words nothing: core names only what
+    // it knows.
     const claimed = claiming({ attribute: ["values", "pattern", "ref"] });
-    for (const syntax of [defaultSyntax(), claimed]) {
-      expect(
-        caught(() => compile("<box mode='s'/>", tags, syntax)).message,
-      ).toBe(
-        "`<box>`: attribute `mode` must be atom, got string (one of :a, :b)",
-      );
-    }
+    expect(
+      caught(() => compile("<box mode='s'/>", tags, claimed)).message,
+    ).toBe("`<box>`: attribute `mode` must be atom, got string");
+    // The module words it (`describeAttribute`), from a frozen copy.
+    const seen: unknown[] = [];
+    const describing: SyntaxModule = {
+      ...claimed,
+      describeAttribute: (declaration) => {
+        seen.push(Object.isFrozen(declaration), declaration.values);
+        return " (as the module says)";
+      },
+    };
+    expect(
+      caught(() => compile("<box mode='s'/>", tags, describing)).message,
+    ).toBe(
+      "`<box>`: attribute `mode` must be atom, got string (as the module says)",
+    );
+    expect(seen).toEqual([true, ["b", "a"]]);
+    // The reference module's wording is core's built-in one.
+    expect(
+      caught(() => compile("<box mode='s'/>", tags, meshSyntax)).message,
+    ).toBe(builtIn);
+    // An unclaimed `values` is still core's to quote.
+    expect(
+      caught(() =>
+        compile("<box mode=1/>", tags, claiming({ attribute: ["ref"] })),
+      ).message,
+    ).toBe(
+      "`<box>`: attribute `mode` must be atom, got number (one of :a, :b)",
+    );
   });
 });
 
@@ -883,7 +1032,11 @@ describe("`checkContract`", () => {
         },
       },
     );
-    expect(seen).toBe(children);
+    expect(seen).toEqual(children);
+    expect(Object.isFrozen((seen as typeof children)["*"].attributes.c)).toBe(
+      true,
+    );
+    expect(Object.isFrozen(children["*"].attributes.c)).toBe(false);
   });
 
   it("`ctx.fail` is a registration error carrying `code`; a throw is named", () => {
@@ -1084,4 +1237,35 @@ describe("`contractFields` through a manifest", () => {
       0,
     ]);
   });
+
+  it.each([
+    ["throws on load", "throw new Error('broken syntax');\n"],
+    ["has no `table`", "export default { lowerTrigger() {} };\n"],
+  ])(
+    "L2: a syntax module that %s is the error, not a contract key it might claim",
+    (_, body) => {
+      const page = project(
+        { syntax: "./syntax.ts", contracts: "./contracts.ts" },
+        {
+          "syntax.ts": body,
+          "contracts.ts": CONTRACTS,
+          "tags/box.tag.ts": `export default { attributes: { a: { type: "string", values: ["a"] } } };\n`,
+        },
+      );
+      const expected = caught(() => resolveSyntaxOf(page));
+      expect(expected.file).toBe(join(dir, "syntax.ts"));
+      for (const run of [
+        () => build(page, "<div/>"),
+        () => scanCustomTags(page, { targets, stopAt: dir }),
+      ]) {
+        const error = caught(run);
+        expect([error.message, error.file, error.line, error.column]).toEqual([
+          expected.message,
+          expected.file,
+          expected.line,
+          expected.column,
+        ]);
+      }
+    },
+  );
 });

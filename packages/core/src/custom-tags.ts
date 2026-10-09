@@ -21,6 +21,8 @@ import {
   type ClaimedFields,
   checkClaimedContract,
   claimedFields,
+  frozenData,
+  unclaimedAttribute,
 } from "./contract-fields.ts";
 import type { Ctx, Node } from "./core.ts";
 import { isTranslateError, TranslateError, warn } from "./core.ts";
@@ -1168,8 +1170,9 @@ function checkAtomAttr(
   attr: Exclude<Attr, { kind: "spread" }>,
   declaration: CustomTagAttribute,
   locate?: Locate,
+  claims?: ClaimContext,
 ): void {
-  const expected = atomExpectation(declaration);
+  const expected = expectationOf(declaration, claims?.claimed);
   const at = valueLoc(attr, locate);
   // An atom, the sugar-derived `name` included, satisfies an atom contract.
   if (attr.kind === "static" && attr.atom) return;
@@ -1185,6 +1188,20 @@ function checkAtomAttr(
   // A plain string against a `ref` atom is reported by the file-level check,
   // once the declarations exist and the error can list the names.
   if (declaration.ref !== undefined && plainStringOf(attr) !== undefined) {
+    // A module that claims `ref` reports it from its `afterLower`. The shape
+    // check stays core's (decision 183 addendum 2): its own error is queued
+    // behind that hook, so the module's diagnostics keep their order and a
+    // module that checks nothing still gets it.
+    if (claims?.claimed.attribute.has("ref")) {
+      claims.defer(
+        new TranslateError(
+          `${owner}: attribute ${attrLabel(attr)} must be atom, got string${expected}`,
+          at.line,
+          at.column,
+          at.file,
+        ),
+      );
+    }
     return;
   }
   if (shape && shape !== "atom" && shape !== "array") {
@@ -1506,6 +1523,7 @@ function validateAttributes(
   attrs: readonly Attr[],
   loc: Position,
   locate?: Locate,
+  claims?: ClaimContext,
 ): void {
   if (!attributes) return;
   // An empty closed contract rejects named and spread attributes identically.
@@ -1543,7 +1561,7 @@ function validateAttributes(
       );
     }
     if (declaration.type === "atom") {
-      checkAtomAttr(owner, attr, declaration, locate);
+      checkAtomAttr(owner, attr, declaration, locate, claims);
     } else if (declaration.type === "member") {
       checkMemberAttr(owner, attr, locate);
     } else if (
@@ -1631,6 +1649,7 @@ function validateAttributeTags(
   loc: Position,
   allowUncontractedTags: boolean,
   locate?: Locate,
+  claims?: ClaimContext,
 ): void {
   const wildcardMatches = new Map<
     string,
@@ -1676,6 +1695,7 @@ function validateAttributeTags(
         tag.attrs,
         tag.loc,
         locate,
+        claims,
       );
       validateAttributeTags(
         nestedOwner,
@@ -1686,6 +1706,7 @@ function validateAttributeTags(
         allowUncontractedTags ||
           (extended && declaration.attributeTags === undefined),
         locate,
+        claims,
       );
     }
   }
@@ -1720,11 +1741,53 @@ function validateAttributeTags(
   }
 }
 
+/**
+ * What a call's checks know of the file's syntax module: the keys it claims,
+ * and where an error core queues behind the module's `afterLower` goes.
+ */
+export interface ClaimContext {
+  claimed: ClaimedFields;
+  defer(error: TranslateError): void;
+}
+
+/**
+ * What core's shape error says an atom declaration accepts. Core never
+ * reads a key the module claims: a declaration that uses a claimed `values`
+ * or `ref` is worded by the module's `describeAttribute`, else from the keys
+ * core keeps.
+ */
+function expectationOf(
+  declaration: CustomTagAttribute,
+  claimed: ClaimedFields | undefined,
+): string {
+  const usesClaimed =
+    claimed !== undefined &&
+    (["values", "ref"] as const).some(
+      (key) => claimed.attribute.has(key) && Object.hasOwn(declaration, key),
+    );
+  if (!usesClaimed) return atomExpectation(declaration);
+  if (claimed.describe) {
+    const text = claimed.describe(frozenData({ ...declaration }));
+    return typeof text === "string" ? text : "";
+  }
+  return atomExpectation(unclaimedAttribute(declaration, claimed));
+}
+
+/**
+ * Queues an error behind the syntax module's `afterLower` (`ClaimContext`):
+ * the first is raised once that hook has run without failing.
+ */
+export function raiseDeferredContractErrors(ctx: Ctx): void {
+  const first = ctx.deferredContractErrors?.[0];
+  if (first) throw first;
+}
+
 /** Enforces a tag's declared contracts before its transform runs. */
 export function validateCustomTagCall(
   definition: CustomTag,
   call: TagCall,
   locate?: Locate,
+  claims?: ClaimContext,
 ): void {
   const owner = tagLabel(call.name, call.alias);
   validateCustomTagChildren(definition, call, owner);
@@ -1737,6 +1800,7 @@ export function validateCustomTagCall(
     call.attrs,
     call.loc,
     locate,
+    claims,
   );
   validateAttributeTags(
     owner,
@@ -1746,6 +1810,7 @@ export function validateCustomTagCall(
     call.loc,
     hasTemplate(definition),
     locate,
+    claims,
   );
 }
 
@@ -2155,7 +2220,9 @@ function rejectRecursiveContractKeys(
   )) {
     keys(
       declaration,
-      claimed.size === 0 ? ATTRIBUTE_KEYS : [...ATTRIBUTE_KEYS, ...claimed],
+      claimed.size === 0
+        ? ATTRIBUTE_KEYS
+        : [...new Set([...ATTRIBUTE_KEYS, ...claimed])],
       `"${attrName}" attribute declaration`,
     );
     rejectContradictoryAttribute(owner, attrName, declaration, claimed);
@@ -2625,7 +2692,13 @@ export function transformCustomTag(
     );
   }
 
-  validateCustomTagCall(definition, call, (offset) => positionAt(ctx, offset));
+  validateCustomTagCall(definition, call, (offset) => positionAt(ctx, offset), {
+    claimed: claimedFields(ctx.syntaxModule),
+    defer: (error) => {
+      ctx.deferredContractErrors ??= [];
+      ctx.deferredContractErrors.push(error);
+    },
+  });
   // Decision 156: remembered for the file-level declare and check phases.
   ctx.contractFacts ??= new Map();
   ctx.contractFacts.set(node, {

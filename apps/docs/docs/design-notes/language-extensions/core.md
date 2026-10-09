@@ -113,7 +113,7 @@ descriptor (layer 3).
 A **syntax module** is what `package.json#mx.syntax` names when its value is a
 string (a package name, or a path relative to the manifest, resolved like
 `mx.contracts`); its default export is
-`{ table, lowerTrigger?, lowerBlockTag?, lowerFilter?, afterLower?, contractFields?, checkContract?, productName? }`.
+`{ table, lowerTrigger?, lowerBlockTag?, lowerFilter?, afterLower?, contractFields?, checkContract?, describeAttribute?, productName? }`.
 `table` overlays the `.mx` default row with the fields an inline `mx.syntax`
 may set. An inline object stays a table only. A trigger whose `node` is
 `{ call }` needs the module's `lowerTrigger`: a `{ call }` in an inline
@@ -175,9 +175,9 @@ may set. An inline object stays a table only. A trigger whose `node` is
   - `file` and `source`; every span is a UTF-16 offset into `source`.
   - `calls`: every custom tag call that has a declaration, in the order core
     lowered them. A call (`ContractCall`) has `tag` (the canonical name),
-    `span`, `nameSpan`, `contract` (the declaration's `attributes`,
-    `attributeTags` and `children` as registered, plus the module's claimed
-    tag keys),
+    `span`, `nameSpan`, `contract` (deep-frozen copies of the declaration's
+    `attributes`, `attributeTags`, `children` and `declares`, plus the
+    module's claimed tag keys),
     `attrs`, `attributeTags` and `ancestors`.
   - An attribute (`ContractAttr`) has the kinds `@mxlang/data`'s `DataAttr`
     names: `string`, `atom` and `member` with `value` and `span`; `boolean`;
@@ -208,7 +208,17 @@ may set. An inline object stays a table only. A trigger whose `node` is
   - Listing one turns core's registration check and its file-level check
     of that key off.
   - Core keeps the whole-value shape check (`type: "atom"`, `"member"`,
-    decision 156 addendum 6) and `ctx.declare`.
+    decision 156 addendum 6; decision 183 addendum 2) and `ctx.declare`.
+    Core never reads a claimed key to word that check: the module's
+    `describeAttribute` does. A plain string against a declaration with a
+    claimed `ref` is left to the module's `afterLower` (which can list the
+    names). Core's own shape error for it is queued behind that hook, so it
+    is raised if the module reports nothing, and never before the module's
+    own diagnostics.
+  - Claims are per key and independent. With `declares` claimed and `ref`
+    not, core still reads the declared names (raising nothing about them)
+    to resolve its own `ref` check. A contract's `declares` reaches the
+    module whether it claims it or not.
   - The reference module `@mxlang/core/syntax/atoms-sugars` claims all four.
     It checks their shape in `checkContract` and their use in `afterLower`,
     word for word and at the positions core gives.
@@ -228,7 +238,17 @@ may set. An inline object stays a table only. A trigger whose `node` is
   carries. `ctx.fail(message, { code? })` raises a registration error where
   core's own lands: the sidecar's file, an `mx.contracts` module at 1:0, no
   position for the `customTags` option. It runs where core checks
-  `declares`, before core's walk of the attribute declarations.
+  `declares`, before core's walk of the attribute declarations. When the
+  file's `mx.syntax` module itself fails to load, a scan reports that
+  failure instead of refusing a key the module might have claimed.
+- `describeAttribute(declaration)` words what an attribute declaration that
+  uses a claimed key accepts, for core's whole-value shape error: the text
+  appended to it (`" (one of :a, :b)"`), or `""`. Without it, core's
+  message names only what it knows.
+- The contract data a module gets (`ContractCall.contract`, the
+  `checkContract` and `describeAttribute` arguments) is a deep-frozen copy
+  of the registered plain data; an expression's `node` is core's live node,
+  to be read, never written.
 - `productName` names the language in every diagnostic, unless the host
   names one.
 
