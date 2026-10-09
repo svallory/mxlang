@@ -46,6 +46,7 @@ import {
   fallbackAttrTagShape,
   unifyNestedAttrTagPlanGroups,
 } from "./attr-tag.ts";
+import { coreBabel } from "./babel.ts";
 import { BUILTIN_CUSTOM_TAGS } from "./builtin-tags.ts";
 import {
   type AttrTagDecl,
@@ -82,7 +83,6 @@ import {
   isTagOrStatementNode,
   isTextNode,
   isTranslateError,
-  markoBabel,
   mxSpanOf,
   type Node,
   newCtx,
@@ -2247,7 +2247,7 @@ function findLoopParamRead(
       );
   }
 
-  const { types } = markoBabel();
+  const { types } = coreBabel();
   if (types.isFunction(value) || types.isClass(value)) return undefined;
 
   for (const key of types.VISITOR_KEYS[value.type] ?? []) {
@@ -2269,7 +2269,7 @@ function findLoopParamRead(
  * type error at a generated position or to a render-time ReferenceError.
  */
 function rejectLoopParamInBy(node: Node, by: Node): void {
-  const { types } = markoBabel();
+  const { types } = coreBabel();
   const names = new Set<string>();
   for (const param of tagParamsOf(node)) {
     for (const name of Object.keys(types.getBindingIdentifiers(param))) {
@@ -2834,7 +2834,7 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
 function registerStaticBindings(ctx: Ctx, code: string): void {
   let file: { program: { body: Node[] } };
   try {
-    file = markoBabel().parse(code, {
+    file = coreBabel().parse(code, {
       sourceType: "module",
       plugins: ["typescript"],
     });
@@ -2929,7 +2929,7 @@ function rejectInvalidStatement(
         : at.column,
   });
   try {
-    markoBabel().parse(code, options);
+    coreBabel().parse(code, options);
   } catch (error) {
     // JSX is not read in a statement. Detected by what the failure is: the
     // text parses once the JSX syntax is on, so the error is the markup's, and
@@ -3794,7 +3794,7 @@ function targetName(target: ComponentTarget): string {
 }
 
 function referencesUnboundAttrTagType(typeUnits: string[]): boolean {
-  const { parse, traverse } = markoBabel();
+  const { parse, traverse } = coreBabel();
   let declaredLocally = false;
   let referenced = false;
   for (const typeText of typeUnits) {

@@ -32,10 +32,12 @@
     "changelog:check": "bun run scripts/check-changelog-fragment.ts"
   },
   "devDependencies": {
+    "@babel/code-frame": "7.29.7",
     "@babel/core": "7.29.7",
     "@babel/generator": "7.29.8",
     "@babel/helper-validator-identifier": "7.28.5",
     "@babel/parser": "7.29.8",
+    "@babel/plugin-transform-typescript": "7.29.7",
     "@babel/preset-typescript": "7.29.7",
     "@babel/traverse": "7.29.8",
     "@babel/types": "7.29.8",

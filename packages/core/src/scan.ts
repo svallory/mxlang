@@ -49,6 +49,7 @@ import {
 } from "node:fs";
 import { createRequire } from "node:module";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { coreBabel } from "./babel.ts";
 import { BUILTIN_CUSTOM_TAGS } from "./builtin-tags.ts";
 import {
   type ClaimedFields,
@@ -63,7 +64,6 @@ import {
   rejectUnknownDeclarationKeys,
   rejectUnreachableHooks,
 } from "./custom-tags.ts";
-import { markoBabel } from "./marko-frontend.ts";
 import {
   clearPackageJsonCache,
   type PackageJsonParseError,
@@ -657,9 +657,7 @@ export function checkParseOptions(
 /**
  * Reads a sidecar's `parseOptions` without executing it.
  *
- * The file is parsed with the Babel instance `@marko/compiler` already
- * bundles — the same one `fragment.ts` uses — rather than a second copy of
- * `@babel/parser` added as a dependency.
+ * The file is parsed with core's own Babel (`coreBabel()`, `@babel/parser`).
  *
  * The accepted shape is narrow and stated here because an author hits it as a
  * diagnostic: the module's `export default` must be an object literal, or an
@@ -677,7 +675,7 @@ export function readParseOptions(
   source: string,
   file: string,
 ): CustomTagParseOptions | undefined {
-  const babel = markoBabel();
+  const babel = coreBabel();
   let ast: {
     program: { body: Array<Record<string, unknown>> };
   };

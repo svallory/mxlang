@@ -6,6 +6,7 @@
 
 import { readFileSync, statSync } from "node:fs";
 import { basename } from "node:path";
+import * as babelParser from "@babel/parser";
 import {
   type Attr,
   type AttributeTag,
@@ -26,7 +27,6 @@ import {
   type IrNode,
   isTranslateError,
   type MxWarning,
-  markoBabel,
   metadataForTemplate,
   type Position,
   resolveSpecifier,
@@ -518,7 +518,7 @@ function handlerShape(code: string):
   | { form: "other" } {
   let node: HandlerNode;
   try {
-    const babel = markoBabel() as {
+    const babel = babelParser as unknown as {
       parseExpression(source: string, options: unknown): HandlerNode;
     };
     node = babel.parseExpression(code, { plugins: [["typescript", {}]] });
@@ -573,7 +573,7 @@ interface ScanNode {
 function statementBodyConstruct(code: string): string | undefined {
   let root: ScanNode;
   try {
-    const babel = markoBabel() as {
+    const babel = babelParser as unknown as {
       parseExpression(source: string, options: unknown): ScanNode;
     };
     root = babel.parseExpression(code, { plugins: [["typescript", {}]] });
@@ -1232,14 +1232,13 @@ export function unreadableSelectorMessage(fallback: string): string {
  * The module specifier of an authored `import` statement, or undefined.
  *
  * A synthesized import carries `specifier` structurally; an authored one
- * carries only its source text, so it is parsed — through
- * `@marko/compiler/internal/babel`, the instance the core already uses —
+ * carries only its source text, so it is parsed with `@babel/parser`
  * rather than scraped with a regex, which would trip over a specifier
  * containing an escape or a quote of the other kind.
  */
 function authoredImportSpecifier(code: string): string | undefined {
   try {
-    const babel = markoBabel() as {
+    const babel = babelParser as unknown as {
       parse(
         source: string,
         options: unknown,

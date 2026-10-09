@@ -28,8 +28,9 @@
  * arrow parameter `p => p.x` inside the body is left alone.
  */
 
+import { coreBabel } from "./babel.ts";
 import { printExpression } from "./compile.ts";
-import { markoBabel, type Node, TranslateError } from "./core.ts";
+import { type Node, TranslateError } from "./core.ts";
 import type { IrNode, Position } from "./ir.ts";
 import { rewriteCodes } from "./rewrite-codes.ts";
 
@@ -76,7 +77,7 @@ export function rewriteReadsInCode(
   loc: Position,
   shadowed: ReadonlySet<string> = new Set(),
 ): string {
-  const { parseExpression, traverse, types } = markoBabel();
+  const { parseExpression, traverse, types } = coreBabel();
 
   let parsed: Node;
   try {
@@ -217,7 +218,7 @@ export function rewriteReadsInCode(
  */
 export function freeIdentifiersIn(code: string): Set<string> {
   const names = new Set<string>();
-  const { parseExpression, traverse, types } = markoBabel();
+  const { parseExpression, traverse, types } = coreBabel();
 
   let parsed: Node;
   try {
@@ -262,7 +263,7 @@ export type DestructuredName = {
  * from.
  */
 export function destructuredNames(pattern: string): DestructuredName[] | null {
-  const { parseExpression } = markoBabel();
+  const { parseExpression } = coreBabel();
   let parsed: Node;
   try {
     // A pattern is not an expression on its own; an assignment's left-hand

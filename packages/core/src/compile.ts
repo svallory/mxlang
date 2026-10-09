@@ -18,6 +18,7 @@
 import { realpathSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { type AtomFacts, emptyAtomFacts } from "./atom-contracts.ts";
+import { coreBabel } from "./babel.ts";
 import { rejectShadowedRegistration } from "./builtin-tags.ts";
 import { annotateCloseTagOpener } from "./close-tag-opener.ts";
 import { type ClaimedFields, claimedFields } from "./contract-fields.ts";
@@ -47,7 +48,7 @@ import type { Policy } from "./declarations.ts";
 import type { Ir } from "./ir.ts";
 import { nullPrototypeTags } from "./lookup-safety.ts";
 import { lower } from "./lower.ts";
-import { markoBabel, markoCompiler } from "./marko-frontend.ts";
+import { markoCompiler } from "./marko-frontend.ts";
 import {
   compileErrorOf,
   parseMx,
@@ -234,7 +235,7 @@ let current: {
  * shape and options across a version bump.
  */
 export function printExpression(node: Node): string {
-  const { generator } = markoBabel();
+  const { generator } = coreBabel();
   return generator(node, { concise: true }).code;
 }
 

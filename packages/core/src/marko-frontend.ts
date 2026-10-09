@@ -7,15 +7,14 @@
  * (`@mxlang/parser/frontend`, `mx-parse.ts`), not with this layer, and so
  * does `@mxlang/data`'s tag scan (`parseMxDocument`): no production call site
  * compiles or parses a template with `@marko/compiler`. What is still loaded
- * here is the taglib lookup (`taglib.buildLookup`), Marko's Babel (printing,
- * `transform-typescript` for `stripTypes`, `codeFrameColumns`), the error kit
- * (`markoErrorKit`) that rebuilds Marko's `CompileError`s, and, in the
+ * here is the taglib lookup (`taglib.buildLookup`) and, in the
  * dist only, the bundle's copy of MX's template parser for the syntax table
  * (`mxTemplateParser`). The error-path re-lexes use `@mxlang/parser/lexer`
- * directly (PR 6 slice S2). Nothing calls `compileSync`
- * (`parseFragmentNative` delegates to `parseFragment`). The whole file goes
- * with the Marko
- * readers in PR 6 (decision 158).
+ * directly (PR 6 slice S2); printing, the TS strip, code frames and the
+ * error kit use core's own Babel (`babel.ts`, slice S1), and `markoBabel()`
+ * is left only for the differential in `babel.test.ts`. Nothing calls
+ * `compileSync` (`parseFragmentNative` delegates to `parseFragment`). The
+ * whole file goes with the Marko readers in PR 6 (decision 197, slice S5).
  *
  * Decision 159. Until then core's build bundles that layer into
  * `dist/marko-frontend.cjs`, with the `htmljs-parser` specifier resolved to
@@ -81,8 +80,6 @@ interface Frontend {
   babel: MarkoBabel;
   /** MX's template parser: `build/frontend.ts` resolves `htmljs-parser` to it. */
   htmljsParser: unknown;
-  kleur: MarkoColors;
-  markoModules: { cwd: string };
 }
 
 const require = createRequire(import.meta.url);
@@ -145,33 +142,4 @@ export interface MxTemplateParser {
   ): { parse(source: string): void };
   validateSyntaxTable(table: unknown): SyntaxDiagnostic[];
   DEFAULT_SYNTAX: SyntaxTable;
-}
-
-/** `kleur/colors` as `@marko/compiler` loads it: its error frames' colours. */
-export interface MarkoColors {
-  cyan(text: string | number): string;
-  yellow(text: string | number): string;
-}
-
-/**
- * What `@marko/compiler`'s `CompileError` reads besides Babel: `kleur/colors`
- * and `@marko/compiler/modules`' `cwd` (its file names are relative to it).
- * Kept so a parse error the MX front end reports is Marko's error to the byte
- * until the error texts are MX's own (`mx-parse.ts`).
- */
-export function markoErrorKit(): {
-  kleur: MarkoColors;
-  cwd: string;
-} {
-  return typeof MX_MARKO_FRONTEND === "string"
-    ? {
-        kleur: bundledFrontend(MX_MARKO_FRONTEND).kleur,
-        cwd: bundledFrontend(MX_MARKO_FRONTEND).markoModules.cwd,
-      }
-    : {
-        kleur: createRequire(require.resolve("@marko/compiler"))(
-          "kleur/colors",
-        ) as MarkoColors,
-        cwd: (require("@marko/compiler/modules") as { cwd: string }).cwd,
-      };
 }

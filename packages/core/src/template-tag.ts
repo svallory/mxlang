@@ -12,9 +12,10 @@
  */
 
 import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { coreBabel } from "./babel.ts";
 import { CALLEE_INPUT_ERROR } from "./callee-input-error.ts";
 import type { Ctx, Node } from "./core.ts";
-import { isTranslateError, markoBabel, TranslateError, warn } from "./core.ts";
+import { isTranslateError, TranslateError, warn } from "./core.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { Ir, IrNode } from "./ir.ts";
 
@@ -367,7 +368,7 @@ export function inputMember(
 ): { name: string; content: boolean } | "dynamic" | null {
   let expr: Node;
   try {
-    expr = markoBabel().parseExpression(code.trim(), FRAGMENT_OPTIONS);
+    expr = coreBabel().parseExpression(code.trim(), FRAGMENT_OPTIONS);
   } catch {
     return null;
   }
@@ -389,7 +390,7 @@ export function inputMember(
   // does.
   let real = true;
   try {
-    const { traverse, types: t } = markoBabel();
+    const { traverse, types: t } = coreBabel();
     const program = t.program([t.expressionStatement(expr)]);
     traverse(program, {
       Identifier(path: Node) {
@@ -427,7 +428,7 @@ const FRAGMENT_OPTIONS = {
  * syntax error as a statement.
  */
 function parseSnippet(code: string): Node {
-  const { parse } = markoBabel();
+  const { parse } = coreBabel();
   try {
     return parse(code, FRAGMENT_OPTIONS);
   } catch (error) {
@@ -454,7 +455,7 @@ const mentionsInput = (code: string): boolean => /\binput\b/.test(code);
 function spreadsInput(code: string): boolean {
   let found = false;
   try {
-    const { traverse } = markoBabel();
+    const { traverse } = coreBabel();
     const expr = parseSnippet(code);
     traverse(expr, {
       SpreadElement(path: Node) {
@@ -508,7 +509,7 @@ function scanAstForInputMembers(ast: Node): InputScan {
   const members: Array<{ name: string; content: boolean }> = [];
   let dynamic = false;
   {
-    const { traverse } = markoBabel();
+    const { traverse } = coreBabel();
     traverse(ast, {
       // A bare `input` that is not the object of a member read hands the whole
       // object on — returned, assigned, passed to a call, spread into a
@@ -622,7 +623,7 @@ function destructuredInputMembers(
   const none = { names: [], members: [], dynamic: false, handled: false };
   if (initCode.trim() !== "input") return none;
   try {
-    const ast = markoBabel().parse(
+    const ast = coreBabel().parse(
       `(${patternCode.trim()} = 0)`,
       FRAGMENT_OPTIONS,
     );
@@ -763,7 +764,7 @@ export function metadataOfIr(
 /** Records an authored default import so discovery can reuse it by path. */
 export function registerAuthoredTemplateImport(ctx: Ctx, code: string): void {
   try {
-    const declaration = markoBabel().parse(code, {
+    const declaration = coreBabel().parse(code, {
       sourceType: "module",
     }).program.body[0];
     if (declaration?.type !== "ImportDeclaration") return;

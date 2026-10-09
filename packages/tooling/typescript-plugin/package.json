@@ -15,13 +15,14 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts src/ng-worker.ts --outdir dist --target node --format cjs --entry-naming '[dir]/[name].cjs' --define import.meta.url=__mxImportMetaUrl --define __filename=__mxFilename --define __dirname=__mxDirname --banner 'var __mxImportMetaUrl = require(\"node:url\").pathToFileURL(__filename).href, __mxFilename = __filename, __mxDirname = __dirname;' --external @angular/compiler --external @angular/compiler-cli --external @astrojs/compiler --external @astrojs/language-server --external @marko/compiler --external @mxlang/core --external @mxlang/tsx-bridge --external @volar/language-core --external @volar/typescript --external typescript && bun build/cjs-factory.ts && bun ../../../scripts/bundled-build.ts dist/*.cjs && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist && bun build/strip-ng-declarations.ts dist",
+    "build": "rm -rf dist && bun build src/index.ts src/ng-worker.ts --outdir dist --target node --format cjs --entry-naming '[dir]/[name].cjs' --define import.meta.url=__mxImportMetaUrl --define __filename=__mxFilename --define __dirname=__mxDirname --banner 'var __mxImportMetaUrl = require(\"node:url\").pathToFileURL(__filename).href, __mxFilename = __filename, __mxDirname = __dirname;' --external @angular/compiler --external @angular/compiler-cli --external @babel/parser --external @astrojs/compiler --external @astrojs/language-server --external @marko/compiler --external @mxlang/core --external @mxlang/tsx-bridge --external @volar/language-core --external @volar/typescript --external typescript && bun build/cjs-factory.ts && bun ../../../scripts/bundled-build.ts dist/*.cjs && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist && bun build/strip-ng-declarations.ts dist",
     "build:bundled": "bun build/bundled.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
     "@astrojs/compiler": "2.13.1",
+    "@babel/parser": "7.29.8",
     "@jridgewell/sourcemap-codec": "1.6.0",
     "@mxlang/angular": "workspace:*",
     "@mxlang/astro": "workspace:*",

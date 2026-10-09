@@ -11,6 +11,7 @@
  */
 
 import { readFileSync } from "node:fs";
+import * as babelParser from "@babel/parser";
 import {
   type CompileResult,
   type Ctx,
@@ -20,7 +21,6 @@ import {
   type Ir,
   type IrNode,
   type MxWarning,
-  markoBabel,
   moduleExportName,
   type Position,
   type TargetLookup,
@@ -154,8 +154,8 @@ interface InputProp {
 /**
  * Every top-level identifier the given module-level statements bind.
  *
- * Parsed with Babel — the same `@marko/compiler/internal/babel` instance the
- * rest of this file uses — rather than scanned as text: an emitted alias is
+ * Parsed with `@babel/parser` — the parser the rest of this file uses —
+ * rather than scanned as text: an emitted alias is
  * only correct if the set is, and a regex over `import`/`export` lines misses
  * a destructuring pattern, a multi-declarator `const`, and an aliased named
  * import, each of which binds a name that can collide.
@@ -169,7 +169,7 @@ function collectAuthoredIdentifiers(statements: string[]): Set<string> {
   const names = new Set<string>();
   if (statements.length === 0) return names;
 
-  const babel = markoBabel() as {
+  const babel = babelParser as unknown as {
     parse(source: string, options: unknown): BabelFile;
   };
 
@@ -249,8 +249,8 @@ function uniqueName(base: string, taken: ReadonlySet<string>): string {
 /**
  * Parses the property list of an `export interface Input { … }`.
  *
- * Babel's own TypeScript parse, through `@marko/compiler/internal/babel` —
- * the same instance `packages/core` uses, never a second Babel. Each
+ * Babel's own TypeScript parse (`@babel/parser`, the parser `packages/core`
+ * uses too). Each
  * property's type is taken as the **verbatim source slice** of its type
  * annotation rather than re-printed from the AST, so the emitted `@Input()`
  * keeps the author's exact spelling.
@@ -265,7 +265,7 @@ function parseInputProps(
   node: Extract<IrNode, { kind: "InputInterface" }>,
 ): InputProp[] {
   const code = node.code;
-  const babel = markoBabel() as {
+  const babel = babelParser as unknown as {
     parse(source: string, options: unknown): BabelFile;
   };
 
@@ -499,7 +499,7 @@ function rewriteInputReads(body: IrNode[], ctx: Ctx): void {
     const text = params.filter((p) => typeof p === "string").join(", ");
     if (!text) return false;
     try {
-      const babel = markoBabel() as {
+      const babel = babelParser as unknown as {
         parseExpression(source: string, options?: unknown): unknown;
       };
       const arrow = babel.parseExpression(`(${text}) => 0`, {

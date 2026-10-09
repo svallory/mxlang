@@ -1,14 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { markoBabel } from "./core.ts";
+import { coreBabel } from "./babel.ts";
 import { printExpression } from "./index.ts";
 
 /**
- * `printExpression` prints with Marko's own bundled Babel generator
- * (`markoBabel().generator`) — the same instance that parses Marko's nodes
- * in the first place. A node from any other Babel instance is not
- * guaranteed to print correctly here; these fixtures parse with
- * `markoBabel().parseExpression` so the node under test is one Marko itself
- * produced.
+ * `printExpression` prints with core's own Babel generator
+ * (`coreBabel().generator`, decision 197); these fixtures parse with
+ * `coreBabel().parseExpression`, the parser lowering uses beside the front
+ * end's.
  *
  * Imported from `./index.ts`, not `./compile.ts`, so this pins the public
  * entry point every host actually calls through: deleting the re-export
@@ -17,18 +15,18 @@ import { printExpression } from "./index.ts";
  */
 describe("printExpression", () => {
   it("prints a member expression back to source text", () => {
-    const node = markoBabel().parseExpression("a.b");
+    const node = coreBabel().parseExpression("a.b");
     expect(printExpression(node)).toBe("a.b");
   });
 
   it("prints an object literal", () => {
-    const node = markoBabel().parseExpression('{ a: 1, b: "x" }');
+    const node = coreBabel().parseExpression('{ a: 1, b: "x" }');
     expect(printExpression(node)).toBe('{ a: 1, b: "x" }');
   });
 
   it("is the same function `newCtx` receives from `compileSource`'s translate visitor", () => {
-    const { generator } = markoBabel();
-    const node = markoBabel().parseExpression("a.b");
+    const { generator } = coreBabel();
+    const node = coreBabel().parseExpression("a.b");
     expect(printExpression(node)).toBe(generator(node, { concise: true }).code);
   });
 });

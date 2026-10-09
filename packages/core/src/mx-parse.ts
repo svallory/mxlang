@@ -24,9 +24,9 @@
 import { relative } from "node:path";
 import { parse as mxFrontEndParse } from "@mxlang/parser/frontend";
 import { strippedMethodTypeParams } from "./attr-fields.ts";
+import { coreBabel } from "./babel.ts";
 import type { Lookup } from "./compile.ts";
 import { type Node, TranslateError } from "./core.ts";
-import { markoBabel, markoErrorKit } from "./marko-frontend.ts";
 import type { SyntaxTable } from "./syntax-table.ts";
 
 /** The six statement keywords of the language (decision 168). */
@@ -429,7 +429,7 @@ function buildMessage(code: string, loc: Loc, message: string): string {
     end = Math.max(Math.min(end, to), start) + shift - from;
     start += shift - from;
   }
-  return markoBabel().codeFrameColumns(
+  return coreBabel().codeFrameColumns(
     framed.join("\n"),
     { start: { line, column: start + 1 }, end: { line, column: end + 1 } },
     {
@@ -442,9 +442,54 @@ function buildMessage(code: string, loc: Loc, message: string): string {
   );
 }
 
+// `kleur/colors` 4.1.5 as `@marko/compiler` used it: whether colours are on
+// (read once, at load), and its `cyan`/`yellow` wrappers.
+const COLOR = (() => {
+  if (typeof process === "undefined") return true;
+  const { FORCE_COLOR, NODE_DISABLE_COLORS, NO_COLOR, TERM } =
+    process.env ?? {};
+  return (
+    !NODE_DISABLE_COLORS &&
+    NO_COLOR == null &&
+    TERM !== "dumb" &&
+    ((FORCE_COLOR != null && FORCE_COLOR !== "0") ||
+      Boolean(process.stdout?.isTTY))
+  );
+})();
+
+function sgr(open: number, close: number): (text: string | number) => string {
+  const closer = `\u001b[${close}m`;
+  const opener = `\u001b[${open}m`;
+  return (text) => {
+    if (!COLOR) return String(text);
+    const value = String(text);
+    return (
+      opener +
+      (value.includes(closer)
+        ? value.replaceAll(closer, closer + opener)
+        : value) +
+      closer
+    );
+  };
+}
+
+const cyan = sgr(36, 39);
+const yellow = sgr(33, 39);
+
+/**
+ * `@marko/compiler/modules`' `cwd`: `process.cwd()` when the process has one,
+ * read once at load (file names in a frame are relative to it).
+ */
+const CWD = (() => {
+  try {
+    return typeof process?.cwd === "function" ? process.cwd() : "/";
+  } catch {
+    return "/";
+  }
+})();
+
 function buildFileName(filename: string, loc: Loc): string {
-  const { kleur, cwd } = markoErrorKit();
-  return `${kleur.cyan(relative(cwd, filename))}:${kleur.yellow(loc.start.line)}:${kleur.yellow(loc.start.column + 1)}`;
+  return `${cyan(relative(CWD, filename))}:${yellow(loc.start.line)}:${yellow(loc.start.column + 1)}`;
 }
 
 function noop(): void {}
@@ -577,7 +622,7 @@ let stripVisitor: Node | undefined;
 /** The TS plugin's visitor, built once (Marko caches it the same way). */
 function typeScriptVisitor(): Node {
   if (stripVisitor) return stripVisitor;
-  const babel = markoBabel();
+  const babel = coreBabel();
   const api = {
     version: "7.29.0",
     types: babel.types,
@@ -603,7 +648,7 @@ function typeScriptVisitor(): Node {
 
 /** Runs the TS plugin over `body` as one program; returns the program's body after it. */
 function stripProgram(body: Node[]): Node[] {
-  const babel = markoBabel();
+  const babel = coreBabel();
   const t = babel.types;
   const program = t.program(body, [], "module");
   const file = new babel.File(
@@ -674,7 +719,7 @@ function recordImportDeclaration(statement: Node): void {
   if (body[0]?.type !== "ImportDeclaration") return;
   parsedImportDeclarations.set(
     statement,
-    markoBabel().types.cloneNode(body[0], true),
+    coreBabel().types.cloneNode(body[0], true),
   );
 }
 
@@ -682,7 +727,7 @@ const TYPE_CONTAINERS = new Set(["MxTypeArguments", "MxTypeParameters"]);
 
 /** Strips TypeScript from every payload of `document`, as Marko's `stripTypes` did. */
 export function stripMxTypes(document: Node): void {
-  const t = markoBabel().types;
+  const t = coreBabel().types;
   const seen = new Set<unknown>();
   const visit = (value: Node): void => {
     if (value === null || typeof value !== "object" || seen.has(value)) return;

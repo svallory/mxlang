@@ -40,13 +40,13 @@ import type {
 } from "./atom-contracts.ts";
 import { checkAtomContracts } from "./atom-contracts.ts";
 import { attrArgsOf, attrNameOf, isDefaultAttr } from "./attr-fields.ts";
+import { coreBabel } from "./babel.ts";
 import type { CalleeInput } from "./callee-input.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import { nearestHtmlElement, nearestName } from "./did-you-mean.ts";
 import type { Atom, Expr, IrNode, Position } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
-import { markoBabel } from "./marko-frontend.ts";
 import { markoViewOf } from "./marko-view.ts";
 import { sugarAfterDefaultError } from "./stock-parser.ts";
 import type { SyntaxModule } from "./syntax-table.ts";
@@ -61,19 +61,6 @@ import {
 } from "./tag-fields.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
 import { childrenWithTriggers } from "./triggers.ts";
-
-/**
- * Marko's own bundled Babel — parser, traverse and types in one module.
- *
- * The core parses JS in two places (an `import` statement's bindings, and an
- * expression whose identifier references a host may rewrite). Both used
- * `@mxlang/tsx-bridge`'s vendored Babel while this file lived in the translator,
- * which made the string host depend on the *Solid host parser* package for a
- * plain `parse` call. `@marko/compiler` already bundles a full Babel, and
- * these nodes belong to that instance anyway — so the core asks it. Loaded
- * lazily through `marko-frontend.ts` (decision 159: bundled into core's dist).
- */
-export { markoBabel };
 
 /**
  * Raised for a construct that parses as Marko but has no string lowering.
@@ -1064,7 +1051,7 @@ function rewriteReferencesSource(
     return rewrite ? rewrite(node.name) : ctx.source.slice(exprStart, exprEnd);
   }
 
-  const { types, traverse } = markoBabel();
+  const { types, traverse } = coreBabel();
   // `traverse` needs a Program to walk, and these nodes came out of Marko's
   // own Babel instance, so its bundled traverse is the one that knows them.
   const file = types.file(
@@ -1132,7 +1119,7 @@ function rewriteReferencesSource(
  * Fallback node rewriter for synthetic nodes (which lack `start`/`end`).
  */
 function rewriteReferences(ctx: Ctx, node: Node): Node {
-  const { types, traverse, parseExpression } = markoBabel();
+  const { types, traverse, parseExpression } = coreBabel();
   const clone = types.cloneNode(node, true);
   if (clone.type === "Identifier") {
     const rewrite = ctx.bindings.get(clone.name);
@@ -1203,7 +1190,7 @@ export function sliceLoc(ctx: Ctx, loc: Node): string {
  */
 export function importBindings(line: string): string[] {
   try {
-    const file = markoBabel().parse(line, {
+    const file = coreBabel().parse(line, {
       sourceType: "module",
       plugins: ["typescript"],
     });
@@ -1238,7 +1225,7 @@ export function importBindings(line: string): string[] {
 export function importTypeOnlyBindings(line: string): Set<string> {
   const typeOnly = new Set<string>();
   try {
-    const file = markoBabel().parse(line, {
+    const file = coreBabel().parse(line, {
       sourceType: "module",
       plugins: ["typescript"],
     });
@@ -1292,7 +1279,7 @@ export function importedNames(
   line: string,
 ): { source: string; names: ImportedName[] } | null {
   try {
-    const file = markoBabel().parse(line, { sourceType: "module" });
+    const file = coreBabel().parse(line, { sourceType: "module" });
     const declaration = file.program.body[0] as Node;
     if (declaration?.type !== "ImportDeclaration") return null;
     const source = declaration.source?.value;
@@ -1341,7 +1328,7 @@ export function isMarkoOrMxSpecifier(specifier: string): boolean {
  * lowers dynamic). Deliberately narrow: no alias-chasing through another
  * identifier, no evaluating a call's return shape — those are exactly the
  * "unknown" cases the ruling calls out. `node` is a Babel expression/
- * declaration node (from `markoBabel()`'s parse of a `static` line, or a
+ * declaration node (from `coreBabel()`'s parse of a `static` line, or a
  * `<const>`'s raw value node before `exprOf`), not core's own `Expr`.
  */
 export function isFunctionLikeValue(node: Node | null | undefined): boolean {

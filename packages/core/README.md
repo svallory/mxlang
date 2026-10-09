@@ -122,50 +122,28 @@ tested:
 
 ## Which Babel the core uses
 
-Two places need a JS parser: `importBindings()` (an `import` statement's local
-binding names, which decide whether a tag is a component call) and the binding
-rewrite above (walk an expression, replace references, re-parse the host's
-returned source text). Both use **`@marko/compiler/internal/babel`**, required
-lazily inside `markoBabel()` in `src/core.ts`, for `parse`, `parseExpression`,
-`traverse` and `types`.
+Lowering parses, walks, prints and strips TypeScript with stock Babel
+packages (decision 197): `@babel/parser` for `parse`/`parseExpression`,
+`@babel/core`'s own `traverse`, `types` and `File`, `@babel/generator`,
+`@babel/code-frame` and `@babel/plugin-transform-typescript`. They are
+exact-pinned runtime dependencies (not bundled), loaded lazily in
+`src/babel.ts` (`coreBabel()`), so importing core loads no Babel. `traverse`,
+`types` and `File` come from `@babel/core` so the TS strip's file, its paths
+and the walk over them are one instance whatever an install dedupes. The
+published `.d.ts` names no `@babel/*` type: nodes are untyped (`Node`) at
+core's boundary. The MX front end parses payloads with its own fork
+(`@mxlang/babel`); Babel's helpers dispatch on `node.type`, so they read
+those nodes like their own.
 
-It is a **subpath export of `@marko/compiler`**, declared in that package's own
-`exports` map — reachable by design, not a deep `node_modules` path — but the
-`internal/` segment says plainly that its *contents* are the compiler's business,
-not a semver-stable API. Three reasons that is the right trade here rather than a
-second Babel dependency:
+Until PR 6 core used `@marko/compiler`'s bundled Babel (7.29.7, patched for
+Marko's own node types, which MX payloads never are); `src/babel.test.ts`
+pins that the stock generator prints every payload of the repo's `.mx`
+corpus as Marko's did.
 
-- **The nodes already belong to that instance.** Marko's compiler uses its own
-  bundled Babel and registers `MarkoTag` and friends on it, and the Marko-shaped
-  views the host hooks receive belong to it; `traverse` from any
-  *other* `@babel/traverse` refuses a visitor for those types outright, because
-  it snapshots `TYPES` at module load (measured in
-  `notes/research/marko-seam-spikes.md` spike 2 — registering Marko's types on a
-  second instance updates the mutable registries but not the derived `is*`,
-  generator or traverse tables). Asking a second Babel to walk these nodes is
-  not "safer", it is broken.
-- **The version is pinned exactly.** `@marko/compiler` is `5.42.11` with no
-  range, here and in every consumer (AGENTS.md "Exact-pin policy"), so the
-  surface cannot shift under us without a deliberate bump — and a bump is the
-  moment to re-check it, which is true of the AST shapes this package consumes
-  from the same instance anyway.
-- **The alternative is worse.** Adding `@babel/parser` + `@babel/traverse` as
-  real dependencies buys a second copy of Babel, a second version to keep in
-  step, and the cross-instance problem above. `@mxlang/html` used to reach
-  for `@mxlang/tsx-bridge` (the *Solid parser* package, a vendored `@babel/parser`
-  fork) for exactly one `parse` call; dropping that left core with `@babel/parser` as its only runtime
-  dependency.
-
-If a future `@marko/compiler` removes or reshapes that subpath, the blast radius
-is `markoBabel()` — one function, four named values — and the failure is a
-missing export at require time, not silent wrong output.
-
-**`printExpression(node)` is a public export** for the same reason: printing a
-Marko-owned expression node back to source text needs the same generator
-instance that parsed it, for the reasons above, so every host needing this
-prints through the one function `newCtx`'s `translate` visitor already uses,
-rather than reaching into `@marko/compiler/internal/babel` (or a different
-Babel instance's own generator) a second time per host. `@mxlang/solid` used
+**`printExpression(node)` is a public export**: the generator is part of the
+byte contract, so every host prints an expression node back to source text
+through the one function `newCtx`'s `translate` visitor already uses, rather
+than with its own Babel generator. `@mxlang/solid` used
 to carry its own copy over `@babel/generator` — a *different* Babel instance
 from the one that parsed the node — before switching to this export.
 

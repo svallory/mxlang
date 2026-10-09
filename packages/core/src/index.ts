@@ -209,17 +209,12 @@ export {
   type SourceSpan,
 } from "./mapping.ts";
 /**
- * Marko's parse layer, the one instance core compiles with (decision 159: in
- * core's dist, `@marko/compiler` bundled with MX's own template parser). Every
- * package that needs the compiler, its Babel or its parser asks here, so one
- * compiler loads per process.
+ * Marko's taglib lookup, the one instance core builds it with (decision 159:
+ * in core's dist, `@marko/compiler` bundled with MX's own template parser).
+ * Every package that needs it asks here, so one compiler loads per process.
+ * Removed with the lookup (decision 197, PR 6 slice S3b).
  */
-export {
-  type MarkoBabel,
-  type MarkoCompiler,
-  markoBabel,
-  markoCompiler,
-} from "./marko-frontend.ts";
+export { type MarkoCompiler, markoCompiler } from "./marko-frontend.ts";
 export { sugarTagName } from "./name-sugar.ts";
 export { dropOwnParserPosition } from "./parse-error-position.ts";
 export {

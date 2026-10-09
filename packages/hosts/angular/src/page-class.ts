@@ -14,9 +14,10 @@
  * component class) answers `unknown`, and the caller keeps the warning —
  * a redundant hint is cheaper than a silent missing member.
  */
+
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
-import { markoBabel } from "@mxlang/core";
+import * as babelParser from "@babel/parser";
 import { ALL_HELPER_NAMES, RUNTIME_SPECIFIER } from "./emitter.ts";
 
 /** One component class in the file, and which invoker members it lacks. */
@@ -74,7 +75,7 @@ export function inspectPageClass(
 ): PageClassInspection {
   try {
     const source = readFileSync(classFile, "utf8");
-    const babel = markoBabel() as {
+    const babel = babelParser as unknown as {
       parse(source: string, options: unknown): unknown;
     };
     const file = babel.parse(source, {

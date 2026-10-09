@@ -23,11 +23,11 @@
  * the seams (`payloadOf`, `lowerChildList`, the attribute list) with "has no
  * lowering yet".
  */
+import { coreBabel } from "./babel.ts";
 import {
   type Ctx,
   fail,
   isTranslateError,
-  markoBabel,
   type Node,
   positionAtOffset,
 } from "./core.ts";
@@ -267,7 +267,7 @@ function describeValue(value: unknown): string {
  * one (`Identifier.name`) may not.
  */
 function notAnExpression(value: unknown): string | undefined {
-  const t = markoBabel().types;
+  const t = coreBabel().types;
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return describeValue(value);
   }

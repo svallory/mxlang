@@ -89,9 +89,8 @@ Five facts worth knowing before editing it:
   their own positioned errors, unrelated to and unaffected by this change.
 
 - **Marko's parse layer is loaded in one place, `src/marko-frontend.ts`, and
-  bundled into the dist (decision 159).** `markoCompiler()` and `markoBabel()`
-  (both public) are the only way core, the hosts, data and the tools reach
-  `@marko/compiler` or its Babel: never
+  bundled into the dist (decision 159).** `markoCompiler()` (public) is the
+  only way core, data and the tools reach `@marko/compiler`: never
   `require("@marko/compiler...")` elsewhere, or a second compiler instance
   loads (separate taglib caches, compile state and Babel nodes). From source
   they resolve the workspace's `@marko/compiler` (patched npm `htmljs-parser`).
@@ -107,29 +106,28 @@ Five facts worth knowing before editing it:
   that inlines core's dist (the VSIX builds) gets `marko-frontend.cjs` copied
   beside it by `scripts/bundled-build.ts`. Since PR 5 no production call
   site compiles or parses a template with `@marko/compiler`: it serves the
-  taglib lookup (`taglib.buildLookup`), Marko's Babel (printing,
-  `transform-typescript`, `codeFrameColumns`) and the error kit
-  (`markoErrorKit`). The error-path re-lexes (`stock-parser.ts` `lexedAtoms`/
+  taglib lookup (`taglib.buildLookup`) only (Babel and the error kit are
+  core's own since PR 6 slice S1). The error-path re-lexes (`stock-parser.ts` `lexedAtoms`/
   `tagParamError`/`sugarAfterDefaultError`, `close-tag-opener.ts`) and
   name-sugar's `isShorthandWord` probe import MX's template lexer,
   `@mxlang/parser/lexer` (typed by its `public.d.ts`), from source and in the
   dist alike (PR 6 slice S2). The public `parseFragmentNative` now delegates to `parseFragment`.
   Deleted with the Marko readers (PR 6, decision 158).
-- **Its JS parsers are Marko's own Babel (`markoBabel()`) and `@babel/parser`.**
-  `core.ts` used to parse
-  an `import` line with `@mxlang/tsx-bridge` — the *Solid parser* package — for a
-  single `parse` call. It now asks `@marko/compiler/internal/babel`
-  (`parse`/`parseExpression`/`traverse`/`types`, all present), which is also
-  the instance Marko's own nodes belong to. Do not reintroduce a second Babel.
-  **`printExpression(node): string`** (`compile.ts`, public from `@mxlang/core`)
-  is the one function that prints a Marko-owned expression node back to source
-  text, with that same generator instance — it is what `compileSource`'s
-  `translate` visitor hands `newCtx` as its `generate` argument, and every
-  host printing an expression back to text should call this rather than
-  reaching for its own Babel generator. `@mxlang/solid` used to carry its own
-  copy (`generateExpression`, over `@babel/generator` — a different Babel
-  instance from the one that parsed the node) before switching to this
-  export.
+- **Its Babel is stock `@babel/*`, exact-pinned runtime dependencies, loaded
+  lazily by `src/babel.ts` (`coreBabel()`; decision 197, PR 6 slice S1).**
+  `parse`/`parseExpression` are `@babel/parser`; `traverse`, `types` and
+  `File` come from `@babel/core` (one instance for the TS strip);
+  `generator`, `codeFrameColumns` and `pluginTransformTypeScript` from their
+  packages. They are `--external` in the build, and no `.d.ts` names a
+  `@babel/*` type. Do not add a second Babel. **`printExpression(node):
+  string`** (`compile.ts`, public) is the one function that prints an
+  expression node back to source text; it is what `compileSource`'s
+  `translate` visitor hands `newCtx` as `generate`, and every host printing
+  an expression should call it rather than its own generator. The error kit
+  (`mx-parse.ts`: kleur 4.1.5's `cyan`/`yellow` SGR rule and
+  `@marko/compiler/modules`' `cwd`, `process.cwd()`) is ported, so
+  `CompileError` text is byte-identical. `babel.test.ts` pins the stock
+  generator and code frame against Marko's until S5 removes the bundle.
 - **`callee-input.ts` is the synchronous, syntactic cross-file reader for a
   component's `Input`** (decisions 106 and 107). It resolves discovered and
   imported callees, parses complete TS/TSX modules with `@babel/parser`'s
