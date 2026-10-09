@@ -126,6 +126,7 @@ import {
   type ScriptletDeclaration,
   scriptletSentence,
 } from "./parse-error-hints.ts";
+import { payloadOf } from "./payload.ts";
 import { checkReservedTemplate } from "./reserved-bindings.ts";
 import { parseErrorToSugarError } from "./stock-parser.ts";
 import { CONTROL_FLOW_TAGS } from "./structural-tags.ts";
@@ -687,9 +688,17 @@ const FOREIGN_ATTR_HINTS: [
  * A scriptlet that does not parse is kept as its source text.
  */
 function declaredVariable(scriptlet: Node): ScriptletDeclaration | undefined {
-  const first = scriptlet.body?.[0];
+  // An MX scriptlet's statements are its `code` container's payload; one the
+  // front end could not parse has only its source, read as Marko's is. The
+  // scriptlet is refused either way, so its own message wins over the
+  // container's error or trigger: no `payloadOf` here.
+  const body =
+    scriptlet.type === "MxScriptlet"
+      ? (scriptlet.code.node ?? [{ source: scriptlet.code.source }])
+      : scriptlet.body;
+  const first = body?.[0];
   if (typeof first?.source === "string") return declaredBinding(first.source);
-  if (scriptlet.body?.length !== 1) return undefined;
+  if (body?.length !== 1) return undefined;
   const declarations = first?.declarations;
   const id = declarations?.length === 1 ? declarations[0]?.id : undefined;
   return id?.type === "Identifier" &&
@@ -4380,11 +4389,15 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
           break;
         case "MarkoPlaceholder":
         case "MxPlaceholder": {
-          const interpolation = exprOf(ctx, child.value);
+          const value =
+            child.type === "MxPlaceholder"
+              ? payloadOf(child.expression)
+              : child.value;
+          const interpolation = exprOf(ctx, value);
           rejectUncalledParameterizedAttributeTag(
             ctx,
             interpolation.code,
-            child.value,
+            value,
           );
           out.push({
             kind: "Interpolation",
@@ -4425,10 +4438,14 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
         case "MxComment":
           // Marko strips the delimiters, so an HTML comment and a `//` line
           // comment are indistinguishable by value alone; the source decides.
+          // MX records which one it read.
           out.push({
             kind: "Comment",
             value: child.value,
-            html: sliceNode(ctx, child).startsWith("<!--"),
+            html:
+              child.type === "MxComment"
+                ? child.kind === "html"
+                : sliceNode(ctx, child).startsWith("<!--"),
             span: exprSpan(ctx, child),
             loc: posOf(ctx, child),
           });

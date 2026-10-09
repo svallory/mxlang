@@ -4377,9 +4377,13 @@ describe("a host that binds a dynamic tag's /var opts in", () => {
  *   offsets (`start`/`end`, `valueSpan`) and loses `loc`: text, placeholder,
  *   comment, doctype, CDATA, declaration, scriptlet and attribute tag.
  *
+ * - Slice 5: a placeholder's expression is an `MxExpression` container and a
+ *   scriptlet's statements an `MxStatements` one (`node` the Babel payload,
+ *   `error: null`, document offsets), with Marko's `value`/`body` gone; a
+ *   comment's `kind` comes from its delimiter.
+ *
  * Fields a later slice retypes stay Marko-shaped: a tag stays a `MarkoTag`
- * (slice 3), a placeholder keeps `value` beside its `expression` container
- * and a scriptlet its `body` beside `code` (slice 5).
+ * (slice 3).
  */
 function toMxShape(source: string): (body: Node[]) => void {
   const lineStarts = [0];
@@ -4394,6 +4398,20 @@ function toMxShape(source: string): (body: Node[]) => void {
     start: at(node.loc.start),
     end: at(node.loc.end),
   });
+  const container = (
+    type: string,
+    payload: Node,
+    inner: { start: number; end: number },
+    outer: { start: number; end: number },
+  ): Node => ({
+    type,
+    source: source.slice(inner.start, inner.end),
+    outer,
+    node: payload,
+    error: null,
+    atoms: [],
+    ...inner,
+  });
   const leaf = (node: Node): Node => {
     const { start, end } = offsets(node);
     switch (node.type) {
@@ -4407,11 +4425,12 @@ function toMxShape(source: string): (body: Node[]) => void {
           end,
         };
       case "MarkoPlaceholder": {
-        const { loc: _loc, ...rest } = node;
+        const { loc: _loc, value, ...rest } = node;
+        const inner = offsets(value);
         return {
           ...rest,
           type: "MxPlaceholder",
-          expression: { type: "MxExpression", node: node.value },
+          expression: container("MxExpression", value, inner, { start, end }),
           start,
           end,
         };
@@ -4427,15 +4446,40 @@ function toMxShape(source: string): (body: Node[]) => void {
             MarkoCDATA: "MxCDATA",
             MarkoDeclaration: "MxDeclaration",
           }[node.type as string],
-          ...(node.type === "MarkoComment" ? { kind: node.kind } : {}),
+          ...(node.type === "MarkoComment"
+            ? {
+                kind: source.startsWith("<!--", start)
+                  ? "html"
+                  : source.startsWith("//", start)
+                    ? "line"
+                    : "block",
+              }
+            : {}),
           value: node.value,
           valueSpan: { start, end },
           start,
           end,
         };
       case "MarkoScriptlet": {
-        const { loc: _loc, ...rest } = node;
-        return { ...rest, type: "MxScriptlet", start, end };
+        const { loc: _loc, body, ...rest } = node;
+        // The statements run from after `$` (and a block's `{`) to the end.
+        const head = /^\$\s*\{?\s*/.exec(source.slice(start, end))?.[0] ?? "";
+        const inner = {
+          start: start + head.length,
+          end: source[end - 1] === "}" && head.includes("{") ? end - 1 : end,
+        };
+        return {
+          ...rest,
+          type: "MxScriptlet",
+          block: head.includes("{"),
+          code: {
+            ...container("MxStatements", body, inner, { start, end }),
+            directives: [],
+            innerComments: [],
+          },
+          start,
+          end,
+        };
       }
       default:
         return node;
@@ -4788,5 +4832,252 @@ describe("hybrid node kinds and spans, MX-shaped (PR 4 slice 2)", () => {
       sourceStart: 7,
       sourceEnd: 10,
     });
+  });
+});
+
+describe("hybrid text, placeholders, comments and payloads, MX-shaped (PR 4 slice 5)", () => {
+  const mx = (source: string, policy = fakeDeclarations()) =>
+    lowerSource(
+      source,
+      policy,
+      undefined,
+      undefined,
+      undefined,
+      toMxShape(source),
+    );
+  const thrown = (run: () => unknown) => {
+    try {
+      run();
+    } catch (error) {
+      const e = error as TranslateError;
+      return { message: e.message, line: e.line, column: e.column };
+    }
+    throw new Error("no error thrown");
+  };
+  const ctxFor = (source: string) =>
+    newCtx(
+      source,
+      printExpression,
+      fakeDeclarations(),
+      undefined,
+      "test.mx",
+      lookup,
+    );
+  /** An `MxExpression` the way the MX front end builds one (probe, slice 5). */
+  const expression = (fields: Partial<Record<string, unknown>>): Node => ({
+    type: "MxExpression",
+    source: "",
+    outer: { start: 0, end: 0 },
+    node: null,
+    error: null,
+    atoms: [],
+    start: 0,
+    end: 0,
+    ...fields,
+  });
+  const parseError = (start: number, message = "Unexpected token") => ({
+    type: "MxParseError",
+    code: "BABEL_UnexpectedToken",
+    origin: "expression",
+    message,
+    context: null,
+    start,
+    end: start,
+  });
+
+  it("reshapes placeholders and scriptlets into containers, without Marko's fields", () => {
+    const source = "<div>${x}</div>\n$ const a = 1;";
+    let seen: Node[] = [];
+    try {
+      lowerSource(source, undefined, undefined, undefined, undefined, (b) => {
+        toMxShape(source)(b);
+        seen = b;
+      });
+    } catch {
+      // The scriptlet is refused; the reshaped body is what is checked.
+    }
+    const placeholder = seen[0].body.body[0];
+    expect(placeholder).not.toHaveProperty("value");
+    expect(placeholder.expression).toMatchObject({
+      type: "MxExpression",
+      source: "x",
+      outer: { start: 5, end: 9 },
+      start: 7,
+      end: 8,
+      error: null,
+      node: { type: "Identifier", name: "x" },
+    });
+    const scriptlet = seen[1];
+    expect(scriptlet).not.toHaveProperty("body");
+    expect(scriptlet).toMatchObject({ type: "MxScriptlet", block: false });
+    expect(scriptlet.code).toMatchObject({
+      type: "MxStatements",
+      source: "const a = 1;",
+      start: 18,
+      error: null,
+      node: [{ type: "VariableDeclaration", kind: "const" }],
+    });
+  });
+
+  it.each([
+    ["an escaped and an unescaped placeholder", "<p>${a} $!{b}</p>"],
+    ["a placeholder at the top level", "${a}\n<p/>"],
+    [
+      "placeholder shapes (object, array, string)",
+      "<p>${{ a }}${[1]}${`t`}</p>",
+    ],
+    ["a placeholder in an attribute tag", "<Panel><@item>${x}</@item></Panel>"],
+    ["a placeholder in an if chain", "<if=a>${b}</if><else>${c}</else>"],
+    [
+      "html, line and block comments",
+      "<!-- h -->\n<div>\n  // l\n  /* b */\n  <span/>\n</div>",
+    ],
+    ["a comment beside text and a placeholder", "<p>a <!-- c --> ${b}</p>"],
+  ])("lowers %s to the IR the Marko shape lowers to", (_label, source) => {
+    const policy = fakeDeclarations({
+      attrTags: 2,
+      isComponent: (name) => name === "Panel",
+    });
+    expect(mx(source, policy)).toEqual(lowerSource(source, policy));
+  });
+
+  it.each([
+    ["a const", "<div>\n  $ const a = 1;\n</div>"],
+    ["a let", "$ let b = f()\n<p/>"],
+    ["a block", "$ { const c = 1 }\n<p/>"],
+    ["a call (no hint)", "$ f()\n<p/>"],
+    ["two statements (no hint)", "$ const a = 1; const b = 2;\n<p/>"],
+  ])(
+    "refuses a scriptlet declaring %s as the Marko shape does",
+    (_l, source) => {
+      expect(thrown(() => mx(source))).toEqual(
+        thrown(() => lowerSource(source)),
+      );
+    },
+  );
+
+  it("reads a comment's kind, not its source, on the MX path", () => {
+    // The source says HTML comment; `kind` says line. MX's field decides.
+    const source = "<!-- c -->";
+    const comment = {
+      type: "MxComment",
+      kind: "line",
+      value: " c ",
+      valueSpan: { start: 4, end: 7 },
+      start: 0,
+      end: 10,
+    };
+    const [node] = lowerChildren(ctxFor(source), [comment]);
+    expect(node).toMatchObject({ kind: "Comment", html: false });
+    const [html] = lowerChildren(ctxFor("// c"), [
+      { ...comment, kind: "html", end: 4 },
+    ]);
+    expect(html).toMatchObject({ kind: "Comment", html: true });
+  });
+
+  it("fails an unparsed placeholder at its MxParseError", () => {
+    const source = "<div>\n  ${a +}</div>";
+    const placeholder = {
+      type: "MxPlaceholder",
+      escape: true,
+      expression: expression({
+        source: "a +",
+        outer: { start: 8, end: 14 },
+        start: 10,
+        end: 13,
+        error: parseError(13),
+      }),
+      start: 8,
+      end: 14,
+    };
+    expect(thrown(() => lowerChildren(ctxFor(source), [placeholder]))).toEqual({
+      message: "Unexpected token",
+      line: 2,
+      column: 7,
+    });
+  });
+
+  it("records an unparsed placeholder and lowers its siblings (decision 162)", () => {
+    const source = "${a +}b";
+    const ctx = ctxFor(source);
+    ctx.errors = [];
+    const placeholder = {
+      type: "MxPlaceholder",
+      escape: true,
+      expression: expression({ error: parseError(4), start: 2, end: 5 }),
+      start: 0,
+      end: 6,
+    };
+    const text = {
+      type: "MxText",
+      value: "b",
+      raw: "b",
+      valueSpan: { start: 6, end: 7 },
+      start: 6,
+      end: 7,
+    };
+    const out = lowerChildren(ctx, [placeholder, text]);
+    expect(out).toMatchObject([{ kind: "Text", value: "b" }]);
+    expect(ctx.errors.map((e) => [e.message, e.line, e.column])).toEqual([
+      ["Unexpected token", 1, 4],
+    ]);
+  });
+
+  it("refuses a placeholder's expression trigger (decision 182 seam)", () => {
+    const source = "<p>${&status}</p>";
+    const trigger = {
+      type: "MxTrigger",
+      id: "status",
+      position: "expression",
+      text: "&status",
+      value: null,
+      start: 5,
+      end: 12,
+    };
+    const placeholder = {
+      type: "MxPlaceholder",
+      escape: true,
+      expression: expression({
+        node: { type: "Identifier", name: "status", start: 6, end: 12 },
+        triggers: [trigger],
+        start: 5,
+        end: 12,
+      }),
+      start: 3,
+      end: 13,
+    };
+    expect(thrown(() => lowerChildren(ctxFor(source), [placeholder]))).toEqual({
+      message: "`status` trigger has no lowering yet",
+      line: 1,
+      column: 5,
+    });
+  });
+
+  it("keeps an unparsed MX scriptlet's source for the hint, as Marko's", () => {
+    const source = "$ const a = (\n<p/>";
+    const scriptlet = {
+      type: "MxScriptlet",
+      block: false,
+      code: {
+        ...expression({
+          source: "const a = (",
+          error: parseError(13),
+          start: 2,
+          end: 13,
+        }),
+        type: "MxStatements",
+        directives: [],
+        innerComments: [],
+      },
+      start: 0,
+      end: 13,
+    };
+    const parsed = thrown(() => mx("$ const a = 1\n<p/>"));
+    expect(thrown(() => lowerChildren(ctxFor(source), [scriptlet]))).toEqual({
+      ...parsed,
+      line: 1,
+      column: 0,
+    });
+    expect(parsed.message).toMatch(/scriptlets .*; /);
   });
 });
