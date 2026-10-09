@@ -1,4 +1,3 @@
-import { dirname } from "node:path";
 import { bodyChildren, type Ctx, fail, isTagNode, type Node } from "./core.ts";
 import type { DefaultTagContext, DefaultTagParent } from "./declarations.ts";
 import {
@@ -57,7 +56,7 @@ export function invalidDefaultTagHint(node: Node): string | undefined {
 
 /** The scope this compile can judge a default tag in; a target adds its built-ins. */
 function scopeOf(ctx: Ctx): DefaultTagScope {
-  const lookup = judgingLookup(ctx.lookup, dirname(ctx.filename));
+  const lookup = judgingLookup(ctx.lookup, ctx.declarations.nativeTags);
   return {
     ...(ctx.customTags ? { customTags: ctx.customTags } : {}),
     ...(lookup ? { lookup } : {}),

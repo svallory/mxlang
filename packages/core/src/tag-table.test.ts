@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { WEB_ELEMENTS } from "@mxlang/web-elements";
 import { afterAll, describe, expect, it } from "vitest";
 import { createTranslator } from "./compile.ts";
+import { VOID_TAGS } from "./core.ts";
 import {
   CORE_TAGLIB,
   CORE_TAGLIB_ID,
@@ -166,16 +167,50 @@ describe("tagTable", () => {
     });
   }
 
-  it("has no native layer without natives", () => {
+  it("falls back to core's own HTML elements without natives", () => {
     const table = tagTable(createTranslator({} as never), undefined);
-    expect(table.getTag("div")).toBeUndefined();
+    const shape = (name: string) => project(table.getTag(name));
+    const html = (parseOptions?: Record<string, unknown>) => ({
+      taglibId: "marko-html",
+      html: true,
+      parseOptions,
+    });
+    expect(shape("div")).toEqual(html());
+    // Every void name lowering treats as void, `param` included.
+    for (const name of VOID_TAGS) {
+      expect(shape(name), name).toEqual(html({ openTagOnly: true }));
+    }
+    expect(shape("pre")).toEqual(html({ preserveWhitespace: true }));
+    expect(shape("title")).toEqual(html({ text: true }));
+    for (const name of ["script", "style", "textarea"]) {
+      expect(shape(name), name).toEqual(
+        html({ text: true, preserveWhitespace: true }),
+      );
+    }
+    // HTML only: SVG and MathML come from a target's own table.
+    expect(table.getTag("circle")).toBeUndefined();
+    expect(table.getTag("math")).toBeUndefined();
     expect(table.getTag("import")?.parseOptions?.statement).toBe(true);
+  });
+
+  it("gives core's fallback the web elements' HTML parse rules", () => {
+    const fallback = tagTable(createTranslator({} as never), undefined);
+    const web = tagTable(createTranslator({} as never), WEB_ELEMENTS);
+    for (const [name, tag] of WEB_ELEMENTS) {
+      if (tag.namespace !== "html" || !fallback.getTag(name)) continue;
+      expect(project(fallback.getTag(name)), name).toEqual(
+        project(web.getTag(name)),
+      );
+    }
   });
 
   it("is cached per translator and native set", () => {
     const translator = createTranslator({} as never);
     expect(tagTable(translator, WEB_ELEMENTS)).toBe(
       tagTable(translator, WEB_ELEMENTS),
+    );
+    expect(tagTable(translator, undefined)).toBe(
+      tagTable(translator, undefined),
     );
     expect(tagTable(translator, undefined)).not.toBe(
       tagTable(translator, WEB_ELEMENTS),

@@ -8,6 +8,10 @@ it("shares core state with native lazy descriptor requires", () => {
   expect(core.withCalleeInputSources).toBe(native.withCalleeInputSources);
 });
 
+// The probe counts the Marko compiler (core's bundled one included), Astro's,
+// and the Babel core lowers and prints with (`@babel/core`, `generator`,
+// `traverse`): since decision 197 slice S3a a compile loads no Marko
+// compiler, so Babel is what shows the `.mx` transform ran.
 it("keeps config evaluation and reader registration compiler-lazy", () => {
   const entry = new URL("../dist/index.js", import.meta.url).href;
   const script = `
@@ -19,7 +23,7 @@ it("keeps config evaluation and reader registration compiler-lazy", () => {
     const { default: mx } = await import(${JSON.stringify(entry)});
     const plugin = mx();
     const compilers = () => Object.keys(require.cache).filter((key) =>
-      /node_modules\\/(\\.bun\\/)?(@marko[+/]compiler|@astrojs[+/]compiler)|\\/marko-frontend\\.cjs$/.test(key));
+      /node_modules\\/(\\.bun\\/)?(@marko[+/]compiler|@astrojs[+/]compiler|@babel[+/](core|generator|traverse)[@/])|\\/marko-frontend\\.cjs$/.test(key));
     const before = compilers();
     await plugin.buildStart.call({});
     const registered = compilers();

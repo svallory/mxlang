@@ -7,7 +7,7 @@
  */
 
 import { join } from "node:path";
-import { createTargetLookup } from "@mxlang/core";
+import { createTargetLookup, type MxWarning } from "@mxlang/core";
 import { print } from "@mxlang/tsx-bridge";
 import { describe, expect, it } from "vitest";
 import descriptor from "./descriptor.ts";
@@ -335,5 +335,46 @@ describe("whole-file reactive-tag errors are unchanged", () => {
     ],
   ])("%s", (tag, message) => {
     expect(wholeFileError(tag)).toContain(message);
+  });
+});
+
+/**
+ * A region has no tag table, so whether a lowercase name the module imports
+ * is the native element (decision 164's warning) or not a tag (row 3's error)
+ * is read from this host's `nativeTags` (`@mxlang/web-elements`), the same
+ * elements a whole file's table holds (decision 197).
+ */
+describe("native elements in a region", () => {
+  const module = (name: string, parent: string) =>
+    `import ${name} from "./${name}.mx";\nexport function Panel() {\n  return (\n    <${parent}><${name}/></${parent}>\n  );\n}\n`;
+  function warningsOf(source: string): string[] {
+    const warnings: MxWarning[] = [];
+    print(source, FILE, {
+      mx: true,
+      mxRegionCompile: (input) =>
+        compilePreactRegion(input.source, {
+          ...input,
+          targets,
+          warnings,
+        }) as ReturnType<
+          NonNullable<Parameters<typeof print>[2]>["mxRegionCompile"] & {}
+        >,
+    });
+    return warnings.map((warning) => warning.message);
+  }
+
+  it.each([
+    ["param", "div"],
+    ["circle", "svg"],
+  ])("`<%s>` is the native element, as in a whole file", (name, parent) => {
+    expect(warningsOf(module(name, parent))).toEqual([
+      `\`<${name}>\` is the native element; the \`${name}\` imported at 1:1 is not called. Rename it \`${name[0]?.toUpperCase()}${name.slice(1)}\` or write \`<\${${name}}>\``,
+    ]);
+  });
+
+  it("a name no element table lists is row 3's error", () => {
+    expect(errorOf(module("widget", "div")).message).toContain(
+      "`<widget>` is not a tag here: `widget` is imported from ./widget.mx, and a lowercase tag never calls a binding.",
+    );
   });
 });

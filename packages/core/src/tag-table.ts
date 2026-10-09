@@ -10,7 +10,9 @@
  * - The target's native elements come first, each under the element taglib id
  *   Marko gave its namespace (`marko-html`, `marko-svg`, `marko-math`), with
  *   `html: true` and the parse switches of its body mode. The ids stay until
- *   the hosts stop reading them (slice S4).
+ *   the hosts stop reading them (slice S4). A target that declares none gets
+ *   core's own HTML elements (`coreNativeTags`), the void and raw-text names
+ *   lowering already uses, so parse and lowering agree on every target.
  * - Then each `[id, definition]` of `translator.taglibs`, in order (core's
  *   statement taglib, the host's, the custom tags last). An entry is a
  *   definition key `<name>`; other keys (`taglibId`, `@attr`) are not tags. A
@@ -22,7 +24,9 @@
  * `customTags` (core's own discovery); a Marko taglib file is not MX input.
  * No entry carries a `template`.
  */
+import { VOID_TAGS } from "./core.ts";
 import { withStatementTags } from "./core-taglib.ts";
+import { HTML_ELEMENTS } from "./did-you-mean.ts";
 
 /** A native element's body mode, the front end's `tagShape` values (ast §3.12). */
 export type NativeBodyMode =
@@ -88,11 +92,46 @@ export const ELEMENT_TAGLIB_IDS: ReadonlySet<string> = new Set(
   Object.values(NAMESPACE_TAGLIB_IDS),
 );
 
-const nativeLayers = new WeakMap<NativeTags, ReadonlyMap<string, TagEntry>>();
-const NO_NATIVES: ReadonlyMap<string, TagEntry> = new Map();
+// Body modes of core's own elements beyond void: Marko's element taglibs'
+// `text` and `preserveWhitespace` names.
+const CORE_BODY_MODES: Readonly<Record<string, NativeBodyMode>> = {
+  pre: "preserve",
+  script: "parsed-text-preserve",
+  style: "parsed-text-preserve",
+  textarea: "parsed-text-preserve",
+  title: "parsed-text",
+};
 
-function nativeLayer(natives: NativeTags | undefined) {
-  if (!natives) return NO_NATIVES;
+let coreNatives: NativeTags | undefined;
+
+/**
+ * Core's own native elements, for a target that declares no `nativeTags`:
+ * the HTML element names core suggests (`HTML_ELEMENTS`) and every void name
+ * lowering treats as void (`VOID_TAGS`), with Marko's raw-text and
+ * preserved-whitespace bodies. HTML only: a target that renders SVG or
+ * MathML elements passes its own table (`@mxlang/web-elements`).
+ */
+export function coreNativeTags(): NativeTags {
+  if (!coreNatives) {
+    const names = new Set<string>([...HTML_ELEMENTS, ...VOID_TAGS]);
+    coreNatives = new Map(
+      [...names].map((name) => [
+        name,
+        {
+          namespace: "html",
+          body: VOID_TAGS.has(name)
+            ? "void"
+            : (CORE_BODY_MODES[name] ?? "html"),
+        },
+      ]),
+    );
+  }
+  return coreNatives;
+}
+
+const nativeLayers = new WeakMap<NativeTags, ReadonlyMap<string, TagEntry>>();
+
+function nativeLayer(natives: NativeTags) {
   let layer = nativeLayers.get(natives);
   if (!layer) {
     const built = new Map<string, TagEntry>();
@@ -115,17 +154,19 @@ interface TaglibCarrier {
   taglibs?: ReadonlyArray<readonly [string, unknown]>;
 }
 
-const tables = new WeakMap<object, Map<NativeTags | undefined, TagTable>>();
+const tables = new WeakMap<object, Map<NativeTags, TagTable>>();
 
 /**
- * The tag table of `translator` over `natives`. `translator` passes core's
- * statement tags first (`withStatementTags`), as every lookup did. Cached per
- * translator and native set, so one compile's repeated asks build it once.
+ * The tag table of `translator` over `natives` (core's own elements when
+ * `undefined`). `translator` passes core's statement tags first
+ * (`withStatementTags`), as every lookup did. Cached per translator and
+ * native set, so one compile's repeated asks build it once.
  */
 export function tagTable(
   translator: unknown,
-  natives: NativeTags | undefined,
+  declared: NativeTags | undefined,
 ): TagTable {
+  const natives = declared ?? coreNativeTags();
   const key =
     translator !== null && typeof translator === "object"
       ? translator

@@ -405,7 +405,8 @@ Elements, text, `${}` (escaped) and `$!{}` (raw), attributes including spread
 and the `class`/`style` object and array forms, `.class#id` shorthand,
 `<if>`/`<else if>`/`<else>`, every `<for>` form, `<html-comment>`, doctype,
 `<style>`/`<html-script>`/`<html-style>` blocks, dynamic tags `<${expr}/>`,
-components resolved by taglib and `tags/` discovery, and attribute tags.
+components resolved by an `import`, a `<define>` or `tags/` discovery, and
+attribute tags.
 
 Plain `<!-- -->` comments are **stripped**, because Marko strips them.
 
@@ -461,10 +462,12 @@ emitted as written. Only `key=` on `<for>` is refused (see the inert table).
 with `<${input.header}/>` — and a *repeated* `<@item>` becomes an **array**
 of renderables, matching Marko's own server render (verified against Marko
 5.42.5, not assumed). Ordinary children become `input.content`. Component
-resolution goes through Marko's taglib lookup: an `import`, a `<define>`, or
-a `tags/`-discovered `.mx` template. An unknown lowercase tag resolves through
-MX's own element table (`@mxlang/web-elements`: HTML, SVG, MathML), and a plain `<!-- -->` comment is
-stripped, because Marko strips it.
+resolution goes through core's tag table and its own `tags/` discovery: an
+`import`, a `<define>`, or a `tags/`-discovered `.mx` template. A
+`marko.json` / `marko-tag.json` is not read (decision 197): a tag only it maps
+is an unknown tag. An unknown lowercase tag resolves through MX's own element
+table (`@mxlang/web-elements`: HTML, SVG, MathML), and a plain `<!-- -->`
+comment is stripped, because Marko strips it.
 
 The retired `.mx` dialect (decision 68) made different choices here —
 callable function props instead of renderables, `input.children` instead of

@@ -1,7 +1,7 @@
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createTranslator } from "./compile.ts";
 import { CORE_TAGLIB } from "./core-taglib.ts";
@@ -128,6 +128,26 @@ describe("a scan failure: only the custom tags become unknown (round 3)", () => 
 
   it("a plain lookup tag is kept", () => {
     expect(check("section")).toEqual({ value: "section" });
+  });
+});
+
+describe("checkConfiguredDefaultTag: a `marko.json` is not read (decision 197)", () => {
+  it("rejects a `defaultTag` only a `marko.json` defines, as the compile does", () => {
+    const file = project(manifest("badge"));
+    const dir = dirname(file);
+    writeFileSync(
+      join(dir, "marko.json"),
+      JSON.stringify({ "<badge>": { template: "./badge.mx" } }),
+    );
+    writeFileSync(join(dir, "badge.mx"), "<span>badge</span>\n");
+    const scope = defaultTagScopeFor({ dir, translator, customTags: {} });
+    expect(scope.lookup?.getTag("badge")).toBeUndefined();
+    const result = checkConfiguredDefaultTag(file, "t", { scope });
+    expect(result.value).toBeUndefined();
+    expect(result.diagnostic).toMatchObject({
+      code: "invalid-default-tag",
+      severity: "error",
+    });
   });
 });
 

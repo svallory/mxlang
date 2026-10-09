@@ -116,7 +116,7 @@ import {
 } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import { invalidDefaultTagHint, resolveUnnamedTags } from "./default-tag.ts";
-import { HTML_ELEMENTS, nearestName } from "./did-you-mean.ts";
+import { nearestName } from "./did-you-mean.ts";
 import { exportNameFor } from "./export-name.ts";
 import { parseFragment } from "./fragment.ts";
 import type {
@@ -165,7 +165,7 @@ import {
   tagParamsOf,
   tagVarOf,
 } from "./tag-fields.ts";
-import { ELEMENT_TAGLIB_IDS } from "./tag-table.ts";
+import { coreNativeTags, ELEMENT_TAGLIB_IDS } from "./tag-table.ts";
 import {
   bindingForDiscoveredModule,
   hasTemplate,
@@ -2555,6 +2555,39 @@ function isRegisteredTaglibTag(ctx: Ctx, name: string): boolean {
 }
 
 /**
+ * The module the host's `resolveDiscoveredTagModule` names for the tag
+ * `name`, refused when it is a `.marko` file (decision 172: no `.marko` file
+ * is MX input, however the tag was found).
+ */
+function discoveredTagModuleOf(
+  ctx: Ctx,
+  name: string,
+  node: Node,
+): string | undefined {
+  const modulePath = ctx.declarations.resolveDiscoveredTagModule?.(name, ctx);
+  if (modulePath?.endsWith(".marko"))
+    fail(
+      markoFileTagMessage(ctx.filename, name, modulePath, productOf(ctx)),
+      node,
+    );
+  return modulePath;
+}
+
+/**
+ * A tag a translator taglib registers that no module resolves: the bare call
+ * would reference a binding nothing declares (or the import of the same
+ * name, which addendum 1 says the tag is not).
+ */
+function failUncallableTaglibTag(ctx: Ctx, name: string, node: Node): never {
+  const found = uncalledTagFileOf(ctx, name);
+  if (found) failUncalled(ctx, name, found, node);
+  fail(
+    `\`<${name}>\` is declared by a Marko taglib with no template (a \`renderer\`), which ${productOf(ctx)} cannot call. Write the tag as \`tags/${name}.mx\`, or import it explicitly.`,
+    node,
+  );
+}
+
+/**
  * A default import of a tag module — the only import a lowercase tag could be
  * mistaken to call. A named import from a `.mx`/`.marko` file is a value the
  * module exports, not its tag.
@@ -2588,15 +2621,15 @@ const UNLISTED_NATIVE_ELEMENTS: ReadonlySet<string> = new Set(["slot"]);
 
 /**
  * Whether `name` is a native HTML/SVG/MathML element: by the tag table's
- * taglib id when it knows the name, else by the host's native elements (a
- * region has no table), else by core's own HTML element names.
+ * taglib id when it knows the name, else by the elements the table was built
+ * over (a region has no table): the host's `nativeTags`, or core's own when
+ * it declares none.
  */
 function isNativeElementName(ctx: Ctx, name: string): boolean {
   const taglibId = ctx.lookup?.getTag(name)?.taglibId;
   if (taglibId !== undefined) return ELEMENT_TAGLIB_IDS.has(taglibId);
   return (
-    (ctx.declarations.nativeTags?.has(name) ??
-      (HTML_ELEMENTS as readonly string[]).includes(name)) ||
+    (ctx.declarations.nativeTags ?? coreNativeTags()).has(name) ||
     UNLISTED_NATIVE_ELEMENTS.has(name)
   );
 }
@@ -4111,13 +4144,30 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     );
   }
   // A registered taglib tag called `row` is still `row` when a binding of that
-  // name is in scope (addendum 1): the host's tag, not the import.
+  // name is in scope (addendum 1): call the module the host names for the
+  // tag, not the import.
   if (
     registeredTag &&
     !/^[A-Z]/.test(name) &&
     (ctx.defines.has(name) || ctx.imports.has(name))
   ) {
-    return lowerComponent(ctx, node, { kind: "name", name }, true);
+    const modulePath = discoveredTagModuleOf(ctx, name, node);
+    if (!modulePath) failUncallableTaglibTag(ctx, name, node);
+    const binding = bindingForDiscoveredModule(
+      ctx,
+      modulePath,
+      name,
+      posOf(ctx, node),
+    );
+    // `resolvedPath` keeps every metadata read (return shape, `Input`,
+    // attribute tags, `/var`) on the taglib tag too: resolved by name, it
+    // would read the authored import the call no longer targets.
+    return lowerComponent(
+      ctx,
+      node,
+      { kind: "name", name, resolvedPath: modulePath, binding },
+      true,
+    );
   }
   if (
     fileLocalBinding ||
@@ -4187,17 +4237,11 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     // binding: that is already in scope.
     const modulePath = fileLocalBinding
       ? undefined
-      : ctx.declarations.resolveDiscoveredTagModule?.(name, ctx);
+      : discoveredTagModuleOf(ctx, name, node);
     // A host taglib names the tag and nothing resolves it to a module: the
     // bare call would reference a binding nothing declares.
-    if (!modulePath && !fileLocalBinding && registeredTag) {
-      const found = uncalledTagFileOf(ctx, name);
-      if (found) failUncalled(ctx, name, found, node);
-      fail(
-        `\`<${name}>\` is declared by a Marko taglib with no template (a \`renderer\`), which ${productOf(ctx)} cannot call. Write the tag as \`tags/${name}.mx\`, or import it explicitly.`,
-        node,
-      );
-    }
+    if (!modulePath && !fileLocalBinding && registeredTag)
+      failUncallableTaglibTag(ctx, name, node);
     const binding = modulePath
       ? bindingForDiscoveredModule(ctx, modulePath, name, posOf(ctx, node))
       : undefined;

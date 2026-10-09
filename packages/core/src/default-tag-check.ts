@@ -1,5 +1,3 @@
-import { dirname } from "node:path";
-import { buildMarkoLookup } from "./compile.ts";
 import {
   type ContractDefaultTagInput,
   contractDefaultTagDiagnostics,
@@ -17,6 +15,7 @@ import {
   readTargetDefaultTag,
   type TargetPolicyDiagnostic,
 } from "./host-policy.ts";
+import { type NativeTags, tagTable } from "./tag-table.ts";
 
 /** What one package's `mx.<target>.defaultTag` came to. */
 export interface CheckedDefaultTag {
@@ -120,12 +119,12 @@ export function ownDefaultTag(
   input: OwnDefaultTagInput,
 ): string | undefined {
   const { value, diagnostic } = checkConfiguredDefaultTag(file, input.target, {
-    scope: () => ownScope(file, input),
+    scope: () => ownScope(input),
     configKey: input.configKey,
   });
   if (diagnostic) input.report(diagnostic);
   if (input.tags) {
-    const scope = ownScope(file, input);
+    const scope = ownScope(input);
     for (const found of contractDefaultTagDiagnostics({
       tags: input.tags,
       customTags: scope.customTags ?? {},
@@ -143,9 +142,8 @@ export function ownDefaultTag(
   return value;
 }
 
-function ownScope(file: string, input: OwnDefaultTagInput): DefaultTagScope {
+function ownScope(input: OwnDefaultTagInput): DefaultTagScope {
   return buildScope({
-    dir: dirname(file),
     translator: input.translator,
     ...(input.customTags ? { customTags: input.customTags } : {}),
     ...(input.declarations ? { declarations: input.declarations } : {}),
@@ -155,8 +153,10 @@ function ownScope(file: string, input: OwnDefaultTagInput): DefaultTagScope {
 
 /**
  * The scope a target's own compile gives a `defaultTag`: its package's custom
- * tags, Marko's lookup for its translator (parse shape, and its elements
- * through the host's own `isElement`), and the names it lists as built-in.
+ * tags, the tag table its compile reads (its translator's taglibs over its
+ * `nativeTags`: parse shape, and its elements through the host's own
+ * `isElement`), and the names it lists as built-in. No `marko.json` is read
+ * (decision 197).
  */
 export function defaultTagScopeFor(
   input: DefaultTagScopeInput,
@@ -166,8 +166,11 @@ export function defaultTagScopeFor(
 
 /** What `defaultTagScopeFor` needs. */
 export interface DefaultTagScopeInput {
-  /** A directory of the package: the lookup is built as seen from there. */
-  dir: string;
+  /**
+   * A directory of the package. Not read since decision 197: the tag table
+   * reads no directory (no `marko.json`, no `tags-dir`).
+   */
+  dir?: string;
   translator: unknown;
   /**
    * The package's custom tags, or the scan that reads them. A scan that throws
@@ -192,11 +195,11 @@ function buildScope(input: DefaultTagScopeInput): DefaultTagScope {
       customTagsUnknown = true;
     }
   } else customTags = input.customTags;
-  const lookup = judgingLookup(
-    buildMarkoLookup(input.dir, input.translator),
-    input.dir,
-  );
   const declarations = input.declarations;
+  const lookup = judgingLookup(
+    tagTable(input.translator, declarations?.nativeTags),
+    declarations?.nativeTags,
+  );
   const isElement = elementPredicate(lookup, declarations);
   const isNativeElement = nativeElementPredicate(lookup, declarations);
   return {
@@ -212,25 +215,25 @@ function buildScope(input: DefaultTagScopeInput): DefaultTagScope {
 let coreTranslator: unknown;
 
 /**
- * The lookup a default tag is judged in: the compile's or the target's own,
- * with Marko's core tags (`CORE_TAGLIB`) always behind it. A host whose
- * translator registers no core taglib (the JSX, Solid, Angular and Astro
- * hosts) would otherwise not know `html-script` or `else-if` as tags at all and
- * judge them natively; registration, the compile and every entry that scans
- * for itself build their view here, so they cannot disagree.
+ * The table a default tag is judged in: the compile's or the target's own,
+ * with Marko's core tags (`CORE_TAGLIB`) always behind it, both over the
+ * target's `nativeTags` (core's own elements when it declares none). A host
+ * whose translator registers no core taglib (the JSX, Solid, Angular and
+ * Astro hosts) would otherwise not know `html-script` or `else-if` as tags at
+ * all and judge them natively; registration, the compile and every entry that
+ * scans for itself build their view here, so they cannot disagree.
  */
 export function judgingLookup(
   primary: { getTag(name: string): object | undefined } | undefined,
-  dir: string,
-): { getTag(name: string): object | undefined } | undefined {
+  nativeTags: NativeTags | undefined,
+): { getTag(name: string): object | undefined } {
   coreTranslator ??= {
     taglibs: [[CORE_TAGLIB_ID, CORE_TAGLIB]],
     tagDiscoveryDirs: [],
     translate: {},
   };
-  const core = buildMarkoLookup(dir, coreTranslator);
+  const core = tagTable(coreTranslator, nativeTags);
   if (!primary) return core;
-  if (!core) return primary;
   return {
     getTag: (name: string) => primary.getTag(name) ?? core.getTag(name),
   };

@@ -151,17 +151,18 @@ from the one that parsed the node — before switching to this export.
 
 **`compileSource(source, filename, declarations, host)`** — a whole file. It
 parses with the MX front end (`@mxlang/parser/frontend`, inlined into the
-dist), reading each tag's shape and the statement keywords from the taglib
-lookup of the host's translator object (ADR 0001), lowers the MX AST, and runs
-the host's `emitIr`. `host` is required and carries its `emitIr` function plus
-the taglibs to register, the tag-discovery directories, and an optional
-`postEmit` pass over the emitted module text. `createTranslator(host)` is
-exported separately because the taglib lookup is keyed on the translator
-object, so a caller that wants the lookup must hand the same object to
-`@marko/compiler`'s `taglib.buildLookup`. No template is parsed by
-`@marko/compiler`.
+dist), reading each tag's shape and the statement keywords from core's tag
+table (`tagTable(translator, declarations.nativeTags)`: the host translator's
+taglibs over the target's native elements, core's own HTML elements when it
+declares none; decision 197), lowers the MX AST, and runs the host's
+`emitIr`. `host` is required and carries its `emitIr` function plus the
+taglibs to register, the tag-discovery directories, and an optional `postEmit`
+pass over the emitted module text. `createTranslator(host)` is exported
+separately because the table is cached per translator object, so a caller
+that wants the table a compile reads must hand the same object to `tagTable`.
+No `marko.json` is read, and no template is parsed by `@marko/compiler`.
 
-**`parseFragment(source, { filename, baseOffset, baseLine, baseColumn })`** — an
+**`parseFragment(source, { filename, baseOffset, baseLine, baseColumn, nativeTags })`** — an
 MX *substring* of a larger file, with every position shifted to the
 enclosing file. The consumer is a host whose MX lives inside another language
 (Solid's `.solid.mx`). This is the stopgap

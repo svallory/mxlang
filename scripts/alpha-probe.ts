@@ -1,20 +1,22 @@
 #!/usr/bin/env bun
 //
-// Decision 143: prove the two alpha tarballs (`@mxlang/core`, `@mxlang/data`)
+// Decision 143: prove the alpha tarballs (`@mxlang/core`, `@mxlang/data`, and
+// `@mxlang/web-elements`, a data dependency since decision 197 slice S3a)
 // work for a consumer who installs only them. The probe
-//   1. packs both with `bun pm pack` (the command `bun publish` runs), and
-//      checks that the data tarball's `@mxlang/core` is core's exact version
-//      and not `workspace:*` (npm does not rewrite it, bun does);
+//   1. packs them with `bun pm pack` (the command `bun publish` runs), and
+//      checks that the data tarball's `@mxlang/core` and
+//      `@mxlang/web-elements` are their exact versions and not `workspace:*`
+//      (npm does not rewrite it, bun does);
 //   2. installs the two tarballs into a fresh `mktemp -d` project outside the
 //      repo, once with npm and run by Node, once with Bun;
 //   3. runs a `parseData` probe (`customTags`, `structural: "reject"`,
 //      `unknownTags: "reject"`) that must return a tree for a valid file and
 //      the unknown-tag diagnostic, with no tree, for a typo;
-//   4. decision 159: proves the install parses with MX's own template parser
-//      (core's bundled Marko front end): `<input type="email" :email/>` and
-//      `x=a.b .c` split after the value, the process loaded core's
-//      `marko-frontend.cjs`, and no npm `htmljs-parser` or `@marko/compiler`
-//      is installed or loaded.
+//   4. decision 159: proves the install parses with MX's own template parser:
+//      `<input type="email" :email/>` and `x=a.b .c` split after the value,
+//      and no npm `htmljs-parser` or `@marko/compiler` is installed or loaded.
+//      Since decision 197 slice S3a a parse no longer builds Marko's taglib
+//      lookup, so core's bundled `marko-frontend.cjs` must not load either.
 //
 // It must be able to fail: any step that exits non-zero, an unrewritten
 // `workspace:*`, a missing tree, or a missing diagnostic fails the run.
@@ -24,9 +26,10 @@
 // `bun pm pack` hang on macOS with bun 1.3.14; it did not hang here, and the
 // per-step timeout kills it if it does.
 //
-// It builds core and data itself first. It installs into a scratch dir, so it needs
-// the network only for core's and data's registry dependencies (not for the
-// two `@mxlang` packages: `overrides` pin both to the tarballs).
+// It builds web-elements, core and data itself first. It installs into a scratch
+// dir, so it needs the network only for core's and data's registry
+// dependencies (not for the `@mxlang` packages: `overrides` pin them to the
+// tarballs). Publish order follows: web-elements before data.
 //   bun run scripts/alpha-probe.ts [--keep]
 //
 // Not part of `verify` or CI yet (the first manual alpha comes first).
@@ -48,6 +51,7 @@ const STEP_TIMEOUT_MS = 240_000;
 const MIN_NODE_MAJOR = 26;
 const tsc = join(repoRoot, "node_modules/.bin/tsc");
 
+const WEB_ELEMENTS_DIR = join(repoRoot, "packages/web-elements");
 const CORE_DIR = join(repoRoot, "packages/core");
 const DATA_DIR = join(repoRoot, "packages/targets/data");
 
@@ -76,8 +80,8 @@ function run(
 const work = mkdtempSync(join(tmpdir(), "alpha-probe-"));
 console.log(`[alpha-probe] scratch: ${work}`);
 
-/** Build core, then data, so the probe never packs a stale `dist`. */
-for (const dir of [CORE_DIR, DATA_DIR]) {
+/** Build web-elements, core, then data, so the probe never packs a stale `dist`. */
+for (const dir of [WEB_ELEMENTS_DIR, CORE_DIR, DATA_DIR]) {
   const built = run("bun", ["run", "build"], dir);
   if (built.status !== 0) fail(`bun run build failed in ${dir}:\n${built.out}`);
 }
@@ -109,12 +113,16 @@ function tarFile(tarball: string, path: string): string {
   return r.stdout;
 }
 
+const webElementsTarball = pack(WEB_ELEMENTS_DIR);
 const coreTarball = pack(CORE_DIR);
 const dataTarball = pack(DATA_DIR);
 
 const corePkg = JSON.parse(tarFile(coreTarball, "package/package.json")) as {
   version: string;
 };
+const webElementsPkg = JSON.parse(
+  tarFile(webElementsTarball, "package/package.json"),
+) as { version: string };
 const dataPkg = JSON.parse(tarFile(dataTarball, "package/package.json")) as {
   version: string;
   dependencies: Record<string, string>;
@@ -125,6 +133,11 @@ console.log(
 if (dataPkg.dependencies["@mxlang/core"] !== corePkg.version) {
   fail(
     `the data tarball depends on @mxlang/core@${dataPkg.dependencies["@mxlang/core"]}, expected the exact version ${corePkg.version} (workspace:* not rewritten?)`,
+  );
+}
+if (dataPkg.dependencies["@mxlang/web-elements"] !== webElementsPkg.version) {
+  fail(
+    `the data tarball depends on @mxlang/web-elements@${dataPkg.dependencies["@mxlang/web-elements"]}, expected the exact version ${webElementsPkg.version} (workspace:* not rewritten?)`,
   );
 }
 
@@ -194,7 +207,7 @@ if (!same(split, ["x=a.b", "class=c"])) fail("x=a.b .c did not reach the data tr
 const require = createRequire(import.meta.url);
 const loaded = Object.keys(require.cache);
 console.log("loaded parse layer:", JSON.stringify(loaded.filter((k) => /marko|htmljs/.test(k))));
-if (!loaded.some((k) => k.endsWith("/@mxlang/core/dist/marko-frontend.cjs"))) fail("core's marko-frontend.cjs was not loaded");
+if (loaded.some((k) => k.endsWith("/@mxlang/core/dist/marko-frontend.cjs"))) fail("core's marko-frontend.cjs was loaded by a parse");
 for (const name of ["htmljs-parser", "@marko/compiler"]) {
   if (loaded.some((k) => k.includes("/node_modules/" + name + "/"))) fail("an npm " + name + " was loaded");
   if (existsSync("node_modules/" + name)) fail("an npm " + name + " is installed at node_modules/" + name);
@@ -208,9 +221,13 @@ console.log("probe passed");
 function consumer(label: string): string {
   const dir = join(work, label);
   mkdirSync(dir, { recursive: true });
-  // `@mxlang/data` depends on `@mxlang/core@<alpha>`, which is not on the
-  // registry before the first publish: pin it to the tarball.
-  const overrides = { "@mxlang/core": `file:${coreTarball}` };
+  // `@mxlang/data` depends on `@mxlang/core@<alpha>` and
+  // `@mxlang/web-elements@<alpha>`, which are not on the registry before the
+  // first publish: pin both to their tarballs.
+  const overrides = {
+    "@mxlang/core": `file:${coreTarball}`,
+    "@mxlang/web-elements": `file:${webElementsTarball}`,
+  };
   writeFileSync(
     join(dir, "package.json"),
     JSON.stringify(

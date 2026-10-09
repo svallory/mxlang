@@ -103,8 +103,10 @@ export interface HostDeclarations {
    * every built-in target): the names core's tag table gives element parse
    * rules (void, raw text, preserved whitespace) and the element taglib ids,
    * and the names a region, which has no table, counts as native. Absent
-   * means none: every tag parses as plain HTML content and a region knows
-   * only core's own element names.
+   * means core's own HTML elements: the void names lowering treats as void,
+   * `pre`'s preserved whitespace and the raw-text bodies of `script`,
+   * `style`, `textarea` and `title`. No SVG or MathML names: a target that
+   * renders them passes `WEB_ELEMENTS`.
    */
   nativeTags?: NativeTags;
   /** Human-readable host name used by positioned capability diagnostics. */
@@ -288,11 +290,18 @@ export interface HostDeclarations {
    * mechanism). Return the absolute path of the tag's template and the core
    * mints a binding, adds `import <binding> from "<path relative to the
    * file>"` to the module and sets `binding` on the `Component` target so the
-   * emitter calls it.
+   * emitter calls it. A `.marko` path is refused (decision 172).
+   *
+   * A lowercase tag one of the translator's taglibs registers is asked too
+   * when an `import` or `<define>` of the same name is in scope (decision 164
+   * addendum 1): the tag still calls the module named here, never the
+   * binding, and its `Input`, attribute tags and `/var` are read from that
+   * module.
    *
    * `undefined` (and leaving the hook out) means "nothing to import": the
    * call keeps its bare `name`, which is what a host that resolves the name
-   * some other way, or a tag with no template, needs. No built-in target
+   * some other way needs. For a tag a taglib registers it is an error
+   * instead (the tag has no template MX can call). No built-in target
    * implements it since a `marko.json` stopped being read (decision 197).
    */
   resolveDiscoveredTagModule?(name: string, ctx: Ctx): string | undefined;

@@ -616,7 +616,8 @@ A name that starts with `_` or `$` has no capitalized spelling Marko reads as
 a binding, so both diagnostics offer only the dynamic tag for it ("Write
 `<${_row}/>`"). "Native" means the target's `nativeTags`, its element table
 (decision 197; `@mxlang/web-elements`' HTML, SVG and MathML elements on every
-built-in target), in a region and a whole file alike, so the two agree.
+built-in target; core's own HTML elements for a target that declares none),
+in a region and a whole file alike, so the two agree.
 
 The binding's `L:C` comes from the import or define site on every target. A
 `<define>` is in scope only inside the block that declares it, so one inside

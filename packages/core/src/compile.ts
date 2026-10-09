@@ -409,9 +409,10 @@ function sameFilePath(a: string, b: string): boolean {
 /**
  * Marko's tag lookup for `translator` as seen from `dir`: what a compile of a
  * file there would resolve a tag name through. `undefined` when Marko builds
- * none. The tag map is made prototype-free. Compiles no longer use it
- * (`tagTable`); only the `defaultTag` check's judging lookup still does,
- * until decision 197's slice S3b removes it.
+ * none. The tag map is made prototype-free. No production path uses it
+ * since decision 197 (compiles and the `defaultTag` check read `tagTable`);
+ * it stays for the tests that compare against Marko's lookup until slice S3b
+ * removes it.
  */
 export function buildMarkoLookup(
   dir: string,
@@ -473,8 +474,6 @@ export function compileSource(
   policy: Policy,
   host: HostOptions,
 ): CompileResult {
-  // Required lazily and by CJS: `@marko/compiler` is a large dependency and
-  // only this function needs it, so importing the type surface stays free.
   // Only an absent option resolves from the manifest: `null` is refused.
   const resolvedSyntax =
     host.syntax !== undefined
