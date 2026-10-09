@@ -96,6 +96,16 @@ export class TranslateError extends Error {
    */
   spans?: readonly SourceSpan[];
   /**
+   * Where the error is, in UTF-16 offsets into `file` (the file being
+   * compiled when unset), when it was raised on an MX AST node. Such a node
+   * carries offsets, not lines, so `fail` records them here and the lowering
+   * boundary (`recover`, `lower`, `lowerChildren`) fills `line`/`column`
+   * from the source before the error leaves it (decision 158, PR 4
+   * addendum). The span stays after that, for a reporter that wants exact
+   * offsets. Unset on an error raised on a Marko node.
+   */
+  span?: SourceSpan;
+  /**
    * Every callee file the failed compile's `readCalleeInput` had already
    * resolved before the error was raised (decision 106/107). Set by
    * `compileSource`'s catch, from the same-shaped `Ctx.dependencies` a
@@ -630,6 +640,7 @@ export function recover<T>(ctx: Ctx, run: () => T): T | undefined {
     return run();
   } catch (error) {
     if (!isTranslateError(error)) throw error;
+    positionError(ctx, error);
     restore();
     ctx.errors.push(error);
     return undefined;
@@ -667,8 +678,75 @@ export function otherErrorsText(error: TranslateError): string {
 }
 
 export function fail(message: string, node: Node, file?: string): never {
+  const span = node?.loc ? undefined : mxSpanOf(node);
+  if (span) {
+    const error = new TranslateError(message, 0, 0, file);
+    error.span = span;
+    unpositioned.add(error);
+    throw error;
+  }
   const loc = node?.loc?.start ?? node?.start ?? { line: 0, column: 0 };
   throw new TranslateError(message, loc.line ?? 0, loc.column ?? 0, file);
+}
+
+/**
+ * The UTF-16 offsets an MX AST node carries: `start`/`end` on an `Mx*` node,
+ * `span` on a field shape (a tag's `name`, `closeTag`). `undefined` for any
+ * other node: a Marko or Babel node has `loc`, and a synthesized node with
+ * neither has no position.
+ */
+export function mxSpanOf(node: Node): SourceSpan | undefined {
+  const at = String(node?.type ?? "").startsWith("Mx") ? node : node?.span;
+  if (typeof at?.start !== "number" || typeof at?.end !== "number") {
+    return undefined;
+  }
+  return { sourceStart: at.start, sourceEnd: at.end };
+}
+
+/** Errors `fail` raised on an MX node, whose `line`/`column` are not filled in yet. */
+const unpositioned = new WeakSet<TranslateError>();
+
+/** The 1-based line and 0-based column of a UTF-16 offset into `ctx.source`. */
+export function positionAtOffset(ctx: Ctx, offset: number): Position {
+  let line = 1;
+  let lineStart = 0;
+  for (const text of ctx.lines) {
+    const lineEnd = lineStart + text.length;
+    if (offset <= lineEnd) return { line, column: offset - lineStart };
+    line++;
+    lineStart = lineEnd + 1;
+  }
+  return {
+    line: Math.max(1, ctx.lines.length),
+    column: Math.max(0, offset - lineStart),
+  };
+}
+
+/**
+ * Fills in `line`/`column` of an error `fail` raised on an MX node, from its
+ * `span` against `ctx.source`; any other value is left as it is. The
+ * lowering boundary calls it: past it nothing knows the source.
+ */
+export function positionError(ctx: Ctx, error: unknown): void {
+  if (!(error instanceof TranslateError) || !unpositioned.has(error)) return;
+  const at = positionAtOffset(ctx, error.span?.sourceStart ?? 0);
+  // `line`/`column` are read-only to consumers; this is their one writer.
+  (error as { line: number }).line = at.line;
+  (error as { column: number }).column = at.column;
+  unpositioned.delete(error);
+}
+
+/**
+ * Throws an "MX bug" error (decision 161) for an error `fail` raised on an
+ * MX node that left the lowering boundary unpositioned: reporting it at 0:0
+ * would point at the wrong place silently.
+ */
+export function assertPositioned(error: unknown): void {
+  if (!(error instanceof TranslateError) || !unpositioned.has(error)) return;
+  throw new Error(
+    `@mxlang/core: an error left the lowering without a source position (not yours: an MX bug): ${error.message}`,
+    { cause: error },
+  );
 }
 
 /**
@@ -1003,6 +1081,17 @@ function rewriteReferences(ctx: Ctx, node: Node): Node {
  * whose `start`/`end` are undefined; only `loc` spans the statement, so the
  * text is recovered by line/column and handed back to a real JS parser.
  */
+/**
+ * A node's authored source text: a Marko node's `loc` through `sliceLoc`, an
+ * MX node's offsets (`mxSpanOf`) straight from `ctx.source`. The two agree,
+ * CRLF included: `ctx.lines` splits on `\n` alone.
+ */
+export function sliceNode(ctx: Ctx, node: Node): string {
+  const span = node?.loc ? undefined : mxSpanOf(node);
+  if (span) return ctx.source.slice(span.sourceStart, span.sourceEnd);
+  return sliceLoc(ctx, node.loc);
+}
+
 export function sliceLoc(ctx: Ctx, loc: Node): string {
   const { start, end } = loc;
   if (start.line === end.line) {
@@ -1194,8 +1283,8 @@ export function isFunctionLikeValue(node: Node | null | undefined): boolean {
  */
 export function hasContent(children: Node[]): boolean {
   return children.some((child: Node) => {
-    if (child.type === "MarkoComment") return false;
-    if (child.type === "MarkoText") return child.value !== "";
+    if (isCommentNode(child)) return false;
+    if (isTextNode(child)) return child.value !== "";
     return true;
   });
 }
@@ -1284,6 +1373,38 @@ function unsupportedIn(ctx: Ctx): string {
  */
 export function productOf(ctx: Ctx): string {
   return ctx.productName ?? "MX";
+}
+
+/**
+ * Node kinds lowering reads from either AST while it takes both (PR 4; the
+ * Marko half goes with PR 5). A tag is an `MxTag` or an `MxReturn` (Marko's
+ * `<return>` is a `MarkoTag`); an attribute tag is `isMxAttributeTag`'s.
+ */
+export function isTagNode(node: Node): boolean {
+  const type = node?.type;
+  return type === "MarkoTag" || type === "MxTag" || type === "MxReturn";
+}
+
+/** A text run, `MarkoText` or `MxText`. */
+export function isTextNode(node: Node): boolean {
+  return node?.type === "MarkoText" || node?.type === "MxText";
+}
+
+/** A comment, `MarkoComment` or `MxComment`. */
+export function isCommentNode(node: Node): boolean {
+  return node?.type === "MarkoComment" || node?.type === "MxComment";
+}
+
+/** A named attribute, `MarkoAttribute` or `MxAttribute`. */
+export function isAttributeNode(node: Node): boolean {
+  return node?.type === "MarkoAttribute" || node?.type === "MxAttribute";
+}
+
+/** A spread attribute, `MarkoSpreadAttribute` or `MxSpreadAttribute`. */
+export function isSpreadAttributeNode(node: Node): boolean {
+  return (
+    node?.type === "MarkoSpreadAttribute" || node?.type === "MxSpreadAttribute"
+  );
 }
 
 /**
@@ -1427,7 +1548,7 @@ export function rejectInertShape(
   });
 
   for (const attr of node.attributes ?? []) {
-    if (attr.type === "MarkoSpreadAttribute") {
+    if (isSpreadAttributeNode(attr)) {
       fail(
         `spread attributes on \`<${name}>\` are not supported: the tag emits nothing, so a spread's keys would be silently discarded`,
         attr,
@@ -1456,7 +1577,7 @@ export function rejectInertShape(
 
 export function attrByName(node: Node, name: string): Node | undefined {
   return (node.attributes ?? []).find(
-    (a: Node) => a.type === "MarkoAttribute" && a.name === name,
+    (a: Node) => isAttributeNode(a) && a.name === name,
   );
 }
 

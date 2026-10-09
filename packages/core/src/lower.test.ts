@@ -8,17 +8,26 @@ import {
 import { compileSource } from "./compile.ts";
 import type { Ctx, MxWarning, Node } from "./core.ts";
 import {
+  assertPositioned,
   DYNAMIC_TAG,
   expr,
+  fail,
   firstAttributeTag,
   newCtx,
+  positionError,
   TranslateError,
 } from "./core.ts";
 import { STATEMENT_TAGLIB, STATEMENT_TAGLIB_ID } from "./core-taglib.ts";
 import { type CustomTag, customTagTaglib } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
 import type { AttributeTag, Ir, IrNode } from "./ir.ts";
-import { exprOf, exprSpan, lower, paramSpansOf } from "./lower.ts";
+import {
+  exprOf,
+  exprSpan,
+  lower,
+  lowerChildren,
+  paramSpansOf,
+} from "./lower.ts";
 import { lookup } from "./test-targets.ts";
 
 /**
@@ -71,7 +80,7 @@ function lowerSource(
     | ((target: import("./ir.ts").ComponentTarget) => CalleeInput),
   ownInput?: CalleeInput,
   customTags?: Readonly<Record<string, CustomTag>>,
-  reshape?: (body: Node[]) => void,
+  reshape?: (body: Node[], ctx: Ctx) => void,
 ): Ir {
   let ir: Ir | null = null;
   let thrown: unknown = null;
@@ -104,7 +113,7 @@ function lowerSource(
           }
           ctx.ownInput = ownInput;
           ctx.customTags = customTags;
-          reshape?.(path.node.body);
+          reshape?.(path.node.body, ctx);
           try {
             ir = lower(ctx, path.node.body);
           } catch (error) {
@@ -4356,32 +4365,89 @@ describe("a host that binds a dynamic tag's /var opts in", () => {
 });
 
 /**
- * The hybrid attribute-tag paths of PR 4 slice 1, driven with MX-shaped
- * attribute tags until the MX front end feeds `lower()` (PR 5).
+ * The real Marko parse, reshaped into the MX AST as far as `lower()` reads it
+ * so far (PR 4 slices 1 and 2), so its hybrid paths run until the MX front
+ * end feeds `lower()` (PR 5).
  *
- * `toMxAttributeTags` takes the real Marko parse and moves every tag's
- * `attributeTags` back into its body as the MX AST has them: one child list
- * (an array, `MxTagFields.body`) in source order, each `<@name>` an
- * `MxAttributeTag` whose `name` is `{ value, span }` with the `@` dropped from
- * `value` and kept inside `span` (the MX front end's shape, ast §3.7). The
- * rest of each node stays Marko-shaped: later slices retype those reads.
+ * - Slice 1: each tag's `attributeTags` move back into its body as the MX AST
+ *   has them, one child list (an array, `MxTagFields.body`) in source order;
+ *   each `<@name>` is an `MxAttributeTag` whose `name` is `{ value, span }`,
+ *   `@` dropped from `value` and kept inside `span` (ast §3.7).
+ * - Slice 2: every node of a kind slice 2 retyped gets its MX `type` and
+ *   offsets (`start`/`end`, `valueSpan`) and loses `loc`: text, placeholder,
+ *   comment, doctype, CDATA, declaration, scriptlet and attribute tag.
+ *
+ * Fields a later slice retypes stay Marko-shaped: a tag stays a `MarkoTag`
+ * (slice 3), a placeholder keeps `value` beside its `expression` container
+ * and a scriptlet its `body` beside `code` (slice 5).
  */
-function toMxAttributeTags(source: string): (body: Node[]) => void {
+function toMxShape(source: string): (body: Node[]) => void {
   const lineStarts = [0];
   for (let i = 0; i < source.length; i++) {
     if (source[i] === "\n") lineStarts.push(i + 1);
   }
-  const offsetOf = (node: Node): number => {
-    const start = node.loc.start;
-    return (lineStarts[start.line - 1] ?? 0) + start.column;
+  const at = (position: { line: number; column: number }): number =>
+    (lineStarts[position.line - 1] ?? 0) + position.column;
+  const startOf = (node: Node): number =>
+    typeof node.start === "number" ? node.start : at(node.loc.start);
+  const offsets = (node: Node) => ({
+    start: at(node.loc.start),
+    end: at(node.loc.end),
+  });
+  const leaf = (node: Node): Node => {
+    const { start, end } = offsets(node);
+    switch (node.type) {
+      case "MarkoText":
+        return {
+          type: "MxText",
+          value: node.value,
+          raw: source.slice(start, end),
+          valueSpan: { start, end },
+          start,
+          end,
+        };
+      case "MarkoPlaceholder": {
+        const { loc: _loc, ...rest } = node;
+        return {
+          ...rest,
+          type: "MxPlaceholder",
+          expression: { type: "MxExpression", node: node.value },
+          start,
+          end,
+        };
+      }
+      case "MarkoComment":
+      case "MarkoDocumentType":
+      case "MarkoCDATA":
+      case "MarkoDeclaration":
+        return {
+          type: {
+            MarkoComment: "MxComment",
+            MarkoDocumentType: "MxDoctype",
+            MarkoCDATA: "MxCDATA",
+            MarkoDeclaration: "MxDeclaration",
+          }[node.type as string],
+          ...(node.type === "MarkoComment" ? { kind: node.kind } : {}),
+          value: node.value,
+          valueSpan: { start, end },
+          start,
+          end,
+        };
+      case "MarkoScriptlet": {
+        const { loc: _loc, ...rest } = node;
+        return { ...rest, type: "MxScriptlet", start, end };
+      }
+      default:
+        return node;
+    }
   };
   const visit = (node: Node): Node => {
-    if (node?.type !== "MarkoTag") return node;
+    if (node?.type !== "MarkoTag") return leaf(node);
     const children: Node[] = (node.body?.body ?? []).map(visit);
     const tags: Node[] = (node.attributeTags ?? []).map(visit);
     if (tags.length > 0) {
       const merged = [...children, ...tags].sort(
-        (a, b) => offsetOf(a) - offsetOf(b),
+        (a, b) => startOf(a) - startOf(b),
       );
       // Tag params still live on Marko's body wrapper until slice 3 reads
       // `MxTagFields.params`, so a body carrying them keeps the wrapper.
@@ -4393,14 +4459,17 @@ function toMxAttributeTags(source: string): (body: Node[]) => void {
     }
     const name = String(node.name?.value ?? "");
     if (!name.startsWith("@")) return node;
-    const start = offsetOf(node) + 1;
+    const { start, end } = offsets(node);
+    const { loc: _loc, ...rest } = node;
     return {
-      ...node,
+      ...rest,
       type: "MxAttributeTag",
       name: {
         value: name.slice(1),
-        span: { start, end: start + name.length },
+        span: { start: start + 1, end: start + 1 + name.length },
       },
+      start,
+      end,
     };
   };
   return (body) => {
@@ -4422,14 +4491,14 @@ describe("hybrid attribute tags, MX-shaped (PR 4 slice 1)", () => {
       undefined,
       undefined,
       undefined,
-      toMxAttributeTags(source),
+      toMxShape(source),
     );
 
   it("reshapes the parse into MxAttributeTag children", () => {
     const source = "<Panel><@item/></Panel>";
     let seen: Node[] = [];
     lowerSource(source, panel(), undefined, undefined, undefined, (body) => {
-      toMxAttributeTags(source)(body);
+      toMxShape(source)(body);
       seen = body;
     });
     const tag = seen.find((node) => node.type === "MarkoTag");
@@ -4526,3 +4595,198 @@ function lowerSourceError(source: string, policy: Policy): string {
   }
   throw new Error(`${source} lowered without an error`);
 }
+
+describe("hybrid node kinds and spans, MX-shaped (PR 4 slice 2)", () => {
+  const mx = (source: string, policy = fakeDeclarations()) =>
+    lowerSource(
+      source,
+      policy,
+      undefined,
+      undefined,
+      undefined,
+      toMxShape(source),
+    );
+  /** The error `run` throws, as the fields a reporter reads. */
+  const thrown = (run: () => unknown) => {
+    try {
+      run();
+    } catch (error) {
+      const e = error as TranslateError;
+      return { message: e.message, line: e.line, column: e.column, e };
+    }
+    throw new Error("no error thrown");
+  };
+  const ctxFor = (source: string) =>
+    newCtx(
+      source,
+      printExpression,
+      fakeDeclarations(),
+      undefined,
+      "test.mx",
+      lookup,
+    );
+
+  it("reshapes leaf nodes into MX kinds with offsets and no loc", () => {
+    const source = "<!-- c -->\n<div>hi ${x}</div>";
+    let seen: Node[] = [];
+    lowerSource(source, undefined, undefined, undefined, undefined, (body) => {
+      toMxShape(source)(body);
+      seen = body;
+    });
+    expect(seen[0]).toEqual({
+      type: "MxComment",
+      kind: "html",
+      value: " c ",
+      valueSpan: { start: 0, end: 10 },
+      start: 0,
+      end: 10,
+    });
+    const div = seen.find((node) => node.type === "MarkoTag");
+    expect(div.body.body.map((n: Node) => [n.type, n.start, n.end])).toEqual([
+      ["MxText", 16, 19],
+      ["MxPlaceholder", 19, 23],
+    ]);
+    expect(div.body.body.some((n: Node) => "loc" in n)).toBe(false);
+  });
+
+  it.each([
+    ["text and placeholders", "<div>hi ${x} and $!{y}</div>"],
+    [
+      "an HTML and a line comment",
+      "<!-- top -->\n<div>\n  // line\n  <span/>\n</div>",
+    ],
+    ["a doctype", "<!doctype html>\n<html><body>x</body></html>"],
+    ["CRLF lines", "<div>\r\n  a\r\n  ${b}\r\n  <!-- c -->\r\n</div>"],
+    ["UTF-16 surrogate pairs", "<p>\u{1F600} ${x} \u{1F600}</p>"],
+    [
+      "an if chain with layout between branches",
+      "<if=a>A</if>\n<!-- c -->\n<else-if=b>B</else-if>\n<else>C</else>",
+    ],
+    ["a for body", "<ul><for|i| of=xs><li>${i}</li></for></ul>"],
+  ])("lowers %s to the IR the Marko shape lowers to", (_label, source) => {
+    expect(mx(source)).toEqual(lowerSource(source));
+  });
+
+  it.each([
+    ["CDATA", "<div>\n  <![CDATA[ x ]]>\n</div>", 8],
+    ["a declaration", "<div/>\n<?xml version='1.0'?>", 7],
+    ["a scriptlet", "<div>\n  $ const a = 1;\n</div>", 8],
+  ])("positions the %s error as the Marko shape does", (_label, source, at) => {
+    const { e: _marko, ...marko } = thrown(() => lowerSource(source));
+    const { e, ...mxError } = thrown(() => mx(source));
+    expect(mxError).toEqual(marko);
+    // The MX node's offsets stay on the error after the boundary resolved them.
+    expect(e.span?.sourceStart).toBe(at);
+  });
+
+  it("positions an MX-node error in the recovering walk (decision 162)", () => {
+    const source = "<div>\n  <![CDATA[ x ]]>\n</div>\n<?xml?>";
+    let errors: TranslateError[] = [];
+    const { e } = thrown(() =>
+      lowerSource(
+        source,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        (b, c) => {
+          toMxShape(source)(b);
+          c.errors = [];
+          errors = c.errors;
+        },
+      ),
+    );
+    expect(errors.map((each) => [each.line, each.column])).toEqual([
+      [2, 2],
+      [4, 0],
+    ]);
+    expect(e.errors?.map((each) => each.span?.sourceStart)).toEqual([8, 31]);
+  });
+
+  it("positions an MX-node error through the exported lowerChildren", () => {
+    const source = "a\n  <![CDATA[ x ]]>";
+    const cdata = {
+      type: "MxCDATA",
+      value: " x ",
+      valueSpan: { start: 4, end: 19 },
+      start: 4,
+      end: 19,
+    };
+    expect(thrown(() => lowerChildren(ctxFor(source), [cdata]))).toMatchObject({
+      line: 2,
+      column: 2,
+    });
+  });
+
+  it("rejects an MxAttributeTag outside a component call, positioned", () => {
+    const source = "<div>\n  <@a/>\n</div>";
+    const tag = {
+      type: "MxAttributeTag",
+      name: { value: "a", span: { start: 9, end: 11 } },
+      body: null,
+      attributes: [],
+      start: 8,
+      end: 13,
+    };
+    expect(thrown(() => lowerChildren(ctxFor(source), [tag]))).toMatchObject({
+      message:
+        "attribute tag `<@a>` is only valid directly inside a component call",
+      line: 2,
+      column: 2,
+    });
+  });
+
+  it("fails on an MX node kind with no lowering yet instead of dropping it", () => {
+    const source = "import a from 'a';\n";
+    const statement = { type: "MxModuleStatement", start: 0, end: 18 };
+    expect(
+      thrown(() => lowerChildren(ctxFor(source), [statement])),
+    ).toMatchObject({
+      message: "`MxModuleStatement` has no lowering yet (not yours: an MX bug)",
+      line: 1,
+      column: 0,
+    });
+  });
+
+  it("positions a host hook's fail on an MX node at the boundary", () => {
+    const source = "<div>\n  <@a/>\n</div>";
+    const policy = fakeDeclarations({
+      rejectElementAttributeTags: (_name, node) =>
+        fail("no attribute tags here", firstAttributeTag(node)),
+    });
+    expect(thrown(() => mx(source, policy))).toMatchObject({
+      message: "no attribute tags here",
+      line: 2,
+      column: 2,
+    });
+  });
+
+  it("refuses an MX-node error that left the boundary unpositioned", () => {
+    const source = "ab\ncd";
+    let error: unknown;
+    try {
+      fail("oops", { type: "MxText", start: 4, end: 5 });
+    } catch (e) {
+      error = e;
+    }
+    expect(() => assertPositioned(error)).toThrowError(
+      "an error left the lowering without a source position (not yours: an MX bug): oops",
+    );
+    positionError(ctxFor(source), error);
+    expect(() => assertPositioned(error)).not.toThrow();
+    expect(error).toMatchObject({
+      line: 2,
+      column: 1,
+      span: { sourceStart: 4, sourceEnd: 5 },
+    });
+  });
+
+  it("leaves a no-loc node that is not an MX node unpositioned", () => {
+    const ctx = ctxFor("abcdefghijk");
+    expect(exprSpan(ctx, { type: "Id", start: 7, end: 10 })).toBeUndefined();
+    expect(exprSpan(ctx, { type: "MxText", start: 7, end: 10 })).toEqual({
+      sourceStart: 7,
+      sourceEnd: 10,
+    });
+  });
+});

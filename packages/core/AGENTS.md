@@ -798,6 +798,20 @@ Five facts worth knowing before editing it:
   true`) `Import` carry none. Slicing the source with a span yields the
   authored text; tests in `src/spans.test.ts` assert exactly that, including
   under emoji (UTF-16) and CRLF.
+- **Lowering reads both ASTs until PR 5 (parser port PR 4, decision 158).**
+  Node kinds are tested through `isTagNode`/`isTextNode`/`isCommentNode`/
+  `isAttributeNode`/`isSpreadAttributeNode`/`isMxAttributeTag` (core.ts),
+  never a bare `"Marko*"` string, and positions through `posOf(ctx, node)`,
+  `nodeSpan`, `exprSpan` and `sliceNode`: a Marko or Babel node's `loc` first,
+  else an `Mx*` node's UTF-16 `start`/`end` (or a field shape's `span`,
+  `mxSpanOf`). `fail(message, node)` stays ctx-free: on an MX node it records
+  the offsets on `TranslateError.span` and leaves `line`/`column` to the
+  lowering boundary (`recover`, `lower`, `lowerChildren`), which fills them
+  from the source; `compileSource` refuses an error that got past unpositioned
+  as an MX bug (`assertPositioned`). An `Mx*` kind `lowerChildList` has no arm
+  for fails ("has no lowering yet") rather than dropping. Tests drive these
+  paths with `lower.test.ts`'s `toMxShape`, the real Marko parse reshaped into
+  the MX AST as far as lowering reads it; each slice extends it.
 - **Cross-file errors carry their origin structurally.** `metadataForTemplate`
   converts a callee's Marko `CompileError`/`CompileErrors` before the custom-tag
   catch can wrap it at the caller. Its existing `TranslateError.file`, `line`

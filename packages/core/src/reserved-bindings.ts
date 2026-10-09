@@ -1,5 +1,11 @@
 import { type ParserOptions, parse } from "@babel/parser";
-import { type Ctx, type Node, sliceLoc, TranslateError } from "./core.ts";
+import {
+  type Ctx,
+  isTagNode,
+  type Node,
+  sliceNode,
+  TranslateError,
+} from "./core.ts";
 
 /** Shared diagnostic for authored bindings, including host-only code regions. */
 export function reservedBindingMessage(name: string): string {
@@ -61,7 +67,7 @@ export function checkReservedBindings(tree: unknown): void {
     // The parser stamps lowered MX regions. Core already checks their authored
     // bindings; walking the generated replacement would reject our own helpers.
     if (node.extra?.mx) return;
-    if (node.type === "MarkoTag") check(node.var);
+    if (isTagNode(node)) check(node.var);
     if (Array.isArray(node.params) && !skipParams)
       for (const p of node.params) check(p);
     if (
@@ -145,10 +151,10 @@ export function checkReservedTemplate(ctx: Ctx, body: Node[]): void {
   checkReservedBindings(body);
   const visit = (nodes: Node[]): void => {
     for (const node of nodes) {
-      if (node.type !== "MarkoTag") continue;
+      if (!isTagNode(node)) continue;
       const name = node.name?.value;
       if (["import", "export", "static", "server", "client"].includes(name)) {
-        let source = sliceLoc(ctx, node.loc);
+        let source = sliceNode(ctx, node);
         if (name === "static" || name === "server" || name === "client") {
           source = source.replace(/^(static|server|client)\b/, (keyword) =>
             " ".repeat(keyword.length),

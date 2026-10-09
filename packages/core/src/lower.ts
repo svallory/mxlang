@@ -58,13 +58,21 @@ import {
   importBindings,
   importedNames,
   importTypeOnlyBindings,
+  isAttributeNode,
+  isCommentNode,
   isFunctionLikeValue,
   isMarkoOrMxSpecifier,
   isMxAttributeTag,
+  isSpreadAttributeNode,
+  isTagNode,
+  isTextNode,
   isTranslateError,
   markoBabel,
+  mxSpanOf,
   type Node,
   newCtx,
+  positionAtOffset,
+  positionError,
   productOf,
   recover,
   rejectInertShape,
@@ -72,6 +80,7 @@ import {
   scopeBindings,
   shadowBindings,
   sliceLoc,
+  sliceNode,
   TranslateError,
   VOID_TAGS,
   warn,
@@ -141,14 +150,22 @@ import {
   wildcardMatchOf,
 } from "./wildcard-resolve.ts";
 
-/** A node's start position, in `TranslateError`'s own 1-based/0-based shape. */
-function posOf(node: Node): Position {
+/**
+ * A node's start position, in `TranslateError`'s own 1-based/0-based shape:
+ * a Marko or Babel node's `loc`, else an MX node's offset (`mxSpanOf`)
+ * against `ctx.source`.
+ */
+function posOf(ctx: Ctx, node: Node): Position {
+  const span = node?.loc ? undefined : mxSpanOf(node);
+  if (span) return positionAtOffset(ctx, span.sourceStart);
   const start = node?.loc?.start ?? node?.start ?? {};
   return { line: start.line ?? 0, column: start.column ?? 0 };
 }
 
 /** A node's end position, paired with `posOf` for source-backed code blocks. */
-function endPosOf(node: Node): Position {
+function endPosOf(ctx: Ctx, node: Node): Position {
+  const span = node?.loc ? undefined : mxSpanOf(node);
+  if (span) return positionAtOffset(ctx, span.sourceEnd);
   const end = node?.loc?.end ?? node?.end ?? {};
   return { line: end.line ?? 0, column: end.column ?? 0 };
 }
@@ -162,26 +179,13 @@ function offsetOf(ctx: Ctx, position: Position & { index?: number }): number {
   return Math.min(ctx.source.length, offset + position.column);
 }
 
-function positionAtOffset(ctx: Ctx, offset: number): Position {
-  let line = 1;
-  let lineStart = 0;
-  for (const text of ctx.lines) {
-    const lineEnd = lineStart + text.length;
-    if (offset <= lineEnd) return { line, column: offset - lineStart };
-    line++;
-    lineStart = lineEnd + 1;
-  }
-  return {
-    line: Math.max(1, ctx.lines.length),
-    column: Math.max(0, offset - lineStart),
-  };
-}
-
 function attributeTagNamePosition(ctx: Ctx, tag: AttributeTag): Position {
   return positionAtOffset(ctx, tag.nameSpan.sourceStart);
 }
 
 function nodeSpan(ctx: Ctx, node: Node): SourceSpan {
+  const span = node?.loc ? undefined : mxSpanOf(node);
+  if (span) return span;
   const start = node?.loc?.start ?? node?.start ?? {};
   const end = node?.loc?.end ?? node?.end ?? start;
   return {
@@ -206,7 +210,7 @@ function nodeSpan(ctx: Ctx, node: Node): SourceSpan {
  * own export comment below.
  */
 export function exprSpan(ctx: Ctx, node: Node): SourceSpan | undefined {
-  if (!node?.loc) return undefined;
+  if (!node?.loc) return mxSpanOf(node);
   return nodeSpan(ctx, node);
 }
 
@@ -608,7 +612,7 @@ const NON_DOM_EVENT_SPELLINGS: Record<string, string | null> = {
 function warnOnNonDomEventSpelling(ctx: Ctx, attr: Node, name: string): void {
   if (!Object.hasOwn(NON_DOM_EVENT_SPELLINGS, name)) return;
   const suggestion = NON_DOM_EVENT_SPELLINGS[name];
-  const pos = posOf(attr);
+  const pos = posOf(ctx, attr);
   warn(ctx, {
     message:
       `\`${name}\` is not a DOM event` +
@@ -792,10 +796,7 @@ function validateBuiltinValueAttributes(node: Node, name: string): void {
   } else if (name === "let" || name === "return") {
     let seen = false;
     for (const attr of node.attributes ?? []) {
-      if (
-        attr.type !== "MarkoAttribute" ||
-        (!attr.default && attr.name !== "value")
-      )
+      if (!isAttributeNode(attr) || (!attr.default && attr.name !== "value"))
         continue;
       if (seen) fail("Invalid duplicate value attribute.", attr);
       seen = true;
@@ -838,11 +839,11 @@ function lowerAttrNamed(
   const loc = attr?.sugarAt
     ? attr.sugarAt
     : attr?.loc || attr?.start
-      ? posOf(attr)
-      : (tagLoc ?? posOf(attr));
+      ? posOf(ctx, attr)
+      : (tagLoc ?? posOf(ctx, attr));
   const nameSpan = attrNameSpan(ctx, attr, tagLoc);
 
-  if (attr.type === "MarkoSpreadAttribute") {
+  if (isSpreadAttributeNode(attr)) {
     return { kind: "spread", value: exprOf(ctx, attr.value), loc };
   }
 
@@ -1047,7 +1048,7 @@ function lowerAttrs(
   const attrs = resolveDuplicateAttrs(
     ctx,
     (node.attributes ?? []).map((attr: Node) =>
-      lowerAttr(ctx, attr, on, isElement, posOf(node)),
+      lowerAttr(ctx, attr, on, isElement, posOf(ctx, node)),
     ),
   );
   return ctx.declarations.orderAttrs?.(name, attrs, on, ctx) ?? attrs;
@@ -1144,7 +1145,7 @@ export function paramSpansOf(
 /** Marko keeps non-empty params as nodes but represents both absent and `||` as `[]`. */
 function hasParams(ctx: Ctx, node: Node): boolean {
   if ((node.body?.params ?? []).length > 0) return true;
-  const source = sliceLoc(ctx, node.loc);
+  const source = sliceNode(ctx, node);
   const openEnd = source.indexOf(">");
   return (openEnd < 0 ? source : source.slice(0, openEnd)).includes("||");
 }
@@ -1187,7 +1188,7 @@ function lowerBlock(ctx: Ctx, node: Node, body = node.body?.body ?? []): Block {
     hasParams: hasParams(ctx, node),
     params: paramsOf(ctx, node),
     children,
-    loc: posOf(node),
+    loc: posOf(ctx, node),
   };
 }
 
@@ -1242,18 +1243,12 @@ function attributeTagNameSpan(ctx: Ctx, node: Node): SourceSpan {
 }
 
 function isLayout(node: Node): boolean {
-  return (
-    node.type === "MarkoComment" ||
-    (node.type === "MarkoText" && node.value.trim() === "")
-  );
+  return isCommentNode(node) || (isTextNode(node) && node.value.trim() === "");
 }
 
 function isControl(node: Node): boolean {
   const name = String(node?.name?.value ?? "").replace(/^@/, "");
-  return (
-    (node?.type === "MarkoTag" || node?.type === "MxTag") &&
-    (name === "if" || name === "for")
-  );
+  return isTagNode(node) && (name === "if" || name === "for");
 }
 
 function containsAttributeTags(node: Node): boolean {
@@ -1323,7 +1318,7 @@ function warnDefineExtraParams(
     containsAttributeTags(node) ||
     hasContent(node.body?.body ?? []);
   if (!carries) return;
-  const pos = posOf(node.name ?? node);
+  const pos = posOf(ctx, node.name ?? node);
   warn(ctx, {
     message: `\`<${name}>\` has ${params.length} params, but only the first parameter receives the attributes object; destructure it (\`|{ a, b }|\`) instead of reading one param per attribute`,
     line: pos.line,
@@ -1337,7 +1332,7 @@ function validateParentCollision(node: Node, schema: AttrSchema): void {
   if (!owner) return;
   const parentAttrs = new Set(
     (owner.attributes ?? [])
-      .filter((attr: Node) => attr.type !== "MarkoSpreadAttribute")
+      .filter((attr: Node) => !isSpreadAttributeNode(attr))
       .map((attr: Node) => attr.name),
   );
   const name = attrName(node);
@@ -1673,8 +1668,7 @@ function lowerAuthoredAttributeTag(
   validateParentCollision(node, schema);
   const attrs = node.attributes ?? [];
   const contentAttr = attrs.find(
-    (attr: Node) =>
-      attr.type !== "MarkoSpreadAttribute" && attr.name === "content",
+    (attr: Node) => !isSpreadAttributeNode(attr) && attr.name === "content",
   );
   if (contentAttr) {
     fail(
@@ -1722,7 +1716,7 @@ function lowerAuthoredAttributeTag(
     hasParams: hasParamsAtCall,
     params: paramsOf(ctx, node),
     children: lowerChildren(ctx, nested.contentChildren),
-    loc: posOf(node),
+    loc: posOf(ctx, node),
   };
   restore();
   unscope();
@@ -1753,7 +1747,7 @@ function lowerAuthoredAttributeTag(
     attributeTags: nested.flat,
     attributeTagTree: nested.tree,
     attrTagProps: nested.props,
-    loc: posOf(node),
+    loc: posOf(ctx, node),
   };
 }
 
@@ -1773,7 +1767,7 @@ function lowerAttributeFor(
     kind: "AttributeTagFor",
     loop,
     nodes: lowered.tree,
-    loc: posOf(node),
+    loc: posOf(ctx, node),
   };
 }
 
@@ -1827,7 +1821,7 @@ function lowerAttributeIf(
       branchContent[0],
     );
   }
-  return [{ kind: "AttributeTagIf", branches, loc: posOf(first) }, cursor];
+  return [{ kind: "AttributeTagIf", branches, loc: posOf(ctx, first) }, cursor];
 }
 
 function attributeIfChainEnd(body: Node[], index: number): number {
@@ -1878,12 +1872,12 @@ function lowerAttributeTags(
   // collected up front: the loop below jumps over an `<if>` chain, and the
   // chain scan skips layout comments, so a comment collected in the loop
   // could be skipped with it.
-  const hoistedComments: Node[] = directTags.filter(
-    (tag: Node) => tag?.type === "MarkoComment",
+  const hoistedComments: Node[] = directTags.filter((tag: Node) =>
+    isCommentNode(tag),
   );
   for (let index = 0; index < directTags.length; index++) {
     const tag = directTags[index];
-    if (tag?.type === "MarkoComment") continue;
+    if (isCommentNode(tag)) continue;
     if (isControl(tag) && containsAttributeTags(tag)) {
       candidates.push({
         offset: nodeSpan(ctx, tag).sourceStart,
@@ -2048,7 +2042,7 @@ function lowerIfChain(
       condition: exprOf(ctx, cond.value),
       children: branchChildren(node),
       span: exprSpan(ctx, node),
-      loc: posOf(node),
+      loc: posOf(ctx, node),
     },
   ];
 
@@ -2057,17 +2051,17 @@ function lowerIfChain(
   while (i < children.length) {
     const child = children[i];
     // Whitespace and comments between branches are layout, not content.
-    if (child.type === "MarkoComment") {
+    if (isCommentNode(child)) {
       i++;
       continue;
     }
-    if (child.type === "MarkoText" && child.value.trim() === "") {
+    if (isTextNode(child) && child.value.trim() === "") {
       i++;
       continue;
     }
     const childName = child.name?.value;
     if (
-      child.type !== "MarkoTag" ||
+      !isTagNode(child) ||
       (childName !== "else" && childName !== "else-if")
     ) {
       break;
@@ -2085,7 +2079,7 @@ function lowerIfChain(
       condition: ifAttr ? exprOf(ctx, ifAttr.value) : null,
       children: branchChildren(child),
       span: exprSpan(ctx, child),
-      loc: posOf(child),
+      loc: posOf(ctx, child),
     });
     lastBranch = child;
     i++;
@@ -2104,7 +2098,7 @@ function lowerIfChain(
         startSpan && endSpan
           ? { sourceStart: startSpan.sourceStart, sourceEnd: endSpan.sourceEnd }
           : undefined,
-      loc: posOf(node),
+      loc: posOf(ctx, node),
     },
     i,
   ];
@@ -2318,7 +2312,7 @@ function lowerFor(ctx: Ctx, node: Node): IrNode {
     ...head,
     children,
     span: exprSpan(ctx, node),
-    loc: posOf(node),
+    loc: posOf(ctx, node),
   };
 }
 
@@ -2359,7 +2353,7 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
     name,
     init,
     span: exprSpan(ctx, node),
-    loc: posOf(node),
+    loc: posOf(ctx, node),
   };
 }
 
@@ -2601,7 +2595,7 @@ function warnLowercaseBinding(ctx: Ctx, node: Node, name: string): void {
     "or write",
     "",
   );
-  const at = posOf(node);
+  const at = posOf(ctx, node);
   warn(ctx, {
     message: `\`<${name}>\` is the native element; the \`${name}\` ${kind}${where} is not called. ${fix}`,
     line: at.line,
@@ -2628,7 +2622,7 @@ function bindFailedDefine(ctx: Ctx, node: Node): void {
       // The params are what failed; the name alone is still bound.
     }
     ctx.defines.set(name, params);
-    ctx.bindingSites.set(name, { kind: "defined", ...posOf(node.var) });
+    ctx.bindingSites.set(name, { kind: "defined", ...posOf(ctx, node.var) });
   } catch {
     // No readable name to bind.
   }
@@ -2671,14 +2665,17 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
   unscope();
 
   ctx.defines.set(name, params);
-  ctx.bindingSites.set(name, { kind: "defined", ...posOf(node.var ?? node) });
+  ctx.bindingSites.set(name, {
+    kind: "defined",
+    ...posOf(ctx, node.var ?? node),
+  });
 
-  const loc = posOf(node);
+  const loc = posOf(ctx, node);
   const hoisted: IrNode[] = prelude.map(({ code, node }) => ({
     kind: "Hoisted" as const,
     code,
-    loc: posOf(node),
-    end: endPosOf(node),
+    loc: posOf(ctx, node),
+    end: endPosOf(ctx, node),
   }));
   return {
     kind: "Define",
@@ -2781,6 +2778,7 @@ function statementSpan(ctx: Ctx, node: Node): SourceSpan | undefined {
  * of the authored statement come before `code` (`static `).
  */
 function rejectInvalidStatement(
+  ctx: Ctx,
   node: Node,
   code: string,
   prefix: number,
@@ -2796,7 +2794,7 @@ function rejectInvalidStatement(
     // compiles a template `static return` too.
     allowReturnOutsideFunction: true,
   };
-  const start = posOf(node);
+  const start = posOf(ctx, node);
   const place = (at?: { line: number; column: number }) => ({
     line: start.line + (at ? at.line - 1 : 0),
     column:
@@ -2914,11 +2912,12 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
       node,
     );
   }
-  const line = sliceLoc(ctx, node.loc).trim();
-  const loc = posOf(node);
-  const end = endPosOf(node);
+  const line = sliceNode(ctx, node).trim();
+  const loc = posOf(ctx, node);
+  const end = endPosOf(ctx, node);
   const span = statementSpan(ctx, node);
   rejectInvalidStatement(
+    ctx,
     node,
     name === "static" ? line.replace(/^static\s+/, "") : line,
     name === "static" ? (/^static\s+/.exec(line)?.[0].length ?? 0) : 0,
@@ -2984,7 +2983,7 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
 
 /** A tag this host claims, with every part lowered for its emitter. */
 function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
-  const loc = posOf(node);
+  const loc = posOf(ctx, node);
   const target: ComponentTarget =
     name === DYNAMIC_TAG
       ? { kind: "dynamic", expr: exprOf(ctx, node.name) }
@@ -3055,14 +3054,14 @@ function lowerReturn(ctx: Ctx, node: Node, nested: boolean): IrNode {
   }
 
   for (const attr of node.attributes ?? []) {
-    if (attr.type === "MarkoSpreadAttribute") {
+    if (isSpreadAttributeNode(attr)) {
       fail("`<return>` does not support spread attributes", attr);
     }
   }
 
   let valueAttr: Node | undefined;
   for (const attr of node.attributes ?? []) {
-    if (attr.type !== "MarkoAttribute") continue;
+    if (!isAttributeNode(attr)) continue;
     // The parser spells `<return=x/>` as the `default` attribute and
     // `<return value=x/>` as `value`; both are the same authored thing.
     const attrName = attr.default ? "value" : String(attr.name);
@@ -3093,10 +3092,13 @@ function lowerReturn(ctx: Ctx, node: Node, nested: boolean): IrNode {
     fail("cannot have multiple `<return>` tags for the template", node);
   }
 
-  ctx.returnValue = { expr: exprOf(ctx, valueAttr.value), loc: posOf(node) };
+  ctx.returnValue = {
+    expr: exprOf(ctx, valueAttr.value),
+    loc: posOf(ctx, node),
+  };
   // Contributes nothing to the rendered output: the value is lifted onto the
   // `Ir` and emitted as part of the unit's signature, not in document order.
-  return { kind: "Text", value: "", loc: posOf(node) };
+  return { kind: "Text", value: "", loc: posOf(ctx, node) };
 }
 
 /** Check attribute-tag authored bodies before any child can transform away its name. */
@@ -3160,7 +3162,7 @@ function validateCustomAttributeTagBodies(
         declaration,
         {
           name: `@${name}`,
-          loc: posOf(tag),
+          loc: posOf(ctx, tag),
           childTree: authoredChildTree(ctx, tag.body?.body ?? []),
         },
         nestedOwner,
@@ -3177,7 +3179,7 @@ function validateCustomAttributeTagBodies(
   }
   for (const child of children) {
     if (
-      child.type === "MarkoTag" &&
+      isTagNode(child) &&
       CONTROL_FLOW_TAGS.includes(child.name?.value) &&
       !directTags.includes(child)
     ) {
@@ -3242,12 +3244,15 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
   const tree: ChildNode[] = [];
   for (let index = 0; index < children.length; index++) {
     const node = children[index];
-    const loc = posOf(node);
-    if (node.type === "MarkoText") {
+    const loc = posOf(ctx, node);
+    if (isTextNode(node)) {
       if (node.value.trim() !== "") tree.push({ kind: "ChildText", loc });
-    } else if (node.type === "MarkoPlaceholder") {
+    } else if (
+      node.type === "MarkoPlaceholder" ||
+      node.type === "MxPlaceholder"
+    ) {
       tree.push({ kind: "ChildText", loc });
-    } else if (node.type === "MarkoTag") {
+    } else if (isTagNode(node)) {
       if (node.name?.type !== "StringLiteral") {
         tree.push({ kind: "ChildDynamic", loc });
         continue;
@@ -3277,7 +3282,7 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
           }
           const branchName = branch.name?.value;
           if (
-            branch.type !== "MarkoTag" ||
+            !isTagNode(branch) ||
             (branchName !== "else" && branchName !== "else-if")
           )
             break;
@@ -3344,7 +3349,7 @@ function lowerCustomTag(
   validateCustomTagParents(
     definition,
     name,
-    posOf(node),
+    posOf(ctx, node),
     ctx.authoredAncestors?.at(-2) ?? "#root",
     label,
   );
@@ -3398,7 +3403,7 @@ function lowerCustomTag(
   const childTree = authoredChildTree(ctx, children);
   validateCustomTagChildren(
     definition,
-    { name, loc: posOf(node), childTree },
+    { name, loc: posOf(ctx, node), childTree },
     label,
   );
   const handsToHost =
@@ -3411,7 +3416,7 @@ function lowerCustomTag(
     ...(alias ? { alias } : {}),
     nameSpan: exprSpan(ctx, node.name),
     span: exprSpan(ctx, node),
-    loc: posOf(node),
+    loc: posOf(ctx, node),
     // A contract-only call on a claimed name becomes a DelegatedTag, so its
     // attributes lower as `lowerDelegatedTag` lowers them.
     attrs: lowerAttrs(ctx, node, name, handsToHost ? "element" : "component"),
@@ -3511,7 +3516,7 @@ function lowerComponent(
     ctx.calleeInputFor?.(target) ?? readCalleeInput(target, ctx).input;
   const owner = targetName(target);
   if (input.kind === "unresolved" && containsAttributeTags(node)) {
-    const pos = posOf(node.name ?? node);
+    const pos = posOf(ctx, node.name ?? node);
     warn(ctx, {
       message: `couldn't read \`<${owner}>\`'s Input (\`${input.specifier}\` not resolvable); attribute-tag shape inferred from this call`,
       line: pos.line,
@@ -3554,7 +3559,7 @@ function lowerComponent(
     var: callVar,
     varBindings: varBindingsOf(ctx, node.var),
     ...(returnShape === "returns" ? { returnsValue: true } : {}),
-    loc: posOf(node),
+    loc: posOf(ctx, node),
   };
 }
 
@@ -3682,6 +3687,11 @@ function pushAuthoredAncestor(ctx: Ctx, name: string, node: Node): () => void {
     ancestors.pop();
     nodes.pop();
   };
+}
+
+/** An attribute tag (`name` with its `@`) written outside a component call. */
+function strayAttributeTagMessage(name: string): string {
+  return `attribute tag \`<${name}>\` is only valid directly inside a component call`;
 }
 
 function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
@@ -3821,9 +3831,10 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     (name === "server" || name === "client") &&
     typeof node.rawValue === "string"
   ) {
-    const text = sliceLoc(ctx, node.loc).trim();
+    const text = sliceNode(ctx, node).trim();
     const keyword = new RegExp(`^${name}\\s+`).exec(text)?.[0] ?? name;
     rejectInvalidStatement(
+      ctx,
       node,
       text.slice(keyword.length),
       keyword.length,
@@ -3838,7 +3849,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     if (disposition.kind === "error") fail(disposition.reason, node);
     rejectInertShape(ctx, node, name, disposition);
     // Inert: accepted, contributes nothing to the IR.
-    return { kind: "Text", value: "", loc: posOf(node) };
+    return { kind: "Text", value: "", loc: posOf(ctx, node) };
   }
 
   switch (name) {
@@ -3872,12 +3883,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       return fail(`\`<${name}>\` without a preceding \`<if>\``, node);
   }
 
-  if (name.startsWith("@")) {
-    fail(
-      `attribute tag \`<${name}>\` is only valid directly inside a component call`,
-      node,
-    );
-  }
+  if (name.startsWith("@")) fail(strayAttributeTagMessage(name), node);
 
   // Core-owned custom tags (`<try>`) are consulted before a caller's own
   // `ctx.customTags`, and win unconditionally: a caller registering the same
@@ -4013,7 +4019,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   ) {
     const template = ctx.lookup?.getTag(name)?.template;
     const binding = template
-      ? bindingForDiscoveredModule(ctx, template, name, posOf(node))
+      ? bindingForDiscoveredModule(ctx, template, name, posOf(ctx, node))
       : undefined;
     // `resolvedPath` keeps every metadata read (return shape, `Input`,
     // attribute tags, `/var`) on the taglib tag too: resolved by name, it
@@ -4117,7 +4123,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       );
     }
     const binding = modulePath
-      ? bindingForDiscoveredModule(ctx, modulePath, name, posOf(node))
+      ? bindingForDiscoveredModule(ctx, modulePath, name, posOf(ctx, node))
       : undefined;
     return lowerComponent(
       ctx,
@@ -4188,7 +4194,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     attrs: lowerAttrs(ctx, node, name, "element", true),
     children: isVoid ? [] : lowerChildren(ctx, contentChildren),
     void: isVoid,
-    loc: posOf(node),
+    loc: posOf(ctx, node),
   };
 }
 
@@ -4208,6 +4214,17 @@ const DECLARATION_MESSAGE =
   "`<?…?>` (an XML declaration or processing instruction) is not supported: remove it";
 
 export function lowerChildren(ctx: Ctx, children: Node[]): IrNode[] {
+  try {
+    return lowerChildrenOf(ctx, children);
+  } catch (error) {
+    // A lowering boundary (decision 158, PR 4 addendum): an error raised on
+    // an MX node leaves positioned.
+    positionError(ctx, error);
+    throw error;
+  }
+}
+
+function lowerChildrenOf(ctx: Ctx, children: Node[]): IrNode[] {
   // An external call (not from `lower`) has unresolved unnamed tags; the
   // walk starts with no parents, right for a body lowered on its own.
   if (!ctx.unnamedTagsResolved) {
@@ -4258,16 +4275,16 @@ function ifChainEnd(children: Node[], index: number): number {
   let i = index + 1;
   while (i < children.length) {
     const child = children[i];
-    if (child.type === "MarkoComment") {
+    if (isCommentNode(child)) {
       i++;
       continue;
     }
-    if (child.type === "MarkoText" && child.value.trim() === "") {
+    if (isTextNode(child) && child.value.trim() === "") {
       i++;
       continue;
     }
     const name = child.name?.value;
-    if (child.type !== "MarkoTag" || (name !== "else" && name !== "else-if")) {
+    if (!isTagNode(child) || (name !== "else" && name !== "else-if")) {
       break;
     }
     i++;
@@ -4290,15 +4307,15 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
   const importsName = (tagName: string): boolean => {
     siblingImports ??= new Set(
       children.flatMap((child) =>
-        child?.type === "MarkoTag" && child.name?.value === "import"
-          ? importBindings(sliceLoc(ctx, child.loc).trim())
+        isTagNode(child) && child.name?.value === "import"
+          ? importBindings(sliceNode(ctx, child).trim())
           : [],
       ),
     );
     return siblingImports.has(tagName);
   };
   for (const child of children) {
-    if (child?.type !== "MarkoTag" || !child.var) continue;
+    if (!isTagNode(child) || !child.var) continue;
     // Only a *custom tag call* binds a `/var` from a unit's `<return>`.
     // `<let>`, `<const>` and every other core construct that takes a `/var`
     // declares an ordinary binding whose scope rules already work, and
@@ -4330,7 +4347,7 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
   while (index < children.length) {
     const child = children[index];
 
-    if (child.type === "MarkoTag" && child.name?.value === "if") {
+    if (isTagNode(child) && child.name?.value === "if") {
       const lowered = recover(ctx, () => lowerIfChain(ctx, children, index));
       if (lowered) {
         out.push(lowered[0]);
@@ -4350,6 +4367,7 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
     recover(ctx, () => {
       switch (child.type) {
         case "MarkoText":
+        case "MxText":
           // Already decision 33: Marko's own `onText` dropped newline-bearing
           // whitespace runs and collapsed the rest before we saw them. `value`
           // carries that normalized text; `span` covers the authored range.
@@ -4357,10 +4375,11 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
             kind: "Text",
             value: child.value,
             span: exprSpan(ctx, child),
-            loc: posOf(child),
+            loc: posOf(ctx, child),
           });
           break;
-        case "MarkoPlaceholder": {
+        case "MarkoPlaceholder":
+        case "MxPlaceholder": {
           const interpolation = exprOf(ctx, child.value);
           rejectUncalledParameterizedAttributeTag(
             ctx,
@@ -4372,11 +4391,13 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
             expr: interpolation,
             escaped: child.escape,
             span: exprSpan(ctx, child),
-            loc: posOf(child),
+            loc: posOf(ctx, child),
           });
           break;
         }
-        case "MarkoTag": {
+        case "MarkoTag":
+        case "MxTag":
+        case "MxReturn": {
           // A statement the host hoisted stays on `ctx.prelude` and is drained
           // by the enclosing *function* — `lowerDefine`, or `lower` for the
           // render function — never here. Draining it at every child list would
@@ -4388,25 +4409,32 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
           else out.push(lowered);
           break;
         }
+        // Marko's `<@name>` here is a `MarkoTag`, rejected by `lowerTag`.
+        case "MxAttributeTag":
+          fail(strayAttributeTagMessage(`@${child.name.value}`), child);
+          break;
         case "MarkoDocumentType":
+        case "MxDoctype":
           out.push({
             kind: "DocumentType",
             value: child.value,
-            loc: posOf(child),
+            loc: posOf(ctx, child),
           });
           break;
         case "MarkoComment":
+        case "MxComment":
           // Marko strips the delimiters, so an HTML comment and a `//` line
           // comment are indistinguishable by value alone; the source decides.
           out.push({
             kind: "Comment",
             value: child.value,
-            html: sliceLoc(ctx, child.loc).startsWith("<!--"),
+            html: sliceNode(ctx, child).startsWith("<!--"),
             span: exprSpan(ctx, child),
-            loc: posOf(child),
+            loc: posOf(ctx, child),
           });
           break;
         case "MarkoScriptlet":
+        case "MxScriptlet":
           fail(
             `scriptlets (\`$ statement\`) are not supported in ${productOf(ctx)} (decision 54)${scriptletSentence(declaredVariable(child), ctx.declarations)}`,
             child,
@@ -4422,11 +4450,23 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
         // the construct there is text and stays text. That is the parser's call,
         // not this switch's, which is why nothing here has to special-case them.
         case "MarkoCDATA":
+        case "MxCDATA":
           fail(CDATA_MESSAGE, child);
           break;
         case "MarkoDeclaration":
+        case "MxDeclaration":
           fail(DECLARATION_MESSAGE, child);
           break;
+        default:
+          // An MX node kind with no lowering yet (`MxModuleStatement` until
+          // PR 4 slice 6) is never dropped silently; a Marko kind this
+          // switch has no arm for keeps today's behaviour.
+          if (String(child.type).startsWith("Mx")) {
+            fail(
+              `\`${child.type}\` has no lowering yet (not yours: an MX bug)`,
+              child,
+            );
+          }
       }
     });
     index++;
@@ -4443,6 +4483,17 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
  * filtering the tree for statement nodes.
  */
 export function lower(ctx: Ctx, body: Node[]): Ir {
+  try {
+    return lowerRoot(ctx, body);
+  } catch (error) {
+    // A lowering boundary (decision 158, PR 4 addendum): an error raised on
+    // an MX node leaves positioned.
+    positionError(ctx, error);
+    throw error;
+  }
+}
+
+function lowerRoot(ctx: Ctx, body: Node[]): Ir {
   // Before anything reads a tag name: an unnamed tag has none yet. The flag
   // tells `lowerChildren` the whole tree is already resolved, so only a call
   // from outside this walk resolves (and never re-walks a subtree).
@@ -4469,8 +4520,7 @@ function lowerTemplate(ctx: Ctx, body: Node[]): Ir {
   const ownInputCode: string[] = [];
   const ownInputAux: string[] = [];
   for (const node of body) {
-    if (node.type !== "MarkoTag" || node.name?.type !== "StringLiteral")
-      continue;
+    if (!isTagNode(node) || node.name?.type !== "StringLiteral") continue;
     const statementName = node.name.value as string;
     if (
       statementName !== "import" &&
@@ -4478,7 +4528,7 @@ function lowerTemplate(ctx: Ctx, body: Node[]): Ir {
       statementName !== "export"
     )
       continue;
-    const code = sliceLoc(ctx, node.loc).trim();
+    const code = sliceNode(ctx, node).trim();
     if (/^export\s+(?:interface|type)\s+Input\b/.test(code)) {
       ownInputCode.push(code);
     } else if (statementName === "import") {
@@ -4554,8 +4604,8 @@ function lowerTemplate(ctx: Ctx, body: Node[]): Ir {
     prelude: prelude.map(({ code, node }) => ({
       kind: "Hoisted",
       code,
-      loc: posOf(node),
-      end: endPosOf(node),
+      loc: posOf(ctx, node),
+      end: endPosOf(ctx, node),
     })),
     body: [],
     tagMetadata: { readsContent: false, attributeTags: [] },

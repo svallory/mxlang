@@ -21,6 +21,7 @@ import { type AtomFacts, emptyAtomFacts } from "./atom-contracts.ts";
 import { rejectShadowedRegistration } from "./builtin-tags.ts";
 import { annotateCloseTagOpener } from "./close-tag-opener.ts";
 import {
+  assertPositioned,
   type Ctx,
   isTranslateError,
   type MxWarning,
@@ -453,6 +454,11 @@ export function compileSource(
     });
   } catch (error) {
     if (isTranslateError(error)) {
+      // Past `lower()` nothing knows the source: an MX-node error that got
+      // here unpositioned is an MX bug, never a 0:0 diagnostic.
+      for (const each of [error, ...(error.errors ?? [])]) {
+        assertPositioned(each);
+      }
       error.dependencies = state.dependencies;
       error.atomFacts = state.atomFacts;
       dropCompiledFilePrefix(error, filename);

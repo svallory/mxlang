@@ -1,5 +1,5 @@
 import { dirname } from "node:path";
-import { type Ctx, type Node, TranslateError } from "./core.ts";
+import { type Ctx, isTagNode, type Node, TranslateError } from "./core.ts";
 import type { DefaultTagContext, DefaultTagParent } from "./declarations.ts";
 import {
   elementPredicate,
@@ -22,7 +22,7 @@ import {
  * has; that is the one reliable mark of the unnamed tag.
  */
 function isUnnamedTag(node: Node): boolean {
-  if (node?.type !== "MarkoTag" || node.name?.type !== "StringLiteral") {
+  if (!isTagNode(node) || node.name?.type !== "StringLiteral") {
     return false;
   }
   const loc = node.name.loc;
@@ -73,7 +73,7 @@ export function resolveUnnamedTags(ctx: Ctx, body: readonly Node[]): void {
     scope: ContractScope | undefined,
   ): void => {
     for (const node of new Set(nodes)) {
-      if (node?.type !== "MarkoTag") continue;
+      if (!isTagNode(node)) continue;
       // Decision 146: `:name`/`#id`/`.class` sugar turns into the tag the
       // author would have written without it, before the name is read.
       rewriteNameSugar(ctx, node);
