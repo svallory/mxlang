@@ -241,3 +241,7 @@ and the always-quoted form is safer and more readable.
   `.` and `./bun`.
 
 - **chore:** renamed scope from `@markox` to `@mxlang` (decision 74).
+
+- **Fixed (html-publish-prep):** Publish prep for `@mxlang/html` and the repository metadata: `@mxlang/html` ships its `LICENSE` and declares `publishConfig.access: public`; every `repository` URL points at `github.com/svallory/mxlang`; the README and docs example import the named `translator` and lead with `compile`; `@mxlang/core` writes `dist/THIRD-PARTY-NOTICES.md` with the licence text of the vendored `@babel/parser`, `@babel/helper-validator-identifier` and `charcodes` that `dist/index.js` bundles.
+
+- **Changed (marko-644-pin):** Pin `@marko/compiler` 5.42.11 in `@mxlang/core` and `@mxlang/html`, and `marko` / `@marko/runtime-tags` 6.4.4 in the oracle, so the html oracle goldens and every parity claim run against Marko 6.4.4.

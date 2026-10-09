@@ -256,7 +256,7 @@
     },
     "packages/core": {
       "name": "@mxlang/core",
-      "version": "0.1.0-alpha.13",
+      "version": "0.1.0-alpha.14",
       "dependencies": {
         "@babel/parser": "7.29.8",
       },
@@ -502,7 +502,7 @@
     },
     "packages/targets/data": {
       "name": "@mxlang/data",
-      "version": "0.1.0-alpha.13",
+      "version": "0.1.0-alpha.14",
       "dependencies": {
         "@babel/types": "7.29.8",
         "@mxlang/core": "workspace:*",

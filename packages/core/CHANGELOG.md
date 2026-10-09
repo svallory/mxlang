@@ -1,5 +1,15 @@
 # @mxlang/core
 
+## 0.1.0-alpha.14 — 2026-10-09
+
+- **Fixed (html-publish-prep):** Publish prep for `@mxlang/html` and the repository metadata: `@mxlang/html` ships its `LICENSE` and declares `publishConfig.access: public`; every `repository` URL points at `github.com/svallory/mxlang`; the README and docs example import the named `translator` and lead with `compile`; `@mxlang/core` writes `dist/THIRD-PARTY-NOTICES.md` with the licence text of the vendored `@babel/parser`, `@babel/helper-validator-identifier` and `charcodes` that `dist/index.js` bundles.
+
+- **Changed (marko-644-pin):** Pin `@marko/compiler` 5.42.11 in `@mxlang/core` and `@mxlang/html`, and `marko` / `@marko/runtime-tags` 6.4.4 in the oracle, so the html oracle goldens and every parity claim run against Marko 6.4.4.
+
+- **Added (mesh-alpha14-asks):** - `@mxlang/core/syntax/member`: Mesh's `&` member sigil module (all three trigger positions) ships in the tarball as a documented reference for extension authors (`dist/syntax/member.js` and `.d.ts`; the README shows the `import` and the copy-and-rename path). It is built on the public hook API only; core stays host-agnostic. - core: an IR tag a syntax module builds with `ctx.child` carries `trigger: { id, span, text }` (the trigger row's id, its source span and authored text, the facts `extra.mxTrigger` carries on expression stand-ins). Authored tags have none. Additive. - data: `DataTag.trigger?: { id: string; span: Span; text: string }` exposes it, so `&title` and an authored `<member name="title"/>` are told apart without comparing spans. - data: `DataImportName` gains `span` (the imported name as written; the binding for a default or namespace import) and `localSpan` (the alias, only when the local differs from the imported name). `parseData`'s option shape is unchanged. All additions are optional/additive.
+
+- **Fixed (try-placement):** Refuse the `<try>` shapes Marko 6.4 refuses: a `<try>` with no body content, and a `<try>` with neither `<@catch>` nor `<@placeholder>` (it would have no effect), each positioned at the `<try>` tag on every target. A `<@catch>`/`<@placeholder>` written under `<if>`/`<for>` was already refused at the misplaced tag.
+
 ## 0.1.0-alpha.13 — 2026-10-09
 
 - **Fixed (fix-426-nested-attr-tag-pos):** A legacy host's "nested attribute tags aren't supported" error points at the first nested attribute tag again (`<@icon>` in `<Panel><@item><@icon/></@item></Panel>`, column 14), not at the outer `<@item>`, as before the attribute-tag lowering moved to child selection. New public export `firstAttributeTag(node)`: the first attribute tag a tag carries, from Marko's `attributeTags` field or from `MxAttributeTag` children, for a host diagnostic to point at.

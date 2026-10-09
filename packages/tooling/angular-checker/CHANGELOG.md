@@ -23,3 +23,5 @@
 - **The tarball ships no `.d.ts.map` files** (pkg-types-g10): `tsconfig.build.json` turns `declarationMap` off (the maps pointed at unpublished `../src/*.ts`) and excludes `src/**/fixtures/**`.
 
 - **Changed (release-changelog-in-package):** `CHANGELOG.md` is now part of every published tarball (`files` lists it in all packed packages); `bun pm pack` honours `files` only, so the alpha.11 tarballs carried just `README.md` and `dist`.
+
+- **Fixed (html-publish-prep):** Publish prep for `@mxlang/html` and the repository metadata: `@mxlang/html` ships its `LICENSE` and declares `publishConfig.access: public`; every `repository` URL points at `github.com/svallory/mxlang`; the README and docs example import the named `translator` and lead with `compile`; `@mxlang/core` writes `dist/THIRD-PARTY-NOTICES.md` with the licence text of the vendored `@babel/parser`, `@babel/helper-validator-identifier` and `charcodes` that `dist/index.js` bundles.
