@@ -26,6 +26,7 @@
 
 import { createRequire } from "node:module";
 import type { Node } from "./core.ts";
+import type { SyntaxDiagnostic, SyntaxTable } from "./syntax-table.ts";
 
 /** Set by core's build (`build/frontend.ts`); undefined when running from source. */
 declare const MX_MARKO_FRONTEND: string | undefined;
@@ -112,6 +113,33 @@ export function markoBabel(): MarkoBabel {
  * the compiler, not from core, because the copy that matters is the one Marko
  * parses with.
  */
+/**
+ * MX's own template parser with its syntax-table API (decision 182):
+ * `createParser(handlers, { syntax })`, `validateSyntaxTable`,
+ * `DEFAULT_SYNTAX`. In the dist it is the bundle's parser, which is
+ * `packages/parser/src/template` already; from source it is that workspace
+ * package (a devDependency), loaded by `require`, so no parser source enters
+ * core's type program and the published `.d.ts` never names it. Never
+ * Marko's parser from source: that is the patched npm `htmljs-parser`, which
+ * has no syntax table.
+ */
+export function mxTemplateParser(): MxTemplateParser {
+  return typeof MX_MARKO_FRONTEND === "string"
+    ? (bundledFrontend(MX_MARKO_FRONTEND)
+        .htmljsParser as unknown as MxTemplateParser)
+    : (require("@mxlang/parser") as MxTemplateParser);
+}
+
+/** The slice of the MX template parser's entry that core uses (decision 182). */
+export interface MxTemplateParser {
+  createParser(
+    handlers: Record<string, unknown>,
+    options?: { syntax?: SyntaxTable },
+  ): { parse(source: string): void };
+  validateSyntaxTable(table: unknown): SyntaxDiagnostic[];
+  DEFAULT_SYNTAX: SyntaxTable;
+}
+
 export function markoHtmljsParser(): HtmljsParser {
   return typeof MX_MARKO_FRONTEND === "string"
     ? bundledFrontend(MX_MARKO_FRONTEND).htmljsParser

@@ -375,6 +375,28 @@ Five facts worth knowing before editing it:
   language plugin — because which tags a template may call follows from where
   the template lives. An explicitly passed `customTags` still wins over a
   discovered tag of the same name.
+- **`package.json#mx.syntax` is the file's syntax table (decision 182, PR C;
+  `src/syntax-table.ts`).** `resolveSyntax(file)` reads the nearest
+  `package.json` (so a dependency's files use the dependency's manifest),
+  overlays its `mx.syntax` on `DEFAULT_SYNTAX`, validates it with the
+  template parser's `validateSyntaxTable` (a `TranslateError` in the
+  manifest at the `mx.syntax` key, naming the field path; `tagTypes` is
+  refused as taglib-owned), deep-freezes and interns it by `syntaxHash`
+  (sha256 of canonical JSON), cached per manifest read. `compileSource`,
+  `parseFragment` and `@mxlang/data`'s `parseData` take an explicit
+  `syntax` that wins. `checkSyntaxUse` runs only when the table's hash
+  differs from the default row's (`syntaxPrepasses` counts it): a pre-pass
+  with MX's template parser fails the file at its first trigger, block tag
+  or filter ("`<id>` trigger has no lowering yet") or at an error the table
+  causes; with no such event the default parse that follows is the table's
+  parse. Core reaches that parser through `mxTemplateParser()`
+  (`marko-frontend.ts`): the bundle's parser in the dist, the workspace
+  `@mxlang/parser` devDependency by `require` from source (never a static
+  import: parser sources would enter core's stricter program, and the
+  published `.d.ts` must not name a private package). `SyntaxTable` and
+  `Trigger` are declared in core;
+  `packages/parse-differential/src/syntax-types.test.ts` pins them equal to
+  the parser's until parser port PR 4 bundles the front end.
 - **Package-level contracts use `mx.contracts` (decision 142).** A string,
   `{ module, hosts? }`, or array names modules default-exporting `ContractMap`
   (`Record<string, CustomTag>`): declarations plus `analyze`, no `transform`,

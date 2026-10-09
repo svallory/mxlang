@@ -462,6 +462,20 @@ function contractsPosition(packageFile: string): {
   line: number;
   column: number;
 } {
+  return mxKeyPosition(packageFile, "contracts");
+}
+
+/**
+ * Locate the direct `mx.<key>` key of a `package.json` (`contracts`, `syntax`),
+ * not a string or nested decoy; `1:0` when it is not found.
+ */
+export function mxKeyPosition(
+  packageFile: string,
+  mxKey: string,
+): {
+  line: number;
+  column: number;
+} {
   const text = readPackageJsonCached(packageFile)?.text ?? "";
   const tokens = [
     ...text.matchAll(
@@ -483,7 +497,7 @@ function contractsPosition(packageFile: string): {
         } catch {
           return;
         }
-        if (path.length === 1 && path[0] === "mx" && name === "contracts")
+        if (path.length === 1 && path[0] === "mx" && name === mxKey)
           offset = key.index;
         cursor++; // colon
         value([...path, name]);

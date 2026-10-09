@@ -188,7 +188,7 @@ interface Found {
  * that exists, whether or not it parses. `undefined` if none is found before
  * the filesystem root or a `node_modules` directory.
  */
-function findNearestPackageJson(fileDir: string): Found | undefined {
+export function findNearestPackageJson(fileDir: string): Found | undefined {
   let dir = fileDir;
   for (;;) {
     const file = join(dir, "package.json");

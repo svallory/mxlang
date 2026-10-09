@@ -58,6 +58,11 @@ import {
   sugarAfterDefaultError,
   tagParamError,
 } from "./stock-parser.ts";
+import {
+  checkSyntaxUse,
+  resolveSyntax,
+  type SyntaxTable,
+} from "./syntax-table.ts";
 
 /**
  * A translator that translates nothing: the parse-only configuration.
@@ -187,6 +192,11 @@ export interface FragmentBase {
   /** The name reported for the *enclosing* file, in diagnostics. */
   filename?: string;
   /**
+   * The syntax table (decision 182); omitted, `filename`'s nearest
+   * `package.json#mx.syntax`, as for `compileSource`.
+   */
+  syntax?: SyntaxTable;
+  /**
    * Character offset of the fragment's first character within the file. When
    * omitted, indexes stay fragment-relative and the offset checks
    * (`===` on line 0, `>=` after) are skipped.
@@ -214,7 +224,7 @@ export interface FragmentBase {
 }
 
 type ResolvedFragmentBase = Required<
-  Omit<FragmentBase, "customTags" | "productName">
+  Omit<FragmentBase, "customTags" | "productName" | "syntax">
 > & { productName?: string };
 
 export interface FragmentResult {
@@ -439,6 +449,11 @@ export function parseFragment(
     productName: base.productName,
   };
 
+  checkSyntaxUse(source, base.syntax ?? resolveSyntax(resolved.filename), {
+    filename: resolved.filename,
+    baseLine: resolved.baseLine,
+    baseColumn: resolved.baseColumn,
+  });
   const compiler = markoCompiler();
   const translator = parseOnlyTranslator(base.customTags);
   prepareLookup(compiler, resolved.filename, translator);

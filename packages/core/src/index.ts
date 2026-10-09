@@ -240,6 +240,17 @@ export {
   scanCached,
 } from "./scan-cache.ts";
 export {
+  defaultSyntax,
+  normalizeMxSyntax,
+  resolveSyntax,
+  type StandIn,
+  type SyntaxDiagnostic,
+  type SyntaxTable,
+  syntaxHash,
+  type Trigger,
+  type TriggerNode,
+} from "./syntax-table.ts";
+export {
   type AmbientTypesProgram,
   createTargetLookup,
   type HostFileKind,

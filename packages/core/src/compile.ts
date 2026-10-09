@@ -54,6 +54,11 @@ import {
   sugarAfterDefaultError,
   tagParamError,
 } from "./stock-parser.ts";
+import {
+  checkSyntaxUse,
+  resolveSyntax,
+  type SyntaxTable,
+} from "./syntax-table.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
 
 export interface RawSourceMap {
@@ -138,6 +143,13 @@ export interface TranslatorOptions {
 }
 
 export interface HostOptions extends TranslatorOptions {
+  /**
+   * The syntax table (decision 182). Omitted, the file's nearest
+   * `package.json#mx.syntax` resolves it (`resolveSyntax`); a table that is
+   * not the `.mx` default row fails the file at the first construct core
+   * cannot lower yet (`checkSyntaxUse`).
+   */
+  syntax?: SyntaxTable;
   /**
    * A last pass over the emitted module, for a host that appends helpers or
    * rewrites the module shape. Receives and returns the whole module text.
@@ -392,6 +404,9 @@ export function compileSource(
 ): CompileResult {
   // Required lazily and by CJS: `@marko/compiler` is a large dependency and
   // only this function needs it, so importing the type surface stays free.
+  checkSyntaxUse(source, host.syntax ?? resolveSyntax(filename), {
+    filename,
+  });
   const compiler = markoCompiler();
   const translator = createTranslator(host);
 

@@ -26,6 +26,7 @@ import {
   type Ir,
   isTranslateError,
   type MxWarning,
+  type SyntaxTable,
   TranslateError,
 } from "@mxlang/core";
 import {
@@ -65,6 +66,13 @@ const dataTargets = createTargetLookup([dataTargetBase]);
 export interface ParseDataOptions {
   /** Contract-only custom tags (decision 130), by call name. */
   customTags?: Record<string, CustomTag>;
+  /**
+   * The syntax table (decision 182), for a consumer that builds its own
+   * (Mesh); omitted, the file's nearest `package.json#mx.syntax`. Until core
+   * lowers triggers, a trigger, block tag or filter the table produces is a
+   * positioned diagnostic ("`<id>` trigger has no lowering yet").
+   */
+  syntax?: SyntaxTable;
   /**
    * `package.json#mx.data.defaultTag`, already validated: what the unnamed
    * tag (`<#id>`, `<.class>`) stands for in place of the built-in `object`
@@ -422,6 +430,7 @@ export function parseData(
       tagDiscoveryDirs: [],
       customTags: options.customTags,
       defaultTag: options.defaultTag,
+      ...(options.syntax ? { syntax: options.syntax } : {}),
       warnings,
       emitIr: (lowered) => {
         ir = lowered;

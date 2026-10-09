@@ -45,6 +45,7 @@
   },
   "devDependencies": {
     "@marko/compiler": "5.42.10",
+    "@mxlang/parser": "workspace:*",
     "htmljs-parser": "5.18.0"
   }
 }
