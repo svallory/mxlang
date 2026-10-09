@@ -55,6 +55,8 @@
 
 - **Fix (marko-parity-trio, `:modifier`):** `<div :foo="y"/>` compiles and renders as `<div value:foo="y">`, Marko's own attribute (MX previously rejected it).
 
+- **Changed (release-changelog-in-package):** `CHANGELOG.md` is now part of every published tarball (`files` lists it in all packed packages); `bun pm pack` honours `files` only, so the alpha.11 tarballs carried just `README.md` and `dist`.
+
 ## 0.1.0 (unreleased)
 
 - **Fix (expression-values-unmapped-jsx-html):** component prop values, spreads, attribute expressions (incl. structured `class`/`style`, the spread-merge form, `<textarea value>`) and `${}`/`$!{}` text are mapped to their authored source with `mappedExpr`, so a TypeScript error inside them (e.g. a misspelled atom in `modes=[:strict, :lose]`) reaches the editor and `mx-tsc` at its position. Emitted text unchanged.

@@ -20,6 +20,8 @@
 
 - **Fix (reserve-mx-identifiers):** a `TranslateError` carrying a position but no Babel `loc` — the Solid and Angular module-binding paths, including the reserved-`__mx` diagnostic — now lands at its real line and column instead of offset 0. Errors that already carry a Babel `loc` are unchanged.
 
+- **Changed (release-changelog-in-package):** `CHANGELOG.md` is now part of every published tarball (`files` lists it in all packed packages); `bun pm pack` honours `files` only, so the alpha.11 tarballs carried just `README.md` and `dist`.
+
 ## 0.1.0 (unreleased)
 
 - **Changed (bridge-host, decision 154):** one region language plugin per registered region file kind (`createRegionLanguagePlugin`, `createRegionLanguagePlugins`); `createSolidMxLanguagePlugin` is the first built-in region kind's. A region kind's `completeTypecheckModule` runs on its printed module, so Solid's built-in imports (`appendSolidBuiltinImport`, moved to `@mxlang/solid`) are Solid's hook, not a step every region file takes. `moduleFileExtensions()` lists the module file kinds `mx-tsc` checks. Output unchanged. A region plugin claims its own kind's suffix directly, case-insensitively as before (Volar keys files case-insensitively where the filesystem is), but turns the MX grammar on only for the exact-case suffix, so `X.SOLID.mx` is claimed and parsed as plain TSX exactly as at base (the language server, Vite and the registry treat it as whole-file `.mx`). The fallback syntax-error text names the file's own suffix, so a region kind other than Solid names its own (`.solid.mx`'s text is unchanged). Regions compile through the registry's `regionKindCompile`.

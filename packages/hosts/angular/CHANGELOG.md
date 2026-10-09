@@ -243,3 +243,5 @@
   lower to that projection; all other value reads are positioned errors.
   Arrays, attributes, params, nested tags, and bodiless tags remain positioned
   host errors.
+
+- **Changed (release-changelog-in-package):** `CHANGELOG.md` is now part of every published tarball (`files` lists it in all packed packages); `bun pm pack` honours `files` only, so the alpha.11 tarballs carried just `README.md` and `dist`.

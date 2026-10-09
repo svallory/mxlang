@@ -1,5 +1,9 @@
 # @mxlang/tree-sitter-mx
 
+## Unreleased
+
+- **Changed (release-changelog-in-package):** `CHANGELOG.md` is now part of every published tarball (`files` lists it in all packed packages); `bun pm pack` honours `files` only, so the alpha.11 tarballs carried just `README.md` and `dist`.
+
 ## 0.1.0-alpha.2 (unreleased)
 
 Atoms (decision 156) and the tagless `:name=value` line. Four new local

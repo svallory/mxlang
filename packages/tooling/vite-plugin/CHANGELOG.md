@@ -6,6 +6,8 @@
 
 - **Fix (third-party-data-host, decision 148):** a file of a third-party host built on the data target (`post.mesh.mx`) transforms through the host's descriptor into data's output instead of being refused for the host's `defaultTag`.
 
+- **Changed (release-changelog-in-package):** `CHANGELOG.md` is now part of every published tarball (`files` lists it in all packed packages); `bun pm pack` honours `files` only, so the alpha.11 tarballs carried just `README.md` and `dist`.
+
 ## 0.1.0 (unreleased)
 
 - **Docs (render-consumers, decision 155):** the comment on the Astro page pipeline describes the default export as `(input) => string`, not `{ value, output }`.

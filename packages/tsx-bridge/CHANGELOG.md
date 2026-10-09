@@ -173,3 +173,5 @@
   `public.d.ts`, with `src/public-types.test.ts` asserting two-way
   assignability against the real shapes so the two copies cannot drift
   unnoticed.
+
+- **Changed (release-changelog-in-package):** `CHANGELOG.md` is now part of every published tarball (`files` lists it in all packed packages); `bun pm pack` honours `files` only, so the alpha.11 tarballs carried just `README.md` and `dist`.

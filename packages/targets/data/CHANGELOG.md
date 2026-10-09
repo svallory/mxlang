@@ -1,5 +1,13 @@
 # @mxlang/data
 
+## 0.1.0-alpha.12 — 2026-10-09
+
+- **Added (lang-ext-syntax-table-parser-c):** `package.json#mx.syntax` (decision 182, PR C): core resolves a file's syntax table from its nearest manifest (a dependency's files use the dependency's manifest), overlaid on the `.mx` default row, validated with positioned diagnostics at the manifest's `mx.syntax` key (`tagTypes` is refused: tag types are taglib-owned), frozen and interned by hash. `compileSource`, `parseFragment` and `@mxlang/data`'s `parseData` accept an explicit `syntax`. Core lowers no trigger yet: a file whose table produces a trigger, block tag or filter fails with one positioned error ("`<id>` trigger has no lowering yet"), and a project on the default row runs no extra parse. New exports: `SyntaxTable`, `Trigger`, `StandIn`, `TriggerNode`, `SyntaxDiagnostic`, `defaultSyntax`, `normalizeMxSyntax`, `resolveSyntax`, `syntaxHash`.
+
+- **Changed (release-changelog-in-package):** `CHANGELOG.md` is now part of every published tarball (`files` lists it in all packed packages); `bun pm pack` honours `files` only, so the alpha.11 tarballs carried just `README.md` and `dist`.
+
+- **Fixed (tree-reject-invalid-tag-names):** A tag name outside letters (any script), digits and `-._:$` (`&title`, `a!b`) is now a positioned error on the name ("Invalid tag name `&title`; Marko rejects it too — …"), next to the existing attribute-name error, on every target. Stock Marko lexes such a name and fails only later in its translator ("Unable to find entry point for custom tag"); `parseData("div\n &title\n")` used to return a child tag named `&title` with no diagnostic.
+
 ## 0.1.0-alpha.11 — 2026-10-09
 
 - **Fixed (tree-comments-not-structural, decision 131 addendum 5):** comments are never structural. Under either `structural` value a `//` line or `<!-- -->` stays in the tree as the `Comment` node it already is under `"pass"`; `structural: "reject"` no longer reports it and keeps rejecting `<if>`/`<for>`/`<const>`, `${}`, `export`/`static`, and `import` unless `imports: "pass"`. `mx-tsc`'s strict data check inherits the fix. No new option.

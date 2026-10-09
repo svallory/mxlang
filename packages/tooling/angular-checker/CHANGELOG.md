@@ -21,3 +21,5 @@
 - **`typescript` is a declared peer dependency** (`>=5.9.0 <7`, the repo's peer policy): `dist/*.d.ts` imports `typescript` but the package declared only `@angular/compiler-cli`, so a strict consumer got `TS2307`. Caught by `scripts/pack-hygiene.test.ts` after the checker's declarations started referencing the TypeScript API.
 - **`typescript` is resolved from the resolved compiler-cli's own location first** (the instance compiler-cli itself loads), falling back to the project. This also finds it in strict layouts where the project does not depend on `typescript` directly. `resolveCompilerCli`'s ok result gains `packageJson`; `resolveTypescript` takes it as an optional second argument.
 - **The tarball ships no `.d.ts.map` files** (pkg-types-g10): `tsconfig.build.json` turns `declarationMap` off (the maps pointed at unpublished `../src/*.ts`) and excludes `src/**/fixtures/**`.
+
+- **Changed (release-changelog-in-package):** `CHANGELOG.md` is now part of every published tarball (`files` lists it in all packed packages); `bun pm pack` honours `files` only, so the alpha.11 tarballs carried just `README.md` and `dist`.
