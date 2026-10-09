@@ -28,6 +28,16 @@ import { dirname, resolve } from "node:path";
 import { parse as babelParse, type ParserPlugin } from "@babel/parser";
 import { freeIdentifiersIn } from "./accessor-reads.ts";
 import { assertNoStandIn, atomOf, atomsIn, convertAtoms } from "./atoms.ts";
+import {
+  attrArgsOf,
+  attrNameOf,
+  attrValueOf,
+  hasExpressionValue,
+  hookAttr,
+  isBoundAttr,
+  isDefaultAttr,
+  isMethodAttr,
+} from "./attr-fields.ts";
 import { attrLabel } from "./attr-label.ts";
 import {
   fallbackAttrTagShape,
@@ -327,6 +337,18 @@ function attrNameSpan(ctx: Ctx, attr: Node, tagLoc?: Position): SourceSpan {
     return {
       sourceStart: attr.sugarNameSpan.start,
       sourceEnd: attr.sugarNameSpan.end,
+    };
+  }
+  // An MX attribute carries its name's spans: the head through the modifier.
+  // The default value is anchored zero-width at the attribute's start, where
+  // Marko anchors it (for `<x async(a) {}>` that is `async`, not the `(`).
+  if (attr?.type === "MxAttribute" || attr?.type === "MxSpreadAttribute") {
+    if (attr.type === "MxSpreadAttribute" || attr.name === null) {
+      return { sourceStart: attr.start, sourceEnd: attr.start };
+    }
+    return {
+      sourceStart: attr.nameSpan.start,
+      sourceEnd: (attr.modifierSpan ?? attr.nameSpan).end,
     };
   }
   // A tag's own shorthand (`<a#x.y/>`, `a#x.y`) has no attribute position in
@@ -753,11 +775,16 @@ function isRefinementIdentifier(name: string): boolean {
 function boundRefinement(ctx: Ctx, attr: Node): Expr | undefined {
   if (attr.modifier == null) return undefined;
   const modifier = String(attr.modifier);
+  // An MX attribute carries the modifier's span; Marko's starts one past the
+  // colon after the name.
+  const mxAt: number | undefined =
+    attr.type === "MxAttribute" ? attr.modifierSpan?.start : undefined;
   const start = attr.loc?.start;
   const nameLength = attr.default ? 0 : String(attr.name).length;
   if (!isRefinementIdentifier(modifier)) {
     const message =
       "Bound attribute refinement shorthand must be a valid JavaScript identifier.";
+    if (mxAt !== undefined) fail(message, { span: { start: mxAt, end: mxAt } });
     if (!start) fail(message, attr);
     fail(message, {
       // Marko puts it on the modifier's first character, one past the colon.
@@ -766,7 +793,7 @@ function boundRefinement(ctx: Ctx, attr: Node): Expr | undefined {
       },
     });
   }
-  const at = offsetOf(ctx, attr.loc?.start ?? {}) + nameLength + 1;
+  const at = mxAt ?? offsetOf(ctx, attr.loc?.start ?? {}) + nameLength + 1;
   return {
     code: modifier,
     shape: "other",
@@ -778,7 +805,7 @@ function boundRefinement(ctx: Ctx, attr: Node): Expr | undefined {
 /** Marko refuses a refinement that is not an identifier before any host sees it. */
 function rejectBadRefinements(ctx: Ctx, node: Node): void {
   for (const attr of tagAttributesOf(node)) {
-    if (attr.bound) boundRefinement(ctx, attr);
+    if (isBoundAttr(attr)) boundRefinement(ctx, attr);
   }
 }
 
@@ -786,18 +813,19 @@ function rejectBadRefinements(ctx: Ctx, node: Node): void {
 function validateBoundAttributes(ctx: Ctx, node: Node): void {
   rejectBadRefinements(ctx, node);
   for (const attr of tagAttributesOf(node)) {
+    if (!isBoundAttr(attr)) continue;
+    const value = attrValueOf(ctx, attr);
     if (
-      attr.bound &&
-      attr.value?.type !== "Identifier" &&
+      value?.type !== "Identifier" &&
       !(
-        (attr.value?.type === "MemberExpression" ||
-          attr.value?.type === "OptionalMemberExpression") &&
-        attr.value.property?.type !== "PrivateName"
+        (value?.type === "MemberExpression" ||
+          value?.type === "OptionalMemberExpression") &&
+        value.property?.type !== "PrivateName"
       )
     ) {
       fail(
         "Attributes may only be bound to identifiers or member expressions",
-        attr.value,
+        value,
       );
     }
   }
@@ -815,8 +843,7 @@ function validateBuiltinValueAttributes(node: Node, name: string): void {
   } else if (name === "let" || name === "return") {
     let seen = false;
     for (const attr of tagAttributesOf(node)) {
-      if (!isAttributeNode(attr) || (!attr.default && attr.name !== "value"))
-        continue;
+      if (!isAttributeNode(attr) || attrNameOf(attr) !== "value") continue;
       if (seen) fail("Invalid duplicate value attribute.", attr);
       seen = true;
     }
@@ -861,9 +888,20 @@ function lowerAttrNamed(
       ? posOf(ctx, attr)
       : (tagLoc ?? posOf(ctx, attr));
   const nameSpan = attrNameSpan(ctx, attr, tagLoc);
+  // Read once, where Marko's lowering first read `attr.value`: an MX value
+  // container can fail (`payloadOf`), and a method's function is rebuilt.
+  let valueNode: Node;
+  let valueRead = false;
+  const readValue = (): Node => {
+    if (!valueRead) {
+      valueNode = attrValueOf(ctx, attr);
+      valueRead = true;
+    }
+    return valueNode;
+  };
 
   if (isSpreadAttributeNode(attr)) {
-    return { kind: "spread", value: exprOf(ctx, attr.value), loc };
+    return { kind: "spread", value: exprOf(ctx, readValue()), loc };
   }
 
   // Marko rejects a name outside its grammar for every tag; only a host with
@@ -884,9 +922,9 @@ function lowerAttrNamed(
   // Bound attributes retain the base name: Marko uses the modifier as a value
   // conversion there, not as part of the rendered attribute name.
   const name =
-    !attr.bound && isOrdinaryColonName(attr, isElement)
+    !isBoundAttr(attr) && isOrdinaryColonName(attr, isElement)
       ? `${attr.name}:${attr.modifier}`
-      : attr.name;
+      : attrNameOf(attr);
 
   if (isElement && attr.modifier === "" && attr.name === "on") {
     fail("`on:` is not a valid attribute, did you mean `on`?", attr);
@@ -900,34 +938,36 @@ function lowerAttrNamed(
     isOrdinaryColonName(attr, isElement) &&
     !EVENT_ATTR.test(String(name))
   ) {
+    const value = readValue();
     if (
-      attr.value?.type === "FunctionExpression" ||
-      attr.value?.type === "ArrowFunctionExpression"
+      value?.type === "FunctionExpression" ||
+      value?.type === "ArrowFunctionExpression"
     ) {
       fail(`The \`${name}\` attribute cannot be a function.`, attr);
     }
-    if (attr.arguments) {
+    if (attrArgsOf(attr)) {
       fail(`Unsupported arguments on the \`${name}\` attribute.`, attr);
     }
   }
 
-  if (attr.arguments || attr.value?.type === "FunctionExpression") {
-    if (ctx.declarations.resolveAttributeMethod?.(attr, on) !== true) {
-      ctx.declarations.rejectAttributeMethod?.(attr, on);
+  if (attrArgsOf(attr) || isMethodAttr(attr)) {
+    const hooked = hookAttr(attr);
+    if (ctx.declarations.resolveAttributeMethod?.(hooked, on) !== true) {
+      ctx.declarations.rejectAttributeMethod?.(hooked, on);
       fail(
-        `attribute method \`${attr.name}(...)\` is an event handler and requires a runtime; standalone ${productOf(ctx)} renders once to a string`,
+        `attribute method \`${attrNameOf(attr)}(...)\` is an event handler and requires a runtime; standalone ${productOf(ctx)} renders once to a string`,
         attr,
       );
     }
   }
 
-  if (attr.bound) {
+  if (isBoundAttr(attr)) {
     const refinement = boundRefinement(ctx, attr);
     return {
       kind: "bound",
-      name: attr.name,
+      name: attrNameOf(attr),
       nameSpan,
-      value: exprOf(ctx, attr.value),
+      value: exprOf(ctx, readValue()),
       ...(refinement ? { refinement } : {}),
       loc,
     };
@@ -945,7 +985,7 @@ function lowerAttrNamed(
         kind: "dynamic",
         name: resolvedName,
         nameSpan,
-        value: exprOf(ctx, attr.value),
+        value: exprOf(ctx, readValue()),
         loc,
       };
     }
@@ -960,7 +1000,7 @@ function lowerAttrNamed(
     );
   }
 
-  const value = attr.value;
+  const value = readValue();
   // `<div :foo/>`: HTML's valueless attribute is an attribute *present with an
   // empty value* — `<div value:foo>` and `<div value:foo="">` are one thing to
   // every HTML parser — and that is what Marko emits (`<div value:foo>`, probed
@@ -969,7 +1009,11 @@ function lowerAttrNamed(
   // non-boolean attribute" and drops it, Hono renders `value:foo="true"`, and
   // only Preact happens to print Marko's own form. The empty string is the one
   // value every host renders as the attribute Marko wrote.
-  if (name !== attr.name && value?.type === "BooleanLiteral" && value.value) {
+  if (
+    name !== attrNameOf(attr) &&
+    value?.type === "BooleanLiteral" &&
+    value.value
+  ) {
     // The empty value has no characters, but it has a position: the end of
     // the spelled name. A consumer that slices `valueSpan` (the data tree)
     // gets a zero-width span instead of an invariant failure.
@@ -1350,7 +1394,7 @@ function validateParentCollision(node: Node, schema: AttrSchema): void {
   const parentAttrs = new Set(
     tagAttributesOf(owner)
       .filter((attr: Node) => !isSpreadAttributeNode(attr))
-      .map((attr: Node) => attr.name),
+      .map((attr: Node) => attrNameOf(attr)),
   );
   const name = attrName(node);
   if (parentAttrs.has(name)) {
@@ -1685,7 +1729,8 @@ function lowerAuthoredAttributeTag(
   validateParentCollision(node, schema);
   const attrs = tagAttributesOf(node);
   const contentAttr = attrs.find(
-    (attr: Node) => !isSpreadAttributeNode(attr) && attr.name === "content",
+    (attr: Node) =>
+      !isSpreadAttributeNode(attr) && attrNameOf(attr) === "content",
   );
   if (contentAttr) {
     fail(
@@ -1818,7 +1863,7 @@ function lowerAttributeIf(
     const lowered = lowerAttributeTags(ctx, branch, schema, true, false);
     unscope();
     branches.push({
-      ...(conditionAttr ? { test: exprOf(ctx, conditionAttr.value) } : {}),
+      ...(conditionAttr ? { test: exprOf(ctx, attrValueOf(ctx, conditionAttr)) } : {}),
       span: nodeSpan(ctx, branch),
       nodes: lowered.tree,
     });
@@ -2043,7 +2088,7 @@ function lowerIfChain(
   validateBoundAttributes(ctx, node);
   rejectUnsupportedFields(ctx, node, "`<if>`");
   const cond = attrByName(node, "value") ?? tagAttributesOf(node)[0];
-  if (!cond?.value) fail("`<if>` without a condition", node);
+  if (!cond) fail("`<if>` without a condition", node);
 
   // Each branch is its own JS block: a `<const>` declared inside one does not
   // shadow the host's binding for the code that follows the chain.
@@ -2056,7 +2101,7 @@ function lowerIfChain(
 
   const branches: Branch[] = [
     {
-      condition: exprOf(ctx, cond.value),
+      condition: exprOf(ctx, attrValueOf(ctx, cond)),
       children: branchChildren(node),
       span: exprSpan(ctx, node),
       loc: posOf(ctx, node),
@@ -2093,7 +2138,7 @@ function lowerIfChain(
         ? (attrByName(child, "value") ?? tagAttributesOf(child)[0])
         : attrByName(child, "if");
     branches.push({
-      condition: ifAttr ? exprOf(ctx, ifAttr.value) : null,
+      condition: ifAttr ? exprOf(ctx, attrValueOf(ctx, ifAttr)) : null,
       children: branchChildren(child),
       span: exprSpan(ctx, child),
       loc: posOf(ctx, child),
@@ -2174,7 +2219,10 @@ function rejectLoopParamInBy(node: Node, by: Node): void {
     }
   }
   if (names.size === 0) return;
-  const read = findLoopParamRead(by.value, names);
+  // Marko scans whatever its parser produced; an MX container the front end
+  // could not parse has no payload to scan, and fails later at `exprOf`.
+  const value = by.type === "MxAttribute" ? by.value?.node : by.value;
+  const read = findLoopParamRead(value, names);
   if (!read) return;
   fail(
     `The \`by=\` attribute is evaluated before the loop runs, so \`${read.name}\` is not in scope. Key with a property name string (\`by="id"\`) or a function (\`by=(${read.name}) => key\`).`,
@@ -2254,12 +2302,7 @@ function lowerForHead(
   }
 
   const requireValue = (attr: Node | undefined, label: string): void => {
-    if (
-      attr &&
-      (!attr.value?.loc ||
-        attr.arguments ||
-        attr.value.type === "FunctionExpression")
-    ) {
+    if (attr && !hasExpressionValue(attr)) {
       fail(`\`<for ${label}=...>\` requires an expression value`, attr);
     }
   };
@@ -2274,17 +2317,17 @@ function lowerForHead(
 
   let source: ForSource;
   if (of) {
-    source = { kind: "of", list: exprOf(ctx, of.value) };
+    source = { kind: "of", list: exprOf(ctx, attrValueOf(ctx, of)) };
   } else if (inAttr) {
-    source = { kind: "in", object: exprOf(ctx, inAttr.value) };
+    source = { kind: "in", object: exprOf(ctx, attrValueOf(ctx, inAttr)) };
   } else if (to || until) {
     const from = attrByName(node, "from");
     source = {
       kind: "range",
-      from: from ? exprOf(ctx, from.value) : null,
-      bound: exprOf(ctx, (to ?? until).value),
+      from: from ? exprOf(ctx, attrValueOf(ctx, from)) : null,
+      bound: exprOf(ctx, attrValueOf(ctx, to ?? until)),
       inclusive: Boolean(to),
-      step: step ? exprOf(ctx, step.value) : null,
+      step: step ? exprOf(ctx, attrValueOf(ctx, step)) : null,
     };
   } else {
     fail("`<for>` requires `of=`, `in=`, or `from=`/`to=`/`until=`", node);
@@ -2295,12 +2338,13 @@ function lowerForHead(
   // render ("by is not a function"). Marko refuses it at compile time, at the
   // quoted key it refuses, rather than letting the failure surface on first
   // paint. `of` keeps the shorthand, so this cannot be "no string `by`".
-  if (!of && by?.value?.type === "StringLiteral") {
+  const byValue = by ? attrValueOf(ctx, by) : undefined;
+  if (!of && byValue?.type === "StringLiteral") {
     fail(
       `The [\`<for>\` tag](https://markojs.com/docs/reference/core-tag#for) only supports a string \`by\` key with \`of\`; use a \`by=(${
         inAttr ? "key, value" : "index"
       }) => ...\` function for \`<for ${inAttr ? "in" : to ? "to" : "until"}>\`.`,
-      by.value,
+      byValue,
     );
   }
 
@@ -2311,7 +2355,7 @@ function lowerForHead(
     paramNodes: [...tagParamsOf(node)],
     bindings,
     paramSpans: paramSpansOf(ctx, node),
-    key: by ? exprOf(ctx, by.value) : null,
+    key: by ? exprOf(ctx, byValue) : null,
   };
 }
 
@@ -2347,14 +2391,15 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
   // to `<const>`.
   ctx.declarations.checkBinding?.(tagVarOf(node), "`<const>`");
   const value = attrByName(node, "value") ?? tagAttributesOf(node)[0];
-  if (!value?.value) fail("`<const>` without a value", node);
+  if (!value) fail("`<const>` without a value", node);
 
   const name = declName(ctx, tagVarOf(node));
   // The initializer is evaluated *before* the binding exists, so a registered
   // name on the right-hand side is still the host's: `<const/count=count + 1>`
   // resolves to `const count = count() + 1`. Shadowing takes effect only
   // afterwards, for the rest of the render scope.
-  const init = exprOf(ctx, value.value);
+  const valueNode = attrValueOf(ctx, value);
+  const init = exprOf(ctx, valueNode);
   // Local extension of decision 116: a `<const>` bound to a plain identifier
   // whose value isn't statically a function/arrow/class is "unknown" and
   // routes dynamic when later used as a tag — a destructuring pattern
@@ -2362,7 +2407,7 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
   // is left out of this check entirely rather than guessed at.
   if (
     tagVarOf(node)?.type === "Identifier" &&
-    !isFunctionLikeValue(value.value)
+    !isFunctionLikeValue(valueNode)
   ) {
     ctx.unknownLocalValue.add(name);
   }
@@ -3088,7 +3133,7 @@ function lowerReturn(ctx: Ctx, node: Node, nested: boolean): IrNode {
     if (!isAttributeNode(attr)) continue;
     // The parser spells `<return=x/>` as the `default` attribute and
     // `<return value=x/>` as `value`; both are the same authored thing.
-    const attrName = attr.default ? "value" : String(attr.name);
+    const attrName = isDefaultAttr(attr) ? "value" : String(attrNameOf(attr));
     if (attrName !== "value") {
       fail(
         attrName === "valueChange"
@@ -3101,7 +3146,7 @@ function lowerReturn(ctx: Ctx, node: Node, nested: boolean): IrNode {
     valueAttr = attr;
   }
 
-  if (!valueAttr?.value) {
+  if (!valueAttr) {
     fail("`<return>` requires a `value=` attribute", node);
   }
 
@@ -3117,7 +3162,7 @@ function lowerReturn(ctx: Ctx, node: Node, nested: boolean): IrNode {
   }
 
   ctx.returnValue = {
-    expr: exprOf(ctx, valueAttr.value),
+    expr: exprOf(ctx, attrValueOf(ctx, valueAttr)),
     loc: posOf(ctx, node),
   };
   // Contributes nothing to the rendered output: the value is lifted onto the

@@ -4503,6 +4503,106 @@ function toMxShape(source: string): (body: Node[]) => void {
     };
     return container(type, payload, inner, inner);
   };
+  /** The offset of the `)` closing the `(` at `open`, depth-counted. */
+  const closeParen = (open: number): number => {
+    let depth = 0;
+    for (let i = open; i < source.length; i++) {
+      if (source[i] === "(") depth++;
+      else if (source[i] === ")" && --depth === 0) return i;
+    }
+    return -1;
+  };
+  /** Marko's method `FunctionExpression`, as the `MxMethod` it was parsed from. */
+  const method = (fn: Node): Node => {
+    const { start, end } = offsets(fn);
+    const open = source.indexOf("(", start);
+    const close = closeParen(open);
+    const inner = offsets(fn.body);
+    return {
+      type: "MxMethod",
+      start,
+      end,
+      async: fn.async,
+      typeParams:
+        "typeParameters" in fn
+          ? container(
+              "MxTypeParameters",
+              { type: "TSTypeParameterDeclaration", params: [] },
+              { start: start + 1, end: open - 1 },
+              { start, end: open },
+            )
+          : null,
+      params: container(
+        "MxParameterList",
+        fn.params,
+        { start: open + 1, end: close },
+        { start: open, end: close + 1 },
+      ),
+      body: {
+        ...container("MxStatements", fn.body.body, inner, {
+          start: inner.start - 1,
+          end: inner.end + 1,
+        }),
+        directives: fn.body.directives,
+        innerComments: fn.body.innerComments ?? [],
+      },
+      source: source.slice(start, end),
+    };
+  };
+  /**
+   * Slice 4: a named or spread attribute as the MX front end builds it
+   * (`MxAttribute`, `MxSpreadAttribute`; probed): the value in a container,
+   * a method as `MxMethod`, the default value named `null`, `:=` as
+   * `operator`. Name sugar (`#x`, `.x`, `:x`) and the tag's own shorthand
+   * stay Marko-shaped.
+   */
+  const attribute = (attr: Node): Node => {
+    if (!attr.loc) return attr;
+    const { start, end } = offsets(attr);
+    if (attr.type === "MarkoSpreadAttribute") {
+      return {
+        type: "MxSpreadAttribute",
+        value: wrap("MxExpression", attr.value, [attr.value]),
+        start,
+        end,
+      };
+    }
+    if (
+      attr.type !== "MarkoAttribute" ||
+      /^[#.]/.test(attr.name) ||
+      (attr.default && attr.modifier != null)
+    ) {
+      return attr;
+    }
+    const value: Node = attr.value;
+    const isMethod = value?.type === "FunctionExpression";
+    const name: string | null = attr.default ? null : attr.name;
+    const nameStart =
+      name !== null ? start : isMethod ? source.indexOf("(", start) : start;
+    const nameEnd = nameStart + (name?.length ?? 0);
+    const modifierStart = nameEnd + 1;
+    return {
+      type: "MxAttribute",
+      name,
+      nameSpan: { start: nameStart, end: nameEnd },
+      modifier: attr.modifier ?? null,
+      modifierSpan:
+        attr.modifier != null
+          ? { start: modifierStart, end: modifierStart + attr.modifier.length }
+          : null,
+      operator: attr.bound ? ":=" : value?.loc && !isMethod ? "=" : null,
+      value: isMethod
+        ? method(value)
+        : value?.loc
+          ? wrap("MxExpression", value, [value])
+          : null,
+      args: attr.arguments
+        ? wrap("MxArguments", attr.arguments, attr.arguments)
+        : null,
+      start,
+      end,
+    };
+  };
   const tagName = (node: Node): Node => {
     const name = node.name;
     if (name?.type === "StringLiteral") {
@@ -4549,6 +4649,7 @@ function toMxShape(source: string): (body: Node[]) => void {
           ])
         : null,
       params: params.length ? wrap("MxParameterList", params, params) : null,
+      attributes: (node.attributes ?? []).map(attribute),
       body,
       start,
       end,
@@ -5420,5 +5521,303 @@ describe("hybrid tags, MX-shaped (PR 4 slice 3)", () => {
     });
     expect(messages[0]).toContain("<else-if=condition>");
     expect(messages[1]).toEqual(messages[0]);
+  });
+});
+
+describe("hybrid attributes, MX-shaped (PR 4 slice 4)", () => {
+  const reshaped =
+    (source: string, extra?: (body: Node[]) => void) => (body: Node[]) => {
+      toMxShape(source)(body);
+      extra?.(body);
+    };
+  /** What a lowering produced: its IR, or the error as a reporter reads it. */
+  const outcome = (run: () => Ir) => {
+    try {
+      return { ir: run() };
+    } catch (error) {
+      const e = error as TranslateError;
+      return { message: e.message, line: e.line, column: e.column };
+    }
+  };
+  const mx = (
+    source: string,
+    policy = fakeDeclarations(),
+    extra?: (body: Node[]) => void,
+  ) =>
+    outcome(() =>
+      lowerSource(
+        source,
+        policy,
+        undefined,
+        undefined,
+        undefined,
+        reshaped(source, extra),
+      ),
+    );
+  const marko = (source: string, policy = fakeDeclarations()) =>
+    outcome(() => lowerSource(source, policy));
+  const components = (overrides: Partial<Policy> = {}) =>
+    fakeDeclarations({
+      isComponent: (name) => name === "Foo",
+      ...overrides,
+    });
+  const methods = (overrides: Partial<Policy> = {}) =>
+    components({ resolveAttributeMethod: () => true, ...overrides });
+  /** The first tag's attributes after the reshape. */
+  const attributesOf = (source: string): Node[] => {
+    let seen: Node[] = [];
+    try {
+      lowerSource(source, undefined, undefined, undefined, undefined, (b) => {
+        toMxShape(source)(b);
+        seen = b[0].attributes;
+      });
+    } catch {
+      // Only the shape matters here.
+    }
+    return seen;
+  };
+
+  it("reshapes attributes as the MX front end parses them", () => {
+    // The front end's own parse of this input (probed; containers trimmed).
+    expect(attributesOf("<div a=1 b:=x c(){} ...s/>")).toMatchObject([
+      {
+        type: "MxAttribute",
+        start: 5,
+        end: 8,
+        name: "a",
+        nameSpan: { start: 5, end: 6 },
+        modifier: null,
+        modifierSpan: null,
+        operator: "=",
+        value: { type: "MxExpression", start: 7, end: 8, source: "1" },
+        args: null,
+      },
+      {
+        type: "MxAttribute",
+        start: 9,
+        end: 13,
+        name: "b",
+        nameSpan: { start: 9, end: 10 },
+        operator: ":=",
+        value: { type: "MxExpression", start: 12, end: 13, source: "x" },
+      },
+      {
+        type: "MxAttribute",
+        start: 14,
+        end: 19,
+        name: "c",
+        nameSpan: { start: 14, end: 15 },
+        operator: null,
+        value: {
+          type: "MxMethod",
+          start: 15,
+          end: 19,
+          async: false,
+          typeParams: null,
+          params: {
+            type: "MxParameterList",
+            start: 16,
+            end: 16,
+            outer: { start: 15, end: 17 },
+            node: [],
+          },
+          body: {
+            type: "MxStatements",
+            start: 18,
+            end: 18,
+            outer: { start: 17, end: 19 },
+            node: [],
+            directives: [],
+            innerComments: [],
+          },
+          source: "(){}",
+        },
+        args: null,
+      },
+      {
+        type: "MxSpreadAttribute",
+        start: 20,
+        end: 24,
+        value: { type: "MxExpression", start: 23, end: 24, source: "s" },
+      },
+    ]);
+  });
+
+  it("reshapes a modifier and the default value", () => {
+    const [modified] = attributesOf("<div class:x=1/>");
+    expect(modified).toMatchObject({
+      name: "class",
+      nameSpan: { start: 5, end: 10 },
+      modifier: "x",
+      modifierSpan: { start: 11, end: 12 },
+    });
+    const [value] = attributesOf("<Foo=1/>");
+    expect(value).toMatchObject({ name: null, value: { source: "1" } });
+  });
+
+  it.each([
+    ["static, dynamic and boolean values", "<div a=1 b=x c='s' download/>"],
+    ["an ordinary colon name", "<div value:foo:bar=1 x:=y/>"],
+    ["bound attributes", "<Foo v:=q w:fn:=r/>"],
+    ["event attributes", "<div onClick=fn on-my-event=g/>"],
+    ["an event's string and boolean forms", "<div onClick onclick='x()'/>"],
+    ["spreads", "<div ...s a=1/><Foo ...t/>"],
+    ["the default value", "<Foo=1/><Foo=x b=2/>"],
+    ["a whole-value atom", "<Foo mode=:strict/>"],
+    ["an if chain", "<if=a>A</if><else-if=b>B</else-if><else>C</else>"],
+    ["a for of with a string by", '<for|x| of=xs by="id">${x}</for>'],
+    ["a for range", "<for|i| from=0 to=3 step=1>${i}</for>"],
+    ["a for in with a by function", "<for|k| in=o by=(k) => k>${k}</for>"],
+    ["a const", "<const/x=1/>${x}"],
+    ["a return", "<return=1/>"],
+    ["a return spelled value=", "<return value=1/>"],
+  ])("lowers %s to the IR the Marko shape lowers to", (_label, source) => {
+    const policy = components();
+    const ir = marko(source, policy);
+    expect(ir).toHaveProperty("ir");
+    expect(mx(source, policy)).toEqual(ir);
+  });
+
+  it.each([
+    ["an element method", "<div onClick(e){ go(e) }/>"],
+    ["a component method", "<Foo render(x) { return x }/>"],
+    ["a default method", "<Foo(x){ y }/>"],
+    ["an async default method", "<Foo async(x){ await x }/>"],
+    ["a method with type parameters", "<Foo m<T>(a: T) { a }/>"],
+    ["a comment-only body", "<Foo m(a) { /* c */ }/>"],
+    ["a directive", "<Foo m(a) { 'use strict'; a }/>"],
+    ["a multi-line method", "<Foo\n  m(a,\n    b) {\n    a(b)\n  }/>"],
+  ])(
+    "lowers %s to the same IR, function and body span included",
+    (_label, source) => {
+      const ir = marko(source, methods());
+      expect(ir).toHaveProperty("ir");
+      expect(mx(source, methods())).toEqual(ir);
+    },
+  );
+
+  it.each([
+    ["a modifier with no host resolution", "<div class:x=1/>"],
+    ["a bad refinement", "<Foo v:no-update:=q/>"],
+    ["a bound non-identifier", "<Foo v:=a + b/>"],
+    ["`on:`", "<div on:/>"],
+    ["a refused element method", "<div onClick(e){ go(e) }/>"],
+    ["refused arguments", "<div c(x)/>"],
+    ["a function on a colon name", "<div data:x(e){ e }/>"],
+    ["arguments on a colon name", "<div data:x(a)/>"],
+    ["an invalid name", "<div a{b}=1/>"],
+    ["a valueless for of", "<for of>x</for>"],
+    ["a method for of", "<for of(x){ x }>x</for>"],
+    ["arguments on for by", "<for|x| of=xs by(a)>x</for>"],
+    ["a string by on a range", '<for|i| to=3 by="id">${i}</for>'],
+    ["a duplicate let value", "<let/x=1 value=2/>"],
+    ["a return extra", "<return=1 extra=2/>"],
+    ["a return valueChange", "<return=1 valueChange=f/>"],
+    ["an extra const attribute", "<const/x=1 y=2/>"],
+    ["a trailing colon", "<div data:=1 x:/>"],
+    ["a valueless if", "<if>A</if>"],
+  ])("fails %s as the Marko shape does", (_label, source) => {
+    const policy = components();
+    const error = marko(source, policy);
+    expect(error).toHaveProperty("message");
+    expect(mx(source, policy)).toEqual(error);
+  });
+
+  it("hands a host hook the default value as `value`", () => {
+    const names: string[] = [];
+    const policy = components({
+      resolveAttributeMethod: () => false,
+      rejectAttributeMethod: (attr) => {
+        names.push(String(attr.name));
+      },
+    });
+    const source = "<Foo(x){ y }/>";
+    const error = marko(source, policy);
+    expect(mx(source, policy)).toEqual(error);
+    expect(error).toMatchObject({
+      message: expect.stringContaining("attribute method `value(...)`"),
+    });
+    expect(names).toEqual(["value", "value"]);
+  });
+
+  it("rebuilds a method as Marko's FunctionExpression", () => {
+    const source = "<Foo m<T>(a: T) { /* c */ }/>";
+    const fn = (shape: "marko" | "mx") => {
+      const result =
+        shape === "mx" ? mx(source, methods()) : marko(source, methods());
+      const component = (result as { ir: Ir }).ir.body[0] as Extract<
+        IrNode,
+        { kind: "Component" }
+      >;
+      const attr = component.attrs[0] as { value: { node: Node } };
+      return attr.value.node;
+    };
+    const rebuilt = fn("mx");
+    expect(rebuilt).toEqual(fn("marko"));
+    expect(rebuilt).toMatchObject({
+      type: "FunctionExpression",
+      typeParameters: null,
+      body: { innerComments: [{ type: "CommentBlock", value: " c " }] },
+    });
+  });
+
+  it("fails an unparsed attribute value at its MxParseError", () => {
+    const source = "<div a=x b=y/>";
+    const result = mx(source, components(), (body) => {
+      const [, b] = body[0].attributes;
+      b.value = {
+        ...b.value,
+        node: null,
+        error: {
+          type: "MxParseError",
+          code: "BABEL_UnexpectedToken",
+          origin: "expression",
+          message: "Unexpected token",
+          context: null,
+          start: 11,
+          end: 11,
+        },
+      };
+    });
+    expect(result).toEqual({
+      message: "Unexpected token",
+      line: 1,
+      column: 11,
+    });
+  });
+
+  it("refuses a trigger in an attribute value (decision 182 seam)", () => {
+    const source = "<div a=x/>";
+    const result = mx(source, components(), (body) => {
+      body[0].attributes[0].value.triggers = [
+        { type: "MxTrigger", id: "fmt", start: 7, end: 8 },
+      ];
+    });
+    expect(result).toEqual({
+      message: "`fmt` trigger has no lowering yet",
+      line: 1,
+      column: 7,
+    });
+  });
+
+  it("fails an unparsed spread value at its MxParseError", () => {
+    const source = "<div ...s/>";
+    const result = mx(source, components(), (body) => {
+      const [spread] = body[0].attributes;
+      spread.value = {
+        ...spread.value,
+        node: null,
+        error: {
+          type: "MxParseError",
+          code: "BABEL_UnexpectedToken",
+          origin: "expression",
+          message: "Unexpected token",
+          context: null,
+          start: 8,
+          end: 8,
+        },
+      };
+    });
+    expect(result).toEqual({ message: "Unexpected token", line: 1, column: 8 });
   });
 });

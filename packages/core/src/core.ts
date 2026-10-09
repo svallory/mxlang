@@ -39,6 +39,7 @@ import type {
   DerivedDeclaration,
 } from "./atom-contracts.ts";
 import { checkAtomContracts } from "./atom-contracts.ts";
+import { attrArgsOf, attrNameOf, isDefaultAttr } from "./attr-fields.ts";
 import type { CalleeInput } from "./callee-input.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
@@ -1365,9 +1366,13 @@ function eventHandlerHint(ctx: Ctx, node: Node): string {
   ) {
     return "";
   }
-  const value: Node | undefined = tagAttributesOf(node).find(
-    (attr: Node) => attr.default,
-  )?.value;
+  const valueAttr: Node | undefined = tagAttributesOf(node).find(isDefaultAttr);
+  // A hint only: an MX value's payload is peeked, not unwrapped, so a
+  // container that failed to parse names no handler rather than throwing.
+  const value: Node | undefined =
+    valueAttr?.type === "MxAttribute"
+      ? valueAttr.value?.node
+      : valueAttr?.value;
   const handler =
     value?.type === "Identifier"
       ? value.name
@@ -1574,9 +1579,10 @@ export function rejectInertShape(
     // marked `default` by the parser depending on the form; either way it is
     // the tag's own argument, not an extra. An `effect() { … }` body arrives
     // as an attribute with `arguments`, which is likewise the tag's own.
-    if (attr.name === "value" || attr.default || attr.arguments) continue;
+    if (attrNameOf(attr) === "value" || isDefaultAttr(attr) || attrArgsOf(attr))
+      continue;
     fail(
-      `\`<${name}>\` does not support the \`${attr.name}\` attribute; it emits nothing, so the attribute would be silently discarded`,
+      `\`<${name}>\` does not support the \`${attrNameOf(attr)}\` attribute; it emits nothing, so the attribute would be silently discarded`,
       attr,
     );
   }
@@ -1592,7 +1598,7 @@ export function rejectInertShape(
 
 export function attrByName(node: Node, name: string): Node | undefined {
   return tagAttributesOf(node).find(
-    (a: Node) => isAttributeNode(a) && a.name === name,
+    (a: Node) => isAttributeNode(a) && attrNameOf(a) === name,
   );
 }
 
