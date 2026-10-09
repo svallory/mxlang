@@ -847,9 +847,9 @@ function sidecarHint(message: string, what = "custom tag sidecar"): string {
   return "";
 }
 
-function loadDefaultExport(
+export function loadDefaultExport(
   file: string,
-  what: "sidecar" | "contracts module",
+  what: "sidecar" | "contracts module" | "syntax module",
 ): Record<string, unknown> {
   let module: { default?: unknown } | undefined;
   try {
@@ -870,7 +870,7 @@ function loadDefaultExport(
     const fail = what === "sidecar" ? failIn : failContracts;
     fail(
       file,
-      `${what} must \`export default\` ${what === "sidecar" ? "a CustomTag object" : "a plain ContractMap object"}`,
+      `${what} must \`export default\` ${what === "sidecar" ? "a CustomTag object" : what === "syntax module" ? "a syntax module object (`{ table, lowerTrigger?, … }`)" : "a plain ContractMap object"}`,
     );
   }
   return definition as Record<string, unknown>;

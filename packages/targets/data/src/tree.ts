@@ -74,6 +74,24 @@ export type DataAttr =
       nameSpan?: SourceSpan;
       span: SourceSpan;
     }
+  /**
+   * An attribute whose entire value is one member reference a layer-2 syntax
+   * module produced (decision 182 addenda 4 and 5): Mesh's `&dueOn` after a
+   * kind (`sort asc &dueOn`), a sibling of the atom variant. `name` is the
+   * attribute name the module's trigger declares, `value` the member's name
+   * without its sigil, `span` the authored token, sigil included. `nameSpan`
+   * is absent: the name is not written. A member inside an expression is not
+   * this kind: it is whatever node the module built in `DataExpr.node`,
+   * marked `extra.mxMember = { span, name }` (`MxMemberMark`, from
+   * `@mxlang/core`).
+   */
+  | {
+      kind: "member";
+      name: string;
+      value: string;
+      nameSpan?: SourceSpan;
+      span: SourceSpan;
+    }
   /** `required`: a bare attribute. */
   | { kind: "boolean"; name: string; nameSpan: SourceSpan }
   /** `values=[...]`, `change=(x) => ...`, `n=1`, `v:=x` (bound). */

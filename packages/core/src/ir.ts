@@ -164,6 +164,34 @@ export interface MxAtomMark {
   span: SourceSpan;
 }
 
+/**
+ * A member reference a layer-2 syntax module produced (decision 182 addenda 4
+ * and 5): a sibling of {@link Atom} for a value slot that names a member of
+ * the enclosing declaration (Mesh's `&dueOn` after a kind). Its runtime value
+ * is the name as a string literal on every target, like an atom; the IR
+ * keeps it distinct so a contract (`type: "member"`) or a data consumer can
+ * tell it from an atom or a string. `span` covers the whole authored token,
+ * sigil included.
+ */
+export interface Member {
+  kind: "member";
+  name: string;
+  span: SourceSpan;
+}
+
+/**
+ * `extra.mxMember` on a node a syntax module built for a member reference
+ * (decision 182 addendum 5): on the `StringLiteral` of a whole-value member
+ * (core reads it into {@link Member}), and on whatever expression the module
+ * hands `ctx.expression` inside an expression (`self.status` for Mesh's
+ * `&status`). `name` is the member's name, `span` the authored token, sigil
+ * included. Public API, as stable as the IR.
+ */
+export interface MxMemberMark {
+  span: SourceSpan;
+  name: string;
+}
+
 /** The syntax-level value shape known while resolving an expression. */
 export type ExprShape = "object" | "array" | "string" | "other";
 
@@ -221,6 +249,12 @@ export type Attr =
        * `value` is the atom's name, which is what every target emits.
        */
       atom?: Atom;
+      /**
+       * Set when the whole value is one member reference a syntax module
+       * produced (decision 182 addendum 5). `value` is the member's name,
+       * which is what every target emits. Never set together with `atom`.
+       */
+      member?: Member;
     } & IrBase &
       AttrSugar)
   /** A bare attribute (`disabled`), HTML's spelling of `true`. */

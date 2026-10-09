@@ -49,6 +49,7 @@ import type { SourceSpan } from "./mapping.ts";
 import { markoBabel } from "./marko-frontend.ts";
 import { markoViewOf } from "./marko-view.ts";
 import { sugarAfterDefaultError } from "./stock-parser.ts";
+import type { SyntaxModule } from "./syntax-table.ts";
 import {
   hasTypeArguments,
   tagArgsOf,
@@ -59,6 +60,7 @@ import {
   tagVarOf,
 } from "./tag-fields.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
+import { childrenWithTriggers } from "./triggers.ts";
 
 /**
  * Marko's own bundled Babel — parser, traverse and types in one module.
@@ -455,6 +457,13 @@ export interface Ctx {
    * value: a hook reports through `fail`/`warn` or mutates the `Ctx`.
    */
   afterLower?: ReadonlyArray<(ctx: Ctx) => void>;
+  /**
+   * The syntax module of the file being lowered (decision 182 addendum 5),
+   * set by the trigger pass (`lowerTriggers`) from the document's
+   * registered syntax; `lowerChildList` reads its `lowerBlockTag` and
+   * `lowerFilter`. Unset for a default-row file.
+   */
+  syntaxModule?: SyntaxModule;
   /** Resolved template path -> default import binding, authored or injected. */
   customTagImports?: Map<string, string>;
   /** Imports synthesized while lowering discovered template calls. */
@@ -1503,8 +1512,9 @@ export function isMxAttributeTag(node: Node): boolean {
 /** Hybrid body read: MX has `body: MxChild[]`, Marko has `body: { body }`. */
 export function bodyChildren(node: Node): Node[] {
   if (!node.body) return [];
-  // MX AST: body is direct child list (no wrapper)
-  if (Array.isArray(node.body)) return node.body;
+  // MX AST: body is direct child list (no wrapper); its line triggers as
+  // lowered by the trigger pass (decision 182 addendum 5).
+  if (Array.isArray(node.body)) return childrenWithTriggers(node.body);
   // Marko AST: body.body is the child list
   return node.body.body ?? [];
 }

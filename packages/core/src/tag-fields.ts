@@ -7,8 +7,10 @@
  * answers what lowering read off the Marko tag, from either shape; the Marko
  * branches go when `lower()` takes only the MX AST.
  */
+
 import type { Node } from "./core.ts";
 import { payloadOf } from "./payload.ts";
+import { attributesWithTriggers } from "./triggers.ts";
 
 /**
  * Default tags resolved for unnamed MX tags (`default-tag.ts`), kept beside
@@ -176,8 +178,11 @@ export function hasTypeArguments(node: Node): boolean {
  * same list (`MxTagFields.attributes`); Marko dropped them, so they go here.
  */
 export function tagAttributesOf(node: Node): Node[] {
-  const attributes: Node[] = node?.attributes ?? [];
-  if (!isMxTagShape(node)) return attributes;
+  if (!isMxTagShape(node)) return node?.attributes ?? [];
+  // Attribute triggers as the trigger pass lowered them (decision 182
+  // addendum 5); the name-sugar record, when there is one, is built from
+  // the same list.
+  const attributes: Node[] = attributesWithTriggers(node);
   return (
     sugarAttributes.get(node) ??
     attributes.filter((attr) => attr?.type !== "MxComment")

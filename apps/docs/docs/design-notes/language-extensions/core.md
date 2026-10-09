@@ -98,14 +98,49 @@ bodyEnd)`.
 ## Hooks
 
 Post-parse only, plain functions, declared by a syntax module (layer 2) or a
-descriptor (layer 3):
+descriptor (layer 3).
 
-- `lowerTrigger(id, text, span, ctx)` builds the node a trigger produced;
-  default implementations cover the `node` kinds of the table.
-- `lowerBlockTag(text, span, ctx)` turns a block form into IR through `ctx.build`.
-- `lowerFilter(name, body, span, ctx)` returns IR for a filter block.
-- `afterLower(ir, ctx)` runs once per unit after lowering, before emit.
-- `productName` names the language in every diagnostic.
+A **syntax module** is what `package.json#mx.syntax` names when its value is a
+string (a package name, or a path relative to the manifest, resolved like
+`mx.contracts`); its default export is
+`{ table, lowerTrigger?, lowerBlockTag?, lowerFilter?, afterLower?, productName? }`.
+`table` overlays the `.mx` default row with the fields an inline `mx.syntax`
+may set. An inline object stays a table only. A trigger whose `node` is
+`{ call }` needs the module's `lowerTrigger`: a `{ call }` in an inline
+`mx.syntax`, or in a module without `lowerTrigger`, is an error at the
+`mx.syntax` key. A tool that builds its own table passes the module as the
+`syntax` option of `compileSource`, `parseFragment` or `parseData`.
+
+- `lowerTrigger(id, text, span, ctx)` builds what a `{ call }` trigger
+  produces. `ctx.position` says where the trigger sits (`"expression"`,
+  `"attribute"`, `"line"`) and `ctx.value` is its lowered `=value` (or
+  `null`). Three constructors, one per position, are the only way to build
+  anything:
+  - `ctx.expression(node)`: a Babel node that replaces the trigger's stand-in
+    in the expression's payload. The authored text and every offset stay.
+  - `ctx.attribute(name, value)`: a named attribute. `value` is `true`, a
+    string, a `ctx.expression` result, or a whole-value
+    `{ kind: "atom" | "member", name }`.
+  - `ctx.child(tagName, attrs)`: a child tag of the enclosing body, built
+    from `ctx.attribute` results. It goes through the normal tag path, so
+    contracts apply to it.
+
+  Core positions the result from the trigger. A result that does not fit
+  the position, a `=value` the hook leaves out, and a trigger written where
+  a name is declared (`(&a) => 1`) are positioned errors. The built-in
+  `node` kinds lower in core with no hook: in an expression, `"string"` (a
+  string literal of the text) and `"identifier"`; in an attribute list,
+  `"attribute"` (an attribute named by the text after its sigil, bare or
+  with its `=value`).
+- `lowerBlockTag(text, span, ctx)` turns a block form into IR through
+  `ctx.build`, the builders a custom tag's `transform` gets.
+- `lowerFilter(name, body, span, ctx)` returns IR for a filter block, through
+  `ctx.build`. A block tag or filter whose module has no hook for it stays a
+  "has no lowering yet" error.
+- `afterLower(ctx)` runs once per unit after lowering, before emit, after
+  core's own checks.
+- `productName` names the language in every diagnostic, unless the host
+  names one.
 
 ## Attribute tags: one runtime shape
 

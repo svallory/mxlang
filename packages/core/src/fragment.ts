@@ -63,11 +63,13 @@ import {
   tagParamError,
 } from "./stock-parser.ts";
 import {
-  explicitSyntax,
-  resolveSyntax,
+  explicitSyntaxOf,
+  resolveSyntaxOf,
+  type SyntaxModule,
   type SyntaxTable,
   tableParseError,
 } from "./syntax-table.ts";
+import { registerSyntax } from "./triggers.ts";
 
 /**
  * A translator that translates nothing: the parse-only configuration.
@@ -183,10 +185,11 @@ export interface FragmentBase {
   /** The name reported for the *enclosing* file, in diagnostics. */
   filename?: string;
   /**
-   * The syntax table (decision 182); omitted, `filename`'s nearest
-   * `package.json#mx.syntax`, as for `compileSource`.
+   * The syntax table or syntax module (decision 182 addendum 5); omitted,
+   * `filename`'s nearest `package.json#mx.syntax`, as for `compileSource`.
+   * The returned body lowers with it (`lower`/`lowerChildren`).
    */
-  syntax?: SyntaxTable;
+  syntax?: SyntaxTable | SyntaxModule;
   /**
    * Character offset of the fragment's first character within the file. When
    * omitted, indexes stay fragment-relative and the offset checks
@@ -414,10 +417,11 @@ export function parseFragment(
   };
 
   // Only an absent option resolves from the manifest: `null` is refused.
-  const syntax =
+  const resolvedSyntax =
     base.syntax !== undefined
-      ? explicitSyntax(base.syntax, resolved.filename)
-      : resolveSyntax(resolved.filename);
+      ? explicitSyntaxOf(base.syntax, resolved.filename)
+      : resolveSyntaxOf(resolved.filename);
+  const syntax = resolvedSyntax.table;
   const compiler = markoCompiler();
   const translator = parseOnlyTranslator(base.customTags);
   const lookup = compiler.taglib.buildLookup(
@@ -434,9 +438,12 @@ export function parseFragment(
       column: resolved.baseColumn,
     },
   });
-  const tableError = tableParseError(document, syntax, {
-    filename: resolved.filename,
-  });
+  const tableError = tableParseError(
+    document,
+    syntax,
+    { filename: resolved.filename },
+    resolvedSyntax.module,
+  );
   if (tableError) throw tableError;
   // Marko's parse-only output never threw on expression errors alone: those
   // stayed in the tree for lowering, as the containers' `error` do now.
@@ -480,6 +487,7 @@ export function parseFragment(
     throw error;
   }
   registerDocument(document);
+  registerSyntax(document, resolvedSyntax);
   return { ast: document, body: document.body };
 }
 

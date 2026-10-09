@@ -69,6 +69,12 @@ export interface CustomTagAttribute {
    * arrow function, function expression or method shorthand. An identifier,
    * call, member or conditional has no knowable type and is accepted, as for
    * `string` and `number`.
+   *
+   * `member` (decision 182 addendum 4) accepts exactly a whole-value member
+   * a syntax module produced (`asc &dueOn` in Mesh) and nothing else; an
+   * `expression` slot accepts a member too, an `atom` slot refuses it.
+   * Membership checks are the module's `afterLower` job: `values`, `pattern`
+   * and `ref` stay atom-only.
    */
   type?:
     | "string"
@@ -77,7 +83,8 @@ export interface CustomTagAttribute {
     | "expression"
     | "array"
     | "function"
-    | "atom";
+    | "atom"
+    | "member";
   /**
    * `type: "atom"` only (decision 156): the allowed names, like an enum. An
    * atom (`:name`), or a list of them, is checked name by name.
@@ -799,7 +806,7 @@ function failForOwner(owner: string, message: string, at: Position): never {
   throw new TranslateError(`${owner}: ${message}`, at.line, at.column, at.file);
 }
 
-function buildersFor(
+export function buildersFor(
   loc: Position,
   ctx: Ctx,
   node: Node | null,
@@ -974,7 +981,7 @@ function buildersFor(
 }
 
 interface LiteralValue {
-  type: "string" | "number" | "boolean" | "atom";
+  type: "string" | "number" | "boolean" | "atom" | "member";
   value: string | number | boolean;
 }
 
@@ -987,7 +994,11 @@ function literalValue(attr: Attr): LiteralValue | null {
     // The name sugar's `:name` is stringified for every contract but an atom
     // one (decision 156 addendum 6); an explicit `x=:a` stays an atom.
     return {
-      type: attr.atom && !attr.sugar ? "atom" : "string",
+      type: attr.member
+        ? "member"
+        : attr.atom && !attr.sugar
+          ? "atom"
+          : "string",
       value: attr.value,
     };
   }
@@ -1081,8 +1092,10 @@ function nodeShape(node: Node | null | undefined): string | null {
 
 /** The written type of an attribute's value, or `null` when it cannot be known. */
 function attrShape(attr: Attr): string | null {
-  if (attr.kind === "static")
+  if (attr.kind === "static") {
+    if (attr.member) return "member";
     return attr.atom && !attr.sugar ? "atom" : "string";
+  }
   if (attr.kind === "boolean") return "boolean";
   if (attr.kind !== "dynamic" && attr.kind !== "bound") return null;
   return nodeShape(attr.value.node);
@@ -1150,6 +1163,14 @@ function checkAtomAttr(
   const at = valueLoc(attr, locate);
   // An atom, the sugar-derived `name` included, satisfies an atom contract.
   if (attr.kind === "static" && attr.atom) return;
+  // Decision 182 addendum 4: a member is not an atom.
+  if (attr.kind === "static" && attr.member) {
+    failForOwner(
+      owner,
+      `attribute ${attrLabel(attr)} must be an atom, got a member${expected}`,
+      at,
+    );
+  }
   const shape = attrShape(attr);
   // A plain string against a `ref` atom is reported by the file-level check,
   // once the declarations exist and the error can list the names.
@@ -1181,6 +1202,32 @@ function checkAtomAttr(
         : attr.loc,
     );
   }
+}
+
+/**
+ * A `type: "member"` slot (decision 182 addendum 4) takes exactly a
+ * whole-value member a syntax module produced; an atom, a string, a bare
+ * attribute or an expression is refused, naming what was written.
+ */
+function checkMemberAttr(
+  owner: string,
+  attr: Exclude<Attr, { kind: "spread" }>,
+  locate?: Locate,
+): void {
+  if (attr.kind === "static" && attr.member) return;
+  const got =
+    attr.kind === "static"
+      ? attr.atom && !attr.sugar
+        ? "an atom"
+        : "a string"
+      : attr.kind === "boolean"
+        ? "a bare attribute"
+        : "an expression";
+  failForOwner(
+    owner,
+    `attribute ${attrLabel(attr)} must be a member, got ${got}`,
+    valueLoc(attr, locate),
+  );
 }
 
 function isLiteralAttr(attr: Attr): boolean {
@@ -1475,6 +1522,8 @@ function validateAttributes(
     }
     if (declaration.type === "atom") {
       checkAtomAttr(owner, attr, declaration, locate);
+    } else if (declaration.type === "member") {
+      checkMemberAttr(owner, attr, locate);
     } else if (
       declaration.type === "array" ||
       declaration.type === "function"
@@ -1494,7 +1543,8 @@ function validateAttributes(
     }
     if (
       declaration.type === "expression" &&
-      ((attr.kind === "static" && !attr.atom) || attr.kind === "boolean")
+      ((attr.kind === "static" && !attr.atom && !attr.member) ||
+        attr.kind === "boolean")
     ) {
       failForOwner(
         owner,

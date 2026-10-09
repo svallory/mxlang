@@ -26,6 +26,7 @@ import {
   type Ir,
   isTranslateError,
   type MxWarning,
+  type SyntaxModule,
   type SyntaxTable,
   TranslateError,
 } from "@mxlang/core";
@@ -67,12 +68,14 @@ export interface ParseDataOptions {
   /** Contract-only custom tags (decision 130), by call name. */
   customTags?: Record<string, CustomTag>;
   /**
-   * The syntax table (decision 182), for a consumer that builds its own
-   * (Mesh); omitted, the file's nearest `package.json#mx.syntax`. Until core
-   * lowers triggers, a trigger, block tag or filter the table produces is a
-   * positioned diagnostic ("`<id>` trigger has no lowering yet").
+   * The syntax table or syntax module (decision 182 addendum 5), for a
+   * consumer that builds its own (Mesh passes its module, hooks included);
+   * omitted, the file's nearest `package.json#mx.syntax`. A trigger, block
+   * tag or filter nothing lowers (a `{ call }` trigger with no
+   * `lowerTrigger`) is a positioned diagnostic ("`<id>` trigger has no
+   * lowering yet").
    */
-  syntax?: SyntaxTable;
+  syntax?: SyntaxTable | SyntaxModule;
   /**
    * `package.json#mx.data.defaultTag`, already validated: what the unnamed
    * tag (`<#id>`, `<.class>`) stands for in place of the built-in `object`

@@ -51,6 +51,20 @@ const MESH = {
   lineTriggers: [MEMBER],
 };
 
+/**
+ * MESH with a built-in node kind, which an inline `mx.syntax` may use: a
+ * `{ call }` node needs a syntax module (decision 182 addendum 5).
+ */
+const INLINE_ROW: Trigger = { ...MEMBER, node: "identifier" };
+const INLINE = {
+  expressionTriggers: [INLINE_ROW],
+  attributeTriggers: [{ ...MEMBER, node: "attribute" } as Trigger],
+  lineTriggers: [INLINE_ROW],
+};
+
+/** MESH as an explicit table: the option path keeps "has no lowering yet". */
+const EXPLICIT: SyntaxTable = Object.freeze({ ...defaultSyntax(), ...MESH });
+
 let dir: string;
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "mx-syntax-"));
@@ -96,8 +110,8 @@ describe("normalizeMxSyntax", () => {
   });
 
   it("overlays the default row, freezes, and interns by content", () => {
-    const a = normalizeMxSyntax(MESH, "/a/package.json");
-    const b = normalizeMxSyntax(structuredClone(MESH), "/b/package.json");
+    const a = normalizeMxSyntax(INLINE, "/a/package.json");
+    const b = normalizeMxSyntax(structuredClone(INLINE), "/b/package.json");
     expect(a).toBe(b);
     expect(Object.isFrozen(a)).toBe(true);
     expect(Object.isFrozen(a.expressionTriggers[0])).toBe(true);
@@ -132,7 +146,7 @@ describe("normalizeMxSyntax", () => {
 
 describe("resolveSyntax", () => {
   it("uses the nearest manifest, and a dependency's files its own", () => {
-    manifest(dir, { syntax: MESH });
+    manifest(dir, { syntax: INLINE });
     const dep = join(dir, "node_modules", "dep");
     manifest(dep, {});
     expect(resolveSyntax(join(dir, "src/page.mx")).lineTriggers).toHaveLength(
@@ -146,7 +160,7 @@ describe("resolveSyntax", () => {
   });
 
   it("an unchanged manifest is not re-read; an edited one is", () => {
-    const file = manifest(dir, { syntax: MESH });
+    const file = manifest(dir, { syntax: INLINE });
     const page = join(dir, "page.mx");
     const first = resolveSyntax(page);
     expect(resolveSyntax(page)).toBe(first);
@@ -162,14 +176,16 @@ describe("a table core cannot lower yet fails the file loudly", () => {
     ["x=() => &status\n", "`member` trigger has no lowering yet", 1, 8],
     ["div\n  span\n    &title\n", "`member` trigger has no lowering yet", 3, 4],
     ["sort asc &dueOn\n", "`member` trigger has no lowering yet", 1, 9],
-  ])("%j", (source, message, line, column) => {
-    manifest(dir, { syntax: MESH });
-    const page = join(dir, "page.mx");
-    const error = caught(() => compile(source, page));
-    expect(error.message).toBe(message);
-    expect(error.file).toBe(page);
-    expect([error.line, error.column]).toEqual([line, column]);
-  });
+  ])(
+    "%j (an explicit `{ call }` table with no module)",
+    (source, message, line, column) => {
+      const page = join(dir, "page.mx");
+      const error = caught(() => compile(source, page, EXPLICIT));
+      expect(error.message).toBe(message);
+      expect(error.file).toBe(page);
+      expect([error.line, error.column]).toEqual([line, column]);
+    },
+  );
 
   it("block tags and filters name their construct", () => {
     const table = normalizeMxSyntax(
@@ -190,7 +206,7 @@ describe("a table core cannot lower yet fails the file loudly", () => {
 
   it("an error the table causes is reported too", () => {
     const table = normalizeMxSyntax(
-      { expressionTriggers: [{ ...MEMBER, match: "&[a-z]+" }] },
+      { expressionTriggers: [{ ...INLINE_ROW, match: "&[a-z]+" }] },
       join(dir, "package.json"),
     );
     const error = caught(() =>
@@ -202,7 +218,7 @@ describe("a table core cannot lower yet fails the file loudly", () => {
   });
 
   it("a file that uses none of the table compiles as with the default row", () => {
-    manifest(dir, { syntax: MESH });
+    manifest(dir, { syntax: INLINE });
     const source = "<div class=a>${x && y}</div>\n";
     expect(compile(source, join(dir, "page.mx")).code).toBe(
       compile(source, "/elsewhere/page.mx").code,
@@ -227,7 +243,7 @@ describe("a table core cannot lower yet fails the file loudly", () => {
   });
 
   it("an explicit null is refused, not read as omitted (review 442/443 verify)", () => {
-    manifest(dir, { syntax: MESH });
+    manifest(dir, { syntax: INLINE });
     const page = join(dir, "page.mx");
     const error = caught(() =>
       compileSource("<p/>\n", page, declarations, {
@@ -259,7 +275,7 @@ describe("a table core cannot lower yet fails the file loudly", () => {
   });
 
   it("an explicit table wins over the manifest", () => {
-    manifest(dir, { syntax: MESH });
+    manifest(dir, { syntax: INLINE });
     const page = join(dir, "page.mx");
     expect(() => compile("x=&a\n", page, defaultSyntax())).toThrow(
       /&a|Unexpected/,
@@ -267,7 +283,7 @@ describe("a table core cannot lower yet fails the file loudly", () => {
   });
 
   it("a fragment's position is shifted by its base", () => {
-    const table = normalizeMxSyntax(MESH, join(dir, "package.json"));
+    const table = EXPLICIT;
     const error = caught(() =>
       parseFragment("<p x=&a/>", {
         filename: join(dir, "page.solid.mx"),
@@ -321,12 +337,9 @@ describe("the default row costs nothing", () => {
     once(() => compile("<p>a</p>\n", join(same, "page.mx")));
 
     const other = join(dir, "other");
-    manifest(other, { syntax: MESH });
+    manifest(other, { syntax: INLINE });
     once(() => compile("<p>a</p>\n", join(other, "page.mx")));
-    once(() =>
-      expect(() => compile("x=&a\n", join(other, "page.mx"))).toThrow(
-        "`member` trigger has no lowering yet",
-      ),
-    );
+    // A built-in node kind lowers in core: one parse, no error.
+    once(() => compile("x=&a\n", join(other, "page.mx")));
   });
 });

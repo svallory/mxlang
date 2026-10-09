@@ -101,6 +101,7 @@ import {
   warn,
 } from "./core.ts";
 import {
+  buildersFor,
   type ChildNode,
   type CustomTag,
   hasAttributeTagContract,
@@ -151,6 +152,7 @@ import {
 import { payloadOf } from "./payload.ts";
 import { checkReservedTemplate } from "./reserved-bindings.ts";
 import { CONTROL_FLOW_TAGS } from "./structural-tags.ts";
+import type { SyntaxBuildContext } from "./syntax-table.ts";
 import {
   hasStaticName,
   tagArgsOf,
@@ -170,6 +172,7 @@ import {
   registerTemplateMetadataCompiler,
   type TemplateTag,
 } from "./template-tag.ts";
+import { childrenWithTriggers, lowerTriggers, memberOf } from "./triggers.ts";
 import {
   findUncalledTagFile,
   markoFileTagMessage,
@@ -1048,6 +1051,9 @@ function lowerAttrNamed(
     // `:name` sugar sets) is still a static string to every target; the IR
     // marks it so a data consumer or contract can tell it from `"strict"`.
     const atom = atomOf(value);
+    // Decision 182 addendum 5: a whole-value member a syntax module built
+    // (`ctx.attribute(name, { kind: "member", name })`), marked the same way.
+    const member = atom ? undefined : memberOf(value);
     return {
       kind: "static",
       name,
@@ -1056,6 +1062,7 @@ function lowerAttrNamed(
       nameSpan,
       loc,
       ...(atom ? { atom } : {}),
+      ...(member ? { member } : {}),
     };
   }
   // An event attribute is `on<Name>` or `on-<exact>`, and only on a native
@@ -4415,11 +4422,14 @@ export function lowerChildren(ctx: Ctx, children: readonly Node[]): IrNode[] {
   }
 }
 
-function lowerChildrenOf(ctx: Ctx, children: readonly MxChild[]): IrNode[] {
+function lowerChildrenOf(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
+  let children = authored;
   // An external call (not from `lower`) has unresolved unnamed tags; the
   // walk starts with no parents, right for a body lowered on its own.
   if (!ctx.unnamedTagsResolved) {
     if (!ctx.atomsConverted) convertAtoms(ctx, children);
+    lowerTriggers(ctx, children);
+    children = childrenWithTriggers(children);
     resolveUnnamedTags(ctx, children);
     ctx.unnamedTagsResolved = true;
     try {
@@ -4484,7 +4494,9 @@ function ifChainEnd(children: readonly Node[], index: number): number {
   return i;
 }
 
-function lowerChildList(ctx: Ctx, children: readonly MxChild[]): IrNode[] {
+function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
+  // A body read straight off its tag: its line triggers as lowered.
+  const children = childrenWithTriggers(authored);
   // Every `/var` this block declares is registered *before* the walk, at the
   // sibling index it is declared at. A read earlier in the same block then
   // finds a binding whose sequence is greater than its own and reports
@@ -4661,18 +4673,44 @@ function lowerChildList(ctx: Ctx, children: readonly MxChild[]): IrNode[] {
         case "MxDeclaration":
           fail(DECLARATION_MESSAGE, child);
           break;
-        // Decision 182 seam: a syntax table's child-level nodes, refused in
-        // the syntax pre-pass's wording until lowering dispatches them to
-        // the table's `lowerTrigger`/`lowerBlockTag`/`lowerFilter`.
+        // Decision 182 seam: a line trigger the trigger pass did not lower
+        // (no registered syntax, or a `{ call }` with no `lowerTrigger`) is
+        // refused in the table check's wording; a block tag or filter goes
+        // to the syntax module's hook (addendum 5), or is refused likewise.
         case "MxTrigger":
           fail(`\`${child.id}\` trigger has no lowering yet`, child);
           break;
-        case "MxBlockTag":
-          fail("a block tag has no lowering yet", child);
+        case "MxBlockTag": {
+          const hook = ctx.syntaxModule?.lowerBlockTag;
+          if (!hook) fail("a block tag has no lowering yet", child);
+          out.push(
+            ...syntaxHookIr(ctx, child, "lowerBlockTag", (build) =>
+              (hook as NonNullable<typeof hook>)(
+                child.value,
+                { sourceStart: child.start, sourceEnd: child.end },
+                build,
+              ),
+            ),
+          );
           break;
-        case "MxFilter":
-          fail(`the \`${child.name}\` filter has no lowering yet`, child);
+        }
+        case "MxFilter": {
+          const hook = ctx.syntaxModule?.lowerFilter;
+          if (!hook) {
+            fail(`the \`${child.name}\` filter has no lowering yet`, child);
+          }
+          out.push(
+            ...syntaxHookIr(ctx, child, "lowerFilter", (build) =>
+              (hook as NonNullable<typeof hook>)(
+                child.name,
+                child.value,
+                { sourceStart: child.start, sourceEnd: child.end },
+                build,
+              ),
+            ),
+          );
           break;
+        }
         default:
           // An MX node kind with no lowering is never dropped silently; a
           // Marko kind this switch has no arm for keeps today's behaviour.
@@ -4688,6 +4726,37 @@ function lowerChildList(ctx: Ctx, children: readonly MxChild[]): IrNode[] {
   }
 
   return out;
+}
+
+/**
+ * Runs a syntax module's `lowerBlockTag`/`lowerFilter` (decision 182
+ * addendum 5) with the IR builders a custom tag's `transform` gets, and
+ * returns its IR as a list. Whatever the hook throws leaves positioned at the
+ * construct: a `TranslateError` as is, anything else wrapped.
+ */
+function syntaxHookIr(
+  ctx: Ctx,
+  node: Node,
+  hook: "lowerBlockTag" | "lowerFilter",
+  run: (context: SyntaxBuildContext) => IrNode | readonly IrNode[],
+): IrNode[] {
+  const build = buildersFor(posOf(ctx, node), ctx, null, hook, {});
+  let result: IrNode | readonly IrNode[];
+  try {
+    result = run(Object.freeze({ build }));
+  } catch (error) {
+    if (isTranslateError(error)) throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    return fail(`the syntax module's \`${hook}\` threw: ${message}`, node);
+  }
+  const nodes = Array.isArray(result) ? [...result] : [result as IrNode];
+  if (nodes.some((each) => !each || typeof each !== "object" || !each.kind)) {
+    fail(
+      `the syntax module's \`${hook}\` must return IR nodes (build them with \`ctx.build\`)`,
+      node,
+    );
+  }
+  return nodes;
 }
 
 /**
@@ -4713,15 +4782,19 @@ export function lower(ctx: Ctx, body: readonly Node[]): Ir {
   }
 }
 
-function lowerRoot(ctx: Ctx, body: readonly MxChild[]): Ir {
+function lowerRoot(ctx: Ctx, authored: readonly MxChild[]): Ir {
   // Before anything reads a tag name: an unnamed tag has none yet. The flag
   // tells `lowerChildren` the whole tree is already resolved, so only a call
   // from outside this walk resolves (and never re-walks a subtree).
   // Decision 156: atoms first, so no expression is ever read as its stand-in.
   if (!ctx.atomsConverted) {
-    convertAtoms(ctx, body);
+    convertAtoms(ctx, authored);
     ctx.atomsConverted = true;
   }
+  // Decision 182 addendum 5: a syntax table's triggers, before anything
+  // reads an expression, an attribute list or a body.
+  lowerTriggers(ctx, authored);
+  const body = childrenWithTriggers(authored);
   resolveUnnamedTags(ctx, body);
   const wasResolved = ctx.unnamedTagsResolved;
   ctx.unnamedTagsResolved = true;

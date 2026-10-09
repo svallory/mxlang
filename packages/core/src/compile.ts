@@ -56,12 +56,14 @@ import {
 import { hintParseError } from "./parse-error-hints.ts";
 import { sugarAfterDefaultError, tagParamError } from "./stock-parser.ts";
 import {
-  explicitSyntax,
-  resolveSyntax,
+  explicitSyntaxOf,
+  resolveSyntaxOf,
+  type SyntaxModule,
   type SyntaxTable,
   tableParseError,
 } from "./syntax-table.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
+import { registerSyntax } from "./triggers.ts";
 
 export interface RawSourceMap {
   version: number;
@@ -146,12 +148,13 @@ export interface TranslatorOptions {
 
 export interface HostOptions extends TranslatorOptions {
   /**
-   * The syntax table (decision 182). Omitted, the file's nearest
-   * `package.json#mx.syntax` resolves it (`resolveSyntax`); a table that is
-   * not the `.mx` default row fails the file at the first construct core
-   * cannot lower yet (`checkSyntaxUse`).
+   * The syntax table, or a syntax module carrying one and its hooks
+   * (decision 182 addendum 5). Omitted, the file's nearest
+   * `package.json#mx.syntax` resolves it (`resolveSyntax`). A trigger, block
+   * tag or filter nothing lowers fails the file at the first one
+   * (`tableParseError`).
    */
-  syntax?: SyntaxTable;
+  syntax?: SyntaxTable | SyntaxModule;
   /**
    * A last pass over the emitted module, for a host that appends helpers or
    * rewrites the module shape. Receives and returns the whole module text.
@@ -453,10 +456,11 @@ export function compileSource(
   // Required lazily and by CJS: `@marko/compiler` is a large dependency and
   // only this function needs it, so importing the type surface stays free.
   // Only an absent option resolves from the manifest: `null` is refused.
-  const syntax =
+  const resolvedSyntax =
     host.syntax !== undefined
-      ? explicitSyntax(host.syntax, filename)
-      : resolveSyntax(filename);
+      ? explicitSyntaxOf(host.syntax, filename)
+      : resolveSyntaxOf(filename);
+  const syntax = resolvedSyntax.table;
   const compiler = markoCompiler();
   const translator = createTranslator(host);
 
@@ -494,7 +498,12 @@ export function compileSource(
     // and its payloads lose their TypeScript as Marko's did (`stripTypes`
     // defaults to true for a build). `@marko/compiler` no longer parses.
     const document = parseMx(source, { syntax, lookup });
-    const tableError = tableParseError(document, syntax, { filename });
+    const tableError = tableParseError(
+      document,
+      syntax,
+      { filename },
+      resolvedSyntax.module,
+    );
     if (tableError) throw tableError;
     const parseError = compileErrorOf(document, filename, {
       expressionErrors: true,
@@ -502,6 +511,7 @@ export function compileSource(
     if (parseError) throw parseError;
     if (host.stripTypes !== false) stripMxTypes(document);
     registerDocument(document);
+    registerSyntax(document, resolvedSyntax);
     try {
       translator.translate.Program.exit({ node: { body: document.body } });
     } catch (error) {

@@ -20,11 +20,13 @@
  * bound value or arguments on a sugar, a dynamic attribute shorthand, sugar
  * on a statement tag) fails there; lowering never sees that source.
  */
+
 import { attrArgsOf, attrValueOf, methodFunctionOf } from "./attr-fields.ts";
 import type { Ctx, Node } from "./core.ts";
 import { rewriteSugarTag, sugarLoc } from "./name-sugar.ts";
 import { payloadOf } from "./payload.ts";
 import { recordSugarAttributes } from "./tag-fields.ts";
+import { attributesWithTriggers } from "./triggers.ts";
 
 const done = new WeakSet<Node>();
 
@@ -327,7 +329,7 @@ export function rewriteMxSugar(ctx: Ctx, tag: Node): void {
     return;
   }
   done.add(tag);
-  const authored: Node[] = (tag.attributes ?? []).filter(
+  const authored: Node[] = attributesWithTriggers(tag).filter(
     (attr: Node) => attr?.type !== "MxComment",
   );
   if (

@@ -10,13 +10,15 @@
  * the MX path and has its own test.
  */
 import { fail, type Node } from "./core.ts";
+import { isTriggerLowered } from "./triggers.ts";
 
 /**
  * A container's Babel payload, checked in this order:
  *
- * 1. An expression trigger inside (decision 182; ast §4.4) is refused at the
- *    first one, in the syntax pre-pass's wording, until lowering dispatches
- *    triggers to the table's `lowerTrigger`. This is that dispatch's seam.
+ * 1. An expression trigger inside (decision 182; ast §4.4) that the trigger
+ *    pass did not lower (`lowerTriggers`: no registered syntax, or a
+ *    `{ call }` with no `lowerTrigger`) is refused at the first one, in the
+ *    table check's wording.
  * 2. A container the front end could not parse fails at its `MxParseError`,
  *    with the parser's message.
  * 3. A container with neither a payload nor an error is an MX bug.
@@ -26,9 +28,11 @@ import { fail, type Node } from "./core.ts";
  * offsets at the lowering boundary.
  */
 export function payloadOf(container: Node): Node {
-  const trigger = container.triggers?.[0];
+  const trigger = container.triggers?.find(
+    (each: Node) => !isTriggerLowered(each),
+  );
   if (trigger) {
-    // Decision 182 seam: `lowerTrigger` dispatch replaces this refusal.
+    // Decision 182 seam: the trigger pass lowers what it can reach.
     fail(`\`${trigger.id}\` trigger has no lowering yet`, trigger);
   }
   if (container.error) fail(container.error.message, container.error);

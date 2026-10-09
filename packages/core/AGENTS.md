@@ -443,6 +443,22 @@ Five facts worth knowing before editing it:
   `payloadOf`/`lowerChildList` are the backstop for callers that lower a
   document themselves. `MX_SUGAR_ON_STATEMENT` is decided by the parse table
   alone, never by `ctx.lookup`.
+  **Syntax modules (decision 182 addendum 5; `src/triggers.ts`).** A string
+  `mx.syntax` names a module (`resolveSyntaxOf`, loaded with
+  `loadDefaultExport` like `mx.contracts`, reloaded when its mtime changes);
+  the `syntax` option takes one too (`explicitSyntaxOf`). `compileSource` and
+  `parseFragment` register the document's syntax by every body array
+  (`registerSyntax`), and `lower`/`lowerChildren` run `lowerTriggers` right
+  after `convertAtoms`: hooks in source order (a tag's attributes before its
+  body, a value's triggers before its owner), stand-ins replaced inside the
+  payload, attribute and line triggers kept as synthesized `MxAttribute`/
+  `MxTag` nodes in WeakMaps that `tagAttributesOf`, `bodyChildren` and
+  `lowerChildList` read, so the tree stays as parsed. `payloadOf`,
+  `lowerChildList` and `tableParseError` refuse only what nothing lowered.
+  A whole-value member is a static `Attr` with `member` (`memberOf`, mirror
+  of `atomOf`); `type: "member"` is checked in `custom-tags.ts`
+  (`checkMemberAttr`). The test module is `src/fixtures/syntax/member-syntax.ts`
+  (Mesh's `&`); it imports types only so a manifest can `require` it.
   parse. Core reaches that parser through `mxTemplateParser()`
   (`marko-frontend.ts`): the bundle's parser in the dist, the workspace
   `@mxlang/parser` devDependency by `require` from source (never a static

@@ -63,6 +63,16 @@ never during lexing. A matcher may capture a terminator and close on it
 Mesh is the first layer-2 user and the acceptance test. Its module carries
 what used to be MX core:
 
+- **Members** (`&name`) in all three trigger lists, one row
+  (`{ id: "member", chars: "&", standIn: "identifier", node: { call: "member" } }`):
+  in an expression `&status` lowers to `self.status` marked
+  `extra.mxMember = { span, name }` (`[&a, &b]` is an array of marked
+  members); after a kind (`sort asc &dueOn`) it is a static value
+  `{ kind: "member", name: "dueOn" }`, checked by the contract type
+  `type: "member"`; on a tagless line (`&title`, `&amount=qty * price`) it is
+  a `member` child tag with a static `name` and a dynamic `value`. `&&`,
+  `a &b` and `&=` stay operators.
+
 - **Atoms** (`:name` in expression position, nested atoms, `::name` reserved),
   with the contract vocabulary (`type: "atom"`, `values`, `pattern`, `ref`,
   `declares`) checked from `afterLower`.

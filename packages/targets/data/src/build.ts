@@ -284,6 +284,16 @@ function dataAttr(attr: Attr): DataAttr {
           span: attr.atom.span,
         };
       }
+      // Decision 182 addendum 5: the name a syntax module's trigger
+      // declares is not written, so the variant carries no `nameSpan`.
+      if (attr.member) {
+        return {
+          kind: "member",
+          name: attr.name,
+          value: attr.member.name,
+          span: attr.member.span,
+        };
+      }
       return {
         kind: "string",
         name: attr.name,

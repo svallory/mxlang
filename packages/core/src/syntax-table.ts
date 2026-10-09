@@ -10,18 +10,31 @@
  * into core (parser port PR 4).
  */
 import { createHash } from "node:crypto";
-import { dirname, isAbsolute } from "node:path";
-import { type Node, TranslateError } from "./core.ts";
+import { statSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, isAbsolute, resolve } from "node:path";
+import type { Ctx, Node } from "./core.ts";
+import { TranslateError } from "./core.ts";
+import type { IrBuilders } from "./custom-tags.ts";
 import { findNearestPackageJson } from "./host-policy.ts";
+import type { IrNode } from "./ir.ts";
+import type { SourceSpan } from "./mapping.ts";
 import { type MxTemplateParser, mxTemplateParser } from "./marko-frontend.ts";
 import { filePosition } from "./mx-parse.ts";
 import type { PackageJsonRead } from "./package-json.ts";
-import { mxKeyPosition } from "./scan.ts";
+import { loadDefaultExport, mxKeyPosition } from "./scan.ts";
 
 /** What the expression parser reads in place of a trigger's text, always of the same length. */
 export type StandIn = "number" | "identifier" | "keep";
 
-/** What core builds from a trigger (`lowerTrigger`, not implemented yet). */
+/**
+ * What core builds from a trigger. The built-in kinds lower in core with no
+ * hook: in an expression, `"string"` is a string literal of the trigger's
+ * text and `"identifier"` an identifier named by it; in an attribute list,
+ * `"attribute"` is an attribute named by the text after its first
+ * character, the sigil (bare, or with its `=value`). Any other pairing is a positioned error. `{ call }` hands the
+ * trigger to the syntax module's `lowerTrigger` (decision 182 addendum 5).
+ */
 export type TriggerNode =
   | "string"
   | "identifier"
@@ -55,6 +68,114 @@ export interface SyntaxTable {
   /** Tag types by written name: html 0, text 1, void 2, statement 3 (the template parser's `TagType`). */
   readonly tagTypes: Readonly<Record<string, 0 | 1 | 2 | 3>>;
   readonly expressionLanguage: "ts";
+}
+
+/** Where a trigger sits: the table list that armed it. */
+export type TriggerPosition = "expression" | "attribute" | "line";
+
+/**
+ * An expression a trigger lowers to, built by `ctx.expression(node)`: a Babel
+ * node that replaces the trigger's stand-in in the expression's payload (in
+ * an expression), or an attribute's value. `ctx.value` is one too.
+ */
+export interface TriggerExpression {
+  readonly kind: "expression";
+  readonly node: object;
+}
+
+/**
+ * The value of an attribute `ctx.attribute` builds: `true` (a bare
+ * attribute), a string, an expression, or a whole-value atom or member
+ * (`{ kind: "member", name }` for Mesh's `&dueOn`). A value's `span`
+ * defaults to the trigger's own.
+ */
+export type TriggerAttributeValue =
+  | true
+  | string
+  | TriggerExpression
+  | {
+      readonly kind: "atom" | "member";
+      readonly name: string;
+      readonly span?: SourceSpan;
+    };
+
+/** A named attribute, built by `ctx.attribute(name, value)`. */
+export interface TriggerAttribute {
+  readonly kind: "attribute";
+  readonly name: string;
+  readonly value: TriggerAttributeValue;
+}
+
+/** A child tag of the enclosing body, built by `ctx.child(tagName, attrs)`. */
+export interface TriggerChild {
+  readonly kind: "child";
+  readonly tagName: string;
+  readonly attrs: readonly TriggerAttribute[];
+}
+
+/** What `lowerTrigger` returns: an expression, an attribute or a child, matching `ctx.position`. */
+export type TriggerResult = TriggerExpression | TriggerAttribute | TriggerChild;
+
+/**
+ * What `lowerTrigger` is handed (decision 182 addendum 5): where the trigger
+ * sits, its lowered `=value`, and the three constructors, the only way a
+ * module builds anything. Each position takes the matching result:
+ * `"expression"` an expression, `"attribute"` an attribute, `"line"` a
+ * child. Core gives the result its positions from the trigger.
+ */
+export interface TriggerContext {
+  readonly position: TriggerPosition;
+  /** The `=value` of an attribute or line trigger, its own triggers already lowered; `null` without one. */
+  readonly value: TriggerExpression | null;
+  expression(node: object): TriggerExpression;
+  attribute(name: string, value: TriggerAttributeValue): TriggerAttribute;
+  child(tagName: string, attrs: readonly TriggerAttribute[]): TriggerChild;
+}
+
+/** What `lowerBlockTag` and `lowerFilter` get: the IR builders a custom tag's `transform` gets. */
+export interface SyntaxBuildContext {
+  readonly build: IrBuilders;
+}
+
+/**
+ * A syntax module (decision 182 addendum 5): the default export of the
+ * module `package.json#mx.syntax` names as a string, or the object a
+ * consumer passes as the `syntax` option. `table` overlays the `.mx` default
+ * row (the fields an inline `mx.syntax` may set); the hooks are post-parse
+ * only (`language-extensions/core.md`, "Hooks").
+ */
+export interface SyntaxModule {
+  readonly table: Partial<Omit<SyntaxTable, "tagTypes">>;
+  /** Builds what a `{ call }` trigger produces. Required when the table has one. */
+  readonly lowerTrigger?: (
+    id: string,
+    text: string,
+    span: SourceSpan,
+    ctx: TriggerContext,
+  ) => TriggerResult;
+  /** IR for a block tag (`{% … %}`): its raw text between the delimiters. */
+  readonly lowerBlockTag?: (
+    text: string,
+    span: SourceSpan,
+    ctx: SyntaxBuildContext,
+  ) => IrNode | readonly IrNode[];
+  /** IR for a filter block: its name and raw body. */
+  readonly lowerFilter?: (
+    name: string,
+    body: string,
+    span: SourceSpan,
+    ctx: SyntaxBuildContext,
+  ) => IrNode | readonly IrNode[];
+  /** Joins the unit's `afterLower` list, after core's own hooks. */
+  readonly afterLower?: (ctx: Ctx) => void;
+  /** Names the language where core's diagnostics say "MX", unless the host sets one. */
+  readonly productName?: string;
+}
+
+/** A file's syntax: its table and, when a module supplied it, the module. */
+export interface ResolvedSyntax {
+  readonly table: SyntaxTable;
+  readonly module?: SyntaxModule;
 }
 
 /** One problem `validateSyntaxTable` reports. */
@@ -173,84 +294,325 @@ function intern(table: SyntaxTable): SyntaxTable {
   return frozen;
 }
 
+/** The default row as a resolved syntax: no module. */
+const DEFAULT_RESOLVED: ResolvedSyntax = Object.freeze({ table: DEFAULT_ROW });
+
+/** The hooks and fields a syntax module may export (decision 182 addendum 5). */
+const MODULE_FIELDS = new Set([
+  "table",
+  "lowerTrigger",
+  "lowerBlockTag",
+  "lowerFilter",
+  "afterLower",
+  "productName",
+]);
+
+const MODULE_HOOKS = [
+  "lowerTrigger",
+  "lowerBlockTag",
+  "lowerFilter",
+  "afterLower",
+] as const;
+
+/** Each problem as `` `<path>.<field>` (trigger "<id>"): <message> ``, joined. */
+function describeProblems(
+  problems: readonly SyntaxDiagnostic[],
+  path: string,
+): string {
+  return problems
+    .map(
+      (problem) =>
+        `\`${path}.${problem.field}\`${problem.triggerId === undefined ? "" : ` (trigger "${problem.triggerId}")`}: ${problem.message}`,
+    )
+    .join("; ");
+}
+
 /**
- * `package.json#mx.syntax` overlaid on `DEFAULT_SYNTAX`, validated, frozen and
- * interned by hash. `undefined` means the default row. A problem is a
- * `TranslateError` in the manifest, at the `mx.syntax` key, naming the field
- * (the `mx.tags` / `mx.contracts` precedent).
+ * Table fields (`mx.syntax`, or a module's `table`) overlaid on the default
+ * row, validated, frozen and interned by hash. `path` names the fields in
+ * every message (`mx.syntax`, `table`).
  */
-export function normalizeMxSyntax(
+function overlayTable(
   value: unknown,
-  packageFile: string,
+  path: string,
+  fail: (message: string) => never,
 ): SyntaxTable {
-  if (value === undefined) return DEFAULT_ROW;
-  const fail = (message: string): never => {
-    const { line, column } = mxKeyPosition(packageFile, "syntax");
-    throw new TranslateError(message, line, column, packageFile);
-  };
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    fail("`mx.syntax` must be an object overlaying the syntax table");
+    fail(`\`${path}\` must be an object overlaying the syntax table`);
   }
   const fields = value as Record<string, unknown>;
   for (const key of Object.keys(fields)) {
     if (key === "tagTypes") {
       fail(
-        "`mx.syntax.tagTypes` is not a manifest field: tag types are taglib-owned, computed from the tags and their parseOptions",
+        `\`${path}.tagTypes\` is not a manifest field: tag types are taglib-owned, computed from the tags and their parseOptions`,
       );
     }
     if (!MANIFEST_FIELDS.has(key)) {
       fail(
-        `\`mx.syntax.${key}\` is not a syntax table field (${[...MANIFEST_FIELDS].join(", ")})`,
+        `\`${path}.${key}\` is not a syntax table field (${[...MANIFEST_FIELDS].join(", ")})`,
       );
     }
   }
   const table = { ...DEFAULT_ROW, ...fields } as SyntaxTable;
   if (syntaxHash(table) === defaultSyntaxHash()) return DEFAULT_ROW;
   const parser = syntaxParser();
-  if (!parser) fail(`\`mx.syntax\`: ${NEEDS_MX_PARSER}`);
+  if (!parser) fail(`\`${path}\`: ${NEEDS_MX_PARSER}`);
   const problems = (parser as MxTemplateParser).validateSyntaxTable(table);
-  if (problems.length > 0) {
-    fail(
-      problems
-        .map(
-          (problem) =>
-            `\`mx.syntax.${problem.field}\`${problem.triggerId === undefined ? "" : ` (trigger "${problem.triggerId}")`}: ${problem.message}`,
-        )
-        .join("; "),
-    );
-  }
+  if (problems.length > 0) fail(describeProblems(problems, path));
   return intern(structuredClone(table));
 }
 
-/** The table each manifest read gave, so an unchanged `package.json` is never re-validated. */
-const byManifest = new WeakMap<PackageJsonRead, SyntaxTable>();
+/** The trigger lists, by their `MxTrigger.position`. */
+export const TRIGGER_LISTS = {
+  expression: "expressionTriggers",
+  attribute: "attributeTriggers",
+  line: "lineTriggers",
+} as const;
+
+/** The first `{ call }` trigger of a table, with its field path, in list order. */
+function firstCallTrigger(
+  table: SyntaxTable,
+): { field: string; id: string } | undefined {
+  for (const list of [
+    "expressionTriggers",
+    "attributeTriggers",
+    "lineTriggers",
+    "textTriggers",
+  ] as const) {
+    const index = table[list].findIndex(
+      (trigger) => typeof trigger.node === "object",
+    );
+    if (index >= 0) {
+      return { field: `${list}[${index}]`, id: table[list][index]?.id ?? "" };
+    }
+  }
+  return undefined;
+}
 
 /**
- * The syntax table for `filename`: its nearest `package.json`'s `mx.syntax`,
- * so a dependency's files use the dependency's manifest. A relative or
- * virtual name with no manifest above it gets the default row.
+ * A syntax module's shape: an object with a `table` object, hooks that are
+ * functions, a non-empty `productName`. `path` prefixes the field names
+ * (the option's wording, or the module's default export).
+ */
+function checkModuleShape(
+  value: Record<string, unknown>,
+  path: string,
+  fail: (message: string) => never,
+): SyntaxModule {
+  for (const key of Object.keys(value)) {
+    if (!MODULE_FIELDS.has(key)) {
+      fail(
+        `\`${path}${key}\` is not a syntax module field (${[...MODULE_FIELDS].join(", ")})`,
+      );
+    }
+  }
+  if (value.table === undefined) {
+    fail(`\`${path}table\` is required: the module's syntax table fields`);
+  }
+  for (const hook of MODULE_HOOKS) {
+    if (value[hook] !== undefined && typeof value[hook] !== "function") {
+      fail(`\`${path}${hook}\` must be a function`);
+    }
+  }
+  if (
+    value.productName !== undefined &&
+    (typeof value.productName !== "string" || value.productName === "")
+  ) {
+    fail(`\`${path}productName\` must be a non-empty string`);
+  }
+  return value as unknown as SyntaxModule;
+}
+
+/** Is this `syntax` option value a syntax module rather than a table? */
+function isSyntaxModule(value: unknown): value is SyntaxModule {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    "table" in value
+  );
+}
+
+/**
+ * Loads the syntax module `package.json#mx.syntax` names (resolved like
+ * `mx.contracts`: a package name, or a path relative to the manifest). A
+ * module that fails to load or has the wrong shape is an error in the module
+ * file; a specifier that does not resolve, or a `{ call }` trigger with no
+ * `lowerTrigger`, is an error at the `mx.syntax` key.
+ */
+function loadSyntaxModule(
+  spec: string,
+  packageFile: string,
+  failKey: (message: string) => never,
+): { resolved: ResolvedSyntax; file: string } {
+  const packageDir = dirname(packageFile);
+  let file = "";
+  try {
+    file = createRequire(packageFile).resolve(
+      isAbsolute(spec) || spec.startsWith(".")
+        ? resolve(packageDir, spec)
+        : spec,
+    );
+  } catch {
+    failKey(`\`mx.syntax\` could not resolve \`${spec}\` from ${packageDir}`);
+  }
+  const failInModule = (message: string): never => {
+    throw new TranslateError(message, 1, 0, file);
+  };
+  const module = checkModuleShape(
+    loadDefaultExport(file, "syntax module"),
+    "",
+    failInModule,
+  );
+  const table = overlayTable(module.table, "table", failInModule);
+  const call = firstCallTrigger(table);
+  if (call && !module.lowerTrigger) {
+    failKey(
+      `\`mx.syntax\` (${spec}): \`table.${call.field}\` (trigger "${call.id}") has a \`{ call }\` node, and the module exports no \`lowerTrigger\``,
+    );
+  }
+  return { resolved: { table, module }, file };
+}
+
+/**
+ * `package.json#mx.syntax`: an inline object (table fields only) overlaid on
+ * the default row, or a string naming a syntax module. A problem is a
+ * `TranslateError` in the manifest at the `mx.syntax` key, naming the field
+ * (the `mx.tags` / `mx.contracts` precedent), or in the module file for the
+ * module's own shape.
+ */
+function resolveMxSyntaxValue(
+  value: unknown,
+  packageFile: string,
+): { resolved: ResolvedSyntax; file?: string } {
+  if (value === undefined) return { resolved: DEFAULT_RESOLVED };
+  const fail = (message: string): never => {
+    const { line, column } = mxKeyPosition(packageFile, "syntax");
+    throw new TranslateError(message, line, column, packageFile);
+  };
+  if (typeof value === "string") {
+    return loadSyntaxModule(value, packageFile, fail);
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    fail(
+      "`mx.syntax` must be an object overlaying the syntax table, or a string naming a syntax module",
+    );
+  }
+  const table = overlayTable(value, "mx.syntax", fail);
+  const call = firstCallTrigger(table);
+  if (call) {
+    fail(
+      `\`mx.syntax.${call.field}\` (trigger "${call.id}"): a \`{ call }\` node is lowered by a syntax module's \`lowerTrigger\`, and an inline \`mx.syntax\` is a table only; move the table into a module and name it (\`"syntax": "./syntax.ts"\`)`,
+    );
+  }
+  return { resolved: table === DEFAULT_ROW ? DEFAULT_RESOLVED : { table } };
+}
+
+/**
+ * The table `package.json#mx.syntax` gives (an inline object, or a module's
+ * `table`), validated and interned. `undefined` means the default row.
+ */
+export function normalizeMxSyntax(
+  value: unknown,
+  packageFile: string,
+): SyntaxTable {
+  return resolveMxSyntaxValue(value, packageFile).resolved.table;
+}
+
+/** Each manifest read's syntax, so an unchanged `package.json` (and module) is never re-validated. */
+const byManifest = new WeakMap<
+  PackageJsonRead,
+  { resolved: ResolvedSyntax; file?: string; mtimeMs?: number }
+>();
+
+function mtimeOf(file: string): number | undefined {
+  try {
+    return statSync(file).mtimeMs;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The syntax for `filename`: its nearest `package.json`'s `mx.syntax`, so a
+ * dependency's files use the dependency's manifest. A relative or virtual
+ * name with no manifest above it gets the default row. A syntax module is
+ * reloaded when its file changes.
+ */
+export function resolveSyntaxOf(filename: string): ResolvedSyntax {
+  if (!isAbsolute(filename)) return DEFAULT_RESOLVED;
+  const found = findNearestPackageJson(dirname(filename));
+  if (!found?.read.manifest) return DEFAULT_RESOLVED;
+  const known = byManifest.get(found.read);
+  if (
+    known &&
+    (known.file === undefined || mtimeOf(known.file) === known.mtimeMs)
+  ) {
+    return known.resolved;
+  }
+  const mx = (found.read.manifest as { mx?: { syntax?: unknown } }).mx;
+  const { resolved, file } = resolveMxSyntaxValue(mx?.syntax, found.file);
+  byManifest.set(found.read, {
+    resolved,
+    ...(file === undefined ? {} : { file, mtimeMs: mtimeOf(file) }),
+  });
+  return resolved;
+}
+
+/**
+ * The syntax table for `filename` (see {@link resolveSyntaxOf}, which also
+ * returns the syntax module when one supplied it).
  */
 export function resolveSyntax(filename: string): SyntaxTable {
-  if (!isAbsolute(filename)) return DEFAULT_ROW;
-  const found = findNearestPackageJson(dirname(filename));
-  if (!found?.read.manifest) return DEFAULT_ROW;
-  const known = byManifest.get(found.read);
-  if (known) return known;
-  const mx = (found.read.manifest as { mx?: { syntax?: unknown } }).mx;
-  const table = normalizeMxSyntax(mx?.syntax, found.file);
-  byManifest.set(found.read, table);
-  return table;
+  return resolveSyntaxOf(filename).table;
 }
 
 /** Explicit tables already validated (tables are frozen data, checked once per object). */
 const validExplicit = new WeakSet<object>();
 
+/** Explicit modules already resolved, per frozen module object. */
+const explicitModules = new WeakMap<object, ResolvedSyntax>();
+
 /**
  * An explicit `syntax` option (`HostOptions.syntax`, `FragmentBase.syntax`,
- * `ParseDataOptions.syntax`: a consumer's own table, Mesh's path), validated
- * with the manifest's rules and wording, as the caller's error: a
- * `TranslateError` at the start of `filename` naming `syntax.<field>`. A
- * non-empty `tagTypes` is refused (taglib-owned), as in a manifest.
+ * `ParseDataOptions.syntax`: a consumer's own table or syntax module, Mesh's
+ * path), validated with the manifest's rules and wording, as the caller's
+ * error: a `TranslateError` at the start of `filename` naming
+ * `syntax.<field>`. A non-empty `tagTypes` is refused (taglib-owned), as in a
+ * manifest. A module's `table` overlays the default row. A `{ call }`
+ * trigger without `lowerTrigger` is accepted here: lowering reports it at
+ * the trigger ("has no lowering yet"; decision 182 addendum 5 item 4).
+ */
+export function explicitSyntaxOf(
+  value: SyntaxTable | SyntaxModule,
+  filename: string,
+): ResolvedSyntax {
+  const fail = (message: string): never => {
+    throw new TranslateError(message, 1, 0, filename);
+  };
+  if (!isSyntaxModule(value)) {
+    const table = explicitSyntax(value, filename);
+    return table === DEFAULT_ROW ? DEFAULT_RESOLVED : { table };
+  }
+  const known = explicitModules.get(value);
+  if (known) return known;
+  const module = checkModuleShape(
+    value as unknown as Record<string, unknown>,
+    "syntax.",
+    (message) =>
+      fail(`the \`syntax\` option is not a valid syntax module: ${message}`),
+  );
+  const table = overlayTable(module.table, "syntax.table", (message) =>
+    fail(`the \`syntax\` option is not a valid syntax module: ${message}`),
+  );
+  const resolved: ResolvedSyntax = { table, module };
+  if (Object.isFrozen(value)) explicitModules.set(value, resolved);
+  return resolved;
+}
+
+/**
+ * An explicit `syntax` table option, validated (see
+ * {@link explicitSyntaxOf}, which also takes a syntax module).
  */
 export function explicitSyntax(
   table: SyntaxTable,
@@ -282,12 +644,7 @@ export function explicitSyntax(
     const problems = (parser as MxTemplateParser).validateSyntaxTable(table);
     if (problems.length > 0) {
       fail(
-        `the \`syntax\` option is not a valid syntax table: ${problems
-          .map(
-            (problem) =>
-              `\`syntax.${problem.field}\`${problem.triggerId === undefined ? "" : ` (trigger "${problem.triggerId}")`}: ${problem.message}`,
-          )
-          .join("; ")}`,
+        `the \`syntax\` option is not a valid syntax table: ${describeProblems(problems, "syntax")}`,
       );
     }
   }
@@ -304,13 +661,35 @@ export interface SyntaxSite {
   baseColumn?: number;
 }
 
+/** The table row an `MxTrigger` came from: its id in the list its position names. */
+export function triggerRow(
+  table: SyntaxTable,
+  trigger: { id: string; position: TriggerPosition },
+): Trigger | undefined {
+  return table[TRIGGER_LISTS[trigger.position]].find(
+    (row) => row.id === trigger.id,
+  );
+}
+
+/** Does lowering build this trigger (a built-in node kind, or a `{ call }` with the module's `lowerTrigger`)? */
+function lowersTrigger(
+  table: SyntaxTable,
+  module: SyntaxModule | undefined,
+  trigger: { id: string; position: TriggerPosition },
+): boolean {
+  const row = triggerRow(table, trigger);
+  if (!row) return false;
+  return typeof row.node === "object" ? !!module?.lowerTrigger : true;
+}
+
 /**
- * The error a table core cannot lower yet gives a file (decision 182), or
- * `undefined`: its first trigger, block tag, filter or template error, in
- * order of appearance, positioned, naming the file. Until port PR 5 a
- * pre-pass parsed the file a second time to find it; the compile's own parse
- * now carries the table, so this reads the same events from its document
- * (one parse per compile). Lowering's seams (`payloadOf`, `lowerChildList`)
+ * The error a table gives a file before lowering (decision 182), or
+ * `undefined`: its first table-caused template error, or the first trigger,
+ * block tag or filter nothing lowers (a `{ call }` trigger with no
+ * `lowerTrigger`, a block tag with no `lowerBlockTag`, a filter with no
+ * `lowerFilter`), in order of appearance, positioned, naming the file. The
+ * compile's own parse carries the table, so this reads its document (one
+ * parse per compile). Lowering's seams (`payloadOf`, `lowerChildList`)
  * refuse the same nodes in the same wording for a caller that lowers a
  * document itself. The default row costs nothing: nothing is read.
  */
@@ -318,6 +697,7 @@ export function tableParseError(
   document: Node,
   table: SyntaxTable,
   site: SyntaxSite,
+  module?: SyntaxModule,
 ): TranslateError | undefined {
   // The default row by identity first: a plain project pays one comparison.
   if (table === DEFAULT_ROW || syntaxHash(table) === defaultSyntaxHash()) {
@@ -336,16 +716,22 @@ export function tableParseError(
     seen.add(value);
     switch (value.type) {
       case "MxTrigger":
-        consider(value.start, `\`${value.id}\` trigger has no lowering yet`);
+        if (!lowersTrigger(table, module, value)) {
+          consider(value.start, `\`${value.id}\` trigger has no lowering yet`);
+        }
         break;
       case "MxBlockTag":
-        consider(value.start, "a block tag has no lowering yet");
+        if (!module?.lowerBlockTag) {
+          consider(value.start, "a block tag has no lowering yet");
+        }
         break;
       case "MxFilter":
-        consider(
-          value.start,
-          `the \`${value.name}\` filter has no lowering yet`,
-        );
+        if (!module?.lowerFilter) {
+          consider(
+            value.start,
+            `the \`${value.name}\` filter has no lowering yet`,
+          );
+        }
         break;
     }
     for (const field of Object.values(value)) visit(field);
