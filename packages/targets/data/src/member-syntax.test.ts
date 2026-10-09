@@ -328,3 +328,22 @@ describe('the `"member"` contract type (decision 182 addendum 4)', () => {
     },
   );
 });
+
+describe("the unknown-tag scan takes the module too (PR 450's parseMxDocument)", () => {
+  it("after a lowering error, the scan still finds an unknown tag beside members", () => {
+    // The scan runs only when lowering fails (`asc=1` against a boolean).
+    const result = parseData("sort &a asc=1\nfoo\n", "/v/entity.mx", {
+      syntax: memberSyntax,
+      unknownTags: "reject",
+      customTags: {
+        sort: {
+          attributes: { asc: { type: "boolean" }, member: { type: "member" } },
+        },
+      },
+    });
+    const messages = result.diagnostics.map((d) => d.message);
+    expect(messages).toHaveLength(2);
+    expect(messages[0]).toContain("attribute `asc` must be boolean");
+    expect(messages[1]).toContain("`<foo>`");
+  });
+});

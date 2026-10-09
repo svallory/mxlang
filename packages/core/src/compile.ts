@@ -426,12 +426,14 @@ export function parseMxDocument(
   source: string,
   filename: string,
   translator: unknown,
-  syntax?: SyntaxTable,
+  syntax?: SyntaxTable | SyntaxModule,
 ): Node | undefined {
-  const table =
+  // A syntax module's table parses; its hooks are lowering's, not the scan's.
+  const table = (
     syntax !== undefined
-      ? explicitSyntax(syntax, filename)
-      : resolveSyntax(filename);
+      ? explicitSyntaxOf(syntax, filename)
+      : resolveSyntaxOf(filename)
+  ).table;
   const lookup = buildMarkoLookup(dirname(filename), translator);
   const document = parseMx(source, { syntax: table, lookup });
   return compileErrorOf(document, filename, { expressionErrors: false })

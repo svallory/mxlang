@@ -17,6 +17,7 @@ import {
   type CustomTag,
   matchWildcardChild,
   parseMxDocument,
+  type SyntaxModule,
   type SyntaxTable,
   scopeForChildren,
   sugarTagName,
@@ -131,7 +132,7 @@ export function scanAuthoredTags(
   filename: string,
   customTags: Record<string, CustomTag> | undefined,
   defaultTag: string = DEFAULT_TAG,
-  syntax?: SyntaxTable,
+  syntax?: SyntaxTable | SyntaxModule,
 ): AuthoredTag[] | null {
   let document: { body: readonly MxChildNode[] } | undefined;
   try {
