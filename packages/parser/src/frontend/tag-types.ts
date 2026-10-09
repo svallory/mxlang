@@ -112,3 +112,74 @@ export function buildTagTypes(
   }
   return table;
 }
+
+/** A tag type's name, for messages. */
+const TYPE_NAMES: Record<number, string> = {
+  [TagType.html]: "html",
+  [TagType.text]: "text",
+  [TagType.void]: "void",
+  [TagType.statement]: "statement",
+};
+
+/**
+ * The statement rule against a caller's table, checked before the parse
+ * (decision 182 addenda 2 and 3): `statementKeywords` alone decides what is a
+ * statement, on a concise line only. A table may give a keyword `statement`
+ * or leave it out (it is filled in, see `withStatementKeywords`), never
+ * another type, and may give no other name `statement`. A keyword's
+ * HTML-mode spelling is parsed as html, so `tagShape` must answer `html` or
+ * `preserve` for it. Returns one sentence per problem; empty means the
+ * parse can start. `shapeOf` is asked once per keyword.
+ */
+export function statementRuleProblems(
+  tagTypes: Readonly<Record<string, TagTypeValue>> | undefined,
+  statementKeywords: ReadonlySet<MxStatementKeyword>,
+  shapeOf: (name: string) => string,
+): string[] {
+  const problems: string[] = [];
+  for (const [name, type] of Object.entries(tagTypes ?? {})) {
+    const keyword = statementKeywords.has(name as MxStatementKeyword);
+    if (keyword && type !== TagType.statement) {
+      problems.push(
+        `\`tagTypes\` gives the statement keyword "${name}" ${TYPE_NAMES[type] ?? type}; a statement keyword is a statement on a concise line whatever the table says, so the table may only give it statement (3) or leave it out`,
+      );
+    } else if (!keyword && type === TagType.statement) {
+      problems.push(
+        `\`tagTypes\` gives "${name}" statement, but it is not in \`statementKeywords\`; only a statement keyword is a statement`,
+      );
+    }
+  }
+  for (const keyword of statementKeywords) {
+    const mode = shapeOf(keyword);
+    if (
+      mode === "void" ||
+      mode === "parsed-text" ||
+      mode === "parsed-text-preserve"
+    ) {
+      problems.push(
+        `\`tagShape\` answers "${mode}" for the statement keyword "${keyword}", but its HTML-mode spelling (\`<${keyword}>\`) is parsed as html; answer "html" or "preserve" for it`,
+      );
+    }
+  }
+  return problems;
+}
+
+/**
+ * `tagTypes` with every statement keyword given `statement`: the table the
+ * template parser reads always carries the statement rule, whether or not a
+ * caller's table or the pre-scan listed a keyword. The same object when
+ * nothing is missing.
+ */
+export function withStatementKeywords(
+  tagTypes: Readonly<Record<string, TagTypeValue>>,
+  statementKeywords: ReadonlySet<MxStatementKeyword>,
+): Readonly<Record<string, TagTypeValue>> {
+  let out: Record<string, TagTypeValue> | undefined;
+  for (const keyword of statementKeywords) {
+    if (tagTypes[keyword] !== TagType.statement) {
+      out ??= { ...tagTypes };
+      out[keyword] = TagType.statement;
+    }
+  }
+  return out ?? tagTypes;
+}

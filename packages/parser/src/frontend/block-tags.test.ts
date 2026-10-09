@@ -15,6 +15,7 @@ import {
   type SyntaxTable,
   TagType,
 } from "../template/index.ts";
+import type { TagType as TagTypeValue } from "../template/internal.ts";
 import { parse } from "./parse.ts";
 import { buildTagTypes, candidateNames } from "./tag-types.ts";
 import { characters, tokens } from "./test-support/fuzz.ts";
@@ -117,6 +118,76 @@ describe("tagTypes (decision 182 addenda 2 and 3)", () => {
           "`tagTypes` gives <textarea> html, but `tagShape` answers text: the caller's table and `tagShape` disagree, so the tag was parsed as html",
       }),
     );
+  });
+
+  describe("the statement rule is checked before the parse (review 442 r2)", () => {
+    const plain = (source: string) => JSON.stringify(parse(source, OPTIONS));
+    it.each([
+      ["static x=1\np", {}],
+      ["import x from 'y'\np", {}],
+      ["static x=1\np", { static: TagType.statement }],
+      ["<static x=1/>", {}],
+    ])(
+      "a table that leaves a keyword out, or gives it statement, parses %j as without one",
+      (source, tagTypes) => {
+        const given = tagTypes as Record<string, TagTypeValue>;
+        expect(
+          JSON.stringify(parse(source, { ...OPTIONS, tagTypes: given })),
+        ).toBe(plain(source));
+      },
+    );
+
+    it.each([
+      [
+        "static x=1\np",
+        { static: TagType.html },
+        '`tagTypes` gives the statement keyword "static" html',
+      ],
+      [
+        "div x=1\np",
+        { div: TagType.statement },
+        '`tagTypes` gives "div" statement, but it is not in `statementKeywords`',
+      ],
+    ])(
+      "a table that contradicts it is a TypeError: %j with %j",
+      (source, tagTypes, message) => {
+        const given = tagTypes as Record<string, TagTypeValue>;
+        let thrown: unknown;
+        try {
+          parse(source, { ...OPTIONS, tagTypes: given });
+        } catch (error) {
+          thrown = error;
+        }
+        expect(thrown).toBeInstanceOf(TypeError);
+        expect((thrown as TypeError).message).toContain(message);
+      },
+    );
+
+    it("so does a syntax table's own tagTypes", () => {
+      expect(() =>
+        parse("div x=1\np", {
+          ...OPTIONS,
+          syntax: { ...DEFAULT_SYNTAX, tagTypes: { div: TagType.statement } },
+        }),
+      ).toThrow(TypeError);
+    });
+
+    it("a tagShape that answers void for a keyword is a TypeError", () => {
+      const tagShape = (name: string) =>
+        name === "static" ? ("void" as const) : OPTIONS.tagShape(name);
+      expect(() => parse("<p/>", { ...OPTIONS, tagShape })).toThrow(
+        /`tagShape` answers "void" for the statement keyword "static"/,
+      );
+    });
+
+    it("a tagShape that throws on a keyword the source never uses is not asked again", () => {
+      const tagShape = (name: string) => {
+        if (name === "class") throw new Error("not a tag");
+        return OPTIONS.tagShape(name);
+      };
+      const document = parse("<p/>", { ...OPTIONS, tagShape });
+      expect(document.errors).toEqual([]);
+    });
   });
 
   it("an unclosed filter has its own code", () => {

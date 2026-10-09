@@ -46,7 +46,11 @@ import {
   type RuleContext,
   frontEndRules as realFrontEndRules,
 } from "./rules.ts";
-import { buildTagTypes } from "./tag-types.ts";
+import {
+  buildTagTypes,
+  statementRuleProblems,
+  withStatementKeywords,
+} from "./tag-types.ts";
 
 export type { MxBlockTag, MxFilter, MxTrigger };
 
@@ -63,7 +67,11 @@ export interface ParseOptions extends MxFrontEndOptions {
    * 2, 3), the template parser's only source of a tag's type. Omitted, the
    * table's own `tagTypes` are used when it has any, else they are built
    * from `tagShape` and `statementKeywords` by pre-scanning the source
-   * (interim until PR C). They must agree with `tagShape`'s body modes.
+   * (interim until PR C). Checked before the parse against the statement
+   * rule (a `TypeError` when it contradicts it): a statement keyword may
+   * only be `statement`, and is filled in when absent; no other name may be.
+   * A static tag whose entry disagrees with `tagShape`'s body mode is
+   * `MX_TAG_TYPES_MISMATCH` at its name, parsed with the table's type.
    */
   readonly tagTypes?: Readonly<Record<string, TagTypeValue>>;
 }
@@ -184,6 +192,33 @@ export function parse(source: string, options: ParseOptions): MxDocument {
       ...(options.tagTypes ? { tagTypes: options.tagTypes } : {}),
     });
   }
+  // So is a table that contradicts the statement rule (decision 182
+  // addenda 2, 3): checked before the parse, so it can never reach the
+  // template parser as a statement the front end did not expect (an
+  // attribute dropped, a tag re-nested) or the reverse. `tagShape`'s answers
+  // are kept for the parse, which asks each name once.
+  const shapes = new Map<string, MxBodyMode>();
+  const problems = statementRuleProblems(
+    givenTagTypes(options),
+    options.statementKeywords,
+    (name) => {
+      const known = shapes.get(name);
+      if (known !== undefined) return known;
+      let mode: string;
+      try {
+        mode = options.tagShape(name);
+      } catch {
+        // Asked again during the parse, where a throw is reported as
+        // `MX_FRONT_END_INTERNAL` with the partial tree, as before.
+        return "html";
+      }
+      if (BODY_MODES.has(mode)) shapes.set(name, mode as MxBodyMode);
+      return mode;
+    },
+  );
+  if (problems.length > 0) {
+    throw new TypeError(`parse: ${problems.join("; ")}`);
+  }
   const base: MxFragmentBase = options.base ?? {
     offset: 0,
     line: 0,
@@ -193,7 +228,7 @@ export function parse(source: string, options: ParseOptions): MxDocument {
   // pre-scan missed (a parser quirk the scan's name contexts do not cover)
   // restarts the parse with the name added: the table stays the parser's
   // only source and the tree is the one a complete table gives.
-  let prior: Prior | undefined;
+  let prior: Prior = { tagTypes: undefined, shapes };
   for (let attempt = 0; ; attempt++) {
     const builder = new FrontEnd(source, options, base.offset, base, prior);
     try {
@@ -226,8 +261,19 @@ const MAX_RESCANS = 64;
 
 /** What a restarted parse keeps: the table so far and the answers `tagShape` gave. */
 interface Prior {
-  readonly tagTypes: Readonly<Record<string, TagTypeValue>>;
+  readonly tagTypes: Readonly<Record<string, TagTypeValue>> | undefined;
   readonly shapes: Map<string, MxBodyMode>;
+}
+
+/** The caller's tag types: `ParseOptions.tagTypes`, else a non-empty `syntax.tagTypes`; undefined when the front end builds them. */
+function givenTagTypes(
+  options: ParseOptions,
+): Readonly<Record<string, TagTypeValue>> | undefined {
+  const fromTable = options.syntax?.tagTypes;
+  return (
+    options.tagTypes ??
+    (fromTable && Object.keys(fromTable).length > 0 ? fromTable : undefined)
+  );
 }
 
 class FrontEnd {
@@ -312,16 +358,18 @@ class FrontEnd {
     // The table's tag types: the caller's, else the table's own, else built
     // from `tagShape` by pre-scanning the source (interim until PR C builds
     // them in core; see `tag-types.ts`).
-    const given =
-      this.options.tagTypes ??
-      (Object.keys(base.tagTypes).length > 0 ? base.tagTypes : undefined);
+    const given = givenTagTypes(this.options);
     this.built = given === undefined;
-    this.tagTypes =
+    // Every table carries the statement rule: each keyword is `statement`
+    // (the parser applies it only on a concise line), listed or not.
+    this.tagTypes = withStatementKeywords(
       given ??
-      this.prior?.tagTypes ??
-      buildTagTypes(this.source, this.options.statementKeywords, (name) =>
-        this.shapeOf(name),
-      );
+        this.prior?.tagTypes ??
+        buildTagTypes(this.source, this.options.statementKeywords, (name) =>
+          this.shapeOf(name),
+        ),
+      this.options.statementKeywords,
+    );
     const syntax: SyntaxTable = { ...base, tagTypes: this.tagTypes };
     this.inTemplate = true;
     seams.createParser(wrapped, { syntax }).parse(this.source);
@@ -884,7 +932,7 @@ class FrontEnd {
         start: template.start,
         nameEnd: template.end,
       };
-      this.expectType(written, TagType.statement, template);
+      this.expectType(written, TagType.statement, template, concise);
       return;
     }
 
@@ -968,6 +1016,7 @@ class FrontEnd {
             ? TagType.text
             : TagType.html,
         template,
+        concise,
       );
     }
   }
@@ -980,12 +1029,16 @@ class FrontEnd {
    * the tag name (`MX_TAG_TYPES_MISMATCH`), and the parse goes on with the
    * table's type.
    */
-  expectType(written: string, expected: TagTypeValue, name: Range): void {
+  expectType(
+    written: string,
+    expected: TagTypeValue,
+    name: Range,
+    concise: boolean,
+  ): void {
     let listed = this.tagTypes[written] ?? TagType.html;
-    // Off a concise line the parser applies a statement word as html.
-    if (listed === TagType.statement && expected !== TagType.statement) {
-      listed = TagType.html;
-    }
+    // Off a concise line the parser applies a statement word as html; on
+    // one, as a statement (`TAG_NAME.ts` `tableTagType`).
+    if (listed === TagType.statement && !concise) listed = TagType.html;
     if (listed === expected) return;
     if (!this.built) {
       this.errors.push({

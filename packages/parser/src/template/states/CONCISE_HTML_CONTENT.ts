@@ -178,8 +178,9 @@ export const CONCISE_HTML_CONTENT: StateDefinition = {
             ? "filter"
             : undefined;
         if (opener) {
+          const open = opener === "filter" ? filter!.open : blockTag!.open;
           this.emitError(
-            this.pos,
+            { start: this.pos, end: this.pos + open.length },
             ErrorCode.INVALID_LINE_START,
             `A ${opener} cannot start a concise line; write it in a text line ("-- ${opener === "filter" ? filter!.open : blockTag!.open} … ${opener === "filter" ? filter!.close : blockTag!.close}") or in HTML content`,
           );

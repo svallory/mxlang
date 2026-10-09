@@ -439,9 +439,13 @@ type MxTagName =
   **last** `:` (A2); that rule does not apply here. Attribute tags are not
   split (§3.7). `tagShape` receives the written static name, before the
   split (`<input:email>` asks `tagShape("input:email")`, `<.x>` asks
-  `tagShape("")`); a dynamic name is not asked and is `"html"`; an attribute
-  tag is not asked either, its body is `"html"`: `tagShape` only sees names
-  that are tags. The statement-keyword test reads the written name too, so
+  `tagShape("")`); a dynamic name is not looked up and is `"html"`; an
+  attribute tag is not asked either, its body is `"html"`. `tagShape` is
+  not only asked about tags: unless the caller passes `tagTypes`, the front
+  end's pre-scan asks it about every run of the source that could be a
+  static tag name, text words included, and the statement keywords are
+  asked before the parse (§7.1), so it must answer any string without
+  throwing (`"html"` for a name it does not know). The statement-keyword test reads the written name too, so
   `import:x` is a tag (decision 163 addenda 7 and 8). Because the split happens after htmljs has read the name,
   htmljs still sees the written name `input:email` when deciding whether the
   tag is void or may self-close, so `<input:email type="email"/>` needs its
@@ -965,7 +969,7 @@ Three producers, with different consequences:
    | `MX_ATTRIBUTE_TAG_AT_ROOT` | an attribute tag with no enclosing tag | Marko, `[C]chunk-src.js:5917` |
    | `MX_TAG_NAME_MISSING` | a `,` line or `<,/>` with no tag above: the comma continues the attributes of a tag that was never named; the nameless node stays in the tree beside the error (decision 163 addendum 9) | new (`<,/>` today throws `MISSING_END_TAG` in the template parser) |
    | `MX_UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE` | `$!{…}` as an attribute value (`<div x=$!{a}/>`) | rejected by `@marko/compiler` today; the port removes that layer (decision 166 item 1, decision 163 addendum 5) |
-   | `MX_TAG_TYPES_MISMATCH` | a caller-supplied `tagTypes` (decision 182 addenda 2, 3) gives a static tag a type its `tagShape` body mode does not match; positioned at the tag name, the tag parsed with the table's type | new (decision 182, PR B) |
+   | `MX_TAG_TYPES_MISMATCH` | a caller-supplied `tagTypes` (decision 182 addenda 2, 3) gives a static tag a type its `tagShape` body mode does not match; positioned at the tag name, the tag parsed with the table's type. A table that contradicts the statement rule never gets this far: it is a `TypeError` before the parse (§7.1) | new (decision 182, PR B) |
    | `MX_FRONT_END_INTERNAL` | the front end itself failed (an exception inside a handler): always an MX bug, never the author's. The parse does not throw; the error is recorded with the partial tree, its message a fixed MX sentence ending "not yours: an MX bug" (decision 161's wording) followed by the raw exception message, no stack or code frame | new (decision 163 addendum 7) |
 
    A duplicate default value is not among them: it is lowering's
@@ -1813,13 +1817,26 @@ depend on an input marked "front end" in the last column.
 | The generator and Babel support packages | `printExpression` (`core/src/compile.ts`, `generator(node, { concise: true })`); `expr()` for loc-less nodes; `declName` | Marko's bundled `@babel/generator`, `@babel/traverse`, `@babel/types` **7.29.7** (`[C]babel.js`; `markoBabel`, `core/src/core.ts`) | **lowering**, not the front end: the port pins `@babel/{types,traverse,generator}` at 7.29.7 with today's generator options (`concise: true`). The generator is part of the byte contract: it prints `Const.name`, `Define`/`Component.var`/`DelegatedTag.var` names, unsliceable `For` params, attribute-method values and dynamic tag names, and rewrites authored text (`<const/{ a,b }=x/>` gives `"{ a, b }"`, the reviewer's probe c). Replacing generator output with source slices is wanted, but as a separate recorded change after the port (TODO `ir-generated-text-to-source-slices`) |
 | `file.___hasParseErrors`, `watchFiles` | `:1028`, `:6190` | internal | dropped (errors are data; dependency tracking is core's) |
 
-So the front end takes two external inputs, both supplied per target: the
-statement keyword set (§3.10) and `tagShape(name) → bodyMode`, supplied by
-core from the active target (its element shapes, the
-core tags, the custom tags' `text`/`preserveWhitespace`, and a target's
-overrides such as the tree target's). Every other decision Marko made from a
-tag definition moves to lowering or disappears. The element-shape table is
-the target descriptor's, with a core default (§3.12, ruling Q21).
+So the front end takes two required external inputs, both supplied per
+target: the statement keyword set (§3.10) and `tagShape(name) → bodyMode`,
+supplied by core from the active target (its element shapes, the core tags,
+the custom tags' `text`/`preserveWhitespace`, and a target's overrides such
+as the tree target's). `tagShape` must answer any string without throwing
+(`"html"` for a name it does not know): the front end asks it about every
+candidate name of the source, not only about tags (§3.3), and it must answer
+`"html"` or `"preserve"` for a statement keyword, whose HTML-mode spelling is
+parsed as html. Two more are optional (decision 182): `syntax`, the syntax
+table (the `.mx` default row when omitted), and `tagTypes`, the template
+parser's tag types keyed by the full written static name (§3.12). The
+template parser takes every tag's type from that table and from nothing
+else; when the caller does not pass it, the front end builds it before the
+parse from `tagShape` and the keyword set (interim until core builds it).
+A caller's `tagTypes` is checked against the statement rule before the
+parse, and a contradiction is a `TypeError`: a keyword may only be
+`statement` (it is filled in when absent) and no other name may be. Every
+other decision Marko made from a tag definition moves to lowering or
+disappears. The element-shape table is the target descriptor's, with a core
+default (§3.12, ruling Q21).
 
 **Events the MX patch adds or changes.** One added: `onAtom` (atoms,
 decision 156; `packages/parser/src/template/PROVENANCE.md`, "Atoms"). The

@@ -102,10 +102,10 @@ describe("block tags", () => {
 
   it("a block tag or filter cannot start a concise line", () => {
     expect(render("div\n  {% if x %}", JINJA)).toBe(
-      '<div> ERR(6-6 A block tag cannot start a concise line; write it in a text line ("-- {% … %}") or in HTML content)',
+      '<div> ERR(6-8 A block tag cannot start a concise line; write it in a text line ("-- {% … %}") or in HTML content)',
     );
     expect(render("::md:: x ::", JINJA)).toBe(
-      'ERR(0-0 A filter cannot start a concise line; write it in a text line ("-- :: … ::") or in HTML content)',
+      'ERR(0-2 A filter cannot start a concise line; write it in a text line ("-- :: … ::") or in HTML content)',
     );
     expect(render("div -- {% if x %}", JINJA)).toContain(
       'block(7-17 " if x ")',
