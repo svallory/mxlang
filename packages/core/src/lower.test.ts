@@ -2089,6 +2089,36 @@ describe("errors keep their message and position", () => {
     expect(() => lowerSource(source)).toThrow(message);
   });
 
+  it.each([
+    ["&title", "<div>\n  <&title/>\n</div>\n", 3],
+    ["a!b", "<div><a!b/></div>\n", 6],
+    ["a@b", "<div><a@b/></div>\n", 6],
+  ])(
+    "rejects the tag name `%s` outside Marko's name charset",
+    (name, source, column) => {
+      let caught: { message: string; line?: number; column?: number } | null =
+        null;
+      try {
+        lowerSource(source);
+      } catch (error) {
+        caught = error as { message: string; line?: number; column?: number };
+      }
+      expect(caught?.message).toContain(
+        `Invalid tag name \`${name}\`; Marko rejects it too — a tag name may use letters, digits and \`-._:\``,
+      );
+      expect(caught?.column).toBe(column);
+    },
+  );
+
+  it.each(["a-b", "a.b", "a:b", "a_b", "a$b", "h1", "é", "日本", "ünï-tag"])(
+    "keeps the tag name `%s` inside the charset",
+    (name) => {
+      expect(() =>
+        lowerSource(`<div><${name}/></div>\n`, fakeDeclarations()),
+      ).not.toThrow(/Invalid tag name/);
+    },
+  );
+
   it("rejects an unknown lowercase tag rather than emitting it literally", () => {
     expect(() =>
       lowerSource(
