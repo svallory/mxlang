@@ -710,6 +710,15 @@ export function mxSpanOf(node: Node): SourceSpan | undefined {
   if (typeof at?.start !== "number" || typeof at?.end !== "number") {
     return undefined;
   }
+  // A module statement's range is the template parser's, untrimmed (ast
+  // §3.10): the range Marko gives the statement tag, which the IR's `end`
+  // and every source slice of a statement read. `end` is the trimmed extent.
+  if (
+    node?.type === "MxModuleStatement" &&
+    typeof at.untrimmedEnd === "number"
+  ) {
+    return { sourceStart: at.start, sourceEnd: at.untrimmedEnd };
+  }
   return { sourceStart: at.start, sourceEnd: at.end };
 }
 
@@ -739,6 +748,10 @@ export function positionAtOffset(ctx: Ctx, offset: number): Position {
  */
 export function positionError(ctx: Ctx, error: unknown): void {
   if (!(error instanceof TranslateError) || !unpositioned.has(error)) return;
+  // Offsets into another file (`error.file`) mean nothing against this
+  // source: left unpositioned, so `assertPositioned` refuses them rather
+  // than reporting a line in the wrong file.
+  if (error.file !== undefined && error.file !== ctx.filename) return;
   const at = positionAtOffset(ctx, error.span?.sourceStart ?? 0);
   // `line`/`column` are read-only to consumers; this is their one writer.
   (error as { line: number }).line = at.line;
@@ -1404,6 +1417,25 @@ export function productOf(ctx: Ctx): string {
 export function isTagNode(node: Node): boolean {
   const type = node?.type;
   return type === "MarkoTag" || type === "MxTag" || type === "MxReturn";
+}
+
+/**
+ * A module statement, by how it was parsed: an `MxModuleStatement`, or a
+ * Marko tag its statement taglib read as a statement (its text is
+ * `rawValue`, decision 168). A tag merely *named* `import` is neither.
+ */
+export function isStatementNode(node: Node): boolean {
+  if (node?.type === "MxModuleStatement") return true;
+  return node?.type === "MarkoTag" && typeof node.rawValue === "string";
+}
+
+/**
+ * A tag or a module statement: Marko parses a statement as a tag named by
+ * its keyword, so every scan for `import`/`static`/`export` by name reads
+ * both. The Marko half goes with PR 5.
+ */
+export function isTagOrStatementNode(node: Node): boolean {
+  return isTagNode(node) || node?.type === "MxModuleStatement";
 }
 
 /** A text run, `MarkoText` or `MxText`. */

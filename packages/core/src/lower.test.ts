@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import type { MxChild } from "@mxlang/babel/mx-ast";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   type AttrTagDecl,
   type CalleeInput,
@@ -4391,6 +4392,8 @@ describe("a host that binds a dynamic tag's /var opts in", () => {
  *
  * Fields a later slice retypes stay Marko-shaped: a tag's attributes and
  * shorthand fields (slice 4).
+ *
+ * - Slice 6: a statement tag becomes an `MxModuleStatement`.
  */
 function toMxShape(source: string): (body: Node[]) => void {
   const lineStarts = [0];
@@ -4851,8 +4854,39 @@ function toMxShape(source: string): (body: Node[]) => void {
       span: { start: expression.start - 2, end: expression.end + 1 },
     };
   };
+  /**
+   * A tag Marko parsed as a statement (`rawValue`) is an `MxModuleStatement`:
+   * `end` the trimmed extent, `untrimmedEnd` Marko's range end, `code` the
+   * text after the keyword (`static`/`server`/`client`) or the whole line.
+   * Lowering reads the statement's text, never `code.node`, so the payload
+   * is the text Marko kept.
+   */
+  const statement = (node: Node): Node => {
+    const { start, end: untrimmedEnd } = offsets(node);
+    let end = untrimmedEnd;
+    while (end > start && /\s/.test(source[end - 1] as string)) end--;
+    const keyword = String(node.name.value);
+    const head = ["static", "server", "client"].includes(keyword)
+      ? (new RegExp(`^${keyword}\\s*`).exec(source.slice(start, end))?.[0] ??
+        "")
+      : "";
+    const inner = { start: start + head.length, end };
+    return {
+      type: "MxModuleStatement",
+      keyword,
+      code: {
+        ...container("MxStatements", node.rawValue, inner, inner),
+        directives: [],
+        innerComments: [],
+      },
+      start,
+      end,
+      untrimmedEnd,
+    };
+  };
   const visit = (node: Node): Node => {
     if (node?.type !== "MarkoTag") return leaf(node);
+    if (typeof node.rawValue === "string") return statement(node);
     const children: Node[] = (node.body?.body ?? []).map(visit);
     const tags: Node[] = (node.attributeTags ?? []).map(visit);
     const body = [...children, ...tags].sort((a, b) => startOf(a) - startOf(b));
@@ -5168,18 +5202,6 @@ describe("hybrid node kinds and spans, MX-shaped (PR 4 slice 2)", () => {
         "attribute tag `<@a>` is only valid directly inside a component call",
       line: 2,
       column: 2,
-    });
-  });
-
-  it("fails on an MX node kind with no lowering yet instead of dropping it", () => {
-    const source = "import a from 'a';\n";
-    const statement = { type: "MxModuleStatement", start: 0, end: 18 };
-    expect(
-      thrown(() => lowerChildren(ctxFor(source), [statement])),
-    ).toMatchObject({
-      message: "`MxModuleStatement` has no lowering yet (not yours: an MX bug)",
-      line: 1,
-      column: 0,
     });
   });
 
@@ -6399,5 +6421,272 @@ describe("hybrid name sugar, MX-shaped (PR 4 slice 4, family 3)", () => {
         operator: null,
       },
     ]);
+  });
+});
+
+describe("hybrid module statements and the signature, MX-shaped (PR 4 slice 6)", () => {
+  /** What a lowering produced: its IR, or the error as a reporter reads it. */
+  const outcome = (run: () => Ir) => {
+    try {
+      return { ir: run() };
+    } catch (error) {
+      const e = error as TranslateError;
+      return { message: e.message, line: e.line, column: e.column };
+    }
+  };
+  const both = (source: string, policy = fakeDeclarations()) => [
+    outcome(() =>
+      lowerSource(
+        source,
+        policy,
+        undefined,
+        undefined,
+        undefined,
+        toMxShape(source),
+      ),
+    ),
+    outcome(() => lowerSource(source, policy)),
+  ];
+  const thrown = (run: () => unknown) => {
+    try {
+      run();
+    } catch (error) {
+      const e = error as TranslateError;
+      return { message: e.message, line: e.line, column: e.column, e };
+    }
+    throw new Error("no error thrown");
+  };
+  const ctxFor = (source: string) =>
+    newCtx(
+      source,
+      printExpression,
+      fakeDeclarations(),
+      undefined,
+      "test.mx",
+      lookup,
+    );
+
+  it("takes the MX AST, published as Node until PR 5", () => {
+    // Ruling B: the internal walk is typed `readonly MxChild[]` straight from
+    // `@mxlang/babel/mx-ast` (one declaration, so no drift to pin); the
+    // published entries stay `readonly Node[]` because the .d.ts may not name
+    // the private package. PR 5 narrows these two.
+    expectTypeOf(lower).parameter(1).toEqualTypeOf<readonly Node[]>();
+    expectTypeOf(lowerChildren).parameter(1).toEqualTypeOf<readonly Node[]>();
+    expectTypeOf<readonly MxChild[]>().toExtend<Parameters<typeof lower>[1]>();
+  });
+
+  it("reshapes a statement tag into an MxModuleStatement", () => {
+    const source = "static const x = 1;   \n<div/>";
+    let seen: Node[] = [];
+    lowerSource(source, undefined, undefined, undefined, undefined, (b) => {
+      toMxShape(source)(b);
+      seen = b;
+    });
+    expect(seen[0]).toMatchObject({
+      type: "MxModuleStatement",
+      keyword: "static",
+      code: { type: "MxStatements", start: 7, end: 19 },
+      start: 0,
+      end: 19,
+      untrimmedEnd: 22,
+    });
+    expect(seen[0]).not.toHaveProperty("loc");
+  });
+
+  const sources = [
+    'import a from "./a"\n<div/>',
+    'import { b, type C } from "./b"\n<div>${b}</div>',
+    'import Card from "./card.mx"\n<Card/>',
+    "import * as ns from 'ns'\n\n\n<p>${ns.x}</p>",
+    "static const x = 1;   \n<div>${x}</div>",
+    "static function f(a: number) {\n  return a;\n}\n<p>${f(1)}</p>",
+    "export interface Input { a: string }\n<p>${input.a}</p>",
+    "export type Input = { a: string }\n<p/>",
+    "export const y = 1\n<p/>",
+    "server const y = 1\n<p/>",
+    "client foo()\n<p/>",
+    "class {}\n<p/>",
+    "static const = 1\n<p/>",
+    "static const x = <div/>\n<p/>",
+    "import a from 'a'\nimport a from 'b'\n<p/>",
+    "static const input = 1\n<p/>",
+    'import Foo from "./foo"\n<Foo/x/>\n<p>${x}</p>',
+    "<p/>\nstatic let n = 0\n<p>${n}</p>",
+  ];
+  for (const source of sources) {
+    it(`same IR or error on Marko and MX: ${JSON.stringify(source)}`, () => {
+      const [mx, marko] = both(source);
+      expect(mx).toEqual(marko);
+    });
+  }
+
+  it("lowers an import's IR span, start and untrimmed end", () => {
+    const source = "import a from 'a'   \n<p/>";
+    const [mx] = both(source);
+    expect(mx?.ir?.imports[0]).toMatchObject({
+      kind: "Import",
+      code: "import a from 'a'",
+      loc: { line: 1, column: 0 },
+      end: { line: 1, column: 20 },
+      span: { sourceStart: 0, sourceEnd: 17 },
+    });
+  });
+
+  it("lowers an MxModuleStatement through the exported lowerChildren", () => {
+    const source = "import a from 'a';\n";
+    const statement = {
+      type: "MxModuleStatement",
+      keyword: "import",
+      code: { type: "MxStatements", start: 0, end: 18, node: [], error: null },
+      start: 0,
+      end: 18,
+      untrimmedEnd: 19,
+    };
+    expect(lowerChildren(ctxFor(source), [statement])).toMatchObject([
+      { kind: "Import", code: "import a from 'a';", bindings: ["a"] },
+    ]);
+  });
+
+  it("refuses a statement keyword the front end read as a tag", () => {
+    const source = "<import a/>";
+    const tag = {
+      type: "MxTag",
+      name: { kind: "static", value: "import", span: { start: 1, end: 7 } },
+      attributes: [],
+      shorthands: [],
+      typeArgs: null,
+      var: null,
+      args: null,
+      typeParams: null,
+      params: null,
+      body: null,
+      start: 0,
+      end: 11,
+    };
+    expect(thrown(() => lowerChildren(ctxFor(source), [tag]))).toMatchObject({
+      message: expect.stringContaining(
+        "`import` was parsed as a tag with attributes",
+      ),
+      line: 1,
+      column: 0,
+    });
+  });
+
+  it("checks a server statement's text by node kind", () => {
+    const source = "<p/>\nserver const = 1";
+    const statement = {
+      type: "MxModuleStatement",
+      keyword: "server",
+      code: { type: "MxStatements", start: 12, end: 21, node: null },
+      start: 5,
+      end: 21,
+      untrimmedEnd: 21,
+    };
+    expect(
+      thrown(() => lowerChildren(ctxFor(source), [statement])),
+    ).toMatchObject({ line: 2, column: 13 });
+  });
+
+  it("names a syntax-table node at child level and positions it (decision 182)", () => {
+    const source = "<p/>\n&status=x\n{% if a %}\n::md:: b ::";
+    const cases: [Node, string, number, number][] = [
+      [
+        {
+          type: "MxTrigger",
+          id: "status",
+          position: "line",
+          text: "&status",
+          value: null,
+          start: 5,
+          end: 14,
+        },
+        "`status` trigger has no lowering yet",
+        2,
+        0,
+      ],
+      [
+        {
+          type: "MxBlockTag",
+          value: " if a ",
+          valueSpan: { start: 17, end: 23 },
+          start: 15,
+          end: 25,
+        },
+        "a block tag has no lowering yet",
+        3,
+        0,
+      ],
+      [
+        {
+          type: "MxFilter",
+          name: "md",
+          nameSpan: { start: 28, end: 30 },
+          value: " b ",
+          valueSpan: { start: 32, end: 35 },
+          start: 26,
+          end: 37,
+        },
+        "the `md` filter has no lowering yet",
+        4,
+        0,
+      ],
+    ];
+    for (const [node, message, line, column] of cases) {
+      expect(thrown(() => lowerChildren(ctxFor(source), [node]))).toMatchObject(
+        { message, line, column },
+      );
+    }
+  });
+
+  it("still fails on an MX node kind lowering does not know", () => {
+    const source = "ab";
+    expect(
+      thrown(() =>
+        lowerChildren(ctxFor(source), [
+          { type: "MxUnknown", start: 1, end: 2 },
+        ]),
+      ),
+    ).toMatchObject({
+      message: "`MxUnknown` has no lowering yet (not yours: an MX bug)",
+      line: 1,
+      column: 1,
+    });
+  });
+
+  it("positions an MX-node error only against the file it is about", () => {
+    const source = "ab\ncd";
+    const node = { type: "MxText", start: 4, end: 5 };
+    const same = thrown(() => fail("here", node, "test.mx")).e;
+    positionError(ctxFor(source), same);
+    expect([same.file, same.line, same.column]).toEqual(["test.mx", 2, 1]);
+
+    // An error about another file keeps its offsets unresolved: this ctx's
+    // lines would give it a wrong position, so the boundary refuses it.
+    const other = thrown(() => fail("there", node, "other.mx")).e;
+    positionError(ctxFor(source), other);
+    expect([other.line, other.column]).toEqual([0, 0]);
+    expect(() => assertPositioned(other)).toThrow(/not yours: an MX bug/);
+  });
+
+  it("refuses another file's unpositioned error at lower()'s boundary", () => {
+    const source = "<div/>";
+    const policy = fakeDeclarations({
+      isElement: () => {
+        fail("from elsewhere", { type: "MxText", start: 0, end: 1 }, "x.mx");
+      },
+    });
+    const error = thrown(() =>
+      lowerSource(
+        source,
+        policy,
+        undefined,
+        undefined,
+        undefined,
+        toMxShape(source),
+      ),
+    ).e;
+    expect(error.file).toBe("x.mx");
+    expect(() => assertPositioned(error)).toThrow(/not yours: an MX bug/);
   });
 });

@@ -808,8 +808,16 @@ Five facts worth knowing before editing it:
   the offsets on `TranslateError.span` and leaves `line`/`column` to the
   lowering boundary (`recover`, `lower`, `lowerChildren`), which fills them
   from the source; `compileSource` refuses an error that got past unpositioned
-  as an MX bug (`assertPositioned`). An `Mx*` kind `lowerChildList` has no arm
-  for fails ("has no lowering yet") rather than dropping. Tests drive these
+  as an MX bug (`assertPositioned`); an offset-only error naming another
+  `file` is never positioned against this one. An `Mx*` kind `lowerChildList`
+  has no arm for fails ("has no lowering yet") rather than dropping; a
+  child-level `MxTrigger`/`MxBlockTag`/`MxFilter` fails in the syntax
+  pre-pass's wording (decision 182). An `MxModuleStatement` lowers on the tag
+  path by its keyword (`tagNameOf`), a statement by kind (`isStatementNode`),
+  its range to `untrimmedEnd` (`mxSpanOf`). The walk is typed
+  `readonly MxChild[]` (a type-only import of the private `@mxlang/babel`,
+  erased from the `.d.ts`); the published `lower`/`lowerChildren` take
+  `readonly Node[]` until PR 5. Tests drive these
   paths with `lower.test.ts`'s `toMxShape`, the real Marko parse reshaped into
   the MX AST as far as lowering reads it; each slice extends it.
 - **Cross-file errors carry their origin structurally.** `metadataForTemplate`

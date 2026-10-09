@@ -34,6 +34,8 @@ function isMxTagShape(node: Node): boolean {
  */
 export function tagNameOf(node: Node): string | undefined {
   if (node?.type === "MxAttributeTag") return `@${node.name.value}`;
+  // Marko parses a statement as a tag named by its keyword (`rawValue`).
+  if (node?.type === "MxModuleStatement") return node.keyword;
   if (isMxTagShape(node)) {
     const resolved = resolvedNames.get(node);
     if (resolved !== undefined) return resolved;
@@ -44,7 +46,9 @@ export function tagNameOf(node: Node): string | undefined {
 
 /** Is the tag's name static (Marko: a `StringLiteral` name node)? */
 export function hasStaticName(node: Node): boolean {
-  if (node?.type === "MxAttributeTag") return true;
+  if (node?.type === "MxAttributeTag" || node?.type === "MxModuleStatement") {
+    return true;
+  }
   if (isMxTagShape(node)) {
     return node.name?.kind === "static" || resolvedNames.has(node);
   }
@@ -57,6 +61,12 @@ export function hasStaticName(node: Node): boolean {
  * since Marko's dynamic name node is the expression itself, not `${…}`.
  */
 export function tagNameSpanOf(node: Node): Node {
+  // A module statement's keyword, where Marko's statement tag has its name.
+  if (node?.type === "MxModuleStatement") {
+    return {
+      span: { start: node.start, end: node.start + node.keyword.length },
+    };
+  }
   if (isMxTagShape(node) && node.name?.kind === "dynamic") {
     return node.name.expression;
   }

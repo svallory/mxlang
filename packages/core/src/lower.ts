@@ -26,6 +26,10 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { parse as babelParse, type ParserPlugin } from "@babel/parser";
+// Type-only and erased from the emitted .d.ts: the internal signatures take
+// the MX AST; the published ones keep `Node` until PR 5 (decision 158 PR 4
+// slice 6 ruling B), since `@mxlang/babel` is private.
+import type { MxChild } from "@mxlang/babel/mx-ast";
 import { freeIdentifiersIn } from "./accessor-reads.ts";
 import { assertNoStandIn, atomOf, atomsIn, convertAtoms } from "./atoms.ts";
 import {
@@ -74,7 +78,9 @@ import {
   isMarkoOrMxSpecifier,
   isMxAttributeTag,
   isSpreadAttributeNode,
+  isStatementNode,
   isTagNode,
+  isTagOrStatementNode,
   isTextNode,
   isTranslateError,
   markoBabel,
@@ -2083,7 +2089,7 @@ function lowerAttributeTags(
  */
 function lowerIfChain(
   ctx: Ctx,
-  children: Node[],
+  children: readonly Node[],
   index: number,
 ): [IrNode, number] {
   const node = children[index];
@@ -2972,11 +2978,12 @@ function firstJsxStart(
 }
 
 function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
-  // Decision 168: a statement tag is parsed as a statement (its text is
-  // `rawValue`). One the parser read as attributes came from a translator that
-  // does not declare the statement tags; recovering its text from the source
-  // would hide that, so it is refused.
-  if (typeof node.rawValue !== "string") {
+  // Decision 168: a statement tag is parsed as a statement (Marko: its text
+  // is `rawValue`; MX: an `MxModuleStatement`). One the parser read as
+  // attributes came from a translator that does not declare the statement
+  // tags; recovering its text from the source would hide that, so it is
+  // refused.
+  if (!isStatementNode(node)) {
     fail(
       `\`${name}\` was parsed as a tag with attributes: this target's translator does not declare the statement tags. Build the translator with \`createTranslator\`, or register core's \`STATEMENT_TAGLIB\` in it`,
       node,
@@ -3896,12 +3903,9 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // (#395 r3), before a host runs it (html's `server`), drops it (html's
   // `client`) or refuses it: Marko parses it first, so an invalid join that
   // swallowed the next template line is its syntax error, never a silent
-  // drop. Only a statement-parsed node (`rawValue`); data's ordinary
+  // drop. Only a statement-parsed node (`isStatementNode`); data's ordinary
   // `client`/`server` tags are not statements.
-  if (
-    (name === "server" || name === "client") &&
-    typeof node.rawValue === "string"
-  ) {
+  if ((name === "server" || name === "client") && isStatementNode(node)) {
     const text = sliceNode(ctx, node).trim();
     const keyword = new RegExp(`^${name}\\s+`).exec(text)?.[0] ?? name;
     rejectInvalidStatement(
@@ -4284,7 +4288,7 @@ const CDATA_MESSAGE =
 const DECLARATION_MESSAGE =
   "`<?…?>` (an XML declaration or processing instruction) is not supported: remove it";
 
-export function lowerChildren(ctx: Ctx, children: Node[]): IrNode[] {
+export function lowerChildren(ctx: Ctx, children: readonly Node[]): IrNode[] {
   try {
     return lowerChildrenOf(ctx, children);
   } catch (error) {
@@ -4295,7 +4299,7 @@ export function lowerChildren(ctx: Ctx, children: Node[]): IrNode[] {
   }
 }
 
-function lowerChildrenOf(ctx: Ctx, children: Node[]): IrNode[] {
+function lowerChildrenOf(ctx: Ctx, children: readonly MxChild[]): IrNode[] {
   // An external call (not from `lower`) has unresolved unnamed tags; the
   // walk starts with no parents, right for a body lowered on its own.
   if (!ctx.unnamedTagsResolved) {
@@ -4342,7 +4346,7 @@ function lowerChildrenOf(ctx: Ctx, children: Node[]): IrNode[] {
  * `else` branches, with the layout between them, as `lowerIfChain` walks them.
  * A chain whose head failed is skipped by this much.
  */
-function ifChainEnd(children: Node[], index: number): number {
+function ifChainEnd(children: readonly Node[], index: number): number {
   let i = index + 1;
   while (i < children.length) {
     const child = children[i];
@@ -4364,7 +4368,7 @@ function ifChainEnd(children: Node[], index: number): number {
   return i;
 }
 
-function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
+function lowerChildList(ctx: Ctx, children: readonly MxChild[]): IrNode[] {
   // Every `/var` this block declares is registered *before* the walk, at the
   // sibling index it is declared at. A read earlier in the same block then
   // finds a binding whose sequence is greater than its own and reports
@@ -4378,7 +4382,7 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
   const importsName = (tagName: string): boolean => {
     siblingImports ??= new Set(
       children.flatMap((child) =>
-        isTagNode(child) && tagNameOf(child) === "import"
+        isTagOrStatementNode(child) && tagNameOf(child) === "import"
           ? importBindings(sliceNode(ctx, child).trim())
           : [],
       ),
@@ -4416,7 +4420,9 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
   let index = 0;
 
   while (index < children.length) {
-    const child = children[index];
+    // Hybrid until PR 5: the arms below still name Marko's kinds, which the
+    // MX type cannot hold.
+    const child: Node = children[index];
 
     if (isTagNode(child) && tagNameOf(child) === "if") {
       const lowered = recover(ctx, () => lowerIfChain(ctx, children, index));
@@ -4472,7 +4478,10 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
         }
         case "MarkoTag":
         case "MxTag":
-        case "MxReturn": {
+        case "MxReturn":
+        // A module statement lowers where Marko's statement tag did: the
+        // tag path, by its keyword (`tagNameOf`).
+        case "MxModuleStatement": {
           // A statement the host hoisted stays on `ctx.prelude` and is drained
           // by the enclosing *function* — `lowerDefine`, or `lower` for the
           // render function — never here. Draining it at every child list would
@@ -4536,10 +4545,21 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
         case "MxDeclaration":
           fail(DECLARATION_MESSAGE, child);
           break;
+        // Decision 182 seam: a syntax table's child-level nodes, refused in
+        // the syntax pre-pass's wording until lowering dispatches them to
+        // the table's `lowerTrigger`/`lowerBlockTag`/`lowerFilter`.
+        case "MxTrigger":
+          fail(`\`${child.id}\` trigger has no lowering yet`, child);
+          break;
+        case "MxBlockTag":
+          fail("a block tag has no lowering yet", child);
+          break;
+        case "MxFilter":
+          fail(`the \`${child.name}\` filter has no lowering yet`, child);
+          break;
         default:
-          // An MX node kind with no lowering yet (`MxModuleStatement` until
-          // PR 4 slice 6) is never dropped silently; a Marko kind this
-          // switch has no arm for keeps today's behaviour.
+          // An MX node kind with no lowering is never dropped silently; a
+          // Marko kind this switch has no arm for keeps today's behaviour.
           if (String(child.type).startsWith("Mx")) {
             fail(
               `\`${child.type}\` has no lowering yet (not yours: an MX bug)`,
@@ -4561,7 +4581,7 @@ function lowerChildList(ctx: Ctx, children: Node[]): IrNode[] {
  * out of the body into `Ir`'s own fields, so a host places them without
  * filtering the tree for statement nodes.
  */
-export function lower(ctx: Ctx, body: Node[]): Ir {
+export function lower(ctx: Ctx, body: readonly Node[]): Ir {
   try {
     return lowerRoot(ctx, body);
   } catch (error) {
@@ -4572,7 +4592,7 @@ export function lower(ctx: Ctx, body: Node[]): Ir {
   }
 }
 
-function lowerRoot(ctx: Ctx, body: Node[]): Ir {
+function lowerRoot(ctx: Ctx, body: readonly MxChild[]): Ir {
   // Before anything reads a tag name: an unnamed tag has none yet. The flag
   // tells `lowerChildren` the whole tree is already resolved, so only a call
   // from outside this walk resolves (and never re-walks a subtree).
@@ -4591,7 +4611,7 @@ function lowerRoot(ctx: Ctx, body: Node[]): Ir {
   }
 }
 
-function lowerTemplate(ctx: Ctx, body: Node[]): Ir {
+function lowerTemplate(ctx: Ctx, body: readonly MxChild[]): Ir {
   checkReservedTemplate(ctx, body);
   // Each file/template is its own authored root, including recursive units.
   ctx.authoredAncestors = [];
@@ -4599,7 +4619,7 @@ function lowerTemplate(ctx: Ctx, body: Node[]): Ir {
   const ownInputCode: string[] = [];
   const ownInputAux: string[] = [];
   for (const node of body) {
-    if (!isTagNode(node) || !hasStaticName(node)) continue;
+    if (!isTagOrStatementNode(node) || !hasStaticName(node)) continue;
     const statementName = tagNameOf(node) as string;
     if (
       statementName !== "import" &&
@@ -4776,7 +4796,7 @@ function lowerTemplate(ctx: Ctx, body: Node[]): Ir {
  * Skipped entirely when no registered tag defines `analyze`, so a file using
  * only ordinary tags pays for one walk as before.
  */
-function runCustomTagAnalyze(ctx: Ctx, body: Node[]): void {
+function runCustomTagAnalyze(ctx: Ctx, body: readonly MxChild[]): void {
   const customTags = ctx.customTags;
   if (!customTags) return;
   if (!Object.values(customTags).some((tag) => tag.analyze)) return;

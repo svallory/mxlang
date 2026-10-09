@@ -3,7 +3,9 @@ import {
   bodyChildren,
   type Ctx,
   isTagNode,
+  isTagOrStatementNode,
   type Node,
+  positionAtOffset,
   sliceNode,
   TranslateError,
 } from "./core.ts";
@@ -154,11 +156,11 @@ function parseAuthoredSource(
 }
 
 /** Checks Marko statement tags before a host can reject or discard them. */
-export function checkReservedTemplate(ctx: Ctx, body: Node[]): void {
+export function checkReservedTemplate(ctx: Ctx, body: readonly Node[]): void {
   checkReservedBindings(body);
-  const visit = (nodes: Node[]): void => {
+  const visit = (nodes: readonly Node[]): void => {
     for (const node of nodes) {
-      if (!isTagNode(node)) continue;
+      if (!isTagOrStatementNode(node)) continue;
       const name = tagNameOf(node) as string;
       if (["import", "export", "static", "server", "client"].includes(name)) {
         let source = sliceNode(ctx, node);
@@ -169,11 +171,8 @@ export function checkReservedTemplate(ctx: Ctx, body: Node[]): void {
         }
         let parsed: Node;
         try {
-          parsed = parseAuthoredSource(
-            source,
-            node.loc.start.line,
-            node.loc.start.column,
-          );
+          const at = node.loc?.start ?? positionAtOffset(ctx, node.start);
+          parsed = parseAuthoredSource(source, at.line, at.column);
         } catch {
           // Existing statement/host validation owns malformed source. Never
           // treat an unparsed identifier substring as evidence of a binding.
