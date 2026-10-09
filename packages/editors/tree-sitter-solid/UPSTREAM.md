@@ -36,24 +36,26 @@ regenerated during that task anyway to fix an unrelated grammar-patch defect,
 which is the deliberate CLI-version bump this file's own warning below asks
 for; corrected here rather than left to drift further.)
 
-### `tree-sitter-cli` version split: 0.26.9 for generate/test, 0.24.7 for the wasm build fallback
+### `tree-sitter-cli` version split (resolved): 0.26.9 for the wasm build fallback too
 
-(2026-09-13, round 3 of zed-solidmx-followups) `scripts/zed-compile-check.sh`'s
+(2026-10-09, ci-docker-hub-rate-limit) `scripts/zed-compile-check.sh`'s
 `tree-sitter build --wasm` fallback path (used when Zed's own wasi-sdk clang
-isn't installed — always true on CI) runs `bunx --package
-"tree-sitter-cli@0.24.7"`, an **older** CLI than `package.json`'s own
-`tree-sitter-cli: 0.26.9` used everywhere else in this package (`generate`,
-`test`, `parse`, `highlight-smoke.sh`). This is deliberate, not drift:
-`tree-sitter-cli` 0.26.9 dropped `build --wasm`'s `--docker` flag, which
-`ZED_COMPILE_CHECK_WASM_BUILD_ARGS` needs on CI runners (Docker, not a local
-emscripten install). Verified against a sibling defect: `tree-sitter-amx`'s
-own `zed-compile-check.sh` was briefly bumped to 0.26.9 and broke CI's
-Docker-based wasm build for exactly this reason (commit `11d1acaf`,
-"tree-sitter-cli 0.26.9 dropped the --docker argument for build --wasm"),
-and was reverted back to 0.24.7 to match `tree-sitter-solid`'s own
-(already-correct) pin. Do not "fix" `zed-compile-check.sh`'s bunx pin to
-match `package.json` without first confirming `--docker` support is back in
-whatever CLI version you'd bump to, or that CI no longer needs `--docker`.
+isn't installed — always true on CI) now runs `bunx --package
+"tree-sitter-cli@0.26.9"`, the same version as `package.json`. 0.26.9's
+`build --wasm` downloads its own wasi-sdk, so the fallback needs neither
+Docker nor a local emsdk, and it compiles the clean clone's committed `src/`
+as-is; `tree-sitter-mx`'s own `zed-compile-check.sh` already worked this way.
+`ZED_COMPILE_CHECK_WASM_BUILD_ARGS` stays as a pass-through, empty by default.
+
+History: from 2026-09-13 (round 3 of zed-solidmx-followups) this pin was
+0.24.7, because 0.26.9 dropped `build --wasm`'s `--docker` flag and CI passed
+`--docker` (`tree-sitter-amx` was briefly bumped and reverted for the same
+reason, commit `11d1acaf`). `--docker` pulled an emscripten image from Docker
+Hub anonymously, and once the unauthenticated pull rate limit was hit
+(`toomanyrequests`) every PR's `zed-compile-check` and `test-bun-grammar`
+went red. 0.24.7 also regenerated `src/parser.c` from `grammar.js` before
+compiling, so it never compiled the committed parser. Do not reintroduce
+`--docker` or a Docker-based fallback.
 
 **Regenerating with a different CLI produces a different `src/parser.c`.** That
 shows up as a large spurious diff, so bump the CLI deliberately and say so in

@@ -57,8 +57,20 @@ else
     echo "zed-compile-check.sh: no wasi-sdk clang and no bunx to fall back to tree-sitter build" >&2
     exit 2
   fi
+  # ZED_COMPILE_CHECK_WASM_BUILD_ARGS: extra flags for `tree-sitter build`
+  # (empty by default; a pass-through, nothing in CI sets it).
+  #
+  # tree-sitter-cli 0.26.9's `build --wasm` downloads its own wasi-sdk, so
+  # this needs neither Docker nor a local emsdk, and it compiles the clone's
+  # committed src/ as-is. The earlier 0.24.7 pin existed only for `--docker`
+  # (dropped in 0.26), which pulled an emscripten image from Docker Hub
+  # anonymously and hit its unauthenticated pull rate limit on CI. 0.24.7
+  # also regenerated src/parser.c before compiling. package.json keeps
+  # tree-sitter-cli 0.24.7 for generate/test; this pin is only the wasm
+  # build. Same path as tree-sitter-mx's own zed-compile-check.sh.
   set +e
-  (cd "$CLONE_DIR/$PKG_REL" && bunx --package "tree-sitter-cli@0.24.7" tree-sitter build --wasm ${ZED_COMPILE_CHECK_WASM_BUILD_ARGS:-} -o "$WASM_OUT") \
+  # shellcheck disable=SC2086 # deliberately unquoted: a flag list, not one value
+  (cd "$CLONE_DIR/$PKG_REL" && bunx --package "tree-sitter-cli@0.26.9" tree-sitter build --wasm ${ZED_COMPILE_CHECK_WASM_BUILD_ARGS:-} -o "$WASM_OUT") \
     2> "$TMP_DIR/tsbuild-stderr.log"
   rc=$?
   set -e

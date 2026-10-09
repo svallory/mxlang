@@ -214,9 +214,9 @@ the root `bun run test:grammar`):
 4. `tools/check-wasm.mts`: the wasm parses a sample, and both queries load.
 5. `scripts/zed-compile-check.sh`: compiles `src/` from a clean clone of
    HEAD, as Zed's `file://` dev install does (CI: the `zed-compile-check` job,
-   forced `tree-sitter build --wasm --docker` fallback with tree-sitter-cli
-   0.24.7; see `../tree-sitter-solid/UPSTREAM.md` "tree-sitter-cli version
-   split").
+   forced `tree-sitter build --wasm` fallback with tree-sitter-cli 0.26.9,
+   no Docker, the same as the solid and amx packages; see
+   `../tree-sitter-solid/UPSTREAM.md` "tree-sitter-cli version split").
 
 `bun run vendor:check` (`scripts/vendor-check.sh`) re-fetches the pin from
 GitHub, applies `patches/`, and diffs the result against the committed files.

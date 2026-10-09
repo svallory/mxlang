@@ -101,8 +101,8 @@ else
   fi
   # ZED_COMPILE_CHECK_WASM_BUILD_ARGS: extra flags for `tree-sitter build`.
   #
-  # Unlike the solid/amx copies (tree-sitter-cli 0.24.7 with --docker), this
-  # fallback uses package.json's own tree-sitter-cli 0.26.9: it downloads its
+  # Like the solid/amx copies, this fallback uses tree-sitter-cli 0.26.9
+  # (package.json's own version here): it downloads its
   # own wasi-sdk (no Docker or emsdk needed on CI) and compiles the clone's
   # committed src/ as-is. 0.24.7 regenerates src/parser.c from grammar.js
   # first, so it never compiles the committed parser (PR #301 review: a junk
