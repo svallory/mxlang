@@ -349,6 +349,7 @@ export function compileSolidMx(
     filename: options.filename,
     ...base,
     customTags: options.customTags,
+    nativeTags: solidDeclarations.nativeTags,
   });
   repairEmbeddedTsx(body, positionedSource);
   const ctx = newCtx(
@@ -571,6 +572,7 @@ export function compileSolidUnit(
   const { body } = parseFragment(source, {
     filename: options.filename,
     customTags: options.customTags,
+    nativeTags: solidDeclarations.nativeTags,
   });
   repairEmbeddedTsx(body, source);
   const ctx = newCtx(

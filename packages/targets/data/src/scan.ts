@@ -23,7 +23,11 @@ import {
   sugarTagName,
 } from "@mxlang/core";
 import { lineStartsOf } from "./build.ts";
-import { DEFAULT_TAG, RESERVED_NAMES } from "./declarations.ts";
+import {
+  DEFAULT_TAG,
+  dataDeclarations,
+  RESERVED_NAMES,
+} from "./declarations.ts";
 import { dataTaglib } from "./taglib.ts";
 
 /** A tag the author wrote, with the position of its `<`. */
@@ -141,6 +145,7 @@ export function scanAuthoredTags(
       filename,
       translatorFor(customTags),
       syntax,
+      dataDeclarations.nativeTags,
     );
   } catch {
     return null;

@@ -517,11 +517,6 @@ export function createHtmlMappings(
   targets: TargetLookup = builtinLookup(),
   defaultTag?: string,
 ): CodeMapping[] {
-  const compiler = core.markoCompiler();
-  const { body } = parseFragment(source, {
-    filename: fileName,
-    customTags,
-  });
   // D3: the mapping pass still uses the default HTML target's translator,
   // even when the compile target is JSX. Do not change this disagreement.
   const fallback = builtinLookup().target(builtinLookup().defaultTarget());
@@ -530,11 +525,16 @@ export function createHtmlMappings(
     (strict ? fallback?.declarations?.strict : undefined) ??
     fallback?.declarations?.default;
   if (!mappingDeclarations) throw new Error("missing mapping declarations");
+  const { body } = parseFragment(source, {
+    filename: fileName,
+    customTags,
+    nativeTags: mappingDeclarations.nativeTags,
+  });
   const ctx = newCtx(
     source,
     printExpression,
     mappingDeclarations,
-    core.buildMarkoLookup(dirname(fileName), fallback?.translator),
+    core.tagTable(fallback?.translator, mappingDeclarations.nativeTags),
     fileName,
     targets,
   );

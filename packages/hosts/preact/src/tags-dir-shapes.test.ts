@@ -5,7 +5,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { compilePreactMx } from "./index.ts";
 
 /**
- * A `tags/` file Marko's lookup finds is imported from the path Marko found
+ * A `tags/` file core's discovery finds is imported from the path Marko found
  * it at, never from one derived from the tag's name; a shape with no template
  * to import is a positioned error, not an import of a file that does not exist.
  */
@@ -112,39 +112,29 @@ describe("preact: `tags/` shapes", () => {
     expect(code).not.toContain("tags/x.marko");
   });
 
-  describe("a marko.json tag with an .mx template", () => {
-    const page = () =>
-      project({
+  // A `marko.json` is not read (decision 197): what it maps is no tag, so a
+  // lowercase name stays the element it spells and nothing is imported.
+  describe("a marko.json registers nothing", () => {
+    it("a template tag stays a native element", () => {
+      const file = project({
         "marko.json": JSON.stringify({
           "<fancy-btn>": { template: "./impl/fancy-btn.mx" },
         }),
         "impl/fancy-btn.mx": "<b>hi</b>\n",
       });
-
-    it("is imported from its real path under core's camelCased binding, once", () => {
-      const { code } = compilePreactMx(
-        '<fancy-btn/><fancy-btn label="b"/>',
-        page(),
-      );
-      expect(code).toContain('import _fancyBtn from "./impl/fancy-btn.mx"');
-      expect(code.match(/impl\/fancy-btn\.mx/g)).toHaveLength(1);
-      expect(code).toContain("<_fancyBtn />");
+      const { code } = compilePreactMx('<fancy-btn label="b"/>', file);
+      expect(code).toContain('<fancy-btn label="b" />');
+      expect(code).not.toContain("impl/fancy-btn.mx");
     });
 
-    it("does not reuse an identifier already in the source", () => {
-      const { code } = compilePreactMx(
-        "static const _fancyBtn = 1\n<fancy-btn/>",
-        page(),
-      );
-      expect(code).toContain('import _fancyBtn2 from "./impl/fancy-btn.mx"');
-    });
-
-    it("a template-less taglib tag is an error, never an import", () => {
+    it("a renderer tag stays a native element", () => {
       const file = project({
         "marko.json": JSON.stringify({ "<x>": { renderer: "./x.js" } }),
         "x.js": "module.exports = () => {}",
       });
-      expect(() => compilePreactMx("<x/>", file)).toThrow("no template");
+      const { code } = compilePreactMx("<x/>", file);
+      expect(code).toContain("<x />");
+      expect(code).not.toContain("x.js");
     });
   });
 });

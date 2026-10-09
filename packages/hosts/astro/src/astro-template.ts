@@ -43,6 +43,7 @@ import {
   sourceBindings,
   unknownSourceBindings,
 } from "@mxlang/tsx-bridge";
+import { WEB_ELEMENTS } from "@mxlang/web-elements";
 import descriptor from "./descriptor.ts";
 
 /**
@@ -261,6 +262,7 @@ export const DEFAULT_TAG = "div";
 
 export const astroTemplateDeclarations: HostDeclarations = {
   name: "@mxlang/astro",
+  nativeTags: WEB_ELEMENTS,
   attrTags: 2,
   // The ladder (decision 145): the parent's contract `defaultTag`, then
   // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
@@ -1361,6 +1363,7 @@ export function lowerAstroMx(
     baseLine,
     baseColumn: 0,
     customTags: options.customTags,
+    nativeTags: astroTemplateDeclarations.nativeTags,
   });
 
   try {

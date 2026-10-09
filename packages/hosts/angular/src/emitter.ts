@@ -36,6 +36,7 @@ import {
   unresolvedCustomTagMessage,
   warn,
 } from "@mxlang/core";
+import { WEB_ELEMENTS } from "@mxlang/web-elements";
 import {
   AngularCompilerUnavailableError,
   nativeBinding,
@@ -171,6 +172,7 @@ export const DEFAULT_TAG = "div";
 
 export const angularDeclarations: HostDeclarations = {
   name: "@mxlang/angular",
+  nativeTags: WEB_ELEMENTS,
   attrTags: 2,
   // The ladder (decision 145): the parent's contract `defaultTag`, then
   // `mx.<target>.defaultTag`, then the target's built-in (the registry folds

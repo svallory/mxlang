@@ -1,4 +1,5 @@
-import { type CustomTag, parseFragment } from "@mxlang/core";
+import { type CustomTag, type NativeTags, parseFragment } from "@mxlang/core";
+import { builtinLookup } from "@mxlang/target-registry";
 import type { AuthoredSpan } from "./unmapped-diagnostics.ts";
 
 /** A UTF-16 range into the parsed source (an MX node, field shape or Babel node). */
@@ -58,6 +59,17 @@ const NOT_CODE = new Set([
  * at its name (an `async` method's keyword is outside) and a sugar attribute
  * ends after its default value; an atom value is code, a quoted string is not.
  */
+/**
+ * The native elements the spans parse with: the default target's, which every
+ * built-in target shares (`@mxlang/web-elements`), so `<br>` and `<textarea>`
+ * shape the tree as the compile did.
+ */
+function defaultNativeTags(): NativeTags | undefined {
+  const lookup = builtinLookup();
+  return lookup.target(lookup.defaultTarget())?.declarations?.default
+    ?.nativeTags;
+}
+
 export function markoAuthoredSpans(
   source: string,
   fileName: string,
@@ -66,8 +78,11 @@ export function markoAuthoredSpans(
 ): AuthoredSpan[] {
   let body: readonly MxNode[];
   try {
-    body = parseFragment(source, { filename: fileName, customTags })
-      .body as readonly MxNode[];
+    body = parseFragment(source, {
+      filename: fileName,
+      customTags,
+      nativeTags: defaultNativeTags(),
+    }).body as readonly MxNode[];
   } catch {
     return [];
   }

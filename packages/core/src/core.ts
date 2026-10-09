@@ -16,9 +16,10 @@
  *   "what this target can't do": a construct either contributes output bytes
  *   (lower), only configures behaviour after the first render (inert), or
  *   evaluates to an initial value. The policy declares its own table.
- * - **Element resolution** asks Marko's taglib lookup, so a tag Marko adds or
- *   removes reaches it on a pin bump (ADR 0001's whole point) — `.mx`'s own
- *   hand-carried element set is gone with the rest of that dialect.
+ * - **Element resolution** asks core's tag table (`tag-table.ts`), built from
+ *   the host's taglibs and the target's native elements
+ *   (`HostDeclarations.nativeTags`, `@mxlang/web-elements` on every built-in
+ *   target).
  *
  * Two shapes of Marko's AST drive nearly everything here, both measured
  * against 5.42.5 rather than assumed:
@@ -59,6 +60,7 @@ import {
   tagParamsOf,
   tagVarOf,
 } from "./tag-fields.ts";
+import type { TagTable } from "./tag-table.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
 import { childrenWithTriggers } from "./triggers.ts";
 
@@ -379,27 +381,12 @@ export interface Ctx {
   calleeInputFor?: (target: import("./ir.ts").ComponentTarget) => CalleeInput;
   /** The current unit's resolved Input, for callee-side data-tag checks. */
   ownInput?: CalleeInput;
-  /** Set by a dialect that resolves tags through Marko's taglib lookup. */
-  lookup?: {
-    /**
-     * Marko's tag definition for `name`, or `undefined` when nothing resolves it.
-     *
-     * `template` is the absolute path of the tag's template file, which
-     * Marko's own `getTagTemplate` reads from the same definition. It is set
-     * by `@marko/compiler` (not by MX) for a tag found through `tags/` or a
-     * `marko.json`, and is read only by a host's `resolveDiscoveredTagModule`.
-     * `undefined` means the tag has no template file (an element, a host
-     * taglib tag, a Marko 5 `renderer` tag).
-     */
-    getTag(name: string):
-      | {
-          taglibId?: string;
-          template?: string;
-          /** Marko's parse switches for the tag (`statement`: its text is code). */
-          parseOptions?: { statement?: boolean };
-        }
-      | undefined;
-  };
+  /**
+   * Core's tag table for the file (`tagTable`): taglib ids, `html` flags and
+   * parse switches by tag name. Absent in a region, which resolves tags by its
+   * host's declarations alone.
+   */
+  lookup?: TagTable;
   /** Custom tags already discovered and loaded by the calling integration. */
   customTags?: Readonly<Record<string, CustomTag>>;
   /**

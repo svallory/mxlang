@@ -16,7 +16,7 @@
  */
 
 import { realpathSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { resolve } from "node:path";
 import { type AtomFacts, emptyAtomFacts } from "./atom-contracts.ts";
 import { coreBabel } from "./babel.ts";
 import { rejectShadowedRegistration } from "./builtin-tags.ts";
@@ -64,6 +64,7 @@ import {
   type SyntaxTable,
   tableParseError,
 } from "./syntax-table.ts";
+import { type NativeTags, tagTable } from "./tag-table.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
 import { registerSyntax } from "./triggers.ts";
 
@@ -408,7 +409,9 @@ function sameFilePath(a: string, b: string): boolean {
 /**
  * Marko's tag lookup for `translator` as seen from `dir`: what a compile of a
  * file there would resolve a tag name through. `undefined` when Marko builds
- * none. The tag map is made prototype-free, as `compileSource` does.
+ * none. The tag map is made prototype-free. Compiles no longer use it
+ * (`tagTable`); only the `defaultTag` check's judging lookup still does,
+ * until decision 197's slice S3b removes it.
  */
 export function buildMarkoLookup(
   dir: string,
@@ -426,7 +429,7 @@ export function buildMarkoLookup(
 /**
  * The MX document of `source` as `compileSource` parses it, without lowering
  * it: the MX front end, with the tag shapes and statement keywords of
- * `translator`'s lookup (`buildMarkoLookup` from the file's directory) and the
+ * `translator`'s tag table over `nativeTags` (`tagTable`) and the
  * file's syntax table (`syntax`, else its `package.json#mx.syntax`).
  * `undefined` when the template itself does not parse. An expression error
  * does not count (it stays on its container, as Marko's parse-only output
@@ -441,6 +444,7 @@ export function parseMxDocument(
   filename: string,
   translator: unknown,
   syntax?: SyntaxTable | SyntaxModule,
+  nativeTags?: NativeTags,
 ): Node | undefined {
   // A syntax module's table parses; its hooks are lowering's, not the scan's.
   const table = (
@@ -448,7 +452,7 @@ export function parseMxDocument(
       ? explicitSyntaxOf(syntax, filename)
       : resolveSyntaxOf(filename)
   ).table;
-  const lookup = buildMarkoLookup(dirname(filename), translator);
+  const lookup = tagTable(translator, nativeTags);
   const document = parseMx(source, { syntax: table, lookup });
   return compileErrorOf(document, filename, { expressionErrors: false })
     ? undefined
@@ -477,16 +481,11 @@ export function compileSource(
       ? explicitSyntaxOf(host.syntax, filename)
       : resolveSyntaxOf(filename);
   const syntax = resolvedSyntax.table;
-  const compiler = markoCompiler();
   const translator = translatorClaiming(
     host,
     claimedFields(resolvedSyntax.module),
   );
-
-  const lookup = compiler.taglib.buildLookup(dirname(filename), translator) as
-    | Lookup
-    | undefined;
-  nullPrototypeTags(lookup);
+  const lookup = tagTable(translator, policy.nativeTags);
 
   const state = {
     source,
@@ -503,16 +502,15 @@ export function compileSource(
     targets: host.targets,
     dependencies: [] as string[],
     atomFacts: undefined,
-    // The lookup is keyed on the translator object, so asking for it here gets
-    // exactly the taglibs this host registers plus Marko's own element
-    // taglibs — and the tag-discovery directories beside this particular file.
+    // The host's taglibs over the target's native elements; tags beside the
+    // file reach it as `customTags`, never by a directory walk here.
     lookup,
   };
 
   const previous = current;
   current = state;
   try {
-    // Port PR 5: the MX front end parses, with the tag shapes Marko's lookup
+    // Port PR 5: the MX front end parses, with the tag shapes the tag table
     // gives; its parse errors are thrown as the `CompileError` Marko threw,
     // and its payloads lose their TypeScript as Marko's did (`stripTypes`
     // defaults to true for a build). `@marko/compiler` no longer parses.

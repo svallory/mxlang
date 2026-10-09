@@ -186,14 +186,12 @@ describe("generated names do not shadow authored bindings", () => {
         }),
       ).toBe("<p>ok</p>");
     });
-    // The binding core names for a lowercase taglib tag (`_badge`, which JSX reads
-    // as a component) must not shadow an authored `MxBadge`. A taglib tag is the
-    // only route to the alias since decision 164 (a lowercase import is native).
-    it(`${host}: a lowercase taglib tag's alias does not collide with an authored MxBadge`, async () => {
+    // A `marko.json` registers nothing (decision 197): its lowercase tag is the
+    // native element, so no alias is named and an authored `MxBadge` stands.
+    it(`${host}: a lowercase marko.json tag is native beside an authored MxBadge`, async () => {
       const compile = await compilerFor(host);
       const scratch = mkdtempSync(join(tmpdir(), `mx-${host}-alias-`));
       try {
-        mkdirSync(join(scratch, "tags"));
         writeFileSync(join(scratch, "package.json"), '{"type":"module"}');
         mkdirSync(join(scratch, "impl"));
         writeFileSync(
@@ -209,9 +207,8 @@ describe("generated names do not shadow authored bindings", () => {
           join(scratch, "main.mx"),
         );
         expect(code).toContain("const MxBadge = 1");
-        expect(code).toContain('import _badge from "./impl/badge.mx"');
-        expect(code).toContain('<_badge label="ok" />');
-        expect(code).not.toMatch(/import MxBadge\b/);
+        expect(code).toContain('<badge label="ok" />');
+        expect(code).not.toContain("impl/badge.mx");
       } finally {
         rmSync(scratch, { recursive: true, force: true });
       }

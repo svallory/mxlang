@@ -118,10 +118,9 @@ describe("lowercase tag with a same-named binding in scope", () => {
     expect(warnings).toEqual([]);
   });
 
-  it("a registered taglib tag is still called, whatever is imported", () => {
+  it("a `marko.json` tag is not registered (decision 197): the import is row 3's error", () => {
     const scratch = mkdtempSync(join(tmpdir(), "mx-html-row4-"));
     try {
-      mkdirSync(join(scratch, "tags"));
       writeFileSync(join(scratch, "package.json"), '{"type":"module"}');
       mkdirSync(join(scratch, "impl"));
       writeFileSync(
@@ -129,67 +128,13 @@ describe("lowercase tag with a same-named binding in scope", () => {
         JSON.stringify({ "<row>": { template: "./impl/row.mx" } }),
       );
       writeFileSync(join(scratch, "impl", "row.mx"), "<p>${input.label}</p>");
-      const warnings: MxWarning[] = [];
-      const { code } = compile(
-        `import row from "./row.mx"\n<row label="x"/>\n`,
-        join(scratch, "main.mx"),
-        { warnings },
-      );
-      expect(code).toContain('import _row from "./impl/row.mx"');
-      expect(code).toContain("_row.render({");
-      expect(code).not.toContain('<row label=\\"x\\"');
-      expect(warnings).toEqual([]);
-    } finally {
-      rmSync(scratch, { recursive: true, force: true });
-    }
-  });
-
-  it("row 4: the taglib tag's metadata wins too (return shape, `/var`, `<@item>`)", () => {
-    // The authored `./row.mx` declares `<return>` and an `Input` whose `item`
-    // is a plain prop; the taglib tag declares neither. Every call below must
-    // compile exactly as it does with no import in scope.
-    const scratch = mkdtempSync(join(tmpdir(), "mx-html-row4-meta-"));
-    try {
-      mkdirSync(join(scratch, "tags"));
-      writeFileSync(join(scratch, "package.json"), '{"type":"module"}');
-      mkdirSync(join(scratch, "impl"));
-      writeFileSync(
-        join(scratch, "marko.json"),
-        JSON.stringify({ "<row>": { template: "./impl/row.mx" } }),
-      );
-      writeFileSync(join(scratch, "impl", "row.mx"), "<p>${input.label}</p>");
-      writeFileSync(
-        join(scratch, "row.mx"),
-        [
-          "export interface Input { label: number; item?: { x: number } }",
-          "<i>${input.label}</i>",
-          "<return value=42/>",
-        ].join("\n"),
-      );
-      const page = join(scratch, "main.mx");
-      const outcome = (source: string) => {
-        try {
-          return compile(source, page)
-            .code.split("\n")
-            .filter((line) => !line.includes('"./row.mx"'))
-            .join("\n");
-        } catch (error) {
-          return `error: ${(error as Error).message}`;
-        }
-      };
-      const imported = 'import row from "./row.mx"';
-      for (const call of [
-        '<row label="x"/>',
-        '<row label="x"><@item x="s"/></row>',
-      ]) {
-        expect(outcome(`${imported}\n${call}\n`)).toBe(outcome(`\n${call}\n`));
-      }
-      // The plain call renders the tag (no `<return>` shape to unwrap), and
-      // `/var` stays refused as it is for any discovered `.marko` tag.
-      expect(outcome(`${imported}\n<row label="x"/>\n`)).toContain(
-        "_row.render({",
-      );
-      expect(outcome(`${imported}\n<row/r label="x"/>\n`)).toMatch(/^error: /);
+      writeFileSync(join(scratch, "row.mx"), "<i>${input.label}</i>");
+      expect(() =>
+        compile(
+          `import row from "./row.mx"\n<row label="x"/>\n`,
+          join(scratch, "main.mx"),
+        ),
+      ).toThrow("`<row>` is not a tag here: `row` is imported from ./row.mx");
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }

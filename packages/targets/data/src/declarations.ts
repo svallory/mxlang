@@ -32,6 +32,7 @@ import {
   type HostDeclarations,
   TranslateError,
 } from "@mxlang/core";
+import { WEB_ELEMENTS } from "@mxlang/web-elements";
 
 /** The names no data tag may use (the 131 addendum's item 2). */
 export const RESERVED_NAMES = [
@@ -66,6 +67,10 @@ const BUILTIN_TAGS: readonly string[] = [DEFAULT_TAG];
 
 export const dataDeclarations: HostDeclarations = {
   name: "tree",
+  // The element parse rules core's tag table starts from, which the data
+  // taglib then turns off (`taglib.ts`), so the table matches the one Marko
+  // built for this target.
+  nativeTags: WEB_ELEMENTS,
   attrTags: 2,
   builtinTags: BUILTIN_TAGS,
   // The ladder (decision 145): the parent's contract `defaultTag`, then

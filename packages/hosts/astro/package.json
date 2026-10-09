@@ -25,7 +25,8 @@
     "@mxlang/core": "workspace:*",
     "@mxlang/html": "workspace:*",
     "@mxlang/tsx-bridge": "workspace:*",
-    "@mxlang/vite-plugin": "workspace:*"
+    "@mxlang/vite-plugin": "workspace:*",
+    "@mxlang/web-elements": "workspace:*"
   },
   "devDependencies": {
     "astro": "7.3.2"

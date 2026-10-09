@@ -303,7 +303,12 @@ function lowerRegion(
   );
   const parsed = parseFragment(
     fragment ? `${FRAGMENT_WRAPPER_OPEN}${regionSource}</>` : regionSource,
-    { filename, ...parseBase, customTags: options.customTags },
+    {
+      filename,
+      ...parseBase,
+      customTags: options.customTags,
+      nativeTags: angularDeclarations.nativeTags,
+    },
   );
   const body = fragment ? unwrapFragment(parsed.body, filename) : parsed.body;
 

@@ -45,12 +45,13 @@
     "access": "public"
   },
   "scripts": {
-    "build": "rm -rf dist && bun build src/parse.ts src/descriptor.ts src/tree.ts --outdir dist --target node --format esm --external @marko/compiler --external @mxlang/core && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
+    "build": "rm -rf dist && bun build src/parse.ts src/descriptor.ts src/tree.ts --outdir dist --target node --format esm --external @marko/compiler --external @mxlang/core --external @mxlang/web-elements && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
     "@babel/types": "7.29.8",
-    "@mxlang/core": "workspace:*"
+    "@mxlang/core": "workspace:*",
+    "@mxlang/web-elements": "workspace:*"
   }
 }

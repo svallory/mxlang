@@ -3,19 +3,20 @@
  *
  * Two halves:
  *
- * 1. **Neutralizations.** Marko's own `marko-html.json` declares HTML parse
- *    rules for 19 tag names: `openTagOnly` (void), `text` (raw body) and
+ * 1. **Neutralizations.** The web element table (`@mxlang/web-elements`,
+ *    which this target gives core as its `nativeTags`) declares HTML parse
+ *    rules for 19 tag names: void (`openTagOnly`), raw text (`text`) and
  *    `preserveWhitespace`. A data tag named `source`, `input`, `title` or
  *    `script` must parse like any other tag, so the data taglib overrides
- *    each rule with `false` — the *derived* list, read from Marko's own
- *    taglib lookup rather than hand-listed, so a Marko bump that adds a void
- *    tag changes the list with no edit here. (An empty override `{}` merges
- *    nothing and fails; scalars overwrite, which is why `false` wins.)
+ *    each rule with `false` — the *derived* list, read from that table
+ *    rather than hand-listed, so a table change that adds a void tag changes
+ *    the list with no edit here. (An empty override `{}` merges nothing and
+ *    fails; scalars overwrite, which is why `false` wins.)
  *
  * 2. **Structural entries**, copied from core's
  *    `taglib/core-tags.json` (`CORE_TAGLIB`): `if`/`else`/`else-if`/`for`/`const`/`define`/
  *    `return`/`import`/`static`/`export`. They are not derivable from
- *    `marko-html.json`. The host-owned entries (`let`, `id`, `effect`,
+ *    the element table. The host-owned entries (`let`, `id`, `effect`,
  *    `lifecycle`, `log`, `debug`, `await`, `class`, `client`, `server`,
  *    `html-*`) are deliberately omitted, so those names stay ordinary data
  *    tag names. TODO `core-export-structural-taglib`: core may one day export
@@ -27,7 +28,7 @@
  * or an attribute instead.
  */
 
-import { markoCompiler } from "@mxlang/core";
+import { WEB_ELEMENTS } from "@mxlang/web-elements";
 
 export const DATA_TAGLIB_ID = "mx-data";
 
@@ -76,34 +77,26 @@ const STRUCTURAL_ENTRIES: Record<string, unknown> = {
   "<export>": { parseOptions: { statement: true, rawOpenTag: true } },
 };
 
+const OFF: Record<string, ParseOptionsOverride> = {
+  void: { openTagOnly: false },
+  "parsed-text": { text: false },
+  preserve: { preserveWhitespace: false },
+  "parsed-text-preserve": { text: false, preserveWhitespace: false },
+};
+
 /**
- * The names whose Marko HTML parse rules the data taglib neutralizes, read
- * from Marko's own lookup: every tag with any of `openTagOnly`, `text` or
- * `preserveWhitespace` set. 19 names on Marko 6.3.51 (`@marko/compiler`
- * 5.42.5), pinned by `taglib.test.ts` so a Marko change to the lookup or the
- * rules fails loudly here.
+ * The names whose HTML parse rules the data taglib neutralizes, read from the
+ * web element table: every element whose body is not plain HTML content, in
+ * name order. 19 names, pinned by `taglib.test.ts` so a table change fails
+ * loudly here.
  */
 export function neutralizations(): Map<string, ParseOptionsOverride> {
-  // Loaded lazily, through core's one compiler instance: importing the
-  // descriptor must not load the compiler (the registry's light-import
-  // invariant).
-  const lookup = markoCompiler().taglib.buildLookup("/", {
-    taglibs: [],
-    tagDiscoveryDirs: [],
-    translate: {},
-  });
   const out = new Map<string, ParseOptionsOverride>();
-  for (const tag of lookup.getTagsSorted()) {
-    const options = tag.parseOptions;
-    if (!options) continue;
-    const off: ParseOptionsOverride = {
-      ...(options.openTagOnly ? { openTagOnly: false as const } : {}),
-      ...(options.text ? { text: false as const } : {}),
-      ...(options.preserveWhitespace
-        ? { preserveWhitespace: false as const }
-        : {}),
-    };
-    if (Object.keys(off).length > 0) out.set(tag.name, off);
+  const names = [...WEB_ELEMENTS.keys()].sort();
+  for (const name of names) {
+    const body = WEB_ELEMENTS.get(name)?.body;
+    const off = body === undefined ? undefined : OFF[body];
+    if (off) out.set(name, { ...off });
   }
   return out;
 }

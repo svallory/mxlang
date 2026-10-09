@@ -33,7 +33,6 @@
  *   array; `MarkoComment` nodes in the body are shifted like any other node.
  */
 
-import { dirname } from "node:path";
 import { rejectShadowedRegistration } from "./builtin-tags.ts";
 import { type ClaimedFields, claimedFields } from "./contract-fields.ts";
 import { type Node, TranslateError } from "./core.ts";
@@ -50,8 +49,6 @@ import {
   rejectUnreachableHooks,
   rejectWildcardReferences,
 } from "./custom-tags.ts";
-import { nullPrototypeTags } from "./lookup-safety.ts";
-import { markoCompiler } from "./marko-frontend.ts";
 import {
   compileErrorOf,
   filePosition,
@@ -70,6 +67,7 @@ import {
   type SyntaxTable,
   tableParseError,
 } from "./syntax-table.ts";
+import { type NativeTags, tagTable } from "./tag-table.ts";
 import { registerSyntax } from "./triggers.ts";
 
 /**
@@ -213,6 +211,13 @@ export interface FragmentBase {
   /** Registered custom tags whose parse options affect this fragment. */
   customTags?: Record<string, CustomTag>;
   /**
+   * The host's native elements (`HostDeclarations.nativeTags`), whose parse
+   * rules (void, raw text, preserved whitespace) shape the fragment. Omitted,
+   * no element has any: `<br>` waits for its close tag and `<textarea>` parses
+   * its body as markup.
+   */
+  nativeTags?: NativeTags;
+  /**
    * The product name diagnostics use where core's own wording says "MX"
    * (decision 183); see `TranslatorOptions.productName`. Unset, `MX`.
    */
@@ -220,7 +225,7 @@ export interface FragmentBase {
 }
 
 type ResolvedFragmentBase = Required<
-  Omit<FragmentBase, "customTags" | "productName" | "syntax">
+  Omit<FragmentBase, "customTags" | "nativeTags" | "productName" | "syntax">
 > & { productName?: string };
 
 export interface FragmentResult {
@@ -383,7 +388,8 @@ export function positionRegionSource(
  * Parses `source` as an MX fragment, with every position shifted by `base`.
  *
  * Port PR 5: the MX front end parses (offsets are file-absolute at creation,
- * ast §5.3), with the tag shapes Marko's lookup gives. `body` is the
+ * ast §5.3), with the tag shapes core's tag table gives (`base.nativeTags`
+ * under core's statement and raw-text taglibs and the custom tags). `body` is the
  * `MxDocument`'s body and `ast` the document; `lowerChildren` reads it.
  *
  * It throws for the inputs Marko's parse-only compile threw for, with the
@@ -424,16 +430,11 @@ export function parseFragment(
       ? explicitSyntaxOf(base.syntax, resolved.filename)
       : resolveSyntaxOf(resolved.filename);
   const syntax = resolvedSyntax.table;
-  const compiler = markoCompiler();
   const translator = parseOnlyTranslator(
     base.customTags,
     claimedFields(resolvedSyntax.module),
   );
-  const lookup = compiler.taglib.buildLookup(
-    dirname(resolved.filename),
-    translator,
-  );
-  nullPrototypeTags(lookup);
+  const lookup = tagTable(translator, base.nativeTags);
   const document = parseMx(source, {
     syntax,
     lookup,

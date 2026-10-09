@@ -43,6 +43,7 @@ import {
   TranslateError,
   unresolvedCustomTagMessage,
 } from "@mxlang/core";
+import { WEB_ELEMENTS } from "@mxlang/web-elements";
 import { decodeHTML } from "entities";
 import { type JsxDialect, preactDialect } from "./dialect.ts";
 
@@ -204,6 +205,7 @@ export function createJsxDeclarations(
           : dialectName;
   return {
     name: declarationName,
+    nativeTags: WEB_ELEMENTS,
     attrTags: 2,
     defineCallPassesAttrs: true,
     // Decision 155's model on this host: the compiled unit exposes `.render`,
@@ -251,17 +253,6 @@ export function createJsxDeclarations(
       const taglibId = ctx.lookup?.getTag(name)?.taglibId;
       if (taglibId !== undefined) return !ELEMENT_TAGLIBS.has(taglibId);
       return false;
-    },
-    // The template Marko's lookup resolved a `tags/` tag to, so the import
-    // names the file that exists (`tags/x/index.marko`, a `marko.json`
-    // `tags-dir`), never a path derived from the tag's name.
-    resolveDiscoveredTagModule: (name, ctx) => {
-      if (ctx.defines.has(name) || ctx.imports.has(name)) return undefined;
-      const tag = ctx.lookup?.getTag(name);
-      if (tag?.taglibId === undefined || ELEMENT_TAGLIBS.has(tag.taglibId)) {
-        return undefined;
-      }
-      return tag.template;
     },
     rejectUnknownTag(name, node, ctx) {
       rawFail(

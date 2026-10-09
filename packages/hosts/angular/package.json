@@ -47,13 +47,14 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.typecheck.json",
     "test": "vitest run",
-    "build": "rm -rf dist && bun build src/index.ts src/bin.ts src/descriptor.ts --tsconfig-override tsconfig.build.json --outdir dist --target node --format esm --external @angular/compiler --external @babel/parser --external @marko/compiler --external @mxlang/core && bun build src/runtime.ts --tsconfig-override tsconfig.build.json --outdir dist --target browser --format esm && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist"
+    "build": "rm -rf dist && bun build src/index.ts src/bin.ts src/descriptor.ts --tsconfig-override tsconfig.build.json --outdir dist --target node --format esm --external @angular/compiler --external @babel/parser --external @marko/compiler --external @mxlang/core --external @mxlang/web-elements && bun build src/runtime.ts --tsconfig-override tsconfig.build.json --outdir dist --target browser --format esm && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist"
   },
   "dependencies": {
     "@babel/parser": "7.29.8",
     "@jridgewell/sourcemap-codec": "1.6.0",
     "@mxlang/core": "workspace:*",
     "@mxlang/tsx-bridge": "workspace:*",
+    "@mxlang/web-elements": "workspace:*",
     "magic-string": "0.30.21"
   },
   "devDependencies": {

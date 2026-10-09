@@ -105,9 +105,10 @@ Five facts worth knowing before editing it:
   `@babel/preset-typescript` (only for a `.cts` Babel config file). A bundle
   that inlines core's dist (the VSIX builds) gets `marko-frontend.cjs` copied
   beside it by `scripts/bundled-build.ts`. Since PR 5 no production call
-  site compiles or parses a template with `@marko/compiler`: it serves the
-  taglib lookup (`taglib.buildLookup`) only (Babel and the error kit are
-  core's own since PR 6 slice S1). The error-path re-lexes (`stock-parser.ts` `lexedAtoms`/
+  site compiles or parses a template with `@marko/compiler`, and since slice
+  S3a no compile builds its taglib lookup either: it serves only the
+  `defaultTag` check's judging lookup (`buildMarkoLookup`, removed in slice
+  S3b). Babel and the error kit are core's own since PR 6 slice S1. The error-path re-lexes (`stock-parser.ts` `lexedAtoms`/
   `tagParamError`/`sugarAfterDefaultError`, `close-tag-opener.ts`) and
   name-sugar's `isShorthandWord` probe import MX's template lexer,
   `@mxlang/parser/lexer` (typed by its `public.d.ts`), from source and in the
@@ -233,10 +234,28 @@ Five facts worth knowing before editing it:
   `ctx.bindings.register(name, rewrite)` (rewrite identifier *references*, so a
   host whose state is a getter emits `count()` for `${count}`). Rewrites apply
   only to reference positions, and emitted-JS scopes restore shadowed names.
+- **Core's tag table (`src/tag-table.ts`, decision 197 slice S3a).**
+  `tagTable(translator, nativeTags)` is what a tag name means to the parser
+  and to lowering (`ctx.lookup`): the target's native elements first (the
+  `nativeTags` a target sets on its `HostDeclarations`, and on
+  `parseFragment`'s base / `parseMxDocument`'s fifth argument; every built-in
+  target passes `@mxlang/web-elements`' `WEB_ELEMENTS`), each under its
+  namespace's old Marko taglib id (`marko-html`/`marko-svg`/`marko-math`,
+  kept until the hosts stop reading `ELEMENT_TAGLIB_IDS` in slice S4) with
+  `html: true` and its body mode's parse switches; then each `<name>` key of
+  `translator.taglibs` in order (`withStatementTags` first), the later entry
+  taking the `taglibId`, merging `parseOptions` key by key, and setting `html`
+  only when it says so. It reads no `tags/` directory, `marko.json` or
+  `node_modules` taglib, and no entry has a `template`.
+  `tag-table.test.ts` pins it against `@marko/compiler`'s live
+  `taglib.buildLookup` for every translator shape MX builds; when the
+  judging lookup goes (S3b) that oracle goes with it. Without `nativeTags`
+  the table has no native layer (no void/raw-text parse rules), and region
+  lowering's `isNativeElementName` falls back to `HTML_ELEMENTS`.
 - **`compileSource` and `parseFragment` parse with the MX front end (port PR
   5).** `src/mx-parse.ts` `parseMx` calls `@mxlang/parser/frontend`'s `parse`
-  with tag shapes and statement keywords read from the Marko taglib lookup
-  (`taglib.buildLookup`, still Marko's until PR 6) and the resolved syntax table; one
+  with tag shapes and statement keywords read from core's tag table
+  (`tag-table.ts`, below) and the resolved syntax table; one
   parse per compile (`mxParses` counts it). `parseMxDocument` (`compile.ts`,
   public, `@unstable`) is the same parse without lowering, `undefined` when
   the template does not parse; `@mxlang/data`'s `unknownTags: "reject"` scan

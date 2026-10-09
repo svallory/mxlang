@@ -539,9 +539,9 @@ that nothing failed.
 
 ## Pins
 
-`@marko/compiler` 5.42.11 exactly, matching the rest of the repo. It supplies
-the taglib lookup and the printer; no template is parsed with it. The core
-taglib (`CORE_TAGLIB`, `@mxlang/core`'s `taglib/core-tags.json`) declares the
-core tags' parse options (statement tags, control flow, `openTagOnly`,
-raw-text bodies), which core hands the MX front end as each tag's shape; the
-HTML, SVG and MathML element taglibs load on their own.
+No Marko tag lookup runs in a compile (decision 197). Core's tag table reads
+the core taglib (`CORE_TAGLIB`, `@mxlang/core`'s `taglib/core-tags.json`),
+which declares the core tags' parse options (statement tags, control flow,
+`openTagOnly`, raw-text bodies), and the HTML, SVG and MathML elements of
+`@mxlang/web-elements`, which this target hands core as its `nativeTags`; core
+hands the MX front end each tag's shape from that table.

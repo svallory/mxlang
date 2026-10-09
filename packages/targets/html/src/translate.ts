@@ -48,7 +48,7 @@ import {
   unresolvedCustomTagMessage,
 } from "@mxlang/core";
 
-import { isWebElement } from "@mxlang/web-elements";
+import { isWebElement, WEB_ELEMENTS } from "@mxlang/web-elements";
 
 export { TranslateError } from "@mxlang/core";
 
@@ -239,28 +239,6 @@ function isComponent(name: string, ctx: Ctx): boolean {
   const taglibId = ctx.lookup?.getTag(name)?.taglibId;
   if (taglibId === undefined) return false;
   return taglibId !== "mx-translator-core";
-}
-
-/**
- * The `.marko` template Marko's taglib lookup resolved a tag to, so the
- * emitted module can import it the way Marko's own translator does.
- *
- * Only a taglib-discovered tag (`tags/badge.marko`, a package's `marko.json`)
- * has one: a `<define>` or an import is already in scope, and the element
- * and host taglibs carry no template. A tag the taglib declares with no
- * template (a Marko 5 `renderer`) gets `undefined` and keeps its bare call.
- */
-function resolveDiscoveredTagModule(
-  name: string,
-  ctx: Ctx,
-): string | undefined {
-  if (ctx.defines.has(name) || ctx.imports.has(name)) return undefined;
-  const tag = ctx.lookup?.getTag(name);
-  if (tag?.taglibId === undefined) return undefined;
-  if (isWebElement(name) || tag.taglibId === "mx-translator-core") {
-    return undefined;
-  }
-  return tag.template;
 }
 
 /**
@@ -512,6 +490,7 @@ export const DEFAULT_TAG = "div";
 
 export const policy: Policy = {
   name: "@mxlang/html",
+  nativeTags: WEB_ELEMENTS,
   attrTags: 2,
   defineCallPassesAttrs: true,
   // The ladder (decision 145): the parent's contract `defaultTag`, then
@@ -529,7 +508,6 @@ export const policy: Policy = {
       : `declare a value with \`<let/${name}=…/>\` (initial value only on this target)`,
   isElement,
   isComponent,
-  resolveDiscoveredTagModule,
   checkBinding: rejectInputShadowing,
   isDelegatedTag,
   isBuiltinTag: (name) => name === "let" || name === "id",

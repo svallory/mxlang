@@ -5,7 +5,7 @@ import { afterAll, describe, expect, test } from "vitest";
 import { compile } from "./index.ts";
 
 /**
- * A `.marko` file is not an MX input (decision 172): a tag Marko's lookup
+ * A `.marko` file is not an MX input (decision 172): a tag that
  * resolves to one is a single positioned error naming the file and saying to
  * convert it to `.mx`, whatever the shape, and never an emitted import.
  */
@@ -91,13 +91,9 @@ describe("a .marko tag is one error", () => {
     ).not.toThrow();
   });
 
-  test("tags/x/x.marko and a renderer-only taglib tag are errors, never imports", () => {
+  test("tags/x/x.marko is an error, never an import", () => {
     write("xx/tags/x/x.marko", MARKO);
     expect(() => emit("xx", "<x/>")).toThrow("resolves to `tags/x/x.marko`");
-    write("rend/package.json", "{}");
-    write("rend/marko.json", JSON.stringify({ "<x>": { renderer: "./x.js" } }));
-    write("rend/x.js", "module.exports = () => {}");
-    expect(() => emit("rend", "<x/>")).toThrow("no template");
   });
 
   test("never emits an import of a .marko file", () => {
@@ -120,51 +116,30 @@ describe("tags/<name>/index.mx", () => {
 });
 
 /**
- * A tag a `marko.json` maps to an `.mx` template is imported the way Marko
- * imports a discovered tag: a default import, extension kept, the path
- * relative to the page, named `_` plus the camelCased tag name (numeric suffix
- * on a collision), once per module.
+ * A `marko.json` is not read (decision 197): a tag it maps to an `.mx`
+ * template or to a renderer is an unknown tag, never an import.
  */
-describe("marko.json tags with an .mx template", () => {
+describe("a marko.json registers nothing", () => {
   write(
     "mj/marko.json",
     JSON.stringify({
       "<badge>": { template: "./impl/badge.mx" },
-      "<fancy-btn>": { template: "./impl/fancy-btn.mx" },
+      "<x>": { renderer: "./x.js" },
     }),
   );
   write("mj/package.json", "{}");
   write("mj/impl/badge.mx", "<i>${input.label}</i>");
-  write("mj/impl/fancy-btn.mx", "<b>${input.label}</b>");
-  const page = (name: string, source: string) =>
-    compile(source, join(root, "mj", name)).code;
+  write("mj/x.js", "module.exports = () => {}");
 
-  test("default import, extension kept, relative to the page", () => {
-    const code = page("page.mx", '<badge label="a"/>');
-    expect(code).toContain('import _badge from "./impl/badge.mx"');
-    expect(code).toContain("_badge.render({");
+  test("a template tag is unknown", () => {
+    expect(() => emit("mj", '<badge label="a"/>')).toThrow(
+      "Unable to find entry point for custom tag `<badge>`.",
+    );
   });
 
-  test("a hyphenated tag gets a camelCased identifier", () => {
-    const code = page("page.mx", '<fancy-btn label="a"/>');
-    expect(code).toContain('import _fancyBtn from "./impl/fancy-btn.mx"');
-    expect(code).toContain("_fancyBtn.render({");
-  });
-
-  test("a tag called twice is imported once", () => {
-    const code = page("page.mx", '<badge label="a"/><badge label="b"/>');
-    expect(code.match(/impl\/badge\.mx/g)).toHaveLength(1);
-    expect(code.match(/_badge\.render\(/g)).toHaveLength(2);
-  });
-
-  test("an identifier already in the source is not reused", () => {
-    const code = page("page.mx", '<badge label="a"/>${"_badge"}');
-    expect(code).toContain('import _badge2 from "./impl/badge.mx"');
-  });
-
-  test("the path is relative to the page from a nested directory", () => {
-    mkdirSync(join(root, "mj", "sub", "deep"), { recursive: true });
-    const code = page("sub/deep/page.mx", '<badge label="a"/>');
-    expect(code).toContain('import _badge from "../../impl/badge.mx"');
+  test("a renderer tag is unknown", () => {
+    expect(() => emit("mj", "<x/>")).toThrow(
+      "Unable to find entry point for custom tag `<x>`.",
+    );
   });
 });

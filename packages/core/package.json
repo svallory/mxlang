@@ -63,6 +63,7 @@
     "@marko/compiler": "5.42.11",
     "@mxlang/babel": "workspace:*",
     "@mxlang/parser": "workspace:*",
+    "@mxlang/web-elements": "workspace:*",
     "htmljs-parser": "5.18.0"
   }
 }

@@ -270,6 +270,7 @@
         "@marko/compiler": "5.42.11",
         "@mxlang/babel": "workspace:*",
         "@mxlang/parser": "workspace:*",
+        "@mxlang/web-elements": "workspace:*",
         "htmljs-parser": "5.18.0",
       },
     },
@@ -331,6 +332,7 @@
         "@jridgewell/sourcemap-codec": "1.6.0",
         "@mxlang/core": "workspace:*",
         "@mxlang/tsx-bridge": "workspace:*",
+        "@mxlang/web-elements": "workspace:*",
         "magic-string": "0.30.21",
       },
       "devDependencies": {
@@ -357,6 +359,7 @@
         "@mxlang/html": "workspace:*",
         "@mxlang/tsx-bridge": "workspace:*",
         "@mxlang/vite-plugin": "workspace:*",
+        "@mxlang/web-elements": "workspace:*",
       },
       "devDependencies": {
         "astro": "7.3.2",
@@ -385,6 +388,7 @@
       "dependencies": {
         "@mxlang/core": "workspace:*",
         "@mxlang/tsx-bridge": "workspace:*",
+        "@mxlang/web-elements": "workspace:*",
         "entities": "6.0.1",
       },
       "devDependencies": {
@@ -419,6 +423,7 @@
         "@babel/parser": "7.29.8",
         "@mxlang/core": "workspace:*",
         "@mxlang/tsx-bridge": "workspace:*",
+        "@mxlang/web-elements": "workspace:*",
         "entities": "6.0.1",
         "magic-string": "0.30.21",
       },
@@ -514,6 +519,7 @@
       "dependencies": {
         "@babel/types": "7.29.8",
         "@mxlang/core": "workspace:*",
+        "@mxlang/web-elements": "workspace:*",
       },
     },
     "packages/targets/html": {

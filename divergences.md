@@ -191,6 +191,21 @@ Probed on stock Marko 6.4.4 / `@marko/compiler` 5.42.11 (`packages/stock-marko`)
 
 Not divergences, only a different error: `import x = require("y")` (Marko refuses it with Babel's CommonJS-transform advice; MX refuses it at the statement without that advice) and several statements in one `import` (Marko: "The `<import>` tag takes a single import statement."; MX: the decision 193 message).
 
+## File conventions: `marko.json` is not read (decision 197)
+
+MX resolves tag names with its own tag table: the target's taglibs over its
+element table (`@mxlang/web-elements`), plus core's own `tags/` discovery. A
+`marko.json` (or `marko-tag.json`) taglib is not read on any target. Marko
+reads it, and `@mxlang/html` and the JSX hosts used to, through
+`@marko/compiler`'s lookup: a `<badge>` its `template` named was imported and
+called. In MX a tag it maps (`template`, `renderer`, `tags-dir`) is an unknown
+tag like any other: `@mxlang/html`'s "Unable to find entry point for custom tag"
+error, a native element on the hosts that render an unknown lowercase tag. A
+custom tag is a `tags/<name>.mx` file or an `mx.tags` entry. Tests:
+`packages/targets/html/src/marko-tags.test.ts` (`a marko.json registers
+nothing`), `packages/hosts/preact/src/tags-dir-shapes.test.ts` (same), and the
+row 4 cases of each `lowercase-binding-native.test.ts`.
+
 ## Deferred to MX 2
 
 | Construct | Why it was wanted | Marko verdict | Test |

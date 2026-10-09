@@ -29,6 +29,7 @@ import {
   unresolvedCustomTagMessage,
 } from "@mxlang/core";
 import { SOLID_BUILTIN_TAGS } from "@mxlang/tsx-bridge";
+import { WEB_ELEMENTS } from "@mxlang/web-elements";
 import { decodeHTML } from "entities";
 import {
   MX_ATTR_SPREAD_BINDING,
@@ -716,6 +717,7 @@ export const DEFAULT_TAG = "div";
 
 export const solidDeclarations: HostDeclarations = {
   name: "@mxlang/solid",
+  nativeTags: WEB_ELEMENTS,
   attrTags: 2,
   defineCallPassesAttrs: true,
   // The ladder (decision 145): the parent's contract `defaultTag`, then

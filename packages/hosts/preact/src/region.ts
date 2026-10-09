@@ -199,6 +199,7 @@ export function compileJsxRegion(
     filename: options.filename,
     ...base,
     customTags: options.customTags,
+    nativeTags: options.declarations.nativeTags,
   });
   const ctx = newCtx(
     padded,

@@ -274,6 +274,22 @@ export {
   type TriggerUse,
   type TriggerValueForm,
 } from "./syntax-table.ts";
+/**
+ * Core's tag table (decision 197): a translator's taglibs over a target's
+ * native elements, what `parseMx` and lowering read tag names through.
+ *
+ * @unstable for the tools that lower outside `compileSource` (the TS plugin's
+ * mapping pass).
+ */
+export {
+  type NativeBodyMode,
+  type NativeTag,
+  type NativeTags,
+  type TagEntry,
+  type TagParseOptions,
+  type TagTable,
+  tagTable,
+} from "./tag-table.ts";
 export {
   type AmbientTypesProgram,
   createTargetLookup,

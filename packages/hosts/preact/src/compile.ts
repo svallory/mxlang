@@ -528,8 +528,8 @@ export function emitModuleWithMappings(
     ...ir.hoisted.map((node) => node.code),
     // A component whose Marko name JSX would read as an element is called
     // under a capitalized alias. Where the author imported the name, the
-    // alias is a local binding; a tag Marko's lookup discovered is imported by
-    // core under its own binding (`resolveDiscoveredTagModule`), so a name
+    // alias is a local binding; a tag a host resolves to a module is imported
+    // by core under its own binding (`resolveDiscoveredTagModule`), so a name
     // with neither has nothing to import and is core's error, never an import
     // synthesized from the tag's name.
     ...[...emitter.aliases]

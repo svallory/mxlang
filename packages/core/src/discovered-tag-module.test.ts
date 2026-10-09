@@ -73,3 +73,61 @@ describe("resolveDiscoveredTagModule", () => {
     ]);
   });
 });
+
+/**
+ * A tag a translator's own taglib registers (a third-party target's; no
+ * built-in target registers a lowercase tag since a `marko.json` stopped being
+ * read, decision 197) is the host's tag, not a binding of the same name
+ * (decision 164 addendum 1), and needs the hook to have something to call.
+ */
+describe("a tag a translator taglib registers", () => {
+  function lowerWithTaglib(source: string, declarations: Policy): Ir {
+    let ir: Ir | null = null;
+    compileSource(source, CALLER, declarations, {
+      targets: lookup,
+      taglibs: [["acme-tags", { "<badge>": {} }]],
+      tagDiscoveryDirs: [],
+      emitIr(lowered) {
+        ir = lowered;
+        return "";
+      },
+    });
+    if (!ir) throw new Error("lowerer produced no IR");
+    return ir;
+  }
+
+  it("is called through the hook's module", () => {
+    const ir = lowerWithTaglib(
+      "<badge/>",
+      policy(() => "/tmp/mx-discovered/tags/badge.mx"),
+    );
+    expect(ir.imports.map((i) => i.code)).toEqual([
+      'import _badge from "../tags/badge.mx"',
+    ]);
+    expect(targets(ir)).toEqual([
+      { kind: "name", name: "badge", binding: "_badge" },
+    ]);
+  });
+
+  it("is an error when nothing resolves it to a module", () => {
+    expect(() => lowerWithTaglib("<badge/>", policy())).toThrow(
+      "`<badge>` is declared by a Marko taglib with no template (a `renderer`), which",
+    );
+  });
+
+  it("stays the host's tag when an import binds the same name", () => {
+    const ir = lowerWithTaglib(
+      'import badge from "./badge.mx"\n<badge label="a"/>',
+      policy(),
+    );
+    expect(targets(ir)).toEqual([{ kind: "name", name: "badge" }]);
+  });
+
+  it("stays the host's tag when a define binds the same name", () => {
+    const ir = lowerWithTaglib(
+      "<define/badge|x|>d</define>\n<badge/>",
+      policy(),
+    );
+    expect(targets(ir)).toEqual([{ kind: "name", name: "badge" }]);
+  });
+});

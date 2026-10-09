@@ -11,7 +11,7 @@
  * a `<try>` pulls in.
  */
 
-import type { CustomTag, MxWarning } from "@mxlang/core";
+import type { CustomTag } from "@mxlang/core";
 
 const ATTR = "__mxAttrValue";
 const SPREAD = "__mxAttrSpread";
@@ -990,9 +990,9 @@ describe("attribute tag values (executed)", () => {
 
 describe("component aliases", () => {
   // Decision 164: a lowercase tag is a native element or a registered tag,
-  // never a call to an imported binding. A lowercase taglib tag is the only
-  // route to the alias, because JSX would read `<badge>` as an element.
-  it("aliases a lowercase taglib tag a JSX element would shadow", async () => {
+  // never a call to an imported binding. A `marko.json` registers nothing
+  // (decision 197), so the tag it maps stays the element it spells.
+  it("leaves a lowercase marko.json tag a native element", async () => {
     const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import(
       "node:fs"
     );
@@ -1000,7 +1000,6 @@ describe("component aliases", () => {
     const { join } = await import("node:path");
     const scratch = mkdtempSync(join(tmpdir(), "mx-preact-alias-"));
     try {
-      mkdirSync(join(scratch, "tags"));
       writeFileSync(join(scratch, "package.json"), '{"type":"module"}');
       mkdirSync(join(scratch, "impl"));
       writeFileSync(
@@ -1012,42 +1011,8 @@ describe("component aliases", () => {
         '<badge label="x"/>',
         join(scratch, "main.mx"),
       );
-      expect(code).toContain('import _badge from "./impl/badge.mx"');
-      expect(code).toContain('<_badge label="x" />');
-    } finally {
-      rmSync(scratch, { recursive: true, force: true });
-    }
-  });
-
-  it("calls a registered taglib tag whatever a same-named import binds", async () => {
-    const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import(
-      "node:fs"
-    );
-    const { tmpdir } = await import("node:os");
-    const { join } = await import("node:path");
-    const scratch = mkdtempSync(join(tmpdir(), "mx-preact-alias-reg-"));
-    try {
-      mkdirSync(join(scratch, "tags"));
-      writeFileSync(join(scratch, "package.json"), '{"type":"module"}');
-      mkdirSync(join(scratch, "impl"));
-      writeFileSync(
-        join(scratch, "marko.json"),
-        JSON.stringify({ "<badge>": { template: "./impl/badge.mx" } }),
-      );
-      writeFileSync(join(scratch, "impl", "badge.mx"), "<p>${input.label}</p>");
-      const warnings: MxWarning[] = [];
-      const { code } = compilePreactMx(
-        'import badge from "./badge.mx"\n<badge label="x"/>',
-        join(scratch, "main.mx"),
-        { warnings },
-      );
-      // The taglib tag, under core's binding: never the authored import.
-      expect(code).toContain('import _badge from "./impl/badge.mx"');
-      expect(code.split('"./impl/badge.mx"')).toHaveLength(2);
-      expect(code).toContain('<_badge label="x" />');
-      expect(code).not.toContain("__mxBadge");
-      expect(code).not.toContain('<badge label="x" />');
-      expect(warnings).toEqual([]);
+      expect(code).toContain('<badge label="x" />');
+      expect(code).not.toContain("impl/badge.mx");
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }

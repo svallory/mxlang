@@ -47,7 +47,9 @@ import {
  * discovered as a tag at all. This host still accepts only `.mx` at the
  * loader boundary; a `tags/*.marko` file is real Marko syntax read by
  * `@marko/compiler` itself during discovery, not a second entry point this
- * host advertises.
+ * host advertises. Core's own tag table does not read it (decision 197):
+ * only a caller that drives `@marko/compiler` does, and, until slice S3b, the
+ * `defaultTag` check's judging lookup.
  */
 const host = {
   taglibs: [["mx-translator-core", CORE_TAGLIB]] as Array<[string, unknown]>,

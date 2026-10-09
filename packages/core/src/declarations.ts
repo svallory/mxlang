@@ -23,6 +23,7 @@ import type { Ctx, Disposition, Node } from "./core.ts";
 import type { CustomTag } from "./custom-tags.ts";
 import type { DefaultTagScope } from "./default-tag-validate.ts";
 import type { Attr, DelegatedTag } from "./ir.ts";
+import type { NativeTags } from "./tag-table.ts";
 
 export type { Disposition };
 
@@ -97,6 +98,15 @@ export interface HostDeclarations {
    * own. Absent means none beyond the descriptor's own `defaultTag`.
    */
   builtinTags?: readonly string[];
+  /**
+   * The target's native elements (`@mxlang/web-elements`' `WEB_ELEMENTS` on
+   * every built-in target): the names core's tag table gives element parse
+   * rules (void, raw text, preserved whitespace) and the element taglib ids,
+   * and the names a region, which has no table, counts as native. Absent
+   * means none: every tag parses as plain HTML content and a region knows
+   * only core's own element names.
+   */
+  nativeTags?: NativeTags;
   /** Human-readable host name used by positioned capability diagnostics. */
   name?: string;
   /** Attribute-tag IR/emission contract implemented by this host. */
@@ -275,16 +285,15 @@ export interface HostDeclarations {
    * Called from `lowerTag` for a tag that `isComponent` routed as a plain
    * named call, is not shadowed by a file-local binding, and is not a
    * registered custom tag (a `tags/*.mx` tag is imported by its own
-   * mechanism). Return the absolute path of the tag's template, e.g. the
-   * `tags/badge.marko` Marko's taglib lookup found, and the core mints a
-   * binding, adds `import <binding> from "<path relative to the file>"` to
-   * the module and sets `binding` on the `Component` target so the emitter
-   * calls it. Marko does the same for every tag its lookup finds.
+   * mechanism). Return the absolute path of the tag's template and the core
+   * mints a binding, adds `import <binding> from "<path relative to the
+   * file>"` to the module and sets `binding` on the `Component` target so the
+   * emitter calls it.
    *
    * `undefined` (and leaving the hook out) means "nothing to import": the
    * call keeps its bare `name`, which is what a host that resolves the name
-   * some other way, or a tag with no template, needs. No host but the vanilla
-   * HTML host implements it.
+   * some other way, or a tag with no template, needs. No built-in target
+   * implements it since a `marko.json` stopped being read (decision 197).
    */
   resolveDiscoveredTagModule?(name: string, ctx: Ctx): string | undefined;
   /**

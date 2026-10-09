@@ -175,9 +175,10 @@ One narrow exception, outside the product path:
   `./x.marko` imports pointed at the twins; a fixture's committed `.mx` twin
   wins). The real `.marko` files are only ever read by Marko's own run.
 
-Marko's own tag lookup (`tags/`, `marko.json`) still runs inside a whole-file
-compile on the hosts that have one, so it can find a `.marko` file for a tag
-call. That is not an MX input (decision 172): see "`.marko` files as tags" in §4.
+Core resolves tag names itself (decision 197): a compile runs no Marko tag
+lookup and reads no `marko.json`. Core's own `tags/` discovery can still find a
+`.marko` file for a tag call. That is not an MX input (decision 172): see
+"`.marko` files as tags" in §4.
 
 ### Why an `.astro.mx` file cannot be a page
 
@@ -608,14 +609,14 @@ stays a native element, silently:
 | `<x>` is… | Result |
 |---|---|
 | a native element (`<span>` + a define or tag import named `span`) | the native element, with a positioned warning at the tag: "`<span>` is the native element; the `span` defined\|imported at L:C is not called. Rename it `Span` or write `<${span}>`" |
-| a registered custom tag, a contract child, or a Marko taglib tag (a `marko.json` entry whose `template` is an `.mx` file) | called as before, whatever is imported; no diagnostic |
+| a registered custom tag, a contract child, or a tag the target's own taglib registers (a third-party target's; a `marko.json` is not read, decision 197) | called as before, whatever is imported; no diagnostic |
 | none of those (`import row from "./row.mx"` + `<row/>`) | a positioned **error** on every target: "`<row>` is not a tag here: `row` is imported from ./row.mx, and a lowercase tag never calls a binding. Write `<Row>` (rename the import) or `<${row}/>`" (a define reads "`row` is defined at L:C" and "(rename the define)") |
 
 A name that starts with `_` or `$` has no capitalized spelling Marko reads as
 a binding, so both diagnostics offer only the dynamic tag for it ("Write
-`<${_row}/>`"). Without a taglib lookup (the region hosts), "native" means the
-HTML elements plus Marko's own `marko-svg` and `marko-math` tag lists, so a
-region and a whole file agree.
+`<${_row}/>`"). "Native" means the target's `nativeTags`, its element table
+(decision 197; `@mxlang/web-elements`' HTML, SVG and MathML elements on every
+built-in target), in a region and a whole file alike, so the two agree.
 
 The binding's `L:C` comes from the import or define site on every target. A
 `<define>` is in scope only inside the block that declares it, so one inside
@@ -2389,34 +2390,35 @@ It is never compiled as MX, never a silent native element and never an emitted
 `import`. What counts, per host:
 
 - **`tags/x.marko`, `tags/x/index.marko`, `tags/x/x.marko`** (in the page's or an
-  ancestor's `tags/`): every host. On the hosts with no Marko lookup (Solid, Astro,
-  Angular, a `.<host>.mx` region) core finds the file itself.
-- **A `marko.json` `tags-dir` or `template` that resolves to a `.marko` file**: html,
-  Preact, React, Hono and Angular. Solid and Astro never read `marko.json`, so
-  there such a tag stays the native element `<x>` (no lookup of theirs resolves it).
+  ancestor's `tags/`): every host, a whole file and a `.<host>.mx` region alike.
+  Core finds the file itself.
 - **A binding imported from a `.marko` file and used as a tag**, static (`<X/>`) or
   dynamic with that binding directly (`<${X}/>`): every host, at the tag use. An
   import that is never used as a tag is left alone, and so is one that reaches a
   dynamic tag indirectly (through a variable, a ternary or a prop); a named import
   from a `.marko` file is a value, not a tag.
-- **A `marko.json` tag with no template** (a `renderer`): html and the JSX hosts, as
-  a positioned error that says there is no template to call, never an import.
+
+**A `marko.json` is not read** (decision 197), on any target. A tag it maps (a
+`tags-dir`, a `template`, a `renderer`) is an unknown tag like any other: html's
+"Unable to find entry point for custom tag" error, and the native element `<x>` on
+the hosts that render an unknown lowercase tag natively. It is never an import.
 
 A same-name `tags/x.mx` is a registered custom tag and is consulted first, so it still
 wins; the `.marko` file beside it is never consulted.
 
 **A `tags/` directory tag MX cannot call is never silent.** `tags/<name>/index.<ext>`
-and `tags/<name>/<name>.<ext>` (`marko`, `mx`, `tag.ts`) are directory tags Marko's
-lookup knows; MX calls flat `tags/<name>.mx` files only. A call to `<x>` with one
+and `tags/<name>/<name>.<ext>` (`marko`, `mx`, `tag.ts`) are directory tags Marko
+knows; MX calls flat `tags/<name>.mx` files only. A call to `<x>` with one
 beside it is a positioned error naming the file, not the native element `<x>` and
 not a call to an unbound name. A flat `tags/x.mx` beside it still wins.
 
-**A discovered tag that resolves to an `.mx` template** (a `marko.json` entry) is
-imported the way Marko imports a discovered tag: a default import, extension kept,
-relative to the calling file, named `_` plus the camelCased tag name (numeric suffix
-on a collision), once per module. It is the optional
-`HostDeclarations.resolveDiscoveredTagModule` hook plus `binding` on the `Component`
-target, implemented by html and the JSX hosts (Preact, React, Hono).
+**A tag a host resolves to a module** is imported the way Marko imports a
+discovered tag: a default import, extension kept, relative to the calling file,
+named `_` plus the camelCased tag name (numeric suffix on a collision), once per
+module. It is the optional `HostDeclarations.resolveDiscoveredTagModule` hook plus
+`binding` on the `Component` target. No built-in target implements the hook since
+a `marko.json` stopped being read (decision 197); it stays for a third-party
+target.
 
 The config key is **`mx`**, not `mxlang` — a hard rename with no legacy path
 (decision 89a).
@@ -3725,10 +3727,10 @@ are ordinary data tag names.
 **Marko's HTML parse rules are off.** Marko gives 19 tag names an HTML parse rule
 (void `openTagOnly`: `area base br col embed hr img input link meta param source track wbr`; raw `text` bodies: `script style textarea title`;
 `preserveWhitespace`: `pre script style textarea`). The data taglib sets each of
-those three options to `false` on every name Marko's own lookup reports, so a data
+those three options to `false` on every name the element table gives one, so a data
 tag named `source`, `input`, `title`, `script` or `pre` parses like any other tag
-and may have child tags. The list is derived from Marko's lookup, not
-hand-written, and a test pins the 19 names. The cost: a tag-like `<name` inside
+and may have child tags. The list is derived from `@mxlang/web-elements`'
+element table (`WEB_ELEMENTS`, decision 197), not hand-written, and a test pins the 19 names. The cost: a tag-like `<name` inside
 a `script`, `style`, `textarea` or `title` body parses as a tag, not text; a data
 file writes text through `${"…"}` or an attribute. This is the one place a data
 file is not a Marko file: Marko rejects `<source><input/></source>`, data
@@ -4105,7 +4107,8 @@ table other than the default row, core reads the first table-caused error from
 that document before lowering (§13.9.5), in source order, positioned and naming
 the file. A caller that lowers a document itself still meets the same refusals at
 lowering's seams (`payloadOf`, the child and attribute lists), in the same words.
-Core computes `tagTypes` from the taglib lookup and the tags' `parseOptions`
+Core computes `tagTypes` from its tag table (the translator's taglibs over the
+target's `nativeTags`, decision 197) and the tags' `parseOptions`
 (§9.3) before the parse; the written name is the key.
 
 #### 13.9.5 Triggers

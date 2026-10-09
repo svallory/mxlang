@@ -165,6 +165,7 @@ import {
   tagParamsOf,
   tagVarOf,
 } from "./tag-fields.ts";
+import { ELEMENT_TAGLIB_IDS } from "./tag-table.ts";
 import {
   bindingForDiscoveredModule,
   hasTemplate,
@@ -2480,9 +2481,6 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
   };
 }
 
-const ELEMENT_TAGLIB_IDS = new Set(["marko-html", "marko-svg", "marko-math"]);
-
-/** A tag Marko's taglib lookup registers (`tags/`, a `marko.json`), not an element. */
 /** One filesystem probe per tag name per compile, not per occurrence. */
 const uncalledTagFiles = new WeakMap<
   Ctx,
@@ -2543,11 +2541,10 @@ function rejectMarkoImportTag(
   );
 }
 
-function registeredTagWithoutTemplate(ctx: Ctx, name: string): boolean {
-  const tag = ctx.lookup?.getTag(name);
-  return isRegisteredTaglibTag(ctx, name) && tag?.template === undefined;
-}
-
+/**
+ * A tag a host taglib registers (a third-party translator's `taglibs`), not an
+ * element, a core tag or a custom tag.
+ */
 function isRegisteredTaglibTag(ctx: Ctx, name: string): boolean {
   const taglibId = ctx.lookup?.getTag(name)?.taglibId;
   return (
@@ -2584,123 +2581,23 @@ function lowercaseBindingFix(
   return `${rename(pascal)} ${or} ${dynamic}`;
 }
 
-// Elements a taglib lookup cannot vouch for when none is set (the region
-// hosts): `HTML_ELEMENTS` omits these. The SVG and MathML names are Marko's own
-// `marko-svg` and `marko-math` taglibs (@marko/compiler 5.42.10), so a region
-// and a whole file agree on what is native.
-const EXTRA_NATIVE_ELEMENTS = new Set([
-  "search",
-  "slot",
-  "animate",
-  "animateColor",
-  "animateMotion",
-  "animateTransform",
-  "circle",
-  "clipPath",
-  "defs",
-  "desc",
-  "ellipse",
-  "feBlend",
-  "feColorMatrix",
-  "feComponentTransfer",
-  "feComposite",
-  "feConvolveMatrix",
-  "feDiffuseLighting",
-  "feDisplacementMap",
-  "feDistantLight",
-  "feFlood",
-  "feFuncA",
-  "feFuncB",
-  "feFuncG",
-  "feFuncR",
-  "feGaussianBlur",
-  "feImage",
-  "feMerge",
-  "feMergeNode",
-  "feMorphology",
-  "feOffset",
-  "fePointLight",
-  "feSpecularLighting",
-  "feSpotLight",
-  "feTile",
-  "feTurbulence",
-  "filter",
-  "foreignObject",
-  "g",
-  "image",
-  "line",
-  "linearGradient",
-  "marker",
-  "mask",
-  "metadata",
-  "mpath",
-  "path",
-  "pattern",
-  "polygon",
-  "polyline",
-  "radialGradient",
-  "rect",
-  "set",
-  "stop",
-  "svg",
-  "switch",
-  "symbol",
-  "text",
-  "textPath",
-  "tspan",
-  "use",
-  "view",
-  "math",
-  "maction",
-  "maligngroup",
-  "malignmark",
-  "menclose",
-  "merror",
-  "mfenced",
-  "mfrac",
-  "mglyph",
-  "mi",
-  "mlabeledtr",
-  "mlongdiv",
-  "mmultiscripts",
-  "mn",
-  "mo",
-  "mover",
-  "mpadded",
-  "mphantom",
-  "mroot",
-  "mrow",
-  "ms",
-  "mscarries",
-  "mscarry",
-  "msgroup",
-  "mstack",
-  "msline",
-  "mspace",
-  "msqrt",
-  "msrow",
-  "mstyle",
-  "msub",
-  "msup",
-  "msubsup",
-  "mtable",
-  "mtd",
-  "mtext",
-  "mtr",
-  "munder",
-  "munderover",
-  "semantics",
-  "mprescripts",
-  "none",
-]);
+// HTML elements no native table lists (`@mxlang/web-elements` follows
+// Marko's element taglibs, which have no `<slot>`), native in a region and a
+// whole file alike.
+const UNLISTED_NATIVE_ELEMENTS: ReadonlySet<string> = new Set(["slot"]);
 
-/** Whether `name` is a native HTML/SVG/MathML element, by lookup or, without one, by list. */
+/**
+ * Whether `name` is a native HTML/SVG/MathML element: by the tag table's
+ * taglib id when it knows the name, else by the host's native elements (a
+ * region has no table), else by core's own HTML element names.
+ */
 function isNativeElementName(ctx: Ctx, name: string): boolean {
   const taglibId = ctx.lookup?.getTag(name)?.taglibId;
   if (taglibId !== undefined) return ELEMENT_TAGLIB_IDS.has(taglibId);
   return (
-    (HTML_ELEMENTS as readonly string[]).includes(name) ||
-    EXTRA_NATIVE_ELEMENTS.has(name)
+    (ctx.declarations.nativeTags?.has(name) ??
+      (HTML_ELEMENTS as readonly string[]).includes(name)) ||
+    UNLISTED_NATIVE_ELEMENTS.has(name)
   );
 }
 
@@ -4173,20 +4070,10 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // gate, so the lowercase case is cut off here, once, for every host.
   //
   // Marko's own gate is "not `/^[A-Z]/`" (`fileLocalBinding`'s complement), so
-  // `_x` and `$x` names are lowercase here too. A tag Marko's taglib lookup
-  // registers (`tags/row.marko`) is not a lowercase *binding* call at all: it
-  // keeps the host's routing whatever is imported (addendum 1).
+  // `_x` and `$x` names are lowercase here too. A tag a host taglib registers
+  // is not a lowercase *binding* call at all: it keeps the host's routing
+  // whatever is imported (addendum 1).
   const registeredTag = isRegisteredTaglibTag(ctx, name);
-  // Decision 172: a `.marko` file is no MX input, however the tag was found.
-  const resolvedTemplate = registeredTag
-    ? ctx.lookup?.getTag(name)?.template
-    : undefined;
-  if (!fileLocalBinding && resolvedTemplate?.endsWith(".marko")) {
-    fail(
-      markoFileTagMessage(ctx.filename, name, resolvedTemplate, productOf(ctx)),
-      node,
-    );
-  }
   // A `tags/` file this host cannot call (`tags/x.marko`, `tags/x/index.*`)
   // would otherwise compile as the native element `<x>`, silently.
   if (!registeredTag && !fileLocalBinding && !ctx.imports.has(name)) {
@@ -4224,32 +4111,13 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     );
   }
   // A registered taglib tag called `row` is still `row` when a binding of that
-  // name is in scope (addendum 1): call the tag's own template, not the import.
+  // name is in scope (addendum 1): the host's tag, not the import.
   if (
     registeredTag &&
     !/^[A-Z]/.test(name) &&
     (ctx.defines.has(name) || ctx.imports.has(name))
   ) {
-    const template = ctx.lookup?.getTag(name)?.template;
-    const binding = template
-      ? bindingForDiscoveredModule(ctx, template, name, posOf(ctx, node))
-      : undefined;
-    // `resolvedPath` keeps every metadata read (return shape, `Input`,
-    // attribute tags, `/var`) on the taglib tag too: resolved by name, it
-    // would read the authored import the call no longer targets.
-    return lowerComponent(
-      ctx,
-      node,
-      template
-        ? {
-            kind: "name",
-            name,
-            resolvedPath: template,
-            ...(binding && { binding }),
-          }
-        : { kind: "name", name },
-      true,
-    );
+    return lowerComponent(ctx, node, { kind: "name", name }, true);
   }
   if (
     fileLocalBinding ||
@@ -4315,19 +4183,14 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
         valueImportBinding: name,
       });
     }
-    // A taglib-discovered tag the host imports (Marko imports every tag its
-    // lookup finds). Not for a file-local binding: that is already in scope.
+    // A tag the host itself resolves to a module. Not for a file-local
+    // binding: that is already in scope.
     const modulePath = fileLocalBinding
       ? undefined
       : ctx.declarations.resolveDiscoveredTagModule?.(name, ctx);
-    // Marko's lookup knows the tag but names no template for it (a
-    // `tags/x/index.mx` directory, which Marko discovers and MX cannot
-    // import): the bare call would reference a binding nothing declares.
-    if (
-      !modulePath &&
-      !fileLocalBinding &&
-      registeredTagWithoutTemplate(ctx, name)
-    ) {
+    // A host taglib names the tag and nothing resolves it to a module: the
+    // bare call would reference a binding nothing declares.
+    if (!modulePath && !fileLocalBinding && registeredTag) {
       const found = uncalledTagFileOf(ctx, name);
       if (found) failUncalled(ctx, name, found, node);
       fail(
@@ -5088,6 +4951,7 @@ registerTemplateMetadataCompiler((ctx: Ctx, tag: TemplateTag) => {
   const { body } = parseFragment(tag.source, {
     filename: tag.filename,
     customTags: ctx.customTags as Record<string, CustomTag> | undefined,
+    nativeTags: ctx.declarations.nativeTags,
   });
   const templateCtx = newCtx(
     tag.source,
