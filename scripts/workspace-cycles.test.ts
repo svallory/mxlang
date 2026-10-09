@@ -130,6 +130,19 @@ describe("workspace dependency graph", () => {
     expect(graph.get("@mxlang/babel")).toEqual([]);
   });
 
+  it("lets core use the parser as a devDependency only (decision 182)", () => {
+    // Core resolves `package.json#mx.syntax` and runs the syntax table's
+    // pre-pass with MX's template parser: from source through the workspace
+    // package, in the dist through the bundled front end, so no published
+    // `.d.ts` or runtime import names it. Parser port PR 4 needs this edge.
+    const manifest = JSON.parse(
+      readFileSync(join(repoRoot, "packages/core/package.json"), "utf8"),
+    ) as Partial<Record<(typeof DEP_FIELDS)[number], Record<string, string>>>;
+    expect(manifest.devDependencies?.["@mxlang/parser"]).toBe("workspace:*");
+    expect(manifest.dependencies?.["@mxlang/parser"]).toBeUndefined();
+    expect(manifest.peerDependencies?.["@mxlang/parser"]).toBeUndefined();
+  });
+
   it("points every host at tsx-bridge, never at the parser package", () => {
     for (const [name, deps] of graph) {
       if (name === "@mxlang/parser") continue;
@@ -139,11 +152,8 @@ describe("workspace dependency graph", () => {
       // Private reference package: it compares stock htmljs-parser events with
       // the parser's front end and is never published.
       if (name === "@mxlang/stock-marko") continue;
-      // Decision 182 (PR C): core resolves `package.json#mx.syntax` and runs
-      // the syntax table's pre-pass with MX's template parser. A
-      // devDependency only: the dist reaches the parser through the bundled
-      // front end, and no published `.d.ts` names it. Parser port PR 4 needs
-      // this edge anyway.
+      // Decision 182 (PR C): core may use the parser as a devDependency
+      // only, pinned by the next test.
       if (name === "@mxlang/core") continue;
       expect(deps, `${name} depends on @mxlang/parser`).not.toContain(
         "@mxlang/parser",

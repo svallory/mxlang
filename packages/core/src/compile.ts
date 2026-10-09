@@ -56,6 +56,7 @@ import {
 } from "./stock-parser.ts";
 import {
   checkSyntaxUse,
+  explicitSyntax,
   resolveSyntax,
   type SyntaxTable,
 } from "./syntax-table.ts";
@@ -404,7 +405,10 @@ export function compileSource(
 ): CompileResult {
   // Required lazily and by CJS: `@marko/compiler` is a large dependency and
   // only this function needs it, so importing the type surface stays free.
-  checkSyntaxUse(source, host.syntax ?? resolveSyntax(filename), {
+  const syntax = host.syntax
+    ? explicitSyntax(host.syntax, filename)
+    : resolveSyntax(filename);
+  checkSyntaxUse(source, syntax, {
     filename,
   });
   const compiler = markoCompiler();

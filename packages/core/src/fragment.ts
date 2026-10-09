@@ -60,6 +60,7 @@ import {
 } from "./stock-parser.ts";
 import {
   checkSyntaxUse,
+  explicitSyntax,
   resolveSyntax,
   type SyntaxTable,
 } from "./syntax-table.ts";
@@ -449,7 +450,10 @@ export function parseFragment(
     productName: base.productName,
   };
 
-  checkSyntaxUse(source, base.syntax ?? resolveSyntax(resolved.filename), {
+  const syntax = base.syntax
+    ? explicitSyntax(base.syntax, resolved.filename)
+    : resolveSyntax(resolved.filename);
+  checkSyntaxUse(source, syntax, {
     filename: resolved.filename,
     baseLine: resolved.baseLine,
     baseColumn: resolved.baseColumn,

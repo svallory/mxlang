@@ -44,6 +44,20 @@ describe("parseData's syntax option", () => {
     );
   });
 
+  it("an invalid table is a diagnostic naming the option, not an internal error", () => {
+    const bad = Object.freeze({
+      ...MESH,
+      expressionTriggers: [{ ...MEMBER, match: "&[" }],
+    });
+    const result = parseData("div\n", "/v/a.mx", { syntax: bad });
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]?.message).toMatch(
+      /^the `syntax` option is not a valid syntax table: `syntax\.expressionTriggers\[0\]\.match`/,
+    );
+    expect(result.diagnostics[0]?.message).not.toContain("internal error");
+    expect(result.diagnostics[0]).toMatchObject({ line: 1, column: 0 });
+  });
+
   it("the default row is frozen and has no triggers", () => {
     const row = defaultSyntax();
     expect(Object.isFrozen(row)).toBe(true);

@@ -89,9 +89,17 @@ function canonical(value: unknown): string {
   return JSON.stringify(value);
 }
 
+/** Hashes already computed, per table object (tables are frozen data). */
+const hashes = new WeakMap<object, string>();
+
 /** A table's identity: the sha256 of its canonical JSON. Two tables with the same content hash alike. */
 export function syntaxHash(table: SyntaxTable): string {
-  return createHash("sha256").update(canonical(table)).digest("hex");
+  let hash = hashes.get(table);
+  if (hash === undefined) {
+    hash = createHash("sha256").update(canonical(table)).digest("hex");
+    if (Object.isFrozen(table)) hashes.set(table, hash);
+  }
+  return hash;
 }
 
 /**
@@ -229,6 +237,56 @@ export function resolveSyntax(filename: string): SyntaxTable {
   return table;
 }
 
+/** Explicit tables already validated (tables are frozen data, checked once per object). */
+const validExplicit = new WeakSet<object>();
+
+/**
+ * An explicit `syntax` option (`HostOptions.syntax`, `FragmentBase.syntax`,
+ * `ParseDataOptions.syntax`: a consumer's own table, Mesh's path), validated
+ * with the manifest's rules and wording, as the caller's error: a
+ * `TranslateError` at the start of `filename` naming `syntax.<field>`. A
+ * non-empty `tagTypes` is refused (taglib-owned), as in a manifest.
+ */
+export function explicitSyntax(
+  table: SyntaxTable,
+  filename: string,
+): SyntaxTable {
+  if (table === DEFAULT_ROW || validExplicit.has(table)) return table;
+  const fail = (message: string): never => {
+    throw new TranslateError(message, 1, 0, filename);
+  };
+  if (!table || typeof table !== "object" || Array.isArray(table)) {
+    fail("the `syntax` option must be a syntax table object");
+  }
+  if (
+    table.tagTypes &&
+    typeof table.tagTypes === "object" &&
+    Object.keys(table.tagTypes).length > 0
+  ) {
+    fail(
+      "the `syntax` option's `tagTypes` must be empty: tag types are taglib-owned, computed from the tags and their parseOptions",
+    );
+  }
+  if (syntaxHash(table) !== defaultSyntaxHash()) {
+    const parser = syntaxParser();
+    if (!parser) fail(`the \`syntax\` option: ${NEEDS_MX_PARSER}`);
+    const problems = (parser as MxTemplateParser).validateSyntaxTable(table);
+    if (problems.length > 0) {
+      fail(
+        `the \`syntax\` option is not a valid syntax table: ${problems
+          .map(
+            (problem) =>
+              `\`syntax.${problem.field}\`${problem.triggerId === undefined ? "" : ` (trigger "${problem.triggerId}")`}: ${problem.message}`,
+          )
+          .join("; ")}`,
+      );
+    }
+  }
+  // Only a frozen table is remembered: an unfrozen one could change.
+  if (Object.isFrozen(table)) validExplicit.add(table);
+  return table;
+}
+
 /** Where a parse runs: the file and the fragment's base, for positions. */
 export interface SyntaxSite {
   filename: string;
@@ -254,7 +312,10 @@ export function checkSyntaxUse(
   table: SyntaxTable,
   site: SyntaxSite,
 ): void {
-  if (syntaxHash(table) === defaultSyntaxHash()) return;
+  // The default row by identity first: a plain project pays one comparison.
+  if (table === DEFAULT_ROW || syntaxHash(table) === defaultSyntaxHash()) {
+    return;
+  }
   syntaxPrepasses.count++;
   const parser = syntaxParser();
   if (!parser) {

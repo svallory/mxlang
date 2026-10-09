@@ -207,6 +207,31 @@ describe("a table core cannot lower yet fails the file loudly", () => {
     );
   });
 
+  it("an invalid explicit table is the caller's error at the file start, naming the option", () => {
+    const page = join(dir, "page.mx");
+    const bad = Object.freeze({
+      ...defaultSyntax(),
+      expressionTriggers: [{ ...MEMBER, match: "&[" }],
+    });
+    const error = caught(() => compile("<p/>\n", page, bad));
+    expect(error.message).toMatch(
+      /^the `syntax` option is not a valid syntax table: `syntax\.expressionTriggers\[0\]\.match` \(trigger "member"\): `match` is not a valid regex/,
+    );
+    expect([error.file, error.line, error.column]).toEqual([page, 1, 0]);
+    const fragment = caught(() =>
+      parseFragment("<p/>", { filename: page, syntax: bad }),
+    );
+    expect(fragment.message).toBe(error.message);
+  });
+
+  it("an explicit table's tagTypes is refused, as in a manifest", () => {
+    const page = join(dir, "page.mx");
+    const typed = { ...defaultSyntax(), tagTypes: { div: 2 as const } };
+    expect(caught(() => compile("<div/>\n", page, typed)).message).toBe(
+      "the `syntax` option's `tagTypes` must be empty: tag types are taglib-owned, computed from the tags and their parseOptions",
+    );
+  });
+
   it("an explicit table wins over the manifest", () => {
     manifest(dir, { syntax: MESH });
     const page = join(dir, "page.mx");

@@ -384,7 +384,9 @@ Five facts worth knowing before editing it:
   refused as taglib-owned), deep-freezes and interns it by `syntaxHash`
   (sha256 of canonical JSON), cached per manifest read. `compileSource`,
   `parseFragment` and `@mxlang/data`'s `parseData` take an explicit
-  `syntax` that wins. `checkSyntaxUse` runs only when the table's hash
+  `syntax` that wins, validated once per frozen object (`explicitSyntax`)
+  with the manifest's rules as the caller's error at the file start, naming
+  `syntax.<field>`; a non-empty `tagTypes` is refused there too. `checkSyntaxUse` runs only when the table's hash
   differs from the default row's (`syntaxPrepasses` counts it): a pre-pass
   with MX's template parser fails the file at its first trigger, block tag
   or filter ("`<id>` trigger has no lowering yet") or at an error the table
