@@ -206,6 +206,15 @@ export interface IrBase {
  * `class` made from it, so a diagnostic can say `:email` (`name`) and not only
  * `name`. Absent on an attribute written out.
  */
+/**
+ * The arguments an attribute was written with (`a(b, c)`), the same `Expr`s a
+ * tag's `args` holds. Present only when the parentheses were written, so `a()`
+ * carries `[]`. Not a method's parameters: `a(x) { … }` is a function value.
+ */
+export interface AttrArgs {
+  args?: Expr[];
+}
+
 export interface AttrSugar {
   sugar?: string;
   /**
@@ -256,17 +265,20 @@ export type Attr =
        */
       member?: Member;
     } & IrBase &
-      AttrSugar)
+      AttrSugar &
+      AttrArgs)
   /** A bare attribute (`disabled`), HTML's spelling of `true`. */
   | ({ kind: "boolean"; name: string; nameSpan: SourceSpan } & IrBase &
-      AttrSugar)
+      AttrSugar &
+      AttrArgs)
   | ({
       kind: "dynamic";
       name: string;
       value: Expr;
       nameSpan: SourceSpan;
     } & IrBase &
-      AttrSugar)
+      AttrSugar &
+      AttrArgs)
   /**
    * `value:=expr`, Marko's two-way binding. Resolved rather than rejected: a
    * host with no update path emits the initial value, which is what Marko's
@@ -285,7 +297,8 @@ export type Attr =
       refinement?: Expr;
       nameSpan: SourceSpan;
     } & IrBase &
-      AttrSugar)
+      AttrSugar &
+      AttrArgs)
   /**
    * An event handler on an *element*: `onClick=fn` or `on-my-event=fn`.
    *
@@ -310,7 +323,8 @@ export type Attr =
       value: Expr;
       nameSpan: SourceSpan;
     } & IrBase &
-      AttrSugar)
+      AttrSugar &
+      AttrArgs)
   | ({ kind: "spread"; value: Expr } & IrBase);
 
 /**

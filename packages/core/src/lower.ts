@@ -883,6 +883,10 @@ function lowerAttr(
   if (attr?.sugarValueOf && lowered.kind !== "spread") {
     lowered.sugarValueOf = attr.sugarValueOf;
   }
+  const args = attrArgsOf(attr);
+  if (args && lowered.kind !== "spread") {
+    lowered.args = args.map((arg: Node) => exprOf(ctx, arg));
+  }
   return lowered;
 }
 

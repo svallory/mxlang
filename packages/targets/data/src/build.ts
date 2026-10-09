@@ -272,6 +272,15 @@ function rejectSpanlessShorthand(attrs: Attr[], at: Position): void {
 }
 
 function dataAttr(attr: Attr): DataAttr {
+  const built = dataAttrBase(attr);
+  if (attr.kind === "spread" || !attr.args) return built;
+  const args = each(attr.args, (arg, i) =>
+    dataExpr(arg, `argument ${i + 1} of attribute \`${attr.name}\``),
+  );
+  return { ...built, args } as DataAttr;
+}
+
+function dataAttrBase(attr: Attr): DataAttr {
   switch (attr.kind) {
     case "static": {
       const nameSpan = optionalNameSpan(attr);

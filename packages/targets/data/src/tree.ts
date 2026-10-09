@@ -57,6 +57,12 @@ export type DataAttr =
       value: string;
       nameSpan?: SourceSpan;
       valueSpan: SourceSpan;
+      /**
+       * The arguments written after the name (`a(b, c)`, `a()` gives `[]`).
+       * Present only when written. A method shorthand (`a(x) { … }`) is a
+       * function value and never routes here.
+       */
+      args?: DataExpr[];
     }
   /**
    * An attribute whose entire value is one atom (decision 156 addendum 1,
@@ -73,6 +79,12 @@ export type DataAttr =
       value: string;
       nameSpan?: SourceSpan;
       span: SourceSpan;
+      /**
+       * The arguments written after the name (`a(b, c)`, `a()` gives `[]`).
+       * Present only when written. A method shorthand (`a(x) { … }`) is a
+       * function value and never routes here.
+       */
+      args?: DataExpr[];
     }
   /**
    * An attribute whose entire value is one member reference a layer-2 syntax
@@ -91,15 +103,37 @@ export type DataAttr =
       value: string;
       nameSpan?: SourceSpan;
       span: SourceSpan;
+      /**
+       * The arguments written after the name (`a(b, c)`, `a()` gives `[]`).
+       * Present only when written. A method shorthand (`a(x) { … }`) is a
+       * function value and never routes here.
+       */
+      args?: DataExpr[];
     }
-  /** `required`: a bare attribute. */
-  | { kind: "boolean"; name: string; nameSpan: SourceSpan }
+  /** `required`: a bare attribute (`a(b)`: with `args`). */
+  | {
+      kind: "boolean";
+      name: string;
+      nameSpan: SourceSpan;
+      /**
+       * The arguments written after the name (`a(b, c)`, `a()` gives `[]`).
+       * Present only when written. A method shorthand (`a(x) { … }`) is a
+       * function value and never routes here.
+       */
+      args?: DataExpr[];
+    }
   /** `values=[...]`, `change=(x) => ...`, `n=1`, `v:=x` (bound). */
   | {
       kind: "expression";
       name: string;
       value: DataExpr;
       nameSpan: SourceSpan;
+      /**
+       * The arguments written after the name (`a(b, c)`, `a()` gives `[]`).
+       * Present only when written. A method shorthand (`a(x) { … }`) is a
+       * function value and never routes here.
+       */
+      args?: DataExpr[];
       bound?: true;
       /**
        * `fn` in `v:fn:=q`: Marko's refinement, the function its change handler
