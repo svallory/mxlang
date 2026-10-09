@@ -22,6 +22,9 @@ import { join } from "node:path";
  * - `ambient-types` a host whose `ambientTypes` adds its `ambient.d.ts` to a
  *   program holding an `.amb.mx` file
  * - `ambient-types-throws` a host whose `ambientTypes` throws for every program
+ * - `ambient-types-misbehaves` a host whose `ambientTypes` throws, returns a
+ *   non-iterable, or returns a generator that throws, picked by a root file
+ *   named `<mode>.ts` (see its `index.cjs`); `[]` otherwise
  * - `join-solid` names the built-in host `solid` (rejected)
  * - `own-core`  imports its own `@mxlang/core` copy (pins the brand check)
  * - `hostless`  valid target with no `host` part (an error under `mx.host`)
@@ -43,6 +46,7 @@ export type FakeTarget =
   | "file-kinds"
   | "ambient-types"
   | "ambient-types-throws"
+  | "ambient-types-misbehaves"
   | "join-solid"
   | "own-core"
   | "hostless"

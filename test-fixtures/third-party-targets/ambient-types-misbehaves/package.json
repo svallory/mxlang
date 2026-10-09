@@ -1,0 +1,6 @@
+{
+  "name": "@fake/mx-ambient-types-misbehaves",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.cjs"
+}

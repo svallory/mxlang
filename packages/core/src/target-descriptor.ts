@@ -208,9 +208,10 @@ export interface TargetHost {
    * of its own (its `fileKinds`, or the framework files its tooling checks)
    * and returns `[]` when it does not. `resolve("<package>/<file>")` is the
    * absolute path of a file of an installed package, looked up from the
-   * project first and then from the tool's own install, or `undefined` when
-   * neither has it. Returns absolute paths, which the tool adds as root
-   * files.
+   * files that selected this host first, then from the project, then from
+   * the tool's own install, or `undefined` when none has it. Returns absolute
+   * paths, which the tool adds as root files; a throw, or a return value that
+   * is no iterable of paths, adds nothing and the tool reports it.
    */
   readonly ambientTypes?: (program: AmbientTypesProgram) => readonly string[];
 }
@@ -225,8 +226,9 @@ export interface AmbientTypesProgram {
   readonly rootNames: readonly string[];
   /**
    * The absolute path of `<package>/<file>` in the nearest installed copy of
-   * the package, from the project, then from the tool's install; `undefined`
-   * when neither has the package, or the package lacks the file.
+   * the package, from the files that selected the host, then from the
+   * project, then from the tool's install; `undefined` when none has the
+   * package, or the package lacks the file.
    */
   resolve(packageFile: string): string | undefined;
 }

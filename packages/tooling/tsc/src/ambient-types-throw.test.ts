@@ -67,3 +67,53 @@ describe("mx-tsc with a host whose ambientTypes throws", () => {
     expect(output).toMatch(/index\.ts\(1,\d+\): error TS2322/);
   });
 });
+
+describe("mx-tsc with a host whose ambientTypes returns no iterable of files", () => {
+  const prefix = "error TS80004: host @fake/mx-ambient-types-misbehaves:";
+
+  it.each([
+    [
+      "number",
+      `${prefix} ambientTypes returned number, expected an iterable of files`,
+    ],
+    [
+      "object",
+      `${prefix} ambientTypes returned object, expected an iterable of files`,
+    ],
+    [
+      "undefined",
+      `${prefix} ambientTypes returned undefined, expected an iterable of files`,
+    ],
+    ["generator", `${prefix} ambientTypes threw: generator failed`],
+  ])(
+    "reports %s as one file-level error instead of crashing",
+    (mode, diagnostic) => {
+      const project = fakeProject({
+        mx: { target: specifier("ambient-types-misbehaves") },
+        install: ["ambient-types-misbehaves"],
+        files: {
+          "tsconfig.json": JSON.stringify({
+            compilerOptions: {
+              strict: true,
+              module: "esnext",
+              target: "es2022",
+              outDir: "out",
+            },
+            include: ["*.ts"],
+          }),
+          "index.ts": "export const answer: number = 42;\n",
+          [`${mode}.ts`]: "export {};\n",
+        },
+      });
+
+      const run = runInProcess(["-p", "tsconfig.json"], project.root);
+      const output = stripVTControlCharacters(`${run.stdout}${run.stderr}`);
+
+      expect(run.status).toBe(1);
+      expect(
+        output.split("\n").filter((line) => line.includes("TS80004")),
+      ).toEqual([diagnostic]);
+      expect(existsSync(join(project.root, "out", "index.js"))).toBe(true);
+    },
+  );
+});

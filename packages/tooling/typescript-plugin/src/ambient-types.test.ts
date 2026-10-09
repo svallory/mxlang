@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   cleanupProjects,
   fakeProject,
+  fakeWorkspace,
   specifier,
 } from "../../../../test-fixtures/third-party-targets/support.ts";
 import {
@@ -113,6 +114,123 @@ describe("ambientTypeFiles", () => {
     expect(errors).toEqual([
       "host @fake/mx-ambient-types-throws: ambientTypes threw: cannot find astro install",
     ]);
+  });
+});
+
+describe("ambientTypeFiles, a host resolved from the file, not the tsconfig", () => {
+  it("asks a host only the file's own package loads, and resolves its files from there", () => {
+    // A monorepo: the tsconfig sits at the workspace root, which has no
+    // package.json; the host is a dependency of `pkg` alone.
+    const workspace = fakeWorkspace();
+    const pkg = fakeProject({
+      root: join(workspace, "pkg"),
+      mx: { target: specifier("ambient-types") },
+      install: ["ambient-types"],
+    });
+
+    expect(ambientTypeFiles([pkg.path("page.amb.mx")], workspace, [])).toEqual([
+      join(pkg.root, "node_modules/@fake/mx-ambient-types/ambient.d.ts"),
+    ]);
+  });
+
+  it("still asks the tsconfig directory's host for a file outside its package", () => {
+    const project = fakeProject({
+      mx: { target: specifier("ambient-types") },
+      install: ["ambient-types"],
+    });
+
+    // `/elsewhere` has no package.json: the project's lookup answers.
+    expect(
+      ambientTypeFiles(["/elsewhere/page.amb.mx"], project.root, []),
+    ).toEqual([
+      join(project.root, "node_modules/@fake/mx-ambient-types/ambient.d.ts"),
+    ]);
+  });
+
+  it("asks each package's host once, however many of its files the program holds", () => {
+    const workspace = fakeWorkspace();
+    const pkg = fakeProject({
+      root: join(workspace, "pkg"),
+      mx: { target: specifier("ambient-types-throws") },
+      install: ["ambient-types-throws"],
+    });
+    const errors: string[] = [];
+
+    ambientTypeFiles(
+      [pkg.path("a.ambthrow.mx"), pkg.path("b.ambthrow.mx")],
+      workspace,
+      errors,
+    );
+
+    expect(errors).toEqual([
+      "host @fake/mx-ambient-types-throws: ambientTypes threw: cannot find astro install",
+    ]);
+  });
+});
+
+describe("ambientTypeFiles, a host returning no iterable of files", () => {
+  const misbehaving = () =>
+    fakeProject({
+      mx: { target: specifier("ambient-types-misbehaves") },
+      install: ["ambient-types-misbehaves"],
+    });
+  const prefix = "host @fake/mx-ambient-types-misbehaves: ambientTypes";
+
+  it.each([
+    [
+      "number",
+      "a number",
+      `${prefix} returned number, expected an iterable of files`,
+    ],
+    [
+      "object",
+      "an object without an iterator",
+      `${prefix} returned object, expected an iterable of files`,
+    ],
+    [
+      "undefined",
+      "undefined",
+      `${prefix} returned undefined, expected an iterable of files`,
+    ],
+    [
+      "string",
+      "a string (it iterates characters)",
+      `${prefix} returned string, expected an iterable of files`,
+    ],
+    [
+      "generator",
+      "a generator that throws while read",
+      `${prefix} threw: generator failed`,
+    ],
+  ])(
+    "reports %s (%s) as one error and adds nothing",
+    (mode, _what, message) => {
+      const project = misbehaving();
+      const errors: string[] = [];
+
+      expect(
+        ambientTypeFiles([project.path(`${mode}.ts`)], project.root, errors),
+      ).toEqual([]);
+      expect(errors).toEqual([message]);
+    },
+  );
+
+  it("keeps the other hosts' files", () => {
+    const project = misbehaving();
+    const errors: string[] = [];
+
+    const files = ambientTypeFiles(
+      [project.path("number.ts"), project.path("page.astro.mx")],
+      project.root,
+      errors,
+    );
+
+    expect(files.map(tail)).toEqual([
+      "types/env.d.ts",
+      "types/astro-jsx.d.ts",
+      "types/jsx-runtime-fallback.d.ts",
+    ]);
+    expect(errors).toHaveLength(1);
   });
 });
 

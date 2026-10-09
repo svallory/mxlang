@@ -403,12 +403,22 @@ function runPatchedTsc(
 }
 
 /**
- * The messages of hosts whose `ambientTypes` threw in this run, each once
- * (`ambientTypeFiles`). Reported after the run's programs are created: a
- * program built with its stderr swallowed (the `.ng.mx` listing) still
- * counts.
+ * The `ambientTypeFiles` messages of the latest program created for each
+ * project directory: a host whose `ambientTypes` threw, or returned no
+ * iterable of files. A watch rebuild that creates its program again replaces
+ * that project's entry, so a host that stopped throwing clears it and one that
+ * started adds it; a rebuild that does not ask the hosts again (Volar asks
+ * only when the root files or options change) keeps the last answer, which
+ * still holds for the program it reuses. Reported after the run's programs are
+ * created: a program built with its stderr swallowed (the `.ng.mx` listing)
+ * still counts.
  */
-const ambientTypeErrors = new Set<string>();
+const ambientTypeErrors = new Map<string, readonly string[]>();
+
+/** The current {@link ambientTypeErrors}, each message once. */
+function currentAmbientTypeErrors(): string[] {
+  return [...new Set([...ambientTypeErrors.values()].flat())];
+}
 
 /**
  * Adds the hosts' ambient declaration files for this program
@@ -425,7 +435,7 @@ function addAmbientTypes(options: ts.CreateProgramOptions): void {
       : (options.host?.getCurrentDirectory() ?? process.cwd());
   const errors: string[] = [];
   const extra = ambientTypeFiles(options.rootNames, projectDir, errors);
-  for (const message of errors) ambientTypeErrors.add(message);
+  ambientTypeErrors.set(projectDir, errors);
   if (extra.length === 0) return;
   (options as { rootNames: readonly string[] }).rootNames = [
     ...options.rootNames,
@@ -585,7 +595,7 @@ function runMxTscChecks(): number {
         cwd: process.cwd(),
         build: build !== undefined && !build.clean && !build.dry,
         programs: ngPlugins,
-        report: reportNgErrors,
+        report: reportWatchPass,
       })
     : undefined;
   const tscExitCode = runPatchedTsc(
@@ -649,9 +659,11 @@ function runMxTscChecks(): number {
   reportTargetPolicyDiagnostics(policyDiagnostics);
   const hasPolicyError = policyDiagnostics.some((d) => d.severity === "error");
   // A host whose `ambientTypes` threw: one error, the run went on without
-  // that host's ambient files, and it fails.
-  reportAmbientTypeErrors([...ambientTypeErrors]);
-  const hasAmbientTypeError = ambientTypeErrors.size > 0;
+  // that host's ambient files, and it fails. A watch run printed them from
+  // inside its first build's summary (`reportWatchPass`), counted in it.
+  const ambientErrors = currentAmbientTypeErrors();
+  if (!watchRan) reportAmbientTypeErrors(ambientErrors);
+  const hasAmbientTypeError = ambientErrors.length > 0;
   const hasCompileError = diagnostics.some(
     (diagnostic) => diagnostic.category === "error",
   );
@@ -694,18 +706,25 @@ function countNgErrors(result: NgDiagnosticsResult): number {
 }
 
 /**
- * Reports one pass's result and returns its error count, for the watch
+ * Reports one watch build's own errors and returns their count, for the watch
  * interceptor: tsc's own summary line is written right after, and its count
- * has to carry these errors too. An error found by a rebuild outlives the call
- * that returns here (a watcher is killed, not exited), so it is also the
- * process's exit code — and a later clean pass clears it again, so a watcher
- * whose templates were fixed and that is stopped cleanly exits 0.
+ * has to carry these errors too. They are `ambient`, the current
+ * `ambientTypes` errors (so every build that still runs without a host's
+ * ambient files says so again; a test passes its own), and the Angular
+ * template pass's `result`. An error found by a rebuild outlives the call that
+ * returns here (a watcher is killed, not exited), so it is also the process's
+ * exit code — and a later clean build clears it again, so a watcher whose
+ * templates and hosts were fixed and that is stopped cleanly exits 0.
  */
 let watchFailure = false;
 
-function reportNgErrors(result: NgDiagnosticsResult): number {
+export function reportWatchPass(
+  result: NgDiagnosticsResult,
+  ambient: readonly string[] = currentAmbientTypeErrors(),
+): number {
+  reportAmbientTypeErrors(ambient);
   reportNgDiagnostics(result);
-  const errors = countNgErrors(result);
+  const errors = ambient.length + countNgErrors(result);
   if (errors > 0) {
     process.exitCode = 1;
     watchFailure = true;

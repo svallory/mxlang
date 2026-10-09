@@ -3426,11 +3426,18 @@ declarations without it gets none of them.
 A host may declare `host.ambientTypes({ rootNames, resolve })`
 (mx-tsc-astro-ambient-types): the declaration files a type-check of its files
 needs beyond the project's `tsconfig.json`, as the framework's own tooling adds
-them. `mx-tsc` and the TypeScript plugin ask every host of the project's lookup
-(built-ins and a loaded host alike) for every program they check, add what it
-returns as root files, and the host returns `[]` for a program holding none of
-its files. `resolve("<package>/<file>")` looks in the project's `node_modules`,
-then in the tool's install. The built-in Astro host returns astro's `env.d.ts`
+them. `mx-tsc` and the TypeScript plugin ask every host of each root file's own
+lookup (the file's policy, resolved from the nearest `package.json` above it as
+for every other host operation; built-ins and a loaded host alike), then of the
+`tsconfig.json` directory's, each host once, for every program they check, add
+what it returns as root files, and the host returns `[]` for a program holding
+none of its files (ambient-types-host-lookup-tsconfig-dir).
+`resolve("<package>/<file>")` looks in the `node_modules` above the directory
+of the first root file whose lookup holds the host, then above the
+`tsconfig.json` directory, then in the tool's install. A host whose
+`ambientTypes` throws, or returns anything but an iterable of files, adds
+nothing and is one file-less `TS80004` error naming its package; the check goes
+on. The built-in Astro host returns astro's `env.d.ts`
 and `astro-jsx.d.ts` (or `@astrojs/language-server`'s fallback copies) for a
 program holding an `.astro.mx` or `.astro` file, so `Fragment` resolves without
 `types: ["astro/env"]`. A non-function `host.ambientTypes` is a load error.
