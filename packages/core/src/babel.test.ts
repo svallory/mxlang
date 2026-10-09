@@ -8,7 +8,7 @@
  * The comparison side (`markoBabel()`) is a devDependency of core only until
  * slice S5 deletes `marko-frontend.ts`; the differential goes with it.
  */
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { type Dirent, readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { coreBabel } from "./babel.ts";
@@ -21,9 +21,26 @@ const ROOT = resolve(import.meta.dirname, "../../..");
 /** Comment nodes: the generator prints them only attached to a node. */
 const COMMENT = new Set(["CommentBlock", "CommentLine"]);
 
+/**
+ * Whether `error` is a missing file or directory. Other test files write and
+ * delete `.mx` fixtures under `packages/` while this one runs
+ * (angular-checker's `virtual-tags-*` dirs), so a directory or file seen a
+ * moment ago can be gone; only that is skipped, and any other error throws.
+ */
+function isMissing(error: unknown): boolean {
+  return (error as { code?: unknown } | null)?.code === "ENOENT";
+}
+
 /** Every `.mx` file under `dir`, outside `node_modules`, `dist` and dot dirs. */
 function mxFiles(dir: string, out: string[] = []): string[] {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch (error) {
+    if (isMissing(error)) return out;
+    throw error;
+  }
+  for (const entry of entries) {
     if (entry.name.startsWith(".")) continue;
     if (entry.name === "node_modules" || entry.name === "dist") continue;
     const path = join(dir, entry.name);
@@ -88,13 +105,15 @@ describe("coreBabel's generator prints as Marko's did", () => {
     let compared = 0;
     const differences: string[] = [];
     for (const file of files) {
-      // Other test files write and delete `.mx` fixtures under `packages/`
-      // while this one runs (angular-checker's `virtual-tags-*` dirs), so a
-      // file listed at collection can be gone by now.
-      if (!existsSync(file)) continue;
+      let source: string;
+      try {
+        source = readFileSync(file, "utf8");
+      } catch (error) {
+        if (isMissing(error)) continue;
+        throw error;
+      }
       let document: unknown;
       try {
-        const source = readFileSync(file, "utf8");
         document = parseMx(source, {
           syntax: defaultSyntax(),
           lookup: undefined,
