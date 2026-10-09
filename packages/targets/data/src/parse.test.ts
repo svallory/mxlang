@@ -623,7 +623,7 @@ describe('structural: "reject"', () => {
     );
   });
 
-  it("the same constructs pass by default, comments included under reject too", () => {
+  it("the same constructs pass by default", () => {
     const tree = ok(
       `// c\n<if=a>t${D}x}</if><else>u</else>\n<for|i| of=items>v</for>\n<const/n=1/>\n`,
     );

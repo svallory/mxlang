@@ -73,6 +73,7 @@ export interface ParseDataOptions {
   defaultTag?: string;
   /**
    * `"pass"` (default) keeps the structural constructs — text, `${}`,
+   * `<if>`/`<for>`/`<const>`, `import`/`export`/`static` — in the
    * tree for the consumer to interpret. Comments are never structural:
    * under either value a `//` line or `<!-- -->` stays in the tree as the
    * `Comment` node it already is under `"pass"` (decision 131 addendum 5).
