@@ -12,6 +12,7 @@ import {
   TagType,
   type Trigger,
 } from "../template/index.ts";
+import { SUGARS_SYNTAX } from "../template/test-support/sugar-rows.ts";
 import { parse } from "./parse.ts";
 import { characters, expressionHeavy, tokens } from "./test-support/fuzz.ts";
 import { checkInvariants } from "./test-support/invariants.ts";
@@ -412,5 +413,108 @@ describe("the & table over many inputs", () => {
     }
     expect(problems).toEqual([]);
     expect(withTriggers).toBeGreaterThan(300);
+  }, 120_000);
+});
+
+describe("the atoms-and-sugars rows through the front end (slice a1)", () => {
+  const sugarParse = (source: string) =>
+    parse(source, { ...OPTIONS, syntax: SUGARS_SYNTAX });
+
+  it("an attribute trigger's method value is an MxMethod", () => {
+    const source =
+      "boolean :isOverdue({ self }) { return self.status === :sent }";
+    const document = sugarParse(source);
+    expect(document.errors).toEqual([]);
+    expect(checkInvariants(document, OPTIONS.tagShape)).toEqual([]);
+    const trigger = (document.body[0] as Node).attributes[0];
+    expect(shape({ ...trigger, value: undefined })).toEqual({
+      type: "MxTrigger",
+      start: 8,
+      end: 61,
+      id: "name",
+      position: "attribute",
+      text: ":isOverdue",
+    });
+    const method = trigger.value;
+    expect(method.type).toBe("MxMethod");
+    expect(method.start).toBe(18);
+    expect(method.end).toBe(61);
+    expect(method.async).toBe(false);
+    expect(method.typeParams).toBeNull();
+    expect(method.source).toBe("({ self }) { return self.status === :sent }");
+    expect(method.params.source).toBe("{ self }");
+    expect(method.body.source).toBe(" return self.status === :sent ");
+    // The atom inside the body is the body's expression trigger.
+    expect(shape(method.body.triggers)).toEqual([
+      {
+        type: "MxTrigger",
+        start: 54,
+        end: 59,
+        id: "atom",
+        position: "expression",
+        text: ":sent",
+        value: null,
+      },
+    ]);
+    expect(method.body.error).toBeNull();
+    expect(projectDocument(document)).toEqual([
+      'tag "boolean" [0,7) [0,61) open=[0,61) mode=html concise',
+      '  trigger name ":isOverdue" [8,61) method [18,61) params "{ self }" [19,27) body " return self.status === :sent " [30,60)',
+    ]);
+  });
+
+  it("an async method with type parameters starts at `async`", () => {
+    const document = sugarParse("<a async :x<T>(p: T) { await p }/>");
+    expect(document.errors).toEqual([]);
+    expect(checkInvariants(document, OPTIONS.tagShape)).toEqual([]);
+    const [trigger] = (document.body[0] as Node).attributes;
+    expect([trigger.type, trigger.start, trigger.end, trigger.text]).toEqual([
+      "MxTrigger",
+      3,
+      32,
+      ":x",
+    ]);
+    expect(trigger.value.async).toBe(true);
+    expect(trigger.value.start).toBe(3);
+    expect(trigger.value.typeParams.source).toBe("T");
+  });
+
+  it("a refused value is a template MxParseError at the `=`", () => {
+    const document = sugarParse("<a #main=1/>");
+    expect(document.complete).toBe(false);
+    expect(document.errors).toEqual([
+      {
+        type: "MxParseError",
+        start: 8,
+        end: 9,
+        code: "INVALID_ATTRIBUTE_VALUE",
+        origin: "template",
+        message: "The `#main` shorthand takes no value.",
+        context: null,
+      },
+    ]);
+  });
+
+  it("never throws and keeps the span invariant over the probes and fuzz", () => {
+    const inputs = PROBES.map((p) => ({ id: p.id, source: p.input }));
+    for (let seed = 1; seed <= 300; seed++) {
+      inputs.push({ id: `tokens#${seed}`, source: tokens(seed) });
+      inputs.push({ id: `expr#${seed}`, source: expressionHeavy(seed) });
+    }
+    const problems: string[] = [];
+    let methods = 0;
+    for (const { id, source } of inputs) {
+      const document = sugarParse(source);
+      const where = `${id} ${JSON.stringify(source.slice(0, 80))}`;
+      if (document.errors.some((e) => e.code === "MX_FRONT_END_INTERNAL")) {
+        problems.push(`${where}: internal error`);
+      }
+      for (const problem of checkInvariants(document)) {
+        problems.push(`${where}: ${problem}`);
+      }
+      if (JSON.stringify(document.body).includes('"MxMethod"')) methods++;
+    }
+    expect(problems).toEqual([]);
+    expect(methods).toBeGreaterThan(0);
   }, 120_000);
 });

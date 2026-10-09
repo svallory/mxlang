@@ -91,6 +91,29 @@ Mesh's syntax needs no "`:name` after a value" form (`belongs-to=:List :list`):
 the member sigil `&` covers the reference in all three positions, so that
 parser rule has no layer-2 user (decision 182, addendum 1).
 
+The rows (`packages/core/src/syntax/atoms-sugars.ts`, `@mxlang/core/syntax/atoms-sugars`, combined
+with the member row in `syntax/mesh.ts`, `@mxlang/core/syntax/mesh`, the module Mesh copies):
+
+| Row | List | `chars` | `match` | Other fields |
+|---|---|---|---|---|
+| `atom` | expression | `:` | `::(?:NAME)?\|:NAME` | `standIn: "number"`, `{ call }` |
+| `name` | attribute | `:` | `:` then a token | `terminatesValue` |
+| `id` | attribute | `#` | `#` then a token (a chain) | `terminatesValue`, `value: "refuse"` |
+| `class` | attribute | `.` | `.` then a token (a chain) | `terminatesValue`, `value: "refuse"` |
+
+`NAME` is `[A-Za-z_$][\w$]*(?:-[\w$]+)*`. A token runs to whitespace, `=`,
+`(`, `,` or the end of the tag or group. While both exist, a loaded row on a
+character replaces core's built-in handling of that character in that
+position (lexing, after-value rule, lowering).
+
+What a Mesh file reads differently from a plain `.mx` file once the move
+lands: `#x=1`, `.x=1` and `#x(p) { b }` are refused (decision 183); a bare
+`:` after a value no longer ends it, and `belongs-to=:X :x` no longer splits
+(decision 182 addendum 1); `a::b` after a word is TypeScript's error rather
+than the reserved-token one; `::` inside a tag or attribute name is Marko's
+reading; tag-adjacent `kind:name`, `<:name>` and `#id:name.class` are
+Marko's readings (no trigger reaches a tag name).
+
 Order of work: the table lands, MX's own atoms and sugars move onto it with no
 behavior change, then the entries move to the Mesh package. The parser's
 atom corpus becomes Mesh's table tests, run against the MX parser with the

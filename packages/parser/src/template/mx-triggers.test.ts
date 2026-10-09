@@ -7,7 +7,8 @@
  * Events are rendered compactly, as the atom cases do (`mx-atoms.cases.ts`):
  * `<tag>`, `@name`, `="value"` (as `read()` returns it, so stand-ins show),
  * `atom(name@start-end)`, `trigger(id position "text"@start-end)` with
- * `="value"` when it has one, and `ERR(start-end message)`.
+ * `="value"` or `method{"body"}` when it has one, and
+ * `ERR(start-end message)`.
  */
 import { describe, expect, it } from "vitest";
 import { PROBES } from "./grammar-spec.cases.ts";
@@ -18,6 +19,7 @@ import {
   type Trigger,
   validateSyntaxTable,
 } from "./index.ts";
+import { ATOM, CLASS, ID, NAME } from "./test-support/sugar-rows.ts";
 
 /**
  * Mesh's member trigger (decision 182 addendum 2), the first table row. Its
@@ -50,20 +52,27 @@ const MESH = table({
   lineTriggers: [MEMBER],
 });
 
-function render(code: string, syntax: SyntaxTable | undefined): string {
+function render(
+  code: string,
+  syntax: SyntaxTable | undefined,
+  codes = false,
+): string {
   const out: string[] = [];
   const show = (r: { start: number; end: number }) =>
     JSON.stringify(parser.read(r));
   const parser = createParser(
     {
-      onError: (e) => out.push(`ERR(${e.start}-${e.end} ${e.message})`),
+      onError: (e) =>
+        out.push(
+          `ERR(${e.start}-${e.end} ${e.message}${codes ? ` #${e.code}` : ""})`,
+        ),
       onAtom: (a) =>
         out.push(
           `atom(${code.slice(a.value.start, a.value.end)}@${a.start}-${a.end})`,
         ),
       onTrigger: (t) =>
         out.push(
-          `trigger(${t.id} ${t.position} ${JSON.stringify(code.slice(t.text.start, t.text.end))}@${t.start}-${t.end}${t.value ? ` =${show(t.value)}` : ""})`,
+          `trigger(${t.id} ${t.position} ${JSON.stringify(code.slice(t.text.start, t.text.end))}@${t.start}-${t.end}${t.value ? ` =${show(t.value)}` : ""}${t.method ? ` ${t.method.async ? "async " : ""}${t.method.typeParams ? `<${show(t.method.typeParams.value)}>` : ""}(${show(t.method.params.value)}) method{${show(t.method.body.value)}}` : ""})`,
         ),
       onOpenTagName: (t) => {
         out.push(`<${code.slice(t.start, t.end)}>`);
@@ -210,13 +219,14 @@ describe("the & member row (decision 182 addendum 1)", () => {
       'ERR(5-5 A "member" trigger line ends after its text and its value; only whitespace may follow it on the line.)',
     ],
     ["&a=", "ERR(3-3 Missing value for attribute)"],
+    // `(…)` after an attribute trigger is a method's: a body must follow.
     [
       "sort &a(1)",
-      'ERR(5-8 Invalid attribute name. The "member" trigger "&a" must be followed by whitespace, "=" or the end of the tag.)',
+      'ERR(5-8 Invalid attribute name. The "member" trigger "&a" must be followed by whitespace, "=", a method or the end of the tag.)',
     ],
     [
       "<div &a.b/>",
-      '<div> ERR(5-8 Invalid attribute name. The "member" trigger "&a" must be followed by whitespace, "=" or the end of the tag.)',
+      '<div> ERR(5-8 Invalid attribute name. The "member" trigger "&a" must be followed by whitespace, "=", a method or the end of the tag.)',
     ],
     [
       "<div &a=",
@@ -290,17 +300,14 @@ describe("review 439 round 1", () => {
     );
   });
 
-  it("a stand-in never merges with what follows the match (Opus B1)", () => {
+  it("a stand-in never merges with what follows the match (Opus B1): the trigger declines (a1 item 4, P2)", () => {
+    // It was an error; like an atom on `:aé`, the text now stays source.
     const ascii = table({ expressionTriggers: [ASCII_MEMBER] });
-    expect(render("x=&façade", ascii)).toBe(
-      '<x> @ ERR(2-6 The "member" trigger "&fa" is followed by "ç", which would continue its token; its matcher must take the whole token.)',
-    );
+    expect(render("x=&façade", ascii)).toBe('<x> @ ="&façade"');
     const narrow = table({
       expressionTriggers: [{ ...MEMBER, match: "&[a-z]+" }],
     });
-    expect(render("x=&fooBar + 1", narrow)).toBe(
-      '<x> @ ERR(2-7 The "member" trigger "&foo" is followed by "B", which would continue its token; its matcher must take the whole token.)',
-    );
+    expect(render("x=&fooBar + 1", narrow)).toBe('<x> @ ="&fooBar + 1"');
     const hash = table({
       expressionTriggers: [
         {
@@ -312,9 +319,7 @@ describe("review 439 round 1", () => {
         },
       ],
     });
-    expect(render("x=#.toString()", hash)).toBe(
-      '<x> @ ERR(2-4 The "n" trigger "#" is followed by ".", which would continue its token; its matcher must take the whole token.)',
-    );
+    expect(render("x=#.toString()", hash)).toBe('<x> @ ="#.toString()"');
     // Two characters read `0.` and then `.x`: a member of the literal.
     expect(render("x=#a.x", hash)).toBe(
       '<x> @ trigger(n expression "#a"@2-4) ="0..x"',
@@ -365,6 +370,242 @@ describe("review 439 round 1", () => {
       '<x> @ trigger(e expression "😀ab"@2-6) ="__ab + 1"',
     );
   });
+});
+
+/** The atoms-and-sugars rows (slice a1), with the member row. */
+const SUGARS = table({
+  expressionTriggers: [MEMBER, ATOM],
+  attributeTriggers: [MEMBER, NAME, ID, CLASS],
+  lineTriggers: [MEMBER],
+});
+
+describe('value: "refuse" (a1 item 1; lead ruling Q5)', () => {
+  it.each([
+    ["<a #main=1/>", "<a> ERR(8-9 The `#main` shorthand takes no value. #3)"],
+    [
+      "<a #main = 1/>",
+      "<a> ERR(9-10 The `#main` shorthand takes no value. #3)",
+    ],
+    ["<a .big:=x/>", "<a> ERR(7-9 The `.big` shorthand takes no value. #3)"],
+    [
+      "<a #main(p) { return p }/>",
+      "<a> ERR(8-9 The `#main` shorthand takes no value. #3)",
+    ],
+    ["div .a.b=1", "<div> ERR(8-9 The `.a.b` shorthand takes no value. #3)"],
+    [
+      "div x=1 #m.c (p) { b }",
+      '<div> @x ="1" ERR(13-14 The `#m.c` shorthand takes no value. #3)',
+    ],
+    // `async` before it is flushed as an attribute first.
+    [
+      "<a async #m(p) { b }/>",
+      "<a> @async ERR(11-12 The `#m` shorthand takes no value. #3)",
+    ],
+  ])("%j", (code, expected) => {
+    expect(render(code, SUGARS, true)).toBe(expected);
+  });
+
+  it("a refusing trigger without a value is a trigger", () => {
+    expect(render("<a #main .big x=1/>", SUGARS)).toBe(
+      '<a> trigger(id attribute "#main"@3-8) trigger(class attribute ".big"@9-13) @x ="1"',
+    );
+  });
+
+  it("type parameters after a refusing trigger are the generic error (no method)", () => {
+    expect(render("<a #m<T>(p) { b }/>", SUGARS)).toBe(
+      '<a> ERR(3-6 Invalid attribute name. The "id" trigger "#m" must be followed by whitespace, "=" or the end of the tag.)',
+    );
+  });
+
+  it("is an attribute-trigger field", () => {
+    const expressionRow = table({
+      expressionTriggers: [{ ...MEMBER, value: "refuse" }],
+    });
+    expect(validateSyntaxTable(expressionRow)).toEqual([
+      {
+        field: "expressionTriggers[0].value",
+        triggerId: "member",
+        message: "`value` applies to attribute triggers only",
+      },
+    ]);
+    const lineRow = table({ lineTriggers: [{ ...MEMBER, value: "refuse" }] });
+    expect(validateSyntaxTable(lineRow).map((d) => d.field)).toEqual([
+      "lineTriggers[0].value",
+    ]);
+    const other = table({
+      attributeTriggers: [{ ...MEMBER, value: "accept" as never }],
+    });
+    expect(validateSyntaxTable(other)).toEqual([
+      {
+        field: "attributeTriggers[0].value",
+        triggerId: "member",
+        message: '`value` is "refuse" or omitted',
+      },
+    ]);
+    expect(validateSyntaxTable(SUGARS)).toEqual([]);
+  });
+});
+
+describe("a method value after an attribute trigger (a1 item 2, T1)", () => {
+  it.each([
+    // Mesh v4's computed field; atoms and members inside the body lex.
+    [
+      "boolean :isOverdue({ self }) { return self.status === :sent }",
+      '<boolean> trigger(atom expression ":sent"@54-59) trigger(name attribute ":isOverdue"@8-61 ("{ self }") method{" return self.status === 0.000 "})',
+    ],
+    // Whitespace before `(` and before `{`, as after a name.
+    [
+      "<a :x (p)  { p }/>",
+      '<a> trigger(name attribute ":x"@3-16 ("p") method{" p "})',
+    ],
+    // Type parameters.
+    [
+      "<a :x<T>(p: T) { p }/>",
+      '<a> trigger(name attribute ":x"@3-20 <"T">("p: T") method{" p "})',
+    ],
+    // `async` before the trigger modifies the method and starts it.
+    [
+      "<a async :x(p) { await p }/>",
+      '<a> trigger(name attribute ":x"@3-26 async ("p") method{" await p "})',
+    ],
+    // The member row takes one too; the next attribute follows.
+    [
+      "field &total() { return 1 } y=2",
+      '<field> trigger(member attribute "&total"@6-27 ("") method{" return 1 "}) @y ="2"',
+    ],
+  ])("%j", (code, expected) => {
+    expect(render(code, SUGARS)).toBe(expected);
+  });
+
+  it("`async` with no method after the trigger stays an attribute", () => {
+    expect(render("<script async :x/>", SUGARS)).toBe(
+      '<script> @async trigger(name attribute ":x"@14-16)',
+    );
+    expect(render("<script async &x/>", SUGARS)).toBe(
+      '<script> @async trigger(member attribute "&x"@14-16)',
+    );
+  });
+
+  it.each([
+    // Arguments with no body.
+    [
+      "div :b(x)",
+      '<div> ERR(4-7 Invalid attribute name. The "name" trigger ":b" must be followed by whitespace, "=", a method or the end of the tag.)',
+    ],
+    [
+      "<a :b(:c)/>",
+      '<a> trigger(atom expression ":c"@6-8) ERR(3-6 Invalid attribute name. The "name" trigger ":b" must be followed by whitespace, "=", a method or the end of the tag.)',
+    ],
+    // `</` and `<!--` right after it are no type parameters.
+    [
+      "<a :x</a>",
+      '<a> ERR(3-6 Invalid attribute name. The "name" trigger ":x" must be followed by whitespace, "=", a method or the end of the tag.)',
+    ],
+    [
+      "<a :x<!-- c -->/>",
+      '<a> ERR(3-6 Invalid attribute name. The "name" trigger ":x" must be followed by whitespace, "=", a method or the end of the tag.)',
+    ],
+    // Type parameters with no arguments.
+    [
+      "<a :x<T> y/>",
+      "<a> ERR(6-7 Attribute cannot contain type parameters unless it is a shorthand method)",
+    ],
+  ])("error: %j", (code, expected) => {
+    expect(render(code, SUGARS)).toBe(expected);
+  });
+});
+
+describe("the atom row arms where the built-in atom does (a1 items 3, 4 and 6)", () => {
+  const ATOMS = table({ expressionTriggers: [ATOM] });
+
+  it.each([
+    // P1: TypeScript's optional marker `?:` (or `? :`) is never followed
+    // by an atom; a ternary's `?` is.
+    ["x=(a?:T) => a", '<x> @ ="(a?:T) => a"'],
+    ["x=(a? :T) => a", '<x> @ ="(a? :T) => a"'],
+    ["x=[c]?:a", '<x> @ ="[c]?:a"'],
+    [
+      "x=c ? :a : :b",
+      '<x> @ trigger(atom expression ":a"@6-8) trigger(atom expression ":b"@11-13) ="c ? 0. : 0."',
+    ],
+    [
+      "x=n === 1? :a : :b",
+      '<x> @ trigger(atom expression ":a"@11-13) trigger(atom expression ":b"@16-18) ="n === 1? 0. : 0."',
+    ],
+    // P2: a non-ASCII letter after the name, directly or after `-`: the
+    // trigger declines and the text stays source, as `lexAtom` does.
+    ["x=[:aé]", '<x> @ ="[:aé]"'],
+    ["x=[:a-é]", '<x> @ ="[:a-é]"'],
+    ["x=[:a-b-é]", '<x> @ ="[:a-b-é]"'],
+    // `::` is the row's own (the hook reports it reserved).
+    ["x=::a", '<x> @ trigger(atom expression "::a"@2-5) ="0.0"'],
+    // Item 6: no `onAtom` with the row loaded; a declined `:` is the ternary's.
+    ["x=a ? :b :c", '<x> @ trigger(atom expression ":b"@6-8) ="a ? 0. :c"'],
+  ])("%j", (code, expected) => {
+    expect(render(code, ATOMS)).toBe(expected);
+  });
+
+  it("each P1/P2 input lexes no built-in atom either", () => {
+    for (const code of [
+      "x=(a?:T) => a",
+      "x=(a? :T) => a",
+      "x=[c]?:a",
+      "x=[:aé]",
+      "x=[:a-é]",
+    ]) {
+      expect(render(code, undefined), code).not.toMatch(/atom\(/);
+    }
+  });
+
+  it("P2 leaves a matcher that takes the characters, or never would, alone", () => {
+    expect(render("x=&a-é", MESH)).toBe(
+      '<x> @ trigger(member expression "&a"@2-4) ="_a-é"',
+    );
+  });
+
+  it("drops the single-atom default exemption with the built-in atom (182 addendum 1)", () => {
+    expect(render("<belongs-to=:X :y/>", undefined)).toBe(
+      '<belongs-to> @ atom(X@12-14) ="0." @:y',
+    );
+    expect(render("<belongs-to=:X :y/>", ATOMS)).toBe(
+      '<belongs-to> @ trigger(atom expression ":X"@12-14) ="0. :y"',
+    );
+  });
+});
+
+describe("attribute rows replace the built-in after-value cases (a1 item 6)", () => {
+  // The rows without `terminatesValue`: the built-in case is off, so
+  // nothing ends the value there.
+  const quietName = table({
+    attributeTriggers: [{ ...NAME, terminatesValue: false }],
+  });
+  const quietClass = table({
+    attributeTriggers: [{ ...CLASS, terminatesValue: false }],
+  });
+
+  it.each([
+    ["<a x=1 :b/>", undefined, '<a> @x ="1" @:b'],
+    ["<a x=1 :b/>", quietName, '<a> @x ="1 :b"'],
+    ["<a x=1 :b/>", SUGARS, '<a> @x ="1" trigger(name attribute ":b"@7-9)'],
+    ["<a x=1 :/>", undefined, '<a> @x ="1" @:'],
+    [
+      "<a x=1 :/>",
+      SUGARS,
+      "<a> @x ERR(8-8 EOF reached while parsing regular expression)",
+    ],
+    ["<a x=a .b/>", undefined, '<a> @x ="a" @.b'],
+    ["<a x=a .b/>", quietClass, '<a> @x ="a .b"'],
+    ["<a x=a .b/>", SUGARS, '<a> @x ="a" trigger(class attribute ".b"@7-9)'],
+    // `.5` matches no row, and the stock rule keeps it in the value.
+    ["<a x=a .5/>", SUGARS, '<a> @x ="a .5"'],
+    // `#` never continued a value.
+    ["<a x=1 #b/>", SUGARS, '<a> @x ="1" trigger(id attribute "#b"@7-9)'],
+  ] as [string, SyntaxTable | undefined, string][])(
+    "%j",
+    (code, syntax, expected) => {
+      expect(render(code, syntax)).toBe(expected);
+    },
+  );
 });
 
 describe("other trigger shapes", () => {

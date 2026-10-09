@@ -13,7 +13,11 @@ import {
   wordWidthAt,
   wordWidthBefore,
 } from "../internal.ts";
-import { matchTrigger } from "../syntax.ts";
+import {
+  type CompiledSyntax,
+  type CompiledTrigger,
+  matchTrigger,
+} from "../syntax.ts";
 import * as CODE from "../util/codes.ts";
 import * as ErrorCode from "../util/error-code.ts";
 
@@ -259,7 +263,13 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
           break;
         case CODE.COLON:
           // MX: an atom's `:` is not a ternary's, so it is consumed first.
-          if (expression.atoms && lexAtom(this, expression, data)) {
+          // A loaded expression trigger on `:` replaces atom lexing (the
+          // coexistence rule); a `:` it declined is the ternary's or a type's.
+          if (
+            expression.atoms &&
+            this.syntax.builtInAtoms &&
+            lexAtom(this, expression, data)
+          ) {
             if (this.pos > maxPos) return; // `::` was reported
             continue;
           }
@@ -556,7 +566,12 @@ function checkForOperators(
       ) {
         return false;
       }
-      const lookAheadPos = lookAheadForOperator(expression, data, nextNonSpace);
+      const lookAheadPos = lookAheadForOperator(
+        expression,
+        data,
+        nextNonSpace,
+        parser.syntax,
+      );
       if (lookAheadPos !== -1) {
         parser.pos = lookAheadPos;
         return true;
@@ -700,6 +715,7 @@ function lookAheadForOperator(
   expression: ExpressionMeta,
   data: string,
   pos: number,
+  syntax: CompiledSyntax,
 ): number {
   switch (data.charCodeAt(pos)) {
     case CODE.AMPERSAND:
@@ -724,8 +740,11 @@ function lookAheadForOperator(
 
     case CODE.COLON:
       // MX: in an attribute value, ` :name` (no open `?`) or a bare `:` before
-      // the end of the tag or line starts a new attribute.
-      return valueMayEndAt(expression, data, pos) &&
+      // the end of the tag or line starts a new attribute. An attribute
+      // trigger on `:` replaces both (the coexistence rule): its
+      // `terminatesValue`, checked before this, does the work.
+      return syntax.builtInColonEnd &&
+        valueMayEndAt(expression, data, pos) &&
         (isIdentStartCode(data.charCodeAt(pos + 1)) ||
           isBareColonEnd(data, pos + 1))
         ? -1
@@ -733,8 +752,13 @@ function lookAheadForOperator(
 
     case CODE.PERIOD: {
       // MX: in an attribute value, ` .name` starts a new attribute.
-      // A non-ASCII letter starts a name too (`x=a .é` stays sugar).
-      if (expression.attrValue && isNameStartAt(data, pos + 1)) {
+      // A non-ASCII letter starts a name too (`x=a .é` stays sugar). An
+      // attribute trigger on `.` replaces it (the coexistence rule).
+      if (
+        syntax.builtInPeriodEnd &&
+        expression.attrValue &&
+        isNameStartAt(data, pos + 1)
+      ) {
         return -1;
       }
       // Only matches `.` followed by something that could be an identifier.
@@ -993,8 +1017,11 @@ function lexAtom(
  * its matcher matches and an operand is expected here: never inside a word,
  * never continuing a punctuator of the same character (`a &&b` is a logical
  * and, not `&` and `&b`), and only where `expectsExpression` holds, the atom
- * rule. Records the span for `read`, announces it through `onTrigger`, and
- * returns whether it consumed it.
+ * rule, or right after a ternary's `?` (below). It declines, silently, when
+ * the text after the match would continue the token (`continuesToken`,
+ * `stopsShortOfToken`): the character is then lexed as if no trigger were
+ * armed, as the atom rule declines `:aé`. Records the span for `read`,
+ * announces it through `onTrigger`, and returns whether it consumed it.
  */
 function lexTrigger(
   parser: Parser,
@@ -1011,10 +1038,15 @@ function lexTrigger(
   ) {
     return false;
   }
-  // A `?` before the trigger is a ternary's (`c?&a:&b`), never the
-  // TypeScript optional marker the atom rule guards against (`a?:T`).
+  // A `?` before the trigger is a ternary's (`c?&a:&b`): TypeScript's
+  // optional marker is a `?` followed by `:` (`a?:T`, `a? :T`), so the
+  // bypass never applies to a trigger armed on `:`, where the atom rule
+  // (`expectsExpression`) alone decides, as it does for atoms.
   if (
-    !afterQuestion(expression, data, start) &&
+    !(
+      data.charCodeAt(start) !== CODE.COLON &&
+      afterQuestion(expression, data, start)
+    ) &&
     !expectsExpression(expression, data, start)
   ) {
     return false;
@@ -1022,15 +1054,14 @@ function lexTrigger(
   const { trigger, end } = hit;
   // The stand-in must end where the trigger does: text that continues the
   // token (`&façade` matched as `&fa` by an ASCII matcher, or `0` then `.`
-  // for a one-character number stand-in) would merge into it.
-  const continued = trigger.standIn !== "keep" && continuesToken(data, start, end, trigger.standIn);
-  if (continued) {
-    parser.emitError(
-      { start, end: end + continued },
-      ErrorCode.INVALID_EXPRESSION,
-      `The "${trigger.id}" trigger "${data.slice(start, end)}" is followed by "${data.slice(end, end + continued)}", which would continue its token; its matcher must take the whole token.`,
-    );
-    return true;
+  // for a one-character number stand-in) would merge into it, so the
+  // trigger declines and the text stays source, as `:aé` stays for atoms.
+  if (
+    trigger.standIn !== "keep" &&
+    (continuesToken(data, start, end, trigger.standIn) > 0 ||
+      stopsShortOfToken(trigger, data, start, end))
+  ) {
+    return false;
   }
   if (parser.recordTrigger(trigger, start, end)) {
     parser.options.onTrigger?.({
@@ -1052,6 +1083,45 @@ function afterQuestion(expression: ExpressionMeta, data: string, pos: number) {
   let i = pos - 1;
   while (i >= expression.start && isUnicodeWhitespaceCode(data.charCodeAt(i))) i--;
   return i >= expression.start && data.charCodeAt(i) === CODE.QUESTION;
+}
+
+/**
+ * Whether the matcher stopped only because non-ASCII word characters follow
+ * the match: it would take more had each of them been an ASCII letter
+ * (`:a-é` matched as `:a` by an ASCII matcher, which `-[\w$]+` would
+ * extend). The stand-in would then end inside the authored token (`0.-é`,
+ * silently a subtraction). A matcher that already takes those characters,
+ * or never would, is unaffected (`&a-é` for a member is `_a - é`). Only the
+ * characters up to the next ASCII whitespace (at most 64) are looked at.
+ */
+function stopsShortOfToken(
+  trigger: CompiledTrigger,
+  data: string,
+  start: number,
+  end: number,
+): boolean {
+  const limit = Math.min(data.length, end + 64);
+  let folded = "";
+  let wide = false;
+  for (let i = end; i < limit; ) {
+    const code = data.charCodeAt(i);
+    if (isWhitespaceCode(code)) break;
+    const width = code >= 0x80 ? wordWidthAt(data, i) : 0;
+    if (width > 0) {
+      folded += "a".repeat(width);
+      wide = true;
+      i += width;
+    } else {
+      folded += data[i];
+      i++;
+    }
+  }
+  if (!wide) return false;
+  const { matcher } = trigger;
+  const probe = data.slice(start, end) + folded;
+  matcher.lastIndex = 0;
+  const found = matcher.exec(probe);
+  return found !== null && found[0].length > end - start;
 }
 
 /**

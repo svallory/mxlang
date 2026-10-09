@@ -90,6 +90,11 @@ export namespace Ranges {
     text: Range;
     /** The `=value` expression of an attribute or line trigger, `=` excluded. */
     value?: Range;
+    /**
+     * The method value of an attribute trigger (`:x(p) { b }`), lexed as a
+     * named attribute's method shorthand; never with `value`.
+     */
+    method?: AttrMethod;
   }
 }
 

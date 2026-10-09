@@ -33,7 +33,12 @@ by the repo's lead, who owns the tooling.
 armed in three positions (expression, attribute name, tagless concise line),
 announced through `onTrigger` and stood in by `read()` at the same length;
 the front end builds `MxTrigger` nodes (`@mxlang/babel/mx-ast`, ast §4.4). Atoms and the `:name`/`#id`/`.class` sugars keep
-their own paths until they move onto the table. Nothing is lowered here.
+their own paths until they move onto the table; a loaded row on `:` (expression
+or attribute) or `.` (attribute) turns the built-in path for that character
+off (the coexistence rule, `CompiledSyntax.builtIn*`), and
+`src/template/test-support/sugar-rows.ts` holds the rows that express them
+(slice a1; differences in `src/template/mx-sugar-module.deltas.ts`). Nothing
+is lowered here.
 Block tags and filters (`MxBlockTag`, `MxFilter`, ast §4.5) are raw body
 children in HTML content. Tag types come from the table's `tagTypes`
 (addenda 2 and 3), never from a handler's return: the front end passes

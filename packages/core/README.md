@@ -529,6 +529,29 @@ file's choices. In the source, change its one type import from `../index.ts` to
 through Node's strip-only `require`: types-only imports, no enums or
 parameter properties.
 
+## Atoms and name sugars as a syntax module: `@mxlang/core/syntax/atoms-sugars` and `@mxlang/core/syntax/mesh`
+
+Decisions 183 and 196 take atoms (`:name` values, decision 156) and the
+name sugars (`:name` setting `name`, spaced `#id` and `.class`, decision
+146) out of core's grammar before the beta. `@mxlang/core/syntax/atoms-sugars`
+is the reference module that carries them as layer-2 triggers on the public
+hook API only; `@mxlang/core/syntax/mesh` combines it with the member module
+(the shape Mesh copies as its own module). Until the move lands, core still
+handles them itself on the `.mx` default row; a loaded row on a character
+(`:` in an expression, `:`, `#` or `.` in an attribute list) replaces core's
+built-in handling of that character. What the module reads differently from
+the built-in path is the list in `scripts/sugar-module/deltas.json`, each
+entry naming its ruling (`#x=1` refused, decision 183, among them).
+
+```ts
+import meshSyntax from "@mxlang/core/syntax/mesh";
+
+const result = parseData(source, file, { syntax: meshSyntax });
+```
+
+Copy it the way the member module is copied (its type imports from
+`../index.ts` become `@mxlang/core`; `mesh.ts` also imports its two siblings).
+
 ## Host-policy resolution
 
 **`resolveTargetPolicy(filePath)`** (`src/host-policy.ts`) answers which host a

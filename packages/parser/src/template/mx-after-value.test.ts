@@ -16,6 +16,9 @@
 
 import { describe, expect, it } from "vitest";
 import * as template from "./index.ts";
+import { DELTAS } from "./mx-sugar-module.deltas.ts";
+import { sugarBuild } from "./test-support/sugar-module.ts";
+import { MESH_SYNTAX } from "./test-support/sugar-rows.ts";
 
 type Parser = typeof template;
 
@@ -53,7 +56,30 @@ function render(mod: Parser, code: string, statements = false): string {
   return out.join(" ");
 }
 
-const builds: [string, Parser][] = [["src/template", template]];
+/**
+ * The built-in path, and the atoms-and-sugars syntax module (with the member
+ * row, as Mesh combines them; `lang-ext-move-sugars-to-mesh` slice a1): the
+ * same tables, the module's result differing only by a row of
+ * `mx-sugar-module.deltas.ts` (`expectedFor`).
+ */
+const MODULE = "mesh-syntax";
+const builds: [string, Parser][] = [
+  ["src/template", template],
+  [MODULE, sugarBuild(MESH_SYNTAX)],
+];
+
+const SUITE = "after-value";
+
+/** The module build's expected rendering: the built-in one, or its delta's. */
+function expectedFor(build: string, input: string, expected: string) {
+  if (build !== MODULE) return expected;
+  const delta = DELTAS.find(
+    (d) => d.build === MODULE && d.suite === SUITE && d.input === input,
+  );
+  if (!delta) return expected;
+  expect(delta.builtIn, "the delta's built-in result is stale").toBe(expected);
+  return delta.module;
+}
 
 /** [input, rendered events] — the behaviour the patch introduces. */
 const CHANGED: [string, string][] = [
@@ -217,17 +243,17 @@ const PINNED: [string, string][] = [
   ["input [x=1\n .b\n :c]", '<input> @x ="1" @.b @:c'],
 ];
 
-describe.each(builds)("htmljs-parser patch (%s)", (_name, mod) => {
+describe.each(builds)("htmljs-parser patch (%s)", (name, mod) => {
   it.each(CHANGED)("new attribute: %j", (input, expected) => {
-    expect(render(mod, input)).toBe(expected);
+    expect(render(mod, input)).toBe(expectedFor(name, input, expected));
   });
 
   it.each(PINNED)("unchanged: %j", (input, expected) => {
-    expect(render(mod, input)).toBe(expected);
+    expect(render(mod, input)).toBe(expectedFor(name, input, expected));
   });
 });
 
-describe.each(builds)("statement tags (%s)", (_name, mod) => {
+describe.each(builds)("statement tags (%s)", (name, mod) => {
   // Statement tags keep their text when the host returns `TagType.statement`.
   it.each([
     "static const x = a .b",
@@ -244,8 +270,9 @@ describe.each(builds)("statement tags (%s)", (_name, mod) => {
 
   // Without it the line is an ordinary tag and the rule applies.
   it("a non-statement host sees attributes", () => {
-    expect(render(mod, "static const x = a .b")).toBe(
-      '<static> @const @x ="a" @.b',
+    const input = "static const x = a .b";
+    expect(render(mod, input)).toBe(
+      expectedFor(name, input, '<static> @const @x ="a" @.b'),
     );
   });
 });
@@ -271,8 +298,22 @@ const DEFAULT_ATTRIBUTE: [string, string][] = [
   ["<if=a b=1 .c>x</if>", '<if> @ ="a" @b ="1" @.c'],
 ];
 
-describe.each(builds)("default attribute (exempt) (%s)", (_name, mod) => {
+describe.each(builds)("default attribute (exempt) (%s)", (name, mod) => {
   it.each(DEFAULT_ATTRIBUTE)("%j", (input, expected) => {
-    expect(render(mod, input)).toBe(expected);
+    expect(render(mod, input)).toBe(expectedFor(name, input, expected));
+  });
+});
+
+describe("the module's after-value deltas", () => {
+  it("name only inputs of these tables, each a real difference", () => {
+    const inputs = new Set(
+      [...CHANGED, ...PINNED, ...DEFAULT_ATTRIBUTE].map(([input]) => input),
+    );
+    inputs.add("static const x = a .b");
+    for (const delta of DELTAS.filter((d) => d.suite === SUITE)) {
+      expect(delta.build).toBe(MODULE);
+      expect(inputs.has(delta.input), delta.input).toBe(true);
+      expect(delta.module).not.toBe(delta.builtIn);
+    }
   });
 });

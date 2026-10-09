@@ -110,7 +110,27 @@ export function checkInvariants(
         break;
       case "MxTrigger": {
         // Decision 182: the span starts with the matched text; `=value`, if
-        // any, follows it after `=` and whitespace, and ends the span.
+        // any, follows it after `=` and whitespace, and ends the span. A
+        // method value follows it after whitespace and ends the span; its
+        // `async`, written before the text, starts both.
+        if (node.value?.type === "MxMethod") {
+          within(`${path}.value`, node.value, node);
+          if (node.value.end !== node.end)
+            fail(path, "method does not end the span");
+          if (node.value.async && node.value.start !== node.start)
+            fail(path, "an async method does not start the span");
+          const textAt = node.value.async ? slice.indexOf(node.text) : 0;
+          if (node.text === "" || slice.slice(textAt).indexOf(node.text) !== 0)
+            fail(path, "the span does not hold its text");
+          const between = slice.slice(
+            textAt + node.text.length,
+            node.value.start - node.start,
+          );
+          if (!node.value.async && !/^\s*$/.test(between)) {
+            fail(path, `${JSON.stringify(between)} before the method`);
+          }
+          break;
+        }
         if (!slice.startsWith(node.text) || node.text === "") {
           fail(
             path,

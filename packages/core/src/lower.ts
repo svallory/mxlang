@@ -4472,7 +4472,8 @@ function lowerChildrenOf(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
   // walk starts with no parents, right for a body lowered on its own.
   if (!ctx.unnamedTagsResolved) {
     if (!ctx.atomsConverted) convertAtoms(ctx, children);
-    lowerTriggers(ctx, children);
+    // A syntax module's atoms (`extra.mxAtom` replacements) join the atoms.
+    if (lowerTriggers(ctx, children)) convertAtoms(ctx, children);
     children = childrenWithTriggers(children);
     resolveUnnamedTags(ctx, children);
     ctx.unnamedTagsResolved = true;
@@ -4837,7 +4838,8 @@ function lowerRoot(ctx: Ctx, authored: readonly MxChild[]): Ir {
   }
   // Decision 182 addendum 5: a syntax table's triggers, before anything
   // reads an expression, an attribute list or a body.
-  lowerTriggers(ctx, authored);
+  // A syntax module's atoms (`extra.mxAtom` replacements) join the atoms.
+  if (lowerTriggers(ctx, authored)) convertAtoms(ctx, authored);
   const body = childrenWithTriggers(authored);
   resolveUnnamedTags(ctx, body);
   const wasResolved = ctx.unnamedTagsResolved;

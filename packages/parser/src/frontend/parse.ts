@@ -804,9 +804,16 @@ class FrontEnd {
       id: event.id,
       position: event.position,
       text,
-      value: event.value
-        ? this.container("MxExpression", event.value, event.value, "attr-value")
-        : null,
+      value: event.method
+        ? this.method(event.method)
+        : event.value
+          ? this.container(
+              "MxExpression",
+              event.value,
+              event.value,
+              "attr-value",
+            )
+          : null,
     };
     if (event.position === "line") {
       this.pushChild(node);
@@ -1481,9 +1488,8 @@ class FrontEnd {
     this.reach(event.end);
   }
 
-  onAttrMethod(event: Ranges.AttrMethod): void {
-    if (this.statement) return;
-    const current = this.requireCurrent();
+  /** The `MxMethod` of a method shorthand: an attribute's, or an attribute trigger's value. */
+  method(event: Ranges.AttrMethod): Builder {
     const typeParams = event.typeParams
       ? this.container(
           "MxTypeParameters",
@@ -1497,7 +1503,7 @@ class FrontEnd {
       event.params,
     );
     const body = this.container("MxStatements", event.body.value, event.body);
-    const method = {
+    return {
       type: "MxMethod",
       ...this.span(event),
       async: event.async,
@@ -1506,6 +1512,12 @@ class FrontEnd {
       body,
       source: this.slice(event),
     };
+  }
+
+  onAttrMethod(event: Ranges.AttrMethod): void {
+    if (this.statement) return;
+    const current = this.requireCurrent();
+    const method = this.method(event);
     if (current.type === "MxAttribute") {
       current.value = method;
       if (current.name === null) {

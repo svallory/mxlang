@@ -39,12 +39,17 @@ import type {
   SyntaxTable,
   Trigger,
   TriggerAttribute,
+  TriggerAttributeOptions,
   TriggerAttributeValue,
   TriggerChild,
   TriggerContext,
   TriggerExpression,
+  TriggerFailOptions,
+  TriggerMethod,
   TriggerPosition,
   TriggerResult,
+  TriggerShorthand,
+  TriggerUse,
 } from "./syntax-table.ts";
 
 /** The member a whole-value `StringLiteral` stands for (`extra.mxMember`), or `undefined`. */
@@ -155,9 +160,9 @@ const applied = new WeakSet<Ctx>();
  * trigger already lowered is skipped, so a second walk (a scratch `Ctx`)
  * calls no hook twice.
  */
-export function lowerTriggers(ctx: Ctx, roots: readonly Node[]): void {
+export function lowerTriggers(ctx: Ctx, roots: readonly Node[]): boolean {
   const run = syntaxRuns.get(roots);
-  if (!run) return;
+  if (!run) return false;
   const { table, module } = run.syntax;
   ctx.triggerSplices = run.splices;
   ctx.syntaxModule = module;
@@ -171,30 +176,41 @@ export function lowerTriggers(ctx: Ctx, roots: readonly Node[]): void {
     }
   }
   const seen = new WeakSet<object>();
-  const visit = (value: Node): void => {
+  // `owner` is the node holding `value` (arrays pass it through): a
+  // container's owner tells a spread (`<div ...x/>`) from other uses.
+  const visit = (value: Node, owner: Node | null): void => {
     if (!value || typeof value !== "object" || seen.has(value)) return;
     seen.add(value);
     if (Array.isArray(value)) {
-      for (const item of value) visit(item);
+      for (const item of value) visit(item, owner);
       mapChildren(ctx, table, module, value);
       return;
     }
-    if (typeof value.type !== "string") return;
+    if (typeof value.type !== "string") {
+      // A typeless MX field shape (a dynamic tag name's `{ kind, expression }`,
+      // a shorthand's value) holds containers too; it is no owner itself.
+      for (const [key, child] of Object.entries(value)) {
+        if (key === "span" || !child || typeof child !== "object") continue;
+        visit(child, owner);
+      }
+      return;
+    }
     if (isContainer(value)) {
-      lowerExpressionTriggers(ctx, run, value);
+      lowerExpressionTriggers(ctx, run, value, owner);
       return;
     }
     // A tag's attributes before its body, in source order.
     if (Array.isArray(value.attributes)) {
-      visit(value.attributes);
+      visit(value.attributes, value);
       mapAttributes(ctx, table, module, value);
     }
     for (const [key, child] of Object.entries(value)) {
       if (key === "loc" || !child || typeof child !== "object") continue;
-      visit(child);
+      visit(child, value);
     }
   };
-  visit(roots);
+  visit(roots, null);
+  return true;
 }
 
 /** An MX expression container (`MxExpression`, `MxStatements`, …; ast §4.1). */
@@ -322,12 +338,16 @@ function positionPhrase(position: TriggerPosition): string {
 function callHook(
   module: SyntaxModule,
   trigger: Node,
-  value: TriggerExpression | null,
+  value: TriggerExpression | TriggerMethod | null,
+  use: TriggerUse = null,
+  operator: string | null = null,
 ): TriggerResult {
   const hook = module.lowerTrigger as NonNullable<SyntaxModule["lowerTrigger"]>;
   const context: TriggerContext = Object.freeze({
     position: trigger.position as TriggerPosition,
     value,
+    use,
+    operator,
     expression(node: object): TriggerExpression {
       const problem = notAnExpression(node);
       if (problem) {
@@ -341,20 +361,45 @@ function callHook(
       return result;
     },
     attribute(
-      name: string,
+      name: string | null,
       attrValue: TriggerAttributeValue,
+      options?: TriggerAttributeOptions,
     ): TriggerAttribute {
-      if (typeof name !== "string" || name === "") {
+      if (name !== null && (typeof name !== "string" || name === "")) {
         fail(
-          `the \`${trigger.id}\` trigger's \`lowerTrigger\`: \`ctx.attribute\` takes a non-empty attribute name`,
+          `the \`${trigger.id}\` trigger's \`lowerTrigger\`: \`ctx.attribute\` takes a non-empty attribute name, or \`null\` for the tag's default value`,
           trigger,
         );
       }
       checkAttributeValue(trigger, attrValue);
+      checkAttributeOptions(trigger, options);
+      if (options?.at) checkPart(trigger, options.at, "ctx.attribute");
       const result = Object.freeze({
         kind: "attribute" as const,
         name,
         value: attrValue,
+        ...(options ? { options: Object.freeze({ ...options }) } : {}),
+      });
+      built.add(result);
+      return result;
+    },
+    shorthand(attribute: "id" | "class", name: string): TriggerShorthand {
+      if (attribute !== "id" && attribute !== "class") {
+        fail(
+          `the \`${trigger.id}\` trigger's \`lowerTrigger\`: \`ctx.shorthand\` takes \`"id"\` or \`"class"\``,
+          trigger,
+        );
+      }
+      if (typeof name !== "string" || name === "") {
+        fail(
+          `the \`${trigger.id}\` trigger's \`lowerTrigger\`: \`ctx.shorthand\` takes a non-empty name`,
+          trigger,
+        );
+      }
+      const result = Object.freeze({
+        kind: "shorthand" as const,
+        attribute,
+        name,
       });
       built.add(result);
       return result;
@@ -383,6 +428,25 @@ function callHook(
       built.add(result);
       return result;
     },
+    fail(message: string, options?: TriggerFailOptions): never {
+      if (typeof message !== "string" || message === "") {
+        return fail(
+          `the \`${trigger.id}\` trigger's \`lowerTrigger\`: \`ctx.fail\` takes a non-empty message`,
+          trigger,
+        );
+      }
+      const at = options?.at
+        ? checkPart(trigger, options.at, "ctx.fail")
+        : undefined;
+      try {
+        return fail(message, at ?? trigger);
+      } catch (error) {
+        if (options?.code !== undefined && isTranslateError(error)) {
+          (error as { code?: string }).code = String(options.code);
+        }
+        throw error;
+      }
+    },
   });
   let result: TriggerResult;
   try {
@@ -395,13 +459,64 @@ function callHook(
       trigger,
     );
   }
-  if (!result || typeof result !== "object" || !built.has(result)) {
+  const handMade = (item: unknown) =>
+    !item || typeof item !== "object" || !built.has(item);
+  if (
+    Array.isArray(result)
+      ? result.length === 0 || result.some(handMade)
+      : handMade(result)
+  ) {
     fail(
-      `the \`${trigger.id}\` trigger's \`lowerTrigger\` must return what \`ctx.expression\`, \`ctx.attribute\` or \`ctx.child\` built`,
+      `the \`${trigger.id}\` trigger's \`lowerTrigger\` must return what \`ctx.expression\`, \`ctx.attribute\`, \`ctx.shorthand\` or \`ctx.child\` built (a non-empty list of attributes and shorthands in an attribute list)`,
       trigger,
     );
   }
   return result;
+}
+
+/** A module's span as a positioned node, refused unless it lies in the trigger's own line of source. */
+function checkPart(trigger: Node, at: SourceSpan, where: string): Node {
+  if (
+    !at ||
+    typeof at.sourceStart !== "number" ||
+    typeof at.sourceEnd !== "number" ||
+    at.sourceStart > at.sourceEnd
+  ) {
+    return fail(
+      `the \`${trigger.id}\` trigger's \`lowerTrigger\`: \`${where}\`'s \`at\` is a \`{ sourceStart, sourceEnd }\` span`,
+      trigger,
+    );
+  }
+  return { type: "MxTriggerPart", start: at.sourceStart, end: at.sourceEnd };
+}
+
+function checkAttributeOptions(
+  trigger: Node,
+  options: TriggerAttributeOptions | undefined,
+): void {
+  if (options === undefined) return;
+  const bad = (what: string): never =>
+    fail(
+      `the \`${trigger.id}\` trigger's \`lowerTrigger\`: \`ctx.attribute\`'s options ${what}`,
+      trigger,
+    );
+  if (!options || typeof options !== "object" || Array.isArray(options)) {
+    bad("are an object");
+  }
+  for (const key of Object.keys(options)) {
+    if (key !== "authored" && key !== "once" && key !== "at") {
+      bad(`have no \`${key}\``);
+    }
+  }
+  if (options.authored !== undefined && typeof options.authored !== "boolean") {
+    bad("take a boolean `authored`");
+  }
+  if (
+    options.once !== undefined &&
+    (typeof options.once !== "string" || options.once === "")
+  ) {
+    bad("take a non-empty message as `once`");
+  }
 }
 
 function checkAttributeValue(
@@ -410,7 +525,12 @@ function checkAttributeValue(
 ): void {
   if (value === true || typeof value === "string") return;
   if (value && typeof value === "object") {
-    if (value.kind === "expression" && built.has(value)) return;
+    if (
+      (value.kind === "expression" || value.kind === "method") &&
+      built.has(value)
+    ) {
+      return;
+    }
     if (
       (value.kind === "atom" || value.kind === "member") &&
       typeof (value as { name?: unknown }).name === "string" &&
@@ -420,7 +540,7 @@ function checkAttributeValue(
     }
   }
   fail(
-    `the \`${trigger.id}\` trigger's \`lowerTrigger\`: an attribute value is \`true\`, a string, a \`ctx.expression\` result, or \`{ kind: "atom" | "member", name }\``,
+    `the \`${trigger.id}\` trigger's \`lowerTrigger\`: an attribute value is \`true\`, a string, a \`ctx.expression\` result, the trigger's own method value, or \`{ kind: "atom" | "member", name }\``,
     trigger,
   );
 }
@@ -627,10 +747,42 @@ function notWholeOperand(trigger: Node): never {
   );
 }
 
+/** How the marked operand is used (`TriggerUse`), from its parent, or its container's owner at the payload root. */
+function useOf(site: Site, owner: Node | null): TriggerUse {
+  const parent = site.parent;
+  if (!parent) {
+    return owner?.type === "MxSpreadAttribute" ? "spread" : null;
+  }
+  if (inKeyPosition(site)) return "key";
+  switch (parent.type) {
+    case "MemberExpression":
+    case "OptionalMemberExpression":
+      return site.key === "object" ? "member-object" : null;
+    case "CallExpression":
+    case "OptionalCallExpression":
+    case "NewExpression":
+      return site.key === "callee" ? "callee" : null;
+    case "TaggedTemplateExpression":
+      return site.key === "tag" ? "callee" : null;
+    case "UnaryExpression":
+      return "unary";
+    case "SpreadElement":
+      return "spread";
+    default:
+      return null;
+  }
+}
+
+/** A whole string literal marked as an atom (`extra.mxAtom`): `expr()` splices it as an atom. */
+function isAtomLiteral(node: Node): boolean {
+  return node?.type === "StringLiteral" && !!node.extra?.mxAtom;
+}
+
 function lowerExpressionTriggers(
   ctx: Ctx,
   run: SyntaxRun,
   container: Node,
+  owner: Node | null,
 ): void {
   const { table, module } = run.syntax;
   for (const trigger of container.triggers ?? []) {
@@ -651,8 +803,10 @@ function lowerExpressionTriggers(
       );
     }
     // A property name (`{ &a: 1 }`, `{ &a }`) is no operand: an expression
-    // there is an invalid key, and a shorthand would keep the stand-in.
-    if (inKeyPosition(at)) notWholeOperand(trigger);
+    // there is an invalid key, and a shorthand would keep the stand-in. A
+    // module may refuse it in its own words first (`ctx.use` is "key").
+    const use = useOf(at, owner);
+    if (use === "key" && typeof row.node !== "object") notWholeOperand(trigger);
     const mark = at.node.extra?.mxTrigger;
     let replacement: Node;
     if (row.node === "string") {
@@ -674,33 +828,49 @@ function lowerExpressionTriggers(
     } else if (row.node === "attribute") {
       badKind(trigger, "attribute");
     } else {
-      const result = callHook(module as SyntaxModule, trigger, null);
-      if (result.kind !== "expression")
+      const result = callHook(
+        module as SyntaxModule,
+        trigger,
+        null,
+        use,
+        use === "unary" ? String(at.parent?.operator) : null,
+      );
+      if (use === "key") notWholeOperand(trigger);
+      if (
+        Array.isArray(result) ||
+        (result as { kind: string }).kind !== "expression"
+      )
         wrongResult(trigger, "ctx.expression(node)");
       replacement = (result as TriggerExpression).node as Node;
     }
     replaceAt(container, at, positioned(replacement, at.node));
     // The expression's `code` is spliced from the source: the trigger's
-    // text becomes the replacement's printed code, as an atom becomes its
-    // string literal.
-    run.splices.push({
-      ...spanRange(trigger),
-      text: printed(ctx, replacement, trigger),
-    });
+    // text becomes the replacement's printed code. A replacement marked as
+    // an atom is recorded with the atoms instead (`convertAtoms` after this
+    // pass), which splice and map it exactly as a built-in atom.
+    if (!isAtomLiteral(replacement)) {
+      run.splices.push({
+        ...spanRange(trigger),
+        text: printed(ctx, replacement, trigger),
+      });
+    }
     lowered.add(trigger);
   }
 }
 
 // --- attributes and children ----------------------------------------------
 
-/** The expression result behind a trigger's `=value` container. */
-function triggerValue(trigger: Node): TriggerExpression | null {
+/** The value behind a trigger's `=value` container, or its method value (`:x() { … }`). */
+function triggerValue(trigger: Node): TriggerExpression | TriggerMethod | null {
   const container = trigger.value;
   if (!container) return null;
-  const result = Object.freeze({
-    kind: "expression" as const,
-    node: container.node as object,
-  });
+  const result: TriggerExpression | TriggerMethod =
+    container.type === "MxMethod"
+      ? Object.freeze({ kind: "method" as const })
+      : Object.freeze({
+          kind: "expression" as const,
+          node: container.node as object,
+        });
   built.add(result);
   containers.set(result, container);
   return result;
@@ -761,20 +931,29 @@ function literal(
  * trigger's text when it has one (`title` in `&title`), else the text.
  */
 function attributeNode(ctx: Ctx, trigger: Node, attr: TriggerAttribute): Node {
-  const text = spanOf(trigger);
+  // The part of the trigger's text that spells this attribute (`at`), else
+  // all of it.
+  const text = attr.options?.at ?? spanOf(trigger);
+  const spelled = ctx.source.slice(text.sourceStart, text.sourceEnd);
   const value = attr.value;
   const ownValue =
-    typeof value === "object" && value.kind === "expression"
+    typeof value === "object" &&
+    (value.kind === "expression" || value.kind === "method")
       ? containers.get(value)
       : undefined;
-  const nameSpan = ownValue
-    ? equalsAt(ctx, ownValue.outer.start)
-    : { start: text.sourceStart, end: text.sourceEnd };
+  // A method value is named zero-width at its start (Marko's anchor for a
+  // default method), an `=value` at its `=`.
+  const nameSpan =
+    ownValue?.type === "MxMethod"
+      ? { start: ownValue.start, end: ownValue.start }
+      : ownValue
+        ? equalsAt(ctx, ownValue.outer.start)
+        : { start: text.sourceStart, end: text.sourceEnd };
   let container: Node | null = null;
   if (value === true) {
     container = null;
   } else if (typeof value === "string") {
-    const at = String(trigger.text).indexOf(value);
+    const at = spelled.indexOf(value);
     const [start, end] =
       value !== "" && at >= 0
         ? [text.sourceStart + at, text.sourceStart + at + value.length]
@@ -782,6 +961,12 @@ function attributeNode(ctx: Ctx, trigger: Node, attr: TriggerAttribute): Node {
     container = containerOf(ctx, literal(ctx, value, start, end), start, end);
   } else if (ownValue) {
     container = ownValue;
+  } else if (value.kind === "method") {
+    // Only the trigger's own method value is ever built (`ctx.value`).
+    return fail(
+      `the \`${trigger.id}\` trigger's \`lowerTrigger\`: a method value is the trigger's own \`ctx.value\``,
+      trigger,
+    );
   } else if (value.kind === "expression") {
     // A module-built expression spans the trigger's text, and its `code` is
     // the expression printed (spliced over that text, like an expression
@@ -803,60 +988,174 @@ function attributeNode(ctx: Ctx, trigger: Node, attr: TriggerAttribute): Node {
       value.kind === "member"
         ? { mxMember: { span, name: value.name } }
         : { mxAtom: { span } };
+    // The value spans the name where the text spells it (`email` in
+    // `:email`), as a string value does; the mark keeps the whole token.
+    const at = value.span ? -1 : spelled.indexOf(value.name);
+    const [start, end] =
+      at > 0
+        ? [text.sourceStart + at, text.sourceStart + at + value.name.length]
+        : [span.sourceStart, span.sourceEnd];
     container = containerOf(
       ctx,
-      literal(ctx, value.name, span.sourceStart, span.sourceEnd, mark),
-      span.sourceStart,
-      span.sourceEnd,
+      literal(ctx, value.name, start, end, mark),
+      start,
+      end,
     );
   }
+  const authored = attr.options?.authored === true;
   return {
     type: "MxAttribute",
-    start: trigger.start,
-    end: trigger.end,
+    // The default value is anchored at its value, Marko's anchor.
+    start: attr.name === null && container ? container.start : text.sourceStart,
+    end: attr.name === null && container ? container.end : text.sourceEnd,
     name: attr.name,
     nameSpan,
     modifier: null,
     modifierSpan: null,
-    operator: container ? "=" : null,
+    operator: container && container.type !== "MxMethod" ? "=" : null,
     value: container,
     args: null,
     mxTrigger: { id: trigger.id, span: text },
+    // Spelled by the trigger's text: diagnostics name it, and lowering
+    // copies it to `Attr.sugar` (decision 156 addendum 6).
+    // A default value the trigger's own value sets is named by it instead
+    // (`set by \`:n=…\``), as a contract's error on `value` says.
+    ...(authored && attr.name === null && ownValue
+      ? {
+          sugarValueOf: `${spelled}${ownValue.type === "MxMethod" ? "(…)" : "=…"}`,
+        }
+      : authored
+        ? {
+            sugarLabel: spelled,
+            sugarNameSpan: { start: text.sourceStart, end: text.sourceEnd },
+          }
+        : {}),
+    ...(attr.options?.once ? { mxOnce: attr.options.once } : {}),
   };
 }
 
-/** The attribute an attribute trigger lowers to. */
+/**
+ * The `MxShorthand` a `ctx.shorthand` result places: what the parser builds
+ * for a tag-adjacent `#name` / `.name`, at the part of the trigger's text
+ * that spells it (searched from `from`), else over the whole text.
+ */
+function shorthandNode(
+  trigger: Node,
+  shorthand: TriggerShorthand,
+  from: number,
+): { node: Node; end: number } {
+  const sigil = shorthand.attribute === "id" ? "#" : ".";
+  const text = String(trigger.text);
+  const at = text.indexOf(`${sigil}${shorthand.name}`, from);
+  const [start, end] =
+    at >= 0
+      ? [trigger.start + at, trigger.start + at + 1 + shorthand.name.length]
+      : [trigger.start, trigger.start + text.length];
+  const nameStart = at >= 0 ? start + 1 : start;
+  return {
+    node: {
+      type: "MxShorthand",
+      start,
+      end,
+      sigil,
+      position: "attribute",
+      value: {
+        kind: "static",
+        value: shorthand.name,
+        span: { start: nameStart, end },
+      },
+      operator: null,
+      default: null,
+      args: null,
+      mxTrigger: { id: trigger.id, span: spanOf(trigger) },
+    },
+    end: at >= 0 ? at + 1 + shorthand.name.length : from,
+  };
+}
+
+/** The attributes (and shorthands) an attribute trigger lowers to, in order. */
 function lowerAttributeTrigger(
   ctx: Ctx,
   table: SyntaxTable,
   module: SyntaxModule | undefined,
   trigger: Node,
-): Node {
+): Node[] {
   const row = rowFor(table, trigger);
-  let attr: TriggerAttribute;
+  let results: readonly (TriggerAttribute | TriggerShorthand)[];
   if (row.node === "attribute") {
     const value = triggerValue(trigger);
+    if (value?.kind === "method") {
+      return fail(
+        `the \`${trigger.id}\` trigger's \`node: "attribute"\` takes no method value; use \`{ call }\` and a syntax module's \`lowerTrigger\``,
+        trigger.value ?? trigger,
+      );
+    }
     // Named by the text after the trigger's first character (the sigil):
     // the sigil itself is never a valid first character of a name.
-    attr = {
-      kind: "attribute",
-      name: String(trigger.text).slice(1),
-      value: value ?? true,
-    };
+    results = [
+      {
+        kind: "attribute",
+        name: String(trigger.text).slice(1),
+        value: value ?? true,
+      },
+    ];
   } else if (typeof row.node === "object") {
     if (!module?.lowerTrigger) noLowering(trigger);
     const value = triggerValue(trigger);
     const result = callHook(module as SyntaxModule, trigger, value);
-    if (result.kind !== "attribute") {
+    const list = Array.isArray(result) ? result : [result];
+    if (
+      list.some(
+        (item: { kind: string }) =>
+          item.kind !== "attribute" && item.kind !== "shorthand",
+      )
+    ) {
       wrongResult(trigger, "ctx.attribute(name, value)");
     }
-    attr = result as TriggerAttribute;
-    if (value && !usesValue([attr], value)) droppedValue(trigger);
+    results = list as (TriggerAttribute | TriggerShorthand)[];
+    const attrs = results.filter(
+      (item): item is TriggerAttribute => item.kind === "attribute",
+    );
+    if (value && !usesValue(attrs, value)) droppedValue(trigger);
   } else {
-    return badKind(trigger, row.node);
+    return [badKind(trigger, row.node)];
   }
   lowered.add(trigger);
-  return attributeNode(ctx, trigger, attr);
+  let from = 0;
+  return results.map((item) => {
+    if (item.kind === "attribute") return attributeNode(ctx, trigger, item);
+    const placed = shorthandNode(trigger, item, from);
+    from = placed.end;
+    return placed.node;
+  });
+}
+
+/**
+ * `ctx.attribute(…, { once })`: a second attribute of that name on the tag,
+ * written or built, is the module's error, at the later of the two.
+ */
+function checkOnce(attributes: readonly Node[]): void {
+  for (const [index, attr] of attributes.entries()) {
+    if (!attr?.mxOnce) continue;
+    const other = attributes.findIndex(
+      (candidate, at) =>
+        at !== index &&
+        candidate?.type === "MxAttribute" &&
+        candidate.name === attr.name,
+    );
+    if (other < 0) continue;
+    const later = attributes[Math.max(index, other)] as Node;
+    fail(
+      attr.mxOnce,
+      later.mxTrigger ? { ...later, ...spanOfMark(later) } : later,
+    );
+  }
+}
+
+/** A built attribute positioned at its trigger's text. */
+function spanOfMark(node: Node): { start: number; end: number } {
+  const span = node.mxTrigger.span as SourceSpan;
+  return { start: span.sourceStart, end: span.sourceEnd };
 }
 
 function mapAttributes(
@@ -868,26 +1167,27 @@ function mapAttributes(
   const attributes: Node[] = tag.attributes;
   if (triggerAttributes.has(tag)) return;
   if (!attributes.some((attr) => attr?.type === "MxTrigger")) return;
-  triggerAttributes.set(
-    tag,
-    attributes.map((attr) =>
-      attr?.type === "MxTrigger"
-        ? lowerAttributeTrigger(ctx, table, module, attr)
-        : attr,
-    ),
+  const lowered = attributes.flatMap((attr) =>
+    attr?.type === "MxTrigger"
+      ? lowerAttributeTrigger(ctx, table, module, attr)
+      : [attr],
   );
+  checkOnce(lowered);
+  triggerAttributes.set(tag, lowered);
 }
 
 /** Does one of `attrs` carry the trigger's own `=value` (`ctx.value`, or its node)? */
 function usesValue(
   attrs: readonly TriggerAttribute[],
-  value: TriggerExpression,
+  value: TriggerExpression | TriggerMethod,
 ): boolean {
   return attrs.some(
     (attr) =>
       typeof attr.value === "object" &&
-      attr.value.kind === "expression" &&
-      (attr.value === value || attr.value.node === value.node),
+      (attr.value === value ||
+        (value.kind === "expression" &&
+          attr.value.kind === "expression" &&
+          attr.value.node === value.node)),
   );
 }
 
@@ -914,7 +1214,7 @@ function lowerLineTrigger(
   if (!module?.lowerTrigger) noLowering(trigger);
   const value = triggerValue(trigger);
   const result = callHook(module as SyntaxModule, trigger, value);
-  if (result.kind !== "child")
+  if (Array.isArray(result) || (result as { kind: string }).kind !== "child")
     wrongResult(trigger, "ctx.child(tagName, attrs)");
   const child = result as TriggerChild;
   if (value && !usesValue(child.attrs, value)) droppedValue(trigger);

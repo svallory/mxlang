@@ -147,6 +147,12 @@ export interface Expr {
  * value is the name as a string literal on every target; the IR keeps it
  * distinct from a string so a data consumer, a contract check or an editor
  * can tell `:title` from `"title"`. `span` covers the whole atom, `:` included.
+ *
+ * Decisions 183 and 196: atoms leave core's grammar for a layer-2 syntax
+ * module. This shape stays as one of the whole values a syntax module
+ * builds (`ctx.attribute(name, { kind: "atom", name })`); the syntax that
+ * writes it becomes the module's.
+ * @unstable
  */
 export interface Atom {
   kind: "atom";
@@ -158,7 +164,10 @@ export interface Atom {
  * `extra.mxAtom` on the `StringLiteral` an atom becomes inside an expression
  * (decision 156 addendum 1, item 1): the atom's own span, `:` included. The
  * node's `value` is the name, so code that reads strings still works; code
- * that cares checks `node.extra?.mxAtom`. Public API, as stable as the IR.
+ * that cares checks `node.extra?.mxAtom`. The mark a syntax module sets on
+ * the literal it builds for an atom (decisions 183 and 196), which core
+ * splices and maps as it does today.
+ * @unstable
  */
 export interface MxAtomMark {
   span: SourceSpan;

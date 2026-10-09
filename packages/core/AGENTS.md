@@ -464,6 +464,22 @@ Five facts worth knowing before editing it:
   entry, `dist/syntax/member.js` + `.d.ts`); it imports types only so a
   manifest can `require` it or a project can copy it. Its tests stay in
   `src/triggers.test.ts` and the html/data `member-syntax.test.ts`.
+  **Atoms and name sugars as a module (decisions 183, 196; slice a1).**
+  `src/syntax/atoms-sugars.ts` (`@mxlang/core/syntax/atoms-sugars`) carries
+  atoms, `:name` and spaced `#id`/`.class` as triggers; `src/syntax/mesh.ts`
+  (`@mxlang/core/syntax/mesh`) adds the member rows. Until slice c deletes
+  the built-ins, a loaded row on a character replaces core's handling of it
+  (parser: `CompiledSyntax.builtInAtoms`/`builtInColonEnd`/`builtInPeriodEnd`;
+  core: `convertAtoms` skips a stand-in marked `extra.mxTrigger`, and re-runs
+  after the trigger pass so a module's `extra.mxAtom` literal is recorded and
+  spliced as an atom). `bun run test:sugar-module` (`scripts/sugar-module.ts`,
+  in `verify`) reruns the atom and sugar suites with every file that declares
+  no `mx.syntax` resolved to the mesh module (a preload sets a process global
+  `resolveSyntaxOf` reads, `Symbol.for("@mxlang/core:fallbackSyntaxForTesting")`,
+  test-only) and requires the failures to be exactly
+  `scripts/sugar-module/deltas.json`, each with its ruling. Many sugar unit
+  tests lower through Marko's compiler (`name-sugar.test.ts`) and never reach
+  syntax resolution; the suites listed in the script are the ones that do.
   parse. Core reaches that parser through `mxTemplateParser()`
   (`marko-frontend.ts`): the bundle's parser in the dist, the workspace
   `@mxlang/parser` devDependency by `require` from source (never a static

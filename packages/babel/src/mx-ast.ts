@@ -133,8 +133,12 @@ export interface MxTrigger extends MxNodeBase {
   readonly position: "expression" | "attribute" | "line";
   /** The authored text the matcher matched, starting at `start`. */
   readonly text: string;
-  /** The `=value` of an attribute or line trigger; null without one, and always for an expression trigger. */
-  readonly value: MxExpression | null;
+  /**
+   * The `=value` of an attribute or line trigger, or an attribute trigger's
+   * method value (`:isOverdue(p) { … }`, lexed as a method shorthand); null
+   * without one, and always for an expression trigger.
+   */
+  readonly value: MxExpression | MxMethod | null;
 }
 
 /**

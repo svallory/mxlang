@@ -12,10 +12,11 @@
   "scripts": {
     "typecheck": "for d in packages/*/ packages/*/*/ examples/*/; do if [ -f \"$d/tsconfig.json\" ]; then (cd \"$d\" && echo \"[typecheck] $d\" && if [ -f package.json ] && grep -q '\"typecheck\"' package.json; then bun run typecheck; else bunx tsc --noEmit; fi) || exit 1; fi; done",
     "test": "vitest run --reporter=default --reporter=json --outputFile=vitest-results.json",
+    "test:sugar-module": "bun run scripts/sugar-module.ts",
     "test:bun": "bun run --cwd packages/tsx-bridge test:bun && bun run --cwd packages/targets/html test:bun && bun run --cwd packages/hosts/hono test:bun",
     "test:grammar": "moon run tree-sitter-solid:test --force && moon run tree-sitter-amx:test --force && moon run tree-sitter-mx:test --force",
     "lint": "biome check .",
-    "verify": "bun run scripts/pre-verify.ts && bun run build && bun run typecheck && bun run lint && bun run test && bun run test:bun && bun run test:grammar && bun run consumer-check:html && bun run pack-probe && bun run --cwd apps/docs test && bun run --cwd apps/docs build && bun run scripts/verify-coverage.ts",
+    "verify": "bun run scripts/pre-verify.ts && bun run build && bun run typecheck && bun run lint && bun run test && bun run test:sugar-module && bun run test:bun && bun run test:grammar && bun run consumer-check:html && bun run pack-probe && bun run --cwd apps/docs test && bun run --cwd apps/docs build && bun run scripts/verify-coverage.ts",
     "build": "cd packages/core && bun run build && cd ../targets/data && bun run build && cd ../../tsx-bridge && bun run build && cd ../../packages/targets/html && bun run build && cd ../../hosts/angular && bun run build && cd ../../../packages/tooling/vite-plugin && bun run build && cd ../language-server && bun run build && cd ../angular-checker && bun run build && cd ../typescript-plugin && bun run build && cd ../tsc && bun run build && cd ../../.. && bun run scripts/check-build-artifacts.ts",
     "consumer-check:html": "bun run packages/targets/html/scripts/consumer-check.ts",
     "pack-probe": "bun run scripts/pack-probe.ts",

@@ -64,6 +64,7 @@ interface Trigger {
   standIn: "number" | "identifier" | "keep";
   node: "string" | "identifier" | "attribute" | { call: string };
   terminatesValue?: boolean;         // attribute triggers: a space then this ends the preceding value
+  value?: "refuse";                  // attribute triggers: `=`, `:=` or `(` after it is a parser error
 }
 ```
 
@@ -135,6 +136,25 @@ may set. An inline object stays a table only. A trigger whose `node` is
   - `ctx.child(tagName, attrs)`: a child tag of the enclosing body, built
     from `ctx.attribute` results. It goes through the normal tag path, so
     contracts apply to it.
+  - `ctx.shorthand("id" | "class", name)`: in an attribute list, exactly
+    what Marko's tag-adjacent `#name` / `.name` sets, with Marko's rules
+    (one id; a class merged with the tag's other classes in written order).
+
+  An attribute-list hook may return a non-empty list of attributes and
+  shorthands (`:x() { … }` is a `name` and the default value; `#main.big` an
+  id and a class). `ctx.attribute(null, value)` sets the tag's default value
+  (`<tag=value>`). `ctx.attribute`'s third argument takes `authored` (the
+  attribute is spelled by the trigger's text: diagnostics name the text, and
+  a whole-value atom so placed also satisfies a `string` or `enum` slot as
+  its name) and `once` (a second attribute of that name on the tag is an
+  error with this message). An attribute trigger written right before
+  `(params) { body }` takes it as its value: `ctx.value` is then an opaque
+  method value that `ctx.attribute` places. In an expression, `ctx.use` says
+  how the operand is used (`"member-object"`, `"callee"`, `"unary"` with
+  `ctx.operator`, `"spread"`, `"key"`, or `null`), so a module can refuse a
+  use in its own words with `ctx.fail(message)`, a positioned error at the
+  trigger. Core still refuses a property name after the hook returns.
+  A replacement marked `extra.mxAtom` is spliced and mapped as an atom.
 
   Core positions the result from the trigger. A result that does not fit
   the position, a `=value` the hook leaves out, a trigger written where a

@@ -232,6 +232,11 @@ function markoAttribute(ctx: Ctx, attr: Node): Node {
     start: attr.start,
     end: attr.end,
     loc: sugarLoc(ctx, attr.start, attr.end),
+    // A syntax module's authored attribute (`ctx.attribute(…, { authored })`)
+    // keeps the token its trigger spelled.
+    ...(attr.sugarLabel
+      ? { sugarLabel: attr.sugarLabel, sugarNameSpan: attr.sugarNameSpan }
+      : {}),
   };
 }
 

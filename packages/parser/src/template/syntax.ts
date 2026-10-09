@@ -8,6 +8,9 @@
  * `DEFAULT_SYNTAX` is the `.mx` row: today's grammar, byte for byte. Atoms
  * (decision 156) and the `:name` / `#id` / `.class` sugars keep their own
  * code paths until `lang-ext-move-sugars-to-mesh` moves them onto the table.
+ * Until then a loaded row on one of their characters replaces the built-in
+ * behaviour for that character in that position (the coexistence rule,
+ * `CompiledSyntax.builtInAtoms` and the two `builtIn…End` flags).
  */
 import type { TagType as TagTypeValue } from "./util/constants.ts";
 import * as TagType from "./util/tag-type.ts";
@@ -43,6 +46,14 @@ export interface Trigger {
   readonly node: TriggerNode;
   /** Attribute triggers only: a space and then this trigger ends the preceding attribute value. */
   readonly terminatesValue?: boolean;
+  /**
+   * Attribute triggers only: `"refuse"` makes a value after the trigger
+   * (`=`, `:=` or a method's `(`, after optional whitespace) a parse error
+   * positioned there, ``The `#main` shorthand takes no value.`` (decision
+   * 183: `#id` and `.class` take none). Omitted: the trigger takes an
+   * `=value` or a method value `(params) { body }`.
+   */
+  readonly value?: "refuse";
 }
 
 export interface SyntaxTable {
@@ -365,7 +376,7 @@ function validateTrigger(
   const out: { field: string; message: string }[] = [];
   if (!isRecord(trigger))
     return [{ field: at, message: "a trigger is an object" }];
-  const { id, chars, match, standIn, node, terminatesValue } = trigger;
+  const { id, chars, match, standIn, node, terminatesValue, value } = trigger;
   if (typeof id !== "string" || id === "")
     out.push({ field: `${at}.id`, message: "`id` is a non-empty string" });
   if (standIn !== "number" && standIn !== "identifier" && standIn !== "keep") {
@@ -397,6 +408,19 @@ function validateTrigger(
       out.push({
         field: `${at}.terminatesValue`,
         message: "`terminatesValue` applies to attribute triggers only",
+      });
+    }
+  }
+  if (value !== undefined) {
+    if (value !== "refuse") {
+      out.push({
+        field: `${at}.value`,
+        message: '`value` is "refuse" or omitted',
+      });
+    } else if (list !== "attributeTriggers") {
+      out.push({
+        field: `${at}.value`,
+        message: "`value` applies to attribute triggers only",
       });
     }
   }
@@ -632,6 +656,8 @@ export interface CompiledTrigger {
   readonly id: string;
   readonly standIn: StandIn;
   readonly terminatesValue: boolean;
+  /** `value: "refuse"`: a value after the trigger is a parse error. */
+  readonly refusesValue: boolean;
   readonly first: RegExp;
   readonly matcher: RegExp;
 }
@@ -647,6 +673,18 @@ export interface CompiledSyntax {
   readonly line: TriggerSet | null;
   /** Whether any attribute trigger sets `terminatesValue`. */
   readonly terminators: boolean;
+  /**
+   * The coexistence rule (`lang-ext-move-sugars-to-mesh`): a loaded row on a
+   * character replaces the built-in behaviour for that character in that
+   * position. True unless an expression trigger is armed on `:`: then
+   * `lexAtom` never runs and a default value is never a single atom
+   * (decision 146 addendum 5's exemption is the built-in atom's).
+   */
+  readonly builtInAtoms: boolean;
+  /** True unless an attribute trigger is armed on `:`: the built-in ` :name` and bare `:` ends of an attribute value. */
+  readonly builtInColonEnd: boolean;
+  /** True unless an attribute trigger is armed on `.`: the built-in ` .name` end of an attribute value. */
+  readonly builtInPeriodEnd: boolean;
   readonly blockTag: Delimiters | null;
   readonly filter: Delimiters | null;
   /** The first characters of `blockTag.open` and `filter.open`, which stop HTML content's text run (empty on the default row). */
@@ -659,6 +697,9 @@ export interface Delimiters {
   readonly close: string;
 }
 
+const COLON = 58;
+const PERIOD = 46;
+
 const compiled = new WeakMap<object, CompiledSyntax>();
 const listCache = new WeakMap<object, SyntaxDiagnostic[]>();
 const setCache = new WeakMap<object, TriggerSet | null>();
@@ -669,6 +710,9 @@ export const DEFAULT_COMPILED: CompiledSyntax = Object.freeze({
   attribute: null,
   line: null,
   terminators: false,
+  builtInAtoms: true,
+  builtInColonEnd: true,
+  builtInPeriodEnd: true,
   blockTag: null,
   filter: null,
   contentStops: Object.freeze([]),
@@ -704,6 +748,7 @@ export function compileSyntax(table: SyntaxTable): CompiledSyntax {
         id: trigger.id,
         standIn: trigger.standIn,
         terminatesValue: trigger.terminatesValue === true,
+        refusesValue: trigger.value === "refuse",
         first,
         matcher: matcherOf(trigger.match),
       };
@@ -722,13 +767,18 @@ export function compileSyntax(table: SyntaxTable): CompiledSyntax {
     setCache.set(triggers, result);
     return result;
   };
+  const expression = set(table.expressionTriggers);
+  const attribute = set(table.attributeTriggers);
   const result: CompiledSyntax = {
-    expression: set(table.expressionTriggers),
-    attribute: set(table.attributeTriggers),
+    expression,
+    attribute,
     line: set(table.lineTriggers),
     terminators: table.attributeTriggers.some(
       (t) => t.terminatesValue === true,
     ),
+    builtInAtoms: expression?.ascii[COLON] === undefined,
+    builtInColonEnd: attribute?.ascii[COLON] === undefined,
+    builtInPeriodEnd: attribute?.ascii[PERIOD] === undefined,
     blockTag: table.blockTag,
     filter: table.filter,
     contentStops: [table.blockTag, table.filter].flatMap((d) =>

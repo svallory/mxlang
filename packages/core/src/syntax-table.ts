@@ -19,6 +19,9 @@ import type { IrBuilders } from "./custom-tags.ts";
 import { findNearestPackageJson } from "./host-policy.ts";
 import type { IrNode } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
+
+export type { SourceSpan };
+
 import { type MxTemplateParser, mxTemplateParser } from "./marko-frontend.ts";
 import { filePosition } from "./mx-parse.ts";
 import type { PackageJsonRead } from "./package-json.ts";
@@ -50,6 +53,12 @@ export interface Trigger {
   readonly standIn: StandIn;
   readonly node: TriggerNode;
   readonly terminatesValue?: boolean;
+  /**
+   * Attribute triggers: `"refuse"` makes a `=value`, `:=value` or
+   * `(params) { body }` after the trigger a parser error at that character
+   * (decision 183: `tag #id=123` is refused). Absent, the trigger takes one.
+   */
+  readonly value?: "refuse";
 }
 
 /** The syntax table: one plain-data object per parse (decision 182; `language-extensions/core.md`). */
@@ -85,26 +94,80 @@ export interface TriggerExpression {
 }
 
 /**
+ * A method value, `(params) { body }` written right after an attribute
+ * trigger (`boolean :isOverdue() { … }`): `ctx.value` when the trigger has
+ * one. It is opaque: a module places it with `ctx.attribute`, never builds
+ * one. @unstable
+ */
+export interface TriggerMethod {
+  readonly kind: "method";
+}
+
+/**
  * The value of an attribute `ctx.attribute` builds: `true` (a bare
- * attribute), a string, an expression, or a whole-value atom or member
- * (`{ kind: "member", name }` for Mesh's `&dueOn`). A value's `span`
- * defaults to the trigger's own.
+ * attribute), a string, an expression, the trigger's own method value, or a
+ * whole-value atom or member (`{ kind: "member", name }` for Mesh's
+ * `&dueOn`). A value's `span` defaults to the trigger's own.
  */
 export type TriggerAttributeValue =
   | true
   | string
   | TriggerExpression
+  | TriggerMethod
   | {
       readonly kind: "atom" | "member";
       readonly name: string;
       readonly span?: SourceSpan;
     };
 
-/** A named attribute, built by `ctx.attribute(name, value)`. */
+/**
+ * How `ctx.attribute` places an attribute (all optional). @unstable
+ *
+ * - `authored`: the attribute is spelled by the trigger's text. A
+ *   diagnostic names the text (`:email` for `name`), and a whole-value atom
+ *   so placed also satisfies a `string` or `enum` contract slot as its name
+ *   (decision 156 addendum 6). On the default value the trigger's own value
+ *   sets, a contract's error says which trigger set it (`set by \`:n=…\``).
+ * - `once`: a second attribute of the same name on the tag, written or
+ *   built, is a positioned error with this message.
+ * - `at`: the part of the trigger's text that spells the attribute, where
+ *   one trigger builds several (`#main.big:name`).
+ */
+export interface TriggerAttributeOptions {
+  readonly authored?: boolean;
+  readonly once?: string;
+  /** The part of the trigger's text that spells this attribute (`:name` in `#m.big:name`); the whole text when absent. */
+  readonly at?: SourceSpan;
+}
+
+/** How `ctx.fail` raises its error (all optional). @unstable */
+export interface TriggerFailOptions {
+  /** Where the error is; the trigger's own span when absent. */
+  readonly at?: SourceSpan;
+  /** A machine-readable code, carried on the error as `code`. */
+  readonly code?: string;
+}
+
+/**
+ * A named attribute, built by `ctx.attribute(name, value)`. A `null` name is
+ * the tag's default value (`<tag=value>`).
+ */
 export interface TriggerAttribute {
   readonly kind: "attribute";
-  readonly name: string;
+  readonly name: string | null;
   readonly value: TriggerAttributeValue;
+  readonly options?: TriggerAttributeOptions;
+}
+
+/**
+ * A shorthand, built by `ctx.shorthand("id" | "class", name)`: exactly what
+ * Marko's tag-adjacent `#name` / `.name` sets, with Marko's rules (one id, a
+ * class merged with the tag's other classes in written order). @unstable
+ */
+export interface TriggerShorthand {
+  readonly kind: "shorthand";
+  readonly attribute: "id" | "class";
+  readonly name: string;
 }
 
 /** A child tag of the enclosing body, built by `ctx.child(tagName, attrs)`. */
@@ -114,8 +177,34 @@ export interface TriggerChild {
   readonly attrs: readonly TriggerAttribute[];
 }
 
-/** What `lowerTrigger` returns: an expression, an attribute or a child, matching `ctx.position`. */
-export type TriggerResult = TriggerExpression | TriggerAttribute | TriggerChild;
+/**
+ * What `lowerTrigger` returns, matching `ctx.position`: an expression; an
+ * attribute or shorthand, or a non-empty list of them (`:x() { … }` is a
+ * `name` and the default value); a child.
+ */
+export type TriggerResult =
+  | TriggerExpression
+  | TriggerAttribute
+  | TriggerShorthand
+  | readonly (TriggerAttribute | TriggerShorthand)[]
+  | TriggerChild;
+
+/**
+ * How an expression trigger's operand is used, for a module that refuses
+ * some uses (an atom is a name, not a value to operate on): the object of a
+ * member access, a callee (a tagged template's tag included), the operand
+ * of a unary operator, a spread (`<div ...x/>` included), or a property
+ * name (`{ x: 1 }`, `{ x }`). `null` for any other use. Core refuses a
+ * property name after the hook returns, so a module may only refuse it in
+ * its own words first. @unstable
+ */
+export type TriggerUse =
+  | "member-object"
+  | "callee"
+  | "unary"
+  | "spread"
+  | "key"
+  | null;
 
 /**
  * What `lowerTrigger` is handed (decision 182 addendum 5): where the trigger
@@ -126,11 +215,31 @@ export type TriggerResult = TriggerExpression | TriggerAttribute | TriggerChild;
  */
 export interface TriggerContext {
   readonly position: TriggerPosition;
-  /** The `=value` of an attribute or line trigger, its own triggers already lowered; `null` without one. */
-  readonly value: TriggerExpression | null;
+  /**
+   * The `=value` of an attribute or line trigger, its own triggers already
+   * lowered, or an attribute trigger's method value (`:x() { … }`); `null`
+   * without one.
+   */
+  readonly value: TriggerExpression | TriggerMethod | null;
+  /** How an expression trigger's operand is used (`null` elsewhere). @unstable */
+  readonly use: TriggerUse;
+  /** The operator when `use` is `"unary"` (`-`, `!`, `typeof`, …); `null` otherwise. @unstable */
+  readonly operator: string | null;
   expression(node: object): TriggerExpression;
-  attribute(name: string, value: TriggerAttributeValue): TriggerAttribute;
+  attribute(
+    name: string | null,
+    value: TriggerAttributeValue,
+    options?: TriggerAttributeOptions,
+  ): TriggerAttribute;
+  /** A shorthand id or class, as Marko's tag-adjacent `#name` / `.name`. @unstable */
+  shorthand(attribute: "id" | "class", name: string): TriggerShorthand;
   child(tagName: string, attrs: readonly TriggerAttribute[]): TriggerChild;
+  /**
+   * A positioned error in the module's own words, at the trigger or at
+   * `at` (a span inside the document), carrying `code` when given.
+   * @unstable
+   */
+  fail(message: string, options?: TriggerFailOptions): never;
 }
 
 /** What `lowerBlockTag` and `lowerFilter` get: the IR builders a custom tag's `transform` gets. */
@@ -539,6 +648,33 @@ function mtimeOf(file: string): number | undefined {
  * reloaded when its file changes.
  */
 export function resolveSyntaxOf(filename: string): ResolvedSyntax {
+  const resolved = resolveManifestSyntax(filename);
+  return resolved === DEFAULT_RESOLVED
+    ? fallbackForTesting(resolved)
+    : resolved;
+}
+
+/**
+ * Test-only: the syntax module a file with no `mx.syntax` resolves to, read
+ * from a process global so a preload reaches every copy of core (source and
+ * dist alike). `scripts/sugar-module.ts` sets it to run the existing atom
+ * and name-sugar suites through the reference module (slice a1 of
+ * `lang-ext-move-sugars-to-mesh`). Unset, nothing changes.
+ */
+const FALLBACK_FOR_TESTING = Symbol.for(
+  "@mxlang/core:fallbackSyntaxForTesting",
+);
+
+function fallbackForTesting(resolved: ResolvedSyntax): ResolvedSyntax {
+  const module = (globalThis as Record<symbol, unknown>)[FALLBACK_FOR_TESTING];
+  if (!module) return resolved;
+  return explicitSyntaxOf(
+    module as SyntaxModule,
+    "<fallback syntax for testing>",
+  );
+}
+
+function resolveManifestSyntax(filename: string): ResolvedSyntax {
   if (!isAbsolute(filename)) return DEFAULT_RESOLVED;
   const found = findNearestPackageJson(dirname(filename));
   if (!found?.read.manifest) return DEFAULT_RESOLVED;

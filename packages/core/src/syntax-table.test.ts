@@ -205,16 +205,18 @@ describe("a table core cannot lower yet fails the file loudly", () => {
   });
 
   it("an error the table causes is reported too", () => {
+    // A row that refuses a value (slice a1 of lang-ext-move-sugars-to-mesh;
+    // a match a word character would continue now declines silently).
     const table = normalizeMxSyntax(
-      { expressionTriggers: [{ ...INLINE_ROW, match: "&[a-z]+" }] },
+      {
+        attributeTriggers: [
+          { ...MEMBER, node: "attribute", value: "refuse" } as Trigger,
+        ],
+      },
       join(dir, "package.json"),
     );
-    const error = caught(() =>
-      compile("x=&façade\n", join(dir, "p.mx"), table),
-    );
-    expect(error.message).toContain(
-      '"member" trigger "&fa" is followed by "ç"',
-    );
+    const error = caught(() => compile("x &a=1\n", join(dir, "p.mx"), table));
+    expect(error.message).toContain("The `&a` shorthand takes no value.");
   });
 
   it("a file that uses none of the table compiles as with the default row", () => {

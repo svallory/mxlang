@@ -127,7 +127,8 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
       } else if (code === CODE.OPEN_PAREN) {
         // With a pending `async` the name is emitted once we know whether this
         // is a method, since `<foo async(1)/>` is an attribute named `async`.
-        if (!attr.async) ensureAttrName(this, attr);
+        // MX: an attribute trigger's method announces no name.
+        if (!attr.async && !attr.trigger) ensureAttrName(this, attr);
         attr.stage = ATTR_STAGE.ARGUMENT;
         this.pos++; // skip (
         const expr = this.enterState(STATE.EXPRESSION);
@@ -148,7 +149,7 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
         expr.shouldTerminate = matchesCloseAngleBracket;
         return;
       } else if (code === CODE.OPEN_CURLY_BRACE && attr.args) {
-        ensureAttrName(this, attr);
+        if (!attr.trigger) ensureAttrName(this, attr);
         attr.stage = ATTR_STAGE.BLOCK;
         this.pos++; // skip {
         const body = this.enterState(STATE.EXPRESSION);
@@ -257,6 +258,21 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
           );
           return;
         }
+        if (attr.trigger) {
+          // MX (decision 182): `(params)` after an attribute trigger is a
+          // method value's, so a body must follow.
+          const end = this.pos + 1; // include )
+          if (!lookAheadForBody(this, end)) {
+            flushPendingAsync(this, attr);
+            const { trigger, text } = attr.trigger;
+            this.emitError(
+              { start: text.start, end: text.end + 1 },
+              ErrorCode.INVALID_ATTRIBUTE_NAME,
+              triggerFollowMessage(this, trigger, text),
+            );
+            return;
+          }
+        }
 
         const start = child.start - 1; // include (
         const end = ++this.pos; // include )
@@ -310,7 +326,7 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
             ? typeParams.start
             : params.start;
 
-        this.options.onAttrMethod?.({
+        const method: Ranges.AttrMethod = {
           start,
           end,
           params,
@@ -324,7 +340,10 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
               end: child.end,
             },
           },
-        });
+        };
+        // MX (decision 182): an attribute trigger's method is its value.
+        if (attr.trigger) announceAttrTrigger(this, attr, undefined, method);
+        else this.options.onAttrMethod?.(method);
         this.exitState();
         break;
       }
@@ -367,7 +386,12 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
           return;
         }
 
-        announceAttrTrigger(this, attr, { start: child.start, end: child.end });
+        announceAttrTrigger(
+          this,
+          attr,
+          { start: child.start, end: child.end },
+          undefined,
+        );
         this.exitState();
         break;
       }
@@ -421,7 +445,9 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
 function enterAttrValue(parser: Parser, attrValue: boolean) {
   const expr = parser.enterState(STATE.EXPRESSION);
   expr.attrValue = attrValue;
-  expr.defaultAtom = !attrValue;
+  // A loaded expression trigger on `:` replaces built-in atoms, and with
+  // them this exemption (the coexistence rule; 182 addendum 1 item 3).
+  expr.defaultAtom = !attrValue && parser.syntax.builtInAtoms;
   expr.atoms = true; // MX: decision 156
   expr.operators = true;
   expr.terminatedByWhitespace = true;
@@ -434,16 +460,20 @@ function enterAttrValue(parser: Parser, attrValue: boolean) {
 
 /**
  * MX (decision 182): at an attribute name's first character, lexes an
- * attribute trigger when its matcher matches. The match is the whole name;
- * `=` after it starts a value lexed exactly as a named attribute's, anything
+ * attribute trigger when its matcher matches. The match is the whole name.
+ * After it (and optional whitespace, as after a name): `=` starts a value
+ * lexed exactly as a named attribute's; `(params) { body }`, or
+ * `<T>(params) { body }`, is a method value lexed as a named attribute's
+ * method shorthand (an `async` before the trigger modifies it); anything
  * but the end of the name (whitespace, `,`, the end of the tag or line) is
- * an error. Returns whether it consumed the trigger.
+ * an error. A row with `value: "refuse"` takes no value: `=`, `:=` or `(`
+ * there is an error positioned at it. Returns whether it consumed the
+ * trigger.
  */
 function lexAttrTrigger(parser: Parser, attr: AttrMeta, data: string) {
   const start = parser.pos;
   const hit = matchTrigger(parser.syntax.attribute!, data, start);
   if (!hit) return false;
-  flushPendingAsync(parser, attr);
   const { trigger, end } = hit;
   attr.trigger = {
     trigger,
@@ -457,7 +487,40 @@ function lexAttrTrigger(parser: Parser, attr: AttrMeta, data: string) {
   const skip = parser.isConcise ? isIndentCode : isWhitespaceCode;
   let at = end;
   while (at < parser.maxPos && skip(data.charCodeAt(at))) at++;
-  if (data.charCodeAt(at) === CODE.EQUAL) {
+  const code = data.charCodeAt(at);
+  const bound =
+    code === CODE.COLON && data.charCodeAt(at + 1) === CODE.EQUAL;
+
+  if (
+    trigger.refusesValue &&
+    (code === CODE.EQUAL || code === CODE.OPEN_PAREN || bound)
+  ) {
+    flushPendingAsync(parser, attr);
+    parser.emitError(
+      { start: at, end: at + (bound ? 2 : 1) },
+      ErrorCode.INVALID_ATTRIBUTE_VALUE,
+      `The \`${data.slice(start, end)}\` shorthand takes no value.`,
+    );
+    return true;
+  }
+
+  if (
+    !trigger.refusesValue &&
+    (code === CODE.OPEN_PAREN ||
+      // Type parameters; never `</` or `<!--`, which end the attribute.
+      (code === CODE.OPEN_ANGLE_BRACKET &&
+        data.charCodeAt(at + 1) !== CODE.FORWARD_SLASH &&
+        data.charCodeAt(at + 1) !== CODE.EXCLAMATION))
+  ) {
+    // A method value: the attribute's own `(` and `<` branches lex it, as
+    // after a name; a pending `async` stays pending until the body shows.
+    attr.stage = ATTR_STAGE.NAME;
+    parser.pos = at;
+    return true;
+  }
+
+  flushPendingAsync(parser, attr);
+  if (code === CODE.EQUAL) {
     attr.valueStart = at;
     attr.stage = ATTR_STAGE.TRIGGER_VALUE;
     parser.pos = at + 1; // skip =
@@ -470,14 +533,31 @@ function lexAttrTrigger(parser: Parser, attr: AttrMeta, data: string) {
     parser.emitError(
       { start, end: end + 1 },
       ErrorCode.INVALID_ATTRIBUTE_NAME,
-      `Invalid attribute name. The "${trigger.id}" trigger "${data.slice(start, end)}" must be followed by whitespace, "=" or the end of the tag.`,
+      triggerFollowMessage(parser, trigger, { start, end }),
     );
     return true;
   }
 
-  announceAttrTrigger(parser, attr, undefined);
+  announceAttrTrigger(parser, attr, undefined, undefined);
   parser.exitState();
   return true;
+}
+
+/** The error for text after an attribute trigger that cannot follow it. */
+function triggerFollowMessage(
+  parser: Parser,
+  trigger: CompiledTrigger,
+  text: Range,
+) {
+  return `Invalid attribute name. The "${trigger.id}" trigger "${parser.data.slice(text.start, text.end)}" must be followed by whitespace, "="${trigger.refusesValue ? "" : ", a method"} or the end of the tag.`;
+}
+
+/** Whether `{` follows `pos` after optional whitespace, as a method body's opener (`consumeWhitespaceIfBefore`'s test, without moving). */
+function lookAheadForBody(parser: Parser, pos: number) {
+  const { data } = parser;
+  let at = pos;
+  while (isWhitespaceCode(data.charCodeAt(at))) at++;
+  return data.charCodeAt(at) === CODE.OPEN_CURLY_BRACE;
 }
 
 /** Whether an attribute trigger's text may end at `pos`: whitespace, `,`, EOF, or the end of the tag, line or attribute group. */
@@ -504,6 +584,7 @@ function announceAttrTrigger(
   parser: Parser,
   attr: AttrMeta,
   value: Range | undefined,
+  method: Ranges.AttrMethod | undefined,
 ) {
   const { trigger, text, fresh } = attr.trigger!;
   if (!fresh) return;
@@ -511,10 +592,11 @@ function announceAttrTrigger(
     id: trigger.id,
     position: "attribute",
     standIn: trigger.standIn,
-    start: text.start,
-    end: value ? value.end : text.end,
+    start: method ? Math.min(text.start, method.start) : text.start,
+    end: method ? method.end : value ? value.end : text.end,
     text,
     ...(value && { value }),
+    ...(method && { method }),
   });
 }
 
@@ -705,7 +787,11 @@ function isAsyncMethodPrefix(parser: Parser, name: Range) {
     code === CODE.OPEN_PAREN || // a default attribute method's params
     // a default attribute method's type params, but not a close tag
     (code === CODE.OPEN_ANGLE_BRACKET &&
-      data.charCodeAt(pos + 1) !== CODE.FORWARD_SLASH)
+      data.charCodeAt(pos + 1) !== CODE.FORWARD_SLASH) ||
+    // MX (decision 182): an attribute trigger, which may take a method
+    // value; `lexAttrTrigger` flushes `async` when none follows.
+    (parser.syntax.attribute !== null &&
+      matchTrigger(parser.syntax.attribute, data, pos) !== undefined)
   );
 }
 

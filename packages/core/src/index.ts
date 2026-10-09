@@ -256,12 +256,17 @@ export {
   syntaxHash,
   type Trigger,
   type TriggerAttribute,
+  type TriggerAttributeOptions,
   type TriggerAttributeValue,
   type TriggerChild,
   type TriggerContext,
   type TriggerExpression,
+  type TriggerFailOptions,
+  type TriggerMethod,
   type TriggerNode,
   type TriggerResult,
+  type TriggerShorthand,
+  type TriggerUse,
 } from "./syntax-table.ts";
 export {
   type AmbientTypesProgram,

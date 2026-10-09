@@ -53,7 +53,9 @@ function offsets(node: Node): [number, number] | undefined {
 
 /** Is `node` the parser's stand-in for an atom, still unconverted? */
 function isStandIn(ctx: Ctx, node: Node): boolean {
-  if (node?.type !== "NumericLiteral") return false;
+  // A syntax table's trigger on `:` (a layer-2 atom row) stands in with the
+  // same numeric shape; its node is marked, and the trigger pass owns it.
+  if (node?.type !== "NumericLiteral" || node.extra?.mxTrigger) return false;
   const at = offsets(node);
   return !!at && ctx.source[at[0]] === ":";
 }

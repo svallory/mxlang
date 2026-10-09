@@ -493,7 +493,7 @@ describe("a hook's result is checked", () => {
         ({ kind: "expression", node: { type: "NullLiteral" } }) as never,
     });
     expect(caught(() => irOf("rule x=&a\n", undefined, forged)).message).toBe(
-      "the `member` trigger's `lowerTrigger` must return what `ctx.expression`, `ctx.attribute` or `ctx.child` built",
+      "the `member` trigger's `lowerTrigger` must return what `ctx.expression`, `ctx.attribute`, `ctx.shorthand` or `ctx.child` built (a non-empty list of attributes and shorthands in an attribute list)",
     );
   });
 

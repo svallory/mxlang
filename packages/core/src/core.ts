@@ -110,6 +110,12 @@ export class TranslateError extends Error {
    */
   spans?: readonly SourceSpan[];
   /**
+   * A machine-readable code for the error, when its raiser gave one: today a
+   * syntax module's `ctx.fail(message, { code })`. Core's own diagnostics
+   * gain codes in a follow-up. @unstable
+   */
+  code?: string;
+  /**
    * Where the error is, in UTF-16 offsets into `file` (the file being
    * compiled when unset), when it was raised on an MX AST node. Such a node
    * carries offsets, not lines, so `fail` records them here and the lowering
