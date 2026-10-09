@@ -194,7 +194,7 @@ is a positioned compile error.
 | --- | --- |
 | `text` | Creates literal text. |
 | `interpolation` | Creates escaped interpolation by default; `false` requests raw output. |
-| `element` | Creates an element, optionally marked void. |
+| `element` | Creates an element. `options.void` marks it void; without it the element is void exactly when an authored one of that name is (the target's native elements say so: `<br>`, `<img>`, `<input>`, ...), so `build.element("br")` gets no close tag on any target. |
 | `attr` | Creates a static string attribute. |
 | `dynamicAttr` | Creates an expression-valued attribute. |
 | `booleanAttr` | Creates a valueless boolean attribute. |

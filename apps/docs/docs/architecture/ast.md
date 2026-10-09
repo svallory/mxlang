@@ -895,9 +895,11 @@ and `preserveWhitespace` to the parser (`custom-tags.ts` `customTagTaglib`) and 
 `openTagOnly` in lowering with a positioned call-site error
 (`specification.md` ("9.4 Units")). `tagShape` never answers `"void"` for a custom tag.
 
-`bodyMode` is a parse fact, not the IR's `Element.void`: lowering keeps taking
-`Element.void` from `VOID_TAGS` (`core/src/core.ts`, read at
-`lower.ts` `lowerAuthoredTag`; IR spec §5.5).
+`bodyMode` is a parse fact, not the IR's `Element.void`: lowering takes
+`Element.void` from the target's native elements (`HostDeclarations.nativeTags`,
+else core's own HTML elements; `tag-table.ts` `isNativeVoid`, read at `lower.ts`
+`lowerAuthoredTag`; decision 197, IR spec §5.5), the same table the parse's tag
+shapes come from.
 
 Invariant: in a `parsed-text*` body no `MxTag` appears; `<x>` inside
 `<script>` is text (probe: `MarkoText " <x>"`), and so is `<b>` inside
@@ -1433,7 +1435,7 @@ recorded change, never inside the port (decision 163).
 |---|---|---|
 | `Text` | `MxText`; also the empty `Text` `<return>` leaves (`lowerReturn`) and an inert disposition leaves | `value` ← `value`; `span` ← `valueSpan` (§3.8) |
 | `Interpolation` | `MxPlaceholder` | `expr` ← `expression`; `escaped` ← `escape`; `span` ← node span |
-| `Element` | `MxTag` resolved to a native element | `name` ← `name` (static, or unnamed after the ladder); `nameSpan` ← `name.span`; `attrs` ← `attributes` + `shorthands`; `children` ← `body`; `void` ← `VOID_TAGS` in lowering (`core.ts`, `lower.ts` `lowerAuthoredTag`), not `bodyMode` (§3.12) |
+| `Element` | `MxTag` resolved to a native element | `name` ← `name` (static, or unnamed after the ladder); `nameSpan` ← `name.span`; `attrs` ← `attributes` + `shorthands`; `children` ← `body`; `void` ← the target's native elements in lowering (`nativeTags`, else core's HTML elements; `tag-table.ts` `isNativeVoid`, `lower.ts` `lowerAuthoredTag`), not `bodyMode` (§3.12) |
 | `Component` | `MxTag` resolved to an import, discovered tag, `<define>` or dynamic name | `target` ← `name`; `args` ← `args`; `var` ← `var`; `content.params` ← `params`; `attributeTags*` ← `MxAttributeTag` children (and those inside `if`/`for` children); `content` ← the other children |
 | `IfChain` / `Branch` | consecutive `MxTag`s `if`, `else-if`/`else if`, `else` | `condition` ← the default value `MxAttribute.value` |
 | `For` | `MxTag` `for` | `source` ← `of`/`in`/`from`/`to`/`until`/`step` attributes; `key` ← `by`; `params`, `paramNodes`, `paramSpans` ← `params` |
@@ -1585,8 +1587,9 @@ never appear in it.
 The IR needs, and the AST as drafted does not carry:
 
 - **Resolution facts**: which tag is native, a component, a define, a custom
-  tag; the binding registry; `Element.void`, which is lowering's (`VOID_TAGS`,
-  `core.ts`), not a parse fact. These are lowering's by design.
+  tag; the binding registry; `Element.void`, which is lowering's (the
+  target's `nativeTags`, `tag-table.ts` `isNativeVoid`), not a parse fact.
+  These are lowering's by design.
 - **`Expr.code` after rewrites** and `ExprShape`: derived in lowering from
   `source` + `node`.
 

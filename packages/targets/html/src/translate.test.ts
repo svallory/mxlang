@@ -2410,6 +2410,53 @@ describe("local scope bindings shadow a registered custom tag (executed)", () =>
   });
 });
 
+// The emitter trusts the IR's `void` (decision 197), so a custom tag's
+// `ctx.build.element("br")` is void because the builder defaults `void` from
+// the target's native elements, not because the emitter re-reads a table
+// (review 475 r3). An explicit `void` still wins.
+describe("a custom tag's built void elements (executed)", () => {
+  async function render(tag: CustomTag): Promise<string> {
+    const dir = mkdtempSync(join(tmpdir(), "mx-html-built-void-"));
+    try {
+      const path = join(dir, "entry.mx");
+      const code = compile(src("<built/>"), path, {
+        customTags: { built: tag },
+      }).code.replaceAll(
+        'from "@mxlang/html"',
+        `from ${JSON.stringify(fileURLToPath(new URL("./index.ts", import.meta.url)))}`,
+      );
+      writeFileSync(path.replace(/\.mx$/, ".ts"), code);
+      const module = (await import(
+        `${pathToFileURL(path.replace(/\.mx$/, ".ts")).href}?t=${Date.now()}`
+      )) as { default: (value: unknown) => string };
+      return module.default({});
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it("renders a built `<br>` and `<img>` without a close tag", async () => {
+    const html = await render({
+      transform: (_call, ctx) => [
+        ctx.build.element("p", [], [ctx.build.text("a")]),
+        ctx.build.element("br"),
+        ctx.build.element("img", [ctx.build.attr("src", "x")]),
+      ],
+    });
+    expect(html).toBe('<p>a</p><br><img src="x">');
+  });
+
+  it("keeps an explicit `void` either way", async () => {
+    const html = await render({
+      transform: (_call, ctx) => [
+        ctx.build.element("br", [], [], { void: false }),
+        ctx.build.element("mx-icon", [], [], { void: true }),
+      ],
+    });
+    expect(html).toBe("<br></br><mx-icon>");
+  });
+});
+
 /**
  * A tag template is a compilation unit (decision 95), so these compile the
  * *unit itself* through this host rather than only its caller — the half a

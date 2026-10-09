@@ -42,6 +42,7 @@ import type {
 } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
+import { isNativeVoid } from "./tag-table.ts";
 import {
   hasTemplate,
   routeTemplateCall,
@@ -581,6 +582,12 @@ export interface IrBuilders {
    */
   text(value: string, from?: BuildFrom): IrNode;
   interpolation(expr: Expr, escaped?: boolean, from?: BuildFrom): IrNode;
+  /**
+   * A native element. `options.void` marks it void (no children, no close
+   * tag); absent, it is void exactly when an authored element of that name
+   * is: the target's `nativeTags` declares it void, else core's own HTML void
+   * elements (`<br>`, `<img>`, ...).
+   */
   element(
     name: string,
     attrs?: Attr[],
@@ -848,7 +855,9 @@ export function buildersFor(
         name,
         attrs,
         children,
-        void: options.void ?? false,
+        // Absent, void follows the target's table, as an authored element's
+        // does (`<br>` is void, `<box>` is when the target declares it).
+        void: options.void ?? isNativeVoid(ctx.declarations.nativeTags, name),
         loc: spans.loc,
         ...spanOf(spans),
       };

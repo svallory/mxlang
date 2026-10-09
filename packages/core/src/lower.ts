@@ -164,7 +164,11 @@ import {
   tagParamsOf,
   tagVarOf,
 } from "./tag-fields.ts";
-import { coreNativeTags, ELEMENT_TAGLIB_IDS } from "./tag-table.ts";
+import {
+  coreNativeTags,
+  ELEMENT_TAGLIB_IDS,
+  isNativeVoid,
+} from "./tag-table.ts";
 import {
   bindingForDiscoveredModule,
   hasTemplate,
@@ -4305,9 +4309,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
 
   // Void by the same table the parse read (the target's `nativeTags`, else
   // core's own HTML elements), so a body the parse kept is never dropped.
-  const isVoid =
-    (ctx.declarations.nativeTags ?? coreNativeTags()).get(name)?.body ===
-    "void";
+  const isVoid = isNativeVoid(ctx.declarations.nativeTags, name);
   // Filter attribute tags from children — they're processed by lowerAttributeTags,
   // not as regular children. MX AST has them in body; Marko AST had them separate.
   const contentChildren = body.filter(

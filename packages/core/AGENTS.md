@@ -254,7 +254,11 @@ Five facts worth knowing before editing it:
   preserved whitespace and `script`/`style`/`textarea`/`title` as text (HTML
   only; SVG and MathML come from a target's own table). Region lowering's
   `isNativeElementName` and the `defaultTag` check's judge read the same
-  fallback, so a file, a region and the judge agree. The `defaultTag` judge
+  fallback, so a file, a region and the judge agree. Whether an element is
+  void is `isNativeVoid(nativeTags, name)` over the same table, read by
+  lowering (`lowerAuthoredTag`) and by the custom-tag builder's `element()`
+  when it gets no `void` option; no emitter reads a void table (IR spec
+  E8). The `defaultTag` judge
   (`default-tag-check.ts` `judgingLookup`) is this table too, so no
   `marko.json` is read anywhere; `buildMarkoLookup` has no production caller
   and stays for tests until S3b.

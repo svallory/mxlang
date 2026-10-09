@@ -129,6 +129,19 @@ export function coreNativeTags(): NativeTags {
   return coreNatives;
 }
 
+/**
+ * Whether `name` is a void element of a target whose native elements are
+ * `natives` (core's own when `undefined`): the one answer the parse, lowering
+ * and the custom-tag builder's `element()` share, so the IR's `void` never
+ * disagrees with how the element parsed and no emitter re-reads a table.
+ */
+export function isNativeVoid(
+  natives: NativeTags | undefined,
+  name: string,
+): boolean {
+  return (natives ?? coreNativeTags()).get(name)?.body === "void";
+}
+
 const nativeLayers = new WeakMap<NativeTags, ReadonlyMap<string, TagEntry>>();
 
 function nativeLayer(natives: NativeTags) {

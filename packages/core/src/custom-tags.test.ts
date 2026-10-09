@@ -2171,6 +2171,67 @@ describe("ctx.build.delegatedTag attributes", () => {
   });
 });
 
+/**
+ * `ctx.build.element(name)` without `void` is void exactly when an authored
+ * `<name>` is: the target's `nativeTags`, else core's own HTML void elements
+ * (review 475 r3). An explicit `void` still wins. No emitter re-reads a
+ * table, so this default is what keeps a built `<br>` from closing.
+ */
+describe("ctx.build.element's void default", () => {
+  const voidOf = (
+    build: CustomTag["transform"],
+    policy = fakeDeclarations(),
+  ): Record<string, boolean> => {
+    const body = lowerWithTags(
+      "<built/>\n",
+      { built: { transform: build } },
+      policy,
+    ).body;
+    const out: Record<string, boolean> = {};
+    for (const node of body)
+      if (node.kind === "Element") out[node.name] = node.void;
+    return out;
+  };
+  const names =
+    (...elements: string[]): CustomTag["transform"] =>
+    (_call, ctx) =>
+      elements.map((name) => ctx.build.element(name));
+
+  it("is void for core's HTML void elements on a target without nativeTags", () => {
+    expect(voidOf(names("br", "img", "input", "hr", "div", "span"))).toEqual({
+      br: true,
+      img: true,
+      input: true,
+      hr: true,
+      div: false,
+      span: false,
+    });
+  });
+
+  it("is void for what the target's own nativeTags declares void, and only that", () => {
+    const policy = fakeDeclarations({
+      nativeTags: new Map([
+        ["box", { namespace: "html", body: "void" }],
+        ["br", { namespace: "html", body: "html" }],
+      ]),
+    });
+    expect(voidOf(names("box", "br", "img"), policy)).toEqual({
+      box: true,
+      br: false,
+      img: false,
+    });
+  });
+
+  it("lets an explicit `void` win either way", () => {
+    expect(
+      voidOf((_call, ctx) => [
+        ctx.build.element("br", [], [], { void: false }),
+        ctx.build.element("mx-icon", [], [], { void: true }),
+      ]),
+    ).toEqual({ br: false, "mx-icon": true });
+  });
+});
+
 describe("array and function attribute types (decision 138, E1)", () => {
   const listed: CustomTag = {
     attributes: { values: { type: "array" } },
