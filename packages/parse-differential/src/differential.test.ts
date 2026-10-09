@@ -106,13 +106,15 @@ describe(`fixtures (${INPUT_GLOB})`, () => {
 
 /**
  * Where today's front end throws ITS OWN error before the sugar rule
- * (ast \u00a73.13 keeps today's text for the rules themselves). Seven inputs;
+ * (ast \u00a73.13 keeps today's text for the rules themselves). Four inputs;
  * the test below pins each one's exact today-first reason, so a rule change
  * that moves an entry into or out of this list fails there:
- * - `:=1` on an empty `:name` (`<div:=1/>`, `<let/x:=1/>`, `let/x:=1`,
- *   `<div :=1/>`, `<let/x :=1/>`): Marko's binding error "Attributes may
- *   only be bound to identifiers or member expressions" fires before
- *   `BOUND_ON_SUGAR`; MX records `MX_SUGAR_BOUND` at the sugar.
+ * - `:=1` on an empty tag-adjacent `:name` (`<div:=1/>`): Marko's binding
+ *   error "Attributes may only be bound to identifiers or member
+ *   expressions" fires before `BOUND_ON_SUGAR`; MX records `MX_SUGAR_BOUND`
+ *   at the sugar. Anywhere else (`<let/x:=1/>`, `<div :=1/>`) `:=` is
+ *   Marko's own bound default value, not sugar: the front end records
+ *   nothing and lowering raises the binding error, as today.
  * - `.` with arguments and no word (`<div x=a . (b) y/>`): today's attr
  *   with arguments is not sugar at all, so "Invalid attribute name `.`"
  *   fires instead of `MX_SUGAR_ARGUMENTS`.
@@ -127,10 +129,6 @@ const TODAY_OWN_FIRST = new Set([
   "g0755",
   "g0062",
   "g0330",
-  "g0488",
-  "g0489",
-  "g1035",
-  "g1355",
   "g1715",
 ]);
 
@@ -149,26 +147,6 @@ const TODAY_OWN_REASON: Record<string, { start: number; message: string }> = {
     start: 9,
     message:
       "Invalid attribute name `.`; Marko rejects it too — an attribute name may use letters, digits and `._:-`",
-  },
-  g0488: {
-    start: 8,
-    message:
-      "Attributes may only be bound to identifiers or member expressions",
-  },
-  g0489: {
-    start: 7,
-    message:
-      "Attributes may only be bound to identifiers or member expressions",
-  },
-  g1035: {
-    start: 7,
-    message:
-      "Attributes may only be bound to identifiers or member expressions",
-  },
-  g1355: {
-    start: 9,
-    message:
-      "Attributes may only be bound to identifiers or member expressions",
   },
   g1715: {
     start: 8,

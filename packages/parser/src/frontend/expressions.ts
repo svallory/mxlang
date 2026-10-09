@@ -137,7 +137,7 @@ const WRAPPERS: Record<
   MxParameterList: { code: (t) => `(${t})=>{}`, offset: 1 },
   MxTypeArguments: { code: (t) => `_<${t}>`, offset: 2 },
   MxTypeParameters: { code: (t) => `<${t}>()=>{}`, offset: 1 },
-  MxTemplateLiteral: { code: (t) => "`" + t + "`", offset: 1 },
+  MxTemplateLiteral: { code: (t) => `\`${t}\``, offset: 1 },
 };
 
 /** Marko's `getParseErrorLabel`: two reason codes get their own sentence; every other message loses its `(line:column)` tail. */
@@ -407,6 +407,7 @@ function convertStandIns(
     atoms.map((atom) => [atom.start + fileOffset, atom] as const),
   );
   const seen = new Set<unknown>();
+  // biome-ignore lint/suspicious/noExplicitAny: walks and rewrites Babel nodes generically
   const visit = (value: any): void => {
     if (!value || typeof value !== "object" || seen.has(value)) return;
     seen.add(value);
@@ -507,10 +508,33 @@ export function wrappedAttrValueHint(
   text: string,
   at: SubParseAt,
   end: number,
+  atoms: readonly SubParseAtom[] = [],
+  triggers: readonly SubParseTrigger[] = [],
 ): string {
   const trimmed = text.trim();
   const inner = trimmed.slice(1, -1);
-  const result = subParse("MxExpression", inner, [], at, end);
+  // The inside starts after the leading whitespace and the `{`. Its atoms
+  // and triggers are stood in as for the whole value: Marko's `read()` handed
+  // the inside with the same stand-ins (`{ new :a }` parses as `new 0.`).
+  const from = text.length - text.trimStart().length + 1;
+  const inside = <T extends { start: number; end: number }>(
+    items: readonly T[],
+  ): T[] =>
+    items
+      .filter((item) => item.start >= from && item.end <= from + inner.length)
+      .map((item) => ({
+        ...item,
+        start: item.start - from,
+        end: item.end - from,
+      }));
+  const result = subParse(
+    "MxExpression",
+    inner,
+    inside(atoms),
+    at,
+    end,
+    inside(triggers),
+  );
   return result.error === null
     ? " Attribute values in MX are plain TypeScript expressions, not JSX; remove the wrapping `{ }`."
     : "";

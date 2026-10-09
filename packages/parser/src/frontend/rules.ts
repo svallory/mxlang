@@ -644,12 +644,20 @@ export function frontEndRules(
   headRules(ctx, errs, tag);
   // `<div:=x/>`: the default attribute bound (`:=` after a tag-adjacent `:`).
   // The value being a non-identifier (`:=1`) is Marko's own binding error,
-  // lowering's to raise; the sugar rule fires either way (ast §3.6).
+  // lowering's to raise; the sugar rule fires either way (ast §3.6). An
+  // attribute-position `:=x` (`<div :=x/>`) is not sugar: it is Marko's own
+  // `value:=x`, bound (name-sugar.ts `checkNearSugar`: an empty modifier),
+  // and a value that cannot be bound keeps Marko's own binding error.
+  const headEnd = Math.max(
+    name?.span?.end ?? -1,
+    ...tagShorthands(tag).map((shorthand) => shorthand.end as number),
+  );
   for (const item of tag.attributes as Any[]) {
     if (
       item.type === "MxAttribute" &&
       item.name === null &&
-      item.operator === ":="
+      item.operator === ":=" &&
+      item.start === headEnd
     ) {
       errs.push(
         point(ctx, "MX_SUGAR_BOUND", BOUND_ON_SUGAR, localOf(ctx, item.start)),

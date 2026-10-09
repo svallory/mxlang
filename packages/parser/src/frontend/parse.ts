@@ -14,7 +14,6 @@ import type {
   MxBodyMode,
   MxDocument,
   MxErrorCode,
-  MxExpression,
   MxFilter,
   MxFragmentBase,
   MxFrontEndOptions,
@@ -48,6 +47,7 @@ import {
 } from "./rules.ts";
 import {
   buildTagTypes,
+  ownTagType,
   statementRuleProblems,
   withStatementKeywords,
 } from "./tag-types.ts";
@@ -523,6 +523,16 @@ class FrontEnd {
     // The sub-parse (ast §4.1): the container's position carries the fragment
     // base, so the payload's offsets are file-absolute at creation.
     const position = this.positionAt(value.start);
+    const subAtoms = atoms.map((atom: Builder) => ({
+      start: (atom.start as number) - start,
+      end: (atom.end as number) - start,
+      name: atom.name as string,
+    }));
+    const subTriggers = claimed.map((trigger) => ({
+      ...trigger,
+      start: this.at(trigger.start) - start,
+      end: this.at(trigger.end) - start,
+    }));
     const staticTemplate = subKind === "MxTemplateLiteral-static";
     const result = staticTemplate
       ? staticTemplateString(
@@ -533,18 +543,10 @@ class FrontEnd {
       : subParse(
           (subKind ?? type) as ContainerKind,
           text,
-          atoms.map((atom: Builder) => ({
-            start: (atom.start as number) - start,
-            end: (atom.end as number) - start,
-            name: atom.name as string,
-          })),
+          subAtoms,
           { offset: start, line: position.line, column: position.column },
           end,
-          claimed.map((trigger) => ({
-            ...trigger,
-            start: this.at(trigger.start) - start,
-            end: this.at(trigger.end) - start,
-          })),
+          subTriggers,
         );
     let error = result.error;
     if (error !== null) {
@@ -567,7 +569,7 @@ class FrontEnd {
         // appended).
         error = {
           ...error,
-          message: `${error.message}${error.message.endsWith(".") ? "" : "."}${wrappedAttrValueHint(text, { offset: start, line: position.line, column: position.column }, end)}`,
+          message: `${error.message}${error.message.endsWith(".") ? "" : "."}${wrappedAttrValueHint(text, { offset: start, line: position.line, column: position.column }, end, subAtoms, subTriggers)}`,
         };
       }
       this.errors.push(error);
@@ -1035,7 +1037,7 @@ class FrontEnd {
     name: Range,
     concise: boolean,
   ): void {
-    let listed = this.tagTypes[written] ?? TagType.html;
+    let listed = ownTagType(this.tagTypes, written) ?? TagType.html;
     // Off a concise line the parser applies a statement word as html; on
     // one, as a statement (`TAG_NAME.ts` `tableTagType`).
     if (listed === TagType.statement && !concise) listed = TagType.html;
@@ -1052,7 +1054,7 @@ class FrontEnd {
       return;
     }
     // A name the pre-scan missed: `parse` restarts with it added.
-    if (this.tagTypes[written] === undefined) {
+    if (ownTagType(this.tagTypes, written) === undefined) {
       this.missed = { name: written, type: expected };
     }
     throw new Error(

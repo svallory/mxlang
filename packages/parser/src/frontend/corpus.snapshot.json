@@ -2182,14 +2182,12 @@
   "g0488": [
     "tag \"let\" [1,4) [0,11) open=[0,11) mode=html self-closed",
     "  var \"x\" [5,6)",
-    "  attr default [6,9) name=[6,6) := value \"1\" [8,9)",
-    "error MX_SUGAR_BOUND [6,7)"
+    "  attr default [6,9) name=[6,6) := value \"1\" [8,9)"
   ],
   "g0489": [
     "tag \"let\" [0,3) [0,8) open=[0,8) mode=html concise",
     "  var \"x\" [4,5)",
-    "  attr default [5,8) name=[5,5) := value \"1\" [7,8)",
-    "error MX_SUGAR_BOUND [5,6)"
+    "  attr default [5,8) name=[5,5) := value \"1\" [7,8)"
   ],
   "g0490": [
     "tag \"let\" [1,4) [0,14) open=[0,7) close=[8,14) \"let\" mode=html",
@@ -4626,8 +4624,7 @@
   ],
   "g1035": [
     "tag \"div\" [1,4) [0,10) open=[0,10) mode=html self-closed",
-    "  attr default [5,8) name=[5,5) := value \"1\" [7,8)",
-    "error MX_SUGAR_BOUND [5,6)"
+    "  attr default [5,8) name=[5,5) := value \"1\" [7,8)"
   ],
   "g1036": [
     "tag \"div\" [1,4) [0,24) open=[0,24) mode=html self-closed",
@@ -6126,8 +6123,7 @@
   "g1355": [
     "tag \"let\" [1,4) [0,12) open=[0,12) mode=html self-closed",
     "  var \"x\" [5,6)",
-    "  attr default [7,10) name=[7,7) := value \"1\" [9,10)",
-    "error MX_SUGAR_BOUND [7,8)"
+    "  attr default [7,10) name=[7,7) := value \"1\" [9,10)"
   ],
   "g1356": [
     "tag \"let\" [0,3) [0,13) open=[0,5) mode=html concise",

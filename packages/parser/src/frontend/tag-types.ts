@@ -97,12 +97,21 @@ function typeOf(mode: MxBodyMode): TagTypeValue | undefined {
  * concise line), any other name its `tagShape` body mode's type. `@name` is
  * never asked (an attribute tag's body is html, decision 163 addendum 8).
  */
+/** `tagTypes[name]` as an own property: a tag named `toString` is not a function. */
+export function ownTagType(
+  tagTypes: Readonly<Record<string, TagTypeValue>>,
+  name: string,
+): TagTypeValue | undefined {
+  return Object.hasOwn(tagTypes, name) ? tagTypes[name] : undefined;
+}
+
 export function buildTagTypes(
   source: string,
   statementKeywords: ReadonlySet<MxStatementKeyword>,
   shapeOf: (name: string) => MxBodyMode,
 ): Record<string, TagTypeValue> {
-  const table: Record<string, TagTypeValue> = {};
+  // No prototype: a tag may be named `__proto__` or `constructor`.
+  const table: Record<string, TagTypeValue> = Object.create(null);
   for (const name of candidateNames(source)) {
     if (name.startsWith("@")) continue;
     const type = statementKeywords.has(name as MxStatementKeyword)
@@ -176,7 +185,7 @@ export function withStatementKeywords(
 ): Readonly<Record<string, TagTypeValue>> {
   let out: Record<string, TagTypeValue> | undefined;
   for (const keyword of statementKeywords) {
-    if (tagTypes[keyword] !== TagType.statement) {
+    if (ownTagType(tagTypes, keyword) !== TagType.statement) {
       out ??= { ...tagTypes };
       out[keyword] = TagType.statement;
     }

@@ -5,7 +5,10 @@
   "type": "module",
   "exports": {
     ".": "./src/template/index.ts",
-    "./frontend": "./src/frontend/index.ts"
+    "./frontend": {
+      "types": "./src/frontend/public.d.ts",
+      "default": "./src/frontend/index.ts"
+    }
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

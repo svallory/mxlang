@@ -216,7 +216,10 @@ describe("exposed as the package's second entry point (PR 3, decision 166 addend
     );
     expect(manifest.exports).toEqual({
       ".": "./src/template/index.ts",
-      "./frontend": "./src/frontend/index.ts",
+      "./frontend": {
+        types: "./src/frontend/public.d.ts",
+        default: "./src/frontend/index.ts",
+      },
     });
     expect(manifest.private).toBe(true);
   });
