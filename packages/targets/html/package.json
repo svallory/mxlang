@@ -45,7 +45,8 @@
   "files": [
     "dist",
     "types",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",

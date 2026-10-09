@@ -191,6 +191,7 @@ export const PACKED_PACKAGES: PackedPackage[] = [
         "src",
         "grammar.js",
         "README.md",
+        "CHANGELOG.md",
         "LICENSE",
       ],
       runtimeDir: "highlight",

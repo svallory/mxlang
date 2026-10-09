@@ -31,7 +31,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external @angular/compiler-cli --external @mxlang/angular --external typescript && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",

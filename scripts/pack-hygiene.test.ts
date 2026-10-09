@@ -60,7 +60,12 @@ for (const p of PACKED_PACKAGES) {
           ]),
         ]
       : packedFiles(dir);
-    const allowedTop = new Set(["package.json", "README.md", "LICENSE"]);
+    const allowedTop = new Set([
+      "package.json",
+      "README.md",
+      "CHANGELOG.md",
+      "LICENSE",
+    ]);
     // `dist/` for most packages; an assets package names its own top levels.
     const shippedTop = p.assets
       ? p.assets.files.map((f) => f.split("/")[0] ?? f)
@@ -68,7 +73,12 @@ for (const p of PACKED_PACKAGES) {
 
     it("declares a `files` allowlist", () => {
       expect(pkg.files).toEqual(
-        p.assets?.files ?? ["dist", ...p.extraTopLevel, "README.md"],
+        p.assets?.files ?? [
+          "dist",
+          ...p.extraTopLevel,
+          "README.md",
+          "CHANGELOG.md",
+        ],
       );
     });
 

@@ -17,7 +17,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "bun build/runtime.ts && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
