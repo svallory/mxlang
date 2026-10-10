@@ -12,16 +12,19 @@
  * attribute tags, the params count and the dynamic name.
  */
 import { describe, expect, it } from "vitest";
-import { compileSource } from "./compile.ts";
+import { compileSource, printExpression } from "./compile.ts";
 import {
   type Ctx,
   DYNAMIC_TAG,
   fail,
   type Node,
+  newCtx,
   rejectUnsupportedFields,
   TranslateError,
 } from "./core.ts";
 import type { HostDeclarations } from "./declarations.ts";
+import { resolveUnnamedTags } from "./default-tag.ts";
+import { parseFragment } from "./fragment.ts";
 import { handleNode } from "./host-handle.ts";
 import {
   bindingSpan,
@@ -67,14 +70,24 @@ function markoTag(ctx: Ctx, view: Node): unknown {
   return {
     name: dynamic ? "" : view.name.value,
     at: view.loc.start.index,
-    nameSpan: dynamic ? undefined : [view.name.start, view.name.end],
+    // A `${"a"}` name carries a line/column `loc` and no offsets.
+    nameSpan: [
+      view.name.start ?? lineColumnOffset(ctx, view.name.loc?.start),
+      view.name.end ?? lineColumnOffset(ctx, view.name.loc?.end),
+    ],
     attributes: view.attributes.map((attr: Node) => markoAttribute(ctx, attr)),
     var: view.var ? [view.var.start, view.var.end] : null,
     attributeTags: view.attributeTags.map((tag: Node) => [
       tag.name.value,
       tag.loc.start.index,
     ]),
-    params: view.body.params?.length ?? 0,
+    params: view.body.params?.length
+      ? [
+          view.body.params.length,
+          view.body.params[0].start,
+          view.body.params.at(-1).end,
+        ]
+      : null,
     dynamicName: dynamic ? exprOf(ctx, view.name).code : null,
   };
 }
@@ -122,13 +135,13 @@ function hostTag(view: HostTagView): unknown {
   return {
     name: view.name,
     at: view.span.start,
-    nameSpan: view.dynamicName
-      ? undefined
-      : [view.nameSpan.start, view.nameSpan.end],
+    nameSpan: [view.nameSpan.start, view.nameSpan.end],
     attributes: view.attributes.map(hostAttribute),
     var: view.var ? [view.var.span.start, view.var.span.end] : null,
     attributeTags: view.attributeTags.map((tag) => [tag.name, tag.span.start]),
-    params: view.params?.count ?? 0,
+    params: view.params
+      ? [view.params.count, view.params.span.start, view.params.span.end]
+      : null,
     dynamicName: view.dynamicName?.code ?? null,
   };
 }
@@ -154,6 +167,7 @@ function claimed(source: string, names: string[]): Pair[] {
   const error = compile(
     source,
     declarations({
+      resolveDefaultTag: () => "claim",
       isDelegatedTag: (name) => names.includes(name),
       resolveDelegatedTag(name, node, ctx) {
         const view = hostTagViewOf(ctx, mxNodeOf(node));
@@ -183,6 +197,12 @@ const TAG_INPUTS: [string, string, string[]][] = [
     ["claim"],
   ],
   ["params", `<claim|x, y|>\${x}</claim>\n`, ["claim"]],
+  [
+    "params with a pattern, a type and a default",
+    `<claim|{ a }: T, b = 1|>\${a}</claim>\n`,
+    ["claim"],
+  ],
+  ["unnamed, resolved to the default tag", `<p><.a x=1/></p>\n`, ["claim"]],
   ["attribute tags", `<claim><@a>1</@a><@b x=1/></claim>\n`, ["claim"]],
   [
     "control flow holding an attribute tag",
@@ -190,6 +210,16 @@ const TAG_INPUTS: [string, string, string[]][] = [
     ["claim"],
   ],
   ["dynamic tag", `<\${Comp} x=2>y</>\n`, [DYNAMIC_TAG]],
+  [
+    "atom name: static, as on Marko's tree",
+    `<\${:widget} b=1/>x\n`,
+    ["widget"],
+  ],
+  [
+    "string name: a template literal, still dynamic",
+    `<\${"lit"} b=1/>\n`,
+    [DYNAMIC_TAG],
+  ],
   ["concise", `claim/v a=1\n  -- text\n`, ["claim"]],
   ["unicode before", `<p>é😀</p>\n<claim a="é"/>\n`, ["claim"]],
 ];
@@ -281,6 +311,26 @@ describe("the view's contract", () => {
     expect(first?.value?.code).toBe("1");
     expect(second?.name).toBe("flag");
     expect(second && "value" in second).toBe(false);
+  });
+
+  it("an unnamed tag's name is read through, not memoized: '' until resolveDefaultTag answers", () => {
+    const source = "<.a x=1/>\n";
+    const ctx = newCtx(
+      source,
+      printExpression,
+      declarations({ resolveDefaultTag: () => "section" }),
+      undefined,
+      FILE,
+      lookup,
+    );
+    const [node] = parseFragment(source).body;
+    const tag = hostTagViewOf(ctx, node);
+    expect(tag.name).toBe("");
+    expect(tag.nameSpan).toEqual({ start: 1, end: 1 });
+    resolveUnnamedTags(ctx, [node]);
+    expect(tag.name).toBe("section");
+    expect(hostTagViewOf(ctx, node)).toBe(tag);
+    expect(tag.nameSpan).toEqual({ start: 1, end: 1 });
   });
 
   it("no var, no params, no attribute tags: null, null, []", () => {

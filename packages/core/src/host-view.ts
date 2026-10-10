@@ -74,6 +74,10 @@ export interface HostSpreadView {
 export interface HostTagView {
   /** The tag name; an unnamed tag's resolved default name; for a module statement, its keyword. */
   readonly name: string;
+  /**
+   * The name's range: for `<${…}>`, the expression inside the braces; for an
+   * unnamed tag, empty where a name would be written (after the `<`).
+   */
   readonly nameSpan: HostSpan;
   /** The whole tag, or the statement's span. */
   readonly span: HostSpan;
@@ -88,9 +92,9 @@ export interface HostTagView {
     readonly name: string;
     readonly span: HostSpan;
   }[];
-  /** The body parameters, when pipes were written. */
+  /** The body parameters, when pipes were written: first to last, pipes excluded. */
   readonly params: { readonly span: HostSpan; readonly count: number } | null;
-  /** The `<${…}>` name expression, else null. */
+  /** The `<${…}>` name expression, else null (an atom name `<${:a}>` is static). */
   readonly dynamicName: Expr | null;
   readonly handle: MxNodeHandle;
 }
@@ -177,16 +181,25 @@ function buildTagView(ctx: Ctx, node: Node): HostTagView {
     span: spanOf(node.start, node.end),
     handle: handleFor(node),
   };
-  const dynamic = node.name?.kind === "dynamic";
+  // An atom name (`<${:a}>`) is static, as on Marko's tree: `tagNameOf`
+  // reads it, and answers nothing only for a name that is really dynamic.
+  const dynamic =
+    node.name?.kind === "dynamic" && tagNameOf(node) === undefined;
   // An unnamed tag's name changes once `resolveDefaultTag` answers, so it is
   // read on every access, not memoized.
   Object.defineProperty(view, "name", {
     enumerable: true,
-    get: () => (dynamic ? "" : String(tagNameOf(node) ?? "")),
+    get: () => String(tagNameOf(node) ?? ""),
   });
   lazy(view, "nameSpan", () => {
-    // The default tag is written over an empty span at the tag's start: the
-    // shorthand has no authored name.
+    // A `<${…}>` name is its expression inside the braces, as on the
+    // Marko-shaped view: a `${"a"}` string's range is its `loc`.
+    if (node.name?.kind === "dynamic") {
+      const range = locatedRangeOf(ctx, tagNameExprOf(node));
+      if (range) return range;
+    }
+    // An unnamed tag's default is written over an empty span where its name
+    // would be: the shorthand has no authored name.
     const span = node.name?.span ?? { start: node.start, end: node.start };
     const end = node.name?.kind === "unnamed" ? span.start : span.end;
     return spanOf(span.start, end);
