@@ -7,7 +7,7 @@
  *
  * The scan reads core's sources: the dist's requires are exactly the literal
  * ones there (`babel.ts`, `mx-config.ts`). Excluded by design:
- * `node:` builtins (always present, bare or prefixed), `marko-frontend.ts`'s three specifiers
+ * `node:` builtins (always present, bare or prefixed), `marko-frontend.ts`'s two specifiers
  * (dead in the dist — the build folds their conditional to the bundled
  * `marko-frontend.cjs` — see that file), and `target-loader.ts`'s
  * user-project descriptors (resolved from the project, not shipped).
@@ -23,7 +23,6 @@ const CORE_SRC = join(import.meta.dirname, "../../../core/src");
 const SOURCE_ONLY = new Set([
   "@marko/compiler",
   "@marko/compiler/internal/babel",
-  "@mxlang/parser",
 ]);
 
 function coreBareRequires(): string[] {

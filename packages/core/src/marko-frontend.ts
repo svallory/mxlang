@@ -7,9 +7,8 @@
  * (`@mxlang/parser/frontend`, `mx-parse.ts`), not with this layer, and so
  * does the IR entry's tag scan (`parseMxDocument`): no production call site
  * compiles or parses a template with `@marko/compiler`. What is still loaded
- * here is the taglib lookup (`taglib.buildLookup`) and, in the
- * dist only, the bundle's copy of MX's template parser for the syntax table
- * (`mxTemplateParser`). The error-path re-lexes use `@mxlang/parser/lexer`
+ * here is the taglib lookup (`taglib.buildLookup`); the syntax table's
+ * parser (`mxTemplateParser`) loads `@mxlang/parser` instead. The error-path re-lexes use `@mxlang/parser/lexer`
  * directly (PR 6 slice S2); printing, the TS strip, code frames and the
  * error kit use core's own Babel (`babel.ts`, slice S1), and `markoBabel()`
  * is left only for the differential in `babel.test.ts`. Nothing calls
@@ -125,8 +124,9 @@ export function markoBabel(): MarkoBabel {
 /**
  * MX's own template parser with its syntax-table API (decision 182):
  * `createParser(handlers, { syntax })`, `validateSyntaxTable`,
- * `DEFAULT_SYNTAX`. Always `@mxlang/parser` (a devDependency, loaded by
- * `require`, so no parser source enters core's type program and the
+ * `DEFAULT_SYNTAX`. Always `@mxlang/parser`, imported through its `./lexer`
+ * export (a static ESM import; the export's curated `public.d.ts` types are
+ * what core's type program sees, so no parser source enters it and the
  * published `.d.ts` never names it): in the dist the bundler inlines it into
  * `index.js`, so validating a dialect's table must not load the whole
  * `marko-frontend.cjs` bundle (the cold-start work — a dialect's first

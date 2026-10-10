@@ -23,9 +23,10 @@ export const BUNDLED_MAIN = "bin.cjs";
  * Left external AND shipped beside the server (copied with their dependency
  * closure): the runtime dependencies `@mxlang/core` loads through
  * `require("…")` (`src/babel.ts`, `src/mx-config.ts`; decision 197, PR 6
- * slice S1) — Babel cannot follow a `createRequire` call, so every bare
- * specifier core may require must be listed here (`cold-start.test.ts` in
- * core pins that against core's sources). The Marko parse layer comes with
+ * slice S1) — the bundler (Bun) cannot follow a `createRequire` call, so
+ * every bare specifier core may require must be listed here
+ * (`src/bundled-deps.test.ts` pins that against core's sources). The Marko
+ * parse layer comes with
  * `@mxlang/core`'s dist as `marko-frontend.cjs` (decision 159), which
  * `scripts/bundled-build.ts` copies into the bundle directory.
  */

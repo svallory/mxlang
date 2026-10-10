@@ -185,9 +185,7 @@ describe("cold start: the built dist loads the heavy dependencies lazily", () =>
       // dist already inlines (`mxTemplateParser`); loading the whole
       // `marko-frontend.cjs` for it was ~50 ms of a dialect's first call.
       const requests = probe(dist, "dialect");
-      expect(
-        requests.filter((r) => r.includes("marko-frontend")),
-      ).toEqual([]);
+      expect(requests.filter((r) => r.includes("marko-frontend"))).toEqual([]);
     },
   );
 });
