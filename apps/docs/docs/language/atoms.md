@@ -177,7 +177,7 @@ things atoms add:
   ```
 
   Every other default value keeps decision 151 ruling 2 — `belongs-to=a
-  :customer` is still "` :customer` right after a default value is not
+  :customer` is still "`:customer` right after a default value is not
   supported".
 
 - **The sugar against contracts.** A sugar-derived `name` satisfies a `string`
