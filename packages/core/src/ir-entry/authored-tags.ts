@@ -68,7 +68,6 @@ function translatorFor(
     translator = {
       taglibs: [...taglibsOfRules(rules), ...(custom ? [custom] : [])],
       statementTags: false,
-      tagDiscoveryDirs: [],
       translate: {},
     };
     translators.set(key, translator);

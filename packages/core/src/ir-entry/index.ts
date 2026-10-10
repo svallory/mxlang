@@ -195,7 +195,6 @@ export function lowerSource(
       targets: lookupFor(declarations),
       taglibs: taglibsOfRules(rules),
       statementTags: false,
-      tagDiscoveryDirs: [],
       customTags: options.customTags,
       defaultTag: options.defaultTag,
       ...(options.syntax !== undefined ? { syntax: options.syntax } : {}),

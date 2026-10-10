@@ -492,7 +492,6 @@ describe("checkIr lists the errors lowerSource reports", () => {
       targets,
       taglibs: taglibsOfRules(rules),
       statementTags: false,
-      tagDiscoveryDirs: [],
       emitIr: (lowered) => {
         captured = lowered;
         return "";
