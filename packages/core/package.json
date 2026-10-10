@@ -1,6 +1,6 @@
 {
   "name": "@mxlang/core",
-  "version": "0.1.0-alpha.15",
+  "version": "0.1.0-alpha.16",
   "description": "MX core: parses and lowers .mx templates to a host-independent IR, shared by every target",
   "license": "MIT",
   "repository": {
