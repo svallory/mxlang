@@ -78,10 +78,12 @@ interface Case {
   /**
    * A `<define>`'s own declared params are emitted unannotated
    * (`const Row = (p) => …`), so strict tsc reports them whether or not the
-   * call has tag params (space TODO.md, `jsx-define-params-implicit-any`). Listed here
+   * call has tag params (space TODO.md, `jsx-define-params-implicit-any`). A
+   * param written as a destructure (`|a, { content }|`, the trailing-object
+   * binding) is reported on its binding element instead. Listed here
    * so the strict test still proves the body's params are bound and typed.
    */
-  untypedDefineParams?: string[];
+  untypedDefineParams?: Array<string | { bindingElement: string }>;
 }
 
 const CASES: Record<string, Case> = {
@@ -124,12 +126,12 @@ export interface Input { items: string[] }
   },
   "a define called with args and a params body": {
     caller: `export interface Input { items: string[] }
-<define/Row|a, content|>
+<define/Row|a, { content }|>
   <li>\${a}<\${content}("r")/></li>
 </define>
 <ul><Row("x")|n|><b>\${n}</b></Row></ul>`,
     html: "<ul><li>x<b>r</b></li></ul>",
-    untypedDefineParams: ["a", "content"],
+    untypedDefineParams: ["a", { bindingElement: "content" }],
   },
   "a <return> unit": {
     callee: {
@@ -275,8 +277,10 @@ describe.each(hosts)("%s: tag params on a component call", (host) => {
           .split("\n")
           .filter(Boolean)
           .map((line) => line.replace(/^.*?: error /, ""));
-        const expected = (testCase.untypedDefineParams ?? []).map(
-          (name) => `TS7006: Parameter '${name}' implicitly has an 'any' type.`,
+        const expected = (testCase.untypedDefineParams ?? []).map((entry) =>
+          typeof entry === "string"
+            ? `TS7006: Parameter '${entry}' implicitly has an 'any' type.`
+            : `TS7031: Binding element '${entry.bindingElement}' implicitly has an 'any' type.`,
         );
         expect(errors).toEqual(expected);
         expect(proc.status).toBe(expected.length === 0 ? 0 : 2);
