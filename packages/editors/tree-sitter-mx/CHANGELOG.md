@@ -6,6 +6,12 @@
 
 - **Fixed (tree-conformance-grammar-corpus):** `parseData` rejects a shorthand id or class with a placeholder (`<x#a${y}/>`, `<x.a${y}/>`) with an error positioned at the sigil, instead of `internal error: … core IR invariant broken — attribute `id` carries no span` (id) or a wrong "together with a `class` attribute" message (class). The grammar package gains `test/corpus/`, 314 tree-sitter corpus cases (htmljs-parser v5.12.0 fixtures the grammar accepts, plus MX's own), and a data-target test that runs every case through `parseData`.
 
+- **Changed (beta-hygiene-2):** - tsx-bridge: publish-ready at `0.1.0-alpha.1` (was private `0.0.0`), because the beta's `@mxlang/angular` depends on it. Adds an `exports` map resolving from `dist`, `publishConfig.access: public`, repository metadata, a LICENSE and a CHANGELOG. The exports are unchanged. - language-server: marked `private`; it is outside the beta and on no registry. - tree-sitter-mx: the CHANGELOG heading for `0.1.0-alpha.2` carries its publish date (2026-10-05) instead of "unreleased".
+
+- **Changed (beta-readme-note):** Every published package's README now carries the same beta note right after its title/intro: the package is at 0.x and its API may change in any release until 1.0.0 (npm publishes plain `0.1.0` on the `latest` dist-tag for the beta).
+
+- **Fixed (grammar-htmljs-errors):** - The grammar now reports the seven inputs htmljs-parser rejects that it used to accept silently: EOF inside a CDATA section, a doctype, an XML declaration or an HTML comment (`<![CDATA[oops`, `<!DOCTYPE html PUBLIC`, `<?xml version="1.0"`, `<!-- oops`), code after a concise comment block (`/* c */ x`), and a concise line starting with a single `-` or with a `/` that opens no comment. Each is an `ERROR` node over the offending span instead of an empty document or a dropped line. The cases live in `test/corpus/errors.txt` (tree-sitter `:error` cases).
+
 ## 0.1.0-alpha.2 (2026-10-05)
 
 Atoms (decision 156) and the tagless `:name=value` line. Four new local

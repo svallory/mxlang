@@ -1,12 +1,14 @@
 #!/usr/bin/env bun
 //
-// Decision 143: prove the alpha tarballs (`@mxlang/core` and
-// `@mxlang/web-elements`, a core dependency) work for a consumer who installs
-// only them. Decision 204 deleted `@mxlang/data`: a consumer that reads the
-// tree calls core's `lowerSource`. The probe
-//   1. packs them with `bun pm pack` (the command `bun publish` runs), and
-//      checks that the core tarball's `@mxlang/web-elements` is its exact
-//      version and not `workspace:*` (npm does not rewrite it, bun does);
+// Decision 143: prove the alpha tarball of `@mxlang/core` works for a consumer
+// who installs only it. Core bundles `@mxlang/web-elements` (a devDependency
+// of the workspace), so it is the only `@mxlang` package published for Mesh.
+// Decision 204 deleted `@mxlang/data`: a consumer that reads the tree calls
+// core's `lowerSource`. The probe
+//   1. packs core with `bun pm pack` (the command `bun publish` runs), and
+//      checks that its tarball lists no `@mxlang/*` in `dependencies` (a
+//      `workspace:*` there would ship unrewritten by npm, or point at an
+//      unpublished version);
 //   2. installs the core tarball into a fresh `mktemp -d` project outside the
 //      repo, once with npm and run by Node, once with Bun;
 //   3. runs a `lowerSource` probe (`customTags`, `structural: "reject"`,
@@ -26,10 +28,9 @@
 // `bun pm pack` hang on macOS with bun 1.3.14; it did not hang here, and the
 // per-step timeout kills it if it does.
 //
-// It builds web-elements and core itself first. It installs into a scratch
-// dir, so it needs the network only for core's registry dependencies (not
-// for the `@mxlang` packages: `overrides` pin them to the tarballs). Publish
-// order follows: web-elements before core.
+// It builds core itself first. It installs into a scratch dir, so it needs the
+// network only for core's registry dependencies (not for core itself: the
+// consumer's dependency is the tarball).
 //   bun run scripts/alpha-probe.ts [--keep]
 //
 // Not part of `verify` or CI yet (the first manual alpha comes first).
@@ -51,7 +52,6 @@ const STEP_TIMEOUT_MS = 240_000;
 const MIN_NODE_MAJOR = 26;
 const tsc = join(repoRoot, "node_modules/.bin/tsc");
 
-const WEB_ELEMENTS_DIR = join(repoRoot, "packages/web-elements");
 const CORE_DIR = join(repoRoot, "packages/core");
 
 function fail(message: string): never {
@@ -79,10 +79,11 @@ function run(
 const work = mkdtempSync(join(tmpdir(), "alpha-probe-"));
 console.log(`[alpha-probe] scratch: ${work}`);
 
-/** Build web-elements, then core, so the probe never packs a stale `dist`. */
-for (const dir of [WEB_ELEMENTS_DIR, CORE_DIR]) {
-  const built = run("bun", ["run", "build"], dir);
-  if (built.status !== 0) fail(`bun run build failed in ${dir}:\n${built.out}`);
+/** Build core, so the probe never packs a stale `dist`. */
+{
+  const built = run("bun", ["run", "build"], CORE_DIR);
+  if (built.status !== 0)
+    fail(`bun run build failed in ${CORE_DIR}:\n${built.out}`);
 }
 
 /** `bun pm pack` a package into `work/tarballs`; returns the tarball path. */
@@ -112,12 +113,8 @@ function tarFile(tarball: string, path: string): string {
   return r.stdout;
 }
 
-const webElementsTarball = pack(WEB_ELEMENTS_DIR);
 const coreTarball = pack(CORE_DIR);
 
-const webElementsPkg = JSON.parse(
-  tarFile(webElementsTarball, "package/package.json"),
-) as { version: string };
 const corePkg = JSON.parse(tarFile(coreTarball, "package/package.json")) as {
   version: string;
   dependencies: Record<string, string>;
@@ -125,9 +122,12 @@ const corePkg = JSON.parse(tarFile(coreTarball, "package/package.json")) as {
 console.log(
   `[alpha-probe] core tarball dependencies: ${JSON.stringify(corePkg.dependencies)}`,
 );
-if (corePkg.dependencies["@mxlang/web-elements"] !== webElementsPkg.version) {
+const mxlangDeps = Object.keys(corePkg.dependencies ?? {}).filter((n) =>
+  n.startsWith("@mxlang/"),
+);
+if (mxlangDeps.length > 0) {
   fail(
-    `the core tarball depends on @mxlang/web-elements@${corePkg.dependencies["@mxlang/web-elements"]}, expected the exact version ${webElementsPkg.version} (workspace:* not rewritten?)`,
+    `the core tarball depends on ${mxlangDeps.join(", ")}: core ships self-contained, and a published @mxlang dependency has to be added to the release set (and the alpha version bumped) first`,
   );
 }
 
@@ -210,11 +210,10 @@ console.log("probe passed");
 function consumer(label: string): string {
   const dir = join(work, label);
   mkdirSync(dir, { recursive: true });
-  // `@mxlang/core` depends on `@mxlang/web-elements@<alpha>`, which is not on
-  // the registry before the first publish: pin both to their tarballs.
+  // Core is not on the registry before the first publish: pin it to its
+  // tarball.
   const overrides = {
     "@mxlang/core": `file:${coreTarball}`,
-    "@mxlang/web-elements": `file:${webElementsTarball}`,
   };
   writeFileSync(
     join(dir, "package.json"),

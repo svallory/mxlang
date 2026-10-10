@@ -11,6 +11,12 @@
 
 - **Fix (marko-parity-trio, `:modifier`):** `:foo=1` in an MX region is no longer a syntax error. It is Marko's attribute named `value:foo`, so it now parses to the JSXNamespacedName `value:foo` (and a valueless `:foo` to `value:foo=""`, HTML's empty attribute); `a:b:c=1` is still refused as malformed.
 
+- **Changed (beta-hygiene-2):** - tsx-bridge: publish-ready at `0.1.0-alpha.1` (was private `0.0.0`), because the beta's `@mxlang/angular` depends on it. Adds an `exports` map resolving from `dist`, `publishConfig.access: public`, repository metadata, a LICENSE and a CHANGELOG. The exports are unchanged. - language-server: marked `private`; it is outside the beta and on no registry. - tree-sitter-mx: the CHANGELOG heading for `0.1.0-alpha.2` carries its publish date (2026-10-05) instead of "unreleased".
+
+- **Changed (beta-readme-note):** Every published package's README now carries the same beta note right after its title/intro: the package is at 0.x and its API may change in any release until 1.0.0 (npm publishes plain `0.1.0` on the `latest` dist-tag for the beta).
+
+- **Changed (pr6-s2-lexer):** Core's parse-error rewrites (the mismatched-close opener, a failure inside a tag's `|params|`, sugar right after a default value, the atom hints, the shorthand-word probe) replay the source with MX's own template lexer (`@mxlang/parser/lexer`) on every run, never with `htmljs-parser` through `@marko/compiler` (decision 197, PR 6 slice S2). The dist already lexed with MX's parser; running from source now does too. No diagnostic text or position changes. `@mxlang/tsx-bridge` declares the `htmljs-parser` 5.18.0 its region walk bundles, which it used to resolve from the install around it; its output is unchanged. `parseData` output and the `DataTag`/`DataAttr`/`DataExpr`/`DataImport` types are unchanged (`mesh-syntax.test.ts` passes unchanged).
+
 ## Unreleased
 
 - **Types (public-dts-customtags-any):** `PrintOptions.customTags`, `MxRegionCompileInput.customTags` and `MxParseOptions.mxCustomTags` are now `Record<string, CustomTag>` (type-only `@mxlang/core` import; no runtime or declaration cycle). They were `any`/`unknown`, so a loose tag definition that used to typecheck can now fail to build.
