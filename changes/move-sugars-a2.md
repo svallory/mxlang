@@ -1,5 +1,5 @@
 ---
-packages: [core, data]
+packages: [core]
 kind: Added
 ---
 

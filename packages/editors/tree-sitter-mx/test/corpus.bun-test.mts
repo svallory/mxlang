@@ -2,8 +2,8 @@
 // ERROR or MISSING node (except the `:error` cases of errors.txt, which must
 // have one: htmljs-parser rejects them), and the reader hands back the source
 // the case holds.
-// packages/targets/data/src/tree-conformance.test.ts runs the same cases
-// through parseData.
+// packages/core/src/ir-entry/conformance.test.ts runs the same cases
+// through lowerSource.
 import assert from "node:assert";
 import { parseMx } from "../__tests__/util/language.mts";
 import { readCorpus } from "./corpus/read.mts";

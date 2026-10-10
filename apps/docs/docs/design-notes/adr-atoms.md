@@ -5,7 +5,7 @@ description: "Why `:name` in an expression position is a value that represents i
 
 # ADR 156: atoms
 
-**Status:** accepted (decision 156 in the decisions log); parser approach implemented in PR #342. **Depends on:** ADR 145 (`defaultTag`), ADR 146 (`:name`). **Amended by:** decision 156 addendum 1 (the lead's rulings on Mesh's review), addendum 5 (`scope` takes a list) and addendum 7 (the default scope is the file). **Implementation:** Phase B PR 1 (parser, core conversion, IR, typecheck splice, `parseData`); contracts implemented in PR 2 (`feat/atoms-contracts`, `packages/core/src/atom-contracts.ts`). **User docs:** [Atoms](/language/atoms/), [Errors](/language/errors/#errors-atom-errors), [Sidecars](/custom-tags/sidecars/#sidecars-declare-the-call-contract-atoms-in-contracts).
+**Status:** accepted (decision 156 in the decisions log); parser approach implemented in PR #342. **Depends on:** ADR 145 (`defaultTag`), ADR 146 (`:name`). **Amended by:** decision 156 addendum 1 (the lead's rulings on Mesh's review), addendum 5 (`scope` takes a list) and addendum 7 (the default scope is the file). **Implementation:** Phase B PR 1 (parser, core conversion, IR, typecheck splice, the IR entry point); contracts implemented in PR 2 (`feat/atoms-contracts`, `packages/core/src/atom-contracts.ts`). **User docs:** [Atoms](/language/atoms/), [Errors](/language/errors/#errors-atom-errors), [Sidecars](/custom-tags/sidecars/#sidecars-declare-the-call-contract-atoms-in-contracts).
 
 ## Context
 
@@ -53,13 +53,13 @@ A name matches `[A-Za-z_$][\w$]*(-[\w$]+)*`: `:title`, `:rename-all`, `:primary-
 
 ### 2. IR
 
-An atom is its own IR node, `atom { name, span }`, distinct from `string`. It is not a string literal in the tree; it lowers to one (next section). `parseData` exposes it as an atom, so data consumers can tell `:title` from `"title"` and tools can offer completion and go-to on it.
+An atom is its own IR node, `atom { name, span }`, distinct from `string`. It is not a string literal in the tree; it lowers to one (next section). `lowerSource` exposes it as an atom, so dialect consumers can tell `:title` from `"title"` and tools can offer completion and go-to on it.
 
-**An atom inside an expression** (decision 156 addendum 1, item 1). Where an atom sits inside any expression, nested cases included (array element, object value, call argument, ternary branch, template placeholder, comparison, function body), the `DataExpr.node` Babel node is a `StringLiteral` whose `extra.mxAtom` is `{ span }`, the atom's own span. The node's value is the atom's name, so code that only reads strings still works, and code that cares checks `extra.mxAtom`. This node shape is **public API** of `@mxlang/core` and `@mxlang/data`, stable like the rest of the IR; the Parser approach section builds it, and Phase B PR 1 documents it in `apps/docs/docs/architecture/ir-spec.md`. A consumer that translates an expression (Mesh turns `filter=({ self }) => self.status === :sent` into SQL) recognises an atom by `extra.mxAtom` and reads its span from there.
+**An atom inside an expression** (decision 156 addendum 1, item 1). Where an atom sits inside any expression, nested cases included (array element, object value, call argument, ternary branch, template placeholder, comparison, function body), the `Expr.node` Babel node is a `StringLiteral` whose `extra.mxAtom` is `{ span }`, the atom's own span. The node's value is the atom's name, so code that only reads strings still works, and code that cares checks `extra.mxAtom`. This node shape is **public API** of `@mxlang/core`, stable like the rest of the IR; the Parser approach section builds it, and Phase B PR 1 documents it in `apps/docs/docs/architecture/ir-spec.md`. A consumer that translates an expression (Mesh turns `filter=({ self }) => self.status === :sent` into SQL) recognises an atom by `extra.mxAtom` and reads its span from there.
 
-**Atom-ness survives the name sugar** (addendum 1, item 2). The `name` attribute that the sugar sets (`<string :title/>`, `<:status="paid"/>` under `set`) is marked as written-as-atom in the IR. The `parseData` shape is one rule (addendum 1, item 10): **any attribute whose entire value is one atom is `DataAttr { kind: "atom", name, span }`**, which covers `mode=:strict` and the sugar-derived `name` alike; an atom nested anywhere in an expression (an array item, an object value, a call argument) stays a `StringLiteral` with `extra.mxAtom = { span }`. The sugar form is therefore a reference like any other: a contract `name: { type: "atom", ref: ... }` is satisfied and checked by it (and offered by `atomCandidates`), and `name="title"` is a type error where `name` is typed atom.
+**Atom-ness survives the name sugar** (addendum 1, item 2). The `name` attribute that the sugar sets (`<string :title/>`, `<:status="paid"/>` under `set`) is marked as written-as-atom in the IR. The IR shape is one rule (addendum 1, item 10): **any attribute whose entire value is one atom is a `static` `Attr` with `atom { kind: "atom", name, span }`**, which covers `mode=:strict` and the sugar-derived `name` alike; an atom nested anywhere in an expression (an array item, an object value, a call argument) stays a `StringLiteral` with `extra.mxAtom = { span }`. The sugar form is therefore a reference like any other: a contract `name: { type: "atom", ref: ... }` is satisfied and checked by it (and offered by `atomCandidates`), and `name="title"` is a type error where `name` is typed atom.
 
-An atom list (`accept=[:title, :body]` is an expression, not a whole-value atom) arrives in `parseData` as a `DataExpr` whose array items are `StringLiteral` nodes with `extra.mxAtom`, each with its own span.
+An atom list (`accept=[:title, :body]` is an expression, not a whole-value atom) arrives in `lowerSource` as an `Expr` whose `node` has array items are `StringLiteral` nodes with `extra.mxAtom`, each with its own span.
 
 ### 3. Lowering
 
@@ -131,7 +131,7 @@ The kinds Mesh refers to: an *attribute* (`accept`, `require`, `sort`, the left 
 | 6 | **Derived declarations from `analyze`** | `ctx.declare(kind, name, { span, scope })` |
 | 7 | **Extensions add kinds** (Mesh ADR-0037: extensions add tags and sections in one generated contracts module) | kinds merge by name across contract modules |
 | 8 | **Duplicate declarations** | a positioned core error with both spans; optional `uniqueWith` |
-| 9 | **`parseData` shape.** An atom list arrives as a list of atom nodes with their own spans | section 2: items are `StringLiteral` nodes with `extra.mxAtom`; a whole-value atom (`mode=:strict`, the name sugar) is `DataAttr` kind `atom` |
+| 9 | **IR shape.** An atom list arrives as a list of atom nodes with their own spans | section 2: items are `StringLiteral` nodes with `extra.mxAtom`; a whole-value atom (`mode=:strict`, the name sugar) is a `static` `Attr` with `atom` |
 | 10 | **A read action for `on:load`** | stays with Mesh's `analyze`. A contract names a kind, not a property of the declaration (read against write); a kind per property (`read-action`) is the contract-only answer if Mesh wants it |
 
 ### 5. The name sugar, restated
@@ -150,7 +150,7 @@ boolean :isOverdue({ self }) { ... }   ->  name="isOverdue" value=function
 <input :email=expr/>                   ->  name="email" value=expr
 ```
 
-The `name` attribute the sugar sets keeps its atom-ness (section 2): the IR and `parseData` mark it as written-as-atom (`DataAttr` kind `atom`), so a contract that types `name` as an atom with a `ref` checks it, and `name="title"` is a type error there. For contract checks the sugar-derived `name` is also a string where the contract says `string` or `enum` (decision 156 addendum 6). It is an error only if the tag already has a default value. This replaces 146's "sugar takes no value" errors. The tag-adjacent forms (`<:atom>`, `<kind:atom>`) are unchanged and still resolved after parsing.
+The `name` attribute the sugar sets keeps its atom-ness (section 2): the IR marks it as written-as-atom (a `static` `Attr` with `atom`), so a contract that types `name` as an atom with a `ref` checks it, and `name="title"` is a type error there. For contract checks the sugar-derived `name` is also a string where the contract says `string` or `enum` (decision 156 addendum 6). It is an error only if the tag already has a default value. This replaces 146's "sugar takes no value" errors. The tag-adjacent forms (`<:atom>`, `<kind:atom>`) are unchanged and still resolved after parsing.
 
 ### 6. Invariants
 
@@ -214,7 +214,7 @@ With atoms:
 
 ### Mesh's worked examples
 
-**A `set` line** (shown as text: the tree-sitter grammar does not yet parse the addendum-4 form `:name=value`). Inside `<set>`, each line is the default tag with the name sugar: `<:status="paid"/>` sets `name="status"` and `value="paid"` on the default tag (decision 146 addendum 4), not on `set` itself. That `name` is a reference to an attribute: the contract types it `{ type: "atom", ref: "attribute" }`, the sugar form satisfies it, `parseData` reports it as a `DataAttr` of kind `atom`, and `<:statuss="paid"/>` is an error with a suggestion.
+**A `set` line** (shown as text: the tree-sitter grammar does not yet parse the addendum-4 form `:name=value`). Inside `<set>`, each line is the default tag with the name sugar: `<:status="paid"/>` sets `name="status"` and `value="paid"` on the default tag (decision 146 addendum 4), not on `set` itself. That `name` is a reference to an attribute: the contract types it `{ type: "atom", ref: "attribute" }`, the sugar form satisfies it, `lowerSource` reports it as a `static` `Attr` with `atom`, and `<:statuss="paid"/>` is an error with a suggestion.
 
 ```text
 <entity :invoice>
@@ -330,7 +330,7 @@ Settled by the lead on 2026-10-05 alongside the parser research; option (b′) i
 Settled by the lead on 2026-10-05 in decision 156 addendum 1, on Mesh's review (all nine items accepted):
 
 - **Atoms in expressions are public API.** `StringLiteral` with `extra.mxAtom = { span }`, nested cases included (section 2).
-- **The name sugar keeps its atom-ness**, in the IR and as `DataAttr` kind `atom` (sections 2 and 5).
+- **The name sugar keeps its atom-ness**, in the IR as a `static` `Attr` with `atom` (sections 2 and 5).
 - **Open atom type**, `values` optional, optional `pattern` (section 4).
 - **Two phases and scope.** Declare then check; `declares.scope` names an ancestor tag, default the file (addendum 7); innermost-first resolution; no tag opens a context (section 4). This replaces the earlier open question "how a context is declared" and refines "the enclosing tag's whole subtree".
 - **Union `ref`.** A list of kinds.
@@ -338,7 +338,7 @@ Settled by the lead on 2026-10-05 in decision 156 addendum 1, on Mesh's review (
 - **Duplicates** are a positioned core error with both spans; `uniqueWith` is optional.
 - **Kinds merge** across modules. This replaces the earlier open question 2(b).
 - **Atom against `string`** is a type error, both ways. This replaces the earlier open question on string contracts.
-- **`parseData` shape** (addendum 1, item 10). An attribute whose entire value is one atom, the sugar-derived `name` included, is a `DataAttr` of kind `atom`; an atom nested in an expression is a `StringLiteral` with `extra.mxAtom`; each carries its own span.
+- **IR shape** (addendum 1, item 10). An attribute whose entire value is one atom, the sugar-derived `name` included, is a `static` `Attr` with `atom`; an atom nested in an expression is a `StringLiteral` with `extra.mxAtom`; each carries its own span.
 
 Known limits, settled by the lead in decision 156 addendum 4 (pinned by tests, not fixed; there is no type parser in the lexer). MX reads a spaced `< >` as comparison:
 
@@ -355,11 +355,11 @@ Each has a `divergences.md` row and a case-table row, so a future lexer change i
 
 Still open:
 
-1. **Printing and round-trip.** A formatter and `parseData` consumers that re-emit source must keep `:x` as `:x`; the IR keeps the span, but no formatter exists to confirm it.
+1. **Printing and round-trip.** A formatter and `lowerSource` consumers that re-emit source must keep `:x` as `:x`; the IR keeps the span, but no formatter exists to confirm it.
 
 ## Phase B
 
-1. **PR 1: parser, IR, lowering, public node shape.** The parser change in both places (decision 158), the `atom` IR node, lowering to string literals, `extra.mxAtom = { span }` on atoms inside expressions with the node shape documented in `apps/docs/docs/architecture/ir-spec.md` in that same PR, and `DataAttr` kind `atom` (including for the name sugar). Re-measures the invariants table and the parser simulation on 5.18.0, and adds the `divergences.md` rows.
+1. **PR 1: parser, IR, lowering, public node shape.** The parser change in both places (decision 158), the `atom` IR node, lowering to string literals, `extra.mxAtom = { span }` on atoms inside expressions with the node shape documented in `apps/docs/docs/architecture/ir-spec.md` in that same PR, and the `atom` on a `static` `Attr` (including for the name sugar). Re-measures the invariants table and the parser simulation on 5.18.0, and adds the `divergences.md` rows.
 2. **Ruled follow-up, decision 146 addendum 5 (implemented in PR #346).** When a tag's default attribute value is a single atom, a following whitespace and `:name` is the name sugar: `belongs-to=:Customer :customer` is `belongs-to` with `value="Customer"` (an atom) and `name="customer"`. Decision 151 ruling 2 (sugar right after a default value is not supported) stays for every other default value. Tests in that PR: `belongs-to=:Customer :customer`, and `<const/x=(a) :T => a/>` stays a type annotation.
 3. **PR 2: contracts.** The open atom type with `values` and `pattern`; the two phases; `declares` with `from`, `scope` and `uniqueWith`; union `ref`; `ctx.declare` from `analyze`; the duplicate-declaration error; kind merging across modules; atom-against-string type errors.
 4. **PR 3: docs and grammar.** User docs for atoms and contracts, and the tree-sitter grammar.

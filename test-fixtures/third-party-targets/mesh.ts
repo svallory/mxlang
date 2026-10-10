@@ -16,7 +16,9 @@ import { join } from "node:path";
  * and compiles through data's own compile, recording each call. The data
  * descriptor is handed over on `globalThis` because the package sits in a temp
  * project that cannot resolve `@mxlang/data`; `setupMesh` sets the handoff and
- * `teardownMesh` clears it.
+ * `teardownMesh` clears it. Decision 204 removed the tree target and
+ * `@mxlang/data`, so every suite that uses this host is skipped until the
+ * dialect check re-keys it (TODO dialect-check (PR 1)).
  */
 export interface MeshOptions {
   /** `host.fileKinds`: plain data, it goes through JSON. */

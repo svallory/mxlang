@@ -90,7 +90,7 @@ Five facts worth knowing before editing it:
 
 - **Marko's parse layer is loaded in one place, `src/marko-frontend.ts`, and
   bundled into the dist (decision 159).** `markoCompiler()` (public) is the
-  only way core, data and the tools reach `@marko/compiler`: never
+  only way core and the tools reach `@marko/compiler`: never
   `require("@marko/compiler...")` elsewhere, or a second compiler instance
   loads (separate taglib caches, compile state and Babel nodes). From source
   they resolve the workspace's `@marko/compiler` (patched npm `htmljs-parser`).
@@ -269,8 +269,8 @@ Five facts worth knowing before editing it:
   (`tag-table.ts`, below) and the resolved syntax table; one
   parse per compile (`mxParses` counts it). `parseMxDocument` (`compile.ts`,
   public, `@unstable`) is the same parse without lowering, `undefined` when
-  the template does not parse; `@mxlang/data`'s `unknownTags: "reject"` scan
-  (`scan.ts`) walks its document. No production call site parses through
+  the template does not parse; the IR entry's `unknownTags: "reject"` scan
+  (`src/ir-entry/authored-tags.ts`) walks its document. No production call site parses through
   `@marko/compiler`; it stays for the IR differential (`packages/parse-differential`) and the
   oracles. The front end is imported
   statically and inlined into `dist/index.js` (462 KB at 9293794df, 1.13 MB
@@ -455,7 +455,7 @@ Five facts worth knowing before editing it:
   manifest at the `mx.syntax` key, naming the field path; `tagTypes` is
   refused as taglib-owned), deep-freezes and interns it by `syntaxHash`
   (sha256 of canonical JSON), cached per manifest read. `compileSource`,
-  `parseFragment` and `@mxlang/data`'s `parseData` take an explicit
+  `parseFragment` and `lowerSource` take an explicit
   `syntax` that wins, validated once per frozen object (`explicitSyntax`)
   with the manifest's rules as the caller's error at the file start, naming
   `syntax.<field>`; a non-empty `tagTypes` is refused there too. The table
@@ -486,7 +486,8 @@ Five facts worth knowing before editing it:
   (Mesh's `&`), published as `@mxlang/core/syntax/member` (its own build
   entry, `dist/syntax/member.js` + `.d.ts`); it imports types only so a
   manifest can `require` it or a project can copy it. Its tests stay in
-  `src/triggers.test.ts` and the html/data `member-syntax.test.ts`.
+  `src/triggers.test.ts`, the html `member-syntax.test.ts` and
+  `src/ir-entry/member-syntax.test.ts`.
   **Atoms and name sugars as a module (decisions 183, 196; slice a1).**
   `src/syntax/atoms-sugars.ts` (`@mxlang/core/syntax/atoms-sugars`) carries
   atoms, `:name` and spaced `#id`/`.class` as triggers; `src/syntax/mesh.ts`
@@ -747,12 +748,12 @@ Five facts worth knowing before editing it:
   canonical name, `alias` on the IR node. A name is claimable only when
   nothing else resolves it: not a core structural name, not a core-owned or
   registered tag, not a *built-in of the target*: an entry of core's own
-  taglib (`CORE_TAG_NAMES`, on every target, data included), a name the host
+  taglib (`CORE_TAG_NAMES`, on every target), a name the host
   declares a disposition for, or a non-element in the target's `ctx.tagTable`
   (`isBuiltin`). Core holds no list and no host literal. A native element name is
   claimable (the contract decides inside a contract parent), and a
-  PascalCase file-local binding beats a match. The parse-only data scan
-  (`@mxlang/data` `scan.ts`) reuses `matchWildcardChild`/`scopeForChildren`
+  PascalCase file-local binding beats a match. The parse-only IR-entry scan
+  (`src/ir-entry/authored-tags.ts`) reuses `matchWildcardChild`/`scopeForChildren`
   with no `lookup`. A guard hit (`rejectNearExplicitChild`) is a compile error, not a warning. Cycle rule: only an inline entry object reachable from
   itself is non-terminating; recursion by `contract` reference is fine.
 - **A contract-only tag is a `DelegatedTag` on a claimed name (decision 130).** A
@@ -1129,8 +1130,8 @@ marked `@unstable`; `descriptorVersion` is `0` until core is published under a
 stable version.
 
 - **Vocabulary.** A *target* is an output format (the `mx.target` value); a
-  *host* is a framework (the `mx.host` value, `host.name`). `html` and `data`
-  would be targets with no host. A `TargetDescriptor` is plain data plus an
+  *host* is a framework (the `mx.host` value, `host.name`). `html`
+  would be a target with no host. A `TargetDescriptor` is plain data plus an
   optional lazy `load(core)`; its optional `host` part carries host facts (name,
   `default`, file kinds). **Core names no target and no host**: no built-in name
   appears in core code. `createTargetLookup`'s `reservedNames` option

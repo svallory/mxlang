@@ -14,14 +14,14 @@ import {
  * Only the arguments a data check understands qualify: `-p`/`--project <dir
  * or tsconfig>`, `--pretty [bool]` and `--noEmit`. Anything else (`-b`,
  * `-w`, `--version`, `--init`, a file list) is a request the data check does
- * not answer, so it stays with `tsc` and the staged error for `data` that
- * the registry wrapper still raises (TODO `data-target-tooling-dispatch`).
+ * not answer, so it stays with `tsc` and the registry wrapper's removed-target error.
  * No tsconfig is needed or read: the files are the package's `.mx` files.
  *
  * And only when that directory's own `package.json` says `mx.target: "tree"`:
- * a package that is data by rule 5 (an `@mxlang/data` dependency), a monorepo
- * root, or a directory with no manifest of its own keeps its `tsc` run, so a
- * TypeScript error is never swallowed by a data inference.
+ * a monorepo root, or a directory with no manifest of its own, keeps its
+ * `tsc` run, so a TypeScript error is never swallowed by a data inference.
+ * Decision 204 removed the tree target, so no directory qualifies until the
+ * dialect check replaces this one (TODO dialect-check (PR 1)).
  */
 export function dataProjectDir(
   argv: readonly string[],

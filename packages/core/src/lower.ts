@@ -4123,7 +4123,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // (#395 r3), before a host runs it (html's `server`), drops it (html's
   // `client`) or refuses it: Marko parses it first, so an invalid join that
   // swallowed the next template line is its syntax error, never a silent
-  // drop. Only a statement-parsed node (`isStatementNode`); data's ordinary
+  // drop. Only a statement-parsed node (`isStatementNode`); the `none` preset's ordinary
   // `client`/`server` tags are not statements.
   if ((name === "server" || name === "client") && isStatementNode(node)) {
     const text = sliceNode(ctx, node).trim();

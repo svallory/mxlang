@@ -98,10 +98,10 @@ jobs:
         run: bun run oracle:custom-tags -- --strict
 
   test-node-floor:
-    # core, data and html declare `engines.node >=22.18` (Node's type-stripping
+    # core and html declare `engines.node >=22.18` (Node's type-stripping
     # `require` loads a `.ts` sidecar from 22.18), but every other lane runs
-    # Node 26. This lane runs the core and data suites on the declared floor
-    # so a Node 23+ API in either one fails here instead of in a consumer.
+    # Node 26. This lane runs the core suite on the declared floor so a
+    # Node 23+ API in it fails here instead of in a consumer.
     # Vitest is launched through node (its bin's shebang), so setup-node's
     # version is the one under test; bun only installs and builds.
     runs-on: ubuntu-latest
@@ -121,7 +121,7 @@ jobs:
         run: test "$(node --version)" = "v22.18.0"
       - run: >-
           node ./node_modules/vitest/vitest.mjs run
-          --project @mxlang/core --project @mxlang/data
+          --project @mxlang/core
 
   test-bun-grammar:
     runs-on: ubuntu-latest

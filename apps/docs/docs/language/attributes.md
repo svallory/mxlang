@@ -23,7 +23,7 @@ web page:
 <div id="main"><div class="card wide">hello</div></div>
 ```
 
-On the [tree target](/specification/#the-mx-language-13-host-semantics-table-137-the-tree-target) there is no `div`; the
+Through [the core IR entry point](/specification/#the-mx-language-13-host-semantics-table-137-the-core-ir-entry-point) there is no `div`; the
 unnamed tag is the built-in `object`, a tag with an open contract that carries
 `id` and `class` as ordinary attributes:
 
@@ -32,7 +32,7 @@ unnamed tag is the built-in `object`, a tag with an open contract that carries
 <.b/>
 ```
 
-`parseData` returns two tags named `object`, the first with `id="a"`, the second
+`lowerSource` returns two tags named `object`, the first with `id="a"`, the second
 with `class="b"`.
 
 You can change the answer. In the order they win:
@@ -138,7 +138,7 @@ boolean #isOverdue ({ self }) { return self.x }
 boolean ({ self }) { return self.x } #isOverdue
 ```
 
-(on the [tree target](/specification/#the-mx-language-13-host-semantics-table-137-the-tree-target):
+(through [the core IR entry point](/specification/#the-mx-language-13-host-semantics-table-137-the-core-ir-entry-point):
 a tag `boolean` with `id="isOverdue"` and a function `value`). A tag takes **one**
 default value: `kind=1 #x=2` and `<if=a #x=b>` are errors at the second. A bound
 `value:=y` counts as the default value too. On Angular an attribute-position

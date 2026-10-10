@@ -43,7 +43,7 @@ afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
 });
 
-it("keeps data-only tool policy and generated renderer identical to base HTML", () => {
+it("a leftover @mxlang/data dependency keeps tool policy and generated renderer identical to base HTML (decision 204)", () => {
   const source = "<div>Hello</div>";
   const base = compile(project({}), source);
   const data = compile(

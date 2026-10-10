@@ -29,7 +29,7 @@ module.exports = {
   packageName: "@acme/mx-vue",
   defaultTag: "div", // required: what <#id> and <.class> stand for on this target
   host: { name: "vue" }, // optional: the framework; required under mx.host
-  // builtOn: "tree", // optional: the registered target this one is built on (see below)
+  // builtOn: "html", // optional: the registered target this one is built on (see below)
   load(core) {
     // `core` is the TOOL's @mxlang/core: use it, do not import your own.
     return {
@@ -89,29 +89,29 @@ resolveDefaultTag(node, parents: readonly DefaultTagParent[], context: DefaultTa
 
 **`HostDeclarations.nativeTags?`.** Optional map, on `declarations.default`: your target's native elements by tag name, each `{ namespace: "html" | "svg" | "mathml", body }`, where `body` is how its content parses (`"html"`, `"void"`, `"preserve"`, `"parsed-text"`, `"parsed-text-preserve"`). Core's tag table puts them under your translator's taglibs: they decide which tags parse and lower as void (`<br>`, an IR `Element` with `void: true` and no children), keep their whitespace (`<pre>`) or read their body as text (`<textarea>`, `<script>`), and which lowercase names are elements rather than tags, in a whole file and in a `.<host>.mx` region alike. Every built-in target passes `WEB_ELEMENTS` from `@mxlang/web-elements` (HTML, SVG and MathML, Marko's element rules). Absent means core's own HTML elements: the 14 void elements, `pre`, and the raw-text `script`, `style`, `textarea` and `title`, with no SVG or MathML names. A target that renders SVG or MathML passes `WEB_ELEMENTS` (or its own map). It is `@unstable` (decision 197).
 
-**`HostDeclarations.builtinTags?`.** Optional list, on `declarations.default`: the tag names your target provides without a taglib entry (the tree target's anonymous `object`). The registry counts them as reachable when it checks `defaultTag` and `host.defaultTag`, and a `children["*"]` wildcard never claims them (they are built-ins of the target), so a descriptor that reuses a target's declarations keeps the target's built-in with no literal of its own. A name no taglib, custom tag or `builtinTags` entry covers is still an error. The field is validated at load: an array of non-empty strings.
+**`HostDeclarations.builtinTags?`.** Optional list, on `declarations.default`: the tag names your target provides without a taglib entry (an anonymous `object`, say). The registry counts them as reachable when it checks `defaultTag` and `host.defaultTag`, and a `children["*"]` wildcard never claims them (they are built-ins of the target), so a descriptor that reuses a target's declarations keeps the target's built-in with no literal of its own. A name no taglib, custom tag or `builtinTags` entry covers is still an error. The field is validated at load: an array of non-empty strings.
 
-**`TargetDescriptor.builtOn?`.** Optional string: the name of the registered target this one is built on (a host that reuses another target's declarations and compile, like Mesh on `tree`). `createTargetLookup` resolves it when your descriptor joins the project's lookup: a name no registered target has, a target built on itself and a loop are positioned load errors naming both targets (`target "mesh-data" is built on "dta", which is not a registered target (registered: ...)`; a host name such as `"solid"` gets a hint naming its target, `"solid-jsx"`). The end of the chain is the target's **base target** (`TargetLookup.baseTargetOf`), and a tool keys a check that belongs to a target on it, never on the project's `mx.target` string. It is generic: any target can be built on any other. **Declare `builtOn` to inherit the base target's config checks.** Reusing a target's `declarations` without it gets none, as before. It is `@unstable`, like the rest of the descriptor.
+**`TargetDescriptor.builtOn?`.** Optional string: the name of the registered target this one is built on (a host that reuses another target's declarations and compile, like a host on `html`). `createTargetLookup` resolves it when your descriptor joins the project's lookup: a name no registered target has, a target built on itself and a loop are positioned load errors naming both targets (`target "mesh-data" is built on "dta", which is not a registered target (registered: ...)`; a host name such as `"solid"` gets a hint naming its target, `"solid-jsx"`). The end of the chain is the target's **base target** (`TargetLookup.baseTargetOf`), and a tool keys a check that belongs to a target on it, never on the project's `mx.target` string. It is generic: any target can be built on any other. **Declare `builtOn` to inherit the base target's config checks.** Reusing a target's `declarations` without it gets none, as before. It is `@unstable`, like the rest of the descriptor.
 
-**`TargetDescriptor.configKey?`.** Optional string: the `package.json` key this target's per-target config lives under, `mx[configKey]` (`defaultTag` today), when it is not the target's own `name`. It exists so a renamed target keeps its historical config key and user config survives the rename: the tree target reads `mx.data.*` while its name is `tree` (decision 187), and `mx.tree.defaultTag` is read by no tool. Every `mx[<name>]` config read goes through it, in core and in the registry, so a host built on such a target reads the base's config under the same key (`mx.data.defaultTag` on a host built on `tree`). A bare word, like a target name; anything else is rejected at load. Default: the target's `name`. It is `@unstable`, like the rest of the descriptor.
+**`TargetDescriptor.configKey?`.** Optional string: the `package.json` key this target's per-target config lives under, `mx[configKey]` (`defaultTag` today), when it is not the target's own `name`. It exists so a renamed target keeps its historical config key and user config survives the rename (decision 187 renamed the since-removed tree target this way, and its `mx.data.*` stayed). Every `mx[<name>]` config read goes through it, in core and in the registry, so a host built on such a target reads the base's config under the same key. A bare word, like a target name; anything else is rejected at load. Default: the target's `name`. It is `@unstable`, like the rest of the descriptor.
 
 **`contractDefaultTag(parents, context, builtins?)`** is the exported helper for rung 1: the nearest authored parent's declared `defaultTag` (reading attribute-tag declarations at any depth, skipping control flow by the tag's own definition, never climbing past a parent that declares none), or `undefined`. `builtins` lists names your target provides without a taglib entry. The same module exports `validateDefaultTag(name, scope)` (the reason a value is invalid, or `undefined`), used by the registry for every rung.
-### A host on the tree target
+### A host with its own file kind
 
-A host can be built on the [tree target](/targets/data/) and name its own file kind. This is how Mesh ships `.mesh.mx` (decision 148): a package `@acme/mx-mesh` whose descriptor reuses data's declarations, keeps data's `defaultTag` (`object`), and compiles through data's own compile.
+A descriptor can name its own host and file kind. This is how Mesh ships `.mesh.mx` (decision 148): a package `@acme/mx-mesh` whose `load()` compile reads the file's IR with `lowerSource` (see [the core IR entry point](/architecture/ir-entry/)) and does whatever the dialect does with it. The IR entry point is a function of `@mxlang/core`, not a registered target, so the descriptor is not built on one.
 
 ```js
 // @acme/mx-mesh/index.cjs
-const data = require("@mxlang/data/descriptor").default; // the tree target's descriptor
-
 module.exports = {
   descriptorVersion: 0,
   name: "mesh-data",
   packageName: "@acme/mx-mesh",
-  defaultTag: data.defaultTag, // `object`, data's built-in
-  declarations: data.declarations, // carries builtinTags: ["object"] and the permit flag
-  get parseTranslator() {
-    return data.parseTranslator;
+  defaultTag: "object", // what <#id> and <.class> stand for; lowerSource's own built-in
+  declarations: {
+    default: {
+      builtinTags: ["object"], // reachable without a taglib entry
+      // ...the rest of your HostDeclarations
+    },
   },
   host: {
     name: "mesh",
@@ -120,7 +120,12 @@ module.exports = {
     fileKinds: [{ segment: "mesh", diagnosticSource: "mesh" }], // `.mesh.mx`
   },
   load(core) {
-    return data.load(core); // or wrap it: add your own checks, then delegate
+    return {
+      compileModule(source, filename, options) {
+        const { ir, diagnostics } = core.lowerSource(source, filename, { /* customTags, tagRules, ... */ });
+        // walk `ir`; return { code, dependencies } or throw `new core.TranslateError(message, line, column)`
+      },
+    };
   },
 };
 ```
@@ -131,10 +136,10 @@ The project selects it with `mx.host`:
 { "name": "my-app", "mx": { "host": "@acme/mx-mesh" } }
 ```
 
-- **`defaultTag`** keeps data's `object` because `builtinTags` travels with the declarations; a host override (`host.defaultTag`) or `mx.mesh-data.defaultTag` follows the [ladder](#third-party-targets-what-the-package-exports-the-unnamed-tag), and an override the target cannot reach is the same positioned error as on any target. Set `allowContractDefaultTag: false` on a copy of the declarations to forbid the parent-contract rung.
+- **`defaultTag`** keeps `object` because `builtinTags` travels with the declarations; a host override (`host.defaultTag`) or `mx.mesh-data.defaultTag` follows the [ladder](#third-party-targets-what-the-package-exports-the-unnamed-tag), and an override the target cannot reach is the same positioned error as on any target. Set `allowContractDefaultTag: false` on a copy of the declarations to forbid the parent-contract rung.
 - **`fileKinds`** is checked like a built-in's: a segment is one lowercase word with no dot and never `mx`, needs a `diagnosticSource`, and is refused when another host already owns it (`file-kind segment "x" is declared more than once (host "a" and host "b")`). A kind without `compileRegion` is a **whole-file** kind: `post.mesh.mx` compiles whole-file on the host's target, never through the region bridge. A segment must be the host's own `name` (`mesh` declares `mesh`, never `react`): the segment before `.mx` is a host name (decisions 136, 148). A kind's `readCalleeInput` is read from the project's own lookup, so two projects that load different hosts never share readers.
-- **The data check.** With `builtOn: "tree"`, `mx-tsc` runs data's check on a project that selects your host with `mx.host` as it does for `mx.target: "tree"`: the strict `structural`/`unknownTags` defaults and the `mx.data.*` keys (`structural`, `unknownTags`, `imports`, `defaultTag`). The check adds to your host: `parseData` runs with data's options and your descriptor's own `load()` compile runs on the same file, with the same custom tags and the unnamed tag the [ladder](#third-party-targets-what-the-package-exports-the-unnamed-tag) resolves, so your own rules and transforms still fire (an error both report prints once). `defaultTag` is read from your own namespace (`mx["mesh-data"].defaultTag`) and, when that is absent, from `mx.data.defaultTag`, by every tool (Vite, the language server, the TypeScript plugin and `mx-tsc` share one answer); when both are set and differ your own key wins and a positioned warning names both. Without `builtOn` your host keeps `mx-tsc`'s ordinary run. Compile and editor diagnostics are unaffected.
-- **Tools.** The registry, language server, Vite plugin, `mx-tsc` and the TypeScript plugin all resolve `post.mesh.mx` through `mx.host`, compile it through the descriptor's `load`, and report data's errors positioned in the file.
+- **No dialect check.** No tool checks the file for the dialect's own errors until the dialect check (`TODO dialect-check (PR 1)`); the host's `load()` compile runs on it, and its diagnostics are reported positioned in the file.
+- **Tools.** The registry, language server, Vite plugin, `mx-tsc` and the TypeScript plugin all resolve `post.mesh.mx` through `mx.host` and compile it through the descriptor's `load`.
 
 ### Use the injected core
 
@@ -161,7 +166,7 @@ The language server shows them on the document, linked to the key in `package.js
 
 ### What a third-party target cannot do yet
 
-- **No region file kinds in the editor.** A loaded host may declare `host.fileKinds` (see [A host on the tree target](#third-party-targets-what-the-package-exports-a-host-on-the-tree-target)): the segment is validated like a built-in's, joins the project's lookup and routes whole-file on the host's target. A kind that carries a `compileRegion` (TypeScript with MX regions) is routed by the registry, the language server and Vite from the project's lookup, but the TypeScript plugin builds its region plugins once from the built-ins, so a third-party region kind gets no editor type-checking yet.
+- **No region file kinds in the editor.** A loaded host may declare `host.fileKinds` (see [A host with its own file kind](#third-party-targets-what-the-package-exports-a-host-with-its-own-file-kind)): the segment is validated like a built-in's, joins the project's lookup and routes whole-file on the host's target. A kind that carries a `compileRegion` (TypeScript with MX regions) is routed by the registry, the language server and Vite from the project's lookup, but the TypeScript plugin builds its region plugins once from the built-ins, so a third-party region kind gets no editor type-checking yet.
 - **No joining a built-in host.** A descriptor naming `solid`, `react`, or any other built-in host is rejected: `host "solid" belongs to the built-in targets; a third-party target cannot join it (for now)`. Pick your own host name (TODO `third-party-join-builtin-host`).
 
 Two loaded packages that name the same host agree under `mx.host` / `mx.target`, and a bare `mx.host: "vue"` beside `mx.target: "@acme/mx-vue"` (whose host is `vue`) selects it without an unknown-host warning.

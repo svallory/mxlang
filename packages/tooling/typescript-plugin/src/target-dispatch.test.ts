@@ -86,9 +86,9 @@ describe("target-table page dispatch", () => {
     );
   });
 
-  it("keeps tree unreachable through the tooling policy wrapper", () => {
-    expect(compile("tree").policyDiagnostics[0]?.message).toContain(
-      "not wired into the editor and build tools yet",
+  it("reports the removed tree target through the tooling policy wrapper", () => {
+    expect(compile("tree").policyDiagnostics[0]?.message).toBe(
+      'mx.target "tree" was removed (decision 204); a consumer that reads the tree calls lowerSource from @mxlang/core',
     );
   });
 });

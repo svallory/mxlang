@@ -80,4 +80,4 @@ Each page opens with the same component in the framework's own syntax and in MX,
 
 ## No framework?
 
-MX also compiles without a host: to [HTML strings](/targets/html/) for a server or a static build, and to a [data tree](/targets/data/) when the markup describes data instead of a page.
+MX also compiles without a host: to [HTML strings](/targets/html/) for a server or a static build, and, through [core's IR entry point](/architecture/ir-entry/), to a tree a program reads itself when the markup describes data instead of a page.

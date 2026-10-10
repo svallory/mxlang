@@ -119,7 +119,7 @@ may set. An inline object stays a table only. A trigger whose `node` is
 `{ call }` needs the module's `lowerTrigger`: a `{ call }` in an inline
 `mx.syntax`, or in a module without `lowerTrigger`, is an error at the
 `mx.syntax` key. A tool that builds its own table passes the module as the
-`syntax` option of `compileSource`, `parseFragment` or `parseData`.
+`syntax` option of `compileSource`, `parseFragment` or `lowerSource`.
 
 - `lowerTrigger(id, text, span, ctx)` builds what a `{ call }` trigger
   produces. `ctx.position` says where the trigger sits (`"expression"`,
@@ -179,8 +179,8 @@ may set. An inline object stays a table only. A trigger whose `node` is
     `attributes`, `attributeTags`, `children` and `declares`, plus the
     module's claimed tag keys),
     `attrs`, `attributeTags` and `ancestors`.
-  - An attribute (`ContractAttr`) has the kinds `@mxlang/data`'s `DataAttr`
-    names: `string`, `atom` and `member` with `value` and `span`; `boolean`;
+  - An attribute (`ContractAttr`) has the kinds
+    `string`, `atom` and `member` with `value` and `span`; `boolean`;
     `expression` with the lowered `node`, `code`, `span` and `bound`;
     `spread`. Each named one carries `nameSpan`, `label` (how core's
     diagnostics name it) and `authored` (the sugar that wrote it).

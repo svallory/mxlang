@@ -34,8 +34,9 @@ export interface DataCheckResult {
 /**
  * Whether the project at `dir` takes the data check: its own `package.json`
  * says `mx.target: "tree"` (rule-5 inference does not count). The editor
- * tools never ask: `mx-tsc` is the one caller (TODO
- * `data-target-tooling-dispatch` keeps the staged error for the rest).
+ * tools never ask: `mx-tsc` is the one caller. Decision 204 removed the tree
+ * target, so nothing qualifies until the dialect check (TODO dialect-check
+ * (PR 1)).
  */
 export function isDataProject(dir: string): boolean {
   return registryIsDataProject(dir);

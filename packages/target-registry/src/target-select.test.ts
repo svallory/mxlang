@@ -21,13 +21,13 @@ function project(mx: unknown, dependencies = {}) {
   return join(root, "a.mx");
 }
 it.each([{}, { "@mxlang/host-solid": "1" }])(
-  "explicit tree is a positioned registry-only error, with the unknown-target fallback (%j)",
+  "explicit tree (removed, decision 204) is a positioned error naming lowerSource, with the unknown-target fallback (%j)",
   (deps) => {
     const file = project({ target: "tree" }, deps);
     const { policy, diagnostics } = resolveTargetPolicyDetailed(file);
+    // Core's own answer is the generic unknown target; the registry words it.
     expect(coreResolve(file, builtinLookup())).toMatchObject({
-      policy: { target: "tree" },
-      diagnostics: [],
+      diagnostics: [{ code: "unknown-target", value: "tree" }],
     });
     expect(policy.target).toBe(Object.keys(deps).length ? "solid-jsx" : "html");
     expect(diagnostics).toEqual([
@@ -40,7 +40,7 @@ it.each([{}, { "@mxlang/host-solid": "1" }])(
         column: 14,
         length: 6,
         message:
-          'mx.target "tree" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead',
+          'mx.target "tree" was removed (decision 204); a consumer that reads the tree calls lowerSource from @mxlang/core',
       },
     ]);
     const related: Parameters<typeof diagnoseDocument>[6] = [];
@@ -56,7 +56,7 @@ it.each([{}, { "@mxlang/host-solid": "1" }])(
       diagnostics,
     );
     expect(reported[0]?.severity).toBe(1);
-    expect(reported[0]?.message).toContain("parseData from @mxlang/data");
+    expect(reported[0]?.message).toContain("lowerSource from @mxlang/core");
     expect(related[0]?.diagnostics[0]).toMatchObject({
       severity: 1,
       range: {
@@ -83,14 +83,14 @@ it('mx.target: "data" is refused as the reserved name (decision 187)', () => {
     '"data" is reserved for the evaluated tree target (decision 187); the static tree target is "tree"',
   );
 });
-it("staged tree is neither advertised nor suggested for an unknown target", () => {
+it("tree is neither advertised nor suggested for an unknown target", () => {
   const { diagnostics } = resolveTargetPolicyDetailed(
     project({ target: "dta" }),
   );
   expect(diagnostics[0]?.message).not.toContain("data");
   expect(diagnostics[0]?.message).not.toContain('Did you mean "data"?');
-  // Registration and package inference still know the staged target.
-  expect(builtinLookup().targetNames()).toContain("tree");
+  expect(diagnostics[0]?.message).not.toContain("tree");
+  expect(builtinLookup().targetNames()).not.toContain("tree");
 });
 it("tree plus an explicit host uses the host, as unknown-target does", () => {
   expect(
@@ -98,7 +98,7 @@ it("tree plus an explicit host uses the host, as unknown-target does", () => {
       .policy.target,
   ).toBe("solid-jsx");
 });
-it("the rule-2 data shim stays silent and unchanged", () => {
+it("a leftover @mxlang/data dependency selects nothing and stays silent", () => {
   expect(
     resolveTargetPolicyDetailed(project({}, { "@mxlang/data": "1" })),
   ).toEqual({ policy: { target: "html", host: undefined }, diagnostics: [] });
@@ -118,7 +118,9 @@ it("legacy agreement remains silent; disagreement keeps the explicit target", ()
   });
 });
 
-it.each([{}, { "@mxlang/host-solid": "1" }])(
+// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// check re-keys `dataWired`.
+it.skip.each([{}, { "@mxlang/host-solid": "1" }])(
   "dataWired answers the real data policy; the default stays staged (%j)",
   (deps) => {
     const file = project({ target: "tree" }, deps);
@@ -131,7 +133,9 @@ it.each([{}, { "@mxlang/host-solid": "1" }])(
   },
 );
 
-it("dataWired also resolves a dependency-inferred data package (rule 5)", () => {
+// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// check re-keys `dataWired`.
+it.skip("dataWired also resolves a dependency-inferred data package (rule 5)", () => {
   const file = project(undefined, { "@mxlang/data": "*" });
   expect(resolveTargetPolicyDetailed(file).policy.target).toBe("html");
   expect(

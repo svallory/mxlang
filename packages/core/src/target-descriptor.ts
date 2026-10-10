@@ -324,8 +324,8 @@ export interface TargetDescriptor {
    * The `package.json` key this target's per-target config lives under,
    * `mx[configKey]` (`defaultTag` today), when it is not the target's own
    * `name`. A renamed target keeps its historical config key so user config
-   * survives the rename: the tree target reads `mx.data.*` (decision 187).
-   * Every `mx[<name>]` config read goes through it, in core and in the
+   * survives the rename: the former tree target read `mx.data.*` (decision
+   * 187). Every `mx[<name>]` config read goes through it, in core and in the
    * registry. A bare word, like a target name. Default: the target's `name`.
    */
   readonly configKey?: string;

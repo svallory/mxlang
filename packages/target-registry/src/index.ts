@@ -40,7 +40,6 @@ import {
   type TargetPolicyDiagnostic,
   type TargetPolicyResolution,
 } from "@mxlang/core";
-import data from "@mxlang/data/descriptor";
 import angular from "@mxlang/host-angular/descriptor";
 import astro from "@mxlang/host-astro/descriptor";
 import hono from "@mxlang/host-hono/descriptor";
@@ -83,7 +82,7 @@ function resolved(
  */
 export { html as htmlTarget };
 
-/** Built-ins in registration order; hostless `data` is last. */
+/** Built-ins in registration order. */
 export const builtinTargets: readonly TargetDescriptor[] = [
   html,
   astro,
@@ -92,7 +91,6 @@ export const builtinTargets: readonly TargetDescriptor[] = [
   react,
   hono,
   angular,
-  data,
 ].filter(resolved);
 
 /** Names no descriptor may take: outputs a built-in host may add later (07 Q5), and `data`, reserved for the future evaluated tree target (decision 187). */
@@ -375,9 +373,8 @@ export function resolveTargetPolicy(
 export interface ResolveTargetPolicyOptions {
   /**
    * The caller compiles `data` itself (`mx-tsc`, through `checkDataPackage`):
-   * answer with the real policy, `data` included, instead of the positioned
-   * "not wired yet" error and the `html` fallback the editor tools, Vite and
-   * the Bun loader still get (TODO `data-target-tooling-dispatch`).
+   * answer with core's unmasked policy instead of the registry's positioned
+   * error and the `html` fallback the editor tools, Vite and the Bun loader get.
    */
   dataWired?: boolean;
   /**
@@ -733,10 +730,11 @@ function resolveStaged(
   // registry's staged error and fallback stay the default for every other tool.
   if (options.dataWired)
     return coreResolveTargetPolicyDetailed(filePath, lookup, options);
-  // Decision 131 addendum: explicit tree is not yet wired into tooling.
-  // Mask selection and suggestions, not registration or package inference,
-  // so core's generic unknown-target path positions it and hands on the
-  // same fallback without advertising a target that tools cannot use.
+  // Decision 204 removed the tree target, so nothing registers "tree" and the
+  // masks below are inert until the dialect check replaces this staging (TODO
+  // dialect-check (PR 1)). Core's unknown-target path positions an explicit
+  // `mx.target: "tree"` and hands on its fallback; the message names the
+  // replacement.
   const resolution = coreResolveTargetPolicyDetailed(
     filePath,
     {
@@ -751,7 +749,7 @@ function resolveStaged(
   for (const diagnostic of resolution.diagnostics) {
     if (diagnostic.code === "unknown-target" && diagnostic.value === "tree") {
       diagnostic.message =
-        'mx.target "tree" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead';
+        'mx.target "tree" was removed (decision 204); a consumer that reads the tree calls lowerSource from @mxlang/core';
     }
   }
   // Preserve the pre-3b staging of rule-2 data inference as well.

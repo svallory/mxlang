@@ -98,7 +98,7 @@ export interface TranslatorOptions {
   taglibs?: Array<[string, unknown]>;
   /**
    * `false` when the host declares its own statement tags in `taglibs` (the
-   * data target's three) and core's six (decision 168) must not be registered
+   * former tree target's three) and core's six (decision 168) must not be registered
    * beside them. Unset, every parse registers core's statement tags.
    */
   statementTags?: false;
@@ -412,7 +412,7 @@ function sameFilePath(a: string, b: string): boolean {
  * that lowering raises (`MX_*` rules): the tree is whole. The node is
  * untyped, as everywhere at core's public boundary.
  *
- * @unstable plumbing for `@mxlang/data`'s parse-only scan.
+ * @unstable plumbing for the IR entry's parse-only scan (`ir-entry/authored-tags.ts`).
  */
 export function parseMxDocument(
   source: string,

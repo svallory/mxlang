@@ -19,8 +19,9 @@
  * either used as is,
  *
  * ```ts
+ * import { lowerSource } from "@mxlang/core";
  * import memberSyntax from "@mxlang/core/syntax/member";
- * parseData(source, file, { syntax: memberSyntax });
+ * lowerSource(source, file, { syntax: memberSyntax });
  * ```
  *
  * or copied into a project and renamed (the sigil, the `member` id, the

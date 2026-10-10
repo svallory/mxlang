@@ -77,16 +77,10 @@ describe("target-table Vite dispatch", () => {
     );
   });
 
-  it("keeps tree unreachable through the policy wrapper", async () => {
-    const descriptor = builtinLookup().target("tree");
-    if (!descriptor?.load) throw new Error("missing data compiler");
-    const wired = descriptor as typeof descriptor & {
-      load: NonNullable<typeof descriptor.load>;
-    };
-    const load = vi.spyOn(wired, "load");
+  it("reports the removed tree target through the policy wrapper", async () => {
+    expect(builtinLookup().target("tree")).toBeUndefined();
     await expect(transform("tree")).rejects.toThrow(
-      "not wired into the editor and build tools yet",
+      'mx.target "tree" was removed (decision 204)',
     );
-    expect(load).not.toHaveBeenCalled();
   });
 });

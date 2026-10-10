@@ -21,7 +21,7 @@ import { runInProcess } from "./in-process.ts";
  * `.mx` file the policy assigns to `data`, parsed with the package's tag map
  * (`mx.contracts` and `tags/` sidecars) and `structural`/`unknownTags` both
  * `"reject"` unless `package.json#mx.data` says otherwise. The language server,
- * TS plugin and Vite keep the staged error (TODO `data-target-tooling-dispatch`).
+ * TS plugin and Vite report the removed-target error.
  */
 
 const fixture = realpathSync(
@@ -72,7 +72,9 @@ function check(dir: string, ...extra: string[]) {
   }
 }
 
-describe("mx-tsc on a data package", () => {
+// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// check re-keys this suite.
+describe.skip("mx-tsc on a data package", () => {
   it("prints every file's diagnostics in order and exits 1", async () => {
     const { status, output } = check(fixture);
     expect(status).toBe(1);
@@ -944,7 +946,9 @@ describe("mx-tsc on a data package", () => {
   });
 });
 
-describe("mx-tsc on a data package: wildcard children (decision 147)", () => {
+// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// check re-keys this suite.
+describe.skip("mx-tsc on a data package: wildcard children (decision 147)", () => {
   const withContracts = (contracts: string, doc: string) => {
     const dir = emptyPackage({ mx: DATA });
     writeFileSync(join(dir, "contracts.ts"), contracts);

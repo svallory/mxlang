@@ -67,6 +67,10 @@
           "loc": {
             "line": 7,
             "column": 4
+          },
+          "span": {
+            "sourceStart": 101,
+            "sourceEnd": 114
           }
         }
       ],
@@ -267,6 +271,10 @@
                   "loc": {
                     "line": 16,
                     "column": 5
+                  },
+                  "span": {
+                    "sourceStart": 251,
+                    "sourceEnd": 257
                   }
                 }
               ],

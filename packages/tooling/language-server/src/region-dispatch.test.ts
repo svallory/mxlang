@@ -137,7 +137,9 @@ const MESH_KIND = [{ segment: "mesh", diagnosticSource: "mesh" }];
 const mesh = (options: MeshOptions = {}) =>
   setupMesh(builtinLookup().target("tree"), options);
 
-describe(".mesh.mx (a third-party host on the data target)", () => {
+// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// check re-keys this suite.
+describe.skip(".mesh.mx (a third-party host on the data target)", () => {
   it("a declared whole-file kind resolves cleanly, compiles on data and never reaches the region bridge", () => {
     mesh({ fileKinds: MESH_KIND });
     const dir = meshProject("mx-ls-mesh-", { fileKinds: MESH_KIND });

@@ -32,7 +32,7 @@ import {
 /**
  * A contract in force at some point of the walk, with its owner's message label.
  *
- * @unstable plumbing for `@mxlang/data`'s parse-only scan.
+ * @unstable plumbing for the IR entry's parse-only scan (`ir-entry/authored-tags.ts`).
  */
 export interface ContractScope {
   declaration: CustomTag | CustomTagAttributeTag;
@@ -42,7 +42,7 @@ export interface ContractScope {
 /**
  * What a parent's `"*"` entry decided for one authored tag.
  *
- * @unstable plumbing for `@mxlang/data`'s parse-only scan.
+ * @unstable plumbing for the IR entry's parse-only scan (`ir-entry/authored-tags.ts`).
  */
 export interface WildcardMatch {
   /** The tag the child is checked as: the referenced tag, or the authored name for an inline contract. */
@@ -78,7 +78,7 @@ const CORE_NAMES = new Set([
  * What eligibility reads of a compile: the registered tags, the target's
  * tag table and its declarations.
  *
- * @unstable plumbing for `@mxlang/data`'s parse-only scan.
+ * @unstable plumbing for the IR entry's parse-only scan (`ir-entry/authored-tags.ts`).
  */
 export type WildcardContext = Pick<Ctx, "customTags" | "tagTable"> &
   Partial<Pick<Ctx, "declarations">>;
@@ -88,7 +88,7 @@ export type WildcardContext = Pick<Ctx, "customTags" | "tagTable"> &
  * claim: (a) an entry of core's own taglib (`let`, `effect`, `script`,
  * `style`, ...), on every target; (b) a name the host declares a disposition
  * for; (c) a name the target's tag table holds as a non-element; (d) a name
- * the target's declarations list in `builtinTags` (data's anonymous `object`):
+ * the target's declarations list in `builtinTags` (the IR entry's anonymous `object`):
  * one concept, shared with the `defaultTag` check. A native
  * element (`title`, `div`) is not a built-in, so a contract can claim it.
  */
@@ -161,7 +161,7 @@ function entryDefinition(
  * records the result; a tag matched once keeps its match under that contract
  * (the walk can run more than once over one tree).
  *
- * @unstable plumbing for `@mxlang/data`'s parse-only scan.
+ * @unstable plumbing for the IR entry's parse-only scan (`ir-entry/authored-tags.ts`).
  */
 export function matchWildcardChild(
   node: Node,
@@ -202,7 +202,7 @@ export function matchWildcardChild(
  * reads its declaration in the owner's `attributeTags`; a matched wildcard
  * child, a core-owned custom tag and a registered tag bring their own.
  *
- * @unstable plumbing for `@mxlang/data`'s parse-only scan.
+ * @unstable plumbing for the IR entry's parse-only scan (`ir-entry/authored-tags.ts`).
  */
 export function scopeForChildren(
   node: Node,

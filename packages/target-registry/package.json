@@ -16,7 +16,6 @@
   },
   "dependencies": {
     "@mxlang/core": "workspace:*",
-    "@mxlang/data": "workspace:*",
     "@mxlang/host-angular": "workspace:*",
     "@mxlang/host-astro": "workspace:*",
     "@mxlang/host-hono": "workspace:*",

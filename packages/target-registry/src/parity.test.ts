@@ -1,7 +1,6 @@
 // Parity between the built-in descriptors and the resolution, scanning and
-// tooling rules that core's former closed lists encoded. The eighth target,
-// data, has no host or file kind but participates in package selection and
-// AttrTag sources. Tooling is imported by relative path here: the registry
+// tooling rules that core's former closed lists encoded. Tooling is imported
+// by relative path here: the registry
 // must not depend on tooling, which now depends on the registry.
 
 import { spawnSync } from "node:child_process";
@@ -25,7 +24,6 @@ import { reactDeclarations } from "@mxlang/host-react";
 import { solidDeclarations } from "@mxlang/host-solid";
 import { policy, strictPolicy, translator } from "@mxlang/target-html";
 import { afterAll, describe, expect, it, vi } from "vitest";
-import { dataDeclarations } from "../../targets/data/src/declarations.ts";
 // language-server/src/diagnose.ts:35 (SOLID_MX_LANGUAGE_IDS, exported)
 import { SOLID_MX_LANGUAGE_IDS } from "../../tooling/language-server/src/diagnose.ts";
 // typescript-plugin/src/amx-language.ts:32 (AMX_LANGUAGE_ID, exported)
@@ -153,9 +151,7 @@ describe("mx.host values", () => {
     // each target, and the one target that has none (named by its own
     // non-deprecated legacy `mx.host` value).
     expect(hostValues().filter((value) => value !== "translator")).toEqual(
-      builtinTargets
-        .filter((t) => t.name !== "tree")
-        .map((t) => t.host?.name ?? "html"),
+      builtinTargets.map((t) => t.host?.name ?? "html"),
     );
   });
 
@@ -232,22 +228,20 @@ describe("mx.host values", () => {
 });
 
 describe("packages and rule 2 (the single target dependency)", () => {
-  it.each(
-    builtinTargets
-      .filter((t) => t.name !== "tree")
-      .map((t) => [t.name, t.packageName] as const),
-  )("a project with only %s's package picks that target", (name, pkg) => {
-    expect(lookup.fromPackage(pkg)).toBe(name);
-    const resolved = resolveTargetPolicy(
-      project({ dependencies: { [pkg]: "*" } }),
-    );
-    expect(resolved.target).toBe(name);
-    expect(resolved.host).toBe(lookup.hostOf(name));
-  });
+  it.each(builtinTargets.map((t) => [t.name, t.packageName] as const))(
+    "a project with only %s's package picks that target",
+    (name, pkg) => {
+      expect(lookup.fromPackage(pkg)).toBe(name);
+      const resolved = resolveTargetPolicy(
+        project({ dependencies: { [pkg]: "*" } }),
+      );
+      expect(resolved.target).toBe(name);
+      expect(resolved.host).toBe(lookup.hostOf(name));
+    },
+  );
 
   it("every built-in target declares a distinct package", () => {
     expect(builtinTargets.map((t) => t.packageName).sort()).toEqual([
-      "@mxlang/data",
       "@mxlang/host-angular",
       "@mxlang/host-astro",
       "@mxlang/host-hono",
@@ -256,17 +250,6 @@ describe("packages and rule 2 (the single target dependency)", () => {
       "@mxlang/host-solid",
       "@mxlang/target-html",
     ]);
-  });
-
-  // target-open-set-resolver: stage inference until data PR 4 adds dispatch
-  // to all tools. Core still selects tree; the registry preserves base output.
-  it("a lone @mxlang/data dependency retains the default until data PR 4", () => {
-    const resolved = resolveTargetPolicy(
-      project({ dependencies: { "@mxlang/data": "*" } }),
-    );
-    expect(lookup.fromPackage("@mxlang/data")).toBe("tree");
-    expect(resolved.target).toBe(defaultTarget());
-    expect(resolved.host).toBeUndefined();
   });
 
   it("a package no target declares picks nothing, so the default applies", () => {
@@ -308,7 +291,6 @@ describe("attr-tag sources (what the callee reader asks the lookup)", () => {
       [
         "@mxlang/host-angular",
         "@mxlang/host-astro",
-        "@mxlang/data",
         "@mxlang/host-hono",
         "@mxlang/target-html",
         "@mxlang/host-preact",
@@ -511,12 +493,6 @@ describe("declarations (typescript-plugin/src/mx-language.ts:253-280, createHtml
       expect(declared?.strict).toBeUndefined();
     },
   );
-
-  it("tree lowers under its own declarations and has no translator", () => {
-    expectSame(target("tree").declarations?.default, dataDeclarations);
-    expect(target("tree").declarations?.strict).toBeUndefined();
-    expect(target("tree").translator).toBeUndefined();
-  });
 
   it("html's translator is the one the mapping pass uses for every target (D3, mx-language.ts:21)", () => {
     const fromDescriptor = target("html").translator as Record<string, unknown>;

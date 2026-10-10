@@ -1,5 +1,5 @@
 ---
-packages: [core, parser, data]
+packages: [core, parser]
 kind: Fixed
 ---
 

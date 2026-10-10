@@ -35,7 +35,7 @@ vi.mock("@mxlang/core", async (importOriginal) => {
 
 import { resolveTargetPolicyDetailed } from "./index.ts";
 
-it("preserves the tree error without a second manifest read", () => {
+it("positions the removed-tree error without a second manifest read", () => {
   const root = mkdtempSync(join(tmpdir(), "mx-registry-no-reread-"));
   try {
     writeFileSync(join(root, "package.json"), '{"mx":{"target":"tree"}}');
@@ -46,7 +46,7 @@ it("preserves the tree error without a second manifest read", () => {
       value: "tree",
       length: 6,
       message:
-        'mx.target "tree" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead',
+        'mx.target "tree" was removed (decision 204); a consumer that reads the tree calls lowerSource from @mxlang/core',
     });
     expect(state.secondReads).toBe(0);
   } finally {

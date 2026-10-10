@@ -6,10 +6,9 @@ Private package (decisions 129 and 132; **unstable**, like the contract in
 `@mxlang/core`'s "Target contract" section). It statically imports each host
 package's `./descriptor` subpath and exports:
 
-- `builtinTargets`: the eight built-in `TargetDescriptor`s: the seven hosts in
+- `builtinTargets`: the seven built-in `TargetDescriptor`s, the hosts in
   `mx.host` order (`html`, `astro-html`, `solid-jsx`, `preact-jsx`, `react-jsx`,
-  `hono-jsx`, `angular-template`), then the hostless `data` (no host, no file
-  kinds, no `mx.host` value, no `mx.tags[].hosts` filter key).
+  `hono-jsx`, `angular-template`). There is no hostless descriptor.
 - `builtinLookup()`: `createTargetLookup(builtinTargets, { reservedNames: ["astro-template"] })`, built lazily and cached. `lookupFor(policy)` adds a loaded third-party descriptor to it.
   `astro-template` is reserved for the Astro template output, `.astro.mx` (design note §8 Q5; decision 134 made it a file kind of the `astro` host); the
   reservation lives here because core names no target.
@@ -25,7 +24,7 @@ package's `./descriptor` subpath and exports:
   `.<segment>.mx` suffix names, and the parser hook that lowers its regions.
   Every tool routes region files through these, never by a segment name. An
   unregistered `.<word>.mx` and a kind without `compileRegion` (a template
-  kind, or a third-party host such as Mesh's on data) are never region files.
+  kind) are never region files.
 
 **The registry is the only dispatch table.** Core's former closed lists
 (`HOST_NAMES`, `HOST_PACKAGES`, `HOST_MODULE_SEGMENTS`, `MX_ATTR_TAG_SOURCES`,
@@ -52,8 +51,8 @@ Beyond the registry it adds:
   full entry (`compile`, `compileFile`, `policy`, …). It stays a subpath because
   that entry reaches the compiler, and the main entry must load none.
 
-`@mxlang/data` is not part of the umbrella and keeps its name: decision 204
-deletes it. The package stays private 0.0.0 with `src` entry points; making it
+`@mxlang/data`, the former tree target, was deleted by decision 204; its
+replacement is core's `lowerSource`. The package stays private 0.0.0 with `src` entry points; making it
 publishable is release track C. `src/umbrella.test.ts` pins the export map and
 the identity of every re-export.
 

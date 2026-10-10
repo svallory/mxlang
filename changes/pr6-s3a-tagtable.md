@@ -1,5 +1,5 @@
 ---
-packages: [core, html, preact, angular, solid, astro, data, typescript-plugin]
+packages: [core, html, preact, angular, solid, astro, typescript-plugin]
 kind: Changed
 ---
 

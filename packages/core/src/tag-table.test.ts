@@ -53,8 +53,8 @@ const CUSTOM_TAGS: Record<string, CustomTag> = {
   textarea: custom({ preserveWhitespace: false }),
 };
 
-// The data target's shape: its own statement entries and a layer that turns
-// every native parse switch off (`@mxlang/data`'s `dataTaglib`).
+// The shape of a taglib that owns its statement entries and turns every native
+// parse switch off (the former tree target's `dataTaglib`).
 const dataLike = (): [string, unknown] => {
   const definition: Record<string, unknown> = { taglibId: "mx-data-like" };
   for (const [name, tag] of WEB_ELEMENTS) {

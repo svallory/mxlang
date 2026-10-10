@@ -81,10 +81,11 @@ A name matches `[A-Za-z_$][\w$]*(-[\w$]+)*`: `:title`, `:rename-all`,
 <div x="rename-all" y="primary-key"></div>
 ```
 
-The name keeps its span in the IR, and `parseData` on the
-[tree target](/targets/data/) reports an attribute whose whole value is one
-atom as an `atom` attribute (the name sugar's `name` included), and an atom
-nested in an expression as an atom node with its own span — so a tool can tell
+The name keeps its span in the IR, and `lowerSource` from
+[the core IR entry point](/architecture/ir-entry/) reports an attribute whose
+whole value is one atom as a `static` attribute whose `atom` is set (the name
+sugar's `name` included), and an atom nested in an expression as an atom node
+with its own span — so a tool can tell
 `:title` from `"title"`. See [the IR spec](/architecture/ir-spec/).
 
 ## Atoms you cannot operate on
@@ -150,7 +151,7 @@ shorthand, where the text is an expression: `<${"a::b"}/>` is legal. Write
 
 `:email` in attribute position is not a value: it is the **name sugar**, the
 same rule as `x=:a :b`. It sets `name`, and the `name` it sets keeps its
-atom-ness in the IR and in `parseData`, so a contract that types `name` as an
+atom-ness in the IR, so a contract that types `name` as an
 atom checks it and `name="title"` is a type error there:
 
 ```mx

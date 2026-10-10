@@ -133,7 +133,7 @@ the key `"*"`: a claim on the names nothing else resolves (decision 147,
 [ADR 147](/design-notes/adr-wildcard-children/)).
 
 ```ts
-// contracts.ts, named by "mx": { "target": "tree", "contracts": "./contracts.ts" }
+// contracts.ts, named by "mx": { "contracts": "./contracts.ts" }, or passed to lowerSource as customTags
 export default {
   attributes: {
     children: {
@@ -227,7 +227,7 @@ always an inline contract — an attribute tag has no transform of its own, so t
 `contract:` form and no delegation case (decision 147, for attribute tags):
 
 ```ts
-// contracts.ts, named by "mx": { "target": "tree", "contracts": "./contracts.ts" }
+// contracts.ts, named by "mx": { "contracts": "./contracts.ts" }, or passed to lowerSource as customTags
 export default {
   resource: {
     attributeTags: {
@@ -292,10 +292,10 @@ export default {
 - A parent that declares no `defaultTag` answers "none"; the question does not climb to the grandparent, and the next rung of the ladder decides.
 - Each declaration speaks only for its own direct children: `body` does not borrow the `defaultTag` of an attribute tag nested inside it.
 
-The same contract on the tree target (Mesh's `attributes` and `attribute`):
+The same contract read through [`lowerSource`](/architecture/ir-entry/) (Mesh's `attributes` and `attribute`):
 
 ```ts
-// contracts.ts, named by "mx": { "target": "tree", "contracts": "./contracts.ts" }
+// contracts.ts, named by "mx": { "contracts": "./contracts.ts" }, or passed to lowerSource as customTags
 export default {
   attributes: {
     defaultTag: "attribute",

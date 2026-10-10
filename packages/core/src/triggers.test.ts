@@ -3,8 +3,8 @@
  * `mx.syntax` and of the `syntax` option, `lowerTrigger` dispatch in the
  * three positions with the built-in node kinds, the guards on a hook's
  * result, `lowerBlockTag`/`lowerFilter`, and the module's `afterLower` and
- * `productName`. The `&` member shapes through `parseData` are pinned in
- * `@mxlang/data`'s `member-syntax.test.ts`.
+ * `productName`. The `&` member shapes through `lowerSource` are pinned in
+ * `ir-entry/member-syntax.test.ts`.
  */
 import {
   mkdirSync,

@@ -573,8 +573,10 @@ function runMxTscChecks(): number {
   ambientTypeErrors.clear();
   const astro = consumeAstroFlag(process.argv);
   // A package that compiles as `data` is not a TypeScript program: its
-  // `.mx` files go to `@mxlang/data` and nothing else runs (decision 131,
-  // addendum 4).
+  // `.mx` files go to core's `lowerSource` and nothing else runs (decision
+  // 131, addendum 4). Decision 204 removed the tree target, so no package
+  // takes this path until the dialect check replaces it (TODO dialect-check
+  // (PR 1)).
   const dataDir = dataProjectDir(process.argv.slice(2), process.cwd());
   if (dataDir !== undefined) return runDataCheck(dataDir);
   const diagnosticPlugins: MxDiagnosticLanguagePlugin[] = [];

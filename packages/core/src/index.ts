@@ -185,6 +185,7 @@ export type {
   TagAlias,
   TagTrigger,
 } from "./ir.ts";
+export { IR_VERSION } from "./ir.ts";
 /**
  * The IR entry point (decision 204): parse, lower, check and return core's
  * IR, for a consumer that interprets the tree itself (a dialect).

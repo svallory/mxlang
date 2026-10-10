@@ -27,7 +27,7 @@ Custom tags let a project define its own portable markup vocabulary in `tags/x.m
 | `packages/hosts/hono` | `@mxlang/host-hono` | The Hono target on the shared JSX emitter: native `class`/`for`, and `<try>` lowers straight to `hono/jsx`'s own built-in `ErrorBoundary`/`Suspense`—no hand-rolled boundary class needed, unlike Preact/React. Ships a Bun loader (`@mxlang/host-hono/bun`) for a plain Bun server with no bundler. |
 | `packages/tooling/language-server` | `@mxlang/language-server` | Diagnostics-only LSP server for MX hosts (decision 71/72): publishes one `Diagnostic` per host-policy `TranslateError` (e.g. `<let>` under a `strict` policy) that Marko's own language server cannot see. Runs alongside Marko's server, never in place of it — no completion, hover, or go-to-definition. |
 
-**Package names** (decision 201): a target is `@mxlang/target-<name>` and a host `@mxlang/host-<name>`; `@mxlang/targets` is the umbrella (the target registry plus every target). Compiler internals (`core`, `parser`, `babel`, `tsx-bridge`), tooling and editor packages keep their names. `@mxlang/data` is not renamed: decision 204 deletes it.
+**Package names** (decision 201): a target is `@mxlang/target-<name>` and a host `@mxlang/host-<name>`; `@mxlang/targets` is the umbrella (the target registry plus every target). Compiler internals (`core`, `parser`, `babel`, `tsx-bridge`), tooling and editor packages keep their names.
 
 ## Pinned versions
 

@@ -90,7 +90,7 @@ export interface HostDeclarations {
    */
   allowContractDefaultTag?: boolean;
   /**
-   * Tag names the target provides without a taglib entry (data's anonymous
+   * Tag names the target provides without a taglib entry (the IR entry's anonymous
    * `object`). A `defaultTag` check counts them as reachable and as elements
    * of the target, for the descriptor's own `defaultTag` and `host.defaultTag`
    * too, so a descriptor that reuses these declarations (a third-party host

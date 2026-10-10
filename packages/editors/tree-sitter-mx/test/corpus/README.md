@@ -16,8 +16,8 @@ tree it produces.
 `bun test/corpus/generate.mts` rewrites the sources (it fetches the pinned
 fixtures); run `bunx tree-sitter test --update` after it to fill the trees.
 `test/corpus.bun-test.mts` asserts no `ERROR`/`MISSING` node per case, and
-`packages/targets/data/src/tree-conformance.test.ts` runs every case through
-`parseData`, so a new case is a new data case without further wiring.
+`packages/core/src/ir-entry/conformance.test.ts` runs every case through
+`lowerSource`, so a new case is a new IR-entry case without further wiring.
 
 ## Errors (`errors.txt`)
 

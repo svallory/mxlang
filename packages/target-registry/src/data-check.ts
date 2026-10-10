@@ -3,12 +3,15 @@
  * `mx.target: "tree"` (decision 131, addendum 4; the target is named "tree"
  * since decision 187).
  *
- * The registry wrapper's staged "not wired yet" error stays the answer for
- * the editor tools and Vite (TODO `data-target-tooling-dispatch`); this
- * module is the one caller that asks for the real policy
+ * The registry wrapper's positioned error stays the answer for the editor
+ * tools and Vite; this module is the one caller that asks for the real policy
  * (`resolveTargetPolicyDetailed(file, { dataWired: true })`). It lives in a
- * module of its own, not in `index.ts`, because it imports `@mxlang/data`'s
- * parse entry and the registry's own import must stay light.
+ * module of its own, not in `index.ts`, because it imports core's IR entry
+ * point (`lowerSource`) and the registry's own import must stay light.
+ *
+ * Decision 204 removed the tree target's descriptor, so no policy resolves to
+ * `"tree"` and this check runs on nothing until the dialect check replaces it
+ * (TODO dialect-check (PR 1)).
  */
 
 import {
@@ -23,11 +26,12 @@ import * as core from "@mxlang/core";
 import {
   clearScanCache,
   isTranslateError,
+  type LowerSourceOptions,
+  lowerSource,
   type MxWarning,
   type TargetCompiler,
   type TargetPolicyDiagnostic,
 } from "@mxlang/core";
-import { type ParseDataOptions, parseData } from "@mxlang/data";
 import {
   baseTargetOfPolicy,
   defaultTagFor,
@@ -64,7 +68,7 @@ export interface DataCheckDiagnostic {
   severity: "error" | "warning";
   message: string;
   /**
-   * `data`: from `parseData`, or a discovery failure positioned in a file.
+   * `data`: from `lowerSource`, or a discovery failure positioned in a file.
    * `manifest`: a `package.json` or policy problem.
    * `io`: the file system refused (no text to position in: print the path).
    */
@@ -78,9 +82,9 @@ export interface DataCheckResult {
   diagnostics: DataCheckDiagnostic[];
 }
 
-type Structural = NonNullable<ParseDataOptions["structural"]>;
-type UnknownTags = NonNullable<ParseDataOptions["unknownTags"]>;
-type Imports = NonNullable<ParseDataOptions["imports"]>;
+type Structural = NonNullable<LowerSourceOptions["structural"]>;
+type UnknownTags = NonNullable<LowerSourceOptions["unknownTags"]>;
+type Imports = NonNullable<LowerSourceOptions["imports"]>;
 
 const STRUCTURAL: readonly Structural[] = ["pass", "reject"];
 const UNKNOWN_TAGS: readonly UnknownTags[] = ["allow", "reject"];
@@ -114,10 +118,8 @@ function readManifest(dir: string): Manifest | undefined {
  * `package.json` selects a target (`mx.target`) or a host (`mx.host`) whose
  * resolved base target is `data` (`baseTargetOf`), so a third-party host built
  * on data (Mesh) gets the check the `data` target gets. The project's own
- * `mx.target` string is never the key. Rule-5 inference from an `@mxlang/data`
- * dependency does not qualify (such a package, or a monorepo root with one,
- * keeps its ordinary `tsc` run and the staged error for its data files), and
- * neither does a `package.json` found only in an ancestor. A host that fails
+ * `mx.target` string is never the key. A `package.json` found only in an
+ * ancestor does not qualify. A host that fails
  * to load resolves to the fallback target, not data: the ordinary run reports
  * the load error.
  */
@@ -142,7 +144,7 @@ export function isDataProject(dir: string): boolean {
 interface DataOptions {
   structural: Structural;
   unknownTags: UnknownTags;
-  /** Absent: `parseData` defaults it to the effective `structural`. */
+  /** Absent: `lowerSource` defaults it to the effective `structural`. */
   imports?: Imports;
 }
 
@@ -250,7 +252,7 @@ interface Package {
   defaultTag?: string;
   /**
    * The host's own compile when the target differs from its base target (a
-   * host built on data): it runs on every file beside `parseData`, so the
+   * host built on data): it runs on every file beside `lowerSource`, so the
    * host's checks and transforms are never replaced by the base's.
    */
   host?: {
@@ -527,7 +529,7 @@ export function checkDataPackage(dir: string): DataCheckResult {
         lfCoordinates: true,
       });
     }
-    const result = parseData(source, file, {
+    const result = lowerSource(source, file, {
       customTags: scan.customTags,
       structural: pkg.options.structural,
       unknownTags: pkg.options.unknownTags,

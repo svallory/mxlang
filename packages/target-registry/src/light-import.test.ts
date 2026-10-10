@@ -62,7 +62,7 @@ console.log(JSON.stringify({ loaded: compilers(), hosts: hostEntries(), value })
 describe("light import", () => {
   it("loads no compiler and no host compile entry when the registry is imported", () => {
     const { loaded, hosts, value } = probe(`return builtinTargets.length;`);
-    expect(value).toBe(8);
+    expect(value).toBe(7);
     expect(loaded).toEqual([]);
     // Only descriptor modules and their light dependencies may appear.
     expect(hosts).toEqual([]);
@@ -78,15 +78,6 @@ describe("light import", () => {
     expect(loaded.some((k) => k.includes("@babel"))).toBe(true);
   });
 
-  it("tree compiles a data file through the registry (under Bun, where load() can require)", () => {
-    const { value } = probe(
-      `const data = builtinTargets.find((t) => t.name === "tree")!;
-       const out = data.load!({} as never).compileModule("<x a=1/>\\n", ${JSON.stringify(join(work, "d.mx"))}, {});
-       return { exported: out.code.startsWith("export default "), dependencies: out.dependencies };`,
-    );
-    expect(value).toEqual({ exported: true, dependencies: [] });
-  });
-
   it("does not load a compiler for load() alone, for any target", () => {
     const { loaded, value } = probe(
       `return builtinTargets.map((t) => { t.load?.({} as never); return t.name; });`,
@@ -99,7 +90,6 @@ describe("light import", () => {
       "react-jsx",
       "hono-jsx",
       "angular-template",
-      "tree",
     ]);
     expect(loaded).toEqual([]);
   });

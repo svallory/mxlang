@@ -497,9 +497,10 @@ three trigger positions. A tag built from a tagless line carries
 Use it as is, as the `syntax` option or through `package.json#mx.syntax`:
 
 ```ts
+import { lowerSource } from "@mxlang/core";
 import memberSyntax from "@mxlang/core/syntax/member";
 
-const result = parseData(source, file, { syntax: memberSyntax });
+const result = lowerSource(source, file, { syntax: memberSyntax });
 ```
 
 or copy `dist/syntax/member.js` from the package (or the source, `packages/core/src/syntax/member.ts` in the mxlang repo) into your project and rename it. The sigil
@@ -525,9 +526,10 @@ the built-in path is the list in `scripts/sugar-module/deltas.json`, each
 entry naming its ruling (`#x=1` refused, decision 183, among them).
 
 ```ts
+import { lowerSource } from "@mxlang/core";
 import meshSyntax from "@mxlang/core/syntax/mesh";
 
-const result = parseData(source, file, { syntax: meshSyntax });
+const result = lowerSource(source, file, { syntax: meshSyntax });
 ```
 
 Copy it the way the member module is copied (its type imports from
@@ -539,7 +541,7 @@ them at the alpha.15 pin and owns its copy from then on. `atom`, `name` and
 `member` are Mesh's forms; `id` and `class` are kept for parity with the
 built-in sugars and may be dropped. Mesh's entity files and docs blocks are a
 golden corpus here (`src/fixtures/syntax/mesh-corpus/`, its README, and
-`packages/targets/data/src/mesh-corpus.test.ts`); the deletion of the built-ins
+`src/ir-entry/mesh-corpus.test.ts`); the deletion of the built-ins
 (slice c) must pass it unchanged.
 
 ### Contract checks in a module: `contractFields`, `checkContract` and `afterLower(unit)`

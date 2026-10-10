@@ -18,10 +18,10 @@ target beats dependency inference, and combining it with `mx.host: "solid"`
 is a positioned `target-host-mismatch` error (decisions 129/132;
 [spec §13.5](/specification/#the-mx-language-13-host-semantics-table-135-host-and-target-selection)).
 
-The other hostless target, `tree`, is checked by `mx-tsc` but not wired into the
-editor tools or Vite yet: explicit `mx.target: "tree"` errors at its value there
-and names `TODO data-target-tooling-dispatch`. See [the tree target](/targets/data/)
-(decision 131 addenda).
+HTML is the only hostless target. A program that reads the markup as a tree
+calls `lowerSource` from `@mxlang/core` instead; see
+[the core IR entry point](/architecture/ir-entry/). `mx.target: "tree"` is an
+error (decision 204).
 
 ## Attribute-tag values
 

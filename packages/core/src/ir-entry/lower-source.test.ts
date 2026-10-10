@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import * as core from "../index.ts";
 import type { DelegatedTag } from "../ir.ts";
 import {
   type LowerSourceOptions,
@@ -275,5 +276,12 @@ describe("lowerFile", () => {
 
   it("throws when the file cannot be read", () => {
     expect(() => lowerFile("/no/such/dir/page.mx")).toThrow(/ENOENT/);
+  });
+});
+
+describe("IR_VERSION", () => {
+  // A dialect asserts it; a change to it is a change to every dialect's pin.
+  it("is exported from core's entry as 1", () => {
+    expect(core.IR_VERSION).toBe(1);
   });
 });

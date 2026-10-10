@@ -32,7 +32,7 @@ export interface LoweredUnitFailOptions {
   /**
    * Where the error is, a span inside the document. Without it the error is
    * file-level: no source position (line 0, column 0), as a registration
-   * error is; `@mxlang/data` reports it at 1:0.
+   * error is; `lowerSource` reports it at 1:0.
    */
   readonly at?: SourceSpan;
   /** A machine-readable code, carried on the error as `diagnosticCode`. */
@@ -74,10 +74,9 @@ interface ContractAttrBase {
 }
 
 /**
- * One attribute of a call as written, in the shapes `@mxlang/data`'s
- * `DataAttr` names: a string, a whole-value atom or member (the kinds a
- * syntax module builds with `ctx.attribute`), a bare attribute, an
- * expression (the node as lowered, marks included), a spread. @unstable
+ * One attribute of a call as written: a string, a whole-value atom or member
+ * (the kinds a syntax module builds with `ctx.attribute`), a bare attribute,
+ * an expression (the node as lowered, marks included), a spread. @unstable
  */
 export type ContractAttr =
   | (ContractAttrBase & {

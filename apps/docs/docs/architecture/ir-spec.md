@@ -11,7 +11,7 @@ This page is the normative description of the IR that `@mxlang/core` produces an
 
 Everything here is derived from the code and the tests that pin it, at the commit this page was last changed in. Each invariant names the test that pins it; "no pinning test" says so where none exists (none does at present). The types live in `packages/core/src/ir.ts`; the walk in `packages/core/src/emit.ts`; spans in `packages/core/src/mapping.ts`.
 
-The key words **must**, **must not**, **may** and **should** are used in the RFC 2119 sense. "Lowering" means whatever produces the `Ir`; "emitter" means anything that reads one (an `Emitter<Out>` driven by `drive()`, or a direct walker such as `@mxlang/data`'s tree builder).
+The key words **must**, **must not**, **may** and **should** are used in the RFC 2119 sense. "Lowering" means whatever produces the `Ir`; "emitter" means anything that reads one (an `Emitter<Out>` driven by `drive()`, or a direct walker such as a dialect reading `lowerSource`'s IR).
 
 ## 1. The pipeline: what a parser produces and what lowering adds
 
@@ -61,7 +61,7 @@ A node is **synthesized** when no authored source backs it: built by a custom ta
 - carry `nameSpan: { sourceStart: 0, sourceEnd: 0 }` on an `Attr` built by `ctx.build.attr`/`dynamicAttr`/`booleanAttr`, because `Attr.nameSpan` is required. A zero-width span at offset 0 cannot be an authored name (a tag always precedes an attribute), so a consumer may treat it as "no source";
 - carry an `Expr` whose `node` is `null` and whose `shape` is `"other"` (`syntheticExpr`), with no `span`.
 
-An emitter must not assume that any optional span is present. `@mxlang/data` is the one consumer that requires spans; it refuses a missing one with "core IR invariant broken — … carries no span" (`packages/targets/data/src/build.ts` `requiredSpan`) rather than guessing.
+An emitter must not assume that any optional span is present. The [core IR entry point](/architecture/ir-entry/) is the one consumer that requires spans; it refuses a missing one with "core IR invariant broken — … carries no span" (`packages/core/src/ir-entry/checks.ts` `requiredSpan`) rather than guessing.
 
 ## 3. Positions
 
@@ -156,7 +156,7 @@ interface Atom {
 | `unrewrittenCode?` | `code` as it was before a rewrite changed it (`rewrite-codes.ts` `rewriteCodes`, e.g. Solid's accessor reads `i` → `i()`): set by that rewrite only when it changed `code`, so it is absent when no read was rewritten. It is the authored text with each atom as its string literal (`:q` is `"q"`, one character longer), not a slice of the source: `mappedExpr` maps it to `span` through `atomMappings`, or one to one when the lengths match, then diffs it against `code` token by token and leaves inserted text unmapped. The diff trims the common prefix and suffix, and past `MAX_DIFF_CELLS` (about 2000 x 2000 tokens) maps the changed middle as one run. Read by every host that maps expressions through `mappedExpr` (today Solid). Pinned by `solid/src/expression-mappings.test.ts` (rewritten reads keep exact columns). |
 | `bodySpan?` | The authored `{ … }` block of an attribute method shorthand (`onClick() { … }`, `async onClick<T>(…) { … }`), whose `code` is the `function` expression the compiler printed for it; absent for every other expression, an authored `function` expression included. Set in `lower.ts` (`methodBodySpan`) from the method node's own body position, which Marko gives as the text between the braces, so it is widened onto them. `bodySource` is its authored text. A host that emits the printed function maps its head as generated text and diffs the printed body against `bodySource` token by token (`mappedRewrite`), so a reformatted body (`{ go() }` printed as `{ go(); }`) or one with rewritten reads still maps. Read by Solid's `mappedValue`, which splits the printed function at its parsed body (`printedBodyStart`). Pinned by `tsc` `expression-values-solid-typecheck.test.ts` (an error in a method body, async, generic or nested, reports at its authored column). |
 | `file` | Reserved. Nothing in `packages/core` sets it today; a tag unit compiles under its own `Ctx`, so its spans are already absolute in its own file. |
-| `atoms` | Decision 156: the atoms (`:name`) written inside the expression, in source order; absent when there are none. `code` holds each one as its string literal (`[:a]` is `["a"]`): core splices `JSON.stringify(name)` at each atom's span on both `expr()` paths (`atoms.test.ts`). In `node`, each atom is a `StringLiteral` whose `value` is the name and whose `extra.mxAtom` is `{ span }` (`MxAtomMark`). That node shape is **public API** of `@mxlang/core` and `@mxlang/data` (addendum 1, item 1): a consumer translating an expression recognises an atom by `extra.mxAtom`. `mappedExpr` maps each atom to its literal and the text between one to one, so a type error on a nested atom lands on it. |
+| `atoms` | Decision 156: the atoms (`:name`) written inside the expression, in source order; absent when there are none. `code` holds each one as its string literal (`[:a]` is `["a"]`): core splices `JSON.stringify(name)` at each atom's span on both `expr()` paths (`atoms.test.ts`). In `node`, each atom is a `StringLiteral` whose `value` is the name and whose `extra.mxAtom` is `{ span }` (`MxAtomMark`). That node shape is **public API** of `@mxlang/core` (addendum 1, item 1): a consumer translating an expression recognises an atom by `extra.mxAtom`. `mappedExpr` maps each atom to its literal and the text between one to one, so a type error on a nested atom lands on it. |
 
 **The `node` contract (decision 166, addendum 3).** `Expr.node`, `For.paramNodes` and the tag-author API's `attr.value.node` are expression nodes in `@mxlang/babel`'s vocabulary (Babel 7.29 shapes), with file-absolute positions, and they are read-only: an emitter that edits one copies first with `cloneIr` (E21). A `node` is `null` in two cases only: a value core built itself (section 2.2), and, after the MX2 port, an expression that failed to parse. A host treats `null` as "no structure" and never dereferences it unchecked. No host parses source text to recover structure, and core offers no re-parse helper.
 
@@ -223,7 +223,7 @@ A module-level kind in a body is a malformed IR: `drive()` throws ("unexpected m
 | `var?` | The `/var` binding as source text. Only ever non-null on a call whose target declares `<return>`; core rejects `/var` on any other call ("does not return a value"). |
 | `varBindings?` | Each identifier the `/var` pattern declares (`{ a, b: c }` gives `a` and `c`), as `{ name, span? }` with its authored span; empty or absent without `/var`. Populated by `lower.ts` `varBindingsOf` (on `lowerCustomTag` and `lowerComponent`) and by `template-tag.ts` for a routed template call; also on `TagCall`, so custom-tag transforms see it. It serves one invariant: an emitter that lifts bindings into one scope (a `.react.mx`/`.solid.mx` region arrow) can refuse a duplicate at the authored name. A `/var` pattern the parser cannot read fails in lowering at the parser's position instead of yielding `[]`. Optional: an emitter that ignores it needs no change. |
 | `returnsValue?` | `true` when the target unit declares `<return>`, resolved from the callee's cached metadata; set even without a `/var`, because the JSX hosts must still unwrap the output from `{ value, output }`; html and astro call the default export unchanged and read the value from `render`. Absent otherwise. |
-| `authoredName?` | The tag name as written, set only when it differs from the target's name (a discovered tag routed to `$mx_Name1`). Use it in diagnostics: Preact, Solid, Astro, Angular and data do, pinned by `preact/src/index.test.ts` › "rejects /var inside <for>, naming the tag as written", the same test in `solid/src/index.test.ts`, `astro-template.test.ts` › "rejects /var on it, naming the tag as written", `angular/test/component.test.ts` › "rejects content with tag params, naming the real tag rather than a literal {Tag} placeholder" and `data/src/parse.test.ts` › "calls a template tag". |
+| `authoredName?` | The tag name as written, set only when it differs from the target's name (a discovered tag routed to `$mx_Name1`). Use it in diagnostics: Preact, Solid, Astro, Angular and the IR entry do, pinned by `preact/src/index.test.ts` › "rejects /var inside <for>, naming the tag as written", the same test in `solid/src/index.test.ts`, `astro-template.test.ts` › "rejects /var on it, naming the tag as written", `angular/test/component.test.ts` › "rejects content with tag params, naming the real tag rather than a literal {Tag} placeholder" and `core/src/ir-entry/parse.test.ts` › "calls a template tag". |
 
 A named custom tag's argument form is exclusive (Marko's `assertAttributesOrSingleArg`): arguments with attributes, attribute tags or a body is an error. A `dynamic` or `define` target follows Marko's lenient rule: arguments with a body or attribute tags are allowed, arguments with a plain attribute are not (decision 109). Pinned by `lower.test.ts` › "allows a define call mixing tag-argument form with an attribute tag…", "…with a body…", "still rejects a define call mixing tag-argument form with a plain attribute".
 
@@ -388,7 +388,7 @@ interface Emitter<Out> {
 
 `drive(emitter, nodes)` calls one method per node in order; `emit(emitter, ir)` drives `ir.body` and returns `done()`. Every method is required. A host that cannot express a kind **throws** from its method, naming the construct and its position; it must never silently skip one (the S8 class). `drive` throws on a module-level kind and on an unknown kind. Pinned by `emit.test.ts` › "dispatches each kind to its own emitter method", "throws on an unknown IR kind rather than ignoring it", "throws on a module-level kind reaching the body walk".
 
-A host renders nested child lists (a `Block`, a branch, a loop body) by calling `drive` recursively. Module-level fields (`imports`, `hoisted`, `inputInterface`, `prelude`, `returnValue`, `exportName`, `needsAttrTagImport`) are placed by the host from `Ir`, not by the walk. A host need not use `drive`: `@mxlang/data` walks the IR directly and throws on any kind its declarations make impossible.
+A host renders nested child lists (a `Block`, a branch, a loop body) by calling `drive` recursively. Module-level fields (`imports`, `hoisted`, `inputInterface`, `prelude`, `returnValue`, `exportName`, `needsAttrTagImport`) are placed by the host from `Ir`, not by the walk. A host need not use `drive`: a program reading `lowerSource`'s IR walks it directly.
 
 ### 10.2 Invariants emitters rely on
 
@@ -414,9 +414,9 @@ Each of these is assumed by at least one shipped emitter or tool without re-chec
 | E16 | `attrTagProps` is the plan: a `single` prop's `source` contains no `AttributeTagFor` (html fails with "internal attribute-tag plan error" otherwise); `declared` marks a plan from a declared `Input`. | html, preact, solid | `lower.test.ts` › "attribute-tag v2 IR and validation"; `attribute-tag-contracts.test.ts`; `html/src/ir-contract.test.ts` › "E16: a single attrTagProps value holding a <for> is an internal plan error" |
 | E17 | Every claimed `DelegatedTag` has the `data` its host's `resolveDelegatedTag` returned; emitters cast it and switch on `data.kind` with no null check. A host that claims a tag must supply the hook. | html, preact, solid, angular, astro | `lower.test.ts` › "DelegatedTag hands a claimed tag over with its parts lowered" |
 | E18 | A claimed dynamic `DelegatedTag` carries `args`, `children` and all three attribute-tag views, and an emitter rebuilding the call forwards them. | html (`renderDynamic`) | `lower.test.ts` › "retains arguments on a claimed dynamic DelegatedTag", "a claimed dynamic tag's DelegatedTag carries its attribute tags"; `html/src/translate.test.ts` › "forwards an attribute tag on a dynamic tag into the renderDynamic call, not `{}`" |
-| E19 | A synthesized `Import` carries `bindings[0]`, `specifier` and `resolvedPath`; Solid throws an internal error otherwise. | solid, data (skips them) | `solid/src/index.test.ts` › "hands the synthesized import back instead of rejecting it" |
-| E20 | Every source-backed node the tree target admits carries its `span` (`Text`, `Interpolation`, `Comment`, `IfChain`, `Branch`, `For` and `paramSpans`, `Const`, `DelegatedTag` `nameSpan`/`span`, a static attribute's finite `valueSpan`). | data | `data/src/attr-tag-span-guard.test.ts` |
-| E21 | Emitters must not mutate the IR. One lowered `Ir` may be emitted more than once, and a lowering may share an object (an `Expr`, a `loc`) between two places. An emitter that rewrites `Expr.code`, `For.bindings` or a parser node takes a private copy first (`cloneIr`, `@mxlang/core`): Solid copies each `For` it rewrites, and Angular's tag module copies the whole `Ir` before `projectSlots` and `rewriteInputReads`. `rewriteCodes` still visits each shared object once, so a rewrite applied to a copy is applied once. | every host | `ir-readonly.test.ts` in html, preact (also React and Hono), solid, astro, angular (page: `angular/test/ir-readonly.test.ts`; tag module: `angular/test/ir-readonly-tag-module.test.ts`) and data: the IR is frozen all the way down (parser nodes included) before the emitter sees it, so a write throws; `core/src/clone-ir.test.ts` |
+| E19 | A synthesized `Import` carries `bindings[0]`, `specifier` and `resolvedPath`; Solid throws an internal error otherwise. | solid, the IR entry (skips them) | `solid/src/index.test.ts` › "hands the synthesized import back instead of rejecting it" |
+| E20 | Every source-backed node the IR entry admits carries its `span` (`Text`, `Interpolation`, `Comment`, `IfChain`, `Branch`, `For` and `paramSpans`, `Const`, `DelegatedTag` `nameSpan`/`span`, a static attribute's finite `valueSpan`). | `lowerSource` | `core/src/ir-entry/lower-source.test.ts`; `core/src/ir-entry/all-errors.test.ts` |
+| E21 | Emitters must not mutate the IR. One lowered `Ir` may be emitted more than once, and a lowering may share an object (an `Expr`, a `loc`) between two places. An emitter that rewrites `Expr.code`, `For.bindings` or a parser node takes a private copy first (`cloneIr`, `@mxlang/core`): Solid copies each `For` it rewrites, and Angular's tag module copies the whole `Ir` before `projectSlots` and `rewriteInputReads`. `rewriteCodes` still visits each shared object once, so a rewrite applied to a copy is applied once. | every host | `ir-readonly.test.ts` in html, preact (also React and Hono), solid, astro, angular (page: `angular/test/ir-readonly.test.ts`; tag module: `angular/test/ir-readonly-tag-module.test.ts`) and `lowerSource` (`core/src/ir-entry/ir-readonly.test.ts`): the IR is frozen all the way down (parser nodes included) before the emitter sees it, so a write throws; `core/src/clone-ir.test.ts` |
 | E22 | Emission follows IR walk order: the TypeScript plugin finds each `Expr.code` in the generated text after the previous match. | `@mxlang/typescript-plugin` | `typescript-plugin/src/index.test.ts` › "keeps duplicate expression mappings on their own forward occurrences" |
 
 ### 10.3 Who rewrites expressions
@@ -441,15 +441,15 @@ An emitter rejects a construct by throwing a positioned error from its method. T
 | `Define` nested in markup | solid | `solid/src/index.test.ts` › "rejects a <define> nested inside <for>/<if> with a positioned error" |
 | `Hoisted` inside a JSX expression | preact, solid | "a hoisted statement cannot be emitted inside a JSX expression" — `preact/src/ir-contract.test.ts`, `solid/src/ir-contract.test.ts` › "10.4: a Hoisted node in the body is rejected, positioned" |
 | `Interpolation` with `escaped: false` not the sole child | preact, solid | "raw placeholder (`$!{…}`) must be the only child" |
-| `DocumentType` | preact, data | `preact/src/index.test.ts` › "rejects a document type, which belongs in the HTML shell" |
-| `Component` with a `dynamic` target | astro, data | `astro-template.test.ts` › "rejects a dynamic tag name" |
+| `DocumentType` | preact, the IR entry | `preact/src/index.test.ts` › "rejects a document type, which belongs in the HTML shell" |
+| `Component` with a `dynamic` target | astro, the IR entry | `astro-template.test.ts` › "rejects a dynamic tag name" |
 | `Component.var` | astro (any), preact/solid (inside `<for>`/`<if>`) | `astro-template.test.ts` › "rejects /var on it, naming the tag as written"; `preact/src/index.test.ts` › "rejects /var inside <for>, naming the tag as written" |
 | `Ir.returnValue` | astro, angular | `astro-template.test.ts` › "rejects the .astro.mx file's own <return>"; `angular/test/tag-module.test.ts` › "errors rather than emitting `<return>` as a literal template element" |
 | Content `Block` with params | astro, angular | `angular/test/component.test.ts` › "rejects content with tag params, naming the real tag rather than a literal {Tag} placeholder" |
 | Attributes or nested tags on an attribute tag | astro | `astro-template.test.ts` › "rejects attributes on an attribute tag with a positioned host error" |
 | `event` with an expression value | html, astro | no runtime to bind it |
 | `<html-comment>` claim | preact, react, hono, solid | `preact/src/index.test.ts` › "rejects <html-comment> instead of emitting a literal element" |
-| `Component`, `Element`, `Define` | data | "calls a template tag; a data file cannot call a template tag" for a call; "unexpected IR node kind" for the others, which its declarations make unreachable |
+| `Component`, `Element`, `Define` | the IR entry | "calls a template tag; a data file cannot call a template tag" for a call; "unexpected IR node kind" for the others, which its declarations make unreachable |
 
 A host whose output has a returning unit invoked as a plain function also refuses hook imports in it (`preact/src/index.test.ts` › "rejects a hook in a unit that declares <return>").
 
@@ -460,7 +460,7 @@ A host whose output has a returning unit invoked as a plain function also refuse
 **Rules for changing the IR** (decisions 79 and 80):
 
 - The kind set is **closed** in MX 1: structural core plus "component call". A new construct with compile-time meaning becomes an IR kind (or a field on one) only when every host must emit it differently; host-owned constructs travel as `DelegatedTag` with their decision in `data`.
-- Adding a kind means adding it to `IrNode`, to `Emitter` (a required method) and to `drive`'s switch. Because `drive`'s `default` narrows to `never`, the compiler then fails every emitter until each one **handles or rejects** the kind; no emitter may ignore it. A direct walker (`@mxlang/data`) must handle it or throw.
+- Adding a kind means adding it to `IrNode`, to `Emitter` (a required method) and to `drive`'s switch. Because `drive`'s `default` narrows to `never`, the compiler then fails every emitter until each one **handles or rejects** the kind; no emitter may ignore it. A direct walker (a dialect reading `lowerSource`'s IR) must handle it or throw.
 - User-defined compile-time tags (decision 80, MX 2) must produce IR, not host output: input IR in, IR out, positions preserved, run in core before emitters. That is what `transform` already is for custom tags. No opaque "user node" every host must handle is admitted.
 - A new optional field must document its absence (synthesized or not applicable); a new span field follows section 3.
 
@@ -562,6 +562,10 @@ Its IR, `greeting.ir.json`. `Expr.node` and `For.paramNodes` are elided (section
           "loc": {
             "line": 7,
             "column": 4
+          },
+          "span": {
+            "sourceStart": 101,
+            "sourceEnd": 114
           }
         }
       ],
@@ -762,6 +766,10 @@ Its IR, `greeting.ir.json`. `Expr.node` and `For.paramNodes` are elided (section
                   "loc": {
                     "line": 16,
                     "column": 5
+                  },
+                  "span": {
+                    "sourceStart": 251,
+                    "sourceEnd": 257
                   }
                 }
               ],
@@ -873,4 +881,4 @@ A lowering reports **every** error of a file it can find, not the first (decisio
 - **A callee's error.** An error raised inside an inlined tag template is recorded against the *call site's* tag in the caller's walk, carrying the template's `file` as before (spec §2 of custom tags, third position rule). The callee is not walked a second time for more of its errors.
 - **Error-free files are unchanged.** Recovery adds no node, no field and no byte to the `Ir` or to any target's output of a file that raised nothing.
 - **Nothing host-specific.** Recovery lives in the lowering. An emitter never sees a skipped tag, because a file that recorded an error is never emitted.
-- **Reporting.** Every tool that reports a compile error reports all of `errors`: `mx-tsc` and the TypeScript plugin (one diagnostic each), the language server (one diagnostic each), the Vite plugin (the first as the thrown error, the others in its message), the Bun loader and `@mxlang/data`'s `parseData` (which collects the same list instead of its own duplicate).
+- **Reporting.** Every tool that reports a compile error reports all of `errors`: `mx-tsc` and the TypeScript plugin (one diagnostic each), the language server (one diagnostic each), the Vite plugin (the first as the thrown error, the others in its message), the Bun loader and `lowerSource` (which collects the same list instead of its own duplicate).

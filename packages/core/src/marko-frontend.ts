@@ -5,7 +5,7 @@
  *
  * Since port PR 5 core parses templates with the MX front end
  * (`@mxlang/parser/frontend`, `mx-parse.ts`), not with this layer, and so
- * does `@mxlang/data`'s tag scan (`parseMxDocument`): no production call site
+ * does the IR entry's tag scan (`parseMxDocument`): no production call site
  * compiles or parses a template with `@marko/compiler`. What is still loaded
  * here is the taglib lookup (`taglib.buildLookup`) and, in the
  * dist only, the bundle's copy of MX's template parser for the syntax table

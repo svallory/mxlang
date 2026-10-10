@@ -60,7 +60,7 @@ it("policy errors alone fail one program; fixing them leaves host warnings non-f
     expect(output).toContain(
       'mx.target "@acme/target" cannot be resolved from',
     );
-    expect(output).toContain("TODO data-target-tooling-dispatch");
+    expect(output).toContain('mx.target "tree" was removed (decision 204)');
     for (const i of cases.keys())
       writeFileSync(
         join(root, `p${i}`, "package.json"),

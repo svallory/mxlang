@@ -3,14 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CustomTag } from "@mxlang/core";
 import * as core from "@mxlang/core";
-import { parseData } from "@mxlang/data";
 import { afterAll, describe, expect, it } from "vitest";
 import { builtinLookup, builtinTargets } from "./index.ts";
 
 /**
  * `children["*"]` per target family (decision 147): inside a contract parent
  * the contract decides, so a lowercase child matches on every target exactly
- * as on html and data, native-element name or not; outside a contract parent
+ * as on html and under lowerSource, native-element name or not; outside a contract parent
  * the target's own behaviour is unchanged. A target's built-ins are never
  * matched.
  *
@@ -18,7 +17,7 @@ import { builtinLookup, builtinTargets } from "./index.ts";
  *   html, astro-html           : error, Marko's "Unable to find entry point"
  *   solid, preact, react, hono : a native element
  *   angular-template           : a native element
- *   data                       : a tree node (`unknownTags` defaults to allow)
+ *   lowerSource (the IR entry) : a tree node (`unknownTags` defaults to allow)
  */
 
 const work = mkdtempSync(join(tmpdir(), "mx-wildcard-children-"));
@@ -93,9 +92,11 @@ describe("a wildcard parent claims a lowercase child on every target", () => {
   );
 
   it.each(NAMES)(
-    "data: <%s> inside the contract parent is the contract's",
+    "lowerSource: <%s> inside the contract parent is the contract's",
     (name) => {
-      const { diagnostics } = parseData(inside(name), "/d.mx", { customTags });
+      const { diagnostics } = core.lowerSource(inside(name), "/d.mx", {
+        customTags,
+      });
       expect(diagnostics[0]?.message).toContain("nope");
       expect(diagnostics[0]?.message).toContain(
         `\`<${name}>\` (as \`attribute\`)`,
@@ -135,13 +136,15 @@ describe("outside a contract parent each target keeps its behaviour", () => {
     },
   );
 
-  it("data: it is a tree node by default and an error under reject", () => {
+  it("lowerSource: it is a tree node by default and an error under reject", () => {
     expect(
-      parseData(outside("zork"), "/d.mx", { customTags }).diagnostics,
+      core.lowerSource(outside("zork"), "/d.mx", { customTags }).diagnostics,
     ).toEqual([]);
     expect(
-      parseData(outside("zork"), "/d.mx", { customTags, unknownTags: "reject" })
-        .diagnostics[0]?.message,
+      core.lowerSource(outside("zork"), "/d.mx", {
+        customTags,
+        unknownTags: "reject",
+      }).diagnostics[0]?.message,
     ).toContain("is not a known tag");
   });
 });
@@ -179,7 +182,7 @@ const compilersWith = (
 ];
 
 describe("a target's built-ins are never wildcard-matched", () => {
-  // Core's own taglib names are built-ins on every target (data included), so
+  // Core's own taglib names are built-ins on every target (and under lowerSource), so
   // one `.mx` file validates identically everywhere.
   const expected = (name: string) =>
     `\`<resource>\`: \`<${name}>\` is not allowed here; names must match \`.+\` (\`<${name}>\` is a built-in tag, so the wildcard does not apply to it)`;
@@ -204,9 +207,9 @@ describe("a target's built-ins are never wildcard-matched", () => {
   );
 
   it.each(["let", "style", "effect", "script"])(
-    "data: <%s> inside a catch-all parent is the built-in",
+    "lowerSource: <%s> inside a catch-all parent is the built-in",
     (name) => {
-      const { diagnostics } = parseData(
+      const { diagnostics } = core.lowerSource(
         `<resource><${name} nope="a"/></resource>\n`,
         "/d.mx",
         { customTags: catchAll },

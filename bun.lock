@@ -503,7 +503,6 @@
       "version": "0.0.0",
       "dependencies": {
         "@mxlang/core": "workspace:*",
-        "@mxlang/data": "workspace:*",
         "@mxlang/host-angular": "workspace:*",
         "@mxlang/host-astro": "workspace:*",
         "@mxlang/host-hono": "workspace:*",
@@ -511,15 +510,6 @@
         "@mxlang/host-react": "workspace:*",
         "@mxlang/host-solid": "workspace:*",
         "@mxlang/target-html": "workspace:*",
-      },
-    },
-    "packages/targets/data": {
-      "name": "@mxlang/data",
-      "version": "0.1.0-alpha.14",
-      "dependencies": {
-        "@babel/types": "7.29.8",
-        "@mxlang/core": "workspace:*",
-        "@mxlang/web-elements": "workspace:*",
       },
     },
     "packages/targets/html": {
@@ -1156,8 +1146,6 @@
     "@mxlang/babel-plugin": ["@mxlang/babel-plugin@workspace:packages/tooling/babel-plugin"],
 
     "@mxlang/core": ["@mxlang/core@workspace:packages/core"],
-
-    "@mxlang/data": ["@mxlang/data@workspace:packages/targets/data"],
 
     "@mxlang/docs": ["@mxlang/docs@workspace:apps/docs"],
 

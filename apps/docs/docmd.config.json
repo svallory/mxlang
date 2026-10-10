@@ -31,7 +31,8 @@
   "redirects": {
     "/hosts/": "/hosts/intro/",
     "/hosts/html/": "/targets/html/",
-    "/hosts/data/": "/targets/data/",
+    "/hosts/data/": "/architecture/ir-entry/",
+    "/targets/data/": "/architecture/ir-entry/",
     "/hosts/third-party-targets/": "/targets/third-party-targets/"
   },
   "pageNavigation": true,
@@ -93,7 +94,6 @@
       "icon": "server",
       "children": [
         { "title": "HTML target", "path": "/targets/html/" },
-        { "title": "Data target", "path": "/targets/data/" },
         {
           "title": "Third-party targets",
           "path": "/targets/third-party-targets/"
@@ -207,6 +207,10 @@
         { "title": "Core and hosts", "path": "/architecture/core-and-hosts/" },
         { "title": "The IR", "path": "/architecture/ir/" },
         { "title": "IR specification", "path": "/architecture/ir-spec/" },
+        {
+          "title": "IR entry point and dialects",
+          "path": "/architecture/ir-entry/"
+        },
         { "title": "The MX AST", "path": "/architecture/ast/" },
         {
           "title": "The parser grammar",

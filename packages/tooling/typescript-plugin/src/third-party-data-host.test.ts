@@ -44,7 +44,9 @@ function compile(source: string, options: MeshOptions = {}) {
   };
 }
 
-describe("`.mesh.mx` in the TS plugin", () => {
+// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// check re-keys this suite.
+describe.skip("`.mesh.mx` in the TS plugin", () => {
   it.each([
     ["with its file kind declared", { fileKinds: MESH_KIND }],
     ["without one", {}],

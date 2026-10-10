@@ -1,5 +1,5 @@
 ---
-packages: [core, data, parser, babel]
+packages: [core, parser, babel]
 kind: Added
 ---
 

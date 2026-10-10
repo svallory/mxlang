@@ -803,7 +803,7 @@ const explicitModules = new WeakMap<object, ResolvedSyntax>();
 
 /**
  * An explicit `syntax` option (`HostOptions.syntax`, `FragmentBase.syntax`,
- * `ParseDataOptions.syntax`: a consumer's own table or syntax module, Mesh's
+ * `LowerSourceOptions.syntax`: a consumer's own table or syntax module, Mesh's
  * path), validated with the manifest's rules and wording, as the caller's
  * error: a `TranslateError` at the start of `filename` naming
  * `syntax.<field>`. A non-empty `tagTypes` is refused (taglib-owned), as in a

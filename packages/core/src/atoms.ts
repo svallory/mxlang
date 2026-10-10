@@ -9,10 +9,10 @@ import type { Atom, MxAtomMark } from "./ir.ts";
  * `0.000000000`), so every offset in the expression stays exact. This pass
  * turns each stand-in back into what the language means: a `StringLiteral`
  * whose value is the name, marked with `extra.mxAtom = { span }` (decision 156
- * addendum 1, item 1; public API of `@mxlang/core` and `@mxlang/data`). It runs
+ * addendum 1, item 1; public API of `@mxlang/core`). It runs
  * on the parsed tree before anything reads an expression, from `lower` and
  * from an external `lowerChildren` call (`parseFragment`'s hosts), so every
- * target, the data tree and the type-check projection see the string.
+ * target, the IR entry and the type-check projection see the string.
  *
  * A stand-in is recognised by the source character at its start: no authored
  * numeric literal starts with `:`, so the check cannot be forged.

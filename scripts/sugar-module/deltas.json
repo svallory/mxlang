@@ -75,132 +75,67 @@
     "note": "decision 183 (146 addendum 4 withdrawn): `#x=…`, `.x=…`, `#x(p) { b }` are refused at the operator by the row's `value: \"refuse\"`"
   },
   {
-    "test": "packages/targets/data/src/atoms.test.ts > Mesh's syntax-v3 lines a single-atom default value then `:name` is name sugar: \"x\\n  belongs-to=:Customer :customer\\n\"",
+    "test": "packages/core/src/ir-entry/atoms.test.ts > Mesh's syntax-v3 lines a single-atom default value then `:name` is name sugar: \"x\\n  belongs-to=:Customer :customer\\n\"",
     "ruling": "single-atom-default",
     "note": "decision 182 addendum 1 item 3: `kind=:X :x` no longer splits after a single-atom default value"
   },
   {
-    "test": "packages/targets/data/src/atoms.test.ts > Mesh's syntax-v3 lines a single-atom default value then `:name` is name sugar: \"x\\n  has-many=:Order :orders\\n\"",
+    "test": "packages/core/src/ir-entry/atoms.test.ts > Mesh's syntax-v3 lines a single-atom default value then `:name` is name sugar: \"x\\n  has-many=:Order :orders\\n\"",
     "ruling": "single-atom-default",
     "note": "decision 182 addendum 1 item 3: `kind=:X :x` no longer splits after a single-atom default value"
   },
   {
-    "test": "packages/targets/data/src/atoms.test.ts > Mesh's syntax-v3 lines a single-atom default value then `:name` is name sugar: \"<x><has-many=:Order :orders/></x>\"",
+    "test": "packages/core/src/ir-entry/atoms.test.ts > Mesh's syntax-v3 lines a single-atom default value then `:name` is name sugar: \"<x><has-many=:Order :orders/></x>\"",
     "ruling": "single-atom-default",
     "note": "decision 182 addendum 1 item 3: `kind=:X :x` no longer splits after a single-atom default value"
   },
   {
-    "test": "packages/targets/data/src/atoms.test.ts > Mesh's syntax-v3 lines a single-atom default value then `:name` is name sugar: \"x\\n  belongs-to=:Customer :customer required\\n\"",
+    "test": "packages/core/src/ir-entry/atoms.test.ts > Mesh's syntax-v3 lines a single-atom default value then `:name` is name sugar: \"x\\n  belongs-to=:Customer :customer required\\n\"",
     "ruling": "single-atom-default",
     "note": "decision 182 addendum 1 item 3: `kind=:X :x` no longer splits after a single-atom default value"
   },
   {
-    "test": "packages/targets/data/src/parse.test.ts > a dynamic shorthand class on data <a.${x} .${y}/> is a positioned diagnostic, not a throw",
+    "test": "packages/core/src/ir-entry/parse.test.ts > a dynamic shorthand class on data <a.${x} .${y}/> is a positioned diagnostic, not a throw",
     "ruling": "placeholder-in-attribute-sugar",
     "note": "a `${…}` inside a spaced sugar ends the trigger's token; the generic trigger error replaces the dynamic-shorthand message (lead 13:24, Q4)"
   },
   {
-    "test": "packages/targets/data/src/parse.test.ts > a dynamic shorthand class on data <a .${x}/> is a positioned diagnostic, not a throw",
+    "test": "packages/core/src/ir-entry/parse.test.ts > a dynamic shorthand class on data <a .${x}/> is a positioned diagnostic, not a throw",
     "ruling": "placeholder-in-attribute-sugar",
     "note": "a `${…}` inside a spaced sugar ends the trigger's token; the generic trigger error replaces the dynamic-shorthand message (lead 13:24, Q4)"
   },
   {
-    "test": "packages/targets/data/src/sugar-default-value.test.ts > Mesh: boolean #isOverdue({ self }) { return self.x } concise",
+    "test": "packages/core/src/ir-entry/sugar-default-value.test.ts > Mesh: boolean #isOverdue({ self }) { return self.x } concise",
     "ruling": "refuse-value",
     "note": "decision 183 (146 addendum 4 withdrawn): `#x=…`, `.x=…`, `#x(p) { b }` are refused at the operator by the row's `value: \"refuse\"`"
   },
   {
-    "test": "packages/targets/data/src/sugar-default-value.test.ts > Mesh: boolean #isOverdue({ self }) { return self.x } concise, space before the params",
+    "test": "packages/core/src/ir-entry/sugar-default-value.test.ts > Mesh: boolean #isOverdue({ self }) { return self.x } concise, space before the params",
     "ruling": "refuse-value",
     "note": "decision 183 (146 addendum 4 withdrawn): `#x=…`, `.x=…`, `#x(p) { b }` are refused at the operator by the row's `value: \"refuse\"`"
   },
   {
-    "test": "packages/targets/data/src/sugar-default-value.test.ts > Mesh: boolean #isOverdue({ self }) { return self.x } html",
+    "test": "packages/core/src/ir-entry/sugar-default-value.test.ts > Mesh: boolean #isOverdue({ self }) { return self.x } html",
     "ruling": "refuse-value",
     "note": "decision 183 (146 addendum 4 withdrawn): `#x=…`, `.x=…`, `#x(p) { b }` are refused at the operator by the row's `value: \"refuse\"`"
   },
   {
-    "test": "packages/targets/data/src/sugar-default-value.test.ts > Mesh: boolean #isOverdue({ self }) { return self.x } as a child line",
+    "test": "packages/core/src/ir-entry/sugar-default-value.test.ts > Mesh: boolean #isOverdue({ self }) { return self.x } as a child line",
     "ruling": "refuse-value",
     "note": "decision 183 (146 addendum 4 withdrawn): `#x=…`, `.x=…`, `#x(p) { b }` are refused at the operator by the row's `value: \"refuse\"`"
   },
   {
-    "test": "packages/targets/data/src/sugar-default-value.test.ts > each form, on the data target <a #x=1/>",
+    "test": "packages/core/src/ir-entry/sugar-default-value.test.ts > contracts see the default value a function value passes `value: function`",
     "ruling": "refuse-value",
     "note": "decision 183 (146 addendum 4 withdrawn): `#x=…`, `.x=…`, `#x(p) { b }` are refused at the operator by the row's `value: \"refuse\"`"
   },
   {
-    "test": "packages/targets/data/src/sugar-default-value.test.ts > each form, on the data target <a .c=1/>",
+    "test": "packages/core/src/ir-entry/sugar-default-value.test.ts > contracts see the default value a wrong value is E1 on `value`, positioned at the sugar's value",
     "ruling": "refuse-value",
     "note": "decision 183 (146 addendum 4 withdrawn): `#x=…`, `.x=…`, `#x(p) { b }` are refused at the operator by the row's `value: \"refuse\"`"
   },
   {
-    "test": "packages/targets/data/src/sugar-default-value.test.ts > each form, on the data target <a .c=\"s\"/>",
-    "ruling": "refuse-value",
-    "note": "decision 183 (146 addendum 4 withdrawn): `#x=…`, `.x=…`, `#x(p) { b }` are refused at the operator by the row's `value: \"refuse\"`"
-  },
-  {
-    "test": "packages/targets/data/src/sugar-default-value.test.ts > each form, on the data target a #x=1",
-    "ruling": "refuse-value",
-    "note": "decision 183 (146 addendum 4 withdrawn): `#x=…`, `.x=…`, `#x(p) { b }` are refused at the operator by the row's `value: \"refuse\"`"
-  },
-  {
-    "test": "packages/targets/data/src/sugar-default-value.test.ts > each form, on the data target a .c=1",
-    "ruling": "refuse-value",
-    "note": "decision 183 (146 addendum 4 withdrawn): `#x=…`, `.x=…`, `#x(p) { b }` are refused at the operator by the row's `value: \"refuse\"`"
-  },
-  {
-    "test": "packages/targets/data/src/sugar-default-value.test.ts > each form, on the data target kind #name (p) { b }: both orders are the same tag",
-    "ruling": "refuse-value",
-    "note": "decision 183 (146 addendum 4 withdrawn): `#x=…`, `.x=…`, `#x(p) { b }` are refused at the operator by the row's `value: \"refuse\"`"
-  },
-  {
-    "test": "packages/targets/data/src/sugar-default-value.test.ts > each form, on the data target kind #name(p) { b }: both orders are the same tag",
-    "ruling": "refuse-value",
-    "note": "decision 183 (146 addendum 4 withdrawn): `#x=…`, `.x=…`, `#x(p) { b }` are refused at the operator by the row's `value: \"refuse\"`"
-  },
-  {
-    "test": "packages/targets/data/src/sugar-default-value.test.ts > each form, on the data target <item=a #x=b/>: a second default value is a positioned error at the second",
-    "ruling": "refuse-value",
-    "note": "decision 183 (146 addendum 4 withdrawn): `#x=…`, `.x=…`, `#x(p) { b }` are refused at the operator by the row's `value: \"refuse\"`"
-  },
-  {
-    "test": "packages/targets/data/src/sugar-default-value.test.ts > each form, on the data target kind=1 #x=2: a second default value is a positioned error at the second",
-    "ruling": "refuse-value",
-    "note": "decision 183 (146 addendum 4 withdrawn): `#x=…`, `.x=…`, `#x(p) { b }` are refused at the operator by the row's `value: \"refuse\"`"
-  },
-  {
-    "test": "packages/targets/data/src/sugar-default-value.test.ts > each form, on the data target kind (p) { b } #x(q) { c }: a second default value is a positioned error at the second",
-    "ruling": "refuse-value",
-    "note": "decision 183 (146 addendum 4 withdrawn): `#x=…`, `.x=…`, `#x(p) { b }` are refused at the operator by the row's `value: \"refuse\"`"
-  },
-  {
-    "test": "packages/targets/data/src/sugar-default-value.test.ts > each form, on the data target <item value:=y #x=1/>: a second default value is a positioned error at the second",
-    "ruling": "refuse-value",
-    "note": "decision 183 (146 addendum 4 withdrawn): `#x=…`, `.x=…`, `#x(p) { b }` are refused at the operator by the row's `value: \"refuse\"`"
-  },
-  {
-    "test": "packages/targets/data/src/sugar-default-value.test.ts > each form, on the data target <item #x=1 value:=y/>: a second default value is a positioned error at the second",
-    "ruling": "refuse-value",
-    "note": "decision 183 (146 addendum 4 withdrawn): `#x=…`, `.x=…`, `#x(p) { b }` are refused at the operator by the row's `value: \"refuse\"`"
-  },
-  {
-    "test": "packages/targets/data/src/sugar-default-value.test.ts > the message gives the first default as line:column names a position, not an offset",
-    "ruling": "refuse-value",
-    "note": "decision 183 (146 addendum 4 withdrawn): `#x=…`, `.x=…`, `#x(p) { b }` are refused at the operator by the row's `value: \"refuse\"`"
-  },
-  {
-    "test": "packages/targets/data/src/sugar-default-value.test.ts > contracts see the default value a function value passes `value: function`",
-    "ruling": "refuse-value",
-    "note": "decision 183 (146 addendum 4 withdrawn): `#x=…`, `.x=…`, `#x(p) { b }` are refused at the operator by the row's `value: \"refuse\"`"
-  },
-  {
-    "test": "packages/targets/data/src/sugar-default-value.test.ts > contracts see the default value a wrong value is E1 on `value`, positioned at the sugar's value",
-    "ruling": "refuse-value",
-    "note": "decision 183 (146 addendum 4 withdrawn): `#x=…`, `.x=…`, `#x(p) { b }` are refused at the operator by the row's `value: \"refuse\"`"
-  },
-  {
-    "test": "packages/targets/data/src/sugar-default-value.test.ts > contracts see the default value a closed contract without `value` rejects the sugar's value at it",
+    "test": "packages/core/src/ir-entry/sugar-default-value.test.ts > contracts see the default value a closed contract without `value` rejects the sugar's value at it",
     "ruling": "refuse-value",
     "note": "decision 183 (146 addendum 4 withdrawn): `#x=…`, `.x=…`, `#x(p) { b }` are refused at the operator by the row's `value: \"refuse\"`"
   },
@@ -310,7 +245,7 @@
     "note": "lead ruling 14:29 (slice a2): `CompileResult.atomFacts` / `atomCandidates` are core's built-in path only; a syntax module that claims the atom contract fields (`contractFields`) leaves the facts empty on a result and unset on an error, so completion has nothing to read. They leave with slice c (decision 196)."
   },
   {
-    "test": "packages/targets/data/src/atoms.test.ts > atom errors are positioned diagnostics, never a raw throw \"x y=::a\\n\"",
+    "test": "packages/core/src/ir-entry/atoms.test.ts > atom errors are positioned diagnostics, never a raw throw \"x y=::a\\n\"",
     "ruling": "module-wording",
     "note": "the module's texts quote no MX decision number (review 460 F6): the built-in's text without `(decision 156)`, at the same position"
   },

@@ -148,7 +148,9 @@ describe("mx.<target>.defaultTag validation, once per package", () => {
     expect(diagnostics.map((d) => d.code)).toEqual(["invalid-default-tag"]);
   });
 
-  it("on tree, reachable means the built-in `object` plus the custom tags", () => {
+  // TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+  // check re-keys this case.
+  it.skip("on tree, reachable means the built-in `object` plus the custom tags", () => {
     const dataPackage = (name: string) =>
       resolveTargetPolicyDetailed(
         project({ mx: { target: "tree", data: { defaultTag: name } } }),
@@ -407,7 +409,9 @@ describe("a loaded descriptor's own values are checked against the target's look
   });
 });
 
-describe("a third-party host on the tree target (decision 148)", () => {
+// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// check re-keys this suite.
+describe.skip("a third-party host on the tree target (decision 148)", () => {
   afterEach(() => teardownMesh());
 
   const MESH_KIND = [{ segment: "mesh", diagnosticSource: "mesh" }];
@@ -562,7 +566,9 @@ describe("Marko core tags are no valid default on any target (round 3)", () => {
     }
   });
 
-  it("tree rejects them as well (and falls back to object)", () => {
+  // TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+  // check re-keys this case.
+  it.skip("tree rejects them as well (and falls back to object)", () => {
     for (const name of CORE) {
       const file = project({
         mx: { target: "tree", data: { defaultTag: name } },
@@ -724,7 +730,9 @@ describe("a contract's defaultTag is checked at registration, at the declaration
     expect(() => resolveTargetPolicyDetailed(file)).not.toThrow();
   });
 
-  it("on tree, `object` and declared tags are valid; html elements are not", () => {
+  // TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+  // check re-keys this case.
+  it.skip("on tree, `object` and declared tags are valid; html elements are not", () => {
     const data = (name: string) =>
       project(
         { mx: { target: "tree", contracts: "./contracts.ts" } },
@@ -915,7 +923,9 @@ describe("a dashed custom-element name, per target, as measured (decision 145, r
     },
   );
 
-  it("tree rejects it, config and contract", () => {
+  // TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+  // check re-keys this case.
+  it.skip("tree rejects it, config and contract", () => {
     const config = project({
       mx: { target: "tree", data: { defaultTag: "sl-card" } },
     });

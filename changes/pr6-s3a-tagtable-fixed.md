@@ -1,5 +1,5 @@
 ---
-packages: [core, html, preact, react, hono, solid, angular, astro, data]
+packages: [core, html, preact, react, hono, solid, angular, astro]
 kind: Fixed
 ---
 

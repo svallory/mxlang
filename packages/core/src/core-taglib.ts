@@ -67,7 +67,7 @@ interface TaglibCarrier {
  * so a translator not built with `createTranslator` (a third-party target's)
  * still parses `static`, `import`, `export`, `client`, `server` and `class` as
  * statements. A translator that already lists core's taglib or the statement
- * taglib, or says `statementTags: false` (data's own three), is returned as it
+ * taglib, or says `statementTags: false` (`lowerSource`, whose tag rules preset carries its own), is returned as it
  * is. The result is cached per input: Marko keys its lookup on the object.
  */
 export function withStatementTags<T>(translator: T): T {

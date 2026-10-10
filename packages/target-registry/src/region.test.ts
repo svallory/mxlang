@@ -169,19 +169,16 @@ describe("a .<word>.mx no region kind registers is not claimed", () => {
     expect(regionCompileFor(file)).toBeUndefined();
   });
 
-  it("a file kind without compileRegion is never a region kind (a Mesh-style host on tree)", () => {
+  it("a file kind without compileRegion is never a region kind (a Mesh-style host)", () => {
     // Decision 148's shape: host `mesh` on a data-like target. A loaded
     // third-party descriptor may not declare file kinds today; this one is
     // registered directly, so even a declared `.mesh.mx` kind stays out of the
     // region bridge because it has no region entry.
-    const data = builtinLookup().target("tree");
-    if (!data) throw new Error("missing tree descriptor");
     const mesh: TargetDescriptor = {
       descriptorVersion: 0,
       name: "mesh-data",
       packageName: "@fake/mx-mesh",
-      defaultTag: data.defaultTag,
-      ...(data.declarations ? { declarations: data.declarations } : {}),
+      defaultTag: "object",
       host: {
         name: "mesh",
         fileKinds: [{ segment: "mesh", diagnosticSource: "mesh" }],

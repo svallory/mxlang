@@ -240,8 +240,7 @@ describe("the module path reuses the built-in texts and positions (review 460)",
   });
 
   // Core's own after-value text, raised before any trigger runs, so the same
-  // on both paths: it still quotes decision 151 (not one of the module's
-  // texts; see the sugars-followup report).
+  // on both paths.
   it("<x=1 :n=2/>", () => {
     expect(firstError("<x=1 :n=2/>", atomsSugars)).toEqual(
       firstError("<x=1 :n=2/>"),

@@ -42,9 +42,7 @@ review of PR 460, F2). The test is
   (restated by every `span`) is dropped, and each parser (Babel) node keeps
   its shape and the `mx*` marks on its `extra` but not its offsets (`start`,
   `end`, `loc`, `range`), which the spans and the marks already carry. The
-  golden was a data tree (`parseData`'s `ParseDataResult`) until
-  `@mxlang/data` was replaced by `lowerSource`; every diagnostic and every
-  tag name, count and span of that tree is unchanged in the IR.
+  golden pins every diagnostic and every tag name, count and span.
 
 ## Updating
 

@@ -63,7 +63,9 @@ function check(source: string, options: MeshOptions = {}) {
   }
 }
 
-describe("mx-tsc on a third-party host built on data", () => {
+// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// check re-keys this suite.
+describe.skip("mx-tsc on a third-party host built on data", () => {
   it.each([
     ["with its file kind declared", { fileKinds: MESH_KIND }],
     ["without one", {}],
@@ -95,7 +97,9 @@ describe("mx-tsc on a third-party host built on data", () => {
   });
 });
 
-describe("mx-tsc's data check keys on the resolved base target", () => {
+// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// check re-keys this suite.
+describe.skip("mx-tsc's data check keys on the resolved base target", () => {
   const FILE = join("src", "post.mesh.mx");
 
   it("gives a host built on data data's strict defaults: an unknown tag is an error", () => {
@@ -148,7 +152,7 @@ describe("mx-tsc's data check keys on the resolved base target", () => {
     const { status, output } = check("<x a=1/>\n", { notBuiltOnData: true });
     expect(output).toBe("");
     expect(status).toBe(0);
-    // The host's own compile ran (the data check calls `parseData` itself).
+    // The host's own compile ran (the data check calls `lowerSource` itself).
     expect(
       (globalThis as { __mxMeshCompiles?: string[] }).__mxMeshCompiles?.length,
     ).toBeGreaterThan(0);
@@ -180,7 +184,9 @@ const WITH_CONTRACTS = {
 const SHORTHAND = '<#a value="x"/>\n';
 const PORT_AT_TOP = `${join("src", "post.mesh.mx")}(1,1): error TS80001: \`<port>\` must be inside \`<service>\`; found at the top level\n`;
 
-describe("the unnamed-tag ladder (decision 145) on a host built on data", () => {
+// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// check re-keys this suite.
+describe.skip("the unnamed-tag ladder (decision 145) on a host built on data", () => {
   const mx = (extra: Record<string, unknown> = {}) => ({
     contracts: "./contracts.ts",
     ...extra,
@@ -285,7 +291,9 @@ describe("the unnamed-tag ladder (decision 145) on a host built on data", () => 
   });
 });
 
-describe("the data check adds to a host built on data; it never replaces the host's compile", () => {
+// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// check re-keys this suite.
+describe.skip("the data check adds to a host built on data; it never replaces the host's compile", () => {
   const RULE = "forbidden";
 
   it("the host's own rule still fires", () => {

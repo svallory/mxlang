@@ -39,10 +39,10 @@ export const SUITES = [
   "packages/core/src/name-sugar.test.ts",
   "packages/core/src/atom-contracts.test.ts",
   "packages/core/src/atom-candidates.test.ts",
-  "packages/targets/data/src/atoms.test.ts",
-  "packages/targets/data/src/sugar-default-value.test.ts",
-  "packages/targets/data/src/parse.test.ts",
-  "packages/targets/data/src/default-tag.test.ts",
+  "packages/core/src/ir-entry/atoms.test.ts",
+  "packages/core/src/ir-entry/sugar-default-value.test.ts",
+  "packages/core/src/ir-entry/parse.test.ts",
+  "packages/core/src/ir-entry/default-tag.test.ts",
   "packages/targets/html/src/atoms.test.ts",
   "packages/targets/html/src/attr-name.test.ts",
   "packages/core/src/custom-tags.test.ts",
@@ -50,10 +50,10 @@ export const SUITES = [
   "packages/core/src/default-tag.test.ts",
   "packages/core/src/compile.test.ts",
   "packages/core/src/fragment.test.ts",
-  "packages/targets/data/src/unknown-tags.test.ts",
-  "packages/targets/data/src/attribute-tag-contracts.test.ts",
+  "packages/core/src/ir-entry/unknown-tags.test.ts",
+  "packages/core/src/ir-entry/attribute-tag-contracts.test.ts",
   // Slice a2: the atom contract checks run from the module's `afterLower`.
-  "packages/targets/data/src/contracts.test.ts",
+  "packages/core/src/ir-entry/contracts.test.ts",
 ];
 
 interface Delta {

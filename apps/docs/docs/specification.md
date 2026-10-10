@@ -216,8 +216,9 @@ on these nodes, so the statement text is recovered by slicing on
 (`import`, `static`, `export`, `client`, `server`, `class`) are declared to the
 parser from core's own taglib on every host, so their text is code, never
 attributes: a typed `static function f(a: number): string {…}` or a `<T,>`
-generic reads the same on every target. (The tree target declares three of the
-six, its documented exception.)
+generic reads the same on every target. (The IR entry point's default `none`
+tag rules preset declares three of the six, `import`, `static` and `export`;
+§13.7.3.)
 
 A statement's text is parsed as a TypeScript module body and a syntax error is a
 positioned error on every target, exactly as in Marko 6.4.4 (measured, html and
@@ -389,8 +390,8 @@ therefore supply one-space content, through both imports and discovered
 `tags/*.mx`; `<Wrap>\n  </Wrap>` supplies no content. A comment alone supplies
 none, while `<!--note--> ` supplies a space. All seven hosts preserve that
 text when forwarding the body; Angular uses `&ngsp;` so its own template
-whitespace removal cannot discard the space. The tree target's pass-through
-tree carries the same normalized text, and `structural: "reject"` rejects a
+whitespace removal cannot discard the space. The IR `lowerSource` returns
+(§13.7) carries the same normalized text, and `structural: "reject"` rejects a
 retained space as text. The rendered parity matrix is
 `test-fixtures/body-whitespace/cases.json`.
 
@@ -905,8 +906,8 @@ read in `static`/`import`/`export` blocks, scriptlets, tag
 params, strings, template text, regular expressions or comments.
 
 **The name sugar is an atom standing alone in attribute position**: `:email`
-sets `name="email"` (above), and that `name` keeps its atom-ness in the IR and in
-`parseData` (addendum 1, item 2). `x=:a :b` is the atom value `x="a"` plus
+sets `name="email"` (above), and that `name` keeps its atom-ness in the IR,
+`lowerSource`'s included (addendum 1, item 2). `x=:a :b` is the atom value `x="a"` plus
 `name="b"`.
 
 **Atoms in contracts (decision 156 PR 2; ADR 156 section 4).** A contract
@@ -941,14 +942,13 @@ sugar (decision 156.5): "`::a` is reserved (decision 156)…", positioned at the
 too: it parses with the MX front end and MX's template parser (decisions 158,
 159), never a stock htmljs-parser.
 
-**IR and data.** An attribute whose whole value is one atom is a `static`
-attribute carrying `atom: { kind: "atom", name, span }`; in `parseData` it is
-`DataAttr { kind: "atom", name, value, nameSpan?, span }`, the sugar `name`
+**IR.** An attribute whose whole value is one atom is a `static`
+attribute carrying `atom: { kind: "atom", name, span }`, the sugar `name`
 included. An atom nested in an expression is a `StringLiteral` whose
 `extra.mxAtom` is `{ span }` and whose `Expr.atoms` lists it (see
 [the IR spec](/architecture/ir-spec/)).
 
-**Not yet:** printing and round-trip — a formatter and a `parseData` consumer
+**Not yet:** printing and round-trip — a formatter and a `lowerSource` consumer
 that re-emits source must keep `:x` as `:x` (the IR keeps the span; no formatter
 exists yet).
 
@@ -959,8 +959,8 @@ shorthand and no name, `<#main>`, `<.card>`, `<#a.b>`, or concise `#main` and
 `.card`, is an **unnamed tag**. `#x` still becomes `id="x"` and `.a.b` still
 becomes `class="a b"`; what changed from Marko is the tag they sit on. Marko
 always writes `div` there, because it has one host. MX resolves the name by
-vocabulary, so on a target where `div` means nothing (the tree target) the
-shorthand is still meaningful.
+vocabulary, so where `div` means nothing (a dialect read through `lowerSource`, §13.7)
+the shorthand is still meaningful.
 
 **The empty-name rule.** Marko's parser writes `div` into the AST but leaves the
 name's source span empty, which no authored name has. Core recognises that,
@@ -973,9 +973,9 @@ dynamic name (`<${tag}.a>`) is not either.
 | # | Rung | Where it is set |
 |---|---|---|
 | 1 | the parent's contract `defaultTag` | beside `children`, in a sidecar or `mx.contracts`; honoured only when the target's declarations permit it (the built-in targets do) |
-| 2 | the package's override | `package.json#mx.<target>.defaultTag` (`mx.html`, `mx.solid-jsx`, `mx.data`, …); for a target `builtOn` another (§13.5), the base target's key (`mx.<base>.defaultTag`) when the target's own is absent or rejected. When both are set and differ the target's own wins and a warning at the base key names both (`default-tag-overridden`) |
+| 2 | the package's override | `package.json#mx.<target>.defaultTag` (`mx.html`, `mx.solid-jsx`, …); for a target `builtOn` another (§13.5), the base target's key (`mx.<base>.defaultTag`) when the target's own is absent or rejected. When both are set and differ the target's own wins and a warning at the base key names both (`default-tag-overridden`) |
 | 3 | the host's override | the host's optional `defaultTag` on its descriptor |
-| 4 | the target's built-in | `div` on every html-family target, `object` on the tree target; required on every target descriptor |
+| 4 | the target's built-in | `div` on every html-family target, `object` under the IR entry point (§13.7, overridden by its `defaultTag` option); required on every target descriptor |
 
 For example, with `package.json#mx.html.defaultTag` set to `"section"` and these
 two tags (`tags/my-list.tag.ts` declares `defaultTag: "li"`,
@@ -1026,7 +1026,7 @@ resolved to.
 (the resolved name missing from it is the usual E2 error, positioned at the
 shorthand), and so does the tag's own `attributes` contract (`<.x>` under a tag
 whose closed attributes lack `class` is the usual E1 error, positioned at the
-shorthand). On the tree target, with `attributes` declaring
+shorthand). Under `lowerSource`, with `attributes` declaring
 `defaultTag: "attribute"` and `children: { other: {} }`:
 
 ```text
@@ -1101,13 +1101,13 @@ was rejected and the rung that answered instead is not in the parent's closed
 doc.mx(1,13): error TS80001: `<attributes>`: `<object>` is not allowed here; allowed children: `<attribute>` (the parent's `defaultTag` `nope` is invalid; see the declaration)
 ```
 
-**The tree target.** `object` is a built-in tag of the tree target: the
+**The IR entry point.** `object` is a built-in tag under `lowerSource`: the
 anonymous node, carrying the shorthand's `id` and `class` as ordinary attributes,
 with an open contract. It is always known, so it is never an unknown-tag error
 under `unknownTags: "reject"` and needs no declaration; an authored
 `<object>` is the same tag, and a declared `object` contract replaces the
 built-in. A closed parent `children` that lists neither `object` nor a
-`defaultTag` gives the ordinary E2 error. See §13.7 and `packages/targets/data/README.md`.
+`defaultTag` gives the ordinary E2 error. See §13.7.
 
 **Divergence.** Marko always resolves the unnamed tag to `div`; MX resolves it by
 vocabulary. Every html-family built-in is `div`, so every existing file and the
@@ -1123,9 +1123,8 @@ Marko oracle are unchanged. Recorded in `divergences.md`.
   without a registry (the html and hono Bun loaders, the Astro Vite template
   plugin, Angular `build()`); the Vite plugin aborts the build on it, like any
   other policy error, and the other tools compile with the built-in meanwhile.
-- **The tree target is not wired into the language server, the TypeScript
-  plugin, Vite or the Bun loader yet** (§13.7); `parseData` and `mx-tsc` use
-  `mx.data.defaultTag`.
+- **No tool checks a dialect file yet** (§13.7); `lowerSource` takes the
+  unnamed tag from its `defaultTag` option.
 
 ### `class:foo` / `style:foo` modifiers
 
@@ -1207,7 +1206,7 @@ Angular accepts only a signal there; a `<for of>` index or a `<for>` range numbe
 modifier (a non-ASCII refinement name is a positioned Angular error, since its
 expression language reads ASCII identifiers only); html renders once and emits
 no handler (Marko's is client-only, so its server output is the same) but
-type-checks `fn` against the bound value in the tooling projection only; the data tree records it as
+type-checks `fn` against the bound value in the tooling projection only; the IR records it as
 `refinement`; the hosts that refuse `:=` report their own error on the
 attribute. A non-bound `v:fn=q` is the attribute named `v:fn`.
 Host-specific binding
@@ -2713,11 +2712,11 @@ Errors stop at the first in check order, not source order: authored children are
 
 Core checks authored children before lowering them, so a child's transform output does not change its name or count. The rule applies to transform tags, template tags with declaration-only sidecars, and contract-only delegated tags on every target. A dynamic child is an error in a closed contract. `TagCall.childTree?: ChildNode[]` exposes this authored shape to `analyze` and `transform`: named `ChildTag`, `ChildText`, `ChildDynamic`, `ChildFor.nodes`, and `ChildIf.branches` (each branch has `unconditional` and `nodes`), each node positioned with `loc`. It is syntax metadata, not emitted IR. Contracts report the first error of a tag; the tag is then skipped with its subtree and the file's other tags are still checked (decision 162, IR spec §13).
 
-**Wildcard children (MX addition, decisions 147 and 147 addendum 1).** `children["*"]` is an entry or an ordered list of entries `{ pattern?, contract }` or `{ pattern?, attributes?, attributeTags?, children?, defaultTag? }`. `pattern` is a JavaScript regex source, anchored by core as `^(?:pattern)$` with no flags; an entry with no `pattern` is a catch-all. `contract: "<tag>"` validates the child with that tag's whole contract (E1 attributes, E4 attribute tags, E2 children, 145 `defaultTag`) and the IR node's `name` is that canonical tag; an inline entry is a contract of its own, its `name` is the authored name, and it admits only `attributes`, `attributeTags`, `children` and `defaultTag`. In both forms `alias = { authored, span, groups }` records the match, `groups` being the pattern's named capture groups. The data tree (§13.7.2) shows the match the other way round: a claimed `DataTag` keeps the authored spelling in `name` and gains `contract` (the canonical tag, or the authored name for an inline entry) and `groups`, so a consumer that dispatches on the contract reads `contract`, not `name`. The key works on a tag's `children` and on an attribute-tag declaration's `children`.
+**Wildcard children (MX addition, decisions 147 and 147 addendum 1).** `children["*"]` is an entry or an ordered list of entries `{ pattern?, contract }` or `{ pattern?, attributes?, attributeTags?, children?, defaultTag? }`. `pattern` is a JavaScript regex source, anchored by core as `^(?:pattern)$` with no flags; an entry with no `pattern` is a catch-all. `contract: "<tag>"` validates the child with that tag's whole contract (E1 attributes, E4 attribute tags, E2 children, 145 `defaultTag`) and the IR node's `name` is that canonical tag; an inline entry is a contract of its own, its `name` is the authored name, and it admits only `attributes`, `attributeTags`, `children` and `defaultTag`. In both forms `alias = { authored, span, groups }` records the match, `groups` being the pattern's named capture groups. The IR `lowerSource` returns (§13.7.2) is the same: a consumer that dispatches on the contract reads `name`, and the authored spelling is in `alias.authored`. The key works on a tag's `children` and on an attribute-tag declaration's `children`.
 
 *Check order.* For each authored child: an explicit `children` entry first; then the `"*"` entries in order, the first whose pattern matches the whole name; then the closed record's own error. A name that matches no entry is the E2 error with the patterns and the explicit names listed. A tag declared in `customTags` that is absent from the parent's explicit `children` is rejected even when it matches a pattern: a wildcard never applies to a declared name. A file-local binding of a PascalCase name (import, `<define>`, `<const>`, parameter) beats a match. Unnamed tags (`<.x>`) and dynamic tags never match.
 
-*"Unknown".* A wildcard claims a name only when nothing else resolves it, and this is target-neutral: no core structural name, no core-owned or registered custom tag, no entry in the parent's explicit `children`, and no built-in of the target. A name is a built-in on every target when it is an entry of core's own taglib (`let`, `const`, `effect`, `id`, `lifecycle`, `log`, `debug`, `await`, `script`, `style`, `html-comment`, `html-script`, `html-style`, `client`, `server`, `class`, ...), when the host declares a disposition for it, when the target's taglib lookup holds it as a non-element, or when the target's declarations list it in `builtinTags` (names the target provides without a taglib entry; data's anonymous `object`; the same list the `defaultTag` check reads, so a built-in means one thing in core). Data is no exception: its non-wildcard handling of `<let>` is unchanged, but a wildcard never claims `let` or `object`; a vocabulary that wants a child named `let` lists it explicitly in `children`. A native element name (`title`, `div`) is not a built-in: inside a contract parent the contract decides, and `children["*"]` matches a lowercase child on the JSX hosts, Solid and Angular exactly as on html and data, so one `.mx` file validates the same way everywhere. Outside a contract parent every target keeps its behaviour (decision 151 ruling 7): an unknown tag that matches no wildcard entry is an error on html, astro-html and (under `unknownTags: "reject"`) data, and a native element on the JSX hosts, Solid and Angular. `unknownTags: "reject"` counts a wildcard-matched child as known.
+*"Unknown".* A wildcard claims a name only when nothing else resolves it, and this is target-neutral: no core structural name, no core-owned or registered custom tag, no entry in the parent's explicit `children`, and no built-in of the target. A name is a built-in on every target when it is an entry of core's own taglib (`let`, `const`, `effect`, `id`, `lifecycle`, `log`, `debug`, `await`, `script`, `style`, `html-comment`, `html-script`, `html-style`, `client`, `server`, `class`, ...), when the host declares a disposition for it, when the target's taglib lookup holds it as a non-element, or when the target's declarations list it in `builtinTags` (names the target provides without a taglib entry; the IR entry point's anonymous `object`; the same list the `defaultTag` check reads, so a built-in means one thing in core). The IR entry point is no exception: its non-wildcard handling of `<let>` is unchanged, but a wildcard never claims `let` or `object`; a vocabulary that wants a child named `let` lists it explicitly in `children`. A native element name (`title`, `div`) is not a built-in: inside a contract parent the contract decides, and `children["*"]` matches a lowercase child on the JSX hosts, Solid and Angular exactly as on html and under `lowerSource`, so one `.mx` file validates the same way everywhere. Outside a contract parent every target keeps its behaviour (decision 151 ruling 7): an unknown tag that matches no wildcard entry is an error on html, astro-html and (under `unknownTags: "reject"`) `lowerSource`, and a native element on the JSX hosts, Solid and Angular. `unknownTags: "reject"` counts a wildcard-matched child as known.
 
 *One identity.* `parents`, `children`, duplicate and cardinality rules, did-you-mean and `unknownTags` key on the canonical name; the alias is never a second identity. Messages print both: `` `<title>` (as `attribute`) ``; an inline contract prints `` `<PORT>` (inline contract) ``. A transform sees the canonical name and the alias.
 
@@ -3309,14 +3308,14 @@ A **host** is a framework; a **target** is an output format (decisions 129/132).
 lookup; tools use `@mxlang/targets`'s built-in wrapper.
 
 1. `mx.target` names a registered target directly: `html`, `astro-html`,
-   `solid-jsx`, `preact-jsx`, `react-jsx`, `hono-jsx`, `angular-template`, or
-   `tree` (subject to the tooling limit below). A host name here is an
+   `solid-jsx`, `preact-jsx`, `react-jsx`, `hono-jsx` or `angular-template`.
+   `tree` is an error (decision 204 removed it; below). A host name here is an
    `unknown-target` **error** with its default target in the hint; other unknown
    names get a nearest-target suggestion when within two edits. The literal
    `data` is refused the same way, with a hint instead of a suggestion:
    `"data" is reserved for the evaluated tree target (decision 187); the static
-   tree target is "tree"` — the name is kept for a future evaluated target, and
-   what ships today reads `mx.target: "tree"` (decision 187). A package
+   tree target is "tree"` — the name is kept for a future evaluated target
+   (decision 187; the hint's mention of `tree` predates decision 204). A package
    specifier (containing `/` or starting with `@`, `.` or `/`) is not a built-in
    name: it is loaded from the project as a third-party target (below).
 2. `mx.host` selects that host's default target. `mx.host: "html"` is accepted
@@ -3415,14 +3414,14 @@ first failing field), and two set rules join the reasons above, reported as
 
 | Rule | When | Message |
 |---|---|---|
-| `built-on-unknown` | the name is no registered target | `target "mesh-data" is built on "dta", which is not a registered target (registered: html, …, tree, mesh-data)`; when the name is a host name, `; "solid" is a host name, and builtOn takes a target name (did you mean "solid-jsx"?)`; when the name is the reserved literal `"data"`, `; "data" is reserved for the evaluated tree target (decision 187); the static tree target is "tree"` |
+| `built-on-unknown` | the name is no registered target | `target "mesh-data" is built on "dta", which is not a registered target (registered: html, …, angular-template, mesh-data)`; when the name is a host name, `; "solid" is a host name, and builtOn takes a target name (did you mean "solid-jsx"?)`; when the name is the reserved literal `"data"`, `; "data" is reserved for the evaluated tree target (decision 187); the static tree target is "tree"` |
 | `built-on-loop` | the chain comes back to a target (itself included) | `target "a" is built on itself: a -> b -> a` |
 
-A target a tool keeps from selection is still registered for this (the staged
-`tree`, §13.7). Core names no target: any target can be built on any other. A
-check that belongs to a target keys on the project's base target, never on its
-`mx.target` string: `mx-tsc`'s data check (§13.7.4), and the base target's
-`defaultTag` key (§4's ladder, rung 2). **Declare `builtOn` to inherit the base
+Core names no target: any target can be built on any other. A check that
+belongs to a target keys on the project's base target, never on its
+`mx.target` string: the base target's `defaultTag` key (§4's ladder, rung 2),
+and the dialect check that replaces `mx-tsc`'s data check (TODO
+`dialect-check`). **Declare `builtOn` to inherit the base
 target's config checks**: a descriptor that copies another target's
 declarations without it gets none of them.
 
@@ -3478,36 +3477,18 @@ A loaded host's name is a valid `mx.tags[].hosts` value for files compiled under
 that target, and its `mx.tags` entries filter by it; no unknown-host warning
 fires for it.
 
-**The tree target and its tooling limit (decisions 131 and 132, 131 addenda 1
-and 2).** `data` is a **hostless** target: its descriptor has no `host` part, so
-no `mx.host` value names it and it has no file kinds (§13.7). It is chosen only
-per package, by `mx.target: "tree"` (rule 1; a nested `package.json` covers a
-subtree of a mixed repository) or by rule 5 when `@mxlang/data` is the single
-target package in `dependencies`/`devDependencies`. There is no `x.data.mx` file
-kind: a file kind's segment is a host's name (decision 136) and `data` has none.
-A package that depends on both `@mxlang/data` and another built-in target
-package has two matches under rule 5 and falls to `html`; it must set
-`mx.target` to the target its tool-compiled files use, and its data files go
-through `parseData`.
-
-Editor dispatch for data files is deferred (TODO
-`data-target-tooling-dispatch`): **the language server, the TypeScript plugin,
-Vite and the Bun loader do not compile data files yet; `mx-tsc` does** (§13.7.4,
-decision 131 addendum 4). Until editor dispatch lands, an explicit
-`mx.target: "tree"` is a positioned error raised by the registry wrapper, never
-by core, at the key's value (code `unknown-target`):
-`mx.target "tree" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead`.
-The language server and the TypeScript plugin report it as a policy
-error and the Vite plugin fails the transform with it. `mx-tsc` asks the wrapper
-for the unmasked policy when it is run on a package whose own `package.json`
-resolves to `tree` (§13.7.4); in every other run (rule-5 inference, a
-monorepo root, `-b`/`-w`) it still reports the error like the editor tools. The tools still hand on
-the same fallback as any `unknown-target` (rule 5, else `html`), so later
-diagnostics are not drowned, but the error means no green build. The Bun loader
-does not read `mx.target` at all: `@mxlang/target-html/bun` always compiles as `html`.
-Dependency-only `data` inference (rule 5) keeps its existing staging to `html`
-with no diagnostic. `parseData` from `@mxlang/data` is the supported entry
-point today and is independent of editor/build dispatch (§13.7).
+**`mx.target: "tree"` is removed (decision 204).** The tree target and its
+package, `@mxlang/data`, are deleted; a program that reads the tree calls
+`lowerSource` (§13.7). An explicit `mx.target: "tree"` is a positioned error
+raised by the registry wrapper, never by core, at the key's value (code
+`unknown-target`):
+`mx.target "tree" was removed (decision 204); a consumer that reads the tree calls lowerSource from @mxlang/core`.
+The language server, the TypeScript plugin and `mx-tsc` report it as a policy
+error and the Vite plugin fails the transform with it. The tools hand on the
+same fallback as any `unknown-target` (rule 5, else `html`), so later
+diagnostics are not drowned, but the error means no green build. A leftover
+`@mxlang/data` dependency is not a target package: rule 5 ignores it, with no
+diagnostic.
 
 **Edge cases of the walk.** The nearest `package.json` is the one that *exists*:
 a malformed one (or one that is not a JSON object) ends the walk with the
@@ -3546,251 +3527,142 @@ does something else, silently.
 | 8 | Angular | **FIXED 2026-09-17** (page level; the tag-unit call site already errored). Was: `<return>` accepted and emitted nothing at the page level, silently dropping the value channel rather than erroring as `.astro.mx` does. |
 | 9 | html | **FIXED 2026-09-26**, decision 104. Dynamic tags receive attribute-tag props. |
 
-### 13.7 The tree target
+### 13.7 The core IR entry point
 
-**Decisions 131 (with addenda 1 to 3) and 132.** `@mxlang/data` is MX's first
-**hostless** target (§13.5): a `.mx` file under it is **data**, not UI. It
-compiles with core's own pipeline (delegate-everything declarations plus a data
-taglib) and returns a small, closed, serializable **static tree**. The tree
-describes what is written, never what it evaluates to; the consumer decides what
-any tag or expression means. A later *evaluated mode* (the file compiles to a
-module exporting a value) is TODO `data-host-evaluated-mode` and is not part of
-this section.
+**Decision 204** (replacing the tree target of decisions 131 and 132; ruling
+209). `@mxlang/core` exports `lowerSource` and `lowerFile`, which parse, lower
+and check one source and return core's IR (the [IR specification](/architecture/ir-spec/))
+with every diagnostic positioned. Nothing is emitted and nothing is evaluated:
+a **dialect** (a program that gives tags its own meaning, such as Mesh) walks
+the IR and decides what each tag means. Both are `@unstable`.
 
-**Tooling status.** `mx-tsc` checks a data package (§13.7.4). The language
-server, the TypeScript plugin, Vite and the Bun loader do **not** compile data
-files yet (TODO `data-target-tooling-dispatch`); for them `mx.target: "tree"` in
-a project is the positioned error quoted in §13.5. **`parseData` is the
-supported entry point for a program.** Nothing in this section depends on tool
-dispatch.
+The tree target (`@mxlang/data`, `parseData`, the `Data*` tree types,
+`mx.target: "tree"`) is removed. `mx.target: "tree"` is a positioned error in
+every tool: ``mx.target "tree" was removed (decision 204); a consumer that reads the tree calls lowerSource from @mxlang/core``.
+The name `data` stays reserved (decision 187).
 
-#### 13.7.1 `parseData`
+**Tooling status.** No tool checks a dialect file: `mx-tsc`'s data-package
+check (decision 131 addendum 4) went with the target, and the dialect check
+that replaces it is not part of this release (TODO `dialect-check`).
+
+#### 13.7.1 `lowerSource`
 
 ```ts
-parseData(source: string, filename: string, options?: ParseDataOptions): ParseDataResult
-parseDataFile(path: string, options?: ParseDataOptions): ParseDataResult
+lowerSource(source: string, filename: string, options?: LowerSourceOptions): LowerSourceResult
+lowerFile(path: string, options?: LowerSourceOptions): LowerSourceResult
 ```
 
-`parseData` never throws for a source problem: a Marko parse error, a rejected
-construct or a failed contract is an error diagnostic, one per error of the
-file, and `tree` is `undefined`. Core recovers per tag (decision 162, IR spec
-§13: a failed tag is skipped with its subtree and lowering goes on), so every
-independent error of the file is reported, each once, in position order; Marko's
-own parse errors still stop the parse. There is never a partial tree. An unrecognized internal
-error that carries no position fields is rethrown; a `TranslateError` at 0:0
-(core's "no position" sentinel) is not that, it is a file-level diagnostic
-(below).
+`lowerSource` never throws. A parse error, a rejected construct and a failed
+contract are each an error diagnostic, and `ir` is `undefined`: there is never a
+partial IR. Every independent error of the file is reported once, in position
+order: every parse error (the parser recovers), and, once the source lowers,
+every check reject, structural hit and unknown tag. Lowering stops at its first
+error (decision 162 recovers per tag, but a lowering error is the one error of
+its kind); under `unknownTags: "reject"` the unknown tags are still listed beside
+it. An error with no position (a bug in core) is reported at 1:0 with an
+`internal error: ` prefix, and a user-facing one with none with
+`unpositioned error: `. `lowerFile` reads the file first; a file that cannot be
+read throws, as `readFileSync` does.
 
 | Result field | Meaning |
 |---|---|
-| `tree` | the `DataDocument` (§13.7.2), or `undefined` when `diagnostics` holds an error |
-| `diagnostics` | `{ severity, message, line, column, offset, file? }`. `line` is 1-based and `column` 0-based, as `TranslateError` and `MxWarning`. `offset` is the UTF-16 offset derived from them (`-1` when `file` names another file, whose text `parseData` does not have). An error or warning with no source position (core's 0:0, as for a bad `customTags` registration) is file-level: `line: 1`, `column: 0`, `offset: 0` (`-1` when `file` names another file). On success it holds this call's warnings only |
+| `ir` | the `SpannedIr` (§13.7.2), or `undefined` when `diagnostics` holds an error |
+| `diagnostics` | `IrDiagnostic`: `{ severity, message, line, column, offset, file?, code? }`. `line` is 1-based and `column` 0-based, as `TranslateError` and `MxWarning`. `offset` is the UTF-16 offset derived from them (`-1` when `file` names another file, whose text `lowerSource` does not have). An error or warning with no source position (core's 0:0, as for a bad `customTags` registration) is file-level: `line: 1`, `column: 0`, `offset: 0`. `code` is the error's `TranslateError.diagnosticCode` when it has one (today, a syntax module's `ctx.fail(message, { code })`). On success it holds this call's warnings only |
 
 | Option | Values | Meaning |
 |---|---|---|
-| `customTags` | `Record<string, CustomTag>` | contract-only custom tags by call name (decisions 130 and 138): required attributes, attribute types, `children`, `parents`. `parseData` does **not** scan `tags/` or `package.json`; this map is the whole vocabulary it knows. An entry whose `transform` emits tags is not supported yet: `parseData` throws on its output, an internal error rather than a source diagnostic (TODO `data-transform-output-tree`) (see [Writing a dialect package](/custom-tags/dialect-package/) for producing it) |
-| `structural` | `"pass"` (default), `"reject"` | `"pass"` keeps the structural constructs in the tree (§13.7.3). `"reject"` makes the first one, in document order, a positioned error: ``the data tree is static; this file's consumer does not evaluate `<if>` `` (the construct is named: text, `${}`, `<if>`, `<for>`, `<const>`, `import`, `export`, `static`; comments are **never** structural — a `//` line or `<!-- -->` stays in the tree as the `Comment` node it already is under either value, decision 131 addendum 5). For a consumer that wants tags and attributes only |
-| `imports` | `"pass"`, `"reject"` (default: the effective `structural`) | Decides a top-level `import` on its own. `"pass"` with `structural: "reject"` keeps every other structural construct rejected and returns the imports as `tree.imports` (file order; not repeated in `statements`; with `structural: "pass"` they stay in `statements` and `tree.imports` is absent; one entry per authored statement line). An entry is `{ code, span, from, names, typeOnly? }`: `code` and `span` (UTF-16) are the statement as written, `from` is the unquoted specifier and `names` the bound names in written order (`{ imported, local, kind: "default" \| "named" \| "namespace", span, localSpan?, typeOnly? }`; empty for `import "x"`), all read from the parsed `ImportDeclaration`, never from the text; `typeOnly` marks `import type` and an inline `{ type X }`. A tag-body `import` is not an import at all: Marko parses it as body text, so `structural: "reject"` rejects it as text and `imports` does not apply. `"reject"` with `structural: "pass"` rejects only the `import`s. `mx-tsc` reads `package.json#mx.data.imports`. |
-| `syntax` | `SyntaxTable` or `SyntaxModule` | the syntax of this file, for a consumer that builds its own (Mesh passes its module, hooks included). Omitted, the file's nearest `package.json#mx.syntax` applies. A trigger, block tag or filter nothing lowers is a positioned diagnostic (§13.9) |
-| `unknownTags` | `"allow"` (default), `"reject"` | `"allow"` is the open set of decision 131: a tag with no entry in `customTags` is accepted. `"reject"` (131 addendum 3) makes any authored tag, at any depth, whose name has no entry in `customTags` a positioned error at the tag: ``` `<opem>` is not a known tag: it has no contract in `customTags`; did you mean `<open>`? ``` (the hint appears when one declared name is clearly nearest). Reserved names never reach the check (core consumes them first) and `<@name>` attribute tags are governed by the parent's `attributeTags`, not by this option. |
+| `customTags` | `Record<string, CustomTag>` | contract-only custom tags by call name (decisions 130 and 138): required attributes, attribute types, `children`, `parents`, `analyze`. `lowerSource` does **not** scan `tags/` or `package.json`; this map is the whole vocabulary it knows. Contracts are enforced at every depth (see [Writing a dialect package](/custom-tags/dialect-package/)) |
+| `syntax` | `SyntaxTable` or `SyntaxModule` | the syntax of this file, for a dialect that builds its own (Mesh passes its module, hooks included). Omitted, the file's nearest `package.json#mx.syntax` applies. A trigger, block tag or filter nothing lowers is a positioned diagnostic (§13.9) |
+| `tagRules` | `"none"` (default), `"markup"`, `"html"` | the tag rules preset the source parses under (§13.7.3). An option of this function only, never a project or host setting (ruling 209) |
+| `defaultTag` | tag name | what `<#id>` and `<.class>` stand for in place of the built-in `object` (decision 145; see "The unnamed tag" in §4) |
+| `structural` | `"pass"` (default), `"reject"` | `"pass"` keeps the structural constructs (text, `${}`, `<if>`, `<for>`, `<const>`, `import`, `export`, `static`) in the IR. `"reject"` makes each one a positioned error: ``the data tree is static; this file's consumer does not evaluate `<if>` `` (the construct is named). Comments are **never** structural — a `//` line or `<!-- -->` stays in the IR as its `Comment` node under either value (decision 131 addendum 5). A structural hit and a check error are ordered by position |
+| `imports` | `"pass"`, `"reject"` (default: the effective `structural`) | Decides a top-level `import` on its own. `"pass"` with `structural: "reject"` keeps every other structural construct rejected and returns the imports in `ir.imports`; `"reject"` with `structural: "pass"` rejects only the `import`s. Each `Import` carries `code`, `span`, `from` (the unquoted specifier) and `names` (`{ imported, local, kind: "default" \| "named" \| "namespace", span, localSpan?, typeOnly? }`, in written order, empty for `import "x"`), read from the parsed declaration, never from the text. A tag-body `import` is not an import: it parses as body text, so `structural: "reject"` rejects it as text and `imports` does not apply |
+| `unknownTags` | `"allow"` (default), `"reject"` | `"allow"` is the open set of decision 131: a tag with no entry in `customTags` is accepted. `"reject"` (131 addendum 3) makes any authored tag, at any depth, whose name has no entry in `customTags` (and is not the built-in `object`) a positioned error at the tag: ``` `<opem>` is not a known tag: it has no contract in `customTags`; did you mean `<open>`? ``` (the hint appears when one declared name is clearly nearest). Reserved names never reach the check (core consumes them first) and `<@name>` attribute tags are governed by the parent's `attributeTags`. An unknown parent is reported before its children's `parents`/`children` errors, and the errors inside an unknown tag are labelled, never dropped (decision 161) |
 | `warnings` | `MxWarning[]` | a sink for core's warnings, pushed as raised, so those raised before a later error stay in the caller's array |
 
-**Error order under `unknownTags: "reject"`** (decision 131 addendum 3; the
-unknown-tag check runs on a tag before anything inside it, so the first error is
-the root cause). Every independent error is reported, once each, in position
-order; the rules below say which error wins where two compete for one tag or one
-position:
+#### 13.7.2 The returned IR
 
-1. A source that does not parse reports its Marko parse error.
-2. An error core raises while compiling (a reserved name, `<define>`,
-   `<return>`, a `customTags` contract error: attribute shape, closed
-   `children`, `parents`, a tag variable on a contract tag) is reported, **unless**
-   an unknown authored tag opens strictly earlier in the file, in which case the
-   unknown tag is reported. An ancestor always opens earlier, so a typo'd parent
-   (`resourse` holding an `<attributes>`) is reported with its `did you mean`
-   hint, not the contract error of the child under it. A core error at or before
-   the unknown tag's position wins, so a known parent's closed-`children` error
-   positioned at the unknown child itself is the reported one.
-3. When compiling succeeds, the tree is built. The `structural: "reject"` hit,
-   the unknown-tag check and the build rejects (dynamic tag, `<!doctype>`, tag
-   variable, merged shorthand class, unusable tag name) compete **by position in
-   the file**: the earliest wins, wherever it sits in the tree, with attribute
-   tags and children interleaved in document order. At the same position the
-   build reject wins. An unknown tag's own body is never walked, so there is one
-   error per unknown call. A core error does not stop the unknown-tag scan: the
-   unknown tags are listed beside core's errors (decision 162).
-
-#### 13.7.2 The tree
-
-All types are in `@mxlang/data/tree`. Every span is core's `SourceSpan`
+`ir` is core's `Ir` (IR spec) as `SpannedIr`, `Spanned<Ir>`: every `span` is
+required at every depth. A `DelegatedTag` and an `AttributeTag` also carry
+`nameSpan`, and a `DelegatedTag` always has `args` (`[]` without arguments).
+`valueSpan`, `bodySpan` and `paramSpans` stay optional (an atom, a member or a
+default attribute has none). A promised span that is missing is an
+`internal error`, with no IR. Every span is core's `SourceSpan`
 (`{ sourceStart, sourceEnd }`, UTF-16 code units from the file's start, so
-`source.slice(span.sourceStart, span.sourceEnd)` is always the authored text).
+`source.slice(span.sourceStart, span.sourceEnd)` is the authored text).
 
-- **`DataDocument`**: `{ kind: "document", filename, statements, children }`.
-  `statements` holds the `import`/`export`/`static` statements (each
-  `{ kind, code, span }`), sorted by `span`, because core splits them out of the
-  body and loses their order relative to the body. `children` is a `DataNode[]`.
-- **`DataNode`** is one of: `tag`, `text`, `expression`, `comment`, `if`,
-  `for`, `const`. Each carries a `span`.
-- **`DataTag`** (`kind: "tag"`): `name`, `nameSpan`, `span` (the whole tag, body
-  and closing tag included), `attrs`, `args` (`<x(1, 2)>`), `params` (`<x|a, b|>`,
-  as source text), `attrTags` and `children`; and, only on a tag a parent's
-  `children["*"]` claimed (decision 147), `contract?` (the canonical tag whose
-  contract applied) and `groups?` (the pattern's named captures, absent when
-  empty). On such a tag `name` is the authored spelling, not the contract tag.
-  A tag a syntax module's `lowerTrigger` built with `ctx.child` carries
-  `trigger?: { id, span, text }` (§13.9.7); an authored tag has none.
-- **`DataAttrTag`** (`kind: "attr-tag"`): a `<@y>`; the same fields except
-  `args`, with `name` without the `@`. `attrTags` is the tree form of a tag's attribute tags, with
-  `<if>`/`<for>` among them kept (those nodes carry no `span`, unlike the body
-  nodes); they are **not** in `children`, and their
-  interleaving with ordinary children is not kept. Every other node written
-  beside an attribute tag (text, tags, comments) is in `children`, in source
-  order, exactly as it is without attribute tags. A comment written right
-  before an `@tag` is one of them: Marko's parser moves it into the tag's
-  attribute list, and core puts it back among the children.
-- **`DataAttr`**, by `kind`:
+- **A copy.** The IR is a fresh copy on every call; core's own lowered IR is
+  never handed out (IR spec E21).
+- **A tag's span ends at the tag.** A `DelegatedTag`'s and an `AttributeTag`'s
+  span is trimmed of the trailing line terminator a concise tag's measure
+  includes (`\n` or `\r\n`); a `<tag/>` span is unchanged.
+- **Every authored tag is a `DelegatedTag`.** Core's entry declarations
+  delegate every name core does not own (decision 132). A wildcard child
+  (decision 147) is named by its canonical tag in `tag.name`, with the authored
+  spelling in `tag.alias` (`{ authored, span, groups }`). A tag a syntax module's
+  `lowerTrigger` built carries `tag.trigger` (`{ id, span, text }`, §13.9.7).
+- **Attributes** are core's `Attr` kinds: `static` (a string literal, an atom, a
+  shorthand), `boolean`, `dynamic` (any expression, a method value included,
+  whose `Expr.bodySpan` marks it), `bound` (`v:=x`) and `spread`. Only a string
+  literal is `static`; nothing is evaluated.
+- **`IR_VERSION`**, exported from `@mxlang/core`, is the version of the IR's
+  shape: it goes up by one with every change a reader can observe (a node kind
+  or field added, removed, renamed or given a new meaning). It is `1`.
 
-  | `kind` | Source | Fields |
-  |---|---|---|
-  | `string` | `type="string"`, `<x="post">`, shorthand `#id`, `.cls` | `name`, `value`, `valueSpan`, `nameSpan` (absent for shorthand), `args?` |
-  | `boolean` | `required`, `a(b)` | `name`, `nameSpan`, `args?: DataExpr[]` |
-  | `expression` | `n=1`, `values=[…]`, `change=(x) => …`, `v:=x`, `onClick=fn` | `name`, `value: DataExpr`, `nameSpan`, `bound?: true`, `refinement?: DataExpr` (the `fn` of a bound `v:fn:=q`), `args?` |
-  | `spread` | `...rest` | `value: DataExpr` |
-  | `member` | a whole-value member a syntax module produced: `sort asc &dueOn` (§13.9.6) | `name`, `value` (the member's name, without its sigil), `span` (the token, sigil included); no `nameSpan` |
+#### 13.7.3 Tag rules presets
 
-  `args` is on every kind but `spread` (the `atom` and `member` variants too).
-  It holds the arguments written after the name (`a(b, c)`), built like
-  `DataTag.args`, and is present only when the parentheses were written:
-  `a()` gives `[]`, and an attribute without parentheses has no `args` key. A
-  method shorthand (`isOverdue() { … }`) is a function-expression `value`, never
-  `args`.
+A preset is the tag table entries the source parses under:
 
-  Only a string literal is `string`; `n=1` and `required=true` are `expression`
-  (the tree does not evaluate). A default attribute (`<resource="post">`) is a
-  `string` attribute named `value` whose `nameSpan` is zero-width at the `=`.
-  Attributes keep authored order, then the shorthand-synthesized `class` and
-  `id`. Duplicates follow decision 135: the last occurrence is kept and the
-  dropped one is a warning (`duplicate attribute \`b\`: the later one at 1:8 wins, so this one is dropped`).
-  Event attributes stay plain expression attributes (`onClick`).
-- **`DataExpr`**: `{ code, shape, span, node }`. `shape` is `"object"`,
-  `"array"`, `"string"` or `"other"`. `node` is Marko's own Babel node (offsets at
-  `node.loc.{start,end}.index`), or `null` for a value MX synthesized with no
-  authored expression (read `code` and `span` there). **`code` is the printed form, not the authored
-  text**: a method shorthand `value({ post }) { … }` has `code` `function ({ post }) { … }`. Slice `span` for what the author wrote.
-
-**Serialized form.** `SerializedDataDocument` is `DataDocument` with every `node`
-removed (`code`, `shape` and every `span` stay), so it is plain data. The data
-target's `compileModule` emits it as `export default <literal> as const`, a
-module that imports nothing; it takes `customTags` from its options and uses the
-defaults for `structural` and `unknownTags`. A consumer that needs the Babel
-nodes calls `parseData`.
-
-#### 13.7.3 What each construct means in data
-
-| Construct | In the tree | Notes |
+| Preset | Native elements | Language tags |
 |---|---|---|
-| Tags, attributes, attribute tags | `tag`, `attrs`, `attrTags` | every name core does not own is a data tag (it is *delegated*, decision 132): no `unknown tag` error by default (`unknownTags: "allow"`) |
-| Text | `text`: `value`, `span` | `value` is Marko-normalized; `span` slices the text as authored, so they differ on collapsed whitespace. A same-line one-space body (`<a> </a>`) is text; a newline-plus-indent run is not (decision 141) |
-| `${x}`, `$!{x}` | `expression`: `value`, `escaped`, `span` | `span` covers the delimiters, `value.span` the expression |
-| `<if>`, `<else-if>`, `<else>` | `if`: `branches[]` of `{ test \| null, children, span }` | `test: null` is `<else>` |
-| `<for>` | `for`: `head`, `children` | `head.source` is `of`, `in` or `range`; plus `params`, `paramSpans`, `key` |
-| `<const/n=expr>` | `const`: `name`, `init` | |
-| Comments | `comment`: `value`, `html` | `html` is true for `<!-- -->`, false for `//` |
-| `import`, `export`, `static` | `statements` | statement text, never resolved or evaluated |
-| Tag params, args | `params` (text), `args` | |
-| `<define>` and calls to it | **error**: ``` `<define>` is a render-time macro: the data tree is static and cannot expand it; inline the content at each use ``` | a macro cannot be expanded by a static tree |
-| `<return>` | **error**: ``` `<return>` needs the evaluated mode: the data tree is static and has no value to return ``` | |
-| Tag variable `/v` | **error**: ``tag variable `/v` on `<a>`: the data tree is static; a binding without evaluation means nothing`` | |
-| Dynamic tag `<${x}>` | **error**: ``a dynamic tag (`<${expr}>`) has no name; the data tree is static and needs one`` | |
-| Call of an imported component (`<Foo/>` with `import Foo`) | **error**: ``` `<Foo>` calls a template tag; a data file cannot call a template tag ``` | `parseData` does not scan, so a lowercase tag is a data tag even when a `tags/` file of that name exists. If `customTags` holds an entry **with a template** (a map from `getCustomTags` does for a `tags/` file), the call is the same error |
-| `<!doctype>` | **error**: ``` `<!doctype>` means nothing in a data file; the data tree describes tags and data, not a page ``` | |
-| `<![CDATA[…]]>`, `<?xml …?>` | **error**, from core on every target (decision 139) | |
-| Attribute methods `change(ctx) { … }` | accepted, as an `expression` attribute | the Ash-style fixture uses `value({ post }) { … }` |
-| Attribute modifiers `class:active=c` | **error** (core, standalone template) | |
+| `none` | none | the module statements (`import`, `static`, `export`), plus `<const>` and `<return>` open-tag-only |
+| `markup` | the web elements (`WEB_ELEMENTS`, decision 197) with their parse rules | core's statement tags (`import`, `static`, `export`, `client`, `server`, `class`), plus `<const>` and `<return>` open-tag-only |
+| `html` | the web elements with their parse rules | every entry of core's taglib: the html target's table |
 
-A tag or attribute-tag **name** is not restricted to an identifier:
-namespaced (`svg:rect`) and non-ASCII names pass through. The only refused
-names are ones that are not names: a leading `$` or `!`, or a `{`, `}` or
-whitespace (a `$!{x}` line or a `$const x = 1` scriptlet that Marko parses as a
-tag; MX has no scriptlets, decision 54). A shorthand `class` together with an
-authored `class` on one tag (`<x.a class="b"/>`) is one positioned error, because
-core merges them into a class with no source span.
+Under `none` the 19 HTML parse rules are off (void `openTagOnly`: `area base br col embed hr img input link meta param source track wbr`;
+raw `text` bodies: `script style textarea title`; `preserveWhitespace`:
+`pre script style textarea`), so a tag named `source`, `input`, `title`, `script`
+or `pre` parses like any other tag and may have child tags, and the host-owned
+names (`let`, `id`, `log`, `debug`, `effect`, `class`, `await`, …) are ordinary
+tag names. The cost: a tag-like `<name` inside a `script`, `style`, `textarea` or
+`title` body parses as a tag, not text. This is the one place a `none` file is
+not a Marko file: Marko rejects `<source><input/></source>`, `none` accepts it.
 
-**Reserved names.** No data tag may be named `if`, `else`, `else-if`, `for`,
+`<const>` and `<return>` are open-tag-only under every preset: a `<const/y=1>`
+not self-closed ends at its opening tag, a closing `</const>` is a parse error,
+and a child written inside one is an error, never dropped.
+
+An unknown preset name is an error diagnostic, not a throw.
+
+#### 13.7.4 What is rejected
+
+| Construct | Error |
+|---|---|
+| `<define>` and calls to it | ``` `<define>` is a render-time macro: the data tree is static and cannot expand it; inline the content at each use ``` |
+| `<return>` | ``` `<return>` needs the evaluated mode: the data tree is static and has no value to return ``` |
+| Tag variable `/v` | ``tag variable `/v` on `<a>`: the data tree is static; a binding without evaluation means nothing`` |
+| Dynamic tag `<${x}>` | ``a dynamic tag (`<${expr}>`) has no name; the data tree is static and needs one`` |
+| Call of a tag with a template (`<Foo/>` with `import Foo`, or a `customTags` entry with a template) | ``` `<Foo>` calls a template tag; a data file cannot call a template tag ``` |
+| `<!doctype>` | ``` `<!doctype>` means nothing in a data file; the data tree describes tags and data, not a page ``` |
+| `<![CDATA[…]]>`, `<?xml …?>` | from core on every target (decision 139) |
+| Attribute modifiers `class:active=c` | from core (standalone template) |
+
+The messages keep `parseData`'s text byte for byte, "data" wording included
+(decision 204: a dialect that matched them keeps working); a wording change
+waits for the dialect API.
+
+A tag name is not restricted to an identifier: namespaced (`svg:rect`) and
+non-ASCII names pass through. The only refused names are ones that are not
+names: a leading `$` or `!`, or a `{`, `}` or whitespace (a `$!{x}` line or a
+`$const x = 1` scriptlet that parses as a tag; MX has no scriptlets, decision
+54). A shorthand `class` together with an authored `class` on one tag
+(`<x.a class="b"/>`) is one positioned error, because core merges them into a
+class with no source span.
+
+**Reserved names.** No dialect tag may be named `if`, `else`, `else-if`, `for`,
 `const`, `define`, `return`, `import`, `export`, `static` or **`try`**: core
-consumes these before a target sees a tag (`try` is core-owned, `else` and
-`else-if` are consumed by the `<if>` walk). `if`, `for`, `const`, `import`,
-`export` and `static` always parse as the structural construct. `else`,
-`else-if` and `try` outside such a construct fail with ``` `<try>` cannot name a data tag: it is reserved — core consumes the structural names (…) and `<try>` before a target sees them ```. The host-owned names (`let`, `id`, `log`, `debug`, `effect`, `class`, `await`, …)
-are ordinary data tag names.
-
-**Marko's HTML parse rules are off.** Marko gives 19 tag names an HTML parse rule
-(void `openTagOnly`: `area base br col embed hr img input link meta param source track wbr`; raw `text` bodies: `script style textarea title`;
-`preserveWhitespace`: `pre script style textarea`). The data taglib sets each of
-those three options to `false` on every name the element table gives one, so a data
-tag named `source`, `input`, `title`, `script` or `pre` parses like any other tag
-and may have child tags. The list is derived from `@mxlang/web-elements`'
-element table (`WEB_ELEMENTS`, decision 197), not hand-written, and a test pins the 19 names. The cost: a tag-like `<name` inside
-a `script`, `style`, `textarea` or `title` body parses as a tag, not text; a data
-file writes text through `${"…"}` or an attribute. This is the one place a data
-file is not a Marko file: Marko rejects `<source><input/></source>`, data
-accepts it.
-
-#### 13.7.4 `mx-tsc` on a data package
-
-**Decision 131, addendum 4.** `mx-tsc` run on a project directory whose own
-`package.json` says `mx.target: "tree"` does not build a TypeScript program.
-Rule-5 inference from an `@mxlang/data` dependency does **not** switch it: such
-a package, a monorepo root, and a directory with no manifest of its own keep
-their ordinary `tsc` run and the staged error for their data files, so a
-TypeScript error is never swallowed by an inference. With no tsconfig it parses
-every `.mx` file under the directory that the policy assigns to `data`, in
-full-path order (skipping `node_modules` and dot directories; a nested package
-that resolves to another target is not walked), with `parseData` and the
-package's own tag map (`getCustomTags(file, { host: null })`: `tags/` sidecars
-and `mx.contracts`). The command is `mx-tsc` in the package directory, or
-`mx-tsc -p <dir>`; `-p` also accepts a tsconfig path (only its directory is
-used), and `--pretty` and `--noEmit` are accepted and ignored. Any other
-argument (`-b`, `-w`, `--version`, a file list) is an ordinary `tsc` run.
-
-Each diagnostic prints as `file(line,column): error TS80001: message` (a
-warning is `TS80002`): the compile diagnostic a host `.mx` file gets, so one
-search finds every `.mx` problem. Positions are 1-based, converted from the
-diagnostic's 1-based `line` and 0-based `column`. A problem in the
-configuring `package.json` is `TS80003` at its position: the resolution's own
-policy diagnostics (a mismatch, an unknown target or host) with their own
-severity, a scan warning, an invalid `mx.data` value (checked even when there
-is no `.mx` file). A discovery failure (a missing or invalid `mx.contracts`
-module) is an error at the position it carries, and independent packages are
-still checked; it is never an empty tag map with a green result. A broken or
-looping `.mx` link and an unreadable directory are `TS80001` errors naming the
-path. The exit code is 1 when any diagnostic is an error
-and 0 otherwise; a clean package prints nothing.
-
-`package.json#mx.data` is `{ "structural"?: "pass" | "reject", "unknownTags"?:
-"allow" | "reject", "defaultTag"?: string }`. The first two default to
-`"reject"` here; `parseData`'s own defaults stay `"pass"` and `"allow"`, and only
-`mx-tsc` reads the key. `defaultTag` names what `<#id>` and `<.class>` stand for
-(default `object`; see "The unnamed tag" in §4). An invalid value is an error at
-the value and the strict default applies (for `defaultTag`, the built-in
-`object`). The
-language server, the TypeScript plugin and Vite keep the staged error of §13.5
-until `data-target-tooling-dispatch` lands.
-
-**A host built on data (lead ruling 2026-10-05 21:26, follow-up to #355).** The
-check keys on the project's *resolved base target*, never on its `mx.target`
-string. A project that selects a third-party host with `mx.host` gets the same
-check when the host's descriptor declares `builtOn: "tree"` (directly or through
-a chain; see "Base target" in §13.5). It adds to the host: `parseData` runs with
-the strict defaults and the `mx.data.*` keys, and the host's own compile runs on
-the same file with the same tags and the same unnamed tag, so its rules still
-fire (an error both report prints once). The unnamed tag is the registry's
-shared answer, the one Vite, the language server and the TypeScript plugin
-compile with (§4's ladder: `mx.<host target>.defaultTag`, else
-`mx.data.defaultTag`, then the host's `defaultTag`, the descriptor's, and data's
-`object`), so `mx-tsc` checks the tree the build compiles. A host that copies
-data's declarations without `builtOn` gets none of this.
+consumes these first. `else`, `else-if` and `try` outside their construct fail
+with ``` `<try>` cannot name a data tag: it is reserved — core consumes the structural names (…) and `<try>` before a target sees them ```.
 
 ### Host selection
 
@@ -4043,7 +3915,7 @@ precedent):
 | A `{ call }` trigger in an inline object | `` `mx.syntax.<list>[<i>]` (trigger "<id>"): a `{ call }` node is lowered by a syntax module's `lowerTrigger`, and an inline `mx.syntax` is a table only; move the table into a module and name it (`"syntax": "./syntax.ts"`) `` |
 
 **The `syntax` option.** `compileSource` (`HostOptions.syntax`), `parseFragment`
-and `parseData` (`ParseDataOptions.syntax`) take an explicit table or syntax
+and `lowerSource` (`LowerSourceOptions.syntax`) take an explicit table or syntax
 module, which wins over the manifest. It is validated with the manifest's rules as
 the caller's error, a `TranslateError` at the start of the file naming
 `syntax.<field>`. A non-empty `tagTypes` is refused there too. `null` is not
@@ -4232,16 +4104,16 @@ type: a kind with an atom slot and a member slot declares two slots.
 &d`) is a positioned error, not a duplicate-attribute warning: ``one member per
 slot: `sort` already holds `c`, so this member cannot also set it``.
 
-In the data tree (§13.7.2) a whole-value member is a `DataAttr` of `kind: "member"`:
-`{ name, value, nameSpan?, span }`, where `value` is the member's name without its
-sigil and `nameSpan` is absent because the name is not written. A member inside an
-expression is not that kind.
+In the IR (and so in `lowerSource`'s, §13.7.2) a whole-value member is a `static`
+attribute carrying `member: { kind: "member", name, span }`, where `name` is the
+member's name without its sigil and `span` covers the token, sigil included. A
+member inside an expression is not that kind: its node carries `extra.mxMember`.
 
 #### 13.9.7 Provenance of a built child: `trigger`
 
 A tag a `lowerTrigger` builds with `ctx.child` carries `trigger: { id, span, text
-}` in the IR (`TagTrigger`, on its `Element`, `Component` or `DelegatedTag`) and, in the data tree,
-`DataTag.trigger`: the row's `id`, the file-absolute span of the trigger's
+}` in the IR (`TagTrigger`, on its `Element`, `Component` or `DelegatedTag`, and so
+in `lowerSource`'s IR): the row's `id`, the file-absolute span of the trigger's
 authored text, and that text. An authored tag has none, so a consumer tells
 `&title` from an authored `<member name="title"/>` without comparing spans. Core
 names no trigger.
@@ -4254,7 +4126,7 @@ hook API only, importing types only.
 
 ```ts
 import memberSyntax from "@mxlang/core/syntax/member";
-parseData(source, file, { syntax: memberSyntax });
+lowerSource(source, file, { syntax: memberSyntax });
 ```
 
 Its row is `{ id: "member", chars: "&", match: <an identifier after &>, standIn:

@@ -140,7 +140,7 @@ decision entry that changes the language names the spec section it updates.
 
 ## Per-package instructions
 
-Packages and examples with their own `AGENTS.md` (each has a sibling `CLAUDE.md` symlink). `packages/hosts/` holds the hosts; `packages/targets/` holds the hostless targets (decision 132): `@mxlang/target-html` and `@mxlang/data`:
+Packages and examples with their own `AGENTS.md` (each has a sibling `CLAUDE.md` symlink). `packages/hosts/` holds the hosts; `packages/targets/` holds the hostless targets (decision 132): `@mxlang/target-html`:
 
 | Path | Covers |
 |---|---|
@@ -150,7 +150,6 @@ Packages and examples with their own `AGENTS.md` (each has a sibling `CLAUDE.md`
 | `packages/parse-differential/AGENTS.md` | `@mxlang/parse-differential`: private test package of the parser port, the tree differential against today's Marko tree |
 | `packages/core/AGENTS.md` | `@mxlang/core`: IR, lowering, custom tags, `<try>`, tag discovery |
 | `packages/web-elements/AGENTS.md` | `@mxlang/web-elements`: the element table and its Marko pin |
-| `packages/targets/data/AGENTS.md` | `@mxlang/data`: the hostless tree target (package `@mxlang/data`); static tree, `parseData` |
 | `packages/targets/html/AGENTS.md` | `@mxlang/target-html`: string target, policy table, Bun loader, `.mx` import typing |
 | `packages/hosts/solid/AGENTS.md` | `@mxlang/host-solid` |
 | `packages/hosts/preact/AGENTS.md` | `@mxlang/host-preact` |
