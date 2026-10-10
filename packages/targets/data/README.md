@@ -14,7 +14,7 @@ matching version.
 There is no host: the target is registered as `tree` (decision 187) and is hostless (decision 132).
 
 ```sh
-bun add @mxlang/core@alpha @mxlang/data@alpha
+bun add @mxlang/core @mxlang/data
 ```
 
 ## Usage
