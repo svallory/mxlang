@@ -101,7 +101,7 @@ describe("loadTargetDescriptor: fixture packages", () => {
     const error = loadError("./version/index.ts", FIXTURES);
     expect(error.code).toBe("invalid-descriptor");
     expect(error.message).toBe(
-      '"./version/index.ts" targets descriptor version 1; this mx supports 0.',
+      '"./version/index.ts" targets descriptor version 1; this compiler supports descriptor version 0.',
     );
   });
 

@@ -70,7 +70,7 @@ describe("a stock parser", () => {
       normalizeMxSyntax({ lineTriggers: [MEMBER] }, manifest),
     );
     expect(error.message).toBe(
-      "`mx.syntax`: a syntax table other than the `.mx` default row needs the template parser; the installed `htmljs-parser` has no syntax table",
+      "`mx.syntax`: needs a template parser with the syntax-table API; the installed `htmljs-parser` has none",
     );
     expect(error.file).toBe(manifest);
     expect([error.line, error.column]).toEqual([3, 10]);
@@ -80,7 +80,9 @@ describe("a stock parser", () => {
     const page = join(dir, "page.mx");
     const table = Object.freeze({ ...defaultSyntax(), lineTriggers: [MEMBER] });
     const viaOption = caught(() => explicitSyntax(table, page));
-    expect(viaOption.message).toContain("the `syntax` option: a syntax table");
+    expect(viaOption.message).toContain(
+      "the `syntax` option: needs a template parser",
+    );
     expect([viaOption.file, viaOption.line, viaOption.column]).toEqual([
       page,
       1,

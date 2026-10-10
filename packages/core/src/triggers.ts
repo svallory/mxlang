@@ -46,7 +46,6 @@ import type {
   TriggerChild,
   TriggerContext,
   TriggerExpression,
-  TriggerExpressionNode,
   TriggerFailOptions,
   TriggerMethod,
   TriggerPosition,
@@ -373,7 +372,7 @@ function callHook(
     valueForm,
     use,
     operator,
-    expression(node: TriggerExpressionNode): TriggerExpression {
+    expression(node: object): TriggerExpression {
       const problem = notAnExpression(node);
       if (problem) {
         fail(

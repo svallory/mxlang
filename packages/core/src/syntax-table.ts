@@ -241,18 +241,6 @@ export type TriggerValueForm =
   | null;
 
 /**
- * What `ctx.expression` accepts: the runtime check (`notAnExpression`)
- * insists on a non-array object with a string `type`, so this interface is
- * the parameter's real promise.
- */
-export interface TriggerExpressionNode {
-  /** The Babel node type (`StringLiteral`, `MemberExpression`, …). */
-  readonly type: string;
-  /** The node's other Babel fields; the runtime check reads only `type`. */
-  [key: string]: unknown;
-}
-
-/**
  * What `lowerTrigger` is handed (decision 182 addendum 5): where the trigger
  * sits, its lowered `=value`, and the three constructors, the only way a
  * module builds anything. Each position takes the matching result:
@@ -280,7 +268,7 @@ export interface TriggerContext {
   readonly use: TriggerUse;
   /** The operator when `use` is `"unary"` (`-`, `!`, `typeof`, …); `null` otherwise. @unstable */
   readonly operator: string | null;
-  expression(node: TriggerExpressionNode): TriggerExpression;
+  expression(node: object): TriggerExpression;
   attribute(
     name: string | null,
     value: TriggerAttributeValue,
@@ -474,7 +462,7 @@ function syntaxParser() {
 
 /** Why a table cannot be honoured: the installed parser has no syntax table. */
 const NEEDS_MX_PARSER =
-  "a syntax table other than the `.mx` default row needs the template parser; the installed `htmljs-parser` has no syntax table";
+  "needs a template parser with the syntax-table API; the installed `htmljs-parser` has none";
 
 function deepFreeze<T>(value: T): T {
   if (value && typeof value === "object" && !Object.isFrozen(value)) {

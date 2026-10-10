@@ -3005,7 +3005,7 @@ function refuseUnsupportedImport(node: Node): void {
   }
   if (isTypeofImport(declaration)) {
     fail(
-      "`import typeof` is Flow syntax; the template language is TypeScript. Use `import type` for an import that binds no value",
+      "`import typeof` is Flow syntax; imports here are TypeScript. Use `import type` for an import that binds no value",
       node,
     );
   }

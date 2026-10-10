@@ -239,7 +239,7 @@ describe("failures are positioned errors with no fallback (§4.3, OQ2 c)", () =>
       code: "target-invalid-descriptor",
       severity: "error",
       message:
-        'mx.target "@fake/mx-version" targets descriptor version 1; this mx supports 0.',
+        'mx.target "@fake/mx-version" targets descriptor version 1; this compiler supports descriptor version 0.',
     });
   });
 

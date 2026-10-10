@@ -690,7 +690,7 @@ function checkNearSugar(ctx: Ctx, attr: Node): void {
   if (attr.default === true && attr.name === "value" && attr.modifier === "") {
     failAt(
       ctx,
-      "`:` is name sugar and needs a name (`:email`); write `value:` for the `value` attribute",
+      "`:` is name sugar and needs a name (`:email`); for an attribute named `value:`, write `value:`",
       start,
     );
   }

@@ -17,6 +17,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { coreBabel } from "./babel.ts";
 import { compileSource } from "./compile.ts";
 import { newCtx, TranslateError } from "./core.ts";
 import { parseFragment } from "./fragment.ts";
@@ -28,7 +29,7 @@ import {
   resolveSyntaxOf,
   type SyntaxModule,
   type Trigger,
-  type TriggerExpressionNode,
+  type TriggerContext,
 } from "./syntax-table.ts";
 import { lookup as targets } from "./test-targets.ts";
 
@@ -446,8 +447,8 @@ describe("a hook's result is checked", () => {
       const bad = moduleWith(rows, {
         lowerTrigger: (_id, _text, _span, ctx) =>
           // SAFETY: the row's point is a node the runtime must refuse; the
-          // assertion deliberately bypasses the interface.
-          ctx.expression(node as unknown as TriggerExpressionNode),
+          // assertion deliberately bypasses the parameter type.
+          ctx.expression(node as unknown as object),
       });
       const error = caught(() => irOf("rule x=&a\n", undefined, bad));
       expect(error.message).toBe(
@@ -456,6 +457,16 @@ describe("a hook's result is checked", () => {
       expect([error.line, error.column]).toEqual([1, 7]);
     },
   );
+
+  it("a Babel-typed node satisfies ctx.expression's parameter (type-level)", () => {
+    // Review 485 r3: the parameter must keep accepting Babel's own node
+    // types — a shaped parameter with an index signature rejected
+    // `t.StringLiteral` (interfaces carry no index signature). The call
+    // never runs; the assertion is the type check itself, enforced by tsc.
+    const types = coreBabel().types;
+    const ctx = null as unknown as TriggerContext;
+    expect(() => ctx.expression(types.stringLiteral("x"))).toThrow();
+  });
 
   it("`ctx.expression` accepts a node that leaves out a field Babel defaults", () => {
     const lean = moduleWith(rows, {

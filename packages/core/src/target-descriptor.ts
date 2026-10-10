@@ -663,7 +663,7 @@ export function validateDescriptor(value: unknown): TargetDescriptor {
     if (version !== 0) {
       throw new TargetDescriptorError(
         "descriptorVersion",
-        `descriptor version ${version}; this mx supports 0`,
+        `descriptor version ${version}; this compiler supports descriptor version 0`,
         "version",
         version,
       );

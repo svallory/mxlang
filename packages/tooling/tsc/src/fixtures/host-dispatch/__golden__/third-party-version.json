@@ -9,7 +9,7 @@
           {
             "severity": 1,
             "source": "mxlang",
-            "message": "<root>/third-party-version/package.json:3:15: mx.target \"./target.cjs\" targets descriptor version 1; this mx supports 0.",
+            "message": "<root>/third-party-version/package.json:3:15: mx.target \"./target.cjs\" targets descriptor version 1; this compiler supports descriptor version 0.",
             "range": {
               "start": {
                 "line": 0,
@@ -35,7 +35,7 @@
                     }
                   }
                 },
-                "message": "mx.target \"./target.cjs\" targets descriptor version 1; this mx supports 0."
+                "message": "mx.target \"./target.cjs\" targets descriptor version 1; this compiler supports descriptor version 0."
               }
             ]
           }
@@ -47,7 +47,7 @@
               {
                 "severity": 1,
                 "source": "mxlang",
-                "message": "mx.target \"./target.cjs\" targets descriptor version 1; this mx supports 0.",
+                "message": "mx.target \"./target.cjs\" targets descriptor version 1; this compiler supports descriptor version 0.",
                 "range": {
                   "start": {
                     "line": 2,
@@ -83,7 +83,7 @@
             "severity": "error",
             "value": "./target.cjs",
             "file": "<root>/third-party-version/package.json",
-            "message": "mx.target \"./target.cjs\" targets descriptor version 1; this mx supports 0.",
+            "message": "mx.target \"./target.cjs\" targets descriptor version 1; this compiler supports descriptor version 0.",
             "line": 3,
             "column": 14,
             "length": 14
@@ -94,7 +94,7 @@
       "vite": {
         "threw": {
           "name": "Error",
-          "message": "<root>/third-party-version/package.json:3:15: mx.target \"./target.cjs\" targets descriptor version 1; this mx supports 0.",
+          "message": "<root>/third-party-version/package.json:3:15: mx.target \"./target.cjs\" targets descriptor version 1; this compiler supports descriptor version 0.",
           "id": "<root>/third-party-version/package.json",
           "loc": {
             "file": "<root>/third-party-version/package.json",
@@ -109,6 +109,6 @@
   },
   "mxTsc": [
     "<root>/third-party-version/page.mx(1,1): error TS80001: target not loaded: see <root>/third-party-version/package.json(3,15)",
-    "<root>/third-party-version/package.json(3,15): error TS80003: mx.target \"./target.cjs\" targets descriptor version 1; this mx supports 0."
+    "<root>/third-party-version/package.json(3,15): error TS80003: mx.target \"./target.cjs\" targets descriptor version 1; this compiler supports descriptor version 0."
   ]
 }

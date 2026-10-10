@@ -365,7 +365,7 @@ export function loadTargetDescriptor(
     delete req.cache[resolved];
     const message =
       cause.kind === "version"
-        ? `"${spec}" targets descriptor version ${cause.found}; this mx supports 0.`
+        ? `"${spec}" targets descriptor version ${cause.found}; this compiler supports descriptor version 0.`
         : `"${spec}" must export a target descriptor (default export or "mxTarget"): ${cause.message}. See the TargetDescriptor contract (unstable).`;
     throw new TargetLoadError("invalid-descriptor", message, {
       spec,

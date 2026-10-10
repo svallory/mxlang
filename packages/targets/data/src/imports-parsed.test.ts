@@ -267,7 +267,7 @@ describe("an import that is not one ES import declaration", () => {
   const NOT_ES =
     'an `import` statement must be one ES import declaration (`import … from "…"`); `import x = …` and several statements in one `import` are not supported';
   const FLOW =
-    "`import typeof` is Flow syntax; the template language is TypeScript. Use `import type` for an import that binds no value";
+    "`import typeof` is Flow syntax; imports here are TypeScript. Use `import type` for an import that binds no value";
 
   it.each([
     ["import-equals", `import x = M.N\n<x/>\n`, NOT_ES, 1],
