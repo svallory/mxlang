@@ -4731,7 +4731,7 @@ custom-tags build spec is also on the site at `/design-notes/custom-tags/`.
 - [`/design-notes/custom-tags/`](https://mx.saulo.tech/design-notes/custom-tags/) — the custom-tags feature spec
 - `notes/solidmx-spec.md` — Solid (note §5.1's `<if=cond|u|>` is wrong; see §5.2)
 - `packages/core/src/{lower,core,custom-tags,builtin-tags,template-tag,scan,ir}.ts`
-- `packages/core/src/{syntax-table,triggers}.ts`, `packages/parser/src/template/syntax.ts` — the syntax table (§13.9, decision 182 and addenda)
+- `packages/core/src/{syntax-table,triggers}.ts`, `packages/parser/src/template/syntax.ts` — the syntax table (§13.9)
 - `packages/hosts/*/README.md` and their emitters
 - `apps/docs/docs/language/*.md` — six user-facing pages
 - htmljs-parser `src/states/CONCISE_HTML_CONTENT.ts` — concise-mode line rules
