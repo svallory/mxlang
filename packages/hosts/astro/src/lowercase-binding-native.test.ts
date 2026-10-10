@@ -17,4 +17,22 @@ describe("lowercase tag with a same-named binding in scope", () => {
     expect(JSON.stringify(out)).toContain('<span title=\\"search\\"></span>');
     expect(warnings).toEqual([]);
   });
+
+  it("a fence value import that is no element is Marko's local-variable error, on this host too", () => {
+    let error: unknown;
+    try {
+      lowerAstroMx(
+        `---\nimport layout from "./layout.ts"\n---\n<layout/>\n`,
+        "Test.astro.mx",
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toMatchObject({
+      message:
+        "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${layout}/>` or rename to `Layout`.",
+      line: 4,
+      column: 1,
+    });
+  });
 });

@@ -2715,6 +2715,20 @@ function lowercaseBindingFix(
   return `${rename(pascal)} ${or} ${dynamic}`;
 }
 
+/**
+ * Marko's own failure for a lowercase tag naming a file-local binding, moved
+ * into core verbatim (measured on `@marko/compiler` 5.42.11 / `marko` 6.4.4,
+ * the stock parser: identical text and position — the tag name — for a tag
+ * import, a `.ts` value import and a `static const` local alike). A local
+ * variable is called as a tag only by a dynamic tag or its PascalCase name,
+ * whatever the binding imports: the rule is about name resolution, not about
+ * what kind of value is bound. Marko capitalizes the first character
+ * whatever it is, so `_row`'s rename offer reads `_row`; kept verbatim.
+ */
+function localVariableTagMessage(name: string): string {
+  return `Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use \`<\${${name}}/>\` or rename to \`${name[0]?.toUpperCase()}${name.slice(1)}\`.`;
+}
+
 // HTML elements no native table lists (`@mxlang/web-elements` follows
 // Marko's element taglibs, which have no `<slot>`), native in a region and a
 // whole file alike.
@@ -4291,31 +4305,22 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     !/^[A-Z]/.test(name) &&
     !registeredTag &&
     (ctx.defines.has(name) || ctx.imports.has(name));
-  // The diagnostic fires only for a binding that can be a tag: an in-scope
-  // `<define>`, or an import of a tag module (`.mx`, `.marko`). A value import
-  // (Angular's `input`, any `.ts` helper) is native and silent.
+  // The *warning* further below fires only for a binding that can be a tag:
+  // an in-scope `<define>`, or an import of a tag module (`.mx`, `.marko`).
   const tagBinding =
     lowercaseBinding &&
     (ctx.bindingSites.get(name)?.kind === "defined" ||
       isTagModuleImport(ctx, name));
-  if (tagBinding && !isNativeElementName(ctx, name)) {
-    const site = ctx.bindingSites.get(name);
-    const from = ctx.importSpecifiers.get(name);
-    const defined = site?.kind === "defined";
-    const bound = defined
-      ? `\`${name}\` is defined at ${site.line}:${site.column + 1}`
-      : `\`${name}\` is imported from ${from}`;
-    const fix = lowercaseBindingFix(
-      name,
-      (pascal) =>
-        `Write \`<${pascal}>\` (rename the ${defined ? "define" : "import"})`,
-      "or",
-      "/",
-    );
-    fail(
-      `\`<${name}>\` is not a tag here: ${bound}, and a lowercase tag never calls a binding. ${fix}`,
-      node,
-    );
+  // Marko's own rule, in Marko's own words, for every file-local binding
+  // alike: a lowercase tag never calls a local variable, so one that is
+  // neither a native element nor a registered tag nor a host claim (all
+  // returned above) is Marko's positioned error, at the tag name, whatever
+  // the binding imports - a tag module, a `.ts` helper, a named import.
+  // Before this was core's, only the html host rejected a value import
+  // (through `rejectComponentTag`); the JSX hosts and Astro emitted a literal
+  // lowercase element instead, silently.
+  if (lowercaseBinding && !isNativeElementName(ctx, name)) {
+    fail(localVariableTagMessage(name), node.name);
   }
   // A registered taglib tag called `row` is still `row` when a binding of that
   // name is in scope (addendum 1): call the module the host names for the
@@ -4446,12 +4451,6 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // the silent-failure mode ADR 0001 names: a core tag the host has no
   // lowering for must be an error, never a literal element.
   if (!ctx.declarations.isElement(name, ctx)) {
-    // A lowercase tag naming an in-scope binding that is no element keeps the
-    // host's own wording for it (Marko: "Local variables must be in a dynamic
-    // tag unless they are PascalCase").
-    if (lowercaseBinding) {
-      ctx.declarations.rejectComponentTag?.(name, markoViewOf(ctx, node), ctx);
-    }
     // The host's own wording first: a Marko-parity target reports Marko's
     // failure for an unresolved custom tag, which is what its users see and
     // what the fixtures assert. The message below is the fallback.

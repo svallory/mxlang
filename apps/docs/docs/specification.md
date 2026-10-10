@@ -601,21 +601,24 @@ lowercase (the exact complement of Marko's `/^[A-Z]/` rule, so `_x` and `$x`
 count as lowercase), or through a dynamic tag (`<${row}>`). `import { input }
 from "@angular/core"` therefore never turns `<input>` into a call of that
 import. The check runs in core, once, before any host's `isComponent` or
-unknown-tag path, and treats a lowercase tag `<x>` whose name equals a binding
-that **can be a tag** (a `<define>` in scope, or a default import whose
-specifier is a tag module, `.mx`) like this; any other import (a
-value import, or a named import from a tag module) never triggers it and `<x>`
-stays a native element, silently:
+unknown-tag path, and applies to a lowercase tag `<x>` whose name equals a
+**file-local binding of any kind** — a `<define>` in scope, a default or named
+import, a tag module or a `.ts` value — exactly Marko's own rule for a local
+variable (measured on the stock parser: identical for a tag import, a value
+import and a `static const` local). A *native* name is exempt: `<span>` stays
+the element whatever is bound, silently for a value binding, with the warning
+below for a tag binding:
 
 | `<x>` is… | Result |
 |---|---|
 | a native element (`<span>` + a define or tag import named `span`) | the native element, with a positioned warning at the tag: "`<span>` is the native element; the `span` defined\|imported at L:C is not called. Rename it `Span` or write `<${span}>`" |
 | a registered custom tag, a contract child, or a tag the target's own taglib registers (a third-party target's; a `marko.json` is not read, decision 197) | called as before, whatever is imported; no diagnostic |
-| none of those (`import row from "./row.mx"` + `<row/>`) | a positioned **error** on every target: "`<row>` is not a tag here: `row` is imported from ./row.mx, and a lowercase tag never calls a binding. Write `<Row>` (rename the import) or `<${row}/>`" (a define reads "`row` is defined at L:C" and "(rename the define)") |
+| none of those (`import row from "./row.mx"` + `<row/>`, a `.ts` value import, a named import, a lowercase `<define>`) | a positioned **error** on every target, Marko's own message verbatim, at the tag name: "' + marko('row') + '" |
 
-A name that starts with `_` or `$` has no capitalized spelling Marko reads as
-a binding, so both diagnostics offer only the dynamic tag for it ("Write
-`<${_row}/>`"). "Native" means the target's `nativeTags`, its element table
+Marko's message capitalizes the first character whatever it is, so `_row`'s
+rename offer reads "rename to `_row`" (kept verbatim for parity); the warning
+below, which is MX's own wording, offers only the dynamic tag for such a name
+("write `<${_row}>`"). "Native" means the target's `nativeTags`, its element table
 (decision 197; `@mxlang/web-elements`' HTML, SVG and MathML elements on every
 built-in target; core's own HTML elements for a target that declares none),
 in a region and a whole file alike, so the two agree.
@@ -623,10 +626,11 @@ in a region and a whole file alike, so the two agree.
 The binding's `L:C` comes from the import or define site on every target. A
 `<define>` is in scope only inside the block that declares it, so one inside
 an `<if>` does not warn for a tag outside it. This is a deliberate,
-same-on-every-target improvement: `@mxlang/target-html` used to report
-"Unable to find entry point" (or Marko's "Local variables must be in a dynamic
-tag unless they are PascalCase") and the JSX hosts rendered a literal `<row>`
-element; all now raise the one error above. A lowercase tag a host claims
+same-on-every-target improvement: `@mxlang/target-html` used to be the only
+target that rejected a lowercase value import (through its own
+`rejectComponentTag` hook), and the JSX hosts and Astro rendered a literal
+`<row>` element, silently; all now raise the one error above, in core, in
+Marko's own words. A lowercase tag a host claims
 (`<style>`) returns before the warning, so it is silent. This matches Marko
 6.4.4 for a native element, and is stricter than it for the error case.
 
@@ -1713,7 +1717,8 @@ The **normative** order, as shipped (decisions 93, 113):
 7. A host claim (`isDelegatedTag`)
 8. `declarations.isComponent` — skipped for a lowercase name bound by an
    `import` or `<define>` (decision 164, §4: a native element with a warning,
-   or an error when the name is no element and the binding can be a tag)
+   or Marko's local-variable error when the name is no element, whatever the
+   binding is)
 9. PascalCase with nothing matching → error; else an element if
    `isElement` accepts it; else error
 

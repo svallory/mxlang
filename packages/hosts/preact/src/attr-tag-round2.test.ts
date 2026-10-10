@@ -222,7 +222,7 @@ describe("generated names do not shadow authored bindings", () => {
             'static const MxBadge = 1;\nimport badge from "./row.mx"\n<badge label="ok"/>',
           "row.mx": "<p>${input.label}</p>",
         }),
-      ).rejects.toThrow(/`<badge>` is not a tag here/);
+      ).rejects.toThrow(/Local variables must be in a .dynamic tag./);
     });
     it(`${host}: does not collide with an authored $mx_ret0 temporary`, async () => {
       expect(

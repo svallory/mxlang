@@ -11,8 +11,8 @@ import { compilePreactMx } from "./index.ts";
 // registered tag, or (when it names a tag binding and is neither) an error.
 // Only a host's own taglib registers a tag: a `marko.json` is not read
 // (decision 197), so the `marko.json` tag below is no longer row 4.
-const NOT_A_TAG = (name: string, bound: string, kind = "import") =>
-  `\`<${name}>\` is not a tag here: ${bound}, and a lowercase tag never calls a binding. Write \`<${name[0]?.toUpperCase()}${name.slice(1)}>\` (rename the ${kind}) or \`<\${${name}}/>\``;
+const LOCAL_VARIABLE = (name: string) =>
+  `Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use \`<\${${name}}/>\` or rename to \`${name[0]?.toUpperCase()}${name.slice(1)}\`.`;
 
 // The authored `./row.mx` the import binds.
 const AUTHORED_ROW = [
@@ -87,19 +87,36 @@ describe("lowercase tag with a same-named binding in scope", () => {
     expect(warnings).toEqual([]);
   });
 
+  it("a lowercase value import that is no element is the same Marko error (core's, on every host)", () => {
+    let error: unknown;
+    try {
+      compilePreactMx(
+        `import layout from "./layout.ts"\n<layout/>\n`,
+        "/fixtures/a.mx",
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toMatchObject({
+      message: LOCAL_VARIABLE("layout"),
+      line: 2,
+      column: 1,
+    });
+  });
+
   it("row 3: unknown + tag import is a positioned error", () => {
     expect(() =>
       compilePreactMx(
         `import row from "./row.mx"\n<row label="x"/>\n`,
         "/fixtures/a.mx",
       ),
-    ).toThrow(NOT_A_TAG("row", "`row` is imported from ./row.mx"));
+    ).toThrow(LOCAL_VARIABLE("row"));
   });
 
   it("row 3: unknown + lowercase define is the same error, naming where it is defined", () => {
     expect(() =>
       compilePreactMx(`<define/row|x|>d</define>\n<row/>\n`, "/fixtures/a.mx"),
-    ).toThrow(NOT_A_TAG("row", "`row` is defined at 1:9", "define"));
+    ).toThrow(LOCAL_VARIABLE("row"));
   });
 
   it("a `_`-prefixed tag import gets the same error, offering only the dynamic tag", () => {
@@ -108,9 +125,7 @@ describe("lowercase tag with a same-named binding in scope", () => {
         `import _row from "./row.mx"\n<_row/>\n`,
         "/fixtures/a.mx",
       ),
-    ).toThrow(
-      "`<_row>` is not a tag here: `_row` is imported from ./row.mx, and a lowercase tag never calls a binding. Write `<${_row}/>`",
-    );
+    ).toThrow(LOCAL_VARIABLE("_row"));
   });
 
   it("a named import from a tag module is a value: native and silent", () => {
@@ -127,13 +142,13 @@ describe("lowercase tag with a same-named binding in scope", () => {
   it("row 4: a `marko.json` registers nothing (decision 197), so a tag import is row 3's error", () => {
     expect(() =>
       withTaglibRow(`import row from "./row.mx"\n<row label="x"/>\n`),
-    ).toThrow(NOT_A_TAG("row", "`row` is imported from ./row.mx"));
+    ).toThrow(LOCAL_VARIABLE("row"));
   });
 
   it("row 4: a `marko.json` registers nothing, so a lowercase define is row 3's error", () => {
     expect(() =>
       withTaglibRow(`<define/row|x|>d</define>\n<row label="x"/>\n`),
-    ).toThrow(NOT_A_TAG("row", "`row` is defined at 1:9", "define"));
+    ).toThrow(LOCAL_VARIABLE("row"));
   });
 
   it("a dynamic tag still calls the binding, with no warning", () => {
