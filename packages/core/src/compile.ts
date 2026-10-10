@@ -17,7 +17,6 @@
 
 import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
-import { type AtomFacts, emptyAtomFacts } from "./atom-contracts.ts";
 import { coreBabel } from "./babel.ts";
 import { rejectShadowedRegistration } from "./builtin-tags.ts";
 import { annotateCloseTagOpener } from "./close-tag-opener.ts";
@@ -98,8 +97,6 @@ export interface CompileResult {
    * actually resolves a callee (task 1b wires the resolver in).
    */
   dependencies: string[];
-  /** The unit's custom tag calls and declared names, input of `atomCandidates`. */
-  atomFacts: AtomFacts;
 }
 
 export interface TranslatorOptions {
@@ -230,7 +227,6 @@ let current: {
   resolveImport?: (specifier: string, importer: string) => string | undefined;
   targets: TargetLookup;
   dependencies: string[];
-  atomFacts: AtomFacts | undefined;
 } | null = null;
 
 /**
@@ -311,9 +307,6 @@ function translatorClaiming(
           ctx.warnings = state.warnings;
           ctx.productName = state.productName;
           ctx.resolveImport = state.resolveImport;
-          // Decision 183: `newCtx` seeds `afterLower` with
-          // `checkAtomContracts`; the compile entry only adds host hooks on
-          // top, so non-`compileSource` lowering paths keep the check too.
           // Every host reaching `compileSource` emits a whole module with a
           // default export, so the file has a declaration to name and a tag
           // may call itself without importing itself.
@@ -334,7 +327,6 @@ function translatorClaiming(
             // the edge matter, and never re-check it when the callee changes
             // again.
             state.dependencies = [...(ctx.dependencies ?? [])];
-            state.atomFacts = ctx.atomFacts;
           }
           state.code = state.postEmit ? state.postEmit(code) : code;
           path.node.body = [];
@@ -540,7 +532,6 @@ export function compileSource(
     resolveImport: host.resolveImport,
     targets: host.targets,
     dependencies: [] as string[],
-    atomFacts: undefined,
     // The host's taglibs over the target's native elements; tags beside the
     // file reach it as `customTags`, never by a directory walk here.
     tagTable: lookup,
@@ -585,14 +576,12 @@ export function compileSource(
         assertPositioned(each);
       }
       error.dependencies = state.dependencies;
-      error.atomFacts = state.atomFacts;
       dropCompiledFilePrefix(error, filename);
       // The rest of the file's errors travel with the first and carry what it
       // does (decision 162); Babel only prefixed the one it rethrew.
       for (const other of error.errors ?? []) {
         if (other === error) continue;
         other.dependencies = state.dependencies;
-        other.atomFacts = state.atomFacts;
       }
     }
     // The parse-error rewrites below treat an `errors` list as Marko's own
@@ -623,7 +612,6 @@ export function compileSource(
   return {
     code: state.code,
     dependencies: state.dependencies,
-    atomFacts: state.atomFacts ?? emptyAtomFacts(),
     map: {
       version: 3,
       file: filename,

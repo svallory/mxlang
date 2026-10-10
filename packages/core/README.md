@@ -632,19 +632,19 @@ handling of that character.
 
 ### Contract checks in a dialect: `contractFields`, `checkContract` and `afterLower(unit)`
 
-The atom contract keys (an attribute's `values`, `pattern` and `ref`, a
-tag's `declares`) can be checked by a dialect instead of by core, once the
-dialect claims them. Three `@unstable` parts of `Dialect` carry this, and
-none names atoms:
+Core checks the contract keys it knows (`type`, `items`, `required`,
+`enum`, `default`, `literalOnly`, `children`, ...). A dialect adds keys of its
+own, with their meaning, by claiming them. Three `@unstable` parts of
+`Dialect` carry this:
 
 - `contractFields: { attribute?: string[], tag?: string[] }` lists the
   contract keys the dialect owns. Core accepts a listed key at registration
   as opaque data, in `customTags`, `mx.contracts` and tag sidecars alike, and
   never checks it. A key that no core rule knows and no dialect lists is
-  still a registration error. Of core's own keys only those four can be
-  listed. Claims are per key and independent. Core keeps the whole-value
-  shape check (`type: "atom"` or `"member"`) and `ctx.declare` in
-  `analyze`, and never reads a claimed key to word its shape error.
+  still a registration error. A key core checks itself cannot be listed.
+  Core keeps the whole-value shape check (`type: "atom"` or `"member"`, for
+  the atoms and members a dialect builds) and `ctx.declare` in `analyze`,
+  and reads no claimed key.
 - `checkContract(tag, contract, ctx)` runs at registration for every
   contract that uses a listed key, at any depth, called or not. `contract`
   is plain data (`attributes`, `attributeTags`, `children` and the listed
@@ -652,7 +652,7 @@ none names atoms:
   own registration error lands: in the sidecar, in the `mx.contracts`
   module at 1:0, or with no position for the `customTags` option.
 - `describeAttribute(declaration)` words what a declaration that uses a
-  listed key accepts, for core's shape error (`" (one of :a, :b)"`).
+  listed key accepts, for core's shape error (`" (one of ~a, ~b)"`).
 - Contract data handed to a dialect is a deep-frozen copy; an expression's
   `node` is core's live node, read-only by contract.
 - `afterLower(unit)` runs once per unit, after core's own checks. `unit` is
@@ -692,9 +692,7 @@ Which dialect claims the keys follows the file's syntax. A discovery scan
 routes it to; it cannot see an explicit `dialect` option. So a
 scanned contract that uses a key only the option's dialect claims is refused
 at the scan, positioned in the sidecar or the contracts module. Contracts
-passed as `customTags` follow the explicit option. One thing is the built-in path's only: completion
-facts (`CompileResult.atomFacts`, `atomCandidates`) are empty for a unit
-whose dialect takes over the atom keys.
+passed as `customTags` follow the explicit option.
 
 ## Host-policy resolution
 

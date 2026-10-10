@@ -5168,12 +5168,8 @@ function lowerTemplate(ctx: Ctx, body: readonly MxChild[]): Ir {
     referencesUnboundAttrTagType(typeUnits) &&
     !ctx.importedNames.has("AttrTag");
 
-  // Decision 156: declare every name of this unit, then check every atom
-  // reference, once the whole body (and every `analyze`) has been seen.
-  // Decision 183: the check now runs as the first `afterLower` hook,
-  // seeded by `newCtx`, so a language can add its own
-  // post-lowering checks behind it. Behaviour is unchanged: one function,
-  // the same `ctx`, at the same point.
+  // The dialect's post-lowering hooks run once the whole body (and every
+  // `analyze`) has been seen.
   for (const hook of ctx.afterLower ?? []) hook(ctx);
 
   if (isFileRoot && ctx.customTags) {

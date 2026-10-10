@@ -33,7 +33,6 @@ import {
   checkDialectNodeTypes,
   isCallRow,
   isNodeTypeRow,
-  MX_DIALECT,
   type NodeType,
   rowKey,
   TRIGGER_KEY,
@@ -172,10 +171,9 @@ export interface TriggerMethod {
  * The value of an attribute `ctx.attribute` builds: `true` (a bare
  * attribute), a string, an expression or the trigger's own method value.
  * A value's `span` defaults to the trigger's own. A node is an attribute's
- * value only through the value position (`valueTriggers`). Removal work:
- * `{ kind: "atom" | "member", name }` is the atom and member sugars'
- * leftover mark (Mesh's `&dueOn`), kept only until the atoms-and-members
- * dialect carries them as its own value nodes; do not build on it.
+ * value only through the value position (`valueTriggers`).
+ * `{ kind: "atom" | "member", name }` is a whole-value atom or member the
+ * module builds; core has no syntax that builds one.
  */
 export type TriggerAttributeValue =
   | true
@@ -407,9 +405,8 @@ export interface Dialect {
   /**
    * Contract keys this dialect owns: accepted at registration as opaque data
    * (a key core does not know is otherwise an error), handed to `afterLower`
-   * on `ContractCall.contract`, and never checked by core. Of core's own
-   * keys only `values`, `pattern`, `ref` (attribute) and `declares` (tag)
-   * can be claimed. @unstable
+   * on `ContractCall.contract`, and never checked by core. A key core
+   * checks itself (`type`, `children`, ...) cannot be claimed. @unstable
    */
   readonly contractFields?: ContractFields;
   /**
@@ -912,57 +909,20 @@ export function resolveSyntaxOf(
   filename: string,
   options: RouteDialectOptions = {},
 ): ResolvedSyntax {
-  const resolved = resolveManifestSyntax(filename, options);
-  return resolved === DEFAULT_RESOLVED
-    ? fallbackForTesting(resolved)
-    : resolved;
-}
-
-/**
- * Test-only: the dialect an MX file (no dialect claims it) resolves to, read
- * from a process global so a preload reaches every copy of core (source and
- * dist alike). A test preload may set it to run an existing suite through
- * a dialect. Unset, nothing changes.
- */
-const FALLBACK_FOR_TESTING = Symbol.for(
-  "@mxlang/core:fallbackSyntaxForTesting",
-);
-
-/** The fallback dialect, named "MX" so the suites it runs keep MX's wording. */
-const fallbacks = new WeakMap<object, Dialect>();
-
-/** Resolutions `fallbackForTesting` made: MX's own files, not a dialect's. */
-const fallbackResolutions = new WeakSet<ResolvedSyntax>();
-
-function fallbackForTesting(resolved: ResolvedSyntax): ResolvedSyntax {
-  const module = (globalThis as Record<symbol, unknown>)[FALLBACK_FOR_TESTING];
-  if (!module || typeof module !== "object") return resolved;
-  let dialect = fallbacks.get(module);
-  if (!dialect) {
-    // MX's name and no tag rules of its own: the suites it runs are MX's,
-    // under their target's tag rules.
-    const { tagRules: _tagRules, ...rest } = module as Dialect;
-    dialect = Object.freeze({ ...rest, name: MX_DIALECT.name });
-    fallbacks.set(module, dialect);
-  }
-  const fallback = explicitSyntaxOf(dialect, "<fallback syntax for testing>");
-  fallbackResolutions.add(fallback);
-  return fallback;
+  return resolveManifestSyntax(filename, options);
 }
 
 /**
  * The tag rules a file's dialect states for it ({@link dialectTagRules}), or
  * `undefined` for MX's own files, which parse under their target's tag
  * rules. A routed dialect and an explicit `dialect` option both count; a bare
- * table (no module) and the test fallback do not.
+ * table (no module) does not.
  */
 export function fileTagRules(
   resolved: ResolvedSyntax,
 ): TagRulesPreset | undefined {
   const { dialect } = resolved;
-  return dialect && !fallbackResolutions.has(resolved)
-    ? dialectTagRules(dialect)
-    : undefined;
+  return dialect ? dialectTagRules(dialect) : undefined;
 }
 
 function resolveManifestSyntax(

@@ -6,8 +6,7 @@
  * - The view: calls, attributes in every kind, attribute tags at any depth,
  *   ancestors and their scope identity, `declared`, frozen.
  * - `fail` and `warn`.
- * - `contractFields`: shape, registration acceptance and refusal, takeover
- *   (core stops checking a claimed key), through the `dialect` option, a
+ * - `contractFields`: shape, registration acceptance and refusal, through the `dialect` option, a
  *   dialect package that claims the file's extension, `mx.contracts` and a
  *   sidecar.
  */
@@ -29,6 +28,7 @@ import {
 } from "./core.ts";
 import type { CustomTag } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
+import atomFixture from "./fixtures/syntax/atom-fixture.ts";
 import declaresFixture from "./fixtures/syntax/declares-fixture.ts";
 import memberFixture from "./fixtures/syntax/member-fixture.ts";
 import type { ContractAttr, LoweredUnit } from "./lowered-unit.ts";
@@ -88,111 +88,16 @@ function caught(run: () => unknown): TranslateError {
   throw new Error("expected a TranslateError");
 }
 
-/** What a compile reports: success, or the error as every reporter reads it. */
-function outcome(
-  source: string,
-  customTags: Record<string, CustomTag>,
-  syntax: Syntax,
-): unknown {
-  const warnings: MxWarning[] = [];
-  try {
-    compile(source, customTags, syntax, { warnings });
-    return { ok: true, warnings };
-  } catch (error) {
-    if (!isTranslateError(error)) throw error;
-    return {
-      message: error.message,
-      line: error.line,
-      column: error.column,
-      file: error.file,
-      spans: error.spans,
-      diagnosticCode: error.diagnosticCode,
-    };
-  }
-}
-
-/** Analyze hook: declares `name` (of `kind`) at each call, optionally scoped. */
-function deriving(
-  kind: string,
-  name: string,
-  scope?: string | string[],
-): CustomTag {
-  return {
-    analyze(calls, ctx) {
-      for (const call of calls) {
-        if (call.span) ctx.declare(kind, name, { span: call.span, scope });
-      }
-    },
-  };
-}
-
-const NAMES = [
-  "alpha",
-  "bravo",
-  "charlie",
-  "delta",
-  "echo",
-  "foxtrot",
-  "golf",
-  "hotel",
-  "india",
-  "juliet",
-  "kilo",
-  "lima",
-];
-
-const vocab: Record<string, CustomTag> = {
-  entity: {},
-  attributes: {},
-  actions: {},
-  arguments: {},
-  relationships: {},
-  string: {
-    attributes: { name: { type: "atom" } },
-    declares: [
-      { kind: "attribute", from: "name", under: "attributes" },
-      {
-        kind: "argument",
-        from: "name",
-        under: "arguments",
-        scope: ["create", "read", "update", "destroy", "action"],
-      },
-    ],
-  },
-  action: {
-    attributes: { name: { type: "atom" } },
-    declares: { kind: "action", from: "name" },
-  },
-  "has-many": {
-    attributes: { name: { type: "atom" } },
-    declares: { kind: "relationship", from: "name" },
-  },
-  calc: {
-    attributes: { name: { type: "atom" } },
-    declares: { kind: "computed", from: "name" },
-  },
-  policy: {
-    attributes: {
-      accept: { type: "atom", ref: "attribute" },
-      load: { type: "atom", ref: ["relationship", "computed"] },
-      require: { type: "atom", ref: ["attribute", "argument"] },
-      types: { type: "atom", values: ["create", "read", "update", "destroy"] },
-      only: { type: "atom", ref: "attribute", values: ["title", "body"] },
-      shaped: { type: "atom", ref: "attribute", pattern: "^t" },
-    },
-  },
-  setter: {
-    attributes: { name: { type: "atom", ref: "attribute" }, value: {} },
-  },
-  set: { defaultTag: "setter" },
+/**
+ * Contracts that use the keys a module claims (`values`, `pattern`, `ref`,
+ * `declares`). Core knows none of them, so the literal is typed loosely: the
+ * module that claims them gives them their meaning.
+ */
+const vocab = {
   box: {
     attributes: {
       any: { type: "atom" },
       mode: { type: "atom", values: ["strict", "loose"] },
-      slug: { type: "atom", pattern: "^[a-z]+$" },
-      both: { type: "atom", values: ["a1", "b2"], pattern: "^[a-z]\\d$" },
-      many: { type: "atom", values: NAMES },
-      ten: { type: "atom", values: NAMES.slice(0, 10) },
     },
     attributeTags: {
       row: {
@@ -212,58 +117,30 @@ const vocab: Record<string, CustomTag> = {
   },
   node: { attributes: { id: {} }, declares: { kind: "node", from: "id" } },
   link: { attributes: { to: { type: "atom", ref: "node" } } },
-  slot: {
-    attributes: { name: { type: "atom" } },
-    declares: { kind: "slot", from: "name", uniqueWith: ["node"] },
-  },
-  scoped: {
-    attributes: { name: { type: "atom" } },
-    declares: { kind: "item", from: "name", scope: ["list", "grid"] },
-  },
-  list: {},
-  item: {
-    attributes: { name: { type: "atom" } },
-    declares: { kind: "item", from: "name", scope: "list" },
-  },
-  pick: { attributes: { of: { type: "atom", ref: "item" } } },
-  derive: deriving("node", "made"),
-  "derive-scoped": deriving("node", "lost", "nowhere"),
-  "derive-list": deriving("item", "auto", "list"),
+} as unknown as Record<string, CustomTag>;
+
+/** The keys the atom fixture claims, and a tag key a test claims on top. */
+const ATOM_FIELDS = atomFixture.contractFields as {
+  attribute: string[];
+  tag: string[];
 };
 
-const nodes = (names: readonly string[]) =>
-  names.map((name) => `<node#${name}/>`).join("");
-
-/** Sources the built-in path accepts. */
-const PASSING: readonly string[] = [
-  "<box mode=:strict slug=:abc both=:a1/>",
-  "<box mode=[:strict, :loose]/>",
-  `${nodes(["a"])}<link to=:a/>`,
-  "<link to=:later/><node#later/>",
-  "<list><item :a/><pick of=:a/></list>",
-  "<list><derive-list/><pick of=:auto/></list>",
-  "<derive/><link to=:made/>",
-  `<entity :invoice>
-  <attributes><string :title/></attributes>
-  <actions>
-    <action :rename>
-      <arguments><string :newTitle/></arguments>
-      <policy require=[:title, :newTitle]/>
-    </action>
-  </actions>
-</entity>`,
-  `${nodes(["n"])}<box><@row mode=:a to=:n><@cell k=:x/></@row><@col-2 to=:n/></box>`,
-];
-
-/** The unit a module's `afterLower` was handed (`fields` claimed). */
+/**
+ * The unit a module's `afterLower` was handed: `base`'s syntax (the atom
+ * fixture's `~`, or the member fixture's `&`), claiming `fields`.
+ */
 function unitOf(
   source: string,
   customTags: Record<string, CustomTag>,
-  fields: Dialect["contractFields"] = { tag: ["relations"] },
+  fields: Dialect["contractFields"] = {
+    attribute: ATOM_FIELDS.attribute,
+    tag: [...ATOM_FIELDS.tag, "relations"],
+  },
+  base: Dialect = atomFixture,
 ): LoweredUnit {
   let seen: LoweredUnit | undefined;
   compile(source, customTags, {
-    ...memberFixture,
+    ...base,
     contractFields: fields,
     afterLower: (unit) => {
       seen = unit;
@@ -293,8 +170,7 @@ describe("the `LoweredUnit` view", () => {
   };
 
   it("lists every call with its contract, its attributes in each kind, and the file", () => {
-    const source =
-      "<open :named s='str' a=:at e=(x + :y) b v:=w ...rest/>\n<open &due/>";
+    const source = "<open ~named s='str' a=~at e=(x + ~y) b v:=w ...rest/>";
     const unit = unitOf(source, tags);
     expect(unit.file).toBe(FILE);
     expect(unit.source).toBe(source);
@@ -303,7 +179,7 @@ describe("the `LoweredUnit` view", () => {
     expect(call?.nameSpan).toEqual({ sourceStart: 1, sourceEnd: 5 });
     expect(call?.span).toEqual({
       sourceStart: 0,
-      sourceEnd: source.indexOf("\n"),
+      sourceEnd: source.length,
     });
     // A claimed tag key is carried as written; unclaimed core keys are not.
     expect(call?.contract).toEqual({ relations: ["x"] });
@@ -317,8 +193,7 @@ describe("the `LoweredUnit` view", () => {
     expect(kinds.name).toEqual({
       name: "name",
       nameSpan: { sourceStart: 6, sourceEnd: 12 },
-      authored: ":named",
-      label: "`:named` (`name`)",
+      label: "`name`",
       value: {
         type: "mx:Atom",
         name: "named",
@@ -363,8 +238,16 @@ describe("the `LoweredUnit` view", () => {
         expect(Object.isFrozen(attr.value)).toBe(true);
       }
     }
-    // A whole-value member a module built.
-    expect(unit.calls[1]?.attrs).toEqual([
+  });
+
+  it("hands a whole-value member a module built as `mx:Member`", () => {
+    const unit = unitOf(
+      "<open &due/>",
+      { open: tags.open as CustomTag },
+      { tag: ["relations"] },
+      memberFixture,
+    );
+    expect(unit.calls[0]?.attrs).toEqual([
       expect.objectContaining({
         value: expect.objectContaining({ type: "mx:Member", name: "due" }),
       }),
@@ -373,7 +256,7 @@ describe("the `LoweredUnit` view", () => {
 
   it("gives attribute tags at any depth, each with the declaration it matched", () => {
     const unit = unitOf(
-      "<box><@row mode=:a><@cell k=:x/></@row><@col-1 to=:n/></box><node#n/>",
+      "<box><@row mode=~a><@cell k=~x/></@row><@col-1 to=~n/></box><node#n/>",
       { ...vocab, ...tags },
     );
     const box = unit.calls.find((call) => call.tag === "box");
@@ -457,7 +340,7 @@ describe("the `LoweredUnit` view", () => {
     let ran = false;
     const error = caught(() =>
       compile("<box mode=1/>", vocab, {
-        ...noHooks,
+        ...atomFixture,
         afterLower: () => {
           ran = true;
         },
@@ -555,80 +438,54 @@ describe("`unit.fail` and `unit.warn`", () => {
   });
 });
 
-/** Every subset of the four atom keys, as `contractFields`. */
-const CLAIMS = Array.from({ length: 16 }, (_, bits) => {
-  const attribute = ["values", "pattern", "ref"].filter(
-    (_, i) => bits & (1 << i),
-  );
-  const tag = bits & 8 ? ["declares"] : [];
-  return { attribute, tag };
-});
-
-describe("review 466 r1: core keeps its checks beside a module's claims", () => {
-  const claimOnly = (fields = CLAIMS[15]): Dialect => ({
+describe("core keeps its checks beside a module's claims", () => {
+  const claimOnly: Dialect = {
     id: "test",
     name: "MX",
     table: {},
-    contractFields: fields,
-  });
+    contractFields: ATOM_FIELDS,
+  };
 
-  it("B1: a plain string against a claimed `ref` is still core's shape error, behind the module's hook", () => {
+  it("a plain string against a claimed-key atom declaration is core's shape error, behind the module's hook", () => {
     const source = '<link to="red"/>';
-    const builtIn = caught(() => compile(source, vocab, defaultSyntax()));
-    expect(builtIn.message).toBe(
-      "`<link>`: attribute `to` must be atom, got string (none declared); write it as `:red`",
-    );
-    // A module that claims the keys and checks nothing: core's error.
-    const plain = caught(() => compile(source, vocab, claimOnly()));
+    const plain = caught(() => compile(source, vocab, claimOnly));
     expect(plain.message).toBe(
       "`<link>`: attribute `to` must be atom, got string",
     );
-    expect([plain.line, plain.column]).toEqual([builtIn.line, builtIn.column]);
+    expect([plain.line, plain.column]).toEqual([1, 9]);
+    // The atom fixture words it from `describeAttribute`.
+    const worded = caught(() =>
+      compile('<box mode="red"/>', vocab, atomFixture),
+    );
+    expect(worded.message).toBe(
+      "`<box>`: attribute `mode` must be atom, got string (one of ~strict, ~loose)",
+    );
   });
 
-  it("B1: a module error earlier in the file keeps its place", () => {
+  it("a module error earlier in the file keeps its place", () => {
     const source = '<node#a/><link to=:zz/><link to="red"/>';
     expect(
-      caught(() => compile(source, vocab, declaresFixture)).message,
+      caught(() =>
+        compile(
+          source,
+          {
+            node: vocab.node as CustomTag,
+            link: vocab.link as CustomTag,
+          },
+          declaresFixture,
+        ),
+      ).message,
     ).toMatch(/`:zz` is not a declared node here/);
   });
 
-  it("completion facts are core's built-in path only: a dialect that claims the atom fields leaves `atomFacts` empty, and unset on an error", () => {
-    const source = "<node#a/><link to=:a/>";
-    const facts = (syntax: Syntax) =>
-      (compile(source, vocab, syntax).atomFacts as unknown as { calls: [] })
-        .calls.length;
-    expect(facts(defaultSyntax())).toBe(2);
-    expect(facts(claimOnly())).toBe(0);
-    const failing = "<node#a/><link to=:b/>";
-    expect(
-      caught(() => compile(failing, vocab, defaultSyntax())).atomFacts,
-    ).toBeDefined();
-    expect(
-      caught(() => compile(failing, vocab, declaresFixture)).atomFacts,
-    ).toBeUndefined();
-  });
-
-  it.each(CLAIMS)(
-    "L3: valid input passes under the partial claim %o",
-    (fields) => {
-      for (const source of [...PASSING, "<node#a/><link to=:a/>"]) {
-        expect(outcome(source, vocab, claimOnly(fields))).toEqual({
-          ok: true,
-          warnings: [],
-        });
-      }
-    },
-  );
-
   it("L4: the view's contracts are deep-frozen copies; the registered contract is untouched", () => {
     const tags: Record<string, CustomTag> = {
-      box: { attributes: { b: { type: "atom", values: ["x"] } } },
+      box: { attributes: { b: { type: "atom", values: ["x"] } as never } },
     };
     const errors: unknown[] = [];
     for (let run = 0; run < 2; run++) {
-      compile("<box b=:x/>", tags, {
-        ...noHooks,
+      compile("<box b=~x/>", tags, {
+        ...atomFixture,
         afterLower: (unit) => {
           const values = unit.calls[0]?.contract.attributes?.b
             ?.values as string[];
@@ -642,7 +499,8 @@ describe("review 466 r1: core keeps its checks beside a module's claims", () => 
     }
     expect(errors).toHaveLength(2);
     expect(errors[0]).toBeInstanceOf(TypeError);
-    expect(tags.box?.attributes?.b?.values).toEqual(["x"]);
+    const registered = tags.box?.attributes?.b as { values?: string[] };
+    expect(registered.values).toEqual(["x"]);
     expect(Object.isFrozen(tags.box?.attributes?.b)).toBe(false);
   });
 });
@@ -695,7 +553,7 @@ describe("`contractFields`", () => {
       },
     };
     expect(caught(() => compile("<box/>", tags, defaultSyntax())).message).toBe(
-      'Unknown key "facet" in the "a" attribute declaration of tag "box"; allowed: type, items, required, enum, default, literalOnly, values, pattern, ref',
+      'Unknown key "facet" in the "a" attribute declaration of tag "box"; allowed: type, items, required, enum, default, literalOnly',
     );
     let facets: unknown[] = [];
     compile(
@@ -712,48 +570,15 @@ describe("`contractFields`", () => {
     expect(facets).toEqual(["wide", "narrow"]);
   });
 
-  it("core stops checking a claimed key: registration, and the file-level check", () => {
+  it("core keeps the whole-value shape check, and the module words it", () => {
     const tags: Record<string, CustomTag> = {
-      box: { attributes: { mode: { type: "atom", values: ["a", "b"] } } },
-      node: { declares: { kind: "node", from: "id" } },
+      box: {
+        attributes: { mode: { type: "atom", values: ["b", "a"] } as never },
+      },
     };
-    const values = claiming({ attribute: ["values"] });
-    expect(() => compile("<box mode=:zz/>", tags, defaultSyntax())).toThrow(
-      /is not one of :a, :b/,
-    );
-    expect(() => compile("<box mode=:zz/>", tags, values)).not.toThrow();
-    const malformed = {
-      box: { attributes: { mode: { type: "string", values: 5 } } },
-    } as unknown as Record<string, CustomTag>;
-    expect(() => compile("<box/>", malformed, defaultSyntax())).toThrow(
-      /`values` requires `type: "atom"`/,
-    );
-    expect(() => compile("<box/>", malformed, values)).not.toThrow();
-
-    const declares = claiming({ tag: ["declares"] });
-    const dup = "<node#a/><node#a/>";
-    expect(() => compile(dup, tags, defaultSyntax())).toThrow(
-      /already declared/,
-    );
-    expect(() => compile(dup, tags, declares)).not.toThrow();
-    const bad = {
-      node: { declares: { kind: "" } },
-    } as unknown as Record<string, CustomTag>;
-    expect(() => compile("<node/>", bad, declares)).not.toThrow();
-  });
-
-  it("core keeps the whole-value shape check, and reads no claimed key to word it", () => {
-    const tags: Record<string, CustomTag> = {
-      box: { attributes: { mode: { type: "atom", values: ["b", "a"] } } },
-    };
-    const builtIn =
-      "`<box>`: attribute `mode` must be atom, got string (one of :a, :b)";
-    expect(
-      caught(() => compile("<box mode='s'/>", tags, defaultSyntax())).message,
-    ).toBe(builtIn);
+    const claimed = claiming({ attribute: ["values", "pattern", "ref"] });
     // A module that claims `values` and words nothing: core names only what
     // it knows.
-    const claimed = claiming({ attribute: ["values", "pattern", "ref"] });
     expect(
       caught(() => compile("<box mode='s'/>", tags, claimed)).message,
     ).toBe("`<box>`: attribute `mode` must be atom, got string");
@@ -772,14 +597,6 @@ describe("`contractFields`", () => {
       "`<box>`: attribute `mode` must be atom, got string (as the module says)",
     );
     expect(seen).toEqual([true, ["b", "a"]]);
-    // An unclaimed `values` is still core's to quote.
-    expect(
-      caught(() =>
-        compile("<box mode=1/>", tags, claiming({ attribute: ["ref"] })),
-      ).message,
-    ).toBe(
-      "`<box>`: attribute `mode` must be atom, got number (one of :a, :b)",
-    );
   });
 });
 

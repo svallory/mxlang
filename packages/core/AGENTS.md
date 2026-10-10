@@ -619,10 +619,8 @@ Five facts worth knowing before editing it:
   `CompiledSyntax.builtInAtoms`/`builtInColonEnd`/`builtInPeriodEnd`; core:
   `convertAtoms` skips a stand-in marked `extra.mxTrigger`, and re-runs after
   the trigger pass so a dialect's `extra.mxAtom` literal is recorded and
-  spliced as an atom). `resolveSyntaxOf` reads a process global,
-  `Symbol.for("@mxlang/core:fallbackSyntaxForTesting")`, so a test preload
-  can run existing suites through a dialect (test-only; unset, nothing
-  changes).
+  spliced as an atom). `src/fixtures/syntax/atom-fixture.ts` is the fixture
+  that builds atoms and claims `values`, `pattern`, `ref` and `declares`.
   **Contract keys in a dialect: `afterLower(unit)` and `contractFields`.** A module's `afterLower` gets `LoweredUnit`
   (`src/lowered-unit.ts`), never the `Ctx`: `lowerTriggers` appends
   `ctx => module.afterLower(loweredUnitOf(ctx))` to `ctx.afterLower`. The
@@ -634,8 +632,8 @@ Five facts worth knowing before editing it:
   registered declaration objects, not copies. `fail` without `at` is
   file-level (0:0, no `file`).
   `Dialect.checkContract` is the dialect's registration check:
-  `rejectUnknownDeclarationKeys` calls `checkClaimedContract` per tag,
-  where `rejectInvalidDeclares` runs, when the contract uses a claimed key
+  `rejectUnknownDeclarationKeys` calls `checkClaimedContract` per tag
+  when the contract uses a claimed key
   at any depth (`usesClaimed`: attributes, attribute tags named and `"*"`,
   inline `children["*"]`). Its `ctx.fail` throws core's registration shape
   (0:0, no file), so the sidecar path (`failIn`) and `mx.contracts`
@@ -646,8 +644,10 @@ Five facts worth knowing before editing it:
   and an unknown key reports the claimed one first, where the built-in path
   reports whichever its walk meets first.
   `Dialect.contractFields` (`src/contract-fields.ts`, `claimedFields`)
-  lists the contract keys the dialect owns; only `values`, `pattern`, `ref`
-  and `declares` of core's own keys can be claimed (`checkContractFields`).
+  lists the contract keys the dialect owns; a key core checks itself
+  (`type`, `children`, ...) cannot be claimed (`checkContractFields`). Core
+  knows no other key: `values`, `pattern`, `ref` and `declares` are unknown
+  keys unless a dialect claims them.
   The claim is threaded into registration with the file's resolved module:
   - `compileSource` (`translatorClaiming`) and `parseFragment`
     (`parseOnlyTranslator`), after they resolve the syntax;
@@ -658,28 +658,20 @@ Five facts worth knowing before editing it:
     `contracts.test.ts` loads under Node's strip-only mode): `syntax-table.ts`
     registers `resolveSyntaxOf` with `registerSyntaxResolver` as it loads;
   - `discoverProjectTags` has no file and claims nothing.
-  A claimed key is skipped by `rejectInvalidDeclares`,
-  `rejectContradictoryAttribute` and the unknown-key check (its "allowed:"
-  list deduplicated), and by `checkAtomContracts` (`unclaimedAttribute`).
-  Claims are independent: with `declares` claimed and `ref` not, `declare`
-  reads the names leniently (`declare(null, …)`, no clash or scope errors,
-  ill-formed entries dropped by `pickEntry`) so core's own `ref` resolves;
-  with both claimed it returns no scopes. `contractData` always carries
-  `declares` too, deep-frozen copies (`frozenCopy`, one memo per unit), so a
-  module claiming `ref` alone can still resolve it.
-  `checkAtomAttr` (review 466 r1): its suffix comes from `expectationOf`,
-  which never reads a claimed key; a declaration using a claimed `values`
-  or `ref` is worded by the module's `describeAttribute`, else from the
-  unclaimed keys. A plain string against a claimed `ref` (B1) is no longer
-  a silent return: `validateCustomTagCall`'s `ClaimContext.defer` queues
-  core's shape error on `ctx.deferredContractErrors`, raised by
-  `raiseDeferredContractErrors`, which `lowerTriggers` appends to
-  `ctx.afterLower` behind the module's hook whenever the module has
-  `contractFields`.
+  A claimed key is skipped by the unknown-key check (its "allowed:" list
+  is core's keys only) and handed to the module as frozen data
+  (`frozenCopy`, one memo per unit).
+  `checkAtomAttr`: its suffix comes from `expectationOf`, which reads no
+  key itself: a declaration using a claimed key is worded by the module's
+  `describeAttribute`, else it has none. A plain string against an atom
+  declaration that uses a claimed key is no longer a silent return:
+  `validateCustomTagCall`'s `ClaimContext.defer` queues core's shape error on
+  `ctx.deferredContractErrors`, raised by `raiseDeferredContractErrors`,
+  which `lowerTriggers` appends to `ctx.afterLower` behind the module's hook
+  whenever the module has `contractFields`.
   A scan whose file's dialect fails to load carries the error
   (`ClaimedFields.failure`) and raises it in place of any contract-key
-  refusal (`mx.contracts`, sidecar validation). `ctx.atomFacts` is not set when the module claims an atom
-  key: completion facts are the built-in path's only (lead ruling 14:29).
+  refusal (`mx.contracts`, sidecar validation).
   `lowered-unit.test.ts` pins the hooks on fixture dialects.
   parse. Core reaches that parser through `mxTemplateParser()`
   (`marko-frontend.ts`): the bundle's parser in the dist, the workspace
@@ -1366,26 +1358,10 @@ stable version.
 - **No stock-parser path.** Core parses with the MX front end (port PR 5), so
   a stock `htmljs-parser` never lexes MX input; decision 151's stock-parser
   and "atoms need the MX parser" errors were deleted with it.
-- **Atom contracts are two phases at the end of a unit's lowering**
-  (`src/atom-contracts.ts`, decision 156 PR 2). `transformCustomTag` records a
-  `ContractFact` (definition, call, authored ancestor nodes) per call in
-  `ctx.contractFacts`, `ctx.declare` from `analyze` fills `ctx.contractDerived`,
-  and `checkAtomContracts` (called from `lowerTemplate`) declares everything,
-  then checks every `values`/`pattern`/`ref`. Scopes are tag *instances* (Marko
-  nodes in `ctx.authoredAncestorNodes`, pushed beside `authoredAncestors`);
-  the default scope is the file (decision 156 addendum 7), the outermost link of
-  every resolution chain, so top-level siblings share names and a `ctx.declare`
-  outside every call is visible too. Attribute-tag attributes (any depth) are
-  checked from `call.attributeTags` against `definition.attributeTags`. A call's own atom-vs-string type check stays in
-  `validateAttributes` (`checkAtomAttr`), not here.
-  Diagnostics list the candidates through `atomList` (sorted, ten, `+N more`)
-  and `acceptedNames` (the one filter shared with completion: `pattern`
-  filters, `values` and `ref` intersect). `atomCandidates(atomFacts, offset)`
-  answers the same for a position and never throws. `AtomFacts` is opaque and
-  compact (`atomFactsOf`: resolved declarations, scope ids, atom slots per call;
-  no node, definition or hook). `checkAtomContracts` sets `ctx.atomFacts` when
-  it starts, so `TranslateError.atomFacts` exists only when the atom check ran
-  (complete facts); earlier errors leave it unset. A plain string against a
-  `ref` atom is raised by that check (`checkStringForRef`), listing the names.
-  Editor completion on top of it is a TODO (the language server is
-  diagnostics-only).
+- **Core has no atom contract layer.** `transformCustomTag` records a
+  `ContractFact` (`src/contract-facts.ts`: definition, call, authored
+  ancestor nodes) per call in `ctx.contractFacts`, and `ctx.declare` from
+  `analyze` fills `ctx.contractDerived`. A syntax module reads both through
+  `LoweredUnit` in its `afterLower`; core checks no `values`, `pattern`,
+  `ref` or `declares`. A call's own atom-vs-string shape check stays in
+  `validateAttributes` (`checkAtomAttr`).

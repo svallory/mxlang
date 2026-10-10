@@ -34,15 +34,10 @@
  *   text is sliced back out by `loc` and re-parsed.
  */
 
-import type {
-  AtomFacts,
-  ContractFact,
-  DerivedDeclaration,
-} from "./atom-contracts.ts";
-import { checkAtomContracts } from "./atom-contracts.ts";
 import { attrArgsOf, attrNameOf, isDefaultAttr } from "./attr-fields.ts";
 import { coreBabel } from "./babel.ts";
 import type { CalleeInput } from "./callee-input.ts";
+import type { ContractFact, DerivedDeclaration } from "./contract-facts.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import { MX_DIALECT } from "./dialect-registry.ts";
@@ -130,15 +125,6 @@ export class TranslateError extends Error {
    * callee's declaration changes again.
    */
   dependencies?: string[];
-  /**
-   * The unit's atom facts, for `atomCandidates`. Set only when the error came
-   * from the file-level atom check (a clash, an unknown atom, a string against
-   * a `ref` atom), which runs after every call was seen, so the facts are
-   * complete. An error thrown before it (a type error, a missing attribute, an
-   * `analyze` failure, a parse error) leaves it unset: a consumer then keeps
-   * the facts of the last good `CompileResult` instead of partial ones.
-   */
-  atomFacts?: AtomFacts;
   /**
    * Every error the compile found, ordered by position, when this one came
    * from the lowering's body walk (decision 162). The thrown error is
@@ -296,8 +282,6 @@ export interface Ctx {
    * error on a key the module claims): raised, the first, once it ran.
    */
   deferredContractErrors?: TranslateError[];
-  /** The unit's atom facts, set when the atom check starts (every call has been seen). */
-  atomFacts?: AtomFacts;
   source: string;
   /** Absolute or caller-supplied filename used to resolve injected imports. */
   filename: string;
@@ -452,9 +436,8 @@ export interface Ctx {
   /**
    * Post-lowering hooks (decision 183): run once the file's body is fully
    * lowered, in order, each receiving the file's own `Ctx` — the same
-   * context every lower ran under. `newCtx` seeds the list with
-   * `checkAtomContracts` so every lowering path gets it (the compile
-   * entry appends host hooks, never replaces: decision 183). Nothing may read a hook's return
+   * context every lower ran under. The compile entry appends host hooks,
+   * never replaces. Nothing may read a hook's return
    * value: a hook reports through `fail`/`warn` or mutates the `Ctx`.
    */
   afterLower?: ReadonlyArray<(ctx: Ctx) => void>;
@@ -1799,12 +1782,7 @@ export function newCtx(
     tagTable,
     targets,
     customTagGensym: { n: 0 },
-    // Decision 183: the atom contract check is the seeded default so every
-    // `Ctx` gets it — a host building its own context (a `.solid.mx` region,
-    // the metadata compiler) must not silently skip the check the way it did
-    // when only the compile entry registered it. Callers append, never
-    // replace.
-    afterLower: [checkAtomContracts],
+    afterLower: [],
   };
   return ctx;
 }

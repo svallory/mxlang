@@ -24,9 +24,6 @@ export interface CustomTagAttribute {
     | "function"
     | "atom";
   items?: "string" | "number" | "boolean";
-  values?: string[]; // type: "atom" only
-  pattern?: string; // type: "atom" only
-  ref?: string | string[]; // type: "atom" only
   required?: boolean;
   enum?: string[];
   default?: unknown;
@@ -136,7 +133,6 @@ The exported limits are `MAX_EXPANSION_DEPTH = 64` nested calls and `MAX_EXPANSI
 | `attributes` | Closed attribute contract, validated before hooks; omit it to leave attributes open. |
 | `attributeTags` | Closed `<@name>` contract with required/repeatable controls and recursive `attributes`, `attributeTags` and `children` maps. |
 | `defaultTag` | The tag name that `<#id>` and `<.class>` (an unnamed tag) written directly inside this tag stand for. Also accepted on every `attributeTags` declaration. A non-empty string naming a plain tag reachable from the package; see [Name the unnamed tag](/custom-tags/sidecars/#sidecars-declare-the-call-contract-name-the-unnamed-tag-defaulttag). |
-| `declares` | The names this tag declares for atom references: one entry or an array of `{ kind, from: "id" \| "name", scope?, under?, uniqueWith? }` (decision 156, see [Atoms in contracts](/custom-tags/sidecars/#sidecars-declare-the-call-contract-atoms-in-contracts)). |
 | `analyze` | Non-mutating pass over every call of this tag in one file, before transforms. |
 | `transform` | Expands one validated call into ordinary IR; optional only when a template exists. |
 | `finalize` | Adds nodes once per file after expansion; returned nodes are prepended. |
@@ -152,7 +148,6 @@ The exported limits are `MAX_EXPANSION_DEPTH = 64` nested calls and `MAX_EXPANSI
 | `items` | With `type: "array"`, checks each literal element as `"string"`, `"number"` or `"boolean"`. |
 | `required` | Requires the attribute or attribute tag. |
 | `enum` | Restricts an attribute to listed string literals. |
-| `values`, `pattern`, `ref` | With `type: "atom"`: the allowed names, a regex they must match, and the declaration kind (or kinds) they must name. |
 | `default` | Supplies an omitted string, number, or boolean attribute on the custom tag after validation; not applied to attribute-tag attributes (decision 138 E4). |
 | `literalOnly` | Requires a compile-time scalar, array, or object literal. |
 | `repeatable` | Allows an attribute tag name to appear more than once. |
@@ -183,7 +178,7 @@ is a positioned compile error.
 | `gensym` | Produces a hygienic file-unique binding, optionally using a hint. |
 | `fail` | Creates a positioned `TranslateError`; always write `throw ctx.fail(...)`. |
 | `hoist` | Moves code to the head of the nearest enclosing function. |
-| `declare` | In `analyze`: `declare(kind, name, { span, scope? })` adds a derived declaration for atom references. |
+| `declare` | In `analyze`: `declare(kind, name, { span, scope? })` adds a derived declaration a syntax module reads from `LoweredUnit.declared`. |
 | `store` | Private per-tag, per-file state shared by `analyze`, `transform`, and `finalize`. |
 | `get` | Reads one typed store key. |
 | `set` | Writes one store key. |
@@ -214,7 +209,7 @@ Messages begin with the relevant tag name unless the problem belongs to a discov
 | Trigger | Diagnostic form |
 | --- | --- |
 | A registration uses a core-owned name such as `try`. | `` `<name>` is a core-owned custom tag and cannot be shadowed by a registered custom tag of the same name `` |
-| An `attributes`/`attributeTags` declaration has an unknown key (e.g. the retired `staticOnly`/`repeated`). | `Unknown key "KEY" in the "NAME" attribute declaration of tag "TAG"; allowed: …` |
+| An `attributes`/`attributeTags` declaration has an unknown key (e.g. the retired `staticOnly`/`repeated`). | `Unknown key "KEY" in the "NAME" attribute declaration of tag "TAG"; allowed: …`; this includes `values`, `pattern`, `ref` and `declares`, unless the file's syntax module claims the key through `contractFields` |
 | A definition declares only `finalize`. | `` `<name>`: a custom tag that defines only `finalize` has no call site and nothing to collect… `` |
 | A called tag has neither a transform nor a template. | `` `<name>`: custom tag has neither a `transform` nor a template file… `` |
 | Nested custom-tag calls exceed 64. | `` `<name>`: custom tag expansion exceeded 64 nested invocations `` |
@@ -238,10 +233,7 @@ Messages begin with the relevant tag name unless the problem belongs to a discov
 | An enum receives a non-literal expression. | `` `<name>`: attribute `x` must be a static value from … `` |
 | An enum receives a non-string literal. | `` `<name>`: attribute `x` must be a string from …, got TYPE `` |
 | An enum string is not a member. | `` `<name>`: attribute `x` must be one of …, got VALUE `` |
-| An explicit atom meets a non-atom type, or a non-atom meets `type: "atom"` (the name sugar's `name` counts as a string for non-atom types). | `` `<name>`: attribute `x` must be atom, got string `` (and `must be string, got atom`); against `values` the message ends `(one of :a, :b)`, against `ref` `(a declared KIND)` |
-| An atom is outside `values`, fails `pattern`, or names no declaration of its `ref` kind. | `` `<name>`: attribute `x`: `:a` is not one of …`` / `does not match the pattern /…/` / `is not a declared KIND here (one of :a, :b +N more); did you mean `:b`?`; the list is sorted and capped at ten |
-| Two declarations of one name and kind (or `uniqueWith` kinds) share a scope. | `` `a` is already declared as `kind` at L:C `` (positioned at the second, `spans` holds both) |
-| A `declares` `scope` has no such ancestor. | `` `a` declares a `kind` scoped to `x` or `y`, but has no such ancestor `` |
+| A non-atom meets `type: "atom"`, or an atom meets another type. | `` `<name>`: attribute `x` must be atom, got string `` (and `must be string, got atom`); a syntax module that claims a key words the suffix |
 | A required attribute is absent. | `` `<name>`: missing required attribute `x` `` |
 | A declared default is not a string, number, or boolean. | `` `<name>`: attribute `x` declares a `default` that … has no attribute spelling `` |
 

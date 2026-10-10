@@ -130,7 +130,7 @@ export function createHtmlBunPlugin(
           const rest = isTranslateError(error) ? otherErrorsText(error) : "";
           if (!isTranslateError(error) || rest === "") throw error;
           // In place, so the thrown error stays `errors[0]` and keeps its
-          // stack, `dependencies`, `atomFacts` and `spans`.
+          // stack, `dependencies` and `spans`.
           Object.defineProperty(error, "message", {
             value: `${error.message}${rest}`,
             enumerable: false,

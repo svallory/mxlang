@@ -14,8 +14,8 @@
  * read, never written.
  */
 
-import { positionAt } from "./atom-contracts.ts";
 import { attrLabel } from "./attr-label.ts";
+import { positionAt } from "./contract-facts.ts";
 import { claimedFields, contractData } from "./contract-fields.ts";
 import { type Ctx, mxSpanOf, type Node, TranslateError, warn } from "./core.ts";
 import type {
@@ -98,11 +98,9 @@ export interface ContractExpression {
 }
 
 /**
- * Removal work, not part of the contract view: the leftover mark of a
- * whole-value atom or member the atom and member sugars wrote
- * (`ctx.attribute`'s `{ kind: "atom" | "member", name }`). It stays only
- * until the atoms-and-members dialect carries them as its own value
- * nodes; do not build on it. @unstable
+ * A whole-value atom or member a syntax module built (`ctx.attribute`'s
+ * `{ kind: "atom" | "member", name }`). Core has no syntax that builds one: it
+ * carries the module's value as it wrote it. @unstable
  */
 export interface ContractAtomOrMember {
   readonly type: "mx:Atom" | "mx:Member";
@@ -118,7 +116,7 @@ export interface ContractAtomOrMember {
  * `start` and `end`). A claimed node lowered to `ctx.expression` is the
  * value that expression makes, as if written there: `mx:Expression`, or
  * `mx:String` for a string literal (`mx:Atom` when it is atom-marked).
- * `ContractAtomOrMember` is removal work. Read `type`
+ * Read `type`
  * first; `type` does not narrow a dialect's node, so check its key and cast.
  * @unstable
  */

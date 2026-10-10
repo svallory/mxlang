@@ -411,29 +411,6 @@ describe('the `"member"` contract type', () => {
       ),
     ]);
   });
-
-  it.each(["values", "pattern", "ref"] as const)(
-    "`%s` stays atom-only",
-    (key) => {
-      const result = lowerSource("sort &a\n", "/v/entity.mx", {
-        dialect: memberSyntax,
-        customTags: {
-          sort: {
-            attributes: {
-              member: {
-                type: "member",
-                [key]:
-                  key === "values" ? ["a"] : key === "pattern" ? "^a$" : "kind",
-              },
-            },
-          },
-        },
-      });
-      expect(result.diagnostics.map((d) => d.message)).toEqual([
-        expect.stringContaining(`\`${key}\` requires \`type: "atom"\``),
-      ]);
-    },
-  );
 });
 
 describe("the unknown-tag scan takes the module too (PR 450's parseMxDocument)", () => {

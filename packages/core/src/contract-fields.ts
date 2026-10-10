@@ -2,10 +2,10 @@
  * Contract keys a dialect owns (`Dialect.contractFields`,
  * lang-ext-move-sugars-to-mesh slice a2). A claimed key is accepted at
  * registration as opaque data, reaches the module's `afterLower` on
- * `ContractCall.contract`, and is never checked by core. A key core checks
- * itself can be claimed only when it is one of the fields a module may take
- * over (the atom contract's `values`, `pattern`, `ref` and `declares`); any
- * other key core owns stays core's.
+ * `ContractCall.contract`, and is never checked by core. Any key core does
+ * not check itself can be claimed (`values`, `pattern`, `ref` and `declares`
+ * are keys of that kind); a key core owns stays core's. An unclaimed unknown
+ * key is a registration error.
  */
 import { isTranslateError, TranslateError } from "./core.ts";
 import type { ContractData } from "./lowered-unit.ts";
@@ -45,11 +45,6 @@ export interface ContractCheckContext {
    */
   fail(message: string, options?: { readonly code?: string }): never;
 }
-
-/** Core's attribute-declaration keys a module may take over. */
-export const MOVABLE_ATTRIBUTE_FIELDS = ["values", "pattern", "ref"] as const;
-/** Core's tag-contract keys a module may take over. */
-export const MOVABLE_TAG_FIELDS = ["declares"] as const;
 
 /** Core's attribute-declaration keys no module may claim. */
 const CORE_ATTRIBUTE_FIELDS = [
@@ -130,30 +125,12 @@ export function frozenData<T>(value: T): T {
   return frozenCopy(value, new WeakMap()) as T;
 }
 
-/** An attribute declaration without the keys `claimed` lists: what core may read of it. */
-export function unclaimedAttribute<T extends object>(
-  declaration: T,
-  claimed: ClaimedFields,
-): T {
-  if (![...claimed.attribute].some((key) => Object.hasOwn(declaration, key))) {
-    return declaration;
-  }
-  const own = { ...declaration } as Record<string, unknown>;
-  for (const key of claimed.attribute) delete own[key];
-  return own as T;
-}
-
 /** The contract keys a module reads besides the ones it claims. */
-const CONTRACT_DATA_KEYS = [
-  "attributes",
-  "attributeTags",
-  "children",
-  "declares",
-];
+const CONTRACT_DATA_KEYS = ["attributes", "attributeTags", "children"];
 
 /**
  * A contract's declarations as plain data, as a module reads them:
- * `attributes`, `attributeTags`, `children`, `declares` and the claimed tag
+ * `attributes`, `attributeTags`, `children` and the claimed tag
  * keys it states, deep-frozen copies of the registered objects (which stay
  * as they are). Pass one `memo` per unit so a contract several calls share
  * is copied once.
@@ -286,14 +263,6 @@ export function claimedFieldsOf(filePath: string): ClaimedFields {
   } catch (failure) {
     return { ...NONE, failure };
   }
-}
-
-/** Does the module take over any of the atom contract's fields? */
-export function claimsAtomFields(claimed: ClaimedFields): boolean {
-  return (
-    MOVABLE_ATTRIBUTE_FIELDS.some((key) => claimed.attribute.has(key)) ||
-    MOVABLE_TAG_FIELDS.some((key) => claimed.tag.has(key))
-  );
 }
 
 /**

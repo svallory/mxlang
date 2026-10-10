@@ -923,26 +923,17 @@ sets `name="email"` (above), and that `name` keeps its atom-ness in the IR,
 `lowerSource`'s included (addendum 1, item 2). `x=:a :b` is the atom value `x="a"` plus
 `name="b"`.
 
-**Atoms in contracts (decision 156 PR 2; ADR 156 section 4).** A contract
-attribute declared `{ type: "atom" }` accepts an atom or a literal list of
-atoms; `values` (a set of names), `pattern` (a regex source string) and `ref`
-(a declaration kind, or a list of kinds) restrict it. An atom where the
-contract says `string`, and a string where it says `atom`, are type errors, so
-explicit `x=:a` against `string` stays an error and `name="title"` against an
-atom-typed `name` is an error. The **name sugar** (`:title`) is the exception
-(decision 156 addendum 6): its `name` satisfies `string` and `enum` contracts as
-its string, and `atom` contracts as the atom. A tag's `declares` (`kind`, `from` `"id"`|`"name"`, `scope`, `under`,
-`uniqueWith`) and `ctx.declare` from `analyze` state names; checking is two
-phases (every declaration, then every reference), a reference resolves against
-the enclosing scopes innermost first and last the file scope, which is the
-default `scope` of a declaration and the home of a `ctx.declare` outside every
-call (addendum 7); `values`, `pattern` and `ref` are checked on attribute-tag
-attributes at any depth too; `scope` is a tag name or a list (the
-nearest ancestor with one of those names; none is an error, addendum 5), and
-two declarations of one name and kind in a scope are an error carrying both
-spans (`TranslateError.spans`, see below). An unknown name is an error on the atom that lists the candidates (sorted, at most ten, then `+N more`) and a did-you-mean. `ref`
-checks the one file. Without a contract an atom is never an error. See
-[Custom tags: atoms in contracts](/custom-tags/sidecars/#sidecars-declare-the-call-contract-atoms-in-contracts).
+**Atoms in contracts.** A contract attribute declared `{ type: "atom" }`
+accepts a whole-value atom a syntax module built, or a literal list of them. An
+atom where the contract says `string`, and a string where it says `atom`, are
+type errors; a member is not an atom either way. A syntax module that builds
+atoms owns the rest: `values`, `pattern`, `ref` and `declares` are not core
+keys, and a syntax module may claim them (and any other key core does not
+know) through `contractFields`, check them in `checkContract` and `afterLower`,
+and word core's shape error through `describeAttribute`. `ctx.declare` from
+`analyze` states derived names for the module to read through `LoweredUnit`.
+Without a module that claims it, a contract key core does not know is the
+unknown-key error. See [Custom tags: the contract](/custom-tags/reference/).
 
 **Errors core owns**, each positioned at the atom: member access (`:a.length`,
 `:a[0]`), a call (`:a(1)`), a unary operator (`-:a`, `!:a`, `typeof :a`),
@@ -2708,7 +2699,7 @@ their existing registration behavior.
 |---|---|
 | `` `<${name}>` is a core-owned custom tag and cannot be shadowed by a registered custom tag of the same name `` | A registered map contains `try`. |
 | `` `<${name}>`: a custom tag that defines only `finalize` has no call site and nothing to collect; add a `transform`, an `analyze` or a template file `` | `finalize` alone. |
-| `` Unknown key "${key}" in the "${attrName}" attribute declaration of tag "${tagName}"; allowed: type, items, required, enum, default, literalOnly, values, pattern, ref `` | Unknown attribute-declaration key. |
+| `` Unknown key "${key}" in the "${attrName}" attribute declaration of tag "${tagName}"; allowed: type, items, required, enum, default, literalOnly `` | Unknown attribute-declaration key. |
 | `` Invalid "${attrName}" attribute declaration of tag "${tagName}": `items` requires `type: "array"` `` | `items` on an attribute whose `type` is not `"array"` (decision 138). |
 | `` Invalid "${attrName}" attribute declaration of tag "${tagName}": `items` must be one of string, number, boolean `` | An `items` value outside the three literal element types. |
 | `` Invalid "${attrName}" attribute declaration of tag "${tagName}": `enum` cannot be combined with `type: "array"` `` | `enum` with `type: "array"` or `type: "function"` (the message names the type). |
@@ -3030,8 +3021,7 @@ runtime, and a template using none of it imports none of it.
 
 ### The contract
 
-An error about more than one place (a duplicate declaration: the first and the
-second) also carries `TranslateError.spans`, the source spans in file offsets
+An error about more than one place (a module's `fail` with `also`) also carries `TranslateError.spans`, the source spans in file offsets
 in source order; its `line`/`column` are the last one's.
 
 A `TranslateError` carries **1-based `line`** and **0-based `column`** — what

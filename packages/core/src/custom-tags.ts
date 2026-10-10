@@ -7,22 +7,17 @@
  * custom tag existed.
  */
 
-import {
-  atomExpectation,
-  plainStringOf,
-  positionAt,
-} from "./atom-contracts.ts";
 import { attrLabel } from "./attr-label.ts";
 import {
   fallbackAttrTagShape,
   unifyNestedAttrTagPlanGroups,
 } from "./attr-tag.ts";
+import { positionAt } from "./contract-facts.ts";
 import {
   type ClaimedFields,
   checkClaimedContract,
   claimedFields,
   frozenData,
-  unclaimedAttribute,
 } from "./contract-fields.ts";
 import type { Ctx, Node } from "./core.ts";
 import { isTranslateError, TranslateError, warn } from "./core.ts";
@@ -84,8 +79,8 @@ export interface CustomTagAttribute {
    * (`asc &dueOn` in Mesh) or a dynamic value that is one marked member
    * (`on:load=&visible`); nothing else. An `expression` slot accepts a
    * member too, an `atom` slot refuses both forms.
-   * Membership checks are the module's `afterLower` job: `values`, `pattern`
-   * and `ref` stay atom-only.
+   * Which atoms or members a slot allows is the module's job: it claims the
+   * keys that say so (`Dialect.contractFields`) and checks them itself.
    */
   type?:
     | "string"
@@ -96,18 +91,6 @@ export interface CustomTagAttribute {
     | "function"
     | "atom"
     | "member";
-  /**
-   * `type: "atom"` only (decision 156): the allowed names, like an enum. An
-   * atom (`:name`), or a list of them, is checked name by name.
-   */
-  values?: string[];
-  /** `type: "atom"` only: a regex source string every atom name must match. */
-  pattern?: string;
-  /**
-   * `type: "atom"` only: the atom must name a declaration of this kind (or one
-   * of these kinds) visible from the reference, in this file.
-   */
-  ref?: string | string[];
   /** The literal element type of an `array` attribute; a non-literal element passes. */
   items?: "string" | "number" | "boolean";
   required?: boolean;
@@ -260,26 +243,6 @@ export interface AnalyzeContext {
     name: string,
     options: { span: SourceSpan; scope?: string | string[] },
   ): void;
-}
-
-/**
- * One thing a tag's contract declares (decision 156 addendum 1, items 4, 7, 10).
- * The tag's `name` (including `:name`) or its `#id` becomes a name of `kind`.
- */
-export interface ContractDeclaration {
-  /** A plain kind name; the same name in two contract modules is one kind. */
-  kind: string;
-  /** Where the name comes from: the `#id` sugar or the `name` attribute. */
-  from: "id" | "name";
-  /**
-   * The nearest ancestor whose tag name is this one (or one of these) owns the
-   * declaration; default the root tag. No such ancestor is a positioned error.
-   */
-  scope?: string | string[];
-  /** Also clash with a same-named declaration of these kinds in the scope. */
-  uniqueWith?: string[];
-  /** Applies only under this parent tag (or one of these). No `under` means any parent. */
-  under?: string | string[];
 }
 
 export interface FinalizeContext {
@@ -557,12 +520,6 @@ export interface CustomTag {
   children?: CustomTagChildren;
   /** Allowed authored direct parents; `#root` is a unit's top level and `@name` an attribute tag. */
   parents?: string[];
-  /**
-   * The names this tag declares for atom references (decision 156). One entry
-   * or an array; the most specific entry whose `under` matches the parent wins,
-   * else the entry without `under`.
-   */
-  declares?: ContractDeclaration | ContractDeclaration[];
   analyze?(calls: readonly TagCall[], ctx: AnalyzeContext): void;
   transform?(call: TagCall, ctx: TransformContext): IrNode[] | TagCall;
   finalize?(ctx: FinalizeContext): IrNode[];
@@ -1192,8 +1149,8 @@ function checkCompositeAttr(
  * Checks an `atom` attribute against its written shape (decision 156): an atom
  * or a literal list of atoms. A string, a number or a function is a type error
  * at the offending value; an identifier, call, member or conditional has no
- * knowable type and passes. Which names are allowed is the file-level check's
- * business (`atom-contracts.ts`).
+ * knowable type and passes. Which names are allowed is the claiming module's
+ * business.
  */
 function checkAtomAttr(
   owner: string,
@@ -1215,23 +1172,24 @@ function checkAtomAttr(
     );
   }
   const shape = attrShape(attr);
-  // A plain string against a `ref` atom is reported by the file-level check,
-  // once the declarations exist and the error can list the names.
-  if (declaration.ref !== undefined && plainStringOf(attr) !== undefined) {
-    // A module that claims `ref` reports it from its `afterLower`. The shape
-    // check stays core's (decision 183 addendum 2): its own error is queued
-    // behind that hook, so the module's diagnostics keep their order and a
-    // module that checks nothing still gets it.
-    if (claims?.claimed.attribute.has("ref")) {
-      claims.defer(
-        new TranslateError(
-          `${owner}: attribute ${attrLabel(attr)} must be atom, got string${expected}`,
-          at.line,
-          at.column,
-          at.file,
-        ),
-      );
-    }
+  // A plain string against an atom declaration that uses a key the module
+  // claims: the module may word it itself (it can list the names), so
+  // the shape check stays core's but its error is queued behind the module's
+  // `afterLower`. The module's diagnostics keep their order, and a module that
+  // checks nothing still gets the error.
+  if (
+    claims &&
+    usesClaimedKey(declaration, claims.claimed) &&
+    plainStringOf(attr) !== undefined
+  ) {
+    claims.defer(
+      new TranslateError(
+        `${owner}: attribute ${attrLabel(attr)} must be atom, got string${expected}`,
+        at.line,
+        at.column,
+        at.file,
+      ),
+    );
     return;
   }
   if (shape && shape !== "atom" && shape !== "array") {
@@ -1780,27 +1738,36 @@ export interface ClaimContext {
   defer(error: TranslateError): void;
 }
 
+/** Does the declaration use a key the file's dialect claims? */
+function usesClaimedKey(
+  declaration: CustomTagAttribute,
+  claimed: ClaimedFields,
+): boolean {
+  return Object.keys(declaration).some((key) => claimed.attribute.has(key));
+}
+
+/** The text of an attribute written as a plain string (not an atom, not an expression), else undefined. */
+function plainStringOf(attr: Attr): string | undefined {
+  if (attr.kind === "static") return attr.atom ? undefined : attr.value;
+  if (attr.kind !== "dynamic") return undefined;
+  const node = attr.value.node;
+  return node?.type === "StringLiteral" && !node.extra?.mxAtom
+    ? String(node.value)
+    : undefined;
+}
+
 /**
- * What core's shape error says an atom declaration accepts. Core never
- * reads a key the module claims: a declaration that uses a claimed `values`
- * or `ref` is worded by the module's `describeAttribute`, else from the keys
- * core keeps.
+ * What core's shape error says an atom declaration accepts. Core reads no
+ * key a module claims: a declaration that uses one is worded by the module's
+ * `describeAttribute`, else not at all.
  */
 function expectationOf(
   declaration: CustomTagAttribute,
   claimed: ClaimedFields | undefined,
 ): string {
-  const usesClaimed =
-    claimed !== undefined &&
-    (["values", "ref"] as const).some(
-      (key) => claimed.attribute.has(key) && Object.hasOwn(declaration, key),
-    );
-  if (!usesClaimed) return atomExpectation(declaration);
-  if (claimed.describe) {
-    const text = claimed.describe(frozenData({ ...declaration }));
-    return typeof text === "string" ? text : "";
-  }
-  return atomExpectation(unclaimedAttribute(declaration, claimed));
+  if (!claimed?.describe || !usesClaimedKey(declaration, claimed)) return "";
+  const text = claimed.describe(frozenData({ ...declaration }));
+  return typeof text === "string" ? text : "";
 }
 
 /**
@@ -1907,9 +1874,6 @@ const ATTRIBUTE_KEYS = [
   "enum",
   "default",
   "literalOnly",
-  "values",
-  "pattern",
-  "ref",
 ] as const;
 const CHILD_KEYS = ["repeatable", "required"] as const;
 const ATTRIBUTE_TAG_KEYS = [
@@ -1927,63 +1891,11 @@ const WILDCARD_ATTRIBUTE_TAG_KEYS = [
 
 const ITEM_TYPES = ["string", "number", "boolean"] as const;
 
-/** A non-empty string, or a non-empty array of them. */
-function nonEmptyStrings(value: unknown): boolean {
-  const ok = (item: unknown) => typeof item === "string" && item !== "";
-  return Array.isArray(value) ? value.length > 0 && value.every(ok) : ok(value);
-}
-
-const DECLARES_KEYS = ["kind", "from", "scope", "uniqueWith", "under"] as const;
-
-/** Rejects a malformed `declares` at registration, naming the tag and the entry. */
-function rejectInvalidDeclares(tagName: string, definition: CustomTag): void {
-  if (definition.declares === undefined) return;
-  const entries: unknown[] = Array.isArray(definition.declares)
-    ? definition.declares
-    : [definition.declares];
-  const reject = (problem: string): never => {
-    throw new TranslateError(
-      `Invalid \`declares\` of tag "${tagName}": ${problem}`,
-      0,
-      0,
-    );
-  };
-  if (entries.length === 0) reject("it has no entries");
-  for (const entry of entries as Array<Record<string, unknown>>) {
-    if (typeof entry !== "object" || entry === null) {
-      reject("each entry must be an object");
-    }
-    for (const key of Object.keys(entry)) {
-      if (!(DECLARES_KEYS as readonly string[]).includes(key)) {
-        reject(`unknown key "${key}"; allowed: ${DECLARES_KEYS.join(", ")}`);
-      }
-    }
-    if (typeof entry.kind !== "string" || entry.kind === "") {
-      reject("`kind` must be a non-empty kind name");
-    }
-    if (entry.from !== "id" && entry.from !== "name") {
-      reject('`from` must be "id" or "name"');
-    }
-    for (const key of ["scope", "under"] as const) {
-      if (entry[key] !== undefined && !nonEmptyStrings(entry[key])) {
-        reject(`\`${key}\` must be a tag name or an array of tag names`);
-      }
-    }
-    if (
-      entry.uniqueWith !== undefined &&
-      !(Array.isArray(entry.uniqueWith) && nonEmptyStrings(entry.uniqueWith))
-    ) {
-      reject("`uniqueWith` must be an array of kind names");
-    }
-  }
-}
-
 /** Rejects a declaration whose keys contradict each other, at registration. */
 function rejectContradictoryAttribute(
   owner: string,
   attrName: string,
   declaration: CustomTagAttribute,
-  claimed: ReadonlySet<string>,
 ): void {
   const reject = (problem: string): never => {
     throw new TranslateError(
@@ -2000,41 +1912,8 @@ function rejectContradictoryAttribute(
       reject(`\`items\` must be one of ${ITEM_TYPES.join(", ")}`);
     }
   }
-  for (const key of ["values", "pattern", "ref"] as const) {
-    if (claimed.has(key)) continue;
-    if (declaration[key] !== undefined && declaration.type !== "atom") {
-      reject(`\`${key}\` requires \`type: "atom"\``);
-    }
-  }
-  if (declaration.type === "atom") {
-    if (declaration.enum !== undefined) {
-      reject('`enum` cannot be combined with `type: "atom"`; use `values`');
-    }
-    if (
-      !claimed.has("values") &&
-      declaration.values !== undefined &&
-      !(
-        Array.isArray(declaration.values) &&
-        declaration.values.every((value) => typeof value === "string")
-      )
-    ) {
-      reject("`values` must be an array of strings");
-    }
-    if (!claimed.has("pattern") && declaration.pattern !== undefined) {
-      try {
-        if (typeof declaration.pattern !== "string") throw new TypeError();
-        new RegExp(declaration.pattern);
-      } catch {
-        reject("`pattern` must be a valid regular expression source string");
-      }
-    }
-    if (
-      !claimed.has("ref") &&
-      declaration.ref !== undefined &&
-      !nonEmptyStrings(declaration.ref)
-    ) {
-      reject("`ref` must be a kind name or an array of kind names");
-    }
+  if (declaration.type === "atom" && declaration.enum !== undefined) {
+    reject('`enum` cannot be combined with `type: "atom"`');
   }
   if (
     declaration.enum &&
@@ -2117,8 +1996,6 @@ export function rejectUnknownDeclarationKeys(
     rejectNonStringDefaultTag(`\`<${tagName}>\``, definition);
     // A key the file's dialect claims is its data, not core's to
     // check: the module's `checkContract` checks it here, at registration.
-    if (!claimed.tag.has("declares"))
-      rejectInvalidDeclares(tagName, definition);
     checkClaimedContract(tagName, definition, claimed);
     rejectRecursiveContractKeys(
       `tag "${tagName}"`,
@@ -2255,7 +2132,7 @@ function rejectRecursiveContractKeys(
         : [...new Set([...ATTRIBUTE_KEYS, ...claimed])],
       `"${attrName}" attribute declaration`,
     );
-    rejectContradictoryAttribute(owner, attrName, declaration, claimed);
+    rejectContradictoryAttribute(owner, attrName, declaration);
   }
   for (const [childName, declaration] of explicitChildEntries(
     definition.children,

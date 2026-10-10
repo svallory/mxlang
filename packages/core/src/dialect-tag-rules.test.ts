@@ -173,44 +173,6 @@ describe.each([
   });
 });
 
-// A test preload may run MX's suites through a dialect set on this global;
-// those files are still MX's, under their target's rules.
-describe("the test fallback dialect keeps MX's own tag rules", () => {
-  const FALLBACK = Symbol.for("@mxlang/core:fallbackSyntaxForTesting");
-  const global = globalThis as Record<symbol, unknown>;
-  afterEach(() => {
-    delete global[FALLBACK];
-  });
-
-  it("its `tagRules` never reach the compile entries", () => {
-    global[FALLBACK] = Object.freeze({
-      id: "fallback",
-      name: "Fallback",
-      table: {},
-      tagRules: "none",
-    });
-    expect(compile(join(dir, "page.mx"))).toContain(VOID_ERROR);
-    expect(fragment(join(dir, "page.mx"))).toContain(VOID_ERROR);
-  });
-
-  // `<html-comment>`'s raw body comes from the HTML rules' taglib, which this
-  // test host does not register: the fallback must not bring it in.
-  it("the host's own taglibs stay in force under it", () => {
-    const source = "<html-comment>x <i>z</html-comment>\n";
-    const run = () =>
-      messageOf(() =>
-        compileSource(source, join(dir, "page.mx"), host, {
-          targets: lookup,
-          emitIr: () => "",
-        }),
-      );
-    const without = run();
-    expect(without).toBeDefined();
-    global[FALLBACK] = Object.freeze({ id: "fallback", name: "F", table: {} });
-    expect(run()).toBe(without);
-  });
-});
-
 describe("a dialect's id is unique on the compile path too", () => {
   it("two dependencies with one id fail `compileSource`, naming both", () => {
     dialectProject(dir, { packageName: "a-dialect" });

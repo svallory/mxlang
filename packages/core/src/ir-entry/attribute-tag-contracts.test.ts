@@ -91,66 +91,6 @@ describe("recursive attribute-tag contracts through lowerSource (decision 138 E4
   );
 });
 
-describe("atom contracts on attribute-tag attributes through lowerSource (decision 156 addendum 7)", () => {
-  const atomTags: Record<string, CustomTag> = {
-    box: {
-      declares: { kind: "node", from: "id" },
-      attributeTags: {
-        row: {
-          repeatable: true,
-          attributes: {
-            mode: { type: "atom", values: ["a", "b"] },
-            to: { type: "atom", ref: "node" },
-          },
-        },
-      },
-    },
-  };
-
-  it("accepts declared names and listed values", () => {
-    const result = lowerSource("<box#k><@row mode=:a to=:k/></box>", "/a.mx", {
-      customTags: atomTags,
-    });
-    expect(result.diagnostics).toEqual([]);
-  });
-
-  it.each([
-    // `<box><@row mode=:zzz/></box>` (not one of :a, :b) is pinned, same
-    // message and position, by core's `atom-contracts.test.ts` (round 3).
-    [
-      "<box><@row to=:nope/></box>",
-      "`<box>`: `<@row>`: attribute `to`: `:nope` is not a declared node here (none declared)",
-      14,
-    ],
-    [
-      '<box><@row mode="a"/></box>',
-      "`<box>`: `<@row>`: attribute `mode` must be atom, got string (one of :a, :b)",
-      16,
-    ],
-  ])("reports %s at the value", (source, message, column) => {
-    const result = lowerSource(source, "/a.mx", { customTags: atomTags });
-    expect(result.ir).toBeUndefined();
-    expect(result.diagnostics).toHaveLength(1);
-    expect(result.diagnostics[0]).toMatchObject({
-      severity: "error",
-      message,
-      line: 1,
-      column,
-    });
-  });
-
-  it("top-level siblings share the file scope", () => {
-    const tags: Record<string, CustomTag> = {
-      node: { declares: { kind: "node", from: "id" } },
-      link: { attributes: { to: { type: "atom", ref: "node" } } },
-    };
-    const result = lowerSource("<node#a/>\n<node#b/>\n<link to=:a/>", "/a.mx", {
-      customTags: tags,
-    });
-    expect(result.diagnostics).toEqual([]);
-  });
-});
-
 describe('attributeTags["*"] through lowerSource (decision 147, for attribute tags)', () => {
   const wildcardTags: Record<string, CustomTag> = {
     resource: {

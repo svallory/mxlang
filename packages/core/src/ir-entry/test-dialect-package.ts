@@ -15,12 +15,13 @@ export const FIXTURE_EXTENSIONS = [".member.mx"];
 /**
  * Writes the project at `dir` and its dialect package
  * `dir/node_modules/fixture-dialect`, whose module re-exports `module` (an
- * absolute path) and whose `id` and `name` are the module's own.
+ * absolute path) and whose `id` and `name` are the module's own and whose `extensions` default
+ * to {@link FIXTURE_EXTENSIONS}.
  */
 export function dialectPackage(
   dir: string,
   module: string,
-  identity: { id: string; name: string },
+  identity: { id: string; name: string; extensions?: string[] },
 ): void {
   const packageDir = join(dir, "node_modules", "fixture-dialect");
   mkdirSync(packageDir, { recursive: true });
@@ -31,7 +32,7 @@ export function dialectPackage(
       mx: {
         dialect: {
           ...identity,
-          extensions: FIXTURE_EXTENSIONS,
+          extensions: identity.extensions ?? FIXTURE_EXTENSIONS,
           module: "./index.cjs",
         },
       },

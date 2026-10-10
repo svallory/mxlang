@@ -37,7 +37,6 @@ An attribute declaration supports:
 - `enum`: accept only one of the listed string literals.
 - `default`: append a string, number, or boolean value when the call omits it.
 - `literalOnly`: reject values that cannot be read at compile time. Literal arrays and objects are accepted as well as scalar literals.
-- `values`, `pattern`, `ref`: with `type: "atom"` only (see [Atoms in contracts](#sidecars-declare-the-call-contract-atoms-in-contracts)); on any other type they are registration errors.
 
 Declaring `attributes` makes a closed contract: undeclared attributes and spreads are errors. Omitting `attributes` leaves attributes open.
 
@@ -45,37 +44,9 @@ Declaring `attributes` makes a closed contract: undeclared attributes and spread
 
 ### Atoms in contracts
 
-Decision 156 (ADR 156 section 4). `type: "atom"` accepts an atom (`mode=:strict`, the `:name` sugar) or a literal list of atoms (`accept=[:title, :body]`):
+`type: "atom"` accepts a whole-value atom that a syntax module built. An atom where the contract says `string` (or any other non-atom type), and a string where it says `atom`, are type errors (``attribute `x` must be string, got atom``), positioned at the value.
 
-```ts
-accept: { type: "atom", ref: "attribute" },            // must name a declared attribute
-load:   { type: "atom", ref: ["relationship", "computed"] }, // one of several kinds
-types:  { type: "atom", values: ["create", "read", "update", "destroy"] },
-slug:   { type: "atom", pattern: "^[a-z]+$" },          // regex source; with or without values
-any:    { type: "atom" },                               // any atom
-```
-
-An explicit atom where the contract says `string` (or any other non-atom type), and a string where it says `atom`, are type errors (``attribute `x` must be string, got atom``), positioned at the value (the atom, the string, the expression; a list item at the item). The same holds for attributes of an attribute tag at any depth, with the owner `` `<box>`: `<@row>`: `` in front, and `values`, `pattern` and `ref` are checked there too. The one exception is the name sugar (decision 156 addendum 6): `<field :email/>` sets `name`, which satisfies a `string` or `enum` contract as its string and an `atom` contract as the atom; `name="email"` against an atom-typed `name` is still an error. A name outside `values`, failing `pattern`, or not declared as a `ref` kind is a positioned error on the atom that lists the candidates (``is not one of :a, :b`` for `values`, ``is not a declared attribute here (one of :id, :title)`` for `ref`, ``(none declared)`` when there are none), sorted, at most ten and then `+N more`, with a did-you-mean when one candidate is clearly nearest. A type error against a contract with `values` lists them too (``must be atom, got string (one of :a, :b)``); against a `ref` it names the kinds (``(a declared attribute or action)``), because the declarations are collected after the call is checked. Editors do not complete atoms yet; `atomCandidates(facts, derived, offset)` in `@mxlang/core` answers "what can be written here" for a tool that wants to (`CompileResult.atomFacts`, or `TranslateError.atomFacts` when the atom check failed, holds its input). Without a contract an atom is never an error. `ref` checks the one file: a name it cannot find is an error, so an attribute that refers across files is simply not typed with `ref`.
-
-A tag states what it declares with `declares`, one entry or an array:
-
-```ts
-string: {
-  attributes: { name: { type: "atom" } },
-  declares: [
-    { kind: "attribute", from: "name", under: "attributes" },
-    { kind: "argument", from: "name", under: "arguments",
-      scope: ["create", "read", "update", "destroy", "action"] },
-  ],
-},
-```
-
-- `from`: `"name"` (the `name` attribute, including `:name`) or `"id"` (the `#id` sugar).
-- `under`: the parent tag name, or a list; an entry without `under` applies under any parent, and the entry whose `under` names the parent wins.
-- `scope`: a tag name or list; the declaration belongs to the nearest ancestor with one of those names (default: the file, decision 156 addendum 7: every reference in the file sees it, the outermost link of every resolution chain; a `ctx.declare` whose span is inside no call also lands there). No such ancestor is an error: ``` `x` declares an `argument` scoped to `update` or `action`, but has no such ancestor ```.
-- `uniqueWith`: kinds that also clash with this name in the scope.
-
-A reference resolves against every enclosing scope, innermost first; no tag "opens a context". Declarations are collected before references are checked, so source order does not matter, and a name `analyze` adds with `ctx.declare(kind, name, { span, scope })` is visible to every reference (`span` anchors the scope: the tag whose span holds it). Two declarations of one name and kind in one scope are an error positioned at the second and carrying both spans (`TranslateError.spans`). A kind is a plain name, so contract modules that use the same kind name share one namespace.
+Core knows no other atom key. `values`, `pattern`, `ref` and `declares` are not core keys: a contract that uses one gets the unknown-key error unless the file's syntax module claims it with `contractFields`. A module that claims them checks them in its own `checkContract` and `afterLower`, and words core's shape error through `describeAttribute`. `ctx.declare(kind, name, { span, scope })` in `analyze` still states a derived name; the module reads it from `LoweredUnit.declared`.
 
 ### Declare an attribute tag's own contract
 
