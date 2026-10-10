@@ -4,11 +4,13 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createTranslator } from "./compile.ts";
+import type { Ctx } from "./core.ts";
 import { CORE_TAGLIB } from "./core-taglib.ts";
 import {
   checkConfiguredDefaultTag,
   defaultTagScopeFor,
 } from "./default-tag-check.ts";
+import { validateDefaultTag } from "./default-tag-validate.ts";
 import { lookup as targets } from "./test-targets.ts";
 
 /** A real translator over Marko's html taglibs plus the core tags (await, try, define, effect). */
@@ -177,6 +179,51 @@ describe("defaultTagScopeFor: an element needs the host's say and Marko's html f
 
   it("the host's `false` still wins (data)", () => {
     expect(build({ isElement: () => false }).isElement?.("div")).toBe(false);
+  });
+
+  describe("the host's `isElement` reads the judging table as `ctx.tagTable` (review 480)", () => {
+    // The JSX and Angular hosts' rule: a name the table knows is an element
+    // when its taglib is an element taglib; casing decides only for a name
+    // the table does not know.
+    const ELEMENT_TAGLIBS = new Set(["marko-html", "marko-svg", "marko-math"]);
+    const hostLike = {
+      isElement: (name: string, ctx: Ctx) => {
+        const taglibId = ctx.tagTable?.getTag(name)?.taglibId;
+        if (taglibId !== undefined) return ELEMENT_TAGLIBS.has(taglibId);
+        return !/^[A-Z]/.test(name);
+      },
+    };
+    // A third-party taglib that redefines a native name and adds a
+    // custom-element-shaped tag of its own.
+    const acme = {
+      taglibs: [["acme-ui", { "<button>": {}, "<acme-card>": {} }]],
+      tagDiscoveryDirs: [],
+    };
+    const scope = defaultTagScopeFor({
+      dir: tmpdir(),
+      translator: acme,
+      declarations: hostLike as never,
+    });
+
+    it("rejects a native name the taglib took over, as the compile routes it", () => {
+      expect(
+        hostLike.isElement("button", { tagTable: scope.lookup } as Ctx),
+      ).toBe(false);
+      expect(scope.isElement?.("button")).toBe(false);
+      expect(validateDefaultTag("button", scope)).toBe(
+        "`<button>` is not an element of this target",
+      );
+    });
+
+    it("still accepts a native element the taglib left alone", () => {
+      expect(scope.isElement?.("div")).toBe(true);
+      expect(validateDefaultTag("div", scope)).toBeUndefined();
+    });
+
+    it("the native-element answer reads the table too", () => {
+      expect(scope.isNativeElement?.("acme-card")).toBe(false);
+      expect(scope.isNativeElement?.("my-widget")).toBe(true);
+    });
   });
 
   it("a custom-tag thunk that throws makes the custom tags unknown, nothing else", () => {

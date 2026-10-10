@@ -15,7 +15,7 @@ import {
   readTargetDefaultTag,
   type TargetPolicyDiagnostic,
 } from "./host-policy.ts";
-import { type NativeTags, tagTable } from "./tag-table.ts";
+import { type NativeTags, type TagTable, tagTable } from "./tag-table.ts";
 
 /** What one package's `mx.<target>.defaultTag` came to. */
 export interface CheckedDefaultTag {
@@ -224,9 +224,9 @@ let coreTranslator: unknown;
  * scans for itself build their view here, so they cannot disagree.
  */
 export function judgingLookup(
-  primary: { getTag(name: string): object | undefined } | undefined,
+  primary: TagTable | undefined,
   nativeTags: NativeTags | undefined,
-): { getTag(name: string): object | undefined } {
+): TagTable {
   coreTranslator ??= {
     taglibs: [[CORE_TAGLIB_ID, CORE_TAGLIB]],
     tagDiscoveryDirs: [],
@@ -248,21 +248,13 @@ export function judgingLookup(
  * declarations is covered too.
  */
 export function elementPredicate(
-  lookup: { getTag(name: string): object | undefined } | undefined,
+  lookup: TagTable,
   declarations: HostDeclarations | undefined,
 ): (name: string) => boolean {
-  const flagged = (name: string): boolean =>
-    (lookup?.getTag(name) as { html?: unknown } | undefined)?.html === true;
-  // SAFETY: the object below is cast `as unknown as Ctx`; `Ctx` is a
-  // compiler-internal type and `isElement` only reads `lookup`, `defines`
-  // and `imports` from it, so no field it touches is missing at runtime.
+  const flagged = (name: string): boolean => lookup.getTag(name)?.html === true;
+  const ctx = isElementCtx(lookup);
   return (name) =>
-    (!declarations?.isElement ||
-      declarations.isElement(name, {
-        lookup,
-        defines: new Set<string>(),
-        imports: new Set<string>(),
-      } as unknown as Ctx)) &&
+    (!declarations?.isElement || declarations.isElement(name, ctx)) &&
     flagged(name);
 }
 
@@ -272,17 +264,26 @@ export function elementPredicate(
  * no declarations cannot say.
  */
 export function nativeElementPredicate(
-  lookup: { getTag(name: string): object | undefined } | undefined,
+  lookup: TagTable,
   declarations: HostDeclarations | undefined,
 ): (name: string) => boolean {
-  // SAFETY: the object below is cast `as unknown as Ctx`; `Ctx` is a
-  // compiler-internal type and `isElement` only reads `lookup`, `defines`
-  // and `imports` from it, so no field it touches is missing at runtime.
+  const ctx = isElementCtx(lookup);
   return (name) =>
-    !!declarations?.isElement &&
-    declarations.isElement(name, {
-      lookup,
-      defines: new Set<string>(),
-      imports: new Set<string>(),
-    } as unknown as Ctx);
+    !!declarations?.isElement && declarations.isElement(name, ctx);
+}
+
+/**
+ * The compile state a host's `isElement` reads, outside a compile: the
+ * judging table as the compile's `ctx.tagTable`, and no file-local bindings.
+ */
+function isElementCtx(table: TagTable): Ctx {
+  const view: Pick<Ctx, "tagTable" | "defines" | "imports"> = {
+    tagTable: table,
+    defines: new Map(),
+    imports: new Set(),
+  };
+  // SAFETY: `Ctx` is compiler-internal, and a host's `isElement` reads only
+  // `tagTable`, `defines` and `imports` from it. `view` is typed as that
+  // `Pick` of `Ctx`, so renaming one of those fields fails to compile here.
+  return view as Ctx;
 }
