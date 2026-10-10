@@ -208,7 +208,7 @@ describe.skip("a host whose builtOn names no registered target", () => {
     const [message, ...rest] = verdict("data");
     expect(rest).toEqual([]);
     expect(message).toContain(
-      '"data" is reserved for the evaluated tree target (decision 187); the static tree target is "tree"',
+      '"data" is reserved for the evaluated tree target (decision 187); a consumer that reads the tree calls lowerSource from @mxlang/core',
     );
   });
 

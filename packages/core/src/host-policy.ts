@@ -850,7 +850,7 @@ export function resolveTargetPolicyDetailed(
         : undefined;
     const dataReserved =
       value === "data"
-        ? ' "data" is reserved for the evaluated tree target (decision 187); the static tree target is "tree".'
+        ? ' "data" is reserved for the evaluated tree target (decision 187); a consumer that reads the tree calls lowerSource from @mxlang/core.'
         : "";
     diagnostics.push({
       code: "unknown-target",

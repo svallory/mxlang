@@ -80,7 +80,7 @@ it('mx.target: "data" is refused as the reserved name (decision 187)', () => {
     length: 6,
   });
   expect(diagnostics[0]?.message).toContain(
-    '"data" is reserved for the evaluated tree target (decision 187); the static tree target is "tree"',
+    '"data" is reserved for the evaluated tree target (decision 187); a consumer that reads the tree calls lowerSource from @mxlang/core',
   );
 });
 it("tree is neither advertised nor suggested for an unknown target", () => {

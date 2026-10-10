@@ -3313,9 +3313,10 @@ lookup; tools use `@mxlang/targets`'s built-in wrapper.
    `unknown-target` **error** with its default target in the hint; other unknown
    names get a nearest-target suggestion when within two edits. The literal
    `data` is refused the same way, with a hint instead of a suggestion:
-   `"data" is reserved for the evaluated tree target (decision 187); the static
-   tree target is "tree"` — the name is kept for a future evaluated target
-   (decision 187; the hint's mention of `tree` predates decision 204). A package
+   `"data" is reserved for the evaluated tree target (decision 187); a consumer
+   that reads the tree calls lowerSource from @mxlang/core` — the name is kept
+   for a future evaluated target (decision 187), and the static tree is core's
+   IR from `lowerSource` (decision 204, §13.7). A package
    specifier (containing `/` or starting with `@`, `.` or `/`) is not a built-in
    name: it is loaded from the project as a third-party target (below).
 2. `mx.host` selects that host's default target. `mx.host: "html"` is accepted
@@ -3414,7 +3415,7 @@ first failing field), and two set rules join the reasons above, reported as
 
 | Rule | When | Message |
 |---|---|---|
-| `built-on-unknown` | the name is no registered target | `target "mesh-data" is built on "dta", which is not a registered target (registered: html, …, angular-template, mesh-data)`; when the name is a host name, `; "solid" is a host name, and builtOn takes a target name (did you mean "solid-jsx"?)`; when the name is the reserved literal `"data"`, `; "data" is reserved for the evaluated tree target (decision 187); the static tree target is "tree"` |
+| `built-on-unknown` | the name is no registered target | `target "mesh-data" is built on "dta", which is not a registered target (registered: html, …, angular-template, mesh-data)`; when the name is a host name, `; "solid" is a host name, and builtOn takes a target name (did you mean "solid-jsx"?)`; when the name is the reserved literal `"data"`, `; "data" is reserved for the evaluated tree target (decision 187); a consumer that reads the tree calls lowerSource from @mxlang/core` |
 | `built-on-loop` | the chain comes back to a target (itself included) | `target "a" is built on itself: a -> b -> a` |
 
 Core names no target: any target can be built on any other. A check that

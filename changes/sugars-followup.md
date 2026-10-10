@@ -4,7 +4,7 @@ kind: Fixed
 ---
 
 Follow-ups to the atoms-and-sugars syntax module (PR 460) from Mesh's review
-of it. `parseData`'s option shape is unchanged. Two additions are visible to
+of it. Two additions are visible to
 a syntax module such as Mesh's: `TriggerMethod.async` and the
 `"async-method"` value of `TriggerContext.valueForm` (with the new exported
 type `TriggerValueForm`).
@@ -27,13 +27,9 @@ type `TriggerValueForm`).
   because a hook gets no span for a method or argument value. Core's
   generic error for a trigger value the hook drops now reads "`<text>` takes no `=value` here: the `<id>` trigger does not place
   it", at the value, and no longer names `lowerTrigger`.
-- data: `DataDiagnostic.file` is set only when the diagnostic is in another
-  file than the one parsed, on the built-in and the module path alike. A
-  warning in the parsed file (a duplicate attribute) no longer carries its
-  own path.
 - core: Mesh's entity files and docs blocks are checked in as a golden parse
   corpus (`src/fixtures/syntax/mesh-corpus/`, MIT, attributed) and parsed by
-  `packages/targets/data/src/mesh-corpus.test.ts` through `syntax/mesh`.
+  `packages/core/src/ir-entry/mesh-corpus.test.ts` through `syntax/mesh`.
 - The lifetime of the two reference modules is documented: exported,
   `@unstable`, through the beta; Mesh vendors them at the alpha.15 pin.
 - `bun run test:sugar-module` exits 2 with a "not built" message when a
