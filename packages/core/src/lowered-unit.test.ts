@@ -39,7 +39,7 @@ import {
   defaultSyntax,
   resolveSyntaxOf,
 } from "./syntax-table.ts";
-import { dialectProject } from "./test-dialect-project.ts";
+import { dialectProject, reexport } from "./test-dialect-project.ts";
 import { testTargetLookup } from "./test-targets.ts";
 
 const targets = testTargetLookup();
@@ -1104,8 +1104,8 @@ describe("`contractFields` through a manifest", () => {
 
   /**
    * A project in `root` holding `files`. With `dialect`, it depends on a
-   * dialect package claiming `.mesh`, whose module is the reference Mesh
-   * dialect (`true`) or the given source, and the page is a `.mesh` file;
+   * dialect package claiming `.mesh`, whose module re-exports the reference
+   * Mesh dialect (`true`) or is the given source, and the page is a `.mesh` file;
    * without, the page is a `.mx` file.
    */
   function project(
@@ -1132,9 +1132,9 @@ describe("`contractFields` through a manifest", () => {
         id: "mesh",
         name: "Mesh",
         extensions: [".mesh"],
-        ...(dialect === true ? { module: MESH_MODULE } : {}),
+        ...(dialect === true ? { module: "./index.cjs" } : {}),
       },
-      ...(dialect === true ? {} : { module: dialect }),
+      module: dialect === true ? reexport(MESH_MODULE) : dialect,
       mx,
     });
     return join(root, "page.mesh");

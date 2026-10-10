@@ -3924,7 +3924,10 @@ the field path and, for a trigger, its `id`:
 - `extensions` is a non-empty list of the file extensions the dialect claims,
   each with its leading dot, none twice. `.mx` is MX's own and cannot be claimed.
 - `module` is a path, relative to that `package.json`, to the module whose
-  default export is the dialect (§13.9.3).
+  default export is the dialect (§13.9.3). It stays inside the package
+  (`./dialect.js`, or `dist/dialect.js` without the `./`), so a published
+  manifest works wherever the package is installed: an absolute path, or one
+  that climbs out with `..`, is an error.
 
 A malformed manifest is a `TranslateError` in the dialect's `package.json` at the
 offending field (at `mxDialect` itself for a missing one):
@@ -3941,6 +3944,7 @@ offending field (at `mxDialect` itself for a missing one):
 | Not an extension | `` `mxDialect.extensions`: "<value>" is not a file extension; write it with its leading dot (`.mesh`) `` |
 | An extension twice | `` `mxDialect.extensions` lists `<ext>` twice `` |
 | No `module` | `` `mxDialect.module` must be a path, relative to this `package.json`, to the module whose default export is the dialect `` |
+| A `module` outside the package | `` `mxDialect.module` must stay inside the dialect's package, so the manifest works wherever the package is installed: "<value>" is an absolute path; write a path relative to this `package.json` (`./dialect.js`) `` (`is outside the package` for one that climbs out with `..`) |
 
 **Discovery.** A file's project is its nearest `package.json`. Core reads that
 manifest's `dependencies`, `devDependencies`, `optionalDependencies` and

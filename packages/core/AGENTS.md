@@ -451,7 +451,9 @@ Five facts worth knowing before editing it:
   212; `src/dialect-discovery.ts`, `src/syntax-table.ts`).** A dialect is a
   package whose `package.json#mxDialect` declares `{ id, name, extensions,
   module }` (`DIALECT_MANIFEST_KEY`), validated eagerly with a positioned
-  error at the field. `discoverDialects(projectFile)` reads only the direct
+  error at the field; `module` must stay inside the package (absolute, or
+  out through `..`, is an error), so tests reach core's reference modules
+  through an in-package re-export (`reexport` in `test-dialect-project.ts`). `discoverDialects(projectFile)` reads only the direct
   dependencies of the file's nearest `package.json` (all four fields),
   found by a `node_modules` walk-up, statically (no dialect code runs), plus
   the project's own `mxDialect` (a dialect routes its own files).

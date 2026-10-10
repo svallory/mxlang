@@ -3,8 +3,8 @@
  * review 451 r1 BLOCKING 2): a lowered trigger's replacement is spliced into
  * the expression's code as an atom is, so the html target emits
  * `self.status`, never the authored `&status`. The module is core's
- * test-only member dialect, the module of a dialect package the temp project
- * depends on (decision 212), which claims `.mesh`.
+ * test-only member dialect, re-exported by the module of a dialect package
+ * the temp project depends on (decision 212), which claims `.mesh`.
  */
 import {
   mkdirSync,
@@ -34,9 +34,13 @@ beforeAll(() => {
         id: "member",
         name: "Mesh",
         extensions: [".mesh"],
-        module: MODULE,
+        module: "./index.cjs",
       },
     }),
+  );
+  writeFileSync(
+    join(dialect, "index.cjs"),
+    `module.exports = require(${JSON.stringify(MODULE)});\n`,
   );
   writeFileSync(
     join(dir, "package.json"),

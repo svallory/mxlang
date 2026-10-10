@@ -9,7 +9,7 @@ kind: Changed
   - `id` is lower-case words joined by `-`, never `mx`. It keys the dialect's node types and the project's `mx.extensions`.
   - `name` is the name tooling shows the dialect's users.
   - `extensions` lists the file extensions the dialect claims, each with its leading dot. `.mx` is always MX's.
-  - `module` is a path, relative to that `package.json`, to the module whose default export is the dialect.
+  - `module` is a path, relative to that `package.json`, to the module whose default export is the dialect. It must stay inside the package: an absolute path, or one that climbs out with `..`, is an error.
   - A malformed manifest is a positioned error at the field, in the dialect's `package.json`.
 - **Discovery reads only the project's direct dependencies.** The project is a file's nearest `package.json`. Core reads its `dependencies`, `devDependencies`, `optionalDependencies` and `peerDependencies`, finds each package where Node would, and keeps the ones that declare `mxDialect`. It never scans `node_modules`. A dialect package routes its own files too. A dialect's module loads only when a file it claims is compiled.
 - **Routing.** A file goes to the dialect that claims the longest extension its name ends with. Every other file parses with MX's default row, as before.

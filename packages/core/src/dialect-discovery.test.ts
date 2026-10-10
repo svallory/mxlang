@@ -67,6 +67,21 @@ describe("`package.json#mxDialect`", () => {
     ]);
   });
 
+  // A manifest's `module` stays inside its package (it must work wherever
+  // the package is installed); within it, `./` is optional and `..` is fine
+  // while the path stays in. Each module here throws, which proves the
+  // loader reached it.
+  it.each(["./index.mjs", "dist/dialect.mjs", "./dist/../lib/dialect.mjs"])(
+    "`module: %j` stays inside the package and loads",
+    (module) => {
+      dialectProject(dir, {
+        manifest: { module },
+        module: 'throw new Error("reached");',
+      });
+      expect(() => resolveSyntaxOf(join(dir, "page.tst"))).toThrow("reached");
+    },
+  );
+
   // The dialect package's `package.json`, as `dialectProject` writes it:
   // `mxDialect` on line 3, then `id`, `name`, `extensions` (lines 6 to 8)
   // and `module` on line 9.
@@ -143,6 +158,30 @@ describe("`package.json#mxDialect`", () => {
       { module: "" },
       [9, 4],
       "`mxDialect.module` must be a path, relative to this `package.json`, to the module whose default export is the dialect",
+    ],
+    [
+      "an absolute module",
+      { module: "/opt/dialects/mesh.js" },
+      [9, 4],
+      '`mxDialect.module` must stay inside the dialect\'s package, so the manifest works wherever the package is installed: "/opt/dialects/mesh.js" is an absolute path; write a path relative to this `package.json` (`./dialect.js`)',
+    ],
+    [
+      "a Windows absolute module",
+      { module: "C:\\dialects\\mesh.js" },
+      [9, 4],
+      "is an absolute path",
+    ],
+    [
+      "a module outside the package",
+      { module: "../other/index.js" },
+      [9, 4],
+      '"../other/index.js" is outside the package',
+    ],
+    [
+      "a module that climbs out through a subdirectory",
+      { module: "dist/../../index.js" },
+      [9, 4],
+      "is outside the package",
     ],
   ])(
     "%s is an error at the field, in the dialect's `package.json`",

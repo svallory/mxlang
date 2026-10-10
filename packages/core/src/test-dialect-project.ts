@@ -91,5 +91,14 @@ export function dialectProject(
   return { projectFile, packageFile, packageDir };
 }
 
+/**
+ * A CommonJS dialect module that re-exports `file` (an absolute path), for a
+ * package whose manifest names `./index.cjs`: a manifest's `module` stays
+ * inside its package, so a test reaches core's reference modules this way.
+ */
+export function reexport(file: string): string {
+  return `module.exports = require(${JSON.stringify(file)});`;
+}
+
 /** The packages each project directory lists, across calls. */
 const listedPackages = new Map<string, Map<string, string>>();

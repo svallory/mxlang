@@ -7,7 +7,7 @@
  * `node_modules` and never loads a transitive package. The dialect's module
  * is loaded by `syntax-table.ts`, only for a file with one of its extensions.
  */
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, posix, win32 } from "node:path";
 import { TranslateError } from "./core.ts";
 import { CORE_DIALECT, DIALECT_ID } from "./dialect-registry.ts";
 import { findNearestPackageJson } from "./host-policy.ts";
@@ -52,6 +52,22 @@ export interface DialectManifest {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+/**
+ * Why a manifest's `module` leaves its package, or `undefined` when it stays
+ * inside: an absolute path (POSIX or Windows), or a relative one that climbs
+ * out with `..`. `./dialect.js` and `dist/dialect.js` stay inside.
+ */
+function moduleEscape(module: string): string | undefined {
+  if (posix.isAbsolute(module) || win32.isAbsolute(module)) {
+    return "an absolute path";
+  }
+  const normalized = posix.normalize(module.replaceAll("\\", "/"));
+  if (normalized === ".." || normalized.startsWith("../")) {
+    return "outside the package";
+  }
+  return undefined;
 }
 
 /** Is `value` an extension a dialect may claim (`.mesh`, `.mesh.mx`)? */
@@ -149,6 +165,13 @@ export function readDialectManifest(
     fail(
       `\`${DIALECT_MANIFEST_KEY}.module\` must be a path, relative to this \`package.json\`, to the module whose default export is the dialect`,
       module === undefined ? undefined : "module",
+    );
+  }
+  const leaves = moduleEscape(module as string);
+  if (leaves) {
+    fail(
+      `\`${DIALECT_MANIFEST_KEY}.module\` must stay inside the dialect's package, so the manifest works wherever the package is installed: ${JSON.stringify(module)} is ${leaves}; write a path relative to this \`package.json\` (\`./dialect.js\`)`,
+      "module",
     );
   }
   return Object.freeze({

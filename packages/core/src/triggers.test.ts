@@ -17,7 +17,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { coreBabel } from "./babel.ts";
 import { compileSource } from "./compile.ts";
@@ -229,14 +229,24 @@ describe("the member dialect through the `dialect` option", () => {
 });
 
 describe("a dialect package (`package.json#mxDialect`, decision 212)", () => {
-  /** The member dialect, declared by a dependency, claiming `.mesh`. */
-  function memberProject(module: string = FIXTURE) {
-    return dialectProject(dir, {
+  /**
+   * The member dialect, declared by a dependency claiming `.mesh`, whose
+   * module (at `module`, inside the package) re-exports the fixture.
+   */
+  function memberProject(module = "./syntax.mjs") {
+    const project = dialectProject(dir, {
       manifest: { id: "member", name: "Mesh", extensions: [".mesh"], module },
     });
+    const file = join(project.packageDir, module);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(
+      file,
+      `export { default } from ${JSON.stringify(FIXTURE)};\n`,
+    );
+    return project;
   }
 
-  it("an absolute module loads the dialect and its hooks for the files it claims", () => {
+  it("the module loads the dialect and its hooks for the files it claims", () => {
     memberProject();
     const [sort] = elements(
       irOf("sort asc &dueOn\n", join(dir, "a.mesh")).body,
@@ -247,12 +257,8 @@ describe("a dialect package (`package.json#mxDialect`, decision 212)", () => {
     expect(resolveSyntaxOf(join(dir, "a.mx")).isDefault).toBe(true);
   });
 
-  it("a relative module resolves from the dialect's package", () => {
-    const { packageDir } = memberProject("./syntax.mjs");
-    writeFileSync(
-      join(packageDir, "syntax.mjs"),
-      `export { default } from ${JSON.stringify(FIXTURE)};\n`,
-    );
+  it("a package subpath with no `./` resolves from the dialect's package", () => {
+    memberProject("lib/syntax.mjs");
     const [input] = elements(
       irOf("fields\n  &title\n", join(dir, "a.mesh")).body,
     );

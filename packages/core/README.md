@@ -503,7 +503,8 @@ A dialect is a package (decision 212). It declares itself in its own
 `id` is lower-case words joined by `-` (never `mx`, MX's own); `name` is what
 tooling calls the dialect, and core's diagnostics on its files say it where
 they would say "MX"; `extensions` are the extensions it claims (never `.mx`);
-`module` is the path to the module whose default export is the dialect:
+`module` is the path, inside the package (never absolute, never out
+through `..`), to the module whose default export is the dialect:
 `{ table, … }`, a syntax table overlaid on the `.mx` default row, plus
 optional hooks (`lowerTrigger`, `lowerBlockTag`, `lowerFilter`, `afterLower`,
 the contract hooks below), a `tagRules` preset (`html` when it states none)
