@@ -56,6 +56,51 @@ describe("Define", () => {
     assertAngularParses(out);
   });
 
+  it("rejects body content on a `<define>` call instead of silently dropping it", () => {
+    // `ngTemplateOutletContext` carries positional arguments only; unlike
+    // Marko, which appends a trailing `{ content }` object, Angular has no
+    // channel for the body — a positioned error, not the silent-drop class.
+    try {
+      emit("<define/Row|a|>${a}</define>\n<Row(1)>body</Row>");
+      throw new Error("expected compile to fail");
+    } catch (error) {
+      expect((error as Error).message).toContain(
+        "body content on `<Row>` isn't supported by @mxlang/host-angular",
+      );
+      expect((error as Error).message).toContain(
+        "pass the value as a tag argument instead",
+      );
+      // The call tag itself, second line, column 0.
+      expect((error as { line?: number }).line).toBe(2);
+      expect((error as { column?: number }).column).toBe(0);
+    }
+  });
+
+  it("rejects a no-argument call's body content at the call tag", () => {
+    try {
+      emit("-- <define/Empty>hi</define>\n\n<Empty()>fallback</Empty>");
+      throw new Error("expected compile to fail");
+    } catch (error) {
+      expect((error as Error).message).toContain(
+        "body content on `<Empty>` isn't supported by @mxlang/host-angular",
+      );
+      expect((error as { line?: number }).line).toBe(3);
+      expect((error as { column?: number }).column).toBe(0);
+    }
+  });
+
+  it("compiles a call with an empty body exactly like the self-closing form", () => {
+    // `<Row(1)></Row>` has no content (decision 141 keeps `content: null`),
+    // so the empty closing form must keep compiling, byte-identical.
+    const closed = emit("<define/Row|a|>${a}</define><Row(1)></Row>");
+    const selfClosed = emit("<define/Row|a|>${a}</define><Row(1)/>");
+    expect(closed).toBe(selfClosed);
+    expect(closed).toBe(
+      '<ng-template #Row let-a> {{ a }} </ng-template><ng-container [ngTemplateOutlet]="Row" [ngTemplateOutletContext]="{ $implicit: 1 }"></ng-container>',
+    );
+    assertAngularParses(closed);
+  });
+
   it("rejects an attribute tag on a `<define>` call instead of silently dropping it", () => {
     // `ngTemplateOutletContext` is a positional argument object, not content
     // projection, so an attribute tag has nowhere to go — a positioned error

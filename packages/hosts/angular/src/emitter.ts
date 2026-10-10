@@ -2326,6 +2326,12 @@ class AngularEmitter implements Emitter<string> {
         node,
       );
     }
+    if (node.content !== null) {
+      fail(
+        `body content on \`<${target.name}>\` isn't supported by @mxlang/host-angular: a \`<define>\` call is projected with \`ngTemplateOutletContext\`, a positional argument object, not content projection — pass the value as a tag argument instead, \`<${target.name}(...)/>\``,
+        node,
+      );
+    }
     if (node.args.length !== target.params.length) {
       fail(
         `\`<${target.name}>\` expects ${target.params.length} argument(s), got ${node.args.length}`,
