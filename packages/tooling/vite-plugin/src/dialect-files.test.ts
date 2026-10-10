@@ -204,6 +204,53 @@ describe("importing a dialect file", () => {
       expect(error.loc).toEqual({ file: main, line: 1, column: 7 });
     });
 
+    it.each([
+      ["a file with an error of its own", PROBE_SOURCES.bad],
+      ["an empty file", ""],
+    ])(
+      "is refused at the import when the package is a sibling of the Vite root (%s)",
+      async (_, text) => {
+        const project = probeProject(
+          {
+            "package.json": JSON.stringify({ name: "root" }),
+            "app/package.json": JSON.stringify({ name: "app" }),
+            "app/main.ts": 'import "../pkg/a.probe";\n',
+            "pkg/package.json": JSON.stringify({
+              name: "pkg",
+              mx: { dialect: PROBE_MANIFEST },
+            }),
+            "pkg/dialect.cjs": PROBE_DIALECT_MODULE,
+            "pkg/a.probe": text,
+          },
+          { manifest: null },
+        );
+        const main = project.path("app/main.ts");
+        const error = await refusal(() =>
+          hooksFor(project.path("app")).call(context, "../pkg/a.probe", main),
+        );
+        expect(error.message).toBe(NO_EMIT);
+        expect(error.loc).toEqual({ file: main, line: 1, column: 7 });
+      },
+    );
+
+    it("is refused at the head of the file when it is loaded without an import", async () => {
+      const project = workspace(PROBE_SOURCES.ok);
+      const plugin = mx();
+      (plugin.configResolved as unknown as (c: unknown) => void)({
+        root: project.path("elsewhere"),
+        resolve: { alias: [] },
+      });
+      const load = plugin.load as unknown as Hook;
+      const file = project.path("pkg/a.probe");
+      const error = await refusal(() => load.call(context, file));
+      expect(error.message).toBe(NO_EMIT);
+      expect(error.loc).toEqual({ file, line: 1, column: 0 });
+      // A file of the same extension in a package with no dialect loads as before.
+      const plain = probeProject({ "b.probe": "x" }, { manifest: null });
+      expect(await load.call(context, plain.path("b.probe"))).toBeNull();
+      expect(await load.call(context, project.path("main.ts"))).toBeNull();
+    });
+
     it("leaves a sibling package's file alone", async () => {
       const project = probeProject(
         {

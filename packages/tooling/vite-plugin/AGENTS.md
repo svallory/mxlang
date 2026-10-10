@@ -385,9 +385,11 @@ failure (two dialects claim the extension): no dialect has a name, so the
 routing error is the refusal, at the dialect file. The refusal is in `resolveId` (after
 resolution, for an `.mx`-ending file; before the extension test for a
 dialect-owned extension such as `.probe`: `claimedByDialect` is only a
-pre-filter (the extensions of every package under the Vite root, plus the
-importer directory's, cached per build), and the refusal is decided on the
-resolved file by its own package, so a workspace package's dialect counts for
-a root that declares none) and in `transform` (an entry or a
+pre-filter (an extension no bundler handles itself, `NATIVE_EXTENSIONS`, or one claimed by
+the Vite root's packages, the importer's or the file's own directory, cached per
+build), and the refusal is decided on the resolved file by its own package, so a
+sibling of the root, a workspace package or a dependency may declare the dialect
+that the importer's package does not; `load` is the backstop at the head of the
+file for a non-native extension that arrives without a visible import) and in `transform` (an entry or a
 hand-built id). `?raw`, `?url` and the workers stay Vite's. The check loads
 lazily (`loadDialectCheck`), like the registry. Pins: `dialect-files.test.ts`.

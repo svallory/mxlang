@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, isAbsolute } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 import * as core from "@mxlang/core";
 import {
@@ -481,6 +481,28 @@ export function relabelBuildErrors(
   }
   return relabeled;
 }
+
+/**
+ * Extensions a bundler handles itself, on a file no dialect is likely to own:
+ * code, styles, data, images, fonts, media and the templates of other tools.
+ * An import ending in any other extension may be a dialect's file, whichever
+ * package declares the dialect (the root's, the importer's, a sibling's, one
+ * in `node_modules`), and is resolved to find out. A dialect that does claim
+ * one of these is still found through its own project's extensions.
+ */
+const NATIVE_EXTENSIONS: ReadonlySet<string> = new Set(
+  `js mjs cjs jsx ts tsx mts cts json json5 css scss sass less styl html htm
+   svg png jpg jpeg gif webp avif ico bmp woff woff2 ttf otf eot mp3 mp4 webm
+   wav ogg txt md mdx wasm vue svelte astro marko mx map node yaml yml toml
+   xml csv`.split(/\s+/),
+);
+
+/** The lower-cased extension of the last path segment of `path`, without its dot, or `undefined`. */
+const extensionOf = (path: string): string | undefined => {
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  const dot = name.lastIndexOf(".");
+  return dot <= 0 ? undefined : name.slice(dot + 1).toLowerCase();
+};
 
 /**
  * A specifier worth asking the resolver about: not a virtual module (`\0…`),
@@ -975,6 +997,13 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       ? undefined
       : unresolvedImport(sourcePath(importerPath, ext), specifier);
   };
+  const refuseDialectLoad = async (path: string): Promise<null> => {
+    if (await claimedByDialect(path, undefined)) {
+      const refusal = await dialectFileRefusal(path);
+      if (refusal) throw refusal;
+    }
+    return null;
+  };
   /** The Vite project root, once known (`configResolved`). */
   let projectRoot: string | undefined;
   /**
@@ -998,12 +1027,14 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
   /**
    * Whether an import of `path` may be a dialect's file, a cheap pre-filter
    * so that not every import is resolved twice: `path` ends in an extension
-   * that some dialect of the project root (any package under it) or of the
-   * importer's own project claims. Whether the resolved file is a dialect's
-   * is then decided on the file, by its own package (`isDialectFile`): a
-   * workspace package may declare the dialect that its importer's package
-   * does not. Cached per directory for the length of a build: an import of
-   * anything else must not read a manifest each time.
+   * no bundler handles itself (`NATIVE_EXTENSIONS`), or one that a dialect of
+   * the project root (any package under it), of the importer's own project or
+   * of the file's own directory claims. Whether the resolved file is a
+   * dialect's is then decided on the file, by its own package
+   * (`isDialectFile`): a workspace package, a sibling of the root or a
+   * dependency may declare the dialect that its importer's package does not.
+   * Cached per directory for the length of a build: an import of anything
+   * else must not read a manifest each time.
    */
   const dialectExtensionsAt = new Map<string, readonly string[]>();
   let rootDialectExtensions: readonly string[] | undefined;
@@ -1011,6 +1042,10 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     path: string,
     importer: string | undefined,
   ): Promise<boolean> => {
+    const extension = extensionOf(path);
+    if (extension !== undefined && !NATIVE_EXTENSIONS.has(extension)) {
+      return true;
+    }
     const directory = dirname(importer ?? path);
     const check = await loadDialectCheck();
     if (rootDialectExtensions === undefined) {
@@ -1167,7 +1202,20 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     load(id: string) {
       const [path] = splitId(id);
       const ext = isMxModule(path);
-      if (ext === undefined) return null;
+      if (ext === undefined) {
+        // The backstop for a dialect file that reached the build without an
+        // import this plugin could see (a dependency's import, an alias, a
+        // glob): refused at the head of the file, by its own package.
+        // Only an extension no bundler handles itself is asked about here, so
+        // an ordinary module costs nothing; a dialect that claims one of the
+        // native extensions is refused at its import.
+        const extension = extensionOf(path);
+        return isAbsolute(path) &&
+          extension !== undefined &&
+          !NATIVE_EXTENSIONS.has(extension)
+          ? refuseDialectLoad(path)
+          : null;
+      }
 
       // A real `Foo.solid.mx.tsx` on disk is a different module and must not
       // be shadowed: only claim the id when the un-suffixed MX file is the
