@@ -58,9 +58,9 @@ const ASTRO_SUPPORTED_EXTENSIONS = [
 ];
 
 /**
- * The directories whose dialects this run takes into account: the current
- * directory, the directory of each project `-p`/`--project` (or each `-b`
- * argument) names, and the directory of every project those reference
+ * The directories whose dialects this run takes into account: the directory
+ * of each project `-p`/`--project` (or each `-b` argument) names, or the
+ * current directory when it names none, and the directory of every project those reference
  * (`references` in a `tsconfig.json`, followed recursively). A dialect's
  * extensions are a property of the project that uses it, and `runTsc` wants
  * the extension list before the program exists.
@@ -69,7 +69,6 @@ export function dialectProjectDirs(
   argv: readonly string[],
   cwd: string,
 ): string[] {
-  const dirs = new Set([cwd]);
   const named: string[] = [];
   for (let index = 0; index < argv.length; index++) {
     const arg = argv[index] ?? "";
@@ -77,13 +76,15 @@ export function dialectProjectDirs(
       const value = argv[index + 1];
       if (value !== undefined && !value.startsWith("-")) named.push(value);
     } else if (arg === "-b" || arg === "--build") {
-      // `-b` takes any number of projects, up to the next flag.
+      // `-b` takes any number of projects, with its flags (`--verbose`,
+      // `--force`, `--dry`: none takes a value) in any order around them.
       for (const value of argv.slice(index + 1)) {
-        if (value.startsWith("-")) break;
-        named.push(value);
+        if (!value.startsWith("-")) named.push(value);
       }
     }
   }
+  // Without a project named, tsc takes the current directory's.
+  const dirs = new Set<string>(named.length === 0 ? [cwd] : []);
   const seen = new Set<string>();
   const visit = (project: string): void => {
     const path = resolve(cwd, project);

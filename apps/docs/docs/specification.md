@@ -3582,7 +3582,7 @@ unknown-target error in every tool (§4). The name `data` stays reserved
 language server and the TypeScript plugin route a file to its dialect
 (§13.9.2), run `lowerSource` on it under the dialect's syntax and tag rules
 (`tagRules`), and report its diagnostics with `source` set to the dialect's
-`name` (`mxlang` for a file no dialect routes) and `code` set to the code the
+`name` (`mxlang` when two dialects claim its extension and routing cannot settle which) and `code` set to the code the
 dialect gave. `mx-tsc` prints that code in place of `TS<number>`. No
 JavaScript is generated for a dialect's file. Building a file calls its
 dialect's emit, and the Vite plugin, which builds, refuses to import a dialect

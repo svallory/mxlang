@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   cleanupProbeProjects,
   PROBE_DIALECT_MODULE,
+  PROBE_MANIFEST,
   PROBE_SOURCES,
   probeProject,
 } from "../../../../test-fixtures/dialects/probe.ts";
@@ -12,8 +13,9 @@ import mx, { MX_SUFFIX } from "./index";
 /**
  * A dialect file is built by its dialect, and a dialect registers no emit, so
  * the plugin refuses to import one: at the import (`resolveId`), and for an
- * entry or a hand-built id (`transform`). Every refusal is positioned in the
- * dialect file. A non-dialect `.mx` file is unaffected (index.test.ts pins
+ * entry or a hand-built id (`transform`). A refusal is positioned at the
+ * import in the importing file, and at the head of the dialect file when
+ * there is no import to point at. A non-dialect `.mx` file is unaffected (index.test.ts pins
  * its output).
  */
 
@@ -165,6 +167,68 @@ describe("importing a dialect file", () => {
     });
   });
 
+  describe("a dialect declared by the imported file's package, not the importer's", () => {
+    const workspace = (probe: string) =>
+      probeProject(
+        {
+          "package.json": JSON.stringify({ name: "root" }),
+          "pkg/package.json": JSON.stringify({
+            name: "pkg",
+            mx: { dialect: PROBE_MANIFEST },
+          }),
+          "pkg/dialect.cjs": PROBE_DIALECT_MODULE,
+          "pkg/a.probe": probe,
+          "main.ts": 'import "./pkg/a.probe";\n',
+        },
+        { manifest: null },
+      );
+    const hooksFor = (root: string) => {
+      const plugin = mx();
+      (plugin.configResolved as unknown as (c: unknown) => void)({
+        root,
+        resolve: { alias: [] },
+      });
+      return plugin.resolveId as unknown as Hook;
+    };
+
+    it.each([
+      ["a file with an error of its own", PROBE_SOURCES.bad],
+      ["an empty file", ""],
+    ])("is refused at the import (%s)", async (_, text) => {
+      const project = workspace(text);
+      const main = project.path("main.ts");
+      const error = await refusal(() =>
+        hooksFor(project.dir).call(context, "./pkg/a.probe", main),
+      );
+      expect(error.message).toBe(NO_EMIT);
+      expect(error.loc).toEqual({ file: main, line: 1, column: 7 });
+    });
+
+    it("leaves a sibling package's file alone", async () => {
+      const project = probeProject(
+        {
+          "package.json": JSON.stringify({ name: "root" }),
+          "pkg/package.json": JSON.stringify({
+            name: "pkg",
+            mx: { dialect: PROBE_MANIFEST },
+          }),
+          "pkg/dialect.cjs": PROBE_DIALECT_MODULE,
+          "other/package.json": JSON.stringify({ name: "other" }),
+          "other/b.probe": "plain\n",
+          "main.ts": 'import "./other/b.probe";\n',
+        },
+        { manifest: null },
+      );
+      expect(
+        await hooksFor(project.dir).call(
+          context,
+          "./other/b.probe",
+          project.path("main.ts"),
+        ),
+      ).toBeNull();
+    });
+  });
+
   it("two dialects claim the extension: no dialect has a name, so the routing error is the refusal", async () => {
     const project = probeProject(
       { "a.probe": PROBE_SOURCES.ok, "main.ts": importer("./a.probe") },
@@ -191,8 +255,8 @@ describe("importing a dialect file", () => {
     const error = await refusal(() =>
       hooks().resolveId.call(context, "./a.probe", project.path("main.ts")),
     );
-    expect(error.message).toMatch(
-      /^two dialects claim `\.probe`: `probe` \(probe-dialect\) and `other` \(other-dialect\)\./,
+    expect(error.message).toBe(
+      `two dialects claim \`.probe\`: \`probe\` (probe-dialect) and \`other\` (other-dialect). Choose one in \`mx.extensions\` in MX's config: \`"extensions": { ".probe": "probe" }\` (in ${project.path("package.json")}:1:152)`,
     );
     expect(error.loc).toEqual({ file, line: 1, column: 0 });
   });

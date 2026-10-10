@@ -975,6 +975,8 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       ? undefined
       : unresolvedImport(sourcePath(importerPath, ext), specifier);
   };
+  /** The Vite project root, once known (`configResolved`). */
+  let projectRoot: string | undefined;
   /**
    * The authored file behind `importer` (the file for a JS/TS importer, the
    * `.mx` source for one of this plugin's virtual ids) and the specifier as
@@ -994,23 +996,39 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     };
   };
   /**
-   * Whether the project around `directory` hands `path`'s extension to a
-   * dialect. Cached per directory for the length of a build: an import of
+   * Whether an import of `path` may be a dialect's file, a cheap pre-filter
+   * so that not every import is resolved twice: `path` ends in an extension
+   * that some dialect of the project root (any package under it) or of the
+   * importer's own project claims. Whether the resolved file is a dialect's
+   * is then decided on the file, by its own package (`isDialectFile`): a
+   * workspace package may declare the dialect that its importer's package
+   * does not. Cached per directory for the length of a build: an import of
    * anything else must not read a manifest each time.
    */
   const dialectExtensionsAt = new Map<string, readonly string[]>();
+  let rootDialectExtensions: readonly string[] | undefined;
   const claimedByDialect = async (
     path: string,
     importer: string | undefined,
   ): Promise<boolean> => {
     const directory = dirname(importer ?? path);
+    const check = await loadDialectCheck();
+    if (rootDialectExtensions === undefined) {
+      rootDialectExtensions =
+        projectRoot === undefined
+          ? []
+          : check.dialectExtensionsUnder(projectRoot);
+    }
     let claimed = dialectExtensionsAt.get(directory);
     if (claimed === undefined) {
-      claimed = (await loadDialectCheck()).dialectExtensions(directory);
+      claimed = check.dialectExtensions(directory);
       dialectExtensionsAt.set(directory, claimed);
     }
-    return claimed.some(
-      (ext) => path.length > ext.length && path.endsWith(ext),
+    const endsWithClaimed = (ext: string) =>
+      path.length > ext.length && path.endsWith(ext);
+    return (
+      claimed.some(endsWithClaimed) ||
+      rootDialectExtensions.some(endsWithClaimed)
     );
   };
   /**
@@ -1029,6 +1047,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     enforce: "pre",
 
     configResolved(config) {
+      projectRoot = config.root;
       aliases = [...config.resolve.alias];
       resolveImport = aliases.length > 0 ? aliasResolver : undefined;
       void loadRegistry();
@@ -1036,6 +1055,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
 
     async buildStart() {
       dialectExtensionsAt.clear();
+      rootDialectExtensions = undefined;
       await ensureExtensions();
     },
 

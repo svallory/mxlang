@@ -11,6 +11,7 @@ import {
   probeProject,
 } from "../../../../test-fixtures/dialects/probe.ts";
 import { runInProcess } from "./in-process.ts";
+import { dialectProjectDirs } from "./index.ts";
 
 /**
  * `mx-tsc` checks a dialect's files with `lowerSource` and prints what it
@@ -167,15 +168,18 @@ describe("mx-tsc on a dialect's files", () => {
       );
     });
 
-    it("`-b` follows the project's references to a package outside its own directory", {
-      timeout: 120_000,
-    }, () => {
-      const project = probeProject(
+    const buildWorkspace = () =>
+      probeProject(
         {
           "app/tsconfig.json": JSON.stringify({
             files: [],
             references: [{ path: "../pkg" }],
           }),
+          "other/tsconfig.json": JSON.stringify({
+            compilerOptions: { types: [] },
+            include: ["**/*.ts"],
+          }),
+          "other/ok.ts": "export {};\n",
           "pkg/tsconfig.json": JSON.stringify({
             compilerOptions: {
               composite: true,
@@ -198,6 +202,13 @@ describe("mx-tsc on a dialect's files", () => {
         },
         { manifest: null },
       );
+    const diagnosticLines = (project: ReturnType<typeof buildWorkspace>) =>
+      `${shown(project.path("pkg/a.probe"))}(1,4): error PROBE_BAD: bad probe`;
+
+    it("`-b` follows the project's references to a package outside its own directory", {
+      timeout: 120_000,
+    }, () => {
+      const project = buildWorkspace();
       const result = runInProcess([
         "-b",
         project.path("app"),
@@ -205,9 +216,66 @@ describe("mx-tsc on a dialect's files", () => {
         "false",
       ]);
       expect(stripVTControlCharacters(result.stderr + result.stdout)).toBe(
-        `${shown(project.path("pkg/a.probe"))}(1,4): error PROBE_BAD: bad probe\n`,
+        `${diagnosticLines(project)}\n`,
       );
       expect(result.status).not.toBe(0);
     });
+
+    it("`-b` takes every project it is given, not only the first", {
+      timeout: 120_000,
+    }, () => {
+      const project = buildWorkspace();
+      const result = runInProcess([
+        "-b",
+        project.path("other"),
+        project.path("pkg"),
+        "--pretty",
+        "false",
+      ]);
+      expect(stripVTControlCharacters(result.stderr + result.stdout)).toBe(
+        `${diagnosticLines(project)}\n`,
+      );
+    });
+
+    it("`-b` takes its flags in any order around the projects", {
+      timeout: 120_000,
+    }, () => {
+      const project = buildWorkspace();
+      const result = runInProcess([
+        "-b",
+        "--verbose",
+        project.path("app"),
+        "--pretty",
+        "false",
+      ]);
+      const lines = stripVTControlCharacters(result.stderr + result.stdout)
+        .split("\n")
+        .filter((line) => line.includes("a.probe"))
+        .filter((line) => line.includes("error"));
+      expect(lines).toEqual([diagnosticLines(project)]);
+    });
+  });
+});
+
+describe("dialectProjectDirs", () => {
+  const cwd = process.cwd();
+
+  it("walks the current directory only when no project is named", () => {
+    expect(dialectProjectDirs([], cwd)).toEqual([cwd]);
+    expect(dialectProjectDirs(["--pretty", "false"], cwd)).toEqual([cwd]);
+    const project = probeProject({ "tsconfig.json": "{}" });
+    expect(dialectProjectDirs(["-p", project.dir], cwd)).toEqual([project.dir]);
+    expect(dialectProjectDirs(["-b", project.dir], cwd)).toEqual([project.dir]);
+  });
+
+  it("takes every `-b` argument that is not a flag, wherever the flags are", () => {
+    const first = probeProject({ "tsconfig.json": "{}" });
+    const second = probeProject({ "tsconfig.json": "{}" });
+    expect(
+      dialectProjectDirs(["-b", "--verbose", first.dir, second.dir], cwd),
+    ).toEqual([first.dir, second.dir]);
+    expect(
+      dialectProjectDirs(["--build", first.dir, "--force", second.dir], cwd),
+    ).toEqual([first.dir, second.dir]);
   });
 });
