@@ -901,7 +901,16 @@ function lowerAttr(
     lowered.args = args.map((arg: Node) => exprOf(ctx, arg));
   }
   if (lowered.kind !== "spread") {
-    const span = wholeAttrSpan(lowered);
+    // The parsed `MxArguments`' `outer` runs `(` through `)` (ast §3.4); the
+    // argument expressions alone would end the span at the last argument
+    // (`a(b` for `a(b)`), and at the name for `a()`.
+    const outer =
+      args && attr?.type === "MxAttribute" ? attr.args?.outer : undefined;
+    const argsSpan: SourceSpan | undefined =
+      typeof outer?.start === "number" && typeof outer?.end === "number"
+        ? { sourceStart: outer.start, sourceEnd: outer.end }
+        : undefined;
+    const span = wholeAttrSpan(lowered, argsSpan);
     if (span) lowered.span = span;
   }
   return lowered;
@@ -909,8 +918,8 @@ function lowerAttr(
 
 /**
  * The whole span of a named attribute, from the spans its parts already
- * carry: the name through the value, arguments, refinement and method body
- * included; a name sugar's token (`:email`, `#id`). A spread takes its parsed
+ * carry: the name through the value, arguments (their parentheses, from
+ * `argsSpan`), refinement and method body included; a name sugar's token (`:email`, `#id`). A spread takes its parsed
  * node's range instead (`lowerAttrNamed`). Read from the lowered parts, not the
  * parsed node: the front end's range for a default attribute runs on over a
  * name sugar written after it (`<x="post" :email>`), which lowering splits
@@ -918,6 +927,7 @@ function lowerAttr(
  */
 function wholeAttrSpan(
   attr: Exclude<Attr, { kind: "spread" }>,
+  argsSpan?: SourceSpan,
 ): SourceSpan | undefined {
   let start = Number.POSITIVE_INFINITY;
   let end = Number.NEGATIVE_INFINITY;
@@ -940,6 +950,7 @@ function wholeAttrSpan(
   add(valueSpan);
   if (attr.kind === "bound") add(attr.refinement?.span);
   for (const arg of attr.args ?? []) add(arg.span);
+  add(argsSpan);
   return Number.isFinite(start) && Number.isFinite(end)
     ? { sourceStart: start, sourceEnd: end }
     : undefined;

@@ -1,9 +1,12 @@
+import { createRequire } from "node:module";
 import { WEB_ELEMENTS } from "@mxlang/web-elements";
 import { describe, expect, it } from "vitest";
 import { compileSource } from "./compile.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import type { Attr, DelegatedTag, Ir, IrNode } from "./ir.ts";
+import { lowerSource } from "./ir-entry/index.ts";
 import type { SourceSpan } from "./mapping.ts";
+import type { SyntaxModule } from "./syntax-table.ts";
 import { lookup } from "./test-targets.ts";
 
 /**
@@ -514,6 +517,40 @@ describe("a whole attribute's span", () => {
       ["onClick", "onClick=h"],
       ["x", "x(1, 2)=3"],
     ]);
+  });
+
+  // Review 484 r4 B1: the span runs through the closing `)`, which belongs
+  // to none of the argument expressions.
+  it.each([
+    ["<x a()/>\n", "a()"],
+    ["<x a(b)/>\n", "a(b)"],
+    ["<x a( b , c )/>\n", "a( b , c )"],
+    ["<x a((b))/>\n", "a((b))"],
+    ["x a(b, c)\n", "a(b, c)"],
+    ["x a(b) c\n", "a(b)"],
+  ])("closes an argument list: %j", (source, expected) => {
+    expect(attrSpans(source)[0]).toEqual(["a", expected]);
+  });
+
+  it("closes an argument list on an attribute tag", () => {
+    const source = "<x>\n  <@t a(b) c/>\n</x>\n";
+    const t = delegatedTag(irOf(source, claimAll).body[0]).attributeTags[0];
+    if (!t) throw new Error("expected an attribute tag");
+    expect(t.attrs.map((a) => slice(source, a.span))).toEqual(["a(b)", "c"]);
+  });
+
+  it("closes an argument list holding a member (`item a(&b)`)", () => {
+    const memberSyntax = (
+      createRequire(import.meta.url)("./syntax/member.ts") as {
+        default: SyntaxModule;
+      }
+    ).default;
+    const source = "item a(&b)\n";
+    const result = lowerSource(source, "/t.mx", { syntax: memberSyntax });
+    expect(result.diagnostics).toEqual([]);
+    const node = result.ir?.body[0];
+    if (node?.kind !== "DelegatedTag") throw new Error("expected a tag");
+    expect(node.tag.attrs.map((a) => slice(source, a.span))).toEqual(["a(&b)"]);
   });
 
   it.each([

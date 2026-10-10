@@ -51,14 +51,14 @@ resource="post" table="posts"
 
 ### `SpannedIr`
 
-The returned IR is core's `Ir` with the span guarantee in its type: every `span` is required, at every depth. A `DelegatedTag` and an `AttributeTag` also carry their `nameSpan`, and a `DelegatedTag` always has `args` (`[]` when the tag has none). A static attribute always has its `valueSpan`, an atom's and a member's included (`e=""` spans its quotes; a bare colon name such as `x:foo`, whose value is `""`, has a zero-width one at the name's end), and an `Import` always has `from` and `names`. `bodySpan` and `paramSpans` stay optional. A node that should have a span or one of these fields and does not is an `internal error`, never a silent `undefined`.
+The returned IR is core's `Ir` with the span guarantee in its type (`SpannedIr` is `Spanned<Ir>`; `Spanned<T>` is exported for a consumer that types one node, such as `Spanned<DelegatedTag>`): every `span` is required, at every depth. A `DelegatedTag` and an `AttributeTag` also carry their `nameSpan`, and a `DelegatedTag` always has `args` (`[]` when the tag has none). A static attribute always has its `valueSpan`, an atom's and a member's included (`e=""` spans its quotes; a bare colon name such as `x:foo`, whose value is `""`, has a zero-width one at the name's end), and an `Import` always has `from` and `names`. `bodySpan` and `paramSpans` stay optional. A node that should have a span or one of these fields and does not is an `internal error`, never a silent `undefined`.
 
 Two more properties of the returned IR:
 
 - **It is a fresh copy on every call.** Core's own IR is never handed out, so a consumer may mutate what it gets.
 - **A tag's span ends at the tag.** In concise syntax core measures a tag through the end of its line; the entry point trims the trailing line terminator (`\n` or `\r\n`), so `source.slice(span.sourceStart, span.sourceEnd)` is `"b\n  c"` for a concise `b` with a child `c`, never `"b\n  c\n"`. A `<tag/>` span is unchanged.
 
-`IR_VERSION` (from `@mxlang/core`) is the version of the IR's shape. A dialect asserts it to detect a core whose IR it was not written against; it goes up with every change a reader can observe.
+`IR_VERSION` (from `@mxlang/core`) is the version of the IR's shape. A dialect asserts it to detect a core whose IR it was not written against; it goes up with every change a reader can observe. A test in core pins it with a hash of the IR's type declarations, so a change of shape cannot ship without a bump.
 
 ### What a dialect reads
 
@@ -120,6 +120,8 @@ A preset decides which tag names have a parse rule of their own. `none`, the def
 | `none` | none | the module statements (`import`, `static`, `export`), plus `<const>` and `<return>` as open-tag-only |
 | `markup` | the web elements, with their HTML parse rules | core's statement tags (`import`, `static`, `export`, `client`, `server`, `class`), plus `<const>` and `<return>` as open-tag-only; what the JSX, Solid, Astro and Angular hosts register |
 | `html` | the web elements, with their HTML parse rules | every entry of core's taglib (`if`, `for`, `script`, `let`, the statement tags, …): the html target's table |
+
+`tagRulesPreset(name, nativeTags?)` returns a preset's `TagRules` (the tag-table entries and the native elements it parses under), and `TAG_RULES_PRESETS` lists the three names, `["html", "markup", "none"]`.
 
 Under `none`, Marko's 19 HTML parse rules are off: void (`area base br col embed hr img input link meta param source track wbr`), raw text bodies (`script style textarea title`) and preserved whitespace (`pre`). A tag named `source`, `input`, `title`, `script` or `pre` parses like any other tag and may have child tags, and host-owned names (`id`, `log`, `debug`, `class`) are ordinary tags. The cost: a tag-like `<name` inside a `script`, `style`, `textarea` or `title` body parses as a tag, not text. This is the one place a `none` file is not a Marko file: Marko rejects `<source><input/></source>`, `none` accepts it.
 

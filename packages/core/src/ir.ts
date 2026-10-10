@@ -43,17 +43,19 @@ import type { Node } from "./core.ts";
 import type { SourceSpan } from "./mapping.ts";
 import type { TemplateMetadata } from "./template-tag.ts";
 
-/** A source position, as Marko reports one and `TranslateError` carries it. */
 /**
  * The version of the IR's shape (decision 204). A consumer that reads the
  * IR itself (a dialect, through `lowerSource`) asserts it to detect a core
  * whose IR it was not written against. It goes up by one with every change
  * a reader could observe: a node kind or field added, removed, renamed or
  * given a new meaning. A host that only emits through `Emitter` need not read
- * it. @unstable
+ * it. `ir-entry/ir-version.test.ts` pins it with a hash of this file's type
+ * declarations (and `Spanned`'s), so a shape change fails until it goes up; a
+ * change of meaning alone is the author's to catch. @unstable
  */
 export const IR_VERSION = 1;
 
+/** A source position, as Marko reports one and `TranslateError` carries it. */
 export interface Position {
   /** 1-based, as Marko and `TranslateError` both count lines. */
   line: number;

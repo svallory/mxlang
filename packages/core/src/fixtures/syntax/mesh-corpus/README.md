@@ -53,6 +53,13 @@ then regenerate the golden and review its diff:
 MESH_CORPUS_UPDATE=1 bun x vitest run packages/core/src/ir-entry/mesh-corpus.test.ts
 ```
 
+Regenerating the golden never touches `IR_VERSION`. A change to the IR's
+shape fails `packages/core/src/ir-entry/ir-version.test.ts` until
+`IR_VERSION` goes up by one and its pinned hash is updated. A change of
+meaning with no change of shape (a field that now holds something else) is
+not caught by that test: when a golden diff shows one, bump `IR_VERSION` by
+hand.
+
 Slice c (the deletion of core's built-in atoms and sugars) must pass the
 golden test unchanged; a change to the golden in that slice is a
 behaviour change and needs a ruling.
