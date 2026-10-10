@@ -50,8 +50,9 @@ import type { TemplateMetadata } from "./template-tag.ts";
  * a reader could observe: a node kind or field added, removed, renamed or
  * given a new meaning. A host that only emits through `Emitter` need not read
  * it. `ir-entry/ir-version.test.ts` pins it with a hash of this file's type
- * declarations (and `Spanned`'s), so a shape change fails until it goes up; a
- * change of meaning alone is the author's to catch. @unstable
+ * declarations (and `Spanned`'s, `SourceSpan`'s and `TemplateMetadata`'s), so
+ * a shape change fails until it goes up; a change of meaning alone is the
+ * author's to catch. @unstable
  */
 export const IR_VERSION = 1;
 

@@ -9,7 +9,8 @@ import * as core from "../index.ts";
  * `IR_VERSION`'s contract (decision 204, lead ruling: +1 on every change a
  * reader of the IR can observe), checked (review 484 r4 B2). The pin is the
  * version together with a hash of the IR's type declarations: `ir.ts`,
- * `ir-entry/spans.ts` (`Spanned`/`SpannedIr`) and `SourceSpan`, printed
+ * `ir-entry/spans.ts` (`Spanned`/`SpannedIr`), `SourceSpan` and
+ * `TemplateMetadata` (`Ir.tagMetadata`, review 484 r5 L1), printed
  * without comments so a comment or formatting edit does not trip it. A shape
  * change fails here until `IR_VERSION` goes up and the hash is re-pinned.
  *
@@ -19,7 +20,7 @@ import * as core from "../index.ts";
 
 const PINNED = {
   irVersion: 1,
-  shape: "969e1cfccecef8677ed5a16353c874e9b189e2b76c40efaf718cfdb65e434c06",
+  shape: "b27f14d954b6066a379d8fa2ad2f426c2af82f19232f2bee3f12b3a5c9cd89f7",
 };
 
 /** Type-level declarations only: a function body in `spans.ts` is not shape. */
@@ -51,6 +52,7 @@ function shapeHash(): string {
     declarations("ir.ts"),
     declarations("ir-entry/spans.ts"),
     declarations("mapping.ts", new Set(["SourceSpan"])),
+    declarations("template-tag.ts", new Set(["TemplateMetadata"])),
   ].join("\n");
   return createHash("sha256").update(text).digest("hex");
 }
