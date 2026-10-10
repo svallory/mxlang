@@ -285,6 +285,14 @@ export function nodeTypeRegistry(
 }
 
 /**
+ * Is `type` a registry key (`ref:Ref`)? A claimed node's type is its node
+ * type's key; MX's own node types never hold a colon.
+ */
+export function isRegistryKey(type: unknown): type is string {
+  return typeof type === "string" && /^[^:\s]+:[^:\s]+$/.test(type);
+}
+
+/**
  * The registry key a row's `node` names: its own for `{ type, dialect }`,
  * else core's `mx:Trigger` (a `{ call }` row, and the built-in
  * `"attribute"` spelling, are core's trigger node).

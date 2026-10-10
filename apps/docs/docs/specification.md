@@ -4443,7 +4443,9 @@ being lowered), never set together with `atom` or `member`.
 `ctx.fail(message, { at?, code? })` in `parse` is a positioned error at the
 node's text, or at `at`, carrying `code`. It is raised while the file parses
 and stops the parse, so it is the file's error even when an earlier line holds
-a parse error.
+a parse error. Line and attribute hooks (`lower`, and a `{ call }` row's
+`lowerTrigger`) run once each, in source order, so the first failing trigger
+in the source is the file's error.
 
 A row names a type of core (`mx`) or of its own dialect. Naming another
 dialect's types is not supported yet.

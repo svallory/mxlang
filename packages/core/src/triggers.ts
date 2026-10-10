@@ -44,6 +44,7 @@ import { raiseDeferredContractErrors } from "./custom-tags.ts";
 import {
   isCallRow,
   isNodeTypeRow,
+  isRegistryKey,
   nodeTypeRegistry,
   type RegisteredNode,
   rowKey,
@@ -149,47 +150,39 @@ export function isTriggerLowered(trigger: Node): boolean {
 }
 
 /**
- * Is `type` a registry key (`ref:Ref`)? A claimed node's type is its node
- * type's key; MX's own node types never hold a colon. The node is lowered
- * through the registry by this key, which refuses a key nothing registers.
- */
-function isRegisteredKey(type: unknown): boolean {
-  return typeof type === "string" && /^[^:\s]+:[^:\s]+$/.test(type);
-}
-
-/**
  * Is `node` a trigger node of the tree: core's `MxTrigger`, or a node a
  * registered type claimed? Read from `node.type` alone.
  */
 function isTriggerNode(node: Node): boolean {
-  return node?.type === "MxTrigger" || isRegisteredKey(node?.type);
+  return node?.type === "MxTrigger" || isRegistryKey(node?.type);
 }
 
 /**
- * The row a claimed node came from: the first row of `position` naming the
- * node's type whose `chars` and `match` take `text` (the parser asks rows in
- * that order).
+ * The row a claimed node came from, picked as the parser picks it: a list
+ * arms at most one row per first character (the table check refuses a
+ * shared one), so the first code point of the node's text names the row.
+ * A row naming another type, or none, is an internal error.
  */
 function claimedRow(
   table: SyntaxTable,
   position: "attribute" | "line",
-  type: string,
+  node: Node,
   text: string,
-): Trigger | undefined {
-  const rows = table[TRIGGER_LISTS[position]].filter(
-    (row) => isNodeTypeRow(row.node) && rowKey(row.node) === type,
-  );
-  if (rows.length <= 1) return rows[0];
-  return (
-    rows.find((row) => {
-      if (!row.chars.includes(text.charAt(0))) return false;
-      try {
-        return new RegExp(`^(?:${row.match})$`).test(text);
-      } catch {
-        return false;
-      }
-    }) ?? rows[0]
-  );
+): Trigger {
+  const first = String.fromCodePoint(text.codePointAt(0) ?? 0);
+  const row = table[TRIGGER_LISTS[position]].find((each) => {
+    try {
+      return new RegExp(`^[${each.chars}]$`, "u").test(first);
+    } catch {
+      return false;
+    }
+  });
+  if (!row || rowKey(row.node) !== node.type) {
+    throw new Error(
+      `internal: the \`${node.type}\` node at ${node.start} has no ${position} row naming its type`,
+    );
+  }
+  return row;
 }
 
 /**
@@ -212,7 +205,7 @@ function triggerOf(
     type: "MxTrigger",
     start: node.start,
     end: node.end,
-    id: claimedRow(table, position, node.type, text)?.id ?? node.type,
+    id: claimedRow(table, position, node, text).id,
     position,
     text,
     operator: node.operator ?? null,

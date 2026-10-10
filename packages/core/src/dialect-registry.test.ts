@@ -24,6 +24,7 @@ import type { Attr, Ir, IrNode } from "./ir.ts";
 import { type Dialect, defaultSyntax, type Trigger } from "./syntax-table.ts";
 import { dialectProject } from "./test-dialect-project.ts";
 import { lookup as targets } from "./test-targets.ts";
+import { attributesWithTriggers, childrenWithTriggers } from "./triggers.ts";
 
 const declarations = {
   tags: {},
@@ -251,6 +252,59 @@ describe("the lowering cache: each node lowered once, in source order", () => {
       "attribute:d",
       "line:e",
     ]);
+  });
+});
+
+describe("a claimed node's row is the one the parser matched", () => {
+  /** Two line rows of one type; `tilde`'s `chars` and `match` need the `u` flag. */
+  const twoRows = (chars: string, match: string): Dialect => ({
+    ...REF_DIALECT,
+    table: {
+      lineTriggers: [
+        { ...REF, id: "amp", chars: "&", match: "&[a-z]+" },
+        { ...REF, id: "tilde", chars, match },
+      ],
+    },
+    nodeTypes: {
+      Ref: { ...RefType, parse: (text) => ({ path: [text.slice(1)] }) },
+    },
+  });
+
+  it.each([
+    ["an escaped `chars`", "\\x7E", "~[a-z]+"],
+    ["a `\\u{…}` class and a `\\p{…}` match", "\\u{7E}", "~\\p{L}+"],
+  ])("%s: the IR trigger names the row", (_, chars, match) => {
+    const ir = irOf("~foo\n", twoRows(chars, match));
+    const tag = ir.body[0] as { trigger?: { id: string; text: string } };
+    expect(tag.trigger).toMatchObject({ id: "tilde", text: "~foo" });
+  });
+
+  it("a diagnostic names the row", () => {
+    const dialect = twoRows("\\x7E", "~[a-z]+");
+    const failing = {
+      ...dialect,
+      nodeTypes: {
+        Ref: {
+          ...(dialect.nodeTypes?.Ref as NodeType<Ref>),
+          lower: () => 42 as never,
+        },
+      },
+    };
+    expect(caught(() => irOf("~foo\n", failing)).message).toMatch(
+      /^the `tilde` trigger's `lower` \(node type `ref:Ref`\)/,
+    );
+  });
+});
+
+describe("the lowering cache's readers", () => {
+  const node = { type: "ref:Ref", start: 4, end: 8 };
+  it("a claimed node the pass never lowered is an internal error", () => {
+    expect(() => attributesWithTriggers({ attributes: [node] })).toThrow(
+      /^internal: the `ref:Ref` node at 4 was read before the trigger pass lowered it$/,
+    );
+    expect(() => childrenWithTriggers([node])).toThrow(
+      /^internal: the `ref:Ref` node at 4/,
+    );
   });
 });
 

@@ -30,6 +30,7 @@ import {
   type ClaimContext,
   type ClaimPosition,
   claimNode,
+  isRegistryKey,
   nodeTypeRegistry,
   rowKey,
 } from "./dialect-registry.ts";
@@ -902,10 +903,7 @@ export function stripMxTypes(document: Node): void {
         }
         visit(field);
       }
-    } else if (
-      typeof value.type === "string" &&
-      /^[^:\s]+:[^:\s]+$/.test(value.type)
-    ) {
+    } else if (isRegistryKey(value.type)) {
       // A claimed node (its type is its registry key): core placed the
       // trigger's `value` and `args` on it, stripped as on an `MxTrigger`;
       // its other fields are the node type's own.
