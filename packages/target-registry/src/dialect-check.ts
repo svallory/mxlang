@@ -7,7 +7,7 @@
  * report. No JavaScript is generated and no target is involved. This module
  * is the one place that does it, so the three tools cannot disagree.
  */
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import {
   type DialectManifest,
@@ -16,8 +16,9 @@ import {
   isTranslateError,
   lowerSource,
   routeDialect,
+  type ScanResult,
 } from "@mxlang/core";
-import { moduleSegments } from "./index.ts";
+import { moduleSegments, scanCached } from "./index.ts";
 
 /** What a tool shows for a diagnostic when no dialect owns the file. */
 export const FALLBACK_DIAGNOSTIC_SOURCE = "mxlang";
@@ -92,6 +93,42 @@ export function dialectExtensions(dir: string): string[] {
   } catch {
     // A malformed config is reported when a file is checked.
   }
+  return [...found];
+}
+
+/**
+ * {@link dialectExtensions} over a whole project tree: the extensions the
+ * dialects declared by `root`'s own package and by every package below it
+ * claim. A project's files are not all in the package that holds its
+ * `tsconfig.json`: in a workspace a dialect is declared by a member package,
+ * and a tool that lists a program's file types from the `tsconfig`'s
+ * directory must still hear of it. `node_modules` and dot-directories are not
+ * walked, and neither are symbolic links.
+ *
+ * Which file a dialect handles is still decided per file ({@link isDialectFile}),
+ * so a sibling package that declares no dialect leaves its own `.probe` file
+ * alone.
+ */
+export function dialectExtensionsUnder(root: string): string[] {
+  const found = new Set(dialectExtensions(root));
+  const visit = (dir: string): void => {
+    let entries: import("node:fs").Dirent[];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+      const child = join(dir, entry.name);
+      if (existsSync(join(child, "package.json"))) {
+        for (const extension of dialectExtensions(child)) found.add(extension);
+      }
+      visit(child);
+    }
+  };
+  visit(root);
   return [...found];
 }
 
@@ -171,32 +208,68 @@ export function checkDialectFile(
     };
   }
   if (dialect === undefined) return undefined;
-  const { diagnostics } = lowerSource(text, filePath);
+  // The project's tags reach a dialect file as they reach an MX file: core
+  // never discovers them on its own, so a contract (`mx.contracts`) or a local
+  // `tags/` template is checked only if it is handed over here. A dialect
+  // file has no target, so no `mx.tags[].hosts` restriction applies to it.
+  let scan: ScanResult;
+  try {
+    scan = scanCached(filePath, { host: null });
+  } catch (error) {
+    if (!isTranslateError(error)) throw error;
+    return {
+      source: dialect.name,
+      diagnostics: [
+        elsewhere(
+          error.message,
+          error.line,
+          error.column,
+          error.file,
+          filePath,
+        ),
+      ],
+    };
+  }
+  const customTags =
+    Object.keys(scan.customTags).length > 0 ? scan.customTags : undefined;
+  const { diagnostics } = lowerSource(text, filePath, { customTags });
   return {
     source: dialect.name,
-    diagnostics: diagnostics.map((diagnostic) => {
-      if (diagnostic.file !== undefined && diagnostic.file !== filePath) {
+    diagnostics: [
+      ...scan.diagnostics.map((diagnostic) => ({
+        ...elsewhere(
+          diagnostic.message,
+          diagnostic.line,
+          diagnostic.column,
+          diagnostic.file,
+          filePath,
+        ),
+        severity: "warning" as const,
+      })),
+      ...diagnostics.map((diagnostic) => {
+        if (diagnostic.file !== undefined && diagnostic.file !== filePath) {
+          return {
+            ...elsewhere(
+              diagnostic.message,
+              diagnostic.line,
+              diagnostic.column,
+              diagnostic.file,
+              filePath,
+            ),
+            severity: diagnostic.severity,
+            ...(diagnostic.code === undefined ? {} : { code: diagnostic.code }),
+          };
+        }
         return {
-          ...elsewhere(
-            diagnostic.message,
-            diagnostic.line,
-            diagnostic.column,
-            diagnostic.file,
-            filePath,
-          ),
           severity: diagnostic.severity,
+          message: diagnostic.message,
+          line: diagnostic.line,
+          column: diagnostic.column,
+          offset: diagnostic.offset,
           ...(diagnostic.code === undefined ? {} : { code: diagnostic.code }),
         };
-      }
-      return {
-        severity: diagnostic.severity,
-        message: diagnostic.message,
-        line: diagnostic.line,
-        column: diagnostic.column,
-        offset: diagnostic.offset,
-        ...(diagnostic.code === undefined ? {} : { code: diagnostic.code }),
-      };
-    }),
+      }),
+    ],
   };
 }
 

@@ -63,7 +63,15 @@ Beyond the registry it adds:
   at 1:0 and says where it is. It returns `undefined` for every other file,
   which is how a tool leaves a non-dialect `.mx` byte for byte alone. A
   subpath, not the main entry: it reaches `lowerSource`, the main entry stays
-  light. Tests use `test-fixtures/dialects/probe.ts`.
+  light. The project's tags reach the check: it scans the file
+  (`scanCached(path, { host: null })`, no `mx.tags[].hosts` entry applies to a
+  dialect file), hands the result's `customTags` to `lowerSource` and reports the
+  scan's own diagnostics as warnings, so `mx.contracts` and `tags/` apply as they
+  do to an MX file (core never discovers tags itself).
+  `dialectExtensionsUnder(root)` unions `dialectExtensions` over every package
+  under a project root (skipping `node_modules`, dot-directories and symlinks),
+  for tools that must list extensions before the program exists. Tests use
+  `test-fixtures/dialects/probe.ts`.
 
 `@mxlang/data`, the former tree target, was deleted by decision 204; its
 replacement is core's `lowerSource`. The package stays private 0.0.0 with `src` entry points; making it

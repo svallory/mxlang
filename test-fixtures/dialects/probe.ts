@@ -56,6 +56,18 @@ export const PROBE_SOURCES = {
   noRules: "<input>\n",
 } as const;
 
+/**
+ * `contracts.cjs`: one contract, `<service>` with a required string `value`.
+ * A project that lists it under `mx.contracts` (the `contracts` option of
+ * {@link probeProject}) makes `<service/>` a contract violation.
+ */
+export const PROBE_CONTRACTS_MODULE = `module.exports = { default: { service: { attributes: { value: { type: "string", required: true } } } } };
+`;
+
+/** What the contract above reports for a `<service/>` that omits `value`. */
+export const PROBE_CONTRACT_MESSAGE =
+  "`<service>`: missing required attribute `value`";
+
 const roots: string[] = [];
 
 export interface ProbeProject {
@@ -69,13 +81,15 @@ export interface ProbeProject {
  * Writes the project under a fresh temp directory. `files` are relative paths
  * to texts; `package.json` and `dialect.cjs` are written unless given.
  * `manifest` changes the dialect's declaration (`null` writes a project that
- * declares no dialect).
+ * declares no dialect). `packageJson` keys replace the generated ones.
  */
 export function probeProject(
   files: Record<string, string> = {},
   options: {
     manifest?: Partial<typeof PROBE_MANIFEST> | null;
     packageJson?: Record<string, unknown>;
+    /** Lists `contracts.cjs` under `mx.contracts`. */
+    contracts?: boolean;
   } = {},
 ): ProbeProject {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-probe-dialect-")));
@@ -87,10 +101,18 @@ export function probeProject(
   const all: Record<string, string> = {
     "package.json": JSON.stringify({
       name: "probe-dialect",
-      ...(manifest ? { mx: { dialect: manifest } } : {}),
+      ...(manifest || options.contracts
+        ? {
+            mx: {
+              ...(manifest ? { dialect: manifest } : {}),
+              ...(options.contracts ? { contracts: "./contracts.cjs" } : {}),
+            },
+          }
+        : {}),
       ...options.packageJson,
     }),
     ...(manifest ? { "dialect.cjs": PROBE_DIALECT_MODULE } : {}),
+    ...(options.contracts ? { "contracts.cjs": PROBE_CONTRACTS_MODULE } : {}),
     ...files,
   };
   for (const [relative, text] of Object.entries(all)) {
