@@ -10,7 +10,7 @@ function Row(item: number, i: number) {
   );
 }
 
-function Card(title: string, head: () => unknown) {
+function Card(title: string, { head }: { head: () => unknown }) {
   return (
     <section>
       <h1>{title}</h1>
@@ -24,7 +24,7 @@ export function DefineHoist() {
     <div>
       {Empty()}
       {Row(1, 0)}
-      {Card("Hi", () => "tagged")}
+      {Card("Hi", { head: () => "tagged" })}
     </div>
   );
 }

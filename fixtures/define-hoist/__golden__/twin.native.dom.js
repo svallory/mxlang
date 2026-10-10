@@ -14,7 +14,7 @@ function Row(item, i) {
  _$insert(_el$, i, _el$3);
  return _el$;
 }
-function Card(title, head) {
+function Card(title, { head }) {
  var _el$4 = _tmpl$2();
  var _el$5 = _el$4.firstChild;
  _$insert(_el$5, title);
@@ -31,7 +31,7 @@ export function DefineHoist() {
  return Row(1, 0);
  }, _el$8);
  _$insert(_el$6, () => {
- return Card("Hi", () => "tagged");
+ return Card("Hi", { head: () => "tagged" });
  }, _el$9);
  return _el$6;
 }

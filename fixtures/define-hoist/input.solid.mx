@@ -7,7 +7,7 @@ export function DefineHoist() {
         <li>${item}-${i}</li>
       </define>
       <Row(1, 0)/>
-      <define/Card|title, head|>
+      <define/Card|title, { head }|>
         <section>
           <h1>${title}</h1>
           ${head()}

@@ -14,7 +14,9 @@ function Row(item, i) {
  _v$3 = _$escape(i);
  return _$ssr(_tmpl$, _v$, _v$2, _v$3);
 }
-function Card(title, head) {
+function Card(title, {
+ head
+}) {
  var _v$4 = _$ssrHydrationKey(),
  _v$5 = _$escape(title),
  _v$6 = _$scope(() => _$escape(head()));
@@ -24,6 +26,8 @@ export function DefineHoist() {
  var _v$7 = _$ssrHydrationKey(),
  _v$8 = _$scope(() => _$escape(Empty())),
  _v$9 = _$scope(() => _$escape(Row(1, 0))),
- _v$0 = _$scope(() => _$escape(Card("Hi", () => "tagged")));
+ _v$0 = _$scope(() => _$escape(Card("Hi", {
+ head: () => "tagged"
+ })));
  return _$ssr(_tmpl$3, _v$7, _v$8, _v$9, _v$0);
 }
