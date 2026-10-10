@@ -24,11 +24,12 @@ import { attrNameOf, attrValueOf } from "./attr-fields.ts";
 import { bindingIdentifierNodes, type Ctx, type Node } from "./core.ts";
 import { handleFor, handleNode, type MxNodeHandle } from "./host-handle.ts";
 import type { Expr } from "./ir.ts";
-import { exprOf } from "./lower.ts";
+import { exprOf, tagAttrNameSpan } from "./lower.ts";
 import {
   tagAttributesOf,
   tagNameExprOf,
   tagNameOf,
+  tagNameSpanOf,
   tagParamsOf,
   tagVarOf,
 } from "./tag-fields.ts";
@@ -43,22 +44,30 @@ export interface HostSpan {
  * An attribute as lowering produced it. The default value is named
  * `"value"`; `modifier` is what follows the last `:` (null without one).
  *
- * @unstable decision 197, PR 6.
+ * @unstable the host hook view; its shape may change before the hooks receive it.
  */
 export interface HostAttributeView {
   readonly kind: "attribute";
   readonly name: string;
   readonly modifier: string | null;
-  /** The name's range; zero-width for a default value (ast §6.4, Q8). */
+  /**
+   * The name's range, as lowering gives `Attr.nameSpan`: the head through
+   * the modifier (`b:mod`), a shorthand's sigil and token (`.big`), a
+   * sugar's token (`:email`); zero-width for a default value (ast §6.4, Q8).
+   */
   readonly nameSpan: HostSpan;
-  /** The whole attribute: where an error about it is reported. */
+  /**
+   * The whole attribute: where an error about it is reported. A tag's own
+   * shorthand (`<x.a#b>`'s `class`, its `id`) has no range of its own and
+   * reports at its shorthand text, `nameSpan`.
+   */
   readonly span: HostSpan;
   /** The value; absent for a valueless attribute. */
   readonly value?: Expr;
   readonly handle: MxNodeHandle;
 }
 
-/** @unstable decision 197, PR 6. */
+/** @unstable the host hook view; its shape may change before the hooks receive it. */
 export interface HostSpreadView {
   readonly kind: "spread";
   readonly span: HostSpan;
@@ -69,14 +78,16 @@ export interface HostSpreadView {
 /**
  * A tag (or a module statement routed as one) as a hook sees it.
  *
- * @unstable decision 197, PR 6.
+ * @unstable the host hook view; its shape may change before the hooks receive it.
  */
 export interface HostTagView {
   /** The tag name; an unnamed tag's resolved default name; for a module statement, its keyword. */
   readonly name: string;
   /**
-   * The name's range: for `<${…}>`, the expression inside the braces; for an
-   * unnamed tag, empty where a name would be written (after the `<`).
+   * The name's range: for `<${…}>`, the expression inside the braces; for a
+   * name mixing text and `${…}` (`<foo-${bar}>`), the whole name; for an
+   * unnamed tag, empty where a name would be written (after the `<`); for a
+   * module statement, its keyword.
    */
   readonly nameSpan: HostSpan;
   /** The whole tag, or the statement's span. */
@@ -92,7 +103,11 @@ export interface HostTagView {
     readonly name: string;
     readonly span: HostSpan;
   }[];
-  /** The body parameters, when pipes were written: first to last, pipes excluded. */
+  /**
+   * The body parameters, when pipes were written: `span` runs from the first
+   * parameter's start to the last one's end, so the space inside the pipes
+   * is not in it; an empty list (`||`) is empty after the opening pipe.
+   */
   readonly params: { readonly span: HostSpan; readonly count: number } | null;
   /** The `<${…}>` name expression, else null (an atom name `<${:a}>` is static). */
   readonly dynamicName: Expr | null;
@@ -194,19 +209,28 @@ function buildTagView(ctx: Ctx, node: Node): HostTagView {
   lazy(view, "nameSpan", () => {
     // A `<${…}>` name is its expression inside the braces, as on the
     // Marko-shaped view: a `${"a"}` string's range is its `loc`.
+    // A name with text around its `${…}` has no such expression to give:
+    // it falls through to the whole name.
     if (node.name?.kind === "dynamic") {
       const range = locatedRangeOf(ctx, tagNameExprOf(node));
       if (range) return range;
     }
-    // An unnamed tag's default is written over an empty span where its name
-    // would be: the shorthand has no authored name.
-    const span = node.name?.span ?? { start: node.start, end: node.start };
+    // A module statement's name is its keyword (`tagNameSpanOf`), a mixed
+    // name its whole `MxExpression`. An unnamed tag's default is written
+    // over an empty span where its name would be: the shorthand has no
+    // authored name.
+    const span = rangeOf(tagNameSpanOf(node)) ?? {
+      start: node.start,
+      end: node.start,
+    };
     const end = node.name?.kind === "unnamed" ? span.start : span.end;
     return spanOf(span.start, end);
   });
   lazy(view, "attributes", () =>
     Object.freeze(
-      tagAttributesOf(node).map((attr: Node) => hostAttributeViewOf(ctx, attr)),
+      tagAttributesOf(node).map((attr: Node) =>
+        hostAttributeViewOf(ctx, attr, node),
+      ),
     ),
   );
   lazy(view, "var", () => {
@@ -226,10 +250,15 @@ function buildTagView(ctx: Ctx, node: Node): HostTagView {
   );
   lazy(view, "params", () => {
     if (!node.params) return null;
-    const span = rangeOf(node.params);
-    return span
-      ? Object.freeze({ span, count: tagParamsOf(node).length })
-      : null;
+    const params = tagParamsOf(node);
+    const first = params.length ? locatedRangeOf(ctx, params[0]) : undefined;
+    const last = params.length ? locatedRangeOf(ctx, params.at(-1)) : undefined;
+    const inside = rangeOf(node.params);
+    const span =
+      first && last
+        ? spanOf(first.start, last.end)
+        : inside && spanOf(inside.start, inside.start);
+    return span ? Object.freeze({ span, count: params.length }) : null;
   });
   lazy(view, "dynamicName", () =>
     dynamic ? exprOf(ctx, tagNameExprOf(node)) : null,
@@ -246,24 +275,32 @@ function holdsAttributeTags(child: Node): boolean {
 }
 
 /**
- * The entry of one attribute: an `MxAttribute`/`MxSpreadAttribute`, or a
- * record the name-sugar rewrite built in their place.
+ * The entry of one attribute of `tag`: an `MxAttribute`/`MxSpreadAttribute`,
+ * or a record the name-sugar rewrite built in their place. The tag is what
+ * positions a shorthand's record, which has no range of its own.
  */
 export function hostAttributeViewOf(
   ctx: Ctx,
   attr: Node,
+  tag: Node,
 ): HostAttributeView | HostSpreadView {
-  return cached(ctx, attr, () => buildAttributeView(ctx, attr));
+  return cached(ctx, attr, () => buildAttributeView(ctx, attr, tag));
 }
 
 function buildAttributeView(
   ctx: Ctx,
   attr: Node,
+  tag: Node,
 ): HostAttributeView | HostSpreadView {
+  const named = (): HostSpan => {
+    const span = tagAttrNameSpan(ctx, attr, tag);
+    return spanOf(span.sourceStart, span.sourceEnd);
+  };
   // A shorthand's record (`<x.a#b>`'s merged `class`, its `id`) carries no
-  // position of its own: it reports at its value, the shorthand's text,
-  // where the Marko-shaped view had none to give.
-  const span = rangeOf(attr) ?? locatedRangeOf(ctx, attr.value) ?? spanOf(0, 0);
+  // range of its own, where the Marko-shaped view had no position to give:
+  // it reports at its shorthand text, the name span lowering reads off the
+  // tag (`.a.${x}` included), else at its value, else at the tag's name.
+  const span = rangeOf(attr) ?? shorthandSpan(ctx, attr, tag, named());
   const view: Record<string, unknown> = { span, handle: handleFor(attr) };
   const spread =
     attr.type === "MxSpreadAttribute" || attr.type === "MarkoSpreadAttribute";
@@ -275,13 +312,7 @@ function buildAttributeView(
   view.kind = "attribute";
   view.name = attrNameOf(attr);
   view.modifier = attr.modifier ?? null;
-  lazy(view, "nameSpan", () => {
-    const named = attr.nameSpan ?? attr.sugarNameSpan;
-    if (typeof named?.start === "number") {
-      return spanOf(named.start, named.end);
-    }
-    return spanOf(span.start, span.start);
-  });
+  lazy(view, "nameSpan", named);
   // Valueless: no value on an `MxAttribute`; the synthesized, position-less
   // `true` a sugar record copies from `attrValueOf`.
   const value = attr.value;
@@ -297,13 +328,26 @@ function buildAttributeView(
   return Object.freeze(view) as unknown as HostAttributeView;
 }
 
+/** Where a record with no range of its own reports (`buildAttributeView`). */
+function shorthandSpan(
+  ctx: Ctx,
+  attr: Node,
+  tag: Node,
+  named: HostSpan,
+): HostSpan {
+  if (named.end > named.start) return named;
+  const value = locatedRangeOf(ctx, attr.value);
+  if (value) return value;
+  return hostTagViewOf(ctx, tag).nameSpan;
+}
+
 /**
  * The span of the binding identifier `name` declares inside `target`, the
  * first in source order: `target` is a view or handle (its tag variable) or
  * a binding pattern payload (a Babel pattern, as `checkBinding` receives).
  * `null` when the pattern binds no such name (ast §6.4).
  *
- * @unstable decision 197, PR 6.
+ * @unstable the host hook view; its shape may change before the hooks receive it.
  */
 export function bindingSpan(
   target: MxNodeHandle | HostTagView | Node,

@@ -351,6 +351,14 @@ function builtShorthandSpan(
  * shorthand in `attr.default`, so the authored name is `:foo` — measured from
  * the attribute's own start, which is the `:`.
  */
+/**
+ * `attrNameSpan` for an attribute of `tag`, as `lowerAttrs` reads it: the
+ * rule the host hook view (`host-view.ts`) shares with `Attr.nameSpan`.
+ */
+export function tagAttrNameSpan(ctx: Ctx, attr: Node, tag: Node): SourceSpan {
+  return attrNameSpan(ctx, attr, posOf(ctx, tag));
+}
+
 function attrNameSpan(ctx: Ctx, attr: Node, tagLoc?: Position): SourceSpan {
   // A name-sugar attribute (`:b`, `#b`, `.c`) is spelled as one token.
   if (attr?.sugarNameSpan) {

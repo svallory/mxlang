@@ -12,7 +12,7 @@ declare const handleBrand: unique symbol;
  * (`rejectUnsupportedFields`, `bindingSpan`, `contractDefaultTag`) resolve
  * it; a host cannot read through it.
  *
- * @unstable decision 197, PR 6.
+ * @unstable the host hook view; its shape may change before the hooks receive it.
  */
 export interface MxNodeHandle {
   readonly [handleBrand]: true;
