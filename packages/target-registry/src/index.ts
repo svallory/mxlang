@@ -369,14 +369,8 @@ export function resolveTargetPolicy(
   return resolveTargetPolicyDetailed(filePath, options).policy;
 }
 
-/** Options of {@link resolveTargetPolicyDetailed}; every default is the staged behavior. */
+/** Options of {@link resolveTargetPolicyDetailed}. */
 export interface ResolveTargetPolicyOptions {
-  /**
-   * The caller compiles `data` itself (`mx-tsc`, through `checkDataPackage`):
-   * answer with core's unmasked policy instead of the registry's positioned
-   * error and the `html` fallback the editor tools, Vite and the Bun loader get.
-   */
-  dataWired?: boolean;
   /**
    * Print nothing for the deprecated `mx.host` alias. For a caller that asks
    * about a file's policy again after another call already reported it.
@@ -393,7 +387,10 @@ export function resolveTargetPolicyDetailed(
   filePath: string,
   options: ResolveTargetPolicyOptions = {},
 ): TargetPolicyResolution {
-  return checkDefaultTags(resolveStaged(filePath, options), filePath);
+  return checkDefaultTags(
+    coreResolveTargetPolicyDetailed(filePath, builtinLookup(), options),
+    filePath,
+  );
 }
 
 /**
@@ -719,43 +716,6 @@ export function defaultTagFor(filePath: string, policy: TargetPolicy): string {
     value === undefined ? {} : { defaultTag: value },
     descriptor,
   );
-}
-
-function resolveStaged(
-  filePath: string,
-  options: ResolveTargetPolicyOptions,
-): TargetPolicyResolution {
-  const lookup = builtinLookup();
-  // A tool that checks data files itself asks for the unmasked answer: the
-  // registry's staged error and fallback stay the default for every other tool.
-  if (options.dataWired)
-    return coreResolveTargetPolicyDetailed(filePath, lookup, options);
-  // Decision 204 removed the tree target, so nothing registers "tree" and the
-  // masks below are inert until the dialect check replaces this staging (TODO
-  // dialect-check (PR 1c)). Core's unknown-target path positions an explicit
-  // `mx.target: "tree"` and hands on its fallback; the message names the
-  // replacement.
-  const resolution = coreResolveTargetPolicyDetailed(
-    filePath,
-    {
-      ...lookup,
-      hasTarget: (name) => name !== "tree" && lookup.hasTarget(name),
-      targetNames: () => lookup.targetNames().filter((name) => name !== "tree"),
-      // Still registered: a loaded host may be `builtOn` it.
-      allTargetNames: () => lookup.targetNames(),
-    },
-    options,
-  );
-  for (const diagnostic of resolution.diagnostics) {
-    if (diagnostic.code === "unknown-target" && diagnostic.value === "tree") {
-      diagnostic.message =
-        'mx.target "tree" was removed (decision 204); a consumer that reads the tree calls lowerSource from @mxlang/core';
-    }
-  }
-  // Preserve the pre-3b staging of rule-2 data inference as well.
-  if (resolution.policy.target !== "tree") return resolution;
-  const target = lookup.defaultTarget();
-  return { ...resolution, policy: { target, host: lookup.hostOf(target) } };
 }
 
 /**

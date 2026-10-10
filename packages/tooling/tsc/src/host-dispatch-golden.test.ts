@@ -123,12 +123,6 @@ const ROWS = [
   "target-data",
   "target-unknown-host",
   "tags-hosts-target",
-  // mx-tsc checks a data package (decision 131, addendum 4). The tool legs
-  // report the removed-target error (decision 204); the row's
-  // `mxTscDataCheck` is `mx-tsc -p <row>` run on its own, where the data
-  // check answers. The shared program's `mxTsc` leg is still that
-  // error, since a program that spans packages is not a data project.
-  "data-check",
   // Registration PR 7 (§6.2): a package specifier under mx.target / mx.host
   // loads a third-party target. Additive rows. Each target is a local
   // `./target.cjs` re-exporting the shared fake package of
@@ -148,10 +142,9 @@ const ROWS = [
   // Decision 145 (the unnamed tag): the package's `mx.<target>.defaultTag`
   // reaches every tool's compile (`my-card` from `tags/`), an invalid value
   // is one positioned error at the package.json value in each tool and the
-  // built-in answers meanwhile, and the data check reports an unreachable one.
+  // built-in answers meanwhile.
   "default-tag-html",
   "default-tag-invalid",
-  "default-tag-data",
   // Decision 146 (the `:name` sugar), PR 3: valid sugar in every position on a
   // string host and a JSX host (the JSX row pins the mapped name/class/id
   // tokens), a typed template tag whose `name` prop gets the wrong type (the
@@ -175,19 +168,6 @@ const ROWS = [
   // A bare `:` in attribute position (leader ruling, PR 3 round 2): one error
   // at the `:`, first, after a value and in concise mode.
   "sugar-bare-colon",
-  // The Mesh case with the sugar: `<:title/>` under `<attributes>` is the
-  // parent's `defaultTag` with `name="title"`; the data check is clean, and an
-  // E1 error on it names the token (`:title` (`name`)) at the sugar.
-  "data-sugar",
-  "data-sugar-e1",
-  // Decision 147 (wildcard children), PR 2: the data check on a package whose
-  // `attributes` claims lowercase children by `children["*"]`. A claimed child
-  // is clean; a name no entry matches is the E2 error listing the patterns; a
-  // name one typo from an explicit child is the guard, an error on every
-  // target and tool.
-  "data-wildcard",
-  "data-wildcard-nomatch",
-  "data-wildcard-guard",
 ] as const;
 
 /** Rows whose Vite leg resolves `~/` through a configured alias. */
@@ -447,17 +427,6 @@ function splitByRow(output: string): Pick<TscRun, "byRow" | "unattributed"> {
 
 let tsc: TscRun;
 
-/** `mx-tsc -p <row>` alone: for a data package it is the data check, not a program. */
-function dataCheckLeg(row: string): { status: number; output: string[] } {
-  const run = runInProcess(["-p", join(root, row)], here);
-  return {
-    status: run.status,
-    output: String(normalise(`${run.stdout}\n${run.stderr}`))
-      .split("\n")
-      .filter((line) => line !== ""),
-  };
-}
-
 beforeAll(() => {
   const result = runInProcess(
     [
@@ -476,18 +445,6 @@ beforeAll(() => {
   };
 }, 120_000);
 
-/** Rows whose golden records the tree target's data check (decision 204 removed it). */
-const TREE_ROWS = new Set([
-  "target-data",
-  "data-check",
-  "default-tag-data",
-  "data-sugar",
-  "data-sugar-e1",
-  "data-wildcard",
-  "data-wildcard-nomatch",
-  "data-wildcard-guard",
-]);
-
 describe("dispatch goldens", () => {
   it("covers every fixture directory", () => {
     const onDisk = readdirSync(root)
@@ -497,76 +454,59 @@ describe("dispatch goldens", () => {
     expect(onDisk).toEqual([...ROWS].sort());
   });
 
-  // TODO dialect-check (PR 1c): decision 204 removed the tree target; the
-  // dialect check re-keys these rows and re-records their goldens.
-  it.skip.each([...TREE_ROWS])("%s", () => {});
-
-  it.each(ROWS.filter((row) => !TREE_ROWS.has(row)))(
-    "%s",
-    { timeout: 60_000 },
-    async (row) => {
-      const files: Record<string, unknown> = {};
-      for (const name of mxFilesOf(row)) {
-        const file = join(root, row, name);
-        const text = readFileSync(file, "utf8");
-        if (row === "bad-package-json") {
-          // Only the host-policy output is pinned for this row. Compiling a file
-          // beside a malformed package.json depends on the process cwd: Marko's
-          // Babel config lookup throws "Error while parsing JSON" for it when
-          // vitest runs from the repo root (`bun run test`) and not from this
-          // package's directory, so generated text, mappings and the compile
-          // diagnostics differ between the two. Reported, not fixed here (TODO
-          // compile-beside-malformed-package-json-cwd). The policy warning also
-          // names the package.json this file's target was taken from instead
-          // (`<repo>/packages/tooling/tsc/package.json`), so the golden depends
-          // on that file's `mx` field staying `html`.
-          const lsLeg = languageServerLeg(file, text, "mx");
-          files[name] = {
-            languageServer: lsLeg.diagnostics.filter((d) =>
-              String(d.message).includes("package.json"),
-            ),
-            // Keep the recorded JSON key byte-identical; it is not an API name.
-            tsPluginHostPolicy: tsPluginLeg(file, text).hostPolicyDiagnostics,
-          };
-          continue;
-        }
-        const entry: Record<string, unknown> = {
-          languageServer: name.endsWith(".astro.mx")
-            ? "watched by the server, not diagnosed"
-            : languageServerLeg(
-                file,
-                text,
-                name.endsWith(".solid.mx") ? "solidmx" : "mx",
-              ),
-          tsPlugin: tsPluginLeg(file, text),
-          vite: await viteLeg(row, file, text),
+  it.each(ROWS)("%s", { timeout: 60_000 }, async (row) => {
+    const files: Record<string, unknown> = {};
+    for (const name of mxFilesOf(row)) {
+      const file = join(root, row, name);
+      const text = readFileSync(file, "utf8");
+      if (row === "bad-package-json") {
+        // Only the host-policy output is pinned for this row. Compiling a file
+        // beside a malformed package.json depends on the process cwd: Marko's
+        // Babel config lookup throws "Error while parsing JSON" for it when
+        // vitest runs from the repo root (`bun run test`) and not from this
+        // package's directory, so generated text, mappings and the compile
+        // diagnostics differ between the two. Reported, not fixed here (TODO
+        // compile-beside-malformed-package-json-cwd). The policy warning also
+        // names the package.json this file's target was taken from instead
+        // (`<repo>/packages/tooling/tsc/package.json`), so the golden depends
+        // on that file's `mx` field staying `html`.
+        const lsLeg = languageServerLeg(file, text, "mx");
+        files[name] = {
+          languageServer: lsLeg.diagnostics.filter((d) =>
+            String(d.message).includes("package.json"),
+          ),
+          // Keep the recorded JSON key byte-identical; it is not an API name.
+          tsPluginHostPolicy: tsPluginLeg(file, text).hostPolicyDiagnostics,
         };
-        if (row === "solid-file" && name === "card.solid.mx") {
-          entry.languageServerUntitled = untitledLeg(file, text);
-        }
-        files[name] = entry;
+        continue;
       }
-      const golden = normalise({
-        files,
-        mxTsc: (tsc.byRow.get(row) ?? []).filter(
-          // bad-package-json: the host-policy warning only (see its leg above).
-          (block) => row !== "bad-package-json" || block.includes("TS80003"),
-        ),
-        ...(row === "data-check" ||
-        row === "default-tag-data" ||
-        row === "data-sugar" ||
-        row === "data-sugar-e1" ||
-        row === "data-wildcard" ||
-        row === "data-wildcard-nomatch" ||
-        row === "data-wildcard-guard"
-          ? { mxTscDataCheck: dataCheckLeg(row) }
-          : {}),
-      });
-      await expect(`${JSON.stringify(golden, null, 2)}\n`).toMatchFileSnapshot(
-        join(goldens, `${row}.json`),
-      );
-    },
-  );
+      const entry: Record<string, unknown> = {
+        languageServer: name.endsWith(".astro.mx")
+          ? "watched by the server, not diagnosed"
+          : languageServerLeg(
+              file,
+              text,
+              name.endsWith(".solid.mx") ? "solidmx" : "mx",
+            ),
+        tsPlugin: tsPluginLeg(file, text),
+        vite: await viteLeg(row, file, text),
+      };
+      if (row === "solid-file" && name === "card.solid.mx") {
+        entry.languageServerUntitled = untitledLeg(file, text);
+      }
+      files[name] = entry;
+    }
+    const golden = normalise({
+      files,
+      mxTsc: (tsc.byRow.get(row) ?? []).filter(
+        // bad-package-json: the host-policy warning only (see its leg above).
+        (block) => row !== "bad-package-json" || block.includes("TS80003"),
+      ),
+    });
+    await expect(`${JSON.stringify(golden, null, 2)}\n`).toMatchFileSnapshot(
+      join(goldens, `${row}.json`),
+    );
+  });
 
   it("mx-tsc: one program, its exit code and the output no row owns", async () => {
     const golden = normalise({

@@ -8,6 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, matchesGlob } from "node:path";
+import { pathToFileURL } from "node:url";
 import { MX_CONFIG_SEARCH_PLACES } from "@mxlang/core";
 import { builtinFileKinds } from "@mxlang/targets";
 import { afterEach, describe, expect, it } from "vitest";
@@ -18,6 +19,11 @@ import {
   StreamMessageReader,
   StreamMessageWriter,
 } from "vscode-jsonrpc/node";
+import {
+  cleanupProbeProjects,
+  PROBE_SOURCES,
+  probeProject,
+} from "../../../../test-fixtures/dialects/probe.ts";
 import { isMxDocument, WATCHED_FILE_GLOBS } from "./server.ts";
 
 /**
@@ -146,6 +152,40 @@ describe("stdio server (e2e)", () => {
       }
     },
   );
+  it("publishes a dialect file's diagnostic with the dialect's name and code over stdio", async () => {
+    const project = probeProject();
+    const conn = startClient();
+    await conn.sendRequest("initialize", {
+      processId: null,
+      rootUri: null,
+      capabilities: {},
+    });
+    const uri = pathToFileURL(project.path("a.probe")).href;
+    const published = nextDiagnostics(conn, (params) => params.uri === uri);
+    await conn.sendNotification("textDocument/didOpen", {
+      textDocument: {
+        uri,
+        languageId: "plaintext",
+        version: 1,
+        text: PROBE_SOURCES.bad,
+      },
+    });
+    const result = await published;
+    expect(result.diagnostics).toEqual([
+      {
+        severity: 1,
+        source: "Probe",
+        code: "PROBE_BAD",
+        message: "bad probe",
+        range: {
+          start: { line: 0, character: 3 },
+          end: { line: 0, character: 4 },
+        },
+      },
+    ]);
+    cleanupProbeProjects();
+  });
+
   it("re-diagnoses an open caller from an open callee's unsaved Input changes", async () => {
     const conn = startClient();
     await conn.sendRequest("initialize", {
@@ -854,6 +894,21 @@ describe("stdio server (e2e)", () => {
         );
       }
     }
+  });
+
+  it("recognizes a dialect's files by the extensions its package claims, and no other", () => {
+    const project = probeProject();
+    const uri = (name: string) => pathToFileURL(project.path(name)).href;
+    expect(isMxDocument(uri("a.probe"), "")).toBe(true);
+    expect(isMxDocument(uri("a.probe.mx"), "")).toBe(true);
+    expect(isMxDocument(uri("a.probes"), "")).toBe(false);
+    expect(isMxDocument(uri("a.ts"), "typescript")).toBe(false);
+    // The same extension in a project with no dialect is no MX document.
+    const plain = probeProject({}, { manifest: null });
+    expect(isMxDocument(pathToFileURL(plain.path("a.probe")).href, "")).toBe(
+      false,
+    );
+    cleanupProbeProjects();
   });
 
   it("does not recognize a .marko document or the marko language id", () => {

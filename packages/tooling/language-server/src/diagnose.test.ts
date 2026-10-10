@@ -23,6 +23,11 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DiagnosticSeverity } from "vscode-languageserver/node";
 import {
+  cleanupProbeProjects,
+  PROBE_SOURCES,
+  probeProject,
+} from "../../../../test-fixtures/dialects/probe.ts";
+import {
   diagnoseDocument,
   type RelatedDiagnostics,
   splitCodeFrame,
@@ -1274,5 +1279,99 @@ describe("Babel's 0-based (L:C) suffix", () => {
     );
     expect(d?.message).toMatch(OPENER);
     expect(d?.message).not.toMatch(/\(\d+:\d+\)/);
+  });
+});
+
+describe("a dialect's files", () => {
+  afterEach(() => cleanupProbeProjects());
+
+  const at = (file: string) => pathToFileURL(file).href;
+
+  it("report lowerSource's diagnostic with the dialect's name as source and its code", () => {
+    const project = probeProject();
+    for (const name of ["a.probe", "a.probe.mx"]) {
+      expect(
+        diagnoseDocument(
+          PROBE_SOURCES.bad,
+          at(project.path(name)),
+          policy("html"),
+        ),
+      ).toEqual([
+        {
+          severity: DiagnosticSeverity.Error,
+          source: "Probe",
+          code: "PROBE_BAD",
+          message: "bad probe",
+          range: {
+            start: { line: 0, character: 3 },
+            end: { line: 0, character: 4 },
+          },
+        },
+      ]);
+    }
+  });
+
+  it("are clean when the dialect accepts them", () => {
+    const project = probeProject();
+    expect(
+      diagnoseDocument(
+        PROBE_SOURCES.ok,
+        at(project.path("a.probe")),
+        policy("html"),
+      ),
+    ).toEqual([]);
+  });
+
+  it("are checked under the dialect's tagRules, not the host's", () => {
+    const project = probeProject();
+    // `<input>` is a void element to HTML and an unclosed tag under `none`.
+    expect(
+      diagnoseDocument(
+        PROBE_SOURCES.noRules,
+        at(project.path("a.probe")),
+        policy("html"),
+      ),
+    ).toEqual([
+      {
+        severity: DiagnosticSeverity.Error,
+        source: "Probe",
+        message: 'Missing ending "input" tag',
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 1 },
+        },
+      },
+    ]);
+    const plain = probeProject({}, { manifest: null });
+    expect(
+      diagnoseDocument(
+        PROBE_SOURCES.noRules,
+        at(plain.path("a.mx")),
+        policy("html"),
+      ),
+    ).toEqual([]);
+  });
+
+  it("read the host policy for nothing: a strict policy adds no diagnostic", () => {
+    const project = probeProject();
+    expect(
+      diagnoseDocument(
+        PROBE_SOURCES.ok,
+        at(project.path("a.probe")),
+        policy("html", true),
+      ),
+    ).toEqual([]);
+  });
+
+  it("a plain .mx file in the same project is diagnosed as before, source mxlang", () => {
+    const project = probeProject();
+    const diagnostics = diagnoseDocument(
+      "<div>\n",
+      at(project.path("a.mx")),
+      policy("html"),
+    );
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.source).toBe("mxlang");
+    expect(diagnostics[0]?.code).toBeUndefined();
   });
 });

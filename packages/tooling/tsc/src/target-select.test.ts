@@ -60,7 +60,9 @@ it("policy errors alone fail one program; fixing them leaves host warnings non-f
     expect(output).toContain(
       'mx.target "@acme/target" cannot be resolved from',
     );
-    expect(output).toContain('mx.target "tree" was removed (decision 204)');
+    expect(output).toContain(
+      'unknown mx.target "tree"; valid targets: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template. Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned.',
+    );
     for (const i of cases.keys())
       writeFileSync(
         join(root, `p${i}`, "package.json"),

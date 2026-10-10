@@ -35,7 +35,7 @@ vi.mock("@mxlang/core", async (importOriginal) => {
 
 import { resolveTargetPolicyDetailed } from "./index.ts";
 
-it("positions the removed-tree error without a second manifest read", () => {
+it("positions the unknown-target error for tree without a second manifest read", () => {
   const root = mkdtempSync(join(tmpdir(), "mx-registry-no-reread-"));
   try {
     writeFileSync(join(root, "package.json"), '{"mx":{"target":"tree"}}');
@@ -46,7 +46,7 @@ it("positions the removed-tree error without a second manifest read", () => {
       value: "tree",
       length: 6,
       message:
-        'mx.target "tree" was removed (decision 204); a consumer that reads the tree calls lowerSource from @mxlang/core',
+        'unknown mx.target "tree"; valid targets: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template. Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned.',
     });
     expect(state.secondReads).toBe(0);
   } finally {

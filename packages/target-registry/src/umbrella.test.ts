@@ -14,12 +14,12 @@ const manifest = JSON.parse(
 ) as { name: string; exports: Record<string, string> };
 
 describe("@mxlang/targets umbrella", () => {
-  it("is the package @mxlang/targets with the ./html subpath and no ./tree", () => {
+  it("is the package @mxlang/targets with the ./html and ./dialect-check subpaths and no ./tree", () => {
     expect(manifest.name).toBe("@mxlang/targets");
     expect(manifest.exports).toEqual({
       ".": "./src/index.ts",
       "./html": "./src/html.ts",
-      "./data-check": "./src/data-check.ts",
+      "./dialect-check": "./src/dialect-check.ts",
     });
   });
 

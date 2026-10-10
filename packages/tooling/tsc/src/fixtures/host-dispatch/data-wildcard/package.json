@@ -1,8 +1,0 @@
-{
-  "name": "data-wildcard-fixture",
-  "private": true,
-  "mx": {
-    "target": "tree",
-    "contracts": "./contracts.ts"
-  }
-}

@@ -86,9 +86,9 @@ describe("target-table page dispatch", () => {
     );
   });
 
-  it("reports the removed tree target through the tooling policy wrapper", () => {
+  it("reports `tree` as an unknown target through the tooling policy wrapper", () => {
     expect(compile("tree").policyDiagnostics[0]?.message).toBe(
-      'mx.target "tree" was removed (decision 204); a consumer that reads the tree calls lowerSource from @mxlang/core',
+      'unknown mx.target "tree"; valid targets: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template. Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned.',
     );
   });
 });

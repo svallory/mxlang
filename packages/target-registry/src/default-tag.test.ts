@@ -11,12 +11,6 @@ import type { TargetDescriptor } from "@mxlang/core";
 import * as core from "@mxlang/core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  type MeshOptions,
-  meshProject,
-  setupMesh,
-  teardownMesh,
-} from "../../../test-fixtures/third-party-targets/mesh.ts";
-import {
   cleanupProjects,
   type FakeTarget,
   fakeProject,
@@ -29,7 +23,6 @@ import {
   effectiveDefaultTag,
   getCustomTags,
   lookupFor,
-  regionFileKind,
   resolveTargetPolicyDetailed,
 } from "./index.ts";
 
@@ -148,33 +141,6 @@ describe("mx.<target>.defaultTag validation, once per package", () => {
     expect(diagnostics.map((d) => d.code)).toEqual(["invalid-default-tag"]);
   });
 
-  // TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
-  // check re-keys this case.
-  it.skip("on tree, reachable means the built-in `object` plus the custom tags", () => {
-    const dataPackage = (name: string) =>
-      resolveTargetPolicyDetailed(
-        project({ mx: { target: "tree", data: { defaultTag: name } } }),
-        { dataWired: true },
-      );
-    const accept = dataPackage("object");
-    expect(accept.diagnostics).toEqual([]);
-    expect(accept.policy.defaultTag).toBe("object");
-
-    // Marko's lookup answers parse shape only: html's elements are no data tags.
-    for (const name of ["div", "section", "pre", "input", "nope"]) {
-      const { policy, diagnostics } = dataPackage(name);
-      expect(policy.defaultTag).toBeUndefined();
-      expect(diagnostics[0]).toMatchObject({
-        code: "invalid-default-tag",
-        severity: "error",
-      });
-      expect(diagnostics[0]?.message).toContain("not");
-    }
-    expect(dataPackage("nope").diagnostics[0]?.message).toBe(
-      "invalid `defaultTag` value: `<nope>` is not a tag reachable from this package",
-    );
-  });
-
   it("a non-string value is still core's diagnostic, once", () => {
     const { diagnostics } = resolveTargetPolicyDetailed(project(html(3)));
     expect(diagnostics.map((d) => d.code)).toEqual(["invalid-default-tag"]);
@@ -187,9 +153,7 @@ describe("every built-in descriptor's own default is a plain tag", () => {
     (_name, descriptor) => {
       // The descriptor's values pass the same check a package's value does.
       const file = project({ mx: { target: descriptor.name } });
-      const { diagnostics } = resolveTargetPolicyDetailed(file, {
-        dataWired: true,
-      });
+      const { diagnostics } = resolveTargetPolicyDetailed(file);
       expect(
         diagnostics.filter((d) => d.code === "invalid-default-tag"),
       ).toEqual([]);
@@ -369,7 +333,7 @@ describe("a scan failure never escapes a policy call (reviewer finding 1)", () =
     mx: {
       target,
       contracts: { item: {} },
-      [target]: { defaultTag: target === "tree" ? "object" : "section" },
+      [target]: { defaultTag: "section" },
     },
   });
 
@@ -380,13 +344,6 @@ describe("a scan failure never escapes a policy call (reviewer finding 1)", () =
     expect(policy.defaultTag).toBe("section");
     expect(diagnostics.map((d) => d.code)).not.toContain("invalid-default-tag");
     expect(() => defaultTagFor(file, policy)).not.toThrow();
-  });
-
-  it("tree: the policy call does not throw either", () => {
-    const file = project(broken("tree"));
-    expect(() =>
-      resolveTargetPolicyDetailed(file, { dataWired: true }),
-    ).not.toThrow();
   });
 });
 
@@ -406,82 +363,6 @@ describe("a loaded descriptor's own values are checked against the target's look
     expect(own[0]?.message).toBe(
       'invalid `defaultTag` value: `<nonexistent>` is not a tag reachable from this package (defaultTag of "fake-bad-default")',
     );
-  });
-});
-
-// TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
-// check re-keys this suite.
-describe.skip("a third-party host on the tree target (decision 148)", () => {
-  afterEach(() => teardownMesh());
-
-  const MESH_KIND = [{ segment: "mesh", diagnosticSource: "mesh" }];
-  const setup = (options: MeshOptions = {}) => {
-    setupMesh(builtinLookup().target("tree"), options);
-    const dir = meshProject("mx-registry-mesh-", options);
-    return join(dir, "post.mesh.mx");
-  };
-  const invalid = (file: string) =>
-    resolveTargetPolicyDetailed(file).diagnostics.filter(
-      (d) => d.code === "invalid-default-tag",
-    );
-
-  it("keeps tree's built-in `object`: no diagnostic, and it is the rung the compile gets", () => {
-    const file = setup({ fileKinds: MESH_KIND });
-    const { policy, diagnostics } = resolveTargetPolicyDetailed(file);
-    expect(diagnostics).toEqual([]);
-    expect(policy).toMatchObject({ target: "mesh-data", host: "mesh" });
-    expect(defaultTagFor(file, policy)).toBe("object");
-  });
-
-  it("the host's override outranks the built-in; the package's config outranks both", () => {
-    const file = setup({
-      hostDefaultTag: "object",
-      mx: { "mesh-data": { defaultTag: "object" } },
-    });
-    const { policy, diagnostics } = resolveTargetPolicyDetailed(file);
-    expect(diagnostics).toEqual([]);
-    expect(policy.defaultTag).toBe("object");
-    expect(defaultTagFor(file, policy)).toBe("object");
-  });
-
-  it("an override the target cannot reach is still one error at the mx.host value", () => {
-    const file = setup({ hostDefaultTag: "nonexistent" });
-    const own = invalid(file);
-    expect(own).toHaveLength(1);
-    expect(own[0]).toMatchObject({ severity: "error", line: 3 });
-    expect(own[0]?.message).toBe(
-      'invalid `defaultTag` value: `<nonexistent>` is not a tag reachable from this package (host.defaultTag of "mesh-data")',
-    );
-  });
-
-  it("a built-in the declarations do not provide is rejected, not waved through", () => {
-    const file = setup({ defaultTag: "nonexistent" });
-    const own = invalid(file);
-    expect(own).toHaveLength(1);
-    expect(own[0]?.message).toBe(
-      'invalid `defaultTag` value: `<nonexistent>` is not a tag reachable from this package (defaultTag of "mesh-data")',
-    );
-  });
-
-  it("the declared file kind is a whole-file kind of host `mesh`, never a region kind", () => {
-    const file = setup({ fileKinds: MESH_KIND });
-    const { policy } = resolveTargetPolicyDetailed(file);
-    const lookup = lookupFor(policy);
-    expect(lookup.moduleSegments()).toContain("mesh");
-    expect(lookup.hostOf("mesh-data")).toBe("mesh");
-    expect(lookup.hostTarget("mesh")?.target).toBe("mesh-data");
-    expect(regionFileKind(file, lookup)).toBeUndefined();
-    expect(builtinLookup().moduleSegments()).not.toContain("mesh");
-  });
-
-  it("a file kind's key is the one `defaultTagFor` reads for a file of that kind", () => {
-    const file = setup({
-      fileKinds: MESH_KIND,
-      mx: { "mesh-data": { defaultTag: "nonexistent" } },
-    });
-    const own = invalid(file);
-    expect(own).toHaveLength(1);
-    expect(own[0]?.line).toBe(5);
   });
 });
 
@@ -532,7 +413,7 @@ describe("a host override reaches the compile through defaultTagFor", () => {
 describe("Marko core tags are no valid default on any target (round 3)", () => {
   const CORE = ["await", "try", "define", "effect"];
 
-  it.each(builtinTargets.map((t) => t.name).filter((n) => n !== "tree"))(
+  it.each(builtinTargets.map((t) => t.name))(
     "%s rejects every core tag and the file falls back to the built-in",
     (target) => {
       for (const name of CORE) {
@@ -563,23 +444,6 @@ describe("Marko core tags are no valid default on any target (round 3)", () => {
         name,
       ).toEqual(["invalid-default-tag"]);
       expect(tagFor(file)).toBe("div");
-    }
-  });
-
-  // TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
-  // check re-keys this case.
-  it.skip("tree rejects them as well (and falls back to object)", () => {
-    for (const name of CORE) {
-      const file = project({
-        mx: { target: "tree", data: { defaultTag: name } },
-      });
-      const { diagnostics } = resolveTargetPolicyDetailed(file, {
-        dataWired: true,
-      });
-      expect(
-        diagnostics.map((d) => d.code),
-        name,
-      ).toEqual(["invalid-default-tag"]);
     }
   });
 
@@ -728,25 +592,6 @@ describe("a contract's defaultTag is checked at registration, at the declaration
       mx: { target: "html", contracts: { item: {} } },
     });
     expect(() => resolveTargetPolicyDetailed(file)).not.toThrow();
-  });
-
-  // TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
-  // check re-keys this case.
-  it.skip("on tree, `object` and declared tags are valid; html elements are not", () => {
-    const data = (name: string) =>
-      project(
-        { mx: { target: "tree", contracts: "./contracts.ts" } },
-        {
-          "contracts.ts": `export default { list: { defaultTag: "${name}" }, item: {} };\n`,
-        },
-      );
-    const check = (name: string) =>
-      resolveTargetPolicyDetailed(data(name), {
-        dataWired: true,
-      }).diagnostics.filter((d) => d.code === "invalid-default-tag");
-    expect(check("object")).toEqual([]);
-    expect(check("item")).toEqual([]);
-    expect(check("div")).toHaveLength(1);
   });
 
   it("a host that forbids it: every declaration is a registration error naming the host", () => {
@@ -923,30 +768,6 @@ describe("a dashed custom-element name, per target, as measured (decision 145, r
     },
   );
 
-  // TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
-  // check re-keys this case.
-  it.skip("tree rejects it, config and contract", () => {
-    const config = project({
-      mx: { target: "tree", data: { defaultTag: "sl-card" } },
-    });
-    expect(
-      resolveTargetPolicyDetailed(config, { dataWired: true }).diagnostics.map(
-        (d) => d.code,
-      ),
-    ).toEqual(["invalid-default-tag"]);
-    const contract = project(
-      { mx: { target: "tree", contracts: "./contracts.ts" } },
-      {
-        "contracts.ts": `export default { list: { defaultTag: "sl-card" } };\n`,
-      },
-    );
-    expect(
-      resolveTargetPolicyDetailed(contract, {
-        dataWired: true,
-      }).diagnostics.map((d) => d.code),
-    ).toEqual(["invalid-default-tag"]);
-  });
-
   it("non-dashed unknown names and Marko core tags stay rejected on a native-element target", () => {
     for (const name of ["nope", "await", "annotation-xml"]) {
       const file = project({
@@ -1025,9 +846,7 @@ describe("one source for the permit flag: the declarations (review round 3)", ()
 
 describe("dashed Marko core tags: registration and compile agree on every non-html target (review round 3)", () => {
   const NAMES = ["else-if", "html-script", "html-style", "html-comment"];
-  const TARGETS = builtinTargets
-    .map((t) => t.name)
-    .filter((n) => n !== "html" && n !== "tree");
+  const TARGETS = builtinTargets.map((t) => t.name).filter((n) => n !== "html");
 
   it.each(TARGETS)(
     "%s rejects them as config and as a contract value",

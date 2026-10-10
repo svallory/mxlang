@@ -21,7 +21,7 @@ function project(mx: unknown, dependencies = {}) {
   return join(root, "a.mx");
 }
 it.each([{}, { "@mxlang/host-solid": "1" }])(
-  "explicit tree (removed, decision 204) is a positioned error naming lowerSource, with the unknown-target fallback (%j)",
+  "explicit tree (no longer a target) is core's positioned unknown-target error, with the dependency fallback (%j)",
   (deps) => {
     const file = project({ target: "tree" }, deps);
     const { policy, diagnostics } = resolveTargetPolicyDetailed(file);
@@ -40,7 +40,7 @@ it.each([{}, { "@mxlang/host-solid": "1" }])(
         column: 14,
         length: 6,
         message:
-          'mx.target "tree" was removed (decision 204); a consumer that reads the tree calls lowerSource from @mxlang/core',
+          'unknown mx.target "tree"; valid targets: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template. Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned.',
       },
     ]);
     const related: Parameters<typeof diagnoseDocument>[6] = [];
@@ -56,7 +56,9 @@ it.each([{}, { "@mxlang/host-solid": "1" }])(
       diagnostics,
     );
     expect(reported[0]?.severity).toBe(1);
-    expect(reported[0]?.message).toContain("lowerSource from @mxlang/core");
+    expect(reported[0]?.message).toContain(
+      'unknown mx.target "tree"; valid targets: html, astro-html',
+    );
     expect(related[0]?.diagnostics[0]).toMatchObject({
       severity: 1,
       range: {
@@ -116,29 +118,4 @@ it("legacy agreement remains silent; disagreement keeps the explicit target", ()
     policy: { target: "astro-html", host: "astro" },
     diagnostics: [{ code: "target-host-mismatch", severity: "error" }],
   });
-});
-
-// TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
-// check re-keys `dataWired`.
-it.skip.each([{}, { "@mxlang/host-solid": "1" }])(
-  "dataWired answers the real data policy; the default stays staged (%j)",
-  (deps) => {
-    const file = project({ target: "tree" }, deps);
-    expect(resolveTargetPolicyDetailed(file, { dataWired: true })).toEqual({
-      policy: { target: "tree", host: undefined },
-      diagnostics: [],
-    });
-    // The option is opt-in: the same call without it is still the staged error.
-    expect(resolveTargetPolicyDetailed(file).diagnostics).toHaveLength(1);
-  },
-);
-
-// TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
-// check re-keys `dataWired`.
-it.skip("dataWired also resolves a dependency-inferred data package (rule 5)", () => {
-  const file = project(undefined, { "@mxlang/data": "*" });
-  expect(resolveTargetPolicyDetailed(file).policy.target).toBe("html");
-  expect(
-    resolveTargetPolicyDetailed(file, { dataWired: true }).policy.target,
-  ).toBe("tree");
 });

@@ -9,7 +9,7 @@
           {
             "severity": 1,
             "source": "mxlang",
-            "message": "<root>/target-data/package.json:3:15: mx.target \"tree\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead",
+            "message": "<root>/target-data/package.json:3:15: unknown mx.target \"tree\"; valid targets: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template. Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned.",
             "range": {
               "start": {
                 "line": 0,
@@ -35,7 +35,7 @@
                     }
                   }
                 },
-                "message": "mx.target \"tree\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead"
+                "message": "unknown mx.target \"tree\"; valid targets: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template. Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned."
               }
             ]
           }
@@ -47,7 +47,7 @@
               {
                 "severity": 1,
                 "source": "mxlang",
-                "message": "mx.target \"tree\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead",
+                "message": "unknown mx.target \"tree\"; valid targets: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template. Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned.",
                 "range": {
                   "start": {
                     "line": 2,
@@ -83,7 +83,7 @@
             "severity": "error",
             "value": "tree",
             "file": "<root>/target-data/package.json",
-            "message": "mx.target \"tree\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead",
+            "message": "unknown mx.target \"tree\"; valid targets: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template. Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned.",
             "line": 3,
             "column": 14,
             "length": 6
@@ -94,7 +94,7 @@
       "vite": {
         "threw": {
           "name": "Error",
-          "message": "<root>/target-data/package.json:3:15: mx.target \"tree\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead",
+          "message": "<root>/target-data/package.json:3:15: unknown mx.target \"tree\"; valid targets: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template. Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned.",
           "id": "<root>/target-data/package.json",
           "loc": {
             "file": "<root>/target-data/package.json",
@@ -109,6 +109,6 @@
   },
   "mxTsc": [
     "<root>/target-data/page.mx(1,1): error TS80001: target not loaded: see <root>/target-data/package.json(3,15)",
-    "<root>/target-data/package.json(3,15): error TS80003: mx.target \"tree\" is not wired into the editor and build tools yet (TODO data-target-tooling-dispatch); call parseData from @mxlang/data instead"
+    "<root>/target-data/package.json(3,15): error TS80003: unknown mx.target \"tree\"; valid targets: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template. Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned."
   ]
 }

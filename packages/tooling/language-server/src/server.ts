@@ -20,6 +20,7 @@ import {
   withCalleeInputSources,
 } from "@mxlang/core";
 import { resolveTargetPolicyDetailed } from "@mxlang/targets";
+import { isDialectFile } from "@mxlang/targets/dialect-check";
 import {
   createConnection,
   type Diagnostic,
@@ -68,7 +69,21 @@ const DEBOUNCE_MS = 150;
 const MX_LANGUAGE_IDS = new Set(["mx", ...REGION_LANGUAGE_IDS]);
 
 function isMxDocument(uri: string, languageId: string): boolean {
-  return MX_LANGUAGE_IDS.has(languageId) || uri.endsWith(".mx");
+  return (
+    MX_LANGUAGE_IDS.has(languageId) ||
+    uri.endsWith(".mx") ||
+    isDialectFile(uriPath(uri))
+  );
+}
+
+/** The file path of a `file:` URI; any other string is returned as it is. */
+function uriPath(uri: string): string {
+  if (!uri.startsWith("file://")) return uri;
+  try {
+    return fileURLToPath(uri);
+  } catch {
+    return uri;
+  }
 }
 
 /**

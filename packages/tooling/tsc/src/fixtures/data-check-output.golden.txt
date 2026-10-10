@@ -1,2 +1,0 @@
-unknown-tag.mx(1,1): error TS80001: `<servce>` is not a known tag: it has no contract in `customTags`; did you mean `<service>`?
-violation.mx(1,1): error TS80001: `<service>`: missing required attribute `value`

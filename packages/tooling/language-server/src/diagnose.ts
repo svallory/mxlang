@@ -33,6 +33,7 @@ import {
   regionFileKinds,
   scanCached,
 } from "@mxlang/targets";
+import { checkDialectFile } from "@mxlang/targets/dialect-check";
 import { type PrintOptions, print } from "@mxlang/tsx-bridge";
 import {
   type Diagnostic,
@@ -290,11 +291,12 @@ function documentPath(uri: string): string {
  * and also returns `[]`.
  *
  * Supply the policy from `@mxlang/targets`'s `resolveTargetPolicy` or
- * `resolveTargetPolicyDetailed`. Those wrappers enforce tooling availability,
- * including staging/rejecting the data target. A hand-built policy bypasses
- * that staging: `{ target: "tree" }` reaches the data compiler, not HTML or an
- * unwired-target fallback. Such direct dispatch is outside the supported
- * language-server policy path; this function does not re-resolve the policy.
+ * `resolveTargetPolicyDetailed`. A hand-built policy bypasses the checks those
+ * wrappers make; such direct dispatch is outside the supported language-server
+ * policy path, and this function does not re-resolve the policy.
+ *
+ * A dialect's file (one `routeDialect` hands to a dialect) takes none of that:
+ * it is checked with `lowerSource` alone and `hostPolicy` is not read.
  *
  * Custom tags are discovered from the document's own path (spec §4), so a
  * `<icon>` a `vite build` compiles is a `<icon>` the editor knows about too.
@@ -349,6 +351,31 @@ export function diagnoseDocument(
   const warnings: MxWarning[] = [];
 
   try {
+    // A dialect's file is checked, never compiled: `lowerSource` under the
+    // dialect's own syntax and tag rules, reported with the dialect's name as
+    // the diagnostic's `source` and its own `code`. The host policy, the tag
+    // scan and every target are irrelevant to it.
+    const dialect = checkDialectFile(documentPath(uri), text);
+    if (dialect !== undefined) {
+      return dialect.diagnostics.map(
+        (diagnostic): Diagnostic => ({
+          severity:
+            diagnostic.severity === "error"
+              ? DiagnosticSeverity.Error
+              : DiagnosticSeverity.Warning,
+          source: dialect.source,
+          ...(diagnostic.code === undefined ? {} : { code: diagnostic.code }),
+          message: diagnostic.message,
+          range: {
+            start: { line: diagnostic.line - 1, character: diagnostic.column },
+            end: {
+              line: diagnostic.line - 1,
+              character: diagnostic.column + 1,
+            },
+          },
+        }),
+      );
+    }
     // Tag discovery is filesystem work, so it needs a path. `startServer`
     // already converts before calling, but this function is public and an
     // editor integration may hand it a `file://` URI directly — and

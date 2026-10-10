@@ -1,6 +1,6 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
 import {
   ambientTypeDiagnostics,
   ambientTypeFiles,
@@ -10,9 +10,11 @@ import {
   createAmxLanguagePlugin,
   createAstroLanguagePlugin,
   createCompoundExtensionResolver,
+  createDialectLanguagePlugin,
   createMxLanguagePlugin,
   createNgMxLanguagePlugin,
   createRegionLanguagePlugins,
+  dialectFileExtensions,
   HOST_POLICY_DIAGNOSTIC_CODE,
   hostPolicyText,
   type MxCompileDiagnostic,
@@ -30,7 +32,6 @@ import {
   parseBuildMode,
   resolveBuildProjects,
 } from "./build-templates.ts";
-import { dataProjectDir, runDataCheck } from "./data-check.ts";
 import {
   checkNgMxGroups,
   checkNgMxProjects,
@@ -55,6 +56,45 @@ const ASTRO_SUPPORTED_EXTENSIONS = [
   ".astro",
   ".astro.mx",
 ];
+
+/**
+ * The directories whose dialects this run takes into account: the current
+ * directory, and the directory of the project `-p`/`--project` (or the first
+ * `-b` argument) names. A dialect's extensions are a property of the project
+ * that uses it, and `runTsc` wants the extension list before the program
+ * exists.
+ */
+export function dialectProjectDirs(
+  argv: readonly string[],
+  cwd: string,
+): string[] {
+  const dirs = new Set([cwd]);
+  const flag = argv.findIndex(
+    (arg) =>
+      arg === "-p" || arg === "--project" || arg === "-b" || arg === "--build",
+  );
+  const value = flag === -1 ? undefined : argv[flag + 1];
+  if (value !== undefined && !value.startsWith("-")) {
+    const path = resolve(cwd, value);
+    let isDirectory = false;
+    try {
+      isDirectory = statSync(path).isDirectory();
+    } catch {
+      // A path that does not exist is tsc's to report.
+    }
+    dirs.add(isDirectory ? path : dirname(path));
+  }
+  return [...dirs];
+}
+
+/** The file extensions dialects claim in the projects of this run. */
+function dialectExtensionsOf(argv: readonly string[]): string[] {
+  return [
+    ...new Set(
+      dialectProjectDirs(argv, process.cwd()).flatMap(dialectFileExtensions),
+    ),
+  ];
+}
 
 /**
  * Resolves TypeScript's own `tsc.js`.
@@ -343,6 +383,7 @@ function runPatchedTsc(
 ): number {
   let tscExitCode = 0;
   approximateUnmappedInVolar();
+  const dialectExtensions = dialectExtensionsOf(process.argv.slice(2));
   const exit = process.exit;
   const stopped = Symbol("mx-tsc-exit");
   process.exit = ((code?: number) => {
@@ -352,9 +393,17 @@ function runPatchedTsc(
   try {
     runTsc(
       resolveTscPath(),
-      astro ? ASTRO_SUPPORTED_EXTENSIONS : EXTRA_SUPPORTED_EXTENSIONS,
+      [
+        ...(astro ? ASTRO_SUPPORTED_EXTENSIONS : EXTRA_SUPPORTED_EXTENSIONS),
+        ...dialectExtensions.filter((extension) => extension !== ".mx"),
+      ],
       (typescript, options) => {
         addAmbientTypes(options);
+        // First: a dialect's `.probe.mx` is the dialect's file, not an MX one.
+        const dialect = createDialectLanguagePlugin(
+          typescript,
+          dialectExtensions,
+        );
         const regionPlugins = createRegionLanguagePlugins(typescript);
         // `retainCompiled`: Angular template diagnostics run over the very
         // compiles the type-check used, not a second pass of them.
@@ -366,8 +415,13 @@ function runPatchedTsc(
           getCompiledNgMx: () => ngMx.getCompiledNgMx(),
         });
         const mx = createMxLanguagePlugin(typescript);
-        diagnosticPlugins.push(...regionPlugins, ngMx, mx);
-        const plugins: LanguagePlugin<string>[] = [...regionPlugins, ngMx, mx];
+        diagnosticPlugins.push(dialect, ...regionPlugins, ngMx, mx);
+        const plugins: LanguagePlugin<string>[] = [
+          dialect,
+          ...regionPlugins,
+          ngMx,
+          mx,
+        ];
         if (astro) {
           const amx = createAmxLanguagePlugin(typescript);
           diagnosticPlugins.push(amx);
@@ -572,13 +626,6 @@ function runMxTscBody(): number {
 function runMxTscChecks(): number {
   ambientTypeErrors.clear();
   const astro = consumeAstroFlag(process.argv);
-  // A package that compiles as `data` is not a TypeScript program: its
-  // `.mx` files go to core's `lowerSource` and nothing else runs (decision
-  // 131, addendum 4). Decision 204 removed the tree target, so no package
-  // takes this path until the dialect check replaces it (TODO dialect-check
-  // (PR 1c)).
-  const dataDir = dataProjectDir(process.argv.slice(2), process.cwd());
-  if (dataDir !== undefined) return runDataCheck(dataDir);
   const diagnosticPlugins: MxDiagnosticLanguagePlugin[] = [];
   // One language plugin per program: `tsc -b` creates one for each project,
   // and every one of them holds compiles the Angular pass has to see.
@@ -809,35 +856,50 @@ export function reportCompileDiagnostics(
   if (diagnostics.length === 0) return;
   const require = createRequire(import.meta.url);
   const typescript = require("typescript") as typeof import("typescript");
-  const formatted = typescript.formatDiagnostics(
-    diagnostics.map((diagnostic) => ({
-      file: typescript.createSourceFile(
-        diagnostic.fileName,
-        diagnostic.source,
-        typescript.ScriptTarget.Latest,
-        false,
-        typescript.ScriptKind.TSX,
-      ),
-      start: diagnostic.offset,
-      length: Math.min(1, diagnostic.source.length - diagnostic.offset),
-      category:
-        diagnostic.category === "error"
-          ? typescript.DiagnosticCategory.Error
-          : typescript.DiagnosticCategory.Warning,
-      code: diagnostic.category === "error" ? 80001 : 80002,
-      source: "mxlang",
-      // The language plugin already drops Babel's 0-based `(line:column)` at
-      // its source (`dropBabelPositionSuffix`), so every surface agrees. Kept
-      // as a harmless guard for a diagnostic that did not come from a
-      // `toSyntaxError` (tsc prints `file(line,column)`, 1-based).
-      messageText: diagnostic.message.replace(/\s*\(\d+:\d+\)\s*$/, ""),
-    })),
-    {
-      getCanonicalFileName: (fileName) => fileName,
-      getCurrentDirectory: () => process.cwd(),
-      getNewLine: () => "\n",
-    },
-  );
+  const formatted = diagnostics
+    .map((diagnostic) => {
+      const code = diagnostic.category === "error" ? 80001 : 80002;
+      const line = typescript.formatDiagnostics(
+        [
+          {
+            file: typescript.createSourceFile(
+              diagnostic.fileName,
+              diagnostic.source,
+              typescript.ScriptTarget.Latest,
+              false,
+              typescript.ScriptKind.TSX,
+            ),
+            start: diagnostic.offset,
+            length: Math.min(1, diagnostic.source.length - diagnostic.offset),
+            category:
+              diagnostic.category === "error"
+                ? typescript.DiagnosticCategory.Error
+                : typescript.DiagnosticCategory.Warning,
+            code,
+            source: "mxlang",
+            // The language plugin already drops Babel's 0-based `(line:column)` at
+            // its source (`dropBabelPositionSuffix`), so every surface agrees. Kept
+            // as a harmless guard for a diagnostic that did not come from a
+            // `toSyntaxError` (tsc prints `file(line,column)`, 1-based).
+            messageText: diagnostic.message.replace(/\s*\(\d+:\d+\)\s*$/, ""),
+          },
+        ],
+        {
+          getCanonicalFileName: (fileName) => fileName,
+          getCurrentDirectory: () => process.cwd(),
+          getNewLine: () => "\n",
+        },
+      );
+      // tsc prints `TS<number>`; a dialect's own code is a name, printed as
+      // it is: `page.probe(1,4): error PROBE_BAD: bad probe`.
+      return diagnostic.diagnosticCode === undefined
+        ? line
+        : line.replace(
+            ` ${diagnostic.category} TS${code}: `,
+            ` ${diagnostic.category} ${diagnostic.diagnosticCode}: `,
+          );
+    })
+    .join("");
   process.stderr.write(formatted);
 }
 

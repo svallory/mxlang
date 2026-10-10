@@ -1,5 +1,9 @@
 import { dirname, join } from "node:path";
 import { builtinFileKinds } from "@mxlang/targets";
+import {
+  dialectExtensions,
+  isDialectFile,
+} from "@mxlang/targets/dialect-check";
 import type { Language } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import { createLanguageServicePlugin } from "@volar/typescript/lib/quickstart/createLanguageServicePlugin";
@@ -15,6 +19,7 @@ import {
   type AstroLanguagePluginLoader,
   createAstroLanguagePlugin,
 } from "./astro-language.ts";
+import { createDialectLanguagePlugin } from "./dialect-language.ts";
 import {
   HOST_POLICY_DIAGNOSTIC_CODE,
   hostPolicyMessage,
@@ -25,6 +30,7 @@ import {
   createRegionLanguagePlugin,
   type DependencySourceReader,
   isNgMx,
+  type MxDiagnosticLanguagePlugin,
   type NgMxLanguagePlugin,
   type SolidMxLanguagePlugin,
 } from "./language.ts";
@@ -46,8 +52,16 @@ function createBuiltinLanguagePlugins(
   typescript: typeof ts,
   readSource?: DependencySourceReader,
   onCompiled?: import("./language.ts").NgMxLanguagePluginOptions["onCompiled"],
+  projectDir?: string,
 ): Array<AnyMxLanguagePlugin> {
-  const plugins: Array<AnyMxLanguagePlugin> = [];
+  // First, so a dialect's `.probe.mx` is the dialect's file; it answers
+  // nothing for any other file.
+  const plugins: Array<AnyMxLanguagePlugin> = [
+    createDialectLanguagePlugin(
+      typescript,
+      projectDir === undefined ? [] : dialectExtensions(projectDir),
+    ),
+  ];
   for (const kind of builtinFileKinds) {
     switch (kind.pipeline) {
       case "region":
@@ -70,6 +84,7 @@ function createBuiltinLanguagePlugins(
 }
 
 type AnyMxLanguagePlugin =
+  | MxDiagnosticLanguagePlugin
   | SolidMxLanguagePlugin
   | NgMxLanguagePlugin
   | MxLanguagePlugin
@@ -114,6 +129,7 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
       typescript,
       readSource,
       (entry) => ngDiagnostics?.notifyCompiled(entry),
+      projectDirectory(typescript, info),
     );
     if (info.config?.astro === true) {
       languagePlugins.push(createAmxLanguagePlugin(typescript, { readSource }));
@@ -141,7 +157,8 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
         (fileName) =>
           fileName.endsWith(".mx") ||
           isNgMx(fileName) ||
-          fileName.endsWith(".astro"),
+          fileName.endsWith(".astro") ||
+          isDialectFile(fileName),
       );
     },
     create(info) {
@@ -155,6 +172,16 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
     },
   };
 };
+
+/** The directory a tsserver project's files are resolved from. */
+function projectDirectory(
+  typescript: typeof ts,
+  info: ts.server.PluginCreateInfo,
+): string {
+  return info.project.projectKind === typescript.server.ProjectKind.Configured
+    ? dirname(info.project.getProjectName())
+    : info.project.getCurrentDirectory();
+}
 
 /**
  * Reads a callee's text as the project holds it, so a caller compiles
@@ -327,8 +354,11 @@ function withSyntaxDiagnostics(
               diagnostic.category === "error"
                 ? typescript.DiagnosticCategory.Error
                 : typescript.DiagnosticCategory.Warning,
-            code: diagnostic.category === "error" ? 80001 : 80002,
-            source,
+            // A dialect's code is its own string; tsserver forwards `code`
+            // as it is, and editors show a string code as well as a number.
+            code: (diagnostic.diagnosticCode ??
+              (diagnostic.category === "error" ? 80001 : 80002)) as number,
+            source: diagnostic.diagnosticSource ?? source,
             messageText: diagnostic.message,
           })),
           ...hostPolicy.map((diagnostic) => ({
@@ -366,12 +396,11 @@ export {
   createAmxLanguagePlugin,
 } from "./amx-language.ts";
 export { createAstroLanguagePlugin } from "./astro-language.ts";
-export type { DataCheckDiagnostic, DataCheckResult } from "./data-check.ts";
 export {
-  checkDataPackage,
-  isDataProject,
-  lineAndColumn,
-} from "./data-check.ts";
+  createDialectLanguagePlugin,
+  DIALECT_LANGUAGE_ID,
+  dialectFileExtensions,
+} from "./dialect-language.ts";
 export {
   HOST_POLICY_DIAGNOSTIC_CODE,
   hostPolicyMessage,

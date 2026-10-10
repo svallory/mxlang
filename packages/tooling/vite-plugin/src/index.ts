@@ -25,6 +25,52 @@ function loadRegistry(): Promise<RegistryModule> {
   return registryModule;
 }
 
+/** The dialect check, behind its own lazy import for the same reason. */
+type DialectCheckModule = typeof import("@mxlang/targets/dialect-check");
+let dialectCheckModule: Promise<DialectCheckModule> | undefined;
+
+function loadDialectCheck(): Promise<DialectCheckModule> {
+  dialectCheckModule ??= import("@mxlang/targets/dialect-check");
+  return dialectCheckModule;
+}
+
+/**
+ * The refusal for a dialect file the build was asked to import, or
+ * `undefined` when `file` is no dialect file. Building a file asks its
+ * dialect for an emit, and a dialect registers none, so the import is
+ * refused: positioned at the head of the dialect file, with exactly
+ * `<dialect> files cannot be imported: the dialect registers no emit`.
+ * A dialect file that does not check clean reports its first error instead,
+ * at its own position: that is the next thing its author has to fix.
+ */
+async function dialectFileRefusal(file: string): Promise<Error | undefined> {
+  const { checkDialectFile, isDialectFile } = await loadDialectCheck();
+  if (!isDialectFile(file)) return undefined;
+  const text = readTemplateSource(file);
+  if (text === undefined) return undefined;
+  const check = checkDialectFile(file, text);
+  if (check === undefined) return undefined;
+  const first = check.diagnostics.find(
+    (diagnostic) => diagnostic.severity === "error",
+  );
+  const message =
+    first?.message ??
+    `${check.source} files cannot be imported: the dialect registers no emit`;
+  // The authored position goes in `pluginCode` too, so Vite does not map it
+  // through the importer's sourcemap (see `unresolvedImport`).
+  const error = Object.assign(new Error(), {
+    plugin: "mx",
+    pluginCode: text,
+  });
+  return locate(error, {
+    file,
+    line: first?.line ?? 1,
+    column: first?.column ?? 0,
+    source: text,
+    message,
+  });
+}
+
 /** The unnamed tag's name for a file the Vite plugin prints (a `.solid.mx`), resolved quietly: the page transform already reported the policy's warnings. */
 async function regionDefaultTag(file: string): Promise<string> {
   const { defaultTagFor, resolveTargetPolicy } = await loadRegistry();
@@ -905,6 +951,26 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       : unresolvedImport(sourcePath(importerPath, ext), specifier);
   };
   /**
+   * Whether the project around `directory` hands `path`'s extension to a
+   * dialect. Cached per directory for the length of a build: an import of
+   * anything else must not read a manifest each time.
+   */
+  const dialectExtensionsAt = new Map<string, readonly string[]>();
+  const claimedByDialect = async (
+    path: string,
+    importer: string | undefined,
+  ): Promise<boolean> => {
+    const directory = dirname(importer ?? path);
+    let claimed = dialectExtensionsAt.get(directory);
+    if (claimed === undefined) {
+      claimed = (await loadDialectCheck()).dialectExtensions(directory);
+      dialectExtensionsAt.set(directory, claimed);
+    }
+    return claimed.some(
+      (ext) => path.length > ext.length && path.endsWith(ext),
+    );
+  };
+  /**
    * The authored file behind one of this plugin's virtual module ids, with any
    * `?query`/`#hash` carried across, or `undefined` for an id this plugin did
    * not mint. `relabelBuildErrors`'s only notion of "ours".
@@ -926,6 +992,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     },
 
     async buildStart() {
+      dialectExtensionsAt.clear();
       await ensureExtensions();
     },
 
@@ -977,6 +1044,15 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
 
       const ext = matchExt(path);
       if (ext === undefined) {
+        // A dialect file with an extension of its own (`.probe`): nothing else
+        // in the build can read it, so the import is refused where it is made.
+        if (await claimedByDialect(path, importer)) {
+          const resolved = await this.resolve(id, importer, { skipSelf: true });
+          if (resolved && !resolved.external) {
+            const refusal = await dialectFileRefusal(splitId(resolved.id)[0]);
+            if (refusal) throw refusal;
+          }
+        }
         // Not ours to rewrite, but an import written in an authored MX file
         // that nothing resolves is ours to report: rolldown would name the
         // generated `page.mx.tsx` at a generated position (audit item 10).
@@ -1007,6 +1083,11 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       const [resolvedPath, resolvedSuffix] = splitId(resolved.id);
       const resolvedExt = matchExt(resolvedPath);
       if (resolvedExt === undefined) return null;
+
+      // `.probe.mx` is `.mx` to the extension list and a dialect file to its
+      // project: the dialect builds it, not this plugin.
+      const refusal = await dialectFileRefusal(resolvedPath);
+      if (refusal) throw refusal;
 
       // Carry the query across the rewrite. Vite appends its own (`?t=` on an
       // HMR re-fetch, `?import`), and dropping it would turn a cache-busted
@@ -1083,6 +1164,10 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       const [path] = splitId(id);
       const ext = isMxModule(path);
       if (ext === undefined) return null;
+
+      // An entry or a hand-built id reaches here without `resolveId`.
+      const refusal = await dialectFileRefusal(sourcePath(path, ext));
+      if (refusal) throw refusal;
 
       // Rollup's own warning channel, so a misconfigured `mx.tags` reaches the
       // build log and the dev-server overlay the way any other plugin warning
