@@ -1,5 +1,0 @@
-entity :Comment table="comments"
-  attributes
-    uuid :id primary-key
-    string :body
-  actions auto=[:read]

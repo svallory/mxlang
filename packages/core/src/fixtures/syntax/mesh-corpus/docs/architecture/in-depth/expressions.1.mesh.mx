@@ -1,4 +1,0 @@
-read :overdue
-  filter=() => &isOverdue
-  sort
-    asc &dueOn

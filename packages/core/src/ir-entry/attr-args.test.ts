@@ -6,8 +6,8 @@
  * function value, never `args`.
  */
 import { describe, expect, it } from "vitest";
+import memberSyntax from "../fixtures/syntax/member-fixture.ts";
 import type { Attr, DelegatedTag } from "../ir.ts";
-import memberSyntax from "../syntax/member.ts";
 import { type LowerSourceOptions, lowerSource, type Spanned } from "./index.ts";
 
 function firstTag(

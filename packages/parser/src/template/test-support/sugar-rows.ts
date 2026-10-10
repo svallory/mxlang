@@ -1,10 +1,9 @@
 /**
  * The atoms-and-sugars dialect's rows (`lang-ext-move-sugars-to-mesh`,
  * slice a1): MX's atoms (decision 156) and name sugars (decision 146) as
- * layer-2 syntax-table rows. Core's fixture
- * (`packages/core/src/syntax/atoms-sugars.ts`) carries the same
- * rows; the parser's differential tests (`mx-sugar-module.test.ts`) run the
- * atom and after-value corpora through them.
+ * layer-2 syntax-table rows. The parser's differential tests
+ * (`mx-sugar-module.test.ts`) run the atom and after-value corpora through
+ * them.
  *
  * The attribute rows' matchers take exactly the attribute-name extent the
  * built-in lexer gives a static sugar (`#a.b:c`, `.c:b`, `::x`, `:a:b`,
@@ -91,10 +90,7 @@ export const CLASS: Trigger = {
   value: "refuse",
 };
 
-/**
- * Mesh's member row (decision 182 addendum 2), as in
- * `packages/core/src/syntax/member.ts`.
- */
+/** A one-character sigil row (`&name`) in all three positions, as a dialect's member row. */
 export const MEMBER: Trigger = {
   id: "member",
   chars: "&",

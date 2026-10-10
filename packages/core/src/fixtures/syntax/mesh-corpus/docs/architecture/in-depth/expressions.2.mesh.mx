@@ -1,6 +1,0 @@
-do
-  set
-    &paidAt=({ input }) => input.paidAt
-  when=() => &amount > 10000
-    set
-      &needsReview=true

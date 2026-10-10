@@ -258,9 +258,9 @@ may set. An inline object stays a table only. A trigger whose `node` is
     not, core still reads the declared names (raising nothing about them)
     to resolve its own `ref` check. A contract's `declares` reaches the
     module whether it claims it or not.
-  - The reference module `@mxlang/core/syntax/atoms-sugars` claims all four.
-    It checks their shape in `checkContract` and their use in `afterLower`,
-    word for word and at the positions core gives.
+  - A dialect that owns atoms (Mesh's) claims all four. It checks their
+    shape in `checkContract` and their use in `afterLower`. Core ships no
+    such module.
   - The claim follows the file's syntax. A discovery scan (`tags/`,
     `mx.tags`, `mx.contracts`) reads it from the file's nearest
     `package.json#mx.syntax`: an explicit `syntax` option is invisible to

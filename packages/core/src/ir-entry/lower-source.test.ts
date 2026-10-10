@@ -432,7 +432,9 @@ describe("required beyond `span`", () => {
 
   it("a static attribute's `valueSpan`: a member", () => {
     const memberSyntax = (
-      createRequire(import.meta.url)("../syntax/member.ts") as {
+      createRequire(import.meta.url)(
+        "../fixtures/syntax/member-fixture.ts",
+      ) as {
         default: Dialect;
       }
     ).default;

@@ -99,8 +99,7 @@ Mesh's syntax needs no "`:name` after a value" form (`belongs-to=:List :list`):
 the member sigil `&` covers the reference in all three positions, so that
 parser rule has no layer-2 user (decision 182, addendum 1).
 
-The rows (`packages/core/src/syntax/atoms-sugars.ts`, `@mxlang/core/syntax/atoms-sugars`, combined
-with the member row in `syntax/mesh.ts`, `@mxlang/core/syntax/mesh`, the module Mesh copies):
+The rows Mesh's dialect owns (core ships none of them):
 
 | Row | List | `chars` | `match` | Other fields |
 |---|---|---|---|---|
@@ -108,15 +107,14 @@ with the member row in `syntax/mesh.ts`, `@mxlang/core/syntax/mesh`, the module 
 | `name` | attribute | `:` | `:` then a token | `terminatesValue` |
 | `id` | attribute | `#` | `#` then a token (a chain) | `terminatesValue`, `value: "refuse"` |
 | `class` | attribute | `.` | `.` then a token (a chain) | `terminatesValue`, `value: "refuse"` |
-| `atom-value` (`syntax/mesh.ts`) | value | `:` | `:NAME` | `standIn: "keep"`, `{ type: "Atom", dialect: "mesh" }` |
+| `atom-value` | value | `:` | `:NAME` | `standIn: "keep"`, `{ type: "Atom", dialect: "mesh" }` |
 
 `NAME` is `[A-Za-z_$][\w$]*(?:-[\w$]+)*`. `atom-value` claims a whole
 attribute value `:NAME` as a `mesh:Atom` node, which lowers to the
 atom-marked string literal the `atom` row builds, so the atom contracts read
 it unchanged. Because a claimed default value ends at a spaced `name` row,
 `belongs-to=:List :list` is the default `:List` and the name `:list`, refused
-as the unknown attribute `value`. Mesh copies this row and the `Atom` node
-type into its own syntax. A token runs to whitespace, `=`,
+as the unknown attribute `value`. A token runs to whitespace, `=`,
 `(`, `,` or the end of the tag or group. While both exist, a loaded row on a
 character replaces core's built-in handling of that character in that
 position (lexing, after-value rule, lowering).
@@ -125,18 +123,14 @@ position (lexing, after-value rule, lowering).
 for parity with core's built-in sugars only: Mesh writes neither, and its
 copy may drop both rows.
 
-**Lifetime** (decision 183 addendum 6). Both modules are exported from
-`@mxlang/core`, marked `@unstable`, through the beta, as reference material
-rather than a host's API. Mesh vendors (copies) them at the alpha.15 pin and
-owns its copy from then on. Mesh's 41 entity files and its docs blocks are a
-golden parse corpus in this repo
-(`packages/core/src/fixtures/syntax/mesh-corpus/`), so a change that would
-read one of them differently fails here first.
+**Ownership.** Core exports no syntax module. Mesh's atoms, name sugars and
+`&` members, and the corpus of Mesh files that pins them, live in Mesh; core's
+own tests of the claim process use fixture dialects.
 
 **`async` before a method value.** `kind async :name(p) { b }` reaches the
 `name` hook as an async method (`ctx.valueForm` is `"async-method"`,
-specification §13.9.5). A `:name` method has no async meaning, so both
-modules refuse it at the `:name`, naming the form. Core's built-in sugar never
+specification §13.9.5). A `:name` method has no async meaning, so a
+dialect that owns the sugar refuses it at the `:name`, naming the form. Core's built-in sugar never
 sees it: there `async` stays an attribute (`` unknown attribute `async` `` under a
 contract that does not declare it), and that is alpha.14's behavior.
 

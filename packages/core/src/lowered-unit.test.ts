@@ -1,10 +1,8 @@
 /**
- * Slice a2 of `lang-ext-move-sugars-to-mesh` (lead ruling Q2 A): a syntax
- * module's `afterLower(unit)` sees a public view of the unit
- * (`LoweredUnit`), and `contractFields` hands contract keys to the module.
+ * A dialect's `afterLower(unit)` sees a public view of the unit
+ * (`LoweredUnit`), and `contractFields` hands contract keys to the dialect.
+ * The dialects here are test fixtures.
  *
- * - The atom contract checks, run by the reference module from that view,
- *   against core's built-in path: same error text, position, spans and code.
  * - The view: calls, attributes in every kind, attribute tags at any depth,
  *   ancestors and their scope identity, `declared`, frozen.
  * - `fail` and `warn`.
@@ -31,9 +29,10 @@ import {
 } from "./core.ts";
 import type { CustomTag } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
+import declaresFixture from "./fixtures/syntax/declares-fixture.ts";
+import memberFixture from "./fixtures/syntax/member-fixture.ts";
 import type { ContractAttr, LoweredUnit } from "./lowered-unit.ts";
 import { scanCustomTags } from "./scan.ts";
-import meshSyntax from "./syntax/mesh.ts";
 import {
   type Dialect,
   defaultSyntax,
@@ -44,7 +43,13 @@ import { testTargetLookup } from "./test-targets.ts";
 
 const targets = testTargetLookup();
 const FILE = "/tmp/mx-lowered-unit/page.mx";
-const MESH_MODULE = join(import.meta.dirname, "syntax/mesh.ts");
+const DECLARES_MODULE = join(
+  import.meta.dirname,
+  "fixtures/syntax/declares-fixture.ts",
+);
+
+/** A dialect with no rows and no hooks: the hooks a test sets are its own. */
+const noHooks: Dialect = { id: "test", name: "MX", table: {} };
 
 const host: HostDeclarations = {
   tags: {},
@@ -421,65 +426,6 @@ const REGISTRATION: ReadonlyArray<
   ],
 ] as unknown as ReadonlyArray<readonly [string, Record<string, CustomTag>]>;
 
-describe("the module's contract checks match core's built-in path", () => {
-  it.each(FAILING)("%s", (source) => {
-    const builtIn = outcome(source, vocab, defaultSyntax());
-    expect(builtIn).toHaveProperty("message");
-    expect(outcome(source, vocab, meshSyntax)).toEqual(builtIn);
-  });
-
-  it.each(PASSING)("%s", (source) => {
-    expect(outcome(source, vocab, defaultSyntax())).toEqual({
-      ok: true,
-      warnings: [],
-    });
-    expect(outcome(source, vocab, meshSyntax)).toEqual({
-      ok: true,
-      warnings: [],
-    });
-  });
-
-  it.each(REGISTRATION)("registration: %s", (_, tags) => {
-    // The tag is never called: the module's `checkContract` runs at
-    // registration, as core's own check does.
-    const builtIn = outcome("<div/>", tags, defaultSyntax());
-    expect(builtIn).toMatchObject({ line: 0, column: 0, file: undefined });
-    expect(outcome("<div/>", tags, meshSyntax)).toEqual(builtIn);
-    expect(outcome("<box/>", tags, meshSyntax)).toEqual(
-      outcome("<box/>", tags, defaultSyntax()),
-    );
-  });
-
-  it("a duplicate carries both spans, the first then the second", () => {
-    const source = "<node#a/>\n<node#a/>";
-    const error = caught(() => compile(source, vocab, meshSyntax));
-    expect(error.message).toBe("`a` is already declared as `node` at 1:7");
-    expect(error.spans).toEqual([
-      { sourceStart: 6, sourceEnd: 7 },
-      { sourceStart: 16, sourceEnd: 17 },
-    ]);
-    expect([error.line, error.column]).toEqual([2, 6]);
-  });
-});
-
-describe("completion facts are core's built-in path only (lead 14:29)", () => {
-  it("a module that claims the atom fields leaves `atomFacts` empty, and unset on an error", () => {
-    const source = "<node#a/><link to=:a/>";
-    const facts = (syntax: Syntax) =>
-      (compile(source, vocab, syntax).atomFacts as unknown as { calls: [] })
-        .calls.length;
-    expect(facts(defaultSyntax())).toBe(2);
-    expect(facts(meshSyntax)).toBe(0);
-    const failing = "<node#a/><link to=:b/>";
-    expect(
-      caught(() => compile(failing, vocab, defaultSyntax())).atomFacts,
-    ).toBeDefined();
-    expect(
-      caught(() => compile(failing, vocab, meshSyntax)).atomFacts,
-    ).toBeUndefined();
-  });
-});
-
 /** The unit a module's `afterLower` was handed (`fields` claimed). */
 function unitOf(
   source: string,
@@ -488,7 +434,7 @@ function unitOf(
 ): LoweredUnit {
   let seen: LoweredUnit | undefined;
   compile(source, customTags, {
-    ...meshSyntax,
+    ...memberFixture,
     contractFields: fields,
     afterLower: (unit) => {
       seen = unit;
@@ -682,7 +628,7 @@ describe("the `LoweredUnit` view", () => {
     let ran = false;
     const error = caught(() =>
       compile("<box mode=1/>", vocab, {
-        ...meshSyntax,
+        ...noHooks,
         afterLower: () => {
           ran = true;
         },
@@ -703,7 +649,7 @@ describe("`unit.fail` and `unit.warn`", () => {
       compile(
         source,
         {},
-        { ...meshSyntax, afterLower: run },
+        { ...noHooks, afterLower: run },
         {
           warnings,
         },
@@ -765,7 +711,7 @@ describe("`unit.fail` and `unit.warn`", () => {
       "<x/>\n<y/>",
       {},
       {
-        ...meshSyntax,
+        ...noHooks,
         afterLower: (unit) => {
           unit.warn("here", { sourceStart: 6, sourceEnd: 7 });
           unit.warn("file");
@@ -809,49 +755,39 @@ describe("review 466 r1: core keeps its checks beside a module's claims", () => 
       "`<link>`: attribute `to` must be atom, got string",
     );
     expect([plain.line, plain.column]).toEqual([builtIn.line, builtIn.column]);
-    // The same with mesh's hooks but no `afterLower`: worded by the module.
-    const { afterLower: _, ...noAfterLower } = meshSyntax;
-    expect(
-      caught(() => compile(source, vocab, noAfterLower as Dialect)).message,
-    ).toBe(
-      "`<link>`: attribute `to` must be atom, got string (a declared node)",
-    );
-    // The mesh module's own message comes first, byte for byte.
-    expect(outcome(source, vocab, meshSyntax)).toEqual(
-      outcome(source, vocab, defaultSyntax()),
-    );
   });
 
   it("B1: a module error earlier in the file keeps its place", () => {
     const source = '<node#a/><link to=:zz/><link to="red"/>';
-    expect(caught(() => compile(source, vocab, meshSyntax)).message).toMatch(
-      /`:zz` is not a declared node here/,
-    );
+    expect(
+      caught(() => compile(source, vocab, declaresFixture)).message,
+    ).toMatch(/`:zz` is not a declared node here/);
+  });
+
+  it("completion facts are core's built-in path only: a dialect that claims the atom fields leaves `atomFacts` empty, and unset on an error", () => {
+    const source = "<node#a/><link to=:a/>";
+    const facts = (syntax: Syntax) =>
+      (compile(source, vocab, syntax).atomFacts as unknown as { calls: [] })
+        .calls.length;
+    expect(facts(defaultSyntax())).toBe(2);
+    expect(facts(claimOnly())).toBe(0);
+    const failing = "<node#a/><link to=:b/>";
+    expect(
+      caught(() => compile(failing, vocab, defaultSyntax())).atomFacts,
+    ).toBeDefined();
+    expect(
+      caught(() => compile(failing, vocab, declaresFixture)).atomFacts,
+    ).toBeUndefined();
   });
 
   it.each(CLAIMS)(
     "L3: valid input passes under the partial claim %o",
     (fields) => {
-      const partial = { ...meshSyntax, contractFields: fields };
       for (const source of [...PASSING, "<node#a/><link to=:a/>"]) {
-        expect(outcome(source, vocab, partial)).toEqual({
-          ok: true,
-          warnings: [],
-        });
         expect(outcome(source, vocab, claimOnly(fields))).toEqual({
           ok: true,
           warnings: [],
         });
-      }
-    },
-  );
-
-  it.each(CLAIMS)(
-    "L3: invalid input still fails under the partial claim %o",
-    (fields) => {
-      const partial = { ...meshSyntax, contractFields: fields };
-      for (const source of FAILING) {
-        expect(outcome(source, vocab, partial)).toHaveProperty("message");
       }
     },
   );
@@ -863,7 +799,7 @@ describe("review 466 r1: core keeps its checks beside a module's claims", () => 
     const errors: unknown[] = [];
     for (let run = 0; run < 2; run++) {
       compile("<box b=:x/>", tags, {
-        ...meshSyntax,
+        ...noHooks,
         afterLower: (unit) => {
           const values = unit.calls[0]?.contract.attributes?.b
             ?.values as string[];
@@ -1007,10 +943,6 @@ describe("`contractFields`", () => {
       "`<box>`: attribute `mode` must be atom, got string (as the module says)",
     );
     expect(seen).toEqual([true, ["b", "a"]]);
-    // The reference module's wording is core's built-in one.
-    expect(
-      caught(() => compile("<box mode='s'/>", tags, meshSyntax)).message,
-    ).toBe(builtIn);
     // An unclaimed `values` is still core's to quote.
     expect(
       caught(() =>
@@ -1135,8 +1067,8 @@ describe("`contractFields` through a manifest", () => {
 
   /**
    * A project in `root` holding `files`. With `dialect`, it depends on a
-   * dialect package claiming `.mesh.mx`, whose module re-exports the reference
-   * Mesh dialect (`true`) or is the given source, and the page is a `.mesh.mx` file;
+   * dialect package claiming `.fixture.mx`, whose module re-exports the
+   * declares fixture (`true`) or is the given source, and the page is a `.fixture.mx` file;
    * without, the page is a `.mx` file.
    */
   function project(
@@ -1158,22 +1090,22 @@ describe("`contractFields` through a manifest", () => {
       return join(root, "page.mx");
     }
     dialectProject(root, {
-      packageName: "mesh-dialect",
+      packageName: "fixture-dialect",
       manifest: {
-        id: "mesh",
-        name: "Mesh",
-        extensions: [".mesh.mx"],
+        id: "fixture",
+        name: "Fixture",
+        extensions: [".fixture.mx"],
         ...(dialect === true ? { module: "./index.cjs" } : {}),
       },
-      module: dialect === true ? reexport(MESH_MODULE) : dialect,
+      module: dialect === true ? reexport(DECLARES_MODULE) : dialect,
       mx,
     });
-    return join(root, "page.mesh.mx");
+    return join(root, "page.fixture.mx");
   }
 
   /** The module file of a dialect `project` wrote from source. */
   const dialectModule = (root = dir) =>
-    join(root, "node_modules", "mesh-dialect", "index.mjs");
+    join(root, "node_modules", "fixture-dialect", "index.mjs");
 
   /** Scans and compiles `page` as a host does, the syntax from its manifest. */
   function build(page: string, source: string) {
@@ -1230,88 +1162,8 @@ describe("`contractFields` through a manifest", () => {
     expect(
       caught(() => build(page, "<node#alpha/><link to=:alpah/>")).message,
     ).toBe(
-      "`<link>`: attribute `to`: `:alpah` is not a declared node here (one of :alpha); did you mean `:alpha`?",
+      "`<link>`: attribute `to`: `:alpah` is not a declared node here (one of :alpha)",
     );
-  });
-
-  /**
-   * The registration error of `files` on a page that calls none of its
-   * tags: built-in (a `.mx` page) and through the dialect (a `.mesh.mx` page),
-   * each project in its own directory. `file` is relative to the project.
-   */
-  function placed(files: Record<string, string>, mx = {}) {
-    return ["builtin", "module"].map((name) => {
-      const root = join(dir, name);
-      const page = project(
-        mx,
-        files,
-        root,
-        name === "module" ? true : undefined,
-      );
-      const error = caught(() => build(page, "<div/>"));
-      return {
-        message: error.message,
-        line: error.line,
-        column: error.column,
-        file: error.file?.slice(root.length + 1),
-      };
-    });
-  }
-
-  it.each([
-    ["values", `{ attributes: { a: { type: "string", values: ["a"] } } }`],
-    ["pattern", `{ attributes: { a: { type: "atom", pattern: "(" } } }`],
-    ["declares", `{ declares: { kind: "k", from: "nope" } }`],
-  ])(
-    "a sidecar's malformed `%s` points at the sidecar, called or not",
-    (_, body) => {
-      const [builtIn, module] = placed({
-        "tags/box.tag.ts": `export default ${body};\n`,
-      });
-      expect(builtIn).toMatchObject({
-        file: "tags/box.tag.ts",
-        line: 1,
-        column: 0,
-      });
-      expect(module).toEqual(builtIn);
-    },
-  );
-
-  it("an `mx.contracts` module's malformed claimed key points at the module file, 1:0", () => {
-    const [builtIn, module] = placed(
-      {
-        "contracts.ts": `export default { box: { attributes: { a: { type: "string", values: ["a"] } } } };\n`,
-      },
-      { contracts: "./contracts.ts" },
-    );
-    expect(builtIn).toEqual({
-      message:
-        'Invalid "a" attribute declaration of tag "box": `values` requires `type: "atom"`',
-      line: 1,
-      column: 0,
-      file: "contracts.ts",
-    });
-    expect(module).toEqual(builtIn);
-  });
-
-  it("an `mx.contracts` module's malformed `declares` (claimed) points at the module file", () => {
-    const page = project(
-      { contracts: "./contracts.ts" },
-      {
-        "contracts.ts": `export default { box: { declares: { kind: "k", from: "nope" } } };\n`,
-      },
-      dir,
-      true,
-    );
-    const error = caught(() => build(page, "<div/>"));
-    expect(error.message).toBe(
-      'Invalid `declares` of tag "box": `from` must be "id" or "name"',
-    );
-    expect([error.file, error.line, error.column]).toEqual([
-      join(dir, "contracts.ts"),
-      1,
-      0,
-    ]);
   });
 
   it.each([

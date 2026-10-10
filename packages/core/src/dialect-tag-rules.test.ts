@@ -15,7 +15,6 @@ import { TranslateError } from "./core.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import { parseFragment } from "./fragment.ts";
 import { lowerSource } from "./ir-entry/index.ts";
-import meshSyntax from "./syntax/mesh.ts";
 import type { Dialect } from "./syntax-table.ts";
 import { dialectProject } from "./test-dialect-project.ts";
 import { lookup, testTargetLookupWithSegments } from "./test-targets.ts";
@@ -174,14 +173,8 @@ describe.each([
   });
 });
 
-describe("the reference `syntax/mesh` module", () => {
-  it('states `tagRules: "none"`: Mesh files are data, not HTML', () => {
-    expect(meshSyntax.tagRules).toBe("none");
-  });
-});
-
-// `scripts/sugar-module.ts` runs MX's suites through a reference dialect
-// set on this global; those files are still MX's, under their target's rules.
+// A test preload may run MX's suites through a dialect set on this global;
+// those files are still MX's, under their target's rules.
 describe("the test fallback dialect keeps MX's own tag rules", () => {
   const FALLBACK = Symbol.for("@mxlang/core:fallbackSyntaxForTesting");
   const global = globalThis as Record<symbol, unknown>;

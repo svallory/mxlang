@@ -1,5 +1,0 @@
-entity :Todo
-  attributes
-    uuid :id primary-key
-  relationships
-    has-many :items entity=List nullable
