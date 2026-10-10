@@ -1,7 +1,7 @@
 /**
  * Test support: a project that uses one of core's reference dialects the way
  * decision 212 has it. The project's `package.json` lists a dialect package
- * as a dependency, and that package's `package.json#mxDialect` names its own
+ * as a dependency, and that package's `package.json#mx.dialect` names its own
  * `./index.cjs`, which re-exports the reference module: a manifest's `module`
  * stays inside its package, so the package carries the module, not a path
  * out to it. Not exported from the package.
@@ -28,10 +28,12 @@ export function dialectPackage(
     join(packageDir, "package.json"),
     JSON.stringify({
       name: "mesh-dialect",
-      mxDialect: {
-        ...identity,
-        extensions: MESH_EXTENSIONS,
-        module: "./index.cjs",
+      mx: {
+        dialect: {
+          ...identity,
+          extensions: MESH_EXTENSIONS,
+          module: "./index.cjs",
+        },
       },
     }),
   );

@@ -448,7 +448,7 @@ describe("a dialect's node types are validated", () => {
   });
 });
 
-describe("a dialect package (`package.json#mxDialect`, decision 212)", () => {
+describe("a dialect package (`package.json#mx.dialect`, decision 212)", () => {
   /** The fixture dialect as a published package: plain JS, default export. */
   const PACKAGE = `const REF = ${JSON.stringify(REF)};
 export default {

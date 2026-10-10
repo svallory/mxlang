@@ -449,14 +449,18 @@ Five facts worth knowing before editing it:
   discovered tag of the same name.
 - **A file reaches its dialect by its extension (decisions 182 PR C, 202,
   212; `src/dialect-discovery.ts`, `src/syntax-table.ts`).** A dialect is a
-  package whose `package.json#mxDialect` declares `{ id, name, extensions,
+  package whose `package.json#mx.dialect` declares `{ id, name, extensions,
   module }` (`DIALECT_MANIFEST_KEY`), validated eagerly with a positioned
   error at the field; `module` must stay inside the package (absolute, or
   out through `..`, is an error), so tests reach core's reference modules
   through an in-package re-export (`reexport` in `test-dialect-project.ts`). `discoverDialects(projectFile)` reads only the direct
   dependencies of the file's nearest `package.json` (all four fields),
   found by a `node_modules` walk-up, statically (no dialect code runs), plus
-  the project's own `mxDialect` (a dialect routes its own files).
+  the project's own `mx.dialect` (a dialect routes its own files).
+  `mx.dialect` is a reserved identity block: no reader of the project's `mx`
+  settings (`mx.tags`, `mx.contracts`, `mx.host`/`target`/`strict`,
+  `mx.extensions`, `mx[<configKey>]`) may treat it as config or reject it as an
+  unknown key (pinned in `dialect-discovery.test.ts`).
   `routeDialect(file)` picks the longest claimed extension; a clash is an
   error at the second package's dependency entry naming both, settled by
   `mx.extensions` (`{ ".x": "<id>" }`, an error at the entry's key when
@@ -467,7 +471,7 @@ Five facts worth knowing before editing it:
   dependency edit is seen; a dependency read keeps one manifest object
   (`manifests`), which `byDialect` caches the loaded dialect by.
   `.mx` is never claimable. `loadDialect` resolves `module` from the
-  package directory (unresolvable: an error at `mxDialect.module`), loads it
+  package directory (unresolvable: an error at `mx.dialect.module`), loads it
   with `loadDefaultExport` once per mtime (`loadDialectModule`: a failed load
   is rethrown until the file changes, because Node before 22.20 cannot
   `require` an errored ES module again; Node never re-evaluates an edited ES

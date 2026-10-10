@@ -28,7 +28,7 @@
  * `self` receiver and the `member` tag are this file's choices, not core's):
  * change the type import below to `@mxlang/core`, give the row your own `id`
  * and `chars`, and name the copy in your dialect package's
- * `package.json#mxDialect.module`. It loads
+ * `package.json#mx.dialect.module`. It loads
  * through Node's strip-only `require`, so keep it free of enums and
  * parameter properties.
  */

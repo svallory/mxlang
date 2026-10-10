@@ -2,7 +2,7 @@
  * The `&` member shapes through `lowerSource` (decision 182 addenda 4 and 5;
  * `notes/mesh/language-extensions-for-mesh.md` updates 03:10, 03:40, 03:42)
  * with core's test-only member module (`../syntax/member.ts`, which Mesh
- * copies) loaded two ways: a dialect package naming it in `mxDialect.module`, and
+ * copies) loaded two ways: a dialect package naming it in `mx.dialect.module`, and
  * the `dialect` option. Then the cases that must not be members, and the
  * `"member"` contract type's acceptance matrix. Core's `triggers.test.ts`
  * pins the same module through `compileSource`; these pin what the entry

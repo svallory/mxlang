@@ -33,7 +33,7 @@
  * Its messages are the user's: they quote no MX decision numbers.
  *
  * Self-contained: it imports types only, so a dialect package's
- * `mxDialect.module` can name it, and Mesh can copy it (`mesh.ts` combines it with the
+ * `mx.dialect.module` can name it, and Mesh can copy it (`mesh.ts` combines it with the
  * member module).
  */
 import type {

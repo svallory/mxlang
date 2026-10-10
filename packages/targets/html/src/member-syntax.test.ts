@@ -30,11 +30,13 @@ beforeAll(() => {
     join(dialect, "package.json"),
     JSON.stringify({
       name: "member-dialect",
-      mxDialect: {
-        id: "member",
-        name: "Mesh",
-        extensions: [".mesh.mx"],
-        module: "./index.cjs",
+      mx: {
+        dialect: {
+          id: "member",
+          name: "Mesh",
+          extensions: [".mesh.mx"],
+          module: "./index.cjs",
+        },
       },
     }),
   );

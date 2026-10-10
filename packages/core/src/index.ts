@@ -139,7 +139,7 @@ export {
 } from "./default-tag-validate.ts";
 /**
  * Dialect discovery (decision 212): a dialect package declares itself in
- * its `package.json#mxDialect`; a project uses the dialects among its
+ * its `package.json#mx.dialect`; a project uses the dialects among its
  * direct dependencies, and a file goes to the one that claims its
  * extension. Tools read the extensions from here without loading a
  * dialect's code.

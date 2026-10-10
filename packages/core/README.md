@@ -485,17 +485,19 @@ routes the call to the template as an L1-only tag does, now validated.
 
 ## Dialects
 
-A dialect is a package (decision 212). It declares itself in its own
-`package.json`, under `mxDialect`:
+A dialect is a package. It declares itself in its own
+`package.json`, under `mx.dialect`:
 
 ```json
 {
   "name": "@acme/mesh",
-  "mxDialect": {
-    "id": "mesh",
-    "name": "Mesh",
-    "extensions": [".mesh.mx"],
-    "module": "./dialect.js"
+  "mx": {
+    "dialect": {
+      "id": "mesh",
+      "name": "Mesh",
+      "extensions": [".mesh.mx"],
+      "module": "./dialect.js"
+    }
   }
 }
 ```
@@ -512,7 +514,9 @@ it when its call states no `tagRules`)
 and `nodeTypes`. Core stamps the manifest's `id` and `name` on it; the module
 may leave them out (`DialectModule`).
 
-A project uses a dialect by depending on it. Core reads the direct
+`mx.dialect` is an identity block, never project configuration: the project's
+own `mx` settings are read as if it were not there, and it is never an
+unknown-key error. A project uses a dialect by depending on it. Core reads the direct
 dependencies of a file's nearest `package.json` (all four dependency fields),
 statically, and routes the file to the dialect that claims the longest
 extension its name ends with. Every other file, `.mx` included, parses with
@@ -526,7 +530,7 @@ an error naming both; the project settles it with `mx.extensions`:
 ```
 
 A malformed manifest is an error at its field, in the dialect's
-`package.json`; a `module` that cannot be resolved, at `mxDialect.module`. A
+`package.json`; a `module` that cannot be resolved, at `mx.dialect.module`. A
 problem in the dialect itself is an error in the module file, and a module
 that fails to load keeps that error until the file changes. On Node, an edited
 ES-module dialect is picked up after a restart (Bun, and CommonJS on Node,
@@ -610,7 +614,7 @@ or copy `dist/syntax/member.js` from the package (or the source, `packages/core/
 here), the row `id`, the `self` receiver and the child tag name are that
 file's choices. In the source, change its one type import from `../index.ts` to
 `@mxlang/core`; edit the row, and name your copy as the `module` of your
-dialect package's `mxDialect`. It loads
+dialect package's `mx.dialect`. It loads
 through Node's strip-only `require`: types-only imports, no enums or
 parameter properties.
 

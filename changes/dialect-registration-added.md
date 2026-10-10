@@ -5,7 +5,7 @@ kind: Added
 
 **Dialect discovery (decision 212, `@unstable`).** New exports from `@mxlang/core`:
 
-- `DIALECT_MANIFEST_KEY` (`"mxDialect"`) and the `DialectManifest` type.
+- `DIALECT_MANIFEST_KEY` (`"mx.dialect"`) and the `DialectManifest` type.
 - `discoverDialects(projectFile)`: the dialects a project's direct dependencies declare, read statically from their `package.json` files without loading any dialect's code. Tools use it to learn a dialect's extensions.
 - `routeDialect(filename)`: the dialect that claims a file's extension, or `undefined`.
 - `MX_DIALECT`: MX's own dialect identity, `{ id: "mx", name: "MX" }`.

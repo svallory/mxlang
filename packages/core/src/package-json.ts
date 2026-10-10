@@ -91,7 +91,7 @@ export function positionOfOffset(
 
 /**
  * The position of the key at `path` in a JSON text (`["mx", "contracts"]`,
- * `["mxDialect", "id"]`): the key itself, not a string or a nested decoy
+ * `["mx", "dialect", "id"]`): the key itself, not a string or a nested decoy
  * with the same name. `1:0` when it is not there. The text need not parse:
  * the walk reads tokens, so a broken revision still positions what it can.
  */

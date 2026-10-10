@@ -228,7 +228,7 @@ describe("the member dialect through the `dialect` option", () => {
   });
 });
 
-describe("a dialect package (`package.json#mxDialect`, decision 212)", () => {
+describe("a dialect package (`package.json#mx.dialect`, decision 212)", () => {
   /**
    * The member dialect, declared by a dependency claiming `.mesh.mx`, whose
    * module (at `module`, inside the package) re-exports the fixture.
@@ -316,7 +316,7 @@ describe("a dialect package (`package.json#mxDialect`, decision 212)", () => {
     expect(resolveSyntaxOf(page)).toBe(second);
   });
 
-  it("a module that does not resolve is an error at `mxDialect.module`", () => {
+  it("a module that does not resolve is an error at `mx.dialect.module`", () => {
     const { packageFile, packageDir } = dialectProject(dir, {
       manifest: { module: "./missing.ts" },
     });
@@ -324,7 +324,7 @@ describe("a dialect package (`package.json#mxDialect`, decision 212)", () => {
     expect(error.file).toBe(packageFile);
     expect([error.line, error.column]).toEqual([9, 4]);
     expect(error.message).toBe(
-      `the dialect \`test\`'s module "./missing.ts" cannot be resolved from ${packageDir}. Check \`mxDialect.module\`.`,
+      `the dialect \`test\`'s module "./missing.ts" cannot be resolved from ${packageDir}. Check \`mx.dialect.module\`.`,
     );
   });
 
@@ -363,11 +363,11 @@ describe("a dialect package (`package.json#mxDialect`, decision 212)", () => {
     ],
     [
       "export default { id: 'other', table: {} };",
-      '`id` is "other", and the dialect\'s `package.json#mxDialect.id` is "test": leave it to the manifest, or make them agree',
+      '`id` is "other", and the dialect\'s `package.json#mx.dialect.id` is "test": leave it to the manifest, or make them agree',
     ],
     [
       "export default { name: 'Other', table: {} };",
-      '`name` is "Other", and the dialect\'s `package.json#mxDialect.name` is "Test": leave it to the manifest, or make them agree',
+      '`name` is "Other", and the dialect\'s `package.json#mx.dialect.name` is "Test": leave it to the manifest, or make them agree',
     ],
     [
       "export default { table: { tagTypes: {} } };",
@@ -395,7 +395,7 @@ describe("a dialect package (`package.json#mxDialect`, decision 212)", () => {
       expect(error.file).toBe(file);
       expect([error.line, error.column]).toEqual([3, 9]);
       expect(error.message).toBe(
-        "`mx.syntax` is removed: a syntax of your own is a dialect, a package that declares itself in its `package.json#mxDialect` (`id`, `name`, the `extensions` it claims, its `module`) and is one of the project's dependencies; a file goes to the dialect that claims its extension. `.mx` files are always MX's.",
+        "`mx.syntax` is removed: a syntax of your own is a dialect, a package that declares itself in its `package.json#mx.dialect` (`id`, `name`, the `extensions` it claims, its `module`) and is one of the project's dependencies; a file goes to the dialect that claims its extension. `.mx` files are always MX's.",
       );
     }
   });

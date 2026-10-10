@@ -175,7 +175,7 @@ describe("a dialect's table", () => {
 
 describe("the removed `package.json#mx.syntax`", () => {
   const REMOVED =
-    "`mx.syntax` is removed: a syntax of your own is a dialect, a package that declares itself in its `package.json#mxDialect` (`id`, `name`, the `extensions` it claims, its `module`) and is one of the project's dependencies; a file goes to the dialect that claims its extension. `.mx` files are always MX's.";
+    "`mx.syntax` is removed: a syntax of your own is a dialect, a package that declares itself in its `package.json#mx.dialect` (`id`, `name`, the `extensions` it claims, its `module`) and is one of the project's dependencies; a file goes to the dialect that claims its extension. `.mx` files are always MX's.";
 
   it.each([
     ["an inline table", { lineTriggers: [] }],

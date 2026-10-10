@@ -318,7 +318,7 @@ export interface SyntaxBuildContext {
 
 /**
  * A dialect (decisions 182 addendum 5, 202, 212): the default export of the
- * module its package's `package.json#mxDialect` names, or the object a
+ * module its package's `package.json#mx.dialect` names, or the object a
  * consumer passes as the `dialect` option. A file is a dialect's when the
  * dialect claims its extension; a project may use several. `table`
  * overlays the `.mx` default row; the hooks are post-parse only
@@ -670,7 +670,7 @@ function checkModuleShape(
     for (const key of ["id", "name"] as const) {
       if (value[key] !== undefined && value[key] !== identity[key]) {
         fail(
-          `\`${path}${key}\` is ${JSON.stringify(value[key])}, and the dialect's \`package.json#mxDialect.${key}\` is ${JSON.stringify(identity[key])}: leave it to the manifest, or make them agree`,
+          `\`${path}${key}\` is ${JSON.stringify(value[key])}, and the dialect's \`package.json#mx.dialect.${key}\` is ${JSON.stringify(identity[key])}: leave it to the manifest, or make them agree`,
         );
       }
     }
@@ -733,7 +733,7 @@ function loadDialect(manifest: DialectManifest): {
   const packageDir = dirname(manifest.packageFile);
   const failAtModule = (message: string): never => {
     const read = readPackageJsonText(manifest.packageFile);
-    const { line, column } = jsonKeyPosition(read, ["mxDialect", "module"]);
+    const { line, column } = jsonKeyPosition(read, ["mx", "dialect", "module"]);
     throw new TranslateError(message, line, column, manifest.packageFile);
   };
   let file = "";
@@ -743,7 +743,7 @@ function loadDialect(manifest: DialectManifest): {
     );
   } catch {
     failAtModule(
-      `the dialect \`${manifest.id}\`'s module "${manifest.module}" cannot be resolved from ${packageDir}. Check \`mxDialect.module\`.`,
+      `the dialect \`${manifest.id}\`'s module "${manifest.module}" cannot be resolved from ${packageDir}. Check \`mx.dialect.module\`.`,
     );
   }
   const failInModule = (message: string): never => {
@@ -789,7 +789,7 @@ function rejectRemovedSyntax(packageFile: string, manifest: unknown): void {
   }
   const { line, column } = mxKeyPosition(packageFile, "syntax");
   throw new TranslateError(
-    "`mx.syntax` is removed: a syntax of your own is a dialect, a package that declares itself in its `package.json#mxDialect` (`id`, `name`, the `extensions` it claims, its `module`) and is one of the project's dependencies; a file goes to the dialect that claims its extension. `.mx` files are always MX's.",
+    "`mx.syntax` is removed: a syntax of your own is a dialect, a package that declares itself in its `package.json#mx.dialect` (`id`, `name`, the `extensions` it claims, its `module`) and is one of the project's dependencies; a file goes to the dialect that claims its extension. `.mx` files are always MX's.",
     line,
     column,
     packageFile,

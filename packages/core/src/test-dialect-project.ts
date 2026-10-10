@@ -1,7 +1,7 @@
 /**
  * Test support: a project that uses a dialect the way decision 212 has it.
  * The project's `package.json` lists a dialect package as a direct
- * dependency, and that package's own `package.json#mxDialect` declares the
+ * dependency, and that package's own `package.json#mx.dialect` declares the
  * dialect. Not exported from the package.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -12,7 +12,7 @@ export interface DialectProjectOptions {
   /** The dialect package's name, as the project depends on it. Default `test-dialect`. */
   readonly packageName?: string;
   /**
-   * The `mxDialect` field as written; its defaults are `id: "test"`,
+   * The `mx.dialect` field as written; its defaults are `id: "test"`,
    * `name: "Test"`, `extensions: [".tst"]` and `module: "./index.mjs"`.
    * `null` removes a default field; a non-object replaces the whole field.
    */
@@ -65,7 +65,7 @@ export function dialectProject(
   const packageFile = join(packageDir, "package.json");
   writeFileSync(
     packageFile,
-    `${JSON.stringify({ name: packageName, mxDialect: manifest }, null, 2)}\n`,
+    `${JSON.stringify({ name: packageName, mx: { dialect: manifest } }, null, 2)}\n`,
   );
   const module = (manifest as { module?: unknown } | undefined)?.module;
   if (options.module !== undefined && typeof module === "string") {

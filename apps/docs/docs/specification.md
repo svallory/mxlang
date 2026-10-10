@@ -3904,16 +3904,18 @@ the field path and, for a trigger, its `id`:
 #### 13.9.2 Dialect packages and routing
 
 **Decision 212.** A dialect is a package. It declares itself in its own
-`package.json`, under `mxDialect`:
+`package.json`, under `mx.dialect`:
 
 ```json
 {
   "name": "@acme/mesh",
-  "mxDialect": {
-    "id": "mesh",
-    "name": "Mesh",
-    "extensions": [".mesh.mx"],
-    "module": "./dialect.js"
+  "mx": {
+    "dialect": {
+      "id": "mesh",
+      "name": "Mesh",
+      "extensions": [".mesh.mx"],
+      "module": "./dialect.js"
+    }
   }
 }
 ```
@@ -3931,35 +3933,42 @@ the field path and, for a trigger, its `id`:
   manifest works wherever the package is installed: an absolute path, or one
   that climbs out with `..`, is an error.
 
+`mx` is the one top-level key MX reads in a `package.json`; `mx.dialect` is its
+identity block, a dialect package's statement of who it is. It is never project
+configuration: a project's own `mx` settings (`mx.target`, `mx.tags`,
+`mx.extensions`, …) are read as if `mx.dialect` were not there, and it is never
+an unknown-key error. A dialect package that is itself a project (it routes its
+own files) carries both.
+
 A malformed manifest is a `TranslateError` in the dialect's `package.json` at the
-offending field (at `mxDialect` itself for a missing one):
+offending field (at `mx.dialect` itself for a missing one):
 
 | Problem | Message |
 |---|---|
-| Not an object | `` `mxDialect` must be an object declaring the dialect: `{ "id", "name", "extensions", "module" }` `` |
-| An unknown field | `` `mxDialect.<key>` is not a dialect manifest field (id, name, extensions, module) `` |
-| An `id` that is not one | `` `mxDialect.id` must be a dialect id: lower-case words joined by `-` (`mesh`) `` |
-| `id` `mx` | `` `mxDialect.id` cannot be `mx`: that is MX's own dialect `` |
-| No `name`, or a blank one | `` `mxDialect.name` must be a non-empty string: the name tooling shows the dialect's users `` |
-| No `extensions` | `` `mxDialect.extensions` must be a non-empty array of the file extensions the dialect claims (`[".mesh.mx"]`) `` |
-| `.mx` claimed | `` `mxDialect.extensions` cannot claim `.mx`: it is MX's own; a dialect claims its own extensions (`.mesh.mx`) `` |
-| Not an extension | `` `mxDialect.extensions`: "<value>" is not a file extension; write it with its leading dot (`.mesh.mx`) `` |
-| An extension twice | `` `mxDialect.extensions` lists `<ext>` twice `` |
-| No `module` | `` `mxDialect.module` must be a path, relative to this `package.json`, to the module whose default export is the dialect `` |
-| A `module` outside the package | `` `mxDialect.module` must stay inside the dialect's package, so the manifest works wherever the package is installed: "<value>" is an absolute path; write a path relative to this `package.json` (`./dialect.js`) `` (`is outside the package` for one that climbs out with `..`) |
+| Not an object | `` `mx.dialect` must be an object declaring the dialect: `{ "id", "name", "extensions", "module" }` `` |
+| An unknown field | `` `mx.dialect.<key>` is not a dialect manifest field (id, name, extensions, module) `` |
+| An `id` that is not one | `` `mx.dialect.id` must be a dialect id: lower-case words joined by `-` (`mesh`) `` |
+| `id` `mx` | `` `mx.dialect.id` cannot be `mx`: that is MX's own dialect `` |
+| No `name`, or a blank one | `` `mx.dialect.name` must be a non-empty string: the name tooling shows the dialect's users `` |
+| No `extensions` | `` `mx.dialect.extensions` must be a non-empty array of the file extensions the dialect claims (`[".mesh.mx"]`) `` |
+| `.mx` claimed | `` `mx.dialect.extensions` cannot claim `.mx`: it is MX's own; a dialect claims its own extensions (`.mesh.mx`) `` |
+| Not an extension | `` `mx.dialect.extensions`: "<value>" is not a file extension; write it with its leading dot (`.mesh.mx`) `` |
+| An extension twice | `` `mx.dialect.extensions` lists `<ext>` twice `` |
+| No `module` | `` `mx.dialect.module` must be a path, relative to this `package.json`, to the module whose default export is the dialect `` |
+| A `module` outside the package | `` `mx.dialect.module` must stay inside the dialect's package, so the manifest works wherever the package is installed: "<value>" is an absolute path; write a path relative to this `package.json` (`./dialect.js`) `` (`is outside the package` for one that climbs out with `..`) |
 
 **Discovery.** A file's project is its nearest `package.json`. Core reads that
 manifest's `dependencies`, `devDependencies`, `optionalDependencies` and
 `peerDependencies`, finds each listed package where Node would (the
 `node_modules` directories from the project up), and keeps the ones whose
-`package.json` declares `mxDialect`. It reads those files statically and never
+`package.json` declares `mx.dialect`. It reads those files statically and never
 scans `node_modules`: a dialect that is installed but not a direct dependency is
 not found, and a listed package that is missing or declares nothing is skipped. A
-dialect package's own `mxDialect` routes its own files too, so a dialect's tests
+dialect package's own `mx.dialect` routes its own files too, so a dialect's tests
 need no dependency on itself. A file with a relative or virtual name, or no
 manifest above it, gets no dialect. No dialect's code runs until a file it claims
 is compiled. Discovery follows the dependencies on disk: installing a listed
-package, upgrading one or editing a dependency's `mxDialect` is seen at the next
+package, upgrading one or editing a dependency's `mx.dialect` is seen at the next
 compile, with no change to the project's `package.json`.
 
 A dialect's `id` is its identity: two direct dependencies (or the project and a
@@ -3996,18 +4005,18 @@ is an error at that entry's key:
 **Loading.** A routed file loads its dialect's `module`, resolved from the
 dialect's package directory, synchronously (like `mx.contracts`). A module that
 does not resolve is an error in the dialect's `package.json` at
-`mxDialect.module`: `` the dialect `<id>`'s module "<module>" cannot be resolved
-from <dir>. Check `mxDialect.module`. `` Core stamps the manifest's `id` and
+`mx.dialect.module`: `` the dialect `<id>`'s module "<module>" cannot be resolved
+from <dir>. Check `mx.dialect.module`. `` Core stamps the manifest's `id` and
 `name` on the loaded dialect; a module that states either must agree with the
 manifest (`` `<key>` is "<module's>", and the dialect's
-`package.json#mxDialect.<key>` is "<manifest's>": leave it to the manifest, or
+`package.json#mx.dialect.<key>` is "<manifest's>": leave it to the manifest, or
 make them agree ``, in the module file at 1:0).
 
 **`mx.syntax` is removed** (decisions 202 and 212, no alias, decision 195). No
 setting selects a file's syntax. In either of its old forms, an inline table or a
 string, it is an error at its key, also on a file a dialect claims: ``` `mx.syntax`
 is removed: a syntax of your own is a dialect, a package that declares itself in
-its `package.json#mxDialect` (`id`, `name`, the `extensions` it claims, its
+its `package.json#mx.dialect` (`id`, `name`, the `extensions` it claims, its
 `module`) and is one of the project's dependencies; a file goes to the dialect
 that claims its extension. `.mx` files are always MX's. ```
 
@@ -4039,7 +4048,7 @@ there).
 
 #### 13.9.3 Dialects
 
-A **dialect** is the default export of the module its `mxDialect.module` names
+A **dialect** is the default export of the module its `mx.dialect.module` names
 (its `id` and `name` stamped from the manifest; the module may leave them out,
 which its type, `DialectModule`, allows), or the object passed as the `dialect`
 option:

@@ -137,7 +137,7 @@ The messages still say "data tree" (``the data tree is static; this file's consu
 
 ## Dialects
 
-A **dialect** is a package that declares itself in its `package.json#mxDialect` (decision 212): its id, its name, the file extensions it claims and the module that carries its syntax table and hooks. `lowerSource` routes a file to the dialect that claims its extension, or takes one through the `dialect` option; contracts and the tag rules preset are still options (specification §13.9.2).
+A **dialect** is a package that declares itself in its `package.json#mx.dialect`: its id, its name, the file extensions it claims and the module that carries its syntax table and hooks. `lowerSource` routes a file to the dialect that claims its extension, or takes one through the `dialect` option; contracts and the tag rules preset are still options (specification §13.9.2).
 
 Until the tools route dialect files (decision 212, PR 1b):
 

@@ -1,6 +1,6 @@
 /**
  * Dialect discovery and routing (decision 212 items 1 to 3 and 5): a
- * dialect package's `package.json#mxDialect`, discovery among the project's
+ * dialect package's `package.json#mx.dialect`, discovery among the project's
  * direct dependencies only, routing by the longest claimed extension, the
  * clash between two dialects and `mx.extensions`, which settles it. Loading
  * a dialect's module is pinned in `triggers.test.ts`.
@@ -52,9 +52,9 @@ const ids = (dialects: readonly DialectManifest[]) =>
 
 /** The message for a manifest `module` that leaves its package. */
 const outside = (why: string) =>
-  `\`mxDialect.module\` must stay inside the dialect's package, so the manifest works wherever the package is installed: ${why}; write a path relative to this \`package.json\` (\`./dialect.js\`)`;
+  `\`mx.dialect.module\` must stay inside the dialect's package, so the manifest works wherever the package is installed: ${why}; write a path relative to this \`package.json\` (\`./dialect.js\`)`;
 
-describe("`package.json#mxDialect`", () => {
+describe("`package.json#mx.dialect`", () => {
   it("declares the dialect's id, name, extensions and module", () => {
     const { projectFile, packageFile } = dialectProject(dir, {
       manifest: { id: "mesh", name: "Mesh", extensions: [".mesh.mx"] },
@@ -87,109 +87,109 @@ describe("`package.json#mxDialect`", () => {
   );
 
   // The dialect package's `package.json`, as `dialectProject` writes it:
-  // `mxDialect` on line 3, then `id`, `name`, `extensions` (lines 6 to 8)
-  // and `module` on line 9.
+  // `mx` on line 3, `dialect` on line 4, then `id`, `name`, `extensions` (lines 7 to 9)
+  // and `module` on line 10.
   it.each([
     [
       "not an object",
       "mesh",
-      [3, 2],
-      '`mxDialect` must be an object declaring the dialect: `{ "id", "name", "extensions", "module" }`',
+      [4, 4],
+      '`mx.dialect` must be an object declaring the dialect: `{ "id", "name", "extensions", "module" }`',
     ],
     [
       "an unknown field",
       { targets: ["web"] },
-      [10, 4],
-      "`mxDialect.targets` is not a dialect manifest field (id, name, extensions, module)",
+      [11, 6],
+      "`mx.dialect.targets` is not a dialect manifest field (id, name, extensions, module)",
     ],
     [
       "an id that is not one",
       { id: "Mesh" },
-      [4, 4],
-      "`mxDialect.id` must be a dialect id: lower-case words joined by `-` (`mesh`)",
+      [5, 6],
+      "`mx.dialect.id` must be a dialect id: lower-case words joined by `-` (`mesh`)",
     ],
     [
       "MX's own id",
       { id: "mx" },
-      [4, 4],
-      "`mxDialect.id` cannot be `mx`: that is MX's own dialect",
+      [5, 6],
+      "`mx.dialect.id` cannot be `mx`: that is MX's own dialect",
     ],
     [
       "no id",
       { id: null },
-      [3, 2],
-      "`mxDialect.id` must be a dialect id: lower-case words joined by `-` (`mesh`)",
+      [4, 4],
+      "`mx.dialect.id` must be a dialect id: lower-case words joined by `-` (`mesh`)",
     ],
     [
       "no name",
       { name: null },
-      [3, 2],
-      "`mxDialect.name` must be a non-empty string: the name tooling shows the dialect's users",
+      [4, 4],
+      "`mx.dialect.name` must be a non-empty string: the name tooling shows the dialect's users",
     ],
     [
       "a blank name",
       { name: " " },
-      [5, 4],
-      "`mxDialect.name` must be a non-empty string: the name tooling shows the dialect's users",
+      [6, 6],
+      "`mx.dialect.name` must be a non-empty string: the name tooling shows the dialect's users",
     ],
     [
       "no extensions",
       { extensions: [] },
-      [6, 4],
-      '`mxDialect.extensions` must be a non-empty array of the file extensions the dialect claims (`[".mesh.mx"]`)',
+      [7, 6],
+      '`mx.dialect.extensions` must be a non-empty array of the file extensions the dialect claims (`[".mesh.mx"]`)',
     ],
     [
       "`.mx`",
       { extensions: [".mx"] },
-      [6, 4],
-      "`mxDialect.extensions` cannot claim `.mx`: it is MX's own; a dialect claims its own extensions (`.mesh.mx`)",
+      [7, 6],
+      "`mx.dialect.extensions` cannot claim `.mx`: it is MX's own; a dialect claims its own extensions (`.mesh.mx`)",
     ],
     [
       "an extension without its dot",
       { extensions: ["mesh"] },
-      [6, 4],
-      '`mxDialect.extensions`: "mesh" is not a file extension; write it with its leading dot (`.mesh.mx`)',
+      [7, 6],
+      '`mx.dialect.extensions`: "mesh" is not a file extension; write it with its leading dot (`.mesh.mx`)',
     ],
     [
       "an extension with a path in it",
       { extensions: [".a/b"] },
-      [6, 4],
-      '`mxDialect.extensions`: ".a/b" is not a file extension; write it with its leading dot (`.mesh.mx`)',
+      [7, 6],
+      '`mx.dialect.extensions`: ".a/b" is not a file extension; write it with its leading dot (`.mesh.mx`)',
     ],
     [
       "an extension twice",
       { extensions: [".tst", ".tst"] },
-      [6, 4],
-      "`mxDialect.extensions` lists `.tst` twice",
+      [7, 6],
+      "`mx.dialect.extensions` lists `.tst` twice",
     ],
     [
       "no module",
       { module: "" },
-      [9, 4],
-      "`mxDialect.module` must be a path, relative to this `package.json`, to the module whose default export is the dialect",
+      [10, 6],
+      "`mx.dialect.module` must be a path, relative to this `package.json`, to the module whose default export is the dialect",
     ],
     [
       "an absolute module",
       { module: "/opt/dialects/mesh.js" },
-      [9, 4],
+      [10, 6],
       outside('"/opt/dialects/mesh.js" is an absolute path'),
     ],
     [
       "a Windows absolute module",
       { module: "C:\\dialects\\mesh.js" },
-      [9, 4],
+      [10, 6],
       outside('"C:\\\\dialects\\\\mesh.js" is an absolute path'),
     ],
     [
       "a module outside the package",
       { module: "../other/index.js" },
-      [9, 4],
+      [10, 6],
       outside('"../other/index.js" is outside the package'),
     ],
     [
       "a module that climbs out through a subdirectory",
       { module: "dist/../../index.js" },
-      [9, 4],
+      [10, 6],
       outside('"dist/../../index.js" is outside the package'),
     ],
   ])(
@@ -219,11 +219,13 @@ describe("discovery reads the project's direct dependencies only", () => {
     const { projectFile } = dialectProject(dir);
     writeJson(join(dir, "node_modules/other-dialect/package.json"), {
       name: "other-dialect",
-      mxDialect: {
-        id: "other",
-        name: "Other",
-        extensions: [".oth"],
-        module: "./index.mjs",
+      mx: {
+        dialect: {
+          id: "other",
+          name: "Other",
+          extensions: [".oth"],
+          module: "./index.mjs",
+        },
       },
     });
     expect(ids(discoverDialects(projectFile))).toEqual(["test"]);
@@ -253,11 +255,13 @@ describe("discovery reads the project's direct dependencies only", () => {
   it("a dialect package routes its own files", () => {
     writeJson(join(dir, "package.json"), {
       name: "mesh",
-      mxDialect: {
-        id: "mesh",
-        name: "Mesh",
-        extensions: [".mesh.mx"],
-        module: "./index.mjs",
+      mx: {
+        dialect: {
+          id: "mesh",
+          name: "Mesh",
+          extensions: [".mesh.mx"],
+          module: "./index.mjs",
+        },
       },
     });
     expect(routeDialect(join(dir, "test/a.mesh.mx"))?.id).toBe("mesh");
@@ -409,15 +413,17 @@ describe("a dialect's id is its identity", () => {
   });
 
   it("the project's own dialect and a dependency with its id is an error at the dependency", () => {
-    // `mxDialect` spans lines 3 to 10; `devDependencies` opens on line 11.
+    // `mx` spans lines 3 to 12; `devDependencies` opens on line 13.
     const { projectFile } = dialectProject(dir, {
       manifest: { id: "mesh" },
       project: {
-        mxDialect: {
-          id: "mesh",
-          name: "Own",
-          extensions: [".own"],
-          module: "./index.mjs",
+        mx: {
+          dialect: {
+            id: "mesh",
+            name: "Own",
+            extensions: [".own"],
+            module: "./index.mjs",
+          },
         },
       },
     });
@@ -425,7 +431,7 @@ describe("a dialect's id is its identity", () => {
     expect([error.message, error.file, error.line, error.column]).toEqual([
       sameId("app and test-dialect"),
       projectFile,
-      12,
+      14,
       4,
     ]);
   });
@@ -441,7 +447,7 @@ describe("a dependency listed under an alias", () => {
     });
     writeJson(join(dir, "node_modules/b/package.json"), {
       name: "@real/b-dialect",
-      mxDialect: manifest,
+      mx: { dialect: manifest },
     });
     const projectFile = join(dir, "package.json");
     writeJson(projectFile, {
@@ -498,11 +504,13 @@ describe("discovery follows the dependencies on disk", () => {
     expect(discoverDialects(projectFile)).toEqual([]);
     writeJson(join(dir, "node_modules/late-dialect/package.json"), {
       name: "late-dialect",
-      mxDialect: {
-        id: "late",
-        name: "Late",
-        extensions: [".tst"],
-        module: "./index.mjs",
+      mx: {
+        dialect: {
+          id: "late",
+          name: "Late",
+          extensions: [".tst"],
+          module: "./index.mjs",
+        },
       },
     });
     expect(routeDialect(join(dir, "page.tst"))?.id).toBe("late");
@@ -517,11 +525,13 @@ describe("discovery follows the dependencies on disk", () => {
     // Same size, so only the text tells the two revisions apart.
     writeJson(packageFile, {
       name: "test-dialect",
-      mxDialect: {
-        id: "test",
-        name: "Test",
-        extensions: [".e2"],
-        module: "./index.mjs",
+      mx: {
+        dialect: {
+          id: "test",
+          name: "Test",
+          extensions: [".e2"],
+          module: "./index.mjs",
+        },
       },
     });
     expect(routeDialect(join(dir, "page.e1"))).toBeUndefined();

@@ -1,6 +1,6 @@
 /**
  * Dialect discovery and routing (decision 212). A dialect declares itself in
- * its own `package.json` (`mxDialect`: `id`, `name`, `extensions`,
+ * its own `package.json` (`mx.dialect`: `id`, `name`, `extensions`,
  * `module`); a project uses the dialects among its direct dependencies, and
  * a file goes to the dialect that claims its extension. Nothing here runs a
  * dialect's code: discovery reads `package.json` files only, never scans
@@ -17,8 +17,15 @@ import {
   readPackageJsonCached,
 } from "./package-json.ts";
 
-/** The `package.json` field a dialect package declares itself in. */
-export const DIALECT_MANIFEST_KEY = "mxDialect";
+/**
+ * The `package.json` key a dialect package declares itself in: `dialect`
+ * inside the one top-level `mx` object MX reads. It is an identity block,
+ * never project config: no reader of a project's `mx` settings looks at it.
+ */
+export const DIALECT_MANIFEST_KEY = "mx.dialect";
+
+/** {@link DIALECT_MANIFEST_KEY} as a path into `package.json`. */
+const MANIFEST_PATH = ["mx", "dialect"] as const;
 
 /** MX's own extension: no dialect may claim it. */
 const MX_EXTENSION = ".mx";
@@ -34,7 +41,7 @@ const DEPENDENCY_FIELDS = [
   "peerDependencies",
 ] as const;
 
-/** A dialect as its package declares it (`package.json#mxDialect`). @unstable */
+/** A dialect as its package declares it (`package.json#mx.dialect`). @unstable */
 export interface DialectManifest {
   /** Its identity and its key in MX's config (`mesh`). */
   readonly id: string;
@@ -90,13 +97,12 @@ export function readDialectManifest(
 ): DialectManifest | undefined {
   const manifest = read.manifest;
   if (!isRecord(manifest)) return undefined;
-  const value = manifest[DIALECT_MANIFEST_KEY];
+  const mx = manifest.mx;
+  const value = isRecord(mx) ? mx.dialect : undefined;
   if (value === undefined) return undefined;
   const fail = (message: string, field?: string): never => {
     const path =
-      field === undefined
-        ? [DIALECT_MANIFEST_KEY]
-        : [DIALECT_MANIFEST_KEY, field];
+      field === undefined ? [...MANIFEST_PATH] : [...MANIFEST_PATH, field];
     const { line, column } = jsonKeyPosition(read.text, path);
     throw new TranslateError(message, line, column, packageFile);
   };
