@@ -460,7 +460,8 @@ Five facts worth knowing before editing it:
   `mx.dialect` is a reserved identity block: no reader of the project's `mx`
   settings (`mx.tags`, `mx.contracts`, `mx.host`/`target`/`strict`,
   `mx.extensions`, `mx[<configKey>]`) may treat it as config or reject it as an
-  unknown key (pinned in `dialect-discovery.test.ts`).
+  unknown key (pinned in `dialect-identity-block.test.ts`; a target's config key is refused
+  when it is `dialect`, pinned in `target-descriptor.test.ts`).
   `routeDialect(file)` picks the longest claimed extension; a clash is an
   error at the second package's dependency entry naming both, settled by
   `mx.extensions` (`{ ".x": "<id>" }`, an error at the entry's key when

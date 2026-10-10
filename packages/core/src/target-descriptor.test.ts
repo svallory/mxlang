@@ -492,6 +492,48 @@ describe("createTargetLookup", () => {
       ).toBeTypeOf("object");
     });
 
+    it("`dialect` is reserved as a config key: by name or by configKey", () => {
+      const message = (descriptor: TargetDescriptor): string => {
+        try {
+          createTargetLookup([...all, descriptor]);
+        } catch (error) {
+          expect(error).toBeInstanceOf(TargetLookupError);
+          expect((error as TargetLookupError).rule).toBe("reserved-config-key");
+          return (error as Error).message;
+        }
+        throw new Error("expected createTargetLookup to throw");
+      };
+      expect(
+        message(target({ name: "dialect", packageName: "@t/dialect" })),
+      ).toBe(
+        "target \"dialect\" reads mx.dialect, which is reserved: `mx.dialect` is a dialect package's identity block, never a target's config block; set `configKey` to another word",
+      );
+      expect(
+        message(
+          target({
+            name: "mesh",
+            packageName: "@t/mesh",
+            configKey: "dialect",
+          }),
+        ),
+      ).toBe(
+        "target \"mesh\" reads mx.dialect, which is reserved: `mx.dialect` is a dialect package's identity block, never a target's config block; set `configKey` to another word",
+      );
+    });
+
+    it("a target named `dialect` with another configKey is accepted", () => {
+      expect(
+        createTargetLookup([
+          ...all,
+          target({
+            name: "dialect",
+            packageName: "@t/dialect",
+            configKey: "other",
+          }),
+        ]),
+      ).toBeTypeOf("object");
+    });
+
     it("distinct configKeys are accepted", () => {
       expect(
         createTargetLookup([

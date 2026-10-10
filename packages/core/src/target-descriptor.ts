@@ -326,7 +326,9 @@ export interface TargetDescriptor {
    * `name`. A renamed target keeps its historical config key so user config
    * survives the rename: the former tree target read `mx.data.*` (decision
    * 187). Every `mx[<name>]` config read goes through it, in core and in the
-   * registry. A bare word, like a target name. Default: the target's `name`.
+   * registry. A bare word, like a target name, and never a key `mx` reserves
+   * (`dialect`: a dialect package's identity block, not target config).
+   * Default: the target's `name`.
    */
   readonly configKey?: string;
 }
@@ -430,7 +432,14 @@ export type TargetLookupRule =
   | "reserved-name"
   | "built-on-unknown"
   | "built-on-loop"
-  | "config-key-conflict";
+  | "config-key-conflict"
+  | "reserved-config-key";
+
+/**
+ * The `mx` keys no target may use as its config block (`configKey`, else its
+ * name). `dialect` is a dialect package's identity block, never a target's.
+ */
+const RESERVED_CONFIG_KEYS: readonly string[] = ["dialect"];
 
 /**
  * The `built-on-unknown` message: both targets, the registered names, and,
@@ -766,6 +775,7 @@ export function validateDescriptor(value: unknown): TargetDescriptor {
  *   targets of the same `host.name`;
  * - a config key (a target's `configKey`, else its name) belongs to one
  *   target (`config-key-conflict`, on the descriptor that loaded second);
+ * - a config key is never one `mx` reserves (`reserved-config-key`: `dialect`);
  * - a host with several targets has exactly one `host.default` (implied for one);
  * - `mx.host` values (host names and legacy values) each select one target;
  * - a file-kind segment belongs to one host.
@@ -800,6 +810,16 @@ export function createTargetLookup(
       throw new TargetLookupError(
         "reserved-name",
         `target "${descriptor.name}" uses a reserved name`,
+      );
+    }
+  }
+
+  for (const descriptor of descriptors) {
+    const key = descriptor.configKey ?? descriptor.name;
+    if (RESERVED_CONFIG_KEYS.includes(key)) {
+      throw new TargetLookupError(
+        "reserved-config-key",
+        `target "${descriptor.name}" reads mx.${key}, which is reserved: \`mx.${key}\` is a dialect package's identity block, never a target's config block; set \`configKey\` to another word`,
       );
     }
   }

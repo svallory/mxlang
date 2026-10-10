@@ -83,6 +83,7 @@ describe("`mx.dialect` next to a project's own settings", () => {
   it("routes by `mx.extensions` and by the block's own extensions, unchanged", () => {
     const dir = project(true);
     expect(routeDialect(join(dir, "page.mesh.mx"))?.id).toBe("mesh");
+    expect(routeDialect(join(dir, "page.other"))).toBeUndefined();
     // A name only `mx.extensions` could route is not routed by the block alone.
     const other = project(true);
     writeFileSync(
@@ -110,6 +111,6 @@ describe("`mx.dialect` next to a project's own settings", () => {
     );
     expect(diagnostics).toEqual([]);
     expect(policy.target).toBe(lookup.defaultTarget());
-    expect(routeDialect(join(dir, "a.mx"))).toBeUndefined();
+    expect(routeDialect(join(dir, "page.other"))).toBeUndefined();
   });
 });

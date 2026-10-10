@@ -3937,8 +3937,9 @@ the field path and, for a trigger, its `id`:
 identity block, a dialect package's statement of who it is. It is never project
 configuration: a project's own `mx` settings (`mx.target`, `mx.tags`,
 `mx.extensions`, …) are read as if `mx.dialect` were not there, and it is never
-an unknown-key error. A dialect package that is itself a project (it routes its
-own files) carries both.
+an unknown-key error. No target may use `dialect` as its config key (its
+`configKey`, else its name): the set of registered targets is refused. A dialect
+package that is itself a project (it routes its own files) carries both.
 
 A malformed manifest is a `TranslateError` in the dialect's `package.json` at the
 offending field (at `mx.dialect` itself for a missing one):

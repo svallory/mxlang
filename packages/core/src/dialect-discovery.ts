@@ -18,9 +18,11 @@ import {
 } from "./package-json.ts";
 
 /**
- * The `package.json` key a dialect package declares itself in: `dialect`
- * inside the one top-level `mx` object MX reads. It is an identity block,
- * never project config: no reader of a project's `mx` settings looks at it.
+ * Where a dialect package declares itself, as messages write it: the
+ * `dialect` key inside the one top-level `mx` object MX reads (read it as
+ * `pkg.mx?.dialect`; this label is not a property key). It is an identity
+ * block, never project config: no reader of a project's `mx` settings looks
+ * at it.
  */
 export const DIALECT_MANIFEST_KEY = "mx.dialect";
 

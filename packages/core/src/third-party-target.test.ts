@@ -231,6 +231,31 @@ describe("failures are positioned errors with no fallback (§4.3, OQ2 c)", () =>
     },
   );
 
+  it("a descriptor whose config key is `dialect` is refused at mx.target", () => {
+    // `mx.dialect` is a dialect package's identity block, never target config.
+    const project = fakeProject({
+      mx: { target: "./t.cjs" },
+      files: {
+        "t.cjs":
+          'module.exports = { descriptorVersion: 0, name: "mesh", packageName: "@t/mesh", defaultTag: "node", configKey: "dialect" };',
+      },
+    });
+    const { policy, diagnostics } = resolveTargetPolicyDetailed(
+      project.path("a.mx"),
+      lookup,
+    );
+    expect(policy.target).toBe("page");
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toMatchObject({
+      code: "target-invalid-descriptor",
+      severity: "error",
+      message:
+        'mx.target "./t.cjs" cannot be registered next to the built-in targets: target "mesh" reads mx.dialect, which is reserved: `mx.dialect` is a dialect package\'s identity block, never a target\'s config block; set `configKey` to another word. See the TargetDescriptor contract (unstable).',
+      line: 3,
+      column: 14,
+    });
+  });
+
   it("version", () => {
     const { diagnostics } = resolve({ target: specifier("version") }, [
       "version",
