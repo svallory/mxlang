@@ -132,7 +132,7 @@ describe("a target with its own nativeTags", () => {
 });
 
 /**
- * A `.<host>.mx` region is lowered with no tag table (`ctx.lookup` absent), so
+ * A `.<host>.mx` region is lowered with no tag table (`ctx.tagTable` absent), so
  * whether a lowercase name an in-scope `<define>` binds is the native element
  * (decision 164's warning) or not a tag (row 3's error) comes from the
  * target's `nativeTags`, else core's own HTML elements: the same elements a

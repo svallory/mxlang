@@ -386,7 +386,7 @@ export interface Ctx {
    * parse switches by tag name. Absent in a region, which resolves tags by its
    * host's declarations alone.
    */
-  lookup?: TagTable;
+  tagTable?: TagTable;
   /** Custom tags already discovered and loaded by the calling integration. */
   customTags?: Readonly<Record<string, CustomTag>>;
   /**
@@ -1726,7 +1726,7 @@ export function newCtx(
   source: string,
   generate: (node: Node) => string,
   declarations: HostDeclarations,
-  lookup: Ctx["lookup"] | undefined,
+  tagTable: Ctx["tagTable"] | undefined,
   filename: string,
   targets: TargetLookup,
 ): Ctx {
@@ -1778,7 +1778,7 @@ export function newCtx(
     bindingSites: new Map(),
     generate,
     declarations,
-    lookup,
+    tagTable,
     targets,
     customTagGensym: { n: 0 },
     // Decision 183: the atom contract check is the seeded default so every

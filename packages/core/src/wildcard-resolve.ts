@@ -75,18 +75,18 @@ const CORE_NAMES = new Set([
 
 /**
  * What eligibility reads of a compile: the registered tags, the target's
- * taglib lookup and its declarations.
+ * tag table and its declarations.
  *
  * @unstable plumbing for `@mxlang/data`'s parse-only scan.
  */
-export type WildcardContext = Pick<Ctx, "customTags" | "lookup"> &
+export type WildcardContext = Pick<Ctx, "customTags" | "tagTable"> &
   Partial<Pick<Ctx, "declarations">>;
 
 /**
  * Whether `name` is a built-in of the target, which no wildcard entry may
  * claim: (a) an entry of core's own taglib (`let`, `effect`, `script`,
  * `style`, ...), on every target; (b) a name the host declares a disposition
- * for; (c) a name the target's taglib lookup holds as a non-element; (d) a name
+ * for; (c) a name the target's tag table holds as a non-element; (d) a name
  * the target's declarations list in `builtinTags` (data's anonymous `object`):
  * one concept, shared with the `defaultTag` check. A native
  * element (`title`, `div`) is not a built-in, so a contract can claim it.
@@ -97,7 +97,7 @@ function isBuiltin(name: string, ctx: WildcardContext): boolean {
     return true;
   }
   if (ctx.declarations?.builtinTags?.includes(name)) return true;
-  const def = ctx.lookup?.getTag(name) as { html?: unknown } | undefined;
+  const def = ctx.tagTable?.getTag(name) as { html?: unknown } | undefined;
   return def !== undefined && def.html !== true;
 }
 

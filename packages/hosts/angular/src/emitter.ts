@@ -197,7 +197,7 @@ export const angularDeclarations: HostDeclarations = {
   // in Marko. Matches the JSX hosts' `isElement`; `isComponent` below still
   // wins for a file-local binding, and the core consults it first.
   isElement: (name, ctx) => {
-    const taglibId = ctx.lookup?.getTag(name)?.taglibId;
+    const taglibId = ctx.tagTable?.getTag(name)?.taglibId;
     if (taglibId !== undefined) return ELEMENT_TAGLIBS.has(taglibId);
     return !/^[A-Z]/.test(name);
   },
@@ -212,7 +212,7 @@ export const angularDeclarations: HostDeclarations = {
   // `rejectUnknownTag` below.
   isComponent: (name, ctx) => {
     if (ctx.defines?.has(name) || ctx.imports?.has(name)) return true;
-    const taglibId = ctx.lookup?.getTag(name)?.taglibId;
+    const taglibId = ctx.tagTable?.getTag(name)?.taglibId;
     if (taglibId === undefined) return false;
     return !ELEMENT_TAGLIBS.has(taglibId);
   },

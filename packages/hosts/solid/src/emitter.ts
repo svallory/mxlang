@@ -680,7 +680,7 @@ const SOLID_BUILTIN_TAG_NAMES = new Set(
  *
  * Anything else reaching here is genuinely unresolved: Solid has no
  * taglib-backed `tags/`-discovery channel the way `@mxlang/target-html`/
- * `@mxlang/host-preact` do (`ctx.lookup` is never set here — a `.solid.mx` region
+ * `@mxlang/host-preact` do (`ctx.tagTable` is never set here — a `.solid.mx` region
  * is a fragment compile, not a whole-Marko-file parse). Core's own
  * `rejectUnknownTag` hook (below) then reports Marko's wording, positioned
  * on the real node.

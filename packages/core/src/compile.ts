@@ -193,9 +193,9 @@ export interface Translator {
  * The compile in flight.
  *
  * `translate` is a plain visitor the compiler calls; it receives the AST but
- * not the original source text or the taglib lookup, both of which the
- * lowering needs (source for statement-tag slicing, lookup for element and
- * component resolution). A module-scoped handle is how the visitor reaches
+ * not the original source text or the tag table, both of which the
+ * lowering needs (source for statement-tag slicing, the table for element
+ * and component resolution). A module-scoped handle is how the visitor reaches
  * them. `compileSync` is synchronous and single-threaded, so there is never
  * more than one.
  */
@@ -204,7 +204,7 @@ let current: {
   filename: string;
   code: string | null;
   policy: Policy;
-  lookup?: TagTable;
+  tagTable?: TagTable;
   postEmit?: (code: string) => string;
   emitIr: (ir: Ir, ctx: Ctx) => string;
   customTags?: Readonly<Record<string, CustomTag>>;
@@ -288,7 +288,7 @@ function translatorClaiming(
             state.source,
             printExpression,
             state.policy,
-            state.lookup,
+            state.tagTable,
             state.filename,
             state.targets,
           );
@@ -476,7 +476,7 @@ export function compileSource(
     atomFacts: undefined,
     // The host's taglibs over the target's native elements; tags beside the
     // file reach it as `customTags`, never by a directory walk here.
-    lookup,
+    tagTable: lookup,
   };
 
   const previous = current;

@@ -236,7 +236,7 @@ Five facts worth knowing before editing it:
   only to reference positions, and emitted-JS scopes restore shadowed names.
 - **Core's tag table (`src/tag-table.ts`, decision 197 slice S3a).**
   `tagTable(translator, nativeTags)` is what a tag name means to the parser
-  and to lowering (`ctx.lookup`): the target's native elements first (the
+  and to lowering (`ctx.tagTable`): the target's native elements first (the
   `nativeTags` a target sets on its `HostDeclarations`, and on
   `parseFragment`'s base / `parseMxDocument`'s fifth argument; every built-in
   target passes `@mxlang/web-elements`' `WEB_ELEMENTS`), each under its
@@ -465,7 +465,7 @@ Five facts worth knowing before editing it:
   and with `file` ("`<id>` trigger has no lowering yet"); the seams in
   `payloadOf`/`lowerChildList` are the backstop for callers that lower a
   document themselves. `MX_SUGAR_ON_STATEMENT` is decided by the parse table
-  alone, never by `ctx.lookup`.
+  alone, never by `ctx.tagTable`.
   **Syntax modules (decision 182 addendum 5; `src/triggers.ts`).** A string
   `mx.syntax` names a module (`resolveSyntaxOf`, loaded with
   `loadDefaultExport` like `mx.contracts`, reloaded when its mtime changes);
@@ -748,7 +748,7 @@ Five facts worth knowing before editing it:
   nothing else resolves it: not a core structural name, not a core-owned or
   registered tag, not a *built-in of the target*: an entry of core's own
   taglib (`CORE_TAG_NAMES`, on every target, data included), a name the host
-  declares a disposition for, or a non-element in the target's `ctx.lookup`
+  declares a disposition for, or a non-element in the target's `ctx.tagTable`
   (`isBuiltin`). Core holds no list and no host literal. A native element name is
   claimable (the contract decides inside a contract parent), and a
   PascalCase file-local binding beats a match. The parse-only data scan

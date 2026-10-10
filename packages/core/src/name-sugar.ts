@@ -1091,7 +1091,7 @@ const CORE_STATEMENT_TAGS: ReadonlySet<string> = new Set(
  * 182 addenda 2 and 3), so `rewriteMxSugar` never asks.
  */
 function isStatementTag(ctx: Ctx, name: string): boolean {
-  if (ctx.lookup) return !!ctx.lookup.getTag(name)?.parseOptions?.statement;
+  if (ctx.tagTable) return !!ctx.tagTable.getTag(name)?.parseOptions?.statement;
   return CORE_STATEMENT_TAGS.has(name);
 }
 

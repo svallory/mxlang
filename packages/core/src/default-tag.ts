@@ -56,7 +56,7 @@ export function invalidDefaultTagHint(node: Node): string | undefined {
 
 /** The scope this compile can judge a default tag in; a target adds its built-ins. */
 function scopeOf(ctx: Ctx): DefaultTagScope {
-  const lookup = judgingLookup(ctx.lookup, ctx.declarations.nativeTags);
+  const lookup = judgingLookup(ctx.tagTable, ctx.declarations.nativeTags);
   return {
     ...(ctx.customTags ? { customTags: ctx.customTags } : {}),
     ...(lookup ? { lookup } : {}),
@@ -139,7 +139,7 @@ export function resolveUnnamedTags(ctx: Ctx, body: readonly Node[]): void {
       const name = match?.canonical ?? authored;
       const attributeTag = name.startsWith("@");
       const tagDef =
-        attributeTag || match ? undefined : ctx.lookup?.getTag(name);
+        attributeTag || match ? undefined : ctx.tagTable?.getTag(name);
       const self: DefaultTagParent = {
         name,
         attributeTag,

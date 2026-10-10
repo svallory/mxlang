@@ -236,7 +236,7 @@ function isElement(name: string, _ctx: Ctx): boolean {
 function isComponent(name: string, ctx: Ctx): boolean {
   if (ctx.defines.has(name) || ctx.imports.has(name)) return true;
   if (isWebElement(name)) return false;
-  const taglibId = ctx.lookup?.getTag(name)?.taglibId;
+  const taglibId = ctx.tagTable?.getTag(name)?.taglibId;
   if (taglibId === undefined) return false;
   return taglibId !== "mx-translator-core";
 }

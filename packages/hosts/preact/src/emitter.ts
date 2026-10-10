@@ -234,7 +234,7 @@ export function createJsxDeclarations(
     // rule, so a `tags/`-discovered `<badge/>` is the component it is in Marko.
     // The casing difference is handled at emit time by `componentAlias`.
     isElement: (name, ctx) => {
-      const taglibId = ctx.lookup?.getTag(name)?.taglibId;
+      const taglibId = ctx.tagTable?.getTag(name)?.taglibId;
       if (taglibId !== undefined) return ELEMENT_TAGLIBS.has(taglibId);
       return !isComponentName(name);
     },
@@ -250,7 +250,7 @@ export function createJsxDeclarations(
     // now reports through `lower.ts`'s unresolved-tag guard.
     isComponent: (name, ctx) => {
       if (ctx.defines?.has(name) || ctx.imports?.has(name)) return true;
-      const taglibId = ctx.lookup?.getTag(name)?.taglibId;
+      const taglibId = ctx.tagTable?.getTag(name)?.taglibId;
       if (taglibId !== undefined) return !ELEMENT_TAGLIBS.has(taglibId);
       return false;
     },

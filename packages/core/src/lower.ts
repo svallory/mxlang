@@ -2549,7 +2549,7 @@ function rejectMarkoImportTag(
  * element, a core tag or a custom tag.
  */
 function isRegisteredTaglibTag(ctx: Ctx, name: string): boolean {
-  const taglibId = ctx.lookup?.getTag(name)?.taglibId;
+  const taglibId = ctx.tagTable?.getTag(name)?.taglibId;
   return (
     taglibId !== undefined &&
     !ELEMENT_TAGLIB_IDS.has(taglibId) &&
@@ -2629,7 +2629,7 @@ const UNLISTED_NATIVE_ELEMENTS: ReadonlySet<string> = new Set(["slot"]);
  * it declares none.
  */
 function isNativeElementName(ctx: Ctx, name: string): boolean {
-  const taglibId = ctx.lookup?.getTag(name)?.taglibId;
+  const taglibId = ctx.tagTable?.getTag(name)?.taglibId;
   if (taglibId !== undefined) return ELEMENT_TAGLIB_IDS.has(taglibId);
   return (
     (ctx.declarations.nativeTags ?? coreNativeTags()).has(name) ||
@@ -4007,7 +4007,10 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       // Decision 168: `class` is a statement tag so the parser reads its
       // text as code, but MX has no component class on any target. A lookup
       // that makes `class` an ordinary tag (data) leaves it to the generic path.
-      if (ctx.lookup && !ctx.lookup.getTag("class")?.parseOptions?.statement)
+      if (
+        ctx.tagTable &&
+        !ctx.tagTable.getTag("class")?.parseOptions?.statement
+      )
         break;
       return fail(
         `\`class { … }\` is not supported in ${productOf(ctx)}: a Marko component class has no equivalent on any target — write a function component, or put the state in \`<let>\`/\`static\` code`,
@@ -4957,7 +4960,7 @@ function runCustomTagAnalyze(ctx: Ctx, body: readonly MxChild[]): void {
     ctx.source,
     ctx.generate,
     ctx.declarations,
-    ctx.lookup,
+    ctx.tagTable,
     ctx.filename,
     ctx.targets,
   );
@@ -5006,7 +5009,7 @@ registerTemplateMetadataCompiler((ctx: Ctx, tag: TemplateTag) => {
     tag.source,
     ctx.generate,
     ctx.declarations,
-    ctx.lookup,
+    ctx.tagTable,
     tag.filename,
     ctx.targets,
   );
