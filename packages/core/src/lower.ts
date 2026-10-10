@@ -2716,14 +2716,17 @@ function lowercaseBindingFix(
 }
 
 /**
- * Marko's own failure for a lowercase tag naming a file-local binding, moved
- * into core verbatim (measured on `@marko/compiler` 5.42.11 / `marko` 6.4.4,
- * the stock parser: identical text and position — the tag name — for a tag
- * import, a `.ts` value import and a `static const` local alike). A local
- * variable is called as a tag only by a dynamic tag or its PascalCase name,
- * whatever the binding imports: the rule is about name resolution, not about
- * what kind of value is bound. Marko capitalizes the first character
- * whatever it is, so `_row`'s rename offer reads `_row`; kept verbatim.
+ * Marko's own failure for a lowercase tag naming a lowercase `import` or
+ * `<define>` binding, moved into core verbatim (measured on
+ * `@marko/compiler` 5.42.11 / `marko` 6.4.4, the stock parser: for a tag
+ * import, a `.ts` value import and a `static const` local alike, Marko
+ * raises exactly this text at the tag name). A local variable is called as
+ * a tag only by a dynamic tag or its PascalCase name, whatever the binding
+ * imports: the rule is about name resolution, not about what kind of value
+ * is bound. The gate is `ctx.defines`/`ctx.imports` (an `import` or
+ * `<define>`); a `<const>` or tag param instead reaches the unknown-tag
+ * path. Marko capitalizes the first character whatever it is, so `_row`'s
+ * rename offer reads `_row`; kept verbatim.
  */
 function localVariableTagMessage(name: string): string {
   return `Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use \`<\${${name}}/>\` or rename to \`${name[0]?.toUpperCase()}${name.slice(1)}\`.`;
@@ -4311,8 +4314,8 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     lowercaseBinding &&
     (ctx.bindingSites.get(name)?.kind === "defined" ||
       isTagModuleImport(ctx, name));
-  // Marko's own rule, in Marko's own words, for every file-local binding
-  // alike: a lowercase tag never calls a local variable, so one that is
+  // Marko's own rule, in Marko's own words, for every `import`/`<define>`
+  // binding alike: a lowercase tag never calls a local variable, so one that is
   // neither a native element nor a registered tag nor a host claim (all
   // returned above) is Marko's positioned error, at the tag name, whatever
   // the binding imports - a tag module, a `.ts` helper, a named import.

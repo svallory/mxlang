@@ -3,8 +3,9 @@ packages: [core, html, preact, react, hono, solid, astro, angular]
 kind: Fixed
 ---
 
-A lowercase tag naming a file-local binding is now Marko's own error, in
-core, on every target — same message verbatim, same position (the tag name):
+A lowercase tag naming a lowercase `import` or `<define>` binding is now
+Marko's own error, in core, on every target — same message verbatim, same
+position (the tag name):
 `Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${layout}/>` or rename to `Layout`.`
 Before, the error existed only for a tag binding (a `<define>` or a `.mx`
 default import) and in core's own wording ("`<layout>` is not a tag here…"),
