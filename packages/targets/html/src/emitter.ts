@@ -775,7 +775,6 @@ export function createEmitter(
     untypedCallee = false,
   ): {
     parts: MappedCode[];
-    named: Map<string, string>;
     spreads: string[];
   } => {
     // `parts` is built in **source order**, spreads included, because that is
@@ -785,17 +784,13 @@ export function createEmitter(
     // them first (the shape this replaced) silently inverted that for every
     // key a spread shares with an earlier named prop.
     const parts: MappedCode[] = [];
-    // The named values alone, for the positional `<define>` lookup, which asks
-    // by parameter name rather than by position in the source.
-    const named = new Map<string, string>();
     const spreads: string[] = [];
 
-    const setNamed = (
+    const setProp = (
       name: string,
       value: string | MappedCode,
       span: { sourceStart: number; sourceEnd: number } | null = null,
     ): void => {
-      named.set(name, typeof value === "string" ? value : value.code);
       parts.push(concatMapped(mapped(propKey(name), span), ": ", value));
     };
 
@@ -806,13 +801,13 @@ export function createEmitter(
           parts.push(concatMapped("...", mappedExpr(attr.value)));
           break;
         case "boolean":
-          setNamed(attr.name, "true", attr.nameSpan);
+          setProp(attr.name, "true", attr.nameSpan);
           break;
         case "static":
-          setNamed(attr.name, quote(attr.value), attr.nameSpan);
+          setProp(attr.name, quote(attr.value), attr.nameSpan);
           break;
         default:
-          setNamed(attr.name, attributeValue(attr), attr.nameSpan);
+          setProp(attr.name, attributeValue(attr), attr.nameSpan);
       }
     }
 
@@ -820,7 +815,7 @@ export function createEmitter(
     // already resolved by core. The legacy flat occurrence list is retained
     // for tooling only; v2 hosts emit exclusively from this plan.
     for (const prop of attrTagProps) {
-      setNamed(
+      setProp(
         prop.name,
         attrTagPropValue(prop, ownerType),
         attrTagNameSpan(prop.source),
@@ -835,7 +830,7 @@ export function createEmitter(
       // params from (`__mxRenderDynamic` takes `Record<string, any>`), so an
       // unannotated param would be an implicit `any` under strict tsc. The cast
       // is the contextual type: the params are `any`, as the callee is unknown.
-      setNamed(
+      setProp(
         "content",
         untypedCallee && content.hasParams
           ? concatMapped("(", fn, ") as (...args: any[]) => any")
@@ -843,7 +838,7 @@ export function createEmitter(
       );
     }
 
-    return { parts, named, spreads };
+    return { parts, spreads };
   };
 
   /** The JS value a (non-spread) attribute carries, for `<textarea value>`. */
@@ -939,7 +934,7 @@ export function createEmitter(
         target.kind === "name" ? (target.binding ?? target.name) : "";
       const ownerType =
         target.kind === "name" ? `__MxInputOf<typeof ${callee}>` : null;
-      const { parts, named, spreads } = propsOf(
+      const { parts, spreads } = propsOf(
         node.attrs,
         node.attrTagProps,
         node.content,
@@ -1030,33 +1025,46 @@ export function createEmitter(
         // `<Row(input.a)/>` — Marko's tag-argument form, and the ordinary way
         // to call a `<define>` that declares params.
         //
-        // Decision 109: args now combine with a body/attribute tag (Marko's
-        // own lenient dynamic-tag rule, `rejectArgsWithProps`; core has
-        // already rejected a plain attribute alongside args, so `named` here
-        // only ever holds `content`/attribute-tag values). A `<define>` has no
-        // declared `Input` to destructure a single trailing props object
-        // against — measured against real Marko 6.3.51: its own codegen for
-        // this exact shape (`Card('a')><@head>H</@head></Card>` against
-        // `<define/Card|title, head|>`) binds `head` to the whole
-        // `{ head: attrTagValue }` object rather than the attribute tag's
-        // value, and renders `<div>a</div>`/`<div>[object Object]</div>`
-        // silently dropping the content Marko's own comment calls "fallback
-        // content" — so on the args path MX keeps its positional named-lookup
-        // scheme instead: params beyond the args are filled from `named`, one
-        // value per param.
+        // Decision 109, revised to Marko's own shape (ruling 2026-10-09):
+        // args combine with a body/attribute tag (Marko's lenient
+        // dynamic-tag rule, `rejectArgsWithProps`; core has already rejected
+        // a plain attribute alongside args, so `parts` here only ever holds
+        // `content`/attribute-tag values). Measured on stock Marko 6.4.4:
+        // the call appends ONE trailing object `{ ...attributeTags, content }`
+        // as the next argument, so it lands in the first unfilled parameter
+        // and every parameter after it reads `undefined` — nothing is bound
+        // by name, not even a parameter that shares an attribute tag's name.
+        // When the args already fill every parameter Marko drops the extras
+        // entirely, so no object is appended. Parameters left unfilled are
+        // still passed as `undefined` so the call keeps the arity of the
+        // function the define declared (a type checker counts a missing
+        // argument as an error even though JS tolerates it).
         //
         // Without args the call is Marko's (decision 160): the attributes
         // (spreads included, in source order), attribute tags and `content`
         // travel as ONE object bound to the first param, `{}` when the call
         // carries none; rest params stay `undefined`. A define with no params
         // ignores them.
+        const takesObject =
+          node.args.length > 0 &&
+          node.args.length < target.params.length &&
+          parts.length > 0;
         const args: Array<string | MappedCode> =
           node.args.length > 0
             ? [
                 ...node.args.map((a: Expr) => a.code),
-                ...target.params
-                  .slice(node.args.length)
-                  .map((param) => named.get(param) ?? "undefined"),
+                ...(takesObject ? [propsObject] : []),
+                ...Array.from(
+                  {
+                    length: Math.max(
+                      target.params.length -
+                        node.args.length -
+                        (takesObject ? 1 : 0),
+                      0,
+                    ),
+                  },
+                  () => "undefined",
+                ),
               ]
             : target.params.length > 0
               ? [propsObject]

@@ -1054,11 +1054,13 @@ describe("<define> and <const>", () => {
   });
 
   it("accepts a `<define>` call mixing tag-argument form with an attribute tag (decision 109, Marko parity)", async () => {
+    // Marko appends ONE trailing object `{ head }` after the args, landing in
+    // the first unfilled param; the define destructures `head` out of it.
     const { render } = (await import("preact-render-to-string")) as {
       render: (vnode: unknown) => string;
     };
     const code = compilePreactMx(
-      "<define/Card|title, head|><div>${title}<${head}/></div></define>\n<Card('a')><@head>H</@head></Card>",
+      "<define/Card|title, { head }|><div>${title}<${head}/></div></define>\n<Card('a')><@head>H</@head></Card>",
       "/fixtures/card.mx",
     ).code;
     const { writeFileSync, mkdtempSync, rmSync, symlinkSync } = await import(

@@ -2175,10 +2175,12 @@ export class SolidEmitter implements Emitter<string> {
    * Decision 160: with no tag arguments the attributes (spreads included),
    * attribute tags and `content` travel as ONE object bound to the first
    * param, `{}` when the call carries none; a define with no params ignores
-   * them. With tag arguments (decision 109) they fill the params positionally
-   * and any remaining params are filled by name from attrs/attribute
-   * tags/`content`, `undefined` where nothing supplies one; a spread has no
-   * name to look up there and is rejected.
+   * them. With tag arguments (decision 109, revised to Marko's own shape,
+   * ruling 2026-10-09) the args fill the params positionally and ONE
+   * trailing object — the attribute tags by their names plus `content` — is
+   * appended as the next argument, filling the first unfilled param, every
+   * param after it reading `undefined`; a spread cannot ride it and is
+   * rejected.
    */
   #defineComponent(
     node: Extract<IrNode, { kind: "Component" }>,
@@ -2212,6 +2214,54 @@ export class SolidEmitter implements Emitter<string> {
         : jsxValue(body);
     };
 
+    // The ONE object both call shapes can build: attributes by name
+    // (spreads in source order — the no-args shape alone accepts them;
+    // alongside args core rejects every attribute, so a spread there is
+    // refused below rather than silently dropped), attribute tags by their
+    // names, and `content` for the body. Built only when a shape can use
+    // it — a define without params ignores the call's extras, and building
+    // a part renders its expression, which registers state (a lazy scope,
+    // hoisted defines) that must not run for output nobody reads.
+    const objectUsed =
+      node.args.length === 0
+        ? target.params.length > 0
+        : node.args.length < target.params.length;
+    for (const attr of node.attrs) {
+      if (attr.kind === "spread" && node.args.length > 0) {
+        fail(
+          `spreading into \`<${target.name}>\` alongside tag arguments is not supported: a <define> call's extras travel as one object, and a spread's keys are only known at run time`,
+          attr,
+        );
+      }
+    }
+    const parts: MappedCode[] = [];
+    if (objectUsed) {
+      for (const attr of node.attrs) {
+        parts.push(
+          attr.kind === "spread"
+            ? concatMapped("...", mappedExpr(attr.value))
+            : concatMapped(
+                JSON.stringify(attr.name),
+                ": ",
+                attributeTagAttrValue(attr),
+              ),
+        );
+      }
+      for (const prop of node.attrTagProps) {
+        parts.push(
+          concatMapped(JSON.stringify(prop.name), ": ", attributeTagProp(prop)),
+        );
+      }
+      if (node.content) {
+        parts.push(concatMapped("content: ", contentValue()));
+      }
+    }
+    const propsObject = concatMapped(
+      "{ ",
+      ...parts.flatMap((part, i) => (i === 0 ? [part] : [", ", part])),
+      " }",
+    );
+
     let args: MappedCode[];
     if (node.args.length === 0) {
       // Decision 160: without tag arguments the attributes (spreads
@@ -2221,66 +2271,38 @@ export class SolidEmitter implements Emitter<string> {
       if (target.params.length === 0) {
         args = [];
       } else {
-        const parts: MappedCode[] = [];
-        for (const attr of node.attrs) {
-          parts.push(
-            attr.kind === "spread"
-              ? concatMapped("...", mappedExpr(attr.value))
-              : concatMapped(
-                  JSON.stringify(attr.name),
-                  ": ",
-                  attributeTagAttrValue(attr),
-                ),
-          );
-        }
-        for (const prop of node.attrTagProps) {
-          parts.push(
-            concatMapped(
-              JSON.stringify(prop.name),
-              ": ",
-              attributeTagProp(prop),
-            ),
-          );
-        }
-        if (node.content) {
-          parts.push(concatMapped("content: ", contentValue()));
-        }
         // The params beyond the first are passed as `undefined`: the hoisted
         // function declares them, and TypeScript counts a missing argument
         // (TS2554) even though a JS call tolerates it.
         args = [
-          concatMapped(
-            "{ ",
-            ...parts.flatMap((part, i) => (i === 0 ? [part] : [", ", part])),
-            " }",
-          ),
+          propsObject,
           ...target.params.slice(1).map(() => concatMapped("undefined")),
         ];
       }
     } else {
-      // Decision 109: tag arguments fill the params positionally; the rest
-      // are filled by name from attrs/attribute tags/`content`, `undefined`
-      // where nothing supplies one. A spread has no name to look up.
-      const named = new Map<string, MappedCode>();
-      for (const attr of node.attrs) {
-        if (attr.kind === "spread") {
-          fail(
-            `spreading into \`<${target.name}>\` alongside tag arguments is not supported: the remaining params are filled by name, and a spread's keys are only known at run time`,
-            attr,
-          );
-        }
-        named.set(attr.name, attributeTagAttrValue(attr));
-      }
-      for (const prop of node.attrTagProps) {
-        named.set(prop.name, attributeTagProp(prop));
-      }
-      if (node.content) named.set("content", contentValue());
-      const positional = node.args.map((arg) => mappedExpr(arg));
+      // Decision 109, revised to Marko's own shape (ruling 2026-10-09,
+      // measured on stock Marko 6.4.4): ONE trailing object — the attribute
+      // tags by their names plus `content` — is appended as the next
+      // argument, so it fills the first unfilled param and every param after
+      // it reads `undefined`; nothing is bound by name, not even a param
+      // sharing an attribute tag's name. When the args already fill every
+      // param Marko drops the extras entirely. Params left unfilled are
+      // still passed as `undefined` for the type checker (TS2554), matching
+      // the no-args shape's padding.
+      const takesObject =
+        node.args.length < target.params.length && parts.length > 0;
       args = [
-        ...positional,
-        ...target.params
-          .slice(positional.length)
-          .map((param) => named.get(param) ?? concatMapped("undefined")),
+        ...node.args.map((arg) => mappedExpr(arg)),
+        ...(takesObject ? [propsObject] : []),
+        ...Array.from(
+          {
+            length: Math.max(
+              target.params.length - node.args.length - (takesObject ? 1 : 0),
+              0,
+            ),
+          },
+          () => concatMapped("undefined"),
+        ),
       ];
     }
 

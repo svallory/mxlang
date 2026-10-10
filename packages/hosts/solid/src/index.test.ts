@@ -892,12 +892,13 @@ describe("<define> hoisted to module scope (decision 110b)", () => {
   });
 
   it("supports args, content and attribute tags together (decision 109)", () => {
-    // `item` is consumed positionally by the arg; `head`/`content` are
-    // params beyond it, filled by name from the attribute tag/body — the
-    // same named-lookup scheme `@mxlang/target-html`'s `<define>` call already
-    // uses for this exact shape.
+    // `item` is consumed positionally by the arg. Marko appends ONE
+    // trailing object — the attribute tags by their names plus `content` —
+    // as the next argument, so it lands in the second param; the define
+    // destructures `head` and `content` out of it, the same trailing-object
+    // shape `@mxlang/target-html`'s `<define>` call now uses.
     const result = compile(
-      `<define/Row|item, head, content|>\${item}\${head}\${content}</define><Row(input.name)><@head>H</@head>body</Row>`,
+      `<define/Row|item, { head, content }|>\${item}\${head}\${content}</define><Row(input.name)><@head>H</@head>body</Row>`,
     );
     const [hoisted] = result.hoistedDefines;
     expect(result.code).toContain(`{${hoisted?.binding}(input.name`);

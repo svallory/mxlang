@@ -120,8 +120,37 @@ const CASES: Array<[string, string, string, string]> = [
     "<ul><li>12</li></ul>",
   ],
   [
-    "tag arguments still fill the remaining params from an attribute tag",
-    "<define/Row|a, b|><li>${a}${b}</li></define><Row(1)><@b>2</@b></Row>",
+    "tag arguments: ONE trailing object fills the next param, not by name",
+    "<define/Row|a, { b }|><li>${a}<${b}/></li></define><Row(1)><@b>2</@b></Row>",
+    "",
+    "<ul><li>12</li></ul>",
+  ],
+  // Decision 109, revised to Marko's own shape (ruling 2026-10-09; measured
+  // on stock Marko 6.4.4): a `<define>` call WITH tag arguments appends ONE
+  // trailing object `{ ...attributeTags, content }` as the next argument, so
+  // it lands in the first unfilled param and every param after it reads
+  // `undefined` — nothing is bound by name. These four pin each shape.
+  [
+    "tag arguments bind the body to the first unfilled param as a trailing object",
+    "<define/Row|a, b|><li>${a}${b.content}</li></define><Row(1)>text</Row>",
+    "",
+    "<ul><li>1text</li></ul>",
+  ],
+  [
+    "tag arguments bind an attribute tag inside the trailing object, not by its name",
+    "<define/Row|a, b|><li>${a}<${b.item}/></li></define><Row(1)><@item>I</@item></Row>",
+    "",
+    "<ul><li>1I</li></ul>",
+  ],
+  [
+    "tag arguments carry the body and an attribute tag together in the one object",
+    "<define/Row|a, b, c|><li>${a}<${b.item}/>${b.content}${c === undefined ? 'u' : c}</li></define><Row(1)><@item>I</@item>x</Row>",
+    "",
+    "<ul><li>1Ixu</li></ul>",
+  ],
+  [
+    "tag arguments drop the extras when the args already fill every param, as Marko does",
+    "<define/Row|a, b|><li>${a}${b}</li></define><Row(1, 2)>ignored</Row>",
     "",
     "<ul><li>12</li></ul>",
   ],

@@ -1790,25 +1790,43 @@ export class PreactEmitter implements Emitter<string> {
       // A `<define>` is a local block; this host lowers one to a local
       // function (see `define` below), so calling it is an ordinary call.
       //
-      // Decision 109, Marko parity: args now combine with a body/attribute
-      // tag. A `<define>` has no declared `Input` to destructure a single
-      // trailing props object against — measured against real Marko 6.3.51:
-      // its own codegen for this shape binds the object itself to whichever
-      // param follows the args, not the attribute tag's value, and silently
-      // drops the content. On this args path MX keeps its positional
-      // named-lookup scheme: params beyond the args are filled from the same
-      // named lookup, one value per param.
+      // Decision 109, revised to Marko's own shape (ruling 2026-10-09),
+      // measured on stock Marko 6.4.4: with tag arguments the call appends
+      // ONE trailing object — the attribute tags by their names plus
+      // `content` — as the next argument, so it fills the first unfilled
+      // parameter and every parameter after it reads `undefined`; nothing
+      // is bound by name, not even a parameter sharing an attribute tag's
+      // name. When the args already fill every parameter Marko drops the
+      // extras entirely. `#propsObject` builds the object (a plain attribute
+      // alongside args is core's error, so only attribute tags and `content`
+      // can be in it); unfilled parameters are padded `undefined` so the
+      // emitted call keeps the function's arity (a type checker counts a
+      // missing argument as an error even though JS tolerates it).
       //
       // Without args the call is Marko's: the attributes (spreads included),
       // attribute tags and `content` travel as ONE object bound to the first
       // param, `{}` when the call carries none (measured on 6.3.51; `|p|` and
       // `|{ n }|` both read it). A define with no params ignores them.
+      const argList = node.args.map((arg: Expr) => arg.code);
+      const takesObject =
+        node.args.length > 0 &&
+        node.args.length < node.target.params.length &&
+        (node.attrTagProps.length > 0 ||
+          (node.content?.children.length ?? 0) > 0);
+      if (takesObject) argList.push(this.#propsObject(node));
+      if (node.args.length > 0) {
+        argList.push(
+          ...Array.from(
+            {
+              length: Math.max(node.target.params.length - argList.length, 0),
+            },
+            () => "undefined",
+          ),
+        );
+      }
       const args =
         node.args.length > 0
-          ? [
-              ...node.args.map((arg: Expr) => arg.code),
-              ...this.#defineTrailingParams(node),
-            ].join(", ")
+          ? argList.join(", ")
           : node.target.params.length > 0
             ? this.#propsObject(node)
             : "";
@@ -1957,57 +1975,6 @@ export class PreactEmitter implements Emitter<string> {
       rendered,
       "</>) as (...args: any[]) => any",
     );
-  }
-
-  /**
-   * The named values a `<define>` call supplies, keyed by name — attributes,
-   * attribute tags and (when the body has content) `content`, matching the
-   * prop name Marko's own `<${input.content}/>` reads. Shared by
-   * `#defineTrailingParams` (the args-plus-content/attribute-tag shape,
-   * decision 109).
-   */
-  #defineNamed(
-    node: Extract<IrNode, { kind: "Component" }>,
-  ): Map<string, string> {
-    const named = new Map<string, string>();
-    for (const attr of node.attrs) {
-      if (attr.kind === "spread") continue;
-      named.set(
-        attr.name,
-        attr.kind === "boolean"
-          ? "true"
-          : attr.kind === "static"
-            ? JSON.stringify(attr.value)
-            : attr.value.code,
-      );
-    }
-    // A `<define>` has no exported binding to type an attribute tag's value
-    // against (`owner` stays `undefined`, same as a dynamic target); its
-    // params are ordinary local shadows, not a declared `Input`.
-    for (const prop of node.attrTagProps) {
-      named.set(prop.name, this.#attributeTagProp(prop).code);
-    }
-    const content = node.content?.children ?? [];
-    if (content.length > 0) {
-      named.set("content", this.#contentFn(node).code);
-    }
-    return named;
-  }
-
-  /**
-   * The positional values for the `<define>` params beyond the tag args
-   * (decision 109): a body or attribute tag rides alongside args as
-   * additional positional values, one per remaining param, by named
-   * lookup.
-   */
-  #defineTrailingParams(
-    node: Extract<IrNode, { kind: "Component" }>,
-  ): string[] {
-    if (node.target.kind !== "define") return [];
-    const named = this.#defineNamed(node);
-    return node.target.params
-      .slice(node.args.length)
-      .map((param) => named.get(param) ?? "undefined");
   }
 
   /**

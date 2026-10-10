@@ -333,11 +333,13 @@ describe("bindings may not shadow the input parameter", () => {
     // Marko's own "dynamic tag fallback content" — `assertAttributesOrArgs`
     // rejects only a plain attribute alongside args, not a body/attribute
     // tag. `title` is a define param bound positionally, so it does not
-    // also appear as a named prop; `head` is the trailing props object.
+    // also appear as a named prop; Marko appends ONE trailing object
+    // `{ head }` as the next argument, so it lands in the second param —
+    // the define destructures `head` out of it to render the tag.
     const html = await renderModules(
       {
         "entry.mx":
-          "<define/Card|title, head|><div>${title}<${head}/></div></define>\n<Card('a')><@head>H</@head></Card>",
+          "<define/Card|title, { head }|><div>${title}<${head}/></div></define>\n<Card('a')><@head>H</@head></Card>",
       },
       "entry.mx",
     );
@@ -345,10 +347,13 @@ describe("bindings may not shadow the input parameter", () => {
   });
 
   it("accepts a `<define>` call mixing tag-argument form with a body (decision 109, Marko parity)", async () => {
+    // Same trailing-object rule: the body arrives under `content` in the
+    // object bound to the first unfilled param, not bound to a param
+    // *named* `content`.
     const html = await renderModules(
       {
         "entry.mx":
-          "<define/Card|title, content|><div>${title}<${content}/></div></define>\n<Card('a')>body</Card>",
+          "<define/Card|title, { content }|><div>${title}<${content}/></div></define>\n<Card('a')>body</Card>",
       },
       "entry.mx",
     );
@@ -365,6 +370,59 @@ describe("bindings may not shadow the input parameter", () => {
       ),
     ).toThrow("Tag does not support arguments when attributes present.");
   });
+
+  // Decision 109, revised to Marko's own shape (ruling 2026-10-09; measured
+  // on stock Marko 6.4.4): a `<define>` call WITH tag arguments appends ONE
+  // trailing object `{ ...attributeTags, content }` as the next argument, so
+  // it lands in the first unfilled param and every param after it reads
+  // `undefined` — nothing is bound by name. These four pin each shape.
+  it("binds the body to the first unfilled param, not to a param named content", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx":
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+          "<define/Row|a, b|><div>${a}<${b.content}/></div></define>\n<Row(1)>body</Row>",
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<div>1body</div>");
+  });
+
+  it("binds an attribute tag inside the trailing object, not by its name", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx":
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+          "<define/Row|a, b|><div>${a}<${b.item}/></div></define>\n<Row(1)><@item>I</@item></Row>",
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<div>1I</div>");
+  });
+
+  it("carries the body and an attribute tag together in the one object", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx":
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+          '<define/Row|a, b, c|><div>${a}<${b.item}/><${b.content}/>${c ?? "u"}</div></define>\n<Row(1)><@item>I</@item>x</Row>',
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<div>1Ixu</div>");
+  });
+
+  it("drops the extras when the args already fill every param, as Marko does", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx":
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+          "<define/Row|a, b|><div>${a}${b}</div></define>\n<Row(1, 2)>ignored</Row>",
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<div>12</div>");
+  });
 });
 
 describe("<html-comment> lowers placeholders", () => {
@@ -377,16 +435,16 @@ describe("<html-comment> lowers placeholders", () => {
   });
 
   it("falls back to a space only when the comment has no static text", () => {
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
     const only = compile(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
       src("<html-comment>${input.a}${input.b}</html-comment>"),
       file,
     ).code;
     expect(only).toContain(
       '(__mxEscapeComment(input.a, true) + __mxEscapeComment(input.b, true)) || " "',
     );
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
     const mixed = compile(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
       src("<html-comment>a ${input.a}</html-comment>"),
       file,
     ).code;
@@ -564,9 +622,9 @@ describe("a type-only import does not resolve a tag (decision 114 parity)", () =
  * re-export) still renders the body and can bind the value.
  */
 describe("the render sink (decision 155)", () => {
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
   const counter = [
     "export interface Input { start: number }",
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
     "<span>${input.start}</span>",
     "<return value=input.start + 1/>",
   ].join("\n");
@@ -1508,15 +1566,15 @@ describe("dynamic tags", () => {
   ])(
     "renders the body when the dynamic tag name is %s (Marko parity)",
     async (_name, tag) => {
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
       const html = await renderModules(
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
         { "entry.mx": "<${input.tag}>body</>" },
         "entry.mx",
         { tag },
       );
       expect(html).toBe("body");
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
       const selfClosing = await renderModules(
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko dynamic-tag syntax in template source
         { "entry.mx": "<${input.tag}/>" },
         "entry.mx",
         { tag },
@@ -1703,7 +1761,7 @@ describe("a component body with tag params (`<List|item, i|>`) binds them (execu
       'import List from "./list.mx"',
       "<${List}|item, i| items=input.items><b>${item}${i}</b></${List}>",
     ],
-  ])("%s", async (_label, header, body) => {
+  ])("%s", async (_label, header, _body) => {
     const html = await renderModules(
       {
         "list.mx": list,

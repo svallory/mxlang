@@ -738,11 +738,63 @@ export default function Row(props: Input) { return <p>{props.items.map((x, i) =>
       // Marko's own "dynamic tag fallback content" — `assertAttributesOrArgs`
       // rejects only a plain attribute alongside args, not a body/attribute
       // tag (round-2 review finding, then decision 109 closed the gap).
+      // Marko appends ONE trailing object `{ head }` as the next argument,
+      // landing in the first unfilled param; the define destructures `head`
+      // out of it to render the tag.
       const html = await renderFixture(host, {
         "main.mx":
-          "<define/Card|title, head|><div>${title}<${head}/></div></define>\n<Card('a')><@head>H</@head></Card>",
+          "<define/Card|title, { head }|><div>${title}<${head}/></div></define>\n<Card('a')><@head>H</@head></Card>",
       });
       expect(html).toBe("<div>aH</div>");
+    },
+  );
+
+  // Decision 109, revised to Marko's own shape (ruling 2026-10-09;
+  // measured on stock Marko 6.4.4): a `<define>` call WITH tag arguments
+  // appends ONE trailing object `{ ...attributeTags, content }` as the next
+  // argument, so it lands in the first unfilled param and every param after
+  // it reads `undefined` — nothing is bound by name.
+  it.each(hosts)(
+    "%s: binds a define call's body to the first unfilled param, not to a param named content",
+    async (host) => {
+      const html = await renderFixture(host, {
+        "main.mx":
+          "<define/Row|a, b|><div>${a}<${b.content}/></div></define>\n<Row(1)>body</Row>",
+      });
+      expect(html).toBe("<div>1body</div>");
+    },
+  );
+
+  it.each(hosts)(
+    "%s: binds a define call's attribute tag inside the trailing object, not by its name",
+    async (host) => {
+      const html = await renderFixture(host, {
+        "main.mx":
+          "<define/Row|a, b|><div>${a}<${b.item}/></div></define>\n<Row(1)><@item>I</@item></Row>",
+      });
+      expect(html).toBe("<div>1I</div>");
+    },
+  );
+
+  it.each(hosts)(
+    "%s: carries a define call's body and attribute tag together in the one trailing object",
+    async (host) => {
+      const html = await renderFixture(host, {
+        "main.mx":
+          '<define/Row|a, b, c|><div>${a}<${b.item}/><${b.content}/>${c ?? "u"}</div></define>\n<Row(1)><@item>I</@item>x</Row>',
+      });
+      expect(html).toBe("<div>1Ixu</div>");
+    },
+  );
+
+  it.each(hosts)(
+    "%s: drops a define call's extras when the args already fill every param, as Marko does",
+    async (host) => {
+      const html = await renderFixture(host, {
+        "main.mx":
+          "<define/Row|a, b|><div>${a}${b}</div></define>\n<Row(1, 2)>ignored</Row>",
+      });
+      expect(html).toBe("<div>12</div>");
     },
   );
 

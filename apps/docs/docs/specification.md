@@ -1568,8 +1568,15 @@ is withdrawn on those hosts. When a define with 2 or more params is called that
 way, lowering gives a warning positioned at the call's tag name (only on the
 hosts that implement the rule, marked by `HostDeclarations.defineCallPassesAttrs`):
 `` `<Card>` has 2 params, but only the first parameter receives the attributes object; destructure it (`|{ a, b }|`) instead of reading one param per attribute ``.
-A call with tag arguments is unchanged (decision 109), and a define with no
-params still ignores the attributes. Decision 160 is the language rule for every
+A call with tag arguments binds its extras Marko's way (decision 109,
+revised by decision 210 item 3): the call appends **one trailing object** —
+the attribute tags by their names plus `content` for the body — as its next
+argument, so it lands in the first unfilled parameter and every parameter
+after it reads `undefined`; nothing is bound by name, so a parameter that
+shares an attribute tag's name receives the whole object, not the tag's
+value (destructure it: `|a, { b }|`). When the tag arguments already fill
+every parameter, the extras are dropped. A define with no params still
+ignores the attributes. Decision 160 is the language rule for every
 target; Angular keeps its own call shape until `define-call-attrs-angular`
 lands.
 
@@ -1598,8 +1605,9 @@ captured identifier, not silently wrong code. Both are hard limits, not
 enclosing render function, and no per-row/per-branch scope for a nested one
 to close over either. On Solid, a `<define>` call is a plain function-call
 expression (`{__mx_DefineRowN(...)}`), not a JSX tag — JSX has no
-positional-call syntax. With tag arguments it uses the named-param binding
-closed item 9 below describes; without them it passes one attribute object
+positional-call syntax. With tag arguments it appends Marko's one trailing
+object (decision 109, revised by decision 210 item 3, above); without them it
+passes one attribute object
 (decision 160, above). The capture check binds the names a destructured param
 introduces (`|{ n }, i|` binds `n` and `i`).
 
@@ -4430,7 +4438,7 @@ deferred (decision 85).
    (`<define>` unconditionally errored there), so a `<define>`-bound call
    target was unreachable on Solid and out of this decision's scope —
    **superseded by decision 110b below**, which makes `<define>` itself work
-   in a region and gives Solid its own named-param call shape (a plain
+   in a region and gives Solid its own call shape (a plain
    function call, not JSX — §5.4). Angular and
    Astro keep a positioned error naming their own constraint
    (`ngComponentOutlet`/no local component form), not MX's.
@@ -4455,6 +4463,14 @@ deferred (decision 85).
    filled from that same named lookup — attributes, attribute-tag exports,
    and a bare body under the reserved `content` key — one value per
    remaining param, rather than one trailing object.
+   **Superseded by decision 210 item 3 (2026-10-09): the args path now emits
+   Marko's own trailing-object shape.** The measured Marko behaviour above
+   is the rule on html, preact/react/hono and Solid: one trailing object
+   (the attribute tags by name plus `content`) is appended as the next
+   argument and lands in the first unfilled parameter, every later
+   parameter reads `undefined`, and when the args already fill every
+   parameter the extras are dropped. The named-lookup scheme this item
+   closed on is withdrawn (§5.4).
 10. **`<define>` is supported in `.solid.mx` regions — closed by decision
    110b.** Previously a compile error ("cannot declare a function inside a
    JSX expression"). A top-level `<define>` in a region hoists to a
