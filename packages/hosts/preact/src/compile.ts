@@ -48,18 +48,6 @@ import {
   preactDeclarations,
 } from "./emitter.ts";
 
-/**
- * Marko's own convention: `@marko/compiler`'s `scanTagsDir` only
- * auto-discovers files whose extension is literally `.marko` (measured in
- * 5.42.5's `loadTaglibFromDir.js`, `ext === ".marko"`), so a `tags/*.marko`
- * file is callable as a tag with no import. A `.mx` file in `tags/` is not
- * discovered. Kept because this is a host for stock Marko syntax, the same
- * as `@mxlang/target-html`.
- */
-export const host = {
-  tagDiscoveryDirs: ["tags"],
-};
-
 export interface CompilePreactOptions {
   /** Custom tags already discovered and loaded by the calling integration. */
   customTags?: Record<string, CustomTag>;
@@ -744,7 +732,6 @@ export function compilePreactMx(
     filename,
     options.declarations ?? preactDeclarations,
     {
-      ...host,
       customTags: options.customTags,
       defaultTag: options.defaultTag,
       resolveImport: options.resolveImport,

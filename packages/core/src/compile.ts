@@ -106,6 +106,11 @@ export interface TranslatorOptions {
    * Directories beside a template whose `.marko`/`.mx` files are callable as
    * tags without an import. Marko's own convention is `["tags"]`; a host that
    * requires explicit imports passes `[]`.
+   *
+   * @deprecated Unread: core no longer walks directories (tags beside a file
+   * reach a compile as `customTags`), and `Translator` stopped carrying the
+   * field when Marko's lookup went away. Goes with `taglibs` in PR 6 slice
+   * S3b-2 (decision 197).
    */
   tagDiscoveryDirs?: string[];
   /** Custom tags already loaded by the calling integration, by call name. */
@@ -171,16 +176,14 @@ export interface HostOptions extends TranslatorOptions {
 }
 
 /**
- * The `config.translator` object `@marko/compiler` is given: the taglibs this
- * host registers plus the visitor that runs the lowering. Exported for the
- * hosts and tools that hand one to `compile` themselves (the mapping pass,
- * the oracle's stock-Marko comparison).
+ * A host's translator: the taglibs it registers, which core's tag table
+ * (`tag-table.ts`) reads, plus the visitor that runs the lowering. Exported
+ * for the hosts and tools that build one themselves.
  */
 export interface Translator {
   taglibs: Array<[string, unknown]>;
   /** `false`: this translator declares its own statement tags (data). */
   statementTags?: false;
-  tagDiscoveryDirs: string[];
   translate: {
     // biome-ignore lint/style/useNamingConvention: a Marko translate visitor key is a node type
     Program: {
@@ -235,12 +238,11 @@ export function printExpression(node: Node): string {
 }
 
 /**
- * Builds the `config.translator` object for a host.
+ * Builds a host's translator.
  *
- * Exported because `@marko/compiler`'s taglib lookup is keyed on the
- * translator object itself: a caller that wants the lookup (for its own tag
- * resolution) has to hand the compiler the same object it later passes to
- * `compileSync`.
+ * Exported because core's tag table is cached per translator object
+ * (`tagTable`): a caller that resolves tags itself shares the cache by
+ * passing the same object the host compiles with.
  */
 export function createTranslator(host: TranslatorOptions): Translator {
   return translatorClaiming(host, claimedFields(undefined));
@@ -276,7 +278,6 @@ function translatorClaiming(
       ...hostTaglibs,
       ...(customTags ? [customTags] : []),
     ],
-    tagDiscoveryDirs: host.tagDiscoveryDirs ?? [],
     ...(host.statementTags === false ? { statementTags: false as const } : {}),
     translate: {
       // biome-ignore lint/style/useNamingConvention: a Marko translate visitor key is a node type

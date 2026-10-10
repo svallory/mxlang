@@ -38,32 +38,20 @@ import {
 } from "./translate.ts";
 
 /**
- * The Marko translator config a compile runs under: this host's taglib, plus
- * the tag-discovery directories (`tags/`) Marko's own convention uses.
- * `tagDiscoveryDirs: ["tags"]` is Marko's own convention: `@marko/compiler`'s
- * `scanTagsDir` only auto-discovers files whose extension is literally
- * `.marko` (measured in `@marko/compiler` 5.42.5's `loadTaglibFromDir.js`,
- * `ext === ".marko"`) — a `.mx` file in a `tags/` directory is not
- * discovered as a tag at all. This host still accepts only `.mx` at the
- * loader boundary; a `tags/*.marko` file is real Marko syntax read by
- * `@marko/compiler` itself during discovery, not a second entry point this
- * host advertises. Core's own tag table does not read it (decision 197):
- * only a caller that drives `@marko/compiler` does, and, until slice S3b, the
- * `defaultTag` check's judging lookup.
+ * The translator config a compile runs under: this host's taglib. Tags beside
+ * a file reach a compile as `customTags` (the integration discovers them), so
+ * the translator names no discovery directory (decision 197).
  */
 const host = {
   taglibs: [["mx-translator-core", CORE_TAGLIB]] as Array<[string, unknown]>,
-  tagDiscoveryDirs: ["tags"],
 };
 
-/** One translator per lookup: Marko keys its taglib cache on the translator object, so a shared instance keeps that cache stable. */
+/** One translator per lookup: core caches its tag table per translator object, so a shared instance keeps that cache stable. */
 const translators = new WeakMap<TargetLookup, Translator>();
 
 /**
- * The Marko translator object, for `compile(src, file, { translator })`, over
- * `targets`. A caller that drives `@marko/compiler` itself (the oracle's
- * stock-Marko comparison) builds one through here; `index.ts` exports the
- * instance over the package's own lookup.
+ * This host's translator over `targets`. `index.ts` exports the instance over
+ * the package's own lookup.
  */
 export function createHtmlTranslator(targets: TargetLookup): Translator {
   let translator = translators.get(targets);

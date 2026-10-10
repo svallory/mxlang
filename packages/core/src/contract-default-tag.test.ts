@@ -195,6 +195,8 @@ describe("contractDefaultTag: the nearest authored parent's contract", () => {
     compiler.compileSync(source, "/tmp/mx-cdt/a.mx", {
       translator: {
         ...translator,
+        // Marko's finder iterates this; core's `Translator` no longer has it.
+        tagDiscoveryDirs: [],
         translate: {
           Program: {
             exit(path: { node: { body: Node[] } }) {
@@ -332,6 +334,7 @@ describe("contractDefaultTag: the nearest authored parent's contract", () => {
       compiler.compileSync(source, "/tmp/mx-cdt/a.mx", {
         translator: {
           ...translator,
+          tagDiscoveryDirs: [],
           translate: {
             Program: {
               exit(path: { node: { body: Node[] } }) {

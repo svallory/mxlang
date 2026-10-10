@@ -76,7 +76,6 @@ import {
   compilePreactMx as compilePreactMxWith,
   emitModule,
   emitModuleWithMappings,
-  host,
 } from "./compile.ts";
 import descriptor from "./descriptor.ts";
 import type { CompileJsxRegionResult } from "./region.ts";
@@ -138,9 +137,8 @@ export type AttrTag<
  */
 const ownTargets: TargetLookup = createTargetLookup([descriptor]);
 
-/** The Marko translator object, for a caller driving `@marko/compiler` itself. */
+/** This host's translator, over the package's own lookup. */
 export const translator: Translator = createTranslator({
-  ...host,
   targets: ownTargets,
 });
 
