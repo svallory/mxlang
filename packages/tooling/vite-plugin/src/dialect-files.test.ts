@@ -369,3 +369,52 @@ describe("what is not a dialect file", () => {
     ).toBeNull();
   });
 });
+
+describe("core's own files are built by core's emit", () => {
+  it("a plain .mx file in a dialect project transforms to the same code as in a project with no dialect", async () => {
+    const withDialect = probeProject({ "page.mx": "<p>hi</p>\n" });
+    const without = probeProject(
+      { "page.mx": "<p>hi</p>\n" },
+      { manifest: null },
+    );
+    const build = async (project: { path(relative: string): string }) => {
+      const result = (await hooks().transform.call(
+        {},
+        "<p>hi</p>\n",
+        `${project.path("page.mx")}${MX_SUFFIX}`,
+      )) as { code: string };
+      return result.code;
+    };
+    const code = await build(withDialect);
+    expect(code).toContain("hi");
+    expect(code).toBe(await build(without));
+  });
+
+  it("a dialect file that cannot be read is still refused with the text, at the head, from the source the bundler loaded", async () => {
+    const project = probeProject();
+    const file = project.path("gone.probe.mx");
+    const error = await refusal(() =>
+      hooks().transform.call({}, PROBE_SOURCES.ok, `${file}${MX_SUFFIX}`),
+    );
+    expect(error.message).toBe(NO_EMIT);
+    expect(error.loc).toMatchObject({ file, line: 1, column: 0 });
+  });
+
+  it("a .marko file whose extension routing fails reports the routing error located, as the compile does", async () => {
+    const project = probeProject(
+      { "x.marko": "<p>hi</p>\n" },
+      { manifest: { extensions: [".mx"] } },
+    );
+    const error = await refusal(() =>
+      hooks().transform.call(
+        {},
+        "<p>hi</p>\n",
+        `${project.path("x.marko")}${MX_SUFFIX}`,
+      ),
+    );
+    expect(error.loc.file).toBe(project.path("package.json"));
+    expect(error.id).toBe(project.path("package.json"));
+    expect(error.loc.line).toBe(1);
+    expect(error.message).toMatch(/\.mx/);
+  });
+});

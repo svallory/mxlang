@@ -3585,11 +3585,12 @@ language server and the TypeScript plugin route a file to its dialect
 `name` (`mxlang` when two dialects claim its extension and routing cannot settle which) and `code` set to the code the
 dialect gave. `mx-tsc` prints that code in place of `TS<number>`. No
 JavaScript is generated for a dialect's file. Building a file calls its
-dialect's emit, and the Vite plugin, which builds, refuses to import a dialect
-file when its dialect registers none: an error at the import (the specifier in
+dialect's emit (core is dialect zero: its emit is the compile of MX's own
+files), and the Vite plugin and the Bun loader, which build, refuse to import a
+dialect file when its dialect registers none: an error at the import (the specifier in
 the importing file), or at the head of the dialect file for an entry or a
-hand-built id, `<dialect name> files cannot be imported: the dialect registers
-no emit`. The text is the same whether or not the file checks clean; its own
+hand-built id (the Bun loader: at line 1, column 0 of the file), `<dialect name> files
+cannot be imported: the dialect registers no emit`. The text is the same whether or not the file checks clean; its own
 errors are what the other tools report. The project's contracts (`mx.contracts`)
 and local `tags/` apply to a dialect's file as they do to an MX file, and a
 dialect declared in a package below the project's root counts for the files in
@@ -4204,7 +4205,8 @@ states no `tagRules` option, and a `tagRules` option it states wins.
 
 **A dialect owns its emit.** Building a file calls its dialect's emit, so a
 dialect's files are built by the dialect and by nothing else; no tool picks a
-target for them. The tools check a dialect's files and generate nothing for
+target for them. Core is dialect zero: its emit is the compile of MX's own
+files, and `emitFor(filename)` answers the dialect and the emit of any file. The tools check a dialect's files and generate nothing for
 them (§13.7).
 
 **A `{ call }` trigger needs the dialect's `lowerTrigger`.** A loaded dialect

@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import {
   mkdirSync,
   mkdtempSync,
@@ -462,6 +462,76 @@ describe("@mxlang/target-html/bun", () => {
       warn.mockRestore();
       rmSync(pkgDir, { recursive: true, force: true });
     }
+  });
+});
+
+/**
+ * A throwaway project that is itself a dialect package, `probe`, claiming
+ * `.probe.mx`: a project's own `package.json#mx.dialect` is a declaration like
+ * a dependency's. Its module is never loaded here: the loader refuses the
+ * file before the dialect parses anything.
+ */
+const dialectRoots: string[] = [];
+function dialectProject(file: string, text: string): string {
+  const dir = mkdtempSync(join(tmpdir(), "mx-bun-dialect-"));
+  dialectRoots.push(dir);
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      name: "probe-dialect",
+      mx: {
+        dialect: {
+          id: "probe",
+          name: "Probe",
+          extensions: [".probe.mx"],
+          module: "./dialect.cjs",
+        },
+      },
+    }),
+  );
+  writeFileSync(join(dir, "dialect.cjs"), "module.exports.default = {};\n");
+  writeFileSync(join(dir, file), text);
+  return dir;
+}
+
+describe("@mxlang/target-html/bun asks the file's dialect for its emit", () => {
+  afterEach(() => {
+    for (const dir of dialectRoots.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  async function importError(path: string): Promise<unknown> {
+    try {
+      await import(path);
+    } catch (error) {
+      return error;
+    }
+    throw new Error("expected the import to be refused");
+  }
+
+  test("refuses a dialect file with the exact text, at the file head", async () => {
+    Bun.plugin(markoPlugin);
+    const path = join(dialectProject("a.probe.mx", "<y !ok/>\n"), "a.probe.mx");
+    const error = (await importError(path)) as Error & {
+      line?: number;
+      column?: number;
+      file?: string;
+    };
+    expect(error.message).toBe(
+      "Probe files cannot be imported: the dialect registers no emit",
+    );
+    expect(error.line).toBe(1);
+    expect(error.column).toBe(0);
+    expect(error.file).toBeUndefined();
+  });
+
+  test("a plain .mx file builds through the same lookup", async () => {
+    Bun.plugin(markoPlugin);
+    const dir = dialectProject("plain.mx", "<p>hi</p>\n");
+    linkRuntime(dir);
+    const mod = await import(join(dir, "plain.mx"));
+    expect((mod.default as (input: unknown) => string)({})).toBe("<p>hi</p>");
   });
 });
 

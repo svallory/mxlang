@@ -461,6 +461,16 @@ Five facts worth knowing before editing it:
   `mx.extensions`, `mx[<configKey>]`) may treat it as config or reject it as an
   unknown key (pinned in `dialect-identity-block.test.ts`; a target's config key is refused
   when it is `dialect`, pinned in `target-descriptor.test.ts`).
+  `emitFor(file, { hostSegments })` (`dialect-emit.ts`, `@unstable`) is the one
+  lookup every building tool uses: it routes the file and answers `{ dialect,
+  emit }`. Core is dialect zero: its emit (the target-driven compile) is the only
+  entry of a module-private table keyed by dialect id, so no manifest field,
+  option or export registers another and a routed dialect answers `emit:
+  undefined`. A routing error on a name ending in `.mx` is swallowed (core's
+  compile re-reports it); on any other name it is rethrown. The tool passes
+  `core` (its `@mxlang/core`, the `load(core)` contract) and `unwired` (the
+  text for a target that cannot compile yet) in the request, so core builds no
+  tool-specific string. Pinned in `dialect-emit.test.ts`.
   `routeDialect(file)` picks the longest claimed extension; a clash is an
   error at the second package's dependency entry naming both, settled by
   `mx.extensions` (`{ ".x": "<id>" }`, an error at the entry's key when

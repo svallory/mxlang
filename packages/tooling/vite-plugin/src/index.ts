@@ -4,6 +4,7 @@ import { stripVTControlCharacters } from "node:util";
 import * as core from "@mxlang/core";
 import {
   type CustomTag,
+  type DialectEmit,
   isTranslateError,
   otherErrorsText,
   type TargetPolicyDiagnostic,
@@ -35,13 +36,15 @@ function loadDialectCheck(): Promise<DialectCheckModule> {
 }
 
 /**
- * The refusal for a dialect file the build was asked to import, or
- * `undefined` when `file` is no dialect file. Building a file asks its
- * dialect for an emit, and a dialect registers none, so the import is
- * refused with exactly
+ * What building `file` calls: the emit its dialect registers, or the error
+ * that refuses the import when the dialect registers none. Building a file
+ * asks its dialect for an emit (`emitOf`); MX's own files get core's, and a
+ * dialect that registers none is refused with exactly
  * `<dialect> files cannot be imported: the dialect registers no emit`,
  * whatever else is wrong with the file: its own errors are what the checkers
- * report, and the build's answer is the refusal.
+ * report, and the build's answer is the refusal. `undefined` when the dialect
+ * has no emit, its file cannot be read and the caller has no text to give
+ * (`fallbackText`, the source the bundler loaded).
  *
  * Positioned where the author has to act: at the specifier in the importing
  * file (`from`: the importer's authored file and the specifier as written),
@@ -49,24 +52,36 @@ function loadDialectCheck(): Promise<DialectCheckModule> {
  * head of the dialect file. The one exception to the text is a file whose
  * extension the project hands to dialects without the routing settling which:
  * no dialect has a name to put in the sentence, so the routing error is the
- * refusal.
+ * refusal. Throws the routing error of a file that is neither MX's nor a
+ * dialect's.
  */
-async function dialectFileRefusal(
+async function askEmit(
+  file: string,
+  from: { importer: string; specifier: string } | undefined,
+  fallbackText: string,
+): Promise<{ emit: DialectEmit } | { refusal: Error }>;
+async function askEmit(
   file: string,
   from?: { importer: string; specifier: string },
-): Promise<Error | undefined> {
-  const { checkDialectFile, FALLBACK_DIAGNOSTIC_SOURCE, isDialectFile } =
-    await loadDialectCheck();
-  if (!isDialectFile(file)) return undefined;
-  const text = readTemplateSource(file);
+): Promise<{ emit: DialectEmit } | { refusal: Error } | undefined>;
+async function askEmit(
+  file: string,
+  from?: { importer: string; specifier: string },
+  fallbackText?: string,
+): Promise<{ emit: DialectEmit } | { refusal: Error } | undefined> {
+  const { checkDialectFile, emitOf } = await loadDialectCheck();
+  const answer = emitOf(file);
+  if (answer.emit !== undefined) return { emit: answer.emit };
+  const text = readTemplateSource(file) ?? fallbackText;
   if (text === undefined) return undefined;
-  const check = checkDialectFile(file, text);
-  if (check === undefined) return undefined;
-  const unsettled = check.source === FALLBACK_DIAGNOSTIC_SOURCE;
+  const unsettled = !answer.settled;
+  const first = unsettled
+    ? checkDialectFile(file, text)?.diagnostics[0]
+    : undefined;
   const message = unsettled
-    ? (check.diagnostics[0]?.message ??
-      `${check.source} files cannot be imported: the dialect registers no emit`)
-    : `${check.source} files cannot be imported: the dialect registers no emit`;
+    ? (first?.message ??
+      `${answer.name} files cannot be imported: the dialect registers no emit`)
+    : `${answer.name} files cannot be imported: the dialect registers no emit`;
   const importerText =
     from === undefined || unsettled
       ? undefined
@@ -78,22 +93,44 @@ async function dialectFileRefusal(
   // The authored position goes in `pluginCode` too, so Vite does not map it
   // through the importer's sourcemap (see `unresolvedImport`).
   if (from !== undefined && importerText !== undefined && at !== undefined) {
-    return locate(
-      Object.assign(new Error(), { plugin: "mx", pluginCode: importerText }),
-      { file: from.importer, ...at, source: importerText, message },
-    );
+    return {
+      refusal: locate(
+        Object.assign(new Error(), { plugin: "mx", pluginCode: importerText }),
+        { file: from.importer, ...at, source: importerText, message },
+      ),
+    };
   }
-  const first = unsettled ? check.diagnostics[0] : undefined;
-  return locate(
-    Object.assign(new Error(), { plugin: "mx", pluginCode: text }),
-    {
-      file,
-      line: first?.line ?? 1,
-      column: first?.column ?? 0,
-      source: text,
-      message,
-    },
-  );
+  return {
+    refusal: locate(
+      Object.assign(new Error(), { plugin: "mx", pluginCode: text }),
+      {
+        file,
+        line: first?.line ?? 1,
+        column: first?.column ?? 0,
+        source: text,
+        message,
+      },
+    ),
+  };
+}
+
+/**
+ * The refusal for a dialect file the build was asked to import
+ * ({@link askEmit}), or `undefined` for any other file.
+ */
+async function dialectFileRefusal(
+  file: string,
+  from?: { importer: string; specifier: string },
+): Promise<Error | undefined> {
+  try {
+    const asked = await askEmit(file, from);
+    return asked !== undefined && "refusal" in asked
+      ? asked.refusal
+      : undefined;
+  } catch (error) {
+    if (isTranslateError(error)) return undefined;
+    throw error;
+  }
 }
 
 /** The unnamed tag's name for a file the Vite plugin prints (a `.solid.mx`), resolved quietly: the page transform already reported the policy's warnings. */
@@ -141,8 +178,12 @@ export async function defaultExtensions(): Promise<string[]> {
   return [...regionFileKinds().map((kind) => `.${kind.segment}.mx`), ".mx"];
 }
 
-/** Whole-file compilation selects a target, never the policy's host name. */
+/**
+ * Whole-file build: the file's project resolves its target, and the emit the
+ * file's dialect registered (core's, for MX's own files) builds under it.
+ */
 async function compileMarko(
+  emit: DialectEmit,
   source: string,
   filename: string,
   strict: boolean,
@@ -156,24 +197,18 @@ async function compileMarko(
   const policy = resolveTargetPolicy(filename);
   // The project's lookup: a target loaded from a package specifier included.
   const lookup = lookupFor(policy);
-  const descriptor = lookup.target(policy.target);
-  const load = descriptor?.load;
-  if (!load) {
-    const identity = descriptor?.host
-      ? `${descriptor.host.name} host`
-      : `${policy.target} target`;
-    throw new Error(
-      `the ${identity} is not wired into @mxlang/vite-plugin yet${descriptor?.pending ? ` (${descriptor.pending})` : ""}`,
-    );
-  }
-  return load(core).compileModule(source, filename, {
+  return emit(source, filename, {
+    target: policy.target,
+    targets: lookup,
+    core,
+    unwired: (identity, pending) =>
+      `the ${identity} is not wired into @mxlang/vite-plugin yet${pending ? ` (${pending})` : ""}`,
     // D1: build strictness is caller-owned, even for an always-strict target.
     strict,
     customTags,
     defaultTag: defaultTagFor(filename, policy),
     // D2: descriptors decide which compile leaves receive the Vite resolver.
     resolveImport,
-    targets: lookup,
   });
 }
 
@@ -1031,7 +1066,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
    * the project root (any package under it), of the importer's own project or
    * of the file's own directory claims. Whether the resolved file is a
    * dialect's is then decided on the file, by its own package
-   * (`isDialectFile`): a workspace package, a sibling of the root or a
+   * (`emitOf`): a workspace package, a sibling of the root or a
    * dependency may declare the dialect that its importer's package does not.
    * Cached per directory for the length of a build: an import of anything
    * else must not read a manifest each time.
@@ -1282,10 +1317,9 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       const ext = isMxModule(path);
       if (ext === undefined) return null;
 
-      // An entry or a hand-built id reaches here without `resolveId`.
-      const refusal = await dialectFileRefusal(sourcePath(path, ext));
-      if (refusal) throw refusal;
-
+      // An entry or a hand-built id reaches here without `resolveId`. The
+      // file's dialect is asked for its emit: a dialect with none is refused,
+      // and every other file is built by the emit it answers with.
       // Rollup's own warning channel, so a misconfigured `mx.tags` reaches the
       // build log and the dev-server overlay the way any other plugin warning
       // does. `this` is the plugin context here; captured because `tagsFor`
@@ -1302,6 +1336,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       };
 
       let policyErrorRaised = false;
+      let refused = false;
       const policyError = (diagnostic: TargetPolicyDiagnostic): never => {
         const error = locate(
           new Error(
@@ -1324,6 +1359,14 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       const source = sourcePath(path, ext);
 
       try {
+        // Inside the try so the routing error of a file no dialect settles
+        // gets the same located report the compile gives it.
+        const asked = await askEmit(source, undefined, code);
+        if ("refusal" in asked) {
+          refused = true;
+          throw asked.refusal;
+        }
+
         if (ext === ".mx" || ext === TAG_EXT) {
           // Install registered callee readers even for direct hook callers.
           await loadRegistry();
@@ -1331,6 +1374,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
           // is printed on this path), so there is nothing real to hand Vite
           // — returning it would claim a mapping that does not exist.
           const { code: compiled, dependencies } = await compileMarko(
+            asked.emit,
             code,
             source,
             options.strict ?? false,
@@ -1359,7 +1403,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       } catch (err) {
         // Policy errors already carry package.json coordinates (this.error
         // may wrap them). Other scan/compile errors need the locator below.
-        if (policyErrorRaised) throw err;
+        if (policyErrorRaised || refused) throw err;
         // A `TranslateError` raised while compiling a tag template
         // (`tags/x.mx`) carries `.file`, the template's own path (spec §2's
         // third position rule), never a `.loc` — so `isSyntaxError` is

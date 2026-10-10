@@ -10,8 +10,10 @@
 import { existsSync, readdirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import {
+  type DialectEmit,
   type DialectManifest,
   discoverDialects,
+  emitFor,
   findMxConfig,
   isTranslateError,
   lowerSource,
@@ -151,6 +153,44 @@ export function dialectOf(filePath: string): DialectManifest | undefined {
     return routeDialect(filePath, { hostSegments: moduleSegments() });
   } catch {
     return undefined;
+  }
+}
+
+/** What a tool that builds `filePath` gets from the file's dialect: see {@link emitOf}. */
+export interface BuildEmit {
+  /**
+   * The dialect's `name` (`MX` for MX's own files), or `"mxlang"` when the
+   * project hands the file's extension to dialects without the routing
+   * settling which.
+   */
+  name: string;
+  /** The dialect's emit, `undefined` when it registers none. */
+  emit: DialectEmit | undefined;
+  /** False for the unsettled case above: no dialect has a name to give. */
+  settled: boolean;
+}
+
+/**
+ * Asks the dialect of `filePath` for its emit, with the host file kinds of
+ * the built-in targets reserved (`emitFor`). A tool that builds a file calls
+ * this and runs the emit, or refuses the file when there is none; it never
+ * picks a target for a dialect's file.
+ *
+ * Throws the routing error for a file that is no `.mx` file and that the
+ * project does not hand to dialects either: it is nothing this module
+ * serves, and the caller decides what a failed route means for it.
+ */
+export function emitOf(filePath: string): BuildEmit {
+  try {
+    const found = emitFor(filePath, { hostSegments: moduleSegments() });
+    return { name: found.dialect.name, emit: found.emit, settled: true };
+  } catch (error) {
+    if (!isTranslateError(error) || !claimsExtension(filePath)) throw error;
+    return {
+      name: FALLBACK_DIAGNOSTIC_SOURCE,
+      emit: undefined,
+      settled: false,
+    };
   }
 }
 

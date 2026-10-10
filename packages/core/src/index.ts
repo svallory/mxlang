@@ -155,6 +155,20 @@ export {
   routeDialect,
 } from "./dialect-discovery.ts";
 /**
+ * What building a file calls: `emitFor(filename)` routes the file to its
+ * dialect and returns that dialect's emit (`undefined` for a dialect with
+ * none). Core is dialect zero, and its emit is the target-driven whole-file
+ * compile.
+ *
+ * @unstable
+ */
+export {
+  type DialectEmit,
+  type EmitRequest,
+  emitFor,
+  type FileEmit,
+} from "./dialect-emit.ts";
+/**
  * The node-type registry: a dialect's `nodeTypes`, keyed `dialect:Type`,
  * with core's own MX AST types as dialect zero (`mx:Tag`, `mx:String`, …).
  * A line, attribute or value row naming `{ type, dialect }` claims its text

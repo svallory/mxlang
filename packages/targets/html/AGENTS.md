@@ -222,8 +222,8 @@ retired `@mxlang/html/bun` by decision 68). It exports a `BunPlugin` that
 registers `build.onLoad({ filter: MX_FILTER }, ...)` — `MX_FILTER` is
 `/(?<!\.solid)\.mx$/`, `.mx` only; `.marko` is deliberately not registered
 (see "`.mx` is the only template extension" in `packages/tsx-bridge/AGENTS.md`). On each matched `.mx`
-file it reads the source, runs it through `compile()`, and returns
-`{ contents: code, loader: "ts" }` — `compile()`'s output is plain TypeScript
+file it asks its dialect for the emit (`emitFor`, with the html host's `moduleSegments()`): a dialect with none is refused with a positioned `TranslateError` (`<dialect name> files cannot be imported: the dialect registers no emit`, line 1, column 0, pinned in `bun.test.ts`), so `.mesh.mx` stays check-only; MX's own files get core's emit, which reads the source and compiles it under `html`. The loader returns
+`{ contents: code, loader: "ts" }` — the emit's output is plain TypeScript
 (an `import`, an optional `export interface Input`, a default-exported
 function, no JSX), so Bun's own TS stripper handles it directly with no
 second transform.

@@ -372,7 +372,7 @@ function.
 
 ## Dialect files are refused, not built
 
-A dialect's file (`@mxlang/targets/dialect-check`'s `isDialectFile`: its
+Every file the plugin builds goes through `askEmit` (`@mxlang/targets/dialect-check`'s `emitOf`, core's `emitFor`): MX's own files get core's emit, which `compileMarko` runs with the resolved target, the lookup, `core` and the `unwired` text (`the <identity> is not wired into @mxlang/vite-plugin yet`); region files (`.solid.mx`) pass the same gate and are printed through tsx-bridge, which core cannot host. A dialect's file (`isDialectFile`: its
 extension is claimed by a dialect the project uses, `.probe.mx` included) is
 never compiled here. Building a file calls its dialect's emit and no dialect
 registers one, so `dialectFileRefusal` throws `<dialect name> files cannot be

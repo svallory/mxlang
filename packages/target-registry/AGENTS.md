@@ -55,6 +55,11 @@ Beyond the registry it adds:
   does with a dialect's files, in one place so the tools cannot disagree.
   `isDialectFile`/`dialectOf`/`dialectExtensions(dir)` recognise them (through
   core's `routeDialect`, `discoverDialects` and `mx.extensions`), and
+  `emitOf(path)` asks core's `emitFor` with the built-in `moduleSegments()` and
+  returns `{ name, emit, settled }` (`settled: false`, name `mxlang`, no emit,
+  for a non-`.mx` file a project hands to dialects without routing settling
+  which); the Vite plugin builds through it, and the registry's `emitOf` tests
+  pin the three answers.
   `checkDialectFile(path, text)` runs `lowerSource` on one (so the dialect's
   `tagRules` apply) and returns `{ source, diagnostics }`: `source` is the
   dialect's `name` (`mxlang` for a file whose extension a project hands to

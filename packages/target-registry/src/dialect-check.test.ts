@@ -14,6 +14,7 @@ import {
   dialectExtensions,
   dialectExtensionsUnder,
   dialectOf,
+  emitOf,
   isDialectFile,
 } from "./dialect-check.ts";
 
@@ -268,6 +269,19 @@ describe("checkDialectFile", () => {
       ).toBeUndefined();
     });
 
+    it("emitOf: a non-.mx file is unsettled, with no name and no emit; an .mx file is core's", () => {
+      const project = clash();
+      expect(emitOf(project.path("a.probe"))).toEqual({
+        name: "mxlang",
+        emit: undefined,
+        settled: false,
+      });
+      const mx = emitOf(project.path("a.probe.mx"));
+      expect(mx.name).toBe("MX");
+      expect(mx.settled).toBe(true);
+      expect(typeof mx.emit).toBe("function");
+    });
+
     it("`mx.extensions` settles it", () => {
       const project = clash();
       writeFileSync(
@@ -283,6 +297,29 @@ describe("checkDialectFile", () => {
         diagnostics: [],
       });
     });
+  });
+});
+
+describe("emitOf", () => {
+  it("core's own files and files no dialect claims get core's emit", () => {
+    const project = probeProject();
+    for (const file of ["page.mx", "page.solid.mx", "util.ts"]) {
+      const found = emitOf(project.path(file));
+      expect(found.name).toBe("MX");
+      expect(found.settled).toBe(true);
+      expect(typeof found.emit).toBe("function");
+    }
+  });
+
+  it("a dialect file gets its dialect's name and no emit", () => {
+    const project = probeProject();
+    for (const file of ["a.probe", "a.probe.mx"]) {
+      expect(emitOf(project.path(file))).toEqual({
+        name: "Probe",
+        emit: undefined,
+        settled: true,
+      });
+    }
   });
 });
 

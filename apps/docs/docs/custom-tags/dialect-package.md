@@ -9,6 +9,8 @@ A dialect — a cohesive vocabulary of tag names with validation rules, like a r
 
 This page's dialect is a tag vocabulary written in MX's own syntax, in `.mx` files. A dialect that changes the syntax itself and claims file extensions of its own (`.mesh.mx`) is a package that declares `mx.dialect` in its `package.json`; see [the specification, §13.9.2](/specification/). Its `mx.dialect.module` is a file path inside the package (`./dist/dialect.js`), never a package specifier, and once published it must be JavaScript Node can load: build TypeScript to `.js`, `.mjs` or `.cjs` and point `module` at the build. Bun and Vitest load a `.ts` module, Node does not, so MX refuses an installed dialect whose module is TypeScript; a workspace dialect linked into `node_modules` may still point at its source. It cannot claim `.mx` in any spelling, a host's file kind (`.solid.mx`) or a TypeScript, JavaScript or Marko extension; an extension of its own that ends in `.mx`, like `.mesh.mx`, is fine.
 
+Building a file calls its dialect's emit. Core is dialect zero: its emit is the compile MX's own files get, so a plain `.mx` file builds the same in every tool. A dialect has no emit, so the tools that build refuse its files (the Vite plugin at the import, the Bun loader at the file: `<dialect name> files cannot be imported: the dialect registers no emit`) and the tools that check run `lowerSource` on them. See [the IR entry point](/architecture/ir-entry/).
+
 ## The module
 
 Declarations only: `parseOptions`, `attributes`, `attributeTags`, `children`, `parents`, and `analyze`. Hooks that produce IR (`transform`, `finalize`) and templates stay in `tags/` sidecars — a contracts module cannot carry them.

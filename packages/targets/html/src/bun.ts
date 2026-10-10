@@ -1,17 +1,21 @@
 import { readFileSync } from "node:fs";
+import * as core from "@mxlang/core";
 import {
+  emitFor,
   isTranslateError,
   otherErrorsText,
   reportScanDiagnostics,
   scanCached,
   type TargetLookup,
+  TranslateError,
 } from "@mxlang/core";
 import type { BunPlugin } from "bun";
 import { configuredDefaultTag } from "./default-tag.ts";
-import { compile, htmlTargets } from "./index.ts";
+import { htmlTargets } from "./index.ts";
 
 /**
- * Registers an `onLoad` for `.mx` files: `compile()`'s output is plain
+ * Registers an `onLoad` for `.mx` files, built by the emit of the file's dialect
+ * (core's for MX's own files): that output is plain
  * TypeScript (an `import`, an optional `export interface Input`, and a
  * default-exported function), so `loader: "ts"` hands it straight to Bun's
  * own stripper — no JSX, no second transform needed.
@@ -82,6 +86,19 @@ export function createHtmlBunPlugin(
     name: "mxlang-translator",
     setup(build) {
       build.onLoad({ filter: mxFilter(targets) }, ({ path }) => {
+        // Building a file asks its dialect for the emit. A dialect that
+        // registers none is refused at the head of its file, whatever else
+        // is wrong with it; MX's own files get core's emit, built under html.
+        const { dialect, emit } = emitFor(path, {
+          hostSegments: targets.moduleSegments(),
+        });
+        if (emit === undefined) {
+          throw new TranslateError(
+            `${dialect.name} files cannot be imported: the dialect registers no emit`,
+            1,
+            0,
+          );
+        }
         const source = readFileSync(path, "utf8");
         const scan = scanCached(path, { host: "html", targets });
         reportScanDiagnostics(
@@ -97,10 +114,14 @@ export function createHtmlBunPlugin(
           scan.tags,
         );
         try {
-          const { code } = compile(source, path, {
+          const { code } = emit(source, path, {
+            target: "html",
+            targets,
+            core,
+            unwired: (identity) =>
+              `the ${identity} is not wired into @mxlang/target-html/bun yet`,
             customTags: scan.customTags,
             ...(defaultTag === undefined ? {} : { defaultTag }),
-            targets,
           });
           return { contents: code, loader: "ts" };
         } catch (error) {
