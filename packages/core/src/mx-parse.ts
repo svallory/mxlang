@@ -24,7 +24,7 @@
 import { relative } from "node:path";
 import { parse as mxFrontEndParse } from "@mxlang/parser/frontend";
 import { strippedMethodTypeParams } from "./attr-fields.ts";
-import { coreBabel } from "./babel.ts";
+import { coreBabel, coreTsPlugin } from "./babel.ts";
 import { type Node, TranslateError } from "./core.ts";
 import {
   type ClaimContext,
@@ -782,12 +782,16 @@ function typeScriptVisitor(): Node {
       return undefined;
     },
   };
-  stripVisitor = babel.pluginTransformTypeScript(api, STRIP_OPTIONS).visitor;
+  stripVisitor = coreTsPlugin()(api, STRIP_OPTIONS).visitor;
   return stripVisitor;
 }
 
 /** Runs the TS plugin over `body` as one program; returns the program's body after it. */
 function stripProgram(body: Node[]): Node[] {
+  // The plugin runs for every payload, TypeScript or not: it is not a no-op
+  // on TS-free programs (it rebuilds nodes, and lowering reads the result),
+  // so there is no skip-if-no-TS fast path — only the module itself loads
+  // lazily (`coreTsPlugin`, the cold-start win).
   const babel = coreBabel();
   const t = babel.types;
   const program = t.program(body, [], "module");
@@ -806,7 +810,12 @@ function stripProgram(body: Node[]): Node[] {
     true,
   );
   // Marko drops the empty `export {}` the plugin adds to a module.
-  return path.node.body.filter(
+  return filterEmptyExport(path.node.body);
+}
+
+/** Marko drops the empty `export {}` the plugin adds to a module. */
+function filterEmptyExport(body: Node[]): Node[] {
+  return body.filter(
     (statement: Node) =>
       statement.type !== "ExportNamedDeclaration" ||
       statement.declaration ||

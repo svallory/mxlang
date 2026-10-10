@@ -99,6 +99,27 @@ function policyOf(root: string, file = "src/App.mx") {
 
 const PACKAGE = JSON.stringify({ name: "app" });
 
+describe("MX_CONFIG_SEARCH_PLACES spells out cosmiconfig's defaults", () => {
+  it("equals cosmiconfig 10's getDefaultSearchPlaces plus the extra spellings", async () => {
+    // The list is hardcoded so importing core loads no cosmiconfig (the
+    // cold-start guard); this pin fails loudly if the pinned cosmiconfig
+    // (10.0.1, exact) ever changes its defaults.
+    const cosmiconfig = (await import("cosmiconfig")) as unknown as {
+      getDefaultSearchPlaces: (name: string) => string[];
+    };
+    expect(MX_CONFIG_SEARCH_PLACES.slice(0, -5)).toEqual(
+      cosmiconfig.getDefaultSearchPlaces("mx"),
+    );
+    expect(MX_CONFIG_SEARCH_PLACES.slice(-5)).toEqual([
+      "mx.config.mts",
+      "mx.config.cts",
+      "mx.config.json",
+      "mx.config.yaml",
+      "mx.config.yml",
+    ]);
+  });
+});
+
 describe("findMxConfig: where MX's config comes from", () => {
   it("answers undefined with no config, and the policy is the default with nothing said", () => {
     const root = project({ "package.json": PACKAGE, "src/App.mx": "" });

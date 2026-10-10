@@ -14,9 +14,14 @@
  * Loaded lazily on first use: importing core (the registry's light-import
  * invariant) must not load Babel. The interface is untyped (`Node`) so the
  * published `.d.ts` names no `@babel/*` type.
+ *
+ * The parser and the TS strip plugin load on their own memos, apart from the
+ * `@babel/core` graph (the cold-start work, decision on `perf/core-cold-start`):
+ * a path that only parses expressions (mapping, the reserved-binding check)
+ * pays for `@babel/parser` alone, and a file with no TypeScript never pays
+ * for `@babel/plugin-transform-typescript`.
  */
 import { createRequire } from "node:module";
-import { parse, parseExpression } from "@babel/parser";
 import type { Node } from "./core.ts";
 
 /** Parser, traverse, types, generator, code frame and the TS strip plugin. */
@@ -28,7 +33,6 @@ export interface Babel {
   generator: (node: Node, options?: Node) => { code: string };
   codeFrameColumns: (rawLines: string, loc: Node, options?: Node) => string;
   File: new (options: Node, input: { code: string; ast: Node }) => Node;
-  pluginTransformTypeScript: (api: Node, options: Node) => Node;
 }
 
 const require = createRequire(import.meta.url);
@@ -38,6 +42,44 @@ function defaultOf<T>(loaded: { __esModule?: boolean; default?: T } & T): T {
   return loaded.__esModule && loaded.default !== undefined
     ? loaded.default
     : loaded;
+}
+
+/** `@babel/plugin-transform-typescript`'s plugin factory. */
+type PluginTransformTypeScript = (api: Node, options: Node) => Node;
+
+let tsPlugin: PluginTransformTypeScript | undefined;
+
+/** The slice of `@babel/parser` core calls directly. */
+interface Parser {
+  parse: Babel["parse"];
+  parseExpression: Babel["parseExpression"];
+}
+
+let parser: Parser | undefined;
+
+/**
+ * `@babel/parser`, loaded on first call: importing core must not load any
+ * Babel package (the registry's light-import invariant), and a path that
+ * never parses must not pay for the parser either.
+ */
+export function coreParser(): Parser {
+  parser ??= require("@babel/parser") as Parser;
+  return parser;
+}
+
+/**
+ * `@babel/plugin-transform-typescript`'s plugin factory, loaded on first
+ * call: a file with no TypeScript is stripped without it (the TS-free fast
+ * path in `mx-parse.ts`), so it must not load even with the rest of Babel.
+ */
+export function coreTsPlugin(): PluginTransformTypeScript {
+  if (!tsPlugin) {
+    const plugin = defaultOf(
+      require("@babel/plugin-transform-typescript"),
+    ) as PluginTransformTypeScript;
+    tsPlugin = plugin;
+  }
+  return tsPlugin;
 }
 
 let loaded: Babel | undefined;
@@ -55,9 +97,10 @@ export function coreBabel(): Babel {
     traverse: Node;
     types: Node;
   };
+  const { parse, parseExpression } = coreParser();
   loaded = {
-    parse: parse as Babel["parse"],
-    parseExpression: parseExpression as Babel["parseExpression"],
+    parse,
+    parseExpression,
     traverse: core.traverse,
     types: core.types,
     generator: defaultOf(require("@babel/generator")),
@@ -67,9 +110,6 @@ export function coreBabel(): Babel {
       }
     ).codeFrameColumns,
     File: core.File,
-    pluginTransformTypeScript: defaultOf(
-      require("@babel/plugin-transform-typescript"),
-    ),
   };
   return loaded;
 }

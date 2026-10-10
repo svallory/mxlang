@@ -56,12 +56,7 @@ import {
   relative,
   resolve,
 } from "node:path";
-import {
-  cosmiconfigSync,
-  defaultLoadersSync,
-  getDefaultSearchPlaces,
-  type LoaderSync,
-} from "cosmiconfig";
+import type { LoaderSync } from "cosmiconfig";
 import {
   positionOfOffset,
   positionOfParseError,
@@ -78,7 +73,31 @@ export const MX_CONFIG_MODULE = "mx";
  * `mx.config.*` spellings cosmiconfig leaves out.
  */
 export const MX_CONFIG_SEARCH_PLACES: readonly string[] = [
-  ...getDefaultSearchPlaces(MX_CONFIG_MODULE),
+  // cosmiconfig 10.0.1's `getDefaultSearchPlaces("mx")`, spelled out so the
+  // module list needs no cosmiconfig at import time (`mx-config.test.ts`
+  // pins the equality); the five `mx.config.*` spellings cosmiconfig leaves
+  // out follow.
+  "package.json",
+  ".mxrc",
+  ".mxrc.json",
+  ".mxrc.yaml",
+  ".mxrc.yml",
+  ".mxrc.js",
+  ".mxrc.ts",
+  ".mxrc.cjs",
+  ".mxrc.mjs",
+  ".config/mxrc",
+  ".config/mxrc.json",
+  ".config/mxrc.yaml",
+  ".config/mxrc.yml",
+  ".config/mxrc.js",
+  ".config/mxrc.ts",
+  ".config/mxrc.cjs",
+  ".config/mxrc.mjs",
+  "mx.config.js",
+  "mx.config.ts",
+  "mx.config.cjs",
+  "mx.config.mjs",
   "mx.config.mts",
   "mx.config.cts",
   "mx.config.json",
@@ -460,11 +479,11 @@ const loadJson = cached((filepath, content) => {
   }
 });
 
-const yamlLoader = defaultLoadersSync[".yaml"] as LoaderSync;
-
 const loadYaml = cached((filepath, content) => {
   try {
-    const value: unknown = yamlLoader(filepath, content);
+    const value: unknown = (
+      cosmiconfigModule().defaultLoadersSync[".yaml"] as LoaderSync
+    )(filepath, content);
     const problem = shapeProblem(value);
     if (problem) {
       return record(filepath, content, {
@@ -634,16 +653,39 @@ const LOADERS: Record<string, LoaderSync> = {
   ".cts": loadModule,
 };
 
-let explorer: ReturnType<typeof cosmiconfigSync> | undefined;
+/** The slice of cosmiconfig's entry core uses (CJS named exports). */
+interface Cosmiconfig {
+  cosmiconfigSync: (
+    module: string,
+    options: Record<string, unknown>,
+  ) => {
+    load: (filepath: string) => unknown;
+  };
+  defaultLoadersSync: Record<string, LoaderSync>;
+}
 
-function getExplorer(): ReturnType<typeof cosmiconfigSync> {
-  explorer ??= cosmiconfigSync(MX_CONFIG_MODULE, {
+let cosmiconfig: Cosmiconfig | undefined;
+
+/**
+ * cosmiconfig, loaded on first config read: importing core must not load it
+ * (the cold-start work), and a process that never reads an MX config (every
+ * `tagRules: "none"` consumer, a provided config) never pays for it.
+ */
+function cosmiconfigModule(): Cosmiconfig {
+  cosmiconfig ??= createRequire(import.meta.url)("cosmiconfig") as Cosmiconfig;
+  return cosmiconfig;
+}
+
+let explorer: ReturnType<Cosmiconfig["cosmiconfigSync"]> | undefined;
+
+function getExplorer(): ReturnType<Cosmiconfig["cosmiconfigSync"]> {
+  explorer ??= cosmiconfigModule().cosmiconfigSync(MX_CONFIG_MODULE, {
     searchPlaces: [...MX_CONFIG_SEARCH_PLACES],
     loaders: {
       ...LOADERS,
       // `package.json` takes `.json`'s loader in cosmiconfig; route it to the
       // shared read by name.
-      ".json": (filepath, content) =>
+      ".json": (filepath: string, content: string) =>
         basename(filepath) === "package.json"
           ? loadPackageJson(filepath, content)
           : loadJson(filepath, content),
@@ -859,7 +901,7 @@ export function findMxConfig(fromDir: string): MxConfigSource | undefined {
     const format = formatOf(filepath);
     let loaded: { config: unknown } | null;
     try {
-      loaded = getExplorer().load(filepath);
+      loaded = getExplorer().load(filepath) as { config: unknown } | null;
     } catch (cause) {
       // cosmiconfig throws for what it validates itself: a bad `$import`.
       const previous = loads.get(filepath);

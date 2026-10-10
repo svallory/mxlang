@@ -1,4 +1,5 @@
-import { type ParserOptions, parse } from "@babel/parser";
+import type { ParserOptions } from "@babel/parser";
+import { coreParser } from "./babel.ts";
 import {
   bodyChildren,
   type Ctx,
@@ -146,12 +147,15 @@ function parseAuthoredSource(
       : {}),
   };
   try {
-    return parse(source, {
+    return coreParser().parse(source, {
       ...position,
       plugins: [...MARKO_PLUGINS, "jsx"],
     });
   } catch {
-    return parse(source, { ...position, plugins: [...MARKO_PLUGINS] });
+    return coreParser().parse(source, {
+      ...position,
+      plugins: [...MARKO_PLUGINS],
+    });
   }
 }
 

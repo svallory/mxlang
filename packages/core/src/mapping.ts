@@ -1,4 +1,4 @@
-import { parseExpression } from "@babel/parser";
+import { type Babel, coreParser } from "./babel.ts";
 import type { Expr } from "./ir.ts";
 
 /**
@@ -120,9 +120,9 @@ export function mappedRewrite(
  * is not one function expression.
  */
 function printedBodyStart(code: string): number | null {
-  let fn: ReturnType<typeof parseExpression>;
+  let fn: ReturnType<Babel["parseExpression"]>;
   try {
-    fn = parseExpression(code, { plugins: ["typescript"] });
+    fn = coreParser().parseExpression(code, { plugins: ["typescript"] });
   } catch {
     return null;
   }

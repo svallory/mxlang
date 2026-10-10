@@ -25,7 +25,6 @@
 
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { parse as babelParse, type ParserPlugin } from "@babel/parser";
 // Type-only and erased from the emitted .d.ts: the internal signatures take
 // the MX AST; the published ones keep `Node` until PR 5 (decision 158 PR 4
 // slice 6 ruling B), since `@mxlang/babel` is private.
@@ -46,7 +45,7 @@ import {
   fallbackAttrTagShape,
   unifyNestedAttrTagPlanGroups,
 } from "./attr-tag.ts";
-import { coreBabel } from "./babel.ts";
+import { coreBabel, coreParser } from "./babel.ts";
 import { BUILTIN_CUSTOM_TAGS } from "./builtin-tags.ts";
 import {
   type AttrTagDecl,
@@ -3084,10 +3083,10 @@ function firstJsxStart(
 ): { line: number; column: number } | undefined {
   const parseWithJsx = (text: string): Node =>
     // Marko's slim Babel has no `jsx` plugin; core's own `@babel/parser` does.
-    babelParse(text, {
+    coreParser().parse(text, {
       sourceType: "module",
       allowReturnOutsideFunction: true,
-      plugins: [...options.plugins, "jsx"] as ParserPlugin[],
+      plugins: [...options.plugins, "jsx"],
     });
   let file: Node;
   try {

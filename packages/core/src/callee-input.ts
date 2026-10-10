@@ -30,7 +30,7 @@ import {
   isAbsolute,
   resolve as resolvePath,
 } from "node:path";
-import { parse } from "@babel/parser";
+import { coreParser } from "./babel.ts";
 import { CALLEE_INPUT_ERROR } from "./callee-input-error.ts";
 import type { Ctx, Node } from "./core.ts";
 import type { ComponentTarget } from "./ir.ts";
@@ -1995,7 +1995,7 @@ function containsAttrTag(value: unknown): boolean {
  * scraped out of TSX text, so offsets and syntax are the callee's real AST.
  */
 function parseDeclarationModule(code: string, _file: string): Node[] {
-  return parse(code, {
+  return coreParser().parse(code, {
     sourceType: "module",
     plugins: ["typescript", "jsx"],
   }).program.body as Node[];
