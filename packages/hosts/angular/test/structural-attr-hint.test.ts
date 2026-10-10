@@ -37,10 +37,16 @@ function stripAnsi(text: string): string {
   return text.replace(ANSI, "");
 }
 
+/**
+ * A host with nothing but the file-kind segments routing reads before the
+ * parse; the parse fails before anything else is read.
+ */
+const BARE_HOST = { targets: { moduleSegments: () => [] } } as never;
+
 /** The message core raises for `source` with no hint in the way. */
 function unhinted(source: string, filename: string): string {
   try {
-    compileSource(source, filename, {} as never, {} as never);
+    compileSource(source, filename, {} as never, BARE_HOST);
   } catch (error) {
     return (error as Error).message;
   }
@@ -436,7 +442,7 @@ describe("a file with several failures", () => {
 
   it("leaves the unrelated member byte-identical to Marko's", () => {
     const plain = members(() =>
-      compileSource(source, "/p/x.mx", {} as never, {} as never),
+      compileSource(source, "/p/x.mx", {} as never, BARE_HOST),
     );
     const hinted = members(() => compile(source, "/p/x.mx"));
     expect(hinted).toHaveLength(3);
@@ -574,7 +580,7 @@ describe("a quote that never closes is not a tag prefix", () => {
       expect(message).not.toContain("cannot follow");
       // Byte-for-byte what core gives without the hint.
       const plain = thrown(() =>
-        compileSource(source, "t.mx", {} as never, {} as never),
+        compileSource(source, "t.mx", {} as never, BARE_HOST),
       ).message;
       expect(message).toBe(plain);
     });
