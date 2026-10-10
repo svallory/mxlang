@@ -521,3 +521,18 @@ The stub is `export default` of an `any`, plus `Input` and every `export`ed name
 ## Handler typing on the shared JSX hosts (decision 140)
 
 `mx-language.ts`'s `compileMxVirtual` passes `typeCheck: true` to `compilePreactMx`/`compileReactMx`/`compileHonoMx`, so the virtual code (never the build output) wraps native event handlers as `(fn) satisfies Handler<"tag", "event">`, a type-only form that TypeScript erases on emit — `mx-tsc` emits JavaScript from this same projection, so no helper value or call may ever appear in it (`jsx-handler-emit.test.ts` emits and runs each host). The host's handler type is looked up case-insensitively in its `JSX.IntrinsicElements`; an unknown prop, custom element or dynamic tag is unchecked. A shorthand handler has no source span of its own, so its generated function maps onto the attribute name and errors inside its body land on that name. `mx-tsc` tests: `packages/tooling/tsc/src/jsx-handler-typing.test.ts` (shared sources in `src/fixtures/handler-typing`, one throwaway project per host).
+
+## Dialect files are check-only
+
+`createDialectLanguagePlugin(typescript, extensions)` (`src/dialect-language.ts`) is
+the first language plugin, so a dialect's `.probe.mx` is the dialect's and not
+an MX file. It claims a file when its name ends in one of the extensions the
+project's dialects claim and `isDialectFile` agrees (`@mxlang/targets/dialect-check`,
+which also owns the check). Its virtual code is an empty module (`export {};`)
+carrying `MxCompileDiagnostic`s from `checkDialectFile`, i.e. `lowerSource`
+under the dialect's own `tagRules`; `diagnosticSource` is the dialect's `name`
+and `diagnosticCode` its code, which `withSyntaxDiagnostics` reports as the
+diagnostic's `source` and `code` (tsserver forwards a string `code` as it is).
+`getExternalFiles` lets dialect files through. Extensions are fixed when the
+plugin is created, so the project's directory is read then (`dialectFileExtensions`).
+No file other than a dialect's changes. Pins: `src/dialect-files.test.ts`.

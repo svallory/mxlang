@@ -216,3 +216,14 @@ watcher scheduling does not bypass the runtime's export cache.
 **Code frame in `data`.** Babel/Marko errors arrive as `\n    at <path>:L:C\n    > 1 | <src>\n        | ^^^ <text>\n      2 | ...`. `diagnose.ts`'s `splitCodeFrame` keeps only `<text>` (the caret line's text) as the diagnostic `message` and puts the ANSI-stripped frame, dedented to its `> 1 |` marker, in `data.codeFrame` (decision: audit item 21, an agent pays per token). No frame, or a caret line with no text, leaves the message untouched with no `data`. Not `relatedInformation`: VS Code would render a repeat of the message. The unknown-host parity test compares `data.codeFrame` with `mx-tsc`'s frame and the compact text with `mx-tsc`'s caret line. Because the `at <path>` line is dropped, the file-URI tests assert absence of `file:`/`../` leaks rather than the path.
 
 **Callee parse errors.** Core converts a callee template's Marko parse error to a `TranslateError` with `file`, `line` and `column` measured in that template. The server publishes it on the template URI even when only the caller is open, moves its frame to `data.codeFrame`, and leaves a caller pointer at 1:1 with `(in <abs>:L:C)` (printed positions 1-based) and `relatedInformation` at the real range. `splitCodeFrame` retains its `at`-header fallback for legacy wrapped errors without `file`. A callee with several Marko parser errors is one error whose message carries one frame each; the published message names only the first frame's reason, so it ends with `(+N more)` when the frame holds N further ones — on the callee diagnostic, its `relatedInformation`, and the caller pointer alike. The stdio regression in `server.test.ts` uses a real discovered child with an unclosed `<div>` on line 3 and, in its aggregate case, `<div a=(x +)/>\n<span>`.
+
+## Dialect files
+
+`diagnoseDocument` checks a dialect's file before anything else: `checkDialectFile`
+(`@mxlang/targets/dialect-check`) runs `lowerSource` under the dialect's `tagRules`, and each
+diagnostic is published with `source` the dialect's `name` (`mxlang` when no
+dialect could be routed) and `code` the dialect's code. The host policy, the
+tag scan and every target are not involved. `isMxDocument` accepts a document
+whose path is a dialect file (`isDialectFile`), so the server opens it without
+an `.mx` suffix or a language id. Pins: `diagnose.test.ts` ("a dialect's files")
+and the stdio test in `server.test.ts`.

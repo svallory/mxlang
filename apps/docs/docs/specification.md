@@ -462,8 +462,7 @@ hyphen — see **Text lines (`--`)** below for the `--` rule, and **A bare
 Inherited from Marko under the subset rule: no MX decision fixes this. Concise
 blocks are exercised in MX source by the landing page's example
 (`apps/docs/example/home-example.mx`, compiled on the html target and rendered
-by every docs build) and by the `data-check` violation fixture
-(`packages/tooling/tsc/src/fixtures/host-dispatch/data-check/violation.mx`).
+by every docs build).
 Every rule in this section was read off
 htmljs-parser's `CONCISE_HTML_CONTENT`/`HTML_CONTENT` states by compiling the
 snippets above and their variants on the html target; the behaviour is the
@@ -1137,8 +1136,9 @@ Marko oracle are unchanged. Recorded in `divergences.md`.
   without a registry (the html and hono Bun loaders, the Astro Vite template
   plugin, Angular `build()`); the Vite plugin aborts the build on it, like any
   other policy error, and the other tools compile with the built-in meanwhile.
-- **No tool checks a dialect file yet** (§13.7); `lowerSource` takes the
-  unnamed tag from its `defaultTag` option.
+- **A dialect's file has no project `defaultTag`.** The tools check it with
+  `lowerSource` (§13.7), which takes the unnamed tag from its own `defaultTag`
+  option, and they pass none.
 
 ### `class:foo` / `style:foo` modifiers
 
@@ -3453,9 +3453,8 @@ first failing field), and two set rules join the reasons above, reported as
 
 Core names no target: any target can be built on any other. A check that
 belongs to a target keys on the project's base target, never on its
-`mx.target` string: the base target's `defaultTag` key (§4's ladder, rung 2),
-and the dialect check that replaces `mx-tsc`'s data check (TODO
-`dialect-check`). **Declare `builtOn` to inherit the base
+`mx.target` string: the base target's `defaultTag` key (§4's ladder, rung 2).
+**Declare `builtOn` to inherit the base
 target's config checks**: a descriptor that copies another target's
 declarations without it gets none of them.
 
@@ -3511,12 +3510,11 @@ A loaded host's name is a valid `mx.tags[].hosts` value for files compiled under
 that target, and its `mx.tags` entries filter by it; no unknown-host warning
 fires for it.
 
-**`mx.target: "tree"` is removed (decision 204).** The tree target and its
+**`mx.target: "tree"` is not a target (decision 204).** The tree target and its
 package, `@mxlang/data`, are deleted; a program that reads the tree calls
-`lowerSource` (§13.7). An explicit `mx.target: "tree"` is a positioned error
-raised by the registry wrapper, never by core, at the key's value (code
-`unknown-target`):
-`mx.target "tree" was removed (decision 204); a consumer that reads the tree calls lowerSource from @mxlang/core`.
+`lowerSource` (§13.7). An explicit `mx.target: "tree"` is the ordinary
+`unknown-target` error at the key's value, which lists the valid targets:
+`unknown mx.target "tree"; valid targets: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template. Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned.`
 The language server, the TypeScript plugin and `mx-tsc` report it as a policy
 error and the Vite plugin fails the transform with it. The tools hand on the
 same fallback as any `unknown-target` (rule 5, else `html`), so later
@@ -3576,13 +3574,22 @@ a **dialect** (a program that gives tags its own meaning, such as Mesh) walks
 the IR and decides what each tag means. Both are `@unstable`.
 
 The tree target (`@mxlang/data`, `parseData`, the `Data*` tree types,
-`mx.target: "tree"`) is removed. `mx.target: "tree"` is a positioned error in
-every tool: ``mx.target "tree" was removed (decision 204); a consumer that reads the tree calls lowerSource from @mxlang/core``.
-The name `data` stays reserved (decision 187).
+`mx.target: "tree"`) is removed. `mx.target: "tree"` is the ordinary
+unknown-target error in every tool (§4). The name `data` stays reserved
+(decision 187).
 
-**Tooling status.** No tool checks a dialect file: `mx-tsc`'s data-package
-check (decision 131 addendum 4) went with the target, and the dialect check
-that replaces it is not part of this release (TODO `dialect-check`).
+**Tooling.** The tools treat a dialect's files as check-only. `mx-tsc`, the
+language server and the TypeScript plugin route a file to its dialect
+(§13.9.2), run `lowerSource` on it under the dialect's syntax and tag rules
+(`tagRules`), and report its diagnostics with `source` set to the dialect's
+`name` (`mxlang` for a file no dialect routes) and `code` set to the code the
+dialect gave. `mx-tsc` prints that code in place of `TS<number>`. No
+JavaScript is generated for a dialect's file. Building a file calls its
+dialect's emit, and the Vite plugin, which builds, refuses to import a dialect
+file when its dialect registers none: an error at the head of the file,
+`<dialect name> files cannot be imported: the dialect registers no emit`. A
+dialect file that does not check clean reports its first error instead. A
+dialect's emit is its own business: no tool picks a target for its files.
 
 #### 13.7.1 `lowerSource`
 
@@ -4186,11 +4193,10 @@ the file routes to) under the dialect's preset in place of the host's tag rules,
 with no native elements under `none`; `lowerSource` does the same when its call
 states no `tagRules` option, and a `tagRules` option it states wins.
 
-**A dialect owns its targets** (ruling 211; decision 212 item 1). Building a
-file calls its dialect's emit. Core is dialect zero, and its emit is where MX's
-targets live. A dialect that registers no emit is check-only (decision 204): its
-files are checked and build nothing. The module shape above has no emit field,
-so every loaded dialect is check-only.
+**A dialect owns its emit.** Building a file calls its dialect's emit, so a
+dialect's files are built by the dialect and by nothing else; no tool picks a
+target for them. The tools check a dialect's files and generate nothing for
+them (§13.7).
 
 **A `{ call }` trigger needs the dialect's `lowerTrigger`.** A loaded dialect
 whose table has one and no hook is an error in the module file at 1:0: ``

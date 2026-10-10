@@ -51,6 +51,20 @@ Beyond the registry it adds:
   full entry (`compile`, `compileFile`, `policy`, …). It stays a subpath because
   that entry reaches the compiler, and the main entry must load none.
 
+- `@mxlang/targets/dialect-check` (`src/dialect-check.ts`): what every tool
+  does with a dialect's files, in one place so the tools cannot disagree.
+  `isDialectFile`/`dialectOf`/`dialectExtensions(dir)` recognise them (through
+  core's `routeDialect`, `discoverDialects` and `mx.extensions`), and
+  `checkDialectFile(path, text)` runs `lowerSource` on one (so the dialect's
+  `tagRules` apply) and returns `{ source, diagnostics }`: `source` is the
+  dialect's `name` (`mxlang` for a file whose extension a project hands to
+  dialects but routing cannot settle), each diagnostic carries the dialect's
+  `code`, and an error measured in another file (the dialect's manifest) sits
+  at 1:0 and says where it is. It returns `undefined` for every other file,
+  which is how a tool leaves a non-dialect `.mx` byte for byte alone. A
+  subpath, not the main entry: it reaches `lowerSource`, the main entry stays
+  light. Tests use `test-fixtures/dialects/probe.ts`.
+
 `@mxlang/data`, the former tree target, was deleted by decision 204; its
 replacement is core's `lowerSource`. The package stays private 0.0.0 with `src` entry points; making it
 publishable is release track C. `src/umbrella.test.ts` pins the export map and

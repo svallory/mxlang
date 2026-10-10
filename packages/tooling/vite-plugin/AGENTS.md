@@ -369,3 +369,18 @@ integration) — kept as a mirror since the two call sites' surrounding error
 shapes (`TranslateError` vs. `AstroTemplateError`) differ enough that
 sharing would need a third parameter or a generic, for one four-line
 function.
+
+## Dialect files are refused, not built
+
+A dialect's file (`@mxlang/targets/dialect-check`'s `isDialectFile`: its
+extension is claimed by a dialect the project uses, `.probe.mx` included) is
+never compiled here. Building a file calls its dialect's emit and no dialect
+registers one, so `dialectFileRefusal` throws, positioned at the head of the
+file (`id`, `loc` 1:0, `frame`): `<dialect name> files cannot be imported: the
+dialect registers no emit`. A file that does not check clean reports its first
+error instead, at its own position. The refusal is in `resolveId` (after
+resolution, for an `.mx`-ending file; before the extension test for a
+dialect-owned extension such as `.probe`, which `claimedByDialect` finds per
+importer directory, cached per build) and in `transform` (an entry or a
+hand-built id). `?raw`, `?url` and the workers stay Vite's. The check loads
+lazily (`loadDialectCheck`), like the registry. Pins: `dialect-files.test.ts`.

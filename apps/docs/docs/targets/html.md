@@ -20,8 +20,8 @@ is a positioned `target-host-mismatch` error (decisions 129/132;
 
 HTML is the only hostless target. A program that reads the markup as a tree
 calls `lowerSource` from `@mxlang/core` instead; see
-[the core IR entry point](/architecture/ir-entry/). `mx.target: "tree"` is an
-error (decision 204).
+[the core IR entry point](/architecture/ir-entry/). `mx.target: "tree"` is the
+ordinary unknown-target error.
 
 ## Attribute-tag values
 

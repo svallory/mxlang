@@ -2224,7 +2224,7 @@ exercise a section:
 | E10 statement tags | `patches/htmljs-parser.test.ts` (`statement tags`); htmljs fixtures `statement-concise-only`, `statement-root-only` |
 | E11 scriptlets | htmljs fixtures `scriptlet-*` |
 | E12 delimited blocks | htmljs fixtures `double-hyphen-*`, `multiline-html-block*`, `single-line-text-block*`, `concise-contentplaceholder-start` |
-| Concise mode, mixed mode | `apps/docs/example/home-example.mx`; `packages/tooling/tsc/src/fixtures/host-dispatch/data-check/violation.mx`; htmljs fixtures `semicolon-concise`, `mixed-*`, `open-tag-comments*` |
+| Concise mode, mixed mode | `apps/docs/example/home-example.mx`; htmljs fixtures `semicolon-concise`, `mixed-*`, `open-tag-comments*` |
 | Whitespace (consumer level) | `test-fixtures/body-whitespace/cases.json` |
 | Text, comments, doctype | `packages/targets/html/fixtures-marko/{doctype-page,comments-and-html-comment,html-comment-placeholder,elements-text,piped-text}`; htmljs fixture `dtd` |
 | Attribute tags | `packages/targets/html/fixtures-marko/attribute-tags*` |
