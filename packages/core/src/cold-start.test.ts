@@ -43,7 +43,7 @@ function loadedRequests(log: string): string[] {
 }
 
 /** Runs `import(dist); lowerSource(plain)` in a fresh Node, returns the requests `Module._load` saw. */
-function probe(entry: string, lower: boolean): string[] {
+function probe(entry: string, mode: "import" | "plain" | "dialect"): string[] {
   const dir = mkdtempSync(join(tmpdir(), "mx-cold-start-"));
   try {
     const log = join(dir, "loads.txt");
@@ -70,11 +70,29 @@ Module._load = function (request) {
       "}" +
       "'" +
       " expression</div>";
+    // A non-default table (one `&`-member expression trigger, a built-in
+    // node kind, never used by the source), so resolving the dialect
+    // validates it — the path that must not load `marko-frontend.cjs`.
+    const member = {
+      id: "member",
+      chars: "&",
+      match: "&[a-zA-Z_$][a-zA-Z0-9_$]*",
+      standIn: "identifier",
+      node: "identifier",
+    };
+    const dialect = JSON.stringify({
+      id: "probe",
+      name: "Probe",
+      table: { expressionTriggers: [member] },
+      tagRules: "none",
+    });
+    const options =
+      mode === "dialect" ? `{ dialect: ${dialect}, tagRules: "none" }` : "{}";
     writeFileSync(
       probe,
       `const core = await import(${JSON.stringify(entry)});
-if (${JSON.stringify(lower)}) {
-  const result = core.lowerSource(${JSON.stringify(plain)}, "probe.mx");
+if (${JSON.stringify(mode !== "import")}) {
+  const result = core.lowerSource(${JSON.stringify(plain)}, "probe.mx", ${options});
   if (result.ir === undefined) {
     throw new Error("lowerSource failed: " + JSON.stringify(result.diagnostics));
   }
@@ -138,7 +156,7 @@ describe("cold start: the built dist loads the heavy dependencies lazily", () =>
       // lines are checked directly: every external import is a failure.
       expect(staticImportsOfDist()).toEqual([]);
       // And nothing may be required on import alone.
-      for (const request of probe(dist, false)) {
+      for (const request of probe(dist, "import")) {
         expect(
           request.startsWith("@babel/") || request === "cosmiconfig",
           `${request} loaded on import`,
@@ -150,7 +168,7 @@ describe("cold start: the built dist loads the heavy dependencies lazily", () =>
   it.skipIf(!existsSync(dist))(
     "lowering a plain file still loads no cosmiconfig",
     () => {
-      const requests = probe(dist, true);
+      const requests = probe(dist, "plain");
       // `@babel/core` (traverse/types), `@babel/parser` and the TS strip
       // plugin are the lowering path's own cost — the strip runs for every
       // payload, TypeScript or not (it is not a no-op on TS-free programs).

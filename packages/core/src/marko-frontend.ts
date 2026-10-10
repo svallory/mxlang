@@ -38,6 +38,13 @@
  */
 
 import { createRequire } from "node:module";
+// The template parser entry, under the `./lexer` export so its curated
+// `public.d.ts` types (not the parser's own sources, which are written under
+// a different compiler flag set) are what core's program sees; the runtime
+// module is `src/template/index.ts` either way. A static import, so the dist
+// build inlines it into `index.js` instead of leaving a `createRequire` call
+// the bundler cannot follow.
+import * as templateParser from "@mxlang/parser/lexer";
 import type { Node } from "./core.ts";
 import type { SyntaxDiagnostic, SyntaxTable } from "./syntax-table.ts";
 
@@ -78,8 +85,6 @@ export interface MarkoBabel {
 interface Frontend {
   compiler: MarkoCompiler;
   babel: MarkoBabel;
-  /** MX's template parser: `build/frontend.ts` resolves `htmljs-parser` to it. */
-  htmljsParser: unknown;
 }
 
 const require = createRequire(import.meta.url);
@@ -120,18 +125,23 @@ export function markoBabel(): MarkoBabel {
 /**
  * MX's own template parser with its syntax-table API (decision 182):
  * `createParser(handlers, { syntax })`, `validateSyntaxTable`,
- * `DEFAULT_SYNTAX`. In the dist it is the bundle's parser, which is
- * `packages/parser/src/template` already; from source it is that workspace
- * package (a devDependency), loaded by `require`, so no parser source enters
- * core's type program and the published `.d.ts` never names it. Never
- * Marko's parser from source: that is the patched npm `htmljs-parser`, which
- * has no syntax table.
+ * `DEFAULT_SYNTAX`. Always `@mxlang/parser` (a devDependency, loaded by
+ * `require`, so no parser source enters core's type program and the
+ * published `.d.ts` never names it): in the dist the bundler inlines it into
+ * `index.js`, so validating a dialect's table must not load the whole
+ * `marko-frontend.cjs` bundle (the cold-start work — a dialect's first
+ * `lowerSource` paid ~50 ms for it; `syntax-table.ts` is the only caller
+ * and `validateSyntaxTable` is a pure validator, so it shares no state
+ * with the compiler's own parser in the bundle). Never Marko's parser from
+ * source: that is the patched npm `htmljs-parser`, which has no syntax
+ * table.
  */
 export function mxTemplateParser(): MxTemplateParser {
-  return typeof MX_MARKO_FRONTEND === "string"
-    ? (bundledFrontend(MX_MARKO_FRONTEND)
-        .htmljsParser as unknown as MxTemplateParser)
-    : (require("@mxlang/parser") as MxTemplateParser);
+  // SAFETY: the `./lexer` module is `src/template/index.ts`, whose runtime
+  // exports are exactly the syntax-table API `MxTemplateParser` declares; the
+  // cast exists only because core typechecks against the curated `public.d.ts`,
+  // which the syntax-table members have not been added to.
+  return templateParser as unknown as MxTemplateParser;
 }
 
 /** The slice of the MX template parser's entry that core uses (decision 182). */
