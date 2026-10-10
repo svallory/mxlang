@@ -208,7 +208,7 @@ const FAILURES = [
     code: "target-invalid-descriptor",
     at: [3, 15, 18],
     message:
-      'mx.target "@fake/mx-version" targets descriptor version 1; this mx supports 0.',
+      'mx.target "@fake/mx-version" targets descriptor version 1; this compiler supports descriptor version 0.',
   },
   {
     name: "hostless-under-mx-host",
