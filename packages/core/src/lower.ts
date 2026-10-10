@@ -2547,14 +2547,14 @@ function rejectMarkoImportTag(
 
 /**
  * Whether `name` is one of Marko's core taglib tags (`<debug>`, `<log>`, ...):
- * by the lookup's id when the table registered the full core taglib (only the
- * html target's does), else by the core taglib's own name set - so every
- * target judges the same set. Stock Marko lets a core tag win over a
+ * by the tag table's id when it registered the full core taglib (only the
+ * html target's table does), else by the core taglib's own name set - so
+ * every target judges the same set. Stock Marko lets a core tag win over a
  * same-named lowercase import, so the local-variable rule must not fire for
  * one.
  */
 function isCoreTaglibTag(ctx: Ctx, name: string): boolean {
-  if (ctx.lookup?.getTag(name)?.taglibId === CORE_TAGLIB_ID) return true;
+  if (ctx.tagTable?.getTag(name)?.taglibId === CORE_TAGLIB_ID) return true;
   return CORE_TAG_NAMES.has(name);
 }
 
@@ -2778,9 +2778,11 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
 }
 
 /**
- * Registers every PascalCase name a `static` block's own top-level
- * declarations bind, classifying each by whether its value is statically
- * provable function/arrow/class (local extension of decision 116). Mirrors
+ * Registers every name a `static` block's own top-level declarations bind —
+ * a plain identifier or any identifier a destructuring pattern binds — in
+ * `ctx.staticBindings`, and every *capitalized* plain-identifier one in
+ * `ctx.imports` too, classified by whether its value is statically provable
+ * function/arrow/class (local extension of decision 116). Mirrors
  * `lowerStatement`'s `import` branch, which does the equivalent for an
  * `import` line, except `static` may declare several statements
  * (`static { const A = 1; function B(){} }`-style bodies are not MX's
@@ -2788,10 +2790,15 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
  * `static function Foo(){}` both are), so every top-level statement in the
  * parsed block is walked rather than assuming one declaration.
  *
- * Only a capitalized binding is registered: a lowercase `static const x = 1`
- * is never resolved as a component tag (decision 116's own casing gate,
- * `fileLocalBinding`'s `/^[A-Z]/` test), so classifying it would be dead
- * weight no caller reads.
+ * A lowercase name joins `staticBindings` only: it is never resolved as a
+ * component tag (decision 116's own casing gate, `fileLocalBinding`'s
+ * `/^[A-Z]/` test), so `imports` would be dead weight no caller reads — but
+ * the lowercase-tag rule needs it, because Marko raises its local-variable
+ * error for a lowercase `static const layout` used as `<layout/>` (measured
+ * on the stock parser, `@marko/compiler` 5.42.11 / `marko` 6.4.4). A
+ * destructured name never joins `imports` even when capitalized: its value
+ * is a member of the initializer, not the initializer itself, and no caller
+ * has asked for that classification.
  */
 function registerStaticBindings(ctx: Ctx, code: string): void {
   let file: { program: { body: Node[] } };
@@ -2818,8 +2825,13 @@ function registerStaticBindings(ctx: Ctx, code: string): void {
     }
     if (statement.type === "VariableDeclaration") {
       for (const declarator of statement.declarations as Node[]) {
-        if (declarator.id?.type !== "Identifier") continue;
-        const bound = declarator.id.name as string;
+        const names = boundNamesOf(declarator.id);
+        if (declarator.id?.type !== "Identifier") {
+          for (const bound of names) ctx.staticBindings.add(bound);
+          continue;
+        }
+        const bound = names[0];
+        if (bound === undefined) continue;
         ctx.staticBindings.add(bound);
         if (!/^[A-Z]/.test(bound)) continue;
         ctx.imports.add(bound);
@@ -2829,6 +2841,37 @@ function registerStaticBindings(ctx: Ctx, code: string): void {
       }
     }
   }
+}
+
+/**
+ * Every identifier a declaration pattern binds: a plain identifier, or each
+ * identifier an object/array destructuring pattern reaches, through rests,
+ * defaults and nested patterns.
+ */
+function boundNamesOf(pattern: Node | null | undefined): string[] {
+  if (!pattern || typeof pattern !== "object") return [];
+  if (pattern.type === "Identifier") return [pattern.name as string];
+  if (pattern.type === "ObjectPattern") {
+    const out: string[] = [];
+    for (const property of (pattern.properties ?? []) as Node[]) {
+      if (property.type === "RestElement") {
+        out.push(...boundNamesOf(property.argument));
+      } else {
+        out.push(...boundNamesOf(property.value));
+      }
+    }
+    return out;
+  }
+  if (pattern.type === "ArrayPattern") {
+    const out: string[] = [];
+    for (const element of (pattern.elements ?? []) as (Node | null)[]) {
+      out.push(...boundNamesOf(element ?? undefined));
+    }
+    return out;
+  }
+  if (pattern.type === "RestElement") return boundNamesOf(pattern.argument);
+  if (pattern.type === "AssignmentPattern") return boundNamesOf(pattern.left);
+  return [];
 }
 
 /**
@@ -3125,6 +3168,14 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
     return { kind: "InputInterface", code: line, loc, end, span };
   }
   if (name === "export") {
+    // The declaration after `export` binds names the same way a `static`
+    // one does (`export const layout = 1` + `<layout/>` is Marko's
+    // local-variable error, measured on the stock parser). `export
+    // interface Input` returned above; an `export type`/`interface` strips
+    // to a declaration `registerStaticBindings` does not walk, and an
+    // `export type { … }`/`export default <expr>` does not parse as one, so
+    // type-only exports register nothing.
+    registerStaticBindings(ctx, line.replace(/^export\s+/, ""));
     return { kind: "Export", code: line, loc, end, span };
   }
   fail(
@@ -4327,7 +4378,12 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       node,
     );
   }
-  if (tagBinding) warnLowercaseBinding(ctx, node, name);
+  // A core taglib name (`<log>`, `<debug>`) is not "the native element" the
+  // warning claims - it only reached the element path because the target
+  // does not implement the tag - so it stays silent instead.
+  if (tagBinding && !isCoreTaglibTag(ctx, name)) {
+    warnLowercaseBinding(ctx, node, name);
+  }
 
   const body = bodyChildren(node);
   // Hybrid: check BOTH Marko field AND MX body children for attribute tags

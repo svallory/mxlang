@@ -603,7 +603,10 @@ import. The check runs in core, once, before any host's `isComponent` or
 unknown-tag path, and applies to a lowercase tag `<x>` whose name equals a
 **local binding of any kind** — a `<define>` in scope, a default or named
 import, a tag module or a `.ts` value, a `<const>`, a `<for>`/`<define>` tag
-param, a `static` declaration. That is Marko's own rule for a local variable
+param, a `static` declaration (a plain name or any name a destructuring
+pattern binds), or an `export const`/`function`/`class` declaration (type
+exports and `export interface` bind nothing). That is Marko's own rule for a
+local variable
 (measured on the stock parser: the message and position are identical for a
 tag import, a value import, a `static const` local, a `<const>` and a `<for>`
 param; a use *before* the `import`/`static` statement is not covered —

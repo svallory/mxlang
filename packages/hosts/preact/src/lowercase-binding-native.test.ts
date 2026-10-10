@@ -105,7 +105,26 @@ describe("lowercase tag with a same-named binding in scope", () => {
     });
   });
 
-  it("a lowercase `static` declaration is the same Marko error (r3: every local binding)", () => {
+  it("an `export const` and a destructured `static const` bind like every local form", () => {
+    for (const decl of [
+      "export const layout = 1\n",
+      "static const { layout } = { layout: 1 }\n",
+    ]) {
+      let error: unknown;
+      try {
+        compilePreactMx(`${decl}<layout/>` + "", "/fixtures/a.mx");
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error, decl).toMatchObject({
+        message: "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use \`<\${layout}/>\` or rename to \`Layout\`.",
+        line: 2,
+        column: 1,
+      });
+    }
+  });
+
+  it("a lowercase `static` declaration is the same Marko error, like every local binding form", () => {
     let error: unknown;
     try {
       compilePreactMx("static const layout = 1\n<layout/>\n", "/fixtures/a.mx");

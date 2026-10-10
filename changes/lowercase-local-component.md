@@ -8,12 +8,14 @@ every target — same message verbatim, same position (the tag name):
 `Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${layout}/>` or rename to `Layout`.`
 The rule covers every local binding: a default or named `import` (a `.mx`
 tag module or a `.ts` value alike), a lowercase `<define>`, a `<const>`, a
-`<for>`/`<define>` tag param, and a `static` declaration (`static const
-layout = 1` then `<layout/>`). A native-element name stays native (silently
+`<for>`/`<define>` tag param, a `static` declaration (`static const layout
+= 1` then `<layout/>`, plain or destructured), and an `export
+const`/`function`/`class` declaration. A core taglib name (`<debug>`,
+`<log>`) keeps its own routing — as in Marko — even when bound: no error and
+no "native element" warning. A native-element name stays native (silently
 for a value binding, with the existing warning for a tag binding); a
 registered custom tag, a taglib tag or a host claim still wins whatever is
-imported; a core taglib name (`<debug>`, `<log>`) keeps its own routing, as
-in Marko. `_`/`$`-prefixed names follow Marko's message, whose naive
+imported. `_`/`$`-prefixed names follow Marko's message, whose naive
 capitalization offers "rename to `_row`".
 
 Before, the error existed only for a tag binding (a `<define>` or a `.mx`

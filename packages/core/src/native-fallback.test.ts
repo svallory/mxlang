@@ -226,26 +226,26 @@ describe("a lowercase tag naming a local binding", () => {
     }
   });
 
-  // The r3 forms: a `<const>`, a `static` declaration and a `<for>` param are
-  // the same Marko error, at the same tag-name position (stock parser: 2:2,
-  // 2:2, 1:19 1-based), not the unknown-tag path they used to fall to.
+  // Every local binding form raises the same Marko error, at the same
+  // tag-name position (stock parser: 2:2, 2:2, 1:19 1-based), rather
+  // than the unknown-tag path or a silent element.
   it("fails at the tag name for a `<const>`, a `static const` and a `<for>` param", () => {
     const cases: [string, string, string][] = [
-      [
-        "const",
-        '<const/layout="x"/>\n<layout/>\n',
-        "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${layout}/>` or rename to `Layout`.",
-      ],
-      [
-        "static",
+      ["const",
+        "<const/layout=\"x\"/>\n<layout/>\n",
+        "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use \`<\${layout}/>\` or rename to \`Layout\`."],
+      ["static",
         "static const layout = 1\n<layout/>\n",
-        "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${layout}/>` or rename to `Layout`.",
-      ],
-      [
-        "for param",
+        "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use \`<\${layout}/>\` or rename to \`Layout\`."],
+      ["static destructured",
+        "static const { layout } = { layout: 1 }\n<layout/>\n",
+        "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use \`<\${layout}/>\` or rename to \`Layout\`."],
+      ["export const",
+        "export const layout = 1\n<layout/>\n",
+        "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use \`<\${layout}/>\` or rename to \`Layout\`."],
+      ["for param",
         "<for|row| of=[1]><row/></for>\n",
-        "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${row}/>` or rename to `Row`.",
-      ],
+        "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use \`<\${row}/>\` or rename to \`Row\`."],
     ];
     for (const [label, source, message] of cases) {
       let error: unknown;
@@ -262,11 +262,18 @@ describe("a lowercase tag naming a local binding", () => {
     }
   });
 
-  it("a core taglib name bound by an import is exempt: the tag keeps its routing, never the local-variable error", () => {
+  it("a core taglib name bound by an import is exempt: no local-variable error", () => {
     // Stock Marko compiles `import debug from "debug"` + `<debug/>` as the
-    // core `<debug>` tag. The rule must not blame the import.
-    expect(body('import debug from "debug"\n<debug/>\n')).toEqual([
-      { element: "debug", children: [] },
-    ]);
+    // core `<debug>` tag. The rule must not blame the import. What the tag
+    // itself lowers to is each target's own answer (a target that does not
+    // implement the tag falls to its element path), so this asserts only the
+    // absence of the local-variable error.
+    let error: unknown;
+    try {
+      irOf('import debug from "debug"\n<debug/>\n');
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeUndefined();
   });
 });
