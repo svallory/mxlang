@@ -1,6 +1,5 @@
 /**
- * The cached front door to `scanCustomTags`, plus the Marko taglib-lifetime
- * fix the P1 review left to this phase.
+ * The cached front door to `scanCustomTags`.
  *
  * Two caches with different keys, because two different things are expensive:
  *
@@ -13,20 +12,20 @@
  *    entry is *detected*, not merely expired, so an editor that never restarts
  *    still recompiles against the tag an author just saved.
  *
- * 2. **The tag map identity**, keyed on the set of tags a scan produced.
- *    `@marko/compiler` caches its taglib lookups process-wide and never
- *    evicts: `loadedTranslatorsTaglibs` is keyed on the *translator object*
- *    and `lookupCache` on the sorted taglib ids (measured in 5.42.5,
- *    `chunk-src.js`'s `buildLookup`). A long-lived language server compiling
- *    an edited file over and over would therefore add one live entry per
- *    compile. Returning the *same map object* for an unchanged tag set makes
- *    the taglib id — which P1 derives from that set — stable, so the compiler
- *    reuses one lookup instead of accumulating them; and when the set does
- *    change, `evictTaglibCaches` drops the entries the old set left behind.
+ * 2. **The tag map identity**, keyed on the tag files a scan loaded. An
+ *    unchanged tag set hands back the *same map object*, whose `CustomTag`s
+ *    keep the sidecar modules they already loaded, so a long-lived process
+ *    compiling an edited file over and over neither reloads every sidecar
+ *    nor accumulates one map per compile. Only the newest map of a
+ *    parser-facing set (names, origins, `parseOptions`) is kept.
  *
  * Both caches are process-global on purpose. The whole point is that the
  * language server, `mx-tsc` and a Vite dev server each hold one long-lived
  * process; a per-call cache would be no cache at all.
+ *
+ * Until PR 6 slice S3b the map identity also kept `@marko/compiler`'s
+ * process-wide taglib lookup cache from growing, and a changed set evicted
+ * it (`evictTaglibCaches`). Core builds no Marko lookup since S3a.
  */
 
 import { createHash } from "node:crypto";
@@ -34,7 +33,6 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { isTranslateError } from "./core.ts";
 import type { CustomTag } from "./custom-tags.ts";
-import { markoCompiler } from "./marko-frontend.ts";
 import {
   dottedTagFileDiagnostics,
   type ScanDiagnostic,
@@ -71,12 +69,9 @@ const scans = new Map<string, CacheEntry>();
 
 /**
  * Tag maps kept alive by their signature, so an unchanged tag set hands back
- * one object and therefore one Marko taglib id. See the module doc.
+ * one object. See the module doc.
  */
 const maps = new Map<string, Record<string, CustomTag>>();
-
-/** The signature of the tag set the last handed-out map represented. */
-let liveSignature: string | undefined;
 
 function listingOf(dir: string): string {
   try {
@@ -148,11 +143,9 @@ function isFresh(entry: CacheEntry): boolean {
 
 /**
  * The parser-facing identity of a tag set: the names, where each came from,
- * and each one's `parseOptions`.
- *
- * This is what Marko's taglib id is derived from, so two scans agreeing here
- * may share one lookup. It deliberately excludes the sidecars' *contents*,
- * whose hooks are evaluated lazily.
+ * and each one's `parseOptions`: what the tag table reads of it. It
+ * deliberately excludes the sidecars' *contents*, whose hooks are evaluated
+ * lazily.
  */
 function parserSignatureOf(result: ScanResult): string {
   return [...result.tags.keys()]
@@ -170,9 +163,9 @@ function parserSignatureOf(result: ScanResult): string {
  * than reading or hashing the files a second time to build this signature.
  *
  * Two different questions hide behind "is this the same tag set", and
- * conflating them is a real bug rather than a nicety. Marko's taglib only
- * cares about names and parse options, so an edit that changes neither may
- * keep its lookup. But a memoized `CustomTag` also holds the sidecar module
+ * conflating them is a real bug rather than a nicety. The tag table only
+ * reads names and parse options, so an edit that changes neither leaves the
+ * parse alone. But a memoized `CustomTag` also holds the sidecar module
  * it already loaded, so reusing that object after an edit serves the *old*
  * hooks — measured: editing a `transform` changed nothing about the compiled
  * output until this key gained the mtimes. Text hashes also distinguish an
@@ -189,29 +182,11 @@ function loadedSignatureOf(entry: CacheEntry): string {
 }
 
 /**
- * Drops `@marko/compiler`'s taglib caches.
- *
- * Called only when the live tag set actually changes, never per compile: the
- * caches are what make repeated compilation fast, and clearing them on every
- * call would trade one leak for a much larger slowdown.
- */
-export function evictTaglibCaches(): void {
-  try {
-    const { taglib } = markoCompiler();
-    taglib?.clearCaches?.();
-  } catch {
-    // The compiler is a lazy dependency of this package; a caller that never
-    // loaded it has no caches to clear.
-  }
-}
-
-/**
  * Returns the custom tags callable from `filePath`, scanning at most once per
  * directory per filesystem state.
  *
  * The returned map is shared: callers must not mutate it. It is the same
- * object across calls while the tag set is unchanged, which is what keeps
- * Marko's taglib lookup from growing (module doc, point 2).
+ * object across calls while the tag set is unchanged (module doc, point 2).
  */
 export function getCustomTags(
   filePath: string,
@@ -310,19 +285,12 @@ export function scanCached(filePath: string, options: ScanOptions): ScanResult {
   if (existing) {
     result.customTags = existing;
   } else {
-    if (liveSignature !== undefined && liveSignature !== parserSignature) {
-      // The *parser-facing* set changed, so the entries the old one left in
-      // Marko's caches can never be hit again. An edit that changed only a
-      // hook body leaves those entries valid and does not evict them.
-      evictTaglibCaches();
-    }
     // Only one loaded map per parser-facing set is useful: an older one
     // describes files that have since been edited.
     for (const key of maps.keys()) {
       if (key.startsWith(`${parserSignature}\n--\n`)) maps.delete(key);
     }
     maps.set(loadedSignature, result.customTags);
-    liveSignature = parserSignature;
   }
 
   // Do not cache the first caller's dotted-filename wording. Keep the file
@@ -346,7 +314,6 @@ export function scanCached(filePath: string, options: ScanOptions): ScanResult {
 export function clearScanCache(): void {
   scans.clear();
   maps.clear();
-  liveSignature = undefined;
 }
 
 /** Copies of file evidence only, for testing snapshot retention (not public API). */

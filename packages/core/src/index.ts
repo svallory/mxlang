@@ -239,7 +239,6 @@ export {
 } from "./scan.ts";
 export {
   clearScanCache,
-  evictTaglibCaches,
   getCustomTags,
   liveTagMapCount,
   reportScanDiagnostics,

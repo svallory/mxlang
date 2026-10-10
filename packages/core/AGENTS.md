@@ -320,19 +320,14 @@ Five facts worth knowing before editing it:
 - **Programmatic custom tags lower to ordinary IR before a host emits.** Every
   host compiler accepts `customTags: Record<string, CustomTag>`; the core
   validates declared attributes and attribute tags, then calls `transform`.
-  Only `parseOptions.text`/`preserveWhitespace`/`openTagOnly` cross into an
-  injected Marko taglib. Marko caches injected taglibs by id, so the id must
-  remain keyed by the parser-facing definitions or later compilations can
-  reuse the first map. **That cache is never evicted, so the id must not be
-  minted per compile.** Marko's `lookupCache` is keyed on the sorted taglib
-  ids and `loadedTranslatorsTaglibs` on the translator object, and neither
-  drops an entry except through `clearCaches()`; measured, 200 compiles with
-  200 distinct tag sets leave 200 live ids. In a one-shot build that is
-  bounded, but a long-lived language server compiling an edited file over and
-  over grows without limit. **Done in P2** (`packages/core/src/scan-cache.ts`):
-  the cache interns one tag-map object per tag set, so the derived id is
-  stable across compiles, and evicts `taglib.clearCaches()` when the
-  parser-facing set changes. The TypeScript plugin passes the
+  Only `parseOptions.text`/`preserveWhitespace`/`openTagOnly` reach the tag
+  table, as a taglib entry keyed by the parser-facing definitions
+  (`customTagTaglib`). `src/scan-cache.ts` interns one tag-map object per
+  tag set, so an unchanged set hands back the same `CustomTag`s and their
+  loaded sidecars. Until slice S3b that interning also bounded
+  `@marko/compiler`'s never-evicted taglib caches, and a changed
+  parser-facing set evicted them (`evictTaglibCaches`); core has built no
+  Marko lookup since S3a, so S3b deleted the eviction. The TypeScript plugin passes the
   same map to compilation and its
   second lower. `.solid.mx` carries the map across the parser boundary on the
   `mxCustomTags` parser option (`print(source, file, { customTags })`), the
