@@ -13,6 +13,7 @@ import {
   type CompiledTrigger,
   DEFAULT_COMPILED,
   matchTrigger,
+  matchValue,
   standInText,
   type TriggerSet,
 } from "../syntax.ts";
@@ -60,13 +61,14 @@ export interface StateDefinition<P extends Meta = Meta> {
 
 /**
  * MX: the `claim` option of `createParser`. Asked when an attribute or line
- * trigger's row matches, with the row's id, the position and the matched
- * text's range; `undefined` declines (the text lexes as if no row matched),
- * anything else claims it.
+ * trigger's row matches, or a value row matches a whole attribute value,
+ * with the row's id, the position and the matched text's range;
+ * `undefined` declines (the text lexes as if no row matched), anything else
+ * claims it.
  */
 export type TriggerClaim = (
   id: string,
-  position: "attribute" | "line",
+  position: "attribute" | "line" | "value",
   start: number,
   end: number,
 ) => unknown;
@@ -210,6 +212,32 @@ export class Parser {
       this.claims.set(key, claim);
     }
     return claim === undefined ? undefined : { ...hit, claim };
+  }
+
+  /**
+   * MX: the value row claiming `data.slice(start, end)`, a whole attribute
+   * value: the row armed on its first character whose `match` covers all
+   * of it, when its claim takes it. Memoized per range, so the end rule
+   * (`EXPRESSION`) and the value's exit ask once between them.
+   */
+  claimValue(
+    data: string,
+    start: number,
+    end: number,
+  ): { trigger: CompiledTrigger; claim: unknown } | undefined {
+    const set = this.syntax.value;
+    if (set === null) return undefined;
+    const trigger = matchValue(set, data, start, end);
+    if (trigger === undefined) return undefined;
+    if (this.claim === undefined) return { trigger, claim: undefined };
+    const key = `value:${start}:${end}`;
+    let claim: unknown;
+    if (this.claims.has(key)) claim = this.claims.get(key);
+    else {
+      claim = this.claim(trigger.id, "value", start, end);
+      this.claims.set(key, claim);
+    }
+    return claim === undefined ? undefined : { trigger, claim };
   }
 
   /**

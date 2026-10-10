@@ -36,6 +36,13 @@ export declare namespace Ranges {
   }
   interface AttrValue extends Value {
     bound: boolean;
+    /**
+     * The value row that claimed the whole value (`=value` only); absent
+     * when no row claimed it.
+     */
+    trigger?: string;
+    /** What the parser's `claim` answered for that row, when one was given. */
+    claim?: unknown;
   }
   interface AttrMethod extends Range {
     body: Value;
@@ -130,13 +137,14 @@ export declare function createParser(
 ): Lexer;
 
 /**
- * Asked once per matched attribute or line trigger start in one parse: `undefined`
- * declines (the text lexes as if no row matched); anything else claims and
- * is carried on the trigger's event as `claim`.
+ * Asked once per matched attribute or line trigger start, and once per
+ * value a value row matches, in one parse: `undefined` declines (the text
+ * lexes as if no row matched); anything else claims and is carried on the
+ * trigger's or value's event as `claim`.
  */
 export type TriggerClaim = (
   id: string,
-  position: "attribute" | "line",
+  position: "attribute" | "line" | "value",
   start: number,
   end: number,
 ) => unknown;

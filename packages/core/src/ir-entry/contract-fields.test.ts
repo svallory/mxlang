@@ -195,13 +195,20 @@ describe("a module's own contract key", () => {
           if (call.tag !== "index") continue;
           seen.push([call.tag, call.contract.relations]);
           const on = call.attrs.find(
-            (attr) => attr.kind !== "spread" && attr.name === "on",
+            (attr) => !("spread" in attr) && attr.name === "on",
           );
-          if (on?.kind === "atom" && call.contract.attributes?.on?.unique) {
-            unit.fail(`\`:${on.value}\` is not unique`, {
-              at: on.span,
-              code: "MESH_UNIQUE",
-            });
+          const value = on && !("spread" in on) ? on.value : null;
+          if (
+            value?.type === "mx:Atom" &&
+            call.contract.attributes?.on?.unique
+          ) {
+            unit.fail(
+              `\`:${(value as { name: string }).name}\` is not unique`,
+              {
+                at: value.span,
+                code: "MESH_UNIQUE",
+              },
+            );
           }
         }
       },

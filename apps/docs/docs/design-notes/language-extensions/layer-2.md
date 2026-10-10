@@ -49,6 +49,7 @@ Consequences a project accepts by declaring a syntax module:
 | `expressionTriggers` | `:draft` (atoms), `%ui.save`, `Order Total` as one identifier | `lowerTrigger`; stand-in keeps the projection one-to-one |
 | `attributeTriggers` | `:email` sets `name`, spaced `#id` and `.class` | `lowerTrigger` with `node: "attribute"` |
 | `lineTriggers` | `&title`, `&amount=qty * price` at the start of a tagless line | `lowerTrigger` with `{ call }`; the result is a child tag of the enclosing block |
+| `valueTriggers` | `to=~user.name`, `title="Hi"` as a whole attribute value | the named node type's `parse` claims the value (or declines it); its `lower` returns the string or expression the attribute holds |
 | `textTriggers` | `%ui.save` in text | `lowerTrigger`; empty on `.mx`, for languages |
 | `concise` | off | none |
 

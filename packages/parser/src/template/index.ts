@@ -46,10 +46,11 @@ export interface CreateParserOptions {
    */
   syntax?: SyntaxTable;
   /**
-   * MX: asked when an attribute or line trigger's row matches, with the
-   * row's id, the position and the matched text's range. `undefined`
-   * declines: the text lexes as if no row matched. Anything else claims it
-   * and reaches `onTrigger` as `claim`. Asked once per trigger start in one
+   * MX: asked when an attribute or line trigger's row matches, or a value
+   * row matches a whole attribute value, with the row's id, the position
+   * and the matched text's range. `undefined` declines: the text lexes as
+   * if no row matched. Anything else claims it and reaches `onTrigger` (or
+   * `onAttrValue`) as `claim`. Asked once per trigger start in one
    * parse, however often that parse re-lexes the text. Omitted means every match claims.
    */
   claim?: TriggerClaim;

@@ -22,6 +22,7 @@ import type {
   CustomTagAttributeTag,
   CustomTagAttributeTags,
 } from "./custom-tags.ts";
+import type { DialectNode } from "./dialect-registry.ts";
 import type { Attr, AttributeTag } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { hasStaticName, tagNameOf } from "./tag-fields.ts";
@@ -73,34 +74,60 @@ interface ContractAttrBase {
   readonly authored?: string;
 }
 
+/** A string value: written as one, or claimed by a value row naming `mx:String`. @unstable */
+export interface ContractString {
+  readonly type: "mx:String";
+  readonly value: string;
+  /** The value as written: the string with its quotes. */
+  readonly span?: SourceSpan;
+}
+
+/** An expression value, the node as lowered (marks included). @unstable */
+export interface ContractExpression {
+  readonly type: "mx:Expression";
+  /**
+   * The lowered expression node; `null` for one with no source. It is
+   * core's live node, shared with the IR the host emits: read it, never
+   * write it (it is not frozen).
+   */
+  readonly node: object | null;
+  readonly code: string;
+  readonly span?: SourceSpan;
+  /** Written `name:=value`. */
+  readonly bound?: true;
+}
+
 /**
- * One attribute of a call as written: a string, a whole-value atom or member
- * (the kinds a dialect builds with `ctx.attribute`), a bare attribute, an
- * expression (the node as lowered, marks included), a spread. @unstable
+ * A whole-value atom or member reference a dialect built with
+ * `ctx.attribute` (`{ kind: "atom" | "member", name }`). These two keys
+ * leave core with the Mesh dialect's own value nodes. @unstable
+ */
+export interface ContractAtomOrMember {
+  readonly type: "mx:Atom" | "mx:Member";
+  readonly name: string;
+  /** The atom or member token as written. */
+  readonly span?: SourceSpan;
+}
+
+/**
+ * An attribute's value in a contract view: a string, an expression, a
+ * whole-value atom or member, or the node a value row claimed (a dialect's
+ * registered type, frozen, as its `parse` returned it). Read `type` first.
+ * @unstable
+ */
+export type ContractValue =
+  | ContractString
+  | ContractExpression
+  | ContractAtomOrMember
+  | DialectNode;
+
+/**
+ * One attribute of a call as written: its name and its value node, `null`
+ * for a bare attribute (HTML's `true`); or a spread. @unstable
  */
 export type ContractAttr =
-  | (ContractAttrBase & {
-      readonly kind: "string" | "atom" | "member";
-      /** The string, or the atom's or member's name. */
-      readonly value: string;
-      /** The value as written: the string with its quotes, the atom or member token. */
-      readonly span?: SourceSpan;
-    })
-  | (ContractAttrBase & { readonly kind: "boolean" })
-  | (ContractAttrBase & {
-      readonly kind: "expression";
-      /**
-       * The lowered expression node; `null` for one with no source. It is
-       * core's live node, shared with the IR the host emits: read it, never
-       * write it (it is not frozen).
-       */
-      readonly node: object | null;
-      readonly code: string;
-      readonly span?: SourceSpan;
-      /** Written `name:=value`. */
-      readonly bound?: true;
-    })
-  | { readonly kind: "spread"; readonly span?: SourceSpan };
+  | (ContractAttrBase & { readonly value: ContractValue | null })
+  | { readonly spread: true; readonly span?: SourceSpan };
 
 /** An attribute tag of a call, at any depth, with the declaration it matched. @unstable */
 export interface ContractAttributeTag {
@@ -173,7 +200,7 @@ function freezeAll<T>(items: T[]): readonly T[] {
 
 function attrOf(attr: Attr): ContractAttr {
   if (attr.kind === "spread") {
-    return Object.freeze({ kind: "spread" as const, span: attr.value.span });
+    return Object.freeze({ spread: true as const, span: attr.value.span });
   }
   const base = {
     name: attr.name,
@@ -181,39 +208,39 @@ function attrOf(attr: Attr): ContractAttr {
     label: attrLabel(attr),
     ...(attr.sugar !== undefined ? { authored: attr.sugar } : {}),
   };
-  if (attr.kind === "boolean") {
-    return Object.freeze({ ...base, kind: "boolean" as const });
-  }
+  return Object.freeze({ ...base, value: contractValueOf(attr) });
+}
+
+/** The value node of a written attribute (`null` for a bare one). */
+function contractValueOf(
+  attr: Exclude<Attr, { kind: "spread" }>,
+): ContractValue | null {
+  if (attr.kind === "boolean") return null;
   if (attr.kind === "static") {
-    if (attr.atom) {
+    if (attr.atom || attr.member) {
+      const mark = (attr.atom ?? attr.member) as {
+        name: string;
+        span: SourceSpan;
+      };
       return Object.freeze({
-        ...base,
-        kind: "atom" as const,
-        value: attr.atom.name,
-        span: attr.atom.span,
+        type: attr.atom ? ("mx:Atom" as const) : ("mx:Member" as const),
+        name: mark.name,
+        span: mark.span,
       });
     }
-    if (attr.member) {
-      return Object.freeze({
-        ...base,
-        kind: "member" as const,
-        value: attr.member.name,
-        span: attr.member.span,
-      });
-    }
+    // The node a value row claimed, as parsed (frozen).
+    if (attr.node) return attr.node;
     return Object.freeze({
-      ...base,
-      kind: "string" as const,
+      type: "mx:String" as const,
       value: attr.value,
-      span: attr.valueSpan,
+      ...(attr.valueSpan ? { span: attr.valueSpan } : {}),
     });
   }
   return Object.freeze({
-    ...base,
-    kind: "expression" as const,
+    type: "mx:Expression" as const,
     node: attr.value.node ?? null,
     code: attr.value.code,
-    span: attr.value.span,
+    ...(attr.value.span ? { span: attr.value.span } : {}),
     ...(attr.kind === "bound" ? { bound: true as const } : {}),
   });
 }

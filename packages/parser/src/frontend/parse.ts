@@ -75,10 +75,14 @@ export interface ParseOptions extends MxFrontEndOptions {
    */
   readonly tagTypes?: Readonly<Record<string, TagTypeValue>>;
   /**
-   * Asked when an attribute or line trigger's row matches: the row's id,
-   * the position, the matched text's file offsets and, in attribute
-   * position, the static name of the tag whose attribute list holds it
-   * (`null` on a line, or for a dynamic or unnamed tag). Asked once per
+   * Asked when an attribute or line trigger's row matches, or a value row
+   * matches an attribute's whole `=value`: the row's id, the position, the
+   * matched text's file offsets, in attribute and value position the static
+   * name of the tag whose attribute list holds it (`null` on a line, or for
+   * a dynamic or unnamed tag), and in value position the attribute's name
+   * (`null` for a default value and in the other positions). In value
+   * position an object is the attribute's `value`, untouched but for its
+   * `start` and `end`. Asked once per
    * trigger in one parse attempt (a restart for a missed tag name asks
    * again; core memoizes its answers across attempts). `undefined` declines: the text parses as if no row matched.
    * An object claims it: an `MxTrigger`-typed one keeps the front end's own
@@ -94,10 +98,11 @@ export interface ParseOptions extends MxFrontEndOptions {
 /** The `claim` option of `parse` (see {@link ParseOptions.claim}). */
 export type TriggerClaim = (
   rowId: string,
-  position: "attribute" | "line",
+  position: "attribute" | "line" | "value",
   start: number,
   end: number,
   tag: string | null,
+  attribute: string | null,
 ) => object | undefined;
 
 /** A throw out of the caller's `claim`, carried out of the template parser. */
@@ -483,7 +488,7 @@ class FrontEnd {
         ...(claim && {
           claim: (
             id: string,
-            position: "attribute" | "line",
+            position: "attribute" | "line" | "value",
             start: number,
             end: number,
           ) => this.claimAt(claim, id, position, start, end),
@@ -835,13 +840,21 @@ class FrontEnd {
   claimAt(
     claim: TriggerClaim,
     id: string,
-    position: "attribute" | "line",
+    position: "attribute" | "line" | "value",
     start: number,
     end: number,
   ): object | undefined {
     let tag: string | null = null;
+    let attribute: string | null = null;
+    if (position === "value") {
+      // Only an attribute's own `=value` is a value position: a statement's
+      // words and a shorthand's default are not.
+      const current = this.current;
+      if (this.statement || current?.type !== "MxAttribute") return undefined;
+      attribute = typeof current.name === "string" ? current.name : null;
+    }
     const top = this.top;
-    if (position === "attribute" && top && !top._openEnded) {
+    if (position !== "line" && top && !top._openEnded) {
       const name = (top as { name?: { kind?: string; value?: unknown } }).name;
       if (top.type === "MxAttributeTag" && typeof name?.value === "string")
         tag = `@${name.value}`;
@@ -850,7 +863,8 @@ class FrontEnd {
     }
     try {
       return (
-        claim(id, position, this.at(start), this.at(end), tag) ?? undefined
+        claim(id, position, this.at(start), this.at(end), tag, attribute) ??
+        undefined
       );
     } catch (error) {
       throw new ClaimThrow(error);
@@ -1582,6 +1596,18 @@ class FrontEnd {
       current.operator = operator;
       current.value = value;
       current.end = value.end;
+      // A node a value row's claim returned is the value: the container
+      // above took the atoms and triggers announced inside it, and is
+      // dropped. The node keeps its own fields; the front end sets only
+      // its offsets.
+      const claimed = event.claim;
+      if (claimed && typeof claimed === "object") {
+        this.claimedNodes.add(claimed);
+        current.value = Object.assign(claimed as Builder, {
+          start: value.start,
+          end: value.end,
+        });
+      }
     } else {
       current.operator = operator;
       current.default = value;
@@ -1927,7 +1953,10 @@ function freezeCopy(root: unknown, kept: ReadonlySet<object>): Copy {
     ];
     const [from, to] = pair;
     if (from === null || typeof from !== "object") continue;
-    const keys = from === to ? KEPT_FIELDS : Object.keys(from);
+    const keys =
+      from === to
+        ? KEPT_FIELDS.filter((key) => key in from)
+        : Object.keys(from);
     for (const key of keys) {
       const field = from[key];
       if (key.startsWith("_")) continue;

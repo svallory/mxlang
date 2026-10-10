@@ -539,16 +539,19 @@ Five facts worth knowing before editing it:
   without the `Mx` prefix, keys only, lowered directly), and a dialect's
   `nodeTypes` (`{ keys, parse, print, lower }` per PascalCase type; the
   dialect's `id`, always required, never `mx`) follow. A row's `node: { type, dialect }`
-  (attribute and line triggers only; expression position is a table error)
-  names a type core or the loading dialect registers with a `parse`
-  (core registers one only for `mx:Trigger` and `mx:Expression`); any
-  other is the one claim error, "not registered", at load
+  (attribute, line and value triggers; expression position is a table
+  error) names a type core or the loading dialect registers with a `parse`
+  for that position (`CORE_POSITIONS`, `claimsAt`: core registers one only
+  for `mx:Trigger` in attribute and line, `mx:String` in value, and
+  `mx:Expression` everywhere); any other is the one claim error, "not
+  registered" (position-aware: `notRegisteredMessage` lists what a row in
+  that position can name), at load
   (`unregisteredNodeRow`, in the module file or at the option) and in
   `claimNode`. Naming another dialect's types is not supported yet (the
   error says so). **The claim** (`claimNode`, the only place it is
   decided): `parseMx` (`mx-parse.ts`, `nodeClaims`) passes the front end a
-  `claim` option whenever the table has an attribute or line row (never
-  for the default row); at a matching row the template parser asks it once
+  `claim` option whenever the table has an attribute, line or value row
+  (never for the default row); at a matching row the template parser asks it once
   per position and offset in one parse attempt (core's `answers` memo
   covers restarts). `claimNode` calls `parse(text, span, ctx: ClaimContext)`:
   fields are stamped `type`/`span` and placed in the tree by identity (the front end's `freezeCopy` keeps them), frozen
@@ -565,10 +568,22 @@ Five facts worth knowing before editing it:
   `hookFor` dispatches it on `node.type`
   (`nodeTypeHook` calls that type's `lower`, with the same `ctx`
   constructors as `lowerTrigger`; errors name the hook, `` `lower` (node
-  type `ref:Ref`) ``). `ctx.attribute(name, { kind: "node", node, value
-  })` (until slice B) carries the node on the built `MxAttribute`
-  (`dialectNode`), which `lower.ts` reads into the static `Attr.node`;
-  `node` must be the node being lowered. `lowerTriggers` is the one pass
+  type `ref:Ref`) ``). **The value position**: the template parser
+  (`claimValue`, whole-value match) asks the claim at an attribute's
+  `=value` and a tag's default value, never for `:=`, a spread, a
+  trigger's own `=value` or a statement (the front end's `claimAt`
+  declines those); a claimed node is `MxAttribute.value` (core sets only
+  `type`/`span`/`start`/`end` there, `CORE_SET_VALUE`, so the node may own
+  a `value` field). `lowerValueAttribute` (`triggers.ts`) lowers it to a
+  static `MxAttribute`: `mx:String` gives its `value`; any other type's
+  `lower` sees `ctx.position` `"value"` and returns a string or
+  `ctx.expression`. `valueNodeOf` gives `lower.ts` the node for the static
+  `Attr.node` (never with `atom`/`member`). A claimed default value ends
+  at a space followed by a `terminatesValue` row (`isClaimedDefault`,
+  parser `EXPRESSION.ts`). `ContractAttr` (`lowered-unit.ts`) is the
+  attribute's name plus its value node (`mx:String`, `mx:Expression`, the
+  claimed node, or Mesh's `mx:Atom`/`mx:Member` marks, removal work), or
+  `{ spread: true }`. `lowerTriggers` is the one pass
   that lowers line and attribute nodes, once each, in source order (a
   body's line node right after the walk reaches it), into `loweredNodes`,
   a cache keyed by the AST node that `attributesWithTriggers` and

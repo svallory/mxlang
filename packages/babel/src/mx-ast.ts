@@ -172,6 +172,31 @@ export interface MxRegisteredNode extends Span {
 }
 
 /**
+ * A node a value row claimed: an attribute's whole `=value` (ast §4.4,
+ * the value position), in place of its `MxExpression`. Its `type` is its
+ * registry key (`mx:String`, `ref:Ref`); `span` and `start`/`end` cover the
+ * value's text. Every other field is the node type's own: core sets no
+ * `value`, `operator` or `args` on it.
+ */
+export interface MxValueNode extends Span {
+  readonly type: `${string}:${string}`;
+  readonly span: { readonly sourceStart: number; readonly sourceEnd: number };
+  readonly [field: string]: unknown;
+}
+
+/**
+ * Core's `mx:String`: an attribute value a value row naming
+ * `{ type: "String", dialect: "mx" }` claimed. `raw` is the text as
+ * written; `value` is the string it spells (a quoted string's contents,
+ * escapes resolved; any other text as written). Lowers to a static string.
+ */
+export interface MxString extends MxValueNode {
+  readonly type: "mx:String";
+  readonly value: string;
+  readonly raw: string;
+}
+
+/**
  * A syntax table's block tag (decision 182; ast §4.5), `{% for x in xs %}`:
  * a child of the enclosing body. Raw: `value` is the body between the
  * table's `open` and `close`, untrimmed. Core's `lowerBlockTag` builds IR
@@ -315,7 +340,8 @@ export interface MxAttribute extends MxNodeBase {
   /** The modifier's own span, colon excluded; `""` for a trailing colon is zero-width after the colon (`nameSpan.end + 1`); `null` with `modifier`. */
   readonly modifierSpan: Span | null;
   readonly operator: "=" | ":=" | null;
-  readonly value: MxExpression | MxMethod | null;
+  /** A node a value row claimed (`MxValueNode`) holds the whole `=value`. */
+  readonly value: MxExpression | MxMethod | MxValueNode | null;
   readonly args: MxArguments | null;
 }
 

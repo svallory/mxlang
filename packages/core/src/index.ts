@@ -155,10 +155,10 @@ export {
   routeDialect,
 } from "./dialect-discovery.ts";
 /**
- * The node-type registry (decision 202 item 3): a dialect's `nodeTypes`,
- * keyed `dialect:Type`, with core's own MX AST types as dialect zero
- * (`mx:Tag`, …). A trigger row naming `node: { type, dialect }` claims its
- * text with the type's `parse` (`undefined` declines it), and the node it
+ * The node-type registry: a dialect's `nodeTypes`, keyed `dialect:Type`,
+ * with core's own MX AST types as dialect zero (`mx:Tag`, `mx:String`, …).
+ * A line, attribute or value row naming `{ type, dialect }` claims its text
+ * with the type's `parse` (`undefined` declines it), and the node it
  * returns, in the tree at its position, lowers with the type's `lower`.
  *
  * @unstable until the Mesh dialect has moved onto it (slice c).
@@ -172,6 +172,7 @@ export {
   MX_DIALECT,
   type NodeType,
   nodeTypeRegistry,
+  parseMxString,
   type RegisteredNodeType,
 } from "./dialect-registry.ts";
 export { nearestName } from "./did-you-mean.ts";
@@ -241,10 +242,14 @@ export {
 export { expressionShape, lower, lowerChildren } from "./lower.ts";
 export type {
   ContractAncestor,
+  ContractAtomOrMember,
   ContractAttr,
   ContractAttributeTag,
   ContractCall,
   ContractData,
+  ContractExpression,
+  ContractString,
+  ContractValue,
   DeclaredName,
   LoweredUnit,
   LoweredUnitFailOptions,
@@ -313,6 +318,7 @@ export {
   scanCached,
 } from "./scan-cache.ts";
 export {
+  type CallPosition,
   type ContractCheckContext,
   type ContractFields,
   type Dialect,
@@ -334,6 +340,7 @@ export {
   type TriggerFailOptions,
   type TriggerMethod,
   type TriggerNode,
+  type TriggerPosition,
   type TriggerResult,
   type TriggerShorthand,
   type TriggerUse,

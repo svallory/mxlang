@@ -91,6 +91,14 @@ export interface SyntaxTable {
   readonly attributeTriggers: readonly Trigger[];
   /** Armed at the start of a tagless concise line (decision 182 addendum 1). */
   readonly lineTriggers: readonly Trigger[];
+  /**
+   * Tried on an attribute's whole value once the parser knows where it ends
+   * (`=value`, never `:=value` or a spread): the row armed on the value's
+   * first character claims it when its `match` covers the whole value text.
+   * Each row names a registered node type (`{ type, dialect }`). Omitted
+   * means none; the `.mx` row has none.
+   */
+  readonly valueTriggers?: readonly Trigger[];
   /** Text position; empty on the `.mx` row, always (layer 3 only). */
   readonly textTriggers: readonly Trigger[];
   /**
@@ -131,6 +139,7 @@ const LISTS = [
   "expressionTriggers",
   "attributeTriggers",
   "lineTriggers",
+  "valueTriggers",
   "textTriggers",
 ] as const;
 type ListName = (typeof LISTS)[number];
@@ -154,6 +163,12 @@ const REFUSED: Record<ListName, { chars: string; why: string }> = {
   lineTriggers: {
     chars: "<-/@$",
     why: "it starts a tag, a delimited block, a comment, an attribute tag or an inline script",
+  },
+  // A value's first character: a quote or a `{` still opens a value a row
+  // may claim, so only what can never start a value is refused.
+  valueTriggers: {
+    chars: "<>=,;)]}",
+    why: "it cannot start an attribute value",
   },
   // core.md, "Validation".
   textTriggers: { chars: "<$/\\", why: "it is template syntax" },
@@ -279,6 +294,8 @@ function validate(
   }
 
   for (const list of LISTS) {
+    // `valueTriggers` is optional: absent is no rows.
+    if (list === "valueTriggers" && table[list] === undefined) continue;
     for (const problem of validateList(table[list], list, listCache)) {
       out.push(problem);
     }
@@ -420,6 +437,12 @@ function validateTrigger(
       field: `${at}.node`,
       message:
         "a registered node type (`{ type, dialect }`) is not supported in expression position yet; use { call }",
+    });
+  } else if (!nodeType && list === "valueTriggers") {
+    out.push({
+      field: `${at}.node`,
+      message:
+        "a value trigger names a registered node type (`{ type, dialect }`): the node is the attribute's value",
     });
   }
   if (terminatesValue !== undefined) {
@@ -667,6 +690,12 @@ function matcherOf(source: string): RegExp {
   return new RegExp(source.startsWith("^") ? source.slice(1) : source, "uy");
 }
 
+/** A value row's matcher: it must cover the whole value text. */
+function wholeMatcherOf(source: string): RegExp {
+  const body = source.startsWith("^") ? source.slice(1) : source;
+  return new RegExp(`^(?:${body})$`, "u");
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -695,6 +724,8 @@ export interface CompiledSyntax {
   readonly expression: TriggerSet | null;
   readonly attribute: TriggerSet | null;
   readonly line: TriggerSet | null;
+  /** The value position's rows; each `matcher` must cover the whole value (`matchValue`). */
+  readonly value: TriggerSet | null;
   /** Whether any attribute trigger sets `terminatesValue`. */
   readonly terminators: boolean;
   /**
@@ -727,12 +758,15 @@ const PERIOD = 46;
 const compiled = new WeakMap<object, CompiledSyntax>();
 const listCache = new WeakMap<object, SyntaxDiagnostic[]>();
 const setCache = new WeakMap<object, TriggerSet | null>();
+/** Value rows compile to whole-text matchers, so they are cached apart. */
+const wholeSetCache = new WeakMap<object, TriggerSet | null>();
 
 /** The default row compiles to no trigger sets at all: the parser's checks are one `null` test. */
 export const DEFAULT_COMPILED: CompiledSyntax = Object.freeze({
   expression: null,
   attribute: null,
   line: null,
+  value: null,
   terminators: false,
   builtInAtoms: true,
   builtInColonEnd: true,
@@ -758,9 +792,13 @@ export function compileSyntax(table: SyntaxTable): CompiledSyntax {
       `invalid syntax table:\n${problems.map((p) => `  ${p.field}: ${p.message}`).join("\n")}`,
     );
   }
-  const set = (triggers: readonly Trigger[]): TriggerSet | null => {
+  const set = (
+    triggers: readonly Trigger[],
+    whole = false,
+  ): TriggerSet | null => {
     if (triggers.length === 0) return null;
-    const cached = setCache.get(triggers);
+    const cache = whole ? wholeSetCache : setCache;
+    const cached = cache.get(triggers);
     if (cached !== undefined) return cached;
     const ascii: (CompiledTrigger | undefined)[] = new Array(128).fill(
       undefined,
@@ -774,7 +812,9 @@ export function compileSyntax(table: SyntaxTable): CompiledSyntax {
         terminatesValue: trigger.terminatesValue === true,
         refusesValue: trigger.value === "refuse",
         first,
-        matcher: matcherOf(trigger.match),
+        matcher: whole
+          ? wholeMatcherOf(trigger.match)
+          : matcherOf(trigger.match),
       };
       for (let code = 0; code < 128; code++) {
         if (first.test(String.fromCharCode(code))) ascii[code] = entry;
@@ -788,7 +828,7 @@ export function compileSyntax(table: SyntaxTable): CompiledSyntax {
         other.push(entry);
     }
     const result = { ascii, other };
-    setCache.set(triggers, result);
+    cache.set(triggers, result);
     return result;
   };
   const expression = set(table.expressionTriggers);
@@ -797,6 +837,7 @@ export function compileSyntax(table: SyntaxTable): CompiledSyntax {
     expression,
     attribute,
     line: set(table.lineTriggers),
+    value: set(table.valueTriggers ?? [], true),
     terminators: table.attributeTriggers.some(
       (t) => t.terminatesValue === true,
     ),
@@ -837,6 +878,28 @@ export function matchTrigger(
   const found = matcher.exec(data);
   if (found === null || found[0].length === 0) return undefined;
   return { trigger, end: pos + found[0].length };
+}
+
+/**
+ * The value row armed on the first character of `data.slice(start, end)`
+ * whose matcher covers that whole text; undefined when none.
+ */
+export function matchValue(
+  set: TriggerSet,
+  data: string,
+  start: number,
+  end: number,
+): CompiledTrigger | undefined {
+  if (end <= start) return undefined;
+  const code = data.charCodeAt(start);
+  let trigger: CompiledTrigger | undefined;
+  if (code < 128) trigger = set.ascii[code];
+  else {
+    const char = String.fromCodePoint(data.codePointAt(start) as number);
+    trigger = set.other.find((t) => t.first.test(char));
+  }
+  if (trigger === undefined) return undefined;
+  return trigger.matcher.test(data.slice(start, end)) ? trigger : undefined;
 }
 
 /**

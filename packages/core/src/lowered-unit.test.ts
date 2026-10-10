@@ -534,38 +534,65 @@ describe("the `LoweredUnit` view", () => {
     expect(call?.contract).toEqual({ relations: ["x"] });
     const kinds = Object.fromEntries(
       (call?.attrs ?? []).map((attr) => [
-        attr.kind === "spread" ? "...spread" : attr.name,
+        "spread" in attr ? "...spread" : attr.name,
         attr,
       ]),
     ) as Record<string, ContractAttr>;
-    expect(kinds.name).toMatchObject({
-      kind: "atom",
-      value: "named",
+    // Each attribute is its name plus its value node, read by `type`.
+    expect(kinds.name).toEqual({
+      name: "name",
+      nameSpan: { sourceStart: 6, sourceEnd: 12 },
       authored: ":named",
       label: "`:named` (`name`)",
-      span: { sourceStart: 6, sourceEnd: 12 },
+      value: {
+        type: "mx:Atom",
+        name: "named",
+        span: { sourceStart: 6, sourceEnd: 12 },
+      },
     });
-    expect(kinds.s).toMatchObject({
-      kind: "string",
-      value: "str",
-      label: "`s`",
-      span: { sourceStart: 15, sourceEnd: 20 },
+    expect(kinds.s).toEqual({
+      name: "s",
       nameSpan: { sourceStart: 13, sourceEnd: 14 },
+      label: "`s`",
+      value: {
+        type: "mx:String",
+        value: "str",
+        span: { sourceStart: 15, sourceEnd: 20 },
+      },
     });
-    expect(kinds.a).toMatchObject({ kind: "atom", value: "at" });
-    expect(kinds.e).toMatchObject({ kind: "expression", code: 'x + "y"' });
-    const marked = (kinds.e as { node: { right: { extra: unknown } } }).node
-      .right.extra;
+    expect(kinds.a).toMatchObject({ value: { type: "mx:Atom", name: "at" } });
+    expect(kinds.e).toMatchObject({
+      value: { type: "mx:Expression", code: 'x + "y"' },
+    });
+    const marked = (
+      kinds.e as { value: { node: { right: { extra: unknown } } } }
+    ).value.node.right.extra;
     expect(marked).toMatchObject({ mxAtom: { span: { sourceStart: 34 } } });
-    expect(kinds.b).toMatchObject({ kind: "boolean", label: "`b`" });
-    expect(kinds.v).toMatchObject({ kind: "expression", bound: true });
-    expect(kinds["...spread"]).toMatchObject({
-      kind: "spread",
+    expect(kinds.b).toEqual({
+      name: "b",
+      nameSpan: { sourceStart: 38, sourceEnd: 39 },
+      label: "`b`",
+      value: null,
+    });
+    expect(kinds.v).toMatchObject({
+      value: { type: "mx:Expression", code: "w", bound: true },
+    });
+    expect(kinds["...spread"]).toEqual({
+      spread: true,
       span: { sourceStart: 48, sourceEnd: 52 },
     });
+    // Every attribute and value node is frozen.
+    for (const attr of Object.values(kinds)) {
+      expect(Object.isFrozen(attr)).toBe(true);
+      if ("value" in attr && attr.value) {
+        expect(Object.isFrozen(attr.value)).toBe(true);
+      }
+    }
     // A whole-value member a module built.
     expect(unit.calls[1]?.attrs).toEqual([
-      expect.objectContaining({ kind: "member", value: "due" }),
+      expect.objectContaining({
+        value: expect.objectContaining({ type: "mx:Member", name: "due" }),
+      }),
     ]);
   });
 
@@ -581,13 +608,17 @@ describe("the `LoweredUnit` view", () => {
     // A deep-frozen copy: the registered object stays the caller's.
     expect(row?.contract?.attributes).toEqual(declared?.attributes);
     expect(row?.contract?.attributes).not.toBe(declared?.attributes);
-    expect(row?.attrs[0]).toMatchObject({ kind: "atom", value: "a" });
+    expect(row?.attrs[0]).toMatchObject({
+      value: { type: "mx:Atom", name: "a" },
+    });
     const [cell] = row?.attributeTags ?? [];
     expect(cell?.name).toBe("cell");
     expect(cell?.contract?.attributes).toEqual({
       k: { type: "atom", values: ["x", "y"] },
     });
-    expect(cell?.attrs[0]).toMatchObject({ kind: "atom", value: "x" });
+    expect(cell?.attrs[0]).toMatchObject({
+      value: { type: "mx:Atom", name: "x" },
+    });
     // A wildcard entry is resolved for the module.
     expect(col?.name).toBe("col-1");
     expect(col?.contract?.attributes).toEqual({

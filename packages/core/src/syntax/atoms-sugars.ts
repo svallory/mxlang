@@ -37,12 +37,15 @@
  * member module).
  */
 import type {
+  ContractAtomOrMember,
   ContractAttr,
   ContractAttributeTag,
   ContractCall,
   ContractCheckContext,
   ContractData,
+  ContractExpression,
   ContractFields,
+  ContractString,
   Dialect,
   LoweredUnit,
   SourceSpan,
@@ -598,28 +601,38 @@ function checkContract(
 function statedName(
   attr: ContractAttr | undefined,
 ): { name: string; span: SourceSpan } | null {
-  if (!attr) return null;
-  if (
-    attr.kind === "string" ||
-    attr.kind === "atom" ||
-    attr.kind === "member"
-  ) {
+  if (!attr || "spread" in attr || !attr.value) return null;
+  const value = attr.value;
+  if (value.type === "mx:String") {
     return {
-      name: attr.value,
-      span: (attr.span ?? attr.nameSpan) as SourceSpan,
+      name: (value as ContractString).value,
+      span: (value.span ?? attr.nameSpan) as SourceSpan,
     };
   }
-  if (attr.kind !== "expression" || attr.bound) return null;
-  const node = attr.node as {
+  if (value.type === "mx:Atom" || value.type === "mx:Member") {
+    return {
+      name: (value as ContractAtomOrMember).name,
+      span: (value.span ?? attr.nameSpan) as SourceSpan,
+    };
+  }
+  const expression = expressionOf(attr);
+  if (!expression || expression.bound) return null;
+  const node = expression.node as {
     type?: string;
     value?: unknown;
     extra?: { mxAtom?: { span: SourceSpan } };
   } | null;
-  if (node?.type !== "StringLiteral" || !attr.span) return null;
+  if (node?.type !== "StringLiteral" || !expression.span) return null;
   return {
     name: String(node.value),
-    span: node.extra?.mxAtom?.span ?? attr.span,
+    span: node.extra?.mxAtom?.span ?? expression.span,
   };
+}
+
+/** The attribute's value when it is an expression, else null. */
+function expressionOf(attr: ContractAttr): ContractExpression | null {
+  if ("spread" in attr || attr.value?.type !== "mx:Expression") return null;
+  return attr.value as ContractExpression;
 }
 
 function pickEntry(
@@ -677,7 +690,7 @@ function declare(unit: LoweredUnit): Scopes {
     if (!entry) continue;
     const stated = statedName(
       call.attrs.find(
-        (attr) => attr.kind !== "spread" && attr.name === entry.from,
+        (attr) => !("spread" in attr) && attr.name === entry.from,
       ),
     );
     if (!stated) continue;
@@ -831,12 +844,15 @@ function markedAtoms(node: unknown): Array<{ name: string; span: SourceSpan }> {
 function atomsOf(
   attr: ContractAttr,
 ): Array<{ name: string; span: SourceSpan }> {
-  if (attr.kind === "atom") {
-    return attr.span ? [{ name: attr.value, span: attr.span }] : [];
+  if ("spread" in attr) return [];
+  if (attr.value?.type === "mx:Atom") {
+    const { name, span } = attr.value as ContractAtomOrMember;
+    return span ? [{ name, span }] : [];
   }
-  if (attr.kind !== "expression" || !attr.span) return [];
-  const { sourceStart, sourceEnd } = attr.span;
-  return markedAtoms(attr.node).filter(
+  const expression = expressionOf(attr);
+  if (!expression?.span) return [];
+  const { sourceStart, sourceEnd } = expression.span;
+  return markedAtoms(expression.node).filter(
     ({ span }) =>
       span.sourceStart >= sourceStart && span.sourceEnd <= sourceEnd,
   );
@@ -844,9 +860,16 @@ function atomsOf(
 
 /** The text of an attribute written as a plain string (not an atom, not an expression), else undefined. */
 function plainStringOf(attr: ContractAttr): string | undefined {
-  if (attr.kind === "string" || attr.kind === "member") return attr.value;
-  if (attr.kind !== "expression" || attr.bound) return undefined;
-  const node = attr.node as {
+  if ("spread" in attr) return undefined;
+  if (attr.value?.type === "mx:String") {
+    return (attr.value as ContractString).value;
+  }
+  if (attr.value?.type === "mx:Member") {
+    return (attr.value as ContractAtomOrMember).name;
+  }
+  const expression = expressionOf(attr);
+  if (!expression || expression.bound) return undefined;
+  const node = expression.node as {
     type?: string;
     value?: unknown;
     extra?: { mxAtom?: unknown };
@@ -905,7 +928,7 @@ function checkStringForRef(
   call: ContractCall,
   scopes: Scopes,
   label: string,
-  attr: Exclude<ContractAttr, { kind: "spread" }>,
+  attr: Exclude<ContractAttr, { spread: true }>,
   declaration: AtomDeclaration,
   text: string,
 ): void {
@@ -915,7 +938,7 @@ function checkStringForRef(
     visibleNames(scopes, chain, asList(declaration.ref)),
   );
   const listed = names.length ? `one of ${atomList(names)}` : "none declared";
-  const at = "span" in attr && attr.span ? attr.span : attr.nameSpan;
+  const at = attr.value?.span ?? attr.nameSpan;
   unit.fail(
     `${label}: attribute ${attr.label} must be atom, got string (${listed}); write it as \`:${text}\``,
     at ? { at } : undefined,
@@ -934,7 +957,7 @@ function queueAttrs(
 ): void {
   if (!attributes) return;
   for (const attr of attrs) {
-    if (attr.kind === "spread" || !Object.hasOwn(attributes, attr.name)) {
+    if ("spread" in attr || !Object.hasOwn(attributes, attr.name)) {
       continue;
     }
     const declaration = attributes[attr.name] as AtomDeclaration | undefined;

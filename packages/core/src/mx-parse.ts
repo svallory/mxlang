@@ -120,9 +120,10 @@ export function parseMx(
 
 /**
  * The front end's `claim` option for `table`: `undefined` when the table
- * has no attribute or line row (the default row: nothing is asked).
- * Answers are kept per position and offset, as the front end may parse
- * twice (a tag name its pre-scan missed), so each `parse` runs once.
+ * has no attribute, line or value row (the default row: nothing is asked).
+ * Answers are kept per position and offset (per range in value position),
+ * as the front end may parse twice (a tag name its pre-scan missed), so
+ * each `parse` runs once.
  */
 function nodeClaims(
   source: string,
@@ -135,12 +136,18 @@ function nodeClaims(
         start: number,
         end: number,
         tag: string | null,
+        attribute: string | null,
       ) => object | undefined;
       placed: Set<object>;
     }
   | undefined {
   const table = options.syntax;
-  if (table.attributeTriggers.length === 0 && table.lineTriggers.length === 0) {
+  const values = table.valueTriggers ?? [];
+  if (
+    table.attributeTriggers.length === 0 &&
+    table.lineTriggers.length === 0 &&
+    values.length === 0
+  ) {
     return undefined;
   }
   const registry = nodeTypeRegistry(options.dialect);
@@ -161,11 +168,17 @@ function nodeClaims(
     start: number,
     end: number,
     tag: string | null,
+    attribute: string | null,
   ): object | undefined => {
-    const key = `${position}:${start}`;
+    const key =
+      position === "value" ? `value:${start}:${end}` : `${position}:${start}`;
     if (answers.has(key)) return answers.get(key);
     const list =
-      position === "line" ? table.lineTriggers : table.attributeTriggers;
+      position === "line"
+        ? table.lineTriggers
+        : position === "value"
+          ? values
+          : table.attributeTriggers;
     const row = list.find((each) => each.id === id);
     if (!row) {
       // The parser asks only with ids of this table.
@@ -178,7 +191,7 @@ function nodeClaims(
     const ctx: ClaimContext = Object.freeze({
       position,
       tag,
-      attribute: null,
+      attribute: position === "value" ? attribute : null,
       fail(message: string, failOptions?: TriggerFailOptions): never {
         if (typeof message !== "string" || message === "") {
           return raise(

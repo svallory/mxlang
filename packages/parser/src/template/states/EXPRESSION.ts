@@ -14,7 +14,6 @@ import {
   wordWidthBefore,
 } from "../internal.ts";
 import {
-  type CompiledSyntax,
   type CompiledTrigger,
   matchTrigger,
 } from "../syntax.ts";
@@ -32,6 +31,12 @@ export interface ExpressionMeta extends Meta {
    * atom: an atom takes no member access, so ` :name` after it is sugar.
    */
   defaultAtom: boolean;
+  /**
+   * MX: the expression is a default attribute's `=value` and the table has
+   * value rows: a value one of them claims whole (the text so far) ends
+   * before a terminating attribute trigger, as a single atom does.
+   */
+  claimDefault: boolean;
   /**
    * MX (decision 156): `:name` here is an atom where an expression is
    * expected. Set for attribute values, spreads and arguments, tag
@@ -116,6 +121,7 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
       operators: false,
       attrValue: false,
       defaultAtom: false,
+      claimDefault: false,
       atoms: false,
       atomEnd: -1,
       comments: undefined,
@@ -561,9 +567,9 @@ function checkForOperators(
       // declines ends nothing: the value reads on as if no row matched.
       if (
         parser.syntax.terminators &&
-        valueMayEndAt(expression, data, nextNonSpace) &&
         matchTrigger(parser.syntax.attribute!, data, nextNonSpace)?.trigger
           .terminatesValue &&
+        valueMayEndAt(expression, data, nextNonSpace, parser) &&
         parser.claimTrigger(
           parser.syntax.attribute!,
           data,
@@ -577,7 +583,7 @@ function checkForOperators(
         expression,
         data,
         nextNonSpace,
-        parser.syntax,
+        parser,
       );
       if (lookAheadPos !== -1) {
         parser.pos = lookAheadPos;
@@ -701,20 +707,43 @@ function isSingleAtomDefault(
 }
 
 /**
+ * MX: a default attribute's value that a value row claims whole so far
+ * (`=:List` under a row for `:List`), with only whitespace between it and
+ * `pos`. The table-driven form of the single-atom exemption: the value is
+ * one claimed node, so what follows is the next attribute.
+ */
+function isClaimedDefault(
+  expression: ExpressionMeta,
+  data: string,
+  pos: number,
+  parser: Parser,
+): boolean {
+  if (!expression.claimDefault || expression.groupStack.length) return false;
+  let end = pos;
+  while (end > expression.start && isWhitespaceCode(data.charCodeAt(end - 1)))
+    end--;
+  return parser.claimValue(data, expression.start, end) !== undefined;
+}
+
+/**
  * MX: whether an attribute value may end at `pos`, the start of the next
  * token after whitespace: a named attribute's (or spread's) value, or a
- * single-atom default value (decision 146 addendum 5), with no `?` open (a
- * ` :x` there is the ternary's). The guard of decision 146's ` :name` rule,
- * shared with the syntax table's `terminatesValue` (decision 182).
+ * single-atom default value (decision 146 addendum 5) or a default value a
+ * value row claims whole, with no `?` open (a ` :x` there is the
+ * ternary's). The guard of decision 146's ` :name` rule, shared with the
+ * syntax table's `terminatesValue` (decision 182).
  */
 function valueMayEndAt(
   expression: ExpressionMeta,
   data: string,
   pos: number,
+  parser: Parser,
 ): boolean {
   return (
-    (expression.attrValue || isSingleAtomDefault(expression, data, pos)) &&
-    !expression.ternaryDepth
+    !expression.ternaryDepth &&
+    (expression.attrValue ||
+      isSingleAtomDefault(expression, data, pos) ||
+      isClaimedDefault(expression, data, pos, parser))
   );
 }
 
@@ -722,8 +751,9 @@ function lookAheadForOperator(
   expression: ExpressionMeta,
   data: string,
   pos: number,
-  syntax: CompiledSyntax,
+  parser: Parser,
 ): number {
+  const syntax = parser.syntax;
   switch (data.charCodeAt(pos)) {
     case CODE.AMPERSAND:
     case CODE.ASTERISK:
@@ -751,7 +781,7 @@ function lookAheadForOperator(
       // trigger on `:` replaces both (the coexistence rule): its
       // `terminatesValue`, checked before this, does the work.
       return syntax.builtInColonEnd &&
-        valueMayEndAt(expression, data, pos) &&
+        valueMayEndAt(expression, data, pos, parser) &&
         (isIdentStartCode(data.charCodeAt(pos + 1)) ||
           isBareColonEnd(data, pos + 1))
         ? -1

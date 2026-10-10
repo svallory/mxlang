@@ -144,7 +144,7 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
 
         attr.stage = ATTR_STAGE.VALUE;
         // MX: a default attribute (no name) is exempt from the after-value rule.
-        enterAttrValue(this, !!(attr.name || attr.spread));
+        enterAttrValue(this, !!(attr.name || attr.spread), attr.bound);
         return;
       } else if (code === CODE.OPEN_PAREN) {
         // With a pending `async` the name is emitted once we know whether this
@@ -435,6 +435,11 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
             },
           });
         } else {
+          // MX: a value row claims the whole `=value` (never `:=`); a
+          // declined or unmatched value is today's expression.
+          const hit = attr.bound
+            ? undefined
+            : this.claimValue(this.data, child.start, child.end);
           this.options.onAttrValue?.({
             start: attr.valueStart,
             end: child.end,
@@ -443,6 +448,8 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
               start: child.start,
               end: child.end,
             },
+            ...(hit && { trigger: hit.trigger.id }),
+            ...(hit && hit.claim !== undefined && { claim: hit.claim }),
           });
         }
 
@@ -458,12 +465,15 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
  * `attrValue` (MX) arms the after-value rule; without it, decision 146
  * addendum 5's single-atom default value still is followed by name sugar.
  */
-function enterAttrValue(parser: Parser, attrValue: boolean) {
+function enterAttrValue(parser: Parser, attrValue: boolean, bound = false) {
   const expr = parser.enterState(STATE.EXPRESSION);
   expr.attrValue = attrValue;
   // A loaded expression trigger on `:` replaces built-in atoms, and with
   // them this exemption (the coexistence rule; 182 addendum 1 item 3).
   expr.defaultAtom = !attrValue && parser.syntax.builtInAtoms;
+  // The table-driven exemption: a default `=value` a value row claims.
+  expr.claimDefault =
+    !attrValue && !bound && parser.syntax.value !== null;
   expr.atoms = true; // MX: decision 156
   expr.operators = true;
   expr.terminatedByWhitespace = true;

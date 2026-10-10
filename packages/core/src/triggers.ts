@@ -42,18 +42,21 @@ import {
 } from "./core.ts";
 import { raiseDeferredContractErrors } from "./custom-tags.ts";
 import {
+  type DialectNode,
   isCallRow,
   isNodeTypeRow,
   isRegistryKey,
   nodeTypeRegistry,
   type RegisteredNode,
   rowKey,
+  STRING_KEY,
   TRIGGER_KEY,
 } from "./dialect-registry.ts";
 import type { Member, MxMemberMark } from "./ir.ts";
 import { loweredUnitOf } from "./lowered-unit.ts";
 import type { SourceSpan } from "./mapping.ts";
 import type {
+  CallPosition,
   Dialect,
   ResolvedSyntax,
   SyntaxTable,
@@ -85,6 +88,7 @@ const TRIGGER_LISTS = {
   expression: "expressionTriggers",
   attribute: "attributeTriggers",
   line: "lineTriggers",
+  value: "valueTriggers",
 } as const;
 
 /**
@@ -97,7 +101,7 @@ export function triggerRow(
   table: SyntaxTable,
   trigger: { id: string; position: TriggerPosition },
 ): Trigger | undefined {
-  return table[TRIGGER_LISTS[trigger.position]].find(
+  return (table[TRIGGER_LISTS[trigger.position]] ?? []).find(
     (row) => row.id === trigger.id,
   );
 }
@@ -165,12 +169,12 @@ function isTriggerNode(node: Node): boolean {
  */
 function claimedRow(
   table: SyntaxTable,
-  position: "attribute" | "line",
+  position: "attribute" | "line" | "value",
   node: Node,
   text: string,
 ): Trigger {
   const first = String.fromCodePoint(text.codePointAt(0) ?? 0);
-  const row = table[TRIGGER_LISTS[position]].find((each) => {
+  const row = (table[TRIGGER_LISTS[position]] ?? []).find((each) => {
     try {
       return new RegExp(`^[${each.chars}]$`, "u").test(first);
     } catch {
@@ -234,16 +238,41 @@ function notLowered(node: Node): never {
 }
 
 /**
+ * Is `attr` an attribute whose whole value a value row claimed (its
+ * `value` is a registered node, `mx:String` or a dialect's)?
+ */
+function hasValueNode(attr: Node): boolean {
+  return attr?.type === "MxAttribute" && isRegistryKey(attr.value?.type);
+}
+
+/** Does the trigger pass replace `attr` (a trigger node, or a claimed value's attribute)? */
+function isLoweredAttribute(attr: Node): boolean {
+  return isTriggerNode(attr) || hasValueNode(attr);
+}
+
+/**
+ * The node a value row claimed, by the lowered attribute that carries the
+ * static string it lowered to: lowering puts it on the IR's `Attr.node`.
+ */
+const valueNodes = new WeakMap<object, DialectNode>();
+
+/** The claimed value node behind a lowered attribute (static values only), or `undefined`. */
+export function valueNodeOf(attr: Node): DialectNode | undefined {
+  return attr && typeof attr === "object" ? valueNodes.get(attr) : undefined;
+}
+
+/**
  * A tag's attributes as authored, each attribute trigger node replaced by
- * what it lowered to (the name-sugar pass reads these). An `MxTrigger` the
- * pass never lowered stays, for the seams to refuse; a claimed node the pass
- * never lowered is an internal error.
+ * what it lowered to, and each attribute whose value a value row claimed
+ * by the attribute its node lowered to (the name-sugar pass reads these).
+ * An `MxTrigger` the pass never lowered stays, for the seams to refuse; a
+ * claimed node the pass never lowered is an internal error.
  */
 export function attributesWithTriggers(tag: Node): Node[] {
   const attributes: Node[] = tag?.attributes ?? [];
-  if (!attributes.some(isTriggerNode)) return attributes;
+  if (!attributes.some(isLoweredAttribute)) return attributes;
   return attributes.flatMap((attr) => {
-    if (!isTriggerNode(attr)) return [attr];
+    if (!isLoweredAttribute(attr)) return [attr];
     const results = loweredNodes.get(attr) as Node[] | undefined;
     if (results) return results;
     return attr.type === "MxTrigger" ? [attr] : notLowered(attr);
@@ -507,7 +536,8 @@ function lowerTriggerHook(
         trigger.id,
         trigger.text,
         spanOf(trigger),
-        context,
+        // A `{ call }` row is never a value row (the table check).
+        context as TriggerContext & { readonly position: CallPosition },
       ),
   };
 }
@@ -591,7 +621,9 @@ function positionPhrase(position: TriggerPosition): string {
     ? "an expression"
     : position === "attribute"
       ? "an attribute list"
-      : "a tagless line";
+      : position === "value"
+        ? "an attribute value"
+        : "a tagless line";
 }
 
 /**
@@ -711,6 +743,10 @@ function callHook(
       trigger,
     );
   }
+  // In value position the string every target emits is a result too.
+  if (trigger.position === "value" && typeof result === "string") {
+    return result;
+  }
   const handMade = (item: unknown) =>
     !item || typeof item !== "object" || !built.has(item);
   if (
@@ -719,7 +755,9 @@ function callHook(
       : handMade(result)
   ) {
     fail(
-      `the \`${trigger.id}\` trigger's ${label} must return what \`ctx.expression\`, \`ctx.attribute\`, \`ctx.shorthand\` or \`ctx.child\` built (a non-empty list of attributes and shorthands in an attribute list)`,
+      trigger.position === "value"
+        ? `the \`${trigger.id}\` trigger's ${label} must return a string or \`ctx.expression(node)\` for an attribute value`
+        : `the \`${trigger.id}\` trigger's ${label} must return what \`ctx.expression\`, \`ctx.attribute\`, \`ctx.shorthand\` or \`ctx.child\` built (a non-empty list of attributes and shorthands in an attribute list)`,
       trigger,
     );
   }
@@ -802,17 +840,9 @@ function checkAttributeValue(
     ) {
       return;
     }
-    if (
-      value.kind === "node" &&
-      value.node !== undefined &&
-      value.node === trigger.claimed &&
-      typeof value.value === "string"
-    ) {
-      return;
-    }
   }
   fail(
-    `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: an attribute value is \`true\`, a string, a \`ctx.expression\` result, the trigger's own method value, \`{ kind: "atom" | "member", name }\`, or \`{ kind: "node", node, value }\` with the node being lowered`,
+    `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: an attribute value is \`true\`, a string, a \`ctx.expression\` result, the trigger's own method value, or \`{ kind: "atom" | "member", name }\``,
     trigger,
   );
 }
@@ -1292,17 +1322,6 @@ function attributeNode(ctx: Ctx, trigger: Node, attr: TriggerAttribute): Node {
       text: printed(ctx, node, trigger),
     });
     container = containerOf(ctx, node, text.sourceStart, text.sourceEnd);
-  } else if (value.kind === "node") {
-    // The static string every target emits, spanning the node's text; the
-    // attribute holds the node (`dialectNode`), which lowering puts on
-    // `Attr.node`.
-    const span = value.span ?? value.node.span;
-    container = containerOf(
-      ctx,
-      literal(ctx, value.value, span.sourceStart, span.sourceEnd),
-      span.sourceStart,
-      span.sourceEnd,
-    );
   } else {
     const span = value.span ?? text;
     const mark =
@@ -1337,9 +1356,6 @@ function attributeNode(ctx: Ctx, trigger: Node, attr: TriggerAttribute): Node {
     value: container,
     args: null,
     mxTrigger: { id: trigger.id, span: text },
-    ...(typeof value === "object" && value.kind === "node"
-      ? { dialectNode: value.node }
-      : {}),
     // Spelled by the trigger's text: diagnostics name it, and lowering
     // copies it to `Attr.sugar` (decision 156 addendum 6).
     // A default value the trigger's own value sets is named by it instead
@@ -1515,22 +1531,95 @@ function mapAttributes(
   tag: Node,
 ): void {
   const attributes: Node[] = tag.attributes;
-  if (!attributes.some(isTriggerNode)) return;
+  if (!attributes.some(isLoweredAttribute)) return;
   const list = attributes.flatMap((attr) => {
-    if (!isTriggerNode(attr)) return [attr];
+    if (!isLoweredAttribute(attr)) return [attr];
     let results = loweredNodes.get(attr) as Node[] | undefined;
     if (!results) {
-      results = lowerAttributeTrigger(
-        ctx,
-        table,
-        dialect,
-        triggerOf(ctx, table, attr, "attribute"),
-      );
+      results = hasValueNode(attr)
+        ? [lowerValueAttribute(ctx, table, dialect, attr)]
+        : lowerAttributeTrigger(
+            ctx,
+            table,
+            dialect,
+            triggerOf(ctx, table, attr, "attribute"),
+          );
       loweredNodes.set(attr, results);
     }
     return results;
   });
   checkOnce(ctx, list);
+}
+
+/**
+ * The attribute a claimed value lowers to: its node's value as a string
+ * every target emits (`mx:String` is its own `value`; a dialect's type
+ * returns one from `lower`, and the node stays beside it on `Attr.node`),
+ * or the expression a dialect's `lower` built (`ctx.expression`), spliced
+ * over the value's text. Positions are the value's own.
+ */
+function lowerValueAttribute(
+  ctx: Ctx,
+  table: SyntaxTable,
+  dialect: Dialect | undefined,
+  attr: Node,
+): Node {
+  const node = attr.value as Node;
+  const span: SourceSpan = node.span;
+  const { sourceStart: start, sourceEnd: end } = span;
+  const text = ctx.source.slice(start, end);
+  let result: TriggerResult;
+  if (node.type === STRING_KEY) {
+    result = node.value as string;
+  } else {
+    const trigger: Node = {
+      type: "MxTrigger",
+      start,
+      end,
+      id: claimedRow(table, "value", node, text).id,
+      position: "value",
+      text,
+      operator: null,
+      value: null,
+      args: null,
+      claimed: node,
+    };
+    result = callHook(
+      ctx,
+      nodeTypeHook(dialect, trigger, node as unknown as RegisteredNode),
+      trigger,
+      null,
+    );
+    if (
+      typeof result !== "string" &&
+      (Array.isArray(result) ||
+        (result as { kind?: unknown }).kind !== "expression")
+    ) {
+      fail(
+        `the \`${trigger.id}\` trigger's ${hookLabel(trigger)} must return a string or \`ctx.expression(node)\` for an attribute value`,
+        trigger,
+      );
+    }
+  }
+  let container: Node;
+  if (typeof result === "string") {
+    container = containerOf(ctx, literal(ctx, result, start, end), start, end);
+  } else {
+    const expression = positioned((result as TriggerExpression).node as Node, {
+      start,
+      end,
+      loc: locOf(ctx, start, end),
+    });
+    ctx.triggerSplices?.push({
+      start,
+      end,
+      text: ctx.generate(expression),
+    });
+    container = containerOf(ctx, expression, start, end);
+  }
+  const lowered = { ...attr, value: container };
+  if (typeof result === "string") valueNodes.set(lowered, node as DialectNode);
+  return lowered;
 }
 
 /** Does one of `attrs` carry the trigger's own `=value` (`ctx.value`, or its node)? */

@@ -55,6 +55,13 @@ export namespace Ranges {
 
   export interface AttrValue extends Value {
     bound: boolean;
+    /**
+     * The value row that claimed the whole value (`=value` only), and what
+     * the parser's `claim` answered for it (`undefined` without one).
+     * Absent when no row claimed the value.
+     */
+    trigger?: string;
+    claim?: unknown;
   }
 
   export interface AttrMethod extends Range {

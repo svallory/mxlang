@@ -52,6 +52,7 @@ interface SyntaxTable {
   expressionTriggers: Trigger[];                         // empty on the default row
   attributeTriggers: Trigger[];                          // empty on the default row
   lineTriggers: Trigger[];                               // empty on the default row; start of a tagless concise line
+  valueTriggers?: Trigger[];                             // absent on the default row; a whole attribute value
   textTriggers: Trigger[];                               // empty on the default row, always
   tagTypes: Record<string, TagType>;                     // from the taglib and discovered parseOptions
   expressionLanguage: "ts";                              // reserved
@@ -68,16 +69,33 @@ interface Trigger {
 }
 ```
 
-In attribute and line position every row goes through one claim process.
-The row's node type is asked to claim the matched text: its `parse` gets the
-text, the span and the context, and returns the node's fields or
-`undefined`. Fields put a registered node in the MX AST at that position,
-and lowering later calls that type's `lower`. `undefined` declines: parsing
-continues as if no row matched. A `{ call }` row and `"attribute"` are core's
+In attribute, line and value position every row goes through one claim
+process. The row's node type is asked to claim the matched text: its `parse`
+gets the text, the span and the context (`ctx.position` is `"line"`,
+`"attribute"` or `"value"`), and returns the node's fields or `undefined`.
+Fields put a registered node in the MX AST at that position, and lowering
+later calls that type's `lower`. `undefined` declines: parsing continues as
+if no row matched. A `{ call }` row and `"attribute"` are core's
 `mx:Trigger` type, which always claims; `{ type, dialect }` names a type of
-the row's own dialect, or `mx:Trigger` or `mx:Expression`. The one error the
-claim owns is a row naming a type that is not registered. A row naming
-another dialect's types is not supported yet.
+the row's own dialect, or one of core's three: `mx:Trigger` (attribute and
+line), `mx:Expression` (every position; it always declines) and `mx:String`
+(value only). The one error the claim owns is a row naming a type that is
+not registered, in that position. A row naming another dialect's types is
+not supported yet.
+
+`valueTriggers` arm on the first character of an attribute's `=value`, a
+tag's default value included. The parser already knows where the value
+ends, so the row's `match` must cover the whole value and only decides
+whether the row is asked; a `:=` value, a spread, a trigger's own `=value`
+and a statement's words are never asked. A value row names a node type
+(`{ type, dialect }`) and nothing else. The claimed node is the
+`MxAttribute`'s `value`; its `lower` returns the string every target emits
+(the static `Attr` keeps the node as `node`) or `ctx.expression(node)`.
+`mx:String` claims a quoted value as its contents (one-character escapes
+resolved; any other escape declines) and other text as itself, so only a
+value a row claims becomes an `MxString`. A claimed default value also ends
+where a space and a `terminatesValue` attribute row follow it:
+`belongs-to=:List :list` is the default `:List` and the attribute `:list`.
 
 `lineTriggers` (decision 182, addendum 1) arm at the start of a tagless
 concise line, with or without an `=value` after the matched text, and lower
@@ -190,11 +208,16 @@ may set. An inline object stays a table only. A trigger whose `node` is
     `attributes`, `attributeTags`, `children` and `declares`, plus the
     module's claimed tag keys),
     `attrs`, `attributeTags` and `ancestors`.
-  - An attribute (`ContractAttr`) has the kinds
-    `string`, `atom` and `member` with `value` and `span`; `boolean`;
-    `expression` with the lowered `node`, `code`, `span` and `bound`;
-    `spread`. Each named one carries `nameSpan`, `label` (how core's
-    diagnostics name it) and `authored` (the sugar that wrote it).
+  - An attribute (`ContractAttr`) is its `name` and its `value` node,
+    read by `type`: `mx:String` (`value`, `span`), `mx:Expression` (the
+    lowered `node`, `code`, `span`, `bound`), the node a value row claimed
+    (its registry key, as parsed, frozen), or `null` for a bare attribute.
+    Each carries `nameSpan`, `label` (how core's diagnostics name it) and
+    `authored` (the sugar that wrote it). A spread is `{ spread: true,
+    span }`. Two more value types, `mx:Atom` and `mx:Member` (`name`,
+    `span`), carry a whole-value atom or member a dialect built with
+    `ctx.attribute`; they leave core once the Mesh dialect's own value
+    nodes carry them.
   - `attributeTags` nest to any depth. Each carries the declaration its
     parent's contract has for it, wildcards resolved, as `contract`.
   - `ancestors` are the authored tags around the call, outermost first,

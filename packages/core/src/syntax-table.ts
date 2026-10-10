@@ -31,7 +31,6 @@ import {
 } from "./dialect-discovery.ts";
 import {
   checkDialectNodeTypes,
-  type DialectNode,
   isCallRow,
   isNodeTypeRow,
   MX_DIALECT,
@@ -115,14 +114,30 @@ export interface SyntaxTable {
   readonly expressionTriggers: readonly Trigger[];
   readonly attributeTriggers: readonly Trigger[];
   readonly lineTriggers: readonly Trigger[];
+  /**
+   * Rows tried on an attribute's whole `=value`: the row armed on the
+   * value's first character claims it when its `match` covers the whole
+   * text and its node type's `parse` takes it. Each names a node type
+   * (`{ type, dialect }`). Omitted means none.
+   */
+  readonly valueTriggers?: readonly Trigger[];
   readonly textTriggers: readonly Trigger[];
   /** Tag types by written name: html 0, text 1, void 2, statement 3 (the template parser's `TagType`). */
   readonly tagTypes: Readonly<Record<string, 0 | 1 | 2 | 3>>;
   readonly expressionLanguage: "ts";
 }
 
-/** Where a trigger sits: the table list that armed it. */
-export type TriggerPosition = "expression" | "attribute" | "line";
+/**
+ * Where a trigger sits: the table list that armed it. `"value"` is a node
+ * a value row claimed, lowered as an attribute's whole value.
+ */
+export type TriggerPosition = "expression" | "attribute" | "line" | "value";
+
+/**
+ * The positions a `{ call }` row lowers in, through `lowerTrigger`: a value
+ * row always names a node type, so `lowerTrigger` never sees `"value"`.
+ */
+export type CallPosition = Exclude<TriggerPosition, "value">;
 
 /**
  * An expression a trigger lowers to, built by `ctx.expression(node)`: a Babel
@@ -155,11 +170,11 @@ export interface TriggerMethod {
 
 /**
  * The value of an attribute `ctx.attribute` builds: `true` (a bare
- * attribute), a string, an expression, the trigger's own method value, a
- * whole-value atom or member (`{ kind: "member", name }` for Mesh's
- * `&dueOn`), or a node a node type parsed (`{ kind: "node", node, value }`:
- * `value` is the static string every target emits, and the IR keeps the
- * node beside it). A value's `span` defaults to the trigger's own.
+ * attribute), a string, an expression, the trigger's own method value, or
+ * a whole-value atom or member (`{ kind: "member", name }` for Mesh's
+ * `&dueOn`; atoms and members leave core with the Mesh dialect's own value
+ * nodes). A value's `span` defaults to the trigger's own. A node is an
+ * attribute's value only through the value position (`valueTriggers`).
  */
 export type TriggerAttributeValue =
   | true
@@ -169,12 +184,6 @@ export type TriggerAttributeValue =
   | {
       readonly kind: "atom" | "member";
       readonly name: string;
-      readonly span?: SourceSpan;
-    }
-  | {
-      readonly kind: "node";
-      readonly node: DialectNode;
-      readonly value: string;
       readonly span?: SourceSpan;
     };
 
@@ -239,11 +248,14 @@ export interface TriggerChild {
 }
 
 /**
- * What `lowerTrigger` returns, matching `ctx.position`: an expression; an
- * attribute or shorthand, or a non-empty list of them (`:x() { … }` is a
- * `name` and the default value); a child.
+ * What `lowerTrigger` (or a node type's `lower`) returns, matching
+ * `ctx.position`: an expression; an attribute or shorthand, or a non-empty
+ * list of them (`:x() { … }` is a `name` and the default value); a child;
+ * in value position the string every target emits (the IR keeps the node
+ * beside it) or an expression.
  */
 export type TriggerResult =
+  | string
   | TriggerExpression
   | TriggerAttribute
   | TriggerShorthand
@@ -281,7 +293,9 @@ export type TriggerValueForm =
  * sits, its lowered `=value`, and the three constructors, the only way a
  * dialect builds anything. Each position takes the matching result:
  * `"expression"` an expression, `"attribute"` an attribute, `"line"` a
- * child. Core gives the result its positions from the trigger.
+ * child, `"value"` (a node a value row claimed) the string every target
+ * emits or an expression. Core gives the result its positions from the
+ * trigger, or from the value.
  */
 export interface TriggerContext {
   readonly position: TriggerPosition;
@@ -367,7 +381,7 @@ export interface Dialect {
     id: string,
     text: string,
     span: SourceSpan,
-    ctx: TriggerContext,
+    ctx: TriggerContext & { readonly position: CallPosition },
   ) => TriggerResult;
   /** IR for a block tag (`{% … %}`): its raw text between the delimiters. */
   readonly lowerBlockTag?: (
@@ -456,6 +470,7 @@ const MANIFEST_FIELDS = new Set([
   "expressionTriggers",
   "attributeTriggers",
   "lineTriggers",
+  "valueTriggers",
   "textTriggers",
   "expressionLanguage",
 ]);

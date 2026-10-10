@@ -13,9 +13,10 @@
  * position, and lowering hands it to its type's `lower`. A row naming a
  * type nothing registers is the one table error.
  *
- * Attribute and line position only: an expression-position row naming a
- * node type is a table error (expression-position rows stay `{ call }`,
- * `"string"` or `"identifier"`).
+ * Three positions: line, attribute and value (an attribute's whole
+ * `=value`, once the parser knows where it ends). An expression-position
+ * row naming a node type is a table error (expression-position rows stay
+ * `{ call }`, `"string"` or `"identifier"`).
  */
 import type { SourceSpan } from "./mapping.ts";
 import type {
@@ -27,8 +28,12 @@ import type {
   TriggerResult,
 } from "./syntax-table.ts";
 
-/** Where a row's node type is asked to claim text. @unstable */
-export type ClaimPosition = "line" | "attribute";
+/**
+ * Where a row's node type is asked to claim text: a tagless line, an
+ * attribute (the first character of its name), or an attribute's whole
+ * `=value`. @unstable
+ */
+export type ClaimPosition = "line" | "attribute" | "value";
 
 /**
  * What a node type's `parse` gets besides the text and its span: where the
@@ -38,11 +43,14 @@ export interface ClaimContext {
   readonly position: ClaimPosition;
   /**
    * The static name of the tag whose attribute list holds the text, in
-   * attribute position; `null` on a tagless line, and for a tag whose name
-   * is dynamic.
+   * attribute and value position; `null` on a tagless line, and for a tag
+   * whose name is dynamic.
    */
   readonly tag: string | null;
-  /** The attribute whose value holds the text; `null` in line and attribute position. */
+  /**
+   * The attribute whose value the text is, in value position; `null` for a
+   * default value (`<x=value>`), and in line and attribute position.
+   */
   readonly attribute: string | null;
   /**
    * A positioned error in the dialect's own words, at the text or at `at`
@@ -78,9 +86,10 @@ export interface DialectNodes {}
 /**
  * One node type a dialect registers (`Dialect.nodeTypes`, keyed by `Type`).
  * `print(parse(text))` gives the text back. `lower` builds core's shapes with
- * the same `ctx` constructors `lowerTrigger` gets; a whole attribute value
- * keeps the node (`ctx.attribute(name, { kind: "node", node, value })`), so
- * the IR carries it beside the static value every target emits. @unstable
+ * the same `ctx` constructors `lowerTrigger` gets. In value position
+ * (`ctx.position === "value"`) it returns the string every target emits or
+ * a `ctx.expression` result; a string keeps the node on the IR attribute
+ * (`Attr.node`). @unstable
  */
 export interface NodeType<N extends DialectNode = DialectNode> {
   /** The fields that hold child nodes, in order; `[]` for a leaf. */
@@ -88,7 +97,9 @@ export interface NodeType<N extends DialectNode = DialectNode> {
   /**
    * The node's own fields, from the text the row matched, or `undefined` to
    * decline the text (it then parses as if no row matched). Core adds
-   * `type` and `span`, and the trigger's `value`, `operator` and `args`.
+   * `type` and `span`, and in line and attribute position the trigger's
+   * `value`, `operator` and `args`; in value position the node's fields
+   * are all its own but `type` and `span`.
    */
   parse(
     text: string,
@@ -111,10 +122,12 @@ export interface RegisteredNodeType {
   readonly nodeType?: NodeType;
   /**
    * The type's `parse`, for a type a row may name: a dialect's own, and
-   * core's for `mx:Trigger` and `mx:Expression`. Absent for every other
-   * core type, which no row can name.
+   * core's for `mx:Trigger`, `mx:Expression` and `mx:String`. Absent for
+   * every other core type, which no row can name.
    */
   readonly parse?: NodeType["parse"];
+  /** The positions a row naming the type may hold; absent means all three. */
+  readonly positions?: readonly ClaimPosition[];
 }
 
 /** Core's dialect id: dialect zero. No dialect may take it. */
@@ -178,6 +191,7 @@ const CORE_TYPES: Readonly<Record<string, readonly string[]>> = {
   Shorthand: ["value", "default", "args"],
   Method: ["typeParams", "params", "body"],
   Trigger: ["value", "args"],
+  String: [],
   Atom: [],
   Text: [],
   Placeholder: ["expression"],
@@ -205,6 +219,7 @@ function entry(
   keys: readonly string[],
   nodeType?: NodeType,
   parse?: NodeType["parse"],
+  positions?: readonly ClaimPosition[],
 ): RegisteredNodeType {
   const claims = parse ?? nodeType?.parse;
   return Object.freeze({
@@ -214,19 +229,81 @@ function entry(
     keys: Object.freeze([...keys]),
     ...(nodeType ? { nodeType } : {}),
     ...(claims ? { parse: claims } : {}),
+    ...(positions ? { positions: Object.freeze([...positions]) } : {}),
   });
+}
+
+/** The JavaScript escapes `mx:String` resolves in a quoted value. */
+const STRING_ESCAPES: Readonly<Record<string, string>> = {
+  n: "\n",
+  t: "\t",
+  r: "\r",
+  b: "\b",
+  f: "\f",
+  v: "\v",
+  "0": "\0",
+  "\\": "\\",
+  "'": "'",
+  '"': '"',
+  "`": "`",
+  "\n": "",
+};
+
+/**
+ * `mx:String`'s `parse`: a quoted value (`"a"`, `'a'`) is its contents,
+ * the one-character escapes resolved; any other text is itself. A quoted
+ * value with another escape (`\x41`, `\u{…}`) or a template literal is
+ * declined: it parses as the expression it is, which gives the same string.
+ */
+export function parseMxString(text: string):
+  | {
+      value: string;
+      raw: string;
+    }
+  | undefined {
+  const quote = text[0];
+  if (quote === "`") return undefined;
+  if ((quote !== '"' && quote !== "'") || text.length < 2) {
+    return { value: text, raw: text };
+  }
+  if (text[text.length - 1] !== quote) return undefined;
+  let value = "";
+  for (let i = 1; i < text.length - 1; i++) {
+    const char = text[i] as string;
+    if (char === quote) return undefined;
+    if (char !== "\\") {
+      value += char;
+      continue;
+    }
+    const next = text[++i] as string;
+    if (i >= text.length - 1) return undefined;
+    // `\0` before a digit is an octal escape, which a value never means.
+    if (next === "0" && /[0-9]/.test(text[i + 1] ?? "")) return undefined;
+    const escaped = STRING_ESCAPES[next];
+    if (escaped === undefined) return undefined;
+    value += escaped;
+  }
+  return { value, raw: text };
 }
 
 /**
  * Core's `parse` for the types a row may name. `mx:Trigger` claims every
  * text: the node is core's `MxTrigger`, lowered by the dialect's
  * `lowerTrigger` (a `{ call }` row) or by core (the `"attribute"` row).
- * `mx:Expression` claims none in attribute or line position: the text
- * parses as if no row matched, which is what an expression is there.
+ * `mx:Expression` claims none: the text parses as if no row matched, which
+ * is what an expression is in every position. `mx:String` claims a whole
+ * attribute value as the string it spells ({@link parseMxString}).
  */
 const CORE_PARSES: Readonly<Record<string, NodeType["parse"]>> = {
   Trigger: () => ({}),
   Expression: () => undefined,
+  String: (text) => parseMxString(text),
+};
+
+/** The positions of core's types a row may name; absent is all three. */
+const CORE_POSITIONS: Readonly<Record<string, readonly ClaimPosition[]>> = {
+  Trigger: ["line", "attribute"],
+  String: ["value"],
 };
 
 const CORE_REGISTRY: ReadonlyMap<string, RegisteredNodeType> = new Map(
@@ -237,6 +314,7 @@ const CORE_REGISTRY: ReadonlyMap<string, RegisteredNodeType> = new Map(
       keys,
       undefined,
       CORE_PARSES[type],
+      CORE_POSITIONS[type],
     );
     return [registered.key, registered];
   }),
@@ -244,6 +322,9 @@ const CORE_REGISTRY: ReadonlyMap<string, RegisteredNodeType> = new Map(
 
 /** The registry key of core's trigger node (`MxTrigger`). */
 export const TRIGGER_KEY = `${CORE_DIALECT}:Trigger`;
+
+/** The registry key of core's string value node (`MxString`). */
+export const STRING_KEY = `${CORE_DIALECT}:String`;
 
 /** Registries already built, per dialect object (a dialect is fixed once loaded). */
 const registries = new WeakMap<
@@ -320,6 +401,22 @@ const CLAIMED_KEYS = ["value", "args"] as const;
 /** The fields core sets on a claimed node; a `parse` result may not hold them. */
 const CORE_SET = ["type", "span", "start", "end", "value", "operator", "args"];
 
+/** The fields core sets on a node claimed in value position. */
+const CORE_SET_VALUE = ["type", "span", "start", "end"];
+
+/** Can a row naming `registered` hold `position`? */
+export function claimsAt(
+  registered: RegisteredNodeType | undefined,
+  position: ClaimPosition | undefined,
+): registered is RegisteredNodeType & { parse: NodeType["parse"] } {
+  return (
+    !!registered?.parse &&
+    (position === undefined ||
+      !registered.positions ||
+      registered.positions.includes(position))
+  );
+}
+
 /**
  * The claim process (one function for every position): the node type `row`
  * names parses `text` (at `span`) and returns the node's fields, or
@@ -342,9 +439,14 @@ export function claimNode(
 ): RegisteredNode | undefined {
   const key = rowKey(row.node);
   const registered = registry.get(key);
-  if (!registered?.parse) {
+  if (!claimsAt(registered, ctx.position)) {
     return ctx.fail(
-      notRegisteredMessage(`the \`${row.id}\` trigger`, key, registry),
+      notRegisteredMessage(
+        `the \`${row.id}\` trigger`,
+        key,
+        registry,
+        ctx.position,
+      ),
     );
   }
   const label = `\`parse\` (node type \`${key}\`)`;
@@ -362,7 +464,9 @@ export function claimNode(
       `the \`${row.id}\` trigger's ${label} must return the node's fields as an object, or \`undefined\` to decline the text`,
     );
   }
-  const owned = CORE_SET.filter((field) => field in fields);
+  const owned = (ctx.position === "value" ? CORE_SET_VALUE : CORE_SET).filter(
+    (field) => field in fields,
+  );
   if (owned.length > 0) {
     return ctx.fail(
       `the \`${row.id}\` trigger's ${label} returns the node's own fields: core sets ${owned.map((field) => `\`${field}\``).join(", ")}`,
@@ -394,16 +498,23 @@ function notRegisteredMessage(
   at: string,
   key: string,
   registry: ReadonlyMap<string, RegisteredNodeType>,
+  position?: ClaimPosition,
 ): string {
   const named = [...registry.values()]
-    .filter((each) => each.parse)
+    .filter((each) => claimsAt(each, position))
     .map((each) => `\`${each.key}\``);
   const dialects = new Set([...registry.values()].map((each) => each.dialect));
   const dialect = key.slice(0, key.indexOf(":"));
   const foreign = dialects.has(dialect)
     ? ""
     : `; a row names a type of core (\`${CORE_DIALECT}\`) or of its own dialect: naming another dialect's types is not supported yet`;
-  return `${at} names \`${key}\`, which is not a registered node type (a row can name ${named.join(", ")})${foreign}`;
+  // A type registered for other positions only: say which position.
+  const where =
+    position !== undefined && registry.get(key)?.parse
+      ? ` in ${position} position`
+      : "";
+  const can = where ? `a row there can name` : "a row can name";
+  return `${at} names \`${key}\`, which is not a registered node type${where} (${can} ${named.join(", ")})${foreign}`;
 }
 
 /** Is this row's `node` a registered node type (`{ type, dialect }`)? */
@@ -508,18 +619,20 @@ export function checkDialectNodeTypes(
   }
 }
 
-/** The trigger lists a table holds rows in, with the positions each takes. */
-const ROW_LISTS = [
-  "expressionTriggers",
-  "attributeTriggers",
-  "lineTriggers",
-  "textTriggers",
-] as const;
+/** The trigger lists a table holds rows in, with the position each takes. */
+const ROW_LISTS = {
+  expressionTriggers: undefined,
+  attributeTriggers: "attribute",
+  lineTriggers: "line",
+  valueTriggers: "value",
+  textTriggers: undefined,
+} as const satisfies Record<string, ClaimPosition | undefined>;
 
 /**
- * The first row of `table` naming a node type that is not registered (core's
- * `mx:Trigger` and `mx:Expression`, or one of the dialect's `nodeTypes`), as
- * an error message, or `undefined`. `path` names the table (`table`,
+ * The first row of `table` naming a node type that is not registered for
+ * its position (core's `mx:Trigger` and `mx:Expression`, `mx:String` in
+ * value position, or one of the dialect's `nodeTypes`), as an error
+ * message, or `undefined`. `path` names the table (`table`,
  * `dialect.table`) in the message.
  */
 export function unregisteredNodeRow(
@@ -528,16 +641,20 @@ export function unregisteredNodeRow(
   path: string,
 ): string | undefined {
   const registry = nodeTypeRegistry(dialect);
-  for (const list of ROW_LISTS) {
-    for (const [index, row] of table[list].entries()) {
+  for (const [list, position] of Object.entries(ROW_LISTS) as [
+    keyof typeof ROW_LISTS,
+    ClaimPosition | undefined,
+  ][]) {
+    for (const [index, row] of (table[list] ?? []).entries()) {
       const node: unknown = row.node;
       if (!isNodeTypeRow(node)) continue;
       const key = `${node.dialect}:${node.type}`;
-      if (registry.get(key)?.parse) continue;
+      if (claimsAt(registry.get(key), position)) continue;
       return notRegisteredMessage(
         `\`${path}.${list}[${index}].node\` (trigger "${row.id}")`,
         key,
         registry,
+        position,
       );
     }
   }

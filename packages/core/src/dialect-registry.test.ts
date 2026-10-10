@@ -1,9 +1,10 @@
 /**
  * The node-type registry (decision 202 item 3): core's MX AST types as
  * dialect zero (`mx:Tag`, keys only), a dialect's `nodeTypes` keyed
- * `id:Type`, a row naming `node: { type, dialect }` in attribute and line
- * position (the row's `match` ends the node, the type's `parse` reads it,
- * its `lower` builds core's shapes), the node riding on the IR attribute,
+ * `id:Type`, a row naming `node: { type, dialect }` in attribute, line and
+ * value position (the row's `match` ends the node, the type's `parse` reads
+ * it, its `lower` builds core's shapes), a claimed value's node riding on
+ * the IR attribute,
  * `print(parse(text))` giving the text back, and every refusal positioned.
  */
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
@@ -60,19 +61,22 @@ const RefType: NodeType<Ref> = {
   print: (node) => `~${node.path.join(".")}`,
   lower(node, ctx) {
     const value = node.path.join(".");
+    if (ctx.position === "value") return value;
     if (ctx.position === "line") {
-      return ctx.child("ref", [
-        ctx.attribute("to", { kind: "node", node, value }),
-      ]);
+      return ctx.child("ref", [ctx.attribute("to", value)]);
     }
-    return ctx.attribute("ref", { kind: "node", node, value });
+    return ctx.attribute("ref", value);
   },
 };
 
 const REF_DIALECT: Dialect = {
   id: "ref",
   name: "Ref",
-  table: { attributeTriggers: [REF], lineTriggers: [REF] },
+  table: {
+    attributeTriggers: [REF],
+    lineTriggers: [REF],
+    valueTriggers: [REF],
+  },
   nodeTypes: { Ref: RefType },
 };
 
@@ -176,29 +180,39 @@ describe("the registry", () => {
 });
 
 describe("a node type in an attribute list", () => {
-  it("is a static attribute carrying the parsed node", () => {
+  it("is what its `lower` built: a string attribute holds no node", () => {
     const source = "sort asc ~user.name\n";
     const [sort] = elements(irOf(source, REF_DIALECT).body);
     const ref = attr(sort, "ref");
+    expect(ref).toMatchObject({ kind: "static", value: "user.name" });
+    expect(ref).not.toHaveProperty("node");
+  });
+});
+
+describe("a node type in value position", () => {
+  it("is a static attribute carrying the parsed node", () => {
+    const source = "sort to=~user.name\n";
+    const [sort] = elements(irOf(source, REF_DIALECT).body);
+    const ref = attr(sort, "to");
     expect(ref).toMatchObject({
       kind: "static",
       value: "user.name",
       node: {
         type: "ref:Ref",
         path: ["user", "name"],
-        span: { sourceStart: 9, sourceEnd: 19 },
+        span: { sourceStart: 8, sourceEnd: 18 },
       },
     });
     if (ref.kind !== "static" || !ref.node) throw new Error("no node");
     expect(Object.isFrozen(ref.node)).toBe(true);
-    expect(ref.valueSpan).toEqual({ sourceStart: 9, sourceEnd: 19 });
+    expect(ref.valueSpan).toEqual({ sourceStart: 8, sourceEnd: 18 });
   });
 
   it("`print(parse(text))` is the text the row matched", () => {
-    const source = "sort ~user.name.first\ndiv\n  ~a\n";
+    const source = "sort to=~user.name.first\ndiv\n  sort to=~a\n";
     const [sort, div] = elements(irOf(source, REF_DIALECT).body);
     const [ref] = elements((div as Element).children);
-    const nodes = [attr(sort, "ref"), attr(ref, "to")].map(
+    const nodes = [attr(sort, "to"), attr(ref, "to")].map(
       (each) => (each.kind === "static" ? each.node : undefined) as Ref,
     );
     expect(nodes.map((node) => node.path)).toEqual([
@@ -214,18 +228,13 @@ describe("a node type in an attribute list", () => {
 });
 
 describe("a node type on a tagless line", () => {
-  it("is a child the type's `lower` built, its attribute carrying the node", () => {
+  it("is a child the type's `lower` built", () => {
     const [div] = elements(irOf("div\n  ~user.name\n", REF_DIALECT).body);
     const [ref] = elements((div as Element).children);
     expect(ref?.name).toBe("ref");
     expect(attr(ref, "to")).toMatchObject({
       kind: "static",
       value: "user.name",
-      node: {
-        type: "ref:Ref",
-        path: ["user", "name"],
-        span: { sourceStart: 6, sourceEnd: 16 },
-      },
     });
   });
 
@@ -244,10 +253,11 @@ describe("the lowering cache: each node lowered once, in source order", () => {
         return RefType.lower(node, ctx);
       },
     });
-    irOf("div ~a ~b\n  ~c\n  sort ~d\n  ~e\n", dialect);
+    irOf("div ~a ~b to=~f\n  ~c\n  sort ~d\n  ~e\n", dialect);
     expect(lowered).toEqual([
       "attribute:a",
       "attribute:b",
+      "value:f",
       "line:c",
       "attribute:d",
       "line:e",
@@ -442,18 +452,15 @@ describe("the type's hooks are checked, positioned at the trigger", () => {
     );
   });
 
-  it("a node no `parse` returned is refused as an attribute value", () => {
+  it("a value's `lower` returns a string or an expression", () => {
     const dialect = refWith({
-      lower: (node, ctx) =>
-        ctx.attribute("ref", {
-          kind: "node",
-          node: { ...node },
-          value: "user",
-        }),
+      lower: (node, ctx) => ctx.attribute("ref", node.path.join(".")),
     });
-    expect(caught(() => irOf("sort ~user\n", dialect)).message).toMatch(
-      /^the `ref` trigger's `lower` \(node type `ref:Ref`\): an attribute value is .*`\{ kind: "node", node, value \}` with the node being lowered$/,
+    const error = caught(() => irOf("sort to=~user\n", dialect));
+    expect(error.message).toBe(
+      "the `ref` trigger's `lower` (node type `ref:Ref`) must return a string or `ctx.expression(node)` for an attribute value",
     );
+    expect([error.line, error.column]).toEqual([1, 8]);
   });
 });
 
@@ -583,7 +590,7 @@ describe("a dialect package (`package.json#mx.dialect`, decision 212)", () => {
   /** The fixture dialect as a published package: plain JS, default export. */
   const PACKAGE = `const REF = ${JSON.stringify(REF)};
 export default {
-  table: { attributeTriggers: [REF], lineTriggers: [REF] },
+  table: { attributeTriggers: [REF], lineTriggers: [REF], valueTriggers: [REF] },
   nodeTypes: {
     Ref: {
       keys: [],
@@ -591,9 +598,10 @@ export default {
       print: (node) => "~" + node.path.join("."),
       lower(node, ctx) {
         const value = node.path.join(".");
+        if (ctx.position === "value") return value;
         return ctx.position === "line"
-          ? ctx.child("ref", [ctx.attribute("to", { kind: "node", node, value })])
-          : ctx.attribute("ref", { kind: "node", node, value });
+          ? ctx.child("ref", [ctx.attribute("to", value)])
+          : ctx.attribute("ref", value);
       },
     },
   },
@@ -608,20 +616,19 @@ export default {
     }).packageDir;
   }
 
-  it("lowers its node types in both positions", () => {
+  it("lowers its node types in every position", () => {
     project(PACKAGE);
     const page = join(dir, "page.ref");
     const [sort, div] = elements(
-      irOf("sort ~user.name\ndiv\n  ~user\n", undefined, page).body,
+      irOf("sort ~user.name at=~top\ndiv\n  ~user\n", undefined, page).body,
     );
-    expect(attr(sort, "ref")).toMatchObject({
-      value: "user.name",
-      node: { type: "ref:Ref", path: ["user", "name"] },
+    expect(attr(sort, "ref")).toMatchObject({ value: "user.name" });
+    expect(attr(sort, "at")).toMatchObject({
+      value: "top",
+      node: { type: "ref:Ref", path: ["top"] },
     });
     const [ref] = elements((div as Element).children);
-    expect(attr(ref, "to")).toMatchObject({
-      node: { type: "ref:Ref", path: ["user"] },
-    });
+    expect(attr(ref, "to")).toMatchObject({ value: "user" });
   });
 
   it("a row naming a type it does not register is an error in the dialect's module", () => {
@@ -774,7 +781,7 @@ describe("lowering dispatches on `node.type`", () => {
     parse: (text) => ({ name: text.slice(1) }),
     print: (node) => `!${node.name}`,
     lower: (node, ctx) =>
-      ctx.attribute("up", { kind: "node", node, value: node.name }),
+      ctx.position === "value" ? node.name : ctx.attribute("up", node.name),
   };
   const UP: Trigger = {
     id: "up",
@@ -787,12 +794,16 @@ describe("lowering dispatches on `node.type`", () => {
   it("each node is lowered by the type that parsed it", () => {
     const dialect: Dialect = {
       ...REF_DIALECT,
-      table: { attributeTriggers: [REF, UP] },
+      table: { attributeTriggers: [REF, UP], valueTriggers: [REF, UP] },
       nodeTypes: { Ref: RefType, Up: UpType },
     };
-    const [sort] = elements(irOf("sort ~user !top\n", dialect).body);
-    expect(attr(sort, "ref")).toMatchObject({ node: { type: "ref:Ref" } });
-    expect(attr(sort, "up")).toMatchObject({
+    const [sort] = elements(
+      irOf("sort ~user !top a=~user b=!top\n", dialect).body,
+    );
+    expect(attr(sort, "ref")).toMatchObject({ value: "user" });
+    expect(attr(sort, "up")).toMatchObject({ value: "top" });
+    expect(attr(sort, "a")).toMatchObject({ node: { type: "ref:Ref" } });
+    expect(attr(sort, "b")).toMatchObject({
       value: "top",
       node: { type: "ref:Up", name: "top" },
     });

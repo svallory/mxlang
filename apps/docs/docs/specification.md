@@ -3852,6 +3852,7 @@ interface SyntaxTable {
   expressionTriggers: Trigger[];
   attributeTriggers: Trigger[];
   lineTriggers: Trigger[];                             // addendum 1
+  valueTriggers?: Trigger[];                           // a whole attribute value
   textTriggers: Trigger[];
   tagTypes: Record<string, 0 | 1 | 2 | 3>;            // html, text, void, statement
   expressionLanguage: "ts";                            // reserved
@@ -3880,7 +3881,9 @@ stay one-to-one: `"number"` (a numeric literal), `"identifier"` (an identifier) 
 `"keep"` (the text itself). `node` says what core builds from it (§13.9.5).
 `terminatesValue` (attribute triggers only) makes a space followed by the
 trigger end the attribute value before it, instead of continuing it as an
-expression.
+expression. A tag's default value (`belongs-to=:List :list`) ends there too when
+a value row claims the text before the space (§13.9.9): the default is `:List`
+and `:list` is the next attribute.
 
 A trigger lists where it sits by the list that holds it:
 
@@ -3889,6 +3892,7 @@ A trigger lists where it sits by the list that holds it:
 | `expressionTriggers` | inside an expression (an attribute value, a placeholder, a method body) | a Babel expression replaces the stand-in |
 | `attributeTriggers` | in a tag's attribute list, where an attribute name would start; with or without an `=value` | an attribute |
 | `lineTriggers` | at the start of a tagless concise line; with or without an `=value` | a child tag of the enclosing block. Generalises `inlineScript` |
+| `valueTriggers` | on the first character of an attribute's `=value` (a tag's default value included; never a `:=` value, a spread, a trigger's own `=value` or a statement's words), when `match` covers the whole value | the attribute's value: a registered node type (§13.9.9) |
 | `textTriggers` | in text | reserved: refused on every table today (below) |
 
 **Block tags and filters.** A table with `blockTag: { open, close }` reads
@@ -4243,6 +4247,12 @@ target's `nativeTags`, decision 197) and the tags' `parseOptions`
 | `{ call }` | `lowerTrigger` | `lowerTrigger` | `lowerTrigger` |
 | `{ type, dialect }` | error | the node type's `parse`, then its `lower` (§13.9.9) | the node type's `parse`, then its `lower` |
 
+A value row (`valueTriggers`) names a node type and nothing else: the node is
+the attribute's value (§13.9.9). Any other `node` there is refused when the
+table loads: `` a value trigger names a registered node type (`{ type, dialect
+}`): the node is the attribute's value ``. A value row may not be armed on a
+character no value starts with (`<>=,;)]}`).
+
 The built-in kinds lower in core with no hook. A kind in a position where it has
 no meaning is a positioned error: `` the `<id>` trigger's `node: "<kind>"` has no
 meaning in <an expression | an attribute list | a tagless line>; use `{ call }` and a
@@ -4255,7 +4265,7 @@ expression yet; use `{ call }` and the dialect's `lowerTrigger` ``.
 produces. `text` is the trigger's authored text and `span` its file-absolute
 UTF-16 range. `ctx` is frozen and offers exactly:
 
-- `ctx.position`: `"expression"`, `"attribute"` or `"line"`, read-only.
+- `ctx.position`: `"expression"`, `"attribute"` or `"line"`, read-only (a node type's `lower` also sees `"value"`, §13.9.9).
 - `ctx.value`: the trigger's own `=value` as an expression, its own triggers
   already lowered, or `null` when it has none (attribute and line triggers only),
   read-only. A method value (`kind :name(p) { b }`) is `{ kind: "method", async }`
@@ -4315,7 +4325,7 @@ row's id and `<text>` for the trigger's text:
 | The hook returns an object it did not build | `` the `<id>` trigger's `lowerTrigger` must return what `ctx.expression`, `ctx.attribute` or `ctx.child` built `` |
 | The hook throws | `` the `<id>` trigger's `lowerTrigger` threw: <message> `` (a `TranslateError` it throws is kept as is) |
 | `ctx.expression` is not given a Babel expression node | `` the `<id>` trigger's `lowerTrigger`: `ctx.expression` takes a Babel expression node, got <what> `` |
-| A bad constructor argument | ``the `<id>` trigger's `lowerTrigger`: `ctx.attribute` takes a non-empty attribute name``; ``the `<id>` trigger's `lowerTrigger`: `ctx.child` takes a non-empty tag name``; ``the `<id>` trigger's `lowerTrigger`: `ctx.child` takes an array of `ctx.attribute` results``; ``the `<id>` trigger's `lowerTrigger`: an attribute value is `true`, a string, a `ctx.expression` result, or `{ kind: "atom" \| "member", name }` `` |
+| A bad constructor argument | ``the `<id>` trigger's `lowerTrigger`: `ctx.attribute` takes a non-empty attribute name``; ``the `<id>` trigger's `lowerTrigger`: `ctx.child` takes a non-empty tag name``; ``the `<id>` trigger's `lowerTrigger`: `ctx.child` takes an array of `ctx.attribute` results``; ``the `<id>` trigger's `lowerTrigger`: an attribute value is `true`, a string, a `ctx.expression` result, the trigger's own method value, or `{ kind: "atom" \| "member", name }` `` |
 | The hook ignores the trigger's `=value` or method value | `` `<text>` takes no `=value` here: the `<id>` trigger does not place it `` (`method value` for a method; a value that would vanish from the output is an error, positioned at the value) |
 | An expression trigger that is not a whole operand, or is a property name (`{ &a }`, `{ &a: 1 }`) | `` `<text>` is not a whole operand here: the `<id>` trigger lowers to an expression; write it where a value stands `` |
 | An expression trigger where a name is declared (`(&a) => 1`, a declarator, a catch parameter, a method parameter) | `` `<text>` (the `<id>` trigger) cannot be declared: it lowers to an expression, and a parameter or declaration needs a plain name `` |
@@ -4397,11 +4407,11 @@ publish the copy as a dialect package (§13.9.2). Mesh's `&` replaces the "`:nam
 
 #### 13.9.9 Node types
 
-**Decision 202 item 3.** One registry keys every node the MX AST can hold as
-`id:Type`. Core is **dialect zero**, named `mx`: its MX AST node types are
-registered under it (`MxTag` is `mx:Tag`) with their child keys, and core lowers
-them directly. A dialect registers its own under its `id`, in `nodeTypes`, keyed
-by a PascalCase `Type`:
+One registry keys every node the MX AST can hold as `id:Type`. Core is
+**dialect zero**, named `mx`: its MX AST node types are registered under it
+(`MxTag` is `mx:Tag`) with their child keys, and core lowers them directly. A
+dialect registers its own under its `id`, in `nodeTypes`, keyed by a PascalCase
+`Type`:
 
 ```ts
 interface NodeType<N extends DialectNode> {
@@ -4412,49 +4422,96 @@ interface NodeType<N extends DialectNode> {
 }
 
 interface ClaimContext {
-  position: "line" | "attribute";
-  tag: string | null;        // the static name of the tag an attribute is on; null on a line
-  attribute: string | null;  // null in both positions
+  position: "line" | "attribute" | "value";
+  tag: string | null;        // the static name of the tag the attribute or value is on; null on a line
+  attribute: string | null;  // the attribute a value belongs to (null for a tag's default value); null elsewhere
   fail(message: string, options?: { at?: SourceSpan; code?: string }): never;
 }
 ```
 
-A table row names one with `node: { type, dialect }`, in an attribute or line list
-only.
+A table row names one with `node: { type, dialect }`, in an attribute, line or
+value list.
 
-**The claim.** Every row in these two positions goes through one process. At a
-trigger position the parser finds the row whose `match` matches (the match
-decides where the node ends) and asks the row's node type to claim the text:
-core calls its `parse` with the matched text, its span and the context. `parse`
-returns the node's own fields, or `undefined`:
+**The claim.** Every row in these three positions goes through one process. At
+a trigger position the parser finds the row whose `match` matches and asks the
+row's node type to claim the text: core calls its `parse` with the matched
+text, its span and the context. In an attribute list and on a line the match
+decides where the node ends. In the value position the parser already knows
+where the value ends, so the row's `match` must cover the whole value, and only
+decides whether the row is asked. `parse` returns the node's own fields, or
+`undefined`:
 
 - **Fields** claim the text. Core sets `type` (the key) and `span` on them, and
-  the node takes the trigger's place in the MX AST: in its tag's attribute list,
-  or as a child of the enclosing body. Core also sets the trigger fields every
-  node in those positions has (`start`, `end`, `operator`, `value`, `args`) and
-  freezes the node once the parse is done. At lowering, core looks the node's
-  `type` up in the registry and calls that type's `lower`, which builds with the
-  `ctx` constructors `lowerTrigger` gets (§13.9.5).
+  the node takes the text's place in the MX AST: in its tag's attribute list, as
+  a child of the enclosing body, or as the `MxAttribute`'s `value`. In an
+  attribute list and on a line, core also sets the trigger fields every node
+  there has (`start`, `end`, `operator`, `value`, `args`); as a value it sets
+  only `start` and `end`, so a value node may own a `value` field. Core freezes
+  the node once the parse is done. At lowering, core looks the node's `type` up
+  in the registry and calls that type's `lower`, which builds with the `ctx`
+  constructors `lowerTrigger` gets (§13.9.5).
 - **`undefined` declines** the text. Parsing continues as if no row had matched
-  at that position: the text is an attribute name, or a tag on its line, as the
-  file's other rows and the default grammar read it.
+  at that position: the text is an attribute name, a tag on its line, or the
+  expression a value is with no row, as the file's other rows and the default
+  grammar read it.
 
-`parse` is called once per trigger. With no row in either position (the
-default `.mx` row), nothing is asked. A `{ call }` row and the built-in
-`"attribute"` spelling are core's own node type, `mx:Trigger`: its `parse`
-always claims, and the dialect's `lowerTrigger` lowers it. A row may name
-`mx:Trigger` itself, which is the same as `{ call }`. A row may also name
-`mx:Expression`, which declines every text in these two positions. Core
-registers a `parse` for no other `mx:` type.
+`parse` is called once per trigger. With no row in any of the three positions
+(the default `.mx` row), nothing is asked.
 
-A whole attribute value keeps the node:
-`ctx.attribute(name, { kind: "node", node, value })` lowers to a static `Attr`
-with `value` (what every target emits) and `node` (`DialectNode`, the node
-being lowered), never set together with `atom` or `member`.
+**Core's node types.** Core registers a `parse` for three of its types, and a
+row may name them:
+
+| Type | Positions | `parse` |
+|---|---|---|
+| `mx:Trigger` | attribute, line | claims every text; the node is an `MxTrigger`, lowered by the dialect's `lowerTrigger`. A `{ call }` row and the built-in `"attribute"` spelling are this type. |
+| `mx:Expression` | attribute, line, value | declines every text: an expression is what the text is with no row, in every position. |
+| `mx:String` | value | claims a value as the string it spells (`MxString`, below). |
+
+**`mx:String`.** A quoted value (`"a\"b"`, `'it\'s'`) is its contents with the
+one-character escapes (`\n`, `\t`, `\r`, `\b`, `\f`, `\v`, `\0`, `\\`,
+`\'`, `\"`, `` \` `` and a line continuation) resolved. A quoted value with
+any other escape (`\x41`, `\u{…}`, an octal `\01`) or a template literal is
+declined, so it parses as the expression it is, which gives the same string.
+Any other text is itself: under a row matching bare words, `title=hello` is the
+string `"hello"`, not the identifier `hello`. The node is
+
+```ts
+interface MxString {
+  type: "mx:String";
+  value: string;   // the string
+  raw: string;     // the value as written, quotes included
+  span: SourceSpan;
+  start: number;
+  end: number;
+}
+```
+
+Only a value a row claims becomes an `MxString`; a value no row claims keeps
+its `MxExpression`.
+
+**The value position.** A value row is armed on the first character of an
+attribute's `=value`, and of a tag's default value (`sort=~user`, whose
+attribute is `value`). A `:=` value, a spread, a trigger's own `=value` and a
+statement's words are never claimed. A claimed node is the `MxAttribute`'s
+`value`. It lowers to a static `Attr`: the type's `lower(node, ctx)`, with
+`ctx.position` `"value"`, returns a string (the attribute's
+`value`, what every target emits) or `ctx.expression(node)` (an expression
+value). For a string, the static `Attr` also carries the claimed node as `node`
+(`DialectNode`), never set together with `atom` or `member`; `mx:String` lowers
+to its `value` with no hook. Any other result is ``the `<id>` trigger's `lower`
+(node type `<key>`) must return a string or `ctx.expression(node)` for an
+attribute value``.
+
+A claimed value also ends a tag's default value early: where a space is
+followed by a `terminatesValue` attribute row, a default value that a value row
+claims up to the space ends there (`belongs-to=:List :list` is the default
+`:List` and the attribute `:list`). A default no row claims runs on as an
+expression, as it does with no value row.
+
 `ctx.fail(message, { at?, code? })` in `parse` is a positioned error at the
 node's text, or at `at`, carrying `code`. It is raised while the file parses
 and stops the parse, so it is the file's error even when an earlier line holds
-a parse error. Line and attribute hooks (`lower`, and a `{ call }` row's
+a parse error. Line, attribute and value hooks (`lower`, and a `{ call }` row's
 `lowerTrigger`) run once each, in source order, so the first failing trigger
 in the source is the file's error.
 
@@ -4463,20 +4520,25 @@ dialect's types is not supported yet.
 
 **Errors.** The only error the claim itself owns is a row naming a type that is
 not registered: ``the `<id>` trigger names `<key>`, which is not a registered
-node type (a row can name `mx:Trigger`, `mx:Expression`, …)``, followed by
-``; a row names a type of core (`mx`) or of its own dialect: naming another
-dialect's types is not supported yet`` when `<key>`'s dialect is not loaded.
-A dialect's rows are checked when it loads, so a dialect module reports it in
-the module file at 1:0 (or at the start of the file for the `dialect` option),
-naming the row (`` `table.lineTriggers[0].node` (trigger "ref") ``). Also at
-load: a type name that is not PascalCase, a field outside `keys`, `parse`,
-`print`, `lower`, a hook that is not a function, `keys` that is not an array of
-non-empty names or names `type` or `span`.
+node type (a row can name `mx:Trigger`, `mx:Expression`, …)``, listing the
+types a row in that position can name, followed by ``; a row names a type of
+core (`mx`) or of its own dialect: naming another dialect's types is not
+supported yet`` when `<key>`'s dialect is not loaded. A type registered only
+for other positions says so: ``… which is not a registered node type in value
+position (a row there can name `mx:String`, `mx:Expression`, …)`` (likewise
+`mx:String` in attribute or line position). A dialect's rows are checked when
+it loads, so a dialect module reports it in the module file at 1:0 (or at the
+start of the file for the `dialect` option), naming the row
+(`` `table.valueTriggers[0].node` (trigger "ref") ``). Also at load: a type
+name that is not PascalCase, a field outside `keys`, `parse`, `print`, `lower`,
+a hook that is not a function, `keys` that is not an array of non-empty names
+or names `type` or `span`.
 
 A node type's own mistakes are errors at the trigger, raised while the file
 parses: ``the `<id>` trigger's `parse` (node type `<key>`) threw: <message>``,
 ``… must return the node's fields as an object, or `undefined` to decline the
-text``, ``… returns the node's own fields: core sets `type` ``, and ``…:
+text``, ``… returns the node's own fields: core sets `type` `` (in the value
+position core sets only `type`, `span`, `start` and `end`), and ``…:
 `ctx.fail` takes a non-empty message``. `lower`'s results are checked as
 `lowerTrigger`'s are, named `` `lower` (node type `<key>`) ``.
 

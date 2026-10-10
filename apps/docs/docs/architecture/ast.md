@@ -502,7 +502,7 @@ Purpose: one named attribute, or the tag's default value.
 | `modifier` | `string \| null` | no | the text after the **last** `:` of the authored name (`class:x` → `x`), `null` without one; a trailing colon (`x:`) is `""` (decision 170) |
 | `modifierSpan` | `Span \| null` | no | the modifier's own span, colon excluded, starting at `nameSpan.end + 1`; zero-width there for the empty modifier; `null` with `modifier` |
 | `operator` | `"=" \| ":=" \| null` | no | `null` for a bare attribute or a method |
-| `value` | `MxExpression \| MxMethod \| null` | no | `null` for a bare attribute (`disabled`) |
+| `value` | `MxExpression \| MxMethod \| MxValueNode \| null` | no | `null` for a bare attribute (`disabled`); the node a value row claimed (§4.4b) in place of the expression |
 | `args` | `MxArguments \| null` | no | `name(args)` without a body: Marko 5's attribute-arguments form (`onAttrArgs`). Kept so lowering can position its error: today lowering only rejects it (`Unsupported arguments on …`) or hands it to the host's `resolveAttributeMethod` (`lowerAttrNamed`, `lower.ts`) |
 
 Spans, one rule: `start = min(nameSpan.start, value?.start)` and `end =` the
@@ -1344,6 +1344,41 @@ Core sets `type`, `span`, the offsets, `operator`, `value` and `args`; the
 `=value` after the text is lexed by core, never by the node type. The node is
 frozen once the parse ends. Lowering hands it to its type's `lower`.
 
+#### 4.4b `MxValueNode` and `MxString`
+
+A node a registered node type claimed as an attribute's whole value, in place
+of the `MxExpression` (design note `language-extensions/core.md`, "Node
+types"). When the value's first character arms a `valueTriggers` row whose
+`match` covers the whole value, the parser asks the row's node type to claim
+it; `undefined` declines, and the value is the `MxExpression` it is with no
+row. A `:=` value, a spread, a trigger's own `=value` and a statement's words
+are never claimed. The node is `MxAttribute.value`, the default value's
+included (`sort=~user`).
+
+```ts
+interface MxValueNode extends Span {
+  readonly type: `${string}:${string}`;                     // the registry key, `ref:Ref` or `mx:String`
+  readonly span: { sourceStart: number; sourceEnd: number }; // the value as written
+  readonly [field: string]: unknown;                        // the node type's own fields
+}
+
+interface MxString extends MxValueNode {
+  readonly type: "mx:String";
+  readonly value: string;                                   // the string, escapes resolved
+  readonly raw: string;                                     // the value as written, quotes included
+}
+```
+
+Core sets `type`, `span` and the offsets, nothing else, so a value node may own
+a `value` field (`MxString` does). The node is frozen once the parse ends.
+`MxString` is core's own value type (`mx:String`): a row naming it claims a
+quoted value as its contents and any other text as itself, and declines a
+quoted value with an escape it does not resolve, so only a value a row claims
+is an `MxString`.
+
+Offsets, under a row on `~` naming `ref:Ref`: in `sort to=~user.name`,
+`MxAttribute` `to` is `[5, 18)` and its `value` `ref:Ref` is `[8, 18)`.
+
 ### 4.5 `MxBlockTag`, `MxFilter`
 
 A syntax table's block tag and filter (decision 182), in HTML content only
@@ -1820,7 +1855,7 @@ in-repo template parser adds a 28th, `onAtom` (decision 156; source
 | `onTagParams` | `Value` | `MxTag.params` (`MxParameterList`, span inside the pipes) |
 | `onAttrName` | `Range` | `MxAttribute.name`/`nameSpan`; a name `#x`, `.x` or `:x` becomes `MxShorthand` (`position: "attribute"`); an empty range is the default value (`name: null`) |
 | `onAttrArgs` | `Value` | `MxAttribute.args` |
-| `onAttrValue` | `AttrValue { value, bound }` | `MxAttribute.value`, `operator`; on a shorthand, `MxShorthand.default` |
+| `onAttrValue` | `AttrValue { value, bound, trigger?, claim? }` | `MxAttribute.value`, `operator`; on a shorthand, `MxShorthand.default`; a `claim` (the node a value row's type returned) is the value itself (§4.4b) |
 | `onAttrMethod` | `AttrMethod { params, body, typeParams, async }` | `MxMethod` (§3.5a); `params.value` → `MxParameterList` span, `params` range → its `outer`; extends `MxAttribute.start` per §3.5 |
 | `onAttrSpread` | `Value` | `MxSpreadAttribute` |
 | `onOpenTagComment` | `Value` | `MxComment` in `MxTag.attributes` |
@@ -2064,6 +2099,7 @@ not listed.
 | `MxAtom` | node | §4.3 | 1197 |
 | `MxTrigger` | node | §4.4 | 1265 |
 | `MxRegisteredNode` | registered node (typed by its key) | §4.4a | 1323 |
+| `MxValueNode`, `MxString` | registered value node (typed by its key) | §4.4b | 1359 |
 | `MxBlockTag`, `MxFilter` | node | §4.5 | 1302 |
 | `MxBodyMode` | union | §3.12 | 864 |
 | `MxTagShape` | function type | §3.12 | 864 |

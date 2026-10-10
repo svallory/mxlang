@@ -544,14 +544,19 @@ routing.
 
 A dialect can register its own node types, keyed `id:Type` in one registry
 with core's own (core is dialect zero, `mx`: `mx:Tag`, `mx:Attribute`, …). A
-trigger row names one with `node: { type, dialect }`, in an attribute list
-or on a tagless line. The row's `match` decides where the node ends. While
-the file parses, core hands the matched text, its span and a context
-(`ClaimContext`: the position, the tag's static name, `fail`) to the type's
-`parse`. Fields claim the text: core stamps them with `type` and `span`, and
-the node stays in the MX AST at that position. `undefined` declines it: the
-parse goes on as if no row matched there. At lowering, core calls the `lower`
-of the node's `type`, with the same `ctx` constructors `lowerTrigger` gets:
+trigger row names one with `node: { type, dialect }`, in an attribute list,
+on a tagless line, or in the value position (`valueTriggers`: an attribute's
+whole `=value`). In an attribute list and on a line the row's `match` decides
+where the node ends; in the value position the parser already knows where the
+value ends, so `match` must cover the whole value and only decides whether the
+row is asked. While the file parses, core hands the text, its span and a
+context (`ClaimContext`: the position, the tag's static name, the attribute's
+name for a value, `fail`) to the type's `parse`. Fields claim the text: core
+stamps them with `type` and `span`, and the node stays in the MX AST at that
+position (a value node is the `MxAttribute`'s `value`). `undefined` declines
+it: the parse goes on as if no row matched there. At lowering, core calls the
+`lower` of the node's `type`, with the same `ctx` constructors `lowerTrigger`
+gets:
 
 ```ts
 import type { Dialect, DialectNode, NodeType } from "@mxlang/core";
@@ -563,40 +568,48 @@ interface Ref extends DialectNode {
 const Ref: NodeType<Ref> = {
   keys: [],
   parse: (text, _span, ctx) => {
-    if (text === "~skip") return undefined; // declined: `~skip` stays an attribute name
+    if (text === "~skip") return undefined; // declined: `~skip` parses as it would with no row
     const path = text.slice(1).split(".");
     if (path.includes("")) ctx.fail("empty segment");
     return { path };
   },
   print: (node) => `~${node.path.join(".")}`,
-  lower: (node, ctx) =>
-    ctx.attribute("ref", { kind: "node", node, value: node.path.join(".") }),
+  // In the value position, `lower` returns the attribute's value.
+  lower: (node) => node.path.join("."),
 };
-
-const REF = {
-  id: "ref",
-  chars: "~",
-  match: "~[a-z]+(?:\\.[a-z]+)*",
-  standIn: "identifier",
-  node: { type: "Ref", dialect: "ref" },
-} as const;
 
 export default {
   id: "ref",
   name: "Ref",
-  table: { attributeTriggers: [REF], lineTriggers: [REF] },
+  table: {
+    valueTriggers: [
+      {
+        id: "ref",
+        chars: "~",
+        match: "~[a-z]+(?:\\.[a-z]+)*",
+        standIn: "identifier",
+        node: { type: "Ref", dialect: "ref" },
+      },
+    ],
+  },
   nodeTypes: { Ref },
 } satisfies Dialect;
 ```
 
-`print(parse(text))` gives the text back. An attribute built with
-`{ kind: "node", node, value }` is a static attribute whose IR carries the
-node (`Attr.node`) beside the `value` every target emits. A row names a
-type of its own dialect, or core's `mx:Trigger` (the same as `{ call }`) or
-`mx:Expression` (declines every text here); naming another dialect's types
-is not supported yet. Any other name is the one error the claim owns: ``the
-`ref` trigger names `ref:Path`, which is not a registered node type (a row
-can name `mx:Trigger`, `mx:Expression`, `ref:Ref`)``.
+`print(parse(text))` gives the text back. `<sort to=~user.name>` lowers to a
+static attribute `to="user.name"` whose IR carries the node (`Attr.node`)
+beside the `value` every target emits. A value node's `lower` returns a string
+or `ctx.expression(node)`; in an attribute list or on a line it builds
+attributes and tags, as `lowerTrigger` does. A row names a type of its own
+dialect or one of core's: `mx:Trigger` (the same as `{ call }`; attribute and
+line), `mx:Expression` (declines every text; every position) and `mx:String`
+(claims a value as the string it spells, quoted or bare; value position only).
+Naming another dialect's types is not supported yet. Any other name is the one
+error the claim owns: ``the `ref` trigger names `ref:Path`, which is not a
+registered node type (a row can name `mx:Trigger`, `mx:Expression`,
+`ref:Ref`)``, and a type registered for other positions is named as such
+(``… which is not a registered node type in value position (a row there can
+name `mx:String`, `mx:Expression`, `ref:Ref`)``).
 
 ## A reference dialect: `@mxlang/core/syntax/member`
 
