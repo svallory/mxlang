@@ -3587,7 +3587,9 @@ read throws, as `readFileSync` does.
 required at every depth. A `DelegatedTag` and an `AttributeTag` also carry
 `nameSpan`, and a `DelegatedTag` always has `args` (`[]` without arguments).
 A static attribute always has `valueSpan` (an atom's and a member's included;
-an empty value's is zero-width), and an `Import` always has `from` and `names`.
+`e=""` spans its quotes, and a bare colon name such as `x:foo`, whose value is
+`""`, has a zero-width one at the name's end), and an `Import` always has
+`from` and `names`.
 `bodySpan` and `paramSpans` stay optional. A promised span or field that is
 missing is an `internal error`, with no IR. Every span is core's `SourceSpan`
 (`{ sourceStart, sourceEnd }`, UTF-16 code units from the file's start, so

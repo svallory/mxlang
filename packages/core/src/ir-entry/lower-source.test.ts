@@ -293,6 +293,19 @@ describe("required beyond `span`", () => {
     expect(staticValues(`<a="post"/>`)).toEqual([["value", `"post"`]]);
   });
 
+  it("a static attribute's `valueSpan`: zero-width for a bare colon name", () => {
+    const source = "<a x:foo/>";
+    const result = lowerSource(source, "/t.mx");
+    expect(result.diagnostics).toEqual([]);
+    const [attr] = tagOf(result.ir?.body[0]).attrs;
+    expect(attr?.kind).toBe("static");
+    if (attr?.kind !== "static") return;
+    expect([attr.value, attr.valueSpan]).toEqual([
+      "",
+      { sourceStart: 8, sourceEnd: 8 },
+    ]);
+  });
+
   it("a static attribute's `valueSpan`: shorthand id and class", () => {
     expect(staticValues("<a#main.big/>")).toEqual([
       ["class", "big"],
