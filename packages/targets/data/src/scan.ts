@@ -57,10 +57,9 @@ const SCAN_TAGLIB_ID = "mx-data-scan-parse";
 
 /**
  * One translator per parse-switch signature, kept for the life of the
- * process. Marko caches a lookup by taglib id and keeps every translator
- * object it has seen in a map that is never freed, so the id must carry the
- * definitions (as core's `parserTaglibId` does) and the object must be reused
- * rather than rebuilt on each error-path scan.
+ * process. Core's tag table (`tagTable`) is cached per translator object, so
+ * reusing the object keeps each error-path scan from rebuilding the table;
+ * the key carries the definitions, as core's `parserTaglibId` does.
  */
 const translators = new Map<string, unknown>();
 

@@ -47,14 +47,12 @@ export function readExample(file: string): string {
 
 /**
  * Lowers `source` exactly as `@mxlang/target-html` does — same declarations, same
- * taglibs, same discovery dirs, same targets — but hands the IR back instead
- * of emitting it.
+ * taglibs, same targets — but hands the IR back instead of emitting it.
  */
 export function lowerForHtml(source: string, warnings: MxWarning[]): Ir {
   let captured: Ir | null = null;
   compileSource(source, exampleFilename, policy, {
     taglibs: [["mx-translator-core", CORE_TAGLIB]],
-    tagDiscoveryDirs: ["tags"],
     targets: htmlTargets,
     warnings,
     emitIr: (ir) => {

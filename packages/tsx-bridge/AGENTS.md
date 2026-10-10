@@ -62,14 +62,11 @@ supports the MX 1.0 subset of Marko syntax, so treating an arbitrary
 extension across every host loader (`@mxlang/target-html/bun`, `@mxlang/host-hono/bun`,
 `@mxlang/vite-plugin`), the language server, the TypeScript plugin/`mx-tsc`,
 and the VS Code/Zed extensions. Porting a Marko component that stays within
-the MX 1.0 subset is a rename. `@marko/compiler`'s own `tags/` auto-discovery
-convention (`tagDiscoveryDirs: ["tags"]`, used by `@mxlang/target-html` and
-`@mxlang/host-preact`) is the one narrow exception that still touches real
-`.marko` files: `@marko/compiler`'s `scanTagsDir` only discovers files whose
-*actual* extension is `.marko` (measured in 5.42.5's `loadTaglibFromDir.js`,
-`ext === ".marko"`) — a `.mx` file placed in a `tags/` directory is not
-discovered at all. This is Marko's own compiler behavior during a whole-file
-`.mx` compile, not a second entry point MX advertises.
+the MX 1.0 subset is a rename. Tags beside a file reach a compile through
+core's own scan (`getCustomTags`: `tags/x.mx` and `tags/x.tag.ts`, handed to
+the compile as `customTags`). No MX compile runs `@marko/compiler`'s `tags/`
+auto-discovery, which only ever found files whose *actual* extension is
+`.marko` (measured in 5.42.5's `loadTaglibFromDir.js`, `ext === ".marko"`).
 
 The oracle (`packages/oracle`, `packages/targets/html/fixtures-marko/*`) still
 keeps its 43 stock fixtures as real `.marko` files, because Marko's own
