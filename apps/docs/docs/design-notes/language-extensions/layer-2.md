@@ -142,8 +142,9 @@ contract that does not declare it), and that is alpha.14's behavior.
 
 What a Mesh file reads differently from a plain `.mx` file once the move
 lands: `#x=1`, `.x=1` and `#x(p) { b }` are refused (decision 183); a bare
-`:` after a value no longer ends it, and `belongs-to=:X :x` no longer splits
-(decision 182 addendum 1); `a::b` after a word is TypeScript's error rather
+`:` after a value no longer ends it (decision 182 addendum 1), and
+`belongs-to=:X :x` splits only because the module's value row `atom-value`
+claims `:X` and a claimed default value ends at the spaced `:x`; `a::b` after a word is TypeScript's error rather
 than the reserved-token one; `::` inside a tag or attribute name is Marko's
 reading; tag-adjacent `kind:name`, `<:name>` and `#id:name.class` are
 Marko's readings (no trigger reaches a tag name).

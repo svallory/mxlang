@@ -75,26 +75,6 @@
     "note": "decision 183 (146 addendum 4 withdrawn): `#x=…`, `.x=…`, `#x(p) { b }` are refused at the operator by the row's `value: \"refuse\"`"
   },
   {
-    "test": "packages/core/src/ir-entry/atoms.test.ts > Mesh's syntax-v3 lines a single-atom default value then `:name` is name sugar: \"x\\n  belongs-to=:Customer :customer\\n\"",
-    "ruling": "single-atom-default",
-    "note": "decision 182 addendum 1 item 3: `kind=:X :x` no longer splits after a single-atom default value"
-  },
-  {
-    "test": "packages/core/src/ir-entry/atoms.test.ts > Mesh's syntax-v3 lines a single-atom default value then `:name` is name sugar: \"x\\n  has-many=:Order :orders\\n\"",
-    "ruling": "single-atom-default",
-    "note": "decision 182 addendum 1 item 3: `kind=:X :x` no longer splits after a single-atom default value"
-  },
-  {
-    "test": "packages/core/src/ir-entry/atoms.test.ts > Mesh's syntax-v3 lines a single-atom default value then `:name` is name sugar: \"<x><has-many=:Order :orders/></x>\"",
-    "ruling": "single-atom-default",
-    "note": "decision 182 addendum 1 item 3: `kind=:X :x` no longer splits after a single-atom default value"
-  },
-  {
-    "test": "packages/core/src/ir-entry/atoms.test.ts > Mesh's syntax-v3 lines a single-atom default value then `:name` is name sugar: \"x\\n  belongs-to=:Customer :customer required\\n\"",
-    "ruling": "single-atom-default",
-    "note": "decision 182 addendum 1 item 3: `kind=:X :x` no longer splits after a single-atom default value"
-  },
-  {
     "test": "packages/core/src/ir-entry/parse.test.ts > a dynamic shorthand class on data <a.${x} .${y}/> is a positioned diagnostic, not a throw",
     "ruling": "placeholder-in-attribute-sugar",
     "note": "a `${…}` inside a spaced sugar ends the trigger's token; the generic trigger error replaces the dynamic-shorthand message (lead 13:24, Q4)"
