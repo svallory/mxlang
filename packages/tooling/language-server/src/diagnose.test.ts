@@ -24,6 +24,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { DiagnosticSeverity } from "vscode-languageserver/node";
 import {
   cleanupProbeProjects,
+  PROBE_CONTRACT_MESSAGE,
   PROBE_SOURCES,
   probeProject,
 } from "../../../../test-fixtures/dialects/probe.ts";
@@ -1361,6 +1362,78 @@ describe("a dialect's files", () => {
         policy("html", true),
       ),
     ).toEqual([]);
+  });
+
+  it("are checked against the project's contracts", () => {
+    const project = probeProject({}, { contracts: true });
+    expect(
+      diagnoseDocument(
+        "<service/>\n",
+        at(project.path("a.probe")),
+        policy("html"),
+      ),
+    ).toEqual([
+      {
+        severity: DiagnosticSeverity.Error,
+        source: "Probe",
+        message: PROBE_CONTRACT_MESSAGE,
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 1 },
+        },
+      },
+    ]);
+  });
+
+  it("raise no host-policy problem on their behalf: nothing reaches the package.json", () => {
+    const project = probeProject();
+    const related: RelatedDiagnostics[] = [];
+    const manifest = project.path("package.json");
+    expect(
+      diagnoseDocument(
+        PROBE_SOURCES.ok,
+        at(project.path("a.probe")),
+        policy("html"),
+        undefined,
+        "",
+        undefined,
+        related,
+        undefined,
+        [
+          {
+            file: manifest,
+            line: 1,
+            column: 0,
+            message: 'unknown mx.target "nope"',
+          },
+        ],
+      ),
+    ).toEqual([]);
+    expect(related).toEqual([]);
+    // The same problem on a page of the same project is still raised.
+    const page = diagnoseDocument(
+      "<p/>\n",
+      at(project.path("a.mx")),
+      policy("html"),
+      undefined,
+      "",
+      undefined,
+      related,
+      undefined,
+      [
+        {
+          file: manifest,
+          line: 1,
+          column: 0,
+          message: 'unknown mx.target "nope"',
+        },
+      ],
+    );
+    expect(page).toHaveLength(1);
+    expect(page[0]?.severity).toBe(DiagnosticSeverity.Warning);
+    expect(page[0]?.message).toBe(`${manifest}:1:1: unknown mx.target "nope"`);
+    expect(related).toHaveLength(1);
+    expect(related[0]?.uri).toBe(at(manifest));
   });
 
   it("a plain .mx file in the same project is diagnosed as before, source mxlang", () => {

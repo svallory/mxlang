@@ -1,7 +1,9 @@
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve as resolvePath } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   cleanupProbeProjects,
+  PROBE_DIALECT_MODULE,
   PROBE_SOURCES,
   probeProject,
 } from "../../../../test-fixtures/dialects/probe.ts";
@@ -54,35 +56,84 @@ async function refusal(run: () => Promise<unknown>): Promise<Refusal> {
 
 const NO_EMIT = "Probe files cannot be imported: the dialect registers no emit";
 
+/** A TypeScript importer whose third line imports `specifier`. */
+const importer = (specifier: string) =>
+  `// entry\nconst before = 1;\nimport ${JSON.stringify(specifier)};\n`;
+
 describe("importing a dialect file", () => {
   it.each([
     ["an extension of its own", "./a.probe"],
     ["an extension that ends in .mx", "./a.probe.mx"],
   ])(
-    "is refused with the exact text, at the head of the file (%s)",
+    "is refused with the exact text, at the import in the importing file (%s)",
     async (_, specifier) => {
       const project = probeProject({
         "a.probe": PROBE_SOURCES.ok,
         "a.probe.mx": PROBE_SOURCES.ok,
+        "main.ts": importer(specifier),
       });
-      const file = project.path(specifier.slice(2));
+      const main = project.path("main.ts");
       const error = await refusal(() =>
-        hooks().resolveId.call(context, specifier, project.path("main.ts")),
+        hooks().resolveId.call(context, specifier, main),
       );
       expect(error.message).toBe(NO_EMIT);
-      expect(error.id).toBe(file);
-      expect(error.loc).toEqual({ file, line: 1, column: 0 });
-      expect(error.frame).toBe("1 | <y !ok/>\n    ^");
+      expect(error.id).toBe(main);
+      expect(error.loc).toEqual({ file: main, line: 3, column: 7 });
+      expect(error.frame).toBe(`3 | import "${specifier}";\n           ^`);
       // Rolldown prints the stack after the position: only name and message.
       expect(error.stack).toBe(`Error: ${NO_EMIT}`);
+      expect((error as unknown as { pluginCode: string }).pluginCode).toBe(
+        importer(specifier),
+      );
     },
   );
 
-  it("an entry or a hand-built id reaches transform, which refuses the same way", async () => {
-    const project = probeProject({ "a.probe.mx": PROBE_SOURCES.ok });
+  it("an .mx importer is pointed at in its authored source, not the module this plugin mints", async () => {
+    const project = probeProject({
+      "a.probe": PROBE_SOURCES.ok,
+      "page.mx": 'import "./a.probe"\n<p/>\n',
+    });
+    const page = project.path("page.mx");
+    const error = await refusal(() =>
+      hooks().resolveId.call(context, "./a.probe", `${page}${MX_SUFFIX}`),
+    );
+    expect(error.message).toBe(NO_EMIT);
+    expect(error.id).toBe(page);
+    expect(error.loc).toEqual({ file: page, line: 1, column: 7 });
+    expect(error.frame).toBe('1 | import "./a.probe"\n           ^');
+  });
+
+  it("the refusal is the text even when the dialect file has an error of its own", async () => {
+    const project = probeProject({
+      "a.probe": PROBE_SOURCES.bad,
+      "main.ts": importer("./a.probe"),
+    });
+    const main = project.path("main.ts");
+    const error = await refusal(() =>
+      hooks().resolveId.call(context, "./a.probe", main),
+    );
+    expect(error.message).toBe(NO_EMIT);
+    expect(error.loc).toEqual({ file: main, line: 3, column: 7 });
+  });
+
+  it("falls back to the head of the dialect file when the import is not written in the importer", async () => {
+    // No importer on disk (a hand-built id, an import the emitter added).
+    const project = probeProject({ "a.probe": PROBE_SOURCES.ok });
+    const file = project.path("a.probe");
+    const error = await refusal(() =>
+      hooks().resolveId.call(context, "./a.probe", project.path("main.ts")),
+    );
+    expect(error.message).toBe(NO_EMIT);
+    expect(error.id).toBe(file);
+    expect(error.loc).toEqual({ file, line: 1, column: 0 });
+    expect(error.frame).toBe("1 | <y !ok/>\n    ^");
+  });
+
+  it("an entry or a hand-built id reaches transform, which refuses at the head of the file", async () => {
+    const project = probeProject({ "a.probe.mx": PROBE_SOURCES.bad });
     const file = project.path("a.probe.mx");
     const error = await refusal(() =>
-      hooks().transform.call({}, PROBE_SOURCES.ok, `${file}${MX_SUFFIX}`),
+      hooks().transform.call({}, PROBE_SOURCES.bad, `${file}${MX_SUFFIX}`),
     );
     expect(error.message).toBe(NO_EMIT);
     expect(error.loc).toEqual({ file, line: 1, column: 0 });
@@ -101,24 +152,49 @@ describe("importing a dialect file", () => {
     );
   });
 
-  it("a dialect file with an error reports that error first, at its position", async () => {
-    const project = probeProject({ "a.probe": PROBE_SOURCES.bad });
-    const file = project.path("a.probe");
-    const error = await refusal(() =>
-      hooks().resolveId.call(context, "./a.probe", project.path("main.ts")),
-    );
-    expect(error.message).toBe("bad probe");
-    expect(error.loc).toEqual({ file, line: 1, column: 3 });
-    expect(error.frame).toBe("1 | <y !bad/>\n       ^");
-  });
-
   it("a warning-free empty dialect file is still refused", async () => {
     const project = probeProject({ "a.probe": "" });
     const error = await refusal(() =>
       hooks().resolveId.call(context, "./a.probe", project.path("main.ts")),
     );
     expect(error.message).toBe(NO_EMIT);
-    expect(error.loc.line).toBe(1);
+    expect(error.loc).toEqual({
+      file: project.path("a.probe"),
+      line: 1,
+      column: 0,
+    });
+  });
+
+  it("two dialects claim the extension: no dialect has a name, so the routing error is the refusal", async () => {
+    const project = probeProject(
+      { "a.probe": PROBE_SOURCES.ok, "main.ts": importer("./a.probe") },
+      { packageJson: { devDependencies: { "other-dialect": "0.0.0" } } },
+    );
+    const other = join(project.dir, "node_modules", "other-dialect");
+    mkdirSync(other, { recursive: true });
+    writeFileSync(
+      join(other, "package.json"),
+      JSON.stringify({
+        name: "other-dialect",
+        mx: {
+          dialect: {
+            id: "other",
+            name: "Other",
+            extensions: [".probe"],
+            module: "./index.cjs",
+          },
+        },
+      }),
+    );
+    writeFileSync(join(other, "index.cjs"), PROBE_DIALECT_MODULE);
+    const file = project.path("a.probe");
+    const error = await refusal(() =>
+      hooks().resolveId.call(context, "./a.probe", project.path("main.ts")),
+    );
+    expect(error.message).toMatch(
+      /^two dialects claim `\.probe`: `probe` \(probe-dialect\) and `other` \(other-dialect\)\./,
+    );
+    expect(error.loc).toEqual({ file, line: 1, column: 0 });
   });
 
   it("a query does not hide the file", async () => {

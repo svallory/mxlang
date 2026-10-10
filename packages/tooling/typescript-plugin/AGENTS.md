@@ -527,8 +527,12 @@ The stub is `export default` of an `any`, plus `Input` and every `export`ed name
 `createDialectLanguagePlugin(typescript, extensions)` (`src/dialect-language.ts`) is
 the first language plugin, so a dialect's `.probe.mx` is the dialect's and not
 an MX file. It claims a file when its name ends in one of the extensions the
-project's dialects claim and `isDialectFile` agrees (`@mxlang/targets/dialect-check`,
-which also owns the check). Its virtual code is an empty module (`export {};`)
+project's dialects claim (unioned over the packages under the project root,
+`dialectExtensionsUnder`) and `isDialectFile` agrees (`@mxlang/targets/dialect-check`,
+which also owns the check). A file with a claimed extension that is no dialect's
+here (a sibling package that declares no dialect) is still answered, with an
+empty module and no diagnostics, since TypeScript lists every file of an
+extension it was told about and Volar needs a plugin to answer each. Its virtual code is an empty module (`export {};`)
 carrying `MxCompileDiagnostic`s from `checkDialectFile`, i.e. `lowerSource`
 under the dialect's own `tagRules`; `diagnosticSource` is the dialect's `name`
 and `diagnosticCode` its code, which `withSyntaxDiagnostics` reports as the

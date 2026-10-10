@@ -1,6 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import {
   ambientTypeDiagnostics,
   ambientTypeFiles,
@@ -59,32 +59,69 @@ const ASTRO_SUPPORTED_EXTENSIONS = [
 
 /**
  * The directories whose dialects this run takes into account: the current
- * directory, and the directory of the project `-p`/`--project` (or the first
- * `-b` argument) names. A dialect's extensions are a property of the project
- * that uses it, and `runTsc` wants the extension list before the program
- * exists.
+ * directory, the directory of each project `-p`/`--project` (or each `-b`
+ * argument) names, and the directory of every project those reference
+ * (`references` in a `tsconfig.json`, followed recursively). A dialect's
+ * extensions are a property of the project that uses it, and `runTsc` wants
+ * the extension list before the program exists.
  */
 export function dialectProjectDirs(
   argv: readonly string[],
   cwd: string,
 ): string[] {
   const dirs = new Set([cwd]);
-  const flag = argv.findIndex(
-    (arg) =>
-      arg === "-p" || arg === "--project" || arg === "-b" || arg === "--build",
-  );
-  const value = flag === -1 ? undefined : argv[flag + 1];
-  if (value !== undefined && !value.startsWith("-")) {
-    const path = resolve(cwd, value);
+  const named: string[] = [];
+  for (let index = 0; index < argv.length; index++) {
+    const arg = argv[index] ?? "";
+    if (arg === "-p" || arg === "--project") {
+      const value = argv[index + 1];
+      if (value !== undefined && !value.startsWith("-")) named.push(value);
+    } else if (arg === "-b" || arg === "--build") {
+      // `-b` takes any number of projects, up to the next flag.
+      for (const value of argv.slice(index + 1)) {
+        if (value.startsWith("-")) break;
+        named.push(value);
+      }
+    }
+  }
+  const seen = new Set<string>();
+  const visit = (project: string): void => {
+    const path = resolve(cwd, project);
     let isDirectory = false;
     try {
       isDirectory = statSync(path).isDirectory();
     } catch {
       // A path that does not exist is tsc's to report.
+      return;
     }
+    const config = isDirectory ? join(path, "tsconfig.json") : path;
+    if (seen.has(config)) return;
+    seen.add(config);
     dirs.add(isDirectory ? path : dirname(path));
-  }
+    for (const reference of referencesOf(config)) visit(reference);
+  };
+  for (const project of named) visit(project);
   return [...dirs];
+}
+
+/** The `references` a tsconfig lists, as paths (a directory or a config file). */
+function referencesOf(config: string): string[] {
+  try {
+    const typescript = createRequire(import.meta.url)(
+      "typescript",
+    ) as typeof ts;
+    const read = typescript.readConfigFile(config, typescript.sys.readFile);
+    const references = (
+      read.config as { references?: Array<{ path?: unknown }> } | undefined
+    )?.references;
+    return (references ?? []).flatMap((reference) =>
+      typeof reference?.path === "string"
+        ? [resolve(dirname(config), reference.path)]
+        : [],
+    );
+  } catch {
+    return [];
+  }
 }
 
 /** The file extensions dialects claim in the projects of this run. */

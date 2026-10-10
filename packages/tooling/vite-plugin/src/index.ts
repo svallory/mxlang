@@ -38,37 +38,62 @@ function loadDialectCheck(): Promise<DialectCheckModule> {
  * The refusal for a dialect file the build was asked to import, or
  * `undefined` when `file` is no dialect file. Building a file asks its
  * dialect for an emit, and a dialect registers none, so the import is
- * refused: positioned at the head of the dialect file, with exactly
- * `<dialect> files cannot be imported: the dialect registers no emit`.
- * A dialect file that does not check clean reports its first error instead,
- * at its own position: that is the next thing its author has to fix.
+ * refused with exactly
+ * `<dialect> files cannot be imported: the dialect registers no emit`,
+ * whatever else is wrong with the file: its own errors are what the checkers
+ * report, and the build's answer is the refusal.
+ *
+ * Positioned where the author has to act: at the specifier in the importing
+ * file (`from`: the importer's authored file and the specifier as written),
+ * and, for an entry, a hand-built id or an import the emitter added, at the
+ * head of the dialect file. The one exception to the text is a file whose
+ * extension the project hands to dialects without the routing settling which:
+ * no dialect has a name to put in the sentence, so the routing error is the
+ * refusal.
  */
-async function dialectFileRefusal(file: string): Promise<Error | undefined> {
-  const { checkDialectFile, isDialectFile } = await loadDialectCheck();
+async function dialectFileRefusal(
+  file: string,
+  from?: { importer: string; specifier: string },
+): Promise<Error | undefined> {
+  const { checkDialectFile, FALLBACK_DIAGNOSTIC_SOURCE, isDialectFile } =
+    await loadDialectCheck();
   if (!isDialectFile(file)) return undefined;
   const text = readTemplateSource(file);
   if (text === undefined) return undefined;
   const check = checkDialectFile(file, text);
   if (check === undefined) return undefined;
-  const first = check.diagnostics.find(
-    (diagnostic) => diagnostic.severity === "error",
-  );
-  const message =
-    first?.message ??
-    `${check.source} files cannot be imported: the dialect registers no emit`;
+  const unsettled = check.source === FALLBACK_DIAGNOSTIC_SOURCE;
+  const message = unsettled
+    ? (check.diagnostics[0]?.message ??
+      `${check.source} files cannot be imported: the dialect registers no emit`)
+    : `${check.source} files cannot be imported: the dialect registers no emit`;
+  const importerText =
+    from === undefined || unsettled
+      ? undefined
+      : readTemplateSource(from.importer)?.replace(/\r\n?/g, "\n");
+  const at =
+    from === undefined || importerText === undefined
+      ? undefined
+      : findImportSpecifier(importerText, from.specifier);
   // The authored position goes in `pluginCode` too, so Vite does not map it
   // through the importer's sourcemap (see `unresolvedImport`).
-  const error = Object.assign(new Error(), {
-    plugin: "mx",
-    pluginCode: text,
-  });
-  return locate(error, {
-    file,
-    line: first?.line ?? 1,
-    column: first?.column ?? 0,
-    source: text,
-    message,
-  });
+  if (from !== undefined && importerText !== undefined && at !== undefined) {
+    return locate(
+      Object.assign(new Error(), { plugin: "mx", pluginCode: importerText }),
+      { file: from.importer, ...at, source: importerText, message },
+    );
+  }
+  const first = unsettled ? check.diagnostics[0] : undefined;
+  return locate(
+    Object.assign(new Error(), { plugin: "mx", pluginCode: text }),
+    {
+      file,
+      line: first?.line ?? 1,
+      column: first?.column ?? 0,
+      source: text,
+      message,
+    },
+  );
 }
 
 /** The unnamed tag's name for a file the Vite plugin prints (a `.solid.mx`), resolved quietly: the page transform already reported the policy's warnings. */
@@ -951,6 +976,24 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       : unresolvedImport(sourcePath(importerPath, ext), specifier);
   };
   /**
+   * The authored file behind `importer` (the file for a JS/TS importer, the
+   * `.mx` source for one of this plugin's virtual ids) and the specifier as
+   * written, for a dialect refusal to point at the import.
+   */
+  const importSite = (
+    importer: string | undefined,
+    specifier: string,
+  ): { importer: string; specifier: string } | undefined => {
+    if (importer === undefined) return undefined;
+    const [importerPath] = splitId(importer);
+    const ext = isMxModule(importerPath);
+    return {
+      importer:
+        ext === undefined ? importerPath : sourcePath(importerPath, ext),
+      specifier,
+    };
+  };
+  /**
    * Whether the project around `directory` hands `path`'s extension to a
    * dialect. Cached per directory for the length of a build: an import of
    * anything else must not read a manifest each time.
@@ -1049,7 +1092,10 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
         if (await claimedByDialect(path, importer)) {
           const resolved = await this.resolve(id, importer, { skipSelf: true });
           if (resolved && !resolved.external) {
-            const refusal = await dialectFileRefusal(splitId(resolved.id)[0]);
+            const refusal = await dialectFileRefusal(
+              splitId(resolved.id)[0],
+              importSite(importer, path),
+            );
             if (refusal) throw refusal;
           }
         }
@@ -1086,7 +1132,10 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
 
       // `.probe.mx` is `.mx` to the extension list and a dialect file to its
       // project: the dialect builds it, not this plugin.
-      const refusal = await dialectFileRefusal(resolvedPath);
+      const refusal = await dialectFileRefusal(
+        resolvedPath,
+        importSite(importer, path),
+      );
       if (refusal) throw refusal;
 
       // Carry the query across the rewrite. Vite appends its own (`?t=` on an

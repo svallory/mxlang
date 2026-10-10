@@ -4,6 +4,9 @@ import { stripVTControlCharacters } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   cleanupProbeProjects,
+  PROBE_CONTRACT_MESSAGE,
+  PROBE_DIALECT_MODULE,
+  PROBE_MANIFEST,
   PROBE_SOURCES,
   probeProject,
 } from "../../../../test-fixtures/dialects/probe.ts";
@@ -100,8 +103,9 @@ describe("mx-tsc on a dialect's files", () => {
   }, () => {
     const { project, status, output } = run({ "page.mx": "<div>\n" });
     expect(status).toBe(1);
-    expect(output).toContain(`${project.path("page.mx")}`);
-    expect(output).toContain('Missing ending "div" tag');
+    expect(output).toBe(
+      `${shown(project.path("page.mx"))}(1,1): error TS80001: \n    > 1 | <div>\n        | ^^^^^ Missing ending "div" tag\n      2 |\n`,
+    );
     expect(output).not.toContain("PROBE_BAD");
   });
 
@@ -117,5 +121,93 @@ describe("mx-tsc on a dialect's files", () => {
     expect(
       stripVTControlCharacters(result.stderr + result.stdout),
     ).not.toContain("PROBE_BAD");
+  });
+
+  it("checks a call against the project's contracts", {
+    timeout: 120_000,
+  }, () => {
+    const project = probeProject(
+      { "tsconfig.json": TSCONFIG, "a.probe": "<service/>\n" },
+      { contracts: true },
+    );
+    const result = runInProcess(["-p", project.dir, "--pretty", "false"]);
+    expect(result.status).toBe(1);
+    expect(stripVTControlCharacters(result.stderr + result.stdout)).toBe(
+      `${shown(project.path("a.probe"))}(1,1): error TS80001: ${PROBE_CONTRACT_MESSAGE}\n`,
+    );
+  });
+
+  describe("a dialect declared by a package below the tsconfig's directory", () => {
+    /** The root declares no dialect; `pkg` does; `other` is a sibling that does not. */
+    const workspace = (extra: Record<string, string> = {}) =>
+      probeProject(
+        {
+          "tsconfig.json": TSCONFIG,
+          "pkg/package.json": JSON.stringify({
+            name: "pkg",
+            mx: { dialect: PROBE_MANIFEST },
+          }),
+          "pkg/dialect.cjs": PROBE_DIALECT_MODULE,
+          "pkg/a.probe": PROBE_SOURCES.bad,
+          "other/package.json": JSON.stringify({ name: "other" }),
+          "other/b.probe": PROBE_SOURCES.bad,
+          ...extra,
+        },
+        { manifest: null },
+      );
+
+    it("checks the dialect's files, and leaves a sibling package's alone", {
+      timeout: 120_000,
+    }, () => {
+      const project = workspace();
+      const result = runInProcess(["-p", project.dir, "--pretty", "false"]);
+      expect(result.status).toBe(1);
+      expect(stripVTControlCharacters(result.stderr + result.stdout)).toBe(
+        `${shown(project.path("pkg/a.probe"))}(1,4): error PROBE_BAD: bad probe\n`,
+      );
+    });
+
+    it("`-b` follows the project's references to a package outside its own directory", {
+      timeout: 120_000,
+    }, () => {
+      const project = probeProject(
+        {
+          "app/tsconfig.json": JSON.stringify({
+            files: [],
+            references: [{ path: "../pkg" }],
+          }),
+          "pkg/tsconfig.json": JSON.stringify({
+            compilerOptions: {
+              composite: true,
+              emitDeclarationOnly: true,
+              declaration: true,
+              outDir: "./out",
+              module: "esnext",
+              moduleResolution: "bundler",
+              target: "esnext",
+              types: [],
+            },
+            include: ["**/*.probe"],
+          }),
+          "pkg/package.json": JSON.stringify({
+            name: "pkg",
+            mx: { dialect: PROBE_MANIFEST },
+          }),
+          "pkg/dialect.cjs": PROBE_DIALECT_MODULE,
+          "pkg/a.probe": PROBE_SOURCES.bad,
+        },
+        { manifest: null },
+      );
+      const result = runInProcess([
+        "-b",
+        project.path("app"),
+        "--pretty",
+        "false",
+      ]);
+      expect(stripVTControlCharacters(result.stderr + result.stdout)).toBe(
+        `${shown(project.path("pkg/a.probe"))}(1,4): error PROBE_BAD: bad probe\n`,
+      );
+      expect(result.status).not.toBe(0);
+    });
   });
 });

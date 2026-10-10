@@ -1,9 +1,6 @@
 import { dirname, join } from "node:path";
 import { builtinFileKinds } from "@mxlang/targets";
-import {
-  dialectExtensions,
-  isDialectFile,
-} from "@mxlang/targets/dialect-check";
+import { isDialectFile } from "@mxlang/targets/dialect-check";
 import type { Language } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import { createLanguageServicePlugin } from "@volar/typescript/lib/quickstart/createLanguageServicePlugin";
@@ -19,7 +16,10 @@ import {
   type AstroLanguagePluginLoader,
   createAstroLanguagePlugin,
 } from "./astro-language.ts";
-import { createDialectLanguagePlugin } from "./dialect-language.ts";
+import {
+  createDialectLanguagePlugin,
+  dialectFileExtensions,
+} from "./dialect-language.ts";
 import {
   HOST_POLICY_DIAGNOSTIC_CODE,
   hostPolicyMessage,
@@ -59,7 +59,7 @@ function createBuiltinLanguagePlugins(
   const plugins: Array<AnyMxLanguagePlugin> = [
     createDialectLanguagePlugin(
       typescript,
-      projectDir === undefined ? [] : dialectExtensions(projectDir),
+      projectDir === undefined ? [] : dialectFileExtensions(projectDir),
     ),
   ];
   for (const kind of builtinFileKinds) {
@@ -354,8 +354,11 @@ function withSyntaxDiagnostics(
               diagnostic.category === "error"
                 ? typescript.DiagnosticCategory.Error
                 : typescript.DiagnosticCategory.Warning,
-            // A dialect's code is its own string; tsserver forwards `code`
-            // as it is, and editors show a string code as well as a number.
+            // A dialect's code is its own string, not a TypeScript number, so
+            // this cast lies to the type checker. Checked consumers: tsserver's
+            // `formatDiag` and `formatDiagnosticToProtocol` copy `code` into the
+            // protocol response untouched (it is JSON). Consumers that expect a
+            // number (TypeScript's own message table) never see a dialect's.
             code: (diagnostic.diagnosticCode ??
               (diagnostic.category === "error" ? 80001 : 80002)) as number,
             source: diagnostic.diagnosticSource ?? source,

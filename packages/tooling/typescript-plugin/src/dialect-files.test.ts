@@ -4,6 +4,9 @@ import ts from "typescript";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   cleanupProbeProjects,
+  PROBE_CONTRACT_MESSAGE,
+  PROBE_DIALECT_MODULE,
+  PROBE_MANIFEST,
   PROBE_SOURCES,
   probeProject,
 } from "../../../../test-fixtures/dialects/probe.ts";
@@ -111,8 +114,12 @@ function createService(
 }
 
 /** The structured shape a client of tsserver reads. */
-function shape(service: ts.LanguageService, file: string) {
-  service.getSemanticDiagnostics(join(file, "..", "consumer.ts"));
+function shape(
+  service: ts.LanguageService,
+  file: string,
+  consumer = join(file, "..", "consumer.ts"),
+) {
+  service.getSemanticDiagnostics(consumer);
   return [
     ...service.getSyntacticDiagnostics(file),
     ...service.getSemanticDiagnostics(file),
@@ -189,6 +196,68 @@ describe("dialect files through the TypeScript plugin", () => {
     ]);
   });
 
+  it("checks a call against the project's contracts", () => {
+    const project = probeProject({}, { contracts: true });
+    const file = project.path("page.probe");
+    const service = createService(project.dir, { [file]: "<service/>\n" });
+    expect(shape(service, file)).toEqual([
+      {
+        start: 0,
+        length: 1,
+        category: "Error",
+        code: 80001,
+        source: "Probe",
+        message: PROBE_CONTRACT_MESSAGE,
+      },
+    ]);
+  });
+
+  describe("a dialect declared by a package below the tsconfig's directory", () => {
+    const workspace = () =>
+      probeProject(
+        {
+          "pkg/package.json": JSON.stringify({
+            name: "pkg",
+            mx: { dialect: PROBE_MANIFEST },
+          }),
+          "pkg/dialect.cjs": PROBE_DIALECT_MODULE,
+          "other/package.json": JSON.stringify({ name: "other" }),
+        },
+        { manifest: null },
+      );
+
+    it("checks the dialect's files", () => {
+      const project = workspace();
+      const file = project.path("pkg/page.probe");
+      const service = createService(project.dir, {
+        [file]: PROBE_SOURCES.bad,
+      });
+      expect(shape(service, file, project.path("consumer.ts"))).toEqual([
+        {
+          start: 3,
+          length: 1,
+          category: "Error",
+          code: "PROBE_BAD",
+          source: "Probe",
+          message: "bad probe",
+        },
+      ]);
+    });
+
+    it("answers a sibling package's file with nothing, as it holds no dialect", () => {
+      const project = workspace();
+      const dialectFile = project.path("pkg/page.probe");
+      const sibling = project.path("other/page.probe");
+      const service = createService(project.dir, {
+        [dialectFile]: PROBE_SOURCES.ok,
+        [sibling]: PROBE_SOURCES.bad,
+      });
+      const consumer = project.path("consumer.ts");
+      expect(shape(service, sibling, consumer)).toEqual([]);
+      expect(shape(service, dialectFile, consumer)).toEqual([]);
+    });
+  });
+
   it("an .mx file of the same project keeps the MX rules and its own source", () => {
     const project = probeProject();
     const plain = project.path("page.mx");
@@ -218,13 +287,20 @@ describe("the dialect language plugin", () => {
     expect(none.getLanguageId(project.path("a.probe"))).toBeUndefined();
   });
 
-  it("a file of a project that hands the extension to no dialect is not claimed", () => {
-    // The plugin was made for one project; a file under another that uses no
-    // dialect is no dialect file, whatever its extension.
+  it("a file of a package that uses no dialect gets an empty answer, and an .mx one is left to MX", () => {
+    // The plugin was made for a whole project (every package in it): a file
+    // under a package that uses no dialect is no dialect file. TypeScript was
+    // told to list the extension, so a plain file is answered with nothing to
+    // check; a `.probe.mx` one is an MX file there.
     const plugin = createDialectLanguagePlugin(ts, [".probe", ".probe.mx"]);
     const plain = probeProject({}, { manifest: null });
-    expect(plugin.getLanguageId(plain.path("a.probe"))).toBeUndefined();
+    expect(plugin.getLanguageId(plain.path("a.probe"))).toBe("mx-dialect");
     expect(plugin.getLanguageId(plain.path("a.probe.mx"))).toBeUndefined();
+    const snapshot = ts.ScriptSnapshot.fromString(PROBE_SOURCES.bad);
+    plugin.createVirtualCode?.(plain.path("a.probe"), "mx-dialect", snapshot, {
+      getLanguageId: () => "",
+    } as never);
+    expect(plugin.getCompileDiagnostics?.(plain.path("a.probe"))).toEqual([]);
   });
 
   it("tells TypeScript about the extensions, except `.mx`", () => {

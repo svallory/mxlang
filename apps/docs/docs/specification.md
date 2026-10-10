@@ -3586,10 +3586,15 @@ language server and the TypeScript plugin route a file to its dialect
 dialect gave. `mx-tsc` prints that code in place of `TS<number>`. No
 JavaScript is generated for a dialect's file. Building a file calls its
 dialect's emit, and the Vite plugin, which builds, refuses to import a dialect
-file when its dialect registers none: an error at the head of the file,
-`<dialect name> files cannot be imported: the dialect registers no emit`. A
-dialect file that does not check clean reports its first error instead. A
-dialect's emit is its own business: no tool picks a target for its files.
+file when its dialect registers none: an error at the import (the specifier in
+the importing file), or at the head of the dialect file for an entry or a
+hand-built id, `<dialect name> files cannot be imported: the dialect registers
+no emit`. The text is the same whether or not the file checks clean; its own
+errors are what the other tools report. The project's contracts (`mx.contracts`)
+and local `tags/` apply to a dialect's file as they do to an MX file, and a
+dialect declared in a package below the project's root counts for the files in
+that package. A dialect's emit is its own business: no tool picks a target for
+its files.
 
 #### 13.7.1 `lowerSource`
 

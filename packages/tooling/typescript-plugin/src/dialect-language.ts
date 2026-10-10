@@ -1,6 +1,6 @@
 import {
   checkDialectFile,
-  dialectExtensions,
+  dialectExtensionsUnder,
   isDialectFile,
 } from "@mxlang/targets/dialect-check";
 import type { VirtualCode } from "@volar/language-core";
@@ -41,8 +41,16 @@ export function createDialectLanguagePlugin(
     getLanguageId(fileName) {
       // The cheap suffix test first: TypeScript asks this of every file of a
       // program, and routing a path costs a manifest lookup.
-      return claimed.some((extension) => fileName.endsWith(extension)) &&
-        isDialectFile(fileName)
+      if (!claimed.some((extension) => fileName.endsWith(extension))) {
+        return undefined;
+      }
+      // The extension list is the project's: the union over every package in
+      // it. A file of a package whose own dialects do not claim it is not
+      // checked, but TypeScript has been told to list its extension, so it
+      // must be answered here or the program would hold a file nothing can
+      // read. A `.mx`-ending one is an MX file in that package: the MX plugins
+      // answer it.
+      return isDialectFile(fileName) || !fileName.endsWith(".mx")
         ? DIALECT_LANGUAGE_ID
         : undefined;
     },
@@ -50,8 +58,12 @@ export function createDialectLanguagePlugin(
     createVirtualCode(fileName, languageId, snapshot) {
       if (languageId !== DIALECT_LANGUAGE_ID) return undefined;
       const source = snapshot.getText(0, snapshot.getLength());
-      const check = checkDialectFile(fileName, source);
-      if (check === undefined) return undefined;
+      // `undefined` for a file the project lists but no dialect of its package
+      // claims: nothing to check, and no diagnostics.
+      const check = checkDialectFile(fileName, source) ?? {
+        source: "",
+        diagnostics: [],
+      };
       compileDiagnostics.set(
         fileName,
         check.diagnostics.map((diagnostic) => ({
@@ -101,10 +113,12 @@ export function createDialectLanguagePlugin(
 }
 
 /**
- * The dotted extensions the project around `dir` hands to dialects, for a
- * tool that must name them before it has seen a file (`mx-tsc`'s list of the
- * file types a program may hold). Empty when the project uses no dialect.
+ * The dotted extensions the project rooted at `dir` hands to dialects: those
+ * of its own package and of every package below it, for a tool that must name
+ * them before it has seen a file (`mx-tsc`'s list of the file types a program
+ * may hold, the language service's file types). Empty when the project uses no
+ * dialect.
  */
 export function dialectFileExtensions(dir: string): string[] {
-  return dialectExtensions(dir);
+  return dialectExtensionsUnder(dir);
 }

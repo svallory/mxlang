@@ -341,9 +341,7 @@ export function diagnoseDocument(
   // `mx.tags` leaves the local `tags/` directories perfectly usable — so they
   // are collected here and returned alongside whatever the compile produces,
   // rather than replacing it.
-  let scanWarnings: Diagnostic[] = (hostPolicyDiagnostics ?? []).map(
-    (diagnostic) => scanDiagnosticToLsp(diagnostic, related),
-  );
+  let scanWarnings: Diagnostic[] = [];
   // Positioned warnings the *compile* raised: content a tag template never
   // placed, an attribute tag a transform never read. A different source from
   // the scan's configuration warnings above, and routed per file below, since
@@ -376,6 +374,12 @@ export function diagnoseDocument(
         }),
       );
     }
+    // The host policy's problems are the page's: a dialect's file has no
+    // target, so none of them is raised on its behalf (above, they would
+    // have reached the `package.json` through `related`).
+    scanWarnings = (hostPolicyDiagnostics ?? []).map((diagnostic) =>
+      scanDiagnosticToLsp(diagnostic, related),
+    );
     // Tag discovery is filesystem work, so it needs a path. `startServer`
     // already converts before calling, but this function is public and an
     // editor integration may hand it a `file://` URI directly — and

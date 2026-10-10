@@ -375,10 +375,14 @@ function.
 A dialect's file (`@mxlang/targets/dialect-check`'s `isDialectFile`: its
 extension is claimed by a dialect the project uses, `.probe.mx` included) is
 never compiled here. Building a file calls its dialect's emit and no dialect
-registers one, so `dialectFileRefusal` throws, positioned at the head of the
-file (`id`, `loc` 1:0, `frame`): `<dialect name> files cannot be imported: the
-dialect registers no emit`. A file that does not check clean reports its first
-error instead, at its own position. The refusal is in `resolveId` (after
+registers one, so `dialectFileRefusal` throws `<dialect name> files cannot be
+imported: the dialect registers no emit`, always with that text. It is
+positioned at the specifier in the importer (`findImportSpecifier`, the
+authored position in `pluginCode` so Vite does not remap it) when the importer
+is readable, and at the head of the dialect file (1:0) for an entry, a
+hand-built id or an import the emitter added. The one exception is a routing
+failure (two dialects claim the extension): no dialect has a name, so the
+routing error is the refusal, at the dialect file. The refusal is in `resolveId` (after
 resolution, for an `.mx`-ending file; before the extension test for a
 dialect-owned extension such as `.probe`, which `claimedByDialect` finds per
 importer directory, cached per build) and in `transform` (an entry or a
