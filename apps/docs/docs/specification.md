@@ -4186,9 +4186,11 @@ the file routes to) under the dialect's preset in place of the host's tag rules,
 with no native elements under `none`; `lowerSource` does the same when its call
 states no `tagRules` option, and a `tagRules` option it states wins.
 
-**A dialect owns its targets** (ruling 211; decision 212 item 1). Its module will
-declare `targets` and a `defaultTarget`; one that declares none is check-only
-(decision 204). That declaration is not specified yet.
+**A dialect owns its targets** (ruling 211; decision 212 item 1). Building a
+file calls its dialect's emit. Core is dialect zero, and its emit is where MX's
+targets live. A dialect that registers no emit is check-only (decision 204): its
+files are checked and build nothing. The module shape above has no emit field,
+so every loaded dialect is check-only.
 
 **A `{ call }` trigger needs the dialect's `lowerTrigger`.** A loaded dialect
 whose table has one and no hook is an error in the module file at 1:0: ``

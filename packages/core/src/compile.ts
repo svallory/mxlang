@@ -423,7 +423,9 @@ function sameFilePath(a: string, b: string): boolean {
  * does not count (it stays on its container, as Marko's parse-only output
  * kept it in the tree, `parseFragment`'s rule), nor does a front-end error
  * that lowering raises (`MX_*` rules): the tree is whole. The node is
- * untyped, as everywhere at core's public boundary.
+ * untyped, as everywhere at core's public boundary. Routing gets no host
+ * segments: the only caller is `lowerSource`'s scan, which has no host, so no
+ * host file kind is reserved here, as in `lowerSource` itself.
  *
  * @unstable plumbing for the IR entry's parse-only scan (`ir-entry/authored-tags.ts`).
  */
@@ -435,9 +437,6 @@ export function parseMxDocument(
   nativeTags?: NativeTags,
 ): Node | undefined {
   // A dialect's table parses; its hooks are lowering's, not the scan's.
-  // Routing gets no host segments: the only caller is `lowerSource`'s scan,
-  // which has no host, so no host file kind is reserved here, as in
-  // `lowerSource` itself.
   const table = (
     dialect !== undefined
       ? explicitSyntaxOf(dialect, filename)
