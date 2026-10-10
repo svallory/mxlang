@@ -367,14 +367,16 @@ export interface Ctx {
    */
   unknownLocalValue: Set<string>;
   /**
-   * Every name a `<static>` block binds at its top level (a `const`/
-   `let`/`var` declarator, a `function`, a `class`), recorded by
-   `registerStaticBindings` as the block lowers. The consumer is the
-   lowercase-tag rule: Marko raises its local-variable error for a lowercase
-   `static const layout` used as `<layout/>` too, but the names must not join
-   `ctx.imports` — that set routes *component calls* (`isComponent`), which a
-   lowercase name can never be (decision 116's casing gate), so only the
-   PascalCase ones do.
+   * Every name a module-level declaration binds: a `static` block's top-level
+   * `const`/`let`/`var` declarators (a plain name or any name a destructuring
+   * pattern reaches), `function`s and `class`es, and the same forms after an
+   * `export`. Recorded by `registerStaticBindings` as the statement lowers.
+   * The consumer is the lowercase-tag rule: Marko raises its local-variable
+   * error for a lowercase `static const layout` or `export const layout` used
+   * as `<layout/>` too, but the names must not join `ctx.imports` - that set
+   * routes *component calls* (`isComponent`), which a lowercase name can never
+   * be (decision 116's casing gate), so only a `static` block's PascalCase
+   * plain names do.
    */
   staticBindings: Set<string>;
   /**

@@ -604,11 +604,14 @@ import. The check runs in core, once, before any host's `isComponent` or
 unknown-tag path, and applies to a lowercase tag `<x>` whose name equals a
 **local binding of any kind** — a `<define>` in scope, a default or named
 import, a tag module or a `.ts` value, a `<const>`, a `<for>`/`<define>` tag
-param, a `static` declaration. That is Marko's own rule for a local variable
-(measured on the stock parser: the message and position are identical for a
-tag import, a value import, a `static const` local, a `<const>` and a `<for>`
-param; a use *before* the `import`/`static` statement is not covered —
-bindings register in document order). A *native* name is exempt: `<span>`
+param, a `static` declaration (a plain name or any name a destructuring
+pattern binds), or an `export const`/`function`/`class` declaration (type
+exports and `export interface` bind nothing). That is Marko's own rule for a
+local variable (measured on the stock parser: the message and position are
+identical for a tag import, a value import, a `static const` local, an
+`export const` local, a `<const>` and a `<for>` param; a use *before* the
+`import`/`static`/`export` statement is not covered — bindings register in
+document order). A *native* name is exempt: `<span>`
 stays the element whatever is bound, silently for a value binding, with the
 warning below for a tag binding, and so is a **core taglib name** (`<debug>`,
 `<log>`): stock Marko compiles `import debug from "debug"` + `<debug/>` as the
@@ -619,7 +622,7 @@ the local-variable error:
 |---|---|
 | a native element (`<span>` + a define or tag import named `span`) | the native element, with a positioned warning at the tag: "`<span>` is the native element; the `span` defined\|imported at L:C is not called. Rename it `Span` or write `<${span}>`" |
 | a registered custom tag, a contract child, a tag the target's own taglib registers (a third-party target's; a `marko.json` is not read, decision 197), or a core taglib name (`<debug>`, `<log>`) | called (or disposed) as before, whatever is imported; no diagnostic, never the local-variable error |
-| none of those (`import row from "./row.mx"` + `<row/>`, a `.ts` value import, a named import, a lowercase `<define>`, `<const>`, `static const`, a lowercase `<for>` param) | a positioned **error** on every target, Marko's own message verbatim, at the tag name: "`Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${row}/>` or rename to `Row`." |
+| none of those (`import row from "./row.mx"` + `<row/>`, a `.ts` value import, a named import, a lowercase `<define>`, `<const>`, `static const`, `export const`, a lowercase `<for>` param) | a positioned **error** on every target, Marko's own message verbatim, at the tag name: "`Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${row}/>` or rename to `Row`." |
 
 Marko's message capitalizes the first character whatever it is, so `_row`'s
 rename offer reads "rename to `_row`" (kept verbatim for parity); the warning

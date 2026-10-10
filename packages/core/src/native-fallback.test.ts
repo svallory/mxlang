@@ -198,75 +198,184 @@ describe("a region's native elements", () => {
 });
 
 // Marko's own rule, moved into core verbatim: a lowercase tag never calls a
-// lowercase `import` or `<define>` binding, whatever the binding imports
-// (measured on the stock
+// local binding of any kind, whatever the binding holds (measured on the stock
 // parser, `@marko/compiler` 5.42.11 / `marko` 6.4.4: identical message and
-// position - the tag name - for a tag import, a `.ts` value import and a
-// `static const` local). One error, host-agnostic, before any host's
+// position - the tag name - for a tag import, a `.ts` value import, a
+// `<const>`, a tag param and a `static`/`export` declaration, plain or
+// destructured). One error, host-agnostic, before any host's
 // `isElement`/`isComponent` is consulted.
 describe("a lowercase tag naming a local binding", () => {
+  const LOCAL_VARIABLE = (name: string) =>
+    `Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use \`<\${${name}}/>\` or rename to \`${name[0]?.toUpperCase()}${name.slice(1)}\`.`;
+
+  function thrownBy(source: string): unknown {
+    try {
+      irOf(source);
+    } catch (caught) {
+      return caught;
+    }
+    return undefined;
+  }
+
   it("fails at the tag name with Marko's exact message, whatever the binding is", () => {
     for (const decl of [
       'import layout from "./layout.mx"',
       'import layout from "./layout.ts"',
       "<define/layout|x|>d</define>",
     ]) {
-      let error: unknown;
-      try {
-        irOf(`${decl}\n<layout/>\n`);
-      } catch (caught) {
-        error = caught;
-      }
-      expect(error, decl).toMatchObject({
-        message:
-          "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${layout}/>` or rename to `Layout`.",
+      expect(thrownBy(`${decl}\n<layout/>\n`), decl).toMatchObject({
+        message: LOCAL_VARIABLE("layout"),
         line: 2,
         column: 1,
       });
     }
   });
 
-  // The r3 forms: a `<const>`, a `static` declaration and a `<for>` param are
-  // the same Marko error, at the same tag-name position (stock parser: 2:2,
-  // 2:2, 1:19 1-based), not the unknown-tag path they used to fall to.
-  it("fails at the tag name for a `<const>`, a `static const` and a `<for>` param", () => {
-    const cases: [string, string, string][] = [
-      [
-        "const",
-        '<const/layout="x"/>\n<layout/>\n',
-        "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${layout}/>` or rename to `Layout`.",
-      ],
-      [
-        "static",
-        "static const layout = 1\n<layout/>\n",
-        "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${layout}/>` or rename to `Layout`.",
-      ],
-      [
-        "for param",
-        "<for|row| of=[1]><row/></for>\n",
-        "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${row}/>` or rename to `Row`.",
-      ],
-    ];
-    for (const [label, source, message] of cases) {
-      let error: unknown;
-      try {
-        irOf(source);
-      } catch (caught) {
-        error = caught;
-      }
-      expect(error, label).toMatchObject({
-        message,
-        line: label === "for param" ? 1 : 2,
-        column: label === "for param" ? 18 : 1,
-      });
-    }
+  // Each source declares `layout` one way and calls `<layout/>`; the position
+  // is the tag name (stock parser, 1-based: 2:2, or 3:4 when nested).
+  it.each([
+    ["a `<const>`", '<const/layout="x"/>\n<layout/>\n'],
+    ["a `static const`", "static const layout = 1\n<layout/>\n"],
+    ["a `static function`", "static function layout() {}\n<layout/>\n"],
+    ["a `static class`", "static class layout {}\n<layout/>\n"],
+    [
+      "a `static const` in a second declarator",
+      "static const a = 1, layout = 2\n<layout/>\n",
+    ],
+    [
+      "a destructured `static const`",
+      "static const { layout } = { layout: 1 }\n<layout/>\n",
+    ],
+    [
+      "a renamed destructured `static const`",
+      "static const { a: layout } = { a: 1 }\n<layout/>\n",
+    ],
+    [
+      "a defaulted destructured `static const`",
+      "static const { layout = 1 } = {}\n<layout/>\n",
+    ],
+    [
+      "a rest in a destructured `static const`",
+      "static const { a, ...layout } = { a: 1, b: 2 }\n<layout/>\n",
+    ],
+    [
+      "a nested destructured `static const`",
+      "static const { a: { layout } } = { a: { layout: 1 } }\n<layout/>\n",
+    ],
+    [
+      "an array-destructured `static const`",
+      "static const [layout] = [1]\n<layout/>\n",
+    ],
+    [
+      "a rest in an array-destructured `static const`",
+      "static const [, ...layout] = [1, 2]\n<layout/>\n",
+    ],
+    ["an `export const`", "export const layout = 1\n<layout/>\n"],
+    [
+      "an `export let` second declarator",
+      "export let a = 1, layout = 2\n<layout/>\n",
+    ],
+    ["an `export function`", "export function layout() {}\n<layout/>\n"],
+    ["an `export class`", "export class layout {}\n<layout/>\n"],
+    [
+      "a destructured `export const`",
+      "export const { layout } = { layout: 1 }\n<layout/>\n",
+    ],
+    [
+      "an array-destructured `export const`",
+      "export const [layout] = [1]\n<layout/>\n",
+    ],
+  ])("fails at the tag name for %s", (_label, source) => {
+    expect(thrownBy(source), source).toMatchObject({
+      message: LOCAL_VARIABLE("layout"),
+      line: 2,
+      column: 1,
+    });
   });
 
-  it("a core taglib name bound by an import is exempt: the tag keeps its routing, never the local-variable error", () => {
-    // Stock Marko compiles `import debug from "debug"` + `<debug/>` as the
-    // core `<debug>` tag. The rule must not blame the import.
-    expect(body('import debug from "debug"\n<debug/>\n')).toEqual([
-      { element: "debug", children: [] },
-    ]);
+  it("fails at the tag name of a nested tag, not at its parent", () => {
+    expect(
+      thrownBy("export const layout = 1\n<div>\n  <layout/>\n</div>\n"),
+    ).toMatchObject({ message: LOCAL_VARIABLE("layout"), line: 3, column: 3 });
   });
+
+  it("fails at a `<for>` param's tag name", () => {
+    expect(thrownBy("<for|row| of=[1]><row/></for>\n")).toMatchObject({
+      message: LOCAL_VARIABLE("row"),
+      line: 1,
+      column: 18,
+    });
+  });
+
+  // `export type`/`export interface` bind a type, not a value, and Marko
+  // treats the tag as an unknown one (its "Unable to find entry point"), so
+  // neither is the local-variable error; neither is a capitalized export, a
+  // different name, or a name declared only inside a function body.
+  it.each([
+    ["an `export type`", "export type layout = number\n<layout/>\n"],
+    [
+      "an `export interface`",
+      "export interface layout { a: number }\n<layout/>\n",
+    ],
+    [
+      "an `export const` of another name",
+      "export const other = 1\n<layout/>\n",
+    ],
+    [
+      "a destructured `static const` of another name",
+      "static const { other } = { other: 1 }\n<layout/>\n",
+    ],
+    [
+      "a name only a function body declares",
+      "static function f() { const layout = 1 }\n<layout/>\n",
+    ],
+  ])("does not raise the local-variable error for %s", (_label, source) => {
+    const error = thrownBy(source) as { message?: string } | undefined;
+    expect(error?.message ?? "").not.toContain("Local variables must be");
+  });
+
+  // Out of this rule's scope: an exported PascalCase name binds for the
+  // lowercase rule only. How it resolves as a component is unchanged (a
+  // `static` PascalCase name is a component call; an exported one is not,
+  // yet), so a change to that is its own decision, not a side effect here.
+  it("an `export const` PascalCase name is not routed as a component by this rule", () => {
+    expect(
+      thrownBy("export const Layout = () => 1\n<Layout/>\n"),
+    ).toMatchObject({
+      message: expect.stringContaining(
+        "`<Layout>` has no matching import or `<define>` in scope",
+      ),
+    });
+    expect(
+      thrownBy("static const Layout = () => 1\n<Layout/>\n"),
+    ).toBeUndefined();
+  });
+
+  it("a core taglib name bound by an import is exempt: no local-variable error", () => {
+    // Stock Marko compiles `import debug from "debug"` + `<debug/>` as the
+    // core `<debug>` tag. The rule must not blame the import. What the tag
+    // itself lowers to is each target's own answer (a target that does not
+    // implement the tag falls to its element path), so this asserts only the
+    // absence of the local-variable error.
+    expect(thrownBy('import debug from "debug"\n<debug/>\n')).toBeUndefined();
+  });
+
+  // A core taglib name is not "the native element" the binding warning
+  // claims: bound by a tag module or a `<define>`, it raises neither the
+  // local-variable error nor that warning.
+  it.each([
+    ["an import", 'import log from "./log.mx"\n<log=1/>\n'],
+    ["a `<define>`", "<define/debug|x|>d</define>\n<debug/>\n"],
+  ])(
+    "a core taglib name bound by %s raises no error and no warning",
+    (_label, source) => {
+      const warnings: MxWarning[] = [];
+      compileSource(source, "/tmp/native-fallback.mx", thirdParty, {
+        targets: lookup,
+        warnings,
+        emitIr: () => "",
+      });
+      expect(warnings).toEqual([]);
+    },
+  );
 });

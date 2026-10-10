@@ -105,21 +105,6 @@ describe("lowercase tag with a same-named binding in scope", () => {
     });
   });
 
-  it("a lowercase `static` declaration is the same Marko error (r3: every local binding)", () => {
-    let error: unknown;
-    try {
-      compilePreactMx("static const layout = 1\n<layout/>\n", "/fixtures/a.mx");
-    } catch (caught) {
-      error = caught;
-    }
-    expect(error).toMatchObject({
-      message:
-        "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${layout}/>` or rename to `Layout`.",
-      line: 2,
-      column: 1,
-    });
-  });
-
   it("row 3: unknown + tag import is a positioned error", () => {
     expect(() =>
       compilePreactMx(
@@ -143,6 +128,77 @@ describe("lowercase tag with a same-named binding in scope", () => {
       ),
     ).toThrow(LOCAL_VARIABLE("_row"));
   });
+
+  /** The error compiling `source` throws, if any (`warnings` collects the non-fatal ones). */
+  function failureOf(
+    source: string,
+    warnings: MxWarning[] = [],
+  ): { message?: string; line?: number; column?: number } | undefined {
+    try {
+      compilePreactMx(source, "/fixtures/a.mx", { warnings });
+    } catch (caught) {
+      return caught as { message?: string; line?: number; column?: number };
+    }
+    return undefined;
+  }
+
+  // A module-level declaration binds like any local: `static` or `export`,
+  // plain or destructured, is the same Marko error at the tag name (stock
+  // parser, 1-based: 2:2).
+  it.each([
+    ["a `static const`", "static const layout = 1\n<layout/>\n"],
+    [
+      "a destructured `static const`",
+      "static const { layout } = { layout: 1 }\n<layout/>\n",
+    ],
+    [
+      "an array-destructured `static const`",
+      "static const [layout] = [1]\n<layout/>\n",
+    ],
+    ["an `export const`", "export const layout = 1\n<layout/>\n"],
+    ["an `export function`", "export function layout() {}\n<layout/>\n"],
+    [
+      "a destructured `export const`",
+      "export const { layout } = { layout: 1 }\n<layout/>\n",
+    ],
+  ])("%s is the same Marko error, at the tag name", (_label, source) => {
+    expect(failureOf(source)).toMatchObject({
+      message: LOCAL_VARIABLE("layout"),
+      line: 2,
+      column: 1,
+    });
+  });
+
+  // `export type`/`export interface` bind a type, not a value: Marko reports
+  // an unknown tag for them, not the local-variable error.
+  it.each([
+    ["an `export type`", "export type layout = number\n<layout/>\n"],
+    [
+      "an `export interface`",
+      "export interface layout { a: number }\n<layout/>\n",
+    ],
+  ])("%s is not the local-variable error", (_label, source) => {
+    expect(failureOf(source)?.message ?? "").not.toContain(
+      "Local variables must be",
+    );
+  });
+
+  // A core taglib name (`<log>`, `<debug>`) keeps its own routing, as in Marko,
+  // even when a lowercase binding of that name is in scope: neither the
+  // local-variable error nor the "native element" warning (it is not one).
+  it.each([
+    ["an import", 'import log from "./log.mx"\n<log=1/>\n'],
+    ["a `<define>`", "<define/debug|x|>d</define>\n<debug/>\n"],
+  ])(
+    "a core taglib name bound by %s raises no binding diagnostic",
+    (_label, source) => {
+      const warnings: MxWarning[] = [];
+      expect(failureOf(source, warnings)?.message ?? "").not.toContain(
+        "Local variables must be",
+      );
+      expect(warnings).toEqual([]);
+    },
+  );
 
   it("a named import from a tag module is a value: native and silent", () => {
     const warnings: MxWarning[] = [];
