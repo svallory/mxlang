@@ -280,18 +280,24 @@ Three facts worth knowing before touching it:
   when the call carries none; a define with no params ignores them), as
   Marko 6.3.51 does, and `HostDeclarations.defineCallPassesAttrs` is set so
   core warns on a multi-param define. With tag arguments the args fill the
-  declared params positionally and any params beyond them are filled by name
-  from attribute tags/`content` (`undefined` where nothing supplies one),
-  html's decision 109 scheme; a spread there is rejected, since its keys are
-  only known at run time. The capture check binds the names a destructured
+  declared params positionally and, when the call has attribute tags or a
+  body and a param is left unfilled, ONE trailing object
+  `{ ...attributeTags, content }` goes to the first unfilled param, as Marko
+  6.4.4 does (decision 109 as revised; the params after it read `undefined`,
+  and a rest param is never padded). Nothing is bound by name: `|a, { head }|`
+  reads the attribute tag out of the object, and a param that merely shares
+  an attribute tag's name gets the whole object. When the args already fill
+  every param the extras are dropped, as Marko drops them. A spread there is
+  rejected, since its keys are only known at run time. The capture check binds the names a destructured
   param introduces (`paramBindingNames`: `Define.params` is source text, so
   `|{ n }|` is one string), a real capture still errors. One difference from html's `content`/attribute-tag values is
   load-bearing: **Solid's own attribute-tag convention (an accessor,
-  `() => JSX`) still applies to a `<define>` call's named-lookup values**,
-  since they are resolved through the same `attributeTagProp`/`content`
-  machinery every other Solid call uses — a `<define>` param filled that
-  way is a function the define's own body must call (`${head()}`, not
-  `${head}`), unlike html's plain-value convention. `/var` on a
+  `() => JSX`) still applies to the values inside a `<define>` call's
+  trailing object**, since they are resolved through the same
+  `attributeTagProp`/`content` machinery every other Solid call uses — a
+  property read out of that object is a function the define's own body must
+  call (`${head()}` after `|a, { head }|`, not `${head}`), unlike html's
+  plain-value convention. `/var` on a
   `<define>` call binds the call's own return value directly (there is no
   Solid-only callback-prop channel for a plain function call the way a
   JSX component call has); it is otherwise still refused inside

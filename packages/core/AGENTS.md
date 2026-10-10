@@ -62,17 +62,16 @@ Five facts worth knowing before editing it:
   tags> })` — Marko's own, confirmed against `@marko/compiler`/`marko`
   6.3.51's translator and runtime: the props object is appended once,
   after every positional arg, only when there is content or an attribute
-  tag to carry. **A `<define>` call is not literally Marko's shape**: Marko
-  itself has no declared `Input` to destructure that single trailing object
-  against for a `<define>`, and measured against real Marko 6.3.51 its own
-  codegen for `<Card('a')><@head>H</@head></Card>` binds the *whole* trailing
-  object to whichever param follows the positional args, not the attribute
-  tag's value — silently dropping the content Marko's own comment calls
-  "fallback content". MX's `<define>` emitters (html, the shared preact/
-  react/hono emitter) instead extend their own pre-existing positional
-  named-lookup scheme (args path only; a no-args call passes one attribute
-  object, decision 160): params beyond the
-  consumed args are filled from the same named lookup, one value per param.
+  tag to carry. **A `<define>` call follows Marko's shape too** (ruling
+  2026-10-09, revising the earlier named-lookup scheme): measured against
+  real Marko 6.4.4, `<Card('a')><@head>H</@head></Card>` appends the ONE
+  trailing object `{ head, content }` as the next argument, so it binds to
+  whichever param follows the positional args (the define destructures it:
+  `|title, { head }|`), every later param reads `undefined` and nothing is
+  filled by name. When the args already fill every param Marko drops the
+  extras. The html and the shared preact/react/hono emitters and Solid's
+  `#defineComponent` all emit exactly that (a no-args call still passes one
+  attribute object, decision 160).
   Solid needed no emitter change for the dynamic-tag case — its design
   already keeps attrs/attribute-tags/content orthogonal from args (args only
   resolve the value handed to `<Dynamic component=…>`; attrs/tags/content

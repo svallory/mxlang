@@ -1575,8 +1575,9 @@ argument, so it lands in the first unfilled parameter and every parameter
 after it reads `undefined`; nothing is bound by name, so a parameter that
 shares an attribute tag's name receives the whole object, not the tag's
 value (destructure it: `|a, { b }|`). When the tag arguments already fill
-every parameter, the extras are dropped. A define with no params still
-ignores the attributes. Decision 160 is the language rule for every
+every parameter, the extras are dropped. A rest parameter is never padded
+with `undefined`: when nothing fills it, it is the empty array, as in Marko.
+A define with no params still ignores the attributes. Decision 160 is the language rule for every
 target; Angular keeps its own call shape until `define-call-attrs-angular`
 lands.
 
