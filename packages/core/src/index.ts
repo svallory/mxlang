@@ -272,6 +272,18 @@ export {
   type TriggerValueForm,
 } from "./syntax-table.ts";
 /**
+ * Tag rules presets (decision 204): `html`, `markup` and `none`, the
+ * tag-table entries a dialect names instead of assembling taglibs.
+ *
+ * @unstable until the hosts read them (slice S3b-2).
+ */
+export {
+  TAG_RULES_PRESETS,
+  type TagRules,
+  type TagRulesPreset,
+  tagRulesPreset,
+} from "./tag-presets.ts";
+/**
  * Core's tag table (decision 197): a translator's taglibs over a target's
  * native elements, what `parseMx` and lowering read tag names through.
  *
