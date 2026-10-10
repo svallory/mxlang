@@ -9,8 +9,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-/** The extensions the test dialect claims: Mesh's two. */
-export const MESH_EXTENSIONS = [".mesh", ".mesh.mx"];
+/** The extension the test dialect claims: Mesh's `.mesh.mx`. */
+export const MESH_EXTENSIONS = [".mesh.mx"];
 
 /**
  * Writes the project at `dir` and its dialect package

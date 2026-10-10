@@ -3910,7 +3910,7 @@ the field path and, for a trigger, its `id`:
   "mxDialect": {
     "id": "mesh",
     "name": "Mesh",
-    "extensions": [".mesh", ".mesh.mx"],
+    "extensions": [".mesh.mx"],
     "module": "./dialect.js"
   }
 }
@@ -3939,9 +3939,9 @@ offending field (at `mxDialect` itself for a missing one):
 | An `id` that is not one | `` `mxDialect.id` must be a dialect id: lower-case words joined by `-` (`mesh`) `` |
 | `id` `mx` | `` `mxDialect.id` cannot be `mx`: that is MX's own dialect `` |
 | No `name`, or a blank one | `` `mxDialect.name` must be a non-empty string: the name tooling shows the dialect's users `` |
-| No `extensions` | `` `mxDialect.extensions` must be a non-empty array of the file extensions the dialect claims (`[".mesh"]`) `` |
-| `.mx` claimed | `` `mxDialect.extensions` cannot claim `.mx`: it is MX's own; a dialect claims its own extensions (`.mesh`, `.mesh.mx`) `` |
-| Not an extension | `` `mxDialect.extensions`: "<value>" is not a file extension; write it with its leading dot (`.mesh`) `` |
+| No `extensions` | `` `mxDialect.extensions` must be a non-empty array of the file extensions the dialect claims (`[".mesh.mx"]`) `` |
+| `.mx` claimed | `` `mxDialect.extensions` cannot claim `.mx`: it is MX's own; a dialect claims its own extensions (`.mesh.mx`) `` |
+| Not an extension | `` `mxDialect.extensions`: "<value>" is not a file extension; write it with its leading dot (`.mesh.mx`) `` |
 | An extension twice | `` `mxDialect.extensions` lists `<ext>` twice `` |
 | No `module` | `` `mxDialect.module` must be a path, relative to this `package.json`, to the module whose default export is the dialect `` |
 | A `module` outside the package | `` `mxDialect.module` must stay inside the dialect's package, so the manifest works wherever the package is installed: "<value>" is an absolute path; write a path relative to this `package.json` (`./dialect.js`) `` (`is outside the package` for one that climbs out with `..`) |
@@ -3959,8 +3959,8 @@ manifest above it, gets no dialect. No dialect's code runs until a file it claim
 is compiled.
 
 **Routing.** A file goes to the dialect that claims the longest extension its
-name ends with (`page.mesh.mx` goes to the dialect claiming `.mesh.mx` before one
-claiming `.mesh`; a bare `.mesh` is not a file with that extension). A file no
+name ends with (`page.ui.tpl` goes to the dialect claiming `.ui.tpl` before one
+claiming `.tpl`; a bare `.tpl` is not a file with that extension). A file no
 dialect claims, every `.mx` file among them, parses with the file kind's default
 row and no dialect. Two dialects claiming the extension a file is routed by is an
 error in the project's `package.json` at the second one's dependency entry,
@@ -3969,15 +3969,15 @@ naming both: `` two dialects claim `<ext>`: `<a>` (<package a>) and `<b>`
 A clash on an extension the file does not end with is not an error for that file.
 
 **`mx.extensions`** in the project's `package.json` maps an extension to a
-dialect id: `{ ".mesh": "mesh" }`. It settles a clash, and it can route an
+dialect id: `{ ".mesh.mx": "mesh" }`. It settles a clash, and it can route an
 extension the dialect does not claim to a dialect the project uses. A problem is
 an error at the `mx.extensions` key:
 
 | Problem | Message |
 |---|---|
-| Not an object | `` `mx.extensions` must be an object mapping a file extension to the id of the dialect that handles it (`{ ".mesh": "mesh" }`) `` |
+| Not an object | `` `mx.extensions` must be an object mapping a file extension to the id of the dialect that handles it (`{ ".mesh.mx": "mesh" }`) `` |
 | `.mx` routed | `` `mx.extensions` cannot route `.mx`: it is MX's own `` |
-| A key that is not an extension | `` `mx.extensions`: "<key>" is not a file extension; write it with its leading dot (`.mesh`) `` |
+| A key that is not an extension | `` `mx.extensions`: "<key>" is not a file extension; write it with its leading dot (`.mesh.mx`) `` |
 | An id no dependency declares | `` `mx.extensions` routes `<ext>` to "<id>", which is not a dialect this project uses (it uses `<ids>`); a dialect is found among the project's direct dependencies `` |
 
 **Loading.** A routed file loads its dialect's `module`, resolved from the

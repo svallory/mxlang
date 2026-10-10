@@ -43,7 +43,7 @@ afterAll(() => {
 
 /** The two ways a consumer loads the module. */
 const LOADERS: [string, () => [string, LowerSourceOptions]][] = [
-  ["a dialect package", () => [join(dir, "entity.mesh"), {}]],
+  ["a dialect package", () => [join(dir, "entity.mesh.mx"), {}]],
   ["the `dialect` option", () => ["/v/entity.mx", { dialect: memberSyntax }]],
 ];
 

@@ -40,7 +40,7 @@ export interface DialectManifest {
   readonly id: string;
   /** What tooling shows its users (`Mesh`). */
   readonly name: string;
-  /** The file extensions it claims (`.mesh`), each with its leading dot. */
+  /** The file extensions it claims (`.mesh.mx`), each with its leading dot. */
   readonly extensions: readonly string[];
   /** Its module, relative to its package directory. */
   readonly module: string;
@@ -70,7 +70,7 @@ function moduleEscape(module: string): string | undefined {
   return undefined;
 }
 
-/** Is `value` an extension a dialect may claim (`.mesh`, `.mesh.mx`)? */
+/** Is `value` an extension a dialect may claim (`.mesh.mx`)? */
 function validExtension(value: unknown): value is string {
   return (
     typeof value === "string" &&
@@ -135,7 +135,7 @@ export function readDialectManifest(
   }
   if (!Array.isArray(extensions) || extensions.length === 0) {
     fail(
-      `\`${DIALECT_MANIFEST_KEY}.extensions\` must be a non-empty array of the file extensions the dialect claims (\`[".mesh"]\`)`,
+      `\`${DIALECT_MANIFEST_KEY}.extensions\` must be a non-empty array of the file extensions the dialect claims (\`[".mesh.mx"]\`)`,
       extensions === undefined ? undefined : "extensions",
     );
   }
@@ -143,13 +143,13 @@ export function readDialectManifest(
   for (const extension of extensions as unknown[]) {
     if (extension === MX_EXTENSION) {
       fail(
-        `\`${DIALECT_MANIFEST_KEY}.extensions\` cannot claim \`${MX_EXTENSION}\`: it is MX's own; a dialect claims its own extensions (\`.mesh\`, \`.mesh.mx\`)`,
+        `\`${DIALECT_MANIFEST_KEY}.extensions\` cannot claim \`${MX_EXTENSION}\`: it is MX's own; a dialect claims its own extensions (\`.mesh.mx\`)`,
         "extensions",
       );
     }
     if (!validExtension(extension)) {
       fail(
-        `\`${DIALECT_MANIFEST_KEY}.extensions\`: ${JSON.stringify(extension)} is not a file extension; write it with its leading dot (\`.mesh\`)`,
+        `\`${DIALECT_MANIFEST_KEY}.extensions\`: ${JSON.stringify(extension)} is not a file extension; write it with its leading dot (\`.mesh.mx\`)`,
         "extensions",
       );
     }
@@ -287,7 +287,7 @@ function extensionOverrides(
   };
   if (!isRecord(value)) {
     fail(
-      '`mx.extensions` must be an object mapping a file extension to the id of the dialect that handles it (`{ ".mesh": "mesh" }`)',
+      '`mx.extensions` must be an object mapping a file extension to the id of the dialect that handles it (`{ ".mesh.mx": "mesh" }`)',
     );
   }
   const ids = dialects.map((dialect) => `\`${dialect.id}\``).join(", ");
@@ -301,7 +301,7 @@ function extensionOverrides(
     }
     if (!validExtension(extension)) {
       fail(
-        `\`mx.extensions\`: ${JSON.stringify(extension)} is not a file extension; write it with its leading dot (\`.mesh\`)`,
+        `\`mx.extensions\`: ${JSON.stringify(extension)} is not a file extension; write it with its leading dot (\`.mesh.mx\`)`,
       );
     }
     const dialect = dialects.find((candidate) => candidate.id === id);

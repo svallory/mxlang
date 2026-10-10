@@ -53,13 +53,13 @@ const ids = (dialects: readonly DialectManifest[]) =>
 describe("`package.json#mxDialect`", () => {
   it("declares the dialect's id, name, extensions and module", () => {
     const { projectFile, packageFile } = dialectProject(dir, {
-      manifest: { id: "mesh", name: "Mesh", extensions: [".mesh", ".mesh.mx"] },
+      manifest: { id: "mesh", name: "Mesh", extensions: [".mesh.mx"] },
     });
     expect(discoverDialects(projectFile)).toEqual([
       {
         id: "mesh",
         name: "Mesh",
-        extensions: [".mesh", ".mesh.mx"],
+        extensions: [".mesh.mx"],
         module: "./index.mjs",
         packageName: "test-dialect",
         packageFile,
@@ -139,7 +139,7 @@ describe("`package.json#mxDialect`", () => {
       "an extension without its dot",
       { extensions: ["mesh"] },
       [6, 4],
-      '`mxDialect.extensions`: "mesh" is not a file extension; write it with its leading dot (`.mesh`)',
+      '`mxDialect.extensions`: "mesh" is not a file extension; write it with its leading dot (`.mesh.mx`)',
     ],
     [
       "an extension with a path in it",
@@ -247,11 +247,11 @@ describe("discovery reads the project's direct dependencies only", () => {
       mxDialect: {
         id: "mesh",
         name: "Mesh",
-        extensions: [".mesh"],
+        extensions: [".mesh.mx"],
         module: "./index.mjs",
       },
     });
-    expect(routeDialect(join(dir, "test/a.mesh"))?.id).toBe("mesh");
+    expect(routeDialect(join(dir, "test/a.mesh.mx"))?.id).toBe("mesh");
   });
 
   it("the project is the file's nearest `package.json`: a nested package without the dialect gets none", () => {

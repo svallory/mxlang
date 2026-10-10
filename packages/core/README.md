@@ -494,7 +494,7 @@ A dialect is a package (decision 212). It declares itself in its own
   "mxDialect": {
     "id": "mesh",
     "name": "Mesh",
-    "extensions": [".mesh", ".mesh.mx"],
+    "extensions": [".mesh.mx"],
     "module": "./dialect.js"
   }
 }
@@ -519,7 +519,7 @@ MX's default row. Two dialects claiming one extension is an error naming
 both; the project settles it with `mx.extensions`:
 
 ```json
-{ "mx": { "extensions": { ".mesh": "mesh" } } }
+{ "mx": { "extensions": { ".mesh.mx": "mesh" } } }
 ```
 
 A malformed manifest is an error at its field, in the dialect's

@@ -4,7 +4,7 @@
  * the expression's code as an atom is, so the html target emits
  * `self.status`, never the authored `&status`. The module is core's
  * test-only member dialect, re-exported by the module of a dialect package
- * the temp project depends on (decision 212), which claims `.mesh`.
+ * the temp project depends on (decision 212), which claims `.mesh.mx`.
  */
 import {
   mkdirSync,
@@ -33,7 +33,7 @@ beforeAll(() => {
       mxDialect: {
         id: "member",
         name: "Mesh",
-        extensions: [".mesh"],
+        extensions: [".mesh.mx"],
         module: "./index.cjs",
       },
     }),
@@ -72,7 +72,7 @@ describe("a member trigger on the html target", () => {
     ["<p>${&a + 1}</p>\n", "self.a + 1"],
     ['<p title=(&a === :sent ? "y" : "n")/>\n', 'self.a === "sent"'],
   ])("%j emits valid TypeScript with %j", (source, expected) => {
-    const { code } = compile(source, join(dir, "page.mesh"));
+    const { code } = compile(source, join(dir, "page.mesh.mx"));
     expect(code).toContain(expected);
     expect(code).not.toMatch(/&(status|a)\b/);
     expect(syntaxErrors(code)).toEqual([]);

@@ -1104,8 +1104,8 @@ describe("`contractFields` through a manifest", () => {
 
   /**
    * A project in `root` holding `files`. With `dialect`, it depends on a
-   * dialect package claiming `.mesh`, whose module re-exports the reference
-   * Mesh dialect (`true`) or is the given source, and the page is a `.mesh` file;
+   * dialect package claiming `.mesh.mx`, whose module re-exports the reference
+   * Mesh dialect (`true`) or is the given source, and the page is a `.mesh.mx` file;
    * without, the page is a `.mx` file.
    */
   function project(
@@ -1131,13 +1131,13 @@ describe("`contractFields` through a manifest", () => {
       manifest: {
         id: "mesh",
         name: "Mesh",
-        extensions: [".mesh"],
+        extensions: [".mesh.mx"],
         ...(dialect === true ? { module: "./index.cjs" } : {}),
       },
       module: dialect === true ? reexport(MESH_MODULE) : dialect,
       mx,
     });
-    return join(root, "page.mesh");
+    return join(root, "page.mesh.mx");
   }
 
   /** The module file of a dialect `project` wrote from source. */
@@ -1205,7 +1205,7 @@ describe("`contractFields` through a manifest", () => {
 
   /**
    * The registration error of `files` on a page that calls none of its
-   * tags: built-in (a `.mx` page) and through the dialect (a `.mesh` page),
+   * tags: built-in (a `.mx` page) and through the dialect (a `.mesh.mx` page),
    * each project in its own directory. `file` is relative to the project.
    */
   function placed(files: Record<string, string>, mx = {}) {

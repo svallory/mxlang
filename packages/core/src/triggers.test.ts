@@ -230,12 +230,17 @@ describe("the member dialect through the `dialect` option", () => {
 
 describe("a dialect package (`package.json#mxDialect`, decision 212)", () => {
   /**
-   * The member dialect, declared by a dependency claiming `.mesh`, whose
+   * The member dialect, declared by a dependency claiming `.mesh.mx`, whose
    * module (at `module`, inside the package) re-exports the fixture.
    */
   function memberProject(module = "./syntax.mjs") {
     const project = dialectProject(dir, {
-      manifest: { id: "member", name: "Mesh", extensions: [".mesh"], module },
+      manifest: {
+        id: "member",
+        name: "Mesh",
+        extensions: [".mesh.mx"],
+        module,
+      },
     });
     const file = join(project.packageDir, module);
     mkdirSync(dirname(file), { recursive: true });
@@ -249,7 +254,7 @@ describe("a dialect package (`package.json#mxDialect`, decision 212)", () => {
   it("the module loads the dialect and its hooks for the files it claims", () => {
     memberProject();
     const [sort] = elements(
-      irOf("sort asc &dueOn\n", join(dir, "a.mesh")).body,
+      irOf("sort asc &dueOn\n", join(dir, "a.mesh.mx")).body,
     );
     expect(attr(sort as Element, "member")).toMatchObject({
       member: { name: "dueOn" },
@@ -260,7 +265,7 @@ describe("a dialect package (`package.json#mxDialect`, decision 212)", () => {
   it("a package subpath with no `./` resolves from the dialect's package", () => {
     memberProject("lib/syntax.mjs");
     const [input] = elements(
-      irOf("fields\n  &title\n", join(dir, "a.mesh")).body,
+      irOf("fields\n  &title\n", join(dir, "a.mesh.mx")).body,
     );
     expect(elements((input as Element).children)[0]?.name).toBe("member");
   });

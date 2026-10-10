@@ -117,7 +117,7 @@ const builtIn = (source: string) =>
 
 const LOADERS: [string, () => [string, LowerSourceOptions]][] = [
   ["the `dialect` option", () => ["/v/invoice.mx", { dialect: meshSyntax }]],
-  ["a dialect package", () => [join(dir, "invoice.mesh"), {}]],
+  ["a dialect package", () => [join(dir, "invoice.mesh.mx"), {}]],
 ];
 
 describe.each(LOADERS)("through %s", (_, loader) => {
