@@ -731,9 +731,11 @@ describe("duplicate attributes", () => {
   });
 });
 
-describe("the raw-text trade (the addendum's item 3)", () => {
+describe('the raw-text trade of `tagRules: "none"` (the addendum\'s item 3)', () => {
+  const none = { tagRules: "none" } as const;
+
   it("a `<style>` body with tag-like content parses as tags, not text", () => {
-    const style = firstTag(ok(`<style>.a <b>bold</b></style>\n`));
+    const style = firstTag(ok(`<style>.a <b>bold</b></style>\n`, none));
     expect(style.name).toBe("style");
     expect(style.children[0]).toMatchObject({ kind: "Text", value: ".a " });
     expect(tagIn(style.children[1]).name).toBe("b");
@@ -742,7 +744,7 @@ describe("the raw-text trade (the addendum's item 3)", () => {
   it("a `<` that starts no tag stays text, in `style`, `script` and `title`", () => {
     for (const name of ["style", "script", "title"]) {
       const source = `<${name}>a < b {}</${name}>\n`;
-      const text = as(firstTag(ok(source)).children[0], "Text");
+      const text = as(firstTag(ok(source, none)).children[0], "Text");
       expect(text.value).toBe("a < b {}");
       expect(slice(source, text.span)).toBe("a < b {}");
     }

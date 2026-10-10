@@ -95,7 +95,7 @@ A parent's `children["*"]` entry claims child names that no explicit entry, regi
 ```ts
 lowerSource(source, filename, {
   customTags, // contract-only tags by name
-  tagRules: "none", // "none" (default) | "markup" | "html"
+  tagRules: "none", // "html" (default) | "markup" | "none"
   structural: "reject", // "pass" (default) | "reject"
   imports: "pass", // optional; default: whatever `structural` is
   unknownTags: "reject", // "allow" (default) | "reject"
@@ -113,7 +113,7 @@ lowerSource(source, filename, {
 
 ## Tag rules presets
 
-A preset decides which tag names have a parse rule of their own. `none`, the default, is what a dialect wants: its tags are not HTML.
+A preset decides which tag names have a parse rule of their own. With no `tagRules`, a file parses under `html`, the full HTML rules (decision 212 item 8): a dialect that states nothing gets strict rules and turns off what it does not want. `none` is what a dialect whose tags are not HTML passes; Mesh does.
 
 | Preset | Native elements | Language tags |
 |---|---|---|

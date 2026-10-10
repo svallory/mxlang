@@ -463,8 +463,12 @@ describe("the Mesh case with the `:name` sugar (decision 146 PR 3)", () => {
 // (`class`); the entry point's tag rules make it an ordinary tag, so the sugar
 // applies.
 describe("name sugar on a data tag named like a statement", () => {
+  // Under `none` (Mesh's preset); the strict default reads `class` as a
+  // statement (decision 212 item 8).
   const classAttrs = (source: string) => {
-    const { ir, diagnostics } = lowerSource(source, "/c.mx", {});
+    const { ir, diagnostics } = lowerSource(source, "/c.mx", {
+      tagRules: "none",
+    });
     expect(diagnostics).toEqual([]);
     const find = (nodes: readonly { kind: string }[]): Tag | undefined => {
       for (const node of nodes) {

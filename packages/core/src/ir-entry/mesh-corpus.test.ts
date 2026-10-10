@@ -4,8 +4,8 @@
  * in its docs, copied with attribution into
  * `packages/core/src/fixtures/syntax/mesh-corpus/` (see its README), lowered
  * exactly as Mesh's compiler parses them (`parseEntitySource`: Mesh's closed
- * contracts, `structural: "reject"`, `unknownTags: "reject"`,
- * `imports: "pass"`) with the reference module `@mxlang/core/syntax/mesh`,
+ * contracts, `tagRules: "none"`, `structural: "reject"`,
+ * `unknownTags: "reject"`, `imports: "pass"`) with the reference module `@mxlang/core/syntax/mesh`,
  * `productName: "Mesh"`. The whole `LowerSourceResult` (the IR with its tags,
  * attributes, atoms, members, imports and spans, the Babel nodes reduced to
  * their shape and marks (see `snapshot`), and diagnostics) is compared with
@@ -65,6 +65,8 @@ function parseEntity(
   return lowerSource(source, file, {
     syntax,
     customTags: contracts,
+    // Mesh states its tag rules; the default is strict (decision 212 item 8).
+    tagRules: "none",
     structural: "reject",
     unknownTags: "reject",
     imports: "pass",

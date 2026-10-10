@@ -814,7 +814,8 @@ Today, by target:
 | Targets | Statement set at parse time | Declared by |
 |---|---|---|
 | html | the six | `targets/html/src/compiler.ts` `host` registers `CORE_TAGLIB` (`core-tags.json`, `<import>` through `<class>`, `parseOptions.statement`) |
-| `lowerSource` with `tagRules: "none"` (the default) | `import`, `static`, `export` | `core/src/tag-presets.ts` (`tagRulesPreset`, `taglibsOfRules`: `"<import>"`, `"<static>"`, `"<export>"` entries) |
+| `lowerSource` with no `tagRules` (strict, decision 212 item 8) or `tagRules: "html"` | the six | `core/src/tag-presets.ts` (`tagRulesPreset`: core's whole taglib) |
+| `lowerSource` with `tagRules: "none"` | `import`, `static`, `export` | `core/src/tag-presets.ts` (`tagRulesPreset`, `taglibsOfRules`: `"<import>"`, `"<static>"`, `"<export>"` entries) |
 | Preact, React, Hono (`hosts/preact/src/compile.ts`, no taglibs), Angular (`hosts/angular/src/index.ts` and `tag-module.ts`, no `taglibs`), and every `parseFragment` caller (Solid, Astro, the regions; `fragment.ts` `PARSE_ONLY_TRANSLATOR`, custom tags only) | none | — |
 
 On the last row a statement line parses as a tag with attributes (probe:

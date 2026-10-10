@@ -216,7 +216,7 @@ on these nodes, so the statement text is recovered by slicing on
 (`import`, `static`, `export`, `client`, `server`, `class`) are declared to the
 parser from core's own taglib on every host, so their text is code, never
 attributes: a typed `static function f(a: number): string {…}` or a `<T,>`
-generic reads the same on every target. (The IR entry point's default `none`
+generic reads the same on every target. (The IR entry point's `none`
 tag rules preset declares three of the six, `import`, `static` and `export`;
 §13.7.3.)
 
@@ -3574,7 +3574,7 @@ read throws, as `readFileSync` does.
 |---|---|---|
 | `customTags` | `Record<string, CustomTag>` | contract-only custom tags by call name (decisions 130 and 138): required attributes, attribute types, `children`, `parents`, `analyze`. `lowerSource` does **not** scan `tags/` or `package.json`; this map is the whole vocabulary it knows. Contracts are enforced at every depth (see [Writing a dialect package](/custom-tags/dialect-package/)) |
 | `syntax` | `SyntaxTable` or `SyntaxModule` | the syntax of this file, for a dialect that builds its own (Mesh passes its module, hooks included). Omitted, the file's nearest `package.json#mx.syntax` applies. A trigger, block tag or filter nothing lowers is a positioned diagnostic (§13.9) |
-| `tagRules` | `"none"` (default), `"markup"`, `"html"` | the tag rules preset the source parses under (§13.7.3). An option of this function only, never a project or host setting (ruling 209) |
+| `tagRules` | `"html"` (default), `"markup"`, `"none"` | the tag rules preset the source parses under (§13.7.3). An option of this function only, never a project or host setting (ruling 209) |
 | `defaultTag` | tag name | what `<#id>` and `<.class>` stand for in place of the built-in `object` (decision 145; see "The unnamed tag" in §4) |
 | `structural` | `"pass"` (default), `"reject"` | `"pass"` keeps the structural constructs (text, `${}`, `<if>`, `<for>`, `<const>`, `import`, `export`, `static`) in the IR. `"reject"` makes each one a positioned error: ``the data tree is static; this file's consumer does not evaluate `<if>` `` (the construct is named). Comments are **never** structural — a `//` line or `<!-- -->` stays in the IR as its `Comment` node under either value (decision 131 addendum 5). A structural hit and a check error are ordered by position |
 | `imports` | `"pass"`, `"reject"` (default: the effective `structural`) | Decides a top-level `import` on its own. `"pass"` with `structural: "reject"` keeps every other structural construct rejected and returns the imports in `ir.imports`; `"reject"` with `structural: "pass"` rejects only the `import`s. Each `Import` carries `code`, `span`, `from` (the unquoted specifier) and `names` (`{ imported, local, kind: "default" \| "named" \| "namespace", span, localSpan?, typeOnly? }`, in written order, empty for `import "x"`), read from the parsed declaration, never from the text. A tag-body `import` is not an import: it parses as body text, so `structural: "reject"` rejects it as text and `imports` does not apply |
@@ -3615,7 +3615,10 @@ missing is an `internal error`, with no IR. Every span is core's `SourceSpan`
 
 #### 13.7.3 Tag rules presets
 
-A preset is the tag table entries the source parses under:
+A preset is the tag table entries the source parses under. An absent
+`tagRules` is `html` (decision 212 item 8): a dialect that states no tag rules
+gets the full HTML rules and turns off what it does not want; Mesh passes
+`none`.
 
 | Preset | Native elements | Language tags |
 |---|---|---|

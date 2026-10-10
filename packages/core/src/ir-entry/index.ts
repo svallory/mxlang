@@ -69,10 +69,12 @@ export interface LowerSourceOptions {
   /**
    * The tag rules preset the source parses under (decision 204; ruling 209:
    * an option of this function only, never a project or host setting).
-   * `"none"` (default): no native element rules, so `script`, `input` or
-   * `title` is an ordinary tag whose body parses as markup. `"markup"` and
-   * `"html"` add the web elements' parse rules (void, raw text, preserved
-   * whitespace) and, for `"html"`, core's whole taglib.
+   * `"html"` (default, decision 212 item 8: a dialect that states no tag
+   * rules gets the full HTML rules): the web elements' parse rules (void, raw
+   * text, preserved whitespace) and core's whole taglib. `"markup"`: the same
+   * parse rules with core's statement tags only. `"none"` (Mesh's): no native
+   * element rules, so `script`, `input` or `title` is an ordinary tag whose
+   * body parses as markup.
    */
   tagRules?: TagRulesPreset;
   /**
@@ -183,7 +185,7 @@ export function lowerSource(
   });
   let rules: ReturnType<typeof tagRulesPreset>;
   try {
-    rules = tagRulesPreset(options.tagRules ?? "none", WEB_ELEMENTS);
+    rules = tagRulesPreset(options.tagRules ?? "html", WEB_ELEMENTS);
   } catch (error) {
     return failed([error]);
   }

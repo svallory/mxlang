@@ -216,21 +216,6 @@ const KNOWN_GAPS: Record<string, string[]> = {
     "attr-operators-space-between",
     "attr-without-delimiters",
   ],
-  // Open-tag-only void tags (`<img>`), raw-text `<script>`/`<style>`, an
-  // html-comment tag and a regexp attribute ("Missing ending", "closing X does
-  // not match"). REVISIT THE DECISION, not a bug: decision 131 addendum,
-  // ruling 1 switches the HTML parse rules (openTagOnly, text) off on purpose,
-  // so these bodies parse as tags. Fixing means reversing that ruling.
-  "open-tag-only-and-raw-text": [
-    "attr-regexp",
-    "html-comment-tag",
-    "mixed-open-tag-only",
-    "open-tag-only",
-    "parsed-text-style-tag",
-    "script",
-    "script-concise",
-    "script-mismatched-close",
-  ],
   // `#a${x}` and `.a${x}`: core builds the value with no authored span. Stock
   // Marko compiles them. Rejected positioned at the sigil (build.ts); the id
   // case used to be an `internal error`, the class case a wrong "class
@@ -243,84 +228,127 @@ const KNOWN_GAPS: Record<string, string[]> = {
   ],
 };
 
+/**
+ * Gaps of the `none` preset only (`tagRules: "none"`, Mesh's): open-tag-only
+ * void tags (`<img>`), raw-text `<script>`/`<style>`, an html-comment tag and
+ * a regexp attribute ("Missing ending", "closing X does not match"). Not a
+ * bug: `none` switches the HTML parse rules (openTagOnly, text) off on
+ * purpose (decision 131 addendum, ruling 1), so these bodies parse as tags.
+ * The default, strict rules (decision 212 item 8) parse them all.
+ */
+const NONE_GAPS: Record<string, string[]> = {
+  "open-tag-only-and-raw-text": [
+    "attr-regexp",
+    "html-comment-tag",
+    "mixed-open-tag-only",
+    "open-tag-only",
+    "parsed-text-style-tag",
+    "script",
+    "script-concise",
+    "script-mismatched-close",
+  ],
+};
+
 const cases = readCorpus();
 
 const intendedBy = new Map<string, { group: string; pattern: RegExp }>();
 for (const [group, { pattern, cases: names }] of Object.entries(INTENDED)) {
   for (const name of names) intendedBy.set(name, { group, pattern });
 }
-const gapBy = new Map<string, string>();
-for (const [group, names] of Object.entries(KNOWN_GAPS)) {
-  for (const name of names) gapBy.set(name, group);
+function gapsOf(...groups: Record<string, string[]>[]): Map<string, string> {
+  const gapBy = new Map<string, string>();
+  for (const gaps of groups) {
+    for (const [group, names] of Object.entries(gaps)) {
+      for (const name of names) gapBy.set(name, group);
+    }
+  }
+  return gapBy;
 }
 
-function run(source: string) {
+/** The corpus under the default rules (strict) and under Mesh's `none`. */
+const PRESETS = [
+  {
+    label: "default (strict) tag rules",
+    tagRules: undefined,
+    gapBy: gapsOf(KNOWN_GAPS),
+  },
+  {
+    label: '`tagRules: "none"`',
+    tagRules: "none" as const,
+    gapBy: gapsOf(KNOWN_GAPS, NONE_GAPS),
+  },
+];
+
+function run(source: string, tagRules?: "none") {
   // Only real parse rejections count: the structural, import and unknown-tag
   // checks are left at their pass-through settings.
   return lowerSource(source, "/corpus.mx", {
     structural: "pass",
     imports: "pass",
     unknownTags: "allow",
+    ...(tagRules ? { tagRules } : {}),
   });
 }
 
-describe("tree-sitter-mx corpus through lowerSource", () => {
-  it("reads the whole corpus, and every list entry names a case", () => {
-    expect(cases.length).toBeGreaterThanOrEqual(300);
-    const names = cases.map((c) => c.name);
-    expect(new Set(names).size).toBe(names.length);
-    for (const name of [...intendedBy.keys(), ...gapBy.keys()]) {
-      expect(names, name).toContain(name);
-    }
-    for (const name of intendedBy.keys())
-      expect(gapBy.has(name), name).toBe(false);
-  });
+for (const { label, tagRules, gapBy } of PRESETS) {
+  describe(`tree-sitter-mx corpus through lowerSource, ${label}`, () => {
+    it("reads the whole corpus, and every list entry names a case", () => {
+      expect(cases.length).toBeGreaterThanOrEqual(300);
+      const names = cases.map((c) => c.name);
+      expect(new Set(names).size).toBe(names.length);
+      for (const name of [...intendedBy.keys(), ...gapBy.keys()]) {
+        expect(names, name).toContain(name);
+      }
+      for (const name of intendedBy.keys())
+        expect(gapBy.has(name), name).toBe(false);
+    });
 
-  for (const c of cases) {
-    const intended = intendedBy.get(c.name);
-    const gap = gapBy.get(c.name);
+    for (const c of cases) {
+      const intended = intendedBy.get(c.name);
+      const gap = gapBy.get(c.name);
 
-    if (intended) {
-      it(`${c.name}: refused on purpose (${intended.group})`, () => {
-        const errors = run(c.source).diagnostics.filter(
-          (d) => d.severity === "error",
-        );
-        expect(errors.length).toBeGreaterThan(0);
-        const allowed = Object.values(INTENDED).map((i) => i.pattern);
-        // Refused for the case's own reason, and for no unlisted one.
-        expect(
-          errors.some((e) => intended.pattern.test(e.message)),
-          errors.map((e) => e.message).join("\n"),
-        ).toBe(true);
-        for (const e of errors) {
+      if (intended) {
+        it(`${c.name}: refused on purpose (${intended.group})`, () => {
+          const errors = run(c.source, tagRules).diagnostics.filter(
+            (d) => d.severity === "error",
+          );
+          expect(errors.length).toBeGreaterThan(0);
+          const allowed = Object.values(INTENDED).map((i) => i.pattern);
+          // Refused for the case's own reason, and for no unlisted one.
           expect(
-            allowed.some((p) => p.test(e.message)),
-            e.message,
+            errors.some((e) => intended.pattern.test(e.message)),
+            errors.map((e) => e.message).join("\n"),
           ).toBe(true);
-        }
-      });
-    } else if (gap) {
-      it(`${c.name}: known gap (${gap}) still fails`, () => {
-        const errors = run(c.source).diagnostics.filter(
-          (d) => d.severity === "error",
-        );
-        // Fixed? Delete this case from KNOWN_GAPS.
-        expect(errors.length).toBeGreaterThan(0);
-        expect(errors.map((e) => e.message).join("\n")).not.toMatch(
-          /^internal error/m,
-        );
-      });
-    } else {
-      it(`${c.file} ${c.name}: parses with no error`, () => {
-        const result = run(c.source);
-        expect(
-          result.diagnostics.filter((d) => d.severity === "error"),
-        ).toEqual([]);
-        expect(result.ir).toBeDefined();
-      });
+          for (const e of errors) {
+            expect(
+              allowed.some((p) => p.test(e.message)),
+              e.message,
+            ).toBe(true);
+          }
+        });
+      } else if (gap) {
+        it(`${c.name}: known gap (${gap}) still fails`, () => {
+          const errors = run(c.source, tagRules).diagnostics.filter(
+            (d) => d.severity === "error",
+          );
+          // Fixed? Delete this case from KNOWN_GAPS.
+          expect(errors.length).toBeGreaterThan(0);
+          expect(errors.map((e) => e.message).join("\n")).not.toMatch(
+            /^internal error/m,
+          );
+        });
+      } else {
+        it(`${c.file} ${c.name}: parses with no error`, () => {
+          const result = run(c.source, tagRules);
+          expect(
+            result.diagnostics.filter((d) => d.severity === "error"),
+          ).toEqual([]);
+          expect(result.ir).toBeDefined();
+        });
+      }
     }
-  }
-});
+  });
+}
 
 describe("a shorthand with a placeholder", () => {
   it.each([

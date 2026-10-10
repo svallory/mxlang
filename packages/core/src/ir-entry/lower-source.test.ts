@@ -157,9 +157,60 @@ const NATIVE_RULE_NAMES = [
   "wbr",
 ];
 
-describe("the `none` preset (default): no native element rules", () => {
+/**
+ * An absent `tagRules` is the strict `html` preset (decision 212 item 8: a
+ * dialect that chooses no tag rules gets the full HTML rules). Mesh passes
+ * `none` itself.
+ */
+describe("absent `tagRules`: the strict `html` preset", () => {
+  it.each([
+    "<input><child/></input>\n",
+    "<input/>\n<br>\n",
+    "<script><child/></script>\n",
+    "<pre>\n  <child/>\n</pre>\n",
+    "<style>\n  <b/>\n</style>\n",
+    "<id=1/>\n<class=z/>\n",
+    "<let/x=1/>\n<a/>\n",
+  ])('%j lowers as under `tagRules: "html"`', (source) => {
+    expect(lowerSource(source, "/t.mx")).toEqual(
+      lowerSource(source, "/t.mx", { tagRules: "html" }),
+    );
+  });
+
+  it("a void element takes no child", () => {
+    expect(errors("<input><child/></input>\n")).toEqual([
+      ["error", 'The closing "input" tag was not expected', 1, 15, 15],
+    ]);
+  });
+
+  it.each(["script", "style", "textarea", "title"])(
+    "a `<%s>` body is text",
+    (name) => {
+      const result = lowerSource(`<${name}><child/></${name}>\n`, "/t.mx");
+      expect(result.diagnostics).toEqual([]);
+      const tag = tagOf(result.ir?.body[0]);
+      expect(tag.children).toMatchObject([{ kind: "Text", value: "<child/>" }]);
+    },
+  );
+
+  it("`<pre>` keeps the whitespace around a child tag", () => {
+    const result = lowerSource("<pre>\n  <child/>\n</pre>\n", "/t.mx");
+    expect(result.diagnostics).toEqual([]);
+    expect(tagOf(result.ir?.body[0]).children.map((node) => node.kind)).toEqual(
+      ["Text", "DelegatedTag", "Text"],
+    );
+  });
+
+  it("`class` is a statement, not a tag", () => {
+    expect(lowerSource("<class=z/>\n", "/t.mx").ir).toBeUndefined();
+  });
+});
+
+describe("the `none` preset: no native element rules", () => {
   it.each(NATIVE_RULE_NAMES)("`<%s>` accepts a child tag", (name) => {
-    const result = lowerSource(`<${name}><child/></${name}>\n`, "/t.mx");
+    const result = lowerSource(`<${name}><child/></${name}>\n`, "/t.mx", {
+      tagRules: "none",
+    });
     expect(result.diagnostics).toEqual([]);
     const tag = tagOf(result.ir?.body[0]);
     expect(tag.name).toBe(name);
@@ -173,6 +224,7 @@ describe("the `none` preset (default): no native element rules", () => {
       const result = lowerSource(
         `<${name}>\n  <child/>\n</${name}>\n`,
         "/t.mx",
+        { tagRules: "none" },
       );
       expect(result.diagnostics).toEqual([]);
       const tag = tagOf(result.ir?.body[0]);
@@ -185,6 +237,7 @@ describe("the `none` preset (default): no native element rules", () => {
     const result = lowerSource(
       "<id=1/>\n<log=x/>\n<debug=y/>\n<class=z/>\n",
       "/t.mx",
+      { tagRules: "none" },
     );
     expect(result.diagnostics).toEqual([]);
     expect(result.ir?.body.map((node) => tagOf(node).name)).toEqual([

@@ -4,7 +4,9 @@
  *
  * - `html`: the html target's full table. The target's native elements with
  *   their HTML parse rules, plus every entry of core's taglib (`if`, `for`,
- *   `script`, `let`, the statement tags, ...).
+ *   `script`, `let`, the statement tags, ...). The IR entry point
+ *   (`lowerSource`) defaults to it when `tagRules` is absent (decision 212
+ *   item 8).
  * - `markup`: the native elements plus core's statement tags (`import`,
  *   `static`, `export`, `client`, `server`, `class`), what the JSX, Solid,
  *   Astro and Angular hosts register, plus `<const>` and `<return>` as
@@ -12,8 +14,7 @@
  * - `none`: no native tag rules at all, only the module statements
  *   (`import`, `static`, `export`) and `<const>`/`<return>` as open-tag-only.
  *   Every other name, `script`, `br` and `class` included, is an ordinary tag
- *   whose body parses as markup. The IR entry point (`lowerSource`) defaults
- *   to it.
+ *   whose body parses as markup. Mesh's preset.
  *
  * `<const>` and `<return>` take no body in any preset: without
  * `openTagOnly`, `<const/y=1>` in HTML mode waits for a `</const>`, and

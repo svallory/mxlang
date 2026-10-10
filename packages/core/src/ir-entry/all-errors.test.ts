@@ -299,11 +299,26 @@ describe("no input makes lowerSource throw", () => {
   ])(
     "%j at end of input: main's error first, else the new one",
     (source, message, line, column) => {
-      const { ir, diagnostics } = lowerSource(source, "/t.mx");
+      // Measured against `parseData`, whose taglib was the `none` preset.
+      const { ir, diagnostics } = lowerSource(source, "/t.mx", {
+        tagRules: "none",
+      });
       expect(ir).toBeUndefined();
       expect(diagnostics[0]).toMatchObject({ message, line, column });
     },
   );
+
+  it("under the strict default, a `script` body's open `${` is the new error", () => {
+    // `script` is raw text there (decision 212 item 8), so the `${` opens in
+    // its body text rather than in a tag head.
+    const { ir, diagnostics } = lowerSource(`script -- \${b`, "/t.mx");
+    expect(ir).toBeUndefined();
+    expect(diagnostics[0]).toMatchObject({
+      message: `the input ends inside \`\${\`…\`}\` opened here`,
+      line: 1,
+      column: 10,
+    });
+  });
 
   it("reports an internal invariant at the file start under a distinct prefix", () => {
     // A macro returning a node with no span breaks the invariant.
