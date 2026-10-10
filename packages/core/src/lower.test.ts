@@ -2137,6 +2137,30 @@ describe("errors keep their message and position", () => {
     },
   );
 
+  it("rejects a bracketed attribute name with the two-way-binding hint, at the attribute", () => {
+    // The full message and its position, pinned so a wording regression (the
+    // hint naming the origin language again) cannot pass silently.
+    let caught: { message: string; line?: number; column?: number } | null =
+      null;
+    try {
+      lowerSource('<input [(value)]="name"/>');
+    } catch (error) {
+      caught = error as { message: string; line?: number; column?: number };
+    }
+    expect(caught?.message).toBe(
+      "Invalid attribute name `[(value)]` — two-way binding is written `value:=expr`",
+    );
+    expect([caught?.line, caught?.column]).toEqual([1, 7]);
+  });
+
+  it("refuses `class` with the full component-class wording", () => {
+    // A bare root `class` statement reaches lowering's statement switch; the
+    // angle-bracket `<class>` spelling is refused earlier, by the front end.
+    expect(() => lowerSource("class A {}\n<p>y</p>")).toThrow(
+      "`class { … }` is not supported in MX: a component class has no equivalent on any target — write a function component, or put the state in `<let>`/`static` code",
+    );
+  });
+
   it("rejects an unknown lowercase tag rather than emitting it literally", () => {
     expect(() =>
       lowerSource(
@@ -3615,7 +3639,7 @@ describe("<for> by=/key= (Marko parity)", () => {
   it("refuses a string `by=` on `in`, at the quoted key", () => {
     fails(
       '<for|k, v| in=o by=§"id"><p/></for>',
-      "only supports a string `by` key with `of`; use a `by=(key, value) => ...` function for `<for in>`",
+      "The `<for>` tag only supports a string `by` key with `of`; use a `by=(key, value) => ...` function for `<for in>`.",
     );
   });
 
@@ -3633,7 +3657,7 @@ describe("<for> by=/key= (Marko parity)", () => {
   it("redirects `key=` to `by=`, at the attribute, for every loop form", () => {
     fails(
       '<for|x| of=xs §key="id"><p/></for>',
-      'keys items with the `by=` attribute, not `key=`. Use `by="propName"` or `by=(item, index) => key`',
+      'The `<for>` tag keys items with the `by=` attribute, not `key=`. Use `by="propName"` or `by=(item, index) => key`.',
     );
     fails(
       '<for|k, v| in=o §key="id"><p/></for>',
