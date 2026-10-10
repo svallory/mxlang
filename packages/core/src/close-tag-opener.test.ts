@@ -3,16 +3,20 @@ import { describe, expect, it } from "vitest";
 import { annotateCloseTagOpener } from "./close-tag-opener.ts";
 import { compileSource } from "./compile.ts";
 
+/** Routing reads the host's file-kind segments before the parse. */
+const noHostSegments = { moduleSegments: () => [] };
+
 /** Compiles `source` and returns the thrown message minus ANSI colour. */
 function failure(source: string): string {
   try {
     // The parse fails before the rest of the policy or the host is read;
-    // only the web elements' parse rules (`<br>` is void) matter.
+    // only the web elements' parse rules (`<br>` is void) and the host
+    // segments routing reads (none here) matter.
     (compileSource as (...args: unknown[]) => unknown)(
       source,
       "/fixtures/x.mx",
       { nativeTags: WEB_ELEMENTS },
-      {},
+      { targets: noHostSegments },
     );
   } catch (error) {
     // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI strip
@@ -69,7 +73,7 @@ describe("a mismatched closing tag names the opener's position", () => {
         source,
         "/fixtures/x.mx",
         {},
-        {},
+        { targets: noHostSegments },
       );
     } catch (error) {
       thrown = error as Error & { errors?: Error[] };

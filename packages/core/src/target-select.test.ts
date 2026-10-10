@@ -252,7 +252,7 @@ describe("mx.target resolution table (§4.1)", () => {
   });
   it("positions the target and related host values, skipping nested keys and escaped spelling (CRLF/UTF-16)", () => {
     const text =
-      '{\r\n  "other": {"mx":{"target":"view-jsx"}},\r\n  "mx": {\r\n    "nested": {"host":"unit","target":"view-jsx"},\r\n    "host": "unit",\r\n    "target": "view-js\\u0078"\r\n  }\r\n}';
+      '{\r\n  "other": {"mx":{"target":"view-jsx"}},\r\n  "mx": {\r\n    "view": {"host":"unit","target":"view-jsx"},\r\n    "host": "unit",\r\n    "target": "view-js\\u0078"\r\n  }\r\n}';
     const { diagnostics, file } = resolve({}, {}, text);
     expect(diagnostics[0]).toMatchObject({
       code: "target-host-mismatch",
