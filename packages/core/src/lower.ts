@@ -5224,6 +5224,10 @@ function runCustomTagAnalyze(ctx: Ctx, body: readonly MxChild[]): void {
     ctx.targets,
   );
   scratch.customTags = customTags;
+  // The file's dialect: a call's checks read the keys it claims and the
+  // wording it gives (`describeAttribute`), and this walk's errors are the
+  // file's.
+  scratch.dialect = ctx.dialect;
   // Mirrors the parent: this walk is the same file, so whether it emits a
   // module is the same answer.
   scratch.emitsModule = ctx.emitsModule;

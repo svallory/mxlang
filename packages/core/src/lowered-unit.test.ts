@@ -598,6 +598,34 @@ describe("`contractFields`", () => {
     );
     expect(seen).toEqual([true, ["b", "a"]]);
   });
+
+  it("a file that uses a tag with an `analyze` hook gets the same wording: the analyze walk is the file's, so it sees the dialect", () => {
+    const tags: Record<string, CustomTag> = {
+      box: {
+        attributes: {
+          mode: { type: "atom", values: ["b", "a"] } as never,
+        },
+      },
+      watched: { analyze() {} },
+    };
+    const worded: Dialect = {
+      ...claiming({ attribute: ["values"] }),
+      describeAttribute: () => " (as the module says)",
+    };
+    const error = caught(() =>
+      compile("<watched/><box mode=1/>", tags, worded),
+    );
+    expect(error.message).toBe(
+      "`<box>`: attribute `mode` must be atom, got number (as the module says)",
+    );
+    // A plain string is queued behind the module's hook in this walk too.
+    const queued = caught(() =>
+      compile("<watched/><box mode='s'/>", tags, worded),
+    );
+    expect(queued.message).toBe(
+      "`<box>`: attribute `mode` must be atom, got string (as the module says)",
+    );
+  });
 });
 
 describe("`checkContract`", () => {
