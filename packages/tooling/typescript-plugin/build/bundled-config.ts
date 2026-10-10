@@ -28,7 +28,9 @@ export const BUNDLED_INSTALLED = [
   "@babel/code-frame",
   "@babel/core",
   "@babel/generator",
+  "@babel/parser",
   "@babel/plugin-transform-typescript",
+  "cosmiconfig",
 ] as const;
 
 /**

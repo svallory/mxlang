@@ -21,6 +21,7 @@ import { spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -95,13 +96,36 @@ if (${JSON.stringify(lower)}) {
   }
 }
 
-/** The external packages `dist/index.js` imports statically, by specifier. */
+/**
+ * The external packages a dist entry imports statically, by specifier: every
+ * `import … from`, side-effect `import "…"`, and `export … from` form, across
+ * every `dist/*.js` entry. The bundler emits each on its own line, so the
+ * scan is line-anchored — free-text matches inside generated string literals
+ * must not count.
+ */
 function staticImportsOfDist(): string[] {
-  const text = readFileSync(dist, "utf8");
+  const distDir = join(here, "..", "dist");
   const imports: string[] = [];
-  for (const line of text.split("\n")) {
-    const match = /^import\s+.*?from\s+"([^"]+)";$/.exec(line.trim());
-    if (match?.[1] && !match[1].startsWith("node:")) imports.push(match[1]);
+  for (const name of readdirSync(distDir)) {
+    if (!name.endsWith(".js")) continue;
+    for (const raw of readFileSync(join(distDir, name), "utf8").split("\n")) {
+      const line = raw.trim().replace(/;$/, "");
+      const forms = [
+        /^import\s+"([^"]+)"$/,
+        /^import\s[^;]*?from\s+"([^"]+)"$/,
+        /^export\s[^;]*?from\s+"([^"]+)"$/,
+      ];
+      for (const form of forms) {
+        const match = form.exec(line);
+        if (
+          match?.[1] &&
+          !match[1].startsWith("node:") &&
+          !match[1].startsWith(".")
+        ) {
+          imports.push(match[1]);
+        }
+      }
+    }
   }
   return imports;
 }
@@ -135,11 +159,24 @@ describe("cold start: the built dist loads the heavy dependencies lazily", () =>
       expect(requests.filter((r) => r === "cosmiconfig")).toEqual([]);
     },
   );
+
+  it.skipIf(!existsSync(dist))(
+    "lowering under a dialect loads no marko-frontend bundle",
+    () => {
+      // Validating a dialect's syntax table uses the template parser the
+      // dist already inlines (`mxTemplateParser`); loading the whole
+      // `marko-frontend.cjs` for it was ~50 ms of a dialect's first call.
+      const requests = probe(dist, "dialect");
+      expect(
+        requests.filter((r) => r.includes("marko-frontend")),
+      ).toEqual([]);
+    },
+  );
 });
 
 describe("cold start: no source module statically imports a lazy dependency", () => {
   it("every src import of them is type-only or a hand-rolled require", async () => {
-    const { readdirSync, statSync } = await import("node:fs");
+    const statSync = (await import("node:fs")).statSync;
     const sources: string[] = [];
     const walk = (dir: string): void => {
       for (const name of readdirSync(dir)) {
@@ -163,16 +200,26 @@ describe("cold start: no source module statically imports a lazy dependency", ()
     for (const path of sources) {
       const text = readFileSync(path, "utf8");
       for (const dependency of lazy) {
-        const pattern = new RegExp(
-          `^import\\s+([^;]*?)\\s*from\\s*"${dependency.replace("/", "\\/")}"`,
-          "m",
-        );
-        const match = pattern.exec(text);
-        if (match?.[1]) {
+        const escaped = dependency.replace("/", "\\/");
+        // Every import form loads the module — named/default values,
+        // side-effect `import "…"`, and `export … from` — except a whole
+        // `import type … from "…"`, which is erased. Line-anchored, so prose
+        // in comments never matches.
+        const clauses = [
+          ...text.matchAll(
+            new RegExp(
+              `^\\s*import\\s+([^;\\n]*?)\\s*from\\s*"${escaped}"`,
+              "gm",
+            ),
+          ),
+          ...text.matchAll(new RegExp(`^\\s*import\\s+"${escaped}"`, "gm")),
+          ...text.matchAll(
+            new RegExp(`^\\s*export\\s+[^;\\n]*?from\\s*"${escaped}"`, "gm"),
+          ),
+        ].map((match) => (match[1] ?? "").trim());
+        for (const clause of clauses) {
           expect(
-            match[1]
-              .split(",")
-              .every((spec) => spec.trim().startsWith("type ")),
+            clause === "type" || clause.startsWith("type "),
             `${relative(here, path)} value-imports ${dependency}`,
           ).toBe(true);
         }

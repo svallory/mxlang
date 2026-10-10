@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@astrojs/compiler": "2.13.1",
+    "cosmiconfig": "10.0.1",
     "@babel/parser": "7.29.8",
     "@jridgewell/sourcemap-codec": "1.6.0",
     "@mxlang/core": "workspace:*",

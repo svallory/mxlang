@@ -569,6 +569,7 @@
         "@mxlang/host-angular": "workspace:*",
         "@mxlang/targets": "workspace:*",
         "@mxlang/tsx-bridge": "workspace:*",
+        "cosmiconfig": "10.0.1",
         "vscode-languageserver": "10.1.1",
         "vscode-languageserver-textdocument": "1.0.14",
       },
@@ -614,6 +615,7 @@
         "@mxlang/tsx-bridge": "workspace:*",
         "@volar/language-core": "2.4.28",
         "@volar/typescript": "2.4.28",
+        "cosmiconfig": "10.0.1",
       },
       "devDependencies": {
         "@angular/compiler": "22.1.7",

@@ -810,12 +810,7 @@ function stripProgram(body: Node[]): Node[] {
     true,
   );
   // Marko drops the empty `export {}` the plugin adds to a module.
-  return filterEmptyExport(path.node.body);
-}
-
-/** Marko drops the empty `export {}` the plugin adds to a module. */
-function filterEmptyExport(body: Node[]): Node[] {
-  return body.filter(
+  return path.node.body.filter(
     (statement: Node) =>
       statement.type !== "ExportNamedDeclaration" ||
       statement.declaration ||

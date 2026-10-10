@@ -16,10 +16,10 @@
  * published `.d.ts` names no `@babel/*` type.
  *
  * The parser and the TS strip plugin load on their own memos, apart from the
- * `@babel/core` graph (the cold-start work, decision on `perf/core-cold-start`):
- * a path that only parses expressions (mapping, the reserved-binding check)
- * pays for `@babel/parser` alone, and a file with no TypeScript never pays
- * for `@babel/plugin-transform-typescript`.
+ * `@babel/core` graph: a path that only parses expressions (mapping, the
+ * reserved-binding check) pays for `@babel/parser` alone, and the strip
+ * plugin loads only when a payload is stripped — which every lowering with
+ * an expression payload runs, TypeScript or not.
  */
 import { createRequire } from "node:module";
 import type { Node } from "./core.ts";
@@ -68,9 +68,9 @@ export function coreParser(): Parser {
 }
 
 /**
- * `@babel/plugin-transform-typescript`'s plugin factory, loaded on first
- * call: a file with no TypeScript is stripped without it (the TS-free fast
- * path in `mx-parse.ts`), so it must not load even with the rest of Babel.
+ * `@babel/plugin-transform-typescript`'s plugin factory, loaded on the first
+ * strip: the strip runs for every payload, TypeScript or not, so the plugin
+ * loads with the first lowering — but importing core never loads it.
  */
 export function coreTsPlugin(): PluginTransformTypeScript {
   if (!tsPlugin) {

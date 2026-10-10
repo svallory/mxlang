@@ -45,6 +45,7 @@
   },
   "dependencies": {
     "@mxlang/core": "workspace:*",
+    "cosmiconfig": "10.0.1",
     "@mxlang/host-angular": "workspace:*",
     "@mxlang/targets": "workspace:*",
     "@mxlang/tsx-bridge": "workspace:*",
