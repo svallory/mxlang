@@ -83,10 +83,6 @@ bun add @mxlang/target-html
 ```
 
 Published from `dist/` (ESM + `.d.ts`); see `CHANGELOG.md` for release notes.
-Will publish as `@mxlang/target-html` once the org rename (decision 74) lands
-across the workspace; this package's own name, its `escapeFrom` import
-string, and every in-repo consumer specifier stay `@mxlang/target-html` until
-then, so the two never drift out of sync.
 
 ## Usage
 
@@ -186,7 +182,8 @@ Two loaders make `import page from "./page.mx"` resolve, one per runtime:
 
 - **Bun**: `@mxlang/target-html/bun` is a `BunPlugin` that intercepts `.mx`
   imports and compiles them on the fly (`.solid.mx` is excluded
-  — a different file kind, handled by `@mxlang/vite-plugin`). Register it
+  — a different file kind, handled by `@mxlang/vite-plugin`, which is not
+  published in the beta). Register it
   once via `bunfig.toml`:
 
   ```toml
@@ -218,7 +215,8 @@ Two loaders make `import page from "./page.mx"` resolve, one per runtime:
   import "@mxlang/target-html/types/marko";
   ```
 
-- **Vite**: `@mxlang/vite-plugin`'s `mx()` plugin handles `.mx`
+- **Vite** (in-repo only; `@mxlang/vite-plugin` is not published in the
+  beta): its `mx()` plugin handles `.mx`
   alongside `.solid.mx` (which keeps precedence regardless of extension
   order) — add it to `plugins` and import `.mx` files as usual. See
   `examples/mx-vite`.
