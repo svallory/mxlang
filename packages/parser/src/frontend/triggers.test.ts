@@ -675,7 +675,7 @@ describe("the `claim` option (a node type's claim at a trigger)", () => {
     );
   });
 
-  it("asks once per trigger, even when the parse restarts for a missed tag name", () => {
+  it("asks once per trigger in one parse (core memoizes across restarts)", () => {
     const asked: string[] = [];
     parse("my-tag &x\n  &y", {
       ...OPTIONS,
@@ -688,6 +688,56 @@ describe("the `claim` option (a node type's claim at a trigger)", () => {
     expect(new Set(asked).size).toBe(asked.length);
     expect(asked).toEqual(["attribute:7", "line:12"]);
   });
+
+  describe("a row that ends an attribute value (`terminatesValue`)", () => {
+    const TERMINATING: SyntaxTable = {
+      ...DEFAULT_SYNTAX,
+      attributeTriggers: [{ ...MEMBER, terminatesValue: true }],
+    };
+    const outcome = (document: ReturnType<typeof parse>) =>
+      shape({ body: document.body, errors: document.errors });
+
+    it.each(["div a=x &skip", "div a=x &skip b", "div a=(x) &skip=1"])(
+      "declined, %j parses as if no row matched",
+      (source) => {
+        const declined = parse(source, {
+          ...OPTIONS,
+          syntax: TERMINATING,
+          claim: () => undefined,
+        });
+        expect(outcome(declined)).toEqual(outcome(parse(source, OPTIONS)));
+      },
+    );
+
+    it("claimed, the value ends before the trigger", () => {
+      const document = parse("div a=x &y", {
+        ...OPTIONS,
+        syntax: TERMINATING,
+        claim: () => ({ type: "ref:Ref" }),
+      });
+      expect(document.errors).toEqual([]);
+      const div = document.body[0] as Node;
+      expect(div.attributes.map((each: Node) => each.type)).toEqual([
+        "MxAttribute",
+        "ref:Ref",
+      ]);
+      expect(div.attributes[0].value.source).toBe("x");
+    });
+  });
+
+  it.each(["div async &skip", "div async &skip(x) { y }"])(
+    "declined after `async`, %j parses as if no row matched",
+    (source) => {
+      const outcome = (document: ReturnType<typeof parse>) =>
+        shape({ body: document.body, errors: document.errors });
+      const declined = parse(source, {
+        ...OPTIONS,
+        syntax: ROWS,
+        claim: () => undefined,
+      });
+      expect(outcome(declined)).toEqual(outcome(parse(source, OPTIONS)));
+    },
+  );
 
   it("a throw out of the claim leaves `parse` unwrapped", () => {
     const thrown = new Error("not a registered node type");

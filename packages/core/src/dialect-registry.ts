@@ -267,10 +267,15 @@ export function nodeTypeRegistry(
   if (known) return known;
   const registry = new Map(CORE_REGISTRY);
   for (const [type, nodeType] of Object.entries(nodeTypes)) {
+    // Core places the trigger's `value` and `args` (containers) on the
+    // node, so walkers reach them through `keys`.
     const registered = entry(
       dialect.id,
       type,
-      nodeType.keys,
+      [
+        ...nodeType.keys,
+        ...CLAIMED_KEYS.filter((key) => !nodeType.keys.includes(key)),
+      ],
       nodeType as NodeType,
     );
     registry.set(registered.key, registered);
@@ -301,20 +306,8 @@ export interface RegisteredNode extends DialectNode {
   readonly args: unknown;
 }
 
-/** Where a claimed node came from: its row, position and text. */
-export interface ClaimedFrom {
-  readonly row: Trigger;
-  readonly position: ClaimPosition;
-  readonly text: string;
-}
-
-/** Every node `claimNode` stamped, with where it came from, so a hand-made node is refused. */
-const claimedNodes = new WeakMap<object, ClaimedFrom>();
-
-/** Where `claimNode` claimed `node` from, or `undefined` for a node it never returned. */
-export function claimedFrom(node: unknown): ClaimedFrom | undefined {
-  return node && typeof node === "object" ? claimedNodes.get(node) : undefined;
-}
+/** The fields core places on a claimed node that hold containers. */
+const CLAIMED_KEYS = ["value", "args"] as const;
 
 /** The fields core sets on a claimed node; a `parse` result may not hold them. */
 const CORE_SET = ["type", "span", "start", "end", "value", "operator", "args"];
@@ -372,7 +365,6 @@ export function claimNode(
     type: key === TRIGGER_KEY ? "MxTrigger" : key,
     span,
   } as unknown as RegisteredNode;
-  claimedNodes.set(node, { row, position: ctx.position, text });
   return node;
 }
 
@@ -389,7 +381,7 @@ function isTranslateErrorLike(error: unknown): boolean {
   );
 }
 
-/** "`<at>` names `k`, which is not a registered node type (…)", with the Q4 note for another dialect. */
+/** "`<at>` names `k`, which is not a registered node type (…)", with a note that naming another dialect's types is not supported yet. */
 function notRegisteredMessage(
   at: string,
   key: string,

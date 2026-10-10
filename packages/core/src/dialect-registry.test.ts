@@ -15,7 +15,6 @@ import { TranslateError } from "./core.ts";
 import {
   type ClaimContext,
   CORE_DIALECT,
-  claimedFrom,
   claimNode,
   type DialectNode,
   type NodeType,
@@ -160,7 +159,8 @@ describe("the registry", () => {
       key: "ref:Ref",
       dialect: "ref",
       type: "Ref",
-      keys: [],
+      // Core appends the containers it places on a claimed node.
+      keys: ["value", "args"],
       nodeType: RefType,
     });
     expect(registry.get("mx:Tag")).toBe(nodeTypeRegistry().get("mx:Tag"));
@@ -231,6 +231,80 @@ describe("a node type on a tagless line", () => {
   it("parses each trigger once", () => {
     irOf("div\n  ~a\nsort ~b\n", REF_DIALECT);
     expect(parses).toBe(2);
+  });
+});
+
+describe("the lowering cache: each node lowered once, in source order", () => {
+  it("each `lower` runs once per node, in source order, across positions", () => {
+    const lowered: string[] = [];
+    const dialect = refWith({
+      lower(node, ctx) {
+        lowered.push(`${ctx.position}:${node.path.join(".")}`);
+        return RefType.lower(node, ctx);
+      },
+    });
+    irOf("div ~a ~b\n  ~c\n  sort ~d\n  ~e\n", dialect);
+    expect(lowered).toEqual([
+      "attribute:a",
+      "attribute:b",
+      "line:c",
+      "attribute:d",
+      "line:e",
+    ]);
+  });
+});
+
+describe("a claimed node's value is stripped of TypeScript, as a `{ call }` row's", () => {
+  const ROW = {
+    id: "ref",
+    chars: "~",
+    match: "~[a-z]+",
+    standIn: "identifier" as const,
+  };
+  type Placing = {
+    position: string;
+    value?: unknown;
+    attribute: (...args: unknown[]) => unknown;
+  };
+  const place = (name: string, ctx: Placing) =>
+    ctx.attribute(name, ctx.value ?? "x");
+  const viaType: Dialect = {
+    id: "ref",
+    name: "Ref",
+    table: {
+      attributeTriggers: [{ ...ROW, node: { type: "Name", dialect: "ref" } }],
+    },
+    nodeTypes: {
+      Name: {
+        keys: [],
+        parse: (text: string) => ({ name: text.slice(1) }),
+        print: (node: { name: string }) => `~${node.name}`,
+        lower: (node: { name: string }, ctx: unknown) =>
+          place(node.name, ctx as Placing),
+      } as unknown as NodeType,
+    },
+  };
+  const viaCall: Dialect = {
+    id: "ref",
+    name: "Ref",
+    table: { attributeTriggers: [{ ...ROW, node: { call: "ref" } }] },
+    lowerTrigger: ((_id: string, text: string, _span: unknown, ctx: Placing) =>
+      place(text.slice(1), ctx)) as unknown as Dialect["lowerTrigger"],
+  };
+  const codeOf = (source: string, dialect: Dialect) =>
+    JSON.stringify(
+      (irOf(source, dialect).body[0] as { attrs: Attr[] }).attrs[0],
+    );
+
+  it.each([
+    ["`as`", "div ~title=(x as string)\n"],
+    ["`satisfies`", "div ~title=(y satisfies number)\n"],
+    ["a typed parameter", "div ~title=((v: number) => v)\n"],
+  ])("%s", (_, source) => {
+    const typed = codeOf(source, viaType);
+    expect(typed).toBe(codeOf(source, viaCall));
+    expect(typed).not.toMatch(/"code":"[^"]*(as string|satisfies)/);
+    expect(typed).not.toMatch(/"typeAnnotation":\{/);
   });
 });
 
@@ -324,7 +398,7 @@ describe("the type's hooks are checked, positioned at the trigger", () => {
         }),
     });
     expect(caught(() => irOf("sort ~user\n", dialect)).message).toMatch(
-      /^the `ref` trigger's `lower` \(node type `ref:Ref`\): an attribute value is .*`\{ kind: "node", node, value \}` with a node a node type parsed$/,
+      /^the `ref` trigger's `lower` \(node type `ref:Ref`\): an attribute value is .*`\{ kind: "node", node, value \}` with the node being lowered$/,
     );
   });
 });
@@ -562,7 +636,7 @@ describe("a node type declines with `undefined`", () => {
 });
 
 describe("a claimed node is in the AST at its position", () => {
-  it("in an attribute list, between its siblings, frozen and claimed", () => {
+  it("in an attribute list, between its siblings, frozen", () => {
     const source = "sort asc ~user.name desc\n";
     const { body } = parseMxDocument(
       source,
@@ -590,10 +664,6 @@ describe("a claimed node is in the AST at its position", () => {
       args: null,
     });
     expect(Object.isFrozen(node)).toBe(true);
-    expect(claimedFrom(node)).toMatchObject({
-      position: "attribute",
-      text: "~user.name",
-    });
   });
 
   it("on a tagless line, as a child of the enclosing body", () => {
@@ -613,7 +683,12 @@ describe("a claimed node is in the AST at its position", () => {
       end: 16,
       path: ["user", "name"],
     });
-    expect(claimedFrom(node)?.position).toBe("line");
+  });
+
+  it("a `ctx.fail` in `parse` stops the parse: it is the file's error over an earlier parse error", () => {
+    const error = caught(() => irOf("div a=(1 2)\n  ~user.bad\n", REF_DIALECT));
+    expect(error.message).toBe("`bad` is not a field of the record");
+    expect([error.line, error.column]).toEqual([2, 2]);
   });
 
   it("with no dialect row, the parse asks no node type", () => {

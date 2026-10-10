@@ -130,7 +130,7 @@ export declare function createParser(
 ): Lexer;
 
 /**
- * Asked once per matched attribute or line trigger start: `undefined`
+ * Asked once per matched attribute or line trigger start in one parse: `undefined`
  * declines (the text lexes as if no row matched); anything else claims and
  * is carried on the trigger's event as `claim`.
  */

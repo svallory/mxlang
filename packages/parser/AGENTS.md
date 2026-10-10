@@ -35,7 +35,9 @@ announced through `onTrigger` and stood in by `read()` at the same length;
 the front end builds `MxTrigger` nodes (`@mxlang/babel/mx-ast`, ast §4.4).
 With a `claim` option (`createParser(handlers, { syntax, claim })`, the
 front end's `parse(source, { …, claim })`; core passes it), a matching
-attribute or line row is asked once per position and offset: `undefined`
+attribute or line row is asked once per position and offset in one parse
+attempt (a restart for a missed tag name asks again; core's `parseMx`
+memoizes across attempts): `undefined`
 declines, and the parse goes on as if no row matched; an object rides on
 the trigger event (`Ranges.Trigger.claim`), and the front end places it in
 the tree by identity (`freezeCopy` keeps it) in the trigger's place, unless

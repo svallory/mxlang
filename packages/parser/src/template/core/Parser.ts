@@ -127,7 +127,7 @@ export class Parser {
   declare public lastTriggerStart: number;
   /** MX: the `claim` option; absent means every matched row claims. */
   declare public claim: TriggerClaim | undefined;
-  /** MX: what `claim` answered, by position and trigger start, so a re-lex asks once. */
+  /** MX: what `claim` answered, by position and trigger start, so a re-lex within this parse asks once. */
   declare public claims: Map<string, unknown>;
 
   constructor(

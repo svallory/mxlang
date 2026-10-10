@@ -42,7 +42,6 @@ import {
 } from "./core.ts";
 import { raiseDeferredContractErrors } from "./custom-tags.ts";
 import {
-  claimedFrom,
   isCallRow,
   isNodeTypeRow,
   nodeTypeRegistry,
@@ -150,84 +149,131 @@ export function isTriggerLowered(trigger: Node): boolean {
 }
 
 /**
+ * Is `type` a registry key (`ref:Ref`)? A claimed node's type is its node
+ * type's key; MX's own node types never hold a colon. The node is lowered
+ * through the registry by this key, which refuses a key nothing registers.
+ */
+function isRegisteredKey(type: unknown): boolean {
+  return typeof type === "string" && /^[^:\s]+:[^:\s]+$/.test(type);
+}
+
+/**
  * Is `node` a trigger node of the tree: core's `MxTrigger`, or a node a
- * registered type claimed (its type is its `dialect:Type` key)?
+ * registered type claimed? Read from `node.type` alone.
  */
 function isTriggerNode(node: Node): boolean {
+  return node?.type === "MxTrigger" || isRegisteredKey(node?.type);
+}
+
+/**
+ * The row a claimed node came from: the first row of `position` naming the
+ * node's type whose `chars` and `match` take `text` (the parser asks rows in
+ * that order).
+ */
+function claimedRow(
+  table: SyntaxTable,
+  position: "attribute" | "line",
+  type: string,
+  text: string,
+): Trigger | undefined {
+  const rows = table[TRIGGER_LISTS[position]].filter(
+    (row) => isNodeTypeRow(row.node) && rowKey(row.node) === type,
+  );
+  if (rows.length <= 1) return rows[0];
   return (
-    node?.type === "MxTrigger" ||
-    (typeof node?.type === "string" &&
-      node.type.includes(":") &&
-      claimedFrom(node) !== undefined)
+    rows.find((row) => {
+      if (!row.chars.includes(text.charAt(0))) return false;
+      try {
+        return new RegExp(`^(?:${row.match})$`).test(text);
+      } catch {
+        return false;
+      }
+    }) ?? rows[0]
   );
 }
 
-/** The `MxTrigger` view of each claimed dialect node (its row id, position and text). */
-const views = new WeakMap<object, Node>();
-
 /**
- * A trigger node as lowering reads it: an `MxTrigger` as is; a dialect
- * type's node as an `MxTrigger` view with its row's id, its position and
- * text, its offsets, `value`, `operator` and `args`, and the node itself
- * (`claimed`). Errors about the node are positioned on the view.
+ * A trigger node as lowering reads it: an `MxTrigger` as is; a claimed node
+ * as an `MxTrigger` view rebuilt from the node and the table: the row naming
+ * its type at `position`, the text its `span` covers, its offsets, `value`,
+ * `operator` and `args`, and the node itself (`claimed`). Errors about the
+ * node are positioned on the view.
  */
-function triggerOf(node: Node): Node {
+function triggerOf(
+  ctx: Ctx,
+  table: SyntaxTable,
+  node: Node,
+  position: "attribute" | "line",
+): Node {
   if (node?.type === "MxTrigger") return node;
-  let view = views.get(node);
-  if (!view) {
-    const from = claimedFrom(node);
-    view = {
-      type: "MxTrigger",
-      start: node.start,
-      end: node.end,
-      id: from?.row.id,
-      position: from?.position,
-      text: from?.text,
-      operator: node.operator ?? null,
-      value: node.value ?? null,
-      args: node.args ?? null,
-      claimed: node,
-    };
-    views.set(node, view);
-  }
-  return view;
+  const span = node.span ?? { sourceStart: node.start, sourceEnd: node.end };
+  const text = ctx.source.slice(span.sourceStart, span.sourceEnd);
+  return {
+    type: "MxTrigger",
+    start: node.start,
+    end: node.end,
+    id: claimedRow(table, position, node.type, text)?.id ?? node.type,
+    position,
+    text,
+    operator: node.operator ?? null,
+    value: node.value ?? null,
+    args: node.args ?? null,
+    claimed: node,
+  };
 }
 
-/** What each attribute trigger node lowered to (attributes and shorthands). */
-const attributeResults = new WeakMap<object, Node[]>();
+/**
+ * The lowering cache: what each line or attribute trigger node lowered to
+ * (an `MxTag` for a line; attributes and shorthands for an attribute),
+ * keyed by the AST node. It is filled by one pass (`lowerTriggers`, which
+ * dispatches on `node.type`), once per node, in source order, before
+ * `afterLower`; the walkers below only read it. It is never consulted to
+ * decide what a node is, and holds nothing the node and the table cannot
+ * rebuild. Plan: lowering inside the walkers, with the `Ctx`, replaces it.
+ */
+const loweredNodes = new WeakMap<object, Node | Node[]>();
 
-/** What each line trigger node lowered to (an `MxTag`). */
-const lineResults = new WeakMap<object, Node>();
+/** A claimed node the pass never lowered: an internal bug, never a fallback. */
+function notLowered(node: Node): never {
+  throw new Error(
+    `internal: the \`${node.type}\` node at ${node.start} was read before the trigger pass lowered it`,
+  );
+}
 
 /**
  * A tag's attributes as authored, each attribute trigger node replaced by
- * what it lowered to (the name-sugar pass reads these). A trigger the pass
- * never lowered stays, as an `MxTrigger`, for the seams to refuse.
+ * what it lowered to (the name-sugar pass reads these). An `MxTrigger` the
+ * pass never lowered stays, for the seams to refuse; a claimed node the pass
+ * never lowered is an internal error.
  */
 export function attributesWithTriggers(tag: Node): Node[] {
   const attributes: Node[] = tag?.attributes ?? [];
   if (!attributes.some(isTriggerNode)) return attributes;
-  return attributes.flatMap((attr) =>
-    isTriggerNode(attr)
-      ? (attributeResults.get(attr) ?? [triggerOf(attr)])
-      : [attr],
-  );
+  return attributes.flatMap((attr) => {
+    if (!isTriggerNode(attr)) return [attr];
+    const results = loweredNodes.get(attr) as Node[] | undefined;
+    if (results) return results;
+    return attr.type === "MxTrigger" ? [attr] : notLowered(attr);
+  });
 }
 
 /**
  * A body's children, each line trigger node replaced by the tag it lowered
- * to. A trigger the pass never lowered stays, as an `MxTrigger`, for the
- * seam in `lowerChildList` to refuse.
+ * to. An `MxTrigger` the pass never lowered stays, for the seam in
+ * `lowerChildList` to refuse; a claimed node the pass never lowered is an
+ * internal error.
  */
 export function childrenWithTriggers<T>(children: readonly T[]): T[] {
   if (!children.some((child) => isTriggerNode(child as Node))) {
     return children as T[];
   }
-  return children.map((child) =>
-    isTriggerNode(child as Node)
-      ? ((lineResults.get(child as object) ?? triggerOf(child as Node)) as T)
-      : child,
-  );
+  return children.map((child) => {
+    const node = child as Node;
+    if (!isTriggerNode(node)) return child;
+    const result = loweredNodes.get(node) as Node | undefined;
+    if (result) return result as T;
+    return (node.type === "MxTrigger" ? child : notLowered(node)) as T;
+  });
 }
 
 /** Results built by a `TriggerContext`, so a hand-made object is refused. */
@@ -275,8 +321,14 @@ export function lowerTriggers(ctx: Ctx, roots: readonly Node[]): boolean {
     if (!value || typeof value !== "object" || seen.has(value)) return;
     seen.add(value);
     if (Array.isArray(value)) {
-      for (const item of value) visit(item, owner);
-      mapChildren(ctx, table, dialect, value);
+      // A body's line trigger nodes are lowered as the walk reaches them, so
+      // every hook runs in source order; an attribute list is lowered by
+      // `mapAttributes`, never as a body.
+      const body = owner?.attributes !== value;
+      for (const item of value) {
+        visit(item, owner);
+        if (body) lowerChild(ctx, table, dialect, item);
+      }
       return;
     }
     if (typeof value.type !== "string") {
@@ -759,14 +811,15 @@ function checkAttributeValue(
     }
     if (
       value.kind === "node" &&
-      claimedFrom(value.node) !== undefined &&
+      value.node !== undefined &&
+      value.node === trigger.claimed &&
       typeof value.value === "string"
     ) {
       return;
     }
   }
   fail(
-    `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: an attribute value is \`true\`, a string, a \`ctx.expression\` result, the trigger's own method value, \`{ kind: "atom" | "member", name }\`, or \`{ kind: "node", node, value }\` with a node a node type parsed`,
+    `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: an attribute value is \`true\`, a string, a \`ctx.expression\` result, the trigger's own method value, \`{ kind: "atom" | "member", name }\`, or \`{ kind: "node", node, value }\` with the node being lowered`,
     trigger,
   );
 }
@@ -1472,10 +1525,15 @@ function mapAttributes(
   if (!attributes.some(isTriggerNode)) return;
   const list = attributes.flatMap((attr) => {
     if (!isTriggerNode(attr)) return [attr];
-    let results = attributeResults.get(attr);
+    let results = loweredNodes.get(attr) as Node[] | undefined;
     if (!results) {
-      results = lowerAttributeTrigger(ctx, table, dialect, triggerOf(attr));
-      attributeResults.set(attr, results);
+      results = lowerAttributeTrigger(
+        ctx,
+        table,
+        dialect,
+        triggerOf(ctx, table, attr, "attribute"),
+      );
+      loweredNodes.set(attr, results);
     }
     return results;
   });
@@ -1555,17 +1613,15 @@ function lowerLineTrigger(
   };
 }
 
-/** Lowers a body's line trigger nodes, in order, once each. */
-function mapChildren(
+/** Lowers a body's line trigger node, once. */
+function lowerChild(
   ctx: Ctx,
   table: SyntaxTable,
   dialect: Dialect | undefined,
-  children: Node[],
+  child: Node,
 ): void {
-  for (const child of children) {
-    if (!isTriggerNode(child) || lineResults.has(child)) continue;
-    const trigger = triggerOf(child);
-    if (trigger.position !== "line") continue;
-    lineResults.set(child, lowerLineTrigger(ctx, table, dialect, trigger));
-  }
+  if (!isTriggerNode(child) || loweredNodes.has(child)) return;
+  const trigger = triggerOf(ctx, table, child, "line");
+  if (trigger.position !== "line") return;
+  loweredNodes.set(child, lowerLineTrigger(ctx, table, dialect, trigger));
 }

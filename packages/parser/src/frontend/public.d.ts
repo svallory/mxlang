@@ -41,7 +41,8 @@ export interface ParseOptions extends MxFrontEndOptions {
   /** Tag types keyed by the full written static name: html 0, text 1, void 2, statement 3. */
   readonly tagTypes?: Readonly<Record<string, 0 | 1 | 2 | 3>>;
   /**
-   * Asked once per matched attribute or line trigger, with the row's id, the
+   * Asked once per matched attribute or line trigger in one parse attempt
+   * (a restart for a missed tag name asks again), with the row's id, the
    * position, the file offsets of the matched text and, in attribute
    * position, the static name of the tag (else `null`). `undefined` declines:
    * the text parses as if no row matched. An object other than an

@@ -49,8 +49,8 @@ export interface CreateParserOptions {
    * MX: asked when an attribute or line trigger's row matches, with the
    * row's id, the position and the matched text's range. `undefined`
    * declines: the text lexes as if no row matched. Anything else claims it
-   * and reaches `onTrigger` as `claim`. Asked once per trigger start, however
-   * often the text is re-lexed. Omitted means every match claims.
+   * and reaches `onTrigger` as `claim`. Asked once per trigger start in one
+   * parse, however often that parse re-lexes the text. Omitted means every match claims.
    */
   claim?: TriggerClaim;
 }

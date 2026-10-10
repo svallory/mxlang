@@ -166,7 +166,12 @@ function nodeClaims(
     const list =
       position === "line" ? table.lineTriggers : table.attributeTriggers;
     const row = list.find((each) => each.id === id);
-    if (!row) return undefined;
+    if (!row) {
+      // The parser asks only with ids of this table.
+      throw new Error(
+        `internal: the parser asked to claim with the \`${id}\` ${position} trigger, which the table does not hold`,
+      );
+    }
     const span = { sourceStart: start, sourceEnd: end };
     const label = `the \`${id}\` trigger's \`parse\` (node type \`${rowKey(row.node)}\`)`;
     const ctx: ClaimContext = Object.freeze({
@@ -887,6 +892,25 @@ export function stripMxTypes(document: Node): void {
           value[key] = null;
           continue;
         }
+        if (
+          field &&
+          typeof field === "object" &&
+          "node" in field &&
+          "outer" in field
+        ) {
+          stripContainer(field, t);
+        }
+        visit(field);
+      }
+    } else if (
+      typeof value.type === "string" &&
+      /^[^:\s]+:[^:\s]+$/.test(value.type)
+    ) {
+      // A claimed node (its type is its registry key): core placed the
+      // trigger's `value` and `args` on it, stripped as on an `MxTrigger`;
+      // its other fields are the node type's own.
+      for (const key of ["value", "args"]) {
+        const field = value[key] as Node;
         if (
           field &&
           typeof field === "object" &&

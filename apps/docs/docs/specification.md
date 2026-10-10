@@ -4438,9 +4438,12 @@ registers a `parse` for no other `mx:` type.
 
 A whole attribute value keeps the node:
 `ctx.attribute(name, { kind: "node", node, value })` lowers to a static `Attr`
-with `value` (what every target emits) and `node` (`DialectNode`), never set
-together with `atom` or `member`. `ctx.fail(message, { at?, code? })` in `parse`
-is a positioned error at the node's text, or at `at`, carrying `code`.
+with `value` (what every target emits) and `node` (`DialectNode`, the node
+being lowered), never set together with `atom` or `member`.
+`ctx.fail(message, { at?, code? })` in `parse` is a positioned error at the
+node's text, or at `at`, carrying `code`. It is raised while the file parses
+and stops the parse, so it is the file's error even when an earlier line holds
+a parse error.
 
 A row names a type of core (`mx`) or of its own dialect. Naming another
 dialect's types is not supported yet.

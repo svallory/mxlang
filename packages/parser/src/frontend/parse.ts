@@ -79,7 +79,8 @@ export interface ParseOptions extends MxFrontEndOptions {
    * the position, the matched text's file offsets and, in attribute
    * position, the static name of the tag whose attribute list holds it
    * (`null` on a line, or for a dynamic or unnamed tag). Asked once per
-   * trigger. `undefined` declines: the text parses as if no row matched.
+   * trigger in one parse attempt (a restart for a missed tag name asks
+   * again; core memoizes its answers across attempts). `undefined` declines: the text parses as if no row matched.
    * An object claims it: an `MxTrigger`-typed one keeps the front end's own
    * `MxTrigger` node; any other is the node the tree holds at that
    * position, and the front end sets its `start`, `end`, `operator`,

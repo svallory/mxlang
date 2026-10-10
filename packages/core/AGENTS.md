@@ -551,21 +551,33 @@ Five facts worth knowing before editing it:
   decided): `parseMx` (`mx-parse.ts`, `nodeClaims`) passes the front end a
   `claim` option whenever the table has an attribute or line row (never
   for the default row); at a matching row the template parser asks it once
-  per position and offset (core memoizes again, as the front end may
-  restart). `claimNode` calls `parse(text, span, ctx: ClaimContext)`:
-  fields are stamped `type`/`span`, recorded (`claimedFrom`) and placed in
-  the tree by identity (the front end's `freezeCopy` keeps them), frozen
+  per position and offset in one parse attempt (core's `answers` memo
+  covers restarts). `claimNode` calls `parse(text, span, ctx: ClaimContext)`:
+  fields are stamped `type`/`span` and placed in the tree by identity (the front end's `freezeCopy` keeps them), frozen
   after the parse; `undefined` declines, and the template parser goes on
   as if no row matched. `{ call }` and `"attribute"` rows are `mx:Trigger`
   (claimed as a plain `MxTrigger`). Errors from `parse` are positioned
   `TranslateError`s thrown out of `parseMx` (no `BABEL_TRANSFORM_ERROR`
   code); the front end rethrows a claim's throw unwrapped (`ClaimThrow`).
-  At lowering, `hookFor` dispatches a claimed node on `node.type`
+  `stripMxTypes` strips a claimed node's `value`/`args` as an
+  `MxTrigger`'s, and a dialect type's registry `keys` end with `value`,
+  `args`. At lowering, a claimed node is recognised by `node.type` alone
+  (a `dialect:Type` key; `isTriggerNode`), its `MxTrigger` view rebuilt
+  from the node, the table and the source (`triggerOf`, `claimedRow`), and
+  `hookFor` dispatches it on `node.type`
   (`nodeTypeHook` calls that type's `lower`, with the same `ctx`
   constructors as `lowerTrigger`; errors name the hook, `` `lower` (node
   type `ref:Ref`) ``). `ctx.attribute(name, { kind: "node", node, value
   })` (until slice B) carries the node on the built `MxAttribute`
-  (`dialectNode`), which `lower.ts` reads into the static `Attr.node`.
+  (`dialectNode`), which `lower.ts` reads into the static `Attr.node`;
+  `node` must be the node being lowered. `lowerTriggers` is the one pass
+  that lowers line and attribute nodes, once each, in source order (a
+  body's line node right after the walk reaches it), into `loweredNodes`,
+  a cache keyed by the AST node that `attributesWithTriggers` and
+  `childrenWithTriggers` read; a claimed node with no entry there is an
+  internal error. Lowering inside those walkers (with the `Ctx`) is not
+  done: their callers (`tagAttributesOf`, `mx-sugar.ts`, `lower.ts`'s
+  body walks, `core.ts`'s `bodyChildren`) have no `Ctx`.
   Core's own lowering stays
   direct until PR 6 is done with `lower.ts`. Tests:
   `src/dialect-registry.test.ts`.
