@@ -3574,7 +3574,7 @@ read throws, as `readFileSync` does.
 |---|---|---|
 | `customTags` | `Record<string, CustomTag>` | contract-only custom tags by call name (decisions 130 and 138): required attributes, attribute types, `children`, `parents`, `analyze`. `lowerSource` does **not** scan `tags/` or `package.json`; this map is the whole vocabulary it knows. Contracts are enforced at every depth (see [Writing a dialect package](/custom-tags/dialect-package/)) |
 | `dialect` | `Dialect` or `SyntaxTable` | the dialect of this file, for a consumer that builds its own (Mesh passes its dialect, hooks included); a bare table is a dialect with no hooks. Omitted, the dialect that claims the file's extension applies (§13.9.2). A trigger, block tag or filter nothing lowers is a positioned diagnostic (§13.9) |
-| `tagRules` | `"html"` (default), `"markup"`, `"none"` | the tag rules preset the source parses under (§13.7.3). An option of this function only, never a project or host setting (ruling 209) |
+| `tagRules` | `"html"`, `"markup"`, `"none"` (default: the dialect's `tagRules`, else `"html"`) | the tag rules preset the source parses under (§13.7.3). Omitted, the preset the dialect states (the `dialect` option's, else the routed one's; §13.9.2). An option of this function only, never a project or host setting (ruling 209) |
 | `defaultTag` | tag name | what `<#id>` and `<.class>` stand for in place of the built-in `object` (decision 145; see "The unnamed tag" in §4) |
 | `structural` | `"pass"` (default), `"reject"` | `"pass"` keeps the structural constructs (text, `${}`, `<if>`, `<for>`, `<const>`, `import`, `export`, `static`) in the IR. `"reject"` makes each one a positioned error: ``the data tree is static; this file's consumer does not evaluate `<if>` `` (the construct is named). Comments are **never** structural — a `//` line or `<!-- -->` stays in the IR as its `Comment` node under either value (decision 131 addendum 5). A structural hit and a check error are ordered by position |
 | `imports` | `"pass"`, `"reject"` (default: the effective `structural`) | Decides a top-level `import` on its own. `"pass"` with `structural: "reject"` keeps every other structural construct rejected and returns the imports in `ir.imports`; `"reject"` with `structural: "pass"` rejects only the `import`s. Each `Import` carries `code`, `span`, `from` (the unquoted specifier) and `names` (`{ imported, local, kind: "default" \| "named" \| "namespace", span, localSpan?, typeOnly? }`, in written order, empty for `import "x"`), read from the parsed declaration, never from the text. A tag-body `import` is not an import: it parses as body text, so `structural: "reject"` rejects it as text and `imports` does not apply |
@@ -3611,12 +3611,14 @@ missing is an `internal error`, with no IR. Every span is core's `SourceSpan`
   literal is `static`; nothing is evaluated.
 - **`IR_VERSION`**, exported from `@mxlang/core`, is the version of the IR's
   shape: it goes up by one with every change a reader can observe (a node kind
-  or field added, removed, renamed or given a new meaning). It is `1`.
+  or field added, removed, renamed or given a new meaning). It is `2`: `2` added
+  a static `Attr`'s `node` (a dialect's node, §13.9.9).
 
 #### 13.7.3 Tag rules presets
 
 A preset is the tag table entries the source parses under. An absent
-`tagRules` is `html` (decision 212 item 8): a dialect that states no tag rules
+`tagRules` is the dialect's own preset, and `html` when the dialect states none
+or there is no dialect (decision 212 item 8): a dialect that states no tag rules
 gets the full HTML rules and turns off what it does not want; Mesh passes
 `none`.
 
@@ -3956,7 +3958,17 @@ not found, and a listed package that is missing or declares nothing is skipped. 
 dialect package's own `mxDialect` routes its own files too, so a dialect's tests
 need no dependency on itself. A file with a relative or virtual name, or no
 manifest above it, gets no dialect. No dialect's code runs until a file it claims
-is compiled.
+is compiled. Discovery follows the dependencies on disk: installing a listed
+package, upgrading one or editing a dependency's `mxDialect` is seen at the next
+compile, with no change to the project's `package.json`.
+
+A dialect's `id` is its identity: two direct dependencies (or the project and a
+dependency) declaring one `id` is an error in the project's `package.json` at the
+second one's dependency entry, naming both: `` two dialects have the id `<id>`:
+<package a> and <package b>. A dialect's id is its identity; keep one of these
+dependencies ``. A package listed under an alias (`"b": "npm:@real/b@1"`) is
+named with its key, `@real/b, as `b``, and positioned at that key, here and in
+the clash below.
 
 **Routing.** A file goes to the dialect that claims the longest extension its
 name ends with (`page.ui.tpl` goes to the dialect claiming `.ui.tpl` before one
@@ -3965,13 +3977,14 @@ dialect claims, every `.mx` file among them, parses with the file kind's default
 row and no dialect. Two dialects claiming the extension a file is routed by is an
 error in the project's `package.json` at the second one's dependency entry,
 naming both: `` two dialects claim `<ext>`: `<a>` (<package a>) and `<b>`
-(<package b>). Choose one in MX's config: `"extensions": { "<ext>": "<a>" }` ``.
+(<package b>). Choose one in `package.json#mx.extensions`: `"extensions": { "<ext>": "<a>" }` ``.
 A clash on an extension the file does not end with is not an error for that file.
 
 **`mx.extensions`** in the project's `package.json` maps an extension to a
 dialect id: `{ ".mesh.mx": "mesh" }`. It settles a clash, and it can route an
-extension the dialect does not claim to a dialect the project uses. A problem is
-an error at the `mx.extensions` key:
+extension the dialect does not claim to a dialect the project uses. A value that
+is not an object is an error at the `mx.extensions` key; a problem with an entry
+is an error at that entry's key:
 
 | Problem | Message |
 |---|---|
@@ -4017,8 +4030,12 @@ dropped), so two tables with equal content hash alike and share one frozen objec
 for the process. A table whose content equals the default row resolves to the
 default row itself, and a default-row project runs no extra parse and pays one
 comparison. An explicit table is validated once per frozen object. A manifest
-read is resolved once; an unchanged manifest is not re-validated, and a dialect
-module is reloaded when its file's mtime changes.
+read is resolved once; an unchanged manifest is not re-validated. A dialect
+module is loaded once per revision of its file (its mtime): a module that fails to
+load reports that first error until the file changes, and an edited module is
+loaded again (re-evaluated on Bun, and on Node for a CommonJS module; Node keeps
+an ES module it has loaded, so an edited `.mjs` or `.ts` dialect needs a restart
+there).
 
 #### 13.9.3 Dialects
 
@@ -4061,8 +4078,10 @@ syntax-table API; under the stock parser it is refused in the module file (``
 (ruling 211; decision 212 item 8). The dialect states it in its own module; every
 tool honours it for the dialect's files, and project config cannot change it. A
 dialect that states none gets `html`, the full rules. A file no dialect claims
-takes its preset from its target. *(The preset wiring lands with the tag-preset
-tables; the field is accepted and validated today.)*
+takes its preset from its target. `lowerSource` honours it today: a call with no
+`tagRules` option parses under the `dialect` option's preset, else the preset of
+the dialect the file routes to. *(The compile entries and the tools read it when
+they route dialect files, decision 212 PR 1b.)*
 
 **A dialect owns its targets** (ruling 211; decision 212 item 1). Its module will
 declare `targets` and a `defaultTarget`; one that declares none is check-only

@@ -210,7 +210,7 @@ function directDependencies(
 function dependencyPackageFile(
   projectDir: string,
   name: string,
-): { file: string; read: PackageJsonRead } | undefined {
+): DependencyFile | undefined {
   let dir = projectDir;
   for (;;) {
     const file = join(dir, "node_modules", name, "package.json");
@@ -222,36 +222,111 @@ function dependencyPackageFile(
   }
 }
 
+/** Where the project lists a dialect package: the dependency field and key. */
+interface Listing {
+  readonly field: string;
+  /** The dependency's key, which differs from its package name for an alias (`"b": "npm:@real/b@1"`). */
+  readonly key: string;
+}
+
 /** The dialects a project uses, with where each is declared. */
 interface Discovered {
   readonly dialects: readonly DialectManifest[];
-  /** The dependency field each dialect package is listed in; absent for the project itself. */
-  readonly listedIn: ReadonlyMap<DialectManifest, string>;
+  /** Where each dialect package is listed; absent for the project itself. */
+  readonly listedIn: ReadonlyMap<DialectManifest, Listing>;
 }
 
-/** Discovery per project manifest read: an unchanged `package.json` is not walked again. */
-const byProject = new WeakMap<PackageJsonRead, Discovered>();
+/**
+ * Each dependency `package.json` read's manifest (`null`: it declares none),
+ * so an unchanged dependency keeps one manifest object, which is what a
+ * loaded dialect is cached by.
+ */
+const manifests = new WeakMap<PackageJsonRead, DialectManifest | null>();
+
+function manifestOf(
+  file: string,
+  read: PackageJsonRead,
+): DialectManifest | undefined {
+  let known = manifests.get(read);
+  if (known === undefined) {
+    known = readDialectManifest(file, read) ?? null;
+    manifests.set(read, known);
+  }
+  return known ?? undefined;
+}
+
+/**
+ * The last discovery per project manifest read, with the dependency reads it
+ * was built from: it is reused only while every dependency reads the same
+ * (installed at the same place, unchanged, still missing), so an install,
+ * an upgrade or an edited dependency manifest is seen at the next call.
+ */
+const byProject = new WeakMap<
+  PackageJsonRead,
+  {
+    readonly found: readonly (DependencyFile | undefined)[];
+    readonly discovered: Discovered;
+  }
+>();
+
+interface DependencyFile {
+  readonly file: string;
+  readonly read: PackageJsonRead;
+}
+
+/** The package label a message uses: the name, and the key it is listed under when that differs. */
+function packageLabel(dialect: DialectManifest, listing?: Listing): string {
+  return listing === undefined || listing.key === dialect.packageName
+    ? dialect.packageName
+    : `${dialect.packageName}, as \`${listing.key}\``;
+}
 
 function discover(projectFile: string, read: PackageJsonRead): Discovered {
-  const known = byProject.get(read);
-  if (known) return known;
   const manifest = isRecord(read.manifest) ? read.manifest : {};
+  const projectDir = dirname(projectFile);
+  const dependencies = [...directDependencies(manifest)];
+  const found = dependencies.map(([key]) =>
+    dependencyPackageFile(projectDir, key),
+  );
+  const known = byProject.get(read);
+  if (
+    known &&
+    known.found.length === found.length &&
+    known.found.every(
+      (entry, index) =>
+        entry?.file === found[index]?.file &&
+        entry?.read === found[index]?.read,
+    )
+  ) {
+    return known.discovered;
+  }
   const dialects: DialectManifest[] = [];
-  const listedIn = new Map<DialectManifest, string>();
+  const listedIn = new Map<DialectManifest, Listing>();
   // A dialect package routes its own files too (its tests, its tags).
   const own = readDialectManifest(projectFile, read);
   if (own) dialects.push(own);
-  const projectDir = dirname(projectFile);
-  for (const [name, field] of directDependencies(manifest)) {
-    const found = dependencyPackageFile(projectDir, name);
-    if (!found) continue;
-    const dialect = readDialectManifest(found.file, found.read);
-    if (!dialect) continue;
+  dependencies.forEach(([key, field], index) => {
+    const entry = found[index];
+    const dialect = entry && manifestOf(entry.file, entry.read);
+    if (!dialect) return;
+    const listing: Listing = { field, key };
+    // An id is the dialect's identity and its config key: two packages
+    // cannot both be it, and `mx.extensions` could not tell them apart.
+    const same = dialects.find((other) => other.id === dialect.id);
+    if (same) {
+      const { line, column } = jsonKeyPosition(read.text, [field, key]);
+      throw new TranslateError(
+        `two dialects have the id \`${dialect.id}\`: ${packageLabel(same, listedIn.get(same))} and ${packageLabel(dialect, listing)}. A dialect's id is its identity; keep one of these dependencies`,
+        line,
+        column,
+        projectFile,
+      );
+    }
     dialects.push(dialect);
-    listedIn.set(dialect, field);
-  }
+    listedIn.set(dialect, listing);
+  });
   const discovered: Discovered = { dialects, listedIn };
-  byProject.set(read, discovered);
+  byProject.set(read, { found, discovered });
   return discovered;
 }
 
@@ -281,8 +356,13 @@ function extensionOverrides(
   const value = isRecord(mx) ? mx.extensions : undefined;
   const overrides = new Map<string, DialectManifest>();
   if (value === undefined) return overrides;
-  const fail = (message: string): never => {
-    const { line, column } = jsonKeyPosition(read.text, ["mx", "extensions"]);
+  const fail = (message: string, extension?: string): never => {
+    const { line, column } = jsonKeyPosition(
+      read.text,
+      extension === undefined
+        ? ["mx", "extensions"]
+        : ["mx", "extensions", extension],
+    );
     throw new TranslateError(message, line, column, projectFile);
   };
   if (!isRecord(value)) {
@@ -297,17 +377,20 @@ function extensionOverrides(
     if (extension === MX_EXTENSION) {
       fail(
         `\`mx.extensions\` cannot route \`${MX_EXTENSION}\`: it is MX's own`,
+        extension,
       );
     }
     if (!validExtension(extension)) {
       fail(
         `\`mx.extensions\`: ${JSON.stringify(extension)} is not a file extension; write it with its leading dot (\`.mesh.mx\`)`,
+        extension,
       );
     }
     const dialect = dialects.find((candidate) => candidate.id === id);
     if (!dialect) {
       fail(
         `\`mx.extensions\` routes \`${extension}\` to ${JSON.stringify(id)}, which is not a dialect this project uses (${ids === "" ? "it uses none" : `it uses ${ids}`}); a dialect is found among the project's direct dependencies`,
+        extension,
       );
     }
     overrides.set(extension, dialect as DialectManifest);
@@ -350,13 +433,13 @@ export function routeDialect(filename: string): DialectManifest | undefined {
   );
   if (claimants.length > 1) {
     const [first, second] = claimants as [DialectManifest, DialectManifest];
-    const field = listedIn.get(second);
+    const listing = listedIn.get(second);
     const { line, column } = jsonKeyPosition(
       found.read.text,
-      field === undefined ? [] : [field, second.packageName],
+      listing === undefined ? [] : [listing.field, listing.key],
     );
     throw new TranslateError(
-      `two dialects claim \`${best}\`: \`${first.id}\` (${first.packageName}) and \`${second.id}\` (${second.packageName}). Choose one in MX's config: \`"extensions": { "${best}": "${first.id}" }\``,
+      `two dialects claim \`${best}\`: \`${first.id}\` (${packageLabel(first, listedIn.get(first))}) and \`${second.id}\` (${packageLabel(second, listing)}). Choose one in \`package.json#mx.extensions\`: \`"extensions": { "${best}": "${first.id}" }\``,
       line,
       column,
       found.file,

@@ -28,7 +28,13 @@ import { type MxWarning, TranslateError } from "../core.ts";
 import type { CustomTag } from "../custom-tags.ts";
 import type { HostDeclarations } from "../declarations.ts";
 import type { Ir } from "../ir.ts";
-import type { Dialect, SyntaxTable } from "../syntax-table.ts";
+import {
+  type Dialect,
+  dialectTagRules,
+  explicitSyntaxOf,
+  resolveSyntaxOf,
+  type SyntaxTable,
+} from "../syntax-table.ts";
 import {
   type TagRulesPreset,
   taglibsOfRules,
@@ -70,9 +76,11 @@ export interface LowerSourceOptions {
   /**
    * The tag rules preset the source parses under (decision 204; ruling 209:
    * an option of this function only, never a project or host setting).
-   * `"html"` (default, decision 212 item 8: a dialect that states no tag
-   * rules gets the full HTML rules): the web elements' parse rules (void, raw
-   * text, preserved whitespace) and core's whole taglib. `"markup"`: the same
+   * Omitted, the dialect's own `tagRules` (the `dialect` option's, else the
+   * one the file routes to), else `"html"` (decision 212 item 8: a dialect
+   * that states no tag rules gets the full HTML rules): the web elements'
+   * parse rules (void, raw text, preserved whitespace) and core's whole
+   * taglib. `"markup"`: the same
    * parse rules with core's statement tags only. `"none"` (Mesh's): no native
    * element rules, so `script`, `input` or `title` is an ordinary tag whose
    * body parses as markup.
@@ -165,6 +173,23 @@ function declaredTagNames(
 }
 
 /**
+ * The preset `filename` parses under: the call's `tagRules`, else its
+ * dialect's (decision 212 item 8). A dialect that fails to resolve throws
+ * the error the compile would raise.
+ */
+function presetOf(
+  options: LowerSourceOptions,
+  filename: string,
+): TagRulesPreset {
+  if (options.tagRules !== undefined) return options.tagRules;
+  const { dialect } =
+    options.dialect !== undefined
+      ? explicitSyntaxOf(options.dialect, filename)
+      : resolveSyntaxOf(filename);
+  return dialect ? dialectTagRules(dialect) : "html";
+}
+
+/**
  * Parses, lowers and checks one source, returning its IR.
  *
  * Never throws: every error the source has is a positioned error diagnostic
@@ -186,7 +211,7 @@ export function lowerSource(
   });
   let rules: ReturnType<typeof tagRulesPreset>;
   try {
-    rules = tagRulesPreset(options.tagRules ?? "html", WEB_ELEMENTS);
+    rules = tagRulesPreset(presetOf(options, filename), WEB_ELEMENTS);
   } catch (error) {
     return failed([error]);
   }

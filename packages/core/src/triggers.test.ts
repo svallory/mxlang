@@ -277,6 +277,29 @@ describe("a dialect package (`package.json#mxDialect`, decision 212)", () => {
     expect(Object.isFrozen(dialect)).toBe(true);
   });
 
+  // Before 22.20, Node cannot `require` an ES module again once its
+  // evaluation threw ("Unexpected module status 5"), so a second load would
+  // report Node's error in place of the dialect's. The first is kept.
+  it("a module that fails to load reports that error on every load until its file changes", () => {
+    const { packageDir } = dialectProject(dir, {
+      module: "throw new Error('broken dialect');",
+    });
+    const file = join(packageDir, "index.mjs");
+    const page = join(dir, "page.tst");
+    const first = caught(() => resolveSyntaxOf(page));
+    expect([first.message, first.file, first.line, first.column]).toEqual([
+      "dialect failed to load: broken dialect",
+      file,
+      1,
+      0,
+    ]);
+    expect(caught(() => irOf("div\n", page))).toBe(first);
+    expect(caught(() => resolveSyntaxOf(page))).toBe(first);
+    const later = new Date(Date.now() + 5_000);
+    utimesSync(file, later, later);
+    expect(caught(() => resolveSyntaxOf(page))).not.toBe(first);
+  });
+
   it("an edited dialect is resolved again (Vitest keeps its own module registry, so not re-evaluated here)", () => {
     const { packageDir } = dialectProject(dir, {
       module: `export default { table: { attributeTriggers: [${JSON.stringify(MEMBER)}] }, lowerTrigger: (id, text, span, ctx) => ctx.attribute("m", { kind: "member", name: text.slice(1) }) };`,
@@ -294,14 +317,14 @@ describe("a dialect package (`package.json#mxDialect`, decision 212)", () => {
   });
 
   it("a module that does not resolve is an error at `mxDialect.module`", () => {
-    const { packageFile } = dialectProject(dir, {
+    const { packageFile, packageDir } = dialectProject(dir, {
       manifest: { module: "./missing.ts" },
     });
     const error = caught(() => irOf("div\n", join(dir, "page.tst")));
     expect(error.file).toBe(packageFile);
     expect([error.line, error.column]).toEqual([9, 4]);
-    expect(error.message).toContain(
-      'the dialect `test`\'s module "./missing.ts" cannot be resolved from',
+    expect(error.message).toBe(
+      `the dialect \`test\`'s module "./missing.ts" cannot be resolved from ${packageDir}. Check \`mxDialect.module\`.`,
     );
   });
 
@@ -318,11 +341,17 @@ describe("a dialect package (`package.json#mxDialect`, decision 212)", () => {
   });
 
   it.each([
-    ["export default 1;", "dialect must `export default` a dialect object"],
-    ["export default { };", "`table` is required"],
+    [
+      "export default 1;",
+      "dialect must `export default` a dialect object (`{ table, lowerTrigger?, … }`)",
+    ],
+    [
+      "export default { };",
+      "`table` is required: the dialect's syntax table fields",
+    ],
     [
       "export default { table: {}, lower: () => 1 };",
-      "`lower` is not a dialect field",
+      "`lower` is not a dialect field (id, name, table, tagRules, nodeTypes, lowerTrigger, lowerBlockTag, lowerFilter, afterLower, contractFields, checkContract, describeAttribute)",
     ],
     [
       "export default { table: {}, lowerTrigger: 1 };",
@@ -330,7 +359,7 @@ describe("a dialect package (`package.json#mxDialect`, decision 212)", () => {
     ],
     [
       "export default { table: {}, productName: 'Mesh' };",
-      "`productName` is not a dialect field",
+      "`productName` is not a dialect field (id, name, table, tagRules, nodeTypes, lowerTrigger, lowerBlockTag, lowerFilter, afterLower, contractFields, checkContract, describeAttribute)",
     ],
     [
       "export default { id: 'other', table: {} };",
@@ -338,18 +367,18 @@ describe("a dialect package (`package.json#mxDialect`, decision 212)", () => {
     ],
     [
       "export default { name: 'Other', table: {} };",
-      '`name` is "Other", and the dialect\'s `package.json#mxDialect.name` is "Test"',
+      '`name` is "Other", and the dialect\'s `package.json#mxDialect.name` is "Test": leave it to the manifest, or make them agree',
     ],
     [
       "export default { table: { tagTypes: {} } };",
-      "`table.tagTypes` is not a manifest field",
+      "`table.tagTypes` is not a manifest field: tag types are taglib-owned, computed from the tags and their parseOptions",
     ],
   ])("a dialect `%s` is an error in the dialect file", (body, message) => {
     const { packageDir } = dialectProject(dir, { module: body });
     const error = caught(() => irOf("div\n", join(dir, "page.tst")));
     expect(error.file).toBe(join(packageDir, "index.mjs"));
     expect([error.line, error.column]).toEqual([1, 0]);
-    expect(error.message).toContain(message);
+    expect(error.message).toBe(message);
   });
 
   it("a dialect that matches the manifest's `id` and `name` is accepted", () => {
@@ -365,8 +394,8 @@ describe("a dialect package (`package.json#mxDialect`, decision 212)", () => {
       const error = caught(() => irOf("div\n", join(dir, page)));
       expect(error.file).toBe(file);
       expect([error.line, error.column]).toEqual([3, 9]);
-      expect(error.message).toContain(
-        "`mx.syntax` is removed: a syntax of your own is a dialect, a package that declares itself in its `package.json#mxDialect`",
+      expect(error.message).toBe(
+        "`mx.syntax` is removed: a syntax of your own is a dialect, a package that declares itself in its `package.json#mxDialect` (`id`, `name`, the `extensions` it claims, its `module`) and is one of the project's dependencies; a file goes to the dialect that claims its extension. `.mx` files are always MX's.",
       );
     }
   });

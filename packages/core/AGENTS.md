@@ -459,10 +459,19 @@ Five facts worth knowing before editing it:
   the project's own `mxDialect` (a dialect routes its own files).
   `routeDialect(file)` picks the longest claimed extension; a clash is an
   error at the second package's dependency entry naming both, settled by
-  `mx.extensions` (`{ ".x": "<id>" }`, an error at its key when malformed).
+  `mx.extensions` (`{ ".x": "<id>" }`, an error at the entry's key when
+  malformed). Two dialects with one `id` is an error at the second's
+  dependency entry; an aliased dependency is positioned at its key
+  (`Listing.key`). Discovery is reused only while every dependency's
+  `package.json` read is the same object (`byProject`), so an install or a
+  dependency edit is seen; a dependency read keeps one manifest object
+  (`manifests`), which `byDialect` caches the loaded dialect by.
   `.mx` is never claimable. `loadDialect` resolves `module` from the
   package directory (unresolvable: an error at `mxDialect.module`), loads it
-  with `loadDefaultExport` (reloaded when its mtime changes), and stamps the
+  with `loadDefaultExport` once per mtime (`loadDialectModule`: a failed load
+  is rethrown until the file changes, because Node before 22.20 cannot
+  `require` an errored ES module again; Node never re-evaluates an edited ES
+  module, Bun and CommonJS do), and stamps the
   manifest's `id`/`name` (a module stating a different one is an error); a
   problem with the module's shape or table, `{ call }` without
   `lowerTrigger` and an unregistered node row included, is in the module

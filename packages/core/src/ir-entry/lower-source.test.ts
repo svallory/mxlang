@@ -1,10 +1,11 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { DelegatedTag } from "../ir.ts";
 import type { Dialect } from "../syntax-table.ts";
+import { dialectProject } from "../test-dialect-project.ts";
 import {
   type LowerSourceOptions,
   lowerFile,
@@ -206,6 +207,70 @@ describe("absent `tagRules`: the strict `html` preset", () => {
   });
 });
 
+/**
+ * An absent `tagRules` is the dialect's own (decision 212 item 8): the
+ * `dialect` option's, else the one the file routes to; `html` when it
+ * states none. The call's `tagRules` wins.
+ */
+describe("absent `tagRules`: the dialect's preset", () => {
+  const VOID_CHILD = "<input><child/></input>\n";
+  const VOID_ERROR = [
+    ["error", 'The closing "input" tag was not expected', 1, 15, 15],
+  ];
+  const none: Dialect = Object.freeze({
+    id: "loose",
+    name: "Loose",
+    table: {},
+    tagRules: "none",
+  });
+
+  it("the `dialect` option's `tagRules` applies", () => {
+    expect(errors(VOID_CHILD, { dialect: none })).toEqual([]);
+  });
+
+  it("the call's `tagRules` wins over the dialect's", () => {
+    expect(errors(VOID_CHILD, { dialect: none, tagRules: "html" })).toEqual(
+      VOID_ERROR,
+    );
+  });
+
+  it("a dialect that states none gets `html`", () => {
+    const strict: Dialect = Object.freeze({
+      id: "strict",
+      name: "Strict",
+      table: {},
+    });
+    expect(errors(VOID_CHILD, { dialect: strict })).toEqual(VOID_ERROR);
+  });
+
+  it("the routed dialect's `tagRules` applies, and a dialect that fails to load is a diagnostic", () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-ir-tag-rules-")));
+    try {
+      dialectProject(dir, {
+        module: 'export default { table: {}, tagRules: "none" };',
+      });
+      const page = join(dir, "page.tst");
+      expect(lowerSource(VOID_CHILD, page).diagnostics).toEqual([]);
+      expect(lowerSource(VOID_CHILD, join(dir, "page.mx")).ir).toBeUndefined();
+      dialectProject(dir, {
+        packageName: "broken-dialect",
+        manifest: { id: "broken", extensions: [".brk"] },
+        module: "throw new Error('broken dialect');",
+      });
+      const broken = lowerSource(VOID_CHILD, join(dir, "page.brk"));
+      expect(broken.ir).toBeUndefined();
+      expect(broken.diagnostics.map((d) => [d.message, d.file])).toEqual([
+        [
+          "dialect failed to load: broken dialect",
+          join(dir, "node_modules/broken-dialect/index.mjs"),
+        ],
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("the `none` preset: no native element rules", () => {
   it.each(NATIVE_RULE_NAMES)("`<%s>` accepts a child tag", (name) => {
     const result = lowerSource(`<${name}><child/></${name}>\n`, "/t.mx", {
@@ -371,9 +436,9 @@ describe("required beyond `span`", () => {
         default: Dialect;
       }
     ).default;
-    expect(staticValues("sort asc &dueOn\n", { dialect: memberSyntax })).toEqual(
-      [["member", "&dueOn"]],
-    );
+    expect(
+      staticValues("sort asc &dueOn\n", { dialect: memberSyntax }),
+    ).toEqual([["member", "&dueOn"]]);
   });
 
   it("an `Import`'s `from` and `names`, `[]` for a side-effect import", () => {

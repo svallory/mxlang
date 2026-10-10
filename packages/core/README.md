@@ -507,7 +507,8 @@ they would say "MX"; `extensions` are the extensions it claims (never `.mx`);
 through `..`), to the module whose default export is the dialect:
 `{ table, … }`, a syntax table overlaid on the `.mx` default row, plus
 optional hooks (`lowerTrigger`, `lowerBlockTag`, `lowerFilter`, `afterLower`,
-the contract hooks below), a `tagRules` preset (`html` when it states none)
+the contract hooks below), a `tagRules` preset (`html` when it states none; `lowerSource` parses under
+it when its call states no `tagRules`)
 and `nodeTypes`. Core stamps the manifest's `id` and `name` on it; the module
 may leave them out (`DialectModule`).
 
@@ -515,8 +516,10 @@ A project uses a dialect by depending on it. Core reads the direct
 dependencies of a file's nearest `package.json` (all four dependency fields),
 statically, and routes the file to the dialect that claims the longest
 extension its name ends with. Every other file, `.mx` included, parses with
-MX's default row. Two dialects claiming one extension is an error naming
-both; the project settles it with `mx.extensions`:
+MX's default row. Discovery follows the dependencies on disk, so an install
+or an edited dependency manifest is seen at the next compile. Two dependencies
+with one `id` is an error naming both. Two dialects claiming one extension is
+an error naming both; the project settles it with `mx.extensions`:
 
 ```json
 { "mx": { "extensions": { ".mesh.mx": "mesh" } } }
@@ -524,8 +527,10 @@ both; the project settles it with `mx.extensions`:
 
 A malformed manifest is an error at its field, in the dialect's
 `package.json`; a `module` that cannot be resolved, at `mxDialect.module`. A
-problem in the dialect itself is an error in the module file. `mx.syntax` is
-removed. `discoverDialects(projectFile)` lists a project's dialects without
+problem in the dialect itself is an error in the module file, and a module
+that fails to load keeps that error until the file changes. On Node, an edited
+ES-module dialect is picked up after a restart (Bun, and CommonJS on Node,
+reload it). `mx.syntax` is removed. `discoverDialects(projectFile)` lists a project's dialects without
 loading any code, and `routeDialect(file)` says which one a file goes to.
 `compileSource`, `parseFragment` and `lowerSource` also take a `dialect` option
 (a dialect with its `id` and `name`, or a bare table), which wins over

@@ -51,6 +51,7 @@ import { type MxTemplateParser, mxTemplateParser } from "./marko-frontend.ts";
 import { filePosition } from "./mx-parse.ts";
 import { jsonKeyPosition, readPackageJsonCached } from "./package-json.ts";
 import { loadDefaultExport, mxKeyPosition } from "./scan.ts";
+import { TAG_RULES_PRESETS, type TagRulesPreset } from "./tag-presets.ts";
 import { triggerRow } from "./triggers.ts";
 
 /** What the expression parser reads in place of a trigger's text, always of the same length. */
@@ -314,16 +315,6 @@ export interface TriggerContext {
 export interface SyntaxBuildContext {
   readonly build: IrBuilders;
 }
-
-/**
- * The core tag rules a dialect parses with (decision 204 item 2): `html`
- * (the html target's table), `markup` (native elements plus statement
- * tags) or `none` (statement tags only). @unstable
- *
- * TODO(dialect-registration): core's `tag-presets.ts` exports this type
- * (tree-ir-entry); this declaration goes when that lands.
- */
-export type TagRulesPreset = "html" | "markup" | "none";
 
 /**
  * A dialect (decisions 182 addendum 5, 202, 212): the default export of the
@@ -651,17 +642,11 @@ function firstCallTrigger(
   return undefined;
 }
 
-/** The core tag rule presets a dialect may name. */
-const TAG_RULES = ["html", "markup", "none"] as const;
-
 /**
  * The tag rules a dialect's files parse with: the preset its module states,
  * else `html`, the full strict rules (decision 212 item 8 and addendum item
  * 1). A dialect never inherits a target's preset, and project config never
- * changes it.
- *
- * TODO(dialect-registration): read by the preset wiring once
- * tree-ir-entry's `tag-presets.ts` lands.
+ * changes it. `lowerSource` reads it when its call states no `tagRules`.
  */
 export function dialectTagRules(dialect: Dialect): TagRulesPreset {
   return dialect.tagRules ?? "html";
@@ -703,10 +688,10 @@ function checkModuleShape(
   }
   if (
     value.tagRules !== undefined &&
-    !(TAG_RULES as readonly unknown[]).includes(value.tagRules)
+    !(TAG_RULES_PRESETS as readonly unknown[]).includes(value.tagRules)
   ) {
     fail(
-      `\`${path}tagRules\` must be one of core's tag rule presets: ${TAG_RULES.map((name) => `"${name}"`).join(", ")}`,
+      `\`${path}tagRules\` must be one of core's tag rule presets: ${TAG_RULES_PRESETS.map((name) => `"${name}"`).join(", ")}`,
     );
   }
   checkDialectNodeTypes(value, path, fail);
@@ -765,7 +750,7 @@ function loadDialect(manifest: DialectManifest): {
     throw new TranslateError(message, 1, 0, file);
   };
   const dialect = checkModuleShape(
-    loadDefaultExport(file, "dialect"),
+    loadDialectModule(file),
     "",
     failInModule,
     manifest,
@@ -825,12 +810,46 @@ function mtimeOf(file: string): number | undefined {
   }
 }
 
+/** Each dialect module file's last load, per revision (its mtime). */
+const moduleLoads = new Map<
+  string,
+  | { mtimeMs?: number; failed: false; definition: Record<string, unknown> }
+  | { mtimeMs?: number; failed: true; error: unknown }
+>();
+
+/**
+ * A dialect module's default export, loaded once per revision of its file.
+ * A failed load is kept and rethrown until the file changes: before 22.20,
+ * Node cannot `require` an ES module again once its evaluation threw (the
+ * second `require` fails with "Unexpected module status"), so loading it
+ * again would replace the dialect's own error with Node's.
+ */
+function loadDialectModule(file: string): Record<string, unknown> {
+  const mtimeMs = mtimeOf(file);
+  const known = moduleLoads.get(file);
+  if (known && known.mtimeMs === mtimeMs) {
+    if (known.failed) throw known.error;
+    return known.definition;
+  }
+  try {
+    const definition = loadDefaultExport(file, "dialect");
+    moduleLoads.set(file, { mtimeMs, failed: false, definition });
+    return definition;
+  } catch (error) {
+    moduleLoads.set(file, { mtimeMs, failed: true, error });
+    throw error;
+  }
+}
+
 /**
  * The syntax for `filename`: the dialect that claims its extension among
  * its project's (the nearest `package.json`'s) direct dependencies, so a
  * dependency's files use the dependency's dialects; MX's default row for
  * every other file. A relative or virtual name gets the default row. A
- * dialect is reloaded when its module file changes.
+ * dialect is loaded again when its module file changes: Bun re-evaluates
+ * it, and so does Node for a CommonJS module, but Node keeps an ES module it
+ * has loaded (deleting its `require.cache` entry does not evict it), so an
+ * edited `.mjs`/`.ts` dialect is picked up after a restart there.
  */
 export function resolveSyntaxOf(filename: string): ResolvedSyntax {
   const resolved = resolveManifestSyntax(filename);
