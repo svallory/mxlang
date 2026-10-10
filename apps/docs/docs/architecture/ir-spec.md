@@ -89,6 +89,7 @@ What each span covers is listed with its field. The rule throughout: slicing the
 | --- | --- |
 | `Expr.span` | The expression's own text. For a string literal, quotes included. |
 | `Attr.nameSpan` (required) | The authored name. Zero-width at the `=` for a default attribute (`<x="post">`), as in Marko (`spans.test.ts` › "a default attribute's nameSpan"). For a colon name (`value:foo`, `x:`), the whole spelling, colons included (`lower.test.ts` › "`:modifier` is Marko's `value:modifier` attribute, not a modifier"). For a name-sugar attribute, the sugar token. |
+| `Attr.span` | The whole attribute: name through value, its arguments, refinement or method body included (`a="x"`, `x(1, 2)=3`, `v:fn:=q`, `g(x) { return x }`); a spread from `...` through its expression; a name-sugar attribute's token (`#main`, `.card`, `:email`); a default attribute from its `=` (`="post"`). Absent on a synthesized attribute (a contract default, a merged or synthesized shorthand) and on one the custom-tag builder made from no attribute. An attribute the builder copies from an authored one keeps that one's `span`. |
 | static `Attr.valueSpan` | The string literal, quotes included; zero-width at the end of the name for a valueless colon name (`value:foo`, `x:`; `lower.test.ts` › "gives the valueless modifier a zero-width valueSpan at the end of its name"). |
 | `Element`/`DelegatedTag`/`AttributeTag` `nameSpan` | The tag name (`x` in `<x>`); for an attribute tag, the name after the `@` (`attributeTagNameSpan`). |
 | `Element`/`Component`/`DelegatedTag`/`AttributeTag`/`For`/`Define`/`Const` `span` | The whole tag: opening tag, body and closing tag, or the self-closed tag. |
@@ -96,10 +97,13 @@ What each span covers is listed with its field. The rule throughout: slicing the
 | `Text.span` | The authored text, which `value` has normalized. |
 | `Interpolation.span` | The whole `${…}`/`$!{…}`, delimiters included. |
 | `Comment.span` | The whole comment, delimiters included. |
+| `AttributeTagIf.span` | The `<if>` through the last branch's closing tag, as `IfChain.span`. |
+| `AttributeTagFor.span` | The whole `<for>`. |
 | `IfChain.span` | From the `<if>`'s `<` through the last branch's closing tag, layout between branches included. |
 | `Branch.span` | That branch's own tag. |
 | `For.paramSpans`, `Define.paramSpans` | One per param, `undefined` for a param with no `loc`. |
 | `Define.nameSpan` | The define's own name (`Row`). |
+| `Import.names[].span`, `localSpan` | A named specifier's imported name (`b` in `{ b as c }`, quotes included for a string name), else the binding (`Icon`, `ns` in `* as ns`); `localSpan` is the alias, present whenever an `as` is written. |
 | `Import`/`Export`/`Static` `span` | The authored statement, `static` keyword included, trailing line terminator excluded; a trailing same-line comment included. |
 | `InputInterface.span` (optional) | The authored `export interface Input` statement, trailing line terminator excluded. Pinned by `solid/src/expression-mappings.test.ts` › "the Input interface". |
 
@@ -268,7 +272,7 @@ The params shadow host bindings inside `children` only; emitters must not re-sha
 
 | Kind | Fields | Contract |
 | --- | --- | --- |
-| `Import` | `code`, `bindings`, `end`, `span?`, `synthesized?`, `specifier?`, `resolvedPath?` | `code` is the trimmed statement. `bindings` are its local names. A synthesized import (for a discovered tag) has `synthesized: true` plus `specifier` and `resolvedPath`, no span, and is deduped by resolved path. Only Solid treats the two differently (it hoists synthesized imports out of a region). |
+| `Import` | `code`, `bindings`, `declaration?`, `from?`, `names?`, `typeOnly?`, `end`, `span?`, `synthesized?`, `specifier?`, `resolvedPath?` | `code` is the trimmed statement. `bindings` are its local names. An authored import also carries its parsed Babel `declaration` and, read from it, `from` (the module specifier, unquoted), `names` (`ImportName[]` in the order written: `imported` (`"default"`, `"*"` or the exported name), `local`, `kind` (`default`/`named`/`namespace`), `span`, `localSpan?`, `typeOnly?` for an inline `{ type X }`; empty for a side-effect import) and `typeOnly` for a whole `import type`, so a consumer reads an import without Babel (`spans.test.ts` › "an import's names"). A synthesized import (for a discovered tag) has `synthesized: true` plus `specifier` and `resolvedPath`, no span, and is deduped by resolved path. Only Solid treats the two differently (it hoists synthesized imports out of a region). |
 | `Static` | `code`, `end`, `span?` | `code` has the leading `static ` removed. |
 | `Export` | `code`, `end`, `span?` | Any top-level `export` except `export interface Input`, verbatim. |
 | `InputInterface` | `code`, `end`, `span?` | `export interface Input …`, verbatim; `span` is the authored statement (section 3.3). |
@@ -301,7 +305,7 @@ This is decision 79's narrow escape hatch: every host-owned construct (`<try>`, 
 
 ## 6. `Attr`
 
-Every non-spread attribute has `name`, `nameSpan` (required), `loc` at the name, and an optional `sugar` (the decision-146 token, `:email`, when the attribute came from sugar).
+Every attribute has an optional `span`, the whole attribute (section 3.3). Every non-spread attribute has `name`, `nameSpan` (required), `loc` at the name, and an optional `sugar` (the decision-146 token, `:email`, when the attribute came from sugar).
 
 | Kind | Fields | Produced for |
 | --- | --- | --- |
@@ -334,7 +338,7 @@ A `Component` and a `DelegatedTag` (and, recursively, an `AttributeTag`) carry *
 | View | Type | Contract |
 | --- | --- | --- |
 | `attributeTags` | `AttributeTag[]` | Every occurrence, flattened, in source order. Repeats are kept (`lower.test.ts` › "Component keeps every repeated attribute tag, not just the last"). |
-| `attributeTagTree` | `AttributeTagNode[]` | The same occurrences with their `<if>`/`<for>` structure: `AttributeTag { tag }`, `AttributeTagIf { branches: [{ test?, span, nodes }] }` (no `test` on `<else>`), `AttributeTagFor { loop: ForHead, nodes }`. Static tags and control-flow tags merge in authored order. |
+| `attributeTagTree` | `AttributeTagNode[]` | The same occurrences with their `<if>`/`<for>` structure: `AttributeTag { tag }`, `AttributeTagIf { branches: [{ test?, span, nodes }], span? }` (no `test` on `<else>`), `AttributeTagFor { loop: ForHead, nodes, span? }`. Static tags and control-flow tags merge in authored order. |
 | `attrTagProps` | `AttrTagProp[]` | The emission plan, one entry per property name: `cardinality` (`"single"`/`"array"`), `as` (`"data"`/`"renderable"`), and `source` (the tree filtered to that name). |
 
 `AttributeTag` is `{ name, nameSpan, span?, attrs, block: Block, hasBody, attributeTags, attributeTagTree, attrTagProps }`. `name` excludes the `@`. `hasBody` follows `hasContent`. `content` is reserved and rejected as an attribute name.

@@ -224,6 +224,17 @@ export interface AttrArgs {
   args?: Expr[];
 }
 
+/**
+ * File-absolute UTF-16 code-unit span of the whole attribute as authored: the
+ * name through the value, its arguments, refinement or method body included
+ * (`a=1`, `v:fn:=q`, `h(x) { … }`); a spread's `...` through its expression;
+ * a name sugar's token (`:email`, `#id`). A default attribute (`<x="post">`)
+ * starts at its `=`. `undefined` for an attribute synthesized with no source.
+ */
+export interface AttrSpan {
+  span?: SourceSpan;
+}
+
 export interface AttrSugar {
   sugar?: string;
   /**
@@ -274,10 +285,12 @@ export type Attr =
        */
       member?: Member;
     } & IrBase &
+      AttrSpan &
       AttrSugar &
       AttrArgs)
   /** A bare attribute (`disabled`), HTML's spelling of `true`. */
   | ({ kind: "boolean"; name: string; nameSpan: SourceSpan } & IrBase &
+      AttrSpan &
       AttrSugar &
       AttrArgs)
   | ({
@@ -286,6 +299,7 @@ export type Attr =
       value: Expr;
       nameSpan: SourceSpan;
     } & IrBase &
+      AttrSpan &
       AttrSugar &
       AttrArgs)
   /**
@@ -306,6 +320,7 @@ export type Attr =
       refinement?: Expr;
       nameSpan: SourceSpan;
     } & IrBase &
+      AttrSpan &
       AttrSugar &
       AttrArgs)
   /**
@@ -332,9 +347,10 @@ export type Attr =
       value: Expr;
       nameSpan: SourceSpan;
     } & IrBase &
+      AttrSpan &
       AttrSugar &
       AttrArgs)
-  | ({ kind: "spread"; value: Expr } & IrBase);
+  | ({ kind: "spread"; value: Expr } & IrBase & AttrSpan);
 
 /**
  * A block of children a host emits as a callable unit: an attribute tag's
@@ -506,11 +522,18 @@ export type AttributeTagNode =
         span: SourceSpan;
         nodes: AttributeTagNode[];
       }>;
+      /**
+       * File-absolute UTF-16 code-unit span of the chain: the `<if>`'s start
+       * through the last branch's end, as `IfChain.span`.
+       */
+      span?: SourceSpan;
     } & IrBase)
   | ({
       kind: "AttributeTagFor";
       loop: ForHead;
       nodes: AttributeTagNode[];
+      /** File-absolute UTF-16 code-unit span of the whole `<for>`. */
+      span?: SourceSpan;
     } & IrBase);
 
 export interface AttrTagProp {
@@ -562,6 +585,33 @@ export type ComponentTarget =
    * its expression is not in general a single known binding.
    */
   | { kind: "dynamic"; expr: Expr; valueImportBinding?: string };
+
+/** One name an authored `import` brings in (`Import.names`). */
+export interface ImportName {
+  /**
+   * The name the module exports: `useState` for both `{ useState }` and
+   * `{ useState as us }`, `"default"` for a default import, `"*"` for a
+   * namespace import (every export is reachable through `local`).
+   */
+  imported: string;
+  /** The binding this file refers to it by (the alias, when there is one). */
+  local: string;
+  kind: "default" | "named" | "namespace";
+  /**
+   * The name as written (UTF-16 offsets): the imported name for a named
+   * specifier (`b` in `{ b as c }`, the quotes included for
+   * `{ "a-b" as ab }`), the binding for a default (`Icon`) or namespace
+   * (`ns` in `* as ns`) import. An inline `type` keyword is not part of it.
+   */
+  span: SourceSpan;
+  /**
+   * The alias (`c` in `{ b as c }`); present whenever an `as` clause is
+   * written, even `{ a as a }`, never for `{ a }`.
+   */
+  localSpan?: SourceSpan;
+  /** Present (`true`) only for an inline `{ type X }` specifier. */
+  typeOnly?: true;
+}
 
 export type IrNode =
   /**
@@ -758,6 +808,21 @@ export type IrNode =
        * refuses an authored `import` that is not one ES import declaration).
        */
       declaration?: Node;
+      /**
+       * The module specifier, unquoted (`"./icon.mx"` for `from './icon.mx'`),
+       * read from `declaration`. Absent for a synthesized import (its
+       * specifier is `specifier`) and when no declaration was parsed.
+       */
+      from?: string;
+      /**
+       * The names the statement brings in, in the order written, read from
+       * `declaration`; empty for a side-effect import (`import "./polyfill"`).
+       * A consumer reads the import here without Babel. Present exactly when
+       * `from` is.
+       */
+      names?: ImportName[];
+      /** Present (`true`) only for a whole `import type … from …`. */
+      typeOnly?: true;
       end: Position;
       /**
        * File-absolute UTF-16 code-unit span of the authored statement,

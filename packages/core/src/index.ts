@@ -175,6 +175,7 @@ export type {
   ExprShape,
   ForHead,
   ForSource,
+  ImportName,
   Ir,
   IrNode,
   Member,

@@ -130,6 +130,7 @@ import type {
   ExprShape,
   ForHead,
   ForSource,
+  ImportName,
   Ir,
   IrNode,
   Member,
@@ -899,7 +900,49 @@ function lowerAttr(
   if (args && lowered.kind !== "spread") {
     lowered.args = args.map((arg: Node) => exprOf(ctx, arg));
   }
+  if (lowered.kind !== "spread") {
+    const span = wholeAttrSpan(lowered);
+    if (span) lowered.span = span;
+  }
   return lowered;
+}
+
+/**
+ * The whole span of a named attribute, from the spans its parts already
+ * carry: the name through the value, arguments, refinement and method body
+ * included; a name sugar's token (`:email`, `#id`). A spread takes its parsed
+ * node's range instead (`lowerAttrNamed`). Read from the lowered parts, not the
+ * parsed node: the front end's range for a default attribute runs on over a
+ * name sugar written after it (`<x="post" :email>`), which lowering splits
+ * into two attributes. `undefined` when the value was synthesized.
+ */
+function wholeAttrSpan(
+  attr: Exclude<Attr, { kind: "spread" }>,
+): SourceSpan | undefined {
+  let start = Number.POSITIVE_INFINITY;
+  let end = Number.NEGATIVE_INFINITY;
+  const add = (span: SourceSpan | undefined) => {
+    if (!span) return;
+    start = Math.min(start, span.sourceStart);
+    end = Math.max(end, span.sourceEnd);
+  };
+  add(attr.nameSpan);
+  // A value with no source (a shorthand with a placeholder, `#a${x}`, or a
+  // shorthand class merged into an authored `class`) is synthesized, so the
+  // name alone would claim a partial range: no span at all.
+  const valueSpan =
+    attr.kind === "static"
+      ? attr.valueSpan
+      : attr.kind === "boolean"
+        ? attr.nameSpan
+        : attr.value.span;
+  if (!valueSpan) return undefined;
+  add(valueSpan);
+  if (attr.kind === "bound") add(attr.refinement?.span);
+  for (const arg of attr.args ?? []) add(arg.span);
+  return Number.isFinite(start) && Number.isFinite(end)
+    ? { sourceStart: start, sourceEnd: end }
+    : undefined;
 }
 
 function lowerAttrNamed(
@@ -933,7 +976,15 @@ function lowerAttrNamed(
   };
 
   if (isSpreadAttributeNode(attr)) {
-    return { kind: "spread", value: exprOf(ctx, readValue()), loc };
+    // The parsed range is the authored `...expr`, which the expression's own
+    // span leaves the `...` out of.
+    const span = exprSpan(ctx, attr);
+    return {
+      kind: "spread",
+      value: exprOf(ctx, readValue()),
+      loc,
+      ...(span ? { span } : {}),
+    };
   }
 
   // Marko rejects a name outside its grammar for every tag; only a host with
@@ -1887,10 +1938,12 @@ function lowerAttributeFor(
   const lowered = lowerAttributeTags(ctx, node, schema, true, false);
   restore();
   unscope();
+  const span = exprSpan(ctx, node);
   return {
     kind: "AttributeTagFor",
     loop,
     nodes: lowered.tree,
+    ...(span ? { span } : {}),
     loc: posOf(ctx, node),
   };
 }
@@ -1951,7 +2004,25 @@ function lowerAttributeIf(
       branchContent[0],
     );
   }
-  return [{ kind: "AttributeTagIf", branches, loc: posOf(ctx, first) }, end];
+  // As `IfChain`: the `<if>`'s start through the last branch's end.
+  const firstSpan = branches[0]?.span;
+  const lastSpan = branches[branches.length - 1]?.span;
+  return [
+    {
+      kind: "AttributeTagIf",
+      branches,
+      ...(firstSpan && lastSpan
+        ? {
+            span: {
+              sourceStart: firstSpan.sourceStart,
+              sourceEnd: lastSpan.sourceEnd,
+            },
+          }
+        : {}),
+      loc: posOf(ctx, first),
+    },
+    end,
+  ];
 }
 
 function attributeIfChainEnd(body: Node[], index: number): number {
@@ -2988,6 +3059,76 @@ function importDeclarationOf(node: Node): { declaration?: Node } {
 }
 
 /**
+ * `Import.declaration` plus what a consumer reads from it without Babel:
+ * `from`, `names` and a whole-statement `typeOnly`. Spans come from the
+ * declaration's line/column positions (the payload is parsed at its place in
+ * the file), never from re-parsing `code`.
+ */
+function importFactsOf(
+  ctx: Ctx,
+  node: Node,
+): Pick<
+  Extract<IrNode, { kind: "Import" }>,
+  "declaration" | "from" | "names" | "typeOnly"
+> {
+  const { declaration } = importDeclarationOf(node);
+  if (declaration?.type !== "ImportDeclaration") {
+    return declaration ? { declaration } : {};
+  }
+  return {
+    declaration,
+    from: declaration.source.value,
+    names: declaration.specifiers.map((specifier: Node) =>
+      importNameOf(ctx, specifier),
+    ),
+    ...(declaration.importKind === "type" ? { typeOnly: true as const } : {}),
+  };
+}
+
+/** The UTF-16 span of a parsed import specifier's identifier or string. */
+function specifierSpan(ctx: Ctx, node: Node): SourceSpan {
+  const at = (position: { line: number; column: number }) =>
+    offsetOf(ctx, { line: position.line, column: position.column });
+  return { sourceStart: at(node.loc.start), sourceEnd: at(node.loc.end) };
+}
+
+function importNameOf(ctx: Ctx, specifier: Node): ImportName {
+  switch (specifier.type) {
+    case "ImportDefaultSpecifier":
+      return {
+        imported: "default",
+        local: specifier.local.name,
+        kind: "default",
+        span: specifierSpan(ctx, specifier.local),
+      };
+    case "ImportNamespaceSpecifier":
+      return {
+        imported: "*",
+        local: specifier.local.name,
+        kind: "namespace",
+        span: specifierSpan(ctx, specifier.local),
+      };
+    default: {
+      const imported = specifier.imported;
+      const span = specifierSpan(ctx, imported);
+      const localSpan = specifierSpan(ctx, specifier.local);
+      return {
+        // `import { "a-b" as ab }` names the export with a string literal.
+        imported:
+          imported.type === "StringLiteral" ? imported.value : imported.name,
+        local: specifier.local.name,
+        kind: "named",
+        span,
+        // Babel gives `local` the imported node's own range when no alias is
+        // written, so differing spans mean an `as` clause (`{ a as a }` too).
+        ...(localSpan.sourceStart !== span.sourceStart ? { localSpan } : {}),
+        ...(specifier.importKind === "type" ? { typeOnly: true as const } : {}),
+      };
+    }
+  }
+}
+
+/**
  * MX imports are ES imports: one `import … from "…"` declaration per
  * statement. An `MxModuleStatement` whose payload is anything else is refused
  * at the statement (`import x = …`, several statements in one `import`), and
@@ -3080,7 +3221,7 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
       kind: "Import",
       code: line,
       bindings,
-      ...importDeclarationOf(node),
+      ...importFactsOf(ctx, node),
       loc,
       end,
       span,

@@ -658,11 +658,13 @@ function spanOf(spans: FromSpans): { span?: SourceSpan } {
 function attrSpansOf(
   from: BuildFrom | undefined,
   fallback: Position,
-): { nameSpan: SourceSpan; valueSpan?: SourceSpan } {
+): { nameSpan: SourceSpan; valueSpan?: SourceSpan; span?: SourceSpan } {
   const spans = spansFrom(from, fallback);
   return {
     nameSpan: spans.nameSpan ?? { sourceStart: 0, sourceEnd: 0 },
     ...(spans.valueSpan ? { valueSpan: spans.valueSpan } : {}),
+    // The whole range of the attribute it was built from.
+    ...(spans.attrSpan ? { span: spans.attrSpan } : {}),
   };
 }
 
@@ -708,6 +710,8 @@ export type BuildFrom =
 interface FromSpans {
   loc: Position;
   span?: SourceSpan;
+  /** An `Attr` source's whole span, which a built attribute copies. */
+  attrSpan?: SourceSpan;
   nameSpan?: SourceSpan;
   valueSpan?: SourceSpan;
 }
@@ -728,9 +732,14 @@ function spansFrom(from: BuildFrom | undefined, fallback: Position): FromSpans {
             nameSpan?: SourceSpan;
           })
         : (from as { span?: SourceSpan; nameSpan?: SourceSpan });
+    // An `Attr`'s kinds are lowercase, an IR node's capitalized. A node built
+    // from an attribute keeps the attribute's name span as its span; only a
+    // built attribute takes the attribute's whole span.
+    const fromAttr = /^[a-z]/.test(from.kind);
     return {
       loc: from.loc,
-      ...(inner.span ? { span: inner.span } : {}),
+      ...(inner.span && !fromAttr ? { span: inner.span } : {}),
+      ...(inner.span && fromAttr ? { attrSpan: inner.span } : {}),
       ...(inner.nameSpan ? { nameSpan: inner.nameSpan } : {}),
       // An `Attr` (which has a `kind`) may carry a value span for the built
       // static attribute; the other positioned shapes have none.

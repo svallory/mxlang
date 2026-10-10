@@ -470,3 +470,154 @@ describe("non-ASCII source", () => {
     expect(slice(source, p.span)).toBe('<p title="ção"/>');
   });
 });
+
+describe("a whole attribute's span", () => {
+  function attrSpans(source: string): Array<[string, string]> {
+    const tag = delegatedTag(irOf(source, claimAll).body[0]);
+    return tag.attrs.map((a) => [
+      a.kind === "spread" ? "..." : a.name,
+      slice(source, a.span),
+    ]);
+  }
+
+  it("covers name through value on every attribute form", () => {
+    expect(
+      attrSpans(
+        '<t a="x" b c=d+1 e:=f g(x) { return x } ...rest #main .card :email/>\n',
+      ),
+    ).toEqual([
+      ["a", 'a="x"'],
+      ["b", "b"],
+      ["c", "c=d+1"],
+      ["e", "e:=f"],
+      ["g", "g(x) { return x }"],
+      ["...", "...rest"],
+      ["id", "#main"],
+      ["class", ".card"],
+      ["name", ":email"],
+    ]);
+  });
+
+  it("starts a default attribute at the `=`", () => {
+    expect(attrSpans('<t="post" x=1/>\n')).toEqual([
+      ["value", '="post"'],
+      ["x", "x=1"],
+    ]);
+  });
+
+  it("includes a bound attribute's refinement", () => {
+    expect(attrSpans("<t v:fn:=q/>\n")).toEqual([["v", "v:fn:=q"]]);
+  });
+
+  it("includes an attribute's arguments", () => {
+    expect(attrSpans("<t onClick=h x(1, 2)=3/>\n")).toEqual([
+      ["onClick", "onClick=h"],
+      ["x", "x(1, 2)=3"],
+    ]);
+  });
+
+  it.each([
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+    ["a shorthand id with a placeholder", "<t#a${x}/>\n", "id"],
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+    ["a shorthand class with a placeholder", "<t.a${x}/>\n", "class"],
+    ["a shorthand class merged into `class`", '<t.a class="b"/>\n', "class"],
+  ])("is absent for %s, whose value was synthesized", (_, source, name) => {
+    const tag = delegatedTag(irOf(source, claimAll).body[0]);
+    expect(attr(tag.attrs, name).span).toBeUndefined();
+  });
+
+  it("is a UTF-16 range under emoji and CRLF", () => {
+    expect(attrSpans('<t a="🙂"\r\n  b=c/>\r\n')).toEqual([
+      ["a", 'a="🙂"'],
+      ["b", "b=c"],
+    ]);
+  });
+});
+
+describe("attribute-tag control flow spans", () => {
+  it("cover the whole `<if>` chain and the whole `<for>`", () => {
+    const source =
+      "<t>\n  <if=a>\n    <@item>x</@item>\n  </if>\n  <else-if=b>\n    <@item/>\n  </else-if>\n  <for|i| of=xs>\n    <@item/>\n  </for>\n</t>\n";
+    const tree = delegatedTag(irOf(source, claimAll).body[0]).attributeTagTree;
+    expect(
+      tree.map((node) => [
+        node.kind,
+        slice(source, "span" in node ? node.span : undefined),
+      ]),
+    ).toEqual([
+      [
+        "AttributeTagIf",
+        "<if=a>\n    <@item>x</@item>\n  </if>\n  <else-if=b>\n    <@item/>\n  </else-if>",
+      ],
+      ["AttributeTagFor", "<for|i| of=xs>\n    <@item/>\n  </for>"],
+    ]);
+  });
+});
+
+describe("an import's names", () => {
+  const source =
+    'import Icon, { a, b as c, "a-b" as ab, type T } from "./icon.mx";\r\nimport * as ns from "ns";\nimport type { U } from "u";\nimport "./poly";\n<div/>\n';
+  const imports = irOf(source, elements).imports;
+
+  function names(index: number) {
+    return imports[index]?.names?.map((name) => ({
+      imported: name.imported,
+      local: name.local,
+      kind: name.kind,
+      text: slice(source, name.span),
+      ...(name.localSpan ? { alias: slice(source, name.localSpan) } : {}),
+      ...(name.typeOnly ? { typeOnly: true } : {}),
+    }));
+  }
+
+  it("reads the module specifier, unquoted", () => {
+    expect(imports.map((node) => node.from)).toEqual([
+      "./icon.mx",
+      "ns",
+      "u",
+      "./poly",
+    ]);
+  });
+
+  it("lists default and named names in the order written", () => {
+    expect(names(0)).toEqual([
+      { imported: "default", local: "Icon", kind: "default", text: "Icon" },
+      { imported: "a", local: "a", kind: "named", text: "a" },
+      { imported: "b", local: "c", kind: "named", text: "b", alias: "c" },
+      {
+        imported: "a-b",
+        local: "ab",
+        kind: "named",
+        text: '"a-b"',
+        alias: "ab",
+      },
+      { imported: "T", local: "T", kind: "named", text: "T", typeOnly: true },
+    ]);
+    expect(imports[0]?.typeOnly).toBeUndefined();
+  });
+
+  it("reads a namespace import after a CRLF line", () => {
+    expect(names(1)).toEqual([
+      { imported: "*", local: "ns", kind: "namespace", text: "ns" },
+    ]);
+  });
+
+  it("marks a whole `import type`", () => {
+    expect(imports[2]?.typeOnly).toBe(true);
+    expect(names(2)).toEqual([
+      { imported: "U", local: "U", kind: "named", text: "U" },
+    ]);
+  });
+
+  it("gives a side-effect import no names", () => {
+    expect(imports[3]?.names).toEqual([]);
+  });
+
+  it("marks an `as` clause even when it repeats the name", () => {
+    const own = 'import { a as a } from "m";\n<div/>\n';
+    const [name] = irOf(own, elements).imports[0]?.names ?? [];
+    expect(name && slice(own, name.localSpan)).toBe("a");
+    expect(name?.localSpan?.sourceStart).toBe(14);
+  });
+});
