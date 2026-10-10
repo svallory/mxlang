@@ -921,9 +921,8 @@ export function resolveSyntaxOf(
 /**
  * Test-only: the dialect an MX file (no dialect claims it) resolves to, read
  * from a process global so a preload reaches every copy of core (source and
- * dist alike). `scripts/sugar-module.ts` sets it to run the existing atom
- * and name-sugar suites through the reference module (slice a1 of
- * `lang-ext-move-sugars-to-mesh`). Unset, nothing changes.
+ * dist alike). A test preload may set it to run an existing suite through
+ * a dialect. Unset, nothing changes.
  */
 const FALLBACK_FOR_TESTING = Symbol.for(
   "@mxlang/core:fallbackSyntaxForTesting",

@@ -1,9 +1,0 @@
-entity :Todo table="todos"
-  attributes
-    uuid :id primary-key
-    string :title
-    uuid :tenantId
-
-  policies
-    policy :sameTenant types=[:create]
-      authorize-if=({ context }) => &tenantId === context.tenantId

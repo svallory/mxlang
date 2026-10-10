@@ -612,75 +612,29 @@ in that position can name. A type registered only for other positions is
 named as such (``… which is not a registered node type in value position (a
 row there can name `mx:String`, `mx:Expression`, `ref:Ref`)``).
 
-## A reference dialect: `@mxlang/core/syntax/member`
+## Core ships no dialect
 
-Core ships one dialect as a reference for extension authors: Mesh's `&`
-member sigil (`&status` in an expression, `sort asc &dueOn` in an attribute
-list, `&title` on a tagless line). It is not a host and core knows no
-"member"; it is built on the public hook API only (`Dialect`, `Trigger`
-and the `lowerTrigger` context), so it doubles as a worked example of all
-three trigger positions. A tag built from a tagless line carries
-`trigger: { id, span, text }`; an authored `<member>` does not.
+A dialect owns its rows: core exports no syntax module and no `./syntax/*`
+entry. Mesh's atoms, name sugars and `&` members are rows in Mesh's own
+dialect; core supplies only the generic hook API they are built on
+(`Dialect`, `Trigger`, `NodeType` and the `lowerTrigger` context), which
+covers all four trigger positions: expression, attribute list, tagless line
+and attribute value. A dialect built on it is loaded as the `dialect` option
+or as the `module` of a dialect package (`package.json#mx.dialect`), through
+Node's strip-only `require`: types-only imports from `@mxlang/core`, no enums
+or parameter properties. A tag built from a tagless line carries
+`trigger: { id, span, text }`; an authored tag does not.
 
-Use it as is, as the `dialect` option or as the `module` of a dialect package:
-
-```ts
-import { lowerSource } from "@mxlang/core";
-import memberSyntax from "@mxlang/core/syntax/member";
-
-const result = lowerSource(source, file, { dialect: memberSyntax });
-```
-
-or copy `dist/syntax/member.js` from the package (or the source, `packages/core/src/syntax/member.ts` in the mxlang repo) into your project and rename it. The sigil
-(`chars` and `match`), the dialect's `id` and `name` (`member` and `Mesh`
-here), the row `id`, the `self` receiver and the child tag name are that
-file's choices. In the source, change its one type import from `../index.ts` to
-`@mxlang/core`; edit the row, and name your copy as the `module` of your
-dialect package's `mx.dialect`. It loads
-through Node's strip-only `require`: types-only imports, no enums or
-parameter properties.
-
-## Atoms and name sugars as a dialect: `@mxlang/core/syntax/atoms-sugars` and `@mxlang/core/syntax/mesh`
-
-Decisions 183 and 196 take atoms (`:name` values, decision 156) and the
-name sugars (`:name` setting `name`, spaced `#id` and `.class`, decision
-146) out of core's grammar before the beta. `@mxlang/core/syntax/atoms-sugars`
-is the reference dialect that carries them as layer-2 triggers on the public
-hook API only; `@mxlang/core/syntax/mesh` combines it with the member dialect
-(the shape Mesh copies as its own dialect). Until the move lands, core still
-handles them itself on the `.mx` default row; a loaded row on a character
-(`:` in an expression, `:`, `#` or `.` in an attribute list) replaces core's
-built-in handling of that character. What the dialect reads differently from
-the built-in path is the list in `scripts/sugar-module/deltas.json`, each
-entry naming its ruling (`#x=1` refused, decision 183, among them).
-
-```ts
-import { lowerSource } from "@mxlang/core";
-import meshSyntax from "@mxlang/core/syntax/mesh";
-
-const result = lowerSource(source, file, { dialect: meshSyntax });
-```
-
-Copy it the way the member dialect is copied (its type imports from
-`../index.ts` become `@mxlang/core`; `mesh.ts` also imports its two siblings).
-
-**Lifetime** (decision 183 addendum 6): both dialects are exported, `@unstable`,
-through the beta, as reference material rather than a host's API. Mesh vendors
-them at the alpha.15 pin and owns its copy from then on. `atom`, `name` and
-`member` are Mesh's forms; `id` and `class` are kept for parity with the
-built-in sugars and may be dropped. `syntax/mesh` also has the value row
-`atom-value` (a whole attribute value `:name`, the node type `mesh:Atom`,
-lowered to the atom-marked string literal the `atom` row builds); Mesh copies
-it and the `Atom` node type into its own syntax. Mesh's entity files and docs blocks are a
-golden corpus here (`src/fixtures/syntax/mesh-corpus/`, its README, and
-`src/ir-entry/mesh-corpus.test.ts`); the deletion of the built-ins
-(slice c) must pass it unchanged.
+Until atoms and the name sugars leave core's own grammar, core still handles
+them on the `.mx` default row; a loaded row on a character (`:` in an
+expression, `:`, `#` or `.` in an attribute list) replaces core's built-in
+handling of that character.
 
 ### Contract checks in a dialect: `contractFields`, `checkContract` and `afterLower(unit)`
 
 The atom contract keys (an attribute's `values`, `pattern` and `ref`, a
-tag's `declares`) are checked by the atoms dialect too, not by core, once the
-dialect is loaded. Three `@unstable` parts of `Dialect` carry this, and
+tag's `declares`) can be checked by a dialect instead of by core, once the
+dialect claims them. Three `@unstable` parts of `Dialect` carry this, and
 none names atoms:
 
 - `contractFields: { attribute?: string[], tag?: string[] }` lists the
@@ -732,10 +686,6 @@ const checks: Partial<Dialect> = {
   },
 };
 ```
-
-The atoms dialect's diagnostics are core's built-in ones, word for word and
-at the same positions: shape problems from its `checkContract`, uses from
-its `afterLower`.
 
 Which dialect claims the keys follows the file's syntax. A discovery scan
 (`tags/`, `mx.tags`, `mx.contracts`) reads the dialect the file's extension

@@ -1,4 +1,0 @@
-entity :InvoiceLine
-  attributes
-    uuid :id primary-key
-    decimal :amount

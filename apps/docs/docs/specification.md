@@ -4297,8 +4297,7 @@ trigger's `text` and `span` are its own token (`:name`), never `async`; a
 its `(` (or its `<` for type parameters), so neither `async` nor the trigger is
 part of the value's text. `async` with no method after it stays an ordinary
 boolean attribute. A module that has no meaning for an async method refuses it
-with `ctx.fail`, naming the form: both reference dialects (`syntax/atoms-sugars`
-and `syntax/mesh`, §13.9.8) do, with `` `async :name(…) { … }` is not supported:
+with `ctx.fail`, naming the form: Mesh's dialect does, with `` `async :name(…) { … }` is not supported:
 a `:name` method value cannot be async; remove `async` `` at the `:name`. Core's
 built-in `:name` sugar never sees one: there `async` stays an attribute, and a
 contract that does not declare it reports `` `<kind>`: unknown attribute `async` ``.
@@ -4381,16 +4380,11 @@ authored text, and that text. An authored tag has none, so a consumer tells
 `&title` from an authored `<member name="title"/>` without comparing spans. Core
 names no trigger.
 
-#### 13.9.8 The reference dialect
+#### 13.9.8 An example dialect: a member sigil
 
-`@mxlang/core/syntax/member` is a dialect shipped as a reference for
-extension authors: Mesh's member sigil `&` in all three lists, built on the public
-hook API only, importing types only.
-
-```ts
-import memberSyntax from "@mxlang/core/syntax/member";
-lowerSource(source, file, { dialect: memberSyntax });
-```
+Core ships no dialect: a dialect owns its rows. As an example of the hook API,
+take a member sigil `&` in all three lists, built on the public hook API only
+and importing types only.
 
 Its row is `{ id: "member", chars: "&", match: <an identifier after &>, standIn:
 "identifier", node: { call: "member" } }`, and it lowers to four shapes:
@@ -4403,8 +4397,8 @@ Its row is `{ id: "member", chars: "&", match: <an identifier after &>, standIn:
 | tagless line | `&amount=expr` | the same, plus a dynamic `value` |
 
 The sigil, the `member` id, the `self` receiver and the `member` tag are this
-file's choices, not core's. A project may copy the dialect, rename them, and
-publish the copy as a dialect package (§13.9.2). Mesh's `&` replaces the "`:name` after a value" form
+dialect's choices, not core's. A project writes its own and publishes it as a
+dialect package (§13.9.2). Mesh's `&` replaces the "`:name` after a value" form
 (`belongs-to=:List :list`), which no layer-2 user needs (addendum 1).
 
 #### 13.9.9 Node types
@@ -4737,7 +4731,7 @@ custom-tags build spec is also on the site at `/design-notes/custom-tags/`.
 - [`/design-notes/custom-tags/`](https://mx.saulo.tech/design-notes/custom-tags/) — the custom-tags feature spec
 - `notes/solidmx-spec.md` — Solid (note §5.1's `<if=cond|u|>` is wrong; see §5.2)
 - `packages/core/src/{lower,core,custom-tags,builtin-tags,template-tag,scan,ir}.ts`
-- `packages/core/src/{syntax-table,triggers}.ts`, `packages/core/src/syntax/member.ts`, `packages/parser/src/template/syntax.ts` — the syntax table (§13.9, decision 182 and addenda)
+- `packages/core/src/{syntax-table,triggers}.ts`, `packages/parser/src/template/syntax.ts` — the syntax table (§13.9, decision 182 and addenda)
 - `packages/hosts/*/README.md` and their emitters
 - `apps/docs/docs/language/*.md` — six user-facing pages
 - htmljs-parser `src/states/CONCISE_HTML_CONTENT.ts` — concise-mode line rules

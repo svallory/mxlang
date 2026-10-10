@@ -1,7 +1,0 @@
-entity :Todo
-  attributes
-    uuid :id primary-key
-  actions
-    read :custom
-      input
-        &id

@@ -1,6 +1,0 @@
-import { Usr } from "./list.mesh.mx"
-entity :Todo
-  attributes
-    uuid :id primary-key
-  relationships
-    belongs-to :list entity=Usr

@@ -22,11 +22,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { coreBabel } from "./babel.ts";
 import { compileSource } from "./compile.ts";
 import { newCtx, TranslateError } from "./core.ts";
+import memberSyntax, { MEMBER } from "./fixtures/syntax/member-fixture.ts";
 import { parseFragment } from "./fragment.ts";
 import type { Attr, Ir, IrNode } from "./ir.ts";
 import { lowerChildren } from "./lower.ts";
 import type { LoweredUnit } from "./lowered-unit.ts";
-import memberSyntax, { MEMBER } from "./syntax/member.ts";
 import {
   type Dialect,
   resolveSyntaxOf,
@@ -36,7 +36,7 @@ import {
 import { dialectProject } from "./test-dialect-project.ts";
 import { lookup as targets } from "./test-targets.ts";
 
-const FIXTURE = join(import.meta.dirname, "syntax/member.ts");
+const FIXTURE = join(import.meta.dirname, "fixtures/syntax/member-fixture.ts");
 
 const declarations = {
   tags: {},
@@ -237,7 +237,7 @@ describe("a dialect package (`package.json#mx.dialect`, decision 212)", () => {
     const project = dialectProject(dir, {
       manifest: {
         id: "member",
-        name: "Mesh",
+        name: "Fixture",
         extensions: [".mesh.mx"],
         module,
       },

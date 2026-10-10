@@ -1,4 +1,0 @@
-entity :Payment
-  attributes
-    uuid :id primary-key
-    decimal :amount

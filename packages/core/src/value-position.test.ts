@@ -9,9 +9,6 @@
  * (`ContractAttr.value`). A claimed value also ends where a terminating
  * attribute row starts, which is how `belongs-to=:List :list` reads.
  */
-import { readdirSync, readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { compileSource, parseMxDocument } from "./compile.ts";
 import { TranslateError } from "./core.ts";
@@ -498,142 +495,122 @@ describe("the contract view's attribute is its name and its value node", () => {
   });
 });
 
-// The reference `syntax/mesh` and its `atom-value` row: the alpha.15
-// regression, fixed by the value position.
-const load = createRequire(import.meta.url);
-const meshSyntax = (
-  load(join(import.meta.dirname, "syntax/mesh.ts")) as { default: Dialect }
-).default;
-const contracts = (
-  load(
-    join(import.meta.dirname, "fixtures/syntax/mesh-corpus/contracts.ts"),
-  ) as { default: Record<string, CustomTag> }
-).default;
-
-interface Atom extends DialectNode {
+// A claimed default value ends where a terminating attribute row starts. The
+// fixture dialect has a spaced `:name` attribute row that terminates a value
+// (`terminatesValue`) and a `:name` expression row; the value row claims a
+// whole `:name` value.
+interface Sym extends DialectNode {
   readonly name: string;
 }
 
-/** `syntax/mesh` with its value row: what Mesh copies. */
-const ATOM_VALUES: Dialect = meshSyntax;
+const SYMBOL = ":[A-Za-z_$][\\w$]*";
 
-/** `syntax/mesh` without its value row: Mesh's alpha.15 `MESH_SYNTAX`. */
-const NO_VALUE_ROW: Dialect = (() => {
-  const { valueTriggers: _, ...table } = meshSyntax.table;
-  const { nodeTypes: __, ...rest } = meshSyntax;
+const SYM_EXPRESSION: Trigger = {
+  id: "sym",
+  chars: ":",
+  match: SYMBOL,
+  standIn: "number",
+  node: { call: "sym" },
+};
+
+const SYM_NAME: Trigger = {
+  id: "sym-name",
+  chars: ":",
+  match: SYMBOL,
+  standIn: "keep",
+  node: { call: "sym-name" },
+  terminatesValue: true,
+};
+
+const SYM_VALUE: Trigger = {
+  id: "sym-value",
+  chars: ":",
+  match: SYMBOL,
+  standIn: "keep",
+  node: { type: "Sym", dialect: "symbols" },
+};
+
+const SymType: NodeType<Sym> = {
+  keys: [],
+  parse: (text) => ({ name: text.slice(1) }),
+  print: (node) => `:${node.name}`,
+  lower: (node) => node.name,
+};
+
+/** The fixture dialect with its value row: `to=:List :list`. */
+const SYM_VALUES: Dialect = {
+  id: "symbols",
+  name: "Symbols",
+  table: {
+    expressionTriggers: [SYM_EXPRESSION],
+    attributeTriggers: [SYM_NAME],
+    valueTriggers: [SYM_VALUE],
+  },
+  nodeTypes: { Sym: SymType },
+  lowerTrigger: (id, text, _span, ctx) =>
+    id === "sym-name"
+      ? ctx.attribute("name", text.slice(1))
+      : ctx.expression({ type: "StringLiteral", value: text.slice(1) }),
+};
+
+/** The same dialect without its value row. */
+const SYM_NO_VALUE_ROW: Dialect = (() => {
+  const { valueTriggers: _, ...table } = SYM_VALUES.table;
+  const { nodeTypes: __, ...rest } = SYM_VALUES;
   return { ...rest, table };
 })();
 
-/** Mesh's `parseEntitySource`, with the syntax as a parameter. */
-function parseEntity(source: string, file: string, dialect: Dialect) {
-  return lowerSource(source, file, {
-    dialect,
-    customTags: contracts,
-    tagRules: "none",
-    structural: "reject",
-    unknownTags: "reject",
-    imports: "pass",
-  });
-}
-
-function meshDiagnostics(source: string, dialect: Dialect) {
-  return parseEntity(
-    source,
-    "/x/old-relationship.mesh.mx",
-    dialect,
-  ).diagnostics.map((each) => [each.message, each.line, each.column]);
-}
-
-const CORPUS = join(import.meta.dirname, "fixtures/syntax/mesh-corpus");
-
-function corpusFiles(dir = CORPUS): string[] {
-  const found: string[] = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) found.push(...corpusFiles(path));
-    else if (entry.name.endsWith(".mesh.mx"))
-      found.push(relative(CORPUS, path));
-  }
-  return found.sort();
-}
-
-/** The whole result as JSON, or the thrown message. */
-function lowered(file: string, dialect: Dialect): string {
-  try {
-    return JSON.stringify(
-      parseEntity(
-        readFileSync(join(CORPUS, file), "utf8"),
-        `/mesh-corpus/${file}`,
-        dialect,
-      ),
-    );
-  } catch (error) {
-    return `threw: ${(error as Error).message}`;
-  }
+/** What the parse reads from `sort=:List :list`: each attribute's node type, its value's, and the value's parse error. */
+function readAttributes(source: string, dialect: Dialect): unknown {
+  const { body } = parseMxDocument(source, "page.mx", undefined, dialect) as {
+    body: {
+      attributes: {
+        type: string;
+        value?: { type: string; error?: { message: string } } | null;
+      }[];
+    }[];
+  };
+  return (body[0]?.attributes ?? []).map((each) => [
+    each.type,
+    each.value?.type ?? null,
+    each.value?.error?.message ?? null,
+  ]);
 }
 
 describe("a claimed default value ends at a terminating attribute row", () => {
-  // `fixtures/syntax/mesh-corpus/entities/.../negative/old-relationship.mesh.mx`.
-  const source =
-    "entity :Todo\n  attributes\n    uuid :id primary-key\n  relationships\n    belongs-to=:List :list\n";
+  const source = "sort=:List :list\n";
 
-  it("`belongs-to=:List :list` is the default `:List` and the name `:list`", () => {
-    expect(meshDiagnostics(source, ATOM_VALUES)).toEqual([
-      ["`<belongs-to>`: unknown attribute `value`", 5, 14],
+  it("`sort=:List :list` is the default `:List` and the name `:list`", () => {
+    expect(readAttributes(source, SYM_VALUES)).toEqual([
+      ["MxAttribute", "symbols:Sym", null],
+      ["MxTrigger", null, null],
     ]);
   });
 
-  it("with no value row the value runs on, as it did in Mesh's alpha.15 syntax", () => {
-    expect(meshDiagnostics(source, NO_VALUE_ROW)).toEqual([
-      ["Expected a single expression, but found `:` after it.", 5, 21],
-    ]);
-  });
-
-  it("over Mesh's whole corpus the value row changes only `old-relationship`", () => {
-    const files = corpusFiles();
-    expect(files.length).toBeGreaterThan(60);
-    const changed = files.filter(
-      (file) => lowered(file, ATOM_VALUES) !== lowered(file, NO_VALUE_ROW),
-    );
-    expect(changed).toEqual([
-      "entities/packages/compiler/test/fixtures/negative/old-relationship.mesh.mx",
+  it("with no value row the value runs on as an expression", () => {
+    expect(readAttributes(source, SYM_NO_VALUE_ROW)).toEqual([
+      [
+        "MxAttribute",
+        "MxExpression",
+        "Expected a single expression, but found `:` after it.",
+      ],
     ]);
   });
 
   it("a value the row declines keeps the expression's end", () => {
     const declining: Dialect = {
-      ...ATOM_VALUES,
+      ...SYM_VALUES,
       nodeTypes: {
-        Atom: {
+        Sym: {
           keys: [],
           parse: () => undefined,
           print: () => "",
           lower: () => "",
-        } satisfies NodeType<Atom>,
+        } satisfies NodeType<Sym>,
       },
     };
-    expect(meshDiagnostics(source, declining)).toEqual(
-      meshDiagnostics(source, NO_VALUE_ROW),
+    expect(readAttributes(source, declining)).toEqual(
+      readAttributes(source, SYM_NO_VALUE_ROW),
     );
-  });
-});
-
-describe("the value row leaves `::NAME` to the atom trigger's reserved-form error", () => {
-  // `atom-value` matches `:NAME`, never `::NAME`, so `::Foo` is refused as it
-  // is with no value row. A copy of the row that widens its match to `::`
-  // claims the value and passes the reserved form silently.
-  const reserved =
-    "`::Foo` is reserved: `::` will be the Symbol.for sugar; write `:Foo` for an atom";
-
-  it("a default value `belongs-to=::Foo` is refused at its `::`", () => {
-    expect(
-      meshDiagnostics("entity :Todo\n  belongs-to=::Foo\n", ATOM_VALUES),
-    ).toEqual([[reserved, 2, 13]]);
-  });
-
-  it("an attribute value `to=::Foo` is refused at its `::`", () => {
-    expect(
-      meshDiagnostics("relationships\n  belongs-to to=::Foo\n", ATOM_VALUES),
-    ).toEqual([[reserved, 2, 16]]);
   });
 });

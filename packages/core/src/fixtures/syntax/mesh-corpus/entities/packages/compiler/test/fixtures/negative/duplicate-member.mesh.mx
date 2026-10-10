@@ -1,4 +1,0 @@
-entity :Todo
-  attributes
-    uuid :id primary-key
-    string :id

@@ -1,9 +1,0 @@
-entity :Todo
-  attributes
-    uuid :id primary-key
-    string :title
-  actions
-    update :change
-      do
-        set
-          &title

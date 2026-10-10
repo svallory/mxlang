@@ -1,38 +1,24 @@
 /**
- * `@mxlang/core/syntax/member`: a reference dialect for extension
- * authors (decision 182 addendum 5): Mesh's `&` member sigil, in all three
- * trigger lists, lowered to four shapes:
+ * A test dialect for core's claim process: a one-character sigil row (`&`) in
+ * all three trigger lists, lowered to four shapes:
  *
  * - in an expression, `&status` is `self.status`, a `MemberExpression`
  *   marked `extra.mxMember = { span, name }`;
  * - in an attribute list (after a kind, `sort asc &dueOn`), a static
  *   attribute `member` whose value is `{ kind: "member", name: "dueOn" }`
- *   (a value after it, `&dueOn=1` or `&dueOn(x) { … }`, is refused at the
- *   member);
+ *   (a value after it, `&dueOn=1` or `&dueOn(x) { … }`, is refused);
  * - on a tagless line, a `member` child tag with a static `name` and, for
  *   `&amount=expr`, a dynamic `value`. The tag carries `trigger`
  *   (`{ id: "member", span, text }`), which an authored `<member>` lacks.
  *
- * This is a reference, not a host: core stays host-agnostic and knows no
- * "member". The dialect is built on the public hook API only (`Dialect`,
- * `Trigger` and the `ctx` constructors) and imports types only, so it is
- * either used as is,
- *
- * ```ts
- * import { lowerSource } from "@mxlang/core";
- * import memberSyntax from "@mxlang/core/syntax/member";
- * lowerSource(source, file, { dialect: memberSyntax });
- * ```
- *
- * or copied into a project and renamed (the sigil, the `member` id, the
- * `self` receiver and the `member` tag are this file's choices, not core's):
- * change the type import below to `@mxlang/core`, give the row your own `id`
- * and `chars`, and name the copy in your dialect package's
- * `package.json#mx.dialect.module`. It loads
- * through Node's strip-only `require`, so keep it free of enums and
- * parameter properties.
+ * It is a fixture, not shipped: core is host-agnostic and knows no "member".
+ * The sigil, the ids, the `self` receiver and the `member` tag are this
+ * file's choices. It uses the public hook API only (`Dialect`, `Trigger` and
+ * the `ctx` constructors) and imports types only, so a test can load it
+ * through Node's strip-only `require` as a dialect package's module (no enums
+ * or parameter properties).
  */
-import type { Dialect, Trigger } from "../index.ts";
+import type { Dialect, Trigger } from "../../index.ts";
 
 /** The member row in all three trigger lists. */
 export const MEMBER: Trigger = Object.freeze({
@@ -45,7 +31,7 @@ export const MEMBER: Trigger = Object.freeze({
 
 const memberSyntax = {
   id: "member",
-  name: "Mesh",
+  name: "Fixture",
   table: Object.freeze({
     expressionTriggers: [MEMBER],
     attributeTriggers: [MEMBER],
@@ -63,8 +49,8 @@ const memberSyntax = {
           extra: { mxMember: { span, name } },
         });
       case "attribute":
-        // After a kind (`sort asc &dueOn`) a member names a field; Mesh's
-        // review of PR 460 (F6) asked for this refusal in the module's words.
+        // After a kind (`sort asc &dueOn`) a member names a field, so a value
+        // after it is refused in the fixture's words.
         if (ctx.valueForm !== null)
           ctx.fail(`\`${text}\` is a member reference and takes no value`);
         return ctx.attribute("member", { kind: "member", name, span });

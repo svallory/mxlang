@@ -1,7 +1,0 @@
-entity :Todo
-  attributes
-    uuid :id primary-key
-  actions
-    update :custom
-      validate
-        check :ok code="bad" message="bad"

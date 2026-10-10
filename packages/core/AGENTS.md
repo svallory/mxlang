@@ -451,7 +451,7 @@ Five facts worth knowing before editing it:
   package whose `package.json#mx.dialect` declares `{ id, name, extensions,
   module }` (`DIALECT_MANIFEST_KEY`), validated eagerly with a positioned
   error at the field; `module` must stay inside the package (absolute, or
-  out through `..`, is an error), so tests reach core's reference modules
+  out through `..`, is an error), so tests reach a fixture dialect
   through an in-package re-export (`reexport` in `test-dialect-project.ts`). `discoverDialects(projectFile)` reads only the direct
   dependencies of the file's nearest `package.json` (all four fields),
   found by a `node_modules` walk-up, statically (no dialect code runs), plus
@@ -606,30 +606,24 @@ Five facts worth knowing before editing it:
   `src/dialect-registry.test.ts`.
   A whole-value member is a static `Attr` with `member` (`memberOf`, mirror
   of `atomOf`); `type: "member"` is checked in `custom-tags.ts`
-  (`checkMemberAttr`). The reference module is `src/syntax/member.ts`
-  (Mesh's `&`), published as `@mxlang/core/syntax/member` (its own build
-  entry, `dist/syntax/member.js` + `.d.ts`); it imports types only so a
-  manifest can `require` it or a project can copy it. Its tests stay in
-  `src/triggers.test.ts`, the html `member-syntax.test.ts` and
-  `src/ir-entry/member-syntax.test.ts`.
-  **Atoms and name sugars as a module (decisions 183, 196; slice a1).**
-  `src/syntax/atoms-sugars.ts` (`@mxlang/core/syntax/atoms-sugars`) carries
-  atoms, `:name` and spaced `#id`/`.class` as triggers; `src/syntax/mesh.ts`
-  (`@mxlang/core/syntax/mesh`) adds the member rows. Until slice c deletes
-  the built-ins, a loaded row on a character replaces core's handling of it
-  (parser: `CompiledSyntax.builtInAtoms`/`builtInColonEnd`/`builtInPeriodEnd`;
-  core: `convertAtoms` skips a stand-in marked `extra.mxTrigger`, and re-runs
-  after the trigger pass so a module's `extra.mxAtom` literal is recorded and
-  spliced as an atom). `bun run test:sugar-module` (`scripts/sugar-module.ts`,
-  in `verify`) reruns the atom and sugar suites with every file no dialect
-  package claims resolved to the mesh dialect (a preload sets a process global
-  `resolveSyntaxOf` reads, `Symbol.for("@mxlang/core:fallbackSyntaxForTesting")`,
-  test-only) and requires the failures to be exactly
-  `scripts/sugar-module/deltas.json`, each with its ruling. Many sugar unit
-  tests lower through Marko's compiler (`name-sugar.test.ts`) and never reach
-  syntax resolution; the suites listed in the script are the ones that do.
-  **Atom contracts in a module: `afterLower(unit)` and `contractFields`
-  (slice a2).** A module's `afterLower` gets `LoweredUnit`
+  (`checkMemberAttr`). Core ships no dialect and no `./syntax/*` export: a dialect owns its
+  rows, and Mesh's atoms, name sugars and `&` members live in Mesh. Core's
+  tests of the claim process (`src/triggers.test.ts`, `src/spans.test.ts`,
+  `src/value-position.test.ts`, `src/lowered-unit.test.ts` and the
+  `src/ir-entry` suites) use test-local fixture dialects: the sigil row in
+  `src/fixtures/syntax/member-fixture.ts` and the contract-claim dialect in
+  `src/fixtures/syntax/declares-fixture.ts`, plus small row tables defined in
+  the test. Never import a Mesh module or copy a Mesh corpus into core.
+  Until atoms and the name sugars leave core, a loaded row on a character
+  replaces core's handling of it (parser:
+  `CompiledSyntax.builtInAtoms`/`builtInColonEnd`/`builtInPeriodEnd`; core:
+  `convertAtoms` skips a stand-in marked `extra.mxTrigger`, and re-runs after
+  the trigger pass so a dialect's `extra.mxAtom` literal is recorded and
+  spliced as an atom). `resolveSyntaxOf` reads a process global,
+  `Symbol.for("@mxlang/core:fallbackSyntaxForTesting")`, so a test preload
+  can run existing suites through a dialect (test-only; unset, nothing
+  changes).
+  **Contract keys in a dialect: `afterLower(unit)` and `contractFields`.** A module's `afterLower` gets `LoweredUnit`
   (`src/lowered-unit.ts`), never the `Ctx`: `lowerTriggers` appends
   `ctx => module.afterLower(loweredUnitOf(ctx))` to `ctx.afterLower`. The
   view is cached per `Ctx` and frozen. Its `calls` and `declared` are built
@@ -686,11 +680,7 @@ Five facts worth knowing before editing it:
   (`ClaimedFields.failure`) and raises it in place of any contract-key
   refusal (`mx.contracts`, sidecar validation). `ctx.atomFacts` is not set when the module claims an atom
   key: completion facts are the built-in path's only (lead ruling 14:29).
-  `atoms-sugars.ts` claims all four, checks their shape in `checkContract`
-  and ports `atom-contracts.ts` onto the view in `afterLower`, word for
-  word; `lowered-unit.test.ts` pins built-in vs module on
-  every diagnostic, and `test:sugar-module` lists the `atom-candidates`
-  tests as `completion-facts-built-in-only` deltas.
+  `lowered-unit.test.ts` pins the hooks on fixture dialects.
   parse. Core reaches that parser through `mxTemplateParser()`
   (`marko-frontend.ts`): the bundle's parser in the dist, the workspace
   `@mxlang/parser` devDependency by `require` from source (never a static
