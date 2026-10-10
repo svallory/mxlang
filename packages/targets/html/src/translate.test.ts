@@ -423,6 +423,67 @@ describe("bindings may not shadow the input parameter", () => {
     );
     expect(html).toBe("<div>12</div>");
   });
+
+  // The three rendered tests above cannot tell the call shapes apart: JS
+  // ignores an extra argument and the body thunk is never called. These pin
+  // the emitted call text (and, for a rest param, the run-time arity).
+  it("appends no object when the args already fill every param", () => {
+    const { code } = compile(
+      src(
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+        "<define/Row|a, b|><div>${a}${b}</div></define>\n<Row(1, 2)>ignored</Row>",
+      ),
+      file,
+    );
+    expect(code).toContain("__mxOut.write(Row(1, 2));");
+  });
+
+  it("passes the trailing object, then undefined for each later param", () => {
+    const { code } = compile(
+      src(
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+        "<define/Row|a, b, c|><div>${a}${b}${c}</div></define>\n<Row(1)>x</Row>",
+      ),
+      file,
+    );
+    expect(code).toContain(
+      '__mxOut.write(Row(1, { content: () => {\n    const __mxOut = __mxCreateOut();\n    __mxOut.write("x");\n    return __mxOut.toString();\n  } }, undefined));',
+    );
+  });
+
+  it("never pads a rest param: it stays empty, as in Marko", async () => {
+    const { code } = compile(
+      src(
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+        "<define/Row|a, b, ...rest|><p>${rest.length}</p></define>\n<Row(1)>x</Row>",
+      ),
+      file,
+    );
+    expect(code).toContain(
+      '__mxOut.write(Row(1, { content: () => {\n    const __mxOut = __mxCreateOut();\n    __mxOut.write("x");\n    return __mxOut.toString();\n  } }));',
+    );
+    const html = await renderModules(
+      {
+        "entry.mx":
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+          "<define/Row|a, b, ...rest|><p>${rest.length}</p></define>\n<Row(1)>x</Row>",
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<p>0</p>");
+  });
+
+  it("pads the fixed params before a rest param, and leaves the rest empty", async () => {
+    const html = await renderModules(
+      {
+        "entry.mx":
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+          "<define/Row|a, b, c, ...rest|><p>${c === undefined ? 'u' : c}:${rest.length}</p></define>\n<Row(1)>x</Row>",
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<p>u:0</p>");
+  });
 });
 
 describe("<html-comment> lowers placeholders", () => {
@@ -1761,14 +1822,14 @@ describe("a component body with tag params (`<List|item, i|>`) binds them (execu
       'import List from "./list.mx"',
       "<${List}|item, i| items=input.items><b>${item}${i}</b></${List}>",
     ],
-  ])("%s", async (_label, header, _body) => {
+  ])("%s", async (_label, header, body) => {
     const html = await renderModules(
       {
         "list.mx": list,
         "entry.mx": [
           header,
           "export interface Input { items: string[] }",
-          "<${List}|item, i| items=input.items><b>${item}${i}</b></>",
+          body,
         ].join("\n"),
       },
       "entry.mx",

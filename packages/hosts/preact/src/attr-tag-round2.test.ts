@@ -798,6 +798,60 @@ export default function Row(props: Input) { return <p>{props.items.map((x, i) =>
     },
   );
 
+  // The rendered tests above cannot tell the call shapes apart: JS ignores an
+  // extra argument and the body thunk is never called. These pin the emitted
+  // call text, and, for a rest param, the run-time arity.
+  it.each(hosts)(
+    "%s: appends no object when a define call's args already fill every param",
+    async (host) => {
+      const compile = await compilerFor(host);
+      const { code } = compile(
+        "<define/Row|a, b|><div>${a}${b}</div></define>\n<Row(1, 2)>ignored</Row>",
+        "/tmp/mx-define-call/entry.mx",
+      );
+      expect(code).toContain("{Row(1, 2)}");
+    },
+  );
+
+  it.each(hosts)(
+    "%s: passes the trailing object, then undefined for each later param",
+    async (host) => {
+      const compile = await compilerFor(host);
+      const { code } = compile(
+        "<define/Row|a, b, c|><div>${a}${b}${c}</div></define>\n<Row(1)>x</Row>",
+        "/tmp/mx-define-call/entry.mx",
+      );
+      expect(code).toContain(
+        "{Row(1, { content: () => <><>x</></> }, undefined)}",
+      );
+    },
+  );
+
+  it.each(hosts)(
+    "%s: never pads a rest param, so it stays empty as in Marko",
+    async (host) => {
+      const compile = await compilerFor(host);
+      const source =
+        "<define/Row|a, b, ...rest|><div>${rest.length}</div></define>\n<Row(1)>x</Row>";
+      const { code } = compile(source, "/tmp/mx-define-call/entry.mx");
+      expect(code).toContain("{Row(1, { content: () => <><>x</></> })}");
+      expect(await renderFixture(host, { "main.mx": source })).toBe(
+        "<div>0</div>",
+      );
+    },
+  );
+
+  it.each(hosts)(
+    "%s: pads the fixed params before a rest param and leaves the rest empty",
+    async (host) => {
+      const html = await renderFixture(host, {
+        "main.mx":
+          "<define/Row|a, b, c, ...rest|><div>${c === undefined ? 'u' : c}:${rest.length}</div></define>\n<Row(1)>x</Row>",
+      });
+      expect(html).toBe("<div>u:0</div>");
+    },
+  );
+
   it.each(hosts)(
     "%s: still rejects a `<define>` call mixing tag-argument form with a plain attribute",
     async (host) => {

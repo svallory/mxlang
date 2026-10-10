@@ -2262,6 +2262,11 @@ export class SolidEmitter implements Emitter<string> {
       " }",
     );
 
+    // A rest param is never padded: Marko leaves it `[]` when nothing fills
+    // it, and an `undefined` here would make it `[undefined]`.
+    const fixedParamCount = target.params.filter(
+      (param) => !param.trimStart().startsWith("..."),
+    ).length;
     let args: MappedCode[];
     if (node.args.length === 0) {
       // Decision 160: without tag arguments the attributes (spreads
@@ -2276,7 +2281,9 @@ export class SolidEmitter implements Emitter<string> {
         // (TS2554) even though a JS call tolerates it.
         args = [
           propsObject,
-          ...target.params.slice(1).map(() => concatMapped("undefined")),
+          ...Array.from({ length: Math.max(fixedParamCount - 1, 0) }, () =>
+            concatMapped("undefined"),
+          ),
         ];
       }
     } else {
@@ -2289,15 +2296,16 @@ export class SolidEmitter implements Emitter<string> {
       // param Marko drops the extras entirely. Params left unfilled are
       // still passed as `undefined` for the type checker (TS2554), matching
       // the no-args shape's padding.
-      const takesObject =
-        node.args.length < target.params.length && parts.length > 0;
+      // `parts` is only ever filled when `objectUsed` holds, which with
+      // args means a param is left unfilled for the object to land in.
+      const takesObject = parts.length > 0;
       args = [
         ...node.args.map((arg) => mappedExpr(arg)),
         ...(takesObject ? [propsObject] : []),
         ...Array.from(
           {
             length: Math.max(
-              target.params.length - node.args.length - (takesObject ? 1 : 0),
+              fixedParamCount - node.args.length - (takesObject ? 1 : 0),
               0,
             ),
           },

@@ -155,6 +155,18 @@ const CASES: Array<[string, string, string, string]> = [
     "<ul><li>12</li></ul>",
   ],
   [
+    "a rest param stays empty when the trailing object fills the param before it",
+    "<define/Row|a, b, ...rest|><li>${a}${rest.length}</li></define><Row(1)>x</Row>",
+    "",
+    "<ul><li>10</li></ul>",
+  ],
+  [
+    "the fixed params before a rest param are padded, the rest stays empty",
+    "<define/Row|a, b, c, ...rest|><li>${c === undefined ? 'u' : c}:${rest.length}</li></define><Row(1)>x</Row>",
+    "",
+    "<ul><li>u:0</li></ul>",
+  ],
+  [
     "a destructuring default applies to a missing attribute",
     "<define/Row|{ n = 9 }|><li>${n}</li></define><Row/>",
     "",
@@ -187,6 +199,48 @@ describe("solid: a <define> call passes its attributes as the first param", () =
     );
     expect(code).toContain(
       `{${hoistedDefines[0]?.binding}({ "n": 1 }, undefined)}`,
+    );
+  });
+
+  // The executed CASES above cannot tell the call shapes apart: JS ignores an
+  // extra argument and Solid builds the `content` JSX eagerly in the object.
+  // These pin the emitted call text.
+  it("appends no object when the args already fill every param", () => {
+    const { code, hoistedDefines } = compile(
+      "<define/Row|a, b|><li>${a}${b}</li></define><Row(1, 2)>ignored</Row>",
+      "",
+    );
+    expect(code).toBe(`{${hoistedDefines[0]?.binding}(1, 2)}`);
+  });
+
+  it("passes the trailing object, then undefined for each later param", () => {
+    const { code, hoistedDefines } = compile(
+      "<define/Row|a, b, c|><li>${a}${b}${c}</li></define><Row(1)>x</Row>",
+      "",
+    );
+    expect(code).toBe(
+      `{${hoistedDefines[0]?.binding}(1, { content: <>x</> }, undefined)}`,
+    );
+  });
+
+  it("never pads a rest param, with tag arguments or without", () => {
+    const withArgs = compile(
+      "<define/Row|a, b, ...rest|><li>${rest.length}</li></define><Row(1)>x</Row>",
+      "",
+    );
+    expect(withArgs.code).toBe(
+      `{${withArgs.hoistedDefines[0]?.binding}(1, { content: <>x</> })}`,
+    );
+    // The no-args shape pads the fixed params after the first, never a rest.
+    const warnings: Array<{ message: string; line: number; column: number }> =
+      [];
+    const noArgs = compile(
+      "<define/Row|a, ...rest|><li>${rest.length}</li></define><Row>x</Row>",
+      "",
+      warnings,
+    );
+    expect(noArgs.code).toBe(
+      `{${noArgs.hoistedDefines[0]?.binding}({ content: <>x</> })}`,
     );
   });
 

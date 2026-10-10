@@ -1045,6 +1045,11 @@ export function createEmitter(
         // travel as ONE object bound to the first param, `{}` when the call
         // carries none; rest params stay `undefined`. A define with no params
         // ignores them.
+        // A rest param is never padded: Marko leaves it `[]` when nothing
+        // fills it, and an `undefined` here would make it `[undefined]`.
+        const fixedParamCount = target.params.filter(
+          (param: string) => !param.trimStart().startsWith("..."),
+        ).length;
         const takesObject =
           node.args.length > 0 &&
           node.args.length < target.params.length &&
@@ -1057,7 +1062,7 @@ export function createEmitter(
                 ...Array.from(
                   {
                     length: Math.max(
-                      target.params.length -
+                      fixedParamCount -
                         node.args.length -
                         (takesObject ? 1 : 0),
                       0,

@@ -1808,6 +1808,11 @@ export class PreactEmitter implements Emitter<string> {
       // param, `{}` when the call carries none (measured on 6.3.51; `|p|` and
       // `|{ n }|` both read it). A define with no params ignores them.
       const argList = node.args.map((arg: Expr) => arg.code);
+      // A rest param is never padded: Marko leaves it `[]` when nothing
+      // fills it, and an `undefined` here would make it `[undefined]`.
+      const fixedParamCount = node.target.params.filter(
+        (param: string) => !param.trimStart().startsWith("..."),
+      ).length;
       const takesObject =
         node.args.length > 0 &&
         node.args.length < node.target.params.length &&
@@ -1818,7 +1823,7 @@ export class PreactEmitter implements Emitter<string> {
         argList.push(
           ...Array.from(
             {
-              length: Math.max(node.target.params.length - argList.length, 0),
+              length: Math.max(fixedParamCount - argList.length, 0),
             },
             () => "undefined",
           ),

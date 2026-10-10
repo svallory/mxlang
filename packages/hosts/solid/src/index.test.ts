@@ -901,9 +901,9 @@ describe("<define> hoisted to module scope (decision 110b)", () => {
       `<define/Row|item, { head, content }|>\${item}\${head}\${content}</define><Row(input.name)><@head>H</@head>body</Row>`,
     );
     const [hoisted] = result.hoistedDefines;
-    expect(result.code).toContain(`{${hoisted?.binding}(input.name`);
-    expect(result.code).toContain("H");
-    expect(result.code).toContain("body");
+    expect(result.code).toBe(
+      `{${hoisted?.binding}(input.name, { "head": () => <>H</>, content: <>body</> })}`,
+    );
     // Parse the region the way it is used (inside an element), so a
     // syntactically invalid call argument cannot slip through a substring check.
     expect(() =>
