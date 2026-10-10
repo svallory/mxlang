@@ -72,3 +72,50 @@ describe("a body forwarded through <${input.content}/> (html, Marko parity)", ()
     expect(render(page, input as Record<string, unknown>)).toBe(expected);
   });
 });
+
+// Body-text whitespace follows stock Marko (decision 141), asserted on a plain
+// element's own content rather than on a forwarded body. Expected HTML is what
+// stock Marko 6.4.4 (`bun run --cwd packages/stock-marko probe`, @marko/compiler
+// 5.42.11 on the stock htmljs-parser) emits for the same source.
+describe("element body whitespace, Marko 6.4.4 parity", () => {
+  it.each([
+    [
+      "newline run between words becomes one space",
+      "<p>a\n  b</p>",
+      {},
+      "<p>a b</p>",
+    ],
+    [
+      "leading newline run dropped, newline run before a tag becomes one space",
+      "<p>\n  static\n  <span>x</span></p>",
+      {},
+      "<p>static <span>x</span></p>",
+    ],
+    [
+      "blank line between text and tag becomes one space",
+      "<p>x\n   \n<b>y</b></p>",
+      {},
+      "<p>x <b>y</b></p>",
+    ],
+    [
+      "newline run on both sides of a placeholder is dropped",
+      "<p>\n  ${input.v}\n  <span>x</span></p>",
+      { v: "V" },
+      "<p>V<span>x</span></p>",
+    ],
+    [
+      "text before a placeholder keeps its space, the newline after it is dropped",
+      "<p>\n  a ${input.v}\n  <span>x</span></p>",
+      { v: "V" },
+      "<p>a V<span>x</span></p>",
+    ],
+    [
+      "text after a placeholder keeps its space, the newline after it becomes one space",
+      "<p>\n  ${input.v} b\n  <span>x</span></p>",
+      { v: "V" },
+      "<p>V b <span>x</span></p>",
+    ],
+  ])("%s", (_label, page, input, expected) => {
+    expect(render(page, input as Record<string, unknown>)).toBe(expected);
+  });
+});
