@@ -1,5 +1,7 @@
 # @mxlang/host-angular
 
+> **Beta.** This package is at 0.x. Its API may change in any release until 1.0.0.
+
 **Preview.** This host is not yet a complete "Angular host" by decision
 70's own bar (a host is not done without its TypeScript plugin; that part
 of step 2 is still open). Two file kinds compile today:

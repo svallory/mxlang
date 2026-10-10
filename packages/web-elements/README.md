@@ -3,6 +3,8 @@
 The HTML, SVG and MathML element names, and how each element's body parses,
 as plain data with no dependency.
 
+> **Beta.** This package is at 0.x. Its API may change in any release until 1.0.0.
+
 ```ts
 import { isWebElement, webElement, WEB_ELEMENTS } from "@mxlang/web-elements";
 

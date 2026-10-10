@@ -8,6 +8,8 @@ not an input (a `.marko` file found where a tag is looked up is a positioned
 error telling you to convert it), and porting a Marko component is a rename
 plus the differences listed in `divergences.md`.
 
+> **Beta.** This package is at 0.x. Its API may change in any release until 1.0.0.
+
 `@mxlang/target-html` is **the vanilla host on `@mxlang/core`**: it compiles an
 MX (`.mx`) template to a pure function — a JS/TS module
 whose default export is `(input) => string`, with no runtime beyond an `escape`

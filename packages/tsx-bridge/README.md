@@ -12,6 +12,8 @@ means owning and building its source ourselves; see
 `notes/research/parser-fork-strategy.md` at the space root for why the
 alternatives (patching the published bundle, acorn, oxc/swc) were rejected.
 
+> **Beta.** This package is at 0.x. Its API may change in any release until 1.0.0.
+
 ## What this package does
 
 This package's job is **region discovery only**: finding where an MX region

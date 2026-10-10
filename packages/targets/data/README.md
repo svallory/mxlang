@@ -7,8 +7,10 @@ walk tags and attributes rather than render them. The first consumer is the
 Ash-style resource framework (mash); the fixture in
 `fixtures/ash-resource/post.mx` is its resource dialect.
 
-Alpha (`0.1.0-alpha.1`, npm tag `alpha`): the API is unstable. It ships a
-built `dist/` with declarations and needs `@mxlang/core` at the same alpha.
+> **Beta.** This package is at 0.x. Its API may change in any release until 1.0.0.
+
+It ships a built `dist/` with declarations and needs `@mxlang/core` at a
+matching version.
 There is no host: the target is registered as `tree` (decision 187) and is hostless (decision 132).
 
 ```sh

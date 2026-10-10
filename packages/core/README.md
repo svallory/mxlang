@@ -2,6 +2,8 @@
 
 The MX front end and lowerer every MX host is built on.
 
+> **Beta.** This package is at 0.x. Its API may change in any release until 1.0.0.
+
 MX is a template language born from Marko: Marko's syntax is the default row,
 brought to wherever JSX lives today (see `notes/mx-vision.md`). MX itself defines
 the markup and the **structural** tags — `<if>` / `<else if>` / `<else>`, `<for>`
