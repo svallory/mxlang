@@ -996,6 +996,17 @@ describe("a top-level key that is neither MX's, a target's nor a dialect's", () 
     expect(policyOf(root).diagnostics).toEqual([]);
   });
 
+  it("a `$` key (`$schema`, `$comment`) is JSON metadata, not a setting", () => {
+    const root = project({
+      "package.json": PACKAGE,
+      "mx.config.json": `{\n  "$schema": "https://example.com/mx.schema.json",\n  "$comment": "x",\n  "target": "page"\n}\n`,
+    });
+    expect(policyOf(root)).toEqual({
+      policy: { target: "page" },
+      diagnostics: [],
+    });
+  });
+
   it("a dialect package's own `mx.dialect` is not a setting, and its id is a dialect's", () => {
     const root = project({
       "package.json": JSON.stringify({

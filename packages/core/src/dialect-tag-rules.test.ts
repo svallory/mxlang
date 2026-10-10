@@ -3,7 +3,8 @@
  * addendum item 1): `compileSource` and `parseFragment` parse a dialect's
  * files under the preset the dialect states, never the target's, as
  * `lowerSource` does; MX's own files keep the host's. The caller's host
- * file kinds reach routing from `compileSource`'s target lookup.
+ * file kinds reach routing from the target lookup `compileSource` and
+ * `parseFragment` are given.
  */
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -107,30 +108,69 @@ describe("`lowerSource`'s own `tagRules` wins over the routed dialect's", () => 
   });
 });
 
-describe("`compileSource` hands routing its target's host file kinds", () => {
+// A region file (`.solid.mx`) reaches core only through `parseFragment`, from
+// its host's region entry: both entries must refuse a dialect that claims it.
+describe.each([
+  [
+    "compileSource",
+    (filename: string) =>
+      compileSource(VOID_CHILD, filename, host, {
+        targets: testTargetLookupWithSegments("solid"),
+        emitIr: () => "",
+      }),
+  ],
+  [
+    "parseFragment",
+    (filename: string) =>
+      parseFragment(VOID_CHILD, {
+        filename,
+        targets: testTargetLookupWithSegments("solid"),
+      }),
+  ],
+] as const)("`%s` hands routing its target's host file kinds", (_, run) => {
+  const caught = (filename: string) => {
+    let error: unknown;
+    try {
+      run(filename);
+    } catch (thrown) {
+      error = thrown;
+    }
+    expect(error).toBeInstanceOf(TranslateError);
+    const { file, line, column, message } = error as TranslateError;
+    return { file, line, column, message };
+  };
+  const REASON = "`.solid.mx` is a host's file kind, which MX owns";
+
   it("a dialect claiming one is an error at its `mx.dialect.extensions`", () => {
     const { packageFile } = dialectProject(dir, {
       manifest: { extensions: [".tst", ".solid.mx"] },
       module: "export default { table: {} };",
     });
-    let error: unknown;
-    try {
-      compileSource(VOID_CHILD, join(dir, "page.tst"), host, {
-        targets: testTargetLookupWithSegments("solid"),
-        emitIr: () => "",
-      });
-    } catch (caught) {
-      error = caught;
-    }
-    expect(error).toBeInstanceOf(TranslateError);
-    const { file, line, column, message } = error as TranslateError;
-    expect({ file, line, column, message }).toEqual({
+    const expected = {
       file: packageFile,
       line: 7,
       column: 6,
-      message:
-        "`mx.dialect.extensions` cannot claim `.solid.mx`: `.solid.mx` is a host's file kind, which MX owns; a dialect claims its own extensions (`.mesh.mx`)",
+      message: `\`mx.dialect.extensions\` cannot claim \`.solid.mx\`: ${REASON}; a dialect claims its own extensions (\`.mesh.mx\`)`,
+    };
+    expect(caught(join(dir, "page.tst"))).toEqual(expected);
+    expect(caught(join(dir, "page.solid.mx"))).toEqual(expected);
+  });
+
+  // The project's `package.json`: `mx.extensions` on line 7, the second
+  // entry's key on line 9.
+  it("`mx.extensions` routing one is an error at the entry", () => {
+    const { projectFile } = dialectProject(dir, {
+      module: "export default { table: {} };",
+      mx: { extensions: { ".tst": "test", ".solid.mx": "test" } },
     });
+    const expected = {
+      file: projectFile,
+      line: 9,
+      column: 6,
+      message: `\`mx.extensions\` cannot route \`.solid.mx\`: ${REASON}`,
+    };
+    expect(caught(join(dir, "page.tst"))).toEqual(expected);
+    expect(caught(join(dir, "page.solid.mx"))).toEqual(expected);
   });
 });
 

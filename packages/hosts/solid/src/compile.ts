@@ -350,6 +350,7 @@ export function compileSolidMx(
     ...base,
     customTags: options.customTags,
     nativeTags: solidDeclarations.nativeTags,
+    targets: options.targets,
   });
   repairEmbeddedTsx(body, positionedSource);
   const ctx = newCtx(
@@ -573,6 +574,7 @@ export function compileSolidUnit(
     filename: options.filename,
     customTags: options.customTags,
     nativeTags: solidDeclarations.nativeTags,
+    targets: options.targets,
   });
   repairEmbeddedTsx(body, source);
   const ctx = newCtx(

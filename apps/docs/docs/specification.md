@@ -4058,10 +4058,13 @@ is an error at that entry's key:
 | An id no dependency declares | `` `mx.extensions` routes `<ext>` to "<id>", which is not a dialect this project uses (it uses `<ids>`); a dialect is found among the project's direct dependencies `` |
 
 Core holds no list of hosts: the caller's targets name the host file kinds
-(`TargetLookup.moduleSegments()`). `compileSource` passes its `targets`' segments,
-so every tool that compiles through it refuses a host's file kind; the IR entry
-point, which has no host, does not. The claim is an error in the dialect's
-`package.json` at `mx.dialect.extensions`.
+(`TargetLookup.moduleSegments()`). Two compile entries refuse a dialect that
+claims one: `compileSource`, with its `targets`, and `parseFragment`, with the
+`targets` its caller passes, which every host's region entry does (a region
+file such as `.solid.mx` reaches core only through `parseFragment`). The IR
+entry point (`lowerSource`) has no host and refuses none. The claim is an error
+in the dialect's `package.json` at `mx.dialect.extensions`, and an
+`mx.extensions` entry routing a host's file kind is an error at its key.
 
 **What a dialect owns, MX's config cannot set.** A file's tag rules and a
 dialect's name are the dialect's; MX's config overrides only which dialect

@@ -70,6 +70,7 @@ import {
 } from "./syntax-table.ts";
 import { taglibsOfRules, tagRulesPreset } from "./tag-presets.ts";
 import { type NativeTags, tagTable } from "./tag-table.ts";
+import type { TargetLookup } from "./target-descriptor.ts";
 import { registerSyntax } from "./triggers.ts";
 
 /**
@@ -235,10 +236,22 @@ export interface FragmentBase {
    * dialect's `name`, and `MX` for MX's own default row.
    */
   productName?: string;
+  /**
+   * The registered targets the fragment's host compiles under. Routing
+   * refuses a dialect that claims one of their file kinds (`.solid.mx` for a
+   * `solid` module segment), by its manifest or through `mx.extensions`, as
+   * `compileSource` does with its host's targets. A host's region entry must
+   * pass them: a region file reaches core only through `parseFragment`.
+   * Omitted, no host file kind is reserved.
+   */
+  targets?: Pick<TargetLookup, "moduleSegments">;
 }
 
 type ResolvedFragmentBase = Required<
-  Omit<FragmentBase, "customTags" | "dialect" | "nativeTags" | "productName">
+  Omit<
+    FragmentBase,
+    "customTags" | "dialect" | "nativeTags" | "productName" | "targets"
+  >
 > & { productName?: string };
 
 export interface FragmentResult {
@@ -441,7 +454,9 @@ export function parseFragment(
   const resolvedSyntax =
     base.dialect !== undefined
       ? explicitSyntaxOf(base.dialect, resolved.filename)
-      : resolveSyntaxOf(resolved.filename);
+      : resolveSyntaxOf(resolved.filename, {
+          hostSegments: base.targets?.moduleSegments(),
+        });
   const syntax = resolvedSyntax.table;
   // A dialect's fragment parses under the dialect's tag rules, as its files
   // do (`compileSource`); MX's own fragments keep the host's natives.

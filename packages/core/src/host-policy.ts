@@ -802,9 +802,14 @@ function unknownConfigKeys(
   descriptor: TargetDescriptor | undefined,
 ): TargetPolicyDiagnostic[] {
   const config = source.config as Record<string, unknown>;
-  // `tagRules` has its own error, from routing: it belongs to a dialect.
+  // `tagRules` has its own error, from routing: it belongs to a dialect. A
+  // `$` key (`$schema`, `$comment`) is JSON metadata for an editor, never a
+  // setting, and no target, host or dialect name starts with `$`.
   const keys = Object.keys(config).filter(
-    (key) => !MX_CONFIG_KEYS.includes(key) && key !== "tagRules",
+    (key) =>
+      !MX_CONFIG_KEYS.includes(key) &&
+      key !== "tagRules" &&
+      !key.startsWith("$"),
   );
   if (keys.length === 0) return [];
   const known = new Set<string>();

@@ -1364,6 +1364,7 @@ export function lowerAstroMx(
     baseColumn: 0,
     customTags: options.customTags,
     nativeTags: astroTemplateDeclarations.nativeTags,
+    targets: options.targets ?? ownTargets,
   });
 
   try {

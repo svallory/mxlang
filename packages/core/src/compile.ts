@@ -435,6 +435,9 @@ export function parseMxDocument(
   nativeTags?: NativeTags,
 ): Node | undefined {
   // A dialect's table parses; its hooks are lowering's, not the scan's.
+  // Routing gets no host segments: the only caller is `lowerSource`'s scan,
+  // which has no host, so no host file kind is reserved here, as in
+  // `lowerSource` itself.
   const table = (
     dialect !== undefined
       ? explicitSyntaxOf(dialect, filename)

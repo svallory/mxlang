@@ -21,6 +21,7 @@ import {
   discoverDialects,
   routeDialect,
 } from "./dialect-discovery.ts";
+import { findMxConfig } from "./mx-config.ts";
 import { resolveSyntaxOf } from "./syntax-table.ts";
 import { dialectProject } from "./test-dialect-project.ts";
 
@@ -779,10 +780,11 @@ describe("MX's config cannot set what a dialect owns", () => {
   });
 
   it("the dialect's other settings pass through untouched", () => {
-    dialectProject(dir, {
-      mx: { test: { strictModels: true, target: "web", names: ["x"] } },
-    });
+    const settings = { strictModels: true, target: "web", names: ["x"] };
+    dialectProject(dir, { mx: { test: settings } });
     expect(routeDialect(join(dir, "page.tst"))?.id).toBe("test");
+    const config = findMxConfig(dir)?.config as Record<string, unknown>;
+    expect(config.test).toEqual(settings);
   });
 
   it("a section for a dialect the project does not use is not routing's to judge", () => {

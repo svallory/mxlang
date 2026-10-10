@@ -486,8 +486,11 @@ Five facts worth knowing before editing it:
   (`reservedExtensionReason`): `.mx` in any case, a TS/JS/Marko last segment,
   and a host suffix `.<segment>.mx`. Core has no host list: the segments come
   in as `RouteDialectOptions.hostSegments` (`compileSource` passes
-  `host.targets.moduleSegments()`; `lowerSource`'s synthetic lookup has
-  none), and `routeDialect` refuses a manifest claim (`rejectHostClaims`) or
+  `host.targets.moduleSegments()`, `parseFragment` its `targets` option's,
+  which every host region entry must forward: a region file reaches core
+  only through `parseFragment`, pinned per host by
+  `dialect-host-claim.test.ts`; `lowerSource`'s synthetic lookup and
+  `parseMxDocument` have none), and `routeDialect` refuses a manifest claim (`rejectHostClaims`) or
   an `mx.extensions` entry on one. `routeDialect` also errors MX's config
   setting `tagRules` (top level) or `<id>.tagRules`/`<id>.name`
   (`rejectDialectOwnedConfig`); an unknown top-level key is the policy's
@@ -501,10 +504,10 @@ Five facts worth knowing before editing it:
   `tagRulesDecided` so its own `tagRules` option wins. The tools (`mx-tsc`,
   the language server, the TypeScript and Vite plugins) do not yet recognise
   a dialect's extensions or check its files, nor show the dialect's `name`
-  as `source` and `diagnosticCode` as `code`: that is dialect PR 1c
-  (`TODO dialect-check (PR 1c)`), waiting on how a dialect declares its
-  targets. They reach a dialect's tag rules and the refusals above only
-  through `compileSource`. The dialect's
+  as `source` and `diagnosticCode` as `code`: the tools' check-only
+  handling of dialect files lands in dialect PR 1c
+  (`TODO dialect-check (PR 1c)`). They reach a dialect's tag rules and the
+  refusals above only through `compileSource` and `parseFragment`. The dialect's
   `table` is overlaid on `DEFAULT_SYNTAX`, validated with the template
   parser's `validateSyntaxTable` (`tagTypes` refused as taglib-owned),
   deep-frozen and interned by `syntaxHash` (sha256 of canonical JSON),

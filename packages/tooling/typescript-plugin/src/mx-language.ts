@@ -528,6 +528,7 @@ export function createHtmlMappings(
     filename: fileName,
     customTags,
     nativeTags: mappingDeclarations.nativeTags,
+    targets,
   });
   const ctx = newCtx(
     source,

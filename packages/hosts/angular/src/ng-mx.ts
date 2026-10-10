@@ -308,6 +308,7 @@ function lowerRegion(
       ...parseBase,
       customTags: options.customTags,
       nativeTags: angularDeclarations.nativeTags,
+      targets: options.targets ?? angularOwnTargets,
     },
   );
   const body = fragment ? unwrapFragment(parsed.body, filename) : parsed.body;

@@ -47,7 +47,7 @@ export default {
 }
 ```
 
-A bare specifier resolves through the consuming package's own `node_modules`, using `require`/`default` export conditions; installed dialect packages must export JavaScript. A relative path resolves against the package directory. The language server, `mx-tsc`, the TypeScript and Vite plugins, and the Bun loaders discover the module without per-tool configuration. Contract-only calls require a target that delegates their names; `lowerSource` delegates every non-reserved name. No tool checks a dialect file against this map yet: the dialect check (`TODO dialect-check (PR 1c)`) is the future home of that.
+A bare specifier resolves through the consuming package's own `node_modules`, using `require`/`default` export conditions; installed dialect packages must export JavaScript. A relative path resolves against the package directory. The language server, `mx-tsc`, the TypeScript and Vite plugins, and the Bun loaders discover the module without per-tool configuration. Contract-only calls require a target that delegates their names; `lowerSource` delegates every non-reserved name. No tool checks a dialect file against this map yet: that is the dialect check's job, which is not released yet.
 
 ## The `lowerSource` one-liners
 
@@ -114,7 +114,7 @@ If your dialect is assembled from a core vocabulary plus optional extensions —
 
 - **Entries replace, they do not merge.** When two `mx.contracts` modules export the same tag name, the first module's whole entry wins and the scan warns that the name is defined twice; `children`, `parents`, `attributes` and `parseOptions` are not combined. Compose the final `resource` contract in your generator, where you know which extensions are on.
 - **Imports are not tracked.** The scan stamps the module file itself, so regenerating it gives every caller a fresh scan map. Under Node, an ESM/TS module's exports are only re-read after a restart; a `.cjs` module is re-read in process (see Limits). An edit to a file the module imports, or to config it reads at load time, goes unseen until a restart. A generated file with no relative imports (beyond `import type`) avoids that.
-- **Shadowing stays visible.** A local `tags/<name>.mx` or `mx.tags` entry replaces a module's contract for that name, and the scan reports it: `` `<attribute>` from `mx.contracts` (…) is shadowed by …; the module's contract does not apply ``. The language server and the TypeScript plugin surface that warning, so a user's stray template cannot silently drop a rule of your dialect in the editor (for dialect files, once the dialect check lands: `TODO dialect-check (PR 1c)`). `getCustomTags` returns only the map; a build that discovers the map and must see these warnings reads `scanCached(file, options).diagnostics`.
+- **Shadowing stays visible.** A local `tags/<name>.mx` or `mx.tags` entry replaces a module's contract for that name, and the scan reports it: `` `<attribute>` from `mx.contracts` (…) is shadowed by …; the module's contract does not apply ``. The language server and the TypeScript plugin surface that warning, so a user's stray template cannot silently drop a rule of your dialect in the editor (for a dialect's own files, once the dialect check is released). `getCustomTags` returns only the map; a build that discovers the map and must see these warnings reads `scanCached(file, options).diagnostics`.
 
 ## Limits
 
