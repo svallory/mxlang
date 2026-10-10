@@ -185,6 +185,21 @@ export type {
   TagAlias,
   TagTrigger,
 } from "./ir.ts";
+/**
+ * The IR entry point (decision 204): parse, lower, check and return core's
+ * IR, for a consumer that interprets the tree itself (a dialect).
+ *
+ * @unstable
+ */
+export {
+  type IrDiagnostic,
+  type LowerSourceOptions,
+  type LowerSourceResult,
+  lowerFile,
+  lowerSource,
+  type Spanned,
+  type SpannedIr,
+} from "./ir-entry/index.ts";
 export { expressionShape, lower, lowerChildren } from "./lower.ts";
 export type {
   ContractAncestor,
