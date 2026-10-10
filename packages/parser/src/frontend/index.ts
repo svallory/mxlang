@@ -18,4 +18,5 @@ export {
   type MxTrigger,
   type ParseOptions,
   parse,
+  type TriggerClaim,
 } from "./parse.ts";

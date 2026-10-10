@@ -14,7 +14,7 @@ import {
   wordWidthAt,
   wordWidthBefore,
 } from "../internal.ts";
-import { type CompiledTrigger, matchTrigger } from "../syntax.ts";
+import type { CompiledTrigger } from "../syntax.ts";
 import * as CODE from "../util/codes.ts";
 import * as ErrorCode from "../util/error-code.ts";
 import { rejectReservedName } from "./EXPRESSION.ts";
@@ -46,6 +46,8 @@ export interface AttrMeta extends Meta {
         fresh: boolean;
         args: Ranges.Value | undefined;
         announced: boolean;
+        /** What the parser's `claim` answered (`undefined` without one). */
+        claim: unknown;
       };
 }
 
@@ -488,15 +490,22 @@ function enterAttrValue(parser: Parser, attrValue: boolean) {
  */
 function lexAttrTrigger(parser: Parser, attr: AttrMeta, data: string) {
   const start = parser.pos;
-  const hit = matchTrigger(parser.syntax.attribute!, data, start);
+  // MX: a row whose claim declines lexes as if none matched (a name).
+  const hit = parser.claimTrigger(
+    parser.syntax.attribute!,
+    data,
+    start,
+    "attribute",
+  );
   if (!hit) return false;
-  const { trigger, end } = hit;
+  const { trigger, end, claim } = hit;
   attr.trigger = {
     trigger,
     text: { start, end },
     fresh: parser.recordTrigger(trigger, start, end),
     args: undefined,
     announced: false,
+    claim,
   };
   parser.pos = end;
 
@@ -607,7 +616,7 @@ function announceAttrTrigger(
 ) {
   const state = attr.trigger!;
   state.announced = true;
-  const { trigger, text, fresh, args } = state;
+  const { trigger, text, fresh, args, claim } = state;
   if (!fresh) return;
   parser.options.onTrigger?.({
     id: trigger.id,
@@ -621,6 +630,7 @@ function announceAttrTrigger(
     ...(args && { args }),
     ...(value && { value, operator: attr.bound ? ":=" : "=" }),
     ...(method && { method }),
+    ...(claim !== undefined && { claim }),
   });
 }
 
@@ -815,7 +825,8 @@ function isAsyncMethodPrefix(parser: Parser, name: Range) {
     // MX (decision 182): an attribute trigger, which may take a method
     // value; `lexAttrTrigger` flushes `async` when none follows.
     (parser.syntax.attribute !== null &&
-      matchTrigger(parser.syntax.attribute, data, pos) !== undefined)
+      parser.claimTrigger(parser.syntax.attribute, data, pos, "attribute") !==
+        undefined)
   );
 }
 

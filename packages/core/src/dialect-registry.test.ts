@@ -10,10 +10,13 @@ import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { compileSource } from "./compile.ts";
+import { compileSource, parseMxDocument } from "./compile.ts";
 import { TranslateError } from "./core.ts";
 import {
+  type ClaimContext,
   CORE_DIALECT,
+  claimedFrom,
+  claimNode,
   type DialectNode,
   type NodeType,
   nodeTypeRegistry,
@@ -46,11 +49,11 @@ let parses = 0;
 
 const RefType: NodeType<Ref> = {
   keys: [],
-  parse(text, _span, kit) {
+  parse(text, _span, ctx) {
     parses++;
     const path = text.slice(1).split(".");
     if (path.includes("bad")) {
-      kit.fail("`bad` is not a field of the record", { code: "ref-bad" });
+      ctx.fail("`bad` is not a field of the record", { code: "ref-bad" });
     }
     return { path };
   },
@@ -232,7 +235,7 @@ describe("a node type on a tagless line", () => {
 });
 
 describe("the type's hooks are checked, positioned at the trigger", () => {
-  it("`kit.fail` is the dialect's error, at the node's text, with its code", () => {
+  it("`ctx.fail` is the dialect's error, at the node's text, with its code", () => {
     const error = caught(() => irOf("div\n  ~user.bad\n", REF_DIALECT));
     expect(error.message).toBe("`bad` is not a field of the record");
     expect([error.line, error.column]).toEqual([2, 2]);
@@ -241,10 +244,10 @@ describe("the type's hooks are checked, positioned at the trigger", () => {
     );
   });
 
-  it("`kit.fail` at a span inside the document", () => {
+  it("`ctx.fail` at a span inside the document", () => {
     const dialect = refWith({
-      parse: (_text, span, kit) =>
-        kit.fail("here", {
+      parse: (_text, span, ctx) =>
+        ctx.fail("here", {
           at: { sourceStart: span.sourceStart + 1, sourceEnd: span.sourceEnd },
         }),
     });
@@ -263,23 +266,23 @@ describe("the type's hooks are checked, positioned at the trigger", () => {
     [
       "returns no object",
       () => "user" as never,
-      "the `ref` trigger's `parse` (node type `ref:Ref`) must return the node's fields as an object",
+      "the `ref` trigger's `parse` (node type `ref:Ref`) must return the node's fields as an object, or `undefined` to decline the text",
     ],
     [
       "returns `type`",
       () => ({ path: [], type: "x" }) as never,
-      "the `ref` trigger's `parse` (node type `ref:Ref`) returns the node's own fields: core sets `type` and `span`",
+      "the `ref` trigger's `parse` (node type `ref:Ref`) returns the node's own fields: core sets `type`",
     ],
     [
       "returns `span`",
       () => ({ path: [], span: null }) as never,
-      "the `ref` trigger's `parse` (node type `ref:Ref`) returns the node's own fields: core sets `type` and `span`",
+      "the `ref` trigger's `parse` (node type `ref:Ref`) returns the node's own fields: core sets `span`",
     ],
     [
-      "calls `kit.fail` with no message",
-      (_text: string, _span: unknown, kit: { fail(m: string): never }) =>
-        kit.fail(""),
-      "the `ref` trigger's `parse` (node type `ref:Ref`): `kit.fail` takes a non-empty message",
+      "calls `ctx.fail` with no message",
+      (_text: string, _span: unknown, ctx: { fail(m: string): never }) =>
+        ctx.fail(""),
+      "the `ref` trigger's `parse` (node type `ref:Ref`): `ctx.fail` takes a non-empty message",
     ],
   ])("a `parse` that %s", (_, parse, message) => {
     const error = caught(() =>
@@ -396,7 +399,7 @@ describe("a dialect's node types are validated", () => {
           lineTriggers: [{ ...REF, node: { type: "Path", dialect: "ref" } }],
         },
       },
-      '`dialect.table.lineTriggers[0].node` (trigger "ref") names `ref:Path`, which the dialect does not register (it registers Ref)',
+      '`dialect.table.lineTriggers[0].node` (trigger "ref") names `ref:Path`, which is not a registered node type (a row can name `mx:Trigger`, `mx:Expression`, `ref:Ref`)',
     ],
     [
       "a row naming another dialect's type",
@@ -406,7 +409,7 @@ describe("a dialect's node types are validated", () => {
           lineTriggers: [{ ...REF, node: { type: "Ref", dialect: "mesh" } }],
         },
       },
-      '`dialect.table.lineTriggers[0].node` (trigger "ref") names the dialect `mesh`, and this dialect is `ref`: a row names a node type of its own dialect',
+      '`dialect.table.lineTriggers[0].node` (trigger "ref") names `mesh:Ref`, which is not a registered node type (a row can name `mx:Trigger`, `mx:Expression`, `ref:Ref`); a row names a type of core (`mx`) or of its own dialect: naming another dialect\'s types is not supported yet',
     ],
     [
       "a row naming core's own type",
@@ -416,7 +419,7 @@ describe("a dialect's node types are validated", () => {
           lineTriggers: [{ ...REF, node: { type: "Tag", dialect: "mx" } }],
         },
       },
-      '`dialect.table.lineTriggers[0].node` (trigger "ref") names `mx:Tag`: core\'s own node types are not trigger targets',
+      '`dialect.table.lineTriggers[0].node` (trigger "ref") names `mx:Tag`, which is not a registered node type (a row can name `mx:Trigger`, `mx:Expression`, `ref:Ref`)',
     ],
     [
       "a row in expression position",
@@ -443,7 +446,7 @@ describe("a dialect's node types are validated", () => {
       } as unknown as Dialect),
     );
     expect(error.message).toContain(
-      '`dialect.lineTriggers[0].node` (trigger "ref") names `ref:Ref`, and no dialect registers node types here',
+      '`dialect.lineTriggers[0].node` (trigger "ref") names `ref:Ref`, which is not a registered node type (a row can name `mx:Trigger`, `mx:Expression`); a row names a type of core (`mx`) or of its own dialect: naming another dialect\'s types is not supported yet',
     );
   });
 });
@@ -499,7 +502,7 @@ export default {
     expect(error.file).toBe(join(pkg, "index.mjs"));
     expect([error.line, error.column]).toEqual([1, 0]);
     expect(error.message).toBe(
-      '`table.attributeTriggers[0].node` (trigger "ref") names `ref:Path`, which the dialect does not register (it registers Ref)',
+      '`table.attributeTriggers[0].node` (trigger "ref") names `ref:Path`, which is not a registered node type (a row can name `mx:Trigger`, `mx:Expression`, `ref:Ref`)',
     );
   });
 
@@ -511,5 +514,249 @@ export default {
     expect(error.message).toBe(
       "`nodeTypes.Ref.printed` is not a node type field (keys, parse, print, lower)",
     );
+  });
+});
+
+/** The tree `parseMxDocument` builds, as plain data. */
+function treeOf(source: string, dialect?: Dialect): unknown {
+  const document = parseMxDocument(source, "page.mx", undefined, dialect) as
+    | { body: unknown }
+    | undefined;
+  if (!document) throw new Error("the template did not parse");
+  return JSON.parse(JSON.stringify(document.body));
+}
+
+/** A `Ref` that declines `~skip...`: the text is left to the no-row parse. */
+const DECLINING = refWith({
+  parse(text, span, ctx) {
+    if (text.startsWith("~skip")) return undefined;
+    return RefType.parse(text, span, ctx);
+  },
+});
+
+describe("a node type declines with `undefined`", () => {
+  it.each([
+    ["an attribute list", "sort asc ~skip\n"],
+    ["a tagless line", "div\n  ~skip\n"],
+  ])("in %s, the text parses as if no row matched", (_, source) => {
+    const declined = treeOf(source, DECLINING);
+    expect(declined).toEqual(treeOf(source));
+    expect(JSON.stringify(declined)).not.toContain("ref:Ref");
+  });
+
+  it("declines one occurrence and claims the next", () => {
+    const source = "sort ~skip ~user\n";
+    const { body } = parseMxDocument(
+      source,
+      "page.mx",
+      undefined,
+      DECLINING,
+    ) as {
+      body: { attributes: { type: string; start: number }[] }[];
+    };
+    expect(body[0]?.attributes.map((each) => [each.type, each.start])).toEqual([
+      ["MxAttribute", 5],
+      ["ref:Ref", 11],
+    ]);
+  });
+});
+
+describe("a claimed node is in the AST at its position", () => {
+  it("in an attribute list, between its siblings, frozen and claimed", () => {
+    const source = "sort asc ~user.name desc\n";
+    const { body } = parseMxDocument(
+      source,
+      "page.mx",
+      undefined,
+      REF_DIALECT,
+    ) as {
+      body: { attributes: Record<string, unknown>[] }[];
+    };
+    const attributes = body[0]?.attributes ?? [];
+    expect(attributes.map((each) => each.type)).toEqual([
+      "MxAttribute",
+      "ref:Ref",
+      "MxAttribute",
+    ]);
+    const node = attributes[1] as Record<string, unknown>;
+    expect(node).toMatchObject({
+      type: "ref:Ref",
+      start: 9,
+      end: 19,
+      span: { sourceStart: 9, sourceEnd: 19 },
+      path: ["user", "name"],
+      operator: null,
+      value: null,
+      args: null,
+    });
+    expect(Object.isFrozen(node)).toBe(true);
+    expect(claimedFrom(node)).toMatchObject({
+      position: "attribute",
+      text: "~user.name",
+    });
+  });
+
+  it("on a tagless line, as a child of the enclosing body", () => {
+    const source = "div\n  ~user.name\n";
+    const { body } = parseMxDocument(
+      source,
+      "page.mx",
+      undefined,
+      REF_DIALECT,
+    ) as {
+      body: { body: Record<string, unknown>[] }[];
+    };
+    const [node] = body[0]?.body ?? [];
+    expect(node).toMatchObject({
+      type: "ref:Ref",
+      start: 6,
+      end: 16,
+      path: ["user", "name"],
+    });
+    expect(claimedFrom(node)?.position).toBe("line");
+  });
+
+  it("with no dialect row, the parse asks no node type", () => {
+    let asked = 0;
+    const counting = refWith({
+      parse(text, span, ctx) {
+        asked++;
+        return RefType.parse(text, span, ctx);
+      },
+    });
+    treeOf("sort asc ~user\ndiv\n  ~a\n");
+    treeOf("sort asc ~user\ndiv\n  ~a\n", {
+      ...counting,
+      table: { attributeTriggers: [], lineTriggers: [] },
+    });
+    expect(asked).toBe(0);
+    treeOf("sort asc ~user\ndiv\n  ~a\n", counting);
+    expect(asked).toBe(2);
+  });
+});
+
+describe("lowering dispatches on `node.type`", () => {
+  /** `!name`: a second type of the same dialect, lowered by its own `lower`. */
+  interface Up extends DialectNode {
+    readonly name: string;
+  }
+  const UpType: NodeType<Up> = {
+    keys: [],
+    parse: (text) => ({ name: text.slice(1) }),
+    print: (node) => `!${node.name}`,
+    lower: (node, ctx) =>
+      ctx.attribute("up", { kind: "node", node, value: node.name }),
+  };
+  const UP: Trigger = {
+    id: "up",
+    chars: "!",
+    match: "![a-z]+",
+    standIn: "identifier",
+    node: { type: "Up", dialect: "ref" },
+  };
+
+  it("each node is lowered by the type that parsed it", () => {
+    const dialect: Dialect = {
+      ...REF_DIALECT,
+      table: { attributeTriggers: [REF, UP] },
+      nodeTypes: { Ref: RefType, Up: UpType },
+    };
+    const [sort] = elements(irOf("sort ~user !top\n", dialect).body);
+    expect(attr(sort, "ref")).toMatchObject({ node: { type: "ref:Ref" } });
+    expect(attr(sort, "up")).toMatchObject({
+      value: "top",
+      node: { type: "ref:Up", name: "top" },
+    });
+  });
+});
+
+describe("a row can name core's `mx:Trigger` and `mx:Expression`", () => {
+  const named = (type: string): Trigger => ({
+    ...REF,
+    node: { type, dialect: "mx" },
+  });
+
+  it("`mx:Trigger` is a `{ call }` row: the dialect's `lowerTrigger` lowers it", () => {
+    const calls: string[] = [];
+    const dialect: Dialect = {
+      id: "ref",
+      name: "Ref",
+      table: { attributeTriggers: [named("Trigger")] },
+      lowerTrigger: (id, text, _span, ctx) => {
+        calls.push(`${id} ${text}`);
+        return ctx.attribute("ref", text.slice(1));
+      },
+    };
+    const [sort] = elements(irOf("sort ~user\n", dialect).body);
+    expect(calls).toEqual(["ref ~user"]);
+    expect(attr(sort, "ref")).toMatchObject({ kind: "static", value: "user" });
+    const [node] =
+      (
+        parseMxDocument("sort ~user\n", "page.mx", undefined, dialect) as {
+          body: { attributes: { type: string }[] }[];
+        }
+      ).body[0]?.attributes ?? [];
+    expect(node?.type).toBe("MxTrigger");
+  });
+
+  it("`mx:Trigger` with no `lowerTrigger` has no lowering yet", () => {
+    const dialect: Dialect = {
+      id: "ref",
+      name: "Ref",
+      table: { attributeTriggers: [named("Trigger")] },
+    };
+    expect(caught(() => irOf("sort ~user\n", dialect)).message).toBe(
+      "`ref` trigger has no lowering yet",
+    );
+  });
+
+  it("`mx:Expression` declines every text in A's positions", () => {
+    const dialect: Dialect = {
+      id: "ref",
+      name: "Ref",
+      table: {
+        attributeTriggers: [named("Expression")],
+        lineTriggers: [named("Expression")],
+      },
+    };
+    for (const source of ["sort asc ~user\n", "div\n  ~user\n"]) {
+      expect(treeOf(source, dialect)).toEqual(treeOf(source));
+    }
+  });
+});
+
+describe("`claimNode` refuses a row naming an unregistered type", () => {
+  /** A context whose `fail` throws its message and span. */
+  const context = (): ClaimContext => ({
+    position: "attribute",
+    tag: "sort",
+    attribute: null,
+    fail(message, options) {
+      throw Object.assign(new Error(message), { at: options?.at });
+    },
+  });
+
+  it.each([
+    [
+      "an unregistered type of the dialect",
+      { type: "Path", dialect: "ref" },
+      "the `ref` trigger names `ref:Path`, which is not a registered node type (a row can name `mx:Trigger`, `mx:Expression`, `ref:Ref`)",
+    ],
+    [
+      "a core type with no `parse`",
+      { type: "Tag", dialect: "mx" },
+      "the `ref` trigger names `mx:Tag`, which is not a registered node type (a row can name `mx:Trigger`, `mx:Expression`, `ref:Ref`)",
+    ],
+    [
+      "another dialect's type",
+      { type: "Ref", dialect: "mesh" },
+      "the `ref` trigger names `mesh:Ref`, which is not a registered node type (a row can name `mx:Trigger`, `mx:Expression`, `ref:Ref`); a row names a type of core (`mx`) or of its own dialect: naming another dialect's types is not supported yet",
+    ],
+  ])("%s", (_, node, message) => {
+    const row: Trigger = { ...REF, node };
+    const span = { sourceStart: 5, sourceEnd: 10 };
+    expect(() =>
+      claimNode(nodeTypeRegistry(REF_DIALECT), row, "~user", span, context()),
+    ).toThrow(message);
   });
 });

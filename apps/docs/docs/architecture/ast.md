@@ -1316,6 +1316,34 @@ entity Order
 Offsets: line trigger `&title` `[15, 21)`, line trigger `&amount` `[24, 43)`
 with `value` `[32, 43)`.
 
+#### 4.4a `MxRegisteredNode`
+
+A node a registered node type claimed, in place of an attribute or line
+`MxTrigger` (design note `language-extensions/core.md`, "Node types"). When
+an attribute or line row matches, the parser asks the node type the row
+names to claim the matched text: its `parse` returns the node's fields, or
+`undefined` to decline. A declined text parses as if no row matched (on a
+tagless line, a tag name; in an attribute list, an attribute name). A
+claimed node sits where the `MxTrigger` would, typed by its registry key.
+Core's own `mx:Trigger` (a `{ call }` row, the `"attribute"` spelling)
+claims an `MxTrigger`, so a table without node types never produces this
+node.
+
+```ts
+interface MxRegisteredNode extends Span {
+  readonly type: `${string}:${string}`;                     // the registry key, `ref:Ref`
+  readonly span: { sourceStart: number; sourceEnd: number }; // the text the row matched
+  readonly operator: "=" | ":=" | null;                     // as on `MxTrigger`
+  readonly value: MxExpression | MxMethod | null;           // as on `MxTrigger`
+  readonly args: MxArguments | null;                        // as on `MxTrigger`
+  readonly [field: string]: unknown;                        // the node type's own fields
+}
+```
+
+Core sets `type`, `span`, the offsets, `operator`, `value` and `args`; the
+`=value` after the text is lexed by core, never by the node type. The node is
+frozen once the parse ends. Lowering hands it to its type's `lower`.
+
 ### 4.5 `MxBlockTag`, `MxFilter`
 
 A syntax table's block tag and filter (decision 182), in HTML content only
@@ -2035,6 +2063,7 @@ not listed.
 | `MxExpression` | node (container) | §4.1 | 1086 |
 | `MxAtom` | node | §4.3 | 1197 |
 | `MxTrigger` | node | §4.4 | 1265 |
+| `MxRegisteredNode` | registered node (typed by its key) | §4.4a | 1323 |
 | `MxBlockTag`, `MxFilter` | node | §4.5 | 1302 |
 | `MxBodyMode` | union | §3.12 | 864 |
 | `MxTagShape` | function type | §3.12 | 864 |

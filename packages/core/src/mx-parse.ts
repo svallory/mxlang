@@ -26,7 +26,19 @@ import { parse as mxFrontEndParse } from "@mxlang/parser/frontend";
 import { strippedMethodTypeParams } from "./attr-fields.ts";
 import { coreBabel } from "./babel.ts";
 import { type Node, TranslateError } from "./core.ts";
-import type { SyntaxTable } from "./syntax-table.ts";
+import {
+  type ClaimContext,
+  type ClaimPosition,
+  claimNode,
+  nodeTypeRegistry,
+  rowKey,
+} from "./dialect-registry.ts";
+import type { SourceSpan } from "./mapping.ts";
+import type {
+  Dialect,
+  SyntaxTable,
+  TriggerFailOptions,
+} from "./syntax-table.ts";
 import type { TagTable } from "./tag-table.ts";
 
 /** The six statement keywords of the language (decision 168). */
@@ -61,10 +73,21 @@ export const mxParses = { count: 0 };
  * Parses `source` with the MX front end, the tag shapes and statement
  * keywords read from `lookup` (the lookup Marko would have parsed with).
  * Returns the `MxDocument`; parse errors are in its `errors`, never thrown.
+ *
+ * A table with attribute or line rows parses with the claim process: each
+ * matched row's node type (of `dialect`'s registry, core's without one) is
+ * asked through `claimNode`, and a node type's positioned error (its
+ * `ctx.fail`, a `parse` that throws or returns a wrong shape) is thrown
+ * from here as a `TranslateError`.
  */
 export function parseMx(
   source: string,
-  options: { syntax: SyntaxTable; lookup: TagTable | undefined; base?: MxBase },
+  options: {
+    syntax: SyntaxTable;
+    lookup: TagTable | undefined;
+    base?: MxBase;
+    dialect?: Dialect;
+  },
 ): Node {
   const { lookup } = options;
   const parseOptionsOf = (name: string): Node =>
@@ -81,12 +104,116 @@ export function parseMx(
     STATEMENT_KEYWORDS.filter((name) => parseOptionsOf(name)?.statement),
   );
   mxParses.count++;
-  return mxFrontEndParse(source, {
+  const claims = nodeClaims(source, options);
+  const document = mxFrontEndParse(source, {
     statementKeywords,
     tagShape,
     syntax: options.syntax,
     ...(options.base ? { base: options.base } : {}),
+    ...(claims ? { claim: claims.claim } : {}),
   });
+  // A claimed node is frozen once the front end has set its trigger fields.
+  if (claims) for (const node of claims.placed) Object.freeze(node);
+  return document;
+}
+
+/**
+ * The front end's `claim` option for `table`: `undefined` when the table
+ * has no attribute or line row (the default row: nothing is asked).
+ * Answers are kept per position and offset, as the front end may parse
+ * twice (a tag name its pre-scan missed), so each `parse` runs once.
+ */
+function nodeClaims(
+  source: string,
+  options: { syntax: SyntaxTable; base?: MxBase; dialect?: Dialect },
+):
+  | {
+      claim: (
+        id: string,
+        position: ClaimPosition,
+        start: number,
+        end: number,
+        tag: string | null,
+      ) => object | undefined;
+      placed: Set<object>;
+    }
+  | undefined {
+  const table = options.syntax;
+  if (table.attributeTriggers.length === 0 && table.lineTriggers.length === 0) {
+    return undefined;
+  }
+  const registry = nodeTypeRegistry(options.dialect);
+  const base = options.base ?? { offset: 0, line: 0, column: 0 };
+  const site = { source, base };
+  const answers = new Map<string, object | undefined>();
+  const placed = new Set<object>();
+  const raise = (message: string, at: SourceSpan, code?: string): never => {
+    const { line, column } = filePosition(site, at.sourceStart);
+    const error = new TranslateError(message, line, column);
+    error.span = at;
+    if (code !== undefined) error.diagnosticCode = String(code);
+    throw error;
+  };
+  const claim = (
+    id: string,
+    position: ClaimPosition,
+    start: number,
+    end: number,
+    tag: string | null,
+  ): object | undefined => {
+    const key = `${position}:${start}`;
+    if (answers.has(key)) return answers.get(key);
+    const list =
+      position === "line" ? table.lineTriggers : table.attributeTriggers;
+    const row = list.find((each) => each.id === id);
+    if (!row) return undefined;
+    const span = { sourceStart: start, sourceEnd: end };
+    const label = `the \`${id}\` trigger's \`parse\` (node type \`${rowKey(row.node)}\`)`;
+    const ctx: ClaimContext = Object.freeze({
+      position,
+      tag,
+      attribute: null,
+      fail(message: string, failOptions?: TriggerFailOptions): never {
+        if (typeof message !== "string" || message === "") {
+          return raise(
+            `${label}: \`ctx.fail\` takes a non-empty message`,
+            span,
+          );
+        }
+        const at = failOptions?.at;
+        if (at !== undefined && !insideDocument(at, base.offset, source)) {
+          return raise(
+            `${label}: \`ctx.fail\`'s \`at\` is a \`{ sourceStart, sourceEnd }\` span inside the document (${base.offset} to ${base.offset + source.length})`,
+            span,
+          );
+        }
+        return raise(message, at ?? span, failOptions?.code);
+      },
+    });
+    const text = source.slice(start - base.offset, end - base.offset);
+    const node = claimNode(registry, row, text, span, ctx);
+    answers.set(key, node);
+    if (node && (node.type as string) !== "MxTrigger") placed.add(node);
+    return node;
+  };
+  return { claim, placed };
+}
+
+/** Is `at` a span inside the document (file offsets, `offset` the fragment's base)? */
+function insideDocument(
+  at: SourceSpan,
+  offset: number,
+  source: string,
+): boolean {
+  return (
+    !!at &&
+    typeof at === "object" &&
+    Number.isInteger(at.sourceStart) &&
+    Number.isInteger(at.sourceEnd) &&
+    at.sourceStart >= offset &&
+    at.sourceStart <= at.sourceEnd &&
+    at.sourceEnd <= offset + source.length
+  );
 }
 
 /** 1-based line, 0-based column of a fragment-local `offset` in `source`. */

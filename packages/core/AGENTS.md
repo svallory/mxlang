@@ -529,25 +529,44 @@ Five facts worth knowing before editing it:
   after `convertAtoms`: hooks in source order (a tag's attributes before its
   body, a value's triggers before its owner), stand-ins replaced inside the
   payload (each replacement's printed text spliced into `code` by `expr()`
-  through `ctx.triggerSplices`, per document, as atoms are), attribute and
-  line triggers kept as synthesized `MxAttribute`/
-  `MxTag` nodes in WeakMaps that `tagAttributesOf`, `bodyChildren` and
-  `lowerChildList` read, so the tree stays as parsed. `payloadOf`,
-  `lowerChildList` and `tableParseError` refuse only what nothing lowered.
+  through `ctx.triggerSplices`, per document, as atoms are). An attribute or
+  line trigger node (`MxTrigger`, or a claimed dialect node) stays in the
+  tree as parsed; its lowered `MxAttribute`/`MxTag` is memoized per node
+  (`attributeResults`/`lineResults`), and `attributesWithTriggers`/
+  `childrenWithTriggers` expand a list by `node.type` for `tagAttributesOf`,
+  `bodyChildren` and `lowerChildList`. `payloadOf`, `lowerChildList` and
+  `tableParseError` refuse only what nothing lowered.
   **Node types (decision 202 item 3; `src/dialect-registry.ts`).** One key
   space, `id:Type`: core is dialect zero (`mx`, its MX AST types
   without the `Mx` prefix, keys only, lowered directly), and a dialect's
   `nodeTypes` (`{ keys, parse, print, lower }` per PascalCase type; the
   dialect's `id`, always required, never `mx`) follow. A row's `node: { type, dialect }`
   (attribute and line triggers only; expression position is a table error)
-  must name a type of the loading dialect (`unregisteredNodeRow`, in the
-  module file or at the option). The row's `match` ends the node; at the
-  trigger, `nodeTypeHook` runs `parse(text, span, kit)` once (core stamps
-  `type`/`span`, freezes, and remembers it in `parsedNodes`), then `lower(node, ctx)`
-  with the same `ctx` constructors as `lowerTrigger`; errors name the hook
-  (`` `parse` (node type `ref:Ref`) ``). `ctx.attribute(name, { kind:
-  "node", node, value })` keeps the node on the literal (`extra.mxNode`,
-  `dialectNodeOf`) into the static `Attr.node`. Core's own lowering stays
+  names a type core or the loading dialect registers with a `parse`
+  (core registers one only for `mx:Trigger` and `mx:Expression`); any
+  other is the one claim error, "not registered", at load
+  (`unregisteredNodeRow`, in the module file or at the option) and in
+  `claimNode`. Naming another dialect's types is not supported yet (the
+  error says so). **The claim** (`claimNode`, the only place it is
+  decided): `parseMx` (`mx-parse.ts`, `nodeClaims`) passes the front end a
+  `claim` option whenever the table has an attribute or line row (never
+  for the default row); at a matching row the template parser asks it once
+  per position and offset (core memoizes again, as the front end may
+  restart). `claimNode` calls `parse(text, span, ctx: ClaimContext)`:
+  fields are stamped `type`/`span`, recorded (`claimedFrom`) and placed in
+  the tree by identity (the front end's `freezeCopy` keeps them), frozen
+  after the parse; `undefined` declines, and the template parser goes on
+  as if no row matched. `{ call }` and `"attribute"` rows are `mx:Trigger`
+  (claimed as a plain `MxTrigger`). Errors from `parse` are positioned
+  `TranslateError`s thrown out of `parseMx` (no `BABEL_TRANSFORM_ERROR`
+  code); the front end rethrows a claim's throw unwrapped (`ClaimThrow`).
+  At lowering, `hookFor` dispatches a claimed node on `node.type`
+  (`nodeTypeHook` calls that type's `lower`, with the same `ctx`
+  constructors as `lowerTrigger`; errors name the hook, `` `lower` (node
+  type `ref:Ref`) ``). `ctx.attribute(name, { kind: "node", node, value
+  })` (until slice B) carries the node on the built `MxAttribute`
+  (`dialectNode`), which `lower.ts` reads into the static `Attr.node`.
+  Core's own lowering stays
   direct until PR 6 is done with `lower.ts`. Tests:
   `src/dialect-registry.test.ts`.
   A whole-value member is a static `Attr` with `member` (`memberOf`, mirror

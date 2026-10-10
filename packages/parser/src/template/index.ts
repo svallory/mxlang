@@ -1,6 +1,7 @@
 import {
   type ParseOptions,
   Parser,
+  type TriggerClaim,
   type ParserOptions,
   type Range,
 } from "./internal.ts";
@@ -17,6 +18,7 @@ export {
   type Range,
   type Ranges,
   TagType,
+  type TriggerClaim,
 } from "./internal.ts";
 export {
   DEFAULT_SYNTAX,
@@ -43,6 +45,14 @@ export interface CreateParserOptions {
    * does not validate (`validateSyntaxTable`).
    */
   syntax?: SyntaxTable;
+  /**
+   * MX: asked when an attribute or line trigger's row matches, with the
+   * row's id, the position and the matched text's range. `undefined`
+   * declines: the text lexes as if no row matched. Anything else claims it
+   * and reaches `onTrigger` as `claim`. Asked once per trigger start, however
+   * often the text is re-lexed. Omitted means every match claims.
+   */
+  claim?: TriggerClaim;
 }
 
 /**
@@ -56,6 +66,7 @@ export function createParser(
   const parser = new Parser(
     handlers,
     options?.syntax ? compileSyntax(options.syntax) : undefined,
+    options?.claim,
   );
 
   return {

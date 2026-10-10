@@ -62,11 +62,22 @@ interface Trigger {
   chars: string;                     // first characters that arm it: ":" or "A-Z"
   match: string;                     // anchored regex source, RE2 subset
   standIn: "number" | "identifier" | "keep";
-  node: "string" | "identifier" | "attribute" | { call: string };
+  node: "string" | "identifier" | "attribute" | { call: string } | { type: string; dialect: string };
   terminatesValue?: boolean;         // attribute triggers: a space then this ends the preceding value
   value?: "refuse";                  // attribute triggers: `=`, `:=` or `(` after it is a parser error
 }
 ```
+
+In attribute and line position every row goes through one claim process.
+The row's node type is asked to claim the matched text: its `parse` gets the
+text, the span and the context, and returns the node's fields or
+`undefined`. Fields put a registered node in the MX AST at that position,
+and lowering later calls that type's `lower`. `undefined` declines: parsing
+continues as if no row matched. A `{ call }` row and `"attribute"` are core's
+`mx:Trigger` type, which always claims; `{ type, dialect }` names a type of
+the row's own dialect, or `mx:Trigger` or `mx:Expression`. The one error the
+claim owns is a row naming a type that is not registered. A row naming
+another dialect's types is not supported yet.
 
 `lineTriggers` (decision 182, addendum 1) arm at the start of a tagless
 concise line, with or without an `=value` after the matched text, and lower

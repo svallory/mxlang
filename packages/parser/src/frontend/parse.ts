@@ -74,6 +74,37 @@ export interface ParseOptions extends MxFrontEndOptions {
    * `MX_TAG_TYPES_MISMATCH` at its name, parsed with the table's type.
    */
   readonly tagTypes?: Readonly<Record<string, TagTypeValue>>;
+  /**
+   * Asked when an attribute or line trigger's row matches: the row's id,
+   * the position, the matched text's file offsets and, in attribute
+   * position, the static name of the tag whose attribute list holds it
+   * (`null` on a line, or for a dynamic or unnamed tag). Asked once per
+   * trigger. `undefined` declines: the text parses as if no row matched.
+   * An object claims it: an `MxTrigger`-typed one keeps the front end's own
+   * `MxTrigger` node; any other is the node the tree holds at that
+   * position, and the front end sets its `start`, `end`, `operator`,
+   * `value` and `args` as on an `MxTrigger`. A throw leaves `parse` as
+   * thrown (the caller's error, not `MX_FRONT_END_INTERNAL`). Omitted, every
+   * matched row claims.
+   */
+  readonly claim?: TriggerClaim;
+}
+
+/** The `claim` option of `parse` (see {@link ParseOptions.claim}). */
+export type TriggerClaim = (
+  rowId: string,
+  position: "attribute" | "line",
+  start: number,
+  end: number,
+  tag: string | null,
+) => object | undefined;
+
+/** A throw out of the caller's `claim`, carried out of the template parser. */
+class ClaimThrow {
+  constructor(error: unknown) {
+    this.error = error;
+  }
+  readonly error: unknown;
 }
 
 /** Decision 161's wording for an error that is never the author's. */
@@ -234,6 +265,7 @@ export function parse(source: string, options: ParseOptions): MxDocument {
     try {
       builder.run();
     } catch (error) {
+      if (error instanceof ClaimThrow) throw error.error;
       const missed = builder.missed;
       if (missed && attempt < MAX_RESCANS) {
         prior = {
@@ -339,6 +371,8 @@ class FrontEnd {
   atoms: { start: number; end: number; name: string }[] = [];
   /** Expression triggers announced but not yet claimed by a container, in source order (local offsets). */
   triggers: (SubParseTrigger & { position: "expression" })[] = [];
+  /** Nodes the caller's `claim` returned: kept by identity in the finished tree. */
+  readonly claimedNodes = new Set<object>();
   openStart: number | undefined;
   /** The attribute-list item(s) the last `onAttrName` produced: value, args and methods attach to the last one. */
   current: Builder | undefined;
@@ -440,8 +474,21 @@ class FrontEnd {
       this.options.statementKeywords,
     );
     const syntax: SyntaxTable = { ...base, tagTypes: this.tagTypes };
+    const claim = this.options.claim;
     this.inTemplate = true;
-    seams.createParser(wrapped, { syntax }).parse(this.source);
+    seams
+      .createParser(wrapped, {
+        syntax,
+        ...(claim && {
+          claim: (
+            id: string,
+            position: "attribute" | "line",
+            start: number,
+            end: number,
+          ) => this.claimAt(claim, id, position, start, end),
+        }),
+      })
+      .parse(this.source);
     this.inTemplate = false;
     // At end of input inside a concise open delimiter the template parser
     // stops with no error and no close events (parser-grammar OQ 19; stock
@@ -781,6 +828,35 @@ class FrontEnd {
   }
 
   /**
+   * Asks the caller's `claim` for a matched attribute or line trigger, at
+   * file offsets. A throw is carried out of the template parser untouched.
+   */
+  claimAt(
+    claim: TriggerClaim,
+    id: string,
+    position: "attribute" | "line",
+    start: number,
+    end: number,
+  ): object | undefined {
+    let tag: string | null = null;
+    const top = this.top;
+    if (position === "attribute" && top && !top._openEnded) {
+      const name = (top as { name?: { kind?: string; value?: unknown } }).name;
+      if (top.type === "MxAttributeTag" && typeof name?.value === "string")
+        tag = `@${name.value}`;
+      else if (name?.kind === "static" && typeof name.value === "string")
+        tag = name.value;
+    }
+    try {
+      return (
+        claim(id, position, this.at(start), this.at(end), tag) ?? undefined
+      );
+    } catch (error) {
+      throw new ClaimThrow(error);
+    }
+  }
+
+  /**
    * `onTrigger` (decision 182): an expression trigger waits for its
    * container; an attribute trigger joins its tag's attributes; a line
    * trigger is a child of the enclosing body. A value's container is built
@@ -799,13 +875,17 @@ class FrontEnd {
       });
       return;
     }
-    const node: Builder = {
-      type: "MxTrigger",
+    // A node the caller's `claim` returned takes the trigger's place, with
+    // the fields core sets on every trigger node.
+    const claimed =
+      event.claim &&
+      typeof event.claim === "object" &&
+      (event.claim as { type?: unknown }).type !== "MxTrigger"
+        ? (event.claim as Builder)
+        : undefined;
+    const fields = {
       start: this.at(event.start),
       end: this.at(event.end),
-      id: event.id,
-      position: event.position,
-      text,
       operator: event.operator ?? null,
       value: event.method
         ? this.method(event.method)
@@ -821,6 +901,20 @@ class FrontEnd {
         ? this.container("MxArguments", event.args.value, event.args)
         : null,
     };
+    if (claimed) this.claimedNodes.add(claimed);
+    const node: Builder = claimed
+      ? Object.assign(claimed, fields)
+      : {
+          type: "MxTrigger",
+          start: fields.start,
+          end: fields.end,
+          id: event.id,
+          position: event.position,
+          text,
+          operator: fields.operator,
+          value: fields.value,
+          args: fields.args,
+        };
     if (event.position === "line") {
       this.pushChild(node);
       return;
@@ -1790,26 +1884,32 @@ class FrontEnd {
       base: { offset: base.offset, line: base.line, column: base.column },
     };
     // SAFETY: `freezeCopy` copies the builder tree shape verbatim.
-    return freezeCopy(document) as unknown as MxDocument;
+    return freezeCopy(document, this.claimedNodes) as unknown as MxDocument;
   }
 }
 
 /**
  * Copies a builder tree into fresh plain objects, dropping builder state
  * (`_` keys). Iterative, so a deeply nested document cannot overflow the
- * stack (`scaling.test.ts`, the deep shape).
+ * stack (`scaling.test.ts`, the deep shape). A claimed node (`kept`) stays
+ * the object the caller's `claim` returned, its own fields untouched; only
+ * the trigger fields the front end set on it (`value`, `args`) are copied.
  */
 /** Anything a builder tree holds: builders, plain arrays, or a leaf value. */
 // SAFETY: the copy keeps leaves verbatim and rebuilds only objects.
 type Copy = null | boolean | number | string | Copy[] | { [key: string]: Copy };
 
-function freezeCopy(root: unknown): Copy {
+/** The fields of a claimed node the front end set from builders. */
+const KEPT_FIELDS = ["value", "args"];
+
+function freezeCopy(root: unknown, kept: ReadonlySet<object>): Copy {
   // SAFETY: every leaf is copied verbatim; only objects are fresh copies,
   // each distinct object copied once so shared references (a container's
   // error and its entry in `errors`, ast §3.13) stay one object.
   const copies = new Map<unknown, Copy>();
   const copyOf = (value: Copy): Copy => {
     if (value === null || typeof value !== "object") return value;
+    if (kept.has(value)) return value;
     let copy = copies.get(value);
     if (copy === undefined) {
       copy = Array.isArray(value) ? new Array(value.length) : {};
@@ -1826,11 +1926,13 @@ function freezeCopy(root: unknown): Copy {
     ];
     const [from, to] = pair;
     if (from === null || typeof from !== "object") continue;
-    for (const [key, field] of Object.entries(from)) {
+    const keys = from === to ? KEPT_FIELDS : Object.keys(from);
+    for (const key of keys) {
+      const field = from[key];
       if (key.startsWith("_")) continue;
       const copy = copyOf(field as Copy);
       to[key] = copy;
-      if (copy !== field) work.push([field, copy]);
+      if (copy !== field || kept.has(field as object)) work.push([field, copy]);
     }
   }
   return top;

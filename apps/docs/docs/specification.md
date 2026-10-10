@@ -4395,32 +4395,74 @@ by a PascalCase `Type`:
 ```ts
 interface NodeType<N extends DialectNode> {
   keys: readonly string[];                                  // child-node fields; [] for a leaf
-  parse(text: string, span: SourceSpan, kit: NodeKit): Omit<N, "type" | "span">;
+  parse(text: string, span: SourceSpan, ctx: ClaimContext): Omit<N, "type" | "span"> | undefined;
   print(node: N): string;                                   // print(parse(text)) is text
   lower(node: N, ctx: TriggerContext): TriggerResult;
+}
+
+interface ClaimContext {
+  position: "line" | "attribute";
+  tag: string | null;        // the static name of the tag an attribute is on; null on a line
+  attribute: string | null;  // null in both positions
+  fail(message: string, options?: { at?: SourceSpan; code?: string }): never;
 }
 ```
 
 A table row names one with `node: { type, dialect }`, in an attribute or line list
-only. The row's `match` decides where the node ends; at lowering core hands the
-matched text and its span to `parse`, sets `type` (the key) and `span` on the
-fields it returns, freezes the node, and hands it to `lower`, which builds with
-the `ctx` constructors `lowerTrigger` gets (§13.9.5). A node is parsed once per
-trigger. A whole attribute value keeps the node:
+only.
+
+**The claim.** Every row in these two positions goes through one process. At a
+trigger position the parser finds the row whose `match` matches (the match
+decides where the node ends) and asks the row's node type to claim the text:
+core calls its `parse` with the matched text, its span and the context. `parse`
+returns the node's own fields, or `undefined`:
+
+- **Fields** claim the text. Core sets `type` (the key) and `span` on them, and
+  the node takes the trigger's place in the MX AST: in its tag's attribute list,
+  or as a child of the enclosing body. Core also sets the trigger fields every
+  node in those positions has (`start`, `end`, `operator`, `value`, `args`) and
+  freezes the node once the parse is done. At lowering, core looks the node's
+  `type` up in the registry and calls that type's `lower`, which builds with the
+  `ctx` constructors `lowerTrigger` gets (§13.9.5).
+- **`undefined` declines** the text. Parsing continues as if no row had matched
+  at that position: the text is an attribute name, or a tag on its line, as the
+  file's other rows and the default grammar read it.
+
+`parse` is called once per trigger. With no row in either position (the
+default `.mx` row), nothing is asked. A `{ call }` row and the built-in
+`"attribute"` spelling are core's own node type, `mx:Trigger`: its `parse`
+always claims, and the dialect's `lowerTrigger` lowers it. A row may name
+`mx:Trigger` itself, which is the same as `{ call }`. A row may also name
+`mx:Expression`, which declines every text in these two positions. Core
+registers a `parse` for no other `mx:` type.
+
+A whole attribute value keeps the node:
 `ctx.attribute(name, { kind: "node", node, value })` lowers to a static `Attr`
 with `value` (what every target emits) and `node` (`DialectNode`), never set
-together with `atom` or `member`. `kit.fail(message, { at?, code? })` is a
-positioned error at the node's text, or at `at`.
+together with `atom` or `member`. `ctx.fail(message, { at?, code? })` in `parse`
+is a positioned error at the node's text, or at `at`, carrying `code`.
 
-**Errors.** At load, in the module file at 1:0 (or at the start of the file for
-the `dialect` option): a type name that is not PascalCase, a field outside `keys`, `parse`, `print`, `lower`, a
-hook that is not a function, `keys` that is not an array of non-empty names or
-names `type` or `span`. A row naming a type its dialect does not register, another
-dialect's type, or core's own `mx:` types is an error in the module file at
-1:0 too. At lowering, at the trigger: ``the `<id>` trigger's `parse` (node type
-`<key>`) threw: <message>``, ``… must return the node's fields as an object``,
-``… returns the node's own fields: core sets `type` and `span` ``, and `lower`'s
-results are checked as `lowerTrigger`'s are, named `` `lower` (node type `<key>`) ``.
+A row names a type of core (`mx`) or of its own dialect. Naming another
+dialect's types is not supported yet.
+
+**Errors.** The only error the claim itself owns is a row naming a type that is
+not registered: ``the `<id>` trigger names `<key>`, which is not a registered
+node type (a row can name `mx:Trigger`, `mx:Expression`, …)``, followed by
+``; a row names a type of core (`mx`) or of its own dialect: naming another
+dialect's types is not supported yet`` when `<key>`'s dialect is not loaded.
+A dialect's rows are checked when it loads, so a dialect module reports it in
+the module file at 1:0 (or at the start of the file for the `dialect` option),
+naming the row (`` `table.lineTriggers[0].node` (trigger "ref") ``). Also at
+load: a type name that is not PascalCase, a field outside `keys`, `parse`,
+`print`, `lower`, a hook that is not a function, `keys` that is not an array of
+non-empty names or names `type` or `span`.
+
+A node type's own mistakes are errors at the trigger, raised while the file
+parses: ``the `<id>` trigger's `parse` (node type `<key>`) threw: <message>``,
+``… must return the node's fields as an object, or `undefined` to decline the
+text``, ``… returns the node's own fields: core sets `type` ``, and ``…:
+`ctx.fail` takes a non-empty message``. `lower`'s results are checked as
+`lowerTrigger`'s are, named `` `lower` (node type `<key>`) ``.
 
 **Errors this section does not own.** Positions for all of the above follow §12.
 A syntax table changes which files are valid, not what a valid file's diagnostics

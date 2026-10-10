@@ -55,6 +55,8 @@ export declare namespace Ranges {
     standIn: "number" | "identifier" | "keep";
     text: Range;
     value?: Range;
+    /** What the parser's `claim` answered for this trigger, when one was given. */
+    claim?: unknown;
   }
 }
 
@@ -124,5 +126,17 @@ export interface Lexer {
  */
 export declare function createParser(
   handlers: Handlers,
-  options?: { syntax?: object },
+  options?: { syntax?: object; claim?: TriggerClaim },
 ): Lexer;
+
+/**
+ * Asked once per matched attribute or line trigger start: `undefined`
+ * declines (the text lexes as if no row matched); anything else claims and
+ * is carried on the trigger's event as `claim`.
+ */
+export type TriggerClaim = (
+  id: string,
+  position: "attribute" | "line",
+  start: number,
+  end: number,
+) => unknown;

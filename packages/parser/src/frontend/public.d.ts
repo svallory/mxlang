@@ -40,7 +40,25 @@ export interface ParseOptions extends MxFrontEndOptions {
   readonly syntax?: object;
   /** Tag types keyed by the full written static name: html 0, text 1, void 2, statement 3. */
   readonly tagTypes?: Readonly<Record<string, 0 | 1 | 2 | 3>>;
+  /**
+   * Asked once per matched attribute or line trigger, with the row's id, the
+   * position, the file offsets of the matched text and, in attribute
+   * position, the static name of the tag (else `null`). `undefined` declines:
+   * the text parses as if no row matched. An object other than an
+   * `MxTrigger`-typed one is the node the tree holds there. Omitted, every
+   * matched row claims.
+   */
+  readonly claim?: TriggerClaim;
 }
+
+/** The `claim` option of `parse`. */
+export type TriggerClaim = (
+  rowId: string,
+  position: "attribute" | "line",
+  start: number,
+  end: number,
+  tag: string | null,
+) => object | undefined;
 
 /** Builds the MX AST of `source` (ast §7). Parse errors are in the document's `errors`. */
 export declare function parse(

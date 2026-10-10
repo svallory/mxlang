@@ -588,3 +588,117 @@ describe("the atoms-and-sugars rows through the front end (slice a1)", () => {
     expect(methods).toBeGreaterThan(0);
   }, 120_000);
 });
+
+describe("the `claim` option (a node type's claim at a trigger)", () => {
+  /** `&` in attribute and line position only, so a decline leaves the default grammar. */
+  const ROWS: SyntaxTable = {
+    ...DEFAULT_SYNTAX,
+    attributeTriggers: [MEMBER],
+    lineTriggers: [MEMBER],
+  };
+  const SOURCES = ["div a &x b", "div\n  &x\n  span", "div &x &y\n  &z"];
+
+  it("the default table never calls it, and every corpus tree is unchanged", () => {
+    const refuse = () => {
+      throw new Error("claim called with the default table");
+    };
+    const wrong: string[] = [];
+    for (const probe of PROBES) {
+      if (probe.options?.base) continue;
+      const plain = parse(probe.input, OPTIONS);
+      const asked = parse(probe.input, { ...OPTIONS, claim: refuse });
+      if (JSON.stringify(shape(asked)) !== JSON.stringify(shape(plain)))
+        wrong.push(probe.id);
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it.each(SOURCES)(
+    "a decline (`undefined`) parses %j as if no row matched",
+    (source) => {
+      const declined = parse(source, {
+        ...OPTIONS,
+        syntax: ROWS,
+        claim: () => undefined,
+      });
+      expect(shape(declined)).toEqual(shape(parse(source, OPTIONS)));
+    },
+  );
+
+  it("a claimed node takes the trigger's place, by identity, with the trigger fields", () => {
+    const claimed: { id: string; position: string; tag: string | null }[] = [];
+    const nodes: object[] = [];
+    const document = parse("div a &x b\n  &z", {
+      ...OPTIONS,
+      syntax: ROWS,
+      claim: (id, position, start, end, tag) => {
+        claimed.push({ id, position, tag });
+        const node = { type: "ref:Ref", text: [start, end] };
+        nodes.push(node);
+        return node;
+      },
+    });
+    expect(document.errors).toEqual([]);
+    expect(claimed).toEqual([
+      { id: "member", position: "attribute", tag: "div" },
+      { id: "member", position: "line", tag: null },
+    ]);
+    const div = document.body[0] as Node;
+    expect(div.attributes.map((each: Node) => each.type)).toEqual([
+      "MxAttribute",
+      "ref:Ref",
+      "MxAttribute",
+    ]);
+    expect(div.attributes[1]).toBe(nodes[0]);
+    expect(div.attributes[1]).toEqual({
+      type: "ref:Ref",
+      text: [6, 8],
+      start: 6,
+      end: 8,
+      operator: null,
+      value: null,
+      args: null,
+    });
+    expect(div.body[0]).toBe(nodes[1]);
+    expect(div.body[0]).toMatchObject({ type: "ref:Ref", start: 13, end: 15 });
+  });
+
+  it("a claim of type `MxTrigger` builds the trigger node the row would", () => {
+    const source = "div a &x b\n  &z";
+    const trigger = parse(source, {
+      ...OPTIONS,
+      syntax: ROWS,
+      claim: () => ({ type: "MxTrigger" }),
+    });
+    expect(shape(trigger)).toEqual(
+      shape(parse(source, { ...OPTIONS, syntax: ROWS })),
+    );
+  });
+
+  it("asks once per trigger, even when the parse restarts for a missed tag name", () => {
+    const asked: string[] = [];
+    parse("my-tag &x\n  &y", {
+      ...OPTIONS,
+      syntax: ROWS,
+      claim: (_id, position, start) => {
+        asked.push(`${position}:${start}`);
+        return undefined;
+      },
+    });
+    expect(new Set(asked).size).toBe(asked.length);
+    expect(asked).toEqual(["attribute:7", "line:12"]);
+  });
+
+  it("a throw out of the claim leaves `parse` unwrapped", () => {
+    const thrown = new Error("not a registered node type");
+    expect(() =>
+      parse("div &x", {
+        ...OPTIONS,
+        syntax: ROWS,
+        claim: () => {
+          throw thrown;
+        },
+      }),
+    ).toThrow(thrown);
+  });
+});

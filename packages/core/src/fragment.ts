@@ -475,6 +475,7 @@ export function parseFragment(
   const document = parseMx(source, {
     syntax,
     lookup,
+    dialect: resolvedSyntax.dialect,
     base: {
       offset: resolved.baseOffset,
       line: resolved.baseLine,

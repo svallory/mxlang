@@ -436,14 +436,19 @@ export function parseMxDocument(
   dialect?: SyntaxTable | Dialect,
   nativeTags?: NativeTags,
 ): Node | undefined {
-  // A dialect's table parses; its hooks are lowering's, not the scan's.
-  const table = (
+  // A dialect's table parses and its node types claim; its other hooks are
+  // lowering's, not the scan's.
+  const resolved =
     dialect !== undefined
       ? explicitSyntaxOf(dialect, filename)
-      : resolveSyntaxOf(filename)
-  ).table;
+      : resolveSyntaxOf(filename);
+  const table = resolved.table;
   const lookup = tagTable(translator, nativeTags);
-  const document = parseMx(source, { syntax: table, lookup });
+  const document = parseMx(source, {
+    syntax: table,
+    lookup,
+    dialect: resolved.dialect,
+  });
   return compileErrorOf(document, filename, { expressionErrors: false })
     ? undefined
     : document;
@@ -548,7 +553,11 @@ export function compileSource(
     // gives; its parse errors are thrown as the `CompileError` Marko threw,
     // and its payloads lose their TypeScript as Marko's did (`stripTypes`
     // defaults to true for a build). `@marko/compiler` no longer parses.
-    const document = parseMx(source, { syntax, lookup });
+    const document = parseMx(source, {
+      syntax,
+      lookup,
+      dialect: resolvedSyntax.dialect,
+    });
     const tableError = tableParseError(
       document,
       syntax,

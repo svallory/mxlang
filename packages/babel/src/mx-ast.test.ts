@@ -145,8 +145,11 @@ it("exports every type Appendix A names, and nothing it does not", () => {
   }
 });
 
-it("MxNode['type'] is the set of node names marked 'node' in Appendix A", () => {
-  expectTypeOf<MxNode["type"]>().toEqualTypeOf<(typeof NODE_TYPES)[number]>();
+it("MxNode['type'] is the set of node names marked 'node' in Appendix A, and a registered node's key", () => {
+  // A registered node (`MxRegisteredNode`) is typed by its `dialect:Type` key.
+  expectTypeOf<MxNode["type"]>().toEqualTypeOf<
+    (typeof NODE_TYPES)[number] | `${string}:${string}`
+  >();
   const fromAppendix = appendixRows()
     // "generic base" (MxExpressionContainer) is not a node: no `type`.
     .filter((r) => r.kind.startsWith("node"))
@@ -751,6 +754,7 @@ it("MxChild is the child-list members and MxNode adds the rest (ast §3.0)", () 
     | "MxDeclaration"
     | "MxModuleStatement"
     | "MxTrigger"
+    | `${string}:${string}`
     | "MxBlockTag"
     | "MxFilter"
   >();

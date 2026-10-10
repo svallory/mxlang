@@ -17,6 +17,8 @@ export interface LineTriggerMeta extends Meta {
   text: Range;
   /** Whether it is announced (false on a re-lex). */
   fresh: boolean;
+  /** What the parser's `claim` answered (`undefined` without one). */
+  claim: unknown;
 }
 
 /**
@@ -38,6 +40,7 @@ export const LINE_TRIGGER: StateDefinition<LineTriggerMeta> = {
       trigger: undefined!,
       text: undefined!,
       fresh: false,
+      claim: undefined,
     };
   },
 
@@ -134,7 +137,7 @@ function announce(
   line: LineTriggerMeta,
   value: Range | undefined,
 ) {
-  const { trigger, text, fresh } = line;
+  const { trigger, text, fresh, claim } = line;
   if (fresh) {
     parser.options.onTrigger?.({
       id: trigger.id,
@@ -144,6 +147,7 @@ function announce(
       end: value ? value.end : text.end,
       text,
       ...(value && { value, operator: "=" as const }),
+      ...(claim !== undefined && { claim }),
     });
   }
 }

@@ -180,12 +180,7 @@ import {
   registerTemplateMetadataCompiler,
   type TemplateTag,
 } from "./template-tag.ts";
-import {
-  childrenWithTriggers,
-  dialectNodeOf,
-  lowerTriggers,
-  memberOf,
-} from "./triggers.ts";
+import { childrenWithTriggers, lowerTriggers, memberOf } from "./triggers.ts";
 import {
   findUncalledTagFile,
   markoFileTagMessage,
@@ -1140,8 +1135,9 @@ function lowerAttrNamed(
     // Decision 182 addendum 5: a whole-value member a dialect built
     // (`ctx.attribute(name, { kind: "member", name })`), marked the same way.
     const member = atom ? undefined : memberOf(value);
-    // Decision 202 item 3: a whole-value node a dialect's node type parsed.
-    const node = atom || member ? undefined : dialectNodeOf(value);
+    // Decision 202 item 3: a whole-value node a dialect's node type parsed,
+    // held by the attribute its trigger lowered to.
+    const node = atom || member ? undefined : attr?.dialectNode;
     return {
       kind: "static",
       name,

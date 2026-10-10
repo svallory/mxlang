@@ -36,6 +36,8 @@ import {
   isNodeTypeRow,
   MX_DIALECT,
   type NodeType,
+  rowKey,
+  TRIGGER_KEY,
   unregisteredNodeRow,
 } from "./dialect-registry.ts";
 import { findNearestPackageJson } from "./host-policy.ts";
@@ -69,10 +71,13 @@ export type StandIn = "number" | "identifier" | "keep";
  * `"attribute"` is an attribute named by the text after its first
  * character, the sigil (bare, or with its `=value`). Any other pairing is a positioned error. `{ call }` hands the
  * trigger to the dialect's `lowerTrigger` (decision 182 addendum 5).
- * `{ type, dialect }` names a node type the dialect registers
- * (`Dialect.nodeTypes`, decision 202 item 3): the row's `match` decides
- * where the node ends, the type's `parse` reads it and its `lower` builds
- * it. Attribute and line triggers only.
+ * `{ type, dialect }` names a registered node type (decision 202 item 3):
+ * one of the dialect's `nodeTypes`, or core's `mx:Trigger` (what `{ call }`
+ * and `"attribute"` are) or `mx:Expression`. The row's `match` decides
+ * where the text ends; the parser asks the type's `parse` to claim it, and
+ * a declined text parses as if no row matched. A claimed node stays in the
+ * tree at its position and its type's `lower` builds it. Attribute and
+ * line triggers only.
  */
 export type TriggerNode =
   | "string"
@@ -1077,9 +1082,10 @@ export interface SyntaxSite {
 }
 
 /**
- * Does lowering build this trigger (a built-in node kind, a `{ call }` with
- * the dialect's `lowerTrigger`, or a node type the dialect registers, which
- * loading already checked)?
+ * Does lowering build this `MxTrigger` (a built-in node kind, or core's
+ * `mx:Trigger` — a `{ call }` row or a row naming it — with the dialect's
+ * `lowerTrigger`)? A dialect type's node is never an `MxTrigger`: its own
+ * `lower` builds it, which loading already checked.
  */
 function lowersTrigger(
   table: SyntaxTable,
@@ -1088,8 +1094,10 @@ function lowersTrigger(
 ): boolean {
   const row = triggerRow(table, trigger);
   if (!row) return false;
-  if (isNodeTypeRow(row.node)) return true;
-  return isCallRow(row.node) ? !!dialect?.lowerTrigger : true;
+  if (isCallRow(row.node) || isNodeTypeRow(row.node)) {
+    return rowKey(row.node) === TRIGGER_KEY ? !!dialect?.lowerTrigger : true;
+  }
+  return true;
 }
 
 /**

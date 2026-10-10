@@ -106,6 +106,12 @@ export namespace Ranges {
      * named attribute's method shorthand; never with `value`.
      */
     method?: AttrMethod;
+    /**
+     * What the parser's `claim` answered for an attribute or line trigger
+     * (the claimed node), when one was given; absent otherwise. A trigger
+     * the claim declined is never announced: it lexes as if no row matched.
+     */
+    claim?: unknown;
   }
 }
 

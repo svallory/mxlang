@@ -157,17 +157,19 @@ export {
 /**
  * The node-type registry (decision 202 item 3): a dialect's `nodeTypes`,
  * keyed `dialect:Type`, with core's own MX AST types as dialect zero
- * (`mx:Tag`, …). A trigger row naming `node: { type, dialect }` parses its
- * text with the type's `parse` and lowers it with the type's `lower`.
+ * (`mx:Tag`, …). A trigger row naming `node: { type, dialect }` claims its
+ * text with the type's `parse` (`undefined` declines it), and the node it
+ * returns, in the tree at its position, lowers with the type's `lower`.
  *
  * @unstable until the Mesh dialect has moved onto it (slice c).
  */
 export {
+  type ClaimContext,
+  type ClaimPosition,
   CORE_DIALECT,
   type DialectNode,
   type DialectNodes,
   MX_DIALECT,
-  type NodeKit,
   type NodeType,
   nodeTypeRegistry,
   type RegisteredNodeType,

@@ -557,12 +557,19 @@ function checkForOperators(
     ) {
       // MX (decision 182): a space and then an attribute trigger that sets
       // `terminatesValue` ends an attribute value; decision 146's ` :ident`
-      // and ` .ident` rule as a table property.
+      // and ` .ident` rule as a table property. A row whose claim
+      // declines ends nothing: the value reads on as if no row matched.
       if (
         parser.syntax.terminators &&
         valueMayEndAt(expression, data, nextNonSpace) &&
         matchTrigger(parser.syntax.attribute!, data, nextNonSpace)?.trigger
-          .terminatesValue
+          .terminatesValue &&
+        parser.claimTrigger(
+          parser.syntax.attribute!,
+          data,
+          nextNonSpace,
+          "attribute",
+        ) !== undefined
       ) {
         return false;
       }

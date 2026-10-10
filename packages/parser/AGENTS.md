@@ -32,7 +32,15 @@ by the repo's lead, who owns the tooling.
 …, syntax })` take a table (an invalid one is a `TypeError`). Triggers are
 armed in three positions (expression, attribute name, tagless concise line),
 announced through `onTrigger` and stood in by `read()` at the same length;
-the front end builds `MxTrigger` nodes (`@mxlang/babel/mx-ast`, ast §4.4). Atoms and the `:name`/`#id`/`.class` sugars keep
+the front end builds `MxTrigger` nodes (`@mxlang/babel/mx-ast`, ast §4.4).
+With a `claim` option (`createParser(handlers, { syntax, claim })`, the
+front end's `parse(source, { …, claim })`; core passes it), a matching
+attribute or line row is asked once per position and offset: `undefined`
+declines, and the parse goes on as if no row matched; an object rides on
+the trigger event (`Ranges.Trigger.claim`), and the front end places it in
+the tree by identity (`freezeCopy` keeps it) in the trigger's place, unless
+its type is `MxTrigger`. A throw out of `claim` leaves `parse` unwrapped
+(`ClaimThrow`), not as `MX_FRONT_END_INTERNAL`. Atoms and the `:name`/`#id`/`.class` sugars keep
 their own paths until they move onto the table; a loaded row on `:` (expression
 or attribute) or `.` (attribute) turns the built-in path for that character
 off (the coexistence rule, `CompiledSyntax.builtIn*`), and

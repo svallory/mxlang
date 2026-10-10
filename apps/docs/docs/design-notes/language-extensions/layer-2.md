@@ -59,6 +59,13 @@ checks ("is this name declared") happen in `lowerTrigger` or `afterLower`,
 never during lexing. A matcher may capture a terminator and close on it
 (`closeFrom`), or declare `balance` for nested delimiters; both are data.
 
+An attribute or line row may instead name a node type the dialect registers
+(`node: { type, dialect }`). At a match, the type's `parse` claims the text
+by returning the node's fields, and the node stays in the AST where the text
+was; or it returns `undefined` to decline, and the text parses as if the row
+had not matched (an attribute name, or a tag on its line). The type's `lower`
+turns the node into core's shapes.
+
 ## The Mesh syntax set
 
 Mesh is the first layer-2 user and the acceptance test. Its module carries

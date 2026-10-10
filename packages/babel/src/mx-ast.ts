@@ -155,6 +155,23 @@ export interface MxTrigger extends MxNodeBase {
 }
 
 /**
+ * A node a registered node type claimed at an attribute or line trigger
+ * (ast §4.4): in place of an `MxTrigger`, at the same position. Its `type`
+ * is its registry key (`ref:Ref`); `span` is the text the row matched.
+ * Core sets the trigger's offsets, `operator`, `value` and `args` as on an
+ * `MxTrigger`; every other field is the node type's own. Core's own
+ * `mx:Trigger` claims an `MxTrigger` instead.
+ */
+export interface MxRegisteredNode extends Span {
+  readonly type: `${string}:${string}`;
+  readonly span: { readonly sourceStart: number; readonly sourceEnd: number };
+  readonly operator: "=" | ":=" | null;
+  readonly value: MxExpression | MxMethod | null;
+  readonly args: MxArguments | null;
+  readonly [field: string]: unknown;
+}
+
+/**
  * A syntax table's block tag (decision 182; ast §4.5), `{% for x in xs %}`:
  * a child of the enclosing body. Raw: `value` is the body between the
  * table's `open` and `close`, untrimmed. Core's `lowerBlockTag` builds IR
@@ -382,6 +399,7 @@ interface MxTagFields {
     | MxSpreadAttribute
     | MxComment
     | MxTrigger
+    | MxRegisteredNode
   )[];
   readonly body: readonly MxChild[] | null;
   readonly bodyMode: MxBodyMode;
@@ -434,6 +452,7 @@ export type MxChild =
   | MxDeclaration
   | MxModuleStatement
   | MxTrigger
+  | MxRegisteredNode
   | MxBlockTag
   | MxFilter;
 

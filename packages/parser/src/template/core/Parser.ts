@@ -12,7 +12,9 @@ import {
   type CompiledSyntax,
   type CompiledTrigger,
   DEFAULT_COMPILED,
+  matchTrigger,
   standInText,
+  type TriggerSet,
 } from "../syntax.ts";
 import * as CODE from "../util/codes.ts";
 import * as TagType from "../util/tag-type.ts";
@@ -55,6 +57,19 @@ export interface StateDefinition<P extends Meta = Meta> {
   parse: (this: Parser, data: string, maxPos: number, activeRange: P) => void;
   return: (this: Parser, child: Meta, activeRange: P) => void;
 }
+
+/**
+ * MX: the `claim` option of `createParser`. Asked when an attribute or line
+ * trigger's row matches, with the row's id, the position and the matched
+ * text's range; `undefined` declines (the text lexes as if no row matched),
+ * anything else claims it.
+ */
+export type TriggerClaim = (
+  id: string,
+  position: "attribute" | "line",
+  start: number,
+  end: number,
+) => unknown;
 
 /** MX (decision 182): a lexed trigger's span and the stand-in `read` gives it. */
 export interface TriggerSpan extends Range {
@@ -110,10 +125,19 @@ export class Parser {
   declare public triggers: TriggerSpan[];
   /** MX (decision 182): where the last trigger lexed starts (-1: none). */
   declare public lastTriggerStart: number;
+  /** MX: the `claim` option; absent means every matched row claims. */
+  declare public claim: TriggerClaim | undefined;
+  /** MX: what `claim` answered, by position and trigger start, so a re-lex asks once. */
+  declare public claims: Map<string, unknown>;
 
-  constructor(options: Options, syntax: CompiledSyntax = DEFAULT_COMPILED) {
+  constructor(
+    options: Options,
+    syntax: CompiledSyntax = DEFAULT_COMPILED,
+    claim?: TriggerClaim,
+  ) {
     this.options = options;
     this.syntax = syntax;
+    this.claim = claim;
   }
 
   declare public startOffset: number;
@@ -162,6 +186,30 @@ export class Parser {
       last = next.end;
     }
     return last === range.start ? text : out + this.data.slice(last, range.end);
+  }
+
+  /**
+   * MX: the row of `set` matching at `pos`, when its claim takes it. With no
+   * `claim` option every match claims (`claim` is then `undefined`); a
+   * declined match is `undefined`, as if no row matched.
+   */
+  claimTrigger(
+    set: TriggerSet,
+    data: string,
+    pos: number,
+    position: "attribute" | "line",
+  ): { trigger: CompiledTrigger; end: number; claim: unknown } | undefined {
+    const hit = matchTrigger(set, data, pos);
+    if (hit === undefined) return undefined;
+    if (this.claim === undefined) return { ...hit, claim: undefined };
+    const key = `${position}:${pos}`;
+    let claim: unknown;
+    if (this.claims.has(key)) claim = this.claims.get(key);
+    else {
+      claim = this.claim(hit.trigger.id, position, pos, hit.end);
+      this.claims.set(key, claim);
+    }
+    return claim === undefined ? undefined : { ...hit, claim };
   }
 
   /**
@@ -487,6 +535,7 @@ export class Parser {
     this.atoms = [];
     this.triggers = [];
     this.lastTriggerStart = -1;
+    this.claims = new Map();
     this.rawOpenTags = new Map();
     // Drop any state left over from a previous parse so reusing a parser
     // does not chain (and retain) the old state metas via parent references.
