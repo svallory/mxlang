@@ -21,7 +21,7 @@ describe("invalid tag names (IR entry point)", () => {
       column: 2,
     });
     expect(diagnostics[0]?.message).toContain(
-      "Invalid tag name `&title`; Marko rejects it too — a tag name may use letters (any script), digits and `-._:$`",
+      "Invalid tag name `&title` — a tag name may use letters (any script), digits and `-._:$`",
     );
   });
 
@@ -38,7 +38,9 @@ describe("invalid tag names (IR entry point)", () => {
     expect(diagnostics[0]?.message).toContain(
       "Invalid attribute name `&dueOn`",
     );
-    expect(diagnostics[0]?.message).toContain("Marko rejects it too");
+    expect(diagnostics[0]?.message).toContain(
+      "an attribute name may use letters",
+    );
   });
 
   it.each(["a-b", "a.b", "a:b", "a_b", "a$b"])(
