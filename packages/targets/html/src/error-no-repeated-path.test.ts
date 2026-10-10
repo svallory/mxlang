@@ -34,7 +34,7 @@ describe("a TranslateError message does not repeat the compiled file's path", ()
     const error = failure('<input [value]="input.name"/>\n', file);
     expect(error.name).toBe("TranslateError");
     expect(error.message.replace(ANSI, "")).toBe(
-      "Invalid attribute name `[value]`; Marko rejects it too — write `value=` with the expression as the value",
+      "Invalid attribute name `[value]` — write `value=` with the expression as the value",
     );
   });
 
@@ -62,7 +62,7 @@ describe("a TranslateError message does not repeat the compiled file's path", ()
     );
     expect(error.name).toBe("TranslateError");
     expect(error.message.replace(ANSI, "")).toBe(
-      "Invalid attribute name `[value]`; Marko rejects it too — write `value=` with the expression as the value",
+      "Invalid attribute name `[value]` — write `value=` with the expression as the value",
     );
   });
 
@@ -83,7 +83,7 @@ describe("a TranslateError message does not repeat the compiled file's path", ()
       );
       expect(error.name).toBe("TranslateError");
       expect(error.message.replace(ANSI, "")).toBe(
-        "Invalid attribute name `[value]`; Marko rejects it too — write `value=` with the expression as the value",
+        "Invalid attribute name `[value]` — write `value=` with the expression as the value",
       );
     } finally {
       rmSync(dir, { recursive: true, force: true });

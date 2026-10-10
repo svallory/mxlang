@@ -70,7 +70,7 @@ describe("a stock parser", () => {
       normalizeMxSyntax({ lineTriggers: [MEMBER] }, manifest),
     );
     expect(error.message).toBe(
-      "`mx.syntax`: a syntax table other than the `.mx` default row needs MX's template parser; the installed `htmljs-parser` has no syntax table",
+      "`mx.syntax`: a syntax table other than the `.mx` default row needs the template parser; the installed `htmljs-parser` has no syntax table",
     );
     expect(error.file).toBe(manifest);
     expect([error.line, error.column]).toEqual([3, 10]);

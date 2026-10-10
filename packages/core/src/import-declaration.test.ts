@@ -80,7 +80,7 @@ describe("Import.declaration", () => {
 const NOT_ES =
   'an `import` statement must be one ES import declaration (`import … from "…"`); `import x = …` and several statements in one `import` are not supported';
 const FLOW =
-  "`import typeof` is Flow syntax; MX is TypeScript. Use `import type` for an import that binds no value";
+  "`import typeof` is Flow syntax; the template language is TypeScript. Use `import type` for an import that binds no value";
 
 function refusal(source: string): {
   message: string;

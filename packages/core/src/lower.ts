@@ -704,7 +704,7 @@ const FOREIGN_ATTR_HINTS: [
 ][] = [
   [
     /^\[\(([^()[\]]+)\)\]$/,
-    (m) => `Marko's two-way binding is \`${m[1]}:=expr\``,
+    (m) => `two-way binding is written \`${m[1]}:=expr\``,
   ],
   [/^\[class\.([^[\]]+)\]$/, (m) => `write \`class={ ${m[1]}: cond }\``],
   [
@@ -856,7 +856,7 @@ function validateBuiltinValueAttributes(node: Node, name: string): void {
   if (name === "const" || name === "id") {
     if (tagAttributesOf(node).length > 1) {
       fail(
-        `The [\`<${name}>\` tag](https://markojs.com/docs/reference/core-tag#${name}) only supports the [\`value=\` attribute](https://markojs.com/docs/reference/language#shorthand-value).`,
+        `The \`<${name}>\` tag only supports the \`value=\` attribute.`,
         node.name,
       );
     }
@@ -937,7 +937,7 @@ function lowerAttrNamed(
     !ATTR_NAME.test(attr.name)
   ) {
     fail(
-      `Invalid attribute name \`${attr.name}\`; Marko rejects it too — ${foreignAttrHint(attr.name, productOf(ctx))}`,
+      `Invalid attribute name \`${attr.name}\` — ${foreignAttrHint(attr.name, productOf(ctx))}`,
       attr,
     );
   }
@@ -2338,7 +2338,7 @@ function lowerForHead(
   const keyAttr = attrByName(node, "key");
   if (keyAttr) {
     fail(
-      `The [\`<for>\` tag](https://markojs.com/docs/reference/core-tag#for) keys items with the \`by=\` attribute, not \`key=\`. ${
+      `The \`<for>\` tag keys items with the \`by=\` attribute, not \`key=\`. ${
         of
           ? 'Use `by="propName"` or `by=(item, index) => key`'
           : inAttr
@@ -2403,7 +2403,7 @@ function lowerForHead(
   const byValue = by ? attrValueOf(ctx, by) : undefined;
   if (!of && byValue?.type === "StringLiteral") {
     fail(
-      `The [\`<for>\` tag](https://markojs.com/docs/reference/core-tag#for) only supports a string \`by\` key with \`of\`; use a \`by=(${
+      `The \`<for>\` tag only supports a string \`by\` key with \`of\`; use a \`by=(${
         inAttr ? "key, value" : "index"
       }) => ...\` function for \`<for ${inAttr ? "in" : to ? "to" : "until"}>\`.`,
       byValue,
@@ -2585,7 +2585,7 @@ function failUncallableTaglibTag(ctx: Ctx, name: string, node: Node): never {
   const found = uncalledTagFileOf(ctx, name);
   if (found) failUncalled(ctx, name, found, node);
   fail(
-    `\`<${name}>\` is declared by a Marko taglib with no template (a \`renderer\`), which ${productOf(ctx)} cannot call. Write the tag as \`tags/${name}.mx\`, or import it explicitly.`,
+    `\`<${name}>\` is declared by a taglib with no template (a \`renderer\`), which ${productOf(ctx)} cannot call. Write the tag as \`tags/${name}.mx\`, or import it explicitly.`,
     node,
   );
 }
@@ -3005,7 +3005,7 @@ function refuseUnsupportedImport(node: Node): void {
   }
   if (isTypeofImport(declaration)) {
     fail(
-      "`import typeof` is Flow syntax; MX is TypeScript. Use `import type` for an import that binds no value",
+      "`import typeof` is Flow syntax; the template language is TypeScript. Use `import type` for an import that binds no value",
       node,
     );
   }
@@ -3909,7 +3909,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   const name = String(tagNameOf(node));
   if (!TAG_NAME.test(name) && !NOT_A_NAME_SHAPE.test(name)) {
     fail(
-      `Invalid tag name \`${name}\`; Marko rejects it too — a tag name may use letters (any script), digits and \`-._:$\``,
+      `Invalid tag name \`${name}\` — a tag name may use letters (any script), digits and \`-._:$\``,
       node.name,
     );
   }
@@ -4013,7 +4013,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       )
         break;
       return fail(
-        `\`class { … }\` is not supported in ${productOf(ctx)}: a Marko component class has no equivalent on any target — write a function component, or put the state in \`<let>\`/\`static\` code`,
+        `\`class { … }\` is not supported in ${productOf(ctx)}: a component class has no equivalent on any target — write a function component, or put the state in \`<let>\`/\`static\` code`,
         node,
       );
     case "for":
@@ -4676,7 +4676,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
           // Marko kind this switch has no arm for keeps today's behaviour.
           if (String(child.type).startsWith("Mx")) {
             fail(
-              `\`${child.type}\` has no lowering yet (not yours: an MX bug)`,
+              `\`${child.type}\` has no lowering yet (not yours: an internal bug)`,
               child,
             );
           }

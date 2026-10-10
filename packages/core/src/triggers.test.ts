@@ -28,6 +28,7 @@ import {
   resolveSyntaxOf,
   type SyntaxModule,
   type Trigger,
+  type TriggerExpressionNode,
 } from "./syntax-table.ts";
 import { lookup as targets } from "./test-targets.ts";
 
@@ -444,7 +445,9 @@ describe("a hook's result is checked", () => {
     (_, node, got) => {
       const bad = moduleWith(rows, {
         lowerTrigger: (_id, _text, _span, ctx) =>
-          ctx.expression(node as unknown as object),
+          // SAFETY: the row's point is a node the runtime must refuse; the
+          // assertion deliberately bypasses the interface.
+          ctx.expression(node as unknown as TriggerExpressionNode),
       });
       const error = caught(() => irOf("rule x=&a\n", undefined, bad));
       expect(error.message).toBe(

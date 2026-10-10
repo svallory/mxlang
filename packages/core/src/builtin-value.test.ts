@@ -23,7 +23,7 @@ function check(source: string, vocabulary = false): void {
   lower(ctx, parseFragment(source, { filename: "probe.mx" }).body);
 }
 const onlyValue = (tag: string) =>
-  `The [\`<${tag}>\` tag](https://markojs.com/docs/reference/core-tag#${tag}) only supports the [\`value=\` attribute](https://markojs.com/docs/reference/language#shorthand-value).`;
+  `The \`<${tag}>\` tag only supports the \`value=\` attribute.`;
 
 describe("builtin duplicate value validation (Marko 6.3.51)", () => {
   it("does not impose compiler-builtin rules on delegated vocabulary", () => {

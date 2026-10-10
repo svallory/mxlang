@@ -99,10 +99,10 @@ describe("payloadOf", () => {
     expect(payloadOf(expression({ node, triggers: [] }))).toBe(node);
   });
 
-  it("fails a container with neither a payload nor an error as an MX bug", () => {
+  it("fails a container with neither a payload nor an error as an internal bug", () => {
     expect(thrown(() => payloadOf(expression({ start: 3, end: 7 })))).toEqual({
       message:
-        "`MxExpression` has neither a payload nor an error (not yours: an MX bug)",
+        "`MxExpression` has neither a payload nor an error (not yours: an internal bug)",
       span: { sourceStart: 3, sourceEnd: 7 },
     });
   });

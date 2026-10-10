@@ -2122,7 +2122,7 @@ describe("errors keep their message and position", () => {
         caught = error as { message: string; line?: number; column?: number };
       }
       expect(caught?.message).toContain(
-        `Invalid tag name \`${name}\`; Marko rejects it too — a tag name may use letters (any script), digits and \`-._:$\``,
+        `Invalid tag name \`${name}\` — a tag name may use letters (any script), digits and \`-._:$\``,
       );
       expect(caught?.column).toBe(column);
     },
@@ -5213,7 +5213,7 @@ describe("hybrid node kinds and spans, MX-shaped (PR 4 slice 2)", () => {
       error = e;
     }
     expect(() => assertPositioned(error)).toThrowError(
-      "an error left the lowering without a source position (not yours: an MX bug): oops",
+      "an error left the lowering without a source position (not yours: an internal bug): oops",
     );
     positionError(ctxFor(source), error);
     expect(() => assertPositioned(error)).not.toThrow();
@@ -6634,7 +6634,7 @@ describe("hybrid module statements and the signature, MX-shaped (PR 4 slice 6)",
         ]),
       ),
     ).toMatchObject({
-      message: "`MxUnknown` has no lowering yet (not yours: an MX bug)",
+      message: "`MxUnknown` has no lowering yet (not yours: an internal bug)",
       line: 1,
       column: 1,
     });
@@ -6652,7 +6652,7 @@ describe("hybrid module statements and the signature, MX-shaped (PR 4 slice 6)",
     const other = thrown(() => fail("there", node, "other.mx")).e;
     positionError(ctxFor(source), other);
     expect([other.line, other.column]).toEqual([0, 0]);
-    expect(() => assertPositioned(other)).toThrow(/not yours: an MX bug/);
+    expect(() => assertPositioned(other)).toThrow(/not yours: an internal bug/);
   });
 
   it("refuses another file's unpositioned error at lower()'s boundary", () => {
@@ -6673,6 +6673,6 @@ describe("hybrid module statements and the signature, MX-shaped (PR 4 slice 6)",
       ),
     ).e;
     expect(error.file).toBe("x.mx");
-    expect(() => assertPositioned(error)).toThrow(/not yours: an MX bug/);
+    expect(() => assertPositioned(error)).toThrow(/not yours: an internal bug/);
   });
 });

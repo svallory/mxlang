@@ -9,7 +9,7 @@
           {
             "severity": 1,
             "source": "mxlang",
-            "message": "`:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name",
+            "message": "`:` is name sugar and needs a name (`:email`); write `value:` for the `value` attribute",
             "range": {
               "start": {
                 "line": 0,
@@ -33,7 +33,7 @@
         "compileDiagnostics": [
           {
             "fileName": "<root>/sugar-bare-colon/after-value.mx",
-            "message": "`:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name",
+            "message": "`:` is name sugar and needs a name (`:email`); write `value:` for the `value` attribute",
             "offset": 13,
             "category": "error"
           }
@@ -44,7 +44,7 @@
       "vite": {
         "threw": {
           "name": "TranslateError",
-          "message": "`:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name",
+          "message": "`:` is name sugar and needs a name (`:email`); write `value:` for the `value` attribute",
           "id": "<root>/sugar-bare-colon/after-value.mx",
           "loc": {
             "file": "<root>/sugar-bare-colon/after-value.mx",
@@ -65,7 +65,7 @@
           {
             "severity": 1,
             "source": "mxlang",
-            "message": "`:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name",
+            "message": "`:` is name sugar and needs a name (`:email`); write `value:` for the `value` attribute",
             "range": {
               "start": {
                 "line": 0,
@@ -89,7 +89,7 @@
         "compileDiagnostics": [
           {
             "fileName": "<root>/sugar-bare-colon/concise.mx",
-            "message": "`:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name",
+            "message": "`:` is name sugar and needs a name (`:email`); write `value:` for the `value` attribute",
             "offset": 6,
             "category": "error"
           }
@@ -100,7 +100,7 @@
       "vite": {
         "threw": {
           "name": "TranslateError",
-          "message": "`:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name",
+          "message": "`:` is name sugar and needs a name (`:email`); write `value:` for the `value` attribute",
           "id": "<root>/sugar-bare-colon/concise.mx",
           "loc": {
             "file": "<root>/sugar-bare-colon/concise.mx",
@@ -121,7 +121,7 @@
           {
             "severity": 1,
             "source": "mxlang",
-            "message": "`:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name",
+            "message": "`:` is name sugar and needs a name (`:email`); write `value:` for the `value` attribute",
             "range": {
               "start": {
                 "line": 0,
@@ -145,7 +145,7 @@
         "compileDiagnostics": [
           {
             "fileName": "<root>/sugar-bare-colon/page.mx",
-            "message": "`:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name",
+            "message": "`:` is name sugar and needs a name (`:email`); write `value:` for the `value` attribute",
             "offset": 7,
             "category": "error"
           }
@@ -156,7 +156,7 @@
       "vite": {
         "threw": {
           "name": "TranslateError",
-          "message": "`:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name",
+          "message": "`:` is name sugar and needs a name (`:email`); write `value:` for the `value` attribute",
           "id": "<root>/sugar-bare-colon/page.mx",
           "loc": {
             "file": "<root>/sugar-bare-colon/page.mx",
@@ -170,8 +170,8 @@
     }
   },
   "mxTsc": [
-    "<root>/sugar-bare-colon/after-value.mx(1,14): error TS80001: `:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name",
-    "<root>/sugar-bare-colon/concise.mx(1,7): error TS80001: `:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name",
-    "<root>/sugar-bare-colon/page.mx(1,8): error TS80001: `:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name"
+    "<root>/sugar-bare-colon/after-value.mx(1,14): error TS80001: `:` is name sugar and needs a name (`:email`); write `value:` for the `value` attribute",
+    "<root>/sugar-bare-colon/concise.mx(1,7): error TS80001: `:` is name sugar and needs a name (`:email`); write `value:` for the `value` attribute",
+    "<root>/sugar-bare-colon/page.mx(1,8): error TS80001: `:` is name sugar and needs a name (`:email`); write `value:` for the `value` attribute"
   ]
 }

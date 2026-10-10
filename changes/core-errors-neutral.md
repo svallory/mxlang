@@ -1,0 +1,5 @@
+---
+packages: [core, parser]
+kind: Changed
+---
+Core's construct diagnostics no longer name the underlying template language or its origin project: a dialect built on the machinery may hide what it is built on, and a dialect author sees these errors. Thirteen user-facing message strings now state the rule itself — "Marko rejects it too" became the rule's own words on the invalid tag name and attribute name, "MX is TypeScript" became "the template language is TypeScript" on `import typeof`, "a Marko taglib" became "a taglib", "a Marko component class" became "a component class", the `(not yours: an MX bug)` internal-error suffix became `(not yours: an internal bug)`, and the `<const>`/`<id>` `value=` error dropped its links to the origin project's docs site. Meaning, position, severity and error codes are unchanged. The ported parser front end's copy of the bare-`:` name-sugar message changes with it, so the parse differential stays byte-identical between the two paths; tests, the `mx-tsc` host-dispatch golden and one `targets/html` pin carry the new texts.

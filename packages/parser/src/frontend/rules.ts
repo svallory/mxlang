@@ -433,7 +433,7 @@ function attrChainRules(
         point(
           ctx,
           "MX_SUGAR_NAME_MISSING",
-          "`:` is name sugar and needs a name (`:email`); write `value:` for Marko's attribute of that name",
+          "`:` is name sugar and needs a name (`:email`); write `value:` for the `value` attribute",
           textStart,
         ),
       );

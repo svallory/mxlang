@@ -792,7 +792,7 @@ export function positionError(ctx: Ctx, error: unknown): void {
 export function assertPositioned(error: unknown): void {
   if (!(error instanceof TranslateError) || !unpositioned.has(error)) return;
   throw new Error(
-    `@mxlang/core: an error left the lowering without a source position (not yours: an MX bug): ${error.message}`,
+    `@mxlang/core: an error left the lowering without a source position (not yours: an internal bug): ${error.message}`,
     { cause: error },
   );
 }

@@ -150,7 +150,7 @@ const TODAY_OWN_REASON: Record<string, { start: number; message: string }> = {
   g0330: {
     start: 9,
     message:
-      "Invalid attribute name `.`; Marko rejects it too — an attribute name may use letters, digits and `._:-`",
+      "Invalid attribute name `.` — an attribute name may use letters, digits and `._:-`",
   },
   g1715: {
     start: 8,

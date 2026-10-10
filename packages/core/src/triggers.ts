@@ -46,6 +46,7 @@ import type {
   TriggerChild,
   TriggerContext,
   TriggerExpression,
+  TriggerExpressionNode,
   TriggerFailOptions,
   TriggerMethod,
   TriggerPosition,
@@ -372,7 +373,7 @@ function callHook(
     valueForm,
     use,
     operator,
-    expression(node: object): TriggerExpression {
+    expression(node: TriggerExpressionNode): TriggerExpression {
       const problem = notAnExpression(node);
       if (problem) {
         fail(
@@ -592,7 +593,7 @@ function rowFor(table: SyntaxTable, trigger: Node) {
   const row = triggerRow(table, trigger);
   if (!row) {
     fail(
-      `the \`${trigger.id}\` trigger has no row in the syntax table (not yours: an MX bug)`,
+      `the \`${trigger.id}\` trigger has no row in the syntax table (not yours: an internal bug)`,
       trigger,
     );
   }

@@ -136,7 +136,7 @@ describe("a tag a translator taglib registers", () => {
 
   it("is an error when nothing resolves it to a module", () => {
     expect(() => lowerWithTaglib("<badge/>", policy())).toThrow(
-      "`<badge>` is declared by a Marko taglib with no template (a `renderer`), which",
+      "`<badge>` is declared by a taglib with no template (a `renderer`), which",
     );
   });
 
@@ -223,7 +223,7 @@ describe("a tag a translator taglib registers", () => {
     it("is an error when nothing resolves it to a module", () => {
       for (const prefix of [IMPORT, DEFINE]) {
         expect(failure(`${prefix}<badge label="a"/>`, policy())).toContain(
-          "`<badge>` is declared by a Marko taglib with no template (a `renderer`), which",
+          "`<badge>` is declared by a taglib with no template (a `renderer`), which",
         );
       }
     });

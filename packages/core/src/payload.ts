@@ -38,7 +38,7 @@ export function payloadOf(container: Node): Node {
   if (container.error) fail(container.error.message, container.error);
   if (container.node == null) {
     fail(
-      `\`${container.type}\` has neither a payload nor an error (not yours: an MX bug)`,
+      `\`${container.type}\` has neither a payload nor an error (not yours: an internal bug)`,
       container,
     );
   }

@@ -101,7 +101,7 @@ describe("MX_ATTRIBUTE_TAG_AT_ROOT", () => {
 describe("MX_SUGAR_NAME_MISSING", () => {
   it("an attribute `:` with no word: `write value:` hint included", () => {
     expect(frontEnd(doc("div x=a :"))).toEqual([
-      `MX_SUGAR_NAME_MISSING [8,9) "\`:\` is name sugar and needs a name (\`:email\`); write \`value:\` for Marko's attribute of that name" ctx=null`,
+      `MX_SUGAR_NAME_MISSING [8,9) "\`:\` is name sugar and needs a name (\`:email\`); write \`value:\` for the \`value\` attribute" ctx=null`,
     ]);
   });
 

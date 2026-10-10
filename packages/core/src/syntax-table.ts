@@ -241,6 +241,18 @@ export type TriggerValueForm =
   | null;
 
 /**
+ * What `ctx.expression` accepts: the runtime check (`notAnExpression`)
+ * insists on a non-array object with a string `type`, so this interface is
+ * the parameter's real promise.
+ */
+export interface TriggerExpressionNode {
+  /** The Babel node type (`StringLiteral`, `MemberExpression`, …). */
+  readonly type: string;
+  /** The node's other Babel fields; the runtime check reads only `type`. */
+  [key: string]: unknown;
+}
+
+/**
  * What `lowerTrigger` is handed (decision 182 addendum 5): where the trigger
  * sits, its lowered `=value`, and the three constructors, the only way a
  * module builds anything. Each position takes the matching result:
@@ -268,7 +280,7 @@ export interface TriggerContext {
   readonly use: TriggerUse;
   /** The operator when `use` is `"unary"` (`-`, `!`, `typeof`, …); `null` otherwise. @unstable */
   readonly operator: string | null;
-  expression(node: object): TriggerExpression;
+  expression(node: TriggerExpressionNode): TriggerExpression;
   attribute(
     name: string | null,
     value: TriggerAttributeValue,
@@ -462,7 +474,7 @@ function syntaxParser() {
 
 /** Why a table cannot be honoured: the installed parser has no syntax table. */
 const NEEDS_MX_PARSER =
-  "a syntax table other than the `.mx` default row needs MX's template parser; the installed `htmljs-parser` has no syntax table";
+  "a syntax table other than the `.mx` default row needs the template parser; the installed `htmljs-parser` has no syntax table";
 
 function deepFreeze<T>(value: T): T {
   if (value && typeof value === "object" && !Object.isFrozen(value)) {
@@ -612,6 +624,11 @@ function checkModuleShape(
     fail(`\`${path}productName\` must be a non-empty string`);
   }
   checkContractFields(value.contractFields, path, fail);
+  // SAFETY: the checks above validated `value` field by field (keys in
+  // MODULE_FIELDS, `table` present, hooks functions, `productName` a
+  // non-empty string, contract fields checked) — exactly SyntaxModule's
+  // shape; the assertion carries that dynamic validation into the typed
+  // interface.
   return value as unknown as SyntaxModule;
 }
 
@@ -819,6 +836,9 @@ export function explicitSyntaxOf(
   }
   const known = explicitModules.get(value);
   if (known) return known;
+  // SAFETY: `isSyntaxModule` narrowed `value` to SyntaxModule, a plain
+  // object; checkModuleShape reads its fields dynamically, so the record
+  // view is the same object widened for the field-by-field validation.
   const module = checkModuleShape(
     value as unknown as Record<string, unknown>,
     "syntax.",
