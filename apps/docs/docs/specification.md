@@ -600,22 +600,25 @@ lowercase (the exact complement of Marko's `/^[A-Z]/` rule, so `_x` and `$x`
 count as lowercase), or through a dynamic tag (`<${row}>`). `import { input }
 from "@angular/core"` therefore never turns `<input>` into a call of that
 import. The check runs in core, once, before any host's `isComponent` or
-unknown-tag path, and applies to a lowercase tag `<x>` whose name equals an
-**`import` or `<define>` binding** — a `<define>` in scope, a default or named
-import, a tag module or a `.ts` value. That is Marko's own rule for a local
-variable (measured on the stock parser: identical for a tag import, a value
-import and a `static const` local), with one boundary: a `<const>` or tag
-param of that name is not this error — Marko raises the same message for it,
-MX leaves it to the unknown-tag path (an error too, in different words). A
-*native* name is exempt: `<span>` stays
-the element whatever is bound, silently for a value binding, with the warning
-below for a tag binding:
+unknown-tag path, and applies to a lowercase tag `<x>` whose name equals a
+**local binding of any kind** — a `<define>` in scope, a default or named
+import, a tag module or a `.ts` value, a `<const>`, a `<for>`/`<define>` tag
+param, a `static` declaration. That is Marko's own rule for a local variable
+(measured on the stock parser: the message and position are identical for a
+tag import, a value import, a `static const` local, a `<const>` and a `<for>`
+param; a use *before* the `import`/`static` statement is not covered —
+bindings register in document order). A *native* name is exempt: `<span>`
+stays the element whatever is bound, silently for a value binding, with the
+warning below for a tag binding, and so is a **core taglib name** (`<debug>`,
+`<log>`): stock Marko compiles `import debug from "debug"` + `<debug/>` as the
+core tag, so the tag keeps whatever routing it has without the import — never
+the local-variable error:
 
 | `<x>` is… | Result |
 |---|---|
 | a native element (`<span>` + a define or tag import named `span`) | the native element, with a positioned warning at the tag: "`<span>` is the native element; the `span` defined\|imported at L:C is not called. Rename it `Span` or write `<${span}>`" |
-| a registered custom tag, a contract child, or a tag the target's own taglib registers (a third-party target's; a `marko.json` is not read, decision 197) | called as before, whatever is imported; no diagnostic |
-| none of those (`import row from "./row.mx"` + `<row/>`, a `.ts` value import, a named import, a lowercase `<define>`) | a positioned **error** on every target, Marko's own message verbatim, at the tag name: "`Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${row}/>` or rename to `Row`." |
+| a registered custom tag, a contract child, a tag the target's own taglib registers (a third-party target's; a `marko.json` is not read, decision 197), or a core taglib name (`<debug>`, `<log>`) | called (or disposed) as before, whatever is imported; no diagnostic, never the local-variable error |
+| none of those (`import row from "./row.mx"` + `<row/>`, a `.ts` value import, a named import, a lowercase `<define>`, `<const>`, `static const`, a lowercase `<for>` param) | a positioned **error** on every target, Marko's own message verbatim, at the tag name: "`Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${row}/>` or rename to `Row`." |
 
 Marko's message capitalizes the first character whatever it is, so `_row`'s
 rename offer reads "rename to `_row`" (kept verbatim for parity); the warning
@@ -634,7 +637,8 @@ target that rejected a lowercase value import (through its own
 `<row>` element, silently; all now raise the one error above, in core, in
 Marko's own words. A lowercase tag a host claims
 (`<style>`) returns before the warning, so it is silent. This matches Marko
-6.4.4 for a native element, and is stricter than it for the error case.
+6.4.4 for a native element, for every local-binding error form, and for a
+core taglib name bound by an import.
 
 ### Void elements
 

@@ -204,7 +204,7 @@ describe("a region's native elements", () => {
 // position - the tag name - for a tag import, a `.ts` value import and a
 // `static const` local). One error, host-agnostic, before any host's
 // `isElement`/`isComponent` is consulted.
-describe("a lowercase tag naming a file-local binding", () => {
+describe("a lowercase tag naming a local binding", () => {
   it("fails at the tag name with Marko's exact message, whatever the binding is", () => {
     for (const decl of [
       'import layout from "./layout.mx"',
@@ -224,5 +224,49 @@ describe("a lowercase tag naming a file-local binding", () => {
         column: 1,
       });
     }
+  });
+
+  // The r3 forms: a `<const>`, a `static` declaration and a `<for>` param are
+  // the same Marko error, at the same tag-name position (stock parser: 2:2,
+  // 2:2, 1:19 1-based), not the unknown-tag path they used to fall to.
+  it("fails at the tag name for a `<const>`, a `static const` and a `<for>` param", () => {
+    const cases: [string, string, string][] = [
+      [
+        "const",
+        '<const/layout="x"/>\n<layout/>\n',
+        "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${layout}/>` or rename to `Layout`.",
+      ],
+      [
+        "static",
+        "static const layout = 1\n<layout/>\n",
+        "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${layout}/>` or rename to `Layout`.",
+      ],
+      [
+        "for param",
+        "<for|row| of=[1]><row/></for>\n",
+        "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${row}/>` or rename to `Row`.",
+      ],
+    ];
+    for (const [label, source, message] of cases) {
+      let error: unknown;
+      try {
+        irOf(source);
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error, label).toMatchObject({
+        message,
+        line: label === "for param" ? 1 : 2,
+        column: label === "for param" ? 18 : 1,
+      });
+    }
+  });
+
+  it("a core taglib name bound by an import is exempt: the tag keeps its routing, never the local-variable error", () => {
+    // Stock Marko compiles `import debug from "debug"` + `<debug/>` as the
+    // core `<debug>` tag. The rule must not blame the import.
+    expect(body('import debug from "debug"\n<debug/>\n')).toEqual([
+      { element: "debug", children: [] },
+    ]);
   });
 });
