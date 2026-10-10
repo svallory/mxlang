@@ -148,7 +148,7 @@ describe("mx.<target>.defaultTag validation, once per package", () => {
     expect(diagnostics.map((d) => d.code)).toEqual(["invalid-default-tag"]);
   });
 
-  // TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+  // TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
   // check re-keys this case.
   it.skip("on tree, reachable means the built-in `object` plus the custom tags", () => {
     const dataPackage = (name: string) =>
@@ -409,7 +409,7 @@ describe("a loaded descriptor's own values are checked against the target's look
   });
 });
 
-// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
 // check re-keys this suite.
 describe.skip("a third-party host on the tree target (decision 148)", () => {
   afterEach(() => teardownMesh());
@@ -566,7 +566,7 @@ describe("Marko core tags are no valid default on any target (round 3)", () => {
     }
   });
 
-  // TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+  // TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
   // check re-keys this case.
   it.skip("tree rejects them as well (and falls back to object)", () => {
     for (const name of CORE) {
@@ -730,7 +730,7 @@ describe("a contract's defaultTag is checked at registration, at the declaration
     expect(() => resolveTargetPolicyDetailed(file)).not.toThrow();
   });
 
-  // TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+  // TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
   // check re-keys this case.
   it.skip("on tree, `object` and declared tags are valid; html elements are not", () => {
     const data = (name: string) =>
@@ -923,7 +923,7 @@ describe("a dashed custom-element name, per target, as measured (decision 145, r
     },
   );
 
-  // TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+  // TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
   // check re-keys this case.
   it.skip("tree rejects it, config and contract", () => {
     const config = project({

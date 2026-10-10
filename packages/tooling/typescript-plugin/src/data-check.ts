@@ -36,7 +36,7 @@ export interface DataCheckResult {
  * says `mx.target: "tree"` (rule-5 inference does not count). The editor
  * tools never ask: `mx-tsc` is the one caller. Decision 204 removed the tree
  * target, so nothing qualifies until the dialect check (TODO dialect-check
- * (PR 1)).
+ * (PR 1c)).
  */
 export function isDataProject(dir: string): boolean {
   return registryIsDataProject(dir);

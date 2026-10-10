@@ -139,7 +139,7 @@ The messages still say "data tree" (``the data tree is static; this file's consu
 
 A **dialect** is a package that declares itself in its `package.json#mx.dialect`: its id, its name, the file extensions it claims and the module that carries its syntax table and hooks. `lowerSource` routes a file to the dialect that claims its extension, or takes one through the `dialect` option; contracts and the tag rules preset are still options (specification §13.9.2).
 
-Until the tools route dialect files (decision 212, PR 1b):
+Until the tools route dialect files (decision 212, PR 1c):
 
 - **`mx-tsc`, the language server, the TypeScript plugin and Vite do not check dialect files.** `mx.target: "tree"` in a `package.json` is an error in every tool: `mx.target "tree" was removed (decision 204); a consumer that reads the tree calls lowerSource from @mxlang/core`. The `mx-tsc` check of a data package is gone with the target; the dialect check replaces it.
 - A dialect's own CLI or test suite calls `lowerSource` with its options and prints the diagnostics.

@@ -127,7 +127,7 @@ describe("a file no region kind registers compiles whole-file", () => {
 
 const MESH_KIND = [{ segment: "mesh", diagnosticSource: "mesh" }];
 
-// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
 // check re-keys this suite.
 describe.skip(".mesh.mx (a third-party host on the data target)", () => {
   const compile = async (options: MeshOptions, source = "<x a=1/>\n") => {

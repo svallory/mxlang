@@ -72,7 +72,7 @@ function check(dir: string, ...extra: string[]) {
   }
 }
 
-// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
 // check re-keys this suite.
 describe.skip("mx-tsc on a data package", () => {
   it("prints every file's diagnostics in order and exits 1", async () => {
@@ -946,7 +946,7 @@ describe.skip("mx-tsc on a data package", () => {
   });
 });
 
-// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
 // check re-keys this suite.
 describe.skip("mx-tsc on a data package: wildcard children (decision 147)", () => {
   const withContracts = (contracts: string, doc: string) => {

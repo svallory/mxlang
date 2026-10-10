@@ -21,7 +21,7 @@ import {
  * a monorepo root, or a directory with no manifest of its own, keeps its
  * `tsc` run, so a TypeScript error is never swallowed by a data inference.
  * Decision 204 removed the tree target, so no directory qualifies until the
- * dialect check replaces this one (TODO dialect-check (PR 1)).
+ * dialect check replaces this one (TODO dialect-check (PR 1c)).
  */
 export function dataProjectDir(
   argv: readonly string[],

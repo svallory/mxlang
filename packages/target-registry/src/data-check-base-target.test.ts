@@ -37,7 +37,7 @@ function mesh(options: MeshOptions = {}): string {
   return meshProject("mx-base-target-mesh-", options);
 }
 
-// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
 // check re-keys this suite.
 describe.skip("the base target of a lookup", () => {
   it("is each built-in target's own name, and `tree` for a host that declares builtOn", () => {
@@ -67,7 +67,7 @@ describe.skip("the base target of a lookup", () => {
   });
 });
 
-// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
 // check re-keys this suite.
 describe.skip("isDataProject keys on the resolved base target", () => {
   it("accepts mx.target: tree", () => {
@@ -104,7 +104,7 @@ describe.skip("isDataProject keys on the resolved base target", () => {
   });
 });
 
-// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
 // check re-keys this suite.
 describe.skip("the base target's mx.<base>.defaultTag is a rung of the shared ladder", () => {
   const TAGS = { "tags/node.mx": "", "tags/leaf.mx": "" };
@@ -188,7 +188,7 @@ describe.skip("the base target's mx.<base>.defaultTag is a rung of the shared la
   });
 });
 
-// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
 // check re-keys this suite.
 describe.skip("a host whose builtOn names no registered target", () => {
   const verdict = (builtOn: string) => {

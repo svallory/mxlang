@@ -732,7 +732,7 @@ function resolveStaged(
     return coreResolveTargetPolicyDetailed(filePath, lookup, options);
   // Decision 204 removed the tree target, so nothing registers "tree" and the
   // masks below are inert until the dialect check replaces this staging (TODO
-  // dialect-check (PR 1)). Core's unknown-target path positions an explicit
+  // dialect-check (PR 1c)). Core's unknown-target path positions an explicit
   // `mx.target: "tree"` and hands on its fallback; the message names the
   // replacement.
   const resolution = coreResolveTargetPolicyDetailed(

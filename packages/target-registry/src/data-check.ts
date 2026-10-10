@@ -11,7 +11,7 @@
  *
  * Decision 204 removed the tree target's descriptor, so no policy resolves to
  * `"tree"` and this check runs on nothing until the dialect check replaces it
- * (TODO dialect-check (PR 1)).
+ * (TODO dialect-check (PR 1c)).
  */
 
 import {

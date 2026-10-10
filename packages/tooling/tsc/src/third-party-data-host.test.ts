@@ -63,7 +63,7 @@ function check(source: string, options: MeshOptions = {}) {
   }
 }
 
-// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
 // check re-keys this suite.
 describe.skip("mx-tsc on a third-party host built on data", () => {
   it.each([
@@ -97,7 +97,7 @@ describe.skip("mx-tsc on a third-party host built on data", () => {
   });
 });
 
-// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
 // check re-keys this suite.
 describe.skip("mx-tsc's data check keys on the resolved base target", () => {
   const FILE = join("src", "post.mesh.mx");
@@ -184,7 +184,7 @@ const WITH_CONTRACTS = {
 const SHORTHAND = '<#a value="x"/>\n';
 const PORT_AT_TOP = `${join("src", "post.mesh.mx")}(1,1): error TS80001: \`<port>\` must be inside \`<service>\`; found at the top level\n`;
 
-// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
 // check re-keys this suite.
 describe.skip("the unnamed-tag ladder (decision 145) on a host built on data", () => {
   const mx = (extra: Record<string, unknown> = {}) => ({
@@ -291,7 +291,7 @@ describe.skip("the unnamed-tag ladder (decision 145) on a host built on data", (
   });
 });
 
-// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
 // check re-keys this suite.
 describe.skip("the data check adds to a host built on data; it never replaces the host's compile", () => {
   const RULE = "forbidden";

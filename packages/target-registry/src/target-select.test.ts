@@ -118,7 +118,7 @@ it("legacy agreement remains silent; disagreement keeps the explicit target", ()
   });
 });
 
-// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
 // check re-keys `dataWired`.
 it.skip.each([{}, { "@mxlang/host-solid": "1" }])(
   "dataWired answers the real data policy; the default stays staged (%j)",
@@ -133,7 +133,7 @@ it.skip.each([{}, { "@mxlang/host-solid": "1" }])(
   },
 );
 
-// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
 // check re-keys `dataWired`.
 it.skip("dataWired also resolves a dependency-inferred data package (rule 5)", () => {
   const file = project(undefined, { "@mxlang/data": "*" });

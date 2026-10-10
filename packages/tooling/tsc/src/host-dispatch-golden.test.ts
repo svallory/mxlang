@@ -497,7 +497,7 @@ describe("dispatch goldens", () => {
     expect(onDisk).toEqual([...ROWS].sort());
   });
 
-  // TODO dialect-check (PR 1): decision 204 removed the tree target; the
+  // TODO dialect-check (PR 1c): decision 204 removed the tree target; the
   // dialect check re-keys these rows and re-records their goldens.
   it.skip.each([...TREE_ROWS])("%s", () => {});
 

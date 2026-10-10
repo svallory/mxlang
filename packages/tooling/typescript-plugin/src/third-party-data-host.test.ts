@@ -44,7 +44,7 @@ function compile(source: string, options: MeshOptions = {}) {
   };
 }
 
-// TODO dialect-check (PR 1): decision 204 removed the tree target; the dialect
+// TODO dialect-check (PR 1c): decision 204 removed the tree target; the dialect
 // check re-keys this suite.
 describe.skip("`.mesh.mx` in the TS plugin", () => {
   it.each([

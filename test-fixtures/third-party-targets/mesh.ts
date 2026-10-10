@@ -18,7 +18,7 @@ import { join } from "node:path";
  * project that cannot resolve `@mxlang/data`; `setupMesh` sets the handoff and
  * `teardownMesh` clears it. Decision 204 removed the tree target and
  * `@mxlang/data`, so every suite that uses this host is skipped until the
- * dialect check re-keys it (TODO dialect-check (PR 1)).
+ * dialect check re-keys it (TODO dialect-check (PR 1c)).
  */
 export interface MeshOptions {
   /** `host.fileKinds`: plain data, it goes through JSON. */
