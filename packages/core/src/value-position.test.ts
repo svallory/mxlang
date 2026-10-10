@@ -498,7 +498,8 @@ describe("the contract view's attribute is its name and its value node", () => {
   });
 });
 
-// Mesh's `MESH_SYNTAX` with a value row: the alpha.15 regression.
+// The reference `syntax/mesh` and its `atom-value` row: the alpha.15
+// regression, fixed by the value position.
 const load = createRequire(import.meta.url);
 const meshSyntax = (
   load(join(import.meta.dirname, "syntax/mesh.ts")) as { default: Dialect }
@@ -513,44 +514,15 @@ interface Atom extends DialectNode {
   readonly name: string;
 }
 
-/** Mesh's syntax plus a value row on `:` naming its own `Atom` type. */
-const ATOM_VALUES: Dialect = {
-  ...meshSyntax,
-  id: "mesh",
-  table: {
-    ...meshSyntax.table,
-    valueTriggers: [
-      {
-        id: "atom-value",
-        chars: ":",
-        // `::x` stays the atom expression trigger's reserved-form error.
-        match: ":[A-Za-z_$][\\w$]*(?:-[\\w$]+)*",
-        standIn: "keep",
-        node: { type: "Atom", dialect: "mesh" },
-      },
-    ],
-  },
-  nodeTypes: {
-    Atom: {
-      keys: [],
-      parse: (text) => ({ name: text.slice(1) }),
-      print: (node) => `:${node.name}`,
-      // The literal the `ATOM` expression trigger builds: the IR attribute
-      // keeps its atom mark, so the atom contracts read it as before. A
-      // plain string here would be an unmarked static string.
-      lower: (node, ctx) =>
-        ctx.expression({
-          type: "StringLiteral",
-          value: node.name,
-          extra: {
-            raw: JSON.stringify(node.name),
-            rawValue: node.name,
-            mxAtom: { span: node.span },
-          },
-        }),
-    } satisfies NodeType<Atom>,
-  },
-};
+/** `syntax/mesh` with its value row: what Mesh copies. */
+const ATOM_VALUES: Dialect = meshSyntax;
+
+/** `syntax/mesh` without its value row: Mesh's alpha.15 `MESH_SYNTAX`. */
+const NO_VALUE_ROW: Dialect = (() => {
+  const { valueTriggers: _, ...table } = meshSyntax.table;
+  const { nodeTypes: __, ...rest } = meshSyntax;
+  return { ...rest, table };
+})();
 
 /** Mesh's `parseEntitySource`, with the syntax as a parameter. */
 function parseEntity(source: string, file: string, dialect: Dialect) {
@@ -611,8 +583,8 @@ describe("a claimed default value ends at a terminating attribute row", () => {
     ]);
   });
 
-  it("with no value row the value runs on, as it does in Mesh's syntax today", () => {
-    expect(meshDiagnostics(source, meshSyntax)).toEqual([
+  it("with no value row the value runs on, as it did in Mesh's alpha.15 syntax", () => {
+    expect(meshDiagnostics(source, NO_VALUE_ROW)).toEqual([
       ["Expected a single expression, but found `:` after it.", 5, 21],
     ]);
   });
@@ -621,7 +593,7 @@ describe("a claimed default value ends at a terminating attribute row", () => {
     const files = corpusFiles();
     expect(files.length).toBeGreaterThan(60);
     const changed = files.filter(
-      (file) => lowered(file, ATOM_VALUES) !== lowered(file, meshSyntax),
+      (file) => lowered(file, ATOM_VALUES) !== lowered(file, NO_VALUE_ROW),
     );
     expect(changed).toEqual([
       "entities/packages/compiler/test/fixtures/negative/old-relationship.mesh.mx",
@@ -641,7 +613,7 @@ describe("a claimed default value ends at a terminating attribute row", () => {
       },
     };
     expect(meshDiagnostics(source, declining)).toEqual(
-      meshDiagnostics(source, meshSyntax),
+      meshDiagnostics(source, NO_VALUE_ROW),
     );
   });
 });

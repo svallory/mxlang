@@ -33902,10 +33902,10 @@
   "diagnostics": [
    {
     "severity": "error",
-    "message": "Expected a single expression, but found `:` after it.",
+    "message": "`<belongs-to>`: unknown attribute `value`",
     "line": 5,
-    "column": 21,
-    "offset": 88
+    "column": 14,
+    "offset": 81
    }
   ]
  },

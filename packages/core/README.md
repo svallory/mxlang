@@ -668,7 +668,10 @@ Copy it the way the member dialect is copied (its type imports from
 through the beta, as reference material rather than a host's API. Mesh vendors
 them at the alpha.15 pin and owns its copy from then on. `atom`, `name` and
 `member` are Mesh's forms; `id` and `class` are kept for parity with the
-built-in sugars and may be dropped. Mesh's entity files and docs blocks are a
+built-in sugars and may be dropped. `syntax/mesh` also has the value row
+`atom-value` (a whole attribute value `:name`, the node type `mesh:Atom`,
+lowered to the atom-marked string literal the `atom` row builds); Mesh copies
+it and the `Atom` node type into its own syntax. Mesh's entity files and docs blocks are a
 golden corpus here (`src/fixtures/syntax/mesh-corpus/`, its README, and
 `src/ir-entry/mesh-corpus.test.ts`); the deletion of the built-ins
 (slice c) must pass it unchanged.

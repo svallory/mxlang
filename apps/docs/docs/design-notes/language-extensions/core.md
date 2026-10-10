@@ -214,7 +214,9 @@ may set. An inline object stays a table only. A trigger whose `node` is
     when its type lowered it to a string (its registry key, as parsed,
     frozen; a claimed `mx:String` also has `raw`, `start` and `end`), or
     `null` for a bare attribute. A claimed node whose type lowered it to
-    `ctx.expression` is that `mx:Expression`. Each carries `nameSpan`,
+    `ctx.expression` is the value that expression makes, as if written
+    there: `mx:Expression`, or `mx:String` for a string literal (`mx:Atom`
+    when the literal is atom-marked). Each carries `nameSpan`,
     `label` (how core's diagnostics name it) and `authored` (the sugar that
     wrote it). A spread is `{ spread: true, span }`.
   - Removal work, not part of what `ContractAttr` offers: a value typed

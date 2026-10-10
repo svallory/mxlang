@@ -152,24 +152,8 @@ const BUILT_IN_DELTAS: Record<
   string,
   { ruling: string; diagnostics: unknown }
 > = {
-  // single-atom-default (decision 182 addendum 1, item 3; decision 183
-  // addendum 6: Mesh does not need `kind=:X :x`): v3's
-  // `belongs-to=:List :list` is refused on both paths, at the value's
-  // end on the module path (column 21) rather than as the unknown
-  // `value` attribute (column 14).
-  "entities/packages/compiler/test/fixtures/negative/old-relationship.mesh.mx":
-    {
-      ruling: "single-atom-default",
-      diagnostics: [
-        {
-          severity: "error",
-          message: "`<belongs-to>`: unknown attribute `value`",
-          line: 5,
-          column: 14,
-          offset: 81,
-        },
-      ],
-    },
+  // None: since the value position claims `belongs-to=:List`, the module
+  // path refuses old-relationship as the built-in path does (5:14).
 };
 
 describe("Mesh's golden parse corpus (decision 183 addendum 6)", () => {
@@ -214,7 +198,13 @@ describe("Mesh's golden parse corpus (decision 183 addendum 6)", () => {
     expect(differing).toEqual(Object.keys(BUILT_IN_DELTAS));
   });
 
-  it("the old-relationship fixture is the ruled column-21 refusal (Mesh's `MESH_SYNTAX` 5:21)", () => {
+  // The column-21 refusal (`Expected a single expression, but found `:`
+  // after it.` at 5:21) was an alpha.15 regression: with no value row the
+  // default value `:List :list` ran on as one expression. The value row
+  // (`atom-value`) claims `:List` and the claimed default ends at the
+  // spaced `:list`, so the module path gives alpha.14's unknown attribute
+  // `value` at 5:14 again.
+  it("the old-relationship fixture is alpha.14's unknown attribute `value` at 5:14", () => {
     const golden = JSON.parse(readFileSync(GOLDEN, "utf8"));
     expect(
       golden[
@@ -224,10 +214,10 @@ describe("Mesh's golden parse corpus (decision 183 addendum 6)", () => {
       diagnostics: [
         {
           severity: "error",
-          message: "Expected a single expression, but found `:` after it.",
+          message: "`<belongs-to>`: unknown attribute `value`",
           line: 5,
-          column: 21,
-          offset: 88,
+          column: 14,
+          offset: 81,
         },
       ],
     });

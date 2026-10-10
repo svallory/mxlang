@@ -115,8 +115,10 @@ export interface ContractAtomOrMember {
  * An attribute's value in a contract view: a string, an expression, or the
  * node a value row claimed when its type lowered it to a string (frozen, as
  * its `parse` returned it; a claimed `mx:String` also carries `raw`,
- * `start` and `end`). A claimed node lowered to `ctx.expression` is that
- * `mx:Expression`. `ContractAtomOrMember` is removal work. Read `type`
+ * `start` and `end`). A claimed node lowered to `ctx.expression` is the
+ * value that expression makes, as if written there: `mx:Expression`, or
+ * `mx:String` for a string literal (`mx:Atom` when it is atom-marked).
+ * `ContractAtomOrMember` is removal work. Read `type`
  * first; `type` does not narrow a dialect's node, so check its key and cast.
  * @unstable
  */

@@ -108,8 +108,15 @@ with the member row in `syntax/mesh.ts`, `@mxlang/core/syntax/mesh`, the module 
 | `name` | attribute | `:` | `:` then a token | `terminatesValue` |
 | `id` | attribute | `#` | `#` then a token (a chain) | `terminatesValue`, `value: "refuse"` |
 | `class` | attribute | `.` | `.` then a token (a chain) | `terminatesValue`, `value: "refuse"` |
+| `atom-value` (`syntax/mesh.ts`) | value | `:` | `:NAME` | `standIn: "keep"`, `{ type: "Atom", dialect: "mesh" }` |
 
-`NAME` is `[A-Za-z_$][\w$]*(?:-[\w$]+)*`. A token runs to whitespace, `=`,
+`NAME` is `[A-Za-z_$][\w$]*(?:-[\w$]+)*`. `atom-value` claims a whole
+attribute value `:NAME` as a `mesh:Atom` node, which lowers to the
+atom-marked string literal the `atom` row builds, so the atom contracts read
+it unchanged. Because a claimed default value ends at a spaced `name` row,
+`belongs-to=:List :list` is the default `:List` and the name `:list`, refused
+as the unknown attribute `value`. Mesh copies this row and the `Atom` node
+type into its own syntax. A token runs to whitespace, `=`,
 `(`, `,` or the end of the tag or group. While both exist, a loaded row on a
 character replaces core's built-in handling of that character in that
 position (lexing, after-value rule, lowering).
