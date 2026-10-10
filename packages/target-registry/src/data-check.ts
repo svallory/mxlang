@@ -91,26 +91,30 @@ const UNKNOWN_TAGS: readonly UnknownTags[] = ["allow", "reject"];
 const IMPORTS: readonly Imports[] = ["pass", "reject"];
 
 interface Manifest {
+  /** The package's own `package.json`, which makes `dir` a package. */
+  packageJson: string;
+  /** The file MX's config came from (`package.json`, `mx.config.*`, …). */
   file: string;
-  text: string;
+  /** The package's MX config, `undefined` when it has none. */
+  config: core.MxConfigSource | undefined;
   data: unknown;
 }
 
+/**
+ * The package at `dir`: its own `package.json` makes it one, and its MX
+ * config (`core.findMxConfig`, which never searches past that manifest) says
+ * how it is checked.
+ */
 function readManifest(dir: string): Manifest | undefined {
-  const file = join(dir, "package.json");
-  if (!existsSync(file)) return undefined;
-  let text: string;
-  try {
-    text = readFileSync(file, "utf8");
-  } catch {
-    return undefined;
-  }
-  try {
-    const parsed = JSON.parse(text) as { mx?: { data?: unknown } } | null;
-    return { file, text, data: parsed?.mx?.data };
-  } catch {
-    return { file, text, data: undefined };
-  }
+  const packageJson = join(dir, "package.json");
+  if (!existsSync(packageJson)) return undefined;
+  const config = core.findMxConfig(dir);
+  return {
+    packageJson,
+    file: config?.file ?? packageJson,
+    config,
+    data: config?.config?.data,
+  };
 }
 
 /**
@@ -126,16 +130,12 @@ function readManifest(dir: string): Manifest | undefined {
 export function isDataProject(dir: string): boolean {
   const manifest = readManifest(dir);
   if (!manifest) return false;
-  try {
-    const parsed = JSON.parse(manifest.text) as {
-      mx?: { target?: unknown; host?: unknown };
-    } | null;
-    const { target, host } = parsed?.mx ?? {};
-    if (typeof target !== "string" && typeof host !== "string") return false;
-  } catch {
-    return false;
-  }
-  const { policy } = resolveTargetPolicyDetailed(manifest.file, {
+  // A revision that does not load selects nothing here; the ordinary run
+  // reports it.
+  if (manifest.config?.error) return false;
+  const { target, host } = manifest.config?.config ?? {};
+  if (typeof target !== "string" && typeof host !== "string") return false;
+  const { policy } = resolveTargetPolicyDetailed(manifest.packageJson, {
     dataWired: true,
   });
   return baseTargetOfPolicy(policy) === "tree";
@@ -151,12 +151,20 @@ interface DataOptions {
 type Report = (diagnostic: DataCheckDiagnostic) => void;
 
 /** Where `mx.data[.key]` sits in a manifest, falling back to the manifest's start. */
-function locateData(manifest: Manifest, key?: string) {
+function locateData(
+  manifest: Manifest,
+  key?: string,
+): { offset?: number; line: number; column: number; length: number } {
+  const path = key === undefined ? ["data"] : ["data", key];
+  const config = manifest.config;
+  if (config && config.format !== "package.json") return config.locate(path);
   return (
-    locateJsonPath(
-      manifest.text,
-      key === undefined ? ["mx", "data"] : ["mx", "data", key],
-    ) ?? { offset: 0, line: 1, column: 0, length: 1 }
+    locateJsonPath(config?.text ?? "", ["mx", ...path]) ?? {
+      offset: 0,
+      line: 1,
+      column: 0,
+      length: 1,
+    }
   );
 }
 
@@ -379,9 +387,12 @@ export function checkDataPackage(dir: string): DataCheckResult {
   const enter = (pkgDir: string, entry: boolean): Package | undefined => {
     const manifest = readManifest(pkgDir);
     if (!manifest) return undefined;
-    const { policy, diagnostics } = resolveTargetPolicyDetailed(manifest.file, {
-      dataWired: true,
-    });
+    const { policy, diagnostics } = resolveTargetPolicyDetailed(
+      manifest.packageJson,
+      {
+        dataWired: true,
+      },
+    );
     if (!entry && baseTargetOfPolicy(policy) !== "tree") return undefined;
     for (const d of diagnostics) {
       reportManifest({

@@ -147,7 +147,7 @@ export function jsonKeyPosition(
  * position at all. So position is best-effort and `1:0` is the honest answer
  * when there is none; nothing may depend on it being present.
  */
-function positionOfParseError(
+export function positionOfParseError(
   message: string,
   text: string,
 ): { line: number; column: number } {

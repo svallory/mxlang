@@ -7,7 +7,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, matchesGlob } from "node:path";
+import { MX_CONFIG_SEARCH_PLACES } from "@mxlang/core";
 import { builtinFileKinds } from "@mxlang/targets";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -17,7 +18,7 @@ import {
   StreamMessageReader,
   StreamMessageWriter,
 } from "vscode-jsonrpc/node";
-import { isMxDocument } from "./server.ts";
+import { isMxDocument, WATCHED_FILE_GLOBS } from "./server.ts";
 
 /**
  * The one stdio end-to-end test the brief asks for (§5): spawn the real
@@ -662,6 +663,72 @@ describe("stdio server (e2e)", () => {
       expect([latest.get(uriA), latest.get(uriB), latest.get(pkgUri)]).toEqual([
         0, 0, 0,
       ]);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  }, 30000);
+
+  it.each([...MX_CONFIG_SEARCH_PLACES])(
+    "asks the client to watch the MX config search place %s",
+    (place) => {
+      const matched = (path: string) =>
+        WATCHED_FILE_GLOBS.filter((glob) => matchesGlob(path, glob));
+      expect(matched(`/project/${place}`)).not.toEqual([]);
+      expect(matched(`/project/app/${place}`)).not.toEqual([]);
+    },
+  );
+
+  it("re-diagnoses an open document when its project's mx.config.json is created, then fixed", async () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-ls-config-")));
+    try {
+      writeFileSync(join(dir, "package.json"), '{"name":"t"}');
+      const configPath = join(dir, "mx.config.json");
+      const configUri = `file://${configPath}`;
+      const uri = `file://${join(dir, "a.mx")}`;
+      const conn = startClient();
+      await conn.sendRequest("initialize", {
+        processId: null,
+        rootUri: null,
+        capabilities: {},
+      });
+      conn.sendNotification("initialized", {});
+      const latest = new Map<string, string[]>();
+      conn.onNotification(PublishDiagnosticsNotification, (params) => {
+        latest.set(
+          params.uri,
+          params.diagnostics.map((d) => d.message),
+        );
+      });
+      const until = async (done: () => boolean) => {
+        for (let i = 0; i < 300 && !done(); i++) {
+          await new Promise((r) => setTimeout(r, 50));
+        }
+      };
+      conn.sendNotification("textDocument/didOpen", {
+        textDocument: { uri, languageId: "mx", version: 1, text: "<p>x</p>\n" },
+      });
+      await until(() => latest.get(uri)?.length === 0);
+      expect(latest.get(uri)).toEqual([]);
+
+      // The file did not exist when the document compiled: only the watcher
+      // event says it does now.
+      writeFileSync(configPath, '{\n  "host": "htmll"\n}\n');
+      conn.sendNotification("workspace/didChangeWatchedFiles", {
+        changes: [{ uri: configUri, type: 1 }],
+      });
+      await until(() => latest.get(configUri)?.length === 1);
+      expect(latest.get(uri)).toHaveLength(1);
+      expect(latest.get(configUri)?.[0]).toContain('"htmll"');
+
+      writeFileSync(configPath, '{\n  "host": "html"\n}\n');
+      conn.sendNotification("workspace/didChangeWatchedFiles", {
+        changes: [{ uri: configUri, type: 2 }],
+      });
+      await until(
+        () =>
+          latest.get(uri)?.length === 0 && latest.get(configUri)?.length === 0,
+      );
+      expect([latest.get(uri), latest.get(configUri)]).toEqual([[], []]);
     } finally {
       rmSync(dir, { recursive: true });
     }

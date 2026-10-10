@@ -318,7 +318,7 @@ describe("routing a file to its dialect", () => {
     expect(error.file).toBe(projectFile);
     expect([error.line, error.column]).toEqual([5, 4]);
     expect(error.message).toBe(
-      'two dialects claim `.tst`: `a` (a-dialect) and `b` (b-dialect). Choose one in `package.json#mx.extensions`: `"extensions": { ".tst": "a" }`',
+      'two dialects claim `.tst`: `a` (a-dialect) and `b` (b-dialect). Choose one in `mx.extensions` in MX\'s config: `"extensions": { ".tst": "a" }`',
     );
   });
 
@@ -343,6 +343,57 @@ describe("routing a file to its dialect", () => {
   it("`mx.extensions` may route an extension the dialect does not claim", () => {
     dialectProject(dir, { mx: { extensions: { ".page": "test" } } });
     expect(routeDialect(join(dir, "home.page"))?.id).toBe("test");
+  });
+
+  describe("`mx.extensions` is read from MX's config, in any format", () => {
+    it("an `mx.config.json` routes an extension", () => {
+      dialectProject(dir);
+      writeJson(join(dir, "mx.config.json"), {
+        extensions: { ".page": "test" },
+      });
+      expect(routeDialect(join(dir, "home.page"))?.id).toBe("test");
+    });
+
+    it("an `.mxrc.yaml` settles a clash", () => {
+      twoDialects(
+        { id: "a", name: "A", extensions: [".tst"] },
+        { id: "b", name: "B", extensions: [".tst"] },
+      );
+      writeFileSync(join(dir, ".mxrc.yaml"), 'extensions:\n  ".tst": b\n');
+      expect(routeDialect(join(dir, "page.tst"))?.id).toBe("b");
+    });
+
+    it("`package.json#mx` wins over an `mx.config.json` beside it", () => {
+      dialectProject(dir, { mx: { extensions: { ".one": "test" } } });
+      writeJson(join(dir, "mx.config.json"), {
+        extensions: { ".two": "test" },
+      });
+      expect(routeDialect(join(dir, "home.one"))?.id).toBe("test");
+      expect(routeDialect(join(dir, "home.two"))).toBeUndefined();
+    });
+
+    it("an edit to the config is seen at the next routing", () => {
+      dialectProject(dir);
+      const config = join(dir, "mx.config.json");
+      writeJson(config, { extensions: { ".one": "test" } });
+      expect(routeDialect(join(dir, "home.one"))?.id).toBe("test");
+      writeJson(config, { extensions: { ".two": "test" } });
+      expect(routeDialect(join(dir, "home.one"))).toBeUndefined();
+      expect(routeDialect(join(dir, "home.two"))?.id).toBe("test");
+    });
+
+    // `{`, `"extensions": {` on line 2, `".tst"` on line 3, `".mx"` on line 4.
+    it("a bad entry is an error in the config file, at the entry's key", () => {
+      dialectProject(dir);
+      const config = join(dir, "mx.config.json");
+      writeJson(config, { extensions: { ".tst": "test", ".mx": "test" } });
+      const error = caught(() => routeDialect(join(dir, "page.mx")));
+      expect(error.file).toBe(config);
+      expect([error.line, error.column]).toEqual([4, 4]);
+      expect(error.message).toBe(
+        "`mx.extensions` cannot route `.mx`: it is MX's own",
+      );
+    });
   });
 
   // The project's `package.json`: `devDependencies` on lines 3 to 5, then
@@ -469,7 +520,7 @@ describe("a dependency listed under an alias", () => {
     });
     const error = caught(() => routeDialect(join(dir, "page.tst")));
     expect([error.message, error.file, error.line, error.column]).toEqual([
-      'two dialects claim `.tst`: `a` (a-dialect) and `b` (@real/b-dialect, as `b`). Choose one in `package.json#mx.extensions`: `"extensions": { ".tst": "a" }`',
+      'two dialects claim `.tst`: `a` (a-dialect) and `b` (@real/b-dialect, as `b`). Choose one in `mx.extensions` in MX\'s config: `"extensions": { ".tst": "a" }`',
       projectFile,
       5,
       4,

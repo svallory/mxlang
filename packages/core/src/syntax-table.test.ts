@@ -189,6 +189,23 @@ describe("the removed `package.json#mx.syntax`", () => {
     expect(error.message).toBe(REMOVED);
   });
 
+  it.each([
+    [
+      "mx.config.json",
+      '{\n  "tags": "tags",\n  "syntax": "./dialect.ts"\n}\n',
+      [3, 2],
+    ],
+    ["mx.config.yaml", "tags: tags\nsyntax: ./dialect.ts\n", [2, 0]],
+  ])("is an error at its key in %s too", (name, text, position) => {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "package.json"), '{ "name": "x" }\n');
+    writeFileSync(join(dir, name), text);
+    const error = caught(() => resolveSyntax(join(dir, "page.mx")));
+    expect(error.file).toBe(join(dir, name));
+    expect([error.line, error.column]).toEqual(position);
+    expect(error.message).toBe(REMOVED);
+  });
+
   it("is refused for a dialect's files too", () => {
     const file = dialect(dir, INLINE, { syntax: "./x.ts" });
     const error = caught(() => resolveSyntax(join(dir, PAGE)));

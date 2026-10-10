@@ -9,7 +9,9 @@
  *
  * Rule, in order:
  *
- * 1. Walk upward to the nearest `package.json`. `mx.target` names a
+ * 1. Read MX's config for the file (`mx-config.ts`: a provided config,
+ *    `mx.config.*`, `.mxrc*`, or `package.json#mx`, searched upward and
+ *    ending at the nearest `package.json`). `mx.target` names a
  *    registered target; `mx.host` names a host (its default target) or a
  *    target's legacy spelling. If both resolve, they must agree; a mismatch
  *    is an error with the explicit target handed on. Exactly one resolved
@@ -17,7 +19,9 @@
  *    errors; unknown hosts retain their existing warning.
  * 2. If neither resolves, exactly one registered target package in that
  *    manifest's `dependencies` or `devDependencies` selects its target.
- *    The lookup answers which packages count; peers do not count.
+ *    The lookup answers which packages count; peers do not count. The
+ *    manifest is always the nearest `package.json`, wherever the config
+ *    came from.
  * 3. Otherwise, fall back to the lookup's default target, non-strict.
  *
  * Edge cases of the walk (each pinned in `host-policy.test.ts`):
@@ -56,6 +60,11 @@
  */
 
 import { basename, dirname, join } from "node:path";
+import {
+  findMxConfig,
+  type MxConfigLocation,
+  type MxConfigSource,
+} from "./mx-config.ts";
 import {
   type PackageJsonRead,
   positionOfOffset,
@@ -122,6 +131,8 @@ export interface PolicyLocation {
 export type TargetPolicyDiagnosticCode =
   | "unknown-host"
   | "malformed-package-json"
+  | "malformed-config"
+  | "shadowed-config"
   | "unknown-target"
   | "target-host-mismatch"
   | "target-not-found"
@@ -145,7 +156,7 @@ export interface TargetPolicyDiagnostic {
    * message text.
    */
   code: TargetPolicyDiagnosticCode;
-  /** The `package.json` to point an author at. */
+  /** The `package.json` or config file to point an author at. */
   file: string;
   message: string;
   /** 1-based. */
@@ -172,6 +183,8 @@ export interface TargetPolicyResolution {
   policy: TargetPolicy;
   diagnostics: TargetPolicyDiagnostic[];
 }
+
+const START: MxConfigLocation = { line: 1, column: 0, length: 1 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -613,7 +626,7 @@ function loadSpecifiers(
   mx: Record<string, unknown>,
   dir: string,
   lookup: TargetLookup,
-  source: { file: string; text: string },
+  source: { file: string; at: (key: string) => MxConfigLocation },
   diagnostics: TargetPolicyDiagnostic[],
 ): LoadedSpecifiers {
   const loaded: LoadedSpecifiers = { failed: {} };
@@ -634,7 +647,7 @@ function loadSpecifiers(
         value: spec,
         file: source.file,
         message,
-        ...locateMxValue(source.text, key),
+        ...source.at(key),
       });
       loaded.failed[key] = true;
       return loaded;
@@ -683,25 +696,18 @@ export interface DefaultTagConfig {
   diagnostic?: TargetPolicyDiagnostic;
 }
 
-/** Reads `mx[<config key>].defaultTag` from an already-read manifest; see {@link readTargetDefaultTag}. */
+/** Reads `mx[<config key>].defaultTag` from an already-found config; see {@link readTargetDefaultTag}. */
 function readDefaultTagConfig(
-  read: PackageJsonRead,
-  file: string,
+  source: MxConfigSource,
   target: string,
   configKey?: string,
 ): DefaultTagConfig {
   const key = configKey ?? target;
-  const mx =
-    isObject(read.manifest) && isObject(read.manifest.mx)
-      ? read.manifest.mx
-      : undefined;
-  const configured = mx?.[key];
+  const configured = source.config?.[key];
   if (!isObject(configured) || configured.defaultTag === undefined) return {};
   const value = configured.defaultTag;
-  const at = {
-    file,
-    ...locateMxValue(read.text, [key, "defaultTag"]),
-  };
+  const file = source.file;
+  const at = { file, ...locateIn(source, [key, "defaultTag"]) };
   if (typeof value === "string" && value !== "") return { value, at };
   return {
     diagnostic: {
@@ -731,8 +737,46 @@ export function readTargetDefaultTag(
   configKey?: string,
 ): DefaultTagConfig {
   const found = findNearestPackageJson(dirname(filePath));
-  if (!found || found.read.error || !isObject(found.read.manifest)) return {};
-  return readDefaultTagConfig(found.read, found.file, target, configKey);
+  if (found && (found.read.error || !isObject(found.read.manifest))) return {};
+  const source = configFor(dirname(filePath), found);
+  if (!source) return {};
+  return readDefaultTagConfig(source, target, configKey);
+}
+
+/**
+ * The MX config that applies to `dir`, or `undefined`. A file inside an
+ * installed package that ships no `package.json` (`found` is `undefined`
+ * because the walk stopped at `node_modules`) has none: Node's package scope
+ * ends there, and so does the config search.
+ */
+function configFor(
+  dir: string,
+  found: Found | undefined,
+): MxConfigSource | undefined {
+  if (!found && insideNodeModules(dir)) return undefined;
+  return findMxConfig(dir);
+}
+
+function insideNodeModules(dir: string): boolean {
+  for (let at = dir; ; at = dirname(at)) {
+    if (basename(at) === "node_modules") return true;
+    if (dirname(at) === at) return false;
+  }
+}
+
+/**
+ * Where the value at `mx.<path>` is written in `source`. A `package.json`
+ * keeps the walk's own tokenizer, byte-for-byte with the positions it always
+ * reported; every other format asks the config source.
+ */
+function locateIn(
+  source: MxConfigSource,
+  path: string | readonly string[],
+  legacyValue?: unknown,
+): MxConfigLocation {
+  if (source.format === "package.json")
+    return locateMxValue(source.text, path, legacyValue);
+  return source.locate(typeof path === "string" ? [path] : path);
 }
 
 /**
@@ -767,11 +811,8 @@ export function resolveTargetPolicyDetailed(
   });
 
   const found = findNearestPackageJson(dirname(filePath));
-  if (!found) return finish(defaultPolicy());
-
-  const { file, dir, read } = found;
-
-  if (read.error || !isObject(read.manifest)) {
+  if (found && (found.read.error || !isObject(found.read.manifest))) {
+    const { file, dir, read } = found;
     const reason = read.error
       ? `could not be parsed as JSON: ${read.error.message}`
       : "must contain a JSON object";
@@ -789,21 +830,56 @@ export function resolveTargetPolicyDetailed(
     return finish(defaultPolicy());
   }
 
-  const mx = isObject(read.manifest.mx) ? read.manifest.mx : undefined;
+  const source = configFor(dirname(filePath), found);
+  if (!source && !found) return finish(defaultPolicy());
+  const manifest = (found?.read.manifest ?? {}) as Record<string, unknown>;
+  if (source?.error) {
+    diagnostics.push({
+      code: "malformed-config",
+      severity: "error",
+      file: source.file,
+      message: `${source.file} could not be loaded: ${source.error.message}; ${source.config ? "the last revision that loaded stays in force until this one does" : `its settings are not applied until it loads (the target comes from the @mxlang dependencies, or the default "${lookup.defaultTarget()}")`}`,
+      line: source.error.line,
+      column: source.error.column,
+    });
+  }
+  for (const hidden of source?.shadowed ?? []) {
+    diagnostics.push({
+      code: "shadowed-config",
+      severity: "warning",
+      file: hidden,
+      message: `${hidden} is not read: ${(source as MxConfigSource).file} is this project's MX config, and one file serves the project; move these settings there, or delete this file`,
+      line: 1,
+      column: 0,
+    });
+  }
+  const file = source?.file ?? (found as Found).file;
+  const mx = source?.config;
+  const at = (
+    key: string | readonly string[],
+    legacyValue?: unknown,
+  ): MxConfigLocation => (source ? locateIn(source, key, legacyValue) : START);
   const loaded = mx
-    ? loadSpecifiers(mx, dir, lookup, { file, text: read.text }, diagnostics)
+    ? loadSpecifiers(
+        mx,
+        (source as MxConfigSource).dir,
+        lookup,
+        { file, at },
+        diagnostics,
+      )
     : NO_SPECIFIERS;
-  const resolved = policyOf(read.manifest, lookup, loaded);
+  const resolved = policyOf({ ...manifest, mx }, lookup, loaded);
   if (resolved.policy.descriptor) {
     const key = loaded.target ? "target" : "host";
-    resolved.policy.descriptorAt = { file, ...locateMxValue(read.text, key) };
+    resolved.policy.descriptorAt = { file, ...at(key) };
   }
-  const config = readDefaultTagConfig(
-    read,
-    file,
-    resolved.policy.target,
-    lookup.target(resolved.policy.target)?.configKey,
-  );
+  const config = source
+    ? readDefaultTagConfig(
+        source,
+        resolved.policy.target,
+        lookup.target(resolved.policy.target)?.configKey,
+      )
+    : {};
   if (config.value !== undefined) {
     resolved.policy.defaultTag = config.value;
     resolved.policy.defaultTagAt = config.at;
@@ -829,11 +905,7 @@ export function resolveTargetPolicyDetailed(
       file,
       message: `unknown mx.host ${shown}; valid hosts: ${validHostsClause(lookup)}.${hint ? ` Did you mean "${hint}"?` : ""} Ignoring it; the host is taken from the @mxlang dependencies instead.`,
       ...(() => {
-        const { line, column } = locateMxValue(
-          read.text,
-          "host",
-          resolved.ignoredHost,
-        );
+        const { line, column } = at("host", resolved.ignoredHost);
         return { line, column };
       })(),
     });
@@ -858,7 +930,7 @@ export function resolveTargetPolicyDetailed(
       ...(typeof value === "string" ? { value } : {}),
       file,
       message: `unknown mx.target ${shown}; valid targets: ${lookup.targetNames().join(", ")}.${isHost ? ` ${shown} is a host, not a target: its default target is "${host.target}" (use mx.host ${shown} or mx.target "${host.target}").` : hint ? ` Did you mean "${hint}"?` : ""}${dataReserved} Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned.`,
-      ...locateMxValue(read.text, "target"),
+      ...at("target"),
     });
   }
   if (resolved.mismatch) {
@@ -880,12 +952,12 @@ export function resolveTargetPolicyDetailed(
         : targetHost
           ? `mx.target "${target}" belongs to host "${targetHost}", but mx.host is "${host}". Remove one of them: mx.host "${host}" selects target "${hostTarget}"; mx.target "${target}" selects host "${targetHost}".`
           : `mx.target "${target}" has no host, but mx.host is "${host}". Remove one of them: mx.host "${host}" selects target "${hostTarget}"; mx.target "${target}" needs no mx.host.`,
-      ...locateMxValue(read.text, "target"),
+      ...at("target"),
       relatedInformation: [
         {
           file,
           message: `mx.host "${host}" selects target "${hostTarget}".`,
-          ...locateMxValue(read.text, "host"),
+          ...at("host"),
         },
       ],
     });
@@ -920,8 +992,15 @@ function formerAncestorPolicy(
     const file = join(dir, "package.json");
     const read = readPackageJsonCached(file);
     if (read && !read.error && isObject(read.manifest)) {
-      const { target, host } = policyOf(read.manifest, lookup).policy;
-      return { file, host: host ?? (lookup.hostFilterKey(target) as string) };
+      const source = findMxConfig(startDir);
+      const { target, host } = policyOf(
+        { ...read.manifest, mx: source?.config },
+        lookup,
+      ).policy;
+      return {
+        file: source?.file ?? file,
+        host: host ?? (lookup.hostFilterKey(target) as string),
+      };
     }
     const parent = dirname(dir);
     if (parent === dir) return undefined;

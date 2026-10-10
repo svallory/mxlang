@@ -13,7 +13,7 @@ description: "A .mx template beside a hand-written Angular component, MX tags co
 | a page template, `x.component.mx` | `x.component.html` | The `templateUrl` of a class you keep in its own `.ts` |
 | a tag, `tags/badge.mx` | `tags/badge.ts`, a standalone component | A reusable piece with no class of its own |
 
-A `.mx` file is a tag when it sits under a `tags/` directory or is listed in `package.json#mx.tags`; otherwise it is a page template. A `mx.tags` entry restricted to other hosts (`"hosts": ["solid"]`) is not compiled here.
+A `.mx` file is a tag when it sits under a `tags/` directory or is listed in `mx.tags` in [MX's config](/configuration/); otherwise it is a page template. A `mx.tags` entry restricted to other hosts (`"hosts": ["solid"]`) is not compiled here.
 
 ## Page templates
 
@@ -68,6 +68,8 @@ Projection places nodes; it cannot pass values or repeat. So in a tag, these are
 | `<child header=input.header/>` where `child` projects `header` | Nest a `<@header>` block instead |
 
 ## Configuration
+
+The settings live in [MX's config](/configuration/); here in `package.json`:
 
 ```jsonc
 // package.json

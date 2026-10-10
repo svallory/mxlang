@@ -1812,7 +1812,7 @@ parser reports for each form is the table after it.
 9. **The unnamed tag and `defaultTag` (decision 145).** The parser reports an
    empty name range; by design it writes no tag name there. Core resolves the
    name afterwards: parent contract `defaultTag`, then user config
-   `package.json#mx.<target>.defaultTag`, then the host override, then the
+   `mx.<target>.defaultTag`, then the host override, then the
    target's built-in (decision 145, addendum 2). An invalid `defaultTag` value
    is an error at its declaration (decision 145 and its addendum 1).
 10. **Wildcard children (decision 147)** add no syntax: a child keeps its

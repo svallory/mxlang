@@ -11,6 +11,7 @@ import { basename, dirname, join, posix, win32 } from "node:path";
 import { TranslateError } from "./core.ts";
 import { CORE_DIALECT, DIALECT_ID } from "./dialect-registry.ts";
 import { findNearestPackageJson } from "./host-policy.ts";
+import { findMxConfig, type MxConfigSource } from "./mx-config.ts";
 import {
   jsonKeyPosition,
   type PackageJsonRead,
@@ -351,27 +352,25 @@ export function discoverDialects(
 }
 
 /**
- * The project's `mx.extensions`: which dialect handles which extension, the
+ * The project's `mx.extensions`, from MX's config: which dialect handles which extension, the
  * one dialect fact a user may override (decision 212 item 5). Each key is an
  * extension, each value a discovered dialect's `id`.
  */
 function extensionOverrides(
-  projectFile: string,
-  read: PackageJsonRead,
+  source: MxConfigSource | undefined,
   dialects: readonly DialectManifest[],
 ): ReadonlyMap<string, DialectManifest> {
-  const mx = isRecord(read.manifest) ? read.manifest.mx : undefined;
-  const value = isRecord(mx) ? mx.extensions : undefined;
+  const value = source?.config?.extensions;
   const overrides = new Map<string, DialectManifest>();
-  if (value === undefined) return overrides;
+  if (source === undefined || value === undefined) return overrides;
   const fail = (message: string, extension?: string): never => {
-    const { line, column } = jsonKeyPosition(
-      read.text,
-      extension === undefined
-        ? ["mx", "extensions"]
-        : ["mx", "extensions", extension],
-    );
-    throw new TranslateError(message, line, column, projectFile);
+    const path =
+      extension === undefined ? ["extensions"] : ["extensions", extension];
+    const { line, column } =
+      source.format === "package.json"
+        ? jsonKeyPosition(source.text, ["mx", ...path])
+        : source.locate(path, { key: true });
+    throw new TranslateError(message, line, column, source.file);
   };
   if (!isRecord(value)) {
     fail(
@@ -419,7 +418,12 @@ export function routeDialect(filename: string): DialectManifest | undefined {
   const found = findNearestPackageJson(dirname(filename));
   if (!found?.read.manifest) return undefined;
   const { dialects, listedIn } = discover(found.file, found.read);
-  const overrides = extensionOverrides(found.file, found.read, dialects);
+  // TODO(dialect-1b): `mx.extensions` is read from MX's config here; the
+  // rest of a dialect's settings (`mx.<id>`) stay unread until PR 1b.
+  const overrides = extensionOverrides(
+    findMxConfig(dirname(filename)),
+    dialects,
+  );
   if (dialects.length === 0) return undefined;
   const name = basename(filename);
   const matches = (extension: string) =>
@@ -447,7 +451,7 @@ export function routeDialect(filename: string): DialectManifest | undefined {
       listing === undefined ? [] : [listing.field, listing.key],
     );
     throw new TranslateError(
-      `two dialects claim \`${best}\`: \`${first.id}\` (${packageLabel(first, listedIn.get(first))}) and \`${second.id}\` (${packageLabel(second, listing)}). Choose one in \`package.json#mx.extensions\`: \`"extensions": { "${best}": "${first.id}" }\``,
+      `two dialects claim \`${best}\`: \`${first.id}\` (${packageLabel(first, listedIn.get(first))}) and \`${second.id}\` (${packageLabel(second, listing)}). Choose one in \`mx.extensions\` in MX's config: \`"extensions": { "${best}": "${first.id}" }\``,
       line,
       column,
       found.file,

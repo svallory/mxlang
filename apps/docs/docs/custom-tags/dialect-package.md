@@ -5,7 +5,7 @@ description: "Ship a whole tag dialect as one mx.contracts module, and hand it t
 
 # Writing a dialect package
 
-A dialect — a cohesive vocabulary of tag names with validation rules, like a resource-definition language — ships as a package-level `mx.contracts` module: one file default-exports a `ContractMap` (`Record<string, CustomTag>`, exported by `@mxlang/core`), and each consuming package names the module in its own `package.json`.
+A dialect — a cohesive vocabulary of tag names with validation rules, like a resource-definition language — ships as a package-level `mx.contracts` module: one file default-exports a `ContractMap` (`Record<string, CustomTag>`, exported by `@mxlang/core`), and each consuming package names the module in its own [MX config](/configuration/).
 
 This page's dialect is a tag vocabulary written in MX's own syntax, in `.mx` files. A dialect that changes the syntax itself and claims file extensions of its own (`.mesh.mx`) is a package that declares `mx.dialect` in its `package.json`; see [the specification, §13.9.2](/specification/).
 
@@ -83,7 +83,7 @@ How they differ:
 | Source of the map | exactly the module's default export | the scan of the file's package: `tags/`, `mx.tags`, then `mx.contracts` |
 | A local `tags/attribute.mx` | ignored | wins over the module's `<attribute>` (with a shadow warning in the scan) |
 | Entries with templates or `transform` | never (a contracts module cannot carry them) | included when `tags/` or `mx.tags` provides them |
-| Needs `package.json#mx.contracts` | no | yes, to include the dialect's contracts |
+| Needs `mx.contracts` in MX's config | no | yes, to include the dialect's contracts |
 | Shadow and defined-twice warnings | not applicable | not returned: read `scanCached(file, options).diagnostics` |
 | `analyze` | runs | runs |
 

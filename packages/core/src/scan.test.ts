@@ -18,6 +18,7 @@ import { TranslateError } from "./core.ts";
 import { customTagTaglib } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
 import type { Ir, IrNode } from "./ir.ts";
+import { mxConfigSearchPaths } from "./mx-config.ts";
 import {
   clearManifestCache,
   discoverProjectTags,
@@ -1093,14 +1094,29 @@ describe("the scan cache", () => {
       expect(scanCached(caller, { targets: lookup })).toBe(first);
     }
     const stamps = scanCacheStampsForTests();
-    expect(stamps).toHaveLength(60); // Two tag files and one manifest per key.
+    // Per key: two tag files, plus the manifest and every MX config search
+    // place up to it (`package.json` is one of those places).
+    const watched = new Set([
+      join(dir, "package.json"),
+      ...mxConfigSearchPaths(join(dir, "sibling-0")),
+    ]);
+    expect(stamps).toHaveLength(20 * (2 + watched.size));
     for (const stamp of stamps) {
       expect(stamp).not.toHaveProperty("text");
+      // A search place with no file is stamped as absent.
+      if ((stamp as { hash?: string }).hash === undefined) {
+        expect(stamp).toEqual({ mtimeMs: -1, hash: undefined });
+        continue;
+      }
       expect(stamp).toEqual({
         mtimeMs: expect.any(Number),
         hash: expect.stringMatching(/^[a-f0-9]{64}$/),
       });
     }
+    // Two tag files and the manifest exist per key.
+    expect(
+      stamps.filter((stamp) => (stamp as { hash?: string }).hash),
+    ).toHaveLength(60);
     expect(JSON.stringify(stamps)).not.toContain(marker);
     expect(liveTagMapCount()).toBe(1);
     clearScanCache();

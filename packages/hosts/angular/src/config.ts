@@ -1,10 +1,11 @@
 /**
- * `package.json#mx.angular` config (design note A3).
+ * The `angular` section of MX's config (`mx.config.*`, `.mxrc*` or
+ * `package.json#mx`; design note A3).
  */
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { TranslateError } from "@mxlang/core";
+import { findMxConfig, TranslateError } from "@mxlang/core";
 
 export type OnError = "keep-last" | "error-template" | "delete";
 
@@ -47,10 +48,6 @@ interface AngularConfigShape {
   diagnostics?: unknown;
 }
 
-interface PackageJsonShape {
-  mx?: { angular?: AngularConfigShape };
-}
-
 const DEFAULTS: AngularConfig = {
   include: [],
   pageExtension: ".html",
@@ -61,7 +58,7 @@ const DEFAULTS: AngularConfig = {
   diagnostics: "idle",
 };
 
-/** A config error, positioned against `package.json` itself (no finer position exists for a JSON value read this way). */
+/** A config error, positioned against the config file itself (no finer position exists for a value read this way). */
 function fail(packageFile: string, message: string): never {
   throw new TranslateError(message, 1, 0, packageFile);
 }
@@ -112,16 +109,17 @@ function readDiagnostics(
 }
 
 /**
- * Reads and validates `package.json#mx.angular` in `projectDir`, applying A3's
- * defaults.
+ * Reads and validates the `angular` section of the MX config that applies to
+ * `projectDir` (`package.json#mx.angular`, or `angular` in `mx.config.*`),
+ * applying A3's defaults.
  *
  * Tooling-facing API: the build, the watcher and editor tooling (the
  * TypeScript plugin) read the same config through it, so they cannot disagree
  * about a project. Not part of `@mxlang/host-angular/runtime`, which stays
  * zero-import.
  *
- * Throws a positioned `TranslateError` (line 1 of `<projectDir>/package.json`)
- * when `package.json` cannot be read, when a value has the wrong type, and for
+ * Throws a positioned `TranslateError` (line 1 of the config file) when the
+ * config file cannot be read, when a value has the wrong type, and for
  * an unknown key: `` `mx.angular.<key>` is not a recognized key; expected one
  * of ... ``, and for a `diagnostics` value other than `"idle"`, `"save"` or
  * `"off"` (`"off"` turns Angular template diagnostics off everywhere; the
@@ -130,18 +128,30 @@ function readDiagnostics(
  * report the error rather than ignore it.
  */
 export function readAngularConfig(projectDir: string): AngularConfig {
-  const packageFile = join(projectDir, "package.json");
-  let pkg: PackageJsonShape;
-  try {
-    pkg = JSON.parse(readFileSync(packageFile, "utf8"));
-  } catch (err) {
-    fail(
+  const source = findMxConfig(projectDir);
+  const packageFile = source?.file ?? join(projectDir, "package.json");
+  if (!source || source.format === "package.json") {
+    // The project's own manifest must parse, as it always had to: the
+    // config loader keeps a broken revision's previous settings in force,
+    // which the build must not do silently.
+    try {
+      JSON.parse(readFileSync(packageFile, "utf8"));
+    } catch (err) {
+      fail(
+        packageFile,
+        `could not read ${packageFile}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  } else if (source.error) {
+    throw new TranslateError(
+      `could not read ${packageFile}: ${source.error.message}`,
+      source.error.line,
+      source.error.column,
       packageFile,
-      `could not read ${packageFile}: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 
-  const raw = pkg.mx?.angular ?? {};
+  const raw = (source?.config?.angular ?? {}) as AngularConfigShape;
   const allowed = new Set([
     "include",
     "pageExtension",

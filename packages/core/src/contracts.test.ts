@@ -224,6 +224,18 @@ describe("mx.contracts (decision 142)", () => {
     expect([caught.line, caught.column]).toEqual([3, 4]);
     expect(caught.message).toContain("mx.contracts");
   });
+  it.each([
+    ["mx.config.json", '{\n  "contracts": 42\n}\n', [2, 2]],
+    ["mx.config.yaml", "tags: tags\ncontracts: 42\n", [2, 0]],
+  ])("positions bad config at the contracts key in %s", (name, text, at) => {
+    const dir = project();
+    writeFileSync(join(dir, "package.json"), '{ "name": "x" }\n');
+    writeFileSync(join(dir, name), text);
+    const caught = error(dir);
+    expect(caught.file).toBe(join(dir, name));
+    expect([caught.line, caught.column]).toEqual(at);
+    expect(caught.message).toContain("mx.contracts");
+  });
   it("locates the actual mx key, not a nested decoy, including escaped spelling", () => {
     const dir = project();
     writeFileSync(

@@ -33,6 +33,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { isTranslateError } from "./core.ts";
 import type { CustomTag } from "./custom-tags.ts";
+import { mxConfigGeneration } from "./mx-config.ts";
 import {
   dottedTagFileDiagnostics,
   type ScanDiagnostic,
@@ -43,6 +44,8 @@ import {
 
 interface CacheEntry {
   result: ScanResult;
+  /** {@link mxConfigGeneration} when scanned: a provided config is no file. */
+  configGeneration: number;
   /** Directory entry lists as they were when scanned, for add/remove. */
   listings: Map<string, string>;
   /**
@@ -103,7 +106,7 @@ function snapshot(result: ScanResult): CacheEntry {
   const listings = new Map<string, string>();
   for (const dir of result.directories) listings.set(dir, listingOf(dir));
   const manifests = new Map<string, FileStamp>();
-  for (const file of result.packageFiles) {
+  for (const file of [...result.packageFiles, ...(result.configFiles ?? [])]) {
     // mtime before content: a write racing this snapshot then reads as stale.
     manifests.set(file, { mtimeMs: mtimeOf(file), hash: hashOf(file) });
   }
@@ -113,7 +116,13 @@ function snapshot(result: ScanResult): CacheEntry {
     // rather than a later stat that could hide an intervening edit.
     files.set(file.path, { mtimeMs: file.mtimeMs, hash: hashOf(file.path) });
   }
-  return { result, listings, manifests, files };
+  return {
+    result,
+    configGeneration: mxConfigGeneration(),
+    listings,
+    manifests,
+    files,
+  };
 }
 
 /**
@@ -121,12 +130,13 @@ function snapshot(result: ScanResult): CacheEntry {
  *
  * Checks exactly the three things the spec names as invalidating: an add or
  * remove in a scanned directory (its entries, not its mtime), a tag file,
- * and a `package.json` carrying `mx.tags` (both files checked by mtime and
+ * and a `package.json` or MX config search place (both files checked by mtime and
  * content hash). An unchanged hit reads and hashes each tracked tag file and
  * manifest once; directory listings were already content-aware. Snapshots
  * retain only fixed-size hashes, not file contents duplicated per directory.
  */
 function isFresh(entry: CacheEntry): boolean {
+  if (entry.configGeneration !== mxConfigGeneration()) return false;
   for (const [dir, listing] of entry.listings) {
     if (listingOf(dir) !== listing) return false;
   }

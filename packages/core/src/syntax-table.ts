@@ -48,6 +48,7 @@ export type {
 };
 
 import { type MxTemplateParser, mxTemplateParser } from "./marko-frontend.ts";
+import { findMxConfig, type MxConfigSource } from "./mx-config.ts";
 import { filePosition } from "./mx-parse.ts";
 import { jsonKeyPosition, readPackageJsonCached } from "./package-json.ts";
 import { loadDefaultExport, mxKeyPosition } from "./scan.ts";
@@ -772,21 +773,13 @@ function readPackageJsonText(file: string): string {
 }
 
 /**
- * The removed `package.json#mx.syntax` (decision 212 item 2: no setting
+ * The removed `mx.syntax`, in any MX config file (decision 212 item 2: no setting
  * selects a file's syntax): an error at its key.
  */
-function rejectRemovedSyntax(packageFile: string, manifest: unknown): void {
-  const mx =
-    manifest && typeof manifest === "object"
-      ? (manifest as { mx?: unknown }).mx
-      : undefined;
-  if (
-    !mx ||
-    typeof mx !== "object" ||
-    (mx as { syntax?: unknown }).syntax === undefined
-  ) {
-    return;
-  }
+function rejectRemovedSyntax(source: MxConfigSource | undefined): void {
+  const config = source?.config;
+  if (!source || !config || config.syntax === undefined) return;
+  const packageFile = source.file;
   const { line, column } = mxKeyPosition(packageFile, "syntax");
   throw new TranslateError(
     "`mx.syntax` is removed: a syntax of your own is a dialect, a package that declares itself in its `package.json#mx.dialect` (`id`, `name`, the `extensions` it claims, its `module`) and is one of the project's dependencies; a file goes to the dialect that claims its extension. `.mx` files are always MX's.",
@@ -888,9 +881,9 @@ function fallbackForTesting(resolved: ResolvedSyntax): ResolvedSyntax {
 
 function resolveManifestSyntax(filename: string): ResolvedSyntax {
   if (!isAbsolute(filename)) return DEFAULT_RESOLVED;
+  rejectRemovedSyntax(findMxConfig(dirname(filename)));
   const found = findNearestPackageJson(dirname(filename));
   if (!found?.read.manifest) return DEFAULT_RESOLVED;
-  rejectRemovedSyntax(found.file, found.read.manifest);
   const manifest = routeDialect(filename);
   if (!manifest) return DEFAULT_RESOLVED;
   const known = byDialect.get(manifest);

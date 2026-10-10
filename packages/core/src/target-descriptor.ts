@@ -436,10 +436,12 @@ export type TargetLookupRule =
   | "reserved-config-key";
 
 /**
- * The `mx` keys no target may use as its config block (`configKey`, else its
- * name). `dialect` is a dialect package's identity block, never a target's.
+ * The `mx` keys that are never project config: no target may use one as its
+ * config block (`configKey`, else its name), and MX's config loader drops
+ * them in every format. `dialect` is a dialect package's identity block.
+ * The one list both rules read.
  */
-const RESERVED_CONFIG_KEYS: readonly string[] = ["dialect"];
+export const RESERVED_CONFIG_KEYS: readonly string[] = ["dialect"];
 
 /**
  * The `built-on-unknown` message: both targets, the registered names, and,

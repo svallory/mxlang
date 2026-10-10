@@ -20,7 +20,7 @@ Both files may exist in the same directory and compose into one definition. Othe
 
 ## Package tag directories
 
-`package.json#mx.tags` extends discovery with shared directories. A string is shorthand for one directory. The object-array form accepts `dir`, `prefix`, `hosts`, and directory-level `parseOptions`.
+`mx.tags` in MX's config ([Configuration](/configuration/): `mx.config.*`, `.mxrc*`, or `package.json#mx`) extends discovery with shared directories. Its directories resolve from the directory the config belongs to. A string is shorthand for one directory. The object-array form accepts `dir`, `prefix`, `hosts`, and directory-level `parseOptions`.
 
 This passing scan fixture prefixes two tags and supplies text mode by default:
 
@@ -83,7 +83,7 @@ A cached result is rechecked against evidence rather than a timer:
 
 - the entry list of every scanned tag directory;
 - every discovered tag file's modification time;
-- the `package.json` that supplied `mx.tags`.
+- the `package.json` and every MX config place the search consulted, so creating, editing or deleting a config file is noticed.
 
 Adding or removing a tag, editing a template or sidecar, or changing `mx.tags` invalidates affected callers. Parser-facing changes and loaded-hook changes use separate signatures so changing only a transform body cannot leave an old sidecar module live. Filesystems supported by MX provide sub-second mtimes, though two writes within one filesystem tick can still look identical.
 
@@ -101,7 +101,7 @@ These constraints keep Bun builds, Node-based editors, and `mx-tsc` from loading
 
 A sidecar that cannot be parsed, throws while loading, or does not default-export an object becomes a positioned `TranslateError` naming the sidecar. The language server reports it instead of crashing.
 
-An `mx.tags` entry whose directory does not exist is non-fatal: discovery continues and records a diagnostic against its `package.json`. The language server publishes it as a warning on the open document while naming the manifest; Vite and the TypeScript plugin warn once per distinct problem.
+An `mx.tags` entry whose directory does not exist is non-fatal: discovery continues and records a diagnostic against the config file that names it. The language server publishes it as a warning on the open document while naming that file; Vite and the TypeScript plugin warn once per distinct problem.
 
 A file that tries to redefine a core-owned name such as `try` is also omitted with a diagnostic so one misnamed file does not break every caller in the package.
 

@@ -1136,6 +1136,54 @@ export default () => <div />;
       expect(updated).toContain(mod);
     });
 
+    it.each(["mx.config.json", ".mxrc.yaml", ".config/mxrc.json"])(
+      "invalidates callers when the project's %s is created",
+      async (name) => {
+        const { dir, caller } = project(
+          "export default { transform: (_c, ctx) => [ctx.build.text('x')] };\n",
+        );
+        // No `mx` key: the project has no config yet, so every search place in
+        // its directory is an input of the compile.
+        writeFileSync(join(dir, "package.json"), '{"name":"v"}');
+        const plugin = mx();
+        await transformOf(plugin).call(
+          {},
+          "<marker/>\n",
+          `${caller}${MX_SUFFIX}`,
+        );
+
+        const created = join(dir, name);
+        mkdirSync(dirname(created), { recursive: true });
+        writeFileSync(
+          created,
+          name.endsWith(".yaml") ? "host: html\n" : '{"host":"html"}',
+        );
+
+        const mod = { id: `${caller}${MX_SUFFIX}`, url: caller };
+        const invalidated: unknown[] = [];
+        const handle = plugin.handleHotUpdate as unknown as (
+          this: unknown,
+          ctx: unknown,
+        ) => unknown[] | undefined;
+        const updated = handle.call(
+          {},
+          {
+            file: created,
+            modules: [],
+            server: {
+              moduleGraph: {
+                getModuleById: (id: string) =>
+                  id === `${caller}${MX_SUFFIX}` ? mod : undefined,
+                invalidateModule: (target: unknown) => invalidated.push(target),
+              },
+            },
+          },
+        );
+        expect(invalidated).toEqual([mod]);
+        expect(updated).toContain(mod);
+      },
+    );
+
     it("invalidates the callers of an edited tag file", async () => {
       const { tagFile, caller } = project(
         "export default { transform: (_c, ctx) => [ctx.build.text('x')] };\n",

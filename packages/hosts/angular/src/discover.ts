@@ -4,16 +4,11 @@
  * output kinds").
  */
 
-import {
-  existsSync,
-  globSync,
-  readdirSync,
-  readFileSync,
-  realpathSync,
-} from "node:fs";
+import { existsSync, globSync, readdirSync, realpathSync } from "node:fs";
 import { basename, join, relative, resolve, sep } from "node:path";
 import {
   discoverProjectTags,
+  findMxConfig,
   hostModuleSegment,
   hostRestrictionDiagnostics,
   type MxTagsEntry,
@@ -160,21 +155,21 @@ function expandInclude(
  * `ScanResult.tags`/`customTags` already do for the compiled tag map.
  */
 function excludedMxTagsDirs(projectDir: string): Set<string> {
-  const packageJson = join(projectDir, "package.json");
-  if (!existsSync(packageJson)) return new Set();
-  let manifest: { mx?: { tags?: unknown } } | undefined;
-  try {
-    manifest = JSON.parse(readFileSync(packageJson, "utf8"));
-  } catch {
-    // Silent, not swallowed: discoverProjectTags reads this same
-    // package.json through readManifest and already pushes a
-    // ScanResult.diagnostics entry naming it on a parse failure — pushing
-    // one here too would double-warn for one broken file.
+  // The same config `discoverProjectTags` reads (core's config loader), so
+  // the two never disagree. A config that does not load is silent here, not
+  // swallowed: discoverProjectTags already pushes a ScanResult.diagnostics
+  // entry naming it, and pushing one here too would double-warn.
+  const source = findMxConfig(projectDir);
+  if (!source || source.config === undefined) return new Set();
+  // Without a manifest of its own, the project takes no config from above it.
+  if (
+    !existsSync(join(projectDir, "package.json")) &&
+    resolve(source.dir) !== resolve(projectDir)
+  )
     return new Set();
-  }
   let entries: MxTagsEntry[];
   try {
-    entries = normalizeMxTags(manifest?.mx?.tags, projectDir, packageJson);
+    entries = normalizeMxTags(source.config.tags, source.dir, source.file);
   } catch {
     // Same reasoning: discoverProjectTags's own indexMxTagsEntries calls
     // normalizeMxTags against this manifest and reports an invalid

@@ -17,7 +17,12 @@ import {
   statSync,
 } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import { scanCached, type TargetLookup } from "@mxlang/core";
+import {
+  isMxConfigFile,
+  isTranslateError,
+  scanCached,
+  type TargetLookup,
+} from "@mxlang/core";
 import {
   compileOne,
   outputPathFor,
@@ -131,7 +136,13 @@ export function startWatch(
       return config;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      onLine(`${join(projectDir, "package.json")}:1:1 error: ${message}`);
+      // The config file the error is about (a `package.json` or an
+      // `mx.config.*`), at the position it names.
+      const at =
+        isTranslateError(err) && err.file !== undefined
+          ? `${err.file}:${err.line}:${err.column + 1}`
+          : `${join(projectDir, "package.json")}:1:1`;
+      onLine(`${at} error: ${message}`);
       return lastGoodConfig;
     }
   }
@@ -292,6 +303,9 @@ export function startWatch(
   /** Every directory `fs.watch` should cover: every directory under the project root, plus every discovered `tags/` directory (which may live outside the project root via `mx.tags`). */
   function computeWatchedDirs(tagDirectories: string[]): Set<string> {
     const dirs = walkAllDirs(resolvedProjectDir);
+    // The walk skips dot directories, but `.config/mxrc.*` is an MX config
+    // search place: editing it must rebuild like any other config change.
+    dirs.add(join(resolvedProjectDir, ".config"));
     for (const dir of tagDirectories) dirs.add(dir);
     return dirs;
   }
@@ -396,7 +410,7 @@ export function startWatch(
       const tagChanges = new Set<string>();
 
       for (const p of relevant) {
-        if (basename(p) === "package.json") {
+        if (basename(p) === "package.json" || isMxConfigFile(p)) {
           needsFullRebuild = true;
           continue;
         }

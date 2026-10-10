@@ -1,11 +1,11 @@
 ---
 title: "Third-party targets"
-description: "Load a target package from package.json#mx.target or mx.host: the contract, the errors, and how to write one."
+description: "Load a target package from mx.target or mx.host in MX's config: the contract, the errors, and how to write one."
 ---
 
 # Third-party targets
 
-A **target** is an output format a `.mx` file compiles to; a **host** is the framework the file lives inside ([Core and hosts](/architecture/core-and-hosts/)). The built-in targets are `html`, `astro-html`, `solid-jsx`, `preact-jsx`, `react-jsx`, `hono-jsx` and `angular-template`. A project can name another one by package:
+A **target** is an output format a `.mx` file compiles to; a **host** is the framework the file lives inside ([Core and hosts](/architecture/core-and-hosts/)). The built-in targets are `html`, `astro-html`, `solid-jsx`, `preact-jsx`, `react-jsx`, `hono-jsx` and `angular-template`. A project can name another one by package in [MX's config](/configuration/):
 
 ```json
 {
@@ -13,7 +13,7 @@ A **target** is an output format a `.mx` file compiles to; a **host** is the fra
 }
 ```
 
-`mx.host: "@acme/mx-vue"` works too, when the package describes a host. The specifier is resolved **from the project** (the directory of the `package.json` that holds the key), so a target the project installed is found by the editor, `mx-tsc` and the build alike, even when the language server is the one bundled in the VS Code extension.
+`mx.host: "@acme/mx-vue"` works too, when the package describes a host. The specifier is resolved **from the project** (the directory of the config that holds the key), so a target the project installed is found by the editor, `mx-tsc` and the build alike, even when the language server is the one bundled in the VS Code extension.
 
 A third-party target is never picked by dependency inference: the single-dependency rule applies to built-in targets only, so the key is always explicit.
 
@@ -82,7 +82,7 @@ resolveDefaultTag(node, parents: readonly DefaultTagParent[], context: DefaultTa
 ```
 
 - `parents` is the authored ancestor chain, **nearest first**. Each entry has `name` (an attribute tag keeps its `@`), `attributeTag`, the Marko `node`, and `tagDef` (Marko's tag def for that name in this compile's lookup, when it has one). Control-flow tags (`if`, `for`, …) are in the chain as ordinary entries; an unnamed ancestor appears under the name it was already resolved to.
-- `context.configured` is `package.json#mx.<target>.defaultTag` already validated, **with the registry's host override folded in** (config, then `host.defaultTag`), or `undefined`. The fall-back to your descriptor's own `defaultTag` is yours.
+- `context.configured` is `mx.<target>.defaultTag` already validated, **with the registry's host override folded in** (config, then `host.defaultTag`), or `undefined`. The fall-back to your descriptor's own `defaultTag` is yours.
 - `context.customTags` are the compile's custom tags: a parent's contract lives there.
 - `context.contractRung` is `false` when your declarations set `allowContractDefaultTag: false`; `contractDefaultTag` honours it.
 - `context.scope` carries what the compile can say about reachable names (custom tags, Marko's lookup, the host's `isElement`); `contractDefaultTag` uses it to check the contract's value, and returns `undefined` for a rejected one so the next rung answers. `context.onContractRejected` is how the use-site error learns the declaration was the problem.
@@ -93,7 +93,7 @@ resolveDefaultTag(node, parents: readonly DefaultTagParent[], context: DefaultTa
 
 **`TargetDescriptor.builtOn?`.** Optional string: the name of the registered target this one is built on (a host that reuses another target's declarations and compile, like a host on `html`). `createTargetLookup` resolves it when your descriptor joins the project's lookup: a name no registered target has, a target built on itself and a loop are positioned load errors naming both targets (`target "mesh-data" is built on "dta", which is not a registered target (registered: ...)`; a host name such as `"solid"` gets a hint naming its target, `"solid-jsx"`). The end of the chain is the target's **base target** (`TargetLookup.baseTargetOf`), and a tool keys a check that belongs to a target on it, never on the project's `mx.target` string. It is generic: any target can be built on any other. **Declare `builtOn` to inherit the base target's config checks.** Reusing a target's `declarations` without it gets none, as before. It is `@unstable`, like the rest of the descriptor.
 
-**`TargetDescriptor.configKey?`.** Optional string: the `package.json` key this target's per-target config lives under, `mx[configKey]` (`defaultTag` today), when it is not the target's own `name`. It exists so a renamed target keeps its historical config key and user config survives the rename (decision 187 renamed the since-removed tree target this way, and its `mx.data.*` stayed). Every `mx[<name>]` config read goes through it, in core and in the registry, so a host built on such a target reads the base's config under the same key. A bare word, like a target name; anything else is rejected at load. Default: the target's `name`. It is `@unstable`, like the rest of the descriptor.
+**`TargetDescriptor.configKey?`.** Optional string: the config key this target's per-target config lives under, `mx[configKey]` (`defaultTag` today), when it is not the target's own `name`. It exists so a renamed target keeps its historical config key and user config survives the rename (decision 187 renamed the since-removed tree target this way, and its `mx.data.*` stayed). Every `mx[<name>]` config read goes through it, in core and in the registry, so a host built on such a target reads the base's config under the same key. A bare word, like a target name; anything else is rejected at load. Default: the target's `name`. It is `@unstable`, like the rest of the descriptor.
 
 **`contractDefaultTag(parents, context, builtins?)`** is the exported helper for rung 1: the nearest authored parent's declared `defaultTag` (reading attribute-tag declarations at any depth, skipping control flow by the tag's own definition, never climbing past a parent that declares none), or `undefined`. `builtins` lists names your target provides without a taglib entry. The same module exports `validateDefaultTag(name, scope)` (the reason a value is invalid, or `undefined`), used by the registry for every rung.
 ### A host with its own file kind

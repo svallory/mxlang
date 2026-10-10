@@ -95,7 +95,7 @@ function installSecondCore(root: string): void {
   mkdirSync(join(copy, "dist"), { recursive: true });
   cpSync(join(repoCore, "package.json"), join(copy, "package.json"));
   cpSync(join(repoCore, "dist", "index.js"), join(copy, "dist", "index.js"));
-  for (const dep of ["@marko", "@babel", "htmljs-parser"]) {
+  for (const dep of ["@marko", "@babel", "htmljs-parser", "cosmiconfig"]) {
     symlinkSync(
       realpathSync(join(repoCore, "node_modules", dep)),
       join(nm, dep),

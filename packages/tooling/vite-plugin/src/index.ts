@@ -789,6 +789,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       ...scan.directories,
       ...scan.files.map((entry) => entry.path),
       ...scan.packageFiles,
+      ...(scan.configFiles ?? []),
     ]);
 
     // Drop this caller from inputs its previous transform used and this one

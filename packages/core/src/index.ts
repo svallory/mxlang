@@ -263,6 +263,20 @@ export {
  * Removed with the lookup (decision 197, PR 6 slice S3b).
  */
 export { type MarkoCompiler, markoCompiler } from "./marko-frontend.ts";
+export {
+  clearMxConfigCache,
+  findMxConfig,
+  isMxConfigFile,
+  MX_CONFIG_KEYS,
+  MX_CONFIG_MODULE,
+  MX_CONFIG_SEARCH_PLACES,
+  type MxConfigError,
+  type MxConfigFormat,
+  type MxConfigLocation,
+  type MxConfigSource,
+  mxConfigSearchPaths,
+  provideMxConfig,
+} from "./mx-config.ts";
 export { sugarTagName } from "./name-sugar.ts";
 export { dropOwnParserPosition } from "./parse-error-position.ts";
 export {

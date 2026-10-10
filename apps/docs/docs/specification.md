@@ -973,11 +973,11 @@ dynamic name (`<${tag}.a>`) is not either.
 | # | Rung | Where it is set |
 |---|---|---|
 | 1 | the parent's contract `defaultTag` | beside `children`, in a sidecar or `mx.contracts`; honoured only when the target's declarations permit it (the built-in targets do) |
-| 2 | the package's override | `package.json#mx.<target>.defaultTag` (`mx.html`, `mx.solid-jsx`, …); for a target `builtOn` another (§13.5), the base target's key (`mx.<base>.defaultTag`) when the target's own is absent or rejected. When both are set and differ the target's own wins and a warning at the base key names both (`default-tag-overridden`) |
+| 2 | the package's override | `mx.<target>.defaultTag` in MX's config (`mx.html`, `mx.solid-jsx`, …); for a target `builtOn` another (§13.5), the base target's key (`mx.<base>.defaultTag`) when the target's own is absent or rejected. When both are set and differ the target's own wins and a warning at the base key names both (`default-tag-overridden`) |
 | 3 | the host's override | the host's optional `defaultTag` on its descriptor |
 | 4 | the target's built-in | `div` on every html-family target, `object` under the IR entry point (§13.7, overridden by its `defaultTag` option); required on every target descriptor |
 
-For example, with `package.json#mx.html.defaultTag` set to `"section"` and these
+For example, with `mx.html.defaultTag` set to `"section"` and these
 two tags (`tags/my-list.tag.ts` declares `defaultTag: "li"`,
 `tags/panel.tag.ts` declares it on its `head` attribute tag):
 
@@ -2293,7 +2293,7 @@ decisions 97 and 98 shipped it. The full feature spec is
 
 `getCustomTags(file)` walks **upward** from a file to the package root collecting
 `tags/` directories, indexes `x.mx` and `x.tag.ts` by basename, and extends the
-walk with `package.json#mx.tags` (a string, or entries of
+walk with `mx.tags` from the MX config ([Configuration](/configuration/); a string, or entries of
 `{ dir, prefix?, hosts?, parseOptions? }`). **Nearest `tags/` wins**; `mx.tags`
 entries follow local directories, in array order. Package-level `mx.contracts`
 modules follow `mx.tags`, also in array order. Each winner replaces the **whole
@@ -2301,14 +2301,14 @@ entry**, never merging declarations. An explicitly passed `customTags` still
 beats a discovered tag of the same name.
 
 **Package-level contracts (MX addition, decision 142).**
-`package.json#mx.contracts` is a module string, an entry `{ module, hosts? }`, or
+`mx.contracts` is a module string, an entry `{ module, hosts? }`, or
 an array of either. The module must default-export a plain
 `ContractMap` (`Record<string, CustomTag>`, exported by `@mxlang/core`); each key
 is a tag name matching the discovery name pattern. Entries may declare
 `parseOptions`, `attributes`, `attributeTags`, `children`, `parents`, and
 `analyze`; `transform`, `finalize`, templates, and unknown keys are rejected.
-There is no `prefix`. Relative and absolute paths resolve against the consuming
-package directory; bare specifiers resolve through that package's
+There is no `prefix`. Relative and absolute paths resolve against the directory
+the config belongs to; bare specifiers resolve through that package's
 `node_modules`, using the `require`/`default` package export conditions. A
 package exporting only an `import` condition fails loudly with the positioned
 resolution error below.
@@ -2342,8 +2342,9 @@ to delegate the name (§9.8). A file-backed tag shadowing a module declaration
 warns at the winning file; two modules declaring the same name warn at the later
 module and the first wins. Core-owned names (`try`) warn and are skipped.
 
-Both discovery walks index these entries identically. Only the nearest
-`package.json` supplies contracts: a monorepo member with its own manifest must
+Both discovery walks index these entries identically. Only the config that
+applies to the file supplies contracts, and it is the one in the directory of
+the nearest `package.json`: a monorepo member with its own manifest must
 redeclare them. Dependency manifests are never scanned for `mx.contracts`;
 the consumer names each module explicitly. This surface provides diagnostics,
 not contract-to-call-site types, completions, or hover.
@@ -3304,8 +3305,16 @@ Not merely in emitted syntax — in observable behavior:
 ### 13.5 Host and target selection
 
 A **host** is a framework; a **target** is an output format (decisions 129/132).
-`@mxlang/core` resolves the nearest `package.json` through a required open-set
-lookup; tools use `@mxlang/targets`'s built-in wrapper.
+`@mxlang/core` reads the file's MX config ([Configuration](/configuration/):
+`mx.config.*`, `.mxrc*` or `package.json#mx`, read from the project directory
+only: the directory of the nearest `package.json`, never a subdirectory of it
+or a directory above it, so every tool resolves the same config for a file;
+when several of those places hold one, the first wins and each other one gets a
+`shadowed-config` warning) and resolves it through a required open-set lookup;
+tools use `@mxlang/targets`'s built-in wrapper. `mx.<key>` below is the `<key>`
+of that config, in any of its formats; `mx.host` and `mx.target` follow the
+same rules in each. The dependency rule reads the nearest `package.json`,
+wherever the config came from.
 
 1. `mx.target` names a registered target directly: `html`, `astro-html`,
    `solid-jsx`, `preact-jsx`, `react-jsx`, `hono-jsx` or `angular-template`.
@@ -3345,7 +3354,7 @@ host. `mx.tags[].hosts` still filters by **host**, not target: `solid-jsx` there
 warns that it is a target and suggests `solid`.
 
 **Third-party targets.** A package specifier under `mx.target` or `mx.host` is
-resolved from the directory of the `package.json` that holds the key (never from
+resolved from the directory of the config that holds the key (never from
 the tool, so a VSIX-bundled language server finds a target the project installed),
 required synchronously, and validated. The module's default export, else its
 named `mxTarget` export, else the module itself when it is the descriptor
@@ -3501,7 +3510,12 @@ should not inherit the root's host needs its own `package.json` (or `mx.host`).
 The walk stops at a `node_modules` directory, so an installed package that
 ships no `package.json` resolves to `html`, not to the consumer's host. An
 `mx.host` that names no host is ignored with a warning listing the valid hosts
-(and the nearest one, if close) and resolution continues with step 2.
+(and the nearest one, if close) and resolution continues with step 2. A config
+file (`mx.config.*`, `.mxrc*`) that cannot be loaded is a `malformed-config`
+**error** at the position it names: ``<file> could not be loaded: <reason>; the
+last revision that loaded stays in force until this one does``, or, for a
+file that never loaded, ``…; its settings are not applied until it loads (the
+target comes from the @mxlang dependencies, or the default "html")``.
 
 **One resolver, shared** by the Vite plugin, the Bun loaders, the language server
 and the TypeScript plugin — so an editor, a `tsc` run and a build cannot disagree
@@ -3987,10 +4001,10 @@ dialect claims, every `.mx` file among them, parses with the file kind's default
 row and no dialect. Two dialects claiming the extension a file is routed by is an
 error in the project's `package.json` at the second one's dependency entry,
 naming both: `` two dialects claim `<ext>`: `<a>` (<package a>) and `<b>`
-(<package b>). Choose one in `package.json#mx.extensions`: `"extensions": { "<ext>": "<a>" }` ``.
+(<package b>). Choose one in `mx.extensions` in MX's config: `"extensions": { "<ext>": "<a>" }` ``.
 A clash on an extension the file does not end with is not an error for that file.
 
-**`mx.extensions`** in the project's `package.json` maps an extension to a
+**`mx.extensions`** in the project's MX config ([Configuration](/configuration/)) maps an extension to a
 dialect id: `{ ".mesh.mx": "mesh" }`. It settles a clash, and it can route an
 extension the dialect does not claim to a dialect the project uses. A value that
 is not an object is an error at the `mx.extensions` key; a problem with an entry

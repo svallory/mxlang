@@ -14,7 +14,11 @@
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { withCalleeInputSources } from "@mxlang/core";
+import {
+  findMxConfig,
+  mxConfigSearchPaths,
+  withCalleeInputSources,
+} from "@mxlang/core";
 import { resolveTargetPolicyDetailed } from "@mxlang/targets";
 import {
   createConnection,
@@ -32,6 +36,28 @@ import {
 } from "./diagnose.ts";
 
 /** Milliseconds to wait after the last edit before compiling (brief §3). */
+/**
+ * The files the server asks the client to watch. Installed contracts modules
+ * may export JavaScript, not TypeScript. A host-policy diagnostic is about a
+ * package.json or MX config file, so fixing it must re-diagnose the documents
+ * that reported it, and creating or editing a config file changes what they
+ * compile to: every MX config search place matches one of these.
+ */
+export const WATCHED_FILE_GLOBS: readonly string[] = [
+  "**/*.mx",
+  "**/*.ts",
+  "**/*.tsx",
+  "**/*.js",
+  "**/*.mjs",
+  "**/*.cjs",
+  "**/package.json",
+  "**/mx.config.*",
+  "**/.mxrc",
+  "**/.mxrc.*",
+  "**/.config/mxrc",
+  "**/.config/mxrc.*",
+];
+
 const DEBOUNCE_MS = 150;
 
 /**
@@ -178,11 +204,17 @@ export function startServer(
             hostPolicyDiagnostics,
           ),
       );
-      // The package.json files the host resolution read are inputs too: the
+      // The package.json and config files the host resolution read are inputs too: the
       // nearest one (so breaking it re-diagnoses) and every one a diagnostic
       // names (so fixing it does).
       const nearest = nearestPackageJson(filePath);
       if (nearest) dependencies.add(nearest);
+      // Every MX config search place ahead of (and including) the one in
+      // force: creating a nearer `mx.config.ts` re-diagnoses too.
+      const configDir = dirname(filePath);
+      for (const place of findMxConfig(configDir)?.watch ??
+        mxConfigSearchPaths(configDir))
+        dependencies.add(place);
       for (const diagnostic of hostPolicyDiagnostics) {
         dependencies.add(diagnostic.file);
       }
@@ -234,18 +266,7 @@ export function startServer(
   connection.onInitialized(() => {
     if (!watchedFilesDynamicRegistration) return;
     void connection.client.register(DidChangeWatchedFilesNotification.type, {
-      watchers: [
-        { globPattern: "**/*.mx" },
-        { globPattern: "**/*.ts" },
-        { globPattern: "**/*.tsx" },
-        // Installed contracts modules may export JavaScript, not TypeScript.
-        { globPattern: "**/*.js" },
-        { globPattern: "**/*.mjs" },
-        { globPattern: "**/*.cjs" },
-        // A host-policy diagnostic is about a package.json, so fixing it must
-        // re-diagnose the documents that reported it.
-        { globPattern: "**/package.json" },
-      ],
+      watchers: WATCHED_FILE_GLOBS.map((globPattern) => ({ globPattern })),
     });
   });
 

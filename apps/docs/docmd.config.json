@@ -43,6 +43,7 @@
       "path": "/introduction/",
       "icon": "book-open"
     },
+    { "title": "Configuration", "path": "/configuration/", "icon": "settings" },
     {
       "title": "Language",
       "icon": "code",

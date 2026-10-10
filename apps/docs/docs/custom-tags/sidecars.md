@@ -264,7 +264,7 @@ Marko has no attribute-tag contracts, so this is an mx-only extension.
 ### Name the unnamed tag: `defaultTag`
 
 `defaultTag` sits beside `children` and says what `<#id>` and `<.class>`, written
-with no tag name directly inside this tag, stand for ([the unnamed tag](/specification/#the-mx-language-4-elements-and-attributes-the-unnamed-tag), decision 145). It is the first rung of the ladder: it beats `package.json#mx.<target>.defaultTag`, the host and the target's built-in. A sidecar declares it like `children`, and `mx.contracts` modules take the same key:
+with no tag name directly inside this tag, stand for ([the unnamed tag](/specification/#the-mx-language-4-elements-and-attributes-the-unnamed-tag), decision 145). It is the first rung of the ladder: it beats `mx.<target>.defaultTag` in MX's config, the host and the target's built-in. A sidecar declares it like `children`, and `mx.contracts` modules take the same key:
 
 ```ts
 // tags/my-list.tag.ts

@@ -11,8 +11,8 @@ The generic half of the work — consuming Marko's AST, applying the structural 
 
 ## Selecting the host
 
-HTML is a **hostless target**. Select it with `"mx": { "target": "html" }`
-in `package.json`. `mx.host: "html"` remains a silent legacy alias;
+HTML is a **hostless target**. Select it with `target: "html"` in
+[MX's config](/configuration/) (`"mx": { "target": "html" }` in `package.json`). `mx.host: "html"` remains a silent legacy alias;
 `mx.host: "translator"` retains its deprecation warning. An explicit HTML
 target beats dependency inference, and combining it with `mx.host: "solid"`
 is a positioned `target-host-mismatch` error (decisions 129/132;

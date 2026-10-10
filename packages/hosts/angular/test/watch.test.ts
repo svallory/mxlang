@@ -229,6 +229,67 @@ describe("startWatch incremental rebuilds", () => {
     expect(existsSync(join(projectDir, "src/a.ng.html"))).toBe(true);
   });
 
+  it.each(["mx.config.json", ".config/mxrc.json"])(
+    "builds from %s, rebuilds on its edit, and names a broken revision by file:line:col",
+    async (name) => {
+      const config = (extra: object) =>
+        JSON.stringify(
+          {
+            host: "angular",
+            angular: { include: ["src/**/*.mx"], ...extra },
+          },
+          null,
+          2,
+        );
+      writeProject({
+        "package.json": JSON.stringify({ name: "p" }),
+        [name]: config({}),
+        "src/a.mx": "<div>A</div>",
+      });
+
+      const lines: string[] = [];
+      handle = startWatch(projectDir, {
+        debounceMs: 10,
+        onLine: (l) => lines.push(l),
+      });
+      await handle.onIdle;
+      expect(existsSync(join(projectDir, "src/a.html"))).toBe(true);
+
+      writeFileSync(
+        join(projectDir, name),
+        config({ pageExtension: ".ng.html" }),
+        "utf8",
+      );
+      await handle.onIdle;
+      expect(existsSync(join(projectDir, "src/a.ng.html"))).toBe(true);
+
+      lines.length = 0;
+      writeFileSync(
+        join(projectDir, name),
+        '{\n  "host": "angular",\n  oops\n}\n',
+        "utf8",
+      );
+      await handle.onIdle;
+      // Positioned at the file, not the project: `<file>:<line>:<col> error:`.
+      // The JSON parser's own words after it differ between runtimes.
+      const file = join(projectDir, name);
+      expect(
+        lines
+          .filter((l) => l.includes(" error: "))
+          .map((l) => l.split(": ")[0]),
+      ).toContain(`${file}:3:3 error`);
+      expect(
+        lines.some((l) =>
+          l.startsWith(`${file}:3:3 error: could not read ${file}: `),
+        ),
+      ).toBe(true);
+      // The last good build stays: nothing was rewritten or deleted.
+      expect(readFileSync(join(projectDir, "src/a.ng.html"), "utf8")).toContain(
+        "A</div>",
+      );
+    },
+  );
+
   it("keep-last: an error keeps the previous good output, then a fix overwrites it", async () => {
     writeProject({
       "package.json": JSON.stringify({

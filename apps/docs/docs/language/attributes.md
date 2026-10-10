@@ -40,7 +40,7 @@ You can change the answer. In the order they win:
 1. **The parent tag's contract.** A tag declares `defaultTag` beside `children`
    ([custom tags](/custom-tags/reference/)), so everything shorthand-only under it
    is that tag.
-2. **Your package**: `package.json#mx.<target>.defaultTag`, for example
+2. **Your package**: `mx.<target>.defaultTag` in MX's config, for example
    `{ "mx": { "html": { "defaultTag": "section" } } }` makes the first example
    `<section id="main"><section class="card wide">hello</section></section>`.
 3. **The host**, if it overrides its target.

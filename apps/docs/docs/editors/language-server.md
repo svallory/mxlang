@@ -27,15 +27,17 @@ Marko's own language server compiles with a fixed configuration that carries no 
 
 ## Policy resolution
 
-An editor only hands the server a file path and its text — nothing about which host compiles it. The server resolves that by walking upward from the file to the nearest `package.json`:
+An editor only hands the server a file path and its text — nothing about which host compiles it. The server resolves that from the file's MX config ([Configuration](/configuration/)), searched upward from the file and ending at the nearest `package.json`:
 
-1. **An explicit `mx` field**, if present — the authoritative source:
+1. **The config's `target` or `host`**, if set — the authoritative source:
 
    ```json
    { "mx": { "host": "html", "strict": true } }
    ```
 
-2. Otherwise, if that `package.json` depends on exactly one `@mxlang/*` host package, that host's default (non-strict) policy applies.
+   or the same keys in an `mx.config.ts`, `mx.config.json`, `.mxrc` or any other config file.
+
+2. Otherwise, if the nearest `package.json` depends on exactly one `@mxlang/*` host package, that host's default (non-strict) policy applies.
 3. Otherwise, it falls back to the html target's default policy.
 
 The Astro host always compiles under its strict policy — it has no non-strict mode — so `"host": "astro"` behaves as strict regardless of the field's own `strict` value.
@@ -71,17 +73,16 @@ node node_modules/@mxlang/language-server/dist/bin.js --stdio
 
 `--stdio` is accepted for symmetry with other language servers, but stdio is the only transport this server speaks.
 
-## `package.json#mx` and Host Resolution
+## MX's config and host resolution
 
-The language server determines the correct host policy to use by reading the `mx` field in the project's `package.json`. For example:
+The language server determines the correct host policy to use by reading MX's config: an `mx.config.*` or `.mxrc*` file, or the `mx` field of the project's `package.json`. For example:
 
-```json
-{
-  "mx": {
-    "host": "react",
-    "strict": true
-  }
-}
+```ts
+// mx.config.ts
+export default {
+  host: "react",
+  strict: true,
+};
 ```
 
 This tells the language server to apply the React host policy. If the `strict` flag is true, stateful tags like `<let>` or `<effect>` will be reported as diagnostics.

@@ -48,7 +48,14 @@ import {
   statSync,
 } from "node:fs";
 import { createRequire } from "node:module";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+} from "node:path";
 import { coreBabel } from "./babel.ts";
 import { BUILTIN_CUSTOM_TAGS } from "./builtin-tags.ts";
 import {
@@ -64,6 +71,11 @@ import {
   rejectUnknownDeclarationKeys,
   rejectUnreachableHooks,
 } from "./custom-tags.ts";
+import {
+  findMxConfig,
+  mxConfigKeyPosition,
+  mxConfigSearchPaths,
+} from "./mx-config.ts";
 import {
   clearPackageJsonCache,
   jsonKeyPosition,
@@ -275,6 +287,12 @@ export interface ScanResult {
   directories: string[];
   /** `package.json` files consulted, for invalidation. */
   packageFiles: string[];
+  /**
+   * Every MX config search place consulted (`mx.config.*`, `.mxrc*`, …),
+   * most of which do not exist, for invalidation: creating, editing or
+   * removing one changes the answer.
+   */
+  configFiles?: string[];
   /** Every tag file found, with the mtime it had when read. */
   files: Array<{ path: string; mtimeMs: number }>;
   /**
@@ -491,7 +509,8 @@ function contractsPosition(packageFile: string): {
 
 /**
  * Locate the direct `mx.<key>` key of a `package.json` (`contracts`, `syntax`),
- * not a string or nested decoy; `1:0` when it is not found.
+ * or the top-level `<key>` of another MX config file, not a string or nested
+ * decoy; `1:0` when it is not found.
  */
 export function mxKeyPosition(
   packageFile: string,
@@ -500,6 +519,10 @@ export function mxKeyPosition(
   line: number;
   column: number;
 } {
+  if (basename(packageFile) !== "package.json") {
+    const { line, column } = mxConfigKeyPosition(packageFile, [mxKey]);
+    return { line, column };
+  }
   return jsonKeyPosition(readPackageJsonCached(packageFile)?.text ?? "", [
     "mx",
     mxKey,
@@ -1208,6 +1231,7 @@ function buildCustomTags(
 function indexMxTagsEntries(
   packageDir: string,
   packageJson: string,
+  mx: { tags?: unknown; contracts?: unknown } | undefined,
   tags: Map<string, DiscoveredTag>,
   files: Array<{ path: string; mtimeMs: number }>,
   diagnostics: ScanDiagnostic[],
@@ -1217,8 +1241,7 @@ function indexMxTagsEntries(
   host: ScanOptions["host"],
   claimed: ClaimedFields,
 ): void {
-  const manifest = readManifest(packageJson, diagnostics);
-  const entries = normalizeMxTags(manifest?.mx?.tags, packageDir, packageJson);
+  const entries = normalizeMxTags(mx?.tags, packageDir, packageJson);
   for (const entry of entries) {
     directories.push(entry.dir);
     if (!existsSync(entry.dir)) {
@@ -1250,7 +1273,7 @@ function indexMxTagsEntries(
     });
   }
   indexMxContractsEntries(
-    manifest?.mx?.contracts,
+    mx?.contracts,
     packageDir,
     packageJson,
     tags,
@@ -1260,6 +1283,62 @@ function indexMxTagsEntries(
     host,
     claimed,
   );
+}
+
+/**
+ * Indexes the `tags` and `contracts` of the MX config that applies to
+ * `fromDir` (`mx-config.ts`: `mx.config.*`, `.mxrc*`, `package.json#mx`, or a
+ * provided config). `packageJson` is the nearest manifest the caller found,
+ * read here for its own parse diagnostic; with none, a config found above
+ * `walkedTo` (the last directory the caller's walk reached) does not apply.
+ * Every search place consulted lands in `configFiles` for invalidation.
+ */
+function indexMxConfig(
+  fromDir: string,
+  walkedTo: string,
+  packageJson: string | undefined,
+  configFiles: string[],
+  tags: Map<string, DiscoveredTag>,
+  files: Array<{ path: string; mtimeMs: number }>,
+  diagnostics: ScanDiagnostic[],
+  directories: string[],
+  dottedTagFiles: DottedTagFile[],
+  hostRestrictions: HostRestriction[],
+  host: ScanOptions["host"],
+  claimed: ClaimedFields,
+): void {
+  if (packageJson) readManifest(packageJson, diagnostics);
+  const source = findMxConfig(fromDir);
+  configFiles.push(...(source?.watch ?? mxConfigSearchPaths(fromDir)));
+  if (!source) return;
+  if (!packageJson && !isWithin(walkedTo, source.dir)) return;
+  if (source.error) {
+    diagnostics.push({
+      file: source.file,
+      message: `\`${basename(source.file)}\` could not be loaded: ${source.error.message}; ${source.config === undefined ? "no `tags` or `contracts` are loaded until it loads" : "the previous valid `tags` and `contracts` stay in force"}`,
+      line: source.error.line,
+      column: source.error.column,
+    });
+  }
+  indexMxTagsEntries(
+    source.dir,
+    source.file,
+    source.config,
+    tags,
+    files,
+    diagnostics,
+    directories,
+    dottedTagFiles,
+    hostRestrictions,
+    host,
+    claimed,
+  );
+}
+
+/** Whether `dir` is `root` or inside it. */
+function isWithin(root: string, dir: string): boolean {
+  const rel = relative(root, dir);
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
 }
 
 /** Both discovery walks index modules after all file-backed tags. */
@@ -1433,6 +1512,7 @@ export function scanCustomTags(
   const tags = new Map<string, DiscoveredTag>();
   const directories: string[] = [];
   const packageFiles: string[] = [];
+  const configFiles: string[] = [];
   const files: Array<{ path: string; mtimeMs: number }> = [];
   const diagnostics: ScanDiagnostic[] = [];
   const hostRestrictions: HostRestriction[] = [];
@@ -1441,7 +1521,6 @@ export function scanCustomTags(
 
   return withScanDependencies(files, packageFiles, () => {
     let dir = dirname(resolve(filePath));
-    let packageDir: string | undefined;
     let packageJson: string | undefined;
 
     for (;;) {
@@ -1453,7 +1532,6 @@ export function scanCustomTags(
 
       const manifest = join(dir, "package.json");
       if (existsSync(manifest)) {
-        packageDir = dir;
         packageJson = manifest;
         break;
       }
@@ -1463,21 +1541,21 @@ export function scanCustomTags(
       dir = parent;
     }
 
-    if (packageDir && packageJson) {
-      packageFiles.push(packageJson);
-      indexMxTagsEntries(
-        packageDir,
-        packageJson,
-        tags,
-        files,
-        diagnostics,
-        directories,
-        dottedTagFiles,
-        hostRestrictions,
-        options.host,
-        claimed,
-      );
-    }
+    if (packageJson) packageFiles.push(packageJson);
+    indexMxConfig(
+      dirname(resolve(filePath)),
+      dir,
+      packageJson,
+      configFiles,
+      tags,
+      files,
+      diagnostics,
+      directories,
+      dottedTagFiles,
+      hostRestrictions,
+      options.host,
+      claimed,
+    );
 
     if (options.host !== undefined) applyHostFilter(tags, options.host);
 
@@ -1486,6 +1564,7 @@ export function scanCustomTags(
       customTags: buildCustomTags(tags, claimed),
       directories,
       packageFiles,
+      configFiles,
       files,
       diagnostics: dottedTagFileDiagnostics(
         dottedTagFiles,
@@ -1621,6 +1700,7 @@ export function discoverProjectTags(
   const tags = new Map<string, DiscoveredTag>();
   const directories: string[] = [];
   const packageFiles: string[] = [];
+  const configFiles: string[] = [];
   const files: Array<{ path: string; mtimeMs: number }> = [];
   const diagnostics: ScanDiagnostic[] = [];
   const hostRestrictions: HostRestriction[] = [];
@@ -1646,21 +1726,22 @@ export function discoverProjectTags(
     }
 
     const packageJson = join(root, "package.json");
-    if (existsSync(packageJson)) {
-      packageFiles.push(packageJson);
-      indexMxTagsEntries(
-        root,
-        packageJson,
-        tags,
-        files,
-        diagnostics,
-        directories,
-        dottedTagFiles,
-        hostRestrictions,
-        options.host,
-        NO_CLAIM,
-      );
-    }
+    const hasManifest = existsSync(packageJson);
+    if (hasManifest) packageFiles.push(packageJson);
+    indexMxConfig(
+      root,
+      root,
+      hasManifest ? packageJson : undefined,
+      configFiles,
+      tags,
+      files,
+      diagnostics,
+      directories,
+      dottedTagFiles,
+      hostRestrictions,
+      options.host,
+      NO_CLAIM,
+    );
 
     if (options.host !== undefined) applyHostFilter(tags, options.host);
 
@@ -1669,6 +1750,7 @@ export function discoverProjectTags(
       customTags: buildCustomTags(tags, NO_CLAIM),
       directories,
       packageFiles,
+      configFiles,
       files,
       diagnostics: dottedTagFileDiagnostics(
         dottedTagFiles,

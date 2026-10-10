@@ -28,7 +28,7 @@ Both run in `mx-tsc` and, through `@mxlang/typescript-plugin`, in the editor. Th
 
 The check runs in a worker process, one per Angular project, never inside the TypeScript server, so typing is not blocked. Results appear when a check finishes and are hidden while the file's text is newer than the result.
 
-| `package.json#mx.angular.diagnostics` | When the editor checks |
+| `mx.angular.diagnostics` in MX's config | When the editor checks |
 |---|---|
 | `"idle"` (default) | One second after your last edit |
 | `"save"` | When the file is saved |
@@ -44,4 +44,4 @@ Only open `.ng.mx` files are checked. If `@angular/compiler-cli` is missing or f
 
 ## Known limit
 
-- The editor picks up a change to `package.json` or to a called tag when the `.ng.mx` is next edited or reopened, not at once.
+- The editor picks up a change to MX's config (`package.json#mx`, `mx.config.*`, `.mxrc*`) or to a called tag when the `.ng.mx` is next edited or reopened, not at once.

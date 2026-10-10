@@ -40,7 +40,7 @@ There is no import or registration step. The scanner walks upward from the calli
 
 ## Discovery in one paragraph
 
-For each file, MX walks toward the nearest `package.json`, collecting `tags/` directories as it goes. The nearest definition of a name wins. A package can add shared directories through `package.json#mx.tags`; those entries have lower precedence than local `tags/`. A programmatically supplied `customTags` definition has highest precedence. The Bun loaders, Vite and Astro integrations, TypeScript plugin, language server, and `mx-tsc` all use the same synchronous scanner, so builds and editor diagnostics resolve the same tag set.
+For each file, MX walks toward the nearest `package.json`, collecting `tags/` directories as it goes. The nearest definition of a name wins. A package can add shared directories through `mx.tags` in [MX's config](/configuration/); those entries have lower precedence than local `tags/`. A programmatically supplied `customTags` definition has highest precedence. The Bun loaders, Vite and Astro integrations, TypeScript plugin, language server, and `mx-tsc` all use the same synchronous scanner, so builds and editor diagnostics resolve the same tag set.
 
 ## Continue
 
