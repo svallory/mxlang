@@ -502,12 +502,10 @@ Five facts worth knowing before editing it:
   for the test fallback or a bare table), replacing the host's taglibs and,
   under `none`, its natives; `lowerSource` marks its host options
   `tagRulesDecided` so its own `tagRules` option wins. The tools (`mx-tsc`,
-  the language server, the TypeScript and Vite plugins) do not yet recognise
-  a dialect's extensions or check its files, nor show the dialect's `name`
-  as `source` and `diagnosticCode` as `code`: the tools' check-only
-  handling of dialect files lands in dialect PR 1c
-  (`TODO dialect-check (PR 1c)`). They reach a dialect's tag rules and the
-  refusals above only through `compileSource` and `parseFragment`. The dialect's
+  the language server, the TypeScript plugin) check a dialect's file with
+  `lowerSource` through `@mxlang/targets/dialect-check`, showing the dialect's
+  `name` as `source` and its code as `code`; the Vite plugin refuses to
+  import one. The dialect's
   `table` is overlaid on `DEFAULT_SYNTAX`, validated with the template
   parser's `validateSyntaxTable` (`tagTypes` refused as taglib-owned),
   deep-frozen and interned by `syntaxHash` (sha256 of canonical JSON),
