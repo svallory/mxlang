@@ -99,6 +99,7 @@ import {
   TranslateError,
   warn,
 } from "./core.ts";
+import { CORE_TAG_NAMES, CORE_TAGLIB_ID } from "./core-taglib.ts";
 import {
   buildersFor,
   type ChildNode,
@@ -2643,6 +2644,19 @@ function rejectMarkoImportTag(
 }
 
 /**
+ * Whether `name` is one of Marko's core taglib tags (`<debug>`, `<log>`, ...):
+ * by the lookup's id when the table registered the full core taglib (only the
+ * html target's does), else by the core taglib's own name set - so every
+ * target judges the same set. Stock Marko lets a core tag win over a
+ * same-named lowercase import, so the local-variable rule must not fire for
+ * one.
+ */
+function isCoreTaglibTag(ctx: Ctx, name: string): boolean {
+  if (ctx.lookup?.getTag(name)?.taglibId === CORE_TAGLIB_ID) return true;
+  return CORE_TAG_NAMES.has(name);
+}
+
+/**
  * A tag a host taglib registers (a third-party translator's `taglibs`), not an
  * element, a core tag or a custom tag.
  */
@@ -2716,17 +2730,15 @@ function lowercaseBindingFix(
 }
 
 /**
- * Marko's own failure for a lowercase tag naming a lowercase `import` or
- * `<define>` binding, moved into core verbatim (measured on
- * `@marko/compiler` 5.42.11 / `marko` 6.4.4, the stock parser: for a tag
- * import, a `.ts` value import and a `static const` local alike, Marko
+ * Marko's own failure for a lowercase tag naming a local binding, moved into
+ * core verbatim (measured on `@marko/compiler` 5.42.11 / `marko` 6.4.4, the
+ * stock parser: for a tag import, a `.ts` value import and a `static const`
+ * local alike - and equally for a `<const>` or a `<for>` param - Marko
  * raises exactly this text at the tag name). A local variable is called as
  * a tag only by a dynamic tag or its PascalCase name, whatever the binding
  * imports: the rule is about name resolution, not about what kind of value
- * is bound. The gate is `ctx.defines`/`ctx.imports` (an `import` or
- * `<define>`); a `<const>` or tag param instead reaches the unknown-tag
- * path. Marko capitalizes the first character whatever it is, so `_row`'s
- * rename offer reads `_row`; kept verbatim.
+ * is bound. Marko capitalizes the first character whatever it is, so
+ * `_row`'s rename offer reads `_row`; kept verbatim.
  */
 function localVariableTagMessage(name: string): string {
   return `Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use \`<\${${name}}/>\` or rename to \`${name[0]?.toUpperCase()}${name.slice(1)}\`.`;
@@ -2892,11 +2904,13 @@ function registerStaticBindings(ctx: Ctx, code: string): void {
   for (const statement of file.program.body) {
     if (statement.type === "FunctionDeclaration" && statement.id) {
       const bound = statement.id.name as string;
+      ctx.staticBindings.add(bound);
       if (/^[A-Z]/.test(bound)) ctx.imports.add(bound);
       continue;
     }
     if (statement.type === "ClassDeclaration" && statement.id) {
       const bound = statement.id.name as string;
+      ctx.staticBindings.add(bound);
       if (/^[A-Z]/.test(bound)) ctx.imports.add(bound);
       continue;
     }
@@ -2904,6 +2918,7 @@ function registerStaticBindings(ctx: Ctx, code: string): void {
       for (const declarator of statement.declarations as Node[]) {
         if (declarator.id?.type !== "Identifier") continue;
         const bound = declarator.id.name as string;
+        ctx.staticBindings.add(bound);
         if (!/^[A-Z]/.test(bound)) continue;
         ctx.imports.add(bound);
         if (!isFunctionLikeValue(declarator.init)) {
@@ -4307,22 +4322,37 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   const lowercaseBinding =
     !/^[A-Z]/.test(name) &&
     !registeredTag &&
-    (ctx.defines.has(name) || ctx.imports.has(name));
+    (ctx.defines.has(name) ||
+      ctx.imports.has(name) ||
+      (ctx.tagVarShadowed?.has(name) ?? false) ||
+      ctx.staticBindings.has(name));
   // The *warning* further below fires only for a binding that can be a tag:
   // an in-scope `<define>`, or an import of a tag module (`.mx`, `.marko`).
   const tagBinding =
     lowercaseBinding &&
     (ctx.bindingSites.get(name)?.kind === "defined" ||
       isTagModuleImport(ctx, name));
-  // Marko's own rule, in Marko's own words, for every `import`/`<define>`
-  // binding alike: a lowercase tag never calls a local variable, so one that is
-  // neither a native element nor a registered tag nor a host claim (all
-  // returned above) is Marko's positioned error, at the tag name, whatever
-  // the binding imports - a tag module, a `.ts` helper, a named import.
+  // Marko's own rule, in Marko's own words, for every local binding alike
+  // (`import`, `<define>`, `<const>`, a `<for>`/`<define>` param, a `static`
+  // declaration - measured on the stock parser: the message and position are
+  // identical for all of them): a lowercase tag never calls a local variable,
+  // so one that is neither a native element nor a registered tag nor a host
+  // claim (all returned above) is Marko's positioned error, at the tag name.
   // Before this was core's, only the html host rejected a value import
   // (through `rejectComponentTag`); the JSX hosts and Astro emitted a literal
-  // lowercase element instead, silently.
-  if (lowercaseBinding && !isNativeElementName(ctx, name)) {
+  // lowercase element instead, silently, and `<const>`/`static`/param names
+  // reached the unknown-tag path at best.
+  //
+  // A core taglib name (`<debug>`, `<log>`) is exempt: stock Marko compiles
+  // `import debug from "debug"` + `<debug/>` as the core tag, never blaming
+  // the import, so the tag keeps whatever routing it has without one - the
+  // name set comes from `CORE_TAG_NAMES` (not the lookup: only the html
+  // target's table registers the full core taglib).
+  if (
+    lowercaseBinding &&
+    !isNativeElementName(ctx, name) &&
+    !isCoreTaglibTag(ctx, name)
+  ) {
     fail(localVariableTagMessage(name), node.name);
   }
   // A registered taglib tag called `row` is still `row` when a binding of that

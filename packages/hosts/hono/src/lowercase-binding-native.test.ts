@@ -8,7 +8,8 @@ import { describe, expect, it } from "vitest";
 import { compileHonoMx } from "./index.ts";
 
 // Decision 164 + addendum 1: a lowercase tag is the native element, or a
-// registered tag, or (when it names a tag binding and is neither) an error.
+// registered tag, or (when it names an import or `<define>` binding and is neither)
+// an error.
 // Only a host's own taglib registers a tag: a `marko.json` is not read
 // (decision 197), so the `marko.json` tag below is no longer row 4.
 const LOCAL_VARIABLE = (name: string) =>
@@ -113,13 +114,13 @@ describe("lowercase tag with a same-named binding in scope", () => {
     ).toThrow(LOCAL_VARIABLE("row"));
   });
 
-  it("row 3: unknown + lowercase define is the same error, naming where it is defined", () => {
+  it("row 3: unknown + lowercase define is the same error", () => {
     expect(() =>
       compileHonoMx(`<define/row|x|>d</define>\n<row/>\n`, "/fixtures/a.mx"),
     ).toThrow(LOCAL_VARIABLE("row"));
   });
 
-  it("a `_`-prefixed tag import gets the same error, offering only the dynamic tag", () => {
+  it("a `_`-prefixed tag import gets the same error, in Marko's words", () => {
     expect(() =>
       compileHonoMx(`import _row from "./row.mx"\n<_row/>\n`, "/fixtures/a.mx"),
     ).toThrow(LOCAL_VARIABLE("_row"));

@@ -367,6 +367,17 @@ export interface Ctx {
    */
   unknownLocalValue: Set<string>;
   /**
+   * Every name a `<static>` block binds at its top level (a `const`/
+   `let`/`var` declarator, a `function`, a `class`), recorded by
+   `registerStaticBindings` as the block lowers. The consumer is the
+   lowercase-tag rule: Marko raises its local-variable error for a lowercase
+   `static const layout` used as `<layout/>` too, but the names must not join
+   `ctx.imports` — that set routes *component calls* (`isComponent`), which a
+   lowercase name can never be (decision 116's casing gate), so only the
+   PascalCase ones do.
+   */
+  staticBindings: Set<string>;
+  /**
    * Where an `import` local or a `<define>` name was bound, by name — only
    * for the warning a lowercase tag raises when it names one of them (decision
    * 164). Absent for a name whose site core never saw (a host folding module
@@ -1779,6 +1790,7 @@ export function newCtx(
     importSpecifiers: new Map(),
     importDefaultFromMarkoOrMx: new Set(),
     unknownLocalValue: new Set(),
+    staticBindings: new Set(),
     bindingSites: new Map(),
     generate,
     declarations,
