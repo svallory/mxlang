@@ -9,7 +9,6 @@ import {
   type Ir,
   type IrNode,
   isTranslateError,
-  type Lookup,
   lower,
   type MxWarning,
   newCtx,

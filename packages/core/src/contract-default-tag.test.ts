@@ -9,7 +9,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { buildMarkoLookup, createTranslator } from "./compile.ts";
+import { createTranslator } from "./compile.ts";
 import {
   contractDefaultTag,
   contractDefaultTagDiagnostics,
@@ -20,6 +20,7 @@ import type { CustomTag, CustomTagAttributeTag } from "./custom-tags.ts";
 import type { DefaultTagParent, Policy } from "./declarations.ts";
 import { lower } from "./lower.ts";
 import { scanCustomTags } from "./scan.ts";
+import { tagTable } from "./tag-table.ts";
 import { lookup, testTargetLookup } from "./test-targets.ts";
 
 const targets = testTargetLookup();
@@ -201,10 +202,7 @@ describe("contractDefaultTag: the nearest authored parent's contract", () => {
                 source,
                 () => "",
                 policy,
-                buildMarkoLookup(
-                  tmpdir(),
-                  options.bare ? bareTranslator : translator,
-                ),
+                tagTable(options.bare ? bareTranslator : translator, undefined),
                 "a.mx",
                 lookup,
               );
@@ -341,7 +339,7 @@ describe("contractDefaultTag: the nearest authored parent's contract", () => {
                   source,
                   () => "",
                   policy,
-                  buildMarkoLookup(tmpdir(), translator),
+                  tagTable(translator, undefined),
                   "a.mx",
                   lookup,
                 );

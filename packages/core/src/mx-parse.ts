@@ -25,9 +25,9 @@ import { relative } from "node:path";
 import { parse as mxFrontEndParse } from "@mxlang/parser/frontend";
 import { strippedMethodTypeParams } from "./attr-fields.ts";
 import { coreBabel } from "./babel.ts";
-import type { Lookup } from "./compile.ts";
 import { type Node, TranslateError } from "./core.ts";
 import type { SyntaxTable } from "./syntax-table.ts";
+import type { TagTable } from "./tag-table.ts";
 
 /** The six statement keywords of the language (decision 168). */
 const STATEMENT_KEYWORDS = [
@@ -64,7 +64,7 @@ export const mxParses = { count: 0 };
  */
 export function parseMx(
   source: string,
-  options: { syntax: SyntaxTable; lookup: Lookup | undefined; base?: MxBase },
+  options: { syntax: SyntaxTable; lookup: TagTable | undefined; base?: MxBase },
 ): Node {
   const { lookup } = options;
   const parseOptionsOf = (name: string): Node =>

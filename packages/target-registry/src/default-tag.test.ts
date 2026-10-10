@@ -62,6 +62,19 @@ function project(
   return join(root, entry);
 }
 
+/**
+ * Every name the html target's tag table defines: its native elements and
+ * core's taglib entries, which is what Marko's lookup held for it.
+ */
+const htmlTableNames = (descriptor: TargetDescriptor | undefined): string[] => [
+  ...new Set([
+    ...(descriptor?.declarations?.default?.nativeTags?.keys() ?? []),
+    ...Object.keys(core.CORE_TAGLIB as object)
+      .filter((key) => key.startsWith("<") && key.endsWith(">"))
+      .map((key) => key.slice(1, -1)),
+  ]),
+];
+
 const html = (defaultTag: unknown) => ({
   mx: { target: "html", html: { defaultTag } },
 });
@@ -307,24 +320,18 @@ describe("only elements of the target are valid built-ins", () => {
     },
   );
 
-  it("enumerating html's whole lookup: accepted exactly the plain elements Marko flags html", () => {
+  it("enumerating html's whole tag table: accepted exactly the plain elements it flags html", () => {
     const lookup = builtinLookup();
     const descriptor = lookup.target("html");
     const dir = project({ mx: { target: "html" } });
-    const markoLookup = core.buildMarkoLookup(
-      join(dir, ".."),
+    const table = core.tagTable(
       descriptor?.translator,
-    ) as unknown as {
-      merged: {
-        tags: Record<
-          string,
-          { html?: boolean; parseOptions?: Record<string, unknown> }
-        >;
-      };
-    };
+      descriptor?.declarations?.default?.nativeTags,
+    );
     const accepted: string[] = [];
     const rejected: string[] = [];
-    for (const [name, tag] of Object.entries(markoLookup.merged.tags)) {
+    for (const name of htmlTableNames(descriptor)) {
+      const tag: core.TagEntry = table.getTag(name) ?? { taglibId: "" };
       const plain =
         !tag.parseOptions ||
         !(
@@ -344,7 +351,7 @@ describe("only elements of the target are valid built-ins", () => {
       (reason === undefined ? accepted : rejected).push(name);
       expect(reason === undefined, name).toBe(expected);
     }
-    // The lookup has 109 html + 59 svg + 42 math elements and 26 core tags;
+    // The table has 109 html + 59 svg + 42 math elements and 26 core tags;
     // every core tag is rejected (script/style/html-script/html-style by shape).
     expect(accepted).toContain("div");
     expect(accepted).toContain("svg");
@@ -596,21 +603,15 @@ describe("Marko core tags are no valid default on any target (round 3)", () => {
 
   // 194, not 193 as with @marko/compiler 5.42.5: 5.42.10's native-tag taglib
   // adds the HTML `<search>` element, a plain element, so it is accepted.
-  it("re-enumerating html's lookup still gives 194 accepted and 43 rejected", () => {
+  it("re-enumerating html's tag table still gives 194 accepted and 43 rejected", () => {
     const descriptor = builtinLookup().target("html");
     const dir = join(project({ mx: { target: "html" } }), "..");
-    const lookup = core.buildMarkoLookup(
-      dir,
-      descriptor?.translator,
-    ) as unknown as {
-      merged: { tags: Record<string, unknown> };
-    };
     const scope = core.defaultTagScopeFor({
       dir,
       translator: descriptor?.translator,
       declarations: descriptor?.declarations?.default,
     });
-    const names = Object.keys(lookup.merged.tags);
+    const names = htmlTableNames(descriptor);
     const accepted = names.filter(
       (n) => core.validateDefaultTag(n, scope) === undefined,
     );

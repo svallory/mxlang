@@ -1,0 +1,548 @@
+{
+  "no taglibs": {},
+  "a third-party translator": {
+    "class": {
+      "taglibId": "mx-statement-tags",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    },
+    "client": {
+      "taglibId": "mx-statement-tags",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    },
+    "export": {
+      "taglibId": "mx-statement-tags",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    },
+    "import": {
+      "taglibId": "mx-statement-tags",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    },
+    "server": {
+      "taglibId": "mx-statement-tags",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    },
+    "static": {
+      "taglibId": "mx-statement-tags",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    }
+  },
+  "createTranslator({})": {
+    "class": {
+      "taglibId": "mx-statement-tags",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    },
+    "client": {
+      "taglibId": "mx-statement-tags",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    },
+    "export": {
+      "taglibId": "mx-statement-tags",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    },
+    "import": {
+      "taglibId": "mx-statement-tags",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    },
+    "server": {
+      "taglibId": "mx-statement-tags",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    },
+    "static": {
+      "taglibId": "mx-statement-tags",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    }
+  },
+  "the html translator with custom tags": {
+    "await": {
+      "taglibId": "mx-translator-core"
+    },
+    "card": {
+      "taglibId": "mx-custom-tags:[[\"card\",null],[\"code\",{\"text\":true}],[\"div\",null],[\"pre\",{\"text\":true}],[\"textarea\",{\"preserveWhitespace\":false}]]"
+    },
+    "class": {
+      "taglibId": "mx-translator-core",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    },
+    "client": {
+      "taglibId": "mx-translator-core",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    },
+    "code": {
+      "taglibId": "mx-custom-tags:[[\"card\",null],[\"code\",{\"text\":true}],[\"div\",null],[\"pre\",{\"text\":true}],[\"textarea\",{\"preserveWhitespace\":false}]]",
+      "html": true,
+      "parseOptions": {
+        "text": true
+      }
+    },
+    "const": {
+      "taglibId": "mx-translator-core",
+      "parseOptions": {
+        "openTagOnly": true
+      }
+    },
+    "debug": {
+      "taglibId": "mx-translator-core",
+      "parseOptions": {
+        "openTagOnly": true
+      }
+    },
+    "define": {
+      "taglibId": "mx-translator-core"
+    },
+    "div": {
+      "taglibId": "mx-custom-tags:[[\"card\",null],[\"code\",{\"text\":true}],[\"div\",null],[\"pre\",{\"text\":true}],[\"textarea\",{\"preserveWhitespace\":false}]]",
+      "html": true
+    },
+    "effect": {
+      "taglibId": "mx-translator-core"
+    },
+    "else": {
+      "taglibId": "mx-translator-core",
+      "parseOptions": {
+        "controlFlow": true
+      }
+    },
+    "else-if": {
+      "taglibId": "mx-translator-core",
+      "parseOptions": {
+        "controlFlow": true
+      }
+    },
+    "export": {
+      "taglibId": "mx-translator-core",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    },
+    "for": {
+      "taglibId": "mx-translator-core",
+      "parseOptions": {
+        "controlFlow": true
+      }
+    },
+    "html-comment": {
+      "taglibId": "mx-translator-core",
+      "parseOptions": {
+        "text": true
+      }
+    },
+    "html-script": {
+      "taglibId": "mx-translator-core",
+      "html": true,
+      "parseOptions": {
+        "text": true,
+        "preserveWhitespace": true
+      }
+    },
+    "html-style": {
+      "taglibId": "mx-translator-core",
+      "html": true,
+      "parseOptions": {
+        "text": true,
+        "preserveWhitespace": true
+      }
+    },
+    "id": {
+      "taglibId": "mx-translator-core",
+      "parseOptions": {
+        "openTagOnly": true
+      }
+    },
+    "if": {
+      "taglibId": "mx-translator-core",
+      "parseOptions": {
+        "controlFlow": true
+      }
+    },
+    "import": {
+      "taglibId": "mx-translator-core",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    },
+    "let": {
+      "taglibId": "mx-translator-core",
+      "parseOptions": {
+        "openTagOnly": true
+      }
+    },
+    "lifecycle": {
+      "taglibId": "mx-translator-core",
+      "parseOptions": {
+        "openTagOnly": true
+      }
+    },
+    "log": {
+      "taglibId": "mx-translator-core",
+      "parseOptions": {
+        "openTagOnly": true
+      }
+    },
+    "pre": {
+      "taglibId": "mx-custom-tags:[[\"card\",null],[\"code\",{\"text\":true}],[\"div\",null],[\"pre\",{\"text\":true}],[\"textarea\",{\"preserveWhitespace\":false}]]",
+      "html": true,
+      "parseOptions": {
+        "preserveWhitespace": true,
+        "text": true
+      }
+    },
+    "return": {
+      "taglibId": "mx-translator-core",
+      "parseOptions": {
+        "openTagOnly": true
+      }
+    },
+    "script": {
+      "taglibId": "mx-translator-core",
+      "html": true,
+      "parseOptions": {
+        "text": true,
+        "preserveWhitespace": true
+      }
+    },
+    "server": {
+      "taglibId": "mx-translator-core",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    },
+    "static": {
+      "taglibId": "mx-translator-core",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    },
+    "style": {
+      "taglibId": "mx-translator-core",
+      "html": true,
+      "parseOptions": {
+        "text": true,
+        "preserveWhitespace": true,
+        "html": false,
+        "rawOpenTag": true
+      }
+    },
+    "textarea": {
+      "taglibId": "mx-custom-tags:[[\"card\",null],[\"code\",{\"text\":true}],[\"div\",null],[\"pre\",{\"text\":true}],[\"textarea\",{\"preserveWhitespace\":false}]]",
+      "html": true,
+      "parseOptions": {
+        "text": true,
+        "preserveWhitespace": false
+      }
+    },
+    "try": {
+      "taglibId": "mx-translator-core"
+    }
+  },
+  "the fragment translator": {
+    "card": {
+      "taglibId": "mx-custom-tags:[[\"card\",null],[\"code\",{\"text\":true}],[\"div\",null],[\"pre\",{\"text\":true}],[\"textarea\",{\"preserveWhitespace\":false}]]"
+    },
+    "class": {
+      "taglibId": "mx-statement-tags",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    },
+    "client": {
+      "taglibId": "mx-statement-tags",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    },
+    "code": {
+      "taglibId": "mx-custom-tags:[[\"card\",null],[\"code\",{\"text\":true}],[\"div\",null],[\"pre\",{\"text\":true}],[\"textarea\",{\"preserveWhitespace\":false}]]",
+      "html": true,
+      "parseOptions": {
+        "text": true
+      }
+    },
+    "div": {
+      "taglibId": "mx-custom-tags:[[\"card\",null],[\"code\",{\"text\":true}],[\"div\",null],[\"pre\",{\"text\":true}],[\"textarea\",{\"preserveWhitespace\":false}]]",
+      "html": true
+    },
+    "export": {
+      "taglibId": "mx-statement-tags",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    },
+    "html-comment": {
+      "taglibId": "mx-parse-options",
+      "parseOptions": {
+        "text": true
+      }
+    },
+    "html-script": {
+      "taglibId": "mx-parse-options",
+      "html": true,
+      "parseOptions": {
+        "text": true,
+        "preserveWhitespace": true
+      }
+    },
+    "html-style": {
+      "taglibId": "mx-parse-options",
+      "html": true,
+      "parseOptions": {
+        "text": true,
+        "preserveWhitespace": true
+      }
+    },
+    "import": {
+      "taglibId": "mx-statement-tags",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    },
+    "pre": {
+      "taglibId": "mx-custom-tags:[[\"card\",null],[\"code\",{\"text\":true}],[\"div\",null],[\"pre\",{\"text\":true}],[\"textarea\",{\"preserveWhitespace\":false}]]",
+      "html": true,
+      "parseOptions": {
+        "preserveWhitespace": true,
+        "text": true
+      }
+    },
+    "script": {
+      "taglibId": "mx-parse-options",
+      "html": true,
+      "parseOptions": {
+        "text": true,
+        "preserveWhitespace": true
+      }
+    },
+    "server": {
+      "taglibId": "mx-statement-tags",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    },
+    "static": {
+      "taglibId": "mx-statement-tags",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    },
+    "style": {
+      "taglibId": "mx-parse-options",
+      "html": true,
+      "parseOptions": {
+        "text": true,
+        "preserveWhitespace": true,
+        "html": false,
+        "rawOpenTag": true
+      }
+    },
+    "textarea": {
+      "taglibId": "mx-custom-tags:[[\"card\",null],[\"code\",{\"text\":true}],[\"div\",null],[\"pre\",{\"text\":true}],[\"textarea\",{\"preserveWhitespace\":false}]]",
+      "html": true,
+      "parseOptions": {
+        "text": true,
+        "preserveWhitespace": false
+      }
+    }
+  },
+  "a data-shaped translator": {
+    "area": {
+      "taglibId": "mx-data-like",
+      "html": true,
+      "parseOptions": {
+        "openTagOnly": false
+      }
+    },
+    "base": {
+      "taglibId": "mx-data-like",
+      "html": true,
+      "parseOptions": {
+        "openTagOnly": false
+      }
+    },
+    "br": {
+      "taglibId": "mx-data-like",
+      "html": true,
+      "parseOptions": {
+        "openTagOnly": false
+      }
+    },
+    "col": {
+      "taglibId": "mx-data-like",
+      "html": true,
+      "parseOptions": {
+        "openTagOnly": false
+      }
+    },
+    "embed": {
+      "taglibId": "mx-data-like",
+      "html": true,
+      "parseOptions": {
+        "openTagOnly": false
+      }
+    },
+    "hr": {
+      "taglibId": "mx-data-like",
+      "html": true,
+      "parseOptions": {
+        "openTagOnly": false
+      }
+    },
+    "if": {
+      "taglibId": "mx-data-like",
+      "parseOptions": {
+        "controlFlow": true
+      }
+    },
+    "img": {
+      "taglibId": "mx-data-like",
+      "html": true,
+      "parseOptions": {
+        "openTagOnly": false
+      }
+    },
+    "import": {
+      "taglibId": "mx-data-like",
+      "parseOptions": {
+        "statement": true,
+        "rawOpenTag": true
+      }
+    },
+    "input": {
+      "taglibId": "mx-data-like",
+      "html": true,
+      "parseOptions": {
+        "openTagOnly": false
+      }
+    },
+    "link": {
+      "taglibId": "mx-data-like",
+      "html": true,
+      "parseOptions": {
+        "openTagOnly": false
+      }
+    },
+    "meta": {
+      "taglibId": "mx-data-like",
+      "html": true,
+      "parseOptions": {
+        "openTagOnly": false
+      }
+    },
+    "param": {
+      "taglibId": "mx-data-like",
+      "html": true,
+      "parseOptions": {
+        "openTagOnly": false
+      }
+    },
+    "pre": {
+      "taglibId": "mx-data-like",
+      "html": true,
+      "parseOptions": {
+        "preserveWhitespace": false
+      }
+    },
+    "script": {
+      "taglibId": "mx-data-like",
+      "html": true,
+      "parseOptions": {
+        "text": false,
+        "preserveWhitespace": false
+      }
+    },
+    "source": {
+      "taglibId": "mx-data-like",
+      "html": true,
+      "parseOptions": {
+        "openTagOnly": false
+      }
+    },
+    "style": {
+      "taglibId": "mx-data-like",
+      "html": true,
+      "parseOptions": {
+        "text": false,
+        "preserveWhitespace": false
+      }
+    },
+    "textarea": {
+      "taglibId": "mx-data-like",
+      "html": true,
+      "parseOptions": {
+        "text": false,
+        "preserveWhitespace": false
+      }
+    },
+    "title": {
+      "taglibId": "mx-data-like",
+      "html": true,
+      "parseOptions": {
+        "text": false
+      }
+    },
+    "track": {
+      "taglibId": "mx-data-like",
+      "html": true,
+      "parseOptions": {
+        "openTagOnly": false
+      }
+    },
+    "wbr": {
+      "taglibId": "mx-data-like",
+      "html": true,
+      "parseOptions": {
+        "openTagOnly": false
+      }
+    }
+  }
+}

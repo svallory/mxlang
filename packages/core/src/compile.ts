@@ -35,7 +35,6 @@ import {
   CORE_TAGLIB_ID,
   STATEMENT_TAGLIB,
   STATEMENT_TAGLIB_ID,
-  withStatementTags,
 } from "./core-taglib.ts";
 import {
   type CustomTag,
@@ -46,9 +45,7 @@ import {
 } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
 import type { Ir } from "./ir.ts";
-import { nullPrototypeTags } from "./lookup-safety.ts";
 import { lower } from "./lower.ts";
-import { markoCompiler } from "./marko-frontend.ts";
 import {
   compileErrorOf,
   parseMx,
@@ -64,7 +61,7 @@ import {
   type SyntaxTable,
   tableParseError,
 } from "./syntax-table.ts";
-import { type NativeTags, tagTable } from "./tag-table.ts";
+import { type NativeTags, type TagTable, tagTable } from "./tag-table.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
 import { registerSyntax } from "./triggers.ts";
 
@@ -92,9 +89,6 @@ export interface CompileResult {
   /** The unit's custom tag calls and declared names, input of `atomCandidates`. */
   atomFacts: AtomFacts;
 }
-
-/** The taglib lookup `@marko/compiler` builds for a translator. */
-export type Lookup = NonNullable<Ctx["lookup"]>;
 
 export interface TranslatorOptions {
   /**
@@ -210,7 +204,7 @@ let current: {
   filename: string;
   code: string | null;
   policy: Policy;
-  lookup?: Lookup;
+  lookup?: TagTable;
   postEmit?: (code: string) => string;
   emitIr: (ir: Ir, ctx: Ctx) => string;
   customTags?: Readonly<Record<string, CustomTag>>;
@@ -404,27 +398,6 @@ function pathIdentities(p: string): string[] {
 function sameFilePath(a: string, b: string): boolean {
   const identities = new Set(pathIdentities(a));
   return pathIdentities(b).some((identity) => identities.has(identity));
-}
-
-/**
- * Marko's tag lookup for `translator` as seen from `dir`: what a compile of a
- * file there would resolve a tag name through. `undefined` when Marko builds
- * none. The tag map is made prototype-free. No production path uses it
- * since decision 197 (compiles and the `defaultTag` check read `tagTable`);
- * it stays for the tests that compare against Marko's lookup until slice S3b
- * removes it.
- */
-export function buildMarkoLookup(
-  dir: string,
-  translator: unknown,
-): Lookup | undefined {
-  const compiler = markoCompiler();
-  const lookup = compiler.taglib.buildLookup(
-    dir,
-    withStatementTags(translator),
-  ) as Lookup | undefined;
-  nullPrototypeTags(lookup);
-  return lookup;
 }
 
 /**

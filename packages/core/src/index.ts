@@ -45,12 +45,10 @@ export {
 } from "./callee-input.ts";
 export { cloneIr } from "./clone-ir.ts";
 export {
-  buildMarkoLookup,
   type CompileResult,
   compileSource,
   createTranslator,
   type HostOptions,
-  type Lookup,
   parseMxDocument,
   printExpression,
   type RawSourceMap,

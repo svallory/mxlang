@@ -1,12 +1,13 @@
-// Core's tag table against the `@marko/compiler` lookup it replaces (decision
-// 197, PR 6 slice S3a): for every translator shape MX builds, each name the
-// lookup knows resolves to the same taglib id, `html` flag and parse switches,
-// and the table knows no name the lookup does not.
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+// Core's tag table (decision 197, PR 6 slice S3a). S3a pinned it against the
+// `@marko/compiler` lookup it replaced, live, for every translator shape MX
+// builds. S3b deleted that lookup (`buildMarkoLookup`), so the comparison is
+// frozen in `tag-table.expected.json`: for each shape, every name whose entry
+// differs from the bare native layer, as Marko 5.42.11's lookup gave it
+// (`null`: a name the lookup did not know). The native layer itself follows
+// `WEB_ELEMENTS`, which `packages/stock-marko/src/web-elements.test.ts`
+// compares with Marko's element taglibs.
 import { WEB_ELEMENTS } from "@mxlang/web-elements";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createTranslator } from "./compile.ts";
 import { VOID_TAGS } from "./core.ts";
 import {
@@ -16,38 +17,21 @@ import {
   PARSE_OPTIONS_TAGLIB_ID,
   STATEMENT_TAGLIB,
   STATEMENT_TAGLIB_ID,
-  withStatementTags,
 } from "./core-taglib.ts";
 import type { CustomTag } from "./custom-tags.ts";
 import { customTagTaglib } from "./custom-tags.ts";
-import { markoCompiler } from "./marko-frontend.ts";
-import { tagTable } from "./tag-table.ts";
+import expected from "./tag-table.expected.json" with { type: "json" };
+import { type TagEntry, tagTable } from "./tag-table.ts";
 
-// No `tags/`, `marko.json` or `package.json` around it: the lookup holds only
-// what the translator registers, which is all the table models.
-const dir = mkdtempSync(join(tmpdir(), "mx-tag-table-"));
-afterAll(() => rmSync(dir, { recursive: true, force: true }));
-
-interface MarkoTag {
-  name: string;
+interface ProjectedTag {
   taglibId?: string;
   html?: boolean;
   parseOptions?: Record<string, unknown>;
 }
 
-function markoLookup(translator: unknown) {
-  return markoCompiler().taglib.buildLookup(
-    dir,
-    withStatementTags(translator),
-  ) as unknown as {
-    getTag(name: string): MarkoTag | undefined;
-    getTagsSorted(): MarkoTag[];
-  };
-}
-
-const project = (tag: MarkoTag | object | undefined) => {
+const project = (tag: TagEntry | ProjectedTag | undefined) => {
   if (!tag) return undefined;
-  const { taglibId, html, parseOptions } = tag as MarkoTag;
+  const { taglibId, html, parseOptions } = tag as ProjectedTag;
   const options =
     parseOptions && Object.keys(parseOptions).length > 0
       ? parseOptions
@@ -148,21 +132,66 @@ const PROBES = [
 ];
 
 describe("tagTable", () => {
+  const NAMESPACE_IDS = {
+    html: "marko-html",
+    svg: "marko-svg",
+    mathml: "marko-math",
+  } as const;
+  const BODY_OPTIONS = {
+    html: undefined,
+    void: { openTagOnly: true },
+    preserve: { preserveWhitespace: true },
+    "parsed-text": { text: true },
+    "parsed-text-preserve": { text: true, preserveWhitespace: true },
+  } as const;
+  const native = (name: string) => {
+    const tag = WEB_ELEMENTS.get(name);
+    if (!tag) return undefined;
+    return {
+      taglibId: NAMESPACE_IDS[tag.namespace],
+      html: true,
+      parseOptions: BODY_OPTIONS[tag.body],
+    };
+  };
+  const frozen = expected as Record<
+    string,
+    Record<string, ProjectedTag | null>
+  >;
+
+  it("lays the target's native elements down first, one entry each", () => {
+    const table = tagTable(SHAPES[0]?.[1], WEB_ELEMENTS);
+    expect(WEB_ELEMENTS.size).toBeGreaterThan(200);
+    for (const name of WEB_ELEMENTS.keys()) {
+      expect(project(table.getTag(name)), name).toEqual(native(name));
+    }
+  });
+
   for (const [label, translator] of SHAPES) {
-    it(`matches Marko's lookup for ${label}`, () => {
-      const lookup = markoLookup(translator);
+    it(`matches Marko's frozen lookup for ${label}`, () => {
+      const delta = frozen[label];
+      if (!delta) throw new Error(`no frozen expectations for ${label}`);
       const table = tagTable(translator, WEB_ELEMENTS);
-      const known = lookup.getTagsSorted().map((tag) => tag.name);
-      expect(known.length).toBeGreaterThan(200);
-      for (const name of known) {
-        expect(project(table.getTag(name)), name).toEqual(
-          project(lookup.getTag(name)),
-        );
-      }
-      for (const name of [...WEB_ELEMENTS.keys(), ...PROBES]) {
-        expect(project(table.getTag(name)), name).toEqual(
-          project(known.includes(name) ? lookup.getTag(name) : undefined),
-        );
+      const taglibNames = (
+        (translator as { taglibs?: Array<[string, unknown]> }).taglibs ?? []
+      ).flatMap(([, definition]) =>
+        Object.keys(definition ?? {})
+          .filter((key) => key.startsWith("<") && key.endsWith(">"))
+          .map((key) => key.slice(1, -1)),
+      );
+      const names = new Set([
+        ...WEB_ELEMENTS.keys(),
+        ...Object.keys(delta),
+        ...Object.keys(CORE_TAGLIB as object)
+          .filter((key) => key.startsWith("<"))
+          .map((key) => key.slice(1, -1)),
+        ...taglibNames,
+        ...PROBES,
+      ]);
+      for (const name of names) {
+        const want = Object.hasOwn(delta, name)
+          ? (delta[name] ?? undefined)
+          : native(name);
+        expect(project(table.getTag(name)), name).toEqual(project(want));
       }
     });
   }

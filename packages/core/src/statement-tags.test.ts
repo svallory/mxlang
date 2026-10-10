@@ -2,15 +2,15 @@
 // Decision 168 / #395 r2: every translator declares the statement tags, a
 // translator that does not is refused rather than papered over, and a statement
 // is checked the way Marko checks it.
-import { dirname } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildMarkoLookup, printExpression } from "./compile.ts";
+import { printExpression } from "./compile.ts";
 import { newCtx } from "./core.ts";
 import { withStatementTags } from "./core-taglib.ts";
 import type { Policy } from "./declarations.ts";
 import { parseFragment } from "./fragment.ts";
 import { lower } from "./lower.ts";
 import { markoCompiler } from "./marko-frontend.ts";
+import { tagTable } from "./tag-table.ts";
 import { lookup as targets } from "./test-targets.ts";
 
 /** A third-party target's translator: not built with `createTranslator`, no taglibs. */
@@ -26,8 +26,8 @@ const policy = (): Policy => ({
 const NAMES = ["import", "static", "export", "client", "server", "class"];
 
 describe("a translator not built with createTranslator", () => {
-  it("gets the six statement tags in the lookup core builds from it", () => {
-    const lookup = buildMarkoLookup("/f", bare());
+  it("gets the six statement tags in the tag table core builds from it", () => {
+    const lookup = tagTable(bare(), undefined);
     for (const name of NAMES) {
       expect(lookup?.getTag(name)?.parseOptions?.statement, name).toBe(true);
     }
@@ -72,7 +72,7 @@ describe("a statement is checked like Marko checks it", () => {
       source,
       printExpression,
       policy(),
-      buildMarkoLookup(dirname("/f/t.mx"), bare()),
+      tagTable(bare(), undefined),
       "/f/t.mx",
       targets,
     );

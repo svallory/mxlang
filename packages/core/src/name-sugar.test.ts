@@ -1,7 +1,7 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the sources are MX, not JS templates
 import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
-import { type Lookup, printExpression } from "./compile.ts";
+import { printExpression } from "./compile.ts";
 import { type Ctx, type MxWarning, type Node, newCtx } from "./core.ts";
 import type { Policy } from "./declarations.ts";
 import { parseFragment } from "./fragment.ts";
@@ -17,6 +17,7 @@ import {
 } from "./name-sugar.ts";
 import { defaultSyntax } from "./syntax-table.ts";
 import { tagAttributesOf } from "./tag-fields.ts";
+import type { TagTable } from "./tag-table.ts";
 import { lookup } from "./test-targets.ts";
 
 /**
@@ -610,7 +611,7 @@ describe("statement tags are not rewritten", () => {
    * `class` statements, so a lowering that asked again would refuse the
    * sugar.
    */
-  const lowerParsedWith = (source: string, table: Lookup): Ir => {
+  const lowerParsedWith = (source: string, table: TagTable): Ir => {
     const document = parseMx(source, {
       syntax: defaultSyntax(),
       lookup: table,
@@ -650,7 +651,7 @@ describe("statement tags are not rewritten", () => {
     // A table that calls nothing a statement: `<static:x/>` is an ordinary tag
     // with a tag-adjacent `:x`, so the sugar runs (no statement-tag error) and
     // the rewritten `static` tag is then refused by the statement lowerer.
-    const none = { getTag: () => undefined } as unknown as Lookup;
+    const none = { getTag: () => undefined } as unknown as TagTable;
     expect(messageOf(() => lowerParsedWith("<static:x/>\n", none))).toContain(
       "`static` was parsed as a tag with attributes",
     );
@@ -663,7 +664,7 @@ describe("statement tags are not rewritten", () => {
     // refuses a `class` tag on every target, so the rewrite is driven alone.)
     const data = {
       getTag: (name: string) => (name === "class" ? {} : undefined),
-    } as unknown as Lookup;
+    } as unknown as TagTable;
     const source = "<class:x/>\n";
     const document = parseMx(source, { syntax: defaultSyntax(), lookup: data });
     expect(document.errors).toEqual([]);
