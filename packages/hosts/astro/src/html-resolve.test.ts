@@ -29,7 +29,7 @@ function isolatedProject(): string {
   mkdirSync(join(root, "node_modules", "@mxlang"), { recursive: true });
   symlinkSync(
     fileURLToPath(new URL("..", import.meta.url)),
-    join(root, "node_modules", "@mxlang", "astro"),
+    join(root, "node_modules", "@mxlang", "host-astro"),
   );
   mkdirSync(join(root, "src", "pages"), { recursive: true });
   writeFileSync(join(root, "src", "pages", "index.mx.tsx"), "");

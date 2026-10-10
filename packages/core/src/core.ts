@@ -6,9 +6,9 @@
  * the language, this package is the core, and each host supplies declarations
  * plus an `Emitter`.
  *
- * This file previously served two dialects — `@mxlang/target-html`'s retired `.mx`
- * dialect, alongside `@mxlang/target-html`'s stock `.marko` — until decision
- * 68 retired `.mx` and deleted `@mxlang/target-html` entirely. Two things that were
+ * This file previously served two dialects — `@mxlang/html`'s retired `.mx`
+ * dialect, alongside `@mxlang/html`'s stock `.marko` — until decision
+ * 68 retired `.mx` and deleted `@mxlang/html` entirely. Two things that were
  * true while both existed, kept here because they still explain choices this
  * core makes:
  *

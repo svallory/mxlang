@@ -218,7 +218,7 @@ author binding (the same rule applies to ordinary content loops).
 
 `packages/targets/html/src/bun.ts` (`@mxlang/target-html/bun`) is the Bun-side
 `.mx` integration, decision 58 roadmap item 2, half A (moved here from the
-retired `@mxlang/target-html/bun` by decision 68). It exports a `BunPlugin` that
+retired `@mxlang/html/bun` by decision 68). It exports a `BunPlugin` that
 registers `build.onLoad({ filter: MX_FILTER }, ...)` — `MX_FILTER` is
 `/(?<!\.solid)\.mx$/`, `.mx` only; `.marko` is deliberately not registered
 (see "`.mx` is the only template extension" in `packages/tsx-bridge/AGENTS.md`). On each matched `.mx`

@@ -24,7 +24,7 @@ function linkRuntime(pkgDir: string): void {
   mkdirSync(join(pkgDir, "node_modules", "@mxlang"), { recursive: true });
   symlinkSync(
     join(import.meta.dirname, ".."),
-    join(pkgDir, "node_modules", "@mxlang", "html"),
+    join(pkgDir, "node_modules", "@mxlang", "target-html"),
   );
 }
 

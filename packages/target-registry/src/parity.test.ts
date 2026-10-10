@@ -247,14 +247,14 @@ describe("packages and rule 2 (the single target dependency)", () => {
 
   it("every built-in target declares a distinct package", () => {
     expect(builtinTargets.map((t) => t.packageName).sort()).toEqual([
+      "@mxlang/data",
       "@mxlang/host-angular",
       "@mxlang/host-astro",
-      "@mxlang/data",
       "@mxlang/host-hono",
-      "@mxlang/target-html",
       "@mxlang/host-preact",
       "@mxlang/host-react",
       "@mxlang/host-solid",
+      "@mxlang/target-html",
     ]);
   });
 

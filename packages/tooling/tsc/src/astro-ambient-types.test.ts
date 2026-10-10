@@ -55,7 +55,7 @@ function project(withAstro: boolean, tsconfig: object): string {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-astro-ambient-")));
   made.push(dir);
   mkdirSync(join(dir, "node_modules", "@mxlang"), { recursive: true });
-  symlinkSync(ASTRO_HOST, join(dir, "node_modules", "@mxlang", "astro"));
+  symlinkSync(ASTRO_HOST, join(dir, "node_modules", "@mxlang", "host-astro"));
   if (withAstro) symlinkSync(ASTRO, join(dir, "node_modules", "astro"));
   writeFileSync(
     join(dir, "package.json"),

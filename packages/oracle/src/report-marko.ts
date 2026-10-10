@@ -5,7 +5,7 @@ import { runStockTable } from "./report-marko-stock";
  * toolchain and `@mxlang/target-html`'s output for the stock `.marko` fixture
  * set at `packages/targets/html/fixtures-marko/`.
  *
- * Decision 68 retired the `.mx` dialect and `@mxlang/target-html`, so the table this
+ * Decision 68 retired the `.mx` dialect and `@mxlang/html`, so the table this
  * script used to print for `packages/mx-html/fixtures-mx/` is gone — there is
  * only one dialect (stock Marko) and one table now, `runStockTable()`'s.
  *

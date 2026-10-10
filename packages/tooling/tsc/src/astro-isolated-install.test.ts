@@ -36,7 +36,7 @@ function isolatedProject(): string {
     mkdtempSync(join(tmpdir(), "mx-astro-isolated-ts-")),
   );
   mkdirSync(join(dir, "node_modules", "@mxlang"), { recursive: true });
-  symlinkSync(ASTRO_DIR, join(dir, "node_modules", "@mxlang", "astro"));
+  symlinkSync(ASTRO_DIR, join(dir, "node_modules", "@mxlang", "host-astro"));
   writeFileSync(
     join(dir, "package.json"),
     JSON.stringify({ mx: { host: "astro" } }),
