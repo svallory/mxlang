@@ -1,5 +1,5 @@
 /**
- * `@mxlang/preact` — MX's Preact host, the fourth emitter on `@mxlang/core`'s
+ * `@mxlang/host-preact` — MX's Preact host, the fourth emitter on `@mxlang/core`'s
  * IR (decisions 71, 79, 81, 82).
  *
  * A `.mx` template becomes a Preact component module: a JSX file
@@ -86,8 +86,8 @@ import {
 } from "./region-compile.ts";
 
 export type { AttrTagConfig, AttrTagOf } from "@mxlang/core";
-// Re-exported for the hosts built on this emitter (`@mxlang/react`,
-// `@mxlang/hono`), which depend on this package rather than on the core
+// Re-exported for the hosts built on this emitter (`@mxlang/host-react`,
+// `@mxlang/host-hono`), which depend on this package rather than on the core
 // directly. Their Bun loaders need tag discovery, and a second dependency
 // edge only to reach one function would contradict that arrangement.
 export {
@@ -132,7 +132,7 @@ export type AttrTag<
 /**
  * This package's own target table (decisions 129 and 132): the one descriptor
  * it exports. The default for a direct entry that names no lookup of its own
- * (`@mxlang/preact/bun` and its siblings, which route through here — see
+ * (`@mxlang/host-preact/bun` and its siblings, which route through here — see
  * design note §5.1, rule (c)). A tool compiling several targets passes the
  * full registry's lookup through `options.targets` instead.
  */

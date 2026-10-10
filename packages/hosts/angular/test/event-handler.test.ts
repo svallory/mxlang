@@ -265,7 +265,7 @@ describe("emitted shape", () => {
     expect(message).toContain("protected readonly __mxOn = ");
     expect(message).toContain("`MxHandlers`");
     expect(message).toContain("`MxHandlersMixin(Base)`");
-    expect(message).toContain("@mxlang/angular/runtime");
+    expect(message).toContain("@mxlang/host-angular/runtime");
     // The package must be a runtime dependency for the second option.
     expect(message).toContain("`dependencies`");
     // An indirect base is not recognised; the warning says to extend directly.

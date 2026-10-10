@@ -26,7 +26,7 @@ export interface Input {
       $!{input.content()}
     </main>
     <footer.site-footer>
-      <p>Rendered by @mxlang/html — no client runtime.</p>
+      <p>Rendered by @mxlang/target-html — no client runtime.</p>
     </footer>
   </body>
 </html>

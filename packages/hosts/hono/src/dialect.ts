@@ -1,14 +1,17 @@
 // Import the light subpaths, not the package root: the root is preact's
 // compile entry, and a descriptor's dependencies must stay light
 // (target-registry's light-import test).
-import { honoEventPropNames, type JsxDialect } from "@mxlang/preact/dialect";
-import { createJsxDeclarations } from "@mxlang/preact/emitter";
+import {
+  honoEventPropNames,
+  type JsxDialect,
+} from "@mxlang/host-preact/dialect";
+import { createJsxDeclarations } from "@mxlang/host-preact/emitter";
 
 /** Hono vocabulary for the shared Preact/React/Hono JSX emitter. */
 export const honoDialect: JsxDialect = {
   name: "Hono",
   jsxImportSource: "hono/jsx",
-  attrTagModule: "@mxlang/hono",
+  attrTagModule: "@mxlang/host-hono",
   classAttr: "class",
   forAttr: "for",
   textareaContent: "children",
@@ -18,8 +21,8 @@ export const honoDialect: JsxDialect = {
   // `<try>` lowers to this package's own `MxErrorBoundary`, which wraps
   // `hono/jsx`'s async `ErrorBoundary` around the body thunk; `Suspense` is
   // re-exported from the same module (the emitter imports both from one).
-  errorBoundaryModule: "@mxlang/hono/runtime",
-  mxClassModule: "@mxlang/hono/runtime",
+  errorBoundaryModule: "@mxlang/host-hono/runtime",
+  mxClassModule: "@mxlang/host-hono/runtime",
   errorBoundaryName: "MxErrorBoundary",
   suspenseName: "Suspense",
   fragmentModule: "hono/jsx",

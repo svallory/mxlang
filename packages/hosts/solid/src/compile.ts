@@ -2,7 +2,7 @@
  * The solid host's compile entry, as a **descriptor-free leaf**.
  *
  * `descriptor.ts` must stay a leaf: it is a bundler entry
- * (`@mxlang/solid/descriptor`) and the registry bundles it into tools, so it
+ * (`@mxlang/host-solid/descriptor`) and the registry bundles it into tools, so it
  * may never `require` a module that (transitively) imports it. The compile
  * entry therefore lives here, where nothing reaches for `./descriptor.ts`,
  * and both `index.ts` (which composes the package's own lookup and the public
@@ -611,8 +611,8 @@ export function compileSolidUnit(
   for (const node of ir.hoisted)
     parts.push(mappedStatement(source, node), "\n");
   // The author's `export interface Input` is emitted and the component
-  // parameter is annotated with it, exactly as `@mxlang/preact` and
-  // `@mxlang/html` do, so a caller's `<Card title=1/>` is a JSX props check
+  // parameter is annotated with it, exactly as `@mxlang/host-preact` and
+  // `@mxlang/target-html` do, so a caller's `<Card title=1/>` is a JSX props check
   // against `Input` (TS2322). The output is therefore TSX carrying types, and
   // every runtime consumer must run a TypeScript-aware step over it. The vite
   // plugin already hands a whole-file unit to `@solidjs/vite-plugin` under a
@@ -626,7 +626,7 @@ export function compileSolidUnit(
     "\n",
   );
   if (ir.needsAttrTagImport) {
-    parts.unshift(`import type { AttrTag } from "@mxlang/solid";\n`);
+    parts.unshift(`import type { AttrTag } from "@mxlang/host-solid";\n`);
   }
   // Named after the file, never anonymous: a tag whose template calls its own
   // name resolves to this declaration, so self-recursion needs no self-import
@@ -700,7 +700,7 @@ export function compileSolidUnit(
     vars.length > 0
       ? `let ${vars.map((name) => `${name}: any`).join(", ")}; `
       : "";
-  const name = moduleExportName(ir, "@mxlang/solid");
+  const name = moduleExportName(ir, "@mxlang/host-solid");
   // The return callback is not part of the author's `Input`, so a unit that
   // declares `<return>` widens its parameter with it; the caller's generated
   // `$mxReturn={...}` then type-checks against exactly the units that return.

@@ -2,7 +2,7 @@
  * The preact host's compile entry, as a **descriptor-free leaf**.
  *
  * `descriptor.ts` must stay a leaf: it is a bundler entry
- * (`@mxlang/preact/descriptor`) and the registry bundles it into tools, so it
+ * (`@mxlang/host-preact/descriptor`) and the registry bundles it into tools, so it
  * may never `require` a module that (transitively) imports it. The compile
  * entry — and the module emitter behind it, since nothing else here depends
  * on the descriptor either — therefore lives in this leaf, and both
@@ -54,7 +54,7 @@ import {
  * 5.42.5's `loadTaglibFromDir.js`, `ext === ".marko"`), so a `tags/*.marko`
  * file is callable as a tag with no import. A `.mx` file in `tags/` is not
  * discovered. Kept because this is a host for stock Marko syntax, the same
- * as `@mxlang/html`.
+ * as `@mxlang/target-html`.
  */
 export const host = {
   tagDiscoveryDirs: ["tags"],
@@ -222,7 +222,7 @@ export function attributeHelpers(
  * tag-name string, a render function, or already-rendered content (a
  * caller's `input.content`/`children`, passed straight through rather than
  * called again). JSX's tag position is static, so a module using a dynamic
- * tag gets this helper inlined, the same way `@mxlang/html` inlines
+ * tag gets this helper inlined, the same way `@mxlang/target-html` inlines
  * `renderDynamic` — no runtime package, so nothing to import.
  *
  * `payload` is either the call's props object (no arguments), or — for
@@ -239,7 +239,7 @@ export function attributeHelpers(
  * object — the callee reads it as its own last positional parameter, the
  * same convention \`#defineTrailingParams\` uses for a
  * \`<define>\` call. A positional call is not an element description, matching
- * \`@mxlang/html\`'s \`renderDynamic\` and \`@mxlang/solid\`'s inline dispatch.
+ * \`@mxlang/target-html\`'s \`renderDynamic\` and \`@mxlang/host-solid\`'s inline dispatch.
  *
  * decision 112, Marko parity: a *string* target called with arguments uses
  * \`payload[0]\` (Marko's \`args[0]\`) as its element attributes, not the
@@ -549,7 +549,7 @@ export function emitModuleWithMappings(
     // Named after the file, never anonymous: a tag whose template calls its
     // own name resolves to this declaration, so self-recursion needs no
     // self-import (design invariant §7.5-7).
-    `export default function ${moduleExportName(ir, "@mxlang/preact")}(props: Input) {`,
+    `export default function ${moduleExportName(ir, "@mxlang/host-preact")}(props: Input) {`,
   );
   // Marko names a component's ordinary children `content`, and a template
   // reads them as `${input.content}`. JSX has its own name for the same slot —
@@ -602,7 +602,7 @@ export function emitModuleWithMappings(
   // `.render(input, out)` return value.
   if (ir.returnValue) {
     rejectHooksInReturningUnit(ir, dialect.hookModules);
-    const componentName = moduleExportName(ir, "@mxlang/preact");
+    const componentName = moduleExportName(ir, "@mxlang/host-preact");
     // Fresh against the whole source, so an author's own binding never
     // collides with the lifted body function (the `handlerTypeNames` rule).
     let unit = `${componentName}Unit`;
@@ -727,7 +727,7 @@ export interface CompilePreactResult extends CompileResult {
 /**
  * Compiles a `.mx` template to a Preact component module.
  *
- * The returned map is a placeholder identity map, as `@mxlang/html`'s is: the
+ * The returned map is a placeholder identity map, as `@mxlang/target-html`'s is: the
  * emitter builds text rather than printing a Babel AST, so there are no node
  * positions to derive real mappings from yet. `@mxlang/typescript-plugin`
  * maps from the IR's own node locations instead.

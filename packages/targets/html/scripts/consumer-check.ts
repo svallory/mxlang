@@ -159,7 +159,7 @@ try {
   writeFileSync(
     join(scratchDir, "via-api.ts"),
     [
-      'import { compile } from "@mxlang/html";',
+      'import { compile } from "@mxlang/target-html";',
       'import { readFileSync } from "node:fs";',
       'const source = readFileSync("hello.mx", "utf8");',
       'const { code } = compile(source, "hello.mx");',
@@ -175,7 +175,7 @@ try {
   // syntax, so the loader does not claim a real `.marko` file.
   writeFileSync(
     join(scratchDir, "bunfig.toml"),
-    'preload = ["@mxlang/html/bun"]\n',
+    'preload = ["@mxlang/target-html/bun"]\n',
   );
   writeFileSync(
     join(scratchDir, "via-loader.ts"),
@@ -201,7 +201,7 @@ try {
           moduleResolution: "bundler",
           target: "ES2022",
           noEmit: true,
-          // Checked against the published `@mxlang/html` `.d.ts`
+          // Checked against the published `@mxlang/target-html` `.d.ts`
           // only; a dependency's own `.d.ts`/`.ts` internals (e.g. a
           // `bun-types`/`typescript` version skew unrelated to either
           // package) are not what this step exists to catch.

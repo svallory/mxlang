@@ -19,14 +19,15 @@ Custom tags let a project define its own portable markup vocabulary in `tags/x.m
 | `packages/tooling/vite-plugin` | `@mxlang/vite-plugin` | Vite transform: prints `.solid.mx` to JSX text ahead of `@solidjs/vite-plugin` (the primary integration) |
 | `packages/core` | `@mxlang/core` | The Marko-node consumer every MX host is built on: structural and custom-tag lowering, the host declarations contract, stateful-tag hooks, and the `compileSource`/`parseFragment` front doors. Depends on `@marko/compiler` alone. |
 | `packages/web-elements` | `@mxlang/web-elements` | The HTML, SVG and MathML element names and how each one's body parses, as plain data with no dependency. Read by the targets and hosts that render web elements, which hand it to core through their declarations; core names no element. |
-| `packages/targets/html` | `@mxlang/html` | The vanilla MX host on `@mxlang/core`: `.mx` files compile to a pure `(input) => string` function, no runtime beyond an `escape` helper, as a `config.translator` for `@marko/compiler`. MX 1.0 is a strict subset of Marko syntax (decision 72), so this is Marko syntax, unmodified — no fork. |
-| `packages/hosts/astro` | `@mxlang/astro` | The Astro host: an integration plus a renderer that renders `.mx` components to static markup at build time, with no islands and no client JS. Astro's slots (already-rendered HTML strings) map to MX's `content`/attribute-tag thunks; stateful tags are compile errors, since this host has no reactive target (decision 71). |
-| `packages/hosts/preact` | `@mxlang/preact` | The Preact host: a `.mx` template compiles to a Preact component module in JSX text. The first host whose target has no control-flow components at all — `<if>` becomes a ternary chain and `<for>` a `.map` with a `key`, exactly as a Preact author would write them. Ships `MxErrorBoundary`/`MxPlaceholder` for `<try>` (Preact has no built-in error boundary) and a `Target` object so a React host can reuse the emitter rather than fork it. |
-| `packages/hosts/react` | `@mxlang/react` | The React target on the shared Preact/React JSX emitter: `className`/`htmlFor`, native React Fragment and Suspense, and a React class error boundary for `<try>`—no Preact compat layer. |
-| `packages/hosts/hono` | `@mxlang/hono` | The Hono target on the shared JSX emitter: native `class`/`for`, and `<try>` lowers straight to `hono/jsx`'s own built-in `ErrorBoundary`/`Suspense`—no hand-rolled boundary class needed, unlike Preact/React. Ships a Bun loader (`@mxlang/hono/bun`) for a plain Bun server with no bundler. |
+| `packages/targets/html` | `@mxlang/target-html` | The vanilla MX host on `@mxlang/core`: `.mx` files compile to a pure `(input) => string` function, no runtime beyond an `escape` helper, as a `config.translator` for `@marko/compiler`. MX 1.0 is a strict subset of Marko syntax (decision 72), so this is Marko syntax, unmodified — no fork. |
+| `packages/target-registry` | `@mxlang/targets` | The umbrella (decision 201, private for now): the built-in target registry every tool dispatches through, the html target's descriptor as `htmlTarget`, and the html target's full entry at `@mxlang/targets/html`. |
+| `packages/hosts/astro` | `@mxlang/host-astro` | The Astro host: an integration plus a renderer that renders `.mx` components to static markup at build time, with no islands and no client JS. Astro's slots (already-rendered HTML strings) map to MX's `content`/attribute-tag thunks; stateful tags are compile errors, since this host has no reactive target (decision 71). |
+| `packages/hosts/preact` | `@mxlang/host-preact` | The Preact host: a `.mx` template compiles to a Preact component module in JSX text. The first host whose target has no control-flow components at all — `<if>` becomes a ternary chain and `<for>` a `.map` with a `key`, exactly as a Preact author would write them. Ships `MxErrorBoundary`/`MxPlaceholder` for `<try>` (Preact has no built-in error boundary) and a `Target` object so a React host can reuse the emitter rather than fork it. |
+| `packages/hosts/react` | `@mxlang/host-react` | The React target on the shared Preact/React JSX emitter: `className`/`htmlFor`, native React Fragment and Suspense, and a React class error boundary for `<try>`—no Preact compat layer. |
+| `packages/hosts/hono` | `@mxlang/host-hono` | The Hono target on the shared JSX emitter: native `class`/`for`, and `<try>` lowers straight to `hono/jsx`'s own built-in `ErrorBoundary`/`Suspense`—no hand-rolled boundary class needed, unlike Preact/React. Ships a Bun loader (`@mxlang/host-hono/bun`) for a plain Bun server with no bundler. |
 | `packages/tooling/language-server` | `@mxlang/language-server` | Diagnostics-only LSP server for MX hosts (decision 71/72): publishes one `Diagnostic` per host-policy `TranslateError` (e.g. `<let>` under a `strict` policy) that Marko's own language server cannot see. Runs alongside Marko's server, never in place of it — no completion, hover, or go-to-definition. |
 
-**Naming TODO**: the `@mxlang/*` scope and these short names are placeholders. Final npm names are undecided (see `notes/index.md` in the space root, "Naming on npm").
+**Package names** (decision 201): a target is `@mxlang/target-<name>` and a host `@mxlang/host-<name>`; `@mxlang/targets` is the umbrella (the target registry plus every target). Compiler internals (`core`, `parser`, `babel`, `tsx-bridge`), tooling and editor packages keep their names. `@mxlang/data` is not renamed: decision 204 deletes it.
 
 ## Pinned versions
 
@@ -121,16 +122,16 @@ chromium` once). The e2e suite is not part of the root `bun run test` — it
 needs a browser — so it stays behind the example's own script.
 
 `examples/mx-site` is a different kind of example: a Hono-on-Bun server
-rendering MX (`.mx`) templates to HTML strings with `@mxlang/html`, no
+rendering MX (`.mx`) templates to HTML strings with `@mxlang/target-html`, no
 client runtime and no Solid. It imports these files
-directly via `@mxlang/html/bun` (no prebuild step). See
+directly via `@mxlang/target-html/bun` (no prebuild step). See
 `examples/mx-site/README.md`.
 
 `examples/mx-vite` is a minimal static-site build: two `.mx` pages compiled
 by `@mxlang/vite-plugin`, bundled by `vite build`
 to an SSR entry, then run once to write `dist/*.html`.
 
-`@mxlang/html` needs no app at all — it renders a fixture to stdout,
+`@mxlang/target-html` needs no app at all — it renders a fixture to stdout,
 showing the stock `.marko` template, the compiled runtime-free module, and
 the HTML it produces:
 
@@ -189,7 +190,7 @@ bun run e2e
 
 `examples/hono-app` is the Hono target's example: a Hono-on-Bun server (no
 bundler) rendering one `.mx` page with a `<for>` list and two `<try>` blocks,
-loaded via `@mxlang/hono/bun`'s Bun plugin. Its Playwright e2e fetches the
+loaded via `@mxlang/host-hono/bun`'s Bun plugin. Its Playwright e2e fetches the
 live server and asserts the rendered list, the non-throwing `<try>` branch,
 the branch Hono's built-in `ErrorBoundary` catches, and that the response
 ships no client hydration script — Hono's default server render is plain

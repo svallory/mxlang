@@ -1,7 +1,7 @@
 {
   "name": "angular-ngmx-bad-config-fixture",
   "dependencies": {
-    "@mxlang/angular": "workspace:*"
+    "@mxlang/host-angular": "workspace:*"
   },
   "mx": {
     "angular": {

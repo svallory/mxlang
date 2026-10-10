@@ -11,7 +11,7 @@
 // fails here, not in the workspace, where hoisting hides it.
 //
 // It must be able to fail (decision 61):
-//   - NEGATIVE case: `@mxlang/html` WITHOUT its optional peer `@types/bun`
+//   - NEGATIVE case: `@mxlang/target-html` WITHOUT its optional peer `@types/bun`
 //     must fail on `dist/bun.d.ts` with TS2307. If that ever passes, the probe
 //     has stopped seeing what it exists to see, and the script fails.
 //   - `mx-tsc` smoke: the packed `@mxlang/tsc` must expose a bin that starts.
@@ -65,18 +65,18 @@ const tsc = join(repoRoot, "node_modules/.bin/tsc");
 const PACK_PRIVATE = ["@mxlang/core", "@mxlang/tsx-bridge"];
 /**
  * Publishable packages that are not on the registry yet but are transitive
- * runtime deps of a probed root (`@mxlang/html` imports
+ * runtime deps of a probed root (`@mxlang/target-html` imports
  * `@mxlang/web-elements`, and html is under the language server and
  * `@mxlang/tsc`), so every consumer pins them to their tarball like
  * `PACK_PRIVATE`.
  */
 const PACK_UNPUBLISHED = ["@mxlang/web-elements"];
 const STUB_PRIVATE = [
-  "@mxlang/hono",
-  "@mxlang/preact",
-  "@mxlang/react",
-  "@mxlang/solid",
-  "@mxlang/target-registry",
+  "@mxlang/host-hono",
+  "@mxlang/host-preact",
+  "@mxlang/host-react",
+  "@mxlang/host-solid",
+  "@mxlang/targets",
 ];
 
 function fail(message: string): never {
@@ -151,13 +151,13 @@ workspaceDirs["@mxlang/typescript-plugin"] = join(
  * no real types; each entry names the one type the importing `.d.ts` uses.
  */
 const STUB_TYPES: Record<string, string> = {
-  "@mxlang/astro": "export type AstroTemplateMapping = unknown;\n",
+  "@mxlang/host-astro": "export type AstroTemplateMapping = unknown;\n",
 };
 
 function stubDir(name: string): string {
   const dir = join(work, "stubs", name.replace("/", "__"));
   mkdirSync(dir, { recursive: true });
-  // Every subpath (`@mxlang/astro/template`, …) resolves to the same empty module.
+  // Every subpath (`@mxlang/host-astro/template`, …) resolves to the same empty module.
   writeFileSync(
     join(dir, "package.json"),
     JSON.stringify({
@@ -251,7 +251,7 @@ function makeConsumer(opts: ConsumerOptions): string {
   for (const name of [...PACK_PRIVATE, ...PACK_UNPUBLISHED]) {
     overrides[name] = `file:${tarballOf(name, workspaceDirs[name] as string)}`;
   }
-  // `@mxlang/html` is a dep of the language server: a real tarball.
+  // `@mxlang/target-html` is a dep of the language server: a real tarball.
   const packExtra = new Set(opts.packExtra ?? []);
   // Every workspace dep of the root that has a dist is packed, not resolved.
   for (const [dep, range] of Object.entries(rootPkg.dependencies ?? {})) {
@@ -362,18 +362,22 @@ function smokeMxTsc(): string | undefined {
     label: "tsc-smoke",
     withOptionalPeers: true,
     // `typescript` is a peer of `@mxlang/tsc` (">=5.9.0 <7"); a consumer supplies it.
-    // `@mxlang/html` is the target the typecheck below selects (`mx.host:
+    // `@mxlang/target-html` is the target the typecheck below selects (`mx.host:
     // "html"`): a compiled page imports it at run time and for its types, so
-    // an html project depends on it itself (`bun add @mxlang/html`, the
+    // an html project depends on it itself (`bun add @mxlang/target-html`, the
     // target's docs). Only pinned through `overrides`, it is a transitive
     // dependency an isolated install does not expose to the project, and the
     // page's import is TS2307 (decision 161 reports it; Volar dropped it).
     extraDeps: {
       typescript: "6.0.3",
-      "@mxlang/html": `file:${tarballOf("@mxlang/html", workspaceDirs["@mxlang/html"] as string)}`,
+      "@mxlang/target-html": `file:${tarballOf("@mxlang/target-html", workspaceDirs["@mxlang/target-html"] as string)}`,
     },
-    packExtra: ["@mxlang/typescript-plugin", "@mxlang/angular", "@mxlang/html"],
-    stubExtra: ["@mxlang/astro"],
+    packExtra: [
+      "@mxlang/typescript-plugin",
+      "@mxlang/host-angular",
+      "@mxlang/target-html",
+    ],
+    stubExtra: ["@mxlang/host-astro"],
   });
   const bin = join(dir, "node_modules/.bin/mx-tsc");
   if (!existsSync(bin)) return `mx-tsc bin was not linked at ${bin}`;
@@ -475,7 +479,7 @@ function nodeTypes(
 
 /**
  * Private workspace deps of a probed package beyond `STUB_PRIVATE`: the plugin
- * bundles `@mxlang/astro` (a `bun build --external`), whose `main` is
+ * bundles `@mxlang/host-astro` (a `bun build --external`), whose `main` is
  * `src/*.ts`, so a consumer install cannot load it (D5).
  */
 /** The root `devDependencies.vite`: the exact version the repo and examples build with. */
@@ -503,7 +507,7 @@ function privateStubs(
 ): Pick<ConsumerOptions, "stubExtra" | "extraDeps"> {
   return name === "@mxlang/typescript-plugin"
     ? {
-        stubExtra: ["@mxlang/astro"],
+        stubExtra: ["@mxlang/host-astro"],
         // `typescript` is a required peer (">=5.9.0 <7"); a consumer supplies
         // it, and an unpinned install would resolve 7.x.
         extraDeps: { typescript: pluginTypescript() },
@@ -612,15 +616,15 @@ try {
   }
 
   // 2. Negative case: html without its optional `@types/bun` must fail on bun.d.ts.
-  if (only_("@mxlang/html")) {
+  if (only_("@mxlang/target-html")) {
     const dir = makeConsumer({
-      root: "@mxlang/html",
+      root: "@mxlang/target-html",
       label: "html-no-types-bun",
       withOptionalPeers: false,
     });
     const r = typecheck(dir);
     const onBunDts =
-      /node_modules\/@mxlang\/html\/dist\/bun\.d\.ts\(\d+,\d+\): error TS2307: Cannot find module 'bun'/.test(
+      /node_modules\/@mxlang\/target-html\/dist\/bun\.d\.ts\(\d+,\d+\): error TS2307: Cannot find module 'bun'/.test(
         r.out,
       );
     if (!r.ok && onBunDts) {

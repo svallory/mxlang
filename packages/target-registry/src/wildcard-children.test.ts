@@ -62,7 +62,7 @@ const compilers: [string, Compile][] = [
   [
     "angular-template",
     (source, file) =>
-      import("@mxlang/angular").then((m) =>
+      import("@mxlang/host-angular").then((m) =>
         m.compile(source, file, { customTags, targets: builtinLookup() }),
       ),
   ],
@@ -172,7 +172,7 @@ const compilersWith = (
   [
     "angular-template",
     (source, file) =>
-      import("@mxlang/angular").then((m) =>
+      import("@mxlang/host-angular").then((m) =>
         m.compile(source, file, { customTags: tags, targets: builtinLookup() }),
       ),
   ],

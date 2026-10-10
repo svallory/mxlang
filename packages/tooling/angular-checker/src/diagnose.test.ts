@@ -1,6 +1,6 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: authored MX template source
 import path from "node:path";
-import { compileNgMx } from "@mxlang/angular";
+import { compileNgMx } from "@mxlang/host-angular";
 import { describe, expect, it } from "vitest";
 import {
   createAngularChecker,

@@ -28,7 +28,7 @@ lowering itself.
   appears in expression position. It calls `walkMxRegion` to find the
   region's end, slices the region's raw source text, and passes it to
   whichever `mxRegionCompile` hook the caller supplied (see below) — for
-  `.solid.mx`, that is `@mxlang/solid`'s `compileSolidMx` (which does the
+  `.solid.mx`, that is `@mxlang/host-solid`'s `compileSolidMx` (which does the
   actual MX-to-Solid-JSX lowering, over `@mxlang/core`'s IR) — along with the
   region's file-relative base position (`baseOffset`/`baseLine`/`baseColumn`).
   The resulting JSX text is re-parsed with Babel's own expression parser and
@@ -43,7 +43,7 @@ lowering itself.
 **A host can turn `<>…</>` into a region** with the `mxRegionFragment` option
 (default off, so the note above still holds for `.solid.mx`). Then the host's
 `mxRegionCompile` receives the fragment's children as `source`, with
-`fragment: true`, and lowers them as siblings; `@mxlang/angular` enables it for
+`fragment: true`, and lowers them as siblings; `@mxlang/host-angular` enables it for
 `.ng.mx`. Whatever the option, a second root directly after a region
 (`<a/><b/>`) fails with the `MultipleRoots` error naming the one-root rule, in
 place of the tokenizer's `Unexpected token` — only ever replacing a failure.
@@ -109,8 +109,8 @@ its caller directly, so this package never learns their shape.
 **`mxRegionCompile` is required whenever the grammar is on** — the parser
 imports no host and has no default, so a region reached with the hook absent
 is a positioned compile error at the region's own start, naming the option
-and pointing at `compileSolidMx` from `@mxlang/solid` for `.solid.mx`.
-Angular's `.ng.mx` supplies its own (`@mxlang/angular`'s `compileNgMx`),
+and pointing at `compileSolidMx` from `@mxlang/host-solid` for `.solid.mx`.
+Angular's `.ng.mx` supplies its own (`@mxlang/host-angular`'s `compileNgMx`),
 paired with its own position check; see `src/mx/region-compile.ts`. The
 input also carries the region's own `MxRegionContext` — the same one the
 position check saw — so a host that needs the enclosing syntax to shape what
@@ -136,16 +136,16 @@ Because a `.ng.mx` filename would never match `parse`'s own `.solid.mx`
 extension test, `parse` honours an explicit `mx: boolean` option as the
 grammar gate, falling back to that test when it is unset.
 
-`@mxlang/tsx-bridge` has no dependency on `@mxlang/solid` or any other host
+`@mxlang/tsx-bridge` has no dependency on `@mxlang/host-solid` or any other host
 (only a `devDependency`, for this package's own tests). Every in-repo
 `.solid.mx` caller (the Vite plugin, the TypeScript plugin, the language
-server, the oracle) now imports `@mxlang/solid` itself and passes
+server, the oracle) now imports `@mxlang/host-solid` itself and passes
 `compileSolidMx` through `mxRegionCompile` explicitly — a breaking change
 for each of them, made in the same change that removed the default.
 
 `lower.ts`, `control.ts` and `attrs.ts` — the modules that used to lower the
 raw `walk.ts` tree to Solid JSX text directly inside this package — are
-deleted; that lowering now happens in `@mxlang/solid` over the shared core
+deleted; that lowering now happens in `@mxlang/host-solid` over the shared core
 IR, the same as the HTML and Astro hosts. Their test files
 (`control.test.ts`, `attrs.test.ts`, `render-props.test.ts`) stay, now
 exercising the same behavior end to end through `mxParseElementAt`.

@@ -6,7 +6,7 @@ export interface Input { }
 <Layout title="Home" active="home">
   <Callout text="This whole site is MX (.mx) templates — rendered server-side to a string — no client runtime." />
   <section.intro>
-    <h2>@mxlang/html demo</h2>
+    <h2>@mxlang/target-html demo</h2>
     <p>Use the nav above to see a component import, doctype/head/meta (this page), loops and empty-state handling, attribute escaping, mixins (<code>&lt;define&gt;</code>), and raw vs escaped output.</p>
   </section>
 </Layout>

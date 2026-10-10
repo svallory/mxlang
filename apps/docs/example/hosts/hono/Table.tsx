@@ -1,4 +1,4 @@
-import type { AttrTag } from "@mxlang/hono";
+import type { AttrTag } from "@mxlang/host-hono";
 import type { Member } from "./members.ts";
 
 export interface Input {

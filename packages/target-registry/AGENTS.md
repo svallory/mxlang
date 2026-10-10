@@ -1,6 +1,6 @@
 # target-registry — agent instructions
 
-## `@mxlang/target-registry`: the built-in target table
+## `@mxlang/targets`: the built-in target table
 
 Private package (decisions 129 and 132; **unstable**, like the contract in
 `@mxlang/core`'s "Target contract" section). It statically imports each host
@@ -40,13 +40,30 @@ lists encoded.
 Published tooling declarations must not reference this private package; keep
 registry-typed helpers internal to each tool's build.
 
+## The umbrella (decision 201)
+
+The package is `@mxlang/targets`, the umbrella of the `target-*` family: the
+registry plus every target. Its directory stays `packages/target-registry`.
+Beyond the registry it adds:
+
+- `htmlTarget` on the main entry: the html target's descriptor, the same
+  object `builtinTargets` registers. It is light like the rest of the entry.
+- `@mxlang/targets/html` (`src/html.ts`): `export *` of `@mxlang/target-html`'s
+  full entry (`compile`, `compileFile`, `policy`, …). It stays a subpath because
+  that entry reaches the compiler, and the main entry must load none.
+
+`@mxlang/data` is not part of the umbrella and keeps its name: decision 204
+deletes it. The package stays private 0.0.0 with `src` entry points; making it
+publishable is release track C. `src/umbrella.test.ts` pins the export map and
+the identity of every re-export.
+
 ## Light import
 
 Importing the registry or any descriptor must load no `@marko/compiler` and no
 `@astrojs/compiler`. A descriptor imports only its declarations (policy tables
 and emitters' declaration objects) and reaches the compile entry inside
 `load()` with `require("./index.ts")` on a **relative** path, so Bun inlines it
-in a bundle. (Cross-package: `astro-html` requires `@mxlang/html` by name; a
+in a bundle. (Cross-package: `astro-html` requires `@mxlang/target-html` by name; a
 literal bare `require` is bundled too.) `src/light-import.test.ts` runs a
 fresh `bun` process, lists the compiler modules in `require.cache`, and checks
 the detector with a positive control (compiling once loads `@marko/compiler`).
@@ -60,7 +77,7 @@ a getter so it stays lazy.
 ## Where the descriptors live
 
 Each host package owns `src/descriptor.ts` and `package.json#exports["./descriptor"]`.
-`@mxlang/html` and `@mxlang/angular` ship `dist`, so their build lists
+`@mxlang/target-html` and `@mxlang/host-angular` ship `dist`, so their build lists
 `src/descriptor.ts` as an entry (and html's `distFiles` in
 `scripts/pack-hygiene.ts` names `dist/descriptor.{js,d.ts}`). The registry is
 not in `PACKED_PACKAGES`: it is private with `main` at source and nothing
@@ -69,7 +86,7 @@ ships it; the pack probe stubs it for consumers (`STUB_PRIVATE`).
 ## Running
 
 ```
-bunx vitest run --project @mxlang/target-registry
+bunx vitest run --project @mxlang/targets
 ```
 
-It needs a built `dist` for `@mxlang/core`, `@mxlang/html` and `@mxlang/angular`.
+It needs a built `dist` for `@mxlang/core`, `@mxlang/target-html` and `@mxlang/host-angular`.

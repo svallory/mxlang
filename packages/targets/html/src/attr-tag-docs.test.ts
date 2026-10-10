@@ -53,7 +53,7 @@ async function renderGroup(group: string, input: unknown): Promise<string> {
       if (!snippet.file.endsWith(".mx")) continue;
       const sourcePath = join(dir, snippet.file);
       const code = compile(`${snippet.source}\n`, sourcePath)
-        .code.replaceAll('from "@mxlang/html"', 'from "./runtime.ts"')
+        .code.replaceAll('from "@mxlang/target-html"', 'from "./runtime.ts"')
         .replace(/(from\s+")(\.[^"]+)\.mx(")/g, "$1$2.ts$3");
       writeFileSync(sourcePath.replace(/\.mx$/, ".ts"), code);
     }

@@ -14,7 +14,7 @@ tasks:
 
   test:
     command: "vitest"
-    args: ["run", "--root", "../..", "--project", "@mxlang/astro"]
+    args: ["run", "--root", "../..", "--project", "@mxlang/host-astro"]
     inputs:
       - "src/**/*"
       - "/vitest.config.ts"

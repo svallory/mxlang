@@ -1,10 +1,10 @@
 # hono — agent instructions
 
-## `@mxlang/hono`: the Hono dialect on the shared JSX emitter
+## `@mxlang/host-hono`: the Hono dialect on the shared JSX emitter
 
-`packages/hosts/hono` (`@mxlang/hono`) depends on `@mxlang/preact` and passes
+`packages/hosts/hono` (`@mxlang/host-hono`) depends on `@mxlang/host-preact` and passes
 `honoDialect` to its exported emitter, the same shared-implementation shape as
-`@mxlang/react`: native `class`/`for` (Hono, like Preact, accepts them
+`@mxlang/host-react`: native `class`/`for` (Hono, like Preact, accepts them
 directly), `dangerouslySetInnerHTML` for raw HTML, and `<try>` lowers straight
 to this package's `MxErrorBoundary` (`src/runtime.ts`), which wraps `hono/jsx`'s
 built-in async `ErrorBoundary` around the body, and to `hono/jsx`'s `Suspense`
@@ -14,7 +14,7 @@ written directly in the body is evaluated as a child of `ErrorBoundary` and caug
 inline children would be evaluated by the parent before the boundary exists.
 `src/runtime.ts` also exports `mxClass` (`hono/jsx` has none).
 Host selection is `"mx": { "host": "hono" }` or a lone
-`@mxlang/hono` dependency, through the same resolver used by Vite, the
+`@mxlang/host-hono` dependency, through the same resolver used by Vite, the
 language server and the TypeScript plugin.
 
 Attribute tags share Preact's v2 `attrTagProps` emission (decisions 106–108):
@@ -22,12 +22,12 @@ data values carry `{ ...attrs, ...nestedProps, content }`, renderable values
 are passed bare, arrays are real arrays, and control flow stays expression
 shaped. This package exports `AttrTag<C>` specialised to Hono's `Child`, and
 an ambient `AttrTag` reference in `.mx` emits a type-only import from
-`@mxlang/hono`.
+`@mxlang/host-hono`.
 Untyped body-only props use decision 108's bare renderable fallback; one
 attributed or nested occurrence makes the whole fallback property data.
 
-`@mxlang/hono/bun` registers a Bun plugin loading `.mx` as
-`loader: "tsx"` — the same shape as `@mxlang/html/bun`'s plugin, `"tsx"`
+`@mxlang/host-hono/bun` registers a Bun plugin loading `.mx` as
+`loader: "tsx"` — the same shape as `@mxlang/target-html/bun`'s plugin, `"tsx"`
 instead of `"ts"` since this host's compiled output contains JSX. Bun honors
 the emitted `/** @jsxImportSource hono/jsx */` pragma per compiled file; a
 hand-written `.tsx` sibling with no pragma of its own still needs the running

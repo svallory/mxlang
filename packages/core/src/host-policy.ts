@@ -742,7 +742,7 @@ export function readTargetDefaultTag(
  *
  * `lookup` is required: which values `mx.host` accepts, which package selects
  * which target, and which target is the default are open-set questions the
- * caller answers (`@mxlang/target-registry` binds the built-in lookup, so a
+ * caller answers (`@mxlang/targets` binds the built-in lookup, so a
  * tool imports its wrapper instead of passing one).
  *
  * `resolveTargetPolicy` is this function's `policy`; call this one to also

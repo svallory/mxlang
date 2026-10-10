@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
-import { compileReactFile } from "@mxlang/react";
+import { compileReactFile } from "@mxlang/host-react";
 import type { ComponentType } from "react";
 import { discoveredCustomTags, mxTwins } from "./mx-twins.ts";
 
@@ -39,8 +39,8 @@ export async function renderReact(
             `${prefix}${path}.tsx${suffix}`,
         )
         .replace(
-          '"@mxlang/react/runtime"',
-          JSON.stringify(require.resolve("@mxlang/react/runtime")),
+          '"@mxlang/host-react/runtime"',
+          JSON.stringify(require.resolve("@mxlang/host-react/runtime")),
         );
       writeFileSync(withTsxExtension(file), rewritten);
     }

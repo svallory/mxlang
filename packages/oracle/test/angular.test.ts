@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { compile } from "@mxlang/angular";
+import { compile } from "@mxlang/host-angular";
 import { describe, expect, it } from "vitest";
 import { isDerivedFrom, runAngularTable } from "../src/report-angular";
 

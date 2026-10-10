@@ -45,7 +45,7 @@ function targets(): TargetLookup {
 const descriptor: TargetDescriptor = {
   descriptorVersion: 0,
   name: "html",
-  packageName: "@mxlang/html",
+  packageName: "@mxlang/target-html",
   defaultTag: DEFAULT_TAG,
   // `translator` is `host-policy.ts`'s deprecated alias (the warning text lives there).
   legacyHostValues: [

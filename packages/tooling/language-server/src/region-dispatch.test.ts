@@ -21,7 +21,7 @@ import {
   lookupFor,
   regionFileKind,
   resolveTargetPolicyDetailed,
-} from "@mxlang/target-registry";
+} from "@mxlang/targets";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   type MeshGlobals,

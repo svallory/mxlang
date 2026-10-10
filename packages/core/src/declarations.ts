@@ -12,7 +12,7 @@
  * can write output. `Emitter<Out>` in `emit.ts` is the other half.
  *
  * `Policy` remains as an alias of `HostDeclarations`, deliberately: hosts
- * export their declarations by value (`@mxlang/html`'s `policy` and
+ * export their declarations by value (`@mxlang/target-html`'s `policy` and
  * `strictPolicy`, which `@mxlang/language-server` imports and passes to
  * `compileSource`), and those exports keep working under either name. The new
  * name is the accurate one — the object declares, it no longer emits — and is

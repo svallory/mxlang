@@ -72,7 +72,7 @@ async function renderGroup(
           moduleResolution: "Bundler",
           noEmit: true,
           paths: {
-            "@mxlang/preact": [
+            "@mxlang/host-preact": [
               fileURLToPath(new URL("./index.ts", import.meta.url)),
             ],
           },

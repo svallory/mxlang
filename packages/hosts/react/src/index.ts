@@ -9,7 +9,7 @@ import type {
   CompileJsxRegionResult,
   CompilePreactOptions,
   CompilePreactResult,
-} from "@mxlang/preact";
+} from "@mxlang/host-preact";
 import type { ReactNode } from "react";
 import {
   compileReactFile as compileReactFileWith,
@@ -23,13 +23,13 @@ import descriptor from "./descriptor.ts";
  * This package's own target table (decisions 129 and 132): the one descriptor
  * it exports, defaulting for a direct entry that names no lookup of its own
  * (design note §5.1, rule (c)). The compile itself runs through
- * `@mxlang/preact`'s shared emitter, but the lookup a caller gets by default
- * is React's, so a callee importing `AttrTag` from `@mxlang/react` is
- * recognised the same as one from `@mxlang/preact`.
+ * `@mxlang/host-preact`'s shared emitter, but the lookup a caller gets by default
+ * is React's, so a callee importing `AttrTag` from `@mxlang/host-react` is
+ * recognised the same as one from `@mxlang/host-preact`.
  */
 const ownTargets: TargetLookup = createTargetLookup([descriptor]);
 
-export { TranslateError } from "@mxlang/preact";
+export { TranslateError } from "@mxlang/host-preact";
 export type { ReactRegionOptions } from "./compile.ts";
 export {
   reactDeclarations,
@@ -48,7 +48,7 @@ export type AttrTag<
  * Compiles a whole-file MX template to a React component module.
  *
  * `options.targets` defaults to this package's own lookup; see
- * `@mxlang/preact`'s `CompilePreactOptions.targets`.
+ * `@mxlang/host-preact`'s `CompilePreactOptions.targets`.
  */
 export function compileReactMx(
   source: string,

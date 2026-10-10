@@ -176,14 +176,14 @@ Flags pass through `bun run`, e.g. `bun run oracle -- --strict --update`.
 ## `oracle:marko`: Marko parity for the stock `.marko` fixture set
 
 Decision 51: the parity target for Marko syntax is Marko itself, not Solid.
-Decision 68 retired the `.mx` dialect and `@mxlang/html`, so there is one
+Decision 68 retired the `.mx` dialect and `@mxlang/target-html`, so there is one
 dialect (stock Marko) and one table. `bun run oracle:marko`
 (`packages/oracle/src/report-marko.ts`, delegating to
 `report-marko-stock.ts`) renders every fixture under
 `packages/targets/html/fixtures-marko/<name>/` (`input.marko`, `input.json`,
 `expected.html`, plus any sibling component or `tags/` directory) two ways —
 through the real Marko 6 toolchain (`@marko/compiler` + `marko/translator`)
-and through `@mxlang/html`'s own `compile()` — and compares both
+and through `@mxlang/target-html`'s own `compile()` — and compares both
 against that fixture's `expected.html` for **semantic** equality —
 `htmlEquals()` (`packages/oracle/src/normalize-html.ts`) parses both sides
 with `parse5` and compares decoded tag names, attribute names/values, text
@@ -194,7 +194,7 @@ confirm whether an unescaped character was a genuine escaping gap or a safe
 alternate spelling); parsing decodes both the same way a browser would, so a
 match there means the same rendered output. Before comparison, a trailing
 Marko resume/hydration marker (`<!--M_$…--><script>…</script>`) is stripped —
-hydration plumbing with no `@mxlang/html` equivalent, not template
+hydration plumbing with no `@mxlang/target-html` equivalent, not template
 content, and its id/script body is randomly generated per compile so it could
 never byte-match regardless. Not compared: attribute quote character, entity
 spelling, void self-closing spelling, or inter-tag whitespace (all collapsed
@@ -234,7 +234,7 @@ that two of our own opinions agree.
 ### `meta.json`: the Marko column's skip/divergence marker
 
 An optional `meta.json` in a fixture directory classifies why that fixture's
-real-Marko rendering does not match `@mxlang/html`'s:
+real-Marko rendering does not match `@mxlang/target-html`'s:
 
 ```json
 { "marko": "skip", "reason": "why this fixture is never compiled by Marko" }

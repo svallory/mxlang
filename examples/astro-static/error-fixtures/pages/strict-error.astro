@@ -1,6 +1,6 @@
 ---
 // Also expected to fail the build, for the other reason: `stateful.mx` uses
-// `<let>`, and `@mxlang/astro` compiles MX under `@mxlang/html`'s
+// `<let>`, and `@mxlang/host-astro` compiles MX under `@mxlang/target-html`'s
 // `strictPolicy` (decision 71 — this host has no reactive target, so a
 // reactive construct is a compile error naming the construct, not markup that
 // silently renders once and never updates).

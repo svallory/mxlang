@@ -29,7 +29,7 @@ const SUBPROCESS_TIMEOUT_MS = 15_000;
  * Confirmed regression-detecting: reverting `rewriteAccessorReads`
  * (`packages/core/src/accessor-reads.ts`) locally to an unconditional early
  * return, then rebuilding `@mxlang/core` (its `dist/` is what
- * `@mxlang/solid` resolves — see this package's own CLAUDE.md on stale
+ * `@mxlang/host-solid` resolves — see this package's own CLAUDE.md on stale
  * `dist/` failing silently), fails three of the four tests below with a real
  * client-side crash inside `@solidjs/signals`' `mapArray`/`updateKeyedMap`,
  * not a silently-wrong render: the row body still reads the accessor as a
@@ -370,7 +370,7 @@ describe("Solid client render: live signal updates through the real DOM", () => 
     // (DOM) codegen: before the fix, `e.message` on the accessor rendered
     // empty and `e.constructor.name` rendered `Function` here too.
     const { snapshots } = renderDomApp(
-      "<try><Risky/><@catch|e|><li>caught: \${e.message}</li></@catch></try>",
+      "<try><Risky/><@catch|e|><li>caught: ${e.message}</li></@catch></try>",
       'function Risky() { throw new Error("client boom"); }',
       "unused",
       [],

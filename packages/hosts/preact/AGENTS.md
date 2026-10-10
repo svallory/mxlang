@@ -1,8 +1,8 @@
 # preact — agent instructions
 
-## `@mxlang/preact`: the Preact host on `@mxlang/core`
+## `@mxlang/host-preact`: the Preact host on `@mxlang/core`
 
-`packages/hosts/preact` (`@mxlang/preact`, decisions 71, 79, 81, 82) is the
+`packages/hosts/preact` (`@mxlang/host-preact`, decisions 71, 79, 81, 82) is the
 fourth emitter over the core IR, and the first whose target has **no
 control-flow components at all**: every structural kind lowers to a plain JSX
 *expression*. `packages/hosts/preact/README.md` carries the full lowering
@@ -10,7 +10,7 @@ table, the `key` rule, the error list and the `<try>` helper; this is the
 package-map entry.
 
 Selected by `package.json`'s `"mx": { "host": "preact" }` (or a lone
-`@mxlang/preact` dependency) through `@mxlang/core`'s `resolveTargetPolicy` —
+`@mxlang/host-preact` dependency) through `@mxlang/core`'s `resolveTargetPolicy` —
 the same resolver the Vite plugin, the language server and `mx-tsc` share, so
 an editor, a `tsc` run and a build cannot disagree about a `.mx` file.
 
@@ -26,7 +26,7 @@ Six facts worth knowing before editing it:
 - **Element-vs-component follows Marko's rule, not JSX's.** JSX decides by
   case, so a `tags/`-discovered `<badge/>` emitted verbatim became a literal
   `<badge>` element with the props as attributes. The declarations use the
-  taglib lookup and in-scope bindings (the same rule as `@mxlang/html`), and
+  taglib lookup and in-scope bindings (the same rule as `@mxlang/target-html`), and
   `componentAlias` renames such a component in the emitted JSX, binding
   `MxBadge` beside it. Since decision 164 a lowercase `import`/`<define>` is
   never called as a tag (core skips `isComponent` for it), so only a
@@ -40,8 +40,8 @@ Six facts worth knowing before editing it:
   nothing (a runtime `ReferenceError`, not a compile error). The fallback is
   now `false`, and `rejectUnknownTag` reports Marko's own wording
   ("Unable to find entry point for custom tag `<Name>`.") through the same
-  `lower.ts` hook `@mxlang/html`/`@mxlang/solid` already use. `@mxlang/react`
-  and `@mxlang/hono` share this fix through `createJsxDeclarations`.
+  `lower.ts` hook `@mxlang/target-html`/`@mxlang/host-solid` already use. `@mxlang/host-react`
+  and `@mxlang/host-hono` share this fix through `createJsxDeclarations`.
 - **Attribute tags emit from core's `attrTagProps` plan** (decisions 106–108),
   never by regrouping the flat occurrence list. `data` values are
   `{ ...attrs, ...nestedProps, content }`; `renderable` values are the body;
@@ -124,7 +124,7 @@ none of them emits.
 
 **The shared JSX region engine (`src/region.ts`, decision 154).**
 `compileJsxRegion` compiles one region of a `.<segment>.mx` TSX module for a
-dialect; `@mxlang/react` wraps it (`compileReactRegion`) and this package wraps
+dialect; `@mxlang/host-react` wraps it (`compileReactRegion`) and this package wraps
 it for `.preact.mx` (`src/region-compile.ts`: `compilePreactRegion`, Preact's
 dialect, `preactRegionDeclarations`, segment `preact`; the descriptor's `preact`
 file kind, language id `preactmx`, requires it lazily). The Hono region kind is

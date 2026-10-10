@@ -20,7 +20,7 @@ A `.mx` file is a tag when it sits under a `tags/` directory or is listed in `pa
 Keep `x.component.ts` as it is, point `templateUrl` at `./x.component.html`, write `x.component.mx` beside it, and list it in `mx.angular.include` (for example `src/**/*.mx`): page templates are not found on their own, unlike `.ng.mx` files and tags. Compared with `.ng.mx`, MX cannot edit your class, so two things are yours:
 
 - **Imports.** When the template calls an MX tag or needs a directive, the build warns with the exact `import` and `imports:` entry, and repeats it in the header of the emitted `.html`. Without the entry Angular renders an unknown element as an empty tag, silently.
-- **Event members.** A template that binds a handler needs `__mxOn` and `__mxOnAt` on the class. Extend `MxHandlers`, or `MxHandlersMixin(Base)`, from `@mxlang/angular/runtime`; a missing member is TS2339 at build time under `strictTemplates`.
+- **Event members.** A template that binds a handler needs `__mxOn` and `__mxOnAt` on the class. Extend `MxHandlers`, or `MxHandlersMixin(Base)`, from `@mxlang/host-angular/runtime`; a missing member is TS2339 at build time under `strictTemplates`.
 
 With the class in one file and the template in another, `.ng.mx` is the simpler form for a new component; a page template suits a component whose class you do not want to move.
 

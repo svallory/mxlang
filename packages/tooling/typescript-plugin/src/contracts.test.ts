@@ -53,7 +53,9 @@ function createService(
     baseUrl: repoRoot,
     paths: {
       "@mxlang/core": [join(repoRoot, "packages/core/src/index.ts")],
-      "@mxlang/html": [join(repoRoot, "packages/targets/html/src/index.ts")],
+      "@mxlang/target-html": [
+        join(repoRoot, "packages/targets/html/src/index.ts"),
+      ],
       "@mxlang/tsx-bridge": [
         join(repoRoot, "packages/tsx-bridge/src/public.d.ts"),
       ],

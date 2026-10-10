@@ -13,7 +13,7 @@
     "e2e": "vitest run --config e2e/vitest.config.ts"
   },
   "dependencies": {
-    "@mxlang/preact": "workspace:*",
+    "@mxlang/host-preact": "workspace:*",
     "preact": "10.29.8"
   },
   "devDependencies": {

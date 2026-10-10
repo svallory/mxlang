@@ -10,7 +10,7 @@
  */
 
 import { createTargetLookup } from "@mxlang/core";
-import { getCustomTags } from "@mxlang/preact";
+import { getCustomTags } from "@mxlang/host-preact";
 import { createElement, type FC } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";

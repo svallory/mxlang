@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { TargetDescriptor } from "@mxlang/core";
 import * as core from "@mxlang/core";
-import { builtinFileKinds, builtinLookup } from "@mxlang/target-registry";
+import { builtinFileKinds, builtinLookup } from "@mxlang/targets";
 import ts from "typescript";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAmxLanguagePlugin } from "./amx-language.ts";

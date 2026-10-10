@@ -65,7 +65,7 @@ describe("Define", () => {
         '<define/Card|title, head|>${title}</define><Card title="a"><@head>H</@head></Card>',
       ),
     ).toThrow(
-      /attribute tags on `<Card>` aren't supported by @mxlang\/angular/,
+      /attribute tags on `<Card>` aren't supported by @mxlang\/host-angular/,
     );
   });
 });

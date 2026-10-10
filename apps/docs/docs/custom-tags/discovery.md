@@ -68,9 +68,9 @@ Discovery is synchronous and shared by every integration that compiles or diagno
 
 | Integration | What it does with the scan |
 | --- | --- |
-| Bun loaders (`@mxlang/html/bun`, `@mxlang/hono/bun`) | Scan before compiling an imported `.mx` module. |
+| Bun loaders (`@mxlang/target-html/bun`, `@mxlang/host-hono/bun`) | Scan before compiling an imported `.mx` module. |
 | `@mxlang/vite-plugin` | Scan the real file before transforming `.mx` or `.solid.mx`. |
-| `@mxlang/astro` | Uses the Vite path for `.mx` and scans while lowering `.astro.mx`. |
+| `@mxlang/host-astro` | Uses the Vite path for `.mx` and scans while lowering `.astro.mx`. |
 | `@mxlang/typescript-plugin` | Passes the same map to virtual-code compilation and its mapping lower. |
 | `@mxlang/language-server` | Scans each diagnosed document and publishes tag/template diagnostics. |
 | `mx-tsc` | Uses the same Volar language plugin and therefore the same scan as the editor. |

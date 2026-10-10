@@ -1,5 +1,5 @@
 /**
- * `@mxlang/angular`'s tag-unit compiler (design note "Custom tags: a `.mx`
+ * `@mxlang/host-angular`'s tag-unit compiler (design note "Custom tags: a `.mx`
  * tag file becomes an Angular component", task 1.7).
  *
  * A tag file is an ordinary `.mx` file that compiles, per host, into a module
@@ -800,7 +800,7 @@ function projectSlots(body: IrNode[], ctx: Ctx): Set<string> {
       for (const name of inputMembers(record.node)) {
         if (projected.has(name)) {
           throw new TranslateError(
-            `@mxlang/angular can't read projected content \`${name}\` as a value; render it with <\${input.${name}.content}/>`,
+            `@mxlang/host-angular can't read projected content \`${name}\` as a value; render it with <\${input.${name}.content}/>`,
             here?.line ?? 0,
             here?.column ?? 0,
             here?.file,
@@ -959,7 +959,7 @@ export function compileTagModule(
       // `Expr.code` and the parser nodes in place, so they run on a private
       // copy: the IR is read-only to an emitter (ir-spec E21).
       const ir = cloneIr(lowered, { nodes: true });
-      className = moduleExportName(ir, "@mxlang/angular");
+      className = moduleExportName(ir, "@mxlang/host-angular");
       // `<return>` hands a value to the tag's *caller*, through `/var` on
       // every host whose template can bind one. An Angular component is
       // called by its selector, as a plain element — there is no binding
@@ -1023,7 +1023,9 @@ export function compileTagModule(
       if (ir.inputInterface) {
         inputProps = parseInputProps(ir.inputInterface);
         if (ir.needsAttrTagImport) {
-          moduleLines.push('import type { AttrTag } from "@mxlang/angular";');
+          moduleLines.push(
+            'import type { AttrTag } from "@mxlang/host-angular";',
+          );
         }
         moduleLines.push(ir.inputInterface.code);
       }
@@ -1201,7 +1203,7 @@ export function compileTagModule(
   // compiler bug.
   if (quotedStart < 0) {
     throw new Error(
-      `@mxlang/angular internal: the quoted template is not present in the emitted module for ${filename}`,
+      `@mxlang/host-angular internal: the quoted template is not present in the emitted module for ${filename}`,
     );
   }
   const mappings = templateMappingsToModule(

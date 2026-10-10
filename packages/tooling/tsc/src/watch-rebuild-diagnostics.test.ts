@@ -50,7 +50,7 @@ it.each([
               types: [],
               allowImportingTsExtensions: true,
               paths: {
-                "@mxlang/html": [
+                "@mxlang/target-html": [
                   join(
                     import.meta.dirname,
                     "..",

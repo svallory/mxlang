@@ -1,6 +1,6 @@
 {
   "name": "ng-diag-failing",
   "dependencies": {
-    "@mxlang/angular": "workspace:*"
+    "@mxlang/host-angular": "workspace:*"
   }
 }

@@ -68,7 +68,7 @@ const { tree, diagnostics } = parseData(source, file, {
 ```ts
 import { getCustomTags } from "@mxlang/core";
 import { parseData } from "@mxlang/data";
-import { builtinLookup } from "@mxlang/target-registry";
+import { builtinLookup } from "@mxlang/targets";
 
 // file is an absolute filesystem path; source is the file's text.
 const customTags = getCustomTags(file, { targets: builtinLookup(), host: null });
@@ -88,7 +88,7 @@ How they differ:
 
 Both run every declaration rule and the module's `analyze` hooks, including under `structural: "reject"`. Use the direct import when a user's local `tags/` must not change what your build accepts.
 
-`targets` in the second form is the target lookup in hand — for a CLI, the registry lookup from `@mxlang/target-registry`. `host: null` is what the hostless tree target scans under (a `hosts`-restricted entry is excluded for data, so a data dialect declares no `hosts`). The tree target delegates every non-reserved name, so the module is the entire dialect: no `tags/` directory, no sidecars.
+`targets` in the second form is the target lookup in hand — for a CLI, the registry lookup from `@mxlang/targets`. `host: null` is what the hostless tree target scans under (a `hosts`-restricted entry is excluded for data, so a data dialect declares no `hosts`). The tree target delegates every non-reserved name, so the module is the entire dialect: no `tags/` directory, no sidecars.
 
 ## Closing the vocabulary
 

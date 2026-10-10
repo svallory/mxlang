@@ -72,7 +72,7 @@ function workspaceGraph(): Map<string, string[]> {
  * any other cycle appears.
  */
 const KNOWN_CYCLES = [
-  "@mxlang/astro -> @mxlang/vite-plugin -> @mxlang/target-registry -> @mxlang/astro",
+  "@mxlang/host-astro -> @mxlang/vite-plugin -> @mxlang/targets -> @mxlang/host-astro",
 ];
 
 /** Every distinct cycle found by DFS, each as `a -> b -> a`. */

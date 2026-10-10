@@ -5,7 +5,7 @@ import { parse } from "../index.ts";
 /**
  * A region compiler that lowers every region to `null`. The bridge package
  * depends on no host, so its own tests drive the position and scanning logic
- * with this stub; tests that need a real lowering live in `@mxlang/solid`
+ * with this stub; tests that need a real lowering live in `@mxlang/host-solid`
  * (`packages/hosts/solid/src/bridge/`).
  */
 export const stubRegionCompile: MxRegionCompile = () => ({ code: "null" });

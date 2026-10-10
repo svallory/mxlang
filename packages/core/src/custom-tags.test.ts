@@ -1566,7 +1566,7 @@ describe("import precedence over registered custom tags (IR-level)", () => {
   // The `!fileLocalBinding && isDelegatedTag(...)` branch (lower.ts, gating a
   // host claim on the absence of a file-local binding) is currently
   // unreachable by any real host: every host that claims tags beyond `try`
-  // and the dynamic-tag sentinel (only `@mxlang/html`, for `let`/`server`/
+  // and the dynamic-tag sentinel (only `@mxlang/target-html`, for `let`/`server`/
   // `html-comment`/`html-script`/`html-style`/`style`) claims exclusively
   // lowercase names, and the casing gate above means `fileLocalBinding` is
   // never true for a lowercase name in the first place — so on every real

@@ -1,6 +1,6 @@
 {
   "name": "angular-ngmx-fixture",
   "dependencies": {
-    "@mxlang/angular": "workspace:*"
+    "@mxlang/host-angular": "workspace:*"
   }
 }

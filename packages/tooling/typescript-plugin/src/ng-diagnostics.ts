@@ -18,7 +18,6 @@
  */
 
 import { dirname, join } from "node:path";
-import { readAngularConfig } from "@mxlang/angular";
 import {
   type CheckerWorker,
   type CheckerWorkerOptions,
@@ -26,6 +25,7 @@ import {
   mapNgMxDiagnostics,
   type NgMxDiagnostic,
 } from "@mxlang/angular-checker";
+import { readAngularConfig } from "@mxlang/host-angular";
 import type * as ts from "typescript";
 import { type CompiledNgMx, nearestPackageDir } from "./language.ts";
 

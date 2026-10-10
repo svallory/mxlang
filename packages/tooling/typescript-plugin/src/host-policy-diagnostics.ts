@@ -1,5 +1,5 @@
 import type { TargetPolicy, TargetPolicyDiagnostic } from "@mxlang/core";
-import { resolveTargetPolicyDetailed } from "@mxlang/target-registry";
+import { resolveTargetPolicyDetailed } from "@mxlang/targets";
 import type { MxCompileDiagnostic } from "./language.ts";
 
 /**

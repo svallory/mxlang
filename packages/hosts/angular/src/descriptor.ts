@@ -14,7 +14,7 @@ import { angularDeclarations, DEFAULT_TAG } from "./emitter.ts";
 const descriptor: TargetDescriptor = {
   descriptorVersion: 0,
   name: "angular-template",
-  packageName: "@mxlang/angular",
+  packageName: "@mxlang/host-angular",
   defaultTag: DEFAULT_TAG,
   declarations: { default: angularDeclarations },
   // No compileModule or compileRegion yet: there is no HostOptions boundary

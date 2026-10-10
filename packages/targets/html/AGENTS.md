@@ -1,13 +1,13 @@
 # html — agent instructions
 
-`packages/targets/html` (`@mxlang/html`) holds the string target.
+`packages/targets/html` (`@mxlang/target-html`) holds the string target.
 
-**After editing this package, rebuild `@mxlang/typescript-plugin` too** (`cd packages/tooling/typescript-plugin && bun run build`): its `dist` bundles `@mxlang/html`, so `mx-tsc` tests (`packages/tooling/tsc`) run the stale html until it is rebuilt.
+**After editing this package, rebuild `@mxlang/typescript-plugin` too** (`cd packages/tooling/typescript-plugin && bun run build`): its `dist` bundles `@mxlang/target-html`, so `mx-tsc` tests (`packages/tooling/tsc`) run the stale html until it is rebuilt.
 
 It contains:
 
 - `escape(value)` plus the sink (`createOut`, `createBufferedOut`, the `Out`
-  type; also published as `@mxlang/html/runtime`, `src/runtime.ts`) — the
+  type; also published as `@mxlang/target-html/runtime`, `src/runtime.ts`) — the
   *entire* runtime. `escape` escapes `& < > " '`; `null` and
   `undefined` render as `""`, not their names.
 - `compile(source, filename, options?)` -> `{ code, map }`, driving the
@@ -22,7 +22,7 @@ It contains:
 
 Emitted module shape (decision 155, the Marko render model): one runtime
 import (`escape`, `createOut`, `createBufferedOut` only when a `<try>` uses it,
-and the `Out` type, all from `"@mxlang/html"`, kept in **one** import because
+and the `Out` type, all from `"@mxlang/target-html"`, kept in **one** import because
 the oracle and the test harnesses rewrite that specifier once), the author's
 hoisted `import`s and `static` blocks, their `export interface Input`
 verbatim, then two entries:
@@ -39,7 +39,7 @@ self-recursive or known-returning callee, `__mxRenderTag(__mxOut, Callee)(props)
 before) for anything else, `__mxRenderDynamic(__mxOut, …)` for a dynamic tag.
 Blocks (`content`, `<define>`, renderable attribute tags) stay `() => string`
 with their own sink. Every compiled module imports `createOut` at run time, so
-a test fixture that nests its own `package.json` must make `@mxlang/html`
+a test fixture that nests its own `package.json` must make `@mxlang/target-html`
 resolvable (see `linkRuntime` in `bun.test.ts`).
 
 Whitespace on **every** host, Solid included, is decision 33's rule
@@ -53,9 +53,9 @@ Goldens live at `packages/targets/html/fixtures-marko/<name>/` with
 **rendered HTML**, not on emitted code, so the emitter stays free to improve.
 `biome.json` ignores `**/fixtures-marko`.
 
-## `@mxlang/html`: the vanilla html target on `@mxlang/core`
+## `@mxlang/target-html`: the vanilla html target on `@mxlang/core`
 
-`packages/targets/html` (`@mxlang/html`, decisions 66, 68) compiles an
+`packages/targets/html` (`@mxlang/target-html`, decisions 66, 68) compiles an
 **ordinary Marko template** to a runtime-free `(input) => string` module. Not
 a dialect: tag discovery through taglibs and `tags/` directories, Marko's own
 HTML/SVG/MathML element registry, Marko's attribute-tag and component
@@ -71,7 +71,7 @@ over the core's `compileSource`, and its own `emitProgram` is now a
 `postEmit(code: string) => string` pass that appends the
 `classValue`/`styleValue`/`escapeComment`/`renderDynamic` helpers a template
 actually calls. `escape` moved to the core and is re-exported here, so every
-compiled template's `import { escape } from "@mxlang/html"` is
+compiled template's `import { escape } from "@mxlang/target-html"` is
 unchanged. The `./core` export is **gone** (breaking): importers take
 `@mxlang/core` directly.
 
@@ -197,7 +197,7 @@ Cardinality comes from the callee's `Input`: singular values are one value or
 become conditional values or push loops in source order. Nested plans are
 emitted recursively.
 
-`@mxlang/html` exports its own `AttrTag<C>`. A renderable value is always an
+`@mxlang/target-html` exports its own `AttrTag<C>`. A renderable value is always an
 HTML block function `(...params) => string` (with `[]` when params are absent).
 A data value is `attrs & nestedProps & { content?: (...params) => string }`;
 `content` is explicitly `undefined` when the occurrence has no body. Dynamic
@@ -216,9 +216,9 @@ author binding (the same rule applies to ordinary content loops).
 
 ## Bun loader
 
-`packages/targets/html/src/bun.ts` (`@mxlang/html/bun`) is the Bun-side
+`packages/targets/html/src/bun.ts` (`@mxlang/target-html/bun`) is the Bun-side
 `.mx` integration, decision 58 roadmap item 2, half A (moved here from the
-retired `@mxlang/html/bun` by decision 68). It exports a `BunPlugin` that
+retired `@mxlang/target-html/bun` by decision 68). It exports a `BunPlugin` that
 registers `build.onLoad({ filter: MX_FILTER }, ...)` — `MX_FILTER` is
 `/(?<!\.solid)\.mx$/`, `.mx` only; `.marko` is deliberately not registered
 (see "`.mx` is the only template extension" in `packages/tsx-bridge/AGENTS.md`). On each matched `.mx`
@@ -230,13 +230,13 @@ second transform.
 
 The plugin object self-registers at import time (`Bun.plugin(markoPlugin)`
 runs at module scope, in addition to the `export default`): `bunfig.toml`'s
-`preload = ["@mxlang/html/bun"]` runs a preloaded module purely for its
+`preload = ["@mxlang/target-html/bun"]` runs a preloaded module purely for its
 side effects — it does **not** call `Bun.plugin` on a default export
 automatically — so without the self-registration call, `.mx`
 imports silently fall through to Bun's default loader and resolve to the
 file's path string, not a compiled function. `Bun.plugin` is idempotent for
 an already-registered plugin object, so `import markoPlugin from
-"@mxlang/html/bun"; Bun.plugin(markoPlugin)` (the programmatic form)
+"@mxlang/target-html/bun"; Bun.plugin(markoPlugin)` (the programmatic form)
 still works without double-registering.
 
 `examples/mx-site` uses this loader: `bunfig.toml` preloads it, `.mx` pages

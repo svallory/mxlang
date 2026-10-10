@@ -71,8 +71,8 @@ order is their order in the `plugins` array — `mx()` must come first.
 the registry, see above): `.mx` (the official
 and only template extension — `.marko` is not accepted, see "`.mx` is the
 only template extension" in `packages/tsx-bridge/AGENTS.md`) compiles through `compileMarko()` (routing
-to the resolved host's compiler — `@mxlang/html`'s `compile()`,
-`@mxlang/preact`'s `compilePreactMx()`, etc.) instead of `print()`, to a
+to the resolved host's compiler — `@mxlang/target-html`'s `compile()`,
+`@mxlang/host-preact`'s `compilePreactMx()`, etc.) instead of `print()`, to a
 plain `(input) => string` module or a JSX component module per host —
 `suffixFor` returns `.tsx` for every handled extension (it used to pick
 `.ts` for the `.mx` path): the suffix has to be decided identically by
@@ -91,8 +91,8 @@ doc comment: no AST is printed on that path), so there is nothing real to
 hand Vite yet.
 
 `compileMarko()` inside the plugin dynamically `import()`s
-`@mxlang/html` rather than importing it statically at module top level,
-and this is load-bearing, not a style choice: `@mxlang/html` has no
+`@mxlang/target-html` rather than importing it statically at module top level,
+and this is load-bearing, not a style choice: `@mxlang/target-html` has no
 compiled entry (`main` is `src/index.ts`), and its `translate.ts` pulls in
 `@marko/compiler`. A static import would load that dependency the instant
 `vite.config.ts` imports this plugin — including for a `.solid.mx`-only
@@ -111,7 +111,7 @@ fully.
 
 Any consumer of this plugin needs `allowImportingTsExtensions` in its own
 `tsconfig.json`, even one that only writes `.solid.mx`: resolving
-`@mxlang/html`'s types at all — even through the plugin's own dynamic
+`@mxlang/target-html`'s types at all — even through the plugin's own dynamic
 `import()`, cast away at the call site — means `tsc` walks that package's
 `.ts` source, which needs the flag wherever it lands. `examples/counter-app`
 and `examples/todomvc` both carry it for exactly this reason, not because
@@ -237,7 +237,7 @@ stack included; a test pins that. Two details:
   column, converted to the 0-based `loc.column` the rest of this plugin
   raises); its `label` becomes the message, since `loc` + `frame` replace the
   embedded path and code frame.
-- `TranslateError` is also matched by name: it is raised from `@mxlang/html`'s
+- `TranslateError` is also matched by name: it is raised from `@mxlang/target-html`'s
   copy of core, so `instanceof` is false after a module-graph reload and the
   error used to reach the log raw.
 
@@ -361,7 +361,7 @@ same file — an early version tried to distinguish the two reads through
 `Error().stack` (`"at compileMarko "` as the anchor frame), which is
 V8-stack-format-specific and breaks under a different engine's stack
 grammar or a rename; see `bun-jsc-error-line-column` in the space's memory
-for the same class of engine-format fragility. `@mxlang/astro`'s
+for the same class of engine-format fragility. `@mxlang/host-astro`'s
 `vite-templates.ts` mirrors this helper rather than importing it (the same
 pattern it already uses for `codeFrame`), even though it could import
 `@mxlang/vite-plugin` (it already depends on that package for its `mx()`

@@ -17,11 +17,11 @@ import type { Plugin } from "vite";
  * evaluating vite.config.ts. Registry creation installs lazy callee readers;
  * only descriptor load()/compileRegion() reaches the heavy compile leaves.
  */
-type RegistryModule = typeof import("@mxlang/target-registry");
+type RegistryModule = typeof import("@mxlang/targets");
 let registryModule: Promise<RegistryModule> | undefined;
 
 function loadRegistry(): Promise<RegistryModule> {
-  registryModule ??= import("@mxlang/target-registry");
+  registryModule ??= import("@mxlang/targets");
   return registryModule;
 }
 
@@ -113,13 +113,13 @@ export interface MxPluginOptions {
    */
   extensions?: string[];
   /**
-   * Selects `@mxlang/html`'s `strictPolicy` for `.mx` files:
+   * Selects `@mxlang/target-html`'s `strictPolicy` for `.mx` files:
    * reactive constructs (`<let>`, `<effect>`, `<lifecycle>`, `<script>`,
    * `client` blocks, `<id>`) become compile errors naming the construct
    * instead of rendering their initial value or compiling away as inert.
    *
    * A passthrough rather than a policy of this plugin's own: a host that has
-   * no reactive target (`@mxlang/astro` renders MX to static markup at build
+   * no reactive target (`@mxlang/host-astro` renders MX to static markup at build
    * time, decision 71) wants an author's `<let>` to fail the build with a
    * loc-bearing error rather than silently render once. The flag reaches
    * `compile()` unchanged; `.solid.mx` is unaffected, since it never goes
@@ -155,7 +155,7 @@ const TAG_EXT = ".marko";
  * (`compile()` / string) branch.
  *
  * Today: `.astro.mx` (decision 134), the Astro template kind that
- * `@mxlang/astro`'s own plugin lowers. A registered `.mx` would otherwise
+ * `@mxlang/host-astro`'s own plugin lowers. A registered `.mx` would otherwise
  * swallow it: `mx()` rewrote `x.astro.mx` to `x.astro.mx.ts`, the Astro plugin
  * re-resolved that to `x.astro.mx.ts.astro`, and the build failed inside
  * `compileMarko`. Any other multi-dot MX extension belonging to another host
@@ -173,8 +173,8 @@ const FOREIGN_EXTENSIONS: string[] = [".astro.mx"];
  *
  * Always `.tsx`, for every extension this plugin handles. `.solid.mx` prints
  * JSX text (`print()`) and needs it; so does a `.mx` compiled through a JSX
- * host (`@mxlang/preact` emits a component module). A `.mx` compiled through
- * `@mxlang/html` emits no JSX, and used to take `.ts` for that reason — but
+ * host (`@mxlang/host-preact` emits a component module). A `.mx` compiled through
+ * `@mxlang/target-html` emits no JSX, and used to take `.ts` for that reason — but
  * the suffix has to be decided identically by `resolveId` (which holds the
  * real path) and by `isMxModule` (which holds only the already-suffixed one),
  * and the host is a property of the *file's* nearest `package.json`. Deriving
@@ -596,7 +596,7 @@ function markoPosition(
  * `.mx` compiles to a module whose default export is `(input) => string`,
  * carrying the sink entry `render(input, out)` as `.render` (decision 155) (or a JSX component
  * module, per the resolved host) via `compileMarko()` — the same whole-file
- * translator `examples/mx-site` and `@mxlang/html/bun` use, so a `.mx`
+ * translator `examples/mx-site` and `@mxlang/target-html/bun` use, so a `.mx`
  * template behaves identically whether it is loaded by Vite or by Bun.
  * `compile()`'s returned map is presently an identity placeholder (see its
  * own doc comment — the translator builds text directly, not from a printed

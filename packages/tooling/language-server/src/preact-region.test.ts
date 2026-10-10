@@ -1,6 +1,6 @@
 /**
  * The language server on `.preact.mx` (decision 154): routed by the registry
- * to `@mxlang/preact`'s region entry, it reports Preact's region errors and
+ * to `@mxlang/host-preact`'s region entry, it reports Preact's region errors and
  * region parse errors at their file-absolute position, and nothing for a
  * clean document. Type errors are the TypeScript plugin's (and `mx-tsc`'s),
  * not the language server's.

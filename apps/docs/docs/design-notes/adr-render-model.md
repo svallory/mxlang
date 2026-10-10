@@ -25,7 +25,7 @@ A compiled unit has two entries:
 
 Between units the emitter always passes the caller's sink down, and `/var` is `render`'s return value, dynamic tags included. A callee that the compiler cannot see is dispatched at run time: **a callee with `.render` is a template, anything else is a function returning a string**. Nothing inspects what a callee returns.
 
-`out` is `@mxlang/html/runtime`'s `Out`, which has two members, `write` and `toString`, so a streaming implementation can replace it later without touching emitted code. `<try>` renders its body into a buffered sub-sink (`createBufferedOut`) that is committed when the body finishes and dropped when it throws.
+`out` is `@mxlang/target-html/runtime`'s `Out`, which has two members, `write` and `toString`, so a streaming implementation can replace it later without touching emitted code. `<try>` renders its body into a buffered sub-sink (`createBufferedOut`) that is committed when the body finishes and dropped when it throws.
 
 Rendered HTML is byte-identical except where the old emitter diverged from Marko. There are three such cases, and this PR locks each one against Marko:
 
@@ -48,7 +48,7 @@ The operator chose the Marko model on long-term cost. The one-off cost of rewrit
 
 ## Consequences
 
-- Every compiled module imports the runtime (`createOut`) at run time. Before, a template with no interpolation compiled with an unused `escape` import that TypeScript elided, so it had no run-time dependency on `@mxlang/html`. A consumer always has the package installed (`@mxlang/astro` resolves it for the modules it compiles, so an Astro project does not list it; the type-check projection imports its runtime types from `@mxlang/astro/typecheck`, so `mx-tsc` and the TypeScript plugin resolve them the same way), so this changes nothing in practice. Test fixtures that nest their own `package.json` now link it.
+- Every compiled module imports the runtime (`createOut`) at run time. Before, a template with no interpolation compiled with an unused `escape` import that TypeScript elided, so it had no run-time dependency on `@mxlang/target-html`. A consumer always has the package installed (`@mxlang/host-astro` resolves it for the modules it compiles, so an Astro project does not list it; the type-check projection imports its runtime types from `@mxlang/host-astro/typecheck`, so `mx-tsc` and the TypeScript plugin resolve them the same way), so this changes nothing in practice. Test fixtures that nest their own `package.json` now link it.
 - Emitted code writes with `__mxOut.write(…)` instead of `__mxOut += …`. Tools that match the emitted text (Astro's page wrapper, its type surface, the html brand pass) anchor on the default export and the brand tail, which are unchanged apart from the `Name.render = …` line that Astro's page wrapper now carries along with its rename.
 - A statically named tag that the compiler does not know is a template (a hand-written function, a barrel re-export, a `.mx` import without `<return>`) is called through `__mxRenderTag(out, Callee)(props)`. TypeScript sees `Callee` itself, so the props of a callee declared in the same file (a local `static function`) are checked, generics included. A tag imported from a `.ts` module (a barrel re-export, a hand-written function) lowers to `__mxRenderDynamic(…, Record<string, any>)`, whose props are not checked; that was already so before this decision.
 - `content` blocks, `<define>` calls and renderable attribute tags stay `(…params) => string`, which is what hand-written tags receive and call.

@@ -2,12 +2,6 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { decode } from "@jridgewell/sourcemap-codec";
 import {
-  type AngularMapping,
-  type CompileNgMxResult,
-  compileNgMx,
-  readAngularConfig,
-} from "@mxlang/angular";
-import {
   dropOwnParserPosition,
   type HostFileKind,
   isTranslateError,
@@ -17,13 +11,19 @@ import {
   withCalleeInputSources,
 } from "@mxlang/core";
 import {
+  type AngularMapping,
+  type CompileNgMxResult,
+  compileNgMx,
+  readAngularConfig,
+} from "@mxlang/host-angular";
+import {
   builtinFileKinds,
   builtinLookup,
   defaultTagFor,
   regionKindCompile,
   resolveTargetPolicy,
   scanCached,
-} from "@mxlang/target-registry";
+} from "@mxlang/targets";
 import type { MxRegionCompile, RawSourceMap } from "@mxlang/tsx-bridge";
 import { print } from "@mxlang/tsx-bridge";
 import type {

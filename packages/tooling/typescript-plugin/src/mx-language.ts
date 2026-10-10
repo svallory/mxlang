@@ -1,5 +1,4 @@
 import { dirname } from "node:path";
-import { createVirtualTagModuleReader } from "@mxlang/angular";
 import * as core from "@mxlang/core";
 import {
   type CustomTag,
@@ -20,6 +19,7 @@ import {
   type TargetPolicy,
   type TargetPolicyDiagnostic,
 } from "@mxlang/core";
+import { createVirtualTagModuleReader } from "@mxlang/host-angular";
 import {
   builtinFileKinds,
   builtinLookup,
@@ -28,7 +28,7 @@ import {
   getCustomTags,
   lookupFor,
   scanCached,
-} from "@mxlang/target-registry";
+} from "@mxlang/targets";
 import type { CodeMapping, VirtualCode } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";

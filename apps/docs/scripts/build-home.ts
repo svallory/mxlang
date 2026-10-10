@@ -16,7 +16,7 @@
  */
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { loadMx } from "@mxlang/html";
+import { loadMx } from "@mxlang/target-html";
 import {
   anchorExists,
   compileExample,

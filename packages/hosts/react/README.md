@@ -1,4 +1,4 @@
-# `@mxlang/react`
+# `@mxlang/host-react`
 
 MX's React host compiles a `.mx` template to a React component
 module: TSX with `/** @jsxImportSource react */`, the author's imports and
@@ -13,17 +13,17 @@ with every other host.
 
 React and Preact make the same structural lowering choices: `<if>` is a
 ternary, `<for>` is `.map()` with a `key`, ordinary children are JSX children,
-and attribute tags are props. `@mxlang/react` therefore depends on
-`@mxlang/preact` and passes a React `JsxDialect` to its exported emitter instead of
+and attribute tags are props. `@mxlang/host-react` therefore depends on
+`@mxlang/host-preact` and passes a React `JsxDialect` to its exported emitter instead of
 forking it. The dialect object owns only vocabulary: JSX import source, `className`,
 `htmlFor`, raw-HTML prop, Fragment module, and runtime-helper module. Structural
 changes remain one implementation and one test surface.
 
-When these private workspace packages are published, `@mxlang/preact` becomes
-a regular runtime dependency of `@mxlang/react`, published at the matching
+When these private workspace packages are published, `@mxlang/host-preact` becomes
+a regular runtime dependency of `@mxlang/host-react`, published at the matching
 version; `workspace:*` is only the monorepo development spelling, and release
 packaging replaces it with that exact version. The emitter stays in
-`@mxlang/preact` rather than moving to a neutral package unless the two dialects
+`@mxlang/host-preact` rather than moving to a neutral package unless the two dialects
 eventually gain a third consumer that justifies a separately published shared
 package.
 
@@ -36,7 +36,7 @@ React class error boundary plus React's `Suspense`.
 ```jsonc
 {
   "dependencies": {
-    "@mxlang/react": "workspace:*",
+    "@mxlang/host-react": "workspace:*",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
@@ -120,7 +120,7 @@ Hooks in `static` are invalid because `static` is module scope. Marko's own
 stateful tags are compile errors with React guidance: `<let>` points to
 `useState`, `<effect>` to `useEffect`, and `<id>` to `useId`.
 
-`@mxlang/react/runtime` exports:
+`@mxlang/host-react/runtime` exports:
 
 - `MxErrorBoundary`, a React class component using
   `getDerivedStateFromError` and `componentDidCatch`, with an internal
@@ -135,7 +135,7 @@ These are ordinary React components, not an MX runtime. Templates that use no
 ## Verification
 
 ```sh
-bunx vitest run --root ../../.. --project @mxlang/react
+bunx vitest run --root ../../.. --project @mxlang/host-react
 bun run oracle:react
 cd examples/react-app && bun run e2e
 ```

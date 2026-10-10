@@ -81,7 +81,7 @@ const set = <O, K extends keyof O>(
  *
  * @example
  * ```ts
- * import { MxHandlers } from "@mxlang/angular/runtime";
+ * import { MxHandlers } from "@mxlang/host-angular/runtime";
  *
  * @Component({ selector: "app-form", templateUrl: "./form.html" })
  * export class FormComponent extends MxHandlers {}

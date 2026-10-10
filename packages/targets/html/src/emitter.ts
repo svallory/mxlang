@@ -10,7 +10,7 @@
  * ## Byte compatibility is the whole contract
  *
  * This replaced an emitting walk whose output is pinned three ways: this
- * package's own test suite asserts the module shape, `@mxlang/astro`'s
+ * package's own test suite asserts the module shape, `@mxlang/host-astro`'s
  * `vite-pages.ts` text-matches the emitted tail to wrap a page, and
  * `oracle:marko` renders every fixture and compares the HTML against real
  * Marko. So the output is reproduced exactly, not merely equivalently —
@@ -558,7 +558,7 @@ export function createEmitter(
     // emitted as dead inline JS.
     if (attr.kind === "event") {
       fail(
-        `\`${attr.name}\` is an event handler and requires a runtime; @mxlang/html renders once to a string`,
+        `\`${attr.name}\` is an event handler and requires a runtime; @mxlang/target-html renders once to a string`,
         attr,
       );
     }
@@ -605,7 +605,7 @@ export function createEmitter(
         return concatMapped(quote(` ${attr.name}="${escape(attr.value)}"`));
       case "event":
         return fail(
-          `\`${attr.name}\` is an event handler and requires a runtime; @mxlang/html renders once to a string`,
+          `\`${attr.name}\` is an event handler and requires a runtime; @mxlang/target-html renders once to a string`,
           attr,
         );
       default: {
@@ -854,7 +854,7 @@ export function createEmitter(
     if (attr.kind === "static") return concatMapped(quote(attr.value));
     if (attr.kind === "event") {
       return fail(
-        `\`${attr.name}\` is an event handler and requires a runtime; @mxlang/html renders once to a string`,
+        `\`${attr.name}\` is an event handler and requires a runtime; @mxlang/target-html renders once to a string`,
         attr,
       );
     }
@@ -1405,7 +1405,7 @@ export function emitModuleWithMappings(
   escapeFrom: string,
   options: { typeCheck?: boolean; source?: string } = {},
 ): MappedCode {
-  const name = moduleExportName(ir, "@mxlang/html");
+  const name = moduleExportName(ir, "@mxlang/target-html");
   const emitter = createEmitter(name, options);
   drive(emitter, ir.body);
   const body = emitter.done();

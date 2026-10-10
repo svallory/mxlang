@@ -21,8 +21,8 @@ function resolveIn(): Resolve {
 }
 
 /**
- * An isolated install: a project whose `node_modules` holds `@mxlang/astro`
- * and nothing else, as `bun add -d @mxlang/astro` leaves it.
+ * An isolated install: a project whose `node_modules` holds `@mxlang/host-astro`
+ * and nothing else, as `bun add -d @mxlang/host-astro` leaves it.
  */
 function isolatedProject(): string {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "mx-isolated-")));
@@ -37,36 +37,36 @@ function isolatedProject(): string {
 }
 
 describe("mxHtmlResolve", () => {
-  it("premise: @mxlang/html is not resolvable from an isolated project", () => {
+  it("premise: @mxlang/target-html is not resolvable from an isolated project", () => {
     const root = isolatedProject();
     const fromUser = createRequire(join(root, "src", "pages", "index.mx.tsx"));
-    expect(() => fromUser.resolve("@mxlang/html")).toThrow();
+    expect(() => fromUser.resolve("@mxlang/target-html")).toThrow();
   });
 
-  it("resolves @mxlang/html for a compiled .mx module from this package's dependency", () => {
+  it("resolves @mxlang/target-html for a compiled .mx module from this package's dependency", () => {
     const root = isolatedProject();
     const importer = join(root, "src", "pages", "index.mx.tsx");
     const resolve = resolveIn();
-    expect(resolve("@mxlang/html", importer)).toMatch(
+    expect(resolve("@mxlang/target-html", importer)).toMatch(
       /targets\/html\/dist\/index\.js$/,
     );
   });
 
-  it("resolves subpaths such as @mxlang/html/runtime", () => {
+  it("resolves subpaths such as @mxlang/target-html/runtime", () => {
     const resolve = resolveIn();
-    expect(resolve("@mxlang/html/runtime", "/p/src/a.mx.tsx")).toMatch(
+    expect(resolve("@mxlang/target-html/runtime", "/p/src/a.mx.tsx")).toMatch(
       /targets\/html\/dist\/runtime\.js$/,
     );
   });
 
   it("defers (null) instead of throwing when the package cannot resolve the id", () => {
     expect(
-      resolveIn()("@mxlang/html/not-exported", "/p/src/a.mx.tsx"),
+      resolveIn()("@mxlang/target-html/not-exported", "/p/src/a.mx.tsx"),
     ).toBeNull();
   });
 
   it.each([
-    ["an .astro.mx importer", "@mxlang/html", "/p/src/a.astro.mx", true],
+    ["an .astro.mx importer", "@mxlang/target-html", "/p/src/a.astro.mx", true],
   ])("answers %s", (_name, id, importer) => {
     expect(resolveIn()(id, importer)).toMatch(
       /targets\/html\/dist\/index\.js$/,
@@ -74,9 +74,9 @@ describe("mxHtmlResolve", () => {
   });
 
   it.each([
-    ["a plain .ts importer", "@mxlang/html", "/p/src/a.ts"],
-    ["a .astro importer", "@mxlang/html", "/p/src/a.astro"],
-    ["no importer", "@mxlang/html", undefined],
+    ["a plain .ts importer", "@mxlang/target-html", "/p/src/a.ts"],
+    ["a .astro importer", "@mxlang/target-html", "/p/src/a.astro"],
+    ["no importer", "@mxlang/target-html", undefined],
     ["a different package", "@mxlang/html-foo", "/p/src/a.mx.tsx"],
     ["another scope", "@other/html", "/p/src/a.mx.tsx"],
     ["a relative id", "./html", "/p/src/a.mx.tsx"],

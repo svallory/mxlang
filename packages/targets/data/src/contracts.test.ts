@@ -32,7 +32,7 @@ import { type ParseDataOptions, parseData } from "./parse.ts";
  *
  * The lookup is the single-target one over this package's own descriptor —
  * the same lookup `parseData` compiles under. The registry lookup is not
- * used here because `@mxlang/target-registry` already depends on
+ * used here because `@mxlang/targets` already depends on
  * `@mxlang/data`; a test-only dependency back would be a cycle.
  *
  * The fixture is built in a temp dir, not committed: a committed

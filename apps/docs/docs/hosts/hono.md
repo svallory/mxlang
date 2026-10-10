@@ -99,7 +99,7 @@ What changed:
 Region files compile through the Vite plugin, so this is for a Hono project built with Vite (`@hono/vite-dev-server`, `@hono/vite-build`).
 
 ```bash
-bun add @mxlang/hono
+bun add @mxlang/host-hono
 bun add -d @mxlang/vite-plugin @mxlang/typescript-plugin @mxlang/tsc
 ```
 
@@ -137,7 +137,7 @@ In CI, run `mx-tsc --noEmit` where you ran `tsc --noEmit`.
 
 **MX adds:** the markup syntax above, a `key` on every `<for>` row, and a type check of each attribute tag the callee declares with `AttrTag`.
 
-The output is `hono/jsx` TSX. The server render is plain HTML: no hydration script, no island wrappers, nothing for the browser to run. The only runtime import is `mxClass` from `@mxlang/hono/runtime`, when a class object needs it.
+The output is `hono/jsx` TSX. The server render is plain HTML: no hydration script, no island wrappers, nothing for the browser to run. The only runtime import is `mxClass` from `@mxlang/host-hono/runtime`, when a class object needs it.
 
 ## One rule to know first
 

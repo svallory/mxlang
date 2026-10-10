@@ -11,7 +11,7 @@
 
 /**
  * The HTML elements an author can mistype (no SVG/MathML, no obsolete tags).
- * Every entry compiles on `@mxlang/html`: `<search>` and `<slot>` are left out
+ * Every entry compiles on `@mxlang/target-html`: `<search>` and `<slot>` are left out
  * because that host cannot resolve them, and a suggestion that fails is worse
  * than none (a test compiles each entry).
  */

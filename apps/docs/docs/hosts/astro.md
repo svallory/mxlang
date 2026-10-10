@@ -78,12 +78,12 @@ The output is static markup, as from any `.astro` file. MX ships nothing to the 
 ## Setup
 
 ```bash
-bun add -d @mxlang/astro
+bun add -d @mxlang/host-astro
 ```
 
 ```js
 // astro.config.mjs
-import mx from "@mxlang/astro";
+import mx from "@mxlang/host-astro";
 import { defineConfig } from "astro/config";
 
 export default defineConfig({ integrations: [mx()] });

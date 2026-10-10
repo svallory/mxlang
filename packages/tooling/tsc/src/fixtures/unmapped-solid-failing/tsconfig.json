@@ -10,7 +10,7 @@
     "allowImportingTsExtensions": true,
     "baseUrl": ".",
     "paths": {
-      "@mxlang/solid": ["../../../../../hosts/solid/src/index.ts"],
+      "@mxlang/host-solid": ["../../../../../hosts/solid/src/index.ts"],
       "@mxlang/core": ["../../../../../core/src/index.ts"],
       "@mxlang/tsx-bridge": ["../../../../../tsx-bridge/src/public.d.ts"]
     },

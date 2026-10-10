@@ -17,13 +17,13 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { angularDeclarations } from "@mxlang/angular";
 import type { CalleeInput, HostDeclarations } from "@mxlang/core";
-import { honoDeclarations } from "@mxlang/hono";
-import { policy, strictPolicy, translator } from "@mxlang/html";
-import { preactDeclarations } from "@mxlang/preact";
-import { reactDeclarations } from "@mxlang/react";
-import { solidDeclarations } from "@mxlang/solid";
+import { angularDeclarations } from "@mxlang/host-angular";
+import { honoDeclarations } from "@mxlang/host-hono";
+import { preactDeclarations } from "@mxlang/host-preact";
+import { reactDeclarations } from "@mxlang/host-react";
+import { solidDeclarations } from "@mxlang/host-solid";
+import { policy, strictPolicy, translator } from "@mxlang/target-html";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { dataDeclarations } from "../../targets/data/src/declarations.ts";
 // language-server/src/diagnose.ts:35 (SOLID_MX_LANGUAGE_IDS, exported)
@@ -247,14 +247,14 @@ describe("packages and rule 2 (the single target dependency)", () => {
 
   it("every built-in target declares a distinct package", () => {
     expect(builtinTargets.map((t) => t.packageName).sort()).toEqual([
-      "@mxlang/angular",
-      "@mxlang/astro",
+      "@mxlang/host-angular",
+      "@mxlang/host-astro",
       "@mxlang/data",
-      "@mxlang/hono",
-      "@mxlang/html",
-      "@mxlang/preact",
-      "@mxlang/react",
-      "@mxlang/solid",
+      "@mxlang/host-hono",
+      "@mxlang/target-html",
+      "@mxlang/host-preact",
+      "@mxlang/host-react",
+      "@mxlang/host-solid",
     ]);
   });
 
@@ -282,7 +282,9 @@ describe("packages and rule 2 (the single target dependency)", () => {
 
   it("two target packages are ambiguous and fall back to the default", () => {
     const resolved = resolveTargetPolicy(
-      project({ dependencies: { "@mxlang/solid": "*", "@mxlang/react": "*" } }),
+      project({
+        dependencies: { "@mxlang/host-solid": "*", "@mxlang/host-react": "*" },
+      }),
     );
     expect(resolved.target).toBe(defaultTarget());
   });
@@ -304,14 +306,14 @@ describe("attr-tag sources (what the callee reader asks the lookup)", () => {
     // target declares, which is the set the closed list produced.
     expect([...lookup.attrTagSources()].sort()).toEqual(
       [
-        "@mxlang/angular",
-        "@mxlang/astro",
+        "@mxlang/host-angular",
+        "@mxlang/host-astro",
         "@mxlang/data",
-        "@mxlang/hono",
-        "@mxlang/html",
-        "@mxlang/preact",
-        "@mxlang/react",
-        "@mxlang/solid",
+        "@mxlang/host-hono",
+        "@mxlang/target-html",
+        "@mxlang/host-preact",
+        "@mxlang/host-react",
+        "@mxlang/host-solid",
       ].sort(),
     );
   });
@@ -370,7 +372,7 @@ describe("scanCached over the built-in set", () => {
 describe("callee readers are installed from the table at registry creation", () => {
   it("a callee probe reaches a file kind's extension without importing its host", () => {
     // The #216 ordering hazard: `.solid.mx` was probed only once
-    // `@mxlang/solid` had been imported for its side effect, so a second copy
+    // `@mxlang/host-solid` had been imported for its side effect, so a second copy
     // of core in the process never saw the reader. The registry registers every
     // file kind's reader into its own core at creation, so importing *only* the
     // registry is enough. Proven in a fresh process, because the reader
@@ -384,8 +386,8 @@ describe("callee readers are installed from the table at registry creation", () 
         'import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";',
         'import { tmpdir } from "node:os";',
         'import { join } from "node:path";',
-        "// The registry only: no `@mxlang/solid` import anywhere in this file.",
-        'import { builtinLookup } from "@mxlang/target-registry";',
+        "// The registry only: no `@mxlang/host-solid` import anywhere in this file.",
+        'import { builtinLookup } from "@mxlang/targets";',
         'import { readCalleeInput } from "@mxlang/core";',
         'const dir = mkdtempSync(join(tmpdir(), "mx-probe-"));',
         "mkdirSync(dir, { recursive: true });",
@@ -557,14 +559,14 @@ describe("Astro type surface (typescript-plugin/src/mx-language.ts:315 createAst
 
 describe("dist freshness (html and angular parity reads dist/descriptor.js)", () => {
   it.each(["html", "angular"])(
-    "@mxlang/%s: dist/descriptor.js is no older than src/descriptor.ts and everything it reaches",
+    "%s: dist/descriptor.js is no older than src/descriptor.ts and everything it reaches",
     (host) => {
       const group = host === "html" ? "targets" : "hosts";
       const src = join(here, `../../${group}/${host}/src`);
       const dist = join(src, "../dist/descriptor.js");
       expect(
         existsSync(dist),
-        `rebuild: dist older than src (@mxlang/${host} dist/descriptor.js is missing)`,
+        `rebuild: dist older than src (packages/${group}/${host} dist/descriptor.js is missing)`,
       ).toBe(true);
       const distMtime = statSync(dist).mtimeMs;
       const stale = reachableSources(join(src, "descriptor.ts"), src).filter(
@@ -608,7 +610,7 @@ describe("Solid file kind functions", () => {
   const [kind] = target("solid-jsx").host?.fileKinds ?? [];
 
   it("compileRegion is compileSolidMx (typescript-plugin/src/language.ts:36 solidRegionCompile)", async () => {
-    const { compileSolidMx } = await import("@mxlang/solid");
+    const { compileSolidMx } = await import("@mxlang/host-solid");
     const input = {
       source: "<p>hi</p>",
       filename: join(work, "a.solid.mx"),

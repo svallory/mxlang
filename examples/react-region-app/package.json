@@ -13,7 +13,7 @@
     "e2e": "vitest run --config e2e/vitest.config.ts"
   },
   "dependencies": {
-    "@mxlang/react": "workspace:*",
+    "@mxlang/host-react": "workspace:*",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },

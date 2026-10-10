@@ -98,7 +98,7 @@ Two carve-outs, neither a binding MX generates:
 tag's injected import binding is minted as `$mx_<tag>_<n>` (`$mx_Icon1`), the
 same shape as a discovered tag's natural name, and is kept out of the `__mx`
 set on purpose — it is name-avoided against the caller's own bindings rather
-than reserved. (`@mxlang/astro` re-spells it upper-case-led, `Mx_Icon1`: Astro
+than reserved. (`@mxlang/host-astro` re-spells it upper-case-led, `Mx_Icon1`: Astro
 treats a lower- or `$`-led tag as an HTML element.) The same goes for an imported callee, which MX references by
 its real in-scope name. So "`__mx`-reserved" is a rule about bindings MX
 invents, not a claim about every identifier in emitted output.
@@ -622,7 +622,7 @@ in a region and a whole file alike, so the two agree.
 The binding's `L:C` comes from the import or define site on every target. A
 `<define>` is in scope only inside the block that declares it, so one inside
 an `<if>` does not warn for a tag outside it. This is a deliberate,
-same-on-every-target improvement: `@mxlang/html` used to report
+same-on-every-target improvement: `@mxlang/target-html` used to report
 "Unable to find entry point" (or Marko's "Local variables must be in a dynamic
 tag unless they are PascalCase") and the JSX hosts rendered a literal `<row>`
 element; all now raise the one error above. A lowercase tag a host claims
@@ -736,8 +736,8 @@ UTF-16 code units). Three occurrences give two warnings, each naming the last:
 | The same name on different tags | silent |
 | `<Card a=1 a=2/>`, `<@x a=1 a=2/>` | the callee receives one `a`, the last |
 
-Spreads follow the same rule on a string-concatenating target: `@mxlang/html`
-and `@mxlang/astro` make the object-merge precedence explicit (an explicit
+Spreads follow the same rule on a string-concatenating target: `@mxlang/target-html`
+and `@mxlang/host-astro` make the object-merge precedence explicit (an explicit
 attribute written after a spread suppresses the spread's key, and a spread
 written after an explicit attribute suppresses that attribute), so a browser,
 which keeps the first duplicate, sees the survivor. This is tested by rendering.
@@ -1081,7 +1081,7 @@ On the package value, for `mx.html.defaultTag` set to `"input"` the compile warn
 and the built-in answers (the file still compiles as `div`):
 
 ```text
-@mxlang/html: …/package.json:1:71: invalid `defaultTag` value: `<input>` is a void tag, not a plain tag
+@mxlang/target-html: …/package.json:1:71: invalid `defaultTag` value: `<input>` is a void tag, not a plain tag
 ```
 
 and on a data package (`mx-tsc`, `TS80003` at the value):
@@ -1571,7 +1571,7 @@ scope (decision 110b).** A region is a JSX expression spliced into someone
 else's module, so it has no statement position for `const Row = (...) =>
 ...;` the way html/preact's in-place `const` does — the same wall
 `hoistedImports` already hits for a discovered tag's synthesized import. The
-compiler resolves it the same way: `@mxlang/solid`'s emitter mints a
+compiler resolves it the same way: `@mxlang/host-solid`'s emitter mints a
 gensym'd module-scope function (`__mx_DefineRowN`, never the author's own
 name — see `packages/hosts/solid/AGENTS.md`), and `@mxlang/tsx-bridge`'s bridge
 writes it into the surrounding module alongside any hoisted imports.
@@ -1772,12 +1772,12 @@ the lowercase-unresolved-element (existing) case — one hook, reported before
 either fallback, so a Marko-parity host gets Marko's exact wording either way
 and a host with none keeps the messages in the table above unchanged.
 
-Before this, `@mxlang/solid`'s `isComponent` was a bare `/^[A-Z]/` test with
+Before this, `@mxlang/host-solid`'s `isComponent` was a bare `/^[A-Z]/` test with
 no resolvability check (`solid-attr-tag-resolvability` — filed from a code
 review, TODO `solid-unresolved-component-tag`): an unresolvable PascalCase tag
 silently lowered as an ordinary component call and printed a bare JSX
 reference to a binding nothing declares — a runtime `ReferenceError` on
-Solid's target, not a compile error. `@mxlang/solid`'s `isComponent` now
+Solid's target, not a compile error. `@mxlang/host-solid`'s `isComponent` now
 returns `true` only when the name resolves, and the operator's ruling
 (2026-09-28) extends what "resolves" means for a `.solid.mx` region beyond
 what Marko itself has a concept for, since Marko has neither a host-native-
@@ -1798,21 +1798,21 @@ construct:
   is actually in scope*, never as unresolved.
 - One of Solid's own JSX built-ins (`Show`, `For`, `Switch`, `Match`,
   `Repeat`, `Errored`, `Loading`, `Dynamic` — `SOLID_BUILTIN_TAGS`,
-  `@mxlang/tsx-bridge`) resolves unconditionally: `@mxlang/solid`'s emitter
+  `@mxlang/tsx-bridge`) resolves unconditionally: `@mxlang/host-solid`'s emitter
   prints these as a bare tag with no import of its own, because the real
   Solid build pipeline (`@solidjs/vite-plugin`'s compiler stage) auto-imports
   every one it sees — a stage this compiler never runs through.
 
 Everything else reaches Marko's own error. Solid has no taglib-backed
-`tags/`-discovery channel the way `@mxlang/html`/`@mxlang/preact` do (a
+`tags/`-discovery channel the way `@mxlang/target-html`/`@mxlang/host-preact` do (a
 `.solid.mx` region is a fragment compile, not a whole-Marko-file parse), so
 that route never applies here.
 
 **Extended to Preact, React, Hono and Astro (`unresolved-tag-jsx-astro-angular`,
 firstmate scope: preact/react/hono/astro, Angular out).** Before this, the
-shared JSX emitter's (`@mxlang/preact`, reused by `@mxlang/react`/
-`@mxlang/hono`) `isComponent` fell back to a bare `isComponentName`
-(`/^[A-Z]/`) test whenever the taglib lookup found nothing, and `@mxlang/astro`'s
+shared JSX emitter's (`@mxlang/host-preact`, reused by `@mxlang/host-react`/
+`@mxlang/host-hono`) `isComponent` fell back to a bare `isComponentName`
+(`/^[A-Z]/`) test whenever the taglib lookup found nothing, and `@mxlang/host-astro`'s
 `isComponent` was that bare test outright — so `<TotallyUndefined/>` (no
 import, binding, or taglib entry) silently emitted a JSX component reference
 to nothing on all four hosts, a runtime error rather than Marko's compile
@@ -1844,7 +1844,7 @@ runtime value, so `<Widget/>` on any of these four hosts is Marko's unresolved-
 tag error, not a silent reference.
 
 **Extended to Angular** (the `angular-host` follow-up decision 114 always
-named, PR #113's branch). `@mxlang/angular`'s `isComponent` was a bare
+named, PR #113's branch). `@mxlang/host-angular`'s `isComponent` was a bare
 `/^[A-Z]/` test too, but its fallthrough was softer than a bare reference:
 an unresolved capitalized tag emitted `<mx-totally-undefined>` plus the
 step-1 "add this import yourself" warning, which told the author a tag
@@ -1972,7 +1972,7 @@ and diagnostics are unaffected.
 
 **Astro host-cannot divergence: an "unknown" fence binding cannot render as a
 dynamic tag at all (decision 65's "target cannot" class, unrelated to this
-decision's own classification).** `@mxlang/astro`'s `---` fence resolves a
+decision's own classification).** `@mxlang/host-astro`'s `---` fence resolves a
 capitalized tag through its own top-level value bindings the same way
 `.solid.mx`'s `moduleBindings` does (decision 114's astro extension), and now
 classifies them the same way too — but Astro's emitter (`component()`)
@@ -1982,7 +1982,7 @@ unlike every other host. An "unknown" fence binding therefore cannot fall
 back to a working `<Dynamic>`-style render the way it does on html/preact/
 react/hono/solid: it fails at MX compile time instead, with its own message
 naming the tag (`` `<Tag>` is bound in the frontmatter to a value MX can't
-prove is a component, and @mxlang/astro can't render a tag name decided at
+prove is a component, and @mxlang/host-astro can't render a tag name decided at
 runtime. Bind it to a component (an import, function or class), or use a
 lowercase element. ``) — distinct from the generic `<${expr}>` dynamic-tag
 message, since the author wrote an ordinary tag name, not a dynamic-tag
@@ -2641,7 +2641,7 @@ direct and mutual recursion terminate.
 **The injected import is gensym'd and deduped by resolved path.** A discovered
 tag may be named `icon`, which the casing rule will never resolve as a component,
 and the caller may already bind that name — so the local is always generated
-(`$mx_Icon1`; `@mxlang/astro` re-spells it upper-case-led, `Mx_Icon1`, because
+(`$mx_Icon1`; `@mxlang/host-astro` re-spells it upper-case-led, `Mx_Icon1`, because
 Astro treats a lower- or `$`-led tag as an HTML element, and re-checks the new
 name against the same bindings). One import per module per tag; if the caller already imports that
 same path, its binding is reused and nothing is injected.
@@ -2859,7 +2859,7 @@ creates:
 
 ```astro
 ---
-import { createOut } from "@mxlang/html/runtime";
+import { createOut } from "@mxlang/target-html/runtime";
 import Counter from "./tags/counter.mx";
 const value = Counter.render({ start: 1 }, createOut());
 ---
@@ -2915,7 +2915,7 @@ Solid explicitly declares the binding `let n: any;` (not a bare `let n;`,
 which would additionally report `noImplicitAny`'s own TS7005 on every read,
 unrelated to this gap) on both the `.solid.mx` region path
 (`@mxlang/tsx-bridge`'s `hoistRegionImports`) and the whole-file `.mx` path
-(`@mxlang/solid`'s `compileSolidUnit`). A misuse of the bound value (e.g.
+(`@mxlang/host-solid`'s `compileSolidUnit`). A misuse of the bound value (e.g.
 calling a string method on a `<return>`'d number) type-checks clean today —
 pinned by a regression test on each path, named so a future fix (MX 2's
 per-callback-scope statement position, `tag-var-in-callback-scope`, would
@@ -3271,7 +3271,7 @@ differences noted), **Astro `.astro.mx`**, **Angular**.
 | `server` block | **runs**, hoists like `static` | **runs** | **literal element**, binding undefined | **literal element** | **literal element** | error — fixed, was **literal element** |
 | `<await>` | error | error | field-guard error | error | error | error — fixed, was field-guard-only |
 
-**Only `@mxlang/html` and Angular have a complete tag-disposition table.**
+**Only `@mxlang/target-html` and Angular have a complete tag-disposition table.**
 (Fixed 2026-09-17, task `angular-spec-gaps`: Angular's emitter declared only
 `try`, so every other name fell through to element resolution and became a
 literal lowercase element — bug 1, closed by `STATEFUL_ERRORS` in
@@ -3306,7 +3306,7 @@ Not merely in emitted syntax — in observable behavior:
 
 A **host** is a framework; a **target** is an output format (decisions 129/132).
 `@mxlang/core` resolves the nearest `package.json` through a required open-set
-lookup; tools use `@mxlang/target-registry`'s built-in wrapper.
+lookup; tools use `@mxlang/targets`'s built-in wrapper.
 
 1. `mx.target` names a registered target directly: `html`, `astro-html`,
    `solid-jsx`, `preact-jsx`, `react-jsx`, `hono-jsx`, `angular-template`, or
@@ -3333,7 +3333,7 @@ lookup; tools use `@mxlang/target-registry`'s built-in wrapper.
    target for subsequent diagnostics, never silently replace it.
 4. If exactly one key resolves, it selects the target. A hosted target alone
    also selects its host's behaviour. `mx.target: "html"` beats a dependency on
-   `@mxlang/solid`; it needs no `mx.host`.
+   `@mxlang/host-solid`; it needs no `mx.host`.
 5. If neither resolves, exactly one registered target package in `dependencies`
    or `devDependencies` selects its target; otherwise the default is `html`,
    non-strict. `@mxlang/core` and `peerDependencies` do not count (decision 124).
@@ -3504,7 +3504,7 @@ resolves to `tree` (§13.7.4); in every other run (rule-5 inference, a
 monorepo root, `-b`/`-w`) it still reports the error like the editor tools. The tools still hand on
 the same fallback as any `unknown-target` (rule 5, else `html`), so later
 diagnostics are not drowned, but the error means no green build. The Bun loader
-does not read `mx.target` at all: `@mxlang/html/bun` always compiles as `html`.
+does not read `mx.target` at all: `@mxlang/target-html/bun` always compiles as `html`.
 Dependency-only `data` inference (rule 5) keeps its existing staging to `html`
 with no diagnostic. `parseData` from `@mxlang/data` is the supported entry
 point today and is independent of editor/build dispatch (§13.7).
@@ -3536,7 +3536,7 @@ does something else, silently.
 
 | # | Host | Bug |
 |---|---|---|
-| 1 | Angular | **FIXED 2026-09-17** (task `angular-spec-gaps`). Was: no stateful-tag policy at all — the emitter declared only `try`. `<effect>`, `<lifecycle>`, `<script>`, `<log>`, `<debug>`, `client`/`server` all emitted **literal elements** (`<effect [value]="…">`); `<let>`/`<id>`/`<await>` failed only incidentally, via the generic field guard, so `<let x=1/>` with no `/var` also emitted a literal element. Now every one of these is its own positioned error (`STATEFUL_ERRORS`, `packages/hosts/angular/src/emitter.ts`), same wording family as `@mxlang/preact`'s `statefulErrors`. |
+| 1 | Angular | **FIXED 2026-09-17** (task `angular-spec-gaps`). Was: no stateful-tag policy at all — the emitter declared only `try`. `<effect>`, `<lifecycle>`, `<script>`, `<log>`, `<debug>`, `client`/`server` all emitted **literal elements** (`<effect [value]="…">`); `<let>`/`<id>`/`<await>` failed only incidentally, via the generic field guard, so `<let x=1/>` with no `/var` also emitted a literal element. Now every one of these is its own positioned error (`STATEFUL_ERRORS`, `packages/hosts/angular/src/emitter.ts`), same wording family as `@mxlang/host-preact`'s `statefulErrors`. |
 | 2 | html, Preact | **`<return>` is documented as a compile error and is not.** Both READMEs list it under "Errors"; the code reverses this under decision 95. Preact returns the pair from the unit's `.render` render path (its default export returns the output alone, `dynamic-tag-return-unit-object-object`); html no longer emits a pair since decision 155: its default export stays `(input) => string` and the value comes from `render(input, out)`. |
 | 3 | Astro `.astro.mx` | **FIXED 2026-09-28.** Every range `<for>` emitted invalid JavaScript: `Math.max(0, (` opened two parens and only one closed: `{Array.from({ length: Math.max(0, (3) - (0) + 1 }, …)}` — *"Unexpected token '}'. Expected ')' to end an argument list."* The test asserted only a substring (`toContain("(3) - (1) + 1")`), which passed regardless; now the tests assert the exact emitted code and that the real Astro compiler (`@astrojs/compiler-rs`) reports zero diagnostics for `from`/`to`, `until`, no-`from`, descending, and expression-bound ranges. |
 | 4 | Solid | **FIXED 2026-09-27**, decision 106. Repeated attribute tags now emit real arrays. |
@@ -3836,7 +3836,7 @@ holding only the default export needs no shape check: **a callee with
 `.render` is a compiled template; any other function returns a string, which
 is written**. Rendering never inspects what a callee returns.
 
-`out` is `@mxlang/html/runtime`'s `Out`: `write(html: string)` and
+`out` is `@mxlang/target-html/runtime`'s `Out`: `write(html: string)` and
 `toString()`, made by `createOut()`. It is the seam a streaming implementation
 replaces later without touching emitted code.
 

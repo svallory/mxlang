@@ -123,7 +123,7 @@ export default defineConfig({ plugins: [mx(), solid()] });
 }
 ```
 
-In CI, run `mx-tsc --noEmit` where you ran `tsc --noEmit`: plain `tsc` does not open `.solid.mx` files. The host targets **Solid 2**: this assumes `solid-js`, `@solidjs/web` and `@solidjs/vite-plugin` are already in the project. Add `@mxlang/solid` when you declare attribute tags on your own components.
+In CI, run `mx-tsc --noEmit` where you ran `tsc --noEmit`: plain `tsc` does not open `.solid.mx` files. The host targets **Solid 2**: this assumes `solid-js`, `@solidjs/web` and `@solidjs/vite-plugin` are already in the project. Add `@mxlang/host-solid` when you declare attribute tags on your own components.
 
 ## What stays Solid, what MX adds
 

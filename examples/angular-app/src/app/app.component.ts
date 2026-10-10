@@ -1,6 +1,6 @@
 import { NgClass } from "@angular/common";
 import { Component } from "@angular/core";
-import { MxHandlers } from "@mxlang/angular/runtime";
+import { MxHandlers } from "@mxlang/host-angular/runtime";
 import { ProductList } from "./product-list/product-list.component";
 import Badge from "./tags/badge";
 

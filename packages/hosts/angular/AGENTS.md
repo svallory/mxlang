@@ -1,6 +1,6 @@
 # angular — agent instructions
 
-## `@mxlang/angular`: the Angular host on `@mxlang/core` (in progress)
+## `@mxlang/host-angular`: the Angular host on `@mxlang/core` (in progress)
 
 `packages/hosts/angular` emits an Angular template string from a `.mx` page
 template (`compile()`, `src/index.ts`); the emitter (task 1.3) covers every
@@ -247,7 +247,7 @@ the parsed expression (`handlerShape`), never a regex: a bare name is `this`,
 into the decorated class, a tag module writes them into its class, and a
 page's own class gets a once-per-file warning
 (`EVENT_HELPER_ADVICE_CODE`) with the text to paste, or to extend
-`MxHandlers` / `MxHandlersMixin(Base)` from `@mxlang/angular/runtime` instead
+`MxHandlers` / `MxHandlersMixin(Base)` from `@mxlang/host-angular/runtime` instead
 (decision 118; `src/runtime.ts`, built to `dist/runtime.js`). `build.ts`
 `compileOne` suppresses that warning (and the header's paste line) when
 `inspectPageClass` (`src/page-class.ts`: sibling `<name>.ts`, Babel parse, same
@@ -272,14 +272,14 @@ core's resolved `attrTagProps` plan. A singular tag is an
 `<if>`/`<else if>`/`<else>` is wrapped in Angular `@if` blocks, preserving
 branch exclusivity. Arrays (including an absent declared `AttrTag[]`),
 attributes, params, and nested attribute tags are positioned errors naming
-`@mxlang/angular`, because projection is keyed by selector and carries nodes,
+`@mxlang/host-angular`, because projection is keyed by selector and carries nodes,
 not an object or callback. A bodiless `<@name/>` is also an error because there
 are no nodes to project.
 
 The callee receives no run-time attribute-tag value: each supported render
 idiom above is compiled directly to `<ng-content>`. Any other read (a
 condition, pass-through, property read, and so on) errors with a fix-it naming
-`<${input.x.content}/>`. `@mxlang/angular` therefore exports `AttrTag<C>` as a
+`<${input.x.content}/>`. `@mxlang/host-angular` therefore exports `AttrTag<C>` as a
 `never` projection marker used by core's syntactic `Input` reader; tag-module
 generation excludes every declared projected property from `@Input()` fields
 and auto-imports the marker type when needed. `as: "data"` and

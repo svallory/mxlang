@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import type { MxWarning } from "@mxlang/core";
-import { createOut, escape as htmlEscape } from "@mxlang/html";
+import { createOut, escape as htmlEscape } from "@mxlang/target-html";
 import { describe, expect, it } from "vitest";
 import { fencedBlocks } from "./host-examples.ts";
 import {
@@ -24,7 +24,7 @@ describe("the IR specification's worked example", () => {
     expect(ir, REGENERATE).toBe(readExample(files.ir));
   });
 
-  it("emits the committed module through @mxlang/html", () => {
+  it("emits the committed module through @mxlang/target-html", () => {
     const warnings: MxWarning[] = [];
     const code = compileForHtml(source, warnings);
     expect(warnings).toEqual([]);
@@ -33,7 +33,7 @@ describe("the IR specification's worked example", () => {
 
   it("renders what the page says it renders", () => {
     const code = readExample(files.html).replace(
-      /^import \{ escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut \} from "@mxlang\/html";$/m,
+      /^import \{ escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut \} from "@mxlang\/target-html";$/m,
       "",
     );
     // The emitted module is TypeScript; strip its one interface, the

@@ -10,12 +10,12 @@
     "allowImportingTsExtensions": true,
     "baseUrl": ".",
     "paths": {
-      "@mxlang/html": ["../../../../../../targets/html/src/index.ts"],
-      "@mxlang/astro": ["../../../../../../hosts/astro/src/index.ts"],
-      "@mxlang/solid": ["../../../../../../hosts/solid/src/index.ts"],
-      "@mxlang/preact": ["../../../../../../hosts/preact/src/index.ts"],
-      "@mxlang/react": ["../../../../../../hosts/react/src/index.ts"],
-      "@mxlang/hono": ["../../../../../../hosts/hono/src/index.ts"],
+      "@mxlang/target-html": ["../../../../../../targets/html/src/index.ts"],
+      "@mxlang/host-astro": ["../../../../../../hosts/astro/src/index.ts"],
+      "@mxlang/host-solid": ["../../../../../../hosts/solid/src/index.ts"],
+      "@mxlang/host-preact": ["../../../../../../hosts/preact/src/index.ts"],
+      "@mxlang/host-react": ["../../../../../../hosts/react/src/index.ts"],
+      "@mxlang/host-hono": ["../../../../../../hosts/hono/src/index.ts"],
       "@mxlang/core": ["../../../../../../core/src/index.ts"],
       "@mxlang/tsx-bridge": ["../../../../../../tsx-bridge/src/public.d.ts"]
     },

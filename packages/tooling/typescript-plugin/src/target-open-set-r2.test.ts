@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { clearScanCache, isTranslateError, TranslateError } from "@mxlang/core";
-import * as registry from "@mxlang/target-registry";
+import * as registry from "@mxlang/targets";
 import ts from "typescript";
 import { afterEach, expect, it, vi } from "vitest";
 import { foreignTemplateError } from "./language.ts";

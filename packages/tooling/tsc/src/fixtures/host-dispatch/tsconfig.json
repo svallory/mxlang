@@ -10,21 +10,21 @@
     // Astro's ambient types (`TargetHost.ambientTypes`) and bun-types both
     // declare module "*.html" (TS2309 in bun-types' extensions.d.ts). Bun's
     // types reach this program only because "paths" below maps
-    // @mxlang/html to source that imports "bun", a monorepo artifact no user
+    // @mxlang/target-html to source that imports "bun", a monorepo artifact no user
     // install has. Astro's own tsconfig preset sets skipLibCheck too.
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
     "baseUrl": ".",
     "paths": {
-      "@mxlang/html": ["../../../../../targets/html/src/index.ts"],
-      "@mxlang/astro": ["../../../../../hosts/astro/src/index.ts"],
-      "@mxlang/astro/typecheck": [
+      "@mxlang/target-html": ["../../../../../targets/html/src/index.ts"],
+      "@mxlang/host-astro": ["../../../../../hosts/astro/src/index.ts"],
+      "@mxlang/host-astro/typecheck": [
         "../../../../../hosts/astro/src/typecheck.ts"
       ],
-      "@mxlang/solid": ["../../../../../hosts/solid/src/index.ts"],
-      "@mxlang/preact": ["../../../../../hosts/preact/src/index.ts"],
-      "@mxlang/react": ["../../../../../hosts/react/src/index.ts"],
-      "@mxlang/hono": ["../../../../../hosts/hono/src/index.ts"],
+      "@mxlang/host-solid": ["../../../../../hosts/solid/src/index.ts"],
+      "@mxlang/host-preact": ["../../../../../hosts/preact/src/index.ts"],
+      "@mxlang/host-react": ["../../../../../hosts/react/src/index.ts"],
+      "@mxlang/host-hono": ["../../../../../hosts/hono/src/index.ts"],
       "@mxlang/core": ["../../../../../core/src/index.ts"],
       "@mxlang/tsx-bridge": ["../../../../../tsx-bridge/src/public.d.ts"]
     },

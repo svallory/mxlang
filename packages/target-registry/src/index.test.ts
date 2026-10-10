@@ -42,7 +42,11 @@ describe("builtinTargets", () => {
   it("every descriptor is version 0 and names its own package", () => {
     for (const t of builtinTargets) {
       expect(t.descriptorVersion).toBe(0);
-      expect(t.packageName).toMatch(/^@mxlang\/[a-z]+$/);
+      // Package families (decision 201); `@mxlang/data` keeps its name until
+      // decision 204 deletes it.
+      expect(t.packageName).toMatch(
+        /^@mxlang\/(target-[a-z]+|host-[a-z]+|data)$/,
+      );
     }
   });
 
@@ -198,13 +202,13 @@ describe("shape of each descriptor", () => {
 
 describe("builtinLookup: packages and host values", () => {
   it.each([
-    ["@mxlang/html", "html"],
-    ["@mxlang/astro", "astro-html"],
-    ["@mxlang/solid", "solid-jsx"],
-    ["@mxlang/preact", "preact-jsx"],
-    ["@mxlang/react", "react-jsx"],
-    ["@mxlang/hono", "hono-jsx"],
-    ["@mxlang/angular", "angular-template"],
+    ["@mxlang/target-html", "html"],
+    ["@mxlang/host-astro", "astro-html"],
+    ["@mxlang/host-solid", "solid-jsx"],
+    ["@mxlang/host-preact", "preact-jsx"],
+    ["@mxlang/host-react", "react-jsx"],
+    ["@mxlang/host-hono", "hono-jsx"],
+    ["@mxlang/host-angular", "angular-template"],
     ["@mxlang/data", "tree"],
   ])("fromPackage(%s) is %s", (pkg, name) => {
     expect(lookup.fromPackage(pkg)).toBe(name);
@@ -282,14 +286,14 @@ describe("builtinLookup: packages and host values", () => {
   it("attrTagSources are the seven host packages and @mxlang/data", () => {
     expect([...lookup.attrTagSources()].sort()).toEqual(
       [
-        "@mxlang/angular",
-        "@mxlang/astro",
+        "@mxlang/host-angular",
+        "@mxlang/host-astro",
         "@mxlang/data",
-        "@mxlang/hono",
-        "@mxlang/html",
-        "@mxlang/preact",
-        "@mxlang/react",
-        "@mxlang/solid",
+        "@mxlang/host-hono",
+        "@mxlang/target-html",
+        "@mxlang/host-preact",
+        "@mxlang/host-react",
+        "@mxlang/host-solid",
       ].sort(),
     );
   });
@@ -477,33 +481,42 @@ describe("descriptors compile through load()", () => {
   writeFileSync(join(work, "package.json"), "{}");
 
   it.each([
-    ["html", () => import("@mxlang/html").then((m) => m.compile(source, page))],
+    [
+      "html",
+      () => import("@mxlang/target-html").then((m) => m.compile(source, page)),
+    ],
     [
       "astro-html",
       () =>
-        import("@mxlang/html").then((m) =>
+        import("@mxlang/target-html").then((m) =>
           m.compile(source, page, { strict: true }),
         ),
     ],
     [
       "solid-jsx",
       () =>
-        import("@mxlang/solid").then((m) =>
+        import("@mxlang/host-solid").then((m) =>
           m.compileSolidUnit(source, { filename: page }),
         ),
     ],
     [
       "preact-jsx",
       () =>
-        import("@mxlang/preact").then((m) => m.compilePreactMx(source, page)),
+        import("@mxlang/host-preact").then((m) =>
+          m.compilePreactMx(source, page),
+        ),
     ],
     [
       "react-jsx",
-      () => import("@mxlang/react").then((m) => m.compileReactMx(source, page)),
+      () =>
+        import("@mxlang/host-react").then((m) =>
+          m.compileReactMx(source, page),
+        ),
     ],
     [
       "hono-jsx",
-      () => import("@mxlang/hono").then((m) => m.compileHonoMx(source, page)),
+      () =>
+        import("@mxlang/host-hono").then((m) => m.compileHonoMx(source, page)),
     ],
   ])("%s emits what the host's own entry emits", async (name, direct) => {
     const compiler = byName(name).load?.(await core());

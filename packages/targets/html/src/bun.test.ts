@@ -14,7 +14,7 @@ import markoPlugin, { mxFilter } from "./bun.ts";
 import { htmlTargets } from "./index.ts";
 
 /**
- * Makes `@mxlang/html` resolvable from a fixture that declares its own
+ * Makes `@mxlang/target-html` resolvable from a fixture that declares its own
  * `package.json`, which otherwise ends the self-reference lookup that lets a
  * file inside this package import the package by name. Every compiled module
  * imports the runtime (`createOut`, decision 155), so a real consumer has the
@@ -32,7 +32,7 @@ function linkRuntime(pkgDir: string): void {
  * Runs under `bun test`, not vitest: it exercises `Bun.plugin` and Bun's
  * dynamic `import()` of a `.mx` module, both Bun-runtime-only.
  */
-describe("@mxlang/html/bun", () => {
+describe("@mxlang/target-html/bun", () => {
   test("does not claim a .marko path", async () => {
     Bun.plugin(markoPlugin);
 
@@ -70,7 +70,7 @@ describe("@mxlang/html/bun", () => {
     const source = readFileSync(join(fixtureDir, "input.marko"), "utf8");
 
     // Written alongside input.marko, not a bare tmpdir: the emitted module
-    // imports `escape` from "@mxlang/html" by bare specifier, which
+    // imports `escape` from "@mxlang/target-html" by bare specifier, which
     // Bun resolves via node_modules lookup from the file's own directory —
     // a tmpdir outside the package tree can't resolve it.
     const path = join(fixtureDir, "input.mx");
@@ -150,7 +150,7 @@ describe("@mxlang/html/bun", () => {
     Bun.plugin(markoPlugin);
 
     // Astro's template kind (decision 134): an Astro component, lowered by
-    // `@mxlang/astro`. It ends in `.mx` but is not an MX page, and this
+    // `@mxlang/host-astro`. It ends in `.mx` but is not an MX page, and this
     // source would fail the string translator. Bun's default loader returns
     // the file's own path as the default export when no onLoad hook claims it.
     const dir = mkdtempSync(join(tmpdir(), "mxlang-translator-bun-astro-"));
@@ -164,7 +164,7 @@ describe("@mxlang/html/bun", () => {
   test("does not claim a .react.mx path", async () => {
     Bun.plugin(markoPlugin);
 
-    // A `.react.mx` is TSX with MX regions (`@mxlang/react`'s file kind),
+    // A `.react.mx` is TSX with MX regions (`@mxlang/host-react`'s file kind),
     // compiled by the Vite plugin; claimed here it would be translated as a
     // whole-file `.mx`. Declined, Bun's default loader returns the path.
     const dir = mkdtempSync(join(tmpdir(), "mxlang-translator-bun-react-"));
@@ -181,7 +181,7 @@ describe("@mxlang/html/bun", () => {
   test("does not claim a .preact.mx path", async () => {
     Bun.plugin(markoPlugin);
 
-    // A `.preact.mx` is TSX with MX regions (`@mxlang/preact`'s file kind),
+    // A `.preact.mx` is TSX with MX regions (`@mxlang/host-preact`'s file kind),
     // compiled by the Vite plugin; claimed here it would be translated as a
     // whole-file `.mx`. Declined, Bun's default loader returns the path.
     const dir = mkdtempSync(join(tmpdir(), "mxlang-translator-bun-preact-"));
@@ -198,7 +198,7 @@ describe("@mxlang/html/bun", () => {
   test("does not claim a .hono.mx path", async () => {
     Bun.plugin(markoPlugin);
 
-    // A `.hono.mx` is TSX with MX regions (`@mxlang/hono`'s file kind),
+    // A `.hono.mx` is TSX with MX regions (`@mxlang/host-hono`'s file kind),
     // compiled by the Vite plugin; claimed here it would be translated as a
     // whole-file `.mx`. Declined, Bun's default loader returns the path.
     const dir = mkdtempSync(join(tmpdir(), "mxlang-translator-bun-hono-"));
@@ -245,7 +245,7 @@ describe("@mxlang/html/bun", () => {
     // green with the loader gutted.
     //
     // Inside the package tree, like the test above and for the same reason:
-    // the emitted module imports `escape` from "@mxlang/html" by bare
+    // the emitted module imports `escape` from "@mxlang/target-html" by bare
     // specifier, which Bun resolves from the file's own directory.
     const base = join(import.meta.dirname, "..", "fixtures-marko");
     const tagsDir = join(base, "tags");

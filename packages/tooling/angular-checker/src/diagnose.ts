@@ -14,7 +14,7 @@ import {
   lookupMapping,
   offsetAt,
   sourceOffsetFor,
-} from "@mxlang/angular";
+} from "@mxlang/host-angular";
 import type {
   AngularChecker,
   Diagnostic,

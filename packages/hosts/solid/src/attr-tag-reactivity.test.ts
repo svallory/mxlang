@@ -72,7 +72,7 @@ it("keeps accessor content and signal-backed arrays reactive in the client runti
     const callee = join(dir, "Row.tsx");
     writeFileSync(
       callee,
-      'import type { AttrTag } from "@mxlang/solid"; export interface Input { item: AttrTag[] }',
+      'import type { AttrTag } from "@mxlang/host-solid"; export interface Input { item: AttrTag[] }',
     );
     const compiled = compileSolidMx(
       `<Row><for|value| of=items()><@item>\${value}:\${label()}</@item></for></Row>`,

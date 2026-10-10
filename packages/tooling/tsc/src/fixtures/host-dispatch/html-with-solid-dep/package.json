@@ -3,6 +3,6 @@
     "host": "html"
   },
   "dependencies": {
-    "@mxlang/solid": "workspace:*"
+    "@mxlang/host-solid": "workspace:*"
   }
 }

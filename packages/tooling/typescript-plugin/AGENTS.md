@@ -45,7 +45,7 @@ TypeScript must resolve to **one** copy: the TS plugin is handed the `ts` object
 
 **A package that emits declarations sets `rootDir` explicitly in its `tsconfig.build.json`.** TS 6 stopped inferring a common source directory when a build config and the `tsconfig.json` it extends disagree about one (`TS5011`) — which they do whenever `include` covers `test` and the build config excludes it, as `packages/hosts/angular` does. It belongs in the *build* config: putting `rootDir: "src"` in the base `tsconfig.json` instead makes the ordinary typecheck fail with `TS6059` for every file under `test/`.
 
-**`@mxlang/typescript-plugin` ships `dist/index.d.ts`; `@mxlang/tsc` typechecks against the plugin's `src`** (ts-plugin-declarations). `tsc` imports the plugin as a TS module (`createMxLanguagePlugin`, …), so the packed `types` must be real declarations, not `src/index.ts`. The build is `bun build` (CJS) then `tsc -p tsconfig.build.json --emitDeclarationOnly`; `tsconfig.build.json` sets `types: ["node"]` because excluding the tests drops the `vitest` import that pulled `@types/node` in for the plain typecheck. `packages/tooling/tsc/tsconfig.json` maps `@mxlang/typescript-plugin` to `../typescript-plugin/src/index.ts` (`paths`) with `rootDir: "../.."` (TS6059 otherwise; tsc's bundle is built by `bun build`, so `rootDir` only matters to the typecheck). Why not the dist types: they made every typecheck path (root `typecheck`, moon, the per-edit hook) need a prebuilt plugin, failed with TS2307 on a fresh worktree, and gave false results on a stale dist (a new src export was TS2614, a removed one still passed). The published `types` stay on dist. The emitted declarations keep `.ts` relative specifiers (`allowImportingTsExtensions`), like the other packages; `pack-probe` reports the `node16` result and typechecks the packed tarball against them. Its Angular pipeline declarations import the declared `@mxlang/angular` dependency; Astro spans use core's generic mapping type. No published declaration may reference `@mxlang/target-registry`. The registry's pack-probe stub has no type surface, so it cannot hide a private-type leak.
+**`@mxlang/typescript-plugin` ships `dist/index.d.ts`; `@mxlang/tsc` typechecks against the plugin's `src`** (ts-plugin-declarations). `tsc` imports the plugin as a TS module (`createMxLanguagePlugin`, …), so the packed `types` must be real declarations, not `src/index.ts`. The build is `bun build` (CJS) then `tsc -p tsconfig.build.json --emitDeclarationOnly`; `tsconfig.build.json` sets `types: ["node"]` because excluding the tests drops the `vitest` import that pulled `@types/node` in for the plain typecheck. `packages/tooling/tsc/tsconfig.json` maps `@mxlang/typescript-plugin` to `../typescript-plugin/src/index.ts` (`paths`) with `rootDir: "../.."` (TS6059 otherwise; tsc's bundle is built by `bun build`, so `rootDir` only matters to the typecheck). Why not the dist types: they made every typecheck path (root `typecheck`, moon, the per-edit hook) need a prebuilt plugin, failed with TS2307 on a fresh worktree, and gave false results on a stale dist (a new src export was TS2614, a removed one still passed). The published `types` stay on dist. The emitted declarations keep `.ts` relative specifiers (`allowImportingTsExtensions`), like the other packages; `pack-probe` reports the `node16` result and typechecks the packed tarball against them. Its Angular pipeline declarations import the declared `@mxlang/host-angular` dependency; Astro spans use core's generic mapping type. No published declaration may reference `@mxlang/targets`. The registry's pack-probe stub has no type surface, so it cannot hide a private-type leak.
 
 **`dist/index.cjs`'s `module.exports` must be the plugin factory function, not an object.** tsserver loads a plugin with `sys.require` (a plain `require()`), does not unwrap `.default`, and skips the plugin with "did not expose a proper factory function" unless `typeof module === "function"`. `bun build --format cjs` emits the namespace object, so the build runs `build/cjs-factory.ts` after it, appending `module.exports = Object.assign(module.exports.default, module.exports)` (guarded by `typeof module.exports.default === "function"`, because vite-node's shimmed `module`, used by `@mxlang/tsc`'s tests, hands the bundle a non-function `.default`, where the bare assign throws): the factory carries `default` (itself) and every named export, so nothing is removed. Do not drop that step or "simplify" the export back to an object; `src/cjs-factory.test.ts` and `src/tsserver-load.test.ts` (a real tsserver) fail if it regresses. The ESM entry (`src/index.ts`, `export default pluginFactory` plus named exports) and `dist/index.d.ts` keep their shape.
 
@@ -82,7 +82,7 @@ entry.
   and is removed before TypeScript parses its own arguments.
 
 - **`.ng.mx` is its own file kind.** `createNgMxLanguagePlugin` (`src/language.ts`,
-  language id `ngmx`) compiles it with `compileNgMx` from `@mxlang/angular`
+  language id `ngmx`) compiles it with `compileNgMx` from `@mxlang/host-angular`
   (no `print` round trip) and is routed by core's `hostModuleSegment(...) ===
   "ng"` *before* the host-policy branch; `isMx` excludes it. Outside the
   `template:` regions the module maps through `result.map`; each template
@@ -173,7 +173,7 @@ entry.
   because they test TypeScript semantics; `ng-diag-*` use real `@angular/core`.
 
 `packages/tooling/tsc/package.json` pins `"mx": { "host": "html" }` on purpose:
-  it now depends on `@mxlang/angular`, and the many fixtures without their own
+  it now depends on `@mxlang/host-angular`, and the many fixtures without their own
   `package.json` resolve their host from the nearest one above them, where a
   single host dependency would otherwise make every one of them an angular
   project (`the angular host is not wired ...`).
@@ -243,10 +243,10 @@ Four facts worth knowing before editing either:
 **`.solid.mx`'s virtual TSX gets a synthetic, unmapped import for the Solid
 JSX built-ins the emitter prints as a bare tag** (`Show`/`For`/`Switch`/
 `Match`/`Repeat`/`Errored`/`Loading` from `solid-js`, `Dynamic` from
-`@solidjs/web`) — `@mxlang/solid`'s `appendSolidBuiltinImport`, which is the
+`@solidjs/web`) — `@mxlang/host-solid`'s `appendSolidBuiltinImport`, which is the
 `.solid.mx` file kind's `completeTypecheckModule` (decision 154): the region
 plugin (`createRegionLanguagePlugin`, one per region file kind) calls the
-kind's hook, never a Solid function by name. `@mxlang/solid`'s own emitter never imports
+kind's hook, never a Solid function by name. `@mxlang/host-solid`'s own emitter never imports
 these (see `packages/hosts/solid/AGENTS.md`): the real build pipeline gets
 them from `@solidjs/vite-plugin`'s compiler stage auto-importing every
 built-in it sees, a stage that runs *after* `createVirtualCode` and never
@@ -386,7 +386,7 @@ diagnostic; use it for anything about the generated code's types.
   cap with a synthetic `compile` callback for this reason, not a real
   `readCalleeInput`-driven chain. **The real-caller plumbing is still proven
   end to end**, in `src/compile-deps-cap-warning.test.ts` (a dedicated file
-  so its `vi.mock("@mxlang/preact", …)` cannot leak into any other suite):
+  so its `vi.mock("@mxlang/host-preact", …)` cannot leak into any other suite):
   it mocks only `compilePreactMx` — the one host compile function
   `mx-language.ts` calls for the "preact" host policy — to report one more
   dependency every pass, and drives everything else for real
@@ -449,7 +449,7 @@ diagnostic; use it for anything about the generated code's types.
   filename filter, so a diagnostic keyed under the template's path is
   reported under that path automatically. The same shape (a `TranslateError`
   carrying `.file`) is separately handled in `@mxlang/vite-plugin`'s
-  `transform` catch and `@mxlang/astro`'s `AstroTemplateError`/
+  `transform` catch and `@mxlang/host-astro`'s `AstroTemplateError`/
   `vite-templates.ts` (that package's own `AGENTS.md`), for the dev-server
   and build path rather than the editor.
   **Known limitation: tsserver's pull model, not this package's diagnostic

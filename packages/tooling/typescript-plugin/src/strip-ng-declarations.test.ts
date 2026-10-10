@@ -206,9 +206,7 @@ describe("strip-ng-declarations guard", () => {
     expect(strip(copy)).toBe(0);
     expect(existsSync(path.join(dist, "file-kinds.d.ts"))).toBe(false);
     for (const file of ts.sys.readDirectory(dist, [".d.ts"])) {
-      expect(readFileSync(file, "utf8"), file).not.toContain(
-        "@mxlang/target-registry",
-      );
+      expect(readFileSync(file, "utf8"), file).not.toContain("@mxlang/targets");
     }
   });
 });

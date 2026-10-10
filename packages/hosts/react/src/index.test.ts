@@ -9,7 +9,7 @@ function compile(source: string): string {
 
 it("keeps framework diagnostics separate from host capability diagnostics", () => {
   expect(reactDialect.name).toBe("React");
-  expect(reactDeclarations.name).toBe("@mxlang/react");
+  expect(reactDeclarations.name).toBe("@mxlang/host-react");
 });
 
 function markup(source: string): string {
@@ -39,7 +39,7 @@ describe("React dialect", () => {
 
   it("a type-only import does not resolve a capitalized tag (decision 114 parity, #151)", () => {
     // A type-only import binds no runtime value, so `<Widget/>` has nothing
-    // to call -- the same rule `@mxlang/html`/`@mxlang/solid` already
+    // to call -- the same rule `@mxlang/target-html`/`@mxlang/host-solid` already
     // enforce (`import type` excluded from `ctx.imports`).
     expect(
       errorOf('import type Widget from "./widget.mx"\n<Widget/>'),
@@ -68,7 +68,7 @@ describe("React dialect", () => {
   it("imports React's specialised AttrTag type", () => {
     expect(
       compile("export interface Input { head?: AttrTag }\n<p>x</p>"),
-    ).toContain('import type { AttrTag } from "@mxlang/react";');
+    ).toContain('import type { AttrTag } from "@mxlang/host-react";');
   });
 
   it("renders a body-only fallback bare through the shared dynamic path", async () => {
@@ -227,7 +227,7 @@ describe("React dialect", () => {
     expect(code).toContain("className={__mxClass({active: input.on})}");
     expect(code).toContain("style={{color: input.color}}");
     expect(code).toContain(
-      'import { mxClass as __mxClass } from "@mxlang/react/runtime";',
+      'import { mxClass as __mxClass } from "@mxlang/host-react/runtime";',
     );
   });
 
@@ -246,7 +246,7 @@ describe("React dialect", () => {
       'import Risky from "./Risky.mx"\n<try><Risky/><@catch|error|><p>${error.message}</p></@catch></try>',
     );
     expect(code).toContain(
-      'import { MxErrorBoundary as __mxErrorBoundary } from "@mxlang/react/runtime";',
+      'import { MxErrorBoundary as __mxErrorBoundary } from "@mxlang/host-react/runtime";',
     );
     expect(code).toContain(
       "<__mxErrorBoundary fallback={(error) => <p>{error.message}</p>}>{() => (<><Risky />",
@@ -324,7 +324,7 @@ describe("event attributes (decision 101, phase B of dom-events)", () => {
  * `function Foo(){}`/arrow-valued `static const`/`<const>` stays a direct
  * call, unchanged. Executed through `react-dom/server`, not asserted only as
  * emitted source text — the shared emitter is already covered by
- * `@mxlang/preact`'s own executed suite, but React's own runtime (real
+ * `@mxlang/host-preact`'s own executed suite, but React's own runtime (real
  * `react`/`react-dom`) is exercised here too, per the brief.
  */
 describe("local-value-as-tag-parity: non-import local used as a tag (react)", () => {
@@ -541,7 +541,7 @@ describe("hook-guard-module-list: each host's JsxDialect declares its own hookMo
 
 /**
  * JSX-significant characters in authored text (the `jsx-text-lt-unescaped`
- * bug): the shared `@mxlang/preact` emitter this host reuses must escape
+ * bug): the shared `@mxlang/host-preact` emitter this host reuses must escape
  * `<`, `>`, and braces so the *generated* TSX parses, and React's own
  * renderer must produce the DOM text Marko does (`a < b` is text in Marko;
  * the pre-fix emitter copied it verbatim into the JSX, which failed

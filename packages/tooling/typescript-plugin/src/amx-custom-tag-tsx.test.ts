@@ -7,7 +7,7 @@ import { AMX_LANGUAGE_ID, createAmxLanguagePlugin } from "./amx-language.ts";
 /**
  * Astro's `convertToTSX` decides element-vs-component by the tag name's first
  * letter, so a `$`-led name is an HTML element, and a self-closing one is
- * rewritten to `<$mx_Badge1 /{`>`}`: syntactically invalid TSX. `@mxlang/astro`
+ * rewritten to `<$mx_Badge1 /{`>`}`: syntactically invalid TSX. `@mxlang/host-astro`
  * therefore lowers a custom tag to an upper-case-led binding (`<Mx_Badge1 />`),
  * and the projection hands TypeScript text that parses with no help of its own.
  */

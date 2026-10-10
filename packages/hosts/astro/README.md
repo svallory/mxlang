@@ -1,4 +1,4 @@
-# @mxlang/astro
+# @mxlang/host-astro
 
 MX (Markup eXtended) is a template language born from Marko: it takes Marko's
 syntax and brings it to wherever JSX lives today, MX 1.0 being a strict subset
@@ -7,9 +7,9 @@ extension — MX supports only the MX 1.0 subset of Marko syntax, so a real
 `.marko` file is not treated as MX; porting a Marko component that stays
 within the subset is a rename.
 
-`@mxlang/astro` is **the Astro host**: it renders `.mx` components inside an
+`@mxlang/host-astro` is **the Astro host**: it renders `.mx` components inside an
 Astro project as static markup at build time. An MX component compiles to a
-runtime-free `(input) => string` function ([`@mxlang/html`](../translator/README.md)),
+runtime-free `(input) => string` function ([`@mxlang/target-html`](../translator/README.md)),
 is called during Astro's build, and never reaches a browser. No islands, no
 hydration, no client JS from this renderer.
 
@@ -20,13 +20,13 @@ definitions as the other hosts.
 ## Install
 
 ```
-bun add -d @mxlang/astro
+bun add -d @mxlang/host-astro
 ```
 
 ```js
 // astro.config.mjs
 import { defineConfig } from "astro/config";
-import mx from "@mxlang/astro";
+import mx from "@mxlang/host-astro";
 
 export default defineConfig({
   integrations: [mx()],
@@ -102,7 +102,7 @@ rather than to MX:
 **Not supported, by design**: the stateful tags. `<let>`, `<effect>`,
 `<lifecycle>`, `<script>`, `client` blocks, `<id>`, `<log>` and `<debug>` are
 **compile errors** naming the construct. This host compiles MX under
-`@mxlang/html`'s `strictPolicy`: it renders once, at build time, with no
+`@mxlang/target-html`'s `strictPolicy`: it renders once, at build time, with no
 reactive runtime anywhere, so a construct that only means something with a
 runtime is a build error rather than markup that silently renders once and
 never updates (decision 71 — stateful tags mean whatever the host says;
@@ -307,7 +307,7 @@ build error naming the construct, the reason, and the line in the `.astro.mx` fi
   ```astro
   ---
   import Counter from "./tags/counter.mx";
-  import { createOut } from "@mxlang/astro/runtime";
+  import { createOut } from "@mxlang/host-astro/runtime";
   const value = Counter.render({ start: 1 }, createOut());
   ---
   <p>{value}</p>
@@ -333,7 +333,7 @@ build error naming the construct, the reason, and the line in the `.astro.mx` fi
 - **A dynamic tag name** (`<${expr}>`) — Astro resolves component names
   statically.
 
-`@mxlang/astro` exports `AttrTag<C>` for declarations. A named slot is a
+`@mxlang/host-astro` exports `AttrTag<C>` for declarations. A named slot is a
 callable `() => string`; the renderer also exposes that thunk as `.content`,
 so the default data declaration and `as: "renderable"` are equivalent slot
 views on this host. Slots never carry authored attribute data.
@@ -400,7 +400,7 @@ It also enables `.astro.mx` virtual TSX through the emitter-to-Astro source-map
 composition; this format is not claimed when `astro` is omitted.
 
 Do not add an ambient `declare module "*.mx"` shim or reference
-`@mxlang/astro/types`. The old wildcard erased each component's real props and
+`@mxlang/host-astro/types`. The old wildcard erased each component's real props and
 has been removed. For command-line checks use `mx-tsc --astro --noEmit`, since
 plain `tsc` does not load tsserver plugins.
 

@@ -1,16 +1,19 @@
 import { convertToTSX } from "@astrojs/compiler/sync";
-import { astroMxTemplateOffset, lowerAstroMx } from "@mxlang/astro/template";
 import {
   type GeneratedMapping,
   type MxWarning,
   reportScanDiagnostics,
 } from "@mxlang/core";
 import {
+  astroMxTemplateOffset,
+  lowerAstroMx,
+} from "@mxlang/host-astro/template";
+import {
   builtinLookup,
   defaultTagFor,
   resolveTargetPolicy,
   scanCached,
-} from "@mxlang/target-registry";
+} from "@mxlang/targets";
 import type { RawSourceMap } from "@mxlang/tsx-bridge";
 import type {
   CodeInformation,
@@ -160,7 +163,7 @@ export function createAmxLanguagePlugin(
       // Only for what it reports: this file's host is fixed by its extension.
       hostPolicies.resolve(fileName, source);
       try {
-        // The same tags `@mxlang/astro`'s own Vite plugin discovers for this
+        // The same tags `@mxlang/host-astro`'s own Vite plugin discovers for this
         // file. Without them a tag that compiles under `astro build` is an
         // unknown tag in the editor and under `mx-tsc --astro` — the
         // asymmetry already closed for `.solid.mx`.

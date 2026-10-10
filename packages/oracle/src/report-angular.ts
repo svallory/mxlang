@@ -13,15 +13,15 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseTemplate } from "@angular/compiler";
+import { getCustomTags, type MxWarning } from "@mxlang/core";
 import {
   type AngularMapping,
   compile,
   compileNgMx,
   compileTagModuleFile,
   type MappingDerive,
-} from "@mxlang/angular";
-import { getCustomTags, type MxWarning } from "@mxlang/core";
-import { builtinLookup } from "@mxlang/target-registry";
+} from "@mxlang/host-angular";
+import { builtinLookup } from "@mxlang/targets";
 import ts from "typescript";
 
 /**
@@ -42,7 +42,7 @@ process.on("exit", () => {
 /**
  * `oracle:angular`'s one table (design note A6): every fixture under
  * `packages/oracle/fixtures/angular/<name>/` compiles through
- * `@mxlang/angular`'s emitter, then the emitted template is checked two
+ * `@mxlang/host-angular`'s emitter, then the emitted template is checked two
  * ways against Angular's own compiler — `parseTemplate(...).errors === null`
  * and a span-stripped AST snapshot, both against `@angular/compiler@22.1.7`.
  *
@@ -1036,7 +1036,7 @@ export function runAngularTable(update: boolean): {
 
   const nameWidth = Math.max(8, ...rows.map((r) => r.fixture.length));
   console.log("");
-  console.log("=== angular fixtures (@mxlang/angular) ===");
+  console.log("=== angular fixtures (@mxlang/host-angular) ===");
   console.log(`${"fixture".padEnd(nameWidth)}  kind    verdict`);
   for (const r of rows) {
     console.log(

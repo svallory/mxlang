@@ -4,7 +4,7 @@
  * One test per lowering row and per error, as the brief requires.
  *
  * The assertions are on the *emitted JSX text*, not on rendered HTML: render
- * parity with `@mxlang/html` is the oracle's job (`bun run oracle:preact`),
+ * parity with `@mxlang/target-html` is the oracle's job (`bun run oracle:preact`),
  * and duplicating it here would test Preact rather than this lowering. What
  * these pin is the shape an author reads back out of the generated file —
  * which `key` lands on a row, which prop raw HTML goes through, which import
@@ -27,7 +27,7 @@ function compile(source: string): string {
 
 it("keeps framework diagnostics separate from host capability diagnostics", () => {
   expect(preactDialect.name).toBe("Preact");
-  expect(preactDeclarations.name).toBe("@mxlang/preact");
+  expect(preactDeclarations.name).toBe("@mxlang/host-preact");
 });
 
 /** The body of the emitted component's `return (…)`, without the wrapper. */
@@ -84,7 +84,7 @@ describe("module shape", () => {
 
   it("a type-only import does not resolve a capitalized tag (decision 114 parity, #151)", () => {
     // A type-only import binds no runtime value, so `<Widget/>` has nothing
-    // to call -- the same rule `@mxlang/html`/`@mxlang/solid` already
+    // to call -- the same rule `@mxlang/target-html`/`@mxlang/host-solid` already
     // enforce (`import type` excluded from `ctx.imports`).
     expect(
       errorOf('import type Widget from "./widget.mx"\n<Widget/>'),
@@ -107,12 +107,14 @@ describe("module shape", () => {
   it("imports nothing when the template uses no helper", () => {
     const code = compile("<p>hi</p>");
     expect(code).not.toContain('from "preact"');
-    expect(code).not.toContain("@mxlang/preact/runtime");
+    expect(code).not.toContain("@mxlang/host-preact/runtime");
   });
 
   it("imports the host-specialised AttrTag type when core requests it", () => {
     const code = compile("export interface Input { head?: AttrTag }\n<p>x</p>");
-    expect(code).toContain('import type { AttrTag } from "@mxlang/preact";');
+    expect(code).toContain(
+      'import type { AttrTag } from "@mxlang/host-preact";',
+    );
   });
 });
 
@@ -179,7 +181,7 @@ describe("class and style", () => {
     // the generator, so no space follows `{` here.
     expect(code).toContain("class={__mxClass({active: input.on})}");
     expect(code).toContain(
-      'import { mxClass as __mxClass } from "@mxlang/preact/runtime";',
+      'import { mxClass as __mxClass } from "@mxlang/host-preact/runtime";',
     );
   });
 
@@ -774,13 +776,13 @@ describe("local-value-as-tag-parity: non-import local used as a tag (preact)", (
 /**
  * Firstmate's follow-up on decision 116: preact/compat's own `memo`/
  * `forwardRef` return real FUNCTIONS (measured, unlike React's own — see the
- * sibling describe block in `@mxlang/react`'s suite), so `mxDynamic`'s
+ * sibling describe block in `@mxlang/host-react`'s suite), so `mxDynamic`'s
  * pre-existing `typeof target === "function"` branch already handled them.
  * The one real gap on this host is React's own `memo`/`forwardRef` reached
  * indirectly — a `.tsx` value import can bring in an object built with
  * React's real `memo` even inside a Preact app (e.g. through `react-dom`
  * interop or a shared library) — exercised here directly against `mxDynamic`
- * to prove the fix in `@mxlang/preact`'s emitter covers every host that
+ * to prove the fix in `@mxlang/host-preact`'s emitter covers every host that
  * shares it.
  */
 describe("local-value-as-tag-parity: memo()/forwardRef() objects on the dynamic path (preact)", () => {
@@ -860,8 +862,8 @@ describe("local-value-as-tag-parity: memo()/forwardRef() objects on the dynamic 
   // function instead of returning an object — the test above renders that
   // form successfully. `mxIsHostComponentObject`'s widened check in
   // `mxDynamic` (this package's emitter) is still correct for React and
-  // Hono, both of which do support the object form (see `@mxlang/react`'s
-  // and `@mxlang/hono`'s own suites) — Preact genuinely has no such form to
+  // Hono, both of which do support the object form (see `@mxlang/host-react`'s
+  // and `@mxlang/host-hono`'s own suites) — Preact genuinely has no such form to
   // support, on any path.
 });
 
@@ -1105,7 +1107,7 @@ describe("<try>", () => {
       'import Body from "./body.mx"\n<try><Body/><@catch|err|><p>${err}</p></@catch></try>',
     );
     expect(code).toContain(
-      'import { MxErrorBoundary as __mxErrorBoundary } from "@mxlang/preact/runtime";',
+      'import { MxErrorBoundary as __mxErrorBoundary } from "@mxlang/host-preact/runtime";',
     );
     expect(code).toContain(
       "<__mxErrorBoundary fallback={(err) => <p>{err}</p>}>{() => (<><Body />",
@@ -1142,7 +1144,7 @@ describe("<try>", () => {
       'import Body from "./body.mx"\n<try><Body/><@placeholder><p>loading</p></@placeholder></try>',
     );
     expect(code).toContain(
-      'import { MxPlaceholder as __mxSuspense } from "@mxlang/preact/runtime";',
+      'import { MxPlaceholder as __mxSuspense } from "@mxlang/host-preact/runtime";',
     );
     expect(code).toContain("<__mxSuspense fallback={<p>loading</p>}>");
   });

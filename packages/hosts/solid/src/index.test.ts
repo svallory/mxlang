@@ -866,7 +866,7 @@ describe("<define> hoisted to module scope (decision 110b)", () => {
     );
     // JSX has no positional-call syntax, so a <define> call is a plain
     // function-call expression, not a JSX tag — the same call shape
-    // `@mxlang/html` already uses (decision 109's named-param binding).
+    // `@mxlang/target-html` already uses (decision 109's named-param binding).
     expect(result.code).toContain(`{${hoisted?.binding}()}`);
     expect(result.code).not.toContain("<Row");
   });
@@ -894,7 +894,7 @@ describe("<define> hoisted to module scope (decision 110b)", () => {
   it("supports args, content and attribute tags together (decision 109)", () => {
     // `item` is consumed positionally by the arg; `head`/`content` are
     // params beyond it, filled by name from the attribute tag/body — the
-    // same named-lookup scheme `@mxlang/html`'s `<define>` call already
+    // same named-lookup scheme `@mxlang/target-html`'s `<define>` call already
     // uses for this exact shape.
     const result = compile(
       `<define/Row|item, head, content|>\${item}\${head}\${content}</define><Row(input.name)><@head>H</@head>body</Row>`,
@@ -951,7 +951,7 @@ describe("<define> hoisted to module scope (decision 110b)", () => {
     // `ctx.defines` (core, `lowerDefine`) registers a define's name only
     // *after* lowering its own body, so a reference to a sibling define is
     // only ever resolvable when that sibling was declared **earlier** in
-    // source — confirmed against `@mxlang/html`: a forward reference is a
+    // source — confirmed against `@mxlang/target-html`: a forward reference is a
     // pre-existing, core-wide "has no matching import or `<define>` in
     // scope" error on every host, unrelated to this fix, so this test
     // covers the reachable case only. What it pins for Solid specifically
@@ -966,7 +966,7 @@ describe("<define> hoisted to module scope (decision 110b)", () => {
   it("a self-recursive <define> now errors with Marko's own wording (decision 114, was a silent gap)", () => {
     // `ctx.defines.set(name, params)` (core, `lowerDefine`) runs only
     // *after* lowering a define's own body, so `A` isn't registered as a
-    // define while `A`'s own body is being lowered — on `@mxlang/html` this
+    // define while `A`'s own body is being lowered — on `@mxlang/target-html` this
     // already reached the generic capitalized-tag guard and errored ("no
     // matching import or `<define>` in scope"). On Solid it used to be a
     // silent pass-through: `isComponent` was a bare `/^[A-Z]/` test with no
@@ -1140,7 +1140,7 @@ describe("compileSolidUnit", () => {
   });
 
   it("emits `export interface Input` and annotates the parameter with it", () => {
-    // Same shape as `@mxlang/preact`/`@mxlang/html`: the emitted module is
+    // Same shape as `@mxlang/host-preact`/`@mxlang/target-html`: the emitted module is
     // TSX carrying types, so a caller's ordinary props are type-checked
     // against `Input`. The vite path strips the types (`.tsx` id).
     const code = unitOf("panel.mx");
@@ -1181,12 +1181,14 @@ describe("compileSolidUnit", () => {
       "export interface Input { item: AttrTag }\n<div/>",
       { filename: "/fixtures/typed.mx" },
     ).code;
-    expect(code).toContain('import type { AttrTag } from "@mxlang/solid";');
+    expect(code).toContain(
+      'import type { AttrTag } from "@mxlang/host-solid";',
+    );
     expect(code).toContain("export interface Input { item: AttrTag }");
   });
 
   it("errors on a whole `import type` used as a tag (decision 114 parity)", () => {
-    // Mirrors `@mxlang/html`'s equivalent coverage: a whole `import type`
+    // Mirrors `@mxlang/target-html`'s equivalent coverage: a whole `import type`
     // binds no runtime value, so `<Widget/>` must still be Marko's own
     // unresolved-tag error on Solid's whole-file entry too, not a silently
     // routed component call. Before the core fix, `lowerStatement`'s
@@ -1262,7 +1264,7 @@ describe("compileSolidUnit", () => {
       writeFileSync(
         callee,
         [
-          'import type { AttrTag } from "@mxlang/solid";',
+          'import type { AttrTag } from "@mxlang/host-solid";',
           "export interface Input { item: AttrTag<{ attrs: { id: number }; params: [label: string] }>[] }",
           "export default function Row(_input: Input) { return null; }",
         ].join("\n"),
@@ -1307,7 +1309,7 @@ describe("compileSolidUnit", () => {
             ignoreDeprecations: "6.0",
             baseUrl: scratch,
             paths: {
-              "@mxlang/solid": [join(HERE, "index.ts")],
+              "@mxlang/host-solid": [join(HERE, "index.ts")],
               "@mxlang/core": [join(HERE, "../../../core/dist/index.d.ts")],
               "@mxlang/tsx-bridge": [
                 join(HERE, "../../../tsx-bridge/src/public.d.ts"),

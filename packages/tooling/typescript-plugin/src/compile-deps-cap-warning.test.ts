@@ -21,7 +21,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { builtinLookup } from "@mxlang/target-registry";
+import { builtinLookup } from "@mxlang/targets";
 import ts from "typescript";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMxLanguagePlugin, MX_LANGUAGE_ID } from "./mx-language.ts";

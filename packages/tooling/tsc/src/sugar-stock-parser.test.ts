@@ -138,7 +138,7 @@ describe("with core's bundled front end, a stock htmljs-parser in the install ch
 const lsRequire = require("node:module").createRequire(${JSON.stringify(dist("tooling/language-server/package.json"))});
 Promise.all([
   import(${JSON.stringify(`file://${dist("tooling/language-server/dist/index.js")}`)}),
-  import("file://" + lsRequire.resolve("@mxlang/target-registry")),
+  import("file://" + lsRequire.resolve("@mxlang/targets")),
 ]).then(([{ diagnoseDocument }, { resolveTargetPolicy }]) => {
   const policy = resolveTargetPolicy(${JSON.stringify(page)});
   const diagnostics = diagnoseDocument(${JSON.stringify(SOURCE)}, ${JSON.stringify(`file://${page}`)}, policy, () => {}, "mx");

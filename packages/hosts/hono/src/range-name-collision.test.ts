@@ -7,7 +7,7 @@
  * plausible author names — so a `<const>` of the same name was *shadowed*
  * inside the callback and the loop rendered wrong values with no error.
  *
- * The emitter is shared with `@mxlang/preact` and `@mxlang/react` (this file's
+ * The emitter is shared with `@mxlang/host-preact` and `@mxlang/host-react` (this file's
  * cases are asserted there too); this suite runs the same cases through
  * Hono's own JSX runtime, per the host-parity rule the brief states.
  */
@@ -46,8 +46,8 @@ async function render(source: string): Promise<string> {
     writeFileSync(entry, source);
     const out = join(scratch, "entry.tsx");
     const code = compileHonoMx(source, entry).code.replace(
-      '"@mxlang/hono/runtime"',
-      JSON.stringify(require.resolve("@mxlang/hono/runtime")),
+      '"@mxlang/host-hono/runtime"',
+      JSON.stringify(require.resolve("@mxlang/host-hono/runtime")),
     );
     writeFileSync(out, code);
     const mod = (await import(pathToFileURL(out).href)) as {

@@ -4,7 +4,7 @@ import {
   builtinFileKinds,
   builtinLookup,
   builtinTargets,
-} from "@mxlang/target-registry";
+} from "@mxlang/targets";
 
 /** The built-in glue selects pipelines, never host or segment names. */
 export function fileKindForPipeline(

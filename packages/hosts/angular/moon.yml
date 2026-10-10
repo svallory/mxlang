@@ -14,7 +14,7 @@ tasks:
 
   test:
     command: "vitest"
-    args: ["run", "--root", "../..", "--project", "@mxlang/angular"]
+    args: ["run", "--root", "../..", "--project", "@mxlang/host-angular"]
     inputs:
       - "src/**/*"
       - "test/**/*"

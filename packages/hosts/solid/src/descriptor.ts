@@ -33,7 +33,7 @@ function targets(): TargetLookup {
 const descriptor: TargetDescriptor = {
   descriptorVersion: 0,
   name: "solid-jsx",
-  packageName: "@mxlang/solid",
+  packageName: "@mxlang/host-solid",
   defaultTag: DEFAULT_TAG,
   declarations: { default: solidDeclarations },
   // `typescript-plugin/src/mx-language.ts`: Solid merges the decoded map with

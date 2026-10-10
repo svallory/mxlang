@@ -18,16 +18,16 @@
     "@docmd/core": "0.9.5"
   },
   "devDependencies": {
-    "@mxlang/angular": "workspace:*",
-    "@mxlang/astro": "workspace:*",
     "@mxlang/core": "workspace:*",
-    "@mxlang/hono": "workspace:*",
-    "@mxlang/html": "workspace:*",
-    "@mxlang/tsx-bridge": "workspace:*",
-    "@mxlang/preact": "workspace:*",
-    "@mxlang/react": "workspace:*",
-    "@mxlang/solid": "workspace:*",
+    "@mxlang/host-angular": "workspace:*",
+    "@mxlang/host-astro": "workspace:*",
+    "@mxlang/host-hono": "workspace:*",
+    "@mxlang/host-preact": "workspace:*",
+    "@mxlang/host-react": "workspace:*",
+    "@mxlang/host-solid": "workspace:*",
+    "@mxlang/target-html": "workspace:*",
     "@mxlang/tree-sitter-mx": "workspace:*",
+    "@mxlang/tsx-bridge": "workspace:*",
     "vitest": "3.2.7"
   }
 }

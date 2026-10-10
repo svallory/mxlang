@@ -10,7 +10,7 @@ import type {
   CompileJsxRegionResult,
   CompilePreactOptions,
   CompilePreactResult,
-} from "@mxlang/preact";
+} from "@mxlang/host-preact";
 import type { Child } from "hono/jsx";
 import {
   compileHonoFile as compileHonoFileWith,
@@ -24,9 +24,9 @@ import descriptor from "./descriptor.ts";
  * This package's own target table (decisions 129 and 132): the one descriptor
  * it exports, defaulting for a direct entry that names no lookup of its own
  * (design note §5.1, rule (c)). The compile itself runs through
- * `@mxlang/preact`'s shared emitter, but the lookup a caller gets by default
- * is Hono's, so a callee importing `AttrTag` from `@mxlang/hono` is
- * recognised the same as one from `@mxlang/preact`.
+ * `@mxlang/host-preact`'s shared emitter, but the lookup a caller gets by default
+ * is Hono's, so a callee importing `AttrTag` from `@mxlang/host-hono` is
+ * recognised the same as one from `@mxlang/host-preact`.
  */
 const ownTargets: TargetLookup = createTargetLookup([descriptor]);
 
@@ -38,7 +38,7 @@ const ownTargets: TargetLookup = createTargetLookup([descriptor]);
  */
 export const honoTargets = ownTargets;
 
-export { TranslateError } from "@mxlang/preact";
+export { TranslateError } from "@mxlang/host-preact";
 export type { HonoRegionOptions } from "./compile.ts";
 export {
   honoDeclarations,
@@ -57,7 +57,7 @@ export type AttrTag<
  * Compiles a whole-file MX template to a Hono JSX component module.
  *
  * `options.targets` defaults to this package's own lookup; see
- * `@mxlang/preact`'s `CompilePreactOptions.targets`.
+ * `@mxlang/host-preact`'s `CompilePreactOptions.targets`.
  */
 export function compileHonoMx(
   source: string,

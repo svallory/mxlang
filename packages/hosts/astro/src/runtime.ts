@@ -6,5 +6,5 @@
  * code (the Vite plugin and the compiler) that cannot load inside the SSR
  * bundle a page is rendered from.
  */
-export type { Out } from "@mxlang/html/runtime";
-export { createOut } from "@mxlang/html/runtime";
+export type { Out } from "@mxlang/target-html/runtime";
+export { createOut } from "@mxlang/target-html/runtime";

@@ -1,4 +1,4 @@
-import { mxClass as __mxClass } from "@mxlang/hono/runtime";function Header(props: {text: string;}) {
+import { mxClass as __mxClass } from "@mxlang/host-hono/runtime";function Header(props: {text: string;}) {
   return <><h1 class={__mxClass({ big: true })}>{props.text}</h1></>;
 }
 

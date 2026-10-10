@@ -1,5 +1,5 @@
 {
   "marko": "error",
   "errorPattern": "Unable to find entry point for .*`<my-widget>`\\.",
-  "reason": "real Marko treats an unresolved hyphenated tag as a failed custom-element lookup (\"Unable to find entry point for custom tag `<my-widget>`\") and refuses to compile -- verified against @marko/compiler 5.42.5 / marko@6.3.51. Fixed: @mxlang/html's emitSpecial now rejects an unresolved hyphenated name with Marko's own wording, instead of rendering it as literal HTML. Under the MX 1 subset rule (decision 71/72) this could later become a supported divergence -- see divergences.md \"candidates for MX 2: unknown custom elements in the vanilla host\"."
+  "reason": "real Marko treats an unresolved hyphenated tag as a failed custom-element lookup (\"Unable to find entry point for custom tag `<my-widget>`\") and refuses to compile -- verified against @marko/compiler 5.42.5 / marko@6.3.51. Fixed: @mxlang/target-html's emitSpecial now rejects an unresolved hyphenated name with Marko's own wording, instead of rendering it as literal HTML. Under the MX 1 subset rule (decision 71/72) this could later become a supported divergence -- see divergences.md \"candidates for MX 2: unknown custom elements in the vanilla host\"."
 }

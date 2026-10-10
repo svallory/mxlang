@@ -101,7 +101,7 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/astro/typecheck\";\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nPage.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxOut.write(\"<p>ok</p>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\ntype MxAstroInput = \"content\" extends keyof Input\n  ? Omit<Input, \"content\"> & { children?: unknown }\n  : Input;\nconst mxAstroRender = Page as unknown as ((input: MxAstroInput) => string) & { render: typeof __mxRender };\nexport default mxAstroRender;\n",
+        "generated": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/host-astro/typecheck\";\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nPage.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxOut.write(\"<p>ok</p>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\ntype MxAstroInput = \"content\" extends keyof Input\n  ? Omit<Input, \"content\"> & { children?: unknown }\n  : Input;\nconst mxAstroRender = Page as unknown as ((input: MxAstroInput) => string) & { render: typeof __mxRender };\nexport default mxAstroRender;\n",
         "mappings": [],
         "compileDiagnostics": [
           {

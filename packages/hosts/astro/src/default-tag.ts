@@ -12,7 +12,7 @@ import {
   ownDefaultTag,
   type TargetPolicyDiagnostic,
 } from "@mxlang/core";
-import htmlDescriptor from "@mxlang/html/descriptor";
+import htmlDescriptor from "@mxlang/target-html/descriptor";
 import { DEFAULT_TAG } from "./astro-template.ts";
 
 export function astroDefaultTag(

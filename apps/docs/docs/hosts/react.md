@@ -104,7 +104,7 @@ What changed:
 ## Setup
 
 ```bash
-bun add @mxlang/react
+bun add @mxlang/host-react
 bun add -d @mxlang/vite-plugin @mxlang/typescript-plugin @mxlang/tsc
 ```
 
@@ -139,7 +139,7 @@ In CI, run `mx-tsc --noEmit` where you ran `tsc --noEmit`: plain `tsc` does not 
 - A type check of each attribute tag the callee declares with `AttrTag`.
 - React's own names: `className`, `htmlFor`, `onDoubleClick` for the DOM's `dblclick`.
 
-The output is TSX. MX adds a few inline helpers for attribute values and imports `mxClass` from `@mxlang/react/runtime` when a class object needs it. There is no MX component model at run time.
+The output is TSX. MX adds a few inline helpers for attribute values and imports `mxClass` from `@mxlang/host-react/runtime` when a class object needs it. There is no MX component model at run time.
 
 ## One rule to know first
 

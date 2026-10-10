@@ -117,7 +117,7 @@ function readDiagnostics(
  *
  * Tooling-facing API: the build, the watcher and editor tooling (the
  * TypeScript plugin) read the same config through it, so they cannot disagree
- * about a project. Not part of `@mxlang/angular/runtime`, which stays
+ * about a project. Not part of `@mxlang/host-angular/runtime`, which stays
  * zero-import.
  *
  * Throws a positioned `TranslateError` (line 1 of `<projectDir>/package.json`)

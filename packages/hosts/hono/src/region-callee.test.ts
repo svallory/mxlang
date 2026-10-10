@@ -1,7 +1,7 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: MX `${…}` placeholders in template source
 /**
  * A region calling a `.hono.mx` callee's attribute tag, compiled through
- * `compileHonoRegion` directly — no `@mxlang/target-registry` loaded, so no
+ * `compileHonoRegion` directly — no `@mxlang/targets` loaded, so no
  * reader was registered for `.hono.mx`. The entry's own lookup (its
  * `targets` default) declares the `hono` file kind's `readCalleeInput`, and
  * core reads callee readers from the compile's lookup, so the callee's

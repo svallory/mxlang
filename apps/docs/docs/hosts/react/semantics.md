@@ -69,7 +69,7 @@ The handler receives React's synthetic event. `onChange` on a text field fires p
 </try>
 ```
 
-`<@catch>` becomes `MxErrorBoundary`, a React class component using `componentDidCatch`; `<@placeholder>` becomes React's `Suspense`. Both come from `@mxlang/react/runtime` and are imported only when used. With both present, the placeholder sits inside the boundary, so a render error reaches the catch.
+`<@catch>` becomes `MxErrorBoundary`, a React class component using `componentDidCatch`; `<@placeholder>` becomes React's `Suspense`. Both come from `@mxlang/host-react/runtime` and are imported only when used. With both present, the placeholder sits inside the boundary, so a render error reaches the catch.
 
 The body is handed to the boundary as a function, so a throw written directly in the `<try>` body is caught with the real error, on the server too, and none of the partial body is rendered. React's server renderer runs no error boundaries, so a descendant component's throw during a server render goes to the nearest `Suspense`: the boundary wraps its body in one whose fallback is `<@catch>`. The client then renders the real catch. Three differences from Marko follow, all React-only:
 
@@ -85,7 +85,7 @@ MX calls a component with `children`, the JSX way, so hand-written React compone
 
 ## Attribute tags on your own components
 
-Export an `Input` type from the component and mark the markup props with `AttrTag` from `@mxlang/react`. A renderable is a `ReactNode`; with `params` it is a function returning one; `AttrTag[]` is a real array. With no declaration, MX infers the shape from the call, which is how `<Suspense><@fallback>…</@fallback></Suspense>` works on a library component. See [AttrTag](/language/attr-tag/).
+Export an `Input` type from the component and mark the markup props with `AttrTag` from `@mxlang/host-react`. A renderable is a `ReactNode`; with `params` it is a function returning one; `AttrTag[]` is a real array. With no declaration, MX infers the shape from the call, which is how `<Suspense><@fallback>…</@fallback></Suspense>` works on a library component. See [AttrTag](/language/attr-tag/).
 
 ## How this is checked
 

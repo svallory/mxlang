@@ -196,10 +196,10 @@ Not divergences, only a different error: `import x = require("y")` (Marko refuse
 MX resolves tag names with its own tag table: the target's taglibs over its
 element table (`@mxlang/web-elements`), plus core's own `tags/` discovery. A
 `marko.json` (or `marko-tag.json`) taglib is not read on any target. Marko
-reads it, and `@mxlang/html` and the JSX hosts used to, through
+reads it, and `@mxlang/target-html` and the JSX hosts used to, through
 `@marko/compiler`'s lookup: a `<badge>` its `template` named was imported and
 called. In MX a tag it maps (`template`, `renderer`, `tags-dir`) is an unknown
-tag like any other: `@mxlang/html`'s "Unable to find entry point for custom tag"
+tag like any other: `@mxlang/target-html`'s "Unable to find entry point for custom tag"
 error, a native element on the hosts that render an unknown lowercase tag. A
 custom tag is a `tags/<name>.mx` file or an `mx.tags` entry. Tests:
 `packages/targets/html/src/marko-tags.test.ts` (`a marko.json registers
@@ -215,9 +215,9 @@ row 4 cases of each `lowercase-binding-native.test.ts`.
 | Attribute tags on native elements (`<div><@head>…</@head></div>`) | A uniform “attribute tags become props” rule for every tag. | Rejected: `Tag does not support nested attribute tags.` | `packages/core/src/resolve.test.ts` — `rejects an attribute tag outside a component` |
 | `<fragment>` wrapper | An explicit wrapper for multiple Solid JSX children (in `.solid.mx`, use a TSX fragment `<>…</>`). | Rejected: `Unable to find entry point for custom tag <fragment>. Marko templates and tag bodies may have multiple root nodes; no fragment wrapper is needed.` | `packages/tsx-bridge/src/mx/control.test.ts` — `lowers <fragment> to a JSXFragment` |
 
-## Fixed: former `@mxlang/html` bugs
+## Fixed: former `@mxlang/target-html` bugs
 
-Two `@mxlang/html` implementation bugs against decision 67's rule ("the
+Two `@mxlang/target-html` implementation bugs against decision 67's rule ("the
 translator should follow Marko") were recorded here as open. Both are now
 fixed, and each fixture under `packages/targets/html/fixtures-marko/` asserts
 Marko's own error instead of carrying a `translator-bug` reason. No fixture
@@ -227,13 +227,13 @@ translator bug** over 43 stock fixtures.
 - **`unknown-element`**: real Marko treats an unresolved hyphenated tag as a
   failed custom-element lookup and refuses to compile ("Unable to find entry
   point for custom tag `<my-widget>`", verified against `@marko/compiler`
-  5.42.5 / `marko@6.3.51`). `@mxlang/html` used to render it as literal HTML
+  5.42.5 / `marko@6.3.51`). `@mxlang/target-html` used to render it as literal HTML
   unconditionally. Fixed: `rejectUnknownTag` (`translate.ts`, called at resolve
   time) now rejects an unresolved hyphenated name with Marko's own wording.
 - **`lowercase-component`**: real Marko rejects a lowercase local-variable tag
   reference outright ("Local variables must be in a dynamic tag unless they
   are PascalCase. Use `<${layout}/>` or rename to `Layout`.", same versions).
-  `@mxlang/html` was binding-based regardless of case, so it called the import
+  `@mxlang/target-html` was binding-based regardless of case, so it called the import
   instead of erroring — strictly *more permissive* than Marko. Fixed:
   `rejectComponentTag` (`translate.ts`, called at resolve time) now rejects the
   same reference with Marko's own wording. The
@@ -243,7 +243,7 @@ translator bug** over 43 stock fixtures.
 ## `<textarea value>`: Angular SSR output unverified
 
 Marko renders `<textarea value=x/>` as escaped content. The html and Astro
-targets now do too. `@mxlang/angular` emits a live property binding
+targets now do too. `@mxlang/host-angular` emits a live property binding
 (`<textarea [value]="x">`), which gives the textarea its content on the client;
 spreads on a textarea are rejected there. The server-rendered text is
 unverified, because the repo has no `@angular/platform-server` to render it

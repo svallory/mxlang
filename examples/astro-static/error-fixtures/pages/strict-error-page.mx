@@ -1,5 +1,5 @@
 // Also expected to fail the build, but for a `.mx` file placed directly under
-// `src/pages` (page mode, going through `@mxlang/astro`'s `mxPages` Vite
+// `src/pages` (page mode, going through `@mxlang/host-astro`'s `mxPages` Vite
 // plugin), not a `.astro` page importing a stateful `.mx` component. The
 // strict policy is enforced at `@mxlang/vite-plugin`'s compile step — before
 // `mxPages`'s `enforce: "post"` transform ever runs — so a page-mode `<let>`

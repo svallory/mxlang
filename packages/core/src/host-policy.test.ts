@@ -47,7 +47,7 @@ function fixtureTarget(
  * resolver against the repo's own seven would either reintroduce that list
  * here or assert nothing. A fixture set of invented names says the stronger
  * thing: the resolver answers for *whatever* is registered. The built-in set
- * is pinned against these same rules in `@mxlang/target-registry`'s tests,
+ * is pinned against these same rules in `@mxlang/targets`'s tests,
  * where the real descriptors live.
  */
 const lookup: TargetLookup = createTargetLookup(

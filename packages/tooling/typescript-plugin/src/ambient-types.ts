@@ -2,7 +2,7 @@ import { existsSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { TargetHost } from "@mxlang/core";
-import { lookupFor, resolveTargetPolicy } from "@mxlang/target-registry";
+import { lookupFor, resolveTargetPolicy } from "@mxlang/targets";
 import type * as ts from "typescript";
 
 /**

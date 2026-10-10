@@ -6,7 +6,7 @@ import { EVENT_HELPER_MEMBERS } from "../src/emitter.ts";
 import { MxHandlers, MxHandlersMixin } from "../src/runtime.ts";
 import { assertAngularParses, emit } from "./helpers.ts";
 
-// angular-handlers-base. `@mxlang/angular/runtime` is a zero-import subpath
+// angular-handlers-base. `@mxlang/host-angular/runtime` is a zero-import subpath
 // carrying the two event invoker members (`__mxOn` / `__mxOnAt`) so a
 // hand-written component can extend them instead of pasting them. These tests
 // cover the module's behaviour, its shape (zero imports, in source and in the

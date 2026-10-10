@@ -34,7 +34,7 @@ it("policy errors alone fail one program; fixing them leaves host warnings non-f
           types: [],
           allowImportingTsExtensions: true,
           paths: {
-            "@mxlang/html": [
+            "@mxlang/target-html": [
               join(
                 import.meta.dirname,
                 "..",

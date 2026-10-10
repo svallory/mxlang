@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { stripVTControlCharacters } from "node:util";
 import type { TargetCompiler, TargetPolicy } from "@mxlang/core";
-import { builtinLookup, defaultTarget, hostOf } from "@mxlang/target-registry";
+import { builtinLookup, defaultTarget, hostOf } from "@mxlang/targets";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { diagnoseDocument } from "./diagnose.ts";
 

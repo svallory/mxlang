@@ -10,7 +10,6 @@
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
-import { readAngularConfig } from "@mxlang/angular";
 import {
   type AngularChecker,
   type AngularCheckerOptions,
@@ -19,6 +18,7 @@ import {
   type NgMxDiagnostic,
   resolveCompilerCli,
 } from "@mxlang/angular-checker";
+import { readAngularConfig } from "@mxlang/host-angular";
 import type { CompiledNgMx } from "@mxlang/typescript-plugin";
 
 /**

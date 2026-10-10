@@ -6,7 +6,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import mx from "./index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
-// Inside the package, not `tmpdir()`: the compiled pages import `@mxlang/html`
+// Inside the package, not `tmpdir()`: the compiled pages import `@mxlang/target-html`
 // by bare specifier, which only resolves from within the package tree.
 const root = mkdtempSync(join(here, "..", ".tmp-marko-tags-build-"));
 

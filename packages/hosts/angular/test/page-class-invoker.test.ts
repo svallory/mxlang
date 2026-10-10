@@ -21,7 +21,7 @@ afterEach(() => {
   rmSync(projectDir, { recursive: true, force: true });
 });
 
-const RT = "@mxlang/angular/runtime";
+const RT = "@mxlang/host-angular/runtime";
 
 function readHtml(): string {
   return readFileSync(join(projectDir, "src/page.html"), "utf8");

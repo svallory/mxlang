@@ -3,7 +3,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     // Each test in `server.test.ts` compiles a template through
-    // `@mxlang/html` -> `@marko/compiler` and dynamic-imports the result.
+    // `@mxlang/target-html` -> `@marko/compiler` and dynamic-imports the result.
     // That first compile is a genuinely heavy cold import (~1.5s for the whole
     // file in isolation), and under a full `bun run verify` — 20 vitest
     // projects in parallel, ~77s of transform — individual cases have been

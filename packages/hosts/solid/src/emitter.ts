@@ -672,15 +672,15 @@ const SOLID_BUILTIN_TAG_NAMES = new Set(
  *   treats that set as "the file resolves this name to a value" before
  *   `isComponent` is ever asked.
  * - **It is one of Solid's own JSX built-ins** (`SOLID_BUILTIN_TAGS`,
- *   `@mxlang/tsx-bridge`) — `<Show>`, `<For>`, … — which `@mxlang/solid`'s
+ *   `@mxlang/tsx-bridge`) — `<Show>`, `<For>`, … — which `@mxlang/host-solid`'s
  *   emitter prints as a bare tag with no import of its own because the real
  *   Solid build pipeline (`@solidjs/vite-plugin`'s compiler stage)
  *   auto-imports every one it sees, a stage that runs after this compiler
  *   and never inside it.
  *
  * Anything else reaching here is genuinely unresolved: Solid has no
- * taglib-backed `tags/`-discovery channel the way `@mxlang/html`/
- * `@mxlang/preact` do (`ctx.lookup` is never set here — a `.solid.mx` region
+ * taglib-backed `tags/`-discovery channel the way `@mxlang/target-html`/
+ * `@mxlang/host-preact` do (`ctx.lookup` is never set here — a `.solid.mx` region
  * is a fragment compile, not a whole-Marko-file parse). Core's own
  * `rejectUnknownTag` hook (below) then reports Marko's wording, positioned
  * on the real node.
@@ -716,7 +716,7 @@ function rejectUnknownTag(
 export const DEFAULT_TAG = "div";
 
 export const solidDeclarations: HostDeclarations = {
-  name: "@mxlang/solid",
+  name: "@mxlang/host-solid",
   nativeTags: WEB_ELEMENTS,
   attrTags: 2,
   defineCallPassesAttrs: true,
@@ -1561,7 +1561,7 @@ function satisfying(
  * Same check for a data value, an object literal that needs no inner
  * parenthesization guard: `{ ... } satisfies T` has no arrow function or
  * ternary to disambiguate, so one wrapping pair is enough (matching
- * `@mxlang/html`'s `attrTagValue`).
+ * `@mxlang/target-html`'s `attrTagValue`).
  */
 function satisfyingData(
   value: MappedCode,
@@ -2315,8 +2315,8 @@ export class SolidEmitter implements Emitter<string> {
 
   /**
    * A dynamic-target `Component` — `<${expr} .../>` or a bare `${expr}`
-   * line — is polymorphic at run time, the same as `@mxlang/html`'s
-   * `renderDynamic` and `@mxlang/preact`'s inlined `mxDynamic`: the target
+   * line — is polymorphic at run time, the same as `@mxlang/target-html`'s
+   * `renderDynamic` and `@mxlang/host-preact`'s inlined `mxDynamic`: the target
    * can be a tag-name string, a component function, or already-rendered
    * content (e.g. a caller's `content` prop) passed straight through rather
    * than called again. Solid's own `<Dynamic component=…>` only accepts the
@@ -2799,7 +2799,7 @@ export class SolidEmitter implements Emitter<string> {
 
     // A define can never reference a sibling declared later, or itself
     // (`ctx.defines.set` in core's `lowerDefine` runs only *after* lowering
-    // the define's own body — verified against `@mxlang/html`, which
+    // the define's own body — verified against `@mxlang/target-html`, which
     // rejects the identical source with the same "no matching import or
     // `<define>` in scope" error at lowering time, before any host-specific
     // code runs). So every name `freeJsxNames` can find bound in

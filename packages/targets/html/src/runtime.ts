@@ -1,5 +1,5 @@
 /**
- * `@mxlang/html/runtime` — the output sink a compiled template renders into
+ * `@mxlang/target-html/runtime` — the output sink a compiled template renders into
  * (decision 155, the Marko render model).
  *
  * Every compiled unit has two entries: `render(input, out)`, which writes its

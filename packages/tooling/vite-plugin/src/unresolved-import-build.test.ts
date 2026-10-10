@@ -6,7 +6,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import mx from "./index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
-// Inside the package, not `tmpdir()`: a compiled page imports `@mxlang/html`
+// Inside the package, not `tmpdir()`: a compiled page imports `@mxlang/target-html`
 // by bare specifier, which only resolves from within the package tree.
 const root = mkdtempSync(join(here, "..", ".tmp-unresolved-import-"));
 
@@ -367,7 +367,7 @@ export interface Input { name: string }
     expect(seen.filter((id) => id === "./helper.ts")).toHaveLength(1);
     expect(seen.filter((id) => id === "./card.mx")).toHaveLength(1);
     // The emitter's own import goes through the same probe.
-    expect(seen.filter((id) => id === "@mxlang/html")).toHaveLength(1);
+    expect(seen.filter((id) => id === "@mxlang/target-html")).toHaveLength(1);
   });
 
   it("a valid import still builds", async () => {

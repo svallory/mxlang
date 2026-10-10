@@ -7,7 +7,7 @@
  * plausible author names — so a `<const>` of the same name was *shadowed*
  * inside the callback and the loop rendered wrong values with no error.
  *
- * The emitter is shared with `@mxlang/preact` and `@mxlang/hono` (this file's
+ * The emitter is shared with `@mxlang/host-preact` and `@mxlang/host-hono` (this file's
  * cases are asserted there too); this suite runs the same cases through
  * React's own runtime, per the host-parity rule the brief states.
  */

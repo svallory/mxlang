@@ -6,9 +6,9 @@
  * the language, this package is the core, and each host supplies declarations
  * plus an `Emitter`.
  *
- * This file previously served two dialects — `@mxlang/html`'s retired `.mx`
- * dialect, alongside `@mxlang/html`'s stock `.marko` — until decision
- * 68 retired `.mx` and deleted `@mxlang/html` entirely. Two things that were
+ * This file previously served two dialects — `@mxlang/target-html`'s retired `.mx`
+ * dialect, alongside `@mxlang/target-html`'s stock `.marko` — until decision
+ * 68 retired `.mx` and deleted `@mxlang/target-html` entirely. Two things that were
  * true while both existed, kept here because they still explain choices this
  * core makes:
  *
@@ -801,8 +801,8 @@ export function assertPositioned(error: unknown): void {
  * Marko's own failure for a tag name nothing resolves ("Unable to find
  * entry point for custom tag `<Name>`.", verified against
  * `@marko/compiler`/`marko` 5.42.5/6.3.51 — see decision 114). Every
- * Marko-parity host (`@mxlang/html`, `@mxlang/solid`, the shared preact/
- * react/hono emitter, `@mxlang/astro`) reports this exact wording through
+ * Marko-parity host (`@mxlang/target-html`, `@mxlang/host-solid`, the shared preact/
+ * react/hono emitter, `@mxlang/host-astro`) reports this exact wording through
  * its own `rejectUnknownTag` hook; exported once here so the literal string
  * lives in one place instead of being hand-copied at each call site
  * (`source-bindings-silent-parse-failure`, filed from the PR #156 review).
@@ -1348,7 +1348,7 @@ export function hasContent(children: Node[]): boolean {
  * `<button (click)="go()">`: Angular's event binding reads, in Marko, as tag
  * arguments `(click)` plus a default attribute value. A host that renders
  * event handlers (the one that declares `resolveAttributeMethod`) takes the
- * Marko spelling `onClick=go`; one that does not (`@mxlang/html`) has no form
+ * Marko spelling `onClick=go`; one that does not (`@mxlang/target-html`) has no form
  * to suggest, so the message stays as it was.
  */
 /**

@@ -38,7 +38,7 @@ const FIXTURES = [
 /**
  * Rows deliberately not compared, each with the reason the runner prints.
  *
- * Empty, and twice over: the `table-of`/`solid` row (the `@mxlang/solid`
+ * Empty, and twice over: the `table-of`/`solid` row (the `@mxlang/host-solid`
  * `<for>` accessor/value bug, task `solid-for-accessor`) and the
  * `icon-template`/`solid` row (a discovered unit's import had no module scope
  * inside a `.solid.mx` region until the parser bridge hoisted it, tag-unit

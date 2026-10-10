@@ -55,7 +55,7 @@ Two limits:
 
 ## Imports MX adds
 
-A region is an expression, so anything it needs at module level is added to the module for you, once: the runtime import (`@mxlang/react/runtime`) when a class object or a `<try>` needs it, the import of a [discovered custom tag](/custom-tags/discovery/), and a few inline helpers.
+A region is an expression, so anything it needs at module level is added to the module for you, once: the runtime import (`@mxlang/host-react/runtime`) when a class object or a `<try>` needs it, the import of a [discovered custom tag](/custom-tags/discovery/), and a few inline helpers.
 
 ## Where errors show up
 

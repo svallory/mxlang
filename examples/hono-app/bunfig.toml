@@ -1,1 +1,1 @@
-preload = ["@mxlang/hono/bun"]
+preload = ["@mxlang/host-hono/bun"]

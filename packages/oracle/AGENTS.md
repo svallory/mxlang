@@ -33,13 +33,13 @@ Golden snapshots (`fixtures/<name>/__golden__/twin.<backend>.<variant>.js`) pin 
 ### `oracle:marko`: Marko parity for the stock `.marko` fixture set
 
 Decision 51: the parity target for Marko-syntax constructs is Marko itself,
-not Solid. Decision 68 retired `.mx`/`@mxlang/html`, so there is one dialect
+not Solid. Decision 68 retired `.mx`/`@mxlang/target-html`, so there is one dialect
 and one table: `bun run oracle:marko` (`packages/oracle/src/report-marko.ts`,
 delegating to `report-marko-stock.ts`) renders every fixture under
 `packages/targets/html/fixtures-marko/<name>/{input.marko,input.json,expected.html}`
 two ways — through the real Marko 6 toolchain (`@marko/compiler` 5.42.11 +
 `marko/translator`, exactly matching `marko@6.4.4`'s own dependency) and
-through `@mxlang/html`'s `compile()` — and compares both against
+through `@mxlang/target-html`'s `compile()` — and compares both against
 `expected.html` for **semantic** equality (`normalize-html.ts`'s
 `htmlEquals`: both sides parsed with `parse5` and compared by decoded
 tag/attribute/text/comment content, not by string spelling). `-- --strict` is
@@ -67,5 +67,5 @@ Two Marko-toolchain facts worth knowing before touching
 `packages/oracle/src/marko-compile-stock.ts`:
 
 - `compileFile`'s `translator` option must be resolved and passed as the imported module object (`import * as translator from "marko/translator"`), not the string `"marko/translator"` — passing the string fails to resolve relative to the compiler's own internal base path rather than the caller's `node_modules`.
-- `optimize: true` is required to get a plain server-HTML render: without it, `@marko/compiler` emits Marko's resume/hydration markers (an HTML comment plus an inline `<script>`) even under `output: "html"`. It does not fully suppress them — `<input>` and dynamic spread attributes still emit one regardless of `optimize` — so `normalize-html.ts`'s `stripMarkoResumeMarker` strips the trailing `<!--M_$…--><script>…</script>` pair before comparison: it is Marko hydration plumbing with no `@mxlang/html` equivalent to compare against, not template content, and its id/script body is randomly generated per compile so it can never byte-match anyway.
+- `optimize: true` is required to get a plain server-HTML render: without it, `@marko/compiler` emits Marko's resume/hydration markers (an HTML comment plus an inline `<script>`) even under `output: "html"`. It does not fully suppress them — `<input>` and dynamic spread attributes still emit one regardless of `optimize` — so `normalize-html.ts`'s `stripMarkoResumeMarker` strips the trailing `<!--M_$…--><script>…</script>` pair before comparison: it is Marko hydration plumbing with no `@mxlang/target-html` equivalent to compare against, not template content, and its id/script body is randomly generated per compile so it can never byte-match anyway.
 

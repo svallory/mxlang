@@ -12,7 +12,7 @@ The registry supplies tag discovery/policy wrappers
 and file kinds; `fileKindOf` matches suffixes and region language ids only.
 The `astro-template` pipeline is silent by suffix, never
 by language id alone. The `ng-template` pipeline is served by suffix too, but
-not silently: a `.ng.mx` compiles whole-file through `@mxlang/angular`'s
+not silently: a `.ng.mx` compiles whole-file through `@mxlang/host-angular`'s
 `compileNgMx` (direct import; the file is a TS module whose regions need the
 host's own parse, not the region bridge), and a whole-file `.mx` under the
 `angular-template` target compiles through the same package's `compile` — the
@@ -83,16 +83,16 @@ file. Three branches, in order, walking upward from the file for the nearest
 authoritative source, which doubles as the routing config decision 71's
 "mixed projects" case already needs for the Vite plugin/Bun loader; (2)
 failing that, if the `package.json` depends on **exactly one** `@mxlang/*`
-host package (`@mxlang/html`, `@mxlang/astro`), that host at its
+host package (`@mxlang/target-html`, `@mxlang/host-astro`), that host at its
 default policy; (3) otherwise, the translator's default (non-strict) policy.
-`@mxlang/astro` always compiles under `strictPolicy` (decision 71: it ships
+`@mxlang/host-astro` always compiles under `strictPolicy` (decision 71: it ships
 no stateful tags) — `resolvePolicyObject` in `diagnose.ts` special-cases
 `host: "astro"` to `strictPolicy` regardless of the field's own `strict`
 value, since that host has no other mode. `host: "solid"` remains a
-placeholder for a different reason than before: `@mxlang/solid` ships now
+placeholder for a different reason than before: `@mxlang/host-solid` ships now
 (the Solid host on `@mxlang/core`, see `packages/hosts/solid/AGENTS.md`), but this server has no
 `.solid.mx`-document diagnostics path yet — `.solid.mx` is MX regions inside
-a TypeScript module, not a whole-file Marko template the way `@mxlang/html`
+a TypeScript module, not a whole-file Marko template the way `@mxlang/target-html`
 compiles, so wiring it needs its own diagnose path, not just a `Policy`
 object. `resolveStrict` falls back to the translator's own default rather
 than throwing, keeping the rest of a mixed workspace diagnosed.
@@ -107,7 +107,7 @@ at their authored position, and `@angular/compiler-cli` is never loaded (not
 a dependency; `src/dist-build.test.ts` proves resolution fails and the module
 stays out of the cache after both angular compiles). A whole-file `.mx` under
 `host: "angular"` / `mx.target: "angular-template"` compiles through
-`@mxlang/angular`'s `compile` (the descriptor has no `load`, so the TS plugin
+`@mxlang/host-angular`'s `compile` (the descriptor has no `load`, so the TS plugin
 and Vite are unchanged; wiring their page path is separate scope). A `.ng.mx`
 reports no callee-dependency list yet (`compileNgMx` exposes none), so a
 watcher edge for an imported tag module is a follow-up. An unknown host on an
@@ -115,7 +115,7 @@ watcher edge for an imported tag module is a follow-up. An unknown host on an
 test is `packages/tooling/tsc/src/unknown-host-parity.test.ts`.
 An `.astro.mx` file (decision 134) is routed by kind too, before the
 `.ng.mx` check, and is deliberately silent: the server does not load
-`@mxlang/astro`, so Astro-template diagnostics come from `mx-tsc --astro` and
+`@mxlang/host-astro`, so Astro-template diagnostics come from `mx-tsc --astro` and
 the TS plugin, and the file must never reach the `.mx` compile (it ends in
 `.mx`). Test: `diagnose.test.ts`, "the Astro template file kind".
 

@@ -1,5 +1,5 @@
 {
-  "name": "@mxlang/html",
+  "name": "@mxlang/target-html",
   "version": "0.1.0",
   "description": "Compiles a .mx template to a runtime-free (input) => string function",
   "license": "MIT",

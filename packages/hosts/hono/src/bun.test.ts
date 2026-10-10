@@ -9,7 +9,7 @@ import { honoTargets } from "./index.ts";
 /**
  * Runs under `bun test`, not vitest: it exercises `Bun.plugin` and Bun's
  * dynamic `import()` of a `.mx` module, both Bun-runtime-only — the same
- * shape as `@mxlang/html`'s own `bun.test.ts`.
+ * shape as `@mxlang/target-html`'s own `bun.test.ts`.
  */
 
 /**
@@ -31,7 +31,7 @@ afterAll(() => {
   }
 });
 
-describe("@mxlang/hono/bun", () => {
+describe("@mxlang/host-hono/bun", () => {
   test("compiles a tag discovered beside the file, with no import", async () => {
     Bun.plugin(honoPlugin);
 
@@ -176,7 +176,7 @@ describe("@mxlang/hono/bun", () => {
     Bun.plugin(honoPlugin);
 
     // Astro's template kind (decision 134): an Astro component, lowered by
-    // `@mxlang/astro`. It ends in `.mx` but is not an MX page, and this
+    // `@mxlang/host-astro`. It ends in `.mx` but is not an MX page, and this
     // source would fail the string translator. Bun's default loader returns
     // the file's own path as the default export when no onLoad hook claims it.
     const dir = scratch("mxlang-hono-bun-astro-");
@@ -190,7 +190,7 @@ describe("@mxlang/hono/bun", () => {
   test("does not claim a .react.mx path", async () => {
     Bun.plugin(honoPlugin);
 
-    // A `.react.mx` is TSX with MX regions (`@mxlang/react`'s file kind),
+    // A `.react.mx` is TSX with MX regions (`@mxlang/host-react`'s file kind),
     // compiled by the Vite plugin; claimed here it would be translated as a
     // whole-file `.mx`. Declined, Bun's default loader returns the path.
     const dir = mkdtempSync(join(tmpdir(), "mxlang-hono-bun-react-"));
@@ -207,7 +207,7 @@ describe("@mxlang/hono/bun", () => {
   test("does not claim a .preact.mx path", async () => {
     Bun.plugin(honoPlugin);
 
-    // A `.preact.mx` is TSX with MX regions (`@mxlang/preact`'s file kind),
+    // A `.preact.mx` is TSX with MX regions (`@mxlang/host-preact`'s file kind),
     // compiled by the Vite plugin; claimed here it would be translated as a
     // whole-file `.mx`. Declined, Bun's default loader returns the path.
     const dir = mkdtempSync(join(tmpdir(), "mxlang-hono-bun-preact-"));
@@ -224,7 +224,7 @@ describe("@mxlang/hono/bun", () => {
   test("does not claim a .hono.mx path", async () => {
     Bun.plugin(honoPlugin);
 
-    // A `.hono.mx` is TSX with MX regions (`@mxlang/hono`'s own file kind),
+    // A `.hono.mx` is TSX with MX regions (`@mxlang/host-hono`'s own file kind),
     // compiled by the Vite plugin; claimed here it would be translated as a
     // whole-file `.mx`. Declined, Bun's default loader returns the path.
     const dir = mkdtempSync(join(tmpdir(), "mxlang-hono-bun-hono-"));

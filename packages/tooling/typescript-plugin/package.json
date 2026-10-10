@@ -24,11 +24,11 @@
     "@astrojs/compiler": "2.13.1",
     "@babel/parser": "7.29.8",
     "@jridgewell/sourcemap-codec": "1.6.0",
-    "@mxlang/angular": "workspace:*",
-    "@mxlang/astro": "workspace:*",
     "@mxlang/core": "workspace:*",
+    "@mxlang/host-angular": "workspace:*",
+    "@mxlang/host-astro": "workspace:*",
+    "@mxlang/targets": "workspace:*",
     "@mxlang/tsx-bridge": "workspace:*",
-    "@mxlang/target-registry": "workspace:*",
     "@volar/language-core": "2.4.28",
     "@volar/typescript": "2.4.28"
   },
@@ -50,11 +50,11 @@
     }
   },
   "devDependencies": {
-    "@mxlang/angular-checker": "workspace:*",
     "@angular/compiler": "22.1.7",
     "@angular/compiler-cli": "22.1.7",
     "@angular/core": "22.1.7",
     "@astrojs/language-server": "2.16.16",
+    "@mxlang/angular-checker": "workspace:*",
     "typescript": "6.0.3"
   }
 }

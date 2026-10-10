@@ -1,6 +1,6 @@
 /**
  * Ambient typing for `import page from "./page.mx"` under either loader
- * (`@mxlang/html/bun` or `@mxlang/vite-plugin`'s `.mx` handling).
+ * (`@mxlang/target-html/bun` or `@mxlang/vite-plugin`'s `.mx` handling).
  *
  * `any` rather than each file's real `Input` interface: per-file typing needs
  * a virtual-file projection of the compiled module, which is the phase-3
@@ -16,7 +16,7 @@
  * accepts, since MX only supports the MX 1.0 subset of Marko syntax.
  */
 declare module "*.mx" {
-  import type { Out } from "@mxlang/html/runtime";
+  import type { Out } from "@mxlang/target-html/runtime";
 
   export function render(input: unknown, out: Out): unknown;
   const template: ((input: unknown) => string) & { render: typeof render };

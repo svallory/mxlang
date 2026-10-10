@@ -38,7 +38,7 @@ type P5Node = DefaultTreeAdapterMap["childNode"];
  * indentation as inter-tag whitespace), or a Marko resume/hydration marker
  * (an `<!--M_$…-->` comment immediately followed by an inline `<script>`
  * that revives it — stripped before parsing; these are Marko hydration
- * plumbing, not template content, and `@mxlang/html` has no equivalent
+ * plumbing, not template content, and `@mxlang/target-html` has no equivalent
  * to compare against).
  */
 export interface HtmlEqualsOptions {
@@ -46,7 +46,7 @@ export interface HtmlEqualsOptions {
    * Compare each element's attributes as a *set* rather than in source order.
    *
    * Off by default, because attribute order is real output for a host that
-   * builds its own HTML string: `oracle:marko` asserts that `@mxlang/html`
+   * builds its own HTML string: `oracle:marko` asserts that `@mxlang/target-html`
    * reproduces Marko's own `value`-before-`type` hoist on an `<input>`, which
    * a browser can observe.
    *
@@ -88,7 +88,7 @@ export function htmlEquals(
  * `optimize: true` for some constructs (an `<input>`, a dynamic spread) —
  * see `marko-compile-stock.ts`'s own doc comment. The marker's exact id/script
  * body is randomly generated per compile, so it can never byte-match
- * anything on the `@mxlang/html` side; stripping it here is the harness
+ * anything on the `@mxlang/target-html` side; stripping it here is the harness
  * treating it as what it is (hydration plumbing), not silently hiding a
  * real content difference — everything preceding the marker is still
  * compared normally.

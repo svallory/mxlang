@@ -325,7 +325,9 @@ describe("compileTagModule: content projection", () => {
       "export interface Input { title: string; header?: AttrTag }\n<h2>${input.title}</h2>${input.header()}\n",
     );
 
-    expect(code).toContain('import type { AttrTag } from "@mxlang/angular";');
+    expect(code).toContain(
+      'import type { AttrTag } from "@mxlang/host-angular";',
+    );
     expect(code).toContain("@NgInput({ required: true }) title!: string;");
     expect(code).not.toContain("@NgInput() header");
     expect(templateOf(code)).toContain(
@@ -353,7 +355,7 @@ describe("compileTagModule: content projection", () => {
       throw new Error("expected compile to fail");
     } catch (error) {
       expect((error as Error).message).toContain(
-        "@mxlang/angular can't read projected content `header` as a value; render it with <${input.header.content}/>",
+        "@mxlang/host-angular can't read projected content `header` as a value; render it with <${input.header.content}/>",
       );
       expect((error as { line?: number }).line).toBe(2);
     }

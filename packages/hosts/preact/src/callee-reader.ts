@@ -4,7 +4,7 @@ import { parse as parseMx } from "@mxlang/tsx-bridge";
 /**
  * Reads a JSX region-file callee's `Input` (`.react.mx`, and the other JSX
  * region kinds that share this engine) for core's caller analysis: the JSX
- * counterpart of `@mxlang/solid`'s `readSolidCalleeInput`, offered on each
+ * counterpart of `@mxlang/host-solid`'s `readSolidCalleeInput`, offered on each
  * JSX descriptor's file kind.
  *
  * Only module declarations are read, so region bodies are not compiled

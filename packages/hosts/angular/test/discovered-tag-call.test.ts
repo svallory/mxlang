@@ -114,7 +114,7 @@ describe("calling a discovered tag from a page", () => {
         "card.mx": "export interface Input { item?: AttrTag[] }\n<section/>\n",
       }),
     ).toThrow(
-      "array attribute tag `<@item>` isn't supported by @mxlang/angular",
+      "array attribute tag `<@item>` isn't supported by @mxlang/host-angular",
     );
   });
 

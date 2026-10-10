@@ -42,7 +42,7 @@ console.log(await render(path, input));
  * Runs the emitted module for real, without a bundler.
  *
  * The compiled output is TypeScript that imports `escape` from
- * `@mxlang/html` and any component by its `.marko` path. Bun's own module
+ * `@mxlang/target-html` and any component by its `.marko` path. Bun's own module
  * loader runs it: this registers a loader for `.marko` (the shipped plugin in
  * `bun.ts` deliberately claims only `.mx`) that hands `compileFile`'s output
  * to the TypeScript stripper, then imports the fixture. Nothing here knows

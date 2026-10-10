@@ -100,19 +100,19 @@ The projection hosts reject shapes they cannot carry instead of dropping data.
 
 | Message | Cause |
 | --- | --- |
-| `` array attribute tag `<@item>` isn't supported by @mxlang/astro: a slot is keyed by name `` | An Astro repeat, array declaration, or loop needs several values under one slot name. |
-| `` attributes on `<@header>` aren't supported by @mxlang/astro: a slot carries markup, not data `` | An Astro slot has no attribute-data channel. |
-| `` params on `<@header>` aren't supported by @mxlang/astro: a slot carries rendered markup, not a function `` | An Astro slot cannot call back into projected markup. |
-| `` nested attribute tags inside `<@header>` aren't supported by @mxlang/astro: a slot is keyed by one name and has no nested data shape `` | An Astro slot cannot carry nested properties. |
-| ``<@header/> has no body; @mxlang/astro projects attribute-tag bodies by name`` | An Astro slot has nothing to project. |
-| `` array attribute tag `<@item>` isn't supported by @mxlang/angular: a projection is keyed by name `` | An Angular repeat, array declaration, or loop needs several values under one projection selector. |
-| `` attributes on `<@header>` aren't supported by @mxlang/angular: a projection carries nodes, not data `` | Angular projection has no attribute-data channel. |
-| `` params on `<@header>` aren't supported by @mxlang/angular: content projection cannot pass values back into projected nodes `` | `<ng-content>` cannot call back into projected nodes. |
-| `` nested attribute tags inside `<@header>` aren't supported by @mxlang/angular: a projection has no nested data shape `` | Angular projection cannot carry nested properties. |
-| ``<@header/> has no body; @mxlang/angular projects attribute-tag bodies by name`` | An Angular projection has nothing to place. |
+| `` array attribute tag `<@item>` isn't supported by @mxlang/host-astro: a slot is keyed by name `` | An Astro repeat, array declaration, or loop needs several values under one slot name. |
+| `` attributes on `<@header>` aren't supported by @mxlang/host-astro: a slot carries markup, not data `` | An Astro slot has no attribute-data channel. |
+| `` params on `<@header>` aren't supported by @mxlang/host-astro: a slot carries rendered markup, not a function `` | An Astro slot cannot call back into projected markup. |
+| `` nested attribute tags inside `<@header>` aren't supported by @mxlang/host-astro: a slot is keyed by one name and has no nested data shape `` | An Astro slot cannot carry nested properties. |
+| ``<@header/> has no body; @mxlang/host-astro projects attribute-tag bodies by name`` | An Astro slot has nothing to project. |
+| `` array attribute tag `<@item>` isn't supported by @mxlang/host-angular: a projection is keyed by name `` | An Angular repeat, array declaration, or loop needs several values under one projection selector. |
+| `` attributes on `<@header>` aren't supported by @mxlang/host-angular: a projection carries nodes, not data `` | Angular projection has no attribute-data channel. |
+| `` params on `<@header>` aren't supported by @mxlang/host-angular: content projection cannot pass values back into projected nodes `` | `<ng-content>` cannot call back into projected nodes. |
+| `` nested attribute tags inside `<@header>` aren't supported by @mxlang/host-angular: a projection has no nested data shape `` | Angular projection cannot carry nested properties. |
+| ``<@header/> has no body; @mxlang/host-angular projects attribute-tag bodies by name`` | An Angular projection has nothing to place. |
 
 Angular additionally reports
-`` @mxlang/angular can't read projected content `header` as a value; render it
+`` @mxlang/host-angular can't read projected content `header` as a value; render it
 with <${input.header.content}/> `` for conditions, property reads, and
 pass-throughs. Calling projected content with arguments reports
 `` `input.header(…)` passes arguments to content, which Angular's content

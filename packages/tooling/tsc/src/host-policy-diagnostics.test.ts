@@ -28,7 +28,7 @@ afterEach(() => {
   }
 });
 
-/** `@mxlang/html` is not installed in a temp dir; the generated import resolves to the workspace source. */
+/** `@mxlang/target-html` is not installed in a temp dir; the generated import resolves to the workspace source. */
 const HTML_SOURCE = join(
   import.meta.dirname,
   "..",
@@ -51,7 +51,7 @@ const TSCONFIG = JSON.stringify({
     types: [],
     allowImportingTsExtensions: true,
     experimentalDecorators: true,
-    paths: { "@mxlang/html": [HTML_SOURCE] },
+    paths: { "@mxlang/target-html": [HTML_SOURCE] },
   },
   include: ["src"],
 });

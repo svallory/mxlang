@@ -1,4 +1,4 @@
-# `@mxlang/preact`
+# `@mxlang/host-preact`
 
 MX's Preact host: a `.mx` template compiles to a **Preact
 component module** — JSX text carrying its own `@jsxImportSource` pragma, with
@@ -7,7 +7,7 @@ the author's imports and `static` blocks at module scope and their
 
 The fourth emitter on `@mxlang/core`'s IR (decisions 71, 79, 81, 82), and the
 first whose target has no control-flow components at all. Where
-`@mxlang/solid` has `<Show>`/`<For>` and `@mxlang/astro` has its own template
+`@mxlang/host-solid` has `<Show>`/`<For>` and `@mxlang/host-astro` has its own template
 syntax, Preact has plain JSX plus JavaScript — so every structural kind lowers
 to an *expression*, exactly as a Preact author would write it by hand.
 
@@ -21,7 +21,7 @@ Preact-specific code.
 // package.json
 {
   "dependencies": {
-    "@mxlang/preact": "workspace:*",
+    "@mxlang/host-preact": "workspace:*",
     "preact": "10.29.8"
   },
   "mx": { "host": "preact" }
@@ -153,7 +153,7 @@ row instead.
 Preact has no built-in error boundary component. It has the *hook* —
 `componentDidCatch` on a class component — but no component wrapping it, and
 `preact/compat`'s `Suspense` catches thrown *promises* rather than errors. So
-this package ships both, in `@mxlang/preact/runtime`:
+this package ships both, in `@mxlang/host-preact/runtime`:
 
 - **`MxErrorBoundary`** — a class component using `componentDidCatch` and
   `getDerivedStateFromError`, for `<@catch>`. Its `fallback` takes either a
@@ -190,7 +190,7 @@ import { useState } from "preact/hooks";
 
 A `static` block hoists to **module scope** and runs once per module, so a
 hook there is a rules-of-hooks violation. That is a property of the target,
-and this host does not try to detect it — the same reason `@mxlang/html` does
+and this host does not try to detect it — the same reason `@mxlang/target-html` does
 not detect a template that renders `[object Object]`.
 
 ## Errors
@@ -228,7 +228,7 @@ JSX decides element-vs-component by **case**: `<badge/>` is the DOM element
 `tags/`-discovered `badge.marko` is a component called `<badge/>`.
 
 This host follows Marko's rule — the taglib lookup, and the template's own
-PascalCase imports and `<define>`s, the same as `@mxlang/html` — and renames a
+PascalCase imports and `<define>`s, the same as `@mxlang/target-html` — and renames a
 taglib-discovered component in the emitted JSX, binding `MxBadge` beside it.
 A lowercase `import` or `<define>` is never called as a tag (decision 164): a
 lowercase tag naming one is the native element when it is one (with a
@@ -240,7 +240,7 @@ warning), and a positioned error when it is not and the binding can be a tag
 
 ```
 bun run oracle:preact          # render parity against the html target
-bunx vitest run --root ../../.. --project @mxlang/preact
+bunx vitest run --root ../../.. --project @mxlang/host-preact
 ```
 
 `oracle:preact` compiles every fixture in the stock `.marko` set
@@ -259,7 +259,7 @@ would report a difference in Preact's output as a difference in MX's lowering.
 The lowering here is React's lowering. The two dialects differ in a handful of
 *names* — the JSX import source, `class` versus `className`, which module the
 error boundary comes from — and those live in `dialect.ts`'s `JsxDialect` object,
-so a `@mxlang/react` package can pass its own and reuse this emitter rather
+so a `@mxlang/host-react` package can pass its own and reuse this emitter rather
 than fork it. A knob that would require an `if (dialect.kind === "react")` in
 the emitter does not belong there: that would mean the dialects have genuinely
 diverged, and the fork would be the honest answer.

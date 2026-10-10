@@ -9,7 +9,7 @@ import markoPlugin from "./bun.ts";
  * loaded here, and a call that finds one is a compile error.
  */
 
-// Inside the package, not `tmpdir()`: the emitted modules import `@mxlang/html`
+// Inside the package, not `tmpdir()`: the emitted modules import `@mxlang/target-html`
 // by bare specifier, which only resolves from within the package tree.
 const root = mkdtempSync(join(import.meta.dirname, "..", ".tmp-marko-tags-"));
 

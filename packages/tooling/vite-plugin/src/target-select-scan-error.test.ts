@@ -5,9 +5,8 @@ import { TranslateError } from "@mxlang/core";
 import { expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({ scanError: undefined as Error | undefined }));
-vi.mock("@mxlang/target-registry", async (importOriginal) => {
-  const original =
-    await importOriginal<typeof import("@mxlang/target-registry")>();
+vi.mock("@mxlang/targets", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@mxlang/targets")>();
   return {
     ...original,
     scanCached: (...args: Parameters<typeof original.scanCached>) => {

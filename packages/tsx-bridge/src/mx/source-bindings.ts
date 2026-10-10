@@ -9,7 +9,7 @@ import { isFunctionLikeValue } from "@mxlang/core";
  * compiler stage (native or Babel) auto-imports every built-in it sees (see
  * `packages/hosts/solid/AGENTS.md`, "Solid 2 target and pin policy"). The
  * type-check projection (`@mxlang/typescript-plugin`'s `appendSolidBuiltinImport`)
- * and the resolvability check `@mxlang/solid`'s `isComponent` runs (decision
+ * and the resolvability check `@mxlang/host-solid`'s `isComponent` runs (decision
  * 114) both need this exact list, so it lives here once rather than twice.
  */
 export const SOLID_BUILTIN_TAGS: ReadonlyArray<{
@@ -59,7 +59,7 @@ export interface SourceBindingsOptions {
  *
  * Shared between `@mxlang/typescript-plugin` (`appendSolidBuiltinImport`,
  * deciding whether to inject a synthetic import for a Solid built-in) and
- * `@mxlang/astro` (`lowerAstroMx`, deciding whether a capitalized tag
+ * `@mxlang/host-astro` (`lowerAstroMx`, deciding whether a capitalized tag
  * resolves through the `---` fence's own scope — decision 114). Parses with
  * the same Babel used elsewhere in this package rather than scanning lines,
  * since a line-based probe cannot tell a bound identifier from a substring

@@ -196,7 +196,7 @@ describe("loadMx(path)", () => {
 
   describe("round 3: an options-bearing loadMx call must not taint the shared nested-tag cache", () => {
     // No option this host has today (`strict`, `resolveImport`, `customTags`)
-    // changes `@mxlang/html`'s emitted runtime bytes or `compile()`'s own
+    // changes `@mxlang/target-html`'s emitted runtime bytes or `compile()`'s own
     // `dependencies` array for an ordinary template (measured directly: a
     // `resolveImport` redirect never changes the emitted `import` statement's
     // specifier, and `strict` only ever turns a successful compile into a
@@ -305,7 +305,7 @@ describe("loadMx(path)", () => {
     // Node's own "strip-only" mode explicitly refuses — the vitest process
     // itself is Node, so this is the path this suite already exercises,
     // per this file's own header comment). This must surface as an
-    // `@mxlang/html`-branded error naming this specific file and the
+    // `@mxlang/target-html`-branded error naming this specific file and the
     // no-bundler-helpers erasable-syntax-only constraint, not Node's own
     // opaque `SyntaxError: TypeScript enum is not supported in strip-only
     // mode`.
@@ -463,7 +463,7 @@ describe("mx-helpers on Node (spawned subprocess, registerHooks path)", () => {
     const { dir, cleanup } = makeFixture();
     try {
       const script = [
-        'import { loadMx } from "@mxlang/html";',
+        'import { loadMx } from "@mxlang/target-html";',
         `const render1 = loadMx(${JSON.stringify(join(dir, "page.mx"))});`,
         "const before = render1({});",
         "process.stdout.write(JSON.stringify({ before }));",
@@ -473,7 +473,7 @@ describe("mx-helpers on Node (spawned subprocess, registerHooks path)", () => {
       const nodeModulesLink = join(dir, "node_modules");
       // A Node subprocess spawned from a temp fixture dir needs the same
       // dependency-resolution setup any real consumer project would have;
-      // this repo's own workspace root already has `@mxlang/html` and
+      // this repo's own workspace root already has `@mxlang/target-html` and
       // `@mxlang/core` installed, so this points there instead of copying.
       if (!existsSync(nodeModulesLink)) {
         execFileSync("ln", [

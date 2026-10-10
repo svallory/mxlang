@@ -7,12 +7,12 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { compileNgMx } from "@mxlang/angular";
 import {
   type AngularChecker,
   createAngularChecker,
   type Diagnostic,
 } from "@mxlang/angular-checker";
+import { compileNgMx } from "@mxlang/host-angular";
 import type { CompiledNgMx } from "@mxlang/typescript-plugin";
 import { afterEach, describe, expect, it } from "vitest";
 import { reportNgDiagnostics } from "./index.ts";

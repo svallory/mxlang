@@ -611,7 +611,7 @@ describe("decision 114: module-scope resolution through the real parse() pipelin
     // imported component already surfaces as the real parse error today,
     // not `sourceBindings`'s own silent-empty-set fallback (that fallback
     // is reachable only through sourceBindings' own direct callers --
-    // @mxlang/astro's fence and @mxlang/typescript-plugin's
+    // @mxlang/host-astro's fence and @mxlang/typescript-plugin's
     // appendSolidBuiltinImport -- neither of which is this pipeline).
     // Pinned here so it cannot regress silently if collectModuleScope's own
     // babelParse call is ever wrapped in a catch.

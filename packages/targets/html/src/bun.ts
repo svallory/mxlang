@@ -16,10 +16,10 @@ import { compile, htmlTargets } from "./index.ts";
  * default-exported function), so `loader: "ts"` hands it straight to Bun's
  * own stripper — no JSX, no second transform needed.
  *
- * Usable both as a preload (`bunfig.toml`'s `preload = ["@mxlang/html/bun"]`
+ * Usable both as a preload (`bunfig.toml`'s `preload = ["@mxlang/target-html/bun"]`
  * runs a preloaded module for its side effects — it does not itself call
  * `Bun.plugin` on a default export — so this module registers itself at
- * import time) and at runtime (`import markoPlugin from "@mxlang/html/bun";
+ * import time) and at runtime (`import markoPlugin from "@mxlang/target-html/bun";
  * Bun.plugin(markoPlugin)`, which registers the same plugin object again;
  * `Bun.plugin` is idempotent for an already-registered plugin object).
  *
@@ -66,7 +66,7 @@ export function mxFilter(targets: TargetLookup): RegExp {
 /**
  * Builds the loader over `targets`: the registered targets it scans and
  * compiles under (decisions 129 and 132). It defaults to this package's own
- * descriptor, which is what a plain `import "@mxlang/html/bun"` wants; a
+ * descriptor, which is what a plain `import "@mxlang/target-html/bun"` wants; a
  * caller that compiles for several targets (the oracle, a tool with the
  * built-in registry in hand) passes that lookup instead, so the loader
  * recognises every registered host's file kinds rather than only html's own
@@ -88,7 +88,7 @@ export function createHtmlBunPlugin(
           // Own-only loaders cannot establish that a peer host is unknown.
           scan.diagnostics,
           reportedScanDiagnostics,
-          (d) => console.warn(`@mxlang/html: ${d.file}: ${d.message}`),
+          (d) => console.warn(`@mxlang/target-html: ${d.file}: ${d.message}`),
         );
         const defaultTag = configuredDefaultTag(
           path,

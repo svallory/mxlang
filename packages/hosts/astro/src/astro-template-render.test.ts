@@ -442,7 +442,7 @@ describe("local-value-as-tag-parity: non-import fence binding used as a tag", ()
         "Test.astro.mx",
       ),
     ).toThrow(
-      "`<Tag>` is bound in the frontmatter to a value MX can't prove is a component, and @mxlang/astro can't render a tag name decided at runtime. Bind it to a component (an import, function or class), or use a lowercase element.",
+      "`<Tag>` is bound in the frontmatter to a value MX can't prove is a component, and @mxlang/host-astro can't render a tag name decided at runtime. Bind it to a component (an import, function or class), or use a lowercase element.",
     );
   });
 

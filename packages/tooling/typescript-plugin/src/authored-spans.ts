@@ -1,5 +1,5 @@
 import { type CustomTag, type NativeTags, parseFragment } from "@mxlang/core";
-import { builtinLookup } from "@mxlang/target-registry";
+import { builtinLookup } from "@mxlang/targets";
 import type { AuthoredSpan } from "./unmapped-diagnostics.ts";
 
 /** A UTF-16 range into the parsed source (an MX node, field shape or Babel node). */

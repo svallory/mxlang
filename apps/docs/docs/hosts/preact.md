@@ -104,7 +104,7 @@ What changed:
 ## Setup
 
 ```bash
-bun add @mxlang/preact
+bun add @mxlang/host-preact
 bun add -d @mxlang/vite-plugin @mxlang/typescript-plugin @mxlang/tsc
 ```
 
@@ -138,7 +138,7 @@ In CI, run `mx-tsc --noEmit` where you ran `tsc --noEmit`: plain `tsc` does not 
 - A `key` on every `<for>` row.
 - A type check of each attribute tag the callee declares with `AttrTag`.
 
-The output is TSX. MX adds a few inline helpers for attribute values and imports `mxClass` from `@mxlang/preact/runtime` when a class object needs it. There is no MX component model at run time.
+The output is TSX. MX adds a few inline helpers for attribute values and imports `mxClass` from `@mxlang/host-preact/runtime` when a class object needs it. There is no MX component model at run time.
 
 ## One rule to know first
 

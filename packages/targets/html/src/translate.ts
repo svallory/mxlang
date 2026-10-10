@@ -1,8 +1,8 @@
 /**
- * `@mxlang/html`'s dialect policy: stock `.marko`, expressions-only.
+ * `@mxlang/target-html`'s dialect policy: stock `.marko`, expressions-only.
  *
- * Decision 66. The lowering core is shared with `@mxlang/html`
- * (`@mxlang/html`'s `core.ts`); this file supplies only what differs, and
+ * Decision 66. The lowering core is shared with `@mxlang/target-html`
+ * (`@mxlang/target-html`'s `core.ts`); this file supplies only what differs, and
  * every difference is a property of *stock Marko's conventions* rather than a
  * preference:
  *
@@ -10,7 +10,7 @@
  *   convention is that `<@header>` reaches the component as `input.header`,
  *   rendered with `<${input.header}/>`, and that a *repeated* attribute tag
  *   arrives as an array. Both verified against Marko 5.42.5's own server
- *   render, not assumed. `@mxlang/html` passes callable function props
+ *   render, not assumed. `@mxlang/target-html` passes callable function props
  *   instead (S3); a translator that confused the two would compile happily
  *   and render the wrong markup.
  * - **Components are discovered**, through Marko's taglib lookup: an
@@ -215,7 +215,7 @@ function isElement(name: string, _ctx: Ctx): boolean {
 /**
  * Whether a tag name resolves to a component.
  *
- * An `import` binding or a `<define>` is one, as in `@mxlang/html`. So is a
+ * An `import` binding or a `<define>` is one, as in `@mxlang/target-html`. So is a
  * tag Marko *discovered* — a `.marko` file in a `tags/` directory beside the
  * template — which is the convention this dialect exists to support and the
  * one MX's own dialect deliberately does not have.
@@ -263,7 +263,7 @@ function isComponent(name: string, ctx: Ctx): boolean {
  * syntax compiles through Marko, so there is nothing to compare against.
  *
  * The hook exists so the message is *this* dialect's. Without it the shared
- * core falls back to `@mxlang/html`'s wording ("not supported in a standalone
+ * core falls back to `@mxlang/target-html`'s wording ("not supported in a standalone
  * template"), which is `.mx`'s vocabulary leaking into a Marko-parity target.
  */
 function rejectModifier(
@@ -489,7 +489,7 @@ function resolveDelegatedTag(
 export const DEFAULT_TAG = "div";
 
 export const policy: Policy = {
-  name: "@mxlang/html",
+  name: "@mxlang/target-html",
   nativeTags: WEB_ELEMENTS,
   attrTags: 2,
   defineCallPassesAttrs: true,
@@ -530,7 +530,7 @@ export const policy: Policy = {
 };
 
 /** Runtime import used by this host's emitted modules. */
-export const escapeFrom = "@mxlang/html";
+export const escapeFrom = "@mxlang/target-html";
 
 /**
  * Reactive and debug-only constructs, rejected by name instead of rendering
@@ -794,7 +794,7 @@ function defaultExportIn(
  * needs to read ("not assignable to type 'typeof Comp'"). It is a pure
  * restatement of the declaration's own type, so it widens nothing, and it is
  * erased with the rest of the types: the emitted JavaScript still ends in
- * `export default Name;`, which is what `@mxlang/astro`'s page wrapper
+ * `export default Name;`, which is what `@mxlang/host-astro`'s page wrapper
  * matches after the bundler strips types.
  */
 function brandedTail(name: string, inputType: string): string {
@@ -819,7 +819,7 @@ function namedRenderFrom(defaultExport: string): string {
  * The brand a host's `check()` tests for.
  *
  * `Symbol.for`, not a unique symbol: the property is written by the compiled
- * module and read by a *different* package (`@mxlang/astro`'s renderer), quite
+ * module and read by a *different* package (`@mxlang/host-astro`'s renderer), quite
  * possibly from a different copy of this one on disk, so the two sides must
  * agree on the symbol by name through the global registry rather than by
  * identity through a shared import.
@@ -870,7 +870,7 @@ export function brandRender(code: string): string {
   const defaultExport = defaultExportIn(code);
   if (!defaultExport) {
     throw new Error(
-      "@mxlang/html: cannot brand the compiled module — the emitted " +
+      "@mxlang/target-html: cannot brand the compiled module — the emitted " +
         `code does not match the expected default export shape ${String(
           DEFAULT_EXPORT,
         )}. The core's emitter has changed shape; update DEFAULT_EXPORT in ` +
@@ -942,7 +942,7 @@ export function finalizeModuleWithMappings(emitted: MappedCode): MappedCode {
   if (!defaultExport) {
     // Reuse the detailed seam failure from the string-only path.
     brandRender(emitted.code);
-    throw new Error("@mxlang/html: unreachable missing default export");
+    throw new Error("@mxlang/target-html: unreachable missing default export");
   }
   const { line, name, inputType } = defaultExport;
   const withHelpers =

@@ -1,5 +1,5 @@
 import { For, Show } from "solid-js";
-import type { AttrTag } from "@mxlang/solid";
+import type { AttrTag } from "@mxlang/host-solid";
 import type { Member } from "./members.ts";
 
 export interface Input {

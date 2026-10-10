@@ -1,4 +1,4 @@
-import type { AttrTag } from "@mxlang/react";
+import type { AttrTag } from "@mxlang/host-react";
 import type { ReactNode } from "react";
 
 export interface Input {

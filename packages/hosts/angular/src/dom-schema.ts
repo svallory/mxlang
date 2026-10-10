@@ -53,7 +53,7 @@ interface Schema {
   lowercased: Set<string>;
 }
 
-const HOW_TO_FIX = `install a supported @angular/compiler (${SUPPORTED_COMPILER_RANGE}) in your project (\`bun add -d @angular/compiler\`); @mxlang/angular reads Angular's DOM schema from it to decide between \`[name]\` and \`[attr.name]\` for a dynamic attribute on a native element. Restart the editor's TypeScript server or the dev server after installing it`;
+const HOW_TO_FIX = `install a supported @angular/compiler (${SUPPORTED_COMPILER_RANGE}) in your project (\`bun add -d @angular/compiler\`); @mxlang/host-angular reads Angular's DOM schema from it to decide between \`[name]\` and \`[attr.name]\` for a dynamic attribute on a native element. Restart the editor's TypeScript server or the dev server after installing it`;
 
 /** One schema per resolved `@angular/compiler` package. */
 const schemas = new Map<string, Schema>();
@@ -97,7 +97,7 @@ function load(fromFile: string): Schema {
   const types = registry._schema;
   if (!isTypeMap(types)) {
     throw new AngularCompilerUnavailableError(
-      `@angular/compiler ${version} no longer has the DomElementSchemaRegistry type map @mxlang/angular reads (checked against ${SCHEMA_SHAPE_CHECKED_AGAINST}); please report this to mx`,
+      `@angular/compiler ${version} no longer has the DomElementSchemaRegistry type map @mxlang/host-angular reads (checked against ${SCHEMA_SHAPE_CHECKED_AGAINST}); please report this to mx`,
     );
   }
   const lowercased = new Set<string>();

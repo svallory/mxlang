@@ -13,7 +13,7 @@ tasks:
 
   test:
     command: "vitest"
-    args: ["run", "--root", "../..", "--project", "@mxlang/preact"]
+    args: ["run", "--root", "../..", "--project", "@mxlang/host-preact"]
     inputs:
       - "src/**/*"
       - "/vitest.config.ts"

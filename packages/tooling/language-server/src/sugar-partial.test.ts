@@ -1,4 +1,4 @@
-import { defaultTarget, hostOf } from "@mxlang/target-registry";
+import { defaultTarget, hostOf } from "@mxlang/targets";
 import { describe, expect, it } from "vitest";
 import { diagnoseDocument } from "./diagnose.ts";
 

@@ -1,5 +1,5 @@
 /**
- * `@mxlang/html` — MX's vanilla HTML host, on `@mxlang/core`.
+ * `@mxlang/target-html` — MX's vanilla HTML host, on `@mxlang/core`.
  *
  * A `.mx` template becomes a pure `(input) => string` function: no runtime
  * beyond the `escape` helper, no framework. Everything generic —
@@ -46,7 +46,7 @@ export {
 export { policy, strictPolicy, TranslateError } from "./translate.ts";
 export type { CompileHtmlResult, CompileOptions, CompileResult, RawSourceMap };
 
-/** Attribute-tag value received by an `@mxlang/html` component. */
+/** Attribute-tag value received by an `@mxlang/target-html` component. */
 export type AttrTag<
   // biome-ignore lint/complexity/noBannedTypes: matches the public AttrTag default from decision 106
   C extends AttrTagConfig = {},

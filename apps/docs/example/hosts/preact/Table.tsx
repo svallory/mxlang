@@ -1,4 +1,4 @@
-import type { AttrTag } from "@mxlang/preact";
+import type { AttrTag } from "@mxlang/host-preact";
 import type { Member } from "./members.ts";
 
 export interface Input {

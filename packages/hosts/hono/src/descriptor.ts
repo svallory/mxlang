@@ -14,7 +14,7 @@ import {
   type TargetDescriptor,
   type TargetLookup,
 } from "@mxlang/core";
-import { DEFAULT_TAG } from "@mxlang/preact/emitter";
+import { DEFAULT_TAG } from "@mxlang/host-preact/emitter";
 import { honoDeclarations } from "./dialect.ts";
 
 /**
@@ -41,7 +41,7 @@ function targets(): TargetLookup {
 const descriptor: TargetDescriptor = {
   descriptorVersion: 0,
   name: "hono-jsx",
-  packageName: "@mxlang/hono",
+  packageName: "@mxlang/host-hono",
   defaultTag: DEFAULT_TAG,
   declarations: { default: honoDeclarations },
   load() {
@@ -75,11 +75,11 @@ const descriptor: TargetDescriptor = {
             ...input,
             targets: input.targets ?? targets(),
           }),
-        // The JSX hosts' one reader, in `@mxlang/preact`: the only place
+        // The JSX hosts' one reader, in `@mxlang/host-preact`: the only place
         // they import `@mxlang/tsx-bridge`.
         readCalleeInput: (request) =>
           (
-            require("@mxlang/preact/callee-reader") as typeof import("@mxlang/preact/callee-reader")
+            require("@mxlang/host-preact/callee-reader") as typeof import("@mxlang/host-preact/callee-reader")
           ).readJsxCalleeInput(request),
       },
     ],

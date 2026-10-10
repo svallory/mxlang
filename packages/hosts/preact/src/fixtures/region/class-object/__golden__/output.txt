@@ -1,4 +1,4 @@
-import { mxClass as __mxClass } from "@mxlang/preact/runtime";export default function Page(props: {active: boolean;}) {
+import { mxClass as __mxClass } from "@mxlang/host-preact/runtime";export default function Page(props: {active: boolean;}) {
   return <>
     <><p class={__mxClass({ on: props.active, off: !props.active })} style={{ color: "red" }}>x</p></>
     <><label for="n" class={__mxClass(["a", props.active && "b"])}>n</label></>

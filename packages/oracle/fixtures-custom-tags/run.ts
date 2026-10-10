@@ -12,11 +12,11 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { CustomTag, TemplateBackedTag } from "@mxlang/core";
-import { compileHonoMx } from "@mxlang/hono";
-import { compile as compileHtml } from "@mxlang/html";
-import { compilePreactMx } from "@mxlang/preact";
-import { compileReactMx } from "@mxlang/react";
-import { compileSolidMx, compileSolidUnit } from "@mxlang/solid";
+import { compileHonoMx } from "@mxlang/host-hono";
+import { compilePreactMx } from "@mxlang/host-preact";
+import { compileReactMx } from "@mxlang/host-react";
+import { compileSolidMx, compileSolidUnit } from "@mxlang/host-solid";
+import { compile as compileHtml } from "@mxlang/target-html";
 import { transform as nativeTransform } from "@solidjs/compiler";
 import { normalizeHtml } from "../src/normalize-html.ts";
 import icon from "./icon/icon.tag.ts";
@@ -231,17 +231,17 @@ async function loadModule(
     const resolveRuntimes = (source: string): string =>
       source
         .replace(
-          'from "@mxlang/html"',
-          `from ${JSON.stringify(require.resolve("@mxlang/html"))}`,
+          'from "@mxlang/target-html"',
+          `from ${JSON.stringify(require.resolve("@mxlang/target-html"))}`,
         )
         .replace(
-          '"@mxlang/preact/runtime"',
-          JSON.stringify(require.resolve("@mxlang/preact/runtime")),
+          '"@mxlang/host-preact/runtime"',
+          JSON.stringify(require.resolve("@mxlang/host-preact/runtime")),
         );
 
     // A tag unit is written beside the caller at the path the caller imports,
     // but under a runnable extension: Bun resolves a bare `.mx` import to the
-    // file's *path string*, not a module (that is what `@mxlang/html/bun`
+    // file's *path string*, not a module (that is what `@mxlang/target-html/bun`
     // exists to fix, and this harness loads compiled output directly rather
     // than through a loader). The caller's specifier is repointed to match, so
     // what is under test stays the emitted import, not the extension.

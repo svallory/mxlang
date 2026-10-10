@@ -46,9 +46,9 @@ CI's cause, measured with an event-loop-lag sampler (#390): vitest's main proces
 
 Exception packages (no unit test wiring required; verified elsewhere; keyed by workspace-relative path): every `examples/*` app except `angular-app` is e2e-only; `examples/angular-app` is `ng build`/`ng test`-verified manually; `packages/editors/zed` is build-verified in CI; `apps/docs` is built in verify. A new package without test wiring must be added to this list with a documented reason, or get a vitest project.
 
-`apps/docs` builds a landing page whose hero is a real `.mx` file, so its "built in verify" now covers a drift gate. `scripts/build-home.ts` compiles `apps/docs/example/home-example.mx` with `@mxlang/html` (custom tags discovered from `example/tags/` exactly as `packages/targets/html/src/example.ts` does), renders it across every branch, validates `example/home-example.markers.json` and `example/home-example.cards.json` against it, and writes the highlighted block into `docs/index.md` between its two `mx-home:generated` markers. Three consequences:
+`apps/docs` builds a landing page whose hero is a real `.mx` file, so its "built in verify" now covers a drift gate. `scripts/build-home.ts` compiles `apps/docs/example/home-example.mx` with `@mxlang/target-html` (custom tags discovered from `example/tags/` exactly as `packages/targets/html/src/example.ts` does), renders it across every branch, validates `example/home-example.markers.json` and `example/home-example.cards.json` against it, and writes the highlighted block into `docs/index.md` between its two `mx-home:generated` markers. Three consequences:
 
-- The docs build needs `bun install` **and** `bun run build` first (it imports `@mxlang/html`'s `dist/`).
+- The docs build needs `bun install` **and** `bun run build` first (it imports `@mxlang/target-html`'s `dist/`).
 - Editing the example or a marker means `bun run --cwd apps/docs build:home` and committing the regenerated `docs/index.md`. `bun run --cwd apps/docs check:home` is the read-only half: it fails when the committed block is stale **and** when a marker's `#fragment` is not an `id` in the built `site/` — docmd's heading slugs are prefixed with the page title, so they cannot be derived from the markdown. The `build` script runs it last, after `docmd build`, which is why it can read `site/`.
 - `bun run --cwd apps/docs check:anchors` (`scripts/anchors.ts`, wired into `build` after `check:home`) walks every `href` with a `#fragment` on the built `site/` and fails with one `page: href -> missing id` line per link that resolves to no `id`. It is the same walk `check:home` does for markers, widened to the whole site: `docmd validate` only checks that a link's *page* exists, so 21 links in pages the atoms docs work did not touch shipped broken (decision: docmd prefixes a heading id with its parent headings and the page's `# Title`, so `#the-idea` is really `#angular-the-idea`). Read the id out of the built HTML to fix one; `scripts/anchors.test.ts` pins the walk's rules against a synthetic tree and re-runs it over the real `site/` when a build exists (skipped on a fresh worktree).
 - `bun run --cwd apps/docs test` (vitest, `scripts/home-example.test.ts` and `scripts/mx-highlight.test.ts`) carries the same checks for anyone who runs only the test lane; `verify` and `pack-probe-docs` both run it.
@@ -106,10 +106,10 @@ A PR that touches `packages/*/src` or `packages/*/package.json` adds a fragment 
 
 A `.mx`/`.solid.mx`/`.ng.mx`/`.astro.mx` template flows through the system as follows:
 
-1. **Parse.** For whole-file `.mx`, `@marko/compiler` parses the Marko AST directly. For `.solid.mx` and `.ng.mx`, `@mxlang/tsx-bridge` (a vendored `@babel/parser` fork) finds MX regions inside a TypeScript module. For `.astro.mx`, `@mxlang/astro`'s `lowerAstroMx` (`packages/hosts/astro/src/astro-template.ts`) splits the file's `---` fence from its MX template body itself — no tree-sitter on this path; `packages/editors/tree-sitter-amx` is a separate, editor-only grammar for Zed syntax highlighting.
+1. **Parse.** For whole-file `.mx`, `@marko/compiler` parses the Marko AST directly. For `.solid.mx` and `.ng.mx`, `@mxlang/tsx-bridge` (a vendored `@babel/parser` fork) finds MX regions inside a TypeScript module. For `.astro.mx`, `@mxlang/host-astro`'s `lowerAstroMx` (`packages/hosts/astro/src/astro-template.ts`) splits the file's `---` fence from its MX template body itself — no tree-sitter on this path; `packages/editors/tree-sitter-amx` is a separate, editor-only grammar for Zed syntax highlighting.
 2. **Lower.** `@mxlang/core` (`packages/core/src/lower.ts`) consumes the Marko AST and resolves it into a host-independent IR (`packages/core/src/ir.ts`) — structural constructs (`<if>`, every `<for>` form, `<define>`, custom tags, `<try>`) become IR nodes, never host-specific code.
-3. **Emit.** Each host implements `Emitter<Out>` over that IR: `@mxlang/html` emits plain strings; a shared JSX emitter (`@mxlang/preact`) is reused by `@mxlang/react` and `@mxlang/hono`; `@mxlang/solid` emits Solid 2 JSX text; `@mxlang/astro` emits Astro template syntax; `@mxlang/angular` emits Angular template strings.
-4. **Region files (`.<host>.mx`, today `.solid.mx`, `.preact.mx` and `.react.mx`).** `@mxlang/tsx-bridge` finds each MX region and hands it to the region entry of the host whose file kind the suffix names (`HostFileKind.compileRegion`, routed by `@mxlang/target-registry`'s `regionCompileFor`; for `.solid.mx` that is `@mxlang/solid`'s `compileSolidMx`, for `.preact.mx` `@mxlang/preact`'s `compilePreactRegion` and for `.react.mx` `@mxlang/react`'s `compileReactRegion`, both over `@mxlang/preact`'s shared `compileJsxRegion`), which runs it through `@mxlang/core`'s `parseFragment`; the emitted text is spliced back into the surrounding TypeScript AST at the same span. The parser names no host: tools pass `mx: true` and the hook (decision 154).
+3. **Emit.** Each host implements `Emitter<Out>` over that IR: `@mxlang/target-html` emits plain strings; a shared JSX emitter (`@mxlang/host-preact`) is reused by `@mxlang/host-react` and `@mxlang/host-hono`; `@mxlang/host-solid` emits Solid 2 JSX text; `@mxlang/host-astro` emits Astro template syntax; `@mxlang/host-angular` emits Angular template strings.
+4. **Region files (`.<host>.mx`, today `.solid.mx`, `.preact.mx` and `.react.mx`).** `@mxlang/tsx-bridge` finds each MX region and hands it to the region entry of the host whose file kind the suffix names (`HostFileKind.compileRegion`, routed by `@mxlang/targets`'s `regionCompileFor`; for `.solid.mx` that is `@mxlang/host-solid`'s `compileSolidMx`, for `.preact.mx` `@mxlang/host-preact`'s `compilePreactRegion` and for `.react.mx` `@mxlang/host-react`'s `compileReactRegion`, both over `@mxlang/host-preact`'s shared `compileJsxRegion`), which runs it through `@mxlang/core`'s `parseFragment`; the emitted text is spliced back into the surrounding TypeScript AST at the same span. The parser names no host: tools pass `mx: true` and the hook (decision 154).
 5. **Tooling.** `@mxlang/vite-plugin` is the primary dev integration; `@mxlang/typescript-plugin`/`mx-tsc` type-check `.mx`/`.solid.mx`/`.ng.mx`/`.astro.mx` (`.ng.mx` gets TypeScript semantics in editors and `mx-tsc`, plus Angular template diagnostics in `mx-tsc` only via `@mxlang/angular-checker` with `@angular/compiler-cli` resolved from the user's project; the editor path and the language server land later) via a Volar virtual-file projection; `@mxlang/language-server` publishes host-policy diagnostics Marko's own LS can't see; editor support lives in `packages/editors/{vscode,zed}`.
 6. **Oracle.** `packages/oracle` is the byte/semantic-parity gate — compares MX output against Marko's own render (`oracle:marko`), the JSX hosts' own renderers (`oracle:preact`/`oracle:react`/`oracle:hono`), Solid's compiler (`oracle`), and Angular's compiler (`oracle:angular`).
 
@@ -140,7 +140,7 @@ decision entry that changes the language names the spec section it updates.
 
 ## Per-package instructions
 
-Packages and examples with their own `AGENTS.md` (each has a sibling `CLAUDE.md` symlink). `packages/hosts/` holds the hosts; `packages/targets/` holds the hostless targets (decision 132): `@mxlang/html` and `@mxlang/data`:
+Packages and examples with their own `AGENTS.md` (each has a sibling `CLAUDE.md` symlink). `packages/hosts/` holds the hosts; `packages/targets/` holds the hostless targets (decision 132): `@mxlang/target-html` and `@mxlang/data`:
 
 | Path | Covers |
 |---|---|
@@ -151,14 +151,14 @@ Packages and examples with their own `AGENTS.md` (each has a sibling `CLAUDE.md`
 | `packages/core/AGENTS.md` | `@mxlang/core`: IR, lowering, custom tags, `<try>`, tag discovery |
 | `packages/web-elements/AGENTS.md` | `@mxlang/web-elements`: the element table and its Marko pin |
 | `packages/targets/data/AGENTS.md` | `@mxlang/data`: the hostless tree target (package `@mxlang/data`); static tree, `parseData` |
-| `packages/targets/html/AGENTS.md` | `@mxlang/html`: string target, policy table, Bun loader, `.mx` import typing |
-| `packages/hosts/solid/AGENTS.md` | `@mxlang/solid` |
-| `packages/hosts/preact/AGENTS.md` | `@mxlang/preact` |
-| `packages/hosts/react/AGENTS.md` | `@mxlang/react` |
-| `packages/hosts/hono/AGENTS.md` | `@mxlang/hono` |
-| `packages/hosts/astro/AGENTS.md` | `@mxlang/astro`; `.astro.mx` AstroMX templates |
-| `packages/hosts/angular/AGENTS.md` | `@mxlang/angular` (in progress) |
-| `packages/target-registry/AGENTS.md` | `@mxlang/target-registry`: the built-in target descriptors and lookup (unstable, nothing consumes it yet) |
+| `packages/targets/html/AGENTS.md` | `@mxlang/target-html`: string target, policy table, Bun loader, `.mx` import typing |
+| `packages/hosts/solid/AGENTS.md` | `@mxlang/host-solid` |
+| `packages/hosts/preact/AGENTS.md` | `@mxlang/host-preact` |
+| `packages/hosts/react/AGENTS.md` | `@mxlang/host-react` |
+| `packages/hosts/hono/AGENTS.md` | `@mxlang/host-hono` |
+| `packages/hosts/astro/AGENTS.md` | `@mxlang/host-astro`; `.astro.mx` AstroMX templates |
+| `packages/hosts/angular/AGENTS.md` | `@mxlang/host-angular` (in progress) |
+| `packages/target-registry/AGENTS.md` | `@mxlang/targets` (umbrella, decision 201): the built-in target descriptors and lookup, plus the html target (unstable) |
 | `packages/tooling/vite-plugin/AGENTS.md` | `@mxlang/vite-plugin` |
 | `packages/tooling/typescript-plugin/AGENTS.md` | `@mxlang/typescript-plugin` and `@mxlang/tsc` |
 | `packages/editors/vscode/AGENTS.md` | VS Code extension; how the VSIX ships `@mxlang/typescript-plugin`, `check-vsix` |

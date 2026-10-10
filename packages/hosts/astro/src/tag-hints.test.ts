@@ -10,7 +10,7 @@ import { astroTargets, lowerAstroMx } from "./astro-template.ts";
  * (`custom-tag.ts` `tagNotFoundError`); MX adds where the tag could come from
  * (audit item 14, cases h14/s08). Every suggested fix is compiled too. A
  * lowercase tag is never unresolved here (any lowercase name is an element),
- * so only `@mxlang/html` offers an element did-you-mean.
+ * so only `@mxlang/target-html` offers an element did-you-mean.
  */
 // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI colour
 const ANSI = /\x1b\[[0-9;]*m/g;

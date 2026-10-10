@@ -1,6 +1,6 @@
 {
   "name": "single-dependency-fixture",
   "dependencies": {
-    "@mxlang/html": "0.1.0"
+    "@mxlang/target-html": "0.1.0"
   }
 }

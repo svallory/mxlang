@@ -12,7 +12,7 @@ it("emits only public declarations with no private registry or descriptor import
   expect(declarations).toEqual(["index.d.ts"]);
   for (const file of declarations) {
     expect(readFileSync(join(dist, file), "utf8")).not.toMatch(
-      /@mxlang\/target-registry|@mxlang\/[^"']+\/descriptor/,
+      /@mxlang\/targets|@mxlang\/[^"']+\/descriptor/,
     );
   }
 });

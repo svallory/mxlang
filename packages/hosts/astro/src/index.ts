@@ -1,10 +1,10 @@
 /**
- * `@mxlang/astro` — the Astro host for MX.
+ * `@mxlang/host-astro` — the Astro host for MX.
  *
  * MX (Markup eXtended) is a template language born from Marko, MX 1.0 being a
  * strict subset of Marko's syntax (decision 72). This package renders `.mx`
  * components inside an Astro project as **static markup**: they are compiled
- * by `@mxlang/html` to a runtime-free
+ * by `@mxlang/target-html` to a runtime-free
  * `(input) => string` function, called during Astro's build, and never shipped
  * to a browser.
  *
@@ -29,7 +29,7 @@ import { assertNoAstroMxPages } from "./pages-guard.ts";
 import { mxPages } from "./vite-pages.ts";
 import { mxTemplates } from "./vite-templates.ts";
 
-/** Attribute-tag slot received by an `@mxlang/astro` component. */
+/** Attribute-tag slot received by an `@mxlang/host-astro` component. */
 export type AttrTag<
   // biome-ignore lint/complexity/noBannedTypes: public default from decision 106
   C extends AttrTagConfig = {},
@@ -89,7 +89,7 @@ const DEFAULT_EXTENSIONS = [".mx"];
  * ```js
  * // astro.config.mjs
  * import { defineConfig } from "astro/config";
- * import mx from "@mxlang/astro";
+ * import mx from "@mxlang/host-astro";
  *
  * export default defineConfig({ integrations: [mx()] });
  * ```
@@ -114,7 +114,7 @@ const DEFAULT_EXTENSIONS = [".mx"];
  * (decision 70), not something to discover in a bundle.
  * `examples/astro-static/e2e/build-errors.spec.ts` asserts the failing build.
  *
- * `strict: true` on the Vite plugin selects `@mxlang/html`'s
+ * `strict: true` on the Vite plugin selects `@mxlang/target-html`'s
  * `strictPolicy`: `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client`
  * blocks, `<id>`, `<log>` and `<debug>` become compile errors naming the
  * construct instead of rendering their initial value or compiling away as
@@ -134,13 +134,13 @@ export default function mxAstro(
   // confusing build-time mismatch.
   if (options.extensions?.some((ext) => ext.endsWith(".marko"))) {
     throw new Error(
-      "@mxlang/astro: '.marko' is not a supported extension — MX only compiles the MX 1.0 subset of Marko syntax under '.mx'.",
+      "@mxlang/host-astro: '.marko' is not a supported extension — MX only compiles the MX 1.0 subset of Marko syntax under '.mx'.",
     );
   }
   const extensions = options.extensions ?? DEFAULT_EXTENSIONS;
 
   return {
-    name: "@mxlang/astro",
+    name: "@mxlang/host-astro",
     hooks: {
       "astro:config:setup": ({
         config,
@@ -149,8 +149,8 @@ export default function mxAstro(
         updateConfig,
       }) => {
         addRenderer({
-          name: "@mxlang/astro",
-          serverEntrypoint: "@mxlang/astro/server",
+          name: "@mxlang/host-astro",
+          serverEntrypoint: "@mxlang/host-astro/server",
         });
 
         if (typeof addPageExtension !== "function") {
@@ -188,7 +188,7 @@ export default function mxAstro(
               // extension itself, so the order is documentation rather than a
               // tie-break.
               mxTemplates(options.customTags),
-              // Compiled modules import `@mxlang/html`; resolve it from this
+              // Compiled modules import `@mxlang/target-html`; resolve it from this
               // package's own dependency, not the user's tree.
               mxHtmlResolve(),
               mx({

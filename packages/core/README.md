@@ -33,8 +33,8 @@ code printing, so installing core installs no `@marko/*` package.
 | Custom-tag declarations, validation, and IR transforms | Discovery and sidecar loading in the calling integration |
 | `escape` | Its own integration: a Vite plugin, a Bun loader, a TypeScript plugin |
 
-`@mxlang/html` is the first host (vanilla HTML strings); `@mxlang/astro`
-(`.astro.mx`, expression-shaped Astro syntax) and `@mxlang/solid` (Solid's
+`@mxlang/target-html` is the first host (vanilla HTML strings); `@mxlang/host-astro`
+(`.astro.mx`, expression-shaped Astro syntax) and `@mxlang/host-solid` (Solid's
 `.solid.mx` bridge, Solid JSX text) are the other two.
 
 ## The HostDeclarations contract
@@ -143,7 +143,7 @@ corpus as Marko's did.
 **`printExpression(node)` is a public export**: the generator is part of the
 byte contract, so every host prints an expression node back to source text
 through the one function `newCtx`'s `translate` visitor already uses, rather
-than with its own Babel generator. `@mxlang/solid` used
+than with its own Babel generator. `@mxlang/host-solid` used
 to carry its own copy over `@babel/generator` — a *different* Babel instance
 from the one that parsed the node — before switching to this export.
 
@@ -763,13 +763,13 @@ section).
 4. **Wire it.** Pass the required `emitIr` in `HostOptions`; the core resolves
    and hands your emitter the `Ir`.
 
-**The string worked example is `@mxlang/html`** (`src/emitter.ts`): the vanilla
+**The string worked example is `@mxlang/target-html`** (`src/emitter.ts`): the vanilla
 html target, an `Emitter<string[]>` that accumulates `out +=` lines. It is the
 one to read, because it reproduces its predecessor's output byte for byte —
 including two details that look accidental and are not: literals merge across
 node boundaries into a single `out +=`, and `$forN` names a loop temporary from
 the emitted-line count rather than a loop counter. The expression-shaped
-example is `@mxlang/astro`'s `.astro.mx` emitter: an `Emitter<string>` producing
+example is `@mxlang/host-astro`'s `.astro.mx` emitter: an `Emitter<string>` producing
 ternaries, `.map` expressions, `class:list` and Astro named slots.
 
 Statement tags lower into `Ir.imports`, `Ir.hoisted` and

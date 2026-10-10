@@ -1,7 +1,7 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: MX `${…}` placeholders in template source
 /**
  * A region calling a `.react.mx` callee's attribute tag, compiled through
- * `compileReactRegion` directly — no `@mxlang/target-registry` loaded, so no
+ * `compileReactRegion` directly — no `@mxlang/targets` loaded, so no
  * reader was registered for `.react.mx`. The entry's own lookup (its
  * `targets` default) declares the `react` file kind's `readCalleeInput`, and
  * core reads callee readers from the compile's lookup, so the callee's

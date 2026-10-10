@@ -7,7 +7,7 @@
  * plugin's `amx-language.ts`, selected through the registry-private
  * `pipeline: "astro-template"` key.
  *
- * Page `.mx` under the Astro host compiles through `@mxlang/html`'s `compile`
+ * Page `.mx` under the Astro host compiles through `@mxlang/target-html`'s `compile`
  * under html's strict policy, then the TypeScript plugin rewrites the module's
  * default export (`typeSurface`). Importing this module loads only html's
  * descriptor (policy tables); the compile entry is required inside `load`.
@@ -17,7 +17,7 @@ import {
   type TargetDescriptor,
   type TargetLookup,
 } from "@mxlang/core";
-import htmlDescriptor from "@mxlang/html/descriptor";
+import htmlDescriptor from "@mxlang/target-html/descriptor";
 import { createAstroTypeSurface } from "./type-surface.ts";
 
 /**
@@ -38,12 +38,12 @@ function targets(): TargetLookup {
 }
 
 /** What the type-check projection of a compiled module imports its runtime types from. */
-const ASTRO_TYPECHECK_MODULE = "@mxlang/astro/typecheck";
+const ASTRO_TYPECHECK_MODULE = "@mxlang/host-astro/typecheck";
 
 const descriptor: TargetDescriptor = {
   descriptorVersion: 0,
   name: "astro-html",
-  packageName: "@mxlang/astro",
+  packageName: "@mxlang/host-astro",
   defaultTag: htmlDescriptor.defaultTag,
   // `typescript-plugin/src/mx-language.ts` (`hostPolicy.host === "astro" || …`)
   // and `language-server/src/diagnose.ts` (`resolveStrict`) force strict for astro.
@@ -56,7 +56,7 @@ const descriptor: TargetDescriptor = {
     // under `scripts/bundled-build.ts` on Bun 1.3.14 (rev-230 §3); the real
     // gate is `check-vsix` in registration PR 5.
     const { compile } =
-      require("@mxlang/html") as typeof import("@mxlang/html");
+      require("@mxlang/target-html") as typeof import("@mxlang/target-html");
     return {
       compileModule: (source, filename, options) =>
         compile(source, filename, {
@@ -67,7 +67,7 @@ const descriptor: TargetDescriptor = {
           resolveImport: options.resolveImport,
           // The type-check projection imports its runtime types from a
           // subpath of this package: a project's isolated install holds
-          // `@mxlang/astro` but not `@mxlang/html`, so the bare name does
+          // `@mxlang/host-astro` but not `@mxlang/target-html`, so the bare name does
           // not resolve there. Compiled output for the build is unchanged.
           runtimeFrom: options.typeCheck ? ASTRO_TYPECHECK_MODULE : undefined,
           targets: options.targets ?? targets(),

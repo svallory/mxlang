@@ -1,5 +1,5 @@
 /**
- * Signature-only stand-in for `@mxlang/html`'s runtime surface, used as the
+ * Signature-only stand-in for `@mxlang/target-html`'s runtime surface, used as the
  * `runtime.ts` of the strict-tsc case in `translate.test.ts`. Re-exporting from
  * the real entry points would make tsc check the whole host + core graph on
  * every run. `lean-runtime.check.ts` fails the typecheck gate if any name here

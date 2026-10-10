@@ -36,7 +36,7 @@ export const BUNDLED_INSTALLED = [
 
 /**
  * Left external and NOT shipped: resolved from the user's project at run time.
- * `@angular/compiler` is an optional peer of `@mxlang/angular`, which reads
+ * `@angular/compiler` is an optional peer of `@mxlang/host-angular`, which reads
  * Angular's DOM schema from it through `createRequire(projectDir)`
  * (`hosts/angular/src/dom-schema.ts`); a missing one is a positioned error.
  */

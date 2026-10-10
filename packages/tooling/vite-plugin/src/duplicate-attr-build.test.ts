@@ -12,7 +12,7 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 import mx from "./index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
-// Inside the package, not `tmpdir()`: a compiled page imports `@mxlang/html`
+// Inside the package, not `tmpdir()`: a compiled page imports `@mxlang/target-html`
 // by bare specifier, which only resolves from within the package tree.
 const root = mkdtempSync(join(here, "..", ".tmp-duplicate-attr-"));
 

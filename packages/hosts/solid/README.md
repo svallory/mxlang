@@ -1,9 +1,9 @@
-# @mxlang/solid
+# @mxlang/host-solid
 
 The Solid host: Solid's emitter over `@mxlang/core`'s shared IR (decisions
-69, 71, 72, 79, 81). Same package shape as `@mxlang/astro` — `src/`,
+69, 71, 72, 79, 81). Same package shape as `@mxlang/host-astro` — `src/`,
 `moon.yml`, a vitest project, this README — and the third emitter over the
-core IR after `@mxlang/html` (vanilla strings) and `@mxlang/astro` (`.astro.mx`).
+core IR after `@mxlang/target-html` (vanilla strings) and `@mxlang/host-astro` (`.astro.mx`).
 
 Project [custom tags](../../../apps/docs/docs/custom-tags/index.md) cross the
 Solid parser boundary and expand to ordinary IR before this emitter runs,
@@ -12,7 +12,7 @@ using the same definitions as whole-file `.mx` hosts.
 ## Install
 
 ```
-bun add @mxlang/solid
+bun add @mxlang/host-solid
 ```
 
 Workspace-internal today: `@mxlang/tsx-bridge` depends on it directly for the
@@ -60,12 +60,12 @@ same error, because they have a real module to put it in.
 resolved to Solid through this function in the TypeScript plugin, the
 language server, `mx-tsc` and the vite-plugin. A tag file **is** a module, so
 its module-level statements are placed rather than rejected (an authored
-`import` resolves a capitalized tag exactly as it does on `@mxlang/html`),
+`import` resolves a capitalized tag exactly as it does on `@mxlang/target-html`),
 and its default export is a named declaration after the file (`icon.mx`
 exports `Icon`) — which is what lets a tag call itself with no self-import.
 It emits the author's `export interface Input` and annotates the component
-parameter with it (`function Icon(input: Input)`), like `@mxlang/html` and
-`@mxlang/preact`, so a caller's ordinary props are type-checked (`<Card
+parameter with it (`function Icon(input: Input)`), like `@mxlang/target-html` and
+`@mxlang/host-preact`, so a caller's ordinary props are type-checked (`<Card
 title=1/>` against `title: string` is TS2322). The output is TSX carrying
 types: the vite plugin gives it a `.tsx` id and vite strips the types after
 Solid's compiler, which parses TypeScript but does not erase it.
@@ -181,5 +181,5 @@ in this package (or nothing).
 ## Tests
 
 ```
-bunx vitest run --root ../../.. --project @mxlang/solid
+bunx vitest run --root ../../.. --project @mxlang/host-solid
 ```

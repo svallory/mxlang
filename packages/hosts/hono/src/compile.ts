@@ -2,7 +2,7 @@
  * The hono host's compile entry, as a **descriptor-free leaf**.
  *
  * `descriptor.ts` must stay a leaf: it is a bundler entry
- * (`@mxlang/hono/descriptor`) and the registry bundles it into tools, so it
+ * (`@mxlang/host-hono/descriptor`) and the registry bundles it into tools, so it
  * may never `require` a module that (transitively) imports it. The compile
  * wrapper therefore lives here, where nothing reaches for `./descriptor.ts`,
  * and both `index.ts` (which composes the package's own lookup) and
@@ -26,7 +26,7 @@ import {
   type CompileResult,
   compileJsxRegion,
   compilePreactMx,
-} from "@mxlang/preact";
+} from "@mxlang/host-preact";
 import {
   honoDeclarations,
   honoDialect,
@@ -78,7 +78,7 @@ export type HonoRegionOptions = Omit<
 
 /**
  * Compiles one MX region of a `.hono.mx` module to a Hono JSX expression,
- * under an explicit `targets` lookup (`@mxlang/preact`'s `compileJsxRegion`
+ * under an explicit `targets` lookup (`@mxlang/host-preact`'s `compileJsxRegion`
  * with Hono's dialect and region declarations).
  */
 export function compileHonoRegion(

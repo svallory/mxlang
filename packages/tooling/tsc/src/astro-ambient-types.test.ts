@@ -50,7 +50,7 @@ afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
 });
 
-/** An isolated install: `@mxlang/astro`, and `astro` when asked for. */
+/** An isolated install: `@mxlang/host-astro`, and `astro` when asked for. */
 function project(withAstro: boolean, tsconfig: object): string {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-astro-ambient-")));
   made.push(dir);

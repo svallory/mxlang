@@ -30,7 +30,7 @@ declare module "@mxlang/tsx-bridge" {
      * `mxRegionFragment`. Absent (not `false`) for an ordinary region and
      * whenever the option is off. Set by the bridge after the position is
      * computed, so a position check can word a fragment differently:
-     * `@mxlang/angular` uses it to say a fragment is only allowed as the root
+     * `@mxlang/host-angular` uses it to say a fragment is only allowed as the root
      * of a `template:` region.
      */
     fragment?: boolean;
@@ -165,7 +165,7 @@ declare module "@mxlang/tsx-bridge" {
      * A fragment with no MX child (`<></>`, `<>text</>`) is a region too.
      *
      * Default `false`: `<>` stays a TSX `JSXFragment`, which is what
-     * `.solid.mx` wants, since its output is JSX. `@mxlang/angular` enables it
+     * `.solid.mx` wants, since its output is JSX. `@mxlang/host-angular` enables it
      * for `.ng.mx`, where an Angular template has no TSX to fall back to.
      * Declared explicitly for the same reason as `mxCustomTags` above.
      */
@@ -192,7 +192,7 @@ declare module "@mxlang/tsx-bridge" {
    * Parses a region file (TypeScript with MX regions, `.<host>.mx`) into a
    * Babel `File` of standard node types.
    *
-   * Whole-file `.mx` templates are not parsed here: `@mxlang/html`
+   * Whole-file `.mx` templates are not parsed here: `@mxlang/target-html`
    * drives `@marko/compiler` with its own translator instead (ADR 0001).
    */
   export function parse(
@@ -278,7 +278,7 @@ declare module "@mxlang/tsx-bridge" {
    * Solid JSX built-ins that resolve with no import of their own (decision
    * 114): the real Solid build pipeline auto-imports these, a compiler stage
    * the type-check projection and MX's own resolvability check never run
-   * through. Shared by `@mxlang/typescript-plugin` and `@mxlang/solid`.
+   * through. Shared by `@mxlang/typescript-plugin` and `@mxlang/host-solid`.
    */
   export const SOLID_BUILTIN_TAGS: ReadonlyArray<{
     name: string;
@@ -384,7 +384,7 @@ declare module "@mxlang/tsx-bridge" {
     /**
      * Makes `<>…</>` in expression position an MX fragment region whose
      * children the host lowers as siblings. Default `false` (`<>` stays a TSX
-     * fragment, which `.solid.mx` wants). `@mxlang/angular` enables it for
+     * fragment, which `.solid.mx` wants). `@mxlang/host-angular` enables it for
      * `.ng.mx`. See `ParserOptions.mxRegionFragment`.
      */
     mxRegionFragment?: boolean;

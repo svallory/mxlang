@@ -5,7 +5,7 @@ description: "Compile .mx and .marko templates to a plain (input) => string func
 
 # HTML target
 
-The html target (`@mxlang/html`) is the vanilla MX target. It compiles an `.mx` file (or its `.marko` alias) to a pure function: a JS/TS module whose default export is `(input) => string`, with no runtime beyond an `escape` helper and a string-buffer sink. No scheduler, no signals, no hydration, no resume markers.
+The html target (`@mxlang/target-html`) is the vanilla MX target. It compiles an `.mx` file (or its `.marko` alias) to a pure function: a JS/TS module whose default export is `(input) => string`, with no runtime beyond an `escape` helper and a string-buffer sink. No scheduler, no signals, no hydration, no resume markers.
 
 The generic half of the work — consuming Marko's AST, applying the structural lowerings, the string-emit model — lives in the shared core. This target supplies the policy on top of it: which tags are inert and which are compile errors, component-versus-element resolution, structured `class`/`style` values, and its own integrations (a Bun loader, the `escape` runtime, a taglib).
 
@@ -25,7 +25,7 @@ and names `TODO data-target-tooling-dispatch`. See [the tree target](/targets/da
 
 ## Attribute-tag values
 
-Import `AttrTag` from `@mxlang/html` in hand-written TypeScript. A renderable
+Import `AttrTag` from `@mxlang/target-html` in hand-written TypeScript. A renderable
 attribute tag is a thunk `() => string`; params change it to
 `(...params) => string`. The default data shape carries attrs and nested tags
 plus an optional `content` thunk. Arrays are real arrays, and conditional and
@@ -48,7 +48,7 @@ divergence render the same bytes as Marko's own server render.
 compiles to:
 
 ```typescript
-import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from "@mxlang/html";
+import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from "@mxlang/target-html";
 
 export interface Input {}
 
@@ -82,13 +82,13 @@ The default export is a **named** declaration, after the file (`greeting.mx` giv
 ## Install
 
 ```bash
-bun add @mxlang/html
+bun add @mxlang/target-html
 ```
 
 ## API
 
 ```typescript
-import { compile } from "@mxlang/html";
+import { compile } from "@mxlang/target-html";
 
 const { code } = compile(source, "greeting.mx");
 ```
@@ -96,7 +96,7 @@ const { code } = compile(source, "greeting.mx");
 - `compile(source, filename, { strict? })` → `{ code, map }`
 - `compileFile(filename, { strict? })` → `{ code, map }`
 - `build(filenames, { strict? })` → `Map<filename, { code, map }>`, a CLI-free build step
-- `escape(value)`, `createOut()`, `createBufferedOut(parent)` — the entire runtime the emitted module imports; the sink half is also published as `@mxlang/html/runtime`
+- `escape(value)`, `createOut()`, `createBufferedOut(parent)` — the entire runtime the emitted module imports; the sink half is also published as `@mxlang/target-html/runtime`
 - `Out` — the sink type: `write(html: string)` and `toString()`
 - `TranslateError` — thrown for a construct with no lowering, carrying `line`/`column`
 
@@ -107,7 +107,7 @@ const { code } = compile(source, "greeting.mx");
 For a bundler-free consumer (Express, Hono, a plain Bun server) wanting Pug's `compile`/`renderFile` ergonomics instead of driving `compile`/`compileFile` and executing/caching the result by hand:
 
 ```typescript
-import { loadMx, mx } from "@mxlang/html";
+import { loadMx, mx } from "@mxlang/target-html";
 
 const page = loadMx<{ name: string }>("./views/page.mx");
 page({ name: "Ada" }); // -> "<p>Ada</p>"
@@ -124,17 +124,17 @@ Node-only caveats: `stripTypeScriptTypes` prints one `ExperimentalWarning` per p
 
 Two loaders make `import page from "./page.mx"` (or `"./page.marko"`) resolve, one per runtime.
 
-**Bun** — `@mxlang/html/bun` is a plugin that intercepts `.mx` and `.marko` imports and compiles them on the fly (`.solid.mx`, `.react.mx`, `.preact.mx` and `.hono.mx` are excluded; each is a region file kind handled separately). Register it once:
+**Bun** — `@mxlang/target-html/bun` is a plugin that intercepts `.mx` and `.marko` imports and compiles them on the fly (`.solid.mx`, `.react.mx`, `.preact.mx` and `.hono.mx` are excluded; each is a region file kind handled separately). Register it once:
 
 ```toml
 # bunfig.toml
-preload = ["@mxlang/html/bun"]
+preload = ["@mxlang/target-html/bun"]
 ```
 
 or at runtime:
 
 ```typescript
-import markoPlugin from "@mxlang/html/bun";
+import markoPlugin from "@mxlang/target-html/bun";
 Bun.plugin(markoPlugin);
 ```
 
@@ -212,7 +212,7 @@ Inert is a *shape*, not permission to drop content. Each inert tag still declare
 
 An element's `on<Name>=fn` (`onClick`, `onDblClick`) or `on-<exact>=fn`
 (`on-my-event`) is an event handler — and this target has nowhere to bind one:
-`@mxlang/html` renders once to a string, so an expression-valued event
+`@mxlang/target-html` renders once to a string, so an expression-valued event
 attribute is a compile error naming the attribute and the target.
 
 - **Static strings** (`onclick="alert(1)"`) are an ordinary attribute and

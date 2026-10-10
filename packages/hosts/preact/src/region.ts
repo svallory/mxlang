@@ -21,8 +21,8 @@
  *   `<return>`) and `<const>` are errors: the region has a real TypeScript
  *   module and component around it to hold them.
  *
- * Host-agnostic across the JSX dialects: `@mxlang/react` (and later
- * `@mxlang/preact`/`@mxlang/hono`) wrap it with their dialect, region
+ * Host-agnostic across the JSX dialects: `@mxlang/host-react` (and later
+ * `@mxlang/host-preact`/`@mxlang/host-hono`) wrap it with their dialect, region
  * declarations and segment.
  */
 

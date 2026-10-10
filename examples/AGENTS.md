@@ -58,7 +58,7 @@ each file's real exports and every error inside the file. Each example's
 
 `examples/mx-site` is a plain-string example: a Hono-on-Bun server and a
 static build both rendering MX (`.mx`) templates via
-`@mxlang/html/bun` (the Bun loader — see `packages/targets/html/AGENTS.md`), no
+`@mxlang/target-html/bun` (the Bun loader — see `packages/targets/html/AGENTS.md`), no
 Solid, no client runtime, no prebuild step. `src/server.ts` and
 `src/build.ts` `import renderX from "./pages/x.mx"` directly, exactly like
 any other module; `bunfig.toml` preloads the loader.
@@ -68,14 +68,14 @@ any other module; `bunfig.toml` preloads the loader.
 parser's public types without requiring `dist/` to be built first. Bun's
 `bun run` also honours `tsconfig.json` `paths` at runtime, and does so per
 imported file's own directory, not just the entry point's — so a plain `bun
-run` of any script that imports `@mxlang/html` (which imports
+run` of any script that imports `@mxlang/target-html` (which imports
 `@mxlang/tsx-bridge`) fails with `Export named 'X' not found in module
 ".../public.d.ts"`, because Bun resolves the bare `@mxlang/tsx-bridge` specifier
 against `packages/targets/html/tsconfig.json`'s `paths` regardless of where the
 importing file lives. Work around it with `bun run
 --tsconfig-override=<path to a tsconfig with no such paths>`; `examples/mx-site`'s
 `dev` and `build` scripts do this against the root `tsconfig.base.json`. This
-is a property of `translator`'s tsconfig, not a bug in `@mxlang/html`
+is a property of `translator`'s tsconfig, not a bug in `@mxlang/target-html`
 itself or in Bun's resolver generally — vitest is unaffected because it does
 not resolve bare specifiers through `tsconfig.json` `paths` the same way.
 
@@ -124,7 +124,7 @@ there is no separate question of whether it is a page. A second Vite plugin (`mx
 and rewrites the already-compiled module — by the time this stage runs the
 bundler has already stripped TypeScript types from the code (measured: no
 `: Input`/`: string` annotations survive), so the rewrite injects plain JS,
-not TS. It matches `@mxlang/html`'s exact branded tail (`function
+not TS. It matches `@mxlang/target-html`'s exact branded tail (`function
 About(input) {...}; Object.defineProperty(About,
 Symbol.for("mx.component"), ...); export default About;` — see
 `translate.ts`'s `brandRender`), where the name is the file's own derived
@@ -167,10 +167,10 @@ under `src/pages/`, a tiny `src/build.ts` that imports both and writes
 than a browser entry — `vite build` bundles it through the plugin's
 `.mx` transform, then `bun run dist-ssr/build.js` actually runs it
 and writes the
-HTML. `vite.config.ts`'s `ssr.external: ["@mxlang/html"]` keeps that
-package's own `import { escape } from "@mxlang/html"` (present in
+HTML. `vite.config.ts`'s `ssr.external: ["@mxlang/target-html"]` keeps that
+package's own `import { escape } from "@mxlang/target-html"` (present in
 every compiled `.mx` page) out of the rolldown bundle — left un-external,
-rolldown would try to bundle `@mxlang/html`'s raw TS source itself,
+rolldown would try to bundle `@mxlang/target-html`'s raw TS source itself,
 pulling in `@marko/compiler`'s transitive syntax the same way the plugin's
 own dynamic `import()` has to route around (see
 `packages/tooling/vite-plugin/AGENTS.md`).

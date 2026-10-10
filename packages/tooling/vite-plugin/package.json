@@ -30,10 +30,10 @@
   },
   "dependencies": {
     "@mxlang/core": "workspace:*",
-    "@mxlang/tsx-bridge": "workspace:*",
-    "@mxlang/target-registry": "workspace:*"
+    "@mxlang/targets": "workspace:*",
+    "@mxlang/tsx-bridge": "workspace:*"
   },
   "devDependencies": {
-    "@mxlang/html": "workspace:*"
+    "@mxlang/target-html": "workspace:*"
   }
 }

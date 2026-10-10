@@ -8,7 +8,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { getCustomTags } from "@mxlang/core";
-import { htmlTargets } from "@mxlang/html";
+import { htmlTargets } from "@mxlang/target-html";
 
 /**
  * Turns a scratch copy of a stock `.marko` fixture into the `.mx` project MX

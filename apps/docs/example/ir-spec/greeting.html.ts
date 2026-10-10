@@ -1,4 +1,4 @@
-import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from "@mxlang/html";
+import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from "@mxlang/target-html";
 
 export interface Input {
   name: string;

@@ -28,8 +28,8 @@ library (`lib: ["esnext", "dom"]`) — Vite's declarations use
 
 The plugin bundles every built-in target's compiler, but not the runtime the
 compiled modules import. A module compiled for the `html` target imports its
-helpers from `@mxlang/html` (`import { escape } from "@mxlang/html"`), resolved
-from your project, so a project using that target installs `@mxlang/html`;
+helpers from `@mxlang/target-html` (`import { escape } from "@mxlang/target-html"`), resolved
+from your project, so a project using that target installs `@mxlang/target-html`;
 the JSX targets import their framework (`preact`, `react`, `hono`, `solid-js`).
 
 See `AGENTS.md` for the plugin's internals and target dispatch.

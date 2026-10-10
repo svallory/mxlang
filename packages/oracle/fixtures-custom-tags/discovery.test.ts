@@ -26,11 +26,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { clearScanCache } from "@mxlang/core";
-import { compileHonoMx } from "@mxlang/hono";
-import { compile as compileHtml } from "@mxlang/html";
-import { compilePreactMx } from "@mxlang/preact";
-import { compileReactMx } from "@mxlang/react";
-import { getCustomTags } from "@mxlang/target-registry";
+import { compileHonoMx } from "@mxlang/host-hono";
+import { compilePreactMx } from "@mxlang/host-preact";
+import { compileReactMx } from "@mxlang/host-react";
+import { compile as compileHtml } from "@mxlang/target-html";
+import { getCustomTags } from "@mxlang/targets";
 import { afterEach, describe, expect, it } from "vitest";
 
 const here = dirname(fileURLToPath(import.meta.url));

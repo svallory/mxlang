@@ -41,8 +41,8 @@ An editor only hands the server a file path and its text — nothing about which
 The Astro host always compiles under its strict policy — it has no non-strict mode — so `"host": "astro"` behaves as strict regardless of the field's own `strict` value.
 
 `"host"` accepts `html`, `astro`, `solid`, `preact` and `react`, and the
-matching dependency packages are `@mxlang/html`, `@mxlang/astro`,
-`@mxlang/solid`, `@mxlang/preact` and `@mxlang/react`. (`"translator"` is
+matching dependency packages are `@mxlang/target-html`, `@mxlang/host-astro`,
+`@mxlang/host-solid`, `@mxlang/host-preact` and `@mxlang/host-react`. (`"translator"` is
 accepted as a deprecated alias for `"html"` and warns.) A whole-file
 `.mx`/`.marko` document resolved to a host whose stateful tags are errors —
 `solid`, `preact` and `react` among them — reports `<let>` and the rest as
@@ -53,7 +53,7 @@ errors, each naming that framework's own primitive.
 `.solid.mx` is a different file format rather than another policy for a
 whole-file template: it is TypeScript/TSX with MX regions. The server parses
 the complete module through `@mxlang/tsx-bridge`, which lowers each region through
-`@mxlang/solid`. Host errors and malformed expressions inside a region are
+`@mxlang/host-solid`. Host errors and malformed expressions inside a region are
 reported at their file-absolute positions.
 
 Because the region finder must parse the whole module, the server also reports
@@ -88,4 +88,4 @@ This tells the language server to apply the React host policy. If the `strict` f
 
 ### Region files (`.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx`)
 
-For region files (`.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx`), the language server cannot use the whole-file HTML compilation. Instead, it uses a diagnose path that finds MX regions via the `@mxlang/tsx-bridge` bridge and runs each through the file kind's host (`@mxlang/solid`, `@mxlang/react`, `@mxlang/preact`, `@mxlang/hono`), mapping the resulting errors back to the correct source positions within the complete TypeScript file.
+For region files (`.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx`), the language server cannot use the whole-file HTML compilation. Instead, it uses a diagnose path that finds MX regions via the `@mxlang/tsx-bridge` bridge and runs each through the file kind's host (`@mxlang/host-solid`, `@mxlang/host-react`, `@mxlang/host-preact`, `@mxlang/host-hono`), mapping the resulting errors back to the correct source positions within the complete TypeScript file.

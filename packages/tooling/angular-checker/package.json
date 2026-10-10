@@ -35,16 +35,16 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external @angular/compiler-cli --external @mxlang/angular --external typescript && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
+    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external @angular/compiler-cli --external @mxlang/host-angular --external typescript && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist",
     "typecheck": "tsc -p tsconfig.typecheck.json",
     "test": "vitest run"
   },
   "dependencies": {
-    "@mxlang/angular": "workspace:*"
+    "@mxlang/host-angular": "workspace:*"
   },
   "peerDependencies": {
-    "typescript": ">=5.9.0 <7",
-    "@angular/compiler-cli": ">=22.0.0 <23.0.0"
+    "@angular/compiler-cli": ">=22.0.0 <23.0.0",
+    "typescript": ">=5.9.0 <7"
   },
   "peerDependenciesMeta": {
     "@angular/compiler-cli": {

@@ -1,5 +1,5 @@
 import MutualA from "./mutual-a.solid.mx";
-import type { AttrTag } from "@mxlang/solid";
+import type { AttrTag } from "@mxlang/host-solid";
 
 export interface Input {
   b?: AttrTag<{ as: "renderable" }>;

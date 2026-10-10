@@ -173,8 +173,8 @@ describe("mx-tsc", () => {
     "type-checks a whole-file Solid .mx component's ordinary props at the caller (solid-whole-file-prop-typing)",
     () => {
       // `compileSolidUnit` emits `export interface Input` and annotates
-      // `function Card(input: Input)`, the same shape `@mxlang/preact` and
-      // `@mxlang/html` have, so a caller's props are a JSX props check.
+      // `function Card(input: Input)`, the same shape `@mxlang/host-preact` and
+      // `@mxlang/target-html` have, so a caller's props are a JSX props check.
       // Before this, the emitted `function Card(input)` was implicitly `any`
       // and `<Card title=1/>` against `title: string` had zero diagnostics.
       const result = run(mxTsc, [

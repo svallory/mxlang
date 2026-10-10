@@ -11,7 +11,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { compile } from "@mxlang/html";
+import { compile } from "@mxlang/target-html";
 import { experimental_AstroContainer as AstroContainer } from "astro/container";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { lowerAstroMx } from "./astro-template.ts";
@@ -94,7 +94,7 @@ beforeAll(async () => {
     pathToFileURL(astroRequire.resolve("@astrojs/compiler-rs")).href
   );
   container = await AstroContainer.create();
-  container.addServerRenderer({ name: "@mxlang/astro", renderer });
+  container.addServerRenderer({ name: "@mxlang/host-astro", renderer });
 });
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 

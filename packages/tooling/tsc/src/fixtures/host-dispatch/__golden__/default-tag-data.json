@@ -67,7 +67,7 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/html\";\n\nexport interface Input {}\n\nfunction Shorthand(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nShorthand.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxOut.write(\"<div id=\\\"a\\\"></div>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Shorthand, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Shorthand as ((input: Input) => string) & { render: typeof __mxRender };\n",
+        "generated": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/target-html\";\n\nexport interface Input {}\n\nfunction Shorthand(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nShorthand.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxOut.write(\"<div id=\\\"a\\\"></div>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Shorthand, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Shorthand as ((input: Input) => string) & { render: typeof __mxRender };\n",
         "mappings": [],
         "compileDiagnostics": [
           {

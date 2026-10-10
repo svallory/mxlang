@@ -739,7 +739,7 @@ describe("a literal class folded with a `.x` sugar", () => {
     ["<div .b class=0/>", 'div class="b"', "<div.b class=0/>"],
   ])("%s drops the falsy literal", (source, expected) => {
     // The tag-adjacent spelling keeps Marko's own array form (the class helper
-    // drops the literal at render time); `@mxlang/html`'s attr-name test pins
+    // drops the literal at render time); `@mxlang/target-html`'s attr-name test pins
     // that both render the same. Here the sugar folds it away.
     expect(shape(source)).toBe(expected);
   });

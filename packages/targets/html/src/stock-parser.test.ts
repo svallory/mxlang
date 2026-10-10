@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 /**
- * Decision 159, end to end: `@mxlang/html`'s built `dist` parses with core's
+ * Decision 159, end to end: `@mxlang/target-html`'s built `dist` parses with core's
  * bundled front end and MX's own template parser, so a stock `htmljs-parser`
  * in the install changes nothing. The stock parser is rebuilt in a `mkdtemp`
  * copy by reversing the committed patch, and the dist runs against it in a

@@ -1,4 +1,4 @@
-import type { AttrTag } from "@mxlang/preact";
+import type { AttrTag } from "@mxlang/host-preact";
 
 export interface Input {
   row?: AttrTag<{ as: "renderable"; params: [count: number] }>;

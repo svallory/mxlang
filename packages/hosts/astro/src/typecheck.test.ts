@@ -3,7 +3,7 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import descriptor from "./descriptor.ts";
 
-const SPECIFIER = "@mxlang/astro/typecheck";
+const SPECIFIER = "@mxlang/host-astro/typecheck";
 
 /** One template per optional import the html emitter makes. */
 const TEMPLATES: Record<string, string> = {
@@ -56,7 +56,7 @@ function exportedNames(): Set<string> {
   return new Set(checker.getExportsOfModule(symbol).map((s) => s.name));
 }
 
-describe("@mxlang/astro/typecheck", () => {
+describe("@mxlang/host-astro/typecheck", () => {
   const exported = exportedNames();
 
   for (const [name, source] of Object.entries(TEMPLATES)) {
@@ -64,7 +64,7 @@ describe("@mxlang/astro/typecheck", () => {
       const code = compiled(source);
       const names = importedNames(code);
       expect(names).toContain("createOut");
-      expect(code).not.toContain('from "@mxlang/html"');
+      expect(code).not.toContain('from "@mxlang/target-html"');
       for (const imported of names) expect(exported).toContain(imported);
     });
   }

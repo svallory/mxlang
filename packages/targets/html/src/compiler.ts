@@ -1,7 +1,7 @@
 /**
  * The html host's compile entry, as a **descriptor-free leaf**.
  *
- * `descriptor.ts` must stay a leaf: it is a bundler entry (`@mxlang/html/descriptor`)
+ * `descriptor.ts` must stay a leaf: it is a bundler entry (`@mxlang/target-html/descriptor`)
  * and the registry bundles it into tools, so it may never `require` a module
  * that (transitively) imports it. The compile entry therefore lives here,
  * where nothing reaches for `./descriptor.ts`, and both `index.ts` (the public
@@ -98,9 +98,9 @@ export interface CompileOptions {
   defaultTag?: string;
   /**
    * The module the emitted code imports `escape`, `createOut` and `Out` from,
-   * in place of `@mxlang/html`. For a caller that only type-checks the module
-   * and whose users cannot resolve the bare name: `@mxlang/astro` points it
-   * at its own subpath, which a project that installed `@mxlang/astro`
+   * in place of `@mxlang/target-html`. For a caller that only type-checks the module
+   * and whose users cannot resolve the bare name: `@mxlang/host-astro` points it
+   * at its own subpath, which a project that installed `@mxlang/host-astro`
    * always resolves. Never set it for code that runs.
    */
   runtimeFrom?: string;

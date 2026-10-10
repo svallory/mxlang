@@ -102,7 +102,7 @@ under the sandbox (always "not found," silently falling through to `bunx`).
    { "mx": { "host": "html", "strict": true } }
    ```
    and an `.mx` file containing a `<let>` tag (rejected under `strict`, per
-   `@mxlang/html`'s `strictPolicy` — see its own README).
+   `@mxlang/target-html`'s `strictPolicy` — see its own README).
 4. Open that `.mx` file in Zed. Expect one diagnostic (source `mxlang`)
    naming the `<let>` construct as unsupported under the resolved policy —
    see `packages/tooling/language-server/README.md` "Policy resolution" for exactly

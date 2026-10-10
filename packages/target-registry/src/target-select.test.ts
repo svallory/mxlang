@@ -20,7 +20,7 @@ function project(mx: unknown, dependencies = {}) {
   );
   return join(root, "a.mx");
 }
-it.each([{}, { "@mxlang/solid": "1" }])(
+it.each([{}, { "@mxlang/host-solid": "1" }])(
   "explicit tree is a positioned registry-only error, with the unknown-target fallback (%j)",
   (deps) => {
     const file = project({ target: "tree" }, deps);
@@ -68,7 +68,7 @@ it.each([{}, { "@mxlang/solid": "1" }])(
 );
 it('mx.target: "data" is refused as the reserved name (decision 187)', () => {
   const { diagnostics } = resolveTargetPolicyDetailed(
-    project({ target: "data" }, { "@mxlang/solid": "1" }),
+    project({ target: "data" }, { "@mxlang/host-solid": "1" }),
   );
   expect(diagnostics[0]).toMatchObject({
     code: "unknown-target",
@@ -118,7 +118,7 @@ it("legacy agreement remains silent; disagreement keeps the explicit target", ()
   });
 });
 
-it.each([{}, { "@mxlang/solid": "1" }])(
+it.each([{}, { "@mxlang/host-solid": "1" }])(
   "dataWired answers the real data policy; the default stays staged (%j)",
   (deps) => {
     const file = project({ target: "tree" }, deps);

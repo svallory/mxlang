@@ -1,7 +1,7 @@
 {
   "name": "ng-diag-off",
   "dependencies": {
-    "@mxlang/angular": "workspace:*"
+    "@mxlang/host-angular": "workspace:*"
   },
   "mx": {
     "angular": {

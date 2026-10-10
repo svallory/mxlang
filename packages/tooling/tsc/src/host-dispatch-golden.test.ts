@@ -73,7 +73,7 @@ const goldens = join(root, "__golden__");
  *   naming a package specifier must not warn, and the specifier is still not a
  *   filter value this project can match). Regenerated. The bare-word warning
  *   stays, as tags-hosts-bogus pins.
- * - html-with-solid-dep: `mx.host: "html"` beats rule 2 (a lone `@mxlang/solid`
+ * - html-with-solid-dep: `mx.host: "html"` beats rule 2 (a lone `@mxlang/host-solid`
  *   dependency would otherwise pick solid). PR 3 rewrites rule 2.
  * - translator: the deprecated alias for html and its warning.
  * - tags-hosts-html: a `hosts: ["html"]` tag restriction on an html project
@@ -193,7 +193,7 @@ const ROWS = [
 /** Rows whose Vite leg resolves `~/` through a configured alias. */
 const ALIASED = new Set(ROWS.filter((row) => row.startsWith("alias-")));
 
-// `@mxlang/target-registry` is the language server's dependency, not this
+// `@mxlang/targets` is the language server's dependency, not this
 // package's: resolve it from the server so both sides use the copy the server
 // runs. It is where the resolver now lives for a tool (decisions 129/132), and
 // its `resolveTargetPolicyDetailed` is core's, bound to the built-in lookup.
@@ -201,7 +201,7 @@ const lsRequire = createRequire(
   join(here, "..", "..", "language-server", "package.json"),
 );
 const { hostFilterKey, resolveTargetPolicyDetailed } = (await import(
-  pathToFileURL(lsRequire.resolve("@mxlang/target-registry")).href
+  pathToFileURL(lsRequire.resolve("@mxlang/targets")).href
 )) as {
   resolveTargetPolicyDetailed(file: string): {
     policy: Parameters<typeof diagnoseDocument>[2];

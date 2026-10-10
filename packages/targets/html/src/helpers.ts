@@ -1,7 +1,7 @@
 /**
  * `mx(source)`/`loadMx(path)` — one-call compile-and-cache helpers for a
  * bundler-free consumer (Express, Hono, a plain Bun server): the ergonomics
- * Pug's `compile`/`renderFile` give, over `@mxlang/html`'s `compile`/
+ * Pug's `compile`/`renderFile` give, over `@mxlang/target-html`'s `compile`/
  * `compileFile`, which hand back source text a caller still has to execute
  * and cache themselves.
  *
@@ -47,7 +47,7 @@
  * `compile()`'s emitted imports are three shapes, and each is handled before
  * the module ever reaches Bun's or Node's own resolver:
  *
- * - **Bare** (`import { escape } from "@mxlang/html"`) — resolved with
+ * - **Bare** (`import { escape } from "@mxlang/target-html"`) — resolved with
  *   `createRequire(anchor).resolve(specifier)` against the *anchor* (the
  *   real `.mx` file's own path, or `options.filename` for `mx(source)`),
  *   never the process's current working directory. This is what makes the
@@ -69,13 +69,13 @@
  * the missing option, since there is no directory to resolve `./tags/x.mx`
  * (or a bare specifier, for that matter — an anchor is also what lets a
  * bare import resolve against the *caller's* dependencies rather than
- * `@mxlang/html`'s own) against otherwise.
+ * `@mxlang/target-html`'s own) against otherwise.
  *
  * ## An import is parsed, never matched against printed text
  *
  * Each compiled import is its own complete line (`compile()`'s own emit
  * convention — see `translate.ts`), so `@mxlang/core`'s `importedNames`
- * (a real, one-line Babel parse, the same function `@mxlang/preact`'s own
+ * (a real, one-line Babel parse, the same function `@mxlang/host-preact`'s own
  * hook guard uses) gives the specifier's exact text; splicing it out of
  * that one line is then locating a parser-validated exact substring, not a
  * regex scanning arbitrary code for something that looks like an import.
@@ -324,7 +324,7 @@ function ensureNodeHooks(): void {
         const source = virtualSources.get(url);
         if (source === undefined) {
           throw new Error(
-            `@mxlang/html: no virtual source registered for ${url}`,
+            `@mxlang/target-html: no virtual source registered for ${url}`,
           );
         }
         let stripped: string;
@@ -342,7 +342,7 @@ function ensureNodeHooks(): void {
           // wording with no file context at all.
           const path = url.slice("mx-virtual:".length).replace(/#v\d+$/, "");
           throw new Error(
-            `@mxlang/html: ${path}: mx()/loadMx() support only erasable TypeScript (types only, no enum/namespace/parameter-property runtime code) — ${(cause as Error).message}`,
+            `@mxlang/target-html: ${path}: mx()/loadMx() support only erasable TypeScript (types only, no enum/namespace/parameter-property runtime code) — ${(cause as Error).message}`,
           );
         }
         return {
@@ -438,7 +438,7 @@ function rewriteImports(
     if (isMarkoOrMxSpecifier(specifier)) {
       if (!anchor) {
         throw new Error(
-          `@mxlang/html: mx(source) has a relative import (\`${specifier}\`) and no anchor; pass \`filename\` so it can be resolved.`,
+          `@mxlang/target-html: mx(source) has a relative import (\`${specifier}\`) and no anchor; pass \`filename\` so it can be resolved.`,
         );
       }
       const resolved = specifier.startsWith(".")
@@ -448,11 +448,11 @@ function rewriteImports(
     } else if (specifier.startsWith(".")) {
       if (!anchor) {
         throw new Error(
-          `@mxlang/html: mx(source) has a relative import (\`${specifier}\`) and no anchor; pass \`filename\` so it can be resolved.`,
+          `@mxlang/target-html: mx(source) has a relative import (\`${specifier}\`) and no anchor; pass \`filename\` so it can be resolved.`,
         );
       }
       replacement = pathToFileURL(resolvePath(dirname(anchor), specifier)).href;
-    } else if (specifier === "@mxlang/html") {
+    } else if (specifier === "@mxlang/target-html") {
       // Every compiled template imports this host's own `escape` re-export
       // — a specifier this package can always resolve against itself, since
       // it names its own package. No caller anchor is needed for it
@@ -461,11 +461,11 @@ function rewriteImports(
       // `escape` import, so requiring an anchor for this one bare specifier
       // would make the no-filename case useless in practice.
       const req = createRequire(import.meta.url);
-      replacement = pathToFileURL(req.resolve("@mxlang/html")).href;
+      replacement = pathToFileURL(req.resolve("@mxlang/target-html")).href;
     } else {
       if (!anchor) {
         throw new Error(
-          `@mxlang/html: mx(source) imports \`${specifier}\` and has no anchor; pass \`filename\` so it can resolve against your project's own dependencies.`,
+          `@mxlang/target-html: mx(source) imports \`${specifier}\` and has no anchor; pass \`filename\` so it can resolve against your project's own dependencies.`,
         );
       }
       const req = createRequire(anchor);
@@ -518,7 +518,7 @@ function loadNestedMx(
 ): string {
   if (seen.has(path)) {
     throw new TranslateError(
-      `@mxlang/html: import cycle detected: ${[...seen, path].join(" -> ")}`,
+      `@mxlang/target-html: import cycle detected: ${[...seen, path].join(" -> ")}`,
       1,
       1,
     );
@@ -545,7 +545,7 @@ function loadNestedMx(
   }
 
   if (!existsSync(path)) {
-    throw new Error(`@mxlang/html: cannot find module '${path}'`);
+    throw new Error(`@mxlang/target-html: cannot find module '${path}'`);
   }
 
   const nextSeen = new Set(seen);
@@ -720,7 +720,7 @@ export function loadMx<I = Record<string, unknown>>(
   }
 
   if (!existsSync(abs)) {
-    throw new Error(`@mxlang/html: cannot find module '${abs}'`);
+    throw new Error(`@mxlang/target-html: cannot find module '${abs}'`);
   }
 
   const source = readFileSync(abs, "utf8");
@@ -796,7 +796,7 @@ export function loadMx<I = Record<string, unknown>>(
  * not part of the package's public API or its built `.d.ts` entry point.
  * Exists because round 3's guard (`NESTED_DEFAULT_FINGERPRINT`) has no
  * black-box symptom to assert on today: neither `strict` nor
- * `resolveImport` nor `customTags` changes `@mxlang/html`'s emitted runtime
+ * `resolveImport` nor `customTags` changes `@mxlang/target-html`'s emitted runtime
  * bytes or `compile()`'s own `dependencies` array for an ordinary template
  * (measured directly — see the round-3 commit message), so a
  * `loadMx(A, options)` call that *would* taint the shared nested-tag cache

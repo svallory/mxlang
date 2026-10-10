@@ -2,7 +2,7 @@ import {
   checkDataPackage as registryCheckDataPackage,
   isDataProject as registryIsDataProject,
   lineAndColumn as registryLineAndColumn,
-} from "@mxlang/target-registry/data-check";
+} from "@mxlang/targets/data-check";
 
 /**
  * One diagnostic of {@link checkDataPackage}: a `.mx` file's data diagnostic,

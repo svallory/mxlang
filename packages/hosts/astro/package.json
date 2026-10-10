@@ -1,5 +1,5 @@
 {
-  "name": "@mxlang/astro",
+  "name": "@mxlang/host-astro",
   "version": "0.0.0",
   "engines": {
     "node": ">=22.18",
@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@mxlang/core": "workspace:*",
-    "@mxlang/html": "workspace:*",
+    "@mxlang/target-html": "workspace:*",
     "@mxlang/tsx-bridge": "workspace:*",
     "@mxlang/vite-plugin": "workspace:*",
     "@mxlang/web-elements": "workspace:*"

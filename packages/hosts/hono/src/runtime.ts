@@ -10,7 +10,7 @@ export { Suspense };
 /**
  * Joins Marko's recursive structured `class` value for Hono's string prop.
  *
- * Identical logic to `@mxlang/preact/runtime`'s and `@mxlang/react/runtime`'s
+ * Identical logic to `@mxlang/host-preact/runtime`'s and `@mxlang/host-react/runtime`'s
  * `mxClass` — kept as its own copy rather than a shared import so this
  * package has no runtime dependency beyond `hono` itself.
  */

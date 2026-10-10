@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import type { TargetLookup } from "@mxlang/core";
-import { reportScanDiagnostics, scanCached } from "@mxlang/preact";
+import { reportScanDiagnostics, scanCached } from "@mxlang/host-preact";
 import type { BunPlugin } from "bun";
 import { honoDefaultTag } from "./default-tag.ts";
 import { compileHonoMx, honoTargets } from "./index.ts";
@@ -10,7 +10,7 @@ import { compileHonoMx, honoTargets } from "./index.ts";
  * is JSX TSX, so `loader: "tsx"` hands it to Bun's own JSX transform (which
  * honours the emitted `/** @jsxImportSource hono/jsx *\/` pragma per file) —
  * no second transform, no bundler needed. Same shape as
- * `@mxlang/html/bun`'s plugin; `loader: "tsx"` instead of `"ts"` is the only
+ * `@mxlang/target-html/bun`'s plugin; `loader: "tsx"` instead of `"ts"` is the only
  * difference, since this host's compiled output contains JSX and that
  * package's does not.
  *
@@ -22,7 +22,7 @@ import { compileHonoMx, honoTargets } from "./index.ts";
  * negative lookbehind despite both also ending in `.mx`.
  *
  * Custom tags are discovered per loaded file (spec §4), the same as
- * `@mxlang/html/bun`: which tags a template may call follows from where the
+ * `@mxlang/target-html/bun`: which tags a template may call follows from where the
  * template lives, not from plugin configuration.
  */
 /**
@@ -53,7 +53,7 @@ export function mxFilter(targets: TargetLookup): RegExp {
 /**
  * Builds the loader over `targets`: the registered targets it scans and
  * compiles under (decisions 129 and 132). It defaults to this package's own
- * descriptor, which is what a plain `import "@mxlang/hono/bun"` wants; a
+ * descriptor, which is what a plain `import "@mxlang/host-hono/bun"` wants; a
  * caller compiling for several targets passes the built-in registry's lookup
  * instead (design note §5.1, rule (c)).
  */
@@ -73,14 +73,14 @@ export function createHonoBunPlugin(
           // Own-only loaders cannot establish that a peer host is unknown.
           scan.diagnostics,
           reportedScanDiagnostics,
-          (d) => console.warn(`@mxlang/hono: ${d.file}: ${d.message}`),
+          (d) => console.warn(`@mxlang/host-hono: ${d.file}: ${d.message}`),
         );
         const defaultTag = honoDefaultTag(
           path,
           scan.customTags,
           (d) =>
             console.warn(
-              `@mxlang/hono: ${d.file}:${d.line}:${d.column + 1}: ${d.message}`,
+              `@mxlang/host-hono: ${d.file}:${d.line}:${d.column + 1}: ${d.message}`,
             ),
           scan.tags,
         );

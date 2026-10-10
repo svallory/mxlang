@@ -9,14 +9,14 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
-import { compile } from "@mxlang/html";
+import { compile } from "@mxlang/target-html";
 import { discoveredCustomTags, mxTwins } from "./mx-twins.ts";
 
 /**
- * Renders a stock `.marko` fixture through `@mxlang/html`, by actually
+ * Renders a stock `.marko` fixture through `@mxlang/target-html`, by actually
  * loading the emitted module rather than reconstructing its shape.
  *
- * `@mxlang/html`'s own loaders (the Bun plugin, `@mxlang/vite-plugin`)
+ * `@mxlang/target-html`'s own loaders (the Bun plugin, `@mxlang/vite-plugin`)
  * accept only `.mx` — MX only supports the MX 1.0 subset of Marko syntax, so
  * a real `.marko` filename is never handed to a product entry point. This
  * harness instead reads each fixture's `.marko` file by content and compiles
@@ -39,8 +39,8 @@ import { discoveredCustomTags, mxTwins } from "./mx-twins.ts";
  * change to `postEmit` previously reported every fixture as a translator
  * bug).
  *
- * The emitted `@mxlang/html` imports (`from "@mxlang/html"` and
- * `from "@mxlang/html/runtime"`, bare workspace specifiers) are rewritten to the package's resolved absolute entry point: a
+ * The emitted `@mxlang/target-html` imports (`from "@mxlang/target-html"` and
+ * `from "@mxlang/target-html/runtime"`, bare workspace specifiers) are rewritten to the package's resolved absolute entry point: a
  * bare specifier resolves by walking up from the *importing file* to a
  * `node_modules`, and the scratch copy lives under the OS tmpdir, outside
  * this repo's `node_modules` ancestry, so it would otherwise fail to
@@ -52,8 +52,8 @@ export async function renderTranslator(
   filename: string,
   input: unknown,
 ): Promise<string> {
-  const escapeEntry = require.resolve("@mxlang/html");
-  const runtimeEntry = require.resolve("@mxlang/html/runtime");
+  const escapeEntry = require.resolve("@mxlang/target-html");
+  const runtimeEntry = require.resolve("@mxlang/target-html/runtime");
   const scratch = mkdtempSync(join(tmpdir(), "mx-oracle-translator-"));
   try {
     cpSync(dir, scratch, { recursive: true });
@@ -76,7 +76,7 @@ export async function renderTranslator(
         // `escape`/`createOut` (decision 155's sink) from the package root, and
         // a type-only `AttrTag` import or a `/runtime` specifier may follow.
         .replace(
-          /from "@mxlang\/html(\/runtime)?"/g,
+          /from "@mxlang\/target-html(\/runtime)?"/g,
           (_match, runtime) =>
             `from ${JSON.stringify(runtime ? runtimeEntry : escapeEntry)}`,
         );

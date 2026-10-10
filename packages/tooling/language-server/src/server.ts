@@ -15,7 +15,7 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { withCalleeInputSources } from "@mxlang/core";
-import { resolveTargetPolicyDetailed } from "@mxlang/target-registry";
+import { resolveTargetPolicyDetailed } from "@mxlang/targets";
 import {
   createConnection,
   type Diagnostic,

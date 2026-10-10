@@ -622,7 +622,7 @@ describe("components and slots", () => {
       "<Card>\n  <@item>a</@item>\n  <@item>b</@item>\n</Card>",
     );
     expect(error.message).toBe(
-      "array attribute tag `<@item>` isn't supported by @mxlang/astro: a slot is keyed by name",
+      "array attribute tag `<@item>` isn't supported by @mxlang/host-astro: a slot is keyed by name",
     );
     expect(error.line).toBe(7);
   });
@@ -630,14 +630,14 @@ describe("components and slots", () => {
   it("rejects tag params, which Astro has no render-prop form for", () => {
     const error = errorFor("<Card>\n<@header|item|>${item}</@header>\n</Card>");
     expect(error.message).toContain("params on `<@header>` aren't supported");
-    expect(error.message).toContain("@mxlang/astro");
+    expect(error.message).toContain("@mxlang/host-astro");
     expect(error.line).toBe(6);
   });
 
   it("rejects attributes on an attribute tag with a positioned host error", () => {
     const error = errorFor('<Card>\n<@header tone="loud">H</@header>\n</Card>');
     expect(error.message).toContain(
-      "attributes on `<@header>` aren't supported by @mxlang/astro",
+      "attributes on `<@header>` aren't supported by @mxlang/host-astro",
     );
     expect(error.line).toBe(6);
   });
@@ -647,7 +647,7 @@ describe("components and slots", () => {
       "<Card>\n<@header><@icon>I</@icon></@header>\n</Card>",
     );
     expect(error.message).toContain(
-      "nested attribute tags inside `<@header>` aren't supported by @mxlang/astro",
+      "nested attribute tags inside `<@header>` aren't supported by @mxlang/host-astro",
     );
     expect(error.line).toBe(6);
   });
@@ -656,14 +656,14 @@ describe("components and slots", () => {
     const error = errorFor(
       "<Card>\n<for|item| of=items>\n<@row>${item}</@row>\n</for>\n</Card>",
     );
-    expect(error.message).toContain("@mxlang/astro");
+    expect(error.message).toContain("@mxlang/host-astro");
     expect(error.line).toBe(7);
   });
 
   it("rejects a bodiless attribute tag", () => {
     const error = errorFor("<Card>\n<@header/>\n</Card>");
     expect(error.message).toBe(
-      "<@header/> has no body; @mxlang/astro projects attribute-tag bodies by name",
+      "<@header/> has no body; @mxlang/host-astro projects attribute-tag bodies by name",
     );
     expect(error.line).toBe(6);
   });
@@ -682,7 +682,7 @@ describe("components and slots", () => {
       const source = 'import Card from "./Card.mx";\n<Card/>\n';
 
       expect(() => lowerAstroMx(source, caller)).toThrow(
-        "array attribute tag `<@item>` isn't supported by @mxlang/astro",
+        "array attribute tag `<@item>` isn't supported by @mxlang/host-astro",
       );
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -698,7 +698,7 @@ describe("AttrTag type import", () => {
     );
 
     expect(result.code).toContain(
-      'import type { AttrTag } from "@mxlang/astro";',
+      'import type { AttrTag } from "@mxlang/host-astro";',
     );
   });
 });
@@ -734,7 +734,7 @@ describe("unsupported constructs", () => {
 
   it("rejects a dynamic tag name", () => {
     const message = errorFor("<${Tag}><p>x</p></${Tag}>").message;
-    expect(message).toContain("isn't supported by @mxlang/astro");
+    expect(message).toContain("isn't supported by @mxlang/host-astro");
     expect(message).toContain("resolves component names statically");
   });
 
@@ -744,7 +744,7 @@ describe("unsupported constructs", () => {
     // both are the same error rather than the bare shape silently rendering
     // as an interpolation of the tag-name expression.
     const message = errorFor("${Tag}\n").message;
-    expect(message).toContain("isn't supported by @mxlang/astro");
+    expect(message).toContain("isn't supported by @mxlang/host-astro");
     expect(message).toContain("resolves component names statically");
   });
 });
@@ -879,7 +879,7 @@ describe("a tag that returns a value", () => {
     ).toThrow(
       // The route it names must be one that works since decision 155: the
       // default export returns markup only, so the value comes from `render`.
-      /Astro runs the `---` fence before the template renders.*Call the unit directly from the fence instead.*import \{ createOut \} from "@mxlang\/astro\/runtime"; const value = Mx_Counter\d*\.render\(\{ \.\.\. \}, createOut\(\)\)/s,
+      /Astro runs the `---` fence before the template renders.*Call the unit directly from the fence instead.*import \{ createOut \} from "@mxlang\/host-astro\/runtime"; const value = Mx_Counter\d*\.render\(\{ \.\.\. \}, createOut\(\)\)/s,
     );
   });
 });

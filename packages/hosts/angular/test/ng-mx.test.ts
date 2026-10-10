@@ -1068,8 +1068,8 @@ describe("compileNgMx: event invoker members already declared (per class, by AST
     expect(code.match(/protected readonly __mxOnAt = /g)).toHaveLength(1);
   });
 
-  describe("a base from @mxlang/angular/runtime", () => {
-    const RT = "@mxlang/angular/runtime";
+  describe("a base from @mxlang/host-angular/runtime", () => {
+    const RT = "@mxlang/host-angular/runtime";
     const runtimeFile = (importLine: string, heritage: string, body = "") =>
       classFile(`\n  cancel() {}\n${body}`, importLine).replace(
         "export class XComponent {",

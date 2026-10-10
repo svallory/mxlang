@@ -12,9 +12,9 @@ its exported `Input` marks attribute-tag properties with `AttrTag`.
 
 `AttrTag` is ambient inside `.mx` files. Generated code imports the specialized
 type from the active host package. In hand-written TypeScript or TSX, import it
-from that package yourself, such as `@mxlang/html`, `@mxlang/preact`,
-`@mxlang/react`, `@mxlang/hono`, `@mxlang/solid`, `@mxlang/astro`, or
-`@mxlang/angular`. The generic `AttrTag`, `AttrTagOf`, and `AttrTagConfig` are
+from that package yourself, such as `@mxlang/target-html`, `@mxlang/host-preact`,
+`@mxlang/host-react`, `@mxlang/host-hono`, `@mxlang/host-solid`, `@mxlang/host-astro`, or
+`@mxlang/host-angular`. The generic `AttrTag`, `AttrTagOf`, and `AttrTagConfig` are
 also exported by `@mxlang/core` for host authors.
 
 ## The config
@@ -189,7 +189,7 @@ a data object, its `.content`, and an array:
 
 <!-- attr-tag-example: handwritten-preact preact Tabs.tsx -->
 ```tsx
-import type { AttrTag } from "@mxlang/preact";
+import type { AttrTag } from "@mxlang/host-preact";
 
 export interface Input {
   title: string;
@@ -218,7 +218,7 @@ import Tabs from "./Tabs.tsx"
 </Tabs>
 ```
 
-The same pattern uses `@mxlang/react` in React and `@mxlang/hono` in Hono.
+The same pattern uses `@mxlang/host-react` in React and `@mxlang/host-hono` in Hono.
 When consuming an MX-generated component from JSX/TSX, import that component
 normally; its exported `Input` already exposes these host-specialized prop
 types.

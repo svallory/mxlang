@@ -2,10 +2,10 @@
  * A region file kind's `completeTypecheckModule` warning reaches a real
  * caller's `getCompileDiagnostics`, not only the hook's own return value.
  *
- * Solid's hook (`@mxlang/solid`'s `appendSolidBuiltinImport`) returns a
+ * Solid's hook (`@mxlang/host-solid`'s `appendSolidBuiltinImport`) returns a
  * warning only when the printer emitted invalid TSX — a printer bug no real
  * `.solid.mx` file triggers (`source-bindings-silent-parse-failure`, round 2
- * of the PR #157 review); `@mxlang/solid`'s own tests pin that it returns
+ * of the PR #157 review); `@mxlang/host-solid`'s own tests pin that it returns
  * one. Here the kind is Solid's with the hook replaced by one that returns
  * the same shape, so `createRegionLanguagePlugin`'s real `createVirtualCode`
  * and `compileDiagnostics` plumbing run unmocked.

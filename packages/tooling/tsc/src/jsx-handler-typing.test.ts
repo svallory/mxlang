@@ -99,9 +99,9 @@ beforeAll(() => {
             allowImportingTsExtensions: true,
             baseUrl: ".",
             paths: {
-              "@mxlang/preact": [hostDir("preact")],
-              "@mxlang/react": [hostDir("react")],
-              "@mxlang/hono": [hostDir("hono")],
+              "@mxlang/host-preact": [hostDir("preact")],
+              "@mxlang/host-react": [hostDir("react")],
+              "@mxlang/host-hono": [hostDir("hono")],
               "@mxlang/core": [
                 join(repoRoot, "packages", "core", "src", "index.ts"),
               ],

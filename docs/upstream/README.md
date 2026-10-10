@@ -285,7 +285,7 @@ delegate to `parseFragmentNative` (a local, uncommitted one-line change, not
 part of this commit) and the following ran:
 
 ```
-bunx vitest run --project @mxlang/core --project @mxlang/solid --project @mxlang/tsx-bridge
+bunx vitest run --project @mxlang/core --project @mxlang/host-solid --project @mxlang/tsx-bridge
 ```
 ```
 Test Files  16 passed (16)

@@ -9,7 +9,7 @@ and publishes one LSP `Diagnostic` for a positioned compile error. A
 successful compile clears any previous diagnostics for that file.
 
 - **Angular-host documents get real compile/translate diagnostics.** A
-  whole-file `.mx` under the Angular host compiles through `@mxlang/angular`'s
+  whole-file `.mx` under the Angular host compiles through `@mxlang/host-angular`'s
   `compile`; a `.ng.mx` (a TypeScript module with MX regions) compiles
   whole-file through `compileNgMx`, routed by suffix, so errors and warnings
   inside an MX region appear at their authored position. Angular *template*
@@ -22,8 +22,8 @@ successful compile clears any previous diagnostics for that file.
   compiles under the host the resolver derives (the `@mxlang` dependency's, or
   the html default), the same as `mx-tsc` and vite.
 - `.mx` compiles as a whole-file template under the resolved host
-  policy. The HTML and Astro hosts use `@mxlang/html`; a file routed to
-  `host: "solid"` uses `@mxlang/solid`'s fixed profile, where stateful Marko
+  policy. The HTML and Astro hosts use `@mxlang/target-html`; a file routed to
+  `host: "solid"` uses `@mxlang/host-solid`'s fixed profile, where stateful Marko
   tags such as `<let>` are errors.
 - `.solid.mx` parses as a whole TypeScript/TSX module through
   `@mxlang/tsx-bridge`, the same region-discovery and Solid-lowering path used by
@@ -66,11 +66,11 @@ this by walking upward from the file, looking for the nearest `package.json`:
    doubles as the routing config `@mxlang/vite-plugin`/the Bun loader already
    need for a mixed project (decision 71's "mixed projects" case).
 2. Otherwise, if that `package.json` depends on **exactly one** `@mxlang/*`
-   host package (`@mxlang/html`, `@mxlang/astro`, `@mxlang/solid`), use that
+   host package (`@mxlang/target-html`, `@mxlang/host-astro`, `@mxlang/host-solid`), use that
    host at its default (non-strict) policy.
 3. Otherwise, fall back to the translator's default (non-strict) policy.
 
-`@mxlang/astro` always compiles under its strict policy (it ships no stateful
+`@mxlang/host-astro` always compiles under its strict policy (it ships no stateful
 tags), whatever `strict` says. The Solid host also has a fixed profile:
 `host: "solid"` routes a whole-file `.mx` template through
 `compileSolidUnit` (decision 115; the *region* compiler, `compileSolidMx`,
@@ -191,7 +191,7 @@ bunx vitest run --root ../.. --project @mxlang/language-server
 `src/diagnose.test.ts` covers HTML policy diagnostics, Solid host and parse
 errors with exact positions, clean documents, Solid-host `.mx`, and the
 locationless-error callback. `@mxlang/core`'s `src/host-policy.test.ts` covers explicit,
-dependency-derived (including `@mxlang/solid`), and fallback policies.
+dependency-derived (including `@mxlang/host-solid`), and fallback policies.
 `src/server.test.ts` exercises stdio routing for `.mx`, `.solid.mx`, and the
 `solidmx` language id. Requires `bun run build` first (see the root
 `AGENTS.md` "Running tests in a fresh worktree").

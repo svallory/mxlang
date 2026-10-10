@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { compileNgMx } from "@mxlang/angular";
+import { compileNgMx } from "@mxlang/host-angular";
 import { afterEach, describe, expect, it } from "vitest";
 import { createAngularChecker, diagnoseNgMx } from "./index.ts";
 

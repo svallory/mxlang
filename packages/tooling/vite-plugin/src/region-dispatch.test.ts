@@ -8,7 +8,7 @@ import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { clearScanCache } from "@mxlang/core";
-import { builtinLookup, builtinTargets } from "@mxlang/target-registry";
+import { builtinLookup, builtinTargets } from "@mxlang/targets";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   type MeshGlobals,
@@ -121,7 +121,7 @@ describe("a file no region kind registers compiles whole-file", () => {
     );
     // The html target's string module, not a printed TypeScript region file.
     expect(result?.code).toContain("whole file");
-    expect(result?.code).toContain("@mxlang/html");
+    expect(result?.code).toContain("@mxlang/target-html");
   });
 });
 

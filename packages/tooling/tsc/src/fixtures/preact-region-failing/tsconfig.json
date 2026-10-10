@@ -11,7 +11,7 @@
     "allowImportingTsExtensions": true,
     "baseUrl": ".",
     "paths": {
-      "@mxlang/preact": ["../../../../../hosts/preact/src/index.ts"],
+      "@mxlang/host-preact": ["../../../../../hosts/preact/src/index.ts"],
       "@mxlang/core": ["../../../../../core/src/index.ts"],
       "@mxlang/tsx-bridge": ["../../../../../tsx-bridge/src/public.d.ts"]
     },

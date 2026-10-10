@@ -1,4 +1,4 @@
-import type { AttrTag } from "@mxlang/solid";
+import type { AttrTag } from "@mxlang/host-solid";
 
 export interface Input {
   item: AttrTag<{ as: "renderable" }>;

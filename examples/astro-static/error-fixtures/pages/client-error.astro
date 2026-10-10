@@ -4,7 +4,7 @@
 // `e2e/build-errors.spec.ts` copies it into `src/pages/` for one build, asserts
 // the error, and removes it again.
 //
-// `@mxlang/astro` registers a renderer with no `clientEntrypoint`, because an
+// `@mxlang/host-astro` registers a renderer with no `clientEntrypoint`, because an
 // MX component is a `(input) => string` function with no state and nothing to
 // hydrate. Astro 7.3.2 raises no error of its own here (`NoClientEntrypoint`
 // is defined and never thrown), so the renderer throws on `metadata.hydrate`

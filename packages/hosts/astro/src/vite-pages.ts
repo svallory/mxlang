@@ -21,7 +21,7 @@
 import type { Plugin } from "vite";
 
 /**
- * The exact tail `@mxlang/html`'s `brandRender` (`translate.ts`) always
+ * The exact tail `@mxlang/target-html`'s `brandRender` (`translate.ts`) always
  * appends: the `Symbol.for("mx.component")` brand on the render function,
  * then `export default <Name>;` — where `<Name>` is the file's own derived
  * export name (`about.mx` -> `About`), the *same* name in both halves.
@@ -43,7 +43,7 @@ import type { Plugin } from "vite";
 // or an imported tag unit inlined by the bundler, would be renamed to
 // `__mxRenderPage` and the real render function left alone. The tail names
 // exactly one function, and the same name must appear in both halves of it.
-// The optional `as …` is the signature `@mxlang/html` restates on the export:
+// The optional `as …` is the signature `@mxlang/target-html` restates on the export:
 // the bundler has erased it by the time this post plugin runs, but a caller
 // that hands over the compiled TypeScript itself still sees it.
 const EXPORT_DEFAULT_RENDER_RE =
@@ -69,7 +69,7 @@ const LAYOUT_EXPORT_RE = /^export const layout = (["'])((?:(?!\1).)*)\1;\n?/m;
 /**
  * A bare `export const NAME = ...;` at module scope, for the frontmatter
  * object. Matched over already-compiled JS text, not the AST — tightly
- * coupled to exactly how `@mxlang/core`/`@mxlang/html` format a
+ * coupled to exactly how `@mxlang/core`/`@mxlang/target-html` format a
  * hoisted `export const` line today (one name, single-line). A future
  * codegen change there (e.g. multi-variable `export const a = 1, b = 2;`)
  * could silently under-extract names with no core-side test to catch it —
@@ -240,7 +240,7 @@ export function mxPages(srcDir: URL): Plugin {
         // Decision 61: this file plainly lives under `src/pages/` and passed
         // the extension test above, so it is unambiguously a page module —
         // `wrapAsPage` returning `null` here means the branded-tail regexes
-        // did not match `@mxlang/html`'s actual emitted shape (a drift
+        // did not match `@mxlang/target-html`'s actual emitted shape (a drift
         // in `brandRender`'s output, not "this isn't a page"). Silently
         // falling through would ship the file as a bare component export —
         // the wrong shape for Astro's router — with no signal anywhere that
@@ -248,10 +248,10 @@ export function mxPages(srcDir: URL): Plugin {
         // file, so a future `brandRender` format change breaks the build
         // here rather than shipping broken pages silently.
         throw new Error(
-          `@mxlang/astro: could not wrap ${path} as a page — the compiled ` +
-            "module did not match @mxlang/html's expected branded " +
+          `@mxlang/host-astro: could not wrap ${path} as a page — the compiled ` +
+            "module did not match @mxlang/target-html's expected branded " +
             "export shape. This file is under src/pages and should be a " +
-            "page; if @mxlang/html's emit format changed, update " +
+            "page; if @mxlang/target-html's emit format changed, update " +
             "EXPORT_DEFAULT_RENDER_RE/brandedTailRe in vite-pages.ts to match.",
         );
       }

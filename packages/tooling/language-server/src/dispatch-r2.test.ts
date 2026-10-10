@@ -25,7 +25,7 @@ afterEach(() => {
 function reactTypedCallee(dir: string): void {
   writeFileSync(
     join(dir, "Card.mx"),
-    'import type { AttrTag } from "@mxlang/react"\nexport interface Input { header: AttrTag }\n<div/>\n',
+    'import type { AttrTag } from "@mxlang/host-react"\nexport interface Input { header: AttrTag }\n<div/>\n',
   );
 }
 

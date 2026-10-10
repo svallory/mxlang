@@ -1,5 +1,5 @@
 /**
- * Position mapping for `@mxlang/angular` (design note A5, task 2.2b).
+ * Position mapping for `@mxlang/host-angular` (design note A5, task 2.2b).
  *
  * The emitter builds its template by appending text, so mappings are recorded
  * as it goes rather than derived afterwards from node positions: a

@@ -1,4 +1,4 @@
-import type { AttrTag } from "@mxlang/hono";
+import type { AttrTag } from "@mxlang/host-hono";
 
 export interface Input {
   row?: AttrTag<{ as: "renderable"; params: [count: number] }>;

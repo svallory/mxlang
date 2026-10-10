@@ -102,7 +102,7 @@ export function astroMxPagesMessage(files: string[], pagesDir: string): string {
       `component from it, or write the page as \`${base}.mx\`.`
     );
   });
-  return `@mxlang/astro: ${files.length} \`${ASTRO_MX_EXT}\` file${files.length === 1 ? "" : "s"} under the pages directory (\`${ASTRO_MX_EXT}\` is for components and layouts, decision 134):\n${lines.join("\n")}`;
+  return `@mxlang/host-astro: ${files.length} \`${ASTRO_MX_EXT}\` file${files.length === 1 ? "" : "s"} under the pages directory (\`${ASTRO_MX_EXT}\` is for components and layouts, decision 134):\n${lines.join("\n")}`;
 }
 
 /** Throws the error for every `.astro.mx` file under `<srcDir>/pages`. */

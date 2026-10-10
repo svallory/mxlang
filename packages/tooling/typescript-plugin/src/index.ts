@@ -1,5 +1,5 @@
 import { dirname, join } from "node:path";
-import { builtinFileKinds } from "@mxlang/target-registry";
+import { builtinFileKinds } from "@mxlang/targets";
 import type { Language } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import { createLanguageServicePlugin } from "@volar/typescript/lib/quickstart/createLanguageServicePlugin";

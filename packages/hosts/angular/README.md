@@ -1,4 +1,4 @@
-# @mxlang/angular
+# @mxlang/host-angular
 
 **Preview.** This host is not yet a complete "Angular host" by decision
 70's own bar (a host is not done without its TypeScript plugin; that part
@@ -19,7 +19,7 @@ Marko's syntax and brings it to wherever JSX lives today, MX 1.0 being a
 strict subset of Marko so every borrowed Marko tool keeps working. `.mx` is
 MX's only extension.
 
-`@mxlang/angular` compiles an MX (`.mx`) page template to a plain Angular
+`@mxlang/host-angular` compiles an MX (`.mx`) page template to a plain Angular
 template string — no runtime and no `@angular/*` code in the compiled
 output. `@angular/compiler` (`>=22.0.0 <23.0.0`) is an optional peer
 dependency, resolved from your project and never bundled: the emitter reads
@@ -29,7 +29,7 @@ is missing fails with a positioned error naming the package. The test suite
 also asserts every golden against the real compiler's `parseTemplate`.
 
 ```ts
-import { compile } from "@mxlang/angular";
+import { compile } from "@mxlang/host-angular";
 
 const { code, warnings } = compile(source, "app.component.mx");
 ```
@@ -181,7 +181,7 @@ names would fall through the emitter's bare-case test and render as a
 literal lowercase element instead — the same silent-wrong-render bug this
 error table closes.
 
-## Event handlers and `@mxlang/angular/runtime`
+## Event handlers and `@mxlang/host-angular/runtime`
 
 A template that binds an element event calls two members on its component,
 `__mxOn` and `__mxOnAt` (decision 117). `.ng.mx` and tag modules get them
@@ -190,13 +190,13 @@ extends the zero-import runtime subpath, which carries the same members
 (public, `@internal`):
 
 ```ts
-import { MxHandlers, MxHandlersMixin } from "@mxlang/angular/runtime";
+import { MxHandlers, MxHandlersMixin } from "@mxlang/host-angular/runtime";
 
 export class FormComponent extends MxHandlers {}
 export class ListComponent extends MxHandlersMixin(PagedBase) {}
 ```
 
-If application code imports `@mxlang/angular/runtime`, list `@mxlang/angular`
+If application code imports `@mxlang/host-angular/runtime`, list `@mxlang/host-angular`
 under `dependencies`, not `devDependencies`: `npm ci --omit=dev` would leave a
 production build without it. Its own runtime dependencies (see `package.json`) are
 installed too, not bundled. Extend `MxHandlers` / `MxHandlersMixin` directly:

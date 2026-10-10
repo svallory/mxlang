@@ -84,7 +84,7 @@ describe("builds that are supposed to fail", () => {
     // Round-2 gap: the test above only exercises the component path (a
     // `.astro` page importing a stateful `.mx` component). This one is a
     // `.mx` file placed directly under `src/pages` — page mode, going
-    // through `@mxlang/astro`'s `mxPages` Vite plugin. The strict policy is
+    // through `@mxlang/host-astro`'s `mxPages` Vite plugin. The strict policy is
     // enforced at `@mxlang/vite-plugin`'s compile step, before `mxPages`'s
     // `enforce: "post"` transform ever runs, so this fails the same way for
     // the same reason — but that was previously unverified for the page case.

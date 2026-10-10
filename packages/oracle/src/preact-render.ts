@@ -8,11 +8,11 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
-import { compilePreactFile } from "@mxlang/preact";
+import { compilePreactFile } from "@mxlang/host-preact";
 import { discoveredCustomTags, mxTwins } from "./mx-twins.ts";
 
 /**
- * Renders a stock `.marko` fixture through `@mxlang/preact`, by loading the
+ * Renders a stock `.marko` fixture through `@mxlang/host-preact`, by loading the
  * emitted component module and handing it to `preact-render-to-string`.
  *
  * The same shape as `translator-render.ts`'s harness for the string host, and
@@ -30,7 +30,7 @@ import { discoveredCustomTags, mxTwins } from "./mx-twins.ts";
  *   specifiers still have to resolve: the copy lives under the OS tmpdir,
  *   outside this repo's `node_modules` ancestry. A `node_modules` symlink
  *   pointing back at the repo's own is what makes them resolve, exactly as the
- *   string harness rewrites its one `@mxlang/html` specifier to an absolute
+ *   string harness rewrites its one `@mxlang/target-html` specifier to an absolute
  *   path for the same reason.
  */
 export async function renderPreact(
@@ -66,10 +66,10 @@ export async function renderPreact(
         // from the importing file, and the scratch copy lives under the OS
         // tmpdir — outside this repo's `node_modules` ancestry — so the one
         // known specifier is rewritten to the resolved absolute path, exactly
-        // as `translator-render.ts` does for `@mxlang/html`'s `escape`.
+        // as `translator-render.ts` does for `@mxlang/target-html`'s `escape`.
         .replace(
-          '"@mxlang/preact/runtime"',
-          JSON.stringify(require.resolve("@mxlang/preact/runtime")),
+          '"@mxlang/host-preact/runtime"',
+          JSON.stringify(require.resolve("@mxlang/host-preact/runtime")),
         );
 
       writeFileSync(withTsxExtension(file), rewritten);

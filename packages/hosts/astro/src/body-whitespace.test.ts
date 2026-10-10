@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { getCustomTags } from "@mxlang/core";
-import { compile, htmlTargets } from "@mxlang/html";
+import { compile, htmlTargets } from "@mxlang/target-html";
 import { experimental_AstroContainer as AstroContainer } from "astro/container";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import cases from "../../../../test-fixtures/body-whitespace/cases.json";
@@ -61,7 +61,7 @@ beforeAll(async () => {
     pathToFileURL(astroRequire.resolve("@astrojs/compiler-rs")).href
   );
   container = await AstroContainer.create();
-  container.addServerRenderer({ name: "@mxlang/astro", renderer });
+  container.addServerRenderer({ name: "@mxlang/host-astro", renderer });
 });
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 

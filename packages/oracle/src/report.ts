@@ -1,6 +1,6 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { compileSolidMx } from "@mxlang/solid";
+import { compileSolidMx } from "@mxlang/host-solid";
 import type { MxRegionCompile } from "@mxlang/tsx-bridge";
 import { parse } from "@mxlang/tsx-bridge";
 import { compare } from "./compare";

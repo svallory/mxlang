@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { TargetCompiler, TargetDescriptor } from "@mxlang/core";
 import * as core from "@mxlang/core";
-import { builtinLookup } from "@mxlang/target-registry";
+import { builtinLookup } from "@mxlang/targets";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import mx, { MX_SUFFIX } from "./index.ts";
 

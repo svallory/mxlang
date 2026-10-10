@@ -33,9 +33,9 @@ describe("descriptor lookup forwarding", () => {
   for (const descriptor of wired) {
     it(`${descriptor.name} uses the caller's full lookup for a cross-target AttrTag import`, () => {
       const filename = callee(
-        descriptor.packageName === "@mxlang/react"
-          ? "@mxlang/solid"
-          : "@mxlang/react",
+        descriptor.packageName === "@mxlang/host-react"
+          ? "@mxlang/host-solid"
+          : "@mxlang/host-react",
       );
       // This variable is intentionally structurally assignable before the
       // optional contract field lands too, so the initial failure is runtime.

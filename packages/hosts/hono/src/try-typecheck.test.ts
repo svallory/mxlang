@@ -40,7 +40,7 @@ beforeAll(() => {
     join(repo, "node_modules/hono"),
     join(project, "node_modules/hono"),
   );
-  symlinkSync(pkg, join(project, "node_modules/@mxlang/hono"));
+  symlinkSync(pkg, join(project, "node_modules/@mxlang/host-hono"));
   writeFileSync(
     join(project, "package.json"),
     JSON.stringify({ mx: { host: "hono" } }),

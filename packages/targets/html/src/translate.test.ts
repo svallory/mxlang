@@ -15,7 +15,7 @@ import { brandRender } from "./translate.ts";
  * rendered HTML for constructs that *work*; these assert the policy table of
  * decision 65 — which constructs are accepted with no output (inert), which
  * are errors because the target genuinely cannot express them, and the
- * conventions that differ from `@mxlang/html`'s dialect.
+ * conventions that differ from `@mxlang/target-html`'s dialect.
  *
  * The distinction the table turns on: a construct that only configures
  * behaviour after the first render is inert, and one that contributes output
@@ -63,7 +63,7 @@ async function renderModules(
       if (!name.endsWith(".mx")) continue;
       const path = join(dir, name);
       const code = compile(src(source), path)
-        .code.replaceAll('from "@mxlang/html"', 'from "./runtime.ts"')
+        .code.replaceAll('from "@mxlang/target-html"', 'from "./runtime.ts"')
         .replace(/(from\s+")(\.[^"]+)\.mx(")/g, "$1$2.ts$3");
       writeFileSync(path.replace(/\.mx$/, ".ts"), code);
     }
@@ -253,7 +253,7 @@ describe("class:foo / style:foo modifiers", () => {
   // ("`class:active` is not a valid attribute, did you mean
   // `class={ active: condition }`?"), so matching Marko means rejecting them.
   // The message must be this dialect's own — the shared core's fallback is
-  // `@mxlang/html`'s "standalone template" wording, which is `.mx` vocabulary
+  // `@mxlang/target-html`'s "standalone template" wording, which is `.mx` vocabulary
   // leaking into a Marko-parity target.
   it.each([
     ["class:active", "<div class:active=input.on>a</div>"],
@@ -1444,7 +1444,9 @@ describe("attribute-tag v2 values (executed)", () => {
       ),
       file,
     ).code;
-    expect(code).toContain('import type { AttrTag } from "@mxlang/html";');
+    expect(code).toContain(
+      'import type { AttrTag } from "@mxlang/target-html";',
+    );
   });
 
   it("names ordinary children `content`, the prop Marko's own tags read", () => {
@@ -2046,7 +2048,7 @@ describe("module shape", () => {
   it("imports the runtime and default-exports the renderer", () => {
     const { code } = compile(src("<p>hi</p>"), file);
     expect(code).toContain(
-      'import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from "@mxlang/html";',
+      'import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from "@mxlang/target-html";',
     );
     expect(code).toContain("function Probe(input: Input): string {");
     // Typed as its signature, not left as `typeof Probe` (the declaration
@@ -2091,7 +2093,7 @@ describe("module shape", () => {
 
   it("brands the default export so a host's `check()` can recognize it", () => {
     // A framework host receives a component as an opaque value —
-    // `@mxlang/astro`'s renderer gets `check(Component, props, slots)` and
+    // `@mxlang/host-astro`'s renderer gets `check(Component, props, slots)` and
     // nothing else — so the compiled function carries a marker rather than
     // being identified by name (which a minifier may rewrite) or by call
     // shape (which every `(props) => string` function shares).
@@ -2115,7 +2117,7 @@ describe("module shape", () => {
     // Drifted in the parameter type, which the shape pins; the *name* is
     // deliberately not pinned, since it is derived from the filename now.
     const drifted = [
-      'import { escape } from "@mxlang/html";',
+      'import { escape } from "@mxlang/target-html";',
       "",
       "export interface Input {}",
       "",
@@ -2304,7 +2306,7 @@ describe("local scope bindings shadow a registered custom tag (executed)", () =>
       const code = compile(src(body), path, {
         customTags: { Panel: panel },
       }).code.replaceAll(
-        'from "@mxlang/html"',
+        'from "@mxlang/target-html"',
         `from ${JSON.stringify(fileURLToPath(new URL("./index.ts", import.meta.url)))}`,
       );
       writeFileSync(path.replace(/\.mx$/, ".ts"), code);
@@ -2422,7 +2424,7 @@ describe("a custom tag's built void elements (executed)", () => {
       const code = compile(src("<built/>"), path, {
         customTags: { built: tag },
       }).code.replaceAll(
-        'from "@mxlang/html"',
+        'from "@mxlang/target-html"',
         `from ${JSON.stringify(fileURLToPath(new URL("./index.ts", import.meta.url)))}`,
       );
       writeFileSync(path.replace(/\.mx$/, ".ts"), code);
@@ -2682,14 +2684,14 @@ describe("event attributes (decision 101, phase B of dom-events)", () => {
   it("rejects an expression-valued event handler: a string render has no runtime", () => {
     const body = "<button onClick=handler>x</button>";
     expect(() => compile(src(body), file)).toThrow(
-      "`onClick` is an event handler and requires a runtime; @mxlang/html renders once to a string",
+      "`onClick` is an event handler and requires a runtime; @mxlang/target-html renders once to a string",
     );
   });
 
   it("rejects a custom event name the same way", () => {
     const body = "<div on-my-event=fn>x</div>";
     expect(() => compile(src(body), file)).toThrow(
-      "`on-my-event` is an event handler and requires a runtime; @mxlang/html renders once to a string",
+      "`on-my-event` is an event handler and requires a runtime; @mxlang/target-html renders once to a string",
     );
   });
 

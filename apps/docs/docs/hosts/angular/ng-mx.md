@@ -51,13 +51,13 @@ template: <Card><@title>Team</@title></Card>,
 `onClick=clear` compiles to `(click)="__mxOn(clear, this, $event)"`. The call goes through a small typed invoker so that a handler with no parameters, one, or Marko's `(event, element)` all type-check under `strictTemplates`. MX adds the two invoker members (`__mxOn`, `__mxOnAt`) to your class. To own them instead, extend the base class and MX adds nothing:
 
 ```ts
-import { MxHandlers, MxHandlersMixin } from "@mxlang/angular/runtime";
+import { MxHandlers, MxHandlersMixin } from "@mxlang/host-angular/runtime";
 
 export class FormComponent extends MxHandlers {}
 export class ListComponent extends MxHandlersMixin(PagedBase) {}
 ```
 
-Extend them directly. Through an alias or a base class in another file, MX cannot see the members, adds its own, and TypeScript reports the clash (TS2415). Importing the runtime makes `@mxlang/angular` a `dependencies` entry, not a dev one. Details are in [Events](/hosts/angular/lowering/#angular-what-mx-compiles-to-events).
+Extend them directly. Through an alias or a base class in another file, MX cannot see the members, adds its own, and TypeScript reports the clash (TS2415). Importing the runtime makes `@mxlang/host-angular` a `dependencies` entry, not a dev one. Details are in [Events](/hosts/angular/lowering/#angular-what-mx-compiles-to-events).
 
 ## What the build writes
 

@@ -23,7 +23,7 @@ import {
   type TargetDescriptor,
   type TemplateBackedTag,
 } from "@mxlang/core";
-import { builtinLookup } from "@mxlang/target-registry";
+import { builtinLookup } from "@mxlang/targets";
 import { print } from "@mxlang/tsx-bridge";
 import ts from "typescript";
 import {
@@ -425,7 +425,7 @@ describe("Solid language plugin", () => {
       const component = "/project/AfterRegion.solid.mx";
       const consumer = "/project/index.ts";
       const source = [
-        'import type { AttrTag } from "@mxlang/solid";',
+        'import type { AttrTag } from "@mxlang/host-solid";',
         "",
         ...lines,
       ].join("\n");
@@ -992,7 +992,7 @@ describe("MX language plugin", () => {
 
     it("resolves a discovered tag in an .astro.mx page too", () => {
       // `createAmxLanguagePlugin` lowered with no options while
-      // `@mxlang/astro`'s Vite plugin passed `{ customTags }`, so a tag that
+      // `@mxlang/host-astro`'s Vite plugin passed `{ customTags }`, so a tag that
       // compiled under `astro build` was an unknown tag in the editor and
       // under `mx-tsc --astro` — the asymmetry already closed for
       // `.solid.mx`.
@@ -1740,7 +1740,7 @@ describe("MX language plugin", () => {
       const card =
         host === "solid"
           ? [
-              'import type { AttrTag } from "@mxlang/solid";',
+              'import type { AttrTag } from "@mxlang/host-solid";',
               "export interface Input { tab: AttrTag<{ attrs: { title: string } }> }",
               "export default function Card(_input: Input) { return null; }",
             ].join("\n")
@@ -1783,7 +1783,7 @@ describe("MX language plugin", () => {
     const caller = "/project/Wrong.solid.mx";
     const consumer = "/project/index.ts";
     const card = [
-      'import type { AttrTag } from "@mxlang/solid";',
+      'import type { AttrTag } from "@mxlang/host-solid";',
       "export interface Input { tab: AttrTag<{ attrs: { first: string; title: string; last: string } }> }",
       "export default function Card(_input: Input) { return null; }",
     ].join("\n");
@@ -1833,7 +1833,7 @@ describe("MX language plugin", () => {
       const caller = "/project/Wrong.solid.mx";
       const consumer = "/project/index.ts";
       const card = [
-        'import type { AttrTag } from "@mxlang/solid";',
+        'import type { AttrTag } from "@mxlang/host-solid";',
         "export interface Input { tab: AttrTag<{ attrs: { title: string; after: string } }> }",
         "export default function Card(_input: Input) { return null; }",
       ].join("\n");
@@ -1873,7 +1873,7 @@ describe("MX language plugin", () => {
     const caller = "/project/Wrong.solid.mx";
     const consumer = "/project/index.ts";
     const card = [
-      'import type { AttrTag } from "@mxlang/solid";',
+      'import type { AttrTag } from "@mxlang/host-solid";',
       "export interface Input { tab: AttrTag<{ attrs: { title: string } }> }",
       "export default function Card(_input: Input) { return null; }",
     ].join("\n");
@@ -1921,12 +1921,12 @@ describe("MX language plugin", () => {
     const caller = "/project/Wrong.solid.mx";
     const consumer = "/project/index.ts";
     const card = [
-      'import type { AttrTag } from "@mxlang/solid";',
+      'import type { AttrTag } from "@mxlang/host-solid";',
       "export interface Input { tab: AttrTag<{ attrs: { title: string } }> }",
       "export default function Card(_input: Input) { return null; }",
     ].join("\n");
     const modal = [
-      'import type { AttrTag } from "@mxlang/solid";',
+      'import type { AttrTag } from "@mxlang/host-solid";',
       "export interface Input { tab: AttrTag<{ attrs: { title: string } }> }",
       "export default function Modal(_input: Input) { return null; }",
     ].join("\n");
@@ -1970,12 +1970,12 @@ describe("MX language plugin", () => {
     const caller = "/project/Wrong.solid.mx";
     const consumer = "/project/index.ts";
     const inner = [
-      'import type { AttrTag } from "@mxlang/solid";',
+      'import type { AttrTag } from "@mxlang/host-solid";',
       "export interface Input { sub: AttrTag<{ attrs: { title: string } }> }",
       "export default function Inner(_input: Input) { return null; }",
     ].join("\n");
     const outer = [
-      'import type { AttrTag } from "@mxlang/solid";',
+      'import type { AttrTag } from "@mxlang/host-solid";',
       "export interface Input { tab: AttrTag<{}> }",
       "export default function Card(_input: Input) { return null; }",
     ].join("\n");
@@ -2026,7 +2026,7 @@ describe("MX language plugin", () => {
       const card =
         host === "solid"
           ? [
-              'import type { AttrTag } from "@mxlang/solid";',
+              'import type { AttrTag } from "@mxlang/host-solid";',
               input,
               'export const broken: number = "text";',
               "export default function Card(_input: Input) { return null; }",
@@ -3145,7 +3145,7 @@ describe("declared attribute-tag values in the emitted TypeScript", () => {
   const solidDirectory = `${here}/fixtures/solid-policy`;
   const preactDirectory = `${here}/fixtures/preact-policy`;
   const solidCard = [
-    'import type { AttrTag } from "@mxlang/solid";',
+    'import type { AttrTag } from "@mxlang/host-solid";',
     "export interface Input {",
     '  b?: AttrTag<{ as: "renderable" }>;',
     '  row?: AttrTag<{ as: "renderable"; params: [count: number] }>;',
@@ -4156,10 +4156,16 @@ function emittedDiagnostics(
     baseUrl: repoRoot,
     paths: {
       "@mxlang/core": [join(repoRoot, "packages/core/src/index.ts")],
-      "@mxlang/preact": [join(repoRoot, "packages/hosts/preact/src/index.ts")],
-      "@mxlang/solid": [join(repoRoot, "packages/hosts/solid/src/index.ts")],
-      "@mxlang/html": [join(repoRoot, "packages/targets/html/src/index.ts")],
-      "@mxlang/astro/typecheck": [
+      "@mxlang/host-preact": [
+        join(repoRoot, "packages/hosts/preact/src/index.ts"),
+      ],
+      "@mxlang/host-solid": [
+        join(repoRoot, "packages/hosts/solid/src/index.ts"),
+      ],
+      "@mxlang/target-html": [
+        join(repoRoot, "packages/targets/html/src/index.ts"),
+      ],
+      "@mxlang/host-astro/typecheck": [
         join(repoRoot, "packages/hosts/astro/src/typecheck.ts"),
       ],
       "@mxlang/tsx-bridge": [
@@ -4351,10 +4357,16 @@ function createMutablePluginService(
     baseUrl: repoRoot,
     paths: {
       "@mxlang/core": [join(repoRoot, "packages/core/src/index.ts")],
-      "@mxlang/html": [join(repoRoot, "packages/targets/html/src/index.ts")],
-      "@mxlang/preact": [join(repoRoot, "packages/hosts/preact/src/index.ts")],
-      "@mxlang/solid": [join(repoRoot, "packages/hosts/solid/src/index.ts")],
-      "@mxlang/astro/typecheck": [
+      "@mxlang/target-html": [
+        join(repoRoot, "packages/targets/html/src/index.ts"),
+      ],
+      "@mxlang/host-preact": [
+        join(repoRoot, "packages/hosts/preact/src/index.ts"),
+      ],
+      "@mxlang/host-solid": [
+        join(repoRoot, "packages/hosts/solid/src/index.ts"),
+      ],
+      "@mxlang/host-astro/typecheck": [
         join(repoRoot, "packages/hosts/astro/src/typecheck.ts"),
       ],
       "@mxlang/tsx-bridge": [

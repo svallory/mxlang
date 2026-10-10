@@ -21,7 +21,7 @@ checker.dispose();
 
 ## Why this package exists separately
 
-`@mxlang/angular` (the emitter) ships **no Angular runtime dependency**
+`@mxlang/host-angular` (the emitter) ships **no Angular runtime dependency**
 (decision 79). The Q1 diagnostics path needs `@angular/compiler-cli` at
 check time, so it lives here instead, as a tooling package.
 
@@ -43,7 +43,7 @@ plugin or `mx-tsc` already has one.
 ## `.ng.mx`
 
 ```ts
-import { compileNgMx } from "@mxlang/angular";
+import { compileNgMx } from "@mxlang/host-angular";
 import { createAngularChecker, diagnoseNgMx } from "@mxlang/angular-checker";
 
 const compiled = compileNgMx(source, "/app/x.component.ng.mx");

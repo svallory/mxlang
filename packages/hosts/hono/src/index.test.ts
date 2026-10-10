@@ -8,7 +8,7 @@ function compile(source: string): string {
 
 it("keeps framework diagnostics separate from host capability diagnostics", () => {
   expect(honoDialect.name).toBe("Hono");
-  expect(honoDeclarations.name).toBe("@mxlang/hono");
+  expect(honoDeclarations.name).toBe("@mxlang/host-hono");
 });
 
 function markup(source: string): string {
@@ -36,7 +36,7 @@ describe("Hono dialect", () => {
 
   it("a type-only import does not resolve a capitalized tag (decision 114 parity, #151)", () => {
     // A type-only import binds no runtime value, so `<Widget/>` has nothing
-    // to call -- the same rule `@mxlang/html`/`@mxlang/solid` already
+    // to call -- the same rule `@mxlang/target-html`/`@mxlang/host-solid` already
     // enforce (`import type` excluded from `ctx.imports`).
     expect(
       errorOf('import type Widget from "./widget.mx"\n<Widget/>'),
@@ -65,7 +65,7 @@ describe("Hono dialect", () => {
   it("imports Hono's specialised AttrTag type", () => {
     expect(
       compile("export interface Input { head?: AttrTag }\n<p>x</p>"),
-    ).toContain('import type { AttrTag } from "@mxlang/hono";');
+    ).toContain('import type { AttrTag } from "@mxlang/host-hono";');
   });
 
   it("renders a body-only fallback bare through the shared dynamic path", async () => {
@@ -221,7 +221,7 @@ describe("Hono dialect", () => {
     expect(code).toContain("class={__mxClass({active: input.on})}");
     expect(code).toContain("style={{color: input.color}}");
     expect(code).toContain(
-      'import { mxClass as __mxClass } from "@mxlang/hono/runtime";',
+      'import { mxClass as __mxClass } from "@mxlang/host-hono/runtime";',
     );
   });
 
@@ -242,7 +242,7 @@ describe("Hono dialect", () => {
       'import Risky from "./Risky.mx"\n<try><Risky/><@catch|error|><p>${error.message}</p></@catch></try>',
     );
     expect(code).toContain(
-      'import { MxErrorBoundary as __mxErrorBoundary } from "@mxlang/hono/runtime";',
+      'import { MxErrorBoundary as __mxErrorBoundary } from "@mxlang/host-hono/runtime";',
     );
     expect(code).toContain(
       "<__mxErrorBoundary fallback={(error) => <p>{error.message}</p>}>{() => (<><Risky />",
@@ -264,7 +264,7 @@ describe("Hono dialect", () => {
       'import Risky from "./Risky.mx"\n<try><Risky/><@placeholder><p>loading</p></@placeholder></try>',
     );
     expect(code).toContain(
-      'import { Suspense as __mxSuspense } from "@mxlang/hono/runtime";',
+      'import { Suspense as __mxSuspense } from "@mxlang/host-hono/runtime";',
     );
     expect(code).toContain("<__mxSuspense fallback={<p>loading</p>}>");
   });
@@ -509,7 +509,7 @@ describe("local-value-as-tag-parity: non-import local used as a tag (hono)", () 
   /**
    * Firstmate's follow-up on decision 116: hono/jsx's own `memo`/
    * `forwardRef` return real FUNCTIONS (measured, unlike React's own — see
-   * `@mxlang/react`'s sibling suite), so `mxDynamic`'s pre-existing
+   * `@mxlang/host-react`'s sibling suite), so `mxDynamic`'s pre-existing
    * `typeof target === "function"` branch already handled them, unaffected
    * by `mxIsHostComponentObject`.
    *
@@ -520,7 +520,7 @@ describe("local-value-as-tag-parity: non-import local used as a tag (hono)", () 
    * `typeof === "function"`), so a bare `<Comp/>` with `Comp` = React's
    * `memo` object renders a literal `<[object Object]>` tag whether or not
    * it passes through `mxDynamic` — the identical Preact-vs-React
-   * incompatibility documented in `@mxlang/preact`'s suite, not a
+   * incompatibility documented in `@mxlang/host-preact`'s suite, not a
    * decision-116 routing gap. `mxIsHostComponentObject`'s widened check in
    * the shared emitter is still correct: it is what makes React's own suite
    * pass, and is simply inert (never taken) on hono/preact, since neither
@@ -557,7 +557,7 @@ describe("hook-guard-module-list: each host's JsxDialect declares its own hookMo
 
 /**
  * JSX-significant characters in authored text (the `jsx-text-lt-unescaped`
- * bug): the shared `@mxlang/preact` emitter this host reuses must escape
+ * bug): the shared `@mxlang/host-preact` emitter this host reuses must escape
  * `<`, `>`, and braces so the *generated* TSX parses, and Hono's own
  * renderer must produce the DOM text Marko does (`a < b` is text in Marko;
  * the pre-fix emitter copied it verbatim into the JSX, which failed

@@ -1,5 +1,5 @@
 /**
- * `@mxlang/angular`'s emitter (design note A1/A2, tasks 1.2 and 1.3).
+ * `@mxlang/host-angular`'s emitter (design note A1/A2, tasks 1.2 and 1.3).
  *
  * Emits an Angular template string from the core IR.
  */
@@ -79,7 +79,7 @@ function rawPosition(node: { loc?: { start?: Position } }): Position {
   const loc = node.loc?.start;
   if (!loc) {
     throw new Error(
-      "@mxlang/angular: raw Marko node has no loc.start; every node reaching rawFail must carry a position",
+      "@mxlang/host-angular: raw Marko node has no loc.start; every node reaching rawFail must carry a position",
     );
   }
   return loc;
@@ -107,7 +107,7 @@ const TRY_MESSAGE =
 /**
  * The Marko stateful tags this host refuses, each naming what to write
  * instead on Angular (spec §11, §13.3 bug 1). Same wording family as
- * `@mxlang/preact`'s `statefulErrors` and `@mxlang/solid`'s
+ * `@mxlang/host-preact`'s `statefulErrors` and `@mxlang/host-solid`'s
  * `STATEFUL_ERRORS` — these are Marko's own reactivity, and Angular has its
  * own. Left undeclared, each name falls through `isElement`'s bare case test
  * and becomes a literal lowercase element in the emitted template (the S8
@@ -171,7 +171,7 @@ const STATEFUL_ERRORS: HostDeclarations["tags"] = {
 export const DEFAULT_TAG = "div";
 
 export const angularDeclarations: HostDeclarations = {
-  name: "@mxlang/angular",
+  name: "@mxlang/host-angular",
   nativeTags: WEB_ELEMENTS,
   attrTags: 2,
   // The ladder (decision 145): the parent's contract `defaultTag`, then
@@ -242,7 +242,7 @@ export const angularDeclarations: HostDeclarations = {
       if (node.var) {
         const name = expr(ctx, node.var);
         rawFail(
-          `tag variable \`/${name}\` on a dynamic tag (\`<\${…}/${name}/>\`) isn't supported by @mxlang/angular: \`ngComponentOutlet\` renders the component but has no binding position for a returned value`,
+          `tag variable \`/${name}\` on a dynamic tag (\`<\${…}/${name}/>\`) isn't supported by @mxlang/host-angular: \`ngComponentOutlet\` renders the component but has no binding position for a returned value`,
           node.var,
         );
       }
@@ -349,7 +349,7 @@ const NOT_EVENTS = new Set(["once", "onto"]);
 
 // Marko's own element taglibs: `marko-html`, `marko-svg`, `marko-math` — a
 // capitalized name found in any *other* taglib resolved to a component.
-// Same set `@mxlang/preact`'s emitter declares, for the same lookup.
+// Same set `@mxlang/host-preact`'s emitter declares, for the same lookup.
 const ELEMENT_TAGLIBS = new Set(["marko-html", "marko-svg", "marko-math"]);
 
 /**
@@ -410,7 +410,7 @@ const NGCLASS_NGSTYLE_WARNING: Record<"ngClass" | "ngStyle", string> = {
 // The invoker is a member, not an import: a template can only call what its
 // component instance has. It is inlined per component rather than imported
 // from a runtime module because this package has no runtime, and one would
-// make every generated module depend on `@mxlang/angular` at run time for two
+// make every generated module depend on `@mxlang/host-angular` at run time for two
 // one-liners. `.ng.mx` and tag modules write the members themselves; for a
 // page (whose class is the author's) a warning carries the text to paste.
 //
@@ -429,7 +429,7 @@ export const EVENT_HELPER_MARKER = "__mxOn";
  * and a mixin (`MxHandlersMixin(Base)`), for a component that would rather
  * extend them than paste them (`src/runtime.ts`).
  */
-export const RUNTIME_SPECIFIER = "@mxlang/angular/runtime";
+export const RUNTIME_SPECIFIER = "@mxlang/host-angular/runtime";
 
 /** The invoker members, one class-body line each (2-space indented). */
 export const EVENT_HELPER_MEMBERS = [
@@ -485,7 +485,7 @@ export function helperNamesFor(text: string): string[] {
 /** The second option, appended to the advice in the page header and the warning. */
 export const EVENT_HELPER_RUNTIME_OPTION = `or extend \`MxHandlers\` (or \`MxHandlersMixin(Base)\` when the class already extends another) from "${RUNTIME_SPECIFIER}"`;
 
-const EVENT_HELPER_ADVICE = `this template binds an event handler; add these members to the component class: ${EVENT_HELPER_MEMBERS.map((m) => `\`${m.trim()}\``).join(" and ")}, ${EVENT_HELPER_RUNTIME_OPTION} (app code importing it needs \`@mxlang/angular\` in \`dependencies\`, not \`devDependencies\`; extend \`MxHandlers\`/\`MxHandlersMixin\` directly: \`.ng.mx\` injects the members into an indirect base, and TypeScript then reports a conflict).`;
+const EVENT_HELPER_ADVICE = `this template binds an event handler; add these members to the component class: ${EVENT_HELPER_MEMBERS.map((m) => `\`${m.trim()}\``).join(" and ")}, ${EVENT_HELPER_RUNTIME_OPTION} (app code importing it needs \`@mxlang/host-angular\` in \`dependencies\`, not \`devDependencies\`; extend \`MxHandlers\`/\`MxHandlersMixin\` directly: \`.ng.mx\` injects the members into an indirect base, and TypeScript then reports a conflict).`;
 
 const REFINE_HELPER_ADVICE = `this template binds a refined bound attribute (\`v:fn:=q\`); add these members to the component class: ${REFINE_HELPER_MEMBERS.map((m) => `\`${m.trim()}\``).join(" and ")}, ${EVENT_HELPER_RUNTIME_OPTION}.`;
 
@@ -2235,32 +2235,32 @@ class AngularEmitter implements Emitter<string> {
       };
       collect(prop.source);
       fail(
-        `array attribute tag \`<@${prop.name}>\` isn't supported by @mxlang/angular: a projection is keyed by name`,
+        `array attribute tag \`<@${prop.name}>\` isn't supported by @mxlang/host-angular: a projection is keyed by name`,
         loopTag ?? tags[1] ?? tags[0] ?? owner,
       );
     }
     this.visitAttributeTags(prop.source, (tag) => {
       if (tag.attrs.length > 0) {
         fail(
-          `attributes on \`<@${tag.name}>\` aren't supported by @mxlang/angular: a projection carries nodes, not data`,
+          `attributes on \`<@${tag.name}>\` aren't supported by @mxlang/host-angular: a projection carries nodes, not data`,
           tag.attrs[0] as Attr,
         );
       }
       if (tag.block.hasParams) {
         fail(
-          `params on \`<@${tag.name}>\` aren't supported by @mxlang/angular: content projection cannot pass values back into projected nodes`,
+          `params on \`<@${tag.name}>\` aren't supported by @mxlang/host-angular: content projection cannot pass values back into projected nodes`,
           tag,
         );
       }
       if (tag.attrTagProps.length > 0) {
         fail(
-          `nested attribute tags inside \`<@${tag.name}>\` aren't supported by @mxlang/angular: a projection has no nested data shape`,
+          `nested attribute tags inside \`<@${tag.name}>\` aren't supported by @mxlang/host-angular: a projection has no nested data shape`,
           tag.attributeTagTree[0] ?? tag,
         );
       }
       if (!tag.hasBody) {
         fail(
-          `<@${tag.name}/> has no body; @mxlang/angular projects attribute-tag bodies by name`,
+          `<@${tag.name}/> has no body; @mxlang/host-angular projects attribute-tag bodies by name`,
           tag,
         );
       }
@@ -2298,7 +2298,7 @@ class AngularEmitter implements Emitter<string> {
       }
       if (node.kind === "AttributeTagFor") {
         fail(
-          "attribute tags inside `<for>` aren't supported by @mxlang/angular: repeated projections cannot share one name",
+          "attribute tags inside `<for>` aren't supported by @mxlang/host-angular: repeated projections cannot share one name",
           node,
         );
       }
@@ -2322,7 +2322,7 @@ class AngularEmitter implements Emitter<string> {
   ): void {
     if (node.attrTagProps.length > 0) {
       fail(
-        `attribute tags on \`<${target.name}>\` aren't supported by @mxlang/angular: a \`<define>\` call is projected with \`ngTemplateOutletContext\`, a positional argument object, not content projection — call it with \`<${target.name}(...)/>\` instead`,
+        `attribute tags on \`<${target.name}>\` aren't supported by @mxlang/host-angular: a \`<define>\` call is projected with \`ngTemplateOutletContext\`, a positional argument object, not content projection — call it with \`<${target.name}(...)/>\` instead`,
         node,
       );
     }
@@ -2364,13 +2364,13 @@ class AngularEmitter implements Emitter<string> {
   ): void {
     if (hasContent) {
       fail(
-        "`<${…}>` with content isn't supported by @mxlang/angular: `ngComponentOutlet` projects content only through `ngComponentOutletContent`, which takes prepared nodes rather than a template body. Use a static component tag, or render the content into a `<define>` and pass it as an input.",
+        "`<${…}>` with content isn't supported by @mxlang/host-angular: `ngComponentOutlet` projects content only through `ngComponentOutletContent`, which takes prepared nodes rather than a template body. Use a static component tag, or render the content into a `<define>` and pass it as an input.",
         node,
       );
     }
     if (args.length > 0) {
       fail(
-        "`<${…}(…)>` tag arguments aren't supported by @mxlang/angular: `ngComponentOutlet` binds a component's `@Input()`s, not positional constructor arguments. Pass the values as attributes instead.",
+        "`<${…}(…)>` tag arguments aren't supported by @mxlang/host-angular: `ngComponentOutlet` binds a component's `@Input()`s, not positional constructor arguments. Pass the values as attributes instead.",
         node,
       );
     }
@@ -2651,7 +2651,7 @@ class AngularEmitter implements Emitter<string> {
       );
       return;
     }
-    // html-comment: text-only. `@mxlang/html`'s own emitter accepts an
+    // html-comment: text-only. `@mxlang/target-html`'s own emitter accepts an
     // `Interpolation` child too (`packages/targets/html/src/emitter.ts:604-606`)
     // because that host evaluates it server-side into static comment text —
     // Angular has no such evaluation inside a comment (probed: `<!-- {{ x

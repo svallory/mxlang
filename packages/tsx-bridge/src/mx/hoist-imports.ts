@@ -6,7 +6,7 @@
  * compiler minted for a discovered tag has no module scope of its own to land
  * in: the surrounding TypeScript module is the only place it can go (design
  * §3.2, decision 95 ruling 3). The same is true of a `<define>` written
- * inside a region: `@mxlang/solid` can't emit `const Row = (...) => ...;`
+ * inside a region: `@mxlang/host-solid` can't emit `const Row = (...) => ...;`
  * mid-expression, so it hoists the declaration out to module scope, gensym'd
  * like a synthesized import (decision 110b).
  *

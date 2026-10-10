@@ -33,7 +33,9 @@ describe("packageNameOf", () => {
       "vscode-languageserver",
     );
     expect(packageNameOf("@mxlang/core")).toBe("@mxlang/core");
-    expect(packageNameOf("@mxlang/html/types/marko")).toBe("@mxlang/html");
+    expect(packageNameOf("@mxlang/target-html/types/marko")).toBe(
+      "@mxlang/target-html",
+    );
   });
 });
 
@@ -229,13 +231,13 @@ for (const p of PACKED_PACKAGES) {
   });
 }
 
-describe("@mxlang/html ambient `*.mx` declaration", () => {
+describe("@mxlang/target-html ambient `*.mx` declaration", () => {
   const dir = pkgDirOf(
-    PACKED_PACKAGES.find((p) => p.name === "@mxlang/html") ?? never(),
+    PACKED_PACKAGES.find((p) => p.name === "@mxlang/target-html") ?? never(),
   );
   const pkg = readPackageJson(dir);
 
-  it("is reachable through the exports map as `@mxlang/html/types/marko`", () => {
+  it("is reachable through the exports map as `@mxlang/target-html/types/marko`", () => {
     expect((pkg.exports as Record<string, unknown>)["./types/marko"]).toBe(
       "./types/marko.d.ts",
     );
@@ -244,7 +246,7 @@ describe("@mxlang/html ambient `*.mx` declaration", () => {
 });
 
 function never(): never {
-  throw new Error("@mxlang/html is not in PACKED_PACKAGES");
+  throw new Error("@mxlang/target-html is not in PACKED_PACKAGES");
 }
 
 describe("the relocatable build flags", () => {

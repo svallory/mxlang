@@ -21,7 +21,7 @@ import type { Position } from "./util/location.ts";
 /**
  * One synthesized import a region needs in its surrounding module.
  *
- * The same shape `hoist-imports.ts` places and `@mxlang/solid` returns —
+ * The same shape `hoist-imports.ts` places and `@mxlang/host-solid` returns —
  * re-exported rather than re-declared, so the three cannot drift into three
  * subtly different contracts for one object.
  */
@@ -29,7 +29,7 @@ import type { Position } from "./util/location.ts";
  * One `<define>` a region hoisted to module scope (decision 110b).
  *
  * Re-exported for the same reason `MxRegionHoistedImport` is: one contract
- * shared by `hoist-imports.ts`, this module, and `@mxlang/solid`.
+ * shared by `hoist-imports.ts`, this module, and `@mxlang/host-solid`.
  */
 export type {
   HoistedDefine as MxRegionHoistedDefine,
@@ -59,7 +59,7 @@ export interface HoistedImport {
  *
  * Unlike a `HoistedImport`, there is nothing to reuse or dedupe against: the
  * declaration exists nowhere until the region mints it, so the binding is
- * always a fresh gensym (`@mxlang/solid`'s `generatedDefineBinding`), never
+ * always a fresh gensym (`@mxlang/host-solid`'s `generatedDefineBinding`), never
  * the author's own `<define>` name — the same reason a discovered tag's
  * import is always gensym'd rather than guessing it is safe to call the
  * local binding `icon`.
@@ -78,7 +78,7 @@ export interface MxRegionContext {
    *  every region when the option is off. Set by the bridge after the
    *  position is computed, so a position check can accept a region root and
    *  still reject a fragment there or word the two differently:
-   *  `@mxlang/angular`'s check uses it to say a fragment is only allowed as the
+   *  `@mxlang/host-angular`'s check uses it to say a fragment is only allowed as the
    *  root of a `template:` region. */
   fragment?: boolean;
   /** Innermost enclosing object-property key, if any: `template` in

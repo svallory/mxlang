@@ -1,5 +1,5 @@
 /**
- * `@mxlang/angular` — the Angular host on `@mxlang/core`.
+ * `@mxlang/host-angular` — the Angular host on `@mxlang/core`.
  *
  * Step 1 of the design note (`notes/investigations/angular-host-design.md`):
  * a `.mx` page template compiles to a plain Angular template string, for a

@@ -1,4 +1,4 @@
-# `@mxlang/hono`
+# `@mxlang/host-hono`
 
 MX's Hono host compiles a `.mx` template to a Hono JSX component
 module: TSX with `/** @jsxImportSource hono/jsx */`, the author's imports and
@@ -13,14 +13,14 @@ with every other host.
 
 Hono's JSX makes the same structural lowering choices as Preact and React:
 `<if>` is a ternary, `<for>` is `.map()` with a `key`, ordinary children are
-JSX children, and attribute tags are props. `@mxlang/hono` therefore depends on
-`@mxlang/preact` and passes a Hono `JsxDialect` to its exported emitter instead of
+JSX children, and attribute tags are props. `@mxlang/host-hono` therefore depends on
+`@mxlang/host-preact` and passes a Hono `JsxDialect` to its exported emitter instead of
 forking it. The dialect object owns only vocabulary: JSX import source, native `class`
 (Hono, like Preact, accepts it directly — no `className`), the raw-HTML prop,
 the Fragment module, and the error-boundary module. Structural changes remain
 one implementation and one test surface.
 
-`<try><@catch>` lowers to `MxErrorBoundary` from `@mxlang/hono/runtime`, which wraps
+`<try><@catch>` lowers to `MxErrorBoundary` from `@mxlang/host-hono/runtime`, which wraps
 `hono/jsx`'s async `ErrorBoundary` around the body (passed as a function, so a throw
 written directly in the body is caught too); `<@placeholder>` lowers to `hono/jsx`'s
 `Suspense`, re-exported from the same module. `src/runtime.ts` also supplies `mxClass`,
@@ -31,7 +31,7 @@ the one helper Hono has no equivalent for.
 ```jsonc
 {
   "dependencies": {
-    "@mxlang/hono": "workspace:*",
+    "@mxlang/host-hono": "workspace:*",
     "hono": "4.6.20"
   },
   "mx": { "host": "hono" }
@@ -43,7 +43,7 @@ loader:
 
 ```toml
 # bunfig.toml
-preload = ["@mxlang/hono/bun"]
+preload = ["@mxlang/host-hono/bun"]
 ```
 
 ```ts
@@ -78,7 +78,7 @@ with exactly one `@mxlang/*` host dependency may omit it.
 | `<try>` | `MxErrorBoundary` (around `hono/jsx`'s `ErrorBoundary`) and, with `<@placeholder>`, `hono/jsx`'s `Suspense` |
 
 Every `<for>` row gets a `key`, the same rule as Preact/React (see
-`@mxlang/preact`'s README for the full `by=` semantics and the duplicate/object
+`@mxlang/host-preact`'s README for the full `by=` semantics and the duplicate/object
 key pitfalls).
 
 Marko calls ordinary component children `content`, while JSX calls them
@@ -108,7 +108,7 @@ points to `useState`, `<effect>` to `useEffect`, and `<id>` to `useId`.
 <MxErrorBoundary fallback={(error) => …}>{() => (<><Risky /></>)}</MxErrorBoundary>
 ```
 
-`MxErrorBoundary` and `Suspense` both import from `@mxlang/hono/runtime`:
+`MxErrorBoundary` and `Suspense` both import from `@mxlang/host-hono/runtime`:
 `MxErrorBoundary` wraps `hono/jsx`'s `ErrorBoundary`, and `Suspense` is
 `hono/jsx`'s own, re-exported. The runtime also exports `mxClass`, the
 structured-class string joiner; a template using no structured `class` imports
@@ -116,8 +116,8 @@ no `mxClass`.
 
 ## Bun loader
 
-`@mxlang/hono/bun` registers a Bun plugin loading `.mx` files as
-`loader: "tsx"` — the same shape as `@mxlang/html/bun`'s Bun loader, but
+`@mxlang/host-hono/bun` registers a Bun plugin loading `.mx` files as
+`loader: "tsx"` — the same shape as `@mxlang/target-html/bun`'s Bun loader, but
 `"tsx"` instead of `"ts"` since this host's compiled output contains JSX. Bun
 honors the emitted `/** @jsxImportSource hono/jsx */` pragma per file, so no
 bundler is required for a plain Bun server. A hand-written `.tsx` sibling
@@ -127,7 +127,7 @@ without its own pragma still needs the project's `tsconfig.json` to set
 ## Verification
 
 ```sh
-bunx vitest run --root ../../.. --project @mxlang/hono
+bunx vitest run --root ../../.. --project @mxlang/host-hono
 bun run oracle:hono
 cd examples/hono-app && bun run e2e
 ```

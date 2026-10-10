@@ -1,8 +1,8 @@
 # astro — agent instructions
 
-## `@mxlang/astro`: the Astro host
+## `@mxlang/host-astro`: the Astro host
 
-`packages/hosts/astro` (`@mxlang/astro`, decisions 70 to 72) renders `.mx`
+`packages/hosts/astro` (`@mxlang/host-astro`, decisions 70 to 72) renders `.mx`
 components inside an Astro project as **static markup**: no islands, no
 hydration, no client JS from this renderer. Two files and no third —
 `src/index.ts` is the integration, `src/server.ts` the renderer's server
@@ -17,7 +17,7 @@ Four facts worth knowing before editing it:
   Astro's renderer contract hands `check(Component, props, slots)` the
   component as an opaque value with no reserved brand channel, and Astro's own
   docs suggest sniffing `Component.name` — which a minifier may rewrite and
-  any function could collide with. Instead `@mxlang/html`'s `postEmit`
+  any function could collide with. Instead `@mxlang/target-html`'s `postEmit`
   (`brandRender` in `translate.ts`) names the core's anonymous default export
   `render`, marks it, and exports it, so every compiled MX module carries
   `Symbol.for("mx.component")`. `Symbol.for`, through the global registry, not
@@ -177,9 +177,9 @@ Four facts worth knowing before editing `src/astro-template.ts` or
   one to. The error message explains the ordering and points at the
   workaround: call the unit directly from the fence's own TypeScript, an
   ordinary function call: `X.render(input, createOut())` returns the value, and
-  `createOut` comes from `@mxlang/astro/runtime`.
+  `createOut` comes from `@mxlang/host-astro/runtime`.
 
-`@mxlang/astro/typecheck` (`src/typecheck.ts`, `export * from "@mxlang/html"`, declarations only) is what the *type-check* projection of a compiled module imports its runtime types from (`runtimeFrom`, set in `descriptor.ts` for `typeCheck` compiles only), because an isolated install resolves `@mxlang/astro` but not `@mxlang/html`. Never imported at run time; builds still import `@mxlang/html` (`html-resolve.ts`). `typecheck.test.ts` fails when the emitter imports a name it does not export.
+`@mxlang/host-astro/typecheck` (`src/typecheck.ts`, `export * from "@mxlang/target-html"`, declarations only) is what the *type-check* projection of a compiled module imports its runtime types from (`runtimeFrom`, set in `descriptor.ts` for `typeCheck` compiles only), because an isolated install resolves `@mxlang/host-astro` but not `@mxlang/target-html`. Never imported at run time; builds still import `@mxlang/target-html` (`html-resolve.ts`). `typecheck.test.ts` fails when the emitter imports a name it does not export.
 
 The lowering table and the full error list live in
 `packages/hosts/astro/README.md` "AstroMX templates (`.astro.mx`)". Nothing silently
@@ -188,7 +188,7 @@ the construct, the reason and the `.astro.mx` line.
 
 Astro projects get per-file `.mx` types from
 `@mxlang/typescript-plugin`, not an ambient wildcard. The old
-`packages/hosts/astro/types/mx.d.ts` and `@mxlang/astro/types` export are
+`packages/hosts/astro/types/mx.d.ts` and `@mxlang/host-astro/types` export are
 deleted: they erased every component's real `Input`. Configure one Volar
 plugin entry, `{ "name": "@mxlang/typescript-plugin", "astro": true }`; do
 not also list `@astrojs/ts-plugin`, because the second Volar tsserver plugin is
@@ -204,14 +204,14 @@ singular plan under `<if>`/`<else if>`/`<else>` becomes a conditional named
 slot so Astro receives only the taken branch, including nested conditionals
 and empty branches. Arrays (including a declared
 `AttrTag[]` with no occurrences), attributes, params, and nested attribute
-tags are positioned errors naming `@mxlang/astro`: an Astro slot is keyed by
+tags are positioned errors naming `@mxlang/host-astro`: an Astro slot is keyed by
 one name and carries rendered markup only. A bodiless `<@name/>` is also an
 error because there is no markup to project.
 
 Astro's renderer gives a named slot one observable payload, `() => string`.
 `renderToStaticMarkup` also installs that same thunk as its own `.content`
 property, so the default data declaration and `as: "renderable"` are two views
-of the same slot; no attribute data is invented. `@mxlang/astro` exports the
+of the same slot; no attribute data is invented. `@mxlang/host-astro` exports the
 matching `AttrTag<C>` and `.astro.mx` inserts its type-only import when core sets
 `needsAttrTagImport`.
 

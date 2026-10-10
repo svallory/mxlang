@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { compile } from "@mxlang/html";
+import { compile } from "@mxlang/target-html";
 import { afterAll, describe, expect, it } from "vitest";
 import { check, renderToStaticMarkup } from "./server.ts";
 
@@ -21,12 +21,12 @@ afterAll(() => {
  * Compiles an MX template and imports the resulting module.
  *
  * Against components compiled by the real translator rather than hand-written
- * stand-ins: the brand `check` looks for is written by `@mxlang/html`'s
+ * stand-ins: the brand `check` looks for is written by `@mxlang/target-html`'s
  * `postEmit`, so a fake would prove nothing about whether the two packages
  * actually agree on it.
  *
  * The module is written to a temp file and imported so Vite's own pipeline
- * transpiles it — the emitted code is TypeScript, and `@mxlang/html`'s
+ * transpiles it — the emitted code is TypeScript, and `@mxlang/target-html`'s
  * `escape` import has to resolve like it does in a real build.
  */
 async function compileComponent(
@@ -240,7 +240,7 @@ describe("client:* directives are an error", () => {
     expect(html).toBe("<span>1</span>");
     // The value is still reachable, through the sink entry the README's
     // fence example calls.
-    const { createOut } = await import("@mxlang/html");
+    const { createOut } = await import("@mxlang/target-html");
     const render = (
       component as unknown as {
         render: (input: unknown, out: unknown) => unknown;

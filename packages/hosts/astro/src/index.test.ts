@@ -39,7 +39,7 @@ describe("addPageExtension guard", () => {
     expect(extensions).not.toContain(".astro.mx");
   });
 
-  it("registers the resolver that finds @mxlang/html for compiled modules", () => {
+  it("registers the resolver that finds @mxlang/target-html for compiled modules", () => {
     let config: { vite?: { plugins?: Array<{ name: string }> } } = {};
     mxAstro().hooks["astro:config:setup"]!({
       config: { srcDir: new URL("file:///src/") },

@@ -1,4 +1,4 @@
-import { mxClass as __mxClass } from "@mxlang/react/runtime";function Header(props: {text: string;}) {
+import { mxClass as __mxClass } from "@mxlang/host-react/runtime";function Header(props: {text: string;}) {
   return <><h1 className={__mxClass({ big: true })}>{props.text}</h1></>;
 }
 

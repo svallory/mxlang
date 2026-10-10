@@ -77,17 +77,17 @@ beforeAll(
         paths: {
           ...Object.fromEntries(
             ["preact", "react", "hono"].map((name) => [
-              `@mxlang/${name}`,
+              `@mxlang/host-${name}`,
               [join(repoRoot, "packages", "hosts", name, "src", "index.ts")],
             ]),
           ),
           ...Object.fromEntries(
             ["preact", "react", "hono"].map((name) => [
-              `@mxlang/${name}/runtime`,
+              `@mxlang/host-${name}/runtime`,
               [join(repoRoot, "packages", "hosts", name, "src", "runtime.ts")],
             ]),
           ),
-          "@mxlang/html": [
+          "@mxlang/target-html": [
             join(repoRoot, "packages", "targets", "html", "src", "index.ts"),
           ],
         },

@@ -1,5 +1,5 @@
 {
-  "name": "@mxlang/preact",
+  "name": "@mxlang/host-preact",
   "version": "0.0.0",
   "engines": {
     "node": ">=22.18",

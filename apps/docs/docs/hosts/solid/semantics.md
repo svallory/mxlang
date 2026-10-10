@@ -46,7 +46,7 @@ MX passes a component's body as `props.children`, so a hand-written Solid compon
 Solid's renderable is an accessor, `() => JSX.Element`, and that is what an attribute tag delivers.
 
 ```tsx
-import type { AttrTag } from "@mxlang/solid";
+import type { AttrTag } from "@mxlang/host-solid";
 
 export interface Input {
   header: AttrTag<{ as: "renderable" }>;                    // () => Element

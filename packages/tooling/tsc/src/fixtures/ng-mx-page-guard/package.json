@@ -1,6 +1,6 @@
 {
   "name": "ng-mx-page-guard",
   "dependencies": {
-    "@mxlang/angular": "workspace:*"
+    "@mxlang/host-angular": "workspace:*"
   }
 }

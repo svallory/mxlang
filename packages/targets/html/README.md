@@ -1,4 +1,4 @@
-# @mxlang/html
+# @mxlang/target-html
 
 MX (Markup eXtended) is a template language born from Marko: it takes
 Marko's syntax and brings it to wherever JSX lives today. Marko's syntax is the
@@ -8,7 +8,7 @@ not an input (a `.marko` file found where a tag is looked up is a positioned
 error telling you to convert it), and porting a Marko component is a rename
 plus the differences listed in `divergences.md`.
 
-`@mxlang/html` is **the vanilla host on `@mxlang/core`**: it compiles an
+`@mxlang/target-html` is **the vanilla host on `@mxlang/core`**: it compiles an
 MX (`.mx`) template to a pure function — a JS/TS module
 whose default export is `(input) => string`, with no runtime beyond an `escape`
 helper. No scheduler, no signals, no hydration, no resume markers.
@@ -25,7 +25,7 @@ and which are errors, component-versus-element resolution, Marko's structured
 loader, the `escape` runtime the emitted modules import, and the taglib.
 
 ```ts
-import { compile } from "@mxlang/html";
+import { compile } from "@mxlang/target-html";
 
 const { code } = compile(source, "greeting.mx");
 ```
@@ -36,7 +36,7 @@ const { code } = compile(source, "greeting.mx");
 ```
 
 ```ts
-import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from "@mxlang/html";
+import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from "@mxlang/target-html";
 
 export interface Input {}
 
@@ -63,7 +63,7 @@ Object.defineProperty(Greeting, Symbol.for("mx.component"), { value: true });
 export default Greeting;
 ```
 
-(Helpers such as `__mxClassValue` are omitted.) The default export is `(input) => string`. `render(input, out)` is the sink entry: it writes into `out` and returns the template's `<return>` value. The sink comes from `@mxlang/html/runtime` (decision 155).
+(Helpers such as `__mxClassValue` are omitted.) The default export is `(input) => string`. `render(input, out)` is the sink entry: it writes into `out` and returns the template's `<return>` value. The sink comes from `@mxlang/target-html/runtime` (decision 155).
 
 Marko's syntax is the default: MX parses `.mx` with its own front end, and
 where MX has no ruling of its own the answer is Marko's. Its element knowledge
@@ -77,13 +77,13 @@ repository, and `.marko` files are not an input: a tag is an `.mx` template in a
 ## Install
 
 ```
-bun add @mxlang/html
+bun add @mxlang/target-html
 ```
 
 Published from `dist/` (ESM + `.d.ts`); see `CHANGELOG.md` for release notes.
-Will publish as `@mxlang/html` once the org rename (decision 74) lands
+Will publish as `@mxlang/target-html` once the org rename (decision 74) lands
 across the workspace; this package's own name, its `escapeFrom` import
-string, and every in-repo consumer specifier stay `@mxlang/html` until
+string, and every in-repo consumer specifier stay `@mxlang/target-html` until
 then, so the two never drift out of sync.
 
 ## Usage
@@ -91,7 +91,7 @@ then, so the two never drift out of sync.
 `compile` is the supported entry; it drives the compiler for you:
 
 ```ts
-import { compile } from "@mxlang/html";
+import { compile } from "@mxlang/target-html";
 
 const { code, map } = compile("<p>${input.name}</p>", "/views/page.mx");
 ```
@@ -123,7 +123,7 @@ Pug's `compile`/`renderFile` ergonomics rather than driving `compile`/
 `compileFile` and executing/caching the result by hand:
 
 ```ts
-import { loadMx, mx } from "@mxlang/html";
+import { loadMx, mx } from "@mxlang/target-html";
 
 // From a file already on disk, cached by resolved path + every transitive
 // dependency's mtime:
@@ -182,25 +182,25 @@ is the policy plus the HTML integrations.
 
 Two loaders make `import page from "./page.mx"` resolve, one per runtime:
 
-- **Bun**: `@mxlang/html/bun` is a `BunPlugin` that intercepts `.mx`
+- **Bun**: `@mxlang/target-html/bun` is a `BunPlugin` that intercepts `.mx`
   imports and compiles them on the fly (`.solid.mx` is excluded
   — a different file kind, handled by `@mxlang/vite-plugin`). Register it
   once via `bunfig.toml`:
 
   ```toml
-  preload = ["@mxlang/html/bun"]
+  preload = ["@mxlang/target-html/bun"]
   ```
 
   or at runtime with `Bun.plugin`:
 
   ```ts
-  import markoPlugin from "@mxlang/html/bun";
+  import markoPlugin from "@mxlang/target-html/bun";
   Bun.plugin(markoPlugin);
   ```
 
   See `examples/mx-site` for a full app built this way.
 
-  `@mxlang/html/bun` imports its types from `bun`, so a TypeScript consumer of
+  `@mxlang/target-html/bun` imports its types from `bun`, so a TypeScript consumer of
   this subpath needs `@types/bun` (an optional peer dependency: nothing else in
   the package needs it):
 
@@ -208,12 +208,12 @@ Two loaders make `import page from "./page.mx"` resolve, one per runtime:
   bun add -d @types/bun
   ```
 
-- **Typing `*.mx` imports**: `@mxlang/html/types/marko` is an ambient
+- **Typing `*.mx` imports**: `@mxlang/target-html/types/marko` is an ambient
   `declare module "*.mx"` (`(input: unknown) => string`). Load it once from any
   file in your program:
 
   ```ts
-  import "@mxlang/html/types/marko";
+  import "@mxlang/target-html/types/marko";
   ```
 
 - **Vite**: `@mxlang/vite-plugin`'s `mx()` plugin handles `.mx`
@@ -301,7 +301,7 @@ name, for an author who wants "this needs a reactive runtime" to be a compile
 error rather than silently accepted:
 
 ```ts
-import { compile } from "@mxlang/html";
+import { compile } from "@mxlang/target-html";
 
 const { code } = compile(source, "greeting.mx", { strict: true });
 ```

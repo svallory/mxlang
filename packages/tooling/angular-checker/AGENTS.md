@@ -11,7 +11,7 @@ records** — `{ file, start, length, code, message, category, source }`.
 `oldProgram`, so successive checks are incremental, and takes an optional
 cancellation token (callers own the debounce — ruling e).
 
-It is a **separate package from `@mxlang/angular`** so the emitter keeps zero
+It is a **separate package from `@mxlang/host-angular`** so the emitter keeps zero
 Angular runtime deps (decision 79); `@angular/core` is a devDependency so the
 tests check against real Angular types. `@angular/compiler-cli` is an
 **optional peer dependency** (`>=22.0.0 <23.0.0`, plus a devDependency for the
@@ -25,7 +25,7 @@ empty list that reads as success. This package ships inside the VS Code
 extension's TS plugin and `mx-tsc`, neither of which may carry Angular's
 compiler, hence runtime resolution from the user's project. Consumers decide
 what a failure means: `mx-tsc` fails the run, an editor shows the message once.
-The package depends on `@mxlang/angular` (for `compileNgMx`'s result type and
+The package depends on `@mxlang/host-angular` (for `compileNgMx`'s result type and
 `sourceOffsetFor`).
 
 `typescript` is a **required peer dependency** (`>=5.9.0 <7`, the repo's peer policy for `typescript`; the pinned devDependency stays exact): `dist/*.d.ts` imports `typescript`, and `scripts/pack-hygiene.test.ts` fails a shipped declaration or runtime import that no dependency or peer declares.
@@ -116,11 +116,11 @@ Two traps, both pinned by tests:
 
 **Typecheck hygiene (angular-checker-dist-before-typecheck):** `typecheck`
 runs `tsc -p tsconfig.typecheck.json`, which maps
-`@mxlang/core`/`@mxlang/tsx-bridge`/`@mxlang/angular` to their src via `paths`
+`@mxlang/core`/`@mxlang/tsx-bridge`/`@mxlang/host-angular` to their src via `paths`
 (the #182/#192 pattern), so no typecheck needs a prebuilt or fresh dep `dist`.
 The mapping must NOT move into `tsconfig.json`: Bun's bundler honours the
 nearest tsconfig's `paths`, and the typescript-plugin VSIX bundle inlines this
-package's src, so it would follow `@mxlang/angular` into the Angular host's src
+package's src, so it would follow `@mxlang/host-angular` into the Angular host's src
 and fail on that package's parser -> `public.d.ts` mapping (`vscode-extension`
 CI job, `No matching export … for import "parse"`). `tsconfig.json` and
 `tsconfig.build.json` resolve the deps through their published dist types.

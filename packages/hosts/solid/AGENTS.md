@@ -10,9 +10,9 @@ Consequences encoded in the lowering table: `Index`/`Key`/`mxRange` are gone (on
 
 Event props emitted by this host (`onClick=`, `on-dblclick=`, …) are looked up in `@solidjs/web`'s own declared `jsx.d.ts` spelling (`event-names.ts`'s vendored `SOLID_EVENT_PROP_NAMES`, drift-tested against the installed package), not recomposed by capitalizing only the DOM name's first letter — 97 of the 143 declared names differ from `onDblclick`-style capitalize-first (`onDblClick`, `onKeyDown`, …). Solid's runtime lowercases whatever follows `on` regardless of casing (`prop.slice(2).toLowerCase()`), so this is a typing-only change: it can never bind a different DOM event, only satisfy or fail `jsx.d.ts`'s exact prop-name keys.
 
-## `@mxlang/solid`: the Solid host on `@mxlang/core`
+## `@mxlang/host-solid`: the Solid host on `@mxlang/core`
 
-`packages/hosts/solid` (`@mxlang/solid`, decisions 69, 71, 72, 79, 81) is the
+`packages/hosts/solid` (`@mxlang/host-solid`, decisions 69, 71, 72, 79, 81) is the
 third emitter over the core IR — Solid's `.solid.mx` becomes Solid JSX
 text instead of a string or Astro template. `packages/hosts/solid/README.md`
 carries the full lowering table (IR kind to Solid JSX), the error list, and
@@ -53,16 +53,16 @@ Three facts worth knowing before touching it:
   to put one — but a whole file has its own module scope, so `compileSolidUnit`
   places an authored `import` there like every other host does, and it
   resolves a capitalized tag the same way an import resolves one on
-  `@mxlang/html`/`@mxlang/preact`. Before decision 115, every production entry
+  `@mxlang/target-html`/`@mxlang/host-preact`. Before decision 115, every production entry
   point (the TypeScript plugin, the language server, `mx-tsc`, and the
   vite-plugin, which had no `host === "solid"` branch at all and silently fell
-  through to `@mxlang/html`'s string emitter) routed a whole-file `.mx`
+  through to `@mxlang/target-html`'s string emitter) routed a whole-file `.mx`
   resolved to Solid through `compileSolidMx` regardless, so an authored import
   was rejected there too, contrary to what this file used to say — this was
   the actual bug behind TODO `solid-whole-file-mx-import`, filed from PR #149.
   **`compileSolidUnit` emits the author's `export interface Input` and annotates
   the component parameter with it** (`function Card(input: Input)`), the same
-  shape `@mxlang/html` and `@mxlang/preact` have, so a caller's ordinary props
+  shape `@mxlang/target-html` and `@mxlang/host-preact` have, so a caller's ordinary props
   are a JSX props check: `<Card title=1/>` against `title: string` is TS2322
   through the TypeScript plugin, `mx-tsc` and an editor (TODO
   `solid-whole-file-prop-typing`; tests in `packages/tooling/tsc/src/index.test.ts`
@@ -71,7 +71,7 @@ Three facts worth knowing before touching it:
   parameter with the `$mxReturn` callback prop so a caller's `/var` type-checks
   as a declared prop — but only as `any` (TODO `tag-var-type-from-return`; see
   the bullet below), not the `<return>` expression's real type;
-  an `AttrTag` in `Input` gets its `import type { AttrTag } from "@mxlang/solid"`.
+  an `AttrTag` in `Input` gets its `import type { AttrTag } from "@mxlang/host-solid"`.
   **The output is therefore TSX carrying types, so every runtime consumer needs
   a TypeScript-aware step.** The vite path has it: `@mxlang/vite-plugin` gives a
   whole-file unit a `.tsx` id, `@solidjs/compiler` *parses* TypeScript and passes
@@ -137,7 +137,7 @@ Three facts worth knowing before touching it:
   a regression test on each path (`packages/tsx-bridge/src/mx/hoist-imports.test.ts`,
   `packages/tooling/typescript-plugin/src/index.test.ts`), named so a future
   fix flips the assertion.
-- **It is an `Emitter<string>`, same shape as `@mxlang/astro`'s
+- **It is an `Emitter<string>`, same shape as `@mxlang/host-astro`'s
   `.astro.mx` emitter**: `IfChain` becomes `<Show>` (≤2 conditioned branches) or
   `<Switch>/<Match>` (3+); `For` becomes `<For each keyed>` (`of=`/`in=`) or
   `<Repeat count from>` (`from=`/`to=`/`until=`, with `step` folded into a
@@ -273,7 +273,7 @@ Three facts worth knowing before touching it:
   JSX tag.** Every other `Component` target prints an ordinary `<Tag
   .../>` element; JSX has no positional-call syntax, so
   `SolidEmitter.#defineComponent` instead emits `{__mx_DefineRowN(...)}` —
-  the same call shape `@mxlang/html`'s `<define>` already uses (decision
+  the same call shape `@mxlang/target-html`'s `<define>` already uses (decision
   109). **Decision 160: with no tag arguments the call passes ONE object to
   the define's first param** (`{__mx_DefineRowN({ "n": 1 })}`: attributes in
   source order, spreads, attribute tags by name, the body as `content`; `{}`
@@ -337,7 +337,7 @@ Three facts worth knowing before touching it:
     params)`) registers a define's name only *after* lowering its own body,
     so `<A>` referencing itself or a later `<B>` never resolves as a
     `"define"`-kind `Component` target in the first place. On
-    `@mxlang/html` that already reached the generic capitalized-tag guard
+    `@mxlang/target-html` that already reached the generic capitalized-tag guard
     and errored ("no matching import or `<define>` in scope"); on Solid it
     used to silently lower as a plain `"name"`-kind `Component` and print a
     JSX tag referencing a binding nothing declares (args dropped), because

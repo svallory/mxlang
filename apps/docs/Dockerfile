@@ -16,7 +16,7 @@ RUN npm install -g bun@1.3.14
 WORKDIR /repo
 COPY . .
 RUN bun install --frozen-lockfile
-# `@mxlang/html` (and what it imports) resolve through `dist/`, so the packages
+# `@mxlang/target-html` (and what it imports) resolve through `dist/`, so the packages
 # the landing-page generator uses are built first; CI builds all of them.
 RUN bun run --cwd packages/core build \
   && bun run --cwd packages/targets/data build \

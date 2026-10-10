@@ -19,7 +19,7 @@ import {
   defaultTarget,
   hostOf,
   hostTarget,
-} from "@mxlang/target-registry";
+} from "@mxlang/targets";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DiagnosticSeverity } from "vscode-languageserver/node";
 import {
@@ -415,7 +415,7 @@ describe("the Preact host", () => {
   // `<let>` is valid Marko and renders its initial value under the html
   // host, so a diagnostic here can only come from the Preact host's own
   // declarations — which is what proves the switch routed the document.
-  it("diagnoses a stateful tag through @mxlang/preact", () => {
+  it("diagnoses a stateful tag through @mxlang/host-preact", () => {
     const diagnostics = diagnoseDocument(
       "<let/count=0/>\n<p>${count}</p>\n",
       "file:///app/greeting.mx",
@@ -471,7 +471,7 @@ describe("the Astro template file kind", () => {
 });
 
 describe("the React host", () => {
-  it("diagnoses a stateful tag through @mxlang/react", () => {
+  it("diagnoses a stateful tag through @mxlang/host-react", () => {
     const diagnostics = diagnoseDocument(
       "<let/count=0/>\n<p>${count}</p>\n",
       "file:///app/greeting.mx",
@@ -494,7 +494,7 @@ describe("the React host", () => {
 });
 
 describe("the Hono host", () => {
-  it("diagnoses a stateful tag through @mxlang/hono", () => {
+  it("diagnoses a stateful tag through @mxlang/host-hono", () => {
     const diagnostics = diagnoseDocument(
       "<let/count=0/>\n<p>${count}</p>\n",
       "file:///app/greeting.mx",

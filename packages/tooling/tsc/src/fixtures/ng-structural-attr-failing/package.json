@@ -1,7 +1,7 @@
 {
   "name": "ng-structural-attr-failing",
   "dependencies": {
-    "@mxlang/angular": "workspace:*"
+    "@mxlang/host-angular": "workspace:*"
   },
   "mx": {
     "angular": {

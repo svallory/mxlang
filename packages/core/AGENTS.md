@@ -20,9 +20,9 @@ method per kind, plus the `drive`/`emit` driver). `src/declarations.ts` holds
 compatibility alias of `HostDeclarations` only. `HostOptions.emitIr` is
 required: there is no pre-IR string-walk fallback.
 
-Both current hosts are on the driver. `@mxlang/html` uses
+Both current hosts are on the driver. `@mxlang/target-html` uses
 `packages/targets/html/src/emitter.ts` for vanilla HTML strings;
-`@mxlang/astro` uses `packages/hosts/astro/src/astro-template.ts` for `.astro.mx`'s
+`@mxlang/host-astro` uses `packages/hosts/astro/src/astro-template.ts` for `.astro.mx`'s
 expression-shaped Astro syntax. Neither emitter reads a Marko node; a
 host-specific resolve-time decision goes in `DelegatedTag.data` through
 `isDelegatedTag`/`resolveDelegatedTag` (decision 132 renamed these from `claimsTag`/`resolveHostTag`; `HostTag` is now `DelegatedTag`).
@@ -145,7 +145,7 @@ Five facts worth knowing before editing it:
   path synchronous: Bun loaders, Volar, diagnostics, and `mx-tsc` cannot await
   it. Do not replace full TSX parsing with declaration text extraction, and do
   not add a `core -> @mxlang/tsx-bridge` dependency: parser's Solid test path
-  reaches `@mxlang/solid`, which already depends on core.
+  reaches `@mxlang/host-solid`, which already depends on core.
   **An editor-only callee (not yet on disk) still resolves and still reports a
   dependency (phase 4 tooling fix).** `probeFile` now also checks the active
   `withCalleeInputSources` override map for each candidate path, so an unsaved
@@ -392,7 +392,7 @@ Five facts worth knowing before editing it:
     built-in-shadowing check.
   - **`table-of` on Solid was skipped and now passes.** The skip recorded a
     `<for>` body reading a *property* of its row rendering empty under SSR.
-    That was the accessor-binding bug, not a custom-tag matter: `@mxlang/solid`
+    That was the accessor-binding bug, not a custom-tag matter: `@mxlang/host-solid`
     now rewrites every read of a parameter Solid hands as an accessor into a
     call (`p.name` -> `p().name`), so all 24 rows of `bun run oracle:custom-tags`
     pass with no recorded skip. See `packages/hosts/solid/README.md`
@@ -424,9 +424,9 @@ Five facts worth knowing before editing it:
   while newline indentation already removed by Marko is absent. `<try>` is
   a structural pass-through wrapper and reproduces the caller's body unchanged, matching what
   `lowerDelegatedTag` always did. Each host's `isDelegatedTag`/`resolveDelegatedTag` for
-  `"try"` only decides how the primitive renders now — `@mxlang/html`,
-  `@mxlang/solid`, and `@mxlang/preact`'s shared JSX emitter (reused by
-  `@mxlang/react`/`@mxlang/hono`) all shrank to that. `@mxlang/astro` never
+  `"try"` only decides how the primitive renders now — `@mxlang/target-html`,
+  `@mxlang/host-solid`, and `@mxlang/host-preact`'s shared JSX emitter (reused by
+  `@mxlang/host-react`/`@mxlang/host-hono`) all shrank to that. `@mxlang/host-astro` never
   claimed `"try"`; its rejection is an ordinary `tags["try"]` disposition
   entry (`ctx.declarations.tags`), checked earlier in `lowerTag` than any
   custom tag, so it is unrelated to this change and untouched. Error wording
@@ -618,7 +618,7 @@ Five facts worth knowing before editing it:
   the same file. No `hosts` on the entry (and every local `tags/` directory,
   which has no `mx.tags` entry to carry one) means visible to every host,
   `host` unset included. Every call site that scans passes its own host name
-  — the Bun loaders (`"html"`, `"hono"`), `@mxlang/astro`'s `.astro.mx` plugin
+  — the Bun loaders (`"html"`, `"hono"`), `@mxlang/host-astro`'s `.astro.mx` plugin
   (`"astro"`), the Solid and whole-file `.mx` typescript-plugin paths
   (`"solid"`, resolved per file via `resolveTargetPolicy`), the language
   server (`hostPolicy.host`), the Vite plugin (`resolveTargetPolicyDetailed(file)`
@@ -1060,9 +1060,9 @@ Five facts worth knowing before editing it:
   that proves it end to end on all six hosts.
   **Consequence for anything that matches the emitted module as text:** the
   export line's *name* is now per-file, so four places match its shape and
-  read the name back rather than pinning `render` — `@mxlang/html`'s
+  read the name back rather than pinning `render` — `@mxlang/target-html`'s
   `brandRender`/`finalizeModule`, `@mxlang/typescript-plugin`'s
-  `createAstroTypeSurface`, and `@mxlang/astro`'s two `vite-pages` patterns.
+  `createAstroTypeSurface`, and `@mxlang/host-astro`'s two `vite-pages` patterns.
   Since decision 155 the module also carries `<Name>.render = __mxRender;`
   after the default export; `vite-pages`' `wrapAsPage` renames that line along
   with the function, so a fifth match lives there. The final statement is

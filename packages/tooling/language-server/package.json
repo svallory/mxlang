@@ -44,10 +44,10 @@
     "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external @marko/compiler --external @mxlang/core --external @mxlang/tsx-bridge --external vscode-languageserver --external vscode-languageserver-textdocument && bun build src/bin.ts --outdir dist --target node --format esm --external @marko/compiler --external @mxlang/core --external @mxlang/tsx-bridge --external vscode-languageserver --external vscode-languageserver-textdocument && tsc -p tsconfig.build.json --emitDeclarationOnly --outDir dist"
   },
   "dependencies": {
-    "@mxlang/angular": "workspace:*",
     "@mxlang/core": "workspace:*",
+    "@mxlang/host-angular": "workspace:*",
+    "@mxlang/targets": "workspace:*",
     "@mxlang/tsx-bridge": "workspace:*",
-    "@mxlang/target-registry": "workspace:*",
     "vscode-languageserver": "10.1.1",
     "vscode-languageserver-textdocument": "1.0.14"
   },

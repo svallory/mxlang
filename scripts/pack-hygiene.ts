@@ -97,7 +97,7 @@ export const PACKED_PACKAGES: PackedPackage[] = [
     declarations: true,
   },
   {
-    name: "@mxlang/html",
+    name: "@mxlang/target-html",
     dir: "packages/targets/html",
     extraTopLevel: ["types"],
     distFiles: [
@@ -125,7 +125,7 @@ export const PACKED_PACKAGES: PackedPackage[] = [
     },
   },
   {
-    name: "@mxlang/angular",
+    name: "@mxlang/host-angular",
     dir: "packages/hosts/angular",
     extraTopLevel: [],
     declarations: true,
@@ -292,7 +292,7 @@ export function missingRuntimeEntries(dir: string, pkg: PackageJson): string[] {
   );
 }
 
-/** The `exports` subpaths as import specifiers (`@mxlang/html`, `@mxlang/html/bun`). */
+/** The `exports` subpaths as import specifiers (`@mxlang/target-html`, `@mxlang/target-html/bun`). */
 export function exportSpecifiers(pkg: PackageJson): string[] {
   const exp = pkg.exports;
   if (!exp || typeof exp !== "object") return [pkg.name];
@@ -445,7 +445,7 @@ export function runtimeSpecifiers(file: string): SpecifierRef[] {
 /**
  * Bare imports in the shipped runtime that the package does not declare
  * (dependency or peer), as `relative/file: specifier`. Node builtins, relative
- * paths and the package's own name (`@mxlang/angular/runtime`) are fine. There
+ * paths and the package's own name (`@mxlang/host-angular/runtime`) are fine. There
  * is no allowlist: a runtime import with no declaration installs fine and
  * throws `Cannot find module` on first use.
  */

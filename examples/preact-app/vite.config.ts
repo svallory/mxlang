@@ -8,7 +8,7 @@ import { defineConfig } from "vite";
 // needs no JSX configuration of its own.
 //
 // The host is not configured here: `package.json`'s `"mx": { "host":
-// "preact" }` is what routes `.mx` through `@mxlang/preact`, and the same
+// "preact" }` is what routes `.mx` through `@mxlang/host-preact`, and the same
 // field is what the language server and `mx-tsc` read, so an editor and a
 // build cannot disagree.
 export default defineConfig({

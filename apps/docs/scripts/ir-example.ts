@@ -3,7 +3,7 @@
  * (`docs/architecture/ir-spec.md`).
  *
  * One small `.mx` file, the IR `@mxlang/core` lowers it to, and the module
- * `@mxlang/html` emits from that IR. All three live in `example/ir-spec/` as
+ * `@mxlang/target-html` emits from that IR. All three live in `example/ir-spec/` as
  * real files and the page quotes each verbatim; `ir-example.test.ts` fails
  * when
  *
@@ -25,7 +25,7 @@ import {
   type Ir,
   type MxWarning,
 } from "@mxlang/core";
-import { compile, htmlTargets, policy } from "@mxlang/html";
+import { compile, htmlTargets, policy } from "@mxlang/target-html";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const docsRoot = join(here, "..");
@@ -46,7 +46,7 @@ export function readExample(file: string): string {
 }
 
 /**
- * Lowers `source` exactly as `@mxlang/html` does — same declarations, same
+ * Lowers `source` exactly as `@mxlang/target-html` does — same declarations, same
  * taglibs, same discovery dirs, same targets — but hands the IR back instead
  * of emitting it.
  */

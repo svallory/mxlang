@@ -6,11 +6,11 @@ import { SOLID_BUILTIN_TAGS, sourceBindings } from "@mxlang/tsx-bridge";
  * `@mxlang/tsx-bridge`) the generated text uses as a bare tag and the source
  * does not already bind (`sourceBindings`, same package) — so a caller who
  * genuinely wrote `import { Show } from "./my-show.ts"` is left alone rather
- * than getting a colliding second `Show`. `@mxlang/solid`'s emitter prints
+ * than getting a colliding second `Show`. `@mxlang/host-solid`'s emitter prints
  * these built-ins (`<Show>`, `<For>`, …) as bare tags because the *runtime*
  * build pipeline gets them for free — `@solidjs/vite-plugin`'s compiler
  * stage (native or Babel) auto-imports every built-in it sees, per
- * `@mxlang/solid`'s own `AGENTS.md` — and that compiler stage never runs
+ * `@mxlang/host-solid`'s own `AGENTS.md` — and that compiler stage never runs
  * inside the type-check projection: the TypeScript plugin's
  * `createVirtualCode` only prints JSX text and hands it straight to
  * `tsc`/tsserver, so without this, every

@@ -18,7 +18,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import type { NgtscProgram } from "@angular/compiler-cli";
-import { createVirtualTagModuleReader } from "@mxlang/angular";
+import { createVirtualTagModuleReader } from "@mxlang/host-angular";
 import type ts from "typescript";
 import {
   type CompilerCliModule,

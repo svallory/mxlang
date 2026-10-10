@@ -6,7 +6,7 @@
     // prebuilt (or fresh) dist; the published `types` still point at dist.
     // NOT in tsconfig.json: Bun's bundler honours the nearest tsconfig's
     // `paths`, so the typescript-plugin VSIX bundle (which inlines this
-    // package's src) would follow `@mxlang/angular` into the Angular host's
+    // package's src) would follow `@mxlang/host-angular` into the Angular host's
     // src and then that package's own parser -> `public.d.ts` mapping, and fail
     // with `No matching export … for import "parse"`. The parser maps to its
     // hand-written `public.d.ts` (its vendored Babel src needs relaxed flags),
@@ -16,7 +16,7 @@
     "paths": {
       "@mxlang/core": ["../../core/src/index.ts"],
       "@mxlang/tsx-bridge": ["../../tsx-bridge/src/public.d.ts"],
-      "@mxlang/angular": ["../../hosts/angular/src/index.ts"]
+      "@mxlang/host-angular": ["../../hosts/angular/src/index.ts"]
     },
     "noEmit": true
   },

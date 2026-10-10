@@ -182,7 +182,7 @@ function renderDeclaredAttrTags(
   const callee = join(dir, "Row.tsx");
   writeFileSync(
     callee,
-    `import type { AttrTag } from "@mxlang/solid";\nexport interface Input ${inputDeclaration}\n`,
+    `import type { AttrTag } from "@mxlang/host-solid";\nexport interface Input ${inputDeclaration}\n`,
   );
   try {
     return renderApp(mxFragment, setup, {
@@ -652,7 +652,7 @@ describe("Solid <for>: accessor-backed params are not assignable", () => {
 /**
  * A dynamic tag's target is polymorphic at run time (a tag-name string, a
  * component function, or already-rendered content passed straight through)
- * — the same guard `@mxlang/html`'s `renderDynamic` and `@mxlang/preact`'s
+ * — the same guard `@mxlang/target-html`'s `renderDynamic` and `@mxlang/host-preact`'s
  * inlined `mxDynamic` apply, since Solid's own `<Dynamic component=…>` only
  * accepts a string or a component and throws on a rendered node.
  */
@@ -883,13 +883,13 @@ describe("Solid SSR render: dynamic tag", () => {
 
     // Firstmate's follow-up on decision 116: Solid's own `lazy(...)` returns
     // a real FUNCTION (measured, `typeof lazy(...) === "function"`), unlike
-    // React's `memo`/`forwardRef` (see `@mxlang/react`'s sibling suite,
+    // React's `memo`/`forwardRef` (see `@mxlang/host-react`'s sibling suite,
     // which needed a fix for those). A `lazy(...)` call is a
     // `CallExpression`, always classified "unknown" by `isFunctionLikeValue`,
     // so it already routes through `<Dynamic>` — and Solid's own `<Dynamic
     // component={...}>` accepts any callable component reference
     // generically, with no `typeof` gate of its own the way
-    // `@mxlang/preact`'s `mxDynamic` needed widening. No fix required on
+    // `@mxlang/host-preact`'s `mxDynamic` needed widening. No fix required on
     // this host. Not covered by an executed SSR test here: real
     // `renderToString` of a `lazy(...)` component needs a `<Suspense>`
     // boundary to resolve the async loader, which `renderApp`'s helper does

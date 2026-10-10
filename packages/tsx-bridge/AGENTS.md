@@ -4,7 +4,7 @@
 
 `packages/tsx-bridge` is the MX bridge over `@mxlang/babel` (`packages/babel`), which vendors `@babel/parser` 7.29.8 and forks one method of its JSX plugin so `<` in expression position is parsed as MX. The fork itself knows no MX logic: this package supplies the grammar to it as the `mxHooks` parser option (`src/mx/bridge.ts`'s `mxHooks`; every entry point here injects it when `mx: true`), and the fork throws if `mx: true` arrives without hooks. The Babel tree and its `UPSTREAM.md` live in `packages/babel`; tests that need the real Solid lowering live in `packages/hosts/solid/src/bridge/`, because this package must depend on no host. Entry points:
 
-- `parse(source, filename, options?)` — parses `.solid.mx`, returns a Babel `File` of standard node types only (MX facts go in `node.extra.mx`). The parser imports no host: every MX region is lowered by whichever `mxRegionCompile` hook the caller supplies — for `.solid.mx`, that is `@mxlang/solid`'s `compileSolidMx`, passed explicitly by every caller — before being re-parsed and spliced back in. See "`@mxlang/solid`: the Solid host on `@mxlang/core`" in `packages/hosts/solid/AGENTS.md` for that lowering, and `packages/tsx-bridge/README.md` for this package's own, now-narrower job (region discovery only).
+- `parse(source, filename, options?)` — parses `.solid.mx`, returns a Babel `File` of standard node types only (MX facts go in `node.extra.mx`). The parser imports no host: every MX region is lowered by whichever `mxRegionCompile` hook the caller supplies — for `.solid.mx`, that is `@mxlang/host-solid`'s `compileSolidMx`, passed explicitly by every caller — before being re-parsed and spliced back in. See "`@mxlang/host-solid`: the Solid host on `@mxlang/core`" in `packages/hosts/solid/AGENTS.md` for that lowering, and `packages/tsx-bridge/README.md` for this package's own, now-narrower job (region discovery only).
 - `parseBabel` / `parseBabelExpression` — the untouched vendored `@babel/parser` surface, for plain `.ts`/`.tsx`.
 
 MX parsing is opt-in through the `mx` parser option, which `parse` sets. Without it the vendored parser is byte-equivalent to npm `@babel/parser` — `src/vendored.test.ts` pins that, so keep those tests on `parseBabel` rather than `parse`. `packages/babel/UPSTREAM.md` "Local modifications" records exactly what the fork changed.
@@ -15,11 +15,11 @@ A host can reject an MX region's syntactic position (e.g. Angular's `.ng.mx` onl
 
 `<>…</>` is a TSX fragment by default. The `mxRegionFragment` option (off; `.ng.mx` turns it on) makes it an MX **fragment region** instead: `jsxParseElementAt` sends `<>` to the bridge, `walkMxRegion(..., { fragment: true })` walks it as a synthetic dynamic-named root (htmljs has no nameless open tag, and a static root ignores `</>`), and the host gets the children with `fragment: true` on `MxRegionCompileInput` (the replaced span is `<>`+source+`</>`). Separately and unconditionally, `noteSiblingRoot` (bridge) records a well-formed root that directly follows a region, and `parse` (`babel/index.ts`) rewrites a *Babel* failure that lands inside it to `MxErrors.MultipleRoots`. It never rewrites an MX-raised error (`syntaxPlugin === "mx"`: TypeScript's generic-arrow retry re-enters the bridge and leaves stale hints) and never rejects input that parses.
 
-A host claims the **lowering** of each region through the `mxRegionCompile` parser option, on the same options-bag channel: the bridge hands it the region text, filename, base position and the surrounding module's `importSpecifiers`, and takes back `{ code, hoistedImports?, returnVars?, dependencies? }`. Imports are collected by a declaration-only pre-pass whose region compiler returns `null`, so imports after a region are visible without running host lowering twice. Before compiling a region, the bridge removes imported local names shadowed by an active non-program lexical scope; a function parameter or local binding named like an import must never resolve that import as a custom-tag callee. Region dependencies ride the accepted region root (like hoisted imports, so speculative parses cannot leak them); `print`/`printAst` return their deduplicated union. **`mxRegionCompile` is required whenever the grammar is on** (`.solid.mx` by name, or `mx: true`): the parser has no host of its own and no default, so an absent hook is a positioned compile error at the first region, naming the option and pointing at `compileSolidMx` from `@mxlang/solid` for `.solid.mx`. `print` forwards `mx`/`mxRegionCompile` to `parse` unchanged (`printAst` takes an already-parsed AST, so it has no `parse` call to forward through). `parse` also honours an explicit `mx?: boolean` gate, since a `.ng.mx` filename never matches its `.solid.mx` extension test. See `src/mx/region-compile.ts` and `UPSTREAM.md` item 8.
+A host claims the **lowering** of each region through the `mxRegionCompile` parser option, on the same options-bag channel: the bridge hands it the region text, filename, base position and the surrounding module's `importSpecifiers`, and takes back `{ code, hoistedImports?, returnVars?, dependencies? }`. Imports are collected by a declaration-only pre-pass whose region compiler returns `null`, so imports after a region are visible without running host lowering twice. Before compiling a region, the bridge removes imported local names shadowed by an active non-program lexical scope; a function parameter or local binding named like an import must never resolve that import as a custom-tag callee. Region dependencies ride the accepted region root (like hoisted imports, so speculative parses cannot leak them); `print`/`printAst` return their deduplicated union. **`mxRegionCompile` is required whenever the grammar is on** (`.solid.mx` by name, or `mx: true`): the parser has no host of its own and no default, so an absent hook is a positioned compile error at the first region, naming the option and pointing at `compileSolidMx` from `@mxlang/host-solid` for `.solid.mx`. `print` forwards `mx`/`mxRegionCompile` to `parse` unchanged (`printAst` takes an already-parsed AST, so it has no `parse` call to forward through). `parse` also honours an explicit `mx?: boolean` gate, since a `.ng.mx` filename never matches its `.solid.mx` extension test. See `src/mx/region-compile.ts` and `UPSTREAM.md` item 8.
 
 **A type the host generated has no location.** A host's emitted region is one line; the authored region may span several. `remapExpressionLocations` (`src/mx/bridge.ts`) moves nodes inside a copied expression back to their source span and leaves the rest at their generated offsets, which can name any later source line. For the type of a generated `satisfies`/`as` (one outside every matched expression) the bridge removes the location instead. `print` retains lines, and `@babel/generator` may not break a line between a type's name and its type arguments, so when those two landed on different lines it parenthesized the arguments: `NonNullable(\n<Parameters<...>>)`, which is not TypeScript. Measured on `main` `cbe607f4` as well, where a declared `AttrTag[]` in a multi-line region prints its type with line breaks inside it and stays valid only because none falls between the name and its arguments. A `satisfies` the author wrote inside `${...}` is inside a matched expression and keeps its location.
 
-Two syntax decisions are settled and encoded in `@mxlang/solid`'s lowering (`packages/hosts/solid/README.md`'s table is the authoritative version; this is the summary):
+Two syntax decisions are settled and encoded in `@mxlang/host-solid`'s lowering (`packages/hosts/solid/README.md`'s table is the authoritative version; this is the summary):
 
 - **Whitespace follows Marko, not JSX.** A whitespace-only text run containing a newline is dropped entirely, so indented markup renders nothing between children; a whitespace-only run without a newline collapses to one space. `${" "}` is the escape hatch. Comments are dropped from the output and do not count as content when trimming. This is Marko's own `onText` rule (decision 33), the same one every host relies on — see the four Marko facts below.
 - **Void elements need no slash.** `<input value=x>` parses. The set (`area base br col embed hr img input link meta param source track wbr`) is declared to htmljs-parser as `TagType.void`; a void tag written with a closing tag is a parse error.
@@ -35,7 +35,7 @@ Two syntax decisions are settled and encoded in `@mxlang/solid`'s lowering (`pac
   becomes `name={(p) => body}`; ordinary children stay the child callback, and
   props are emitted as the parent's own attributes in source order followed
   by the attribute tags in source order. `<try>` is expressed *on top of*
-  this in `@mxlang/solid`'s `resolveDelegatedTag`: it reads `<@catch>`/
+  this in `@mxlang/host-solid`'s `resolveDelegatedTag`: it reads `<@catch>`/
   `<@placeholder>` out of the same attribute-tag resolution every other tag
   uses, so the special and generic paths cannot drift. An attribute tag whose
   name is already an attribute on the parent is a parse error rather than a
@@ -48,7 +48,7 @@ Two syntax decisions are settled and encoded in `@mxlang/solid`'s lowering (`pac
 
 Decision 68 retired the old `.mx` *dialect* (required explicit imports,
 `<fragment>`, required `export interface Input`, lowercase-by-scope) —
-`@mxlang/html` and `packages/mx-html` stay deleted, and those conventions do
+`@mxlang/target-html` and `packages/mx-html` stay deleted, and those conventions do
 not come back. Decision 72 re-establishes `.mx` as MX's own **identity**,
 distinct from that dialect: MX is its own language with Marko as its origin,
 and MX 1.0 is a strict subset of Marko syntax — every MX 1.0 file is a valid
@@ -59,12 +59,12 @@ no product path of MX accepts or advertises `.marko` any more — MX only
 supports the MX 1.0 subset of Marko syntax, so treating an arbitrary
 `.marko` file as MX would silently claim support it does not have. `.mx`
 (plus `.solid.mx` and `.astro.mx`, different file kinds) is the only template
-extension across every host loader (`@mxlang/html/bun`, `@mxlang/hono/bun`,
+extension across every host loader (`@mxlang/target-html/bun`, `@mxlang/host-hono/bun`,
 `@mxlang/vite-plugin`), the language server, the TypeScript plugin/`mx-tsc`,
 and the VS Code/Zed extensions. Porting a Marko component that stays within
 the MX 1.0 subset is a rename. `@marko/compiler`'s own `tags/` auto-discovery
-convention (`tagDiscoveryDirs: ["tags"]`, used by `@mxlang/html` and
-`@mxlang/preact`) is the one narrow exception that still touches real
+convention (`tagDiscoveryDirs: ["tags"]`, used by `@mxlang/target-html` and
+`@mxlang/host-preact`) is the one narrow exception that still touches real
 `.marko` files: `@marko/compiler`'s `scanTagsDir` only discovers files whose
 *actual* extension is `.marko` (measured in 5.42.5's `loadTaglibFromDir.js`,
 `ext === ".marko"`) — a `.mx` file placed in a `tags/` directory is not
@@ -85,11 +85,11 @@ covered by the `.marko` alias in the first place.
 
 - `parse(source, filename)` in `@mxlang/tsx-bridge` — a `.solid.mx` file: a
   TypeScript module in which `<` in expression position opens an MX element,
-  lowered to Solid 2 JSX by `@mxlang/solid` (see below). This is the parser
+  lowered to Solid 2 JSX by `@mxlang/host-solid` (see below). This is the parser
   package's only mode; there is no `mxMode` option. Solid is a separate
   host from the vanilla one below, and is not affected by `.mx` being the
   only template extension or by decision 68's dialect retirement.
-- `compile(source, filename)` in `@mxlang/html` — a whole-file MX
+- `compile(source, filename)` in `@mxlang/target-html` — a whole-file MX
   template (`.mx`, stock Marko syntax with no dialect layered on top).
   `@marko/compiler` parses, validates and supplies the tag registry; the
   package supplies only a translator (`packages/targets/html/src/translate.ts`)
@@ -97,7 +97,7 @@ covered by the `.marko` alias in the first place.
   `@mxlang/tsx-bridge` is not on this path at all. `compile()`/`compileFile()`
   themselves do not gate on the filename extension (it is inert in
   `@mxlang/core`'s `compileSource` too — the extension check lives at the
-  loader boundary instead); the Bun loader (`@mxlang/html/bun`) and
+  loader boundary instead); the Bun loader (`@mxlang/target-html/bun`) and
   `@mxlang/vite-plugin`'s `mx()` both accept only `.mx`, excluding
   `.solid.mx`.
 
@@ -137,7 +137,7 @@ Four Marko facts that are easy to get wrong (all measured against
   Marko strips comment delimiters too, which is why an HTML comment and a `//`
   line comment are told apart by re-reading the source at the node's `loc`.
 
-`@mxlang/html`'s translator (`translate.ts`'s dispatch) decides
+`@mxlang/target-html`'s translator (`translate.ts`'s dispatch) decides
 component-vs-HTML dispatch by **in-scope binding, not case**: a tag name
 matching an `import`, a `<define>`, or a tag Marko discovered via taglib/
 `tags/` is a component call whatever its case; anything else is an HTML

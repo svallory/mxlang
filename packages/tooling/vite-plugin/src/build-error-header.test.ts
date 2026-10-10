@@ -7,7 +7,7 @@ import mx, { relabelBuildErrors } from "./index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 // Inside the package tree, like the other build tests: a compiled page
-// imports its host package (`@mxlang/preact`) by bare specifier.
+// imports its host package (`@mxlang/host-preact`) by bare specifier.
 const root = mkdtempSync(join(here, "..", ".tmp-build-error-header-"));
 
 afterAll(() => {

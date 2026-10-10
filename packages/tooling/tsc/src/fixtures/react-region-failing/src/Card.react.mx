@@ -1,4 +1,4 @@
-import type { AttrTag } from "@mxlang/react";
+import type { AttrTag } from "@mxlang/host-react";
 
 export interface Input {
   row?: AttrTag<{ as: "renderable"; params: [count: number] }>;

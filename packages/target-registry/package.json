@@ -1,5 +1,5 @@
 {
-  "name": "@mxlang/target-registry",
+  "name": "@mxlang/targets",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -7,6 +7,7 @@
   "types": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./html": "./src/html.ts",
     "./data-check": "./src/data-check.ts"
   },
   "scripts": {
@@ -14,14 +15,14 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mxlang/angular": "workspace:*",
-    "@mxlang/astro": "workspace:*",
     "@mxlang/core": "workspace:*",
     "@mxlang/data": "workspace:*",
-    "@mxlang/hono": "workspace:*",
-    "@mxlang/html": "workspace:*",
-    "@mxlang/preact": "workspace:*",
-    "@mxlang/react": "workspace:*",
-    "@mxlang/solid": "workspace:*"
+    "@mxlang/host-angular": "workspace:*",
+    "@mxlang/host-astro": "workspace:*",
+    "@mxlang/host-hono": "workspace:*",
+    "@mxlang/host-preact": "workspace:*",
+    "@mxlang/host-react": "workspace:*",
+    "@mxlang/host-solid": "workspace:*",
+    "@mxlang/target-html": "workspace:*"
   }
 }

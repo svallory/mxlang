@@ -1,6 +1,6 @@
 /**
  * This package's own target table (decisions 129 and 132): the one descriptor
- * `@mxlang/angular` exports, bound to a `TargetLookup`.
+ * `@mxlang/host-angular` exports, bound to a `TargetLookup`.
  *
  * Its own module because the import graph is a cycle otherwise:
  * `descriptor.ts` reads `angularDeclarations` from `emitter.ts` at module

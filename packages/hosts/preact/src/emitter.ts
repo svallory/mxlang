@@ -50,7 +50,7 @@ import { type JsxDialect, preactDialect } from "./dialect.ts";
 /**
  * The Marko tags this host refuses, each naming what to write instead.
  *
- * Same shape as `@mxlang/solid`'s table, and for the same reason: these are
+ * Same shape as `@mxlang/host-solid`'s table, and for the same reason: these are
  * Marko's *own* reactivity, and this target has its own. Decision 65's rule
  * holds — the message says what this target cannot express and where the
  * equivalent lives, never "not implemented".
@@ -147,7 +147,7 @@ function rawFail(message: string, node: { loc?: { start?: Position } }): never {
  * The taglibs Marko loads for real HTML, SVG and MathML elements.
  *
  * Anything they define is an element; anything else Marko's lookup resolves
- * is a component. Same set, and same rule, as `@mxlang/html` uses.
+ * is a component. Same set, and same rule, as `@mxlang/target-html` uses.
  */
 const ELEMENT_TAGLIBS = new Set(["marko-html", "marko-svg", "marko-math"]);
 
@@ -197,11 +197,11 @@ export function createJsxDeclarations(
   const region = options.region === true;
   const declarationName =
     dialectName === "Preact"
-      ? "@mxlang/preact"
+      ? "@mxlang/host-preact"
       : dialectName === "React"
-        ? "@mxlang/react"
+        ? "@mxlang/host-react"
         : dialectName === "Hono"
-          ? "@mxlang/hono"
+          ? "@mxlang/host-hono"
           : dialectName;
   return {
     name: declarationName,
@@ -1226,7 +1226,7 @@ export class PreactEmitter implements Emitter<string> {
    * Same check for a data value, an object literal that needs no inner
    * parenthesization guard: `{ ... } satisfies T` has no arrow function or
    * ternary to disambiguate, so one wrapping pair is enough (matching
-   * `@mxlang/html`'s `attrTagValue`).
+   * `@mxlang/target-html`'s `attrTagValue`).
    */
   #satisfyingData(
     value: MappedCode,
@@ -1678,7 +1678,7 @@ export class PreactEmitter implements Emitter<string> {
       // rather than called again — see the `nested-layout` oracle fixture,
       // where `<${input.content}/>` passes an already-rendered JSX tree, not
       // a callable). JSX's tag position is static, so this host inlines a
-      // small `mxDynamic` helper into the module (mirroring `@mxlang/html`'s
+      // small `mxDynamic` helper into the module (mirroring `@mxlang/target-html`'s
       // `renderDynamic`) instead of writing the expression there directly.
       this.#runtimeImports.add("__mxDynamic");
       // Decision 109, Marko parity: args now combine with a body/attribute
@@ -1708,7 +1708,7 @@ export class PreactEmitter implements Emitter<string> {
       // args[0] (not the trailing props object) becomes the input, matching
       // `runtime-tags/src/html/dynamic-tag.ts`'s `_dynamic_tag`. Content
       // still renders, since Marko threads it independently of `input` — the
-      // same reason `@mxlang/html`'s `renderDynamic` takes it as a separate
+      // same reason `@mxlang/target-html`'s `renderDynamic` takes it as a separate
       // parameter rather than reading it off the (possibly dropped) trailing
       // props object.
       // Only the args-array payload form is ambiguous about a trailing

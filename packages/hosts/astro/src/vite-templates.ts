@@ -186,7 +186,7 @@ export function mxTemplates(
         if (reportedScanDiagnostics.has(key)) return;
         reportedScanDiagnostics.add(key);
         console.warn(
-          `@mxlang/astro: ${d.file}:${d.line}:${d.column + 1}: ${d.message}`,
+          `@mxlang/host-astro: ${d.file}:${d.line}:${d.column + 1}: ${d.message}`,
         );
       },
       // The contracts are the scan's, not the caller-supplied map's.
@@ -200,7 +200,7 @@ export function mxTemplates(
       // Own-only loaders cannot establish that a peer host is unknown.
       scan.diagnostics,
       reportedScanDiagnostics,
-      (d) => console.warn(`@mxlang/astro: ${d.file}: ${d.message}`),
+      (d) => console.warn(`@mxlang/host-astro: ${d.file}: ${d.message}`),
     );
     const discovered = scan.customTags;
     const merged = customTags ? { ...discovered, ...customTags } : discovered;

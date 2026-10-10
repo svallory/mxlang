@@ -1,4 +1,4 @@
-import mx from "@mxlang/astro";
+import mx from "@mxlang/host-astro";
 import { defineConfig } from "astro/config";
 
 // `output: "static"` is Astro's default and is written out here only to make

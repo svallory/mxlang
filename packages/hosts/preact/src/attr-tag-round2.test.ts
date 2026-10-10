@@ -99,7 +99,7 @@ async function renderFixture(
       })
         .code.replace(/from "\.\/(\w+)\.mx"/g, 'from "./$1.tsx"')
         .replaceAll(
-          `from "@mxlang/${host}/runtime"`,
+          `from "@mxlang/host-${host}/runtime"`,
           `from ${JSON.stringify(fileURLToPath(new URL(`../../${host}/src/runtime.ts`, import.meta.url)))}`,
         );
       writeFileSync(
@@ -592,7 +592,7 @@ describe("attribute tags round-2 regressions (executed)", () => {
         "main.mx":
           'import Row from "./row.tsx"\n<Row><@head>H</@head><for|x| of=["a", "b"]><@items|n|>${x}${n}</@items></for><@slot><i>S</i></@slot></Row>',
         "row.tsx": `/** @jsxImportSource HOSTJSX */
-import type { AttrTag } from "@mxlang/${host}";
+import type { AttrTag } from "@mxlang/host-${host}";
 export interface Input { head: AttrTag; items: AttrTag<{ params: [n: number] }>[]; slot: AttrTag<{ as: "renderable" }> }
 export default function Row(props: Input) { return <p>{props.head.content}|{props.items.map((x, i) => x.content(i))}|{props.slot}</p>; }`,
       });
@@ -608,7 +608,7 @@ export default function Row(props: Input) { return <p>{props.head.content}|{prop
         const compile = await compilerFor(host);
         symlinkSync(repoNodeModules, join(scratch, "node_modules"), "dir");
         const row = `/** @jsxImportSource ${jsxSources[host]} */
-import type { AttrTag } from "@mxlang/${host}";
+import type { AttrTag } from "@mxlang/host-${host}";
 export interface Input { items: AttrTag<{ params: [n: number] }>[] }
 export default function Row(props: Input) { return <p>{props.items.map((x, i) => x.content?.(i))}</p>; }`;
         writeFileSync(join(scratch, "row.tsx"), row);
@@ -637,8 +637,8 @@ export default function Row(props: Input) { return <p>{props.items.map((x, i) =>
               types: ["node"],
               paths: {
                 "@mxlang/core": ["packages/core/src/index.ts"],
-                "@mxlang/preact": ["packages/hosts/preact/src/index.ts"],
-                "@mxlang/react": ["packages/hosts/react/src/index.ts"],
+                "@mxlang/host-preact": ["packages/hosts/preact/src/index.ts"],
+                "@mxlang/host-react": ["packages/hosts/react/src/index.ts"],
               },
             },
             include: ["*.tsx"],

@@ -3,7 +3,7 @@
  * landing page ships.
  *
  * Three jobs, in order, and all three are gates rather than conveniences:
- * the example must compile on the html target (`@mxlang/html`, the same
+ * the example must compile on the html target (`@mxlang/target-html`, the same
  * entry `packages/targets/html/src/example.ts` uses), every marker must
  * still point at the text it was written for, and every marker link must
  * name a page that exists. A home page that shows syntax the language
@@ -16,7 +16,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { MxWarning } from "@mxlang/core";
 import { scanCached } from "@mxlang/core";
-import { compileFile, htmlTargets } from "@mxlang/html";
+import { compileFile, htmlTargets } from "@mxlang/target-html";
 import { classesOf, escapeHtml, parseMx } from "@mxlang/tree-sitter-mx/docmd";
 
 const here = dirname(fileURLToPath(import.meta.url));

@@ -13,14 +13,14 @@ export default defineConfig({
     outDir: "dist-ssr",
     target: "node22",
   },
-  // Every compiled `.mx` page imports `escape` from `@mxlang/html`.
+  // Every compiled `.mx` page imports `escape` from `@mxlang/target-html`.
   // Left un-external, rolldown bundles that import by parsing
-  // `@mxlang/html`'s own TS source (its `main` is `src/index.ts`,
+  // `@mxlang/target-html`'s own TS source (its `main` is `src/index.ts`,
   // unbuilt) — which pulls in `@marko/compiler`'s transitive TypeScript
   // parameter-property syntax that rolldown's strip-only mode rejects.
   // External keeps it a runtime import, resolved by Bun (which transpiles TS
   // natively) when the bundle runs.
   ssr: {
-    external: ["@mxlang/html"],
+    external: ["@mxlang/target-html"],
   },
 });

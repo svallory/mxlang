@@ -56,7 +56,7 @@ describe("DelegatedTag html-comment", () => {
   });
 
   it("rejects an interpolation inside an html-comment (R-1)", () => {
-    // R-1: `@mxlang/html`'s own emitter accepts an Interpolation child
+    // R-1: `@mxlang/target-html`'s own emitter accepts an Interpolation child
     // here and evaluates it server-side into the comment text
     // (packages/targets/html/src/emitter.ts:604-606) — Angular has no such
     // evaluation inside a comment (probed: `<!-- {{ x }} -->` parses to no

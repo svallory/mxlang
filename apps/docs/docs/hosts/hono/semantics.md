@@ -24,7 +24,7 @@ description: "Each MX construct and the hono/jsx TSX it becomes; event names, ke
 | `<@name>` | the prop `name`; repeated tags become an array |
 | `<@name\|p\|>` | the prop `name` as a function of `p` |
 | `<define/Row\|p\|>` | a local function, called as `Row(p)` |
-| `<try>` | `MxErrorBoundary` (around `hono/jsx`'s `ErrorBoundary`) and `Suspense`, both from `@mxlang/hono/runtime` |
+| `<try>` | `MxErrorBoundary` (around `hono/jsx`'s `ErrorBoundary`) and `Suspense`, both from `@mxlang/host-hono/runtime` |
 
 ## Element or component?
 
@@ -55,11 +55,11 @@ The shared rules are in [Attributes](/language/attributes/#attributes-event-attr
 </try>
 ```
 
-`<@catch>` becomes `MxErrorBoundary` from `@mxlang/hono/runtime`, which wraps `hono/jsx`'s `ErrorBoundary` around the body (handed over as a function, so a throw written directly in the body is caught like a descendant's, with the real error and none of the partial body), and `<@placeholder>` becomes `hono/jsx`'s `Suspense`. With both present, the placeholder sits inside the boundary. `ErrorBoundary` resolves asynchronously, so render the tree the way `c.html()` does, resolving callbacks (`resolveCallback` from `hono/utils/html`), when it can throw or nest.
+`<@catch>` becomes `MxErrorBoundary` from `@mxlang/host-hono/runtime`, which wraps `hono/jsx`'s `ErrorBoundary` around the body (handed over as a function, so a throw written directly in the body is caught like a descendant's, with the real error and none of the partial body), and `<@placeholder>` becomes `hono/jsx`'s `Suspense`. With both present, the placeholder sits inside the boundary. `ErrorBoundary` resolves asynchronously, so render the tree the way `c.html()` does, resolving callbacks (`resolveCallback` from `hono/utils/html`), when it can throw or nest.
 
 ## Attribute tags on your own components
 
-Export an `Input` type from the component and mark the markup props with `AttrTag` from `@mxlang/hono`. A renderable is a Hono `Child`; with `params` it is a function returning one; `AttrTag[]` is a real array. With no declaration, MX infers the shape from the call. See [AttrTag](/language/attr-tag/).
+Export an `Input` type from the component and mark the markup props with `AttrTag` from `@mxlang/host-hono`. A renderable is a Hono `Child`; with `params` it is a function returning one; `AttrTag[]` is a real array. With no declaration, MX infers the shape from the call. See [AttrTag](/language/attr-tag/).
 
 ## How this is checked
 

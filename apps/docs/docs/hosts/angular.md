@@ -118,7 +118,7 @@ What changed:
 ## Setup
 
 ```bash
-bun add -d @mxlang/angular
+bun add -d @mxlang/host-angular
 ```
 
 ```jsonc

@@ -249,7 +249,7 @@ function unwrapFragment(body: FragmentBody, filename: string): FragmentBody {
     !Array.isArray(wrapper.body)
   ) {
     throw new Error(
-      `@mxlang/angular internal: a fragment region did not parse to one wrapper node in ${filename}`,
+      `@mxlang/host-angular internal: a fragment region did not parse to one wrapper node in ${filename}`,
     );
   }
   return wrapper.body;
@@ -397,7 +397,9 @@ function lowerRegion(
   }
   for (const node of ir.hoisted) moduleStatements.push(node.code);
   if (ir.needsAttrTagImport) {
-    moduleStatements.push('import type { AttrTag } from "@mxlang/angular";');
+    moduleStatements.push(
+      'import type { AttrTag } from "@mxlang/host-angular";',
+    );
   }
   if (ir.inputInterface) moduleStatements.push(ir.inputInterface.code);
 
@@ -1447,7 +1449,7 @@ function locateRegionLiterals(
     const at = code.indexOf(region.literal, searchFrom);
     if (at < 0) {
       throw new Error(
-        `@mxlang/angular internal: a region's template literal is not present in the emitted module for ${filename}`,
+        `@mxlang/host-angular internal: a region's template literal is not present in the emitted module for ${filename}`,
       );
     }
     searchFrom = at + region.literal.length;

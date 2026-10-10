@@ -23,7 +23,7 @@ const root = resolve(import.meta.dirname, "..");
 
 /**
  * The built entries the suites load (`@mxlang/core` and `@mxlang/tsx-bridge`
- * resolve to `dist/`, and the core suites compile through `@mxlang/html`'s).
+ * resolve to `dist/`, and the core suites compile through `@mxlang/target-html`'s).
  * Without them every test that reaches one fails with "Cannot find module",
  * which would read as a delta mismatch (Mesh's review of PR 460, F9).
  */

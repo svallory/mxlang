@@ -5,7 +5,7 @@ import { emit } from "./helpers.ts";
 // other Marko stateful tag fell through `isElement`'s bare case test and
 // became a literal lowercase element (the S8 silent-wrong-render class).
 // Each of these is now a positioned error, same wording family as
-// `@mxlang/preact`'s `statefulErrors`/`@mxlang/solid`'s `STATEFUL_ERRORS`,
+// `@mxlang/host-preact`'s `statefulErrors`/`@mxlang/host-solid`'s `STATEFUL_ERRORS`,
 // adapted to name an Angular equivalent.
 describe("stateful tags: positioned errors, not literal elements", () => {
   it("rejects <let> even with no /var", () => {

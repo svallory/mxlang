@@ -1,5 +1,5 @@
 {
-  "name": "@mxlang/react",
+  "name": "@mxlang/host-react",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@mxlang/core": "workspace:*",
-    "@mxlang/preact": "workspace:*"
+    "@mxlang/host-preact": "workspace:*"
   },
   "peerDependencies": {
     "react": "19.3.0"

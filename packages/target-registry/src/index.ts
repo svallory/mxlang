@@ -15,8 +15,6 @@
  */
 
 import { dirname } from "node:path";
-import angular from "@mxlang/angular/descriptor";
-import astro from "@mxlang/astro/descriptor";
 import {
   type CustomTag,
   contractDefaultTagDiagnostics,
@@ -43,11 +41,13 @@ import {
   type TargetPolicyResolution,
 } from "@mxlang/core";
 import data from "@mxlang/data/descriptor";
-import hono from "@mxlang/hono/descriptor";
-import html from "@mxlang/html/descriptor";
-import preact from "@mxlang/preact/descriptor";
-import react from "@mxlang/react/descriptor";
-import solid from "@mxlang/solid/descriptor";
+import angular from "@mxlang/host-angular/descriptor";
+import astro from "@mxlang/host-astro/descriptor";
+import hono from "@mxlang/host-hono/descriptor";
+import preact from "@mxlang/host-preact/descriptor";
+import react from "@mxlang/host-react/descriptor";
+import solid from "@mxlang/host-solid/descriptor";
+import html from "@mxlang/target-html/descriptor";
 
 /**
  * A host file kind plus the key of the editor pipeline that serves it. The key
@@ -74,6 +74,14 @@ function resolved(
     typeof descriptor.name === "string"
   );
 }
+
+/**
+ * The html target's descriptor, by name (decision 201: `@mxlang/targets` is
+ * the umbrella, the registry plus every target). Light like the rest of this
+ * entry; the target's full entry is the `./html` subpath. `@mxlang/data` is
+ * not re-exported: decision 204 deletes it.
+ */
+export { html as htmlTarget };
 
 /** Built-ins in registration order; hostless `data` is last. */
 export const builtinTargets: readonly TargetDescriptor[] = [
@@ -159,7 +167,7 @@ export function descriptorFor(policy: TargetPolicy): TargetDescriptor {
   const found = lookupFor(policy).target(policy.target);
   if (!found) {
     throw new Error(
-      `@mxlang/target-registry: no descriptor for target "${policy.target}"`,
+      `@mxlang/targets: no descriptor for target "${policy.target}"`,
     );
   }
   return found;
@@ -182,7 +190,7 @@ export const builtinFileKinds: readonly BuiltinFileKind[] = builtinTargets
     const pipeline = kind.compileRegion ? "region" : PIPELINES[kind.segment];
     if (!pipeline) {
       throw new Error(
-        `@mxlang/target-registry: built-in file kind "${kind.segment}" has no editor pipeline`,
+        `@mxlang/targets: built-in file kind "${kind.segment}" has no editor pipeline`,
       );
     }
     return { ...kind, pipeline };
@@ -275,7 +283,7 @@ export function regionKindCompile(
   const { compileRegion } = kind;
   if (!compileRegion)
     throw new Error(
-      `@mxlang/target-registry: file kind ".${kind.segment}.mx" has no compileRegion`,
+      `@mxlang/targets: file kind ".${kind.segment}.mx" has no compileRegion`,
     );
   const targets = options.targets ?? builtinLookup();
   return (input) => {
@@ -296,7 +304,7 @@ export function regionKindCompile(
  * once, at registry creation (design note §5).
  *
  * A reader used to exist only after its host package was imported for a side
- * effect (`@mxlang/solid` calls `registerCalleeInputReader` at import), so
+ * effect (`@mxlang/host-solid` calls `registerCalleeInputReader` at import), so
  * core's extension probes saw `.solid.mx` only once that import had happened
  * — an import-order dependency a second copy of core also cannot see. A tool
  * that has the registry has the whole table, so it registers from the table

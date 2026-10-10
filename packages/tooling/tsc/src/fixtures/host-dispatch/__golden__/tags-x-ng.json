@@ -67,7 +67,7 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/html\";\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nPage.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxOut.write(\"<div></div>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page as ((input: Input) => string) & { render: typeof __mxRender };\n",
+        "generated": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/target-html\";\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nPage.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxOut.write(\"<div></div>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page as ((input: Input) => string) & { render: typeof __mxRender };\n",
         "mappings": [],
         "compileDiagnostics": [],
         "hostPolicyDiagnostics": [],
@@ -76,7 +76,7 @@
         ]
       },
       "vite": {
-        "code": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/html\";\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nPage.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxOut.write(\"<div></div>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page as ((input: Input) => string) & { render: typeof __mxRender };\n",
+        "code": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/target-html\";\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nPage.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxOut.write(\"<div></div>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page as ((input: Input) => string) & { render: typeof __mxRender };\n",
         "map": null,
         "warnings": [
           "@mxlang/vite-plugin: <root>/tags-x-ng/tags/x.ng.mx: `x.ng.mx` is a host module file, not a tag template; tag templates are `.mx`"

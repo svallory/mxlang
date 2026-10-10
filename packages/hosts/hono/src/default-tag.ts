@@ -10,8 +10,8 @@ import {
   ownDefaultTag,
   type TargetPolicyDiagnostic,
 } from "@mxlang/core";
-import { translator } from "@mxlang/preact";
-import { DEFAULT_TAG } from "@mxlang/preact/emitter";
+import { translator } from "@mxlang/host-preact";
+import { DEFAULT_TAG } from "@mxlang/host-preact/emitter";
 import { honoDeclarations } from "./dialect.ts";
 
 export function honoDefaultTag(

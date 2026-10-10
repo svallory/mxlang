@@ -17,13 +17,13 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { compileNgMx } from "@mxlang/angular";
-import { lowerAstroMx } from "@mxlang/astro/template";
 import type { MxWarning } from "@mxlang/core";
-import { compileHonoRegion } from "@mxlang/hono";
-import { compilePreactRegion } from "@mxlang/preact";
-import { compileReactRegion } from "@mxlang/react";
-import { compileSolidMx } from "@mxlang/solid";
+import { compileNgMx } from "@mxlang/host-angular";
+import { lowerAstroMx } from "@mxlang/host-astro/template";
+import { compileHonoRegion } from "@mxlang/host-hono";
+import { compilePreactRegion } from "@mxlang/host-preact";
+import { compileReactRegion } from "@mxlang/host-react";
+import { compileSolidMx } from "@mxlang/host-solid";
 import { print } from "@mxlang/tsx-bridge";
 
 const here = dirname(fileURLToPath(import.meta.url));

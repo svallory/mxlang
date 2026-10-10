@@ -1,12 +1,12 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { compileNgMx } from "@mxlang/angular";
 import type {
   CheckerWorker,
   CheckOutcome,
   Diagnostic,
 } from "@mxlang/angular-checker";
+import { compileNgMx } from "@mxlang/host-angular";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CompiledNgMx } from "./language.ts";
 import { createNgDiagnosticsService } from "./ng-diagnostics.ts";

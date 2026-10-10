@@ -10,7 +10,7 @@
  */
 
 import { createTargetLookup } from "@mxlang/core";
-import { getCustomTags } from "@mxlang/preact";
+import { getCustomTags } from "@mxlang/host-preact";
 import { type Child, jsx } from "hono/jsx";
 import { describe, expect, it } from "vitest";
 import cases from "../../../../test-fixtures/body-whitespace/cases.json";

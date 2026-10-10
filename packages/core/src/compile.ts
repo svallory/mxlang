@@ -4,13 +4,13 @@
  *
  * Named `compileSource`, not `compileFile`: it takes source text, and a host
  * is free to keep its own disk-reading `compileFile(filename)` as its public
- * API (`@mxlang/html` does) without two different signatures sharing one
+ * API (`@mxlang/target-html` does) without two different signatures sharing one
  * name across the two packages.
  *
  * This is the seam ADR 0001 names: `@marko/compiler` selects a translator by
  * `config.translator`, and a translator supplying only `translate` (plus its
  * taglibs) injects no runtime at all. The code used to live in
- * `@mxlang/html`'s `index.ts`; it is core's because the seam is the
+ * `@mxlang/target-html`'s `index.ts`; it is core's because the seam is the
  * same for every host — only the taglib list, the policies and any post-pass
  * over the emitted code differ, and those arrive as arguments.
  */

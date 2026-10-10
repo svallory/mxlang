@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
-import { compileHonoFile } from "@mxlang/hono";
+import { compileHonoFile } from "@mxlang/host-hono";
 import { discoveredCustomTags, mxTwins } from "./mx-twins.ts";
 
 /** Compile a fixture tree to Hono JSX TSX and render its entry with `hono/jsx`. */
@@ -53,8 +53,8 @@ export async function renderHono(
             `${prefix}${path}.tsx${suffix}`,
         )
         .replace(
-          '"@mxlang/hono/runtime"',
-          JSON.stringify(require.resolve("@mxlang/hono/runtime")),
+          '"@mxlang/host-hono/runtime"',
+          JSON.stringify(require.resolve("@mxlang/host-hono/runtime")),
         );
       writeFileSync(withTsxExtension(file), rewritten);
     }

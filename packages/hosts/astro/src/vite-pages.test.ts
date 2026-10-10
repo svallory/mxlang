@@ -1,5 +1,5 @@
 import { sep } from "node:path";
-import { compile } from "@mxlang/html";
+import { compile } from "@mxlang/target-html";
 import { describe, expect, it } from "vitest";
 import { isUnderPagesDir, wrapAsPage } from "./vite-pages.ts";
 

@@ -9,7 +9,6 @@
 import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { stripVTControlCharacters } from "node:util";
-import { compile as compileAngular, compileNgMx } from "@mxlang/angular";
 import * as core from "@mxlang/core";
 import {
   type CustomTag,
@@ -21,6 +20,7 @@ import {
   type TargetPolicy,
   type TargetPolicyDiagnostic,
 } from "@mxlang/core";
+import { compile as compileAngular, compileNgMx } from "@mxlang/host-angular";
 import {
   type BuiltinFileKind,
   builtinFileKinds,
@@ -32,7 +32,7 @@ import {
   regionCompileFor,
   regionFileKinds,
   scanCached,
-} from "@mxlang/target-registry";
+} from "@mxlang/targets";
 import { type PrintOptions, print } from "@mxlang/tsx-bridge";
 import {
   type Diagnostic,
@@ -289,7 +289,7 @@ function documentPath(uri: string): string {
  * diagnostics; a locationless exception is reported via `onUnexpectedError`
  * and also returns `[]`.
  *
- * Supply the policy from `@mxlang/target-registry`'s `resolveTargetPolicy` or
+ * Supply the policy from `@mxlang/targets`'s `resolveTargetPolicy` or
  * `resolveTargetPolicyDetailed`. Those wrappers enforce tooling availability,
  * including staging/rejecting the data target. A hand-built policy bypasses
  * that staging: `{ target: "tree" }` reaches the data compiler, not HTML or an

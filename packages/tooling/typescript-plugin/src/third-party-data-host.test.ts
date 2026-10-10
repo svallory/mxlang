@@ -5,7 +5,7 @@
  */
 
 import * as core from "@mxlang/core";
-import { builtinLookup } from "@mxlang/target-registry";
+import { builtinLookup } from "@mxlang/targets";
 import ts from "typescript";
 import { afterEach, describe, expect, it } from "vitest";
 import {

@@ -3,6 +3,6 @@
     "target": "html"
   },
   "dependencies": {
-    "@mxlang/solid": "1"
+    "@mxlang/host-solid": "1"
   }
 }

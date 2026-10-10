@@ -143,7 +143,7 @@ describe("event binding syntax (html)", () => {
     // `<button (click)=…` is reported under `click` (column 9), not under
     // `<button`. There is no `onClick=` hint here because this host has no
     // event-handler form to suggest — `eventHandlerHint` is gated on
-    // `resolveAttributeMethod`, which `@mxlang/html` does not declare.
+    // `resolveAttributeMethod`, which `@mxlang/target-html` does not declare.
     expect(failure('<div (click)="f()"/>')).toMatchObject({
       line: 1,
       column: 6,

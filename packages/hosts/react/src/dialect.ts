@@ -1,8 +1,8 @@
 // Import the light subpaths, not the package root: the root is preact's
 // compile entry, and a descriptor's dependencies must stay light
 // (target-registry's light-import test).
-import type { JsxDialect } from "@mxlang/preact/dialect";
-import { createJsxDeclarations } from "@mxlang/preact/emitter";
+import type { JsxDialect } from "@mxlang/host-preact/dialect";
+import { createJsxDeclarations } from "@mxlang/host-preact/emitter";
 
 /**
  * React's own event-prop names, vendored from its registration table.
@@ -273,7 +273,7 @@ export const reactEventPropNames: Record<string, string> = Object.assign(
 export const reactDialect: JsxDialect = {
   name: "React",
   jsxImportSource: "react",
-  attrTagModule: "@mxlang/react",
+  attrTagModule: "@mxlang/host-react",
   classAttr: "className",
   reactBooleanAttributes: true,
   forAttr: "htmlFor",
@@ -281,7 +281,7 @@ export const reactDialect: JsxDialect = {
   textareaLeadingNewline: "never",
   rawHtmlProp: "dangerouslySetInnerHTML",
   rawHtmlValue: (code) => `{ __html: ${code} }`,
-  errorBoundaryModule: "@mxlang/react/runtime",
+  errorBoundaryModule: "@mxlang/host-react/runtime",
   errorBoundaryName: "MxErrorBoundary",
   suspenseName: "MxPlaceholder",
   fragmentModule: "react",

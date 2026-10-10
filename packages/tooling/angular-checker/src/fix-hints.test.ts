@@ -1,5 +1,5 @@
 import { join, resolve } from "node:path";
-import { compileNgMx } from "@mxlang/angular";
+import { compileNgMx } from "@mxlang/host-angular";
 import { describe, expect, it } from "vitest";
 import { createAngularChecker, diagnoseNgMx } from "./index.ts";
 

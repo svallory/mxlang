@@ -83,7 +83,7 @@ describe("Component name target", () => {
       throw new Error("expected compile to fail");
     } catch (error) {
       expect((error as Error).message).toContain(
-        "params on `<@header>` aren't supported by @mxlang/angular",
+        "params on `<@header>` aren't supported by @mxlang/host-angular",
       );
       expect((error as { line?: number }).line).toBe(2);
     }
@@ -97,7 +97,7 @@ describe("Component name target", () => {
       throw new Error("expected compile to fail");
     } catch (error) {
       expect((error as Error).message).toContain(
-        "attributes on `<@header>` aren't supported by @mxlang/angular",
+        "attributes on `<@header>` aren't supported by @mxlang/host-angular",
       );
       expect((error as { line?: number }).line).toBe(2);
     }
@@ -111,7 +111,7 @@ describe("Component name target", () => {
       throw new Error("expected compile to fail");
     } catch (error) {
       expect((error as Error).message).toContain(
-        "nested attribute tags inside `<@header>` aren't supported by @mxlang/angular",
+        "nested attribute tags inside `<@header>` aren't supported by @mxlang/host-angular",
       );
       expect((error as { line?: number }).line).toBe(2);
     }
@@ -125,7 +125,7 @@ describe("Component name target", () => {
       throw new Error("expected compile to fail");
     } catch (error) {
       expect((error as Error).message).toContain(
-        "array attribute tag `<@item>` isn't supported by @mxlang/angular",
+        "array attribute tag `<@item>` isn't supported by @mxlang/host-angular",
       );
       expect((error as { line?: number }).line).toBe(3);
     }
@@ -137,7 +137,7 @@ describe("Component name target", () => {
       throw new Error("expected compile to fail");
     } catch (error) {
       expect((error as Error).message).toContain(
-        "array attribute tag `<@row>` isn't supported by @mxlang/angular",
+        "array attribute tag `<@row>` isn't supported by @mxlang/host-angular",
       );
       expect((error as { line?: number }).line).toBe(3);
     }
@@ -149,7 +149,7 @@ describe("Component name target", () => {
       throw new Error("expected compile to fail");
     } catch (error) {
       expect((error as Error).message).toContain(
-        "<@header/> has no body; @mxlang/angular projects attribute-tag bodies by name",
+        "<@header/> has no body; @mxlang/host-angular projects attribute-tag bodies by name",
       );
       expect((error as { line?: number }).line).toBe(2);
     }
@@ -221,7 +221,7 @@ describe("Component dynamic target (via DelegatedTag routing)", () => {
 
   it("rejects content on a dynamic component", () => {
     expect(() => emit("<${Cmp}>body</${Cmp}>")).toThrow(
-      /isn't supported by @mxlang\/angular: `ngComponentOutlet`/,
+      /isn't supported by @mxlang\/host-angular: `ngComponentOutlet`/,
     );
   });
 
@@ -234,7 +234,7 @@ describe("Component dynamic target (via DelegatedTag routing)", () => {
   // same error, not a new one.
   it("rejects an attribute-tag-only body on a dynamic component the same way", () => {
     expect(() => emit("<${Cmp}><@header>hi</@header></>")).toThrow(
-      /isn't supported by @mxlang\/angular: `ngComponentOutlet`/,
+      /isn't supported by @mxlang\/host-angular: `ngComponentOutlet`/,
     );
   });
 
@@ -244,7 +244,7 @@ describe("Component dynamic target (via DelegatedTag routing)", () => {
     // constructor arguments — genuinely inexpressible here, so this must be
     // a positioned compile error naming the construct, not a silent drop.
     expect(() => emit('<${Cmp}("x", 2)/>')).toThrow(
-      /tag arguments aren't supported by @mxlang\/angular: `ngComponentOutlet`/,
+      /tag arguments aren't supported by @mxlang\/host-angular: `ngComponentOutlet`/,
     );
   });
 
@@ -263,7 +263,7 @@ describe("Component dynamic target (via DelegatedTag routing)", () => {
     };
     const error = fail("<${Cmp} a=1/>\n<${Cmp}/n a=1/>");
     expect(error?.message).toMatch(
-      /tag variable `\/n` on a dynamic tag .* isn't supported by @mxlang\/angular/,
+      /tag variable `\/n` on a dynamic tag .* isn't supported by @mxlang\/host-angular/,
     );
     // The `/n` is the second character pair of line 2 (`<${Cmp}/n …>`), so
     // the caret lands on the binding, not on the tag's `<`.

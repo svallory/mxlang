@@ -12,13 +12,13 @@
     // import reaches `@mxlang/babel`'s decorator source, which Bun cannot
     // parse (port PR 5). The parser maps to its hand-written `public.d.ts`
     // (its vendored Babel src needs relaxed flags), as vite-plugin does.
-    // `@mxlang/angular` itself is imported by the oracle report the mapping
+    // `@mxlang/host-angular` itself is imported by the oracle report the mapping
     // test reuses. `rootDir` covers the deps' src (TS6059 otherwise).
     "rootDir": "../../..",
     "paths": {
       "@mxlang/core": ["../../core/src/index.ts"],
       "@mxlang/tsx-bridge": ["../../tsx-bridge/src/public.d.ts"],
-      "@mxlang/angular": ["./src/index.ts"]
+      "@mxlang/host-angular": ["./src/index.ts"]
     },
     "noEmit": true
   },

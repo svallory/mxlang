@@ -6,7 +6,7 @@
  * What differs is a short list of *names*: the JSX runtime the emitted pragma
  * points at, whether a class attribute is spelled `class` or `className`, and
  * the prop that sets raw HTML. Keeping them in one object is what lets a
- * future `@mxlang/react` import this package's emitter and pass a different
+ * future `@mxlang/host-react` import this package's emitter and pass a different
  * `JsxDialect` rather than fork 600 lines that would then drift.
  *
  * Deliberately *not* in here: anything the emitter would have to branch on
@@ -84,7 +84,7 @@ export interface JsxDialect {
    * (`keydown` → `onKeyDown`, never `onKeydown`), so every built-in dialect
    * looks them up in a table holding exactly the handler props its JSX types
    * declare ({@link preactEventPropNames}, {@link honoEventPropNames}, and
-   * `reactEventPropNames` in `@mxlang/react`'s `dialect.ts`).
+   * `reactEventPropNames` in `@mxlang/host-react`'s `dialect.ts`).
    */
   eventPropNames?: Record<string, string>;
   /**
@@ -284,14 +284,14 @@ export const honoEventPropNames: Record<string, string> = eventPropNames(
 export const preactDialect: JsxDialect = {
   name: "Preact",
   jsxImportSource: "preact",
-  attrTagModule: "@mxlang/preact",
+  attrTagModule: "@mxlang/host-preact",
   classAttr: "class",
   forAttr: "for",
   textareaContent: "children",
   textareaLeadingNewline: "ssr",
   rawHtmlProp: "dangerouslySetInnerHTML",
   rawHtmlValue: (code) => `{ __html: ${code} }`,
-  errorBoundaryModule: "@mxlang/preact/runtime",
+  errorBoundaryModule: "@mxlang/host-preact/runtime",
   errorBoundaryName: "MxErrorBoundary",
   suspenseName: "MxPlaceholder",
   fragmentModule: "preact",

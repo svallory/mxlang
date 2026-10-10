@@ -41,7 +41,7 @@ function targets(): TargetLookup {
 const descriptor: TargetDescriptor = {
   descriptorVersion: 0,
   name: "preact-jsx",
-  packageName: "@mxlang/preact",
+  packageName: "@mxlang/host-preact",
   defaultTag: DEFAULT_TAG,
   declarations: { default: preactDeclarations },
   load() {

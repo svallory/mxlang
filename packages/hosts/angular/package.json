@@ -1,5 +1,5 @@
 {
-  "name": "@mxlang/angular",
+  "name": "@mxlang/host-angular",
   "version": "0.1.0",
   "description": "Compiles a .mx template to an Angular template",
   "license": "MIT",

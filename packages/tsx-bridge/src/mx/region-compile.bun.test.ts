@@ -17,8 +17,8 @@ import { parse } from "../index.ts";
  * reported at (14:5), a position in neither file — and invisible to 15
  * passing vitest tests.
  *
- * Run by `bun run test:bun`, the same channel `@mxlang/html` and
- * `@mxlang/hono` use for their `Bun.plugin` loaders.
+ * Run by `bun run test:bun`, the same channel `@mxlang/target-html` and
+ * `@mxlang/host-hono` use for their `Bun.plugin` loaders.
  */
 describe("mxRegionCompile error positioning (Bun runtime)", () => {
   // Region early, with real content after it, so a wrong line cannot land on

@@ -8,7 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { builtinFileKinds } from "@mxlang/target-registry";
+import { builtinFileKinds } from "@mxlang/targets";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createMessageConnection,

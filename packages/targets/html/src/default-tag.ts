@@ -42,7 +42,7 @@ export function configuredDefaultTag(
       if (reported.has(key)) return;
       reported.add(key);
       console.warn(
-        `@mxlang/html: ${diagnostic.file}:${diagnostic.line}:${diagnostic.column + 1}: ${diagnostic.message}`,
+        `@mxlang/target-html: ${diagnostic.file}:${diagnostic.line}:${diagnostic.column + 1}: ${diagnostic.message}`,
       );
     },
   });

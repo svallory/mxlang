@@ -40,7 +40,7 @@ TypeScript. Astro always uses strict HTML lowering and projects MX's runtime
 `content` slot as JSX `children` at the type boundary.
 
 `createAmxLanguagePlugin(ts)` lowers the MX template half with
-`@mxlang/astro`, passes that Astro text to
+`@mxlang/host-astro`, passes that Astro text to
 `@astrojs/compiler/sync`'s `convertToTSX`, and composes the two maps into one
 set of Volar `CodeMapping`s. It is registered only with `astro: true`; without
 Astro composition this plugin deliberately ignores `.astro.mx` files.
@@ -126,7 +126,7 @@ source the same way an expression does:
 
 | Host             | Tag name maps to           | Attribute name maps to          |
 | ---------------- | --------------------------- | -------------------------------- |
-| HTML (`@mxlang/html`) | the call target (`Card(...)`) | the props object literal's key (`{ title: ... }`) |
+| HTML (`@mxlang/target-html`) | the call target (`Card(...)`) | the props object literal's key (`{ title: ... }`) |
 | Preact / React   | the JSX opening tag (`<Card`) | the JSX attribute name (`title={...}`) |
 | Solid            | the JSX opening tag (`<Card`) | the JSX attribute name (`title={...}`) |
 

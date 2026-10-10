@@ -126,7 +126,7 @@ describe("the MX + Preact counter", () => {
     // The only place an error boundary actually runs: Preact's boundaries are
     // a client-render mechanism, and `preact-render-to-string`'s sync
     // renderer rethrows instead of invoking one (pinned in
-    // `@mxlang/preact`'s own `runtime.test.ts`). So this browser assertion is
+    // `@mxlang/host-preact`'s own `runtime.test.ts`). So this browser assertion is
     // the live proof that `<@catch>` wires a working boundary — the sibling
     // `<Risky fail=false/>` proves the boundary is transparent otherwise.
     expect(await page.textContent('[data-testid="boom-ok"]')).toBe(

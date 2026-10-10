@@ -1,10 +1,10 @@
 /**
- * `@mxlang/astro`'s renderer server entrypoint.
+ * `@mxlang/host-astro`'s renderer server entrypoint.
  *
  * Astro loads this module by the `serverEntrypoint` the integration registers
  * and calls `check` on every component it renders until a renderer claims it,
  * then `renderToStaticMarkup` on the one that did. There is deliberately no
- * client entrypoint: an MX component compiled by `@mxlang/html` is a
+ * client entrypoint: an MX component compiled by `@mxlang/target-html` is a
  * `(input) => string` function with no runtime, no state and nothing to
  * hydrate, so there is nothing to ship to a browser. Astro itself raises
  * `NoClientEntrypoint` when an author puts `client:*` on such a component,
@@ -22,7 +22,7 @@
 type MxComponent = (input: Record<string, unknown>) => string;
 
 /**
- * The brand `@mxlang/html`'s `postEmit` writes onto the default export.
+ * The brand `@mxlang/target-html`'s `postEmit` writes onto the default export.
  *
  * Looked up through the global registry (`Symbol.for`) rather than imported:
  * the property is written by a compiled module and read here, and the two may

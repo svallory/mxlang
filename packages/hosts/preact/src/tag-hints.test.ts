@@ -14,7 +14,7 @@ const preactTargets = createTargetLookup([descriptor]);
  * (audit item 14, cases h14/h04). The emitter is shared with React and Hono,
  * which assert the same text in their own suites. Every suggested fix is
  * compiled too. A lowercase tag is never unresolved on a JSX host (any
- * lowercase name is an intrinsic element), so only `@mxlang/html` offers an
+ * lowercase name is an intrinsic element), so only `@mxlang/target-html` offers an
  * element did-you-mean.
  */
 // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI colour

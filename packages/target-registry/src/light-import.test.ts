@@ -25,7 +25,7 @@ const COMPILERS = String.raw`/node_modules\/(\.bun\/)?(@marko[+/]compiler|@astro
  * `dist/index.js` of a packed one. Importing the registry must pull in only
  * descriptor modules and their light dependencies — never a compile entry —
  * so a descriptor that eagerly imports its host (e.g. a top-level
- * `import "@mxlang/html"` in the astro descriptor) fails the import test
+ * `import "@mxlang/target-html"` in the astro descriptor) fails the import test
  * below even though the host's index is itself compiler-lazy today.
  */
 const HOST_ENTRIES =

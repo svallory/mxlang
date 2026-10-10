@@ -261,7 +261,7 @@ type DelegatedTagData =
 export const DEFAULT_TAG = "div";
 
 export const astroTemplateDeclarations: HostDeclarations = {
-  name: "@mxlang/astro",
+  name: "@mxlang/host-astro",
   nativeTags: WEB_ELEMENTS,
   attrTags: 2,
   // The ladder (decision 145): the parent's contract `defaultTag`, then
@@ -309,7 +309,7 @@ export const astroTemplateDeclarations: HostDeclarations = {
     // host-specific error rather than the bare shape silently becoming an
     // interpolation.
     fail(
-      "a dynamic tag name (`<${expr}>`) isn't supported by @mxlang/astro: Astro resolves component names statically",
+      "a dynamic tag name (`<${expr}>`) isn't supported by @mxlang/host-astro: Astro resolves component names statically",
       node,
     );
   },
@@ -668,25 +668,25 @@ export function createEmitter(
   const validateAttributeTag = (tag: AttributeTag): void => {
     if (tag.attrs.length > 0) {
       fail(
-        `attributes on \`<@${tag.name}>\` aren't supported by @mxlang/astro: a slot carries markup, not data`,
+        `attributes on \`<@${tag.name}>\` aren't supported by @mxlang/host-astro: a slot carries markup, not data`,
         tag.attrs[0] as Attr,
       );
     }
     if (tag.block.hasParams) {
       fail(
-        `params on \`<@${tag.name}>\` aren't supported by @mxlang/astro: a slot carries rendered markup, not a function`,
+        `params on \`<@${tag.name}>\` aren't supported by @mxlang/host-astro: a slot carries rendered markup, not a function`,
         tag,
       );
     }
     if (tag.attrTagProps.length > 0) {
       fail(
-        `nested attribute tags inside \`<@${tag.name}>\` aren't supported by @mxlang/astro: a slot is keyed by one name and has no nested data shape`,
+        `nested attribute tags inside \`<@${tag.name}>\` aren't supported by @mxlang/host-astro: a slot is keyed by one name and has no nested data shape`,
         tag.attributeTagTree[0] ?? tag,
       );
     }
     if (!tag.hasBody) {
       fail(
-        `<@${tag.name}/> has no body; @mxlang/astro projects attribute-tag bodies by name`,
+        `<@${tag.name}/> has no body; @mxlang/host-astro projects attribute-tag bodies by name`,
         tag,
       );
     }
@@ -728,7 +728,7 @@ export function createEmitter(
       };
       collect(prop.source);
       fail(
-        `array attribute tag \`<@${prop.name}>\` isn't supported by @mxlang/astro: a slot is keyed by name`,
+        `array attribute tag \`<@${prop.name}>\` isn't supported by @mxlang/host-astro: a slot is keyed by name`,
         loopTag ?? tags[1] ?? tags[0] ?? owner,
       );
     }
@@ -753,7 +753,7 @@ export function createEmitter(
     }
     if (node.kind === "AttributeTagFor") {
       fail(
-        "attribute tags inside `<for>` aren't supported by @mxlang/astro: repeated slots cannot share one name",
+        "attribute tags inside `<for>` aren't supported by @mxlang/host-astro: repeated slots cannot share one name",
         node,
       );
     }
@@ -933,12 +933,12 @@ export function createEmitter(
         // the generic dynamic-tag message would misdescribe what they wrote.
         if (node.target.valueImportBinding) {
           fail(
-            `\`<${node.target.valueImportBinding}>\` is bound in the frontmatter to a value MX can't prove is a component, and @mxlang/astro can't render a tag name decided at runtime. Bind it to a component (an import, function or class), or use a lowercase element.`,
+            `\`<${node.target.valueImportBinding}>\` is bound in the frontmatter to a value MX can't prove is a component, and @mxlang/host-astro can't render a tag name decided at runtime. Bind it to a component (an import, function or class), or use a lowercase element.`,
             node,
           );
         }
         fail(
-          "a dynamic tag name (`<${expr}>`) isn't supported by @mxlang/astro: Astro resolves component names statically",
+          "a dynamic tag name (`<${expr}>`) isn't supported by @mxlang/host-astro: Astro resolves component names statically",
           node,
         );
       }
@@ -955,7 +955,7 @@ export function createEmitter(
         // the markup string — not a place any binding could land. Refused
         // rather than dropped.
         fail(
-          `\`/var\` on \`<${node.authoredName ?? name}>\` can't bind in \`.astro.mx\`: Astro runs the \`---\` fence before the template renders, so no statement can receive the value here. Call the unit directly from the fence instead, e.g. \`import ${name} from "./${node.authoredName ?? name}.mx"; import { createOut } from "@mxlang/astro/runtime"; const value = ${name}.render({ ... }, createOut());\`, and use \`value\` in the template.`,
+          `\`/var\` on \`<${node.authoredName ?? name}>\` can't bind in \`.astro.mx\`: Astro runs the \`---\` fence before the template renders, so no statement can receive the value here. Call the unit directly from the fence instead, e.g. \`import ${name} from "./${node.authoredName ?? name}.mx"; import { createOut } from "@mxlang/host-astro/runtime"; const value = ${name}.render({ ... }, createOut());\`, and use \`value\` in the template.`,
           node,
         );
       }
@@ -1228,7 +1228,7 @@ function emitFence(
   }
 
   if (needsAttrTagImport) {
-    code += 'import type { AttrTag } from "@mxlang/astro";';
+    code += 'import type { AttrTag } from "@mxlang/host-astro";';
   }
 
   for (const statement of statements) {

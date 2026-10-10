@@ -814,7 +814,7 @@ function mxSubParseOptions(options: any): any {
  * not `{<Widget />}`), while a caller that splices a host's `code` directly
  * into a surrounding element's JSX children (`<ul>${code}</ul>`) needs the
  * JSX child-expression-container braces a dynamic-tag dispatch emits
- * (`@mxlang/solid`'s `#dynamicComponent`: `{(() => {...})()}`, correct only
+ * (`@mxlang/host-solid`'s `#dynamicComponent`: `{(() => {...})()}`, correct only
  * as a JSX child, not as a standalone expression on its own). A region
  * whose entire content is one dynamic tag is exactly this shape — Solid's
  * lowering has no way to know, at emit time, which of the two contracts its

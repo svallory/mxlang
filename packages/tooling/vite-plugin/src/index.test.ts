@@ -114,7 +114,7 @@ async function mockCompiler(
   target: string,
   compileModule: TargetCompiler["compileModule"],
 ) {
-  const { builtinLookup } = await import("@mxlang/target-registry");
+  const { builtinLookup } = await import("@mxlang/targets");
   const descriptor = builtinLookup().target(target);
   if (!descriptor?.load) throw new Error("missing compiler");
   const wired = descriptor as typeof descriptor & {
@@ -362,7 +362,7 @@ describe("mx()", () => {
     });
 
     it("leaves AstroMX's .astro.mx alone: a different host's extension", async () => {
-      // `.astro.mx` (decision 134) belongs to `@mxlang/astro`'s own plugin,
+      // `.astro.mx` (decision 134) belongs to `@mxlang/host-astro`'s own plugin,
       // which lowers it to Astro template syntax. It ends in `.mx`, so the
       // plain `endsWith` match would claim it without the foreign-extension
       // guard — this pins that, since the two plugins run in the same Vite
@@ -572,7 +572,7 @@ export default () => <div />;
 
     // The 20s timeout below: this is the only test in the file that reaches
     // the `.mx` branch, so it pays for the dynamic
-    // `import("@mxlang/html")` and, through it, the cold load of
+    // `import("@mxlang/target-html")` and, through it, the cold load of
     // `@marko/compiler` — measured at **1145ms idle**, and at **6117ms**
     // inside a full `bun run verify` (20 vitest projects in parallel, ~34s of
     // transform), which overruns vitest's 5000ms default.
@@ -595,7 +595,7 @@ export default () => <div />;
     }, 20_000);
 
     it("passes `strict` through to the translator's strictPolicy", async () => {
-      // The seam `@mxlang/astro` needs: a host with no reactive target selects
+      // The seam `@mxlang/host-astro` needs: a host with no reactive target selects
       // `strictPolicy`, so a reactive construct is a compile error naming the
       // construct rather than markup that renders once and never updates. The
       // flag is a passthrough — no policy logic lives in this plugin.
@@ -1244,7 +1244,7 @@ export default () => <div />;
 
       vi.resetModules();
       // The descriptor's own file kind: dispatch reads the lookup's descriptors.
-      const { builtinTargets } = await import("@mxlang/target-registry");
+      const { builtinTargets } = await import("@mxlang/targets");
       const kind = builtinTargets
         .flatMap((target) => target.host?.fileKinds ?? [])
         .find((kind) => kind.compileRegion);
@@ -1373,7 +1373,7 @@ export default () => <div />;
       writeFileSync(caller, source);
       writeFileSync(
         dependency,
-        'import type { AttrTag } from "@mxlang/solid";\nexport interface Input { item: AttrTag<{ as: "renderable" }> }\nexport default function Card() { return null; }\n',
+        'import type { AttrTag } from "@mxlang/host-solid";\nexport interface Input { item: AttrTag<{ as: "renderable" }> }\nexport default function Card() { return null; }\n',
       );
 
       vi.resetModules();
@@ -1410,7 +1410,7 @@ export default () => <div />;
 
     it("compiles a whole-file Solid .mx through the real Solid host, not the html string emitter (decision 115)", async () => {
       // Before decision 115's wiring, `compileMarko`'s `host === "solid"`
-      // check had no branch at all and fell through to the `@mxlang/html`
+      // check had no branch at all and fell through to the `@mxlang/target-html`
       // branch: a real `vite build` of a page meant for Solid silently
       // compiled it to the vanilla string emitter instead — plausible
       // output, wrong host, no error. Asserting real Solid JSX output
@@ -1442,7 +1442,7 @@ export default () => <div />;
       // vacuously.
       expect(result?.code).toContain('<p class="x">');
       expect(result?.code).not.toContain("__mxOut.write(");
-      expect(result?.code).not.toContain('from "@mxlang/html"');
+      expect(result?.code).not.toContain('from "@mxlang/target-html"');
       vi.resetModules();
     });
 

@@ -12,7 +12,7 @@ import { renderPreact } from "./preact-render";
  * `<if>`, `<for>`, components, attribute tags — means the same thing on every
  * target. This is that claim, checked rather than asserted: every fixture in
  * the stock `.marko` set (`packages/targets/html/fixtures-marko/`, the same 60
- * `oracle:marko` uses) is compiled through `@mxlang/preact`, rendered with
+ * `oracle:marko` uses) is compiled through `@mxlang/host-preact`, rendered with
  * `preact-render-to-string`, and compared against the fixture's own
  * `expected.html` — which was generated from real Marko, so a pass means
  * this host agrees with Marko too, transitively.
@@ -206,7 +206,7 @@ export async function runJsxHostTable(
   const nameWidth = Math.max(8, ...rows.map((r) => r.fixture.length));
   console.log("");
   console.log(
-    `=== stock .marko fixtures (@mxlang/${targetName.toLowerCase()}) ===`,
+    `=== stock .marko fixtures (@mxlang/host-${targetName.toLowerCase()}) ===`,
   );
   console.log(
     `${"fixture".padEnd(nameWidth)}  ${targetName.toLowerCase().padEnd(15)}  verdict`,

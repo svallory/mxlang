@@ -37,7 +37,7 @@ import { lookup } from "./test-targets.ts";
  * The lowerer (decision 79): one fixture per IR kind, plus the error cases.
  *
  * These are the tests that keep the IR honest. `compileSource`'s own emitted
- * output is asserted elsewhere (`@mxlang/html`'s suite and both
+ * output is asserted elsewhere (`@mxlang/target-html`'s suite and both
  * oracles); what is asserted *here* is the shape the core hands a host —
  * because a host's emitter is written against this tree and nothing else, so a
  * silently changed node kind, a dropped child or a lost position is a break no
@@ -2462,8 +2462,8 @@ describe("binding scopes are per JS block", () => {
      * the splice — this is the path a `resolveDelegatedTag` binding (e.g. `<signal>`)
      * takes for every interpolation once any binding is registered.
      *
-     * No shipping host calls `ctx.bindings.register` today — `@mxlang/preact`'s
-     * `<let>` and `@mxlang/solid`'s equivalent are both hard compile errors
+     * No shipping host calls `ctx.bindings.register` today — `@mxlang/host-preact`'s
+     * `<let>` and `@mxlang/host-solid`'s equivalent are both hard compile errors
      * (`packages/hosts/preact/src/emitter.ts`, `packages/hosts/solid/README.md`)
      * — so this path is presently exercised only here, through the
      * `fakeDeclarations`-built `signalPolicy` fixture below, not by any real
