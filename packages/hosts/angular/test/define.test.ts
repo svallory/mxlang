@@ -60,15 +60,14 @@ describe("Define", () => {
     // `ngTemplateOutletContext` carries positional arguments only; unlike
     // Marko, which appends a trailing `{ content }` object, Angular has no
     // channel for the body — a positioned error, not the silent-drop class.
+    // The define has a param, so the fix is the call form alone; the exact
+    // message is pinned so the advice cannot drift.
     try {
       emit("<define/Row|a|>${a}</define>\n<Row(1)>body</Row>");
       throw new Error("expected compile to fail");
     } catch (error) {
-      expect((error as Error).message).toContain(
-        "body content on `<Row>` isn't supported by @mxlang/host-angular",
-      );
-      expect((error as Error).message).toContain(
-        "pass the value as a tag argument instead",
+      expect((error as Error).message).toBe(
+        "body content on `<Row>` isn't supported by @mxlang/host-angular: a `<define>` call is projected with `ngTemplateOutletContext`, a positional argument object, not content projection — pass the value as a tag argument instead, `<Row(...)/>`",
       );
       // The call tag itself, second line, column 0.
       expect((error as { line?: number }).line).toBe(2);
@@ -76,13 +75,16 @@ describe("Define", () => {
     }
   });
 
-  it("rejects a no-argument call's body content at the call tag", () => {
+  it("rejects a no-param call's body content, telling the author to declare a parameter", () => {
+    // A no-param define has no slot for the value: naming only the call
+    // form would steer the author into `expects 0 argument(s), got 1`, so
+    // the pinned advice starts at declaring the parameter.
     try {
       emit("-- <define/Empty>hi</define>\n\n<Empty()>fallback</Empty>");
       throw new Error("expected compile to fail");
     } catch (error) {
-      expect((error as Error).message).toContain(
-        "body content on `<Empty>` isn't supported by @mxlang/host-angular",
+      expect((error as Error).message).toBe(
+        "body content on `<Empty>` isn't supported by @mxlang/host-angular: a `<define>` call is projected with `ngTemplateOutletContext`, a positional argument object, not content projection — declare a parameter on the define, `<define/Empty|value|>`, and pass the value as a tag argument, `<Empty(value)/>`",
       );
       expect((error as { line?: number }).line).toBe(3);
       expect((error as { column?: number }).column).toBe(0);

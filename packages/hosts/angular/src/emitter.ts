@@ -2327,8 +2327,14 @@ class AngularEmitter implements Emitter<string> {
       );
     }
     if (node.content !== null) {
+      // A no-param define has no slot for the body's value at all, so the
+      // fix must start one step earlier — declaring the parameter. Naming
+      // only the call form here would steer the author straight into the
+      // arity error below ("expects 0 argument(s), got 1").
       fail(
-        `body content on \`<${target.name}>\` isn't supported by @mxlang/host-angular: a \`<define>\` call is projected with \`ngTemplateOutletContext\`, a positional argument object, not content projection — pass the value as a tag argument instead, \`<${target.name}(...)/>\``,
+        target.params.length === 0
+          ? `body content on \`<${target.name}>\` isn't supported by @mxlang/host-angular: a \`<define>\` call is projected with \`ngTemplateOutletContext\`, a positional argument object, not content projection — declare a parameter on the define, \`<define/${target.name}|value|>\`, and pass the value as a tag argument, \`<${target.name}(value)/>\``
+          : `body content on \`<${target.name}>\` isn't supported by @mxlang/host-angular: a \`<define>\` call is projected with \`ngTemplateOutletContext\`, a positional argument object, not content projection — pass the value as a tag argument instead, \`<${target.name}(...)/>\``,
         node,
       );
     }
