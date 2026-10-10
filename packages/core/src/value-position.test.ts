@@ -617,3 +617,23 @@ describe("a claimed default value ends at a terminating attribute row", () => {
     );
   });
 });
+
+describe("the value row leaves `::NAME` to the atom trigger's reserved-form error", () => {
+  // `atom-value` matches `:NAME`, never `::NAME`, so `::Foo` is refused as it
+  // is with no value row. A copy of the row that widens its match to `::`
+  // claims the value and passes the reserved form silently.
+  const reserved =
+    "`::Foo` is reserved: `::` will be the Symbol.for sugar; write `:Foo` for an atom";
+
+  it("a default value `belongs-to=::Foo` is refused at its `::`", () => {
+    expect(
+      meshDiagnostics("entity :Todo\n  belongs-to=::Foo\n", ATOM_VALUES),
+    ).toEqual([[reserved, 2, 13]]);
+  });
+
+  it("an attribute value `to=::Foo` is refused at its `::`", () => {
+    expect(
+      meshDiagnostics("relationships\n  belongs-to to=::Foo\n", ATOM_VALUES),
+    ).toEqual([[reserved, 2, 16]]);
+  });
+});
