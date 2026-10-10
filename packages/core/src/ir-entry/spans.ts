@@ -4,7 +4,15 @@
  */
 
 import { cloneIr } from "../clone-ir.ts";
-import type { AttributeTag, DelegatedTag, Expr, Ir } from "../ir.ts";
+import type {
+  Attr,
+  AttributeTag,
+  DelegatedTag,
+  Expr,
+  ImportName,
+  Ir,
+  IrNode,
+} from "../ir.ts";
 import type { SourceSpan } from "../mapping.ts";
 
 /**
@@ -30,13 +38,17 @@ type SpannedObject<T> = {
       : Spanned<T[K]>;
 } & ("span" extends keyof T ? { span: SourceSpan } : unknown);
 
+type StaticAttr = Extract<Attr, { kind: "static" }>;
+type ImportNode = Extract<IrNode, { kind: "Import" }>;
+
 /**
  * `T` with every `span` required, at every depth: what `checks.ts` verified
  * before `lowerSource` returned the IR. A `DelegatedTag` and an
  * `AttributeTag` also carry their `nameSpan`, and a `DelegatedTag` its
- * `args` (`[]` without arguments; `finishIr`). Other optional spans
- * (`valueSpan`, `bodySpan`, `paramSpans`) stay optional: an atom, a member
- * or a default attribute has none to give. @unstable
+ * `args` (`[]` without arguments; `finishIr`). A static attribute carries its
+ * `valueSpan` (an atom's and a member's included; an empty value's is
+ * zero-width), and an `Import` its `from` and `names`. Other optional spans
+ * (`bodySpan`, `paramSpans`) stay optional. @unstable
  */
 export type Spanned<T> = T extends SourceSpan
   ? T
@@ -51,9 +63,16 @@ export type Spanned<T> = T extends SourceSpan
           ? SpannedObject<T> & { nameSpan: SourceSpan; args: Spanned<Expr>[] }
           : T extends AttributeTag
             ? SpannedObject<T> & { nameSpan: SourceSpan }
-            : T extends object
-              ? SpannedObject<T>
-              : T;
+            : T extends StaticAttr
+              ? SpannedObject<T> & { valueSpan: SourceSpan }
+              : T extends ImportNode
+                ? SpannedObject<T> & {
+                    from: string;
+                    names: Spanned<ImportName>[];
+                  }
+                : T extends object
+                  ? SpannedObject<T>
+                  : T;
 
 /** The IR `lowerSource` returns: every node, attribute and expression spanned. @unstable */
 export type SpannedIr = Spanned<Ir>;

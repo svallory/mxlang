@@ -245,10 +245,8 @@ function checkAttr(attr: Attr): void {
 function checkAttrValue(attr: Attr): void {
   switch (attr.kind) {
     case "static":
-      // An atom or member carries its own required `span`; a member's name
-      // is declared by a syntax module's trigger, not written, so it has no
-      // `nameSpan` (decision 182 addendum 5).
-      if (attr.atom || attr.member) return;
+      // An atom's and a member's value is a positioned literal too, so every
+      // static attribute has a `valueSpan` (`SpannedIr` requires it).
       requiredSpan(attr.valueSpan, `static attribute \`${attr.name}\``);
       return;
     case "boolean":
@@ -547,6 +545,13 @@ function statements(ir: Ir): Statement[] {
     // A synthesized import exists only to back a `Component` the checks
     // reject; it is not an authored statement.
     if (node.synthesized) continue;
+    // `SpannedIr` requires both: lowering refuses an authored `import` that is
+    // not one ES import declaration, and reads both from that declaration.
+    if (node.from === undefined || node.names === undefined) {
+      throw new Error(
+        "@mxlang/core: IR invariant broken — an `import` statement carries no `from`/`names`",
+      );
+    }
     out.push({
       kind: "import",
       span: requiredSpan(node.span, "`import` statement"),

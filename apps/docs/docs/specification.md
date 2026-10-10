@@ -3585,9 +3585,10 @@ read throws, as `readFileSync` does.
 `ir` is core's `Ir` (IR spec) as `SpannedIr`, `Spanned<Ir>`: every `span` is
 required at every depth. A `DelegatedTag` and an `AttributeTag` also carry
 `nameSpan`, and a `DelegatedTag` always has `args` (`[]` without arguments).
-`valueSpan`, `bodySpan` and `paramSpans` stay optional (an atom, a member or a
-default attribute has none). A promised span that is missing is an
-`internal error`, with no IR. Every span is core's `SourceSpan`
+A static attribute always has `valueSpan` (an atom's and a member's included;
+an empty value's is zero-width), and an `Import` always has `from` and `names`.
+`bodySpan` and `paramSpans` stay optional. A promised span or field that is
+missing is an `internal error`, with no IR. Every span is core's `SourceSpan`
 (`{ sourceStart, sourceEnd }`, UTF-16 code units from the file's start, so
 `source.slice(span.sourceStart, span.sourceEnd)` is the authored text).
 

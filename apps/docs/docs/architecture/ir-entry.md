@@ -51,7 +51,7 @@ resource="post" table="posts"
 
 ### `SpannedIr`
 
-The returned IR is core's `Ir` with the span guarantee in its type: every `span` is required, at every depth. A `DelegatedTag` and an `AttributeTag` also carry their `nameSpan`, and a `DelegatedTag` always has `args` (`[]` when the tag has none). The spans that a construct may legitimately lack stay optional: `valueSpan`, `bodySpan` and `paramSpans` (an atom, a member or a default attribute has none to give). A node that should have a span and does not is an `internal error`, never a silent `undefined`.
+The returned IR is core's `Ir` with the span guarantee in its type: every `span` is required, at every depth. A `DelegatedTag` and an `AttributeTag` also carry their `nameSpan`, and a `DelegatedTag` always has `args` (`[]` when the tag has none). A static attribute always has its `valueSpan`, an atom's and a member's included (an empty value's is zero-width), and an `Import` always has `from` and `names`. `bodySpan` and `paramSpans` stay optional. A node that should have a span or one of these fields and does not is an `internal error`, never a silent `undefined`.
 
 Two more properties of the returned IR:
 

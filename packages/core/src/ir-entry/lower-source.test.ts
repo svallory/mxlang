@@ -1,9 +1,11 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import * as core from "../index.ts";
 import type { DelegatedTag } from "../ir.ts";
+import type { SyntaxModule } from "../syntax-table.ts";
 import {
   type LowerSourceOptions,
   lowerFile,
@@ -257,6 +259,104 @@ describe("the returned IR", () => {
     expect(result.ir).toBeUndefined();
     expect(result.diagnostics.length).toBeGreaterThan(0);
     expect(result.diagnostics.every((d) => d.severity === "error")).toBe(true);
+  });
+});
+
+/**
+ * The fields `SpannedIr` requires beyond `span` (Mesh review of PR 484): a
+ * static attribute's `valueSpan` and an `Import`'s `from` and `names`. The
+ * reads below go through the types without a cast, so a regression to
+ * optional fails typecheck as well as the assertions.
+ */
+describe("required beyond `span`", () => {
+  const slice = (
+    source: string,
+    span: { sourceStart: number; sourceEnd: number },
+  ) => source.slice(span.sourceStart, span.sourceEnd);
+
+  function staticValues(source: string, options?: LowerSourceOptions) {
+    const result = lowerSource(source, "/t.mx", options);
+    expect(result.diagnostics).toEqual([]);
+    return tagOf(result.ir?.body[0]).attrs.flatMap((attr) =>
+      attr.kind === "static"
+        ? [[attr.name, slice(source, attr.valueSpan)]]
+        : [],
+    );
+  }
+
+  it("a static attribute's `valueSpan`: plain, empty, atom, default", () => {
+    expect(staticValues(`<a x="s" e="" m=:strict/>`)).toEqual([
+      ["x", `"s"`],
+      ["e", `""`],
+      ["m", ":strict"],
+    ]);
+    expect(staticValues(`<a="post"/>`)).toEqual([["value", `"post"`]]);
+  });
+
+  it("a static attribute's `valueSpan`: shorthand id and class", () => {
+    expect(staticValues("<a#main.big/>")).toEqual([
+      ["class", "big"],
+      ["id", "main"],
+    ]);
+  });
+
+  it("a static attribute's `valueSpan`: a member", () => {
+    const memberSyntax = (
+      createRequire(import.meta.url)("../syntax/member.ts") as {
+        default: SyntaxModule;
+      }
+    ).default;
+    expect(staticValues("sort asc &dueOn\n", { syntax: memberSyntax })).toEqual(
+      [["member", "&dueOn"]],
+    );
+  });
+
+  it("an `Import`'s `from` and `names`, `[]` for a side-effect import", () => {
+    const source = [
+      `import { a, b as c } from "./m"`,
+      `import "./side"`,
+      `import type T from "./t"`,
+      "<x/>",
+      "",
+    ].join("\n");
+    const result = lowerSource(source, "/t.mx");
+    expect(result.diagnostics).toEqual([]);
+    const imports = result.ir?.imports.map((node) => [
+      node.from,
+      node.names.map((name) => [name.imported, name.local]),
+    ]);
+    expect(imports).toEqual([
+      [
+        "./m",
+        [
+          ["a", "a"],
+          ["b", "c"],
+        ],
+      ],
+      ["./side", []],
+      ["./t", [["default", "T"]]],
+    ]);
+  });
+
+  // TODO ir-entry-contract-default-spans: a contract `default` materializes a
+  // positionless attribute, which the span invariant rejects, as `parseData`
+  // did (same two messages). Pinned so the limit is visible, not silent.
+  it("a contract `default` is still an invariant error, as in `parseData`", () => {
+    expect(
+      errors("<box/>\n", {
+        customTags: {
+          box: {
+            attributes: {
+              size: { type: "string", default: "s" },
+              n: { type: "number", default: 3 },
+            },
+          },
+        },
+      }).map(([, message]) => message),
+    ).toEqual([
+      "internal error: @mxlang/core: IR invariant broken — static attribute `size` carries no span",
+      "internal error: @mxlang/core: IR invariant broken — attribute `n` carries no span",
+    ]);
   });
 });
 
