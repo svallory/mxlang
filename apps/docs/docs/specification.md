@@ -855,7 +855,7 @@ explicit `value:x`), a dynamic tag name
 **default attribute**: sugar right after a default value (`<if=a .b>`,
 `<const/x=items\n  .filter()/>`) keeps Marko's meaning, and `:name` there is one
 error ("sugar right after a default value is not supported (decision 151,
-ruling 2); put it before the value or on the tag") on every parser. The one exception is a default value that is a single atom: `belongs-to=:Customer :customer` is `value` (the atom `Customer`) plus `name` (the atom `customer`), since an atom takes no member access (decision 146, addendum 5).
+; put it before the value or on the tag") on every parser. The one exception is a default value that is a single atom: `belongs-to=:Customer :customer` is `value` (the atom `Customer`) plus `name` (the atom `customer`), since an atom takes no member access (decision 146, addendum 5).
 
 **Hosts.** Every host applies the sugar, Angular included (decision 146,
 addendum 3). The one host-owned exception is attribute-position `#x` on Angular,

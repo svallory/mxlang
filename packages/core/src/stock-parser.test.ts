@@ -113,7 +113,7 @@ describe("sugar right after a default value", () => {
 
   it("names the rule and the way out", () => {
     expect(SUGAR_AFTER_DEFAULT_MESSAGE(":b")).toBe(
-      '`:b` right after a default value is not supported (decision 151, ruling 2); put it before the value or on the tag (`<input:email type="email">`). See "the parser after-value rule" in divergences.md.',
+      '`:b` right after a default value is not supported; put it before the value or on the tag (`<input:email type="email">`).',
     );
   });
 

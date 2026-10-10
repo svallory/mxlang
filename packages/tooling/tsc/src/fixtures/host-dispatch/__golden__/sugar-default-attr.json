@@ -9,7 +9,7 @@
           {
             "severity": 1,
             "source": "mxlang",
-            "message": "`:b` right after a default value is not supported (decision 151, ruling 2); put it before the value or on the tag (`<input:email type=\"email\">`). See \"the parser after-value rule\" in divergences.md.",
+            "message": "`:b` right after a default value is not supported; put it before the value or on the tag (`<input:email type=\"email\">`).",
             "range": {
               "start": {
                 "line": 0,
@@ -33,7 +33,7 @@
         "compileDiagnostics": [
           {
             "fileName": "<root>/sugar-default-attr/page.mx",
-            "message": "`:b` right after a default value is not supported (decision 151, ruling 2); put it before the value or on the tag (`<input:email type=\"email\">`). See \"the parser after-value rule\" in divergences.md.",
+            "message": "`:b` right after a default value is not supported; put it before the value or on the tag (`<input:email type=\"email\">`).",
             "offset": 12,
             "category": "error"
           }
@@ -44,7 +44,7 @@
       "vite": {
         "threw": {
           "name": "TranslateError",
-          "message": "`:b` right after a default value is not supported (decision 151, ruling 2); put it before the value or on the tag (`<input:email type=\"email\">`). See \"the parser after-value rule\" in divergences.md.",
+          "message": "`:b` right after a default value is not supported; put it before the value or on the tag (`<input:email type=\"email\">`).",
           "id": "<root>/sugar-default-attr/page.mx",
           "loc": {
             "file": "<root>/sugar-default-attr/page.mx",
@@ -58,6 +58,6 @@
     }
   },
   "mxTsc": [
-    "<root>/sugar-default-attr/page.mx(1,13): error TS80001: `:b` right after a default value is not supported (decision 151, ruling 2); put it before the value or on the tag (`<input:email type=\"email\">`). See \"the parser after-value rule\" in divergences.md."
+    "<root>/sugar-default-attr/page.mx(1,13): error TS80001: `:b` right after a default value is not supported; put it before the value or on the tag (`<input:email type=\"email\">`)."
   ]
 }

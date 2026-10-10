@@ -191,7 +191,7 @@ export const BARE_COMMA_MESSAGE =
   "a `,` continues the attributes of the tag above; there is no tag here";
 
 export const SUGAR_AFTER_DEFAULT_MESSAGE = (token: string): string =>
-  `\`${token}\` right after a default value is not supported (decision 151, ruling 2); put it before the value or on the tag (\`<input:email type="email">\`). See "the parser after-value rule" in divergences.md.`;
+  `\`${token}\` right after a default value is not supported; put it before the value or on the tag (\`<input:email type="email">\`).`;
 
 /**
  * The one MX error for sugar right after a default attribute's value
