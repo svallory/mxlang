@@ -847,10 +847,11 @@ class FrontEnd {
     let tag: string | null = null;
     let attribute: string | null = null;
     if (position === "value") {
-      // Only an attribute's own `=value` is a value position: a statement's
-      // words and a shorthand's default are not.
+      // Only an attribute's own `=value` is a value position. The template
+      // parser asks only there (a statement's words and a trigger's own
+      // `=value` are lexed elsewhere); this keeps it so.
       const current = this.current;
-      if (this.statement || current?.type !== "MxAttribute") return undefined;
+      if (current?.type !== "MxAttribute") return undefined;
       attribute = typeof current.name === "string" ? current.name : null;
     }
     const top = this.top;

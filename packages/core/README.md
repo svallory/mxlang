@@ -605,11 +605,12 @@ dialect or one of core's: `mx:Trigger` (the same as `{ call }`; attribute and
 line), `mx:Expression` (declines every text; every position) and `mx:String`
 (claims a value as the string it spells, quoted or bare; value position only).
 Naming another dialect's types is not supported yet. Any other name is the one
-error the claim owns: ``the `ref` trigger names `ref:Path`, which is not a
-registered node type (a row can name `mx:Trigger`, `mx:Expression`,
-`ref:Ref`)``, and a type registered for other positions is named as such
-(``… which is not a registered node type in value position (a row there can
-name `mx:String`, `mx:Expression`, `ref:Ref`)``).
+error the claim owns. For this dialect's value row naming `ref:Path`: ``the
+`ref` trigger names `ref:Path`, which is not a registered node type (a row can
+name `mx:String`, `mx:Expression`, `ref:Ref`)``; the list is the types a row
+in that position can name. A type registered only for other positions is
+named as such (``… which is not a registered node type in value position (a
+row there can name `mx:String`, `mx:Expression`, `ref:Ref`)``).
 
 ## A reference dialect: `@mxlang/core/syntax/member`
 

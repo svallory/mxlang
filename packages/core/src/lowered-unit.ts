@@ -98,9 +98,11 @@ export interface ContractExpression {
 }
 
 /**
- * A whole-value atom or member reference a dialect built with
- * `ctx.attribute` (`{ kind: "atom" | "member", name }`). These two keys
- * leave core with the Mesh dialect's own value nodes. @unstable
+ * Removal work, not part of the contract view: the leftover mark of a
+ * whole-value atom or member the atom and member sugars wrote
+ * (`ctx.attribute`'s `{ kind: "atom" | "member", name }`). It stays only
+ * until the atoms-and-members dialect carries them as its own value
+ * nodes; do not build on it. @unstable
  */
 export interface ContractAtomOrMember {
   readonly type: "mx:Atom" | "mx:Member";
@@ -110,9 +112,12 @@ export interface ContractAtomOrMember {
 }
 
 /**
- * An attribute's value in a contract view: a string, an expression, a
- * whole-value atom or member, or the node a value row claimed (a dialect's
- * registered type, frozen, as its `parse` returned it). Read `type` first.
+ * An attribute's value in a contract view: a string, an expression, or the
+ * node a value row claimed when its type lowered it to a string (frozen, as
+ * its `parse` returned it; a claimed `mx:String` also carries `raw`,
+ * `start` and `end`). A claimed node lowered to `ctx.expression` is that
+ * `mx:Expression`. `ContractAtomOrMember` is removal work. Read `type`
+ * first; `type` does not narrow a dialect's node, so check its key and cast.
  * @unstable
  */
 export type ContractValue =

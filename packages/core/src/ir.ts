@@ -299,11 +299,10 @@ export type Attr =
        */
       member?: Member;
       /**
-       * Set when the whole value is a node a dialect's node type parsed
-       * (decision 202 item 3; `ctx.attribute(name, { kind: "node", node,
-       * value })`). The node is as parsed, frozen, keyed `dialect:Type`;
-       * `value` is the string every target emits. Never set together with
-       * `atom` or `member`.
+       * Set when the whole value is a node a value row claimed and whose
+       * type lowered it to this string. The node is as parsed, frozen,
+       * keyed `dialect:Type`; `value` is the string every target emits.
+       * Never set together with `atom` or `member`.
        */
       node?: DialectNode;
     } & IrBase &

@@ -211,13 +211,16 @@ may set. An inline object stays a table only. A trigger whose `node` is
   - An attribute (`ContractAttr`) is its `name` and its `value` node,
     read by `type`: `mx:String` (`value`, `span`), `mx:Expression` (the
     lowered `node`, `code`, `span`, `bound`), the node a value row claimed
-    (its registry key, as parsed, frozen), or `null` for a bare attribute.
-    Each carries `nameSpan`, `label` (how core's diagnostics name it) and
-    `authored` (the sugar that wrote it). A spread is `{ spread: true,
-    span }`. Two more value types, `mx:Atom` and `mx:Member` (`name`,
-    `span`), carry a whole-value atom or member a dialect built with
-    `ctx.attribute`; they leave core once the Mesh dialect's own value
-    nodes carry them.
+    when its type lowered it to a string (its registry key, as parsed,
+    frozen; a claimed `mx:String` also has `raw`, `start` and `end`), or
+    `null` for a bare attribute. A claimed node whose type lowered it to
+    `ctx.expression` is that `mx:Expression`. Each carries `nameSpan`,
+    `label` (how core's diagnostics name it) and `authored` (the sugar that
+    wrote it). A spread is `{ spread: true, span }`.
+  - Removal work, not part of what `ContractAttr` offers: a value typed
+    `mx:Atom` or `mx:Member` (`name`, `span`) is a leftover mark of the atom
+    and member sugars, kept only until the atoms-and-members dialect carries
+    them as its own value nodes. Do not build on it.
   - `attributeTags` nest to any depth. Each carries the declaration its
     parent's contract has for it, wildcards resolved, as `contract`.
   - `ancestors` are the authored tags around the call, outermost first,

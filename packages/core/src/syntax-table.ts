@@ -75,8 +75,8 @@ export type StandIn = "number" | "identifier" | "keep";
  * and `"attribute"` are) or `mx:Expression`. The row's `match` decides
  * where the text ends; the parser asks the type's `parse` to claim it, and
  * a declined text parses as if no row matched. A claimed node stays in the
- * tree at its position and its type's `lower` builds it. Attribute and
- * line triggers only.
+ * tree at its position and its type's `lower` builds it. Attribute, line
+ * and value triggers only (a value row's `match` covers the whole value).
  */
 export type TriggerNode =
   | "string"
@@ -170,11 +170,12 @@ export interface TriggerMethod {
 
 /**
  * The value of an attribute `ctx.attribute` builds: `true` (a bare
- * attribute), a string, an expression, the trigger's own method value, or
- * a whole-value atom or member (`{ kind: "member", name }` for Mesh's
- * `&dueOn`; atoms and members leave core with the Mesh dialect's own value
- * nodes). A value's `span` defaults to the trigger's own. A node is an
- * attribute's value only through the value position (`valueTriggers`).
+ * attribute), a string, an expression or the trigger's own method value.
+ * A value's `span` defaults to the trigger's own. A node is an attribute's
+ * value only through the value position (`valueTriggers`). Removal work:
+ * `{ kind: "atom" | "member", name }` is the atom and member sugars'
+ * leftover mark (Mesh's `&dueOn`), kept only until the atoms-and-members
+ * dialect carries them as its own value nodes; do not build on it.
  */
 export type TriggerAttributeValue =
   | true

@@ -9,8 +9,9 @@
  * (`ContractAttr.value`). A claimed value also ends where a terminating
  * attribute row starts, which is how `belongs-to=:List :list` reads.
  */
+import { readdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { compileSource, parseMxDocument } from "./compile.ts";
 import { TranslateError } from "./core.ts";
@@ -195,6 +196,134 @@ describe("a value row claims the whole value", () => {
     const source = "sort to=~user\n";
     const none: Dialect = { ...REF_DIALECT, table: {} };
     expect(treeOf(source, none)).toEqual(treeOf(source));
+  });
+
+  it("a trigger's own `=value` is never claimed", () => {
+    const AMP: Trigger = {
+      id: "amp",
+      chars: "&",
+      match: "&[a-z]+",
+      standIn: "identifier",
+      node: "attribute",
+    };
+    const both: Dialect = {
+      ...REF_DIALECT,
+      table: { attributeTriggers: [AMP], valueTriggers: [REF] },
+    };
+    const only: Dialect = {
+      ...REF_DIALECT,
+      table: { attributeTriggers: [AMP] },
+    };
+    const source = "sort &b=~user\n";
+    expect(treeOf(source, both)).toEqual(treeOf(source, only));
+  });
+
+  it("a statement's words are never claimed", () => {
+    // Under the targets' tag rules `static` is a statement: `~user` is JS.
+    // The statement follows an attribute, the last thing the parse built.
+    for (const source of [
+      "static const x = ~user\n",
+      "div a=1\nstatic const x = ~user\n",
+      "div a\nstatic const x = ~user\n",
+    ]) {
+      expect(JSON.stringify(irOf(source, REF_DIALECT))).toEqual(
+        JSON.stringify(irOf(source)),
+      );
+    }
+  });
+
+  it("`parse` gets the value position, the tag and the attribute (`null` for a default value)", () => {
+    const seen: unknown[] = [];
+    const spying: Dialect = {
+      ...REF_DIALECT,
+      nodeTypes: {
+        Ref: {
+          ...RefType,
+          parse: (text, span, ctx) => {
+            seen.push({
+              position: ctx.position,
+              tag: ctx.tag,
+              attribute: ctx.attribute,
+            });
+            return RefType.parse(text, span, ctx);
+          },
+        } satisfies NodeType<Ref>,
+      },
+    };
+    attributesOf("div to=~user.name\n", spying);
+    attributesOf("span=~x\n", spying);
+    expect(seen).toEqual([
+      { position: "value", tag: "div", attribute: "to" },
+      { position: "value", tag: "span", attribute: null },
+    ]);
+  });
+});
+
+describe("a value node's `lower` may return `ctx.expression`", () => {
+  /** `~a.b` lowers to the member expression `a.b`. */
+  const EXPRESSIONS: Dialect = {
+    ...REF_DIALECT,
+    nodeTypes: {
+      Ref: {
+        ...RefType,
+        lower: (node, ctx) =>
+          ctx.expression(
+            node.path.slice(1).reduce<object>(
+              (object, name) => ({
+                type: "MemberExpression",
+                object,
+                property: { type: "Identifier", name },
+                computed: false,
+              }),
+              { type: "Identifier", name: node.path[0] },
+            ),
+          ),
+      } satisfies NodeType<Ref>,
+    },
+  };
+
+  it("an expression is a dynamic attribute at the value's span, with no node", () => {
+    const to = attr("div to=~user.name\n", "to", EXPRESSIONS);
+    expect(to).toMatchObject({
+      kind: "dynamic",
+      name: "to",
+      value: { code: "user.name", span: { sourceStart: 7, sourceEnd: 17 } },
+    });
+    expect(to).not.toHaveProperty("node");
+    expect(attr("span=~x\n", "value", EXPRESSIONS)).toMatchObject({
+      kind: "dynamic",
+      value: { code: "x" },
+    });
+  });
+
+  it("an atom-marked string literal is a static atom attribute, as the atom trigger builds it", () => {
+    const atoms: Dialect = {
+      ...REF_DIALECT,
+      nodeTypes: {
+        Ref: {
+          ...RefType,
+          lower: (node, ctx) => {
+            const name = node.path.join(".");
+            return ctx.expression({
+              type: "StringLiteral",
+              value: name,
+              extra: {
+                raw: JSON.stringify(name),
+                rawValue: name,
+                mxAtom: { span: node.span },
+              },
+            });
+          },
+        } satisfies NodeType<Ref>,
+      },
+    };
+    const to = attr("div to=~user\n", "to", atoms);
+    expect(to).toMatchObject({
+      kind: "static",
+      value: "user",
+      atom: { name: "user" },
+    });
+    expect(to).not.toHaveProperty("node");
   });
 });
 
@@ -394,7 +523,8 @@ const ATOM_VALUES: Dialect = {
       {
         id: "atom-value",
         chars: ":",
-        match: "::?[A-Za-z_$][\\w$]*(?:-[\\w$]+)*",
+        // `::x` stays the atom expression trigger's reserved-form error.
+        match: ":[A-Za-z_$][\\w$]*(?:-[\\w$]+)*",
         standIn: "keep",
         node: { type: "Atom", dialect: "mesh" },
       },
@@ -405,20 +535,69 @@ const ATOM_VALUES: Dialect = {
       keys: [],
       parse: (text) => ({ name: text.slice(1) }),
       print: (node) => `:${node.name}`,
-      lower: (node) => node.name,
+      // The literal the `ATOM` expression trigger builds: the IR attribute
+      // keeps its atom mark, so the atom contracts read it as before. A
+      // plain string here would be an unmarked static string.
+      lower: (node, ctx) =>
+        ctx.expression({
+          type: "StringLiteral",
+          value: node.name,
+          extra: {
+            raw: JSON.stringify(node.name),
+            rawValue: node.name,
+            mxAtom: { span: node.span },
+          },
+        }),
     } satisfies NodeType<Atom>,
   },
 };
 
-function meshDiagnostics(source: string, dialect: Dialect) {
-  return lowerSource(source, "/x/old-relationship.mesh.mx", {
+/** Mesh's `parseEntitySource`, with the syntax as a parameter. */
+function parseEntity(source: string, file: string, dialect: Dialect) {
+  return lowerSource(source, file, {
     dialect,
     customTags: contracts,
     tagRules: "none",
     structural: "reject",
     unknownTags: "reject",
     imports: "pass",
-  }).diagnostics.map((each) => [each.message, each.line, each.column]);
+  });
+}
+
+function meshDiagnostics(source: string, dialect: Dialect) {
+  return parseEntity(
+    source,
+    "/x/old-relationship.mesh.mx",
+    dialect,
+  ).diagnostics.map((each) => [each.message, each.line, each.column]);
+}
+
+const CORPUS = join(import.meta.dirname, "fixtures/syntax/mesh-corpus");
+
+function corpusFiles(dir = CORPUS): string[] {
+  const found: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) found.push(...corpusFiles(path));
+    else if (entry.name.endsWith(".mesh.mx"))
+      found.push(relative(CORPUS, path));
+  }
+  return found.sort();
+}
+
+/** The whole result as JSON, or the thrown message. */
+function lowered(file: string, dialect: Dialect): string {
+  try {
+    return JSON.stringify(
+      parseEntity(
+        readFileSync(join(CORPUS, file), "utf8"),
+        `/mesh-corpus/${file}`,
+        dialect,
+      ),
+    );
+  } catch (error) {
+    return `threw: ${(error as Error).message}`;
+  }
 }
 
 describe("a claimed default value ends at a terminating attribute row", () => {
@@ -435,6 +614,17 @@ describe("a claimed default value ends at a terminating attribute row", () => {
   it("with no value row the value runs on, as it does in Mesh's syntax today", () => {
     expect(meshDiagnostics(source, meshSyntax)).toEqual([
       ["Expected a single expression, but found `:` after it.", 5, 21],
+    ]);
+  });
+
+  it("over Mesh's whole corpus the value row changes only `old-relationship`", () => {
+    const files = corpusFiles();
+    expect(files.length).toBeGreaterThan(60);
+    const changed = files.filter(
+      (file) => lowered(file, ATOM_VALUES) !== lowered(file, meshSyntax),
+    );
+    expect(changed).toEqual([
+      "entities/packages/compiler/test/fixtures/negative/old-relationship.mesh.mx",
     ]);
   });
 

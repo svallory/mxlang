@@ -4493,12 +4493,14 @@ its `MxExpression`.
 attribute's `=value`, and of a tag's default value (`sort=~user`, whose
 attribute is `value`). A `:=` value, a spread, a trigger's own `=value` and a
 statement's words are never claimed. A claimed node is the `MxAttribute`'s
-`value`. It lowers to a static `Attr`: the type's `lower(node, ctx)`, with
-`ctx.position` `"value"`, returns a string (the attribute's
-`value`, what every target emits) or `ctx.expression(node)` (an expression
-value). For a string, the static `Attr` also carries the claimed node as `node`
-(`DialectNode`), never set together with `atom` or `member`; `mx:String` lowers
-to its `value` with no hook. Any other result is ``the `<id>` trigger's `lower`
+`value`. The type's `lower(node, ctx)`, with `ctx.position` `"value"`,
+returns a string or `ctx.expression(node)`; `mx:String` lowers to its
+`value` with no hook. A string is a static `Attr` whose `value` is what every
+target emits, and which carries the claimed node as `node` (`DialectNode`),
+never set together with `atom` or `member`. An expression is the `Attr` that
+expression makes, as an expression written there would: a dynamic `Attr`
+with no `node`, or a static one for a literal (an atom-marked string literal
+gives a static `Attr` with `atom`). Any other result is ``the `<id>` trigger's `lower`
 (node type `<key>`) must return a string or `ctx.expression(node)` for an
 attribute value``.
 
