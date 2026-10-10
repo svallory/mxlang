@@ -61,9 +61,9 @@ import {
   tagParamError,
 } from "./stock-parser.ts";
 import {
+  type Dialect,
   explicitSyntaxOf,
   resolveSyntaxOf,
-  type SyntaxModule,
   type SyntaxTable,
   tableParseError,
 } from "./syntax-table.ts";
@@ -185,11 +185,12 @@ export interface FragmentBase {
   /** The name reported for the *enclosing* file, in diagnostics. */
   filename?: string;
   /**
-   * The syntax table or syntax module (decision 182 addendum 5); omitted,
-   * `filename`'s nearest `package.json#mx.syntax`, as for `compileSource`.
-   * The returned body lowers with it (`lower`/`lowerChildren`).
+   * The dialect, or a bare syntax table (decisions 182 addendum 5, 202);
+   * omitted, the dialect `filename`'s extension routes to, as for
+   * `compileSource`. The returned body lowers with it
+   * (`lower`/`lowerChildren`).
    */
-  syntax?: SyntaxTable | SyntaxModule;
+  dialect?: SyntaxTable | Dialect;
   /**
    * Character offset of the fragment's first character within the file. When
    * omitted, indexes stay fragment-relative and the offset checks
@@ -219,13 +220,14 @@ export interface FragmentBase {
   nativeTags?: NativeTags;
   /**
    * The product name diagnostics use where core's own wording says "MX"
-   * (decision 183); see `TranslatorOptions.productName`. Unset, `MX`.
+   * (decision 183); see `TranslatorOptions.productName`. Unset, the
+   * dialect's `name`, and `MX` for MX's own default row.
    */
   productName?: string;
 }
 
 type ResolvedFragmentBase = Required<
-  Omit<FragmentBase, "customTags" | "nativeTags" | "productName" | "syntax">
+  Omit<FragmentBase, "customTags" | "dialect" | "nativeTags" | "productName">
 > & { productName?: string };
 
 export interface FragmentResult {
@@ -426,13 +428,13 @@ export function parseFragment(
 
   // Only an absent option resolves from the manifest: `null` is refused.
   const resolvedSyntax =
-    base.syntax !== undefined
-      ? explicitSyntaxOf(base.syntax, resolved.filename)
+    base.dialect !== undefined
+      ? explicitSyntaxOf(base.dialect, resolved.filename)
       : resolveSyntaxOf(resolved.filename);
   const syntax = resolvedSyntax.table;
   const translator = parseOnlyTranslator(
     base.customTags,
-    claimedFields(resolvedSyntax.module),
+    claimedFields(resolvedSyntax.dialect),
   );
   const lookup = tagTable(translator, base.nativeTags);
   const document = parseMx(source, {
@@ -448,7 +450,7 @@ export function parseFragment(
     document,
     syntax,
     { filename: resolved.filename },
-    resolvedSyntax.module,
+    resolvedSyntax.dialect,
   );
   if (tableError) throw tableError;
   // Marko's parse-only output never threw on expression errors alone: those

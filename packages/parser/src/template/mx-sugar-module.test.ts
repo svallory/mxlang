@@ -1,5 +1,5 @@
 /**
- * The atoms-and-sugars syntax module against the built-in atoms and sugars
+ * The atoms-and-sugars dialect against the built-in atoms and sugars
  * (`lang-ext-move-sugars-to-mesh`, slice a1): the atom corpora of
  * `mx-atoms.cases.ts` run through the module's rows (`test-support/
  * sugar-rows.ts`), their triggers rendered as the built-in events

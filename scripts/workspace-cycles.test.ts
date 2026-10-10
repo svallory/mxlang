@@ -131,7 +131,7 @@ describe("workspace dependency graph", () => {
   });
 
   it("lets core use the parser as a devDependency only (decision 182)", () => {
-    // Core resolves `package.json#mx.syntax` and runs the syntax table's
+    // Core resolves the file's dialect package and runs the syntax table's
     // pre-pass with MX's template parser: from source through the workspace
     // package, in the dist through the bundled front end, so no published
     // `.d.ts` or runtime import names it. Parser port PR 4 needs this edge.

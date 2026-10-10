@@ -15,7 +15,7 @@
 import { parseMxDocument } from "../compile.ts";
 import type { CustomTag } from "../custom-tags.ts";
 import { sugarTagName } from "../name-sugar.ts";
-import type { SyntaxModule, SyntaxTable } from "../syntax-table.ts";
+import type { Dialect, SyntaxTable } from "../syntax-table.ts";
 import { type TagRules, taglibsOfRules } from "../tag-presets.ts";
 import {
   type ContractScope,
@@ -131,7 +131,7 @@ export function scanAuthoredTags(
   rules: TagRules,
   customTags: Record<string, CustomTag> | undefined,
   defaultTag: string,
-  syntax?: SyntaxTable | SyntaxModule,
+  dialect?: SyntaxTable | Dialect,
 ): AuthoredTag[] | null {
   let document: { body: readonly MxChildNode[] } | undefined;
   try {
@@ -139,7 +139,7 @@ export function scanAuthoredTags(
       source,
       filename,
       translatorFor(rules, customTags),
-      syntax,
+      dialect,
       rules.nativeTags,
     ) as { body: readonly MxChildNode[] } | undefined;
   } catch {

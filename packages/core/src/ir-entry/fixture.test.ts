@@ -11,9 +11,8 @@ import { lowerFile, lowerSource, type Spanned } from "./index.ts";
  * arrow functions, and one method shorthand. It has no text, `${}`, `<if>`,
  * `<for>`, `<const>`, statements or attribute tags.
  *
- * Its nearest `package.json` is core's, which has no `mx` key, so syntax
- * resolution sees the defaults (a `package.json#mx.syntax` would change how
- * the fixture parses).
+ * It is a `.mx` file, which no dialect claims (decision 212), so it parses
+ * with MX's default row.
  */
 
 const fixturePath = new URL("../fixtures/ash-resource/post.mx", import.meta.url)

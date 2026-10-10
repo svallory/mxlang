@@ -536,6 +536,6 @@ export function wrappedAttrValueHint(
     inside(triggers),
   );
   return result.error === null
-    ? " Attribute values in MX are plain TypeScript expressions, not JSX; remove the wrapping `{ }`."
+    ? " Attribute values are plain TypeScript expressions, not JSX; remove the wrapping `{ }`."
     : "";
 }

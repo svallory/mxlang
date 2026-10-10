@@ -207,7 +207,7 @@ function declare(
   derived: readonly DerivedDeclaration[],
 ): Scopes {
   if (ctx) {
-    const claimed = claimedFields(ctx.syntaxModule);
+    const claimed = claimedFields(ctx.dialect);
     // A module that claims `declares` owns its errors (clashes, scopes). Core
     // still resolves an unclaimed `ref` itself, so it reads the names then,
     // leniently, raising nothing (claims are per key and independent).
@@ -319,7 +319,7 @@ export function atomExpectation(declaration: {
   values?: readonly string[];
   ref?: string | readonly string[];
 }): string {
-  // A syntax module that claims `values` or `ref` (`contractFields`) gets
+  // A dialect that claims `values` or `ref` (`contractFields`) gets
   // them unchecked: quote them only in the shape core gives them.
   const { values, ref } = declaration;
   if (Array.isArray(values) && values.every((v) => typeof v === "string")) {
@@ -557,10 +557,7 @@ function queueAttrs(
     }
     const written = attributes[attr.name];
     if (written?.type !== "atom") continue;
-    const declaration = unclaimedAttribute(
-      written,
-      claimedFields(ctx.syntaxModule),
-    );
+    const declaration = unclaimedAttribute(written, claimedFields(ctx.dialect));
     if (
       declaration.values === undefined &&
       declaration.pattern === undefined &&
@@ -624,8 +621,8 @@ function queueAttributeTags(
 export function checkAtomContracts(ctx: Ctx): void {
   // From here the facts are complete: every call of the unit has been seen.
   // Completion facts are core's built-in path only (lead ruling 14:29): a
-  // syntax module that takes over the atom fields has none.
-  if (!claimsAtomFields(claimedFields(ctx.syntaxModule))) {
+  // dialect that takes over the atom fields has none.
+  if (!claimsAtomFields(claimedFields(ctx.dialect))) {
     ctx.atomFacts = atomFactsOf(ctx);
   }
   const facts = ctx.contractFacts ? [...ctx.contractFacts.values()] : [];

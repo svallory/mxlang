@@ -7,6 +7,8 @@ description: "Ship a whole tag dialect as one mx.contracts module, and hand it t
 
 A dialect — a cohesive vocabulary of tag names with validation rules, like a resource-definition language — ships as a package-level `mx.contracts` module: one file default-exports a `ContractMap` (`Record<string, CustomTag>`, exported by `@mxlang/core`), and each consuming package names the module in its own `package.json`.
 
+This page's dialect is a tag vocabulary written in MX's own syntax, in `.mx` files. A dialect that changes the syntax itself and claims file extensions of its own (`.mesh`) is a package that declares `mxDialect` in its `package.json`; see [the specification, §13.9.2](/specification/).
+
 ## The module
 
 Declarations only: `parseOptions`, `attributes`, `attributeTags`, `children`, `parents`, and `analyze`. Hooks that produce IR (`transform`, `finalize`) and templates stay in `tags/` sidecars — a contracts module cannot carry them.

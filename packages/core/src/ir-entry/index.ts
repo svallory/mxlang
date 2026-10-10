@@ -28,7 +28,7 @@ import { type MxWarning, TranslateError } from "../core.ts";
 import type { CustomTag } from "../custom-tags.ts";
 import type { HostDeclarations } from "../declarations.ts";
 import type { Ir } from "../ir.ts";
-import type { SyntaxModule, SyntaxTable } from "../syntax-table.ts";
+import type { Dialect, SyntaxTable } from "../syntax-table.ts";
 import {
   type TagRulesPreset,
   taglibsOfRules,
@@ -59,14 +59,14 @@ export interface LowerSourceOptions {
   /** Contract-only custom tags (decision 130), by call name. */
   customTags?: Record<string, CustomTag>;
   /**
-   * The syntax table or syntax module (decision 182 addendum 5), for a
-   * consumer that builds its own (Mesh passes its module, hooks included);
-   * omitted, the file's nearest `package.json#mx.syntax`. A trigger, block
-   * tag or filter nothing lowers (a `{ call }` trigger with no
-   * `lowerTrigger`) is a positioned diagnostic ("`<id>` trigger has no
+   * The dialect, or a bare syntax table (decision 182 addendum 5), for a
+   * consumer that builds its own (Mesh passes its dialect, hooks included);
+   * omitted, the dialect the file's extension routes to (decision 212). A
+   * trigger, block tag or filter nothing lowers (a `{ call }` trigger with
+   * no `lowerTrigger`) is a positioned diagnostic ("`<id>` trigger has no
    * lowering yet").
    */
-  syntax?: SyntaxTable | SyntaxModule;
+  dialect?: SyntaxTable | Dialect;
   /**
    * The tag rules preset the source parses under (decision 204; ruling 209:
    * an option of this function only, never a project or host setting).
@@ -200,7 +200,7 @@ export function lowerSource(
       statementTags: false,
       customTags: options.customTags,
       defaultTag: options.defaultTag,
-      ...(options.syntax !== undefined ? { syntax: options.syntax } : {}),
+      ...(options.dialect !== undefined ? { dialect: options.dialect } : {}),
       warnings,
       emitIr: (lowered) => {
         ir = lowered;
@@ -218,7 +218,7 @@ export function lowerSource(
         rules,
         options.customTags,
         options.defaultTag ?? DEFAULT_TAG,
-        options.syntax,
+        options.dialect,
       );
       const unknown = (tags ?? []).filter((tag) => !declared.has(tag.name));
       const errors = unknown.map(

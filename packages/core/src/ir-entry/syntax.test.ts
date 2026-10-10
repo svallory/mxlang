@@ -1,5 +1,5 @@
 /**
- * `lowerSource`'s `syntax` option (decision 182, PR C): a consumer's own table
+ * `lowerSource`'s `dialect` option (decision 182, PR C): a consumer's own table
  * (Mesh builds a frozen one) reaches core; until core lowers triggers, a
  * trigger in the file is a positioned diagnostic, and a file without one
  * gives the default row's IR.
@@ -32,10 +32,10 @@ const MESH: SyntaxTable = Object.freeze({
   lineTriggers: [MEMBER],
 });
 
-describe("lowerSource's syntax option", () => {
+describe("lowerSource's dialect option", () => {
   it("a trigger the table produces is a positioned diagnostic", () => {
     const result = lowerSource("entity Order\n  &title\n", "/v/order.mx", {
-      syntax: MESH,
+      dialect: MESH,
     });
     expect(result.ir).toBeUndefined();
     expect(result.diagnostics).toHaveLength(1);
@@ -48,7 +48,7 @@ describe("lowerSource's syntax option", () => {
 
   it("a file without a trigger gives the default row's IR", () => {
     const source = "entity Order\n  field title\n";
-    expect(lowerSource(source, "/v/order.mx", { syntax: MESH })).toEqual(
+    expect(lowerSource(source, "/v/order.mx", { dialect: MESH })).toEqual(
       lowerSource(source, "/v/order.mx"),
     );
   });
@@ -58,10 +58,10 @@ describe("lowerSource's syntax option", () => {
       ...MESH,
       expressionTriggers: [{ ...MEMBER, match: "&[" }],
     });
-    const result = lowerSource("div\n", "/v/a.mx", { syntax: bad });
+    const result = lowerSource("div\n", "/v/a.mx", { dialect: bad });
     expect(result.diagnostics).toHaveLength(1);
     expect(result.diagnostics[0]?.message).toMatch(
-      /^the `syntax` option is not a valid syntax table: `syntax\.expressionTriggers\[0\]\.match`/,
+      /^the `dialect` option is not a valid syntax table: `dialect\.expressionTriggers\[0\]\.match`/,
     );
     expect(result.diagnostics[0]?.message).not.toContain("internal error");
     expect(result.diagnostics[0]).toMatchObject({ line: 1, column: 0 });
@@ -69,10 +69,10 @@ describe("lowerSource's syntax option", () => {
 
   it("an explicit null is a diagnostic, not read as omitted", () => {
     const result = lowerSource("div\n", "/v/a.mx", {
-      syntax: null as unknown as SyntaxTable,
+      dialect: null as unknown as SyntaxTable,
     });
     expect(result.diagnostics.map((d) => d.message)).toEqual([
-      "the `syntax` option must be a syntax table object, not null; omit it to use the file's `package.json#mx.syntax`",
+      "the `dialect` option must be a dialect or a syntax table object, not null; omit it to use the dialect that claims the file's extension",
     ]);
   });
 });

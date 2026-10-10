@@ -1,8 +1,8 @@
 /**
  * The slice-a1 and a2 proof of `lang-ext-move-sugars-to-mesh` (decisions
  * 183, 196): runs the existing atom, name-sugar and atom-contract suites a
- * second time with every file that declares no `mx.syntax` resolved to the
- * reference module (`packages/core/src/syntax/mesh.ts`, atoms and sugars as
+ * second time with every file no dialect package claims resolved to the
+ * reference dialect (`packages/core/src/syntax/mesh.ts`, atoms and sugars as
  * layer-2 triggers, their contract checks as its `afterLower`, plus Mesh's
  * `&`), and requires the failures to be
  * exactly the checked-in deltas (`sugar-module/deltas.json`), each naming

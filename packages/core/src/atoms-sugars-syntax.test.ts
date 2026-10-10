@@ -17,7 +17,7 @@ import atomsSugars, {
   NAME_SUGAR,
 } from "./syntax/atoms-sugars.ts";
 import meshSyntax from "./syntax/mesh.ts";
-import type { SyntaxModule, Trigger, TriggerUse } from "./syntax-table.ts";
+import type { Dialect, Trigger, TriggerUse } from "./syntax-table.ts";
 import { lookup as targets } from "./test-targets.ts";
 
 const declarations = {
@@ -26,11 +26,11 @@ const declarations = {
   isComponent: () => false,
 };
 
-function irOf(source: string, syntax?: SyntaxModule): Ir {
+function irOf(source: string, syntax?: Dialect): Ir {
   let ir: Ir | undefined;
   compileSource(source, "page.mx", declarations, {
     targets,
-    ...(syntax ? { syntax } : {}),
+    ...(syntax ? { dialect: syntax } : {}),
     emitIr: (lowered) => {
       ir = lowered;
       return "";
@@ -204,9 +204,9 @@ describe("what the module path refuses or reads differently (decision 183)", () 
 
 /** A module whose single attribute row `!` (and expression row `@`) calls `hook`. */
 function probe(
-  hook: NonNullable<SyntaxModule["lowerTrigger"]>,
+  hook: NonNullable<Dialect["lowerTrigger"]>,
   rows: { value?: "refuse" } = {},
-): SyntaxModule {
+): Dialect {
   const attribute: Trigger = {
     id: "probe",
     chars: "!",
@@ -223,6 +223,8 @@ function probe(
     node: { call: "at" },
   };
   return {
+    id: "probe",
+    name: "MX",
     table: { attributeTriggers: [attribute], expressionTriggers: [expression] },
     lowerTrigger: hook,
   };

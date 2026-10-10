@@ -40,6 +40,7 @@
  */
 
 import type { Node } from "./core.ts";
+import type { DialectNode } from "./dialect-registry.ts";
 import type { SourceSpan } from "./mapping.ts";
 import type { TemplateMetadata } from "./template-tag.ts";
 
@@ -54,7 +55,7 @@ import type { TemplateMetadata } from "./template-tag.ts";
  * a shape change fails until it goes up; a change of meaning alone is the
  * author's to catch. @unstable
  */
-export const IR_VERSION = 1;
+export const IR_VERSION = 2;
 
 /** A source position, as Marko reports one and `TranslateError` carries it. */
 export interface Position {
@@ -161,10 +162,10 @@ export interface Expr {
  * distinct from a string so a data consumer, a contract check or an editor
  * can tell `:title` from `"title"`. `span` covers the whole atom, `:` included.
  *
- * Decisions 183 and 196: atoms leave core's grammar for a layer-2 syntax
- * module. This shape stays as one of the whole values a syntax module
- * builds (`ctx.attribute(name, { kind: "atom", name })`); the syntax that
- * writes it becomes the module's.
+ * Decisions 183 and 196: atoms leave core's grammar for a layer-2 dialect.
+ * This shape stays as one of the whole values a dialect builds
+ * (`ctx.attribute(name, { kind: "atom", name })`); the syntax that writes it
+ * becomes the dialect's.
  * @unstable
  */
 export interface Atom {
@@ -177,7 +178,7 @@ export interface Atom {
  * `extra.mxAtom` on the `StringLiteral` an atom becomes inside an expression
  * (decision 156 addendum 1, item 1): the atom's own span, `:` included. The
  * node's `value` is the name, so code that reads strings still works; code
- * that cares checks `node.extra?.mxAtom`. The mark a syntax module sets on
+ * that cares checks `node.extra?.mxAtom`. The mark a dialect sets on
  * the literal it builds for an atom (decisions 183 and 196), which core
  * splices and maps as it does today.
  * @unstable
@@ -187,7 +188,7 @@ export interface MxAtomMark {
 }
 
 /**
- * A member reference a layer-2 syntax module produced (decision 182 addenda 4
+ * A member reference a layer-2 dialect produced (decision 182 addenda 4
  * and 5): a sibling of {@link Atom} for a value slot that names a member of
  * the enclosing declaration (Mesh's `&dueOn` after a kind). Its runtime value
  * is the name as a string literal on every target, like an atom; the IR
@@ -202,7 +203,7 @@ export interface Member {
 }
 
 /**
- * `extra.mxMember` on a node a syntax module built for a member reference
+ * `extra.mxMember` on a node a dialect built for a member reference
  * (decision 182 addendum 5): on the `StringLiteral` of a whole-value member
  * (core reads it into {@link Member}), and on whatever expression the module
  * hands `ctx.expression` inside an expression (`self.status` for Mesh's
@@ -292,11 +293,19 @@ export type Attr =
        */
       atom?: Atom;
       /**
-       * Set when the whole value is one member reference a syntax module
-       * produced (decision 182 addendum 5). `value` is the member's name,
-       * which is what every target emits. Never set together with `atom`.
+       * Set when the whole value is one member reference a dialect produced
+       * (decision 182 addendum 5). `value` is the member's name, which is
+       * what every target emits. Never set together with `atom`.
        */
       member?: Member;
+      /**
+       * Set when the whole value is a node a dialect's node type parsed
+       * (decision 202 item 3; `ctx.attribute(name, { kind: "node", node,
+       * value })`). The node is as parsed, frozen, keyed `dialect:Type`;
+       * `value` is the string every target emits. Never set together with
+       * `atom` or `member`.
+       */
+      node?: DialectNode;
     } & IrBase &
       AttrSpan &
       AttrSugar &
@@ -457,7 +466,7 @@ export interface TagTrigger {
 
 export interface DelegatedTag<Data = unknown> extends IrBase {
   name: string;
-  /** Set only on a tag a syntax module's `lowerTrigger` built with `ctx.child`. */
+  /** Set only on a tag a dialect's `lowerTrigger` built with `ctx.child`. */
   trigger?: TagTrigger;
   /** The authored spelling, when a wildcard child resolved to `name` (decision 147). */
   alias?: TagAlias;
@@ -657,7 +666,7 @@ export type IrNode =
   | ({
       kind: "Element";
       name: string;
-      /** Set only on a tag a syntax module's `lowerTrigger` built with `ctx.child`. */
+      /** Set only on a tag a dialect's `lowerTrigger` built with `ctx.child`. */
       trigger?: TagTrigger;
       /** File-absolute UTF-16 code-unit span of the tag name; `undefined` if synthesized. */
       nameSpan?: SourceSpan;
@@ -671,7 +680,7 @@ export type IrNode =
   | ({
       kind: "Component";
       target: ComponentTarget;
-      /** Set only on a tag a syntax module's `lowerTrigger` built with `ctx.child`. */
+      /** Set only on a tag a dialect's `lowerTrigger` built with `ctx.child`. */
       trigger?: TagTrigger;
       /**
        * The opening tag name. Null for a run-time dynamic target, and for a

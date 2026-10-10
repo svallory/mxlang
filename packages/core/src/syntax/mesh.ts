@@ -1,5 +1,5 @@
 /**
- * `@mxlang/core/syntax/mesh` (@unstable): the combined reference module Mesh
+ * `@mxlang/core/syntax/mesh` (@unstable): the combined reference dialect Mesh
  * copies as its `MESH_SYNTAX` (lang-ext-move-sugars-to-mesh, slice a1): the
  * member sigil `&` (`member.ts`) plus atoms and the name sugars
  * (`atoms-sugars.ts`). One row per first character in each list, so the two
@@ -15,13 +15,13 @@
  * Mesh writes neither, and its copy may drop both rows.
  *
  * The atom contract checks (`contractFields`, `checkContract`,
- * `afterLower`) are the atoms module's (slice a2).
+ * `afterLower`) are the atoms dialect's (slice a2).
  *
  * It imports its two siblings as values (their rows and hooks) and types
  * only from core, so a manifest can `require` it with its siblings beside
  * it.
  */
-import type { SyntaxModule } from "../index.ts";
+import type { Dialect } from "../index.ts";
 import atomsSugars, {
   ATOM,
   CLASS_SUGAR,
@@ -31,6 +31,8 @@ import atomsSugars, {
 import memberSyntax, { MEMBER } from "./member.ts";
 
 const meshSyntax = {
+  id: "mesh",
+  name: "Mesh",
   table: Object.freeze({
     expressionTriggers: Object.freeze([ATOM, MEMBER]),
     attributeTriggers: Object.freeze([
@@ -42,8 +44,8 @@ const meshSyntax = {
     lineTriggers: Object.freeze([MEMBER]),
   }),
   lowerTrigger(id, text, span, ctx) {
-    const module = id === MEMBER.id ? memberSyntax : atomsSugars;
-    return (module.lowerTrigger as NonNullable<SyntaxModule["lowerTrigger"]>)(
+    const dialect = id === MEMBER.id ? memberSyntax : atomsSugars;
+    return (dialect.lowerTrigger as NonNullable<Dialect["lowerTrigger"]>)(
       id,
       text,
       span,
@@ -54,6 +56,6 @@ const meshSyntax = {
   checkContract: atomsSugars.checkContract,
   describeAttribute: atomsSugars.describeAttribute,
   afterLower: atomsSugars.afterLower,
-} satisfies SyntaxModule;
+} satisfies Dialect;
 
-export default Object.freeze(meshSyntax) as SyntaxModule;
+export default Object.freeze(meshSyntax) as Dialect;

@@ -55,9 +55,9 @@ import {
 import { hintParseError } from "./parse-error-hints.ts";
 import { sugarAfterDefaultError, tagParamError } from "./stock-parser.ts";
 import {
+  type Dialect,
   explicitSyntaxOf,
   resolveSyntaxOf,
-  type SyntaxModule,
   type SyntaxTable,
   tableParseError,
 } from "./syntax-table.ts";
@@ -123,8 +123,8 @@ export interface TranslatorOptions {
   warnings?: MxWarning[];
   /**
    * The product name diagnostics use where core's own wording says "MX"
-   * (decision 183). Unset, diagnostics say `MX`, so every existing message
-   * is byte-identical. A language packaged on top of MX (design note §L3)
+   * (decision 183). Unset, the file's dialect's `name` (decision 212 item
+   * 10), and `MX` for a file no dialect claims. A language packaged on top of MX (design note §L3)
    * passes its own name so its errors never mention a product its authors
    * did not choose.
    */
@@ -150,13 +150,14 @@ export interface TranslatorOptions {
 
 export interface HostOptions extends TranslatorOptions {
   /**
-   * The syntax table, or a syntax module carrying one and its hooks
-   * (decision 182 addendum 5). Omitted, the file's nearest
-   * `package.json#mx.syntax` resolves it (`resolveSyntax`). A trigger, block
-   * tag or filter nothing lowers fails the file at the first one
+   * The file's dialect (decisions 182 addendum 5, 202), or a bare syntax
+   * table for a dialect with no hooks. Omitted, the dialect that claims the
+   * file's extension among its project's dependencies (decision 212), else
+   * MX's default row (`resolveSyntax`). A trigger,
+   * block tag or filter nothing lowers fails the file at the first one
    * (`tableParseError`).
    */
-  syntax?: SyntaxTable | SyntaxModule;
+  dialect?: SyntaxTable | Dialect;
   /**
    * A last pass over the emitted module, for a host that appends helpers or
    * rewrites the module shape. Receives and returns the whole module text.
@@ -249,8 +250,8 @@ export function createTranslator(host: TranslatorOptions): Translator {
 }
 
 /**
- * `createTranslator` for one file, whose syntax module claims `claimed`
- * contract keys (`SyntaxModule.contractFields`): registration accepts them
+ * `createTranslator` for one file, whose dialect claims `claimed`
+ * contract keys (`Dialect.contractFields`): registration accepts them
  * as the module's data and leaves them unchecked.
  */
 function translatorClaiming(
@@ -405,7 +406,7 @@ function sameFilePath(a: string, b: string): boolean {
  * The MX document of `source` as `compileSource` parses it, without lowering
  * it: the MX front end, with the tag shapes and statement keywords of
  * `translator`'s tag table over `nativeTags` (`tagTable`) and the
- * file's syntax table (`syntax`, else its `package.json#mx.syntax`).
+ * file's syntax table (`dialect`, else the dialect its extension routes to).
  * `undefined` when the template itself does not parse. An expression error
  * does not count (it stays on its container, as Marko's parse-only output
  * kept it in the tree, `parseFragment`'s rule), nor does a front-end error
@@ -418,13 +419,13 @@ export function parseMxDocument(
   source: string,
   filename: string,
   translator: unknown,
-  syntax?: SyntaxTable | SyntaxModule,
+  dialect?: SyntaxTable | Dialect,
   nativeTags?: NativeTags,
 ): Node | undefined {
-  // A syntax module's table parses; its hooks are lowering's, not the scan's.
+  // A dialect's table parses; its hooks are lowering's, not the scan's.
   const table = (
-    syntax !== undefined
-      ? explicitSyntaxOf(syntax, filename)
+    dialect !== undefined
+      ? explicitSyntaxOf(dialect, filename)
       : resolveSyntaxOf(filename)
   ).table;
   const lookup = tagTable(translator, nativeTags);
@@ -450,13 +451,13 @@ export function compileSource(
 ): CompileResult {
   // Only an absent option resolves from the manifest: `null` is refused.
   const resolvedSyntax =
-    host.syntax !== undefined
-      ? explicitSyntaxOf(host.syntax, filename)
+    host.dialect !== undefined
+      ? explicitSyntaxOf(host.dialect, filename)
       : resolveSyntaxOf(filename);
   const syntax = resolvedSyntax.table;
   const translator = translatorClaiming(
     host,
-    claimedFields(resolvedSyntax.module),
+    claimedFields(resolvedSyntax.dialect),
   );
   const lookup = tagTable(translator, policy.nativeTags);
 
@@ -492,7 +493,7 @@ export function compileSource(
       document,
       syntax,
       { filename },
-      resolvedSyntax.module,
+      resolvedSyntax.dialect,
     );
     if (tableError) throw tableError;
     const parseError = compileErrorOf(document, filename, {

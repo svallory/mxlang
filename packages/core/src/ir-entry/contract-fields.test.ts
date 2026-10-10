@@ -4,33 +4,32 @@
  * `afterLower`, which claims those keys (`contractFields`). Through
  * `lowerSource` a Mesh file gets the diagnostics the built-in path gives, field
  * for field (message, line, column, offset, file, code), whether the module
- * comes from the `syntax` option or a manifest's `mx.syntax`, registration
+ * comes from the `dialect` option or a dialect package that claims the file's
+ * extension (decision 212), registration
  * errors included (the module's `checkContract`, called tag or not); a
  * module's own check reaches the diagnostic with its position and `code`.
  */
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { CustomTag } from "../custom-tags.ts";
-import { defaultSyntax, type SyntaxModule } from "../syntax-table.ts";
+import { type Dialect, defaultSyntax } from "../syntax-table.ts";
 import { type LowerSourceOptions, lowerSource } from "./index.ts";
+import { dialectPackage } from "./test-dialect-package.ts";
 
 const MODULE = join(import.meta.dirname, "../syntax/mesh.ts");
 
-/** Through Node's strip-only `require`, as a manifest's `mx.syntax` loads it. */
+/** Through Node's strip-only `require`, as a dialect package's module loads. */
 const meshSyntax = (
-  createRequire(import.meta.url)(MODULE) as { default: SyntaxModule }
+  createRequire(import.meta.url)(MODULE) as { default: Dialect }
 ).default;
 
 let dir: string;
 beforeAll(() => {
   dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-contract-fields-")));
-  writeFileSync(
-    join(dir, "package.json"),
-    JSON.stringify({ name: "mesh-app", mx: { syntax: MODULE } }),
-  );
+  dialectPackage(dir, MODULE, { id: "mesh", name: "Mesh" });
 });
 afterAll(() => {
   rmSync(dir, { recursive: true, force: true });
@@ -113,12 +112,12 @@ const PASSING = `entity :Invoice
 const builtIn = (source: string) =>
   lowerSource(source, "/v/invoice.mx", {
     customTags,
-    syntax: defaultSyntax(),
+    dialect: defaultSyntax(),
   }).diagnostics;
 
 const LOADERS: [string, () => [string, LowerSourceOptions]][] = [
-  ["the `syntax` option", () => ["/v/invoice.mx", { syntax: meshSyntax }]],
-  ["a manifest naming the module", () => [join(dir, "invoice.mx"), {}]],
+  ["the `dialect` option", () => ["/v/invoice.mx", { dialect: meshSyntax }]],
+  ["a dialect package", () => [join(dir, "invoice.mesh"), {}]],
 ];
 
 describe.each(LOADERS)("through %s", (_, loader) => {
@@ -161,7 +160,7 @@ describe.each(LOADERS)("through %s", (_, loader) => {
       expect(
         lowerSource(source, "/v/x.mx", {
           customTags: tags,
-          syntax: defaultSyntax(),
+          dialect: defaultSyntax(),
         }).diagnostics,
       ).toEqual([expected]);
       expect(
@@ -183,12 +182,12 @@ describe("a module's own contract key", () => {
     };
     // Without a module that claims them, `unique` is an unknown key.
     expect(
-      lowerSource(source, "/v/x.mx", { customTags: tags, syntax: meshSyntax })
+      lowerSource(source, "/v/x.mx", { customTags: tags, dialect: meshSyntax })
         .diagnostics[0]?.message,
     ).toMatch(/Unknown key "unique"/);
 
     const seen: unknown[] = [];
-    const module: SyntaxModule = {
+    const module: Dialect = {
       ...meshSyntax,
       contractFields: { attribute: ["unique"], tag: ["relations"] },
       afterLower(unit) {
@@ -209,7 +208,7 @@ describe("a module's own contract key", () => {
     };
     const { diagnostics } = lowerSource(source, "/v/x.mx", {
       customTags: tags,
-      syntax: module,
+      dialect: module,
     });
     expect(seen).toEqual([["index", "many"]]);
     expect(diagnostics).toEqual([

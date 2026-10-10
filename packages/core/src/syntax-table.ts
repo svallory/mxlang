@@ -1,7 +1,9 @@
 /**
- * `package.json#mx.syntax` (decision 182, PR C): the syntax table a file is
- * parsed with, resolved from the nearest manifest beside `mx.tags`, and the
- * check that keeps a table core cannot lower yet from compiling silently.
+ * Dialects (decisions 182, 202, 212): the dialect a file is parsed and
+ * lowered with (its syntax table, hooks and node types), loaded from the
+ * package that claims the file's extension (`dialect-discovery.ts`), and
+ * the check that keeps a table core cannot lower yet from compiling
+ * silently.
  *
  * The table is plain data (`@mxlang/parser`'s `SyntaxTable`); the types are
  * declared here because the published `.d.ts` may not name the private
@@ -22,6 +24,16 @@ import {
 import type { Node } from "./core.ts";
 import { TranslateError } from "./core.ts";
 import type { IrBuilders } from "./custom-tags.ts";
+import { type DialectManifest, routeDialect } from "./dialect-discovery.ts";
+import {
+  checkDialectNodeTypes,
+  type DialectNode,
+  isCallRow,
+  isNodeTypeRow,
+  MX_DIALECT,
+  type NodeType,
+  unregisteredNodeRow,
+} from "./dialect-registry.ts";
 import { findNearestPackageJson } from "./host-policy.ts";
 import type { IrNode } from "./ir.ts";
 import type { ContractData, LoweredUnit } from "./lowered-unit.ts";
@@ -37,7 +49,7 @@ export type {
 
 import { type MxTemplateParser, mxTemplateParser } from "./marko-frontend.ts";
 import { filePosition } from "./mx-parse.ts";
-import type { PackageJsonRead } from "./package-json.ts";
+import { jsonKeyPosition, readPackageJsonCached } from "./package-json.ts";
 import { loadDefaultExport, mxKeyPosition } from "./scan.ts";
 import { triggerRow } from "./triggers.ts";
 
@@ -50,13 +62,18 @@ export type StandIn = "number" | "identifier" | "keep";
  * text and `"identifier"` an identifier named by it; in an attribute list,
  * `"attribute"` is an attribute named by the text after its first
  * character, the sigil (bare, or with its `=value`). Any other pairing is a positioned error. `{ call }` hands the
- * trigger to the syntax module's `lowerTrigger` (decision 182 addendum 5).
+ * trigger to the dialect's `lowerTrigger` (decision 182 addendum 5).
+ * `{ type, dialect }` names a node type the dialect registers
+ * (`Dialect.nodeTypes`, decision 202 item 3): the row's `match` decides
+ * where the node ends, the type's `parse` reads it and its `lower` builds
+ * it. Attribute and line triggers only.
  */
 export type TriggerNode =
   | "string"
   | "identifier"
   | "attribute"
-  | { readonly call: string };
+  | { readonly call: string }
+  | { readonly type: string; readonly dialect: string };
 
 /** One row of a trigger list (decision 182). */
 export interface Trigger {
@@ -109,14 +126,14 @@ export interface TriggerExpression {
 /**
  * A method value, `(params) { body }` written right after an attribute
  * trigger (`boolean :isOverdue() { … }`): `ctx.value` when the trigger has
- * one. It is opaque: a module places it with `ctx.attribute`, never builds
+ * one. It is opaque: a dialect places it with `ctx.attribute`, never builds
  * one. @unstable
  *
  * `async` is `true` when `async` is written before the trigger
  * (`kind async :name(p) { b }`): the method is an async function, and
  * `ctx.valueForm` is `"async-method"`. The `async` keyword is outside the
  * method's span (it starts at the method's `<` or `(`), so a placed value's
- * text never covers the trigger's own. A module that does not want async
+ * text never covers the trigger's own. A dialect that does not want async
  * methods refuses the form with `ctx.fail`; one that places it gets an
  * async `FunctionExpression`.
  */
@@ -127,9 +144,11 @@ export interface TriggerMethod {
 
 /**
  * The value of an attribute `ctx.attribute` builds: `true` (a bare
- * attribute), a string, an expression, the trigger's own method value, or a
+ * attribute), a string, an expression, the trigger's own method value, a
  * whole-value atom or member (`{ kind: "member", name }` for Mesh's
- * `&dueOn`). A value's `span` defaults to the trigger's own.
+ * `&dueOn`), or a node a node type parsed (`{ kind: "node", node, value }`:
+ * `value` is the static string every target emits, and the IR keeps the
+ * node beside it). A value's `span` defaults to the trigger's own.
  */
 export type TriggerAttributeValue =
   | true
@@ -139,6 +158,12 @@ export type TriggerAttributeValue =
   | {
       readonly kind: "atom" | "member";
       readonly name: string;
+      readonly span?: SourceSpan;
+    }
+  | {
+      readonly kind: "node";
+      readonly node: DialectNode;
+      readonly value: string;
       readonly span?: SourceSpan;
     };
 
@@ -215,12 +240,12 @@ export type TriggerResult =
   | TriggerChild;
 
 /**
- * How an expression trigger's operand is used, for a module that refuses
+ * How an expression trigger's operand is used, for a dialect that refuses
  * some uses (an atom is a name, not a value to operate on): the object of a
  * member access, a callee (a tagged template's tag included), the operand
  * of a unary operator, a spread (`<div ...x/>` included), or a property
  * name (`{ x: 1 }`, `{ x }`). `null` for any other use. Core refuses a
- * property name after the hook returns, so a module may only refuse it in
+ * property name after the hook returns, so a dialect may only refuse it in
  * its own words first. @unstable
  */
 export type TriggerUse =
@@ -243,7 +268,7 @@ export type TriggerValueForm =
 /**
  * What `lowerTrigger` is handed (decision 182 addendum 5): where the trigger
  * sits, its lowered `=value`, and the three constructors, the only way a
- * module builds anything. Each position takes the matching result:
+ * dialect builds anything. Each position takes the matching result:
  * `"expression"` an expression, `"attribute"` an attribute, `"line"` a
  * child. Core gives the result its positions from the trigger.
  */
@@ -278,7 +303,7 @@ export interface TriggerContext {
   shorthand(attribute: "id" | "class", name: string): TriggerShorthand;
   child(tagName: string, attrs: readonly TriggerAttribute[]): TriggerChild;
   /**
-   * A positioned error in the module's own words, at the trigger or at
+   * A positioned error in the dialect's own words, at the trigger or at
    * `at` (a span inside the document), carrying `code` when given.
    * @unstable
    */
@@ -291,14 +316,51 @@ export interface SyntaxBuildContext {
 }
 
 /**
- * A syntax module (decision 182 addendum 5): the default export of the
- * module `package.json#mx.syntax` names as a string, or the object a
- * consumer passes as the `syntax` option. `table` overlays the `.mx` default
- * row (the fields an inline `mx.syntax` may set); the hooks are post-parse
- * only (`language-extensions/core.md`, "Hooks").
+ * The core tag rules a dialect parses with (decision 204 item 2): `html`
+ * (the html target's table), `markup` (native elements plus statement
+ * tags) or `none` (statement tags only). @unstable
+ *
+ * TODO(dialect-registration): core's `tag-presets.ts` exports this type
+ * (tree-ir-entry); this declaration goes when that lands.
  */
-export interface SyntaxModule {
+export type TagRulesPreset = "html" | "markup" | "none";
+
+/**
+ * A dialect (decisions 182 addendum 5, 202, 212): the default export of the
+ * module its package's `package.json#mxDialect` names, or the object a
+ * consumer passes as the `dialect` option. A file is a dialect's when the
+ * dialect claims its extension; a project may use several. `table`
+ * overlays the `.mx` default row; the hooks are post-parse only
+ * (`language-extensions/core.md`, "Hooks"); `nodeTypes` registers the
+ * dialect's node types, keyed `id:Type` beside core's own (dialect zero).
+ * @unstable
+ */
+export interface Dialect {
+  /**
+   * The dialect's identity (`mesh`): lower-case words joined by `-`, never
+   * `mx` (MX's own). Its key in MX's config and the namespace of its node
+   * types. A loaded dialect gets it from its manifest.
+   */
+  readonly id: string;
+  /**
+   * What tooling and core's diagnostics call the language (`Mesh`), where
+   * MX's own files say "MX". A loaded dialect gets it from its manifest.
+   */
+  readonly name: string;
   readonly table: Partial<Omit<SyntaxTable, "tagTypes">>;
+  /**
+   * The core tag rules the dialect's files parse with (decisions 204, 211,
+   * 212 item 8 and addendum item 1): the dialect's own, in every tool, and
+   * no project config changes them. Absent means `html`, the full strict
+   * rules; a dialect turns off what it does not want by naming a preset.
+   */
+  readonly tagRules?: TagRulesPreset;
+  /**
+   * The dialect's node types, by `Type` (PascalCase). A table row names one
+   * with `node: { type, dialect }`.
+   */
+  // biome-ignore lint/suspicious/noExplicitAny: a node type is typed by its own node
+  readonly nodeTypes?: Readonly<Record<string, NodeType<any>>>;
   /** Builds what a `{ call }` trigger produces. Required when the table has one. */
   readonly lowerTrigger?: (
     id: string,
@@ -327,7 +389,7 @@ export interface SyntaxModule {
    */
   readonly afterLower?: (unit: LoweredUnit) => void;
   /**
-   * Contract keys this module owns: accepted at registration as opaque data
+   * Contract keys this dialect owns: accepted at registration as opaque data
    * (a key core does not know is otherwise an error), handed to `afterLower`
    * on `ContractCall.contract`, and never checked by core. Of core's own
    * keys only `values`, `pattern`, `ref` (attribute) and `declares` (tag)
@@ -335,7 +397,7 @@ export interface SyntaxModule {
    */
   readonly contractFields?: ContractFields;
   /**
-   * Checks, at registration, a contract that uses a key the module claims
+   * Checks, at registration, a contract that uses a key the dialect claims
    * (`contractFields`), at any depth: `customTags`, `mx.contracts` modules
    * and sidecars alike, called tag or not. `ctx.fail` raises the error where
    * core's own registration error lands (the sidecar's file, the contracts
@@ -347,7 +409,7 @@ export interface SyntaxModule {
     ctx: ContractCheckContext,
   ) => void;
   /**
-   * Words what an attribute declaration that uses a key the module claims
+   * Words what an attribute declaration that uses a key the dialect claims
    * accepts, for core's whole-value shape error (`` attribute `mode` must be
    * atom, got string ``): the text appended to it, such as
    * `" (one of :a, :b)"`, or `""`. Core never reads a claimed key itself;
@@ -356,15 +418,23 @@ export interface SyntaxModule {
   readonly describeAttribute?: (
     declaration: Readonly<Record<string, unknown>>,
   ) => string;
-  /** Names the language where core's diagnostics say "MX", unless the host sets one. */
-  readonly productName?: string;
 }
 
-/** A file's syntax: its table and, when a module supplied it, the module. */
+/**
+ * A dialect module's default export: a {@link Dialect} whose `id` and `name`
+ * may be left to its manifest, which stamps them when it loads (if the
+ * module states them, they must match). @unstable
+ */
+export type DialectModule = Omit<Dialect, "id" | "name"> & {
+  readonly id?: string;
+  readonly name?: string;
+};
+
+/** A file's syntax: its table and, when a dialect supplied it, the dialect. */
 export interface ResolvedSyntax {
   readonly table: SyntaxTable;
-  readonly module?: SyntaxModule;
-  /** The `.mx` default row with no module: nothing to lower. */
+  readonly dialect?: Dialect;
+  /** The `.mx` default row with no dialect: nothing to lower. */
   readonly isDefault?: true;
 }
 
@@ -375,7 +445,7 @@ export interface SyntaxDiagnostic {
   readonly message: string;
 }
 
-/** The fields `mx.syntax` may set: the table's, less `tagTypes`. */
+/** The fields a dialect's `table` may set: the table's, less `tagTypes`. */
 const MANIFEST_FIELDS = new Set([
   "placeholder",
   "inlineScript",
@@ -439,8 +509,8 @@ const DEFAULT_ROW: SyntaxTable = deepFreeze({
 
 /**
  * The `.mx` default row, deeply frozen: the base a consumer overlays to
- * build its own table (Mesh's `&` row), and what a file without
- * `mx.syntax` parses with.
+ * build its own table (Mesh's `&` row), and what MX's own files parse
+ * with.
  */
 export function defaultSyntax(): SyntaxTable {
   return DEFAULT_ROW;
@@ -484,15 +554,19 @@ function intern(table: SyntaxTable): SyntaxTable {
   return frozen;
 }
 
-/** The default row as a resolved syntax: no module. */
+/** The default row as a resolved syntax: no dialect. */
 const DEFAULT_RESOLVED: ResolvedSyntax = Object.freeze({
   table: DEFAULT_ROW,
   isDefault: true,
 });
 
-/** The hooks and fields a syntax module may export (decision 182 addendum 5). */
+/** The hooks and fields a dialect may export (decisions 182 addendum 5, 202). */
 const MODULE_FIELDS = new Set([
+  "id",
+  "name",
   "table",
+  "tagRules",
+  "nodeTypes",
   "lowerTrigger",
   "lowerBlockTag",
   "lowerFilter",
@@ -500,7 +574,6 @@ const MODULE_FIELDS = new Set([
   "contractFields",
   "checkContract",
   "describeAttribute",
-  "productName",
 ]);
 
 const MODULE_HOOKS = [
@@ -526,9 +599,9 @@ function describeProblems(
 }
 
 /**
- * Table fields (`mx.syntax`, or a module's `table`) overlaid on the default
- * row, validated, frozen and interned by hash. `path` names the fields in
- * every message (`mx.syntax`, `table`).
+ * A dialect's `table` overlaid on the default row, validated, frozen and
+ * interned by hash. `path` names the fields in every message (`table`,
+ * `dialect.table`).
  */
 function overlayTable(
   value: unknown,
@@ -570,9 +643,7 @@ function firstCallTrigger(
     "lineTriggers",
     "textTriggers",
   ] as const) {
-    const index = table[list].findIndex(
-      (trigger) => typeof trigger.node === "object",
-    );
+    const index = table[list].findIndex((trigger) => isCallRow(trigger.node));
     if (index >= 0) {
       return { field: `${list}[${index}]`, id: table[list][index]?.id ?? "" };
     }
@@ -580,48 +651,80 @@ function firstCallTrigger(
   return undefined;
 }
 
+/** The core tag rule presets a dialect may name. */
+const TAG_RULES = ["html", "markup", "none"] as const;
+
 /**
- * A syntax module's shape: an object with a `table` object, hooks that are
- * functions, a non-empty `productName`. `path` prefixes the field names
- * (the option's wording, or the module's default export).
+ * The tag rules a dialect's files parse with: the preset its module states,
+ * else `html`, the full strict rules (decision 212 item 8 and addendum item
+ * 1). A dialect never inherits a target's preset, and project config never
+ * changes it.
+ *
+ * TODO(dialect-registration): read by the preset wiring once
+ * tree-ir-entry's `tag-presets.ts` lands.
+ */
+export function dialectTagRules(dialect: Dialect): TagRulesPreset {
+  return dialect.tagRules ?? "html";
+}
+
+/**
+ * A dialect's shape: an object with an `id` and a `name`, a `table`
+ * object, a `tagRules` preset, node types, hooks that are functions. `path`
+ * prefixes the field names (the option's wording, or the module's default
+ * export). `identity` is the manifest's `id` and `name` for a loaded
+ * module: stamped on the dialect, and a module that states either must
+ * agree with it.
  */
 function checkModuleShape(
   value: Record<string, unknown>,
   path: string,
   fail: (message: string) => never,
-): SyntaxModule {
+  identity?: { readonly id: string; readonly name: string },
+): Dialect {
+  if (identity) {
+    for (const key of ["id", "name"] as const) {
+      if (value[key] !== undefined && value[key] !== identity[key]) {
+        fail(
+          `\`${path}${key}\` is ${JSON.stringify(value[key])}, and the dialect's \`package.json#mxDialect.${key}\` is ${JSON.stringify(identity[key])}: leave it to the manifest, or make them agree`,
+        );
+      }
+    }
+    value = { ...value, id: identity.id, name: identity.name };
+  }
   for (const key of Object.keys(value)) {
     if (!MODULE_FIELDS.has(key)) {
       fail(
-        `\`${path}${key}\` is not a syntax module field (${[...MODULE_FIELDS].join(", ")})`,
+        `\`${path}${key}\` is not a dialect field (${[...MODULE_FIELDS].join(", ")})`,
       );
     }
   }
   if (value.table === undefined) {
-    fail(`\`${path}table\` is required: the module's syntax table fields`);
+    fail(`\`${path}table\` is required: the dialect's syntax table fields`);
   }
+  if (
+    value.tagRules !== undefined &&
+    !(TAG_RULES as readonly unknown[]).includes(value.tagRules)
+  ) {
+    fail(
+      `\`${path}tagRules\` must be one of core's tag rule presets: ${TAG_RULES.map((name) => `"${name}"`).join(", ")}`,
+    );
+  }
+  checkDialectNodeTypes(value, path, fail);
   for (const hook of MODULE_HOOKS) {
     if (value[hook] !== undefined && typeof value[hook] !== "function") {
       fail(`\`${path}${hook}\` must be a function`);
     }
   }
-  if (
-    value.productName !== undefined &&
-    (typeof value.productName !== "string" || value.productName === "")
-  ) {
-    fail(`\`${path}productName\` must be a non-empty string`);
-  }
   checkContractFields(value.contractFields, path, fail);
   // SAFETY: the checks above validated `value` field by field (keys in
-  // MODULE_FIELDS, `table` present, hooks functions, `productName` a
-  // non-empty string, contract fields checked) — exactly SyntaxModule's
-  // shape; the assertion carries that dynamic validation into the typed
-  // interface.
-  return value as unknown as SyntaxModule;
+  // MODULE_FIELDS, `id` and `name` stamped or checked, `table` present,
+  // hooks functions, contract fields checked) — exactly Dialect's shape;
+  // the assertion carries that dynamic validation into the typed interface.
+  return (identity ? Object.freeze(value) : value) as unknown as Dialect;
 }
 
-/** Is this `syntax` option value a syntax module rather than a table? */
-function isSyntaxModule(value: unknown): value is SyntaxModule {
+/** Is this `dialect` option value a dialect rather than a bare table? */
+function isDialect(value: unknown): value is Dialect {
   return (
     !!value &&
     typeof value === "object" &&
@@ -631,95 +734,87 @@ function isSyntaxModule(value: unknown): value is SyntaxModule {
 }
 
 /**
- * Loads the syntax module `package.json#mx.syntax` names (resolved like
- * `mx.contracts`: a package name, or a path relative to the manifest). A
- * module that fails to load or has the wrong shape is an error in the module
- * file; a specifier that does not resolve, or a `{ call }` trigger with no
- * `lowerTrigger`, is an error at the `mx.syntax` key.
+ * Loads the dialect `manifest` declares: its `module`, resolved from its
+ * package directory, with the manifest's `id` and `name` stamped on it. A
+ * module that does not resolve is an error at the manifest's `module`; a
+ * module that fails to load or has the wrong shape, a `{ call }` row with
+ * no `lowerTrigger`, or a row naming a node type the dialect does not
+ * register is an error in the module file at 1:0.
  */
-function loadSyntaxModule(
-  spec: string,
-  packageFile: string,
-  failKey: (message: string) => never,
-): { resolved: ResolvedSyntax; file: string } {
-  const packageDir = dirname(packageFile);
+function loadDialect(manifest: DialectManifest): {
+  resolved: ResolvedSyntax;
+  file: string;
+} {
+  const packageDir = dirname(manifest.packageFile);
+  const failAtModule = (message: string): never => {
+    const read = readPackageJsonText(manifest.packageFile);
+    const { line, column } = jsonKeyPosition(read, ["mxDialect", "module"]);
+    throw new TranslateError(message, line, column, manifest.packageFile);
+  };
   let file = "";
   try {
-    file = createRequire(packageFile).resolve(
-      isAbsolute(spec) || spec.startsWith(".")
-        ? resolve(packageDir, spec)
-        : spec,
+    file = createRequire(manifest.packageFile).resolve(
+      resolve(packageDir, manifest.module),
     );
   } catch {
-    failKey(`\`mx.syntax\` could not resolve \`${spec}\` from ${packageDir}`);
+    failAtModule(
+      `the dialect \`${manifest.id}\`'s module "${manifest.module}" cannot be resolved from ${packageDir}. Check \`mxDialect.module\`.`,
+    );
   }
   const failInModule = (message: string): never => {
     throw new TranslateError(message, 1, 0, file);
   };
-  const module = checkModuleShape(
-    loadDefaultExport(file, "syntax module"),
+  const dialect = checkModuleShape(
+    loadDefaultExport(file, "dialect"),
     "",
     failInModule,
+    manifest,
   );
-  const table = overlayTable(module.table, "table", failInModule);
+  const table = overlayTable(dialect.table, "table", failInModule);
   const call = firstCallTrigger(table);
-  if (call && !module.lowerTrigger) {
-    failKey(
-      `\`mx.syntax\` (${spec}): \`table.${call.field}\` (trigger "${call.id}") has a \`{ call }\` node, and the module exports no \`lowerTrigger\``,
+  if (call && !dialect.lowerTrigger) {
+    failInModule(
+      `\`table.${call.field}\` (trigger "${call.id}") has a \`{ call }\` node, and the dialect exports no \`lowerTrigger\``,
     );
   }
-  return { resolved: { table, module }, file };
+  const unregistered = unregisteredNodeRow(table, dialect, "table");
+  if (unregistered) failInModule(unregistered);
+  return { resolved: { table, dialect }, file };
+}
+
+function readPackageJsonText(file: string): string {
+  return readPackageJsonCached(file)?.text ?? "";
 }
 
 /**
- * `package.json#mx.syntax`: an inline object (table fields only) overlaid on
- * the default row, or a string naming a syntax module. A problem is a
- * `TranslateError` in the manifest at the `mx.syntax` key, naming the field
- * (the `mx.tags` / `mx.contracts` precedent), or in the module file for the
- * module's own shape.
+ * The removed `package.json#mx.syntax` (decision 212 item 2: no setting
+ * selects a file's syntax): an error at its key.
  */
-function resolveMxSyntaxValue(
-  value: unknown,
-  packageFile: string,
-): { resolved: ResolvedSyntax; file?: string } {
-  if (value === undefined) return { resolved: DEFAULT_RESOLVED };
-  const fail = (message: string): never => {
-    const { line, column } = mxKeyPosition(packageFile, "syntax");
-    throw new TranslateError(message, line, column, packageFile);
-  };
-  if (typeof value === "string") {
-    return loadSyntaxModule(value, packageFile, fail);
+function rejectRemovedSyntax(packageFile: string, manifest: unknown): void {
+  const mx =
+    manifest && typeof manifest === "object"
+      ? (manifest as { mx?: unknown }).mx
+      : undefined;
+  if (
+    !mx ||
+    typeof mx !== "object" ||
+    (mx as { syntax?: unknown }).syntax === undefined
+  ) {
+    return;
   }
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    fail(
-      "`mx.syntax` must be an object overlaying the syntax table, or a string naming a syntax module",
-    );
-  }
-  const table = overlayTable(value, "mx.syntax", fail);
-  const call = firstCallTrigger(table);
-  if (call) {
-    fail(
-      `\`mx.syntax.${call.field}\` (trigger "${call.id}"): a \`{ call }\` node is lowered by a syntax module's \`lowerTrigger\`, and an inline \`mx.syntax\` is a table only; move the table into a module and name it (\`"syntax": "./syntax.ts"\`)`,
-    );
-  }
-  return { resolved: table === DEFAULT_ROW ? DEFAULT_RESOLVED : { table } };
+  const { line, column } = mxKeyPosition(packageFile, "syntax");
+  throw new TranslateError(
+    "`mx.syntax` is removed: a syntax of your own is a dialect, a package that declares itself in its `package.json#mxDialect` (`id`, `name`, the `extensions` it claims, its `module`) and is one of the project's dependencies; a file goes to the dialect that claims its extension. `.mx` files are always MX's.",
+    line,
+    column,
+    packageFile,
+  );
 }
 
-/**
- * The table `package.json#mx.syntax` gives (an inline object, or a module's
- * `table`), validated and interned. `undefined` means the default row.
- */
-export function normalizeMxSyntax(
-  value: unknown,
-  packageFile: string,
-): SyntaxTable {
-  return resolveMxSyntaxValue(value, packageFile).resolved.table;
-}
-
-/** Each manifest read's syntax, so an unchanged `package.json` (and module) is never re-validated. */
-const byManifest = new WeakMap<
-  PackageJsonRead,
-  { resolved: ResolvedSyntax; file?: string; mtimeMs?: number }
+/** Each loaded dialect, per manifest, so an unchanged module is never re-validated. */
+const byDialect = new WeakMap<
+  DialectManifest,
+  { resolved: ResolvedSyntax; file: string; mtimeMs?: number }
 >();
 
 function mtimeOf(file: string): number | undefined {
@@ -731,10 +826,11 @@ function mtimeOf(file: string): number | undefined {
 }
 
 /**
- * The syntax for `filename`: its nearest `package.json`'s `mx.syntax`, so a
- * dependency's files use the dependency's manifest. A relative or virtual
- * name with no manifest above it gets the default row. A syntax module is
- * reloaded when its file changes.
+ * The syntax for `filename`: the dialect that claims its extension among
+ * its project's (the nearest `package.json`'s) direct dependencies, so a
+ * dependency's files use the dependency's dialects; MX's default row for
+ * every other file. A relative or virtual name gets the default row. A
+ * dialect is reloaded when its module file changes.
  */
 export function resolveSyntaxOf(filename: string): ResolvedSyntax {
   const resolved = resolveManifestSyntax(filename);
@@ -744,7 +840,7 @@ export function resolveSyntaxOf(filename: string): ResolvedSyntax {
 }
 
 /**
- * Test-only: the syntax module a file with no `mx.syntax` resolves to, read
+ * Test-only: the dialect an MX file (no dialect claims it) resolves to, read
  * from a process global so a preload reaches every copy of core (source and
  * dist alike). `scripts/sugar-module.ts` sets it to run the existing atom
  * and name-sugar suites through the reference module (slice a1 of
@@ -754,42 +850,44 @@ const FALLBACK_FOR_TESTING = Symbol.for(
   "@mxlang/core:fallbackSyntaxForTesting",
 );
 
+/** The fallback dialect, named "MX" so the suites it runs keep MX's wording. */
+const fallbacks = new WeakMap<object, Dialect>();
+
 function fallbackForTesting(resolved: ResolvedSyntax): ResolvedSyntax {
   const module = (globalThis as Record<symbol, unknown>)[FALLBACK_FOR_TESTING];
-  if (!module) return resolved;
-  return explicitSyntaxOf(
-    module as SyntaxModule,
-    "<fallback syntax for testing>",
-  );
+  if (!module || typeof module !== "object") return resolved;
+  let dialect = fallbacks.get(module);
+  if (!dialect) {
+    dialect = Object.freeze({
+      ...(module as Dialect),
+      name: MX_DIALECT.name,
+    });
+    fallbacks.set(module, dialect);
+  }
+  return explicitSyntaxOf(dialect, "<fallback syntax for testing>");
 }
 
 function resolveManifestSyntax(filename: string): ResolvedSyntax {
   if (!isAbsolute(filename)) return DEFAULT_RESOLVED;
   const found = findNearestPackageJson(dirname(filename));
   if (!found?.read.manifest) return DEFAULT_RESOLVED;
-  const known = byManifest.get(found.read);
-  if (
-    known &&
-    (known.file === undefined || mtimeOf(known.file) === known.mtimeMs)
-  ) {
-    return known.resolved;
-  }
-  const mx = (found.read.manifest as { mx?: { syntax?: unknown } }).mx;
-  const { resolved, file } = resolveMxSyntaxValue(mx?.syntax, found.file);
-  byManifest.set(found.read, {
-    resolved,
-    ...(file === undefined ? {} : { file, mtimeMs: mtimeOf(file) }),
-  });
+  rejectRemovedSyntax(found.file, found.read.manifest);
+  const manifest = routeDialect(filename);
+  if (!manifest) return DEFAULT_RESOLVED;
+  const known = byDialect.get(manifest);
+  if (known && mtimeOf(known.file) === known.mtimeMs) return known.resolved;
+  const { resolved, file } = loadDialect(manifest);
+  byDialect.set(manifest, { resolved, file, mtimeMs: mtimeOf(file) });
   return resolved;
 }
 
-// The discovery scan reads the claimed contract keys of a file's module
+// The discovery scan reads the claimed contract keys of a file's dialect
 // through this, without importing the syntax table itself.
-registerSyntaxResolver((filePath) => resolveSyntaxOf(filePath).module);
+registerSyntaxResolver((filePath) => resolveSyntaxOf(filePath).dialect);
 
 /**
  * The syntax table for `filename` (see {@link resolveSyntaxOf}, which also
- * returns the syntax module when one supplied it).
+ * returns the dialect when one supplied it).
  */
 export function resolveSyntax(filename: string): SyntaxTable {
   return resolveSyntaxOf(filename).table;
@@ -798,52 +896,57 @@ export function resolveSyntax(filename: string): SyntaxTable {
 /** Explicit tables already validated (tables are frozen data, checked once per object). */
 const validExplicit = new WeakSet<object>();
 
-/** Explicit modules already resolved, per frozen module object. */
+/** Explicit dialects already resolved, per frozen dialect object. */
 const explicitModules = new WeakMap<object, ResolvedSyntax>();
 
 /**
- * An explicit `syntax` option (`HostOptions.syntax`, `FragmentBase.syntax`,
- * `LowerSourceOptions.syntax`: a consumer's own table or syntax module, Mesh's
- * path), validated with the manifest's rules and wording, as the caller's
- * error: a `TranslateError` at the start of `filename` naming
- * `syntax.<field>`. A non-empty `tagTypes` is refused (taglib-owned), as in a
- * manifest. A module's `table` overlays the default row. A `{ call }`
- * trigger without `lowerTrigger` is accepted here: lowering reports it at
- * the trigger ("has no lowering yet"; decision 182 addendum 5 item 4).
+ * An explicit `dialect` option (`HostOptions.dialect`,
+ * `FragmentBase.dialect`, `LowerSourceOptions.dialect`: a consumer's own
+ * dialect, or a bare table for a dialect with no hooks), validated with the
+ * manifest's rules and wording, as the caller's error: a `TranslateError` at
+ * the start of `filename` naming `dialect.<field>`. A non-empty `tagTypes` is
+ * refused (taglib-owned), as in a manifest. A dialect's `table` overlays the
+ * default row. A `{ call }` trigger without `lowerTrigger` is accepted here:
+ * lowering reports it at the trigger ("has no lowering yet"; decision 182
+ * addendum 5 item 4). A row naming a node type the dialect does not register
+ * is refused.
  */
 export function explicitSyntaxOf(
-  value: SyntaxTable | SyntaxModule,
+  value: SyntaxTable | Dialect,
   filename: string,
 ): ResolvedSyntax {
   const fail = (message: string): never => {
     throw new TranslateError(message, 1, 0, filename);
   };
-  if (!isSyntaxModule(value)) {
+  if (!isDialect(value)) {
     const table = explicitSyntax(value, filename);
+    const unregistered = unregisteredNodeRow(table, undefined, "dialect");
+    if (unregistered) fail(`the \`dialect\` option: ${unregistered}`);
     return table === DEFAULT_ROW ? DEFAULT_RESOLVED : { table };
   }
   const known = explicitModules.get(value);
   if (known) return known;
-  // SAFETY: `isSyntaxModule` narrowed `value` to SyntaxModule, a plain
-  // object; checkModuleShape reads its fields dynamically, so the record
-  // view is the same object widened for the field-by-field validation.
-  const module = checkModuleShape(
+  const invalid = (message: string): never =>
+    fail(`the \`dialect\` option is not a valid dialect: ${message}`);
+  // SAFETY: `isDialect` narrowed `value` to a plain object with a `table`;
+  // checkModuleShape reads its fields dynamically, so the record view is
+  // the same object widened for the field-by-field validation.
+  const dialect = checkModuleShape(
     value as unknown as Record<string, unknown>,
-    "syntax.",
-    (message) =>
-      fail(`the \`syntax\` option is not a valid syntax module: ${message}`),
+    "dialect.",
+    invalid,
   );
-  const table = overlayTable(module.table, "syntax.table", (message) =>
-    fail(`the \`syntax\` option is not a valid syntax module: ${message}`),
-  );
-  const resolved: ResolvedSyntax = { table, module };
+  const table = overlayTable(dialect.table, "dialect.table", invalid);
+  const unregistered = unregisteredNodeRow(table, dialect, "dialect.table");
+  if (unregistered) invalid(unregistered);
+  const resolved: ResolvedSyntax = { table, dialect };
   if (Object.isFrozen(value)) explicitModules.set(value, resolved);
   return resolved;
 }
 
 /**
- * An explicit `syntax` table option, validated (see
- * {@link explicitSyntaxOf}, which also takes a syntax module).
+ * An explicit `dialect` option that is a bare table, validated (see
+ * {@link explicitSyntaxOf}, which also takes a dialect).
  */
 export function explicitSyntax(
   table: SyntaxTable,
@@ -857,7 +960,7 @@ export function explicitSyntax(
   };
   if (!table || typeof table !== "object" || Array.isArray(table)) {
     fail(
-      `the \`syntax\` option must be a syntax table object, not ${table === null ? "null" : Array.isArray(table) ? "an array" : typeof table}; omit it to use the file's \`package.json#mx.syntax\``,
+      `the \`dialect\` option must be a dialect or a syntax table object, not ${table === null ? "null" : Array.isArray(table) ? "an array" : typeof table}; omit it to use the dialect that claims the file's extension`,
     );
   }
   if (
@@ -866,16 +969,16 @@ export function explicitSyntax(
     Object.keys(table.tagTypes).length > 0
   ) {
     fail(
-      "the `syntax` option's `tagTypes` must be empty: tag types are taglib-owned, computed from the tags and their parseOptions",
+      "the `dialect` option's `tagTypes` must be empty: tag types are taglib-owned, computed from the tags and their parseOptions",
     );
   }
   if (syntaxHash(table) !== defaultSyntaxHash()) {
     const parser = syntaxParser();
-    if (!parser) fail(`the \`syntax\` option: ${NEEDS_MX_PARSER}`);
+    if (!parser) fail(`the \`dialect\` option: ${NEEDS_MX_PARSER}`);
     const problems = (parser as MxTemplateParser).validateSyntaxTable(table);
     if (problems.length > 0) {
       fail(
-        `the \`syntax\` option is not a valid syntax table: ${describeProblems(problems, "syntax")}`,
+        `the \`dialect\` option is not a valid syntax table: ${describeProblems(problems, "dialect")}`,
       );
     }
   }
@@ -892,15 +995,20 @@ export interface SyntaxSite {
   baseColumn?: number;
 }
 
-/** Does lowering build this trigger (a built-in node kind, or a `{ call }` with the module's `lowerTrigger`)? */
+/**
+ * Does lowering build this trigger (a built-in node kind, a `{ call }` with
+ * the dialect's `lowerTrigger`, or a node type the dialect registers, which
+ * loading already checked)?
+ */
 function lowersTrigger(
   table: SyntaxTable,
-  module: SyntaxModule | undefined,
+  dialect: Dialect | undefined,
   trigger: { id: string; position: TriggerPosition },
 ): boolean {
   const row = triggerRow(table, trigger);
   if (!row) return false;
-  return typeof row.node === "object" ? !!module?.lowerTrigger : true;
+  if (isNodeTypeRow(row.node)) return true;
+  return isCallRow(row.node) ? !!dialect?.lowerTrigger : true;
 }
 
 /**
@@ -918,7 +1026,7 @@ export function tableParseError(
   document: Node,
   table: SyntaxTable,
   site: SyntaxSite,
-  module?: SyntaxModule,
+  dialect?: Dialect,
 ): TranslateError | undefined {
   // The default row by identity first: a plain project pays one comparison.
   if (table === DEFAULT_ROW || syntaxHash(table) === defaultSyntaxHash()) {
@@ -937,17 +1045,17 @@ export function tableParseError(
     seen.add(value);
     switch (value.type) {
       case "MxTrigger":
-        if (!lowersTrigger(table, module, value)) {
+        if (!lowersTrigger(table, dialect, value)) {
           consider(value.start, `\`${value.id}\` trigger has no lowering yet`);
         }
         break;
       case "MxBlockTag":
-        if (!module?.lowerBlockTag) {
+        if (!dialect?.lowerBlockTag) {
           consider(value.start, "a block tag has no lowering yet");
         }
         break;
       case "MxFilter":
-        if (!module?.lowerFilter) {
+        if (!dialect?.lowerFilter) {
           consider(
             value.start,
             `the \`${value.name}\` filter has no lowering yet`,

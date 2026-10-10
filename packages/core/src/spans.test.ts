@@ -6,7 +6,7 @@ import type { HostDeclarations } from "./declarations.ts";
 import type { Attr, DelegatedTag, Ir, IrNode } from "./ir.ts";
 import { lowerSource } from "./ir-entry/index.ts";
 import type { SourceSpan } from "./mapping.ts";
-import type { SyntaxModule } from "./syntax-table.ts";
+import type { Dialect } from "./syntax-table.ts";
 import { lookup } from "./test-targets.ts";
 
 /**
@@ -542,11 +542,11 @@ describe("a whole attribute's span", () => {
   it("closes an argument list holding a member (`item a(&b)`)", () => {
     const memberSyntax = (
       createRequire(import.meta.url)("./syntax/member.ts") as {
-        default: SyntaxModule;
+        default: Dialect;
       }
     ).default;
     const source = "item a(&b)\n";
-    const result = lowerSource(source, "/t.mx", { syntax: memberSyntax });
+    const result = lowerSource(source, "/t.mx", { dialect: memberSyntax });
     expect(result.diagnostics).toEqual([]);
     const node = result.ir?.body[0];
     if (node?.kind !== "DelegatedTag") throw new Error("expected a tag");

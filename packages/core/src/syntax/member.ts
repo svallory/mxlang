@@ -1,5 +1,5 @@
 /**
- * `@mxlang/core/syntax/member`: a reference syntax module for extension
+ * `@mxlang/core/syntax/member`: a reference dialect for extension
  * authors (decision 182 addendum 5): Mesh's `&` member sigil, in all three
  * trigger lists, lowered to four shapes:
  *
@@ -14,24 +14,25 @@
  *   (`{ id: "member", span, text }`), which an authored `<member>` lacks.
  *
  * This is a reference, not a host: core stays host-agnostic and knows no
- * "member". The module is built on the public hook API only (`SyntaxModule`,
+ * "member". The dialect is built on the public hook API only (`Dialect`,
  * `Trigger` and the `ctx` constructors) and imports types only, so it is
  * either used as is,
  *
  * ```ts
  * import { lowerSource } from "@mxlang/core";
  * import memberSyntax from "@mxlang/core/syntax/member";
- * lowerSource(source, file, { syntax: memberSyntax });
+ * lowerSource(source, file, { dialect: memberSyntax });
  * ```
  *
  * or copied into a project and renamed (the sigil, the `member` id, the
  * `self` receiver and the `member` tag are this file's choices, not core's):
  * change the type import below to `@mxlang/core`, give the row your own `id`
- * and `chars`, and point `package.json#mx.syntax` at the copy. It loads
+ * and `chars`, and name the copy in your dialect package's
+ * `package.json#mxDialect.module`. It loads
  * through Node's strip-only `require`, so keep it free of enums and
  * parameter properties.
  */
-import type { SyntaxModule, Trigger } from "../index.ts";
+import type { Dialect, Trigger } from "../index.ts";
 
 /** The member row in all three trigger lists. */
 export const MEMBER: Trigger = Object.freeze({
@@ -43,6 +44,8 @@ export const MEMBER: Trigger = Object.freeze({
 });
 
 const memberSyntax = {
+  id: "member",
+  name: "Mesh",
   table: Object.freeze({
     expressionTriggers: [MEMBER],
     attributeTriggers: [MEMBER],
@@ -72,6 +75,6 @@ const memberSyntax = {
         ]);
     }
   },
-} satisfies SyntaxModule;
+} satisfies Dialect;
 
-export default Object.freeze(memberSyntax) as SyntaxModule;
+export default Object.freeze(memberSyntax) as Dialect;

@@ -8,29 +8,27 @@
  * a `StringLiteral` marked `extra.mxAtom`, a member a `static` attribute
  * carrying `member` or `extra.mxMember`.
  */
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Attr, DelegatedTag } from "../ir.ts";
-import type { SyntaxModule } from "../syntax-table.ts";
+import type { Dialect } from "../syntax-table.ts";
 import { type LowerSourceOptions, lowerSource, type Spanned } from "./index.ts";
+import { dialectPackage } from "./test-dialect-package.ts";
 
 const MODULE = join(import.meta.dirname, "../syntax/mesh.ts");
 
-/** Through Node's strip-only `require`, as a manifest's `mx.syntax` loads it. */
+/** Through Node's strip-only `require`, as a dialect package's module loads. */
 const meshSyntax = (
-  createRequire(import.meta.url)(MODULE) as { default: SyntaxModule }
+  createRequire(import.meta.url)(MODULE) as { default: Dialect }
 ).default;
 
 let dir: string;
 beforeAll(() => {
   dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-mesh-syntax-")));
-  writeFileSync(
-    join(dir, "package.json"),
-    JSON.stringify({ name: "mesh-app", mx: { syntax: MODULE } }),
-  );
+  dialectPackage(dir, MODULE, { id: "mesh", name: "Mesh" });
 });
 afterAll(() => {
   rmSync(dir, { recursive: true, force: true });
@@ -39,10 +37,10 @@ afterAll(() => {
 const BASE: LowerSourceOptions = { structural: "reject", imports: "pass" };
 
 const LOADERS: [string, () => [string, LowerSourceOptions]][] = [
-  ["a manifest naming the module", () => [join(dir, "invoice.mesh.mx"), BASE]],
+  ["a dialect package", () => [join(dir, "invoice.mesh.mx"), BASE]],
   [
-    "the `syntax` option",
-    () => ["/v/invoice.mesh.mx", { ...BASE, syntax: meshSyntax }],
+    "the `dialect` option",
+    () => ["/v/invoice.mesh.mx", { ...BASE, dialect: meshSyntax }],
   ],
 ];
 
@@ -187,7 +185,7 @@ describe("what the module refuses (decision 183)", () => {
     ["kind #name(p) { b }\n", "The `#name` shorthand takes no value.", 10],
   ])("%j", (source, message, offset) => {
     const { diagnostics } = lowerSource(source, "/v/x.mx", {
-      syntax: meshSyntax,
+      dialect: meshSyntax,
     });
     expect(diagnostics[0]).toMatchObject({ message, offset });
   });
@@ -195,13 +193,13 @@ describe("what the module refuses (decision 183)", () => {
 
 const ATOMS_SUGARS = join(import.meta.dirname, "../syntax/atoms-sugars.ts");
 const atomsSugars = (
-  createRequire(import.meta.url)(ATOMS_SUGARS) as { default: SyntaxModule }
+  createRequire(import.meta.url)(ATOMS_SUGARS) as { default: Dialect }
 ).default;
 
 /** The first diagnostic's text and position, built-in path or module path. */
-function firstError(source: string, syntax?: SyntaxModule) {
+function firstError(source: string, syntax?: Dialect) {
   const { diagnostics } = lowerSource(source, "/v/x.mx", {
-    ...(syntax ? { syntax } : {}),
+    ...(syntax ? { dialect: syntax } : {}),
   });
   const [first] = diagnostics;
   return (
@@ -250,9 +248,9 @@ describe("the module path reuses the built-in texts and positions (review 460)",
 
 describe("hook-contract guards and carriers (review 460)", () => {
   /** A module whose `!` attribute row calls `hook`. */
-  const probe = (
-    hook: NonNullable<SyntaxModule["lowerTrigger"]>,
-  ): SyntaxModule => ({
+  const probe = (hook: NonNullable<Dialect["lowerTrigger"]>): Dialect => ({
+    id: "probe",
+    name: "Mesh",
     table: {
       attributeTriggers: [
         {
@@ -276,7 +274,7 @@ describe("hook-contract guards and carriers (review 460)", () => {
     (at) => {
       const module = probe((_id, _text, _span, ctx) => ctx.fail("x", { at }));
       const { diagnostics } = lowerSource("<y !ab/>", "/v/x.mx", {
-        syntax: module,
+        dialect: module,
       });
       expect(diagnostics[0]).toMatchObject({
         message: expect.stringContaining(
@@ -294,7 +292,7 @@ describe("hook-contract guards and carriers (review 460)", () => {
       ctx.attribute("a", true, { at: { sourceStart: -5, sourceEnd: -1 } }),
     );
     const { diagnostics } = lowerSource("<y !ab/>", "/v/x.mx", {
-      syntax: module,
+      dialect: module,
     });
     expect(diagnostics[0]?.message).toContain(
       "`ctx.attribute`'s `at` is a `{ sourceStart, sourceEnd }` span inside the document",
@@ -306,7 +304,7 @@ describe("hook-contract guards and carriers (review 460)", () => {
       ctx.fail("nope", { code: "MESH001" }),
     );
     const { diagnostics } = lowerSource("<y !ab/>", "/v/x.mx", {
-      syntax: module,
+      dialect: module,
     });
     expect(diagnostics[0]).toMatchObject({ message: "nope", code: "MESH001" });
     // A diagnostic with no code carries none.
@@ -318,7 +316,7 @@ describe("hook-contract guards and carriers (review 460)", () => {
   it("a method value the hook drops is named a method value", () => {
     const module = probe((_id, _text, _span, ctx) => ctx.attribute("a", true));
     const { diagnostics } = lowerSource("<y !ab(p) { b }/>", "/v/x.mx", {
-      syntax: module,
+      dialect: module,
     });
     expect(diagnostics[0]?.message).toBe(
       "`!ab` takes no method value here: the `probe` trigger does not place it",
@@ -337,7 +335,7 @@ describe("hook-contract guards and carriers (review 460)", () => {
         return ctx.attribute(text.slice(1), ctx.value ?? true);
       });
       const { ir, diagnostics } = lowerSource(source, "/v/x.mx", {
-        syntax: module,
+        dialect: module,
       });
       expect(diagnostics).toEqual([]);
       expect(seen).toEqual([
@@ -366,7 +364,7 @@ describe("hook-contract guards and carriers (review 460)", () => {
       return ctx.attribute(text.slice(1), ctx.value ?? true);
     });
     const { ir } = lowerSource("<y !ab(p) { p }/>", "/v/x.mx", {
-      syntax: module,
+      dialect: module,
     });
     expect(seen).toEqual(["method", { kind: "method", async: false }]);
     const placed = attr(tags(ir?.body ?? [])[0] as SpannedTag, "ab");
@@ -377,12 +375,12 @@ describe("hook-contract guards and carriers (review 460)", () => {
 describe("`IrDiagnostic.file` names only another file (review 460 F8)", () => {
   const MEMBER = join(import.meta.dirname, "../syntax/member.ts");
   const memberSyntax = (
-    createRequire(import.meta.url)(MEMBER) as { default: SyntaxModule }
+    createRequire(import.meta.url)(MEMBER) as { default: Dialect }
   ).default;
   const PATHS: [string, LowerSourceOptions][] = [
     ["built-in atoms and sugars", BASE],
-    ["`syntax/member` (alpha.14)", { ...BASE, syntax: memberSyntax }],
-    ["`syntax/mesh` (alpha.15)", { ...BASE, syntax: meshSyntax }],
+    ["`syntax/member` (alpha.14)", { ...BASE, dialect: memberSyntax }],
+    ["`syntax/mesh` (alpha.15)", { ...BASE, dialect: meshSyntax }],
   ];
   const SOURCES = [
     "enum values=[::x]\n",

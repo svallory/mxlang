@@ -1,6 +1,6 @@
 /**
  * Every difference between the built-in atoms and sugars and the
- * atoms-and-sugars syntax module (`test-support/sugar-rows.ts`) over the
+ * atoms-and-sugars dialect (`test-support/sugar-rows.ts`) over the
  * parser's corpora (`lang-ext-move-sugars-to-mesh`, slice a1), with the
  * ruling that accepts it. `mx-sugar-module.test.ts` (atom corpora) and
  * `mx-after-value.test.ts` (after-value tables) assert this list is exact:

@@ -1,5 +1,5 @@
 /**
- * The atoms-and-sugars syntax module's rows (`lang-ext-move-sugars-to-mesh`,
+ * The atoms-and-sugars dialect's rows (`lang-ext-move-sugars-to-mesh`,
  * slice a1): MX's atoms (decision 156) and name sugars (decision 146) as
  * layer-2 syntax-table rows. Core's fixture
  * (`packages/core/src/syntax/atoms-sugars.ts`) carries the same

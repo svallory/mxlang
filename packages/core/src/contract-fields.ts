@@ -1,5 +1,5 @@
 /**
- * Contract keys a syntax module owns (`SyntaxModule.contractFields`,
+ * Contract keys a dialect owns (`Dialect.contractFields`,
  * lang-ext-move-sugars-to-mesh slice a2). A claimed key is accepted at
  * registration as opaque data, reaches the module's `afterLower` on
  * `ContractCall.contract`, and is never checked by core. A key core checks
@@ -9,9 +9,9 @@
  */
 import { isTranslateError, TranslateError } from "./core.ts";
 import type { ContractData } from "./lowered-unit.ts";
-import type { SyntaxModule } from "./syntax-table.ts";
+import type { Dialect } from "./syntax-table.ts";
 
-/** What a syntax module claims, as `SyntaxModule.contractFields` states it. @unstable */
+/** What a dialect claims, as `Dialect.contractFields` states it. @unstable */
 export interface ContractFields {
   /** Keys of an attribute declaration (`attributes.<name>`, at any attribute-tag depth). */
   readonly attribute?: readonly string[];
@@ -24,18 +24,18 @@ export interface ClaimedFields {
   readonly attribute: ReadonlySet<string>;
   readonly tag: ReadonlySet<string>;
   /** The module's registration check of a contract that uses a claimed key. */
-  readonly check?: SyntaxModule["checkContract"];
+  readonly check?: Dialect["checkContract"];
   /** The module's wording of an attribute declaration that uses a claimed key. */
-  readonly describe?: SyntaxModule["describeAttribute"];
+  readonly describe?: Dialect["describeAttribute"];
   /**
-   * Why the file's syntax module could not be resolved (a discovery scan's
+   * Why the file's dialect could not be resolved (a discovery scan's
    * `claimedFieldsOf`): raised instead of a refusal of a contract key, which
    * that module might have claimed.
    */
   readonly failure?: unknown;
 }
 
-/** What `SyntaxModule.checkContract` is handed besides the contract. @unstable */
+/** What `Dialect.checkContract` is handed besides the contract. @unstable */
 export interface ContractCheckContext {
   /**
    * A registration error in the module's words, raised where core's own
@@ -83,7 +83,7 @@ const NONE: ClaimedFields = Object.freeze({
 const byModule = new WeakMap<object, ClaimedFields>();
 
 /** The keys `module` claims (none without a module), with its `checkContract`. */
-export function claimedFields(module: SyntaxModule | undefined): ClaimedFields {
+export function claimedFields(module: Dialect | undefined): ClaimedFields {
   const fields = module?.contractFields;
   if (!module || !fields) return NONE;
   const known = byModule.get(module);
@@ -250,31 +250,31 @@ export function checkClaimedContract(
   } catch (error) {
     if (isTranslateError(error)) throw error;
     throw new TranslateError(
-      `the syntax module's \`checkContract\` threw on tag "${tag}": ${error instanceof Error ? error.message : String(error)}`,
+      `the dialect's \`checkContract\` threw on tag "${tag}": ${error instanceof Error ? error.message : String(error)}`,
       0,
       0,
     );
   }
 }
 
-/** How a file's syntax module is found; set by `syntax-table.ts` when it loads. */
-let moduleOfFile: ((filePath: string) => SyntaxModule | undefined) | undefined;
+/** How a file's dialect is found; set by `syntax-table.ts` when it loads. */
+let moduleOfFile: ((filePath: string) => Dialect | undefined) | undefined;
 
 /**
- * Registers how a file's syntax module is resolved, for the discovery scan
+ * Registers how a file's dialect is resolved, for the discovery scan
  * (`claimedFieldsOf`). `syntax-table.ts` registers `resolveSyntaxOf` as it
  * loads, so the scan does not import the syntax table (and the parser
  * behind it): `scan-cache.ts` stays loadable on its own.
  */
 export function registerSyntaxResolver(
-  resolve: (filePath: string) => SyntaxModule | undefined,
+  resolve: (filePath: string) => Dialect | undefined,
 ): void {
   moduleOfFile = resolve;
 }
 
 /**
- * The keys `filePath`'s syntax module claims (its nearest
- * `package.json#mx.syntax`), for registration in a discovery scan. When
+ * The keys `filePath`'s dialect claims (the dialect its extension routes
+ * to, decision 212), for registration in a discovery scan. When
  * that module does not resolve, nothing is claimed and the resolution error
  * rides along as `failure`: the scan raises it in place of refusing a
  * contract key the module might have claimed.

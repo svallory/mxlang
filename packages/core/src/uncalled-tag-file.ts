@@ -14,6 +14,7 @@
  */
 import { existsSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
+import { MX_DIALECT } from "./dialect-registry.ts";
 
 const TAGS_DIR = "tags";
 const TAG_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
@@ -70,7 +71,7 @@ export function uncalledTagFileMessage(
   filename: string,
   name: string,
   found: UncalledTagFile,
-  product = "MX",
+  product = MX_DIALECT.name,
 ): string {
   const shown = relative(dirname(resolve(filename)), found.file);
   return `\`<${name}>\` matches \`${shown}\`, which ${product} cannot call: ${product} calls flat \`tags/<name>.mx\` files only. Write the tag as \`tags/${name}.mx\`, or import it explicitly.`;
@@ -86,7 +87,7 @@ export function markoFileTagMessage(
   filename: string,
   name: string,
   file: string,
-  product = "MX",
+  product = MX_DIALECT.name,
 ): string {
   const shown = relative(dirname(resolve(filename)), file);
   const mx = shown.replace(/\.marko$/, ".mx");

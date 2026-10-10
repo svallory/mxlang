@@ -45,13 +45,14 @@ import { coreBabel } from "./babel.ts";
 import type { CalleeInput } from "./callee-input.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
+import { MX_DIALECT } from "./dialect-registry.ts";
 import { nearestHtmlElement, nearestName } from "./did-you-mean.ts";
 import { handleNode } from "./host-handle.ts";
 import type { Atom, Expr, IrNode, Position } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
 import { sugarAfterDefaultError } from "./stock-parser.ts";
-import type { SyntaxModule } from "./syntax-table.ts";
+import type { Dialect } from "./syntax-table.ts";
 import {
   hasTypeArguments,
   tagArgsOf,
@@ -100,7 +101,7 @@ export class TranslateError extends Error {
    */
   spans?: readonly SourceSpan[];
   /**
-   * The MX diagnostic code, when its raiser gave one: today a syntax module's
+   * The MX diagnostic code, when its raiser gave one: today a dialect's
    * `ctx.fail(message, { code })`. Core's own diagnostics gain codes in a
    * follow-up. Not `code`: Babel's convention sets that on every error a
    * translator throws (`BABEL_TRANSFORM_ERROR`). @unstable
@@ -291,7 +292,7 @@ export interface Ctx {
   /** Names `analyze` hooks declared with `ctx.declare`. */
   contractDerived?: DerivedDeclaration[];
   /**
-   * Errors core queues behind the syntax module's `afterLower` (a shape
+   * Errors core queues behind the dialect's `afterLower` (a shape
    * error on a key the module claims): raised, the first, once it ran.
    */
   deferredContractErrors?: TranslateError[];
@@ -445,12 +446,12 @@ export interface Ctx {
    */
   afterLower?: ReadonlyArray<(ctx: Ctx) => void>;
   /**
-   * The syntax module of the file being lowered (decision 182 addendum 5),
+   * The dialect of the file being lowered (decisions 182 addendum 5, 202),
    * set by the trigger pass (`lowerTriggers`) from the document's
    * registered syntax; `lowerChildList` reads its `lowerBlockTag` and
    * `lowerFilter`. Unset for a default-row file.
    */
-  syntaxModule?: SyntaxModule;
+  dialect?: Dialect;
   /** Resolved template path -> default import binding, authored or injected. */
   customTagImports?: Map<string, string>;
   /** Imports synthesized while lowering discovered template calls. */
@@ -1437,12 +1438,12 @@ function unsupportedIn(ctx: Ctx): string {
 }
 
 /**
- * The product name diagnostics use where core's own wording says "MX"
- * (decision 183); see `Ctx.productName`. The default lives here so every
- * existing message stays byte-identical when the option is unset.
+ * The language name diagnostics use (decisions 183, 212 item 10): the
+ * host's product name, else the file's dialect's `name`, else MX's own
+ * dialect declaration's; see `Ctx.productName`.
  */
 export function productOf(ctx: Ctx): string {
-  return ctx.productName ?? "MX";
+  return ctx.productName ?? MX_DIALECT.name;
 }
 
 /**

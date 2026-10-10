@@ -1,7 +1,7 @@
 # Mesh's golden parse corpus
 
 Every entity file and every `mx` doc block of Mesh, copied with attribution
-as a parse fixture for the syntax modules (decision 183 addendum 6; Mesh's
+as a parse fixture for the dialects (decision 183 addendum 6; Mesh's
 review of PR 460, F2). The test is
 `packages/core/src/ir-entry/mesh-corpus.test.ts`.
 

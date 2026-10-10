@@ -137,6 +137,39 @@ export {
   type DefaultTagScope,
   validateDefaultTag,
 } from "./default-tag-validate.ts";
+/**
+ * Dialect discovery (decision 212): a dialect package declares itself in
+ * its `package.json#mxDialect`; a project uses the dialects among its
+ * direct dependencies, and a file goes to the one that claims its
+ * extension. Tools read the extensions from here without loading a
+ * dialect's code.
+ *
+ * @unstable
+ */
+export {
+  DIALECT_MANIFEST_KEY,
+  type DialectManifest,
+  discoverDialects,
+  routeDialect,
+} from "./dialect-discovery.ts";
+/**
+ * The node-type registry (decision 202 item 3): a dialect's `nodeTypes`,
+ * keyed `dialect:Type`, with core's own MX AST types as dialect zero
+ * (`mx:Tag`, …). A trigger row naming `node: { type, dialect }` parses its
+ * text with the type's `parse` and lowers it with the type's `lower`.
+ *
+ * @unstable until the Mesh dialect has moved onto it (slice c).
+ */
+export {
+  CORE_DIALECT,
+  type DialectNode,
+  type DialectNodes,
+  MX_DIALECT,
+  type NodeKit,
+  type NodeType,
+  nodeTypeRegistry,
+  type RegisteredNodeType,
+} from "./dialect-registry.ts";
 export { nearestName } from "./did-you-mean.ts";
 export { drive, type Emitter, emit } from "./emit.ts";
 export { escape } from "./escape.ts";
@@ -264,13 +297,13 @@ export {
 export {
   type ContractCheckContext,
   type ContractFields,
+  type Dialect,
+  type DialectModule,
   defaultSyntax,
-  normalizeMxSyntax,
   resolveSyntax,
   type StandIn,
   type SyntaxBuildContext,
   type SyntaxDiagnostic,
-  type SyntaxModule,
   type SyntaxTable,
   syntaxHash,
   type Trigger,

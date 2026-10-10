@@ -306,7 +306,7 @@ export interface TagCall {
    * (decision 147): `name` is then the canonical tag.
    */
   alias?: TagAlias;
-  /** Set when a syntax module's `lowerTrigger` built the call (`ctx.child`). */
+  /** Set when a dialect's `lowerTrigger` built the call (`ctx.child`). */
   trigger?: TagTrigger;
   /** UTF-16 span of the whole call, body and closing tag included. */
   span?: SourceSpan;
@@ -1274,7 +1274,7 @@ function isMemberValue(attr: Attr): boolean {
 
 /**
  * A `type: "member"` slot (decision 182 addendum 4) takes exactly a
- * member a syntax module produced, in either form (`isMemberValue`); an
+ * member a dialect produced, in either form (`isMemberValue`); an
  * atom, a string, a bare attribute or any other expression is refused,
  * naming what was written.
  */
@@ -1772,7 +1772,7 @@ function validateAttributeTags(
 }
 
 /**
- * What a call's checks know of the file's syntax module: the keys it claims,
+ * What a call's checks know of the file's dialect: the keys it claims,
  * and where an error core queues behind the module's `afterLower` goes.
  */
 export interface ClaimContext {
@@ -1804,7 +1804,7 @@ function expectationOf(
 }
 
 /**
- * Queues an error behind the syntax module's `afterLower` (`ClaimContext`):
+ * Queues an error behind the dialect's `afterLower` (`ClaimContext`):
  * the first is raised once that hook has run without failing.
  */
 export function raiseDeferredContractErrors(ctx: Ctx): void {
@@ -2115,7 +2115,7 @@ export function rejectUnknownDeclarationKeys(
       }
     }
     rejectNonStringDefaultTag(`\`<${tagName}>\``, definition);
-    // A key the file's syntax module claims is its data, not core's to
+    // A key the file's dialect claims is its data, not core's to
     // check: the module's `checkContract` checks it here, at registration.
     if (!claimed.tag.has("declares"))
       rejectInvalidDeclares(tagName, definition);
@@ -2723,7 +2723,7 @@ export function transformCustomTag(
   }
 
   validateCustomTagCall(definition, call, (offset) => positionAt(ctx, offset), {
-    claimed: claimedFields(ctx.syntaxModule),
+    claimed: claimedFields(ctx.dialect),
     defer: (error) => {
       ctx.deferredContractErrors ??= [];
       ctx.deferredContractErrors.push(error);

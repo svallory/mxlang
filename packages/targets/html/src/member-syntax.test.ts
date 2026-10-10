@@ -1,11 +1,18 @@
 /**
- * A layer-2 syntax module on an emitting target (decision 182 addendum 5;
+ * A layer-2 dialect on an emitting target (decision 182 addendum 5;
  * review 451 r1 BLOCKING 2): a lowered trigger's replacement is spliced into
  * the expression's code as an atom is, so the html target emits
  * `self.status`, never the authored `&status`. The module is core's
- * test-only member module, named by a temp manifest's `mx.syntax`.
+ * test-only member dialect, the module of a dialect package the temp project
+ * depends on (decision 212), which claims `.mesh`.
  */
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import ts from "typescript";
@@ -17,9 +24,26 @@ const MODULE = join(import.meta.dirname, "../../../core/src/syntax/member.ts");
 let dir: string;
 beforeAll(() => {
   dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-html-member-")));
+  const dialect = join(dir, "node_modules", "member-dialect");
+  mkdirSync(dialect, { recursive: true });
+  writeFileSync(
+    join(dialect, "package.json"),
+    JSON.stringify({
+      name: "member-dialect",
+      mxDialect: {
+        id: "member",
+        name: "Mesh",
+        extensions: [".mesh"],
+        module: MODULE,
+      },
+    }),
+  );
   writeFileSync(
     join(dir, "package.json"),
-    JSON.stringify({ name: "app", mx: { syntax: MODULE } }),
+    JSON.stringify({
+      name: "app",
+      devDependencies: { "member-dialect": "0.0.0" },
+    }),
   );
 });
 afterAll(() => {
@@ -44,7 +68,7 @@ describe("a member trigger on the html target", () => {
     ["<p>${&a + 1}</p>\n", "self.a + 1"],
     ['<p title=(&a === :sent ? "y" : "n")/>\n', 'self.a === "sent"'],
   ])("%j emits valid TypeScript with %j", (source, expected) => {
-    const { code } = compile(source, join(dir, "page.mx"));
+    const { code } = compile(source, join(dir, "page.mesh"));
     expect(code).toContain(expected);
     expect(code).not.toMatch(/&(status|a)\b/);
     expect(syntaxErrors(code)).toEqual([]);

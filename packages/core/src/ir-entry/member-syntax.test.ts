@@ -2,42 +2,40 @@
  * The `&` member shapes through `lowerSource` (decision 182 addenda 4 and 5;
  * `notes/mesh/language-extensions-for-mesh.md` updates 03:10, 03:40, 03:42)
  * with core's test-only member module (`../syntax/member.ts`, which Mesh
- * copies) loaded two ways: a temp manifest naming it in `mx.syntax`, and the
- * `syntax` option. Then the cases that must not be members, and the
+ * copies) loaded two ways: a dialect package naming it in `mxDialect.module`, and
+ * the `dialect` option. Then the cases that must not be members, and the
  * `"member"` contract type's acceptance matrix. Core's `triggers.test.ts`
  * pins the same module through `compileSource`; these pin what the entry
  * point hands a consumer, since its options (`unknownTags`, `customTags`,
- * `syntax`) change the path.
+ * `dialect`) change the path.
  */
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { CustomTag } from "../custom-tags.ts";
 import type { Attr, DelegatedTag } from "../ir.ts";
-import type { SyntaxModule } from "../syntax-table.ts";
+import type { Dialect } from "../syntax-table.ts";
 import {
   type LowerSourceOptions,
   lowerSource,
   type Spanned,
   type SpannedIr,
 } from "./index.ts";
+import { dialectPackage } from "./test-dialect-package.ts";
 
 const MODULE = join(import.meta.dirname, "../syntax/member.ts");
 
-/** Loaded the way a manifest loads it (Node's strip-only `require`). */
+/** Loaded the way a dialect package's module loads (Node's strip-only `require`). */
 const memberSyntax = (
-  createRequire(import.meta.url)(MODULE) as { default: SyntaxModule }
+  createRequire(import.meta.url)(MODULE) as { default: Dialect }
 ).default;
 
 let dir: string;
 beforeAll(() => {
   dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-member-")));
-  writeFileSync(
-    join(dir, "package.json"),
-    JSON.stringify({ name: "mesh-app", mx: { syntax: MODULE } }),
-  );
+  dialectPackage(dir, MODULE, { id: "member", name: "Mesh" });
 });
 afterAll(() => {
   rmSync(dir, { recursive: true, force: true });
@@ -45,8 +43,8 @@ afterAll(() => {
 
 /** The two ways a consumer loads the module. */
 const LOADERS: [string, () => [string, LowerSourceOptions]][] = [
-  ["a manifest naming the module", () => [join(dir, "entity.mx"), {}]],
-  ["the `syntax` option", () => ["/v/entity.mx", { syntax: memberSyntax }]],
+  ["a dialect package", () => [join(dir, "entity.mesh"), {}]],
+  ["the `dialect` option", () => ["/v/entity.mx", { dialect: memberSyntax }]],
 ];
 
 type SpannedTag = Spanned<DelegatedTag>;
@@ -241,7 +239,7 @@ describe.each(LOADERS)("the five Mesh cases, via %s", (_, load) => {
 
 describe("what is not a member", () => {
   const parse = (source: string) =>
-    lowerSource(source, "/v/entity.mx", { syntax: memberSyntax });
+    lowerSource(source, "/v/entity.mx", { dialect: memberSyntax });
 
   it.each([
     ["`&&`", "rule x=(a && b)\n", "LogicalExpression"],
@@ -383,7 +381,7 @@ describe('the `"member"` contract type (decision 182 addendum 4)', () => {
   });
   const run = (type: "member" | "atom" | "expression", value: string) =>
     lowerSource(`sort ${value}\n`, "/v/entity.mx", {
-      syntax: {
+      dialect: {
         ...memberSyntax,
         // The member lands in the declared slot.
         lowerTrigger: (_id, text, span, ctx) =>
@@ -423,7 +421,7 @@ describe('the `"member"` contract type (decision 182 addendum 4)', () => {
     "`%s` stays atom-only",
     (key) => {
       const result = lowerSource("sort &a\n", "/v/entity.mx", {
-        syntax: memberSyntax,
+        dialect: memberSyntax,
         customTags: {
           sort: {
             attributes: {
@@ -447,7 +445,7 @@ describe("the unknown-tag scan takes the module too (PR 450's parseMxDocument)",
   it("after a lowering error, the scan still finds an unknown tag beside members", () => {
     // The scan runs only when lowering fails (`asc=1` against a boolean).
     const result = lowerSource("sort &a asc=1\nfoo\n", "/v/entity.mx", {
-      syntax: memberSyntax,
+      dialect: memberSyntax,
       unknownTags: "reject",
       customTags: {
         sort: {
@@ -464,7 +462,7 @@ describe("the unknown-tag scan takes the module too (PR 450's parseMxDocument)",
 
 describe("Mesh review of PR 451 (M1, M4, M5, one member per slot)", () => {
   const parse = (source: string, options: LowerSourceOptions = {}) =>
-    lowerSource(source, "/v/entity.mx", { syntax: memberSyntax, ...options });
+    lowerSource(source, "/v/entity.mx", { dialect: memberSyntax, ...options });
   const codeOf = (source: string, pick: (tag: SpannedTag) => unknown) => {
     const result = parse(source);
     expect(result.diagnostics).toEqual([]);

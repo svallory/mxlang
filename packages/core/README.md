@@ -16,9 +16,8 @@ its own front end (the MX AST), lowers the structural forms into an IR, and asks
 Marko is the default syntax, not the parser: no template is parsed with
 `@marko/compiler`, and a `.marko` file is not an input. Where MX has no ruling of
 its own the answer is Marko's, and every difference is listed in
-`divergences.md` in the repository. A project can change the syntax with a
-syntax table or a syntax module (`package.json#mx.syntax`; see "A reference
-syntax module" below).
+`divergences.md` in the repository. A dialect package can change the syntax
+for the file extensions it claims (see "Dialects" below).
 
 The only runtime dependency is `@babel/parser`. The published bundle inlines the
 MX front end and a copy of the Marko compiler core uses for taglib lookup and
@@ -484,44 +483,142 @@ to route the call to the adjacent template unit; `ctx.build.template(call)`
 does the same. A sidecar with `attributes`/`parseOptions` and no `transform`
 routes the call to the template as an L1-only tag does, now validated.
 
-## A reference syntax module: `@mxlang/core/syntax/member`
+## Dialects
 
-Core ships one syntax module as a reference for extension authors: Mesh's `&`
+A dialect is a package (decision 212). It declares itself in its own
+`package.json`, under `mxDialect`:
+
+```json
+{
+  "name": "@acme/mesh",
+  "mxDialect": {
+    "id": "mesh",
+    "name": "Mesh",
+    "extensions": [".mesh", ".mesh.mx"],
+    "module": "./dialect.js"
+  }
+}
+```
+
+`id` is lower-case words joined by `-` (never `mx`, MX's own); `name` is what
+tooling calls the dialect, and core's diagnostics on its files say it where
+they would say "MX"; `extensions` are the extensions it claims (never `.mx`);
+`module` is the path to the module whose default export is the dialect:
+`{ table, … }`, a syntax table overlaid on the `.mx` default row, plus
+optional hooks (`lowerTrigger`, `lowerBlockTag`, `lowerFilter`, `afterLower`,
+the contract hooks below), a `tagRules` preset (`html` when it states none)
+and `nodeTypes`. Core stamps the manifest's `id` and `name` on it; the module
+may leave them out (`DialectModule`).
+
+A project uses a dialect by depending on it. Core reads the direct
+dependencies of a file's nearest `package.json` (all four dependency fields),
+statically, and routes the file to the dialect that claims the longest
+extension its name ends with. Every other file, `.mx` included, parses with
+MX's default row. Two dialects claiming one extension is an error naming
+both; the project settles it with `mx.extensions`:
+
+```json
+{ "mx": { "extensions": { ".mesh": "mesh" } } }
+```
+
+A malformed manifest is an error at its field, in the dialect's
+`package.json`; a `module` that cannot be resolved, at `mxDialect.module`. A
+problem in the dialect itself is an error in the module file. `mx.syntax` is
+removed. `discoverDialects(projectFile)` lists a project's dialects without
+loading any code, and `routeDialect(file)` says which one a file goes to.
+`compileSource`, `parseFragment` and `lowerSource` also take a `dialect` option
+(a dialect with its `id` and `name`, or a bare table), which wins over
+routing.
+
+### Node types (`@unstable`)
+
+A dialect can register its own node types, keyed `id:Type` in one registry
+with core's own (core is dialect zero, `mx`: `mx:Tag`, `mx:Attribute`, …). A
+trigger row names one with `node: { type, dialect }`, in an attribute list
+or on a tagless line. The row's `match` decides where the node ends. Core
+hands the matched text to the type's `parse`, stamps the result with `type`
+and `span`, then calls the type's `lower` with the same `ctx` constructors
+`lowerTrigger` gets:
+
+```ts
+import type { Dialect, DialectNode, NodeType } from "@mxlang/core";
+
+interface Ref extends DialectNode {
+  readonly path: readonly string[];
+}
+
+const Ref: NodeType<Ref> = {
+  keys: [],
+  parse: (text, _span, kit) => {
+    const path = text.slice(1).split(".");
+    if (path.includes("")) kit.fail("empty segment");
+    return { path };
+  },
+  print: (node) => `~${node.path.join(".")}`,
+  lower: (node, ctx) =>
+    ctx.attribute("ref", { kind: "node", node, value: node.path.join(".") }),
+};
+
+const REF = {
+  id: "ref",
+  chars: "~",
+  match: "~[a-z]+(?:\\.[a-z]+)*",
+  standIn: "identifier",
+  node: { type: "Ref", dialect: "ref" },
+} as const;
+
+export default {
+  id: "ref",
+  name: "Ref",
+  table: { attributeTriggers: [REF], lineTriggers: [REF] },
+  nodeTypes: { Ref },
+} satisfies Dialect;
+```
+
+`print(parse(text))` gives the text back. An attribute built with
+`{ kind: "node", node, value }` is a static attribute whose IR carries the
+node (`Attr.node`) beside the `value` every target emits. A row may only name
+a type its own dialect registers.
+
+## A reference dialect: `@mxlang/core/syntax/member`
+
+Core ships one dialect as a reference for extension authors: Mesh's `&`
 member sigil (`&status` in an expression, `sort asc &dueOn` in an attribute
 list, `&title` on a tagless line). It is not a host and core knows no
-"member"; it is built on the public hook API only (`SyntaxModule`, `Trigger`
+"member"; it is built on the public hook API only (`Dialect`, `Trigger`
 and the `lowerTrigger` context), so it doubles as a worked example of all
 three trigger positions. A tag built from a tagless line carries
 `trigger: { id, span, text }`; an authored `<member>` does not.
 
-Use it as is, as the `syntax` option or through `package.json#mx.syntax`:
+Use it as is, as the `dialect` option or as the `module` of a dialect package:
 
 ```ts
 import { lowerSource } from "@mxlang/core";
 import memberSyntax from "@mxlang/core/syntax/member";
 
-const result = lowerSource(source, file, { syntax: memberSyntax });
+const result = lowerSource(source, file, { dialect: memberSyntax });
 ```
 
 or copy `dist/syntax/member.js` from the package (or the source, `packages/core/src/syntax/member.ts` in the mxlang repo) into your project and rename it. The sigil
-(`chars` and `match`), the row `id` (`member` here; `productName` in a
-product's own copy), the `self` receiver and the child tag name are that
+(`chars` and `match`), the dialect's `id` and `name` (`member` and `Mesh`
+here), the row `id`, the `self` receiver and the child tag name are that
 file's choices. In the source, change its one type import from `../index.ts` to
-`@mxlang/core`; edit the row, and point `mx.syntax` at your copy. It loads
+`@mxlang/core`; edit the row, and name your copy as the `module` of your
+dialect package's `mxDialect`. It loads
 through Node's strip-only `require`: types-only imports, no enums or
 parameter properties.
 
-## Atoms and name sugars as a syntax module: `@mxlang/core/syntax/atoms-sugars` and `@mxlang/core/syntax/mesh`
+## Atoms and name sugars as a dialect: `@mxlang/core/syntax/atoms-sugars` and `@mxlang/core/syntax/mesh`
 
 Decisions 183 and 196 take atoms (`:name` values, decision 156) and the
 name sugars (`:name` setting `name`, spaced `#id` and `.class`, decision
 146) out of core's grammar before the beta. `@mxlang/core/syntax/atoms-sugars`
-is the reference module that carries them as layer-2 triggers on the public
-hook API only; `@mxlang/core/syntax/mesh` combines it with the member module
-(the shape Mesh copies as its own module). Until the move lands, core still
+is the reference dialect that carries them as layer-2 triggers on the public
+hook API only; `@mxlang/core/syntax/mesh` combines it with the member dialect
+(the shape Mesh copies as its own dialect). Until the move lands, core still
 handles them itself on the `.mx` default row; a loaded row on a character
 (`:` in an expression, `:`, `#` or `.` in an attribute list) replaces core's
-built-in handling of that character. What the module reads differently from
+built-in handling of that character. What the dialect reads differently from
 the built-in path is the list in `scripts/sugar-module/deltas.json`, each
 entry naming its ruling (`#x=1` refused, decision 183, among them).
 
@@ -529,13 +626,13 @@ entry naming its ruling (`#x=1` refused, decision 183, among them).
 import { lowerSource } from "@mxlang/core";
 import meshSyntax from "@mxlang/core/syntax/mesh";
 
-const result = lowerSource(source, file, { syntax: meshSyntax });
+const result = lowerSource(source, file, { dialect: meshSyntax });
 ```
 
-Copy it the way the member module is copied (its type imports from
+Copy it the way the member dialect is copied (its type imports from
 `../index.ts` become `@mxlang/core`; `mesh.ts` also imports its two siblings).
 
-**Lifetime** (decision 183 addendum 6): both modules are exported, `@unstable`,
+**Lifetime** (decision 183 addendum 6): both dialects are exported, `@unstable`,
 through the beta, as reference material rather than a host's API. Mesh vendors
 them at the alpha.15 pin and owns its copy from then on. `atom`, `name` and
 `member` are Mesh's forms; `id` and `class` are kept for parity with the
@@ -544,17 +641,17 @@ golden corpus here (`src/fixtures/syntax/mesh-corpus/`, its README, and
 `src/ir-entry/mesh-corpus.test.ts`); the deletion of the built-ins
 (slice c) must pass it unchanged.
 
-### Contract checks in a module: `contractFields`, `checkContract` and `afterLower(unit)`
+### Contract checks in a dialect: `contractFields`, `checkContract` and `afterLower(unit)`
 
 The atom contract keys (an attribute's `values`, `pattern` and `ref`, a
-tag's `declares`) are checked by the atoms module too, not by core, once the
-module is loaded. Three `@unstable` parts of `SyntaxModule` carry this, and
+tag's `declares`) are checked by the atoms dialect too, not by core, once the
+dialect is loaded. Three `@unstable` parts of `Dialect` carry this, and
 none names atoms:
 
 - `contractFields: { attribute?: string[], tag?: string[] }` lists the
-  contract keys the module owns. Core accepts a listed key at registration
+  contract keys the dialect owns. Core accepts a listed key at registration
   as opaque data, in `customTags`, `mx.contracts` and tag sidecars alike, and
-  never checks it. A key that no core rule knows and no module lists is
+  never checks it. A key that no core rule knows and no dialect lists is
   still a registration error. Of core's own keys only those four can be
   listed. Claims are per key and independent. Core keeps the whole-value
   shape check (`type: "atom"` or `"member"`) and `ctx.declare` in
@@ -567,7 +664,7 @@ none names atoms:
   module at 1:0, or with no position for the `customTags` option.
 - `describeAttribute(declaration)` words what a declaration that uses a
   listed key accepts, for core's shape error (`" (one of :a, :b)"`).
-- Contract data handed to a module is a deep-frozen copy; an expression's
+- Contract data handed to a dialect is a deep-frozen copy; an expression's
   `node` is core's live node, read-only by contract.
 - `afterLower(unit)` runs once per unit, after core's own checks. `unit` is
   a frozen `LoweredUnit`:
@@ -579,9 +676,9 @@ none names atoms:
   - `fail(message, { at?, code?, also? })` and `warn(message, at?)`.
 
 ```ts
-import type { LoweredUnit, SyntaxModule } from "@mxlang/core";
+import type { Dialect, LoweredUnit } from "@mxlang/core";
 
-const checks: Partial<SyntaxModule> = {
+const checks: Partial<Dialect> = {
   contractFields: { attribute: ["unique"] },
   afterLower(unit: LoweredUnit) {
     for (const call of unit.calls) {
@@ -601,18 +698,18 @@ const checks: Partial<SyntaxModule> = {
 };
 ```
 
-The atoms module's diagnostics are core's built-in ones, word for word and
+The atoms dialect's diagnostics are core's built-in ones, word for word and
 at the same positions: shape problems from its `checkContract`, uses from
 its `afterLower`.
 
-Which module claims the keys follows the file's syntax. A discovery scan
-(`tags/`, `mx.tags`, `mx.contracts`) reads the nearest
-`package.json#mx.syntax`; it cannot see an explicit `syntax` option. So a
-scanned contract that uses a key only the option's module claims is refused
+Which dialect claims the keys follows the file's syntax. A discovery scan
+(`tags/`, `mx.tags`, `mx.contracts`) reads the dialect the file's extension
+routes it to; it cannot see an explicit `dialect` option. So a
+scanned contract that uses a key only the option's dialect claims is refused
 at the scan, positioned in the sidecar or the contracts module. Contracts
 passed as `customTags` follow the explicit option. One thing is the built-in path's only: completion
 facts (`CompileResult.atomFacts`, `atomCandidates`) are empty for a unit
-whose module takes over the atom keys.
+whose dialect takes over the atom keys.
 
 ## Host-policy resolution
 

@@ -1,5 +1,5 @@
 /**
- * `@mxlang/core/syntax/atoms-sugars` (@unstable): a reference syntax module
+ * `@mxlang/core/syntax/atoms-sugars` (@unstable): a reference dialect
  * (lang-ext-move-sugars-to-mesh, slice a1; decisions 183 and 196): MX's
  * atoms (decision 156) and name sugars (decision 146) as layer-2 triggers,
  * reproducing what core does for them today.
@@ -32,8 +32,8 @@
  *
  * Its messages are the user's: they quote no MX decision numbers.
  *
- * Self-contained: it imports types only, so a manifest's `mx.syntax` can
- * `require` it, and Mesh can copy it (`mesh.ts` combines it with the
+ * Self-contained: it imports types only, so a dialect package's
+ * `mxDialect.module` can name it, and Mesh can copy it (`mesh.ts` combines it with the
  * member module).
  */
 import type {
@@ -43,9 +43,9 @@ import type {
   ContractCheckContext,
   ContractData,
   ContractFields,
+  Dialect,
   LoweredUnit,
   SourceSpan,
-  SyntaxModule,
   Trigger,
   TriggerAttribute,
   TriggerContext,
@@ -1010,6 +1010,8 @@ function checkAtomContracts(unit: LoweredUnit): void {
 }
 
 const atomsSugars = {
+  id: "atoms-sugars",
+  name: "MX",
   table: Object.freeze({
     expressionTriggers: Object.freeze([ATOM]),
     attributeTriggers: Object.freeze([NAME_SUGAR, ID_SUGAR, CLASS_SUGAR]),
@@ -1028,6 +1030,6 @@ const atomsSugars = {
   checkContract,
   describeAttribute,
   afterLower: checkAtomContracts,
-} satisfies SyntaxModule;
+} satisfies Dialect;
 
-export default Object.freeze(atomsSugars) as SyntaxModule;
+export default Object.freeze(atomsSugars) as Dialect;

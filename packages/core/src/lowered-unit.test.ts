@@ -9,8 +9,9 @@
  *   ancestors and their scope identity, `declared`, frozen.
  * - `fail` and `warn`.
  * - `contractFields`: shape, registration acceptance and refusal, takeover
- *   (core stops checking a claimed key), through the `syntax` option, a
- *   manifest's `mx.syntax`, `mx.contracts` and a sidecar.
+ *   (core stops checking a claimed key), through the `dialect` option, a
+ *   dialect package that claims the file's extension, `mx.contracts` and a
+ *   sidecar.
  */
 import {
   mkdirSync,
@@ -34,10 +35,11 @@ import type { ContractAttr, LoweredUnit } from "./lowered-unit.ts";
 import { scanCustomTags } from "./scan.ts";
 import meshSyntax from "./syntax/mesh.ts";
 import {
+  type Dialect,
   defaultSyntax,
   resolveSyntaxOf,
-  type SyntaxModule,
 } from "./syntax-table.ts";
+import { dialectProject } from "./test-dialect-project.ts";
 import { testTargetLookup } from "./test-targets.ts";
 
 const targets = testTargetLookup();
@@ -53,7 +55,7 @@ const host: HostDeclarations = {
   attrTags: 2,
 };
 
-type Syntax = SyntaxModule | ReturnType<typeof defaultSyntax>;
+type Syntax = Dialect | ReturnType<typeof defaultSyntax>;
 
 function compile(
   source: string,
@@ -66,7 +68,7 @@ function compile(
     customTags,
     tagDiscoveryDirs: [],
     warnings: options.warnings ?? [],
-    syntax,
+    dialect: syntax,
     emitIr: () => "",
   });
 }
@@ -482,7 +484,7 @@ describe("completion facts are core's built-in path only (lead 14:29)", () => {
 function unitOf(
   source: string,
   customTags: Record<string, CustomTag>,
-  fields: SyntaxModule["contractFields"] = { tag: ["relations"] },
+  fields: Dialect["contractFields"] = { tag: ["relations"] },
 ): LoweredUnit {
   let seen: LoweredUnit | undefined;
   compile(source, customTags, {
@@ -709,20 +711,20 @@ describe("`unit.fail` and `unit.warn`", () => {
     [{ sourceStart: 3, sourceEnd: 1 }],
   ])("refuses an `at` outside the document (%o)", (at) => {
     expect(failing((unit) => unit.fail("x", { at })).message).toBe(
-      "the syntax module's `afterLower`: `unit.fail`'s `at` is a `{ sourceStart, sourceEnd }` span inside the document (0 to 9)",
+      "the dialect's `afterLower`: `unit.fail`'s `at` is a `{ sourceStart, sourceEnd }` span inside the document (0 to 9)",
     );
     expect(
       failing((unit) =>
         unit.fail("x", { also: [{ sourceStart: 0, sourceEnd: 1 }, at] }),
       ).message,
     ).toBe(
-      "the syntax module's `afterLower`: each of `unit.fail`'s `also` is a `{ sourceStart, sourceEnd }` span inside the document (0 to 9)",
+      "the dialect's `afterLower`: each of `unit.fail`'s `also` is a `{ sourceStart, sourceEnd }` span inside the document (0 to 9)",
     );
   });
 
   it("refuses an empty message", () => {
     expect(failing((unit) => unit.fail("")).message).toBe(
-      "the syntax module's `afterLower`: `unit.fail` takes a non-empty message",
+      "the dialect's `afterLower`: `unit.fail` takes a non-empty message",
     );
   });
 
@@ -757,7 +759,9 @@ const CLAIMS = Array.from({ length: 16 }, (_, bits) => {
 });
 
 describe("review 466 r1: core keeps its checks beside a module's claims", () => {
-  const claimOnly = (fields = CLAIMS[15]): SyntaxModule => ({
+  const claimOnly = (fields = CLAIMS[15]): Dialect => ({
+    id: "test",
+    name: "MX",
     table: {},
     contractFields: fields,
   });
@@ -777,8 +781,7 @@ describe("review 466 r1: core keeps its checks beside a module's claims", () => 
     // The same with mesh's hooks but no `afterLower`: worded by the module.
     const { afterLower: _, ...noAfterLower } = meshSyntax;
     expect(
-      caught(() => compile(source, vocab, noAfterLower as SyntaxModule))
-        .message,
+      caught(() => compile(source, vocab, noAfterLower as Dialect)).message,
     ).toBe(
       "`<link>`: attribute `to` must be atom, got string (a declared node)",
     );
@@ -850,33 +853,38 @@ describe("review 466 r1: core keeps its checks beside a module's claims", () => 
 
 describe("`contractFields`", () => {
   const claiming = (
-    fields: SyntaxModule["contractFields"],
-    afterLower?: SyntaxModule["afterLower"],
-  ): SyntaxModule => ({
+    fields: Dialect["contractFields"],
+    afterLower?: Dialect["afterLower"],
+  ): Dialect => ({
+    id: "test",
+    name: "MX",
     table: {},
     contractFields: fields,
     ...(afterLower ? { afterLower } : {}),
   });
 
   it.each([
-    [[], "`syntax.contractFields` must be an object"],
-    [{ attr: [] }, "`syntax.contractFields.attr` is not a contract field list"],
+    [[], "`dialect.contractFields` must be an object"],
+    [
+      { attr: [] },
+      "`dialect.contractFields.attr` is not a contract field list",
+    ],
     [
       { tag: [""] },
-      "`syntax.contractFields.tag` must be an array of non-empty",
+      "`dialect.contractFields.tag` must be an array of non-empty",
     ],
     [
       { attribute: "values" },
-      "`syntax.contractFields.attribute` must be an array",
+      "`dialect.contractFields.attribute` must be an array",
     ],
     [{ attribute: ["type"] }, "cannot claim `type`: core checks it"],
     [{ tag: ["children"] }, "cannot claim `children`: core checks it"],
   ])("refuses the shape %o", (fields, message) => {
     const error = caught(() =>
-      compile("<x/>", {}, claiming(fields as SyntaxModule["contractFields"])),
+      compile("<x/>", {}, claiming(fields as Dialect["contractFields"])),
     );
     expect(error.message).toContain(
-      "the `syntax` option is not a valid syntax module: ",
+      "the `dialect` option is not a valid dialect: ",
     );
     expect(error.message).toContain(message);
   });
@@ -955,7 +963,7 @@ describe("`contractFields`", () => {
     ).toBe("`<box>`: attribute `mode` must be atom, got string");
     // The module words it (`describeAttribute`), from a frozen copy.
     const seen: unknown[] = [];
-    const describing: SyntaxModule = {
+    const describing: Dialect = {
       ...claimed,
       describeAttribute: (declaration) => {
         seen.push(Object.isFrozen(declaration), declaration.values);
@@ -1003,6 +1011,8 @@ describe("`checkContract`", () => {
   it("runs at registration for each contract that uses a claimed key, at any depth, called or not", () => {
     const seen: unknown[] = [];
     compile("<div/>", tags, {
+      id: "test",
+      name: "MX",
       table: {},
       contractFields: { attribute: ["facet"], tag: ["relations"] },
       checkContract: (tag, contract) => {
@@ -1025,6 +1035,8 @@ describe("`checkContract`", () => {
       "<div/>",
       { box: { children } as unknown as CustomTag },
       {
+        id: "test",
+        name: "MX",
         table: {},
         contractFields: { attribute: ["facet"] },
         checkContract: (_, contract) => {
@@ -1040,9 +1052,11 @@ describe("`checkContract`", () => {
   });
 
   it("`ctx.fail` is a registration error carrying `code`; a throw is named", () => {
-    const failing = (check: SyntaxModule["checkContract"]) =>
+    const failing = (check: Dialect["checkContract"]) =>
       caught(() =>
         compile("<div/>", tags, {
+          id: "test",
+          name: "MX",
           table: {},
           contractFields: { attribute: ["facet"] },
           checkContract: check,
@@ -1058,7 +1072,7 @@ describe("`checkContract`", () => {
       failing(() => {
         throw new Error("boom");
       }).message,
-    ).toBe('the syntax module\'s `checkContract` threw on tag "used": boom');
+    ).toBe('the dialect\'s `checkContract` threw on tag "used": boom');
   });
 
   it("must be a function", () => {
@@ -1068,12 +1082,14 @@ describe("`checkContract`", () => {
           "<div/>",
           {},
           {
+            id: "test",
+            name: "MX",
             table: {},
             checkContract: 1 as never,
           },
         ),
       ).message,
-    ).toContain("`syntax.checkContract` must be a function");
+    ).toContain("`dialect.checkContract` must be a function");
   });
 });
 
@@ -1086,22 +1102,47 @@ describe("`contractFields` through a manifest", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
+  /**
+   * A project in `root` holding `files`. With `dialect`, it depends on a
+   * dialect package claiming `.mesh`, whose module is the reference Mesh
+   * dialect (`true`) or the given source, and the page is a `.mesh` file;
+   * without, the page is a `.mx` file.
+   */
   function project(
     mx: Record<string, unknown>,
     files: Record<string, string>,
     root = dir,
+    dialect?: true | string,
   ) {
     mkdirSync(root, { recursive: true });
-    writeFileSync(
-      join(root, "package.json"),
-      JSON.stringify({ name: "x", mx }, null, 2),
-    );
     for (const [path, text] of Object.entries(files)) {
       mkdirSync(join(root, path, ".."), { recursive: true });
       writeFileSync(join(root, path), text);
     }
-    return join(root, "page.mx");
+    if (dialect === undefined) {
+      writeFileSync(
+        join(root, "package.json"),
+        JSON.stringify({ name: "x", mx }, null, 2),
+      );
+      return join(root, "page.mx");
+    }
+    dialectProject(root, {
+      packageName: "mesh-dialect",
+      manifest: {
+        id: "mesh",
+        name: "Mesh",
+        extensions: [".mesh"],
+        ...(dialect === true ? { module: MESH_MODULE } : {}),
+      },
+      ...(dialect === true ? {} : { module: dialect }),
+      mx,
+    });
+    return join(root, "page.mesh");
   }
+
+  /** The module file of a dialect `project` wrote from source. */
+  const dialectModule = (root = dir) =>
+    join(root, "node_modules", "mesh-dialect", "index.mjs");
 
   /** Scans and compiles `page` as a host does, the syntax from its manifest. */
   function build(page: string, source: string) {
@@ -1115,7 +1156,6 @@ describe("`contractFields` through a manifest", () => {
     });
   }
 
-  const SYNTAX = `export { default } from ${JSON.stringify(MESH_MODULE)};\n`;
   const CONTRACTS = `export default {
   node: { attributes: { id: {} }, declares: { kind: "node", from: "id" } },
   link: { attributes: { to: { type: "atom", ref: "node" } } },
@@ -1133,10 +1173,12 @@ describe("`contractFields` through a manifest", () => {
     );
   });
 
-  it("`mx.syntax` claims it: `mx.contracts` carries `declares` to the module", () => {
+  it("the file's dialect claims it: `mx.contracts` carries `declares` to the dialect", () => {
     const page = project(
-      { syntax: "./syntax.ts", contracts: "./contracts.ts" },
-      { "syntax.ts": SYNTAX, "contracts.ts": CONTRACTS },
+      { contracts: "./contracts.ts" },
+      { "contracts.ts": CONTRACTS },
+      dir,
+      true,
     );
     expect(() => build(page, "<node#a/><link to=:a/>")).not.toThrow();
     expect(caught(() => build(page, "<node#a/><link to=:b/>")).message).toBe(
@@ -1144,14 +1186,15 @@ describe("`contractFields` through a manifest", () => {
     );
   });
 
-  it("a sidecar's claimed keys reach the module", () => {
+  it("a sidecar's claimed keys reach the dialect", () => {
     const page = project(
-      { syntax: "./syntax.ts" },
+      {},
       {
-        "syntax.ts": SYNTAX,
         "tags/node.tag.ts": `export default { attributes: { id: {} }, declares: { kind: "node", from: "id" } };\n`,
         "tags/link.tag.ts": `export default { attributes: { to: { type: "atom", ref: "node" } } };\n`,
       },
+      dir,
+      true,
     );
     expect(
       caught(() => build(page, "<node#alpha/><link to=:alpah/>")).message,
@@ -1162,16 +1205,17 @@ describe("`contractFields` through a manifest", () => {
 
   /**
    * The registration error of `files` on a page that calls none of its
-   * tags: built-in (no `mx.syntax`) and through the module, each project
-   * in its own directory. `file` is relative to the project.
+   * tags: built-in (a `.mx` page) and through the dialect (a `.mesh` page),
+   * each project in its own directory. `file` is relative to the project.
    */
   function placed(files: Record<string, string>, mx = {}) {
     return ["builtin", "module"].map((name) => {
       const root = join(dir, name);
       const page = project(
-        name === "module" ? { ...mx, syntax: "./syntax.ts" } : mx,
-        name === "module" ? { ...files, "syntax.ts": SYNTAX } : files,
+        mx,
+        files,
         root,
+        name === "module" ? true : undefined,
       );
       const error = caught(() => build(page, "<div/>"));
       return {
@@ -1221,11 +1265,12 @@ describe("`contractFields` through a manifest", () => {
 
   it("an `mx.contracts` module's malformed `declares` (claimed) points at the module file", () => {
     const page = project(
-      { syntax: "./syntax.ts", contracts: "./contracts.ts" },
+      { contracts: "./contracts.ts" },
       {
-        "syntax.ts": SYNTAX,
         "contracts.ts": `export default { box: { declares: { kind: "k", from: "nope" } } };\n`,
       },
+      dir,
+      true,
     );
     const error = caught(() => build(page, "<div/>"));
     expect(error.message).toBe(
@@ -1242,18 +1287,19 @@ describe("`contractFields` through a manifest", () => {
     ["throws on load", "throw new Error('broken syntax');\n"],
     ["has no `table`", "export default { lowerTrigger() {} };\n"],
   ])(
-    "L2: a syntax module that %s is the error, not a contract key it might claim",
+    "L2: a dialect that %s is the error, not a contract key it might claim",
     (_, body) => {
       const page = project(
-        { syntax: "./syntax.ts", contracts: "./contracts.ts" },
+        { contracts: "./contracts.ts" },
         {
-          "syntax.ts": body,
           "contracts.ts": CONTRACTS,
           "tags/box.tag.ts": `export default { attributes: { a: { type: "string", values: ["a"] } } };\n`,
         },
+        dir,
+        body,
       );
       const expected = caught(() => resolveSyntaxOf(page));
-      expect(expected.file).toBe(join(dir, "syntax.ts"));
+      expect(expected.file).toBe(dialectModule());
       for (const run of [
         () => build(page, "<div/>"),
         () => scanCustomTags(page, { targets, stopAt: dir }),

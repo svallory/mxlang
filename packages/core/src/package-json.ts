@@ -90,6 +90,56 @@ export function positionOfOffset(
 }
 
 /**
+ * The position of the key at `path` in a JSON text (`["mx", "contracts"]`,
+ * `["mxDialect", "id"]`): the key itself, not a string or a nested decoy
+ * with the same name. `1:0` when it is not there. The text need not parse:
+ * the walk reads tokens, so a broken revision still positions what it can.
+ */
+export function jsonKeyPosition(
+  text: string,
+  path: readonly string[],
+): { line: number; column: number } {
+  const tokens = [
+    ...text.matchAll(
+      /"(?:\\.|[^"\\])*"|[{}[\]:,]|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null/g,
+    ),
+  ];
+  const target = path.join("\0");
+  let cursor = 0;
+  let offset = 0;
+  const value = (at: string[]): void => {
+    const start = tokens[cursor++];
+    if (!start) return;
+    if (start[0] === "{") {
+      while (tokens[cursor] && tokens[cursor]?.[0] !== "}") {
+        const key = tokens[cursor++];
+        if (!key) return;
+        let name: string;
+        try {
+          name = JSON.parse(key[0]) as string;
+        } catch {
+          return;
+        }
+        const keyPath = [...at, name];
+        if (offset === 0 && keyPath.join("\0") === target) offset = key.index;
+        cursor++; // colon
+        value(keyPath);
+        if (tokens[cursor]?.[0] === ",") cursor++;
+      }
+      cursor++;
+    } else if (start[0] === "[") {
+      while (tokens[cursor] && tokens[cursor]?.[0] !== "]") {
+        value([...at, "[]"]);
+        if (tokens[cursor]?.[0] === ",") cursor++;
+      }
+      cursor++;
+    }
+  };
+  value([]);
+  return positionOfOffset(text, offset);
+}
+
+/**
  * Where a parse failure is, from whatever the runtime's message says.
  *
  * `JSON.parse` messages differ by engine: V8 writes `… at position 12 (line 3

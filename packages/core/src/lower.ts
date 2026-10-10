@@ -179,7 +179,12 @@ import {
   registerTemplateMetadataCompiler,
   type TemplateTag,
 } from "./template-tag.ts";
-import { childrenWithTriggers, lowerTriggers, memberOf } from "./triggers.ts";
+import {
+  childrenWithTriggers,
+  dialectNodeOf,
+  lowerTriggers,
+  memberOf,
+} from "./triggers.ts";
 import {
   findUncalledTagFile,
   markoFileTagMessage,
@@ -1131,9 +1136,11 @@ function lowerAttrNamed(
     // `:name` sugar sets) is still a static string to every target; the IR
     // marks it so a data consumer or contract can tell it from `"strict"`.
     const atom = atomOf(value);
-    // Decision 182 addendum 5: a whole-value member a syntax module built
+    // Decision 182 addendum 5: a whole-value member a dialect built
     // (`ctx.attribute(name, { kind: "member", name })`), marked the same way.
     const member = atom ? undefined : memberOf(value);
+    // Decision 202 item 3: a whole-value node a dialect's node type parsed.
+    const node = atom || member ? undefined : dialectNodeOf(value);
     return {
       kind: "static",
       name,
@@ -1143,6 +1150,7 @@ function lowerAttrNamed(
       loc,
       ...(atom ? { atom } : {}),
       ...(member ? { member } : {}),
+      ...(node ? { node } : {}),
     };
   }
   // An event attribute is `on<Name>` or `on-<exact>`, and only on a native
@@ -1218,7 +1226,7 @@ function lowerAttrs(
 /**
  * A second member in one name slot (`sort asc &c &d`) is an error, not a
  * duplicate dropped with a warning (decision 182, lead ruling on PR 451):
- * a syntax module's attribute name is a slot, and two members in it is a
+ * a dialect's attribute name is a slot, and two members in it is a
  * mistake the author must see. Positioned at the second member.
  */
 function rejectSecondMember(attrs: readonly Attr[]): void {
@@ -3506,7 +3514,7 @@ function activeWildcard(ctx: Ctx, node: Node): WildcardMatch | undefined {
   return bound ? undefined : match;
 }
 
-/** `{ trigger }` for a tag a syntax module's `ctx.child` built, else nothing. */
+/** `{ trigger }` for a tag a dialect's `ctx.child` built, else nothing. */
 function triggerOf(node: Node): { trigger: TagTrigger } | undefined {
   const mark = node.mxTrigger;
   if (!mark) return undefined;
@@ -4547,7 +4555,7 @@ function lowerChildrenOf(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
   // walk starts with no parents, right for a body lowered on its own.
   if (!ctx.unnamedTagsResolved) {
     if (!ctx.atomsConverted) convertAtoms(ctx, children);
-    // A syntax module's atoms (`extra.mxAtom` replacements) join the atoms.
+    // A dialect's atoms (`extra.mxAtom` replacements) join the atoms.
     if (lowerTriggers(ctx, children)) convertAtoms(ctx, children);
     children = childrenWithTriggers(children);
     resolveUnnamedTags(ctx, children);
@@ -4796,12 +4804,12 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
         // Decision 182 seam: a line trigger the trigger pass did not lower
         // (no registered syntax, or a `{ call }` with no `lowerTrigger`) is
         // refused in the table check's wording; a block tag or filter goes
-        // to the syntax module's hook (addendum 5), or is refused likewise.
+        // to the dialect's hook (addendum 5), or is refused likewise.
         case "MxTrigger":
           fail(`\`${child.id}\` trigger has no lowering yet`, child);
           break;
         case "MxBlockTag": {
-          const hook = ctx.syntaxModule?.lowerBlockTag;
+          const hook = ctx.dialect?.lowerBlockTag;
           if (!hook) fail("a block tag has no lowering yet", child);
           out.push(
             ...syntaxHookIr(ctx, child, "lowerBlockTag", (build) =>
@@ -4815,7 +4823,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
           break;
         }
         case "MxFilter": {
-          const hook = ctx.syntaxModule?.lowerFilter;
+          const hook = ctx.dialect?.lowerFilter;
           if (!hook) {
             fail(`the \`${child.name}\` filter has no lowering yet`, child);
           }
@@ -4849,7 +4857,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
 }
 
 /**
- * Runs a syntax module's `lowerBlockTag`/`lowerFilter` (decision 182
+ * Runs a dialect's `lowerBlockTag`/`lowerFilter` (decision 182
  * addendum 5) with the IR builders a custom tag's `transform` gets, and
  * returns its IR as a list. Whatever the hook throws leaves positioned at the
  * construct: a `TranslateError` as is, anything else wrapped.
@@ -4867,12 +4875,12 @@ function syntaxHookIr(
   } catch (error) {
     if (isTranslateError(error)) throw error;
     const message = error instanceof Error ? error.message : String(error);
-    return fail(`the syntax module's \`${hook}\` threw: ${message}`, node);
+    return fail(`the dialect's \`${hook}\` threw: ${message}`, node);
   }
   const nodes = Array.isArray(result) ? [...result] : [result as IrNode];
   if (nodes.some((each) => !each || typeof each !== "object" || !each.kind)) {
     fail(
-      `the syntax module's \`${hook}\` must return IR nodes (build them with \`ctx.build\`)`,
+      `the dialect's \`${hook}\` must return IR nodes (build them with \`ctx.build\`)`,
       node,
     );
   }
@@ -4913,7 +4921,7 @@ function lowerRoot(ctx: Ctx, authored: readonly MxChild[]): Ir {
   }
   // Decision 182 addendum 5: a syntax table's triggers, before anything
   // reads an expression, an attribute list or a body.
-  // A syntax module's atoms (`extra.mxAtom` replacements) join the atoms.
+  // A dialect's atoms (`extra.mxAtom` replacements) join the atoms.
   if (lowerTriggers(ctx, authored)) convertAtoms(ctx, authored);
   const body = childrenWithTriggers(authored);
   resolveUnnamedTags(ctx, body);

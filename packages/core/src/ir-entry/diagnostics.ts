@@ -33,7 +33,7 @@ export interface IrDiagnostic {
   file?: string;
   /**
    * A machine-readable code, when the error carries one
-   * (`TranslateError.diagnosticCode`): today a syntax module's
+   * (`TranslateError.diagnosticCode`): today a dialect's
    * `ctx.fail(message, { code })`. @unstable
    */
   code?: string;
@@ -127,7 +127,7 @@ export function toDiagnostic(
   filename: string,
 ): IrDiagnostic {
   // `file` names another file only: core sets it on some errors positioned
-  // in the lowered file too (a syntax module's, a table error's), so it is
+  // in the lowered file too (a dialect's, a table error's), so it is
   // dropped when it is `filename`, on every path (review 460 F8).
   const foreign =
     at.file !== undefined &&

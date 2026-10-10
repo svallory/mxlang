@@ -447,29 +447,44 @@ Five facts worth knowing before editing it:
   language plugin — because which tags a template may call follows from where
   the template lives. An explicitly passed `customTags` still wins over a
   discovered tag of the same name.
-- **`package.json#mx.syntax` is the file's syntax table (decision 182, PR C;
-  `src/syntax-table.ts`).** `resolveSyntax(file)` reads the nearest
-  `package.json` (so a dependency's files use the dependency's manifest),
-  overlays its `mx.syntax` on `DEFAULT_SYNTAX`, validates it with the
-  template parser's `validateSyntaxTable` (a `TranslateError` in the
-  manifest at the `mx.syntax` key, naming the field path; `tagTypes` is
-  refused as taglib-owned), deep-freezes and interns it by `syntaxHash`
-  (sha256 of canonical JSON), cached per manifest read. `compileSource`,
-  `parseFragment` and `lowerSource` take an explicit
-  `syntax` that wins, validated once per frozen object (`explicitSyntax`)
-  with the manifest's rules as the caller's error at the file start, naming
-  `syntax.<field>`; a non-empty `tagTypes` is refused there too. The table
-  is the front end's parse table (one parse, PR 5): for a non-default table,
-  `tableParseError` reads the first trigger, block tag, filter or
-  table-caused template error from the compile's document, in source order
-  and with `file` ("`<id>` trigger has no lowering yet"); the seams in
+- **A file reaches its dialect by its extension (decisions 182 PR C, 202,
+  212; `src/dialect-discovery.ts`, `src/syntax-table.ts`).** A dialect is a
+  package whose `package.json#mxDialect` declares `{ id, name, extensions,
+  module }` (`DIALECT_MANIFEST_KEY`), validated eagerly with a positioned
+  error at the field. `discoverDialects(projectFile)` reads only the direct
+  dependencies of the file's nearest `package.json` (all four fields),
+  found by a `node_modules` walk-up, statically (no dialect code runs), plus
+  the project's own `mxDialect` (a dialect routes its own files).
+  `routeDialect(file)` picks the longest claimed extension; a clash is an
+  error at the second package's dependency entry naming both, settled by
+  `mx.extensions` (`{ ".x": "<id>" }`, an error at its key when malformed).
+  `.mx` is never claimable. `loadDialect` resolves `module` from the
+  package directory (unresolvable: an error at `mxDialect.module`), loads it
+  with `loadDefaultExport` (reloaded when its mtime changes), and stamps the
+  manifest's `id`/`name` (a module stating a different one is an error); a
+  problem with the module's shape or table, `{ call }` without
+  `lowerTrigger` and an unregistered node row included, is in the module
+  file at 1:0. `productName` is not a dialect field: diagnostics use the
+  dialect's `name` unless the host's `productName` option is set.
+  `dialectTagRules` is the module's `tagRules`, else `html`. The removed
+  `mx.syntax` (any form) is an error at its own key. Host-suffix reservation
+  (`.<host>.mx`) is tooling's (PR 1b): core has no host list. The dialect's
+  `table` is overlaid on `DEFAULT_SYNTAX`, validated with the template
+  parser's `validateSyntaxTable` (`tagTypes` refused as taglib-owned),
+  deep-frozen and interned by `syntaxHash` (sha256 of canonical JSON),
+  cached per manifest read. `compileSource`, `parseFragment` and
+  `lowerSource` take an explicit `dialect` option (a dialect
+  or a bare table) that wins, validated once per frozen object
+  (`explicitSyntaxOf`/`explicitSyntax`) as the caller's error at the file
+  start, naming `dialect.<field>`. The table is the front end's parse table
+  (one parse, PR 5): for a non-default table, `tableParseError` reads the
+  first trigger, block tag, filter or table-caused template error from the
+  compile's document, in source order and with `file` ("`<id>` trigger has
+  no lowering yet"); the seams in
   `payloadOf`/`lowerChildList` are the backstop for callers that lower a
   document themselves. `MX_SUGAR_ON_STATEMENT` is decided by the parse table
   alone, never by `ctx.tagTable`.
-  **Syntax modules (decision 182 addendum 5; `src/triggers.ts`).** A string
-  `mx.syntax` names a module (`resolveSyntaxOf`, loaded with
-  `loadDefaultExport` like `mx.contracts`, reloaded when its mtime changes);
-  the `syntax` option takes one too (`explicitSyntaxOf`). `compileSource` and
+  **Dialect hooks (decision 182 addendum 5; `src/triggers.ts`).** `compileSource` and
   `parseFragment` register the document's syntax by every body array
   (`registerSyntax`), and `lower`/`lowerChildren` run `lowerTriggers` right
   after `convertAtoms`: hooks in source order (a tag's attributes before its
@@ -480,6 +495,22 @@ Five facts worth knowing before editing it:
   `MxTag` nodes in WeakMaps that `tagAttributesOf`, `bodyChildren` and
   `lowerChildList` read, so the tree stays as parsed. `payloadOf`,
   `lowerChildList` and `tableParseError` refuse only what nothing lowered.
+  **Node types (decision 202 item 3; `src/dialect-registry.ts`).** One key
+  space, `id:Type`: core is dialect zero (`mx`, its MX AST types
+  without the `Mx` prefix, keys only, lowered directly), and a dialect's
+  `nodeTypes` (`{ keys, parse, print, lower }` per PascalCase type; the
+  dialect's `id`, always required, never `mx`) follow. A row's `node: { type, dialect }`
+  (attribute and line triggers only; expression position is a table error)
+  must name a type of the loading dialect (`unregisteredNodeRow`, in the
+  module file or at the option). The row's `match` ends the node; at the
+  trigger, `nodeTypeHook` runs `parse(text, span, kit)` once (core stamps
+  `type`/`span`, freezes, and remembers it in `parsedNodes`), then `lower(node, ctx)`
+  with the same `ctx` constructors as `lowerTrigger`; errors name the hook
+  (`` `parse` (node type `ref:Ref`) ``). `ctx.attribute(name, { kind:
+  "node", node, value })` keeps the node on the literal (`extra.mxNode`,
+  `dialectNodeOf`) into the static `Attr.node`. Core's own lowering stays
+  direct until PR 6 is done with `lower.ts`. Tests:
+  `src/dialect-registry.test.ts`.
   A whole-value member is a static `Attr` with `member` (`memberOf`, mirror
   of `atomOf`); `type: "member"` is checked in `custom-tags.ts`
   (`checkMemberAttr`). The reference module is `src/syntax/member.ts`
@@ -497,8 +528,8 @@ Five facts worth knowing before editing it:
   core: `convertAtoms` skips a stand-in marked `extra.mxTrigger`, and re-runs
   after the trigger pass so a module's `extra.mxAtom` literal is recorded and
   spliced as an atom). `bun run test:sugar-module` (`scripts/sugar-module.ts`,
-  in `verify`) reruns the atom and sugar suites with every file that declares
-  no `mx.syntax` resolved to the mesh module (a preload sets a process global
+  in `verify`) reruns the atom and sugar suites with every file no dialect
+  package claims resolved to the mesh dialect (a preload sets a process global
   `resolveSyntaxOf` reads, `Symbol.for("@mxlang/core:fallbackSyntaxForTesting")`,
   test-only) and requires the failures to be exactly
   `scripts/sugar-module/deltas.json`, each with its ruling. Many sugar unit
@@ -515,7 +546,7 @@ Five facts worth knowing before editing it:
   `attributes`, `attributeTags`, `children`, claimed tag keys) holds the
   registered declaration objects, not copies. `fail` without `at` is
   file-level (0:0, no `file`).
-  `SyntaxModule.checkContract` is the module's registration check:
+  `Dialect.checkContract` is the dialect's registration check:
   `rejectUnknownDeclarationKeys` calls `checkClaimedContract` per tag,
   where `rejectInvalidDeclares` runs, when the contract uses a claimed key
   at any depth (`usesClaimed`: attributes, attribute tags named and `"*"`,
@@ -527,14 +558,14 @@ Five facts worth knowing before editing it:
   `rejectRecursiveContractKeys`, a contract with both a claimed-key problem
   and an unknown key reports the claimed one first, where the built-in path
   reports whichever its walk meets first.
-  `SyntaxModule.contractFields` (`src/contract-fields.ts`, `claimedFields`)
-  lists the contract keys the module owns; only `values`, `pattern`, `ref`
+  `Dialect.contractFields` (`src/contract-fields.ts`, `claimedFields`)
+  lists the contract keys the dialect owns; only `values`, `pattern`, `ref`
   and `declares` of core's own keys can be claimed (`checkContractFields`).
   The claim is threaded into registration with the file's resolved module:
   - `compileSource` (`translatorClaiming`) and `parseFragment`
     (`parseOnlyTranslator`), after they resolve the syntax;
-  - the scan (`scanCustomTags` -> `claimedFieldsOf(filePath)`, the nearest
-    manifest's `mx.syntax`): `mx.contracts` accepts a claimed tag key, and
+  - the scan (`scanCustomTags` -> `claimedFieldsOf(filePath)`, the dialect
+    the file routes to): `mx.contracts` accepts a claimed tag key, and
     `lazyTag` exposes a sidecar's claimed tag keys. `scan.ts` does not import
     `syntax-table.ts` (that would pull the parser into `scan-cache.ts`, which
     `contracts.test.ts` loads under Node's strip-only mode): `syntax-table.ts`
@@ -558,7 +589,7 @@ Five facts worth knowing before editing it:
   `raiseDeferredContractErrors`, which `lowerTriggers` appends to
   `ctx.afterLower` behind the module's hook whenever the module has
   `contractFields`.
-  A scan whose file's `mx.syntax` fails to resolve carries the error
+  A scan whose file's dialect fails to load carries the error
   (`ClaimedFields.failure`) and raises it in place of any contract-key
   refusal (`mx.contracts`, sidecar validation). `ctx.atomFacts` is not set when the module claims an atom
   key: completion facts are the built-in path's only (lead ruling 14:29).

@@ -66,8 +66,8 @@ import {
 } from "./custom-tags.ts";
 import {
   clearPackageJsonCache,
+  jsonKeyPosition,
   type PackageJsonParseError,
-  positionOfOffset,
   readPackageJsonCached,
 } from "./package-json.ts";
 import { dropOwnParserPosition } from "./parse-error-position.ts";
@@ -317,12 +317,12 @@ export interface ScanDiagnostic {
  * offending file and carry that file's own position, which is what lets the
  * language server point an author at the real problem.
  */
-/** Project-wide discovery has no one file, so no syntax module claims keys. */
+/** Project-wide discovery has no one file, so no dialect claims keys. */
 const NO_CLAIM = claimedFields(undefined);
 
 /**
  * Runs `place`, which rethrows a registration error at its file, keeping the
- * `diagnosticCode` a syntax module's `checkContract` gave it.
+ * `diagnosticCode` a dialect's `checkContract` gave it.
  */
 function withCodeOf(cause: unknown, place: () => never): never {
   try {
@@ -500,44 +500,10 @@ export function mxKeyPosition(
   line: number;
   column: number;
 } {
-  const text = readPackageJsonCached(packageFile)?.text ?? "";
-  const tokens = [
-    ...text.matchAll(
-      /"(?:\\.|[^"\\])*"|[{}[\]:,]|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null/g,
-    ),
-  ];
-  let cursor = 0;
-  let offset = 0;
-  const value = (path: string[]): void => {
-    const start = tokens[cursor++];
-    if (!start) return;
-    if (start[0] === "{") {
-      while (tokens[cursor] && tokens[cursor]?.[0] !== "}") {
-        const key = tokens[cursor++];
-        if (!key) return;
-        let name: string;
-        try {
-          name = JSON.parse(key[0]) as string;
-        } catch {
-          return;
-        }
-        if (path.length === 1 && path[0] === "mx" && name === mxKey)
-          offset = key.index;
-        cursor++; // colon
-        value([...path, name]);
-        if (tokens[cursor]?.[0] === ",") cursor++;
-      }
-      cursor++;
-    } else if (start[0] === "[") {
-      while (tokens[cursor] && tokens[cursor]?.[0] !== "]") {
-        value([...path, "[]"]);
-        if (tokens[cursor]?.[0] === ",") cursor++;
-      }
-      cursor++;
-    }
-  };
-  value([]);
-  return positionOfOffset(text, offset);
+  return jsonKeyPosition(readPackageJsonCached(packageFile)?.text ?? "", [
+    "mx",
+    mxKey,
+  ]);
 }
 
 /** Contracts failures address the actual source file, not the calling page. */
@@ -871,7 +837,7 @@ function sidecarHint(message: string, what = "custom tag sidecar"): string {
 
 export function loadDefaultExport(
   file: string,
-  what: "sidecar" | "contracts module" | "syntax module",
+  what: "sidecar" | "contracts module" | "dialect",
 ): Record<string, unknown> {
   let module: { default?: unknown } | undefined;
   try {
@@ -892,7 +858,7 @@ export function loadDefaultExport(
     const fail = what === "sidecar" ? failIn : failContracts;
     fail(
       file,
-      `${what} must \`export default\` ${what === "sidecar" ? "a CustomTag object" : what === "syntax module" ? "a syntax module object (`{ table, lowerTrigger?, … }`)" : "a plain ContractMap object"}`,
+      `${what} must \`export default\` ${what === "sidecar" ? "a CustomTag object" : what === "dialect" ? "a dialect object (`{ table, lowerTrigger?, … }`)" : "a plain ContractMap object"}`,
     );
   }
   return definition as Record<string, unknown>;
@@ -953,7 +919,7 @@ function lazyTag(tag: DiscoveredTag, claimed: ClaimedFields): CustomTag {
       rejectUnknownDeclarationKeys(own, claimed);
       if (!tag.template) rejectUnreachableHooks(own);
     } catch (cause) {
-      // The file's syntax module did not resolve: that is the error, not a
+      // The file's dialect did not resolve: that is the error, not a
       // key it might have claimed.
       if (claimed.failure !== undefined) throw claimed.failure;
       if (isTranslateError(cause) && cause.file === undefined)
@@ -977,7 +943,7 @@ function lazyTag(tag: DiscoveredTag, claimed: ClaimedFields): CustomTag {
       get: () => load()[key],
     });
   }
-  // The keys the file's syntax module claims are its data: carried as written.
+  // The keys the file's dialect claims are its data: carried as written.
   for (const key of claimed.tag) {
     Object.defineProperty(definition, key, {
       enumerable: true,
@@ -1389,7 +1355,7 @@ function indexMxContractsEntries(
       rejectUnknownDeclarationKeys(contracts, claimed);
       rejectUnreachableHooks(contracts);
     } catch (cause) {
-      // The file's syntax module did not resolve: that is the error, not a
+      // The file's dialect did not resolve: that is the error, not a
       // key it might have claimed.
       if (claimed.failure !== undefined) throw claimed.failure;
       if (isTranslateError(cause) && cause.file !== undefined) throw cause;

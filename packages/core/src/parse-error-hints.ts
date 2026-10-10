@@ -376,7 +376,7 @@ function hintOne(
  * (2026-10-08, `@mxlang/parser` `wrappedAttrValueHint`).
  */
 const JSX_WRAP_SENTENCE =
-  " Attribute values in MX are plain TypeScript expressions, not JSX; remove the wrapping `{ }`.";
+  " Attribute values are plain TypeScript expressions, not JSX; remove the wrapping `{ }`.";
 
 /**
  * `x={ new :a }` (decision 156; lead ruling, review round 3): a keyword key

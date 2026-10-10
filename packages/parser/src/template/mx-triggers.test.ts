@@ -912,7 +912,45 @@ describe("validateSyntaxTable", () => {
       "a bad node",
       table({ lineTriggers: [trigger({ node: { call: "" } })] }),
       "lineTriggers[0].node",
-      /or \{ call \}/,
+      /\{ call \} or \{ type, dialect \}/,
+    ],
+    [
+      "a node type with an empty type",
+      table({
+        lineTriggers: [trigger({ node: { type: "", dialect: "mesh" } })],
+      }),
+      "lineTriggers[0].node",
+      /\{ call \} or \{ type, dialect \}/,
+    ],
+    [
+      "a node type with no dialect",
+      table({
+        attributeTriggers: [trigger({ node: { type: "Atom" } as never })],
+      }),
+      "attributeTriggers[0].node",
+      /\{ call \} or \{ type, dialect \}/,
+    ],
+    [
+      "a node type that also names a call",
+      table({
+        lineTriggers: [
+          trigger({
+            node: { type: "Atom", dialect: "mesh", call: "atom" } as never,
+          }),
+        ],
+      }),
+      "lineTriggers[0].node",
+      /\{ call \} or \{ type, dialect \}/,
+    ],
+    [
+      "a node type in expression position",
+      table({
+        expressionTriggers: [
+          trigger({ node: { type: "Atom", dialect: "mesh" } }),
+        ],
+      }),
+      "expressionTriggers[0].node",
+      /not supported in expression position yet; use \{ call \}/,
     ],
     [
       "terminatesValue off the attribute list",
@@ -1090,6 +1128,15 @@ describe("validateSyntaxTable", () => {
 
   it("accepts the & table, and the same id in several lists", () => {
     expect(validateSyntaxTable(MESH)).toEqual([]);
+  });
+
+  it("accepts a node type in an attribute list and on a tagless line", () => {
+    const row = { ...MEMBER, node: { type: "Member", dialect: "mesh" } };
+    expect(
+      validateSyntaxTable(
+        table({ attributeTriggers: [row], lineTriggers: [row] }),
+      ),
+    ).toEqual([]);
   });
 
   it("accepts a delimited repeat, the atom-name shape (Opus L3)", () => {

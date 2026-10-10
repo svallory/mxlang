@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { DelegatedTag } from "../ir.ts";
-import type { SyntaxModule } from "../syntax-table.ts";
+import type { Dialect } from "../syntax-table.ts";
 import {
   type LowerSourceOptions,
   lowerFile,
@@ -368,10 +368,10 @@ describe("required beyond `span`", () => {
   it("a static attribute's `valueSpan`: a member", () => {
     const memberSyntax = (
       createRequire(import.meta.url)("../syntax/member.ts") as {
-        default: SyntaxModule;
+        default: Dialect;
       }
     ).default;
-    expect(staticValues("sort asc &dueOn\n", { syntax: memberSyntax })).toEqual(
+    expect(staticValues("sort asc &dueOn\n", { dialect: memberSyntax })).toEqual(
       [["member", "&dueOn"]],
     );
   });

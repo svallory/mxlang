@@ -47,7 +47,7 @@ resource="post" table="posts"
 
 `lowerSource` never throws for anything in the source. A parse error, a rejected construct and a failed contract are each an error diagnostic, and every independent error of the file is reported once, in position order. A bug in core that surfaces with no position is reported at `1:0` with an `internal error: ` prefix, so a caller never has to wrap the call.
 
-`offset` is the UTF-16 offset of `line`/`column`, so a consumer needs no line table (`-1` when `file` names another file, whose text `lowerSource` does not have). `code` is set when the error carries a machine-readable code; today only a syntax module's `ctx.fail(message, { code })` gives one.
+`offset` is the UTF-16 offset of `line`/`column`, so a consumer needs no line table (`-1` when `file` names another file, whose text `lowerSource` does not have). `code` is set when the error carries a machine-readable code; today only a dialect's `ctx.fail(message, { code })` gives one.
 
 ### `SpannedIr`
 
@@ -71,7 +71,7 @@ Two more properties of the returned IR:
 | `<if>`, `<for>`, `<const>` | `IfChain`, `For`, `Const` |
 | `import` | `ir.imports`: each `Import` has `code`, `span`, `from` (the unquoted specifier) and `names` (`{ imported, local, kind, span, localSpan?, typeOnly? }`) |
 | `export`, `static` | `ir.hoisted`: `Export` and `Static` nodes |
-| A tag a syntax module built | `DelegatedTag.tag.trigger`: `{ id, span, text }` |
+| A tag a dialect built | `DelegatedTag.tag.trigger`: `{ id, span, text }` |
 
 Only a string literal is `static`; `n=1` and `required=true` are `dynamic`, because nothing is evaluated.
 
@@ -103,7 +103,7 @@ lowerSource(source, filename, {
 ```
 
 - **`customTags`** declares the vocabulary: required attributes, attribute types, allowed children and parents (decisions 130 and 138). `lowerSource` does not scan `tags/` or `package.json`; this map is all it knows. Contracts are enforced at every depth, `analyze` included. See [Writing a dialect package](/custom-tags/dialect-package/).
-- **`syntax`** is the file's syntax table or syntax module, for a dialect that builds its own (Mesh passes its module, hooks included). Omitted, the file's nearest `package.json#mx.syntax` applies.
+- **`dialect`** is the file's dialect, or a bare syntax table, for a consumer that builds its own (Mesh passes its dialect, hooks included). Omitted, the dialect that claims the file's extension applies (decision 212).
 - **`tagRules`** picks the parse rules the source is read under ([below](#core-ir-entry-point-and-dialects-tag-rules-presets)). It is an option of this function only, never a project or host setting (ruling 209).
 - **`defaultTag`** is what `<#id>` and `<.class>` stand for in place of `object`.
 - **`structural`**: `"pass"` keeps text, `${}`, `<if>`, `<for>`, `<const>` and `import`/`export`/`static` in the IR. `"reject"` makes each one a positioned error, so a dialect that reads only tags and attributes cannot silently ignore an `<if>`. Comments are never structural: a `//` line or `<!-- -->` stays in the IR under either value (decision 131 addendum 5).
@@ -137,9 +137,9 @@ The messages still say "data tree" (``the data tree is static; this file's consu
 
 ## Dialects
 
-A **dialect** is a vocabulary (contracts, a syntax module, a tag rules preset) that a program reads through `lowerSource`. Today a dialect passes those as options; the dialect API, which registers them once in a package and lets the tools find them, is the next step and is not part of this release.
+A **dialect** is a package that declares itself in its `package.json#mxDialect` (decision 212): its id, its name, the file extensions it claims and the module that carries its syntax table and hooks. `lowerSource` routes a file to the dialect that claims its extension, or takes one through the `dialect` option; contracts and the tag rules preset are still options (specification §13.9.2).
 
-Until then:
+Until the tools route dialect files (decision 212, PR 1b):
 
 - **`mx-tsc`, the language server, the TypeScript plugin and Vite do not check dialect files.** `mx.target: "tree"` in a `package.json` is an error in every tool: `mx.target "tree" was removed (decision 204); a consumer that reads the tree calls lowerSource from @mxlang/core`. The `mx-tsc` check of a data package is gone with the target; the dialect check replaces it.
 - A dialect's own CLI or test suite calls `lowerSource` with its options and prints the diagnostics.

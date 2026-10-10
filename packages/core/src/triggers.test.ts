@@ -1,10 +1,12 @@
 /**
- * Layer-2 syntax modules (decision 182 addendum 5): the module form of
- * `mx.syntax` and of the `syntax` option, `lowerTrigger` dispatch in the
- * three positions with the built-in node kinds, the guards on a hook's
- * result, `lowerBlockTag`/`lowerFilter`, and the module's `afterLower` and
- * `productName`. The `&` member shapes through `lowerSource` are pinned in
- * `ir-entry/member-syntax.test.ts`.
+ * Dialects (decisions 182 addendum 5, 202, 212): a dialect package and the
+ * `dialect` option, `lowerTrigger` dispatch in the three positions with the
+ * built-in node kinds, the guards on a hook's result,
+ * `lowerBlockTag`/`lowerFilter`, and the dialect's `afterLower` and
+ * `name`. Discovery and routing are pinned in `dialect-discovery.test.ts`.
+ * Node types (`node: { type, dialect }`) are pinned in
+ * `dialect-registry.test.ts`. The `&` member shapes through `lowerSource`
+ * are pinned in `ir-entry/member-syntax.test.ts`.
  */
 import {
   mkdirSync,
@@ -26,11 +28,12 @@ import { lowerChildren } from "./lower.ts";
 import type { LoweredUnit } from "./lowered-unit.ts";
 import memberSyntax, { MEMBER } from "./syntax/member.ts";
 import {
+  type Dialect,
   resolveSyntaxOf,
-  type SyntaxModule,
   type Trigger,
   type TriggerContext,
 } from "./syntax-table.ts";
+import { dialectProject } from "./test-dialect-project.ts";
 import { lookup as targets } from "./test-targets.ts";
 
 const FIXTURE = join(import.meta.dirname, "syntax/member.ts");
@@ -43,7 +46,7 @@ const declarations = {
 
 let dir: string;
 beforeEach(() => {
-  dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-syntax-module-")));
+  dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-dialect-")));
 });
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
@@ -70,12 +73,12 @@ function caught(run: () => unknown): TranslateError {
 function irOf(
   source: string,
   file = join(dir, "page.mx"),
-  syntax?: SyntaxModule,
+  syntax?: Dialect,
 ): Ir {
   let ir: Ir | undefined;
   compileSource(source, file, declarations, {
     targets,
-    ...(syntax ? { syntax } : {}),
+    ...(syntax ? { dialect: syntax } : {}),
     emitIr: (lowered) => {
       ir = lowered;
       return "";
@@ -98,16 +101,17 @@ function attr(node: Element, name: string): Attr {
   return found;
 }
 
-/** A module overlaying `rows` with `lowerTrigger` (and any other hook). */
-function moduleWith(
-  rows: Partial<SyntaxModule["table"]>,
-  hooks: Omit<SyntaxModule, "table"> = {},
-): SyntaxModule {
-  return { table: rows, ...hooks };
+/** A dialect overlaying `rows` with `lowerTrigger` (and any other hook). */
+function dialectWith(
+  rows: Partial<Dialect["table"]>,
+  hooks: Partial<Omit<Dialect, "table">> = {},
+): Dialect {
+  // Named "MX" so core's wording in these messages stays MX's.
+  return { id: "test", name: "MX", table: rows, ...hooks };
 }
 
-describe("the member module through the `syntax` option", () => {
-  it("an expression trigger is the module's node; the authored text and atoms stay", () => {
+describe("the member dialect through the `dialect` option", () => {
+  it("an expression trigger is the dialect's node; the authored text and atoms stay", () => {
     const source = "rule check=(() => &status === :sent)\n";
     const [rule] = elements(irOf(source, undefined, memberSyntax).body);
     const check = attr(rule as Element, "check");
@@ -205,12 +209,12 @@ describe("the member module through the `syntax` option", () => {
 
   it("calls the hook once per trigger, in source order", () => {
     const seen: string[] = [];
-    const counting: SyntaxModule = {
+    const counting: Dialect = {
       ...memberSyntax,
       lowerTrigger: (id, text, span, ctx) => {
         seen.push(`${ctx.position}:${text}`);
         return (
-          memberSyntax.lowerTrigger as NonNullable<SyntaxModule["lowerTrigger"]>
+          memberSyntax.lowerTrigger as NonNullable<Dialect["lowerTrigger"]>
         )(id, text, span, ctx);
       },
     };
@@ -224,35 +228,52 @@ describe("the member module through the `syntax` option", () => {
   });
 });
 
-describe("`package.json#mx.syntax` naming a syntax module", () => {
-  it("an absolute specifier loads the module and its hooks", () => {
-    manifest(dir, { syntax: FIXTURE });
-    const [sort] = elements(irOf("sort asc &dueOn\n").body);
+describe("a dialect package (`package.json#mxDialect`, decision 212)", () => {
+  /** The member dialect, declared by a dependency, claiming `.mesh`. */
+  function memberProject(module: string = FIXTURE) {
+    return dialectProject(dir, {
+      manifest: { id: "member", name: "Mesh", extensions: [".mesh"], module },
+    });
+  }
+
+  it("an absolute module loads the dialect and its hooks for the files it claims", () => {
+    memberProject();
+    const [sort] = elements(
+      irOf("sort asc &dueOn\n", join(dir, "a.mesh")).body,
+    );
     expect(attr(sort as Element, "member")).toMatchObject({
       member: { name: "dueOn" },
     });
+    expect(resolveSyntaxOf(join(dir, "a.mx")).isDefault).toBe(true);
   });
 
-  it("a relative specifier resolves from the manifest", () => {
+  it("a relative module resolves from the dialect's package", () => {
+    const { packageDir } = memberProject("./syntax.mjs");
     writeFileSync(
-      join(dir, "syntax.ts"),
+      join(packageDir, "syntax.mjs"),
       `export { default } from ${JSON.stringify(FIXTURE)};\n`,
     );
-    manifest(dir, { syntax: "./syntax.ts" });
-    const [input] = elements(irOf("fields\n  &title\n").body);
+    const [input] = elements(
+      irOf("fields\n  &title\n", join(dir, "a.mesh")).body,
+    );
     expect(elements((input as Element).children)[0]?.name).toBe("member");
   });
 
-  it("an edited module is resolved again (Vitest keeps its own module registry, so not re-evaluated here)", () => {
-    const file = join(dir, "syntax.ts");
-    writeFileSync(
-      file,
-      `export default { table: { attributeTriggers: [${JSON.stringify(MEMBER)}] }, lowerTrigger: (id, text, span, ctx) => ctx.attribute("m", { kind: "member", name: text.slice(1) }) };\n`,
-    );
-    manifest(dir, { syntax: "./syntax.ts" });
-    const page = join(dir, "page.mx");
+  it("the manifest's `id` and `name` are stamped on the dialect", () => {
+    dialectProject(dir, { module: "export default { table: {} };" });
+    const { dialect } = resolveSyntaxOf(join(dir, "page.tst"));
+    expect(dialect).toMatchObject({ id: "test", name: "Test" });
+    expect(Object.isFrozen(dialect)).toBe(true);
+  });
+
+  it("an edited dialect is resolved again (Vitest keeps its own module registry, so not re-evaluated here)", () => {
+    const { packageDir } = dialectProject(dir, {
+      module: `export default { table: { attributeTriggers: [${JSON.stringify(MEMBER)}] }, lowerTrigger: (id, text, span, ctx) => ctx.attribute("m", { kind: "member", name: text.slice(1) }) };`,
+    });
+    const file = join(packageDir, "index.mjs");
+    const page = join(dir, "page.tst");
     const first = resolveSyntaxOf(page);
-    expect(first.module?.lowerTrigger).toBeTypeOf("function");
+    expect(first.dialect?.lowerTrigger).toBeTypeOf("function");
     expect(resolveSyntaxOf(page)).toBe(first);
     const later = new Date(Date.now() + 5_000);
     utimesSync(file, later, later);
@@ -261,73 +282,82 @@ describe("`package.json#mx.syntax` naming a syntax module", () => {
     expect(resolveSyntaxOf(page)).toBe(second);
   });
 
-  it.each([
-    [
-      "an unresolvable specifier",
-      "./missing.ts",
-      "`mx.syntax` could not resolve `./missing.ts` from",
-    ],
-  ])("%s is an error at the mx.syntax key", (_, syntax, message) => {
-    const file = manifest(dir, { syntax });
-    const error = caught(() => irOf("div\n"));
-    expect(error.file).toBe(file);
-    expect([error.line, error.column]).toEqual([3, 9]);
-    expect(error.message).toContain(message);
-  });
-
-  it("a `{ call }` trigger with no `lowerTrigger` is an error at the mx.syntax key", () => {
-    writeFileSync(
-      join(dir, "syntax.ts"),
-      `export default { table: { lineTriggers: [${JSON.stringify(MEMBER)}] } };\n`,
-    );
-    const file = manifest(dir, { syntax: "./syntax.ts" });
-    const error = caught(() => irOf("div\n"));
-    expect(error.file).toBe(file);
-    expect([error.line, error.column]).toEqual([3, 9]);
-    expect(error.message).toBe(
-      '`mx.syntax` (./syntax.ts): `table.lineTriggers[0]` (trigger "member") has a `{ call }` node, and the module exports no `lowerTrigger`',
+  it("a module that does not resolve is an error at `mxDialect.module`", () => {
+    const { packageFile } = dialectProject(dir, {
+      manifest: { module: "./missing.ts" },
+    });
+    const error = caught(() => irOf("div\n", join(dir, "page.tst")));
+    expect(error.file).toBe(packageFile);
+    expect([error.line, error.column]).toEqual([9, 4]);
+    expect(error.message).toContain(
+      'the dialect `test`\'s module "./missing.ts" cannot be resolved from',
     );
   });
 
-  it("an inline `mx.syntax` with a `{ call }` trigger is an error at the key", () => {
-    const file = manifest(dir, { syntax: { lineTriggers: [MEMBER] } });
-    const error = caught(() => irOf("div\n"));
-    expect(error.file).toBe(file);
+  it("a `{ call }` trigger with no `lowerTrigger` is an error in the dialect file", () => {
+    const { packageDir } = dialectProject(dir, {
+      module: `export default { table: { lineTriggers: [${JSON.stringify(MEMBER)}] } };`,
+    });
+    const error = caught(() => irOf("div\n", join(dir, "page.tst")));
+    expect(error.file).toBe(join(packageDir, "index.mjs"));
+    expect([error.line, error.column]).toEqual([1, 0]);
     expect(error.message).toBe(
-      '`mx.syntax.lineTriggers[0]` (trigger "member"): a `{ call }` node is lowered by a syntax module\'s `lowerTrigger`, and an inline `mx.syntax` is a table only; move the table into a module and name it (`"syntax": "./syntax.ts"`)',
+      '`table.lineTriggers[0]` (trigger "member") has a `{ call }` node, and the dialect exports no `lowerTrigger`',
     );
   });
 
   it.each([
-    [
-      "export default 1;",
-      "syntax module must `export default` a syntax module object",
-    ],
+    ["export default 1;", "dialect must `export default` a dialect object"],
     ["export default { };", "`table` is required"],
     [
       "export default { table: {}, lower: () => 1 };",
-      "`lower` is not a syntax module field",
+      "`lower` is not a dialect field",
     ],
     [
       "export default { table: {}, lowerTrigger: 1 };",
       "`lowerTrigger` must be a function",
     ],
     [
-      "export default { table: {}, productName: '' };",
-      "`productName` must be a non-empty string",
+      "export default { table: {}, productName: 'Mesh' };",
+      "`productName` is not a dialect field",
+    ],
+    [
+      "export default { id: 'other', table: {} };",
+      '`id` is "other", and the dialect\'s `package.json#mxDialect.id` is "test": leave it to the manifest, or make them agree',
+    ],
+    [
+      "export default { name: 'Other', table: {} };",
+      '`name` is "Other", and the dialect\'s `package.json#mxDialect.name` is "Test"',
     ],
     [
       "export default { table: { tagTypes: {} } };",
       "`table.tagTypes` is not a manifest field",
     ],
-  ])("a module `%s` is an error in the module file", (body, message) => {
-    const module = join(dir, "syntax.ts");
-    writeFileSync(module, `${body}\n`);
-    manifest(dir, { syntax: "./syntax.ts" });
-    const error = caught(() => irOf("div\n"));
-    expect(error.file).toBe(module);
+  ])("a dialect `%s` is an error in the dialect file", (body, message) => {
+    const { packageDir } = dialectProject(dir, { module: body });
+    const error = caught(() => irOf("div\n", join(dir, "page.tst")));
+    expect(error.file).toBe(join(packageDir, "index.mjs"));
     expect([error.line, error.column]).toEqual([1, 0]);
     expect(error.message).toContain(message);
+  });
+
+  it("a dialect that matches the manifest's `id` and `name` is accepted", () => {
+    dialectProject(dir, {
+      module: "export default { id: 'test', name: 'Test', table: {} };",
+    });
+    expect(resolveSyntaxOf(join(dir, "page.tst")).dialect?.id).toBe("test");
+  });
+
+  it("the removed `mx.syntax` is an error at its key, on every file of the project", () => {
+    const file = manifest(dir, { syntax: "./syntax.ts" });
+    for (const page of ["page.mx", "page.tst"]) {
+      const error = caught(() => irOf("div\n", join(dir, page)));
+      expect(error.file).toBe(file);
+      expect([error.line, error.column]).toEqual([3, 9]);
+      expect(error.message).toContain(
+        "`mx.syntax` is removed: a syntax of your own is a dialect, a package that declares itself in its `package.json#mxDialect`",
+      );
+    }
   });
 });
 
@@ -338,7 +368,7 @@ describe("the built-in node kinds lower in core", () => {
     const strings = irOf(
       "rule x=&a\n",
       undefined,
-      moduleWith({ expressionTriggers: [row("string")] }),
+      dialectWith({ expressionTriggers: [row("string")] }),
     );
     // A whole-value string literal is a static attribute.
     expect(attr(elements(strings.body)[0] as Element, "x")).toMatchObject({
@@ -349,7 +379,7 @@ describe("the built-in node kinds lower in core", () => {
     const ids = irOf(
       "rule x=&a\n",
       undefined,
-      moduleWith({ expressionTriggers: [row("identifier")] }),
+      dialectWith({ expressionTriggers: [row("identifier")] }),
     );
     const y = attr(elements(ids.body)[0] as Element, "x");
     expect(y.kind === "dynamic" && y.value.node).toMatchObject({
@@ -359,7 +389,7 @@ describe("the built-in node kinds lower in core", () => {
   });
 
   it('`"attribute"` in an attribute list: named after the sigil, bare or with its `=value`', () => {
-    const syntax = moduleWith({ attributeTriggers: [row("attribute")] });
+    const syntax = dialectWith({ attributeTriggers: [row("attribute")] });
     const tag = elements(irOf("sort &a &b=1\n", undefined, syntax).body)[0];
     expect(attr(tag as Element, "a")).toMatchObject({ kind: "boolean" });
     expect(attr(tag as Element, "b")).toMatchObject({
@@ -376,10 +406,10 @@ describe("the built-in node kinds lower in core", () => {
     "%s with `%s` is a positioned error",
     (list, node, source, where, line, column) => {
       const error = caught(() =>
-        irOf(source, undefined, moduleWith({ [list]: [row(node)] })),
+        irOf(source, undefined, dialectWith({ [list]: [row(node)] })),
       );
       expect(error.message).toBe(
-        `the \`member\` trigger's \`node: "${node}"\` has no meaning in ${where}; use \`{ call }\` and a syntax module's \`lowerTrigger\``,
+        `the \`member\` trigger's \`node: "${node}"\` has no meaning in ${where}; use \`{ call }\` and a dialect's \`lowerTrigger\``,
       );
       expect([error.line, error.column]).toEqual([line, column]);
     },
@@ -393,9 +423,9 @@ describe("a hook's result is checked", () => {
     lineTriggers: [MEMBER],
   };
 
-  it("a `{ call }` trigger with no `lowerTrigger` in an option module has no lowering yet", () => {
+  it("a `{ call }` trigger with no `lowerTrigger` in an option dialect has no lowering yet", () => {
     const error = caught(() =>
-      irOf("rule x=&a\n", undefined, moduleWith(rows)),
+      irOf("rule x=&a\n", undefined, dialectWith(rows)),
     );
     expect(error.message).toBe("`member` trigger has no lowering yet");
     expect([error.line, error.column]).toEqual([1, 7]);
@@ -406,7 +436,7 @@ describe("a hook's result is checked", () => {
     ["sort &a\n", "ctx.attribute(name, value)", "an attribute list"],
     ["div\n  &a\n", "ctx.child(tagName, attrs)", "a tagless line"],
   ])("%j: the result must fit the position", (source, want, where) => {
-    const wrong = moduleWith(rows, {
+    const wrong = dialectWith(rows, {
       lowerTrigger: (_id, _text, _span, ctx) =>
         ctx.position === "line"
           ? ctx.expression({ type: "NullLiteral" })
@@ -444,7 +474,7 @@ describe("a hook's result is checked", () => {
   ])(
     "`ctx.expression` refuses %s, positioned at the trigger",
     (_, node, got) => {
-      const bad = moduleWith(rows, {
+      const bad = dialectWith(rows, {
         lowerTrigger: (_id, _text, _span, ctx) =>
           // SAFETY: the row's point is a node the runtime must refuse; the
           // assertion deliberately bypasses the parameter type.
@@ -469,7 +499,7 @@ describe("a hook's result is checked", () => {
   });
 
   it("`ctx.expression` accepts a node that leaves out a field Babel defaults", () => {
-    const lean = moduleWith(rows, {
+    const lean = dialectWith(rows, {
       lowerTrigger: (_id, text, _span, ctx) =>
         ctx.expression({
           type: "MemberExpression",
@@ -482,8 +512,8 @@ describe("a hook's result is checked", () => {
     expect(x.kind === "dynamic" && x.value.code).toBe("self.a + 1");
   });
 
-  it("a module-built expression value prints into `code`", () => {
-    const built = moduleWith(rows, {
+  it("a dialect-built expression value prints into `code`", () => {
+    const built = dialectWith(rows, {
       lowerTrigger: (_id, text, _span, ctx) =>
         ctx.attribute(
           "of",
@@ -503,7 +533,7 @@ describe("a hook's result is checked", () => {
   });
 
   it("a hand-made result is refused", () => {
-    const forged = moduleWith(rows, {
+    const forged = dialectWith(rows, {
       lowerTrigger: () =>
         ({ kind: "expression", node: { type: "NullLiteral" } }) as never,
     });
@@ -513,7 +543,7 @@ describe("a hook's result is checked", () => {
   });
 
   it("a hook that throws is positioned at the trigger", () => {
-    const throwing = moduleWith(rows, {
+    const throwing = dialectWith(rows, {
       lowerTrigger: () => {
         throw new Error("no such member");
       },
@@ -526,7 +556,7 @@ describe("a hook's result is checked", () => {
   });
 
   it("a `TranslateError` from the hook passes through", () => {
-    const own = moduleWith(rows, {
+    const own = dialectWith(rows, {
       lowerTrigger: () => {
         throw new TranslateError("Mesh: unknown member", 9, 9);
       },
@@ -545,7 +575,7 @@ describe("a hook's result is checked", () => {
   ])(
     "%j: a `=value` the hook drops is an error at the value",
     (source, line, column) => {
-      const dropping = moduleWith(rows, {
+      const dropping = dialectWith(rows, {
         lowerTrigger: (_id, text, span, ctx) =>
           ctx.attribute("member", {
             kind: "member",
@@ -567,7 +597,7 @@ describe("a hook's result is checked", () => {
     ["sort asc &a(x) { return 1 }\n", 1, 9],
     ["sort asc &a := b\n", 1, 9],
   ])(
-    "%j: the member module refuses a value after a kind, at the member (review 460 F6)",
+    "%j: the member dialect refuses a value after a kind, at the member (review 460 F6)",
     (source, line, column) => {
       const error = caught(() => irOf(source, undefined, memberSyntax));
       expect(error.message).toBe(
@@ -578,7 +608,7 @@ describe("a hook's result is checked", () => {
   );
 
   it("a line trigger that drops its `=value` is an error too", () => {
-    const dropping = moduleWith(rows, {
+    const dropping = dialectWith(rows, {
       lowerTrigger: (_id, text, _span, ctx) =>
         ctx.child("member", [ctx.attribute("name", text.slice(1))]),
     });
@@ -616,7 +646,7 @@ describe("block tags and filters", () => {
 
   it("go to `lowerBlockTag` and `lowerFilter` with their raw text and `ctx.build`", () => {
     const calls: unknown[] = [];
-    const syntax = moduleWith(table, {
+    const syntax = dialectWith(table, {
       lowerBlockTag: (text, span, ctx) => {
         calls.push(["block", text, span]);
         return ctx.build.text(`[${text.trim()}]`);
@@ -640,8 +670,8 @@ describe("block tags and filters", () => {
     ]);
   });
 
-  it("a module without them keeps the no-lowering error", () => {
-    const syntax = moduleWith(table);
+  it("a dialect without them keeps the no-lowering error", () => {
+    const syntax = dialectWith(table);
     expect(
       caught(() => irOf("<p>{% x %}</p>", undefined, syntax)).message,
     ).toBe("a block tag has no lowering yet");
@@ -651,27 +681,27 @@ describe("block tags and filters", () => {
   });
 
   it("a hook that returns no IR is refused", () => {
-    const syntax = moduleWith(table, {
+    const syntax = dialectWith(table, {
       lowerBlockTag: () => ({}) as IrNode,
     });
     expect(
       caught(() => irOf("<p>{% x %}</p>", undefined, syntax)).message,
     ).toBe(
-      "the syntax module's `lowerBlockTag` must return IR nodes (build them with `ctx.build`)",
+      "the dialect's `lowerBlockTag` must return IR nodes (build them with `ctx.build`)",
     );
   });
 });
 
-describe("`afterLower` and `productName`", () => {
-  it("the module's `afterLower` runs once, with the unit's view, and its `productName` names the language", () => {
+describe("`afterLower` and the dialect's `name`", () => {
+  it("the dialect's `afterLower` runs once, with the unit's view, and its `name` names the language", () => {
     const seen: string[] = [];
     const names: (string | undefined)[] = [];
     const file = join(dir, "page.mx");
     compileSource("sort asc &a\n", file, declarations, {
       targets,
-      syntax: {
+      dialect: {
         ...memberSyntax,
-        productName: "Mesh",
+        name: "Acme",
         afterLower: (unit: LoweredUnit) => {
           seen.push(unit.file);
         },
@@ -682,7 +712,7 @@ describe("`afterLower` and `productName`", () => {
       },
     });
     expect(seen).toEqual([file]);
-    expect(names).toEqual(["Mesh"]);
+    expect(names).toEqual(["Acme"]);
   });
 
   it("the host's `productName` wins", () => {
@@ -690,9 +720,9 @@ describe("`afterLower` and `productName`", () => {
     compileSource("div\n", join(dir, "page.mx"), declarations, {
       targets,
       productName: "Host",
-      syntax: {
+      dialect: {
         ...memberSyntax,
-        productName: "Mesh",
+        name: "Acme",
         afterLower: () => {},
       },
       emitIr: (_ir, ctx) => {
@@ -709,7 +739,7 @@ describe("a fragment lowers with its syntax", () => {
     const source = "<sort asc &dueOn/>";
     const { body } = parseFragment(source, {
       filename: join(dir, "page.solid.mx"),
-      syntax: memberSyntax,
+      dialect: memberSyntax,
     });
     const ctx = newCtx(
       source,

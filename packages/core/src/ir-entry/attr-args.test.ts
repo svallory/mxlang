@@ -54,8 +54,8 @@ describe("attribute arguments", () => {
     expect(argsOf(attr(firstTag("x a()\n"), "a"))).toEqual([]);
   });
 
-  it("`a(&b)` carries the member the syntax module built", () => {
-    const a = attr(firstTag("x a(&b)\n", { syntax: memberSyntax }), "a");
+  it("`a(&b)` carries the member the dialect built", () => {
+    const a = attr(firstTag("x a(&b)\n", { dialect: memberSyntax }), "a");
     const [arg] = "args" in a ? (a.args ?? []) : [];
     expect(arg?.code).toBe("self.b");
     expect(arg?.node).toMatchObject({

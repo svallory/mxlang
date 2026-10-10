@@ -3,9 +3,10 @@
  * triggers become before anything reads the tree.
  *
  * One pass per document, run by `lower`/`lowerChildren` right after the atom
- * conversion, calls the syntax module's `lowerTrigger` once per trigger in
- * source order (a value's own triggers before the trigger that owns it) and
- * resolves the built-in node kinds without a hook:
+ * conversion, calls the dialect's `lowerTrigger` (or, for a row naming a
+ * node type, the type's `parse` then `lower`; decision 202 item 3) once per
+ * trigger in source order (a value's own triggers before the trigger that
+ * owns it) and resolves the built-in node kinds without a hook:
  *
  * - an expression trigger's stand-in is replaced, inside its container's
  *   payload, by the node `ctx.expression(node)` carries (or the built-in
@@ -32,12 +33,19 @@ import {
   positionAtOffset,
 } from "./core.ts";
 import { raiseDeferredContractErrors } from "./custom-tags.ts";
+import {
+  type DialectNode,
+  isCallRow,
+  isNodeTypeRow,
+  type NodeKit,
+  registeredNodeType,
+} from "./dialect-registry.ts";
 import type { Member, MxMemberMark } from "./ir.ts";
 import { loweredUnitOf } from "./lowered-unit.ts";
 import type { SourceSpan } from "./mapping.ts";
 import type {
+  Dialect,
   ResolvedSyntax,
-  SyntaxModule,
   SyntaxTable,
   Trigger,
   TriggerAttribute,
@@ -54,6 +62,16 @@ import type {
   TriggerUse,
   TriggerValueForm,
 } from "./syntax-table.ts";
+
+/**
+ * The dialect node a whole-value `StringLiteral` carries (`extra.mxNode`,
+ * set by `ctx.attribute(name, { kind: "node", node, value })`), or
+ * `undefined`.
+ */
+export function dialectNodeOf(node: Node): DialectNode | undefined {
+  const mark: DialectNode | undefined = node?.extra?.mxNode;
+  return node?.type === "StringLiteral" && mark ? mark : undefined;
+}
 
 /** The member a whole-value `StringLiteral` stands for (`extra.mxMember`), or `undefined`. */
 export function memberOf(node: Node): Member | undefined {
@@ -155,7 +173,7 @@ const built = new WeakSet<object>();
 /** The `MxExpression` container behind an expression result. */
 const containers = new WeakMap<object, Node>();
 
-/** Lowered once per `Ctx`: the module's `afterLower` and `productName`. */
+/** Lowered once per `Ctx`: the dialect's `afterLower` and `name`. */
 const applied = new WeakSet<Ctx>();
 
 /**
@@ -166,26 +184,26 @@ const applied = new WeakSet<Ctx>();
 export function lowerTriggers(ctx: Ctx, roots: readonly Node[]): boolean {
   const run = syntaxRuns.get(roots);
   if (!run) return false;
-  const { table, module } = run.syntax;
+  const { table, dialect } = run.syntax;
   ctx.triggerSplices = run.splices;
-  ctx.syntaxModule = module;
-  if (module && !applied.has(ctx)) {
+  ctx.dialect = dialect;
+  if (dialect && !applied.has(ctx)) {
     applied.add(ctx);
-    const afterLower = module.afterLower;
+    const afterLower = dialect.afterLower;
     if (afterLower) {
-      // The module sees the unit through its public view, never the `Ctx`.
+      // The dialect sees the unit through its public view, never the `Ctx`.
       ctx.afterLower = [
         ...(ctx.afterLower ?? []),
         (unit) => afterLower(loweredUnitOf(unit)),
       ];
     }
-    if (module.contractFields) {
-      // Core's own errors on claimed keys, behind the module's hook.
+    if (dialect.contractFields) {
+      // Core's own errors on claimed keys, behind the dialect's hook.
       ctx.afterLower = [...(ctx.afterLower ?? []), raiseDeferredContractErrors];
     }
-    if (module.productName && ctx.productName === undefined) {
-      ctx.productName = module.productName;
-    }
+    // The dialect names the language in core's diagnostics (decision 212
+    // item 10), unless the host set a product name itself.
+    if (ctx.productName === undefined) ctx.productName = dialect.name;
   }
   const seen = new WeakSet<object>();
   // `owner` is the node holding `value` (arrays pass it through): a
@@ -195,7 +213,7 @@ export function lowerTriggers(ctx: Ctx, roots: readonly Node[]): boolean {
     seen.add(value);
     if (Array.isArray(value)) {
       for (const item of value) visit(item, owner);
-      mapChildren(ctx, table, module, value);
+      mapChildren(ctx, table, dialect, value);
       return;
     }
     if (typeof value.type !== "string") {
@@ -214,7 +232,7 @@ export function lowerTriggers(ctx: Ctx, roots: readonly Node[]): boolean {
     // A tag's attributes before its body, in source order.
     if (Array.isArray(value.attributes)) {
       visit(value.attributes, value);
-      mapAttributes(ctx, table, module, value);
+      mapAttributes(ctx, table, dialect, value);
     }
     for (const [key, child] of Object.entries(value)) {
       if (key === "loc" || !child || typeof child !== "object") continue;
@@ -338,9 +356,167 @@ function printed(ctx: Ctx, node: Node, trigger: Node): string {
 /** The positioned error for a hook's result that does not fit its position. */
 function wrongResult(trigger: Node, want: string): never {
   return fail(
-    `the \`${trigger.id}\` trigger's \`lowerTrigger\` must return \`${want}\` for a trigger in ${positionPhrase(trigger.position)}`,
+    `the \`${trigger.id}\` trigger's ${hookLabel(trigger)} must return \`${want}\` for a trigger in ${positionPhrase(trigger.position)}`,
     trigger,
   );
+}
+
+/**
+ * The hook a trigger lowers through, as its errors name it: the dialect's
+ * `lowerTrigger` for a `{ call }` row, a node type's `lower` for a
+ * `{ type, dialect }` row.
+ */
+interface TriggerHook {
+  readonly label: string;
+  call(context: TriggerContext): TriggerResult;
+}
+
+/** The label of the hook each trigger lowers through, when it is not `lowerTrigger`. */
+const hookLabels = new WeakMap<Node, string>();
+
+function hookLabel(trigger: Node): string {
+  return hookLabels.get(trigger) ?? "`lowerTrigger`";
+}
+
+/** The dialect's `lowerTrigger` as a trigger's hook; "has no lowering yet" without one. */
+function lowerTriggerHook(
+  dialect: Dialect | undefined,
+  trigger: Node,
+): TriggerHook {
+  const lowerTrigger = dialect?.lowerTrigger;
+  if (!lowerTrigger) noLowering(trigger);
+  return {
+    label: "`lowerTrigger`",
+    call: (context) =>
+      (lowerTrigger as NonNullable<Dialect["lowerTrigger"]>)(
+        trigger.id,
+        trigger.text,
+        spanOf(trigger),
+        context,
+      ),
+  };
+}
+
+/** Nodes a node type's `parse` returned, per trigger (each parsed once). */
+const dialectNodes = new WeakMap<Node, DialectNode>();
+
+/** Every node core stamped from a `parse`, so a hand-made one is refused. */
+const parsedNodes = new WeakSet<object>();
+
+/**
+ * The node type a `{ type, dialect }` row names, as the trigger's hook: its
+ * `parse` reads the trigger's text (the row's `match` fixed where it ends),
+ * core stamps the result with `type` and `span`, and its `lower` builds it.
+ */
+function nodeTypeHook(
+  ctx: Ctx,
+  dialect: Dialect | undefined,
+  trigger: Node,
+  row: { readonly type: string; readonly dialect: string },
+): TriggerHook {
+  const registered = registeredNodeType(dialect, row);
+  const nodeType = registered?.nodeType;
+  if (!registered || !nodeType) return noLowering(trigger);
+  let node = dialectNodes.get(trigger);
+  if (!node) {
+    const label = `\`parse\` (node type \`${registered.key}\`)`;
+    hookLabels.set(trigger, label);
+    const kit: NodeKit = Object.freeze({
+      fail: (message: string, options?: TriggerFailOptions): never =>
+        failAt(ctx, trigger, label, message, options),
+    });
+    const span = spanOf(trigger);
+    let fields: unknown;
+    try {
+      fields = nodeType.parse(String(trigger.text), span, kit);
+    } catch (error) {
+      if (isTranslateError(error)) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      return fail(
+        `the \`${trigger.id}\` trigger's ${label} threw: ${message}`,
+        trigger,
+      );
+    }
+    if (!fields || typeof fields !== "object" || Array.isArray(fields)) {
+      return fail(
+        `the \`${trigger.id}\` trigger's ${label} must return the node's fields as an object`,
+        trigger,
+      );
+    }
+    if ("type" in fields || "span" in fields) {
+      return fail(
+        `the \`${trigger.id}\` trigger's ${label} returns the node's own fields: core sets \`type\` and \`span\``,
+        trigger,
+      );
+    }
+    node = Object.freeze({
+      ...(fields as object),
+      type: registered.key as DialectNode["type"],
+      span,
+    });
+    parsedNodes.add(node);
+    dialectNodes.set(trigger, node);
+  }
+  const parsed = node;
+  const label = `\`lower\` (node type \`${registered.key}\`)`;
+  hookLabels.set(trigger, label);
+  return { label, call: (context) => nodeType.lower(parsed, context) };
+}
+
+/**
+ * The hook a `{ call }` or `{ type, dialect }` row lowers through; any
+ * other row is `undefined` (a built-in kind).
+ */
+function hookFor(
+  ctx: Ctx,
+  dialect: Dialect | undefined,
+  trigger: Node,
+  node: unknown,
+): TriggerHook | undefined {
+  if (isNodeTypeRow(node)) return nodeTypeHook(ctx, dialect, trigger, node);
+  if (isCallRow(node)) return lowerTriggerHook(dialect, trigger);
+  return undefined;
+}
+
+/** `kit.fail` inside a node type's `parse`, `ctx.fail` in every other hook. */
+function failName(label: string): string {
+  return label.startsWith("`parse`") ? "kit.fail" : "ctx.fail";
+}
+
+/**
+ * A hook's positioned error (`ctx.fail`, a node type's `kit.fail`): at the
+ * trigger's text (after any `async` before it), or at `at`, carrying
+ * `code` when given.
+ */
+function failAt(
+  ctx: Ctx,
+  trigger: Node,
+  label: string,
+  message: string,
+  options: TriggerFailOptions | undefined,
+): never {
+  if (typeof message !== "string" || message === "") {
+    return fail(
+      `the \`${trigger.id}\` trigger's ${label}: \`${failName(label)}\` takes a non-empty message`,
+      trigger,
+    );
+  }
+  const at = options?.at
+    ? checkPart(ctx, trigger, options.at, failName(label))
+    : undefined;
+  try {
+    const own = asyncTextStart.has(trigger)
+      ? { type: "MxTriggerPart", ...spanRange(trigger) }
+      : trigger;
+    return fail(message, at ?? own);
+  } catch (error) {
+    if (options?.code !== undefined && isTranslateError(error)) {
+      (error as { diagnosticCode?: string }).diagnosticCode = String(
+        options.code,
+      );
+    }
+    throw error;
+  }
 }
 
 function positionPhrase(position: TriggerPosition): string {
@@ -352,20 +528,21 @@ function positionPhrase(position: TriggerPosition): string {
 }
 
 /**
- * Builds the `TriggerContext` for one trigger and calls `lowerTrigger`.
- * Whatever the hook throws leaves positioned at the trigger: a
- * `TranslateError` as is, anything else wrapped.
+ * Builds the `TriggerContext` for one trigger and calls its hook (the
+ * dialect's `lowerTrigger`, or a node type's `lower`). Whatever the hook
+ * throws leaves positioned at the trigger: a `TranslateError` as is,
+ * anything else wrapped.
  */
 function callHook(
   ctx: Ctx,
-  module: SyntaxModule,
+  hook: TriggerHook,
   trigger: Node,
   value: TriggerExpression | TriggerMethod | null,
   use: TriggerUse = null,
   operator: string | null = null,
 ): TriggerResult {
   const valueForm = valueFormOf(trigger);
-  const hook = module.lowerTrigger as NonNullable<SyntaxModule["lowerTrigger"]>;
+  const { label } = hook;
   const context: TriggerContext = Object.freeze({
     position: trigger.position as TriggerPosition,
     value,
@@ -376,7 +553,7 @@ function callHook(
       const problem = notAnExpression(node);
       if (problem) {
         fail(
-          `the \`${trigger.id}\` trigger's \`lowerTrigger\`: \`ctx.expression\` takes a Babel expression node, got ${problem}`,
+          `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: \`ctx.expression\` takes a Babel expression node, got ${problem}`,
           trigger,
         );
       }
@@ -391,7 +568,7 @@ function callHook(
     ): TriggerAttribute {
       if (name !== null && (typeof name !== "string" || name === "")) {
         fail(
-          `the \`${trigger.id}\` trigger's \`lowerTrigger\`: \`ctx.attribute\` takes a non-empty attribute name, or \`null\` for the tag's default value`,
+          `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: \`ctx.attribute\` takes a non-empty attribute name, or \`null\` for the tag's default value`,
           trigger,
         );
       }
@@ -410,13 +587,13 @@ function callHook(
     shorthand(attribute: "id" | "class", name: string): TriggerShorthand {
       if (attribute !== "id" && attribute !== "class") {
         fail(
-          `the \`${trigger.id}\` trigger's \`lowerTrigger\`: \`ctx.shorthand\` takes \`"id"\` or \`"class"\``,
+          `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: \`ctx.shorthand\` takes \`"id"\` or \`"class"\``,
           trigger,
         );
       }
       if (typeof name !== "string" || name === "") {
         fail(
-          `the \`${trigger.id}\` trigger's \`lowerTrigger\`: \`ctx.shorthand\` takes a non-empty name`,
+          `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: \`ctx.shorthand\` takes a non-empty name`,
           trigger,
         );
       }
@@ -431,7 +608,7 @@ function callHook(
     child(tagName: string, attrs: readonly TriggerAttribute[]): TriggerChild {
       if (typeof tagName !== "string" || tagName === "") {
         fail(
-          `the \`${trigger.id}\` trigger's \`lowerTrigger\`: \`ctx.child\` takes a non-empty tag name`,
+          `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: \`ctx.child\` takes a non-empty tag name`,
           trigger,
         );
       }
@@ -440,7 +617,7 @@ function callHook(
         attrs.some((attr) => !built.has(attr) || attr.kind !== "attribute")
       ) {
         fail(
-          `the \`${trigger.id}\` trigger's \`lowerTrigger\`: \`ctx.child\` takes an array of \`ctx.attribute\` results`,
+          `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: \`ctx.child\` takes an array of \`ctx.attribute\` results`,
           trigger,
         );
       }
@@ -453,39 +630,17 @@ function callHook(
       return result;
     },
     fail(message: string, options?: TriggerFailOptions): never {
-      if (typeof message !== "string" || message === "") {
-        return fail(
-          `the \`${trigger.id}\` trigger's \`lowerTrigger\`: \`ctx.fail\` takes a non-empty message`,
-          trigger,
-        );
-      }
-      const at = options?.at
-        ? checkPart(ctx, trigger, options.at, "ctx.fail")
-        : undefined;
-      try {
-        // Absent `at`, the trigger's text (after any `async` before it).
-        const own = asyncTextStart.has(trigger)
-          ? { type: "MxTriggerPart", ...spanRange(trigger) }
-          : trigger;
-        return fail(message, at ?? own);
-      } catch (error) {
-        if (options?.code !== undefined && isTranslateError(error)) {
-          (error as { diagnosticCode?: string }).diagnosticCode = String(
-            options.code,
-          );
-        }
-        throw error;
-      }
+      return failAt(ctx, trigger, label, message, options);
     },
   });
   let result: TriggerResult;
   try {
-    result = hook(trigger.id, trigger.text, spanOf(trigger), context);
+    result = hook.call(context);
   } catch (error) {
     if (isTranslateError(error)) throw error;
     const message = error instanceof Error ? error.message : String(error);
     return fail(
-      `the \`${trigger.id}\` trigger's \`lowerTrigger\` threw: ${message}`,
+      `the \`${trigger.id}\` trigger's ${label} threw: ${message}`,
       trigger,
     );
   }
@@ -497,7 +652,7 @@ function callHook(
       : handMade(result)
   ) {
     fail(
-      `the \`${trigger.id}\` trigger's \`lowerTrigger\` must return what \`ctx.expression\`, \`ctx.attribute\`, \`ctx.shorthand\` or \`ctx.child\` built (a non-empty list of attributes and shorthands in an attribute list)`,
+      `the \`${trigger.id}\` trigger's ${label} must return what \`ctx.expression\`, \`ctx.attribute\`, \`ctx.shorthand\` or \`ctx.child\` built (a non-empty list of attributes and shorthands in an attribute list)`,
       trigger,
     );
   }
@@ -505,7 +660,7 @@ function callHook(
 }
 
 /**
- * A module's `at` span as a positioned node: inside the document
+ * A dialect's `at` span as a positioned node: inside the document
  * (`0 <= sourceStart <= sourceEnd <= source.length`), else the hook-contract
  * error at the trigger.
  */
@@ -525,7 +680,7 @@ function checkPart(
     at.sourceEnd > ctx.source.length
   ) {
     return fail(
-      `the \`${trigger.id}\` trigger's \`lowerTrigger\`: \`${where}\`'s \`at\` is a \`{ sourceStart, sourceEnd }\` span inside the document (0 to ${ctx.source.length})`,
+      `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: \`${where}\`'s \`at\` is a \`{ sourceStart, sourceEnd }\` span inside the document (0 to ${ctx.source.length})`,
       trigger,
     );
   }
@@ -539,7 +694,7 @@ function checkAttributeOptions(
   if (options === undefined) return;
   const bad = (what: string): never =>
     fail(
-      `the \`${trigger.id}\` trigger's \`lowerTrigger\`: \`ctx.attribute\`'s options ${what}`,
+      `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: \`ctx.attribute\`'s options ${what}`,
       trigger,
     );
   if (!options || typeof options !== "object" || Array.isArray(options)) {
@@ -580,9 +735,16 @@ function checkAttributeValue(
     ) {
       return;
     }
+    if (
+      value.kind === "node" &&
+      parsedNodes.has(value.node) &&
+      typeof value.value === "string"
+    ) {
+      return;
+    }
   }
   fail(
-    `the \`${trigger.id}\` trigger's \`lowerTrigger\`: an attribute value is \`true\`, a string, a \`ctx.expression\` result, the trigger's own method value, or \`{ kind: "atom" | "member", name }\``,
+    `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: an attribute value is \`true\`, a string, a \`ctx.expression\` result, the trigger's own method value, \`{ kind: "atom" | "member", name }\`, or \`{ kind: "node", node, value }\` with a node a node type parsed`,
     trigger,
   );
 }
@@ -605,7 +767,7 @@ function noLowering(trigger: Node): never {
 
 function badKind(trigger: Node, kind: string): never {
   return fail(
-    `the \`${trigger.id}\` trigger's \`node: "${kind}"\` has no meaning in ${positionPhrase(trigger.position)}; use \`{ call }\` and a syntax module's \`lowerTrigger\``,
+    `the \`${trigger.id}\` trigger's \`node: "${kind}"\` has no meaning in ${positionPhrase(trigger.position)}; use \`{ call }\` and a dialect's \`lowerTrigger\``,
     trigger,
   );
 }
@@ -738,7 +900,7 @@ function inBindingPosition(site: Site): boolean {
   return false;
 }
 
-/** Gives a replacement the stand-in's offsets, where the module left them out. */
+/** Gives a replacement the stand-in's offsets, where the dialect left them out. */
 function positioned(replacement: Node, standIn: Node): Node {
   for (const key of ["start", "end", "loc", "range"]) {
     if (replacement[key] === undefined && standIn[key] !== undefined) {
@@ -826,13 +988,20 @@ function lowerExpressionTriggers(
   container: Node,
   owner: Node | null,
 ): void {
-  const { table, module } = run.syntax;
+  const { table, dialect } = run.syntax;
   for (const trigger of container.triggers ?? []) {
     if (lowered.has(trigger)) continue;
     const row = rowFor(table, trigger);
     // Unparsed payloads keep their error for `payloadOf`.
     if (container.node == null) return;
-    if (typeof row.node === "object" && !module?.lowerTrigger) {
+    if (isNodeTypeRow(row.node)) {
+      // The table check refuses this row; a hand-built document may not.
+      fail(
+        `the \`${trigger.id}\` trigger names a node type (\`${row.node.dialect}:${row.node.type}\`), which has no meaning in an expression yet; use \`{ call }\` and the dialect's \`lowerTrigger\``,
+        trigger,
+      );
+    }
+    if (isCallRow(row.node) && !dialect?.lowerTrigger) {
       noLowering(trigger);
     }
     const site = markedSite(container, trigger);
@@ -846,9 +1015,9 @@ function lowerExpressionTriggers(
     }
     // A property name (`{ &a: 1 }`, `{ &a }`) is no operand: an expression
     // there is an invalid key, and a shorthand would keep the stand-in. A
-    // module may refuse it in its own words first (`ctx.use` is "key").
+    // dialect may refuse it in its own words first (`ctx.use` is "key").
     const use = useOf(at, owner);
-    if (use === "key" && typeof row.node !== "object") notWholeOperand(trigger);
+    if (use === "key" && !isCallRow(row.node)) notWholeOperand(trigger);
     const mark = at.node.extra?.mxTrigger;
     let replacement: Node;
     if (row.node === "string") {
@@ -872,7 +1041,7 @@ function lowerExpressionTriggers(
     } else {
       const result = callHook(
         ctx,
-        module as SyntaxModule,
+        lowerTriggerHook(dialect, trigger),
         trigger,
         null,
         use,
@@ -1037,7 +1206,7 @@ function attributeNode(ctx: Ctx, trigger: Node, attr: TriggerAttribute): Node {
   } else if (value.kind === "method") {
     // Only the trigger's own method value is ever built (`ctx.value`).
     return fail(
-      `the \`${trigger.id}\` trigger's \`lowerTrigger\`: a method value is the trigger's own \`ctx.value\``,
+      `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: a method value is the trigger's own \`ctx.value\``,
       trigger,
     );
   } else if (value.kind === "expression") {
@@ -1055,6 +1224,18 @@ function attributeNode(ctx: Ctx, trigger: Node, attr: TriggerAttribute): Node {
       text: printed(ctx, node, trigger),
     });
     container = containerOf(ctx, node, text.sourceStart, text.sourceEnd);
+  } else if (value.kind === "node") {
+    // The static string every target emits, spanning the node's text; the
+    // node rides on the literal (`extra.mxNode`) into `Attr.node`.
+    const span = value.span ?? value.node.span;
+    container = containerOf(
+      ctx,
+      literal(ctx, value.value, span.sourceStart, span.sourceEnd, {
+        mxNode: value.node,
+      }),
+      span.sourceStart,
+      span.sourceEnd,
+    );
   } else {
     const span = value.span ?? text;
     const mark =
@@ -1156,7 +1337,7 @@ function shorthandNode(
 function lowerAttributeTrigger(
   ctx: Ctx,
   table: SyntaxTable,
-  module: SyntaxModule | undefined,
+  dialect: Dialect | undefined,
   trigger: Node,
 ): Node[] {
   const row = rowFor(table, trigger);
@@ -1171,7 +1352,7 @@ function lowerAttributeTrigger(
     const value = triggerValue(trigger);
     if (value?.kind === "method") {
       return fail(
-        `the \`${trigger.id}\` trigger's \`node: "attribute"\` takes no method value; use \`{ call }\` and a syntax module's \`lowerTrigger\``,
+        `the \`${trigger.id}\` trigger's \`node: "attribute"\` takes no method value; use \`{ call }\` and a dialect's \`lowerTrigger\``,
         trigger.value ?? trigger,
       );
     }
@@ -1184,10 +1365,10 @@ function lowerAttributeTrigger(
         value: value ?? true,
       },
     ];
-  } else if (typeof row.node === "object") {
-    if (!module?.lowerTrigger) noLowering(trigger);
+  } else if (isCallRow(row.node) || isNodeTypeRow(row.node)) {
+    const hook = hookFor(ctx, dialect, trigger, row.node) as TriggerHook;
     const value = triggerValue(trigger);
-    const result = callHook(ctx, module as SyntaxModule, trigger, value);
+    const result = callHook(ctx, hook, trigger, value);
     const list = Array.isArray(result) ? result : [result];
     if (
       list.some(
@@ -1218,7 +1399,7 @@ function lowerAttributeTrigger(
 
 /**
  * `ctx.attribute(…, { once })`: a second attribute of that name on the tag,
- * written or built, is the module's error, at the later of the two. The
+ * written or built, is the dialect's error, at the later of the two. The
  * default value is one name however it is written (`<x=1>`, `value=1`,
  * `value:=y`; Marko's default attribute is `value`). In the message,
  * `{written}` is the later attribute as written (a built default value from
@@ -1256,7 +1437,7 @@ function checkOnce(ctx: Ctx, attributes: readonly Node[]): void {
 function mapAttributes(
   ctx: Ctx,
   table: SyntaxTable,
-  module: SyntaxModule | undefined,
+  dialect: Dialect | undefined,
   tag: Node,
 ): void {
   const attributes: Node[] = tag.attributes;
@@ -1264,7 +1445,7 @@ function mapAttributes(
   if (!attributes.some((attr) => attr?.type === "MxTrigger")) return;
   const lowered = attributes.flatMap((attr) =>
     attr?.type === "MxTrigger"
-      ? lowerAttributeTrigger(ctx, table, module, attr)
+      ? lowerAttributeTrigger(ctx, table, dialect, attr)
       : [attr],
   );
   checkOnce(ctx, lowered);
@@ -1303,14 +1484,14 @@ function droppedValue(trigger: Node): never {
 function lowerLineTrigger(
   ctx: Ctx,
   table: SyntaxTable,
-  module: SyntaxModule | undefined,
+  dialect: Dialect | undefined,
   trigger: Node,
 ): Node {
   const row = rowFor(table, trigger);
-  if (typeof row.node !== "object") return badKind(trigger, row.node);
-  if (!module?.lowerTrigger) noLowering(trigger);
+  const hook = hookFor(ctx, dialect, trigger, row.node);
+  if (!hook) return badKind(trigger, row.node as string);
   const value = triggerValue(trigger);
-  const result = callHook(ctx, module as SyntaxModule, trigger, value);
+  const result = callHook(ctx, hook, trigger, value);
   if (Array.isArray(result) || (result as { kind: string }).kind !== "child")
     wrongResult(trigger, "ctx.child(tagName, attrs)");
   const child = result as TriggerChild;
@@ -1347,7 +1528,7 @@ function lowerLineTrigger(
 function mapChildren(
   ctx: Ctx,
   table: SyntaxTable,
-  module: SyntaxModule | undefined,
+  dialect: Dialect | undefined,
   children: Node[],
 ): void {
   if (triggerChildren.has(children)) return;
@@ -1362,7 +1543,7 @@ function mapChildren(
     children,
     children.map((child) =>
       child?.type === "MxTrigger" && child.position === "line"
-        ? lowerLineTrigger(ctx, table, module, child)
+        ? lowerLineTrigger(ctx, table, dialect, child)
         : child,
     ),
   );

@@ -3568,12 +3568,12 @@ read throws, as `readFileSync` does.
 | Result field | Meaning |
 |---|---|
 | `ir` | the `SpannedIr` (§13.7.2), or `undefined` when `diagnostics` holds an error |
-| `diagnostics` | `IrDiagnostic`: `{ severity, message, line, column, offset, file?, code? }`. `line` is 1-based and `column` 0-based, as `TranslateError` and `MxWarning`. `offset` is the UTF-16 offset derived from them (`-1` when `file` names another file, whose text `lowerSource` does not have). An error or warning with no source position (core's 0:0, as for a bad `customTags` registration) is file-level: `line: 1`, `column: 0`, `offset: 0`. `code` is the error's `TranslateError.diagnosticCode` when it has one (today, a syntax module's `ctx.fail(message, { code })`). On success it holds this call's warnings only |
+| `diagnostics` | `IrDiagnostic`: `{ severity, message, line, column, offset, file?, code? }`. `line` is 1-based and `column` 0-based, as `TranslateError` and `MxWarning`. `offset` is the UTF-16 offset derived from them (`-1` when `file` names another file, whose text `lowerSource` does not have). An error or warning with no source position (core's 0:0, as for a bad `customTags` registration) is file-level: `line: 1`, `column: 0`, `offset: 0`. `code` is the error's `TranslateError.diagnosticCode` when it has one (today, a dialect's `ctx.fail(message, { code })`). On success it holds this call's warnings only |
 
 | Option | Values | Meaning |
 |---|---|---|
 | `customTags` | `Record<string, CustomTag>` | contract-only custom tags by call name (decisions 130 and 138): required attributes, attribute types, `children`, `parents`, `analyze`. `lowerSource` does **not** scan `tags/` or `package.json`; this map is the whole vocabulary it knows. Contracts are enforced at every depth (see [Writing a dialect package](/custom-tags/dialect-package/)) |
-| `syntax` | `SyntaxTable` or `SyntaxModule` | the syntax of this file, for a dialect that builds its own (Mesh passes its module, hooks included). Omitted, the file's nearest `package.json#mx.syntax` applies. A trigger, block tag or filter nothing lowers is a positioned diagnostic (§13.9) |
+| `dialect` | `Dialect` or `SyntaxTable` | the dialect of this file, for a consumer that builds its own (Mesh passes its dialect, hooks included); a bare table is a dialect with no hooks. Omitted, the dialect that claims the file's extension applies (§13.9.2). A trigger, block tag or filter nothing lowers is a positioned diagnostic (§13.9) |
 | `tagRules` | `"html"` (default), `"markup"`, `"none"` | the tag rules preset the source parses under (§13.7.3). An option of this function only, never a project or host setting (ruling 209) |
 | `defaultTag` | tag name | what `<#id>` and `<.class>` stand for in place of the built-in `object` (decision 145; see "The unnamed tag" in §4) |
 | `structural` | `"pass"` (default), `"reject"` | `"pass"` keeps the structural constructs (text, `${}`, `<if>`, `<for>`, `<const>`, `import`, `export`, `static`) in the IR. `"reject"` makes each one a positioned error: ``the data tree is static; this file's consumer does not evaluate `<if>` `` (the construct is named). Comments are **never** structural — a `//` line or `<!-- -->` stays in the IR as its `Comment` node under either value (decision 131 addendum 5). A structural hit and a check error are ordered by position |
@@ -3603,7 +3603,7 @@ missing is an `internal error`, with no IR. Every span is core's `SourceSpan`
 - **Every authored tag is a `DelegatedTag`.** Core's entry declarations
   delegate every name core does not own (decision 132). A wildcard child
   (decision 147) is named by its canonical tag in `tag.name`, with the authored
-  spelling in `tag.alias` (`{ authored, span, groups }`). A tag a syntax module's
+  spelling in `tag.alias` (`{ authored, span, groups }`). A tag a dialect's
   `lowerTrigger` built carries `tag.trigger` (`{ id, span, text }`, §13.9.7).
 - **Attributes** are core's `Attr` kinds: `static` (a string literal, an atom, a
   shorthand), `boolean`, `dynamic` (any expression, a method value included,
@@ -3770,19 +3770,22 @@ arguments.
 
 **Decisions:** 95, 155.
 
-### 13.9 Syntax tables and syntax modules (layer 2)
+### 13.9 Syntax tables and dialects (layer 2)
 
-**Decision 182 and its addenda 1 to 7.** A project can change what the parser
-recognises, and what the new forms mean, without touching core: the parser reads
-one plain-data **syntax table** per parse, and a **syntax module** lowers what the
-table's triggers, block tags and filters produce. This is *layer 2* of the
+**Decision 182 and its addenda 1 to 7; decisions 202 and 212.** A project can change what
+the parser recognises, and what the new forms mean, without touching core: the
+parser reads one plain-data **syntax table** per parse, and a **dialect**
+(decision 202; a "syntax module" before it) carries that table and lowers what
+its triggers, block tags and filters produce. A dialect is a package that claims
+file extensions; a file reaches its dialect by its extension, and a project may
+use several (decision 212). This is *layer 2* of the
 language-extension design ([design notes](/design-notes/language-extensions/));
 it is not the "L2" of §9.1, which names a custom tag's sidecar. The design pages
 stay as the argument; this section states what is.
 
 **Atoms and the name sugars are not rows of this table.** `:name` as a value,
 `:name` and the spaced `#id`/`.class` on a tag are core today (§4). Decisions 183
-and 196 move them to Mesh's syntax module before the beta; until that lands they
+and 196 move them to Mesh's dialect before the beta; until that lands they
 are specified where they are, and a table cannot express them.
 
 #### 13.9.1 The table
@@ -3807,14 +3810,14 @@ interface Trigger {
   chars: string;            // the first characters that arm it: ":" or "A-Z"
   match: string;            // anchored regex source, RE2 subset
   standIn: "number" | "identifier" | "keep";
-  node: "string" | "identifier" | "attribute" | { call: string };
+  node: "string" | "identifier" | "attribute" | { call: string } | { type: string; dialect: string };
   terminatesValue?: boolean;
 }
 ```
 
 **The default row** is a constant equal to the `.mx` grammar byte for byte:
 `placeholder` `${`/`}`, `inlineScript` `"$ "`, no block tag, no filter, `concise`
-on, every trigger list and `tagTypes` empty. A file with no `mx.syntax` parses
+on, every trigger list and `tagTypes` empty. A file no dialect claims parses
 with it. The Marko parity claim holds on this row only; a project that declares
 a table is outside it.
 
@@ -3874,7 +3877,10 @@ the field path and, for a trigger, its `id`:
 - `concise` is a boolean, `inlineScript` is `null` or `{ trigger }` with a
   non-empty string, `expressionLanguage` is `"ts"`.
 - A trigger is an object with a non-empty `id` (unique within its list), a valid
-  `standIn`, a valid `node` (`{ call }` carries a non-empty string), and a
+  `standIn`, a valid `node` (`{ call }` carries a non-empty string; `{ type,
+  dialect }` two non-empty strings and no `call`, and only in an attribute or line
+  list: `a registered node type ({ type, dialect }) is not supported in expression
+  position yet; use { call }`), and a
   `terminatesValue` that is a boolean and sits in `attributeTriggers`.
 - `chars` is a character-class body, never armed on whitespace or a line break,
   and never on a character the list refuses: expression triggers `, ; ) ] }`,
@@ -3893,42 +3899,113 @@ the field path and, for a trigger, its `id`:
   `placeholder` other than `${`/`}` or `null`, an `inlineScript` trigger other
   than `"$ "` or `null`, `concise: false`, and any `textTriggers` entry.
 
-#### 13.9.2 `package.json#mx.syntax`
+#### 13.9.2 Dialect packages and routing
 
-The nearest `package.json` above a file decides its syntax, for every MX file
-under it of any file kind; the file kind supplies only the default row. A
-dependency's files parse with the dependency's manifest, as `mx.tags` resolves.
-A file with a relative or virtual name, or no manifest above it, gets the default
-row.
+**Decision 212.** A dialect is a package. It declares itself in its own
+`package.json`, under `mxDialect`:
 
-`mx.syntax` is one of:
+```json
+{
+  "name": "@acme/mesh",
+  "mxDialect": {
+    "id": "mesh",
+    "name": "Mesh",
+    "extensions": [".mesh", ".mesh.mx"],
+    "module": "./dialect.js"
+  }
+}
+```
 
-- **An object**: table fields overlaid on the default row. Only these fields
-  may be set: `placeholder`, `inlineScript`, `blockTag`, `filter`, `concise`,
-  `expressionTriggers`, `attributeTriggers`, `lineTriggers`, `textTriggers`,
-  `expressionLanguage`. An inline object is a table only (below).
-- **A string**: a syntax module (§13.9.3).
+- `id` names the dialect: lower-case words joined by `-`, never `mx` (MX's own).
+  It is the dialect's node-type namespace (§13.9.9) and the value
+  `mx.extensions` routes to.
+- `name` is the name tooling shows the dialect's users. Where core's own wording
+  says "MX", a diagnostic on the dialect's files says this name.
+- `extensions` is a non-empty list of the file extensions the dialect claims,
+  each with its leading dot, none twice. `.mx` is MX's own and cannot be claimed.
+- `module` is a path, relative to that `package.json`, to the module whose
+  default export is the dialect (§13.9.3).
 
-Absent means the default row. Every problem is a `TranslateError` in the manifest
-at the `mx.syntax` key, naming the field path (the `mx.tags` and `mx.contracts`
-precedent):
+A malformed manifest is a `TranslateError` in the dialect's `package.json` at the
+offending field (at `mxDialect` itself for a missing one):
 
 | Problem | Message |
 |---|---|
-| Not an object or a string | `` `mx.syntax` must be an object overlaying the syntax table, or a string naming a syntax module `` |
-| `tagTypes` set | `` `mx.syntax.tagTypes` is not a manifest field: tag types are taglib-owned, computed from the tags and their parseOptions `` |
-| An unknown field | `` `mx.syntax.<key>` is not a syntax table field (…) `` |
-| A table that fails validation | `` `mx.syntax.<field>` (trigger "<id>"): <reason> ``, one per problem, joined by `; ` |
-| A `{ call }` trigger in an inline object | `` `mx.syntax.<list>[<i>]` (trigger "<id>"): a `{ call }` node is lowered by a syntax module's `lowerTrigger`, and an inline `mx.syntax` is a table only; move the table into a module and name it (`"syntax": "./syntax.ts"`) `` |
+| Not an object | `` `mxDialect` must be an object declaring the dialect: `{ "id", "name", "extensions", "module" }` `` |
+| An unknown field | `` `mxDialect.<key>` is not a dialect manifest field (id, name, extensions, module) `` |
+| An `id` that is not one | `` `mxDialect.id` must be a dialect id: lower-case words joined by `-` (`mesh`) `` |
+| `id` `mx` | `` `mxDialect.id` cannot be `mx`: that is MX's own dialect `` |
+| No `name`, or a blank one | `` `mxDialect.name` must be a non-empty string: the name tooling shows the dialect's users `` |
+| No `extensions` | `` `mxDialect.extensions` must be a non-empty array of the file extensions the dialect claims (`[".mesh"]`) `` |
+| `.mx` claimed | `` `mxDialect.extensions` cannot claim `.mx`: it is MX's own; a dialect claims its own extensions (`.mesh`, `.mesh.mx`) `` |
+| Not an extension | `` `mxDialect.extensions`: "<value>" is not a file extension; write it with its leading dot (`.mesh`) `` |
+| An extension twice | `` `mxDialect.extensions` lists `<ext>` twice `` |
+| No `module` | `` `mxDialect.module` must be a path, relative to this `package.json`, to the module whose default export is the dialect `` |
 
-**The `syntax` option.** `compileSource` (`HostOptions.syntax`), `parseFragment`
-and `lowerSource` (`LowerSourceOptions.syntax`) take an explicit table or syntax
-module, which wins over the manifest. It is validated with the manifest's rules as
-the caller's error, a `TranslateError` at the start of the file naming
-`syntax.<field>`. A non-empty `tagTypes` is refused there too. `null` is not
-"omitted" (that is `undefined`, which resolves the manifest): it is refused like
-any value that is not a table (``the `syntax` option must be a syntax table
-object, not null; omit it to use the file's `package.json#mx.syntax` ``).
+**Discovery.** A file's project is its nearest `package.json`. Core reads that
+manifest's `dependencies`, `devDependencies`, `optionalDependencies` and
+`peerDependencies`, finds each listed package where Node would (the
+`node_modules` directories from the project up), and keeps the ones whose
+`package.json` declares `mxDialect`. It reads those files statically and never
+scans `node_modules`: a dialect that is installed but not a direct dependency is
+not found, and a listed package that is missing or declares nothing is skipped. A
+dialect package's own `mxDialect` routes its own files too, so a dialect's tests
+need no dependency on itself. A file with a relative or virtual name, or no
+manifest above it, gets no dialect. No dialect's code runs until a file it claims
+is compiled.
+
+**Routing.** A file goes to the dialect that claims the longest extension its
+name ends with (`page.mesh.mx` goes to the dialect claiming `.mesh.mx` before one
+claiming `.mesh`; a bare `.mesh` is not a file with that extension). A file no
+dialect claims, every `.mx` file among them, parses with the file kind's default
+row and no dialect. Two dialects claiming the extension a file is routed by is an
+error in the project's `package.json` at the second one's dependency entry,
+naming both: `` two dialects claim `<ext>`: `<a>` (<package a>) and `<b>`
+(<package b>). Choose one in MX's config: `"extensions": { "<ext>": "<a>" }` ``.
+A clash on an extension the file does not end with is not an error for that file.
+
+**`mx.extensions`** in the project's `package.json` maps an extension to a
+dialect id: `{ ".mesh": "mesh" }`. It settles a clash, and it can route an
+extension the dialect does not claim to a dialect the project uses. A problem is
+an error at the `mx.extensions` key:
+
+| Problem | Message |
+|---|---|
+| Not an object | `` `mx.extensions` must be an object mapping a file extension to the id of the dialect that handles it (`{ ".mesh": "mesh" }`) `` |
+| `.mx` routed | `` `mx.extensions` cannot route `.mx`: it is MX's own `` |
+| A key that is not an extension | `` `mx.extensions`: "<key>" is not a file extension; write it with its leading dot (`.mesh`) `` |
+| An id no dependency declares | `` `mx.extensions` routes `<ext>` to "<id>", which is not a dialect this project uses (it uses `<ids>`); a dialect is found among the project's direct dependencies `` |
+
+**Loading.** A routed file loads its dialect's `module`, resolved from the
+dialect's package directory, synchronously (like `mx.contracts`). A module that
+does not resolve is an error in the dialect's `package.json` at
+`mxDialect.module`: `` the dialect `<id>`'s module "<module>" cannot be resolved
+from <dir>. Check `mxDialect.module`. `` Core stamps the manifest's `id` and
+`name` on the loaded dialect; a module that states either must agree with the
+manifest (`` `<key>` is "<module's>", and the dialect's
+`package.json#mxDialect.<key>` is "<manifest's>": leave it to the manifest, or
+make them agree ``, in the module file at 1:0).
+
+**`mx.syntax` is removed** (decisions 202 and 212, no alias, decision 195). No
+setting selects a file's syntax. In either of its old forms, an inline table or a
+string, it is an error at its key, also on a file a dialect claims: ``` `mx.syntax`
+is removed: a syntax of your own is a dialect, a package that declares itself in
+its `package.json#mxDialect` (`id`, `name`, the `extensions` it claims, its
+`module`) and is one of the project's dependencies; a file goes to the dialect
+that claims its extension. `.mx` files are always MX's. ```
+
+**The `dialect` option.** `compileSource` (`HostOptions.dialect`), `parseFragment`
+and `lowerSource` (`LowerSourceOptions.dialect`) take an explicit dialect, or a bare
+syntax table (a dialect with no hooks), which wins over routing. A dialect passed
+this way carries its own `id` and `name`: no manifest stamps them. It is
+validated with a loaded dialect's rules as the caller's error, a `TranslateError`
+at the start of the file: ``the `dialect` option is not a valid dialect: <reason>``
+for a dialect, naming `dialect.<field>`, and ``the `dialect` option is not a valid
+syntax table: <reason>`` for a bare table. A non-empty `tagTypes` is refused there
+too. `null` is not "omitted" (that is `undefined`, which resolves the manifest): it
+is refused like any value that is neither (``the `dialect` option must be a
+dialect or a syntax table object, not null; omit it to use the dialect that
+claims the file's extension``).
 
 **Identity.** A resolved table is deep-frozen and interned by its **hash**: the
 sha256 of its canonical JSON (keys sorted at every level, `undefined` fields
@@ -3936,49 +4013,73 @@ dropped), so two tables with equal content hash alike and share one frozen objec
 for the process. A table whose content equals the default row resolves to the
 default row itself, and a default-row project runs no extra parse and pays one
 comparison. An explicit table is validated once per frozen object. A manifest
-read is resolved once; an unchanged manifest is not re-validated, and a syntax
+read is resolved once; an unchanged manifest is not re-validated, and a dialect
 module is reloaded when its file's mtime changes.
 
-#### 13.9.3 Syntax modules
+#### 13.9.3 Dialects
 
-A **syntax module** is the default export of the file a string `mx.syntax` names
-(a package name, or a path relative to the manifest, resolved like
-`mx.contracts`), or the object passed as the `syntax` option:
+A **dialect** is the default export of the module its `mxDialect.module` names
+(its `id` and `name` stamped from the manifest; the module may leave them out,
+which its type, `DialectModule`, allows), or the object passed as the `dialect`
+option:
 
 ```ts
-interface SyntaxModule {
+interface Dialect {
+  id: string;                                     // registry namespace: "mesh"
+  name: string;                                   // what tooling calls it: "Mesh"
   table: Partial<Omit<SyntaxTable, "tagTypes">>;  // overlays the default row
+  tagRules?: "html" | "markup" | "none";          // default "html"
+  nodeTypes?: Record<string, NodeType>;           // §13.9.9
   lowerTrigger?(id: string, text: string, span: SourceSpan, ctx: TriggerContext): TriggerResult;
   lowerBlockTag?(text: string, span: SourceSpan, ctx: SyntaxBuildContext): IrNode | IrNode[];
   lowerFilter?(name: string, body: string, span: SourceSpan, ctx: SyntaxBuildContext): IrNode | IrNode[];
-  afterLower?(ctx: Ctx): void;
-  productName?: string;
+  afterLower?(unit: LoweredUnit): void;
+  contractFields?: ContractFields;
+  checkContract?(tag: string, contract: ContractData, ctx: ContractCheckContext): void;
+  describeAttribute?(declaration: Readonly<Record<string, unknown>>): string;
 }
 ```
 
-The file loads like a sidecar (§9.3): Node's strip-only `require`, no top-level
+The module loads like a sidecar (§9.3): Node's strip-only `require`, no top-level
 `await`, explicit extensions on relative imports. Its `table` is validated as in
-§13.9.2, naming `table.<field>`. A module that fails to load, or whose shape is
-wrong, is an error in the module file at 1:0: a field outside the six above, a
-missing `table`, a hook that is not a function, an empty `productName`. A
-specifier that does not resolve is an error at the `mx.syntax` key
-(`` `mx.syntax` could not resolve `<spec>` from <dir> ``).
+§13.9.1, naming `table.<field>`. A module that fails to load, or whose shape is
+wrong, is an error in the module file at 1:0: a field outside those above
+(`productName` included: the dialect's `name` replaces it), a missing `table`, a
+hook that is not a function, a `tagRules` that is not a preset, a malformed node
+type (§13.9.9). For the `dialect` option, an `id` that is missing, not
+lower-case words joined by `-`, or `mx`, and a missing or blank `name`, are
+errors too. A table other than the default row needs a template parser with the
+syntax-table API; under the stock parser it is refused in the module file (``
+`table`: needs a template parser with the syntax-table API; the installed
+`htmljs-parser` has none ``).
 
-**A `{ call }` trigger needs the module's `lowerTrigger`.** A module whose table
-has one and no hook is an error at the `mx.syntax` key (`` `mx.syntax` (<spec>):
-`table.<list>[<i>]` (trigger "<id>") has a `{ call }` node, and the module exports
-no `lowerTrigger` ``). The `syntax` option accepts that combination, and lowering
-reports it at the trigger (§13.9.5).
+**`tagRules`** names the core tag-rule preset the dialect's files parse with
+(ruling 211; decision 212 item 8). The dialect states it in its own module; every
+tool honours it for the dialect's files, and project config cannot change it. A
+dialect that states none gets `html`, the full rules. A file no dialect claims
+takes its preset from its target. *(The preset wiring lands with the tag-preset
+tables; the field is accepted and validated today.)*
 
-**Block tags, filters, `afterLower`, `productName`.** `lowerBlockTag` receives the
+**A dialect owns its targets** (ruling 211; decision 212 item 1). Its module will
+declare `targets` and a `defaultTarget`; one that declares none is check-only
+(decision 204). That declaration is not specified yet.
+
+**A `{ call }` trigger needs the dialect's `lowerTrigger`.** A loaded dialect
+whose table has one and no hook is an error in the module file at 1:0: ``
+`table.<list>[<i>]` (trigger "<id>") has a `{ call }` node, and the dialect
+exports no `lowerTrigger` ``. The `dialect` option accepts that combination, and
+lowering reports it at the trigger (§13.9.5).
+
+**Block tags, filters, `afterLower`, `name`.** `lowerBlockTag` receives the
 raw text between a block tag's delimiters and `lowerFilter` a filter's name and
 raw body; each returns IR built through `ctx.build`, the builders a custom tag's
-`transform` gets. A block tag in a table whose module has no `lowerBlockTag` is
+`transform` gets. A block tag in a table whose dialect has no `lowerBlockTag` is
 the positioned error `a block tag has no lowering yet`; a filter with no
 `lowerFilter`, `` the `<name>` filter has no lowering yet``. `afterLower` joins the
 unit's `afterLower` list, after core's own hooks, and runs once per unit after
-lowering and before emit. `productName` names the language where core's
-diagnostics say "MX", unless the host sets one.
+lowering and before emit. The dialect's `name` names the language where core's
+diagnostics say "MX" on its files, unless the host sets a `productName`; a file
+no dialect claims says "MX".
 
 #### 13.9.4 Where the table is read
 
@@ -4001,11 +4102,15 @@ target's `nativeTags`, decision 197) and the tags' `parseOptions`
 | `"identifier"` | an identifier named by the text | error | error |
 | `"attribute"` | error | an attribute named by the text after its first character (the sigil), bare or with its `=value` | error |
 | `{ call }` | `lowerTrigger` | `lowerTrigger` | `lowerTrigger` |
+| `{ type, dialect }` | error | the node type's `parse`, then its `lower` (§13.9.9) | the node type's `parse`, then its `lower` |
 
 The built-in kinds lower in core with no hook. A kind in a position where it has
 no meaning is a positioned error: `` the `<id>` trigger's `node: "<kind>"` has no
 meaning in <an expression | an attribute list | a tagless line>; use `{ call }` and a
-syntax module's `lowerTrigger` ``.
+dialect's `lowerTrigger` ``. A node-type row in an expression (a table the
+`dialect` option passes; the parser refuses it in a manifest's dialect) is `` the
+`<id>` trigger names a node type (`<d>:<Type>`), which has no meaning in an
+expression yet; use `{ call }` and the dialect's `lowerTrigger` ``.
 
 **`lowerTrigger(id, text, span, ctx)`** builds what a `{ call }` trigger
 produces. `text` is the trigger's authored text and `span` its file-absolute
@@ -4041,7 +4146,7 @@ trigger's `text` and `span` are its own token (`:name`), never `async`; a
 its `(` (or its `<` for type parameters), so neither `async` nor the trigger is
 part of the value's text. `async` with no method after it stays an ordinary
 boolean attribute. A module that has no meaning for an async method refuses it
-with `ctx.fail`, naming the form: both reference modules (`syntax/atoms-sugars`
+with `ctx.fail`, naming the form: both reference dialects (`syntax/atoms-sugars`
 and `syntax/mesh`, §13.9.8) do, with `` `async :name(…) { … }` is not supported:
 a `:name` method value cannot be async; remove `async` `` at the `:name`. Core's
 built-in `:name` sugar never sees one: there `async` stays an attribute, and a
@@ -4082,10 +4187,10 @@ in a method body or in call arguments lowers like any other expression position.
 
 #### 13.9.6 The `"member"` contract type
 
-A member is the whole-value reference a syntax module produces for a sigil like
+A member is the whole-value reference a dialect produces for a sigil like
 Mesh's `&`: not text, not an atom. Core knows no sigil; it knows the **shape**.
 
-- In an expression, a member is whatever Babel node the module handed
+- In an expression, a member is whatever Babel node the dialect handed
   `ctx.expression`, marked `extra.mxMember = { span, name }` (`MxMemberMark`);
   `span` covers the authored token, sigil included.
 - As a whole attribute value it is one of two forms: the static value `ctx.attribute`
@@ -4104,7 +4209,7 @@ Mesh's `&`: not text, not an atom. Core knows no sigil; it knows the **shape**.
 | `"expression"` | accepted | accepted |
 
 `values`, `pattern` and `ref` stay atom-only; whether a member names something that
-exists is the module's `afterLower` check, not the contract's. There is no union
+exists is the dialect's `afterLower` check, not the contract's. There is no union
 type: a kind with an atom slot and a member slot declares two slots.
 
 **One member per name slot.** A second member in the same name slot (`sort asc &c
@@ -4125,15 +4230,15 @@ authored text, and that text. An authored tag has none, so a consumer tells
 `&title` from an authored `<member name="title"/>` without comparing spans. Core
 names no trigger.
 
-#### 13.9.8 The reference module
+#### 13.9.8 The reference dialect
 
-`@mxlang/core/syntax/member` is a syntax module shipped as a reference for
+`@mxlang/core/syntax/member` is a dialect shipped as a reference for
 extension authors: Mesh's member sigil `&` in all three lists, built on the public
 hook API only, importing types only.
 
 ```ts
 import memberSyntax from "@mxlang/core/syntax/member";
-lowerSource(source, file, { syntax: memberSyntax });
+lowerSource(source, file, { dialect: memberSyntax });
 ```
 
 Its row is `{ id: "member", chars: "&", match: <an identifier after &>, standIn:
@@ -4147,9 +4252,47 @@ Its row is `{ id: "member", chars: "&", match: <an identifier after &>, standIn:
 | tagless line | `&amount=expr` | the same, plus a dynamic `value` |
 
 The sigil, the `member` id, the `self` receiver and the `member` tag are this
-file's choices, not core's. A project may copy the module, rename them, and point
-`mx.syntax` at the copy. Mesh's `&` replaces the "`:name` after a value" form
+file's choices, not core's. A project may copy the dialect, rename them, and
+publish the copy as a dialect package (§13.9.2). Mesh's `&` replaces the "`:name` after a value" form
 (`belongs-to=:List :list`), which no layer-2 user needs (addendum 1).
+
+#### 13.9.9 Node types
+
+**Decision 202 item 3.** One registry keys every node the MX AST can hold as
+`id:Type`. Core is **dialect zero**, named `mx`: its MX AST node types are
+registered under it (`MxTag` is `mx:Tag`) with their child keys, and core lowers
+them directly. A dialect registers its own under its `id`, in `nodeTypes`, keyed
+by a PascalCase `Type`:
+
+```ts
+interface NodeType<N extends DialectNode> {
+  keys: readonly string[];                                  // child-node fields; [] for a leaf
+  parse(text: string, span: SourceSpan, kit: NodeKit): Omit<N, "type" | "span">;
+  print(node: N): string;                                   // print(parse(text)) is text
+  lower(node: N, ctx: TriggerContext): TriggerResult;
+}
+```
+
+A table row names one with `node: { type, dialect }`, in an attribute or line list
+only. The row's `match` decides where the node ends; at lowering core hands the
+matched text and its span to `parse`, sets `type` (the key) and `span` on the
+fields it returns, freezes the node, and hands it to `lower`, which builds with
+the `ctx` constructors `lowerTrigger` gets (§13.9.5). A node is parsed once per
+trigger. A whole attribute value keeps the node:
+`ctx.attribute(name, { kind: "node", node, value })` lowers to a static `Attr`
+with `value` (what every target emits) and `node` (`DialectNode`), never set
+together with `atom` or `member`. `kit.fail(message, { at?, code? })` is a
+positioned error at the node's text, or at `at`.
+
+**Errors.** At load, in the module file at 1:0 (or at the start of the file for
+the `dialect` option): a type name that is not PascalCase, a field outside `keys`, `parse`, `print`, `lower`, a
+hook that is not a function, `keys` that is not an array of non-empty names or
+names `type` or `span`. A row naming a type its dialect does not register, another
+dialect's type, or core's own `mx:` types is an error in the module file at
+1:0 too. At lowering, at the trigger: ``the `<id>` trigger's `parse` (node type
+`<key>`) threw: <message>``, ``… must return the node's fields as an object``,
+``… returns the node's own fields: core sets `type` and `span` ``, and `lower`'s
+results are checked as `lowerTrigger`'s are, named `` `lower` (node type `<key>`) ``.
 
 **Errors this section does not own.** Positions for all of the above follow §12.
 A syntax table changes which files are valid, not what a valid file's diagnostics

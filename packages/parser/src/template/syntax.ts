@@ -28,12 +28,18 @@ const TAG_TYPES: ReadonlySet<number> = new Set([
  */
 export type StandIn = "number" | "identifier" | "keep";
 
-/** What core builds from a trigger (lowering, not this parser). */
+/**
+ * What core builds from a trigger (lowering, not this parser): a built-in
+ * stand-in, a `{ call }` to the dialect's `lowerTrigger`, or a node type the
+ * dialect registered (`{ type, dialect }`, decision 202 item 3; tag and
+ * attribute position only until expression-position node types land).
+ */
 export type TriggerNode =
   | "string"
   | "identifier"
   | "attribute"
-  | { readonly call: string };
+  | { readonly call: string }
+  | { readonly type: string; readonly dialect: string };
 
 export interface Trigger {
   /** Unique within its list (one id may name a row in several positions, as Mesh's `&` does); names the trigger in events and diagnostics. */
@@ -154,8 +160,8 @@ const REFUSED: Record<ListName, { chars: string; why: string }> = {
 };
 
 /**
- * Validates a table, which may come from JSON (`package.json#mx.syntax`):
- * its shape, then the rules of core.md "Validation" and decision 182
+ * Validates a table, which may come from untyped code (a dialect's `table`,
+ * or one a consumer passes): its shape, then the rules of core.md "Validation" and decision 182
  * addendum 1, then what this parser does not support yet. Returns every
  * problem; empty means the parser can take the table.
  */
@@ -385,17 +391,35 @@ function validateTrigger(
       message: '`standIn` is "number", "identifier" or "keep"',
     });
   }
+  const nodeType =
+    isRecord(node) &&
+    !("call" in node) &&
+    typeof node.type === "string" &&
+    node.type !== "" &&
+    typeof node.dialect === "string" &&
+    node.dialect !== "";
   if (
     !(
       node === "string" ||
       node === "identifier" ||
       node === "attribute" ||
-      (isRecord(node) && typeof node.call === "string" && node.call !== "")
+      (isRecord(node) &&
+        !("type" in node) &&
+        typeof node.call === "string" &&
+        node.call !== "") ||
+      nodeType
     )
   ) {
     out.push({
       field: `${at}.node`,
-      message: '`node` is "string", "identifier", "attribute" or { call }',
+      message:
+        '`node` is "string", "identifier", "attribute", { call } or { type, dialect }',
+    });
+  } else if (nodeType && list === "expressionTriggers") {
+    out.push({
+      field: `${at}.node`,
+      message:
+        "a registered node type (`{ type, dialect }`) is not supported in expression position yet; use { call }",
     });
   }
   if (terminatesValue !== undefined) {

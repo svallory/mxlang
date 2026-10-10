@@ -2,11 +2,17 @@
  * Decision 182, PR C: with a stock `htmljs-parser` in place of MX's
  * template parser (simulated below), the default row still
  * compiles, and a table other than the default row is refused with "needs
- * MX's template parser" at each place a table enters: the manifest, the
- * explicit option. (The compile's own parse is the MX front end since port
+ * MX's template parser" at each place a table enters: a dialect package
+ * that claims the file's extension, the explicit option. (The compile's own parse is the MX front end since port
  * PR 5, which always carries a table, so there is no pre-pass to refuse.)
  */
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it, vi } from "vitest";
@@ -25,8 +31,10 @@ vi.mock("./marko-frontend.ts", async (original) => {
 });
 
 const { TranslateError } = await import("./core.ts");
-const { defaultSyntax, explicitSyntax, normalizeMxSyntax, resolveSyntax } =
-  await import("./syntax-table.ts");
+const { dialectProject } = await import("./test-dialect-project.ts");
+const { defaultSyntax, explicitSyntax, resolveSyntax } = await import(
+  "./syntax-table.ts"
+);
 
 const MEMBER = {
   id: "member",
@@ -36,7 +44,20 @@ const MEMBER = {
   node: { call: "member" },
 } as const;
 
-const dir = mkdtempSync(join(tmpdir(), "mx-syntax-stock-"));
+const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-syntax-stock-")));
+
+/**
+ * A project in `dir/name` using a table-only dialect package that claims
+ * `.tst`. Returns the dialect's module file.
+ */
+function dialect(name: string, table: unknown): string {
+  const root = join(dir, name);
+  mkdirSync(root);
+  const { packageDir } = dialectProject(root, {
+    module: `export default ${JSON.stringify({ table })};`,
+  });
+  return join(packageDir, "index.mjs");
+}
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 function caught(run: () => unknown) {
@@ -54,26 +75,20 @@ describe("a stock parser", () => {
     writeFileSync(join(dir, "package.json"), '{ "name": "x" }');
     const page = join(dir, "page.mx");
     expect(resolveSyntax(page)).toBe(defaultSyntax());
-    // A manifest overlay equal to the default row is the default row.
-    expect(
-      normalizeMxSyntax({ concise: true }, join(dir, "package.json")),
-    ).toBe(defaultSyntax());
   });
 
-  it("a manifest table is refused at the manifest's mx.syntax key", () => {
-    const manifest = join(dir, "package.json");
-    writeFileSync(
-      manifest,
-      `{\n  "name": "x",\n  "mx": { "syntax": ${JSON.stringify({ lineTriggers: [MEMBER] })} }\n}\n`,
-    );
-    const error = caught(() =>
-      normalizeMxSyntax({ lineTriggers: [MEMBER] }, manifest),
-    );
+  it("a dialect's table equal to the default row is the default row", () => {
+    dialect("same", { concise: true });
+    expect(resolveSyntax(join(dir, "same", "page.tst"))).toBe(defaultSyntax());
+  });
+
+  it("a dialect's table is refused in the dialect file", () => {
+    const file = dialect("other", { lineTriggers: [MEMBER] });
+    const error = caught(() => resolveSyntax(join(dir, "other", "page.tst")));
     expect(error.message).toBe(
-      "`mx.syntax`: needs a template parser with the syntax-table API; the installed `htmljs-parser` has none",
+      "`table`: needs a template parser with the syntax-table API; the installed `htmljs-parser` has none",
     );
-    expect(error.file).toBe(manifest);
-    expect([error.line, error.column]).toEqual([3, 10]);
+    expect([error.file, error.line, error.column]).toEqual([file, 1, 0]);
   });
 
   it("an explicit table is refused at the file's start", () => {
@@ -81,7 +96,7 @@ describe("a stock parser", () => {
     const table = Object.freeze({ ...defaultSyntax(), lineTriggers: [MEMBER] });
     const viaOption = caught(() => explicitSyntax(table, page));
     expect(viaOption.message).toContain(
-      "the `syntax` option: needs a template parser",
+      "the `dialect` option: needs a template parser",
     );
     expect([viaOption.file, viaOption.line, viaOption.column]).toEqual([
       page,

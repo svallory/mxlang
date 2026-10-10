@@ -1,6 +1,6 @@
 // Preloaded into every vitest worker by `scripts/sugar-module.ts` (through
-// NODE_OPTIONS): makes every file with no `mx.syntax` resolve to the
-// reference atoms-and-sugars module, so the existing suites run through it
+// NODE_OPTIONS): makes every file no dialect package claims resolve to the
+// reference atoms-and-sugars dialect, so the existing suites run through it
 // (lang-ext-move-sugars-to-mesh, slice a1). Read by core's
 // `resolveSyntaxOf` from this process global, in every copy of core.
 import { pathToFileURL } from "node:url";

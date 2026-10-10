@@ -6,7 +6,7 @@
  * exactly as Mesh's compiler parses them (`parseEntitySource`: Mesh's closed
  * contracts, `tagRules: "none"`, `structural: "reject"`,
  * `unknownTags: "reject"`, `imports: "pass"`) with the reference module `@mxlang/core/syntax/mesh`,
- * `productName: "Mesh"`. The whole `LowerSourceResult` (the IR with its tags,
+ * whose `name` is "Mesh". The whole `LowerSourceResult` (the IR with its tags,
  * attributes, atoms, members, imports and spans, the Babel nodes reduced to
  * their shape and marks (see `snapshot`), and diagnostics) is compared with
  * the checked-in `__golden__/golden.json`.
@@ -26,23 +26,23 @@ import { createRequire } from "node:module";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { CustomTag } from "../custom-tags.ts";
-import type { SyntaxModule } from "../syntax-table.ts";
+import type { Dialect } from "../syntax-table.ts";
 import { type LowerSourceResult, lowerSource } from "./index.ts";
 
 const CORPUS = join(import.meta.dirname, "../fixtures/syntax/mesh-corpus");
 const GOLDEN = join(CORPUS, "__golden__/golden.json");
 
-// Through Node's strip-only `require`, as a manifest's `mx.syntax` loads a
-// module (and so the copied contracts stay out of this program).
+// Through Node's strip-only `require`, as a dialect package's module loads
+// (and so the copied contracts stay out of this program).
 const load = createRequire(import.meta.url);
 const meshSyntax = (
   load(join(import.meta.dirname, "../syntax/mesh.ts")) as {
-    default: SyntaxModule;
+    default: Dialect;
   }
 ).default;
 const memberSyntax = (
   load(join(import.meta.dirname, "../syntax/member.ts")) as {
-    default: SyntaxModule;
+    default: Dialect;
   }
 ).default;
 const contracts = (
@@ -51,19 +51,22 @@ const contracts = (
   }
 ).default;
 
-/** Mesh's `MESH_SYNTAX` on the alpha.15 pin. */
-const MESH_SYNTAX: SyntaxModule = { ...meshSyntax, productName: "Mesh" };
+/**
+ * Mesh's `MESH_SYNTAX` on the alpha.15 pin. Its `name`, "Mesh", is what
+ * Mesh's `productName: "Mesh"` set (decision 212 item 10).
+ */
+const MESH_SYNTAX: Dialect = meshSyntax;
 /** Mesh's `MESH_SYNTAX` before it (alpha.14): members only, core's built-in atoms. */
-const MEMBER_SYNTAX: SyntaxModule = { ...memberSyntax, productName: "Mesh" };
+const MEMBER_SYNTAX: Dialect = memberSyntax;
 
 /** Mesh's `parseEntitySource` (`packages/compiler/src/build.ts`), with the syntax as a parameter. */
 function parseEntity(
   source: string,
   file: string,
-  syntax: SyntaxModule,
+  syntax: Dialect,
 ): LowerSourceResult {
   return lowerSource(source, file, {
-    syntax,
+    dialect: syntax,
     customTags: contracts,
     // Mesh states its tag rules; the default is strict (decision 212 item 8).
     tagRules: "none",
@@ -130,7 +133,7 @@ function babelNode(value: unknown): unknown {
  * is dropped: it restates the node's `span`, which stays; a statement's `end`
  * position stays, for the few kinds that carry one.
  */
-function snapshot(rel: string, syntax: SyntaxModule): unknown {
+function snapshot(rel: string, syntax: Dialect): unknown {
   const source = readFileSync(join(CORPUS, rel), "utf8");
   const result = parseEntity(source, `/mesh-corpus/${rel}`, syntax);
   return JSON.parse(
@@ -275,7 +278,7 @@ describe("`async` before a `:name` method under Mesh's contracts (review 460 F1)
       const { ir, diagnostics } = lowerSource(
         source,
         "/v/y.mx",
-        syntax ? { syntax } : {},
+        syntax ? { dialect: syntax } : {},
       );
       expect(diagnostics).toEqual([]);
       const tags = (ir?.body ?? []).flatMap((node) =>

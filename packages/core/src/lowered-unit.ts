@@ -1,5 +1,5 @@
 /**
- * `LoweredUnit`: what a syntax module's `afterLower` is handed
+ * `LoweredUnit`: what a dialect's `afterLower` is handed
  * (lang-ext-move-sugars-to-mesh slice a2, lead ruling Q2 A). A read-only
  * view of one lowered unit in generic terms: every custom tag call with its
  * contract and its attributes as written, the names `analyze` hooks declared
@@ -51,7 +51,7 @@ export interface DeclaredName {
 
 /**
  * A contract's declarations as plain data: `attributes`, `attributeTags` and
- * `children` as registered, plus the keys the file's syntax module claims
+ * `children` as registered, plus the keys the file's dialect claims
  * (`contractFields.tag`) that the contract states. @unstable
  */
 export interface ContractData {
@@ -75,8 +75,8 @@ interface ContractAttrBase {
 
 /**
  * One attribute of a call as written: a string, a whole-value atom or member
- * (the kinds a syntax module builds with `ctx.attribute`), a bare attribute,
- * an expression (the node as lowered, marks included), a spread. @unstable
+ * (the kinds a dialect builds with `ctx.attribute`), a bare attribute, an
+ * expression (the node as lowered, marks included), a spread. @unstable
  */
 export type ContractAttr =
   | (ContractAttrBase & {
@@ -139,7 +139,7 @@ export interface ContractCall {
   readonly ancestors: readonly ContractAncestor[];
 }
 
-/** One lowered unit, as a syntax module's `afterLower` sees it. @unstable */
+/** One lowered unit, as a dialect's `afterLower` sees it. @unstable */
 export interface LoweredUnit {
   /** The file being lowered. */
   readonly file: string;
@@ -273,7 +273,7 @@ function inside(ctx: Ctx, span: unknown): span is SourceSpan {
 /** A broken hook contract: a file-level error naming the call. */
 function contractError(ctx: Ctx, what: string): never {
   throw new TranslateError(
-    `the syntax module's \`afterLower\`: ${what} is a \`{ sourceStart, sourceEnd }\` span inside the document (0 to ${ctx.source.length})`,
+    `the dialect's \`afterLower\`: ${what} is a \`{ sourceStart, sourceEnd }\` span inside the document (0 to ${ctx.source.length})`,
     0,
     0,
   );
@@ -292,7 +292,7 @@ export function loweredUnitOf(ctx: Ctx): LoweredUnit {
     source: ctx.source,
     get calls(): readonly ContractCall[] {
       if (calls) return calls;
-      const { tag: tagFields } = claimedFields(ctx.syntaxModule);
+      const { tag: tagFields } = claimedFields(ctx.dialect);
       // One copy per registered object across the unit's calls.
       const memo = new WeakMap<object, unknown>();
       calls = freezeAll(
@@ -338,7 +338,7 @@ export function loweredUnitOf(ctx: Ctx): LoweredUnit {
     fail(message: string, options?: LoweredUnitFailOptions): never {
       if (typeof message !== "string" || message === "") {
         throw new TranslateError(
-          "the syntax module's `afterLower`: `unit.fail` takes a non-empty message",
+          "the dialect's `afterLower`: `unit.fail` takes a non-empty message",
           0,
           0,
         );

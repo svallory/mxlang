@@ -57,7 +57,7 @@ function render(mod: Parser, code: string, statements = false): string {
 }
 
 /**
- * The built-in path, and the atoms-and-sugars syntax module (with the member
+ * The built-in path, and the atoms-and-sugars dialect (with the member
  * row, as Mesh combines them; `lang-ext-move-sugars-to-mesh` slice a1): the
  * same tables, the module's result differing only by a row of
  * `mx-sugar-module.deltas.ts` (`expectedFor`).

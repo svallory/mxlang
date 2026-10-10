@@ -209,7 +209,7 @@ describe("failures are data", () => {
   it("the { … } attribute value hint is the lead's MX rewording (2026-10-08), period rule kept", () => {
     const attr = (doc("<div x={a+b}/>").body[0] as Node).attributes[0];
     expect(attr.value.error?.message).toBe(
-      'Unexpected token, expected ",". Attribute values in MX are plain TypeScript expressions, not JSX; remove the wrapping `{ }`.',
+      'Unexpected token, expected ",". Attribute values are plain TypeScript expressions, not JSX; remove the wrapping `{ }`.',
     );
   });
 
