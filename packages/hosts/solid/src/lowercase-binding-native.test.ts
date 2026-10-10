@@ -59,7 +59,13 @@ describe("lowercase tag with a same-named binding in scope", () => {
 
   it("row 3: an unknown tag naming a tag import is the same error as on every target", () => {
     expect(() => region(`<row label="x"/>`, "./row.mx")).toThrow(
-      "`<row>` is not a tag here: `row` is imported from ./row.mx, and a lowercase tag never calls a binding. Write `<Row>` (rename the import) or `<${row}/>`",
+      "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${row}/>` or rename to `Row`.",
+    );
+  });
+
+  it("a lowercase value import that is no element is the same Marko error (core rule, every host)", () => {
+    expect(() => region(`<row/>`, "./row.ts")).toThrow(
+      "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${row}/>` or rename to `Row`.",
     );
   });
 

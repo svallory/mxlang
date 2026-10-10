@@ -1,3 +1,5 @@
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: MX messages and sources use `${...}` placeholders.
+
 // A target that declares no `nativeTags` (a third-party target written before
 // decision 197) still parses and lowers HTML's void, raw-text and
 // preserved-whitespace elements: core's tag table falls back to core's own
@@ -170,7 +172,7 @@ describe("a region's native elements", () => {
       ),
     });
   const notATag = (name: string) =>
-    `\`<${name}>\` is not a tag here: \`${name}\` is defined at 1:`;
+    `Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use \`<\${${name}}/>\` or rename to \`${name[0]?.toUpperCase()}${name.slice(1)}\`.`;
   const web: HostDeclarations = { ...thirdParty, nativeTags: WEB_ELEMENTS };
 
   it("reads the target's nativeTags: `<param>` and SVG's `<circle>` are native", () => {
@@ -192,5 +194,34 @@ describe("a region's native elements", () => {
     expect(() => lowerRegion(defining("circle"), thirdParty)).toThrow(
       notATag("circle"),
     );
+  });
+});
+
+// Marko's own rule, moved into core verbatim: a lowercase tag never calls a
+// file-local binding, whatever the binding imports (measured on the stock
+// parser, `@marko/compiler` 5.42.11 / `marko` 6.4.4: identical message and
+// position - the tag name - for a tag import, a `.ts` value import and a
+// `static const` local). One error, host-agnostic, before any host's
+// `isElement`/`isComponent` is consulted.
+describe("a lowercase tag naming a file-local binding", () => {
+  it("fails at the tag name with Marko's exact message, whatever the binding is", () => {
+    for (const decl of [
+      'import layout from "./layout.mx"',
+      'import layout from "./layout.ts"',
+      "<define/layout|x|>d</define>",
+    ]) {
+      let error: unknown;
+      try {
+        irOf(`${decl}\n<layout/>\n`);
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error, decl).toMatchObject({
+        message:
+          "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${layout}/>` or rename to `Layout`.",
+        line: 2,
+        column: 1,
+      });
+    }
   });
 });

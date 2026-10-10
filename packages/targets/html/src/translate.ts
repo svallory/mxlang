@@ -222,16 +222,18 @@ function isElement(name: string, _ctx: Ctx): boolean {
  *
  * A *lowercase* local binding (`import layout from "./layout.marko"` then
  * `<layout>`) is not called directly: real Marko rejects it ("Local
- * variables must be in a dynamic tag unless they are PascalCase. Use
+ * variables must be in a [dynamic
+ * tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they
+ * are PascalCase. Use
  * `<${layout}/>` or rename to `Layout`.", verified against `@marko/compiler`
  * 5.42.5 / `marko@6.3.51`; see fixture `lowercase-component`) because a
  * lowercase tag name is only ever resolved through taglib/`tags/`
  * discovery, never through a local variable — that ambiguity is what the
  * dynamic-tag syntax exists to remove. A taglib-discovered tag has no such
  * ambiguity (it is never a local variable), so it is unaffected by this
- * check regardless of case. `isComponent` only decides routing (it has no
- * `node` to report a location with); the rejection itself is raised in
- * `emitComponent`, the first place downstream that has one.
+ * check regardless of case. `isComponent` only decides routing; the
+ * rejection itself is core's (`lower.ts`'s `localVariableTagMessage`, in
+ * Marko's own words), raised once for every target.
  */
 function isComponent(name: string, ctx: Ctx): boolean {
   if (ctx.defines.has(name) || ctx.imports.has(name)) return true;
@@ -294,31 +296,6 @@ function rejectModifier(
   fail(
     `\`${name}\` is not a valid attribute, did you mean \`${suggestion}\`?`,
     attr,
-  );
-}
-
-/**
- * Marko's own rule: a lowercase tag name is never resolved through a local
- * variable.
- *
- * `import layout from "./layout.marko"` then `<layout>` is refused outright
- * ("Local variables must be in a dynamic tag unless they are PascalCase…",
- * verified against `@marko/compiler` 5.42.5 / `marko@6.3.51`; fixture
- * `lowercase-component`), because a lowercase tag is only ever resolved
- * through taglib/`tags/` discovery — that ambiguity is what the dynamic-tag
- * syntax exists to remove. A taglib-discovered tag is unaffected whatever its
- * case, since it is never a local variable.
- *
- * This runs at *resolve* time. Before the IR, it lived in `emitComponent`,
- * "the first place downstream that has a node"; with the emitter no longer
- * seeing Marko nodes, resolve is that place.
- */
-function rejectComponentTag(name: string, node: Node, ctx: Ctx): void {
-  if (!(ctx.defines.has(name) || ctx.imports.has(name))) return;
-  if (/^[A-Z]/.test(name)) return;
-  fail(
-    `Local variables must be in a dynamic tag unless they are PascalCase. Use \`<\${${name}}/>\` or rename to \`${name[0]?.toUpperCase()}${name.slice(1)}\`.`,
-    node,
   );
 }
 
@@ -517,7 +494,6 @@ export const policy: Policy = {
   // fallback, which is `.mx` dialect vocabulary leaking into a Marko-parity
   // target.
   rejectModifier,
-  rejectComponentTag,
   rejectUnknownTag,
   rejectElementAttributeTags: (name, node) => {
     const first = node.attributeTags?.[0];

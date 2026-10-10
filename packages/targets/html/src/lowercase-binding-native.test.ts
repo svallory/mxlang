@@ -10,6 +10,10 @@ import { compile } from "./index.ts";
 // A lowercase tag is a native element whatever binding is in scope (Marko
 // 6.3.51 measured: native for an import and for a lowercase `<define>`).
 describe("lowercase tag with a same-named binding in scope", () => {
+  // Marko's own message, verbatim (measured on the stock parser,
+  // `@marko/compiler` 5.42.11 / `marko` 6.4.4): always at the tag name.
+  const LOCAL_VARIABLE = (name: string) =>
+    `Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use \`<\${${name}}/>\` or rename to \`${name[0]?.toUpperCase()}${name.slice(1)}\`.`;
   it("an imported `span` stays a native element", () => {
     const { code } = compile(
       `import span from "./span.mx"\n<span title="search"/>\n`,
@@ -73,17 +77,30 @@ describe("lowercase tag with a same-named binding in scope", () => {
         `import row from "./row.mx"\n<row label="x"/>\n`,
         "/fixtures/a.mx",
       ),
-    ).toThrow(
-      "`<row>` is not a tag here: `row` is imported from ./row.mx, and a lowercase tag never calls a binding. Write `<Row>` (rename the import) or `<${row}/>`",
-    );
+    ).toThrow(LOCAL_VARIABLE("row"));
   });
 
-  it("the same error names where a lowercase `<define>` is defined", () => {
+  it("a lowercase value import that is no element is the same Marko error (core's, on every host)", () => {
+    let error: unknown;
+    try {
+      compile(
+        `import layout from "./layout.ts"\n<layout/>\n`,
+        "/fixtures/a.mx",
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toMatchObject({
+      message: LOCAL_VARIABLE("layout"),
+      line: 2,
+      column: 1,
+    });
+  });
+
+  it("the same error fires for a lowercase `<define>`", () => {
     expect(() =>
       compile(`<define/row|x|>d</define>\n<row/>\n`, "/fixtures/a.mx"),
-    ).toThrow(
-      "`<row>` is not a tag here: `row` is defined at 1:9, and a lowercase tag never calls a binding. Write `<Row>` (rename the define) or `<${row}/>`",
-    );
+    ).toThrow(LOCAL_VARIABLE("row"));
   });
 
   it("an out-of-scope define does not warn", () => {
@@ -96,15 +113,13 @@ describe("lowercase tag with a same-named binding in scope", () => {
     expect(warnings).toEqual([]);
   });
 
-  it("`_` and `$` names follow Marko's tag-name rule, offering only the dynamic tag", () => {
+  it("`_` and `$` names follow Marko's message, which offers the dynamic tag and the (unchanged) capitalized spelling", () => {
     expect(() =>
       compile(`import _row from "./row.mx"\n<_row/>\n`, "/fixtures/a.mx"),
-    ).toThrow(
-      "`<_row>` is not a tag here: `_row` is imported from ./row.mx, and a lowercase tag never calls a binding. Write `<${_row}/>`",
-    );
+    ).toThrow(LOCAL_VARIABLE("_row"));
     expect(() =>
       compile(`import $row from "./row.mx"\n<$row/>\n`, "/fixtures/a.mx"),
-    ).toThrow("Write `<${$row}/>`");
+    ).toThrow(LOCAL_VARIABLE("$row"));
   });
 
   it("a named import from a tag module is a value: native and silent", () => {
@@ -134,7 +149,7 @@ describe("lowercase tag with a same-named binding in scope", () => {
           `import row from "./row.mx"\n<row label="x"/>\n`,
           join(scratch, "main.mx"),
         ),
-      ).toThrow("`<row>` is not a tag here: `row` is imported from ./row.mx");
+      ).toThrow(LOCAL_VARIABLE("row"));
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }

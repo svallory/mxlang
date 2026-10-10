@@ -1027,7 +1027,7 @@ describe("component aliases", () => {
         "/fixtures/test.mx",
       ),
     ).toThrow(
-      "`<badge>` is not a tag here: `badge` is imported from ./badge.mx, and a lowercase tag never calls a binding. Write `<Badge>` (rename the import) or `<${badge}/>`",
+      "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${badge}/>` or rename to `Badge`.",
     );
   });
 

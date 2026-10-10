@@ -372,9 +372,9 @@ describe("native elements in a region", () => {
     ]);
   });
 
-  it("a name no element table lists is row 3's error", () => {
+  it("a name no element table lists is Marko's local-variable error", () => {
     expect(errorOf(module("widget", "div")).message).toContain(
-      "`<widget>` is not a tag here: `widget` is imported from ./widget.mx, and a lowercase tag never calls a binding.",
+      "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase.",
     );
   });
 });

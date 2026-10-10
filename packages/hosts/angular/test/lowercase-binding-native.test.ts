@@ -72,7 +72,18 @@ describe("lowercase tag with a same-named binding in scope", () => {
         "x.component.ng.mx",
       ),
     ).toThrow(
-      "`<row>` is not a tag here: `row` is imported from ./row.mx, and a lowercase tag never calls a binding. Write `<Row>` (rename the import) or `<${row}/>`",
+      "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${row}/>` or rename to `Row`.",
+    );
+  });
+
+  it("row 3: a lowercase value import that is no element is the same Marko error (core rule, every host)", () => {
+    expect(() =>
+      compileNgMx(
+        ngMx('import layout from "./layout.ts";', "<div><layout/></div>"),
+        "x.component.ng.mx",
+      ),
+    ).toThrow(
+      "Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${layout}/>` or rename to `Layout`.",
     );
   });
 
