@@ -1,0 +1,26 @@
+From f8bbe1005756351a195a4aac2ffe8944279272d5 Mon Sep 17 00:00:00 2001
+From: Saulo Vallory <saulovallory@gmail.com>
+Date: Fri, 9 Oct 2026 22:23:49 -0300
+Subject: [PATCH] docs(readme): a beta note says the API may change until 1.0.0
+
+The npm beta publishes plain 0.1.0 on the latest dist-tag (operator decision, 2026-10-09), so every published package README carries the same one-line beta note right after its intro. This README had no earlier alpha warning to replace; the note sits between the intro paragraph and the grammar description.
+---
+ README.md | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/README.md b/README.md
+index 5ed06f6..7caee9f 100644
+--- a/README.md
++++ b/README.md
+@@ -5,6 +5,8 @@ its highlight and injection queries, the compiled wasm, and a
+ [docmd](https://docmd.io/) plugin that highlights `` ```mx `` fences at build
+ time.
+ 
++> **Beta.** This package is at 0.x. Its API may change in any release until 1.0.0.
++
+ MX is Marko's syntax plus the decision 146 name sugar (`#id`, `.class` and
+ `:name` anywhere in a tag) and decision 156 atoms (`:name` as a value:
+ `default=:draft`, `accept=[:title, :body]`, `self.status === :sent`).
+-- 
+2.55.0
+

@@ -199,6 +199,13 @@ open, as in patch 0004).
   `<!--` met in html content (`MALFORMED_COMMENT` at two other sites) is still a
   silent `return false`; htmljs-parser has no fixture for either.
 
+`patches/0011-docs-readme-a-beta-note-says-the-api-may-change-until-1-0-0.patch`
+is MX's own: `README.md` carries the beta note every published package README
+now opens with (the package is at 0.x; its API may change in any release until
+1.0.0 — the npm beta publishes plain `0.1.0` on `latest`). It sits between the
+intro paragraph and the grammar description; this README had no earlier
+alpha warning to replace.
+
 ## Tests
 
 `bun run test` (`scripts/test.sh`, also `moon run tree-sitter-mx:test` and
