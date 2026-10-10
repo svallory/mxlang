@@ -322,7 +322,7 @@ describe("a dialect package (`package.json#mx.dialect`, decision 212)", () => {
     });
     const error = caught(() => irOf("div\n", join(dir, "page.tst")));
     expect(error.file).toBe(packageFile);
-    expect([error.line, error.column]).toEqual([9, 4]);
+    expect([error.line, error.column]).toEqual([10, 6]);
     expect(error.message).toBe(
       `the dialect \`test\`'s module "./missing.ts" cannot be resolved from ${packageDir}. Check \`mx.dialect.module\`.`,
     );
