@@ -198,7 +198,8 @@ describe("a region's native elements", () => {
 });
 
 // Marko's own rule, moved into core verbatim: a lowercase tag never calls a
-// file-local binding, whatever the binding imports (measured on the stock
+// lowercase `import` or `<define>` binding, whatever the binding imports
+// (measured on the stock
 // parser, `@marko/compiler` 5.42.11 / `marko` 6.4.4: identical message and
 // position - the tag name - for a tag import, a `.ts` value import and a
 // `static const` local). One error, host-agnostic, before any host's

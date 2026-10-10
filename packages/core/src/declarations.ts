@@ -273,11 +273,13 @@ export interface HostDeclarations {
    * Rejects a component call this host will not route, in its own words.
    *
    * Called from `lowerComponent` *before* the `Component` node is built, so
-   * a construct the host refuses never reaches an emitter at all. The vanilla
-   * HTML host uses it for Marko's own rule that a lowercase tag name is never
-   * resolved through a local variable (`import layout …` then `<layout>`),
-   * which Marko rejects outright — a check that has to happen at lower time
-   * now that the emitter no longer sees the Marko node.
+   * a construct the host refuses never reaches an emitter at all. Today's
+   * users: Astro rejects tag params on a component call (an Astro template
+   * passes markup through slots, not render props), and the data target
+   * refuses a template-tag call in a data file. Marko's own rule that a
+   * lowercase tag name is never resolved through a local variable — which
+   * the HTML host used to enforce here — now lives in `lowerAuthoredTag`
+   * itself, raised once for every target.
    */
   rejectComponentTag?(name: string, node: Node, ctx: Ctx): void;
   /**
