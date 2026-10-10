@@ -63,10 +63,12 @@ import {
 import {
   type Dialect,
   explicitSyntaxOf,
+  fileTagRules,
   resolveSyntaxOf,
   type SyntaxTable,
   tableParseError,
 } from "./syntax-table.ts";
+import { taglibsOfRules, tagRulesPreset } from "./tag-presets.ts";
 import { type NativeTags, tagTable } from "./tag-table.ts";
 import { registerSyntax } from "./triggers.ts";
 
@@ -104,12 +106,21 @@ const PARSE_ONLY_TRANSLATOR = {
 function parseOnlyTranslator(
   customTags: Record<string, CustomTag> | undefined,
   claimed: ClaimedFields,
+  rulesTaglibs?: Array<[string, unknown]>,
 ) {
   rejectShadowedRegistration(customTags);
   rejectUnknownDeclarationKeys(customTags, claimed);
   rejectWildcardReferences(customTags);
   rejectUnreachableHooks(customTags);
   const taglib = customTagTaglib(customTags);
+  // A dialect's tag rules replace MX's own parse-only taglibs.
+  if (rulesTaglibs) {
+    return {
+      ...PARSE_ONLY_TRANSLATOR,
+      taglibs: taglib ? [...rulesTaglibs, taglib] : rulesTaglibs,
+      statementTags: false as const,
+    };
+  }
   return taglib
     ? {
         ...PARSE_ONLY_TRANSLATOR,
@@ -432,11 +443,20 @@ export function parseFragment(
       ? explicitSyntaxOf(base.dialect, resolved.filename)
       : resolveSyntaxOf(resolved.filename);
   const syntax = resolvedSyntax.table;
+  // A dialect's fragment parses under the dialect's tag rules, as its files
+  // do (`compileSource`); MX's own fragments keep the host's natives.
+  const preset = fileTagRules(resolvedSyntax);
+  const rules =
+    preset === undefined ? undefined : tagRulesPreset(preset, base.nativeTags);
   const translator = parseOnlyTranslator(
     base.customTags,
     claimedFields(resolvedSyntax.dialect),
+    rules ? taglibsOfRules(rules) : undefined,
   );
-  const lookup = tagTable(translator, base.nativeTags);
+  const lookup = tagTable(
+    translator,
+    rules ? rules.nativeTags : base.nativeTags,
+  );
   const document = parseMx(source, {
     syntax,
     lookup,

@@ -57,11 +57,23 @@ import { sugarAfterDefaultError, tagParamError } from "./stock-parser.ts";
 import {
   type Dialect,
   explicitSyntaxOf,
+  fileTagRules,
   resolveSyntaxOf,
   type SyntaxTable,
   tableParseError,
 } from "./syntax-table.ts";
-import { type NativeTags, type TagTable, tagTable } from "./tag-table.ts";
+import {
+  type TagRules,
+  type TagRulesPreset,
+  taglibsOfRules,
+  tagRulesPreset,
+} from "./tag-presets.ts";
+import {
+  coreNativeTags,
+  type NativeTags,
+  type TagTable,
+  tagTable,
+} from "./tag-table.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
 import { registerSyntax } from "./triggers.ts";
 
@@ -436,6 +448,40 @@ export function parseMxDocument(
 }
 
 /**
+ * Host options whose taglibs already state the file's tag rules: the IR
+ * entry's, which picks the preset itself (its `tagRules` option wins over
+ * the dialect's). Internal: not exported from the package.
+ */
+export const tagRulesDecided = new WeakSet<HostOptions>();
+
+/** `preset`'s rules over the target's native elements (none under `none`). */
+function rulesUnder(preset: TagRulesPreset, policy: Policy): TagRules {
+  return tagRulesPreset(preset, policy.nativeTags);
+}
+
+const policiesUnder = new WeakMap<Policy, WeakMap<NativeTags, Policy>>();
+
+/**
+ * `policy` with `rules`' native elements, one object per pair so a cache
+ * keyed on the policy stays warm. The policy itself when they are its own.
+ */
+function policyUnder(rules: TagRules, policy: Policy): Policy {
+  if (rules.nativeTags === (policy.nativeTags ?? coreNativeTags()))
+    return policy;
+  let byNatives = policiesUnder.get(policy);
+  if (!byNatives) {
+    byNatives = new WeakMap();
+    policiesUnder.set(policy, byNatives);
+  }
+  let under = byNatives.get(rules.nativeTags);
+  if (!under) {
+    under = { ...policy, nativeTags: rules.nativeTags };
+    byNatives.set(rules.nativeTags, under);
+  }
+  return under;
+}
+
+/**
  * Compiles one Marko template under `policy`.
  *
  * The returned map is a placeholder identity map: the emitter builds text
@@ -450,22 +496,34 @@ export function compileSource(
   host: HostOptions,
 ): CompileResult {
   // Only an absent option resolves from the manifest: `null` is refused.
+  // Routing refuses a dialect claiming one of the host's own file kinds.
   const resolvedSyntax =
     host.dialect !== undefined
       ? explicitSyntaxOf(host.dialect, filename)
-      : resolveSyntaxOf(filename);
+      : resolveSyntaxOf(filename, {
+          hostSegments: host.targets.moduleSegments(),
+        });
   const syntax = resolvedSyntax.table;
+  // A dialect's files parse under the dialect's tag rules, never the
+  // target's (decision 212 addendum item 1); MX's own files keep the host's.
+  const preset = tagRulesDecided.has(host)
+    ? undefined
+    : fileTagRules(resolvedSyntax);
+  const rules = preset === undefined ? undefined : rulesUnder(preset, policy);
   const translator = translatorClaiming(
-    host,
+    rules
+      ? { ...host, taglibs: taglibsOfRules(rules), statementTags: false }
+      : host,
     claimedFields(resolvedSyntax.dialect),
   );
-  const lookup = tagTable(translator, policy.nativeTags);
+  const filePolicy = rules ? policyUnder(rules, policy) : policy;
+  const lookup = tagTable(translator, filePolicy.nativeTags);
 
   const state = {
     source,
     filename,
     code: null as string | null,
-    policy,
+    policy: filePolicy,
     postEmit: host.postEmit,
     emitIr: host.emitIr,
     customTags: host.customTags,
@@ -532,7 +590,7 @@ export function compileSource(
     const recorded = isTranslateError(error) ? error.errors : undefined;
     if (recorded && isTranslateError(error)) error.errors = undefined;
     annotateCloseTagOpener(error, source);
-    hintParseError(error, source, policy);
+    hintParseError(error, source, filePolicy);
     // A failure inside a tag's `|params|`, and sugar right after a default
     // value (decision 151, ruling 2), become positioned MX errors.
     const thrown =

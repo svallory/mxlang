@@ -596,3 +596,197 @@ describe("discovery follows the dependencies on disk", () => {
     expect(discoverDialects(projectFile)[0]).toBe(first);
   });
 });
+
+describe("extensions a dialect cannot claim", () => {
+  const claim = (extension: string, reason: string) =>
+    `\`mx.dialect.extensions\` cannot claim \`${extension}\`: ${reason}; a dialect claims its own extensions (\`.mesh.mx\`)`;
+  const foreign = (segment: string) =>
+    `\`.${segment}\` files belong to TypeScript, JavaScript or Marko, whose tools read them`;
+  const otherCase = "it is `.mx` in another case, and `.mx` is MX's own";
+  const host = (suffix: string) =>
+    `\`${suffix}\` is a host's file kind, which MX owns`;
+
+  // The dialect's `package.json`: `extensions` on line 7.
+  it.each([
+    [".ts", foreign("ts")],
+    [".tsx", foreign("tsx")],
+    [".mts", foreign("mts")],
+    [".cts", foreign("cts")],
+    [".js", foreign("js")],
+    [".jsx", foreign("jsx")],
+    [".mjs", foreign("mjs")],
+    [".cjs", foreign("cjs")],
+    [".d.ts", foreign("ts")],
+    [".marko", foreign("marko")],
+    [".TS", foreign("TS")],
+    [".page.tsx", foreign("tsx")],
+    [".MX", otherCase],
+    [".Mx", otherCase],
+    [".mX", otherCase],
+    [".page.MX", otherCase],
+  ])(
+    "`%s` in the manifest is an error at `mx.dialect.extensions`",
+    (extension, reason) => {
+      const { projectFile, packageFile } = dialectProject(dir, {
+        manifest: { extensions: [".tst", extension] },
+      });
+      const error = caught(() => discoverDialects(projectFile));
+      expect(error.file).toBe(packageFile);
+      expect([error.line, error.column]).toEqual([7, 6]);
+      expect(error.message).toBe(claim(extension, reason));
+    },
+  );
+
+  // Core holds no host list: the caller's targets name the host file kinds.
+  describe("a host's file kind (`.<host>.mx`), named by the caller", () => {
+    const hostSegments = ["solid", "ng"];
+
+    it.each([".solid.mx", ".page.ng.mx"])(
+      "a manifest claiming `%s` is an error at `mx.dialect.extensions` when routing",
+      (extension) => {
+        const { packageFile } = dialectProject(dir, {
+          manifest: { extensions: [".tst", extension] },
+        });
+        const error = caught(() =>
+          routeDialect(join(dir, "page.tst"), { hostSegments }),
+        );
+        expect(error.file).toBe(packageFile);
+        expect([error.line, error.column]).toEqual([7, 6]);
+        expect(error.message).toBe(
+          claim(
+            extension,
+            host(extension === ".solid.mx" ? ".solid.mx" : ".ng.mx"),
+          ),
+        );
+      },
+    );
+
+    it("without host segments, discovery accepts the claim: core has no host list", () => {
+      const { projectFile } = dialectProject(dir, {
+        manifest: { extensions: [".solid.mx"] },
+      });
+      expect(ids(discoverDialects(projectFile))).toEqual(["test"]);
+    });
+
+    it("`.mesh.mx` stays claimable: `mesh` is not a host", () => {
+      dialectProject(dir, {
+        manifest: { id: "mesh", name: "Mesh", extensions: [".mesh.mx"] },
+      });
+      expect(routeDialect(join(dir, "x.mesh.mx"), { hostSegments })?.id).toBe(
+        "mesh",
+      );
+      expect(
+        routeDialect(join(dir, "x.solid.mx"), { hostSegments }),
+      ).toBeUndefined();
+      expect(routeDialect(join(dir, "x.mx"), { hostSegments })).toBeUndefined();
+    });
+
+    // The project's `package.json`: `mx.extensions` on line 7, the second
+    // entry's key on line 9.
+    it("`mx.extensions` routing a host's file kind is an error at the entry", () => {
+      const { projectFile } = dialectProject(dir, {
+        mx: { extensions: { ".tst": "test", ".solid.mx": "test" } },
+      });
+      const error = caught(() =>
+        routeDialect(join(dir, "page.tst"), { hostSegments }),
+      );
+      expect(error.file).toBe(projectFile);
+      expect([error.line, error.column]).toEqual([9, 6]);
+      expect(error.message).toBe(
+        `\`mx.extensions\` cannot route \`.solid.mx\`: ${host(".solid.mx")}`,
+      );
+    });
+  });
+
+  it.each([
+    [".ts", foreign("ts")],
+    [".d.ts", foreign("ts")],
+    [".marko", foreign("marko")],
+    [".MX", otherCase],
+  ])(
+    "`mx.extensions` routing `%s` is an error at the entry",
+    (extension, reason) => {
+      const { projectFile } = dialectProject(dir, {
+        mx: { extensions: { ".tst": "test", [extension]: "test" } },
+      });
+      const error = caught(() => routeDialect(join(dir, "page.tst")));
+      expect(error.file).toBe(projectFile);
+      expect([error.line, error.column]).toEqual([9, 6]);
+      expect(error.message).toBe(
+        `\`mx.extensions\` cannot route \`${extension}\`: ${reason}`,
+      );
+    },
+  );
+});
+
+describe("MX's config cannot set what a dialect owns", () => {
+  const TOP =
+    "`mx.tagRules` cannot be set: a file's tag rules belong to its dialect, or to its target for MX's own files. MX's config overrides only which dialect handles which extension (`mx.extensions`)";
+  const owned = (key: string, what: string) =>
+    `\`mx.test.${key}\` cannot be set: the dialect \`test\` (test-dialect) owns its ${what}. MX's config overrides only which dialect handles which extension (\`mx.extensions\`); \`mx.test\` holds the dialect's own settings`;
+
+  // The project's `package.json`: `mx` on line 6, its first key on line 7,
+  // a key inside `mx.test` on line 8.
+  it.each([
+    ["`tagRules` at the top level", { tagRules: "none" }, [7, 4], TOP],
+    [
+      "`tagRules` under the dialect's id",
+      { test: { tagRules: "none" } },
+      [8, 6],
+      owned("tagRules", "tag rules"),
+    ],
+    [
+      "`name` under the dialect's id",
+      { test: { name: "Other" } },
+      [8, 6],
+      owned("name", "name"),
+    ],
+  ])("%s is an error at its key", (_, mx, at, message) => {
+    const { projectFile } = dialectProject(dir, { mx });
+    for (const name of ["page.tst", "page.mx"]) {
+      const error = caught(() => routeDialect(join(dir, name)));
+      expect(error.file).toBe(projectFile);
+      expect([error.line, error.column]).toEqual(at);
+      expect(error.message).toBe(message);
+    }
+  });
+
+  it.each([
+    [
+      "mx.config.json",
+      '{\n  "test": {\n    "tagRules": "none"\n  }\n}\n',
+      [3, 4],
+    ],
+    ["mx.config.yaml", "test:\n  tagRules: none\n", [2, 2]],
+  ])("is an error at its key in %s too", (name, text, at) => {
+    dialectProject(dir);
+    const file = join(dir, name);
+    writeFileSync(file, text);
+    const error = caught(() => routeDialect(join(dir, "page.tst")));
+    expect(error.file).toBe(file);
+    expect([error.line, error.column]).toEqual(at);
+    expect(error.message).toBe(owned("tagRules", "tag rules"));
+  });
+
+  it("top-level `tagRules` in an `mx.config.yaml` is an error at its key", () => {
+    dialectProject(dir);
+    const file = join(dir, "mx.config.yaml");
+    writeFileSync(file, "strict: true\ntagRules: none\n");
+    const error = caught(() => routeDialect(join(dir, "page.tst")));
+    expect(error.file).toBe(file);
+    expect([error.line, error.column]).toEqual([2, 0]);
+    expect(error.message).toBe(TOP);
+  });
+
+  it("the dialect's other settings pass through untouched", () => {
+    dialectProject(dir, {
+      mx: { test: { strictModels: true, target: "web", names: ["x"] } },
+    });
+    expect(routeDialect(join(dir, "page.tst"))?.id).toBe("test");
+  });
+
+  it("a section for a dialect the project does not use is not routing's to judge", () => {
+    dialectProject(dir, { mx: { other: { name: "Other" } } });
+    expect(routeDialect(join(dir, "page.tst"))?.id).toBe("test");
+  });
+});

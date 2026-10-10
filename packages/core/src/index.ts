@@ -150,6 +150,8 @@ export {
   DIALECT_MANIFEST_KEY,
   type DialectManifest,
   discoverDialects,
+  type RouteDialectOptions,
+  reservedExtensionReason,
   routeDialect,
 } from "./dialect-discovery.ts";
 /**

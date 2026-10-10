@@ -22,6 +22,7 @@ import {
 import { clearPackageJsonCache } from "./package-json.ts";
 import { clearScanCache, scanCached } from "./scan-cache.ts";
 import { createTargetLookup, type TargetLookup } from "./target-descriptor.ts";
+import { dialectProject } from "./test-dialect-project.ts";
 
 /**
  * A fixture lookup (core names no real target): a hostless default target
@@ -933,5 +934,89 @@ describe("the tag scan reads the same config", () => {
         column: expect.any(Number),
       },
     ]);
+  });
+});
+
+describe("a top-level key that is neither MX's, a target's nor a dialect's", () => {
+  const unknown = (key: string) =>
+    `\`mx.${key}\` is not a setting: MX's config holds MX's own keys (target, host, strict, tags, contracts, data, extensions), a target's or host's settings under its name, and a dialect's settings under its id, and no dialect among this project's dependencies has the id \`${key}\``;
+  const error = (file: string, key: string, line: number, column: number) => ({
+    code: "unknown-config-key",
+    severity: "error",
+    file,
+    message: unknown(key),
+    line,
+    column,
+  });
+
+  it("is an error at its key in package.json#mx", () => {
+    const root = project({
+      "package.json": `{\n  "name": "app",\n  "mx": {\n    "target": "page",\n    "mesh": { "strictModels": true }\n  }\n}\n`,
+    });
+    expect(policyOf(root)).toEqual({
+      policy: { target: "page" },
+      diagnostics: [error("<root>/package.json", "mesh", 5, 4)],
+    });
+  });
+
+  it.each([
+    [
+      "mx.config.json",
+      `{\n  "target": "page",\n  "pgae": { "defaultTag": "div" }\n}\n`,
+      "pgae",
+      [3, 2],
+    ],
+    [
+      "mx.config.yaml",
+      "target: page\nmesh:\n  strictModels: true\n",
+      "mesh",
+      [2, 0],
+    ],
+  ])("is an error at its key in %s", (name, text, key, [line, column]) => {
+    const root = project({ "package.json": PACKAGE, [name]: text });
+    expect(policyOf(root).diagnostics).toEqual([
+      error(`<root>/${name}`, key, line as number, column as number),
+    ]);
+  });
+
+  it("MX's keys, a target's or host's block, a discovered dialect's id and `tagRules` are not", () => {
+    const root = project({});
+    dialectProject(root, {
+      mx: {
+        target: "view-jsx",
+        strict: true,
+        extensions: { ".page": "test" },
+        page: { defaultTag: "div" },
+        "unit-jsx": { defaultTag: "div" },
+        unit: { setting: true },
+        test: { strictModels: true },
+        tagRules: "none",
+      },
+    });
+    expect(policyOf(root).diagnostics).toEqual([]);
+  });
+
+  it("a dialect package's own `mx.dialect` is not a setting, and its id is a dialect's", () => {
+    const root = project({
+      "package.json": JSON.stringify({
+        name: "own-dialect",
+        mx: {
+          dialect: {
+            id: "own",
+            name: "Own",
+            extensions: [".own"],
+            module: "./index.mjs",
+          },
+          own: { strictModels: true },
+        },
+      }),
+    });
+    expect(policyOf(root).diagnostics).toEqual([]);
+  });
+
+  it("says nothing when discovery itself fails: routing reports that", () => {
+    const root = project({});
+    dialectProject(root, { manifest: { id: "Bad" }, mx: { mesh: {} } });
+    expect(policyOf(root).diagnostics).toEqual([]);
   });
 });

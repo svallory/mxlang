@@ -33,6 +33,53 @@ const MANIFEST_PATH = ["mx", "dialect"] as const;
 /** MX's own extension: no dialect may claim it. */
 const MX_EXTENSION = ".mx";
 
+/**
+ * The last segments of the extensions other languages' tools own: a file
+ * ending in one is TypeScript, JavaScript or Marko to every editor, compiler
+ * and bundler, so no dialect may take it (`.ts`, `.d.ts`, `.marko`).
+ */
+const FOREIGN_SEGMENTS: ReadonlySet<string> = new Set([
+  "ts",
+  "tsx",
+  "mts",
+  "cts",
+  "js",
+  "jsx",
+  "mjs",
+  "cjs",
+  "marko",
+]);
+
+/**
+ * Why no dialect may claim `extension`, or `undefined` when one may. MX owns
+ * `.mx` (in any case: `.MX` is the same file on a case-insensitive disk) and
+ * every host file kind, `.<segment>.mx` for each of `hostSegments` (the
+ * caller's targets' `moduleSegments()`: core holds no host list), and a name
+ * that ends in one of them; TypeScript, JavaScript and Marko own theirs. A
+ * dialect's own `.<id>.mx` (`.mesh.mx`) is not a host file kind and stays
+ * claimable.
+ */
+export function reservedExtensionReason(
+  extension: string,
+  hostSegments: readonly string[] = [],
+): string | undefined {
+  if (extension === MX_EXTENSION) return "it is MX's own";
+  const last = extension.slice(extension.lastIndexOf(".") + 1);
+  if (last.toLowerCase() === "mx" && last !== "mx") {
+    return `it is \`${MX_EXTENSION}\` in another case, and \`${MX_EXTENSION}\` is MX's own`;
+  }
+  if (FOREIGN_SEGMENTS.has(last.toLowerCase())) {
+    return `\`.${last}\` files belong to TypeScript, JavaScript or Marko, whose tools read them`;
+  }
+  for (const segment of hostSegments) {
+    const suffix = `.${segment}${MX_EXTENSION}`;
+    if (extension === suffix || extension.endsWith(suffix)) {
+      return `\`${suffix}\` is a host's file kind, which MX owns`;
+    }
+  }
+  return undefined;
+}
+
 /** The fields of a dialect's manifest. */
 const MANIFEST_FIELDS = ["id", "name", "extensions", "module"] as const;
 
@@ -80,13 +127,14 @@ function moduleEscape(module: string): string | undefined {
   return undefined;
 }
 
-/** Is `value` an extension a dialect may claim (`.mesh.mx`)? */
+/** The error for a manifest claiming a reserved extension. */
+function claimRefusal(extension: string, reason: string): string {
+  return `\`${DIALECT_MANIFEST_KEY}.extensions\` cannot claim \`${extension}\`: ${reason}; a dialect claims its own extensions (\`.mesh.mx\`)`;
+}
+
+/** Is `value` written as a file extension (`.mesh.mx`)? */
 function validExtension(value: unknown): value is string {
-  return (
-    typeof value === "string" &&
-    /^(?:\.[^./\\\s]+)+$/.test(value) &&
-    value !== MX_EXTENSION
-  );
+  return typeof value === "string" && /^(?:\.[^./\\\s]+)+$/.test(value);
 }
 
 /**
@@ -150,17 +198,15 @@ export function readDialectManifest(
   }
   const seen = new Set<string>();
   for (const extension of extensions as unknown[]) {
-    if (extension === MX_EXTENSION) {
-      fail(
-        `\`${DIALECT_MANIFEST_KEY}.extensions\` cannot claim \`${MX_EXTENSION}\`: it is MX's own; a dialect claims its own extensions (\`.mesh.mx\`)`,
-        "extensions",
-      );
-    }
     if (!validExtension(extension)) {
       fail(
         `\`${DIALECT_MANIFEST_KEY}.extensions\`: ${JSON.stringify(extension)} is not a file extension; write it with its leading dot (\`.mesh.mx\`)`,
         "extensions",
       );
+    }
+    const reserved = reservedExtensionReason(extension as string);
+    if (reserved) {
+      fail(claimRefusal(extension as string, reserved), "extensions");
     }
     if (seen.has(extension as string)) {
       fail(
@@ -352,24 +398,38 @@ export function discoverDialects(
 }
 
 /**
+ * Where the key at `path` (under `mx`) is written in `source`, for an error
+ * at it: `package.json` keeps its own tokenizer; every other format asks
+ * the config source.
+ */
+function configKeyAt(
+  source: MxConfigSource,
+  path: readonly string[],
+): { line: number; column: number } {
+  return source.format === "package.json"
+    ? jsonKeyPosition(source.text, ["mx", ...path])
+    : source.locate(path, { key: true });
+}
+
+/**
  * The project's `mx.extensions`, from MX's config: which dialect handles which extension, the
  * one dialect fact a user may override (decision 212 item 5). Each key is an
- * extension, each value a discovered dialect's `id`.
+ * extension, each value a discovered dialect's `id`. A reserved extension
+ * (see {@link reservedExtensionReason}) cannot be routed.
  */
 function extensionOverrides(
   source: MxConfigSource | undefined,
   dialects: readonly DialectManifest[],
+  hostSegments: readonly string[],
 ): ReadonlyMap<string, DialectManifest> {
   const value = source?.config?.extensions;
   const overrides = new Map<string, DialectManifest>();
   if (source === undefined || value === undefined) return overrides;
   const fail = (message: string, extension?: string): never => {
-    const path =
-      extension === undefined ? ["extensions"] : ["extensions", extension];
-    const { line, column } =
-      source.format === "package.json"
-        ? jsonKeyPosition(source.text, ["mx", ...path])
-        : source.locate(path, { key: true });
+    const { line, column } = configKeyAt(
+      source,
+      extension === undefined ? ["extensions"] : ["extensions", extension],
+    );
     throw new TranslateError(message, line, column, source.file);
   };
   if (!isRecord(value)) {
@@ -381,15 +441,16 @@ function extensionOverrides(
   for (const [extension, id] of Object.entries(
     value as Record<string, unknown>,
   )) {
-    if (extension === MX_EXTENSION) {
-      fail(
-        `\`mx.extensions\` cannot route \`${MX_EXTENSION}\`: it is MX's own`,
-        extension,
-      );
-    }
     if (!validExtension(extension)) {
       fail(
         `\`mx.extensions\`: ${JSON.stringify(extension)} is not a file extension; write it with its leading dot (\`.mesh.mx\`)`,
+        extension,
+      );
+    }
+    const reserved = reservedExtensionReason(extension, hostSegments);
+    if (reserved) {
+      fail(
+        `\`mx.extensions\` cannot route \`${extension}\`: ${reserved}`,
         extension,
       );
     }
@@ -406,24 +467,108 @@ function extensionOverrides(
 }
 
 /**
+ * A host file kind a dialect claims: an error at its manifest's
+ * `extensions`, in its own `package.json`. Separate from the manifest's own
+ * validation because the host list is the caller's (`hostSegments`), and
+ * the manifest is read once per revision whoever asks.
+ */
+function rejectHostClaims(
+  dialects: readonly DialectManifest[],
+  hostSegments: readonly string[],
+): void {
+  if (hostSegments.length === 0) return;
+  for (const dialect of dialects) {
+    for (const extension of dialect.extensions) {
+      const reserved = reservedExtensionReason(extension, hostSegments);
+      if (!reserved) continue;
+      const text = readPackageJsonCached(dialect.packageFile)?.text ?? "";
+      const { line, column } = jsonKeyPosition(text, [
+        ...MANIFEST_PATH,
+        "extensions",
+      ]);
+      throw new TranslateError(
+        claimRefusal(extension, reserved),
+        line,
+        column,
+        dialect.packageFile,
+      );
+    }
+  }
+}
+
+/** The dialect facts a user may not set in MX's config: they belong to the dialect. */
+const DIALECT_OWNED = ["tagRules", "name"] as const;
+
+/**
+ * MX's config setting what belongs to a dialect (decision 212 item 5 and its
+ * addendum item 1): `mx.tagRules` at the top level, or `tagRules` or `name`
+ * under a dialect's id, is an error at its key. Users override only which
+ * dialect handles which extension (`mx.extensions`); everything else under
+ * a dialect's id is the dialect's own settings, passed on untouched.
+ */
+function rejectDialectOwnedConfig(
+  source: MxConfigSource | undefined,
+  dialects: readonly DialectManifest[],
+): void {
+  const config = source?.config;
+  if (!source || !config) return;
+  const fail = (message: string, path: readonly string[]): never => {
+    const { line, column } = configKeyAt(source, path);
+    throw new TranslateError(message, line, column, source.file);
+  };
+  if (config.tagRules !== undefined) {
+    fail(
+      "`mx.tagRules` cannot be set: a file's tag rules belong to its dialect, or to its target for MX's own files. MX's config overrides only which dialect handles which extension (`mx.extensions`)",
+      ["tagRules"],
+    );
+  }
+  for (const dialect of dialects) {
+    const section = config[dialect.id];
+    if (!isRecord(section)) continue;
+    for (const key of DIALECT_OWNED) {
+      if (section[key] === undefined) continue;
+      fail(
+        `\`mx.${dialect.id}.${key}\` cannot be set: the dialect \`${dialect.id}\` (${dialect.packageName}) owns its ${key === "tagRules" ? "tag rules" : "name"}. MX's config overrides only which dialect handles which extension (\`mx.extensions\`); \`mx.${dialect.id}\` holds the dialect's own settings`,
+        [dialect.id, key],
+      );
+    }
+  }
+}
+
+/** What the caller knows that core does not. @unstable */
+export interface RouteDialectOptions {
+  /**
+   * The host file-kind segments of the caller's targets
+   * (`TargetLookup.moduleSegments()`: `solid` for `.solid.mx`). A dialect
+   * that claims one of those file kinds, or `mx.extensions` routing one, is
+   * an error; core holds no host list of its own.
+   */
+  readonly hostSegments?: readonly string[];
+}
+
+/**
  * The dialect that handles `filename`, or `undefined` for MX's own files.
  * The project is the nearest `package.json`, so a dependency's files use
  * the dependency's dialects. The longest extension the file name ends with
  * wins (`.mesh.mx` over `.mx`); `mx.extensions` settles an extension two
  * dialects claim, and without it the clash is an error naming both, in the
- * project's `package.json` at the second one's dependency entry.
+ * project's `package.json` at the second one's dependency entry. MX's config
+ * setting a dialect's tag rules or name is an error at its key, and so is a
+ * claim on an extension MX, a host or another language owns.
  * @unstable
  */
-export function routeDialect(filename: string): DialectManifest | undefined {
+export function routeDialect(
+  filename: string,
+  options: RouteDialectOptions = {},
+): DialectManifest | undefined {
   const found = findNearestPackageJson(dirname(filename));
   if (!found?.read.manifest) return undefined;
   const { dialects, listedIn } = discover(found.file, found.read);
-  // TODO(dialect-1b): `mx.extensions` is read from MX's config here; the
-  // rest of a dialect's settings (`mx.<id>`) stay unread until PR 1b.
-  const overrides = extensionOverrides(
-    findMxConfig(dirname(filename)),
-    dialects,
-  );
+  const hostSegments = options.hostSegments ?? [];
+  rejectHostClaims(dialects, hostSegments);
+  const source = findMxConfig(dirname(filename));
+  rejectDialectOwnedConfig(source, dialects);
+  const overrides = extensionOverrides(source, dialects, hostSegments);
   if (dialects.length === 0) return undefined;
   const name = basename(filename);
   const matches = (extension: string) =>

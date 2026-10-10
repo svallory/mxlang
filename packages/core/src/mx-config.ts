@@ -789,9 +789,11 @@ function sourceOf(
   const object = isObject(config) ? withoutReservedKeys(config) : undefined;
   const sections: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(object ?? {})) {
-    // TODO(dialect-1b): tell a discovered dialect id from a target's own key
-    // here, reject a key that is neither, and route `extensions` into
-    // extension routing.
+    // A section is a dialect's (its id) or a target's (its config key). The
+    // loader cannot tell which, since it knows neither the dialects nor the
+    // targets: target policy resolution rejects a key that is neither
+    // (`unknown-config-key`), routing rejects the dialect-owned keys, and
+    // `extensions` reaches routing through `extensions` below.
     if (!MX_CONFIG_KEYS.includes(key)) sections[key] = value;
   }
   const locate = (

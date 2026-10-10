@@ -3964,12 +3964,24 @@ the field path and, for a trigger, its `id`:
 - `name` is the name tooling shows the dialect's users. Where core's own wording
   says "MX", a diagnostic on the dialect's files says this name.
 - `extensions` is a non-empty list of the file extensions the dialect claims,
-  each with its leading dot, none twice. `.mx` is MX's own and cannot be claimed.
+  each with its leading dot, none twice. Some extensions belong to MX or to
+  another language and cannot be claimed: `.mx` and every other spelling of it
+  (`.MX`, `.page.Mx`); a host's file kind, `.<host>.mx` (`.solid.mx`,
+  `.ng.mx`, `.astro.mx`: the segments the registered targets declare); and any
+  extension whose last segment is TypeScript's, JavaScript's or Marko's
+  (`.ts`, `.tsx`, `.mts`, `.cts`, `.d.ts`, `.js`, `.jsx`, `.mjs`, `.cjs`,
+  `.marko`, in any case). An extension that only ends in `.mx`, such as Mesh's
+  `.mesh.mx`, is a dialect's to claim: `mesh` is not a host.
 - `module` is a path, relative to that `package.json`, to the module whose
   default export is the dialect (§13.9.3). It stays inside the package
   (`./dialect.js`, or `dist/dialect.js` without the `./`), so a published
   manifest works wherever the package is installed: an absolute path, or one
-  that climbs out with `..`, is an error.
+  that climbs out with `..`, is an error. It is a file path, never a package
+  specifier (`@scope/pkg/dialect`). An installed dialect's module is
+  JavaScript that Node can load (`.js`, `.mjs` or `.cjs`): Bun and Vitest load
+  TypeScript, Node does not, so a published `.ts` module would fail for every
+  Node user. A dialect linked into `node_modules` from a workspace may point at
+  its TypeScript source.
 
 `mx` is the one top-level key MX reads in a `package.json`; `mx.dialect` is its
 identity block, a dialect package's statement of who it is. It is never project
@@ -3991,6 +4003,9 @@ offending field (at `mx.dialect` itself for a missing one):
 | No `name`, or a blank one | `` `mx.dialect.name` must be a non-empty string: the name tooling shows the dialect's users `` |
 | No `extensions` | `` `mx.dialect.extensions` must be a non-empty array of the file extensions the dialect claims (`[".mesh.mx"]`) `` |
 | `.mx` claimed | `` `mx.dialect.extensions` cannot claim `.mx`: it is MX's own; a dialect claims its own extensions (`.mesh.mx`) `` |
+| `.mx` in another case | `` `mx.dialect.extensions` cannot claim `<ext>`: it is `.mx` in another case, and `.mx` is MX's own; a dialect claims its own extensions (`.mesh.mx`) `` |
+| A TypeScript, JavaScript or Marko extension | `` `mx.dialect.extensions` cannot claim `<ext>`: `.<segment>` files belong to TypeScript, JavaScript or Marko, whose tools read them; a dialect claims its own extensions (`.mesh.mx`) `` |
+| A host's file kind | `` `mx.dialect.extensions` cannot claim `<ext>`: `.<host>.mx` is a host's file kind, which MX owns; a dialect claims its own extensions (`.mesh.mx`) `` |
 | Not an extension | `` `mx.dialect.extensions`: "<value>" is not a file extension; write it with its leading dot (`.mesh.mx`) `` |
 | An extension twice | `` `mx.dialect.extensions` lists `<ext>` twice `` |
 | No `module` | `` `mx.dialect.module` must be a path, relative to this `package.json`, to the module whose default export is the dialect `` |
@@ -4038,14 +4053,50 @@ is an error at that entry's key:
 |---|---|
 | Not an object | `` `mx.extensions` must be an object mapping a file extension to the id of the dialect that handles it (`{ ".mesh.mx": "mesh" }`) `` |
 | `.mx` routed | `` `mx.extensions` cannot route `.mx`: it is MX's own `` |
+| Another reserved extension | `` `mx.extensions` cannot route `<ext>`: <reason> ``, with the reason the manifest table gives |
 | A key that is not an extension | `` `mx.extensions`: "<key>" is not a file extension; write it with its leading dot (`.mesh.mx`) `` |
 | An id no dependency declares | `` `mx.extensions` routes `<ext>` to "<id>", which is not a dialect this project uses (it uses `<ids>`); a dialect is found among the project's direct dependencies `` |
+
+Core holds no list of hosts: the caller's targets name the host file kinds
+(`TargetLookup.moduleSegments()`). `compileSource` passes its `targets`' segments,
+so every tool that compiles through it refuses a host's file kind; the IR entry
+point, which has no host, does not. The claim is an error in the dialect's
+`package.json` at `mx.dialect.extensions`.
+
+**What a dialect owns, MX's config cannot set.** A file's tag rules and a
+dialect's name are the dialect's; MX's config overrides only which dialect
+handles which extension (`mx.extensions`). Each of these is an error at its key,
+in whichever file holds MX's config:
+
+| Key | Message |
+|---|---|
+| `tagRules` at the top level | `` `mx.tagRules` cannot be set: a file's tag rules belong to its dialect, or to its target for MX's own files. MX's config overrides only which dialect handles which extension (`mx.extensions`) `` |
+| `tagRules` or `name` under a dialect's id | `` `mx.<id>.<key>` cannot be set: the dialect `<id>` (<package>) owns its <tag rules or name>. MX's config overrides only which dialect handles which extension (`mx.extensions`); `mx.<id>` holds the dialect's own settings `` |
+
+Every other key under a dialect's id is that dialect's setting and passes
+through untouched. A top-level key that is none of MX's own keys, no target's
+settings block (its descriptor's `configKey`, else its name) and no discovered
+dialect's id is an error at its key, reported with the target diagnostics
+(`unknown-config-key`): `` `mx.<key>` is not a setting: MX's config holds MX's own
+keys (target, host, strict, tags, contracts, data, extensions), a target's or
+host's settings under its name, and a dialect's settings under its id, and no dialect
+among this project's dependencies has the id `<key>` ``. `mx.dialect` is never
+one (see above). When discovery itself fails, routing reports that failure and
+this check says nothing.
 
 **Loading.** A routed file loads its dialect's `module`, resolved from the
 dialect's package directory, synchronously (like `mx.contracts`). A module that
 does not resolve is an error in the dialect's `package.json` at
 `mx.dialect.module`: `` the dialect `<id>`'s module "<module>" cannot be resolved
-from <dir>. Check `mx.dialect.module`. `` Core stamps the manifest's `id` and
+from <dir>. Check `mx.dialect.module`. `` When the value is a package specifier
+(a scoped name, or a name Node resolves from the package), the error says so: ``
+the dialect `<id>`'s module "<module>" cannot be resolved from <dir>:
+`mx.dialect.module` is a file path inside the dialect's package
+("./dist/dialect.js"), not a package specifier ``. An installed dialect (its real
+path inside a `node_modules`) whose module is TypeScript (`.ts`, `.mts`, `.cts`,
+`.tsx`) is an error at the same key: `` the dialect `<id>`'s module "<module>" is
+TypeScript: an installed dialect's module must be JavaScript Node can load. Build
+it to `.js`, `.mjs` or `.cjs` and point `mx.dialect.module` at the build ``. Core stamps the manifest's `id` and
 `name` on the loaded dialect; a module that states either must agree with the
 manifest (`` `<key>` is "<module's>", and the dialect's
 `package.json#mx.dialect.<key>` is "<manifest's>": leave it to the manifest, or
@@ -4126,10 +4177,11 @@ syntax-table API; under the stock parser it is refused in the module file (``
 (ruling 211; decision 212 item 8). The dialect states it in its own module; every
 tool honours it for the dialect's files, and project config cannot change it. A
 dialect that states none gets `html`, the full rules. A file no dialect claims
-takes its preset from its target. `lowerSource` honours it today: a call with no
-`tagRules` option parses under the `dialect` option's preset, else the preset of
-the dialect the file routes to. *(The compile entries and the tools read it when
-they route dialect files, decision 212 PR 1b.)*
+takes its preset from its target. Every compile entry reads it: `compileSource`
+and `parseFragment` parse a dialect's file (the `dialect` option's, else the one
+the file routes to) under the dialect's preset in place of the host's tag rules,
+with no native elements under `none`; `lowerSource` does the same when its call
+states no `tagRules` option, and a `tagRules` option it states wins.
 
 **A dialect owns its targets** (ruling 211; decision 212 item 1). Its module will
 declare `targets` and a `defaultTarget`; one that declares none is check-only

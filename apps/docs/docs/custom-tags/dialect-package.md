@@ -7,7 +7,7 @@ description: "Ship a whole tag dialect as one mx.contracts module, and hand it t
 
 A dialect — a cohesive vocabulary of tag names with validation rules, like a resource-definition language — ships as a package-level `mx.contracts` module: one file default-exports a `ContractMap` (`Record<string, CustomTag>`, exported by `@mxlang/core`), and each consuming package names the module in its own [MX config](/configuration/).
 
-This page's dialect is a tag vocabulary written in MX's own syntax, in `.mx` files. A dialect that changes the syntax itself and claims file extensions of its own (`.mesh.mx`) is a package that declares `mx.dialect` in its `package.json`; see [the specification, §13.9.2](/specification/).
+This page's dialect is a tag vocabulary written in MX's own syntax, in `.mx` files. A dialect that changes the syntax itself and claims file extensions of its own (`.mesh.mx`) is a package that declares `mx.dialect` in its `package.json`; see [the specification, §13.9.2](/specification/). Its `mx.dialect.module` is a file path inside the package (`./dist/dialect.js`), never a package specifier, and once published it must be JavaScript Node can load: build TypeScript to `.js`, `.mjs` or `.cjs` and point `module` at the build. Bun and Vitest load a `.ts` module, Node does not, so MX refuses an installed dialect whose module is TypeScript; a workspace dialect linked into `node_modules` may still point at its source. It cannot claim `.mx` in any spelling, a host's file kind (`.solid.mx`) or a TypeScript, JavaScript or Marko extension; an extension of its own that ends in `.mx`, like `.mesh.mx`, is fine.
 
 ## The module
 

@@ -83,6 +83,17 @@ directory, or for a file under `.config/`, the directory that holds `.config/`.
 | `extensions` | Which dialect compiles which file extension, such as `{ ".mesh": "mesh" }`. See "Dialect packages and routing" (§13.9.2) in the [specification](/specification/). |
 | `<dialect id>` | A dialect's own settings, under its id. MX hands them to the dialect without reading them. |
 
+A key outside this table is an error at that key: `` `mx.<key>` is not a
+setting `` names what the config may hold. A misspelled target block
+(`htlm: { defaultTag: "div" }`) or the settings of a dialect the project does
+not depend on are caught this way.
+
+A dialect's tag rules and its name belong to the dialect, so MX's config cannot
+set them: `tagRules` at the top level, and `tagRules` or `name` under a
+dialect's id, are errors at their key. Which dialect handles which extension
+(`extensions`) is the one dialect fact the config overrides. Everything else
+under a dialect's id is that dialect's to read.
+
 `dialect` is not a setting. It is a dialect package's identity block in that
 package's own `package.json` (see [Writing a dialect package](/custom-tags/dialect-package/)),
 and MX's config never reads it, in any format. A `package.json` whose `mx`

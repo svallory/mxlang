@@ -60,12 +60,15 @@
  */
 
 import { basename, dirname, join } from "node:path";
+import { discoverDialects } from "./dialect-discovery.ts";
 import {
   findMxConfig,
+  MX_CONFIG_KEYS,
   type MxConfigLocation,
   type MxConfigSource,
 } from "./mx-config.ts";
 import {
+  jsonKeyPosition,
   type PackageJsonRead,
   positionOfOffset,
   readPackageJsonCached,
@@ -140,7 +143,8 @@ export type TargetPolicyDiagnosticCode =
   | "target-invalid-descriptor"
   | "host-invalid-descriptor"
   | "invalid-default-tag"
-  | "default-tag-overridden";
+  | "default-tag-overridden"
+  | "unknown-config-key";
 
 /**
  * One problem found while resolving a target, positioned in the
@@ -779,6 +783,69 @@ function locateIn(
   return source.locate(typeof path === "string" ? [path] : path);
 }
 
+/** MX's own keys as an unknown-key message lists them (`syntax` is removed). */
+const LISTED_CONFIG_KEYS = MX_CONFIG_KEYS.filter((key) => key !== "syntax");
+
+/**
+ * A top-level key in MX's config that is neither one of MX's own keys, a
+ * target's settings block (its descriptor's `configKey`, else its name), a
+ * host's (its name) nor
+ * the `id` of a dialect the project's `package.json` discovers. Reserved keys
+ * (`dialect`) never reach here: the loader strips them. When discovery itself
+ * fails, routing reports that failure and this check stays quiet, so one
+ * broken dependency does not also make every dialect section an error.
+ */
+function unknownConfigKeys(
+  source: MxConfigSource,
+  projectFile: string | undefined,
+  lookup: TargetLookup,
+  descriptor: TargetDescriptor | undefined,
+): TargetPolicyDiagnostic[] {
+  const config = source.config as Record<string, unknown>;
+  // `tagRules` has its own error, from routing: it belongs to a dialect.
+  const keys = Object.keys(config).filter(
+    (key) => !MX_CONFIG_KEYS.includes(key) && key !== "tagRules",
+  );
+  if (keys.length === 0) return [];
+  const known = new Set<string>();
+  for (const name of lookup.allTargetNames?.() ?? lookup.targetNames()) {
+    known.add(lookup.target(name)?.configKey ?? name);
+    // A host's settings sit under its name (`mx.angular`, `mx.astro`).
+    const host = lookup.hostOf(name);
+    if (host) known.add(host);
+  }
+  if (descriptor) {
+    known.add(descriptor.configKey ?? descriptor.name);
+    if (descriptor.host?.name) known.add(descriptor.host.name);
+  }
+  let ids: readonly string[] = [];
+  try {
+    ids = projectFile
+      ? discoverDialects(projectFile).map((dialect) => dialect.id)
+      : [];
+  } catch {
+    return [];
+  }
+  for (const id of ids) known.add(id);
+  const diagnostics: TargetPolicyDiagnostic[] = [];
+  for (const key of keys) {
+    if (known.has(key)) continue;
+    const { line, column } =
+      source.format === "package.json"
+        ? jsonKeyPosition(source.text, ["mx", key])
+        : source.locate([key], { key: true });
+    diagnostics.push({
+      code: "unknown-config-key",
+      severity: "error",
+      file: source.file,
+      message: `\`mx.${key}\` is not a setting: MX's config holds MX's own keys (${LISTED_CONFIG_KEYS.join(", ")}), a target's or host's settings under its name, and a dialect's settings under its id, and no dialect among this project's dependencies has the id \`${key}\``,
+      line,
+      column,
+    });
+  }
+  return diagnostics;
+}
+
 /**
  * Resolves the `TargetPolicy` for `filePath` by walking upward from its
  * containing directory, together with the diagnostics the walk produced. See
@@ -872,6 +939,16 @@ export function resolveTargetPolicyDetailed(
   if (resolved.policy.descriptor) {
     const key = loaded.target ? "target" : "host";
     resolved.policy.descriptorAt = { file, ...at(key) };
+  }
+  if (source && mx) {
+    diagnostics.push(
+      ...unknownConfigKeys(
+        source,
+        found?.file,
+        lookup,
+        resolved.policy.descriptor,
+      ),
+    );
   }
   const config = source
     ? readDefaultTagConfig(

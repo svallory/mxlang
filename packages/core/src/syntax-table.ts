@@ -12,9 +12,9 @@
  * into core (parser port PR 4).
  */
 import { createHash } from "node:crypto";
-import { statSync } from "node:fs";
+import { realpathSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, isAbsolute, resolve } from "node:path";
+import { dirname, isAbsolute, resolve, sep } from "node:path";
 import {
   type ContractCheckContext,
   type ContractFields,
@@ -24,7 +24,11 @@ import {
 import type { Node } from "./core.ts";
 import { TranslateError } from "./core.ts";
 import type { IrBuilders } from "./custom-tags.ts";
-import { type DialectManifest, routeDialect } from "./dialect-discovery.ts";
+import {
+  type DialectManifest,
+  type RouteDialectOptions,
+  routeDialect,
+} from "./dialect-discovery.ts";
 import {
   checkDialectNodeTypes,
   type DialectNode,
@@ -738,13 +742,21 @@ function loadDialect(manifest: DialectManifest): {
     throw new TranslateError(message, line, column, manifest.packageFile);
   };
   let file = "";
+  const require = createRequire(manifest.packageFile);
   try {
-    file = createRequire(manifest.packageFile).resolve(
-      resolve(packageDir, manifest.module),
-    );
+    file = require.resolve(resolve(packageDir, manifest.module));
   } catch {
     failAtModule(
-      `the dialect \`${manifest.id}\`'s module "${manifest.module}" cannot be resolved from ${packageDir}. Check \`mx.dialect.module\`.`,
+      isPackageSpecifier(manifest.module, require)
+        ? `the dialect \`${manifest.id}\`'s module "${manifest.module}" cannot be resolved from ${packageDir}: \`mx.dialect.module\` is a file path inside the dialect's package ("./dist/dialect.js"), not a package specifier`
+        : `the dialect \`${manifest.id}\`'s module "${manifest.module}" cannot be resolved from ${packageDir}. Check \`mx.dialect.module\`.`,
+    );
+  }
+  // Bun and Vitest load TypeScript, Node does not: an installed dialect that
+  // ships its source would work here and fail for every Node user.
+  if (TYPESCRIPT_MODULE.test(file) && isInstalled(packageDir)) {
+    failAtModule(
+      `the dialect \`${manifest.id}\`'s module "${manifest.module}" is TypeScript: an installed dialect's module must be JavaScript Node can load. Build it to \`.js\`, \`.mjs\` or \`.cjs\` and point \`mx.dialect.module\` at the build`,
     );
   }
   const failInModule = (message: string): never => {
@@ -766,6 +778,37 @@ function loadDialect(manifest: DialectManifest): {
   const unregistered = unregisteredNodeRow(table, dialect, "table");
   if (unregistered) failInModule(unregistered);
   return { resolved: { table, dialect }, file };
+}
+
+const TYPESCRIPT_MODULE = /\.(?:ts|mts|cts|tsx)$/;
+
+/**
+ * Is `module` a package specifier (`@scope/pkg/dialect`, or a bare name Node
+ * resolves from the package) rather than a path inside the package?
+ */
+function isPackageSpecifier(module: string, require: NodeRequire): boolean {
+  if (/^\.{1,2}(?:[\\/]|$)/.test(module) || isAbsolute(module)) return false;
+  if (module.startsWith("@")) return true;
+  try {
+    require.resolve(module);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Is the package at `dir` installed (its real path inside a `node_modules`),
+ * not a workspace package linked into one?
+ */
+function isInstalled(dir: string): boolean {
+  let real = dir;
+  try {
+    real = realpathSync(dir);
+  } catch {
+    // An unreadable path is judged as written.
+  }
+  return real.split(sep).includes("node_modules");
 }
 
 function readPackageJsonText(file: string): string {
@@ -844,8 +887,11 @@ function loadDialectModule(file: string): Record<string, unknown> {
  * has loaded (deleting its `require.cache` entry does not evict it), so an
  * edited `.mjs`/`.ts` dialect is picked up after a restart there.
  */
-export function resolveSyntaxOf(filename: string): ResolvedSyntax {
-  const resolved = resolveManifestSyntax(filename);
+export function resolveSyntaxOf(
+  filename: string,
+  options: RouteDialectOptions = {},
+): ResolvedSyntax {
+  const resolved = resolveManifestSyntax(filename, options);
   return resolved === DEFAULT_RESOLVED
     ? fallbackForTesting(resolved)
     : resolved;
@@ -865,26 +911,49 @@ const FALLBACK_FOR_TESTING = Symbol.for(
 /** The fallback dialect, named "MX" so the suites it runs keep MX's wording. */
 const fallbacks = new WeakMap<object, Dialect>();
 
+/** Resolutions `fallbackForTesting` made: MX's own files, not a dialect's. */
+const fallbackResolutions = new WeakSet<ResolvedSyntax>();
+
 function fallbackForTesting(resolved: ResolvedSyntax): ResolvedSyntax {
   const module = (globalThis as Record<symbol, unknown>)[FALLBACK_FOR_TESTING];
   if (!module || typeof module !== "object") return resolved;
   let dialect = fallbacks.get(module);
   if (!dialect) {
-    dialect = Object.freeze({
-      ...(module as Dialect),
-      name: MX_DIALECT.name,
-    });
+    // MX's name and no tag rules of its own: the suites it runs are MX's,
+    // under their target's tag rules.
+    const { tagRules: _tagRules, ...rest } = module as Dialect;
+    dialect = Object.freeze({ ...rest, name: MX_DIALECT.name });
     fallbacks.set(module, dialect);
   }
-  return explicitSyntaxOf(dialect, "<fallback syntax for testing>");
+  const fallback = explicitSyntaxOf(dialect, "<fallback syntax for testing>");
+  fallbackResolutions.add(fallback);
+  return fallback;
 }
 
-function resolveManifestSyntax(filename: string): ResolvedSyntax {
+/**
+ * The tag rules a file's dialect states for it ({@link dialectTagRules}), or
+ * `undefined` for MX's own files, which parse under their target's tag
+ * rules. A routed dialect and an explicit `dialect` option both count; a bare
+ * table (no module) and the test fallback do not.
+ */
+export function fileTagRules(
+  resolved: ResolvedSyntax,
+): TagRulesPreset | undefined {
+  const { dialect } = resolved;
+  return dialect && !fallbackResolutions.has(resolved)
+    ? dialectTagRules(dialect)
+    : undefined;
+}
+
+function resolveManifestSyntax(
+  filename: string,
+  options: RouteDialectOptions,
+): ResolvedSyntax {
   if (!isAbsolute(filename)) return DEFAULT_RESOLVED;
   rejectRemovedSyntax(findMxConfig(dirname(filename)));
   const found = findNearestPackageJson(dirname(filename));
   if (!found?.read.manifest) return DEFAULT_RESOLVED;
-  const manifest = routeDialect(filename);
+  const manifest = routeDialect(filename, options);
   if (!manifest) return DEFAULT_RESOLVED;
   const known = byDialect.get(manifest);
   if (known && mtimeOf(known.file) === known.mtimeMs) return known.resolved;

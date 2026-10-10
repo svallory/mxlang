@@ -482,8 +482,23 @@ Five facts worth knowing before editing it:
   file at 1:0. `productName` is not a dialect field: diagnostics use the
   dialect's `name` unless the host's `productName` option is set.
   `dialectTagRules` is the module's `tagRules`, else `html`. The removed
-  `mx.syntax` (any form) is an error at its own key. Host-suffix reservation
-  (`.<host>.mx`) is tooling's (PR 1b): core has no host list. The dialect's
+  `mx.syntax` (any form) is an error at its own key. Reserved extensions
+  (`reservedExtensionReason`): `.mx` in any case, a TS/JS/Marko last segment,
+  and a host suffix `.<segment>.mx`. Core has no host list: the segments come
+  in as `RouteDialectOptions.hostSegments` (`compileSource` passes
+  `host.targets.moduleSegments()`; `lowerSource`'s synthetic lookup has
+  none), and `routeDialect` refuses a manifest claim (`rejectHostClaims`) or
+  an `mx.extensions` entry on one. `routeDialect` also errors MX's config
+  setting `tagRules` (top level) or `<id>.tagRules`/`<id>.name`
+  (`rejectDialectOwnedConfig`); an unknown top-level key is the policy's
+  `unknown-config-key` diagnostic (`host-policy.ts`, which knows the targets
+  and hosts). `loadDialect` refuses an installed (realpath under
+  `node_modules`) dialect whose module is TypeScript and names a package
+  specifier `module` as such. `compileSource` and `parseFragment` parse a
+  dialect's file under `fileTagRules(resolved)` (the dialect's preset; never
+  for the test fallback or a bare table), replacing the host's taglibs and,
+  under `none`, its natives; `lowerSource` marks its host options
+  `tagRulesDecided` so its own `tagRules` option wins. The dialect's
   `table` is overlaid on `DEFAULT_SYNTAX`, validated with the template
   parser's `validateSyntaxTable` (`tagTypes` refused as taglib-owned),
   deep-frozen and interned by `syntaxHash` (sha256 of canonical JSON),

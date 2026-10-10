@@ -11,6 +11,7 @@ import {
   mkdtempSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   utimesSync,
   writeFileSync,
 } from "node:fs";
@@ -27,6 +28,7 @@ import {
   defaultSyntaxHash,
   dialectTagRules,
   resolveSyntax,
+  resolveSyntaxOf,
   type SyntaxTable,
   syntaxHash,
   syntaxHashes,
@@ -423,5 +425,102 @@ describe("the default row costs nothing", () => {
     once(() => compile("<p>a</p>\n", join(other, PAGE)));
     // A built-in node kind lowers in core: one parse, no error.
     once(() => compile("x=&a\n", join(other, PAGE)));
+  });
+});
+
+/**
+ * A dialect's `module` is a file path inside its package, to JavaScript
+ * Node can load: an installed dialect that ships TypeScript would load under
+ * Bun and Vitest and fail for every Node user, and a package specifier is
+ * not a path. Both are errors at `mx.dialect.module` (line 10 of the
+ * dialect's `package.json`).
+ */
+describe("`mx.dialect.module` is a path to JavaScript", () => {
+  function moduleError(run: () => unknown): TranslateError {
+    try {
+      run();
+    } catch (error) {
+      if (error instanceof TranslateError) return error;
+      throw error;
+    }
+    throw new Error("expected a TranslateError");
+  }
+
+  it.each(["./index.ts", "./src/dialect.mts", "./dialect.cts", "./x.tsx"])(
+    "an installed dialect's TypeScript module `%s` is an error",
+    (module) => {
+      const { packageFile } = dialectProject(dir, {
+        manifest: { module },
+        module: "export default { table: {} };",
+      });
+      const error = moduleError(() => resolveSyntaxOf(join(dir, "page.tst")));
+      expect(error.file).toBe(packageFile);
+      expect([error.line, error.column]).toEqual([10, 6]);
+      expect(error.message).toBe(
+        `the dialect \`test\`'s module "${module}" is TypeScript: an installed dialect's module must be JavaScript Node can load. Build it to \`.js\`, \`.mjs\` or \`.cjs\` and point \`mx.dialect.module\` at the build`,
+      );
+    },
+  );
+
+  it("a workspace dialect linked into `node_modules` may point at TypeScript", () => {
+    const source = join(dir, "packages", "test-dialect");
+    mkdirSync(source, { recursive: true });
+    writeFileSync(
+      join(source, "package.json"),
+      JSON.stringify({
+        name: "test-dialect",
+        mx: {
+          dialect: {
+            id: "test",
+            name: "Test",
+            extensions: [".tst"],
+            module: "./index.ts",
+          },
+        },
+      }),
+    );
+    writeFileSync(
+      join(source, "index.ts"),
+      'export default { table: {}, tagRules: "none" as const };\n',
+    );
+    mkdirSync(join(dir, "app", "node_modules"), { recursive: true });
+    symlinkSync(source, join(dir, "app", "node_modules", "test-dialect"));
+    writeFileSync(
+      join(dir, "app", "package.json"),
+      JSON.stringify({ devDependencies: { "test-dialect": "0.0.0" } }),
+    );
+    expect(resolveSyntaxOf(join(dir, "app", "page.tst")).dialect?.id).toBe(
+      "test",
+    );
+  });
+
+  it.each([
+    ["a scoped specifier", "@scope/pkg/dialect"],
+    ["an installed package's file", "other-pkg/dialect.js"],
+  ])("%s is an error saying it is a path inside the package", (_, module) => {
+    mkdirSync(join(dir, "node_modules", "other-pkg"), { recursive: true });
+    writeFileSync(
+      join(dir, "node_modules", "other-pkg", "dialect.js"),
+      "module.exports = {};\n",
+    );
+    const { packageFile, packageDir } = dialectProject(dir, {
+      manifest: { module },
+    });
+    const error = moduleError(() => resolveSyntaxOf(join(dir, "page.tst")));
+    expect(error.file).toBe(packageFile);
+    expect([error.line, error.column]).toEqual([10, 6]);
+    expect(error.message).toBe(
+      `the dialect \`test\`'s module "${module}" cannot be resolved from ${packageDir}: \`mx.dialect.module\` is a file path inside the dialect's package ("./dist/dialect.js"), not a package specifier`,
+    );
+  });
+
+  it("a missing relative path keeps the plain message", () => {
+    const { packageDir } = dialectProject(dir, {
+      manifest: { module: "dist/missing.js" },
+    });
+    const error = moduleError(() => resolveSyntaxOf(join(dir, "page.tst")));
+    expect(error.message).toBe(
+      `the dialect \`test\`'s module "dist/missing.js" cannot be resolved from ${packageDir}. Check \`mx.dialect.module\`.`,
+    );
   });
 });

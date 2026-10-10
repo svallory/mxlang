@@ -33,6 +33,8 @@ import memberSyntax, { MEMBER } from "./member.ts";
 const meshSyntax = {
   id: "mesh",
   name: "Mesh",
+  // Mesh files are data, not HTML: no native elements, no HTML tag rules.
+  tagRules: "none",
   table: Object.freeze({
     expressionTriggers: Object.freeze([ATOM, MEMBER]),
     attributeTriggers: Object.freeze([

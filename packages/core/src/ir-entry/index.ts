@@ -23,7 +23,11 @@
 
 import { readFileSync } from "node:fs";
 import { WEB_ELEMENTS } from "@mxlang/web-elements";
-import { compileSource } from "../compile.ts";
+import {
+  compileSource,
+  type HostOptions,
+  tagRulesDecided,
+} from "../compile.ts";
 import { type MxWarning, TranslateError } from "../core.ts";
 import type { CustomTag } from "../custom-tags.ts";
 import type { HostDeclarations } from "../declarations.ts";
@@ -219,7 +223,7 @@ export function lowerSource(
   const declared = declaredTagNames(options.customTags);
   let ir: Ir | null = null;
   try {
-    compileSource(source, filename, declarations, {
+    const host: HostOptions = {
       targets: lookupFor(declarations),
       taglibs: taglibsOfRules(rules),
       statementTags: false,
@@ -233,7 +237,11 @@ export function lowerSource(
         // back, so the emitted "code" is an unused placeholder.
         return "";
       },
-    });
+    };
+    // `rules` is already this file's preset (`presetOf`): the call's
+    // `tagRules` wins over the dialect's, so the compile must not re-pick.
+    tagRulesDecided.add(host);
+    compileSource(source, filename, declarations, host);
   } catch (error) {
     if (options.unknownTags !== "reject") return failed([error]);
     try {
