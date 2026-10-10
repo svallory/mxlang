@@ -3,7 +3,7 @@
 Every entity file and every `mx` doc block of Mesh, copied with attribution
 as a parse fixture for the syntax modules (decision 183 addendum 6; Mesh's
 review of PR 460, F2). The test is
-`packages/targets/data/src/mesh-corpus.test.ts`.
+`packages/core/src/ir-entry/mesh-corpus.test.ts`.
 
 ## Source
 
@@ -33,11 +33,18 @@ review of PR 460, F2). The test is
 - `model.ts`: the two lists the contracts read from `@meshfw/model`
   (`ACTION_TYPES`, `ATTRIBUTE_TYPES` with each type's `tsType`), copied.
 - `__golden__/golden.json` (left out of Biome, like every `__golden__`):
-  the whole `ParseDataResult` of every file, parsed as Mesh's
+  the whole `LowerSourceResult` of every file (the IR `lowerSource`
+  returns, or the diagnostics when it has none), lowered as Mesh's
   `parseEntitySource` parses (`syntax: @mxlang/core/syntax/mesh` with
   `productName: "Mesh"`, the contracts above, `structural: "reject"`,
   `unknownTags: "reject"`, `imports: "pass"`), under the virtual path
-  `/mesh-corpus/<file>`. Babel's `loc` is dropped; `start`/`end` stay.
+  `/mesh-corpus/<file>`. Two reductions keep it readable: the IR's `loc`
+  (restated by every `span`) is dropped, and each parser (Babel) node keeps
+  its shape and the `mx*` marks on its `extra` but not its offsets (`start`,
+  `end`, `loc`, `range`), which the spans and the marks already carry. The
+  golden was a data tree (`parseData`'s `ParseDataResult`) until
+  `@mxlang/data` was replaced by `lowerSource`; every diagnostic and every
+  tag name, count and span of that tree is unchanged in the IR.
 
 ## Updating
 
@@ -45,7 +52,7 @@ Re-copy from a new Mesh commit by the same rules, update the commit above,
 then regenerate the golden and review its diff:
 
 ```sh
-MESH_CORPUS_UPDATE=1 bun x vitest run packages/targets/data/src/mesh-corpus.test.ts
+MESH_CORPUS_UPDATE=1 bun x vitest run packages/core/src/ir-entry/mesh-corpus.test.ts
 ```
 
 Slice c (the deletion of core's built-in atoms and sugars) must pass the
