@@ -2,8 +2,9 @@
  * The IR entry point (decision 204): parse, lower, check and return core's
  * IR, for a consumer that interprets the tree itself (a dialect such as
  * Mesh) rather than emitting a host's code. Replaces `@mxlang/data`'s
- * `parseData`, with every diagnostic it reported at the same text and
- * position.
+ * `parseData`: with `tagRules: "none"`, every diagnostic it reported is
+ * reported at the same text and position (the default `html` rules reject
+ * files `parseData` accepted, such as `<input><child/></input>`).
  *
  * An error means `ir: undefined` (no partial IR) and every independent error
  * the source has, each positioned, earliest first: every parse error (the
