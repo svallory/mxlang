@@ -271,9 +271,9 @@ export interface BindingRegistry {
 export interface Ctx {
   /** Authored tag ancestors, innermost last; control flow is transparent and units start empty. */
   authoredAncestors?: string[];
-  /** The Marko nodes behind `authoredAncestors`, same order (atom contract scopes). */
+  /** The Marko nodes behind `authoredAncestors`, same order (a module's scopes, through `LoweredUnit`). */
   authoredAncestorNodes?: Node[];
-  /** Every custom tag call of this unit, by node, for the atom contract check. */
+  /** Every custom tag call of this unit, by node, for `LoweredUnit.calls`. */
   contractFacts?: Map<Node, ContractFact>;
   /** Names `analyze` hooks declared with `ctx.declare`. */
   contractDerived?: DerivedDeclaration[];

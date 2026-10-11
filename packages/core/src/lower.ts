@@ -5226,7 +5226,10 @@ function runCustomTagAnalyze(ctx: Ctx, body: readonly MxChild[]): void {
   scratch.customTags = customTags;
   // The file's dialect: a call's checks read the keys it claims and the
   // wording it gives (`describeAttribute`), and this walk's errors are the
-  // file's.
+  // file's. The same dialect also reaches `lowerBlockTag` and `lowerFilter`
+  // here, so a file with an `analyze` hook runs them in this walk as well as
+  // the real one (intended: a hook is a pure function of the node, and an
+  // error in a node it lowers is the file's whichever walk reaches it first).
   scratch.dialect = ctx.dialect;
   // Mirrors the parent: this walk is the same file, so whether it emits a
   // module is the same answer.

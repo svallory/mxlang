@@ -98,6 +98,16 @@ export interface CustomTagAttribute {
   default?: unknown;
   /** Reject a runtime expression when the tag needs a literal value. */
   literalOnly?: boolean;
+  /**
+   * Data for a syntax module that claims the key through
+   * `Dialect.contractFields`. Core never reads it; without a claiming module
+   * it is the unknown-key error. @unstable
+   */
+  values?: string[];
+  /** As `values`: data a syntax module claims; core never reads it. @unstable */
+  pattern?: string;
+  /** As `values`: data a syntax module claims; core never reads it. @unstable */
+  ref?: string | string[];
 }
 
 export interface CustomTagAttributeTag {
@@ -233,10 +243,10 @@ export interface AnalyzeContext {
   fail(message: string, at?: Position): never;
   /**
    * Declares a name no tag states (a derived one, such as the `listId` a
-   * `belongs-to` adds) in the declare phase, before any reference is checked
-   * (decision 156 addendum 1, item 6). `span` is where an error or go-to for
-   * the name points, normally the tag that caused it; `scope` names an
-   * ancestor of that tag, defaulting to the file's root tag.
+   * `belongs-to` adds). Core only records it: a syntax module reads it from
+   * `LoweredUnit.declared`. `span` is where an error or go-to for the name
+   * points, normally the tag that caused it; `scope` names an ancestor of
+   * that tag, defaulting to the file's root tag.
    */
   declare(
     kind: string,
@@ -520,6 +530,12 @@ export interface CustomTag {
   children?: CustomTagChildren;
   /** Allowed authored direct parents; `#root` is a unit's top level and `@name` an attribute tag. */
   parents?: string[];
+  /**
+   * Data for a syntax module that claims the key through
+   * `Dialect.contractFields.tag`. Core never reads it; without a claiming
+   * module it is the unknown-key error. @unstable
+   */
+  declares?: unknown;
   analyze?(calls: readonly TagCall[], ctx: AnalyzeContext): void;
   transform?(call: TagCall, ctx: TransformContext): IrNode[] | TagCall;
   finalize?(ctx: FinalizeContext): IrNode[];
@@ -1996,6 +2012,13 @@ export function rejectUnknownDeclarationKeys(
     rejectNonStringDefaultTag(`\`<${tagName}>\``, definition);
     // A key the file's dialect claims is its data, not core's to
     // check: the module's `checkContract` checks it here, at registration.
+    if (Object.hasOwn(definition, "declares") && !claimed.tag.has("declares")) {
+      failAt(
+        tagName,
+        `\`declares\` is not allowed: no syntax module claims it (\`contractFields\`)`,
+        { line: 0, column: 0 },
+      );
+    }
     checkClaimedContract(tagName, definition, claimed);
     rejectRecursiveContractKeys(
       `tag "${tagName}"`,
@@ -2606,7 +2629,7 @@ export function transformCustomTag(
       ctx.deferredContractErrors.push(error);
     },
   });
-  // Decision 156: remembered for the file-level declare and check phases.
+  // Remembered for the module's `afterLower` (`LoweredUnit.calls`).
   ctx.contractFacts ??= new Map();
   ctx.contractFacts.set(node, {
     definition,

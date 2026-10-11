@@ -14,7 +14,13 @@
  *    error; under the fixture the fixture's check runs and core runs none.
  * 5. `ContractAtomOrMember` types the attribute view a module receives.
  */
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -29,6 +35,7 @@ import type {
   ContractValue,
   LoweredUnit,
 } from "../lowered-unit.ts";
+import { scanCustomTags } from "../scan.ts";
 import type { Dialect } from "../syntax-table.ts";
 import { testTargetLookup } from "../test-targets.ts";
 import { type LowerSourceOptions, lowerSource } from "./index.ts";
@@ -258,6 +265,48 @@ describe('the `type: "atom"` shape check on a module-built atom', () => {
   });
 });
 
+describe("where core's `type` check reports, and what it names", () => {
+  const at = (source: string, customTags: Record<string, CustomTag>) =>
+    lowerSource(source, "/v/entity.mx", {
+      dialect: atomSyntax,
+      customTags,
+    }).diagnostics.map((each) => `${each.line}:${each.column} ${each.message}`);
+  const SLOTS = tags({
+    pick: {
+      attributes: {
+        mode: { type: "atom" },
+        s: { type: "string" },
+        n: { type: "number" },
+      },
+      attributeTags: { row: { attributes: { mode: { type: "atom" } } } },
+    },
+  });
+
+  it.each([
+    ["<pick s=~on/>", "1:8 `<pick>`: attribute `s` must be string, got atom"],
+    ["<pick n=~on/>", "1:8 `<pick>`: attribute `n` must be number, got atom"],
+    ["<pick s=(~on)/>", "1:9 `<pick>`: attribute `s` must be string, got atom"],
+    [
+      "<pick mode=[~a, 2]/>",
+      "1:16 `<pick>`: attribute `mode` must be atom, got number",
+    ],
+    [
+      '<pick mode="on"/>',
+      "1:11 `<pick>`: attribute `mode` must be atom, got string",
+    ],
+    [
+      "<pick mode=1/>",
+      "1:11 `<pick>`: attribute `mode` must be atom, got number",
+    ],
+    [
+      '<pick><@row mode="x"/></pick>',
+      "1:17 `<pick>`: `<@row>`: attribute `mode` must be atom, got string",
+    ],
+  ])("%s is refused once, at the value: %s", (source, expected) => {
+    expect(at(source, SLOTS)).toEqual([expected]);
+  });
+});
+
 describe("`ctx.declare` for a module", () => {
   it("an `analyze` hook's declaration reaches the unit a module's `afterLower` reads", () => {
     const seen: unknown[] = [];
@@ -297,9 +346,9 @@ describe("`ctx.declare` for a module", () => {
 });
 
 /**
- * The attribute keys core no longer knows. (`declares` is a tag key: core
- * refuses no unknown key on a tag, where hooks and a module's own keys live,
- * so unclaimed it is only never read; see the last pin.)
+ * The keys core no longer knows. The first three are attribute keys, refused
+ * by the attribute unknown-key check; `declares` is a tag key, refused by its
+ * own pin below.
  */
 const FOUR_KEYS: [string, Record<string, CustomTag>, string][] = [
   [
@@ -348,7 +397,7 @@ describe("`values`, `pattern` and `ref` belong to the module that claims them, `
     },
   );
 
-  it("`declares` reaches a module only when it claims it; core reads it either way never", () => {
+  it("`declares` reaches a module only when it claims it; unclaimed it is the unknown-key error", () => {
     const declared = tags({ box: { declares: { kind: "node", from: "id" } } });
     const contractOf = (dialect: Dialect) => {
       let seen: unknown;
@@ -366,7 +415,55 @@ describe("`values`, `pattern` and `ref` belong to the module that claims them, `
     expect(
       contractOf({ ...none, contractFields: { tag: ["declares"] } }),
     ).toEqual({ declares: { kind: "node", from: "id" } });
-    expect(contractOf(none)).toEqual({});
+    const refusal =
+      "`<box>`: `declares` is not allowed: no syntax module claims it (`contractFields`)";
+    for (const dialect of [none, undefined]) {
+      expect(messages("<box/>", declared, dialect ? { dialect } : {})).toEqual([
+        refusal,
+      ]);
+    }
+  });
+
+  it("an unclaimed `declares` is refused from a sidecar and from `mx.contracts` too", () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "mx-declares-")));
+    try {
+      writeFileSync(join(root, "package.json"), "{}");
+      mkdirSync(join(root, "tags"));
+      writeFileSync(
+        join(root, "tags", "box.tag.ts"),
+        'export default { declares: { kind: "node", from: "id" }, transform: () => [] };',
+      );
+      const sidecar = () =>
+        // A sidecar loads on its first read of a declared key.
+        (
+          scanCustomTags(join(root, "page.mx"), { targets: testTargetLookup() })
+            .customTags.box as CustomTag
+        ).attributes;
+      expect(sidecar).toThrow("`declares` is not allowed");
+      rmSync(join(root, "tags"), { recursive: true });
+      writeFileSync(
+        join(root, "package.json"),
+        JSON.stringify({ mx: { contracts: "./c.ts" } }),
+      );
+      writeFileSync(
+        join(root, "c.ts"),
+        'export default { box: { declares: { kind: "node", from: "id" } } };',
+      );
+      expect(() =>
+        scanCustomTags(join(root, "page.mx"), { targets: testTargetLookup() }),
+      ).toThrow("`declares` is not allowed in `mx.contracts`");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("the fixture's first error is the file's, ahead of core's shape error on a later call", () => {
+    const box = tags({
+      box: { attributes: { mode: { type: "atom", values: ["on", "off"] } } },
+    });
+    expect(messages('<box mode=~zz/>\n<box mode="red"/>', box)).toEqual([
+      "`<box>`: attribute `mode`: `~zz` is not one of ~on, ~off",
+    ]);
   });
 
   it("under the fixture its own checks run and core runs none", () => {

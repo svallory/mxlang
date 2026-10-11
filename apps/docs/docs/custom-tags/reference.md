@@ -209,7 +209,8 @@ Messages begin with the relevant tag name unless the problem belongs to a discov
 | Trigger | Diagnostic form |
 | --- | --- |
 | A registration uses a core-owned name such as `try`. | `` `<name>` is a core-owned custom tag and cannot be shadowed by a registered custom tag of the same name `` |
-| An `attributes`/`attributeTags` declaration has an unknown key (e.g. the retired `staticOnly`/`repeated`). | `Unknown key "KEY" in the "NAME" attribute declaration of tag "TAG"; allowed: …`; this includes `values`, `pattern`, `ref` and `declares`, unless the file's syntax module claims the key through `contractFields` |
+| An `attributes`/`attributeTags` declaration has an unknown key (e.g. the retired `staticOnly`/`repeated`). | `Unknown key "KEY" in the "NAME" attribute declaration of tag "TAG"; allowed: …`; this includes `values`, `pattern` and `ref`, unless the file's syntax module claims the key through `contractFields` |
+| A tag declares `declares` and no syntax module claims it. | `` `<name>`: `declares` is not allowed: no syntax module claims it (`contractFields`) ``; `customTags`, a sidecar and `mx.contracts` all refuse it |
 | A definition declares only `finalize`. | `` `<name>`: a custom tag that defines only `finalize` has no call site and nothing to collect… `` |
 | A called tag has neither a transform nor a template. | `` `<name>`: custom tag has neither a `transform` nor a template file… `` |
 | Nested custom-tag calls exceed 64. | `` `<name>`: custom tag expansion exceeded 64 nested invocations `` |
