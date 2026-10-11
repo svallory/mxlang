@@ -30,10 +30,21 @@ describe("a module's own contract key", () => {
         relations: "many",
       } as CustomTag,
     };
-    // Without a module that claims them, `unique` is an unknown key.
+    // Without a module that claims them, both keys are unknown: the tag-level
+    // `relations` is refused first, then `unique` once that one is gone.
     expect(
       lowerSource(source, "/v/x.mx", { customTags: tags, dialect: fixture })
         .diagnostics[0]?.message,
+    ).toMatch(/Unknown key "relations" in the declaration of tag "index"/);
+    const { relations: _relations, ...withoutRelations } =
+      tags.index as CustomTag & {
+        relations?: string;
+      };
+    expect(
+      lowerSource(source, "/v/x.mx", {
+        customTags: { ...tags, index: withoutRelations },
+        dialect: fixture,
+      }).diagnostics[0]?.message,
     ).toMatch(/Unknown key "unique"/);
 
     const seen: unknown[] = [];
