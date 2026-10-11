@@ -47,7 +47,7 @@ export function reservedNameMessage(name: string): string {
 
 /**
  * The message for a definition of a name only a dialect may define:
- * "`<entity>` cannot be defined by a tag file: Mesh reserves it". `source`
+ * "`<entity>` cannot be defined by a tag file: Kit reserves it". `source`
  * names what defined it (`a tag file`, `an \`mx.tags\` directory`,
  * `\`mx.contracts\``, `\`customTags\``).
  */

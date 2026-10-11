@@ -224,7 +224,8 @@ export interface MxConfigSource {
   /**
    * Where the value at `path` (or, with `key: true`, its key) is written:
    * exact for JSON and `package.json`, best-effort for YAML, `1:0` for a
-   * module or a provided config, and `1:0` when the path is not found.
+   * module or a provided config, and `1:0` when the path is not found. An
+   * array element is the segment `"[n]"` (its index), JSON only.
    */
   locate(
     path: readonly string[],
@@ -286,8 +287,22 @@ export function locateJsonPath(
       }
       cursor++;
     } else if (start[0] === "[") {
-      while (tokens[cursor] && tokens[cursor]?.[0] !== "]") {
-        value([...at, "[]"]);
+      for (
+        let index = 0;
+        tokens[cursor] && tokens[cursor]?.[0] !== "]";
+        index++
+      ) {
+        // An element is addressed by its index in brackets (`"[1]"`), and is
+        // positioned at its value even with `key: true` (it has no key).
+        const element = [...at, `[${index}]`];
+        const token = tokens[cursor];
+        if (options.key && token && matches(element)) {
+          found = {
+            ...positionOfOffset(text, token.index),
+            length: token[0].length,
+          };
+        }
+        value(element);
         if (tokens[cursor]?.[0] === ",") cursor++;
       }
       cursor++;

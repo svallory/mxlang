@@ -381,39 +381,95 @@ describe("a discovered tag file", () => {
 });
 
 describe("an `mx.tags` entry", () => {
-  it("is reported at the `tags` key of `package.json`, naming the file", () => {
+  /** The position of the `{` that opens the object holding `needle`. */
+  const objectOpening = (text: string, needle: string) => {
+    const offset = text.lastIndexOf("{", text.indexOf(needle));
+    const before = text.slice(0, offset);
+    return {
+      line: before.split("\n").length,
+      column: offset - (before.lastIndexOf("\n") + 1),
+    };
+  };
+
+  const packageText = () => readFile(join(dir, "package.json"));
+  const refusal = (
+    file: string,
+    at: { line: number; column: number },
+    tagFile = "for",
+  ) => ({
+    file,
+    message: expect.stringMatching(
+      new RegExp(
+        "^.<for>. cannot name a data tag: .* \\(.*shared/" +
+          tagFile +
+          "\\.mx\\)$",
+      ),
+    ),
+    ...at,
+    severity: "error",
+    code: RESERVED_CODE,
+  });
+
+  it("is reported at its entry in `package.json`, naming the file", () => {
     write("shared/for.mx");
     write("shared/fine.mx");
     kitProject({ tags: ["shared"] });
     const result = scan("page.mx");
-    const at = positionOf(readFile(join(dir, "package.json")), '"tags"');
     expect(result.diagnostics.map(shown)).toEqual([
-      {
-        file: "package.json",
-        message: expect.stringMatching(
-          /^`<for>` cannot name a data tag: .* \(.*shared\/for\.mx\)$/,
-        ),
-        ...at,
-        severity: "error",
-        code: RESERVED_CODE,
-      },
+      refusal("package.json", positionOf(packageText(), '"shared"')),
     ]);
     expect(Object.keys(result.customTags)).toEqual(["fine"]);
   });
 
-  it("is reported at the `tags` key of an `mx.config.json`", () => {
+  it("is reported at the second entry, not at the `tags` key", () => {
+    write("other/ok.mx");
+    write("shared/for.mx");
+    kitProject({ tags: ["other", "shared"] });
+    const result = scan("page.mx");
+    const at = positionOf(packageText(), '"shared"');
+    expect(at.line).toBeGreaterThan(positionOf(packageText(), '"tags"').line);
+    expect(result.diagnostics.map(shown)).toEqual([
+      refusal("package.json", at),
+    ]);
+    expect(Object.keys(result.customTags)).toEqual(["ok"]);
+  });
+
+  it("is reported at an object entry's opening brace", () => {
+    write("other/ok.mx");
+    write("shared/or.mx");
+    kitProject({
+      tags: ["other", { dir: "shared", prefix: "f" }],
+    });
+    const result = scan("page.mx");
+    expect(result.diagnostics.map(shown)).toEqual([
+      refusal("package.json", objectOpening(packageText(), '"dir"'), "or"),
+    ]);
+  });
+
+  it("is reported at the `tags` key when `mx.tags` is one string", () => {
+    write("shared/for.mx");
+    kitProject({ tags: "shared" });
+    const result = scan("page.mx");
+    const text = packageText();
+    expect(result.diagnostics.map(shown)).toEqual([
+      refusal("package.json", positionOf(text, '"tags"')),
+    ]);
+  });
+
+  it("is reported at its entry in an `mx.config.json`", () => {
     write("shared/if.tag.ts", "export default {};\n");
+    write("other/ok.mx");
     write("package.json", '{"name":"app"}\n');
     const config = write(
       "mx.config.json",
-      '{\n  "extensions": {},\n  "tags": ["shared"]\n}\n',
+      '{\n  "extensions": {},\n  "tags": [\n    "other",\n    "shared"\n  ]\n}\n',
     );
     const result = scan("page.mx");
     expect(result.diagnostics.map(shown)).toEqual([
       expect.objectContaining({
         file: "mx.config.json",
-        line: 3,
-        column: 2,
+        line: 5,
+        column: 4,
         severity: "error",
         code: RESERVED_CODE,
       }),
@@ -461,7 +517,7 @@ describe("an `mx.tags` entry", () => {
         message: expect.stringMatching(
           /^`<entity>` cannot be defined by a tag file: Kit reserves it \(.*shared\/entity\.kit\.mx\)$/,
         ),
-        ...positionOf(readFile(join(dir, "package.json")), '"tags"'),
+        ...positionOf(readFile(join(dir, "package.json")), '"shared"'),
         severity: "error",
         code: RESERVED_CODE,
       },

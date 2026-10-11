@@ -2262,7 +2262,7 @@ Each of these diagnostics carries a stable code, `ScanDiagnostic.code` or
 | `MX_SIDECAR_IGNORED` | warning, at the file | A `.tag.ts` sidecar that a dialect file's scan meets while that dialect sets `sidecars: false`, in its own tag directories or, for a dialect without `tagDirs`, in `tags/`. The sidecar is not read. |
 | `MX_INVALID_TAG_FILE_NAME` | error, at the file | A dialect tag file's name is not a usable tag name. The file is skipped. |
 | `MX_DOTTED_TAG_FILE_NAME` | warning, at the file | A dialect tag file's name has a dot, which a call cannot write as one tag name. The message names the `tagExtensions` entry that would fix it. |
-| `MX_RESERVED_TAG` | error, at the definition | A definition names a reserved tag: core's structural names (`RESERVED_NAMES`), or a name the dialect's `reservedTags` lists. The definition is dropped and a call resolves as if it were absent. Four sources, each positioned at the definition: a discovered tag file (the file's `1:0`), an `mx.tags` entry (the config file's `tags` key, the file named in the message), an `mx.contracts` entry (its key in the module's literal, else the module's `1:0`), and a `customTags` entry passed to `lowerSource` (each call site of the name, else the source's `1:0`). One diagnostic per occurrence: a call that carries it is not also reported `MX_UNKNOWN_TAG`. Never thrown. |
+| `MX_RESERVED_TAG` | error, at the definition | A definition names a reserved tag: core's structural names (`RESERVED_NAMES`), or a name the dialect's `reservedTags` lists. The definition is dropped and a call resolves as if it were absent. Four sources, each positioned at the definition: a discovered tag file (the file's `1:0`), an `mx.tags` entry (that entry in the config file, the tag file named in the message), an `mx.contracts` entry (its key in the module's literal, else the module's `1:0`), and a `customTags` entry passed to `lowerSource` (each call site of the name, else the source's `1:0`). One diagnostic per occurrence: a call that carries it is not also reported `MX_UNKNOWN_TAG`. Never thrown. |
 
 **Package-level contracts (MX addition, decision 142).**
 `mx.contracts` is a module string, an entry `{ module, hosts? }`, or
@@ -2423,7 +2423,7 @@ target, so the core holds no reserved-segment list.
 | `` `${entry}` is a host module file, not a tag template; tag templates are `.mx` `` | A `<base>.<word>.mx` whose `<word>` is a registered file-kind segment. |
 | `` `${entry}` cannot be called as a tag: `<${bare}>` parses as tag `${tag}` with class `${classes}`. If it is another host's module file it does not belong under this host; otherwise rename it without the dot. `` | Any other `<base>.<word>.mx`.
 | `` `${bare}` is not a usable tag name; a tag file's name must start with a letter, digit or underscore and may then contain letters, digits, underscores, hyphens and dots `` | Name fails the pattern. |
-| *(error, `MX_RESERVED_TAG`, recorded not thrown)* `` `<${name}>` cannot name a data tag: it is reserved … `` (core's name), or `` `<${name}>` cannot be defined by a tag file: ${Dialect} reserves it `` | A tag file resolves to a reserved name: any of core's structural names, or a name the routed dialect's `reservedTags` lists. The file's `1:0`; for an `mx.tags` directory, the config file's `tags` key with the file named in the message. Recorded rather than thrown so one misnamed file does not break every file in the package. |
+| *(error, `MX_RESERVED_TAG`, recorded not thrown)* `` `<${name}>` cannot name a data tag: it is reserved … `` (core's name), or `` `<${name}>` cannot be defined by a tag file: ${Dialect} reserves it `` | A tag file resolves to a reserved name: any of core's structural names, or a name the routed dialect's `reservedTags` lists. The file's `1:0`; for an `mx.tags` directory, that entry in the config file (the `tags` key when `mx.tags` is one string) with the tag file named in the message. Recorded rather than thrown so one misnamed file does not break every file in the package. |
 | *(diagnostic, recorded)* `` `mx.tags` names a directory that does not exist: ${entry.dir} `` | A missing `mx.tags` directory. |
 
 That last one is a **diagnostic, not a throw**, on purpose: one typo in
@@ -3686,12 +3686,11 @@ name is an error at the entry. A definition from any of the four sources (a
 discovered tag file, an `mx.tags` entry, an `mx.contracts` entry, a `customTags`
 entry passed to `lowerSource`, §9.2) is dropped with `MX_RESERVED_TAG`, and its
 calls then resolve as if it were absent: `<if>` is core's `if`, and a dialect's
-reserved name is whatever the dialect's own front end makes it. This
-fixes `lowerSource`, which used to ignore a `customTags` entry named after
-`if`, `for` or another core name without a word, and which threw for a `try`
-entry: both are now an `MX_RESERVED_TAG` diagnostic (an error, so `ir` is
-`undefined` beside it). `compileSource` and `parseFragment`, the template
-compilers, keep their throw for a registration that shadows `try` (§5 P4).
+reserved name is whatever the dialect's own front end makes it. In
+`lowerSource` a `customTags` entry named after any reserved name, `try`
+included, is an `MX_RESERVED_TAG` diagnostic (an error, so `ir` is `undefined`
+beside it), at each call of the name. `compileSource` and `parseFragment`, the
+template compilers, throw for a registration that shadows `try` (§5 P4).
 `customTags` passed with an explicit `dialect` are that dialect's own
 vocabulary, so the dialect's `reservedTags` do not apply to them; core's names
 still do. Without an explicit `dialect` the dialect the file routes to decides.

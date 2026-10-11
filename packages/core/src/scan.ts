@@ -679,18 +679,36 @@ function contractsPosition(packageFile: string): {
 export function mxKeyPosition(
   packageFile: string,
   mxKey: string,
+  ...rest: string[]
 ): {
   line: number;
   column: number;
 } {
+  const path = [mxKey, ...rest];
   if (basename(packageFile) !== "package.json") {
-    const { line, column } = mxConfigKeyPosition(packageFile, [mxKey]);
+    const { line, column } = mxConfigKeyPosition(packageFile, path);
     return { line, column };
   }
   return jsonKeyPosition(readPackageJsonCached(packageFile)?.text ?? "", [
     "mx",
-    mxKey,
+    ...path,
   ]);
+}
+
+/**
+ * Where the `index`th `mx.tags` entry is written, or the `tags` key when
+ * `mx.tags` is a single string (no entry to point at) or the entry cannot be
+ * found (a YAML or module config). Exact for JSON and `package.json`.
+ */
+function mxTagsEntryPosition(
+  packageFile: string,
+  index: number | undefined,
+): { line: number; column: number } {
+  const key = mxKeyPosition(packageFile, "tags");
+  if (index === undefined) return key;
+  const entry = mxKeyPosition(packageFile, "tags", `[${index}]`);
+  const found = entry.line !== 1 || entry.column !== 0;
+  return found ? entry : key;
 }
 
 /** Contracts failures address the actual source file, not the calling page. */
@@ -1774,7 +1792,10 @@ function indexMxTagsEntries(
   scope: Pick<IndexOptions, "discovery" | "routes"> = {},
 ): void {
   const entries = normalizeMxTags(mx?.tags, packageDir, packageJson);
-  for (const entry of entries) {
+  // `normalizeMxTags` maps an array one entry to one entry (an invalid one
+  // throws), so the loop index is the authored index; a string is no entry.
+  const authored = Array.isArray(mx?.tags);
+  for (const [entryIndex, entry] of entries.entries()) {
     directories.push(entry.dir);
     if (!existsSync(entry.dir)) {
       // Recorded, not thrown: see `ScanResult.diagnostics`.
@@ -1803,11 +1824,11 @@ function indexMxTagsEntries(
       prefix: entry.prefix,
       parseOptions: entry.parseOptions,
       hosts: entry.hosts,
-      // A reserved name in this directory is reported at `mx.tags`, in the
-      // config file (an entry is an array element, with no key of its own).
+      // A reserved name in this directory is reported at this entry in the
+      // config file (the `tags` key for a single string).
       refuseAt: () => ({
         file: packageJson,
-        ...mxKeyPosition(packageJson, "tags"),
+        ...mxTagsEntryPosition(packageJson, authored ? entryIndex : undefined),
       }),
     });
   }
