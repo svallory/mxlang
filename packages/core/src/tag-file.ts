@@ -11,6 +11,11 @@
  *   parser-facing signature of the tag file's own scan (`ctx.lower` lowers
  *   against that map) and the stamp of every dependency. A failure is cached
  *   too, except on a cycle.
+ * - **Unsaved text.** A tag file an editor has open is read as the editor
+ *   has it, through `withCalleeInputSources` (`unsavedSourceFor`), the
+ *   channel an unsaved `.mx` template reaches core by. A derivation made
+ *   from unsaved text is current only while that same text is in force, and
+ *   one made from the disk only while no unsaved text is.
  * - **Dependencies.** `ctx.dependsOn(path)` records one by hand. A read of
  *   another tag file's contract during a derivation (a call `ctx.lower`
  *   resolves) records that file, and everything it depends on, by itself.
@@ -28,6 +33,7 @@
  */
 
 import { basename, dirname, relative, resolve } from "node:path";
+import { unsavedSourceFor } from "./callee-input.ts";
 import { claimedFields } from "./contract-fields.ts";
 import {
   attachRelatedErrors,
@@ -138,20 +144,39 @@ const CONTRACT_KEYS = [
 /** A contract's hooks: a paired sidecar's to supply. */
 const HOOK_KEYS = ["analyze", "transform", "finalize"] as const;
 
+/**
+ * What a derivation saw of a file. A tag file is read as the editor has it,
+ * so what it saw is the disk's stamp (with no unsaved text in force) or the
+ * unsaved text. A file the hook named with `ctx.dependsOn` is read by the
+ * hook itself, from the disk only.
+ */
+type Seen =
+  | { readonly kind: "tag"; readonly stamp: FileStamp }
+  | { readonly kind: "unsaved"; readonly source: string }
+  | { readonly kind: "disk"; readonly stamp: FileStamp };
+
+/** Whether `seen` still describes `path`, under the unsaved sources now in force. */
+function seenIsCurrent(path: string, seen: Seen): boolean {
+  if (seen.kind === "disk") return fileStampIsFresh(path, seen.stamp);
+  const unsaved = unsavedSourceFor(path);
+  if (seen.kind === "unsaved") return unsaved === seen.source;
+  return unsaved === undefined && fileStampIsFresh(path, seen.stamp);
+}
+
 /** One derived contract, as cached per tag file. */
 interface Derivation {
   readonly path: string;
   /** The dialect module revision: a reload is a new object. */
   readonly dialect: Dialect;
   /** `undefined` for a dialect with no hook: only its revision matters. */
-  readonly stamp?: FileStamp;
+  readonly seen?: Seen;
   /**
    * The tag file's own scan, contract-facing (`contractSignatureOf`): the
    * tags its lowering sees, and the files that define them.
    */
   readonly signature?: string;
   /** Every file the contract depends on, each as it was read, transitively. */
-  readonly dependencies: ReadonlyMap<string, FileStamp>;
+  readonly dependencies: ReadonlyMap<string, Seen>;
   readonly read: DeferredRead;
 }
 
@@ -161,7 +186,7 @@ const derivations = new Map<string, Derivation>();
 /** A derivation in progress: its file, and the dependencies it has read. */
 interface Frame {
   readonly path: string;
-  readonly dependencies: Map<string, FileStamp>;
+  readonly dependencies: Map<string, Seen>;
   /** A call re-entered this frame or one above it: nothing here is cached. */
   onCycle: boolean;
 }
@@ -179,6 +204,25 @@ const INCOMPLETE: DeferredRead = Object.freeze({ incomplete: true as const });
  */
 export function clearTagFileCache(): void {
   derivations.clear();
+}
+
+/**
+ * The files the contracts derived for `tagFiles` depend on, beyond the tag
+ * files themselves: what each hook named with `ctx.dependsOn`, and the files
+ * of the tag files it called, transitively. A tool that re-checks a file when
+ * a file it read changes (the language server) lists these beside the scan's
+ * files, which name the tag files but cannot name what a hook read, since the
+ * scan never runs one. A tag file not derived yet, or whose derivation was
+ * cut short by a cycle, has none. @unstable
+ */
+export function tagFileDependencies(tagFiles: Iterable<string>): string[] {
+  const found = new Set<string>();
+  for (const path of tagFiles) {
+    for (const dependency of derivations.get(path)?.dependencies.keys() ?? []) {
+      found.add(dependency);
+    }
+  }
+  return [...found];
 }
 
 /**
@@ -271,13 +315,13 @@ function signatureNow(path: string, state: RouteState): string | null {
 function isCurrent(derivation: Derivation, pass?: object): boolean {
   const state = routeStateOf(derivation.path, pass);
   if (state.failed || state.dialect !== derivation.dialect) return false;
-  if (derivation.stamp === undefined) return true;
-  if (!fileStampIsFresh(derivation.path, derivation.stamp)) return false;
+  if (derivation.seen === undefined) return true;
+  if (!seenIsCurrent(derivation.path, derivation.seen)) return false;
   if (signatureNow(derivation.path, state) !== derivation.signature) {
     return false;
   }
-  for (const [path, stamp] of derivation.dependencies) {
-    if (!fileStampIsFresh(path, stamp)) return false;
+  for (const [path, seen] of derivation.dependencies) {
+    if (!seenIsCurrent(path, seen)) return false;
   }
   return true;
 }
@@ -285,10 +329,10 @@ function isCurrent(derivation: Derivation, pass?: object): boolean {
 /** Records `derivation` (its file and its dependencies) in the frame reading it. */
 function recordDependency(derivation: Derivation): void {
   const frame = stack.at(-1);
-  if (!frame || derivation.stamp === undefined) return;
-  frame.dependencies.set(derivation.path, derivation.stamp);
-  for (const [path, stamp] of derivation.dependencies) {
-    frame.dependencies.set(path, stamp);
+  if (!frame || derivation.seen === undefined) return;
+  frame.dependencies.set(derivation.path, derivation.seen);
+  for (const [path, seen] of derivation.dependencies) {
+    frame.dependencies.set(path, seen);
   }
 }
 
@@ -389,20 +433,19 @@ function derive(tag: DiscoveredTag): {
     return { derivation, cached: true };
   }
   let own: ReturnType<typeof ownScan>;
-  let read: ReturnType<typeof readStamped>;
+  let read: { text: string; seen: Seen };
   try {
     own = ownScan(path);
-    read = readStamped(path);
+    read = readTagFile(path);
   } catch (error) {
     return uncached(error);
   }
-  const stamp = read.stamp;
   const frame: Frame = { path, dependencies: new Map(), onCycle: false };
   const answer = runHook(tag, dialect, read.text, own.scan, frame);
   const derivation: Derivation = {
     path,
     dialect,
-    stamp,
+    seen: read.seen,
     signature: own.signature,
     dependencies: frame.dependencies,
     read: frame.onCycle ? { ...answer, uncached: true } : answer,
@@ -413,6 +456,19 @@ function derive(tag: DiscoveredTag): {
   }
   derivations.set(path, derivation);
   return { derivation, cached: true };
+}
+
+/**
+ * The text of a tag file, and what was seen of it: the editor's unsaved text
+ * when one is in force, else the disk's, stamped as the scan stamps.
+ */
+function readTagFile(path: string): { text: string; seen: Seen } {
+  const unsaved = unsavedSourceFor(path);
+  if (unsaved !== undefined) {
+    return { text: unsaved, seen: { kind: "unsaved", source: unsaved } };
+  }
+  const read = readStamped(path);
+  return { text: read.text, seen: { kind: "tag", stamp: read.stamp } };
 }
 
 /** Runs the dialect's hook on the tag file, in its frame, and reads its answer. */
@@ -464,7 +520,10 @@ function runHook(
     },
     dependsOn(file) {
       const absolute = resolve(dirname(path), file);
-      frame.dependencies.set(absolute, fileStamp(absolute));
+      frame.dependencies.set(absolute, {
+        kind: "disk",
+        stamp: fileStamp(absolute),
+      });
     },
   };
   let result: unknown;

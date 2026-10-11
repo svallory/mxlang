@@ -22,6 +22,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { withCalleeInputSources } from "./callee-input.ts";
 import { compileSource } from "./compile.ts";
 import { contractDefaultTagDiagnostics } from "./contract-default-tag.ts";
 import { claimedFields } from "./contract-fields.ts";
@@ -1185,5 +1186,128 @@ describe("cycles", () => {
       code: "MX_TAG_FILE_CYCLE",
       file: "concepts/a.kit.mx",
     });
+  });
+});
+
+/**
+ * An editor's unsaved tag file (`withCalleeInputSources`, the channel an
+ * unsaved `.mx` template already reaches core by): the hook is given that
+ * text, and a derivation made from it is never served once it is out of
+ * force, nor the disk's served while it is in force.
+ */
+describe("unsaved tag files", () => {
+  const BROKEN = {
+    contract: {},
+    diagnostics: [
+      {
+        severity: "error",
+        message: "broken concept",
+        line: 2,
+        column: 4,
+        code: "KIT_BAD",
+      },
+    ],
+  };
+  const textOf = (directives: unknown, body = "") =>
+    `<!-- ${JSON.stringify(directives)} -->\n${body}`;
+  const CALLER_ERROR = [
+    {
+      message: "`<money>`'s definition has errors (concepts/money.kit.mx:2:5)",
+      line: 1,
+      column: 0,
+      code: "MX_TAG_FILE_ERROR",
+    },
+    {
+      message: "broken concept",
+      line: 2,
+      column: 4,
+      code: "KIT_BAD",
+      file: "concepts/money.kit.mx",
+    },
+  ];
+
+  /** Lowers `<money/>` with `unsaved` text for `file` in force (none: the disk's). */
+  function withUnsaved(file: string, unsaved: string | undefined) {
+    const sources = new Map(unsaved === undefined ? [] : [[file, unsaved]]);
+    return withCalleeInputSources(sources, () =>
+      brief(lowerAt("page.kit.mx", "<money/>\n")),
+    );
+  }
+
+  it("an unsaved fix clears the caller's error, and the disk's error is back once it is gone", () => {
+    kitProject();
+    const file = tagFile("money", BROKEN);
+    expect(withUnsaved(file, undefined)).toEqual(CALLER_ERROR);
+    expect(withUnsaved(file, textOf({ contract: {} }))).toEqual([]);
+    expect(withUnsaved(file, undefined)).toEqual(CALLER_ERROR);
+  });
+
+  it("an unsaved break raises the caller's error, and the disk's clean tag file is back once it is gone", () => {
+    kitProject();
+    const file = tagFile("money", { contract: {} });
+    expect(withUnsaved(file, undefined)).toEqual([]);
+    expect(withUnsaved(file, textOf(BROKEN))).toEqual(CALLER_ERROR);
+    expect(withUnsaved(file, undefined)).toEqual([]);
+  });
+
+  it("with no unsaved source the disk is used, derived once", () => {
+    kitProject();
+    const file = tagFile("money", BROKEN);
+    const elsewhere = join(dir, "concepts/other.kit.mx");
+    expect(withUnsaved(elsewhere, textOf({ contract: {} }))).toEqual(
+      CALLER_ERROR,
+    );
+    expect(withUnsaved(file, undefined)).toEqual(CALLER_ERROR);
+    expect(count("money.kit.mx")).toBe(1);
+  });
+
+  it("the hook is given the unsaved text", () => {
+    kitProject();
+    const file = tagFile("money", { contract: {} });
+    const unsaved = textOf({ contract: {} }, "<!-- unsaved -->\n");
+    withUnsaved(file, unsaved);
+    expect(
+      (state() as unknown as { lastInput: { source: string; path: string } })
+        .lastInput,
+    ).toMatchObject({ path: file, source: unsaved });
+  });
+
+  it("the same unsaved text is derived once; another text is derived again", () => {
+    kitProject();
+    const file = tagFile("money", BROKEN);
+    const fixed = textOf({ contract: {} });
+    withUnsaved(file, fixed);
+    withUnsaved(file, fixed);
+    expect(count("money.kit.mx")).toBe(1);
+    expect(withUnsaved(file, textOf(BROKEN, "x"))).toEqual(CALLER_ERROR);
+    expect(count("money.kit.mx")).toBe(2);
+  });
+
+  it("an unsaved fix to a tag file a tag file calls clears the caller's error, transitively", () => {
+    kitProject();
+    const coin = tagFile("coin", {
+      contract: { attributes: { v: { required: true } } },
+    });
+    tagFile("money", { lower: true }, "<coin/>\n");
+    const broken = withUnsaved(coin, undefined);
+    expect(broken).toEqual([
+      {
+        message:
+          "`<money>`'s definition has errors (concepts/money.kit.mx:2:1)",
+        line: 1,
+        column: 0,
+        code: "MX_TAG_FILE_ERROR",
+      },
+      {
+        message: expect.stringContaining("`v`"),
+        line: 2,
+        column: 0,
+        file: "concepts/money.kit.mx",
+      },
+    ]);
+    expect(
+      withUnsaved(coin, textOf({ contract: { attributes: { v: {} } } })),
+    ).toEqual([]);
+    expect(withUnsaved(coin, undefined)).toEqual(broken);
   });
 });

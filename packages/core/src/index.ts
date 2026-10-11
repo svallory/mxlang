@@ -363,6 +363,7 @@ export {
   type TagFileDiagnostic,
   type TagFileInput,
   type TagFileResult,
+  tagFileDependencies,
 } from "./tag-file.ts";
 /**
  * The structural names core reserves for every dialect (`if`, `else`,

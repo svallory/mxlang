@@ -268,11 +268,22 @@ export function withCalleeInputSources<T>(
   }
 }
 
+/**
+ * The editor's unsaved text for `path` while a compile runs under
+ * {@link withCalleeInputSources}, or `undefined` when none is in force.
+ * Everything that reads a file an editor can have open (a callee's `Input`,
+ * a dialect tag file) asks this one question, so the editor and the disk
+ * are told apart the same way for all of them. Internal.
+ */
+export function unsavedSourceFor(path: string): string | undefined {
+  return activeSourceOverrides?.get(path);
+}
+
 function sourceSnapshot(path: string): {
   source: string;
   mtimeMs: number | undefined;
 } {
-  const source = activeSourceOverrides?.get(path);
+  const source = unsavedSourceFor(path);
   if (source !== undefined) return { source, mtimeMs: undefined };
   return {
     source: readFileSync(path, "utf8"),
