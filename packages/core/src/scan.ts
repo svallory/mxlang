@@ -1254,7 +1254,6 @@ function lazyTag(tag: DiscoveredTag, claimed: ClaimedFields): CustomTag {
   return definition;
 }
 
-/** The contract keys a dialect tag file supplies (the hooks stay the sidecar's). */
 /** The keys of a `CustomTag` an `mx.contracts` entry may state (no `transform`, `finalize` or `template`). */
 const MX_CONTRACTS_KEYS: readonly string[] = [
   "parseOptions",
@@ -1266,6 +1265,7 @@ const MX_CONTRACTS_KEYS: readonly string[] = [
   "analyze",
 ];
 
+/** The contract keys a dialect tag file supplies (the hooks stay the sidecar's). */
 const TAG_FILE_CONTRACT_KEYS = [
   "attributes",
   "attributeTags",

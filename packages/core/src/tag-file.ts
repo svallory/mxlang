@@ -41,7 +41,12 @@ import {
   type MxWarning,
   TranslateError,
 } from "./core.ts";
-import type { CustomTag, DeferredRead, DeferredReader } from "./custom-tags.ts";
+import {
+  type CustomTag,
+  type DeferredRead,
+  type DeferredReader,
+  rejectUnknownTagKeys,
+} from "./custom-tags.ts";
 import {
   type LowerSourceOptions,
   type LowerSourceResult,
@@ -593,7 +598,7 @@ function answerOf(
         );
       } else {
         contract = { ...(value as Record<string, unknown>) };
-        refuseKeys(contract, dialect, at);
+        refuseKeys(tag.name, contract, dialect, at);
       }
     } else if (!errors.length) {
       at("the dialect's `tagFile` hook returned no contract");
@@ -608,6 +613,7 @@ function answerOf(
 
 /** Refuses a key a tag file's contract cannot carry, each as its own error. */
 function refuseKeys(
+  tagName: string,
   contract: Record<string, unknown>,
   dialect: Dialect,
   at: (message: string) => void,
@@ -632,10 +638,25 @@ function refuseKeys(
       at(
         `a tag file's contract cannot set \`${key}\`: hooks come from a \`.tag.ts\` sidecar beside the tag file`,
       );
-    } else {
+    } else if (key === "declares") {
       at(
-        `\`${key}\` is not a contract key: a tag file's contract holds ${CONTRACT_KEYS.join(", ")}, or a key the dialect claims (\`contractFields.tag\`)`,
+        "`declares` is not allowed: no syntax module claims it (`contractFields`)",
       );
+    } else {
+      // Any other key: the shared refusal every contract source gives,
+      // listing the keys a tag file's contract takes.
+      try {
+        rejectUnknownTagKeys(
+          tagName,
+          { [key]: contract[key] },
+          claimedFields(dialect),
+          undefined,
+          CONTRACT_KEYS,
+        );
+      } catch (cause) {
+        if (!isTranslateError(cause)) throw cause;
+        at(cause.message);
+      }
     }
     delete contract[key];
   }

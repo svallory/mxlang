@@ -1019,7 +1019,7 @@ describe("diagnostics", () => {
     [
       "an unknown top-level key",
       { contract: { bogus: 1 } },
-      "`bogus` is not a contract key: a tag file's contract holds attributes, attributeTags, children, parents, defaultTag, or a key the dialect claims (`contractFields.tag`)",
+      'Unknown key "bogus" in the declaration of tag "money"; allowed: attributes, attributeTags, children, parents, defaultTag',
     ],
     [
       "no contract",
@@ -1050,6 +1050,48 @@ describe("diagnostics", () => {
         file: "concepts/money.kit.mx",
       },
     ]);
+  });
+
+  it("an unknown key lists the keys the dialect claims, in the wording every contract source gives", () => {
+    kitProject('contractFields: { tag: ["kind"] },');
+    tagFile("money", { contract: { bogus: 1, kind: "good" } });
+    expect(brief(lowerAt("page.kit.mx", "<money/>\n"))[1]).toEqual({
+      message:
+        'Unknown key "bogus" in the declaration of tag "money"; allowed: attributes, attributeTags, children, parents, defaultTag, kind',
+      line: 1,
+      column: 0,
+      code: "MX_TAG_FILE_ERROR",
+      file: "concepts/money.kit.mx",
+    });
+  });
+
+  it("each unknown key is its own error, in the order written, and the known ones stay", () => {
+    kitProject();
+    tagFile("money", {
+      contract: { atributes: {}, parents: ["purse"], chilren: {} },
+    });
+    expect(brief(lowerAt("page.kit.mx", "<money/>\n")).slice(1)).toEqual(
+      ["atributes", "chilren"].map((key) => ({
+        message: `Unknown key "${key}" in the declaration of tag "money"; allowed: attributes, attributeTags, children, parents, defaultTag`,
+        line: 1,
+        column: 0,
+        code: "MX_TAG_FILE_ERROR",
+        file: "concepts/money.kit.mx",
+      })),
+    );
+  });
+
+  it("`declares` is refused unless the dialect claims it", () => {
+    kitProject();
+    tagFile("money", { contract: { declares: {} } });
+    expect(brief(lowerAt("page.kit.mx", "<money/>\n"))[1]).toEqual({
+      message:
+        "`declares` is not allowed: no syntax module claims it (`contractFields`)",
+      line: 1,
+      column: 0,
+      code: "MX_TAG_FILE_ERROR",
+      file: "concepts/money.kit.mx",
+    });
   });
 
   it("an unknown nested key goes through the registration checks, at the call", () => {

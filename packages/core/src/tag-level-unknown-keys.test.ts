@@ -362,7 +362,7 @@ describe("a dialect's contracts", () => {
     module: "./index.cjs",
   };
 
-  it("stays refused at the entry's key, with the dialect's code and its own wording", () => {
+  it("is refused at the entry's key with the dialect's code, in the shared wording, listing the keys a dialect contract takes", () => {
     const source = `module.exports = {\n  default: {\n    table: {},\n    contracts: {\n      card: { attributes: {}, atributes: {}, chilren: {} },\n    },\n  },\n};\n`;
     dialectProject(dir, {
       packageName: "lexi-dialect",
