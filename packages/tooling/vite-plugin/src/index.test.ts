@@ -1065,6 +1065,101 @@ export default () => <div />;
       }
     });
 
+    describe("an error-severity tag-scan diagnostic", () => {
+      // `tags/try.mx` names a tag core reserves: the scan skips it and says so
+      // as an error, not a warning.
+      const badFile = (project: { path(relative: string): string }) =>
+        project.path("tags/try.mx");
+      const expectedText = (project: { path(relative: string): string }) =>
+        `${badFile(project)}:1:1: MX_RESERVED_TAG: \`<try>\` cannot name a data tag: it is reserved — core consumes the structural names (\`if\`, \`else\`, \`else-if\`, \`for\`, \`const\`, \`define\`, \`return\`, \`import\`, \`export\`, \`static\`) and \`<try>\` before a target sees them`;
+      type Transform = (
+        this: unknown,
+        code: string,
+        id: string,
+      ) => Promise<unknown>;
+      const pluginFor = (command: "build" | "serve") => {
+        const plugin = mx();
+        (plugin.configResolved as unknown as (config: unknown) => void)({
+          command,
+          root: process.cwd(),
+          resolve: { alias: [] },
+        });
+        return plugin.transform as unknown as Transform;
+      };
+
+      it("fails vite build with the diagnostic's file, position and code", async () => {
+        const project = tagDiscoveryProject({
+          "tags/try.mx": "<p>x</p>\n",
+          "caller.mx": "<p>x</p>\n",
+        });
+        try {
+          const warnings: string[] = [];
+          const transform = pluginFor("build");
+          const id = `${project.path("caller.mx")}${MX_SUFFIX}`;
+          const run = () =>
+            transform.call(
+              { warn: (message: string) => warnings.push(message) },
+              "<p>x</p>\n",
+              id,
+            );
+          const expected = expectedText(project);
+          // Every transform of the broken project fails, not only the first.
+          await expect(run()).rejects.toMatchObject({
+            message: expected,
+            loc: { file: badFile(project), line: 1, column: 0 },
+          });
+          await expect(run()).rejects.toMatchObject({ message: expected });
+          expect(warnings).toEqual([]);
+        } finally {
+          cleanupProbeProjects();
+        }
+      });
+
+      it("stays a positioned warning under vite serve", async () => {
+        const project = tagDiscoveryProject({
+          "tags/try.mx": "<p>x</p>\n",
+          "caller.mx": "<p>x</p>\n",
+        });
+        try {
+          const warnings: string[] = [];
+          const transform = pluginFor("serve");
+          const result = (await transform.call(
+            { warn: (message: string) => warnings.push(message) },
+            "<p>x</p>\n",
+            `${project.path("caller.mx")}${MX_SUFFIX}`,
+          )) as { code: string } | null;
+          expect(result?.code).toBeTypeOf("string");
+          expect(warnings).toEqual([
+            `@mxlang/vite-plugin: ${expectedText(project)}`,
+          ]);
+        } finally {
+          cleanupProbeProjects();
+        }
+      });
+
+      it("leaves a warning-severity scan diagnostic a warning in build", async () => {
+        const project = tagDiscoveryProject({
+          "tags/stray.thing.probe": "<x/>\n",
+          "caller.mx": "<p>x</p>\n",
+        });
+        try {
+          const warnings: string[] = [];
+          const transform = pluginFor("build");
+          const result = (await transform.call(
+            { warn: (message: string) => warnings.push(message) },
+            "<p>x</p>\n",
+            `${project.path("caller.mx")}${MX_SUFFIX}`,
+          )) as { code: string } | null;
+          expect(result?.code).toBeTypeOf("string");
+          expect(warnings).toEqual([
+            `@mxlang/vite-plugin: ${project.path("tags/stray.thing.probe")}:1:1: MX_MISPLACED_TAG_FILE: \`tags/stray.thing.probe\` is a Probe file in \`tags/\`; Probe discovers tags in \`concepts/\` or \`kinds/\`.`,
+          ]);
+        } finally {
+          cleanupProbeProjects();
+        }
+      });
+    });
+
     it("warns once about a malformed package.json and unknown mx.host, and still compiles", async () => {
       const broken = mkdtempSync(join(tmpdir(), "mx-vite-hostpolicy-"));
       scratches.push(broken);

@@ -292,4 +292,4 @@ template's imports never enter the caller's module.
 | `mx.tags` names a missing directory. | `` `mx.tags` names a directory that does not exist: PATH `` |
 | A tag file is named after a reserved name (`if`, `for`, `try`, ...). | `` `<name>` cannot name a data tag: it is reserved ... `` (`MX_RESERVED_TAG`, an error at the file) |
 
-The last two are scanner diagnostics: the bad entry is skipped and discovery continues. The language server surfaces them as warnings; build integrations warn once per distinct problem.
+The last two are scanner diagnostics: the bad entry is skipped and discovery continues. The language server surfaces them as warnings, and build integrations warn once per distinct problem. The reserved-name one is an error: `vite build` fails on it with the diagnostic's file, position and code (every scan error does, on every file it compiles), and `vite serve` keeps it a positioned warning.

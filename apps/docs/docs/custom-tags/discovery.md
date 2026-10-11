@@ -103,7 +103,7 @@ A sidecar that cannot be parsed, throws while loading, or does not default-expor
 
 An `mx.tags` entry whose directory does not exist is non-fatal: discovery continues and records a diagnostic against the config file that names it. The language server publishes it as a warning on the open document while naming that file; Vite and the TypeScript plugin warn once per distinct problem.
 
-A file that tries to redefine a core-owned name such as `try` is also omitted with a diagnostic so one misnamed file does not break every caller in the package.
+A file that tries to redefine a core-owned name such as `try` is also omitted with a diagnostic so one misnamed file does not break every caller in the package. The diagnostic is an error: `vite build` fails with it, positioned at the file, while `vite serve` keeps it a warning.
 
 ## Filename rules
 

@@ -13,6 +13,12 @@ import type { MxRegionCompile } from "@mxlang/tsx-bridge";
 import { print } from "@mxlang/tsx-bridge";
 import type { Plugin } from "vite";
 
+/** The part of a policy or scan diagnostic a build error is made from. */
+type LocatedDiagnostic = Pick<
+  TargetPolicyDiagnostic,
+  "file" | "line" | "column" | "message"
+>;
+
 /**
  * Keep the registry behind a cached dynamic import, never load compilers while
  * evaluating vite.config.ts. Registry creation installs lazy callee readers;
@@ -877,7 +883,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
   const tagsFor = async (
     file: string,
     warn: (message: string) => void,
-    error: (diagnostic: TargetPolicyDiagnostic) => never,
+    error: (diagnostic: LocatedDiagnostic) => never,
   ): Promise<Record<string, CustomTag> | undefined> => {
     const { resolveTargetPolicyDetailed, lookupFor, scanCached } =
       await loadRegistry();
@@ -902,6 +908,19 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       warn(
         `${diagnostic.file}:${diagnostic.line}:${diagnostic.column + 1}: ${diagnostic.message}`,
       );
+    }
+
+    // A scan error is a tag file the scan skipped. A build fails on it, before
+    // the dedupe below, so every transform of a broken project fails rather
+    // than only the first; `vite serve` keeps the warning.
+    if (scanErrorsFail) {
+      for (const diagnostic of scan.diagnostics) {
+        if (diagnostic.severity !== "error") continue;
+        error({
+          ...diagnostic,
+          message: `${diagnostic.code === undefined ? "" : `${diagnostic.code}: `}${diagnostic.message}`,
+        });
+      }
     }
 
     // A misconfigured `mx.tags` is not fatal — the local `tags/` directories
@@ -1044,6 +1063,14 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
   /** The Vite project root, once known (`configResolved`). */
   let projectRoot: string | undefined;
   /**
+   * Whether an error-severity tag-scan diagnostic fails the transform. It does
+   * in `vite build` (a build that passes with a broken tag file is a silent
+   * pass) and in any host that never ran `configResolved`; only `vite serve`
+   * keeps it a positioned warning, so the dev server stays up while the tag
+   * file is being fixed.
+   */
+  let scanErrorsFail = true;
+  /**
    * The authored file behind `importer` (the file for a JS/TS importer, the
    * `.mx` source for one of this plugin's virtual ids) and the specifier as
    * written, for a dialect refusal to point at the import.
@@ -1120,6 +1147,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
 
     configResolved(config) {
       projectRoot = config.root;
+      scanErrorsFail = config.command !== "serve";
       aliases = [...config.resolve.alias];
       resolveImport = aliases.length > 0 ? aliasResolver : undefined;
       void loadRegistry();
@@ -1339,7 +1367,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
 
       let policyErrorRaised = false;
       let refused = false;
-      const policyError = (diagnostic: TargetPolicyDiagnostic): never => {
+      const policyError = (diagnostic: LocatedDiagnostic): never => {
         const error = locate(
           new Error(
             `${diagnostic.file}:${diagnostic.line}:${diagnostic.column + 1}: ${diagnostic.message}`,
