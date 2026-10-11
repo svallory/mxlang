@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { routeDialect } from "@mxlang/core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   cleanupProbeProjects,
@@ -16,6 +17,8 @@ import {
   dialectExtensions,
   dialectExtensionsUnder,
   dialectOf,
+  dialectWatchExtensions,
+  dialectWatchExtensionsUnder,
   emitOf,
   isDialectFile,
 } from "./dialect-check.ts";
@@ -309,6 +312,109 @@ describe("checkDialectFile", () => {
         ],
       },
     );
+  });
+
+  describe("a dialect whose manifest is invalid", () => {
+    // `tagDirs: []` is a field error: the manifest says which extensions it
+    // claims, so its files are still dialect files, and show the error.
+    const invalid = () => probeProject({}, { manifest: { tagDirs: [] } });
+
+    it("a non-.mx file of it shows the manifest field error, positioned in package.json", () => {
+      const project = invalid();
+      const packageFile = project.path("package.json");
+      expect(
+        checkDialectFile(project.path("a.probe"), PROBE_SOURCES.ok),
+      ).toEqual({
+        source: "mxlang",
+        diagnostics: [
+          {
+            severity: "error",
+            message: `\`mx.dialect.tagDirs\` must be a non-empty array of the directory names the dialect's files discover tags in (\`["components"]\`) (in ${packageFile}:1:131)`,
+            line: 1,
+            column: 0,
+            offset: 0,
+            origin: { file: packageFile, line: 1, column: 130 },
+          },
+        ],
+      });
+      expect(isDialectFile(project.path("a.probe"))).toBe(true);
+      expect(isDialectFile(project.path("a.ts"))).toBe(false);
+    });
+
+    it("the error is the one an .mx file of the project reaches: same message, same package.json position", () => {
+      const project = invalid();
+      const viaProbe = checkDialectFile(project.path("a.probe"), "")
+        ?.diagnostics[0];
+      let viaMx: unknown;
+      try {
+        routeDialect(project.path("a.mx"));
+      } catch (error) {
+        viaMx = error;
+      }
+      expect(viaMx).toMatchObject({
+        message: viaProbe?.message.replace(/ \(in .*\)$/s, ""),
+        file: viaProbe?.origin?.file,
+        line: viaProbe?.origin?.line,
+        column: viaProbe?.origin?.column,
+      });
+    });
+
+    it("an .mx file is left to the ordinary compile, which reports the same error", () => {
+      const project = invalid();
+      expect(
+        checkDialectFile(project.path("a.probe.mx"), PROBE_SOURCES.ok),
+      ).toBeUndefined();
+    });
+
+    it("a dialect from a dependency with an invalid manifest shows the error in that package.json", () => {
+      const project = probeProject({}, { manifest: null });
+      const dependency = join(project.dir, "node_modules", "kit");
+      mkdirSync(dependency, { recursive: true });
+      writeFileSync(
+        join(dependency, "package.json"),
+        JSON.stringify({
+          name: "kit",
+          mx: {
+            dialect: { ...PROBE_MANIFEST, tagDirs: ["../out"] },
+          },
+        }),
+      );
+      writeFileSync(join(dependency, "dialect.cjs"), PROBE_DIALECT_MODULE);
+      writeFileSync(
+        project.path("package.json"),
+        JSON.stringify({ name: "app", dependencies: { kit: "0.0.0" } }),
+      );
+      const check = checkDialectFile(project.path("a.probe"), PROBE_SOURCES.ok);
+      expect(check?.source).toBe("mxlang");
+      expect(check?.diagnostics).toHaveLength(1);
+      expect(check?.diagnostics[0]?.origin?.file).toBe(
+        join(dependency, "package.json"),
+      );
+      expect(check?.diagnostics[0]?.message).toMatch(
+        /^`mx\.dialect\.tagDirs`: "\.\.\/out" .* \(in .*kit\/package\.json:\d+:\d+\)$/s,
+      );
+    });
+
+    it("emitOf calls the file unsettled, and dialectExtensions still lists what the manifest claims", () => {
+      const project = invalid();
+      expect(emitOf(project.path("a.probe"))).toEqual({
+        name: "mxlang",
+        emit: undefined,
+        settled: false,
+      });
+      expect(dialectExtensions(project.dir)).toEqual([".probe", ".probe.mx"]);
+    });
+
+    it("a manifest whose `extensions` is itself invalid claims nothing", () => {
+      const project = probeProject(
+        {},
+        { manifest: { extensions: "oops" } as never },
+      );
+      expect(
+        checkDialectFile(project.path("a.probe"), PROBE_SOURCES.ok),
+      ).toBeUndefined();
+      expect(dialectExtensions(project.dir)).toEqual([]);
+    });
   });
 
   describe("two dialects claim one extension", () => {
@@ -643,6 +749,61 @@ describe("dialectExtensions", () => {
     expect(dialectExtensions("/")).toEqual([]);
     const broken = probeProject({ "package.json": "{ not json" });
     expect(dialectExtensions(broken.dir)).toEqual([]);
+  });
+});
+
+describe("dialectWatchExtensions", () => {
+  const withKinds = () =>
+    probeProject(
+      {},
+      { manifest: { tagDirs: ["concepts"], tagExtensions: [".concept"] } },
+    );
+
+  it("adds a dialect's `tagExtensions` to what dialectExtensions lists, and dialectExtensions does not list them", () => {
+    const project = withKinds();
+    expect(dialectExtensions(project.dir)).toEqual([".probe", ".probe.mx"]);
+    expect(dialectWatchExtensions(project.dir)).toEqual([
+      ".probe",
+      ".probe.mx",
+      ".concept",
+    ]);
+  });
+
+  it("is dialectExtensions for a dialect with no `tagExtensions`", () => {
+    const project = probeProject();
+    expect(dialectWatchExtensions(project.dir)).toEqual(
+      dialectExtensions(project.dir),
+    );
+  });
+
+  it("lists `tagExtensions` of every package under the root, and only of those", () => {
+    const project = probeProject(
+      {
+        "pkg/package.json": JSON.stringify({
+          name: "pkg",
+          mx: {
+            dialect: {
+              ...PROBE_MANIFEST,
+              tagDirs: ["concepts"],
+              tagExtensions: [".concept"],
+            },
+          },
+        }),
+        "pkg/dialect.cjs": PROBE_DIALECT_MODULE,
+        "other/package.json": JSON.stringify({ name: "other" }),
+      },
+      { manifest: null },
+    );
+    expect(dialectWatchExtensionsUnder(project.dir)).toEqual([
+      ".probe",
+      ".probe.mx",
+      ".concept",
+    ]);
+    expect(dialectExtensionsUnder(project.dir)).toEqual([
+      ".probe",
+      ".probe.mx",
+    ]);
+    expect(dialectWatchExtensionsUnder(project.path("other"))).toEqual([]);
   });
 });
 

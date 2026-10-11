@@ -7,7 +7,7 @@
  * report. No JavaScript is generated and no target is involved. This module
  * is the one place that does it, so the three tools cannot disagree.
  */
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import {
   type DialectEmit,
@@ -73,31 +73,77 @@ function nearestPackageJson(dir: string): string | undefined {
 }
 
 /**
- * The dialects the project around `dir` uses, or none when its manifests
- * cannot be read: an unreadable manifest is reported where the file is
- * checked, not here.
+ * What the project around `dir` hands to dialects. `dialects` is empty when
+ * its manifests cannot be read. A manifest that is invalid in one field (a
+ * bad `tagDirs`) still says which extensions it claims: `rawClaims` lists the
+ * `mx.dialect.extensions` strings of the `package.json` that holds it, so the
+ * files it claims are still recognised as dialect files and the manifest's
+ * error is shown on them, instead of the file being taken for nothing.
  */
-function dialectsAround(dir: string): readonly DialectManifest[] {
+interface DialectsAround {
+  dialects: readonly DialectManifest[];
+  rawClaims: readonly string[];
+}
+
+function dialectsAround(dir: string): DialectsAround {
   const manifest = nearestPackageJson(dir);
-  if (manifest === undefined) return [];
+  if (manifest === undefined) return { dialects: [], rawClaims: [] };
   try {
-    return discoverDialects(manifest);
+    return { dialects: discoverDialects(manifest), rawClaims: [] };
+  } catch (error) {
+    if (!isTranslateError(error)) return { dialects: [], rawClaims: [] };
+    return {
+      dialects: [],
+      rawClaims: [
+        ...new Set(
+          [manifest, error.file].flatMap((file) =>
+            file === undefined ? [] : rawDialectExtensions(file),
+          ),
+        ),
+      ],
+    };
+  }
+}
+
+/**
+ * The extensions `file` (a `package.json`) lists under `mx.dialect.extensions`,
+ * read without validating the rest of the manifest. Nothing for a file that is
+ * no JSON, declares no dialect, or lists something other than dotted strings.
+ */
+function rawDialectExtensions(file: string): string[] {
+  try {
+    const extensions = (
+      JSON.parse(readFileSync(file, "utf8")) as {
+        mx?: { dialect?: { extensions?: unknown } };
+      }
+    ).mx?.dialect?.extensions;
+    return Array.isArray(extensions)
+      ? extensions.filter(
+          (extension): extension is string =>
+            typeof extension === "string" &&
+            extension.length > 1 &&
+            extension.startsWith("."),
+        )
+      : [];
   } catch {
     return [];
   }
 }
 
 /**
- * The file extensions the project around `dir` hands to dialects, each with
- * its leading dot: the ones its dialect packages claim, then the ones its
- * `mx.extensions` routes. A tool that must know which files to open before it
- * has seen one (a TypeScript program's file list, an editor's file watcher)
- * asks this. Empty when the project uses no dialect.
+ * The extensions of the project around `dir`: what its dialects claim
+ * (`extensions`, and `tagExtensions` when `withTagFiles`), what its
+ * `mx.extensions` routes, and the raw claims of a manifest that is invalid.
  */
-export function dialectExtensions(dir: string): string[] {
-  const dialects = dialectsAround(dir);
-  if (dialects.length === 0) return [];
-  const found = new Set(dialects.flatMap((dialect) => dialect.extensions));
+function extensionsAround(dir: string, withTagFiles: boolean): string[] {
+  const { dialects, rawClaims } = dialectsAround(dir);
+  if (dialects.length === 0) return [...rawClaims];
+  const found = new Set(
+    dialects.flatMap((dialect) => [
+      ...dialect.extensions,
+      ...(withTagFiles ? (dialect.tagExtensions ?? []) : []),
+    ]),
+  );
   try {
     const routed = findMxConfig(dir)?.config?.extensions;
     if (routed && typeof routed === "object" && !Array.isArray(routed)) {
@@ -107,6 +153,33 @@ export function dialectExtensions(dir: string): string[] {
     // A malformed config is reported when a file is checked.
   }
   return [...found];
+}
+
+/**
+ * The file extensions the project around `dir` hands to dialects, each with
+ * its leading dot: the ones its dialect packages claim, then the ones its
+ * `mx.extensions` routes. A tool that must know which files to open before it
+ * has seen one (a TypeScript program's file list) asks this. Empty when the
+ * project uses no dialect. A tag file whose extension is only a dialect's
+ * `tagExtensions` entry is not among them: it is no source file for a program
+ * to host, and the file that calls it carries its diagnostics; see
+ * {@link dialectWatchExtensions} for the files a tool must watch.
+ *
+ * A dialect whose manifest is invalid still lists the extensions it names, so
+ * its files are recognised and show the manifest's error.
+ */
+export function dialectExtensions(dir: string): string[] {
+  return extensionsAround(dir, false);
+}
+
+/**
+ * {@link dialectExtensions} plus the dialects' `tagExtensions`: every file
+ * extension whose change may change a dialect file's diagnostics. A tool that
+ * re-checks files when another changes (an editor's file watcher) asks this;
+ * a tool that decides which files are sources must not.
+ */
+export function dialectWatchExtensions(dir: string): string[] {
+  return extensionsAround(dir, true);
 }
 
 /**
@@ -123,7 +196,19 @@ export function dialectExtensions(dir: string): string[] {
  * alone.
  */
 export function dialectExtensionsUnder(root: string): string[] {
-  const found = new Set(dialectExtensions(root));
+  return extensionsUnder(root, dialectExtensions);
+}
+
+/** {@link dialectWatchExtensions} over a whole project tree, as {@link dialectExtensionsUnder}. */
+export function dialectWatchExtensionsUnder(root: string): string[] {
+  return extensionsUnder(root, dialectWatchExtensions);
+}
+
+function extensionsUnder(
+  root: string,
+  at: (dir: string) => string[],
+): string[] {
+  const found = new Set(at(root));
   const visit = (dir: string): void => {
     let entries: import("node:fs").Dirent[];
     try {
@@ -136,7 +221,7 @@ export function dialectExtensionsUnder(root: string): string[] {
       if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
       const child = join(dir, entry.name);
       if (existsSync(join(child, "package.json"))) {
-        for (const extension of dialectExtensions(child)) found.add(extension);
+        for (const extension of at(child)) found.add(extension);
       }
       visit(child);
     }
@@ -172,7 +257,7 @@ export interface BuildEmit {
   /**
    * The dialect's `name` (`MX` for MX's own files), or `"mxlang"` when the
    * project hands the file's extension to dialects without the routing
-   * settling which.
+   * settling which (two dialects claim it, or a manifest is invalid).
    */
   name: string;
   /** The dialect's emit, `undefined` when it registers none. */
