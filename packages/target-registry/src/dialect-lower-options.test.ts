@@ -137,7 +137,7 @@ describe("R9: the editor equals the dialect's own CLI", () => {
     ["an interpolation", `entity\n  <field>\${x}</field>\n`],
     ["text", "entity\n  <field>hello</field>\n"],
     ["a misspelt tag", "<entiy/>\n"],
-    ["a misspelt child under a closed parent", "entity\n  wiget\n"],
+    ["a misspelt child", "entity\n  wiget\n"],
     ["a project-only tag", "<service/>\n"],
     ["a top-level `export`", "export const a = 1\nentity\n"],
   ];
