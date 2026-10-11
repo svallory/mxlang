@@ -327,14 +327,23 @@ describe("dialect tag directories", () => {
     ]);
   });
 
-  it("MX `tags/` keeps its throw for a bad name", () => {
+  it("MX `tags/` reports a bad name the way a dialect's directory does, and skips the file", () => {
     kitProject();
     write("tags/-bad.mx");
-    const error = thrown(() => scan("page.mx"));
-    expect(isTranslateError(error)).toBe(true);
-    expect((error as Error).message).toContain(
-      "`-bad` is not a usable tag name",
-    );
+    write("tags/good.mx");
+    const result = scan("page.mx");
+    expect(names(result)).toEqual(["good"]);
+    expect(diagnosticsOf(result)).toEqual([
+      {
+        file: "tags/-bad.mx",
+        message:
+          "`tags/-bad.mx` is skipped: `-bad` is not a usable tag name; a tag file's name must start with a letter, digit or underscore and may then contain letters, digits, underscores, hyphens and dots",
+        line: 1,
+        column: 0,
+        severity: "error",
+        code: "MX_INVALID_TAG_FILE_NAME",
+      },
+    ]);
   });
 
   it("a core-reserved tag name is an MX_RESERVED_TAG error and skipped", () => {

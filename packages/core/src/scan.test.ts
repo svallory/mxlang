@@ -347,23 +347,76 @@ describe("scanCustomTags", () => {
     ).toEqual(["real"]);
   });
 
-  it("rejects a tag file whose name cannot be a tag name", () => {
-    const dir = scratch();
-    mkdirSync(join(dir, "tags"), { recursive: true });
-    writeFileSync(join(dir, "package.json"), '{"name":"badname"}');
-    writeFileSync(join(dir, "tags", "-leading.mx"), "<div/>\n");
+  describe("a tag file whose name cannot be a tag name", () => {
+    const NAME_RULE =
+      "is not a usable tag name; a tag file's name must start with a letter, digit or underscore and may then contain letters, digits, underscores, hyphens and dots";
+    const bad = (dir: string, entry: string, bare: string) => ({
+      file: join(dir, "tags", entry),
+      message: `\`tags/${entry}\` is skipped: \`${bare}\` ${NAME_RULE}`,
+      line: 1,
+      column: 0,
+      severity: "error",
+      code: "MX_INVALID_TAG_FILE_NAME",
+    });
 
-    let error: unknown;
-    try {
-      scanCustomTags(join(dir, "caller.mx"), { targets: lookup });
-    } catch (cause) {
-      error = cause;
-    }
+    it("is a positioned error and the file is skipped; the good file next to it is still discovered", () => {
+      const dir = scratch();
+      mkdirSync(join(dir, "tags"), { recursive: true });
+      writeFileSync(join(dir, "package.json"), '{"name":"badname"}');
+      writeFileSync(join(dir, "tags", "-leading.mx"), "<div/>\n");
+      writeFileSync(join(dir, "tags", "good.mx"), "<div/>\n");
 
-    expect(error).toBeInstanceOf(TranslateError);
-    expect((error as TranslateError).file).toContain("-leading.mx");
-    expect((error as Error).message).not.toContain("-leading.mx");
-    expect((error as Error).message).toContain("is not a usable tag name");
+      const result = scanCustomTags(join(dir, "caller.mx"), {
+        targets: lookup,
+      });
+
+      expect([...result.tags.keys()]).toEqual(["good"]);
+      expect(result.diagnostics).toEqual([bad(dir, "-leading.mx", "-leading")]);
+    });
+
+    it("leaves a scan with only the bad file with no tags and the one diagnostic, never a throw", () => {
+      const dir = scratch();
+      mkdirSync(join(dir, "tags"), { recursive: true });
+      writeFileSync(join(dir, "package.json"), '{"name":"badname"}');
+      writeFileSync(join(dir, "tags", "-leading.mx"), "<div/>\n");
+
+      const result = scanCustomTags(join(dir, "caller.mx"), {
+        targets: lookup,
+      });
+
+      expect([...result.tags.keys()]).toEqual([]);
+      expect(Object.keys(result.customTags)).toEqual([]);
+      expect(result.diagnostics).toEqual([bad(dir, "-leading.mx", "-leading")]);
+      expect(result.files).toEqual([]);
+    });
+
+    it("names a sidecar by its own name, and a bad sidecar does not stop its neighbours", () => {
+      const dir = scratch();
+      mkdirSync(join(dir, "tags"), { recursive: true });
+      writeFileSync(join(dir, "package.json"), '{"name":"badname"}');
+      writeFileSync(join(dir, "tags", "-x.tag.ts"), "export default {};\n");
+      writeFileSync(join(dir, "tags", "ok.tag.ts"), "export default {};\n");
+
+      const result = scanCustomTags(join(dir, "caller.mx"), {
+        targets: lookup,
+      });
+
+      expect([...result.tags.keys()]).toEqual(["ok"]);
+      expect(result.diagnostics).toEqual([bad(dir, "-x.tag.ts", "-x")]);
+    });
+
+    it("is the same diagnostic when the project walk finds it (`discoverProjectTags`)", () => {
+      const dir = scratch();
+      mkdirSync(join(dir, "tags"), { recursive: true });
+      writeFileSync(join(dir, "package.json"), '{"name":"badname"}');
+      writeFileSync(join(dir, "tags", "-leading.mx"), "<div/>\n");
+      writeFileSync(join(dir, "tags", "good.mx"), "<div/>\n");
+
+      const result = discoverProjectTags(dir, { targets: lookup });
+
+      expect([...result.tags.keys()]).toEqual(["good"]);
+      expect(result.diagnostics).toEqual([bad(dir, "-leading.mx", "-leading")]);
+    });
   });
 
   it("preserves a tag file's case in its call name", () => {

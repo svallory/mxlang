@@ -71,8 +71,10 @@ import {
   type CustomTagParseOptions,
   type DeferredReader,
   deferContract,
+  type LocateTagKey,
   markContractKeys,
   rejectUnknownDeclarationKeys,
+  rejectUnknownTagKeys,
   rejectUnreachableHooks,
 } from "./custom-tags.ts";
 import { RESERVED_TAG_CODE } from "./diagnostic-codes.ts";
@@ -1200,7 +1202,10 @@ function lazyTag(tag: DiscoveredTag, claimed: ClaimedFields): CustomTag {
     // A paired template makes a finalize-only sidecar reachable.
     try {
       const own = { [tag.name]: candidate };
-      rejectUnknownDeclarationKeys(own, claimed);
+      rejectUnknownDeclarationKeys(own, claimed, undefined, (_name, key) => {
+        const at = staticKeyPathPosition(sidecar, [key]);
+        return at && { ...at, file: sidecar };
+      });
       if (!tag.template) rejectUnreachableHooks(own);
     } catch (cause) {
       // The file's dialect did not resolve: that is the error, not a
@@ -1511,6 +1516,27 @@ function skipClaimedFile(
 }
 
 /**
+ * The `MX_INVALID_TAG_FILE_NAME` diagnostic: a tag file whose name cannot be
+ * a tag name, in MX's own `tags/` and in a dialect's `tagDirs` alike. An
+ * error at the file's own 1:0; the file is skipped, the rest of the scan goes
+ * on.
+ */
+function invalidTagFileNameDiagnostic(
+  dir: string,
+  entry: string,
+  bare: string,
+): ScanDiagnostic {
+  return {
+    file: join(dir, entry),
+    message: `\`${basename(dir)}/${entry}\` is skipped: \`${bare}\` is not a usable tag name; a tag file's name must start with a letter, digit or underscore and may then contain letters, digits, underscores, hyphens and dots`,
+    line: 1,
+    column: 0,
+    severity: "error",
+    code: "MX_INVALID_TAG_FILE_NAME",
+  };
+}
+
+/**
  * Indexes one directory of a dialect's tag files (`kind: "tag-files"`):
  * each file ending in a claimed extension that routes to this dialect, named
  * by its basename minus that extension (the longest claimed one), plus
@@ -1554,14 +1580,7 @@ function indexTagFiles(
       bare = entry.slice(0, -claim.extension.length);
     }
     if (!TAG_NAME_RE.test(bare)) {
-      diagnostics.push({
-        file: path,
-        message: `\`${here}/${entry}\` is skipped: \`${bare}\` is not a usable tag name; a tag file's name must start with a letter, digit or underscore and may then contain letters, digits, underscores, hyphens and dots`,
-        line: 1,
-        column: 0,
-        severity: "error",
-        code: "MX_INVALID_TAG_FILE_NAME",
-      });
+      diagnostics.push(invalidTagFileNameDiagnostic(dir, entry, bare));
       continue;
     }
     if (claim && bare.includes(".")) {
@@ -1674,10 +1693,8 @@ function indexDirectory(
       ? basename(entry, SIDECAR_SUFFIX)
       : basename(entry, TEMPLATE_SUFFIX);
     if (!TAG_NAME_RE.test(bare)) {
-      failIn(
-        join(dir, entry),
-        `\`${bare}\` is not a usable tag name; a tag file's name must start with a letter, digit or underscore and may then contain letters, digits, underscores, hyphens and dots`,
-      );
+      diagnostics.push(invalidTagFileNameDiagnostic(dir, entry, bare));
+      continue;
     }
     const path = join(dir, entry);
     const name = `${options.prefix ?? ""}${bare}`;
@@ -1976,6 +1993,11 @@ function indexMxContractsEntries(
       });
     }
     const contracts: ContractMap = Object.create(null);
+    // A key of an entry, where the module writes it as a literal.
+    const locateContractKey: LocateTagKey = (tagName, key) => {
+      const at = staticKeyPathPosition(file, [tagName, key]);
+      return at && { ...at, file };
+    };
     try {
       const exported = loadDefaultExport(file, "contracts module");
       const plain = (record: Record<string, unknown>): boolean => {
@@ -2003,6 +2025,8 @@ function indexMxContractsEntries(
         }
         if (!isRecord(definition) || !plain(definition))
           failContracts(file, `\`<${name}>\` must be a plain CustomTag object`);
+        // A key no `CustomTag` has: the shared refusal, at the key.
+        rejectUnknownTagKeys(name, definition, claimed, locateContractKey);
         for (const key of Object.getOwnPropertyNames(definition)) {
           if (
             ![
@@ -2038,7 +2062,12 @@ function indexMxContractsEntries(
         }
         contracts[name] = definition as CustomTag;
       }
-      rejectUnknownDeclarationKeys(contracts, claimed);
+      rejectUnknownDeclarationKeys(
+        contracts,
+        claimed,
+        undefined,
+        locateContractKey,
+      );
       rejectUnreachableHooks(contracts);
     } catch (cause) {
       // The file's dialect did not resolve: that is the error, not a
