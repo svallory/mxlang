@@ -140,7 +140,11 @@ describe("names and claims (design §2.3)", () => {
       dialect: "kit",
     });
     expect(result.tags.get("button")?.template).toBeUndefined();
-    expect(result.files.map((entry) => entry.path)).toEqual([file]);
+    // The routed dialect's module is stamped too, so an edit to it rescans.
+    expect(result.files.map((entry) => entry.path)).toEqual([
+      join(dir, "node_modules/kit-dialect/index.mjs"),
+      file,
+    ]);
     expect(result.diagnostics).toEqual([]);
   });
 
