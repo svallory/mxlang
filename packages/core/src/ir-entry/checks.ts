@@ -27,7 +27,7 @@
  * reports under its `internal error: ` prefix, with no IR.
  */
 
-import { isTranslateError, TranslateError } from "../core.ts";
+import { DYNAMIC_TAG, isTranslateError, TranslateError } from "../core.ts";
 import { UNKNOWN_TAG_CODE } from "../diagnostic-codes.ts";
 import { nearestName } from "../did-you-mean.ts";
 import type {
@@ -44,6 +44,12 @@ import type {
 } from "../ir.ts";
 import type { SourceSpan } from "../mapping.ts";
 import { lineStartsOf } from "./diagnostics.ts";
+import {
+  type Explainer,
+  enterTag,
+  ROOT_FRAME,
+  type ViewFrame,
+} from "./unknown-tag-view.ts";
 
 export interface CheckOptions {
   structural: "pass" | "reject";
@@ -58,9 +64,16 @@ export interface CheckOptions {
   /**
    * Names whose every call already carries its own error (a refused
    * `customTags` definition: `MX_RESERVED_TAG` at each call site). Such a call
-   * is not also reported unknown: one diagnostic per occurrence.
+   * is not also reported unknown, and the dialect is not asked about it: one
+   * diagnostic per occurrence.
    */
   exemptTags?: ReadonlySet<string>;
+  /**
+   * The file's dialect's `explainUnknownTag`. Given, the walk for unknown tags
+   * runs in every mode: an explained tag is the dialect's error, in `"allow"`
+   * too; one the dialect leaves alone is core's error in `"reject"` only.
+   */
+  explainer?: Explainer;
 }
 
 /** The dynamic-tag reject, shared by `Component` and an unusable tag name. */
@@ -602,6 +615,8 @@ interface UnknownTagHit {
   at: Position;
   /** Where the tag's element ends, to label the errors inside it. */
   end?: Position;
+  /** The dialect's error for this tag, when it explained it: it replaces core's. */
+  explained?: TranslateError;
 }
 
 /**
@@ -617,9 +632,12 @@ function allUnknownTags(
   ir: Ir,
   declaredTags: ReadonlySet<string>,
   exemptTags: ReadonlySet<string> | undefined,
+  explainer: Explainer | undefined,
 ): UnknownTagHit[] {
   const found: UnknownTagHit[] = [];
-  const visitTag = (tag: DelegatedTag<unknown>) => {
+  const visitTag = (tag: DelegatedTag<unknown>, frame: ViewFrame) => {
+    const written = tag.alias?.authored ?? tag.name;
+    const authored = tag.nameSpan !== undefined;
     if (
       tag.nameSpan !== undefined &&
       // A wildcard child (`alias`) was claimed by its parent's contract: known.
@@ -627,6 +645,12 @@ function allUnknownTags(
       !declaredTags.has(tag.name) &&
       !exemptTags?.has(tag.name)
     ) {
+      const explained = explainer?.explain({
+        name: tag.name,
+        nameSpan: tag.nameSpan,
+        span: tag.span ?? tag.nameSpan,
+        ancestors: frame.ancestors,
+      });
       found.push({
         name: tag.name,
         message: unknownTagMessage(tag.name, declaredTags),
@@ -635,32 +659,55 @@ function allUnknownTags(
         ...(tag.span && Number.isFinite(tag.span.sourceEnd)
           ? { end: positionOfOffset(tag.span.sourceEnd) }
           : {}),
+        ...(explained ? { explained } : {}),
       });
     }
-    visitAttrTagNodes(tag.attributeTagTree);
-    visitNodes(tag.children);
+    // A tag a `transform` emitted has no authored name: it is not an ancestor
+    // (the parse-only scan never sees it either).
+    const inner =
+      explainer && (authored || tag.name === DYNAMIC_TAG)
+        ? enterTag(explainer.env, frame, {
+            node: tag,
+            written: tag.name === DYNAMIC_TAG ? "" : written,
+            name: tag.name === DYNAMIC_TAG ? "" : tag.name,
+            ...(tag.nameSpan ? { nameSpan: tag.nameSpan } : {}),
+            claimed: tag.alias !== undefined,
+          })
+        : frame;
+    visitAttrTagNodes(tag.attributeTagTree, inner);
+    visitNodes(tag.children, inner);
   };
-  const visitAttrTagNodes = (nodes: AttributeTagNode[]) => {
+  const visitAttrTagNodes = (nodes: AttributeTagNode[], frame: ViewFrame) => {
     for (const node of nodes) {
       if (node.kind === "AttributeTag") {
-        visitAttrTagNodes(node.tag.attributeTagTree);
-        visitNodes(node.tag.block.children);
+        const inner = explainer
+          ? enterTag(explainer.env, frame, {
+              node: node.tag,
+              written: `@${node.tag.name}`,
+              name: `@${node.tag.name}`,
+              nameSpan: node.tag.nameSpan,
+              claimed: false,
+            })
+          : frame;
+        visitAttrTagNodes(node.tag.attributeTagTree, inner);
+        visitNodes(node.tag.block.children, inner);
       } else if (node.kind === "AttributeTagIf") {
-        for (const branch of node.branches) visitAttrTagNodes(branch.nodes);
+        for (const branch of node.branches)
+          visitAttrTagNodes(branch.nodes, frame);
       } else {
-        visitAttrTagNodes(node.nodes);
+        visitAttrTagNodes(node.nodes, frame);
       }
     }
   };
-  const visitNodes = (nodes: IrNode[]) => {
+  const visitNodes = (nodes: IrNode[], frame: ViewFrame) => {
     for (const node of nodes) {
-      if (node.kind === "DelegatedTag") visitTag(node.tag);
+      if (node.kind === "DelegatedTag") visitTag(node.tag, frame);
       else if (node.kind === "IfChain") {
-        for (const branch of node.branches) visitNodes(branch.children);
-      } else if (node.kind === "For") visitNodes(node.children);
+        for (const branch of node.branches) visitNodes(branch.children, frame);
+      } else if (node.kind === "For") visitNodes(node.children, frame);
     }
   };
-  visitNodes(ir.body);
+  visitNodes(ir.body, ROOT_FRAME);
   return found;
 }
 
@@ -769,6 +816,8 @@ export interface UnknownTagRange {
   end?: Position;
 }
 
+const NONE: ReadonlySet<unknown> = new Set();
+
 /** The suffix of an error that sits inside an unknown tag's element. */
 function insideUnknownTagLabel(name: string): string {
   return ` (inside the unknown tag \`<${name}>\`; may resolve once it is declared)`;
@@ -788,6 +837,7 @@ function insideUnknownTagLabel(name: string): string {
 export function labelInside(
   errors: unknown[],
   unknown: readonly UnknownTagRange[],
+  except: ReadonlySet<unknown> = NONE,
 ): unknown[] {
   const inside = (at: Position, tag: UnknownTagRange) =>
     tag.end !== undefined &&
@@ -797,6 +847,9 @@ export function labelInside(
     (at.line < tag.end.line ||
       (at.line === tag.end.line && at.column < tag.end.column));
   return errors.map((error) => {
+    // A dialect's explanation of an unknown tag sits on the tag's own name:
+    // it is what the label would point at, not an error inside it.
+    if (except.has(error)) return error;
     const at = positionOf(error);
     if (!at) return error;
     let innermost: UnknownTagRange | undefined;
@@ -896,7 +949,7 @@ function checkAll(ir: Ir, source: string, options: CheckOptions): unknown[] {
   const stmts = attempt(() => statements(ir)) ?? [];
   checkNodes(ir.body);
   const extra: unknown[] = [];
-  let unknownHits: UnknownTagHit[] = [];
+  const unknownHits: UnknownTagHit[] = [];
   const asError = ({
     message,
     at,
@@ -915,15 +968,29 @@ function checkAll(ir: Ir, source: string, options: CheckOptions): unknown[] {
       extra.push(asError(found));
     }
   });
-  if (options.unknownTags === "reject") {
+  const explained = new Set<unknown>();
+  if (options.unknownTags === "reject" || options.explainer) {
     attempt(() => {
-      unknownHits = allUnknownTags(
+      const found = allUnknownTags(
         ir,
         options.declaredTags,
         options.exemptTags,
+        options.explainer,
       );
-      for (const found of unknownHits) extra.push(asError(found));
+      for (const hit of found) {
+        if (hit.explained) {
+          // The dialect's error is the one for this tag, in both modes.
+          explained.add(hit.explained);
+          extra.push(hit.explained);
+          unknownHits.push(hit);
+        } else if (options.unknownTags === "reject") {
+          extra.push(asError(hit));
+          unknownHits.push(hit);
+        }
+      }
     });
   }
-  return sortedProblems(labelInside([...problems, ...extra], unknownHits));
+  return sortedProblems(
+    labelInside([...problems, ...extra], unknownHits, explained),
+  );
 }

@@ -3570,7 +3570,7 @@ read throws, as `readFileSync` does.
 | Result field | Meaning |
 |---|---|
 | `ir` | the `SpannedIr` (§13.7.2), or `undefined` when `diagnostics` holds an error |
-| `diagnostics` | `IrDiagnostic`: `{ severity, message, line, column, offset, file?, code? }`. `line` is 1-based and `column` 0-based, as `TranslateError` and `MxWarning`. `offset` is the UTF-16 offset derived from them (`-1` when `file` names another file, whose text `lowerSource` does not have). An error or warning with no source position (core's 0:0, as for a bad `customTags` registration) is file-level: `line: 1`, `column: 0`, `offset: 0`. `code` is the error's `TranslateError.diagnosticCode` when it has one (a dialect's `ctx.fail(message, { code })`, or a contract hook's `ctx.fail(message, { at?, code? })`, or `MX_TAG_FILE_ERROR` for a call to a dialect tag file the dialect cannot read or whose definition has errors, and `MX_TAG_FILE_CYCLE` for tag files that call each other, §9.2), or a warning's `MxWarning.code` (the duplicate-attribute warning is `MX_DUPLICATE_ATTRIBUTE`). Core's own errors a consumer matches carry a stable code too, so it matches the code and never the wording: `MX_UNKNOWN_TAG` (a tag with no contract, under `unknownTags: "reject"`), `MX_RESERVED_TAG` (a `customTags` definition that names a reserved tag, at each call of the name, §13.7.4 Reserved names; such a call gets no `MX_UNKNOWN_TAG` and no `MX_TAG_NOT_ALLOWED`), `MX_TAG_NOT_ALLOWED` (a child tag a `children` contract does not allow; under `unknownTags: "reject"` a child with no contract gets `MX_UNKNOWN_TAG` alone), `MX_TEXT_NOT_ALLOWED` (text where a `children` contract allows none) and `MX_EXPECTED_SINGLE_EXPRESSION` (a second expression after the one an expression position holds). The code survives the label an error gets inside an unknown tag, and a template compile carries `MX_TAG_NOT_ALLOWED` and `MX_TEXT_NOT_ALLOWED` as `TranslateError.diagnosticCode` and `MX_EXPECTED_SINGLE_EXPRESSION` as `diagnosticCode` on the thrown `CompileError` (`MX_UNKNOWN_TAG` is a `lowerSource` option's error only). The `MX_` prefix is core's own: a contract's or a dialect's code belongs to its own namespace, so a consumer can tell core's codes from a module's. Core does not check the prefix. On success it holds this call's warnings only |
+| `diagnostics` | `IrDiagnostic`: `{ severity, message, line, column, offset, file?, code? }`. `line` is 1-based and `column` 0-based, as `TranslateError` and `MxWarning`. `offset` is the UTF-16 offset derived from them (`-1` when `file` names another file, whose text `lowerSource` does not have). An error or warning with no source position (core's 0:0, as for a bad `customTags` registration) is file-level: `line: 1`, `column: 0`, `offset: 0`. `code` is the error's `TranslateError.diagnosticCode` when it has one (a dialect's `ctx.fail(message, { code })`, or a contract hook's `ctx.fail(message, { at?, code? })`, or `MX_TAG_FILE_ERROR` for a call to a dialect tag file the dialect cannot read or whose definition has errors, and `MX_TAG_FILE_CYCLE` for tag files that call each other, §9.2), or a warning's `MxWarning.code` (the duplicate-attribute warning is `MX_DUPLICATE_ATTRIBUTE`). Core's own errors a consumer matches carry a stable code too, so it matches the code and never the wording: `MX_UNKNOWN_TAG` (a tag with no contract, under `unknownTags: "reject"`), `MX_RESERVED_TAG` (a `customTags` definition that names a reserved tag, at each call of the name, §13.7.4 Reserved names; such a call gets no `MX_UNKNOWN_TAG` and no `MX_TAG_NOT_ALLOWED`), `MX_TAG_NOT_ALLOWED` (a child tag a `children` contract does not allow; under `unknownTags: "reject"` a child with no contract gets `MX_UNKNOWN_TAG` alone), `MX_TEXT_NOT_ALLOWED` (text where a `children` contract allows none) and `MX_EXPECTED_SINGLE_EXPRESSION` (a second expression after the one an expression position holds). `MX_DIALECT_HOOK_ERROR` is a dialect's `explainUnknownTag` that threw or returned a malformed value (§13.9.3), at the tag. The code survives the label an error gets inside an unknown tag, and a template compile carries `MX_TAG_NOT_ALLOWED` and `MX_TEXT_NOT_ALLOWED` as `TranslateError.diagnosticCode` and `MX_EXPECTED_SINGLE_EXPRESSION` as `diagnosticCode` on the thrown `CompileError` (`MX_UNKNOWN_TAG` is a `lowerSource` option's error only). The `MX_` prefix is core's own: a contract's or a dialect's code belongs to its own namespace, so a consumer can tell core's codes from a module's. Core does not check the prefix. On success it holds this call's warnings only |
 
 | Option | Values | Meaning |
 |---|---|---|
@@ -3580,7 +3580,7 @@ read throws, as `readFileSync` does.
 | `defaultTag` | tag name | what `<#id>` and `<.class>` stand for in place of the built-in `object` (decision 145; see "The unnamed tag" in §4) |
 | `structural` | `"pass"` (default), `"reject"` | `"pass"` keeps the structural constructs (text, `${}`, `<if>`, `<for>`, `<const>`, `import`, `export`, `static`) in the IR. `"reject"` makes each one a positioned error: ``the data tree is static; this file's consumer does not evaluate `<if>` `` (the construct is named). Comments are **never** structural — a `//` line or `<!-- -->` stays in the IR as its `Comment` node under either value (decision 131 addendum 5). A structural hit and a check error are ordered by position |
 | `imports` | `"pass"`, `"reject"` (default: the effective `structural`) | Decides a top-level `import` on its own. `"pass"` with `structural: "reject"` keeps every other structural construct rejected and returns the imports in `ir.imports`; `"reject"` with `structural: "pass"` rejects only the `import`s. Each `Import` carries `code`, `span`, `from` (the unquoted specifier) and `names` (`{ imported, local, kind: "default" \| "named" \| "namespace", span, localSpan?, typeOnly? }`, in written order, empty for `import "x"`), read from the parsed declaration, never from the text. A tag-body `import` is not an import: it parses as body text, so `structural: "reject"` rejects it as text and `imports` does not apply |
-| `unknownTags` | `"allow"` (default), `"reject"` | `"allow"` is the open set of decision 131: a tag with no entry in `customTags` is accepted. `"reject"` (131 addendum 3) makes any authored tag, at any depth, whose name has no entry in `customTags` (and is not the built-in `object`) a positioned error at the tag: ``` `<opem>` is not a known tag: it has no contract in `customTags`; did you mean `<open>`? ``` (the hint appears when one declared name is clearly nearest). Reserved names never reach the check (core consumes them first) and `<@name>` attribute tags are governed by the parent's `attributeTags`. An unknown parent is reported before its children's `parents`/`children` errors, and the errors inside an unknown tag are labelled, never dropped (decision 161). A tag gets one error: an unknown tag inside a parent whose `children` is closed reports `MX_UNKNOWN_TAG` only, because the missing contract is the cause and "not allowed here" would be its symptom, so it does not also get `MX_TAG_NOT_ALLOWED`. What the not-allowed message would have said beyond that (the parent's wildcard rule, a `defaultTag` hint) is appended to the `MX_UNKNOWN_TAG` message as `; inside `<parent>`: …`, so the author still sees what the parent accepts. A declared tag that the parent does not allow keeps `MX_TAG_NOT_ALLOWED` in both modes, and under `"allow"` the unknown tag in a closed parent reports `MX_TAG_NOT_ALLOWED` |
+| `unknownTags` | `"allow"` (default), `"reject"` | `"allow"` is the open set of decision 131: a tag with no entry in `customTags` is accepted. `"reject"` (131 addendum 3) makes any authored tag, at any depth, whose name has no entry in `customTags` (and is not the built-in `object`) a positioned error at the tag: ``` `<opem>` is not a known tag: it has no contract in `customTags`; did you mean `<open>`? ``` (the hint appears when one declared name is clearly nearest). Reserved names never reach the check (core consumes them first) and `<@name>` attribute tags are governed by the parent's `attributeTags`. An unknown parent is reported before its children's `parents`/`children` errors, and the errors inside an unknown tag are labelled, never dropped (decision 161). A tag gets one error: an unknown tag inside a parent whose `children` is closed reports `MX_UNKNOWN_TAG` only, because the missing contract is the cause and "not allowed here" would be its symptom, so it does not also get `MX_TAG_NOT_ALLOWED`. What the not-allowed message would have said beyond that (the parent's wildcard rule, a `defaultTag` hint) is appended to the `MX_UNKNOWN_TAG` message as `; inside `<parent>`: …`, so the author still sees what the parent accepts. A tag the file's dialect explains (`explainUnknownTag`, §13.9.3) gets the dialect's error instead, in both modes, and is the one error for it. A declared tag that the parent does not allow keeps `MX_TAG_NOT_ALLOWED` in both modes, and under `"allow"` the unknown tag in a closed parent reports `MX_TAG_NOT_ALLOWED` |
 | `warnings` | `MxWarning[]` | a sink for core's warnings, pushed as raised, so those raised before a later error stay in the caller's array |
 
 #### 13.7.2 The returned IR
@@ -4152,6 +4152,7 @@ interface Dialect {
   contractFields?: ContractFields;
   checkContract?(tag: string, contract: ContractData, ctx: ContractCheckContext): void;
   describeAttribute?(declaration: Readonly<Record<string, unknown>>): string;
+  explainUnknownTag?(tag: UnknownTag): UnknownTagExplanation | undefined;
   tagFile?(file: TagFileInput, ctx: TagFileContext): TagFileResult;  // §9.2
 }
 
@@ -4228,6 +4229,66 @@ unit's `afterLower` list, after core's own hooks, and runs once per unit after
 lowering and before emit. The dialect's `name` names the language where core's
 diagnostics say "MX" on its files, unless the host sets a `productName`; a file
 no dialect claims says "MX".
+
+**`explainUnknownTag`.** A tag with no contract (§13.7.2's `unknownTags`) means
+nothing to core, but it may mean something in the dialect's language: a
+`entity:Todo` written where a field was expected, say. `explainUnknownTag` lets
+the dialect say what such a tag is, as the one error for it, in its own words,
+code and position. It only explains. It cannot claim the tag, give it a
+contract, or turn it into IR, and what it returns is always an error.
+
+```ts
+/** @unstable */
+interface UnknownTag {
+  name: string;                     // as written: `entity:Todo`, `:x` as the tag it names
+  nameSpan: SourceSpan;             // the name, without `<` or `@`
+  span: SourceSpan;                 // the whole element (a concise tag runs to the end of its line)
+  ancestors: readonly UnknownTagAncestor[]; // authored tags around it, outermost first
+  mode: "allow" | "reject";         // the call's `unknownTags`
+  file: string;
+  source: string;                   // the document text
+}
+/** @unstable */
+interface UnknownTagAncestor {
+  tag: string;                      // as written: `@row` for an attribute tag
+  nameSpan?: SourceSpan;            // absent for a dynamic tag
+  contract?: ContractData;          // the contract in force inside it; absent for a tag with none
+}
+/** @unstable */
+interface UnknownTagExplanation {
+  message: string;                  // non-empty
+  code?: string;                    // the dialect's own namespace, never `MX_`
+  at?: SourceSpan;                  // inside the document; default: the tag's `span` start
+}
+```
+
+Core calls the hook once for each authored tag that has no contract, in both
+`unknownTags` modes, and only for such a tag: not for a declared tag, a child a
+parent's `children["*"]` claims, a tag a `transform` emitted, an attribute tag
+`<@x>`, a dynamic tag or a structural name (`if`, `for`, `const`). A hook that
+returns `undefined` leaves the tag to core: `MX_UNKNOWN_TAG` under `"reject"`,
+nothing under `"allow"`. A tag it explains is the dialect's error, in either
+mode, and has no `MX_UNKNOWN_TAG` and, inside a closed parent, no
+`MX_TAG_NOT_ALLOWED`: one tag, one diagnostic. Errors inside an explained tag
+keep their "(inside `<tag>`)" label. Because the explanation is an error, the
+result has no IR, `"allow"` included.
+
+The hook sees the same `UnknownTag` whether the file lowered or lowering
+failed, so an explanation does not depend on an unrelated error elsewhere in the
+file. It runs after `afterLower`, and the file is lowered once. Core computes
+the line, column and offset from `at`; the dialect never does. The hook is data
+in, data out: everything it is handed is frozen.
+
+A hook that throws, or returns something other than an object or `undefined`,
+an empty or non-string `message`, a non-string or empty `code`, or an `at` that
+is not a `{ sourceStart, sourceEnd }` span inside the document, is one error at
+the tag with the code `MX_DIALECT_HOOK_ERROR`, and `lowerSource` never throws.
+`MX_DIALECT_HOOK_ERROR` is core's, like the other `MX_` codes; the dialect's own
+codes belong to its own namespace.
+
+`ContractData` (what `checkContract`, `explainUnknownTag` and
+`unit.calls[].contract` carry) has the contract's `defaultTag` when it states
+one, and no key when it does not: never a built-in default such as `object`.
 
 #### 13.9.4 Where the table is read
 

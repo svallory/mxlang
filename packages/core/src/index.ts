@@ -353,6 +353,9 @@ export {
   type TriggerShorthand,
   type TriggerUse,
   type TriggerValueForm,
+  type UnknownTag,
+  type UnknownTagAncestor,
+  type UnknownTagExplanation,
 } from "./syntax-table.ts";
 export {
   clearTagFileCache,

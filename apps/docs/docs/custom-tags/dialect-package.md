@@ -110,6 +110,36 @@ lowerSource(source, file, {
 
 A `transform` that emits tags is not supported by `lowerSource` yet: it reports an `internal error` diagnostic on the emitted tag in either mode (TODO `data-transform-output-tree`). The check itself only ever looks at names the file's author wrote.
 
+## Explaining an unknown tag
+
+A tag with no contract is not always a mistake in your language. A dialect that reads `entity:Todo` as a member of a family it does not declare can say so, in its own words and code, with `explainUnknownTag`. The hook only explains: it cannot claim the tag or give it IR.
+
+```ts
+// dialect.ts
+import type { Dialect } from "@mxlang/core";
+
+export default {
+  table: {},
+  tagRules: "none",
+  explainUnknownTag(tag) {
+    const colon = tag.name.indexOf(":");
+    if (colon < 0) return undefined; // core's rule applies
+    const kind = tag.name.slice(0, colon);
+    const inside = tag.ancestors.at(-1)?.tag ?? "the top level";
+    return {
+      code: "WIDGETS_NO_SUCH_KIND",
+      message: `\`${kind}\` is not a kind of widget (found in ${inside}); write \`<widget kind="${kind}">\``,
+      at: tag.nameSpan,
+    };
+  },
+} satisfies Partial<Dialect>;
+```
+
+- It is called for each tag that has no contract, in `"allow"` and `"reject"` mode alike, with the tag's name and spans, the authored tags around it (each with the contract in force inside it, `defaultTag` included), the mode, the file and its text. It is not called for a declared tag, a child a parent's `children["*"]` claims, an `<@attribute-tag>`, a dynamic tag or an `if`/`for`/`const`.
+- Returning `undefined` hands the tag back to core. Returning an explanation makes it the only diagnostic for that tag: no `MX_UNKNOWN_TAG`, and no "not allowed" from a closed parent. The result then has no IR, in `"allow"` mode too.
+- You give `message`, and optionally `code` (your own namespace, not `MX_`) and `at`, a span inside the document. Core computes the position. An empty message, a bad `at`, or a hook that throws is one `MX_DIALECT_HOOK_ERROR` at the tag.
+- The hook gets the same view when the file lowered and when lowering failed elsewhere, so the explanation does not change with an unrelated error.
+
 ## Composing a dialect from parts
 
 If your dialect is assembled from a core vocabulary plus optional extensions — an extension that adds a child tag to `resource`, say — **generate one self-contained contracts module** from the enabled parts, and name that file under `mx.contracts`.

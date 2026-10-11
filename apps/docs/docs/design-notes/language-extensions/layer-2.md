@@ -1,6 +1,6 @@
 ---
 title: "Layer 2: syntax"
-description: "Project-scoped syntax extensions through the data-only syntax table: delimiters, triggers, block forms, filters, and the lowering hooks for the forms they add. Planned."
+description: "Project-scoped syntax extensions through the data-only syntax table: delimiters, triggers, block forms, filters, and the lowering hooks for the forms they add, and the hook that explains an unknown tag. Planned."
 ---
 
 # Layer 2: syntax
@@ -12,7 +12,8 @@ Layer 2 lets a project, or a package it depends on, change what the parser
 recognises, through the [syntax table](/design-notes/language-extensions/core/#the-core-the-syntax-table)
 and nothing else. A syntax module is a sidecar-shaped file (default export,
 no top-level `await`, explicit extensions on relative imports) exporting a
-partial table and the four lowering hooks. It is listed in
+partial table and the dialect's hooks (the lowering hooks, `afterLower`, the
+contract hooks and `explainUnknownTag`). It is listed in
 `package.json#mx.syntax`.
 
 ```json
@@ -94,6 +95,13 @@ what used to be MX core:
   trigger's error. Tag-adjacent `tag#id=123` is Marko already. The trigger
   sets `terminatesValue`, so ` .class` after an attribute value ends the value
   rather than continuing a member expression.
+
+**Unknown tags.** A tag with no contract can mean something in the dialect's
+language. The dialect's `explainUnknownTag` hook says what, as the one error
+for that tag, with its own message, code and position (specification §13.9.3).
+It only explains: a dialect still cannot claim a tag it has no contract for, and
+the answer is always an error, so no IR comes of it. Core calls it for the same
+tag whether the file lowered or lowering failed elsewhere.
 
 Mesh's syntax needs no "`:name` after a value" form (`belongs-to=:List :list`):
 the member sigil `&` covers the reference in all three positions, so that

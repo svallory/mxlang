@@ -126,11 +126,16 @@ export function frozenData<T>(value: T): T {
 }
 
 /** The contract keys a module reads besides the ones it claims. */
-const CONTRACT_DATA_KEYS = ["attributes", "attributeTags", "children"];
+const CONTRACT_DATA_KEYS = [
+  "attributes",
+  "attributeTags",
+  "children",
+  "defaultTag",
+];
 
 /**
  * A contract's declarations as plain data, as a module reads them:
- * `attributes`, `attributeTags`, `children` and the claimed tag
+ * `attributes`, `attributeTags`, `children`, `defaultTag` and the claimed tag
  * keys it states, deep-frozen copies of the registered objects (which stay
  * as they are). Pass one `memo` per unit so a contract several calls share
  * is copied once.

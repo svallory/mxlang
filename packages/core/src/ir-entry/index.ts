@@ -74,6 +74,7 @@ import {
 import { finishIr, type SpannedIr } from "./spans.ts";
 // Registers the dialect tag-file reader with the scan (side effect).
 import "../tag-file.ts";
+import { type Explainer, explainerFor } from "./unknown-tag-view.ts";
 
 export type { IrDiagnostic } from "./diagnostics.ts";
 export type { Spanned, SpannedIr } from "./spans.ts";
@@ -330,6 +331,36 @@ function reservedDiagnostics(
 }
 
 /**
+ * The file's dialect's unknown-tag explainer, or `undefined` when the dialect
+ * has no `explainUnknownTag` (or cannot be resolved: the compile reports that).
+ */
+function explainerOf(
+  options: LowerSourceOptions,
+  filename: string,
+  source: string,
+  lineStarts: number[],
+): Explainer | undefined {
+  try {
+    const dialect = dialectOf(options, filename);
+    if (!dialect?.explainUnknownTag) return undefined;
+    const claimed = claimedFields(dialect);
+    return explainerFor(dialect, {
+      mode: options.unknownTags ?? "allow",
+      file: filename,
+      source,
+      lineStarts,
+      env: {
+        customTags: registrationView(options.customTags, claimed),
+        tagFields: claimed.tag,
+        memo: new WeakMap(),
+      },
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Parses, lowers and checks one source, returning its IR.
  *
  * Never throws: every error the source has is a positioned error diagnostic
@@ -436,7 +467,9 @@ export function lowerSource(
     tagRulesDecided.add(host);
     compileSource(source, filename, declarations, host);
   } catch (error) {
-    if (options.unknownTags !== "reject") return failed([error]);
+    const reject = options.unknownTags === "reject";
+    const explainer = explainerOf(options, filename, source, lineStarts);
+    if (!reject && !explainer) return failed([error]);
     try {
       // A deferred entry's contract answers from its view (never throws):
       // its call already reported why it cannot be read.
@@ -450,22 +483,34 @@ export function lowerSource(
         ),
         options.defaultTag ?? DEFAULT_TAG,
         options.dialect,
+        explainer && {
+          explainer,
+          // A call of a refused name has its own error: the dialect is not asked.
+          declared: new Set([...declared, ...refusedNames]),
+        },
       );
       // A refused name's call already has its `MX_RESERVED_TAG`: one
       // diagnostic per occurrence, so it is not also unknown.
       const unknown = (tags ?? []).filter(
         (tag) => !declared.has(tag.name) && !refusedNames.has(tag.name),
       );
+      // Allow mode only has what the dialect explained to say.
+      const reported = reject
+        ? unknown
+        : unknown.filter((tag) => tag.explained);
+      if (reported.length === 0) return failed([error]);
       // An unknown tag inside a closed parent got `MX_TAG_NOT_ALLOWED` from
-      // the lowering and `MX_UNKNOWN_TAG` from the scan: one tag, two errors.
-      // The unknown tag is the cause, so the not-allowed error about the same
-      // occurrence is dropped. The occurrence is what the lowering recorded
-      // when it raised the error (name and offset, in this file), never the
-      // message text. What the dropped message said beyond "not allowed" (a
-      // wildcard rule, a hint) moves onto the surviving error.
+      // the lowering and, from the scan, `MX_UNKNOWN_TAG` or the dialect's
+      // explanation: one tag, two errors. The unknown tag is the cause, so the
+      // not-allowed error about the same occurrence is dropped. The occurrence
+      // is what the lowering recorded when it raised the error (name and
+      // offset, in this file), never the message text. What the dropped message
+      // said beyond "not allowed" (a wildcard rule, a hint) moves onto the
+      // surviving core error; a dialect's explanation is its own words and
+      // keeps them.
       const lowering = flattenErrors(error);
-      const unknownAt = new Map(
-        unknown.map((tag) => [`${tag.offset}:${tag.name}`, tag]),
+      const reportedAt = new Map(
+        reported.map((tag) => [`${tag.offset}:${tag.name}`, tag]),
       );
       const guidance = new Map<string, string>();
       const kept = lowering.filter((entry) => {
@@ -476,11 +521,12 @@ export function lowerSource(
         const file = (entry as TranslateError).file;
         if (file !== undefined && file !== filename) return true;
         const key = `${occurrence.offset}:${occurrence.name}`;
-        if (!unknownAt.has(key)) return true;
+        if (!reportedAt.has(key)) return true;
         if (occurrence.guidance) guidance.set(key, occurrence.guidance);
         return false;
       });
-      const errors = unknown.map((tag) => {
+      const errors = reported.map((tag) => {
+        if (tag.explained) return tag.explained;
         const extra = guidance.get(`${tag.offset}:${tag.name}`);
         const unknownError = new TranslateError(
           unknownTagMessage(tag.name, declared) + (extra ? `; ${extra}` : ""),
@@ -490,14 +536,17 @@ export function lowerSource(
         unknownError.diagnosticCode = UNKNOWN_TAG_CODE;
         return unknownError;
       });
-      const ranges = unknown.map((tag) => ({
+      const ranges = reported.map((tag) => ({
         name: tag.name,
         at: { line: tag.line, column: tag.column },
         ...(tag.endLine !== undefined && tag.endColumn !== undefined
           ? { end: { line: tag.endLine, column: tag.endColumn } }
           : {}),
       }));
-      return failed(labelInside([...kept, ...errors], ranges));
+      const explained = new Set<unknown>(
+        reported.flatMap((tag) => (tag.explained ? [tag.explained] : [])),
+      );
+      return failed(labelInside([...kept, ...errors], ranges, explained));
     } catch (scanError) {
       return failed([error, scanError]);
     }
@@ -510,12 +559,14 @@ export function lowerSource(
   const lowered = ir as Ir;
   // Never throws: the check records every error, even one outside its
   // recovery points, and returns them with the rest.
+  const successExplainer = explainerOf(options, filename, source, lineStarts);
   const errors = checkIr(lowered, source, {
     structural: options.structural ?? "pass",
     imports: options.imports ?? options.structural ?? "pass",
     unknownTags: options.unknownTags ?? "allow",
     declaredTags: declared,
     exemptTags: refusedNames,
+    ...(successExplainer ? { explainer: successExplainer } : {}),
   });
   if (errors.length > 0) return failed(errors);
   let finished: SpannedIr;

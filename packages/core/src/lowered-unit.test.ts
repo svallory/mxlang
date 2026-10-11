@@ -240,6 +240,24 @@ describe("the `LoweredUnit` view", () => {
     }
   });
 
+  it("carries a contract's own `defaultTag` on each call's contract, and has no key when it states none", () => {
+    const withDefault: Record<string, CustomTag> = {
+      ...tags,
+      list: { defaultTag: "group", children: { group: {} } },
+    };
+    const unit = unitOf("<list/>\n<open/>\n<group/>", withDefault);
+    const byTag = Object.fromEntries(
+      unit.calls.map((c) => [c.tag, c.contract]),
+    );
+    expect(byTag.list).toEqual({
+      children: { group: {} },
+      defaultTag: "group",
+    });
+    // Absent, never a built-in default such as `object`.
+    expect("defaultTag" in (byTag.open ?? {})).toBe(false);
+    expect("defaultTag" in (byTag.group ?? {})).toBe(false);
+  });
+
   it("hands a whole-value member a module built as `mx:Member`", () => {
     const unit = unitOf(
       "<open &due/>",

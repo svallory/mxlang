@@ -339,6 +339,53 @@ export interface TriggerContext {
   fail(message: string, options?: TriggerFailOptions): never;
 }
 
+/**
+ * A tag the file's author wrote that has no contract, as
+ * `Dialect.explainUnknownTag` sees it. The same view on both paths core finds
+ * unknown tags on (a source that lowers and one whose lowering failed).
+ * @unstable
+ */
+export interface UnknownTag {
+  /** The name as written: a colon is part of it (`uuid:id`, `:x`). An unnamed tag (`<#a>`) is the default tag it resolves to. */
+  readonly name: string;
+  /** The name's span (`uuid:id` in `<uuid:id/>`): file-absolute UTF-16 offsets. */
+  readonly nameSpan: SourceSpan;
+  /** The whole element, body and closing tag included. */
+  readonly span: SourceSpan;
+  /**
+   * The authored tags around it, outermost first, ending with its direct
+   * parent; `[]` at the top level. An attribute tag is named `@row`.
+   * Control flow (`<if>`, `<for>`) is not a tag here.
+   */
+  readonly ancestors: readonly UnknownTagAncestor[];
+  /** The caller's `unknownTags`. */
+  readonly mode: "allow" | "reject";
+  readonly file: string;
+  readonly source: string;
+}
+
+/** One authored tag around an {@link UnknownTag}. @unstable */
+export interface UnknownTagAncestor {
+  /** The name as written (`@row` for an attribute tag). */
+  readonly tag: string;
+  readonly nameSpan?: SourceSpan;
+  /** Its contract as plain data, absent for a tag with none. */
+  readonly contract?: ContractData;
+}
+
+/** What `Dialect.explainUnknownTag` returns to explain a tag. @unstable */
+export interface UnknownTagExplanation {
+  /** Non-empty. */
+  readonly message: string;
+  /** Carried to `IrDiagnostic.code`: the dialect's own namespace, never `MX_`. */
+  readonly code?: string;
+  /**
+   * Where the error is, a span inside the document (core computes the line
+   * and column). Default: where core reports the tag, its start.
+   */
+  readonly at?: SourceSpan;
+}
+
 /** What `lowerBlockTag` and `lowerFilter` get: the IR builders a custom tag's `transform` gets. */
 export interface SyntaxBuildContext {
   readonly build: IrBuilders;
@@ -426,6 +473,20 @@ export interface Dialect {
     contract: ContractData,
     ctx: ContractCheckContext,
   ) => void;
+  /**
+   * Explains a tag the file's author wrote that has no contract: called once
+   * per such tag, in document order, in every `unknownTags` mode. Return an
+   * explanation to report it as this dialect's error, in place of every
+   * error core would give that tag (`MX_UNKNOWN_TAG`, and inside a closed
+   * parent `MX_TAG_NOT_ALLOWED`); return `undefined` for core's own
+   * behaviour. It cannot make the tag known, and an explanation is always an
+   * error, so the result has no IR. Synchronous. A hook that throws, or
+   * returns a malformed value, is reported as `MX_DIALECT_HOOK_ERROR` at the
+   * tag. @unstable
+   */
+  readonly explainUnknownTag?: (
+    tag: UnknownTag,
+  ) => UnknownTagExplanation | undefined;
   /**
    * Words what an attribute declaration that uses a key the dialect claims
    * accepts, for core's whole-value shape error (`` attribute `mode` must be
@@ -603,6 +664,7 @@ const MODULE_FIELDS = new Set([
   "afterLower",
   "contractFields",
   "checkContract",
+  "explainUnknownTag",
   "describeAttribute",
   "tagFile",
 ]);
@@ -613,6 +675,7 @@ const MODULE_HOOKS = [
   "lowerFilter",
   "afterLower",
   "checkContract",
+  "explainUnknownTag",
   "describeAttribute",
   "tagFile",
 ] as const;

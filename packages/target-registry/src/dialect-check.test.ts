@@ -162,6 +162,98 @@ describe("checkDialectFile", () => {
     );
   });
 
+  describe("a dialect's `explainUnknownTag`", () => {
+    /** The probe dialect, with a hook that explains a name written against its tag. */
+    const HOOK_MODULE = `module.exports.default = {
+  tagRules: "none",
+  table: {},
+  explainUnknownTag(tag) {
+    const colon = tag.name.indexOf(":");
+    if (colon < 0) return undefined;
+    if (tag.name === "boom:x") throw new Error("boom");
+    return {
+      code: "PROBE_UNSPACED",
+      at: tag.nameSpan,
+      message: "\\u0060" + tag.name + "\\u0060 writes the name against the tag: \\u0060" + tag.name.slice(0, colon) + " " + tag.name.slice(colon) + "\\u0060",
+    };
+  },
+};
+`;
+    const explained = (
+      name: string,
+      line: number,
+      column: number,
+      offset: number,
+    ) => ({
+      severity: "error",
+      message: `\`${name}\` writes the name against the tag: \`${name.slice(0, name.indexOf(":"))} ${name.slice(name.indexOf(":"))}\``,
+      line,
+      column,
+      offset,
+      code: "PROBE_UNSPACED",
+    });
+
+    it("gives its code and position through checkDialectFile, with the dialect named", () => {
+      const project = probeProject({ "dialect.cjs": HOOK_MODULE });
+      expect(
+        checkDialectFile(
+          project.path("a.probe"),
+          "<y>\n  <entity:Todo/>\n</y>\n",
+        ),
+      ).toEqual({
+        source: "Probe",
+        diagnostics: [explained("entity:Todo", 2, 3, 7)],
+      });
+      expect(
+        checkDialectFile(project.path("a.probe"), "entity:Todo\n")?.diagnostics,
+      ).toEqual([explained("entity:Todo", 1, 0, 0)]);
+    });
+
+    it("runs in a file that also has a contract error: both diagnostics, the tag's one first", () => {
+      const project = probeProject(
+        { "dialect.cjs": HOOK_MODULE },
+        { contracts: true },
+      );
+      const text = "entity:Todo\n<service/>\n";
+      expect(
+        checkDialectFile(project.path("a.probe"), text)?.diagnostics,
+      ).toEqual([
+        explained("entity:Todo", 1, 0, 0),
+        {
+          severity: "error",
+          message: PROBE_CONTRACT_MESSAGE,
+          line: 2,
+          column: 0,
+          offset: 12,
+        },
+      ]);
+    });
+
+    it("a name the hook leaves alone is no diagnostic in a dialect file (the open set)", () => {
+      const project = probeProject({ "dialect.cjs": HOOK_MODULE });
+      expect(
+        checkDialectFile(project.path("a.probe"), "<entity/>\n")?.diagnostics,
+      ).toEqual([]);
+    });
+
+    it("a hook that throws is one MX_DIALECT_HOOK_ERROR at the tag, not a thrown error", () => {
+      const project = probeProject({ "dialect.cjs": HOOK_MODULE });
+      expect(
+        checkDialectFile(project.path("a.probe"), "<boom:x/>\n")?.diagnostics,
+      ).toEqual([
+        {
+          severity: "error",
+          message:
+            "the dialect's `explainUnknownTag` threw while explaining `<boom:x>`: boom",
+          line: 1,
+          column: 0,
+          offset: 0,
+          code: "MX_DIALECT_HOOK_ERROR",
+        },
+      ]);
+    });
+  });
+
   it("`.probe.mx` is a dialect file too, by the longest extension", () => {
     const project = probeProject();
     expect(

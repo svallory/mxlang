@@ -13,16 +13,21 @@
  */
 
 import { parseMxDocument } from "../compile.ts";
+import type { TranslateError } from "../core.ts";
 import type { CustomTag } from "../custom-tags.ts";
+import { validateDefaultTag } from "../default-tag-validate.ts";
 import type { Dialect, SyntaxTable } from "../syntax-table.ts";
 import { type TagRules, taglibsOfRules } from "../tag-presets.ts";
+import { type ContractScope, matchWildcardChild } from "../wildcard-resolve.ts";
+import { DEFAULT_TAG, RESERVED_NAMES } from "./declarations.ts";
+import { lineStartsOf, positionAt } from "./diagnostics.ts";
 import {
-  type ContractScope,
-  matchWildcardChild,
-  scopeForChildren,
-} from "../wildcard-resolve.ts";
-import { RESERVED_NAMES } from "./declarations.ts";
-import { lineStartsOf } from "./diagnostics.ts";
+  type Explainer,
+  enterTag,
+  ROOT_FRAME,
+  scopeInside,
+  type ViewFrame,
+} from "./unknown-tag-view.ts";
 
 /** A tag the author wrote, with the position of its `<`. */
 export interface AuthoredTag {
@@ -35,6 +40,18 @@ export interface AuthoredTag {
   /** Where the whole element ends (after its closing tag), when known. */
   endLine?: number;
   endColumn?: number;
+  /**
+   * The dialect's error for this tag, when its `explainUnknownTag` explained
+   * it (or failed doing so). Set only on a tag with no contract.
+   */
+  explained?: TranslateError;
+}
+
+/** What the scan needs to ask a dialect about the unknown tags it finds. */
+export interface ScanExplain {
+  explainer: Explainer;
+  /** The names with a contract: a tag outside it is unknown. */
+  declared: ReadonlySet<string>;
 }
 
 /** The fields of an MX child this pass reads (`@mxlang/babel`'s `mx-ast`). */
@@ -43,7 +60,11 @@ interface MxChildNode {
   /** UTF-16 offsets into the file, `[start, end)`. */
   start: number;
   end: number;
-  name?: { kind?: "static" | "dynamic" | "unnamed"; value?: string };
+  name?: {
+    kind?: "static" | "dynamic" | "unnamed";
+    value?: string;
+    span?: { start: number; end: number };
+  };
   body?: readonly MxChildNode[] | null;
 }
 
@@ -103,21 +124,6 @@ function parseTaglib(
   return [`${SCAN_TAGLIB_ID}:${JSON.stringify(signature)}`, definitions];
 }
 
-/** 1-based line, 0-based column of a file offset, as core positions. */
-function positionAt(
-  lineStarts: readonly number[],
-  offset: number,
-): { line: number; column: number } {
-  let low = 0;
-  let high = lineStarts.length - 1;
-  while (low < high) {
-    const mid = (low + high + 1) >> 1;
-    if ((lineStarts[mid] as number) <= offset) low = mid;
-    else high = mid - 1;
-  }
-  return { line: low + 1, column: offset - (lineStarts[low] as number) };
-}
-
 const TAG_TYPES = new Set(["MxTag", "MxAttributeTag", "MxReturn"]);
 
 /**
@@ -136,6 +142,7 @@ export function scanAuthoredTags(
   defaultTag: string,
   dialect?: SyntaxTable | Dialect,
   include?: ReadonlySet<string>,
+  explain?: ScanExplain,
 ): AuthoredTag[] | null {
   let document: { body: readonly MxChildNode[] } | undefined;
   try {
@@ -152,16 +159,28 @@ export function scanAuthoredTags(
   if (!document) return null;
   const lineStarts = lineStartsOf(source);
   const tags: AuthoredTag[] = [];
+  // What an unnamed tag (`<#a>`, `.x`) stands for: the nearest authored
+  // parent's contract `defaultTag` when it is a valid one, else the caller's.
+  // The lowering resolves it the same way (`resolveDefaultTag`), so the scan
+  // must not name it by the caller's alone.
+  const unnamedName = (scope: ContractScope | undefined): string => {
+    const found = scope?.declaration.defaultTag;
+    return typeof found === "string" &&
+      found !== "" &&
+      validateDefaultTag(found, { customTags, builtins: [DEFAULT_TAG] }) ===
+        undefined
+      ? found
+      : defaultTag;
+  };
   const visit = (
     nodes: readonly MxChildNode[] | null | undefined,
-    scope: ContractScope | undefined,
+    frame: ViewFrame,
   ) => {
+    const scope = frame.scope;
     for (const node of nodes ?? []) {
       if (!TAG_TYPES.has(node.type)) continue;
-      // An unnamed tag (`<#a>`, `.x`) is the default tag; the real lowering
-      // resolves it, so this pass names it the same way instead of reporting
-      // an unknown tag. A colon is part of the name (`<resource:post>` is the
-      // tag `resource:post`, as Marko reads it).
+      // A colon is part of the name (`<resource:post>` is the tag
+      // `resource:post`, as Marko reads it).
       const kind = node.name?.kind;
       const written =
         node.type === "MxAttributeTag"
@@ -170,7 +189,7 @@ export function scanAuthoredTags(
             ? node.name?.value
             : undefined;
       const unnamed = kind === "unnamed";
-      const name = unnamed ? defaultTag : written;
+      const name = unnamed ? unnamedName(scope) : written;
       // A tag the enclosing contract's `children["*"]` claims is known
       // (decision 147); the walk carries the contract in force, as core's does.
       // No `lookup`: this pass has no target taglib, and the structural names
@@ -179,6 +198,21 @@ export function scanAuthoredTags(
         name !== undefined && !unnamed
           ? matchWildcardChild(node, name, scope, { customTags })
           : undefined;
+      // The IR's name span of an attribute tag leaves out its `@`, so this
+      // one does too: the hook gets one span whichever path finds the tag.
+      const nameSpan = node.name?.span
+        ? {
+            sourceStart:
+              node.name.span.start +
+              (node.type === "MxAttributeTag" &&
+              source[node.name.span.start] === "@"
+                ? 1
+                : 0),
+            sourceEnd: node.name.span.end,
+          }
+        : undefined;
+      const span = { sourceStart: node.start, sourceEnd: node.end };
+      let explained: TranslateError | undefined;
       if (
         name !== undefined &&
         !claimed &&
@@ -187,6 +221,14 @@ export function scanAuthoredTags(
       ) {
         const start = positionAt(lineStarts, node.start);
         const end = positionAt(lineStarts, node.end);
+        if (explain && nameSpan && !explain.declared.has(name)) {
+          explained = explain.explainer.explain({
+            name,
+            nameSpan,
+            span,
+            ancestors: frame.ancestors,
+          });
+        }
         tags.push({
           name,
           line: start.line,
@@ -194,20 +236,46 @@ export function scanAuthoredTags(
           offset: node.start,
           endLine: end.line,
           endColumn: end.column,
+          ...(explained ? { explained } : {}),
         });
       }
-      const inside =
-        name === undefined
-          ? undefined
-          : scopeForChildren(
-              node,
-              claimed?.canonical ?? name,
-              scope,
-              customTags,
-            );
-      visit(node.body, inside);
+      visit(node.body, inside(frame, node, name, written, nameSpan, claimed));
     }
   };
-  visit(document.body, undefined);
+  const inside = (
+    frame: ViewFrame,
+    node: MxChildNode,
+    name: string | undefined,
+    written: string | undefined,
+    nameSpan: { sourceStart: number; sourceEnd: number } | undefined,
+    claimed: unknown,
+  ): ViewFrame => {
+    // A dynamic tag has no name: no contract, and an empty name among the
+    // ancestors (the IR's `DelegatedTag` for it has none either).
+    const entered = {
+      node,
+      written: name === undefined ? "" : (written ?? name),
+      name: name ?? "",
+      ...(nameSpan ? { nameSpan } : {}),
+      claimed: claimed !== undefined,
+    };
+    if (!explain) {
+      return {
+        scope: scopeInside(customTags, frame.scope, entered),
+        ancestors: frame.ancestors,
+      };
+    }
+    // A structural tag (`<if>`, `<for>`) is not an ancestor: the IR holds it
+    // as control flow, so its body keeps the ancestors and the contract in
+    // force around it.
+    if (name !== undefined && RESERVED.has(name)) {
+      return {
+        scope: scopeInside(customTags, frame.scope, entered),
+        ancestors: frame.ancestors,
+      };
+    }
+    return enterTag(explain.explainer.env, frame, entered);
+  };
+  visit(document.body, ROOT_FRAME);
   return tags;
 }

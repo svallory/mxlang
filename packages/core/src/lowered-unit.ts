@@ -51,9 +51,9 @@ export interface DeclaredName {
 }
 
 /**
- * A contract's declarations as plain data: `attributes`, `attributeTags` and
- * `children` as registered, plus the keys the file's dialect claims
- * (`contractFields.tag`) that the contract states. @unstable
+ * A contract's declarations as plain data: `attributes`, `attributeTags`,
+ * `children` and `defaultTag` as registered, plus the keys the file's dialect
+ * claims (`contractFields.tag`) that the contract states. @unstable
  */
 export interface ContractData {
   readonly attributes?: Readonly<
@@ -61,6 +61,14 @@ export interface ContractData {
   >;
   readonly attributeTags?: Readonly<Record<string, unknown>>;
   readonly children?: Readonly<Record<string, unknown>>;
+  /**
+   * What an unnamed tag (`<#id>`, `<.class>`) directly inside this tag stands
+   * for, as the contract states it: absent when it states none, never a
+   * built-in default such as `object`. It is the registered value: an invalid
+   * one (a tag name that is not reachable) is kept as written, and lowering
+   * ignores it.
+   */
+  readonly defaultTag?: string;
   readonly [field: string]: unknown;
 }
 

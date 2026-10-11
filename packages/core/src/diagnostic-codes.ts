@@ -22,6 +22,12 @@ export const TAG_NOT_ALLOWED_CODE = "MX_TAG_NOT_ALLOWED";
 /** Text where a parent's `children` contract allows none. */
 export const TEXT_NOT_ALLOWED_CODE = "MX_TEXT_NOT_ALLOWED";
 
+/**
+ * A dialect hook that broke its contract (it threw, or returned a malformed
+ * value): the code core gives the error it reports in the hook's place.
+ */
+export const DIALECT_HOOK_ERROR_CODE = "MX_DIALECT_HOOK_ERROR";
+
 /** A second expression after the one an expression position holds. */
 export const EXPECTED_SINGLE_EXPRESSION_CODE = "MX_EXPECTED_SINGLE_EXPRESSION";
 
