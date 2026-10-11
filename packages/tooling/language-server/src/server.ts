@@ -12,8 +12,8 @@
  */
 
 import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { basename, dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   findMxConfig,
   mxConfigSearchPaths,
@@ -28,6 +28,7 @@ import {
   createConnection,
   type Diagnostic,
   DidChangeWatchedFilesNotification,
+  type Disposable,
   ProposedFeatures,
   TextDocumentSyncKind,
   TextDocuments,
@@ -219,6 +220,64 @@ export function startServer(
     }
   }
 
+  let watchedFilesDynamicRegistration = false;
+  let relativePatternSupport = false;
+  // The globs the client was asked to watch at start-up (the static ones and
+  // the project's dialect extensions), as file-name tests.
+  const dialectExtensionsWatched = new Set<string>();
+  const globWatches = (file: string): boolean => {
+    const name = basename(file);
+    return (
+      /\.(?:mx|ts|tsx|js|mjs|cjs)$/.test(name) ||
+      name === "package.json" ||
+      name.startsWith("mx.config.") ||
+      name.startsWith(".mxrc") ||
+      (name.startsWith("mxrc") && basename(dirname(file)) === ".config") ||
+      [...dialectExtensionsWatched].some((extension) =>
+        name.endsWith(extension),
+      )
+    );
+  };
+  // A file a document depends on that no glob above names (a data file a
+  // dialect's tag-file hook reads, `ctx.dependsOn`) is watched by its own
+  // path, or its change would never reach the server. The set only grows
+  // while the server runs, and one registration holds all of it.
+  const extraWatched = new Set<string>();
+  let extraRegistration: Promise<Disposable | undefined> | undefined;
+  function watchBeyondGlobs(dependencies: ReadonlySet<string>): void {
+    if (!watchedFilesDynamicRegistration) return;
+    let added = false;
+    for (const file of dependencies) {
+      if (globWatches(file) || extraWatched.has(file)) continue;
+      extraWatched.add(file);
+      added = true;
+    }
+    if (!added) return;
+    // A file name is a glob pattern: its glob characters are escaped.
+    const literal = (name: string) => name.replace(/[*?[\]{}]/g, "[$&]");
+    const watchers = [...extraWatched].map((file) => ({
+      globPattern: relativePatternSupport
+        ? {
+            baseUri: pathToFileURL(dirname(file)).href,
+            pattern: literal(basename(file)),
+          }
+        : join(dirname(file), literal(basename(file))),
+    }));
+    const previous = extraRegistration;
+    extraRegistration = (async () => {
+      (await previous)?.dispose();
+      try {
+        return await connection.client.register(
+          DidChangeWatchedFilesNotification.type,
+          { watchers },
+        );
+      } catch {
+        // A client that refuses the registration keeps the globs it has.
+        return undefined;
+      }
+    })();
+  }
+
   function scheduleDiagnostics(uri: string, languageId: string, text: string) {
     if (!isMxDocument(uri, languageId)) return;
 
@@ -289,6 +348,7 @@ export function startServer(
         dependencies.add(diagnostic.file);
       }
       recordDependencies(uri, dependencies);
+      watchBeyondGlobs(dependencies);
 
       // One URI can arrive in several entries (two problems in one
       // `package.json`): this document's part of it is merged.
@@ -312,7 +372,6 @@ export function startServer(
     pending.set(uri, timer);
   }
 
-  let watchedFilesDynamicRegistration = false;
   // The workspace's roots, as paths: the dialect extensions the project
   // uses are read from them when the watchers are registered.
   let workspaceRoots: string[] = [];
@@ -324,6 +383,9 @@ export function startServer(
     watchedFilesDynamicRegistration =
       params.capabilities.workspace?.didChangeWatchedFiles
         ?.dynamicRegistration === true;
+    relativePatternSupport =
+      params.capabilities.workspace?.didChangeWatchedFiles
+        ?.relativePatternSupport === true;
     return {
       capabilities: { textDocumentSync: TextDocumentSyncKind.Incremental },
     };
@@ -338,6 +400,7 @@ export function startServer(
       try {
         for (const extension of dialectExtensionsUnder(root)) {
           dialectGlobs.add(`**/*${extension}`);
+          dialectExtensionsWatched.add(extension);
         }
       } catch {
         // An unreadable root has no dialects to watch.
@@ -414,6 +477,9 @@ export function startServer(
     for (const target of dropped) publish(target);
     recordDependencies(event.document.uri, new Set());
     callerDependencies.delete(event.document.uri);
+    // The callers read this document's text while it was open, and the disk's
+    // from now on: a change nobody saved is discarded with the document.
+    scheduleDependents(event.document.uri);
   });
 
   documents.listen(connection);

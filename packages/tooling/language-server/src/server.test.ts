@@ -21,6 +21,7 @@ import {
 } from "vscode-jsonrpc/node";
 import {
   cleanupProbeProjects,
+  PROBE_DEPENDS_ON_HOOK_MODULE,
   PROBE_SOURCES,
   probeProject,
   tagDiscoveryProject,
@@ -760,6 +761,206 @@ describe("stdio server (e2e)", () => {
     expect(latest.get(pageUri)).toEqual([]);
   }, 30000);
 
+  it("an unsaved fix to an open tag file clears the dialect file that calls it, before any save", async () => {
+    const project = tagDiscoveryProject({
+      "concepts/money.thing.probe": "<x/>\n<!-- BAD -->\n",
+    });
+    const tagUri = pathToFileURL(
+      project.path("concepts/money.thing.probe"),
+    ).href;
+    const pageUri = pathToFileURL(project.path("page.probe")).href;
+    const conn = startClient();
+    await conn.sendRequest("initialize", {
+      processId: null,
+      rootUri: null,
+      capabilities: {},
+    });
+    conn.sendNotification("initialized", {});
+    const latest = new Map<string, string[]>();
+    conn.onNotification(PublishDiagnosticsNotification, (params) => {
+      latest.set(
+        params.uri,
+        params.diagnostics.map((d) => String(d.code ?? d.message)),
+      );
+    });
+    const until = async (done: () => boolean) => {
+      for (let i = 0; i < 300 && !done(); i++) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    };
+    conn.sendNotification("textDocument/didOpen", {
+      textDocument: {
+        uri: pageUri,
+        languageId: "probe",
+        version: 1,
+        text: "<p/>\n<money/>\n",
+      },
+    });
+    conn.sendNotification("textDocument/didOpen", {
+      textDocument: {
+        uri: tagUri,
+        languageId: "probe",
+        version: 1,
+        text: "<x/>\n<!-- BAD -->\n",
+      },
+    });
+    await until(() => latest.get(pageUri)?.length === 2);
+    expect(latest.get(pageUri)).toEqual(["MX_TAG_FILE_ERROR", "KIT_BAD"]);
+    expect(latest.get(tagUri)).toEqual(["KIT_BAD"]);
+
+    // The fix is in the editor only: nothing is written to disk.
+    conn.sendNotification("textDocument/didChange", {
+      textDocument: { uri: tagUri, version: 2 },
+      contentChanges: [{ text: "<x/>\n" }],
+    });
+    await until(() => latest.get(pageUri)?.length === 0);
+    expect(latest.get(tagUri)).toEqual([]);
+    expect(latest.get(pageUri)).toEqual([]);
+
+    // The unsaved break comes back the same way.
+    conn.sendNotification("textDocument/didChange", {
+      textDocument: { uri: tagUri, version: 3 },
+      contentChanges: [{ text: "<x/>\n<!-- BAD -->\n" }],
+    });
+    await until(() => latest.get(pageUri)?.length === 2);
+    expect(latest.get(pageUri)).toEqual(["MX_TAG_FILE_ERROR", "KIT_BAD"]);
+
+    // Fixed again, then closed without saving: the disk's text is back in
+    // force, and so is its error.
+    conn.sendNotification("textDocument/didChange", {
+      textDocument: { uri: tagUri, version: 4 },
+      contentChanges: [{ text: "<x/>\n" }],
+    });
+    await until(() => latest.get(pageUri)?.length === 0);
+    expect(latest.get(pageUri)).toEqual([]);
+    conn.sendNotification("textDocument/didClose", {
+      textDocument: { uri: tagUri },
+    });
+    await until(() => latest.get(pageUri)?.length === 2);
+    expect(latest.get(pageUri)).toEqual(["MX_TAG_FILE_ERROR", "KIT_BAD"]);
+  }, 30000);
+
+  describe("a file a tag file's hook names with ctx.dependsOn", () => {
+    const setup = async () => {
+      const project = tagDiscoveryProject({
+        "dialect.cjs": PROBE_DEPENDS_ON_HOOK_MODULE,
+        "concepts/money.thing.probe": "<x/>\n",
+        "concepts/money.json": "ok\n",
+        "concepts/other.json": "ok\n",
+      });
+      const pageUri = pathToFileURL(project.path("page.probe")).href;
+      const conn = startClient();
+      const watchers: Array<{
+        id: string;
+        watchers: Array<{
+          globPattern: string | { baseUri: string; pattern: string };
+        }>;
+      }> = [];
+      conn.onRequest(
+        "client/registerCapability",
+        (params: {
+          registrations: Array<{
+            id: string;
+            method: string;
+            registerOptions: {
+              watchers: Array<{
+                globPattern: string | { baseUri: string; pattern: string };
+              }>;
+            };
+          }>;
+        }) => {
+          for (const registration of params.registrations) {
+            if (registration.method === "workspace/didChangeWatchedFiles") {
+              watchers.push({
+                id: registration.id,
+                watchers: registration.registerOptions.watchers,
+              });
+            }
+          }
+        },
+      );
+      conn.onRequest("client/unregisterCapability", () => null);
+      await conn.sendRequest("initialize", {
+        processId: null,
+        rootUri: pathToFileURL(project.dir).href,
+        capabilities: {
+          workspace: {
+            didChangeWatchedFiles: {
+              dynamicRegistration: true,
+              relativePatternSupport: true,
+            },
+          },
+        },
+      });
+      conn.sendNotification("initialized", {});
+      const published: string[][] = [];
+      conn.onNotification(PublishDiagnosticsNotification, (params) => {
+        if (params.uri === pageUri) {
+          published.push(
+            params.diagnostics.map((d) => String(d.code ?? d.message)),
+          );
+        }
+      });
+      const until = async (done: () => boolean) => {
+        for (let i = 0; i < 300 && !done(); i++) {
+          await new Promise((r) => setTimeout(r, 50));
+        }
+      };
+      conn.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: pageUri,
+          languageId: "probe",
+          version: 1,
+          text: "<p/>\n<money/>\n",
+        },
+      });
+      await until(() => published.length > 0);
+      return { project, conn, published, watchers, until };
+    };
+
+    it("re-checks the dialect file when it changes on disk, and asks the client to watch it", async () => {
+      const { project, conn, published, watchers, until } = await setup();
+      expect(published.at(-1)).toEqual([]);
+      const moneyJson = project.path("concepts/money.json");
+      const watched = watchers
+        .flatMap((registration) => registration.watchers)
+        .map((watcher) => watcher.globPattern)
+        .filter((glob) => typeof glob !== "string");
+      expect(watched).toEqual([
+        {
+          baseUri: pathToFileURL(project.path("concepts")).href,
+          pattern: "money.json",
+        },
+      ]);
+      writeFileSync(moneyJson, "BAD\n");
+      conn.sendNotification("workspace/didChangeWatchedFiles", {
+        changes: [{ uri: pathToFileURL(moneyJson).href, type: 2 }],
+      });
+      await until(() => published.at(-1)?.length === 2);
+      expect(published.at(-1)).toEqual(["MX_TAG_FILE_ERROR", "KIT_BAD"]);
+    }, 30000);
+
+    it("leaves the dialect file alone when a file nobody names changes", async () => {
+      const { project, conn, published, until } = await setup();
+      const before = published.length;
+      const otherJson = project.path("concepts/other.json");
+      writeFileSync(otherJson, "BAD\n");
+      conn.sendNotification("workspace/didChangeWatchedFiles", {
+        changes: [{ uri: pathToFileURL(otherJson).href, type: 2 }],
+      });
+      // Longer than the debounce, then the named file proves the server is live.
+      await new Promise((r) => setTimeout(r, 800));
+      expect(published.length).toBe(before);
+      const moneyJson = project.path("concepts/money.json");
+      writeFileSync(moneyJson, "BAD\n");
+      conn.sendNotification("workspace/didChangeWatchedFiles", {
+        changes: [{ uri: pathToFileURL(moneyJson).href, type: 2 }],
+      });
+      await until(() => published.length > before);
+      expect(published.length).toBe(before + 1);
+    }, 30000);
+  });
+
   describe("diagnostics published against one URI are the union of its parts", () => {
     type Published = {
       code?: string;
@@ -795,7 +996,9 @@ describe("stdio server (e2e)", () => {
         end: { line: 0, character: 4 },
       },
     };
-    const OWN_TEXT = "<y !bad/>\n";
+    // The editor's text of the tag file: the callers read it (not the
+    // disk's), so it carries the `BAD` that makes the hook raise KIT_BAD.
+    const OWN_TEXT = "<y !bad/>\n<!-- BAD -->\n";
     const CALLER_TEXT = "<p/>\n<money/>\n";
 
     async function session() {
@@ -853,7 +1056,7 @@ describe("stdio server (e2e)", () => {
     }, 30000);
 
     it("shrinks both ways: a caller closing or fixing removes only its part, the file's own change keeps the callers'", async () => {
-      const { tagFile, uris, conn, latest, until, open } = await session();
+      const { uris, conn, latest, until, open } = await session();
       open(uris.tag, OWN_TEXT);
       await until(() => codes(latest.get(uris.tag)).length === 1);
       expect(latest.get(uris.tag)).toEqual([OWN]);
@@ -862,11 +1065,11 @@ describe("stdio server (e2e)", () => {
       await until(() => codes(latest.get(uris.tag)).length === 2);
       expect(latest.get(uris.tag)).toEqual([OWN, KIT_BAD]);
 
-      // The file's own diagnostics change (the editor text is fixed):
-      // the callers' stay.
+      // The file's own diagnostics change (the `!bad` is fixed in the
+      // editor): the callers' stay.
       conn.sendNotification("textDocument/didChange", {
         textDocument: { uri: uris.tag, version: 2 },
-        contentChanges: [{ text: "<y/>\n" }],
+        contentChanges: [{ text: "<y/>\n<!-- BAD -->\n" }],
       });
       await until(() => codes(latest.get(uris.tag)).join() === "KIT_BAD");
       expect(latest.get(uris.tag)).toEqual([KIT_BAD]);
@@ -885,18 +1088,14 @@ describe("stdio server (e2e)", () => {
       await new Promise((r) => setTimeout(r, 300));
       expect(latest.get(uris.tag)).toEqual([OWN, KIT_BAD]);
 
-      // The tag file on disk is fixed: the remaining caller stops raising on
-      // it, and only the own diagnostic is left.
-      writeFileSync(tagFile, "<x/>\n");
-      conn.sendNotification("workspace/didChangeWatchedFiles", {
-        changes: [{ uri: uris.tag, type: 2 }],
+      // The tag file is fixed in the editor, unsaved: the remaining caller
+      // stops raising on it, and so does the file's own check.
+      conn.sendNotification("textDocument/didChange", {
+        textDocument: { uri: uris.tag, version: 4 },
+        contentChanges: [{ text: "<y/>\n" }],
       });
-      await until(
-        () =>
-          latest.get(uris.tag)?.length === 1 &&
-          codes(latest.get(uris.tag)).join() === "",
-      );
-      expect(latest.get(uris.tag)).toEqual([OWN]);
+      await until(() => latest.get(uris.tag)?.length === 0);
+      expect(latest.get(uris.tag)).toEqual([]);
       expect(latest.get(uris.b)).toEqual([]);
     }, 30000);
 
