@@ -361,6 +361,11 @@ describe("checkDialectFile", () => {
         "`mx.dialect.sidecars` must be a boolean: whether `<name>.tag.ts` sidecars index in the dialect's `tagDirs`",
       ],
       ["tagDirs", ["a", "a"], "`mx.dialect.tagDirs` lists `a` twice"],
+      [
+        "mxConfigTags",
+        "no",
+        "`mx.dialect.mxConfigTags` must be a boolean: whether the dialect's files take tag definitions from the project's `mx.tags` and `mx.contracts`",
+      ],
     ])(
       "an invalid `%s` field (%j) is shown on the dialect file, at that field",
       (field, value, reason) => {
