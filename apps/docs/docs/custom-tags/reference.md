@@ -176,7 +176,7 @@ is a positioned compile error.
 | --- | --- |
 | `build` | Position-aware constructors for the IR available in that phase. |
 | `gensym` | Produces a hygienic file-unique binding, optionally using a hint. |
-| `fail` | Creates a positioned `TranslateError`; always write `throw ctx.fail(...)`. |
+| `fail` | In `analyze` and `transform`: `fail(message, { at?, code? })` (or `fail(message, position)`) creates a positioned `TranslateError` carrying `code` as `diagnosticCode`; always write `throw ctx.fail(...)`. `finalize` has none. |
 | `hoist` | Moves code to the head of the nearest enclosing function. |
 | `declare` | In `analyze`: `declare(kind, name, { span, scope? })` adds a derived declaration a syntax module reads from `LoweredUnit.declared`. |
 | `store` | Private per-tag, per-file state shared by `analyze`, `transform`, and `finalize`. |

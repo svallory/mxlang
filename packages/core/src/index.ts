@@ -92,6 +92,7 @@ export type {
   AnalyzeContext,
   BuildFrom,
   ChildNode,
+  ContractFailOptions,
   ContractMap,
   CustomTag,
   CustomTagAttribute,

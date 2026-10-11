@@ -2559,6 +2559,15 @@ Six invariants:
 6. The cached metadata a unit exposes to its caller is
    `{ readsContent, attributeTags }` plus `returnsValue` and the return value's
    source text — **and nothing else**.
+7. **`ctx.fail` in `analyze` and `transform`** is `ctx.fail(message, options?)`,
+   where `options` is `{ at?, code? }` or, as before, a bare position (`at`).
+   `at` is a `Position`, defaulting to the tag's first call in `analyze` and to
+   the call in `transform`. `code` is a non-empty string carried as
+   `TranslateError.diagnosticCode`, so it reaches `IrDiagnostic.code`; it
+   belongs to the dialect's or module's own namespace and core does not check
+   its prefix. An empty `code`, an `at` that is not a position, an unknown
+   option, or any other second argument is a positioned error naming the
+   mistake. `finalize` has no `fail`.
 
 The metadata cache is **bounded** (256 entries, oldest-inserted evicted), keyed by
 path + mtime + source, with a provisional entry seeded before the compile so
@@ -3522,7 +3531,7 @@ read throws, as `readFileSync` does.
 | Result field | Meaning |
 |---|---|
 | `ir` | the `SpannedIr` (§13.7.2), or `undefined` when `diagnostics` holds an error |
-| `diagnostics` | `IrDiagnostic`: `{ severity, message, line, column, offset, file?, code? }`. `line` is 1-based and `column` 0-based, as `TranslateError` and `MxWarning`. `offset` is the UTF-16 offset derived from them (`-1` when `file` names another file, whose text `lowerSource` does not have). An error or warning with no source position (core's 0:0, as for a bad `customTags` registration) is file-level: `line: 1`, `column: 0`, `offset: 0`. `code` is the error's `TranslateError.diagnosticCode` when it has one (a dialect's `ctx.fail(message, { code })`, or `MX_TAG_FILE_ERROR` for a call to a dialect tag file the dialect cannot read, §9.2), or a warning's `MxWarning.code` (the duplicate-attribute warning is `MX_DUPLICATE_ATTRIBUTE`). Core's own errors a consumer matches carry a stable code too, so it matches the code and never the wording: `MX_UNKNOWN_TAG` (a tag with no contract, under `unknownTags: "reject"`), `MX_TAG_NOT_ALLOWED` (a child tag a `children` contract does not allow), `MX_TEXT_NOT_ALLOWED` (text where a `children` contract allows none) and `MX_EXPECTED_SINGLE_EXPRESSION` (a second expression after the one an expression position holds). The code survives the label an error gets inside an unknown tag, and a template compile carries `MX_TAG_NOT_ALLOWED` and `MX_TEXT_NOT_ALLOWED` as `TranslateError.diagnosticCode` and `MX_EXPECTED_SINGLE_EXPRESSION` as `diagnosticCode` on the thrown `CompileError` (`MX_UNKNOWN_TAG` is a `lowerSource` option's error only). On success it holds this call's warnings only |
+| `diagnostics` | `IrDiagnostic`: `{ severity, message, line, column, offset, file?, code? }`. `line` is 1-based and `column` 0-based, as `TranslateError` and `MxWarning`. `offset` is the UTF-16 offset derived from them (`-1` when `file` names another file, whose text `lowerSource` does not have). An error or warning with no source position (core's 0:0, as for a bad `customTags` registration) is file-level: `line: 1`, `column: 0`, `offset: 0`. `code` is the error's `TranslateError.diagnosticCode` when it has one (a dialect's `ctx.fail(message, { code })`, or a contract hook's `ctx.fail(message, { at?, code? })`, or `MX_TAG_FILE_ERROR` for a call to a dialect tag file the dialect cannot read, §9.2), or a warning's `MxWarning.code` (the duplicate-attribute warning is `MX_DUPLICATE_ATTRIBUTE`). Core's own errors a consumer matches carry a stable code too, so it matches the code and never the wording: `MX_UNKNOWN_TAG` (a tag with no contract, under `unknownTags: "reject"`), `MX_TAG_NOT_ALLOWED` (a child tag a `children` contract does not allow), `MX_TEXT_NOT_ALLOWED` (text where a `children` contract allows none) and `MX_EXPECTED_SINGLE_EXPRESSION` (a second expression after the one an expression position holds). The code survives the label an error gets inside an unknown tag, and a template compile carries `MX_TAG_NOT_ALLOWED` and `MX_TEXT_NOT_ALLOWED` as `TranslateError.diagnosticCode` and `MX_EXPECTED_SINGLE_EXPRESSION` as `diagnosticCode` on the thrown `CompileError` (`MX_UNKNOWN_TAG` is a `lowerSource` option's error only). The `MX_` prefix is core's own: a contract's or a dialect's code belongs to its own namespace, so a consumer can tell core's codes from a module's. Core does not check the prefix. On success it holds this call's warnings only |
 
 | Option | Values | Meaning |
 |---|---|---|

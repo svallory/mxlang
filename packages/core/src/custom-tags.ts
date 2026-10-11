@@ -242,9 +242,25 @@ export interface TagStore {
   set<T>(key: string, value: T): void;
 }
 
+/**
+ * How a contract hook's `ctx.fail` raises its error (all optional). Passing a
+ * bare `Position` instead of this object still works and means `{ at }`.
+ * @unstable
+ */
+export interface ContractFailOptions {
+  /** Where the error is; the hook's own default position when absent. */
+  readonly at?: Position;
+  /**
+   * A machine-readable code, carried on the error as `diagnosticCode` (and on
+   * a diagnostic as `code`). The code belongs to the dialect's or module's own
+   * namespace: core refuses only an empty one.
+   */
+  readonly code?: string;
+}
+
 export interface AnalyzeContext {
   store: TagStore;
-  fail(message: string, at?: Position): never;
+  fail(message: string, options?: ContractFailOptions | Position): never;
   /**
    * Declares a name no tag states (a derived one, such as the `listId` a
    * `belongs-to` adds). Core only records it: a syntax module reads it from
@@ -508,7 +524,7 @@ export interface TransformContext {
   /** A hygienic, per-file-unique binding name. */
   gensym(hint?: string): string;
   /** Write `throw ctx.fail(...)` so TypeScript narrows the failed branch. */
-  fail(message: string, at?: Position): never;
+  fail(message: string, options?: ContractFailOptions | Position): never;
   /** Lifts a statement to the head of the enclosing function. */
   hoist(code: string): void;
   /** Typed now; accessing it fails clearly until phase 5 implements stores. */
@@ -805,6 +821,71 @@ function syntheticExpr(code: string): Expr {
  */
 function failAt(tagName: string, message: string, at: Position): never {
   return failForOwner(`\`<${tagName}>\``, message, at);
+}
+
+function isPosition(value: unknown): value is Position {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as Position).line === "number" &&
+    typeof (value as Position).column === "number"
+  );
+}
+
+/**
+ * A contract hook's `ctx.fail`: the second argument is a `Position` (the
+ * original form) or a `ContractFailOptions`; anything else is a mistake in
+ * the hook, reported at `fallback` in the hook's own words.
+ */
+function failFromHook(
+  owner: string,
+  message: string,
+  arg: unknown,
+  fallback: Position,
+): never {
+  const misuse = (what: string): never =>
+    failForOwner(
+      owner,
+      `\`ctx.fail\` takes a position or \`{ at?, code? }\`: ${what}`,
+      fallback,
+    );
+  let at = fallback;
+  let code: string | undefined;
+  if (arg !== undefined) {
+    if (isPosition(arg)) {
+      at = arg;
+    } else if (typeof arg !== "object" || arg === null || Array.isArray(arg)) {
+      return misuse(`got ${arg === null ? "null" : typeof arg}`);
+    } else {
+      const options = arg as { at?: unknown; code?: unknown };
+      const extra = Object.keys(options).filter(
+        (key) => key !== "at" && key !== "code",
+      );
+      if (extra.length > 0) {
+        return misuse(`unknown option \`${extra[0]}\``);
+      }
+      if (options.at !== undefined) {
+        if (!isPosition(options.at)) {
+          return misuse("`at` must be a position with `line` and `column`");
+        }
+        at = options.at;
+      }
+      if (options.code !== undefined) {
+        if (typeof options.code !== "string" || options.code === "") {
+          return misuse("`code` must be a non-empty string");
+        }
+        code = options.code;
+      }
+    }
+  }
+  try {
+    return failForOwner(owner, message, at);
+  } catch (error) {
+    if (code !== undefined && isTranslateError(error)) {
+      error.diagnosticCode = code;
+    }
+    throw error;
+  }
 }
 
 /** An already formatted owner chain, shared by contracts at every depth. */
@@ -2754,7 +2835,8 @@ export function runAnalyzeHooks(
     // start reading to understand what the whole set looked like.
     const analyzeContext: AnalyzeContext = {
       store: storeFor(ctx, name),
-      fail: (message, at) => failAt(name, message, at ?? first.loc),
+      fail: (message, options) =>
+        failFromHook(`\`<${name}>\``, message, options, first.loc),
       declare: (kind, declaredName, options) => {
         ctx.contractDerived ??= [];
         ctx.contractDerived.push({
@@ -3024,7 +3106,7 @@ export function transformCustomTag(
   const tagContext: TransformContext = {
     build: builders,
     hoist: (code) => ctx.hoist(code, node),
-    fail: (message, at) => failForOwner(owner, message, at ?? call.loc),
+    fail: (message, options) => failFromHook(owner, message, options, call.loc),
     gensym: (hint) => gensymFor(ctx, call.name, hint),
     store: storeFor(ctx, call.name),
   };

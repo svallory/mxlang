@@ -234,7 +234,7 @@ altogether: core validates the call and lowers it to a `DelegatedTag` carrying t
 call's attributes (decision 130). On a host that does not claim the name it
 still fails with "neither a `transform` nor a template".
 
-Write failures as `throw ctx.fail(message, position?)`. TypeScript does not
+Write failures as `throw ctx.fail(message, { at?, code? })` (a bare position still works as `at`); `code` reaches `IrDiagnostic.code`. TypeScript does not
 reliably narrow after a bare call through the parameter property `ctx.fail`,
 despite its `never` return type. Unexpected exceptions are wrapped with the tag
 name and call-site position; an existing `TranslateError` passes through.

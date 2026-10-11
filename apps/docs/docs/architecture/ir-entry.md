@@ -47,7 +47,7 @@ resource="post" table="posts"
 
 `lowerSource` never throws for anything in the source. A parse error, a rejected construct and a failed contract are each an error diagnostic, and every independent error of the file is reported once, in position order. A bug in core that surfaces with no position is reported at `1:0` with an `internal error: ` prefix, so a caller never has to wrap the call.
 
-`offset` is the UTF-16 offset of `line`/`column`, so a consumer needs no line table (`-1` when `file` names another file, whose text `lowerSource` does not have). `code` is set when the error carries a machine-readable code; today only a dialect's `ctx.fail(message, { code })` gives one.
+`offset` is the UTF-16 offset of `line`/`column`, so a consumer needs no line table (`-1` when `file` names another file, whose text `lowerSource` does not have). `code` is set when the error carries a machine-readable code; a dialect's `ctx.fail(message, { code })` and a contract hook's `ctx.fail(message, { at?, code? })` give one.
 
 ### `SpannedIr`
 
