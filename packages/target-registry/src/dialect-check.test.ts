@@ -478,10 +478,10 @@ describe("checkDialectFile", () => {
       },
     );
 
-    it("a `tagExtensions` entry repeating an `extensions` one is not claimed with them", () => {
+    it("a `tagExtensions` list repeating one `extensions` entry (so core refuses it) is not claimed, `.concept` included", () => {
       const project = probeProject(
         {},
-        { manifest: { tagExtensions: [".probe"], tagDirs: [] } },
+        { manifest: { tagExtensions: [".probe", ".concept"], tagDirs: [] } },
       );
       expect(dialectExtensions(project.dir)).toEqual([".probe", ".probe.mx"]);
     });
