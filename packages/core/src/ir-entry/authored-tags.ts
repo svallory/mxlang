@@ -30,6 +30,8 @@ export interface AuthoredTag {
   /** 1-based line, 0-based column, as core. */
   line: number;
   column: number;
+  /** The file offset of the `<`: the identity of this occurrence. */
+  offset: number;
   /** Where the whole element ends (after its closing tag), when known. */
   endLine?: number;
   endColumn?: number;
@@ -186,6 +188,7 @@ export function scanAuthoredTags(
           name,
           line: start.line,
           column: start.column,
+          offset: node.start,
           endLine: end.line,
           endColumn: end.column,
         });

@@ -211,6 +211,8 @@ export type ChildNode =
       /** The tag's name; the canonical name for a wildcard child. */
       name: string;
       loc: Position;
+      /** The file offset of the tag's `<` (an MX node), when it has one. */
+      offset?: number;
       hint?: string;
       /** How a wildcard child was written (decision 147). */
       alias?: TagAlias;
@@ -909,6 +911,7 @@ function failForOwner(
   message: string,
   at: Position,
   code?: string,
+  occurrence?: TagOccurrence,
 ): never {
   const error = new TranslateError(
     `${owner}: ${message}`,
@@ -917,7 +920,26 @@ function failForOwner(
     at.file,
   );
   if (code !== undefined) error.diagnosticCode = code;
+  if (occurrence !== undefined) occurrences.set(error, occurrence);
   throw error;
+}
+
+/** The authored tag a "not allowed here" error is about. */
+export interface TagOccurrence {
+  readonly name: string;
+  /** The file offset of the tag's `<`, as the authored-tag scan reports it. */
+  readonly offset: number;
+}
+
+/**
+ * Which tag occurrence each `MX_TAG_NOT_ALLOWED` error is about. Internal:
+ * `lowerSource` reads it to give a tag that is also unknown one error, not two.
+ */
+const occurrences = new WeakMap<TranslateError, TagOccurrence>();
+
+/** The tag occurrence `error` (a not-allowed error) is about, when recorded. */
+export function tagOccurrenceOf(error: unknown): TagOccurrence | undefined {
+  return error instanceof TranslateError ? occurrences.get(error) : undefined;
 }
 
 export function buildersFor(
@@ -1581,6 +1603,9 @@ export function validateCustomTagChildren(
             node.kind === "ChildText"
               ? TEXT_NOT_ALLOWED_CODE
               : TAG_NOT_ALLOWED_CODE,
+            node.kind === "ChildTag" && node.offset !== undefined
+              ? { name: node.name, offset: node.offset }
+              : undefined,
           );
         }
         leaves.push(node);

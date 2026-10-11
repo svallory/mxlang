@@ -62,7 +62,14 @@ describe("cold lookup cache", () => {
         DEFAULT_TAG,
       ),
     ).toEqual([
-      { name, line: 1, column: 0, endLine: 1, endColumn: name.length + 3 },
+      {
+        name,
+        line: 1,
+        column: 0,
+        offset: 0,
+        endLine: 1,
+        endColumn: name.length + 3,
+      },
     ]);
   });
 });

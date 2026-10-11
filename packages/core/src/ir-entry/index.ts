@@ -30,7 +30,11 @@ import {
 } from "../compile.ts";
 import { claimedFields } from "../contract-fields.ts";
 import { type MxWarning, TranslateError } from "../core.ts";
-import { type CustomTag, registrationView } from "../custom-tags.ts";
+import {
+  type CustomTag,
+  registrationView,
+  tagOccurrenceOf,
+} from "../custom-tags.ts";
 import type { HostDeclarations } from "../declarations.ts";
 import { UNKNOWN_TAG_CODE } from "../diagnostic-codes.ts";
 import type { Ir } from "../ir.ts";
@@ -283,7 +287,21 @@ export function lowerSource(
           ? { end: { line: tag.endLine, column: tag.endColumn } }
           : {}),
       }));
-      return failed(labelInside([...flattenErrors(error), ...errors], ranges));
+      // An unknown tag inside a closed parent got `MX_TAG_NOT_ALLOWED` from
+      // the lowering and `MX_UNKNOWN_TAG` from the scan: one tag, two errors.
+      // The unknown tag is the cause, so the not-allowed error about the same
+      // occurrence (name and offset, recorded when it was raised) is dropped.
+      const unknownOccurrences = new Set(
+        unknown.map((tag) => `${tag.offset}:${tag.name}`),
+      );
+      const lowering = flattenErrors(error).filter((entry) => {
+        const occurrence = tagOccurrenceOf(entry);
+        return (
+          occurrence === undefined ||
+          !unknownOccurrences.has(`${occurrence.offset}:${occurrence.name}`)
+        );
+      });
+      return failed(labelInside([...lowering, ...errors], ranges));
     } catch (scanError) {
       return failed([error, scanError]);
     }

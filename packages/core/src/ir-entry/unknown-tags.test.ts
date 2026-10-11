@@ -109,14 +109,10 @@ describe('unknownTags: "reject"', () => {
 
   it("lets a known parent's closed children error stand (no unknown tag precedes it)", () => {
     const { diagnostics } = parse("<resource>\n  <bad/>\n</resource>");
-    // The closed-children error is first; `<bad>` is also an unknown tag, at
-    // the same position, and both stay: two different errors are never merged.
+    // `<bad>` is an unknown tag inside a closed parent: the unknown-tag error
+    // is the cause and the only one. The closed-children error it also got is
+    // dropped, as it is about the same occurrence.
     expect(diagnostics.map((d) => [d.line, d.column, d.message])).toEqual([
-      [
-        2,
-        2,
-        "`<resource>`: `<bad>` is not allowed here; allowed children: `<attributes>`, `<relationships>`",
-      ],
       [2, 2, "`<bad>` is not a known tag: it has no contract in `customTags`"],
     ]);
   });
@@ -166,12 +162,11 @@ describe('unknownTags: "reject"', () => {
     const { diagnostics } = parse(
       "<resource>\n  <bad/>\n</resource>\n<widget/>",
     );
-    // The core error comes first, `<bad>` as an unknown tag at the same
-    // position next, and the later unknown tag is listed beside them.
-    expect(diagnostics).toHaveLength(3);
-    expect(diagnostics[0]?.message).toContain("`<bad>` is not allowed here");
-    expect(diagnostics[1]?.message).toContain("`<bad>` is not a known tag");
-    expect(diagnostics[2]).toMatchObject({
+    // `<bad>` is reported once, as an unknown tag, and the later unknown tag
+    // is listed beside it.
+    expect(diagnostics).toHaveLength(2);
+    expect(diagnostics[0]?.message).toContain("`<bad>` is not a known tag");
+    expect(diagnostics[1]).toMatchObject({
       message: expect.stringContaining("`<widget>`"),
       line: 4,
       column: 0,
@@ -208,11 +203,10 @@ describe('unknownTags: "reject"', () => {
       {},
       tags,
     );
-    // The text body's `<foo/>` is not listed: only `<bad>`, as the closed
-    // children error and as an unknown tag at the same position.
-    expect(diagnostics.map((d) => d.line)).toEqual([3, 3]);
-    expect(diagnostics[0]?.message).toContain("`<bad>` is not allowed here");
-    expect(diagnostics[1]?.message).toContain("`<bad>` is not a known tag");
+    // The text body's `<foo/>` is not listed: only `<bad>`, once, as an
+    // unknown tag.
+    expect(diagnostics.map((d) => d.line)).toEqual([3]);
+    expect(diagnostics[0]?.message).toContain("`<bad>` is not a known tag");
   });
 
   it("does not reuse a stale parse lookup across calls with different text tags", () => {
@@ -226,9 +220,8 @@ describe('unknownTags: "reject"', () => {
         {},
         withText(name),
       );
-      expect(diagnostics.map((d) => d.line)).toEqual([3, 3]);
-      expect(diagnostics[0]?.message).toContain("`<bad>` is not allowed here");
-      expect(diagnostics[1]?.message).toContain("`<bad>` is not a known tag");
+      expect(diagnostics.map((d) => d.line)).toEqual([3]);
+      expect(diagnostics[0]?.message).toContain("`<bad>` is not a known tag");
     }
   });
 
@@ -242,9 +235,8 @@ describe('unknownTags: "reject"', () => {
       {},
       tags,
     );
-    expect(diagnostics.map((d) => d.line)).toEqual([3, 3]);
-    expect(diagnostics[0]?.message).toContain("`<bad>` is not allowed here");
-    expect(diagnostics[1]?.message).toContain("`<bad>` is not a known tag");
+    expect(diagnostics.map((d) => d.line)).toEqual([3]);
+    expect(diagnostics[0]?.message).toContain("`<bad>` is not a known tag");
   });
 
   it("keeps the parse shape of a preserveWhitespace tag when listing unknown tags", () => {
@@ -258,11 +250,9 @@ describe('unknownTags: "reject"', () => {
       tags,
     );
     // preserveWhitespace changes whitespace only: `<foo>` is still a tag,
-    // and it opens before the `<bad>` children error. `<bad>` is reported
-    // twice, as the closed-children error and as an unknown tag.
+    // and it opens before `<bad>`, which is reported once, as an unknown tag.
     expect(diagnostics).toMatchObject([
       { message: expect.stringContaining("`<foo>`"), line: 2 },
-      { message: expect.stringContaining("is not allowed here"), line: 5 },
       {
         message: expect.stringContaining("`<bad>` is not a known tag"),
         line: 5,
@@ -695,7 +685,9 @@ describe("wildcard children (decision 147) under unknownTags: reject", () => {
       {},
       tags,
     );
-    expect(diagnostics[0]?.message).toContain("is not allowed here");
+    // An unknown tag in a closed parent is reported once, as unknown.
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.message).toContain("`<T1>` is not a known tag");
   });
 
   it("an unclaimed name outside any contract is still unknown", () => {
@@ -723,5 +715,191 @@ describe("wildcard children (decision 147) under unknownTags: reject", () => {
       severity: "error",
       message: expect.stringContaining("did you mean the explicit child"),
     });
+  });
+});
+
+describe("one error for an unknown tag in a closed parent", () => {
+  const closedTags: Record<string, CustomTag> = {
+    attributes: { children: { uuid: {}, string: {} } },
+    uuid: {},
+    string: {},
+    // Closed too, but not the same parent: its own allowed child.
+    relations: { children: { link: {} } },
+    link: {},
+    set: { defaultTag: "setter" },
+    setter: {},
+    // No text allowed, tags only.
+    rows: { children: { row: {} } },
+    row: {},
+  };
+
+  function run(source: string, mode: "allow" | "reject") {
+    return lowerSource(source, "/u.mx", {
+      customTags: closedTags,
+      tagRules: "none",
+      unknownTags: mode,
+    });
+  }
+  type Row = [
+    code: string | undefined,
+    line: number,
+    column: number,
+    offset: number,
+  ];
+  function rows(source: string, mode: "allow" | "reject"): Row[] {
+    return run(source, mode).diagnostics.map((d) => [
+      d.code,
+      d.line,
+      d.column,
+      d.offset,
+    ]);
+  }
+
+  // [label, source, allow rows, reject rows]. `entity:Todo` and `<:x/>` sit
+  // outside a closed parent: unchanged by the drop, pinned so it stays so.
+  const probes: Array<[string, string, Row[], Row[]]> = [
+    [
+      "entity:Todo at the top level",
+      "entity:Todo\n",
+      [],
+      [["MX_UNKNOWN_TAG", 1, 0, 0]],
+    ],
+    [
+      "concise uuid:id under attributes",
+      "attributes\n  uuid:id\n",
+      [["MX_TAG_NOT_ALLOWED", 2, 2, 13]],
+      [["MX_UNKNOWN_TAG", 2, 2, 13]],
+    ],
+    [
+      "<string:title/> under <attributes>",
+      "<attributes><string:title/></attributes>\n",
+      [["MX_TAG_NOT_ALLOWED", 1, 12, 12]],
+      [["MX_UNKNOWN_TAG", 1, 12, 12]],
+    ],
+    [
+      "<:x/> under <set>",
+      "<set><:x/></set>\n",
+      [],
+      [["MX_UNKNOWN_TAG", 1, 5, 5]],
+    ],
+    [
+      "foo under attributes",
+      "attributes\n  foo\n",
+      [["MX_TAG_NOT_ALLOWED", 2, 2, 13]],
+      [["MX_UNKNOWN_TAG", 2, 2, 13]],
+    ],
+  ];
+
+  it.each(probes)("%s", (_label, source, allow, reject) => {
+    expect(rows(source, "allow")).toEqual(allow);
+    expect(rows(source, "reject")).toEqual(reject);
+  });
+
+  it("reject: the surviving error is the unknown-tag one, with its own message", () => {
+    const { ir, diagnostics } = run("attributes\n  uuid:id\n", "reject");
+    expect(ir).toBeUndefined();
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.message).toBe(
+      "`<uuid:id>` is not a known tag: it has no contract in `customTags`",
+    );
+  });
+
+  it("a declared tag in a closed parent keeps one MX_TAG_NOT_ALLOWED in both modes", () => {
+    // `link` is declared, just not a child of `attributes`.
+    const source = "attributes\n  link\n";
+    for (const mode of ["allow", "reject"] as const) {
+      expect(rows(source, mode)).toEqual([["MX_TAG_NOT_ALLOWED", 2, 2, 13]]);
+    }
+  });
+
+  it("two unknown children of one closed parent: one MX_UNKNOWN_TAG each", () => {
+    const source = "<attributes><foo/><bar/></attributes>\n";
+    expect(rows(source, "reject")).toEqual([
+      ["MX_UNKNOWN_TAG", 1, 12, 12],
+      ["MX_UNKNOWN_TAG", 1, 18, 18],
+    ]);
+  });
+
+  it("unknown children under two closed parents: one MX_UNKNOWN_TAG each", () => {
+    const source =
+      "<attributes><foo/></attributes>\n<relations><bar/></relations>\n";
+    const reject = rows(source, "reject");
+    expect(reject).toEqual([
+      ["MX_UNKNOWN_TAG", 1, 12, 12],
+      ["MX_UNKNOWN_TAG", 2, 11, 43],
+    ]);
+  });
+
+  it("a declared not-allowed tag beside an unknown sibling keeps both, once each", () => {
+    const source = "<attributes><link/><foo/></attributes>\n";
+    const { diagnostics } = run(source, "reject");
+    expect(diagnostics.map((d) => [d.code, d.offset])).toEqual([
+      ["MX_TAG_NOT_ALLOWED", 12],
+      ["MX_UNKNOWN_TAG", 19],
+    ]);
+    expect(diagnostics[0]?.message).toContain("`<link>` is not allowed here");
+    expect(diagnostics[1]?.message).toContain("`<foo>` is not a known tag");
+  });
+
+  it("the same unknown name twice: each occurrence is matched by its offset", () => {
+    const source = "<attributes><foo/><foo/></attributes>\n";
+    expect(rows(source, "reject")).toEqual([
+      ["MX_UNKNOWN_TAG", 1, 12, 12],
+      ["MX_UNKNOWN_TAG", 1, 18, 18],
+    ]);
+  });
+
+  it("an attribute tag a closed parent does not allow keeps its own error", () => {
+    const tags: Record<string, CustomTag> = {
+      ...closedTags,
+      panel: { attributeTags: { title: {} } },
+    };
+    const source = "<panel><@x/></panel>\n";
+    const results = (["allow", "reject"] as const).map(
+      (mode) =>
+        lowerSource(source, "/u.mx", {
+          customTags: tags,
+          tagRules: "none",
+          unknownTags: mode,
+        }).diagnostics,
+    );
+    // The scan never reports `<@x>` as unknown, so reject adds nothing.
+    expect(results[1]).toEqual(results[0]);
+    expect(results[0]).toHaveLength(1);
+    expect(results[0]?.[0]?.code).not.toBe("MX_UNKNOWN_TAG");
+  });
+
+  it("text where a closed parent allows none keeps MX_TEXT_NOT_ALLOWED beside an unknown child", () => {
+    const text = lowerSource("<rows>hello</rows>\n", "/u.mx", {
+      customTags: closedTags,
+      tagRules: "none",
+      unknownTags: "reject",
+    });
+    expect(text.diagnostics.map((d) => d.code)).toEqual([
+      "MX_TEXT_NOT_ALLOWED",
+    ]);
+    const both = run("<rows>hello<foo/></rows>\n", "reject");
+    // Lowering stops at the first not-allowed child (the text); the unknown
+    // tag is the scan's. Neither error replaces the other.
+    expect(both.diagnostics.map((d) => d.code).sort()).toEqual([
+      "MX_TEXT_NOT_ALLOWED",
+      "MX_UNKNOWN_TAG",
+    ]);
+  });
+
+  it("an unrelated contract error elsewhere still comes back beside the unknown-tag error", () => {
+    const tags: Record<string, CustomTag> = {
+      ...closedTags,
+      needy: { attributes: { label: { type: "string", required: true } } },
+    };
+    const { diagnostics } = lowerSource(
+      "<attributes><foo/></attributes>\n<needy/>\n",
+      "/u.mx",
+      { customTags: tags, tagRules: "none", unknownTags: "reject" },
+    );
+    expect(diagnostics.map((d) => d.code)).toContain("MX_UNKNOWN_TAG");
+    expect(diagnostics.map((d) => d.code)).not.toContain("MX_TAG_NOT_ALLOWED");
+    expect(diagnostics.length).toBe(2);
+    expect(diagnostics.some((d) => d.message.includes("<needy>"))).toBe(true);
   });
 });

@@ -3759,6 +3759,7 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
           kind: "ChildTag",
           name: wildcard?.canonical ?? name,
           loc,
+          ...(mxSpanOf(node) ? { offset: mxSpanOf(node)?.sourceStart } : {}),
           ...(why ? { hint: why } : {}),
           ...(wildcard ? { alias: aliasOf(ctx, node, wildcard) } : {}),
           ...(known ? { known } : {}),

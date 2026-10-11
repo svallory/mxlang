@@ -68,11 +68,13 @@ describe("MX_UNKNOWN_TAG", () => {
   });
 
   it("keeps the code of an error the unknown-tag label rewrites", () => {
-    const diagnostics = only(`<opem>\n  <card><bad/></card>\n</opem>\n`, {
+    // `<empty>` is declared but not a child of `<card>`: its not-allowed error
+    // stays (an unknown `<bad>` there would give the unknown-tag error alone).
+    const diagnostics = only(`<opem>\n  <card><empty/></card>\n</opem>\n`, {
       customTags: closed,
       unknownTags: "reject",
     });
-    const inner = diagnostics.find((d) => d.message.includes("<bad>"));
+    const inner = diagnostics.find((d) => d.message.includes("<empty>"));
     expect(inner).toMatchObject({
       code: "MX_TAG_NOT_ALLOWED",
       line: 2,
