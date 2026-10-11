@@ -35,7 +35,7 @@ export interface DialectDiagnostic {
   column: number;
   /** UTF-16 code-unit offset in the file. */
   offset: number;
-  /** The dialect's machine-readable code (`ctx.fail`'s `code`), when it gave one. */
+  /** A machine-readable code, when there is one: the dialect's (`ctx.fail`'s `code`) or core's warning code (`MX_DUPLICATE_ATTRIBUTE`). */
   code?: string;
 }
 

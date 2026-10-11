@@ -752,7 +752,7 @@ tool matches the rule, not the wording.
 | `onClick` next to `on-click` | distinct names (Marko registers both handlers); silent |
 | Angular `x`, `[x]`, `(x)`, `#x` | distinct names; silent |
 | The same name on different tags | silent |
-| `run [after=1] (x) { go(x) }`, `run a=1, (x) { go(x) }` (a default method after other attributes) | one default `value`, the method; silent. The parser reads the method's empty name twice at one offset, which is one authored attribute, not a duplicate |
+| `run [after=1] (x) { go(x) }`, `run a=1, (x) { go(x) }`, `<run after=1, (x) { go(x) }/>` (a default method after other attributes) | one default `value`, the method; silent. The parser reads the method's empty name twice at one offset, which is one authored attribute, not a duplicate |
 | `<Card a=1 a=2/>`, `<@x a=1 a=2/>` | the callee receives one `a`, the last |
 
 Spreads follow the same rule on a string-concatenating target: `@mxlang/target-html`
@@ -765,12 +765,15 @@ The warning is an mx-only lint beyond Marko (which accepts ordinary duplicate
 attributes silently), recorded in `divergences.md`; decisions 133 and 135.
 
 A default method after another attribute is Marko's own reading too: the
-concise `run [after=1] (x) { go(x) }` compiles to one default method, as does
-`run (x) { go(x) }`. Stock Marko refuses the same bytes after a space-separated
-attribute or in the HTML form (`run after=1 (x) { go(x) }`,
-`<run after=1 (x) { go(x) }/>`): the method is read as the rest of `after`'s
-value, so they are the error ``Expected a single expression, but found `{` after
-it.`` at the `{`, and so they are here.
+concise `run [after=1] (x) { go(x) }`, the comma forms `run a=1, (x) { go(x) }`
+and `<run after=1, (x) { go(x) }/>`, and `run (x) { go(x) }` all compile to one
+default method. After a space-separated attribute value, in concise or HTML
+(`run after=1 (x) { go(x) }`, `<run after=1 (x) { go(x) }/>`), Marko reads the
+method as the rest of `after`'s value, so those are the error ``Expected a
+single expression, but found `{` after it.`` at the `{`, and so they are here.
+Two default methods in a row keep one warning for the dropped one. On `<let>`
+and `<return>` Marko does count the parser's empty twin: `let/x [valueChange=f]
+(y) { go(y) }` is `Invalid duplicate value attribute.`.
 
 Builtin value syntax is different: duplicate shorthand/named/bound `value`
 spellings on `<let>` and `<return>` fail with Marko's

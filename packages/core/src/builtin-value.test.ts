@@ -52,6 +52,24 @@ describe("builtin duplicate value validation (Marko 6.3.51)", () => {
       }
       expect(error).toMatchObject({ message, line: 1, column });
     });
+  // Marko counts the parser's empty twin of a default method here, which is
+  // why core resolves it in lowering and not in a front-end collapse.
+  for (const source of [
+    "let/x [valueChange=f] (y) { go(y) }",
+    "<let/x valueChange=f, (y) { go(y) }/>",
+  ])
+    it(`${source} is Marko's duplicate value error`, () => {
+      let error: unknown;
+      try {
+        check(source);
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toMatchObject({
+        message: "Invalid duplicate value attribute.",
+        line: 1,
+      });
+    });
   it("positions a multiline duplicate on its authored value", () => {
     let error: unknown;
     try {

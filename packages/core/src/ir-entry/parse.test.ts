@@ -7,6 +7,7 @@ import type { MxWarning } from "../core.ts";
 import type { CustomTag } from "../custom-tags.ts";
 import type { Attr, DelegatedTag } from "../ir.ts";
 import type { SourceSpan } from "../mapping.ts";
+import type { Dialect } from "../syntax-table.ts";
 import type { TemplateBackedTag } from "../template-tag.ts";
 import {
   type LowerSourceOptions,
@@ -788,6 +789,7 @@ describe("a default method after other attributes (one `value`, no warning)", ()
     ["run [after=1] value(x) { go(x) }\n", ["after", "value"]],
     ["run [after=1] [b=2] (x) { go(x) }\n", ["after", "b", "value"]],
     ["run a=1, (x) { go(x) }\n", ["a", "value"]],
+    ["<run after=1, (x) { go(x) }/>\n", ["after", "value"]],
     ["<run(x) { go(x) }/>\n", ["value"]],
   ])("%j lowers one `value` and no diagnostic", (source, names) => {
     const { diagnostics, names: got } = method(source);
@@ -801,7 +803,116 @@ describe("a default method after other attributes (one `value`, no warning)", ()
     const value = tag.attrs.find(
       (a: SpannedAttr) => a.kind !== "spread" && a.name === "value",
     );
-    expect(value?.kind).not.toBe("static");
+    expect(value?.kind).toBe("dynamic");
+    expect((value as { value: { code: string } }).value.code).toBe(
+      "function (x) { go(x); }",
+    );
+  });
+
+  it("the Mesh shape with a destructured parameter is one value, silent", () => {
+    expect(
+      method("run [after=1] ({ self, actions }) { go(self, actions) }\n"),
+    ).toEqual({ diagnostics: [], names: ["after", "value"] });
+  });
+
+  it("a second dropped method warns once, not twice", () => {
+    const { diagnostics, names } = method(
+      "run [after=1] (x) { a(x) } (y) { b(y) }\n",
+    );
+    expect(names).toEqual(["after", "value"]);
+    expect(diagnostics).toMatchObject([
+      {
+        code: "MX_DUPLICATE_ATTRIBUTE",
+        message:
+          "duplicate attribute `value`: the later one at 1:28 wins, so this one is dropped",
+        column: 14,
+      },
+    ]);
+  });
+
+  it("a spelled `value` before the method is still one warning", () => {
+    expect(method("run [value=1] (x) { go(x) }\n").diagnostics).toMatchObject([
+      {
+        code: "MX_DUPLICATE_ATTRIBUTE",
+        message:
+          "duplicate attribute `value`: the later one at 1:15 wins, so this one is dropped",
+        column: 5,
+      },
+    ]);
+    expect(
+      method("run value(x) { a(x) } value(y) { b(y) }\n").diagnostics,
+    ).toMatchObject([
+      {
+        code: "MX_DUPLICATE_ATTRIBUTE",
+        message:
+          "duplicate attribute `value`: the later one at 1:23 wins, so this one is dropped",
+        column: 4,
+      },
+    ]);
+  });
+
+  it("a dialect hook placing a bare default then a method value still warns", () => {
+    const dialect: Dialect = {
+      id: "probe",
+      name: "Probe",
+      table: {
+        attributeTriggers: [
+          {
+            id: "probe",
+            chars: "!",
+            match: "![a-z]+",
+            standIn: "keep",
+            node: { call: "probe" },
+          },
+        ],
+      },
+      lowerTrigger: (_id, _text, _span, ctx) => [
+        ctx.attribute(null, true),
+        ctx.attribute(null, ctx.value as never),
+      ],
+    };
+    const result = lowerSource("kind !x(p) { b }\n", "/t.mx", {
+      dialect,
+    });
+    expect(result.diagnostics).toMatchObject([
+      { code: "MX_DUPLICATE_ATTRIBUTE", severity: "warning", column: 5 },
+    ]);
+  });
+
+  it("a dialect hook building two defaults at one trigger still warns", () => {
+    let first: "a" | true = "a";
+    const dialect: Dialect = {
+      id: "probe",
+      name: "Probe",
+      table: {
+        attributeTriggers: [
+          {
+            id: "probe",
+            chars: "!",
+            match: "![a-z]+",
+            standIn: "keep",
+            node: { call: "probe" },
+          },
+        ],
+      },
+      lowerTrigger: (_id, _text, _span, ctx) => [
+        ctx.attribute(null, first),
+        ctx.attribute(null, "b"),
+      ],
+    };
+    for (const [source, value] of [
+      ["kind !x\n", "a"],
+      ["<kind !x/>\n", "a"],
+      ["kind !x\n", true],
+    ] as const) {
+      first = value;
+      const result = lowerSource(source, "/t.mx", { dialect });
+      expect(result.diagnostics).toMatchObject([
+        { code: "MX_DUPLICATE_ATTRIBUTE", severity: "warning" },
+      ]);
+      const tag = firstTag(result.ir as NonNullable<typeof result.ir>);
+      expect(tag.attrs).toHaveLength(1);
+    }
   });
 
   it.each([

@@ -1228,12 +1228,37 @@ function lowerAttrs(
   isElement = false,
 ): Attr[] {
   rejectBadRefinements(ctx, node);
-  const lowered = tagAttributesOf(node).map((attr: Node) =>
+  const lowered = withoutParserTwins(tagAttributesOf(node)).map((attr: Node) =>
     lowerAttr(ctx, attr, on, isElement, posOf(ctx, node)),
   );
   rejectSecondMember(lowered);
   const attrs = resolveDuplicateAttrs(ctx, lowered);
   return ctx.declarations.orderAttrs?.(name, attrs, on, ctx) ?? attrs;
+}
+
+/**
+ * htmljs-parser 5.18.0 reads one authored default method after another
+ * attribute (`run [a=1] (x) { y }`, `run a=1, (x) { y }`) as TWO empty-named
+ * attributes at the same offset: a bare one, then the method. Marko's
+ * last-wins keeps the method, so the pair is one attribute, not an authored
+ * duplicate. This drops the bare twin, and only a twin: an `MxAttribute` with
+ * no name, no value and no trigger, immediately followed by a nameless
+ * `MxMethod` attribute at the same offset. A trigger-built default
+ * (`ctx.attribute(null, v)`) has a trigger mark and is never one.
+ */
+function withoutParserTwins(attrs: Node[]): Node[] {
+  const bare = (n: Node) =>
+    n?.type === "MxAttribute" && n.name === null && !n.mxTrigger;
+  return attrs.filter((attr, i) => {
+    const next = attrs[i + 1];
+    return !(
+      bare(attr) &&
+      attr.value == null &&
+      bare(next) &&
+      next.value?.type === "MxMethod" &&
+      next.start === attr.start
+    );
+  });
 }
 
 /**
@@ -1298,18 +1323,6 @@ function resolveDuplicateAttrs(ctx: Ctx, attrs: Attr[]): Attr[] {
     const winner = attr.kind === "spread" ? undefined : survivor.get(attr.name);
     if (attr.kind === "spread" || !winner || winner === attr) {
       kept.push(attr);
-      continue;
-    }
-    // htmljs-parser 5.18.0 reads one authored default method after another
-    // attribute (`run [a=1] (x) { y }`, `run a=1, (x) { y }`) as TWO
-    // empty-named attributes at the same offset, and Marko's last-wins keeps
-    // the method. That pair is one attribute, not an authored duplicate: drop
-    // the empty one without a warning. Two authored defaults never share an
-    // offset (`<a ="x" ="y"/>` is two places).
-    if (
-      attr.nameSpan.sourceStart === attr.nameSpan.sourceEnd &&
-      attr.nameSpan.sourceStart === winner.nameSpan.sourceStart
-    ) {
       continue;
     }
     // A dropped occurrence: warn in document order, at its own name.
