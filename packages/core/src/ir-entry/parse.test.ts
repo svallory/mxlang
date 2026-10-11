@@ -776,7 +776,9 @@ describe("a default method after other attributes (one `value`, no warning)", ()
     const tag = firstTag(result.ir as NonNullable<typeof result.ir>);
     return {
       diagnostics: result.diagnostics,
-      names: tag.attrs.map((a: SpannedAttr) => a.name),
+      names: tag.attrs.map((a: SpannedAttr) =>
+        a.kind === "spread" ? "..." : a.name,
+      ),
     };
   };
 
@@ -796,7 +798,9 @@ describe("a default method after other attributes (one `value`, no warning)", ()
   it("keeps the method, not the empty twin, as the surviving value", () => {
     const result = lowerSource("run [after=1] (x) { go(x) }\n", "/t.mx");
     const tag = firstTag(result.ir as NonNullable<typeof result.ir>);
-    const value = tag.attrs.find((a: SpannedAttr) => a.name === "value");
+    const value = tag.attrs.find(
+      (a: SpannedAttr) => a.kind !== "spread" && a.name === "value",
+    );
     expect(value?.kind).not.toBe("static");
   });
 
