@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   cleanupProbeProjects,
   PROBE_CONTRACT_MESSAGE,
+  PROBE_DEPENDS_ON_HOOK_MODULE,
   PROBE_DIALECT_MODULE,
   PROBE_MANIFEST,
   PROBE_SOURCES,
@@ -752,6 +753,72 @@ describe("checkDialectFile: tag discovery diagnostics", () => {
     expect([...dependencies]).toContain(
       project.path("concepts/money.thing.probe"),
     );
+  });
+});
+
+describe("checkDialectFile: files a hook reads through ctx.dependsOn", () => {
+  const project = () =>
+    tagDiscoveryProject({
+      "dialect.cjs": PROBE_DEPENDS_ON_HOOK_MODULE,
+      "concepts/money.thing.probe": "<x/>\n",
+      "concepts/money.json": "ok\n",
+      "concepts/other.json": "ok\n",
+    });
+
+  it("records the named file as a dependency of the dialect file that calls the tag, and no other", () => {
+    const files = project();
+    const dependencies = new Set<string>();
+    const check = checkDialectFile(
+      files.path("a.probe"),
+      "<money/>\n",
+      dependencies,
+    );
+    expect(check).toEqual({ source: "Probe", diagnostics: [] });
+    expect([...dependencies]).toContain(files.path("concepts/money.json"));
+    expect([...dependencies]).toContain(
+      files.path("concepts/money.thing.probe"),
+    );
+    expect([...dependencies]).not.toContain(files.path("concepts/other.json"));
+  });
+
+  it("a dialect file that calls no tag records none of the hook's files", () => {
+    const files = project();
+    const dependencies = new Set<string>();
+    checkDialectFile(files.path("a.probe"), "<y !ok/>\n", dependencies);
+    expect([...dependencies]).not.toContain(files.path("concepts/money.json"));
+  });
+
+  it("an edit to the named file changes the check; one to a file nobody names does not", () => {
+    const files = project();
+    const check = () =>
+      checkDialectFile(files.path("a.probe"), "<money/>\n")?.diagnostics;
+    expect(check()).toEqual([]);
+    writeFileSync(files.path("concepts/other.json"), "BAD\n");
+    expect(check()).toEqual([]);
+    writeFileSync(files.path("concepts/money.json"), "BAD!\n");
+    expect(check()).toEqual([
+      {
+        severity: "error",
+        message: `\`<money>\`'s definition has errors (concepts/money.thing.probe:1:3)`,
+        line: 1,
+        column: 0,
+        offset: 0,
+        code: "MX_TAG_FILE_ERROR",
+      },
+      {
+        severity: "error",
+        message: `bad money.json (in ${files.path("concepts/money.thing.probe")}:1:3)`,
+        line: 1,
+        column: 0,
+        offset: 0,
+        code: "KIT_BAD",
+        origin: {
+          file: files.path("concepts/money.thing.probe"),
+          line: 1,
+          column: 2,
+        },
+      },
+    ]);
   });
 });
 

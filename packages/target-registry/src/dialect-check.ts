@@ -20,6 +20,7 @@ import {
   reservedExtensionReason,
   routeDialect,
   type ScanResult,
+  tagFileDependencies,
 } from "@mxlang/core";
 import { moduleSegments, scanCached } from "./index.ts";
 
@@ -317,9 +318,10 @@ export function checkDialectFile(
   text: string,
   /**
    * Receives the files the check read: tag files, contracts modules, sidecars
-   * and the manifests and configs the scan read. A tool that re-checks a
-   * file when one of them changes (the language server) passes a set. A file
-   * only a hook's `ctx.dependsOn` names is not among them.
+   * and the manifests and configs the scan read, and what the hooks of the
+   * tag files the check called read (`ctx.dependsOn`, and the tag files those
+   * called). A tool that re-checks a file when one of them changes (the
+   * language server) passes a set.
    */
   dependencies?: Set<string>,
 ): DialectCheck | undefined {
@@ -380,6 +382,11 @@ export function checkDialectFile(
   const customTags =
     Object.keys(scan.customTags).length > 0 ? scan.customTags : undefined;
   const { diagnostics } = lowerSource(text, filePath, { customTags });
+  // The lowering derived the contracts of the tags it called, and a hook
+  // may have read files the scan never saw.
+  for (const file of tagFileDependencies(scan.files.map((f) => f.path))) {
+    dependencies?.add(file);
+  }
   return {
     source: dialect.name,
     diagnostics: [

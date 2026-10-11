@@ -90,6 +90,28 @@ export const PROBE_TAG_HOOK_MODULE = `module.exports.default = {
 };
 `;
 
+/**
+ * The probe dialect whose `tagFile` hook reads `money.json` beside the tag
+ * file, names it with `ctx.dependsOn`, and reports `bad money.json` (1:2,
+ * `KIT_BAD`) when it says BAD. A `.json` file is no file any watcher glob
+ * names, which is the point.
+ */
+export const PROBE_DEPENDS_ON_HOOK_MODULE = `const { readFileSync } = require("node:fs");
+const { dirname, join } = require("node:path");
+module.exports.default = {
+  tagRules: "none",
+  table: {},
+  tagFile(file, ctx) {
+    ctx.dependsOn("money.json");
+    const data = readFileSync(join(dirname(file.path), "money.json"), "utf8");
+    const diagnostics = data.includes("BAD")
+      ? [{ severity: "error", message: "bad money.json", line: 1, column: 2, code: "KIT_BAD" }]
+      : [];
+    return { contract: {}, diagnostics };
+  },
+};
+`;
+
 export const PROBE_TAG_DIALECT = {
   tagDirs: ["concepts", "kinds"],
   tagExtensions: [".thing.probe"],
