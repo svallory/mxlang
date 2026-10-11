@@ -2214,7 +2214,39 @@ to the package root, nearest first, and indexes the files ending in an
 extension the dialect claims (`extensions` and `tagExtensions`) under their
 basename minus the longest claimed suffix, plus `.tag.ts` sidecars unless the
 dialect sets `sidecars: false`. `mx.tags` and `mx.contracts` serve it as they
-serve an MX file. MX's own walk skips a file a dialect with `tagDirs` claims.
+serve an MX file, unless the dialect's manifest sets `mxConfigTags: false`: then
+the dialect's files take no definitions from either, silently (the same config
+still serves `.mx` files, and a call of such a name is an unknown tag), while
+its tag directories (`tagDirs`, or `tags/`) still apply. MX's own walk skips a
+file a dialect with `tagDirs` claims.
+
+**A dialect's own contracts, and precedence.** A dialect ships its vocabulary
+as `contracts` on its module (§13.9.3): every file routed to the dialect, and
+every entry given the dialect as its `dialect` option, registers them beside
+the caller's `customTags` (in the tools, the scan's result). A `.mx` file never
+sees them. For a tag `<x>` in a file of dialect D, highest first:
+
+1. **Core's reserved names, and core's `<try>`.** Any other definition of one
+   is `MX_RESERVED_TAG` and is dropped; in `D.contracts` it fails the dialect at
+   load.
+2. **A file-local PascalCase binding** (an import, a `<define>`, a `<const>`, a
+   tag parameter), as for any registered custom tag.
+3. **D's reserved contracts**: the `contracts` entries whose name D's manifest
+   lists in `reservedTags`. A tag file, an `mx.tags` entry, an `mx.contracts`
+   entry or a `customTags` entry passed to `lowerSource` that defines the name is
+   `MX_RESERVED_TAG` at that definition, and calls are checked against D's
+   contract.
+4. **The passed `customTags`, or the scan**: tag files nearest first, then
+   `mx.tags`, then `mx.contracts`, with their shadow and duplicate warnings. A
+   caller that passes D itself (the `dialect` option) owns D's vocabulary: its
+   `customTags` override every contract of D, reserved ones included, silently.
+5. **D's other contracts.** A project definition of the same name replaces one
+   silently: the dialect's contract is a default. A dialect that forbids
+   replacing a name lists it in `reservedTags`.
+
+Each winner replaces the whole entry. There is no check between `reservedTags`
+and `contracts` in either direction: a reserved name with no contract only
+refuses project definitions, and a contract need not be reserved.
 
 The dialect reads its tag files with its module's `tagFile` hook (§13.9.3). The
 scan never runs it: the first call of the tag does, once per tag file, and the
@@ -2259,6 +2291,7 @@ Each of these diagnostics carries a stable code, `ScanDiagnostic.code` or
 | `MX_TAG_FILE_ERROR` | error, at the call | A call names a dialect tag file the dialect cannot read: `` `<money>` is defined by concepts/money.mesh.mx, but dialect `mesh` has no tagFile hook to read it. ``, or whose definition has errors: `` `<money>`'s definition has errors (concepts/money.mesh.mx:3:2) ``. The tag file's own errors (a refused contract key, a throwing hook, a returned value that is not `{ contract, diagnostics }`) carry it too, unless the hook gave a code. |
 | `MX_TAG_FILE_CYCLE` | error, at the call | Tag files whose lowering calls each other: `` tag files call each other in a cycle: concepts/a.mesh.mx → concepts/b.mesh.mx → concepts/a.mesh.mx ``, at the re-entering call. |
 | `MX_MISPLACED_TAG_FILE` | warning, at the file | A file a dialect with `tagDirs` claims sits in a tag directory outside them: `` `tags/money.mesh.mx` is a Mesh file in `tags/`; Mesh discovers tags in `concepts/`. `` |
+| `MX_INVALID_DIALECT_CONTRACT` | error, at the contract | An entry of a dialect's `contracts` (§13.9.3) cannot register: `` `contracts.if`: `<if>` cannot name a data tag: it is reserved … ``. At the entry's key in the dialect's module when the module writes `contracts` as a literal, else the module's `1:0`; for an explicit `dialect` option, the calling file's `1:0`. The whole dialect fails, so every file of it reports it. A failure the dialect's `checkContract` gave a code keeps that code. |
 | `MX_SIDECAR_IGNORED` | warning, at the file | A `.tag.ts` sidecar that a dialect file's scan meets while that dialect sets `sidecars: false`, in its own tag directories or, for a dialect without `tagDirs`, in `tags/`. The sidecar is not read. |
 | `MX_INVALID_TAG_FILE_NAME` | error, at the file | A dialect tag file's name is not a usable tag name. The file is skipped. |
 | `MX_DOTTED_TAG_FILE_NAME` | warning, at the file | A dialect tag file's name has a dot, which a call cannot write as one tag name. The message names the `tagExtensions` entry that would fix it. |
@@ -3570,11 +3603,11 @@ read throws, as `readFileSync` does.
 | Result field | Meaning |
 |---|---|
 | `ir` | the `SpannedIr` (§13.7.2), or `undefined` when `diagnostics` holds an error |
-| `diagnostics` | `IrDiagnostic`: `{ severity, message, line, column, offset, file?, code? }`. `line` is 1-based and `column` 0-based, as `TranslateError` and `MxWarning`. `offset` is the UTF-16 offset derived from them (`-1` when `file` names another file, whose text `lowerSource` does not have). An error or warning with no source position (core's 0:0, as for a bad `customTags` registration) is file-level: `line: 1`, `column: 0`, `offset: 0`. `code` is the error's `TranslateError.diagnosticCode` when it has one (a dialect's `ctx.fail(message, { code })`, or a contract hook's `ctx.fail(message, { at?, code? })`, or `MX_TAG_FILE_ERROR` for a call to a dialect tag file the dialect cannot read or whose definition has errors, and `MX_TAG_FILE_CYCLE` for tag files that call each other, §9.2), or a warning's `MxWarning.code` (the duplicate-attribute warning is `MX_DUPLICATE_ATTRIBUTE`). Core's own errors a consumer matches carry a stable code too, so it matches the code and never the wording: `MX_UNKNOWN_TAG` (a tag with no contract, under `unknownTags: "reject"`), `MX_RESERVED_TAG` (a `customTags` definition that names a reserved tag, at each call of the name, §13.7.4 Reserved names; such a call gets no `MX_UNKNOWN_TAG` and no `MX_TAG_NOT_ALLOWED`), `MX_TAG_NOT_ALLOWED` (a child tag a `children` contract does not allow; under `unknownTags: "reject"` a child with no contract gets `MX_UNKNOWN_TAG` alone), `MX_TEXT_NOT_ALLOWED` (text where a `children` contract allows none) and `MX_EXPECTED_SINGLE_EXPRESSION` (a second expression after the one an expression position holds). `MX_DIALECT_HOOK_ERROR` is a dialect's `explainUnknownTag` that threw or returned a malformed value (§13.9.3), at the tag. The code survives the label an error gets inside an unknown tag, and a template compile carries `MX_TAG_NOT_ALLOWED` and `MX_TEXT_NOT_ALLOWED` as `TranslateError.diagnosticCode` and `MX_EXPECTED_SINGLE_EXPRESSION` as `diagnosticCode` on the thrown `CompileError` (`MX_UNKNOWN_TAG` is a `lowerSource` option's error only). The `MX_` prefix is core's own: a contract's or a dialect's code belongs to its own namespace, so a consumer can tell core's codes from a module's. Core does not check the prefix. On success it holds this call's warnings only |
+| `diagnostics` | `IrDiagnostic`: `{ severity, message, line, column, offset, file?, code? }`. `line` is 1-based and `column` 0-based, as `TranslateError` and `MxWarning`. `offset` is the UTF-16 offset derived from them (`-1` when `file` names another file, whose text `lowerSource` does not have). An error or warning with no source position (core's 0:0, as for a bad `customTags` registration) is file-level: `line: 1`, `column: 0`, `offset: 0`. `code` is the error's `TranslateError.diagnosticCode` when it has one (a dialect's `ctx.fail(message, { code })`, or a contract hook's `ctx.fail(message, { at?, code? })`, or `MX_TAG_FILE_ERROR` for a call to a dialect tag file the dialect cannot read or whose definition has errors, and `MX_TAG_FILE_CYCLE` for tag files that call each other, §9.2), or a warning's `MxWarning.code` (the duplicate-attribute warning is `MX_DUPLICATE_ATTRIBUTE`). Core's own errors a consumer matches carry a stable code too, so it matches the code and never the wording: `MX_UNKNOWN_TAG` (a tag with no contract, under `unknownTags: "reject"`), `MX_RESERVED_TAG` (a `customTags` definition that names a reserved tag, at each call of the name, §13.7.4 Reserved names; such a call gets no `MX_UNKNOWN_TAG` and no `MX_TAG_NOT_ALLOWED`), `MX_TAG_NOT_ALLOWED` (a child tag a `children` contract does not allow; under `unknownTags: "reject"` a child with no contract gets `MX_UNKNOWN_TAG` alone), `MX_TEXT_NOT_ALLOWED` (text where a `children` contract allows none) and `MX_EXPECTED_SINGLE_EXPRESSION` (a second expression after the one an expression position holds). `MX_DIALECT_HOOK_ERROR` is a dialect's `explainUnknownTag` that threw or returned a malformed value (§13.9.3), at the tag. `MX_INVALID_DIALECT_CONTRACT` is an entry of the dialect's `contracts` that cannot register (§13.9.3), in the dialect's module (`file`). The code survives the label an error gets inside an unknown tag, and a template compile carries `MX_TAG_NOT_ALLOWED` and `MX_TEXT_NOT_ALLOWED` as `TranslateError.diagnosticCode` and `MX_EXPECTED_SINGLE_EXPRESSION` as `diagnosticCode` on the thrown `CompileError` (`MX_UNKNOWN_TAG` is a `lowerSource` option's error only). The `MX_` prefix is core's own: a contract's or a dialect's code belongs to its own namespace, so a consumer can tell core's codes from a module's. Core does not check the prefix. On success it holds this call's warnings only |
 
 | Option | Values | Meaning |
 |---|---|---|
-| `customTags` | `Record<string, CustomTag>` | contract-only custom tags by call name (decisions 130 and 138): required attributes, attribute types, `children`, `parents`, `analyze`. `lowerSource` does **not** scan `tags/` or `package.json`; this map is the whole vocabulary it knows. Contracts are enforced at every depth (see [Writing a dialect package](/custom-tags/dialect-package/)) |
+| `customTags` | `Record<string, CustomTag>` | contract-only custom tags by call name (decisions 130 and 138): required attributes, attribute types, `children`, `parents`, `analyze`. `lowerSource` does **not** scan `tags/` or `package.json`; this map is the whole vocabulary it knows. Contracts are enforced at every depth (see [Contract packages](/custom-tags/contract-packages/)) |
 | `dialect` | `Dialect` or `SyntaxTable` | the dialect of this file, for a consumer that builds its own (Mesh passes its dialect, hooks included); a bare table is a dialect with no hooks. Omitted, the dialect that claims the file's extension applies (§13.9.2). A trigger, block tag or filter nothing lowers is a positioned diagnostic (§13.9) |
 | `tagRules` | `"html"`, `"markup"`, `"none"` (default: the dialect's `tagRules`, else `"html"`) | the tag rules preset the source parses under (§13.7.3). Omitted, the preset the dialect states (the `dialect` option's, else the routed one's; §13.9.2). An option of this function only, never a project or host setting (ruling 209) |
 | `defaultTag` | tag name | what `<#id>` and `<.class>` stand for in place of the built-in `object` (decision 145; see "The unnamed tag" in §4) |
@@ -3686,14 +3719,16 @@ name is an error at the entry. A definition from any of the four sources (a
 discovered tag file, an `mx.tags` entry, an `mx.contracts` entry, a `customTags`
 entry passed to `lowerSource`, §9.2) is dropped with `MX_RESERVED_TAG`, and its
 calls then resolve as if it were absent: `<if>` is core's `if`, and a dialect's
-reserved name is whatever the dialect's own front end makes it. In
+reserved name is what the dialect makes it, its own `contracts` entry of that
+name when it ships one (§13.9.3). In
 `lowerSource` a `customTags` entry named after any reserved name, `try`
 included, is an `MX_RESERVED_TAG` diagnostic (an error, so `ir` is `undefined`
 beside it), at each call of the name. `compileSource` and `parseFragment`, the
 template compilers, throw for a registration that shadows `try` (§5 P4).
 `customTags` passed with an explicit `dialect` are that dialect's own
-vocabulary, so the dialect's `reservedTags` do not apply to them; core's names
-still do. Without an explicit `dialect` the dialect the file routes to decides.
+vocabulary, so the dialect's `reservedTags` do not apply to them, and they
+override the dialect's `contracts`; core's names still do. Without an explicit
+`dialect` the dialect the file routes to decides.
 
 ### Host selection
 
@@ -3974,6 +4009,11 @@ the field path and, for a trigger, its `id`:
   extensions its tag files use (routed like `extensions`), whether its tag
   directories read `.tag.ts` sidecars (on by default), and its reserved tag
   names. Each field's errors sit at its key, except a `reservedTags` entry that names a core name, which sits at the entry.
+- `mxConfigTags` is optional and unstable: whether the dialect's files take tag
+  definitions from the project's `mx.tags` and `mx.contracts` (§9.2). It
+  defaults to `true`; with `false` those entries are skipped for the dialect's
+  files only, silently, and its tag directories still apply. A value that is not
+  a boolean is an error at the key: `` `mx.dialect.mxConfigTags` must be a boolean: whether the dialect's files take tag definitions from the project's `mx.tags` and `mx.contracts` ``.
 
 `mx` is the one top-level key MX reads in a `package.json`; `mx.dialect` is its
 identity block, a dialect package's statement of who it is. It is never project
@@ -3989,7 +4029,7 @@ offending field (at `mx.dialect` itself for a missing one):
 | Problem | Message |
 |---|---|
 | Not an object | `` `mx.dialect` must be an object declaring the dialect: `{ "id", "name", "extensions", "module" }` `` |
-| An unknown field | `` `mx.dialect.<key>` is not a dialect manifest field (id, name, extensions, module, tagDirs, tagExtensions, sidecars, reservedTags) `` |
+| An unknown field | `` `mx.dialect.<key>` is not a dialect manifest field (id, name, extensions, module, tagDirs, tagExtensions, sidecars, reservedTags, mxConfigTags) `` |
 | An `id` that is not one | `` `mx.dialect.id` must be a dialect id: lower-case words joined by `-` (`mesh`) `` |
 | `id` `mx` | `` `mx.dialect.id` cannot be `mx`: that is MX's own dialect `` |
 | No `name`, or a blank one | `` `mx.dialect.name` must be a non-empty string: the name tooling shows the dialect's users `` |
@@ -4154,6 +4194,7 @@ interface Dialect {
   describeAttribute?(declaration: Readonly<Record<string, unknown>>): string;
   explainUnknownTag?(tag: UnknownTag): UnknownTagExplanation | undefined;
   tagFile?(file: TagFileInput, ctx: TagFileContext): TagFileResult;  // §9.2
+  contracts?: ContractMap;                        // @unstable; the dialect's own tags
 }
 
 // @unstable, exported from @mxlang/core
@@ -4178,6 +4219,34 @@ interface TagFileDiagnostic {
   file?: string;                   // another file, for a diagnostic forwarded from ctx.lower
 }
 ```
+
+**`contracts`** is the dialect's own tag vocabulary, a `ContractMap` (the shape
+an `mx.contracts` module default-exports): the tags every file of the dialect
+may call, checked in every tool exactly as the same contracts passed as
+`customTags` would be. They register beside the caller's `customTags`, or the
+scan's, by the precedence in §9.2: a contract whose name the manifest lists in
+`reservedTags` cannot be replaced by the project; any other is a default a
+project definition replaces silently. An `{ entity: … }` vocabulary a dialect
+used to ship as an `mx.contracts` module for its users to list, or as
+`customTags` its front end passed, moves here unchanged.
+
+The contracts are validated once per module revision, when the module loads.
+Each entry is a plain object stating only `CustomTag` keys other than
+`template` (a tag with a template is a tag file), plus the keys the dialect
+claims in `contractFields.tag`; its name is a usable tag name and not one of
+core's reserved names (`if`, `try`, …); its `parseOptions` are valid, its hooks
+are functions, and its declarations pass core's checks and the dialect's
+`checkContract`. The first failure fails the whole dialect (dropping one entry
+would let its calls pass silently) with `MX_INVALID_DIALECT_CONTRACT`, or the
+code `checkContract`'s `ctx.fail` gave:
+`` `contracts.<name>`: <problem> `` in the module file, at the entry's key when
+the module writes `contracts` as an object literal (directly, through `as` or
+`satisfies`, or through an identifier bound to one), else at 1:0. For the
+`dialect` option it is the caller's error at the file's 1:0:
+`` the `dialect` option is not a valid dialect: `dialect.contracts.<name>`: <problem> ``.
+A tool shows the module's position through the diagnostic's `origin`. A load
+failure is kept until the module file changes, and the scan stamps the module,
+so editing it re-checks every file of the dialect.
 
 **`tagFile`** derives the contract of one tag file the dialect's `tagDirs`
 discovered, at the tag's first call (§9.2). `ctx.lower`'s `customTags` are

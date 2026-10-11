@@ -682,6 +682,37 @@ Five facts worth knowing before editing it:
   `Trigger` are declared in core;
   `packages/parse-differential/src/syntax-types.test.ts` pins them equal to
   the parser's until parser port PR 4 bundles the front end.
+- **A dialect ships its vocabulary as `Dialect.contracts` (`@unstable`;
+  `src/dialect-contracts.ts`).** `checkDialectContracts` runs last in
+  `checkModuleShape` (`syntax-table.ts`), so for a routed module and an
+  explicit `dialect` option alike: a registration's checks per entry, the first
+  failure thrown as `MX_INVALID_DIALECT_CONTRACT` (or `checkContract`'s code)
+  at `contracts.<name>` (module literal) or the module's 1:0; the explicit
+  wording is "the `dialect` option is not a valid dialect: …". A passing map
+  is branded (`markValidatedContracts`, `validatedContracts` WeakMap keyed by
+  entry, valued by the module's `ClaimedFields`, which `claimedFields`
+  memoizes per module), so `rejectRegistration` skips
+  `rejectUnknownDeclarationKeys`/`rejectUnreachableHooks` for it under the
+  same claim; `rejectWildcardReferences` still runs (it is cross-source). A
+  load failure is cached in `byDialect` with the module's mtime and rethrown
+  as the same object until the module changes. The scan stamps the routed
+  dialect's module (failed loads too), so a tool re-checks on an edit.
+  **The merge** is `withDialectContracts`, reached through
+  `dialectCustomTags(customTags, dialect, explicit)` (`syntax-table.ts`) in
+  `compileSource`, `parseFragment` and `lowerSource`: `{ ...nonReserved,
+  ...customTags, ...reserved }`, reserved = the manifest's `reservedTags`
+  (`loadedDialects` WeakMap), applied only for a routed dialect; an explicit
+  caller's `customTags` override everything. Memoized per dialect, per
+  routed/explicit, per `customTags` map (`NO_TAGS` for none); a merged map is
+  recognised (`mergedMaps`) and passed through. Rank 3 refusals are the
+  existing `reservedRefusal` machinery (scan and `lowerSource`); in
+  `compileSource`/`parseFragment` the reserved contract simply wins. No
+  coverage check between `reservedTags` and `contracts`.
+  **`mxConfigTags`** (manifest, optional boolean, default `true`): `false`
+  makes `scanCustomTags` skip `mx.tags` and `mx.contracts` for files routed
+  to the dialect; tag files still apply. Tests: `src/dialect-contracts.test.ts`
+  (R1-R9), tools in `packages/target-registry/src/dialect-contracts.test.ts`
+  and `packages/tooling/language-server/src/dialect-contracts.test.ts`.
 - **Package-level contracts use `mx.contracts` (decision 142).** A string,
   `{ module, hosts? }`, or array names modules default-exporting `ContractMap`
   (`Record<string, CustomTag>`): declarations plus `analyze`, no `transform`,

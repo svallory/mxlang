@@ -698,6 +698,40 @@ scanned contract that uses a key only the option's dialect claims is refused
 at the scan, positioned in the sidecar or the contracts module. Contracts
 passed as `customTags` follow the explicit option.
 
+### A dialect's own vocabulary: `contracts` and `mxConfigTags`
+
+`Dialect.contracts` (`@unstable`) is a `ContractMap` the dialect ships with
+its module: every file routed to the dialect, and every `compileSource`,
+`parseFragment` or `lowerSource` call given the dialect as its `dialect`
+option, registers it beside `customTags` (or the scan's map). A `.mx` file
+never sees it.
+
+- **Checked once per module revision, at load.** Each entry is checked as a
+  registration would check it (a usable tag name core does not reserve, a
+  plain object, `CustomTag` keys but `template` plus the claimed tag keys,
+  function hooks, valid `parseOptions`, declarations core accepts, the
+  dialect's `checkContract`). The first failure fails the whole dialect with
+  `MX_INVALID_DIALECT_CONTRACT` (or the code `checkContract` gave), at
+  `contracts.<name>` in the module when it is a literal, else the module's
+  `1:0`; for an explicit `dialect` option, the caller's file start, worded
+  "the `dialect` option is not a valid dialect: …". The failure stays cached
+  until the module is edited, and the scan stamps the module, so an edit
+  re-checks every file. A map that passed is not checked again at
+  registration.
+- **Precedence, highest first:** core's reserved names and `<try>`; a
+  file-local PascalCase binding; the dialect's contracts named in its
+  manifest's `reservedTags` (any other definition is `MX_RESERVED_TAG`);
+  `customTags` or the scan; the dialect's other contracts, which a project
+  definition replaces silently. A caller passing the dialect explicitly owns
+  its vocabulary: its `customTags` override every contract. No check runs
+  between `reservedTags` and `contracts`, in either direction.
+- **The merged map is memoized** per dialect and `customTags` map, so its
+  identity, and the caches keyed on it, stay stable across compiles.
+- **`mxConfigTags: false`** in the manifest makes the scan skip `mx.tags`
+  and `mx.contracts` for the dialect's files, silently; tag files (`tags/`,
+  or `tagDirs`) still apply. Absent means `true`; a non-boolean is an error
+  at the key.
+
 ## Host-policy resolution
 
 **`resolveTargetPolicy(filePath)`** (`src/host-policy.ts`) answers which host a

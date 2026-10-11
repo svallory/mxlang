@@ -77,7 +77,7 @@ directory, or for a file under `.config/`, the directory that holds `.config/`.
 | `host` | A host, which selects its default target. `host` and `target` are read the same way in every format; if both are set they must agree. |
 | `strict` | The strict policy for the selected target. |
 | `tags` | Extra tag directories. See [Discovery](/custom-tags/discovery/). |
-| `contracts` | Contract modules. See [Writing a dialect package](/custom-tags/dialect-package/). |
+| `contracts` | Contract modules. See [Contract packages](/custom-tags/contract-packages/). |
 | `<target>` | A target's own settings, such as `html: { defaultTag: "section" }`. |
 | `angular` | The Angular host's settings. See [Angular](/hosts/angular/). |
 | `extensions` | Which dialect compiles which file extension, such as `{ ".mesh": "mesh" }`. See "Dialect packages and routing" (§13.9.2) in the [specification](/specification/). |
@@ -95,7 +95,7 @@ dialect's id, are errors at their key. Which dialect handles which extension
 under a dialect's id is that dialect's to read.
 
 `dialect` is not a setting. It is a dialect package's identity block in that
-package's own `package.json` (see [Writing a dialect package](/custom-tags/dialect-package/)),
+package's own `package.json` (see [Writing a dialect](/custom-tags/dialects/)),
 and MX's config never reads it, in any format. A `package.json` whose `mx`
 holds only `dialect` has no MX config, so an `mx.config.*` beside it applies.
 

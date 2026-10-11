@@ -80,9 +80,10 @@
         { "title": "Sidecars", "path": "/custom-tags/sidecars/" },
         { "title": "Discovery", "path": "/custom-tags/discovery/" },
         {
-          "title": "Writing a dialect package",
-          "path": "/custom-tags/dialect-package/"
+          "title": "Contract packages",
+          "path": "/custom-tags/contract-packages/"
         },
+        { "title": "Writing a dialect", "path": "/custom-tags/dialects/" },
         { "title": "Reference", "path": "/custom-tags/reference/" }
       ]
     },
