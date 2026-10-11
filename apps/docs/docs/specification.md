@@ -2204,6 +2204,30 @@ modules follow `mx.tags`, also in array order. Each winner replaces the **whole
 entry**, never merging declarations. An explicitly passed `customTags` still
 beats a discovered tag of the same name.
 
+**Dialect tag files.** Core's discovery is one entry of a shape a dialect's
+manifest can also declare (§13.9.2): `tagDirs` `["tags"]`, extensions `[".mx"]`,
+sidecars on, and the reserved names. A file routed to a dialect that declares
+`tagDirs` walks that dialect's directories instead of `tags/`, at each level up
+to the package root, nearest first, and indexes the files ending in an
+extension the dialect claims (`extensions` and `tagExtensions`) under their
+basename minus the longest claimed suffix, plus `.tag.ts` sidecars unless the
+dialect sets `sidecars: false`. `mx.tags` and `mx.contracts` serve it as they
+serve an MX file. MX's own walk skips a file a dialect with `tagDirs` claims.
+Until the dialect reads its tag files, calling such a tag is an error at the
+call; a file that never calls it compiles clean.
+
+Each of these diagnostics carries a stable code, `ScanDiagnostic.code` or
+`TranslateError.diagnosticCode`, so a tool matches the rule, not the wording:
+
+| Code | Severity | When |
+|---|---|---|
+| `MX_TAG_FILE_ERROR` | error, at the call | A call names a dialect tag file the dialect cannot read: `` `<money>` is defined by components/money.mesh.mx, but dialect `mesh` has no tagFile hook to read it. `` |
+| `MX_MISPLACED_TAG_FILE` | warning, at the file | A file a dialect with `tagDirs` claims sits in a tag directory outside them: `` `tags/money.mesh.mx` is a Mesh file in `tags/`; Mesh discovers tags in `components/`. `` |
+| `MX_SIDECAR_IGNORED` | warning, at the file | A `.tag.ts` sidecar in a dialect tag directory with `sidecars: false`. The sidecar is not read. |
+| `MX_INVALID_TAG_FILE_NAME` | error, at the file | A dialect tag file's name is not a usable tag name. The file is skipped. |
+| `MX_DOTTED_TAG_FILE_NAME` | warning, at the file | A dialect tag file's name has a dot, which a call cannot write as one tag name. The message names the `tagExtensions` entry that would fix it. |
+| `MX_BUILTIN_TAG_FILE` | error, at the file | A dialect tag file is named after a core-owned tag (`try`). The file is skipped. |
+
 **Package-level contracts (MX addition, decision 142).**
 `mx.contracts` is a module string, an entry `{ module, hosts? }`, or
 an array of either. The module must default-export a plain
@@ -3498,7 +3522,7 @@ read throws, as `readFileSync` does.
 | Result field | Meaning |
 |---|---|
 | `ir` | the `SpannedIr` (§13.7.2), or `undefined` when `diagnostics` holds an error |
-| `diagnostics` | `IrDiagnostic`: `{ severity, message, line, column, offset, file?, code? }`. `line` is 1-based and `column` 0-based, as `TranslateError` and `MxWarning`. `offset` is the UTF-16 offset derived from them (`-1` when `file` names another file, whose text `lowerSource` does not have). An error or warning with no source position (core's 0:0, as for a bad `customTags` registration) is file-level: `line: 1`, `column: 0`, `offset: 0`. `code` is the error's `TranslateError.diagnosticCode` when it has one (a dialect's `ctx.fail(message, { code })`), or a warning's `MxWarning.code` (the duplicate-attribute warning is `MX_DUPLICATE_ATTRIBUTE`). Core's own errors a consumer matches carry a stable code too, so it matches the code and never the wording: `MX_UNKNOWN_TAG` (a tag with no contract, under `unknownTags: "reject"`), `MX_TAG_NOT_ALLOWED` (a child tag a `children` contract does not allow), `MX_TEXT_NOT_ALLOWED` (text where a `children` contract allows none) and `MX_EXPECTED_SINGLE_EXPRESSION` (a second expression after the one an expression position holds). The code survives the label an error gets inside an unknown tag, and a template compile carries `MX_TAG_NOT_ALLOWED` and `MX_TEXT_NOT_ALLOWED` as `TranslateError.diagnosticCode` and `MX_EXPECTED_SINGLE_EXPRESSION` as `diagnosticCode` on the thrown `CompileError` (`MX_UNKNOWN_TAG` is a `lowerSource` option's error only). On success it holds this call's warnings only |
+| `diagnostics` | `IrDiagnostic`: `{ severity, message, line, column, offset, file?, code? }`. `line` is 1-based and `column` 0-based, as `TranslateError` and `MxWarning`. `offset` is the UTF-16 offset derived from them (`-1` when `file` names another file, whose text `lowerSource` does not have). An error or warning with no source position (core's 0:0, as for a bad `customTags` registration) is file-level: `line: 1`, `column: 0`, `offset: 0`. `code` is the error's `TranslateError.diagnosticCode` when it has one (a dialect's `ctx.fail(message, { code })`, or `MX_TAG_FILE_ERROR` for a call to a dialect tag file the dialect cannot read, §9.2), or a warning's `MxWarning.code` (the duplicate-attribute warning is `MX_DUPLICATE_ATTRIBUTE`). Core's own errors a consumer matches carry a stable code too, so it matches the code and never the wording: `MX_UNKNOWN_TAG` (a tag with no contract, under `unknownTags: "reject"`), `MX_TAG_NOT_ALLOWED` (a child tag a `children` contract does not allow), `MX_TEXT_NOT_ALLOWED` (text where a `children` contract allows none) and `MX_EXPECTED_SINGLE_EXPRESSION` (a second expression after the one an expression position holds). The code survives the label an error gets inside an unknown tag, and a template compile carries `MX_TAG_NOT_ALLOWED` and `MX_TEXT_NOT_ALLOWED` as `TranslateError.diagnosticCode` and `MX_EXPECTED_SINGLE_EXPRESSION` as `diagnosticCode` on the thrown `CompileError` (`MX_UNKNOWN_TAG` is a `lowerSource` option's error only). On success it holds this call's warnings only |
 
 | Option | Values | Meaning |
 |---|---|---|
@@ -3877,6 +3901,11 @@ the field path and, for a trigger, its `id`:
   TypeScript, Node does not, so a published `.ts` module would fail for every
   Node user. A dialect linked into `node_modules` from a workspace may point at
   its TypeScript source.
+- `tagDirs`, `tagExtensions`, `sidecars` and `reservedTags` are optional and
+  unstable: where the dialect's tags live (§9.2, Dialect tag files), the extra
+  extensions its tag files use (routed like `extensions`), whether its tag
+  directories read `.tag.ts` sidecars (on by default), and its reserved tag
+  names. Each field's errors sit at its key.
 
 `mx` is the one top-level key MX reads in a `package.json`; `mx.dialect` is its
 identity block, a dialect package's statement of who it is. It is never project
@@ -3892,7 +3921,7 @@ offending field (at `mx.dialect` itself for a missing one):
 | Problem | Message |
 |---|---|
 | Not an object | `` `mx.dialect` must be an object declaring the dialect: `{ "id", "name", "extensions", "module" }` `` |
-| An unknown field | `` `mx.dialect.<key>` is not a dialect manifest field (id, name, extensions, module) `` |
+| An unknown field | `` `mx.dialect.<key>` is not a dialect manifest field (id, name, extensions, module, tagDirs, tagExtensions, sidecars, reservedTags) `` |
 | An `id` that is not one | `` `mx.dialect.id` must be a dialect id: lower-case words joined by `-` (`mesh`) `` |
 | `id` `mx` | `` `mx.dialect.id` cannot be `mx`: that is MX's own dialect `` |
 | No `name`, or a blank one | `` `mx.dialect.name` must be a non-empty string: the name tooling shows the dialect's users `` |
