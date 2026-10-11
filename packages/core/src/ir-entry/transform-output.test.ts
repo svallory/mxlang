@@ -97,6 +97,7 @@ describe("transform output through lowerSource", () => {
         line: 1,
         column: 6,
         offset: 6,
+        code: "MX_UNKNOWN_TAG",
       },
       {
         severity: "error",
@@ -105,6 +106,7 @@ describe("transform output through lowerSource", () => {
         line: 1,
         column: 12,
         offset: 12,
+        code: "MX_UNKNOWN_TAG",
       },
     ]);
   });

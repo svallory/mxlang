@@ -39,6 +39,7 @@ describe("every error is reported", () => {
         line: 1,
         column: 6,
         offset: 6,
+        code: "MX_EXPECTED_SINGLE_EXPRESSION",
       },
       {
         severity: "error",

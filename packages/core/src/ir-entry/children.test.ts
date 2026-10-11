@@ -39,6 +39,7 @@ describe("authored children under delegate-everything declarations (decision 138
         line: 2,
         column: 2,
         offset: 13,
+        code: "MX_TAG_NOT_ALLOWED",
       },
     ]);
 
