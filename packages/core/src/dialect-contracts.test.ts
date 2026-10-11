@@ -976,6 +976,42 @@ describe("R6: freshness", () => {
     /^`contracts\.if`: `<if>` cannot name a data tag/,
   );
 
+  it("registration does not re-check a contract the load validated: `checkContract` runs once per module revision", () => {
+    const checking = (shape: string) => `module.exports = { default: {
+  table: {},
+  contractFields: { attribute: ["shape"] },
+  checkContract() { globalThis.__lexiChecks = (globalThis.__lexiChecks ?? 0) + 1; },
+  contracts: { box: { attributes: { k: { type: "string", required: true, shape: ${JSON.stringify(shape)} } } } },
+} };`;
+    const checks = () =>
+      (globalThis as unknown as { __lexiChecks?: number }).__lexiChecks ?? 0;
+    (globalThis as unknown as { __lexiChecks?: number }).__lexiChecks = 0;
+    const { packageDir } = lexiProject(checking("square"));
+    // A fresh `customTags` map each time: a new merged map, a new registration.
+    const lower = () =>
+      lowerSource("<box/>\n", page(), {
+        customTags: { other: {} },
+      }).diagnostics.map((d) => d.message);
+    expect(lower()).toEqual(["`<box>`: missing required attribute `k`"]);
+    expect(lower()).toEqual(["`<box>`: missing required attribute `k`"]);
+    expect(lower()).toEqual(["`<box>`: missing required attribute `k`"]);
+    expect(checks()).toBe(1);
+    edit(join(packageDir, "index.cjs"), checking("round"));
+    expect(lower()).toEqual(["`<box>`: missing required attribute `k`"]);
+    expect(lower()).toEqual(["`<box>`: missing required attribute `k`"]);
+    expect(checks()).toBe(2);
+    // The same object registered where no dialect claims `shape` is checked
+    // as any definition: the mark holds only under the dialect's claim.
+    const box = resolveSyntaxOf(page()).dialect?.contracts?.box as CustomTag;
+    expect(
+      lowerSource("<box/>\n", join(dir, "p.mx"), {
+        customTags: { box },
+      }).diagnostics.map((d) => d.message),
+    ).toEqual([
+      'Unknown key "shape" in the "k" attribute declaration of tag "box"; allowed: type, items, required, enum, default, literalOnly',
+    ]);
+  });
+
   it("a module edit re-validates; an unchanged module is validated once", () => {
     const { packageDir } = lexiProject(counted("box"));
     const module = join(packageDir, "index.cjs");

@@ -3060,18 +3060,46 @@ export function rejectRegistration(
 ): Readonly<Record<string, CustomTag>> | undefined {
   const view = registrationView(customTags, claimed);
   if (!view) return view;
+  // A dialect contract its load validated under this claim passed these
+  // checks already; the cross-tag check (`rejectWildcardReferences`) still
+  // runs, since the other tags are this registration's.
+  const unvalidated =
+    (map: Readonly<Record<string, CustomTag>>) => (name: string) =>
+      validatedContracts.get(map[name] as CustomTag) !== claimed;
   if (view === customTags) {
-    rejectUnknownDeclarationKeys(view, claimed, everyTag);
+    const own = unvalidated(view);
+    rejectUnknownDeclarationKeys(view, claimed, own);
     rejectWildcardReferences(view, everyTag);
-    rejectUnreachableHooks(view, everyTag);
+    rejectUnreachableHooks(view, own);
     return view;
   }
   const registration = registrationMapOf(view);
   const eager = (name: string) => !viewEntries.has(view[name] as CustomTag);
-  rejectUnknownDeclarationKeys(registration, claimed, eager);
+  const isNew = unvalidated(registration);
+  const own = (name: string) => eager(name) && isNew(name);
+  rejectUnknownDeclarationKeys(registration, claimed, own);
   rejectWildcardReferences(registration, eager);
-  rejectUnreachableHooks(registration, eager);
+  rejectUnreachableHooks(registration, own);
   return view;
+}
+
+/**
+ * Dialect contracts (`Dialect.contracts`) a dialect's load validated, with
+ * the claim they were validated under. Registration skips their own checks
+ * under that claim, so a contract is checked once per module revision, not
+ * once per compile; the same object registered under another claim (passed
+ * as `customTags` to a file of no dialect) is checked as any definition.
+ */
+const validatedContracts = new WeakMap<CustomTag, ClaimedFields>();
+
+/** Marks every entry of `contracts` validated under `claimed` (see {@link rejectRegistration}). */
+export function markValidatedContracts(
+  contracts: Readonly<Record<string, CustomTag>>,
+  claimed: ClaimedFields,
+): void {
+  for (const name of Object.keys(contracts)) {
+    validatedContracts.set(contracts[name] as CustomTag, claimed);
+  }
 }
 
 /**

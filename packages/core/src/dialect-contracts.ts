@@ -10,6 +10,7 @@ import { isTranslateError } from "./core.ts";
 import {
   type ContractMap,
   type CustomTag,
+  markValidatedContracts,
   rejectUnknownDeclarationKeys,
   rejectUnreachableHooks,
 } from "./custom-tags.ts";
@@ -66,7 +67,8 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * placed by `fail` at the entry's key, `` `<path>contracts.<name>`: … ``,
  * with code `MX_INVALID_DIALECT_CONTRACT`, or the code the dialect's
  * `checkContract` gave. The whole dialect fails: dropping one entry would
- * let its calls pass silently.
+ * let its calls pass silently. A map that passes is marked validated under
+ * the dialect's claim, so registration does not check its entries again.
  */
 export function checkDialectContracts(
   dialect: Record<string, unknown>,
@@ -139,6 +141,7 @@ export function checkDialectContracts(
       refuse(cause.message, cause.diagnosticCode);
     }
   }
+  markValidatedContracts(map as ContractMap, claimed);
 }
 
 /** The merged maps, so merging one again (`lowerSource` then `compileSource`) is free. */
