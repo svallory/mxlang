@@ -121,7 +121,10 @@ export interface LowerSourceOptions {
    */
   defaultTag?: string;
   /**
-   * `"pass"` (default) keeps the structural constructs — text, `${}`,
+   * Omitted, the dialect's own `structural` (the `dialect` option's, else the
+   * one the file routes to), else `"pass"`.
+   *
+   * `"pass"` keeps the structural constructs — text, `${}`,
    * `<if>`/`<for>`/`<const>`, `import`/`export`/`static` — in the IR for the
    * consumer to interpret. Comments are never structural: under either value
    * a `//` line or `<!-- -->` stays in the IR as its `Comment` node
@@ -133,15 +136,19 @@ export interface LowerSourceOptions {
    */
   structural?: "pass" | "reject";
   /**
-   * Whether a top-level `import` passes. Defaults to the effective
-   * `structural` value. `"pass"` with `structural: "reject"` keeps control
+   * Whether a top-level `import` passes. Omitted, the dialect's own `imports`
+   * (the `dialect` option's, else the one the file routes to), else the
+   * effective `structural`. `"pass"` with `structural: "reject"` keeps control
    * flow, `export` and `static` rejected and returns the imports in
    * `ir.imports`. `"reject"` with `structural: "pass"` rejects only the
    * `import`s.
    */
   imports?: "pass" | "reject";
   /**
-   * `"allow"` (default) keeps the open set of decision 131: a tag with no
+   * Omitted, the dialect's own `unknownTags` (the `dialect` option's, else
+   * the one the file routes to), else `"allow"`.
+   *
+   * `"allow"` keeps the open set of decision 131: a tag with no
    * entry in `customTags` is accepted. `"reject"` closes it: any tag, at any
    * depth, whose name has no entry in `customTags` (and is not the built-in
    * `object`) is a positioned error naming the tag, with a
