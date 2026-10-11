@@ -34,6 +34,10 @@ const targets = testTargetLookup();
 const ALLOWED =
   "parseOptions, attributes, attributeTags, children, parents, defaultTag, analyze, transform, finalize, template";
 
+/** What an `mx.contracts` entry accepts: no `transform`, `finalize` or `template`. */
+const MX_CONTRACTS_ALLOWED =
+  "parseOptions, attributes, attributeTags, children, parents, defaultTag, analyze";
+
 const unknownKey = (key: string, tag: string, allowed = ALLOWED) =>
   `Unknown key "${key}" in the declaration of tag "${tag}"; allowed: ${allowed}`;
 
@@ -281,7 +285,7 @@ describe("an `mx.contracts` module", () => {
     );
     const caught = refusal(() => scan());
     expect(caught).toMatchObject({
-      message: unknownKey("atributes", "card"),
+      message: unknownKey("atributes", "card", MX_CONTRACTS_ALLOWED),
       code: undefined,
       file,
       line: 4,
@@ -301,7 +305,9 @@ describe("an `mx.contracts` module", () => {
       `export default {\n  card: {\n    chilren: {},\n    atributes: {},\n  },\n};\n`,
     );
     const caught = refusal(() => scan());
-    expect(caught.message).toBe(unknownKey("chilren", "card"));
+    expect(caught.message).toBe(
+      unknownKey("chilren", "card", MX_CONTRACTS_ALLOWED),
+    );
     expect([caught.line, caught.column]).toEqual([3, 4]);
   });
 
@@ -311,7 +317,7 @@ describe("an `mx.contracts` module", () => {
     );
     // `first` is refused first, at its own key.
     expect(refusal(() => scan())).toMatchObject({
-      message: unknownKey("atributes", "first"),
+      message: unknownKey("atributes", "first", MX_CONTRACTS_ALLOWED),
       line: 2,
       column: 11,
     });
@@ -322,7 +328,7 @@ describe("an `mx.contracts` module", () => {
       `const card = { atributes: {} };\nexport default { ...{ card } };\n`,
     );
     expect(refusal(() => scan())).toMatchObject({
-      message: unknownKey("atributes", "card"),
+      message: unknownKey("atributes", "card", MX_CONTRACTS_ALLOWED),
       file,
       line: 1,
       column: 0,
@@ -371,7 +377,7 @@ describe("a dialect's contracts", () => {
     expect(first).toMatchObject({
       code: "MX_INVALID_DIALECT_CONTRACT",
       message:
-        "`contracts.card`: `atributes` is not a contract key (parseOptions, attributes, attributeTags, children, parents, defaultTag, analyze, transform, finalize, or a key the dialect claims in `contractFields.tag`)",
+        '`contracts.card`: Unknown key "atributes" in the declaration of tag "card"; allowed: parseOptions, attributes, attributeTags, children, parents, defaultTag, analyze, transform, finalize',
     });
   });
 

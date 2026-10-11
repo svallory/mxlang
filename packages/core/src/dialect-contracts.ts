@@ -14,6 +14,7 @@ import {
   isValidatedContract,
   markValidatedContracts,
   rejectUnknownDeclarationKeys,
+  rejectUnknownTagKeys,
   rejectUnreachableHooks,
 } from "./custom-tags.ts";
 import { INVALID_DIALECT_CONTRACT_CODE } from "./diagnostic-codes.ts";
@@ -103,13 +104,29 @@ export function checkDialectContracts(
     for (const key of Object.getOwnPropertyNames(definition)) {
       if ((CONTRACT_KEYS as readonly string[]).includes(key)) continue;
       if (claimed.tag.has(key)) continue;
-      refuse(
-        key === "template"
-          ? "`template` is not allowed in a dialect contract: a tag with a template is a tag file"
-          : key === "declares"
-            ? "`declares` is not allowed: no syntax module claims it (`contractFields`)"
-            : `\`${key}\` is not a contract key (${CONTRACT_KEYS.join(", ")}, or a key the dialect claims in \`contractFields.tag\`)`,
-      );
+      if (key === "template") {
+        refuse(
+          "`template` is not allowed in a dialect contract: a tag with a template is a tag file",
+        );
+      }
+      if (key === "declares") {
+        refuse(
+          "`declares` is not allowed: no syntax module claims it (`contractFields`)",
+        );
+      }
+      // Any other key: the shared refusal, listing the keys a contract has.
+      try {
+        rejectUnknownTagKeys(
+          name,
+          definition,
+          claimed,
+          undefined,
+          CONTRACT_KEYS,
+        );
+      } catch (cause) {
+        if (!isTranslateError(cause)) throw cause;
+        refuse(cause.message, cause.diagnosticCode);
+      }
     }
     for (const hook of CONTRACT_HOOKS) {
       if (

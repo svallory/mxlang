@@ -2174,19 +2174,23 @@ export type LocateTagKey = (
  * misspelled `atributes` would otherwise register as a tag with no
  * attributes: its contract silently never applies. The attribute-level
  * wording (`Unknown key "k" in the … of tag "t"; allowed: …`), no code.
- * Shared by every contract source through {@link rejectUnknownDeclarationKeys}.
+ * Shared by every contract source: registration reaches it through
+ * {@link rejectUnknownDeclarationKeys}, and a source that allows fewer keys
+ * than a `CustomTag` has (`mx.contracts`, a dialect's `contracts`) passes its
+ * own `keys`, so the message lists what that source accepts.
  */
 export function rejectUnknownTagKeys(
   tagName: string,
   definition: object,
   claimed: ClaimedFields = claimedFields(undefined),
   locate?: LocateTagKey,
+  keys: readonly string[] = CUSTOM_TAG_KEYS,
 ): void {
   for (const key of Object.getOwnPropertyNames(definition)) {
-    if ((CUSTOM_TAG_KEYS as readonly string[]).includes(key)) continue;
+    if (keys.includes(key)) continue;
     if (key === "declares" || claimed.tag.has(key)) continue;
     const at = locate?.(tagName, key);
-    const allowed = [...new Set([...CUSTOM_TAG_KEYS, ...claimed.tag])];
+    const allowed = [...new Set([...keys, ...claimed.tag])];
     throw new TranslateError(
       `Unknown key "${key}" in the declaration of tag "${tagName}"; allowed: ${allowed.join(", ")}`,
       at?.line ?? 0,

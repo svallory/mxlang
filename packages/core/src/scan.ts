@@ -67,6 +67,7 @@ import {
 import { isTranslateError, TranslateError } from "./core.ts";
 import {
   type ContractMap,
+  CUSTOM_TAG_KEYS,
   type CustomTag,
   type CustomTagParseOptions,
   type DeferredReader,
@@ -1254,6 +1255,17 @@ function lazyTag(tag: DiscoveredTag, claimed: ClaimedFields): CustomTag {
 }
 
 /** The contract keys a dialect tag file supplies (the hooks stay the sidecar's). */
+/** The keys of a `CustomTag` an `mx.contracts` entry may state (no `transform`, `finalize` or `template`). */
+const MX_CONTRACTS_KEYS: readonly string[] = [
+  "parseOptions",
+  "attributes",
+  "attributeTags",
+  "children",
+  "parents",
+  "defaultTag",
+  "analyze",
+];
+
 const TAG_FILE_CONTRACT_KEYS = [
   "attributes",
   "attributeTags",
@@ -2025,28 +2037,31 @@ function indexMxContractsEntries(
         }
         if (!isRecord(definition) || !plain(definition))
           failContracts(file, `\`<${name}>\` must be a plain CustomTag object`);
-        // A key no `CustomTag` has: the shared refusal, at the key.
-        rejectUnknownTagKeys(name, definition, claimed, locateContractKey);
         for (const key of Object.getOwnPropertyNames(definition)) {
-          if (
-            ![
-              "parseOptions",
-              "attributes",
-              "attributeTags",
-              "children",
-              "parents",
-              "defaultTag",
-              "analyze",
-            ].includes(key) &&
-            !claimed.tag.has(key)
-          ) {
+          if (MX_CONTRACTS_KEYS.includes(key) || claimed.tag.has(key)) continue;
+          if (key === "declares") {
             failContracts(
               file,
-              key === "declares"
-                ? `\`<${name}>\`: \`declares\` is not allowed: no syntax module claims it (\`contractFields\`)`
-                : `\`<${name}>\`: \`${key}\` is not allowed in \`mx.contracts\`; use a tag sidecar for hooks other than \`analyze\` and for templates`,
+              `\`<${name}>\`: \`declares\` is not allowed: no syntax module claims it (\`contractFields\`)`,
             );
           }
+          // A `CustomTag` key this source does not take (a sidecar's).
+          if ((CUSTOM_TAG_KEYS as readonly string[]).includes(key)) {
+            failContracts(
+              file,
+              `\`<${name}>\`: \`${key}\` is not allowed in \`mx.contracts\`; use a tag sidecar for hooks other than \`analyze\` and for templates`,
+            );
+          }
+          // A key no `CustomTag` has: the shared refusal, at the key, listing
+          // what an \`mx.contracts\` entry accepts. The pass over the whole map
+          // below can then only see keys this one let through.
+          rejectUnknownTagKeys(
+            name,
+            definition,
+            claimed,
+            locateContractKey,
+            MX_CONTRACTS_KEYS,
+          );
         }
         if (
           definition.analyze !== undefined &&

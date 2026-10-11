@@ -741,7 +741,7 @@ describe("R4: a contract that cannot register fails the dialect at load", () => 
     expect(reported()).toEqual(
       at(
         module,
-        "`contracts.box`: `colour` is not a contract key (parseOptions, attributes, attributeTags, children, parents, defaultTag, analyze, transform, finalize, or a key the dialect claims in `contractFields.tag`)",
+        '`contracts.box`: Unknown key "colour" in the declaration of tag "box"; allowed: parseOptions, attributes, attributeTags, children, parents, defaultTag, analyze, transform, finalize',
         1,
         41,
       ),
@@ -1446,7 +1446,7 @@ describe("the merge is memoized per dialect and `customTags` map", () => {
       },
     };
     expect(lower()).toEqual([
-      "the `dialect` option is not a valid dialect: `dialect.contracts.box`: `bogusKey` is not a contract key (parseOptions, attributes, attributeTags, children, parents, defaultTag, analyze, transform, finalize, or a key the dialect claims in `contractFields.tag`)",
+      'the `dialect` option is not a valid dialect: `dialect.contracts.box`: Unknown key "bogusKey" in the declaration of tag "box"; allowed: parseOptions, attributes, attributeTags, children, parents, defaultTag, analyze, transform, finalize',
     ]);
   });
 

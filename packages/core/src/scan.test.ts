@@ -350,9 +350,9 @@ describe("scanCustomTags", () => {
   describe("a tag file whose name cannot be a tag name", () => {
     const NAME_RULE =
       "is not a usable tag name; a tag file's name must start with a letter, digit or underscore and may then contain letters, digits, underscores, hyphens and dots";
-    const bad = (dir: string, entry: string, bare: string) => ({
-      file: join(dir, "tags", entry),
-      message: `\`tags/${entry}\` is skipped: \`${bare}\` ${NAME_RULE}`,
+    const bad = (dir: string, entry: string, bare: string, sub = "tags") => ({
+      file: join(dir, sub, entry),
+      message: `\`${sub.split("/").pop()}/${entry}\` is skipped: \`${bare}\` ${NAME_RULE}`,
       line: 1,
       column: 0,
       severity: "error",
@@ -403,6 +403,27 @@ describe("scanCustomTags", () => {
 
       expect([...result.tags.keys()]).toEqual(["ok"]);
       expect(result.diagnostics).toEqual([bad(dir, "-x.tag.ts", "-x")]);
+    });
+
+    it("is named by the `mx.tags` directory's own last segment, and its good file is still discovered", () => {
+      const dir = scratch();
+      mkdirSync(join(dir, "src", "ui"), { recursive: true });
+      writeFileSync(
+        join(dir, "package.json"),
+        '{"name":"badname","mx":{"tags":"./src/ui"}}',
+      );
+      writeFileSync(join(dir, "src", "ui", "-x.mx"), "<div/>\n");
+      writeFileSync(join(dir, "src", "ui", "fine.mx"), "<div/>\n");
+
+      const result = scanCustomTags(join(dir, "caller.mx"), {
+        targets: lookup,
+      });
+
+      expect([...result.tags.keys()]).toEqual(["fine"]);
+      expect(result.diagnostics).toEqual([bad(dir, "-x.mx", "-x", "src/ui")]);
+      expect(result.diagnostics[0]?.message).toBe(
+        `\`ui/-x.mx\` is skipped: \`-x\` ${NAME_RULE}`,
+      );
     });
 
     it("is the same diagnostic when the project walk finds it (`discoverProjectTags`)", () => {
