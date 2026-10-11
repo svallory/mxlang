@@ -2010,8 +2010,6 @@ export function rejectUnknownDeclarationKeys(
       }
     }
     rejectNonStringDefaultTag(`\`<${tagName}>\``, definition);
-    // A key the file's dialect claims is its data, not core's to
-    // check: the module's `checkContract` checks it here, at registration.
     if (Object.hasOwn(definition, "declares") && !claimed.tag.has("declares")) {
       failAt(
         tagName,
@@ -2019,6 +2017,8 @@ export function rejectUnknownDeclarationKeys(
         { line: 0, column: 0 },
       );
     }
+    // A key the file's dialect claims is its data, not core's to
+    // check: the module's `checkContract` checks it here, at registration.
     checkClaimedContract(tagName, definition, claimed);
     rejectRecursiveContractKeys(
       `tag "${tagName}"`,

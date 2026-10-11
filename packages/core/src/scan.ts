@@ -1413,7 +1413,9 @@ function indexMxContractsEntries(
           ) {
             failContracts(
               file,
-              `\`<${name}>\`: \`${key}\` is not allowed in \`mx.contracts\`; use a tag sidecar for hooks other than \`analyze\` and for templates`,
+              key === "declares"
+                ? `\`<${name}>\`: \`declares\` is not allowed: no syntax module claims it (\`contractFields\`)`
+                : `\`<${name}>\`: \`${key}\` is not allowed in \`mx.contracts\`; use a tag sidecar for hooks other than \`analyze\` and for templates`,
             );
           }
         }

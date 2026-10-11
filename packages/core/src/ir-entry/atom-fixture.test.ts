@@ -451,7 +451,9 @@ describe("`values`, `pattern` and `ref` belong to the module that claims them, `
       );
       expect(() =>
         scanCustomTags(join(root, "page.mx"), { targets: testTargetLookup() }),
-      ).toThrow("`declares` is not allowed in `mx.contracts`");
+      ).toThrow(
+        "`<box>`: `declares` is not allowed: no syntax module claims it",
+      );
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
