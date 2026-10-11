@@ -241,6 +241,12 @@ export interface AttrArgs {
  * (`a=1`, `v:fn:=q`, `h(x) { … }`); a spread's `...` through its expression;
  * a shorthand's token (`#id`, `.big`). A default attribute (`<x="post">`)
  * starts at its `=`. `undefined` for an attribute synthesized with no source.
+ *
+ * An attribute the author did not write, one a contract `default` added to a
+ * contract-only tag, has an empty `span` (and `nameSpan`, and value span) at
+ * the end of the tag's name, in the IR `lowerSource` returns and in the
+ * compile path alike. An authored attribute's `span` is never empty, so
+ * `span.sourceStart === span.sourceEnd` marks the attribute as not written.
  */
 export interface AttrSpan {
   span?: SourceSpan;
@@ -272,7 +278,9 @@ export type Attr =
        * File-absolute UTF-16 code-unit span of the bare string literal, quotes included
        * (`"strng"` in `type="strng"`) — the same convention as `Expr.span` for
        * a string expression. For a default attribute (`<x="post">`) it is
-       * `"post"`. `undefined` for an attribute synthesized with no source.
+       * `"post"`. `undefined` for an attribute synthesized with no source,
+       * except one a contract `default` added to a contract-only tag: it has
+       * a zero-width span at the end of the tag's name (see `span`).
        */
       valueSpan?: SourceSpan;
       /**
@@ -280,7 +288,10 @@ export type Attr =
        * no spelled name: its span is zero-width at the `=`, as in Marko
        * (htmljs-parser 5.18.0 `ensureAttrName`, index.js:574-580;
        * `@marko/language-tools` 2.7.0, index.js:3306-3310). Consumers detect
-       * the empty range, like Marko.
+       * the empty range, like Marko. An empty `nameSpan` alone does not mean
+       * a nameless default attribute: an attribute a contract `default` added
+       * to a contract-only tag also has one (zero-width at the end of the
+       * tag's name), so check `span` too (see `span`).
        */
       nameSpan: SourceSpan;
       /**

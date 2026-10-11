@@ -16,8 +16,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { CustomTag, TagCall } from "../custom-tags.ts";
+import { clearScanCache, getCustomTags } from "../index.ts";
 import type { DelegatedTag } from "../ir.ts";
-import { clearScanCache, scanCached } from "../scan-cache.ts";
+import { scanCached } from "../scan-cache.ts";
 import { clearTagFileCache } from "../tag-file.ts";
 import { dialectProject } from "../test-dialect-project.ts";
 import { testTargetLookup } from "../test-targets.ts";
@@ -161,9 +162,11 @@ describe("customTags: a contract default on a contract-only tag", () => {
         attr.kind === "spread" ? "..." : attr.name,
       ),
     ).toEqual(["size", "n", "on"]);
-    for (const attr of tagOf(result).attrs) {
-      expect(attr.span.sourceStart).toBeGreaterThan(4);
-    }
+    expect(tagOf(result).attrs.map((attr) => attr.span)).toEqual([
+      { sourceStart: 5, sourceEnd: 13 },
+      { sourceStart: 14, sourceEnd: 17 },
+      { sourceStart: 18, sourceEnd: 26 },
+    ]);
   });
 
   it("names the tag a non-literal default is declared on, inside the document", () => {
@@ -174,13 +177,179 @@ describe("customTags: a contract default on a contract-only tag", () => {
     });
     expect(result.ir).toBeUndefined();
     expect(result.diagnostics).toEqual([
-      expect.objectContaining({
+      {
         severity: "error",
+        message:
+          "`<box>`: attribute `size` declares a `default` that is not a string, number or boolean, so it has no attribute spelling",
         line: 2,
         column: 0,
         offset: 1,
-        message: expect.stringContaining("attribute `size`"),
-      }),
+      },
+    ]);
+  });
+});
+
+describe("an empty span marks an attribute the author did not write", () => {
+  const coin: CustomTag = {
+    attributes: { value: { type: "string", default: "s" } },
+  };
+
+  it('gives a `value` default the nameSpan of an authored `<box="s"/>`, and tells them apart by span', () => {
+    const defaulted = lowerSource("<box/>\n", "/t.mx", {
+      customTags: { box: coin },
+    });
+    const authored = lowerSource('<box="s"/>\n', "/t.mx", {
+      customTags: { box: coin },
+    });
+    expect(defaulted.diagnostics).toEqual([]);
+    expect(authored.diagnostics).toEqual([]);
+    expect(attrsOf(tagOf(defaulted))).toEqual([
+      {
+        kind: "static",
+        name: "value",
+        nameSpan: at(4),
+        span: at(4),
+        value: "s",
+        valueSpan: at(4),
+      },
+    ]);
+    expect(attrsOf(tagOf(authored))).toEqual([
+      {
+        kind: "static",
+        name: "value",
+        nameSpan: at(4),
+        span: { sourceStart: 4, sourceEnd: 8 },
+        value: "s",
+        valueSpan: { sourceStart: 5, sourceEnd: 8 },
+      },
+    ]);
+  });
+
+  it("lowers a `class` and an `id` default, which main rejected as a merged shorthand class", () => {
+    const result = lowerSource("<box/>\n", "/t.mx", {
+      customTags: {
+        box: {
+          attributes: {
+            class: { type: "string", default: "c" },
+            id: { type: "string", default: "i" },
+          },
+        },
+      },
+    });
+    expect(result.diagnostics).toEqual([]);
+    expect(
+      attrsOf(tagOf(result)).map(({ name, span }) => [name, span]),
+    ).toEqual([
+      ["class", at(4)],
+      ["id", at(4)],
+    ]);
+  });
+});
+
+describe("a contract default from every contract source", () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    clearScanCache();
+    for (const dir of dirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  function project(files: Record<string, string>): string {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-default-src-")));
+    dirs.push(dir);
+    for (const [path, text] of Object.entries(files)) {
+      mkdirSync(join(dir, path, ".."), { recursive: true });
+      writeFileSync(join(dir, path), text);
+    }
+    return dir;
+  }
+
+  it.each(["allow", "reject"] as const)(
+    "an `mx.contracts` module, unknownTags %s",
+    (unknownTags) => {
+      const dir = project({
+        "package.json": JSON.stringify({
+          name: "contracts-default",
+          mx: { contracts: "./contracts.ts" },
+        }),
+        "contracts.ts":
+          'export default { stamp: { attributes: { size: { type: "string", default: "s" } } } };\n',
+        "page.mx": "<stamp/>\n",
+      });
+      const file = join(dir, "page.mx");
+      const result = lowerSource("<stamp/>\n", file, {
+        customTags: getCustomTags(file, { targets, host: null }),
+        unknownTags,
+      });
+      // `<stamp` ends at offset 6.
+      expect(result.diagnostics).toEqual([]);
+      expect(attrsOf(tagOf(result))).toEqual([
+        {
+          kind: "static",
+          name: "size",
+          nameSpan: at(6),
+          span: at(6),
+          value: "s",
+          valueSpan: at(6),
+        },
+      ]);
+    },
+  );
+
+  it.each(["allow", "reject"] as const)(
+    "a sidecar `tags/coin.tag.ts`, unknownTags %s",
+    (unknownTags) => {
+      const dir = project({
+        "package.json": '{"name":"sidecar-default"}',
+        "tags/coin.tag.ts":
+          'export default { attributes: { size: { type: "string", default: "s" } } };\n',
+        "page.mx": "<coin/>\n",
+      });
+      const file = join(dir, "page.mx");
+      const result = lowerSource("<coin/>\n", file, {
+        customTags: getCustomTags(file, { targets, host: null }),
+        unknownTags,
+      });
+      // `<coin` ends at offset 5.
+      expect(result.diagnostics).toEqual([]);
+      expect(attrsOf(tagOf(result))).toEqual([
+        {
+          kind: "static",
+          name: "size",
+          nameSpan: at(5),
+          span: at(5),
+          value: "s",
+          valueSpan: at(5),
+        },
+      ]);
+    },
+  );
+
+  it('an inline `children["*"]` contract', () => {
+    const result = lowerSource("<list><item/></list>\n", "/t.mx", {
+      customTags: {
+        list: {
+          children: {
+            "*": { attributes: { k: { type: "string", default: "d" } } },
+          },
+        },
+      },
+    });
+    expect(result.diagnostics).toEqual([]);
+    const item = tagOf(result).children[0] as unknown as {
+      tag: Spanned<DelegatedTag>;
+    };
+    // `<list><item` ends at offset 11.
+    expect(attrsOf(item.tag)).toEqual([
+      {
+        kind: "static",
+        name: "k",
+        nameSpan: at(11),
+        span: at(11),
+        value: "d",
+        valueSpan: at(11),
+      },
     ]);
   });
 });

@@ -48,7 +48,10 @@ type ImportNode = Extract<IrNode, { kind: "Import" }>;
  * `args` (`[]` without arguments; `finishIr`). A static attribute carries its
  * `valueSpan` (an atom's and a member's included; `e=""` spans its quotes,
  * and a bare colon name such as `x:foo`, whose value is `""`, has a
- * zero-width one at the name's end), and an `Import` its `from` and `names`. Other optional spans
+ * zero-width one at the name's end; an attribute a contract `default` added to
+ * a contract-only tag has an empty `span`, `nameSpan` and value span at the end
+ * of the tag's name, and an empty `span` is what tells it from an authored
+ * one), and an `Import` its `from` and `names`. Other optional spans
  * (`bodySpan`, `paramSpans`) stay optional. @unstable
  */
 export type Spanned<T> = T extends SourceSpan
