@@ -40,6 +40,7 @@
  * the same reason.
  */
 
+import { createHash } from "node:crypto";
 import {
   existsSync,
   readdirSync,
@@ -96,6 +97,27 @@ import { dropOwnParserPosition } from "./parse-error-position.ts";
 import { RESERVED_NAMES, TAG_NAME_RE } from "./tag-names.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
 import type { TemplateTag } from "./template-tag.ts";
+
+/**
+ * The sha256 of the bytes the scan read from a tag file, keyed by that
+ * file's `ScanResult.files` record (internal). The scan cache stamps a racy
+ * file with this hash rather than one it reads later, so an edit between
+ * the scan's read and the cache's snapshot, in the same timestamp tick,
+ * reads as stale.
+ */
+const scannedHashes = new WeakMap<object, string>();
+
+/** The hash of the bytes the scan read for `record`, when it read any. */
+export function scannedHashOf(record: object): string | undefined {
+  return scannedHashes.get(record);
+}
+
+/** Reads a tag file's text for the scan, recording its bytes' hash. */
+function readScanned(path: string, record: object): string {
+  const bytes = readFileSync(path);
+  scannedHashes.set(record, createHash("sha256").update(bytes).digest("hex"));
+  return bytes.toString("utf8");
+}
 
 const require = createRequire(import.meta.url);
 
@@ -1376,7 +1398,8 @@ function indexTagFiles(
     }
     const existing = into.get(name);
     if (existing && existing.sourceDir !== dir) continue;
-    files.push({ path, mtimeMs });
+    const record = { path, mtimeMs };
+    files.push(record);
     const tag: DiscoveredTag = existing ?? {
       name,
       sourceDir: dir,
@@ -1384,7 +1407,7 @@ function indexTagFiles(
     };
     if (isSidecar) {
       tag.sidecar = path;
-      const declared = readParseOptions(readFileSync(path, "utf8"), path);
+      const declared = readParseOptions(readScanned(path, record), path);
       const merged = { ...options.parseOptions, ...declared };
       if (Object.keys(merged).length > 0) tag.parseOptions = merged;
     } else {
@@ -1495,7 +1518,8 @@ function indexDirectory(
     const existing = into.get(name);
     if (existing && existing.sourceDir !== dir) continue;
 
-    files.push({ path, mtimeMs });
+    const record = { path, mtimeMs };
+    files.push(record);
     const tag: DiscoveredTag = existing ?? {
       name,
       sourceDir: dir,
@@ -1505,7 +1529,7 @@ function indexDirectory(
       tag.sidecar = path;
       // The sidecar's own declaration overrides the directory default, which
       // is what "directory-level defaults a sidecar may override" means.
-      const declared = readParseOptions(readFileSync(path, "utf8"), path);
+      const declared = readParseOptions(readScanned(path, record), path);
       const merged = { ...options.parseOptions, ...declared };
       if (Object.keys(merged).length > 0) tag.parseOptions = merged;
     } else {

@@ -16,6 +16,12 @@
  *    is *detected*, not merely expired, so an editor that never restarts
  *    still recompiles against the tag an author just saved.
  *
+ *    A racy sidecar's hash is of the bytes the scan read, so a same-tick
+ *    edit between that read and the snapshot is stale too. Known gaps: an
+ *    `mx.contracts` module is read by the module loader, not the scan, so
+ *    such an edit to one is caught only by its mtime; and see
+ *    {@link RACY_WINDOW_MS} for a filesystem whose clock lags this one.
+ *
  *    The key gains the caller's dialect: an MX file and a dialect file in one
  *    directory scan different tag directories.
  *
@@ -50,6 +56,7 @@ import {
   type ScanDiagnostic,
   type ScanOptions,
   type ScanResult,
+  scannedHashOf,
   scanWithDiscovery,
   type TagDiscovery,
   tagDiscoveryOf,
@@ -96,12 +103,18 @@ type FileStamp =
 
 /**
  * How close to the snapshot a file's mtime or ctime may be and still be
- * changed again without moving either: coarser than any filesystem
- * timestamp granularity in use (FAT's 2 s included), and it also absorbs
- * modest clock skew with a network filesystem. A timestamp in the future is
- * racy too.
+ * changed again without moving either: FAT's 2 s granularity, the coarsest
+ * in use, plus 1 s of margin for a filesystem whose clock runs behind this
+ * process's. A timestamp in the future is racy too.
+ *
+ * Known gap: the window compares filesystem timestamps with this process's
+ * clock (git compares with its index file's own mtime instead). On a
+ * network filesystem whose clock lags by more than the margin and whose
+ * granularity is coarse, a just-written file reads as settled, and a second
+ * same-size edit inside one tick keeps every stamp field: that edit is
+ * missed until the next change.
  */
-const RACY_WINDOW_MS = 2000;
+const RACY_WINDOW_MS = 3000;
 let racyWindowMs = RACY_WINDOW_MS;
 
 /** A listing value no real directory can produce, so "absent" is a state. */
@@ -267,6 +280,12 @@ function snapshot(
     // next lookup rescans rather than trusting what the scan never read.
     const stamp = stampOf(file.path, nowMs);
     const agrees = !("missing" in stamp) && stamp.mtimeMs === file.mtimeMs;
+    // A racy file keeps the hash of the bytes the scan read, not of what is
+    // there now: a same-tick edit between the two then reads as stale.
+    const scanned = scannedHashOf(file);
+    if (agrees && "hash" in stamp && scanned !== undefined) {
+      stamp.hash = scanned;
+    }
     files.set(file.path, agrees ? stamp : { missing: true, poisoned: true });
   }
   return {
@@ -501,6 +520,16 @@ export const stampForTests = {
     stampIsFresh(path, stamp, nowMs),
 };
 
+/**
+ * Snapshots `result` as a cache miss would, and answers whether a lookup
+ * would still trust it: the snapshot's own rules (poisoning, the scanned
+ * hash) end to end, for tests (not public API).
+ */
+export function snapshotFreshForTests(result: ScanResult): () => boolean {
+  const entry = snapshot(result, []);
+  return () => isFresh(entry);
+}
+
 /** Drops every cached scan. For tests and for an editor's "restart" command. */
 export function clearScanCache(): void {
   scans.clear();
@@ -531,7 +560,7 @@ export function scanCacheEvidenceForTests(): Array<[string, object]> {
 
 /**
  * Sets the racy window and returns the previous one, for tests that need a
- * file to be non-racy without waiting two seconds (not public API).
+ * file to be non-racy without waiting out the window (not public API).
  */
 export function setRacyWindowForTests(ms: number): number {
   const previous = racyWindowMs;

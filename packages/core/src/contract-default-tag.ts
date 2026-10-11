@@ -1,5 +1,9 @@
 import { BUILTIN_CUSTOM_TAGS } from "./builtin-tags.ts";
-import type { CustomTag, CustomTagAttributeTag } from "./custom-tags.ts";
+import {
+  type CustomTag,
+  type CustomTagAttributeTag,
+  isDeferredContract,
+} from "./custom-tags.ts";
 import type { DefaultTagContext, DefaultTagParent } from "./declarations.ts";
 import {
   type DefaultTagScope,
@@ -168,6 +172,8 @@ export interface ContractDefaultTagInput {
  * tags (`allowContractDefaultTag: false`) refuses each declaration, naming the
  * host; otherwise the value goes through the shared `validateDefaultTag`.
  * A tag whose sidecar fails to load is skipped: the scan reports that error.
+ * A deferred contract (a dialect tag file) is skipped: nothing reads it
+ * until a call does, and the use site validates the value it reads.
  */
 export function contractDefaultTagDiagnostics(
   input: ContractDefaultTagInput,
@@ -179,7 +185,9 @@ export function contractDefaultTagDiagnostics(
     const tag = Object.hasOwn(input.customTags, name)
       ? input.customTags[name]
       : undefined;
-    if (!file || !tag) continue;
+    // A deferred contract (a dialect tag file) is read only by a call: its
+    // `defaultTag` is validated where a call uses it, never here.
+    if (!file || !tag || isDeferredContract(tag)) continue;
     try {
       const declared: Array<{ chain: string[]; value: string }> = [];
       const collect = (

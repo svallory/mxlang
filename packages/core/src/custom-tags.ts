@@ -2443,19 +2443,44 @@ const DEFERRED_KEYS = [
   "defaultTag",
 ] as const;
 
-/** One deferred entry, read once: the contract and its checks, or why they failed. */
-interface Resolution {
+/**
+ * A deferred entry's raw contract, read once (phase 1): the entry's own
+ * keys copied, or why reading them failed. No check runs here and nothing
+ * else in the map is read, so a read never re-enters another.
+ */
+interface ContractRead {
   contract?: CustomTag;
   error?: unknown;
 }
 
+const contractReads = new WeakMap<CustomTag, ContractRead>();
+
+function readContract(raw: CustomTag): ContractRead {
+  const known = contractReads.get(raw);
+  if (known) return known;
+  let read: ContractRead;
+  try {
+    const contract: CustomTag = {};
+    for (const key of Object.keys(raw)) {
+      const value = (raw as Record<string, unknown>)[key];
+      if (value !== undefined) {
+        (contract as Record<string, unknown>)[key] = value;
+      }
+    }
+    read = { contract };
+  } catch (error) {
+    read = { error };
+  }
+  contractReads.set(raw, read);
+  return read;
+}
+
 /**
- * Per view entry, not per raw entry: the checks read the rest of the map, so
- * one entry in two maps can resolve two ways.
+ * Why a called deferred entry fails (phase 2), cached per view entry: the
+ * checks read the rest of the map, so one entry in two maps can fail two
+ * ways. `undefined` when it reads and checks clean.
  */
-const resolutions = new WeakMap<ViewEntry, Resolution>();
-/** Entries being read now, so two contracts that read each other terminate. */
-const resolving = new WeakSet<ViewEntry>();
+const checkResults = new WeakMap<ViewEntry, { error?: unknown }>();
 
 /** A view entry's origin: the deferred entry, its name, and the view it is in. */
 interface ViewEntry {
@@ -2470,50 +2495,116 @@ const views = new WeakMap<
   Readonly<Record<string, CustomTag>>,
   WeakMap<ClaimedFields, Readonly<Record<string, CustomTag>>>
 >();
-
 /**
- * Reads a deferred entry's contract once and runs that tag's registration
- * checks against the rest of the view (unknown keys, wildcard references,
- * unreachable hooks), as registration does for an eager entry. Never
- * throws: a failure is recorded for the call to raise.
+ * Per view, the map registration checks: each deferred entry reduced to
+ * what registration reads without its contract (its name, `parseOptions`,
+ * `template` and hooks), so a cross-tag check from an eager entry finds the
+ * deferred one's contract keys absent and reads nothing.
  */
-function resolveDeferred(entry: ViewEntry): Resolution {
-  const known = resolutions.get(entry);
+const registrationMaps = new WeakMap<
+  Readonly<Record<string, CustomTag>>,
+  Readonly<Record<string, CustomTag>>
+>();
+
+/** Whether `definition` is a deferred entry, raw or in a view (internal). */
+export function isDeferredContract(definition: unknown): boolean {
+  return (
+    typeof definition === "object" &&
+    definition !== null &&
+    (deferredEntries.has(definition as CustomTag) ||
+      viewEntries.has(definition as CustomTag))
+  );
+}
+
+function registrationMapOf(
+  view: Readonly<Record<string, CustomTag>>,
+): Readonly<Record<string, CustomTag>> {
+  const known = registrationMaps.get(view);
   if (known) return known;
-  if (resolving.has(entry)) return {};
-  resolving.add(entry);
-  let resolution: Resolution;
-  try {
-    const contract: CustomTag = {};
-    for (const key of Object.keys(entry.raw)) {
-      const value = (entry.raw as Record<string, unknown>)[key];
-      if (value !== undefined) {
-        (contract as Record<string, unknown>)[key] = value;
-      }
-    }
-    const own = { ...entry.view, [entry.name]: contract };
-    const only = (name: string) => name === entry.name;
-    rejectUnknownDeclarationKeys(own, entry.claimed, only);
-    rejectWildcardReferences(own, only);
-    rejectUnreachableHooks(own, only);
-    resolution = { contract };
-  } catch (error) {
-    resolution = { error };
-  } finally {
-    resolving.delete(entry);
+  const map: Record<string, CustomTag> = Object.create(
+    Object.getPrototypeOf(view),
+  );
+  for (const name of Object.keys(view)) {
+    const definition = view[name] as CustomTag;
+    const entry = viewEntries.get(definition);
+    map[name] = entry ? withoutContract(entry) : definition;
   }
-  resolutions.set(entry, resolution);
-  return resolution;
+  registrationMaps.set(view, map);
+  return map;
+}
+
+/** A deferred entry's keys other than its contract's, read as they are. */
+function withoutContract(entry: ViewEntry): CustomTag {
+  const stub: CustomTag = {};
+  const deferred = deferredKeysOf(entry.claimed);
+  for (const key of Object.keys(entry.raw)) {
+    if (deferred.has(key)) continue;
+    Object.defineProperty(stub, key, {
+      enumerable: true,
+      configurable: true,
+      get: () => (entry.raw as Record<string, unknown>)[key],
+    });
+  }
+  return stub;
+}
+
+function deferredKeysOf(claimed: ClaimedFields): Set<string> {
+  return new Set<string>([...DEFERRED_KEYS, ...claimed.tag]);
 }
 
 /**
- * The map registration and lowering read, for `customTags`: the map itself
- * when no entry is deferred (nothing changes), else a copy in which each
- * deferred entry (see {@link deferContract}) is a view whose contract keys
- * read the entry on first use ({@link resolveDeferred}) and answer
- * `undefined` when it fails, so a check or a lookup never throws for a tag
- * nobody called. Its name, `parseOptions`, `template` and hooks are the
- * entry's own. Cached per map and claim.
+ * The registration checks a called deferred entry owes (phase 2), run once
+ * per view entry and never throwing; a failure is recorded for the call to
+ * raise. Two passes:
+ *
+ * - its own checks (unknown keys, wildcard references, unreachable hooks)
+ *   over the view, where every other deferred entry answers with its raw
+ *   contract (phase 1), as registration would read it eagerly;
+ * - the eager entries' checks again, over the registration map with this
+ *   one entry readable, for the cross-tag checks (`children`, `parents`,
+ *   `children["*"]`, attribute-tag `children`) that name it.
+ *
+ * Neither pass reads another entry's checks, so nothing re-enters.
+ */
+function checkDeferred(entry: ViewEntry): { error?: unknown } {
+  const known = checkResults.get(entry);
+  if (known) return known;
+  let result: { error?: unknown };
+  const read = readContract(entry.raw);
+  if (read.error !== undefined || !read.contract) {
+    result = { error: read.error };
+  } else {
+    try {
+      const own = { ...entry.view, [entry.name]: read.contract };
+      const only = (name: string) => name === entry.name;
+      rejectUnknownDeclarationKeys(own, entry.claimed, only);
+      rejectWildcardReferences(own, only);
+      rejectUnreachableHooks(own, only);
+      const registration = registrationMapOf(entry.view);
+      const cross = { ...registration, [entry.name]: read.contract };
+      const eager = (name: string) =>
+        !viewEntries.has(entry.view[name] as CustomTag);
+      rejectUnknownDeclarationKeys(cross, entry.claimed, eager);
+      rejectWildcardReferences(cross, eager);
+      rejectUnreachableHooks(cross, eager);
+      result = {};
+    } catch (error) {
+      result = { error };
+    }
+  }
+  checkResults.set(entry, result);
+  return result;
+}
+
+/**
+ * The map lowering reads, for `customTags`: the map itself when no entry is
+ * deferred (nothing changes), else a copy in which each deferred entry (see
+ * {@link deferContract}) is a view whose contract keys read the entry's raw
+ * contract on first use ({@link readContract}) and answer `undefined` when
+ * that read fails, so a lookup never throws for a tag nobody called. Its
+ * name, `parseOptions`, `template` and hooks are the entry's own. Cached per
+ * map and claim. Registration checks a different map
+ * ({@link rejectRegistration}), in which no deferred contract is read.
  */
 export function registrationView(
   customTags: Readonly<Record<string, CustomTag>>,
@@ -2537,6 +2628,7 @@ export function registrationView(
   const view: Record<string, CustomTag> = Object.create(
     Object.getPrototypeOf(customTags),
   );
+  const deferred = deferredKeysOf(claimed);
   for (const name of names) {
     const raw = customTags[name] as CustomTag;
     if (!deferredEntries.has(raw)) {
@@ -2545,7 +2637,6 @@ export function registrationView(
     }
     const wrapper: CustomTag = {};
     const entry: ViewEntry = { raw, name, view, claimed };
-    const deferred = new Set<string>([...DEFERRED_KEYS, ...claimed.tag]);
     for (const key of Object.keys(raw)) {
       if (deferred.has(key)) continue;
       const descriptor = Object.getOwnPropertyDescriptor(raw, key);
@@ -2562,7 +2653,7 @@ export function registrationView(
         enumerable: true,
         configurable: true,
         get: () =>
-          (resolveDeferred(entry).contract as Record<string, unknown>)?.[key],
+          (readContract(raw).contract as Record<string, unknown>)?.[key],
       });
     }
     viewEntries.set(wrapper, entry);
@@ -2577,10 +2668,11 @@ export function registrationView(
 }
 
 /**
- * Why a deferred entry's contract cannot be read, read on the call that
- * needs it: `undefined` for an eager entry or a contract that reads and
- * checks clean. `definition` is a view entry, or a raw deferred entry a
- * caller registered without a view (then `customTags` gives its view).
+ * Why a deferred entry's contract cannot be read or fails its checks, read
+ * on the call that needs it: `undefined` for an eager entry or a contract
+ * that reads and checks clean. `definition` is a view entry, or a raw
+ * deferred entry a caller registered without a view (then `customTags`
+ * gives its view).
  */
 export function deferredContractError(
   definition: CustomTag,
@@ -2598,14 +2690,15 @@ export function deferredContractError(
     );
     entry = viewEntries.get(view[name] as CustomTag);
   }
-  return entry ? resolveDeferred(entry).error : undefined;
+  return entry ? checkDeferred(entry).error : undefined;
 }
 
 /**
- * The registration checks of `customTags`, run on its view: eager entries
- * as always, deferred entries skipped (their checks run on their first call,
- * {@link deferredContractError}). Returns the view, which is the map
- * lowering reads.
+ * The registration checks of `customTags`: eager entries as always, over a
+ * map in which every deferred entry's contract is absent, so no check reads
+ * one (their checks, both their own and the eager entries' that name them,
+ * run on their first call, {@link deferredContractError}). Returns the
+ * view, which is the map lowering reads.
  */
 export function rejectRegistration(
   customTags: Readonly<Record<string, CustomTag>> | undefined,
@@ -2613,13 +2706,17 @@ export function rejectRegistration(
 ): Readonly<Record<string, CustomTag>> | undefined {
   const view = registrationView(customTags, claimed);
   if (!view) return view;
-  const eager =
-    view === customTags
-      ? everyTag
-      : (name: string) => !viewEntries.has(view[name] as CustomTag);
-  rejectUnknownDeclarationKeys(view, claimed, eager);
-  rejectWildcardReferences(view, eager);
-  rejectUnreachableHooks(view, eager);
+  if (view === customTags) {
+    rejectUnknownDeclarationKeys(view, claimed, everyTag);
+    rejectWildcardReferences(view, everyTag);
+    rejectUnreachableHooks(view, everyTag);
+    return view;
+  }
+  const registration = registrationMapOf(view);
+  const eager = (name: string) => !viewEntries.has(view[name] as CustomTag);
+  rejectUnknownDeclarationKeys(registration, claimed, eager);
+  rejectWildcardReferences(registration, eager);
+  rejectUnreachableHooks(registration, eager);
   return view;
 }
 

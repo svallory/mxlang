@@ -9,4 +9,4 @@ A dialect file discovers its own `tagDirs`: files ending in a claimed extension,
 
 Until a dialect can read its tag files, a call to such a tag is a `MX_TAG_FILE_ERROR` at the call (`` `<money>` is defined by components/money.mesh.mx, but dialect `mesh` has no tagFile hook to read it. ``). A file that never calls the tag compiles clean.
 
-`scanCached` keys on the caller's dialect too, and also watches every project dialect's `package.json`. A cache hit now stats each tracked file (mtime, ctime, size, inode) and hashes only files changed within two seconds of the snapshot. A warm hit at 1200 tags drops from about 8.7 ms to 2.2 ms.
+`scanCached` keys on the caller's dialect too, and also watches every project dialect's `package.json`. A cache hit now stats each tracked file (mtime, ctime, size, inode) and hashes only files changed within three seconds of the snapshot (a sidecar's hash is of the bytes the scan read). A warm hit at 1200 tags drops from about 8.7 ms to 2.2 ms.

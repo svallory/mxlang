@@ -22,11 +22,13 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { scanCustomTags } from "./scan.ts";
 import {
   clearScanCache,
   scanCached,
   scanCacheEvidenceForTests,
   setRacyWindowForTests,
+  snapshotFreshForTests,
   stampForTests,
 } from "./scan-cache.ts";
 import { dialectProject } from "./test-dialect-project.ts";
@@ -40,7 +42,7 @@ let window: number;
 beforeEach(() => {
   dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-scan-stamps-")));
   clearScanCache();
-  window = setRacyWindowForTests(2000);
+  window = setRacyWindowForTests(3000);
 });
 afterEach(() => {
   setRacyWindowForTests(window);
@@ -80,14 +82,19 @@ const evidenceOf = (path: string) =>
     .map(([, stamp]) => stamp);
 
 describe("a stamp", () => {
+  it("the racy window is 3 s: FAT's 2 s granularity plus a second of clock lag", () => {
+    // `window` holds the default the suite's `beforeEach` replaced.
+    expect(window).toBe(3000);
+  });
+
   it("hashes a file changed within the racy window, and only such a file", () => {
     const file = write("a.mx");
     const changed = statSync(file).ctimeMs;
-    expect(stampForTests.of(file, changed + 1000)).toHaveProperty(
+    expect(stampForTests.of(file, changed + 2900)).toHaveProperty(
       "hash",
       expect.stringMatching(/^[a-f0-9]{64}$/),
     );
-    expect(stampForTests.of(file, changed + 3000)).not.toHaveProperty("hash");
+    expect(stampForTests.of(file, changed + 3100)).not.toHaveProperty("hash");
   });
 
   it("a timestamp in the future is racy", () => {
@@ -125,7 +132,7 @@ describe("a stamp", () => {
     expect(stamp).toHaveProperty("hash");
     expect(stampForTests.isFresh(file, stamp, now)).toBe(true);
     expect(stamp).toHaveProperty("hash");
-    expect(stampForTests.isFresh(file, stamp, now + 3000)).toBe(true);
+    expect(stampForTests.isFresh(file, stamp, now + 4000)).toBe(true);
     expect(stamp).not.toHaveProperty("hash");
   });
 
@@ -280,7 +287,7 @@ describe("invalidation", () => {
 // the racy hash in play and with every file settled.
 describe("a dialect tag directory's listing", () => {
   it.each([
-    ["the default racy window", 2000],
+    ["the default racy window", 3000],
     ["every file settled", 0],
   ])("an added or removed tag file is seen at once (%s)", async (_, racy) => {
     setRacyWindowForTests(racy);
@@ -308,5 +315,54 @@ describe("a dialect tag directory's listing", () => {
     expect(readFileSync(join(dir, "package.json"), "utf8")).toContain(
       "kit-dialect",
     );
+  });
+});
+
+// The snapshot end to end: what it stamps is checked against what the scan
+// itself saw, not only against the filesystem at snapshot time.
+describe("a snapshot", () => {
+  function sidecarProject() {
+    write("package.json", '{ "name": "app" }\n');
+    return write(
+      "tags/box.tag.ts",
+      "// a\nexport default { parseOptions: { text: true } };\n",
+    );
+  }
+
+  it("trusts a scan nothing changed since", () => {
+    sidecarProject();
+    const result = scanCustomTags(join(dir, "page.mx"), { targets });
+    expect(snapshotFreshForTests(result)()).toBe(true);
+  });
+
+  it("poisons a file whose mtime moved between the scan and the snapshot", () => {
+    const sidecar = sidecarProject();
+    const result = scanCustomTags(join(dir, "page.mx"), { targets });
+    const record = result.files.find((file) => file.path === sidecar);
+    expect(record).toBeDefined();
+    // As if an edit landed between the scan's stat and the snapshot's.
+    (record as { mtimeMs: number }).mtimeMs -= 1;
+    const fresh = snapshotFreshForTests(result);
+    expect(fresh()).toBe(false);
+  });
+
+  it("stamps a racy sidecar with the hash of the bytes the scan read", () => {
+    const sidecar = sidecarProject();
+    // A whole-millisecond mtime, so restoring it below is exact.
+    const tick = new Date(Math.floor(Date.now()));
+    utimesSync(sidecar, tick, tick);
+    const result = scanCustomTags(join(dir, "page.mx"), { targets });
+    expect(result.tags.get("box")?.parseOptions).toEqual({ text: true });
+    // A same-size edit in the same tick: the mtime the scan recorded still
+    // agrees, so only the content tells the scan's bytes from today's.
+    writeFileSync(
+      sidecar,
+      "// b\nexport default { parseOptions: { text: true } };\n",
+    );
+    utimesSync(sidecar, tick, tick);
+    expect(statSync(sidecar).mtimeMs).toBe(
+      result.files.find((file) => file.path === sidecar)?.mtimeMs,
+    );
+    expect(snapshotFreshForTests(result)()).toBe(false);
   });
 });

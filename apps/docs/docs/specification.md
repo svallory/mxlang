@@ -2223,7 +2223,7 @@ Each of these diagnostics carries a stable code, `ScanDiagnostic.code` or
 |---|---|---|
 | `MX_TAG_FILE_ERROR` | error, at the call | A call names a dialect tag file the dialect cannot read: `` `<money>` is defined by components/money.mesh.mx, but dialect `mesh` has no tagFile hook to read it. `` |
 | `MX_MISPLACED_TAG_FILE` | warning, at the file | A file a dialect with `tagDirs` claims sits in a tag directory outside them: `` `tags/money.mesh.mx` is a Mesh file in `tags/`; Mesh discovers tags in `components/`. `` |
-| `MX_SIDECAR_IGNORED` | warning, at the file | A `.tag.ts` sidecar in a dialect tag directory with `sidecars: false`. The sidecar is not read. |
+| `MX_SIDECAR_IGNORED` | warning, at the file | A `.tag.ts` sidecar that a dialect file's scan meets while that dialect sets `sidecars: false`, in its own tag directories or, for a dialect without `tagDirs`, in `tags/`. The sidecar is not read. |
 | `MX_INVALID_TAG_FILE_NAME` | error, at the file | A dialect tag file's name is not a usable tag name. The file is skipped. |
 | `MX_DOTTED_TAG_FILE_NAME` | warning, at the file | A dialect tag file's name has a dot, which a call cannot write as one tag name. The message names the `tagExtensions` entry that would fix it. |
 | `MX_BUILTIN_TAG_FILE` | error, at the file | A dialect tag file is named after a core-owned tag (`try`). The file is skipped. |

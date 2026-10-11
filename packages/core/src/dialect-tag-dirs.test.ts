@@ -20,6 +20,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { contractDefaultTagDiagnostics } from "./contract-default-tag.ts";
 import { isTranslateError } from "./core.ts";
 import { type CustomTag, deferContract } from "./custom-tags.ts";
 import { lowerSource } from "./ir-entry/index.ts";
@@ -451,6 +452,30 @@ describe("dialect tag directories", () => {
     ]);
   });
 
+  it.each([
+    ["an MX file", "page.mx"],
+    ["a file of the dialect without `tagDirs`", "page.plain.mx"],
+  ])(
+    "beside a dialect with `tagDirs`, a dialect without them still claims nothing in `tags/` (from %s)",
+    (_, page) => {
+      kitProject();
+      dialectProject(dir, {
+        packageName: "plain-dialect",
+        manifest: { id: "plain", name: "Plain", extensions: [".plain.mx"] },
+      });
+      write("tags/badge.plain.mx");
+      write("tags/card.mx");
+      const result = scan(page);
+      expect(names(result)).toEqual(["card"]);
+      expect(result.diagnostics.map((d) => [d.message, d.code])).toEqual([
+        [
+          expect.stringContaining("`badge.plain.mx` cannot be called as a tag"),
+          undefined,
+        ],
+      ]);
+    },
+  );
+
   it("a dialect without `tagDirs` but `sidecars: false` scans `tags/` without sidecars, with the warning", () => {
     dialectProject(dir, {
       manifest: { sidecars: false },
@@ -719,5 +744,163 @@ describe("a deferred entry's registration checks run at its call", () => {
     expect(called).toEqual([{ message, line: 2, column: 2 }]);
     // Registered eagerly, the same contract fails the file that never calls it.
     expect(eager.map((d) => d.message)).toEqual([called[0]?.message]);
+  });
+});
+
+/**
+ * Registration reads no deferred contract, not even through an eager tag's
+ * cross-tag check (`children`, `parents`, `children["*"]`, attribute-tag
+ * `children`). Those checks run when the deferred tag is called, at the call.
+ */
+describe("an eager tag's cross-tag checks against a deferred tag", () => {
+  const page = () => join(dir, "page.mx");
+  const lowerWith = (source: string, customTags: Record<string, CustomTag>) =>
+    lowerSource(source, page(), { customTags }).diagnostics.map(
+      ({ message, line, column }) => ({ message, line, column }),
+    );
+
+  /** A deferred `<item>` declaring `parents: ["somewhere"]`, counting every contract read. */
+  function countedItem() {
+    let reads = 0;
+    const item: CustomTag = {};
+    for (const key of [
+      "attributes",
+      "attributeTags",
+      "children",
+      "parents",
+      "defaultTag",
+    ]) {
+      Object.defineProperty(item, key, {
+        enumerable: true,
+        configurable: true,
+        get() {
+          reads++;
+          return key === "parents" ? ["somewhere"] : undefined;
+        },
+      });
+    }
+    return { item: deferContract(item), reads: () => reads };
+  }
+
+  it.each([
+    [
+      "an eager parent's `children` names it",
+      { list: { children: { item: {} } } },
+    ],
+    ["an eager child's `parents` names it", { coin: { parents: ["item"] } }],
+    [
+      'an eager `children["*"]` names it as its contract',
+      { list: { children: { "*": { contract: "item" } } } },
+    ],
+    [
+      "an eager attribute tag declares `children` (the check reads every tag)",
+      { box: { attributeTags: { slot: { children: { x: {} } } } } },
+    ],
+  ])(
+    "%s: uncalled, nothing is read; called, the eager result lands at the call",
+    (_, eager) => {
+      const plain = countedItem();
+      const call = "<div>\n  <item/>\n</div>\n";
+      const tags = (item: CustomTag) => ({
+        ...(eager as Record<string, CustomTag>),
+        item,
+      });
+
+      const uncalled = countedItem();
+      expect(lowerWith("<div/>\n", tags(uncalled.item))).toEqual([]);
+      expect(uncalled.reads()).toBe(0);
+
+      // Called, the file gets what it gets with `<item>` registered eagerly
+      // (a registration error or the call's own `parents` error), at the call.
+      const eagerly = lowerWith(call, tags({ parents: ["somewhere"] }));
+      const called = lowerWith(call, tags(plain.item));
+      expect(called.map((d) => d.message)).toEqual(
+        eagerly.map((d) => d.message),
+      );
+      expect(called).toEqual([
+        { message: expect.any(String), line: 2, column: 2 },
+      ]);
+      expect(plain.reads()).toBeGreaterThan(0);
+    },
+  );
+
+  it("the cross-tag error reaches the call (a parent's `children` without the child's `parents`)", () => {
+    const { item } = countedItem();
+    expect(
+      lowerWith("<div>\n  <item/>\n</div>\n", {
+        list: { children: { item: {} } },
+        item,
+      }),
+    ).toEqual([
+      {
+        message: expect.stringContaining(
+          "`<list>`: child `<item>` declares `parents` without `<list>`",
+        ),
+        line: 2,
+        column: 2,
+      },
+    ]);
+  });
+
+  // Two deferred contracts that read each other: each call's checks read the
+  // other's raw contract, never its half-done checks, in either call order.
+  const cycle = () => ({
+    a: deferContract({ children: { b: {} }, parents: ["z"] }),
+    b: deferContract({ children: { a: {} }, parents: ["a"] }),
+    z: { children: { a: {} } } as CustomTag,
+  });
+  const B_ERROR = expect.stringContaining(
+    "`<b>`: child `<a>` declares `parents` without `<b>`",
+  );
+
+  it("mutually referencing deferred contracts: the check eager mode enforces lands at the `<b>` call", () => {
+    expect(
+      lowerSource("<div/>\n", page(), {
+        customTags: {
+          a: { children: { b: {} }, parents: ["z"] },
+          b: { children: { a: {} }, parents: ["a"] },
+          z: { children: { a: {} } },
+        },
+      }).diagnostics.map((d) => d.message),
+    ).toEqual([B_ERROR]);
+    expect(lowerWith("<z>\n  <a>\n    <b/>\n  </a>\n</z>\n", cycle())).toEqual([
+      { message: B_ERROR, line: 3, column: 4 },
+    ]);
+  });
+
+  it("the same, with `<a>` called alone first in the same map", () => {
+    const tags = cycle();
+    expect(lowerWith("<z>\n  <a/>\n</z>\n", tags)).toEqual([]);
+    expect(lowerWith("<z>\n  <a>\n    <b/>\n  </a>\n</z>\n", tags)).toEqual([
+      { message: B_ERROR, line: 3, column: 4 },
+    ]);
+  });
+
+  it("the same, with `<b>` called first", () => {
+    const tags = cycle();
+    expect(lowerWith("<b/>\n", tags)).toEqual([
+      { message: B_ERROR, line: 1, column: 0 },
+    ]);
+    expect(lowerWith("<z>\n  <a/>\n</z>\n", tags)).toEqual([]);
+  });
+
+  it("the policy check of contract `defaultTag`s skips a deferred contract", () => {
+    const { item, reads } = countedItem();
+    expect(
+      contractDefaultTagDiagnostics({
+        tags: new Map([["item", { sidecar: "components/item.tag.ts" }]]),
+        customTags: { item },
+        scope: { customTags: { item } },
+      }),
+    ).toEqual([]);
+    expect(reads()).toBe(0);
+    // An eager contract with the same invalid value is reported.
+    expect(
+      contractDefaultTagDiagnostics({
+        tags: new Map([["item", { sidecar: "components/item.tag.ts" }]]),
+        customTags: { item: { defaultTag: "not a tag!" } },
+        scope: { customTags: {} },
+      }),
+    ).toHaveLength(1);
   });
 });
