@@ -114,8 +114,9 @@ export interface DialectManifest {
   readonly module: string;
   /**
    * The directory names its files discover tags in (`["components"]`), at
-   * each level of the upward walk; absent, its files discover tags as MX's
-   * own do (`tags/`, `.mx` templates and `.tag.ts` sidecars). @unstable
+   * each level of the upward walk. Absent, its files discover tags as MX's
+   * own do (`tags/`, `.mx` templates and `.tag.ts` sidecars); `[]` closes
+   * `tags/` to them and discovers no directory at all. @unstable
    */
   readonly tagDirs?: readonly string[];
   /**
@@ -332,9 +333,9 @@ function readTagFields(
   } = {};
   const key = (field: string) => `\`${DIALECT_MANIFEST_KEY}.${field}\``;
   if (tagDirs !== undefined) {
-    if (!Array.isArray(tagDirs) || tagDirs.length === 0) {
+    if (!Array.isArray(tagDirs)) {
       fail(
-        `${key("tagDirs")} must be a non-empty array of the directory names the dialect's files discover tags in (\`["components"]\`)`,
+        `${key("tagDirs")} must be an array of the directory names the dialect's files discover tags in (\`["components"]\`), or \`[]\` for none`,
         "tagDirs",
       );
     }

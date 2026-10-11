@@ -1517,7 +1517,11 @@ function skipClaimedFile(
   if (!owner.tagDirs.includes(here)) {
     diagnostics.push({
       file: join(dir, entry),
-      message: `\`${here}/${entry}\` is a ${owner.name} file in \`${here}/\`; ${owner.name} discovers tags in ${dirList(owner.tagDirs)}.`,
+      message: `\`${here}/${entry}\` is a ${owner.name} file in \`${here}/\`; ${owner.name} ${
+        owner.tagDirs.length === 0
+          ? "discovers no tag directories"
+          : `discovers tags in ${dirList(owner.tagDirs)}`
+      }.`,
       line: 1,
       column: 0,
       severity: "warning",
