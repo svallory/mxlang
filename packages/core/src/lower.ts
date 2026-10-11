@@ -109,6 +109,7 @@ import {
   isContractOnlyDelegated,
   runAnalyzeHooks,
   runFinalizeHooks,
+  setChildOffset,
   shadowedBuiltinMessage,
   type TagCall,
   transformCustomTag,
@@ -3755,15 +3756,17 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
         const why = invalidDefaultTagHint(node);
         const wildcard = activeWildcard(ctx, node);
         const known = wildcard ? undefined : wildcardIneligibility(name, ctx);
-        tree.push({
+        const child: ChildNode = {
           kind: "ChildTag",
           name: wildcard?.canonical ?? name,
           loc,
-          ...(mxSpanOf(node) ? { offset: mxSpanOf(node)?.sourceStart } : {}),
           ...(why ? { hint: why } : {}),
           ...(wildcard ? { alias: aliasOf(ctx, node, wildcard) } : {}),
           ...(known ? { known } : {}),
-        });
+        };
+        const span = mxSpanOf(node);
+        if (span) setChildOffset(child, span.sourceStart);
+        tree.push(child);
       }
     }
   }

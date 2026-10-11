@@ -211,8 +211,6 @@ export type ChildNode =
       /** The tag's name; the canonical name for a wildcard child. */
       name: string;
       loc: Position;
-      /** The file offset of the tag's `<` (an MX node), when it has one. */
-      offset?: number;
       hint?: string;
       /** How a wildcard child was written (decision 147). */
       alias?: TagAlias;
@@ -929,6 +927,23 @@ export interface TagOccurrence {
   readonly name: string;
   /** The file offset of the tag's `<`, as the authored-tag scan reports it. */
   readonly offset: number;
+  /**
+   * What the not-allowed message told the author beyond "not allowed": the
+   * wildcard rule and any hint. Absent for a plain closed parent.
+   */
+  readonly guidance?: string;
+}
+
+/**
+ * The file offset of each authored child tag in a `ChildNode` tree. Internal,
+ * so the exported `ChildNode` a hook reads through `TagCall.childTree` is
+ * unchanged.
+ */
+const childOffsets = new WeakMap<object, number>();
+
+/** Records where `node`'s `<` is in the file (an MX node). */
+export function setChildOffset(node: object, offset: number): void {
+  childOffsets.set(node, offset);
 }
 
 /**
@@ -1534,11 +1549,14 @@ export function validateCustomTagChildren(
   // closed record's own error.
   const notAllowed = (
     node: Extract<ChildNode, { kind: "ChildTag" }>,
-  ): string => {
+  ): { message: string; guidance?: string } => {
     const label = `\`<${node.name}>\``;
     const hint = node.hint ? ` ${node.hint}` : "";
     if (entries.length === 0) {
-      return `${label} is not allowed here; allowed children: ${allowed}${hint}`;
+      return {
+        message: `${label} is not allowed here; allowed children: ${allowed}${hint}`,
+        ...(hint ? { guidance: hint.trim() } : {}),
+      };
     }
     const patterns = entries
       .flatMap((entry) =>
@@ -1560,7 +1578,10 @@ export function validateCustomTagChildren(
       names.length > 0
         ? `allowed children: ${names.map(([name]) => `\`<${name}>\``).join(", ")}; `
         : "";
-    return `${label} is not allowed here; ${listed}${rule}${known}${hint}`;
+    return {
+      message: `${label} is not allowed here; ${listed}${rule}${known}${hint}`,
+      guidance: `${listed}${rule}${known}${hint}`,
+    };
   };
   // What a text child is told the parent does accept; a wildcard entry means
   // tags are accepted even when no child is named.
@@ -1594,18 +1615,30 @@ export function validateCustomTagChildren(
         const name = node.kind === "ChildTag" ? node.name : "#text";
         const matched = node.kind === "ChildTag" && node.alias !== undefined;
         if (!matched && !hasExplicitChild(declarations, name)) {
+          if (node.kind === "ChildText") {
+            failForOwner(
+              owner,
+              `text is not allowed here; ${textRule}`,
+              node.loc,
+              TEXT_NOT_ALLOWED_CODE,
+            );
+          }
+          const { message, guidance } = notAllowed(node);
+          const offset = childOffsets.get(node);
           failForOwner(
             owner,
-            node.kind === "ChildText"
-              ? `text is not allowed here; ${textRule}`
-              : notAllowed(node),
+            message,
             node.loc,
-            node.kind === "ChildText"
-              ? TEXT_NOT_ALLOWED_CODE
-              : TAG_NOT_ALLOWED_CODE,
-            node.kind === "ChildTag" && node.offset !== undefined
-              ? { name: node.name, offset: node.offset }
-              : undefined,
+            TAG_NOT_ALLOWED_CODE,
+            offset === undefined
+              ? undefined
+              : {
+                  name: node.name,
+                  offset,
+                  ...(guidance
+                    ? { guidance: `inside ${owner}: ${guidance}` }
+                    : {}),
+                },
           );
         }
         leaves.push(node);

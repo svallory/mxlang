@@ -271,9 +271,34 @@ export function lowerSource(
         options.dialect,
       );
       const unknown = (tags ?? []).filter((tag) => !declared.has(tag.name));
+      // An unknown tag inside a closed parent got `MX_TAG_NOT_ALLOWED` from
+      // the lowering and `MX_UNKNOWN_TAG` from the scan: one tag, two errors.
+      // The unknown tag is the cause, so the not-allowed error about the same
+      // occurrence is dropped. The occurrence is what the lowering recorded
+      // when it raised the error (name and offset, in this file), never the
+      // message text. What the dropped message said beyond "not allowed" (a
+      // wildcard rule, a hint) moves onto the surviving error.
+      const lowering = flattenErrors(error);
+      const unknownAt = new Map(
+        unknown.map((tag) => [`${tag.offset}:${tag.name}`, tag]),
+      );
+      const guidance = new Map<string, string>();
+      const kept = lowering.filter((entry) => {
+        const occurrence = tagOccurrenceOf(entry);
+        if (occurrence === undefined) return true;
+        // An error about another file's tag (a template tag file's contract)
+        // can share a name and offset with this file's: it is not this one.
+        const file = (entry as TranslateError).file;
+        if (file !== undefined && file !== filename) return true;
+        const key = `${occurrence.offset}:${occurrence.name}`;
+        if (!unknownAt.has(key)) return true;
+        if (occurrence.guidance) guidance.set(key, occurrence.guidance);
+        return false;
+      });
       const errors = unknown.map((tag) => {
+        const extra = guidance.get(`${tag.offset}:${tag.name}`);
         const unknownError = new TranslateError(
-          unknownTagMessage(tag.name, declared),
+          unknownTagMessage(tag.name, declared) + (extra ? `; ${extra}` : ""),
           tag.line,
           tag.column,
         );
@@ -287,21 +312,7 @@ export function lowerSource(
           ? { end: { line: tag.endLine, column: tag.endColumn } }
           : {}),
       }));
-      // An unknown tag inside a closed parent got `MX_TAG_NOT_ALLOWED` from
-      // the lowering and `MX_UNKNOWN_TAG` from the scan: one tag, two errors.
-      // The unknown tag is the cause, so the not-allowed error about the same
-      // occurrence (name and offset, recorded when it was raised) is dropped.
-      const unknownOccurrences = new Set(
-        unknown.map((tag) => `${tag.offset}:${tag.name}`),
-      );
-      const lowering = flattenErrors(error).filter((entry) => {
-        const occurrence = tagOccurrenceOf(entry);
-        return (
-          occurrence === undefined ||
-          !unknownOccurrences.has(`${occurrence.offset}:${occurrence.name}`)
-        );
-      });
-      return failed(labelInside([...lowering, ...errors], ranges));
+      return failed(labelInside([...kept, ...errors], ranges));
     } catch (scanError) {
       return failed([error, scanError]);
     }

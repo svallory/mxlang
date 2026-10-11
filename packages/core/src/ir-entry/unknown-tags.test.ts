@@ -107,7 +107,7 @@ describe('unknownTags: "reject"', () => {
     ]);
   });
 
-  it("lets a known parent's closed children error stand (no unknown tag precedes it)", () => {
+  it("reports an unknown tag in a known, closed parent once, as unknown", () => {
     const { diagnostics } = parse("<resource>\n  <bad/>\n</resource>");
     // `<bad>` is an unknown tag inside a closed parent: the unknown-tag error
     // is the cause and the only one. The closed-children error it also got is
@@ -679,7 +679,7 @@ describe("wildcard children (decision 147) under unknownTags: reject", () => {
     expect(diagnostics[0]?.message).not.toContain("is not a known tag");
   });
 
-  it("an unmatched name inside the contract parent is the E2 error", () => {
+  it("an unmatched name inside the contract parent is one unknown-tag error", () => {
     const { diagnostics } = parse(
       "<resource>\n  <T1 value='a'/>\n</resource>\n",
       {},
@@ -901,5 +901,133 @@ describe("one error for an unknown tag in a closed parent", () => {
     expect(diagnostics.map((d) => d.code)).not.toContain("MX_TAG_NOT_ALLOWED");
     expect(diagnostics.length).toBe(2);
     expect(diagnostics.some((d) => d.message.includes("<needy>"))).toBe(true);
+  });
+
+  it("keeps the wildcard rule the dropped error carried, on the unknown-tag message", () => {
+    const tags: Record<string, CustomTag> = {
+      wild: { children: { "*": { pattern: "^T[a-z0-9]*$" } } },
+      wild2: {
+        children: {
+          item: {},
+          "*": [{ pattern: "^T[a-z]+$" }, { pattern: "^U[a-z]+$" }],
+        },
+      },
+      item: {},
+    };
+    const one = lowerSource("<wild><t1/></wild>\n", "/u.mx", {
+      customTags: tags,
+      tagRules: "none",
+      unknownTags: "reject",
+    }).diagnostics;
+    const two = lowerSource("<wild2><t1/></wild2>\n", "/u.mx", {
+      customTags: tags,
+      tagRules: "none",
+      unknownTags: "reject",
+    }).diagnostics;
+    expect(one.map((d) => [d.code, d.message])).toEqual([
+      [
+        "MX_UNKNOWN_TAG",
+        "`<t1>` is not a known tag: it has no contract in `customTags`; inside `<wild>`: names must match `^T[a-z0-9]*$`",
+      ],
+    ]);
+    expect(two.map((d) => [d.code, d.message])).toEqual([
+      [
+        "MX_UNKNOWN_TAG",
+        "`<t1>` is not a known tag: it has no contract in `customTags`; inside `<wild2>`: allowed children: `<item>`; other names must match `^T[a-z]+$` or `^U[a-z]+$`",
+      ],
+    ]);
+  });
+
+  it("keeps an invalid-default-tag hint the dropped error carried", () => {
+    const tags: Record<string, CustomTag> = {
+      box2: { defaultTag: "ghost", children: { item: {} } },
+      item: {},
+    };
+    const { diagnostics } = lowerSource("<box2><#a/></box2>\n", "/u.mx", {
+      customTags: tags,
+      tagRules: "none",
+      unknownTags: "reject",
+      defaultTag: "thing",
+    });
+    expect(diagnostics.map((d) => [d.code, d.message])).toEqual([
+      [
+        "MX_UNKNOWN_TAG",
+        "`<thing>` is not a known tag: it has no contract in `customTags`; inside `<box2>`: (the parent's `defaultTag` `ghost` is invalid; see the declaration)",
+      ],
+    ]);
+  });
+
+  it("a plain closed parent adds no guidance to the unknown-tag message", () => {
+    const { diagnostics } = run("attributes\n  foo\n", "reject");
+    expect(diagnostics[0]?.message).toBe(
+      "`<foo>` is not a known tag: it has no contract in `customTags`",
+    );
+  });
+
+  it("a name and an offset that disagree are two occurrences", () => {
+    // Lowering resolves `<#a>` to the parent's `defaultTag` (`setter`) at
+    // offset 5; the scan names it by the caller's `defaultTag` (`thing`) at
+    // the same offset. The not-allowed error is about `setter`, which the scan
+    // does not list as unknown, so it stays: matching by offset alone would
+    // drop it.
+    const tags: Record<string, CustomTag> = {
+      set: { defaultTag: "setter", children: { uuid: {} } },
+      setter: {},
+      uuid: {},
+    };
+    const { diagnostics } = lowerSource("<set><#a/></set>\n", "/u.mx", {
+      customTags: tags,
+      tagRules: "none",
+      unknownTags: "reject",
+      defaultTag: "thing",
+    });
+    expect(diagnostics.map((d) => [d.code, d.offset])).toContainEqual([
+      "MX_TAG_NOT_ALLOWED",
+      5,
+    ]);
+  });
+
+  it("the offset stays off the child tree a transform hook reads", () => {
+    let seen: unknown;
+    const tags: Record<string, CustomTag> = {
+      card: {
+        children: { item: {} },
+        transform: (call: { childTree?: unknown }) => {
+          seen = call.childTree;
+          return undefined as never;
+        },
+      } as CustomTag,
+      item: {},
+    };
+    lowerSource("<card><item/></card>\n", "/u.mx", {
+      customTags: tags,
+      tagRules: "none",
+    });
+    expect(seen).toBeDefined();
+    expect(JSON.stringify(seen)).not.toContain("offset");
+  });
+
+  it("a not-allowed error in another file is not this file's occurrence", () => {
+    // The tag file's `<foo>` and the main file's `<foo>` share a name and an
+    // offset (12); only the main file's is unknown here.
+    const tags: Record<string, CustomTag> = {
+      attributes: { children: { uuid: {} } },
+      uuid: {},
+      badge: {
+        template: {
+          filename: "/t/tags/badge.mx",
+          source: "<attributes><foo/></attributes>\n",
+        },
+      } as CustomTag,
+    };
+    const { diagnostics } = lowerSource("<badge/><a/><foo/>\n", "/t.mx", {
+      customTags: tags,
+      tagRules: "none",
+      unknownTags: "reject",
+    });
+    expect(
+      diagnostics.map((d) => [d.code, d.file ?? "/t.mx", d.line, d.column]),
+    ).toContainEqual(["MX_TAG_NOT_ALLOWED", "/t/tags/badge.mx", 1, 12]);
+    expect(diagnostics.map((d) => d.code)).toContain("MX_UNKNOWN_TAG");
   });
 });
