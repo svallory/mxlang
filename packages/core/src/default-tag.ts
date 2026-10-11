@@ -1,4 +1,6 @@
+import { contractDefaultTagProblems } from "./contract-default-tag.ts";
 import { bodyChildren, type Ctx, fail, isTagNode, type Node } from "./core.ts";
+import type { CustomTag } from "./custom-tags.ts";
 import type { DefaultTagContext, DefaultTagParent } from "./declarations.ts";
 import {
   elementPredicate,
@@ -62,6 +64,49 @@ function scopeOf(ctx: Ctx): DefaultTagScope {
     isElement: elementPredicate(lookup, ctx.declarations),
     isNativeElement: nativeElementPredicate(lookup, ctx.declarations),
   };
+}
+
+/**
+ * The registration check of a deferred contract's `defaultTag`s (a dialect
+ * tag file's derived contract), run where its call reads it: the problems
+ * `contractDefaultTagDiagnostics` reports for an eager contract at its
+ * declaration, worded the same, judged in this compile's scope and refused
+ * when this compile's declarations forbid the rung. The target is the one
+ * whose declarations this compile runs under (else the lookup's default),
+ * which names the host and adds its built-in tag names.
+ */
+export function deferredDefaultTagProblems(
+  ctx: Ctx,
+  name: string,
+  definition: CustomTag,
+): string[] {
+  const targets = ctx.targets;
+  const names = targets.allTargetNames?.() ?? targets.targetNames();
+  const own =
+    names.find(
+      (each) =>
+        targets.target(each)?.declarations?.default === ctx.declarations,
+    ) ?? targets.defaultTarget();
+  const descriptor = targets.target(own);
+  const hostName = descriptor?.host?.name;
+  const builtins = [
+    descriptor?.defaultTag,
+    descriptor?.host?.defaultTag,
+    ...(ctx.declarations.builtinTags ?? []),
+  ].filter((value): value is string => value !== undefined);
+  const scope = scopeOf(ctx);
+  return contractDefaultTagProblems(
+    name,
+    definition,
+    { ...scope, builtins: [...(scope.builtins ?? []), ...builtins] },
+    {
+      name: hostName ?? own,
+      kind: hostName ? "host" : "target",
+      ...(ctx.declarations.allowContractDefaultTag === false
+        ? { allowContractDefaultTag: false }
+        : {}),
+    },
+  );
 }
 
 /**

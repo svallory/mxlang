@@ -659,9 +659,37 @@ export function recover<T>(ctx: Ctx, run: () => T): T | undefined {
     if (!isTranslateError(error)) throw error;
     positionError(ctx, error);
     restore();
-    ctx.errors.push(error);
+    ctx.errors.push(error, ...relatedErrorsOf(error));
     return undefined;
   }
+}
+
+/**
+ * Errors in other files that travel with one error (a tag file's own
+ * diagnostics behind the call that reads its contract). Internal: a side
+ * table, never a field.
+ */
+const relatedErrors = new WeakMap<TranslateError, readonly TranslateError[]>();
+
+/**
+ * Attaches `related` to `error`: a recovering walk records them right after
+ * it, and a lone throw carries them in `errors` (decision 162's list), so
+ * each becomes a diagnostic of its own, in its own `file`.
+ */
+export function attachRelatedErrors(
+  error: TranslateError,
+  related: readonly TranslateError[],
+): void {
+  if (related.length === 0) return;
+  relatedErrors.set(error, related);
+  if (error.errors === undefined) error.errors = [error, ...related];
+}
+
+/** The errors attached to `error` with {@link attachRelatedErrors}. */
+export function relatedErrorsOf(
+  error: TranslateError,
+): readonly TranslateError[] {
+  return relatedErrors.get(error) ?? [];
 }
 
 /**
@@ -765,7 +793,11 @@ export function positionAtOffset(ctx: Ctx, offset: number): Position {
  * lowering boundary calls it: past it nothing knows the source.
  */
 export function positionError(ctx: Ctx, error: unknown): void {
-  if (!(error instanceof TranslateError) || !unpositioned.has(error)) return;
+  if (!(error instanceof TranslateError)) return;
+  for (const related of relatedErrors.get(error) ?? []) {
+    positionError(ctx, related);
+  }
+  if (!unpositioned.has(error)) return;
   // Offsets into another file (`error.file`) mean nothing against this
   // source: left unpositioned, so `assertPositioned` refuses them rather
   // than reporting a line in the wrong file.

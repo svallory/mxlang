@@ -18,6 +18,8 @@
 import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { coreBabel } from "./babel.ts";
+// Registers the dialect tag-file reader with the scan (side effect).
+import "./tag-file.ts";
 import { rejectShadowedRegistration } from "./builtin-tags.ts";
 import { annotateCloseTagOpener } from "./close-tag-opener.ts";
 import { type ClaimedFields, claimedFields } from "./contract-fields.ts";

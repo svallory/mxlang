@@ -157,88 +157,118 @@ export interface ContractDefaultTagInput {
    * one, otherwise the target's. `allowContractDefaultTag` is the
    * declarations' flag, the one value registration and compile both read.
    */
-  host?: {
-    name: string;
-    kind?: "host" | "target";
-    allowContractDefaultTag?: boolean;
-  };
+  host?: ContractDefaultTagHost;
+}
+
+/** Who answers for a target's declarations, as a `defaultTag` check names it. */
+export interface ContractDefaultTagHost {
+  name: string;
+  kind?: "host" | "target";
+  allowContractDefaultTag?: boolean;
 }
 
 /**
- * Registration check for every `defaultTag` the package's contracts declare,
- * top level and on attribute-tag declarations at any depth: one
- * `invalid-default-tag` diagnostic per declaration, at the file that writes it
- * (the contracts module or the sidecar). A host that forbids per-tag default
- * tags (`allowContractDefaultTag: false`) refuses each declaration, naming the
- * host; otherwise the value goes through the shared `validateDefaultTag`.
- * A tag whose sidecar fails to load is skipped: the scan reports that error.
- * A deferred contract (a dialect tag file) is skipped: nothing reads it
- * until a call does, and the use site validates the value it reads.
+ * The problems with every `defaultTag` the contract of `<name>` declares,
+ * top level and on attribute-tag declarations at any depth, one message per
+ * declaration: a host that forbids per-tag default tags
+ * (`allowContractDefaultTag: false`) refuses each one, naming the host;
+ * otherwise each value goes through the shared `validateDefaultTag`. Throws
+ * what reading the contract throws.
+ */
+export function contractDefaultTagProblems(
+  name: string,
+  tag: CustomTag,
+  scope: DefaultTagScope,
+  host?: ContractDefaultTagHost,
+): string[] {
+  const forbidden = host?.allowContractDefaultTag === false;
+  const declared: Array<{ chain: string[]; value: string }> = [];
+  const collect = (
+    declaration: CustomTag | CustomTagAttributeTag,
+    chain: string[],
+  ): void => {
+    const value = declaration.defaultTag;
+    if (typeof value === "string" && value !== "")
+      declared.push({ chain, value });
+    for (const [attrName, nested] of Object.entries(
+      declaration.attributeTags ?? {},
+    )) {
+      if (attrName === "*" || nested === undefined) continue;
+      collect(nested as CustomTagAttributeTag, [...chain, attrName]);
+    }
+    // A `"*"` entry is compiled too (`lookupDeclared` matches through it),
+    // so its `defaultTag` is registered and validated the same way. The
+    // chain names it by position: it has no single tag name.
+    attributeTagWildcardEntries(declaration.attributeTags).forEach(
+      (entry, index) => {
+        collect(entry, [...chain, `*#${index + 1}`]);
+      },
+    );
+  };
+  collect(tag, []);
+  const problems: string[] = [];
+  for (const { chain, value } of declared) {
+    const owner = `\`<${name}>\`${chain
+      .map((c) =>
+        c.startsWith("*#")
+          ? ` \`attributeTags["*"]\` entry ${c.slice(2)}`
+          : ` \`<@${c}>\``,
+      )
+      .join("")}`;
+    if (forbidden) {
+      problems.push(
+        `\`defaultTag\` in the contract of ${owner} is not allowed: ${host?.kind ?? "host"} \`${host?.name}\` does not permit per-tag default tags`,
+      );
+      continue;
+    }
+    const reason = validateDefaultTag(value, scope);
+    if (reason !== undefined) {
+      problems.push(
+        `invalid \`defaultTag\` value: ${reason} (contract of ${owner})`,
+      );
+    }
+  }
+  return problems;
+}
+
+/**
+ * Registration check for every `defaultTag` the package's contracts declare
+ * ({@link contractDefaultTagProblems}): one `invalid-default-tag` diagnostic
+ * per declaration, at the file that writes it (the contracts module or the
+ * sidecar). A tag whose sidecar fails to load is skipped: the scan reports
+ * that error. A deferred contract (a dialect tag file) is skipped: nothing
+ * reads it until a call does, and its first call runs the same check
+ * (`deferredDefaultTagError`), placed at the call.
  */
 export function contractDefaultTagDiagnostics(
   input: ContractDefaultTagInput,
 ): TargetPolicyDiagnostic[] {
   const out: TargetPolicyDiagnostic[] = [];
-  const forbidden = input.host?.allowContractDefaultTag === false;
   for (const [name, found] of input.tags) {
     const file = found.module ?? found.sidecar;
     const tag = Object.hasOwn(input.customTags, name)
       ? input.customTags[name]
       : undefined;
     // A deferred contract (a dialect tag file) is read only by a call: its
-    // `defaultTag` is validated where a call uses it, never here.
+    // `defaultTag` is checked at the call, never here.
     if (!file || !tag || isDeferredContract(tag)) continue;
+    let problems: string[];
     try {
-      const declared: Array<{ chain: string[]; value: string }> = [];
-      const collect = (
-        declaration: CustomTag | CustomTagAttributeTag,
-        chain: string[],
-      ): void => {
-        const value = declaration.defaultTag;
-        if (typeof value === "string" && value !== "")
-          declared.push({ chain, value });
-        for (const [attrName, nested] of Object.entries(
-          declaration.attributeTags ?? {},
-        )) {
-          if (attrName === "*" || nested === undefined) continue;
-          collect(nested as CustomTagAttributeTag, [...chain, attrName]);
-        }
-        // A `"*"` entry is compiled too (`lookupDeclared` matches through it),
-        // so its `defaultTag` is registered and validated the same way. The
-        // chain names it by position: it has no single tag name.
-        attributeTagWildcardEntries(declaration.attributeTags).forEach(
-          (entry, index) => {
-            collect(entry, [...chain, `*#${index + 1}`]);
-          },
-        );
-      };
-      collect(tag, []);
-      for (const { chain, value } of declared) {
-        const owner = `\`<${name}>\`${chain
-          .map((c) =>
-            c.startsWith("*#")
-              ? ` \`attributeTags["*"]\` entry ${c.slice(2)}`
-              : ` \`<@${c}>\``,
-          )
-          .join("")}`;
-        const reason = forbidden
-          ? `\`defaultTag\` in the contract of ${owner} is not allowed: ${input.host?.kind ?? "host"} \`${input.host?.name}\` does not permit per-tag default tags`
-          : validateDefaultTag(value, input.scope);
-        if (reason === undefined) continue;
-        out.push({
-          code: "invalid-default-tag",
-          severity: "error",
-          file,
-          message: forbidden
-            ? reason
-            : `invalid \`defaultTag\` value: ${reason} (contract of ${owner})`,
-          line: 1,
-          column: 0,
-          length: 1,
-        });
-      }
+      problems = contractDefaultTagProblems(name, tag, input.scope, input.host);
     } catch {
       // The sidecar's own registration error is the scan's to report.
+      continue;
+    }
+    for (const message of problems) {
+      out.push({
+        code: "invalid-default-tag",
+        severity: "error",
+        file,
+        message,
+        line: 1,
+        column: 0,
+        length: 1,
+      });
     }
   }
   return out;

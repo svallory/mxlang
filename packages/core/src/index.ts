@@ -354,6 +354,13 @@ export {
   type TriggerUse,
   type TriggerValueForm,
 } from "./syntax-table.ts";
+export {
+  clearTagFileCache,
+  type TagFileContext,
+  type TagFileDiagnostic,
+  type TagFileInput,
+  type TagFileResult,
+} from "./tag-file.ts";
 /**
  * Tag rules presets (decision 204): `html`, `markup` and `none`, the
  * tag-table entries a dialect names instead of assembling taglibs.

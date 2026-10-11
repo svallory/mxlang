@@ -69,7 +69,9 @@ import {
   type ContractMap,
   type CustomTag,
   type CustomTagParseOptions,
+  type DeferredReader,
   deferContract,
+  markContractKeys,
   rejectUnknownDeclarationKeys,
   rejectUnreachableHooks,
 } from "./custom-tags.ts";
@@ -1154,11 +1156,25 @@ const TAG_FILE_CONTRACT_KEYS = [
 ] as const;
 
 /**
+ * How a dialect tag file's contract is read: set by `tag-file.ts` as it
+ * loads (it runs the dialect's `tagFile` hook through `lowerSource`, which
+ * this module must not import). Unset, every read is the hookless error.
+ */
+let tagFileReader: ((tag: DiscoveredTag) => DeferredReader) | undefined;
+
+/** Registers how a dialect tag file's contract is read (`tag-file.ts`). Internal. */
+export function registerTagFileReader(
+  reader: (tag: DiscoveredTag) => DeferredReader,
+): void {
+  tagFileReader = reader;
+}
+
+/**
  * The error a dialect tag file's contract raises while its dialect has no
  * way to read it: unpositioned, so the custom-tag call that read it places
  * it at the call.
  */
-function tagFileError(tag: DiscoveredTag): TranslateError {
+export function tagFileError(tag: DiscoveredTag): TranslateError {
   const file = tag.tagFile as string;
   const shown = relative(dirname(tag.sourceDir ?? dirname(file)), file)
     .split("\\")
@@ -1172,26 +1188,56 @@ function tagFileError(tag: DiscoveredTag): TranslateError {
   return error;
 }
 
+/** The reader of a tag file while no `tagFile` reader is registered. */
+function hooklessReader(tag: DiscoveredTag): DeferredReader {
+  let read: { error: TranslateError } | undefined;
+  return {
+    read: () => {
+      read ??= { error: tagFileError(tag) };
+      return read;
+    },
+    stale: () => false,
+  };
+}
+
 /**
  * Wraps a dialect tag file as a `CustomTag`. Names and static `parseOptions`
- * register like any tag's; the contract keys are getters that read the tag
- * file, which needs the dialect's hook: without one, the first read throws
- * `MX_TAG_FILE_ERROR`. The entry is branded (`deferContract`), so registration
- * skips its contract and the first call reads it, where the error lands at
- * the call. A paired `.tag.ts` sidecar supplies the hooks, loaded lazily as
- * `lazyTag` loads them. The scan itself reads none of these getters.
+ * register like any tag's; the contract is what the dialect's `tagFile` hook
+ * derives from the file (`tag-file.ts`), read through a reader, and the
+ * contract keys are getters over it that throw when it cannot be read
+ * (without a hook, `MX_TAG_FILE_ERROR`). The entry is branded
+ * (`deferContract`), so registration skips its contract and the first call
+ * reads it, where an error lands at the call. A paired `.tag.ts` sidecar
+ * supplies the hooks, loaded lazily as `lazyTag` loads them. The scan itself
+ * reads none of these getters and runs no hook.
  */
 function dialectTag(tag: DiscoveredTag, claimed: ClaimedFields): CustomTag {
   const definition: CustomTag = {};
   if (tag.parseOptions) definition.parseOptions = tag.parseOptions;
-  const unreadable = (): never => {
-    throw tagFileError(tag);
+  // Chosen at the first read, not here: a scan may run before
+  // `tag-file.ts` has registered (an entry point that imports only the scan).
+  let chosen: DeferredReader | undefined;
+  const choose = (): DeferredReader => {
+    chosen ??= tagFileReader?.(tag) ?? hooklessReader(tag);
+    return chosen;
   };
-  for (const key of [...TAG_FILE_CONTRACT_KEYS, ...claimed.tag]) {
+  const reader: DeferredReader = {
+    read: (call) => choose().read(call),
+    stale: () => chosen?.stale() ?? false,
+    get definedIn() {
+      return choose().definedIn;
+    },
+  };
+  const contractKeys = [...TAG_FILE_CONTRACT_KEYS, ...claimed.tag];
+  for (const key of contractKeys) {
     Object.defineProperty(definition, key, {
       enumerable: true,
       configurable: true,
-      get: unreadable,
+      get: () => {
+        const read = reader.read(false);
+        if (read.error !== undefined) throw read.error;
+        return (read.contract as Record<string, unknown> | undefined)?.[key];
+      },
     });
   }
   if (tag.sidecar) {
@@ -1204,7 +1250,8 @@ function dialectTag(tag: DiscoveredTag, claimed: ClaimedFields): CustomTag {
       });
     }
   }
-  return deferContract(definition);
+  markContractKeys(definition, contractKeys);
+  return deferContract(definition, reader);
 }
 
 /**

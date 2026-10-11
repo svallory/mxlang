@@ -57,6 +57,7 @@ import {
 import { CALLEE_INPUT_ERROR } from "./callee-input-error.ts";
 import { claimedFields } from "./contract-fields.ts";
 import {
+  attachRelatedErrors,
   attrByName,
   bindingIdentifierNodes,
   bindingIdentifiers,
@@ -92,6 +93,7 @@ import {
   recover,
   rejectInertShape,
   rejectUnsupportedFields,
+  relatedErrorsOf,
   scopeBindings,
   shadowBindings,
   sliceLoc,
@@ -105,8 +107,10 @@ import {
   type ChildNode,
   type CustomTag,
   deferredContractError,
+  deferredContractWarnings,
   hasAttributeTagContract,
   isContractOnlyDelegated,
+  isDeferredContract,
   runAnalyzeHooks,
   runFinalizeHooks,
   setChildOffset,
@@ -117,7 +121,11 @@ import {
   validateCustomTagParents,
 } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
-import { invalidDefaultTagHint, resolveUnnamedTags } from "./default-tag.ts";
+import {
+  deferredDefaultTagProblems,
+  invalidDefaultTagHint,
+  resolveUnnamedTags,
+} from "./default-tag.ts";
 import { nearestName } from "./did-you-mean.ts";
 import { exportNameFor } from "./export-name.ts";
 import { parseFragment } from "./fragment.ts";
@@ -3786,7 +3794,9 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
  * A tag whose contract registration deferred (a dialect tag file) is read on
  * its call: a failure to read or check it is raised here, at this call, so
  * every call reports it where it is written and a file that never calls the
- * tag compiles clean. An error that names its own file stays there.
+ * tag compiles clean. An error that names its own file stays there. The
+ * tag file's own diagnostics travel with the call's error, each in its own
+ * file; its warnings are reported once per lowering.
  */
 function raiseDeferredContract(
   ctx: Ctx,
@@ -3800,7 +3810,11 @@ function raiseDeferredContract(
     ctx.customTags,
     claimedFields(ctx.dialect),
   );
-  if (error === undefined) return;
+  reportDeferredWarnings(ctx, definition);
+  if (error === undefined) {
+    raiseDeferredDefaultTag(ctx, node, name, definition);
+    return;
+  }
   if (!isTranslateError(error)) {
     fail(
       `\`<${name}>\`: ${error instanceof Error ? error.message : String(error)}`,
@@ -3811,11 +3825,61 @@ function raiseDeferredContract(
   try {
     fail(error.message, node);
   } catch (placed) {
-    if (isTranslateError(placed) && error.diagnosticCode !== undefined) {
-      placed.diagnosticCode = error.diagnosticCode;
+    if (isTranslateError(placed)) {
+      if (error.diagnosticCode !== undefined) {
+        placed.diagnosticCode = error.diagnosticCode;
+      }
+      attachRelatedErrors(placed, relatedErrorsOf(error));
     }
     throw placed;
   }
+}
+
+/**
+ * A deferred contract that reads and checks clean still gets the
+ * registration check of its `defaultTag`s an eager contract gets at its
+ * declaration (`contractDefaultTagDiagnostics`), here at the call: one
+ * error per problem, the first raised and the rest travelling with it.
+ */
+function raiseDeferredDefaultTag(
+  ctx: Ctx,
+  node: Node,
+  name: string,
+  definition: CustomTag,
+): void {
+  if (!isDeferredContract(definition)) return;
+  const problems = deferredDefaultTagProblems(ctx, name, definition);
+  if (problems.length === 0) return;
+  const placed: TranslateError[] = [];
+  for (const message of problems) {
+    try {
+      fail(message, node);
+    } catch (error) {
+      if (!isTranslateError(error)) throw error;
+      error.diagnosticCode = "invalid-default-tag";
+      placed.push(error);
+    }
+  }
+  const [first, ...rest] = placed as [TranslateError, ...TranslateError[]];
+  attachRelatedErrors(first, rest);
+  throw first;
+}
+
+/** The deferred entries whose warnings a lowering already reported, per sink. */
+const reportedDeferred = new WeakMap<object, WeakSet<object>>();
+
+function reportDeferredWarnings(ctx: Ctx, definition: CustomTag): void {
+  const warnings = deferredContractWarnings(definition);
+  if (warnings.length === 0) return;
+  const sink: object = ctx.warnings ?? ctx;
+  let seen = reportedDeferred.get(sink);
+  if (!seen) {
+    seen = new WeakSet();
+    reportedDeferred.set(sink, seen);
+  }
+  if (seen.has(warnings)) return;
+  seen.add(warnings);
+  for (const warning of warnings) warn(ctx, warning);
 }
 
 function lowerCustomTag(

@@ -19,7 +19,7 @@ import {
   claimedFields,
   frozenData,
 } from "./contract-fields.ts";
-import type { Ctx, Node } from "./core.ts";
+import type { Ctx, MxWarning, Node } from "./core.ts";
 import { isTranslateError, TranslateError, warn } from "./core.ts";
 import {
   TAG_NOT_ALLOWED_CODE,
@@ -2582,9 +2582,55 @@ function everyTag(): boolean {
  */
 const deferredEntries = new WeakSet<CustomTag>();
 
-/** Brands `definition` as a deferred-contract entry (see {@link registrationView}). */
-export function deferContract(definition: CustomTag): CustomTag {
+/**
+ * How a deferred entry's contract is read when its getters are not the
+ * source (a dialect tag file: `tag-file.ts` runs the dialect's hook).
+ * Internal.
+ */
+export interface DeferredReader {
+  /**
+   * The contract, or why it cannot be read, plus warnings to report at the
+   * caller. `call` is a read for a call of this tag (a cycle there is an
+   * error); any other read is a check reading the contract.
+   */
+  read(call: boolean): DeferredRead;
+  /**
+   * Whether a read this entry already answered may no longer hold (a file
+   * it depends on changed): registration then drops the view built on it.
+   */
+  stale(): boolean;
+  /** The file that defines the tag, for `DelegatedTag.definedIn`. */
+  readonly definedIn?: string;
+}
+
+/** What a {@link DeferredReader} answers. Internal. */
+export interface DeferredRead {
+  readonly contract?: CustomTag;
+  readonly error?: unknown;
+  readonly warnings?: readonly MxWarning[];
+  /**
+   * The read could not be answered now (a check reading a tag file whose
+   * derivation is in progress): its contract keys answer absent, and no
+   * check result built on it is kept.
+   */
+  readonly incomplete?: true;
+  /** The answer is not cached by the reader (a cycle): nothing built on it is kept either. */
+  readonly uncached?: true;
+}
+
+const readers = new WeakMap<CustomTag, DeferredReader>();
+
+/**
+ * Brands `definition` as a deferred-contract entry (see {@link registrationView}).
+ * With `reader`, its contract is what the reader answers; without, its own
+ * keys (getters) are read.
+ */
+export function deferContract(
+  definition: CustomTag,
+  reader?: DeferredReader,
+): CustomTag {
   deferredEntries.add(definition);
+  if (reader) readers.set(definition, reader);
   return definition;
 }
 
@@ -2605,11 +2651,23 @@ const DEFERRED_KEYS = [
 interface ContractRead {
   contract?: CustomTag;
   error?: unknown;
+  warnings?: readonly MxWarning[];
 }
 
 const contractReads = new WeakMap<CustomTag, ContractRead>();
 
-function readContract(raw: CustomTag): ContractRead {
+/** A reader's answer joined with the entry's own keys, per answer. */
+const joinedReads = new WeakMap<DeferredRead, ContractRead>();
+
+/**
+ * Bumped whenever a read answers incomplete or uncached: a check that saw
+ * it is not cached (a later call checks again against the full answer).
+ */
+let unsettledReads = 0;
+
+function readContract(raw: CustomTag, call = false): ContractRead {
+  const reader = readers.get(raw);
+  if (reader) return readThrough(raw, reader, call);
   const known = contractReads.get(raw);
   if (known) return known;
   let read: ContractRead;
@@ -2627,6 +2685,108 @@ function readContract(raw: CustomTag): ContractRead {
   }
   contractReads.set(raw, read);
   return read;
+}
+
+/**
+ * A reader's answer as a contract: the entry's own keys other than its
+ * contract's (`parseOptions`, a paired sidecar's hooks), then every key the
+ * reader's contract has, so the registration checks see each of them.
+ */
+function readThrough(
+  raw: CustomTag,
+  reader: DeferredReader,
+  call: boolean,
+): ContractRead {
+  const answer = reader.read(call);
+  if (answer.incomplete || answer.uncached) unsettledReads++;
+  const known = joinedReads.get(answer);
+  if (known) return known;
+  let read: ContractRead;
+  if (answer.incomplete) {
+    read = {};
+  } else if (answer.error !== undefined || !answer.contract) {
+    read = {
+      error: answer.error,
+      ...(answer.warnings ? { warnings: answer.warnings } : {}),
+    };
+  } else {
+    try {
+      const contract: CustomTag = {};
+      for (const key of Object.keys(raw)) {
+        if (Object.hasOwn(answer.contract, key) || isContractKey(raw, key)) {
+          continue;
+        }
+        const value = (raw as Record<string, unknown>)[key];
+        if (value !== undefined) {
+          (contract as Record<string, unknown>)[key] = value;
+        }
+      }
+      Object.assign(contract, answer.contract);
+      read = {
+        contract,
+        ...(answer.warnings ? { warnings: answer.warnings } : {}),
+      };
+    } catch (error) {
+      read = { error };
+    }
+  }
+  joinedReads.set(answer, read);
+  return read;
+}
+
+/** Whether `key` of a reader entry is one of its contract's getters. */
+function isContractKey(raw: CustomTag, key: string): boolean {
+  return (
+    (DEFERRED_KEYS as readonly string[]).includes(key) ||
+    (contractKeysOf.get(raw)?.has(key) ?? false)
+  );
+}
+
+/** A reader entry's claimed contract keys (beyond core's), as the scan defined them. */
+const contractKeysOf = new WeakMap<CustomTag, ReadonlySet<string>>();
+
+/**
+ * Records which of a reader entry's keys are contract getters (core's and
+ * the claimed ones), so a read never runs them for their value. Internal.
+ */
+export function markContractKeys(
+  raw: CustomTag,
+  keys: readonly string[],
+): void {
+  contractKeysOf.set(raw, new Set(keys));
+}
+
+/** The file that defines `definition` (a view entry or a raw one), when a reader names one. */
+export function definedInOf(definition: CustomTag): string | undefined {
+  const raw = viewEntries.get(definition)?.raw ?? definition;
+  return readers.get(raw)?.definedIn;
+}
+
+/**
+ * The warnings a deferred entry's read carries (a tag file's own), for the
+ * call that reads it to report. Empty for an eager entry.
+ */
+export function deferredContractWarnings(
+  definition: CustomTag,
+): readonly MxWarning[] {
+  const raw = viewEntries.get(definition)?.raw ?? definition;
+  if (!readers.has(raw)) return [];
+  return readContract(raw, true).warnings ?? [];
+}
+
+/**
+ * Whether any reader entry of `customTags` answered a read that may no
+ * longer hold. Every reader is asked (each drops its own stale answer).
+ */
+function anyStaleReader(
+  customTags: Readonly<Record<string, CustomTag>>,
+): boolean {
+  let stale = false;
+  for (const name of Object.keys(customTags)) {
+    const reader = readers.get(customTags[name] as CustomTag);
+    if (reader?.stale()) stale = true;
+  }
+  return stale;
 }
 
 /**
@@ -2724,7 +2884,8 @@ function checkDeferred(entry: ViewEntry): { error?: unknown } {
   const known = checkResults.get(entry);
   if (known) return known;
   let result: { error?: unknown };
-  const read = readContract(entry.raw);
+  const unsettled = unsettledReads;
+  const read = readContract(entry.raw, true);
   if (read.error !== undefined || !read.contract) {
     result = { error: read.error };
   } else {
@@ -2746,7 +2907,9 @@ function checkDeferred(entry: ViewEntry): { error?: unknown } {
       result = { error };
     }
   }
-  checkResults.set(entry, result);
+  // A read answered incomplete or uncached (a tag file mid-derivation, a
+  // cycle): this result is not final, so a later call checks again.
+  if (unsettledReads === unsettled) checkResults.set(entry, result);
   return result;
 }
 
@@ -2774,6 +2937,13 @@ export function registrationView(
 ): Readonly<Record<string, CustomTag>> | undefined {
   if (!customTags) return customTags;
   let byClaim = views.get(customTags);
+  // A reader's answer can go stale with no change to this map (a file the
+  // tag file depends on was edited): the views built on it, with their
+  // cached checks, are dropped, and the next call reads afresh.
+  if (byClaim && anyStaleReader(customTags)) {
+    views.delete(customTags);
+    byClaim = undefined;
+  }
   const known = byClaim?.get(claimed);
   if (known) return known;
   const names = Object.keys(customTags);
@@ -2844,7 +3014,11 @@ export function deferredContractError(
     );
     entry = viewEntries.get(view[name] as CustomTag);
   }
-  return entry ? checkDeferred(entry).error : undefined;
+  if (!entry) return undefined;
+  // A call reads the contract even when its check is cached, so a tag file
+  // being derived records this one as a dependency.
+  if (readers.has(entry.raw)) readContract(entry.raw, true);
+  return checkDeferred(entry).error;
 }
 
 /**
@@ -3052,11 +3226,18 @@ export function isContractOnlyDelegated(
  * ("`<tag>`: attribute tag `<@x>` does not support attributes" / "does not
  * support nested attribute tags").
  */
-function contractOnlyDelegatedTag(ctx: Ctx, call: TagCall, node: Node): IrNode {
+function contractOnlyDelegatedTag(
+  ctx: Ctx,
+  call: TagCall,
+  node: Node,
+  definition: CustomTag,
+): IrNode {
+  const definedIn = definedInOf(definition);
   return {
     kind: "DelegatedTag",
     tag: {
       name: call.name,
+      ...(definedIn !== undefined ? { definedIn } : {}),
       ...(call.alias ? { alias: call.alias } : {}),
       ...(call.trigger ? { trigger: call.trigger } : {}),
       nameSpan: call.nameSpan,
@@ -3144,7 +3325,9 @@ export function transformCustomTag(
   }
   // A claimed contract-only call has no transform to run: after validation
   // and the analyze recording above, it is handed to the host as is.
-  if (contractOnly) return [contractOnlyDelegatedTag(ctx, withDefaults, node)];
+  if (contractOnly) {
+    return [contractOnlyDelegatedTag(ctx, withDefaults, node, definition)];
+  }
   const observed = observedCall(withDefaults);
   const originalAttributeTagTree = cloneAttributeTagTree(
     withDefaults.attributeTagTree ??

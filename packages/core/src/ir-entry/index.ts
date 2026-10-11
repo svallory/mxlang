@@ -66,6 +66,8 @@ import {
   toDiagnostic,
 } from "./diagnostics.ts";
 import { finishIr, type SpannedIr } from "./spans.ts";
+// Registers the dialect tag-file reader with the scan (side effect).
+import "../tag-file.ts";
 
 export type { IrDiagnostic } from "./diagnostics.ts";
 export type { Spanned, SpannedIr } from "./spans.ts";

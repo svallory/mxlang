@@ -34,6 +34,8 @@
  */
 
 import { rejectShadowedRegistration } from "./builtin-tags.ts";
+// Registers the dialect tag-file reader with the scan (side effect).
+import "./tag-file.ts";
 import { type ClaimedFields, claimedFields } from "./contract-fields.ts";
 import { type Node, TranslateError } from "./core.ts";
 import {

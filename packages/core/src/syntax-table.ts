@@ -42,6 +42,11 @@ import { findNearestPackageJson } from "./host-policy.ts";
 import type { IrNode } from "./ir.ts";
 import type { ContractData, LoweredUnit } from "./lowered-unit.ts";
 import type { SourceSpan } from "./mapping.ts";
+import type {
+  TagFileContext,
+  TagFileInput,
+  TagFileResult,
+} from "./tag-file.ts";
 
 export type {
   ContractCheckContext,
@@ -431,6 +436,17 @@ export interface Dialect {
   readonly describeAttribute?: (
     declaration: Readonly<Record<string, unknown>>,
   ) => string;
+  /**
+   * Turns one of this dialect's tag files (a file in one of its manifest's
+   * `tagDirs`) into a contract. Sync. The scan never runs it: the first call
+   * of the tag does, and core caches the result per tag file (its stamp,
+   * this module's revision, the tag file's own scan and every dependency).
+   * The contract is checked as any registered tag's, and the call gets what
+   * a contract-only `.tag.ts` call gets: a `DelegatedTag`, plus `definedIn`.
+   * Without this hook, a call of such a tag is an `MX_TAG_FILE_ERROR`.
+   * @unstable
+   */
+  readonly tagFile?: (file: TagFileInput, ctx: TagFileContext) => TagFileResult;
 }
 
 /**
@@ -588,6 +604,7 @@ const MODULE_FIELDS = new Set([
   "contractFields",
   "checkContract",
   "describeAttribute",
+  "tagFile",
 ]);
 
 const MODULE_HOOKS = [
@@ -597,6 +614,7 @@ const MODULE_HOOKS = [
   "afterLower",
   "checkContract",
   "describeAttribute",
+  "tagFile",
 ] as const;
 
 /** Each problem as `` `<path>.<field>` (trigger "<id>"): <message> ``, joined. */

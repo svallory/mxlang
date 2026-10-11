@@ -367,7 +367,7 @@ describe("a dialect package (`package.json#mx.dialect`, decision 212)", () => {
     ],
     [
       "export default { table: {}, lower: () => 1 };",
-      "`lower` is not a dialect field (id, name, table, tagRules, nodeTypes, lowerTrigger, lowerBlockTag, lowerFilter, afterLower, contractFields, checkContract, describeAttribute)",
+      "`lower` is not a dialect field (id, name, table, tagRules, nodeTypes, lowerTrigger, lowerBlockTag, lowerFilter, afterLower, contractFields, checkContract, describeAttribute, tagFile)",
     ],
     [
       "export default { table: {}, lowerTrigger: 1 };",
@@ -375,7 +375,7 @@ describe("a dialect package (`package.json#mx.dialect`, decision 212)", () => {
     ],
     [
       "export default { table: {}, productName: 'Mesh' };",
-      "`productName` is not a dialect field (id, name, table, tagRules, nodeTypes, lowerTrigger, lowerBlockTag, lowerFilter, afterLower, contractFields, checkContract, describeAttribute)",
+      "`productName` is not a dialect field (id, name, table, tagRules, nodeTypes, lowerTrigger, lowerBlockTag, lowerFilter, afterLower, contractFields, checkContract, describeAttribute, tagFile)",
     ],
     [
       "export default { id: 'other', table: {} };",

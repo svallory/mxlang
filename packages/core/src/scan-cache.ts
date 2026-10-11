@@ -328,7 +328,7 @@ function isFresh(entry: CacheEntry): boolean {
  * deliberately excludes the sidecars' *contents*, whose hooks are evaluated
  * lazily.
  */
-function parserSignatureOf(result: ScanResult): string {
+export function parserSignatureOf(result: ScanResult): string {
   return [...result.tags.keys()]
     .sort()
     .map((name) => {
@@ -508,6 +508,39 @@ function hit(cached: CacheEntry, options: ScanOptions): ScanResult {
         ),
       };
 }
+
+/**
+ * A file's stamp for a cache outside the scan's (a tag file's derived
+ * contract, `tag-file.ts`): the scan's own rule, `(mtimeMs, ctimeMs, size,
+ * ino)` plus a hash only while racy. Internal.
+ */
+export function fileStamp(path: string): FileStamp {
+  return stampOf(path, Date.now());
+}
+
+/**
+ * Reads `path` as UTF-8 and stamps what was read: the stat is taken before
+ * the read, so a write after it changes the stat, and a racy stamp hashes the
+ * bytes read rather than the file again. Internal.
+ */
+export function readStamped(path: string): { text: string; stamp: FileStamp } {
+  const nowMs = Date.now();
+  const stat = statOf(path);
+  const bytes = readFileSync(path);
+  const text = bytes.toString("utf8");
+  if (!isRacy(stat, nowMs)) return { text, stamp: stat };
+  return {
+    text,
+    stamp: { ...stat, hash: createHash("sha256").update(bytes).digest("hex") },
+  };
+}
+
+/** Whether `stamp` (from {@link fileStamp}) still describes `path`. Internal. */
+export function fileStampIsFresh(path: string, stamp: FileStamp): boolean {
+  return stampIsFresh(path, stamp, Date.now());
+}
+
+export type { FileStamp };
 
 /**
  * Stamps `path` as a snapshot taken at `nowMs` would, and checks a stamp as

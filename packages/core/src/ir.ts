@@ -55,7 +55,7 @@ import type { TemplateMetadata } from "./template-tag.ts";
  * a shape change fails until it goes up; a change of meaning alone is the
  * author's to catch. @unstable
  */
-export const IR_VERSION = 2;
+export const IR_VERSION = 3;
 
 /** A source position, as Marko reports one and `TranslateError` carries it. */
 export interface Position {
@@ -461,6 +461,12 @@ export interface TagTrigger {
 
 export interface DelegatedTag<Data = unknown> extends IrBase {
   name: string;
+  /**
+   * The absolute path of the dialect tag file that defines this tag (a file
+   * in its dialect's `tagDirs`, read by `Dialect.tagFile`), so the dialect's
+   * back end can find the definition. Absent on every other tag. @unstable
+   */
+  definedIn?: string;
   /** Set only on a tag a dialect's `lowerTrigger` built with `ctx.child`. */
   trigger?: TagTrigger;
   /** The authored spelling, when a wildcard child resolved to `name` (decision 147). */
