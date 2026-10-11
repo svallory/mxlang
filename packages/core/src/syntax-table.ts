@@ -24,9 +24,11 @@ import {
 import type { Node } from "./core.ts";
 import { isTranslateError, TranslateError } from "./core.ts";
 import type { ContractMap, CustomTag, IrBuilders } from "./custom-tags.ts";
+import { RESERVED_TAG_CODE } from "./diagnostic-codes.ts";
 import {
   type ContractFail,
   checkDialectContracts,
+  isMergedContracts,
   withDialectContracts,
 } from "./dialect-contracts.ts";
 import {
@@ -70,6 +72,7 @@ import {
   mxKeyPosition,
   staticKeyPathPosition,
 } from "./scan.ts";
+import { dialectReservedMessage } from "./tag-names.ts";
 import { TAG_RULES_PRESETS, type TagRulesPreset } from "./tag-presets.ts";
 import { triggerRow } from "./triggers.ts";
 
@@ -1142,14 +1145,34 @@ export function failedDialectModule(
  * ({@link withDialectContracts}). A routed dialect's reserved names are its
  * manifest's `reservedTags`; with an `explicit` dialect the caller's
  * `customTags` override every contract. Unchanged without contracts.
+ *
+ * A routed caller's `customTags` entry that names one of the dialect's
+ * reserved names is refused here, `MX_RESERVED_TAG` at the file start, as
+ * `lowerSource` refuses it (which drops the entry before calling this) and
+ * as the scan refuses a tag file: only the dialect defines a reserved name.
+ * A map this merge built (`lowerSource`'s, handed to its compile) carries
+ * the dialect's own reserved contracts and is not refused.
  */
 export function dialectCustomTags(
   customTags: Readonly<Record<string, CustomTag>> | undefined,
   dialect: Dialect | undefined,
   explicit: boolean,
 ): Record<string, CustomTag> | undefined {
-  if (!dialect?.contracts) return customTags as Record<string, CustomTag>;
+  if (!dialect) return customTags as Record<string, CustomTag>;
   const reserved = loadedDialects.get(dialect)?.manifest.reservedTags ?? [];
+  if (!explicit && customTags && !isMergedContracts(customTags)) {
+    for (const name of Object.keys(customTags)) {
+      if (!reserved.includes(name)) continue;
+      const error = new TranslateError(
+        dialectReservedMessage(name, "`customTags`", dialect.name),
+        1,
+        0,
+      );
+      error.diagnosticCode = RESERVED_TAG_CODE;
+      throw error;
+    }
+  }
+  if (!dialect.contracts) return customTags as Record<string, CustomTag>;
   return withDialectContracts(customTags, dialect, reserved, explicit);
 }
 

@@ -10,6 +10,7 @@ import { isTranslateError } from "./core.ts";
 import {
   type ContractMap,
   type CustomTag,
+  isValidatedContract,
   markValidatedContracts,
   rejectUnknownDeclarationKeys,
   rejectUnreachableHooks,
@@ -68,7 +69,8 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * with code `MX_INVALID_DIALECT_CONTRACT`, or the code the dialect's
  * `checkContract` gave. The whole dialect fails: dropping one entry would
  * let its calls pass silently. A map that passes is marked validated under
- * the dialect's claim, so registration does not check its entries again.
+ * the dialect's claim, so registration does not check its entries again,
+ * and neither does a later load that meets the same entry objects.
  */
 export function checkDialectContracts(
   dialect: Record<string, unknown>,
@@ -126,6 +128,10 @@ export function checkDialectContracts(
         refuse(`\`${hook}\` must be a function`);
       }
     }
+    // An entry already checked under this claim (the same object, from an
+    // earlier load or call) is not checked again: an explicit `dialect` that
+    // is not frozen is resolved on every call.
+    if (isValidatedContract(definition as CustomTag, claimed)) continue;
     try {
       if (definition.parseOptions !== undefined) {
         checkParseOptions(definition.parseOptions, "", "parseOptions");
@@ -150,10 +156,20 @@ const mergedMaps = new WeakSet<object>();
 /** The key a call with no `customTags` memoizes under. */
 const NO_TAGS: ContractMap = Object.freeze(Object.create(null));
 
-/** Merged maps per dialect, per caller kind, per `customTags` map. */
+/** Whether `map` is one {@link withDialectContracts} built. */
+export function isMergedContracts(map: object): boolean {
+  return mergedMaps.has(map);
+}
+
+/**
+ * Merged maps per dialect, for the `contracts` object they merged (a dialect
+ * object that is not frozen may get a new one), per caller kind, per
+ * `customTags` map.
+ */
 const merges = new WeakMap<
   Dialect,
   {
+    contracts: ContractMap;
     routed: WeakMap<object, ContractMap>;
     explicit: WeakMap<object, ContractMap>;
   }
@@ -165,11 +181,12 @@ const merges = new WeakMap<
  * the dialect's reserved contracts (`reserved`, its manifest's
  * `reservedTags`), then `customTags`, then the dialect's other contracts.
  * A routed caller's `customTags` naming a reserved name are refused before
- * this (`MX_RESERVED_TAG`); here the dialect's contract simply wins. For a
+ * this (`MX_RESERVED_TAG`, `dialectCustomTags`). For a
  * caller that passes the dialect itself (`explicit`), `customTags` are the
  * dialect's own and override every contract. `customTags` itself when the
  * dialect has no contracts; memoized per (dialect, map), so the merged map
- * keeps its identity across compiles and the caches keyed on it stay warm.
+ * keeps its identity across compiles and the caches keyed on it stay warm;
+ * a dialect whose `contracts` object changed is merged again.
  */
 export function withDialectContracts(
   customTags: Readonly<Record<string, CustomTag>> | undefined,
@@ -183,8 +200,8 @@ export function withDialectContracts(
     return customTags as Record<string, CustomTag>;
   }
   let byKind = merges.get(dialect);
-  if (!byKind) {
-    byKind = { routed: new WeakMap(), explicit: new WeakMap() };
+  if (byKind?.contracts !== contracts) {
+    byKind = { contracts, routed: new WeakMap(), explicit: new WeakMap() };
     merges.set(dialect, byKind);
   }
   const memo = explicit ? byKind.explicit : byKind.routed;

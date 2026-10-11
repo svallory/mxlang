@@ -53,6 +53,40 @@ describe("R7: the tools check a dialect's vocabulary", () => {
     ).toEqual({ source: "Probe", diagnostics: [] });
   });
 
+  it("with an `explainUnknownTag` hook, the dialect's own contract tag is never explained as unknown", () => {
+    const project = probeProject(
+      {
+        "dialect.mjs": `export default {
+  tagRules: "none",
+  table: {},
+  explainUnknownTag(tag) {
+    return { message: "explained " + tag.name, code: "PROBE_UNKNOWN" };
+  },
+  contracts: ${VOCABULARY},
+};
+`,
+      },
+      { manifest: MJS },
+    );
+    expect(
+      checkDialectFile(
+        project.path("a.probe"),
+        '<entity/>\n<entity name="x"/>\n',
+      ),
+    ).toEqual({
+      source: "Probe",
+      diagnostics: [
+        {
+          severity: "error",
+          message: "`<entity>`: missing required attribute `name`",
+          line: 1,
+          column: 0,
+          offset: 0,
+        },
+      ],
+    });
+  });
+
   it("without the contract the same call was silent", () => {
     const project = probeProject(
       { "dialect.mjs": withContracts("{}") },

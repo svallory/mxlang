@@ -3092,6 +3092,14 @@ export function rejectRegistration(
  */
 const validatedContracts = new WeakMap<CustomTag, ClaimedFields>();
 
+/** Whether `contract` was validated as a dialect contract under `claimed`. */
+export function isValidatedContract(
+  contract: CustomTag,
+  claimed: ClaimedFields,
+): boolean {
+  return validatedContracts.get(contract) === claimed;
+}
+
 /** Marks every entry of `contracts` validated under `claimed` (see {@link rejectRegistration}). */
 export function markValidatedContracts(
   contracts: Readonly<Record<string, CustomTag>>,

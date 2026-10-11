@@ -478,32 +478,131 @@ describe("R3: precedence, one fixture per source", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("routed `compileSource`: a passed `customTags` replaces a non-reserved contract, never a reserved one", () => {
-    // A template compiler needs a `transform` on every tag it calls.
-    lexiProject(
-      RANKED_MODULE.replaceAll("} } },", "} }, transform: () => [] },"),
-    );
-    const loose: CustomTag = {
-      attributes: { other: { type: "string" } },
-      transform: () => [],
-    };
-    const compile = (source: string) => {
+  /** `compileSource` on `page()`: `undefined`, or the error's message and code. */
+  const compilePage = (
+    source: string,
+    customTags: Record<string, CustomTag>,
+    dialect?: Parameters<typeof compileSource>[3]["dialect"],
+  ) => {
+    try {
+      compileSource(source, page(), policy, {
+        targets: lookup,
+        tagDiscoveryDirs: [],
+        emitIr: () => "",
+        customTags,
+        ...(dialect === undefined ? {} : { dialect }),
+      });
+      return undefined;
+    } catch (error) {
+      return isTranslateError(error)
+        ? { message: error.message, code: error.diagnosticCode }
+        : String(error);
+    }
+  };
+  // A template compiler needs a `transform` on every tag it calls.
+  const COMPILABLE = RANKED_MODULE.replaceAll(
+    "} } },",
+    "} }, transform: () => [] },",
+  );
+  const LOOSE_COMPILABLE: CustomTag = {
+    attributes: { other: { type: "string" } },
+    transform: () => [],
+  };
+  const REFUSED_SEALED = {
+    message: "`<sealed>` cannot be defined by `customTags`: Lexi reserves it",
+    code: RESERVED_CODE,
+  };
+
+  it("routed `compileSource`: a passed `customTags` replaces a non-reserved contract", () => {
+    lexiProject(COMPILABLE);
+    expect(
+      compilePage('<plain other="x"/>\n', { plain: LOOSE_COMPILABLE }),
+    ).toBeUndefined();
+    // Without the caller's definition the dialect's contract applies.
+    expect(compilePage('<plain other="x"/>\n', {})).toEqual({
+      message: "`<plain>`: unknown attribute `other`",
+      code: undefined,
+    });
+  });
+
+  it("routed `compileSource`: a passed `customTags` naming a reserved contract is `MX_RESERVED_TAG`", () => {
+    lexiProject(COMPILABLE);
+    // Refused whether or not the file calls the name, as `lowerSource` refuses it.
+    expect(
+      compilePage('<plain other="x"/>\n', {
+        sealed: LOOSE_COMPILABLE,
+        plain: LOOSE_COMPILABLE,
+      }),
+    ).toEqual(REFUSED_SEALED);
+    expect(
+      compilePage('<sealed other="x"/>\n', { sealed: LOOSE_COMPILABLE }),
+    ).toEqual(REFUSED_SEALED);
+  });
+
+  it("explicit `compileSource` with the routed dialect: `customTags` override its reserved contract, silently", () => {
+    lexiProject(COMPILABLE);
+    const { dialect } = resolveSyntaxOf(page());
+    expect(dialect?.contracts?.sealed).toBeDefined();
+    expect(
+      compilePage(
+        '<sealed other="x"/>\n',
+        { sealed: LOOSE_COMPILABLE },
+        dialect,
+      ),
+    ).toBeUndefined();
+    // The control: without the caller's definition the reserved contract applies.
+    expect(compilePage('<sealed other="x"/>\n', {}, dialect)).toEqual({
+      message: "`<sealed>`: unknown attribute `other`",
+      code: undefined,
+    });
+  });
+
+  describe("`parseFragment` and a reserved contract (its `parseOptions` show which definition won)", () => {
+    // `sealed` reads its body as text; the caller's `sealed` does not.
+    const TEXT_MODULE = `module.exports = { default: { table: {}, contracts: {
+  sealed: { parseOptions: { text: true } },
+} } };`;
+    const bodyOf = (base: Parameters<typeof parseFragment>[1]) => {
       try {
-        compileSource(source, page(), policy, {
-          targets: lookup,
-          tagDiscoveryDirs: [],
-          emitIr: () => "",
-          customTags: { sealed: loose, plain: loose },
-        });
-        return undefined;
+        return parseFragment("<sealed><b/></sealed>", base).body.flatMap(
+          (node) =>
+            ((node as { body?: Array<{ type: string }> }).body ?? []).map(
+              (child) => child.type,
+            ),
+        );
       } catch (error) {
-        return isTranslateError(error) ? error.message : String(error);
+        return isTranslateError(error)
+          ? { message: error.message, code: error.diagnosticCode }
+          : String(error);
       }
     };
-    expect(compile('<plain other="x"/>\n')).toBeUndefined();
-    expect(compile('<sealed other="x"/>\n')).toBe(
-      "`<sealed>`: unknown attribute `other`",
-    );
+
+    it("routed: the dialect's contract applies; a passed `customTags` entry for it is `MX_RESERVED_TAG`", () => {
+      lexiProject(TEXT_MODULE);
+      expect(bodyOf({ filename: page() })).toEqual(["MxText"]);
+      expect(bodyOf({ filename: page(), customTags: { sealed: {} } })).toEqual(
+        REFUSED_SEALED,
+      );
+    });
+
+    it("explicit, with the routed dialect: the caller's definition wins, silently", () => {
+      lexiProject(TEXT_MODULE);
+      const { dialect } = resolveSyntaxOf(page());
+      expect(dialect?.contracts?.sealed).toBeDefined();
+      expect(
+        bodyOf({
+          filename: page(),
+          dialect: dialect as NonNullable<typeof dialect>,
+        }),
+      ).toEqual(["MxText"]);
+      expect(
+        bodyOf({
+          filename: page(),
+          dialect: dialect as NonNullable<typeof dialect>,
+          customTags: { sealed: {} },
+        }),
+      ).toEqual(["MxTag"]);
+    });
   });
 
   it("the routed dialect passed as the explicit `dialect`: `customTags` still override its reserved contracts", () => {
@@ -1135,6 +1234,27 @@ describe("R8: a front end's vocabulary moves from `customTags` to `Dialect.contr
   });
 });
 
+describe("a dialect with `contracts` and `explainUnknownTag`, in allow mode", () => {
+  it("the hook is never asked about the dialect's own contract tag: one diagnostic, the missing attribute", () => {
+    lexiProject(`module.exports = { default: {
+  table: {},
+  explainUnknownTag(tag) { return { message: "explained " + tag.name, code: "LEXI_UNKNOWN" }; },
+  contracts: {
+    entity: { attributes: { name: { type: "string", required: true } } },
+  },
+} };`);
+    const { diagnostics } = lowerSource(
+      '<entity/>\n<entity name="x"/>\n',
+      join(dir, "a.lexi.mx"),
+    );
+    expect(
+      diagnostics.map((d) => [d.code, d.message, d.line, d.column]),
+    ).toEqual([
+      [undefined, "`<entity>`: missing required attribute `name`", 1, 0],
+    ]);
+  });
+});
+
 describe("R9: `mxConfigTags`, through the scan and the IR entry", () => {
   const PLAIN_MODULE = "module.exports = { default: { table: {} } };";
   const page = (name = "page.lexi.mx") => join(dir, name);
@@ -1277,6 +1397,89 @@ describe("the merge is memoized per dialect and `customTags` map", () => {
     const merged = dialectCustomTags({ other: {} }, dialect, false);
     expect(dialectCustomTags(merged, dialect, false)).toBe(merged);
     expect(dialectCustomTags(merged, dialect, true)).toBe(merged);
+  });
+
+  it("a reassigned `contracts` map is merged afresh, never served from the memo", () => {
+    const own = { ...dialect, contracts: { plain: strict } as ContractMap };
+    const tags: Record<string, CustomTag> = { other: {} };
+    const before = dialectCustomTags(tags, own, false);
+    const loose: CustomTag = {};
+    own.contracts = { plain: loose };
+    const after = dialectCustomTags(tags, own, false);
+    expect(after).not.toBe(before);
+    expect(after?.plain).toBe(loose);
+    expect(dialectCustomTags(tags, own, false)).toBe(after);
+  });
+
+  it("an explicit dialect whose `contracts` is reassigned: the next call checks and applies the new map", () => {
+    const own: {
+      id: string;
+      name: string;
+      table: object;
+      contracts: Record<string, unknown>;
+    } = {
+      id: "lexi",
+      name: "Lexi",
+      table: {},
+      contracts: {
+        box: { attributes: { k: { type: "string", required: true } } },
+      },
+    };
+    const lower = () => {
+      try {
+        return lowerSource("<box/>\n", join(dir, "p.x"), {
+          dialect: own as LowerSourceOptions["dialect"] & object,
+        }).diagnostics.map((d) => d.message);
+      } catch (error) {
+        return isTranslateError(error) ? error.message : String(error);
+      }
+    };
+    expect(lower()).toEqual(["`<box>`: missing required attribute `k`"]);
+    own.contracts = {
+      box: { attributes: { j: { type: "string", required: true } } },
+    };
+    expect(lower()).toEqual(["`<box>`: missing required attribute `j`"]);
+    own.contracts = {
+      box: {
+        attributes: { k: { type: "string", required: true } },
+        bogusKey: 1,
+      },
+    };
+    expect(lower()).toEqual([
+      "the `dialect` option is not a valid dialect: `dialect.contracts.box`: `bogusKey` is not a contract key (parseOptions, attributes, attributeTags, children, parents, defaultTag, analyze, transform, finalize, or a key the dialect claims in `contractFields.tag`)",
+    ]);
+  });
+
+  it("an explicit dialect that is not frozen: `checkContract` runs once per contract entry, however often it is lowered", () => {
+    let checks = 0;
+    const box = {
+      attributes: {
+        k: { type: "string" as const, required: true, shape: "square" },
+      },
+    };
+    const own = {
+      id: "lexi",
+      name: "Lexi",
+      table: {},
+      contractFields: { attribute: ["shape"] },
+      checkContract() {
+        checks += 1;
+      },
+      contracts: { box } as ContractMap,
+    };
+    const lower = () =>
+      lowerSource("<box/>\n", join(dir, "p.x"), {
+        dialect: own as LowerSourceOptions["dialect"] & object,
+        customTags: { other: {} },
+      }).diagnostics.map((d) => d.message);
+    expect(lower()).toEqual(["`<box>`: missing required attribute `k`"]);
+    expect(lower()).toEqual(["`<box>`: missing required attribute `k`"]);
+    expect(checks).toBe(1);
+    // A new entry object is a new contract: checked once more.
+    own.contracts = { box: { ...box } };
+    expect(lower()).toEqual(["`<box>`: missing required attribute `k`"]);
+    expect(lower()).toEqual(["`<box>`: missing required attribute `k`"]);
+    expect(checks).toBe(2);
   });
 
   it("a dialect without contracts leaves `customTags` alone", () => {
