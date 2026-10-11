@@ -92,7 +92,7 @@ const brief = (result: ReturnType<typeof lower>) =>
 
 /** The exact text `unknownTags: "reject"` gives a call nothing defines. */
 const unknown = (name: string, line: number, column: number) => ({
-  message: `\`<${name}>\` is not a known tag: it has no contract in \`customTags\``,
+  message: `\`<${name}>\` is not a known tag in the \`kit\` dialect`,
   line,
   column,
   code: "MX_UNKNOWN_TAG",

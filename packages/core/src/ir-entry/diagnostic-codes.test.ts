@@ -38,7 +38,7 @@ describe("MX_UNKNOWN_TAG", () => {
       {
         severity: "error",
         message:
-          "`<opem>` is not a known tag: it has no contract in `customTags`; did you mean `<open>`?",
+          "`<opem>` is not a known tag: no contract for it was given; did you mean `<open>`?",
         line: 2,
         column: 2,
         offset: 6,
@@ -58,8 +58,7 @@ describe("MX_UNKNOWN_TAG", () => {
     const unknown = diagnostics.find((d) => d.message.includes("not a known"));
     expect(unknown).toEqual({
       severity: "error",
-      message:
-        "`<opem>` is not a known tag: it has no contract in `customTags`",
+      message: "`<opem>` is not a known tag: no contract for it was given",
       line: 2,
       column: 2,
       offset: 9,

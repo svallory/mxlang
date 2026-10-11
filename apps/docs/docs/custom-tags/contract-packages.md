@@ -103,8 +103,10 @@ lowerSource(source, file, {
   structural: "reject",
   unknownTags: "reject",
 });
-// widget="post"  ->  1:0 `<widget>` is not a known tag: it has no contract in `customTags`
+// widget="post"  ->  1:0 `<widget>` is not a known tag: no contract for it was given
 ```
+
+A file of a [dialect](/custom-tags/dialects/) gets the same error naming the dialect instead (`` `<widget>` is not a known tag in the `recipes` dialect ``), whichever of the dialect's contracts, its tag directories or the `customTags` you passed supplied the vocabulary. Match on the code, `MX_UNKNOWN_TAG`, not on the text.
 
 A `transform` that emits tags is not supported by `lowerSource` yet: it reports an `internal error` diagnostic on the emitted tag in either mode (TODO `data-transform-output-tree`). The check itself only ever looks at names the file's author wrote.
 

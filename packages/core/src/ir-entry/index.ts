@@ -261,6 +261,17 @@ function dialectOf(options: LowerSourceOptions, filename: string) {
   ).dialect;
 }
 
+/** The id of the file's dialect, or `undefined` when it has none (or cannot be resolved). */
+function dialectIdOf(
+  dialectOnce: () => ReturnType<typeof dialectOf>,
+): string | undefined {
+  try {
+    return dialectOnce()?.id;
+  } catch {
+    return undefined;
+  }
+}
+
 /** A `customTags` definition that names a reserved tag, with why. */
 interface RefusedDefinition {
   name: string;
@@ -506,6 +517,7 @@ export function lowerSource(
   const modes = modesOf(options, dialectOnce);
   const declarations = entryDeclarations(rules.nativeTags);
   const declared = declaredTagNames(customTags);
+  const dialectId = dialectIdOf(dialectOnce);
   let ir: Ir | null = null;
   try {
     const host: HostOptions = {
@@ -595,7 +607,8 @@ export function lowerSource(
         if (tag.explained) return tag.explained;
         const extra = guidance.get(`${tag.offset}:${tag.name}`);
         const unknownError = new TranslateError(
-          unknownTagMessage(tag.name, declared) + (extra ? `; ${extra}` : ""),
+          unknownTagMessage(tag.name, declared, dialectId) +
+            (extra ? `; ${extra}` : ""),
           tag.line,
           tag.column,
         );
@@ -642,6 +655,7 @@ export function lowerSource(
   const errors = checkIr(lowered, source, {
     ...modes,
     declaredTags: declared,
+    ...(dialectId !== undefined ? { dialectId } : {}),
     exemptTags: refusedNames,
     ...(successExplainer ? { explainer: successExplainer } : {}),
   });

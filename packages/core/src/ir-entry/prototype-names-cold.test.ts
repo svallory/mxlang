@@ -35,7 +35,7 @@ describe("cold lookup cache", () => {
       expect(diagnostics).toEqual([
         {
           severity: "error",
-          message: `\`<${name}>\` is not a known tag: it has no contract in \`customTags\``,
+          message: `\`<${name}>\` is not a known tag: no contract for it was given`,
           line: 1,
           column: 0,
           offset: 0,

@@ -61,6 +61,8 @@ export interface CheckOptions {
    */
   unknownTags: "allow" | "reject";
   declaredTags: ReadonlySet<string>;
+  /** The id of the file's dialect, when it has one: the error names it. */
+  dialectId?: string;
   /**
    * Names whose every call already carries its own error (a refused
    * `customTags` definition: `MX_RESERVED_TAG` at each call site). Such a call
@@ -598,13 +600,25 @@ function statements(ir: Ir): Statement[] {
   return out;
 }
 
-/** The error text for an authored tag with no contract in `customTags`. */
+/**
+ * The error text for an authored tag whose name has no contract, built here
+ * for every place that reports one. A dialect's file names the dialect (its
+ * id): its vocabulary is the dialect's contracts, its tag directories and
+ * whatever the caller handed over, and the tag is in none of them. Any other
+ * file names no source, because a lowering is handed its contracts and cannot
+ * tell where the caller found them.
+ */
 export function unknownTagMessage(
   name: string,
   declaredTags: ReadonlySet<string>,
+  dialectId?: string,
 ): string {
   const near = nearestName(name, declaredTags);
-  return `\`<${name}>\` is not a known tag: it has no contract in \`customTags\`${near ? `; did you mean \`<${near}>\`?` : ""}`;
+  const where =
+    dialectId === undefined
+      ? ": no contract for it was given"
+      : ` in the \`${dialectId}\` dialect`;
+  return `\`<${name}>\` is not a known tag${where}${near ? `; did you mean \`<${near}>\`?` : ""}`;
 }
 
 /** An unknown authored tag, for `unknownTags: "reject"`. */
@@ -633,6 +647,7 @@ function allUnknownTags(
   declaredTags: ReadonlySet<string>,
   exemptTags: ReadonlySet<string> | undefined,
   explainer: Explainer | undefined,
+  dialectId: string | undefined,
 ): UnknownTagHit[] {
   const found: UnknownTagHit[] = [];
   const visitTag = (tag: DelegatedTag<unknown>, frame: ViewFrame) => {
@@ -653,7 +668,7 @@ function allUnknownTags(
       });
       found.push({
         name: tag.name,
-        message: unknownTagMessage(tag.name, declaredTags),
+        message: unknownTagMessage(tag.name, declaredTags, dialectId),
         code: UNKNOWN_TAG_CODE,
         at: tag.loc,
         ...(tag.span && Number.isFinite(tag.span.sourceEnd)
@@ -977,6 +992,7 @@ function checkAll(ir: Ir, source: string, options: CheckOptions): unknown[] {
         options.declaredTags,
         options.exemptTags,
         options.explainer,
+        options.dialectId,
       );
       for (const hit of found) {
         if (hit.explained) {

@@ -92,8 +92,7 @@ describe("transform output through lowerSource", () => {
     expect(diagnostics).toEqual([
       {
         severity: "error",
-        message:
-          "`<mystery>` is not a known tag: it has no contract in `customTags`",
+        message: "`<mystery>` is not a known tag: no contract for it was given",
         line: 1,
         column: 6,
         offset: 6,
@@ -101,8 +100,7 @@ describe("transform output through lowerSource", () => {
       },
       {
         severity: "error",
-        message:
-          "`<mystery>` is not a known tag: it has no contract in `customTags`",
+        message: "`<mystery>` is not a known tag: no contract for it was given",
         line: 1,
         column: 12,
         offset: 12,

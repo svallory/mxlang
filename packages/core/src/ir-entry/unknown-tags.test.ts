@@ -32,8 +32,7 @@ describe('unknownTags: "reject"', () => {
     expect(diagnostics).toEqual([
       {
         severity: "error",
-        message:
-          "`<widget>` is not a known tag: it has no contract in `customTags`",
+        message: "`<widget>` is not a known tag: no contract for it was given",
         line: 1,
         column: 0,
         offset: 0,
@@ -47,7 +46,7 @@ describe('unknownTags: "reject"', () => {
     expect(diagnostics).toMatchObject([
       {
         message:
-          "`<resorce>` is not a known tag: it has no contract in `customTags`; did you mean `<resource>`?",
+          "`<resorce>` is not a known tag: no contract for it was given; did you mean `<resource>`?",
         line: 1,
         column: 0,
       },
@@ -63,14 +62,13 @@ describe('unknownTags: "reject"', () => {
     // labelled as following from `<deep>`.
     expect(diagnostics).toMatchObject([
       {
-        message:
-          "`<deep>` is not a known tag: it has no contract in `customTags`",
+        message: "`<deep>` is not a known tag: no contract for it was given",
         line: 2,
         column: 2,
       },
       {
         message:
-          "`<bogus>` is not a known tag: it has no contract in `customTags` (inside the unknown tag `<deep>`; may resolve once it is declared)",
+          "`<bogus>` is not a known tag: no contract for it was given (inside the unknown tag `<deep>`; may resolve once it is declared)",
         line: 3,
         column: 4,
       },
@@ -80,15 +78,11 @@ describe('unknownTags: "reject"', () => {
   it("reports every unknown call, the ones inside an unknown tag labelled", () => {
     const { diagnostics } = parse("<bogus>\n  <other/>\n</bogus>");
     expect(diagnostics.map((d) => [d.line, d.column, d.message])).toEqual([
-      [
-        1,
-        0,
-        "`<bogus>` is not a known tag: it has no contract in `customTags`",
-      ],
+      [1, 0, "`<bogus>` is not a known tag: no contract for it was given"],
       [
         2,
         2,
-        "`<other>` is not a known tag: it has no contract in `customTags` (inside the unknown tag `<bogus>`; may resolve once it is declared)",
+        "`<other>` is not a known tag: no contract for it was given (inside the unknown tag `<bogus>`; may resolve once it is declared)",
       ],
     ]);
   });
@@ -113,7 +107,7 @@ describe('unknownTags: "reject"', () => {
     // is the cause and the only one. The closed-children error it also got is
     // dropped, as it is about the same occurrence.
     expect(diagnostics.map((d) => [d.line, d.column, d.message])).toEqual([
-      [2, 2, "`<bad>` is not a known tag: it has no contract in `customTags`"],
+      [2, 2, "`<bad>` is not a known tag: no contract for it was given"],
     ]);
   });
 
@@ -126,7 +120,7 @@ describe('unknownTags: "reject"', () => {
       {
         severity: "error",
         message:
-          "`<resourse>` is not a known tag: it has no contract in `customTags`; did you mean `<resource>`?",
+          "`<resourse>` is not a known tag: no contract for it was given; did you mean `<resource>`?",
         line: 1,
         column: 0,
         offset: 0,
@@ -151,7 +145,7 @@ describe('unknownTags: "reject"', () => {
       { message: expect.stringContaining("`<bogus>`"), line: 2, column: 2 },
       {
         message:
-          "`<x>` is not a known tag: it has no contract in `customTags` (inside the unknown tag `<bogus>`; may resolve once it is declared)",
+          "`<x>` is not a known tag: no contract for it was given (inside the unknown tag `<bogus>`; may resolve once it is declared)",
         line: 3,
         column: 4,
       },
@@ -414,8 +408,7 @@ describe('unknownTags: "reject"', () => {
     expect(ir).toBeUndefined();
     expect(diagnostics).toMatchObject([
       {
-        message:
-          "`<widget>` is not a known tag: it has no contract in `customTags`",
+        message: "`<widget>` is not a known tag: no contract for it was given",
         line: 1,
         column: 0,
       },
@@ -447,8 +440,7 @@ describe('unknownTags: "reject"', () => {
     );
     expect(diagnostics).toMatchObject([
       {
-        message:
-          "`<bogus>` is not a known tag: it has no contract in `customTags`",
+        message: "`<bogus>` is not a known tag: no contract for it was given",
         line: 1,
         column: 15,
       },
@@ -504,7 +496,7 @@ describe('unknownTags: "reject"', () => {
     expect(empty.diagnostics).toMatchObject([
       {
         message:
-          "`<anything>` is not a known tag: it has no contract in `customTags`",
+          "`<anything>` is not a known tag: no contract for it was given",
       },
     ]);
     // Nothing to reject in a file with no tags.
@@ -635,7 +627,7 @@ describe("a colon in a tag name, in the parse-only scan", () => {
     const { diagnostics } = parse(source);
     expect(diagnostics).toMatchObject([
       {
-        message: `\`<${name}>\` is not a known tag: it has no contract in \`customTags\``,
+        message: `\`<${name}>\` is not a known tag: no contract for it was given`,
         line: 1,
         column: 0,
       },
@@ -800,7 +792,7 @@ describe("one error for an unknown tag in a closed parent", () => {
     expect(ir).toBeUndefined();
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0]?.message).toBe(
-      "`<uuid:id>` is not a known tag: it has no contract in `customTags`",
+      "`<uuid:id>` is not a known tag: no contract for it was given",
     );
   });
 
@@ -927,13 +919,13 @@ describe("one error for an unknown tag in a closed parent", () => {
     expect(one.map((d) => [d.code, d.message])).toEqual([
       [
         "MX_UNKNOWN_TAG",
-        "`<t1>` is not a known tag: it has no contract in `customTags`; inside `<wild>`: names must match `^T[a-z0-9]*$`",
+        "`<t1>` is not a known tag: no contract for it was given; inside `<wild>`: names must match `^T[a-z0-9]*$`",
       ],
     ]);
     expect(two.map((d) => [d.code, d.message])).toEqual([
       [
         "MX_UNKNOWN_TAG",
-        "`<t1>` is not a known tag: it has no contract in `customTags`; inside `<wild2>`: allowed children: `<item>`; other names must match `^T[a-z]+$` or `^U[a-z]+$`",
+        "`<t1>` is not a known tag: no contract for it was given; inside `<wild2>`: allowed children: `<item>`; other names must match `^T[a-z]+$` or `^U[a-z]+$`",
       ],
     ]);
   });
@@ -952,7 +944,7 @@ describe("one error for an unknown tag in a closed parent", () => {
     expect(diagnostics.map((d) => [d.code, d.message])).toEqual([
       [
         "MX_UNKNOWN_TAG",
-        "`<thing>` is not a known tag: it has no contract in `customTags`; inside `<box2>`: (the parent's `defaultTag` `ghost` is invalid; see the declaration)",
+        "`<thing>` is not a known tag: no contract for it was given; inside `<box2>`: (the parent's `defaultTag` `ghost` is invalid; see the declaration)",
       ],
     ]);
   });
@@ -960,7 +952,7 @@ describe("one error for an unknown tag in a closed parent", () => {
   it("a plain closed parent adds no guidance to the unknown-tag message", () => {
     const { diagnostics } = run("attributes\n  foo\n", "reject");
     expect(diagnostics[0]?.message).toBe(
-      "`<foo>` is not a known tag: it has no contract in `customTags`",
+      "`<foo>` is not a known tag: no contract for it was given",
     );
   });
 

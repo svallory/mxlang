@@ -319,7 +319,20 @@ describe("the pin: a derived contract behaves as the same `.tag.ts` contract", (
     const eager = lowerAt("data.mx", source, { unknownTags: "reject" });
     const derived = lowerAt("page.kit.mx", source, { unknownTags: "reject" });
     expect(eager.diagnostics.map((d) => d.code)).toContain("MX_UNKNOWN_TAG");
-    expect(derived.diagnostics).toEqual(eager.diagnostics);
+    // The same error, but for the source it names: the `.mx` file was given
+    // no contract for the tag, the dialect's file is not in the dialect.
+    expect(eager.diagnostics.map((d) => d.message)).toEqual([
+      "`<wallet>` is not a known tag: no contract for it was given",
+    ]);
+    expect(derived.diagnostics.map((d) => d.message)).toEqual([
+      "`<wallet>` is not a known tag in the `kit` dialect",
+    ]);
+    expect(derived.diagnostics).toEqual(
+      eager.diagnostics.map((d) => ({
+        ...d,
+        message: "`<wallet>` is not a known tag in the `kit` dialect",
+      })),
+    );
   });
 
   it("the derived call carries `definedIn`; the sidecar's does not", () => {

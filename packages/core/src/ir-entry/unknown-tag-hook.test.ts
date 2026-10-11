@@ -303,8 +303,7 @@ describe("explainUnknownTag: the Mesh-style table, in both modes", () => {
       expect(diagnostics).toEqual([
         {
           severity: "error",
-          message:
-            "`<foo>` is not a known tag: it has no contract in `customTags`",
+          message: "`<foo>` is not a known tag in the `fixture` dialect",
           code: "MX_UNKNOWN_TAG",
           line: 3,
           column: 4,
@@ -418,7 +417,7 @@ describe("explainUnknownTag: one tag, one diagnostic", () => {
         needsFirst,
         error({
           message:
-            "`<string:title>` is not a known tag: it has no contract in `customTags`",
+            "`<string:title>` is not a known tag in the `fixture` dialect",
           code: "MX_UNKNOWN_TAG",
           line: 3,
           column: 14,

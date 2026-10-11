@@ -440,8 +440,7 @@ describe("mx.contracts through lowerSource", () => {
       severity: "error",
       line: 1,
       column: 0,
-      message:
-        "`<widget>` is not a known tag: it has no contract in `customTags`",
+      message: "`<widget>` is not a known tag: no contract for it was given",
     });
   });
 });

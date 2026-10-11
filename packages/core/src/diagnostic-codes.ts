@@ -6,7 +6,7 @@
  * with the lowering that raises it.
  */
 
-/** An authored tag with no contract in `customTags`, under `unknownTags: "reject"`. */
+/** An authored tag with no contract, under `unknownTags: "reject"`. */
 export const UNKNOWN_TAG_CODE = "MX_UNKNOWN_TAG";
 
 /**

@@ -97,6 +97,7 @@ Each field is the dialect's default for the [`lowerSource` option](/architecture
 
 - **Resolution.** For each option, the call's value wins, then the dialect's, then the option's own default. `imports` defaults to the effective `structural`, so a dialect that states only `structural: "reject"` rejects `import` too.
 - **Which dialect.** The one in the call's `dialect` option, else the one the file routes to. Your CLI that passes `dialect: YOUR_DIALECT` and the editor that routes by extension read the same object, so they cannot drift apart.
+- **The message names the dialect.** A tag with no contract in a closed vocabulary is reported as `` `<widget>` is not a known tag in the `<id>` dialect `` (with the manifest's `id`), at the tag, with the code `MX_UNKNOWN_TAG` and a `did you mean` hint when one declared name is clearly nearest. It does not say where the contracts came from: your `contracts`, a tag directory and the caller's `customTags` all count. Match on the code, not the text.
 - **A call can override.** Pass the option and it wins in both directions, for a test that wants the open set or a special file that needs a looser rule. The tools never pass them.
 - **One value per dialect.** It covers every file the dialect claims, tag files included. A `tagFile` hook that wants other values for its tag files passes them to `ctx.lower`.
 - **`.mx` files are unaffected.** They route to no dialect.

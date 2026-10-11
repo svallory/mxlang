@@ -150,7 +150,7 @@ describe("every error is reported", () => {
   // reject scan refuses only a template that does not parse (PR 450 round 2;
   // values measured on main, 9293794df).
   const unknown = (name: string) =>
-    `\`<${name}>\` is not a known tag: it has no contract in \`customTags\``;
+    `\`<${name}>\` is not a known tag: no contract for it was given`;
   it.each([
     [
       "<foo x=a.#b/>",
@@ -386,7 +386,7 @@ const inside = (name: string) =>
 const VAR =
   "`/var` on `<open>` is not supported: it has no template, so it has no `<return>` to bind";
 const UNKNOWN = (name: string) =>
-  `\`<${name}>\` is not a known tag: it has no contract in \`customTags\``;
+  `\`<${name}>\` is not a known tag: no contract for it was given`;
 
 describe("an error inside an unknown tag is labelled, never dropped (decision 161)", () => {
   const open: Record<string, CustomTag> = { open: {} };

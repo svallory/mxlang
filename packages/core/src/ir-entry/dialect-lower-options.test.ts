@@ -69,7 +69,7 @@ const IMPORT = {
 } as const;
 const UNKNOWN = {
   severity: "error",
-  message: "`<widget>` is not a known tag: it has no contract in `customTags`",
+  message: "`<widget>` is not a known tag in the `test` dialect",
   line: 5,
   column: 0,
   code: "MX_UNKNOWN_TAG",
@@ -423,8 +423,7 @@ describe("`unknownTags` closes the vocabulary when parsing fails", () => {
     expect(brief(lowerSource(MISSPELT, file))).toEqual([
       {
         severity: "error",
-        message:
-          "`<wiget>` is not a known tag: it has no contract in `customTags`",
+        message: "`<wiget>` is not a known tag in the `test` dialect",
         line: 2,
         column: 2,
         code: "MX_UNKNOWN_TAG",

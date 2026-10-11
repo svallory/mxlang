@@ -59,7 +59,7 @@ const dialectModule = (fields: string) =>
   `module.exports = { default: { tagRules: "none", table: {}, contracts: { entity: {} }, ${fields} } };\n`;
 
 const UNKNOWN_WIDGET =
-  "MX_UNKNOWN_TAG: `<widget>` is not a known tag: it has no contract in `customTags`";
+  "MX_UNKNOWN_TAG: `<widget>` is not a known tag in the `probe` dialect";
 const STATIC_IF =
   "undefined: the data tree is static; this file's consumer does not evaluate `<if>`";
 

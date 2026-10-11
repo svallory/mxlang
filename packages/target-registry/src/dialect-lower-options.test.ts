@@ -26,8 +26,7 @@ widget
 
 const IF =
   "the data tree is static; this file's consumer does not evaluate `<if>`";
-const UNKNOWN =
-  "`<widget>` is not a known tag: it has no contract in `customTags`";
+const UNKNOWN = "`<widget>` is not a known tag in the `probe` dialect";
 const CONTRACTS = { entity: {}, field: { parents: ["entity"] } };
 const STRICT = {
   structural: "reject",
@@ -173,7 +172,7 @@ describe("R9: the editor equals the dialect's own CLI", () => {
     });
     expect(check(path("a.probe"), "entity\n  wiget\n")).toEqual([
       [
-        "`<wiget>` is not a known tag: it has no contract in `customTags`",
+        "`<wiget>` is not a known tag in the `probe` dialect",
         2,
         2,
         "MX_UNKNOWN_TAG",
