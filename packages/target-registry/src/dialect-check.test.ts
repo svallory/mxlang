@@ -313,9 +313,10 @@ describe("checkDialectFile", () => {
   });
 
   describe("a dialect whose manifest is invalid", () => {
-    // `tagDirs: []` is a field error: the manifest says which extensions it
+    // `tagDirs: 7` is a field error: the manifest says which extensions it
     // claims, so its files are still dialect files, and show the error.
-    const invalid = () => probeProject({}, { manifest: { tagDirs: [] } });
+    const invalid = () =>
+      probeProject({}, { manifest: { tagDirs: 7 as never } });
 
     it("a non-.mx file of it shows the manifest field error, positioned in package.json", () => {
       const project = invalid();
@@ -327,7 +328,7 @@ describe("checkDialectFile", () => {
         diagnostics: [
           {
             severity: "error",
-            message: `\`mx.dialect.tagDirs\` must be a non-empty array of the directory names the dialect's files discover tags in (\`["components"]\`) (in ${packageFile}:1:131)`,
+            message: `\`mx.dialect.tagDirs\` must be an array of the directory names the dialect's files discover tags in (\`["components"]\`), or \`[]\` for none (in ${packageFile}:1:131)`,
             line: 1,
             column: 0,
             offset: 0,
@@ -473,7 +474,7 @@ describe("checkDialectFile", () => {
       (_what, extensions) => {
         const project = probeProject(
           {},
-          { manifest: { extensions, tagDirs: [] } as never },
+          { manifest: { extensions, tagDirs: 7 } as never },
         );
         expect(dialectExtensions(project.dir)).toEqual([]);
         expect(isDialectFile(project.path("a.ts"))).toBe(false);
@@ -486,7 +487,7 @@ describe("checkDialectFile", () => {
     it("a `tagExtensions` list repeating one `extensions` entry (so core refuses it) is not claimed, `.concept` included", () => {
       const project = probeProject(
         {},
-        { manifest: { tagExtensions: [".probe", ".concept"], tagDirs: [] } },
+        { manifest: { tagExtensions: [".probe", ".concept"], tagDirs: 7 } },
       );
       expect(dialectExtensions(project.dir)).toEqual([".probe", ".probe.mx"]);
     });

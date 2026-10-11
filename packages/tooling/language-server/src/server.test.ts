@@ -960,7 +960,7 @@ describe("stdio server (e2e)", () => {
   }, 15000);
 
   it("a dialect file of a project whose dialect manifest is invalid shows the manifest error on itself and on package.json", async () => {
-    const project = probeProject({}, { manifest: { tagDirs: [] } });
+    const project = probeProject({}, { manifest: { tagDirs: 7 as never } });
     const packageFile = project.path("package.json");
     const conn = startClient();
     await conn.sendRequest("initialize", {
@@ -986,7 +986,7 @@ describe("stdio server (e2e)", () => {
       await new Promise((r) => setTimeout(r, 50));
     }
     const message =
-      '`mx.dialect.tagDirs` must be a non-empty array of the directory names the dialect\'s files discover tags in (`["components"]`)';
+      '`mx.dialect.tagDirs` must be an array of the directory names the dialect\'s files discover tags in (`["components"]`), or `[]` for none';
     const onPackage = {
       start: { line: 0, character: 130 },
       end: { line: 0, character: 131 },

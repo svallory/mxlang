@@ -72,6 +72,24 @@ describe("`package.json#mx.dialect`", () => {
     ]);
   });
 
+  it("reads `tagDirs: []` as no directories, and an absent `tagDirs` as undefined", () => {
+    const { projectFile } = dialectProject(dir, {
+      manifest: { id: "closed", name: "Closed", tagDirs: [] },
+    });
+    const [closed] = discoverDialects(projectFile);
+    expect(closed?.tagDirs).toEqual([]);
+    expect(Object.isFrozen(closed?.tagDirs)).toBe(true);
+    const other = dialectProject(dir, {
+      packageName: "open-dialect",
+      manifest: { id: "open", name: "Open", extensions: [".open.mx"] },
+    });
+    const open = discoverDialects(other.projectFile).find(
+      (dialect) => dialect.id === "open",
+    );
+    expect(open).toBeDefined();
+    expect(open?.tagDirs).toBeUndefined();
+  });
+
   it("declares the tag-discovery fields, each optional", () => {
     const { projectFile, packageFile } = dialectProject(dir, {
       manifest: {
@@ -226,13 +244,7 @@ describe("`package.json#mx.dialect`", () => {
       "`tagDirs` not an array",
       { tagDirs: "components" },
       [11, 6],
-      '`mx.dialect.tagDirs` must be a non-empty array of the directory names the dialect\'s files discover tags in (`["components"]`)',
-    ],
-    [
-      "an empty `tagDirs`",
-      { tagDirs: [] },
-      [11, 6],
-      '`mx.dialect.tagDirs` must be a non-empty array of the directory names the dialect\'s files discover tags in (`["components"]`)',
+      '`mx.dialect.tagDirs` must be an array of the directory names the dialect\'s files discover tags in (`["components"]`), or `[]` for none',
     ],
     [
       "a `tagDirs` entry that is not a string",
