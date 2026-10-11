@@ -3239,6 +3239,43 @@ export function isContractOnlyDelegated(
 }
 
 /**
+ * `attrs` with every attribute the call did not write spanned where the
+ * author's text ends the tag's name: zero-width, so it contains no position,
+ * claims no authored text and sorts with the tag, never over a neighbour.
+ *
+ * A contract `default` is materialized after parsing and has no source of its
+ * own, but the IR `lowerSource` returns promises a span on every attribute,
+ * its name and its value (`SpannedIr`), and a transform's view of the same
+ * attribute stays unspanned (`defaultAttr`). The authored attributes are
+ * passed through untouched, by identity. A call without a `nameSpan` has no
+ * source to anchor on and is returned as is.
+ */
+function spanDefaultedAttrs(
+  attrs: Attr[],
+  authored: readonly Attr[],
+  nameSpan: SourceSpan | undefined,
+): Attr[] {
+  if (!nameSpan || attrs.length === authored.length) return attrs;
+  const at = { sourceStart: nameSpan.sourceEnd, sourceEnd: nameSpan.sourceEnd };
+  const written = new Set(authored);
+  return attrs.map((attr) => {
+    if (written.has(attr) || attr.kind === "spread") return attr;
+    if (attr.kind === "static") {
+      return { ...attr, nameSpan: at, valueSpan: at, span: at };
+    }
+    if (attr.kind === "dynamic") {
+      return {
+        ...attr,
+        nameSpan: at,
+        span: at,
+        value: { ...attr.value, span: at },
+      };
+    }
+    return attr;
+  });
+}
+
+/**
  * The `DelegatedTag` a validated contract-only call lowers to. It is the node an
  * unregistered claimed tag produces (same body, same attributes), except that
  * the call is validated against its contract and declared defaults are added.
@@ -3255,10 +3292,12 @@ export function isContractOnlyDelegated(
 function contractOnlyDelegatedTag(
   ctx: Ctx,
   call: TagCall,
+  authored: readonly Attr[],
   node: Node,
   definition: CustomTag,
 ): IrNode {
   const definedIn = definedInOf(definition);
+  const attrs = spanDefaultedAttrs(call.attrs, authored, call.nameSpan);
   return {
     kind: "DelegatedTag",
     tag: {
@@ -3268,7 +3307,7 @@ function contractOnlyDelegatedTag(
       ...(call.trigger ? { trigger: call.trigger } : {}),
       nameSpan: call.nameSpan,
       span: call.span,
-      attrs: call.attrs,
+      attrs,
       args: [],
       children: call.content?.children ?? [],
       attributeTags: call.attributeTags,
@@ -3352,7 +3391,9 @@ export function transformCustomTag(
   // A claimed contract-only call has no transform to run: after validation
   // and the analyze recording above, it is handed to the host as is.
   if (contractOnly) {
-    return [contractOnlyDelegatedTag(ctx, withDefaults, node, definition)];
+    return [
+      contractOnlyDelegatedTag(ctx, withDefaults, call.attrs, node, definition),
+    ];
   }
   const observed = observedCall(withDefaults);
   const originalAttributeTagTree = cloneAttributeTagTree(
