@@ -374,7 +374,7 @@ export interface UnknownTag {
    * Control flow (`<if>`, `<for>`) is not a tag here.
    */
   readonly ancestors: readonly UnknownTagAncestor[];
-  /** The caller's `unknownTags`. */
+  /** The effective `unknownTags`: the call's, else the dialect's, else `"allow"`. */
   readonly mode: "allow" | "reject";
   readonly file: string;
   readonly source: string;
@@ -442,6 +442,28 @@ export interface Dialect {
    * rules; a dialect turns off what it does not want by naming a preset.
    */
   readonly tagRules?: TagRulesPreset;
+  /**
+   * The dialect's default for `lowerSource`'s `structural` option: `"reject"`
+   * makes each structural construct (text, `${}`, `<if>`, `<for>`, `<const>`,
+   * `import`, `export`, `static`) a positioned error in the dialect's files.
+   * Absent means `"pass"`. A call that states `structural` wins.
+   * @unstable
+   */
+  readonly structural?: "pass" | "reject";
+  /**
+   * The dialect's default for `lowerSource`'s `imports` option. Absent means
+   * the effective `structural`. A call that states `imports` wins.
+   * @unstable
+   */
+  readonly imports?: "pass" | "reject";
+  /**
+   * The dialect's default for `lowerSource`'s `unknownTags` option:
+   * `"reject"` closes the vocabulary, so a tag with no contract is
+   * `MX_UNKNOWN_TAG`. Absent means `"allow"`. A call that states
+   * `unknownTags` wins.
+   * @unstable
+   */
+  readonly unknownTags?: "allow" | "reject";
   /**
    * The dialect's node types, by `Type` (PascalCase). A table row names one
    * with `node: { type, dialect }`.
@@ -694,6 +716,9 @@ const MODULE_FIELDS = new Set([
   "name",
   "table",
   "tagRules",
+  "structural",
+  "imports",
+  "unknownTags",
   "nodeTypes",
   "lowerTrigger",
   "lowerBlockTag",
@@ -706,6 +731,13 @@ const MODULE_FIELDS = new Set([
   "tagFile",
   "contracts",
 ]);
+
+/** The lowering options a dialect states a default for, with the values each accepts. */
+const LOWER_OPTION_VALUES = [
+  ["structural", ["pass", "reject"]],
+  ["imports", ["pass", "reject"]],
+  ["unknownTags", ["allow", "reject"]],
+] as const;
 
 const MODULE_HOOKS = [
   "lowerTrigger",
@@ -837,6 +869,16 @@ function checkModuleShape(
     fail(
       `\`${path}tagRules\` must be one of core's tag rule presets: ${TAG_RULES_PRESETS.map((name) => `"${name}"`).join(", ")}`,
     );
+  }
+  for (const [key, allowed] of LOWER_OPTION_VALUES) {
+    if (
+      value[key] !== undefined &&
+      !(allowed as readonly unknown[]).includes(value[key])
+    ) {
+      fail(
+        `\`${path}${key}\` must be ${allowed.map((name) => `"${name}"`).join(" or ")}`,
+      );
+    }
   }
   checkDialectNodeTypes(value, path, fail);
   for (const hook of MODULE_HOOKS) {

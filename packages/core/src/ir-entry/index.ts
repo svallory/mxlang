@@ -215,6 +215,36 @@ function presetOf(
   return dialect ? dialectTagRules(dialect) : "html";
 }
 
+/** The three lowering options after the call's, the dialect's and the defaults. */
+interface LowerModes {
+  readonly structural: "pass" | "reject";
+  readonly imports: "pass" | "reject";
+  readonly unknownTags: "allow" | "reject";
+}
+
+/**
+ * Each option as the call states it, else as the file's dialect does, else
+ * its default; `imports` defaults to the effective `structural`. A dialect
+ * that fails to resolve states nothing: the compile reports why.
+ */
+function modesOf(
+  options: LowerSourceOptions,
+  dialectOnce: () => ReturnType<typeof dialectOf>,
+): LowerModes {
+  let dialect: ReturnType<typeof dialectOf>;
+  try {
+    dialect = dialectOnce();
+  } catch {
+    dialect = undefined;
+  }
+  const structural = options.structural ?? dialect?.structural ?? "pass";
+  return {
+    structural,
+    imports: options.imports ?? dialect?.imports ?? structural,
+    unknownTags: options.unknownTags ?? dialect?.unknownTags ?? "allow",
+  };
+}
+
 /** The dialect `filename` compiles under; throws as the compile would. */
 function dialectOf(options: LowerSourceOptions, filename: string) {
   return (
@@ -337,7 +367,7 @@ function reservedDiagnostics(
  * has no `explainUnknownTag` (or cannot be resolved: the compile reports that).
  */
 function explainerOf(
-  options: LowerSourceOptions,
+  modes: LowerModes,
   dialectOnce: () => ReturnType<typeof dialectOf>,
   customTags: LowerSourceOptions["customTags"],
   filename: string,
@@ -349,7 +379,7 @@ function explainerOf(
     if (!dialect?.explainUnknownTag) return undefined;
     const claimed = claimedFields(dialect);
     return explainerFor(dialect, {
-      mode: options.unknownTags ?? "allow",
+      mode: modes.unknownTags,
       file: filename,
       source,
       lineStarts,
@@ -466,6 +496,7 @@ export function lowerSource(
   } catch {
     // The compile below resolves the dialect again and reports the failure.
   }
+  const modes = modesOf(options, dialectOnce);
   const declarations = entryDeclarations(rules.nativeTags);
   const declared = declaredTagNames(customTags);
   let ir: Ir | null = null;
@@ -490,9 +521,9 @@ export function lowerSource(
     tagRulesDecided.add(host);
     compileSource(source, filename, declarations, host);
   } catch (error) {
-    const reject = options.unknownTags === "reject";
+    const reject = modes.unknownTags === "reject";
     const explainer = explainerOf(
-      options,
+      modes,
       dialectOnce,
       customTags,
       filename,
@@ -594,7 +625,7 @@ export function lowerSource(
   // Never throws: the check records every error, even one outside its
   // recovery points, and returns them with the rest.
   const successExplainer = explainerOf(
-    options,
+    modes,
     dialectOnce,
     customTags,
     filename,
@@ -602,9 +633,7 @@ export function lowerSource(
     lineStarts,
   );
   const errors = checkIr(lowered, source, {
-    structural: options.structural ?? "pass",
-    imports: options.imports ?? options.structural ?? "pass",
-    unknownTags: options.unknownTags ?? "allow",
+    ...modes,
     declaredTags: declared,
     exemptTags: refusedNames,
     ...(successExplainer ? { explainer: successExplainer } : {}),
