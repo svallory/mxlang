@@ -2566,7 +2566,8 @@ the same as `{ at }`. `at` is a `Position`, defaulting to the tag's first call
 in `analyze` and to the call in `transform`. `code` is a non-empty string
 carried as `TranslateError.diagnosticCode`, so it reaches `IrDiagnostic.code`
 (also for a failure inside a tag template); it belongs to the dialect's or
-module's own namespace and core does not check its prefix. An empty `code`, an
+module's own namespace, since the `MX_` prefix is core's own, and core does
+not check its prefix. An empty `code`, an
 `at` that is not a position, an unknown option, a position that also carries
 `at` or `code`, a non-plain object, or any other second argument is a
 positioned error naming the mistake. `finalize` has no `fail`.
