@@ -2559,15 +2559,17 @@ Six invariants:
 6. The cached metadata a unit exposes to its caller is
    `{ readsContent, attributeTags }` plus `returnsValue` and the return value's
    source text — **and nothing else**.
-7. **`ctx.fail` in `analyze` and `transform`** is `ctx.fail(message, options?)`,
-   where `options` is `{ at?, code? }` or, as before, a bare position (`at`).
-   `at` is a `Position`, defaulting to the tag's first call in `analyze` and to
-   the call in `transform`. `code` is a non-empty string carried as
-   `TranslateError.diagnosticCode`, so it reaches `IrDiagnostic.code`; it
-   belongs to the dialect's or module's own namespace and core does not check
-   its prefix. An empty `code`, an `at` that is not a position, an unknown
-   option, or any other second argument is a positioned error naming the
-   mistake. `finalize` has no `fail`.
+
+**`ctx.fail` in `analyze` and `transform`** is `ctx.fail(message, options?)`,
+where `options` is a plain `{ at?, code? }` object or a bare position, which is
+the same as `{ at }`. `at` is a `Position`, defaulting to the tag's first call
+in `analyze` and to the call in `transform`. `code` is a non-empty string
+carried as `TranslateError.diagnosticCode`, so it reaches `IrDiagnostic.code`
+(also for a failure inside a tag template); it belongs to the dialect's or
+module's own namespace and core does not check its prefix. An empty `code`, an
+`at` that is not a position, an unknown option, a position that also carries
+`at` or `code`, a non-plain object, or any other second argument is a
+positioned error naming the mistake. `finalize` has no `fail`.
 
 The metadata cache is **bounded** (256 entries, oldest-inserted evicted), keyed by
 path + mtime + source, with a provisional entry seeded before the compile so

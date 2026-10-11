@@ -853,16 +853,31 @@ function failFromHook(
   let code: string | undefined;
   if (arg !== undefined) {
     if (isPosition(arg)) {
+      const own = ["at", "code"].filter((key) => Object.hasOwn(arg, key));
+      if (own.length > 0) {
+        return misuse(
+          `got a position that also has \`${own[0]}\`; write \`{ at, code }\`, not \`{ ...position, ${own[0]} }\``,
+        );
+      }
       at = arg;
     } else if (typeof arg !== "object" || arg === null || Array.isArray(arg)) {
       return misuse(`got ${arg === null ? "null" : typeof arg}`);
     } else {
+      const proto = Object.getPrototypeOf(arg);
+      if (proto !== Object.prototype && proto !== null) {
+        return misuse("got a non-plain object");
+      }
       const options = arg as { at?: unknown; code?: unknown };
       const extra = Object.keys(options).filter(
         (key) => key !== "at" && key !== "code",
       );
       if (extra.length > 0) {
-        return misuse(`unknown option \`${extra[0]}\``);
+        const key = extra[0];
+        return misuse(
+          key === "line" || key === "column"
+            ? "a position needs numeric `line` and `column`"
+            : `unknown option \`${key}\``,
+        );
       }
       if (options.at !== undefined) {
         if (!isPosition(options.at)) {

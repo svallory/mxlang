@@ -272,6 +272,10 @@ export function metadataForTemplate(
         tag.filename,
       );
       positioned.dependencies = error.dependencies;
+      if (error.diagnosticCode !== undefined) {
+        positioned.diagnosticCode = error.diagnosticCode;
+      }
+      if (error.spans !== undefined) positioned.spans = error.spans;
       const carried = (error as { [CALLEE_INPUT_ERROR]?: unknown })[
         CALLEE_INPUT_ERROR
       ];

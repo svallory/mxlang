@@ -16,7 +16,10 @@ import { lookup as targets } from "./test-targets.ts";
 const SOURCE = "<box/>\n<box/>\n";
 const AT = { line: 2, column: 0 };
 
-type Hook = (ctx: { fail: (...args: any[]) => never }) => never;
+type FailFn = (message: string, ...rest: unknown[]) => never;
+type Hook = (ctx: {
+  fail: (message: string, ...rest: unknown[]) => never;
+}) => never;
 
 function tags(
   hook: Hook,
@@ -83,6 +86,11 @@ describe.each(["analyze", "transform"] as const)("ctx.fail in %s", (where) => {
     ["an unknown option", { code: "X", cod: "Y" }, "unknown option `cod`"],
     ["a malformed at", { at: { line: 1 } }, "`at` must be a position"],
     ["a numeric code", { code: 7 }, "`code` must be a non-empty string"],
+    ["a position with a code", { ...AT, code: "X" }, "also has `code`"],
+    ["a position with an at", { ...AT, at: AT }, "also has `at`"],
+    ["a Date", new Date(), "non-plain object"],
+    ["an inherited code", Object.create({ code: "X" }), "non-plain object"],
+    ["a half position", { line: 2 }, "needs numeric `line` and `column`"],
   ])("refuses %s", (_name, arg, why) => {
     const got = run((ctx) => ctx.fail("boom", arg), where);
     expect(got?.message).toContain("takes a position or");
@@ -109,8 +117,8 @@ describe("ctx.fail from a tag template's tag", () => {
           customTags: {
             box: {
               template: { filename: "/tags/box.mx", source: "<div/>\n" },
-              analyze: (_calls: unknown, ctx: { fail: Hook }) =>
-                (ctx as any).fail("from template tag", { code: "X_TPL" }),
+              analyze: (_calls: unknown, ctx: { fail: FailFn }) =>
+                ctx.fail("from template tag", { code: "X_TPL" }),
             } as unknown as TemplateBackedTag,
           },
         },
@@ -124,6 +132,41 @@ describe("ctx.fail from a tag template's tag", () => {
         (error as TranslateError).line,
         (error as TranslateError).column,
       ]).toEqual([1, 0]);
+    }
+  });
+});
+
+describe("ctx.fail from a tag nested in a template", () => {
+  it("keeps the code, file and position when the template's metadata compile fails", () => {
+    try {
+      compileSource(
+        "<card>hi</card>\n",
+        "/app/page.mx",
+        { tags: {}, isElement: () => true, isComponent: () => false },
+        {
+          targets,
+          emitIr: () => "",
+          customTags: {
+            card: {
+              template: {
+                filename: "/tags/card.mx",
+                source: "<div>\n  <inner/>\n</div>\n",
+              },
+            } as unknown as TemplateBackedTag,
+            inner: {
+              transform: (_call: unknown, ctx: { fail: FailFn }) =>
+                ctx.fail("x", { code: "X_IN" }),
+            } as unknown as CustomTag,
+          },
+        },
+      );
+      throw new Error("did not fail");
+    } catch (error) {
+      const failure = error as TranslateError;
+      expect(failure).toBeInstanceOf(TranslateError);
+      expect(failure.diagnosticCode).toBe("X_IN");
+      expect(failure.file).toBe("/tags/card.mx");
+      expect([failure.line, failure.column]).toEqual([2, 2]);
     }
   });
 });
