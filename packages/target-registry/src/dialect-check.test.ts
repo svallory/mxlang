@@ -339,6 +339,51 @@ describe("checkDialectFile", () => {
       expect(isDialectFile(project.path("a.ts"))).toBe(false);
     });
 
+    it.each([
+      [
+        "reservedTags",
+        5,
+        '`mx.dialect.reservedTags` must be an array of the tag names only the dialect may define (`["entity"]`)',
+      ],
+      [
+        "tagExtensions",
+        "oops",
+        '`mx.dialect.tagExtensions` must be an array of the extra file extensions the dialect\'s tag files use (`[".component.mesh.mx"]`)',
+      ],
+      [
+        "tagExtensions",
+        [".probe"],
+        "`mx.dialect.tagExtensions` lists `.probe`, which `mx.dialect.extensions` already claims",
+      ],
+      [
+        "sidecars",
+        "no",
+        "`mx.dialect.sidecars` must be a boolean: whether `<name>.tag.ts` sidecars index in the dialect's `tagDirs`",
+      ],
+      ["tagDirs", ["a", "a"], "`mx.dialect.tagDirs` lists `a` twice"],
+    ])(
+      "an invalid `%s` field (%j) is shown on the dialect file, at that field",
+      (field, value, reason) => {
+        const project = probeProject({}, { manifest: { [field]: value } });
+        const packageFile = project.path("package.json");
+        expect(
+          checkDialectFile(project.path("a.probe"), PROBE_SOURCES.ok),
+        ).toEqual({
+          source: "mxlang",
+          diagnostics: [
+            {
+              severity: "error",
+              message: `${reason} (in ${packageFile}:1:131)`,
+              line: 1,
+              column: 0,
+              offset: 0,
+              origin: { file: packageFile, line: 1, column: 130 },
+            },
+          ],
+        });
+      },
+    );
+
     it("the error is the one an .mx file of the project reaches: same message, same package.json position", () => {
       const project = invalid();
       const viaProbe = checkDialectFile(project.path("a.probe"), "")
