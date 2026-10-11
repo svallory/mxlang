@@ -1,5 +1,5 @@
 ---
-packages: [targets, language-server]
+packages: [target-registry, language-server]
 kind: Added
 ---
 
