@@ -22,11 +22,12 @@ import {
 import {
   cleanupProbeProjects,
   PROBE_DEPENDS_ON_HOOK_MODULE,
+  PROBE_DEPENDS_ON_NAMED_HOOK_MODULE,
   PROBE_SOURCES,
   probeProject,
   tagDiscoveryProject,
 } from "../../../../test-fixtures/dialects/probe.ts";
-import { isMxDocument, WATCHED_FILE_GLOBS } from "./server.ts";
+import { globMatcher, isMxDocument, WATCHED_FILE_GLOBS } from "./server.ts";
 
 /**
  * The one stdio end-to-end test the brief asks for (§5): spawn the real
@@ -961,6 +962,144 @@ describe("stdio server (e2e)", () => {
     }, 30000);
   });
 
+  describe("the files watched for a tag file's ctx.dependsOn", () => {
+    /** A client that records what the server asks it to watch. */
+    const setup = async (relative: boolean, refuseExtra = false) => {
+      const project = tagDiscoveryProject({
+        "dialect.cjs": PROBE_DEPENDS_ON_NAMED_HOOK_MODULE,
+        "concepts/money.thing.probe": "<x/>\n",
+        "concepts/a.json": "ok\n",
+        "concepts/b.json": "ok\n",
+        "concepts/we[ird]/m.json": "ok\n",
+      });
+      const pageUri = pathToFileURL(project.path("page.probe")).href;
+      const tagUri = pathToFileURL(
+        project.path("concepts/money.thing.probe"),
+      ).href;
+      const conn = startClient();
+      type Glob = string | { baseUri: string; pattern: string };
+      const live = new Map<string, Glob[]>();
+      const refused: string[] = [];
+      conn.onRequest(
+        "client/registerCapability",
+        (params: {
+          registrations: Array<{
+            id: string;
+            method: string;
+            registerOptions: { watchers: Array<{ globPattern: Glob }> };
+          }>;
+        }) => {
+          for (const registration of params.registrations) {
+            if (registration.method !== "workspace/didChangeWatchedFiles") {
+              continue;
+            }
+            const globs = registration.registerOptions.watchers.map(
+              (w) => w.globPattern,
+            );
+            const isStatic = globs.every(
+              (glob) => typeof glob === "string" && glob.startsWith("**/"),
+            );
+            if (refuseExtra && !isStatic) throw new Error("no extra watchers");
+            live.set(registration.id, globs);
+          }
+        },
+      );
+      conn.onRequest(
+        "client/unregisterCapability",
+        (params: { unregisterations: Array<{ id: string }> }) => {
+          for (const each of params.unregisterations) live.delete(each.id);
+        },
+      );
+      conn.onNotification(
+        "window/logMessage",
+        (params: { message: string }) => {
+          refused.push(params.message);
+        },
+      );
+      await conn.sendRequest("initialize", {
+        processId: null,
+        rootUri: pathToFileURL(project.dir).href,
+        capabilities: {
+          workspace: {
+            didChangeWatchedFiles: {
+              dynamicRegistration: true,
+              relativePatternSupport: relative,
+            },
+          },
+        },
+      });
+      conn.sendNotification("initialized", {});
+      const published: string[][] = [];
+      conn.onNotification(PublishDiagnosticsNotification, (params) => {
+        if (params.uri === pageUri) {
+          published.push(
+            params.diagnostics.map((d) => String(d.code ?? d.message)),
+          );
+        }
+      });
+      const until = async (done: () => boolean) => {
+        for (let i = 0; i < 300 && !done(); i++) {
+          await new Promise((r) => setTimeout(r, 50));
+        }
+      };
+      /** The watchers the client holds beyond the static globs. */
+      const extra = (): Glob[] =>
+        [...live.values()]
+          .flat()
+          .filter(
+            (glob) => !(typeof glob === "string" && glob.startsWith("**/")),
+          );
+      const open = (uri: string, text: string) =>
+        conn.sendNotification("textDocument/didOpen", {
+          textDocument: { uri, languageId: "probe", version: 1, text },
+        });
+      const edit = (uri: string, version: number, text: string) =>
+        conn.sendNotification("textDocument/didChange", {
+          textDocument: { uri, version },
+          contentChanges: [{ text }],
+        });
+      open(tagUri, "<x/>\n");
+      open(pageUri, "<p/>\n<money/>\n");
+      await until(() => published.length > 0);
+      return { project, conn, tagUri, edit, extra, until, refused };
+    };
+
+    it("watches what the open documents name now: a path, then another, then none", async () => {
+      const { project, tagUri, edit, extra, until } = await setup(true);
+      const dir = pathToFileURL(project.path("concepts")).href;
+      expect(extra()).toEqual([]);
+      edit(tagUri, 2, "<x/>\n<!-- dep=a.json -->\n");
+      await until(() => extra().length > 0);
+      expect(extra()).toEqual([{ baseUri: dir, pattern: "a.json" }]);
+      edit(tagUri, 3, "<x/>\n<!-- dep=b.json -->\n");
+      await until(
+        () =>
+          JSON.stringify(extra()) ===
+          JSON.stringify([{ baseUri: dir, pattern: "b.json" }]),
+      );
+      expect(extra()).toEqual([{ baseUri: dir, pattern: "b.json" }]);
+      edit(tagUri, 4, "<x/>\n");
+      await until(() => extra().length === 0);
+      expect(extra()).toEqual([]);
+    }, 30000);
+
+    it("logs a refused registration", async () => {
+      const { project, tagUri, edit, refused, until } = await setup(true, true);
+      edit(tagUri, 2, "<x/>\n<!-- dep=a.json -->\n");
+      await until(() => refused.some((m) => m.includes("refused to watch")));
+      expect(refused.filter((m) => m.includes("refused to watch"))).toEqual([
+        `The client refused to watch ${project.path("concepts/a.json")}: Request client/registerCapability failed with message: no extra watchers`,
+      ]);
+    }, 30000);
+
+    it("without relative patterns, registers the absolute path with every segment escaped", async () => {
+      const { project, tagUri, edit, extra, until } = await setup(false);
+      edit(tagUri, 2, "<x/>\n<!-- dep=we[ird]/m.json -->\n");
+      await until(() => extra().length > 0);
+      expect(extra()).toEqual([`${project.path("concepts")}/we[[]ird]/m.json`]);
+    }, 30000);
+  });
+
   describe("diagnostics published against one URI are the union of its parts", () => {
     type Published = {
       code?: string;
@@ -1218,6 +1357,38 @@ describe("stdio server (e2e)", () => {
       expect(matched(`/project/app/${place}`)).not.toEqual([]);
     },
   );
+
+  it.each([
+    "/p/a.mx",
+    "/p/a.mxx",
+    "/p/a.tsx",
+    "/p/a.d.ts",
+    "/p/a.json",
+    "/p/package.json",
+    "/p/package.json5",
+    "/p/mx.config.ts",
+    "/p/mx.config",
+    "/p/.mxrc",
+    "/p/.mxrc.json",
+    "/p/.mxrcfoo",
+    "/p/mxrc",
+    "/p/.config/mxrc",
+    "/p/.config/mxrc.json",
+    "/p/.config/mxrcfoo",
+    "/p/other/mxrc",
+    "/p/a.thing.probe",
+    "/p/a.probe",
+    "C:\\p\\a.mx",
+  ])("tests %s against the watched globs as the client does", (path) => {
+    const posix = path.replace(/\\/g, "/");
+    const byClient = [...WATCHED_FILE_GLOBS, "**/*.thing.probe"].some((glob) =>
+      matchesGlob(posix, glob),
+    );
+    const byServer = [...WATCHED_FILE_GLOBS, "**/*.thing.probe"]
+      .map(globMatcher)
+      .some((matches) => matches(path));
+    expect(byServer).toBe(byClient);
+  });
 
   it("re-diagnoses an open document when its project's mx.config.json is created, then fixed", async () => {
     const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-ls-config-")));

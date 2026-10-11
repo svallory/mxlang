@@ -63,6 +63,30 @@ export const WATCHED_FILE_GLOBS: readonly string[] = [
   "**/.config/mxrc.*",
 ];
 
+/** `name` as a glob pattern that matches only itself. */
+function escapeGlob(name: string): string {
+  return name.replace(/[*?[{}]/g, "[$&]");
+}
+
+/**
+ * A test for a path against one of the watched globs: `**\/` then a file
+ * name pattern (`*` matches within a name), or a directory and a file name.
+ */
+export function globMatcher(glob: string): (file: string) => boolean {
+  const tail = glob
+    .replace(/^\*\*\//, "")
+    .split("/")
+    .map((segment) =>
+      segment
+        .split("*")
+        .map((part) => part.replace(/[.+^${}()|[\]\\?]/g, "\\$&"))
+        .join("[^/\\\\]*"),
+    )
+    .join("[\\\\/]");
+  const pattern = new RegExp(`(?:^|[\\\\/])${tail}$`);
+  return (file) => pattern.test(file);
+}
+
 const DEBOUNCE_MS = 150;
 
 /**
@@ -218,61 +242,57 @@ export function startServer(
       callers.add(uri);
       dependencyCallers.set(dependency, callers);
     }
+    syncExtraWatchers();
   }
 
   let watchedFilesDynamicRegistration = false;
   let relativePatternSupport = false;
-  // The globs the client was asked to watch at start-up (the static ones and
-  // the project's dialect extensions), as file-name tests.
-  const dialectExtensionsWatched = new Set<string>();
-  const globWatches = (file: string): boolean => {
-    const name = basename(file);
-    return (
-      /\.(?:mx|ts|tsx|js|mjs|cjs)$/.test(name) ||
-      name === "package.json" ||
-      name.startsWith("mx.config.") ||
-      name.startsWith(".mxrc") ||
-      (name.startsWith("mxrc") && basename(dirname(file)) === ".config") ||
-      [...dialectExtensionsWatched].some((extension) =>
-        name.endsWith(extension),
-      )
-    );
-  };
+  // The globs the client was asked to watch at start-up: the static ones and
+  // the project's dialect extensions.
+  let watchedGlobs: readonly ((file: string) => boolean)[] =
+    WATCHED_FILE_GLOBS.map(globMatcher);
+  const globWatches = (file: string): boolean =>
+    watchedGlobs.some((matches) => matches(file));
   // A file a document depends on that no glob above names (a data file a
   // dialect's tag-file hook reads, `ctx.dependsOn`) is watched by its own
-  // path, or its change would never reach the server. The set only grows
-  // while the server runs, and one registration holds all of it.
-  const extraWatched = new Set<string>();
+  // path, or its change would never reach the server. The watched set is
+  // what the open documents depend on now, in one registration.
+  let extraRegistered = "[]";
   let extraRegistration: Promise<Disposable | undefined> | undefined;
-  function watchBeyondGlobs(dependencies: ReadonlySet<string>): void {
+  function syncExtraWatchers(): void {
     if (!watchedFilesDynamicRegistration) return;
-    let added = false;
-    for (const file of dependencies) {
-      if (globWatches(file) || extraWatched.has(file)) continue;
-      extraWatched.add(file);
-      added = true;
-    }
-    if (!added) return;
-    // A file name is a glob pattern: its glob characters are escaped.
-    const literal = (name: string) => name.replace(/[*?[\]{}]/g, "[$&]");
-    const watchers = [...extraWatched].map((file) => ({
+    const wanted = [...dependencyCallers.keys()]
+      .filter((file) => !globWatches(file))
+      .sort();
+    const key = JSON.stringify(wanted);
+    if (key === extraRegistered) return;
+    extraRegistered = key;
+    const watchers = wanted.map((file) => ({
       globPattern: relativePatternSupport
         ? {
             baseUri: pathToFileURL(dirname(file)).href,
-            pattern: literal(basename(file)),
+            pattern: escapeGlob(basename(file)),
           }
-        : join(dirname(file), literal(basename(file))),
+        : file.split(/[\\/]/).map(escapeGlob).join("/"),
     }));
     const previous = extraRegistration;
     extraRegistration = (async () => {
       (await previous)?.dispose();
+      if (watchers.length === 0) return undefined;
       try {
         return await connection.client.register(
           DidChangeWatchedFilesNotification.type,
           { watchers },
         );
-      } catch {
-        // A client that refuses the registration keeps the globs it has.
+      } catch (error) {
+        // A client that refuses keeps the globs it has; the next change to
+        // the set asks again.
+        extraRegistered = "";
+        connection.console.warn(
+          `The client refused to watch ${wanted.join(", ")}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
         return undefined;
       }
     })();
@@ -348,7 +368,6 @@ export function startServer(
         dependencies.add(diagnostic.file);
       }
       recordDependencies(uri, dependencies);
-      watchBeyondGlobs(dependencies);
 
       // One URI can arrive in several entries (two problems in one
       // `package.json`): this document's part of it is merged.
@@ -400,17 +419,19 @@ export function startServer(
       try {
         for (const extension of dialectExtensionsUnder(root)) {
           dialectGlobs.add(`**/*${extension}`);
-          dialectExtensionsWatched.add(extension);
         }
       } catch {
         // An unreadable root has no dialects to watch.
       }
     }
+    const globs = [...WATCHED_FILE_GLOBS, ...dialectGlobs];
+    watchedGlobs = globs.map(globMatcher);
     void connection.client.register(DidChangeWatchedFilesNotification.type, {
-      watchers: [...WATCHED_FILE_GLOBS, ...dialectGlobs].map((globPattern) => ({
-        globPattern,
-      })),
+      watchers: globs.map((globPattern) => ({ globPattern })),
     });
+    // Documents checked before the client was initialized.
+    extraRegistered = "[]";
+    syncExtraWatchers();
   });
 
   function scheduleDependents(changedUri: string): void {

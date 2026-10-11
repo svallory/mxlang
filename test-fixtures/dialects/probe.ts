@@ -112,6 +112,22 @@ module.exports.default = {
 };
 `;
 
+/**
+ * A dialect whose `tagFile` hook names the file its tag file's text asks for:
+ * `dep=<path>` anywhere in the tag file, relative to the tag file's
+ * directory. A tag file with no `dep=` names nothing.
+ */
+export const PROBE_DEPENDS_ON_NAMED_HOOK_MODULE = `module.exports.default = {
+  tagRules: "none",
+  table: {},
+  tagFile(file, ctx) {
+    const named = /dep=([^\\s>]+)/.exec(file.source);
+    if (named) ctx.dependsOn(named[1]);
+    return { contract: {}, diagnostics: [] };
+  },
+};
+`;
+
 export const PROBE_TAG_DIALECT = {
   tagDirs: ["concepts", "kinds"],
   tagExtensions: [".thing.probe"],
