@@ -268,42 +268,53 @@ function without(
   return kept;
 }
 
+/** One authored call of a refused name, as the authored-tag scan finds it. */
+type ReservedCall = NonNullable<ReturnType<typeof scanAuthoredTags>>[number];
+
 /**
- * One `MX_RESERVED_TAG` error per call site of each refused name, or one at
- * the source's 1:0 when the name is never called (or the source does not
- * parse, so no call can be found).
+ * Every call of a refused name in the source, in document order. Empty when
+ * the source does not parse, so no call can be found.
  */
-function reservedDiagnostics(
+function reservedCalls(
   refused: readonly RefusedDefinition[],
   source: string,
   filename: string,
-  lineStarts: number[],
   rules: ReturnType<typeof tagRulesPreset> | undefined,
   customTags: Record<string, CustomTag> | undefined,
   options: LowerSourceOptions,
-): IrDiagnostic[] {
+): ReservedCall[] {
+  if (!rules) return [];
   const names = new Set(refused.map((definition) => definition.name));
-  let calls: ReturnType<typeof scanAuthoredTags> = null;
-  if (rules) {
-    try {
-      calls = scanAuthoredTags(
-        source,
-        filename,
-        rules,
-        registrationView(
-          customTags,
-          claimedFields(dialectOf(options, filename)),
-        ),
-        options.defaultTag ?? DEFAULT_TAG,
-        options.dialect,
-        names,
-      );
-    } catch {
-      calls = null;
-    }
+  try {
+    const found = scanAuthoredTags(
+      source,
+      filename,
+      rules,
+      registrationView(customTags, claimedFields(dialectOf(options, filename))),
+      options.defaultTag ?? DEFAULT_TAG,
+      options.dialect,
+      names,
+    );
+    // The scan reports every tag that is not core's; keep the refused ones.
+    return (found ?? []).filter((call) => names.has(call.name));
+  } catch {
+    return [];
   }
+}
+
+/**
+ * One `MX_RESERVED_TAG` error per call site of each refused name, or one at
+ * the source's 1:0 when the name is never called.
+ */
+function reservedDiagnostics(
+  refused: readonly RefusedDefinition[],
+  calls: readonly ReservedCall[],
+  source: string,
+  filename: string,
+  lineStarts: number[],
+): IrDiagnostic[] {
   return refused.flatMap(({ name, message }) => {
-    const sites = (calls ?? []).filter((call) => call.name === name);
+    const sites = calls.filter((call) => call.name === name);
     return (sites.length > 0 ? sites : [{ line: 1, column: 0 }]).map((at) =>
       toDiagnostic(
         "error",
@@ -341,6 +352,19 @@ export function lowerSource(
     refused.length > 0 ? without(options, refused) : options.customTags;
   const refusedNames = new Set(refused.map((definition) => definition.name));
   let rules: ReturnType<typeof tagRulesPreset> | undefined;
+  let calls: readonly ReservedCall[] | undefined;
+  // Found once, after `rules` is known, and only when a definition was refused.
+  const callsOfRefused = (): readonly ReservedCall[] => {
+    calls ??= reservedCalls(
+      refused,
+      source,
+      filename,
+      rules,
+      customTags,
+      options,
+    );
+    return calls;
+  };
   const refuse = (result: LowerSourceResult): LowerSourceResult => {
     if (refused.length === 0) return result;
     return {
@@ -349,20 +373,39 @@ export function lowerSource(
         result.ir ? [] : result.diagnostics,
         reservedDiagnostics(
           refused,
+          callsOfRefused(),
           source,
           filename,
           lineStarts,
-          rules,
-          customTags,
-          options,
         ),
       ),
     };
   };
+  // A call of a refused name already has its `MX_RESERVED_TAG`, which is the
+  // cause: a closed parent's `MX_TAG_NOT_ALLOWED` about that same occurrence
+  // (name and offset, as the lowering recorded it) is dropped.
+  const withoutRefusedOccurrences = (errors: unknown[]): unknown[] => {
+    if (refused.length === 0) return errors;
+    const at = new Set(
+      callsOfRefused().map((call) => `${call.offset}:${call.name}`),
+    );
+    return errors.flatMap(flattenErrors).filter((entry) => {
+      const occurrence = tagOccurrenceOf(entry);
+      if (occurrence === undefined) return true;
+      const file = (entry as TranslateError).file;
+      if (file !== undefined && file !== filename) return true;
+      return !at.has(`${occurrence.offset}:${occurrence.name}`);
+    });
+  };
   const failed = (errors: unknown[]): LowerSourceResult =>
     refuse({
       ir: undefined,
-      diagnostics: errorDiagnostics(errors, filename, lineStarts, source),
+      diagnostics: errorDiagnostics(
+        withoutRefusedOccurrences(errors),
+        filename,
+        lineStarts,
+        source,
+      ),
     });
   try {
     rules = tagRulesPreset(presetOf(options, filename), WEB_ELEMENTS);

@@ -918,6 +918,68 @@ describe("passed `customTags`", () => {
       ]);
     });
 
+    describe("a refused call inside a closed parent gets MX_RESERVED_TAG alone", () => {
+      const closed: CustomTag = { children: { item: {} } };
+      const shown = (result: LowerSourceResult) =>
+        result.diagnostics.map((d) => [d.code ?? "core", d.line, d.column]);
+
+      // `unknownTags` unset takes the early failure path; `reject` takes the
+      // unknown-tag scan; both must drop the not-allowed error.
+      it.each([
+        ["the failure path (unknownTags allow)", undefined],
+        ["the unknown-tag scan (unknownTags reject)", "reject" as const],
+      ])("%s", (_label, unknownTags) => {
+        kitProject();
+        const result = lowerSource(
+          "<box><entity/></box>\n",
+          join(dir, "a.kit.mx"),
+          {
+            ...(unknownTags ? { unknownTags } : {}),
+            customTags: { box: closed, entity: DEFINITION },
+          },
+        );
+        expect(result.ir).toBeUndefined();
+        expect(shown(result)).toEqual([[RESERVED_CODE, 1, 5]]);
+      });
+
+      it("a sibling that is only not allowed keeps its MX_TAG_NOT_ALLOWED", () => {
+        kitProject();
+        const result = lowerSource(
+          "<box><other/><entity/></box>\n",
+          join(dir, "a.kit.mx"),
+          { customTags: { box: closed, entity: DEFINITION } },
+        );
+        expect(shown(result)).toEqual([
+          ["MX_TAG_NOT_ALLOWED", 1, 5],
+          [RESERVED_CODE, 1, 13],
+        ]);
+      });
+
+      it("the same name at a second call site that is allowed elsewhere still gets its refusal", () => {
+        kitProject();
+        const result = lowerSource(
+          "<entity/>\n<box><entity/></box>\n",
+          join(dir, "a.kit.mx"),
+          {
+            unknownTags: "reject",
+            customTags: { box: closed, entity: DEFINITION },
+          },
+        );
+        expect(shown(result)).toEqual([
+          [RESERVED_CODE, 1, 0],
+          [RESERVED_CODE, 2, 5],
+        ]);
+      });
+
+      it("a core name inside a closed parent: the same, on the same occurrence", () => {
+        const result = lowerSource("<box><for|x| of=[1]/></box>\n", "t.mx", {
+          tagRules: "none",
+          customTags: { box: closed, for: DEFINITION },
+        });
+        expect(shown(result)).toEqual([[RESERVED_CODE, 1, 5]]);
+      });
+    });
+
     it.each(RESERVED_NAMES)(
       "core name `%s`: no call resolves unknown by itself, so the refusal never doubles",
       (name) => {

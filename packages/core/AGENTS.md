@@ -887,7 +887,10 @@ Five facts worth knowing before editing it:
   routed dialect's `reservedTags` for its own definitions, on a discovered tag
   file, an `mx.tags` entry, an `mx.contracts` entry and a `customTags` entry
   passed to `lowerSource` (which drops it and reports each call site; a call
-  that carries it is never also `MX_UNKNOWN_TAG`, `CheckOptions.exemptTags`).
+  that carries it is never also `MX_UNKNOWN_TAG`, `CheckOptions.exemptTags`,
+  nor a closed parent's `MX_TAG_NOT_ALLOWED`, dropped by occurrence through
+  `tagOccurrenceOf` in `lowerSource`'s `failed`; the unknown exemption stays
+  keyed on the name because the IR check has no call offsets).
   An error, never a throw; the template compilers keep their `try` throw.
 - **A sidecar may not use top-level `await`, and its relative imports need
   explicit extensions** (`./helper.ts`, not `./helper`). Measured: Bun accepts
