@@ -132,15 +132,11 @@ if (mxlangDeps.length > 0) {
   );
 }
 
-// The npm leg runs on the oldest Node core's `engines` admits, so the probe's
-// floor is that field of the packed tarball, not a number kept here.
-const nodeRange = corePkg.engines?.node?.match(/^>=\s*(\d+)(?:\.(\d+))?/);
-if (!nodeRange) {
-  fail(
-    `the core tarball's engines.node is \`${corePkg.engines?.node}\`, expected \`>=<major>[.<minor>]\``,
-  );
-}
-const minNode = [Number(nodeRange[1]), Number(nodeRange[2] ?? 0)] as const;
+// The npm leg runs on the `node` on PATH. It must satisfy core's `engines.node`
+// from the packed tarball, so the probe's floor is that field, not a number
+// kept here.
+const nodeEngines = corePkg.engines?.node;
+if (!nodeEngines) fail("the core tarball has no engines.node");
 
 const PROBE = `
 import { createRequire } from "node:module";
@@ -194,7 +190,7 @@ const colon = lowerSource('<field type="email" :email/>\\n', "/probe/sugar.mx", 
   structural: "reject",
   unknownTags: "reject",
 });
-if (colon.ir || !colon.diagnostics.some((d) => d.message.includes("Expected a single expression, but found \`:\` after it."))) {
+if (colon.ir || colon.diagnostics.length !== 1 || colon.diagnostics[0].message !== "Expected a single expression, but found \`:\` after it.") {
   fail("\`:email\` after a value did not give Marko's error: " + JSON.stringify(colon.diagnostics));
 }
 const member = parseFragment("<div x=a.b .c/>").body[0].attributes.map((a) => a.name);
@@ -320,16 +316,9 @@ const nodeVersion = run("node", ["--version"], nodeDir).out.trim();
 console.log(
   `[alpha-probe] node ${nodeVersion}, npm ${run("npm", ["--version"], nodeDir).out.trim()}`,
 );
-const [nodeMajor = 0, nodeMinor = 0] = nodeVersion
-  .replace(/^v/, "")
-  .split(".")
-  .map(Number);
-if (
-  nodeMajor < minNode[0] ||
-  (nodeMajor === minNode[0] && nodeMinor < minNode[1])
-) {
+if (!Bun.semver.satisfies(nodeVersion.replace(/^v/, ""), nodeEngines)) {
   fail(
-    `the npm leg needs Node ${minNode.join(".")} or newer (core's engines.node ${corePkg.engines?.node}), found ${nodeVersion}`,
+    `the npm leg's node ${nodeVersion} does not satisfy core's engines.node ${nodeEngines}`,
   );
 }
 check("node+npm", run("node", ["probe.mjs"], nodeDir));
