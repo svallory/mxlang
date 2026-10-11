@@ -45,9 +45,7 @@ import {
 import {
   type CustomTag,
   customTagTaglib,
-  rejectUnknownDeclarationKeys,
-  rejectUnreachableHooks,
-  rejectWildcardReferences,
+  rejectRegistration,
 } from "./custom-tags.ts";
 import {
   compileErrorOf,
@@ -106,9 +104,7 @@ function parseOnlyTranslator(
   rulesTaglibs?: Array<[string, unknown]>,
 ) {
   rejectShadowedRegistration(customTags);
-  rejectUnknownDeclarationKeys(customTags, claimed);
-  rejectWildcardReferences(customTags);
-  rejectUnreachableHooks(customTags);
+  rejectRegistration(customTags, claimed);
   const taglib = customTagTaglib(customTags);
   // A dialect's tag rules replace MX's own parse-only taglibs.
   if (rulesTaglibs) {

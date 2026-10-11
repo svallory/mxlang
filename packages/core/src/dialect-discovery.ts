@@ -17,6 +17,7 @@ import {
   type PackageJsonRead,
   readPackageJsonCached,
 } from "./package-json.ts";
+import { RESERVED_NAMES, TAG_NAME_RE } from "./tag-names.ts";
 
 /**
  * Where a dialect package declares itself, as messages write it: the
@@ -81,7 +82,16 @@ export function reservedExtensionReason(
 }
 
 /** The fields of a dialect's manifest. */
-const MANIFEST_FIELDS = ["id", "name", "extensions", "module"] as const;
+const MANIFEST_FIELDS = [
+  "id",
+  "name",
+  "extensions",
+  "module",
+  "tagDirs",
+  "tagExtensions",
+  "sidecars",
+  "reservedTags",
+] as const;
 
 /** The `package.json` fields that list a project's direct dependencies. */
 const DEPENDENCY_FIELDS = [
@@ -101,6 +111,29 @@ export interface DialectManifest {
   readonly extensions: readonly string[];
   /** Its module, relative to its package directory. */
   readonly module: string;
+  /**
+   * The directory names its files discover tags in (`["components"]`), at
+   * each level of the upward walk; absent, its files discover tags as MX's
+   * own do (`tags/`, `.mx` templates and `.tag.ts` sidecars). @unstable
+   */
+  readonly tagDirs?: readonly string[];
+  /**
+   * Extensions claimed for tag files only, appended to `extensions`
+   * (`.component.mesh.mx`): routed to the dialect like `extensions`, and
+   * stripped whole from a tag file's name. @unstable
+   */
+  readonly tagExtensions?: readonly string[];
+  /**
+   * Whether `<name>.tag.ts` sidecars index in its `tagDirs`; absent means
+   * they do. @unstable
+   */
+  readonly sidecars?: boolean;
+  /**
+   * The tag names only the dialect itself may define (validated here;
+   * enforced by the scan in a later slice). Core's own structural names are
+   * always reserved and cannot be listed. @unstable
+   */
+  readonly reservedTags?: readonly string[];
   /** The package that declares it. */
   readonly packageName: string;
   /** That package's `package.json`, absolute. */
@@ -128,8 +161,30 @@ function moduleEscape(module: string): string | undefined {
 }
 
 /** The error for a manifest claiming a reserved extension. */
-function claimRefusal(extension: string, reason: string): string {
-  return `\`${DIALECT_MANIFEST_KEY}.extensions\` cannot claim \`${extension}\`: ${reason}; a dialect claims its own extensions (\`.mesh.mx\`)`;
+function claimRefusal(
+  extension: string,
+  reason: string,
+  field: "extensions" | "tagExtensions" = "extensions",
+): string {
+  return `\`${DIALECT_MANIFEST_KEY}.${field}\` cannot claim \`${extension}\`: ${reason}; a dialect claims its own extensions (\`.mesh.mx\`)`;
+}
+
+/**
+ * Why `value` is not a single directory name (`components`), or `undefined`
+ * when it is one: `tagDirs` names directories found at each level of the
+ * upward walk, never paths.
+ */
+function tagDirRefusal(value: unknown): string | undefined {
+  if (typeof value !== "string" || value === "")
+    return "is not a directory name";
+  if (value.includes("/") || value.includes("\\")) {
+    return "is a path; write a directory name (`components`)";
+  }
+  if (value === "." || value === "..") return "is not a directory name";
+  if (value.startsWith(".")) {
+    return "starts with a dot, and the scan never reads a dot directory";
+  }
+  return undefined;
 }
 
 /** Is `value` written as a file extension (`.mesh.mx`)? */
@@ -229,17 +284,147 @@ export function readDialectManifest(
       "module",
     );
   }
+  const tagFields = readTagFields(fields, seen, fail);
   return Object.freeze({
     id: id as string,
     name: name as string,
     extensions: Object.freeze([...(extensions as string[])]),
     module: module as string,
+    ...tagFields,
     packageName:
       typeof manifest.name === "string"
         ? manifest.name
         : basename(dirname(packageFile)),
     packageFile,
   });
+}
+
+/** The tag-discovery fields of a manifest, validated. */
+type TagFields = Pick<
+  DialectManifest,
+  "tagDirs" | "tagExtensions" | "sidecars" | "reservedTags"
+>;
+
+/**
+ * Validates a manifest's tag-discovery fields (`tagDirs`, `tagExtensions`,
+ * `sidecars`, `reservedTags`), each an error at its own key. `claimed` holds
+ * the manifest's `extensions`, so a `tagExtensions` entry may not repeat one.
+ */
+function readTagFields(
+  fields: Record<string, unknown>,
+  claimed: ReadonlySet<string>,
+  fail: (message: string, field?: string) => never,
+): TagFields {
+  const { tagDirs, tagExtensions, sidecars, reservedTags } = fields;
+  const result: {
+    -readonly [K in keyof TagFields]: TagFields[K];
+  } = {};
+  const key = (field: string) => `\`${DIALECT_MANIFEST_KEY}.${field}\``;
+  if (tagDirs !== undefined) {
+    if (!Array.isArray(tagDirs) || tagDirs.length === 0) {
+      fail(
+        `${key("tagDirs")} must be a non-empty array of the directory names the dialect's files discover tags in (\`["components"]\`)`,
+        "tagDirs",
+      );
+    }
+    const seen = new Set<string>();
+    for (const dir of tagDirs as unknown[]) {
+      const refusal = tagDirRefusal(dir);
+      if (refusal) {
+        fail(`${key("tagDirs")}: ${JSON.stringify(dir)} ${refusal}`, "tagDirs");
+      }
+      if (seen.has(dir as string)) {
+        fail(`${key("tagDirs")} lists \`${dir}\` twice`, "tagDirs");
+      }
+      seen.add(dir as string);
+    }
+    result.tagDirs = Object.freeze([...(tagDirs as string[])]);
+  }
+  if (tagExtensions !== undefined) {
+    if (!Array.isArray(tagExtensions)) {
+      fail(
+        `${key("tagExtensions")} must be an array of the extra file extensions the dialect's tag files use (\`[".component.mesh.mx"]\`)`,
+        "tagExtensions",
+      );
+    }
+    const seen = new Set<string>();
+    for (const extension of tagExtensions as unknown[]) {
+      if (!validExtension(extension)) {
+        fail(
+          `${key("tagExtensions")}: ${JSON.stringify(extension)} is not a file extension; write it with its leading dot (\`.component.mesh.mx\`)`,
+          "tagExtensions",
+        );
+      }
+      const reserved = reservedExtensionReason(extension as string);
+      if (reserved) {
+        fail(
+          claimRefusal(extension as string, reserved, "tagExtensions"),
+          "tagExtensions",
+        );
+      }
+      if (claimed.has(extension as string)) {
+        fail(
+          `${key("tagExtensions")} lists \`${extension}\`, which ${key("extensions")} already claims`,
+          "tagExtensions",
+        );
+      }
+      if (seen.has(extension as string)) {
+        fail(
+          `${key("tagExtensions")} lists \`${extension}\` twice`,
+          "tagExtensions",
+        );
+      }
+      seen.add(extension as string);
+    }
+    result.tagExtensions = Object.freeze([...(tagExtensions as string[])]);
+  }
+  if (sidecars !== undefined) {
+    if (typeof sidecars !== "boolean") {
+      fail(
+        `${key("sidecars")} must be a boolean: whether \`<name>.tag.ts\` sidecars index in the dialect's \`tagDirs\``,
+        "sidecars",
+      );
+    }
+    result.sidecars = sidecars as boolean;
+  }
+  if (reservedTags !== undefined) {
+    if (!Array.isArray(reservedTags)) {
+      fail(
+        `${key("reservedTags")} must be an array of the tag names only the dialect may define (\`["entity"]\`)`,
+        "reservedTags",
+      );
+    }
+    const core = new Set<string>(RESERVED_NAMES);
+    const seen = new Set<string>();
+    for (const name of reservedTags as unknown[]) {
+      if (typeof name !== "string" || !TAG_NAME_RE.test(name)) {
+        fail(
+          `${key("reservedTags")}: ${JSON.stringify(name)} is not a tag name; a tag name starts with a letter, digit or underscore and may then contain letters, digits, underscores, hyphens and dots`,
+          "reservedTags",
+        );
+      }
+      if (core.has(name as string)) {
+        fail(
+          `${key("reservedTags")} cannot list \`${name}\`: MX reserves it for every dialect (${RESERVED_NAMES.join(", ")})`,
+          "reservedTags",
+        );
+      }
+      if (seen.has(name as string)) {
+        fail(`${key("reservedTags")} lists \`${name}\` twice`, "reservedTags");
+      }
+      seen.add(name as string);
+    }
+    result.reservedTags = Object.freeze([...(reservedTags as string[])]);
+  }
+  return result;
+}
+
+/** Every extension a dialect claims: its `extensions`, then its `tagExtensions`. */
+export function claimedExtensions(dialect: DialectManifest): readonly string[] {
+  return dialect.tagExtensions === undefined ||
+    dialect.tagExtensions.length === 0
+    ? dialect.extensions
+    : [...dialect.extensions, ...dialect.tagExtensions];
 }
 
 /** The project's direct dependencies, by package name, with the field naming each. */
@@ -478,20 +663,22 @@ function rejectHostClaims(
 ): void {
   if (hostSegments.length === 0) return;
   for (const dialect of dialects) {
-    for (const extension of dialect.extensions) {
-      const reserved = reservedExtensionReason(extension, hostSegments);
-      if (!reserved) continue;
-      const text = readPackageJsonCached(dialect.packageFile)?.text ?? "";
-      const { line, column } = jsonKeyPosition(text, [
-        ...MANIFEST_PATH,
-        "extensions",
-      ]);
-      throw new TranslateError(
-        claimRefusal(extension, reserved),
-        line,
-        column,
-        dialect.packageFile,
-      );
+    for (const field of ["extensions", "tagExtensions"] as const) {
+      for (const extension of dialect[field] ?? []) {
+        const reserved = reservedExtensionReason(extension, hostSegments);
+        if (!reserved) continue;
+        const text = readPackageJsonCached(dialect.packageFile)?.text ?? "";
+        const { line, column } = jsonKeyPosition(text, [
+          ...MANIFEST_PATH,
+          field,
+        ]);
+        throw new TranslateError(
+          claimRefusal(extension, reserved, field),
+          line,
+          column,
+          dialect.packageFile,
+        );
+      }
     }
   }
 }
@@ -546,61 +733,99 @@ export interface RouteDialectOptions {
   readonly hostSegments?: readonly string[];
 }
 
+/** Where a file name routes: the dialect, and the claimed extension that won. @unstable */
+export interface DialectRoute {
+  readonly dialect: DialectManifest;
+  /** The longest claimed extension (`extensions` or `tagExtensions`) the name ends with. */
+  readonly extension: string;
+}
+
+/**
+ * Routing for the file names of one directory: the project's dialects (the
+ * nearest `package.json`'s) and `route(name)`, which answers what
+ * {@link routeDialect} answers for a file name in that directory, plus the
+ * extension that won. `undefined` when the directory has no project or the
+ * project uses no dialect. Every config check `routeDialect` makes is made
+ * here, once; a clash is raised by `route`, for a name it decides. @unstable
+ */
+export interface DialectRouter {
+  /** The project's dialects, as {@link discoverDialects} lists them. */
+  readonly dialects: readonly DialectManifest[];
+  route(name: string): DialectRoute | undefined;
+}
+
+/** See {@link DialectRouter}. @unstable */
+export function dialectRouter(
+  dir: string,
+  options: RouteDialectOptions = {},
+): DialectRouter | undefined {
+  const found = findNearestPackageJson(dir);
+  if (!found?.read.manifest) return undefined;
+  const { dialects, listedIn } = discover(found.file, found.read);
+  const hostSegments = options.hostSegments ?? [];
+  rejectHostClaims(dialects, hostSegments);
+  const source = findMxConfig(dir);
+  rejectDialectOwnedConfig(source, dialects);
+  const overrides = extensionOverrides(source, dialects, hostSegments);
+  if (dialects.length === 0) return undefined;
+  const claimed = [
+    ...overrides.keys(),
+    ...dialects.flatMap((dialect) => claimedExtensions(dialect)),
+  ];
+  const route = (name: string): DialectRoute | undefined => {
+    let best: string | undefined;
+    for (const extension of claimed) {
+      if (
+        name.length > extension.length &&
+        name.endsWith(extension) &&
+        extension.length > (best?.length ?? 0)
+      ) {
+        best = extension;
+      }
+    }
+    if (best === undefined) return undefined;
+    const extension = best;
+    const chosen = overrides.get(extension);
+    if (chosen) return { dialect: chosen, extension };
+    const claimants = dialects.filter((dialect) =>
+      claimedExtensions(dialect).includes(extension),
+    );
+    if (claimants.length > 1) {
+      const [first, second] = claimants as [DialectManifest, DialectManifest];
+      const listing = listedIn.get(second);
+      const { line, column } = jsonKeyPosition(
+        found.read.text,
+        listing === undefined ? [] : [listing.field, listing.key],
+      );
+      throw new TranslateError(
+        `two dialects claim \`${extension}\`: \`${first.id}\` (${packageLabel(first, listedIn.get(first))}) and \`${second.id}\` (${packageLabel(second, listing)}). Choose one in \`mx.extensions\` in MX's config: \`"extensions": { "${extension}": "${first.id}" }\``,
+        line,
+        column,
+        found.file,
+      );
+    }
+    const [dialect] = claimants;
+    return dialect ? { dialect, extension } : undefined;
+  };
+  return { dialects, route };
+}
+
 /**
  * The dialect that handles `filename`, or `undefined` for MX's own files.
  * The project is the nearest `package.json`, so a dependency's files use
  * the dependency's dialects. The longest extension the file name ends with
- * wins (`.mesh.mx` over `.mx`); `mx.extensions` settles an extension two
- * dialects claim, and without it the clash is an error naming both, in the
- * project's `package.json` at the second one's dependency entry. MX's config
- * setting a dialect's tag rules or name is an error at its key, and so is a
- * claim on an extension MX, a host or another language owns.
+ * (`extensions` or `tagExtensions`) wins (`.mesh.mx` over `.mx`);
+ * `mx.extensions` settles an extension two dialects claim, and without it
+ * the clash is an error naming both, in the project's `package.json` at the
+ * second one's dependency entry. MX's config setting a dialect's tag rules
+ * or name is an error at its key, and so is a claim on an extension MX, a
+ * host or another language owns.
  * @unstable
  */
 export function routeDialect(
   filename: string,
   options: RouteDialectOptions = {},
 ): DialectManifest | undefined {
-  const found = findNearestPackageJson(dirname(filename));
-  if (!found?.read.manifest) return undefined;
-  const { dialects, listedIn } = discover(found.file, found.read);
-  const hostSegments = options.hostSegments ?? [];
-  rejectHostClaims(dialects, hostSegments);
-  const source = findMxConfig(dirname(filename));
-  rejectDialectOwnedConfig(source, dialects);
-  const overrides = extensionOverrides(source, dialects, hostSegments);
-  if (dialects.length === 0) return undefined;
-  const name = basename(filename);
-  const matches = (extension: string) =>
-    name.length > extension.length && name.endsWith(extension);
-  let best: string | undefined;
-  for (const extension of [
-    ...overrides.keys(),
-    ...dialects.flatMap((dialect) => dialect.extensions),
-  ]) {
-    if (matches(extension) && extension.length > (best?.length ?? 0)) {
-      best = extension;
-    }
-  }
-  if (best === undefined) return undefined;
-  const chosen = overrides.get(best);
-  if (chosen) return chosen;
-  const claimants = dialects.filter((dialect) =>
-    dialect.extensions.includes(best as string),
-  );
-  if (claimants.length > 1) {
-    const [first, second] = claimants as [DialectManifest, DialectManifest];
-    const listing = listedIn.get(second);
-    const { line, column } = jsonKeyPosition(
-      found.read.text,
-      listing === undefined ? [] : [listing.field, listing.key],
-    );
-    throw new TranslateError(
-      `two dialects claim \`${best}\`: \`${first.id}\` (${packageLabel(first, listedIn.get(first))}) and \`${second.id}\` (${packageLabel(second, listing)}). Choose one in \`mx.extensions\` in MX's config: \`"extensions": { "${best}": "${first.id}" }\``,
-      line,
-      column,
-      found.file,
-    );
-  }
-  return claimants[0];
+  return dialectRouter(dirname(filename), options)?.route(basename(filename))
+    ?.dialect;
 }

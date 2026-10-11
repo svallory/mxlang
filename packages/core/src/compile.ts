@@ -38,9 +38,8 @@ import {
 import {
   type CustomTag,
   customTagTaglib,
-  rejectUnknownDeclarationKeys,
-  rejectUnreachableHooks,
-  rejectWildcardReferences,
+  registrationView,
+  rejectRegistration,
 } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
 import type { Ir } from "./ir.ts";
@@ -267,9 +266,9 @@ function translatorClaiming(
   claimed: ClaimedFields,
 ): Translator {
   rejectShadowedRegistration(host.customTags);
-  rejectUnknownDeclarationKeys(host.customTags, claimed);
-  rejectWildcardReferences(host.customTags);
-  rejectUnreachableHooks(host.customTags);
+  // Eager entries are checked here; a deferred entry (a dialect tag file)
+  // on its first call (`deferredContractError`).
+  rejectRegistration(host.customTags, claimed);
   const customTags = customTagTaglib(host.customTags);
   // Decision 168: core's own taglib is always registered, so `static`,
   // `import`, `export`, `client`, `server` and `class` are statement tags to
@@ -509,11 +508,12 @@ export function compileSource(
     ? undefined
     : fileTagRules(resolvedSyntax);
   const rules = preset === undefined ? undefined : rulesUnder(preset, policy);
+  const claimed = claimedFields(resolvedSyntax.dialect);
   const translator = translatorClaiming(
     rules
       ? { ...host, taglibs: taglibsOfRules(rules), statementTags: false }
       : host,
-    claimedFields(resolvedSyntax.dialect),
+    claimed,
   );
   const filePolicy = rules ? policyUnder(rules, policy) : policy;
   const lookup = tagTable(translator, filePolicy.nativeTags);
@@ -525,7 +525,8 @@ export function compileSource(
     policy: filePolicy,
     postEmit: host.postEmit,
     emitIr: host.emitIr,
-    customTags: host.customTags,
+    // The map lowering reads: deferred entries answer from their view.
+    customTags: registrationView(host.customTags, claimed),
     defaultTag: host.defaultTag,
     warnings: host.warnings,
     productName: host.productName,

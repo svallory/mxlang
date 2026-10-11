@@ -68,9 +68,19 @@ import {
   type ContractMap,
   type CustomTag,
   type CustomTagParseOptions,
+  deferContract,
   rejectUnknownDeclarationKeys,
   rejectUnreachableHooks,
 } from "./custom-tags.ts";
+import {
+  claimedExtensions,
+  type DialectManifest,
+  type DialectRoute,
+  type DialectRouter,
+  dialectRouter,
+  routeDialect,
+} from "./dialect-discovery.ts";
+import { CORE_DIALECT } from "./dialect-registry.ts";
 import {
   findMxConfig,
   mxConfigKeyPosition,
@@ -83,6 +93,7 @@ import {
   readPackageJsonCached,
 } from "./package-json.ts";
 import { dropOwnParserPosition } from "./parse-error-position.ts";
+import { RESERVED_NAMES, TAG_NAME_RE } from "./tag-names.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
 import type { TemplateTag } from "./template-tag.ts";
 
@@ -96,6 +107,132 @@ const SIDECAR_SUFFIX = ".tag.ts";
 
 /** A template tag (L1). Expansion itself is P3; discovery is here. */
 const TEMPLATE_SUFFIX = ".mx";
+
+/**
+ * How one caller's files discover tags. Core's own discovery is a fixed
+ * entry ({@link CORE_TAG_DISCOVERY}: core is dialect zero), a dialect's comes
+ * from its manifest's `tagDirs`, `tagExtensions`, `sidecars` and
+ * `reservedTags` ({@link tagDiscoveryOf}), and both go through one scan
+ * (`indexDirectory`), which reads only this shape.
+ */
+export interface TagDiscovery {
+  /** The dialect id (`mx` for core's own files). */
+  readonly id: string;
+  /** The dialect's name, as diagnostics write it. */
+  readonly name: string;
+  /** The directory names read at each level of the upward walk. */
+  readonly tagDirs: readonly string[];
+  /** The tag-file extensions: `.mx` for core, every claimed one for a dialect. */
+  readonly extensions: readonly string[];
+  /** Whether `<name>.tag.ts` sidecars index. */
+  readonly sidecars: boolean;
+  /** The names only this dialect may define (enforced by a later slice). */
+  readonly reservedTags: readonly string[];
+  /**
+   * `templates`: MX's own kinds, `.mx` templates (core, and a dialect that
+   * declares no `tagDirs`, which scans exactly as MX does). `tag-files`:
+   * files ending in one of `extensions` that route to this dialect, whose
+   * contract the dialect reads.
+   */
+  readonly kind: "templates" | "tag-files";
+}
+
+/** Core's own tag discovery: `tags/`, `.mx` templates and `.tag.ts` sidecars. */
+export const CORE_TAG_DISCOVERY: TagDiscovery = Object.freeze({
+  id: CORE_DIALECT,
+  name: "MX",
+  tagDirs: Object.freeze([TAGS_DIR]),
+  extensions: Object.freeze([TEMPLATE_SUFFIX]),
+  sidecars: true,
+  reservedTags: RESERVED_NAMES,
+  kind: "templates" as const,
+});
+
+/** One discovery per manifest object, so a cache key and a scan agree. */
+const discoveries = new WeakMap<DialectManifest, TagDiscovery>();
+
+/**
+ * The discovery a dialect's files use: its `tagDirs` with every extension it
+ * claims, or, when it declares no `tagDirs`, MX's own (`tags/`, `.mx`
+ * templates), so a dialect declaring none of the fields scans exactly as
+ * MX's files do. `undefined` is MX's own files.
+ */
+export function tagDiscoveryOf(
+  dialect: DialectManifest | undefined,
+): TagDiscovery {
+  if (dialect === undefined) return CORE_TAG_DISCOVERY;
+  const known = discoveries.get(dialect);
+  if (known) return known;
+  const discovery: TagDiscovery = Object.freeze(
+    dialect.tagDirs === undefined
+      ? {
+          ...CORE_TAG_DISCOVERY,
+          id: dialect.id,
+          name: dialect.name,
+          sidecars: dialect.sidecars ?? true,
+          reservedTags: dialect.reservedTags ?? [],
+        }
+      : {
+          id: dialect.id,
+          name: dialect.name,
+          tagDirs: dialect.tagDirs,
+          extensions: claimedExtensions(dialect),
+          sidecars: dialect.sidecars ?? true,
+          reservedTags: dialect.reservedTags ?? [],
+          kind: "tag-files" as const,
+        },
+  );
+  discoveries.set(dialect, discovery);
+  return discovery;
+}
+
+/**
+ * The discovery for `filePath`'s dialect. A file whose routing fails (a
+ * clash, a broken `mx.extensions`) scans as MX's own: the compile reports
+ * the routing error itself, and a scan is not where it is fixed.
+ */
+export function callerTagDiscovery(filePath: string): TagDiscovery {
+  try {
+    return tagDiscoveryOf(routeDialect(resolve(filePath)));
+  } catch {
+    return CORE_TAG_DISCOVERY;
+  }
+}
+
+/**
+ * The project routing of each directory a scan indexes, built once per
+ * directory and only where some dialect declares `tagDirs` (with none, no
+ * file name changes meaning). A routing error is not the scan's to report.
+ */
+type Routes = (dir: string) => DialectRouter | undefined;
+
+function routesForScan(): Routes {
+  const routers = new Map<string, DialectRouter | undefined>();
+  return (dir) => {
+    if (routers.has(dir)) return routers.get(dir);
+    let router: DialectRouter | undefined;
+    try {
+      router = dialectRouter(dir);
+    } catch {
+      router = undefined;
+    }
+    routers.set(dir, router);
+    return router;
+  };
+}
+
+/** Where `entry` in `dir` routes, or `undefined`; a clash is not the scan's to report. */
+function routeOf(
+  routes: Routes,
+  dir: string,
+  entry: string,
+): DialectRoute | undefined {
+  try {
+    return routes(dir)?.route(entry);
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * A file-kind segment is known to a lookup when a registered target declares
@@ -212,25 +349,7 @@ function rejectUncallableTagFile(
   return true;
 }
 
-/**
- * What a tag file's basename may be, and therefore what a call name may be.
- *
- * The rule: a letter, digit or underscore to start, then letters, digits,
- * underscores, hyphens and dots. It is Marko's own tag-name vocabulary, minus
- * the shapes that break the compiler rather than merely looking odd.
- *
- * This is a guard with teeth, not tidiness. `tags/.mx` has an empty basename,
- * and an empty tag name makes `@marko/compiler` throw `Error while applying
- * option of "<>". Cause: "tag.name" is required` — which fails *every* file in
- * the package, not just the one that would have called it. Dotfiles are the
- * same class from the other side: `.DS_Store.mx` would register a tag named
- * `.DS_Store`, and a `tags/` directory is an ordinary directory that collects
- * ordinary junk.
- *
- * Case is preserved: `tags/Icon.tag.ts` is `<Icon>`, not `<icon>`. A tag name
- * is the filename, and the filename is the author's.
- */
-const TAG_NAME_RE = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
+// `TAG_NAME_RE` (tag-names.ts) is what a tag file's name may be.
 
 /**
  * A `package.json#mx.tags` entry, normalized.
@@ -253,6 +372,14 @@ export interface DiscoveredTag {
   template?: string;
   /** The `x.tag.ts` sidecar, when one exists. */
   sidecar?: string;
+  /**
+   * A dialect tag file (`components/money.mesh.mx`): a file in the
+   * dialect's `tagDirs` ending in one of its claimed extensions, whose
+   * contract the dialect reads. @unstable
+   */
+  tagFile?: string;
+  /** The dialect whose tag file this is (`tagFile`'s dialect id). @unstable */
+  dialect?: string;
   /** The package-level contracts module that supplied this entry. */
   module?: string;
   /** An eagerly loaded module declaration (sidecars remain lazy). */
@@ -327,6 +454,14 @@ export interface ScanDiagnostic {
   message: string;
   line: number;
   column: number;
+  /**
+   * How bad it is, when the scan says: an `error` is a file the scan
+   * skipped, a `warning` one it kept or ignored on purpose. Absent on the
+   * scan's older diagnostics. @unstable
+   */
+  severity?: "error" | "warning";
+  /** A stable code for the diagnostic (`MX_MISPLACED_TAG_FILE`), when it has one. @unstable */
+  code?: string;
 }
 
 /**
@@ -987,6 +1122,69 @@ function lazyTag(tag: DiscoveredTag, claimed: ClaimedFields): CustomTag {
   return definition;
 }
 
+/** The contract keys a dialect tag file supplies (the hooks stay the sidecar's). */
+const TAG_FILE_CONTRACT_KEYS = [
+  "attributes",
+  "attributeTags",
+  "children",
+  "parents",
+  "defaultTag",
+] as const;
+
+/**
+ * The error a dialect tag file's contract raises while its dialect has no
+ * way to read it: unpositioned, so the custom-tag call that read it places
+ * it at the call.
+ */
+function tagFileError(tag: DiscoveredTag): TranslateError {
+  const file = tag.tagFile as string;
+  const shown = relative(dirname(tag.sourceDir ?? dirname(file)), file)
+    .split("\\")
+    .join("/");
+  const error = new TranslateError(
+    `\`<${tag.name}>\` is defined by ${shown}, but dialect \`${tag.dialect}\` has no tagFile hook to read it.`,
+    0,
+    0,
+  );
+  error.diagnosticCode = "MX_TAG_FILE_ERROR";
+  return error;
+}
+
+/**
+ * Wraps a dialect tag file as a `CustomTag`. Names and static `parseOptions`
+ * register like any tag's; the contract keys are getters that read the tag
+ * file, which needs the dialect's hook: without one, the first read throws
+ * `MX_TAG_FILE_ERROR`. The entry is branded (`deferContract`), so registration
+ * skips its contract and the first call reads it, where the error lands at
+ * the call. A paired `.tag.ts` sidecar supplies the hooks, loaded lazily as
+ * `lazyTag` loads them. The scan itself reads none of these getters.
+ */
+function dialectTag(tag: DiscoveredTag, claimed: ClaimedFields): CustomTag {
+  const definition: CustomTag = {};
+  if (tag.parseOptions) definition.parseOptions = tag.parseOptions;
+  const unreadable = (): never => {
+    throw tagFileError(tag);
+  };
+  for (const key of [...TAG_FILE_CONTRACT_KEYS, ...claimed.tag]) {
+    Object.defineProperty(definition, key, {
+      enumerable: true,
+      configurable: true,
+      get: unreadable,
+    });
+  }
+  if (tag.sidecar) {
+    const hooks = lazyTag({ name: tag.name, sidecar: tag.sidecar }, claimed);
+    for (const key of ["analyze", "transform", "finalize"] as const) {
+      Object.defineProperty(definition, key, {
+        enumerable: true,
+        configurable: true,
+        get: () => hooks[key],
+      });
+    }
+  }
+  return deferContract(definition);
+}
+
 /**
  * `package.json` reads go through the shared mtime-keyed reader
  * (`package-json.ts`), which `host-policy.ts` also uses.
@@ -1044,6 +1242,160 @@ interface IndexOptions {
   parseOptions?: CustomTagParseOptions;
   /** The `mx.tags` entry's `hosts` restriction, carried onto each tag found. */
   hosts?: string[];
+  /** The caller's discovery; core's own when absent. */
+  discovery?: TagDiscovery;
+  /** The scan's project routing, for file names a dialect claims. */
+  routes?: Routes;
+}
+
+/** `components/` or `components/` and `concepts/`, for a message. */
+function dirList(dirs: readonly string[]): string {
+  const shown = dirs.map((dir) => `\`${dir}/\``);
+  return shown.length <= 1
+    ? (shown[0] ?? "")
+    : `${shown.slice(0, -1).join(", ")} or ${shown.at(-1)}`;
+}
+
+/**
+ * MX's kinds skip a file a dialect with `tagDirs` claims: it is that
+ * dialect's tag file, never an MX template. When it sits in a directory the
+ * dialect does not read, the author is told where it goes (`true`: skip).
+ * A dialect without `tagDirs` claims nothing here, so its files keep MX's
+ * handling (and a dotted `.mx` name its dotted-name diagnostic).
+ */
+function skipClaimedFile(
+  dir: string,
+  entry: string,
+  routes: Routes | undefined,
+  diagnostics: ScanDiagnostic[],
+): boolean {
+  if (!routes || entry.endsWith(SIDECAR_SUFFIX)) return false;
+  const router = routes(dir);
+  if (!router?.dialects.some((dialect) => dialect.tagDirs !== undefined)) {
+    return false;
+  }
+  const owner = routeOf(routes, dir, entry)?.dialect;
+  if (owner?.tagDirs === undefined) return false;
+  const here = basename(dir);
+  if (!owner.tagDirs.includes(here)) {
+    diagnostics.push({
+      file: join(dir, entry),
+      message: `\`${here}/${entry}\` is a ${owner.name} file in \`${here}/\`; ${owner.name} discovers tags in ${dirList(owner.tagDirs)}.`,
+      line: 1,
+      column: 0,
+      severity: "warning",
+      code: "MX_MISPLACED_TAG_FILE",
+    });
+  }
+  return true;
+}
+
+/**
+ * Indexes one directory of a dialect's tag files (`kind: "tag-files"`):
+ * each file ending in a claimed extension that routes to this dialect, named
+ * by its basename minus that extension (the longest claimed one), plus
+ * `.tag.ts` sidecars unless `sidecars` is off. A file another dialect claims
+ * is that dialect's (two dialects may share a directory), and `.mx`
+ * templates are never read: no dialect claims `.mx`. A bad name is a
+ * positioned error and the file is skipped, never a throw.
+ */
+function indexTagFiles(
+  dir: string,
+  entries: readonly string[],
+  into: Map<string, DiscoveredTag>,
+  files: Array<{ path: string; mtimeMs: number }>,
+  diagnostics: ScanDiagnostic[],
+  options: IndexOptions,
+  discovery: TagDiscovery,
+): void {
+  const here = basename(dir);
+  for (const entry of entries) {
+    if (entry.startsWith(".")) continue;
+    const path = join(dir, entry);
+    const isSidecar = entry.endsWith(SIDECAR_SUFFIX);
+    let bare: string;
+    let claim: DialectRoute | undefined;
+    if (isSidecar) {
+      if (!discovery.sidecars) {
+        diagnostics.push({
+          file: path,
+          message: `\`${here}/${entry}\` is ignored: ${discovery.name} tag directories do not read \`.tag.ts\` sidecars (\`sidecars: false\`)`,
+          line: 1,
+          column: 0,
+          severity: "warning",
+          code: "MX_SIDECAR_IGNORED",
+        });
+        continue;
+      }
+      bare = entry.slice(0, -SIDECAR_SUFFIX.length);
+    } else {
+      claim = options.routes ? routeOf(options.routes, dir, entry) : undefined;
+      if (claim?.dialect.id !== discovery.id) continue;
+      bare = entry.slice(0, -claim.extension.length);
+    }
+    if (!TAG_NAME_RE.test(bare)) {
+      diagnostics.push({
+        file: path,
+        message: `\`${here}/${entry}\` is skipped: \`${bare}\` is not a usable tag name; a tag file's name must start with a letter, digit or underscore and may then contain letters, digits, underscores, hyphens and dots`,
+        line: 1,
+        column: 0,
+        severity: "error",
+        code: "MX_INVALID_TAG_FILE_NAME",
+      });
+      continue;
+    }
+    if (claim && bare.includes(".")) {
+      const first = bare.slice(0, bare.indexOf("."));
+      const suffix = `${bare.slice(bare.indexOf("."))}${claim.extension}`;
+      diagnostics.push({
+        file: path,
+        message: `\`${here}/${entry}\` is named \`<${bare}>\`, which a call cannot write as one tag name; declare \`${suffix}\` in \`tagExtensions\` to name it \`<${first}>\``,
+        line: 1,
+        column: 0,
+        severity: "warning",
+        code: "MX_DOTTED_TAG_FILE_NAME",
+      });
+    }
+    const name = `${options.prefix ?? ""}${bare}`;
+    if (Object.hasOwn(BUILTIN_CUSTOM_TAGS, name)) {
+      diagnostics.push({
+        file: path,
+        message: `\`<${name}>\` is a core-owned custom tag and cannot be redefined by a tag file; rename this file`,
+        line: 1,
+        column: 0,
+        severity: "error",
+        code: "MX_BUILTIN_TAG_FILE",
+      });
+      continue;
+    }
+    let mtimeMs = 0;
+    try {
+      mtimeMs = statSync(path).mtimeMs;
+    } catch {
+      continue;
+    }
+    const existing = into.get(name);
+    if (existing && existing.sourceDir !== dir) continue;
+    files.push({ path, mtimeMs });
+    const tag: DiscoveredTag = existing ?? {
+      name,
+      sourceDir: dir,
+      hosts: options.hosts,
+    };
+    if (isSidecar) {
+      tag.sidecar = path;
+      const declared = readParseOptions(readFileSync(path, "utf8"), path);
+      const merged = { ...options.parseOptions, ...declared };
+      if (Object.keys(merged).length > 0) tag.parseOptions = merged;
+    } else {
+      tag.tagFile = path;
+      tag.dialect = discovery.id;
+      if (!tag.sidecar && options.parseOptions) {
+        tag.parseOptions = { ...options.parseOptions };
+      }
+    }
+    into.set(name, tag);
+  }
 }
 
 /**
@@ -1068,17 +1420,35 @@ function indexDirectory(
   } catch {
     return;
   }
+  const discovery = options.discovery ?? CORE_TAG_DISCOVERY;
 
   // Sorted so a directory holding both `x.mx` and `x.tag.ts` indexes them in
   // a fixed order regardless of the filesystem's own enumeration.
-  for (const entry of entries.sort()) {
+  entries.sort();
+  if (discovery.kind === "tag-files") {
+    indexTagFiles(dir, entries, into, files, diagnostics, options, discovery);
+    return;
+  }
+  for (const entry of entries) {
     // A dotfile is never a tag. `.DS_Store.mx` would otherwise register as
     // `<.DS_Store>` and `tags/.mx` as a tag with no name at all; see
     // `TAG_NAME_RE`.
     if (entry.startsWith(".")) continue;
 
     const isSidecar = entry.endsWith(SIDECAR_SUFFIX);
+    if (isSidecar && !discovery.sidecars) {
+      diagnostics.push({
+        file: join(dir, entry),
+        message: `\`${basename(dir)}/${entry}\` is ignored: ${discovery.name} tag directories do not read \`.tag.ts\` sidecars (\`sidecars: false\`)`,
+        line: 1,
+        column: 0,
+        severity: "warning",
+        code: "MX_SIDECAR_IGNORED",
+      });
+      continue;
+    }
 
+    if (skipClaimedFile(dir, entry, options.routes, diagnostics)) continue;
     if (rejectUncallableTagFile(dir, entry, diagnostics, dottedTagFiles))
       continue;
     const isTemplate = entry.endsWith(TEMPLATE_SUFFIX);
@@ -1217,7 +1587,9 @@ function buildCustomTags(
 ): Record<string, CustomTag> {
   const customTags: Record<string, CustomTag> = Object.create(null);
   for (const [name, tag] of tags)
-    customTags[name] = tag.contract ?? lazyTag(tag, claimed);
+    customTags[name] =
+      tag.contract ??
+      (tag.tagFile ? dialectTag(tag, claimed) : lazyTag(tag, claimed));
   return customTags;
 }
 
@@ -1240,6 +1612,7 @@ function indexMxTagsEntries(
   hostRestrictions: HostRestriction[],
   host: ScanOptions["host"],
   claimed: ClaimedFields,
+  scope: Pick<IndexOptions, "discovery" | "routes"> = {},
 ): void {
   const entries = normalizeMxTags(mx?.tags, packageDir, packageJson);
   for (const entry of entries) {
@@ -1267,6 +1640,7 @@ function indexMxTagsEntries(
     // Resolve precedence only among directories available to this caller.
     if (!appliesToHost(entry.hosts, host)) continue;
     indexDirectory(entry.dir, tags, files, diagnostics, dottedTagFiles, {
+      ...scope,
       prefix: entry.prefix,
       parseOptions: entry.parseOptions,
       hosts: entry.hosts,
@@ -1306,6 +1680,7 @@ function indexMxConfig(
   hostRestrictions: HostRestriction[],
   host: ScanOptions["host"],
   claimed: ClaimedFields,
+  scope: Pick<IndexOptions, "discovery" | "routes"> = {},
 ): void {
   if (packageJson) readManifest(packageJson, diagnostics);
   const source = findMxConfig(fromDir);
@@ -1332,6 +1707,7 @@ function indexMxConfig(
     hostRestrictions,
     host,
     claimed,
+    scope,
   );
 }
 
@@ -1511,6 +1887,20 @@ export function scanCustomTags(
   filePath: string,
   options: ScanOptions,
 ): ScanResult {
+  return scanWithDiscovery(filePath, options, callerTagDiscovery(filePath));
+}
+
+/**
+ * {@link scanCustomTags} under a discovery the caller already resolved
+ * (`scanCached` keys its cache by it). At each level of the upward walk it
+ * reads the discovery's `tagDirs`: `tags/` for MX's own files and for a
+ * dialect without `tagDirs`, the dialect's directories otherwise.
+ */
+export function scanWithDiscovery(
+  filePath: string,
+  options: ScanOptions,
+  discovery: TagDiscovery,
+): ScanResult {
   const tags = new Map<string, DiscoveredTag>();
   const directories: string[] = [];
   const packageFiles: string[] = [];
@@ -1520,16 +1910,26 @@ export function scanCustomTags(
   const hostRestrictions: HostRestriction[] = [];
   const dottedTagFiles: DottedTagFile[] = [];
   const claimed = claimedFieldsOf(resolve(filePath));
+  const scope = { discovery, routes: routesForScan() };
 
   return withScanDependencies(files, packageFiles, () => {
     let dir = dirname(resolve(filePath));
     let packageJson: string | undefined;
 
     for (;;) {
-      const candidate = join(dir, TAGS_DIR);
-      directories.push(candidate);
-      if (existsSync(candidate)) {
-        indexDirectory(candidate, tags, files, diagnostics, dottedTagFiles);
+      for (const tagDir of discovery.tagDirs) {
+        const candidate = join(dir, tagDir);
+        directories.push(candidate);
+        if (existsSync(candidate)) {
+          indexDirectory(
+            candidate,
+            tags,
+            files,
+            diagnostics,
+            dottedTagFiles,
+            scope,
+          );
+        }
       }
 
       const manifest = join(dir, "package.json");
@@ -1557,6 +1957,7 @@ export function scanCustomTags(
       hostRestrictions,
       options.host,
       claimed,
+      scope,
     );
 
     if (options.host !== undefined) applyHostFilter(tags, options.host);
@@ -1722,9 +2123,11 @@ export function discoverProjectTags(
       return depthDiff !== 0 ? depthDiff : left.localeCompare(right);
     });
 
+    // MX's own discovery; a file a dialect with `tagDirs` claims is its.
+    const scope = { routes: routesForScan() };
     for (const dir of tagsDirs) {
       directories.push(dir);
-      indexDirectory(dir, tags, files, diagnostics, dottedTagFiles);
+      indexDirectory(dir, tags, files, diagnostics, dottedTagFiles, scope);
     }
 
     const packageJson = join(root, "package.json");
@@ -1743,6 +2146,7 @@ export function discoverProjectTags(
       hostRestrictions,
       options.host,
       NO_CLAIM,
+      scope,
     );
 
     if (options.host !== undefined) applyHostFilter(tags, options.host);

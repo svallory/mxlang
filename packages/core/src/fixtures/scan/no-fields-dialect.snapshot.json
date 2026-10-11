@@ -1,0 +1,200 @@
+{
+  "fromDialectFile": {
+    "tags": [
+      {
+        "name": "button",
+        "sourceDir": "sub/tags",
+        "template": "sub/tags/button.mx"
+      },
+      {
+        "name": "x",
+        "sourceDir": "sub/tags",
+        "sidecar": "sub/tags/x.tag.ts"
+      },
+      {
+        "name": "card",
+        "sourceDir": "tags",
+        "template": "tags/card.mx",
+        "sidecar": "tags/card.tag.ts",
+        "parseOptions": {
+          "text": true
+        }
+      },
+      {
+        "name": "icon",
+        "sourceDir": "tags",
+        "sidecar": "tags/icon.tag.ts"
+      },
+      {
+        "name": "ui-panel",
+        "sourceDir": "shared",
+        "sidecar": "shared/panel.tag.ts"
+      },
+      {
+        "name": "ui-strip",
+        "sourceDir": "shared",
+        "template": "shared/strip.mx"
+      }
+    ],
+    "customTags": ["button", "card", "icon", "ui-panel", "ui-strip", "x"],
+    "directories": ["sub/tags", "tags", "shared"],
+    "packageFiles": ["package.json"],
+    "configFiles": ["sub/package.json", "package.json"],
+    "files": [
+      "sub/tags/button.mx",
+      "sub/tags/x.tag.ts",
+      "tags/card.mx",
+      "tags/card.tag.ts",
+      "tags/icon.tag.ts",
+      "shared/panel.tag.ts",
+      "shared/strip.mx"
+    ],
+    "diagnostics": [
+      {
+        "file": "tags/badge.tst.mx",
+        "line": 1,
+        "column": 0,
+        "message": "`badge.tst.mx` cannot be called as a tag: `<badge.tst>` parses as tag `badge` with class `tst`. If it is another host's module file it does not belong under this host; otherwise rename it without the dot."
+      },
+      {
+        "file": "tags/chip.page.mx",
+        "line": 1,
+        "column": 0,
+        "message": "`chip.page.mx` cannot be called as a tag: `<chip.page>` parses as tag `chip` with class `page`. If it is another host's module file it does not belong under this host; otherwise rename it without the dot."
+      }
+    ],
+    "hostRestrictions": []
+  },
+  "fromMxFile": {
+    "tags": [
+      {
+        "name": "button",
+        "sourceDir": "sub/tags",
+        "template": "sub/tags/button.mx"
+      },
+      {
+        "name": "x",
+        "sourceDir": "sub/tags",
+        "sidecar": "sub/tags/x.tag.ts"
+      },
+      {
+        "name": "card",
+        "sourceDir": "tags",
+        "template": "tags/card.mx",
+        "sidecar": "tags/card.tag.ts",
+        "parseOptions": {
+          "text": true
+        }
+      },
+      {
+        "name": "icon",
+        "sourceDir": "tags",
+        "sidecar": "tags/icon.tag.ts"
+      },
+      {
+        "name": "ui-panel",
+        "sourceDir": "shared",
+        "sidecar": "shared/panel.tag.ts"
+      },
+      {
+        "name": "ui-strip",
+        "sourceDir": "shared",
+        "template": "shared/strip.mx"
+      }
+    ],
+    "customTags": ["button", "card", "icon", "ui-panel", "ui-strip", "x"],
+    "directories": ["sub/tags", "tags", "shared"],
+    "packageFiles": ["package.json"],
+    "configFiles": ["sub/package.json", "package.json"],
+    "files": [
+      "sub/tags/button.mx",
+      "sub/tags/x.tag.ts",
+      "tags/card.mx",
+      "tags/card.tag.ts",
+      "tags/icon.tag.ts",
+      "shared/panel.tag.ts",
+      "shared/strip.mx"
+    ],
+    "diagnostics": [
+      {
+        "file": "tags/badge.tst.mx",
+        "line": 1,
+        "column": 0,
+        "message": "`badge.tst.mx` cannot be called as a tag: `<badge.tst>` parses as tag `badge` with class `tst`. If it is another host's module file it does not belong under this host; otherwise rename it without the dot."
+      },
+      {
+        "file": "tags/chip.page.mx",
+        "line": 1,
+        "column": 0,
+        "message": "`chip.page.mx` cannot be called as a tag: `<chip.page>` parses as tag `chip` with class `page`. If it is another host's module file it does not belong under this host; otherwise rename it without the dot."
+      }
+    ],
+    "hostRestrictions": []
+  },
+  "project": {
+    "tags": [
+      {
+        "name": "button",
+        "sourceDir": "tags",
+        "template": "tags/button.mx"
+      },
+      {
+        "name": "card",
+        "sourceDir": "tags",
+        "template": "tags/card.mx",
+        "sidecar": "tags/card.tag.ts",
+        "parseOptions": {
+          "text": true
+        }
+      },
+      {
+        "name": "icon",
+        "sourceDir": "tags",
+        "sidecar": "tags/icon.tag.ts"
+      },
+      {
+        "name": "x",
+        "sourceDir": "sub/tags",
+        "sidecar": "sub/tags/x.tag.ts"
+      },
+      {
+        "name": "ui-panel",
+        "sourceDir": "shared",
+        "sidecar": "shared/panel.tag.ts"
+      },
+      {
+        "name": "ui-strip",
+        "sourceDir": "shared",
+        "template": "shared/strip.mx"
+      }
+    ],
+    "customTags": ["button", "card", "icon", "ui-panel", "ui-strip", "x"],
+    "directories": ["tags", "sub/tags", "shared"],
+    "packageFiles": ["package.json"],
+    "configFiles": ["package.json"],
+    "files": [
+      "tags/button.mx",
+      "tags/card.mx",
+      "tags/card.tag.ts",
+      "tags/icon.tag.ts",
+      "sub/tags/x.tag.ts",
+      "shared/panel.tag.ts",
+      "shared/strip.mx"
+    ],
+    "diagnostics": [
+      {
+        "file": "tags/badge.tst.mx",
+        "line": 1,
+        "column": 0,
+        "message": "`badge.tst.mx` cannot be called as a tag: `<badge.tst>` parses as tag `badge` with class `tst`. If it is another host's module file it does not belong under this host; otherwise rename it without the dot."
+      },
+      {
+        "file": "tags/chip.page.mx",
+        "line": 1,
+        "column": 0,
+        "message": "`chip.page.mx` cannot be called as a tag: `<chip.page>` parses as tag `chip` with class `page`. If it is another host's module file it does not belong under this host; otherwise rename it without the dot."
+      }
+    ],
+    "hostRestrictions": []
+  }
+}

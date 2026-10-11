@@ -8,9 +8,16 @@
  *    directory, so an uncached scan would re-read every `tags/` directory and
  *    re-parse every sidecar per file. Invalidation is by the evidence the
  *    scan itself recorded (spec §4): a directory's entry list, every tag
- *    file's mtime and content hash, and the `package.json` that supplied `mx.tags`. A stale
- *    entry is *detected*, not merely expired, so an editor that never restarts
+ *    file's stamp, the `package.json` that supplied `mx.tags`, and every
+ *    project dialect's `package.json` (its `tagDirs` and claims decide what
+ *    the scan reads). A stamp is `(mtimeMs, ctimeMs, size, ino)` plus a
+ *    content hash only for a *racy* file, one changed within
+ *    {@link RACY_WINDOW_MS} of the snapshot (git's index rule). A stale entry
+ *    is *detected*, not merely expired, so an editor that never restarts
  *    still recompiles against the tag an author just saved.
+ *
+ *    The key gains the caller's dialect: an MX file and a dialect file in one
+ *    directory scan different tag directories.
  *
  * 2. **The tag map identity**, keyed on the tag files a scan loaded. An
  *    unchanged tag set hands back the *same map object*, whose `CustomTag`s
@@ -30,16 +37,22 @@
 
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { isTranslateError } from "./core.ts";
 import type { CustomTag } from "./custom-tags.ts";
-import { mxConfigGeneration } from "./mx-config.ts";
+import { dialectRouter } from "./dialect-discovery.ts";
+import { findNearestPackageJson } from "./host-policy.ts";
+import { mxConfigGeneration, mxConfigSearchPaths } from "./mx-config.ts";
 import {
+  CORE_TAG_DISCOVERY,
+  callerTagDiscovery,
   dottedTagFileDiagnostics,
   type ScanDiagnostic,
   type ScanOptions,
   type ScanResult,
-  scanCustomTags,
+  scanWithDiscovery,
+  type TagDiscovery,
+  tagDiscoveryOf,
 } from "./scan.ts";
 
 interface CacheEntry {
@@ -49,26 +62,68 @@ interface CacheEntry {
   /** Directory entry lists as they were when scanned, for add/remove. */
   listings: Map<string, string>;
   /**
-   * `package.json` mtime and content hash, for an `mx.tags` change. Content is
-   * what makes a hit trustworthy: mtime alone misses an edit that pins the mtime
-   * or lands in the same filesystem tick (Linux < 6.13 stamps at jiffy
-   * granularity).
+   * `package.json` (the project's and each dialect's) and MX config stamps.
+   * mtime alone misses an edit that pins the mtime or lands in the same
+   * filesystem tick (Linux < 6.13 stamps at jiffy granularity): ctime catches
+   * the first, the racy hash the second.
    */
   manifests: Map<string, FileStamp>;
   /** Only the tag files the scan already tracks, including sidecars. */
   files: Map<string, FileStamp>;
 }
 
-interface FileStamp {
-  mtimeMs: number;
-  /** `undefined` when the file could not be read. */
-  hash: string | undefined;
-}
+/**
+ * What a file looked like when scanned. `missing` for a file that did not
+ * exist (or a stamp poisoned by an edit racing the scan, which can never
+ * match again).
+ */
+type FileStamp =
+  | {
+      /**
+       * Fractional milliseconds, not `bigint` nanoseconds: a `bigint` stat
+       * measured 2.3x slower under Bun (2.24 vs 0.97 ms for 1200 files),
+       * and a double still resolves ~0.25 µs at today's epoch, far below
+       * the racy window that covers what it cannot tell apart.
+       */
+      mtimeMs: number;
+      ctimeMs: number;
+      size: number;
+      ino: number;
+      /** Only for a racy file; `undefined` when it could not be read. */
+      hash?: string | undefined;
+    }
+  | { missing: true; poisoned?: true };
+
+/**
+ * How close to the snapshot a file's mtime or ctime may be and still be
+ * changed again without moving either: coarser than any filesystem
+ * timestamp granularity in use (FAT's 2 s included), and it also absorbs
+ * modest clock skew with a network filesystem. A timestamp in the future is
+ * racy too.
+ */
+const RACY_WINDOW_MS = 2000;
+let racyWindowMs = RACY_WINDOW_MS;
 
 /** A listing value no real directory can produce, so "absent" is a state. */
 const MISSING_DIR = "<missing>";
 
 const scans = new Map<string, CacheEntry>();
+
+/**
+ * How a directory's file names route to a dialect's discovery, plus the
+ * files that routing read. A hit trusts the memo only because every cache
+ * entry carries those files as evidence: a change that could re-route the
+ * caller makes the entry its guess points at stale, and the miss rebuilds
+ * the memo. A directory whose routing failed has no memo (every lookup
+ * routes afresh), so a dependency installed later is seen.
+ */
+interface Routing {
+  route(name: string): TagDiscovery;
+  /** The project's `package.json`, its dialects' and MX config places. */
+  evidence: string[];
+}
+
+const routings = new Map<string, Routing>();
 
 /**
  * Tag maps kept alive by their signature, so an unchanged tag set hands back
@@ -86,12 +141,64 @@ function listingOf(dir: string): string {
   }
 }
 
-function mtimeOf(path: string): number {
+/** The stat part of a stamp, or `missing`. */
+function statOf(path: string): FileStamp {
+  let stats: ReturnType<typeof statSync> | undefined;
   try {
-    return statSync(path).mtimeMs;
+    stats = statSync(path, { throwIfNoEntry: false });
   } catch {
-    return -1;
+    stats = undefined;
   }
+  if (stats === undefined) return { missing: true };
+  return {
+    mtimeMs: stats.mtimeMs,
+    ctimeMs: stats.ctimeMs,
+    size: stats.size,
+    ino: stats.ino,
+  };
+}
+
+/** Whether a file stamped at `stamp` could still change without moving it. */
+function isRacy(stamp: FileStamp, nowMs: number): boolean {
+  if ("missing" in stamp) return false;
+  return Math.max(stamp.mtimeMs, stamp.ctimeMs) >= nowMs - racyWindowMs;
+}
+
+/**
+ * Stamps `path`: stat first, then the content of a racy file, so a write
+ * racing the stamp reads as stale.
+ */
+function stampOf(path: string, nowMs: number): FileStamp {
+  const stamp = statOf(path);
+  if (isRacy(stamp, nowMs)) return { ...stamp, hash: hashOf(path) };
+  return stamp;
+}
+
+function stampsMatch(stamp: FileStamp, now: FileStamp): boolean {
+  if ("missing" in stamp || "missing" in now) {
+    return (
+      "missing" in stamp &&
+      "missing" in now &&
+      stamp.poisoned === undefined &&
+      now.poisoned === undefined
+    );
+  }
+  return (
+    stamp.mtimeMs === now.mtimeMs &&
+    stamp.ctimeMs === now.ctimeMs &&
+    stamp.size === now.size &&
+    stamp.ino === now.ino
+  );
+}
+
+/** Whether `stamp` still describes `path`, re-reading a racy file. */
+function stampIsFresh(path: string, stamp: FileStamp, nowMs: number): boolean {
+  if (!stampsMatch(stamp, statOf(path))) return false;
+  if ("missing" in stamp || !("hash" in stamp)) return true;
+  if (hashOf(path) !== stamp.hash) return false;
+  // Verified now and no longer racy: a later change moves the stat.
+  if (!isRacy(stamp, nowMs)) delete stamp.hash;
+  return true;
 }
 
 function hashOf(path: string): string | undefined {
@@ -102,19 +209,65 @@ function hashOf(path: string): string | undefined {
   }
 }
 
-function snapshot(result: ScanResult): CacheEntry {
+/**
+ * The routing of `dir`'s file names, or `undefined` when it failed (the
+ * compile reports why). A manifest edit can change which directories the
+ * scan reads and which files it skips, so the project's `package.json`,
+ * every dialect's and MX config's search places are all evidence.
+ */
+function routingOf(dir: string): Routing | undefined {
+  let router: ReturnType<typeof dialectRouter>;
+  try {
+    router = dialectRouter(dir);
+  } catch {
+    return undefined;
+  }
+  const project = findNearestPackageJson(dir)?.file;
+  const evidence = [
+    ...(project === undefined ? [] : [project]),
+    ...mxConfigSearchPaths(dir),
+    ...(router?.dialects ?? []).map((dialect) => dialect.packageFile),
+  ];
+  if (router === undefined) {
+    return { route: () => CORE_TAG_DISCOVERY, evidence };
+  }
+  const known = router;
+  return {
+    route: (name) => {
+      try {
+        return tagDiscoveryOf(known.route(name)?.dialect);
+      } catch {
+        // A clash: the compile reports it; the project file is evidence.
+        return CORE_TAG_DISCOVERY;
+      }
+    },
+    evidence,
+  };
+}
+
+function snapshot(
+  result: ScanResult,
+  routingEvidence: readonly string[],
+): CacheEntry {
+  const nowMs = Date.now();
   const listings = new Map<string, string>();
   for (const dir of result.directories) listings.set(dir, listingOf(dir));
   const manifests = new Map<string, FileStamp>();
-  for (const file of [...result.packageFiles, ...(result.configFiles ?? [])]) {
-    // mtime before content: a write racing this snapshot then reads as stale.
-    manifests.set(file, { mtimeMs: mtimeOf(file), hash: hashOf(file) });
+  for (const file of [
+    ...result.packageFiles,
+    ...(result.configFiles ?? []),
+    ...routingEvidence,
+  ]) {
+    manifests.set(file, stampOf(file, nowMs));
   }
   const files = new Map<string, FileStamp>();
   for (const file of result.files) {
-    // The scan recorded mtime before reading sidecar options; keep that stamp
-    // rather than a later stat that could hide an intervening edit.
-    files.set(file.path, { mtimeMs: file.mtimeMs, hash: hashOf(file.path) });
+    // The scan recorded mtime before reading sidecar options. A stamp that
+    // no longer agrees with it saw an intervening edit: poison it, so the
+    // next lookup rescans rather than trusting what the scan never read.
+    const stamp = stampOf(file.path, nowMs);
+    const agrees = !("missing" in stamp) && stamp.mtimeMs === file.mtimeMs;
+    files.set(file.path, agrees ? stamp : { missing: true, poisoned: true });
   }
   return {
     result,
@@ -128,25 +281,24 @@ function snapshot(result: ScanResult): CacheEntry {
 /**
  * Whether `entry` still describes the filesystem.
  *
- * Checks exactly the three things the spec names as invalidating: an add or
+ * Checks exactly the things the spec names as invalidating: an add or
  * remove in a scanned directory (its entries, not its mtime), a tag file,
- * and a `package.json` or MX config search place (both files checked by mtime and
- * content hash). An unchanged hit reads and hashes each tracked tag file and
- * manifest once; directory listings were already content-aware. Snapshots
- * retain only fixed-size hashes, not file contents duplicated per directory.
+ * and a `package.json` or MX config search place (each file by its stamp).
+ * An unchanged hit stats each tracked file once and reads only racy ones;
+ * directory listings were already content-aware. Snapshots retain only
+ * fixed-size stamps, not file contents duplicated per directory.
  */
 function isFresh(entry: CacheEntry): boolean {
   if (entry.configGeneration !== mxConfigGeneration()) return false;
   for (const [dir, listing] of entry.listings) {
     if (listingOf(dir) !== listing) return false;
   }
+  const nowMs = Date.now();
   for (const [file, stamp] of entry.manifests) {
-    if (mtimeOf(file) !== stamp.mtimeMs) return false;
-    if (hashOf(file) !== stamp.hash) return false;
+    if (!stampIsFresh(file, stamp, nowMs)) return false;
   }
   for (const [file, stamp] of entry.files) {
-    if (mtimeOf(file) !== stamp.mtimeMs) return false;
-    if (hashOf(file) !== stamp.hash) return false;
+    if (!stampIsFresh(file, stamp, nowMs)) return false;
   }
   return true;
 }
@@ -162,15 +314,15 @@ function parserSignatureOf(result: ScanResult): string {
     .sort()
     .map((name) => {
       const tag = result.tags.get(name);
-      return `${name}|${tag?.template ?? ""}|${tag?.sidecar ?? ""}|${tag?.module ?? ""}|${JSON.stringify(tag?.parseOptions ?? null)}`;
+      return `${name}|${tag?.template ?? ""}|${tag?.sidecar ?? ""}|${tag?.module ?? ""}|${tag?.tagFile ?? ""}|${tag?.dialect ?? ""}|${JSON.stringify(tag?.parseOptions ?? null)}`;
     })
     .join("\n");
 }
 
 /**
  * The identity of one *loaded* tag set: the above, plus every tag file's
- * mtime and content hash. Reuse the hashes computed by the snapshot rather
- * than reading or hashing the files a second time to build this signature.
+ * stamp. Reuse the stamps computed by the snapshot rather than reading the
+ * files a second time to build this signature.
  *
  * Two different questions hide behind "is this the same tag set", and
  * conflating them is a real bug rather than a nicety. The tag table only
@@ -184,9 +336,7 @@ function parserSignatureOf(result: ScanResult): string {
 function loadedSignatureOf(entry: CacheEntry): string {
   const files = [...entry.files]
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([path, stamp]) =>
-      JSON.stringify([path, stamp.mtimeMs, stamp.hash ?? null]),
-    )
+    .map(([path, stamp]) => JSON.stringify([path, printableStamp(stamp)]))
     .join("\n");
   return `${parserSignatureOf(entry.result)}\n--\n${files}`;
 }
@@ -250,25 +400,30 @@ export function scanCached(filePath: string, options: ScanOptions): ScanResult {
       : options.host === null
         ? "no-host-key"
         : `host:${options.host}`;
-  const key = `${dirname(resolve(filePath))}\0${options.stopAt ?? ""}\0${filter}`;
-  const cached = scans.get(key);
-  if (cached && isFresh(cached)) {
-    const evidence = cached.result.dottedTagFiles ?? [];
-    return evidence.length === 0
-      ? cached.result
-      : {
-          ...cached.result,
-          diagnostics: dottedTagFileDiagnostics(
-            evidence,
-            options.targets,
-            cached.result.diagnostics,
-          ),
-        };
+  // The caller's dialect picks which tag directories and kinds are scanned,
+  // so it is part of the key. A hit routes by the directory's memo
+  // (`routings`); a miss routes afresh and replaces the memo.
+  const dir = dirname(resolve(filePath));
+  const name = basename(filePath);
+  const prefix = `${dir}\0${options.stopAt ?? ""}\0${filter}\0`;
+  const memo = routings.get(dir);
+  if (memo) {
+    const guessed = scans.get(prefix + memo.route(name).id);
+    if (guessed && isFresh(guessed)) return hit(guessed, options);
   }
+  const routing = routingOf(dir);
+  if (routing) routings.set(dir, routing);
+  else routings.delete(dir);
+  const discovery = routing
+    ? routing.route(name)
+    : callerTagDiscovery(filePath);
+  const key = prefix + discovery.id;
+  const cached = scans.get(key);
+  if (cached && isFresh(cached)) return hit(cached, options);
 
   let result: ScanResult;
   try {
-    result = scanCustomTags(filePath, options);
+    result = scanWithDiscovery(filePath, options, discovery);
   } catch (error) {
     // Discovery stopped early, so partial evidence cannot authoritatively
     // replace the last complete scan's watcher edges. Retain those inputs
@@ -284,7 +439,7 @@ export function scanCached(filePath: string, options: ScanOptions): ScanResult {
     }
     throw error;
   }
-  const entry = snapshot(result);
+  const entry = snapshot(result, routing?.evidence ?? []);
   const loadedSignature = loadedSignatureOf(entry);
   const parserSignature = parserSignatureOf(result);
 
@@ -320,19 +475,68 @@ export function scanCached(filePath: string, options: ScanOptions): ScanResult {
   return result;
 }
 
+/** A fresh entry's result, with dotted-name wording derived per caller. */
+function hit(cached: CacheEntry, options: ScanOptions): ScanResult {
+  const evidence = cached.result.dottedTagFiles ?? [];
+  return evidence.length === 0
+    ? cached.result
+    : {
+        ...cached.result,
+        diagnostics: dottedTagFileDiagnostics(
+          evidence,
+          options.targets,
+          cached.result.diagnostics,
+        ),
+      };
+}
+
+/**
+ * Stamps `path` as a snapshot taken at `nowMs` would, and checks a stamp as
+ * a lookup at `nowMs` would: the freshness rule itself, field by field, for
+ * tests (not public API).
+ */
+export const stampForTests = {
+  of: (path: string, nowMs: number): FileStamp => stampOf(path, nowMs),
+  isFresh: (path: string, stamp: FileStamp, nowMs: number): boolean =>
+    stampIsFresh(path, stamp, nowMs),
+};
+
 /** Drops every cached scan. For tests and for an editor's "restart" command. */
 export function clearScanCache(): void {
   scans.clear();
+  routings.clear();
   maps.clear();
+}
+
+/** A copy of a stamp, so a test cannot mutate the cache. */
+function printableStamp(stamp: FileStamp): object {
+  return { ...stamp };
 }
 
 /** Copies of file evidence only, for testing snapshot retention (not public API). */
 export function scanCacheStampsForTests(): object[] {
   return [...scans.values()].flatMap((entry) =>
-    [...entry.files.values(), ...entry.manifests.values()].map((stamp) => ({
-      ...stamp,
-    })),
+    [...entry.files.values(), ...entry.manifests.values()].map(printableStamp),
   );
+}
+
+/** Each evidence path with its printable stamp, for tests (not public API). */
+export function scanCacheEvidenceForTests(): Array<[string, object]> {
+  return [...scans.values()].flatMap((entry) =>
+    [...entry.files, ...entry.manifests].map(
+      ([path, stamp]): [string, object] => [path, printableStamp(stamp)],
+    ),
+  );
+}
+
+/**
+ * Sets the racy window and returns the previous one, for tests that need a
+ * file to be non-racy without waiting two seconds (not public API).
+ */
+export function setRacyWindowForTests(ms: number): number {
+  const previous = racyWindowMs;
+  racyWindowMs = ms;
+  return previous;
 }
 
 /** How many distinct tag-set maps are live. A test asserts this stays bounded. */

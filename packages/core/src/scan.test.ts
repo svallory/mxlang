@@ -1105,11 +1105,15 @@ describe("the scan cache", () => {
       expect(stamp).not.toHaveProperty("text");
       // A search place with no file is stamped as absent.
       if ((stamp as { hash?: string }).hash === undefined) {
-        expect(stamp).toEqual({ mtimeMs: -1, hash: undefined });
+        expect(stamp).toEqual({ missing: true });
         continue;
       }
+      // Every file here was just written, so each one is racy and hashed.
       expect(stamp).toEqual({
         mtimeMs: expect.any(Number),
+        ctimeMs: expect.any(Number),
+        size: expect.any(Number),
+        ino: expect.any(Number),
         hash: expect.stringMatching(/^[a-f0-9]{64}$/),
       });
     }

@@ -28,8 +28,9 @@ import {
   type HostOptions,
   tagRulesDecided,
 } from "../compile.ts";
+import { claimedFields } from "../contract-fields.ts";
 import { type MxWarning, TranslateError } from "../core.ts";
-import type { CustomTag } from "../custom-tags.ts";
+import { type CustomTag, registrationView } from "../custom-tags.ts";
 import type { HostDeclarations } from "../declarations.ts";
 import { UNKNOWN_TAG_CODE } from "../diagnostic-codes.ts";
 import type { Ir } from "../ir.ts";
@@ -187,11 +188,17 @@ function presetOf(
   filename: string,
 ): TagRulesPreset {
   if (options.tagRules !== undefined) return options.tagRules;
-  const { dialect } =
+  const dialect = dialectOf(options, filename);
+  return dialect ? dialectTagRules(dialect) : "html";
+}
+
+/** The dialect `filename` compiles under; throws as the compile would. */
+function dialectOf(options: LowerSourceOptions, filename: string) {
+  return (
     options.dialect !== undefined
       ? explicitSyntaxOf(options.dialect, filename)
-      : resolveSyntaxOf(filename);
-  return dialect ? dialectTagRules(dialect) : "html";
+      : resolveSyntaxOf(filename)
+  ).dialect;
 }
 
 /**
@@ -246,11 +253,16 @@ export function lowerSource(
   } catch (error) {
     if (options.unknownTags !== "reject") return failed([error]);
     try {
+      // A deferred entry's contract answers from its view (never throws):
+      // its call already reported why it cannot be read.
       const tags = scanAuthoredTags(
         source,
         filename,
         rules,
-        options.customTags,
+        registrationView(
+          options.customTags,
+          claimedFields(dialectOf(options, filename)),
+        ),
         options.defaultTag ?? DEFAULT_TAG,
         options.dialect,
       );

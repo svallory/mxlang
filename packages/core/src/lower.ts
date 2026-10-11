@@ -55,6 +55,7 @@ import {
   readOwnInput,
 } from "./callee-input.ts";
 import { CALLEE_INPUT_ERROR } from "./callee-input-error.ts";
+import { claimedFields } from "./contract-fields.ts";
 import {
   attrByName,
   bindingIdentifierNodes,
@@ -103,6 +104,7 @@ import {
   buildersFor,
   type ChildNode,
   type CustomTag,
+  deferredContractError,
   hasAttributeTagContract,
   isContractOnlyDelegated,
   runAnalyzeHooks,
@@ -3776,6 +3778,42 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
  * built-in like `<try>` is a structural pass-through wrapper, so `isBuiltin`
  * still bypasses the gate and always lowers the block, like `lowerDelegatedTag`.
  */
+/**
+ * A tag whose contract registration deferred (a dialect tag file) is read on
+ * its call: a failure to read or check it is raised here, at this call, so
+ * every call reports it where it is written and a file that never calls the
+ * tag compiles clean. An error that names its own file stays there.
+ */
+function raiseDeferredContract(
+  ctx: Ctx,
+  node: Node,
+  name: string,
+  definition: CustomTag,
+): void {
+  const error = deferredContractError(
+    definition,
+    name,
+    ctx.customTags,
+    claimedFields(ctx.dialect),
+  );
+  if (error === undefined) return;
+  if (!isTranslateError(error)) {
+    fail(
+      `\`<${name}>\`: ${error instanceof Error ? error.message : String(error)}`,
+      node,
+    );
+  }
+  if (error.file !== undefined) throw error;
+  try {
+    fail(error.message, node);
+  } catch (placed) {
+    if (isTranslateError(placed) && error.diagnosticCode !== undefined) {
+      placed.diagnosticCode = error.diagnosticCode;
+    }
+    throw placed;
+  }
+}
+
 function lowerCustomTag(
   ctx: Ctx,
   node: Node,
@@ -3784,6 +3822,7 @@ function lowerCustomTag(
   isBuiltin = false,
   wildcard?: WildcardMatch,
 ): IrNode[] {
+  raiseDeferredContract(ctx, node, name, definition);
   rejectBadRefinements(ctx, node);
   const alias = wildcard ? aliasOf(ctx, node, wildcard) : undefined;
   const label = tagLabel(name, alias);

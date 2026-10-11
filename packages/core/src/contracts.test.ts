@@ -495,8 +495,22 @@ describe("mx.contracts (decision 142)", () => {
       expect(customTagTaglib(next.customTags)?.[0]).toBe(taglib);
       expect(scanCached(file, { targets })).toBe(next);
       expect(liveTagMapCount()).toBe(1);
-      for (const evidence of scanCacheStampsForTests()) {
-        expect(Object.keys(evidence).sort()).toEqual(["hash", "mtimeMs"]);
+      const stamps = scanCacheStampsForTests();
+      // An absent config place is evidence too, stamped `{ missing: true }`.
+      const present = stamps.filter((stamp) => !("missing" in stamp));
+      expect(present.length).toBeGreaterThan(0);
+      for (const stamp of stamps) {
+        if ("missing" in stamp) expect(stamp).toEqual({ missing: true });
+      }
+      for (const evidence of present) {
+        // Freshly written, so racy: the stamp carries the content hash.
+        expect(Object.keys(evidence).sort()).toEqual([
+          "ctimeMs",
+          "hash",
+          "ino",
+          "mtimeMs",
+          "size",
+        ]);
         expect(evidence).toHaveProperty(
           "hash",
           expect.stringMatching(/^[a-f0-9]{64}$/),

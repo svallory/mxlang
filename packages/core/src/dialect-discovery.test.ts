@@ -72,6 +72,34 @@ describe("`package.json#mx.dialect`", () => {
     ]);
   });
 
+  it("declares the tag-discovery fields, each optional", () => {
+    const { projectFile, packageFile } = dialectProject(dir, {
+      manifest: {
+        id: "mesh",
+        name: "Mesh",
+        extensions: [".mesh.mx"],
+        tagDirs: ["components", "atoms"],
+        tagExtensions: [".component.mesh.mx"],
+        sidecars: false,
+        reservedTags: ["entity"],
+      },
+    });
+    expect(discoverDialects(projectFile)).toEqual([
+      {
+        id: "mesh",
+        name: "Mesh",
+        extensions: [".mesh.mx"],
+        module: "./index.mjs",
+        tagDirs: ["components", "atoms"],
+        tagExtensions: [".component.mesh.mx"],
+        sidecars: false,
+        reservedTags: ["entity"],
+        packageName: "test-dialect",
+        packageFile,
+      },
+    ]);
+  });
+
   // A manifest's `module` stays inside its package (it must work wherever
   // the package is installed); within it, `./` is optional and `..` is fine
   // while the path stays in. Each module here throws, which proves the
@@ -101,7 +129,7 @@ describe("`package.json#mx.dialect`", () => {
       "an unknown field",
       { targets: ["web"] },
       [11, 6],
-      "`mx.dialect.targets` is not a dialect manifest field (id, name, extensions, module)",
+      "`mx.dialect.targets` is not a dialect manifest field (id, name, extensions, module, tagDirs, tagExtensions, sidecars, reservedTags)",
     ],
     [
       "an id that is not one",
@@ -192,6 +220,127 @@ describe("`package.json#mx.dialect`", () => {
       { module: "dist/../../index.js" },
       [10, 6],
       outside('"dist/../../index.js" is outside the package'),
+    ],
+    // The tag-discovery fields follow `module`, so each key is on line 11.
+    [
+      "`tagDirs` not an array",
+      { tagDirs: "components" },
+      [11, 6],
+      '`mx.dialect.tagDirs` must be a non-empty array of the directory names the dialect\'s files discover tags in (`["components"]`)',
+    ],
+    [
+      "an empty `tagDirs`",
+      { tagDirs: [] },
+      [11, 6],
+      '`mx.dialect.tagDirs` must be a non-empty array of the directory names the dialect\'s files discover tags in (`["components"]`)',
+    ],
+    [
+      "a `tagDirs` entry that is not a string",
+      { tagDirs: [7] },
+      [11, 6],
+      "`mx.dialect.tagDirs`: 7 is not a directory name",
+    ],
+    [
+      "an empty `tagDirs` entry",
+      { tagDirs: [""] },
+      [11, 6],
+      '`mx.dialect.tagDirs`: "" is not a directory name',
+    ],
+    [
+      "a `tagDirs` path",
+      { tagDirs: ["src/components"] },
+      [11, 6],
+      '`mx.dialect.tagDirs`: "src/components" is a path; write a directory name (`components`)',
+    ],
+    [
+      "a `tagDirs` Windows path",
+      { tagDirs: ["src\\components"] },
+      [11, 6],
+      '`mx.dialect.tagDirs`: "src\\\\components" is a path; write a directory name (`components`)',
+    ],
+    [
+      "a `tagDirs` of `..`",
+      { tagDirs: [".."] },
+      [11, 6],
+      '`mx.dialect.tagDirs`: ".." is not a directory name',
+    ],
+    [
+      "a dot `tagDirs` entry",
+      { tagDirs: [".components"] },
+      [11, 6],
+      '`mx.dialect.tagDirs`: ".components" starts with a dot, and the scan never reads a dot directory',
+    ],
+    [
+      "a `tagDirs` entry twice",
+      { tagDirs: ["components", "components"] },
+      [11, 6],
+      "`mx.dialect.tagDirs` lists `components` twice",
+    ],
+    [
+      "`tagExtensions` not an array",
+      { tagExtensions: ".component.tst" },
+      [11, 6],
+      '`mx.dialect.tagExtensions` must be an array of the extra file extensions the dialect\'s tag files use (`[".component.mesh.mx"]`)',
+    ],
+    [
+      "a `tagExtensions` entry without its dot",
+      { tagExtensions: ["component"] },
+      [11, 6],
+      '`mx.dialect.tagExtensions`: "component" is not a file extension; write it with its leading dot (`.component.mesh.mx`)',
+    ],
+    [
+      "a `tagExtensions` claim on `.mx`",
+      { tagExtensions: [".mx"] },
+      [11, 6],
+      "`mx.dialect.tagExtensions` cannot claim `.mx`: it is MX's own; a dialect claims its own extensions (`.mesh.mx`)",
+    ],
+    [
+      "a `tagExtensions` claim on a foreign extension",
+      { tagExtensions: [".tag.ts"] },
+      [11, 6],
+      "`mx.dialect.tagExtensions` cannot claim `.tag.ts`: `.ts` files belong to TypeScript, JavaScript or Marko, whose tools read them; a dialect claims its own extensions (`.mesh.mx`)",
+    ],
+    [
+      "a `tagExtensions` entry `extensions` already claims",
+      { tagExtensions: [".tst"] },
+      [11, 6],
+      "`mx.dialect.tagExtensions` lists `.tst`, which `mx.dialect.extensions` already claims",
+    ],
+    [
+      "a `tagExtensions` entry twice",
+      { tagExtensions: [".c.tst", ".c.tst"] },
+      [11, 6],
+      "`mx.dialect.tagExtensions` lists `.c.tst` twice",
+    ],
+    [
+      "`sidecars` not a boolean",
+      { sidecars: "no" },
+      [11, 6],
+      "`mx.dialect.sidecars` must be a boolean: whether `<name>.tag.ts` sidecars index in the dialect's `tagDirs`",
+    ],
+    [
+      "`reservedTags` not an array",
+      { reservedTags: "entity" },
+      [11, 6],
+      '`mx.dialect.reservedTags` must be an array of the tag names only the dialect may define (`["entity"]`)',
+    ],
+    [
+      "a `reservedTags` entry that is no tag name",
+      { reservedTags: ["-x"] },
+      [11, 6],
+      '`mx.dialect.reservedTags`: "-x" is not a tag name; a tag name starts with a letter, digit or underscore and may then contain letters, digits, underscores, hyphens and dots',
+    ],
+    [
+      "a `reservedTags` entry core reserves",
+      { reservedTags: ["for"] },
+      [11, 6],
+      "`mx.dialect.reservedTags` cannot list `for`: MX reserves it for every dialect (if, else, else-if, for, const, define, return, import, export, static, try)",
+    ],
+    [
+      "a `reservedTags` entry twice",
+      { reservedTags: ["entity", "entity"] },
+      [11, 6],
+      "`mx.dialect.reservedTags` lists `entity` twice",
     ],
   ])(
     "%s is an error at the field, in the dialect's `package.json`",
@@ -300,6 +449,65 @@ describe("routing a file to its dialect", () => {
     expect(routeDialect(join(dir, "page.x"))?.id).toBe("a");
     expect(routeDialect(join(dir, "page.y.x"))?.id).toBe("b");
     expect(routeDialect(join(dir, "page.z.x"))?.id).toBe("a");
+  });
+
+  describe("`tagExtensions` route like `extensions`", () => {
+    it("a `tagExtensions` name routes to the dialect", () => {
+      dialectProject(dir, {
+        manifest: { tagExtensions: [".component.tst"] },
+      });
+      expect(routeDialect(join(dir, "money.component.tst"))?.id).toBe("test");
+      expect(routeDialect(join(dir, "page.tst"))?.id).toBe("test");
+    });
+
+    it("the longest suffix wins across both fields and dialects", () => {
+      twoDialects(
+        { id: "a", name: "A", extensions: [".x"], tagExtensions: [".c.y.x"] },
+        { id: "b", name: "B", extensions: [".y.x"] },
+      );
+      expect(routeDialect(join(dir, "q.x"))?.id).toBe("a");
+      expect(routeDialect(join(dir, "q.y.x"))?.id).toBe("b");
+      expect(routeDialect(join(dir, "q.c.y.x"))?.id).toBe("a");
+      expect(routeDialect(join(dir, "q.d.y.x"))?.id).toBe("b");
+    });
+
+    // The project's `package.json`: the second dependency entry on line 5.
+    it("one's `tagExtensions` against another's `extensions` is the clash error", () => {
+      const { projectFile } = twoDialects(
+        { id: "a", name: "A", extensions: [".a"], tagExtensions: [".tst"] },
+        { id: "b", name: "B", extensions: [".tst"] },
+      );
+      const error = caught(() => routeDialect(join(dir, "page.tst")));
+      expect(error.file).toBe(projectFile);
+      expect([error.line, error.column]).toEqual([5, 4]);
+      expect(error.message).toBe(
+        'two dialects claim `.tst`: `a` (a-dialect) and `b` (b-dialect). Choose one in `mx.extensions` in MX\'s config: `"extensions": { ".tst": "a" }`',
+      );
+    });
+
+    it("`mx.extensions` settles a `tagExtensions` clash", () => {
+      twoDialects(
+        { id: "a", name: "A", extensions: [".a"], tagExtensions: [".tst"] },
+        { id: "b", name: "B", extensions: [".tst"] },
+        { extensions: { ".tst": "a" } },
+      );
+      expect(routeDialect(join(dir, "page.tst"))?.id).toBe("a");
+    });
+
+    // The dialect's `package.json`: `tagExtensions` on line 11.
+    it("a `tagExtensions` claim on a host's file kind is an error at its key when routing", () => {
+      const { packageFile } = dialectProject(dir, {
+        manifest: { tagExtensions: [".solid.mx"] },
+      });
+      const error = caught(() =>
+        routeDialect(join(dir, "page.tst"), { hostSegments: ["solid"] }),
+      );
+      expect(error.file).toBe(packageFile);
+      expect([error.line, error.column]).toEqual([11, 6]);
+      expect(error.message).toBe(
+        "`mx.dialect.tagExtensions` cannot claim `.solid.mx`: `.solid.mx` is a host's file kind, which MX owns; a dialect claims its own extensions (`.mesh.mx`)",
+      );
+    });
   });
 
   it.each(["page.mx", "page.solid.mx", "page.tsx", ".tst"])(

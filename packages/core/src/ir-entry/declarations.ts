@@ -35,19 +35,7 @@ import type { HostDeclarations } from "../declarations.ts";
 import type { NativeTags } from "../tag-table.ts";
 
 /** The names no tag may use under the entry point (decision 131 addendum, item 2). */
-export const RESERVED_NAMES = [
-  "if",
-  "else",
-  "else-if",
-  "for",
-  "const",
-  "define",
-  "return",
-  "import",
-  "export",
-  "static",
-  "try",
-] as const;
+export { RESERVED_NAMES } from "../tag-names.ts";
 
 /** The reserved-name message, for a name used as a tag. */
 export function reservedNameMessage(name: string): string {

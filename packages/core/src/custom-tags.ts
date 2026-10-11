@@ -1888,9 +1888,11 @@ export function storeFor(ctx: Ctx, tagName: string): TagStore {
  */
 export function rejectUnreachableHooks(
   customTags: Readonly<Record<string, CustomTag>> | undefined,
+  subject: (name: string) => boolean = everyTag,
 ): void {
   if (!customTags) return;
   for (const [name, definition] of Object.entries(customTags)) {
+    if (!subject(name)) continue;
     if (!definition.finalize) continue;
     if (definition.analyze || definition.transform || hasTemplate(definition)) {
       continue;
@@ -1974,9 +1976,11 @@ function rejectContradictoryAttribute(
 export function rejectUnknownDeclarationKeys(
   customTags: Readonly<Record<string, CustomTag>> | undefined,
   claimed: ClaimedFields = claimedFields(undefined),
+  subject: (name: string) => boolean = everyTag,
 ): void {
   if (!customTags) return;
   for (const [tagName, definition] of Object.entries(customTags)) {
+    if (!subject(tagName)) continue;
     if (definition.children !== undefined) {
       for (const option of ["text", "openTagOnly"] as const) {
         if (definition.parseOptions?.[option] === true) {
@@ -2050,6 +2054,7 @@ export function rejectUnknownDeclarationKeys(
     );
   }
   for (const [tagName, definition] of Object.entries(customTags)) {
+    if (!subject(tagName)) continue;
     rejectAttributeTagParentConflicts(
       customTags,
       `\`<${tagName}>\``,
@@ -2337,6 +2342,7 @@ function wildcardReferences(
  */
 export function rejectWildcardReferences(
   customTags: Readonly<Record<string, CustomTag>> | undefined,
+  subject: (name: string) => boolean = everyTag,
 ): void {
   if (!customTags) return;
   const fail: (message: string) => never = (message) => {
@@ -2406,8 +2412,215 @@ export function rejectWildcardReferences(
     );
   };
   for (const [tagName, definition] of Object.entries(customTags)) {
+    if (!subject(tagName)) continue;
     visit(`\`<${tagName}>\``, definition, tagName, new Set());
   }
+}
+
+/** The registration checks' default subject: every tag in the map. */
+function everyTag(): boolean {
+  return true;
+}
+
+/**
+ * Entries whose contract registration does not read (a dialect tag file:
+ * reading it needs the dialect). Internal: a brand, never a field.
+ */
+const deferredEntries = new WeakSet<CustomTag>();
+
+/** Brands `definition` as a deferred-contract entry (see {@link registrationView}). */
+export function deferContract(definition: CustomTag): CustomTag {
+  deferredEntries.add(definition);
+  return definition;
+}
+
+/** The contract keys a deferred entry reads on first use; hooks, `parseOptions` and `template` are read as they are. */
+const DEFERRED_KEYS = [
+  "attributes",
+  "attributeTags",
+  "children",
+  "parents",
+  "defaultTag",
+] as const;
+
+/** One deferred entry, read once: the contract and its checks, or why they failed. */
+interface Resolution {
+  contract?: CustomTag;
+  error?: unknown;
+}
+
+/**
+ * Per view entry, not per raw entry: the checks read the rest of the map, so
+ * one entry in two maps can resolve two ways.
+ */
+const resolutions = new WeakMap<ViewEntry, Resolution>();
+/** Entries being read now, so two contracts that read each other terminate. */
+const resolving = new WeakSet<ViewEntry>();
+
+/** A view entry's origin: the deferred entry, its name, and the view it is in. */
+interface ViewEntry {
+  readonly raw: CustomTag;
+  readonly name: string;
+  readonly view: Readonly<Record<string, CustomTag>>;
+  readonly claimed: ClaimedFields;
+}
+
+const viewEntries = new WeakMap<CustomTag, ViewEntry>();
+const views = new WeakMap<
+  Readonly<Record<string, CustomTag>>,
+  WeakMap<ClaimedFields, Readonly<Record<string, CustomTag>>>
+>();
+
+/**
+ * Reads a deferred entry's contract once and runs that tag's registration
+ * checks against the rest of the view (unknown keys, wildcard references,
+ * unreachable hooks), as registration does for an eager entry. Never
+ * throws: a failure is recorded for the call to raise.
+ */
+function resolveDeferred(entry: ViewEntry): Resolution {
+  const known = resolutions.get(entry);
+  if (known) return known;
+  if (resolving.has(entry)) return {};
+  resolving.add(entry);
+  let resolution: Resolution;
+  try {
+    const contract: CustomTag = {};
+    for (const key of Object.keys(entry.raw)) {
+      const value = (entry.raw as Record<string, unknown>)[key];
+      if (value !== undefined) {
+        (contract as Record<string, unknown>)[key] = value;
+      }
+    }
+    const own = { ...entry.view, [entry.name]: contract };
+    const only = (name: string) => name === entry.name;
+    rejectUnknownDeclarationKeys(own, entry.claimed, only);
+    rejectWildcardReferences(own, only);
+    rejectUnreachableHooks(own, only);
+    resolution = { contract };
+  } catch (error) {
+    resolution = { error };
+  } finally {
+    resolving.delete(entry);
+  }
+  resolutions.set(entry, resolution);
+  return resolution;
+}
+
+/**
+ * The map registration and lowering read, for `customTags`: the map itself
+ * when no entry is deferred (nothing changes), else a copy in which each
+ * deferred entry (see {@link deferContract}) is a view whose contract keys
+ * read the entry on first use ({@link resolveDeferred}) and answer
+ * `undefined` when it fails, so a check or a lookup never throws for a tag
+ * nobody called. Its name, `parseOptions`, `template` and hooks are the
+ * entry's own. Cached per map and claim.
+ */
+export function registrationView(
+  customTags: Readonly<Record<string, CustomTag>>,
+  claimed: ClaimedFields,
+): Readonly<Record<string, CustomTag>>;
+export function registrationView(
+  customTags: Readonly<Record<string, CustomTag>> | undefined,
+  claimed: ClaimedFields,
+): Readonly<Record<string, CustomTag>> | undefined;
+export function registrationView(
+  customTags: Readonly<Record<string, CustomTag>> | undefined,
+  claimed: ClaimedFields,
+): Readonly<Record<string, CustomTag>> | undefined {
+  if (!customTags) return customTags;
+  let byClaim = views.get(customTags);
+  const known = byClaim?.get(claimed);
+  if (known) return known;
+  const names = Object.keys(customTags);
+  if (!names.some((name) => deferredEntries.has(customTags[name] as CustomTag)))
+    return customTags;
+  const view: Record<string, CustomTag> = Object.create(
+    Object.getPrototypeOf(customTags),
+  );
+  for (const name of names) {
+    const raw = customTags[name] as CustomTag;
+    if (!deferredEntries.has(raw)) {
+      view[name] = raw;
+      continue;
+    }
+    const wrapper: CustomTag = {};
+    const entry: ViewEntry = { raw, name, view, claimed };
+    const deferred = new Set<string>([...DEFERRED_KEYS, ...claimed.tag]);
+    for (const key of Object.keys(raw)) {
+      if (deferred.has(key)) continue;
+      const descriptor = Object.getOwnPropertyDescriptor(raw, key);
+      if (!descriptor) continue;
+      Object.defineProperty(wrapper, key, {
+        enumerable: true,
+        configurable: true,
+        get: () => (raw as Record<string, unknown>)[key],
+      });
+    }
+    for (const key of deferred) {
+      if (!Object.hasOwn(raw, key)) continue;
+      Object.defineProperty(wrapper, key, {
+        enumerable: true,
+        configurable: true,
+        get: () =>
+          (resolveDeferred(entry).contract as Record<string, unknown>)?.[key],
+      });
+    }
+    viewEntries.set(wrapper, entry);
+    view[name] = wrapper;
+  }
+  if (!byClaim) {
+    byClaim = new WeakMap();
+    views.set(customTags, byClaim);
+  }
+  byClaim.set(claimed, view);
+  return view;
+}
+
+/**
+ * Why a deferred entry's contract cannot be read, read on the call that
+ * needs it: `undefined` for an eager entry or a contract that reads and
+ * checks clean. `definition` is a view entry, or a raw deferred entry a
+ * caller registered without a view (then `customTags` gives its view).
+ */
+export function deferredContractError(
+  definition: CustomTag,
+  name: string,
+  customTags: Readonly<Record<string, CustomTag>> | undefined,
+  claimed: ClaimedFields,
+): unknown {
+  let entry = viewEntries.get(definition);
+  if (!entry && deferredEntries.has(definition)) {
+    const view = registrationView(
+      customTags && customTags[name] === definition
+        ? customTags
+        : { [name]: definition },
+      claimed,
+    );
+    entry = viewEntries.get(view[name] as CustomTag);
+  }
+  return entry ? resolveDeferred(entry).error : undefined;
+}
+
+/**
+ * The registration checks of `customTags`, run on its view: eager entries
+ * as always, deferred entries skipped (their checks run on their first call,
+ * {@link deferredContractError}). Returns the view, which is the map
+ * lowering reads.
+ */
+export function rejectRegistration(
+  customTags: Readonly<Record<string, CustomTag>> | undefined,
+  claimed: ClaimedFields,
+): Readonly<Record<string, CustomTag>> | undefined {
+  const view = registrationView(customTags, claimed);
+  if (!view) return view;
+  const eager =
+    view === customTags
+      ? everyTag
+      : (name: string) => !viewEntries.has(view[name] as CustomTag);
+  rejectUnknownDeclarationKeys(view, claimed, eager);
+  rejectWildcardReferences(view, eager);
+  rejectUnreachableHooks(view, eager);
+  return view;
 }
 
 /**
