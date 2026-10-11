@@ -1,5 +1,5 @@
 ---
-packages: [targets, language-server, typescript-plugin, tsc]
+packages: [target-registry, language-server, typescript-plugin, tsc]
 kind: Fixed
 ---
 
