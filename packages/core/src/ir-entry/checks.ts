@@ -28,6 +28,7 @@
  */
 
 import { isTranslateError, TranslateError } from "../core.ts";
+import { UNKNOWN_TAG_CODE } from "../diagnostic-codes.ts";
 import { nearestName } from "../did-you-mean.ts";
 import type {
   Attr,
@@ -591,6 +592,7 @@ export function unknownTagMessage(
 interface UnknownTagHit {
   name: string;
   message: string;
+  code?: string;
   at: Position;
   /** Where the tag's element ends, to label the errors inside it. */
   end?: Position;
@@ -620,6 +622,7 @@ function allUnknownTags(
       found.push({
         name: tag.name,
         message: unknownTagMessage(tag.name, declaredTags),
+        code: UNKNOWN_TAG_CODE,
         at: tag.loc,
         ...(tag.span && Number.isFinite(tag.span.sourceEnd)
           ? { end: positionOfOffset(tag.span.sourceEnd) }
@@ -801,12 +804,16 @@ export function labelInside(
       }
     }
     if (!innermost) return error;
-    return new TranslateError(
+    const labelled = new TranslateError(
       `${(error as TranslateError).message}${insideUnknownTagLabel(innermost.name)}`,
       at.line,
       at.column,
       at.file,
     );
+    // The label is prose; the code of the error it labels stays.
+    const code = (error as TranslateError).diagnosticCode;
+    if (code !== undefined) labelled.diagnosticCode = code;
+    return labelled;
   });
 }
 
@@ -882,8 +889,19 @@ function checkAll(ir: Ir, source: string, options: CheckOptions): unknown[] {
   checkNodes(ir.body);
   const extra: unknown[] = [];
   let unknownHits: UnknownTagHit[] = [];
-  const asError = ({ message, at }: { message: string; at: Position }) =>
-    new TranslateError(message, at.line, at.column, at.file);
+  const asError = ({
+    message,
+    at,
+    code,
+  }: {
+    message: string;
+    at: Position;
+    code?: string;
+  }) => {
+    const error = new TranslateError(message, at.line, at.column, at.file);
+    if (code !== undefined) error.diagnosticCode = code;
+    return error;
+  };
   attempt(() => {
     for (const found of allStructural(ir, stmts, options)) {
       extra.push(asError(found));

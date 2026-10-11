@@ -31,6 +31,7 @@ import {
 import { type MxWarning, TranslateError } from "../core.ts";
 import type { CustomTag } from "../custom-tags.ts";
 import type { HostDeclarations } from "../declarations.ts";
+import { UNKNOWN_TAG_CODE } from "../diagnostic-codes.ts";
 import type { Ir } from "../ir.ts";
 import {
   type Dialect,
@@ -254,14 +255,15 @@ export function lowerSource(
         options.dialect,
       );
       const unknown = (tags ?? []).filter((tag) => !declared.has(tag.name));
-      const errors = unknown.map(
-        (tag) =>
-          new TranslateError(
-            unknownTagMessage(tag.name, declared),
-            tag.line,
-            tag.column,
-          ),
-      );
+      const errors = unknown.map((tag) => {
+        const unknownError = new TranslateError(
+          unknownTagMessage(tag.name, declared),
+          tag.line,
+          tag.column,
+        );
+        unknownError.diagnosticCode = UNKNOWN_TAG_CODE;
+        return unknownError;
+      });
       const ranges = unknown.map((tag) => ({
         name: tag.name,
         at: { line: tag.line, column: tag.column },

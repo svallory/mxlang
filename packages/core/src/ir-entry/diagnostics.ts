@@ -149,6 +149,16 @@ export function toDiagnostic(
   };
 }
 
+/**
+ * The stable code an error carries as `diagnosticCode`: a `TranslateError`'s,
+ * or a parse error's (a `CompileError` with a non-enumerable one). Never a
+ * Babel or system error's `code`, which is not ours.
+ */
+function diagnosticCodeOf(error: unknown): string | undefined {
+  const code = (error as { diagnosticCode?: unknown } | null)?.diagnosticCode;
+  return typeof code === "string" ? code : undefined;
+}
+
 /** The prefix of a diagnostic for a bug (ours or core's) with no source position. */
 const INTERNAL_PREFIX = "internal error: ";
 
@@ -211,10 +221,10 @@ export function errorDiagnostics(
       "error",
       at ? message : `${noPositionPrefix(error)}${message}`,
       at ?? { line: 1, column: 0 },
-      // Only a `TranslateError`'s: a Babel or system error's `code` is not ours.
-      isTranslateError(error) && typeof error.diagnosticCode === "string"
-        ? error.diagnosticCode
-        : undefined,
+      // Only `diagnosticCode`, ours: a Babel or system error's `code` is not.
+      // A `TranslateError` has one, and so does the `CompileError` a parse
+      // error becomes.
+      diagnosticCodeOf(error),
       lineStarts,
       source,
       filename,

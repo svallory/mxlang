@@ -21,6 +21,10 @@ import {
 } from "./contract-fields.ts";
 import type { Ctx, Node } from "./core.ts";
 import { isTranslateError, TranslateError, warn } from "./core.ts";
+import {
+  TAG_NOT_ALLOWED_CODE,
+  TEXT_NOT_ALLOWED_CODE,
+} from "./diagnostic-codes.ts";
 import type {
   Attr,
   AttributeTag,
@@ -804,8 +808,20 @@ function failAt(tagName: string, message: string, at: Position): never {
 }
 
 /** An already formatted owner chain, shared by contracts at every depth. */
-function failForOwner(owner: string, message: string, at: Position): never {
-  throw new TranslateError(`${owner}: ${message}`, at.line, at.column, at.file);
+function failForOwner(
+  owner: string,
+  message: string,
+  at: Position,
+  code?: string,
+): never {
+  const error = new TranslateError(
+    `${owner}: ${message}`,
+    at.line,
+    at.column,
+    at.file,
+  );
+  if (code !== undefined) error.diagnosticCode = code;
+  throw error;
 }
 
 export function buildersFor(
@@ -1466,6 +1482,9 @@ export function validateCustomTagChildren(
               ? `text is not allowed here; ${textRule}`
               : notAllowed(node),
             node.loc,
+            node.kind === "ChildText"
+              ? TEXT_NOT_ALLOWED_CODE
+              : TAG_NOT_ALLOWED_CODE,
           );
         }
         leaves.push(node);

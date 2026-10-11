@@ -26,6 +26,7 @@ import { parse as mxFrontEndParse } from "@mxlang/parser/frontend";
 import { strippedMethodTypeParams } from "./attr-fields.ts";
 import { coreBabel, coreTsPlugin } from "./babel.ts";
 import { type Node, TranslateError } from "./core.ts";
+import { PARSE_ERROR_DIAGNOSTIC_CODES } from "./diagnostic-codes.ts";
 import {
   type ClaimContext,
   type ClaimPosition,
@@ -324,7 +325,13 @@ export function compileErrorOf(
       error.end === error.start
         ? { start, end: start }
         : { start, end: positionAt(source, error.end - baseOffset) };
-    return compileError(filename, source, loc, error.message);
+    return compileError(
+      filename,
+      source,
+      loc,
+      error.message,
+      PARSE_ERROR_DIAGNOSTIC_CODES[error.code],
+    );
   });
   return built.length === 1 ? built[0] : compileErrors(built);
 }
@@ -620,6 +627,7 @@ function compileError(
   code: string,
   loc: Loc,
   label: string,
+  diagnosticCode?: string,
 ): Error {
   const prettyMessage = buildMessage(code, loc, label);
   const prettyFileName = buildFileName(filename, loc);
@@ -652,6 +660,18 @@ function compileError(
       configurable: true,
     },
     code: { enumerable: false, configurable: true, get: noop, set: noop },
+    // MX's stable code, when the error has one: not `code`, which stays
+    // Marko's (undefined) so the error is the one Marko threw.
+    ...(diagnosticCode === undefined
+      ? {}
+      : {
+          diagnosticCode: {
+            value: diagnosticCode,
+            enumerable: false,
+            writable: true,
+            configurable: true,
+          },
+        }),
     // Marko's `message` is an accessor whose setter swallows the value once
     // and leaves a plain writable property: `compileSync` threw it through
     // Babel's transform wrapper, which assigns `message` (a filename prefix,
