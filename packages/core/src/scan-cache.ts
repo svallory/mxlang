@@ -491,22 +491,62 @@ export function scanCached(filePath: string, options: ScanOptions): ScanResult {
     };
   }
   scans.set(key, entry);
+  entries.set(result, entry);
+  if (entry.result !== result) entries.set(entry.result, entry);
   return result;
 }
 
 /** A fresh entry's result, with dotted-name wording derived per caller. */
 function hit(cached: CacheEntry, options: ScanOptions): ScanResult {
   const evidence = cached.result.dottedTagFiles ?? [];
-  return evidence.length === 0
-    ? cached.result
-    : {
-        ...cached.result,
-        diagnostics: dottedTagFileDiagnostics(
-          evidence,
-          options.targets,
-          cached.result.diagnostics,
-        ),
-      };
+  if (evidence.length === 0) return cached.result;
+  const result = {
+    ...cached.result,
+    diagnostics: dottedTagFileDiagnostics(
+      evidence,
+      options.targets,
+      cached.result.diagnostics,
+    ),
+  };
+  entries.set(result, cached);
+  return result;
+}
+
+/** The snapshot each result `scanCached` returned was taken with. */
+const entries = new WeakMap<ScanResult, CacheEntry>();
+
+let unstamped = 0;
+
+/** {@link contractSignatureOf}, once per result. */
+const contractSignatures = new WeakMap<ScanResult, string>();
+
+/**
+ * The contract-facing identity of a tag set a {@link scanCached} call
+ * returned: {@link parserSignatureOf} plus the snapshot's stamp of every
+ * definition file except dialect tag files (sidecars, `.mx` templates,
+ * `mx.contracts` modules), whose contents the parser signature leaves out.
+ * A dialect tag file's own contract is derived and cached per file
+ * (`tag-file.ts`), so a sibling's edit does not change this. Internal.
+ */
+export function contractSignatureOf(result: ScanResult): string {
+  const known = contractSignatures.get(result);
+  if (known !== undefined) return known;
+  const entry = entries.get(result);
+  const tagFiles = new Set<string>();
+  for (const tag of result.tags.values()) {
+    if (tag.tagFile !== undefined) tagFiles.add(tag.tagFile);
+  }
+  const files = [...(entry?.files ?? [])]
+    .filter(([path]) => !tagFiles.has(path))
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([path, stamp]) => JSON.stringify([path, printableStamp(stamp)]))
+    .join("\n");
+  // A result no snapshot backs matches nothing, not even itself next time.
+  const signature = entry
+    ? `${parserSignatureOf(result)}\n--\n${files}`
+    : `unstamped ${++unstamped}`;
+  contractSignatures.set(result, signature);
+  return signature;
 }
 
 /**

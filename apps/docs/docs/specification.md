@@ -2232,8 +2232,9 @@ is parsed before a contract is read, so static `parseOptions` come from a
 `.tag.ts` sidecar beside the tag file, which also supplies the hooks).
 
 A derived contract is cached per tag file, keyed on the file's stamp, the
-dialect module's revision, the parser-facing signature of the tag file's own
-scan, and the stamps of every file it depends on: the ones `ctx.dependsOn`
+dialect module's revision, the tag file's own scan (its parser-facing
+signature and the stamps of its contract files: `.tag.ts` sidecars, templates
+and the `mx.contracts` module, but not sibling tag files), and the stamps of every file it depends on: the ones `ctx.dependsOn`
 named, and, with no declaration, every tag file it called while lowering,
 transitively. An edit re-derives only the tag files that read the edited file.
 A failed derivation is cached the same way. The call's `DelegatedTag` carries
@@ -4162,8 +4163,8 @@ interface TagFileDiagnostic {
 
 **`tagFile`** derives the contract of one tag file the dialect's `tagDirs`
 discovered, at the tag's first call (§9.2). `ctx.lower`'s `customTags` are
-merged over the tag file's own scanned tags. `clearTagFileCache()` drops every
-derived contract.
+merged over the tag file's own scanned tags. `clearTagFileCache()` (`@unstable`)
+drops every derived contract, beside `clearScanCache()`.
 
 The module loads like a sidecar (§9.3): Node's strip-only `require`, no top-level
 `await`, explicit extensions on relative imports. Its `table` is validated as in

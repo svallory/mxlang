@@ -24,7 +24,9 @@ import { join, relative } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { compileSource } from "./compile.ts";
 import { contractDefaultTagDiagnostics } from "./contract-default-tag.ts";
+import { claimedFields } from "./contract-fields.ts";
 import { isTranslateError } from "./core.ts";
+import { registrationView } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
 import type { IrNode } from "./ir.ts";
 import {
@@ -34,7 +36,7 @@ import {
 } from "./ir-entry/index.ts";
 import { discoverProjectTags, scanCustomTags } from "./scan.ts";
 import { clearScanCache, scanCached } from "./scan-cache.ts";
-import { clearTagFileCache } from "./tag-file.ts";
+import { clearTagFileCache, ownScanChecksForTests } from "./tag-file.ts";
 import { dialectProject } from "./test-dialect-project.ts";
 import { testTargetLookup } from "./test-targets.ts";
 
@@ -583,6 +585,93 @@ describe("lazy derivation", () => {
         column: 0,
       }),
     ]);
+  });
+
+  it.each([
+    ["a sidecar", "components/coin.tag.ts", "coin", ""],
+    ["an `mx.contracts` module", "contracts.mjs", "stamp", "contracts"],
+  ])(
+    "an edit to %s the tag file's lowering reads re-derives it, broken then fixed",
+    (_, file, name, contracts) => {
+      kitProject("", contracts ? { contracts: "./contracts.mjs" } : undefined);
+      // Vitest keeps its own module registry, so a rewritten module is not
+      // evaluated again here. The module reads its attributes from a JSON
+      // file beside it at each access instead, and each version rewrites the
+      // module too, so its stamp changes the way a real edit's would.
+      const json = `${file}.json`;
+      let version = 0;
+      const define = (attributes: string) => {
+        write(json, attributes);
+        const read = `JSON.parse(readFileSync(${JSON.stringify(join(dir, json))}, "utf8"))`;
+        const contract = `{ get attributes() { return ${read}; } }`;
+        write(
+          file,
+          `import { readFileSync } from "node:fs";\n// version ${++version}\nexport default ${
+            contracts ? `{ ${name}: ${contract} }` : contract
+          };\n`,
+        );
+      };
+      define("{}");
+      tagFile("money", { lower: true }, `<${name}/>\n`);
+      expect(lowerAt("page.kit.mx", "<money/>\n").diagnostics).toEqual([]);
+      define('{ "v": { "required": true } }');
+      expect(brief(lowerAt("page.kit.mx", "<money/>\n"))).toEqual([
+        {
+          message:
+            "`<money>`'s definition has errors (concepts/money.kit.mx:2:1)",
+          line: 1,
+          column: 0,
+          code: "MX_TAG_FILE_ERROR",
+        },
+        {
+          message: `\`<${name}>\`: missing required attribute \`v\``,
+          line: 2,
+          column: 0,
+          file: "concepts/money.kit.mx",
+        },
+      ]);
+      define('{ "v": {} }');
+      expect(lowerAt("page.kit.mx", "<money/>\n").diagnostics).toEqual([]);
+      expect(count("money.kit.mx")).toBe(3);
+    },
+  );
+
+  it("an edit to a sibling tag file the lowering never calls re-derives nothing else", () => {
+    kitProject();
+    tagFile("money", { lower: true }, "<div/>\n");
+    tagFile("coin", { contract: {} });
+    lowerAt("page.kit.mx", "<money/>\n");
+    tagFile("coin", { contract: { attributes: { q: {} } } });
+    lowerAt("page.kit.mx", "<money/>\n<coin/>\n");
+    expect([count("money.kit.mx"), count("coin.kit.mx")]).toEqual([1, 1]);
+  });
+
+  it("a warm compile checks each tag directory's scan once per sweep, not once per tag", () => {
+    kitProject();
+    const names = Array.from({ length: 20 }, (_, i) => `t${i}`);
+    for (const name of names) tagFile(name, { contract: {} });
+    const source = names.map((name) => `<${name}/>`).join("\n");
+    lowerAt("page.kit.mx", source);
+    ownScanChecksForTests.count = 0;
+    expect(lowerAt("page.kit.mx", source).diagnostics).toEqual([]);
+    // One tag directory and one route, swept by each of the compile's two
+    // registration views.
+    expect(ownScanChecksForTests.count).toBeLessThanOrEqual(2);
+    expect(count("t0.kit.mx")).toBe(1);
+  });
+
+  it("one registration of a copied map, after an edit, refreshes every reader", () => {
+    kitProject();
+    write("shared.txt", "one\n");
+    tagFile("money", { contract: {}, dependsOn: ["../shared.txt"] });
+    tagFile("coin", { contract: {}, dependsOn: ["../shared.txt"] });
+    const { customTags } = scanCached(join(dir, "page.kit.mx"), { targets });
+    lowerAt("page.kit.mx", "<money/>\n<coin/>\n");
+    write("shared.txt", "two, longer\n");
+    const view = registrationView({ ...customTags }, claimedFields(undefined));
+    void view?.money?.attributes;
+    void view?.coin?.attributes;
+    expect([count("money.kit.mx"), count("coin.kit.mx")]).toEqual([2, 2]);
   });
 
   it("an edit to a file two tag files depend on re-derives both", () => {

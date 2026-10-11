@@ -2597,8 +2597,10 @@ export interface DeferredReader {
   /**
    * Whether a read this entry already answered may no longer hold (a file
    * it depends on changed): registration then drops the view built on it.
+   * `pass` is one object per sweep over a map's readers, so what one reader
+   * learned (a directory's scan) is not re-checked by the next.
    */
-  stale(): boolean;
+  stale(pass?: object): boolean;
   /** The file that defines the tag, for `DelegatedTag.definedIn`. */
   readonly definedIn?: string;
 }
@@ -2782,9 +2784,10 @@ function anyStaleReader(
   customTags: Readonly<Record<string, CustomTag>>,
 ): boolean {
   let stale = false;
+  const pass = {};
   for (const name of Object.keys(customTags)) {
     const reader = readers.get(customTags[name] as CustomTag);
-    if (reader?.stale()) stale = true;
+    if (reader?.stale(pass)) stale = true;
   }
   return stale;
 }
@@ -2939,8 +2942,10 @@ export function registrationView(
   let byClaim = views.get(customTags);
   // A reader's answer can go stale with no change to this map (a file the
   // tag file depends on was edited): the views built on it, with their
-  // cached checks, are dropped, and the next call reads afresh.
-  if (byClaim && anyStaleReader(customTags)) {
+  // cached checks, are dropped, and the next call reads afresh. Every call
+  // asks, a map with no view yet included: a copy of a scanned map shares
+  // its readers, and their answers.
+  if (anyStaleReader(customTags) && byClaim) {
     views.delete(customTags);
     byClaim = undefined;
   }

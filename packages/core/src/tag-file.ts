@@ -27,7 +27,7 @@
  * it loads: the scan must not import `lowerSource`.
  */
 
-import { dirname, relative, resolve } from "node:path";
+import { basename, dirname, relative, resolve } from "node:path";
 import { claimedFields } from "./contract-fields.ts";
 import {
   attachRelatedErrors,
@@ -48,10 +48,10 @@ import {
   tagFileError,
 } from "./scan.ts";
 import {
+  contractSignatureOf,
   type FileStamp,
   fileStamp,
   fileStampIsFresh,
-  parserSignatureOf,
   readStamped,
   scanCached,
 } from "./scan-cache.ts";
@@ -145,7 +145,10 @@ interface Derivation {
   readonly dialect: Dialect;
   /** `undefined` for a dialect with no hook: only its revision matters. */
   readonly stamp?: FileStamp;
-  /** The tag file's own scan, parser-facing (`parserSignatureOf`). */
+  /**
+   * The tag file's own scan, contract-facing (`contractSignatureOf`): the
+   * tags its lowering sees, and the files that define them.
+   */
   readonly signature?: string;
   /** Every file the contract depends on, each as it was read, transitively. */
   readonly dependencies: ReadonlyMap<string, FileStamp>;
@@ -169,16 +172,14 @@ const stack: Frame[] = [];
 /** The answer to a check reading a tag file whose derivation is in progress. */
 const INCOMPLETE: DeferredRead = Object.freeze({ incomplete: true as const });
 
-/** For tests: drops every derived contract. */
+/**
+ * Drops every contract a dialect's `tagFile` hook derived, so each tag file
+ * is derived again at its next call. For tests and for an editor's
+ * "restart" command, beside `clearScanCache`. @unstable
+ */
 export function clearTagFileCache(): void {
   derivations.clear();
 }
-
-/** For tests: how many times each tag file's hook ran, by path. */
-export const tagFileDerivations = { count: new Map<string, number>() };
-
-/** The parser signature of a scan, computed once per scan result. */
-const signatures = new WeakMap<ScanResult, string>();
 
 /**
  * The lookup a tag file's own scan runs under. A tag file has no host: it
@@ -198,12 +199,7 @@ function ownScan(path: string): { scan: ScanResult; signature: string } {
     },
   ]);
   const scan = scanCached(path, { host: null, targets: ownLookup });
-  let signature = signatures.get(scan);
-  if (signature === undefined) {
-    signature = parserSignatureOf(scan);
-    signatures.set(scan, signature);
-  }
-  return { scan, signature };
+  return { scan, signature: contractSignatureOf(scan) };
 }
 
 /** `path` as a message shows it: from the tag directory's parent. */
@@ -212,22 +208,72 @@ function shownPath(tag: DiscoveredTag, path: string): string {
   return relative(base, path).split("\\").join("/");
 }
 
-/** Whether a cached derivation still describes the filesystem and the dialect. */
-function isCurrent(derivation: Derivation): boolean {
-  let dialect: Dialect | undefined;
-  try {
-    dialect = resolveSyntaxOf(derivation.path).dialect;
-  } catch {
-    return false;
+/**
+ * What a tag file's dialect and own scan are now. Tag files in one
+ * directory whose names share everything after the first dot route alike
+ * (routing reads only the name's ending), so they share one state.
+ */
+interface RouteState {
+  /** `undefined` when the dialect could not be resolved (`failed`). */
+  readonly dialect?: Dialect;
+  readonly failed: boolean;
+  /** The own scan's `contractSignatureOf`; `null` when the scan threw. */
+  signature?: string | null;
+}
+
+/** The route states one staleness pass already computed, per sweep object. */
+const passes = new WeakMap<object, Map<string, RouteState>>();
+
+function routeStateOf(path: string, pass: object | undefined): RouteState {
+  const name = basename(path);
+  const dot = name.indexOf(".");
+  const key = `${dirname(path)}\0${dot < 0 ? "" : name.slice(dot)}`;
+  let memo: Map<string, RouteState> | undefined;
+  if (pass) {
+    memo = passes.get(pass);
+    if (!memo) {
+      memo = new Map();
+      passes.set(pass, memo);
+    }
+    const known = memo.get(key);
+    if (known) return known;
   }
-  if (dialect !== derivation.dialect) return false;
+  let state: RouteState;
+  try {
+    state = { dialect: resolveSyntaxOf(path).dialect, failed: false };
+  } catch {
+    state = { failed: true };
+  }
+  memo?.set(key, state);
+  return state;
+}
+
+/** How many times a staleness check scanned a tag file's directory. Tests only. */
+export const ownScanChecksForTests = { count: 0 };
+
+function signatureNow(path: string, state: RouteState): string | null {
+  if (state.signature === undefined) {
+    ownScanChecksForTests.count++;
+    try {
+      state.signature = ownScan(path).signature;
+    } catch {
+      state.signature = null;
+    }
+  }
+  return state.signature;
+}
+
+/**
+ * Whether a cached derivation still describes the filesystem and the
+ * dialect. Within one `pass` (a sweep over a map's readers) each
+ * directory's dialect and own scan are checked once.
+ */
+function isCurrent(derivation: Derivation, pass?: object): boolean {
+  const state = routeStateOf(derivation.path, pass);
+  if (state.failed || state.dialect !== derivation.dialect) return false;
   if (derivation.stamp === undefined) return true;
   if (!fileStampIsFresh(derivation.path, derivation.stamp)) return false;
-  try {
-    if (ownScan(derivation.path).signature !== derivation.signature) {
-      return false;
-    }
-  } catch {
+  if (signatureNow(derivation.path, state) !== derivation.signature) {
     return false;
   }
   for (const [path, stamp] of derivation.dependencies) {
@@ -274,9 +320,13 @@ function tagFileReader(tag: DiscoveredTag): DeferredReader {
       recordDependency(answered);
       return answered.read;
     },
-    stale() {
+    stale(pass) {
       if (!answered) return false;
-      if (cached && derivations.get(path) === answered && isCurrent(answered)) {
+      if (
+        cached &&
+        derivations.get(path) === answered &&
+        isCurrent(answered, pass)
+      ) {
         return false;
       }
       answered = undefined;
@@ -417,10 +467,6 @@ function runHook(
       frame.dependencies.set(absolute, fileStamp(absolute));
     },
   };
-  tagFileDerivations.count.set(
-    path,
-    (tagFileDerivations.count.get(path) ?? 0) + 1,
-  );
   let result: unknown;
   let thrown: { error: unknown } | undefined;
   stack.push(frame);

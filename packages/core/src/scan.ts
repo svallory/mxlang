@@ -1223,7 +1223,7 @@ function dialectTag(tag: DiscoveredTag, claimed: ClaimedFields): CustomTag {
   };
   const reader: DeferredReader = {
     read: (call) => choose().read(call),
-    stale: () => chosen?.stale() ?? false,
+    stale: (pass) => chosen?.stale(pass) ?? false,
     get definedIn() {
       return choose().definedIn;
     },
