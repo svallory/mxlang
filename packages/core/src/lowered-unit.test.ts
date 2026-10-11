@@ -806,7 +806,7 @@ describe("`contractFields` through a manifest", () => {
       },
     );
     expect(() => build(page, "<node#a/>")).toThrow(
-      "`<node>`: `declares` is not allowed in `mx.contracts`",
+      "`<node>`: `declares` is not allowed: no syntax module claims it",
     );
   });
 
