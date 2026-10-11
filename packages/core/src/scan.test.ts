@@ -497,10 +497,16 @@ describe("scanCustomTags", () => {
 
     // Excluded from the map, so the rest of the package still compiles...
     expect(Object.keys(result.customTags)).toEqual(["fine"]);
-    // ...and the author is told which file to rename.
+    // ...and the author is told which file to rename (`MX_RESERVED_TAG`).
     expect(result.diagnostics).toHaveLength(1);
     expect(result.diagnostics[0]?.file).toContain("try.tag.ts");
-    expect(result.diagnostics[0]?.message).toContain("core-owned custom tag");
+    expect(result.diagnostics[0]).toMatchObject({
+      severity: "error",
+      code: "MX_RESERVED_TAG",
+      line: 1,
+      column: 0,
+    });
+    expect(result.diagnostics[0]?.message).toContain("cannot name a data tag");
   });
 
   it("stops the upward walk at the package root", () => {

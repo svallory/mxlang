@@ -58,7 +58,6 @@ import {
   resolve,
 } from "node:path";
 import { coreBabel } from "./babel.ts";
-import { BUILTIN_CUSTOM_TAGS } from "./builtin-tags.ts";
 import {
   type ClaimedFields,
   claimedFields,
@@ -75,6 +74,7 @@ import {
   rejectUnknownDeclarationKeys,
   rejectUnreachableHooks,
 } from "./custom-tags.ts";
+import { RESERVED_TAG_CODE } from "./diagnostic-codes.ts";
 import {
   claimedExtensions,
   type DialectManifest,
@@ -96,7 +96,12 @@ import {
   readPackageJsonCached,
 } from "./package-json.ts";
 import { dropOwnParserPosition } from "./parse-error-position.ts";
-import { RESERVED_NAMES, TAG_NAME_RE } from "./tag-names.ts";
+import {
+  dialectReservedMessage,
+  RESERVED_NAMES,
+  reservedNameMessage,
+  TAG_NAME_RE,
+} from "./tag-names.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
 import type { TemplateTag } from "./template-tag.ts";
 
@@ -917,6 +922,49 @@ function resolveObjectLiteral(
   return null;
 }
 
+/**
+ * Where the property `name` is written in the object literal a module
+ * `export default`s, read with Babel without executing the module: the
+ * property's key. `undefined` when the module does not parse, its default
+ * export is not a literal (or an identifier bound once to one), or the key is
+ * not there (a spread, a computed key).
+ */
+function staticKeyPosition(
+  file: string,
+  name: string,
+): { line: number; column: number } | undefined {
+  try {
+    const ast = coreBabel().parse(readFileSync(file, "utf8"), {
+      sourceType: "module",
+      plugins: ["typescript"],
+      configFile: false,
+      babelrc: false,
+    }) as { program: { body: Array<Record<string, unknown>> } };
+    const body = ast.program.body;
+    const defaultExport = body.find(
+      (node) => node.type === "ExportDefaultDeclaration",
+    ) as { declaration?: Record<string, unknown> } | undefined;
+    let declaration = defaultExport?.declaration;
+    // `export default { … } satisfies ContractMap`: the literal is one level down.
+    while (
+      declaration?.type === "TSSatisfiesExpression" ||
+      declaration?.type === "TSAsExpression"
+    ) {
+      declaration = declaration.expression as Record<string, unknown>;
+    }
+    if (!declaration) return undefined;
+    const literal = resolveObjectLiteral(declaration, body);
+    const property = literal ? findProperty(literal, name) : undefined;
+    const key = property?.key as
+      | { loc?: { start?: { line: number; column: number } } }
+      | undefined;
+    const start = key?.loc?.start;
+    return start ? { line: start.line, column: start.column } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function findProperty(
   object: Record<string, unknown>,
   name: string,
@@ -1315,6 +1363,55 @@ interface IndexOptions {
   discovery?: TagDiscovery;
   /** The scan's project routing, for file names a dialect claims. */
   routes?: Routes;
+  /**
+   * Where a reserved name defined by this directory is reported, when that
+   * is not the tag file itself: an `mx.tags` entry is reported at its config
+   * file.
+   */
+  refuseAt?: () => { file: string; line: number; column: number };
+}
+
+const CORE_RESERVED: ReadonlySet<string> = new Set(RESERVED_NAMES);
+
+/**
+ * Why `name` may not be defined as a tag for `discovery`'s caller, or
+ * `undefined` when it may. Core's structural names are refused for every
+ * caller; a dialect's own `reservedTags` are refused for its own caller. Core
+ * is dialect zero: its fixed entry carries `RESERVED_NAMES` as `reservedTags`,
+ * so both go through this one check. `source` names what defined the tag
+ * (`a tag file`, `` `mx.contracts` ``, `` `customTags` ``).
+ */
+export function reservedRefusal(
+  name: string,
+  discovery: Pick<TagDiscovery, "name" | "reservedTags">,
+  source: string,
+): string | undefined {
+  if (CORE_RESERVED.has(name)) return reservedNameMessage(name);
+  if (discovery.reservedTags.includes(name)) {
+    return dialectReservedMessage(name, source, discovery.name);
+  }
+  return undefined;
+}
+
+/**
+ * The `MX_RESERVED_TAG` diagnostic for a tag file: the file's own 1:0, or,
+ * for a directory an `mx.tags` entry named, the config file at that entry
+ * (with the file named in the message, since the position is elsewhere).
+ */
+function reservedFileDiagnostic(
+  message: string,
+  path: string,
+  options: IndexOptions,
+): ScanDiagnostic {
+  const at = options.refuseAt?.();
+  return {
+    file: at?.file ?? path,
+    message: at ? `${message} (${path})` : message,
+    line: at?.line ?? 1,
+    column: at?.column ?? 0,
+    severity: "error",
+    code: RESERVED_TAG_CODE,
+  };
 }
 
 /** `components/` or `components/` and `concepts/`, for a message. */
@@ -1426,15 +1523,9 @@ function indexTagFiles(
       });
     }
     const name = `${options.prefix ?? ""}${bare}`;
-    if (Object.hasOwn(BUILTIN_CUSTOM_TAGS, name)) {
-      diagnostics.push({
-        file: path,
-        message: `\`<${name}>\` is a core-owned custom tag and cannot be redefined by a tag file; rename this file`,
-        line: 1,
-        column: 0,
-        severity: "error",
-        code: "MX_BUILTIN_TAG_FILE",
-      });
+    const refusal = reservedRefusal(name, discovery, "a tag file");
+    if (refusal !== undefined) {
+      diagnostics.push(reservedFileDiagnostic(refusal, path, options));
       continue;
     }
     let mtimeMs = 0;
@@ -1537,19 +1628,16 @@ function indexDirectory(
     const path = join(dir, entry);
     const name = `${options.prefix ?? ""}${bare}`;
 
-    // A core-owned tag (`<try>`) cannot be shadowed: `rejectShadowedRegistration`
-    // refuses the *whole* map when one appears in it, so handing this name
-    // onward would break every file in the package — including files that
-    // never call the tag — over one misnamed file. Reported and skipped
-    // instead, the same way a misconfigured `mx.tags` entry is: the author is
-    // told, and everything else keeps working.
-    if (Object.hasOwn(BUILTIN_CUSTOM_TAGS, name)) {
-      diagnostics.push({
-        file: path,
-        message: `\`<${name}>\` is a core-owned custom tag and cannot be redefined by a tag file; rename this file`,
-        line: 1,
-        column: 0,
-      });
+    // A reserved name (core's structural names, `<try>` among them, or the
+    // caller's dialect's `reservedTags`) cannot be defined by a tag file. A
+    // `<try>` definition makes `rejectShadowedRegistration` refuse the *whole*
+    // map, so handing the name onward would break every file in the package
+    // over one misnamed file. Reported and skipped instead, the same way a
+    // misconfigured `mx.tags` entry is: the author is told, and everything
+    // else keeps working, with the call resolving as if there were no file.
+    const refusal = reservedRefusal(name, discovery, "a tag file");
+    if (refusal !== undefined) {
+      diagnostics.push(reservedFileDiagnostic(refusal, path, options));
       continue;
     }
 
@@ -1715,6 +1803,12 @@ function indexMxTagsEntries(
       prefix: entry.prefix,
       parseOptions: entry.parseOptions,
       hosts: entry.hosts,
+      // A reserved name in this directory is reported at `mx.tags`, in the
+      // config file (an entry is an array element, with no key of its own).
+      refuseAt: () => ({
+        file: packageJson,
+        ...mxKeyPosition(packageJson, "tags"),
+      }),
     });
   }
   indexMxContractsEntries(
@@ -1727,6 +1821,7 @@ function indexMxTagsEntries(
     hostRestrictions,
     host,
     claimed,
+    scope.discovery ?? CORE_TAG_DISCOVERY,
   );
 }
 
@@ -1799,6 +1894,7 @@ function indexMxContractsEntries(
   hostRestrictions: HostRestriction[],
   host: ScanOptions["host"],
   claimed: ClaimedFields,
+  discovery: TagDiscovery,
 ): void {
   if (value === undefined) return;
   let position: ReturnType<typeof contractsPosition> | undefined;
@@ -1834,12 +1930,14 @@ function indexMxContractsEntries(
       for (const [name, definition] of Object.entries(exported)) {
         if (!TAG_NAME_RE.test(name))
           failContracts(file, `\`${name}\` is not a usable tag name`);
-        if (Object.hasOwn(BUILTIN_CUSTOM_TAGS, name)) {
+        const refusal = reservedRefusal(name, discovery, "`mx.contracts`");
+        if (refusal !== undefined) {
           diagnostics.push({
             file,
-            line: 1,
-            column: 0,
-            message: `\`<${name}>\` is a core-owned custom tag and cannot be redefined by \`mx.contracts\`; remove this key`,
+            message: refusal,
+            ...(staticKeyPosition(file, name) ?? { line: 1, column: 0 }),
+            severity: "error",
+            code: RESERVED_TAG_CODE,
           });
           continue;
         }

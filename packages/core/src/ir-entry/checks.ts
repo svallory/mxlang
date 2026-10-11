@@ -55,6 +55,12 @@ export interface CheckOptions {
    */
   unknownTags: "allow" | "reject";
   declaredTags: ReadonlySet<string>;
+  /**
+   * Names whose every call already carries its own error (a refused
+   * `customTags` definition: `MX_RESERVED_TAG` at each call site). Such a call
+   * is not also reported unknown: one diagnostic per occurrence.
+   */
+  exemptTags?: ReadonlySet<string>;
 }
 
 /** The dynamic-tag reject, shared by `Component` and an unusable tag name. */
@@ -610,6 +616,7 @@ interface UnknownTagHit {
 function allUnknownTags(
   ir: Ir,
   declaredTags: ReadonlySet<string>,
+  exemptTags: ReadonlySet<string> | undefined,
 ): UnknownTagHit[] {
   const found: UnknownTagHit[] = [];
   const visitTag = (tag: DelegatedTag<unknown>) => {
@@ -617,7 +624,8 @@ function allUnknownTags(
       tag.nameSpan !== undefined &&
       // A wildcard child (`alias`) was claimed by its parent's contract: known.
       tag.alias === undefined &&
-      !declaredTags.has(tag.name)
+      !declaredTags.has(tag.name) &&
+      !exemptTags?.has(tag.name)
     ) {
       found.push({
         name: tag.name,
@@ -909,7 +917,11 @@ function checkAll(ir: Ir, source: string, options: CheckOptions): unknown[] {
   });
   if (options.unknownTags === "reject") {
     attempt(() => {
-      unknownHits = allUnknownTags(ir, options.declaredTags);
+      unknownHits = allUnknownTags(
+        ir,
+        options.declaredTags,
+        options.exemptTags,
+      );
       for (const found of unknownHits) extra.push(asError(found));
     });
   }

@@ -2262,7 +2262,7 @@ Each of these diagnostics carries a stable code, `ScanDiagnostic.code` or
 | `MX_SIDECAR_IGNORED` | warning, at the file | A `.tag.ts` sidecar that a dialect file's scan meets while that dialect sets `sidecars: false`, in its own tag directories or, for a dialect without `tagDirs`, in `tags/`. The sidecar is not read. |
 | `MX_INVALID_TAG_FILE_NAME` | error, at the file | A dialect tag file's name is not a usable tag name. The file is skipped. |
 | `MX_DOTTED_TAG_FILE_NAME` | warning, at the file | A dialect tag file's name has a dot, which a call cannot write as one tag name. The message names the `tagExtensions` entry that would fix it. |
-| `MX_BUILTIN_TAG_FILE` | error, at the file | A dialect tag file is named after a core-owned tag (`try`). The file is skipped. |
+| `MX_RESERVED_TAG` | error, at the definition | A definition names a reserved tag: core's structural names (`RESERVED_NAMES`), or a name the dialect's `reservedTags` lists. The definition is dropped and a call resolves as if it were absent. Four sources, each positioned at the definition: a discovered tag file (the file's `1:0`), an `mx.tags` entry (the config file's `tags` key, the file named in the message), an `mx.contracts` entry (its key in the module's literal, else the module's `1:0`), and a `customTags` entry passed to `lowerSource` (each call site of the name, else the source's `1:0`). One diagnostic per occurrence: a call that carries it is not also reported `MX_UNKNOWN_TAG`. Never thrown. |
 
 **Package-level contracts (MX addition, decision 142).**
 `mx.contracts` is a module string, an entry `{ module, hosts? }`, or
@@ -2341,7 +2341,7 @@ remains manifest `1:0`.
 | Existing parse-option and registration messages (§9.3, §9.7) | Module `1:0`; invalid declarations or contradictions, even when shadowed. |
 | *(warning)* `` `<${name}>` from `mx.contracts` (${file}) is shadowed by ${winner}; the module's contract does not apply `` | Winning sidecar/template `1:0`; whole-entry replacement. |
 | *(warning)* `` `<${name}>` is defined twice in `mx.contracts`: ${winner} and ${file}; the first module's whole entry wins `` | Later module `1:0`; duplicate declaration. |
-| *(warning)* `` `<${name}>` is a core-owned custom tag and cannot be redefined by `mx.contracts`; remove this key `` | Module `1:0`; key skipped. |
+| *(error, `MX_RESERVED_TAG`)* `` `<${name}>` cannot name a data tag: it is reserved … `` (core's name), or `` `<${name}>` cannot be defined by `mx.contracts`: ${Dialect} reserves it `` | The key in the module's default-exported literal (1:0 when the object is not a literal); key dropped. |
 | *(warning)* `` `mx.contracts` names an unknown host in `hosts`: ${host}${hint} `` | Manifest key; full-registry name validation only. |
 | *(warning)* `` `package.json` could not be parsed as JSON: ${message}; no `mx.tags` or `mx.contracts` are loaded until the manifest parses `` | Manifest `1:0`; first revision is broken. With a previous valid revision the suffix is `` the previous valid `mx.tags` and `mx.contracts` stay in force `` instead. |
 
@@ -2423,7 +2423,7 @@ target, so the core holds no reserved-segment list.
 | `` `${entry}` is a host module file, not a tag template; tag templates are `.mx` `` | A `<base>.<word>.mx` whose `<word>` is a registered file-kind segment. |
 | `` `${entry}` cannot be called as a tag: `<${bare}>` parses as tag `${tag}` with class `${classes}`. If it is another host's module file it does not belong under this host; otherwise rename it without the dot. `` | Any other `<base>.<word>.mx`.
 | `` `${bare}` is not a usable tag name; a tag file's name must start with a letter, digit or underscore and may then contain letters, digits, underscores, hyphens and dots `` | Name fails the pattern. |
-| *(diagnostic, recorded not thrown)* `` `<${name}>` is a core-owned custom tag and cannot be redefined by a tag file; rename this file `` | A tag file resolves to a builtin name. Recorded rather than thrown so one misnamed file does not break every file in the package. |
+| *(error, `MX_RESERVED_TAG`, recorded not thrown)* `` `<${name}>` cannot name a data tag: it is reserved … `` (core's name), or `` `<${name}>` cannot be defined by a tag file: ${Dialect} reserves it `` | A tag file resolves to a reserved name: any of core's structural names, or a name the routed dialect's `reservedTags` lists. The file's `1:0`; for an `mx.tags` directory, the config file's `tags` key with the file named in the message. Recorded rather than thrown so one misnamed file does not break every file in the package. |
 | *(diagnostic, recorded)* `` `mx.tags` names a directory that does not exist: ${entry.dir} `` | A missing `mx.tags` directory. |
 
 That last one is a **diagnostic, not a throw**, on purpose: one typo in
@@ -3570,7 +3570,7 @@ read throws, as `readFileSync` does.
 | Result field | Meaning |
 |---|---|
 | `ir` | the `SpannedIr` (§13.7.2), or `undefined` when `diagnostics` holds an error |
-| `diagnostics` | `IrDiagnostic`: `{ severity, message, line, column, offset, file?, code? }`. `line` is 1-based and `column` 0-based, as `TranslateError` and `MxWarning`. `offset` is the UTF-16 offset derived from them (`-1` when `file` names another file, whose text `lowerSource` does not have). An error or warning with no source position (core's 0:0, as for a bad `customTags` registration) is file-level: `line: 1`, `column: 0`, `offset: 0`. `code` is the error's `TranslateError.diagnosticCode` when it has one (a dialect's `ctx.fail(message, { code })`, or a contract hook's `ctx.fail(message, { at?, code? })`, or `MX_TAG_FILE_ERROR` for a call to a dialect tag file the dialect cannot read or whose definition has errors, and `MX_TAG_FILE_CYCLE` for tag files that call each other, §9.2), or a warning's `MxWarning.code` (the duplicate-attribute warning is `MX_DUPLICATE_ATTRIBUTE`). Core's own errors a consumer matches carry a stable code too, so it matches the code and never the wording: `MX_UNKNOWN_TAG` (a tag with no contract, under `unknownTags: "reject"`), `MX_TAG_NOT_ALLOWED` (a child tag a `children` contract does not allow; under `unknownTags: "reject"` a child with no contract gets `MX_UNKNOWN_TAG` alone), `MX_TEXT_NOT_ALLOWED` (text where a `children` contract allows none) and `MX_EXPECTED_SINGLE_EXPRESSION` (a second expression after the one an expression position holds). The code survives the label an error gets inside an unknown tag, and a template compile carries `MX_TAG_NOT_ALLOWED` and `MX_TEXT_NOT_ALLOWED` as `TranslateError.diagnosticCode` and `MX_EXPECTED_SINGLE_EXPRESSION` as `diagnosticCode` on the thrown `CompileError` (`MX_UNKNOWN_TAG` is a `lowerSource` option's error only). The `MX_` prefix is core's own: a contract's or a dialect's code belongs to its own namespace, so a consumer can tell core's codes from a module's. Core does not check the prefix. On success it holds this call's warnings only |
+| `diagnostics` | `IrDiagnostic`: `{ severity, message, line, column, offset, file?, code? }`. `line` is 1-based and `column` 0-based, as `TranslateError` and `MxWarning`. `offset` is the UTF-16 offset derived from them (`-1` when `file` names another file, whose text `lowerSource` does not have). An error or warning with no source position (core's 0:0, as for a bad `customTags` registration) is file-level: `line: 1`, `column: 0`, `offset: 0`. `code` is the error's `TranslateError.diagnosticCode` when it has one (a dialect's `ctx.fail(message, { code })`, or a contract hook's `ctx.fail(message, { at?, code? })`, or `MX_TAG_FILE_ERROR` for a call to a dialect tag file the dialect cannot read or whose definition has errors, and `MX_TAG_FILE_CYCLE` for tag files that call each other, §9.2), or a warning's `MxWarning.code` (the duplicate-attribute warning is `MX_DUPLICATE_ATTRIBUTE`). Core's own errors a consumer matches carry a stable code too, so it matches the code and never the wording: `MX_UNKNOWN_TAG` (a tag with no contract, under `unknownTags: "reject"`), `MX_RESERVED_TAG` (a `customTags` definition that names a reserved tag, at each call of the name, §13.7.4 Reserved names; such a call gets no `MX_UNKNOWN_TAG` and no `MX_TAG_NOT_ALLOWED`), `MX_TAG_NOT_ALLOWED` (a child tag a `children` contract does not allow; under `unknownTags: "reject"` a child with no contract gets `MX_UNKNOWN_TAG` alone), `MX_TEXT_NOT_ALLOWED` (text where a `children` contract allows none) and `MX_EXPECTED_SINGLE_EXPRESSION` (a second expression after the one an expression position holds). The code survives the label an error gets inside an unknown tag, and a template compile carries `MX_TAG_NOT_ALLOWED` and `MX_TEXT_NOT_ALLOWED` as `TranslateError.diagnosticCode` and `MX_EXPECTED_SINGLE_EXPRESSION` as `diagnosticCode` on the thrown `CompileError` (`MX_UNKNOWN_TAG` is a `lowerSource` option's error only). The `MX_` prefix is core's own: a contract's or a dialect's code belongs to its own namespace, so a consumer can tell core's codes from a module's. Core does not check the prefix. On success it holds this call's warnings only |
 
 | Option | Values | Meaning |
 |---|---|---|
@@ -3677,6 +3677,24 @@ class with no source span.
 `const`, `define`, `return`, `import`, `export`, `static` or **`try`**: core
 consumes these first. `else`, `else-if` and `try` outside their construct fail
 with ``` `<try>` cannot name a data tag: it is reserved — core consumes the structural names (…) and `<try>` before a target sees them ```.
+
+**A definition that names a reserved tag is an error, never a throw.** The
+list is exported as `RESERVED_NAMES`; `class`, `client` and `server` are not on
+it. A dialect adds its own names through `reservedTags` in its manifest, which
+bind that dialect's own definitions only, and a manifest entry that names a core
+name is an error at the entry. A definition from any of the four sources (a
+discovered tag file, an `mx.tags` entry, an `mx.contracts` entry, a `customTags`
+entry passed to `lowerSource`, §9.2) is dropped with `MX_RESERVED_TAG`, and its
+calls then resolve as if it were absent: `<if>` is core's `if`, and a dialect's
+reserved name is whatever the dialect's own front end makes it. This
+fixes `lowerSource`, which used to ignore a `customTags` entry named after
+`if`, `for` or another core name without a word, and which threw for a `try`
+entry: both are now an `MX_RESERVED_TAG` diagnostic (an error, so `ir` is
+`undefined` beside it). `compileSource` and `parseFragment`, the template
+compilers, keep their throw for a registration that shadows `try` (§5 P4).
+`customTags` passed with an explicit `dialect` are that dialect's own
+vocabulary, so the dialect's `reservedTags` do not apply to them; core's names
+still do. Without an explicit `dialect` the dialect the file routes to decides.
 
 ### Host selection
 
@@ -3956,7 +3974,7 @@ the field path and, for a trigger, its `id`:
   unstable: where the dialect's tags live (§9.2, Dialect tag files), the extra
   extensions its tag files use (routed like `extensions`), whether its tag
   directories read `.tag.ts` sidecars (on by default), and its reserved tag
-  names. Each field's errors sit at its key.
+  names. Each field's errors sit at its key, except a `reservedTags` entry that names a core name, which sits at the entry.
 
 `mx` is the one top-level key MX reads in a `package.json`; `mx.dialect` is its
 identity block, a dialect package's statement of who it is. It is never project

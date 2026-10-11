@@ -249,3 +249,31 @@ export function errorDiagnostics(
     )
     .map(({ d }) => d);
 }
+
+/**
+ * `extra` errors merged into `errors` (already in {@link errorDiagnostics}
+ * order) by position: an `extra` error comes before an error at the same
+ * place, and the unpositioned errors stay last. An error with the same
+ * message at the same place as an `extra` one is the same finding, reported
+ * once, as the `extra` one (which carries a code).
+ */
+export function mergeDiagnostics(
+  errors: readonly IrDiagnostic[],
+  extra: readonly IrDiagnostic[],
+): IrDiagnostic[] {
+  const rank = (d: IrDiagnostic) => (isUnpositionedPrefix(d.message) ? 1 : 0);
+  const key = (d: IrDiagnostic) =>
+    `${d.file ?? ""}:${d.line}:${d.column}:${d.message}`;
+  const known = new Set(extra.map(key));
+  return [...extra, ...errors.filter((d) => !known.has(key(d)))]
+    .map((d, i) => ({ d, i }))
+    .sort(
+      (a, b) =>
+        rank(a.d) - rank(b.d) ||
+        (a.d.file ?? "").localeCompare(b.d.file ?? "") ||
+        a.d.line - b.d.line ||
+        a.d.column - b.d.column ||
+        a.i - b.i,
+    )
+    .map(({ d }) => d);
+}

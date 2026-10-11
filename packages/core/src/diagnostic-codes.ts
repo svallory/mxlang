@@ -9,6 +9,13 @@
 /** An authored tag with no contract in `customTags`, under `unknownTags: "reject"`. */
 export const UNKNOWN_TAG_CODE = "MX_UNKNOWN_TAG";
 
+/**
+ * A definition that names a reserved tag, from any source: a discovered tag
+ * file, an `mx.tags` directory, an `mx.contracts` entry or a `customTags`
+ * entry. The definition is dropped.
+ */
+export const RESERVED_TAG_CODE = "MX_RESERVED_TAG";
+
 /** A child tag a parent's `children` contract does not allow. */
 export const TAG_NOT_ALLOWED_CODE = "MX_TAG_NOT_ALLOWED";
 

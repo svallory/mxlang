@@ -36,8 +36,13 @@ import {
   tagOccurrenceOf,
 } from "../custom-tags.ts";
 import type { HostDeclarations } from "../declarations.ts";
-import { UNKNOWN_TAG_CODE } from "../diagnostic-codes.ts";
+import { RESERVED_TAG_CODE, UNKNOWN_TAG_CODE } from "../diagnostic-codes.ts";
 import type { Ir } from "../ir.ts";
+import {
+  CORE_TAG_DISCOVERY,
+  callerTagDiscovery,
+  reservedRefusal,
+} from "../scan.ts";
 import {
   type Dialect,
   dialectTagRules,
@@ -63,6 +68,7 @@ import {
   flattenErrors,
   type IrDiagnostic,
   lineStartsOf,
+  mergeDiagnostics,
   toDiagnostic,
 } from "./diagnostics.ts";
 import { finishIr, type SpannedIr } from "./spans.ts";
@@ -74,7 +80,15 @@ export type { Spanned, SpannedIr } from "./spans.ts";
 
 /** @unstable */
 export interface LowerSourceOptions {
-  /** Contract-only custom tags (decision 130), by call name. */
+  /**
+   * Contract-only custom tags (decision 130), by call name. A name core
+   * reserves (`if`, `for`, `try`, …) cannot be defined: the definition is
+   * dropped, the call lowers as core's construct, and each call site is an
+   * `MX_RESERVED_TAG` error (the name's 1:0 when it is never called). A name
+   * the file's dialect reserves is refused the same way, unless the call
+   * passes that dialect as `dialect`: its own front end's definitions are
+   * the dialect's.
+   */
   customTags?: Record<string, CustomTag>;
   /**
    * The dialect, or a bare syntax table (decision 182 addendum 5), for a
@@ -207,6 +221,103 @@ function dialectOf(options: LowerSourceOptions, filename: string) {
   ).dialect;
 }
 
+/** A `customTags` definition that names a reserved tag, with why. */
+interface RefusedDefinition {
+  name: string;
+  message: string;
+}
+
+/**
+ * The `customTags` entries that name a reserved tag: core's structural
+ * names for every caller, and the `reservedTags` of the dialect the file
+ * routes to, unless the call passes a `dialect` (that caller is the
+ * dialect's own front end, so its definitions are the dialect's). Never
+ * throws: a routing failure is the compile's to report.
+ */
+function reservedDefinitions(
+  options: LowerSourceOptions,
+  filename: string,
+): RefusedDefinition[] {
+  const refused: RefusedDefinition[] = [];
+  const names = Object.keys(options.customTags ?? {});
+  if (names.length === 0) return refused;
+  const discovery =
+    options.dialect !== undefined
+      ? CORE_TAG_DISCOVERY
+      : callerTagDiscovery(filename);
+  for (const name of names) {
+    const message = reservedRefusal(name, discovery, "`customTags`");
+    if (message !== undefined) refused.push({ name, message });
+  }
+  return refused;
+}
+
+/** `options.customTags` without the refused definitions. */
+function without(
+  options: LowerSourceOptions,
+  refused: readonly RefusedDefinition[],
+): Record<string, CustomTag> {
+  const dropped = new Set(refused.map((definition) => definition.name));
+  const kept: Record<string, CustomTag> = Object.create(null);
+  for (const name of Object.keys(options.customTags ?? {})) {
+    if (!dropped.has(name))
+      kept[name] = (options.customTags as Record<string, CustomTag>)[
+        name
+      ] as CustomTag;
+  }
+  return kept;
+}
+
+/**
+ * One `MX_RESERVED_TAG` error per call site of each refused name, or one at
+ * the source's 1:0 when the name is never called (or the source does not
+ * parse, so no call can be found).
+ */
+function reservedDiagnostics(
+  refused: readonly RefusedDefinition[],
+  source: string,
+  filename: string,
+  lineStarts: number[],
+  rules: ReturnType<typeof tagRulesPreset> | undefined,
+  customTags: Record<string, CustomTag> | undefined,
+  options: LowerSourceOptions,
+): IrDiagnostic[] {
+  const names = new Set(refused.map((definition) => definition.name));
+  let calls: ReturnType<typeof scanAuthoredTags> = null;
+  if (rules) {
+    try {
+      calls = scanAuthoredTags(
+        source,
+        filename,
+        rules,
+        registrationView(
+          customTags,
+          claimedFields(dialectOf(options, filename)),
+        ),
+        options.defaultTag ?? DEFAULT_TAG,
+        options.dialect,
+        names,
+      );
+    } catch {
+      calls = null;
+    }
+  }
+  return refused.flatMap(({ name, message }) => {
+    const sites = (calls ?? []).filter((call) => call.name === name);
+    return (sites.length > 0 ? sites : [{ line: 1, column: 0 }]).map((at) =>
+      toDiagnostic(
+        "error",
+        message,
+        at,
+        RESERVED_TAG_CODE,
+        lineStarts,
+        source,
+        filename,
+      ),
+    );
+  });
+}
+
 /**
  * Parses, lowers and checks one source, returning its IR.
  *
@@ -223,25 +334,50 @@ export function lowerSource(
   const lineStarts = lineStartsOf(source);
   const warnings: MxWarning[] = options.warnings ?? [];
   const firstWarning = warnings.length;
-  const failed = (errors: unknown[]): LowerSourceResult => ({
-    ir: undefined,
-    diagnostics: errorDiagnostics(errors, filename, lineStarts, source),
-  });
-  let rules: ReturnType<typeof tagRulesPreset>;
+  const refused = reservedDefinitions(options, filename);
+  // A refused definition is dropped: everything below lowers as if the
+  // caller had not passed it, and `refuse` then adds its diagnostics.
+  const customTags =
+    refused.length > 0 ? without(options, refused) : options.customTags;
+  const refusedNames = new Set(refused.map((definition) => definition.name));
+  let rules: ReturnType<typeof tagRulesPreset> | undefined;
+  const refuse = (result: LowerSourceResult): LowerSourceResult => {
+    if (refused.length === 0) return result;
+    return {
+      ir: undefined,
+      diagnostics: mergeDiagnostics(
+        result.ir ? [] : result.diagnostics,
+        reservedDiagnostics(
+          refused,
+          source,
+          filename,
+          lineStarts,
+          rules,
+          customTags,
+          options,
+        ),
+      ),
+    };
+  };
+  const failed = (errors: unknown[]): LowerSourceResult =>
+    refuse({
+      ir: undefined,
+      diagnostics: errorDiagnostics(errors, filename, lineStarts, source),
+    });
   try {
     rules = tagRulesPreset(presetOf(options, filename), WEB_ELEMENTS);
   } catch (error) {
     return failed([error]);
   }
   const declarations = entryDeclarations(rules.nativeTags);
-  const declared = declaredTagNames(options.customTags);
+  const declared = declaredTagNames(customTags);
   let ir: Ir | null = null;
   try {
     const host: HostOptions = {
       targets: lookupFor(declarations),
       taglibs: taglibsOfRules(rules),
       statementTags: false,
-      customTags: options.customTags,
+      customTags,
       defaultTag: options.defaultTag,
       ...(options.dialect !== undefined ? { dialect: options.dialect } : {}),
       warnings,
@@ -266,13 +402,17 @@ export function lowerSource(
         filename,
         rules,
         registrationView(
-          options.customTags,
+          customTags,
           claimedFields(dialectOf(options, filename)),
         ),
         options.defaultTag ?? DEFAULT_TAG,
         options.dialect,
       );
-      const unknown = (tags ?? []).filter((tag) => !declared.has(tag.name));
+      // A refused name's call already has its `MX_RESERVED_TAG`: one
+      // diagnostic per occurrence, so it is not also unknown.
+      const unknown = (tags ?? []).filter(
+        (tag) => !declared.has(tag.name) && !refusedNames.has(tag.name),
+      );
       // An unknown tag inside a closed parent got `MX_TAG_NOT_ALLOWED` from
       // the lowering and `MX_UNKNOWN_TAG` from the scan: one tag, two errors.
       // The unknown tag is the cause, so the not-allowed error about the same
@@ -332,6 +472,7 @@ export function lowerSource(
     imports: options.imports ?? options.structural ?? "pass",
     unknownTags: options.unknownTags ?? "allow",
     declaredTags: declared,
+    exemptTags: refusedNames,
   });
   if (errors.length > 0) return failed(errors);
   let finished: SpannedIr;
@@ -340,7 +481,7 @@ export function lowerSource(
   } catch (error) {
     return failed([error]);
   }
-  return {
+  return refuse({
     ir: finished,
     diagnostics: warnings
       .slice(firstWarning)
@@ -355,7 +496,7 @@ export function lowerSource(
           filename,
         ),
       ),
-  };
+  });
 }
 
 /**

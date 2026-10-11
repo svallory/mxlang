@@ -362,6 +362,15 @@ export {
   type TagFileResult,
 } from "./tag-file.ts";
 /**
+ * The structural names core reserves for every dialect (`if`, `else`,
+ * `else-if`, `for`, `const`, `define`, `return`, `import`, `export`,
+ * `static`, `try`): a tag definition naming one is refused with
+ * `MX_RESERVED_TAG`.
+ *
+ * @unstable
+ */
+export { RESERVED_NAMES } from "./tag-names.ts";
+/**
  * Tag rules presets (decision 204): `html`, `markup` and `none`, the
  * tag-table entries a dialect names instead of assembling taglibs.
  *

@@ -206,9 +206,10 @@ export function readDialectManifest(
   const mx = manifest.mx;
   const value = isRecord(mx) ? mx.dialect : undefined;
   if (value === undefined) return undefined;
-  const fail = (message: string, field?: string): never => {
+  const fail = (message: string, field?: string, index?: number): never => {
     const path =
       field === undefined ? [...MANIFEST_PATH] : [...MANIFEST_PATH, field];
+    if (field !== undefined && index !== undefined) path.push(`[${index}]`);
     const { line, column } = jsonKeyPosition(read.text, path);
     throw new TranslateError(message, line, column, packageFile);
   };
@@ -313,7 +314,7 @@ type TagFields = Pick<
 function readTagFields(
   fields: Record<string, unknown>,
   claimed: ReadonlySet<string>,
-  fail: (message: string, field?: string) => never,
+  fail: (message: string, field?: string, index?: number) => never,
 ): TagFields {
   const { tagDirs, tagExtensions, sidecars, reservedTags } = fields;
   const result: {
@@ -396,21 +397,28 @@ function readTagFields(
     }
     const core = new Set<string>(RESERVED_NAMES);
     const seen = new Set<string>();
-    for (const name of reservedTags as unknown[]) {
+    // Each entry's own error is at the entry, in the dialect's manifest.
+    for (const [index, name] of (reservedTags as unknown[]).entries()) {
       if (typeof name !== "string" || !TAG_NAME_RE.test(name)) {
         fail(
           `${key("reservedTags")}: ${JSON.stringify(name)} is not a tag name; a tag name starts with a letter, digit or underscore and may then contain letters, digits, underscores, hyphens and dots`,
           "reservedTags",
+          index,
         );
       }
       if (core.has(name as string)) {
         fail(
           `${key("reservedTags")} cannot list \`${name}\`: MX reserves it for every dialect (${RESERVED_NAMES.join(", ")})`,
           "reservedTags",
+          index,
         );
       }
       if (seen.has(name as string)) {
-        fail(`${key("reservedTags")} lists \`${name}\` twice`, "reservedTags");
+        fail(
+          `${key("reservedTags")} lists \`${name}\` twice`,
+          "reservedTags",
+          index,
+        );
       }
       seen.add(name as string);
     }

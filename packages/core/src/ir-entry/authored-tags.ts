@@ -125,6 +125,8 @@ const TAG_TYPES = new Set(["MxTag", "MxAttributeTag", "MxReturn"]);
  * reserved names (core consumes them), `<@name>` attribute tags (their bodies
  * are still walked) and dynamic tags. The list is in walk order, not
  * necessarily document order: callers take the earliest by position.
+ * `include` lists reserved names to report anyway: the call sites of a
+ * definition that was refused (`MX_RESERVED_TAG`).
  */
 export function scanAuthoredTags(
   source: string,
@@ -133,6 +135,7 @@ export function scanAuthoredTags(
   customTags: Record<string, CustomTag> | undefined,
   defaultTag: string,
   dialect?: SyntaxTable | Dialect,
+  include?: ReadonlySet<string>,
 ): AuthoredTag[] | null {
   let document: { body: readonly MxChildNode[] } | undefined;
   try {
@@ -180,7 +183,7 @@ export function scanAuthoredTags(
         name !== undefined &&
         !claimed &&
         !name.startsWith("@") &&
-        !RESERVED.has(name)
+        (!RESERVED.has(name) || include?.has(name))
       ) {
         const start = positionAt(lineStarts, node.start);
         const end = positionAt(lineStarts, node.end);

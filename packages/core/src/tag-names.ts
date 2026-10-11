@@ -39,3 +39,22 @@ export const RESERVED_NAMES = [
   "static",
   "try",
 ] as const;
+
+/** The reserved-name message, for a name used as a tag. */
+export function reservedNameMessage(name: string): string {
+  return `\`<${name}>\` cannot name a data tag: it is reserved — core consumes the structural names (\`if\`, \`else\`, \`else-if\`, \`for\`, \`const\`, \`define\`, \`return\`, \`import\`, \`export\`, \`static\`) and \`<try>\` before a target sees them`;
+}
+
+/**
+ * The message for a definition of a name only a dialect may define:
+ * "`<entity>` cannot be defined by a tag file: Mesh reserves it". `source`
+ * names what defined it (`a tag file`, `an \`mx.tags\` directory`,
+ * `\`mx.contracts\``, `\`customTags\``).
+ */
+export function dialectReservedMessage(
+  name: string,
+  source: string,
+  dialectName: string,
+): string {
+  return `\`<${name}>\` cannot be defined by ${source}: ${dialectName} reserves it`;
+}

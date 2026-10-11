@@ -32,15 +32,11 @@
 import { contractDefaultTag } from "../contract-default-tag.ts";
 import { DYNAMIC_TAG, TranslateError } from "../core.ts";
 import type { HostDeclarations } from "../declarations.ts";
+import { reservedNameMessage } from "../tag-names.ts";
 import type { NativeTags } from "../tag-table.ts";
 
 /** The names no tag may use under the entry point (decision 131 addendum, item 2). */
-export { RESERVED_NAMES } from "../tag-names.ts";
-
-/** The reserved-name message, for a name used as a tag. */
-export function reservedNameMessage(name: string): string {
-  return `\`<${name}>\` cannot name a data tag: it is reserved — core consumes the structural names (\`if\`, \`else\`, \`else-if\`, \`for\`, \`const\`, \`define\`, \`return\`, \`import\`, \`export\`, \`static\`) and \`<try>\` before a target sees them`;
-}
+export { RESERVED_NAMES, reservedNameMessage } from "../tag-names.ts";
 
 /**
  * The entry point's built-in tag: the anonymous node (decision 145,

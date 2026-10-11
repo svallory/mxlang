@@ -92,7 +92,8 @@ export function positionOfOffset(
 /**
  * The position of the key at `path` in a JSON text (`["mx", "contracts"]`,
  * `["mx", "dialect", "id"]`): the key itself, not a string or a nested decoy
- * with the same name. `1:0` when it is not there. The text need not parse:
+ * with the same name. An array element is addressed by its index in brackets
+ * (`["mx", "dialect", "reservedTags", "[1]"]`) and is positioned at its value. `1:0` when it is not there. The text need not parse:
  * the walk reads tokens, so a broken revision still positions what it can.
  */
 export function jsonKeyPosition(
@@ -128,8 +129,16 @@ export function jsonKeyPosition(
       }
       cursor++;
     } else if (start[0] === "[") {
-      while (tokens[cursor] && tokens[cursor]?.[0] !== "]") {
-        value([...at, "[]"]);
+      for (
+        let index = 0;
+        tokens[cursor] && tokens[cursor]?.[0] !== "]";
+        index++
+      ) {
+        const element = [...at, `[${index}]`];
+        if (offset === 0 && element.join("\0") === target) {
+          offset = tokens[cursor]?.index ?? 0;
+        }
+        value(element);
         if (tokens[cursor]?.[0] === ",") cursor++;
       }
       cursor++;

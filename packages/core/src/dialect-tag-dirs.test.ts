@@ -333,7 +333,7 @@ describe("dialect tag directories", () => {
     );
   });
 
-  it("a core-owned tag name is an error and skipped", () => {
+  it("a core-reserved tag name is an MX_RESERVED_TAG error and skipped", () => {
     kitProject();
     write("components/try.kit.mx");
     const result = scan("page.kit.mx");
@@ -342,7 +342,7 @@ describe("dialect tag directories", () => {
       expect.objectContaining({
         file: "components/try.kit.mx",
         severity: "error",
-        code: "MX_BUILTIN_TAG_FILE",
+        code: "MX_RESERVED_TAG",
       }),
     ]);
   });

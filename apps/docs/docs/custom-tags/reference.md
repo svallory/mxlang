@@ -290,6 +290,6 @@ template's imports never enter the caller's module.
 | An L1 caller supplies a body but the template has no content placeholder. | `` `<name>`: body content was dropped; FILE has no `<${input.content}/>` placeholder `` |
 | An L1 caller supplies `<@x>` but the template has no matching placeholder. | `` `<name>`: `<@x>` was dropped; FILE has no `<${input.x.content}/>` placeholder `` |
 | `mx.tags` names a missing directory. | `` `mx.tags` names a directory that does not exist: PATH `` |
-| A tag file tries to redefine a core-owned name. | `` `<name>` is a core-owned custom tag and cannot be redefined by a tag file; rename this file `` |
+| A tag file is named after a reserved name (`if`, `for`, `try`, ...). | `` `<name>` cannot name a data tag: it is reserved ... `` (`MX_RESERVED_TAG`, an error at the file) |
 
 The last two are scanner diagnostics: the bad entry is skipped and discovery continues. The language server surfaces them as warnings; build integrations warn once per distinct problem.

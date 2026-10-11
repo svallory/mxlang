@@ -319,7 +319,7 @@ describe("mx.contracts (decision 142)", () => {
     expect([caught.line, caught.column]).toEqual([1, 0]);
     expect(caught.message).toContain(message);
   });
-  it("skips the core-owned try key with a warning, even if its value is invalid", () => {
+  it("skips the reserved try key with an MX_RESERVED_TAG error at its key, even if its value is invalid", () => {
     const dir = project("export default { try: 1, box: { attributes: {} } };");
     const result = scan(dir);
     expect(Object.keys(result.customTags)).toEqual(["box"]);
@@ -327,8 +327,9 @@ describe("mx.contracts (decision 142)", () => {
       expect.objectContaining({
         file: join(dir, "contracts.ts"),
         line: 1,
-        column: 0,
-        message: expect.stringContaining("core-owned"),
+        column: 17,
+        severity: "error",
+        code: "MX_RESERVED_TAG",
       }),
     ]);
   });

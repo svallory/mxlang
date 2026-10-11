@@ -882,6 +882,13 @@ Five facts worth knowing before editing it:
   built-in name appears in it — so passing it through would break every file
   in the package, including files that never call `<try>`, over one misnamed
   file. P4's rule is unchanged; the scan simply does not feed it a violation.
+  **That is now every reserved name, as `MX_RESERVED_TAG`** (`reservedRefusal`
+  in `scan.ts`, the one check): core's `RESERVED_NAMES` for every caller and the
+  routed dialect's `reservedTags` for its own definitions, on a discovered tag
+  file, an `mx.tags` entry, an `mx.contracts` entry and a `customTags` entry
+  passed to `lowerSource` (which drops it and reports each call site; a call
+  that carries it is never also `MX_UNKNOWN_TAG`, `CheckOptions.exemptTags`).
+  An error, never a throw; the template compilers keep their `try` throw.
 - **A sidecar may not use top-level `await`, and its relative imports need
   explicit extensions** (`./helper.ts`, not `./helper`). Measured: Bun accepts
   both forms, Node rejects both (`require() cannot be used on an ESM graph

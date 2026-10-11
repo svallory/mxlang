@@ -324,24 +324,6 @@ describe("`package.json#mx.dialect`", () => {
       [11, 6],
       '`mx.dialect.reservedTags` must be an array of the tag names only the dialect may define (`["entity"]`)',
     ],
-    [
-      "a `reservedTags` entry that is no tag name",
-      { reservedTags: ["-x"] },
-      [11, 6],
-      '`mx.dialect.reservedTags`: "-x" is not a tag name; a tag name starts with a letter, digit or underscore and may then contain letters, digits, underscores, hyphens and dots',
-    ],
-    [
-      "a `reservedTags` entry core reserves",
-      { reservedTags: ["for"] },
-      [11, 6],
-      "`mx.dialect.reservedTags` cannot list `for`: MX reserves it for every dialect (if, else, else-if, for, const, define, return, import, export, static, try)",
-    ],
-    [
-      "a `reservedTags` entry twice",
-      { reservedTags: ["entity", "entity"] },
-      [11, 6],
-      "`mx.dialect.reservedTags` lists `entity` twice",
-    ],
   ])(
     "%s is an error at the field, in the dialect's `package.json`",
     (_, manifest, at, message) => {
@@ -352,6 +334,41 @@ describe("`package.json#mx.dialect`", () => {
       expect(error.message).toBe(message);
     },
   );
+});
+
+describe("a `reservedTags` entry's error is at the entry", () => {
+  it.each([
+    [
+      "an entry that is no tag name",
+      { reservedTags: ["entity", "-x"] },
+      [13, 8],
+      '`mx.dialect.reservedTags`: "-x" is not a tag name; a tag name starts with a letter, digit or underscore and may then contain letters, digits, underscores, hyphens and dots',
+    ],
+    [
+      "an entry core reserves",
+      { reservedTags: ["entity", "for"] },
+      [13, 8],
+      "`mx.dialect.reservedTags` cannot list `for`: MX reserves it for every dialect (if, else, else-if, for, const, define, return, import, export, static, try)",
+    ],
+    [
+      "the second of two equal entries",
+      { reservedTags: ["entity", "entity"] },
+      [13, 8],
+      "`mx.dialect.reservedTags` lists `entity` twice",
+    ],
+    [
+      "the first entry, when it is the one core reserves",
+      { reservedTags: ["try", "entity"] },
+      [12, 8],
+      "`mx.dialect.reservedTags` cannot list `try`: MX reserves it for every dialect (if, else, else-if, for, const, define, return, import, export, static, try)",
+    ],
+  ])("%s", (_, manifest, at, message) => {
+    const { projectFile, packageFile } = dialectProject(dir, { manifest });
+    const error = caught(() => discoverDialects(projectFile));
+    expect(error.file).toBe(packageFile);
+    expect([error.line, error.column]).toEqual(at);
+    expect(error.message).toBe(message);
+  });
 });
 
 describe("discovery reads the project's direct dependencies only", () => {
