@@ -27,6 +27,7 @@ import {
   PROBE_CONTRACT_MESSAGE,
   PROBE_SOURCES,
   probeProject,
+  tagDiscoveryProject,
 } from "../../../../test-fixtures/dialects/probe.ts";
 import {
   diagnoseDocument,
@@ -1434,6 +1435,137 @@ describe("a dialect's files", () => {
     expect(page[0]?.message).toBe(`${manifest}:1:1: unknown mx.target "nope"`);
     expect(related).toHaveLength(1);
     expect(related[0]?.uri).toBe(at(manifest));
+  });
+
+  it("a tag file's error: MX_TAG_FILE_ERROR at the call, and the tag file's own diagnostic published on that file", () => {
+    const project = tagDiscoveryProject({
+      "concepts/money.thing.probe": "<x/>\n<!-- BAD -->\n",
+    });
+    const tagFile = project.path("concepts/money.thing.probe");
+    const related: RelatedDiagnostics[] = [];
+    const diagnostics = diagnoseDocument(
+      "<p/>\n<money/>\n",
+      at(project.path("page.probe")),
+      policy("html"),
+      undefined,
+      "",
+      undefined,
+      related,
+    );
+    const range = {
+      start: { line: 1, character: 4 },
+      end: { line: 1, character: 5 },
+    };
+    expect(diagnostics).toEqual([
+      {
+        severity: DiagnosticSeverity.Error,
+        source: "Probe",
+        code: "MX_TAG_FILE_ERROR",
+        message:
+          "`<money>`'s definition has errors (concepts/money.thing.probe:2:5)",
+        range: {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 1 },
+        },
+      },
+      {
+        severity: DiagnosticSeverity.Error,
+        source: "Probe",
+        code: "KIT_BAD",
+        message: `bad concept (in ${tagFile}:2:5)`,
+        // The head of this file, not the tag file's offsets.
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 1 },
+        },
+        relatedInformation: [
+          {
+            location: { uri: at(tagFile), range },
+            message: "bad concept",
+          },
+        ],
+      },
+    ]);
+    expect(related).toEqual([
+      {
+        uri: at(tagFile),
+        diagnostics: [
+          {
+            severity: DiagnosticSeverity.Error,
+            source: "Probe",
+            code: "KIT_BAD",
+            message: "bad concept",
+            range,
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("a cycle between tag files: MX_TAG_FILE_CYCLE is published on the file it was found in", () => {
+    const project = tagDiscoveryProject({
+      "concepts/a.thing.probe": "<x/>\n<b/>\n",
+      "concepts/b.thing.probe": "<a/>\n",
+    });
+    const related: RelatedDiagnostics[] = [];
+    const diagnostics = diagnoseDocument(
+      "<a/>\n",
+      at(project.path("page.probe")),
+      policy("html"),
+      undefined,
+      "",
+      undefined,
+      related,
+    );
+    expect(diagnostics.map((d) => d.code)).toContain("MX_TAG_FILE_CYCLE");
+    const onB = related.find(
+      (entry) => entry.uri === at(project.path("concepts/b.thing.probe")),
+    );
+    expect(onB?.diagnostics).toEqual([
+      expect.objectContaining({
+        severity: DiagnosticSeverity.Error,
+        code: "MX_TAG_FILE_CYCLE",
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 1 },
+        },
+        message:
+          "tag files call each other in a cycle: concepts/a.thing.probe → concepts/b.thing.probe → concepts/a.thing.probe",
+      }),
+    ]);
+  });
+
+  it("a misplaced tag file seen from an MX file: MX_MISPLACED_TAG_FILE is a warning with its code", () => {
+    const project = tagDiscoveryProject({ "tags/stray.thing.probe": "<x/>\n" });
+    const tagFile = project.path("tags/stray.thing.probe");
+    const related: RelatedDiagnostics[] = [];
+    const diagnostics = diagnoseDocument(
+      "<div/>\n",
+      at(project.path("page.mx")),
+      policy("html"),
+      undefined,
+      "",
+      undefined,
+      related,
+    );
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        severity: DiagnosticSeverity.Warning,
+        code: "MX_MISPLACED_TAG_FILE",
+        message: expect.stringContaining(`${tagFile}:1:1: `),
+      }),
+    ]);
+    expect(related).toEqual([
+      expect.objectContaining({
+        uri: at(tagFile),
+        diagnostics: [
+          expect.objectContaining({
+            severity: DiagnosticSeverity.Warning,
+            code: "MX_MISPLACED_TAG_FILE",
+          }),
+        ],
+      }),
+    ]);
   });
 
   it("a plain .mx file in the same project is diagnosed as before, source mxlang", () => {

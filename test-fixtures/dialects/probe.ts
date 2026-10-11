@@ -68,6 +68,42 @@ export const PROBE_CONTRACTS_MODULE = `module.exports = { default: { service: { 
 export const PROBE_CONTRACT_MESSAGE =
   "`<service>`: missing required attribute `value`";
 
+/**
+ * The probe dialect with tag discovery: it discovers tag files (`concepts/`, `kinds/`, extension
+ * `.thing.probe`) and derives a contract from each with a `tagFile` hook:
+ * the hook lowers the tag file under its own scan and forwards what it
+ * finds, and adds `KIT_BAD` (2:4) to a file that says `BAD`.
+ */
+export const PROBE_TAG_HOOK_MODULE = `module.exports.default = {
+  tagRules: "none",
+  table: {},
+  tagFile(file, ctx) {
+    const diagnostics = ctx.lower().diagnostics.map((x) => ({
+      severity: x.severity, message: x.message, line: x.line, column: x.column,
+      ...(x.code ? { code: x.code } : {}), ...(x.file ? { file: x.file } : {}),
+    }));
+    if (file.source.includes("BAD")) {
+      diagnostics.push({ severity: "error", message: "bad concept", line: 2, column: 4, code: "KIT_BAD" });
+    }
+    return { contract: {}, diagnostics };
+  },
+};
+`;
+
+export const PROBE_TAG_DIALECT = {
+  tagDirs: ["concepts", "kinds"],
+  tagExtensions: [".thing.probe"],
+};
+
+export function tagDiscoveryProject(
+  files: Record<string, string> = {},
+): ProbeProject {
+  return probeProject(
+    { "dialect.cjs": PROBE_TAG_HOOK_MODULE, ...files },
+    { manifest: PROBE_TAG_DIALECT },
+  );
+}
+
 const roots: string[] = [];
 
 export interface ProbeProject {
@@ -86,7 +122,9 @@ export interface ProbeProject {
 export function probeProject(
   files: Record<string, string> = {},
   options: {
-    manifest?: Partial<typeof PROBE_MANIFEST> | null;
+    manifest?:
+      | (Partial<typeof PROBE_MANIFEST> & Record<string, unknown>)
+      | null;
     packageJson?: Record<string, unknown>;
     /** Lists `contracts.cjs` under `mx.contracts`. */
     contracts?: boolean;

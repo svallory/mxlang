@@ -9,6 +9,7 @@ import {
   PROBE_MANIFEST,
   PROBE_SOURCES,
   probeProject,
+  tagDiscoveryProject,
 } from "../../../../test-fixtures/dialects/probe.ts";
 import { createDialectLanguagePlugin } from "./dialect-language.ts";
 import pluginFactory from "./index.ts";
@@ -208,6 +209,35 @@ describe("dialect files through the TypeScript plugin", () => {
         code: 80001,
         source: "Probe",
         message: PROBE_CONTRACT_MESSAGE,
+      },
+    ]);
+  });
+
+  it("shows a tag file's error: MX_TAG_FILE_ERROR at the call, the tag file's own diagnostic at the head, naming its file", () => {
+    const project = tagDiscoveryProject({
+      "concepts/money.thing.probe": "<x/>\n<!-- BAD -->\n",
+    });
+    const file = project.path("page.probe");
+    const text = "<p/>\n<money/>\n";
+    const service = createService(project.dir, { [file]: text });
+    expect(shape(service, file)).toEqual([
+      {
+        start: 5,
+        length: 1,
+        category: "Error",
+        code: "MX_TAG_FILE_ERROR",
+        source: "Probe",
+        message:
+          "`<money>`'s definition has errors (concepts/money.thing.probe:2:5)",
+      },
+      {
+        // Never at the tag file's own offsets in this file.
+        start: 0,
+        length: 1,
+        category: "Error",
+        code: "KIT_BAD",
+        source: "Probe",
+        message: `bad concept (in ${project.path("concepts/money.thing.probe")}:2:5)`,
       },
     ]);
   });

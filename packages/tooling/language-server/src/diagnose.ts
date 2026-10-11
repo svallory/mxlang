@@ -355,8 +355,8 @@ export function diagnoseDocument(
     // scan and every target are irrelevant to it.
     const dialect = checkDialectFile(documentPath(uri), text);
     if (dialect !== undefined) {
-      return dialect.diagnostics.map(
-        (diagnostic): Diagnostic => ({
+      return dialect.diagnostics.map((diagnostic): Diagnostic => {
+        const own: Diagnostic = {
           severity:
             diagnostic.severity === "error"
               ? DiagnosticSeverity.Error
@@ -371,8 +371,32 @@ export function diagnoseDocument(
               character: diagnostic.column + 1,
             },
           },
-        }),
-      );
+        };
+        const origin = diagnostic.origin;
+        if (origin === undefined) return own;
+        // A problem in another file (a tag file, the dialect's manifest) is
+        // that file's: it is published against its own URI at its real
+        // position (through `related`), and this document gets the pointer at
+        // its head, whose `relatedInformation` leads there.
+        const range = {
+          start: { line: origin.line - 1, character: origin.column },
+          end: { line: origin.line - 1, character: origin.column + 1 },
+        };
+        const text = diagnostic.message.replace(
+          ` (in ${origin.file}:${origin.line}:${origin.column + 1})`,
+          "",
+        );
+        related?.push({
+          uri: uriOf(origin.file),
+          diagnostics: [{ ...own, message: text, range }],
+        });
+        return {
+          ...own,
+          relatedInformation: [
+            { location: { uri: uriOf(origin.file), range }, message: text },
+          ],
+        };
+      });
     }
     // The host policy's problems are the page's: a dialect's file has no
     // target, so none of them is raised on its behalf (above, they would
@@ -405,7 +429,7 @@ export function diagnoseDocument(
     scanWarnings = [
       ...scanWarnings,
       ...scan.diagnostics.map((diagnostic) =>
-        scanDiagnosticToLsp(diagnostic, related),
+        scanDiagnosticToLsp(diagnostic, related, true),
       ),
     ];
     // Tags the caller supplied win over the scan's. Normally nothing is
@@ -651,6 +675,11 @@ export function diagnoseDocument(
 function scanDiagnosticToLsp(
   diagnostic: ScanDiagnostic | TargetPolicyDiagnostic,
   related?: RelatedDiagnostics[],
+  /**
+   * Whether the diagnostic's `code` is shown: the scan's own codes
+   * (`MX_MISPLACED_TAG_FILE`) are, the host policy's are not.
+   */
+  showCode = false,
 ): Diagnostic {
   const line = Math.max(0, diagnostic.line - 1);
   const column = Math.max(0, diagnostic.column);
@@ -696,6 +725,9 @@ function scanDiagnosticToLsp(
       {
         severity,
         source: "mxlang",
+        ...(showCode && diagnostic.code !== undefined
+          ? { code: diagnostic.code }
+          : {}),
         message: diagnostic.message,
         range,
         ...(information.length ? { relatedInformation: information } : {}),
@@ -705,6 +737,9 @@ function scanDiagnosticToLsp(
   return {
     severity,
     source: "mxlang",
+    ...(showCode && diagnostic.code !== undefined
+      ? { code: diagnostic.code }
+      : {}),
     message: `${diagnostic.file}:${line + 1}:${column + 1}: ${text}`,
     range: {
       start: { line: 0, character: 0 },

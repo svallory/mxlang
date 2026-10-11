@@ -7,7 +7,9 @@ import {
   PROBE_DIALECT_MODULE,
   PROBE_MANIFEST,
   PROBE_SOURCES,
+  PROBE_TAG_DIALECT,
   probeProject,
+  tagDiscoveryProject,
 } from "../../../test-fixtures/dialects/probe.ts";
 import {
   checkDialectFile,
@@ -302,6 +304,7 @@ describe("checkDialectFile", () => {
             line: 1,
             column: 0,
             offset: 0,
+            origin: { file: project.path("dialect.cjs"), line: 1, column: 0 },
           },
         ],
       },
@@ -388,6 +391,157 @@ describe("checkDialectFile", () => {
         source: "Probe",
         diagnostics: [],
       });
+    });
+  });
+});
+
+/** A second dialect that discovers tags in `things/`, to meet a file in `tags/`. */
+function withOtherDialect(project: ReturnType<typeof probeProject>): void {
+  const other = join(project.dir, "node_modules", "other-dialect");
+  mkdirSync(other, { recursive: true });
+  writeFileSync(
+    join(other, "package.json"),
+    JSON.stringify({
+      name: "other-dialect",
+      mx: {
+        dialect: {
+          id: "other",
+          name: "Other",
+          extensions: [".other"],
+          module: "./index.cjs",
+          tagDirs: ["things"],
+        },
+      },
+    }),
+  );
+  writeFileSync(join(other, "index.cjs"), PROBE_DIALECT_MODULE);
+  writeFileSync(
+    project.path("package.json"),
+    JSON.stringify({
+      name: "probe-dialect",
+      mx: { dialect: PROBE_MANIFEST },
+      devDependencies: { "other-dialect": "0.0.0" },
+    }),
+  );
+}
+
+describe("checkDialectFile: tag discovery diagnostics", () => {
+  it("a call to a tag whose tag file has an error: MX_TAG_FILE_ERROR at the call, the file's own diagnostic with its file", () => {
+    const project = tagDiscoveryProject({
+      "concepts/money.thing.probe": "<x/>\n<!-- BAD -->\n",
+    });
+    const text = "<p/>\n<money/>\n";
+    const check = checkDialectFile(project.path("a.probe"), text);
+    expect(check?.source).toBe("Probe");
+    expect(check?.diagnostics).toEqual([
+      {
+        severity: "error",
+        message:
+          "`<money>`'s definition has errors (concepts/money.thing.probe:2:5)",
+        line: 2,
+        column: 0,
+        offset: 5,
+        code: "MX_TAG_FILE_ERROR",
+      },
+      {
+        severity: "error",
+        message: `bad concept (in ${project.path("concepts/money.thing.probe")}:2:5)`,
+        line: 1,
+        column: 0,
+        offset: 0,
+        code: "KIT_BAD",
+        origin: {
+          file: project.path("concepts/money.thing.probe"),
+          line: 2,
+          column: 4,
+        },
+      },
+    ]);
+    // The call is at the offset the first diagnostic names.
+    expect(text.slice(5)).toMatch(/^<money\/>/);
+  });
+
+  it("a tag file that is fine, in either tag directory, is a clean call", () => {
+    const project = tagDiscoveryProject({
+      "concepts/money.thing.probe": "<x/>\n",
+      "kinds/unit.thing.probe": "<x/>\n",
+    });
+    expect(
+      checkDialectFile(project.path("a.probe"), "<money/>\n<unit/>\n"),
+    ).toEqual({ source: "Probe", diagnostics: [] });
+  });
+
+  it("a two-file cycle: MX_TAG_FILE_CYCLE with the file it was found in, and the definitions' errors at the calls", () => {
+    const project = tagDiscoveryProject({
+      "concepts/a.thing.probe": "<x/>\n<b/>\n",
+      "concepts/b.thing.probe": "<a/>\n",
+    });
+    const check = checkDialectFile(project.path("a.probe"), "<p/>\n<a/>\n");
+    const cycle = check?.diagnostics.find(
+      (diagnostic) => diagnostic.code === "MX_TAG_FILE_CYCLE",
+    );
+    expect(cycle).toEqual({
+      severity: "error",
+      message: `tag files call each other in a cycle: concepts/a.thing.probe → concepts/b.thing.probe → concepts/a.thing.probe (in ${project.path("concepts/b.thing.probe")}:1:1)`,
+      line: 1,
+      column: 0,
+      offset: 0,
+      code: "MX_TAG_FILE_CYCLE",
+      origin: {
+        file: project.path("concepts/b.thing.probe"),
+        line: 1,
+        column: 0,
+      },
+    });
+    // The caller's own call is reported at the call, with its own code.
+    expect(check?.diagnostics[0]).toEqual({
+      severity: "error",
+      message: "`<a>`'s definition has errors (concepts/a.thing.probe:2:1)",
+      line: 2,
+      column: 0,
+      offset: 5,
+      code: "MX_TAG_FILE_ERROR",
+    });
+    expect(check?.diagnostics.every((d) => d.severity === "error")).toBe(true);
+  });
+
+  it("a file of another dialect in `tags/`: MX_MISPLACED_TAG_FILE keeps its warning severity, code and file", () => {
+    // `Probe` has no `tagDirs`, so it walks `tags/` and meets `Other`'s file there.
+    const project = tagDiscoveryProject({ "tags/m.other": "<x/>\n" });
+    withOtherDialect(project);
+    const check = checkDialectFile(project.path("a.probe"), "<p/>\n");
+    expect(check?.diagnostics).toEqual([
+      {
+        severity: "warning",
+        message: `\`tags/m.other\` is a Other file in \`tags/\`; Other discovers tags in \`things/\`. (in ${project.path("tags/m.other")}:1:1)`,
+        line: 1,
+        column: 0,
+        offset: 0,
+        code: "MX_MISPLACED_TAG_FILE",
+        origin: { file: project.path("tags/m.other"), line: 1, column: 0 },
+      },
+    ]);
+  });
+
+  it("a scan failure thrown from another file keeps its code and its file", () => {
+    const project = tagDiscoveryProject({
+      "contracts.cjs": "module.exports = { default: 1 };\n",
+    });
+    writeFileSync(
+      project.path("package.json"),
+      JSON.stringify({
+        name: "probe-dialect",
+        mx: {
+          dialect: { ...PROBE_MANIFEST, ...PROBE_TAG_DIALECT },
+          contracts: "./contracts.cjs",
+        },
+      }),
+    );
+    const [diagnostic] =
+      checkDialectFile(project.path("a.probe"), "<p/>\n")?.diagnostics ?? [];
+    expect(diagnostic?.severity).toBe("error");
+    expect(diagnostic?.origin).toMatchObject({
+      file: project.path("contracts.cjs"),
     });
   });
 });

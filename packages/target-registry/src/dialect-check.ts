@@ -37,6 +37,17 @@ export interface DialectDiagnostic {
   offset: number;
   /** A machine-readable code, when there is one: the dialect's (`ctx.fail`'s `code`) or core's warning code (`MX_DUPLICATE_ATTRIBUTE`). */
   code?: string;
+  /**
+   * Where the problem really is, when it is not in the checked file: a tag
+   * file's own error, a dialect manifest's field error, a misplaced tag
+   * file. `line` and `column` here are measured in `file` (1-based and
+   * 0-based). The diagnostic's own `line`, `column` and `offset` are then the
+   * head of the checked file (1, 0, 0) and its `message` ends with
+   * `(in <file>:<line>:<column>)`, so a tool that paints per file never
+   * underlines what the author has at that spot in the checked file. A tool
+   * that can address the other file (an editor) shows the diagnostic there.
+   */
+  origin?: { file: string; line: number; column: number };
 }
 
 /** The result of checking one dialect file. */
@@ -243,6 +254,8 @@ export function checkDialectFile(
           error.column,
           error.file,
           filePath,
+          "error",
+          error.diagnosticCode,
         ),
       ],
     };
@@ -266,6 +279,8 @@ export function checkDialectFile(
           error.column,
           error.file,
           filePath,
+          "error",
+          error.diagnosticCode,
         ),
       ],
     };
@@ -283,8 +298,9 @@ export function checkDialectFile(
           diagnostic.column,
           diagnostic.file,
           filePath,
+          diagnostic.severity ?? "warning",
+          diagnostic.code,
         ),
-        severity: "warning" as const,
       })),
       ...diagnostics.map((diagnostic) => {
         if (diagnostic.file !== undefined && diagnostic.file !== filePath) {
@@ -295,9 +311,9 @@ export function checkDialectFile(
               diagnostic.column,
               diagnostic.file,
               filePath,
+              diagnostic.severity,
+              diagnostic.code,
             ),
-            severity: diagnostic.severity,
-            ...(diagnostic.code === undefined ? {} : { code: diagnostic.code }),
           };
         }
         return {
@@ -313,23 +329,27 @@ export function checkDialectFile(
   };
 }
 
-/** An error measured in another file, as a diagnostic at the head of `filePath`. */
+/**
+ * A problem measured in another file, as a diagnostic at the head of
+ * `filePath` that names where it is ({@link DialectDiagnostic.origin}).
+ */
 function elsewhere(
   message: string,
   line: number,
   column: number,
   file: string | undefined,
   filePath: string,
+  severity: "error" | "warning" = "error",
+  code?: string,
 ): DialectDiagnostic {
-  const where =
-    file === undefined || file === filePath
-      ? ""
-      : ` (in ${file}:${line}:${column + 1})`;
+  const other = file !== undefined && file !== filePath;
   return {
-    severity: "error",
-    message: `${message}${where}`,
+    severity,
+    message: other ? `${message} (in ${file}:${line}:${column + 1})` : message,
     line: 1,
     column: 0,
     offset: 0,
+    ...(code === undefined ? {} : { code }),
+    ...(other ? { origin: { file, line, column } } : {}),
   };
 }
