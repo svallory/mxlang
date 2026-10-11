@@ -42,7 +42,7 @@ const BIN_PATH = join(import.meta.dirname, "../dist/bin.js");
 
 const PublishDiagnosticsNotification = new NotificationType<{
   uri: string;
-  diagnostics: Array<{ message: string; source?: string }>;
+  diagnostics: Array<{ message: string; source?: string; code?: string }>;
 }>("textDocument/publishDiagnostics");
 
 let child: ChildProcess | undefined;
