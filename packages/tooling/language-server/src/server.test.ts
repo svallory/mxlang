@@ -49,6 +49,7 @@ let child: ChildProcess | undefined;
 let connection: MessageConnection | undefined;
 
 afterEach(() => {
+  cleanupProbeProjects();
   connection?.dispose();
   connection = undefined;
   // The load rule requires killing what a test starts.
@@ -758,6 +759,260 @@ describe("stdio server (e2e)", () => {
     expect(latest.get(tagUri)).toEqual([]);
     expect(latest.get(pageUri)).toEqual([]);
   }, 30000);
+
+  describe("diagnostics published against one URI are the union of its parts", () => {
+    type Published = {
+      code?: string;
+      message: string;
+      source?: string;
+      severity?: number;
+      range: {
+        start: { line: number; character: number };
+        end: { line: number; character: number };
+      };
+    };
+    // The tag file on disk is wrong (`<!-- BAD -->`: the project's tag hook adds
+    // KIT_BAD 2:4 for a caller); the text the editor holds of it is wrong in
+    // another way (`!bad`: an invalid attribute name, 1:3).
+    const KIT_BAD = {
+      severity: 1,
+      source: "Probe",
+      code: "KIT_BAD",
+      message: "bad concept",
+      range: {
+        start: { line: 1, character: 4 },
+        end: { line: 1, character: 5 },
+      },
+    };
+    // A tag file is checked under tag-file rules, where `!bad` is no trigger.
+    const OWN = {
+      severity: 1,
+      source: "Probe",
+      message:
+        "Invalid attribute name `!bad` — an attribute name may use letters, digits and `._:-`",
+      range: {
+        start: { line: 0, character: 3 },
+        end: { line: 0, character: 4 },
+      },
+    };
+    const OWN_TEXT = "<y !bad/>\n";
+    const CALLER_TEXT = "<p/>\n<money/>\n";
+
+    async function session() {
+      const project = tagDiscoveryProject({
+        "concepts/money.thing.probe": "<x/>\n<!-- BAD -->\n",
+      });
+      const tagFile = project.path("concepts/money.thing.probe");
+      const uris = {
+        tag: pathToFileURL(tagFile).href,
+        a: pathToFileURL(project.path("a.probe")).href,
+        b: pathToFileURL(project.path("b.probe")).href,
+      };
+      const conn = startClient();
+      await conn.sendRequest("initialize", {
+        processId: null,
+        rootUri: null,
+        capabilities: {},
+      });
+      conn.sendNotification("initialized", {});
+      const latest = new Map<string, Published[]>();
+      conn.onNotification(PublishDiagnosticsNotification, (params) => {
+        latest.set(params.uri, params.diagnostics as Published[]);
+      });
+      const until = async (done: () => boolean) => {
+        for (let i = 0; i < 300 && !done(); i++) {
+          await new Promise((r) => setTimeout(r, 50));
+        }
+      };
+      const open = (uri: string, text: string) =>
+        conn.sendNotification("textDocument/didOpen", {
+          textDocument: { uri, languageId: "probe", version: 1, text },
+        });
+      return { project, tagFile, uris, conn, latest, until, open };
+    }
+    const codes = (list: Published[] | undefined) =>
+      (list ?? []).map((d) => d.code);
+
+    it("two callers and the file's own diagnostic are all there, whichever published last", async () => {
+      const { uris, latest, until, open } = await session();
+      open(uris.a, CALLER_TEXT);
+      open(uris.b, CALLER_TEXT);
+      await until(() => codes(latest.get(uris.tag)).length > 0);
+      // Both callers raise the same KIT_BAD on the tag file: one diagnostic.
+      expect(latest.get(uris.tag)).toEqual([KIT_BAD]);
+
+      // The tag file is opened; its own diagnostic must not replace the callers'.
+      open(uris.tag, OWN_TEXT);
+      await until(() => codes(latest.get(uris.tag)).length === 2);
+      expect(latest.get(uris.tag)).toEqual([OWN, KIT_BAD]);
+
+      // A caller is edited, so it publishes again: the own diagnostic stays.
+      open(uris.a, `${CALLER_TEXT}<p/>\n`);
+      await new Promise((r) => setTimeout(r, 700));
+      expect(latest.get(uris.tag)).toEqual([OWN, KIT_BAD]);
+    }, 30000);
+
+    it("shrinks both ways: a caller closing or fixing removes only its part, the file's own change keeps the callers'", async () => {
+      const { tagFile, uris, conn, latest, until, open } = await session();
+      open(uris.tag, OWN_TEXT);
+      await until(() => codes(latest.get(uris.tag)).length === 1);
+      expect(latest.get(uris.tag)).toEqual([OWN]);
+      open(uris.a, CALLER_TEXT);
+      open(uris.b, CALLER_TEXT);
+      await until(() => codes(latest.get(uris.tag)).length === 2);
+      expect(latest.get(uris.tag)).toEqual([OWN, KIT_BAD]);
+
+      // The file's own diagnostics change (the editor text is fixed):
+      // the callers' stay.
+      conn.sendNotification("textDocument/didChange", {
+        textDocument: { uri: uris.tag, version: 2 },
+        contentChanges: [{ text: "<y/>\n" }],
+      });
+      await until(() => codes(latest.get(uris.tag)).join() === "KIT_BAD");
+      expect(latest.get(uris.tag)).toEqual([KIT_BAD]);
+
+      // Back to a bad own text, then one caller closes: the other's part and
+      // the own part stay.
+      conn.sendNotification("textDocument/didChange", {
+        textDocument: { uri: uris.tag, version: 3 },
+        contentChanges: [{ text: OWN_TEXT }],
+      });
+      await until(() => codes(latest.get(uris.tag)).length === 2);
+      conn.sendNotification("textDocument/didClose", {
+        textDocument: { uri: uris.a },
+      });
+      await until(() => latest.get(uris.a)?.length === 0);
+      await new Promise((r) => setTimeout(r, 300));
+      expect(latest.get(uris.tag)).toEqual([OWN, KIT_BAD]);
+
+      // The tag file on disk is fixed: the remaining caller stops raising on
+      // it, and only the own diagnostic is left.
+      writeFileSync(tagFile, "<x/>\n");
+      conn.sendNotification("workspace/didChangeWatchedFiles", {
+        changes: [{ uri: uris.tag, type: 2 }],
+      });
+      await until(
+        () =>
+          latest.get(uris.tag)?.length === 1 &&
+          codes(latest.get(uris.tag)).join() === "",
+      );
+      expect(latest.get(uris.tag)).toEqual([OWN]);
+      expect(latest.get(uris.b)).toEqual([]);
+    }, 30000);
+
+    it("closing the last caller leaves the file's own diagnostic; closing the file leaves the callers'", async () => {
+      const { uris, conn, latest, until, open } = await session();
+      open(uris.a, CALLER_TEXT);
+      open(uris.tag, OWN_TEXT);
+      await until(() => codes(latest.get(uris.tag)).length === 2);
+      conn.sendNotification("textDocument/didClose", {
+        textDocument: { uri: uris.tag },
+      });
+      await until(() => codes(latest.get(uris.tag)).join() === "KIT_BAD");
+      // Its own part is gone with the document; the caller's part is not.
+      expect(latest.get(uris.tag)).toEqual([KIT_BAD]);
+      conn.sendNotification("textDocument/didClose", {
+        textDocument: { uri: uris.a },
+      });
+      await until(() => latest.get(uris.tag)?.length === 0);
+      expect(latest.get(uris.tag)).toEqual([]);
+    }, 30000);
+  });
+
+  it("asks the client to watch a dialect's tag-file extension, even one no claimed extension ends", async () => {
+    const project = probeProject(
+      {},
+      { manifest: { tagDirs: ["concepts"], tagExtensions: [".concept"] } },
+    );
+    const conn = startClient();
+    const registered = new Promise<string[]>((resolve) => {
+      conn.onRequest(
+        "client/registerCapability",
+        (params: {
+          registrations: Array<{
+            method: string;
+            registerOptions: { watchers: Array<{ globPattern: string }> };
+          }>;
+        }) => {
+          const watch = params.registrations.find(
+            (r) => r.method === "workspace/didChangeWatchedFiles",
+          );
+          if (watch) {
+            resolve(watch.registerOptions.watchers.map((w) => w.globPattern));
+          }
+        },
+      );
+    });
+    await conn.sendRequest("initialize", {
+      processId: null,
+      rootUri: pathToFileURL(project.dir).href,
+      capabilities: {
+        workspace: { didChangeWatchedFiles: { dynamicRegistration: true } },
+      },
+    });
+    conn.sendNotification("initialized", {});
+    const globs = await registered;
+    expect(globs.filter((glob) => !WATCHED_FILE_GLOBS.includes(glob))).toEqual([
+      "**/*.probe",
+      "**/*.probe.mx",
+      "**/*.concept",
+    ]);
+  }, 15000);
+
+  it("a dialect file of a project whose dialect manifest is invalid shows the manifest error on itself and on package.json", async () => {
+    const project = probeProject({}, { manifest: { tagDirs: [] } });
+    const packageFile = project.path("package.json");
+    const conn = startClient();
+    await conn.sendRequest("initialize", {
+      processId: null,
+      rootUri: null,
+      capabilities: {},
+    });
+    const uri = pathToFileURL(project.path("a.probe")).href;
+    const packageUri = pathToFileURL(packageFile).href;
+    const seen = new Map<
+      string,
+      Array<{ message: string; source?: string; severity?: number }>
+    >();
+    conn.onNotification(PublishDiagnosticsNotification, (params) => {
+      seen.set(params.uri, params.diagnostics);
+    });
+    conn.sendNotification("textDocument/didOpen", {
+      textDocument: {
+        uri,
+        languageId: "plaintext",
+        version: 1,
+        text: PROBE_SOURCES.ok,
+      },
+    });
+    for (let i = 0; i < 100 && !(seen.has(uri) && seen.has(packageUri)); i++) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    const message =
+      '`mx.dialect.tagDirs` must be a non-empty array of the directory names the dialect\'s files discover tags in (`["components"]`)';
+    expect(seen.get(uri)).toMatchObject([
+      {
+        severity: 1,
+        source: "mxlang",
+        message: `${message} (in ${packageFile}:1:131)`,
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 1 },
+        },
+      },
+    ]);
+    expect(seen.get(packageUri)).toMatchObject([
+      {
+        severity: 1,
+        source: "mxlang",
+        message: expect.stringContaining(message),
+        range: {
+          start: { line: 0, character: 130 },
+          end: { line: 0, character: 131 },
+        },
+      },
+    ]);
+  }, 15000);
 
   it.each([...MX_CONFIG_SEARCH_PLACES])(
     "asks the client to watch the MX config search place %s",

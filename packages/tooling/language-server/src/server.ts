@@ -21,7 +21,7 @@ import {
 } from "@mxlang/core";
 import { resolveTargetPolicyDetailed } from "@mxlang/targets";
 import {
-  dialectExtensionsUnder,
+  dialectWatchExtensionsUnder,
   isDialectFile,
 } from "@mxlang/targets/dialect-check";
 import {
@@ -105,11 +105,19 @@ export function startServer(
   // compiles for the same document.
   const pending = new Map<string, ReturnType<typeof setTimeout>>();
 
-  // Template URIs each open document last published diagnostics against, so
-  // they can be cleared when that document stops reporting them. Keyed by the
-  // *caller*: a template is not itself open, so nothing else would ever clear
-  // its diagnostics.
-  const templateDiagnostics = new Map<string, Set<string>>();
+  // What the server publishes against one URI is the union of its own
+  // diagnostics (when it is an open document) and the diagnostics other open
+  // documents raise on it: a tag template's errors, a `package.json`'s. Last
+  // publish must not win, so each part is kept and the union is published.
+  //
+  // The open documents' own diagnostics, by document URI.
+  const ownDiagnostics = new Map<string, Diagnostic[]>();
+  // What each open document (the *caller*) raises on other URIs, by target
+  // URI then caller URI. A target is not itself open (or, if it is, has its
+  // own diagnostics above), so nothing else would ever clear a caller's part.
+  const raisedOn = new Map<string, Map<string, Diagnostic[]>>();
+  // The targets each caller last raised on: the reverse of `raisedOn`.
+  const raisedBy = new Map<string, Set<string>>();
 
   // Compile-result edges in both directions. Paths are filesystem paths,
   // while callers stay document URIs so their current in-memory text can be
@@ -117,15 +125,59 @@ export function startServer(
   const callerDependencies = new Map<string, Set<string>>();
   const dependencyCallers = new Map<string, Set<string>>();
 
-  // Whether a document other than `owner` still publishes against `uri`. Open
-  // documents of one package all report the same `package.json` problem, so
-  // one closing (or recovering) must not clear what the others still show.
-  const publishedByOther = (uri: string, owner: string): boolean => {
-    for (const [other, uris] of templateDiagnostics) {
-      if (other !== owner && uris.has(uri)) return true;
+  /**
+   * Publishes the union for `uri`: its own diagnostics, then the ones each
+   * caller raised on it (callers in URI order), identical diagnostics once.
+   * Open documents of one package all report the same `package.json` problem,
+   * and a tag file's own error is the one its callers raise on it, so the
+   * same diagnostic from two parts is one diagnostic.
+   */
+  function publish(uri: string): void {
+    const seen = new Set<string>();
+    const union: Diagnostic[] = [];
+    const add = (list: readonly Diagnostic[]): void => {
+      for (const diagnostic of list) {
+        const key = JSON.stringify(diagnostic);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        union.push(diagnostic);
+      }
+    };
+    add(ownDiagnostics.get(uri) ?? []);
+    const callers = raisedOn.get(uri);
+    if (callers) {
+      for (const caller of [...callers.keys()].sort()) {
+        add(callers.get(caller) ?? []);
+      }
     }
-    return false;
-  };
+    connection.sendDiagnostics({ uri, diagnostics: union });
+  }
+
+  /**
+   * Replaces what `caller` raises on other URIs by `now`. Returns the URIs it
+   * raised on before and no longer does, which must be published again.
+   */
+  function setRaised(
+    caller: string,
+    now: ReadonlyMap<string, Diagnostic[]>,
+  ): string[] {
+    const dropped: string[] = [];
+    for (const target of raisedBy.get(caller) ?? []) {
+      if (now.has(target)) continue;
+      dropped.push(target);
+      const callers = raisedOn.get(target);
+      callers?.delete(caller);
+      if (callers?.size === 0) raisedOn.delete(target);
+    }
+    for (const [target, list] of now) {
+      const callers = raisedOn.get(target) ?? new Map<string, Diagnostic[]>();
+      callers.set(caller, list);
+      raisedOn.set(target, callers);
+    }
+    if (now.size > 0) raisedBy.set(caller, new Set(now.keys()));
+    else raisedBy.delete(caller);
+    return dropped;
+  }
 
   const nearestPackageJson = (file: string): string | undefined => {
     let dir = dirname(file);
@@ -237,13 +289,9 @@ export function startServer(
         dependencies.add(diagnostic.file);
       }
       recordDependencies(uri, dependencies);
-      connection.sendDiagnostics({ uri, diagnostics });
 
-      // Clear whatever this document published against a template or a
-      // `package.json` last time before publishing what it found now, so a
-      // fixed problem does not linger once the document compiles clean. One
-      // URI can arrive in several entries (two problems in one `package.json`)
-      // and is published once, merged.
+      // One URI can arrive in several entries (two problems in one
+      // `package.json`): this document's part of it is merged.
       const merged = new Map<string, Diagnostic[]>();
       for (const entry of related) {
         merged.set(entry.uri, [
@@ -251,20 +299,13 @@ export function startServer(
           ...entry.diagnostics,
         ]);
       }
-      const previous = templateDiagnostics.get(uri) ?? new Set<string>();
-      const current = new Set(merged.keys());
-      if (current.size > 0) templateDiagnostics.set(uri, current);
-      else templateDiagnostics.delete(uri);
-      for (const relatedUri of previous) {
-        if (!current.has(relatedUri) && !publishedByOther(relatedUri, uri)) {
-          connection.sendDiagnostics({ uri: relatedUri, diagnostics: [] });
-        }
-      }
-      for (const [relatedUri, relatedDiagnostics] of merged) {
-        connection.sendDiagnostics({
-          uri: relatedUri,
-          diagnostics: relatedDiagnostics,
-        });
+      // What this document raised last time and no longer does is gone from
+      // those URIs, and what other documents raise on them stays.
+      ownDiagnostics.set(uri, diagnostics);
+      const dropped = setRaised(uri, merged);
+      publish(uri);
+      for (const target of [...dropped, ...merged.keys()]) {
+        if (target !== uri) publish(target);
       }
     }, DEBOUNCE_MS);
 
@@ -295,7 +336,7 @@ export function startServer(
     const dialectGlobs = new Set<string>();
     for (const root of new Set(workspaceRoots)) {
       try {
-        for (const extension of dialectExtensionsUnder(root)) {
+        for (const extension of dialectWatchExtensionsUnder(root)) {
           dialectGlobs.add(`**/*${extension}`);
         }
       } catch {
@@ -365,14 +406,12 @@ export function startServer(
       clearTimeout(timer);
       pending.delete(event.document.uri);
     }
-    connection.sendDiagnostics({ uri: event.document.uri, diagnostics: [] });
-    const closing = templateDiagnostics.get(event.document.uri) ?? [];
-    templateDiagnostics.delete(event.document.uri);
-    for (const templateUri of closing) {
-      if (!publishedByOther(templateUri, event.document.uri)) {
-        connection.sendDiagnostics({ uri: templateUri, diagnostics: [] });
-      }
-    }
+    // Closing drops this document's own diagnostics and what it raised on
+    // other URIs; what other documents still raise on this URI stays.
+    ownDiagnostics.delete(event.document.uri);
+    const dropped = setRaised(event.document.uri, new Map());
+    publish(event.document.uri);
+    for (const target of dropped) publish(target);
     recordDependencies(event.document.uri, new Set());
     callerDependencies.delete(event.document.uri);
   });
