@@ -666,7 +666,7 @@ describe("a deferred contract is read at the call", () => {
       result.diagnostics.map(({ line, column, code }) => [line, column, code]),
     ).toEqual([
       [1, 0, "MX_TAG_FILE_ERROR"],
-      [2, 2, undefined],
+      [2, 2, "MX_UNKNOWN_TAG"],
     ]);
     expect(result.diagnostics[1]?.message).toContain("<nope>");
   });
