@@ -82,7 +82,7 @@ export interface SyntaxTable {
   readonly filter: { readonly open: string; readonly close: string } | null;
   /** Concise mode; turned off only by a language (layer 3), never by a project. */
   readonly concise: boolean;
-  /** Armed where an operand is expected, in the expressions that lex atoms. */
+  /** Armed where an operand is expected, in every expression that arms triggers. */
   readonly expressionTriggers: readonly Trigger[];
   /** Armed on the first character of an attribute name. */
   readonly attributeTriggers: readonly Trigger[];
@@ -881,13 +881,13 @@ export function matchValue(
 /**
  * The stand-in of a trigger's `text` (always the same length):
  *
- * - `"number"`: the atom rule (decision 156), `0.` plus zeros (`0` for one
- *   character), a numeric literal Babel reads at the same offsets.
+ * - `"number"`: `0.` plus zeros (`0` for one character), a numeric literal
+ *   Babel reads at the same offsets.
  * - `"identifier"`: `_` followed by the text with every character outside
  *   `[A-Za-z0-9_$]` (each UTF-16 unit) replaced by `_`: `&status` reads as
  *   `_status`. One identifier, never a reserved word (it starts with `_`)
  *   and readable in a TypeScript message. A consumer tells a stand-in from
- *   authored text by the trigger's span, exactly as atoms do.
+ *   authored text by the trigger's span.
  * - `"keep"`: the text itself.
  */
 export function standInText(standIn: StandIn, text: string): string {

@@ -828,7 +828,7 @@ represents itself (`mode=:strict` meaning `mode="strict"`) builds it with its
 own `expressionTriggers` and `valueTriggers` rows. Its hook returns a
 `StringLiteral` marked `extra.mxAtom = { span }`, and core records each
 marked literal and splices its string into `Expr.code`, so every target emits
-the string while `Expr.text` keeps the authored spelling. In the IR an attribute
+the string while the source text at `Expr.span` keeps the authored spelling. In the IR an attribute
 whose whole value is one atom is a `static` attribute carrying
 `atom: { kind: "atom", name, span }`; an atom nested in an expression is listed
 in `Expr.atoms` (see [the IR spec](/architecture/ir-spec/)).
@@ -4187,7 +4187,7 @@ scratch walk that runs a custom tag's `analyze`) calls no hook twice. Order is
 source order, a tag's attributes before its body, and a trigger's own `=value`
 before the trigger that owns it. The parsed tree stays as parsed. The lowered
 results live beside it and are what attribute, child and expression readers see,
-so `Expr.code` and `Expr.text` differ: an expression trigger's replacement is
+so `Expr.code` and the source text at `Expr.span` differ: an expression trigger's replacement is
 **printed and spliced into `code`** at the trigger's span (`&status` becomes
 `self.status`), and an atom-marked literal's string is spliced the same way, so emitting hosts emit
 valid code, while `text` and every offset stay the authored text. The stand-in

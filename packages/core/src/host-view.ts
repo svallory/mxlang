@@ -109,7 +109,10 @@ export interface HostTagView {
    * is not in it; an empty list (`||`) is empty after the opening pipe.
    */
   readonly params: { readonly span: HostSpan; readonly count: number } | null;
-  /** The `<${…}>` name expression, else null (an atom name `<${:a}>` is static). */
+  /**
+   * The `<${…}>` name expression, else null (a dialect-built atom name, a
+   * marked `StringLiteral` such as `<${~a}>` under the `~` fixture, is static).
+   */
   readonly dynamicName: Expr | null;
   readonly handle: MxNodeHandle;
 }
@@ -196,8 +199,9 @@ function buildTagView(ctx: Ctx, node: Node): HostTagView {
     span: spanOf(node.start, node.end),
     handle: handleFor(node),
   };
-  // An atom name (`<${:a}>`) is static, as on Marko's tree: `tagNameOf`
-  // reads it, and answers nothing only for a name that is really dynamic.
+  // A dialect-built atom name (a trigger's marked `StringLiteral`, `<${~a}>`
+  // under the `~` fixture) is static, as on Marko's tree: `tagNameOf` reads
+  // it, and answers nothing only for a name that is really dynamic.
   const dynamic =
     node.name?.kind === "dynamic" && tagNameOf(node) === undefined;
   // An unnamed tag's name changes once `resolveDefaultTag` answers, so it is

@@ -171,7 +171,7 @@ export function wordWidthAt(data: string, i: number) {
 
 /**
  * MX (decision 156 addenda 10 and 11): whitespace wherever the parser looks
- * behind (the atom look-behind, division or regex, the keyword and operator
+ * behind (a dialect trigger's look-behind, division or regex, the keyword and operator
  * look-behinds, ` --` and ` >=`): ASCII whitespace and the Unicode
  * whitespace and line terminators of `isUnicodeSpaceCode`, which behave
  * exactly as ASCII whitespace there. Look-aheads and the tag grammar keep

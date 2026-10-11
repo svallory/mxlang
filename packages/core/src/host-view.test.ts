@@ -28,6 +28,7 @@ import {
 } from "./core.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import { resolveUnnamedTags } from "./default-tag.ts";
+import atomFixture from "./fixtures/syntax/atom-fixture.ts";
 import { parseFragment } from "./fragment.ts";
 import { handleNode } from "./host-handle.ts";
 import {
@@ -42,6 +43,7 @@ import {
 import type { Ir } from "./ir.ts";
 import { exprOf, lowerChildren } from "./lower.ts";
 import { mxNodeOf } from "./marko-view.ts";
+import type { Dialect } from "./syntax-table.ts";
 import { tagNameOf, tagVarOf } from "./tag-fields.ts";
 import { lookup } from "./test-targets.ts";
 
@@ -63,10 +65,12 @@ function compile(
   source: string,
   decls: HostDeclarations,
   onIr?: (ir: Ir) => void,
+  dialect?: Dialect,
 ): unknown {
   try {
     compileSource(source, FILE, decls, {
       targets: lookup,
+      ...(dialect ? { dialect } : {}),
       emitIr: (ir) => {
         onIr?.(ir);
         return "";
@@ -210,7 +214,12 @@ interface Claimed {
  * `resolveDelegatedTag`. A compile error fails the test unless it matches
  * `expected`.
  */
-function claimed(source: string, names: string[], expected?: RegExp): Claimed {
+function claimed(
+  source: string,
+  names: string[],
+  expected?: RegExp,
+  dialect?: Dialect,
+): Claimed {
   const pairs: Pair[] = [];
   const views: HostTagView[] = [];
   const delegated: Node[] = [];
@@ -227,6 +236,7 @@ function claimed(source: string, names: string[], expected?: RegExp): Claimed {
       },
     }),
     (ir) => collectDelegated(ir.body, delegated),
+    dialect,
   );
   if (error && !(expected && String(error).match(expected))) throw error;
   if (expected) expect(error).toBeTruthy();
@@ -326,6 +336,20 @@ describe("hostTagViewOf agrees with the Marko-shaped view", () => {
     const { pairs } = claimed(source, names, expected);
     expect(pairs.length).toBeGreaterThan(0);
     for (const [marko, host] of pairs) expect(host).toEqual(marko);
+  });
+
+  // Core has no atom syntax; a dialect trigger's marked `StringLiteral` is
+  // the one way to write a literal tag name, and it is static.
+  it("a dialect-built atom name: static, as on Marko's tree", () => {
+    const { pairs } = claimed(
+      `<\${~widget} b=1/>x\n`,
+      ["widget"],
+      undefined,
+      atomFixture,
+    );
+    expect(pairs).toHaveLength(1);
+    for (const [marko, host] of pairs) expect(host).toEqual(marko);
+    expect(pairs[0]?.[1]).toMatchObject({ name: "widget", dynamicName: null });
   });
 });
 

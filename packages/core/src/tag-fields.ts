@@ -48,10 +48,11 @@ export function tagNameOf(node: Node): string | undefined {
 }
 
 /**
- * A dynamic name whose expression is a `StringLiteral` (`${:a}`: an atom, the
- * only way to write one, since Marko reads `${"a"}` as a template literal) is
- * static on Marko's tree: its name node is that literal, so the tag is the
- * element or tag `a`, as on 9293794df. Read without raising the container's
+ * A dynamic name whose expression is a `StringLiteral` is static on Marko's
+ * tree: its name node is that literal, so the tag is the element or tag `a`,
+ * as on 9293794df. Only a dialect trigger's marked `StringLiteral` (an atom,
+ * `<${~a}>` under the `~` fixture) writes one, since Marko reads `${"a"}` as
+ * a template literal. Read without raising the container's
  * own error, which lowering raises where it reads the expression.
  */
 function stringNameOf(node: Node): string | undefined {

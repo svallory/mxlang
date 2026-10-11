@@ -1158,7 +1158,8 @@ and what the IR makes of atoms follows from that:
 - `Expr.atoms?: Atom[]`, one per marked literal inside the expression, and
   `Expr.code` holds each as its string literal (core splices
   `JSON.stringify(name)` at each atom's span; IR spec §4, `atoms` row).
-- A whole value that is one atom (`mode=:strict`) is a `static` `Attr` with
+- A whole value that is one dialect-built atom (`mode=~strict` under a dialect
+  whose atoms are `~name`) is a `static` `Attr` with
   `atom?: Atom`, `value` the name and `valueSpan` the atom's span (`ir.ts`,
   `Attr`; IR spec §6, `static` row).
 

@@ -814,7 +814,7 @@ export const ATOMS: [string, string][] = [
 /**
  * [input, rendered events] — the row's `::name` is the fixture's reserved
  * token: a positioned error. In tag and attribute names `::` is name text,
- * as in Marko (`mx-stock-colon.test.ts`).
+ * as in Marko (`packages/core/src/stock-colon.test.ts`).
  */
 export const RESERVED: [string, string][] = [
   ["<div x=::a/>", `<div> @x ${reserved("a", "7-10")}`],
