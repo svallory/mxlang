@@ -13,6 +13,12 @@
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import {
+  assertFragmentPackages,
+  discoverPackages,
+  FragmentError,
+  parseFragment,
+} from "./assemble-changelog.ts";
 
 const root = `${import.meta.dir}/../`;
 
@@ -30,6 +36,13 @@ export interface CheckInput {
   added: string[];
   /** The PR body (empty for a non-PR context). */
   body: string;
+  /**
+   * The fragments this branch adds (`changes/<slug>.md`) with their text, and
+   * the packages that own a CHANGELOG.md (short name -> path). When both are
+   * given, a fragment `changelog:assemble` would refuse fails the check.
+   */
+  fragments?: { path: string; text: string }[];
+  packages?: ReadonlyMap<string, string>;
 }
 
 export interface CheckResult {
@@ -38,6 +51,20 @@ export interface CheckResult {
 }
 
 export function evaluate(input: CheckInput): CheckResult {
+  if (input.fragments && input.packages) {
+    for (const { path, text } of input.fragments) {
+      const slug = path.replace(/^changes\//, "").replace(/\.md$/, "");
+      try {
+        assertFragmentPackages(parseFragment(slug, text), input.packages);
+      } catch (error) {
+        if (!(error instanceof FragmentError)) throw error;
+        return {
+          ok: false,
+          message: `${path} would make \`bun run changelog:assemble\` fail: ${error.message}`,
+        };
+      }
+    }
+  }
   const codePaths = input.changed.filter((path) => codeChangeRe.test(path));
   if (codePaths.length === 0) return { ok: true };
   if (noChangelogRe.test(input.body)) return { ok: true };
@@ -109,7 +136,17 @@ if (import.meta.main) {
   ])
     .split("\n")
     .filter(Boolean);
-  const result = evaluate({ changed, added, body: prBody(body, bodyFile) });
+  const fragments = added
+    .filter((path) => /^changes\/[^/]+\.md$/.test(path))
+    .filter((path) => existsSync(`${root}${path}`))
+    .map((path) => ({ path, text: readFileSync(`${root}${path}`, "utf8") }));
+  const result = evaluate({
+    changed,
+    added,
+    body: prBody(body, bodyFile),
+    fragments,
+    packages: discoverPackages(root),
+  });
   if (!result.ok) {
     console.error(`[changelog-check] ${result.message}`);
     process.exit(1);

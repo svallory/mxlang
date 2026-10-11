@@ -128,6 +128,22 @@ export function discoverPackages(repoRoot: string): Map<string, string> {
   return found;
 }
 
+// The one rule for "this fragment may be assembled": it names only packages
+// that own a CHANGELOG.md. `assembleChangelog` and the CI fragment check
+// (check-changelog-fragment.ts) both call it, so CI refuses what assemble would.
+export function assertFragmentPackages(
+  fragment: Fragment,
+  packages: ReadonlyMap<string, string>,
+): void {
+  for (const name of fragment.packages) {
+    if (!packages.has(name)) {
+      throw new FragmentError(
+        `\`${fragment.slug}\` names package \`${name}\`, which has no CHANGELOG.md (known: ${[...packages.keys()].sort().join(", ")})`,
+      );
+    }
+  }
+}
+
 const unreleasedHeading = "## Unreleased";
 
 // Appends one entry line at the end of the `## Unreleased` section, creating
@@ -221,12 +237,8 @@ export function assembleChangelog(
   // Per package, entries in slug order.
   const byPackage = new Map<string, string[]>();
   for (const fragment of fragments) {
+    assertFragmentPackages(fragment, packages);
     for (const name of fragment.packages) {
-      if (!packages.has(name)) {
-        throw new FragmentError(
-          `\`${fragment.slug}\` names package \`${name}\`, which has no CHANGELOG.md (known: ${[...packages.keys()].sort().join(", ")})`,
-        );
-      }
       const entries = byPackage.get(name) ?? [];
       entries.push(
         `- **${fragment.kind} (${fragment.slug}):** ${fragment.body}`,

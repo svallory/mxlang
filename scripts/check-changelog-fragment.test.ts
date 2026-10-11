@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { assertFragmentPackages, parseFragment } from "./assemble-changelog.ts";
 import { evaluate, noChangelogRe } from "./check-changelog-fragment.ts";
 
 describe("evaluate", () => {
@@ -75,5 +76,73 @@ describe("evaluate", () => {
         body: "",
       }).ok,
     ).toBe(true);
+  });
+
+  describe("fragment packages", () => {
+    const packages = new Map([
+      ["core", "packages/core/CHANGELOG.md"],
+      ["solid", "packages/hosts/solid/CHANGELOG.md"],
+    ]);
+    const fragment = (names: string, slug = "my-change") => ({
+      path: `changes/${slug}.md`,
+      text: `---\npackages: [${names}]\nkind: Fixed\n---\nSomething.\n`,
+    });
+    const base = {
+      changed: ["packages/core/src/ir.ts"],
+      added: ["changes/my-change.md"],
+      body: "",
+      packages,
+    };
+
+    it("refuses a fragment naming a package with no CHANGELOG.md, with assemble's text", () => {
+      const result = evaluate({
+        ...base,
+        fragments: [fragment("core, angular")],
+      });
+      expect(result).toEqual({
+        ok: false,
+        message:
+          "changes/my-change.md would make `bun run changelog:assemble` fail: `my-change` names package `angular`, which has no CHANGELOG.md (known: core, solid)",
+      });
+    });
+
+    it("refuses it even when the PR body says no-changelog", () => {
+      expect(
+        evaluate({
+          ...base,
+          body: "no-changelog: nothing\n",
+          fragments: [fragment("angular")],
+        }).ok,
+      ).toBe(false);
+    });
+
+    it("refuses a fragment assemble cannot parse", () => {
+      const result = evaluate({
+        ...base,
+        fragments: [{ path: "changes/bad.md", text: "no front matter\n" }],
+      });
+      expect(result.ok).toBe(false);
+      expect(result.message).toContain(
+        "bad: expected the file to open with `---`",
+      );
+    });
+
+    it("accepts fragments naming only known packages, or none", () => {
+      expect(
+        evaluate({ ...base, fragments: [fragment("core, solid")] }).ok,
+      ).toBe(true);
+      expect(evaluate({ ...base, fragments: [fragment("")] }).ok).toBe(true);
+    });
+
+    it("uses the rule assemble uses (same refusal text)", () => {
+      expect(() =>
+        assertFragmentPackages(
+          parseFragment("my-change", fragment("angular").text),
+          packages,
+        ),
+      ).toThrow(
+        "`my-change` names package `angular`, which has no CHANGELOG.md (known: core, solid)",
+      );
+    });
   });
 });
