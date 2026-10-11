@@ -348,7 +348,11 @@ export interface TriggerContext {
 export interface UnknownTag {
   /** The name as written: a colon is part of it (`uuid:id`, `:x`). An unnamed tag (`<#a>`) is the default tag it resolves to. */
   readonly name: string;
-  /** The name's span (`uuid:id` in `<uuid:id/>`): file-absolute UTF-16 offsets. */
+  /**
+   * The name's span (`uuid:id` in `<uuid:id/>`): file-absolute UTF-16
+   * offsets. An unnamed tag (`<#a>`) has no name in the source: its span is
+   * empty, at the character after the `<`.
+   */
   readonly nameSpan: SourceSpan;
   /** The whole element, body and closing tag included. */
   readonly span: SourceSpan;
@@ -366,8 +370,13 @@ export interface UnknownTag {
 
 /** One authored tag around an {@link UnknownTag}. @unstable */
 export interface UnknownTagAncestor {
-  /** The name as written (`@row` for an attribute tag). */
+  /**
+   * The name as written (`@row` for an attribute tag). A dynamic tag
+   * (`<${expr}>`, always an error in a data file) is `""`, and its `nameSpan` is
+   * the expression.
+   */
   readonly tag: string;
+  /** Where the name is written; absent for a tag a `transform` built. */
   readonly nameSpan?: SourceSpan;
   /** Its contract as plain data, absent for a tag with none. */
   readonly contract?: ContractData;

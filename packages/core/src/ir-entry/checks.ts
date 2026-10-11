@@ -27,7 +27,7 @@
  * reports under its `internal error: ` prefix, with no IR.
  */
 
-import { DYNAMIC_TAG, isTranslateError, TranslateError } from "../core.ts";
+import { isTranslateError, TranslateError } from "../core.ts";
 import { UNKNOWN_TAG_CODE } from "../diagnostic-codes.ts";
 import { nearestName } from "../did-you-mean.ts";
 import type {
@@ -637,7 +637,7 @@ function allUnknownTags(
   const found: UnknownTagHit[] = [];
   const visitTag = (tag: DelegatedTag<unknown>, frame: ViewFrame) => {
     const written = tag.alias?.authored ?? tag.name;
-    const authored = tag.nameSpan !== undefined;
+    const nameSpan = tag.nameSpan;
     if (
       tag.nameSpan !== undefined &&
       // A wildcard child (`alias`) was claimed by its parent's contract: known.
@@ -663,14 +663,15 @@ function allUnknownTags(
       });
     }
     // A tag a `transform` emitted has no authored name: it is not an ancestor
-    // (the parse-only scan never sees it either).
+    // (the parse-only scan never sees it either). A dynamic tag is not here:
+    // `lowerSource` lowers it to a `Component`, which this walk does not enter.
     const inner =
-      explainer && (authored || tag.name === DYNAMIC_TAG)
+      explainer && nameSpan
         ? enterTag(explainer.env, frame, {
             node: tag,
-            written: tag.name === DYNAMIC_TAG ? "" : written,
-            name: tag.name === DYNAMIC_TAG ? "" : tag.name,
-            ...(tag.nameSpan ? { nameSpan: tag.nameSpan } : {}),
+            written,
+            name: tag.name,
+            nameSpan,
             claimed: tag.alias !== undefined,
           })
         : frame;

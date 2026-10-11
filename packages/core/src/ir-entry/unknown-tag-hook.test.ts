@@ -384,6 +384,67 @@ describe("explainUnknownTag: one tag, one diagnostic", () => {
     ]);
   });
 
+  describe("with the unrelated error before the tag (the not-allowed error is not the first one raised)", () => {
+    const before = NEEDS + source;
+    const needsFirst = error({
+      message: NEEDS_MESSAGE,
+      line: 1,
+      column: 0,
+      offset: 0,
+    });
+
+    for (const mode of ["reject", "allow"] as const) {
+      it(`${mode}: the explained tag is the dialect's one diagnostic beside it`, () => {
+        const { diagnostics, ir } = run(before, mode);
+        expect(ir).toBeUndefined();
+        expect(diagnostics).toEqual([
+          needsFirst,
+          error({
+            message: againstTag("string:title", "string"),
+            code: CODE,
+            line: 3,
+            column: 15,
+            offset: 33,
+          }),
+        ]);
+      });
+    }
+
+    it("reject, no hook: the unknown tag is `MX_UNKNOWN_TAG` alone, with no not-allowed beside it", () => {
+      const { diagnostics } = run(before, "reject", {
+        dialect: dialectOf(null),
+      });
+      expect(diagnostics).toEqual([
+        needsFirst,
+        error({
+          message:
+            "`<string:title>` is not a known tag: it has no contract in `customTags`",
+          code: "MX_UNKNOWN_TAG",
+          line: 3,
+          column: 14,
+          offset: 32,
+        }),
+      ]);
+    });
+
+    it("allow, no hook: a not-allowed error is still core's, once", () => {
+      const { diagnostics } = run(before, "allow", {
+        dialect: dialectOf(null),
+      });
+      expect(diagnostics).toEqual([
+        needsFirst,
+        error({
+          message:
+            "`<attributes>`: `<string:title>` is not allowed here; allowed children: `<string>`",
+          code: "MX_TAG_NOT_ALLOWED",
+          line: 3,
+          column: 14,
+          offset: 32,
+        }),
+      ]);
+    });
+  });
+
   it("the dropped error's wildcard guidance stays on core's error, not on the dialect's", () => {
     const tags: Record<string, CustomTag> = {
       wild: { children: { "*": { pattern: "^T[a-z]+$" } } },
@@ -505,6 +566,32 @@ describe("explainUnknownTag: the view the hook gets", () => {
     });
     const call = calls.find((c) => c.name === "string:title");
     expect(call?.ancestors.map((a) => a.tag)).not.toContain("emitted:x");
+  });
+
+  it('a tag inside a dynamic tag: asked on the failure path with an ancestor named "", not on the success path', () => {
+    // A dynamic tag is always an error under `lowerSource` (it has no name), so
+    // this is a file that already has one. The scan still reads its children.
+    const failing = spied();
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: a dynamic tag's source text
+    const source = "<${name}>\n  <g:h/>\n</>\n";
+    const { diagnostics } = run(source + NEEDS, "reject", {
+      dialect: failing.dialect,
+    });
+    expect(failing.calls).toHaveLength(1);
+    expect(failing.calls[0]?.name).toBe("g:h");
+    expect(failing.calls[0]?.ancestors).toEqual([
+      // The name span is the `${...}` expression.
+      { tag: "", nameSpan: { sourceStart: 1, sourceEnd: 8 } },
+    ]);
+    expect(diagnostics.some((d) => d.code === CODE)).toBe(true);
+    // The success path's walk does not enter a dynamic tag.
+    const ok = spied();
+    const lowered = run(source, "reject", { dialect: ok.dialect });
+    expect(ok.calls).toEqual([]);
+    expect(lowered.diagnostics.map((d) => d.message)).toEqual([
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: the message's own text
+      "a dynamic tag (`<${expr}>`) has no name; the data tree is static and needs one",
+    ]);
   });
 
   it("the data handed to the hook is frozen", () => {
@@ -830,6 +917,50 @@ describe("explainUnknownTag: a hook that misbehaves is one positioned diagnostic
       "returns null",
       () => null as never,
       "the dialect's `explainUnknownTag` must return an explanation object or undefined, got null for `<a:b>`",
+    ],
+    [
+      "returns no message at all",
+      () => ({}) as never,
+      "the dialect's `explainUnknownTag` must return a non-empty `message`, got undefined for `<a:b>`",
+    ],
+    [
+      "returns a promise",
+      () => Promise.resolve({ message: "x" }) as never,
+      "the dialect's `explainUnknownTag` must be synchronous: it returned a promise for `<a:b>`",
+    ],
+    [
+      "returns an explanation whose `message` getter throws",
+      () =>
+        ({
+          get message(): string {
+            throw new Error("getter");
+          },
+        }) as never,
+      "the dialect's `explainUnknownTag` threw while explaining `<a:b>`: getter",
+    ],
+    [
+      "returns an explanation whose `at` getter throws",
+      () =>
+        ({
+          message: "x",
+          get at(): never {
+            throw new Error("at getter");
+          },
+        }) as never,
+      "the dialect's `explainUnknownTag` threw while explaining `<a:b>`: at getter",
+    ],
+    [
+      "returns a proxy that throws on any read",
+      () =>
+        new Proxy(
+          {},
+          {
+            get() {
+              throw new Error("proxy");
+            },
+          },
+        ) as never,
+      "the dialect's `explainUnknownTag` threw while explaining `<a:b>`: proxy",
     ],
     [
       "returns an array",

@@ -145,6 +145,7 @@ function insideDocument(span: unknown, length: number): span is SourceSpan {
 }
 
 function describe(value: unknown): string {
+  if (value === undefined) return "undefined";
   if (value === null) return "null";
   if (Array.isArray(value)) return "an array";
   if (typeof value === "object") return "an object";
@@ -193,9 +194,48 @@ export function explainerFor(
         file,
         source,
       });
-      let returned: unknown;
+      // Everything the hook hands back is read inside the guard: a getter or a
+      // proxy that throws is the dialect's failure too.
       try {
-        returned = hook.call(dialect, tag);
+        const returned: unknown = hook.call(dialect, tag);
+        if (returned === undefined) return undefined;
+        if (
+          returned === null ||
+          typeof returned !== "object" ||
+          Array.isArray(returned)
+        ) {
+          return hookError(
+            `must return an explanation object or undefined, got ${describe(returned)} for \`<${facts.name}>\``,
+          );
+        }
+        if (typeof (returned as { then?: unknown }).then === "function") {
+          return hookError(
+            `must be synchronous: it returned a promise for \`<${facts.name}>\``,
+          );
+        }
+        const { message, code, at } = returned as Partial<
+          Record<keyof UnknownTagExplanation, unknown>
+        >;
+        if (typeof message !== "string" || message === "") {
+          return hookError(
+            `must return a non-empty \`message\`, got ${describe(message)} for \`<${facts.name}>\``,
+          );
+        }
+        if (code !== undefined && (typeof code !== "string" || code === "")) {
+          return hookError(
+            `must return \`code\` as a non-empty string, got ${describe(code)} for \`<${facts.name}>\``,
+          );
+        }
+        if (at !== undefined && !insideDocument(at, source.length)) {
+          return hookError(
+            `must return \`at\` as a \`{ sourceStart, sourceEnd }\` span inside the document (0 to ${source.length}) for \`<${facts.name}>\``,
+          );
+        }
+        return errorAt(
+          (at as SourceSpan | undefined)?.sourceStart ?? facts.span.sourceStart,
+          message,
+          code as string | undefined,
+        );
       } catch (thrown) {
         const reason =
           thrown instanceof Error ? thrown.message : describe(thrown);
@@ -203,39 +243,6 @@ export function explainerFor(
           `threw while explaining \`<${facts.name}>\`: ${reason}`,
         );
       }
-      if (returned === undefined) return undefined;
-      if (
-        returned === null ||
-        typeof returned !== "object" ||
-        Array.isArray(returned)
-      ) {
-        return hookError(
-          `must return an explanation object or undefined, got ${describe(returned)} for \`<${facts.name}>\``,
-        );
-      }
-      const { message, code, at } = returned as Partial<
-        Record<keyof UnknownTagExplanation, unknown>
-      >;
-      if (typeof message !== "string" || message === "") {
-        return hookError(
-          `must return a non-empty \`message\`, got ${describe(message)} for \`<${facts.name}>\``,
-        );
-      }
-      if (code !== undefined && (typeof code !== "string" || code === "")) {
-        return hookError(
-          `must return \`code\` as a non-empty string, got ${describe(code)} for \`<${facts.name}>\``,
-        );
-      }
-      if (at !== undefined && !insideDocument(at, source.length)) {
-        return hookError(
-          `must return \`at\` as a \`{ sourceStart, sourceEnd }\` span inside the document (0 to ${source.length}) for \`<${facts.name}>\``,
-        );
-      }
-      return errorAt(
-        (at as SourceSpan | undefined)?.sourceStart ?? facts.span.sourceStart,
-        message,
-        code as string | undefined,
-      );
     },
   };
 }

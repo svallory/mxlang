@@ -4240,8 +4240,8 @@ contract, or turn it into IR, and what it returns is always an error.
 ```ts
 /** @unstable */
 interface UnknownTag {
-  name: string;                     // as written: `entity:Todo`, `:x` as the tag it names
-  nameSpan: SourceSpan;             // the name, without `<` or `@`
+  name: string;                     // as written: `entity:Todo`, `:x`; an unnamed tag (`<#a>`) is the default tag it resolves to
+  nameSpan: SourceSpan;             // the name, without `<` or `@`; empty for an unnamed tag, after the `<`
   span: SourceSpan;                 // the whole element (a concise tag runs to the end of its line)
   ancestors: readonly UnknownTagAncestor[]; // authored tags around it, outermost first
   mode: "allow" | "reject";         // the call's `unknownTags`
@@ -4250,8 +4250,8 @@ interface UnknownTag {
 }
 /** @unstable */
 interface UnknownTagAncestor {
-  tag: string;                      // as written: `@row` for an attribute tag
-  nameSpan?: SourceSpan;            // absent for a dynamic tag
+  tag: string;                      // as written: `@row` for an attribute tag; `""` for a dynamic tag
+  nameSpan?: SourceSpan;            // where the name is written (a dynamic tag's `${...}`)
   contract?: ContractData;          // the contract in force inside it; absent for a tag with none
 }
 /** @unstable */
@@ -4265,7 +4265,7 @@ interface UnknownTagExplanation {
 Core calls the hook once for each authored tag that has no contract, in both
 `unknownTags` modes, and only for such a tag: not for a declared tag, a child a
 parent's `children["*"]` claims, a tag a `transform` emitted, an attribute tag
-`<@x>`, a dynamic tag or a structural name (`if`, `for`, `const`). A hook that
+`<@x>`, a dynamic tag itself or a structural name (`if`, `for`, `const`), nor for a call of a tag whose definition core refused (it has its own error). A hook that
 returns `undefined` leaves the tag to core: `MX_UNKNOWN_TAG` under `"reject"`,
 nothing under `"allow"`. A tag it explains is the dialect's error, in either
 mode, and has no `MX_UNKNOWN_TAG` and, inside a closed parent, no

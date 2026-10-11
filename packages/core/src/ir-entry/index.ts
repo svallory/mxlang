@@ -34,6 +34,7 @@ import {
   type CustomTag,
   registrationView,
   tagOccurrenceOf,
+  withoutCollected,
 } from "../custom-tags.ts";
 import type { HostDeclarations } from "../declarations.ts";
 import { RESERVED_TAG_CODE, UNKNOWN_TAG_CODE } from "../diagnostic-codes.ts";
@@ -206,10 +207,10 @@ function declaredTagNames(
  */
 function presetOf(
   options: LowerSourceOptions,
-  filename: string,
+  dialectOnce: () => ReturnType<typeof dialectOf>,
 ): TagRulesPreset {
   if (options.tagRules !== undefined) return options.tagRules;
-  const dialect = dialectOf(options, filename);
+  const dialect = dialectOnce();
   return dialect ? dialectTagRules(dialect) : "html";
 }
 
@@ -336,12 +337,14 @@ function reservedDiagnostics(
  */
 function explainerOf(
   options: LowerSourceOptions,
+  dialectOnce: () => ReturnType<typeof dialectOf>,
+  customTags: LowerSourceOptions["customTags"],
   filename: string,
   source: string,
   lineStarts: number[],
 ): Explainer | undefined {
   try {
-    const dialect = dialectOf(options, filename);
+    const dialect = dialectOnce();
     if (!dialect?.explainUnknownTag) return undefined;
     const claimed = claimedFields(dialect);
     return explainerFor(dialect, {
@@ -350,7 +353,7 @@ function explainerOf(
       source,
       lineStarts,
       env: {
-        customTags: registrationView(options.customTags, claimed),
+        customTags: registrationView(customTags, claimed),
         tagFields: claimed.tag,
         memo: new WeakMap(),
       },
@@ -382,6 +385,13 @@ export function lowerSource(
   const customTags =
     refused.length > 0 ? without(options, refused) : options.customTags;
   const refusedNames = new Set(refused.map((definition) => definition.name));
+  // The file's dialect, resolved at most once per call (routing costs a stat
+  // pass): a throw is not kept, so the compile still reports it.
+  let resolved: { dialect: ReturnType<typeof dialectOf> } | undefined;
+  const dialectOnce = () => {
+    resolved ??= { dialect: dialectOf(options, filename) };
+    return resolved.dialect;
+  };
   let rules: ReturnType<typeof tagRulesPreset> | undefined;
   let calls: readonly ReservedCall[] | undefined;
   // Found once, after `rules` is known, and only when a definition was refused.
@@ -439,7 +449,7 @@ export function lowerSource(
       ),
     });
   try {
-    rules = tagRulesPreset(presetOf(options, filename), WEB_ELEMENTS);
+    rules = tagRulesPreset(presetOf(options, dialectOnce), WEB_ELEMENTS);
   } catch (error) {
     return failed([error]);
   }
@@ -468,7 +478,14 @@ export function lowerSource(
     compileSource(source, filename, declarations, host);
   } catch (error) {
     const reject = options.unknownTags === "reject";
-    const explainer = explainerOf(options, filename, source, lineStarts);
+    const explainer = explainerOf(
+      options,
+      dialectOnce,
+      customTags,
+      filename,
+      source,
+      lineStarts,
+    );
     if (!reject && !explainer) return failed([error]);
     try {
       // A deferred entry's contract answers from its view (never throws):
@@ -477,12 +494,10 @@ export function lowerSource(
         source,
         filename,
         rules,
-        registrationView(
-          customTags,
-          claimedFields(dialectOf(options, filename)),
-        ),
+        registrationView(customTags, claimedFields(dialectOnce())),
         options.defaultTag ?? DEFAULT_TAG,
         options.dialect,
+        undefined,
         explainer && {
           explainer,
           // A call of a refused name has its own error: the dialect is not asked.
@@ -546,7 +561,13 @@ export function lowerSource(
       const explained = new Set<unknown>(
         reported.flatMap((tag) => (tag.explained ? [tag.explained] : [])),
       );
-      return failed(labelInside([...kept, ...errors], ranges, explained));
+      return failed(
+        labelInside(
+          [...kept.map(withoutCollected), ...errors],
+          ranges,
+          explained,
+        ),
+      );
     } catch (scanError) {
       return failed([error, scanError]);
     }
@@ -559,7 +580,14 @@ export function lowerSource(
   const lowered = ir as Ir;
   // Never throws: the check records every error, even one outside its
   // recovery points, and returns them with the rest.
-  const successExplainer = explainerOf(options, filename, source, lineStarts);
+  const successExplainer = explainerOf(
+    options,
+    dialectOnce,
+    customTags,
+    filename,
+    source,
+    lineStarts,
+  );
   const errors = checkIr(lowered, source, {
     structural: options.structural ?? "pass",
     imports: options.imports ?? options.structural ?? "pass",

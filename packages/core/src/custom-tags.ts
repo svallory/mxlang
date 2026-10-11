@@ -957,6 +957,27 @@ export function tagOccurrenceOf(error: unknown): TagOccurrence | undefined {
   return error instanceof TranslateError ? occurrences.get(error) : undefined;
 }
 
+/**
+ * `error` as one error and nothing more. The first error a walk raised carries
+ * every error it recorded (`errors`, see `collectedError`), so a list that
+ * kept it and dropped one of the others would give that one back the next time
+ * the list is flattened. This copy has no such list, and keeps the position,
+ * code, file, spans and the occurrence recorded for it. An error with no list
+ * is returned as it is. The original is not touched: other readers still see
+ * its list.
+ */
+export function withoutCollected(error: unknown): unknown {
+  if (!(error instanceof TranslateError) || error.errors === undefined) {
+    return error;
+  }
+  const copy = Object.create(Object.getPrototypeOf(error)) as TranslateError;
+  Object.defineProperties(copy, Object.getOwnPropertyDescriptors(error));
+  delete (copy as { errors?: unknown }).errors;
+  const occurrence = occurrences.get(error);
+  if (occurrence !== undefined) occurrences.set(copy, occurrence);
+  return copy;
+}
+
 export function buildersFor(
   loc: Position,
   ctx: Ctx,
