@@ -97,8 +97,7 @@ export class TranslateError extends Error {
   /**
    * The MX diagnostic code, when its raiser gave one: a dialect's
    * `ctx.fail(message, { code })`, or one of core's own (`MX_UNKNOWN_TAG`,
-   * `MX_TAG_NOT_ALLOWED`, `MX_TEXT_NOT_ALLOWED`; a parse error carries
-   * `MX_EXPECTED_SINGLE_EXPRESSION`). Not `code`: Babel's convention sets that on every error a
+   * `MX_TAG_NOT_ALLOWED`, `MX_TEXT_NOT_ALLOWED`). Not `code`: Babel's convention sets that on every error a
    * translator throws (`BABEL_TRANSFORM_ERROR`). @unstable
    */
   diagnosticCode?: string;

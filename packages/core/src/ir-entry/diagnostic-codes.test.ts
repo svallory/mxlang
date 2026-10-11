@@ -180,6 +180,19 @@ describe("MX_EXPECTED_SINGLE_EXPRESSION", () => {
     ]);
   });
 
+  it("a default value followed by a spaced `:` (Mesh's case)", () => {
+    expect(only("<x=1 :n=2/>\n", {})).toEqual([
+      {
+        severity: "error",
+        message: "Expected a single expression, but found `:` after it.",
+        line: 1,
+        column: 5,
+        offset: 5,
+        code: "MX_EXPECTED_SINGLE_EXPRESSION",
+      },
+    ]);
+  });
+
   it("a placeholder in a tag body", () => {
     expect(only(`<x>${D}1 2}</x>\n`, {})).toEqual([
       {
