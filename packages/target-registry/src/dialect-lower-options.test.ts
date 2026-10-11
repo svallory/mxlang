@@ -137,6 +137,7 @@ describe("R9: the editor equals the dialect's own CLI", () => {
     ["an interpolation", `entity\n  <field>\${x}</field>\n`],
     ["text", "entity\n  <field>hello</field>\n"],
     ["a misspelt tag", "<entiy/>\n"],
+    ["a misspelt child under a closed parent", "entity\n  wiget\n"],
     ["a project-only tag", "<service/>\n"],
     ["a top-level `export`", "export const a = 1\nentity\n"],
   ];
@@ -160,6 +161,24 @@ describe("R9: the editor equals the dialect's own CLI", () => {
     );
     expect(cli.length).toBeGreaterThan(0);
     expect(check(file, text)).toEqual(cli);
+  });
+
+  it("a misspelt child under a closed parent is an unknown tag, as the compiler says", () => {
+    const { path } = project({
+      ...STRICT,
+      contracts: {
+        entity: { children: { field: {} } },
+        field: { parents: ["entity"] },
+      },
+    });
+    expect(check(path("a.probe"), "entity\n  wiget\n")).toEqual([
+      [
+        "`<wiget>` is not a known tag: it has no contract in `customTags`",
+        2,
+        2,
+        "MX_UNKNOWN_TAG",
+      ],
+    ]);
   });
 
   it("a tool passes none of the options: the same file under the dialect's values only", () => {

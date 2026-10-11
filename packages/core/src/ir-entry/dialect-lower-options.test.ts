@@ -27,7 +27,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { clearScanCache, scanCached } from "../scan-cache.ts";
-import type { Dialect } from "../syntax-table.ts";
+import { type Dialect, resolveSyntaxOf } from "../syntax-table.ts";
 import { clearTagFileCache } from "../tag-file.ts";
 import { dialectProject } from "../test-dialect-project.ts";
 import { testTargetLookup } from "../test-targets.ts";
@@ -386,5 +386,65 @@ describe("R7: a dialect's tag files", () => {
     tagProject();
     write("concepts/money.member.mx", "<!-- PASS -->\n<if=true><div/></if>\n");
     expect(brief(callMoney())).toEqual([]);
+  });
+});
+
+describe("an explicit dialect is isolated from the routed one", () => {
+  it("R1: in a strict routed project, a bare table and a field-less dialect check nothing", () => {
+    project(STRICT);
+    expect(brief(lowerSource(S, file))).toEqual([IF, UNKNOWN]);
+    const bare = resolveSyntaxOf(join(dir, "z.mx")).table;
+    expect(brief(lowerSource(S, file, { dialect: bare }))).toEqual([]);
+    expect(brief(lowerWith(explicit()))).toEqual([]);
+  });
+});
+
+describe("`unknownTags` closes the vocabulary when parsing fails", () => {
+  const CLOSED = {
+    entity: { children: { field: {} } },
+    field: { parents: ["entity"] },
+  };
+  const MISSPELT = "entity\n  wiget\n";
+
+  function closedProject(unknownTags: "allow" | "reject") {
+    return dialectProject(dir, {
+      manifest: { id: "test", name: "Test", extensions: [".member.mx"] },
+      module: `export default {
+  table: {},
+  tagRules: "none",
+  contracts: ${JSON.stringify(CLOSED)},
+  unknownTags: ${JSON.stringify(unknownTags)},
+};`,
+    });
+  }
+
+  it("the dialect's `reject` names the misspelt child as unknown", () => {
+    closedProject("reject");
+    expect(brief(lowerSource(MISSPELT, file))).toEqual([
+      {
+        severity: "error",
+        message:
+          "`<wiget>` is not a known tag: it has no contract in `customTags`",
+        line: 2,
+        column: 2,
+        code: "MX_UNKNOWN_TAG",
+      },
+    ]);
+  });
+
+  it("the call's `allow` wins and the closed parent refuses the child", () => {
+    closedProject("reject");
+    expect(
+      brief(lowerSource(MISSPELT, file, { unknownTags: "allow" })),
+    ).toEqual([
+      {
+        severity: "error",
+        message:
+          "`<entity>`: `<wiget>` is not allowed here; allowed children: `<field>`",
+        line: 2,
+        column: 2,
+        code: "MX_TAG_NOT_ALLOWED",
+      },
+    ]);
   });
 });
