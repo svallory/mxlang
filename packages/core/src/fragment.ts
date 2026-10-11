@@ -58,6 +58,7 @@ import {
 import { BARE_COMMA_MESSAGE, tagParamError } from "./stock-parser.ts";
 import {
   type Dialect,
+  dialectCustomTags,
   explicitSyntaxOf,
   fileTagRules,
   resolveSyntaxOf,
@@ -458,7 +459,12 @@ export function parseFragment(
   const rules =
     preset === undefined ? undefined : tagRulesPreset(preset, base.nativeTags);
   const translator = parseOnlyTranslator(
-    base.customTags,
+    // The dialect's `contracts` register beside the caller's `customTags`.
+    dialectCustomTags(
+      base.customTags,
+      resolvedSyntax.dialect,
+      base.dialect !== undefined,
+    ),
     claimedFields(resolvedSyntax.dialect),
     rules ? taglibsOfRules(rules) : undefined,
   );

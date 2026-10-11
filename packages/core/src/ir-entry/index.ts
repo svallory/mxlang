@@ -46,6 +46,7 @@ import {
 } from "../scan.ts";
 import {
   type Dialect,
+  dialectCustomTags,
   dialectTagRules,
   explicitSyntaxOf,
   resolveSyntaxOf,
@@ -382,7 +383,7 @@ export function lowerSource(
   const refused = reservedDefinitions(options, filename);
   // A refused definition is dropped: everything below lowers as if the
   // caller had not passed it, and `refuse` then adds its diagnostics.
-  const customTags =
+  let customTags =
     refused.length > 0 ? without(options, refused) : options.customTags;
   const refusedNames = new Set(refused.map((definition) => definition.name));
   // The file's dialect, resolved at most once per call (routing costs a stat
@@ -452,6 +453,18 @@ export function lowerSource(
     rules = tagRulesPreset(presetOf(options, dialectOnce), WEB_ELEMENTS);
   } catch (error) {
     return failed([error]);
+  }
+  // The dialect's `contracts` under the caller's (or the scan's) definitions,
+  // with its reserved ones on top; a dialect that fails to resolve is the
+  // compile's to report.
+  try {
+    customTags = dialectCustomTags(
+      customTags,
+      dialectOnce(),
+      options.dialect !== undefined,
+    );
+  } catch {
+    // The compile below resolves the dialect again and reports the failure.
   }
   const declarations = entryDeclarations(rules.nativeTags);
   const declared = declaredTagNames(customTags);

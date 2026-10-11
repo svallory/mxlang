@@ -250,8 +250,39 @@ let moduleOfFile: ((filePath: string) => Dialect | undefined) | undefined;
  */
 export function registerSyntaxResolver(
   resolve: (filePath: string) => Dialect | undefined,
+  moduleStamp?: ModuleStamp,
 ): void {
   moduleOfFile = resolve;
+  stampOfModule = moduleStamp;
+}
+
+/**
+ * The module file a resolved dialect (or a failed resolution, `failure`)
+ * loaded from, with the mtime it was read at.
+ */
+export type ModuleStamp = (
+  dialect: Dialect | undefined,
+  failure: unknown,
+) => { path: string; mtimeMs?: number } | undefined;
+
+let stampOfModule: ModuleStamp | undefined;
+
+/**
+ * The dialect module `filePath` routes to, stamped as it was loaded, for the
+ * discovery scan's evidence: editing the module (its `contracts`, its
+ * `contractFields`, or a fix to a module that failed) then re-scans, and the
+ * tools that track a scan's files re-check. `undefined` for MX's own files
+ * and for a failure before the module was read.
+ */
+export function dialectModuleOf(
+  filePath: string,
+): { path: string; mtimeMs?: number } | undefined {
+  if (!moduleOfFile || !stampOfModule) return undefined;
+  try {
+    return stampOfModule(moduleOfFile(filePath), undefined);
+  } catch (failure) {
+    return stampOfModule(undefined, failure);
+  }
 }
 
 /**

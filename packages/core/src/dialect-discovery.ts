@@ -91,6 +91,7 @@ const MANIFEST_FIELDS = [
   "tagExtensions",
   "sidecars",
   "reservedTags",
+  "mxConfigTags",
 ] as const;
 
 /** The `package.json` fields that list a project's direct dependencies. */
@@ -134,6 +135,14 @@ export interface DialectManifest {
    * always reserved and cannot be listed. @unstable
    */
   readonly reservedTags?: readonly string[];
+  /**
+   * Whether its files take tag definitions from the project's
+   * `package.json#mx.tags` and `mx.contracts`; absent means they do. With
+   * `false` the dialect's files see only its `tagDirs`, its own
+   * `contracts` and what a caller passes: a language whose vocabulary is
+   * its own opts out of the MX project's. @unstable
+   */
+  readonly mxConfigTags?: boolean;
   /** The package that declares it. */
   readonly packageName: string;
   /** That package's `package.json`, absolute. */
@@ -303,12 +312,12 @@ export function readDialectManifest(
 /** The tag-discovery fields of a manifest, validated. */
 type TagFields = Pick<
   DialectManifest,
-  "tagDirs" | "tagExtensions" | "sidecars" | "reservedTags"
+  "tagDirs" | "tagExtensions" | "sidecars" | "reservedTags" | "mxConfigTags"
 >;
 
 /**
  * Validates a manifest's tag-discovery fields (`tagDirs`, `tagExtensions`,
- * `sidecars`, `reservedTags`), each an error at its own key. `claimed` holds
+ * `sidecars`, `reservedTags`, `mxConfigTags`), each an error at its own key. `claimed` holds
  * the manifest's `extensions`, so a `tagExtensions` entry may not repeat one.
  */
 function readTagFields(
@@ -316,7 +325,8 @@ function readTagFields(
   claimed: ReadonlySet<string>,
   fail: (message: string, field?: string, index?: number) => never,
 ): TagFields {
-  const { tagDirs, tagExtensions, sidecars, reservedTags } = fields;
+  const { tagDirs, tagExtensions, sidecars, reservedTags, mxConfigTags } =
+    fields;
   const result: {
     -readonly [K in keyof TagFields]: TagFields[K];
   } = {};
@@ -387,6 +397,15 @@ function readTagFields(
       );
     }
     result.sidecars = sidecars as boolean;
+  }
+  if (mxConfigTags !== undefined) {
+    if (typeof mxConfigTags !== "boolean") {
+      fail(
+        `${key("mxConfigTags")} must be a boolean: whether the dialect's files take tag definitions from the project's \`mx.tags\` and \`mx.contracts\``,
+        "mxConfigTags",
+      );
+    }
+    result.mxConfigTags = mxConfigTags as boolean;
   }
   if (reservedTags !== undefined) {
     if (!Array.isArray(reservedTags)) {

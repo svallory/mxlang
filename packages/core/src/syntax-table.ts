@@ -22,8 +22,13 @@ import {
   registerSyntaxResolver,
 } from "./contract-fields.ts";
 import type { Node } from "./core.ts";
-import { TranslateError } from "./core.ts";
-import type { IrBuilders } from "./custom-tags.ts";
+import { isTranslateError, TranslateError } from "./core.ts";
+import type { ContractMap, CustomTag, IrBuilders } from "./custom-tags.ts";
+import {
+  type ContractFail,
+  checkDialectContracts,
+  withDialectContracts,
+} from "./dialect-contracts.ts";
 import {
   type DialectManifest,
   type RouteDialectOptions,
@@ -60,7 +65,11 @@ import { type MxTemplateParser, mxTemplateParser } from "./marko-frontend.ts";
 import { findMxConfig, type MxConfigSource } from "./mx-config.ts";
 import { filePosition } from "./mx-parse.ts";
 import { jsonKeyPosition, readPackageJsonCached } from "./package-json.ts";
-import { loadDefaultExport, mxKeyPosition } from "./scan.ts";
+import {
+  loadDefaultExport,
+  mxKeyPosition,
+  staticKeyPathPosition,
+} from "./scan.ts";
 import { TAG_RULES_PRESETS, type TagRulesPreset } from "./tag-presets.ts";
 import { triggerRow } from "./triggers.ts";
 
@@ -517,6 +526,22 @@ export interface Dialect {
    * @unstable
    */
   readonly tagFile?: (file: TagFileInput, ctx: TagFileContext) => TagFileResult;
+  /**
+   * The dialect's tag vocabulary: a contract per tag name, as `customTags`
+   * would register it (every `CustomTag` key but `template`, plus the keys
+   * the dialect claims in `contractFields.tag`). Every file routed to the
+   * dialect, and every entry given the dialect as `dialect`, registers them
+   * in every tool. A name the manifest lists in `reservedTags` is the
+   * dialect's alone: a project definition of it is `MX_RESERVED_TAG`. Any
+   * other name is a default the project may replace (a tag file, `mx.tags`,
+   * `mx.contracts` or `customTags`), silently. With an explicit `dialect`,
+   * the caller's `customTags` are the dialect's own and replace any of them.
+   * Validated once per module revision, when the dialect loads: a contract
+   * that cannot register fails the dialect (`MX_INVALID_DIALECT_CONTRACT`,
+   * at the entry's key in the module). A core reserved name (`if`, `try`,
+   * ...) cannot be defined. @unstable
+   */
+  readonly contracts?: ContractMap;
 }
 
 /**
@@ -676,6 +701,7 @@ const MODULE_FIELDS = new Set([
   "explainUnknownTag",
   "describeAttribute",
   "tagFile",
+  "contracts",
 ]);
 
 const MODULE_HOOKS = [
@@ -771,12 +797,14 @@ export function dialectTagRules(dialect: Dialect): TagRulesPreset {
  * prefixes the field names (the option's wording, or the module's default
  * export). `identity` is the manifest's `id` and `name` for a loaded
  * module: stamped on the dialect, and a module that states either must
- * agree with it.
+ * agree with it. `failContract` places a `contracts` entry's error (at its
+ * key in the module, or as the option's error).
  */
 function checkModuleShape(
   value: Record<string, unknown>,
   path: string,
   fail: (message: string) => never,
+  failContract: ContractFail,
   identity?: { readonly id: string; readonly name: string },
 ): Dialect {
   if (identity) {
@@ -814,9 +842,10 @@ function checkModuleShape(
     }
   }
   checkContractFields(value.contractFields, path, fail);
+  checkDialectContracts(value, path, failContract);
   // SAFETY: the checks above validated `value` field by field (keys in
   // MODULE_FIELDS, `id` and `name` stamped or checked, `table` present,
-  // hooks functions, contract fields checked) — exactly Dialect's shape;
+  // hooks functions, contract fields and contracts checked) — exactly Dialect's shape;
   // the assertion carries that dynamic validation into the typed interface.
   return (identity ? Object.freeze(value) : value) as unknown as Dialect;
 }
@@ -839,7 +868,10 @@ function isDialect(value: unknown): value is Dialect {
  * no `lowerTrigger`, or a row naming a node type the dialect does not
  * register is an error in the module file at 1:0.
  */
-function loadDialect(manifest: DialectManifest): {
+function loadDialect(
+  manifest: DialectManifest,
+  loading?: (file: string) => void,
+): {
   resolved: ResolvedSyntax;
   file: string;
 } {
@@ -870,10 +902,22 @@ function loadDialect(manifest: DialectManifest): {
   const failInModule = (message: string): never => {
     throw new TranslateError(message, 1, 0, file);
   };
+  // A contract's error is at its key when the module writes it as a literal.
+  const failContract: ContractFail = (message, at, code) => {
+    const { line, column } = staticKeyPathPosition(file, at) ?? {
+      line: 1,
+      column: 0,
+    };
+    const error = new TranslateError(message, line, column, file);
+    error.diagnosticCode = code;
+    throw error;
+  };
+  loading?.(file);
   const dialect = checkModuleShape(
     loadDialectModule(file),
     "",
     failInModule,
+    failContract,
     manifest,
   );
   const table = overlayTable(dialect.table, "table", failInModule);
@@ -940,10 +984,21 @@ function rejectRemovedSyntax(source: MxConfigSource | undefined): void {
   );
 }
 
-/** Each loaded dialect, per manifest, so an unchanged module is never re-validated. */
+/**
+ * Each loaded dialect, per manifest, so an unchanged module is never
+ * re-validated: the dialect, or why its module failed to load or validate,
+ * kept until the module file changes.
+ */
 const byDialect = new WeakMap<
   DialectManifest,
-  { resolved: ResolvedSyntax; file: string; mtimeMs?: number }
+  | { resolved: ResolvedSyntax; file: string; mtimeMs?: number }
+  | { error: TranslateError; file: string; mtimeMs?: number }
+>();
+
+/** Each loaded dialect's module file, and the manifest that declared it. */
+const loadedDialects = new WeakMap<
+  Dialect,
+  { file: string; manifest: DialectManifest }
 >();
 
 function mtimeOf(file: string): number | undefined {
@@ -1026,15 +1081,85 @@ function resolveManifestSyntax(
   const manifest = routeDialect(filename, options);
   if (!manifest) return DEFAULT_RESOLVED;
   const known = byDialect.get(manifest);
-  if (known && mtimeOf(known.file) === known.mtimeMs) return known.resolved;
-  const { resolved, file } = loadDialect(manifest);
-  byDialect.set(manifest, { resolved, file, mtimeMs: mtimeOf(file) });
-  return resolved;
+  if (known && mtimeOf(known.file) === known.mtimeMs) {
+    // The same error each time, as a module that fails to evaluate.
+    if ("error" in known) throw known.error;
+    return known.resolved;
+  }
+  // Stamped before the module is read: an edit racing the load reads as a
+  // change next time.
+  let module: { file: string; mtimeMs?: number } | undefined;
+  try {
+    const { resolved, file } = loadDialect(manifest, (file) => {
+      module = { file, mtimeMs: mtimeOf(file) };
+    });
+    byDialect.set(manifest, { resolved, ...(module ?? { file }) });
+    if (resolved.dialect) {
+      loadedDialects.set(resolved.dialect, { file, manifest });
+    }
+    return resolved;
+  } catch (error) {
+    // A failure in the module (its load, shape or contracts) stays until
+    // the module changes; one before it (an unresolvable `module`) is the
+    // manifest's, and a manifest edit is a new manifest object.
+    if (module && isTranslateError(error) && error.file === module.file) {
+      byDialect.set(manifest, { error, ...module });
+    }
+    throw error;
+  }
+}
+
+/**
+ * The module file a routed dialect loaded from, with the mtime it was
+ * loaded at, for the scan's evidence; `undefined` for an explicit dialect.
+ * A module that failed is reported through {@link failedDialectModule}.
+ */
+export function dialectModuleStamp(
+  dialect: Dialect,
+): { path: string; mtimeMs?: number } | undefined {
+  const loaded = loadedDialects.get(dialect);
+  if (!loaded) return undefined;
+  const known = byDialect.get(loaded.manifest);
+  return { path: loaded.file, mtimeMs: known?.mtimeMs };
+}
+
+/**
+ * The module a dialect's failed load was kept for (`error` is what routing
+ * threw), with the mtime it failed at: the scan stamps it too, so fixing the
+ * module re-scans.
+ */
+export function failedDialectModule(
+  error: unknown,
+): { path: string; mtimeMs?: number } | undefined {
+  if (!isTranslateError(error) || error.file === undefined) return undefined;
+  const load = moduleLoads.get(error.file);
+  return load ? { path: error.file, mtimeMs: load.mtimeMs } : undefined;
+}
+
+/**
+ * The `customTags` a file of `dialect` registers: the caller's
+ * (or the scan's) merged with the dialect's `contracts`
+ * ({@link withDialectContracts}). A routed dialect's reserved names are its
+ * manifest's `reservedTags`; with an `explicit` dialect the caller's
+ * `customTags` override every contract. Unchanged without contracts.
+ */
+export function dialectCustomTags(
+  customTags: Readonly<Record<string, CustomTag>> | undefined,
+  dialect: Dialect | undefined,
+  explicit: boolean,
+): Record<string, CustomTag> | undefined {
+  if (!dialect?.contracts) return customTags as Record<string, CustomTag>;
+  const reserved = loadedDialects.get(dialect)?.manifest.reservedTags ?? [];
+  return withDialectContracts(customTags, dialect, reserved, explicit);
 }
 
 // The discovery scan reads the claimed contract keys of a file's dialect
 // through this, without importing the syntax table itself.
-registerSyntaxResolver((filePath) => resolveSyntaxOf(filePath).dialect);
+registerSyntaxResolver(
+  (filePath) => resolveSyntaxOf(filePath).dialect,
+  (dialect, failure) =>
+    dialect ? dialectModuleStamp(dialect) : failedDialectModule(failure),
+);
 
 /**
  * The syntax table for `filename` (see {@link resolveSyntaxOf}, which also
@@ -1086,6 +1211,14 @@ export function explicitSyntaxOf(
     value as unknown as Record<string, unknown>,
     "dialect.",
     invalid,
+    (message, _at, code) => {
+      try {
+        return invalid(message);
+      } catch (error) {
+        (error as TranslateError).diagnosticCode = code;
+        throw error;
+      }
+    },
   );
   const table = overlayTable(dialect.table, "dialect.table", invalid);
   const unregistered = unregisteredNodeRow(table, dialect, "dialect.table");

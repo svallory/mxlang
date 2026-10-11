@@ -109,7 +109,7 @@ describe("emitFor", () => {
   it("a dialect cannot register an emit: the manifest has no field for one", () => {
     dialectProject(dir, { manifest: { emit: "./emit.mjs" } });
     expect(() => emitFor(join(dir, "a.tst"))).toThrow(
-      "`mx.dialect.emit` is not a dialect manifest field (id, name, extensions, module, tagDirs, tagExtensions, sidecars, reservedTags)",
+      "`mx.dialect.emit` is not a dialect manifest field (id, name, extensions, module, tagDirs, tagExtensions, sidecars, reservedTags, mxConfigTags)",
     );
   });
 

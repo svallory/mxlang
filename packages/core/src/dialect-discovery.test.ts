@@ -129,7 +129,7 @@ describe("`package.json#mx.dialect`", () => {
       "an unknown field",
       { targets: ["web"] },
       [11, 6],
-      "`mx.dialect.targets` is not a dialect manifest field (id, name, extensions, module, tagDirs, tagExtensions, sidecars, reservedTags)",
+      "`mx.dialect.targets` is not a dialect manifest field (id, name, extensions, module, tagDirs, tagExtensions, sidecars, reservedTags, mxConfigTags)",
     ],
     [
       "an id that is not one",

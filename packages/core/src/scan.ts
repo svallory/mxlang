@@ -62,6 +62,7 @@ import {
   type ClaimedFields,
   claimedFields,
   claimedFieldsOf,
+  dialectModuleOf,
 } from "./contract-fields.ts";
 import { isTranslateError, TranslateError } from "./core.ts";
 import {
@@ -140,8 +141,8 @@ const TEMPLATE_SUFFIX = ".mx";
 /**
  * How one caller's files discover tags. Core's own discovery is a fixed
  * entry ({@link CORE_TAG_DISCOVERY}: core is dialect zero), a dialect's comes
- * from its manifest's `tagDirs`, `tagExtensions`, `sidecars` and
- * `reservedTags` ({@link tagDiscoveryOf}), and both go through one scan
+ * from its manifest's `tagDirs`, `tagExtensions`, `sidecars`,
+ * `reservedTags` and `mxConfigTags` ({@link tagDiscoveryOf}), and both go through one scan
  * (`indexDirectory`), which reads only this shape.
  */
 export interface TagDiscovery {
@@ -157,6 +158,11 @@ export interface TagDiscovery {
   readonly sidecars: boolean;
   /** The names only this dialect may define (enforced by a later slice). */
   readonly reservedTags: readonly string[];
+  /**
+   * Whether the project's `package.json#mx.tags` and `mx.contracts` define
+   * tags for these files (the manifest's `mxConfigTags`, default `true`).
+   */
+  readonly mxConfigTags: boolean;
   /**
    * `templates`: MX's own kinds, `.mx` templates (core, and a dialect that
    * declares no `tagDirs`, which scans exactly as MX does). `tag-files`:
@@ -174,6 +180,7 @@ export const CORE_TAG_DISCOVERY: TagDiscovery = Object.freeze({
   extensions: Object.freeze([TEMPLATE_SUFFIX]),
   sidecars: true,
   reservedTags: RESERVED_NAMES,
+  mxConfigTags: true,
   kind: "templates" as const,
 });
 
@@ -200,6 +207,7 @@ export function tagDiscoveryOf(
           name: dialect.name,
           sidecars: dialect.sidecars ?? true,
           reservedTags: dialect.reservedTags ?? [],
+          mxConfigTags: dialect.mxConfigTags ?? true,
         }
       : {
           id: dialect.id,
@@ -208,6 +216,7 @@ export function tagDiscoveryOf(
           extensions: claimedExtensions(dialect),
           sidecars: dialect.sidecars ?? true,
           reservedTags: dialect.reservedTags ?? [],
+          mxConfigTags: dialect.mxConfigTags ?? true,
           kind: "tag-files" as const,
         },
   );
@@ -951,6 +960,34 @@ function staticKeyPosition(
   file: string,
   name: string,
 ): { line: number; column: number } | undefined {
+  return staticKeyPathPosition(file, [name]);
+}
+
+/** `value` without its `satisfies`/`as` wrappers. */
+function unwrapTypeAssertions(
+  value: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  let node = value;
+  while (
+    node?.type === "TSSatisfiesExpression" ||
+    node?.type === "TSAsExpression"
+  ) {
+    node = node.expression as Record<string, unknown>;
+  }
+  return node;
+}
+
+/**
+ * {@link staticKeyPosition} along a key path (`["contracts", "card"]`): each
+ * key's value is itself an object literal, or an identifier bound once at
+ * module scope to one (through `satisfies`/`as`), and the last key's
+ * position is returned. `undefined` as soon as one step cannot be read
+ * without running the module.
+ */
+export function staticKeyPathPosition(
+  file: string,
+  path: readonly string[],
+): { line: number; column: number } | undefined {
   try {
     const ast = coreBabel().parse(readFileSync(file, "utf8"), {
       sourceType: "module",
@@ -962,20 +999,19 @@ function staticKeyPosition(
     const defaultExport = body.find(
       (node) => node.type === "ExportDefaultDeclaration",
     ) as { declaration?: Record<string, unknown> } | undefined;
-    let declaration = defaultExport?.declaration;
     // `export default { … } satisfies ContractMap`: the literal is one level down.
-    while (
-      declaration?.type === "TSSatisfiesExpression" ||
-      declaration?.type === "TSAsExpression"
-    ) {
-      declaration = declaration.expression as Record<string, unknown>;
+    let value = unwrapTypeAssertions(defaultExport?.declaration);
+    let key: { loc?: { start?: { line: number; column: number } } } | undefined;
+    for (const name of path) {
+      if (!value) return undefined;
+      const literal = resolveObjectLiteral(value, body);
+      const property = literal ? findProperty(literal, name) : undefined;
+      if (!property) return undefined;
+      key = property.key as typeof key;
+      value = unwrapTypeAssertions(
+        property.value as Record<string, unknown> | undefined,
+      );
     }
-    if (!declaration) return undefined;
-    const literal = resolveObjectLiteral(declaration, body);
-    const property = literal ? findProperty(literal, name) : undefined;
-    const key = property?.key as
-      | { loc?: { start?: { line: number; column: number } } }
-      | undefined;
     const start = key?.loc?.start;
     return start ? { line: start.line, column: start.column } : undefined;
   } catch {
@@ -1870,6 +1906,9 @@ function indexMxConfig(
   scope: Pick<IndexOptions, "discovery" | "routes"> = {},
 ): void {
   if (packageJson) readManifest(packageJson, diagnostics);
+  // A dialect that sets `mxConfigTags: false` takes no definitions from the
+  // MX config: its files see its `tagDirs`, its `contracts` and the caller's.
+  if (scope.discovery?.mxConfigTags === false) return;
   const source = findMxConfig(fromDir);
   configFiles.push(...(source?.watch ?? mxConfigSearchPaths(fromDir)));
   if (!source) return;
@@ -2100,6 +2139,11 @@ export function scanWithDiscovery(
   const hostRestrictions: HostRestriction[] = [];
   const dottedTagFiles: DottedTagFile[] = [];
   const claimed = claimedFieldsOf(resolve(filePath));
+  // The dialect module is evidence: its `contracts` and `contractFields`
+  // shape what this file registers, and a fixed module must re-scan. An
+  // unknown load time poisons the stamp (always re-scan) rather than trust it.
+  const module = dialectModuleOf(resolve(filePath));
+  if (module) files.push({ path: module.path, mtimeMs: module.mtimeMs ?? -1 });
   const scope = { discovery, routes: routesForScan() };
 
   return withScanDependencies(files, packageFiles, () => {

@@ -56,6 +56,7 @@ import { hintParseError } from "./parse-error-hints.ts";
 import { tagParamError } from "./stock-parser.ts";
 import {
   type Dialect,
+  dialectCustomTags,
   explicitSyntaxOf,
   fileTagRules,
   resolveSyntaxOf,
@@ -511,10 +512,19 @@ export function compileSource(
     : fileTagRules(resolvedSyntax);
   const rules = preset === undefined ? undefined : rulesUnder(preset, policy);
   const claimed = claimedFields(resolvedSyntax.dialect);
+  // The dialect's `contracts` register beside the host's `customTags`
+  // (memoized per map, so the translator caches keyed on it stay warm).
+  const customTags = dialectCustomTags(
+    host.customTags,
+    resolvedSyntax.dialect,
+    host.dialect !== undefined,
+  );
+  const tagHost =
+    customTags === host.customTags ? host : { ...host, customTags };
   const translator = translatorClaiming(
     rules
-      ? { ...host, taglibs: taglibsOfRules(rules), statementTags: false }
-      : host,
+      ? { ...tagHost, taglibs: taglibsOfRules(rules), statementTags: false }
+      : tagHost,
     claimed,
   );
   const filePolicy = rules ? policyUnder(rules, policy) : policy;
@@ -528,7 +538,7 @@ export function compileSource(
     postEmit: host.postEmit,
     emitIr: host.emitIr,
     // The map lowering reads: deferred entries answer from their view.
-    customTags: registrationView(host.customTags, claimed),
+    customTags: registrationView(customTags, claimed),
     defaultTag: host.defaultTag,
     warnings: host.warnings,
     productName: host.productName,

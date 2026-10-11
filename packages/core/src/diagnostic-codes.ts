@@ -28,6 +28,13 @@ export const TEXT_NOT_ALLOWED_CODE = "MX_TEXT_NOT_ALLOWED";
  */
 export const DIALECT_HOOK_ERROR_CODE = "MX_DIALECT_HOOK_ERROR";
 
+/**
+ * A `Dialect.contracts` entry that cannot load: the dialect fails, and every
+ * file routed to it reports the error, in the dialect's module at the
+ * entry's key. A dialect's `checkContract` that gives its own code wins.
+ */
+export const INVALID_DIALECT_CONTRACT_CODE = "MX_INVALID_DIALECT_CONTRACT";
+
 /** A second expression after the one an expression position holds. */
 export const EXPECTED_SINGLE_EXPRESSION_CODE = "MX_EXPECTED_SINGLE_EXPRESSION";
 
