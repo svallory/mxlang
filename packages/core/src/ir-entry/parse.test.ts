@@ -830,6 +830,33 @@ describe("a default method after other attributes (one `value`, no warning)", ()
     ]);
   });
 
+  it("an async method has no twin: it still duplicates a default method", () => {
+    expect(
+      method("run(x) { a(x) } async (y) { b(y) }\n").diagnostics,
+    ).toMatchObject([
+      {
+        code: "MX_DUPLICATE_ATTRIBUTE",
+        message:
+          "duplicate attribute `value`: the later one at 1:17 wins, so this one is dropped",
+        column: 3,
+      },
+    ]);
+    expect(method("<run=1, async (x) { go(x) }/>\n").diagnostics).toMatchObject(
+      [
+        {
+          code: "MX_DUPLICATE_ATTRIBUTE",
+          message:
+            "duplicate attribute `value`: the later one at 1:9 wins, so this one is dropped",
+          column: 4,
+        },
+      ],
+    );
+    expect(method("run [after=1] async (x) { go(x) }\n")).toEqual({
+      diagnostics: [],
+      names: ["after", "value"],
+    });
+  });
+
   it("a spelled `value` before the method is still one warning", () => {
     expect(method("run [value=1] (x) { go(x) }\n").diagnostics).toMatchObject([
       {
