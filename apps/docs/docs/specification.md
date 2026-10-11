@@ -3580,7 +3580,7 @@ unknown-target error in every tool (§4). The name `data` stays reserved
 **Tooling.** The tools treat a dialect's files as check-only. `mx-tsc`, the
 language server and the TypeScript plugin route a file to its dialect
 (§13.9.2), run `lowerSource` on it under the dialect's syntax and tag rules
-(`tagRules`), and report its diagnostics with `source` set to the dialect's
+(`tagRules`) and its `structural`, `imports` and `unknownTags` (§13.9.3), and report its diagnostics with `source` set to the dialect's
 `name` (`mxlang` when two dialects claim its extension and routing cannot settle which) and `code` set to the code the
 dialect gave. `mx-tsc` prints that code in place of `TS<number>`. No
 JavaScript is generated for a dialect's file. Building a file calls its
@@ -3626,9 +3626,9 @@ read throws, as `readFileSync` does.
 | `dialect` | `Dialect` or `SyntaxTable` | the dialect of this file, for a consumer that builds its own (Mesh passes its dialect, hooks included); a bare table is a dialect with no hooks. Omitted, the dialect that claims the file's extension applies (§13.9.2). A trigger, block tag or filter nothing lowers is a positioned diagnostic (§13.9) |
 | `tagRules` | `"html"`, `"markup"`, `"none"` (default: the dialect's `tagRules`, else `"html"`) | the tag rules preset the source parses under (§13.7.3). Omitted, the preset the dialect states (the `dialect` option's, else the routed one's; §13.9.2). An option of this function only, never a project or host setting (ruling 209) |
 | `defaultTag` | tag name | what `<#id>` and `<.class>` stand for in place of the built-in `object` (decision 145; see "The unnamed tag" in §4) |
-| `structural` | `"pass"` (default), `"reject"` | `"pass"` keeps the structural constructs (text, `${}`, `<if>`, `<for>`, `<const>`, `import`, `export`, `static`) in the IR. `"reject"` makes each one a positioned error: ``the data tree is static; this file's consumer does not evaluate `<if>` `` (the construct is named). Comments are **never** structural — a `//` line or `<!-- -->` stays in the IR as its `Comment` node under either value (decision 131 addendum 5). A structural hit and a check error are ordered by position |
-| `imports` | `"pass"`, `"reject"` (default: the effective `structural`) | Decides a top-level `import` on its own. `"pass"` with `structural: "reject"` keeps every other structural construct rejected and returns the imports in `ir.imports`; `"reject"` with `structural: "pass"` rejects only the `import`s. Each `Import` carries `code`, `span`, `from` (the unquoted specifier) and `names` (`{ imported, local, kind: "default" \| "named" \| "namespace", span, localSpan?, typeOnly? }`, in written order, empty for `import "x"`), read from the parsed declaration, never from the text. A tag-body `import` is not an import: it parses as body text, so `structural: "reject"` rejects it as text and `imports` does not apply |
-| `unknownTags` | `"allow"` (default), `"reject"` | `"allow"` is the open set of decision 131: a tag with no entry in `customTags` is accepted. `"reject"` (131 addendum 3) makes any authored tag, at any depth, whose name has no entry in `customTags` (and is not the built-in `object`) a positioned error at the tag: ``` `<opem>` is not a known tag: it has no contract in `customTags`; did you mean `<open>`? ``` (the hint appears when one declared name is clearly nearest). Reserved names never reach the check (core consumes them first) and `<@name>` attribute tags are governed by the parent's `attributeTags`. An unknown parent is reported before its children's `parents`/`children` errors, and the errors inside an unknown tag are labelled, never dropped (decision 161). A tag gets one error: an unknown tag inside a parent whose `children` is closed reports `MX_UNKNOWN_TAG` only, because the missing contract is the cause and "not allowed here" would be its symptom, so it does not also get `MX_TAG_NOT_ALLOWED`. What the not-allowed message would have said beyond that (the parent's wildcard rule, a `defaultTag` hint) is appended to the `MX_UNKNOWN_TAG` message as `; inside `<parent>`: …`, so the author still sees what the parent accepts. A tag the file's dialect explains (`explainUnknownTag`, §13.9.3) gets the dialect's error instead, in both modes, and is the one error for it. A declared tag that the parent does not allow keeps `MX_TAG_NOT_ALLOWED` in both modes, and under `"allow"` the unknown tag in a closed parent reports `MX_TAG_NOT_ALLOWED` |
+| `structural` | `"pass"`, `"reject"` (default: the dialect's `structural`, else `"pass"`) | `"pass"` keeps the structural constructs (text, `${}`, `<if>`, `<for>`, `<const>`, `import`, `export`, `static`) in the IR. `"reject"` makes each one a positioned error: ``the data tree is static; this file's consumer does not evaluate `<if>` `` (the construct is named). Comments are **never** structural — a `//` line or `<!-- -->` stays in the IR as its `Comment` node under either value (decision 131 addendum 5). A structural hit and a check error are ordered by position |
+| `imports` | `"pass"`, `"reject"` (default: the dialect's `imports`, else the effective `structural`) | Decides a top-level `import` on its own. `"pass"` with `structural: "reject"` keeps every other structural construct rejected and returns the imports in `ir.imports`; `"reject"` with `structural: "pass"` rejects only the `import`s. Each `Import` carries `code`, `span`, `from` (the unquoted specifier) and `names` (`{ imported, local, kind: "default" \| "named" \| "namespace", span, localSpan?, typeOnly? }`, in written order, empty for `import "x"`), read from the parsed declaration, never from the text. A tag-body `import` is not an import: it parses as body text, so `structural: "reject"` rejects it as text and `imports` does not apply |
+| `unknownTags` | `"allow"`, `"reject"` (default: the dialect's `unknownTags`, else `"allow"`) | `"allow"` is the open set of decision 131: a tag with no entry in `customTags` is accepted. `"reject"` (131 addendum 3) makes any authored tag, at any depth, whose name has no entry in `customTags` (and is not the built-in `object`) a positioned error at the tag: ``` `<opem>` is not a known tag: it has no contract in `customTags`; did you mean `<open>`? ``` (the hint appears when one declared name is clearly nearest). Reserved names never reach the check (core consumes them first) and `<@name>` attribute tags are governed by the parent's `attributeTags`. An unknown parent is reported before its children's `parents`/`children` errors, and the errors inside an unknown tag are labelled, never dropped (decision 161). A tag gets one error: an unknown tag inside a parent whose `children` is closed reports `MX_UNKNOWN_TAG` only, because the missing contract is the cause and "not allowed here" would be its symptom, so it does not also get `MX_TAG_NOT_ALLOWED`. What the not-allowed message would have said beyond that (the parent's wildcard rule, a `defaultTag` hint) is appended to the `MX_UNKNOWN_TAG` message as `; inside `<parent>`: …`, so the author still sees what the parent accepts. A tag the file's dialect explains (`explainUnknownTag`, §13.9.3) gets the dialect's error instead, in both modes, and is the one error for it. A declared tag that the parent does not allow keeps `MX_TAG_NOT_ALLOWED` in both modes, and under `"allow"` the unknown tag in a closed parent reports `MX_TAG_NOT_ALLOWED` |
 | `warnings` | `MxWarning[]` | a sink for core's warnings, pushed as raised, so those raised before a later error stay in the caller's array |
 
 #### 13.7.2 The returned IR
@@ -4203,6 +4203,9 @@ interface Dialect {
   name: string;                                   // what tooling calls it: "Mesh"
   table: Partial<Omit<SyntaxTable, "tagTypes">>;  // overlays the default row
   tagRules?: "html" | "markup" | "none";          // default "html"
+  structural?: "pass" | "reject";                 // @unstable; default "pass"
+  imports?: "pass" | "reject";                    // @unstable; default: the effective `structural`
+  unknownTags?: "allow" | "reject";               // @unstable; default "allow"
   nodeTypes?: Record<string, NodeType>;           // §13.9.9
   lowerTrigger?(id: string, text: string, span: SourceSpan, ctx: TriggerContext): TriggerResult;
   lowerBlockTag?(text: string, span: SourceSpan, ctx: SyntaxBuildContext): IrNode | IrNode[];
@@ -4284,8 +4287,9 @@ The module loads like a sidecar (§9.3): Node's strip-only `require`, no top-lev
 §13.9.1, naming `table.<field>`. A module that fails to load, or whose shape is
 wrong, is an error in the module file at 1:0: a field outside those above
 (`productName` included: the dialect's `name` replaces it), a missing `table`, a
-hook that is not a function, a `tagRules` that is not a preset, a malformed node
-type (§13.9.9). For the `dialect` option, an `id` that is missing, not
+hook that is not a function, a `tagRules` that is not a preset, a `structural`,
+`imports` or `unknownTags` outside its option's values, a malformed node type
+(§13.9.9). For the `dialect` option, an `id` that is missing, not
 lower-case words joined by `-`, or `mx`, and a missing or blank `name`, are
 errors too. A table other than the default row needs a template parser with the
 syntax-table API; under the stock parser it is refused in the module file (``
@@ -4301,6 +4305,23 @@ and `parseFragment` parse a dialect's file (the `dialect` option's, else the one
 the file routes to) under the dialect's preset in place of the host's tag rules,
 with no native elements under `none`; `lowerSource` does the same when its call
 states no `tagRules` option, and a `tagRules` option it states wins.
+
+**`structural`, `imports` and `unknownTags`** are the dialect's defaults for the
+`lowerSource` options of the same name (§13.7.1), with the same values; each is
+`@unstable`. The dialect states them in its own module, so the tools check its
+files as strictly as its own compiler does. `lowerSource` resolves each option
+once per call, after the dialect resolves: the option the call states, else the
+dialect's field, else the option's default, and `imports` defaults to the
+effective `structural`. The dialect is the `dialect` option's, else the one the
+file routes to; a bare syntax table states none. The resolved values are the
+ones the checks use, the explainer sees (`UnknownTag.mode`) and a tag file's
+`ctx.lower()` gets when the hook passes none. A call's option wins in both
+directions, so a dialect's own front end can loosen one for a special case. One
+value covers every file the dialect claims, `tagExtensions` files included. A
+`.mx` file routes to no dialect, so none of this applies to it. A value outside
+the option's set is a shape error: `` `structural` must be "pass" or "reject" ``,
+`` `imports` must be "pass" or "reject" `` or `` `unknownTags` must be "allow" or
+"reject" ``.
 
 **A dialect owns its emit.** Building a file calls its dialect's emit, so a
 dialect's files are built by the dialect and by nothing else; no tool picks a
@@ -4339,7 +4360,7 @@ interface UnknownTag {
   nameSpan: SourceSpan;             // the name, without `<` or `@`; empty for an unnamed tag, after the `<`
   span: SourceSpan;                 // the whole element (a concise tag runs to the end of its line)
   ancestors: readonly UnknownTagAncestor[]; // authored tags around it, outermost first
-  mode: "allow" | "reject";         // the call's `unknownTags`
+  mode: "allow" | "reject";         // the effective `unknownTags`: the call's, else the dialect's, else "allow"
   file: string;
   source: string;                   // the document text
 }

@@ -75,6 +75,33 @@ By default your files also take the project's `mx.tags` and `mx.contracts`, as e
 
 With `false`, your files take no definition from `mx.tags` or `mx.contracts`, silently: the same config still serves the project's `.mx` files, and a call your vocabulary does not define is an unknown tag. Tag files still apply (`tags/`, or the directories your `tagDirs` names). A value other than a boolean is an error at the key.
 
+## How strict your files are: `structural`, `imports`, `unknownTags`
+
+Your own compiler lowers its files with `lowerSource` and tells it how strict to be: no `<if>` or text in a file that is only data, imports allowed, a closed vocabulary. The editor, `mx-tsc` and the TypeScript plugin call `lowerSource` with none of those options, so they would check the same file more loosely. Put the three values on the dialect's module and every caller that leaves them out gets yours:
+
+```ts
+// dialect.ts
+import type { Dialect } from "@mxlang/core";
+
+export default {
+  table: {},
+  tagRules: "none",
+  contracts: { entity: {}, field: { parents: ["entity"] } },
+  structural: "reject", // text, `${}`, `<if>`, `<for>`, `<const>`, `export` and `static` are errors
+  imports: "pass", // but a top-level `import` is fine
+  unknownTags: "reject", // a tag with no contract is `MX_UNKNOWN_TAG`
+} satisfies Partial<Dialect>;
+```
+
+Each field is the dialect's default for the [`lowerSource` option](/architecture/ir-entry/) of the same name, with the same values. All three are `@unstable`.
+
+- **Resolution.** For each option, the call's value wins, then the dialect's, then the option's own default. `imports` defaults to the effective `structural`, so a dialect that states only `structural: "reject"` rejects `import` too.
+- **Which dialect.** The one in the call's `dialect` option, else the one the file routes to. Your CLI that passes `dialect: YOUR_DIALECT` and the editor that routes by extension read the same object, so they cannot drift apart.
+- **A call can override.** Pass the option and it wins in both directions, for a test that wants the open set or a special file that needs a looser rule. The tools never pass them.
+- **One value per dialect.** It covers every file the dialect claims, tag files included. A `tagFile` hook that wants other values for its tag files passes them to `ctx.lower`.
+- **`.mx` files are unaffected.** They route to no dialect.
+- **A wrong value** is an error in your module, like a wrong `tagRules`: `` `structural` must be "pass" or "reject" ``.
+
 ## Explaining an unknown tag
 
 A tag with no contract is not always a mistake in your language. A dialect that reads `entity:Todo` as a member of a family it does not declare can say so, in its own words and code, with `explainUnknownTag`. The hook only explains: it cannot claim the tag or give it IR.
@@ -135,7 +162,7 @@ All four are optional. Without them a dialect's files discover tags exactly as b
 
 | Field | Meaning |
 |---|---|
-| `tagDirs` | Directory names (not paths) the dialect's files discover tags in. Replaces `tags/` for them. Absent means `["tags"]`; `[]` means none, which closes `tags/` to the dialect's files so a call to a tag defined there is an unknown tag. `mx.tags` and `mx.contracts` are a separate setting (`mxConfigTags`). |
+| `tagDirs` | Directory names (not paths) the dialect's files discover tags in. Replaces `tags/` for them. Absent means `["tags"]`, so the dialect's files discover `tags/` as MX's do; `[]` means none, which closes `tags/` to the dialect's files so a call to a tag defined there is an unknown tag. `mx.tags` and `mx.contracts` are a separate setting (`mxConfigTags`). |
 | `tagExtensions` | Extra extensions its tag files may use, written like `extensions` and routed like them: `concepts/money.kind.forma.mx` belongs to Forma, and the longest claimed suffix names the tag, so this file defines `<money>`, not `<money.kind>`. |
 | `sidecars` | Whether `.tag.ts` sidecars in those directories are read. On by default; `false` ignores them with a warning. |
 | `reservedTags` | Tag names only this dialect may define. See [Reserved names](#writing-a-dialect-tag-files-a-directory-of-definitions-reserved-names). |
@@ -174,7 +201,7 @@ export default {
 
 The types (`TagFileInput`, `TagFileContext`, `TagFileResult`, `TagFileDiagnostic`) are exported from `@mxlang/core`. What the hook may use:
 
-- **`ctx.lower(options?)`** lowers the tag file with `lowerSource`, under its own dialect and the tags its own directory sees (not the caller's). The result is memoized per options. The tags it sees stay lazy, so lowering a tag file that calls another one reads that one's contract only at the call.
+- **`ctx.lower(options?)`** lowers the tag file with `lowerSource`, under its own dialect and the tags its own directory sees (not the caller's). An option you leave out takes the dialect's value ([`structural`, `imports`, `unknownTags`](#writing-a-dialect-how-strict-your-files-are-structural-imports-unknowntags)). The result is memoized per options. The tags it sees stay lazy, so lowering a tag file that calls another one reads that one's contract only at the call.
 - **`ctx.dependsOn(path)`** names a file your answer reads, relative to the tag file, so an edit to it re-derives this contract. Every tag file this one calls while lowering is a dependency automatically, transitively. The hook reads `path` from the disk, so the editor re-checks a file that calls the tag when `path` is saved or changes on disk. The tag file's own `source` is the editor's text, saved or not.
 - **The contract** holds `attributes`, `attributeTags`, `children`, `parents`, `defaultTag`, and the keys your dialect claims (`contractFields.tag`). Any other key is an error. `parseOptions` and `template` are refused: a call is parsed before any contract is read, so static `parseOptions` and hooks come from a `.tag.ts` sidecar beside the tag file (`concepts/money.tag.ts`), when `sidecars` is on.
 - **Diagnostics** are in the tag file's coordinates (1-based line, 0-based column). The hook is sync, and a hook that throws is an error at the thrown error's own position, else at the file's 1:0; it never takes the compile down.
