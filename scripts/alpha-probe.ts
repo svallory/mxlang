@@ -15,8 +15,9 @@
 //      `unknownTags: "reject"`) that must return an IR for a valid file and
 //      the unknown-tag diagnostic, with no IR, for a typo;
 //   4. decision 159: proves the install parses with MX's own template parser:
-//      `<input type="email" :email/>` and `x=a.b .c` split after the value,
-//      and no npm `htmljs-parser` or `@marko/compiler` is installed or loaded.
+//      `<field type="email" :email/>` is Marko's "Expected a single
+//      expression" error, `x=a.b .c` is one attribute (member access), and
+//      no npm `htmljs-parser` or `@marko/compiler` is installed or loaded.
 //      Since decision 197 slice S3a a parse no longer builds Marko's taglib
 //      lookup, so core's bundled `marko-frontend.cjs` must not load either.
 //
@@ -49,7 +50,6 @@ import { repoRoot } from "./pack-hygiene.ts";
 
 const keep = process.argv.includes("--keep");
 const STEP_TIMEOUT_MS = 240_000;
-const MIN_NODE_MAJOR = 26;
 const tsc = join(repoRoot, "node_modules/.bin/tsc");
 
 const CORE_DIR = join(repoRoot, "packages/core");
@@ -117,6 +117,7 @@ const coreTarball = pack(CORE_DIR);
 
 const corePkg = JSON.parse(tarFile(coreTarball, "package/package.json")) as {
   version: string;
+  engines?: { node?: string };
   dependencies: Record<string, string>;
 };
 console.log(
@@ -130,6 +131,16 @@ if (mxlangDeps.length > 0) {
     `the core tarball depends on ${mxlangDeps.join(", ")}: core ships self-contained, and a published @mxlang dependency has to be added to the release set (and the alpha version bumped) first`,
   );
 }
+
+// The npm leg runs on the oldest Node core's `engines` admits, so the probe's
+// floor is that field of the packed tarball, not a number kept here.
+const nodeRange = corePkg.engines?.node?.match(/^>=\s*(\d+)(?:\.(\d+))?/);
+if (!nodeRange) {
+  fail(
+    `the core tarball's engines.node is \`${corePkg.engines?.node}\`, expected \`>=<major>[.<minor>]\``,
+  );
+}
+const minNode = [Number(nodeRange[1]), Number(nodeRange[2] ?? 0)] as const;
 
 const PROBE = `
 import { createRequire } from "node:module";
@@ -176,23 +187,29 @@ for (const [name, result, text] of [
   }
 }
 
-// Decision 159: the after-value sugar parses in a registry install.
-const sugar = lowerSource('<field type="email" :email/>\\n', "/probe/sugar.mx", {
-  customTags: { field: { parents: ["#root"], attributes: { type: { type: "string" }, name: { type: "string" } } } },
+// Stock Marko readings: the removed name sugars are gone. A ':email' after a
+// value is Marko's own error, and 'x=a.b .c' is one attribute with member access.
+const colon = lowerSource('<field type="email" :email/>\\n', "/probe/sugar.mx", {
+  customTags: { field: { parents: ["#root"], attributes: { type: { type: "string" } } } },
   structural: "reject",
   unknownTags: "reject",
 });
-const field = sugar.ir?.body[0]?.tag;
-const sugarAttrs = field ? field.attrs.map((a) => a.name) : null;
-console.log("after-value sugar:", JSON.stringify({ attrs: sugarAttrs, diagnostics: sugar.diagnostics }));
-if (sugar.diagnostics.length !== 0 || !same(sugarAttrs, ["type", "name"])) {
-  fail("<field type=\\"email\\" :email/> did not parse as type + name: " + JSON.stringify({ attrs: sugarAttrs, diagnostics: sugar.diagnostics }));
+if (colon.ir || !colon.diagnostics.some((d) => d.message.includes("Expected a single expression, but found \`:\` after it."))) {
+  fail("\`:email\` after a value did not give Marko's error: " + JSON.stringify(colon.diagnostics));
 }
-// Since 0.1.0-alpha.13 \`FragmentResult.body\` is the MX AST: the split-off \`.c\` is an \`MxShorthand\` node, not a named attribute.
-const member = parseFragment("<div x=a.b .c/>").body[0].attributes.map((a) => a.type === "MxShorthand" ? "MxShorthand" : a.name);
-if (!same(member, ["x", "MxShorthand"])) fail("x=a.b .c did not split after the value: " + JSON.stringify(member));
+const member = parseFragment("<div x=a.b .c/>").body[0].attributes.map((a) => a.name);
+if (!same(member, ["x"])) fail("x=a.b .c is not one attribute (stock member access): " + JSON.stringify(member));
 const split = lowerSource("<div x=a.b .c/>\\n", "/t.mx").ir?.body[0]?.tag.attrs.map((a) => a.name + "=" + (a.value?.code ?? a.value));
-if (!same(split, ["x=a.b", "class=c"])) fail("x=a.b .c did not reach the IR as x + class: " + JSON.stringify(split));
+if (!same(split, ["x=a.b .c"])) fail("x=a.b .c did not reach the IR as one attribute x holding the member access a.b .c: " + JSON.stringify(split));
+
+// alpha.18: stable codes reach IrDiagnostic.code; IR_VERSION is 3; the tag-file cache can be cleared.
+if (unknown.diagnostics[0].code !== "MX_UNKNOWN_TAG") fail("the unknown tag has no MX_UNKNOWN_TAG code: " + JSON.stringify(unknown.diagnostics));
+const core = await import("@mxlang/core");
+if (core.IR_VERSION !== 3) fail("IR_VERSION is " + core.IR_VERSION + ", expected 3");
+if (typeof core.clearTagFileCache !== "function") fail("clearTagFileCache is not exported");
+// alpha.19: a dialect's explainUnknownTag replaces the unknown-tag diagnostic with its own error.
+const explained = lowerSource("<resorce/>\\n", "/probe/explained.mx", { ...options, dialect: { id: "probe", name: "Probe", table: {}, explainUnknownTag: (tag) => ({ message: "did you mean <resource>? (" + tag.name + ")", code: "PROBE_TYPO" }) } });
+if (explained.ir || explained.diagnostics.length !== 1 || explained.diagnostics[0].code !== "PROBE_TYPO") fail("explainUnknownTag did not replace MX_UNKNOWN_TAG: " + JSON.stringify(explained.diagnostics));
 const require = createRequire(import.meta.url);
 const loaded = Object.keys(require.cache);
 console.log("loaded parse layer:", JSON.stringify(loaded.filter((k) => /marko|htmljs/.test(k))));
@@ -303,9 +320,16 @@ const nodeVersion = run("node", ["--version"], nodeDir).out.trim();
 console.log(
   `[alpha-probe] node ${nodeVersion}, npm ${run("npm", ["--version"], nodeDir).out.trim()}`,
 );
-if (Number(nodeVersion.replace(/^v/, "").split(".")[0]) < MIN_NODE_MAJOR) {
+const [nodeMajor = 0, nodeMinor = 0] = nodeVersion
+  .replace(/^v/, "")
+  .split(".")
+  .map(Number);
+if (
+  nodeMajor < minNode[0] ||
+  (nodeMajor === minNode[0] && nodeMinor < minNode[1])
+) {
   fail(
-    `the npm leg needs Node ${MIN_NODE_MAJOR} or newer, found ${nodeVersion}`,
+    `the npm leg needs Node ${minNode.join(".")} or newer (core's engines.node ${corePkg.engines?.node}), found ${nodeVersion}`,
   );
 }
 check("node+npm", run("node", ["probe.mjs"], nodeDir));
