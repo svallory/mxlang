@@ -20,7 +20,10 @@ import {
   withCalleeInputSources,
 } from "@mxlang/core";
 import { resolveTargetPolicyDetailed } from "@mxlang/targets";
-import { isDialectFile } from "@mxlang/targets/dialect-check";
+import {
+  dialectExtensionsUnder,
+  isDialectFile,
+} from "@mxlang/targets/dialect-check";
 import {
   createConnection,
   type Diagnostic,
@@ -269,7 +272,14 @@ export function startServer(
   }
 
   let watchedFilesDynamicRegistration = false;
+  // The workspace's roots, as paths: the dialect extensions the project
+  // uses are read from them when the watchers are registered.
+  let workspaceRoots: string[] = [];
   connection.onInitialize((params) => {
+    workspaceRoots = [
+      ...(params.workspaceFolders?.map((folder) => folder.uri) ?? []),
+      ...(params.rootUri ? [params.rootUri] : []),
+    ].map(pathOf);
     watchedFilesDynamicRegistration =
       params.capabilities.workspace?.didChangeWatchedFiles
         ?.dynamicRegistration === true;
@@ -280,8 +290,22 @@ export function startServer(
 
   connection.onInitialized(() => {
     if (!watchedFilesDynamicRegistration) return;
+    // A dialect's files (tag files included) are not in the static list: a
+    // change to one re-checks the files that call it.
+    const dialectGlobs = new Set<string>();
+    for (const root of new Set(workspaceRoots)) {
+      try {
+        for (const extension of dialectExtensionsUnder(root)) {
+          dialectGlobs.add(`**/*${extension}`);
+        }
+      } catch {
+        // An unreadable root has no dialects to watch.
+      }
+    }
     void connection.client.register(DidChangeWatchedFilesNotification.type, {
-      watchers: WATCHED_FILE_GLOBS.map((globPattern) => ({ globPattern })),
+      watchers: [...WATCHED_FILE_GLOBS, ...dialectGlobs].map((globPattern) => ({
+        globPattern,
+      })),
     });
   });
 

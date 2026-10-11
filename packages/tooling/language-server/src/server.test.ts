@@ -23,6 +23,7 @@ import {
   cleanupProbeProjects,
   PROBE_SOURCES,
   probeProject,
+  tagDiscoveryProject,
 } from "../../../../test-fixtures/dialects/probe.ts";
 import { isMxDocument, WATCHED_FILE_GLOBS } from "./server.ts";
 
@@ -706,6 +707,56 @@ describe("stdio server (e2e)", () => {
     } finally {
       rmSync(dir, { recursive: true });
     }
+  }, 30000);
+
+  it("fixing a tag file clears its diagnostics and re-publishes the dialect file that calls it, with no edit to either", async () => {
+    const project = tagDiscoveryProject({
+      "concepts/money.thing.probe": "<x/>\n<!-- BAD -->\n",
+    });
+    const tagFile = project.path("concepts/money.thing.probe");
+    const tagUri = pathToFileURL(tagFile).href;
+    const pageUri = pathToFileURL(project.path("page.probe")).href;
+    const conn = startClient();
+    await conn.sendRequest("initialize", {
+      processId: null,
+      rootUri: null,
+      capabilities: {},
+    });
+    conn.sendNotification("initialized", {});
+    const latest = new Map<string, string[]>();
+    conn.onNotification(PublishDiagnosticsNotification, (params) => {
+      latest.set(
+        params.uri,
+        params.diagnostics.map((d) => String(d.code ?? d.message)),
+      );
+    });
+    const until = async (done: () => boolean) => {
+      for (let i = 0; i < 300 && !done(); i++) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    };
+    conn.sendNotification("textDocument/didOpen", {
+      textDocument: {
+        uri: pageUri,
+        languageId: "probe",
+        version: 1,
+        text: "<p/>\n<money/>\n",
+      },
+    });
+    await until(() => latest.get(tagUri)?.length === 1);
+    expect(latest.get(pageUri)).toEqual(["MX_TAG_FILE_ERROR", "KIT_BAD"]);
+    expect(latest.get(tagUri)).toEqual(["KIT_BAD"]);
+
+    writeFileSync(tagFile, "<x/>\n");
+    conn.sendNotification("workspace/didChangeWatchedFiles", {
+      changes: [{ uri: tagUri, type: 2 }],
+    });
+    await until(
+      () =>
+        latest.get(tagUri)?.length === 0 && latest.get(pageUri)?.length === 0,
+    );
+    expect(latest.get(tagUri)).toEqual([]);
+    expect(latest.get(pageUri)).toEqual([]);
   }, 30000);
 
   it.each([...MX_CONFIG_SEARCH_PLACES])(

@@ -911,7 +911,9 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       const key = `${diagnostic.file}\u0000${diagnostic.message}`;
       if (reported.has(key)) continue;
       reported.add(key);
-      warn(`${diagnostic.file}: ${diagnostic.message}`);
+      warn(
+        `${diagnostic.file}:${diagnostic.line}:${diagnostic.column + 1}: ${diagnostic.code === undefined ? "" : `${diagnostic.code}: `}${diagnostic.message}`,
+      );
     }
     const locations = new Set<string>([
       ...scan.directories,

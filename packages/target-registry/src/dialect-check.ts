@@ -236,6 +236,13 @@ export function isDialectFile(filePath: string): boolean {
 export function checkDialectFile(
   filePath: string,
   text: string,
+  /**
+   * Receives the files the check read: tag files, contracts modules, sidecars
+   * and the manifests and configs the scan read. A tool that re-checks a
+   * file when one of them changes (the language server) passes a set. A file
+   * only a hook's `ctx.dependsOn` names is not among them.
+   */
+  dependencies?: Set<string>,
 ): DialectCheck | undefined {
   let dialect: DialectManifest | undefined;
   try {
@@ -270,6 +277,9 @@ export function checkDialectFile(
     scan = scanCached(filePath, { host: null });
   } catch (error) {
     if (!isTranslateError(error)) throw error;
+    for (const dependency of error.dependencies ?? []) {
+      dependencies?.add(dependency);
+    }
     return {
       source: dialect.name,
       diagnostics: [
@@ -285,6 +295,9 @@ export function checkDialectFile(
       ],
     };
   }
+  for (const file of scan.files) dependencies?.add(file.path);
+  for (const file of scan.packageFiles) dependencies?.add(file);
+  for (const file of scan.configFiles ?? []) dependencies?.add(file);
   const customTags =
     Object.keys(scan.customTags).length > 0 ? scan.customTags : undefined;
   const { diagnostics } = lowerSource(text, filePath, { customTags });

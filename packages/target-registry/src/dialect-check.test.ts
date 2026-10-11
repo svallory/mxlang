@@ -523,9 +523,18 @@ describe("checkDialectFile: tag discovery diagnostics", () => {
     ]);
   });
 
-  it("a scan failure thrown from another file keeps its code and its file", () => {
+  it("a registration error in the contracts module keeps the dialect's code, its severity and its file", () => {
+    // The dialect's `checkContract` refuses the contracts module's entry,
+    // with a code of its own, at the call of the tag.
     const project = tagDiscoveryProject({
-      "contracts.cjs": "module.exports = { default: 1 };\n",
+      "dialect.cjs": `module.exports.default = {
+  table: {},
+  contractFields: { tag: ["relations"] },
+  checkContract(tag, contract, ctx) { ctx.fail("no contract for " + tag, { code: "PROBE_CONTRACT" }); },
+};
+`,
+      "contracts.cjs":
+        "module.exports = { default: { service: { relations: 'many' } } };\n",
     });
     writeFileSync(
       project.path("package.json"),
@@ -537,12 +546,30 @@ describe("checkDialectFile: tag discovery diagnostics", () => {
         },
       }),
     );
-    const [diagnostic] =
-      checkDialectFile(project.path("a.probe"), "<p/>\n")?.diagnostics ?? [];
-    expect(diagnostic?.severity).toBe("error");
-    expect(diagnostic?.origin).toMatchObject({
-      file: project.path("contracts.cjs"),
+    expect(
+      checkDialectFile(project.path("a.probe"), "<service/>\n")?.diagnostics,
+    ).toEqual([
+      {
+        severity: "error",
+        message: `no contract for service (in ${project.path("contracts.cjs")}:1:1)`,
+        line: 1,
+        column: 0,
+        offset: 0,
+        code: "PROBE_CONTRACT",
+        origin: { file: project.path("contracts.cjs"), line: 1, column: 0 },
+      },
+    ]);
+  });
+
+  it("records the files it read as dependencies: the tag files, and the contracts module", () => {
+    const project = tagDiscoveryProject({
+      "concepts/money.thing.probe": "<x/>\n",
     });
+    const dependencies = new Set<string>();
+    checkDialectFile(project.path("a.probe"), "<money/>\n", dependencies);
+    expect([...dependencies]).toContain(
+      project.path("concepts/money.thing.probe"),
+    );
   });
 });
 

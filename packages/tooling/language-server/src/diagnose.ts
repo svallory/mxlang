@@ -353,7 +353,7 @@ export function diagnoseDocument(
     // dialect's own syntax and tag rules, reported with the dialect's name as
     // the diagnostic's `source` and its own `code`. The host policy, the tag
     // scan and every target are irrelevant to it.
-    const dialect = checkDialectFile(documentPath(uri), text);
+    const dialect = checkDialectFile(documentPath(uri), text, dependencies);
     if (dialect !== undefined) {
       return dialect.diagnostics.map((diagnostic): Diagnostic => {
         const own: Diagnostic = {

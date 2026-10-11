@@ -202,7 +202,7 @@ The name of a tag is the file name minus the longest extension the calling diale
 The scan only finds names. The contract of a tag comes from the dialect module's `tagFile` hook, which runs the first time a file calls the tag, never during the scan. A file that never calls `<money>` never pays for `money.forma.mx`, and a dialect with `tagDirs` and no hook makes every call an error.
 
 ```ts
-import type { Dialect, TagFileContext, TagFileInput, TagFileResult } from "@mxlang/core";
+import type { DialectModule, TagFileContext, TagFileInput, TagFileResult } from "@mxlang/core";
 
 export default {
   table: {},
@@ -214,7 +214,7 @@ export default {
       diagnostics: lowered.diagnostics, // core adds `file` for the tag file's own
     };
   },
-} satisfies Dialect;
+} satisfies DialectModule;
 ```
 
 The types (`TagFileInput`, `TagFileContext`, `TagFileResult`, `TagFileDiagnostic`) are exported from `@mxlang/core`. What the hook may use:
@@ -239,9 +239,11 @@ A tool that shows a dialect file shows these, each with its severity, code and t
 | Code | Severity | When |
 |---|---|---|
 | `MX_TAG_FILE_ERROR` | error, at the call | The tag file cannot be read (no `tagFile` hook) or its definition has errors. The tag file's own diagnostics come with it, each in its own file. |
-| `MX_TAG_FILE_CYCLE` | error, at the call | Tag files call each other: `a → b → a`. |
+| `MX_TAG_FILE_CYCLE` | error, at the re-entering call | Tag files call each other: `a → b → a`. |
 | `MX_MISPLACED_TAG_FILE` | warning, at the file | A dialect's tag file sits in a directory the dialect does not scan (`tags/`). |
 | `MX_RESERVED_TAG` | error, at the definition | A reserved name was defined. |
+
+The scan has more codes (`MX_SIDECAR_IGNORED`, `MX_DOTTED_TAG_FILE_NAME`, `MX_INVALID_TAG_FILE_NAME`, `MX_BUILTIN_TAG_FILE`); the specification lists them all.
 
 A diagnostic that is in a tag file shows at the head of the file that made the call, naming the tag file, and on the tag file itself in an editor.
 

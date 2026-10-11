@@ -13,6 +13,10 @@ import {
   type TargetCompiler,
 } from "@mxlang/core";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
+import {
+  cleanupProbeProjects,
+  tagDiscoveryProject,
+} from "../../../../test-fixtures/dialects/probe.ts";
 import mx, { MX_SUFFIX, readTemplateSource } from "./index";
 
 /**
@@ -1033,6 +1037,32 @@ export default () => <div />;
       // package re-reads the same `package.json`.
       await transform.call(context, "<marker/>\n", `${caller}${MX_SUFFIX}`);
       expect(warnings).toHaveLength(1);
+    });
+
+    it("prints a scan diagnostic with its position and code", async () => {
+      // A Probe file in `tags/`, which Probe does not scan: an MX file's scan warns.
+      const project = tagDiscoveryProject({
+        "tags/stray.thing.probe": "<x/>\n",
+        "caller.mx": "<p>x</p>\n",
+      });
+      try {
+        const warnings: string[] = [];
+        const transform = mx().transform as unknown as (
+          this: unknown,
+          code: string,
+          id: string,
+        ) => Promise<unknown>;
+        await transform.call(
+          { warn: (message: string) => warnings.push(message) },
+          "<p>x</p>\n",
+          `${project.path("caller.mx")}${MX_SUFFIX}`,
+        );
+        expect(warnings).toEqual([
+          `@mxlang/vite-plugin: ${project.path("tags/stray.thing.probe")}:1:1: MX_MISPLACED_TAG_FILE: \`tags/stray.thing.probe\` is a Probe file in \`tags/\`; Probe discovers tags in \`concepts/\` or \`kinds/\`.`,
+        ]);
+      } finally {
+        cleanupProbeProjects();
+      }
     });
 
     it("warns once about a malformed package.json and unknown mx.host, and still compiles", async () => {
