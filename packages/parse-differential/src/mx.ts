@@ -28,23 +28,7 @@ export function projectMx(document: MxDocument): NDocument {
   const front = document.errors.find(
     (e: { origin: string }) => e.origin === "front-end",
   );
-  const atoms: { start: number; line: string }[] = [];
-  const walk = (value: unknown) => {
-    if (Array.isArray(value)) return value.forEach(walk);
-    if (!value || typeof value !== "object") return;
-    const node = value as Node;
-    if (node.type === "MxAtom") {
-      atoms.push({
-        start: node.start,
-        line: `:${node.name}@[${node.start},${node.end})`,
-      });
-      return;
-    }
-    for (const field of Object.values(node)) walk(field);
-  };
-  walk(document.body);
   return {
-    atoms: atoms.sort((a, b) => a.start - b.start).map((a) => a.line),
     body: document.body.map(child),
     error: template
       ? `${template.code} [${template.start},${template.end}) ${JSON.stringify(template.message)}`

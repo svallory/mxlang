@@ -401,13 +401,26 @@ describe("required beyond `span`", () => {
     );
   }
 
-  it("a static attribute's `valueSpan`: plain, empty, atom, default", () => {
-    expect(staticValues(`<a x="s" e="" m=:strict/>`)).toEqual([
+  it("a static attribute's `valueSpan`: plain, empty, default", () => {
+    expect(staticValues(`<a x="s" e=""/>`)).toEqual([
       ["x", `"s"`],
       ["e", `""`],
-      ["m", ":strict"],
     ]);
     expect(staticValues(`<a="post"/>`)).toEqual([["value", `"post"`]]);
+  });
+
+  it("a static attribute's `valueSpan`: a module-built atom", () => {
+    const atomSyntax = (
+      createRequire(import.meta.url)("../fixtures/syntax/atom-fixture.ts") as {
+        default: Dialect;
+      }
+    ).default;
+    expect(
+      staticValues(`<a x="s" m=~strict/>`, { dialect: atomSyntax }),
+    ).toEqual([
+      ["x", `"s"`],
+      ["m", "~strict"],
+    ]);
   });
 
   it("a static attribute's `valueSpan`: zero-width for a bare colon name", () => {

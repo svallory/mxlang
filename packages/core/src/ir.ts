@@ -128,7 +128,7 @@ export interface Expr {
    */
   file?: string;
   /**
-   * The atoms written inside this expression, in source order (decision 156).
+   * The atoms a dialect built inside this expression, in source order.
    * Absent when there are none. `code` already holds each as its string
    * literal; the node holds each as a `StringLiteral` with `extra.mxAtom`.
    */
@@ -157,15 +157,13 @@ export interface Expr {
 }
 
 /**
- * An atom (decision 156): `:name`, a value that represents itself. Its runtime
- * value is the name as a string literal on every target; the IR keeps it
- * distinct from a string so a data consumer, a contract check or an editor
- * can tell `:title` from `"title"`. `span` covers the whole atom, `:` included.
- *
- * Decisions 183 and 196: atoms leave core's grammar for a layer-2 dialect.
- * This shape stays as one of the whole values a dialect builds
- * (`ctx.attribute(name, { kind: "atom", name })`); the syntax that writes it
- * becomes the dialect's.
+ * An atom: a value that represents itself, built by a dialect (core has no
+ * atom syntax). Its runtime value is the name as a string literal on every
+ * target; the IR keeps it distinct from a string so a data consumer, a
+ * contract check or an editor can tell the atom `title` from `"title"`.
+ * `span` covers the whole authored atom, its sigil included. A dialect builds
+ * one as a whole value (`ctx.attribute(name, { kind: "atom", name })`) or as
+ * a marked literal inside an expression (`MxAtomMark`).
  * @unstable
  */
 export interface Atom {
@@ -175,12 +173,11 @@ export interface Atom {
 }
 
 /**
- * `extra.mxAtom` on the `StringLiteral` an atom becomes inside an expression
- * (decision 156 addendum 1, item 1): the atom's own span, `:` included. The
- * node's `value` is the name, so code that reads strings still works; code
- * that cares checks `node.extra?.mxAtom`. The mark a dialect sets on
- * the literal it builds for an atom (decisions 183 and 196), which core
- * splices and maps as it does today.
+ * `extra.mxAtom` on the `StringLiteral` a dialect builds for an atom inside
+ * an expression: the atom's own span, its sigil included. The node's `value`
+ * is the name, so code that reads strings still works; code that cares
+ * checks `node.extra?.mxAtom`. Core records every marked literal and splices
+ * and maps it.
  * @unstable
  */
 export interface MxAtomMark {

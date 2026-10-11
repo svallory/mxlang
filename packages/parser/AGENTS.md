@@ -5,8 +5,8 @@ parser and its tests, and `src/frontend/`, the MX2 front end that builds the
 MX AST from the template parser's events (PR 2 of the parser port; see
 below). It is private and has no build; the entry is `src/template/index.ts`. The Babel fork is `packages/babel` and the bridge is
 `packages/tsx-bridge`; neither depends on this package.
-`@mxlang/babel` is a devDependency for `src/template/mx-atoms.test.ts`, which
-checks atom claims against Babel's `parseExpression`, and for the front end's
+`@mxlang/babel` is a devDependency for `src/template/mx-sugar-module.test.ts`,
+which checks the atom row's claims against Babel's `parseExpression`, and for the front end's
 type-only imports of the MX AST types (`@mxlang/babel/mx-ast`).
 
 Biome **ignores** `src/template/` wholesale
@@ -44,12 +44,16 @@ the tree by identity (`freezeCopy` keeps it) in the trigger's place, unless
 its type is `MxTrigger`. A throw out of `claim` leaves `parse` unwrapped
 (`ClaimThrow`), not as `MX_FRONT_END_INTERNAL`. The parser has no name
 sugars: a colon in a tag head, a spaced ` :b` after a value and a spaced
-`#id`/`.class` lex as stock htmljs-parser lexes them. Atoms keep their own path
-until they move onto the table; a loaded row on `:` in an expression turns the
-built-in atom path off (the coexistence rule, `CompiledSyntax.builtInAtoms`).
+`#id`/`.class` lex as stock htmljs-parser lexes them, and it has no atom
+lexer: `:name` in an expression reads as stock reads it (`<a b=:x/>` is
+Babel's "Unexpected token" at the `:`; `::` in a name is part of the name).
+Atoms are a dialect feature: a dialect arms an expression row on `:` whose
+hook returns a `StringLiteral` marked `extra.mxAtom`, which core records and
+splices.
 `src/template/test-support/sugar-rows.ts` holds layer-2 rows that express the
-atoms and the name sugars as a dialect would (test fixtures; differences in
-`src/template/mx-sugar-module.deltas.ts`). Nothing is lowered here.
+atoms and the name sugars as a dialect would (test fixtures, run by
+`src/template/mx-sugar-module.test.ts` over the corpora of
+`src/template/mx-atoms.cases.ts`). Nothing is lowered here.
 Block tags and filters (`MxBlockTag`, `MxFilter`, ast §4.5) are raw body
 children in HTML content. Tag types come from the table's `tagTypes`
 (addenda 2 and 3), never from a handler's return: the front end passes

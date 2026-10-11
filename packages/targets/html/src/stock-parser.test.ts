@@ -20,8 +20,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  * bundled front end and MX's own template parser, so a stock `htmljs-parser`
  * in the install changes nothing. The stock parser is rebuilt in a `mkdtemp`
  * copy by reversing the committed patch, and the dist runs against it in a
- * child process: a built-in atom value, which the stock parser rejects,
- * compiles, and a ` :b` after a value is Marko's own error either way.
+ * child process: a ` :b` after a value is Marko's own error either way.
  */
 
 const require = createRequire(import.meta.url);
@@ -119,13 +118,6 @@ import(${JSON.stringify(`file://${distEntry}`)}).then(({ compile }) => {
 }
 
 describe("core's bundled front end ignores a stock htmljs-parser in the install", () => {
-  it.each([
-    ["the patched parser", false],
-    ["a stock parser", true],
-  ])("compiles a built-in atom value with %s installed", (_name, stock) => {
-    expect(compileWith("<input type=:email/>", stock).ok).toBe(true);
-  });
-
   it.each([
     ["the patched parser", false],
     ["a stock parser", true],

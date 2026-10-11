@@ -1,30 +1,30 @@
 /**
  * A parser module that parses through the atoms-and-sugars rows
- * (`sugar-rows.ts`) and reports what their triggers stand for in the
- * built-in event vocabulary, so the atom and after-value corpora's
- * expectations are shared between the built-in path and the module path
- * (`lang-ext-move-sugars-to-mesh`, slice a1). It renders what core's hook
- * builds from each trigger, at the parser level:
+ * (`sugar-rows.ts`) and renders what their triggers stand for as plain
+ * events, so the atom corpora (`mx-atoms.cases.ts`) read like the parse a
+ * dialect's hook builds. The template parser lexes no atom itself: every
+ * atom here is the `:` expression row's trigger. It renders, at the parser
+ * level:
  *
- * - an `atom` trigger is `onAtom` (`{ start, end, value }`, the name after
- *   the `:`); `::name` is the reserved-token error with today's text, and,
- *   as the built-in error does, it ends the parse (no later event is
- *   delivered);
- * - a `name`, `id` or `class` trigger is `onAttrName` over its text, then
+ * - an `atom` trigger as `onRowAtom` (`{ start, end, value }`, the name
+ *   after the `:`); `::name` as this fixture's reserved-token error
+ *   (`rowReservedMessage`), which ends the parse (no later event is delivered);
+ * - a `name`, `id` or `class` trigger as `onAttrName` over its text, then
  *   its arguments' `onAttrArgs` and its value's `onAttrValue` (`bound` for
- *   `:=`) or `onAttrMethod`; a `::` in its text is the
- *   reserved-token error `rejectReservedName` gives today, and ends the
- *   parse;
+ *   `:=`) or `onAttrMethod`; a `::` in its text is the same reserved-token
+ *   error, and ends the parse;
  * - any other trigger (the member row) is passed to `onTrigger`.
  *
- * Events are otherwise forwarded unchanged. `onAtom` is held back until the
- * next other event, so a sugar's name precedes the atoms of its value, as
- * the built-in path announces them.
+ * Events are otherwise forwarded unchanged. `onRowAtom` is held back until
+ * the next other event, so a sugar's name precedes the atoms of its value.
  */
 
 import type { SyntaxTable } from "../index.ts";
 import * as template from "../index.ts";
-import { reservedMessage } from "../states/EXPRESSION.ts";
+
+/** This fixture's text for a reserved `::name` (the atom row's own rule, not the parser's). */
+export const rowReservedMessage = (name: string) =>
+  `\`::${name}\` is reserved (decision 156): \`::\` will be the Symbol.for sugar; write \`:${name || "name"}\` for an atom`;
 
 type Handlers = Record<string, ((event: never) => unknown) | undefined>;
 
@@ -48,7 +48,7 @@ const SUGARS = new Set(["name", "id", "class"]);
 /** The structural module the corpora drive (`AtomParserModule` and `typeof template`). */
 export type SugarBuild = typeof template;
 
-/** A parser module whose `createParser` parses with `syntax` and renders sugar triggers as built-in events. */
+/** A parser module whose `createParser` parses with `syntax` and renders its triggers as plain events. */
 export function sugarBuild(syntax: SyntaxTable): SugarBuild {
   const createParser = ((handlers: Handlers) => {
     let stopped = false;
@@ -62,7 +62,7 @@ export function sugarBuild(syntax: SyntaxTable): SugarBuild {
       const atoms = held;
       held = [];
       for (const atom of atoms) {
-        call("onAtom", {
+        call("onRowAtom", {
           start: atom.start,
           end: atom.end,
           value: { start: atom.start + 1, end: atom.end },
@@ -75,7 +75,7 @@ export function sugarBuild(syntax: SyntaxTable): SugarBuild {
         start: at,
         end,
         code: template.ErrorCode.INVALID_EXPRESSION,
-        message: reservedMessage(code.slice(at + 2, end)),
+        message: rowReservedMessage(code.slice(at + 2, end)),
       });
       stopped = true;
     };
@@ -97,7 +97,7 @@ export function sugarBuild(syntax: SyntaxTable): SugarBuild {
         return;
       }
       if (event.position === "attribute" && SUGARS.has(event.id)) {
-        // `rejectReservedName`'s reading of the name's text.
+        // The reserved `::` reading of the name's text.
         const colons = text.indexOf("::");
         if (colons >= 0) {
           const at = event.text.start + colons;
@@ -107,7 +107,7 @@ export function sugarBuild(syntax: SyntaxTable): SugarBuild {
           reserved(at, Math.min(at + 2 + name[0].length, event.text.end));
           return;
         }
-        // The value's atoms were held: the name comes first, as built in.
+        // The value's atoms were held: the name comes first.
         const atoms = held;
         held = [];
         call("onAttrName", { start: event.text.start, end: event.text.end });

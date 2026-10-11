@@ -56,7 +56,7 @@ export const LINE_TRIGGER: StateDefinition<LineTriggerMeta> = {
       this.consumeWhitespace();
       const expr = this.enterState(STATE.EXPRESSION);
       expr.attrValue = true;
-      expr.atoms = true;
+      expr.triggers = true;
       expr.operators = true;
       expr.terminatedByWhitespace = true;
       expr.shouldTerminate = shouldTerminateConciseAttrValue;

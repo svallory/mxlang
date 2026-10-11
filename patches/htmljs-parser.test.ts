@@ -14,7 +14,6 @@
  */
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { parseExpression as parseBabelExpression } from "@babel/parser";
 import * as esm from "htmljs-parser";
 import { describe, expect, it } from "vitest";
 import {
@@ -22,23 +21,15 @@ import {
   type ProbeParserModule,
   renderProbe,
 } from "../packages/parser/src/template/grammar-spec.cases.ts";
+import * as source from "../packages/parser/src/template/index.ts";
 import {
   ATOMS,
   type AtomParserModule,
-  asciiTwinMismatches,
-  commentTwinMismatches,
   NOT_ATOMS,
-  nonAsciiMarkerViolations,
   parseScaling,
   RESERVED,
-  rawOpenTagReads,
-  readMismatches,
   renderAtoms,
   SUGAR_FORMS,
-  tagNameReads,
-  tsMarkerViolations,
-  unicodeWhitespaceLoopMismatches,
-  unicodeWhitespaceMismatches,
 } from "../packages/parser/src/template/mx-atoms.cases.ts";
 
 import {
@@ -57,7 +48,6 @@ import {
   AFTER_VALUE_ON_HOLD_ROWS,
   ATOM_AFTER_SYMBOL_ROWS,
   asciiMainMismatches,
-  atomAfterSymbolMismatch,
   BODY_TEXT_ROWS,
   bodyTextTwinMismatches,
   CONCISE_DASH_ROWS,
@@ -71,15 +61,6 @@ import {
   unicodeWhitespaceTwinMismatches,
   unicodeWordTwinMismatches,
 } from "../packages/parser/src/template/mx-unicode-words.cases.ts";
-
-const isValidTs = (expression: string) => {
-  try {
-    parseBabelExpression(expression, { plugins: ["typescript"] });
-    return true;
-  } catch {
-    return false;
-  }
-};
 
 type Parser = typeof esm;
 
@@ -342,66 +323,29 @@ describe.each(builds)("default attribute (%s)", (_name, mod) => {
   });
 });
 
-// Atom lexing (decision 156): the same table the source copy runs
-// (`packages/parser/src/template/mx-atoms.test.ts`), so the two stay in
-// lockstep.
-describe.each(builds)("atoms (%s)", (_name, build) => {
+// The patch lexes no atom, and neither does the source copy's default row:
+// every input of the atom row's corpora (`mx-atoms.cases.ts`) reads as the
+// source copy reads it, `:name` left as source text, as stock 5.18.0 reads it.
+const sourceDefault = source as unknown as AtomParserModule;
+const ATOM_ROW_INPUTS = [
+  ...[...ATOMS, ...RESERVED, ...NOT_ATOMS].map(([input]) => input),
+  ...SUGAR_FORMS,
+];
+
+describe.each(builds)("no atom lexing (%s)", (_name, build) => {
   const mod = build as unknown as AtomParserModule;
 
-  it.each(ATOMS)("atom: %j", (input, expected) => {
-    expect(renderAtoms(mod, input)).toBe(expected);
+  it.each(ATOM_ROW_INPUTS)("reads as the source copy: %j", (input) => {
+    const rendered = renderAtoms(mod, input, true);
+    expect(rendered).not.toMatch(/atom\(|is reserved/);
+    expect(rendered).toBe(renderAtoms(sourceDefault, input, true));
   });
 
-  it.each(RESERVED)("reserved: %j", (input, expected) => {
-    expect(renderAtoms(mod, input)).toBe(expected);
-  });
-
-  it("a raw open-tag read is the source; the value keeps its stand-in", () => {
-    expect(rawOpenTagReads(mod)).toEqual({ raw: "style x=:a", value: "0." });
-  });
-
-  it("a mixed tag name reads its stand-in; only the raw open tag reads the source", () => {
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: MX source, not a JS template
-    const expected = { name: "foo-${0.}", raw: "foo-${:a} x=:b" };
-    expect(tagNameReads(mod)).toEqual(expected);
-  });
-
-  it("no TypeScript marker or type end is followed by an atom, at any depth", () => {
-    const { total, ran, bad } = tsMarkerViolations(mod, isValidTs);
-    expect(total).toBe(11_520);
-    expect(ran).toBeGreaterThan(9_000);
-    expect(bad).toEqual([]);
-  });
-
-  it("no non-ASCII operand or key before a TypeScript `:` is followed by an atom", () => {
-    const { total, ran, bad } = nonAsciiMarkerViolations(mod, isValidTs);
-    expect(total).toBe(21_840);
-    expect(ran).toBeGreaterThan(14_000);
-    expect(bad).toEqual([]);
-  });
-
-  it("a comment around an operator word lexes as whitespace does (decision 156 addendum 8)", () => {
-    const { total, bad } = commentTwinMismatches(mod);
-    expect(total).toBe(312);
-    expect(bad).toEqual([]);
-  });
-
-  it("a non-ASCII letter before `:` lexes as the same row with an ASCII letter", () => {
-    const { total, bad } = asciiTwinMismatches(mod);
-    expect(total).toBe(5_040);
-    expect(bad).toEqual([]);
-  });
-
-  it("Unicode whitespace in the atom look-behind lexes as an ASCII space (decision 156 addendum 10)", () => {
-    const { total, bad } = unicodeWhitespaceLoopMismatches(mod);
-    expect(total).toBe(1_482);
-    expect(bad).toEqual([]);
-  });
-
-  it("Unicode whitespace before `:` lexes as an ASCII space (decision 156 addendum 10; was review F1)", () => {
-    const { total, bad } = unicodeWhitespaceMismatches(mod);
-    expect(total).toBe(2_660);
-    expect(bad).toEqual([]);
+  it("read() returns the source, with no stand-in", () => {
+    const code = "<div x=:a y=:bb/>";
+    const parser = build.createParser({});
+    parser.parse(code);
+    expect(parser.read({ start: 0, end: code.length })).toBe(code);
   });
 
   it("parse time grows linearly with the file (no scan to the end of file)", () => {
@@ -409,28 +353,6 @@ describe.each(builds)("atoms (%s)", (_name, build) => {
     // parseScaling).
     expect(parseScaling(mod)).toBeLessThan(200);
   }, 60_000);
-
-  it("read()'s binary search agrees with a linear stand-in on every range", () => {
-    expect(readMismatches(mod)).toEqual([]);
-  });
-
-  it.each(NOT_ATOMS)("not an atom: %j", (input, expected) => {
-    expect(renderAtoms(mod, input, true)).toBe(expected);
-  });
-
-  it.each(SUGAR_FORMS)("decision 146 form lexes no atom: %j", (input) => {
-    expect(renderAtoms(mod, input)).not.toMatch(/atom\(|is reserved/);
-  });
-
-  it("read() stands in every atom fully inside the range", () => {
-    const code = "<div x=:a y=:bb/>";
-    const parser = build.createParser({});
-    parser.parse(code);
-    expect(parser.read({ start: 0, end: code.length })).toBe(
-      "<div x=0. y=0.0/>",
-    );
-    expect(parser.read({ start: 8, end: 9 })).toBe("a");
-  });
 });
 
 // template-parser-ascii-only-lookbehinds: the same table the source copy
@@ -510,9 +432,13 @@ describe.each(builds)("non-ASCII identifiers (%s)", (_name, build) => {
   );
 
   it.each(ATOM_AFTER_SYMBOL_ROWS)(
-    "an atom after a symbol lexes, as after ASCII punctuation (addendum 13): %j",
-    (input, twin, expected) => {
-      expect(atomAfterSymbolMismatch(mod, [input, twin, expected])).toEqual([]);
+    "a `:` after a symbol reads as the source copy (addendum 13): %j",
+    (input, twin) => {
+      for (const code of [input, twin]) {
+        expect(renderAtoms(mod, code, true)).toBe(
+          renderAtoms(sourceDefault, code, true),
+        );
+      }
     },
   );
 

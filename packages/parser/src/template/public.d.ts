@@ -80,7 +80,6 @@ export declare const TagType: {
 /** The lexer's events, one optional handler each. */
 export interface Handlers {
   onError?(data: Ranges.Error): void;
-  onAtom?(data: Ranges.Value): void;
   onTrigger?(data: Ranges.Trigger): void;
   onBlockTag?(data: Ranges.Value): void;
   onFilter?(data: Ranges.Filter): void;

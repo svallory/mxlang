@@ -41,8 +41,6 @@ export type NNode = NTag | NLeaf;
 
 export interface NDocument {
   readonly body: readonly NNode[];
-  /** Every atom, `:name@[s,e)`, sorted by start. */
-  readonly atoms: readonly string[];
   /** `CODE [s,e) "message"` for the template error, or the thrown error of today's path. */
   readonly error: string | null;
   /**
@@ -72,7 +70,6 @@ export function print(document: NDocument): string[] {
     );
   };
   for (const node of document.body) visit(node, 0);
-  if (document.atoms.length) out.push(`atoms ${document.atoms.join(" ")}`);
   if (document.error) out.push(`error ${document.error}`);
   return out;
 }

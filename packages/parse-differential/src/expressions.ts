@@ -2,8 +2,7 @@
  * The expression differential (PR 3, brief §1.2.8): every MX container's
  * Babel payload is structurally equal to the Babel node in today's tree at
  * the same position — type, every own field, `start`/`end`, `loc` with
- * `index`, `extra`, comments — after today's atom stand-ins are converted
- * with the same rule the front end uses (decision 156 addendum 1). A failed
+ * `index`, `extra`, comments. A failed
  * container is compared against today's `MarkoParseError`: label and
  * bounded position.
  *
@@ -225,40 +224,7 @@ export function todayExpressions(
     }
   };
   visit(ast.program?.body ?? []);
-  // Convert today's atom stand-ins with the front end's own rule, so both
-  // sides carry the public StringLiteral shape.
-  for (const entry of out) convert(entry.nodes, source);
   return out;
-}
-
-/** `core/src/atoms.ts`'s conversion, applied to today's raw tree for the comparison. */
-function convert(nodes: readonly Node[], source: string): void {
-  const seen = new Set<unknown>();
-  const visit = (value: Node): void => {
-    if (!value || typeof value !== "object" || seen.has(value)) return;
-    seen.add(value);
-    if (Array.isArray(value)) {
-      value.forEach(visit);
-      return;
-    }
-    if (typeof value.type !== "string") return;
-    const at = value.loc?.start?.index ?? value.start;
-    if (value.type === "NumericLiteral" && source[at] === ":") {
-      const end = value.loc?.end?.index ?? value.end;
-      const name = source.slice(at + 1, end);
-      value.type = "StringLiteral";
-      value.value = name;
-      value.extra = {
-        raw: JSON.stringify(name),
-        rawValue: name,
-        mxAtom: { span: { sourceStart: at, sourceEnd: end } },
-      };
-    }
-    for (const [key, child] of Object.entries(value)) {
-      if (key !== "loc" && key !== "extra") visit(child);
-    }
-  };
-  nodes.forEach(visit);
 }
 
 export interface MxEntry {

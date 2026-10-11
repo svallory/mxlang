@@ -49,13 +49,13 @@ to one place in `src/`:
 |---|---|
 | `ATTRIBUTE` default state: `expr.attrValue = !!(attr.name \|\| attr.spread)` before `expr.operators = !0` | `states/ATTRIBUTE.ts`, where the attribute value `EXPRESSION` is entered (`attr.stage = ATTR_STAGE.VALUE`) |
 | `case 63` (`?`): skip `??` and `?.` (not `?.5`) when `expression.attrValue` | `states/EXPRESSION.ts`, `case CODE.QUESTION` of `EXPRESSION.char` |
-| helper `isIdentStartCode` | `states/EXPRESSION.ts`, end of file (plus `isDigitCode`, the inline `>= 48 && <= 57` of the `?.` hunk) |
+| the inline `>= 48 && <= 57` of the `?.` hunk | `states/EXPRESSION.ts`, end of file (`isDigitCode`) |
 | (the minified build keeps the flag implicit) | `states/EXPRESSION.ts`: `attrValue: boolean` on `ExpressionMeta`, initialised `false` in `enter` |
 
 Nothing else from the decision 146 rule differs from `v5.18.0`. To check:
 extract `git archive v5.18.0 src` of upstream and diff; only
 `states/ATTRIBUTE.ts` and `states/EXPRESSION.ts` differ from upstream for that
-rule, plus the three files the base-position addition below touches.
+rule, plus the two files the base-position addition below touches.
 
 ## Base position for fragment parses
 
@@ -92,82 +92,62 @@ does exactly this — shifts once, not twice.
 
 Covered by `__tests__/base-offset.test.ts`, alongside the upstream suite.
 
-### Atoms (decision 156)
+### Expression positions and the look-behind
 
-Atom lexing, the same change as the patch's atom hunks (both dist builds carry
-identical JavaScript for it):
+The template parser lexes no atom: `:name` in an expression is JavaScript
+and reads exactly as stock htmljs-parser reads it (`<a b=:x/>` reaches
+Babel as `:x`; `::` in a tag or attribute name is part of the name,
+`<a::b/>` is the tag `a::b`). Atoms are a dialect feature: a dialect arms an
+expression row on `:` in its syntax table, and the same look-behind that
+decides where an operand is expected decides where that row fires. The
+patch carries none of this; it is source-only, like the syntax table below.
 
 | Source location | What it does |
 |---|---|
-| `states/EXPRESSION.ts`: `atoms`, `comments`, `regexEnd` on `ExpressionMeta` | `atoms` turns lexing on for one expression; the other two let the look-behind skip comments and see a regex end |
-| `states/EXPRESSION.ts`, `case CODE.COLON`, first | `lexAtom` runs before the ternary/type handling, so an atom's `:` never counts as a ternary's |
-| `states/EXPRESSION.ts`, `return` | records comment and regular-expression children while `atoms` is on |
-| `states/EXPRESSION.ts`, end of file | `atomKeywords`, `lexAtom`, `atomNameEnd`, `expectsExpression`, `isLookBehindWordCode` |
-| `states/ATTRIBUTE.ts` (value, argument and method-shorthand body `EXPRESSION`; a method body is an attribute value, lead ruling 2026-10-05), `states/OPEN_TAG.ts` (tag arguments), `states/PLACEHOLDER.ts` (`checkForPlaceholder`) | set `atoms = true` |
-| `states/TEMPLATE_STRING.ts` | a template's `${}` inherits `atoms` from the template's own expression |
-| `core/Parser.ts` | `atoms` (reset by `parse`), `read()` stands atoms in, `standInAtoms` |
-| `util/constants.ts` | the `onAtom` handler |
+| `states/EXPRESSION.ts`: `triggers`, `comments`, `regexEnd` on `ExpressionMeta` | `triggers` arms expression triggers for one expression; the other two let the look-behind skip comments and see a regex end |
+| `states/ATTRIBUTE.ts` (value, argument and method-shorthand body `EXPRESSION`; a method body is an attribute value), `states/LINE_TRIGGER.ts`, `states/OPEN_TAG.ts` (tag arguments), `states/PLACEHOLDER.ts` (`checkForPlaceholder`), `states/TAG_NAME.ts` (a `${}` in a tag name or shorthand) | set `triggers = true` |
+| `states/TEMPLATE_STRING.ts` | a template's `${}` inherits `triggers` from the template's own expression |
+| `states/EXPRESSION.ts`, `return` | records comment and regular-expression children while `triggers` is on |
+| `states/EXPRESSION.ts`, end of file | `operandKeywords`, `expectsExpression` |
 
-Behaviour:
+Behaviour of the look-behind (it is `expectsExpression`; a trigger is lexed
+only where it holds, apart from the `?` bypass in `lexTrigger`):
 
-- Atoms are lexed only in attribute values (named, default, bound and spread),
-  attribute arguments, tag arguments, placeholders (`${}`, `$!{}`),
-  method-shorthand bodies (`x(v) { … }`, an attribute value; lead ruling
-  2026-10-05) and the `${}` of a template literal inside one of those. Never
-  in statement tags (`static`, `import`, …), scriptlets, tag variables, tag
-  parameters or type arguments, and never in string, template or regex text
-  or comments (those are other states).
-- A `:` starts an atom only where an expression is expected: at the start of
-  the expression, or after an operator, a punctuator, a spread's `...` or one
-  of `atomKeywords` (`return`, `typeof`, `in`, …). Never after an expression
-  end (a word, a literal, `)`, `]`, `}`, a quote, a regex), after `.` or `?.`,
-  after `as`/`satisfies`, after a postfix `++`/`--`, or as TypeScript's
-  optional/definite marker (`x?:`, `x!:`: a `?` or `!` directly after a word,
-  `]`, `-` or `+` and directly before the `:`). The name is
-  `[A-Za-z_$][\w$]*(-[\w$]+)*`.
-- The ternary counter skips an atom's `:`, so `x=a ? :b :c` is one value;
-  that is the only input whose decision 146 split changes.
-- `::` (with or without a name) is reserved: `onError` with
-  `INVALID_EXPRESSION`, the range of the `::name` token, and "`` `::a` is
-  reserved (decision 156): `::` will be the Symbol.for sugar; write `:a` for
-  an atom``". Parsing stops there, as for every other parser error.
+- Triggers are armed only in attribute values (named, default, bound and
+  spread), attribute arguments, tag arguments, placeholders (`${}`, `$!{}`),
+  method-shorthand bodies (`x(v) { … }`, an attribute value), every `${}` of
+  a tag name or shorthand, and the `${}` of a template literal inside one of
+  those. Never in statement tags (`static`, `import`, …), scriptlets, tag
+  variables, tag parameters or type arguments, and never in string,
+  template or regex text or comments (those are other states).
+- An operand is expected at the start of the expression, or after an
+  operator, a punctuator, a spread's `...` or one of `operandKeywords`
+  (`return`, `typeof`, `in`, …). Never after an expression end (a word, a
+  literal, `)`, `]`, `}`, a quote, a regex), after `.` or `?.`, after
+  `as`/`satisfies`, after a postfix `++`/`--`, or, for a `:`, as
+  TypeScript's optional/definite marker (`x?:`, `x!:`: a `?` or `!` directly
+  after a word, `]`, `-` or `+` and directly before the `:`).
 
-API (what core and other consumers use):
+`read(range)` returns the source of `range` with every trigger wholly inside
+it replaced by its same-length stand-in (`Parser#standIn`, "The syntax table"
+below). With no trigger lexed, it is the source: nothing is replaced in a
+`.mx` file on the default row.
 
-- `read(range)` returns the source of `range` with every atom wholly inside
-  it replaced by a **same-length numeric stand-in**: `0.` followed by zeros
-  (`:a` → `0.`, `:rename-all` → `0.000000000`). Babel parses it as a
-  `NumericLiteral` at the atom's exact offsets; it is not assignable, not a
-  binding and not a shorthand key, so misuse fails at the atom. A consumer
-  tells a stand-in from an authored number by the source character at the
-  node's start, which is `:` (no authored numeric literal starts with `:`).
-  This is how core sees atoms through `@marko/compiler`, which owns the parser
-  instance and its handlers.
-- `onAtom(range)` (handler, `Ranges.Value`): fired once per atom as it is
-  lexed, in source order. `start`/`end` cover the whole atom, `:` included;
-  `value` is the name (`start + 1` to `end`). For consumers that drive the
-  parser themselves (probes, scans).
-- `Parser#atoms` (internal): the recorded spans, `{ start, end }[]`.
-
-An unconverted stand-in reads as a number: anything that compiles through this
-parser without core's conversion turns atoms into numbers silently.
-
-Nothing else differs from `v5.18.0`. To check: extract `git archive v5.18.0 src`
-of upstream and diff; only `index.ts`, `core/Parser.ts`,
+To check what differs from `v5.18.0`: extract `git archive v5.18.0 src` of
+upstream and diff. The files that differ are `index.ts`, `core/Parser.ts`,
 `states/ATTRIBUTE.ts`, `states/CLOSE_TAG.ts`, `states/EXPRESSION.ts`,
 `states/INLINE_SCRIPT.ts`, `states/JS_COMMENT_LINE.ts`, `states/OPEN_TAG.ts`,
 `states/PLACEHOLDER.ts`, `states/TAG_NAME.ts`, `states/TEMPLATE_STRING.ts`,
-`util/constants.ts` and `util/util.ts` differ (`index.ts` from the base
-position above, `TAG_NAME.ts` from review round 4, `INLINE_SCRIPT.ts` and
-`util/util.ts` from template-parser-ascii-only-lookbehinds, `CLOSE_TAG.ts`
-and `JS_COMMENT_LINE.ts` from the crash fix below; checked against
-`git archive v5.18.0 src`).
+`util/constants.ts` and `util/util.ts` (`index.ts` from the base position
+above, `INLINE_SCRIPT.ts` and `util/util.ts` from the look-behind sections
+below, `CLOSE_TAG.ts` and `JS_COMMENT_LINE.ts` from the crash fix below), and
+the files the syntax table adds or touches (its own section).
 
 Unicode whitespace in every look-behind (template-parser-lookbehinds-
 followup, decision 156 addenda 11 and 12; both dist builds carry the same
 JavaScript). Wherever a look-behind asks "is this whitespace", the set of
 `isUnicodeSpaceCode` answers as ASCII whitespace does, through the one
-`isUnicodeWhitespaceCode` the atom look-behind uses. Each input renders as
+`isUnicodeWhitespaceCode`. Each input renders as
 its ASCII-space twin (`unicodeWhitespaceTwinMismatches`), except the
 addendum 12 pair below.
 
@@ -181,17 +161,16 @@ addendum 12 pair below.
 | `states/ATTRIBUTE.ts` | `shouldTerminateConciseAttrValue`, `shouldTerminateConciseAttrName` | a Unicode-whitespace-preceded `--` starts the text block (addendum 12: the attribute's range keeps the trailing whitespace, `1\u00a0` or `x\u00a0`, because an ASCII space ends the attribute by the current-character test, which is unchanged; pinned in `CONCISE_DASH_ROWS`) |
 | `states/HTML_CONTENT.ts` | `HTML_CONTENT.parse` | none: addendum 11 is withdrawn here (addendum 13, item 1). Only ASCII whitespace before `//` or `/*` in HTML text starts a comment, as upstream; `<p>Visit\u00a0//cdn.example/x.js</p>` is text. The function is byte-identical to upstream again |
 
-Comments around an operator word (same follow-up; mx-lead, within decision
-156 addendum 8): `isOperatorWord`'s look-back before `of`, `yield` and
-`await` steps over comments (`expression.comments`) as `expectsExpression`
-already does, so `f(/*c*/ await :b)` reads as `f( await :b)` and
+Comments around an operator word (same follow-up; source only): `isOperatorWord`'s
+look-back before `of`, `yield` and `await` steps over comments
+(`expression.comments`) as `expectsExpression` already does, so under a `:`
+expression row `f(/*c*/ await :b)` reads as `f( await :b)` and
 `(a /*c*/ of :b)` as `(a  of :b)` (`commentTwinMismatches`). The terminator
 look-behind does not step over comments: `x=c ? /*c*/ of :b` still splits
 at the whitespace after the comment (a separate site, not changed).
 
 Left: every current-character and look-ahead whitespace test (a value
-still does not end at a Unicode space; `isSingleAtomDefault`'s and the `.`
-look-aheads), and `detectAmbiguousCloseAngleBracket`'s look-behinds, which a
+still does not end at a Unicode space; the `.` look-aheads), and `detectAmbiguousCloseAngleBracket`'s look-behinds, which a
 forward scan reaches only after it has rejected a Unicode space.
 
 ## The parser never throws
@@ -224,23 +203,20 @@ MX's own, not in the patched npm build: `createParser(handlers, { syntax })`
 reads a `SyntaxTable` (`syntax.ts`, plain data, validated and compiled once
 per table object). `DEFAULT_SYNTAX`, the default, compiles to no trigger
 sets, so every check below is one `null` test and the event stream is the
-npm build's (`corpus-equivalence.test.ts` still pins that). Atoms keep their
-decision-156 path; the triggers are built beside it. Slice a1 of
-`lang-ext-move-sugars-to-mesh` adds the coexistence rule: a loaded row on a
-character replaces the built-in behaviour for that character in that
-position (`CompiledSyntax.builtInAtoms`, true on the default row), so atoms
-and the name sugars are expressible as rows (`test-support/sugar-rows.ts`).
-The parser has no built-in name sugars: a spaced ` :b`, ` .b` or bare ` :`
-after a value continues it, as in stock.
+npm build's (`corpus-equivalence.test.ts` still pins that). The parser has
+no built-in atoms and no built-in name sugars: `:x` in an expression, a
+spaced ` :b`, ` .b` or bare ` :` after a value, and `::` in a name read as
+stock reads them. A dialect expresses atoms and the name sugars as rows
+(`test-support/sugar-rows.ts` holds the fixtures).
 
 | Source location | What changed |
 |---|---|
-| `syntax.ts` (new) | `SyntaxTable`, `Trigger`, `DEFAULT_SYNTAX`, `validateSyntaxTable`, `compileSyntax` (per-list 128-entry first-character table plus a non-ASCII list, sticky `u` matchers), `matchTrigger`, `standInText`. Slice a1: `Trigger.value?: "refuse"` (attribute triggers only, validated as `terminatesValue` is; `CompiledTrigger.refusesValue`), and the coexistence flag `builtInAtoms`, false when an expression trigger is armed on `:` |
-| `core/Parser.ts` | `syntax` (compiled table, a constructor argument), `triggers` and `lastTriggerStart`; `recordTrigger`; `read` goes through `standIn`, the merge of atom and trigger stand-ins, when a trigger was lexed (`standInAtoms` otherwise, unchanged) |
+| `syntax.ts` (new) | `SyntaxTable`, `Trigger`, `DEFAULT_SYNTAX`, `validateSyntaxTable`, `compileSyntax` (per-list 128-entry first-character table plus a non-ASCII list, sticky `u` matchers), `matchTrigger`, `standInText`. `Trigger.value?: "refuse"` (attribute triggers only, validated as `terminatesValue` is; `CompiledTrigger.refusesValue`) |
+| `core/Parser.ts` | `syntax` (compiled table, a constructor argument), `triggers` and `lastTriggerStart`; `recordTrigger`; `read` goes through `standIn` when a trigger was lexed, which replaces each trigger wholly inside the range by its same-length stand-in (binary search for the first candidate; a read of exactly a raw open tag, `rawOpenTags`, returns the source) |
 | `index.ts` | `createParser`'s second argument; exports `DEFAULT_SYNTAX`, `validateSyntaxTable` and the table types |
 | `util/constants.ts` | `onTrigger` and `Ranges.Trigger` (slice a1: `method`, an attribute trigger's method value) |
-| `states/EXPRESSION.ts` | `lexTrigger`, before the word fast path in expressions that lex atoms, where `expectsExpression` holds or right after a ternary's `?` (never inside a word, never continuing a punctuator of the same character), and refused with an error when the text after the match would continue the stand-in's token (`continuesToken`); a trigger's end is recorded in `atomEnd` (its text is an operand, never a keyword); `checkForOperators` ends an attribute value at a space then a `terminatesValue` attribute trigger under `valueMayEndAt`, the decision 146 guard (`attrValue` or a single-atom default, no open `?`) that the ` :name` rule now calls too; the EOF message of a trigger value. Slice a1: P1, the `?` bypass never applies to a trigger armed on `:` (TypeScript's optional marker is `?` then `:`, `a?:T`, `a? :T`), so there `expectsExpression` alone decides, as for `lexAtom`; P2, a trigger whose next text would continue its token declines silently (it was an error), by `continuesToken` or `stopsShortOfToken` (the matcher would take more had the non-ASCII word characters after it been ASCII letters: `:a-é`), as `lexAtom` declines `:aé` and `:a-é`; coexistence, `lexAtom` runs only under `builtInAtoms` |
-| `states/ATTRIBUTE.ts`, `states/attr-stage.ts` | `lexAttrTrigger` at a name's first character, an optional `=value` with whitespace before `=` as after a name (stage `TRIGGER_VALUE`), `endsAttrTriggerAt`; the value-entry code factored into `enterAttrValue`, used by both. Slice a1: a method value after a trigger (`(params) { body }`, `<T>(…) { … }`, `async` before the trigger), lexed by the attribute's own `(` / `<` / `{` branches (no empty name is announced) and announced as the trigger's `method`; `(args)` without a body are the trigger's `args` (review 460 r1, L1: core refuses them through the hook), lexed as a named attribute's arguments, after which `=` / `:=` may give a value and `exit` announces a trigger not yet announced; `:=` after a non-refusing trigger is a value lexed as for `=`, announced with `operator: ":="` (`"="` for `=`, also on line triggers); the generic follow error lists "a method" for a non-refusing row; `isAsyncMethodPrefix` holds `async` before a trigger until the body shows. `value: "refuse"`: `=`, `:=` or `(` after the trigger (after whitespace) is ``The `#main` shorthand takes no value.``, `INVALID_ATTRIBUTE_VALUE`, positioned at that operator; like every parser error it ends the parse (`emitError`), so nothing cascades. `enterAttrValue` sets `defaultAtom` only under `builtInAtoms` (the single-atom default exemption is the built-in atom's) |
+| `states/EXPRESSION.ts` | `lexTrigger`, before the word fast path in expressions that arm triggers (`ExpressionMeta.triggers`), where `expectsExpression` holds or right after a ternary's `?` (never inside a word, never continuing a punctuator of the same character), and refused with an error when the text after the match would continue the stand-in's token (`continuesToken`); a trigger's end is recorded in `atomEnd` (its text is an operand, never a keyword); `checkForOperators` ends an attribute value at a space then a `terminatesValue` attribute trigger under `valueMayEndAt`, the decision 146 guard (`attrValue` or a default value a value row claims whole, no open `?`); the EOF message of a trigger value. Slice a1: P1, the `?` bypass never applies to a trigger armed on `:` (TypeScript's optional marker is `?` then `:`, `a?:T`, `a? :T`), so there `expectsExpression` alone decides; P2, a trigger whose next text would continue its token declines silently, by `continuesToken` or `stopsShortOfToken` (the matcher would take more had the non-ASCII word characters after it been ASCII letters: `:a-é`) |
+| `states/ATTRIBUTE.ts`, `states/attr-stage.ts` | `lexAttrTrigger` at a name's first character, an optional `=value` with whitespace before `=` as after a name (stage `TRIGGER_VALUE`), `endsAttrTriggerAt`; the value-entry code factored into `enterAttrValue`, used by both. A method value after a trigger (`(params) { body }`, `<T>(…) { … }`, `async` before the trigger), lexed by the attribute's own `(` / `<` / `{` branches (no empty name is announced) and announced as the trigger's `method`; `(args)` without a body are the trigger's `args` (review 460 r1, L1: core refuses them through the hook), lexed as a named attribute's arguments, after which `=` / `:=` may give a value and `exit` announces a trigger not yet announced; `:=` after a non-refusing trigger is a value lexed as for `=`, announced with `operator: ":="` (`"="` for `=`, also on line triggers); the generic follow error lists "a method" for a non-refusing row; `isAsyncMethodPrefix` holds `async` before a trigger until the body shows. `value: "refuse"`: `=`, `:=` or `(` after the trigger (after whitespace) is ``The `#main` shorthand takes no value.``, `INVALID_ATTRIBUTE_VALUE`, positioned at that operator; like every parser error it ends the parse (`emitError`), so nothing cascades. `enterAttrValue` sets `claimDefault` for a default `=value` when the table has value rows |
 | `states/CONCISE_HTML_CONTENT.ts`, `states/LINE_TRIGGER.ts` (new), `states/index.ts` | a line trigger at a tagless concise line start, its optional `=value` (a concise attribute value, spaces allowed before `=`), then whitespace or a `//` / block comment (reported through `onComment`, as after a concise tag line) |
 | `states/BLOCK_TAG.ts` (new), `states/HTML_CONTENT.ts`, `states/index.ts` | PR B: a table's block tag (`open`, raw body, first `close`) and filter (`open`, a name, `close`, raw body, next `close`) in HTML content, announced by `onBlockTag` / `onFilter`; the text run stops at their first characters (`contentStops`, empty on the default row); an unclosed one is `MALFORMED_BLOCK_TAG` / `MALFORMED_FILTER` (new codes 31, 32, `util/error-code.ts`) at end of input; an opener at a concise line start is `INVALID_LINE_START` (`states/CONCISE_HTML_CONTENT.ts`) |
 | `states/TAG_NAME.ts` | PR B: `tableTagType`, the table's `tagTypes` keyed by the full written static name (decision 182 addenda 2 and 3): dynamic and `@` names never looked up, absent is html, `statement` only on a concise line; a type an `onOpenTagName` handler still returns wins (the bundled `@marko/compiler` path, whose table is empty) |
@@ -251,106 +227,90 @@ after a value continues it, as in stock.
 - `__tests__/` (upstream, above), via `upstream-suite.test.ts`.
 - `mx-after-value.test.ts`: `patches/htmljs-parser.test.ts` re-pointed at this
   source (vitest).
-- `mx-atoms.test.ts`: atom lexing, from the case table in `mx-atoms.cases.ts`,
-  which `patches/htmljs-parser.test.ts` runs against both npm builds too.
+- `mx-atoms.cases.ts`: the atom row's corpora (`ATOMS`, `NOT_ATOMS`,
+  `SUGAR_FORMS`, the generated suites); run through the `:` expression row by
+  `mx-sugar-module.test.ts`. `patches/htmljs-parser.test.ts` runs the same
+  inputs against both npm builds and the default row and asserts they read
+  as stock reads them, with no atom lexed.
 - `mx-triggers.test.ts`: the syntax table: the `&` member row in all three
   positions, other trigger shapes, `terminatesValue`, `read()` through
   stand-ins, one negative case per validation rule, and the default row's
   event-stream parity over the grammar corpus; slice a1's `value: "refuse"`,
-  method values after an attribute trigger, P1, P2 and the coexistence
-  rule.
+  method values after an attribute trigger, P1 and P2.
 - `mx-block-tags.test.ts`: block tags, filters and `tagTypes` (PR B), and
   their validation.
-- `mx-sugar-module.test.ts`: slice a1's differential. The atom corpora of
-  `mx-atoms.cases.ts` (and its generated suites) run through the
-  atoms-and-sugars rows of `test-support/sugar-rows.ts`, their triggers
-  rendered as built-in events by `test-support/sugar-module.ts`, against the
-  same expectations; `mx-after-value.test.ts` runs its tables through the
-  same module build. Every difference is a row of
-  `mx-sugar-module.deltas.ts` naming its ruling, and both files assert the
-  list exact. It also pins the attribute rows' extents against the
-  built-in attribute-name lexer.
+- `mx-sugar-module.test.ts`: atoms as a dialect builds them. The atom
+  corpora of `mx-atoms.cases.ts` (and its generated suites) run through the
+  atom row of `test-support/sugar-rows.ts` (`ATOMS_SYNTAX`), its triggers
+  rendered as plain events by `test-support/sugar-module.ts`, and the
+  default row reads the same inputs as stock Marko does.
 - `corpus-equivalence.test.ts`: event streams of this copy against the patched
   npm build over every tracked `.mx`, `.marko` and `.amx` file and every `mx` /
-  `marko` Markdown fence (`onAtom` included); and that the only atoms in that
-  corpus are the atoms ADR's own examples.
+  `marko` Markdown fence.
 - `__tests__/base-offset.test.ts`: the base position — handler ranges
   identical with and without the options, `offsetAt` shifting only by
   `startOffset`, the first-line-only column rule, non-BMP input, zero bases,
   an error at end of input, the mid-parse `locationAt` single-shift case, and
   an embedding-equivalence property test against a whole-document parse.
 
-Review round 4 on PR #342 (both dist builds carry the same JavaScript):
+Look-behind rules of `expectsExpression` (source only; the patch does not
+carry them):
 
-- **Look-behind.** A `?` right after a word or `]` is TypeScript's optional
-  marker and a `!` right after an operand is postfix, whitespace before the
-  `:` or not; a type's closing `>` (`inType`, not `=>`) ends an operand. `of`
-  is an operator only after an operand, `yield`/`await` not after `?`, `:`,
-  `,` or `(` (`isOperatorWord`). A non-ASCII letter right after a name ends
-  no atom (`:aé` stays source, so no stand-in reaches Babel's message).
-- **`read()`** binary-searches the first atom at or after the range start
-  (it was a linear scan: 627 ms at 40k atoms). Reading exactly an atom's own
-  range returns its stand-in, by design: that is how `x=:a`'s value reaches
-  Babel. A read of exactly the raw open tag (`rawOpenTags`: tag-name start
-  to open-tag-end start, which `@marko/compiler` builds `rawValue` from and
-  `<style>` uses) returns the source; round 5 narrowed this from "any read
-  starting at a tag name", which also left a mixed tag name's template
-  (`<foo-${:a}>`) unconverted. `read()`'s consumers in `@marko/compiler` parse expressions from
+- **Markers and operand ends.** A `?` right after a word or `]` is
+  TypeScript's optional marker and a `!` right after an operand is postfix,
+  whitespace before the `:` or not; a type's closing `>` (`inType`, not `=>`)
+  ends an operand, as does a type argument list's closing `>`
+  (`closesTypeArguments`: the matching `<` written right after a word, in
+  the same group) and a run of postfix `!` (`a!!`, `a! !`), at every depth
+  (groups, placeholders, tag arguments, method bodies). A number before `?`
+  is never TypeScript's optional marker. `of` is an operator only after an
+  operand, `yield`/`await` not after `?`, `:`, `,` or `(` (`isOperatorWord`).
+  A word after a spread's `...` is an operator, not a member name
+  (`isSpreadEnd`: `[...await :b]` under a `:` row).
+- **A trigger that would continue its token declines.** A non-ASCII letter
+  right after a `:` name (`:aé`, `:a-é`) leaves the text as source
+  (`continuesToken`, `stopsShortOfToken`), so no stand-in reaches Babel's
+  message.
+- **`read()`** binary-searches the first trigger at or after the range start.
+  Reading exactly a trigger's own range returns its stand-in, by design: that
+  is how a trigger's value reaches Babel. A read of exactly the raw open tag
+  (`rawOpenTags`: tag-name start to open-tag-end start, which
+  `@marko/compiler` builds `rawValue` from and `<style>` uses) returns the
+  source, while a mixed tag name's template (`<foo-${&a}>`) reads its
+  stand-ins. `read()`'s consumers in `@marko/compiler` parse expressions from
   value, argument, placeholder and method ranges (stand-ins wanted) and slice
   the raw open tag (source wanted).
-- **Decision 156 addendum 2.** Every `${}` is an expression position: tag
-  names and shorthands (`states/TAG_NAME.ts`) lex atoms too, as do
-  placeholders in `<script>`/`<style>`/`<textarea>` bodies. `::` in a tag
-  name or an attribute name is the reserved-token error, positioned at the
-  `::` (`rejectReservedName`, from `TAG_NAME.ts` and `ATTRIBUTE.ts`).
+- **Every `${}` is an expression position.** Tag names and shorthands
+  (`states/TAG_NAME.ts`) arm triggers too, as do placeholders in
+  `<script>`/`<style>`/`<textarea>` bodies.
 
-Review round 5 on PR #342 (both dist builds carry the same JavaScript):
-
-- **`::` check is local.** `rejectReservedName` reads only the name's own
-  range, one character past each `:`; it used `indexOf` to the end of the
-  file, which made every parse quadratic. Tag names and shorthands check
-  their static quasis only, so `<${"a::b"}>` is legal and `<div.a::b>` is
-  reserved (decision 156 addendum 3).
-- **Look-behind at every depth.** A type argument list's closing `>`
-  (`closesTypeArguments`: the matching `<` written right after a word, in
-  the same group) and a run of postfix `!` (`a!!`, `a! !`) end an operand
-  inside groups, placeholders, tag arguments and method bodies too; the old
-  rule relied on `inType`, which only a top-level value sets. A number
-  before `?` is never TypeScript's optional marker (`n === 1? :a : :b`).
-  `:a-é` is no atom, like `:aé`.
-
-Non-ASCII look-behind (atom-lookbehind-non-ascii, decision 156 addenda 2
-and 8; both dist builds carry the same JavaScript):
+Non-ASCII look-behind (source only):
 
 - **A non-ASCII character is a word character behind a `:`.** The
   look-behind (`expectsExpression`, `isOperatorWord`, `closesTypeArguments`)
-  classifies characters with `isUnicodeWordCode` (`util/util.ts`; named
-  `isLookBehindWordCode` until the next section): `isWordCode`, or, since
-  decision 156 addendum 13 (see "The exact word class" below), a code point at
-  or above U+0080 that is `ID_Continue` or U+200C or U+200D; until then any
-  code unit at or above U+0080 except Unicode whitespace
-  (`isUnicodeSpaceCode`). So `{ é:a }`, `(é :T) => é` and `c ? é :z` keep
+  classifies characters with `isUnicodeWordCode` (`util/util.ts`): `isWordCode`,
+  or, as "The exact word class" below defines it, a
+  code point at or above U+0080 that is `ID_Continue` or U+200C or U+200D. So
+  under a `:` expression row `{ é:a }`, `(é :T) => é` and `c ? é :z` keep
   TypeScript's colon, `éin`/`éof`/`étypeof` are names rather than operator
-  words, and `(é of :b)` lexes the atom, exactly as the same input with an
+  words, and `(é of :b)` lexes the trigger, exactly as the same input with an
   ASCII letter (`asciiTwinMismatches` pins the equivalence). The characters
   that are ECMAScript WhiteSpace or LineTerminator above ASCII, which is also
   Babel's set (U+00A0, U+1680, U+2000
   to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000, U+FEFF) are not word
   characters: TypeScript cannot own a `:` after one, so `[a,\u00a0:b]` keeps
-  its atom. Since decision 156 addendum 10 (template-parser-ascii-only-
-  lookbehinds) the look-behind's whitespace loops (`expectsExpression`, its
+  its trigger. The look-behind's whitespace loops (`expectsExpression`, its
   `!` case, `isOperatorWord`) skip them as whitespace too
-  (`isUnicodeWhitespaceCode` in `util/util.ts`, named `isSpaceCode` until
-  addendum 11: `isWhitespaceCode` or `isUnicodeSpaceCode`), so each behaves exactly as an
-  ASCII space (`unicodeWhitespaceMismatches`,
-  `unicodeWhitespaceLoopMismatches`): `{ é\u00a0:a }` is a key, and
-  `(a?\u00a0:b : c)` and `(Array<T>\u00a0:b)` read as their ASCII-space
-  spellings (`divergences.md`). Nowhere else in the template grammar does a
-  non-ASCII space change meaning.
+  (`isUnicodeWhitespaceCode` in `util/util.ts`: `isWhitespaceCode` or
+  `isUnicodeSpaceCode`), so each behaves exactly as an ASCII space
+  (`unicodeWhitespaceMismatches`, `unicodeWhitespaceLoopMismatches`):
+  `{ é\u00a0:a }` is a key, and `(a?\u00a0:b : c)` and `(Array<T>\u00a0:b)`
+  read as their ASCII-space spellings (`divergences.md`). Nowhere else in the
+  template grammar does a non-ASCII space change meaning.
   `isWordCode` itself stays ASCII. U+0085 and U+200B, which TypeScript
   also skips, are not in the set: ECMAScript and Babel reject both.
 
-Non-ASCII identifiers outside the atom path (template-parser-ascii-only-
+Non-ASCII identifiers outside the trigger look-behind (template-parser-ascii-only-
 lookbehinds, decision 156 addendum 9; both dist builds carry the same
 JavaScript). Code that was byte-identical to `v5.18.0` until then looked
 behind or ahead with the ASCII-only `isWordCode`, so a non-ASCII identifier
@@ -383,7 +343,7 @@ before it) and `wordWidthAt(data, i)` (the character starting at `i`), which
 return its width in UTF-16 units, 0 for none; every site above that took
 `data.charCodeAt(…)` now asks one of them. The loops that step back over a
 word (`wordStartOf`, used by `isOperatorWord` and the `?` case of
-`expectsExpression`) and the forward scan of `detectAmbiguousCloseAngleBracket`
+`expectsExpression`, both source only) and the forward scan of `detectAmbiguousCloseAngleBracket`
 step by that width. `getPreviousNonWhitespaceCharCode` returns a code point
 (its two callers compare it with ASCII codes or pass it to `canFollowDivision`).
 Before, every code unit at or above U+0080 except the 19 Unicode whitespace and
@@ -394,14 +354,7 @@ Marko 6.3.51.
 
 Left ASCII, on purpose: the expression fast path (`if (isWordCode(code))`
 in `EXPRESSION.char`: a non-ASCII character falls through to the same
-result, more slowly), `atomNameEnd`/`isIdentStartCode` (atom names are ASCII
-by decision), the keyword checks that test a
+result, more slowly), the keyword checks that test a
 lowercase ASCII first or last letter (`lookBehindForOperator`'s default case,
-`lookAheadForOperator`'s), `isWhitespaceCode` everywhere outside the atom
+`lookAheadForOperator`'s), `isWhitespaceCode` everywhere outside the
 look-behind, and `isIndentCode`.
-
-Same change, two MX-only fixes: `rejectReservedName` ends the name after
-`::` at the static piece's end (`<a::b${x}>` reports `::b`, not `::b$`), and
-`isOperatorWord` reads a word after a spread's `...` as an operator, not a
-member name (`isSpreadEnd`: `[...await :b]` lexes the atom, decision 156
-addendum 8).

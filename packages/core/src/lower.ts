@@ -30,7 +30,7 @@ import { dirname, resolve } from "node:path";
 // slice 6 ruling B), since `@mxlang/babel` is private.
 import type { MxChild } from "@mxlang/babel/mx-ast";
 import { freeIdentifiersIn } from "./accessor-reads.ts";
-import { assertNoStandIn, atomOf, atomsIn, convertAtoms } from "./atoms.ts";
+import { atomOf, atomsIn, recordAtoms } from "./atom-marks.ts";
 import {
   attrArgsOf,
   attrNameOf,
@@ -498,7 +498,6 @@ export function exprOf(ctx: Ctx, node: Node): Expr {
       loc: { start: node.errorLoc?.start ?? node.loc?.start },
     });
   }
-  assertNoStandIn(ctx, node);
   const code = expr(ctx, node);
   checkTagVarReads(ctx, code, node);
   const span = exprSpan(ctx, node);
@@ -1143,9 +1142,9 @@ function lowerAttrNamed(
     return { kind: "boolean", name, nameSpan, loc };
   }
   if (value?.type === "StringLiteral") {
-    // Decision 156: a whole-value atom (`mode=:strict`, or the `name` the
-    // `:name` sugar sets) is still a static string to every target; the IR
-    // marks it so a data consumer or contract can tell it from `"strict"`.
+    // A whole-value atom a dialect built (its literal marked `extra.mxAtom`)
+    // is still a static string to every target; the IR marks it so a data
+    // consumer or contract can tell it from `"strict"`.
     const atom = atomOf(value);
     // Decision 182 addendum 5: a whole-value member a dialect built
     // (`ctx.attribute(name, { kind: "member", name })`), marked the same way.
@@ -4690,9 +4689,10 @@ function lowerChildrenOf(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
   // An external call (not from `lower`) has unresolved unnamed tags; the
   // walk starts with no parents, right for a body lowered on its own.
   if (!ctx.unnamedTagsResolved) {
-    if (!ctx.atomsConverted) convertAtoms(ctx, children);
-    // A dialect's atoms (`extra.mxAtom` replacements) join the atoms.
-    if (lowerTriggers(ctx, children)) convertAtoms(ctx, children);
+    // A dialect's atoms (`extra.mxAtom` replacements) are recorded once its
+    // triggers are lowered.
+    if (lowerTriggers(ctx, children) || !ctx.atomsRecorded)
+      recordAtoms(ctx, children);
     children = childrenWithTriggers(children);
     resolveUnnamedTags(ctx, children);
     ctx.unnamedTagsResolved = true;
@@ -5050,15 +5050,13 @@ function lowerRoot(ctx: Ctx, authored: readonly MxChild[]): Ir {
   // Before anything reads a tag name: an unnamed tag has none yet. The flag
   // tells `lowerChildren` the whole tree is already resolved, so only a call
   // from outside this walk resolves (and never re-walks a subtree).
-  // Decision 156: atoms first, so no expression is ever read as its stand-in.
-  if (!ctx.atomsConverted) {
-    convertAtoms(ctx, authored);
-    ctx.atomsConverted = true;
-  }
   // Decision 182 addendum 5: a syntax table's triggers, before anything
-  // reads an expression, an attribute list or a body.
-  // A dialect's atoms (`extra.mxAtom` replacements) join the atoms.
-  if (lowerTriggers(ctx, authored)) convertAtoms(ctx, authored);
+  // reads an expression, an attribute list or a body. A dialect's atoms
+  // (`extra.mxAtom` replacements) are recorded once they are lowered.
+  if (lowerTriggers(ctx, authored) || !ctx.atomsRecorded) {
+    recordAtoms(ctx, authored);
+    ctx.atomsRecorded = true;
+  }
   const body = childrenWithTriggers(authored);
   resolveUnnamedTags(ctx, body);
   const wasResolved = ctx.unnamedTagsResolved;

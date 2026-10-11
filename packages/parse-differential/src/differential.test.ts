@@ -88,6 +88,35 @@ const BABEL_MESSAGE_PERIOD = new Set([
   "packages/hosts/hono/src/fixtures/region/for-by/input.hono.mx",
 ]);
 
+/**
+ * Expression errors whose text or position differs from today's, each one
+ * equally present on a twin with no `:` in it, so not from atoms (these
+ * inputs parsed while the template parser lexed `:b` as an atom). One
+ * difference each, pinned below:
+ *
+ * - `g0570` (`{ k: :a }`): MX's Babel 7.29.8 fork says "Unexpected token."
+ *   inside an object literal, today's 7.29.7 "Unexpected token" (twin:
+ *   `<div x={ k: + }/>`). Outside the comma ruling above.
+ * - `g0980`, `g0981` (`[a,` U+2028 or U+2029 `:b]`): Babel counts the
+ *   separator as a line break and Marko's line table does not, so Marko
+ *   bounds the error to the expression's start; MX reports the token (twin:
+ *   `[a,` U+2028 `+]`).
+ */
+const EXPRESSION_ERROR_DIFFERS = new Map([
+  [
+    "g0570",
+    'expression [7,16): MX error "Unexpected token."@[12,12) != today "Unexpected token"@[12,12)',
+  ],
+  [
+    "g0980",
+    'expression [7,14): MX error "Unexpected token"@[11,11) != today "Unexpected token"@[7,7)',
+  ],
+  [
+    "g0981",
+    'expression [7,14): MX error "Unexpected token"@[11,11) != today "Unexpected token"@[7,7)',
+  ],
+]);
+
 describe(`fixtures (${INPUT_GLOB})`, () => {
   const inputs = fixtureInputs();
   it("are the whole-file .mx sources", () => {
@@ -456,7 +485,8 @@ describe("grammar corpus inputs", () => {
           CONCISE_HEAD_TRIMMED.has(probe.id) ||
           SILENT_EOF.has(probe.id) ||
           TODAY_CRASHES.has(probe.id) ||
-          BABEL_MESSAGE_PERIOD.has(probe.id)
+          BABEL_MESSAGE_PERIOD.has(probe.id) ||
+          EXPRESSION_ERROR_DIFFERS.has(probe.id)
         );
       })
       .map(({ probe, outcome }) => ({
@@ -480,6 +510,16 @@ describe("grammar corpus inputs", () => {
       ) {
         expect(outcome.equal, probe.id).toBe(false);
       }
+    }
+  });
+
+  it("each expression-error difference is that one difference and nothing else", () => {
+    for (const [id, difference] of EXPRESSION_ERROR_DIFFERS) {
+      const outcome = results.find(({ probe }) => probe.id === id)?.outcome;
+      expect(outcome, id).toBeDefined();
+      expect(outcome?.expressions.differences, id).toEqual([difference]);
+      expect(outcome?.mx, id).toEqual(outcome?.marko);
+      expect(outcome?.text, id).toEqual([]);
     }
   });
 

@@ -135,32 +135,26 @@ describe("payloads", () => {
   });
 });
 
-describe("atoms", () => {
-  it("an atom parses from the numeric stand-in and lands as today's StringLiteral", () => {
+describe("`:name` is plain JavaScript, as in Marko", () => {
+  it("a value that starts with `:` is Babel's unexpected token at the colon", () => {
     const attr = (doc("<div x=:rename-all/>").body[0] as Node).attributes[0];
-    expect(attr.value.node.type).toBe("StringLiteral");
-    expect(attr.value.node.value).toBe("rename-all");
-    expect(attr.value.node.extra).toEqual({
-      raw: '"rename-all"',
-      rawValue: "rename-all",
-      mxAtom: { span: { sourceStart: 7, sourceEnd: 18 } },
+    expect(attr.value.node).toBeNull();
+    expect(attr.value.error).toMatchObject({
+      code: "BABEL_UnexpectedToken",
+      message: "Unexpected token",
+      start: 7,
+      end: 7,
+      context: { start: 7, end: 18 },
     });
-    expect(attr.value.node.start).toBe(7);
-    expect(attr.value.node.end).toBe(18);
   });
 
-  it("atoms beside real code keep every offset exact", () => {
-    const attr = (doc("<div x=[ :a, :b ]/>").body[0] as Node).attributes[0];
-    expect(attr.value.node.type).toBe("ArrayExpression");
-    const [a, b] = attr.value.node.elements;
-    expect([a.start, a.end]).toEqual([9, 11]);
-    expect([b.start, b.end]).toEqual([13, 15]);
-    expect(b.extra.mxAtom.span).toEqual({ sourceStart: 13, sourceEnd: 15 });
-  });
-
-  it("the container's atoms list is unchanged from PR 2: each atom once, innermost", () => {
-    const attr = (doc("<div x=[:a, :b]/>").body[0] as Node).attributes[0];
-    expect(attr.value.atoms.map((a: Node) => a.name)).toEqual(["a", "b"]);
+  it("`::` after an operand is Babel's single-expression error at the first colon", () => {
+    const attr = (doc("<a b=x::y/>").body[0] as Node).attributes[0];
+    expect(attr.value.error).toMatchObject({
+      code: "BABEL_ParseExpressionExpectsEOF",
+      message: "Expected a single expression, but found `:` after it.",
+      start: 6,
+    });
   });
 });
 

@@ -29,9 +29,9 @@ export const TEMPLATE_STRING: StateDefinition = {
             this.pos += 2; // skip ${
             const expr = this.enterState(STATE.EXPRESSION);
             expr.shouldTerminate = matchesCloseCurlyBrace;
-            // MX: a `${}` lexes atoms when the template's expression does.
-            expr.atoms = !!(templateString.parent as STATE.ExpressionMeta)
-              .atoms;
+            // MX: a `${}` arms triggers when the template's expression does.
+            expr.triggers = !!(templateString.parent as STATE.ExpressionMeta)
+              .triggers;
             return;
           }
           this.pos++;

@@ -130,14 +130,6 @@ export type TagType = (typeof _TagType)[keyof typeof _TagType];
 export interface ParserOptions {
   onError?(data: Ranges.Error): void;
   /**
-   * MX (decision 156): an atom `:name` was lexed; one call per atom, in
-   * source order. The range is the whole atom (`:` included); `value` is its
-   * name. `read()` of the atom's own range returns its stand-in (`0.`), by
-   * design; slice the source for the atom's text, or read `value` for its
-   * name.
-   */
-  onAtom?(data: Ranges.Value): void;
-  /**
    * MX (decision 182): a syntax-table trigger was lexed; one call per
    * trigger, after its `=value` (if any) was lexed. `read()` of its `text`
    * returns its stand-in.

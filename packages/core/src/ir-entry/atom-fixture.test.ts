@@ -13,6 +13,7 @@
  *    contract that uses one without a claiming module is the unknown-key
  *    error; under the fixture the fixture's check runs and core runs none.
  * 5. `ContractAtomOrMember` types the attribute view a module receives.
+ * 6. `mappedExpr` maps each module-built atom to its literal (typecheck).
  */
 import {
   mkdirSync,
@@ -35,6 +36,7 @@ import type {
   ContractValue,
   LoweredUnit,
 } from "../lowered-unit.ts";
+import { mappedExpr } from "../mapping.ts";
 import { scanCustomTags } from "../scan.ts";
 import type { Dialect } from "../syntax-table.ts";
 import { testTargetLookup } from "../test-targets.ts";
@@ -494,6 +496,46 @@ describe("`values`, `pattern` and `ref` belong to the module that claims them, `
     });
     expect(messages("<box/>", malformed)).toEqual([
       "`<box>`: `mode`: `values` must be an array of strings",
+    ]);
+  });
+});
+
+describe("the per-atom source mapping of a module-built atom (typecheck)", () => {
+  const dynamicValue = (source: string) => {
+    const result = lowerSource(source, "/v/entity.mx", { dialect: atomSyntax });
+    expect(result.diagnostics).toEqual([]);
+    const node = result.ir?.body[0] as unknown as {
+      tag?: { attrs: Attr[] };
+      attrs?: Attr[];
+    };
+    const [value] = node.tag?.attrs ?? node.attrs ?? [];
+    if (value?.kind !== "dynamic") throw new Error(String(value?.kind));
+    return value.value;
+  };
+
+  it("maps each atom to its string and the text between one to one", () => {
+    const source = "<div x=[~a, ~rename-all]/>\n";
+    const { code, mappings } = mappedExpr(dynamicValue(source));
+    expect(code).toBe('["a", "rename-all"]');
+    expect(
+      mappings.map((m) => [
+        source.slice(m.sourceStart, m.sourceEnd),
+        code.slice(m.generatedStart, m.generatedEnd),
+      ]),
+    ).toEqual([
+      ["[", "["],
+      ["~a", '"a"'],
+      [", ", ", "],
+      ["~rename-all", '"rename-all"'],
+      ["]", "]"],
+    ]);
+  });
+
+  it("an expression without atoms keeps its one whole mapping and no `atoms` field", () => {
+    const value = dynamicValue("<div x=[1, 2]/>\n");
+    expect("atoms" in value).toBe(false);
+    expect(mappedExpr(value).mappings).toEqual([
+      { sourceStart: 7, sourceEnd: 13, generatedStart: 0, generatedEnd: 6 },
     ]);
   });
 });

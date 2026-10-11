@@ -34,9 +34,21 @@ describe("stockParse", () => {
   it("has no patch marker in its source (module level)", () => {
     const mod = stockParserModule() as unknown as Record<string, unknown>;
     // The patch's additions are internal functions, so absence is checked
-    // on the source text in vendor.test.ts; here the public surface must
-    // not know atoms.
-    expect(Object.keys(mod).join(",")).not.toContain("onAtom");
+    // on the source text in vendor.test.ts; here the public surface is
+    // stock's own.
+    expect(Object.keys(mod).sort()).toEqual([
+      "ErrorCode",
+      "TagType",
+      "Validity",
+      "createParser",
+      "escapeText",
+      "getLines",
+      "getLocation",
+      "getPosition",
+      "isValidAttrValue",
+      "isValidScriptlet",
+      "isValidStatement",
+    ]);
     expect(PATCH_MARKERS.length).toBeGreaterThan(5);
   });
 });
@@ -50,14 +62,13 @@ describe("stockEvents", () => {
     expect(events.some((line) => line.startsWith("AttrName 9-11"))).toBe(false);
   });
 
-  it("reads `<div x=:a/>` as the attribute value `:a`, no atom", () => {
+  it("reads `<div x=:a/>` as the attribute value `:a`", () => {
     const events = stockEvents("<div x=:a/>");
     expect(events.some((line) => line.includes('value=7-9 ":a"'))).toBe(true);
-    expect(events.some((line) => line.startsWith("Atom"))).toBe(false);
   });
 
-  it("agrees with MX on the first and differs on the atom", () => {
+  it("agrees with MX on both", () => {
     expect(stockEvents("<div a=b :c/>")).toEqual(mxEvents("<div a=b :c/>"));
-    expect(stockEvents("<div x=:a/>")).not.toEqual(mxEvents("<div x=:a/>"));
+    expect(stockEvents("<div x=:a/>")).toEqual(mxEvents("<div x=:a/>"));
   });
 });

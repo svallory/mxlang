@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { CustomTag } from "../custom-tags.ts";
+import atomSyntax, { ATOM_VALUE } from "../fixtures/syntax/atom-fixture.ts";
 import type { Attr, DelegatedTag } from "../ir.ts";
 import type { Dialect } from "../syntax-table.ts";
 import {
@@ -85,15 +86,15 @@ function exprOf(tag: SpannedTag, name: string) {
 }
 
 describe.each(LOADERS)("the five member cases, via %s", (_, load) => {
-  it("`() => &status === :sent`: a marked `self.status`, the atom unchanged", () => {
+  it("`() => &status === done`: a marked `self.status`, the rest unchanged", () => {
     const [file, options] = load();
-    const source = "rule check=(() => &status === :sent)\n";
+    const source = "rule check=(() => &status === done)\n";
     const [rule] = tags(ir(source, file, options).body);
     const check = exprOf(rule as SpannedTag, "check");
-    // `code` is spliced, like the atom; the span still slices the authored text.
-    expect(check.code).toBe('() => self.status === "sent"');
-    expect(source.slice(12, 35)).toBe("() => &status === :sent");
-    expect(check.span).toEqual({ sourceStart: 12, sourceEnd: 35 });
+    // `code` is spliced; the span still slices the authored text.
+    expect(check.code).toBe("() => self.status === done");
+    expect(source.slice(12, 34)).toBe("() => &status === done");
+    expect(check.span).toEqual({ sourceStart: 12, sourceEnd: 34 });
     expect(check.node).toMatchObject({
       type: "ArrowFunctionExpression",
       body: {
@@ -109,11 +110,7 @@ describe.each(LOADERS)("the five member cases, via %s", (_, load) => {
             },
           },
         },
-        right: {
-          type: "StringLiteral",
-          value: "sent",
-          extra: { mxAtom: { span: { sourceStart: 30, sourceEnd: 35 } } },
-        },
+        right: { type: "Identifier", name: "done" },
       },
     });
   });
@@ -378,6 +375,15 @@ describe('the `"member"` contract type', () => {
     lowerSource(`sort ${value}\n`, "/v/entity.mx", {
       dialect: {
         ...memberSyntax,
+        // The atom fixture's whole-value row and node type, under this
+        // dialect's id, so `slot=~due-on` is a whole-value atom.
+        table: {
+          ...memberSyntax.table,
+          valueTriggers: [
+            { ...ATOM_VALUE, node: { type: "Atom", dialect: "member" } },
+          ],
+        },
+        nodeTypes: atomSyntax.nodeTypes,
         // The member lands in the declared slot.
         lowerTrigger: (_id, text, span, ctx) =>
           ctx.attribute("slot", { kind: "member", name: text.slice(1), span }),
@@ -400,7 +406,7 @@ describe('the `"member"` contract type', () => {
   });
 
   it.each([
-    ["an atom", "slot=:dueOn"],
+    ["an atom", "slot=~due-on"],
     ["a string", 'slot="dueOn"'],
     ["an expression", "slot=(a.b)"],
     ["a bare attribute", "slot"],

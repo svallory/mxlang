@@ -10,10 +10,9 @@
  * Positions are file-absolute at creation: the sub-parse receives the
  * container's offset, line and column, so every payload node's `start`, `end`
  * and `loc` (with `index`) already addresses the original file (ast §4.1,
- * §5.3) — there is no post-hoc shift walk. Atoms are parsed from a numeric
- * stand-in of the same length (the template parser's rule, decision 156) and
- * the payload carries each as a `StringLiteral` with `extra.mxAtom`, the
- * shape `core/src/atoms.ts` produces today (ast §4.3).
+ * §5.3) — there is no post-hoc shift walk. Expression triggers (decision
+ * 182) are parsed from their same-length stand-in, and the payload marks each
+ * with `extra.mxTrigger` (`markTriggers`).
  *
  * A failure is data (ast §3.13 item 2): `node` is null and the error's
  * message and position are today's, byte for byte, with the position bounded
@@ -62,13 +61,6 @@ export type ContainerPayload<C extends ContainerKind> = C extends "MxExpression"
           : C extends "MxTypeArguments"
             ? TSTypeParameterInstantiation
             : TSTypeParameterDeclaration;
-
-/** An atom of the container's source, local to the container's text. */
-export interface SubParseAtom {
-  readonly start: number;
-  readonly end: number;
-  readonly name: string;
-}
 
 /** An expression trigger of the container's source (decision 182), local to the container's text. */
 export interface SubParseTrigger {
@@ -169,53 +161,28 @@ function boundedSpan(
     : { start: at.offset, end };
 }
 
-/** The atom stand-in of `:name`: `0.` plus one zero per extra character, the same length as the authored `:name` (the template parser's `standInAtoms`). */
-export function atomStandIn(name: string): string {
-  return `0.${"0".repeat(Math.max(name.length - 1, 0))}`;
-}
-
 /**
- * Parses one container. `text` is the authored slice, `atoms` its atoms with
- * local spans, `at` the position of its first character and `end` the
- * file-absolute end of the slice; `triggers` its expression triggers
- * (decision 182), local spans, disjoint from the atoms.
+ * Parses one container. `text` is the authored slice, `at` the position of
+ * its first character and `end` the file-absolute end of the slice;
+ * `triggers` its expression triggers (decision 182), local spans in source
+ * order.
  */
 export function subParse(
   kind: ContainerKind,
   text: string,
-  atoms: readonly SubParseAtom[],
   at: SubParseAt,
   end: number,
   triggers: readonly SubParseTrigger[] = [],
 ): SubParseResult {
   // The sub-parser sees the same-length stand-ins, exactly as the template
-  // parser's read() hands them to Babel today; the payload converts atoms
-  // back and marks triggers.
-  const standIns: { start: number; end: number; text: string }[] = atoms.map(
-    (atom) => ({
-      start: atom.start,
-      end: atom.end,
-      text: atomStandIn(atom.name),
-    }),
-  );
-  if (triggers.length > 0) {
-    for (const trigger of triggers) {
-      standIns.push({
-        start: trigger.start,
-        end: trigger.end,
-        text: standInText(
-          trigger.standIn,
-          text.slice(trigger.start, trigger.end),
-        ),
-      });
-    }
-    standIns.sort((a, b) => a.start - b.start);
-  }
+  // parser's read() hands them to Babel; the payload marks the triggers.
   let parsed = "";
   let last = 0;
-  for (const standIn of standIns) {
-    parsed += text.slice(last, standIn.start) + standIn.text;
-    last = standIn.end;
+  for (const trigger of triggers) {
+    parsed +=
+      text.slice(last, trigger.start) +
+      standInText(trigger.standIn, text.slice(trigger.start, trigger.end));
+    last = trigger.end;
   }
   parsed += text.slice(last);
   const wrapper = WRAPPERS[kind];
@@ -316,7 +283,6 @@ export function subParse(
       else return wrongShape();
       break;
   }
-  if (atoms.length > 0) convertStandIns(node, atoms, at.offset);
   if (triggers.length > 0) markTriggers(node, triggers, at.offset);
   return { node, error: null, directives, innerComments };
 }
@@ -391,56 +357,6 @@ function errorOf(
 }
 
 /**
- * Converts every atom stand-in of a parsed payload into its public shape
- * (decision 156 addendum 1): a `StringLiteral` whose `value` is the name and
- * whose `extra.mxAtom` carries the atom's span, at the stand-in's own
- * offsets. The same mutation `core/src/atoms.ts` (`convertAtoms`) performs
- * on today's tree, done here before the payload is ever attached.
- */
-function convertStandIns(
-  // biome-ignore lint/suspicious/noExplicitAny: walks and rewrites Babel nodes generically
-  node: any,
-  atoms: readonly SubParseAtom[],
-  fileOffset: number,
-): void {
-  const spans = new Map(
-    atoms.map((atom) => [atom.start + fileOffset, atom] as const),
-  );
-  const seen = new Set<unknown>();
-  // biome-ignore lint/suspicious/noExplicitAny: walks and rewrites Babel nodes generically
-  const visit = (value: any): void => {
-    if (!value || typeof value !== "object" || seen.has(value)) return;
-    seen.add(value);
-    if (Array.isArray(value)) {
-      for (const item of value) visit(item);
-      return;
-    }
-    if (typeof value.type !== "string") return;
-    const start = value.start ?? value.loc?.start?.index;
-    const end = value.end ?? value.loc?.end?.index;
-    if (value.type === "NumericLiteral") {
-      const atom = spans.get(start);
-      if (atom && end === atom.end + fileOffset) {
-        value.type = "StringLiteral";
-        value.value = atom.name;
-        value.extra = {
-          raw: JSON.stringify(atom.name),
-          rawValue: atom.name,
-          mxAtom: {
-            span: { sourceStart: start, sourceEnd: end },
-          },
-        };
-      }
-    }
-    for (const [key, child] of Object.entries(value)) {
-      if (key === "loc" || key === "extra") continue;
-      visit(child);
-    }
-  };
-  visit(node);
-}
-
-/**
  * Marks one payload node per trigger (decision 182) with `extra.mxTrigger`:
  * its id, span and authored text (the node holds the stand-in, `_status`).
  * Several nodes can share the span (`x() { &a }`: the statement and the
@@ -508,14 +424,13 @@ export function wrappedAttrValueHint(
   text: string,
   at: SubParseAt,
   end: number,
-  atoms: readonly SubParseAtom[] = [],
   triggers: readonly SubParseTrigger[] = [],
 ): string {
   const trimmed = text.trim();
   const inner = trimmed.slice(1, -1);
-  // The inside starts after the leading whitespace and the `{`. Its atoms
-  // and triggers are stood in as for the whole value: Marko's `read()` handed
-  // the inside with the same stand-ins (`{ new :a }` parses as `new 0.`).
+  // The inside starts after the leading whitespace and the `{`. Its
+  // triggers are stood in as for the whole value: the template parser's
+  // `read()` hands the inside with the same stand-ins.
   const from = text.length - text.trimStart().length + 1;
   const inside = <T extends { start: number; end: number }>(
     items: readonly T[],
@@ -527,14 +442,7 @@ export function wrappedAttrValueHint(
         start: item.start - from,
         end: item.end - from,
       }));
-  const result = subParse(
-    "MxExpression",
-    inner,
-    inside(atoms),
-    at,
-    end,
-    inside(triggers),
-  );
+  const result = subParse("MxExpression", inner, at, end, inside(triggers));
   return result.error === null
     ? " Attribute values are plain TypeScript expressions, not JSX; remove the wrapping `{ }`."
     : "";

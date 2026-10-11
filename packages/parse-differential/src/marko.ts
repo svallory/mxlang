@@ -64,8 +64,6 @@ export interface MarkoResult {
   readonly textNodes: readonly { value: string; start: number; end: number }[];
   /** Today's tree, for the expression differential (PR 3). */
   readonly ast?: Node;
-  /** Ranges of expressions today's tree holds as `MarkoParseError` (no atoms inside). */
-  readonly failed?: readonly Span[];
   /** Set when today's path threw something that is not the template parser's error. */
   readonly crash?: string;
 }
@@ -94,7 +92,6 @@ export function projectMarko(source: string): MarkoResult {
       return {
         document: {
           body: [],
-          atoms: [],
           error: `[${thrown.start},${thrown.end}) ${JSON.stringify(thrown.message)}`,
         },
         texts: [],
@@ -106,7 +103,7 @@ export function projectMarko(source: string): MarkoResult {
         .split("\n")
         .find((l) => l.trim()) ?? "";
     return {
-      document: { body: [], atoms: [], error: null },
+      document: { body: [], error: null },
       texts: [],
       textNodes: [],
       crash: message.trim(),
@@ -114,45 +111,12 @@ export function projectMarko(source: string): MarkoResult {
   }
   const texts: (readonly [number, number])[] = [];
   const ctx = { source, starts, texts, values: [] };
-  // Atoms (decision 156): today's parser hands Babel a numeric stand-in at
-  // each atom, so an atom is a NumericLiteral whose source starts with `:`.
-  const atoms: { start: number; line: string }[] = [];
-  /** Expressions today's Babel could not parse: their atoms are not in today's tree. */
-  const failed: Span[] = [];
-  const seen = new Set<unknown>();
-  const walk = (value: unknown) => {
-    if (!value || typeof value !== "object" || seen.has(value)) return;
-    seen.add(value);
-    if (Array.isArray(value)) return value.forEach(walk);
-    const node = value as Node;
-    if (node.type === "MarkoParseError" && node.loc) {
-      failed.push(spanOf(ctx, node));
-    }
-    const at = node.loc?.start?.index;
-    if (
-      node.type === "NumericLiteral" &&
-      typeof at === "number" &&
-      source[at] === ":"
-    ) {
-      const end = node.loc.end.index;
-      atoms.push({
-        start: at,
-        line: `:${source.slice(at + 1, end)}@[${at},${end})`,
-      });
-    }
-    for (const [key, field] of Object.entries(node)) {
-      if (key !== "loc" && key !== "extra") walk(field);
-    }
-  };
-  walk(ast.program);
   return {
     document: {
       body: children(ctx, ast.program.body, []),
-      atoms: atoms.sort((x, y) => x.start - y.start).map((x) => x.line),
       error: null,
     },
     ast,
-    failed,
     texts,
     textNodes: ctx.values,
   };

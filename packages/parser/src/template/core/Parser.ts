@@ -105,13 +105,11 @@ export class Parser {
   declare public textPos: number; // Used to buffer text that is found within the body of a tag
   declare public lines: undefined | number[]; // Keeps track of line indexes to provide line/column info.
   declare public options: Options;
-  /** MX (decision 156): the span of every atom lexed so far, in source order. */
-  declare public atoms: Range[];
   /**
-   * MX (decision 156): each raw open tag, as tag-name start -> open-tag-end
+   * MX (decision 182): each raw open tag, as tag-name start -> open-tag-end
    * start. A read of exactly that range (`@marko/compiler`'s `rawValue`,
    * which `<style>` uses) gets the source, never stand-ins; any other read,
-   * a mixed tag name's template (`<foo-${:a}>`) included, gets stand-ins.
+   * a mixed tag name's template (`<foo-${&a}>`) included, gets stand-ins.
    */
   declare public rawOpenTags: Map<number, number>;
   /**
@@ -121,8 +119,7 @@ export class Parser {
   declare public syntax: CompiledSyntax;
   /**
    * MX (decision 182): the span and stand-in of every trigger lexed so far
-   * whose stand-in is not `"keep"`, in source order. Disjoint from `atoms`:
-   * neither is lexed inside the other.
+   * whose stand-in is not `"keep"`, in source order.
    */
   declare public triggers: TriggerSpan[];
   /** MX (decision 182): where the last trigger lexed starts (-1: none). */
@@ -148,44 +145,32 @@ export class Parser {
 
   read(range: Range) {
     const text = this.data.slice(range.start, range.end);
-    if (this.triggers.length) return this.standIn(text, range);
-    return this.atoms.length ? this.standInAtoms(text, range) : text;
+    return this.triggers.length ? this.standIn(text, range) : text;
   }
 
   /**
-   * MX (decision 182): `standInAtoms` generalised to triggers. `text` (the
-   * source of `range`) with every atom and every trigger that lies wholly
-   * inside `range` replaced by its same-length stand-in (`standInText`), so
-   * a sub-parser reads it at the authored offsets. The same raw open tag
-   * rule applies; a partly covered span reads the source.
+   * MX (decision 182): `text` (the source of `range`) with every trigger
+   * that lies wholly inside `range` replaced by its same-length stand-in
+   * (`standInText`), so a sub-parser reads it at the authored offsets. A
+   * read of exactly a raw open tag (`rawOpenTags`) gets the source; a partly
+   * covered span reads the source. The first candidate trigger is found by
+   * binary search.
    */
   standIn(text: string, range: Range) {
     if (this.rawOpenTags.get(range.start) === range.end) return text;
-    const { atoms, triggers } = this;
-    let a = firstAtOrAfter(atoms, range.start);
-    let t = firstAtOrAfter(triggers, range.start);
+    const { triggers } = this;
     let out = "";
     let last = range.start;
-    for (;;) {
-      const atom = atoms[a];
-      const trigger = triggers[t];
-      let next: Range | undefined;
-      let replacement: string;
-      if (atom && (!trigger || atom.start < trigger.start)) {
-        next = atom;
-        replacement = standInText("number", ":".repeat(atom.end - atom.start));
-        a++;
-      } else if (trigger) {
-        next = trigger;
-        replacement = standInText(
+    for (let t = firstAtOrAfter(triggers, range.start); t < triggers.length; t++) {
+      const trigger = triggers[t]!;
+      if (trigger.end > range.end) break;
+      out +=
+        this.data.slice(last, trigger.start) +
+        standInText(
           trigger.standIn,
           this.data.slice(trigger.start, trigger.end),
         );
-        t++;
-      } else break;
-      if (next.end > range.end) break;
-      out += this.data.slice(last, next.start) + replacement;
-      last = next.end;
+      last = trigger.end;
     }
     return last === range.start ? text : out + this.data.slice(last, range.end);
   }
@@ -243,7 +228,7 @@ export class Parser {
   /**
    * MX (decision 182): records a lexed trigger's span for `read` (unless its
    * stand-in is `"keep"`). Returns false for a trigger already recorded: a
-   * re-lex never records or announces one twice, as for atoms.
+   * re-lex never records or announces one twice.
    */
   recordTrigger(trigger: CompiledTrigger, start: number, end: number) {
     if (start <= this.lastTriggerStart) return false;
@@ -252,43 +237,6 @@ export class Parser {
       this.triggers.push({ start, end, standIn: trigger.standIn });
     }
     return true;
-  }
-
-  /**
-   * MX (decision 156): `text` (the source of `range`) with every atom that
-   * lies wholly inside `range` replaced by a numeric literal of the same
-   * length (`:a` -> `0.`, `:rename-all` -> `0.000000000`), which Babel parses
-   * at the atom's exact offsets. A consumer tells the stand-in from an
-   * authored number by the source character at its start, which is `:`.
-   *
-   * A read of exactly a raw open tag (`rawOpenTags`) gets the source.
-   * Reading exactly an atom's own range does get the stand-in, by design:
-   * that is how `x=:a`'s value reaches Babel. A consumer that wants the
-   * atom's text slices the source (or reads `value`, the name).
-   * The first candidate atom is found by binary search.
-   */
-  standInAtoms(text: string, range: Range) {
-    if (this.rawOpenTags.get(range.start) === range.end) return text;
-    const { atoms } = this;
-    let lo = 0;
-    let hi = atoms.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >>> 1;
-      if (atoms[mid]!.start < range.start) lo = mid + 1;
-      else hi = mid;
-    }
-    let out = "";
-    let last = range.start;
-    for (let k = lo; k < atoms.length; k++) {
-      const atom = atoms[k]!;
-      if (atom.end > range.end) break;
-      out +=
-        this.data.slice(last, atom.start) +
-        "0." +
-        "0".repeat(atom.end - atom.start - 2);
-      last = atom.end;
-    }
-    return last === range.start ? text : out + this.data.slice(last, range.end);
   }
 
   /**
@@ -560,7 +508,6 @@ export class Parser {
     this.isConcise = true;
     this.beginMixedMode = this.endingMixedModeAtEOL = false;
     this.lines = this.activeTag = this.activeAttr = undefined;
-    this.atoms = [];
     this.triggers = [];
     this.lastTriggerStart = -1;
     this.claims = new Map();

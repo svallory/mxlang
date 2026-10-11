@@ -8,8 +8,8 @@
  * spelling, a row naming `mx:Trigger`) or a dialect's own type
  * (`ref:Ref`). Lowering dispatches on `node.type`.
  *
- * One pass per document, run by `lower`/`lowerChildren` right after the atom
- * conversion, lowers every trigger node once, in source order (a value's
+ * One pass per document, run by `lower`/`lowerChildren` before anything
+ * reads an expression, lowers every trigger node once, in source order (a value's
  * own triggers before the trigger that owns it), through its hook: the
  * dialect's `lowerTrigger` for core's `MxTrigger`, a dialect type's own
  * `lower` for its node; the built-in node kinds resolve without a hook:
@@ -1156,8 +1156,8 @@ function lowerExpressionTriggers(
     replaceAt(container, at, positioned(replacement, at.node));
     // The expression's `code` is spliced from the source: the trigger's
     // text becomes the replacement's printed code. A replacement marked as
-    // an atom is recorded with the atoms instead (`convertAtoms` after this
-    // pass), which splice and map it exactly as a built-in atom.
+    // an atom is recorded with the atoms instead (`recordAtoms` after this
+    // pass), which splice and map it from its mark.
     if (!isAtomLiteral(replacement)) {
       run.splices.push({
         ...spanRange(trigger),

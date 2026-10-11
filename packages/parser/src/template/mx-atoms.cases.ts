@@ -1,16 +1,21 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the cases are MX source, whose `${…}` is a placeholder, not a JS template
 /**
- * Atom lexing (decision 156) at the parser level: one case table, run against
- * this source copy (`mx-atoms.test.ts`) and against both builds of the patched
- * npm `htmljs-parser` (`patches/htmljs-parser.test.ts`), so the two stay in
- * lockstep.
+ * The atom row's corpus: atoms as a dialect builds them, through the `:`
+ * expression row of `test-support/sugar-rows.ts` (`ATOMS_SYNTAX`), rendered
+ * by `test-support/sugar-module.ts`. The template parser lexes no atom of
+ * its own (`:x` in a `.mx` value is plain JavaScript, as in Marko); these
+ * tables pin that the trigger machinery (`expectsExpression`, the stand-in,
+ * `read()`) gives a dialect's `:` row the reading the cases name.
+ * `mx-sugar-module.test.ts` runs them.
  *
  * Events are rendered compactly: `<tag>`, `@name`, `="value"` (as `read()`
  * returns it, so atoms show as their same-length numeric stand-in),
  * `..."spread"`, `args:"…"`, `aargs:"…"`, `${"…"}`, `var:"…"`,
- * `params:"…"`, `$"scriptlet"`, `atom(name@start-end)` (`onAtom`) and
+ * `params:"…"`, `$"scriptlet"`, `atom(name@start-end)` (`onRowAtom`) and
  * `ERR(start-end message)`.
  */
+
+import { rowReservedMessage } from "./test-support/sugar-module.ts";
 
 /** The structural subset of a parser module these cases drive. */
 export interface AtomParserModule {
@@ -47,7 +52,7 @@ export function renderAtoms(
   const parser = mod.createParser({
     onError: (e: { start: number; end: number; message: string }) =>
       out.push(`ERR(${e.start}-${e.end} ${e.message})`),
-    onAtom: (a: ValueRange) =>
+    onRowAtom: (a: ValueRange) =>
       out.push(
         `atom(${code.slice(a.value.start, a.value.end)}@${a.start}-${a.end})`,
       ),
@@ -74,7 +79,7 @@ export function renderAtoms(
 }
 
 const reserved = (name: string, at: string) =>
-  `ERR(${at} \`::${name}\` is reserved (decision 156): \`::\` will be the Symbol.for sugar; write \`:${name}\` for an atom)`;
+  `ERR(${at} ${rowReservedMessage(name)})`;
 
 /** [input, rendered events] — atoms are lexed and stood in for. */
 export const ATOMS: [string, string][] = [
@@ -806,42 +811,21 @@ export const ATOMS: [string, string][] = [
   ["div x=(a       of :b)\n", '<div> @x atom(b@18-20) ="(a       of 0.)"'],
 ];
 
-/** [input, rendered events] — `::name` is reserved: a positioned error. */
+/**
+ * [input, rendered events] — the row's `::name` is the fixture's reserved
+ * token: a positioned error. In tag and attribute names `::` is name text,
+ * as in Marko (`mx-stock-colon.test.ts`).
+ */
 export const RESERVED: [string, string][] = [
   ["<div x=::a/>", `<div> @x ${reserved("a", "7-10")}`],
-  ["<div x={k::a}/>", `<div> @x ${reserved("a", "9-12")}`],
-  ["<div x=a?b::c/>", `<div> @x ${reserved("c", "10-13")}`],
+  // After a word, `::` starts no expression, so the row does not arm
+  // (lead ruling Q4, colon-colon-after-word).
+  ["<div x={k::a}/>", '<div> @x ="{k::a}"'],
+  ["<div x=a?b::c/>", '<div> @x ="a?b::c"'],
   ["<div>${::rename-all}</div>", `<div> ${reserved("rename-all", "7-19")}`],
   ["<if(::a)>y</if>", `<if> ${reserved("a", "4-7")}`],
   ["<div x=[:a, ::b]/>", `<div> @x atom(a@8-10) ${reserved("b", "12-15")}`],
-  [
-    "<div x=::/>",
-    "<div> @x ERR(7-9 `::` is reserved (decision 156): `::` will be the Symbol.for sugar; write `:name` for an atom)",
-  ],
-  // `::` in attribute-name and tag-name position (decision 156 addendum 2).
-  [
-    "<a ::b/>",
-    "<a> ERR(3-6 `::b` is reserved (decision 156): `::` will be the Symbol.for sugar; write `:b` for an atom)",
-  ],
-  [
-    "<a::b/>",
-    "ERR(2-5 `::b` is reserved (decision 156): `::` will be the Symbol.for sugar; write `:b` for an atom)",
-  ],
-  [
-    "<div :: />",
-    "<div> ERR(5-7 `::` is reserved (decision 156): `::` will be the Symbol.for sugar; write `:name` for an atom)",
-  ],
-  // A shorthand is tag-name position too (decision 156 addendum 3, Q1), on
-  // its static text only.
-  ["<div.a::b/>", `<div> ${reserved("b", "6-9")}`],
-  ["<div#a::b/>", `<div> ${reserved("b", "6-9")}`],
-  ["<div.${x}::b/>", `<div> ${reserved("b", "9-12")}`],
-  ["<foo-${x}::b/>", reserved("b", "9-12")],
-  ["div.a::b", `<div> ${reserved("b", "5-8")}`],
-  // template-parser-ascii-only-lookbehinds: the name after `::` ends at the
-  // static piece; it used to run on into the `${` that follows.
-  ["<a::b${x}/>", reserved("b", "2-5")],
-  ["<div.a::b${x}/>", `<div> ${reserved("b", "6-9")}`],
+  ["<div x=::/>", `<div> @x ERR(7-9 ${rowReservedMessage("")})`],
 ];
 
 /** [input, rendered events] — never atoms (research §5 rows 8, 9). */
@@ -975,7 +959,7 @@ export const NOT_ATOMS: [string, string][] = [
   // A non-ASCII letter before the `:` (atom-lookbehind-non-ascii, decision
   // 156 addenda 2 and 8: a `:` TypeScript could own is TypeScript's): the
   // look-behind takes every character at or above U+0080 as a word
-  // character, as `lexAtom` does after a name. Each expected value is the
+  // character, as the row's matcher does after a name. Each expected value is the
   // same row with an ASCII letter in its place (`asciiTwinMismatches`). The
   // first 42 rows are the three reported inputs in every atom position, HTML
   // and concise; then identifier shapes (whole, start, middle, end, outside
@@ -1459,7 +1443,7 @@ export function tsMarkerViolations(
             let wrong = false;
             mod
               .createParser({
-                onAtom: (a: { start: number; end: number }) => {
+                onRowAtom: (a: { start: number; end: number }) => {
                   if (src.slice(a.start, a.end) === ":z") wrong = true;
                 },
                 onError() {},
@@ -1685,7 +1669,7 @@ export function nonAsciiMarkerViolations(
             let wrong = false;
             mod
               .createParser({
-                onAtom: (a: { start: number; end: number }) => {
+                onRowAtom: (a: { start: number; end: number }) => {
                   if (src.slice(a.start, a.end) === ":z") wrong = true;
                 },
                 onError() {},

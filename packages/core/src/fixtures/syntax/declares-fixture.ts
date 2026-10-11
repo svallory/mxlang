@@ -1,17 +1,55 @@
 /**
  * A test dialect for core's contract-field claims: it claims the contract
  * keys `ref` (an attribute key) and `declares` (a tag key), and checks them
- * from `afterLower` through the public unit view. It adds no syntax (an empty
- * table) and is not shipped.
+ * from `afterLower` through the public unit view. Its only syntax is the atom
+ * fixture's `~name` rows (`atom-fixture.ts`), restated here under this
+ * dialect's id because a row names a node type of its own dialect. It is not
+ * shipped.
  *
  * A tag that `declares: { kind, from }` declares the value of its `from`
  * attribute as a name of that kind; an attribute with `ref: kind` must hold a
- * `:name` atom some tag declared. The messages are this fixture's own.
+ * `~name` atom some tag declared. The messages are this fixture's own.
  *
  * It imports types only, so a test can load it through Node's strip-only
  * `require` as a dialect package's module.
  */
-import type { Dialect, LoweredUnit } from "../../index.ts";
+import type { Dialect, LoweredUnit, Trigger } from "../../index.ts";
+
+const NAME = "~[a-z][a-z0-9-]*";
+
+/** The atom row in an expression and an attribute list (`{ call }`). */
+const ATOM: Trigger = Object.freeze({
+  id: "atom",
+  chars: "~",
+  match: NAME,
+  standIn: "identifier",
+  node: Object.freeze({ call: "atom" }),
+});
+
+/** The atom row on a whole `=value`: the node type below lowers it. */
+const ATOM_VALUE: Trigger = Object.freeze({
+  id: "atom-value",
+  chars: "~",
+  match: NAME,
+  standIn: "identifier",
+  node: Object.freeze({ type: "Atom", dialect: "fixture" }),
+});
+
+/** The literal an atom lowers to in an expression or a value position. */
+function atomLiteral(
+  name: string,
+  span: { sourceStart: number; sourceEnd: number },
+) {
+  return {
+    type: "StringLiteral",
+    value: name,
+    extra: {
+      raw: JSON.stringify(name),
+      rawValue: name,
+      mxAtom: { span, name },
+    },
+  };
+}
 
 function nameOf(value: unknown): string | undefined {
   if (typeof value !== "object" || value === null) return undefined;
@@ -47,7 +85,7 @@ function check(unit: LoweredUnit): void {
         span?: { sourceStart: number; sourceEnd: number };
       } | null;
       unit.fail(
-        `\`<${call.tag}>\`: attribute \`${attr.name}\`: \`:${name}\` is not a declared ${ref} here (one of ${known.map((each) => `:${each}`).join(", ")})`,
+        `\`<${call.tag}>\`: attribute \`${attr.name}\`: \`~${name}\` is not a declared ${ref} here (one of ${known.map((each) => `~${each}`).join(", ")})`,
         value?.span ? { at: value.span } : undefined,
       );
     }
@@ -57,7 +95,27 @@ function check(unit: LoweredUnit): void {
 const declaresFixture = {
   id: "fixture",
   name: "Fixture",
-  table: {},
+  table: Object.freeze({
+    expressionTriggers: [ATOM],
+    attributeTriggers: [ATOM],
+    valueTriggers: [ATOM_VALUE],
+  }),
+  nodeTypes: {
+    Atom: {
+      keys: [],
+      parse: (text: string) => ({ name: text.slice(1) }),
+      print: (node: { name: string }) => `~${node.name}`,
+      lower: (node: { name: string; span: never }, ctx) =>
+        ctx.expression(atomLiteral(node.name, node.span)),
+    },
+  },
+  lowerTrigger(_id, text, span, ctx) {
+    const name = text.slice(1);
+    if (ctx.position === "attribute") {
+      return ctx.attribute("name", { kind: "atom", name, span });
+    }
+    return ctx.expression(atomLiteral(name, span));
+  },
   contractFields: { attribute: ["ref"], tag: ["declares"] },
   afterLower: check,
 } satisfies Dialect;

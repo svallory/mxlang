@@ -4,9 +4,9 @@
  * expression, attribute and line position, their same-length stand-ins,
  * `terminatesValue`, validation, and the default row's parity.
  *
- * Events are rendered compactly, as the atom cases do (`mx-atoms.cases.ts`):
+ * Events are rendered compactly, as the atom row's cases do (`mx-atoms.cases.ts`):
  * `<tag>`, `@name`, `="value"` (as `read()` returns it, so stand-ins show),
- * `atom(name@start-end)`, `trigger(id position "text"@start-end)` with
+ * `trigger(id position "text"@start-end)` with
  * `="value"` or `method{"body"}` when it has one, and
  * `ERR(start-end message)`.
  */
@@ -52,6 +52,13 @@ const MESH = table({
   lineTriggers: [MEMBER],
 });
 
+/** The member row beside the atom row in expressions, as Mesh loads them. */
+const MESH_ATOMS = table({
+  expressionTriggers: [MEMBER, ATOM],
+  attributeTriggers: [MEMBER],
+  lineTriggers: [MEMBER],
+});
+
 function render(
   code: string,
   syntax: SyntaxTable | undefined,
@@ -65,10 +72,6 @@ function render(
       onError: (e) =>
         out.push(
           `ERR(${e.start}-${e.end} ${e.message}${codes ? ` #${e.code}` : ""})`,
-        ),
-      onAtom: (a) =>
-        out.push(
-          `atom(${code.slice(a.value.start, a.value.end)}@${a.start}-${a.end})`,
         ),
       onTrigger: (t) =>
         out.push(
@@ -94,10 +97,10 @@ function render(
 
 describe("the & member row (decision 182 addendum 1)", () => {
   it.each([
-    // Expression position; the atom beside it still lexes as an atom.
+    // Expression position.
     [
-      "x=() => &status === :sent",
-      '<x> @ trigger(member expression "&status"@8-15) atom(sent@20-25) ="() => _status === 0.000"',
+      "x=() => &status === done",
+      '<x> @ trigger(member expression "&status"@8-15) ="() => _status === done"',
     ],
     [
       "x load=[&customer, &other]",
@@ -149,12 +152,6 @@ describe("the & member row (decision 182 addendum 1)", () => {
       "x=c ? &a : &b",
       '<x> @ trigger(member expression "&a"@6-8) trigger(member expression "&b"@11-13) ="c ? _a : _b"',
     ],
-    // A trigger's own text is an operand, never a keyword: `:b` after
-    // `&new` is a ternary-less `:`, not an atom.
-    [
-      "x=[&new, :b]",
-      '<x> @ trigger(member expression "&new"@3-7) atom(b@9-11) ="[_new, 0.]"',
-    ],
   ])("expression position: %j", (code, expected) => {
     expect(render(code, MESH)).toBe(expected);
   });
@@ -198,10 +195,10 @@ describe("the & member row (decision 182 addendum 1)", () => {
     ],
     // A value runs on through operators and over a line break after one.
     ["e\n  &a=b +\n    c", '<e> trigger(member line "&a"@4-16 ="b +\\n    c")'],
-    // Expression triggers and atoms inside a line trigger's value.
+    // Expression triggers inside a line trigger's value.
     [
-      "&a=[&b, :c]",
-      'trigger(member expression "&b"@4-6) atom(c@8-10) trigger(member line "&a"@0-11 ="[_b, 0.]")',
+      "&a=[&b, c]",
+      'trigger(member expression "&b"@4-6) trigger(member line "&a"@0-10 ="[_b, c]")',
     ],
     // A tag after a trigger line at the same indent is a sibling.
     ["e\n  &a\n  div", '<e> trigger(member line "&a"@4-6) <div>'],
@@ -441,6 +438,29 @@ describe('value: "refuse" (a1 item 1; lead ruling Q5)', () => {
   });
 });
 
+describe("the member row beside the atom row", () => {
+  it.each([
+    // The atom beside a member lexes as the atom row's.
+    [
+      "x=() => &status === :sent",
+      '<x> @ trigger(member expression "&status"@8-15) trigger(atom expression ":sent"@20-25) ="() => _status === 0.000"',
+    ],
+    // A trigger's own text is an operand, never a keyword (`&new` is not
+    // `new`), so the atom row reads `:b` after it as after any operand.
+    [
+      "x=[&new, :b]",
+      '<x> @ trigger(member expression "&new"@3-7) trigger(atom expression ":b"@9-11) ="[_new, 0.]"',
+    ],
+    // Expression triggers and atoms inside a line trigger's value.
+    [
+      "&a=[&b, :c]",
+      'trigger(member expression "&b"@4-6) trigger(atom expression ":c"@8-10) trigger(member line "&a"@0-11 ="[_b, 0.]")',
+    ],
+  ])("%j", (code, expected) => {
+    expect(render(code, MESH_ATOMS)).toBe(expected);
+  });
+});
+
 describe("a method value after an attribute trigger (a1 item 2, T1)", () => {
   it.each([
     // Mesh v4's computed field; atoms and members inside the body lex.
@@ -554,28 +574,16 @@ describe("the atom row arms where the built-in atom does (a1 items 3, 4 and 6)",
       '<x> @ trigger(atom expression ":a"@11-13) trigger(atom expression ":b"@16-18) ="n === 1? 0. : 0."',
     ],
     // P2: a non-ASCII letter after the name, directly or after `-`: the
-    // trigger declines and the text stays source, as `lexAtom` does.
+    // trigger declines and the text stays source.
     ["x=[:aé]", '<x> @ ="[:aé]"'],
     ["x=[:a-é]", '<x> @ ="[:a-é]"'],
     ["x=[:a-b-é]", '<x> @ ="[:a-b-é]"'],
     // `::` is the row's own (the hook reports it reserved).
     ["x=::a", '<x> @ trigger(atom expression "::a"@2-5) ="0.0"'],
-    // Item 6: no `onAtom` with the row loaded; a declined `:` is the ternary's.
+    // Item 6: a declined `:` is the ternary's.
     ["x=a ? :b :c", '<x> @ trigger(atom expression ":b"@6-8) ="a ? 0. :c"'],
   ])("%j", (code, expected) => {
     expect(render(code, ATOMS)).toBe(expected);
-  });
-
-  it("each P1/P2 input lexes no built-in atom either", () => {
-    for (const code of [
-      "x=(a?:T) => a",
-      "x=(a? :T) => a",
-      "x=[c]?:a",
-      "x=[:aé]",
-      "x=[:a-é]",
-    ]) {
-      expect(render(code, undefined), code).not.toMatch(/atom\(/);
-    }
   });
 
   it("P2 leaves a matcher that takes the characters, or never would, alone", () => {
@@ -584,10 +592,7 @@ describe("the atom row arms where the built-in atom does (a1 items 3, 4 and 6)",
     );
   });
 
-  it("reads ` :y` into a single-atom default value, with the built-in atom or the row", () => {
-    expect(render("<belongs-to=:X :y/>", undefined)).toBe(
-      '<belongs-to> @ atom(X@12-14) ="0. :y"',
-    );
+  it("reads ` :y` into a single-atom default value", () => {
     expect(render("<belongs-to=:X :y/>", ATOMS)).toBe(
       '<belongs-to> @ trigger(atom expression ":X"@12-14) ="0. :y"',
     );
@@ -729,7 +734,7 @@ describe("other trigger shapes", () => {
 describe("read() through stand-ins", () => {
   it("stands in every atom and trigger fully inside the range, same length", () => {
     const code = "<x y=[&ab, :c, &d]/>";
-    const parser = createParser({}, { syntax: MESH });
+    const parser = createParser({}, { syntax: MESH_ATOMS });
     parser.parse(code);
     const whole = parser.read({ start: 0, end: code.length });
     expect(whole).toBe("<x y=[_ab, 0., _d]/>");

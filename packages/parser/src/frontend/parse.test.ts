@@ -313,16 +313,16 @@ describe("§3.5 MxAttribute", () => {
       modifier: "c",
       modifierSpan: span(7, 8),
     });
-    // Doubled colons cannot reach the split: `::` is reserved (decision 156)
-    // and the template parser rejects it before the attribute exists. The
-    // type-level `x::y` case lives in `mx-ast.test.ts`.
+    // Doubled colons are name text, as in stock htmljs-parser; the split is
+    // still at the last one.
     const doubled = doc("<a a::y=1/>");
-    expect(doubled.errors[0]).toMatchObject({
-      code: "INVALID_EXPRESSION",
-      message:
-        "`::y` is reserved (decision 156): `::` will be the Symbol.for sugar; write `:y` for an atom",
+    expect(doubled.errors).toEqual([]);
+    expect(doubled.body[0].attributes[0]).toMatchObject({
+      name: "a:",
+      nameSpan: span(3, 5),
+      modifier: "y",
+      modifierSpan: span(6, 7),
     });
-    expect(doubled.body[0].attributes).toEqual([]);
     // Zero colons.
     expect(first("<a a=1/>").attributes[0]).toMatchObject({
       name: "a",
@@ -907,8 +907,8 @@ describe("template parser shapes the catalogue does not name", () => {
 });
 
 describe("review fixes (decision 163 addenda 10, 11)", () => {
-  it("B1: arguments are kept on the node, atoms included", () => {
-    const s = first("<div .c(:a)/>").attributes[0];
+  it("B1: arguments are kept on the node", () => {
+    const s = first("<div .c(a)/>").attributes[0];
     expect(s).toMatchObject({
       type: "MxAttribute",
       name: ".c",
@@ -916,9 +916,8 @@ describe("review fixes (decision 163 addenda 10, 11)", () => {
       args: {
         type: "MxArguments",
         start: 8,
-        end: 10,
-        outer: span(7, 11),
-        atoms: [{ type: "MxAtom", start: 8, end: 10, name: "a" }],
+        end: 9,
+        outer: span(7, 10),
       },
     });
   });
@@ -980,28 +979,5 @@ describe("§3.14 MxReturn", () => {
       bodyMode: "void",
     });
     expect(tag.attributes[0].value).toMatchObject({ start: 8, end: 9 });
-  });
-});
-
-describe("§4.3 MxAtom", () => {
-  it("<input accept=[:title, :rename-all]/>", () => {
-    const value = first("<input accept=[:title, :rename-all]/>").attributes[0]
-      .value;
-    expect(value.atoms).toEqual([
-      { type: "MxAtom", start: 15, end: 21, name: "title" },
-      { type: "MxAtom", start: 23, end: 34, name: "rename-all" },
-    ]);
-  });
-
-  it("an atom is listed in the innermost container only (decision 163 addendum 8)", () => {
-    const [dot] = first("<a.a-${ :b }/>").shorthands;
-    expect(dot.value.template.atoms).toEqual([]);
-    expect(dot.value.expressions[0].atoms).toEqual([
-      { type: "MxAtom", start: 8, end: 10, name: "b" },
-    ]);
-  });
-
-  it("no atoms in a tag var or statement", () => {
-    expect(first("<a/x/>").var.atoms).toEqual([]);
   });
 });

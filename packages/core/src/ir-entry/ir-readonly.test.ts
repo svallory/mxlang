@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import atomSyntax from "../fixtures/syntax/atom-fixture.ts";
 import type { Ir } from "../ir.ts";
-import { lowerSource } from "./index.ts";
+import { type LowerSourceOptions, lowerSource } from "./index.ts";
 
 /**
  * ir-spec 10.2 E21: a consumer of the lowered IR never mutates it.
@@ -42,15 +43,37 @@ const DOCUMENTS: Record<string, string> = {
   "nested elements": "<a><b x=1/><b x=2/></a>",
   "attribute tags": "<list><@item>one</@item><@item>two</@item></list>",
   "an expression value": "<point x=1+2 y=[1, 2, 3] z={ a: 1 }/>",
-  atoms: "<field mode=:strict accept=[:a, :b]/>",
   comments: "<!-- note --><a>x</a>",
   "a concise tag (its span is trimmed)": "a\n  b\n",
 };
 
+/** Documents that need a dialect: the atom fixture's (sigil `~`). */
+const DIALECT_DOCUMENTS: Record<string, [string, LowerSourceOptions]> = {
+  "module-built atoms": [
+    "<field mode=~strict accept=[~a, ~b]/>",
+    { dialect: atomSyntax },
+  ],
+};
+
 describe("lowerSource leaves the lowered IR alone (E21)", () => {
-  it.each(Object.entries(DOCUMENTS))("%s", (_name, source) => {
+  it.each([
+    ...Object.entries(DOCUMENTS).map(
+      ([name, source]): [string, string, LowerSourceOptions] => [
+        name,
+        source,
+        {},
+      ],
+    ),
+    ...Object.entries(DIALECT_DOCUMENTS).map(
+      ([name, [source, options]]): [string, string, LowerSourceOptions] => [
+        name,
+        source,
+        options,
+      ],
+    ),
+  ])("%s", (_name, source, options) => {
     seen.length = 0;
-    const result = lowerSource(source, "/f/x.mx");
+    const result = lowerSource(source, "/f/x.mx", options);
     expect(result.diagnostics.filter((d) => d.severity === "error")).toEqual(
       [],
     );

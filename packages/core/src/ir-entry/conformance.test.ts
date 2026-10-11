@@ -157,12 +157,13 @@ const INTENDED: Record<string, { pattern: RegExp; cases: string[] }> = {
       "shorthand-closing-html",
     ],
   },
-  // Marko: a value does not end at whitespace before ` :name`, so
-  // `belongs-to=:Customer :customer` is two expressions. Mesh's own syntax
-  // module ends the value there; core reads it as Marko does.
-  colonAfterValue: {
-    pattern: /Expected a single expression, but found `:` after it/,
-    cases: ["mesh-invoice"],
+  // `:name` in an expression is plain JavaScript, as in Marko: core has no
+  // atom syntax, so `mode=:strict` is Marko's "Unexpected token" at the `:`.
+  // The grammar still reads atoms, which only a dialect builds (Mesh's own
+  // syntax module does).
+  colonInExpression: {
+    pattern: /^Unexpected token(, expected ",")?$/,
+    cases: ["atom in expression", "mesh-invoice", "whole-value atom"],
   },
   // decision 172 (Marko behaviour is the default): a tag with no argument
   // contract takes none, as in stock Marko

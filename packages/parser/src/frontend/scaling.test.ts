@@ -17,14 +17,12 @@ const SHAPES: Record<string, (n: number) => string> = {
     ).join("\n"),
   deep: (n) => `${"<div>".repeat(n)}x${"</div>".repeat(n)}`,
   "attribute-heavy": (n) =>
-    `<div ${Array.from({ length: n }, (_, i) => `a${i}=[:b, ${i}] .c${i}`).join(" ")}/>`,
+    `<div ${Array.from({ length: n }, (_, i) => `a${i}=[b, ${i}] .c${i}`).join(" ")}/>`,
   // PR 3 (brief §1.4): expression parsing on, linear with the same bound.
   "many-small-expressions": (n) =>
     `<p>${Array.from({ length: n }, (_, i) => `\${a${i} + b}`).join("")}</p>`,
   "one-large-expression": (n) =>
     `<p>\${${Array.from({ length: n }, (_, i) => `(a${i} + ${i})`).join(" + ")}}</p>`,
-  "many-atoms": (n) =>
-    `<div x=[${Array.from({ length: n }, (_, i) => `:a${i}`).join(", ")}]/>`,
 };
 
 function best(source: string): number {

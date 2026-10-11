@@ -176,7 +176,7 @@ describe("hook-contract guards and carriers", () => {
 
 describe("`IrDiagnostic.file` names only another file", () => {
   const PATHS: [string, LowerSourceOptions][] = [
-    ["built-in atoms and sugars", BASE],
+    ["core's own grammar", BASE],
     ["the member fixture dialect", { ...BASE, dialect: memberFixture }],
   ];
   const SOURCES = [

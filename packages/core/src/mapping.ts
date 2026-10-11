@@ -358,11 +358,11 @@ function mergeAdjacent(mappings: GeneratedMapping[]): GeneratedMapping[] {
 }
 
 /**
- * Per-atom sub-mappings (decision 156): `code` holds each atom as its string
- * literal (`:a` is `"a"`, one character longer), so one whole-span mapping
- * would drift by one per preceding atom. Each atom maps to its literal and the
- * text between them maps one to one, so a TypeScript error on `type=:emial`
- * lands on the atom. `undefined` (the whole-span mapping) when the text
+ * Per-atom sub-mappings: `code` holds each atom a dialect marked as its
+ * string literal (a two-character `~a` is the three-character `"a"`), so one
+ * whole-span mapping would drift by one per preceding atom. Each atom maps to
+ * its literal and the text between them maps one to one, so a TypeScript
+ * error on an atom lands on the atom. `undefined` (the whole-span mapping) when the text
  * between atoms is not the authored text, as when a binding rewrite
  * (`count` to `count()`) moved it.
  */

@@ -123,90 +123,36 @@ component renders with `ngTemplateOutlet`. ``
 The complete value shapes and legal render idioms are in the
 [AttrTag guide](/language/attr-tag/).
 
-## Atom errors
+## A `:` in an expression
 
-`:name` in an expression position is an [atom](/language/atoms/). Most atom
-errors are the contract checks (a name that is not allowed, an atom where a
-string was declared) and the operations an atom refuses; each is positioned at
-the atom. The wording below is the compiler's.
+`:name` has no meaning of its own in a `.mx` file: it is plain JavaScript, as in
+Marko, and a leading `:` where an expression is expected is Marko's syntax
+error, at the `:`:
 
-### A name a contract does not allow
+```text
+<a b=:x/>
+1:5 Unexpected token
+```
 
-With `mode: { type: "atom", values: ["strict", "loose"] }`, a name outside the
-set is an error on the atom, listing the candidates and adding a did-you-mean
-when one is clearly nearest:
+```text
+<a b=x::y/>
+1:6 Expected a single expression, but found `:` after it.
+```
+
+`::` inside a tag or attribute name is part of the name, as in Marko: `<a::b/>`
+is the tag `a::b`.
+
+### Atoms and the contract
+
+Atoms are a dialect feature (see the [specification](/specification/), "`:name` in an expression"). When
+a dialect builds them, core still checks a call's atom-versus-string shape, at
+the value (an attribute-tag attribute at any depth is prefixed
+`` `<box>`: `<@row>`: ``):
 
 | Message | Cause |
 | --- | --- |
-| `` `<box>`: attribute `mode`: `:strct` is not one of :strict, :loose; did you mean `:strict`? `` | a name outside `values`, near one of them |
-| `` `<box>`: attribute `mode`: `:zzzzzz` is not one of :strict, :loose `` | a name outside `values`, near none of them |
-| `` `<box>`: attribute `slug`: `:ab-c` does not match the pattern /^[a-z]+$/ `` | a name that fails `pattern` (checked with or without `values`; with both, a name must pass both) |
-| `` `<policy>`: attribute `load`: `:titel` is not a declared relationship or computed here (one of :author, :title); did you mean `:title`? `` | an atom where the contract says `ref`, and no declaration of that kind covers the name. A union ref names every kind it accepts; the list holds the visible names the attribute accepts (sorted, ten, then `+N more`, or `none declared`) |
-
-Every atom of a list is checked at its own position, so
-`mode=[:strict, :lose]` points at `:lose`, not at the attribute. Without a
-contract an atom is never an error: it is only its name.
-
-### An atom where a string is declared, and the other way round
-
-The distinction is checked both ways, at the value (an attribute-tag attribute
-at any depth is prefixed `` `<box>`: `<@row>`: ``):
-
-| Message | Cause |
-| --- | --- |
-| `` attribute `label` must be string, got atom `` | `label` is declared `string` and written `label=:title` |
-| `` attribute `kind` must be atom, got string `` | `kind` is declared `atom` and written `kind="title"`; in a list, the string item itself is the position. Against `values` the message ends with ``(one of :a, :b)``; against `ref` with the declared names and the fix: ``(one of :id, :title); write it as `:title` `` |
-
-### Operations an atom refuses
-
-An atom is a name, not a value to work on. Member access (`:a.length`, `:a[0]`),
-a call (`:a(1)`), a unary operator (`-:a`, `!:a`, `typeof :a`), spreading
-(`f(...:a)`, `[...:a]`, `<div ...:a/>`) and a non-computed object key
-(`{:a: 1}`) are all errors at the atom:
-
-```text
-<div x=:a.length/>
-1:7 `:a` is an atom (decision 156), a name and not a value to operate on: member access is not allowed on it; write `"a"` for a string you mean to operate on
-```
-
-```text
-<div x={:a: 1}/>
-1:8 `:a` cannot be an object key: an atom is a value (decision 156); write `a:` for the key, or `[:a]` to compute it from the atom
-```
-
-Where a binding, an assignment target or a shorthand property must stand
-(`:a = 1`, `(:a) => 1`, `{:a}`), the parse error names the atom instead:
-
-```text
-<div x=(:a) => 1/>
-1:8 `:a` is an atom (decision 156): a value, not a binding, an assignment target or a shorthand property
-```
-
-### `::name` is reserved
-
-```text
-<div x=::a/>
-1:7 `::a` is reserved (decision 156): `::` will be the Symbol.for sugar; write `:a` for an atom
-```
-
-`::` is one token, so it is reported the same way in a tag or attribute name and
-in a shorthand's static text (`<b::a/>`, `<b ::a/>`, `<b.c::a/>`), positioned at
-the `::`. It is never reported inside a `${}` of a tag name or shorthand, which
-is an expression: `<${"a::b"}/>` is legal.
-
-### The `:` TypeScript owns
-
-Four spellings where TypeScript's `:` and an atom's `:` collide are known limits
-(see [Atoms](/language/atoms/#atoms-known-limits-a-typescript-owns)), each with a
-hint that names the ambiguity and the fix:
-
-```text
-hint: `a<b> :c` reads `a<b>` as type arguments (TypeScript's reading), so `:c` is not an atom there; this spelling is ambiguous (ADR 156, known limits)
-```
-
-```text
-hint: `:z` was read as an atom (decision 156), so the ternary has no `:`; if TypeScript owns that `:` (type arguments before it, ADR 156 known limits), write `: z` with a space
-```
+| `` attribute `label` must be string, got atom `` | `label` is declared `string` and the value is an atom |
+| `` attribute `kind` must be atom, got string `` | `kind` is declared `atom` and written `kind="title"`; in a list, the string item itself is the position. A dialect that claims contract keys may add its own wording after the message |
 
 ## `class:foo` and `style:foo`
 

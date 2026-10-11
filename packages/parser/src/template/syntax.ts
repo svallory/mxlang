@@ -5,10 +5,9 @@
  * struct; everything the parser needs is compiled from the data once per
  * table (`compileSyntax`, cached per object).
  *
- * `DEFAULT_SYNTAX` is the `.mx` row: today's grammar, byte for byte. Atoms
- * (decision 156) keep their own code path until they move onto the table.
- * Until then an expression row on `:` replaces built-in atom lexing (the
- * coexistence rule, `CompiledSyntax.builtInAtoms`).
+ * `DEFAULT_SYNTAX` is the `.mx` row: the stock Marko grammar, with no
+ * trigger, so `:x` in an expression is JavaScript, as in Marko. A dialect
+ * that wants atoms arms an expression row on `:`.
  */
 import type { TagType as TagTypeValue } from "./util/constants.ts";
 import * as TagType from "./util/tag-type.ts";
@@ -726,14 +725,6 @@ export interface CompiledSyntax {
   readonly value: TriggerSet | null;
   /** Whether any attribute trigger sets `terminatesValue`. */
   readonly terminators: boolean;
-  /**
-   * The coexistence rule (`lang-ext-move-sugars-to-mesh`): a loaded row on a
-   * character replaces the built-in behaviour for that character in that
-   * position. True unless an expression trigger is armed on `:`: then
-   * `lexAtom` never runs and a default value is never a single atom
-   * (decision 146 addendum 5's exemption is the built-in atom's).
-   */
-  readonly builtInAtoms: boolean;
   readonly blockTag: Delimiters | null;
   readonly filter: Delimiters | null;
   /** The first characters of `blockTag.open` and `filter.open`, which stop HTML content's text run (empty on the default row). */
@@ -745,8 +736,6 @@ export interface Delimiters {
   readonly open: string;
   readonly close: string;
 }
-
-const COLON = 58;
 
 const compiled = new WeakMap<object, CompiledSyntax>();
 const listCache = new WeakMap<object, SyntaxDiagnostic[]>();
@@ -761,7 +750,6 @@ export const DEFAULT_COMPILED: CompiledSyntax = Object.freeze({
   line: null,
   value: null,
   terminators: false,
-  builtInAtoms: true,
   blockTag: null,
   filter: null,
   contentStops: Object.freeze([]),
@@ -832,7 +820,6 @@ export function compileSyntax(table: SyntaxTable): CompiledSyntax {
     terminators: table.attributeTriggers.some(
       (t) => t.terminatesValue === true,
     ),
-    builtInAtoms: expression?.ascii[COLON] === undefined,
     blockTag: table.blockTag,
     filter: table.filter,
     contentStops: [table.blockTag, table.filter].flatMap((d) =>

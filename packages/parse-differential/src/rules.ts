@@ -86,7 +86,6 @@ export const NOT_COMPARED: readonly string[] = [
   "the order of tag-position shorthands across sigils: the merge loses it; both sides list ids, then classes",
   "a dynamic tag name's span and container: Marko's whole-template name keeps no position through the clone (A17); compared by text",
   "a dynamic shorthand's spans: merged without loc (A4); compared by text",
-  "atoms inside an expression Babel could not parse: today's tree holds the raw text (`MarkoParseError`), not the atom",
   "open and close tag spans, `bodyMode`, `concise`, `selfClosed`: not in today's tree; asserted by `checkInvariants`",
   "statement `code` spans: today's statement is a raw string (A8)",
 ];

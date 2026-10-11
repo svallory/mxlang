@@ -48,8 +48,8 @@ function* walk(node: unknown): Generator<Record<string, unknown>> {
 }
 
 describe("the event-level divergence table", () => {
-  it("has at least 15 rows", () => {
-    expect(EVENT_ROWS.length).toBeGreaterThanOrEqual(15);
+  it("has at least 8 rows", () => {
+    expect(EVENT_ROWS.length).toBeGreaterThanOrEqual(8);
   });
 
   it("covers the documented divergences", () => {

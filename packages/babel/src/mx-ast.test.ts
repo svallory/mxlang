@@ -11,7 +11,6 @@ import type {
 import { expect, expectTypeOf, it } from "vitest";
 import type {
   MxArguments,
-  MxAtom,
   MxAttribute,
   MxAttributeTag,
   MxBodyMode,
@@ -109,7 +108,6 @@ const NODE_TYPES = [
   "MxSpreadAttribute",
   "MxMethod",
   "MxParseError",
-  "MxAtom",
   "MxTrigger",
   "MxBlockTag",
   "MxFilter",
@@ -203,7 +201,6 @@ function expr(start: number, end: number, source = ""): MxExpression {
     outer: sp(start, end),
     node: null,
     error: null,
-    atoms: [],
   };
 }
 
@@ -215,7 +212,6 @@ const params = (start: number, end: number): MxParameterList => ({
   outer: sp(start - 1, end + 1),
   node: null,
   error: null,
-  atoms: [],
 });
 
 const statements = (start: number, end: number): MxStatements => ({
@@ -226,7 +222,6 @@ const statements = (start: number, end: number): MxStatements => ({
   outer: sp(start, end),
   node: null,
   error: null,
-  atoms: [],
   directives: [],
   innerComments: [],
 });
@@ -609,27 +604,12 @@ it("MxParseError (ast §3.13: `<div></span>`)", () => {
   // @ts-expect-error missing `code`
   const missing: MxParseError = rest;
   // @ts-expect-error wrong discriminator
-  const wrong: MxParseError = { ...e, type: "MxAtom" };
+  const wrong: MxParseError = { ...e, type: "MxTrigger" };
   // @ts-expect-error the error carries `start`/`end`, not a `span` field
   const withSpan: MxParseError = { ...e, span: sp(5, 12) };
   // @ts-expect-error lowering is not an origin
   const badOrigin: MxParseError = { ...e, origin: "lowering" };
   expect([missing, wrong, withSpan, badOrigin]).toHaveLength(4);
-});
-
-it("MxAtom (ast §4.3: `:title` in `accept=[:title]`)", () => {
-  const a = {
-    type: "MxAtom",
-    start: 15,
-    end: 21,
-    name: "title",
-  } satisfies MxAtom;
-  const { name: _n, ...rest } = a;
-  // @ts-expect-error missing `name`
-  const missing: MxAtom = rest;
-  // @ts-expect-error wrong discriminator
-  const wrong: MxAtom = { ...a, type: "MxText" };
-  expect([missing, wrong]).toHaveLength(2);
 });
 
 it("the expression containers (ast §4.1)", () => {
@@ -655,7 +635,6 @@ it("the expression containers (ast §4.1)", () => {
     outer: sp(0, 1),
     node: "payload",
     error: null,
-    atoms: [],
   };
   expectTypeOf(generic.node).toEqualTypeOf<string | null>();
 
@@ -666,11 +645,11 @@ it("the expression containers (ast §4.1)", () => {
   const wrong: MxExpression = { ...e, type: "MxStatements" };
   // @ts-expect-error a pattern container is not an expression container
   const crossed: MxPattern = e;
-  // @ts-expect-error missing `atoms`
-  const missingAtoms: MxStatements = { ...statements(0, 1), atoms: undefined };
+  // @ts-expect-error a container lists no atoms: a dialect's atom is an expression trigger
+  const withAtoms: MxStatements = { ...statements(0, 1), atoms: [] };
   // @ts-expect-error wrong discriminator
   const wrongParams: MxParameterList = { ...params(1, 2), type: "MxPattern" };
-  expect([missing, wrong, crossed, missingAtoms, wrongParams]).toHaveLength(5);
+  expect([missing, wrong, crossed, withAtoms, wrongParams]).toHaveLength(5);
 });
 
 // ---- field shapes and unions ------------------------------------------------
@@ -769,12 +748,12 @@ it("MxChild is the child-list members and MxNode adds the rest (ast §3.0)", () 
 //
 // For each node type: the required-key set (every key of every node is
 // required; ast tables say "Opt.: no" throughout), the nullable keys (those that
-// take `null`), and one sample. Generated assertions per node (28 nodes):
+// take `null`), and one sample. Generated assertions per node (27 nodes):
 //   type level: required keys equal; nullable keys equal; no writable field; no
 //               mutable array field
 //   runtime:    the sample's keys equal the required set; nullable keys are
 //               keys of the sample
-// = 6 assertions per node, 168 in all.
+// = 6 assertions per node, 162 in all.
 
 type Eq<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
@@ -831,14 +810,7 @@ const TAG_NULLABLE = [
   "body",
   "closeTag",
 ] as const;
-const CONTAINER_KEYS = [
-  ...BASE,
-  "source",
-  "outer",
-  "node",
-  "error",
-  "atoms",
-] as const;
+const CONTAINER_KEYS = [...BASE, "source", "outer", "node", "error"] as const;
 const CONTAINER_NULLABLE = ["node", "error"] as const;
 const VALUE_KEYS = [...BASE, "value", "valueSpan"] as const;
 
@@ -898,7 +870,6 @@ const ROWS = {
     required: [...BASE, "code", "origin", "message", "context"],
     nullable: ["context"],
   },
-  MxAtom: { required: [...BASE, "name"], nullable: [] },
   MxTrigger: {
     required: [...BASE, "id", "position", "text", "operator", "value", "args"],
     nullable: ["operator", "value", "args"],
@@ -1055,7 +1026,6 @@ const SAMPLES: { [K in MxNode["type"]]: NodeOf<K> } = (() => {
       message: "closing tag does not match",
       context: null,
     },
-    MxAtom: { type: "MxAtom", start: 15, end: 21, name: "title" },
     MxTrigger: {
       type: "MxTrigger",
       start: 0,
@@ -1097,7 +1067,7 @@ it("every node: required keys, nullable keys, read-only fields and arrays", () =
   // Names every node with a false type-level verdict; none may.
   expectTypeOf<FailingNodes>().toEqualTypeOf<never>();
   const nodes = Object.keys(ROWS) as (keyof Rows)[];
-  expect(nodes).toHaveLength(28);
+  expect(nodes).toHaveLength(27);
   expect(new Set(nodes)).toEqual(new Set(NODE_TYPES));
   let assertions = 0;
   for (const name of nodes) {
@@ -1109,7 +1079,7 @@ it("every node: required keys, nullable keys, read-only fields and arrays", () =
     for (const key of row.nullable) expect(sample, name).toHaveProperty(key);
     assertions += 2;
   }
-  expect(assertions).toBe(56);
+  expect(assertions).toBe(54);
 });
 
 it("nullable fields take null and the others do not (spot checks of the table)", () => {

@@ -32,10 +32,10 @@ describe("stockMarkoCompile (the compiler runs on the stock parser)", () => {
     expect(result.error?.loc).toMatchObject({ line: 1, index: 9 });
   });
 
-  it("`<div x={ new :a }/>` fails in Babel (atom syntax, not JS)", () => {
-    // Stock reads the expression as `{ new :a }`; Babel fails because
-    // `:a` is not JavaScript syntax — that is the stock/patch divergence,
-    // not a parser-level divergence here.
+  it("`<div x={ new :a }/>` fails in Babel (`:a` is not JavaScript)", () => {
+    // Stock reads the expression as `{ new :a }`, as MX's parser does
+    // (divergence.cases.ts `colon-after-new-key`); Babel fails because `:a`
+    // is not JavaScript syntax.
     const result = stockMarkoCompile("<div x={ new :a }/>");
     expect(result.ok).toBe(false);
   });
@@ -88,7 +88,7 @@ describe("isolation: the rest of the repo is untouched", () => {
       coreRequire.resolve("htmljs-parser"),
       "utf8",
     );
-    expect(installed).toContain("lexAtom");
+    expect(installed).toContain("isInTextBody");
     expect(installed).toContain("isUnicodeWordCode");
   });
 

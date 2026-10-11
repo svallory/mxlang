@@ -29,9 +29,6 @@ const STATEMENT_TAGS = new Set([
 const SKIP =
   /^(packages\/editors\/zed\/grammars|docs\/upstream|packages\/parser\/src\/template\/__tests__)\//;
 
-// Documentation pages show atoms on purpose; see the atoms test below.
-const DOCS_PAGES = "apps/docs/docs/";
-
 const tracked = execFileSync("git", ["ls-files"], {
   cwd: root,
   encoding: "utf8",
@@ -116,38 +113,4 @@ describe("source copy vs patched npm htmljs-parser", () => {
       expect(total).toBeGreaterThan(10_000);
     });
   }
-
-  // Decision 156: outside the documentation pages, only the files listed
-  // below hold an atom or a reserved `::`, so atom lexing changes no existing
-  // parse (research §5 row 16). Pages under `apps/docs/docs/` are expected to
-  // show atoms and are not listed: a new example there is not a finding.
-  it("lexes atoms only in the docs pages and the listed files", () => {
-    const hits: string[] = [];
-    for (const { name, text } of inputs) {
-      if (name.startsWith(DOCS_PAGES)) continue;
-      for (const [event, range] of events(source, text, true) as [
-        string,
-        { message?: string },
-      ][]) {
-        if (
-          event === "onAtom" ||
-          (event === "onError" && range.message?.includes("is reserved"))
-        ) {
-          hits.push(name);
-        }
-      }
-    }
-    // Files outside the docs pages that use atoms on purpose: the atom
-    // fixtures of PR 1's tests, the expression-value mapping fixtures and
-    // tree-sitter-mx's Mesh fixture (#339).
-    expect([...new Set(hits)]).toEqual([
-      "packages/editors/tree-sitter-mx/test/fixtures/mesh-invoice.mx",
-      "packages/tooling/tsc/src/fixtures/atoms/preact/page.mx",
-      "packages/tooling/tsc/src/fixtures/expression-values/html/page.mx",
-      "packages/tooling/tsc/src/fixtures/expression-values/preact/page.mx",
-      "packages/tooling/tsc/src/fixtures/expression-values/react/page.mx",
-      "packages/tooling/tsc/src/fixtures/expression-values/solid-clean/page.mx",
-      "packages/tooling/tsc/src/fixtures/expression-values/solid/page.mx",
-    ]);
-  });
 });

@@ -5,9 +5,10 @@ The htmljs-parser-derived template parser (`src/template/`; provenance in
 
 ## The front-end handler contract
 
-`src/frontend/parse.ts` (`FrontEnd`) implements the 28 handlers the template
-parser can call — the 27 of htmljs-parser 5.18.0 plus MX's own `onAtom`
-(decision 156). The contract, per handler: the event it serves, the payload
+`src/frontend/parse.ts` (`FrontEnd`) implements the 30 handlers the template
+parser can call — the 27 of htmljs-parser 5.18.0 plus MX's own `onTrigger`,
+`onBlockTag` and `onFilter`, which fire only for a syntax table that arms
+them (decision 182). The contract, per handler: the event it serves, the payload
 the parser hands it, and what the handler must do. The per-node detail (which
 AST field each event lands in, and the exact splitting rules) is ast.md §7
 (`apps/docs/docs/architecture/ast.md`); this section is the *calling*
@@ -16,7 +17,9 @@ contract.
 | Handler | Payload | Handler's obligation |
 |---|---|---|
 | `onError` | `Error { code, message }` | Record the error as data (an `MxParseError` in `errors`); never throw. Ends the parse: no further event is delivered. |
-| `onAtom` | `Value` (range: the whole atom, `value`: its name) | Push one `MxAtom` onto the enclosing container. |
+| `onTrigger` | `Trigger { id, position, standIn, text, value? }` | Push one `MxTrigger` where its position puts it: the enclosing container's `triggers`, the tag's attributes, or a body child (ast.md §4.4). |
+| `onBlockTag` | `Value` | Push `MxBlockTag` with the whole form and its raw body (ast.md §4.5). |
+| `onFilter` | `Filter { name, value }` | Push `MxFilter` (ast.md §4.5). |
 | `onText` | `Range` | Push `MxText`; normalize exactly as Marko does, except in a preserving body. |
 | `onPlaceholder` | `Placeholder { value, escape }` | Push `MxPlaceholder`, keeping `escape`. |
 | `onComment` | `Value` | Push `MxComment`; the kind comes from the source text, as Marko's `getCommentKind`. |

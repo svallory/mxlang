@@ -1,11 +1,10 @@
 import { createParser, TagType } from "@mxlang/parser/lexer";
-import { STATEMENT, TEXT } from "./close-tag-opener.ts";
 import { TranslateError } from "./core.ts";
 
 /**
  * The parse-error rewrite that turns a template-parser failure inside a tag's
  * `|params|` into a positioned MX error, and the template-parser reads it and
- * `parse-error-hints.ts` share (`markoParser`, `lexedAtoms`).
+ * `shorthand.ts` share (`markoParser`).
  *
  * A `:` after a value (`<if=x :b>`) is Marko's own "Expected a single
  * expression" failure, reported as Marko reports it: MX has no `:name` sugar
@@ -26,7 +25,7 @@ type TemplateLexer = {
 const templateLexer: TemplateLexer = { createParser, TagType } as TemplateLexer;
 
 /**
- * The template lexer these rewrites and `parse-error-hints.ts` replay the
+ * The template lexer these rewrites and `shorthand.ts` replay the
  * source with: MX's own (`@mxlang/parser/lexer`), on every run. Always
  * defined; the `undefined` arm is kept for the callers' fallbacks.
  *
@@ -35,46 +34,6 @@ const templateLexer: TemplateLexer = { createParser, TagType } as TemplateLexer;
  */
 export function markoParser(): TemplateLexer | undefined {
   return templateLexer;
-}
-
-let lexedFor: { source: string; atoms: { start: number; end: number }[] } = {
-  source: "",
-  atoms: [],
-};
-
-/**
- * The atoms MX's template lexer lexes in `source` (decision 156), for a
- * diagnostic that must name only a real atom: never a `:` in a scriptlet, a
- * statement tag or a ternary. `undefined` when the parser cannot be loaded.
- * Remembers the last source, since one failure may ask more than once.
- */
-export function lexedAtoms(
-  source: string,
-): { start: number; end: number }[] | undefined {
-  if (lexedFor.source === source) return lexedFor.atoms;
-  const parser = markoParser();
-  if (!parser) return undefined;
-  const atoms: { start: number; end: number }[] = [];
-  try {
-    const instance = parser.createParser({
-      // Statement and text tags as Marko's taglib types them, so a `static`
-      // line or a `<script>` body is never read as attributes.
-      onOpenTagName: (range: { start: number; end: number }) => {
-        const name = source.slice(range.start, range.end);
-        if (STATEMENT.has(name)) return parser.TagType.statement;
-        if (TEXT.has(name)) return parser.TagType.text;
-        return undefined;
-      },
-      onAtom: (atom: { start: number; end: number }) =>
-        atoms.push({ start: atom.start, end: atom.end }),
-      onError: () => {},
-    });
-    instance.parse(source);
-  } catch {
-    // A parse that throws still reported the atoms before it.
-  }
-  lexedFor = { source, atoms };
-  return atoms;
 }
 
 /**

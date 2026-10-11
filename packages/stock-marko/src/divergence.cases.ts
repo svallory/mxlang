@@ -26,43 +26,6 @@ export interface DivergenceRow {
  * cite `divergences.md` rows and the decisions behind them.
  */
 export const EVENT_ROWS: DivergenceRow[] = [
-  // Atoms (decision 156; divergences.md "Atoms"). Stock has no atoms.
-  {
-    id: "atom-value",
-    input: "<div x=:a/>",
-    note: "decision 156: stock's value is `:a` (Marko then fails it in Babel); MX lexes an atom",
-  },
-  {
-    id: "atom-ternary",
-    input: "<div x=a ? :b :c/>",
-    note: "decision 156: stock one plain value; MX two atoms, ternary `:` skipped",
-  },
-  {
-    id: "atom-array",
-    input: "<div x=[:a, :b]/>",
-    note: "decision 156: stock plain value; MX two atoms",
-  },
-  {
-    id: "atom-placeholder",
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: the source itself contains Marko placeholder syntax
-    input: "<div>${:a}</div>",
-    note: "decision 156: atoms in placeholders; stock plain content",
-  },
-  {
-    id: "atom-new-key",
-    input: "<div x={ new :a }/>",
-    note: "decision 156: MX reads keyword + atom; stock's `{ new :a }` is the key `new`",
-  },
-  {
-    id: "atom-reserved-double-colon",
-    input: "<div x=::a/>",
-    note: "decision 156: `::` is a positioned reserved-token error in MX; stock reads the value `::a`",
-  },
-  {
-    id: "default-atom-value-continues",
-    input: "belongs-to=:Customer :customer",
-    note: "decision 156: MX lexes the atom `:Customer`; both read one value `:Customer :customer`",
-  },
   // Non-ASCII word characters in look-behinds (decision 156 addendum 13;
   // unicode-rules-research.md). Stock is ASCII-only.
   {
@@ -90,12 +53,6 @@ export const EVENT_ROWS: DivergenceRow[] = [
     input: "<if=count\u00a0>= 10></if>",
     note: "addenda 10/11: stock ends the value at NBSP (`= 10>` is body text); MX reads `count >= 10`",
   },
-  // The spaced `< >` known limit (decision 156 addendum 4).
-  {
-    id: "spaced-type-args-atom",
-    input: "<div x=(c ? a < b > :z)/>",
-    note: "addendum 4: MX lexes the atom `:z` where TypeScript owns the `:`; stock reads type arguments",
-  },
   // Never-throw (decision 165): stock throws a TypeError, MX reports an
   // onError and returns.
   {
@@ -120,6 +77,117 @@ export const EVENT_ROWS: DivergenceRow[] = [
  * documented MX rule did (or could) diverge.
  */
 export const CONTROL_ROWS: DivergenceRow[] = [
+  // Atoms left core: `:name` in an expression and `::` anywhere read as
+  // stock reads them (Marko then fails `:name` in Babel; colon.test.ts pins
+  // that error and MX's). A dialect builds atoms through its syntax table.
+  {
+    id: "colon-value",
+    input: "<a b=:x/>",
+    note: "the value `:x` in both, as Marko reads it",
+  },
+  {
+    id: "colon-in-call",
+    input: "<a b=(f(:x))/>",
+    note: "the value `(f(:x))` in both, as Marko reads it",
+  },
+  {
+    id: "colon-value-then-attribute",
+    input: "<a b=:x c=1/>",
+    note: "the value `:x`, then the attribute `c`, in both",
+  },
+  {
+    id: "colon-placeholder",
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the source itself contains Marko placeholder syntax
+    input: "${:x}",
+    note: "the placeholder `:x` in both, as Marko reads it",
+  },
+  {
+    id: "colon-concise-value",
+    input: "a b=:x",
+    note: "the concise value `:x` in both, as Marko reads it",
+  },
+  {
+    id: "colon-concise-in-call",
+    input: "a b=(f(:x))",
+    note: "the concise value `(f(:x))` in both",
+  },
+  {
+    id: "colon-concise-value-then-attribute",
+    input: "a b=:x c=1",
+    note: "the concise value `:x`, then `c=1`, in both",
+  },
+  {
+    id: "colon-concise-placeholder",
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the source itself contains Marko placeholder syntax
+    input: "div -- ${:x}",
+    note: "the concise text placeholder `:x` in both",
+  },
+  {
+    id: "colon-ternary",
+    input: "<div x=a ? :b :c/>",
+    note: "one value in both; no `:` is skipped",
+  },
+  {
+    id: "colon-array",
+    input: "<div x=[:a, :b]/>",
+    note: "the value `[:a, :b]` in both",
+  },
+  {
+    id: "colon-in-body-placeholder",
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the source itself contains Marko placeholder syntax
+    input: "<div>${:a}</div>",
+    note: "the placeholder `:a` in both",
+  },
+  {
+    id: "colon-after-new-key",
+    input: "<div x={ new :a }/>",
+    note: "the value `{ new :a }` in both",
+  },
+  {
+    id: "colon-default-value-continues",
+    input: "belongs-to=:Customer :customer",
+    note: "one default value `:Customer :customer` in both",
+  },
+  {
+    id: "colon-after-spaced-type-arguments",
+    input: "<div x=(c ? a < b > :z)/>",
+    note: "the value `(c ? a < b > :z)` in both",
+  },
+  {
+    id: "double-colon-value-start",
+    input: "<div x=::a/>",
+    note: "the value `::a` in both; no reserved-token error",
+  },
+  {
+    id: "double-colon-value",
+    input: "<a b=x::y/>",
+    note: "the value `x::y` in both; Marko fails it in Babel at the first `:`",
+  },
+  {
+    id: "double-colon-tag-name",
+    input: "<a::b/>",
+    note: "the tag name `a::b` in both",
+  },
+  {
+    id: "double-colon-attribute-name",
+    input: "<a x::y=1/>",
+    note: "the attribute name `x::y` in both",
+  },
+  {
+    id: "double-colon-concise-value",
+    input: "a b=x::y",
+    note: "the concise value `x::y` in both",
+  },
+  {
+    id: "double-colon-concise-tag-name",
+    input: "a::b",
+    note: "the concise tag name `a::b` in both",
+  },
+  {
+    id: "double-colon-concise-attribute-name",
+    input: "a x::y=1",
+    note: "the concise attribute name `x::y` in both",
+  },
   // The name sugars left core: a space before `:` or `.` no longer ends an
   // attribute value, so these read as stock reads them.
   {

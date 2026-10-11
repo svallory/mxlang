@@ -313,11 +313,6 @@ const TAG_INPUTS: [string, string, string[], RegExp?][] = [
   ],
   ["dynamic tag", `<\${Comp} x=2>y</>\n`, [DYNAMIC_TAG]],
   [
-    "atom name: static, as on Marko's tree",
-    `<\${:widget} b=1/>x\n`,
-    ["widget"],
-  ],
-  [
     "string name: a template literal, still dynamic",
     `<\${"lit"} b=1/>\n`,
     [DYNAMIC_TAG],

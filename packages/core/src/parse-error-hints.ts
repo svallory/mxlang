@@ -14,7 +14,6 @@
  */
 
 import type { HostDeclarations } from "./declarations.ts";
-import { lexedAtoms } from "./stock-parser.ts";
 
 // With colours on (CI, FORCE_COLOR) Marko wraps the reason in escape codes that
 // run to the end of the line, so allow SGR sequences after the reason.
@@ -105,79 +104,6 @@ function insideBraces(source: string, offset: number): boolean {
   return depth > 0;
 }
 
-/**
- * The atom a parse error at `offset` is on (`:a` at its `:`) or right after
- * (`{:a}` fails at the `}`). Only an atom the installed parser really lexed
- * counts (`lexedAtoms`), so a scriptlet, a statement tag or a ternary's `:`
- * never gets the hint.
- */
-function atomAt(source: string, offset: number): string | undefined {
-  const atoms = lexedAtoms(source);
-  if (!atoms?.length) return undefined;
-  const on = atoms.find((atom) => atom.start === offset);
-  if (on) return source.slice(on.start, on.end);
-  // Right after an atom only where a binding or a key would end (`{:a}`,
-  // `(:a) =>`); `[:a :b]` fails at `:b`, a missing comma, not misuse.
-  if (!/[)}\]=,;]/.test(source[offset] ?? "")) return undefined;
-  const before = source.slice(0, offset).trimEnd().length;
-  const after = atoms.find((atom) => atom.end === before);
-  return after ? source.slice(after.start, after.end) : undefined;
-}
-
-/**
- * The last `word? :name` on the error's line starting at or before `offset` whose
- * `:name` the installed parser did not lex as an atom: `[written, word,
- * ":name"]`.
- */
-function optionalMarkerBefore(
-  source: string,
-  offset: number,
-): [string, string, string] | undefined {
-  const lineStart = source.lastIndexOf("\n", offset - 1) + 1;
-  const lineEnd = source.indexOf("\n", offset);
-  const line = source.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
-  const atoms = lexedAtoms(source);
-  let found: [string, string, string] | undefined;
-  for (const m of line.matchAll(
-    /([A-Za-z_$][\w$]*)\?[ \t]+(:[A-Za-z_$][\w$]*(?:-[\w$]+)*)/g,
-  )) {
-    if (lineStart + m.index > offset) break;
-    const [written, word = "", atom = ""] = m;
-    const atomStart = lineStart + m.index + written.length - atom.length;
-    if (atoms?.some((lexed) => lexed.start === atomStart)) continue;
-    found = [written, word, atom];
-  }
-  return found;
-}
-
-/**
- * The `word<args> :name` on the error's line whose `:name` starts exactly at
- * `offset` (the `:` Babel tripped on) and that the installed parser did not
- * lex as an atom: `[typed, ":name"]` (decision 156 addendum 4). A match
- * elsewhere on the line is valid TypeScript and never takes the hint.
- */
-function typeArgsBefore(
-  source: string,
-  offset: number,
-): [string, string] | undefined {
-  const lineStart = source.lastIndexOf("\n", offset - 1) + 1;
-  const lineEnd = source.indexOf("\n", offset);
-  const line = source.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
-  const atoms = lexedAtoms(source);
-  let found: [string, string] | undefined;
-  for (const m of line.matchAll(
-    /([A-Za-z_$][\w$]*<[^<>\n]*>)[ \t]+(:[A-Za-z_$][\w$]*(?:-[\w$]+)*)/g,
-  )) {
-    if (lineStart + m.index > offset) break;
-    const [written, typed = "", atom = ""] = m;
-    const atomStart = lineStart + m.index + written.length - atom.length;
-    if (atomStart !== offset) continue;
-    if (atoms?.some((lexed) => lexed.start === atomStart)) continue;
-    found = [typed, atom];
-  }
-  return found;
-}
-
 /** Offset of a 1-based line and 0-based column in `source`. */
 function offsetOf(source: string, line: number, column: number): number {
   let start = 0;
@@ -197,38 +123,6 @@ function hintFor(
 ): string | null {
   const offset = at.index ?? offsetOf(source, at.line, at.column);
   if (offset < 0) return null;
-
-  // Decision 156: Babel rejects an atom where a binding, an assignment target
-  // or a shorthand property must stand (its stand-in is a number), at the atom
-  // or right after it; say what the author wrote.
-  const atom = atomAt(source, offset);
-  // Decision 156 addendum 4: a ternary whose `:` was lexed as an atom because
-  // the lexer read a spaced `< >` as comparison (`c ? a < b > :z`, a
-  // conditional type inside type arguments). TypeScript owned that `:`.
-  if (atom && reason.startsWith('Unexpected token, expected ":"')) {
-    return `\`${atom}\` was read as an atom (decision 156), so the ternary has no \`:\`; if TypeScript owns that \`:\` (type arguments before it, ADR 156 known limits), write \`: ${atom.slice(1)}\` with a space`;
-  }
-  if (atom) {
-    return `\`${atom}\` is an atom (decision 156): a value, not a binding, an assignment target or a shorthand property`;
-  }
-
-  // Review round 5 (N4): `cond? :yes : :no`. A `?` touching a word is
-  // TypeScript's optional marker, so the parser lexed no atom after it and
-  // Babel trips somewhere past it; name the spelling the author meant.
-  const marker = optionalMarkerBefore(source, offset);
-  if (marker) {
-    const [written, word, atom] = marker;
-    return `\`${written}\` is TypeScript's optional marker (a \`?\` touching \`${word}\`), so \`${atom}\` is not an atom there; write \`${word} ? ${atom}\` for a ternary`;
-  }
-
-  // Decision 156 addendum 4: `(a<b> :c)` with no open `?`. TypeScript reads
-  // `a<b>` as type arguments, so the parser lexed no atom and Babel trips on
-  // the `:`. The lexer does not decide this spelling; name the ambiguity.
-  const typedArgs = typeArgsBefore(source, offset);
-  if (typedArgs) {
-    const [typed, atom] = typedArgs;
-    return `\`${typed} ${atom}\` reads \`${typed}\` as type arguments (TypeScript's reading), so \`${atom}\` is not an atom there; this spelling is ambiguous (ADR 156, known limits)`;
-  }
 
   // `<div id= class="a">`: the next attribute's name was read as `id`'s value,
   // so the parser trips on that attribute's own `=`.
@@ -370,42 +264,6 @@ function hintOne(
  * (message and `label`, the two places a caller reads it from). An aggregate
  * error is handled entry by entry, mirroring `annotateCloseTagOpener`.
  */
-/**
- * The front end's hint for a `{…}`-wrapped attribute value whose inside
- * parses: Marko's `withWrappedAttrValueHint`, in the lead's MX rewording
- * (2026-10-08, `@mxlang/parser` `wrappedAttrValueHint`).
- */
-const JSX_WRAP_SENTENCE =
-  " Attribute values are plain TypeScript expressions, not JSX; remove the wrapping `{ }`.";
-
-/**
- * `x={ new :a }` (decision 156; lead ruling, review round 3): a keyword key
- * followed by whitespace before `:` is read as the keyword plus an atom, so
- * `{ … }` fails and its inside (`new 0.`) parses, which makes Marko suggest
- * removing the braces. Say what happened instead, in place.
- */
-function rewriteKeywordAtom(
-  error: Located,
-  source: string,
-): string | undefined {
-  const reason = typeof error.label === "string" ? error.label : "";
-  const at = error.loc?.start;
-  if (!reason.includes(JSX_WRAP_SENTENCE) || !at) return undefined;
-  const offset = at.index ?? offsetOf(source, at.line, at.column);
-  const keyword = source.slice(offset).match(/^[A-Za-z_$][\w$]*/)?.[0];
-  if (!keyword) return undefined;
-  const gap = source.slice(offset + keyword.length).match(/^\s+/)?.[0];
-  if (!gap) return undefined;
-  const atomStart = offset + keyword.length + gap.length;
-  const atom = lexedAtoms(source)?.find((found) => found.start === atomStart);
-  if (!atom) return undefined;
-  const name = source.slice(atom.start + 1, atom.end);
-  const sentence = ` \`${keyword} :${name}\` reads as the keyword \`${keyword}\` and the atom \`:${name}\` (decision 156); for an object key write \`{ ${keyword}: ${name} }\`.`;
-  error.label = reason.replace(JSX_WRAP_SENTENCE, sentence);
-  setMessage(error, error.message.replace(JSX_WRAP_SENTENCE, sentence));
-  return sentence;
-}
-
 export function hintParseError(
   error: unknown,
   source: string,
@@ -413,19 +271,8 @@ export function hintParseError(
 ): void {
   if (!(error instanceof Error)) return;
   const aggregate = error as Located;
-  rewriteKeywordAtom(aggregate, source);
   rewriteShorthandGroup(aggregate, source);
   if (rewriteTagVariableShorthand(aggregate, source)) return;
-  for (const entry of aggregate.errors ?? []) {
-    if (typeof (entry as Located | null)?.message !== "string") continue;
-    const sentence = rewriteKeywordAtom(entry as Located, source);
-    if (sentence) {
-      setMessage(
-        aggregate,
-        aggregate.message.replace(JSX_WRAP_SENTENCE, sentence),
-      );
-    }
-  }
   hintOne(aggregate, source, declarations);
   for (const entry of aggregate.errors ?? []) {
     if (typeof (entry as Located | null)?.message !== "string") continue;

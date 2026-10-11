@@ -463,7 +463,7 @@ describe("core keeps its checks beside a module's claims", () => {
   });
 
   it("a module error earlier in the file keeps its place", () => {
-    const source = '<node#a/><link to=:zz/><link to="red"/>';
+    const source = '<node#a/><link to=~zz/><link to="red"/>';
     expect(
       caught(() =>
         compile(
@@ -475,7 +475,7 @@ describe("core keeps its checks beside a module's claims", () => {
           declaresFixture,
         ),
       ).message,
-    ).toMatch(/`:zz` is not a declared node here/);
+    ).toMatch(/`~zz` is not a declared node here/);
   });
 
   it("L4: the view's contracts are deep-frozen copies; the registered contract is untouched", () => {
@@ -557,7 +557,7 @@ describe("`contractFields`", () => {
     );
     let facets: unknown[] = [];
     compile(
-      "<box a=:x><@row b=1/></box>",
+      "<box><@row b=1/></box>",
       tags,
       claiming({ attribute: ["facet"] }, (unit) => {
         const [box] = unit.calls;
@@ -817,9 +817,9 @@ describe("`contractFields` through a manifest", () => {
       dir,
       true,
     );
-    expect(() => build(page, "<node#a/><link to=:a/>")).not.toThrow();
-    expect(caught(() => build(page, "<node#a/><link to=:b/>")).message).toBe(
-      "`<link>`: attribute `to`: `:b` is not a declared node here (one of :a)",
+    expect(() => build(page, "<node#a/><link to=~a/>")).not.toThrow();
+    expect(caught(() => build(page, "<node#a/><link to=~b/>")).message).toBe(
+      "`<link>`: attribute `to`: `~b` is not a declared node here (one of ~a)",
     );
   });
 
@@ -834,9 +834,9 @@ describe("`contractFields` through a manifest", () => {
       true,
     );
     expect(
-      caught(() => build(page, "<node#alpha/><link to=:alpah/>")).message,
+      caught(() => build(page, "<node#alpha/><link to=~alpah/>")).message,
     ).toBe(
-      "`<link>`: attribute `to`: `:alpah` is not a declared node here (one of :alpha)",
+      "`<link>`: attribute `to`: `~alpah` is not a declared node here (one of ~alpha)",
     );
   });
 

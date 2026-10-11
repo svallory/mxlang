@@ -54,10 +54,6 @@
           "path": "/language/attributes/"
         },
         {
-          "title": "Atoms",
-          "path": "/language/atoms/"
-        },
-        {
           "title": "Attribute tags and tag params",
           "path": "/language/attribute-tags-and-params/"
         },
@@ -297,7 +293,7 @@
           "path": "/design-notes/adr-render-model/"
         },
         {
-          "title": "ADR 156: atoms",
+          "title": "ADR 156: atoms (superseded)",
           "path": "/design-notes/adr-atoms/"
         }
       ]

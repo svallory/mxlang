@@ -1,16 +1,26 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the sources are MX, not JS templates
-import { describe, expect, it } from "vitest";
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { compileSolidUnit } from "./index.ts";
 
 /**
  * A whole-file Solid unit records the mapping of every expression value, so a
  * TypeScript error inside one reaches the author's source (without them
- * `mx-tsc` and the editor reported nothing for the unit). Atoms (decision 156)
- * map per atom. Mapping only: the emitted code is unchanged.
+ * `mx-tsc` and the editor reported nothing for the unit). An atom a dialect
+ * builds maps per atom (core's atom fixture, below). Mapping only: the
+ * emitted code is unchanged.
  */
-function pairs(source: string): string[][] {
+function pairs(source: string, filename = "/fixtures/values.mx"): string[][] {
   const { code, mappings } = compileSolidUnit(source, {
-    filename: "/fixtures/values.mx",
+    filename,
     customTags: {},
   });
   return mappings.map((m) => [
@@ -20,6 +30,50 @@ function pairs(source: string): string[][] {
 }
 
 const IMPORT = 'import Field from "./field.mx"\n';
+
+const MODULE = join(
+  import.meta.dirname,
+  "../../../core/src/fixtures/syntax/atom-fixture.ts",
+);
+
+/**
+ * A temp project depending on a dialect package whose module re-exports
+ * core's atom fixture (sigil `~`), claiming `.atom.mx`.
+ */
+let dir: string;
+beforeAll(() => {
+  dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-solid-atom-")));
+  const dialect = join(dir, "node_modules", "atom-dialect");
+  mkdirSync(dialect, { recursive: true });
+  writeFileSync(
+    join(dialect, "package.json"),
+    JSON.stringify({
+      name: "atom-dialect",
+      mx: {
+        dialect: {
+          id: "atom",
+          name: "Fixture",
+          extensions: [".atom.mx"],
+          module: "./index.cjs",
+        },
+      },
+    }),
+  );
+  writeFileSync(
+    join(dialect, "index.cjs"),
+    `module.exports = require(${JSON.stringify(MODULE)});\n`,
+  );
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      name: "app",
+      devDependencies: { "atom-dialect": "0.0.0" },
+    }),
+  );
+});
+afterAll(() => {
+  rmSync(dir, { recursive: true, force: true });
+});
 
 /**
  * The authored text a generated `needle` maps to: the first mapping whose
@@ -75,14 +129,14 @@ describe("solid expression values", () => {
   it.each([
     [
       "a nested atom in a component prop",
-      `${IMPORT}<Field modes=[:strict, :lose]/>`,
-      [":strict", ":lose"],
+      `${IMPORT}<Field modes=[~strict, ~lose]/>`,
+      ["~strict", "~lose"],
     ],
-    ["an atom in a `${}` expression", "<p>${f(:t, u)}</p>", [":t"]],
-    ["an atom in a native attribute", "<input value=f(:a)/>", [":a"]],
-    ["an atom in a component spread", `${IMPORT}<Field ...f(:a)/>`, [":a"]],
+    ["an atom in a `${}` expression", "<p>${f(~t, u)}</p>", ["~t"]],
+    ["an atom in a native attribute", "<input value=f(~a)/>", ["~a"]],
+    ["an atom in a component spread", `${IMPORT}<Field ...f(~a)/>`, ["~a"]],
   ])("maps %s per atom", (_name, source, atoms) => {
-    const result = pairs(source);
+    const result = pairs(source, join(dir, "page.atom.mx"));
     for (const atom of atoms) {
       expect(result).toContainEqual([atom, JSON.stringify(atom.slice(1))]);
     }

@@ -105,12 +105,6 @@ export type MxErrorCode =
   | "MX_INPUT_ENDS_IN_DELIMITER"
   | "MX_FRONT_END_INTERNAL";
 
-/** `:name` atom found in an expression's source (ast §4.3). */
-export interface MxAtom extends Span {
-  readonly type: "MxAtom";
-  readonly name: string;
-}
-
 /**
  * A syntax-table trigger (decision 182; ast §4.4): `&status` in an expression
  * (in its container's `triggers`), an attribute (in `attributes`) or a
@@ -227,7 +221,6 @@ export interface MxExpressionContainer<N> extends Span {
   readonly outer: Span;
   readonly node: N | null;
   readonly error: MxParseError | null;
-  readonly atoms: readonly MxAtom[];
   /** Expression triggers inside (decision 182, ast §4.4); present only when there are any. */
   readonly triggers?: readonly MxTrigger[];
 }
@@ -485,7 +478,6 @@ export type MxNode =
   | MxSpreadAttribute
   | MxMethod
   | MxParseError
-  | MxAtom
   | MxTrigger
   | MxExpression
   | MxStatements

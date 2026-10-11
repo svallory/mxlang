@@ -734,11 +734,12 @@ export const NON_WORD_ROWS: [string, string][] = [
 ];
 
 /**
- * An atom after a non-identifier symbol lexes, as after ASCII punctuation
- * (`%` here); stock reports an error for both forms. Neither input is valid
- * Marko or JavaScript. Before addendum 13 the symbol was a word character, so
- * `\u00d7:await` read as a key and no atom lexed. Each is pinned beside its
- * ASCII twin.
+ * The atom row (`ATOMS_SYNTAX`) arms after a non-identifier symbol, as after
+ * ASCII punctuation (`%` here); stock reports an error for both forms. Neither
+ * input is valid Marko or JavaScript. Before addendum 13 the symbol was a word
+ * character, so `\u00d7:await` read as a key and no atom lexed. Each is pinned
+ * beside its ASCII twin; the patched build, which lexes no atom, reads both as
+ * the source copy's default row does.
  */
 export const ATOM_AFTER_SYMBOL_ROWS: [string, string, string][] = [
   [

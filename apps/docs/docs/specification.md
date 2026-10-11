@@ -223,7 +223,7 @@ tag rules preset declares three of the six, `import`, `static` and `export`;
 A statement's text is parsed as a TypeScript module body and a syntax error is a
 positioned error on every target, exactly as in Marko 6.4.4 (measured, html and
 DOM output): JSX in a statement (`static const el = <b>hi</b>`) and a decorator
-are errors, as is an atom (`{ k: :name }`). A line ending in an operator or `>`
+are errors, as is a stray `:` (`{ k: :name }`). A line ending in an operator or `>`
 continues onto the next line, as in Marko: `static const t = 1 +⏎2` is one valid
 statement, and `static const ok = 2 >⏎<div>…` is the joined expression's own
 error ("Missing semicolon.", at the next line), never a silent drop of that
@@ -813,63 +813,37 @@ Name sugars (`:name` for `name="…"`, `#id` and `.class` among the attributes,
 a `:` in a tag head) are a syntax module's, such as Mesh's, not core's: core
 reads those forms as Marko does ([Attributes](/language/attributes/#attributes-a-colon-and-id-or-class-after-a-space)).
 
-### Atoms: `:name` as a value
+### `:name` in an expression
 
-**Decision 156 and its addenda 1–7; [ADR 156](/design-notes/adr-atoms/).** User
-docs: [Atoms](/language/atoms/). In an
-expression position `:name` is an **atom**: a value that represents itself.
-Its runtime value is the name as a string literal on every target, so
-`mode=:strict` is `mode="strict"` and `accept=[:title, :body]` is
-`accept=["title", "body"]`. TypeScript literal typing checks and completes it.
-At runtime `:a === "a"`: the distinction lives in the source, the IR and
-contracts, and ends at lowering.
+`:name` has no meaning of its own in a `.mx` file: it is plain JavaScript, as in
+Marko. Where an expression is expected a leading `:` is a syntax error, with
+Marko's message and position: `<a b=:x/>`, `<a b=(f(:x))/>`, `${:x}` and the
+concise `a b=:x` are each "Unexpected token" at the `:`, and `<a b=x::y/>` is
+"Expected a single expression, but found `:` after it.". `::` inside a name is
+part of the name, as Marko reads it: `<a::b/>` is the tag `a::b`, and
+`<a x::y=1/>` is the attribute `x:` with the modifier `y`.
 
-| Position | Example |
-|---|---|
-| attribute value | `mode=:strict`, `x= :b`, `x = :b` (all `"b"`-valued atoms) |
-| placeholder, anywhere (raw-text bodies, tag names and shorthands included; addendum 2) | `${:strict}`, `<${:kind}>` |
-| tag and attribute arguments, default values | `<if=kind === :primary>`, `<const/x=:a/>` |
-| method-shorthand body (an attribute value; lead ruling 2026-10-05) | `that({ self }) { return self.status === :sent }` |
-| inside any expression | `[:a, :b]`, `{ k: :a }`, `f(:a)`, `x === :a`, `` `${:a}` ``, `() => :a`, `{[:a]: 1}` |
-
-A name matches `[A-Za-z_$][\w$]*(-[\w$]+)*` (`:rename-all`; a trailing `-` is not
-part of it). A `:` starts an atom only where an expression is expected, so
-`a ? b :c` stays a ternary and `(x :number) => x` a type annotation; an atom's
-own `:` is never the ternary's, so `a ? :b :c` is `a ? "b" : c`. Atoms are never
-read in `static`/`import`/`export` blocks, scriptlets, tag
-params, strings, template text, regular expressions or comments.
+**Atoms are a dialect feature.** A dialect (§13.9) that wants a value which
+represents itself (`mode=:strict` meaning `mode="strict"`) builds it with its
+own `expressionTriggers` and `valueTriggers` rows. Its hook returns a
+`StringLiteral` marked `extra.mxAtom = { span }`, and core records each
+marked literal and splices its string into `Expr.code`, so every target emits
+the string while `Expr.text` keeps the authored spelling. In the IR an attribute
+whose whole value is one atom is a `static` attribute carrying
+`atom: { kind: "atom", name, span }`; an atom nested in an expression is listed
+in `Expr.atoms` (see [the IR spec](/architecture/ir-spec/)).
 
 **Atoms in contracts.** A contract attribute declared `{ type: "atom" }`
-accepts a whole-value atom a syntax module built, or a literal list of them. An
+accepts a whole-value atom a dialect built, or a literal list of them. An
 atom where the contract says `string`, and a string where it says `atom`, are
-type errors; a member is not an atom either way. A syntax module that builds
+type errors; a member is not an atom either way. A dialect that builds
 atoms owns the rest: `values`, `pattern`, `ref` and `declares` are not core
-keys, and a syntax module may claim them (and any other key core does not
+keys, and a dialect may claim them (and any other key core does not
 know) through `contractFields`, check them in `checkContract` and `afterLower`,
 and word core's shape error through `describeAttribute`. `ctx.declare` from
-`analyze` states derived names for the module to read through `LoweredUnit`.
-Without a module that claims it, a contract key core does not know is the
+`analyze` states derived names for the dialect to read through `LoweredUnit`.
+Without a dialect that claims it, a contract key core does not know is the
 unknown-key error. See [Custom tags: the contract](/custom-tags/reference/).
-
-**Errors core owns**, each positioned at the atom: member access (`:a.length`,
-`:a[0]`), a call (`:a(1)`), a unary operator (`-:a`, `!:a`, `typeof :a`),
-spreading (`f(...:a)`, `[...:a]`) and a non-computed object key (`{:a: 1}`;
-write `{[:a]: 1}`). An atom where a binding, an assignment target or a
-shorthand property must stand (`:a = 1`, `(:a) => 1`, `{:a}`) is a positioned
-parse error naming the atom. `::name` is reserved for a future `Symbol.for`
-sugar (decision 156.5): "`::a` is reserved (decision 156)…", positioned at the
-`::`, in a tag or attribute name too (`<a ::b>`, `<a::b>`; addendum 2). Published `@mxlang/core` parses atoms
-too: it parses with the MX front end and MX's template parser (decisions 158,
-159), never a stock htmljs-parser.
-
-**IR.** An attribute whose whole value is one atom is a `static`
-attribute carrying `atom: { kind: "atom", name, span }`. An atom nested in an expression is a `StringLiteral` whose
-`extra.mxAtom` is `{ span }` and whose `Expr.atoms` lists it (see
-[the IR spec](/architecture/ir-spec/)).
-
-**Not yet:** printing and round-trip — a formatter and a `lowerSource` consumer
-that re-emits source must keep `:x` as `:x` (the IR keeps the span; no formatter
-exists yet).
 
 ### The unnamed tag
 
@@ -3741,9 +3715,9 @@ language-extension design ([design notes](/design-notes/language-extensions/));
 it is not the "L2" of §9.1, which names a custom tag's sidecar. The design pages
 stay as the argument; this section states what is.
 
-**Atoms are not rows of this table.** `:name` as a value is core today (§4)
-and moves to Mesh's dialect before the beta; until that lands it is specified
-where it is, and a table cannot express it.
+**Atoms are rows of this table.** Core reads `:name` as Marko does (§4); a
+dialect that wants atoms builds them with an expression row and a value row whose
+hooks return a `StringLiteral` marked `extra.mxAtom` (§13.9.7).
 
 #### 13.9.1 The table
 
@@ -4207,7 +4181,7 @@ such a module `async` stays an ordinary attribute, and a contract that does not
 declare it reports `` `<kind>`: unknown attribute `async` ``.
 
 **One pass, in source order.** All of a document's triggers lower in one pass
-before anything reads the tree (right after the atom conversion, before contracts
+before anything reads the tree (before contracts
 are checked), and a trigger lowers once: a second walk over the same document (the
 scratch walk that runs a custom tag's `analyze`) calls no hook twice. Order is
 source order, a tag's attributes before its body, and a trigger's own `=value`
@@ -4215,7 +4189,7 @@ before the trigger that owns it. The parsed tree stays as parsed. The lowered
 results live beside it and are what attribute, child and expression readers see,
 so `Expr.code` and `Expr.text` differ: an expression trigger's replacement is
 **printed and spliced into `code`** at the trigger's span (`&status` becomes
-`self.status`), as an atom becomes its string literal, so emitting hosts emit
+`self.status`), and an atom-marked literal's string is spliced the same way, so emitting hosts emit
 valid code, while `text` and every offset stay the authored text. The stand-in
 node the parser hands the expression parser carries `extra.mxTrigger = { id, span }`,
 and core's built-in string and identifier replacements keep it.

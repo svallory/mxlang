@@ -4,8 +4,7 @@
  * keys that say which atoms a slot allows. Core has no atom syntax and checks
  * none of these keys: what a claimed key means is this file's choice.
  *
- * Where it builds an atom (the sigil is `~`, so it never meets core's own
- * built-in lexing):
+ * Where it builds an atom (the sigil is `~`):
  *
  * - in an expression, `x=(a + ~b)` is a `StringLiteral` marked
  *   `extra.mxAtom = { span, name }` (`ctx.expression`);

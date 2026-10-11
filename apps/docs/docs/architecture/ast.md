@@ -304,7 +304,7 @@ type MxChild =
 type MxNode =
   | MxDocument | MxChild
   | MxAttribute | MxShorthand | MxSpreadAttribute | MxMethod
-  | MxParseError | MxAtom | MxTrigger
+  | MxParseError | MxTrigger
   // expression containers (§4)
   | MxExpression | MxStatements | MxPattern | MxArguments
   | MxParameterList | MxTypeArguments | MxTypeParameters;
@@ -1034,7 +1034,6 @@ interface MxExpressionContainer<N> extends Span {
   readonly outer: Span;      // the span with the position's delimiters (§3.4); equal to the span when none
   readonly node: N | null;   // the Babel payload; null when the parse failed
   readonly error: MxParseError | null;
-  readonly atoms: readonly MxAtom[];   // §4.3, empty when none
   readonly triggers?: readonly MxTrigger[];   // §4.4, present only when there are any
 }
 type MxExpression    = MxExpressionContainer<Expression>   & { readonly type: "MxExpression" };
@@ -1138,73 +1137,32 @@ normative contract in [the IR spec §4](/architecture/ir-spec/),
 | `shape` | derived from `node.type` | `expressionShape` (`lower.ts`) stays in lowering. |
 | `node` | `node` | `Expr.node` is the container's payload (§4.1a); `null` on a synthesized `Expr` (IR spec §2.2). The type is ruled `Node \| null` (Q14, decision 163); `ir.ts` on main still declares `node: Node`. While `Node` is `any` (`core.ts`) the change has no effect on any type check, so it documents intent only |
 | `span?` | the payload node's range, **not** the container's `start`/`end` | lowering writes `{ sourceStart: node.start, sourceEnd: node.end }`, the range today's `exprSpan` reads from `node.loc`; the container span includes inner whitespace and would move every `Expr.span` over `${ x }`, `( a )` or `\| a \|` (P1). For a string literal the span includes the quotes (IR spec §3.3) |
-| `atoms?` | the container's `atoms` | one IR `Atom { kind: "atom", name, span }` per `MxAtom`, absent when there are none (`ir.ts`, `Expr.atoms`) |
+| `atoms?` | (none: §4.3) | one IR `Atom { kind: "atom", name, span }` per atom-marked `StringLiteral` in the payload, absent when there are none (`ir.ts`, `Expr.atoms`) |
 | `file?` | (document level) | a container never names another file |
 
-### 4.3 `MxAtom`
+### 4.3 Atoms
 
-Decision 156: `:name` in an expression position is an atom. A container
-lists each atom found in its `source` and not inside a nested container (the
-`template` of a tag-adjacent dynamic shorthand lists none of the atoms in its
-`expressions`; decision 163 addendum 8):
+Atoms are not a parser node. The template parser lexes no atom, so `:name` in
+a `.mx` expression reads exactly as stock htmljs-parser and Marko read it
+(`<a b=:x/>` is Babel's "Unexpected token" at the `:`; `::` in a name is part
+of the name, `<a::b/>` is the tag `a::b`), and an expression container has no
+`atoms` list. A dialect builds an atom as a marked `StringLiteral`: the
+`expressionTriggers` or `valueTriggers` row hook of its syntax table (§4.4)
+returns a literal whose `value` is the name and whose `extra.mxAtom` is
+`{ span }`, the atom's own span, sigil included (`MxAtomMark`, `ir.ts`,
+public API of `@mxlang/core`). Every Babel-based consumer sees a string.
 
-```ts
-interface MxAtom extends Span { readonly type: "MxAtom"; readonly name: string }  // span covers ':' and the name
-```
+Core records each marked literal (`atomOf`, `recordAtoms`, `core/src/atom-marks.ts`)
+and what the IR makes of atoms follows from that:
 
-The Babel payload holds the atom as a `StringLiteral` whose `value` is the
-name and whose `extra.mxAtom` is `{ span }`, the atom's own span, `:`
-included (`MxAtomMark`, `ir.ts`; decision 156 addendum 1, item 1, which makes
-that node shape public API of `@mxlang/core`). Every
-Babel-based consumer sees a string. Today the template parser lexes the atom,
-reports it through `onAtom` and hands Babel a numeric stand-in of the same
-length (`0.`), and core's `convertAtoms` (`core/src/atoms.ts`) turns the
-stand-in into that `StringLiteral`; the front end builds the `StringLiteral`
-directly. `::name` is a template-parser error (`INVALID_EXPRESSION`,
-reserved, decision 156 §5; `packages/parser/src/template/PROVENANCE.md`,
-"Atoms").
-
-What the IR makes of atoms is what shipped (#342, #346, #348, #357):
-
-- `Expr.atoms?: Atom[]`, one per `MxAtom` of the container, and `Expr.code`
-  holds each as its string literal (core splices `JSON.stringify(name)` at
-  each atom's span; IR spec §4, `atoms` row).
+- `Expr.atoms?: Atom[]`, one per marked literal inside the expression, and
+  `Expr.code` holds each as its string literal (core splices
+  `JSON.stringify(name)` at each atom's span; IR spec §4, `atoms` row).
 - A whole value that is one atom (`mode=:strict`) is a `static` `Attr` with
   `atom?: Atom`, `value` the name and `valueSpan` the atom's span (`ir.ts`,
   `Attr`; IR spec §6, `static` row).
-- In `lowerSource`'s IR, such a value is a `static` `Attr` with `atom` set (`ir.ts`
-  `Attr`); nested atoms stay
-  `StringLiteral` + `extra.mxAtom`.
 
-`MxExpressionContainer.atoms` stays: lowering needs the spans to splice the
-literal into `Expr.code` and to fill `Expr.atoms`.
-
-**Where the atom lexer runs**, per container field (ruling C11 of decision
-163, amended to describe main; `PROVENANCE.md`, "Atoms", and the
-`expr.atoms = true` sites in `packages/parser/src/template/states/`):
-
-| Field | Atoms | Where main turns lexing on |
-|---|---|---|
-| `MxAttribute.value` (named, default, bound), `MxSpreadAttribute.value`, `MxShorthand.default` | yes | `ATTRIBUTE.ts` (value) |
-| `MxAttribute.args`, `MxMethod.params` | yes: one position. The `(` after an attribute name opens the arguments expression with lexing on, and htmljs learns it was a method only when `{` follows (`ATTR_STAGE.ARGUMENT`, then `BLOCK`), so method parameters lex atoms (`<div onInput(a = :b) { x }/>` reports `:b`). Intended (decision 163 addendum 1) | `ATTRIBUTE.ts` (the `(` branch) |
-| `MxMethod.body` | yes (a method body is an attribute value) | `ATTRIBUTE.ts` (the `{` branch) |
-| `MxTag.args` | yes | `OPEN_TAG.ts` (tag arguments) |
-| `MxPlaceholder.expression`, in every body mode | yes | `PLACEHOLDER.ts` |
-| `${…}` in a dynamic tag name or a tag-adjacent shorthand | yes | `TAG_NAME.ts` (the `${` branch; the tag name state also reads the shorthands) |
-| `${…}` of a template literal inside any of the above | inherited | `TEMPLATE_STRING.ts` |
-| `MxTag.var`, `MxTag.params` (defaults included) | no | — (`OPEN_TAG.ts` enters them without `atoms`) |
-| `MxTag.typeArgs`, `MxTag.typeParams`, `MxMethod.typeParams` | no | — (`ATTRIBUTE.ts` `<` branch, `OPEN_TAG.ts`: type expressions, no `atoms`) |
-| `MxModuleStatement.code`, `MxScriptlet.code` | no (TypeScript statements, decision 156 addendum 2) | — |
-
-Inside a lexed field, a `:` is an atom only where an expression is expected,
-never as TypeScript's ternary, type or optional marker (decision 156 addenda
-2 and 3; `PROVENANCE.md`, "Behaviour").
-
-```mx
-<input accept=[:title, :rename-all]/>
-```
-
-Offsets: atom `title` `[15, 21)`, atom `rename-all` `[23, 34)` (the `:` included).
+What an atom means, and which uses of one are errors, is the dialect's.
 
 ### 4.4 `MxTrigger`
 
@@ -1224,8 +1182,8 @@ interface MxTrigger extends MxNodeBase {
 ```
 
 Where it sits follows its position: an expression trigger is in the
-`triggers` of the innermost container whose source holds it (beside its
-`atoms`; the key is present only when non-empty); an attribute trigger is in
+`triggers` of the innermost container whose source holds it (the key is
+present only when non-empty); an attribute trigger is in
 the tag's `attributes`, in source order; a line trigger (a tagless concise
 line, decision 182 addendum 1) is a child of the enclosing body. The span
 covers the text and, when there is one, `=value`. A container's payload is
@@ -1576,7 +1534,7 @@ never appear in it.
 | `MxDoctype` | DocumentType |
 | `MxScriptlet`, `MxCDATA`, `MxDeclaration` | none: errors (`lower.ts` `lowerChildList`) |
 | `MxParseError` | none: a diagnostic |
-| `MxAtom` | `Expr.atoms`, `Attr.atom` (§4.3) |
+| none (a dialect's atom is a `StringLiteral` marked `extra.mxAtom`) | `Expr.atoms`, `Attr.atom` (§4.3) |
 
 ### 6.3 Gaps
 
@@ -1760,12 +1718,12 @@ change with its own goldens, if it is made.
 ## 7. Mapping from parser events
 
 htmljs-parser 5.18.0 defines 27 handlers (`[H]util/constants.d.ts:64-90`); the
-in-repo template parser adds a 28th, `onAtom` (decision 156; source
+in-repo template parser adds three, `onTrigger`, `onBlockTag` and `onFilter`,
+which fire only for a syntax table that arms them (decision 182; source
 `packages/parser/src/template/util/constants.ts` `ParserOptions`).
 
 | Event | Payload | MX node or field |
 |---|---|---|
-| `onAtom` | `Value` (range: the whole atom; `value`: its name) | one `MxAtom` in the enclosing container's `atoms`, in source order (§4.3) |
 | `onTrigger` | `Trigger { id, position, standIn, text, value? }` (range: the text, then `=value`) | one `MxTrigger` (§4.4): in the enclosing container's `triggers`, in the tag's `attributes`, or a body child |
 | `onBlockTag` | `Value` (range: the whole form; `value`: its body) | `MxBlockTag`, a body child (§4.5) |
 | `onFilter` | `Filter { name, value }` | `MxFilter`, a body child (§4.5) |
@@ -1839,21 +1797,17 @@ other decision Marko made from a tag definition moves to lowering or
 disappears. The element-shape table is the target descriptor's, with a core
 default (§3.12, ruling Q21).
 
-**Events the MX patch adds or changes.** One added: `onAtom` (atoms,
-decision 156; `packages/parser/src/template/PROVENANCE.md`, "Atoms"). The
-patch
-(`patches/htmljs-parser@5.18.0.patch`, hunks at `dist/index.js` 311, 1147,
-1382, 1432, mirrored in `index.mjs`; the same rules live as source in
+**Events the MX patch changes.** None is added; the patch
+(`patches/htmljs-parser@5.18.0.patch`, the same rules as source in
 `packages/parser/src/template/states/ATTRIBUTE.ts` `ATTRIBUTE` and
-`packages/parser/src/template/states/EXPRESSION.ts` `EXPRESSION`, `lookAheadForOperator`,
-`isIdentStartCode`) changes **where `onAttrValue` ends**:
+`packages/parser/src/template/states/EXPRESSION.ts` `EXPRESSION`,
+`lookAheadForOperator`) changes **where `onAttrValue` ends**:
 it marks named-attribute and spread values (`expr.attrValue`) and skips `??`
 and `?.` when counting ternary depth there; a spaced `:` or `.` after a value
-continues it, as in stock. Atom lexing lives in `EXPRESSION` too
-(`lexAtom`), turned on per expression by the states listed in §4.3, and
-reported through `onAtom`; while it is on, `read()` returns the atom's numeric
-stand-in, so a front end that slices `source` for an expression's text must
-not use `read()` for it.
+continues it, as in stock. `read()` returns the source, except where a syntax
+table's trigger was lexed: there it returns the trigger's same-length
+stand-in (§4.4), so a front end that slices `source` for an expression's text
+must not use `read()` for it.
 
 ## 8. Design choices and alternatives
 
@@ -1958,7 +1912,7 @@ rulings, with where the text now lives:
 |---|---|---|
 | Q1 | follow decision 146 addendum 4 as merged; `MxShorthand.operator`, `default` only in attribute position | §3.6 |
 | Q2 | no raw text mode | §3.12 (unchanged) |
-| Q3, Q16 | describe atoms as shipped (`Expr.atoms`, `Attr.atom`, `extra.mxAtom = { span }`); keep `MxExpressionContainer.atoms` | §4.3, §6.2 |
+| Q3, Q16 | describe atoms as shipped (`Expr.atoms`, `Attr.atom`, `extra.mxAtom = { span }`); a container has no `atoms` list | §4.3, §6.2 |
 | Q4 | `InputInterface` split in lowering, by payload type; `export type Input` stays an `Export` | §3.10, §6.1 |
 | Q5 | AST represents `server`/`client`; they route like tags; html's `server` stays a `DelegatedTag` | §6.1, §6.2, §6.4 |
 | Q6 | `MxText` span = whole `onText` range, `valueSpan` = trimmed range | §3.8 |
@@ -2025,7 +1979,6 @@ not listed.
 | `MxReturn` | node | §3.14 | 1040 |
 | `MxExpressionContainer` | generic base | §4.1 | 1079 |
 | `MxExpression` | node (container) | §4.1 | 1086 |
-| `MxAtom` | node | §4.3 | 1197 |
 | `MxTrigger` | node | §4.4 | 1265 |
 | `MxRegisteredNode` | registered node (typed by its key) | §4.4a | 1323 |
 | `MxValueNode`, `MxString` | registered value node (typed by its key) | §4.4b | 1359 |

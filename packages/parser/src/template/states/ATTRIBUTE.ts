@@ -17,7 +17,6 @@ import {
 import type { CompiledTrigger } from "../syntax.ts";
 import * as CODE from "../util/codes.ts";
 import * as ErrorCode from "../util/error-code.ts";
-import { rejectReservedName } from "./EXPRESSION.ts";
 import * as ATTR_STAGE from "./attr-stage.ts";
 import * as TAG_STAGE from "./tag-stage.ts";
 
@@ -155,7 +154,7 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
         this.pos++; // skip (
         const expr = this.enterState(STATE.EXPRESSION);
         expr.shouldTerminate = matchesCloseParen;
-        expr.atoms = true; // MX: decision 156
+        expr.triggers = true; // MX: decision 182
         return;
       } else if (
         code === CODE.OPEN_ANGLE_BRACKET &&
@@ -177,8 +176,8 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
         const body = this.enterState(STATE.EXPRESSION);
         body.shouldTerminate = matchesCloseCurlyBrace;
         // MX: a method-shorthand body is an attribute value (it lowers to a
-        // function), so it lexes atoms (decision 156; lead ruling 2026-10-05).
-        body.atoms = true;
+        // function), so it arms expression triggers (decision 182).
+        body.triggers = true;
         return;
       } else if (attr.stage === ATTR_STAGE.UNKNOWN) {
         if (code === CODE.OPEN_ANGLE_BRACKET) {
@@ -259,8 +258,6 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
         }
 
         attr.name = name;
-        // MX (decision 156 addendum 2): `::` is reserved in an attribute name.
-        if (rejectReservedName(this, name)) return;
 
         // With a pending `async` this name is emitted later, once we know
         // which attribute it belongs to.
@@ -464,19 +461,16 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
  * Enters an attribute value's `EXPRESSION` at the current position.
  * `attrValue` (MX) arms the after-value rule for a named attribute's value.
  * A default value has it off: only a dialect's `terminatesValue` trigger may
- * end one early, and only when the value is a single atom (`defaultAtom`) or
- * a value row claims it whole (`claimDefault`).
+ * end one early, and only when a value row claims it whole
+ * (`claimDefault`).
  */
 function enterAttrValue(parser: Parser, attrValue: boolean, bound = false) {
   const expr = parser.enterState(STATE.EXPRESSION);
   expr.attrValue = attrValue;
-  // A loaded expression trigger on `:` replaces built-in atoms, and with
-  // them this exemption (the coexistence rule; 182 addendum 1 item 3).
-  expr.defaultAtom = !attrValue && parser.syntax.builtInAtoms;
-  // The table-driven exemption: a default `=value` a value row claims.
+  // The exemption: a default `=value` a value row claims.
   expr.claimDefault =
     !attrValue && !bound && parser.syntax.value !== null;
-  expr.atoms = true; // MX: decision 156
+  expr.triggers = true; // MX: decision 182
   expr.operators = true;
   expr.terminatedByWhitespace = true;
   expr.shouldTerminate = parser.isConcise

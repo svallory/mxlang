@@ -482,8 +482,9 @@ export interface Ctx {
    */
   unnamedTagsResolved?: boolean;
   /**
-   * Every atom in the tree, in source order (decision 156), recorded by
-   * `convertAtoms`; `expr()` splices each one inside an expression's span.
+   * Every atom a dialect's trigger marked (`extra.mxAtom`), in source order,
+   * recorded by `recordAtoms`; `expr()` splices each one inside an
+   * expression's span.
    */
   atoms?: Atom[];
   /**
@@ -492,8 +493,8 @@ export interface Ctx {
    * atoms. Set by the trigger pass from the document's registered syntax.
    */
   triggerSplices?: { start: number; end: number; text: string }[];
-  /** Set by `lower` once the whole template's atoms are converted. */
-  atomsConverted?: boolean;
+  /** Set by `lower` once the whole template's atoms are recorded. */
+  atomsRecorded?: boolean;
   /**
    * Every `/var` a tag call has bound so far, and where.
    *
@@ -865,9 +866,10 @@ export function expr(ctx: Ctx, node: Node): string {
     );
   }
 
-  // Decision 156: each atom inside the span becomes its string literal. The
-  // slice is the authored text, so the AST-level conversion alone would leave
-  // `:a` in the output; the splice is what makes `code` carry `"a"`.
+  // Each atom a dialect marked inside the span becomes its string literal.
+  // The slice is the authored text, so the marked node alone would leave the
+  // authored atom (`~a` in a dialect spelling it so) in the output; the
+  // splice is what makes `code` carry `"a"`.
   const atoms = atomSplices(ctx, start, end);
   if (ctx.bindings.size === 0) {
     return atoms.length === 0
@@ -1037,8 +1039,8 @@ function rewriteReferencesSource(
     types.program([types.expressionStatement(node as Node)]),
   );
 
-  // Atoms are spliced together with the binding rewrites (decision 156): an
-  // atom is never an identifier, so the two never overlap.
+  // Atoms are spliced together with the binding rewrites: an atom is never
+  // an identifier, so the two never overlap.
   const rewrites: Splice[] = [...atoms];
   // Set only when a reference that *would* be rewritten has no position to
   // splice at — never cleared, so one such reference anywhere in the tree

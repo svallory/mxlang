@@ -5894,7 +5894,6 @@ describe("hybrid attributes, MX-shaped (PR 4 slice 4)", () => {
     ["an event's string and boolean forms", "<div onClick onclick='x()'/>"],
     ["spreads", "<div ...s a=1/><Foo ...t/>"],
     ["the default value", "<Foo=1/><Foo=x b=2/>"],
-    ["a whole-value atom", "<Foo mode=:strict/>"],
     ["an if chain", "<if=a>A</if><else-if=b>B</else-if><else>C</else>"],
     ["a for of with a string by", '<for|x| of=xs by="id">${x}</for>'],
     ["a for range", "<for|i| from=0 to=3 step=1>${i}</for>"],

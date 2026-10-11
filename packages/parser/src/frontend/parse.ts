@@ -373,8 +373,6 @@ class FrontEnd {
   readonly errors: MxParseError[] = [];
   templateError: MxParseError | undefined;
   readonly stack: TagBuilder[] = [];
-  /** Atoms announced but not yet claimed by a container, in source order (local offsets). */
-  atoms: { start: number; end: number; name: string }[] = [];
   /** Expression triggers announced but not yet claimed by a container, in source order (local offsets). */
   triggers: (SubParseTrigger & { position: "expression" })[] = [];
   /** Nodes the caller's `claim` returned: kept by identity in the finished tree. */
@@ -408,7 +406,6 @@ class FrontEnd {
   run(): void {
     const handlers = {
       onError: (e: Ranges.Error) => this.onError(e),
-      onAtom: (e: Ranges.Value) => this.onAtom(e),
       onTrigger: (e: Ranges.Trigger) => this.onTrigger(e),
       onBlockTag: (e: Ranges.Value) => this.onValueNode("MxBlockTag", e),
       onFilter: (e: Ranges.Filter) => this.onFilter(e),
@@ -628,13 +625,13 @@ class FrontEnd {
     if (top && this.at(local) > top._reached) top._reached = this.at(local);
   }
 
-  // --- containers and atoms ------------------------------------------------
+  // --- containers ----------------------------------------------------------
 
   /**
    * An expression container over `value` (ast §4.1): span and source are the
    * value range, `outer` the range with the position's delimiters. It claims
-   * the pending atoms inside its span, so a nested container built first
-   * keeps its own (decision 163 addendum 8: innermost only).
+   * the pending expression triggers inside its span, so a nested container
+   * built first keeps its own (innermost only).
    */
   container(
     type: ContainerKind,
@@ -643,19 +640,6 @@ class FrontEnd {
     hints: "attr-value" | null = null,
     subKind: ContainerKind | "MxTemplateLiteral-static" | null = null,
   ): Builder {
-    const atoms: Builder[] = [];
-    const rest: typeof this.atoms = [];
-    for (const atom of this.atoms) {
-      if (atom.start >= value.start && atom.end <= value.end) {
-        atoms.push({
-          type: "MxAtom",
-          start: this.at(atom.start),
-          end: this.at(atom.end),
-          name: atom.name,
-        });
-      } else rest.push(atom);
-    }
-    this.atoms = rest;
     const triggers: Builder[] = [];
     const claimed: SubParseTrigger[] = [];
     if (this.triggers.length > 0) {
@@ -684,11 +668,6 @@ class FrontEnd {
     // The sub-parse (ast §4.1): the container's position carries the fragment
     // base, so the payload's offsets are file-absolute at creation.
     const position = this.positionAt(value.start);
-    const subAtoms = atoms.map((atom: Builder) => ({
-      start: (atom.start as number) - start,
-      end: (atom.end as number) - start,
-      name: atom.name as string,
-    }));
     const subTriggers = claimed.map((trigger) => ({
       ...trigger,
       start: this.at(trigger.start) - start,
@@ -704,7 +683,6 @@ class FrontEnd {
       : subParse(
           (subKind ?? type) as ContainerKind,
           text,
-          subAtoms,
           { offset: start, line: position.line, column: position.column },
           end,
           subTriggers,
@@ -730,7 +708,7 @@ class FrontEnd {
         // appended).
         error = {
           ...error,
-          message: `${error.message}${error.message.endsWith(".") ? "" : "."}${wrappedAttrValueHint(text, { offset: start, line: position.line, column: position.column }, end, subAtoms, subTriggers)}`,
+          message: `${error.message}${error.message.endsWith(".") ? "" : "."}${wrappedAttrValueHint(text, { offset: start, line: position.line, column: position.column }, end, subTriggers)}`,
         };
       }
       this.errors.push(error);
@@ -741,7 +719,6 @@ class FrontEnd {
       end,
       source: text,
       outer: this.span(outer),
-      atoms,
       ...(triggers.length > 0 ? { triggers } : {}),
       node: result.node,
       error,
@@ -792,13 +769,7 @@ class FrontEnd {
         start?: number;
         end?: number;
       } | null;
-      const fromAtom = container.atoms.some(
-        (atom: { start: number; end: number }) =>
-          parsed !== null &&
-          atom.start === parsed.start &&
-          atom.end === parsed.end,
-      );
-      if (parsed?.type === "StringLiteral" && !fromAtom) {
+      if (parsed?.type === "StringLiteral") {
         // Marko's quirk: a `${'str'}` name is a template literal with one
         // quasi, not the string itself (`parseTemplateString`).
         const position = this.positionAt(only.value.start);
@@ -823,14 +794,6 @@ class FrontEnd {
       null,
       "MxTemplateLiteral",
     );
-  }
-
-  onAtom(event: Ranges.Value): void {
-    this.atoms.push({
-      start: event.start,
-      end: event.end,
-      name: this.slice(event.value),
-    });
   }
 
   /**
@@ -876,7 +839,7 @@ class FrontEnd {
    * `onTrigger` (decision 182): an expression trigger waits for its
    * container; an attribute trigger joins its tag's attributes; a line
    * trigger is a child of the enclosing body. A value's container is built
-   * now, after the atoms and triggers inside it were announced.
+   * now, after the expression triggers inside it were announced.
    */
   onTrigger(event: Ranges.Trigger): void {
     const text = this.slice(event.text);
@@ -1381,7 +1344,7 @@ class FrontEnd {
         );
       }
     } else {
-      // Inner containers first: each atom belongs to the innermost one.
+      // Inner containers first: each trigger belongs to the innermost one.
       const expressions = template.expressions.map((e) =>
         this.container("MxExpression", e.value, e),
       );
@@ -1531,7 +1494,7 @@ class FrontEnd {
       current.args = this.container("MxArguments", event.value, event);
       current.end = this.at(event.end);
     } else {
-      // Arguments after a trigger's shorthand are kept on the node, atoms
+      // Arguments after a trigger's shorthand are kept on the node, triggers
       // included (ast §3.6 rule 6).
       current.args = this.container("MxArguments", event.value, event);
     }
@@ -1553,7 +1516,7 @@ class FrontEnd {
       current.value = value;
       current.end = value.end;
       // A node a value row's claim returned is the value: the container
-      // above took the atoms and triggers announced inside it, and is
+      // above took the triggers announced inside it, and is
       // dropped. The node keeps its own fields; the front end sets only
       // its offsets.
       const claimed = event.claim;

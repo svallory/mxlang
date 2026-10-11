@@ -107,7 +107,7 @@ Five facts worth knowing before editing it:
   site compiles or parses a template with `@marko/compiler`, and since slice
   S3a no production path builds its taglib lookup either (the `defaultTag`
   judge reads core's tag table); slice S3b deleted `buildMarkoLookup`, the
-  last way to build one. Babel and the error kit are core's own since PR 6 slice S1. The error-path re-lexes (`stock-parser.ts` `lexedAtoms`/
+  last way to build one. Babel and the error kit are core's own since PR 6 slice S1. The error-path re-lexes (`stock-parser.ts`
   `tagParamError`, `close-tag-opener.ts`) and
   `shorthand.ts`'s `isShorthandWord` probe import MX's template lexer,
   `@mxlang/parser/lexer` (typed by its `public.d.ts`), from source and in the
@@ -533,11 +533,11 @@ Five facts worth knowing before editing it:
   document themselves.
   **Dialect hooks (decision 182 addendum 5; `src/triggers.ts`).** `compileSource` and
   `parseFragment` register the document's syntax by every body array
-  (`registerSyntax`), and `lower`/`lowerChildren` run `lowerTriggers` right
-  after `convertAtoms`: hooks in source order (a tag's attributes before its
+  (`registerSyntax`), and `lower`/`lowerChildren` run `lowerTriggers`
+  first: hooks in source order (a tag's attributes before its
   body, a value's triggers before its owner), stand-ins replaced inside the
   payload (each replacement's printed text spliced into `code` by `expr()`
-  through `ctx.triggerSplices`, per document, as atoms are). An attribute or
+  through `ctx.triggerSplices`, per document). An attribute or
   line trigger node (`MxTrigger`, or a claimed dialect node) stays in the
   tree as parsed; its lowered `MxAttribute`/`MxTag` is memoized per node
   (`attributeResults`/`lineResults`), and `attributesWithTriggers`/
@@ -615,13 +615,13 @@ Five facts worth knowing before editing it:
   `src/fixtures/syntax/member-fixture.ts` and the contract-claim dialect in
   `src/fixtures/syntax/declares-fixture.ts`, plus small row tables defined in
   the test. Never import a Mesh module or copy a Mesh corpus into core.
-  Until atoms leave core, a loaded row on a character
-  replaces core's handling of it (parser:
-  `CompiledSyntax.builtInAtoms`; core:
-  `convertAtoms` skips a stand-in marked `extra.mxTrigger`, and re-runs after
-  the trigger pass so a dialect's `extra.mxAtom` literal is recorded and
-  spliced as an atom). `src/fixtures/syntax/atom-fixture.ts` is the fixture
-  that builds atoms and claims `values`, `pattern`, `ref` and `declares`.
+  Core lexes no atom: `:name` reads as Marko reads it (`src/stock-colon.test.ts`).
+  A dialect builds an atom through its triggers, returning a `StringLiteral`
+  marked `extra.mxAtom = { span }`; `recordAtoms`
+  (`src/atom-marks.ts`) runs after the trigger pass and records each marked
+  literal on `ctx.atoms`, which `expr()` splices as its string.
+  `src/fixtures/syntax/atom-fixture.ts` (sigil `~`) is the fixture that builds
+  atoms and claims `values`, `pattern`, `ref` and `declares`.
   **Contract keys in a dialect: `afterLower(unit)` and `contractFields`.** A module's `afterLower` gets `LoweredUnit`
   (`src/lowered-unit.ts`), never the `Ctx`: `lowerTriggers` appends
   `ctx => module.afterLower(loweredUnitOf(ctx))` to `ctx.afterLower`. The
@@ -1337,32 +1337,29 @@ stable version.
   own source cannot be imported by one (it uses parameter properties), which is
   why `own-core` carries a stand-in `core-copy.ts`.
 
-## Atoms (decision 156)
+## Atoms (a dialect feature)
 
+- **Core lexes no atom.** `:name` in a `.mx` file is plain JavaScript, as in
+  Marko (`src/stock-colon.test.ts` pins Marko's errors and positions). A
+  dialect builds atoms with an expression or value trigger whose hook returns
+  a `StringLiteral` marked `extra.mxAtom = { span }` (`MxAtomMark`).
 - **`expr()` emits the authored source slice, not the printed AST; an
   AST-level rewrite must also splice into the slice through
   `rewriteReferencesSource`.** The slice is what keeps TypeScript type
-  arguments (Marko drops them from the AST). `src/atoms.ts` converts each atom
-  stand-in to a `StringLiteral` in the tree, and `expr()` splices the same
-  `"name"` at each atom's span on both paths (no bindings: `spliceSource`;
-  bindings: added to the binding rewrites). Converting the node alone leaves
-  `:a` in `Expr.code`, so every host and the virtual code would emit it.
-- **The parser hands Babel a same-length numeric stand-in** (`:a` is `0.`),
-  recognised by `source[start] === ":"`. `convertAtoms` runs from `lower` and
-  from an external `lowerChildren` before `resolveUnnamedTags`; `exprOf`
-  asserts no stand-in survives (`assertNoStandIn`). A stand-in reaching an
-  emitter would print as a number, silently.
-- **A whole-value atom is a `static` attr with `atom`**, so no emitter changed.
-  Nested atoms
-  are `Expr.atoms`; `mappedExpr` maps each one to its literal. Hosts mapping an
-  expression should call `mappedExpr(expr)`, not `mapped(expr.code, expr.span)`.
-- **No stock-parser path.** Core parses with the MX front end (port PR 5), so
-  a stock `htmljs-parser` never lexes MX input; decision 151's stock-parser
-  and "atoms need the MX parser" errors were deleted with it.
+  arguments (Marko drops them from the AST). `recordAtoms`
+  (`src/atom-marks.ts`) records every marked literal on `ctx.atoms` after the
+  trigger pass, and `expr()` splices the same `"name"` at each atom's span on
+  both paths (no bindings: `spliceSource`; bindings: added to the binding
+  rewrites). Without the splice the authored sigil would stay in
+  `Expr.code`, and every host and the virtual code would emit it.
+- **A whole-value atom is a `static` attr with `atom`** (`atomOf`), so no
+  emitter changed. Nested atoms are `Expr.atoms` (`atomsIn`); `mappedExpr`
+  maps each one to its literal. Hosts mapping an expression should call
+  `mappedExpr(expr)`, not `mapped(expr.code, expr.span)`.
 - **Core has no atom contract layer.** `transformCustomTag` records a
   `ContractFact` (`src/contract-facts.ts`: definition, call, authored
   ancestor nodes) per call in `ctx.contractFacts`, and `ctx.declare` from
-  `analyze` fills `ctx.contractDerived`. A syntax module reads both through
+  `analyze` fills `ctx.contractDerived`. A dialect reads both through
   `LoweredUnit` in its `afterLower`; core checks no `values`, `pattern`,
   `ref` or `declares`. A call's own atom-vs-string shape check stays in
   `validateAttributes` (`checkAtomAttr`).

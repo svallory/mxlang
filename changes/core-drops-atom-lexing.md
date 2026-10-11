@@ -1,0 +1,6 @@
+---
+packages: [core, parser, babel, parse-differential, stock-marko, tsc, typescript-plugin, html, angular, astro, hono, preact, react, solid]
+kind: Removed
+---
+
+**Breaking:** core has no atom syntax. `:x` in a `.mx` file is plain JavaScript, as in Marko: `<a b=:x/>`, `<a b=(f(:x))/>`, `${:x}` and the concise `a b=:x` are Marko's "Unexpected token" at the `:`, and `<a b=x::y/>` is "Expected a single expression, but found `:` after it.". `::` is no longer reserved: inside a name it is part of the name, as Marko reads it (`<a::b/>` is the tag `a::b`, `<a x::y=1/>` the attribute `x:` with the modifier `y`). A dialect builds atoms through its triggers: an `expressionTriggers` or `valueTriggers` row whose hook returns a `StringLiteral` marked `extra.mxAtom = { span }`; core records it, splices its string into `Expr.code`, and lowers a whole-value atom to a `static` attribute with `atom`, as before. Removed: the template parser's `onAtom` handler option and its `Atom` event, and the `MxAtom` node type (`@mxlang/babel`); the "`:a` is an atom" misuse errors, the "`::a` is reserved" error and the two hints about the `:` TypeScript owns. Kept: the `Atom` IR kind, `Expr.atoms`, `MxAtomMark`, `extra.mxAtom` and the `type: "atom"` contract shape check.

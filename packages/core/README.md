@@ -627,9 +627,12 @@ or parameter properties. A tag built from a tagless line carries
 
 Core has no name sugars: on the `.mx` default row a colon in a tag head, a
 spaced ` :b` and a spaced `#id`/`.class` read as stock Marko reads them, so a
-dialect that wants them adds its own rows. Until atoms leave core's own
-grammar, core still handles them; a loaded row on `:` in an expression
-replaces core's built-in atom handling.
+dialect that wants them adds its own rows. Core has no atoms either: `:name`
+in an expression is plain JavaScript, as in Marko. A dialect builds an atom
+with an expression or value trigger whose hook returns a `StringLiteral`
+marked `extra.mxAtom = { span }`; core records it, splices its string
+into `Expr.code`, and lowers a whole-value atom to a `static` attribute with
+`atom`.
 
 ### Contract checks in a dialect: `contractFields`, `checkContract` and `afterLower(unit)`
 

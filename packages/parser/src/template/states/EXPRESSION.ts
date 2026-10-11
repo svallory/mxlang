@@ -7,7 +7,6 @@ import {
   isWordCode,
   type Meta,
   Parser,
-  type Range,
   STATE,
   type StateDefinition,
   wordWidthAt,
@@ -26,31 +25,25 @@ export interface ExpressionMeta extends Meta {
   /** MX: the expression is a named attribute's (or spread's) value, which a `terminatesValue` trigger may end. */
   attrValue: boolean;
   /**
-   * MX (decision 146 addendum 5): the expression is a default attribute's
-   * value, which a `terminatesValue` trigger ends only when it is one single
-   * atom: an atom takes no member access.
-   */
-  defaultAtom: boolean;
-  /**
    * MX: the expression is a default attribute's `=value` and the table has
    * value rows: a value one of them claims whole (the text so far) ends
-   * before a terminating attribute trigger, as a single atom does.
+   * before a terminating attribute trigger.
    */
   claimDefault: boolean;
   /**
-   * MX (decision 156): `:name` here is an atom where an expression is
-   * expected. Set for attribute values, spreads and arguments, tag
-   * arguments, placeholders, method-shorthand bodies (an attribute value,
-   * lead ruling 2026-10-05) and the `${}` of a template inside one of those;
-   * never for statement tags or scriptlets.
+   * MX (decision 182): a syntax table's expression triggers are armed here
+   * where an expression is expected. Set for attribute values, spreads and
+   * arguments, tag arguments, placeholders, method-shorthand bodies (an
+   * attribute value) and the `${}` of a template inside one of those; never
+   * for statement tags or scriptlets.
    */
-  atoms: boolean;
+  triggers: boolean;
   /**
-   * MX: where the last atom, or expression trigger (decision 182), lexed in
-   * this expression ends (-1: none). Its text is an operand, never a keyword.
+   * MX: where the last expression trigger (decision 182) lexed in this
+   * expression ends (-1: none). Its text is an operand, never a keyword.
    */
   atomEnd: number;
-  /** MX: the comments read so far, which atom lexing looks behind past. */
+  /** MX: the comments read so far, which trigger lexing looks behind past. */
   comments: Meta[] | undefined;
   /** MX: where the last regular expression literal ended. */
   regexEnd: number;
@@ -120,9 +113,8 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
       shouldTerminate,
       operators: false,
       attrValue: false,
-      defaultAtom: false,
       claimDefault: false,
-      atoms: false,
+      triggers: false,
       atomEnd: -1,
       comments: undefined,
       regexEnd: -1,
@@ -177,10 +169,10 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
 
       // MX (decision 182): a syntax-table expression trigger, armed by its
       // first character where an operand is expected, in the expressions
-      // that lex atoms. The default row has no trigger set.
+      // that arm triggers. The default row has no trigger set.
       if (
         this.syntax.expression !== null &&
-        expression.atoms &&
+        expression.triggers &&
         lexTrigger(this, expression, data)
       ) {
         if (this.pos > maxPos) return; // an error was reported
@@ -268,17 +260,6 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
           this.pos++;
           break;
         case CODE.COLON:
-          // MX: an atom's `:` is not a ternary's, so it is consumed first.
-          // A loaded expression trigger on `:` replaces atom lexing (the
-          // coexistence rule); a `:` it declined is the ternary's or a type's.
-          if (
-            expression.atoms &&
-            this.syntax.builtInAtoms &&
-            lexAtom(this, expression, data)
-          ) {
-            if (this.pos > maxPos) return; // `::` was reported
-            continue;
-          }
           if (expression.operators && !expression.groupStack.length) {
             if (expression.ternaryDepth) {
               expression.ternaryDepth--;
@@ -480,7 +461,7 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
   },
 
   return(child, expression) {
-    if (expression.atoms) {
+    if (expression.triggers) {
       if (child.state === STATE.REGULAR_EXPRESSION) {
         expression.regexEnd = child.end;
       } else if (
@@ -687,28 +668,10 @@ function lookBehindForOperator(
 }
 
 /**
- * MX (decision 146 addendum 5): a default attribute's value that is exactly
- * one atom so far (`=:Customer`, not `=:a + :b` or `=:a.b`), with only
- * whitespace between it and `pos`.
- */
-function isSingleAtomDefault(
-  expression: ExpressionMeta,
-  data: string,
-  pos: number,
-): boolean {
-  return (
-    expression.defaultAtom &&
-    data.charCodeAt(expression.start) === CODE.COLON &&
-    expression.atomEnd === atomNameEnd(data, expression.start + 1) &&
-    lookAheadWhile(isWhitespaceCode, data, expression.atomEnd) === pos
-  );
-}
-
-/**
  * MX: a default attribute's value that a value row claims whole so far
  * (`=:List` under a row for `:List`), with only whitespace between it and
- * `pos`. The table-driven form of the single-atom exemption: the value is
- * one claimed node, so what follows is the next attribute.
+ * `pos`: the value is one claimed node, so what follows is the next
+ * attribute.
  */
 function isClaimedDefault(
   expression: ExpressionMeta,
@@ -726,9 +689,8 @@ function isClaimedDefault(
 /**
  * MX: whether an attribute value may end at `pos`, the start of the next
  * token after whitespace: a named attribute's (or spread's) value, or a
- * single-atom default value (decision 146 addendum 5) or a default value a
- * value row claims whole, with no `?` open (a ` :x` there is the
- * ternary's). The guard of the syntax table's `terminatesValue`
+ * default value a value row claims whole, with no `?` open (a ` :x` there
+ * is the ternary's). The guard of the syntax table's `terminatesValue`
  * (decision 182).
  */
 function valueMayEndAt(
@@ -739,9 +701,7 @@ function valueMayEndAt(
 ): boolean {
   return (
     !expression.ternaryDepth &&
-    (expression.attrValue ||
-      isSingleAtomDefault(expression, data, pos) ||
-      isClaimedDefault(expression, data, pos, parser))
+    (expression.attrValue || isClaimedDefault(expression, data, pos, parser))
   );
 }
 
@@ -881,7 +841,7 @@ function lookBehindForKeyword(
   pos: number,
   keywords: readonly string[],
 ) {
-  // MX: an atom's own name (`:delete`) is not an operator keyword.
+  // MX: an expression trigger's own text (`:delete`) is not an operator keyword.
   if (pos + 1 === expression.atomEnd) return -1;
   for (const keyword of keywords) {
     const keywordPos = lookBehindFor(data, pos, keyword);
@@ -928,17 +888,9 @@ function isDigitCode(code: number) {
   return code >= CODE.NUMBER_0 && code <= CODE.NUMBER_9;
 }
 
-function isIdentStartCode(code: number) {
-  return (
-    (code >= CODE.UPPER_A && code <= CODE.UPPER_Z) ||
-    (code >= CODE.LOWER_A && code <= CODE.LOWER_Z) ||
-    code === CODE.DOLLAR ||
-    code === CODE.UNDERSCORE
-  );
-}
-
-// MX (decision 156): words after which an expression is expected.
-const atomKeywords = [
+// MX (decision 182): words after which an expression is expected, so an
+// expression trigger may follow them (`typeof &a`, `return :b`).
+const operandKeywords = [
   "await",
   "case",
   "delete",
@@ -957,64 +909,14 @@ const atomKeywords = [
 ] as const;
 
 /**
- * MX (decision 156), at a `:`: lexes `::name` (reserved, reported through
- * `onError`) or, where an expression is expected, an atom `:name`, recorded
- * on the parser and announced through `onAtom`. Returns whether it consumed
- * the `:`.
- */
-function lexAtom(
-  parser: Parser,
-  expression: ExpressionMeta,
-  data: string,
-): boolean {
-  const start = parser.pos;
-  if (data.charCodeAt(start + 1) === CODE.COLON) {
-    const end = atomNameEnd(data, start + 2);
-    const name = data.slice(start + 2, end);
-    parser.emitError(
-      { start, end },
-      ErrorCode.INVALID_EXPRESSION,
-      reservedMessage(name),
-    );
-    return true;
-  }
-
-  const end = atomNameEnd(data, start + 1);
-  if (
-    end === start + 1 ||
-    // A non-ASCII letter right after the name (`:aé`, or `:a-é`, which
-    // would silently read as subtraction) is not part of it, and a stand-in
-    // there would reach Babel's message; leave `:` to Babel.
-    data.charCodeAt(end) >= 0x80 ||
-    (data.charCodeAt(end) === CODE.HYPHEN &&
-      data.charCodeAt(end + 1) >= 0x80) ||
-    !expectsExpression(expression, data, start)
-  ) {
-    return false;
-  }
-
-  const { atoms } = parser;
-  const last = atoms[atoms.length - 1];
-  // Defensive: no state rewinds `pos` into an expression today (280k fuzzed
-  // inputs never re-lexed one), but a re-lex must not record an atom twice.
-  if (!last || last.start < start) {
-    atoms.push({ start, end });
-    parser.options.onAtom?.({ start, end, value: { start: start + 1, end } });
-  }
-  expression.atomEnd = end;
-  parser.pos = end;
-  return true;
-}
-
-/**
  * MX (decision 182): at an armed character, lexes an expression trigger when
  * its matcher matches and an operand is expected here: never inside a word,
  * never continuing a punctuator of the same character (`a &&b` is a logical
- * and, not `&` and `&b`), and only where `expectsExpression` holds, the atom
- * rule, or right after a ternary's `?` (below). It declines, silently, when
- * the text after the match would continue the token (`continuesToken`,
+ * and, not `&` and `&b`), and only where `expectsExpression` holds, or right
+ * after a ternary's `?` (below). It declines, silently, when the text after
+ * the match would continue the token (`continuesToken`,
  * `stopsShortOfToken`): the character is then lexed as if no trigger were
- * armed, as the atom rule declines `:aé`. Records the span for `read`,
+ * armed (`:aé` under an ASCII matcher). Records the span for `read`,
  * announces it through `onTrigger`, and returns whether it consumed it.
  */
 function lexTrigger(
@@ -1034,8 +936,8 @@ function lexTrigger(
   }
   // A `?` before the trigger is a ternary's (`c?&a:&b`): TypeScript's
   // optional marker is a `?` followed by `:` (`a?:T`, `a? :T`), so the
-  // bypass never applies to a trigger armed on `:`, where the atom rule
-  // (`expectsExpression`) alone decides, as it does for atoms.
+  // bypass never applies to a trigger armed on `:`, where
+  // `expectsExpression` alone decides.
   if (
     !(
       data.charCodeAt(start) !== CODE.COLON &&
@@ -1049,7 +951,7 @@ function lexTrigger(
   // The stand-in must end where the trigger does: text that continues the
   // token (`&façade` matched as `&fa` by an ASCII matcher, or `0` then `.`
   // for a one-character number stand-in) would merge into it, so the
-  // trigger declines and the text stays source, as `:aé` stays for atoms.
+  // trigger declines and the text stays source.
   if (
     trigger.standIn !== "keep" &&
     (continuesToken(data, start, end, trigger.standIn) > 0 ||
@@ -1139,39 +1041,9 @@ function continuesToken(
     : 0;
 }
 
-/** MX (decision 156): the error for the reserved `::name` token. */
-export function reservedMessage(name: string) {
-  return `\`::${name}\` is reserved (decision 156): \`::\` will be the Symbol.for sugar; write \`:${name || "name"}\` for an atom`;
-}
-
-/**
- * MX (decision 156): reports a `::` in a tag or attribute name's static
- * text, if any. Only `range` is read, one character past each `:`; never a
- * scan to the end of the file (review round 5, R1).
- */
-export function rejectReservedName(parser: Parser, range: Range): boolean {
-  const { data } = parser;
-  for (let at = range.start; at + 1 < range.end; at++) {
-    if (
-      data.charCodeAt(at) === CODE.COLON &&
-      data.charCodeAt(at + 1) === CODE.COLON
-    ) {
-      // The name ends at the static piece's end (`<a::b${x}>` is `::b`).
-      const end = Math.min(atomNameEnd(data, at + 2), range.end);
-      parser.emitError(
-        { start: at, end },
-        ErrorCode.INVALID_EXPRESSION,
-        reservedMessage(data.slice(at + 2, end)),
-      );
-      return true;
-    }
-  }
-  return false;
-}
-
 /**
  * Whether the word ending at `end` (inclusive) is an operator keyword after
- * which an expression is expected. Never an atom's own name (`:delete :b`,
+ * which an expression is expected. Never a trigger's own text (`:delete :b`,
  * `:foo-new :b`), a member name (`a.new`), or a contextual keyword used as an
  * identifier: `of` only after an operand (`for (x of …)`), `yield`/`await`
  * not after `?`, `:`, `,` or `(` (`c ? of :b`, `c ? yield :b`).
@@ -1191,7 +1063,7 @@ function isOperatorWord(
     return false;
   }
   const word = data.slice(wordStart, end + 1);
-  if (!(atomKeywords as readonly string[]).includes(word)) return false;
+  if (!(operandKeywords as readonly string[]).includes(word)) return false;
   if (word === "of" || word === "yield" || word === "await") {
     // A comment is skipped exactly as whitespace is (decision 156 addendum
     // 8): `f(/*c*/ await :b)` reads as `f( await :b)`.
@@ -1227,7 +1099,7 @@ function isOperatorWord(
  * `Array<() => T>`, `a<b >`), within the same group. `a < b >` (space
  * before `<`), `a >> b`, `a < b && c >` and a `<` beyond the group's own
  * opener are comparisons. Stops at `;`, `&&`, `||`, and at a `?` or `:` of
- * this group, so a run of atoms never rescans the expression.
+ * this group, so a run of triggers never rescans the expression.
  */
 function closesTypeArguments(
   expression: ExpressionMeta,
@@ -1302,28 +1174,12 @@ function wordStartOf(data: string, end: number, min: number) {
   return start;
 }
 
-/** Where an atom name `[A-Za-z_$][\w$]*(-[\w$]+)*` starting at `pos` ends. */
-function atomNameEnd(data: string, pos: number) {
-  if (!isIdentStartCode(data.charCodeAt(pos))) return pos;
-  let end = pos + 1;
-  for (;;) {
-    while (isWordCode(data.charCodeAt(end))) end++;
-    if (
-      data.charCodeAt(end) !== CODE.HYPHEN ||
-      !isWordCode(data.charCodeAt(end + 1))
-    ) {
-      return end;
-    }
-    end += 2;
-  }
-}
-
 /**
  * Whether an expression is expected at `pos`: at the start of the
  * expression, or after an operator, punctuator or operator keyword; never
  * after an expression end (a word, literal, `)`, `]`, `}`), `.`, `?.`, a
  * postfix `++`/`--`, TypeScript's `x?:` / `x!:` markers, a word written
- * right against the `:` (a key or label: `{ new:a }`), or an atom's own name.
+ * right against the `:` (a key or label: `{ new:a }`), or a trigger's own text.
  */
 function expectsExpression(
   expression: ExpressionMeta,

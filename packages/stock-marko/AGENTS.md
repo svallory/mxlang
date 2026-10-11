@@ -33,8 +33,9 @@ patch diverges MX's parser from the published build.
 - Forward-patch equality: vendored bytes + `patches/htmljs-parser@5.18.0.patch`
   == installed `dist` byte-for-byte.
 - Core isolation (`packages/core` resolves the patched parser — verified).
-- Table: ≥20 event-level differences (after-value, atoms, non-ASCII,
+- Table: the event-level differences (non-ASCII words,
   NBSP, never-throw) and the equal-stream controls (`copyright-ambiguous`,
+  the `colon-*` and `double-colon-*` rows, where `:` reads as in stock,
   `nbsp-before-comment`, etc.).
 
 ## Tests

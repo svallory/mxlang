@@ -44,18 +44,14 @@ export const STOCK_TARBALL_INTEGRITY =
  * patch change that renames one rots loudly here.
  */
 export const PATCH_MARKERS = [
-  "lexAtom",
-  "onAtom",
   "isUnicodeWordCode",
   "isUnicodeWhitespaceCode",
   "isUnicodeSpaceCode",
   "wordWidthBefore",
   "wordWidthAt",
   "attrValue",
-  "defaultAtom",
-  "isSingleAtomDefault",
-  "isIdentStartCode",
-  "standInAtoms",
+  "isWordOrPeriodBefore",
+  "isInTextBody",
 ] as const;
 
 export function sha512Base64(path: string): string {

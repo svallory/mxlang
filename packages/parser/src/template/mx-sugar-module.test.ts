@@ -1,9 +1,12 @@
 /**
- * The atom row against the built-in atoms (`lang-ext-move-sugars-to-mesh`,
- * slice a1): the atom corpora of `mx-atoms.cases.ts` run through the row
- * (`test-support/sugar-rows.ts`), its triggers rendered as the built-in
- * events (`test-support/sugar-module.ts`), with the same expectations,
- * except the rows of `mx-sugar-module.deltas.ts`.
+ * Atoms as a dialect builds them: the atom corpora of `mx-atoms.cases.ts`
+ * through the `:` expression row (`test-support/sugar-rows.ts`,
+ * `ATOMS_SYNTAX`), its triggers rendered as plain events
+ * (`test-support/sugar-module.ts`). The template parser lexes no atom of its
+ * own; the default row reads every one of these inputs as stock Marko does
+ * (the `colon-*` and `double-colon-*` rows of
+ * `packages/stock-marko/src/divergence.cases.ts`, and
+ * `packages/core/src/stock-colon.test.ts` for the compile errors).
  */
 
 import { parseExpression as parseBabelExpression } from "@mxlang/babel";
@@ -16,6 +19,7 @@ import {
   commentTwinMismatches,
   NOT_ATOMS,
   nonAsciiMarkerViolations,
+  parseScaling,
   RESERVED,
   rawOpenTagReads,
   readMismatches,
@@ -26,8 +30,6 @@ import {
   unicodeWhitespaceLoopMismatches,
   unicodeWhitespaceMismatches,
 } from "./mx-atoms.cases.ts";
-import { DELTAS, type SugarDelta } from "./mx-sugar-module.deltas.ts";
-import { compileSyntax } from "./syntax.ts";
 import { sugarBuild } from "./test-support/sugar-module.ts";
 import {
   ATOMS_SYNTAX,
@@ -44,113 +46,120 @@ const isValidTs = (expression: string) => {
   }
 };
 
-const BUILT_IN = template as unknown as AtomParserModule;
-const BUILDS: [SugarDelta["build"], AtomParserModule][] = [
-  ["atoms-row", sugarBuild(ATOMS_SYNTAX) as unknown as AtomParserModule],
-];
+const DEFAULT = template as unknown as AtomParserModule;
+const mod = sugarBuild(ATOMS_SYNTAX) as unknown as AtomParserModule;
 
 /**
- * Attribute forms the corpora above lack (review 460 r1): a value after
- * `:=`, `(args)` with no body, and `async` before a method. The atom row
- * must read them as the built-in path does.
+ * Attribute forms the corpora lack (review 460 r1): a value after `:=`,
+ * `(args)` with no body, and `async` before a method. The atom row arms in
+ * expressions only, so a `:name` attribute is stock's attribute name.
  */
-const MODULE_FORMS = [
-  "<x :n:=y/>",
-  "<x :n := y/>",
-  "div :n:=a.b c",
-  "<x :a(p)/>",
-  "<x :a(:p)/>",
-  "div :b(x) y",
-  "<x :a(p)=1/>",
-  "<x :a(p) := q/>",
-  "<x :n(p) { b }/>",
-  "<x async :n(p) { b }/>",
-  "<x #i:=y/>",
-  "<x .c(p)/>",
-];
-
-type Suite = SugarDelta["suite"];
-const SUITES: [Suite, [string, string][], boolean][] = [
-  ["atoms", ATOMS, false],
-  ["reserved", RESERVED, false],
-  ["not-atoms", NOT_ATOMS, true],
-  [
-    "sugar-forms",
-    SUGAR_FORMS.map((input) => [input, renderAtoms(BUILT_IN, input)]),
-    false,
-  ],
-  [
-    "module-forms",
-    MODULE_FORMS.map((input) => [input, renderAtoms(BUILT_IN, input)]),
-    false,
-  ],
+const MODULE_FORMS: [string, string][] = [
+  ["<x :n:=y/>", '<x> @:n ="y"'],
+  ["<x :n := y/>", '<x> @:n ="y"'],
+  ["div :n:=a.b c", '<div> @:n ="a.b" @c'],
+  ["<x :a(p)/>", '<x> @:a aargs:"p"'],
+  ["<x :a(:p)/>", '<x> @:a atom(p@6-8) aargs:"0."'],
+  ["div :b(x) y", '<div> @:b aargs:"x" @y'],
+  ["<x :a(p)=1/>", '<x> @:a aargs:"p" ="1"'],
+  ["<x :a(p) := q/>", '<x> @:a aargs:"p" ="q"'],
+  ["<x :n(p) { b }/>", '<x> @:n method:" b "'],
+  ["<x async :n(p) { b }/>", '<x> @async @:n method:" b "'],
+  ["<x #i:=y/>", '<x> @#i ="y"'],
+  ["<x .c(p)/>", '<x> @.c aargs:"p"'],
 ];
 
 describe("the module rows", () => {
-  it("validate, and the atom row turns the built-in atom off (the coexistence rule)", () => {
+  it("validate", () => {
     for (const syntax of [ATOMS_SYNTAX, SUGARS_SYNTAX, MESH_SYNTAX]) {
       expect(template.validateSyntaxTable(syntax)).toEqual([]);
     }
-    const builtInAtoms = (syntax: template.SyntaxTable) =>
-      compileSyntax(syntax).builtInAtoms;
-    expect(builtInAtoms(template.DEFAULT_SYNTAX)).toBe(true);
-    expect(builtInAtoms(ATOMS_SYNTAX)).toBe(false);
-    expect(builtInAtoms(SUGARS_SYNTAX)).toBe(false);
-    expect(builtInAtoms(MESH_SYNTAX)).toBe(false);
   });
 });
 
-describe.each(BUILDS)(
-  "the atom corpora through the module (%s)",
-  (build, mod) => {
-    const deltaOf = (suite: Suite, input: string) =>
-      DELTAS.find(
-        (d) => d.build === build && d.suite === suite && d.input === input,
-      );
+describe("the atom corpora through the atom row", () => {
+  it.each(ATOMS)("atom: %j", (input, expected) => {
+    expect(renderAtoms(mod, input)).toBe(expected);
+  });
 
-    describe.each(SUITES)("%s", (suite, cases, statements) => {
-      it.each(cases)("%j", (input, builtIn) => {
-        expect(renderAtoms(BUILT_IN, input, statements)).toBe(builtIn);
-        const delta = deltaOf(suite, input);
-        if (delta) expect(delta.builtIn).toBe(builtIn);
-        expect(renderAtoms(mod, input, statements)).toBe(
-          delta ? delta.module : builtIn,
-        );
-      });
-    });
+  it.each(RESERVED)("reserved: %j", (input, expected) => {
+    expect(renderAtoms(mod, input)).toBe(expected);
+  });
 
-    it("lists no stale delta: each names a corpus input and a real difference", () => {
-      for (const delta of DELTAS) {
-        if (delta.build !== build) continue;
-        const suite = SUITES.find(([name]) => name === delta.suite);
-        expect(
-          suite?.[1].some(([input]) => input === delta.input),
-          delta.input,
-        ).toBe(true);
-        expect(delta.module).not.toBe(delta.builtIn);
-      }
-    });
+  it.each(NOT_ATOMS)("not an atom: %j", (input, expected) => {
+    expect(renderAtoms(mod, input, true)).toBe(expected);
+  });
 
-    it("no TypeScript marker or type end is followed by an atom, at any depth", () => {
-      const { bad } = tsMarkerViolations(mod, isValidTs);
-      expect(bad).toEqual([]);
-    });
+  it.each(SUGAR_FORMS)(
+    "a name-sugar form lexes no atom, as the default row reads it: %j",
+    (input) => {
+      const rendered = renderAtoms(mod, input);
+      expect(rendered).not.toMatch(/atom\(|is reserved/);
+      expect(rendered).toBe(renderAtoms(DEFAULT, input));
+    },
+  );
 
-    it("no non-ASCII operand or key before a TypeScript `:` is followed by an atom", () => {
-      expect(nonAsciiMarkerViolations(mod, isValidTs).bad).toEqual([]);
-    });
+  it.each(MODULE_FORMS)("attribute form: %j", (input, expected) => {
+    expect(renderAtoms(mod, input)).toBe(expected);
+  });
 
-    it("comments, non-ASCII letters and Unicode whitespace lex as their twins", () => {
-      expect(commentTwinMismatches(mod).bad).toEqual([]);
-      expect(asciiTwinMismatches(mod).bad).toEqual([]);
-      expect(unicodeWhitespaceLoopMismatches(mod).bad).toEqual([]);
-      expect(unicodeWhitespaceMismatches(mod).bad).toEqual([]);
-    });
+  it("no TypeScript marker or type end is followed by an atom, at any depth", () => {
+    const { total, ran, bad } = tsMarkerViolations(mod, isValidTs);
+    expect(total).toBe(11_520);
+    expect(ran).toBeGreaterThan(9_000);
+    expect(bad).toEqual([]);
+  });
 
-    it("read() stands in the module's atoms as the built-in path does", () => {
-      expect(readMismatches(mod)).toEqual([]);
-      expect(rawOpenTagReads(mod)).toEqual(rawOpenTagReads(BUILT_IN));
-      expect(tagNameReads(mod)).toEqual(tagNameReads(BUILT_IN));
-    });
-  },
-);
+  it("no non-ASCII operand or key before a TypeScript `:` is followed by an atom", () => {
+    const { total, ran, bad } = nonAsciiMarkerViolations(mod, isValidTs);
+    expect(total).toBe(21_840);
+    expect(ran).toBeGreaterThan(14_000);
+    expect(bad).toEqual([]);
+  });
+
+  it("a comment around an operator word lexes as whitespace does", () => {
+    const { total, bad } = commentTwinMismatches(mod);
+    expect(total).toBe(312);
+    expect(bad).toEqual([]);
+  });
+
+  it("a non-ASCII letter before `:` lexes as the same row with an ASCII letter", () => {
+    const { total, bad } = asciiTwinMismatches(mod);
+    expect(total).toBe(5_040);
+    expect(bad).toEqual([]);
+  });
+
+  it("Unicode whitespace in the trigger look-behind lexes as an ASCII space", () => {
+    const { total, bad } = unicodeWhitespaceLoopMismatches(mod);
+    expect(total).toBe(1_482);
+    expect(bad).toEqual([]);
+  });
+
+  it("Unicode whitespace before `:` lexes as an ASCII space", () => {
+    const { total, bad } = unicodeWhitespaceMismatches(mod);
+    expect(total).toBe(2_660);
+    expect(bad).toEqual([]);
+  });
+
+  it("read() stands in every atom fully inside the range", () => {
+    expect(readMismatches(mod)).toEqual([]);
+  });
+
+  it("a raw open-tag read is the source; the value keeps its stand-in", () => {
+    expect(rawOpenTagReads(mod)).toEqual({ raw: "style x=:a", value: "0." });
+  });
+
+  it("a mixed tag name reads its stand-in; only the raw open tag reads the source", () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: MX source, not a JS template
+    const expected = { name: "foo-${0.}", raw: "foo-${:a} x=:b" };
+    expect(tagNameReads(mod)).toEqual(expected);
+  });
+});
+
+describe("the default row", () => {
+  it("parse time grows linearly with the file (no scan to the end of file)", () => {
+    // 32x the input: linear ~32, the end-of-file scan ~1,000 (see
+    // parseScaling).
+    expect(parseScaling(DEFAULT)).toBeLessThan(200);
+  }, 60_000);
+});

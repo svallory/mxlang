@@ -22,6 +22,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { coreBabel } from "./babel.ts";
 import { compileSource } from "./compile.ts";
 import { newCtx, TranslateError } from "./core.ts";
+import atomSyntax, { ATOM } from "./fixtures/syntax/atom-fixture.ts";
 import memberSyntax, { MEMBER } from "./fixtures/syntax/member-fixture.ts";
 import { parseFragment } from "./fragment.ts";
 import type { Attr, Ir, IrNode } from "./ir.ts";
@@ -37,6 +38,21 @@ import { dialectProject } from "./test-dialect-project.ts";
 import { lookup as targets } from "./test-targets.ts";
 
 const FIXTURE = join(import.meta.dirname, "fixtures/syntax/member-fixture.ts");
+
+/** The member fixture with the atom fixture's expression row beside it. */
+const memberAndAtom: Dialect = {
+  ...memberSyntax,
+  table: {
+    ...memberSyntax.table,
+    expressionTriggers: [MEMBER, ATOM],
+  },
+  lowerTrigger: (id, text, span, ctx) => {
+    const lowerTrigger = (id === ATOM.id ? atomSyntax : memberSyntax)
+      .lowerTrigger;
+    if (!lowerTrigger) throw new Error("a fixture without `lowerTrigger`");
+    return lowerTrigger(id, text, span, ctx);
+  },
+};
 
 const declarations = {
   tags: {},
@@ -112,8 +128,8 @@ function dialectWith(
 
 describe("the member dialect through the `dialect` option", () => {
   it("an expression trigger is the dialect's node; the authored text and atoms stay", () => {
-    const source = "rule check=(() => &status === :sent)\n";
-    const [rule] = elements(irOf(source, undefined, memberSyntax).body);
+    const source = "rule check=(() => &status === ~sent)\n";
+    const [rule] = elements(irOf(source, undefined, memberAndAtom).body);
     const check = attr(rule as Element, "check");
     expect(check.kind).toBe("dynamic");
     if (check.kind !== "dynamic") return;

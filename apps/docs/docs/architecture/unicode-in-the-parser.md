@@ -5,9 +5,9 @@ description: "How the MX template parser classifies characters above ASCII where
 
 # Unicode in the parser
 
-The template parser sometimes decides what a character means by looking at the character before or after the current position: whether a `:` is an atom, a `/` a division or a regular expression, a word a keyword, a `>` the end of a tag, a `--` the start of a text block. This page lists how characters above ASCII are classified at those places, the rule each place follows, and the places that read them exactly as the unpatched htmljs-parser 5.18.0 does.
+The template parser sometimes decides what a character means by looking at the character before or after the current position: whether a `/` is a division or a regular expression, a word a keyword, a `>` the end of a tag, a `--` the start of a text block, and, for a dialect's expression triggers such as the atom, whether an operand may start. This page lists how characters above ASCII are classified at those places, the rule each place follows, and the places that read them exactly as the unpatched htmljs-parser 5.18.0 does.
 
-"The unpatched parser" below means htmljs-parser 5.18.0 as published (git tag `v5.18.0`), which classifies only ASCII characters. It is not the `htmljs-parser` the workspace's `@marko/compiler` resolves, which carries MX's patch. Every example was run on both parsers; `stock` is the unpatched one and `MX` is the template parser on main. Events are shortened: `@x ="v"` is an attribute `x` with the value `v`, `atom(b)` an atom event, and every non-printing or easily confused character in an input or an output is written as a `\uXXXX` escape (`\u{XXXXX}` above U+FFFF); ordinary letters such as `é` and `名` and the visible symbols the page discusses are literal. The `g` numbers are probes in the grammar corpus (`packages/parser/src/template/grammar-spec.corpus.json`) that run in CI against the source copy and both patched builds.
+"The unpatched parser" below means htmljs-parser 5.18.0 as published (git tag `v5.18.0`), which classifies only ASCII characters. It is not the `htmljs-parser` the workspace's `@marko/compiler` resolves, which carries MX's patch. Every example was run on both parsers; `stock` is the unpatched one and `MX` is the template parser on main. Events are shortened: `@x ="v"` is an attribute `x` with the value `v`, and every non-printing or easily confused character in an input or an output is written as a `\uXXXX` escape (`\u{XXXXX}` above U+FFFF); ordinary letters such as `é` and `名` and the visible symbols the page discusses are literal. The `g` numbers are probes in the grammar corpus (`packages/parser/src/template/grammar-spec.corpus.json`) that run in CI against the source copy and both patched builds.
 
 ## The two classes
 
@@ -39,22 +39,20 @@ Where the parser looks behind for whitespace, it counts the ASCII code units U+0
 
 This is ECMAScript's WhiteSpace plus LineTerminator above ASCII, code point for code point, and also the set Babel skips. The standard: ECMA-262 (ES2025 and later), "White Space" (WhiteSpace: U+0009, U+000B, U+000C, U+FEFF and any code point in category Zs) and "Line Terminators" (LineTerminator: U+000A, U+000D, U+2028, U+2029). TypeScript's scanner additionally treats U+0085 and U+200B as whitespace; MX does not, so both are neither whitespace nor word characters here (they are no `ID_Continue`). U+180E, U+2060 and U+00AD are neither either. None of the 19 code points is a word character.
 
-The probes in the table pin the atom look-behind for each code point (`<div x=[a,<code point>:b]/>`).
+The probes in the table pin each code point in `<div x=[a,<code point>:b]/>`, which the default syntax reads as one value as written. A dialect's trigger looks behind with the same whitespace class ([below](#unicode-in-the-parser-the-rules-unicode-whitespace-before-a-dialect-trigger)).
 
 ## The rules
 
 Each rule is one place where the parser looks behind or ahead. The probe for an example is named beside it.
 
-### Identifier characters before a `:` and around keywords and `/`
+### Identifier characters around keywords, `/` and `>`
 
-In an expression, a non-ASCII identifier character counts as a word character wherever the parser asks whether a word starts or ends: a word right before a `:` is an object key or a label, so no atom follows (`{ é:a }`); a `/` after a word is a division, not the start of a regular expression; a name that ends in a keyword (`énew`) is a name, not the keyword; `!` after a word is a postfix assertion; a `.` before a word continues a member access; an operand before `>` takes part in the ambiguous-`>` check. A symbol or an unpaired surrogate is not a word character and is read as ASCII punctuation is.
+In an expression, a non-ASCII identifier character counts as a word character wherever the parser asks whether a word starts or ends: a `/` after a word is a division, not the start of a regular expression; a name that ends in a keyword (`énew`) is a name, not the keyword; `!` after a word is a postfix assertion; a `.` before a word continues a member access; an operand before `>` takes part in the ambiguous-`>` check. A symbol or an unpaired surrogate is not a word character and is read as ASCII punctuation is. A dialect's trigger asks the same question: a word right before its `:` is an object key or a label, so no atom follows (`{ é:a }`).
 
 Standard: ECMAScript's `IdentifierPartChar`, as classified above. The unpatched parser is ASCII-only, so it treats every non-ASCII character as punctuation.
 
 | Input | stock | MX | Probe |
 | --- | --- | --- | --- |
-| `<div x=({ é:a })/>` | `@x ="({ é:a })"` | the same value; `é:` is a key and no atom lexes | g0572 |
-| `<div x=(é :b)/>` | `@x ="(é :b)"` | the same value, no atom: a word before whitespace and `:` is an operand, so TypeScript owns the colon | g0574 |
 | `<div x=é / 2 y/>` | `@x ="é / 2 y/"`, then `Missing ending "div" tag` (the `/` starts a regular expression) | `@x ="é / 2" @y` (a division) | g1027 |
 | `<div x=\u{207b7} / 2 y=1/>` (U+20BB7, a surrogate pair) | the same error as above | `@x ="\u{207b7} / 2" @y ="1"` | g1694 |
 | `<div x=a\u200d / 2 y=1/>` (ZWJ) | the same error | `@x ="a\u200d / 2" @y ="1"` | g1695 |
@@ -65,31 +63,26 @@ Standard: ECMAScript's `IdentifierPartChar`, as classified above. The unpatched 
 | `<div x=énew y=1/>` | `@x ="énew y=1"` | `@x ="énew" @y ="1"` | g1029 |
 | `<div x=a >\u{207b7}>c</div>` | `@x ="a"`, then the text `\u{207b7}>c` | `Ambiguous ">" in attribute` (as for `a >b>c`) | g1698 |
 | `<div x=a >©>c</div>` | `@x ="a"`, then the text `©>c` | the same as stock | g1691 |
-| `<div x=(for (é of :a))/>` | `@x ="(for (é of :a))"` | the same value, and the atom `:a` lexes: `of` follows a word | g0989 |
 
-In the first two rows the two parsers read the same value: the unpatched parser has no atoms, so the rule shows only in that MX lexes none.
+In a dialect's trigger look-behind a word before whitespace and a `:` is an operand, so TypeScript owns the colon (`(é :b)`), and `of` after a word is an operator (`(for (é of :a))`). U+200B and U+0085 are not word characters, so `(a\u200b :b)` and `(a\u0085 :b)` arm the trigger there as after ASCII punctuation; the default syntax reads both as one value as written (g1633, g1634).
 
-U+200B and U+0085 are not word characters: `<div x=(a\u200b :b)/>` and `<div x=(a\u0085 :b)/>` lex the atom `:b` in MX (g1633, g1634), as an atom lexes after any ASCII punctuation.
+### Unicode whitespace before a dialect trigger
 
-### Unicode whitespace before an atom's `:`
+A dialect arms an expression trigger on a character such as `:` (the reference atom, `:name`) and asks, before it lexes, whether an operand may start there. That look-behind treats the 19 whitespace code points as an ASCII space: `a\u00a0:b` is a key followed by whitespace and a colon, exactly as `a :b` is, and `[a,\u00a0:b]` is an operand position, exactly as `[a, :b]`.
 
-In the atom look-behind, the 19 whitespace code points behave as an ASCII space. `a\u00a0:b` is a key followed by whitespace and a colon, exactly as `a :b` is; `[a,\u00a0:b]` is an operand position, exactly as `[a, :b]`.
+Standard: ECMAScript's WhiteSpace and LineTerminator (Babel and TypeScript skip the same code points as trivia). The default syntax table has no trigger, so the default parser, unpatched or MX, reads every row below as one value, text as written, `:b` included. The right column is the reference atom dialect (`ATOMS_SYNTAX` in `test-support/sugar-rows.ts`), which `mx-unicode-words.test.ts` runs through its `atomRow` build.
 
-Standard: ECMAScript's WhiteSpace and LineTerminator (Babel and TypeScript skip the same code points as trivia). The unpatched parser has no atoms and sees these code points as non-whitespace punctuation.
-
-| Input | stock | MX | Probe |
+| Input | default (stock and MX) | reference atom dialect | Probe |
 | --- | --- | --- | --- |
-| `<div x=[a,\u00a0:b]/>` | `@x ="[a,\u00a0:b]"` | `@x atom(b) ="[a,\u00a00.]"`: the atom lexes | g0967 |
-| `<div x=({ a\u00a0:b })/>` | `@x ="({ a\u00a0:b })"` | the same value, no atom: a key, as in `{ a :b }` | g0957 |
-| `<div x=({ é\u00a0:a })/>` | the same value shape | no atom: a key | g0955 |
-| `<div x=(a?\u00a0:b : c)/>` | `@x ="(a?\u00a0:b : c)"` | the same value, no atom: `a?` is TypeScript's optional marker, as with `a? :b` | g0960 |
-| `<div x=(Array<T>\u00a0:b)/>` | `@x ="(Array<T>\u00a0:b)"` | the same value, no atom: type arguments, as with `Array<T> :b` | g0962 |
-
-Two shapes that lexed an atom before this rule, `(a?\u00a0:b : c)` and `(Array<T>\u00a0:b)`, now read as their ASCII-space spellings and no longer compile; the fix is an ASCII space before the `?`, or parentheses.
+| `<div x=[a,\u00a0:b]/>` | `@x ="[a,\u00a0:b]"` | the atom `:b` lexes | g0967 |
+| `<div x=({ a\u00a0:b })/>` | `@x ="({ a\u00a0:b })"` | no atom: a key, as in `{ a :b }` | g0957 |
+| `<div x=({ é\u00a0:a })/>` | the same shape | no atom: a key | g0955 |
+| `<div x=(a?\u00a0:b : c)/>` | `@x ="(a?\u00a0:b : c)"` | no atom: `a?` is TypeScript's optional marker, as with `a? :b` | g0960 |
+| `<div x=(Array<T>\u00a0:b)/>` | `@x ="(Array<T>\u00a0:b)"` | no atom: type arguments, as with `Array<T> :b` | g0962 |
 
 ### Unicode whitespace at the expression look-behinds
 
-The same 19 code points count as whitespace wherever an expression look-behind asks "is this whitespace": whether a `/` is a division or a regular expression, the keyword and operator look-behinds (`typeof`, `new`, a trailing `+` or `||`), `++` and `--`, the `{` after a type, a whitespace-preceded `>=`, and a comment skipped before an operator word.
+The same 19 code points count as whitespace wherever an expression look-behind asks "is this whitespace": whether a `/` is a division or a regular expression, the keyword and operator look-behinds (`typeof`, `new`, a trailing `+` or `||`), `++` and `--`, the `{` after a type, and a whitespace-preceded `>=`.
 
 Standard: ECMAScript's WhiteSpace and LineTerminator. The unpatched parser uses `code <= 0x20` everywhere, so these characters end nothing and join nothing.
 
@@ -98,7 +91,6 @@ Standard: ECMAScript's WhiteSpace and LineTerminator. The unpatched parser uses 
 | `<div x=(é)\u00a0/ 2/>` | `@x ="(é)\u00a0/ 2/"`, then the error (a regular expression) | `@x ="(é)\u00a0/ 2"` (a division) | g1684 |
 | `<div x=a +\u00a0 y=1/>` | `@x ="a +\u00a0" @y ="1"` | `@x ="a +\u00a0 y=1"`: the value continues after the operator | g1687 |
 | `<if=count\u00a0>= 10>y</if>` | `@ ="count\u00a0"`, then the text `= 10>y` | `@ ="count\u00a0>= 10"`, then the text `y` | g1686 |
-| `<div x=(a /* c */\u00a0:b)/>` | `@x ="(a /* c */\u00a0:b)"` | the same value, no atom | g1637 |
 
 ### Concise `--` after Unicode whitespace
 
@@ -114,16 +106,16 @@ Standard: MX's own; neither ECMAScript nor the unpatched parser defines it. The 
 
 A trailing U+00A0 on a value does not reach emitted code (the expression is parsed as `1`); on an attribute name the compile fails with `Invalid attribute name`.
 
-### `await`, `yield` and `of` before an atom
+### `await`, `yield` and `of` before a dialect trigger
 
-An atom after `await` or `yield` is not lexed when the keyword follows `(`, `,`, `?` or `:` (`(await :b) => 1` is valid TypeScript with `await` a parameter), and is lexed otherwise; `of` is an operator only after an operand. Whitespace and word characters are read as above: a Unicode whitespace character between the keyword and what precedes it is skipped, and a word character glued to the keyword makes it an ordinary identifier.
+A trigger after `await` or `yield` is not lexed when the keyword follows `(`, `,`, `?` or `:` (`(await :b) => 1` is valid TypeScript with `await` a parameter), and is lexed otherwise; `of` is an operator only after an operand. Whitespace and word characters are read as above: a Unicode whitespace character between the keyword and what precedes it is skipped, and a word character glued to the keyword makes it an ordinary identifier.
 
-Standard: MX's own, derived from the TypeScript grammar; `await` and `yield` are ordinary identifiers outside async and generator code. The unpatched parser has no atoms.
+Standard: MX's own, derived from the TypeScript grammar; `await` and `yield` are ordinary identifiers outside async and generator code. The default syntax table has no trigger, so both rows read as one value as written; the right column is the reference atom dialect.
 
-| Input | stock | MX | Probe |
+| Input | default (stock and MX) | reference atom dialect | Probe |
 | --- | --- | --- | --- |
-| `<div x=(a,\u00a0yield :b)/>` | `@x ="(a,\u00a0yield :b)"` | the same value, no atom: `yield` follows `,` (the non-breaking space is skipped) | g0964 |
-| `<div x=(x\u00a0of :a)/>` | `@x ="(x\u00a0of :a)"` | `@x atom(a) ="(x\u00a0of 0.)"`: `of` follows the operand `x` | g0965 |
+| `<div x=(a,\u00a0yield :b)/>` | `@x ="(a,\u00a0yield :b)"` | no atom: `yield` follows `,` (the non-breaking space is skipped) | g0964 |
+| `<div x=(x\u00a0of :a)/>` | `@x ="(x\u00a0of :a)"` | the atom `:a` lexes: `of` follows the operand `x` | g0965 |
 
 ## Where MX reads as the unpatched parser does
 
@@ -150,28 +142,25 @@ The tag-name and shorthand states keep ASCII whitespace. `div\u00a0-- text` name
 
 Unicode whitespace does not separate attributes either: `<div a\u00a0b/>` has one attribute named `a\u00a0b` (g1538).
 
-### The after-value rule
+### A spaced `:name` or `.name` after a value
 
-After whitespace inside an attribute value, a `:` or a `.` followed by a name starts a new attribute instead of continuing the value (`x=a :b` is the value `a` and the attribute `:b`). The name's first character is tested for being an ASCII identifier start, so a non-ASCII name does not split a `:`. A `.` takes any word character that is not a digit, so `x=a .é` splits.
+MX has no rule that ends a value at a spaced `:` or `.` followed by a name: `x=a :b` is one value, as in stock. A `.` after whitespace continues the value when a word character follows, and a non-ASCII word character counts, so `x=a .é` is one value where the unpatched parser, whose word test is ASCII-only, ends the value before `.é`.
 
 | Input | stock | MX | Probe |
 | --- | --- | --- | --- |
-| `<div x=a :b/>` | `@x ="a :b"` | `@x ="a" @:b` | g0422 |
-| `<div x=1 :é/>` | `@x ="1 :é"` | the same as stock: one value (it fails to compile) | none |
-| `<div x=(a) :T => a/>` | `@x ="(a) :T => a"` | `@x ="(a)" @:T`, then `Missing value for attribute` | g0610 |
-| `<div x=(a) :É => a/>` | `@x ="(a) :É => a"` | the same as stock: one valid value | none |
-| `<div x=a .é/>` | `@x ="a" @.é` | the same | g1020 |
-
-This ASCII-only test is **on hold**, not a final rule. Whether `:name` after a value stays in the language is under review, so the identifier-start test is not being widened to non-ASCII names in the meantime. It would change valid TypeScript that the unpatched parser reads as one value: an arrow function's or a function expression's return type written with a space before the colon (`x=(a) :É => a`).
+| `<div x=a :b/>` | `@x ="a :b"` | the same | g0422 |
+| `<div x=1 :é/>` | `@x ="1 :é"` | the same | g1716 |
+| `<div x=(a) :T => a/>` | `@x ="(a) :T => a"` | the same: one valid value | g0610 |
+| `<div x=(a) :É => a/>` | `@x ="(a) :É => a"` | the same: one valid value | g1717 |
+| `<div x=a .é/>` | `@x ="a" @.é` | `@x ="a .é"`: the `.` is followed by a word character | g1020 |
 
 ## Known approximations and leftovers
 
 - MX's whitespace still counts 27 ASCII control characters that ECMAScript does not (U+0000 to U+0008 and U+000E to U+001F). This is inherited from htmljs-parser, whose `isWhitespaceCode` is `code <= 0x20` and carries the comment "this might be slightly non-conforming".
 - U+2028 and U+2029 are whitespace in the look-behinds but do not end a concise line.
 - The tag grammar's own tests (a character that ends an attribute name, a tag name or a shorthand) look at the current character and keep ASCII whitespace; the Unicode whitespace of this page applies only in the look-behinds and the concise ` --` rule above.
-- An atom's name is ASCII, and a non-ASCII character directly after it makes it no atom: `<div x=:aé/>` is the plain value `:aé` (g0526).
 - The word class has no table of its own; it follows the engine's Unicode property data. TypeScript's identifier tables follow Unicode 15.1 and Babel's 17.0, so a character added to `ID_Continue` after the engine's Unicode version is a non-word character here until the engine updates.
-- Not determined: what MX 0.1.0-alpha.4, before the rules above, did with `(a?\u00a0:b : c)` and `(Array<T>\u00a0:b)` (it needs a checkout of that release), and how editors, formatters and language tools consume the attribute ranges that keep a trailing Unicode space.
+- Not determined: how editors, formatters and language tools consume the attribute ranges that keep a trailing Unicode space.
 
 ## How this was checked
 
@@ -179,6 +168,6 @@ The unpatched reference is htmljs-parser at tag v5.18.0 from its own repository,
 
 ## Sources
 
-- Decision 156 addenda 8 to 15 (atoms, the non-ASCII rules, and the on-hold after-value name).
+- Decision 156 addenda 10 to 13 (the non-ASCII word and whitespace rules).
 - ECMA-262, 16th edition (ES2025) and later: "White Space", "Line Terminators", "Names and Keywords".
 - The probe corpus and the grammar tables: [The parser grammar](/architecture/parser-grammar/).

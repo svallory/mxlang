@@ -62,16 +62,18 @@ Sources of truth, in this order:
 2. the decision log, `notes/decisions-2026-09-10.md` (cited as *decision N* and
    its addenda);
 3. `divergences.md` at the repository root, cited by its **row heading**, because
-   its rows carry no numbers (for example *divergence row "`a ? :b :c` is one
-   value"*), plus `fixtures/divergences.md`.
+   its rows carry no numbers (for example *divergence row "A non-ASCII letter or digit
+   is part of a word in the template parser's look-behinds; stock's word test is
+   ASCII-only."*), plus `fixtures/divergences.md`.
 
 The htmljs-parser fixtures and the Marko fixtures are **evidence of the default
 behaviour, not a gate**.
 
-Decision 146 addenda 4 to 6 and atoms (decision 156 with its addenda 1 to 4
-and 8) are implemented on `main` and are described here as they are, not as planned.
-Addendum 4 lives in core; addenda 5 and 6 and atoms live in the template
-parser.
+Decision 146 addenda 4 to 6 are implemented on `main` and are described here
+as they are, not as planned. Addendum 4 lives in core; addenda 5 and 6 live in
+the template parser. The template parser has no atom lexer: it reads `:name`
+as stock reads it, and atoms exist only as a dialect feature built on the
+parser's triggers ([Atoms](#the-parser-grammar-atoms)).
 
 ### Method: the tables and the probes are the specification
 
@@ -106,10 +108,9 @@ How to read a normative table:
   input.
 - A row that pins a recorded defect or limit names its TODO. Its probes carry
   that name in the corpus, and the fix for the TODO regenerates them.
-- A "Stock: …" remark in a cell, a column headed "Stock", and the "Without
-  atoms" column of the atoms table describe builds the corpus does not run
-  (stock 5.18.0, and main with atom lexing switched off). They are
-  observations made on 2026-10-06, informative and not probed.
+- A "Stock: …" remark in a cell and a column headed "Stock" describe a build
+  the corpus does not run (stock 5.18.0). They are observations,
+  informative and not probed.
 - The probes' consumer types `script`, `style`, `textarea`, `html-comment`,
   `html-script` and `html-style` as text tags, `input` and `br` as void tags,
   and `static`, `import`, `export`, `server`, `client` and `class` as
@@ -129,16 +130,15 @@ symbols that carry them:
 | Departure | Files and symbols | Source of the rule |
 | --- | --- | --- |
 | the `??` / `?.` skip in a named attribute's value | `states/ATTRIBUTE.ts` (`attrValue`); `states/EXPRESSION.ts`: the `??`/`?.` branch of `EXPRESSION.parse` | ([E1](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode)); OQ 3 |
-| a single-atom default value | `states/ATTRIBUTE.ts` (`defaultAtom`); `states/EXPRESSION.ts` (`isSingleAtomDefault`) | decision 146, addendum 5 ([E1](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode)) |
-| atoms and the reserved `::` | `states/EXPRESSION.ts` (`lexAtom`, `expectsExpression`, `isOperatorWord`, `closesTypeArguments`, `isUnicodeWhitespaceCode`, `isSpreadEnd`, `atomNameEnd`, `rejectReservedName`, the atom guard in `lookBehindForKeyword`); the `atoms = true` sites in `states/ATTRIBUTE.ts`, `OPEN_TAG.ts`, `PLACEHOLDER.ts`, `TAG_NAME.ts`, `TEMPLATE_STRING.ts`; `rejectReservedName` calls in `TAG_NAME.exit` and `ATTRIBUTE.return`; `core/Parser.ts` (`atoms`, `read`, `rawOpenTags`); `util/constants.ts` (`onAtom`); `OPEN_TAG.exit` (`rawOpenTags`) | decision 156 and its addenda 2 to 4 and 8 to 10 ([Atoms](#the-parser-grammar-atoms)) |
+| the dialect triggers: a character that opens an expression of the dialect's own, a value row that claims an attribute's default value | `states/EXPRESSION.ts` (`lexTrigger`, `expectsExpression`, `isOperatorWord`, `closesTypeArguments`, `isSpreadEnd`, `claimDefault`, `isClaimedDefault`, `valueMayEndAt`, the `atomEnd` guard in `lookBehindForKeyword`); the `triggers = true` sites in `states/ATTRIBUTE.ts`, `OPEN_TAG.ts`, `PLACEHOLDER.ts`, `TAG_NAME.ts`, `TEMPLATE_STRING.ts`; `core/Parser.ts` (`standIn`, `read`, `rawOpenTags`); `util/constants.ts` (`onTrigger`); `OPEN_TAG.exit` (`rawOpenTags`) | spec §13.9.5 ([Atoms](#the-parser-grammar-atoms)) |
 | the base position | `core/Parser.ts` (`ParseOptions`, `parse`, `positionAt`, `offsetAt`); `index.ts` | the parser's API ([Base position](#the-parser-grammar-base-position-for-fragment-parses)) |
 | non-ASCII word characters where the parser looks behind or ahead | `util/util.ts` (`isUnicodeWordCode`, `wordWidthBefore`, `wordWidthAt`, `isUnicodeSpaceCode`) and its callers in `core/Parser.ts`, `states/EXPRESSION.ts`, `ATTRIBUTE.ts` and `INLINE_SCRIPT.ts` | decision 156, addenda 9, 10 and 13 ([Vocabulary](#the-parser-grammar-status-sources-of-truth-and-method-vocabulary)) |
-| Unicode whitespace in every look-behind that asks whether a character is whitespace | `util/util.ts` (`isUnicodeWhitespaceCode`) and its callers: `core/Parser.ts` (`getPreviousNonWhitespaceCharCode`); `states/EXPRESSION.ts` (the terminator and `{` look-behinds of `EXPRESSION.parse`, `checkForOperators`, the `++`/`--` row of `lookBehindForOperator`, the atom look-behind); `states/ATTRIBUTE.ts` (`shouldTerminateHtmlAttrValue`, `shouldTerminateConciseAttrValue`, `shouldTerminateConciseAttrName`); `states/HTML_CONTENT.ts` | decision 156, addenda 10 to 12 ([Vocabulary](#the-parser-grammar-status-sources-of-truth-and-method-vocabulary)) |
+| Unicode whitespace in every look-behind that asks whether a character is whitespace | `util/util.ts` (`isUnicodeWhitespaceCode`) and its callers: `core/Parser.ts` (`getPreviousNonWhitespaceCharCode`); `states/EXPRESSION.ts` (the terminator and `{` look-behinds of `EXPRESSION.parse`, `checkForOperators`, the `++`/`--` row of `lookBehindForOperator`, the trigger look-behind); `states/ATTRIBUTE.ts` (`shouldTerminateHtmlAttrValue`, `shouldTerminateConciseAttrValue`, `shouldTerminateConciseAttrName`); `states/HTML_CONTENT.ts` | decision 156, addenda 10 to 12 ([Vocabulary](#the-parser-grammar-status-sources-of-truth-and-method-vocabulary)) |
 | a `//` comment in a text tag's open tag; a close tag with no open tag, or after a tag that never got its name | `states/JS_COMMENT_LINE.ts` (`isInTextBody`); `states/CLOSE_TAG.ts` (`checkForClosingTag`, `ensureExpectedCloseTag`) | the parser does not throw (below) |
 
 The bun patch `patches/htmljs-parser@5.18.0.patch`, which `@marko/compiler`'s
-npm copy still runs under in this repository, carries the same after-value,
-addendum-5 and atom rules (`PROVENANCE.md`); the corpus and
+npm copy still runs under in this repository, carries only the `??` / `?.` skip and the non-ASCII word and Unicode
+whitespace look-behinds (`PROVENANCE.md`); the corpus and
 `corpus-equivalence.test.ts` hold the three builds together.
 
 **The parser does not throw** (the language lead, 2026-10-06, recorded with decision
@@ -229,7 +229,7 @@ These are definitions of terms; the tables that use them carry the rules.
   MX does not. [Unicode in the parser](/architecture/unicode-in-the-parser/)
   lists both classes, the rule at each look-behind and where MX reads as the
   unpatched parser does. Step 2 of the
-  scan and an atom's own name use the ASCII part (`isWordCode`).
+  scan uses the ASCII part (`isWordCode`).
 
   | Input | Result | Probes |
   | --- | --- | --- |
@@ -276,7 +276,6 @@ here ("the value", "the arguments") is that `value` range.
 | `onAttrMethod` | `params`, `body`, `typeParams`, each with a `value` inside its delimiters | `MxMethod.params`, `body`, `typeParams` (§3.5a) | g0017 |
 | `onPlaceholder` | `value`: inside `${…}` | `MxPlaceholder.expression` (§3.9) | g0018 g0019 |
 | `onScriptlet` | `value`: the statement, or inside `{…}` for the block form | `MxScriptlet.code` (§3.10) | g0020 g0021 |
-| `onAtom` | the whole atom, `:` included; `value` is the name | `MxAtom` in the enclosing container's `atoms` (§4.3) | g0022 |
 
 A statement tag's code is reported by no event of its own
 ([E10](#the-parser-grammar-expression-boundaries-e10-statement-tags)): the parser reports the name and then
@@ -385,13 +384,13 @@ What the row order means for some inputs:
 | `<foo (a)/>`, `<foo /x/>` | whitespace before the form (row 11): tag arguments, a tag variable | g0697 g0698 |
 | `div a--b` | the attribute name `a--b`: row 4 is reached where an attribute could begin | g0126 |
 | `div a -- text` | the name `a` and a text block | g0699 |
-| `div x\u00a0-- text` (U+00A0 before `--`) | the name `x\u00a0` and a text block: the name keeps the Unicode space, which ends no name (decision 156, addendum 12) | g1681 |
-| `div\u00a0-- text` (U+00A0 before `--`) | the tag name `div\u00a0--` and the attribute `text`: the tag-name state stays ASCII, as upstream and Marko (decision 156, addendum 13 item 5) | g1712 |
-| `div.a\u00a0-- text` (U+00A0 before `--`) | the class `a\u00a0--` and the attribute `text`: the shorthand state stays ASCII, as upstream and Marko (decision 156, addendum 13 item 5) | g1713 |
-| `x=1 :é` | the tag `x` with the single value `1 :é`: a bare input has no after-value context, so the `:` is not split (decision 156, addendum 15) | g1714 |
+| `div x\u00a0-- text` (U+00A0 before `--`) | the name `x\u00a0` and a text block: the name keeps the Unicode space, which ends no name | g1681 |
+| `div\u00a0-- text` (U+00A0 before `--`) | the tag name `div\u00a0--` and the attribute `text`: the tag-name state stays ASCII, as upstream and Marko | g1712 |
+| `div.a\u00a0-- text` (U+00A0 before `--`) | the class `a\u00a0--` and the attribute `text`: the shorthand state stays ASCII, as upstream and Marko | g1713 |
+| `x=1 :é` | the tag `x` with the single value `1 :é`: a spaced `:` after a value continues it | g1714 |
 | `(a) :É => a` | the tag arguments `(a)`, the attribute `:É` and the value `=> a`: a bare input parses as tag forms | g1715 |
 | `<div x=1 :é/>` | the single value `1 :é`, as stock | g1716 |
-| `<div x=(a) :É => a/>` | the single valid value `(a) :É => a`, as stock and as its ASCII twin without addendum 15's hold (decision 156, addendum 15) | g1717 |
+| `<div x=(a) :É => a/>` | the single valid value `(a) :É => a`, as stock | g1717 |
 | `div a\n  // c\n  ,b` | attributes `a` and `b`: row 1's look-ahead crosses the comment line | g0700 |
 | `<div` | `EOF reached while parsing open tag` | g0221 |
 | `div a` | the tag ends at end of input | g0684 |
@@ -415,9 +414,9 @@ What the row order means for some inputs:
 | `<div:=x/>` | the tag `div` with a bound default value | g0702 |
 | concise `div>a` | one tag name | g0703 |
 | `<1abc/>` | the tag `1abc` (OQ 16) | g0704 |
-| `<a::b/>`, `<div.a::b/>`, `<div#a::b/>` | `::` in the static text of a name or shorthand part is the reserved-token error `` `::b` is reserved (decision 156): … `` (`TAG_NAME.exit`, `rejectReservedName`; decision 156, addenda 2 and 3), and the part is not reported. Stock: the tag `a::b`, the parts `.a::b`, `#a::b` | g0194 g0195 g0705 |
+| `<a::b/>`, `<div.a::b/>`, `<div#a::b/>` | `::` is part of the name, as stock: the tag `a::b`, the class `.a::b` and the id `#a::b` | g0194 g0195 g0705 |
 | `<${"a::b"}/>` | the tag `${"a::b"}`: the `::` is inside the interpolation | g0706 |
-| `<a::b${x}/>`, `<a::${x}/>` | the error names `::b` and `::`: the name after `::` ends where the static piece ends | g0707 g0708 |
+| `<a::b${x}/>`, `<a::${x}/>` | the tag names `a::b${x}` and `a::${x}`: the static piece and the interpolation are one name | g0707 g0708 |
 | `<:email/>` | the name `:email`; the tag is not unnamed at this level | g0635 |
 | `<a:b:c/>` | the tag `a:b:c`; the second `:` is core's error, not the parser's | g0655 |
 
@@ -488,7 +487,7 @@ What the row order means for some inputs:
 | `<foo x <T>(a) {b}/>` | a method named `x` | g0713 |
 | concise `div x\n  =1` | the attribute `x`, then a child: an unnamed tag with the default value `1` (row 1) | g0714 |
 | concise `div x =1` | `x` with the value `1` | g0715 |
-| `<div x /*d*/ = :a/>` | the name `x`, an open-tag comment, then a default attribute with the value `:a`: a comment is row 14 | g0716 |
+| `<div x /*d*/ = :a/>` | the name `x`, an open-tag comment, then a default attribute with the value `:a`, read as source text: a comment is row 14 | g0716 |
 | `<div a ...b/>` | the name `a`, then a spread `b` | g0717 |
 | `<div a(b)=c/>` | the name, the arguments and the value `c` | g0718 |
 | `<if=x/>`, `<if:=x/>`, `<foo(a) { b }/>` | the default attribute: a zero-width name range, then the value or method | g0011 g0719 g0120 |
@@ -498,7 +497,7 @@ After each part is read (`ATTRIBUTE.return`):
 
 | Part | Result | Probes |
 | --- | --- | --- |
-| name | first, a name that is exactly `async`, read first in its attribute, may be held back (below). Otherwise a `::` anywhere in the name's range is the reserved-token error and the parse stops (`rejectReservedName`; `<div ::b/>` and `<div a::b/>` are the error, observed; stock reports the names). Otherwise the name is reported, unless an `async` is pending, and in HTML mode the ambiguous-`>` check runs ([below](#the-parser-grammar-attributes-the-ambiguous-check)) | g0095 g0096 g0097 g0098 |
+| name | first, a name that is exactly `async`, read first in its attribute, may be held back (below). Otherwise the name is reported (`<div ::b/>` and `<div a::b/>` are the attributes `::b` and `a::b`, as stock), unless an `async` is pending, and in HTML mode the ambiguous-`>` check runs ([below](#the-parser-grammar-attributes-the-ambiguous-check)) | g0095 g0096 g0097 g0098 |
 | arguments | if the attribute already has arguments: `An attribute can only have one set of arguments`. Otherwise, if `{` follows, after any whitespace **including newlines in both modes**, the attribute is a method and the arguments are its parameters. Otherwise, if type parameters were read: `An attribute cannot have both type parameters and arguments`. Otherwise the arguments are reported as attribute arguments | g0099 g0100 g0101 g0102 g0089 |
 | method body | the method is reported; the attribute ends | g0103 |
 | type parameters | `(` **must** follow, after any whitespace; otherwise `Attribute cannot contain type parameters unless it is a shorthand method` | g0104 g0105 |
@@ -624,7 +623,7 @@ on a native element is rejected (spec §8 "Deferred to MX 2").
 | --- | --- | --- |
 | `<p>${a} $!{b}</p>` | two placeholders in HTML content, the second unescaped | g0747 |
 | `<script>${a}</script>`, `<script>"${a}"</script>` | a placeholder in a text body, and inside a quoted string of one | g0748 g0749 |
-| `<script>${:a}</script>` | the atom `a`: a placeholder lexes atoms in a text body too (decision 156, addendum 2) | g0750 |
+| `<script>${:a}</script>` | the placeholder with the value `:a`, read as stock reads it: the parser lexes no atom, in a text body or elsewhere | g0750 |
 | ``<script>`${:a}`</script>`` | text only: a template literal in a text body is text, so its `${…}` is no placeholder | g0751 |
 | `<p>\${a}</p>` | the text `${a}`: an odd run of backslashes before the `$` makes it literal | g0752 |
 | `<p>\\${a}</p>` | the text `\` and the placeholder `a`: an even run keeps half as text | g0753 |
@@ -796,7 +795,6 @@ The template parser's own messages:
 | --- | --- | --- |
 | `=`, `:=` or `...` with no value | `Missing value for attribute` | g0106 g0188 g0189 |
 | empty `${}` in content, in a tag name or in a template literal | `Invalid placeholder, the expression cannot be missing` | g0190 g0191 g0192 |
-| `::` where atoms are lexed, or in the static text of a tag name, shorthand part or attribute name | `` `::name` is reserved (decision 156): `::` will be the Symbol.for sugar; write `:name` for an atom `` with the written name ([Atoms](#the-parser-grammar-atoms)) | g0193 g0194 g0195 g0097 |
 
 End of input inside a **position**
 ([End of input](#the-parser-grammar-expression-boundaries-how-a-position-is-scanned-end-of-input) has the rule and the silent cases); the message
@@ -853,7 +851,7 @@ conditions:
 Rejections raised **outside** the template parser, by core: scriptlets, CDATA
 and declarations (spec §3); an attribute name outside Marko's grammar, such as
 a spaced `#id` or `.class` (`Invalid attribute name`); duplicate attributes, a warning with the last occurrence winning
-(decision 135); the atom misuses of spec §4 "Atoms". The catalogue's list of
+(decision 135). The catalogue's list of
 front-end codes is [ast.md §3.13](/architecture/ast/).
 
 ## Expression boundaries
@@ -877,9 +875,9 @@ rules themselves are the rows it points to.
 | `consumeIndentedContent` | step 1 below |
 | `inType` | the reads listed in [The type context](#the-parser-grammar-expression-boundaries-how-a-position-is-scanned-the-type-context) |
 | `forceType` | the `=` and `{` rows of the character table |
-| `atoms` | the `:` row of the character table ([Atoms](#the-parser-grammar-atoms)); `EXPRESSION.return`, which records where a regular expression ended and each comment for the atom look-behind; `TEMPLATE_STRING.parse`, which copies the flag to a `${…}` |
-| `attrValue` | the `?` row of the character table and the `:` and `.` rows of the look-ahead table ([E1](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode)); `ATTRIBUTE.parse`, which sets `defaultAtom` to its negation |
-| `defaultAtom` | `isSingleAtomDefault`, for the look-ahead's `:` row ([E1](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode)) |
+| `triggers` | `lexTrigger`, which runs only when a dialect's syntax table has an expression trigger ([Atoms](#the-parser-grammar-atoms)); `EXPRESSION.return`, which records where a regular expression ended and each comment for the trigger look-behind; `TEMPLATE_STRING.parse`, which copies the flag to a `${…}`. The default syntax table has no trigger, so the flag changes nothing there |
+| `attrValue` | the `?` row of the character table ([E1](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode)); `valueMayEndAt`, for a dialect's `terminatesValue` triggers |
+| `claimDefault` | `isClaimedDefault`, for a dialect's value rows: a default attribute's value that one of them claims whole ends before a terminating attribute trigger. It is off in the default syntax table |
 
 State the position keeps as it scans:
 
@@ -888,8 +886,8 @@ State the position keeps as it scans:
 | the group stack (depth) | the opening and closing bracket rows | steps 1, 3 and 4; the `?`, `:`, `=` and non-type `<` rows; the closing-bracket rows; end of input; the look-ahead's keyword row. `EXPRESSION.parse` step 1 and `EXPRESSION.return` also read it to set `hadUnguardedNewline` |
 | `ternaryDepth` | the `?` row and the `:` row | the `:` row; the look-ahead's `:` row; the look-ahead's keyword row ([Ternary depth](#the-parser-grammar-dialect-rules-ternary-depth)) |
 | `wasComment` | set when a `//` comment has just been read, cleared when a newline is passed | step 1 |
-| `atomEnd`, where the last atom lexed in the position ends | `lexAtom` | `lookBehindForKeyword`, `isOperatorWord`, `isSingleAtomDefault` |
-| the comments read so far; where the last regular expression ended | `EXPRESSION.return`, with `atoms` | `expectsExpression` |
+| `atomEnd`, where the last trigger lexed in the position ends | `lexTrigger` | `lookBehindForKeyword`, `isOperatorWord` |
+| the comments read so far; where the last regular expression ended | `EXPRESSION.return`, with `triggers` | `expectsExpression` |
 | `hadUnguardedNewline` | step 1; `EXPRESSION.return` | `util/validators.ts`, which is outside this document |
 
 `EXPRESSION.parse`, for each character:
@@ -905,9 +903,9 @@ State the position keeps as it scans:
 | Character | Effect | Probes |
 | --- | --- | --- |
 | `"`, `'` | a string, to the same quote; `\` escapes one character | g0241 |
-| backtick | a template literal, to the closing backtick; `\` escapes one character; each `${` opens a nested position with the hard stop `}`, no flags but `atoms`, which it copies from the position the template literal is in (`TEMPLATE_STRING.parse`) | g0242 |
+| backtick | a template literal, to the closing backtick; `\` escapes one character; each `${` opens a nested position with the hard stop `}`, no flags but `triggers`, which it copies from the position the template literal is in (`TEMPLATE_STRING.parse`) | g0242 |
 | `?` | first, with `operators` and `attrValue` at depth 0: when the next character is `?`, or is `.` not followed by a digit, both characters are consumed and nothing else happens ([E1 overrides](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode)). Otherwise, with `operators` at depth 0: `ternaryDepth` + 1, then **all whitespace after it is consumed, newlines included**. Otherwise a plain character | g0243 g0244 g0245 |
-| `:` | first, with `atoms`, at any depth: `lexAtom` may consume it as `::` (the reserved-token error, which stops the parse) or as the start of an atom, in which case the atom is consumed and nothing else happens ([Atoms](#the-parser-grammar-atoms)). Otherwise, with `operators` at depth 0: if `ternaryDepth` > 0 it is decremented, otherwise the type context is entered (`inType`); then all whitespace after it is consumed. Otherwise a plain character | g0246 g0247 g0248 g0249 |
+| `:` | first, with `triggers` and a dialect trigger on `:`, at any depth: the trigger's hook may consume it ([Atoms](#the-parser-grammar-atoms)); the default syntax table has none. Otherwise, with `operators` at depth 0: if `ternaryDepth` > 0 it is decremented, otherwise the type context is entered (`inType`); then all whitespace after it is consumed. Otherwise a plain character | g0246 g0247 g0248 g0249 |
 | `=` | with `operators`, at any depth: if the next character is `>` (an arrow), the type context is left when `inType` is set, `forceType` is not, and the previous non-whitespace character is not `)`; both characters are consumed. If the next character is not `>`, the type context is left unless `forceType` is set or a group is open. Then all whitespace after it is consumed. Without `operators` a plain character | g0250 g0251 g0252 g0253 |
 | `/` | `//` is a comment to the end of the line; `/*` is a comment to `*/`. Otherwise it is a **division** when the previous non-whitespace character is a word character or one of backtick, `'`, `"`, `%`, `)`, `.`, `<`, `]`, `}`: it is consumed with all whitespace after it. Otherwise it starts a **regular expression**, which runs to the next `/` that is not escaped and not inside `[…]`. This row does not depend on `operators` or on depth | g0254 g0255 g0256 g0257 |
 | `(`, `[` | opens a group | g0258 |
@@ -924,11 +922,11 @@ steps and the character table mean together, for some inputs:
 | --- | --- | --- |
 | a position with no flags | `?`, `:`, `=`, `<` and `>` are plain characters: `<div x(a ? b : c = d < e > f)/>` is one argument list | g0791 |
 | inside a group | steps 1, 3 and 4 do not apply, and `?`, `:` and `as` do not touch the ternary counter or the type context: `<div x=(a as number > b)/>` is one value | g0792 g0793 |
-| an atom inside groups | lexed: atom lexing runs at any depth | g0794 |
+| a `:name` inside groups | source text, as stock: `<div x=[(:a)]/>` is the value `[(:a)]` | g0794 |
 | whitespace after `?`, `:`, `=` or a non-type `<`, with `operators` at depth 0 | consumed by that row, newlines included | g0795 g0250 g0262 |
 | the same characters in an attribute name, which has no `operators` | nothing is consumed: `<div a: b/>`, `<div a? b/>` and concise `div a: b` are the names `a:`/`a?` and `b` | g0733 g0734 g0796 |
 | whitespace after a division `/` | consumed in a position with or without `operators` | g0254 g0732 |
-| whitespace after an atom | not consumed by the atom's `:` row: `<div x=:a b/>` is the value `:a` and the attribute `b` | g0797 |
+| whitespace after a `:name` at the start of a value | ends the value, as after any word: `<div x=:a b/>` is the value `:a` and the attribute `b` | g0797 |
 | a string, a template literal's text, a regular expression, a comment | opaque: a hard stop inside one is not examined; a template literal's `${…}` is its own position | g0798 g0799 g0800 g0801 |
 
 #### The continuation test
@@ -956,13 +954,13 @@ immediately before the whitespace:
 | `>` | yes when the character before it is `=` (an arrow). Otherwise yes outside a type context and no inside one | g0285 g0286 g0287 |
 | `.` | yes when the first non-whitespace character after the whitespace is a word character | g0288 g0289 |
 | `+`, `-` | when the character before it is the same character (`++`, `--`): the answer is this table applied to the nearest non-whitespace character before the pair. Otherwise yes | g0290 g0291 g0292 g0293 g0294 g0295 g0296 g0297 |
-| a lowercase letter | **no** when `c` is the last character of an atom (the position's `atomEnd`): `:new` and `:delete` are names, not keywords. Otherwise yes when a unary keyword ends at `c` as a whole word. Outside a type context the keywords are `async` `await` `class` `function` `new` `typeof` `delete` `void`; inside one they are `async` `await` `class` `function` `new` `typeof` `asserts` `infer` `is` `keyof` `readonly` `unique`. "Whole word" means the keyword starts at the first character of the value, or the character before it is neither a word character nor `.` | g0298 g0299 g0300 g0301 g0302 g0303 g0304 g0305 g0306 |
+| a lowercase letter | **no** when `c` is the last character of a trigger's text (the position's `atomEnd`, set only by a dialect trigger): its text is an operand, not a keyword. Otherwise yes when a unary keyword ends at `c` as a whole word. Outside a type context the keywords are `async` `await` `class` `function` `new` `typeof` `delete` `void`; inside one they are `async` `await` `class` `function` `new` `typeof` `asserts` `infer` `is` `keyof` `readonly` `unique`. "Whole word" means the keyword starts at the first character of the value, or the character before it is neither a word character nor `.` | g0298 g0299 g0300 g0301 g0302 g0303 g0304 g0305 g0306 |
 | anything else | no | g0307 g0308 g0309 |
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| concise `div x=:new\n  span` | the value `:new` and a child tag `span`: the atom check is in `lookBehindForKeyword`. Stock: the single value `:new\n  span` | g0298 |
-| `<div x=:typeof />` | the value `:typeof` and a self-closed tag: the operator exemption uses the same table. Stock: the value `:typeof /`, then `Missing ending "div" tag` | g0608 |
+| concise `div x=:new\n  span` | the single value `:new\n  span`, as stock: `new` is a unary keyword, so the newline does not end the value | g0298 |
+| `<div x=:typeof />` | the value `:typeof /`, then `Missing ending "div" tag`, as stock: the operator exemption uses the same table | g0608 |
 | concise `div x=return\n  b`, `div x=throw\n  b`, `div x=yield\n  b` | the value ends at the newline: these words are in neither keyword list | g0308 g0812 g0813 |
 | concise `div x=a /* c */\n  b` | the value ends at the newline: a `/` is not in the table | g0814 |
 
@@ -998,7 +996,7 @@ The type context is the flag `inType`.
 
 | How it is entered | `forceType` | Probes |
 | --- | --- | --- |
-| a `:` at depth 0 with `ternaryDepth` 0, in a position with `operators`, that `lexAtom` has not consumed | not set | g0349 g0383 |
+| a `:` at depth 0 with `ternaryDepth` 0, in a position with `operators` | not set | g0349 g0383 |
 | an `as` or `satisfies` found by the look-ahead while the position is not in a type context | set when `ternaryDepth` is 0 | g0348 g0815 |
 | the position's flags at creation: a type list (E14 to E16), a statement or scriptlet that begins with a type keyword (E10, E11) | set | g0391 g0816 |
 
@@ -1108,27 +1106,27 @@ reads of that section it can then reach.
 
 | Call site | Flags | Hard stop | Position | Type context | Probes |
 | --- | --- | --- | --- | --- | --- |
-| `ATTRIBUTE.parse`, value branch | `operators`, `terminatedByWhitespace`, `atoms`; `attrValue` for a named attribute or a spread, `defaultAtom` otherwise | per mode, see E1/E2 | E1, E2, E3 | entered by `:` and by `as`/`satisfies`; reads 1 to 7 | g0383 g0287 |
+| `ATTRIBUTE.parse`, value branch | `operators`, `terminatedByWhitespace`, `triggers`; `attrValue` for a named attribute or a spread, `claimDefault` otherwise (with a dialect's value rows) | per mode, see E1/E2 | E1, E2, E3 | entered by `:` and by `as`/`satisfies`; reads 1 to 7 | g0383 g0287 |
 | `ATTRIBUTE.parse`, name branch | `terminatedByWhitespace` | per mode | [attribute name](#the-parser-grammar-attributes-attribute-names) | not entered: `div a:keyof\n  b` is the name `a:keyof` and a child | g0384 |
-| `ATTRIBUTE.parse`, `(` branch | `atoms` | `)` | E4, and the parameters of E5 | not entered: `>` after a `:` is a plain character | g0385 |
-| `ATTRIBUTE.parse`, `{` branch | `atoms` | `}` | E5, and the body of E17 | not entered | g0386 |
+| `ATTRIBUTE.parse`, `(` branch | `triggers` | `)` | E4, and the parameters of E5 | not entered: `>` after a `:` is a plain character | g0385 |
+| `ATTRIBUTE.parse`, `{` branch | `triggers` | `}` | E5, and the body of E17 | not entered | g0386 |
 | `ATTRIBUTE.parse`, `<` branch | `inType`, `forceType` | `>` | E16 | in it from creation; reads 1 and 2 | g0387 |
 | `OPEN_TAG.parse`, `/` case | `operators`, `terminatedByWhitespace` | per mode | E9 | entered by `:` and by `as`/`satisfies`; reads 1 to 9 | g0388 g0349 g0825 |
-| `OPEN_TAG.parse`, `(` case | `atoms` | `)` | E6, and the parameters of E17 | not entered | g0389 |
+| `OPEN_TAG.parse`, `(` case | `triggers` | `)` | E6, and the parameters of E17 | not entered | g0389 |
 | `OPEN_TAG.parse`, `\|` case | none | `\|` | E7 | not entered | g0390 |
 | `OPEN_TAG.parse`, `<` case | `inType`, `forceType` | `>` | E14, E15 | in it from creation; reads 1 and 2 | g0391 |
-| `TAG_NAME.parse`, `${` branch | `atoms` | `}` | E13 | not entered | g0392 |
+| `TAG_NAME.parse`, `${` branch | `triggers` | `}` | E13 | not entered | g0392 |
 | `TAG_NAME.exit`, statement branch (`prepareStatement`) | `operators`, `terminatedByEOL`, `consumeIndentedContent`; `inType` and `forceType` after a type keyword | none | E10 | after a type keyword: in it from creation, reads 1 to 4 (`static type A = void\nB` ends at the newline, `static type A = keyof\nB` continues). Otherwise entered by `:`, reads 1 to 6 (`static const x: void\ndiv` ends at the newline, `static const x: keyof\ndiv` continues; `static x = void\nB` continues, `static x = keyof\nB` ends) | g0395 g0396 g0393 g0394 g0397 g0398 g0399 g0400 g0401 g0402 |
 | `INLINE_SCRIPT.parse`, line form (`prepareScriptlet`) | `operators`, `terminatedByEOL`; `inType` and `forceType` after a type keyword | none | E11, line form | as the statement: `$ type A = void\n<b/>` ends at the newline; `$ let x: keyof\n<b/>` is one scriptlet and `$ let x: void\n<b/>` ends at the newline; `$ let x = void\n<b/>` is one scriptlet; `$ let x: (b > c)` is `Mismatched group` | g0405 g0406 g0403 g0404 g0407 g0408 g0409 g0410 |
 | `INLINE_SCRIPT.parse`, block form | none | `}` | E11, block form | not entered | g0411 |
-| `checkForPlaceholder` (`PLACEHOLDER.ts`) | `atoms` | `}` | E8 | not entered | g0412 |
-| `TEMPLATE_STRING.parse`, `${` case | `atoms` when the position holding the template literal has it | `}` | a template literal's `${…}`, inside a position or a text body | not entered | g0413 g0414 |
+| `checkForPlaceholder` (`PLACEHOLDER.ts`) | `triggers` | `}` | E8 | not entered | g0412 |
+| `TEMPLATE_STRING.parse`, `${` case | `triggers` when the position holding the template literal has it | `}` | a template literal's `${…}`, inside a position or a text body | not entered | g0413 g0414 |
 
-The positions with the `atoms` flag are where atoms are lexed (decision 156,
-addendum 2; the AST catalogue's table "Where the atom lexer runs",
-[ast.md §4.3](/architecture/ast/)). An attribute's `(` branch opens one
-position whether the attribute turns out to have arguments or to be a method,
-so a method's parameters lex atoms too (decision 163, addendum 1). Tag
+The positions with the `triggers` flag are where a dialect's expression
+triggers run (spec §13.9.5). The default syntax table has none, so there the
+flag has no effect. An attribute's `(` branch opens one position whether the
+attribute turns out to have arguments or to be a method, so a method's
+parameters arm triggers too. Tag
 shorthands and tag names are read by `TAG_NAME.parse`, not by a position.
 
 ### E1 — Attribute value, HTML mode
@@ -1182,7 +1180,7 @@ regular-expression error) and before `>` (`Mismatched group`).
 | --- | --- | --- |
 | `x=a :b` | one value `a :b`: a spaced `:b` after a value continues it, as in stock htmljs-parser | g0422 |
 | `x=a.b .c` | one value `a.b .c`: a spaced `.c` after a value continues it, as in stock htmljs-parser | g0429 |
-| `x=a \| :b` | one value, in which `:b` is an atom: the `\|` before the whitespace is a look-behind operator | g0839 |
+| `x=a \| :b` | one value `a \| :b`: the `\|` before the whitespace is a look-behind operator | g0839 |
 | `x=a ? b :c` | one value: a `?` is open | g0424 |
 | `x=a ? b : c :d` | one value `a ? b : c :d` | g0840 |
 | `<div x=a :/>`, `<div x=a :>` | `<div x=a :/>` is the regular-expression error; `<div x=a :>` is the `Mismatched group` error | g0426 g0841 |
@@ -1191,7 +1189,7 @@ regular-expression error) and before `>` (`Mismatched group`).
 | `<div x=a .2xl y/>` | the value `a .2xl`, then `y` | g0430 |
 | `x=a . b`, `x=a .2xl` | one value | g0842 g0626 |
 | `x=a ?? b :c`, `x=a ?.b :c` | one value each, `a ?? b :c` and `a ?.b :c` (OQ 3) | g0431 g0432 |
-| `x=a ?:b` | one value, in which `:b` is an atom: `?:` opens a ternary (OQ 3) | g0628 |
+| `x=a ?:b` | one value `a ?:b`: `?:` opens a ternary (OQ 3) | g0628 |
 | `<div x=a\n  .b/>` | one value across the newline, in HTML mode | g0843 |
 | `<div ...a :b/>`, `<div ...a .b/>` | a spread's value includes the spaced `:b` or `.b`: `...a :b` spreads `a :b` (OQ 5) | g0844 g0845 |
 
@@ -1206,7 +1204,7 @@ stock.
 | `<if=:a :b :c>` | one value `:a :b :c`, the same as stock | g0850 |
 | `<if=:a :>` | the `Mismatched group` error | g0851 |
 | `<if=:a .b>` | one value | g0630 |
-| `<if=:a.b :c>`, `<if=:a + :b :c>`, `<if=(:a) :b>` | one value: the value is not one atom | g0852 g0853 g0854 |
+| `<if=:a.b :c>`, `<if=:a + :b :c>`, `<if=(:a) :b>` | one value each: `:a.b :c`, `:a + :b :c` and `(:a) :b` | g0852 g0853 g0854 |
 | `<if=:a ? :b :c>` | one value: a `?` is open | g0855 |
 
 ### E2 — Attribute value, concise mode
@@ -1302,7 +1300,7 @@ E2.
 | Input | Result | Probes |
 | --- | --- | --- |
 | `<div ...a, b/>`, concise `div ...a\n  b` | the spread `a`: the stops of E1 and of E2 | g0861 g0862 |
-| `<div ...:a/>` | the atom `a` | g0863 |
+| `<div ...:a/>` | the spread of `:a`, read as source text | g0863 |
 | `<div ...a .b/>`, `<div ...a :b/>` | the spread `a .b` / `a :b`: a spaced `.b` or `:b` after the value continues it (OQ 5) | g0845 g0844 |
 
 ### E4 — Attribute arguments
@@ -1316,7 +1314,7 @@ E2.
 | `<div onClick(a` | an error ([End of input](#the-parser-grammar-expression-boundaries-how-a-position-is-scanned-end-of-input)) | g0200 |
 | concise `div onClick(a` | the arguments `a`, no error | g0866 |
 | `<div x(a :b)/>` | one argument list | g0867 |
-| `<div x(:a)/>`, `<div x(a = :b) { c }/>` | the atoms `a` and `b`: arguments and a method's parameters lex atoms (decision 163, addendum 1) | g0868 g0869 |
+| `<div x(:a)/>`, `<div x(a = :b) { c }/>` | the arguments `:a` and the parameters `a = :b`, read as source text | g0868 g0869 |
 
 ### E5 — Attribute method body
 
@@ -1326,7 +1324,7 @@ content is a statement list.
 | Input | Result | Probes |
 | --- | --- | --- |
 | `<div x(a) { if (b > c) { d } }/>` | one body: nested braces and `>` do not end it | g0870 |
-| `<div x(a) { return :c }/>` | the atom `c`: a method body is an attribute value (lead ruling 2026-10-05, `PROVENANCE.md`; [ast.md §4.3](/architecture/ast/)) | g0871 |
+| `<div x(a) { return :c }/>` | the body ` return :c `, read as source text | g0871 |
 
 ### E6 — Tag arguments
 
@@ -1338,7 +1336,7 @@ content is a statement list.
 | `<foo( a )/>` | the arguments ` a ` | g0872 |
 | `<foo(a) { b }/>` | `{` follows: the default method of [E17](#the-parser-grammar-expression-boundaries-e17-tag-level-default-method) | g0120 |
 | `<foo <A>(a)/>` | type parameters before the `(` and no `{`: `Unexpected types. …` | g0230 |
-| `<foo(:a)/>` | the atom `a` (decision 156.1) | g0873 |
+| `<foo(:a)/>` | the tag arguments `:a`, read as source text | g0873 |
 
 ### E7 — Tag parameters
 
@@ -1351,7 +1349,7 @@ content is a parameter list (spec §8 "Tag params").
 | `<foo\|a: b = c, d\|/>` | one list: `:`, `=` and `,` are plain characters | g0875 |
 | `<foo\|a = (b \| c)\|/>` | one list: a group shields the `\|` | g0876 |
 | `<foo\|x: A \| B\|/>` | the parameters `x: A ` and then an attribute named `B\|`: a union type at depth 0 ends the list. **Not settled** (OQ 6) | g0676 |
-| `<foo\|a = :b\|/>`, `<foo\|a::b\|/>` | no atom and no reserved-token error (spec §4 "Atoms": not in tag params) | g0877 g0878 |
+| `<foo\|a = :b\|/>`, `<foo\|a::b\|/>` | the tag parameters `a = :b` and `a::b`: source text | g0877 g0878 |
 
 ### E8 — Placeholder
 
@@ -1362,8 +1360,8 @@ depth 0.
 | --- | --- | --- |
 | `<p>${ a }</p>` | the value ` a ` | g0018 |
 | `<p>${{a: 1}} ${a > b, c}</p>` | one value each: a group shields the `}`; `>` and `,` do not end it | g0879 |
-| `<p>${:a}</p>`, `<script>${:a}</script>` | the atom `a` (decision 156.1 and addendum 2) | g0880 g0750 |
-| `<p>${a::b}</p>` | the reserved-token error | g0881 |
+| `<p>${:a}</p>`, `<script>${:a}</script>` | the placeholder with the value `:a`: source text | g0880 g0750 |
+| `<p>${a::b}</p>` | the placeholder with the value `a::b` | g0881 |
 
 ### E9 — Tag variable
 
@@ -1398,8 +1396,8 @@ continuation test and the type context apply as there.
 | `<let/x<T>=1/>` | `Unexpected types. …`: outside a type context `<` is a hard stop and the open tag reads a type list | g0350 |
 | `<let/x: A \| B = 1/>` | the variable `x: A`, then tag parameters to the end of the input: `EOF reached while parsing expression`. A `\|` is a hard stop inside a type too (OQ 6) | g0890 |
 | `<const/x=items\n .filter(Boolean)/>` | one default value: the value after the variable is the default attribute, and a spaced `.b` continues it, as in stock ([E1](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode)) | g0657 |
-| `<let/a::b/>` | the variable `a::b`: no atom lexing in the variable | g0891 |
-| `<let/x=:a/>`, `<let/a = :b/>` | the atom: the default value is E1 | g0892 g0948 |
+| `<let/a::b/>` | the variable `a::b` | g0891 |
+| `<let/x=:a/>`, `<let/a = :b/>` | the default values `:a` and `:b`, read as source text: the default value is E1 | g0892 g0948 |
 
 ### E10 — Statement tags
 
@@ -1431,7 +1429,7 @@ the flags of [the inventory](#the-parser-grammar-expression-boundaries-inventory
 | `import type { A } from "x"\ndiv` | ends at the newline: after `type`, `{` and `*` count as a type name | g0899 |
 | `static x = f<T>\ndiv`, `static type = f<T>\ndiv` | each continues onto the `div` line: not a type, so the `>` is a look-behind operator | g0900 g0901 |
 | `static type A = (b > c)` | `Mismatched group. A ">" character was found when ")" was expected.` | g0902 |
-| `static x = :a` | no atom (decision 156.1: "never inside `static`/`import`/script blocks") | g0903 |
+| `static x = :a` | `:a` is source text of the statement | g0903 |
 
 The other type-context inputs are in
 [the inventory](#the-parser-grammar-expression-boundaries-inventory-of-positions).
@@ -1466,7 +1464,7 @@ The second row is OQ 24.
 | concise `$ {a` | the block form ends silently | g0370 |
 | `<p>\n$ {a` | `EOF reached while parsing expression`: the block form in HTML content | g0910 |
 | `$ {(a`, `$ (a` | the same error: a group is open | g0911 g0912 |
-| `$ x = :a`, `$ { x = :a }` | no atom (decision 156.1 and addendum 2) | g0913 g0914 |
+| `$ x = :a`, `$ { x = :a }` | `:a` is source text of the scriptlet | g0913 g0914 |
 
 ### E12 — Delimited HTML blocks
 
@@ -1519,7 +1517,7 @@ rules:
 | `<a${b}c/>` | the name continues after the `}` | g0059 |
 | `<${a > b}/>` | one value: `>` does not end it | g0929 |
 | `<${}/>` | `Invalid placeholder, the expression cannot be missing` | g0191 |
-| `<${:a}/>`, `<div.${:a}/>` | the atom `a`, reported before the name or shorthand event (decision 156, addendum 2) | g0930 g0931 |
+| `<${:a}/>`, `<div.${:a}/>` | the tag name `${:a}` and the class `.${:a}`: the interpolation's `:a` is source text | g0930 g0931 |
 
 ### E14 — Tag type arguments
 
@@ -1582,182 +1580,184 @@ still bound the value.
 
 ## Atoms
 
-An **atom** is `:name` written where an expression is expected, in a position
-that lexes atoms (decision 156; spec §4 "Atoms"). The template parser finds
-atoms, reports them and reserves `::`; it gives them no meaning. The catalogue
-node is `MxAtom` ([ast.md §4.3](/architecture/ast/)).
+The template parser has no atom lexer. It reads `:name` as stock
+htmljs-parser 5.18.0 reads it: in an attribute value, an argument list, a
+placeholder or any other expression, the characters are source text, and a
+`:` at depth 0 is a ternary's colon or a type annotation's colon. `<div
+x=:a/>` is the attribute `x` with the value `:a`, and Babel reports the `:`
+later as an unexpected token. A `::` is part of the surrounding name or two
+colons of the surrounding expression, and no error. There is no atom event,
+and `read` returns the written text unchanged.
 
-### Where atoms are lexed
+Atoms exist as a **dialect** feature. A syntax table's `expressionTriggers`
+and `valueTriggers` (spec §13.9.5) arm a character or
+pattern in the positions that carry the `triggers` flag; the trigger's hook
+returns the replacement node, which for an atom is a `StringLiteral` marked
+`extra.mxAtom` ([ast.md §4.3](/architecture/ast/)). The parser reports a
+trigger's span through `onTrigger`, and `read` hands back the trigger's
+stand-in text (`Parser.standIn`) for a consumer that gives the text to Babel.
+With the default syntax table no trigger is armed and the rows below hold. The rules a trigger asks
+of the parser, where an operand may start, are described under
+[Is an expression expected?](#the-parser-grammar-atoms-is-an-expression-expected-expectsexpression).
 
-In the positions whose `EXPRESSION` has the `atoms` flag
-([Inventory of positions](#the-parser-grammar-expression-boundaries-inventory-of-positions); decision 156.1 and
-addendum 2; [ast.md §4.3](/architecture/ast/) states it per catalogue field):
+### Where `:name` is read
 
-| Where | Atoms | Probes |
+Every position reads it as source text:
+
+| Where | `:name` | Probes |
 | --- | --- | --- |
-| an attribute value: named, bound, default, spread (E1 to E3) | lexed | g0529 g0943 g0944 g0863 |
-| attribute arguments and method parameters (E4) | lexed | g0868 g0869 |
-| a method body (E5) | lexed | g0871 |
-| tag arguments (E6; E17 uses E6 and E5) | lexed | g0873 g0945 |
-| a placeholder, in a text body too (E8) | lexed | g0880 g0750 |
-| the `${…}` of a tag name or shorthand (E13) | lexed | g0930 g0931 |
-| the `${…}` of a template literal inside one of those | lexed | g0946 |
-| an attribute name | not lexed: `<div :a/>` is the name `:a` | g0947 |
-| the tag variable (E9) | not lexed | g0891 |
-| tag parameters (E7) | not lexed | g0877 |
-| a statement tag (E10), a scriptlet (E11) | not lexed | g0903 g0913 g0914 |
-| a type list (E14 to E16) | not lexed | g0949 |
-| a string, a template literal's text, a regular expression, a comment | not lexed | g0950 g0951 g0952 g0953 |
+| an attribute value: named, bound, default, spread (E1 to E3) | source text of the value | g0022 g0529 g0943 g0944 g0863 |
+| attribute arguments and method parameters (E4) | source text | g0868 g0869 |
+| a method body (E5) | source text | g0871 |
+| tag arguments (E6; E17 uses E6 and E5) | source text | g0873 g0945 |
+| a placeholder, in a text body too (E8) | source text of the placeholder's value | g0880 g0750 |
+| the `${…}` of a tag name or shorthand (E13) | source text of the name or shorthand | g0930 g0931 |
+| the `${…}` of a template literal inside a value | source text of the template literal | g0946 |
+| an attribute name | the name: `<div :a/>` is the name `:a` | g0947 |
+| the tag variable (E9) | source text | g0891 |
+| tag parameters (E7) | source text | g0877 |
+| a statement tag (E10), a scriptlet (E11) | source text | g0903 g0913 g0914 |
+| a type list (E14 to E16) | source text | g0949 |
+| a string, a template literal's text, a regular expression, a comment | opaque, as always | g0950 g0951 g0952 g0953 |
 
-### At a `:` (`lexAtom`)
+### `::`
 
-In a position with `atoms`, a `:` the scan reaches in its character table goes
-to `lexAtom` before the ternary and type handling:
-
-| # | At the `:` | Result | Probes |
-| --- | --- | --- | --- |
-| 1 | the next character is `:` | the **reserved-token error** (`INVALID_EXPRESSION`): `` `::name` is reserved (decision 156): `::` will be the Symbol.for sugar; write `:name` for an atom ``, with the name read after `::` (with none, the message names `` `::` `` and suggests `:name`), ranged from the first `:` to the end of that name. The parse stops. This row does not look at what precedes the `:`, so `x=a :: b` and `x=(a ? b::c : d)` are the error too (observed) | g0193 g0521 g0522 g0523 |
-| 2 | no name follows: the next character is not `A`–`Z`, `a`–`z`, `$` or `_` | no atom; the `:` is handled by the rest of the character table | g0524 g0525 |
-| 3 | a character at or above U+0080 directly follows the name | no atom (`:aé`) | g0526 |
-| 4 | a `-` directly follows the name, then a character at or above U+0080 | no atom (`:a-é`) | g0527 |
-| 5 | an expression is not expected here (`expectsExpression`, below) | no atom | g0528 |
-| 6 | otherwise | an **atom**, from the `:` to the end of the name. It is recorded, `onAtom` reports it, the position's `atomEnd` is set to its end, and the scan resumes after it. The `:` touches neither `ternaryDepth` nor the type context, and the whitespace after the atom is not consumed | g0529 g0530 g0531 g0532 g0533 |
-
-A **name** (`atomNameEnd`) is `[A-Za-z_$][\w$]*(-[\w$]+)*`:
+`::` has no meaning of its own in the parser. In a name it is part of the
+name ([Tag names](#the-parser-grammar-tags-tag-names),
+[Attributes](#the-parser-grammar-attributes)); in an expression it is two
+`:` characters, each handled by the `:` row of the character table.
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `<div x=:rename-all y/>` | the atom `:rename-all`: a `-` belongs to the name when a word character follows | g0530 |
-| concise `div x=:a-` | the value `:a-` with the atom `:a` | g0531 |
-| `<div x=:a--b/>` | the value `:a--b` with the atom `:a` | g0532 |
+| `<a::b/>`, `<div.a::b/>` | the tag `a::b`; the class `.a::b` | g0194 g0195 |
+| `<div a::b/>`, `<div ::b/>` | the attributes `a::b` and `::b` | g0097 g0096 |
+| `<let/a::b/>`, `<foo\|a::b\|/>` | the variable `a::b`; the parameters `a::b` | g0891 g0878 |
+| `<div x=::a/>` | the value `::a` | g0193 |
+| `<div x=::/>` | `EOF reached while parsing regular expression`: the `/` of `/>` follows the operator `:` and starts a regular expression | g0521 |
+| `<div x=a :: b/>`, `<div x=(a ? b::c : d)/>` | one value each | g0522 g0523 |
+| `<div x="a::b"/>` | a string | g1014 |
+
+### How a `:name` ends or continues a value
+
+The value is read by the rules of
+[How a position is scanned](#the-parser-grammar-expression-boundaries-how-a-position-is-scanned)
+with no special case for a name that starts with `:`. The word characters of
+a name are `[A-Za-z0-9_$-]` as for any other text, and a non-ASCII character
+after it is a word character too:
+
+| Input | Result | Probes |
+| --- | --- | --- |
+| `<div x=:rename-all y/>` | the value `:rename-all`, then the attribute `y` | g0530 |
+| concise `div x=:a-`, `<div x=:a--b/>`, `<div x=:a-b/>` | one value each | g0531 g0532 g0584 |
 | `<div x=:a-/>` | `EOF reached while parsing regular expression`: the `/` of `/>` follows the operator `-` (the exemption of scan step 4, OQ 17) | g0954 |
+| `<div x=:aé/>`, `<div x=:a-é/>`, `<div x=:1/>`, `<div x=: a/>` | one value each | g0526 g0527 g0524 g0525 |
+| `<div x=[:a, :rename-all]/>` | one value | g1015 |
+
+The `:` at depth 0 is the ternary's or a type annotation's, so the type
+context ([The type context](#the-parser-grammar-expression-boundaries-how-a-position-is-scanned-the-type-context))
+applies after it. These inputs are concise unless written with `<`:
+
+| Input | Result | Probes |
+| --- | --- | --- |
+| `x=a ? :b :c` | one value: the `:` of `:b` closes the `?`, and ` :c` continues the value | g0533 |
+| `div x=:a<b, c> d` | the value `:a<b, c>`, then the attribute `d`: the `:` entered the type context, in which `<` opens a group | g0596 |
+| `<div x=:a<b>(c) y/>` | the value `:a<b>(c)`, then `y` | g0597 |
+| `div x=:a > b`, `div x=:a <b> c` | `Mismatched group` for both: a `>` in the type context is a closing bracket | g0598 g0599 |
+| `div x=:a<b>\n  c` | the value `:a<b>` and a child `c` | g0600 |
+| `div x=:a + void\n  b`, `div x=:a + void!\n  b` | the value ends at the newline: the unary keyword list is the type context's, in which `void` is no keyword | g0601 g0602 |
+| `div x=:a + keyof\n  b` | one value: `keyof` continues the value | g0603 |
+| `<div x=:a + void, y/>` | the value `:a + void`, then `y` | g0604 |
+| `div x=:a as T = b<c> d` | one value: the `as` does not set `forceType`, so the `=` leaves the context | g0605 |
+| `<div x=:new :b/>`, `<div x=:typeof :b/>` | one value each: `new` and `typeof` continue the value | g0606 g0607 |
+| concise `div x=:new\n  span` | the single value `:new\n  span` | g0298 |
+| `<div x=:typeof />` | the value `:typeof /`, then `Missing ending "div" tag` | g0608 |
+| `<if=:a :b>` | one value `:a :b` | g0423 |
 
 ### Is an expression expected? (`expectsExpression`)
 
-Word characters here are those of [Vocabulary](#the-parser-grammar-status-sources-of-truth-and-method-vocabulary), so a non-ASCII
-identifier is an operand and a symbol is not (decision 156, addendum 13). An atom's own name is
-ASCII (`lexAtom`, rows 3 and 4).
+This section describes what a dialect's trigger asks of the parser; the
+default syntax table never asks. `lexTrigger` runs at a character a trigger
+arms and asks `expectsExpression` whether an operand may start there. The
+reference dialect's atom, `:name`, is the example; the rows are exercised by
+`mx-atoms.cases.ts` through `ATOMS_SYNTAX` (`test-support/sugar-rows.ts`),
+and the corpus probes cited at the end of the section show that the default
+syntax reads the same inputs as plain text. Word characters are those of
+[Vocabulary](#the-parser-grammar-status-sources-of-truth-and-method-vocabulary),
+so a non-ASCII identifier is an operand and a symbol is not.
 
-`expectsExpression` scans backwards from the character before the `:`,
+`expectsExpression` scans backwards from the character before the trigger,
 skipping whitespace and each comment already read in this position, and stops
 at the position's start. `p` is the character reached:
 
-| # | `p` | Expected? | Probes |
-| --- | --- | --- | --- |
-| 1 | none: only whitespace and comments lie between the position's start and the `:` | **yes** (`x=:a`, `x= :b`, `${ :a}`) | g0529 g0534 g0535 g0536 |
-| 2 | `)`, `]`, `}`, `"`, `'` or a backtick | **no**: an expression ended | g0537 g0538 g0539 g0540 g0541 g0542 |
-| 3 | `.` | **yes** only when it is the third of `...` (`[...:a]`); otherwise **no** (`a.:b`) | g0543 g0544 |
-| 4 | `?` | if the `?` is the position's first character: **yes**. Otherwise let `o` be the character directly before the `?`. If `o` is a word character: **yes** only when the word ending at `o` starts with a digit (`n === 1? :a : :b`); otherwise **no**, it is TypeScript's optional marker (`(a? :T) => a`, `(é? :T) => a`). If `o` is `]`, `-` or `+`: **no**. Otherwise **yes** (`c ? :a`) | g0545 g0546 g0547 g0548 g0549 g0550 |
-| 5 | `!` | skip back over every `!` and whitespace. If nothing is left: **yes**. Let `o` be the character reached. If `o` is `)`, `]`, `-` or `+`: **no** (postfix). If `o` is not a word character: **yes** (`(!:a)`). Otherwise **yes** only when the word ending at `o` is an operator word (below; `typeof!:a`), otherwise **no** (`a! :b`, `é! :b`) | g0551 g0552 g0553 g0554 g0555 g0556 |
-| 6 | `>` | **yes** when the character before it is `=` (`a => :b`). Otherwise **no** when the `>` closes a type argument list (below; `y as Array<T> :z`), otherwise **yes** (a comparison or a shift) | g0557 g0558 g0559 g0560 g0561 |
-| 7 | `+` or `-` | **no** when the character before it is the same (`a++ :b`); otherwise **yes** | g0562 g0563 g0564 |
-| 8 | `/` | **no** when it is the last character of a regular expression read in this position (`/re/ :b`); otherwise **yes** (`a / :b`) | g0565 g0566 |
-| 9 | any other character that is not a word character | **yes**: an operator or punctuator (`(:a`, `[:a, :b]`, `a + :b`, `{ k: :a }`). | g0567 g0568 g0569 g0570 |
-| 10 | a word character directly before the `:`, with no whitespace or comment between | **no**: an object key or a label, keyword or not (`{ new:a }`, `{ é:a }`) | g0571 g0572 |
-| 11 | a word character, with whitespace or a comment between | **yes** only when the word ending at `p` is an operator word; otherwise **no** (`c ? b :c`, `(é :b)`) | g0573 g0574 g0575 g0576 |
-
-**Unicode whitespace** (decision 156, addendum 10; `isUnicodeWhitespaceCode`): in the atom
-look-behind the characters excepted from the word characters behave as ASCII
-whitespace. In this table ` ` stands for the character U+00A0 at that
-place in the input; the second probe of a row is the same input with a space
-there.
-
-| Input | Result, with U+00A0 and with a space | Probes |
+| # | `p` | Expected? |
 | --- | --- | --- |
-| `x=({ é :a })` | no atom | g0955 g0956 |
-| `x=({ a :b })` | no atom | g0957 g0958 |
-| `x=(a! :b)` | no atom | g0959 g0555 |
-| `x=(a? :b : c)` | no atom | g0960 g0961 |
-| `x=(Array<T> :b)` | no atom | g0962 g0963 |
-| `x=(a, yield :b)` | no atom | g0964 g0591 |
-| `x=(x of :a)` | the atom lexes | g0965 g0966 |
-| `x=[a,` + an excepted character + `:b]`, for U+00A0 and each of the others | the atom lexes | g0967 g0968 g0969 g0970 g0971 g0972 g0973 g0974 g0975 g0976 g0977 g0978 g0979 g0980 g0981 g0982 g0983 g0984 g0985 g0986 |
+| 1 | none: only whitespace and comments lie between the position's start and the trigger | **yes** (`x=:a`, `x= :b`, `${ :a}`) |
+| 2 | `)`, `]`, `}`, `"`, `'` or a backtick | **no**: an expression ended |
+| 3 | `.` | **yes** only when it is the third of `...` (`[...:a]`); otherwise **no** (`a.:b`) |
+| 4 | `?` | if the `?` is the position's first character: **yes**. Otherwise let `o` be the character directly before the `?`. If `o` is a word character: **yes** only when the word ending at `o` starts with a digit (`n === 1? :a : :b`); otherwise **no**, it is TypeScript's optional marker (`(a? :T) => a`, `(é? :T) => a`). If `o` is `]`, `-` or `+`: **no**. Otherwise **yes** (`c ? :a`) |
+| 5 | `!` | skip back over every `!` and whitespace. If nothing is left: **yes**. Let `o` be the character reached. If `o` is `)`, `]`, `-` or `+`: **no** (postfix). If `o` is not a word character: **yes** (`(!:a)`). Otherwise **yes** only when the word ending at `o` is an operator word (below; `typeof!:a`), otherwise **no** (`a! :b`, `é! :b`) |
+| 6 | `>` | **yes** when the character before it is `=` (`a => :b`). Otherwise **no** when the `>` closes a type argument list (below; `y as Array<T> :z`), otherwise **yes** (a comparison or a shift) |
+| 7 | `+` or `-` | **no** when the character before it is the same (`a++ :b`); otherwise **yes** |
+| 8 | `/` | **no** when it is the last character of a regular expression read in this position (`/re/ :b`); otherwise **yes** (`a / :b`) |
+| 9 | any other character that is not a word character | **yes**: an operator or punctuator (`(:a`, `[:a, :b]`, `a + :b`, `{ k: :a }`) |
+| 10 | a word character directly before the trigger, with no whitespace or comment between | **no**: an object key or a label, keyword or not (`{ new:a }`, `{ é:a }`) |
+| 11 | a word character, with whitespace or a comment between | **yes** only when the word ending at `p` is an operator word; otherwise **no** (`c ? b :c`, `(é :b)`) |
+
+Every look-behind treats the characters excepted from the word characters
+(Unicode whitespace) as ASCII whitespace
+([Unicode in the parser](/architecture/unicode-in-the-parser/)).
 
 **Operator words** (`isOperatorWord`), for rows 5 and 11. The word is the run
 of word characters ending at `p`, within the position:
 
-| # | The word | Operator word? | Probes |
-| --- | --- | --- | --- |
-| 1 | ends where the position's last atom ends (an atom's own name) | no: `(:delete :b)` lexes `:delete` alone | g0585 |
-| 2 | is directly preceded by a `.` | no: `(a.new :b)` | g0587 |
-| 2 | the same, when the `.` is the third dot of a spread (`isSpreadEnd`) | the rule does not apply: `[...await :b]` and `[...new :a]` lex the atom (decision 156, addendum 8) | g0987 g0988 |
-| 3 | is not one of `await` `case` `delete` `do` `else` `extends` `in` `instanceof` `new` `of` `return` `throw` `typeof` `void` `yield` (`atomKeywords`) | no: `(c ? b :c)`; in `(éin :b)` the word is `éin` | g0573 g0576 |
-| 4 | is `of` | yes when the character before it, skipping whitespace, is a word character, `)`, `]` or `}`; otherwise no | g0580 g0989 g0990 g0588 |
-| 5 | is `yield` or `await` | no when the character before it, skipping whitespace, is `?`, `:`, `,` or `(`; otherwise yes, at the position's start too. Decision 156, addendum 8: after `(` or `,` the word can be a parameter name with a type annotation, and after `?` or `:` a ternary operand | g0589 g0591 g0991 g0581 g0992 |
-| 6 | is another word of the list | yes | g0575 g0579 g0993 g0994 g0995 g0996 g0997 g0998 g0999 g1000 g1001 g1002 |
-
-| Input | Result | Probes |
+| # | The word | Operator word? |
 | --- | --- | --- |
-| `<div x=yield :b/>` | one value `yield :b`, with the atom `b`, because `yield` is no look-behind keyword | g1003 |
-| `<div x=await :b/>` | one value with the atom `b` | g0581 |
+| 1 | ends where the position's last trigger ends (`atomEnd`: a trigger's own text) | no: `(:delete :b)` lexes `:delete` alone |
+| 2 | is directly preceded by a `.` | no: `(a.new :b)`; when the `.` is the third dot of a spread (`isSpreadEnd`) the rule does not apply: `[...await :b]` and `[...new :a]` |
+| 3 | is not one of `await` `case` `delete` `do` `else` `extends` `in` `instanceof` `new` `of` `return` `throw` `typeof` `void` `yield` (`operandKeywords`) | no: `(c ? b :c)`; in `(éin :b)` the word is `éin` |
+| 4 | is `of` | yes when the character before it, skipping whitespace, is a word character, `)`, `]` or `}`; otherwise no |
+| 5 | is `yield` or `await` | no when the character before it, skipping whitespace, is `?`, `:`, `,` or `(`; otherwise yes, at the position's start too. After `(` or `,` the word can be a parameter name with a type annotation, and after `?` or `:` a ternary operand |
+| 6 | is another word of the list | yes |
 
 **A type argument list's closing `>`** (`closesTypeArguments`), for row 6. It
 scans backwards from the `>`, counting each `>` not preceded by `=` up and
 each `<` down, and each closing bracket `)` `]` `}` up and each opening one
 down:
 
-| # | At | Closes type arguments? | Probes |
-| --- | --- | --- | --- |
-| 1 | a `<` that brings the angle count to 0 | yes when no bracket is open between them and the `<` directly follows a word character (`Array<T>`, `É<T>`, `Map<K, Array<V>>`, `Array<() => T>`, `a<b >`); otherwise no (`a < b >`) | g0558 g0561 g1004 g1005 g1006 g0631 |
-| 2 | an opening bracket with no closing one after it | no | g0559 |
-| 3 | `;` | no | g1007 |
-| 4 | `?` or `:` with no bracket open between it and the `>` | no | g1008 |
-| 5 | `&&` or `\|\|` | no | g1009 g1010 |
-| 6 | the position's start | no | g1011 |
-
-| Input | Result | Probes |
+| # | At | Closes type arguments? |
 | --- | --- | --- |
-| `x=(c ? a < b > :z)`, concise `div x=c ? a < b > :z` | the atom lexes | g0631 g0632 |
-| `<div x=c ? a < b > :z/>` | the ambiguous-`>` error: unparenthesised in HTML mode the `>` is E1's hard stop | g1012 |
-| `x=(a<b> :c)` | no atom: a known limit of a lexer without a type parser (decision 156, addendum 4) | g1013 |
+| 1 | a `<` that brings the angle count to 0 | yes when no bracket is open between them and the `<` directly follows a word character (`Array<T>`, `É<T>`, `Map<K, Array<V>>`, `Array<() => T>`, `a<b >`); otherwise no (`a < b >`) |
+| 2 | an opening bracket with no closing one after it | no |
+| 3 | `;` | no |
+| 4 | `?` or `:` with no bracket open between it and the `>` | no |
+| 5 | `&&` or `\|\|` | no |
+| 6 | the position's start | no |
 
-More inputs:
+`x=(a<b> :c)` is a known limit of a lexer without a type parser: the `>`
+closes type arguments by these rules.
 
-| Input | Atoms | Probes |
+The corpus probes for each row, which show the default syntax reading the
+written text as one value (no event for any `:name`):
+
+| Rows | Inputs | Probes |
 | --- | --- | --- |
-| `x=:a`, `x= :b`, `x=(:a)`, `x=[:a, :b]`, `x=a + :b`, `x=a / :b`, `x=a => :b`, `x=c ? ...:a`, `x=[...:a]`, `x=(!:a)`, `x=(typeof!:a)`, `x=c ? 1? :a : :b`, `x=(return :a)`, `x=(x in :a)`, `x=(for (x of :a))`, `x=await :b`, `x=({ new :a })`, `x=(a ?? :b)`, `x=:a-b` | lexed | g0529 g0534 g0567 g0568 g0569 g0566 g0557 g0577 g0543 g0553 g0554 g0578 g0575 g0579 g0580 g0581 g0582 g0583 g0584 |
-| `x=(:delete :b)` | only `:delete` | g0585 |
-| `x=a.:b`, `x=(a? :T) => a`, `x=(a?:b)`, `x=(a! :b)`, `x=(a++ :b)`, `x=(/re/ :b)`, `x=({ new:a })`, `x=(a.new :b)`, `x=c ? of :b`, `x=f(await :b)`, `x=(yield :b)`, `x=(a, yield :b)`, `x=c ? a[0] :b`, `x=c ? "s" :b`, `x=:aé`, `x=:a-é`, `x=:1`, `x=: a`, `x=(a /* c */ :b)`, `x=(a // c\n :b)` | none | g0544 g0547 g0586 g0555 g0562 g0565 g0571 g0587 g0588 g0589 g0590 g0591 g0592 g0593 g0526 g0527 g0524 g0525 g0594 g0595 |
-
-### The reserved `::` outside expressions
-
-`rejectReservedName` reserves `::` in the static text of a tag name and
-shorthand part ([Tag names](#the-parser-grammar-tags-tag-names)) and in an attribute name's range
-([Attributes](#the-parser-grammar-attributes)):
-
-| Input | Result | Probes |
-| --- | --- | --- |
-| `<a::b/>`, `<div.a::b/>`, `<div a::b/>`, `<div ::b/>` | the reserved-token error | g0194 g0195 g0097 g0096 |
-| `<let/a::b/>`, `<foo\|a::b\|/>` | accepted: a position that lexes no atom reserves nothing | g0891 g0878 |
-| `<div x="a::b"/>` | a string | g1014 |
-
-### How atoms interact with the other rules
-
-Lexing an atom changes where a value ends through the code paths of this
-table. The last text column is the same input read without atom lexing, run
-on a probe build: main's source with its `atoms = true` assignments set to
-`false`, which keeps the after-value rule. Where stock, which has neither,
-differs from the probe build, the cell gives stock too. The probes pin main.
-
-| Code path | Effect | Observed on main | Without atoms (probe build; informative, not probed) | Probes |
-| --- | --- | --- | --- | --- |
-| `lexAtom` runs before the ternary counter (`EXPRESSION.parse`, `case CODE.COLON`) | an atom's `:` does not close a `?`, so a later ` :name` is the ternary's `:` | `x=a ? :b :c` is one value | the first `:` closes the `?`, so `x=a ? :b :c` is the value `a ? :b` and the attribute `:c`. Stock: one value, because it has no after-value rule to split at `:c` | g0533 |
-| the same, at `ternaryDepth` 0 | an atom's `:` does not enter [the type context](#the-parser-grammar-expression-boundaries-how-a-position-is-scanned-the-type-context), so each of its reads that an attribute value can reach takes its other side. (1) `<` is no group. (2) `>` is a plain character. (3) A `>` before whitespace is a look-behind operator. (4) The unary keyword list is JavaScript's, with `delete` and `void` and without `asserts` `infer` `is` `keyof` `readonly` `unique`, in the continuation test, the operator exemption and the `!` row alike. (7) An `as` or `satisfies` after the atom enters the context, and sets `forceType` when `ternaryDepth` is 0. Reads 5 and 6 have nothing to leave, and 8 and 9 belong to the tag variable, which lexes no atom | (1) concise `div x=:a<b, c> d`: value `:a<b`, then attributes `c>` and `d`; `<div x=:a<b>(c) y/>`: value `:a<b` and the `>` ends the tag. (2) concise `div x=:a > b`, `div x=:a <b> c`: one value. (3) concise `div x=:a<b>\n  c`: one value. (4) concise `div x=:a + void\n  b` and `div x=:a + void!\n  b`: one value; `div x=:a + keyof\n  b`: value `:a + keyof` and a child `b`; `<div x=:a + void, y/>`: value `:a + void,`. (7) concise `div x=:a as T = b<c> d`: value `:a as T = b<c>`, then attribute `d` | the `:` enters the type context. (1) value `:a<b, c>`, then `d`; value `:a<b>(c)`, then `y`. (2) `Mismatched group` for both. (3) value `:a<b>` and a child `c`. (4) value `:a + void` and a child `b`, and the same with `void!`; one value `:a + keyof\n  b`; value `:a + void`. (7) one value `:a as T = b<c> d`: the `as` does not set `forceType`, so the `=` leaves the context | g0596 g0597 g0598 g0599 g0600 g0601 g0602 g0603 g0604 g0605 |
-| the atom guard in `lookBehindForKeyword` (continuation test step 2, and the step-4 exemption) | an atom named like a unary keyword is no operator | `x=:new :b` and `x=:typeof :b` are one value; concise `div x=:new\n  span` ends at the newline; `<div x=:typeof />` ends before `/>` | `new`/`typeof` continue the value: `:new :b`, `:new\n  span`, `:typeof /` then `Missing ending "div" tag` | g0606 g0607 g0298 g0608 |
-| `lexAtom` row 1 | `::` is the reserved-token error and the parse stops | `x=::a`, `x=a :: b` | one value | g0193 g0522 |
-| `isSingleAtomDefault` | with no dialect loaded, none: a default value takes a spaced ` :name` into its value like any other value. A dialect's `terminatesValue` trigger may end a default value early only when it is one atom | `<if=:a :b>` is one value | one value, as in stock | g0423 |
-
-### What the parser reports
-
-| What | Result | Probes |
-| --- | --- | --- |
-| `onAtom` (`util/constants.ts`) | one event per atom, in source order, before the event for the range that holds it; its range is the whole atom, `:` included, and its `value` is the name | g1015 |
-| `read(range)` (`Parser.read`) | the source of `range` with each atom wholly inside it replaced by a numeric literal of the same length, `0.` followed by zeros: `[0., 0.000000000]` | g1015 |
-
-The stand-in exists for consumers that hand
-`read()` text to Babel (today `@marko/compiler`); the catalogue's front end
-builds the atom's `StringLiteral` with `extra.mxAtom` itself
-([ast.md §4.3](/architecture/ast/), §7).
+| expected 1 | `x=:a`, `x= :b`, `${ :a}`, `x=(/* c */ :a)` | g0529 g0534 g0535 g0536 |
+| expected 2 | `(f() :a)`, `(a[0] :b)`, `({} :b)`, a string or template literal before `:b` | g0537 g0538 g0539 g0540 g0541 g0542 |
+| expected 3 | `[...:a]`, `a.:b` | g0543 g0544 |
+| expected 4 | `?:a`, `(n === 1? :a : :b)`, `(a? :T) => a`, `(é? :T) => a`, `(a[0]? :b)`, `(c ? :a : b)` | g0545 g0546 g0547 g0548 g0549 g0550 |
+| expected 5 | `!:a`, `(a()! :b)`, `(!:a)`, `(typeof!:a)`, `(a! :b)`, `(é! :b)` | g0551 g0552 g0553 g0554 g0555 g0556 |
+| expected 6 | `a => :b`, `(c ? y as Array<T> :z)`, `(a > :b)`, `(a >> :b)`, `(c ? y as É<T> :z)` | g0557 g0558 g0559 g0560 g0561 |
+| expected 7 to 9 | `(a++ :b)`, `(a + :b)`, `(a - :b)`, `(/re/ :b)`, `a / :b`, `(:a)`, `[:a, :b]`, `a + :b`, `{ k: :a }` | g0562 g0563 g0564 g0565 g0566 g0567 g0568 g0569 g0570 |
+| expected 10, 11 | `({ new:a })`, `({ é:a })`, `(c ? b :c)`, `(é :b)`, `(return :a)`, `(éin :b)` | g0571 g0572 g0573 g0574 g0575 g0576 |
+| more | `(a :b)`, `c ? ...:a`, `c ? 1? :a : :b`, `(x in :a)`, `(for (x of :a))`, `await :b`, `({ new :a })`, `(a ?? :b)`, `(a?:b)`, `c ? of :b`, `f(await :b)`, `(yield :b)`, `(a, yield :b)`, `c ? a[0] :b`, `c ? "s" :b`, `(a /* c */ :b)`, `(a // c\n :b)` | g0528 g0577 g0578 g0579 g0580 g0581 g0582 g0583 g0586 g0588 g0589 g0590 g0591 g0592 g0593 g0594 g0595 |
+| operator words 1, 2 | `(:delete :b)`, `(a.new :b)`, `[...await :b]`, `[...new :a]` | g0585 g0587 g0987 g0988 |
+| operator words 4 | `(for (é of :a))`, `(for (a() of :b))` | g0989 g0990 |
+| operator words 5 | `(c ? yield :b : 1)`, `x() { return await :a }`, `yield :b` | g0991 g0992 g1003 |
+| operator words 6 | `(case :a)`, `(delete :a)`, `(do :a)`, `(else :a)`, `(a extends :b)`, `(a instanceof :b)`, `(new :a)`, `(typeof :a)`, `(void :a)`, `(throw :a)` | g0993 g0994 g0995 g0996 g0997 g0998 g0999 g1000 g1001 g1002 |
+| type arguments | `(c ? y as Map<K, Array<V>> :z)`, `(c ? y as Array<() => T> :z)`, `(c ? a<b > :z)`, `(c ? a < b > :z)`, `c ? a < b > :z` | g1004 g1005 g1006 g0631 g0632 |
+| type arguments 2 to 6 | `x() { a < b; c > :d }`, `(a < b ? c > :d : e)`, `(c ? a < b && c > :z)`, `(c ? a < b \|\| c > :z)`, `a > :b`, `(a<b> :c)` | g1007 g1008 g1009 g1010 g1011 g1013 |
+| `>` in an attribute | `<div x=c ? a < b > :z/>` | g1012 |
+| Unicode whitespace before the `:` | each of `({ é :a })`, `({ a :b })`, `(a! :b)`, `(a? :b : c)`, `(Array<T> :b)`, `(a, yield :b)`, `(x of :a)`, `[a, :b]`, with U+00A0 and with a space, and `[a,` + one of U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000 and U+FEFF + `:b]` | g0955 g0956 g0957 g0958 g0959 g0960 g0961 g0962 g0963 g0964 g0965 g0966 g0967 g0968 g0969 g0970 g0971 g0972 g0973 g0974 g0975 g0976 g0977 g0978 g0979 g0980 g0981 g0982 g0983 g0984 g0985 g0986 |
 
 ## Dialect rules
 
@@ -1795,11 +1795,11 @@ parser reports for each form is the table after it.
    is an error at its declaration (decision 145 and its addendum 1).
 10. **Wildcard children (decision 147)** add no syntax: a child keeps its
     authored tag name, and `<:att>` yields a child whose `name` is `att`.
-11. **Atoms (decision 156 and its addenda 1 to 4 and 8 to 10).** `:name` in an MX
-    expression position is a value that represents itself; its runtime value
-    is the name as a string (156.1, 156.2). *Layer:* the template parser lexes
-    it and reserves `::` ([Atoms](#the-parser-grammar-atoms)); core gives it meaning and raises
-    the misuse errors of spec §4 "Atoms".
+11. **Atoms belong to a dialect.** The template parser reads `:name` as
+    stock does and reserves nothing; a dialect's syntax table arms a trigger
+    that turns `:name` in an expression position into an atom, and core
+    lowers the nodes the trigger's hook returned
+    ([Atoms](#the-parser-grammar-atoms); spec §13.9.5).
 
 | Rule | Input | What the parser reports | Probes |
 | --- | --- | --- | --- |
@@ -1825,11 +1825,11 @@ The counter is the `?` and `:` rows of
 | --- | --- | --- |
 | a `?` at depth 0 opens a ternary and a `:` at depth 0 closes one | `x=a ? b : c :d` is one value `a ? b : c :d` | g0840 |
 | a `:` with no ternary open | enters the type context | g0383 |
-| an atom's `:` | does neither: `x=a ? :b :c` is one value (spec §4 "Atoms": "an atom's own `:` is never the ternary's") | g0533 |
+| a `:` right after a `?` | closes it, as every `:` does: `x=a ? :b :c` is one value, and ` :c` continues it | g0533 |
 | a `?` or `:` inside a group or a string | does not count: the ` :c` after it continues the value | g1023 g1024 |
 | `as` or `satisfies` found by the look-ahead | sets `forceType` when no ternary is open | g0348 g0815 |
 | `??` and `?.` in a named or spread attribute's value | do not open a ternary; `?.` followed by a digit does | g0431 g0432 g0433 |
-| `?:` | opens a ternary: `x=a ?:b` is one value, in which `:b` is an atom (OQ 3) | g0628 |
+| `?:` | opens a ternary: `x=a ?:b` is one value (OQ 3) | g0628 |
 | `??` in a default attribute's value | opens a ternary: `<if=a ?? b :c>` is one value | g0434 |
 
 ## Ambiguous inputs
@@ -1864,14 +1864,14 @@ reports a name and core gives it meaning, both are given.
 | `` x=a `t` `` | value `a`, then an attribute named `` `t` `` | default (observed); **not settled**, OQ 2 | g0625 |
 | `x=a .2xl` | one value | stock (observed) | g0626 |
 | `x=a :b :c` | one value `a :b :c`; MX and stock agree | stock (observed) | g0627 |
-| `x=a ?:b` | one value; `:b` is an atom | default for the extent (observed); OQ 3. The atom: decision 156 ([Atoms](#the-parser-grammar-atoms), row 4) | g0628 |
-| `x= :b` | the value `:b`, which is the atom `b` | decision 156.1; spec §4 "Atoms" (observed) | g0534 |
-| `x=:a :b` | one value `:a :b`, with the atom `a`; MX and stock agree | stock for the extent; spec §4 "Atoms" (observed) | g0629 |
-| `x=a ? :b :c` | one value, `a ? :b : c`, with the atom `b`. Stock: one value, no atom | decision 156; spec §4 "Atoms" (observed) | g0533 |
-| `<if=:a :b>` | one default value `:a :b`, with the atom `a`; MX and stock agree | stock for the extent (observed) | g0423 |
+| `x=a ?:b` | one value | default for the extent (observed); OQ 3 | g0628 |
+| `x= :b` | the value `:b` | stock (observed) | g0534 |
+| `x=:a :b` | one value `:a :b`; MX and stock agree | stock (observed) | g0629 |
+| `x=a ? :b :c` | one value `a ? :b :c`; MX and stock agree | stock (observed) | g0533 |
+| `<if=:a :b>` | one default value `:a :b`; MX and stock agree | stock (observed) | g0423 |
 | `<if=:a .b>` | one value | stock (observed) | g0630 |
-| `x=a :: b`, `x=::a`, `x=(a ? b::c : d)` | the reserved-token error at the `::`. Stock: one value | decision 156.5 and addendum 2 (observed) | g0522 g0193 g0523 |
-| `x=(c ? a < b > :z)`, concise `div x=c ? a < b > :z` | one value with the atom `z` (a spaced `< >` is a comparison). Unparenthesised in HTML mode, `<div x=c ? a < b > :z/>` is the ambiguous-`>` error: the `>` is E1's hard stop first | decision 156, addendum 4: a known limit (observed) | g0631 g0632 |
+| `x=a :: b`, `x=::a`, `x=(a ? b::c : d)` | one value each, as stock | stock (observed) | g0522 g0193 g0523 |
+| `x=(c ? a < b > :z)`, concise `div x=c ? a < b > :z` | one value (a spaced `< >` is a comparison). Unparenthesised in HTML mode, `<div x=c ? a < b > :z/>` is the ambiguous-`>` error: the `>` is E1's hard stop first | stock (observed) | g0631 g0632 |
 | `div x=a\n  <span/>` (concise) | value `a`, then the child tag `span` | default: [E2](#the-parser-grammar-expression-boundaries-e2-attribute-value-concise-mode) (observed); OQ 18 | g0451 |
 | `div x=a\n  .b` (concise) | value `a`, then an unnamed child tag with class `b` | same | g0452 |
 | `div x=a\n  (b)` (concise) | value `a`, then an unnamed child tag with tag arguments `b` | same | g0454 |
@@ -1923,7 +1923,7 @@ the normative one.
    for them, as decision 157.3 requires.
 3. **`??`, `?.` and `?:`.** In a named attribute's value MX stops `??` and `?.` from opening a
    ternary, and tests pin it, but no spec paragraph or decision states it, and
-   `?:` still counts as a ternary (and on main `x=a ?:b` reads `:b` as an atom). *Recommendation:* state `??` and `?.` in the
+   `?:` still counts as a ternary (`x=a ?:b` is one value). *Recommendation:* state `??` and `?.` in the
    spec as what "no open `?`" means, and decide whether `x=a ?:b` is an error.
 4. **`.` followed by a digit.** *Settled*: core has no after-value rule, so a
    spaced `.2xl` after a value continues it, as in stock.
@@ -1939,8 +1939,7 @@ the normative one.
    stop yields to it.
 8. **The ambiguous `>` error.** *Recommendation:* keep it; a TypeScript parser
    cannot tell `>` the operator from `>` the tag end either.
-9. **Atoms in a ternary.** *Settled* by decision 156 and spec §4 "Atoms" ("an
-   atom's own `:` is never the ternary's"): `x=a ? :b :c` is one value on main
+9. **Atoms in a ternary.** *Retired*: the template parser has no atom lexer ([Atoms](#the-parser-grammar-atoms)), so there is nothing to settle. `x=a ? :b :c` is one value, as in stock
    ([Ternary depth](#the-parser-grammar-dialect-rules-ternary-depth)).
 10. **Wording of the parser's own errors.** Messages such as `A semicolon
     indicates the end of a line. Only comments may follow it.` and the HTML
@@ -1963,12 +1962,7 @@ the normative one.
     *Recommendation:* amend the spec to "text and placeholders", decide whether
     quotes stay significant in `textarea`, honour `\` escapes in a
     text-body string, and settle `title`.
-14. **Atoms outside the first ruled positions.** *Settled*: decision 156,
-    addendum 2 (every `${}`; "script blocks" are statement blocks), decision
-    163 (ruling C11 and addendum 1: attribute arguments and method parameters,
-    method bodies, and never the tag variable, tag parameters or type lists)
-    and the lead ruling of 2026-10-05 on method bodies. The positions are in
-    [Atoms](#the-parser-grammar-atoms).
+14. **Atoms outside the first ruled positions.** *Retired*: the template parser has no atom lexer ([Atoms](#the-parser-grammar-atoms)), so there is nothing to settle.
 15. **The stock-parser diagnostic.** *Settled*: core has no after-value rule,
     so the diagnostic for a consumer on a stock parser has no split left to
     describe: both parsers end an attribute value at the same place.
@@ -2000,9 +1994,9 @@ the normative one.
     entirely: `div.a${b` (no shorthand event), `${x` (no event at all) and a
     template literal's `${` in a concise value (``span\n  div x=`${a``: no value
     event). *Recommendation:* an error in each case.
-20. **`::` followed by whitespace.** *Settled* by decision 156, addendum 2
-    ("`::` is the reserved token in every position MX lexes"): on main
-    `x=a :: b` is the reserved-token error ([Atoms](#the-parser-grammar-atoms)).
+20. **`::` followed by whitespace.** *Retired*: `::` is no token of the
+    template parser, so `x=a :: b` is one value, as in stock
+    ([Atoms](#the-parser-grammar-atoms)).
 21. **Agreement with the AST catalogue.** *Settled* by decision 163, ruling
     Q10: field names follow the AST; a container's span is the parser's `value`
     range and `outer` its event range. This document adopts both
@@ -2042,29 +2036,18 @@ the normative one.
 28. **The `:` condition of the former after-value rule.** *Settled*: core has
     no after-value rule, so a spaced `:` after a value continues it, as in
     stock. `x=(a) : T => a` stays one value ([E1](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode)).
-29. **`await :name`.** *Settled* by decision 156, addendum 8: addendum 3's rule
-    restated by addendum 2's principle, "a `:` TypeScript could own is
-    TypeScript's" ([Atoms](#the-parser-grammar-atoms), operator words, rule 5).
+29. **`await :name`.** *Retired*: the template parser has no atom lexer ([Atoms](#the-parser-grammar-atoms)), so there is nothing to settle.
 30. **Statement tags and their "attributes".** Spec §2 "Syntax" says `import`,
     `static` and `export` parse as tags whose "attributes are the remaining
     words". With the statement set supplied, the parser reports no attributes
     for them ([E10](#the-parser-grammar-expression-boundaries-e10-statement-tags)); without the set the words are
     attributes. *Recommendation:* correct spec §2 when MX1
     TODO `statement-tags-not-declared-on-five-hosts` lands.
-31. **A template literal's `${}` in a text body.** Decision 156, addendum 2
-    makes "every `${}` placeholder" an atom position, `<script>` bodies
-    included. A template literal inside a text body is text to the parser, so
-    its `${…}` is no placeholder and lexes no atom
-    (``<script>`${:a}`</script>``). *Recommendation:* confirm that addendum 2
-    means placeholders only.
-32. **Non-ASCII identifiers before an atom.** *Settled* by decision 156,
-    addendum 13 (which corrected addendum 9): the atom look-behind treats as a
-    word character a code point at or above U+0080 that is `ID_Continue`, or
-    U+200C or U+200D, and decision 156, addendum 10: the characters excepted
-    from the word class (U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029,
-    U+202F, U+205F, U+3000, U+FEFF) are skipped as ASCII whitespace is. Main
-    implements both (`isUnicodeWordCode`, `isUnicodeWhitespaceCode`;
-    [Atoms](#the-parser-grammar-atoms-is-an-expression-expected-expectsexpression)).
+31. **A template literal's `${}` in a text body.** *Retired*: the template parser has no atom lexer ([Atoms](#the-parser-grammar-atoms)), so there is nothing to settle.
+32. **Non-ASCII identifiers before an atom.** *Retired* as an atom question.
+    The word-character and Unicode-whitespace look-behinds remain where the
+    parser looks behind ([Vocabulary](#the-parser-grammar-status-sources-of-truth-and-method-vocabulary),
+    [Unicode in the parser](/architecture/unicode-in-the-parser/)).
 
 The inputs the open questions mention:
 
@@ -2076,7 +2059,6 @@ The inputs the open questions mention:
 | 6 | `<foo\|x: A \| B\|/>`, `<let/x: A \| B = 1/>` | g0676 g0890 |
 | 7 | `x=f<T>(y)`, `x=<T,>(a) => a`. TODO `html-value-generic-call-cut-at-gt` | g0353 g0670 |
 | 8 | `<div x=a > b/>` | g0135 |
-| 9 | `x=a ? :b :c` | g0533 |
 | 10 | `div a; b`, `<div a <!-- c -->/>` | g0236 g0049 |
 | 12 | `<div x=$!{a}/>` | g0755 |
 | 13 | `<textarea>don't</textarea>`, `<script>var s = "a\"b";</script>`. TODO `text-body-string-backslash-escape` | g0763 g0176 |
@@ -2084,17 +2066,13 @@ The inputs the open questions mention:
 | 17 | `<div x=a + ,b/>`, `<div x=a +/>`, `<div x=async/>`, `<div x=async, y=1/>`, concise `div x=async\n  span`, `div x=f<T> ,y=1`. TODO `operator-exemption-consumes-hard-stop` | g0788 g0832 g0664 g0665 g0306 g0666 |
 | 18 | concise `div x=a instanceof\nB`, `div x=a +\nspan`; `<div x=a\n  <span/>` | g0446 g1026 g0633 |
 | 19 | `div x=(a`, `div(a`, `$ {a`, `div\|a`, `div<A`, `div (a`, `div onClick(a) {b`, `script -- ${b`, `div.a${b`, `${x`, ``span\n  div x=`${a``. The front end reports `MX_INPUT_ENDS_IN_DELIMITER` for the silent ones (decision 161); TODO `concise-eof-interpolation-drops-event` | g0366 g0368 g0370 g0374 g0375 g0376 g0373 g0377 g0380 g0381 g0382 |
-| 20 | `x=a :: b` | g0522 |
 | 23 | `x=a !b`, `x=a ++b` | g0668 g0669 |
 | 24 | concise `div x=a as T > b`; `<foo<() => void>/>`; `<div onClick<T extends () => void>(a) {x}/>`; `x=a + /* c */ b`; `$ const a = 1 + \n  2`; `<div ... [a]/>`, `<div ... "s"/>`; `<div x=/* c */ a/>`; `static const x = 1\n, y`. TODO `concise-as-type-gt-mismatched-group`, `type-list-arrow-cut`, `value-block-comment-after-operator`, `scriptlet-trailing-space-after-operator`, `spread-value-starting-with-bracket-or-string`, `statement-tag-comma-line-adds-attributes` | g0266 g0677 g0941 g0674 g0504 g0479 g0480 g0667 g0895 |
 | 25 | `<.a></div>`. TODO `unnamed-tag-close-compares-literal-div` | g0686 |
 | 26 | `div\n  </div>`. TODO `concise-close-tag-closes-concise-tag` | g0690 |
 | 27 | `--abc`. TODO `delimiter-next-character-skipped` | g0917 |
 | 28 | `x=(a) : T => a` | g0611 |
-| 29 | `x=await :b`, `x=f(await :b)` | g0581 g0589 |
 | 30 | `static const a = 1`, with `static` in the supplied statement set and without | g0758 g0759 |
-| 31 | ``<script>`${:a}`</script>`` | g0751 |
-| 32 | `x=({ é:a })`; `x=({ é\u00A0:a })` (U+00A0 before the colon) | g0572 g0955 |
 
 ### Where a real TypeScript parser would end the value differently
 
@@ -2116,7 +2094,7 @@ decision 146 under the 2026-10-05 ruling:
 | `x=(a) :T => a` | one value | an arrow function with a return type | **(b)**, no difference | stock reads it as one value | g0610 |
 | `<if=a .b>`, `<const/x=items\n .filter()/>` | one value | one expression | **(b)**, no difference | stock reads it as one value | g0327 g0663 |
 | `x=a ?? b :c`, `x=a ?.b :c` | one value | `??` and `?.` are not ternaries; the expression ends before `:c` | **(a)** | the rule says "`:` … with no open `?`"; whether `??` or `?.` opens one is a fact of TypeScript's grammar. OQ 3 | g0431 g0432 |
-| `x=a ? :b :c` | one value, with the atom `b` | `a ? :b : c` is no TypeScript; with atoms read as values it is one expression | **(b)**, no difference | spec §4 "Atoms": "an atom's own `:` is never the ternary's, so `a ? :b :c` is `a ? "b" : c`"; divergence row "`a ? :b :c` is one value" | g0533 |
+| `x=a ? :b :c` | one value | `a ? :b : c` is no TypeScript: the `:b` is an error in either reading | **(b)**, no difference | stock reads it as one value | g0533 |
 | concise `div x=a\n  .b` | value `a`, then an unnamed child tag with class `b` | member access across the newline | **(b)** | spec §3 "Concise mode": an indented line is a child | g0452 |
 | concise `div x=a\n  (b)`, `\n  + b`, `\n  ? b : c`, `\n  in b`, `\n  <span/>` | value `a`, then a child | continues across the newline | **(c)** | spec §3 "Concise mode" says a concise tag's "children are the lines indented under it" but says nothing about attribute values, and the default itself continues a value onto such lines in other cases (`div x=a +\n  b`, `div x=a in\n  b`). Whether §3 governs value continuation is OQ 18 | g0454 g0456 g0457 g0458 g0451 |
 | `<div x=async/>`, `<div x=async, y=1/>`, concise `div x=async\n  span` | `async/`, then a missing close tag; `async,` then `y=1`; one value swallowing the child | the identifier `async`, then stops | **(c)** | spec silent. OQ 17 | g0664 g0665 g0306 |
@@ -2148,8 +2126,8 @@ corpus.
 | a generic call or generic arrow in an HTML-mode value | cut at `>` with no error: `x=f<T>(y)`, `x=<T,>(a) => a` | `html-value-generic-call-cut-at-gt` (OQ 7) | g0353 g0670 |
 | end of input in concise mode in a position whose delimiter the owning state consumed | no error from the template parser; the MX front end reports `MX_INPUT_ENDS_IN_DELIMITER` at the opener (decision 161) | none (was `concise-eof-open-delimiter-silent`, OQ 19) | g0368 g0370 g0374 g0375 g0376 g0373 g0377 |
 | end of input in concise mode inside a tag name's, shorthand's or template literal's `${…}` | no error, and the owning event is not reported: no shorthand, no event, no value (the MX front end reports `MX_INPUT_ENDS_IN_DELIMITER`, so nothing is dropped silently) | `concise-eof-interpolation-drops-event` (OQ 19) | g0380 g0381 g0382 |
-| fixed on main in #377 (TODOs `template-parser-ascii-only-lookbehinds` and `template-parser-comment-in-text-tag-open-crash`), kept here as regression probes | `<div x=é / 2 y/>` and `${é / 2}` divide; `<div x=énew y=1/>` is the value `énew` and `y=1`; `<div.a::${x}/>` names `::`; `<script // c </script>` no longer closes the tag from inside its open tag | none | g1027 g1028 g1029 g1030 g0047 |
-| fixed in the look-behinds follow-up (TODO `template-parser-lookbehinds-followup`; decision 156, addenda 8, 11 and 12), kept here as regression probes | a comment before `of`, `yield` or `await` is skipped as whitespace is: `x=(f(/*c*/ await :b))` lexes no atom, as `x=(f( await :b))` lexes none; `<if=count\u00a0>= 10>` is the comparison, `<div x=(é)\u00a0/ 2/>` divides and `<div x=a +\u00a0 y=1/>` is one value, each as with a space | none | g1678 g1679 g1686 g1684 g1685 g1687 |
+| fixed on main in #377 (TODOs `template-parser-ascii-only-lookbehinds` and `template-parser-comment-in-text-tag-open-crash`), kept here as regression probes | `<div x=é / 2 y/>` and `${é / 2}` divide; `<div x=énew y=1/>` is the value `énew` and `y=1`; `<div.a::${x}/>` is the class `.a::${x}`; `<script // c </script>` no longer closes the tag from inside its open tag | none | g1027 g1028 g1029 g1030 g0047 |
+| fixed in the look-behinds follow-up (TODO `template-parser-lookbehinds-followup`; decision 156, addenda 11 and 12), kept here as regression probes | `x=(f(/*c*/ await :b))` and `x=(f( await :b))` are one value each; `<if=count\u00a0>= 10>` is the comparison, `<div x=(é)\u00a0/ 2/>` divides and `<div x=a +\u00a0 y=1/>` is one value, each as with a space | none | g1678 g1679 g1686 g1684 g1685 g1687 |
 | the type context at any group depth after `as`, `satisfies` or an annotation | `<div x=a as T ? (b < c) : d/>` is `Mismatched group`. A recorded limit: no action before MX2's TypeScript-aware expression boundary | `as-satisfies-type-context-any-depth` | g0360 |
 
 The behaviours of OQ 13 (no `\` escape in a text-body string), OQ 17, OQ 24,
@@ -2164,8 +2142,10 @@ Beside it: the htmljs fixtures, upstream's fixture directories kept
 byte-identical in `packages/parser/src/template/__tests__/fixtures/` and run
 by `upstream-suite.test.ts`, which are evidence of the default behaviour and
 not a gate; `mx-after-value.test.ts` (a spaced `:b` or `.b` after a value, and
-the `??` / `?.` skip); `mx-atoms.test.ts` over the case table
-`mx-atoms.cases.ts`; `__tests__/base-offset.test.ts`; and
+the `??` / `?.` skip); `mx-sugar-module.test.ts` over the case table
+`mx-atoms.cases.ts`, which runs the reference atom dialect (`ATOMS_SYNTAX` in
+`test-support/sugar-rows.ts`); `mx-triggers.test.ts`;
+`__tests__/base-offset.test.ts`; and
 `corpus-equivalence.test.ts`, which pins identical event streams between this
 source and the patched npm build. Where the fixtures and MX's other tests
 exercise a section:
@@ -2189,7 +2169,7 @@ exercise a section:
 | Text, comments, doctype | `packages/targets/html/fixtures-marko/{doctype-page,comments-and-html-comment,html-comment-placeholder,elements-text,piped-text}`; htmljs fixture `dtd` |
 | Attribute tags | `packages/targets/html/fixtures-marko/attribute-tags*` |
 | End of input | htmljs fixtures `eof-*`, `attr-eof-*`, `tag-name-placeholder-eof`, including `eof-attr-value-js-comment-comment-concise` and `eof-placeholder-concise` for concise mode |
-| Atoms, the reserved `::` | `packages/parser/src/template/mx-atoms.cases.ts` (run by `mx-atoms.test.ts` and by `patches/htmljs-parser.test.ts` against both npm builds); `packages/core/src/atoms.test.ts` |
+| Atoms (a dialect's triggers), `:name` and `::` as source text | `packages/parser/src/template/mx-atoms.cases.ts` (run by `mx-sugar-module.test.ts` through the reference atom dialect); `packages/parser/src/template/mx-triggers.test.ts`; `packages/core/src/atom-marks.test.ts` |
 | Base position | `packages/parser/src/template/__tests__/base-offset.test.ts` |
 | E2 continuation onto a later line | htmljs fixtures `attr-operators-newline-after` (unary keywords and a lone `.` at the end of a line, operand at column 0) and `attr-operators-newline-before` |
 
@@ -2215,28 +2195,25 @@ and the text.
 | OpenTagName, AttrName ×2, AttrValue, OpenTagEnd, CloseTagEnd | g1451 |
 | OpenTagName, AttrName ×2, OpenTagEnd, CloseTagEnd | g1127 g1236 g1251 |
 | OpenTagName, AttrName ×3, OpenTagEnd, CloseTagEnd | g1240 |
-| OpenTagName, AttrName, Atom, AttrValue, AttrName, OpenTagEnd, CloseTagEnd | g1618 |
-| OpenTagName, AttrName, Atom, AttrValue, OpenTagEnd, CloseTagEnd | g1609 g1610 g1616 |
-| OpenTagName, AttrName, Atom, AttrValue, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd ×2 | g1517 g1611 g1612 g1613 g1614 g1615 g1617 |
 | OpenTagName, AttrName, AttrArgs | g1522 |
 | OpenTagName, AttrName, AttrArgs, OpenTagEnd, CloseTagEnd | g1273 |
 | OpenTagName, AttrName, AttrMethod, OpenTagEnd, CloseTagEnd | g1045 g1405 g1550 |
 | OpenTagName, AttrName, AttrMethod, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd ×2 | g1487 |
 | OpenTagName, AttrName, AttrValue, AttrName, AttrValue, OpenTagEnd, CloseTagEnd | g1107 g1170 g1192 g1313 |
 | OpenTagName, AttrName, AttrValue, AttrName, AttrValue, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd ×2 | g1159 |
-| OpenTagName, AttrName, AttrValue, AttrName, OpenTagEnd, CloseTagEnd | g1083 g1086 g1088 g1089 g1108 g1194 g1603 |
+| OpenTagName, AttrName, AttrValue, AttrName, OpenTagEnd, CloseTagEnd | g1083 g1086 g1088 g1089 g1108 g1603 g1618 |
 | OpenTagName, AttrName, AttrValue, AttrName, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd ×2 | g1518 |
 | OpenTagName, AttrName, AttrValue, Error: EOF reached while within an attribute group (e.g. "[ ... ]") | g1523 |
-| OpenTagName, AttrName, AttrValue, OpenTagEnd, CloseTagEnd | g1085 g1112 g1193 g1249 g1328 g1331 g1378 g1379 g1380 g1384 g1385 g1386 g1389 g1390 g1395 g1544 g1573 g1578 g1623 g1630 g1631 g1671 g1675 g1676 |
+| OpenTagName, AttrName, AttrValue, OpenTagEnd, CloseTagEnd | g1085 g1112 g1193 g1194 g1249 g1328 g1331 g1378 g1379 g1380 g1384 g1385 g1386 g1389 g1390 g1395 g1544 g1573 g1578 g1611 g1612 g1613 g1614 g1615 g1616 g1617 g1623 g1630 g1631 g1671 g1675 g1676 |
 | OpenTagName, AttrName, AttrValue, OpenTagEnd, Error: A semicolon indicates the end of a line. Only comments may f | g1084 g1087 |
 | OpenTagName, AttrName, AttrValue, OpenTagEnd, OpenTagName, AttrName, AttrValue, OpenTagEnd, CloseTagEnd ×2 | g1168 |
 | OpenTagName, AttrName, AttrValue, OpenTagEnd, OpenTagName, AttrName, OpenTagEnd, CloseTagEnd ×2 | g1169 |
 | OpenTagName, AttrName, AttrValue, OpenTagEnd, OpenTagName, Error: EOF reached while within an attribute group (e.g. "[ ... ]") | g1167 |
-| OpenTagName, AttrName, AttrValue, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd ×2 | g1034 g1342 g1387 g1388 g1391 g1575 |
+| OpenTagName, AttrName, AttrValue, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd ×2 | g1034 g1342 g1387 g1388 g1391 g1517 g1575 g1610 |
 | OpenTagName, AttrName, Error: EOF reached while parsing multi-line JavaScript comment | g1330 |
 | OpenTagName, AttrName, Error: EOF reached while parsing regular expression | g1533 |
 | OpenTagName, AttrName, Error: EOF reached while parsing string expression | g1532 |
-| OpenTagName, AttrName, Error: Mismatched group. A closing ">" character was found but it i | g1670 |
+| OpenTagName, AttrName, Error: Mismatched group. A closing ">" character was found but it i | g1609 g1670 |
 | OpenTagName, AttrName, Error: Unexpected "]" character within open tag. | g1241 |
 | OpenTagName, AttrName, OpenTagComment, AttrName, OpenTagEnd, CloseTagEnd | g1242 |
 | OpenTagName, AttrName, OpenTagComment, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd ×2 | g1032 |
@@ -2281,7 +2258,6 @@ and the text.
 | OpenTagName, TagVar, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd ×2 | g1656 |
 | OpenTagName, TagVar, OpenTagEnd, Text, CloseTagEnd | g1259 g1356 |
 | OpenTagStart, Error: EOF reached while parsing tag name | g1477 |
-| OpenTagStart, OpenTagName, Atom, AttrName, Atom, AttrMethod, OpenTagEnd | g1494 |
 | OpenTagStart, OpenTagName, AttrName ×2, AttrArgs, OpenTagEnd | g1548 |
 | OpenTagStart, OpenTagName, AttrName ×2, AttrMethod, OpenTagEnd | g1545 |
 | OpenTagStart, OpenTagName, AttrName ×2, AttrValue, AttrName, OpenTagEnd | g1052 |
@@ -2291,33 +2267,22 @@ and the text.
 | OpenTagStart, OpenTagName, AttrName ×3, AttrMethod, OpenTagEnd | g1121 |
 | OpenTagStart, OpenTagName, AttrName ×3, AttrValue, OpenTagEnd, Error: Missing ending "div" tag | g1190 |
 | OpenTagStart, OpenTagName, AttrName ×3, OpenTagEnd | g1037 g1579 |
-| OpenTagStart, OpenTagName, AttrName, Atom ×2, AttrMethod, OpenTagEnd | g1492 |
-| OpenTagStart, OpenTagName, AttrName, Atom ×2, AttrValue, OpenTagEnd | g1608 |
-| OpenTagStart, OpenTagName, AttrName, Atom ×2, AttrValue, OpenTagEnd, CloseTagStart, Text, CloseTagName, CloseTagEnd | g1511 g1513 |
-| OpenTagStart, OpenTagName, AttrName, Atom, AttrValue, OpenTagEnd, CloseTagStart, Text, CloseTagName, CloseTagEnd | g1516 |
-| OpenTagStart, OpenTagName, AttrName, Atom, AttrValue, AttrName, OpenTagEnd | g1619 g1621 g1622 |
-| OpenTagStart, OpenTagName, AttrName, Atom, AttrValue, AttrName, OpenTagEnd, CloseTagStart, Text, CloseTagName, CloseTagEnd | g1507 g1508 g1509 g1514 |
-| OpenTagStart, OpenTagName, AttrName, Atom, AttrValue, OpenTagEnd | g1496 g1497 g1503 g1504 g1572 g1593 g1594 g1595 g1596 g1597 g1598 g1599 g1620 g1636 |
-| OpenTagStart, OpenTagName, AttrName, Atom, AttrValue, OpenTagEnd, CloseTagStart, Text, CloseTagName, CloseTagEnd | g1510 g1512 g1515 |
 | OpenTagStart, OpenTagName, AttrName, AttrArgs, Error: An attribute can only have one set of arguments | g1526 |
 | OpenTagStart, OpenTagName, AttrName, AttrArgs, OpenTagEnd | g1449 g1536 g1570 g1580 g1581 |
 | OpenTagStart, OpenTagName, AttrName, AttrMethod, AttrName, AttrArgs, OpenTagEnd | g1484 |
 | OpenTagStart, OpenTagName, AttrName, AttrMethod, AttrName, AttrValue, OpenTagEnd | g1483 |
 | OpenTagStart, OpenTagName, AttrName, AttrMethod, AttrName, OpenTagEnd | g1486 |
-| OpenTagStart, OpenTagName, AttrName, AttrMethod, OpenTagEnd | g1044 g1048 g1261 g1272 g1404 g1416 g1417 g1418 g1419 g1471 g1472 g1473 g1474 g1479 g1549 g1551 g1666 g1667 |
+| OpenTagStart, OpenTagName, AttrName, AttrMethod, OpenTagEnd | g1044 g1048 g1261 g1272 g1404 g1416 g1417 g1418 g1419 g1471 g1472 g1473 g1474 g1479 g1492 g1494 g1549 g1551 g1666 g1667 |
 | OpenTagStart, OpenTagName, AttrName, AttrSpread, OpenTagEnd | g1450 |
-| OpenTagStart, OpenTagName, AttrName, AttrValue, AttrName ×2, OpenTagEnd | g1071 g1093 g1148 g1150 g1157 g1158 g1171 g1178 g1179 g1184 g1211 g1294 g1600 |
-| OpenTagStart, OpenTagName, AttrName, AttrValue, AttrName, OpenTagEnd | g1162 |
-| OpenTagStart, OpenTagName, AttrName, AttrValue, OpenTagEnd | g1166 |
-| OpenTagStart, OpenTagName, AttrName, AttrValue, AttrName, AttrValue, OpenTagEnd | g1053 g1165 g1173 g1174 g1200 |
+| OpenTagStart, OpenTagName, AttrName, AttrValue, AttrName ×2, OpenTagEnd | g1071 g1148 g1150 g1171 g1178 g1179 g1184 g1211 g1294 g1600 |
+| OpenTagStart, OpenTagName, AttrName, AttrValue, AttrName, AttrValue, OpenTagEnd | g1053 g1173 g1174 g1200 |
 | OpenTagStart, OpenTagName, AttrName, AttrValue, AttrName, Error: Ambiguous ">" in attribute. A ">" preceded by whitespace end | g1465 |
-| OpenTagStart, OpenTagName, AttrName, AttrValue, AttrName, OpenTagEnd | g1038 g1049 g1055 g1056 g1057 g1058 g1059 g1060 g1061 g1069 g1070 g1072 g1073 g1074 g1077 g1078 g1079 g1080 g1081 g1082 g1098 g1100 g1101 g1102 g1103 g1106 g1130 g1131 g1132 g1133 g1134 g1147 g1149 g1151 g1152 g1153 g1154 g1161 g1163 g1164 g1176 g1177 g1205 g1207 g1208 g1212 g1213 g1215 g1263 g1266 g1269 g1276 g1277 g1278 g1281 g1282 g1283 g1284 g1287 g1292 g1293 g1295 g1296 g1299 g1300 g1332 g1333 g1334 g1336 g1338 g1339 g1340 g1341 g1357 g1358 g1359 g1360 g1361 g1362 g1363 g1365 g1366 g1374 g1375 g1376 g1377 g1498 g1499 g1501 g1527 g1577 g1626 g1627 g1629 |
-| OpenTagStart, OpenTagName, AttrName, Error: Mismatched group. A closing ">" character was found but it is not matched with a corresponding opening character | g1265 |
+| OpenTagStart, OpenTagName, AttrName, AttrValue, AttrName, OpenTagEnd | g1038 g1049 g1055 g1056 g1057 g1058 g1059 g1060 g1061 g1069 g1070 g1072 g1073 g1074 g1077 g1078 g1079 g1080 g1081 g1082 g1098 g1100 g1101 g1102 g1103 g1106 g1130 g1147 g1149 g1151 g1152 g1153 g1154 g1157 g1162 g1163 g1164 g1176 g1177 g1205 g1208 g1212 g1213 g1215 g1263 g1276 g1277 g1278 g1281 g1282 g1283 g1284 g1287 g1332 g1333 g1334 g1336 g1338 g1339 g1340 g1341 g1357 g1358 g1359 g1360 g1361 g1362 g1363 g1365 g1366 g1374 g1375 g1376 g1377 g1577 g1619 g1620 g1622 g1626 g1627 g1629 |
 | OpenTagStart, OpenTagName, AttrName, AttrValue, AttrSpread, OpenTagEnd | g1095 |
 | OpenTagStart, OpenTagName, AttrName, AttrValue, Error: A close tag was found before the "div" open tag was closed.  | g1270 g1291 |
 | OpenTagStart, OpenTagName, AttrName, AttrValue, Error: An html comment cannot be used within an open tag. Use a Jav | g1271 |
-| OpenTagStart, OpenTagName, AttrName, AttrValue, OpenTagEnd | g1035 g1046 g1054 g1064 g1065 g1066 g1075 g1076 g1097 g1099 g1160 g1172 g1180 g1181 g1182 g1183 g1185 g1195 g1196 g1198 g1206 g1209 g1210 g1216 g1219 g1255 g1256 g1262 g1286 g1289 g1290 g1297 g1301 g1335 g1337 g1364 g1368 g1369 g1373 g1383 g1392 g1495 g1505 g1525 g1528 g1529 g1571 g1574 g1601 g1602 g1606 g1607 g1632 g1633 g1634 g1635 g1637 g1638 g1639 g1640 g1641 g1642 g1643 g1644 g1645 g1646 g1647 g1648 g1649 g1650 g1651 g1652 g1653 g1654 g1655 g1677 |
-| OpenTagStart, OpenTagName, AttrName, AttrValue, OpenTagEnd, CloseTagStart, Text, CloseTagName, CloseTagEnd | g1094 g1246 g1247 g1267 g1268 g1466 g1519 |
+| OpenTagStart, OpenTagName, AttrName, AttrValue, OpenTagEnd | g1035 g1046 g1054 g1064 g1065 g1066 g1075 g1076 g1093 g1097 g1099 g1131 g1132 g1133 g1134 g1158 g1160 g1161 g1165 g1166 g1172 g1180 g1181 g1182 g1183 g1185 g1195 g1196 g1198 g1206 g1207 g1209 g1210 g1216 g1219 g1255 g1256 g1262 g1266 g1269 g1286 g1289 g1290 g1292 g1293 g1295 g1296 g1297 g1300 g1301 g1335 g1337 g1364 g1368 g1369 g1373 g1383 g1392 g1495 g1496 g1497 g1498 g1499 g1501 g1503 g1504 g1505 g1525 g1527 g1528 g1529 g1571 g1572 g1574 g1593 g1594 g1595 g1596 g1597 g1598 g1599 g1601 g1602 g1606 g1607 g1608 g1621 g1632 g1633 g1634 g1635 g1636 g1637 g1638 g1639 g1640 g1641 g1642 g1643 g1644 g1645 g1646 g1647 g1648 g1649 g1650 g1651 g1652 g1653 g1654 g1655 g1677 |
+| OpenTagStart, OpenTagName, AttrName, AttrValue, OpenTagEnd, CloseTagStart, Text, CloseTagName, CloseTagEnd | g1094 g1246 g1247 g1267 g1268 g1466 g1507 g1508 g1510 g1511 g1512 g1513 g1514 g1515 g1516 g1519 |
 | OpenTagStart, OpenTagName, AttrName, AttrValue, OpenTagEnd, Error: Missing ending "div" tag | g1199 |
 | OpenTagStart, OpenTagName, AttrName, AttrValue, OpenTagEnd, Text, Error: Missing ending "div" tag | g1175 g1367 g1370 g1371 g1372 g1455 g1458 g1460 g1462 g1469 g1470 g1502 g1673 g1674 |
 | OpenTagStart, OpenTagName, AttrName, Error: Ambiguous ">" in attribute. A ">" preceded by whitespace end | g1245 g1288 g1456 g1457 g1459 g1461 g1463 g1464 g1467 g1468 g1556 g1669 |
@@ -2327,17 +2292,17 @@ and the text.
 | OpenTagStart, OpenTagName, AttrName, Error: EOF reached while parsing attribute value for the "onClick"  | g1109 |
 | OpenTagStart, OpenTagName, AttrName, Error: EOF reached while parsing attribute value for the "x" attrib | g1126 g1217 g1218 g1448 |
 | OpenTagStart, OpenTagName, AttrName, Error: EOF reached while parsing expression | g1531 |
-| OpenTagStart, OpenTagName, AttrName, Error: EOF reached while parsing regular expression | g1298 |
+| OpenTagStart, OpenTagName, AttrName, Error: EOF reached while parsing regular expression | g1298 g1299 |
 | OpenTagStart, OpenTagName, AttrName, Error: EOF reached while parsing string expression | g1113 |
 | OpenTagStart, OpenTagName, AttrName, Error: EOL reached while parsing regular expression | g1114 |
 | OpenTagStart, OpenTagName, AttrName, Error: Mismatched group. A ")" character was found when ">" was exp | g1624 g1672 |
 | OpenTagStart, OpenTagName, AttrName, Error: Mismatched group. A ">" character was found when "]" was exp | g1625 |
 | OpenTagStart, OpenTagName, AttrName, Error: Mismatched group. A "]" character was found when ")" was exp | g1500 |
+| OpenTagStart, OpenTagName, AttrName, Error: Mismatched group. A closing ">" character was found but it i | g1265 g1509 |
 | OpenTagStart, OpenTagName, AttrName, Error: Mismatched group. A closing "}" character was found but it i | g1214 |
 | OpenTagStart, OpenTagName, AttrName, Error: Missing value for attribute | g1124 g1125 g1201 |
 | OpenTagStart, OpenTagName, AttrName, OpenTagEnd | g1303 g1538 |
 | OpenTagStart, OpenTagName, AttrName, OpenTagEnd, Text, Error: Missing ending "div" tag | g1554 g1555 |
-| OpenTagStart, OpenTagName, Error: '::b' is reserved (decision 156): '::' will be the Symbol.fo | g1506 |
 | OpenTagStart, OpenTagName, Error: EOF reached while parsing attribute name for the "div" tag | g1187 |
 | OpenTagStart, OpenTagName, Error: EOF reached while parsing attribute value for the "x" attrib | g1446 |
 | OpenTagStart, OpenTagName, Error: EOF reached while parsing expression | g1110 g1111 |
@@ -2347,7 +2312,6 @@ and the text.
 | OpenTagStart, OpenTagName, Error: Unexpected types. Type arguments must directly follow a tag  | g1135 |
 | OpenTagStart, OpenTagName, OpenTagComment, AttrName, OpenTagComment, AttrName, OpenTagEnd | g1036 |
 | OpenTagStart, OpenTagName, OpenTagEnd | g1304 g1408 g1475 g1476 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Atom, Placeholder, CloseTagStart, CloseTagName, CloseTagEnd | g1604 g1605 |
 | OpenTagStart, OpenTagName, OpenTagEnd, CloseTagStart, Error: EOF reached while parsing closing tag | g1119 |
 | OpenTagStart, OpenTagName, OpenTagEnd, CloseTagStart, Text, CloseTagName, CloseTagEnd | g1227 g1557 g1585 |
 | OpenTagStart, OpenTagName, OpenTagEnd, Declaration, CloseTagStart, Text, CloseTagName, CloseTagEnd | g1105 |
@@ -2361,9 +2325,8 @@ and the text.
 | OpenTagStart, OpenTagName, OpenTagEnd, OpenTagStart, OpenTagName, AttrName, OpenTagEnd, CloseTagStart, CloseTagName, CloseTagEnd | g1155 |
 | OpenTagStart, OpenTagName, OpenTagEnd, OpenTagStart, Text, OpenTagName, OpenTagEnd, CloseTagStart, Error: The closing "p" tag does not match the corresponding opening | g1235 |
 | OpenTagStart, OpenTagName, OpenTagEnd, Placeholder ×2, CloseTagStart, CloseTagName, CloseTagEnd | g1488 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Placeholder, CloseTagStart, CloseTagName, CloseTagEnd | g1040 g1047 g1225 g1345 g1346 g1347 g1348 g1349 g1350 g1490 |
+| OpenTagStart, OpenTagName, OpenTagEnd, Placeholder, CloseTagStart, CloseTagName, CloseTagEnd | g1040 g1047 g1225 g1345 g1346 g1347 g1348 g1349 g1350 g1490 g1604 g1605 |
 | OpenTagStart, OpenTagName, OpenTagEnd, Text | g1540 g1541 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Text, Atom, Placeholder, Text, CloseTagStart, CloseTagName, CloseTagEnd | g1530 |
 | OpenTagStart, OpenTagName, OpenTagEnd, Text, CloseTagStart, CloseTagName, CloseTagEnd | g1230 g1321 g1323 g1559 g1560 g1562 |
 | OpenTagStart, OpenTagName, OpenTagEnd, Text, CloseTagStart, CloseTagName, CloseTagEnd, CloseTagStart, Error: The closing "script" tag was not expected | g1561 |
 | OpenTagStart, OpenTagName, OpenTagEnd, Text, Comment, Error: Missing ending "p" tag | g1308 |
@@ -2372,11 +2335,11 @@ and the text.
 | OpenTagStart, OpenTagName, OpenTagEnd, Text, Error: Missing ending "script" tag | g1322 |
 | OpenTagStart, OpenTagName, OpenTagEnd, Text, OpenTagName, OpenTagEnd, CloseTagEnd | g1068 |
 | OpenTagStart, OpenTagName, OpenTagEnd, Text, Placeholder, CloseTagStart, CloseTagName, CloseTagEnd | g1228 |
-| OpenTagStart, OpenTagName, OpenTagEnd, Text, Placeholder, Text, CloseTagStart, CloseTagName, CloseTagEnd | g1229 |
+| OpenTagStart, OpenTagName, OpenTagEnd, Text, Placeholder, Text, CloseTagStart, CloseTagName, CloseTagEnd | g1229 g1530 |
 | OpenTagStart, OpenTagName, OpenTagEnd, Text, Scriptlet, CloseTagStart, Text, CloseTagName, CloseTagEnd | g1139 g1224 g1438 g1439 g1440 |
 | OpenTagStart, OpenTagName, OpenTagEnd, Text, Scriptlet, Error: Missing ending "p" tag | g1558 g1587 |
 | OpenTagStart, OpenTagName, TagArgs, Error: Unexpected types. Type arguments must directly follow a tag  | g1481 |
-| OpenTagStart, OpenTagName, TagArgs, OpenTagEnd | g1202 g1343 g1344 g1403 g1406 g1407 g1668 |
+| OpenTagStart, OpenTagName, TagArgs, OpenTagEnd | g1202 g1343 g1344 g1403 g1406 g1407 g1506 g1668 |
 | OpenTagStart, OpenTagName, TagArgs, TagTypeParams, TagParams, OpenTagEnd | g1136 |
 | OpenTagStart, OpenTagName, TagParams, AttrName, AttrValue, OpenTagEnd | g1260 |
 | OpenTagStart, OpenTagName, TagParams, AttrName, OpenTagEnd | g1397 |

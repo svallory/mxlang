@@ -10,7 +10,6 @@ import {
 import * as CODE from "../util/codes.ts";
 import * as ErrorCode from "../util/error-code.ts";
 import type { TagType as TagTypeValue } from "../util/constants.ts";
-import { rejectReservedName } from "./EXPRESSION.ts";
 import * as TagType from "../util/tag-type.ts";
 import { prepareScriptlet } from "./INLINE_SCRIPT.ts";
 
@@ -39,13 +38,6 @@ export const TAG_NAME: StateDefinition<TagNameMeta> = {
     const { start, end, quasis, expressions } = tagName;
     const last = quasis[quasis.length - 1];
     if (last.end < end) last.end = end;
-
-    // MX (decision 156 addenda 2, 3): `::` is reserved in a tag name and in
-    // its shorthands, in their static text only: a `${}` is an expression
-    // (`<${"a::b"}>`).
-    for (const quasi of quasis) {
-      if (rejectReservedName(this, quasi)) return;
-    }
 
     switch (tagName.shorthandCode) {
       case CODE.NUMBER_SIGN:
@@ -142,8 +134,8 @@ export const TAG_NAME: StateDefinition<TagNameMeta> = {
         this.pos += 2; // skip ${
         const expr = this.enterState(STATE.EXPRESSION);
         expr.shouldTerminate = matchesCloseCurlyBrace;
-        // MX: every `${}` is an expression position (decision 156 addendum 2).
-        expr.atoms = true;
+        // MX: every `${}` is an expression position (decision 182).
+        expr.triggers = true;
         return;
       } else if (
         isWhitespaceCode(code) ||

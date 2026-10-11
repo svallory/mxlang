@@ -8,7 +8,7 @@
  * whose CommonJS resolution hook maps the bare specifier `htmljs-parser`
  * to the vendored stock build for that process only. No install, no other
  * package, and not even this process's own resolution changes; the
- * `lexAtom` assertion in `marko.test.ts` proves packages/core still
+ * `isInTextBody` assertion in `marko.test.ts` proves packages/core still
  * reaches the patched parser. This is the same hook shape
  * `packages/core/src/stock-parser.test.ts` uses.
  */

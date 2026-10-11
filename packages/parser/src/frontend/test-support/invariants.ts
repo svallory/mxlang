@@ -100,14 +100,6 @@ export function checkInvariants(
         }
         within(`${path}.valueSpan`, node.valueSpan, node);
         break;
-      case "MxAtom":
-        if (slice[0] !== ":" || slice.slice(1) !== node.name) {
-          fail(
-            path,
-            `atom span ${JSON.stringify(slice)} is not ":${node.name}"`,
-          );
-        }
-        break;
       case "MxTrigger": {
         // Decision 182: the span starts with the matched text; `=value`, if
         // any, follows it after `=` and whitespace, and ends the span. A
@@ -370,19 +362,12 @@ export function checkInvariants(
           if (node.source !== slice)
             fail(path, "source is not the span's text");
           within(`${path}.outer`, node, node.outer);
-          ordered(`${path}.atoms`, node.atoms);
           // Decision 182: present only when non-empty; each trigger is an
-          // operand inside the container, and none overlaps an atom.
+          // operand inside the container.
           if ("triggers" in node) {
             if (node.triggers.length === 0)
               fail(path, "an empty triggers list");
             ordered(`${path}.triggers`, node.triggers);
-            ordered(
-              `${path}.atoms+triggers`,
-              [...node.atoms, ...node.triggers].sort(
-                (a: Span, b: Span) => a.start - b.start,
-              ),
-            );
           }
         }
     }
@@ -446,24 +431,4 @@ export function checkInvariants(
     }
   }
   return problems;
-}
-
-/** Every atom of every container in the document, in walk order. */
-export function allAtoms(document: MxDocument): Span[] {
-  const found: Span[] = [];
-  const walk = (value: unknown) => {
-    if (Array.isArray(value)) {
-      for (const item of value) walk(item);
-      return;
-    }
-    if (!value || typeof value !== "object") return;
-    const node = value as Node;
-    if (node.type === "MxAtom") {
-      found.push({ start: node.start, end: node.end });
-      return;
-    }
-    for (const field of Object.values(node)) walk(field);
-  };
-  walk(document.body);
-  return found;
 }

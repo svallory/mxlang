@@ -81,7 +81,8 @@
   "g0021": ["scriptlet block [0,10) \" a; b \" [3,9)"],
   "g0022": [
     "tag \"div\" [1,4) [0,20) open=[0,20) mode=html self-closed",
-    "  attr \"x\" [5,18) name=[5,6) = value \":rename-all\" [7,18)"
+    "  attr \"x\" [5,18) name=[5,6) = value \":rename-all\" [7,18)",
+    "error BABEL_UnexpectedToken [7,7)"
   ],
   "g0023": [
     "tag \"div\" [0,3) [0,10) open=[0,3) mode=html concise",
@@ -397,12 +398,12 @@
     "  attr \"onClick\" [5,25) name=[11,18) method async [5,25) params \"a\" [19,20) body \"b\" [23,24)"
   ],
   "g0096": [
-    "tag \"div\" [1,4) [0,5) open=[0,5) mode=html incomplete",
-    "error INVALID_EXPRESSION [5,8)"
+    "tag \"div\" [1,4) [0,10) open=[0,10) mode=html self-closed",
+    "  attr \":\" [5,8) name=[5,6) modifier \"b\" [7,8)"
   ],
   "g0097": [
-    "tag \"div\" [1,4) [0,6) open=[0,6) mode=html incomplete",
-    "error INVALID_EXPRESSION [6,9)"
+    "tag \"div\" [1,4) [0,11) open=[0,11) mode=html self-closed",
+    "  attr \"a:\" [5,9) name=[5,7) modifier \"b\" [8,9)"
   ],
   "g0098": [
     "tag \"div\" [1,4) [0,6) open=[0,6) mode=html incomplete",
@@ -808,14 +809,14 @@
     "error MALFORMED_PLACEHOLDER [10,10)"
   ],
   "g0193": [
-    "tag \"div\" [1,4) [0,7) open=[0,7) mode=html incomplete",
-    "  attr \"x\" [5,6) name=[5,6)",
-    "error INVALID_EXPRESSION [7,10)"
+    "tag \"div\" [1,4) [0,12) open=[0,12) mode=html self-closed",
+    "  attr \"x\" [5,10) name=[5,6) = value \"::a\" [7,10)",
+    "error BABEL_UnexpectedToken [7,7)"
   ],
-  "g0194": ["error INVALID_EXPRESSION [2,5)"],
+  "g0194": ["tag \"a::b\" [1,5) [0,7) open=[0,7) mode=html self-closed"],
   "g0195": [
-    "tag \"div\" [1,4) [0,6) open=[0,6) mode=html incomplete",
-    "error INVALID_EXPRESSION [6,9)"
+    "tag \"div\" [1,4) [0,11) open=[0,11) mode=html self-closed",
+    "  sugar tag . \"a::b\" [4,9)"
   ],
   "g0196": [
     "tag \"div\" [1,4) [0,11) open=[0,11) mode=html incomplete",
@@ -1025,7 +1026,8 @@
   ],
   "g0246": [
     "tag \"div\" [1,4) [0,21) open=[0,21) mode=html self-closed",
-    "  attr \"x\" [5,19) name=[5,6) = value \"(a ? :b : c)\" [7,19)"
+    "  attr \"x\" [5,19) name=[5,6) = value \"(a ? :b : c)\" [7,19)",
+    "error BABEL_UnexpectedToken [10,10)"
   ],
   "g0247": [
     "tag \"div\" [1,4) [0,21) open=[0,21) mode=html self-closed",
@@ -1268,9 +1270,9 @@
     "error BABEL_ParseExpressionExpectsEOF [15,15)"
   ],
   "g0298": [
-    "tag \"div\" [0,3) [0,17) open=[0,10) mode=html concise",
-    "  attr \"x\" [4,10) name=[4,5) = value \":new\" [6,10)",
-    "  tag \"span\" [13,17) [13,17) open=[13,17) mode=html concise"
+    "tag \"div\" [0,3) [0,17) open=[0,17) mode=html concise",
+    "  attr \"x\" [4,17) name=[4,5) = value \":new\\n  span\" [6,17)",
+    "error BABEL_UnexpectedToken [6,6)"
   ],
   "g0299": [
     "tag \"div\" [0,3) [0,16) open=[0,16) mode=html concise",
@@ -1864,7 +1866,7 @@
   "g0423": [
     "tag \"if\" [1,3) [0,10) open=[0,10) mode=html incomplete",
     "  attr default [3,9) name=[3,3) = value \":a :b\" [4,9)",
-    "error BABEL_ParseExpressionExpectsEOF [7,7)",
+    "error BABEL_UnexpectedToken [4,4)",
     "error MISSING_END_TAG [0,10)"
   ],
   "g0424": [
@@ -2314,19 +2316,19 @@
     "error INVALID_TAG_TYPES [13,14)"
   ],
   "g0521": [
-    "tag \"div\" [1,4) [0,7) open=[0,7) mode=html incomplete",
-    "  attr \"x\" [5,6) name=[5,6)",
-    "error INVALID_EXPRESSION [7,9)"
-  ],
-  "g0522": [
     "tag \"div\" [1,4) [0,9) open=[0,9) mode=html incomplete",
     "  attr \"x\" [5,6) name=[5,6)",
-    "error INVALID_EXPRESSION [9,11)"
+    "error INVALID_REGULAR_EXPRESSION [9,9)"
+  ],
+  "g0522": [
+    "tag \"div\" [1,4) [0,15) open=[0,15) mode=html self-closed",
+    "  attr \"x\" [5,13) name=[5,6) = value \"a :: b\" [7,13)",
+    "error BABEL_ParseExpressionExpectsEOF [9,9)"
   ],
   "g0523": [
-    "tag \"div\" [1,4) [0,13) open=[0,13) mode=html incomplete",
-    "  attr \"x\" [5,6) name=[5,6)",
-    "error INVALID_EXPRESSION [13,16)"
+    "tag \"div\" [1,4) [0,23) open=[0,23) mode=html self-closed",
+    "  attr \"x\" [5,21) name=[5,6) = value \"(a ? b::c : d)\" [7,21)",
+    "error BABEL_UnexpectedToken [14,14)"
   ],
   "g0524": [
     "tag \"div\" [1,4) [0,11) open=[0,11) mode=html self-closed",
@@ -2355,38 +2357,44 @@
   ],
   "g0529": [
     "tag \"div\" [1,4) [0,11) open=[0,11) mode=html self-closed",
-    "  attr \"x\" [5,9) name=[5,6) = value \":a\" [7,9)"
+    "  attr \"x\" [5,9) name=[5,6) = value \":a\" [7,9)",
+    "error BABEL_UnexpectedToken [7,7)"
   ],
   "g0530": [
     "tag \"div\" [1,4) [0,22) open=[0,22) mode=html self-closed",
     "  attr \"x\" [5,18) name=[5,6) = value \":rename-all\" [7,18)",
-    "  attr \"y\" [19,20) name=[19,20)"
+    "  attr \"y\" [19,20) name=[19,20)",
+    "error BABEL_UnexpectedToken [7,7)"
   ],
   "g0531": [
     "tag \"div\" [0,3) [0,9) open=[0,9) mode=html concise",
     "  attr \"x\" [4,9) name=[4,5) = value \":a-\" [6,9)",
-    "error BABEL_UnexpectedToken [9,9)"
+    "error BABEL_UnexpectedToken [6,6)"
   ],
   "g0532": [
     "tag \"div\" [1,4) [0,14) open=[0,14) mode=html self-closed",
     "  attr \"x\" [5,12) name=[5,6) = value \":a--b\" [7,12)",
-    "error BABEL_InvalidLhs [7,7)"
+    "error BABEL_UnexpectedToken [7,7)"
   ],
   "g0533": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
-    "  attr \"x\" [5,16) name=[5,6) = value \"a ? :b :c\" [7,16)"
+    "  attr \"x\" [5,16) name=[5,6) = value \"a ? :b :c\" [7,16)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0534": [
     "tag \"div\" [1,4) [0,12) open=[0,12) mode=html self-closed",
-    "  attr \"x\" [5,10) name=[5,6) = value \":b\" [8,10)"
+    "  attr \"x\" [5,10) name=[5,6) = value \":b\" [8,10)",
+    "error BABEL_UnexpectedToken [8,8)"
   ],
   "g0535": [
     "tag \"p\" [1,2) [0,13) open=[0,3) close=[9,13) \"p\" mode=html",
-    "  placeholder [3,9) \" :a\" [5,8)"
+    "  placeholder [3,9) \" :a\" [5,8)",
+    "error BABEL_UnexpectedToken [6,6)"
   ],
   "g0536": [
     "tag \"div\" [1,4) [0,21) open=[0,21) mode=html self-closed",
-    "  attr \"x\" [5,19) name=[5,6) = value \"(/* c */ :a)\" [7,19)"
+    "  attr \"x\" [5,19) name=[5,6) = value \"(/* c */ :a)\" [7,19)",
+    "error BABEL_UnexpectedToken [16,16)"
   ],
   "g0537": [
     "tag \"div\" [1,4) [0,17) open=[0,17) mode=html self-closed",
@@ -2420,7 +2428,8 @@
   ],
   "g0543": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"[...:a]\" [7,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"[...:a]\" [7,14)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0544": [
     "tag \"div\" [1,4) [0,13) open=[0,13) mode=html self-closed",
@@ -2434,7 +2443,8 @@
   ],
   "g0546": [
     "tag \"div\" [1,4) [0,27) open=[0,27) mode=html self-closed",
-    "  attr \"x\" [5,25) name=[5,6) = value \"(n === 1? :a : :b)\" [7,25)"
+    "  attr \"x\" [5,25) name=[5,6) = value \"(n === 1? :a : :b)\" [7,25)",
+    "error BABEL_UnexpectedToken [15,15)"
   ],
   "g0547": [
     "tag \"div\" [1,4) [0,21) open=[0,21) mode=html self-closed",
@@ -2451,11 +2461,13 @@
   ],
   "g0550": [
     "tag \"div\" [1,4) [0,21) open=[0,21) mode=html self-closed",
-    "  attr \"x\" [5,19) name=[5,6) = value \"(c ? :a : b)\" [7,19)"
+    "  attr \"x\" [5,19) name=[5,6) = value \"(c ? :a : b)\" [7,19)",
+    "error BABEL_UnexpectedToken [10,10)"
   ],
   "g0551": [
     "tag \"div\" [1,4) [0,12) open=[0,12) mode=html self-closed",
-    "  attr \"x\" [5,10) name=[5,6) = value \"!:a\" [7,10)"
+    "  attr \"x\" [5,10) name=[5,6) = value \"!:a\" [7,10)",
+    "error BABEL_UnexpectedToken [8,8)"
   ],
   "g0552": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
@@ -2464,11 +2476,13 @@
   ],
   "g0553": [
     "tag \"div\" [1,4) [0,14) open=[0,14) mode=html self-closed",
-    "  attr \"x\" [5,12) name=[5,6) = value \"(!:a)\" [7,12)"
+    "  attr \"x\" [5,12) name=[5,6) = value \"(!:a)\" [7,12)",
+    "error BABEL_UnexpectedToken [9,9)"
   ],
   "g0554": [
     "tag \"div\" [1,4) [0,20) open=[0,20) mode=html self-closed",
-    "  attr \"x\" [5,18) name=[5,6) = value \"(typeof!:a)\" [7,18)"
+    "  attr \"x\" [5,18) name=[5,6) = value \"(typeof!:a)\" [7,18)",
+    "error BABEL_UnexpectedToken [15,15)"
   ],
   "g0555": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
@@ -2482,7 +2496,8 @@
   ],
   "g0557": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"a => :b\" [7,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"a => :b\" [7,14)",
+    "error BABEL_UnexpectedToken [12,12)"
   ],
   "g0558": [
     "tag \"div\" [1,4) [0,31) open=[0,31) mode=html self-closed",
@@ -2490,11 +2505,13 @@
   ],
   "g0559": [
     "tag \"div\" [1,4) [0,17) open=[0,17) mode=html self-closed",
-    "  attr \"x\" [5,15) name=[5,6) = value \"(a > :b)\" [7,15)"
+    "  attr \"x\" [5,15) name=[5,6) = value \"(a > :b)\" [7,15)",
+    "error BABEL_UnexpectedToken [12,12)"
   ],
   "g0560": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
-    "  attr \"x\" [5,16) name=[5,6) = value \"(a >> :b)\" [7,16)"
+    "  attr \"x\" [5,16) name=[5,6) = value \"(a >> :b)\" [7,16)",
+    "error BABEL_UnexpectedToken [13,13)"
   ],
   "g0561": [
     "tag \"div\" [1,4) [0,27) open=[0,27) mode=html self-closed",
@@ -2507,11 +2524,13 @@
   ],
   "g0563": [
     "tag \"div\" [1,4) [0,17) open=[0,17) mode=html self-closed",
-    "  attr \"x\" [5,15) name=[5,6) = value \"(a + :b)\" [7,15)"
+    "  attr \"x\" [5,15) name=[5,6) = value \"(a + :b)\" [7,15)",
+    "error BABEL_UnexpectedToken [12,12)"
   ],
   "g0564": [
     "tag \"div\" [1,4) [0,17) open=[0,17) mode=html self-closed",
-    "  attr \"x\" [5,15) name=[5,6) = value \"(a - :b)\" [7,15)"
+    "  attr \"x\" [5,15) name=[5,6) = value \"(a - :b)\" [7,15)",
+    "error BABEL_UnexpectedToken [12,12)"
   ],
   "g0565": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
@@ -2520,23 +2539,28 @@
   ],
   "g0566": [
     "tag \"div\" [1,4) [0,15) open=[0,15) mode=html self-closed",
-    "  attr \"x\" [5,13) name=[5,6) = value \"a / :b\" [7,13)"
+    "  attr \"x\" [5,13) name=[5,6) = value \"a / :b\" [7,13)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0567": [
     "tag \"div\" [1,4) [0,13) open=[0,13) mode=html self-closed",
-    "  attr \"x\" [5,11) name=[5,6) = value \"(:a)\" [7,11)"
+    "  attr \"x\" [5,11) name=[5,6) = value \"(:a)\" [7,11)",
+    "error BABEL_UnexpectedToken [8,8)"
   ],
   "g0568": [
     "tag \"div\" [1,4) [0,17) open=[0,17) mode=html self-closed",
-    "  attr \"x\" [5,15) name=[5,6) = value \"[:a, :b]\" [7,15)"
+    "  attr \"x\" [5,15) name=[5,6) = value \"[:a, :b]\" [7,15)",
+    "error BABEL_UnexpectedToken [8,8)"
   ],
   "g0569": [
     "tag \"div\" [1,4) [0,15) open=[0,15) mode=html self-closed",
-    "  attr \"x\" [5,13) name=[5,6) = value \"a + :b\" [7,13)"
+    "  attr \"x\" [5,13) name=[5,6) = value \"a + :b\" [7,13)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0570": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
-    "  attr \"x\" [5,16) name=[5,6) = value \"{ k: :a }\" [7,16)"
+    "  attr \"x\" [5,16) name=[5,6) = value \"{ k: :a }\" [7,16)",
+    "error BABEL_UnexpectedToken [12,12)"
   ],
   "g0571": [
     "tag \"div\" [1,4) [0,20) open=[0,20) mode=html self-closed",
@@ -2573,11 +2597,12 @@
   "g0578": [
     "tag \"div\" [1,4) [0,23) open=[0,23) mode=html self-closed",
     "  attr \"x\" [5,21) name=[5,6) = value \"c ? 1? :a : :b\" [7,21)",
-    "error BABEL_UnexpectedToken [21,21)"
+    "error BABEL_UnexpectedToken [14,14)"
   ],
   "g0579": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
-    "  attr \"x\" [5,16) name=[5,6) = value \"(x in :a)\" [7,16)"
+    "  attr \"x\" [5,16) name=[5,6) = value \"(x in :a)\" [7,16)",
+    "error BABEL_UnexpectedToken [13,13)"
   ],
   "g0580": [
     "tag \"div\" [1,4) [0,24) open=[0,24) mode=html self-closed",
@@ -2586,25 +2611,27 @@
   ],
   "g0581": [
     "tag \"div\" [1,4) [0,17) open=[0,17) mode=html self-closed",
-    "  attr \"x\" [5,15) name=[5,6) = value \"await :b\" [7,15)"
+    "  attr \"x\" [5,15) name=[5,6) = value \"await :b\" [7,15)",
+    "error BABEL_UnexpectedToken [13,13)"
   ],
   "g0582": [
     "tag \"div\" [1,4) [0,21) open=[0,21) mode=html self-closed",
-    "  attr \"x\" [5,19) name=[5,6) = value \"({ new :a })\" [7,19)",
-    "error BABEL_UnexpectedKeyword [10,10)"
+    "  attr \"x\" [5,19) name=[5,6) = value \"({ new :a })\" [7,19)"
   ],
   "g0583": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
-    "  attr \"x\" [5,16) name=[5,6) = value \"(a ?? :b)\" [7,16)"
+    "  attr \"x\" [5,16) name=[5,6) = value \"(a ?? :b)\" [7,16)",
+    "error BABEL_UnexpectedToken [13,13)"
   ],
   "g0584": [
     "tag \"div\" [1,4) [0,13) open=[0,13) mode=html self-closed",
-    "  attr \"x\" [5,11) name=[5,6) = value \":a-b\" [7,11)"
+    "  attr \"x\" [5,11) name=[5,6) = value \":a-b\" [7,11)",
+    "error BABEL_UnexpectedToken [7,7)"
   ],
   "g0585": [
     "tag \"div\" [1,4) [0,21) open=[0,21) mode=html self-closed",
     "  attr \"x\" [5,19) name=[5,6) = value \"(:delete :b)\" [7,19)",
-    "error BABEL_UnexpectedTypeAnnotation [16,16)"
+    "error BABEL_UnexpectedToken [8,8)"
   ],
   "g0586": [
     "tag \"div\" [1,4) [0,15) open=[0,15) mode=html self-closed",
@@ -2655,67 +2682,75 @@
   ],
   "g0596": [
     "tag \"div\" [0,3) [0,16) open=[0,16) mode=html concise",
-    "  attr \"x\" [4,10) name=[4,5) = value \":a<b\" [6,10)",
-    "  attr \"c>\" [12,14) name=[12,14)",
-    "  attr \"d\" [15,16) name=[15,16)"
+    "  attr \"x\" [4,14) name=[4,5) = value \":a<b, c>\" [6,14)",
+    "  attr \"d\" [15,16) name=[15,16)",
+    "error BABEL_UnexpectedToken [6,6)"
   ],
   "g0597": [
-    "tag \"div\" [1,4) [0,19) open=[0,12) mode=html incomplete",
-    "  attr \"x\" [5,11) name=[5,6) = value \":a<b\" [7,11)",
-    "  text [12,19)",
-    "error MISSING_END_TAG [0,12)"
+    "tag \"div\" [1,4) [0,19) open=[0,19) mode=html self-closed",
+    "  attr \"x\" [5,15) name=[5,6) = value \":a<b>(c)\" [7,15)",
+    "  attr \"y\" [16,17) name=[16,17)",
+    "error BABEL_UnexpectedToken [7,7)"
   ],
   "g0598": [
-    "tag \"div\" [0,3) [0,12) open=[0,12) mode=html concise",
-    "  attr \"x\" [4,12) name=[4,5) = value \":a > b\" [6,12)"
+    "tag \"div\" [0,3) [0,6) open=[0,6) mode=html concise incomplete",
+    "  attr \"x\" [4,5) name=[4,5)",
+    "error INVALID_EXPRESSION [6,6)"
   ],
   "g0599": [
-    "tag \"div\" [0,3) [0,14) open=[0,14) mode=html concise",
-    "  attr \"x\" [4,14) name=[4,5) = value \":a <b> c\" [6,14)"
+    "tag \"div\" [0,3) [0,6) open=[0,6) mode=html concise incomplete",
+    "  attr \"x\" [4,5) name=[4,5)",
+    "error INVALID_EXPRESSION [6,6)"
   ],
   "g0600": [
-    "tag \"div\" [0,3) [0,15) open=[0,15) mode=html concise",
-    "  attr \"x\" [4,15) name=[4,5) = value \":a<b>\\n  c\" [6,15)",
-    "error BABEL_ParseExpressionExpectsEOF [14,14)"
+    "tag \"div\" [0,3) [0,15) open=[0,11) mode=html concise",
+    "  attr \"x\" [4,11) name=[4,5) = value \":a<b>\" [6,11)",
+    "  tag \"c\" [14,15) [14,15) open=[14,15) mode=html concise",
+    "error BABEL_UnexpectedToken [6,6)"
   ],
   "g0601": [
-    "tag \"div\" [0,3) [0,19) open=[0,19) mode=html concise",
-    "  attr \"x\" [4,19) name=[4,5) = value \":a + void\\n  b\" [6,19)"
+    "tag \"div\" [0,3) [0,19) open=[0,15) mode=html concise",
+    "  attr \"x\" [4,15) name=[4,5) = value \":a + void\" [6,15)",
+    "  tag \"b\" [18,19) [18,19) open=[18,19) mode=html concise",
+    "error BABEL_UnexpectedToken [6,6)"
   ],
   "g0602": [
-    "tag \"div\" [0,3) [0,20) open=[0,20) mode=html concise",
-    "  attr \"x\" [4,20) name=[4,5) = value \":a + void!\\n  b\" [6,20)"
+    "tag \"div\" [0,3) [0,20) open=[0,16) mode=html concise",
+    "  attr \"x\" [4,16) name=[4,5) = value \":a + void!\" [6,16)",
+    "  tag \"b\" [19,20) [19,20) open=[19,20) mode=html concise",
+    "error BABEL_UnexpectedToken [6,6)"
   ],
   "g0603": [
-    "tag \"div\" [0,3) [0,20) open=[0,16) mode=html concise",
-    "  attr \"x\" [4,16) name=[4,5) = value \":a + keyof\" [6,16)",
-    "  tag \"b\" [19,20) [19,20) open=[19,20) mode=html concise"
+    "tag \"div\" [0,3) [0,20) open=[0,20) mode=html concise",
+    "  attr \"x\" [4,20) name=[4,5) = value \":a + keyof\\n  b\" [6,20)",
+    "error BABEL_UnexpectedToken [6,6)"
   ],
   "g0604": [
     "tag \"div\" [1,4) [0,21) open=[0,21) mode=html self-closed",
-    "  attr \"x\" [5,17) name=[5,6) = value \":a + void,\" [7,17)",
+    "  attr \"x\" [5,16) name=[5,6) = value \":a + void\" [7,16)",
     "  attr \"y\" [18,19) name=[18,19)",
-    "error BABEL_UnexpectedToken [16,16)"
+    "error BABEL_UnexpectedToken [7,7)"
   ],
   "g0605": [
     "tag \"div\" [0,3) [0,22) open=[0,22) mode=html concise",
-    "  attr \"x\" [4,20) name=[4,5) = value \":a as T = b<c>\" [6,20)",
-    "  attr \"d\" [21,22) name=[21,22)",
-    "error BABEL_InvalidLhs [6,6)"
+    "  attr \"x\" [4,22) name=[4,5) = value \":a as T = b<c> d\" [6,22)",
+    "error BABEL_UnexpectedToken [6,6)"
   ],
   "g0606": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
     "  attr \"x\" [5,14) name=[5,6) = value \":new :b\" [7,14)",
-    "error BABEL_ParseExpressionExpectsEOF [12,12)"
+    "error BABEL_UnexpectedToken [7,7)"
   ],
   "g0607": [
     "tag \"div\" [1,4) [0,19) open=[0,19) mode=html self-closed",
     "  attr \"x\" [5,17) name=[5,6) = value \":typeof :b\" [7,17)",
-    "error BABEL_ParseExpressionExpectsEOF [15,15)"
+    "error BABEL_UnexpectedToken [7,7)"
   ],
   "g0608": [
-    "tag \"div\" [1,4) [0,17) open=[0,17) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \":typeof\" [7,14)"
+    "tag \"div\" [1,4) [0,17) open=[0,17) mode=html incomplete",
+    "  attr \"x\" [5,16) name=[5,6) = value \":typeof /\" [7,16)",
+    "error BABEL_UnexpectedToken [7,7)",
+    "error MISSING_END_TAG [0,17)"
   ],
   "g0609": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
@@ -2804,27 +2839,26 @@
   "g0628": [
     "tag \"div\" [1,4) [0,14) open=[0,14) mode=html self-closed",
     "  attr \"x\" [5,12) name=[5,6) = value \"a ?:b\" [7,12)",
-    "error BABEL_UnexpectedToken [12,12)"
+    "error BABEL_UnexpectedToken [10,10)"
   ],
   "g0629": [
     "tag \"div\" [1,4) [0,14) open=[0,14) mode=html self-closed",
     "  attr \"x\" [5,12) name=[5,6) = value \":a :b\" [7,12)",
-    "error BABEL_ParseExpressionExpectsEOF [10,10)"
+    "error BABEL_UnexpectedToken [7,7)"
   ],
   "g0630": [
     "tag \"if\" [1,3) [0,10) open=[0,10) mode=html incomplete",
     "  attr default [3,9) name=[3,3) = value \":a .b\" [4,9)",
+    "error BABEL_UnexpectedToken [4,4)",
     "error MISSING_END_TAG [0,10)"
   ],
   "g0631": [
     "tag \"div\" [1,4) [0,25) open=[0,25) mode=html self-closed",
-    "  attr \"x\" [5,23) name=[5,6) = value \"(c ? a < b > :z)\" [7,23)",
-    "error BABEL_UnexpectedToken [22,22)"
+    "  attr \"x\" [5,23) name=[5,6) = value \"(c ? a < b > :z)\" [7,23)"
   ],
   "g0632": [
     "tag \"div\" [0,3) [0,20) open=[0,20) mode=html concise",
-    "  attr \"x\" [4,20) name=[4,5) = value \"c ? a < b > :z\" [6,20)",
-    "error BABEL_UnexpectedToken [20,20)"
+    "  attr \"x\" [4,20) name=[4,5) = value \"c ? a < b > :z\" [6,20)"
   ],
   "g0633": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
@@ -3142,14 +3176,18 @@
   "g0703": ["tag \"div>a\" [0,5) [0,5) open=[0,5) mode=html concise"],
   "g0704": ["tag \"1abc\" [1,5) [0,7) open=[0,7) mode=html self-closed"],
   "g0705": [
-    "tag \"div\" [1,4) [0,6) open=[0,6) mode=html incomplete",
-    "error INVALID_EXPRESSION [6,9)"
+    "tag \"div\" [1,4) [0,11) open=[0,11) mode=html self-closed",
+    "  sugar tag # \"a::b\" [4,9)"
   ],
   "g0706": [
     "tag dynamic [1,10) \"\\\"a::b\\\"\" [3,9) [0,12) open=[0,12) mode=html self-closed"
   ],
-  "g0707": ["error INVALID_EXPRESSION [2,5)"],
-  "g0708": ["error INVALID_EXPRESSION [2,4)"],
+  "g0707": [
+    "tag dynamic [1,9) \"a::b${x}\" [1,9) [0,11) open=[0,11) mode=html self-closed"
+  ],
+  "g0708": [
+    "tag dynamic [1,8) \"a::${x}\" [1,8) [0,10) open=[0,10) mode=html self-closed"
+  ],
   "g0709": [
     "tag \"div\" [1,4) [0,13) open=[0,13) mode=html self-closed",
     "  sugar tag . dynamic [5,11) \"${x}-y\" [5,11) [4,11)"
@@ -3184,7 +3222,8 @@
     "tag \"div\" [1,4) [0,19) open=[0,19) mode=html self-closed",
     "  attr \"x\" [5,6) name=[5,6)",
     "  comment block [7,12)",
-    "  attr default [13,17) name=[13,13) = value \":a\" [15,17)"
+    "  attr default [13,17) name=[13,13) = value \":a\" [15,17)",
+    "error BABEL_UnexpectedToken [15,15)"
   ],
   "g0717": [
     "tag \"div\" [1,4) [0,13) open=[0,13) mode=html self-closed",
@@ -3337,7 +3376,8 @@
   ],
   "g0750": [
     "tag \"script\" [1,7) [0,22) open=[0,8) close=[13,22) \"script\" mode=parsed-text",
-    "  placeholder [8,13) \":a\" [10,12)"
+    "  placeholder [8,13) \":a\" [10,12)",
+    "error BABEL_UnexpectedToken [10,10)"
   ],
   "g0751": [
     "tag \"script\" [1,7) [0,24) open=[0,8) close=[15,24) \"script\" mode=parsed-text",
@@ -3523,7 +3563,8 @@
   ],
   "g0794": [
     "tag \"div\" [1,4) [0,15) open=[0,15) mode=html self-closed",
-    "  attr \"x\" [5,13) name=[5,6) = value \"[(:a)]\" [7,13)"
+    "  attr \"x\" [5,13) name=[5,6) = value \"[(:a)]\" [7,13)",
+    "error BABEL_UnexpectedToken [9,9)"
   ],
   "g0795": [
     "tag \"div\" [1,4) [0,22) open=[0,22) mode=html self-closed",
@@ -3538,7 +3579,8 @@
   "g0797": [
     "tag \"div\" [1,4) [0,13) open=[0,13) mode=html self-closed",
     "  attr \"x\" [5,9) name=[5,6) = value \":a\" [7,9)",
-    "  attr \"b\" [10,11) name=[10,11)"
+    "  attr \"b\" [10,11) name=[10,11)",
+    "error BABEL_UnexpectedToken [7,7)"
   ],
   "g0798": [
     "tag \"div\" [1,4) [0,17) open=[0,17) mode=html self-closed",
@@ -3749,7 +3791,8 @@
   ],
   "g0839": [
     "tag \"div\" [1,4) [0,15) open=[0,15) mode=html self-closed",
-    "  attr \"x\" [5,13) name=[5,6) = value \"a | :b\" [7,13)"
+    "  attr \"x\" [5,13) name=[5,6) = value \"a | :b\" [7,13)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0840": [
     "tag \"div\" [1,4) [0,21) open=[0,21) mode=html self-closed",
@@ -3781,30 +3824,30 @@
   "g0846": [
     "tag \"if\" [1,3) [0,11) open=[0,11) mode=html incomplete",
     "  attr default [3,10) name=[3,3) = value \":a :b\" [5,10)",
-    "error BABEL_ParseExpressionExpectsEOF [8,8)",
+    "error BABEL_UnexpectedToken [5,5)",
     "error MISSING_END_TAG [0,11)"
   ],
   "g0847": [
     "tag \"if\" [1,3) [0,11) open=[0,11) mode=html incomplete",
     "  attr default [3,10) name=[3,3) = value \":a\\n :b\" [4,10)",
-    "error BABEL_ParseExpressionExpectsEOF [8,8)",
+    "error BABEL_UnexpectedToken [4,4)",
     "error MISSING_END_TAG [0,11)"
   ],
   "g0848": [
     "tag \"if\" [0,2) [0,8) open=[0,8) mode=html concise",
     "  attr default [2,8) name=[2,2) = value \":a :b\" [3,8)",
-    "error BABEL_ParseExpressionExpectsEOF [6,6)"
+    "error BABEL_UnexpectedToken [3,3)"
   ],
   "g0849": [
     "tag \"const\" [1,6) [0,16) open=[0,16) mode=html self-closed",
     "  var \"x\" [7,8)",
     "  attr default [8,14) name=[8,8) = value \":a :b\" [9,14)",
-    "error BABEL_ParseExpressionExpectsEOF [12,12)"
+    "error BABEL_UnexpectedToken [9,9)"
   ],
   "g0850": [
     "tag \"if\" [1,3) [0,13) open=[0,13) mode=html incomplete",
     "  attr default [3,12) name=[3,3) = value \":a :b :c\" [4,12)",
-    "error BABEL_ParseExpressionExpectsEOF [7,7)",
+    "error BABEL_UnexpectedToken [4,4)",
     "error MISSING_END_TAG [0,13)"
   ],
   "g0851": [
@@ -3815,24 +3858,25 @@
   "g0852": [
     "tag \"if\" [1,3) [0,12) open=[0,12) mode=html incomplete",
     "  attr default [3,11) name=[3,3) = value \":a.b :c\" [4,11)",
-    "error BABEL_ParseExpressionExpectsEOF [9,9)",
+    "error BABEL_UnexpectedToken [4,4)",
     "error MISSING_END_TAG [0,12)"
   ],
   "g0853": [
     "tag \"if\" [1,3) [0,15) open=[0,15) mode=html incomplete",
     "  attr default [3,14) name=[3,3) = value \":a + :b :c\" [4,14)",
-    "error BABEL_ParseExpressionExpectsEOF [12,12)",
+    "error BABEL_UnexpectedToken [4,4)",
     "error MISSING_END_TAG [0,15)"
   ],
   "g0854": [
     "tag \"if\" [1,3) [0,12) open=[0,12) mode=html incomplete",
     "  attr default [3,11) name=[3,3) = value \"(:a) :b\" [4,11)",
-    "error BABEL_ParseExpressionExpectsEOF [9,9)",
+    "error BABEL_UnexpectedToken [5,5)",
     "error MISSING_END_TAG [0,12)"
   ],
   "g0855": [
     "tag \"if\" [1,3) [0,15) open=[0,15) mode=html incomplete",
     "  attr default [3,14) name=[3,3) = value \":a ? :b :c\" [4,14)",
+    "error BABEL_UnexpectedToken [4,4)",
     "error MISSING_END_TAG [0,15)"
   ],
   "g0856": [
@@ -3871,7 +3915,8 @@
   ],
   "g0863": [
     "tag \"div\" [1,4) [0,12) open=[0,12) mode=html self-closed",
-    "  spread [5,10) \":a\" [8,10)"
+    "  spread [5,10) \":a\" [8,10)",
+    "error BABEL_UnexpectedToken [8,8)"
   ],
   "g0864": [
     "tag \"div\" [1,4) [0,19) open=[0,19) mode=html self-closed",
@@ -3893,11 +3938,13 @@
   ],
   "g0868": [
     "tag \"div\" [1,4) [0,12) open=[0,12) mode=html self-closed",
-    "  attr \"x\" [5,10) name=[5,6) args \":a\" [7,9)"
+    "  attr \"x\" [5,10) name=[5,6) args \":a\" [7,9)",
+    "error BABEL_UnexpectedToken [7,7)"
   ],
   "g0869": [
     "tag \"div\" [1,4) [0,22) open=[0,22) mode=html self-closed",
-    "  attr \"x\" [5,20) name=[5,6) method [6,20) params \"a = :b\" [7,13) body \" c \" [16,19)"
+    "  attr \"x\" [5,20) name=[5,6) method [6,20) params \"a = :b\" [7,13) body \" c \" [16,19)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0870": [
     "tag \"div\" [1,4) [0,32) open=[0,32) mode=html self-closed",
@@ -3905,7 +3952,8 @@
   ],
   "g0871": [
     "tag \"div\" [1,4) [0,25) open=[0,25) mode=html self-closed",
-    "  attr \"x\" [5,23) name=[5,6) method [6,23) params \"a\" [7,8) body \" return :c \" [11,22)"
+    "  attr \"x\" [5,23) name=[5,6) method [6,23) params \"a\" [7,8) body \" return :c \" [11,22)",
+    "error BABEL_UnexpectedToken [19,19)"
   ],
   "g0872": [
     "tag \"foo\" [1,4) [0,11) open=[0,11) mode=html self-closed",
@@ -3913,7 +3961,8 @@
   ],
   "g0873": [
     "tag \"foo\" [1,4) [0,10) open=[0,10) mode=html self-closed",
-    "  args \":a\" [5,7)"
+    "  args \":a\" [5,7)",
+    "error BABEL_UnexpectedToken [5,5)"
   ],
   "g0874": [
     "tag \"foo\" [1,4) [0,11) open=[0,11) mode=html self-closed",
@@ -3945,11 +3994,13 @@
   ],
   "g0880": [
     "tag \"p\" [1,2) [0,12) open=[0,3) close=[8,12) \"p\" mode=html",
-    "  placeholder [3,8) \":a\" [5,7)"
+    "  placeholder [3,8) \":a\" [5,7)",
+    "error BABEL_UnexpectedToken [5,5)"
   ],
   "g0881": [
-    "tag \"p\" [1,2) [0,6) open=[0,3) mode=html incomplete",
-    "error INVALID_EXPRESSION [6,9)"
+    "tag \"p\" [1,2) [0,14) open=[0,3) close=[10,14) \"p\" mode=html",
+    "  placeholder [3,10) \"a::b\" [5,9)",
+    "error BABEL_ParseExpressionExpectsEOF [6,6)"
   ],
   "g0882": [
     "tag \"div\" [1,4) [0,12) open=[0,12) mode=html self-closed",
@@ -4005,7 +4056,8 @@
   "g0892": [
     "tag \"let\" [1,4) [0,11) open=[0,11) mode=html self-closed",
     "  var \"x\" [5,6)",
-    "  attr default [6,9) name=[6,6) = value \":a\" [7,9)"
+    "  attr default [6,9) name=[6,6) = value \":a\" [7,9)",
+    "error BABEL_UnexpectedToken [7,7)"
   ],
   "g0893": [
     "statement static [0,14) untrimmedEnd=15",
@@ -4125,11 +4177,13 @@
     "tag dynamic [1,9) \"a > b\" [3,8) [0,11) open=[0,11) mode=html self-closed"
   ],
   "g0930": [
-    "tag dynamic [1,6) \":a\" [3,5) [0,8) open=[0,8) mode=html self-closed"
+    "tag dynamic [1,6) \":a\" [3,5) [0,8) open=[0,8) mode=html self-closed",
+    "error BABEL_UnexpectedToken [3,3)"
   ],
   "g0931": [
     "tag \"div\" [1,4) [0,12) open=[0,12) mode=html self-closed",
     "  sugar tag . dynamic [5,10) \":a\" [7,9) [4,10)",
+    "error BABEL_UnexpectedToken [7,7)",
     "error BABEL_UnexpectedToken [7,7)"
   ],
   "g0932": [
@@ -4185,19 +4239,24 @@
   ],
   "g0943": [
     "tag \"div\" [1,4) [0,12) open=[0,12) mode=html self-closed",
-    "  attr \"x\" [5,10) name=[5,6) := value \":a\" [8,10)"
+    "  attr \"x\" [5,10) name=[5,6) := value \":a\" [8,10)",
+    "error BABEL_UnexpectedToken [8,8)"
   ],
   "g0944": [
     "tag \"if\" [1,3) [0,8) open=[0,8) mode=html self-closed",
-    "  attr default [3,6) name=[3,3) = value \":a\" [4,6)"
+    "  attr default [3,6) name=[3,3) = value \":a\" [4,6)",
+    "error BABEL_UnexpectedToken [4,4)"
   ],
   "g0945": [
     "tag \"foo\" [1,4) [0,28) open=[0,28) mode=html self-closed",
-    "  attr default [4,26) name=[4,4) method [4,26) params \"a = :b\" [5,11) body \" return :c \" [14,25)"
+    "  attr default [4,26) name=[4,4) method [4,26) params \"a = :b\" [5,11) body \" return :c \" [14,25)",
+    "error BABEL_UnexpectedToken [9,9)",
+    "error BABEL_UnexpectedToken [22,22)"
   ],
   "g0946": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"`${:a}`\" [7,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"`${:a}`\" [7,14)",
+    "error BABEL_UnexpectedToken [10,10)"
   ],
   "g0947": [
     "tag \"div\" [1,4) [0,9) open=[0,9) mode=html self-closed",
@@ -4206,7 +4265,8 @@
   "g0948": [
     "tag \"let\" [1,4) [0,13) open=[0,13) mode=html self-closed",
     "  var \"a\" [5,6)",
-    "  attr default [7,11) name=[7,7) = value \":b\" [9,11)"
+    "  attr default [7,11) name=[7,7) = value \":b\" [9,11)",
+    "error BABEL_UnexpectedToken [9,9)"
   ],
   "g0949": [
     "tag \"foo\" [1,4) [0,20) open=[0,20) mode=html self-closed",
@@ -4293,91 +4353,113 @@
   ],
   "g0967": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0968": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0969": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0970": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0971": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0972": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0973": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0974": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0975": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0976": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0977": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0978": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0979": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0980": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0981": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0982": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0983": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0984": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"[a,　:b]\" [7,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"[a,　:b]\" [7,14)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0985": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"[a,﻿:b]\" [7,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"[a,﻿:b]\" [7,14)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0986": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"[a, :b]\" [7,14)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g0987": [
     "tag \"div\" [1,4) [0,22) open=[0,22) mode=html self-closed",
-    "  attr \"x\" [5,20) name=[5,6) = value \"[...await :b]\" [7,20)"
+    "  attr \"x\" [5,20) name=[5,6) = value \"[...await :b]\" [7,20)",
+    "error BABEL_UnexpectedToken [17,17)"
   ],
   "g0988": [
     "tag \"div\" [1,4) [0,20) open=[0,20) mode=html self-closed",
-    "  attr \"x\" [5,18) name=[5,6) = value \"[...new :a]\" [7,18)"
+    "  attr \"x\" [5,18) name=[5,6) = value \"[...new :a]\" [7,18)",
+    "error BABEL_UnexpectedToken [15,15)"
   ],
   "g0989": [
     "tag \"div\" [1,4) [0,24) open=[0,24) mode=html self-closed",
@@ -4396,7 +4478,8 @@
   ],
   "g0992": [
     "tag \"div\" [1,4) [0,30) open=[0,30) mode=html self-closed",
-    "  attr \"x\" [5,28) name=[5,6) method [6,28) params \"\" [7,7) body \" return await :a \" [10,27)"
+    "  attr \"x\" [5,28) name=[5,6) method [6,28) params \"\" [7,7) body \" return await :a \" [10,27)",
+    "error BABEL_UnexpectedToken [24,24)"
   ],
   "g0993": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
@@ -4405,7 +4488,8 @@
   ],
   "g0994": [
     "tag \"div\" [1,4) [0,20) open=[0,20) mode=html self-closed",
-    "  attr \"x\" [5,18) name=[5,6) = value \"(delete :a)\" [7,18)"
+    "  attr \"x\" [5,18) name=[5,6) = value \"(delete :a)\" [7,18)",
+    "error BABEL_UnexpectedToken [15,15)"
   ],
   "g0995": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
@@ -4424,19 +4508,23 @@
   ],
   "g0998": [
     "tag \"div\" [1,4) [0,26) open=[0,26) mode=html self-closed",
-    "  attr \"x\" [5,24) name=[5,6) = value \"(a instanceof :b)\" [7,24)"
+    "  attr \"x\" [5,24) name=[5,6) = value \"(a instanceof :b)\" [7,24)",
+    "error BABEL_UnexpectedToken [21,21)"
   ],
   "g0999": [
     "tag \"div\" [1,4) [0,17) open=[0,17) mode=html self-closed",
-    "  attr \"x\" [5,15) name=[5,6) = value \"(new :a)\" [7,15)"
+    "  attr \"x\" [5,15) name=[5,6) = value \"(new :a)\" [7,15)",
+    "error BABEL_UnexpectedToken [12,12)"
   ],
   "g1000": [
     "tag \"div\" [1,4) [0,20) open=[0,20) mode=html self-closed",
-    "  attr \"x\" [5,18) name=[5,6) = value \"(typeof :a)\" [7,18)"
+    "  attr \"x\" [5,18) name=[5,6) = value \"(typeof :a)\" [7,18)",
+    "error BABEL_UnexpectedToken [15,15)"
   ],
   "g1001": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
-    "  attr \"x\" [5,16) name=[5,6) = value \"(void :a)\" [7,16)"
+    "  attr \"x\" [5,16) name=[5,6) = value \"(void :a)\" [7,16)",
+    "error BABEL_UnexpectedToken [13,13)"
   ],
   "g1002": [
     "tag \"div\" [1,4) [0,19) open=[0,19) mode=html self-closed",
@@ -4462,25 +4550,28 @@
   ],
   "g1007": [
     "tag \"div\" [1,4) [0,28) open=[0,28) mode=html self-closed",
-    "  attr \"x\" [5,26) name=[5,6) method [6,26) params \"\" [7,7) body \" a < b; c > :d \" [10,25)"
+    "  attr \"x\" [5,26) name=[5,6) method [6,26) params \"\" [7,7) body \" a < b; c > :d \" [10,25)",
+    "error BABEL_UnexpectedToken [22,22)"
   ],
   "g1008": [
     "tag \"div\" [1,4) [0,29) open=[0,29) mode=html self-closed",
-    "  attr \"x\" [5,27) name=[5,6) = value \"(a < b ? c > :d : e)\" [7,27)"
+    "  attr \"x\" [5,27) name=[5,6) = value \"(a < b ? c > :d : e)\" [7,27)",
+    "error BABEL_UnexpectedToken [20,20)"
   ],
   "g1009": [
     "tag \"div\" [1,4) [0,30) open=[0,30) mode=html self-closed",
     "  attr \"x\" [5,28) name=[5,6) = value \"(c ? a < b && c > :z)\" [7,28)",
-    "error BABEL_UnexpectedToken [27,27)"
+    "error BABEL_UnexpectedToken [25,25)"
   ],
   "g1010": [
     "tag \"div\" [1,4) [0,30) open=[0,30) mode=html self-closed",
     "  attr \"x\" [5,28) name=[5,6) = value \"(c ? a < b || c > :z)\" [7,28)",
-    "error BABEL_UnexpectedToken [27,27)"
+    "error BABEL_UnexpectedToken [25,25)"
   ],
   "g1011": [
     "tag \"div\" [0,3) [0,12) open=[0,12) mode=html concise",
-    "  attr \"x\" [4,12) name=[4,5) = value \"a > :b\" [6,12)"
+    "  attr \"x\" [4,12) name=[4,5) = value \"a > :b\" [6,12)",
+    "error BABEL_UnexpectedToken [10,10)"
   ],
   "g1012": [
     "tag \"div\" [1,4) [0,7) open=[0,7) mode=html incomplete",
@@ -4498,7 +4589,8 @@
   ],
   "g1015": [
     "tag \"div\" [1,4) [0,26) open=[0,26) mode=html self-closed",
-    "  attr \"x\" [5,24) name=[5,6) = value \"[:a, :rename-all]\" [7,24)"
+    "  attr \"x\" [5,24) name=[5,6) = value \"[:a, :rename-all]\" [7,24)",
+    "error BABEL_UnexpectedToken [8,8)"
   ],
   "g1016": [
     "tag \"input\" [1,6) [0,22) open=[0,22) mode=void self-closed",
@@ -4561,8 +4653,8 @@
     "  attr \"y\" [12,15) name=[12,13) = value \"1\" [14,15)"
   ],
   "g1030": [
-    "tag \"div\" [1,4) [0,6) open=[0,6) mode=html incomplete",
-    "error INVALID_EXPRESSION [6,8)"
+    "tag \"div\" [1,4) [0,14) open=[0,14) mode=html self-closed",
+    "  sugar tag . dynamic [5,12) \"a::${x}\" [5,12) [4,12)"
   ],
   "g1031": [
     "tag \"div\" [1,4) [0,12) open=[0,12) mode=html self-closed",
@@ -6701,7 +6793,9 @@
   ],
   "g1492": [
     "tag \"div\" [1,4) [0,30) open=[0,30) mode=html self-closed",
-    "  attr \"x\" [5,28) name=[5,6) method [6,28) params \"a = :b\" [7,13) body \" return :c \" [16,27)"
+    "  attr \"x\" [5,28) name=[5,6) method [6,28) params \"a = :b\" [7,13) body \" return :c \" [16,27)",
+    "error BABEL_UnexpectedToken [11,11)",
+    "error BABEL_UnexpectedToken [24,24)"
   ],
   "g1493": [
     "tag \"foo\" [1,4) [0,10) open=[0,10) mode=html self-closed",
@@ -6710,7 +6804,9 @@
   ],
   "g1494": [
     "tag \"foo\" [1,4) [0,25) open=[0,25) mode=html self-closed",
-    "  attr default [5,23) name=[8,8) method [5,23) params \"a = :b\" [9,15) body \" :c \" [18,22)"
+    "  attr default [5,23) name=[8,8) method [5,23) params \"a = :b\" [9,15) body \" :c \" [18,22)",
+    "error BABEL_UnexpectedToken [13,13)",
+    "error BABEL_UnexpectedToken [19,19)"
   ],
   "g1495": [
     "tag \"div\" [1,4) [0,13) open=[0,13) mode=html self-closed",
@@ -6718,11 +6814,13 @@
   ],
   "g1496": [
     "tag \"div\" [1,4) [0,24) open=[0,24) mode=html self-closed",
-    "  attr \"x\" [5,22) name=[5,6) = value \"a /* :b */ + :c\" [7,22)"
+    "  attr \"x\" [5,22) name=[5,6) = value \"a /* :b */ + :c\" [7,22)",
+    "error BABEL_UnexpectedToken [20,20)"
   ],
   "g1497": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
-    "  attr \"x\" [5,16) name=[5,6) = value \"/:a/ + :b\" [7,16)"
+    "  attr \"x\" [5,16) name=[5,6) = value \"/:a/ + :b\" [7,16)",
+    "error BABEL_UnexpectedToken [14,14)"
   ],
   "g1498": [
     "tag \"div\" [1,4) [0,15) open=[0,15) mode=html self-closed",
@@ -6754,11 +6852,12 @@
   "g1503": [
     "tag \"div\" [1,4) [0,20) open=[0,20) mode=html self-closed",
     "  attr \"x\" [5,18) name=[5,6) = value \"c ? a => :b\" [7,18)",
-    "error BABEL_UnexpectedToken [18,18)"
+    "error BABEL_UnexpectedToken [16,16)"
   ],
   "g1504": [
     "tag \"div\" [1,4) [0,17) open=[0,17) mode=html self-closed",
-    "  attr \"x\" [5,15) name=[5,6) = value \"(a / :b)\" [7,15)"
+    "  attr \"x\" [5,15) name=[5,6) = value \"(a / :b)\" [7,15)",
+    "error BABEL_UnexpectedToken [12,12)"
   ],
   "g1505": [
     "tag \"div\" [1,4) [0,19) open=[0,19) mode=html self-closed",
@@ -6766,20 +6865,21 @@
     "error BABEL_UnexpectedToken [14,14)"
   ],
   "g1506": [
-    "tag \"foo\" [1,4) [0,6) open=[0,6) mode=html incomplete",
-    "error INVALID_EXPRESSION [6,9)"
+    "tag \"foo\" [1,4) [0,12) open=[0,12) mode=html self-closed",
+    "  args \"a::b\" [5,9)",
+    "error BABEL_UnexpectedToken [7,7)"
   ],
   "g1507": [
     "tag \"if\" [1,3) [0,16) open=[0,10) close=[11,16) \"if\" mode=html",
     "  attr default [3,9) name=[3,3) = value \":a :b\" [4,9)",
     "  text [10,11)",
-    "error BABEL_ParseExpressionExpectsEOF [7,7)"
+    "error BABEL_UnexpectedToken [4,4)"
   ],
   "g1508": [
     "tag \"if\" [1,3) [0,17) open=[0,11) close=[12,17) \"if\" mode=html",
     "  attr default [3,10) name=[3,3) = value \":a\\n :b\" [4,10)",
     "  text [11,12)",
-    "error BABEL_ParseExpressionExpectsEOF [8,8)"
+    "error BABEL_UnexpectedToken [4,4)"
   ],
   "g1509": [
     "tag \"if\" [1,3) [0,4) open=[0,4) mode=html incomplete",
@@ -6789,47 +6889,50 @@
   "g1510": [
     "tag \"if\" [1,3) [0,16) open=[0,10) close=[11,16) \"if\" mode=html",
     "  attr default [3,9) name=[3,3) = value \":a .b\" [4,9)",
-    "  text [10,11)"
+    "  text [10,11)",
+    "error BABEL_UnexpectedToken [4,4)"
   ],
   "g1511": [
     "tag \"if\" [1,3) [0,21) open=[0,15) close=[16,21) \"if\" mode=html",
     "  attr default [3,14) name=[3,3) = value \":a + :b :c\" [4,14)",
     "  text [15,16)",
-    "error BABEL_ParseExpressionExpectsEOF [12,12)"
+    "error BABEL_UnexpectedToken [4,4)"
   ],
   "g1512": [
     "tag \"if\" [1,3) [0,18) open=[0,12) close=[13,18) \"if\" mode=html",
     "  attr default [3,11) name=[3,3) = value \":a.b :c\" [4,11)",
     "  text [12,13)",
-    "error BABEL_ParseExpressionExpectsEOF [9,9)"
+    "error BABEL_UnexpectedToken [4,4)"
   ],
   "g1513": [
     "tag \"if\" [1,3) [0,21) open=[0,15) close=[16,21) \"if\" mode=html",
     "  attr default [3,14) name=[3,3) = value \":a ? :b :c\" [4,14)",
-    "  text [15,16)"
+    "  text [15,16)",
+    "error BABEL_UnexpectedToken [4,4)"
   ],
   "g1514": [
     "tag \"if\" [1,3) [0,17) open=[0,11) close=[12,17) \"if\" mode=html",
     "  attr default [3,10) name=[3,3) = value \":a :b\" [5,10)",
     "  text [11,12)",
-    "error BABEL_ParseExpressionExpectsEOF [8,8)"
+    "error BABEL_UnexpectedToken [5,5)"
   ],
   "g1515": [
     "tag \"if\" [1,3) [0,18) open=[0,12) close=[13,18) \"if\" mode=html",
     "  attr default [3,11) name=[3,3) = value \"(:a) :b\" [4,11)",
     "  text [12,13)",
-    "error BABEL_ParseExpressionExpectsEOF [9,9)"
+    "error BABEL_UnexpectedToken [5,5)"
   ],
   "g1516": [
     "tag \"if\" [1,3) [0,19) open=[0,13) close=[14,19) \"if\" mode=html",
     "  attr default [3,12) name=[3,3) = value \":a :b :c\" [4,12)",
     "  text [13,14)",
-    "error BABEL_ParseExpressionExpectsEOF [7,7)"
+    "error BABEL_UnexpectedToken [4,4)"
   ],
   "g1517": [
     "tag \"div\" [0,3) [0,18) open=[0,11) mode=html concise",
     "  attr \"x\" [4,11) name=[4,5) = value \":void\" [6,11)",
-    "  tag \"span\" [14,18) [14,18) open=[14,18) mode=html concise"
+    "  tag \"span\" [14,18) [14,18) open=[14,18) mode=html concise",
+    "error BABEL_UnexpectedToken [6,6)"
   ],
   "g1518": [
     "tag \"div\" [0,3) [0,15) open=[0,11) mode=html concise",
@@ -6876,7 +6979,8 @@
   ],
   "g1527": [
     "tag \"div\" [1,4) [0,19) open=[0,19) mode=html self-closed",
-    "  attr \"x\" [5,17) name=[5,6) = value \"/* c */ :a\" [7,17)"
+    "  attr \"x\" [5,17) name=[5,6) = value \"/* c */ :a\" [7,17)",
+    "error BABEL_UnexpectedToken [15,15)"
   ],
   "g1528": [
     "tag \"div\" [1,4) [0,17) open=[0,17) mode=html self-closed",
@@ -6890,7 +6994,8 @@
     "tag \"script\" [1,7) [0,24) open=[0,8) close=[15,24) \"script\" mode=parsed-text",
     "  text [8,9)",
     "  placeholder [9,14) \":a\" [11,13)",
-    "  text [14,15)"
+    "  text [14,15)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g1531": [
     "tag \"div\" [1,4) [0,10) open=[0,10) mode=html incomplete",
@@ -7087,7 +7192,8 @@
   ],
   "g1572": [
     "tag \"div\" [1,4) [0,19) open=[0,19) mode=html self-closed",
-    "  attr \"x\" [5,17) name=[5,6) = value \"((((:a))))\" [7,17)"
+    "  attr \"x\" [5,17) name=[5,6) = value \"((((:a))))\" [7,17)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g1573": [
     "tag \"div\" [0,3) [0,13) open=[0,13) mode=html concise",
@@ -7180,15 +7286,18 @@
   ],
   "g1593": [
     "tag \"div\" [1,4) [0,19) open=[0,19) mode=html self-closed",
-    "  attr \"x\" [5,17) name=[5,6) = value \"(a <b> :c)\" [7,17)"
+    "  attr \"x\" [5,17) name=[5,6) = value \"(a <b> :c)\" [7,17)",
+    "error BABEL_UnexpectedTypeAnnotation [14,14)"
   ],
   "g1594": [
     "tag \"div\" [1,4) [0,20) open=[0,20) mode=html self-closed",
-    "  attr \"x\" [5,18) name=[5,6) = value \"((a)<b> :c)\" [7,18)"
+    "  attr \"x\" [5,18) name=[5,6) = value \"((a)<b> :c)\" [7,18)",
+    "error BABEL_UnexpectedTypeAnnotation [15,15)"
   ],
   "g1595": [
     "tag \"div\" [1,4) [0,21) open=[0,21) mode=html self-closed",
-    "  attr \"x\" [5,19) name=[5,6) = value \"(f(a<b)> :c)\" [7,19)"
+    "  attr \"x\" [5,19) name=[5,6) = value \"(f(a<b)> :c)\" [7,19)",
+    "error BABEL_UnexpectedToken [16,16)"
   ],
   "g1596": [
     "tag \"div\" [1,4) [0,21) open=[0,21) mode=html self-closed",
@@ -7198,15 +7307,17 @@
   "g1597": [
     "tag \"div\" [1,4) [0,22) open=[0,22) mode=html self-closed",
     "  attr \"x\" [5,20) name=[5,6) = value \"(a<b ? c> :d)\" [7,20)",
-    "error BABEL_UnexpectedToken [19,19)"
+    "error BABEL_UnexpectedToken [17,17)"
   ],
   "g1598": [
     "tag \"div\" [1,4) [0,23) open=[0,23) mode=html self-closed",
-    "  attr \"x\" [5,21) name=[5,6) = value \"(a<b && c> :d)\" [7,21)"
+    "  attr \"x\" [5,21) name=[5,6) = value \"(a<b && c> :d)\" [7,21)",
+    "error BABEL_UnexpectedToken [18,18)"
   ],
   "g1599": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
-    "  attr \"x\" [5,16) name=[5,6) = value \"(a => :b)\" [7,16)"
+    "  attr \"x\" [5,16) name=[5,6) = value \"(a => :b)\" [7,16)",
+    "error BABEL_UnexpectedToken [13,13)"
   ],
   "g1600": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
@@ -7231,11 +7342,13 @@
   ],
   "g1604": [
     "tag \"p\" [1,2) [0,20) open=[0,3) close=[16,20) \"p\" mode=html",
-    "  placeholder [3,16) \"/* c */ :a\" [5,15)"
+    "  placeholder [3,16) \"/* c */ :a\" [5,15)",
+    "error BABEL_UnexpectedToken [13,13)"
   ],
   "g1605": [
     "tag \"p\" [1,2) [0,18) open=[0,3) close=[14,18) \"p\" mode=html",
-    "  placeholder [3,14) \"// c\\n :a\" [5,13)"
+    "  placeholder [3,14) \"// c\\n :a\" [5,13)",
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g1606": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
@@ -7250,76 +7363,82 @@
   "g1608": [
     "tag \"div\" [1,4) [0,23) open=[0,23) mode=html self-closed",
     "  attr \"x\" [5,21) name=[5,6) = value \"c ? :a : :b :d\" [7,21)",
-    "error BABEL_ParseExpressionExpectsEOF [19,19)"
+    "error BABEL_UnexpectedToken [11,11)"
   ],
   "g1609": [
-    "tag \"div\" [0,3) [0,14) open=[0,14) mode=html concise",
-    "  attr \"x\" [4,14) name=[4,5) = value \":a >\\n  b\" [6,14)"
+    "tag \"div\" [0,3) [0,6) open=[0,6) mode=html concise incomplete",
+    "  attr \"x\" [4,5) name=[4,5)",
+    "error INVALID_EXPRESSION [6,6)"
   ],
   "g1610": [
-    "tag \"div\" [0,3) [0,21) open=[0,21) mode=html concise",
-    "  attr \"x\" [4,21) name=[4,5) = value \":a + delete\\n  b\" [6,21)",
-    "error BABEL_StrictDelete [11,11)"
+    "tag \"div\" [0,3) [0,21) open=[0,17) mode=html concise",
+    "  attr \"x\" [4,17) name=[4,5) = value \":a + delete\" [6,17)",
+    "  tag \"b\" [20,21) [20,21) open=[20,21) mode=html concise",
+    "error BABEL_UnexpectedToken [6,6)"
   ],
   "g1611": [
-    "tag \"div\" [0,3) [0,22) open=[0,18) mode=html concise",
-    "  attr \"x\" [4,18) name=[4,5) = value \":a + asserts\" [6,18)",
-    "  tag \"b\" [21,22) [21,22) open=[21,22) mode=html concise"
+    "tag \"div\" [0,3) [0,22) open=[0,22) mode=html concise",
+    "  attr \"x\" [4,22) name=[4,5) = value \":a + asserts\\n  b\" [6,22)",
+    "error BABEL_UnexpectedToken [6,6)"
   ],
   "g1612": [
-    "tag \"div\" [0,3) [0,20) open=[0,16) mode=html concise",
-    "  attr \"x\" [4,16) name=[4,5) = value \":a + infer\" [6,16)",
-    "  tag \"b\" [19,20) [19,20) open=[19,20) mode=html concise"
+    "tag \"div\" [0,3) [0,20) open=[0,20) mode=html concise",
+    "  attr \"x\" [4,20) name=[4,5) = value \":a + infer\\n  b\" [6,20)",
+    "error BABEL_UnexpectedToken [6,6)"
   ],
   "g1613": [
-    "tag \"div\" [0,3) [0,17) open=[0,13) mode=html concise",
-    "  attr \"x\" [4,13) name=[4,5) = value \":a + is\" [6,13)",
-    "  tag \"b\" [16,17) [16,17) open=[16,17) mode=html concise"
+    "tag \"div\" [0,3) [0,17) open=[0,17) mode=html concise",
+    "  attr \"x\" [4,17) name=[4,5) = value \":a + is\\n  b\" [6,17)",
+    "error BABEL_UnexpectedToken [6,6)"
   ],
   "g1614": [
-    "tag \"div\" [0,3) [0,23) open=[0,19) mode=html concise",
-    "  attr \"x\" [4,19) name=[4,5) = value \":a + readonly\" [6,19)",
-    "  tag \"b\" [22,23) [22,23) open=[22,23) mode=html concise"
+    "tag \"div\" [0,3) [0,23) open=[0,23) mode=html concise",
+    "  attr \"x\" [4,23) name=[4,5) = value \":a + readonly\\n  b\" [6,23)",
+    "error BABEL_UnexpectedToken [6,6)"
   ],
   "g1615": [
-    "tag \"div\" [0,3) [0,21) open=[0,17) mode=html concise",
-    "  attr \"x\" [4,17) name=[4,5) = value \":a + unique\" [6,17)",
-    "  tag \"b\" [20,21) [20,21) open=[20,21) mode=html concise"
+    "tag \"div\" [0,3) [0,21) open=[0,21) mode=html concise",
+    "  attr \"x\" [4,21) name=[4,5) = value \":a + unique\\n  b\" [6,21)",
+    "error BABEL_UnexpectedToken [6,6)"
   ],
   "g1616": [
     "tag \"div\" [0,3) [0,21) open=[0,21) mode=html concise",
-    "  attr \"x\" [4,21) name=[4,5) = value \":a + typeof\\n  b\" [6,21)"
+    "  attr \"x\" [4,21) name=[4,5) = value \":a + typeof\\n  b\" [6,21)",
+    "error BABEL_UnexpectedToken [6,6)"
   ],
   "g1617": [
-    "tag \"div\" [0,3) [0,21) open=[0,17) mode=html concise",
-    "  attr \"x\" [4,17) name=[4,5) = value \":a + keyof!\" [6,17)",
-    "  tag \"b\" [20,21) [20,21) open=[20,21) mode=html concise"
+    "tag \"div\" [0,3) [0,21) open=[0,21) mode=html concise",
+    "  attr \"x\" [4,21) name=[4,5) = value \":a + keyof!\\n  b\" [6,21)",
+    "error BABEL_UnexpectedToken [6,6)"
   ],
   "g1618": [
     "tag \"div\" [0,3) [0,14) open=[0,14) mode=html concise",
     "  attr \"x\" [4,12) name=[4,5) = value \":a {b}\" [6,12)",
     "  attr \"c\" [13,14) name=[13,14)",
-    "error BABEL_ParseExpressionExpectsEOF [9,9)"
+    "error BABEL_UnexpectedToken [6,6)"
   ],
   "g1619": [
     "tag \"div\" [1,4) [0,22) open=[0,22) mode=html self-closed",
     "  attr \"x\" [5,18) name=[5,6) = value \":a as T = b\" [7,18)",
     "  attr \"y\" [19,20) name=[19,20)",
-    "error BABEL_InvalidLhs [7,7)"
+    "error BABEL_UnexpectedToken [7,7)"
   ],
   "g1620": [
     "tag \"div\" [1,4) [0,22) open=[0,22) mode=html self-closed",
-    "  attr \"x\" [5,20) name=[5,6) = value \":a + void\\n  b\" [7,20)"
+    "  attr \"x\" [5,16) name=[5,6) = value \":a + void\" [7,16)",
+    "  attr \"b\" [19,20) name=[19,20)",
+    "error BABEL_UnexpectedToken [7,7)"
   ],
   "g1621": [
     "tag \"div\" [1,4) [0,23) open=[0,23) mode=html self-closed",
-    "  attr \"x\" [5,17) name=[5,6) = value \":a + keyof\" [7,17)",
-    "  attr \"b\" [20,21) name=[20,21)"
+    "  attr \"x\" [5,21) name=[5,6) = value \":a + keyof\\n  b\" [7,21)",
+    "error BABEL_UnexpectedToken [7,7)"
   ],
   "g1622": [
     "tag \"div\" [1,4) [0,22) open=[0,22) mode=html self-closed",
-    "  attr \"x\" [5,17) name=[5,6) = value \":a + keyof\" [7,17)",
-    "  attr \"y\" [19,20) name=[19,20)"
+    "  attr \"x\" [5,18) name=[5,6) = value \":a + keyof,\" [7,18)",
+    "  attr \"y\" [19,20) name=[19,20)",
+    "error BABEL_UnexpectedToken [7,7)"
   ],
   "g1623": [
     "tag \"div\" [0,3) [0,21) open=[0,21) mode=html concise",
@@ -7389,7 +7508,8 @@
   ],
   "g1636": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
-    "  attr \"x\" [5,16) name=[5,6) = value \"(é in :b)\" [7,16)"
+    "  attr \"x\" [5,16) name=[5,6) = value \"(é in :b)\" [7,16)",
+    "error BABEL_UnexpectedToken [13,13)"
   ],
   "g1637": [
     "tag \"div\" [1,4) [0,23) open=[0,23) mode=html self-closed",

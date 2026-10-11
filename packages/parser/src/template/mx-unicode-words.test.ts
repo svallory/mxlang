@@ -26,8 +26,12 @@ import {
   unicodeWhitespaceTwinMismatches,
   unicodeWordTwinMismatches,
 } from "./mx-unicode-words.cases.ts";
+import { sugarBuild } from "./test-support/sugar-module.ts";
+import { ATOMS_SYNTAX } from "./test-support/sugar-rows.ts";
 
 const mod = template as unknown as AtomParserModule;
+/** The atom row's build: the template parser lexes no atom of its own. */
+const atomRow = sugarBuild(ATOMS_SYNTAX) as unknown as AtomParserModule;
 const wsMod = template as unknown as AtomParserModule & NoThrowParserModule;
 const main = JSON.parse(
   readFileSync(
@@ -89,9 +93,11 @@ describe("non-ASCII identifiers in look-behinds and look-aheads (src/template)",
   );
 
   it.each(ATOM_AFTER_SYMBOL_ROWS)(
-    "an atom after a symbol lexes, as after ASCII punctuation (addendum 13): %j",
+    "the atom row arms after a symbol, as after ASCII punctuation (addendum 13): %j",
     (input, twin, expected) => {
-      expect(atomAfterSymbolMismatch(mod, [input, twin, expected])).toEqual([]);
+      expect(atomAfterSymbolMismatch(atomRow, [input, twin, expected])).toEqual(
+        [],
+      );
     },
   );
 

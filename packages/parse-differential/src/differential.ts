@@ -147,19 +147,11 @@ export function compare(source: string): Outcome {
       text.push(`under ${parent || "the document"}: ${problem}`);
     }
   }
-  // Atoms inside an expression today's Babel could not parse are not in
-  // today's tree (it holds the raw text): not compared (rules.ts).
-  const failed = marko.failed ?? [];
-  const inFailed = (line: string) => {
-    const [, s, e] = /@\[(\d+),(\d+)\)$/.exec(line) ?? [];
-    return failed.some(([fs, fe]) => Number(s) >= fs && Number(e) <= fe);
-  };
-  const comparable = { ...mx, atoms: mx.atoms.filter((a) => !inFailed(a)) };
   const strip = (d: NDocument): NDocument => ({
     ...d,
     body: dropTexts(d.body),
   });
-  const a = print(strip(comparable));
+  const a = print(strip(mx));
   const b = print(strip(marko.document));
   // The whitespace differential (PR 3): value and valueSpan of every text
   // node, against Marko's final `value` and its (trimmed) `withLoc` range.

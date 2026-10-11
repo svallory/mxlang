@@ -1163,7 +1163,7 @@ function checkCompositeAttr(
 }
 
 /**
- * Checks an `atom` attribute against its written shape (decision 156): an atom
+ * Checks an `atom` attribute against its written shape: an atom
  * or a literal list of atoms. A string, a number or a function is a type error
  * at the offending value; an identifier, call, member or conditional has no
  * knowable type and passes. Which names are allowed is the claiming module's

@@ -2,19 +2,27 @@
  * A dialect's own contract key (`Dialect.contractFields`): core passes a
  * claimed key through registration instead of refusing it as unknown, and
  * hands the unit to the dialect's `afterLower`, whose `fail` is a positioned,
- * coded diagnostic. The dialect is a test fixture with no rows.
+ * coded diagnostic. The dialect is a test fixture: the atom fixture's rows
+ * (sigil `~`) without its contract keys.
  */
 import { describe, expect, it } from "vitest";
 import type { CustomTag } from "../custom-tags.ts";
+import atomSyntax from "../fixtures/syntax/atom-fixture.ts";
 import type { Dialect } from "../syntax-table.ts";
 import { lowerSource } from "./index.ts";
 
-/** A dialect that adds no syntax: only the hooks a test sets. */
-const fixture: Dialect = { id: "fixture", name: "Fixture", table: {} };
+/** The atom fixture's rows and nothing else: only the hooks a test sets. */
+const fixture: Dialect = {
+  id: atomSyntax.id,
+  name: "Fixture",
+  table: atomSyntax.table,
+  nodeTypes: atomSyntax.nodeTypes,
+  lowerTrigger: atomSyntax.lowerTrigger,
+};
 
 describe("a module's own contract key", () => {
   it("passes through registration and reaches its `afterLower`, whose `fail` is a positioned, coded diagnostic", () => {
-    const source = "entity name=:Invoice\n  index on=:title\n";
+    const source = "entity name=~invoice\n  index on=~title\n";
     const tags: Record<string, CustomTag> = {
       entity: { attributes: { name: { type: "atom" } } },
       index: {
@@ -45,7 +53,7 @@ describe("a module's own contract key", () => {
             call.contract.attributes?.on?.unique
           ) {
             unit.fail(
-              `\`:${(value as { name: string }).name}\` is not unique`,
+              `\`~${(value as { name: string }).name}\` is not unique`,
               {
                 at: value.span,
                 code: "FIXTURE_UNIQUE",
@@ -63,10 +71,10 @@ describe("a module's own contract key", () => {
     expect(diagnostics).toEqual([
       {
         severity: "error",
-        message: "`:title` is not unique",
+        message: "`~title` is not unique",
         line: 2,
         column: 11,
-        offset: source.indexOf(":title"),
+        offset: source.indexOf("~title"),
         code: "FIXTURE_UNIQUE",
       },
     ]);

@@ -47,15 +47,12 @@ const shape = (value: unknown): unknown =>
   );
 
 describe("the & member row through the front end", () => {
-  it("expression position: in the container's triggers, beside its atoms", () => {
-    const document = meshParse("x=() => &status === :sent");
+  it("expression position: in the container's triggers", () => {
+    const document = meshParse("x=() => &status === done");
     expect(document.errors).toEqual([]);
     expect(checkInvariants(document, OPTIONS.tagShape)).toEqual([]);
     const value = (document.body[0] as Node).attributes[0].value;
-    expect(value.source).toBe("() => &status === :sent");
-    expect(value.atoms).toEqual([
-      { type: "MxAtom", start: 20, end: 25, name: "sent" },
-    ]);
+    expect(value.source).toBe("() => &status === done");
     expect(value.triggers).toEqual([
       {
         type: "MxTrigger",
@@ -85,8 +82,8 @@ describe("the & member row through the front end", () => {
       },
     });
     expect(value.node.body.right).toMatchObject({
-      type: "StringLiteral",
-      value: "sent",
+      type: "Identifier",
+      name: "done",
     });
   });
 
@@ -186,7 +183,6 @@ describe("the & member row through the front end", () => {
         end: 43,
         source: "qty * price",
         outer: { start: 32, end: 43 },
-        atoms: [],
         error: null,
       },
     });
@@ -199,14 +195,13 @@ describe("the & member row through the front end", () => {
   });
 
   it("a value's own triggers belong to the value's container", () => {
-    const document = meshParse("&a=[&b, :c]");
+    const document = meshParse("&a=[&b, c]");
     expect(document.errors).toEqual([]);
     expect(checkInvariants(document, OPTIONS.tagShape)).toEqual([]);
     const [line] = document.body as Node[];
     expect(line.value.triggers.map((t: Node) => [t.text, t.start])).toEqual([
       ["&b", 4],
     ]);
-    expect(line.value.atoms.map((a: Node) => a.name)).toEqual(["c"]);
   });
 
   it("marks only the operand: not the statement in a method body (Mesh 3)", () => {

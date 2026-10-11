@@ -63,7 +63,7 @@ describe("statement tags (hono)", () => {
 
 // Marko parses a statement's text and reports its syntax errors at the
 // offending character; MX matches it on every target (#395 r2), so a statement
-// that swallows the next template line, or holds JSX or an atom, is a positioned
+// that swallows the next template line, or holds JSX or a stray `:`, is a positioned
 // error and never a silent drop. Valid joins compile, as in Marko.
 describe("statement text is checked like Marko checks it", () => {
   const REFUSED: Array<[string, string, string, number, number]> = [
@@ -89,7 +89,7 @@ describe("statement text is checked like Marko checks it", () => {
       6,
     ],
     [
-      "atom text",
+      "a `:name` in the text",
       "static const a = { k: :name }\n<div/>",
       "Unexpected token",
       1,

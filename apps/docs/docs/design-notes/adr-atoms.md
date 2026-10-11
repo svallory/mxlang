@@ -5,7 +5,7 @@ description: "Why `:name` in an expression position is a value that represents i
 
 # ADR 156: atoms
 
-**Status:** accepted (decision 156 in the decisions log); parser approach implemented in PR #342. **Depends on:** ADR 145 (`defaultTag`), ADR 146 (`:name`). **Amended by:** decision 156 addendum 1 (the lead's rulings on Mesh's review), addendum 5 (`scope` takes a list) and addendum 7 (the default scope is the file). **Implementation:** Phase B PR 1 (parser, core conversion, IR, typecheck splice, the IR entry point); contracts implemented in PR 2 (`feat/atoms-contracts`, `packages/core/src/atom-contracts.ts`). **User docs:** [Atoms](/language/atoms/), [Errors](/language/errors/#errors-atom-errors), [Sidecars](/custom-tags/sidecars/#sidecars-declare-the-call-contract-atoms-in-contracts).
+**Status:** superseded: atoms are a dialect feature, and `:name` in a `.mx` file is plain JavaScript, as in Marko; see the [specification](/specification/). The record below is kept as the argument it was.
 
 ## Context
 

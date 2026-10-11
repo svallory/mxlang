@@ -60,6 +60,6 @@ describe("mx-tsc and a diagnostic with no source mapping", () => {
     expect(status).not.toBe(0);
     expect(lines.length).toBeGreaterThan(0);
     expect(lines.join("\n")).not.toContain("position approximate");
-    expect(lines[0]).toMatch(/page\.mx\(3,37\): error TS2820: /);
+    expect(lines[0]).toMatch(/page\.mx\(3,38\): error TS2820: /);
   }, 60_000);
 });

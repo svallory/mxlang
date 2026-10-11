@@ -10,7 +10,6 @@ const expression = (fields: Partial<Record<string, unknown>>): Node => ({
   outer: { start: 0, end: 0 },
   node: null,
   error: null,
-  atoms: [],
   start: 0,
   end: 0,
   ...fields,
