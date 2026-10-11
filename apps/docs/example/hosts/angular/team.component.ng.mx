@@ -6,7 +6,7 @@ import type { Member } from "./members";
   selector: "app-team",
   template: <Card>
     <@title>Team <span.count>${shown.length}</span></@title>
-    <input:q.search type="search" value=query onInput=search/>
+    <input.search name="q" type="search" value=query onInput=search/>
     <if=shown.length>
       <ul.members>
         <for|member| of=shown by=(member => member.id)>

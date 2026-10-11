@@ -625,10 +625,11 @@ Node's strip-only `require`: types-only imports from `@mxlang/core`, no enums
 or parameter properties. A tag built from a tagless line carries
 `trigger: { id, span, text }`; an authored tag does not.
 
-Until atoms and the name sugars leave core's own grammar, core still handles
-them on the `.mx` default row; a loaded row on a character (`:` in an
-expression, `:`, `#` or `.` in an attribute list) replaces core's built-in
-handling of that character.
+Core has no name sugars: on the `.mx` default row a colon in a tag head, a
+spaced ` :b` and a spaced `#id`/`.class` read as stock Marko reads them, so a
+dialect that wants them adds its own rows. Until atoms leave core's own
+grammar, core still handles them; a loaded row on `:` in an expression
+replaces core's built-in atom handling.
 
 ### Contract checks in a dialect: `contractFields`, `checkContract` and `afterLower(unit)`
 

@@ -20,9 +20,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  * bundled front end and MX's own template parser, so a stock `htmljs-parser`
  * in the install changes nothing. The stock parser is rebuilt in a `mkdtemp`
  * copy by reversing the committed patch, and the dist runs against it in a
- * child process. (Decision 151's stock-parser error is gone: core never parses
- * MX with a stock parser since port PR 5.) Ruling 2 still holds: sugar right
- * after a default value is one MX error.
+ * child process: a built-in atom value, which the stock parser rejects,
+ * compiles, and a ` :b` after a value is Marko's own error either way.
  */
 
 const require = createRequire(import.meta.url);
@@ -102,7 +101,7 @@ import(${JSON.stringify(`file://${distEntry}`)}).then(({ compile }) => {
     compile(${JSON.stringify(source)}, ${JSON.stringify(join(work, "t.mx"))});
     console.log(JSON.stringify({ ok: true }));
   } catch (e) {
-    console.log(JSON.stringify({ message: e.message, line: e.line, column: e.column, name: e.constructor.name }));
+    console.log(JSON.stringify({ message: e.message, line: e.line, column: e.column, loc: e.loc, name: e.constructor.name }));
   }
 });
 `,
@@ -114,6 +113,7 @@ import(${JSON.stringify(`file://${distEntry}`)}).then(({ compile }) => {
     message?: string;
     line?: number;
     column?: number;
+    loc?: { start: { line: number; column: number } };
     name?: string;
   };
 }
@@ -122,25 +122,23 @@ describe("core's bundled front end ignores a stock htmljs-parser in the install"
   it.each([
     ["the patched parser", false],
     ["a stock parser", true],
-  ])(
-    "compiles `:name` after an attribute value with %s installed",
-    (_name, stock) => {
-      expect(compileWith('<input type="email" :email/>', stock).ok).toBe(true);
-    },
-  );
+  ])("compiles a built-in atom value with %s installed", (_name, stock) => {
+    expect(compileWith("<input type=:email/>", stock).ok).toBe(true);
+  });
 
   it.each([
     ["the patched parser", false],
     ["a stock parser", true],
   ])(
-    "sugar after a default value is one MX error with %s installed",
+    "` :b` after a default value is Marko's error with %s installed",
     (_name, stock) => {
       const result = compileWith("<if=input.x :b>y</if>", stock);
       expect(result.ok).toBeUndefined();
-      expect(result.name).toBe("TranslateError");
-      expect(result.message).toContain("`:b` right after a default value");
-      expect(result.line).toBe(1);
-      expect(result.column).toBe(12);
+      expect(result.name).toBe("CompileError");
+      expect(result.message).toContain(
+        "Expected a single expression, but found `:` after it.",
+      );
+      expect(result.loc?.start).toMatchObject({ line: 1, column: 12 });
     },
   );
 

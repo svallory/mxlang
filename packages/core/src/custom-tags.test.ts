@@ -2754,14 +2754,14 @@ describe("array and function attribute types (decision 138, E1)", () => {
   });
 });
 
-// Decision 146 (PR 3): an E1 error on an attribute the sugar made names the
-// sugar the author wrote, with the attribute it stands for.
-describe("E1 errors name the sugar the author wrote", () => {
+// A contract error on a shorthand or a colon name names the attribute Marko
+// reads: a tag-adjacent shorthand is its `id`/`class`, `:email` is
+// `value:email`, and a tag-adjacent `=value` is the plain `value`.
+describe("E1 errors name the attribute Marko reads", () => {
   const field: CustomTag = {
     attributes: {
       name: { type: "number" },
       id: { type: "number" },
-      class: { type: "number", literalOnly: true },
       title: { type: "string" },
     },
     transform: () => [],
@@ -2779,39 +2779,6 @@ describe("E1 errors name the sugar the author wrote", () => {
     throw new Error("expected an error");
   };
 
-  it.each([
-    [
-      "\n<field :email/>\n",
-      "`<field>`: attribute `:email` (`name`) must be number, got string",
-    ],
-    [
-      "\n<field #main/>\n",
-      "`<field>`: attribute `#main` (`id`) must be number, got string",
-    ],
-    [
-      '\n<field title="t" :email/>\n',
-      "attribute `:email` (`name`) must be number",
-    ],
-    ["\n<field:email/>\n", "attribute `:email` (`name`) must be number"],
-  ])("%j", (source, text) => {
-    expect(messageOf(source, { field }).message).toContain(text);
-  });
-
-  it("an undeclared sugar attribute is `unknown attribute`, named as written", () => {
-    expect(messageOf("\n<closed :email/>\n", { closed }).message).toContain(
-      "unknown attribute `:email` (`name`)",
-    );
-    expect(messageOf("\n<closed #main/>\n", { closed }).message).toContain(
-      "unknown attribute `#main` (`id`)",
-    );
-  });
-
-  it("is positioned at the sugar token", () => {
-    const error = messageOf('\n<field title="t" :email/>\n', { field });
-    expect(error.line).toBe(2);
-    expect(error.column).toBe(17);
-  });
-
   it("an attribute written out keeps the plain wording", () => {
     expect(messageOf('\n<field name="x"/>\n', { field }).message).toContain(
       "attribute `name` must be number",
@@ -2820,117 +2787,19 @@ describe("E1 errors name the sugar the author wrote", () => {
       "`name` (`name`)",
     );
   });
-});
 
-// Review (PR 3 round 2), finding 1: an authored literal `class` plus a `.x`
-// sugar stays a literal, so the contract checks judge the value it really is
-// ("a b"), and the E1 names the sugar. A dynamic authored value keeps the
-// template-literal/array form.
-describe("E1 on a literal class with a `.x` sugar", () => {
-  const en: CustomTag = {
-    attributes: { class: { type: "string", enum: ["a b", "b a", "a", "b"] } },
-    transform: () => [],
-  };
-  const enStrict: CustomTag = {
-    attributes: { class: { type: "string", enum: ["a", "b"] } },
-    transform: () => [],
-  };
-  const lit: CustomTag = {
-    attributes: { class: { type: "string", literalOnly: true } },
-    transform: () => [],
-  };
-  const num: CustomTag = {
-    attributes: { class: { type: "number" } },
-    transform: () => [],
-  };
-  const messageOf = (source: string, tags: Record<string, CustomTag>) => {
-    try {
-      lowerWithTags(source, tags);
-    } catch (error) {
-      return error as { message: string; line: number; column: number };
-    }
-    return null;
-  };
-
-  it.each([['\n<en class="a" .b/>\n'], ['\n<en .b class="a"/>\n']])(
-    "%j: a static class is a static value, no false error",
-    (source) => {
-      expect(messageOf(source, { en })).toBeNull();
-    },
-  );
-
-  it.each([['\n<lit class="a" .b/>\n'], ['\n<lit .b class="a"/>\n']])(
-    "%j: it is still a literal (`literalOnly` passes)",
-    (source) => {
-      expect(messageOf(source, { lit })).toBeNull();
-    },
-  );
-
-  it("an enum miss names the sugar, with the merged value", () => {
-    const error = messageOf('\n<enStrict class="a" .b/>\n', { enStrict });
-    expect(error?.message).toContain("`.b` (`class`)");
-    expect(error?.message).toContain('got "a b"');
-    const before = messageOf('\n<enStrict .b class="a"/>\n', { enStrict });
-    expect(before?.message).toContain("`.b` (`class`)");
-    expect(before?.message).toContain('got "b a"');
-  });
-
-  it.each([
-    ["\n<num class=1 .b/>\n"],
-    ['\n<num class="1" .b/>\n'],
-    ['\n<num .b class="1"/>\n'],
-  ])("%j: a type mismatch is reported, naming the sugar", (source) => {
-    const error = messageOf(source, { num });
-    expect(error?.message).toContain("must be number");
-    expect(error?.message).toContain("`.b`");
-  });
-
-  it("a dynamic authored class keeps the expression form", () => {
-    const free: CustomTag = {
-      attributes: { class: { type: "string" } },
-      transform: () => [],
-    };
-    expect(() =>
-      lowerWithTags("\n<free class=input.c .b/>\n", { free }),
-    ).not.toThrow();
-    // ...and a contract that needs a static value still rejects it.
-    expect(messageOf("\n<en class=input.c .b/>\n", { en })?.message).toContain(
-      "must be a static value",
+  it("`:email` is `value:email`, an unknown attribute here", () => {
+    const error = messageOf("\n<field :email/>\n", { field });
+    expect(error.message).toContain(
+      "`<field>`: unknown attribute `value:email`",
     );
-  });
-});
-
-// Review (PR 3 round 2), finding 2: a sugar merged onto a tag-adjacent class
-// carries a label (`.a .z`) and the error sits on the sugar token, not the tag.
-describe("E1 on a sugar merged into a tag-adjacent class", () => {
-  const closed: CustomTag = {
-    attributes: { title: { type: "string" } },
-    transform: () => [],
-  };
-  const en: CustomTag = {
-    attributes: { class: { type: "string", enum: ["a", "b"] } },
-    transform: () => [],
-  };
-  const messageOf = (source: string, tags: Record<string, CustomTag>) => {
-    try {
-      lowerWithTags(source, tags);
-    } catch (error) {
-      return error as { message: string; line: number; column: number };
-    }
-    throw new Error("expected an error");
-  };
-
-  it("an unknown attribute names `.a .b` and points at `.b`", () => {
-    const error = messageOf("\n<closed.a .b/>\n", { closed });
-    expect(error.message).toContain("unknown attribute `.a .b` (`class`)");
-    expect([error.line, error.column]).toEqual([2, 10]);
+    expect([error.line, error.column]).toEqual([2, 7]);
   });
 
-  it("an enum miss names `.a .z` and points at `.z`", () => {
-    const error = messageOf("\n<en.a .z/>\n", { en });
-    expect(error.message).toContain("`.a .z` (`class`)");
-    expect(error.message).toContain('got "a z"');
-    expect([error.line, error.column]).toEqual([2, 6]);
+  it("a tag-adjacent `#main` is the attribute `id`", () => {
+    expect(messageOf("\n<field#main/>\n", { field }).message).toContain(
+      "`<field>`: attribute `id` must be number, got string",
+    );
   });
 
   it("a plain tag-adjacent class keeps the plain wording and the tag position", () => {
@@ -2938,60 +2807,11 @@ describe("E1 on a sugar merged into a tag-adjacent class", () => {
     expect(error.message).toContain("unknown attribute `class`");
     expect([error.line, error.column]).toEqual([2, 0]);
   });
-});
 
-// Round 2 of PR 4, review finding 4: a contract that rejects the `value` a
-// sugar produced says which sugar set it.
-describe("E1 on the default value a sugar produced names the sugar", () => {
-  const closed: CustomTag = {
-    attributes: {
-      id: { type: "string" },
-      name: { type: "string" },
-      class: { type: "string" },
-    },
-    transform: () => [],
-  };
-  const fn: CustomTag = {
-    attributes: { id: { type: "string" }, value: { type: "function" } },
-    transform: () => [],
-  };
-  const messageOf = (source: string, tags: Record<string, CustomTag>) => {
-    try {
-      lowerWithTags(source, tags, {
-        tags: {},
-        isElement: () => true,
-        isComponent: (name, ctx) => ctx.defines.has(name),
-        resolveAttributeMethod: () => true,
-      });
-    } catch (error) {
-      return error as { message: string; line: number; column: number };
-    }
-    throw new Error("expected an error");
-  };
-
-  it.each([
-    ["\n<closed #x=1/>\n", "unknown attribute `value` (set by `#x=…`)"],
-    ["\n<closed :n=1/>\n", "unknown attribute `value` (set by `:n=…`)"],
-    ["\n<closed .c(p) { b }/>\n", "unknown attribute `value` (set by `.c(…)`)"],
-  ])("%j", (source, text) => {
-    expect(messageOf(source, { closed }).message).toContain(text);
-  });
-
-  it("a wrong type names it too, at the value", () => {
-    const error = messageOf("\n<fn #x=1/>\n", { fn });
-    expect(error.message).toContain(
-      "attribute `value` (set by `#x=…`) must be function",
-    );
-    expect([error.line, error.column]).toEqual([2, 7]);
-  });
-
-  it("an authored `value=` keeps the plain wording", () => {
-    expect(messageOf("\n<closed value=1/>\n", { closed }).message).toContain(
-      "unknown attribute `value`",
-    );
-    expect(
-      messageOf("\n<closed value=1/>\n", { closed }).message,
-    ).not.toContain("set by");
+  it("a tag-adjacent `=value` is the plain `value`", () => {
+    const error = messageOf("\n<closed#x=1/>\n", { closed });
+    expect(error.message).toContain("unknown attribute `value`");
+    expect(error.message).not.toContain("set by");
   });
 });
 

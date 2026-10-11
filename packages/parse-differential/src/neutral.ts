@@ -17,7 +17,7 @@ export interface NTag {
   readonly span: Span;
   /** `var "x"`, `args "a, b"` … in this order: typeArgs, var, args, typeParams, params. */
   readonly head: readonly string[];
-  /** Tag-position sugar, ids then classes then `:` in source order (today's tree cannot order across sigils). */
+  /** Tag-position shorthands, ids then classes in source order (today's tree cannot order across sigils). */
   readonly sugar: readonly string[];
   readonly attrs: readonly string[];
   readonly children: readonly NNode[];

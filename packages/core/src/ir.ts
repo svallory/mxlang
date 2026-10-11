@@ -224,10 +224,10 @@ export interface IrBase {
 }
 
 /**
- * The name sugar an attribute came from (decision 146): the token the author
- * wrote (`:email`, `#main`, `.big`) when the attribute is `name`, `id` or
- * `class` made from it, so a diagnostic can say `:email` (`name`) and not only
- * `name`. Absent on an attribute written out.
+ * The sugar an attribute came from: the token the author wrote (`#main`,
+ * `.big`, or a syntax module's trigger token) when the attribute was made from
+ * it, so a diagnostic can say `.big` (`class`) and not only `class`. Absent on
+ * an attribute written out.
  */
 /**
  * The arguments an attribute was written with (`a(b, c)`), the same `Expr`s a
@@ -242,7 +242,7 @@ export interface AttrArgs {
  * File-absolute UTF-16 code-unit span of the whole attribute as authored: the
  * name through the value, its arguments, refinement or method body included
  * (`a=1`, `v:fn:=q`, `h(x) { … }`); a spread's `...` through its expression;
- * a name sugar's token (`:email`, `#id`). A default attribute (`<x="post">`)
+ * a shorthand's token (`#id`, `.big`). A default attribute (`<x="post">`)
  * starts at its `=`. `undefined` for an attribute synthesized with no source.
  */
 export interface AttrSpan {
@@ -252,9 +252,9 @@ export interface AttrSpan {
 export interface AttrSugar {
   sugar?: string;
   /**
-   * Set on the default attribute (`value`) a sugar produced
-   * (`#x=1`, `kind #x(p) { b }`): the sugar that set it (`#x=…`, `#x(…)`), so
-   * a contract error says "`value` (set by `#x=…`)".
+   * Set on the default attribute (`value`) a syntax module's trigger
+   * produced: the token that set it, so a contract error says "`value` (set
+   * by `…`)".
    */
   sugarValueOf?: string;
 }
@@ -287,8 +287,7 @@ export type Attr =
        */
       nameSpan: SourceSpan;
       /**
-       * Set when the whole value is one atom (`mode=:strict`, decision 156),
-       * including the `name` the `:name` sugar sets (addendum 1, item 2).
+       * Set when the whole value is one atom (`mode=:strict`).
        * `value` is the atom's name, which is what every target emits.
        */
       atom?: Atom;

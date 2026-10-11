@@ -1,11 +1,9 @@
 /**
- * The atoms-and-sugars dialect against the built-in atoms and sugars
- * (`lang-ext-move-sugars-to-mesh`, slice a1): the atom corpora of
- * `mx-atoms.cases.ts` run through the module's rows (`test-support/
- * sugar-rows.ts`), their triggers rendered as the built-in events
- * (`test-support/sugar-module.ts`), with the same expectations, except the
- * rows of `mx-sugar-module.deltas.ts`. The after-value tables run in
- * `mx-after-value.test.ts`.
+ * The atom row against the built-in atoms (`lang-ext-move-sugars-to-mesh`,
+ * slice a1): the atom corpora of `mx-atoms.cases.ts` run through the row
+ * (`test-support/sugar-rows.ts`), its triggers rendered as the built-in
+ * events (`test-support/sugar-module.ts`), with the same expectations,
+ * except the rows of `mx-sugar-module.deltas.ts`.
  */
 
 import { parseExpression as parseBabelExpression } from "@mxlang/babel";
@@ -49,14 +47,12 @@ const isValidTs = (expression: string) => {
 const BUILT_IN = template as unknown as AtomParserModule;
 const BUILDS: [SugarDelta["build"], AtomParserModule][] = [
   ["atoms-row", sugarBuild(ATOMS_SYNTAX) as unknown as AtomParserModule],
-  ["mesh-syntax", sugarBuild(MESH_SYNTAX) as unknown as AtomParserModule],
 ];
 
 /**
- * Attribute-trigger forms the corpora above lack (review 460 r1): a value
- * after `:=`, `(args)` with no body, and `async` before a method. The
- * built-in path reads them as sugar plus a value, arguments or a method,
- * which core diagnoses; the module path announces the same parts.
+ * Attribute forms the corpora above lack (review 460 r1): a value after
+ * `:=`, `(args)` with no body, and `async` before a method. The atom row
+ * must read them as the built-in path does.
  */
 const MODULE_FORMS = [
   "<x :n:=y/>",
@@ -73,7 +69,7 @@ const MODULE_FORMS = [
   "<x .c(p)/>",
 ];
 
-type Suite = Exclude<SugarDelta["suite"], "after-value">;
+type Suite = SugarDelta["suite"];
 const SUITES: [Suite, [string, string][], boolean][] = [
   ["atoms", ATOMS, false],
   ["reserved", RESERVED, false],
@@ -91,30 +87,16 @@ const SUITES: [Suite, [string, string][], boolean][] = [
 ];
 
 describe("the module rows", () => {
-  it("validate, and turn the built-in paths off for their characters (the coexistence rule)", () => {
+  it("validate, and the atom row turns the built-in atom off (the coexistence rule)", () => {
     for (const syntax of [ATOMS_SYNTAX, SUGARS_SYNTAX, MESH_SYNTAX]) {
       expect(template.validateSyntaxTable(syntax)).toEqual([]);
     }
-    const flags = (syntax: template.SyntaxTable) => {
-      const { builtInAtoms, builtInColonEnd, builtInPeriodEnd } =
-        compileSyntax(syntax);
-      return { builtInAtoms, builtInColonEnd, builtInPeriodEnd };
-    };
-    expect(flags(template.DEFAULT_SYNTAX)).toEqual({
-      builtInAtoms: true,
-      builtInColonEnd: true,
-      builtInPeriodEnd: true,
-    });
-    expect(flags(ATOMS_SYNTAX)).toEqual({
-      builtInAtoms: false,
-      builtInColonEnd: true,
-      builtInPeriodEnd: true,
-    });
-    expect(flags(MESH_SYNTAX)).toEqual({
-      builtInAtoms: false,
-      builtInColonEnd: false,
-      builtInPeriodEnd: false,
-    });
+    const builtInAtoms = (syntax: template.SyntaxTable) =>
+      compileSyntax(syntax).builtInAtoms;
+    expect(builtInAtoms(template.DEFAULT_SYNTAX)).toBe(true);
+    expect(builtInAtoms(ATOMS_SYNTAX)).toBe(false);
+    expect(builtInAtoms(SUGARS_SYNTAX)).toBe(false);
+    expect(builtInAtoms(MESH_SYNTAX)).toBe(false);
   });
 });
 
@@ -139,7 +121,7 @@ describe.each(BUILDS)(
 
     it("lists no stale delta: each names a corpus input and a real difference", () => {
       for (const delta of DELTAS) {
-        if (delta.build !== build || delta.suite === "after-value") continue;
+        if (delta.build !== build) continue;
         const suite = SUITES.find(([name]) => name === delta.suite);
         expect(
           suite?.[1].some(([input]) => input === delta.input),
@@ -172,77 +154,3 @@ describe.each(BUILDS)(
     });
   },
 );
-
-/**
- * Item 5 of the a1 brief: for every static attribute-position sugar of the
- * corpora (`mx-after-value.test.ts`, `SUGAR_FORMS`, the front end's parse
- * and rules tests, core's name-sugar tests), the trigger's text is the
- * attribute-name extent the built-in lexer gives, so core's hook reads the
- * same token.
- */
-const STATIC_SUGARS = [
-  ":a",
-  ":b:c",
-  ":b.c",
-  ":b%c",
-  ":customer",
-  ":isOverdue",
-  ":T",
-  ":x",
-  "._b",
-  ".$b",
-  ".a.b",
-  ".a@b",
-  ".a+b",
-  ".a|b",
-  ".b:c",
-  ".bg-[#fff]",
-  ".c:bad%",
-  ".c:n",
-  ".c#m.d:y",
-  ".c#m.d",
-  ".é",
-  ".w-1.5",
-  ".w-1/2",
-  "#1a",
-  "#a-b_c$d",
-  "#b:c",
-  "#main",
-  "::x",
-  ":a::b",
-];
-
-describe("attribute sugar extents", () => {
-  const names = (mod: AtomParserModule, code: string) => {
-    const out: string[] = [];
-    mod
-      .createParser({
-        onAttrName: (r: { start: number; end: number }) =>
-          out.push(code.slice(r.start, r.end)),
-        onError: (e: { message: string }) => out.push(`ERR ${e.message}`),
-      })
-      .parse(code);
-    return out;
-  };
-  const mesh = sugarBuild(MESH_SYNTAX) as unknown as AtomParserModule;
-
-  it.each(
-    STATIC_SUGARS.flatMap((sugar) => [
-      `<div ${sugar}/>`,
-      `<div ${sugar} x=1/>`,
-      `<div x=1 ${sugar}>`,
-      `div ${sugar}\n`,
-      `div x=1, ${sugar}, y\n`,
-      `div [x=1 ${sugar}]\n`,
-    ]),
-  )("%j", (code) => {
-    expect(names(mesh, code)).toEqual(names(BUILT_IN, code));
-  });
-
-  it("a sugar the rows do not match stays built-in: bare `:`, `.`, `#`, `:1a`, `.2xl`, `.-b`", () => {
-    for (const sugar of [":", ".", "#", ":1a", ":é", ".2xl", ".-b"]) {
-      const code = `<div ${sugar}/>`;
-      expect(names(mesh, code), code).toEqual([sugar]);
-    }
-  });
-});

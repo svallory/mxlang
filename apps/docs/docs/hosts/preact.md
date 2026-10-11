@@ -1,6 +1,6 @@
 ---
 title: "Preact"
-description: "MX in place of JSX inside a Preact component: attribute tags for props that hold markup, tags for control flow, and the #id .class :name sugar. Hooks, props and tooling stay Preact."
+description: "MX in place of JSX inside a Preact component: attribute tags for props that hold markup, tags for control flow, and the #id and .class shorthands. Hooks, props and tooling stay Preact."
 ---
 
 # Preact
@@ -71,7 +71,7 @@ export function Team({ members }: { members: Member[] }) {
 
   return (
     <section#team.panel>
-      <input:q.search type="search" value=query onInput(event) { setQuery(event.currentTarget.value); }/>
+      <input.search name="q" type="search" value=query onInput(event) { setQuery(event.currentTarget.value); }/>
       <Table rows=shown>
         <@head>
           <th>Name</th>
@@ -96,7 +96,7 @@ export function Team({ members }: { members: Member[] }) {
 What changed:
 
 - **`<@head>`, `<@row|member|>`, `<@empty>` are `Table`'s props.** These are [attribute tags](/language/attribute-tags-and-params/): a prop that holds markup is written as markup. The pipes make `row` a function of `member`, the render prop the TSX spells `row={(member) => …}`. `Table` declares them with `AttrTag`, so each one is checked against its props type.
-- **`<section#team.panel>` and `<input:q.search>`** are `id`, `class` and `name`.
+- **`<section#team.panel>` and `<input.search>`** are `id` and `class`.
 - **`<if>` / `<else>` and `<for>`** replace the ternary and the `.map()`. Every `<for>` row gets a `key`; `by="id"` names the field when the row is an object.
 - **`class={ admin: member.admin }`** takes an object or an array, so there is no `clsx` call.
 - **`onInput(event) { … }`** is a handler written as a method.

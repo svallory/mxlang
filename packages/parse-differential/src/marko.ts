@@ -20,8 +20,6 @@ import {
   lineStartsOf,
   offsetOf,
   rejoinAttributeName,
-  splitAtFirstColon,
-  splitChain,
   thrownTemplateError,
 } from "./rules.ts";
 
@@ -292,22 +290,13 @@ function tag(ctx: Ctx, node: Node): NNode {
     while (end > span[0] && /\s/.test(ctx.source[end - 1] as string)) end--;
     return leaf("statement", span, `${name.value} trimmedEnd=${end}`);
   }
-  const sugar: string[] = [];
   let projectedName: string;
   if (name.type === "StringLiteral") {
     const [s, e] = spanOf(ctx, name);
     if (name.value.startsWith("@")) projectedName = `${name.value}@[${s},${e})`;
     else if (s === e && name.value === "div")
       projectedName = `(unnamed)@[${s},${s})`; // rule `unnamed-tag` (A5)
-    else {
-      // Rule `split-name-sugar` (A6): the name splits at its first `:`.
-      const [value, colon] = splitAtFirstColon(name.value);
-      projectedName =
-        value === ""
-          ? `(unnamed)@[${s},${s})`
-          : `${JSON.stringify(value)}@[${s},${s + value.length})`;
-      if (colon) sugar.push(`sugar :${JSON.stringify(colon)}`);
-    }
+    else projectedName = `${JSON.stringify(name.value)}@[${s},${e})`;
   } else {
     projectedName = `dynamic ${text(templateText(ctx, name))}`; // rule `dynamic-name` (A17)
   }
@@ -332,7 +321,7 @@ function tag(ctx: Ctx, node: Node): NNode {
   part("params", node.body?.params);
 
   const items: { start: number; line: string }[] = [];
-  const tagSugar: string[] = [];
+  const shorthands: string[] = [];
   const comments = (list: Node[] | undefined) => {
     for (const comment of list ?? []) {
       const [s, e] = spanOf(ctx, comment);
@@ -352,7 +341,7 @@ function tag(ctx: Ctx, node: Node): NNode {
         line: `spread [${s},${e}) ${nodesCode(ctx, [attr.value])}`,
       });
     } else if (!attr.loc) {
-      tagSugar.push(...unmerge(ctx, attr)); // rule `unmerge-shorthands` (A4)
+      shorthands.push(...unmerge(ctx, attr)); // rule `unmerge-shorthands` (A4)
     } else {
       items.push(...attribute(ctx, attr));
     }
@@ -360,9 +349,8 @@ function tag(ctx: Ctx, node: Node): NNode {
   }
   comments(node.innerComments);
   items.sort((a, b) => a.start - b.start);
-  const order = (line: string) =>
-    line.startsWith("sugar #") ? 0 : line.startsWith("sugar .") ? 1 : 2;
-  const allSugar = [...sugar, ...tagSugar]
+  const order = (line: string) => (line.startsWith("sugar #") ? 0 : 1);
+  const sugar = shorthands
     .map((line, i) => ({ line, i }))
     .sort((a, b) => order(a.line) - order(b.line) || a.i - b.i)
     .map((x) => x.line);
@@ -371,7 +359,7 @@ function tag(ctx: Ctx, node: Node): NNode {
     name: projectedName,
     span,
     head,
-    sugar: allSugar,
+    sugar,
     attrs: items.map((i) => i.line),
     children: children(ctx, node.body?.body ?? [], node.attributeTags ?? []),
   };
@@ -394,7 +382,7 @@ function templateText(ctx: Ctx, node: Node): string {
   return out;
 }
 
-/** Rule `unmerge-shorthands` (A4), with `split-name-sugar` (A6) on each static value. */
+/** Rule `unmerge-shorthands` (A4): a `:` stays in its word, as in Marko. */
 function unmerge(ctx: Ctx, attr: Node): string[] {
   const sigil = attr.name === "id" ? "#" : ".";
   const values: Node[] =
@@ -405,9 +393,7 @@ function unmerge(ctx: Ctx, attr: Node): string[] {
       for (const word of sigil === "."
         ? value.value.split(" ")
         : [value.value]) {
-        const [head, colon] = splitAtFirstColon(word);
-        if (head !== "") out.push(`sugar ${sigil}${JSON.stringify(head)}`);
-        if (colon) out.push(`sugar :${JSON.stringify(colon)}`);
+        out.push(`sugar ${sigil}${JSON.stringify(word)}`);
       }
     } else {
       out.push(`sugar ${sigil}dynamic ${text(templateText(ctx, value))}`);
@@ -436,7 +422,7 @@ function valueText(ctx: Ctx, value: Node): string {
   return ` ${nodesCode(ctx, [value])}`;
 }
 
-/** One authored Marko attribute: rules `rejoin-attribute-name` (A2), `default-attribute` (A3), `split-name-sugar` (A6). */
+/** One authored Marko attribute: rules `rejoin-attribute-name` (A2), `default-attribute` (A3). */
 function attribute(ctx: Ctx, attr: Node): { start: number; line: string }[] {
   const [s, e] = spanOf(ctx, attr);
   const method =
@@ -445,25 +431,18 @@ function attribute(ctx: Ctx, attr: Node): { start: number; line: string }[] {
   const value = valueText(ctx, attr.value);
   const args = attr.arguments ? ` args ${nodesCode(ctx, attr.arguments)}` : "";
   if (attr.default === true) {
-    if (attr.modifier == null) {
-      return [
-        {
-          start: s,
-          line: `attr (default) [${s},${e}) name=[${s},${s})${operator}${value}${args}`,
-        },
-      ];
-    }
-    // `:x` (A3): the attribute-position `:` sugar, spans from the name.
-    const [word, colon] = splitAtFirstColon(attr.modifier);
-    const cut = s + 1 + word.length;
-    const lines = [`sugar :${JSON.stringify(word)}@[${s},${cut})`];
-    if (colon !== undefined) {
-      lines.push(
-        `sugar :${JSON.stringify(colon)}@[${cut},${cut + 1 + colon.length})`,
-      );
-    }
-    lines[lines.length - 1] += `${operator}${value}${args}`; // rule `sugar-arguments`
-    return lines.map((line) => ({ start: s, line }));
+    // `:x` (A3): an empty head with a modifier is the default attribute's
+    // (`value:x`); the modifier's span follows the `:`.
+    const modSpan =
+      attr.modifier == null
+        ? ""
+        : ` mod=${JSON.stringify(attr.modifier)}@[${s + 1},${s + 1 + attr.modifier.length})`;
+    return [
+      {
+        start: s,
+        line: `attr (default) [${s},${e}) name=[${s},${s})${modSpan}${operator}${value}${args}`,
+      },
+    ];
   }
   // Rule A2 (decision 163 addendum 12): Marko's `name` is the head before
   // the last colon and `modifier` the tail; MX carries the head in
@@ -473,23 +452,6 @@ function attribute(ctx: Ctx, attr: Node): { start: number; line: string }[] {
   const head = attr.name ?? "";
   const mod = attr.modifier;
   const authored = rejoinAttributeName(head, mod);
-  if (authored.startsWith("#") || authored.startsWith(".")) {
-    const lines: string[] = [];
-    let at = s;
-    for (const part of splitChain(authored)) {
-      const [word, colon] = splitAtFirstColon(part.word);
-      const cut = at + 1 + word.length;
-      lines.push(`sugar ${part.sigil}${JSON.stringify(word)}@[${at},${cut})`);
-      if (colon !== undefined) {
-        lines.push(
-          `sugar :${JSON.stringify(colon)}@[${cut},${cut + 1 + colon.length})`,
-        );
-      }
-      at += 1 + part.word.length;
-    }
-    lines[lines.length - 1] += `${operator}${value}${args}`; // rule `sugar-arguments`
-    return lines.map((line) => ({ start: s, line }));
-  }
   // Rule A2: compare the split fields themselves. Marko's `name` is the head
   // before the last colon and `modifier` the tail; MX carries both plus their
   // spans, so the neutral line shows the split instead of a rejoined string.

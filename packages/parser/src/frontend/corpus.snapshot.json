@@ -11,8 +11,7 @@
   ],
   "g0004": [
     "tag \"div\" [1,4) [0,10) open=[0,10) mode=html self-closed",
-    "  sugar tag . \"a\" [4,6)",
-    "  sugar tag : \"b\" [6,8)"
+    "  sugar tag . \"a:b\" [4,8)"
   ],
   "g0005": [
     "tag \"foo\" [1,4) [0,9) open=[0,9) mode=html self-closed",
@@ -46,9 +45,9 @@
   ],
   "g0012": [
     "tag \"div\" [1,4) [0,15) open=[0,15) mode=html self-closed",
-    "  sugar attribute # \"x\" [5,7)",
-    "  sugar attribute . \"y\" [8,10)",
-    "  sugar attribute : \"z\" [11,13)"
+    "  attr \"#x\" [5,7) name=[5,7)",
+    "  attr \".y\" [8,10) name=[8,10)",
+    "  attr default [11,13) name=[11,11) modifier \"z\" [12,13)"
   ],
   "g0013": [
     "tag \"div\" [1,4) [0,11) open=[0,11) mode=html self-closed",
@@ -273,8 +272,7 @@
   ],
   "g0062": [
     "tag \"div\" [1,4) [0,9) open=[0,9) mode=html self-closed",
-    "  attr default [4,7) name=[4,4) := value \"1\" [6,7)",
-    "error MX_SUGAR_BOUND [4,5)"
+    "  attr default [4,7) name=[4,4) := value \"1\" [6,7)"
   ],
   "g0063": [
     "tag \"div\" [1,4) [0,9) open=[0,9) mode=html self-closed",
@@ -312,9 +310,7 @@
     "  sugar tag . \"c\" [8,10)"
   ],
   "g0072": [
-    "tag \"my-widget\" [1,10) [0,16) open=[0,16) mode=html self-closed",
-    "  sugar tag : \"x@y\" [10,14)",
-    "error MX_SUGAR_NAME_INVALID [10,11)"
+    "tag \"my-widget:x@y\" [1,14) [0,16) open=[0,16) mode=html self-closed"
   ],
   "g0073": ["tag \"my-widget\" [0,9) [0,9) open=[0,9) mode=html concise"],
   "g0074": [
@@ -483,7 +479,7 @@
   ],
   "g0114": [
     "tag \"div\" [1,4) [0,12) open=[0,12) mode=html self-closed",
-    "  attr \"x\" [5,10) name=[5,6) = value \"1\" [9,10)"
+    "  attr \"x\" [5,10) name=[5,6) modifier \"\" [7,7) = value \"1\" [9,10)"
   ],
   "g0115": [
     "tag \"div\" [1,4) [0,14) open=[0,14) mode=html self-closed",
@@ -511,9 +507,9 @@
   ],
   "g0121": [
     "tag \"div\" [1,4) [0,15) open=[0,15) mode=html self-closed",
-    "  sugar attribute # \"x\" [5,7)",
-    "  sugar attribute . \"x\" [8,10)",
-    "  sugar attribute : \"x\" [11,13)"
+    "  attr \"#x\" [5,7) name=[5,7)",
+    "  attr \".x\" [8,10) name=[8,10)",
+    "  attr default [11,13) name=[11,11) modifier \"x\" [12,13)"
   ],
   "g0122": [
     "tag \"div\" [1,4) [0,25) open=[0,18) close=[19,25) \"div\" mode=html",
@@ -1437,9 +1433,8 @@
   "g0330": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
     "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
-    "  sugar attribute . \"\" [9,10) args \"b\" [12,13)",
-    "  attr \"y\" [15,16) name=[15,16)",
-    "error MX_SUGAR_ARGUMENTS [9,10)"
+    "  attr \".\" [9,14) name=[9,10) args \"b\" [12,13)",
+    "  attr \"y\" [15,16) name=[15,16)"
   ],
   "g0331": [
     "tag \"div\" [1,4) [0,17) open=[0,17) mode=html self-closed",
@@ -1707,7 +1702,7 @@
   ],
   "g0384": [
     "tag \"div\" [0,3) [0,15) open=[0,11) mode=html concise",
-    "  attr \"a\" [4,11) name=[4,5)",
+    "  attr \"a\" [4,11) name=[4,5) modifier \"keyof\" [6,11)",
     "  tag \"b\" [14,15) [14,15) open=[14,15) mode=html concise"
   ],
   "g0385": [
@@ -1863,13 +1858,13 @@
   ],
   "g0422": [
     "tag \"div\" [1,4) [0,13) open=[0,13) mode=html self-closed",
-    "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
-    "  sugar attribute : \"b\" [9,11)"
+    "  attr \"x\" [5,11) name=[5,6) = value \"a :b\" [7,11)",
+    "error BABEL_ParseExpressionExpectsEOF [9,9)"
   ],
   "g0423": [
     "tag \"if\" [1,3) [0,10) open=[0,10) mode=html incomplete",
-    "  attr default [3,6) name=[3,3) = value \":a\" [4,6)",
-    "  sugar attribute : \"b\" [7,9)",
+    "  attr default [3,9) name=[3,3) = value \":a :b\" [4,9)",
+    "error BABEL_ParseExpressionExpectsEOF [7,7)",
     "error MISSING_END_TAG [0,10)"
   ],
   "g0424": [
@@ -1882,10 +1877,9 @@
     "error BABEL_ParseExpressionExpectsEOF [9,9)"
   ],
   "g0426": [
-    "tag \"div\" [1,4) [0,12) open=[0,12) mode=html self-closed",
-    "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
-    "  sugar attribute : \"\" [9,10)",
-    "error MX_SUGAR_NAME_MISSING [9,10)"
+    "tag \"div\" [1,4) [0,10) open=[0,10) mode=html incomplete",
+    "  attr \"x\" [5,6) name=[5,6)",
+    "error INVALID_REGULAR_EXPRESSION [10,10)"
   ],
   "g0427": [
     "tag \"div\" [1,4) [0,13) open=[0,13) mode=html self-closed",
@@ -1900,8 +1894,7 @@
   ],
   "g0429": [
     "tag \"div\" [1,4) [0,15) open=[0,15) mode=html self-closed",
-    "  attr \"x\" [5,10) name=[5,6) = value \"a.b\" [7,10)",
-    "  sugar attribute . \"c\" [11,13)"
+    "  attr \"x\" [5,13) name=[5,6) = value \"a.b .c\" [7,13)"
   ],
   "g0430": [
     "tag \"div\" [1,4) [0,17) open=[0,17) mode=html self-closed",
@@ -1911,13 +1904,13 @@
   ],
   "g0431": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
-    "  attr \"x\" [5,13) name=[5,6) = value \"a ?? b\" [7,13)",
-    "  sugar attribute : \"c\" [14,16)"
+    "  attr \"x\" [5,16) name=[5,6) = value \"a ?? b :c\" [7,16)",
+    "error BABEL_ParseExpressionExpectsEOF [14,14)"
   ],
   "g0432": [
     "tag \"div\" [1,4) [0,17) open=[0,17) mode=html self-closed",
-    "  attr \"x\" [5,12) name=[5,6) = value \"a ?.b\" [7,12)",
-    "  sugar attribute : \"c\" [13,15)"
+    "  attr \"x\" [5,15) name=[5,6) = value \"a ?.b :c\" [7,15)",
+    "error BABEL_ParseExpressionExpectsEOF [13,13)"
   ],
   "g0433": [
     "tag \"div\" [1,4) [0,20) open=[0,20) mode=html self-closed",
@@ -2017,8 +2010,7 @@
   "g0453": [
     "tag \"div\" [0,3) [0,12) open=[0,7) mode=html concise",
     "  attr \"x\" [4,7) name=[4,5) = value \"a\" [6,7)",
-    "  tag unnamed [10,10) [10,12) open=[10,12) mode=html concise",
-    "    sugar tag : \"b\" [10,12)"
+    "  tag \":b\" [10,12) [10,12) open=[10,12) mode=html concise"
   ],
   "g0454": [
     "tag \"div\" [0,3) [0,13) open=[0,7) mode=html concise",
@@ -2042,9 +2034,8 @@
     "  attr \"x\" [4,7) name=[4,5) = value \"a\" [6,7)",
     "  tag \"?\" [10,11) [10,17) open=[10,17) mode=html concise",
     "    attr \"b\" [12,13) name=[12,13)",
-    "    sugar attribute : \"\" [14,15)",
-    "    attr \"c\" [16,17) name=[16,17)",
-    "error MX_SUGAR_NAME_MISSING [14,15)"
+    "    attr default [14,15) name=[14,14) modifier \"\" [15,15)",
+    "    attr \"c\" [16,17) name=[16,17)"
   ],
   "g0458": [
     "tag \"div\" [0,3) [0,14) open=[0,7) mode=html concise",
@@ -2119,10 +2110,9 @@
   "g0472": [
     "tag \"div\" [0,3) [0,14) open=[0,9) mode=html concise",
     "  attr \"x\" [4,7) name=[4,5) = value \"a\" [6,7)",
-    "  sugar attribute . \"\" [8,9)",
+    "  attr \".\" [8,9) name=[8,9)",
     "  tag unnamed [12,12) [12,14) open=[12,14) mode=html concise",
-    "    sugar tag . \"b\" [12,14)",
-    "error MX_SUGAR_NAME_MISSING [8,9)"
+    "    sugar tag . \"b\" [12,14)"
   ],
   "g0473": [
     "tag \"div\" [0,3) [0,14) open=[0,14) mode=html concise",
@@ -2132,7 +2122,7 @@
   "g0474": [
     "tag \"div\" [0,3) [0,14) open=[0,14) mode=html concise",
     "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
-    "  sugar attribute . \"b\" [11,13)"
+    "  attr \".b\" [11,13) name=[11,13)"
   ],
   "g0475": [
     "tag \"div\" [0,3) [0,15) open=[0,15) mode=html concise",
@@ -2715,13 +2705,13 @@
   ],
   "g0606": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,11) name=[5,6) = value \":new\" [7,11)",
-    "  sugar attribute : \"b\" [12,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \":new :b\" [7,14)",
+    "error BABEL_ParseExpressionExpectsEOF [12,12)"
   ],
   "g0607": [
     "tag \"div\" [1,4) [0,19) open=[0,19) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \":typeof\" [7,14)",
-    "  sugar attribute : \"b\" [15,17)"
+    "  attr \"x\" [5,17) name=[5,6) = value \":typeof :b\" [7,17)",
+    "error BABEL_ParseExpressionExpectsEOF [15,15)"
   ],
   "g0608": [
     "tag \"div\" [1,4) [0,17) open=[0,17) mode=html self-closed",
@@ -2732,10 +2722,8 @@
     "  attr \"x\" [5,16) name=[5,6) = value \"a ? b : c\" [7,16)"
   ],
   "g0610": [
-    "tag \"div\" [1,4) [0,15) open=[0,15) mode=html incomplete",
-    "  attr \"x\" [5,10) name=[5,6) = value \"(a)\" [7,10)",
-    "  sugar attribute : \"T\" [11,13)",
-    "error INVALID_ATTRIBUTE_VALUE [15,15)"
+    "tag \"div\" [1,4) [0,20) open=[0,20) mode=html self-closed",
+    "  attr \"x\" [5,18) name=[5,6) = value \"(a) :T => a\" [7,18)"
   ],
   "g0611": [
     "tag \"div\" [1,4) [0,21) open=[0,21) mode=html self-closed",
@@ -2751,8 +2739,8 @@
   ],
   "g0614": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,11) name=[5,6) = value \"a?.b\" [7,11)",
-    "  sugar attribute : \"c\" [12,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"a?.b :c\" [7,14)",
+    "error BABEL_ParseExpressionExpectsEOF [12,12)"
   ],
   "g0615": [
     "tag \"div\" [1,4) [0,14) open=[0,14) mode=html self-closed",
@@ -2773,13 +2761,11 @@
   ],
   "g0619": [
     "tag \"div\" [1,4) [0,14) open=[0,14) mode=html self-closed",
-    "  attr \"x\" [5,9) name=[5,6) = value \"a!\" [7,9)",
-    "  sugar attribute . \"c\" [10,12)"
+    "  attr \"x\" [5,12) name=[5,6) = value \"a! .c\" [7,12)"
   ],
   "g0620": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,11) name=[5,6) = value \"/re/\" [7,11)",
-    "  sugar attribute . \"c\" [12,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"/re/ .c\" [7,14)"
   ],
   "g0621": [
     "tag \"div\" [1,4) [0,23) open=[0,23) mode=html self-closed",
@@ -2812,9 +2798,8 @@
   ],
   "g0627": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
-    "  sugar attribute : \"b\" [9,11)",
-    "  sugar attribute : \"c\" [12,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"a :b :c\" [7,14)",
+    "error BABEL_ParseExpressionExpectsEOF [9,9)"
   ],
   "g0628": [
     "tag \"div\" [1,4) [0,14) open=[0,14) mode=html self-closed",
@@ -2823,8 +2808,8 @@
   ],
   "g0629": [
     "tag \"div\" [1,4) [0,14) open=[0,14) mode=html self-closed",
-    "  attr \"x\" [5,9) name=[5,6) = value \":a\" [7,9)",
-    "  sugar attribute : \"b\" [10,12)"
+    "  attr \"x\" [5,12) name=[5,6) = value \":a :b\" [7,12)",
+    "error BABEL_ParseExpressionExpectsEOF [10,10)"
   ],
   "g0630": [
     "tag \"if\" [1,3) [0,10) open=[0,10) mode=html incomplete",
@@ -2847,116 +2832,97 @@
   ],
   "g0634": [
     "tag \"input\" [1,6) [0,27) open=[0,27) mode=void",
-    "  attr \"type\" [7,19) name=[7,11) = value \"\\\"email\\\"\" [12,19)",
-    "  sugar attribute : \"email\" [20,26)"
+    "  attr \"type\" [7,26) name=[7,11) = value \"\\\"email\\\" :email\" [12,26)",
+    "error BABEL_ParseExpressionExpectsEOF [20,20)"
   ],
-  "g0635": [
-    "tag unnamed [1,1) [0,9) open=[0,9) mode=html self-closed",
-    "  sugar tag : \"email\" [1,7)"
-  ],
+  "g0635": ["tag \":email\" [1,7) [0,9) open=[0,9) mode=html self-closed"],
   "g0636": [
-    "tag \"input\" [1,6) [0,14) open=[0,14) mode=html self-closed",
-    "  sugar tag : \"email\" [6,12)"
+    "tag \"input:email\" [1,12) [0,14) open=[0,14) mode=html self-closed"
   ],
   "g0637": [
     "tag \"input\" [1,6) [0,15) open=[0,15) mode=void self-closed",
-    "  sugar attribute : \"email\" [7,13)"
+    "  attr default [7,13) name=[7,7) modifier \"email\" [8,13)"
   ],
   "g0638": [
     "tag \"input\" [1,6) [0,23) open=[0,23) mode=void self-closed",
-    "  sugar tag # \"main\" [6,11)",
-    "  sugar tag : \"email\" [11,17)",
+    "  sugar tag # \"main:email\" [6,17)",
     "  sugar tag . \"big\" [17,21)"
   ],
   "g0639": [
-    "tag \"input\" [1,6) [0,23) open=[0,23) mode=html self-closed",
-    "  sugar tag : \"email\" [6,12)",
+    "tag \"input:email\" [1,12) [0,23) open=[0,23) mode=html self-closed",
     "  sugar tag . \"big\" [12,16)",
     "  sugar tag # \"main\" [16,21)"
   ],
   "g0640": [
-    "tag \"input\" [1,6) [0,23) open=[0,23) mode=html self-closed",
-    "  sugar tag : \"email\" [6,12)",
+    "tag \"input:email\" [1,12) [0,23) open=[0,23) mode=html self-closed",
     "  sugar tag # \"main\" [12,17)",
     "  sugar tag . \"big\" [17,21)"
   ],
   "g0641": [
     "tag \"input\" [1,6) [0,23) open=[0,23) mode=void self-closed",
-    "  sugar tag . \"big\" [6,10)",
-    "  sugar tag : \"email\" [10,16)",
+    "  sugar tag . \"big:email\" [6,16)",
     "  sugar tag # \"main\" [16,21)"
   ],
   "g0642": [
     "tag \"input\" [1,6) [0,23) open=[0,23) mode=void self-closed",
     "  sugar tag . \"big\" [6,10)",
-    "  sugar tag # \"main\" [10,15)",
-    "  sugar tag : \"email\" [15,21)"
+    "  sugar tag # \"main:email\" [10,21)"
   ],
   "g0643": [
     "tag \"input\" [1,6) [0,23) open=[0,23) mode=void self-closed",
     "  sugar tag # \"main\" [6,11)",
-    "  sugar tag . \"big\" [11,15)",
-    "  sugar tag : \"email\" [15,21)"
+    "  sugar tag . \"big:email\" [11,21)"
   ],
   "g0644": [
     "tag \"input\" [1,6) [0,14) open=[0,14) mode=void self-closed",
-    "  sugar attribute # \"main\" [7,12)"
+    "  attr \"#main\" [7,12) name=[7,12)"
   ],
   "g0645": [
     "tag \"input\" [1,6) [0,13) open=[0,13) mode=void self-closed",
-    "  sugar attribute . \"big\" [7,11)"
+    "  attr \".big\" [7,11) name=[7,11)"
   ],
   "g0646": [
     "tag \"input\" [1,6) [0,28) open=[0,28) mode=void self-closed",
-    "  sugar attribute : \"email\" [7,13)",
+    "  attr default [7,13) name=[7,7) modifier \"email\" [8,13)",
     "  attr \"type\" [14,26) name=[14,18) = value \"\\\"email\\\"\" [19,26)"
   ],
   "g0647": [
     "tag \"input\" [1,6) [0,30) open=[0,30) mode=void self-closed",
     "  attr \"x\" [7,10) name=[7,8) = value \"1\" [9,10)",
-    "  sugar attribute # \"main\" [11,16)",
-    "  sugar attribute . \"big\" [17,21)",
-    "  sugar attribute : \"email\" [22,28)"
+    "  attr \"#main\" [11,16) name=[11,16)",
+    "  attr \".big\" [17,21) name=[17,21)",
+    "  attr default [22,28) name=[22,22) modifier \"email\" [23,28)"
   ],
   "g0648": [
     "tag \"input\" [1,6) [0,17) open=[0,17) mode=void self-closed",
-    "  attr \"x\" [7,12) name=[7,8) = value \"a.b\" [9,12)",
-    "  sugar attribute . \"c\" [13,15)"
+    "  attr \"x\" [7,15) name=[7,8) = value \"a.b .c\" [9,15)"
   ],
   "g0649": [
-    "tag \"input\" [1,6) [0,16) open=[0,16) mode=html self-closed",
-    "  sugar tag : \"email\" [6,12)",
+    "tag \"input:email\" [1,12) [0,16) open=[0,16) mode=html self-closed",
     "  attr default [12,14) name=[12,12) = value \"1\" [13,14)"
   ],
   "g0650": [
     "tag \"input\" [1,6) [0,17) open=[0,17) mode=void self-closed",
-    "  sugar attribute : \"email\" [7,13) = value \"1\" [14,15)"
+    "  attr default [7,15) name=[7,7) modifier \"email\" [8,13) = value \"1\" [14,15)"
   ],
   "g0651": [
-    "tag \"input\" [1,6) [0,31) open=[0,31) mode=html self-closed",
-    "  sugar tag : \"email\" [6,12)",
+    "tag \"input:email\" [1,12) [0,31) open=[0,31) mode=html self-closed",
     "  attr default [12,29) name=[12,12) method [12,29) params \"a\" [13,14) body \" return a; \" [17,28)"
   ],
   "g0652": [
     "tag \"input\" [1,6) [0,20) open=[0,20) mode=void self-closed",
-    "  sugar attribute # \"main\" [7,12) method [12,18) params \"a\" [13,14) body \"\" [17,17)"
+    "  attr \"#main\" [7,18) name=[7,12) method [12,18) params \"a\" [13,14) body \"\" [17,17)"
   ],
   "g0653": [
-    "tag \"input\" [1,6) [0,14) open=[0,14) mode=void self-closed",
-    "  attr \"x\" [7,10) name=[7,8) = value \"1\" [9,10)",
-    "  sugar attribute : \"\" [11,12)",
-    "error MX_SUGAR_NAME_MISSING [11,12)"
+    "tag \"input\" [1,6) [0,12) open=[0,12) mode=void incomplete",
+    "  attr \"x\" [7,8) name=[7,8)",
+    "error INVALID_REGULAR_EXPRESSION [12,12)"
   ],
   "g0654": [
     "tag \"input\" [1,6) [0,10) open=[0,10) mode=void self-closed",
-    "  sugar attribute : \"\" [7,8)",
-    "error MX_SUGAR_NAME_MISSING [7,8)"
+    "  attr default [7,8) name=[7,7) modifier \"\" [8,8)"
   ],
-  "g0655": [
-    "tag \"a\" [1,2) [0,8) open=[0,8) mode=html self-closed",
-    "  sugar tag : \"b:c\" [2,6)",
-    "error MX_SECOND_NAME [4,5)"
-  ],
+  "g0655": ["tag \"a:b:c\" [1,6) [0,8) open=[0,8) mode=html self-closed"],
   "g0656": [
     "tag \"if\" [1,3) [0,16) open=[0,10) close=[11,16) \"if\" mode=html",
     "  attr default [3,9) name=[3,3) = value \"a\\n .b\" [4,9)",
@@ -2969,15 +2935,15 @@
   ],
   "g0658": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"class\" [5,14) name=[5,10) = value \"1\" [13,14)"
+    "  attr \"class\" [5,14) name=[5,10) modifier \"x\" [11,12) = value \"1\" [13,14)"
   ],
   "g0659": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"style\" [5,14) name=[5,10) = value \"1\" [13,14)"
+    "  attr \"style\" [5,14) name=[5,10) modifier \"x\" [11,12) = value \"1\" [13,14)"
   ],
   "g0660": [
     "tag \"input\" [1,6) [0,20) open=[0,20) mode=void self-closed",
-    "  attr \"value\" [7,18) name=[7,12) := value \"x\" [17,18)"
+    "  attr \"value\" [7,18) name=[7,12) modifier \"fn\" [13,15) := value \"x\" [17,18)"
   ],
   "g0661": [
     "tag \"div\" [1,4) [0,23) open=[0,5) close=[17,23) \"div\" mode=html",
@@ -2985,8 +2951,7 @@
   ],
   "g0662": [
     "tag \"div\" [1,4) [0,17) open=[0,17) mode=html self-closed",
-    "  attr \"x\" [5,12) name=[5,6) = value \"fn(a)\" [7,12)",
-    "  sugar attribute . \"b\" [13,15)"
+    "  attr \"x\" [5,15) name=[5,6) = value \"fn(a) .b\" [7,15)"
   ],
   "g0663": [
     "tag \"const\" [1,6) [0,27) open=[0,27) mode=html self-closed",
@@ -3105,12 +3070,10 @@
     "  sugar tag . \"a\" [1,3)"
   ],
   "g0687": [
-    "tag \"div\" [1,4) [0,15) open=[0,7) close=[7,15) \"div:x\" mode=html",
-    "  sugar tag : \"x\" [4,6)"
+    "tag \"div:x\" [1,6) [0,15) open=[0,7) close=[7,15) \"div:x\" mode=html"
   ],
   "g0688": [
-    "tag \"div\" [1,4) [0,7) open=[0,7) mode=html incomplete",
-    "  sugar tag : \"x\" [4,6)",
+    "tag \"div:x\" [1,6) [0,7) open=[0,7) mode=html incomplete",
     "error MISMATCHED_CLOSING_TAG [7,13)"
   ],
   "g0689": [
@@ -3169,14 +3132,12 @@
     "  attr \"b\" [16,17) name=[16,17)"
   ],
   "g0701": [
-    "tag \"a\" [1,2) [0,8) open=[0,8) mode=html self-closed",
-    "  sugar tag : \"b\" [2,4)",
+    "tag \"a:b\" [1,4) [0,8) open=[0,8) mode=html self-closed",
     "  attr default [4,6) name=[4,4) = value \"1\" [5,6)"
   ],
   "g0702": [
     "tag \"div\" [1,4) [0,9) open=[0,9) mode=html self-closed",
-    "  attr default [4,7) name=[4,4) := value \"x\" [6,7)",
-    "error MX_SUGAR_BOUND [4,5)"
+    "  attr default [4,7) name=[4,4) := value \"x\" [6,7)"
   ],
   "g0703": ["tag \"div>a\" [0,5) [0,5) open=[0,5) mode=html concise"],
   "g0704": ["tag \"1abc\" [1,5) [0,7) open=[0,7) mode=html self-closed"],
@@ -3236,8 +3197,7 @@
   ],
   "g0719": [
     "tag \"if\" [1,3) [0,8) open=[0,8) mode=html self-closed",
-    "  attr default [3,6) name=[3,3) := value \"x\" [5,6)",
-    "error MX_SUGAR_BOUND [3,4)"
+    "  attr default [3,6) name=[3,3) := value \"x\" [5,6)"
   ],
   "g0720": [
     "tag \"div\" [1,4) [0,27) open=[0,27) mode=html self-closed",
@@ -3297,7 +3257,7 @@
   ],
   "g0733": [
     "tag \"div\" [1,4) [0,11) open=[0,11) mode=html self-closed",
-    "  attr \"a\" [5,7) name=[5,6)",
+    "  attr \"a\" [5,7) name=[5,6) modifier \"\" [7,7)",
     "  attr \"b\" [8,9) name=[8,9)"
   ],
   "g0734": [
@@ -3572,7 +3532,7 @@
   ],
   "g0796": [
     "tag \"div\" [0,3) [0,8) open=[0,8) mode=html concise",
-    "  attr \"a\" [4,6) name=[4,5)",
+    "  attr \"a\" [4,6) name=[4,5) modifier \"\" [6,6)",
     "  attr \"b\" [7,8) name=[7,8)"
   ],
   "g0797": [
@@ -3793,15 +3753,13 @@
   ],
   "g0840": [
     "tag \"div\" [1,4) [0,21) open=[0,21) mode=html self-closed",
-    "  attr \"x\" [5,16) name=[5,6) = value \"a ? b : c\" [7,16)",
-    "  sugar attribute : \"d\" [17,19)"
+    "  attr \"x\" [5,19) name=[5,6) = value \"a ? b : c :d\" [7,19)",
+    "error BABEL_ParseExpressionExpectsEOF [17,17)"
   ],
   "g0841": [
-    "tag \"div\" [1,4) [0,11) open=[0,11) mode=html incomplete",
-    "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
-    "  sugar attribute : \"\" [9,10)",
-    "error MX_SUGAR_NAME_MISSING [9,10)",
-    "error MISSING_END_TAG [0,11)"
+    "tag \"div\" [1,4) [0,7) open=[0,7) mode=html incomplete",
+    "  attr \"x\" [5,6) name=[5,6)",
+    "error INVALID_EXPRESSION [7,7)"
   ],
   "g0842": [
     "tag \"div\" [1,4) [0,14) open=[0,14) mode=html self-closed",
@@ -3809,55 +3767,50 @@
   ],
   "g0843": [
     "tag \"div\" [1,4) [0,15) open=[0,15) mode=html self-closed",
-    "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
-    "  sugar attribute . \"b\" [11,13)"
+    "  attr \"x\" [5,13) name=[5,6) = value \"a\\n  .b\" [7,13)"
   ],
   "g0844": [
     "tag \"div\" [1,4) [0,14) open=[0,14) mode=html self-closed",
-    "  spread [5,9) \"a\" [8,9)",
-    "  sugar attribute : \"b\" [10,12)"
+    "  spread [5,12) \"a :b\" [8,12)",
+    "error BABEL_ParseExpressionExpectsEOF [10,10)"
   ],
   "g0845": [
     "tag \"div\" [1,4) [0,14) open=[0,14) mode=html self-closed",
-    "  spread [5,9) \"a\" [8,9)",
-    "  sugar attribute . \"b\" [10,12)"
+    "  spread [5,12) \"a .b\" [8,12)"
   ],
   "g0846": [
     "tag \"if\" [1,3) [0,11) open=[0,11) mode=html incomplete",
-    "  attr default [3,7) name=[3,3) = value \":a\" [5,7)",
-    "  sugar attribute : \"b\" [8,10)",
+    "  attr default [3,10) name=[3,3) = value \":a :b\" [5,10)",
+    "error BABEL_ParseExpressionExpectsEOF [8,8)",
     "error MISSING_END_TAG [0,11)"
   ],
   "g0847": [
     "tag \"if\" [1,3) [0,11) open=[0,11) mode=html incomplete",
-    "  attr default [3,6) name=[3,3) = value \":a\" [4,6)",
-    "  sugar attribute : \"b\" [8,10)",
+    "  attr default [3,10) name=[3,3) = value \":a\\n :b\" [4,10)",
+    "error BABEL_ParseExpressionExpectsEOF [8,8)",
     "error MISSING_END_TAG [0,11)"
   ],
   "g0848": [
     "tag \"if\" [0,2) [0,8) open=[0,8) mode=html concise",
-    "  attr default [2,5) name=[2,2) = value \":a\" [3,5)",
-    "  sugar attribute : \"b\" [6,8)"
+    "  attr default [2,8) name=[2,2) = value \":a :b\" [3,8)",
+    "error BABEL_ParseExpressionExpectsEOF [6,6)"
   ],
   "g0849": [
     "tag \"const\" [1,6) [0,16) open=[0,16) mode=html self-closed",
     "  var \"x\" [7,8)",
-    "  attr default [8,11) name=[8,8) = value \":a\" [9,11)",
-    "  sugar attribute : \"b\" [12,14)"
+    "  attr default [8,14) name=[8,8) = value \":a :b\" [9,14)",
+    "error BABEL_ParseExpressionExpectsEOF [12,12)"
   ],
   "g0850": [
     "tag \"if\" [1,3) [0,13) open=[0,13) mode=html incomplete",
-    "  attr default [3,6) name=[3,3) = value \":a\" [4,6)",
-    "  sugar attribute : \"b\" [7,9)",
-    "  sugar attribute : \"c\" [10,12)",
+    "  attr default [3,12) name=[3,3) = value \":a :b :c\" [4,12)",
+    "error BABEL_ParseExpressionExpectsEOF [7,7)",
     "error MISSING_END_TAG [0,13)"
   ],
   "g0851": [
-    "tag \"if\" [1,3) [0,9) open=[0,9) mode=html incomplete",
-    "  attr default [3,6) name=[3,3) = value \":a\" [4,6)",
-    "  sugar attribute : \"\" [7,8)",
-    "error MX_SUGAR_NAME_MISSING [7,8)",
-    "error MISSING_END_TAG [0,9)"
+    "tag \"if\" [1,3) [0,4) open=[0,4) mode=html incomplete",
+    "  attr default [3,3) name=[3,3)",
+    "error INVALID_EXPRESSION [4,4)"
   ],
   "g0852": [
     "tag \"if\" [1,3) [0,12) open=[0,12) mode=html incomplete",
@@ -3898,14 +3851,13 @@
   ],
   "g0859": [
     "tag \"div\" [0,3) [0,10) open=[0,10) mode=html concise",
-    "  attr \"x\" [4,7) name=[4,5) = value \"a\" [6,7)",
-    "  sugar attribute : \"b\" [8,10)"
+    "  attr \"x\" [4,10) name=[4,5) = value \"a :b\" [6,10)",
+    "error BABEL_ParseExpressionExpectsEOF [8,8)"
   ],
   "g0860": [
     "tag \"div\" [0,3) [0,9) open=[0,9) mode=html concise",
-    "  attr \"x\" [4,7) name=[4,5) = value \"a\" [6,7)",
-    "  sugar attribute : \"\" [8,9)",
-    "error MX_SUGAR_NAME_MISSING [8,9)"
+    "  attr \"x\" [4,9) name=[4,5) = value \"a :\" [6,9)",
+    "error BABEL_ParseExpressionExpectsEOF [8,8)"
   ],
   "g0861": [
     "tag \"div\" [1,4) [0,14) open=[0,14) mode=html self-closed",
@@ -4249,7 +4201,7 @@
   ],
   "g0947": [
     "tag \"div\" [1,4) [0,9) open=[0,9) mode=html self-closed",
-    "  sugar attribute : \"a\" [5,7)"
+    "  attr default [5,7) name=[5,5) modifier \"a\" [6,7)"
   ],
   "g0948": [
     "tag \"let\" [1,4) [0,13) open=[0,13) mode=html self-closed",
@@ -4493,8 +4445,7 @@
   ],
   "g1003": [
     "tag \"div\" [1,4) [0,17) open=[0,17) mode=html self-closed",
-    "  attr \"x\" [5,12) name=[5,6) = value \"yield\" [7,12)",
-    "  sugar attribute : \"b\" [13,15)",
+    "  attr \"x\" [5,15) name=[5,6) = value \"yield :b\" [7,15)",
     "error BABEL_UnexpectedReservedWord [7,7)"
   ],
   "g1004": [
@@ -4551,53 +4502,46 @@
   ],
   "g1016": [
     "tag \"input\" [1,6) [0,22) open=[0,22) mode=void self-closed",
-    "  sugar attribute : \"email\" [7,13)",
-    "  sugar attribute : \"other\" [14,20)"
+    "  attr default [7,13) name=[7,7) modifier \"email\" [8,13)",
+    "  attr default [14,20) name=[14,14) modifier \"other\" [15,20)"
   ],
   "g1017": [
     "tag \"div\" [1,4) [0,11) open=[0,11) mode=html self-closed",
     "  attr \"a\" [5,6) name=[5,6)",
-    "  sugar attribute . \"b\" [7,9)"
+    "  attr \".b\" [7,9) name=[7,9)"
   ],
   "g1018": [
     "tag \"div\" [1,4) [0,13) open=[0,13) mode=html self-closed",
     "  attr \"x\" [5,8) name=[5,6) = value \"1\" [7,8)",
-    "  sugar attribute # \"y\" [9,11)"
+    "  attr \"#y\" [9,11) name=[9,11)"
   ],
   "g1019": [
     "tag \"div\" [1,4) [0,15) open=[0,15) mode=html self-closed",
-    "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
-    "  sugar attribute : \"b%c\" [9,13)",
-    "error MX_SUGAR_NAME_INVALID [9,10)"
+    "  attr \"x\" [5,13) name=[5,6) = value \"a :b%c\" [7,13)",
+    "error BABEL_ParseExpressionExpectsEOF [9,9)"
   ],
   "g1020": [
     "tag \"div\" [1,4) [0,13) open=[0,13) mode=html self-closed",
-    "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
-    "  sugar attribute . \"é\" [9,11)"
+    "  attr \"x\" [5,11) name=[5,6) = value \"a .é\" [7,11)"
   ],
   "g1021": [
     "tag unnamed [1,1) [0,5) open=[0,5) mode=html self-closed",
     "  sugar tag . \"a\" [1,3)"
   ],
-  "g1022": [
-    "tag unnamed [1,1) [0,7) open=[0,7) mode=html self-closed",
-    "  sugar tag : \"att\" [1,5)"
-  ],
+  "g1022": ["tag \":att\" [1,5) [0,7) open=[0,7) mode=html self-closed"],
   "g1023": [
     "tag \"div\" [1,4) [0,19) open=[0,19) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"(a ? b)\" [7,14)",
-    "  sugar attribute : \"c\" [15,17)",
+    "  attr \"x\" [5,17) name=[5,6) = value \"(a ? b) :c\" [7,17)",
     "error BABEL_UnexpectedToken [13,13)"
   ],
   "g1024": [
     "tag \"div\" [1,4) [0,19) open=[0,19) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"\\\"a ? b\\\"\" [7,14)",
-    "  sugar attribute : \"c\" [15,17)"
+    "  attr \"x\" [5,17) name=[5,6) = value \"\\\"a ? b\\\" :c\" [7,17)",
+    "error BABEL_ParseExpressionExpectsEOF [15,15)"
   ],
   "g1025": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
-    "  spread [5,13) \"props\" [8,13)",
-    "  sugar attribute . \"b\" [14,16)"
+    "  spread [5,16) \"props .b\" [8,16)"
   ],
   "g1026": [
     "tag \"div\" [0,3) [0,14) open=[0,14) mode=html concise",
@@ -4799,7 +4743,7 @@
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
     "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
     "  attr \"as\" [9,11) name=[9,11)",
-    "  sugar attribute : \"b\" [12,14)"
+    "  attr default [12,14) name=[12,12) modifier \"b\" [13,14)"
   ],
   "g1072": [
     "tag \"div\" [1,4) [0,30) open=[0,30) mode=html self-closed",
@@ -4905,9 +4849,7 @@
   ],
   "g1093": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
-    "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
-    "  sugar attribute . \"b\" [11,13)",
-    "  sugar attribute . \"c\" [14,16)"
+    "  attr \"x\" [5,16) name=[5,6) = value \"a\\n  .b .c\" [7,16)"
   ],
   "g1094": [
     "tag \"if\" [1,3) [0,18) open=[0,12) close=[13,18) \"if\" mode=html",
@@ -4918,8 +4860,7 @@
   "g1095": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
     "  attr \"x\" [5,8) name=[5,6) = value \"y\" [7,8)",
-    "  spread [9,13) \"a\" [12,13)",
-    "  sugar attribute . \"b\" [14,16)"
+    "  spread [9,16) \"a .b\" [12,16)"
   ],
   "g1096": [
     "tag \"foo\" [1,4) [0,10) open=[0,10) mode=html self-closed",
@@ -4970,7 +4911,7 @@
   "g1106": [
     "tag \"input\" [1,6) [0,18) open=[0,18) mode=void self-closed",
     "  attr \"x\" [7,10) name=[7,8) = value \"1\" [9,10)",
-    "  sugar attribute # \"main\" [11,16)"
+    "  attr \"#main\" [11,16) name=[11,16)"
   ],
   "g1107": [
     "tag \"div\" [0,3) [0,13) open=[0,13) mode=html concise",
@@ -5087,24 +5028,23 @@
   ],
   "g1131": [
     "tag \"div\" [1,4) [0,23) open=[0,23) mode=html self-closed",
-    "  attr \"x\" [5,18) name=[5,6) = value \"(a ? b : c)\" [7,18)",
-    "  sugar attribute : \"d\" [19,21)"
+    "  attr \"x\" [5,21) name=[5,6) = value \"(a ? b : c) :d\" [7,21)",
+    "error BABEL_ParseExpressionExpectsEOF [19,19)"
   ],
   "g1132": [
     "tag \"div\" [1,4) [0,19) open=[0,19) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"[a ? b]\" [7,14)",
-    "  sugar attribute : \"d\" [15,17)",
+    "  attr \"x\" [5,17) name=[5,6) = value \"[a ? b] :d\" [7,17)",
     "error BABEL_UnexpectedToken [13,13)"
   ],
   "g1133": [
     "tag \"div\" [1,4) [0,31) open=[0,31) mode=html self-closed",
-    "  attr \"x\" [5,26) name=[5,6) = value \"a ? (b ? c : d) : e\" [7,26)",
-    "  sugar attribute : \"f\" [27,29)"
+    "  attr \"x\" [5,29) name=[5,6) = value \"a ? (b ? c : d) : e :f\" [7,29)",
+    "error BABEL_ParseExpressionExpectsEOF [27,27)"
   ],
   "g1134": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
-    "  attr \"x\" [5,13) name=[5,6) = value \"`a ? `\" [7,13)",
-    "  sugar attribute : \"d\" [14,16)"
+    "  attr \"x\" [5,16) name=[5,6) = value \"`a ? ` :d\" [7,16)",
+    "error BABEL_ParseExpressionExpectsEOF [14,14)"
   ],
   "g1135": [
     "tag \"foo\" [1,4) [0,9) open=[0,9) mode=html incomplete",
@@ -5195,20 +5135,19 @@
   "g1155": [
     "tag \"p\" [1,2) [0,15) open=[0,3) close=[11,15) \"p\" mode=html",
     "  attribute-tag @z [4,6) [3,11) open=[3,11) mode=html self-closed",
-    "    sugar attribute . \"b\" [7,9)"
+    "    attr \".b\" [7,9) name=[7,9)"
   ],
   "g1156": ["text [3,4)", "error INVALID_CHARACTER [7,7)"],
   "g1157": [
     "tag \"div\" [1,4) [0,15) open=[0,15) mode=html self-closed",
-    "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
-    "  sugar attribute : \"b\" [9,11)",
-    "  attr \"y\" [12,13) name=[12,13)"
+    "  attr \"x\" [5,11) name=[5,6) = value \"a :b\" [7,11)",
+    "  attr \"y\" [12,13) name=[12,13)",
+    "error BABEL_ParseExpressionExpectsEOF [9,9)"
   ],
   "g1158": [
     "tag \"div\" [1,4) [0,24) open=[0,24) mode=html self-closed",
-    "  attr \"x\" [5,16) name=[5,6) = value \"a ? b : c\" [7,16)",
-    "  sugar attribute : \"d\" [17,19)",
-    "  sugar attribute : \"e\" [20,22)"
+    "  attr \"x\" [5,22) name=[5,6) = value \"a ? b : c :d :e\" [7,22)",
+    "error BABEL_ParseExpressionExpectsEOF [17,17)"
   ],
   "g1159": [
     "tag \"div\" [0,3) [0,18) open=[0,14) mode=html concise",
@@ -5223,21 +5162,17 @@
   ],
   "g1161": [
     "tag \"div\" [1,4) [0,15) open=[0,15) mode=html self-closed",
-    "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
-    "  sugar attribute . \"b\" [9,11)",
-    "  sugar attribute . \"c\" [11,13)"
+    "  attr \"x\" [5,13) name=[5,6) = value \"a .b.c\" [7,13)"
   ],
   "g1162": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
-    "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
-    "  sugar attribute . \"b\" [9,11) args \"c\" [12,13)",
-    "  attr \"d\" [15,16) name=[15,16)",
-    "error MX_SUGAR_ARGUMENTS [9,10)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"a .b(c)\" [7,14)",
+    "  attr \"d\" [15,16) name=[15,16)"
   ],
   "g1163": [
     "tag \"div\" [1,4) [0,13) open=[0,13) mode=html self-closed",
     "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
-    "  sugar attribute # \"b\" [9,11)"
+    "  attr \"#b\" [9,11) name=[9,11)"
   ],
   "g1164": [
     "tag \"div\" [1,4) [0,14) open=[0,14) mode=html self-closed",
@@ -5247,13 +5182,13 @@
   ],
   "g1165": [
     "tag \"div\" [1,4) [0,15) open=[0,15) mode=html self-closed",
-    "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
-    "  sugar attribute : \"b\" [9,11) = value \"1\" [12,13)"
+    "  attr \"x\" [5,13) name=[5,6) = value \"a :b=1\" [7,13)",
+    "error BABEL_ParseExpressionExpectsEOF [9,9)"
   ],
   "g1166": [
     "tag \"div\" [1,4) [0,20) open=[0,20) mode=html self-closed",
-    "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
-    "  sugar attribute : \"b\" [9,11) method [11,18) params \"c\" [12,13) body \"d\" [16,17)"
+    "  attr \"x\" [5,18) name=[5,6) = value \"a :b(c) {d}\" [7,18)",
+    "error BABEL_ParseExpressionExpectsEOF [9,9)"
   ],
   "g1167": [
     "tag \"div\" [0,3) [0,13) open=[0,7) mode=html concise incomplete",
@@ -5391,8 +5326,8 @@
   ],
   "g1194": [
     "tag \"div\" [0,3) [0,16) open=[0,15) mode=html concise",
-    "  attr \"x\" [4,12) name=[4,5) = value \"a ?? b\" [6,12)",
-    "  sugar attribute : \"c\" [13,15)"
+    "  attr \"x\" [4,15) name=[4,5) = value \"a ?? b :c\" [6,15)",
+    "error BABEL_ParseExpressionExpectsEOF [13,13)"
   ],
   "g1195": [
     "tag \"div\" [1,4) [0,14) open=[0,14) mode=html self-closed",
@@ -5445,8 +5380,8 @@
   ],
   "g1207": [
     "tag \"div\" [1,4) [0,14) open=[0,14) mode=html self-closed",
-    "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
-    "  sugar attribute : \"b\" [10,12)"
+    "  attr \"x\" [5,12) name=[5,6) = value \"a\\n :b\" [7,12)",
+    "error BABEL_ParseExpressionExpectsEOF [10,10)"
   ],
   "g1208": [
     "tag \"div\" [1,4) [0,15) open=[0,15) mode=html self-closed",
@@ -5466,7 +5401,7 @@
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
     "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
     "  attr \"in\" [9,11) name=[9,11)",
-    "  sugar attribute : \"b\" [12,14)"
+    "  attr default [12,14) name=[12,12) modifier \"b\" [13,14)"
   ],
   "g1212": [
     "tag \"div\" [1,4) [0,26) open=[0,26) mode=html self-closed",
@@ -5714,16 +5649,13 @@
     "error INVALID_INDENTATION [9,9)"
   ],
   "g1265": [
-    "tag \"div\" [1,4) [0,18) open=[0,11) close=[12,18) \"div\" mode=html",
-    "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
-    "  sugar attribute : \"\" [9,10)",
-    "  text [11,12)",
-    "error MX_SUGAR_NAME_MISSING [9,10)"
+    "tag \"div\" [1,4) [0,7) open=[0,7) mode=html incomplete",
+    "  attr \"x\" [5,6) name=[5,6)",
+    "error INVALID_EXPRESSION [7,7)"
   ],
   "g1266": [
     "tag \"div\" [1,4) [0,13) open=[0,13) mode=html self-closed",
-    "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
-    "  sugar attribute . \"b\" [9,11)"
+    "  attr \"x\" [5,11) name=[5,6) = value \"a .b\" [7,11)"
   ],
   "g1267": [
     "tag \"if\" [1,3) [0,15) open=[0,9) close=[10,15) \"if\" mode=html",
@@ -5738,8 +5670,7 @@
   ],
   "g1269": [
     "tag \"div\" [1,4) [0,14) open=[0,14) mode=html self-closed",
-    "  attr \"x\" [5,9) name=[5,6) := value \"a\" [8,9)",
-    "  sugar attribute . \"b\" [10,12)"
+    "  attr \"x\" [5,12) name=[5,6) := value \"a .b\" [8,12)"
   ],
   "g1270": [
     "tag \"div\" [1,4) [0,9) open=[0,9) mode=html incomplete",
@@ -5855,30 +5786,27 @@
   ],
   "g1292": [
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
-    "  attr \"x\" [5,13) name=[5,6) = value \"a ?? b\" [7,13)",
-    "  sugar attribute . \"c\" [14,16)"
+    "  attr \"x\" [5,16) name=[5,6) = value \"a ?? b .c\" [7,16)"
   ],
   "g1293": [
     "tag \"div\" [1,4) [0,15) open=[0,15) mode=html self-closed",
-    "  attr \"x\" [5,10) name=[5,6) = value \"a.b\" [7,10)",
-    "  sugar attribute : \"c\" [11,13)"
+    "  attr \"x\" [5,13) name=[5,6) = value \"a.b :c\" [7,13)",
+    "error BABEL_ParseExpressionExpectsEOF [11,11)"
   ],
   "g1294": [
     "tag \"div\" [1,4) [0,17) open=[0,17) mode=html self-closed",
     "  attr \"x\" [5,8) name=[5,6) = value \"a\" [7,8)",
     "  attr \"[0]\" [9,12) name=[9,12)",
-    "  sugar attribute : \"b\" [13,15)"
+    "  attr default [13,15) name=[13,13) modifier \"b\" [14,15)"
   ],
   "g1295": [
     "tag \"div\" [1,4) [0,17) open=[0,17) mode=html self-closed",
-    "  attr \"x\" [5,12) name=[5,6) = value \"a {b}\" [7,12)",
-    "  sugar attribute : \"c\" [13,15)",
+    "  attr \"x\" [5,15) name=[5,6) = value \"a {b} :c\" [7,15)",
     "error BABEL_ParseExpressionExpectsEOF [9,9)"
   ],
   "g1296": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,11) name=[5,6) = value \"a: b\" [7,11)",
-    "  sugar attribute : \"c\" [12,14)",
+    "  attr \"x\" [5,14) name=[5,6) = value \"a: b :c\" [7,14)",
     "error BABEL_ParseExpressionExpectsEOF [8,8)"
   ],
   "g1297": [
@@ -5891,15 +5819,14 @@
     "error INVALID_REGULAR_EXPRESSION [14,14)"
   ],
   "g1299": [
-    "tag \"div\" [1,4) [0,12) open=[0,12) mode=html self-closed",
-    "  attr \"x\" [5,8) name=[5,6) = value \"1\" [7,8)",
-    "  sugar attribute : \"\" [9,10)",
-    "error MX_SUGAR_NAME_MISSING [9,10)"
+    "tag \"div\" [1,4) [0,10) open=[0,10) mode=html incomplete",
+    "  attr \"x\" [5,6) name=[5,6)",
+    "error INVALID_REGULAR_EXPRESSION [10,10)"
   ],
   "g1300": [
     "tag \"input\" [1,6) [0,28) open=[0,28) mode=void self-closed",
-    "  attr \"type\" [7,19) name=[7,11) = value \"\\\"email\\\"\" [12,19)",
-    "  sugar attribute : \"email\" [20,26)"
+    "  attr \"type\" [7,26) name=[7,11) = value \"\\\"email\\\" :email\" [12,26)",
+    "error BABEL_ParseExpressionExpectsEOF [20,20)"
   ],
   "g1301": [
     "tag \"div\" [1,4) [0,13) open=[0,13) mode=html self-closed",
@@ -5912,7 +5839,7 @@
   ],
   "g1303": [
     "tag \"div\" [1,4) [0,14) open=[0,14) mode=html self-closed",
-    "  attr \"class\" [5,12) name=[5,10)"
+    "  attr \"class\" [5,12) name=[5,10) modifier \"x\" [11,12)"
   ],
   "g1304": [
     "attribute-tag @svg:rect [1,10) [0,12) open=[0,12) mode=html self-closed",
@@ -6799,13 +6726,13 @@
   ],
   "g1498": [
     "tag \"div\" [1,4) [0,15) open=[0,15) mode=html self-closed",
-    "  attr \"x\" [5,10) name=[5,6) = value \"f()\" [7,10)",
-    "  sugar attribute : \"a\" [11,13)"
+    "  attr \"x\" [5,13) name=[5,6) = value \"f() :a\" [7,13)",
+    "error BABEL_ParseExpressionExpectsEOF [11,11)"
   ],
   "g1499": [
     "tag \"div\" [1,4) [0,15) open=[0,15) mode=html self-closed",
-    "  attr \"x\" [5,10) name=[5,6) = value \"(a)\" [7,10)",
-    "  sugar attribute : \"b\" [11,13)"
+    "  attr \"x\" [5,13) name=[5,6) = value \"(a) :b\" [7,13)",
+    "error BABEL_ParseExpressionExpectsEOF [11,11)"
   ],
   "g1500": [
     "tag \"div\" [1,4) [0,7) open=[0,7) mode=html incomplete",
@@ -6814,8 +6741,8 @@
   ],
   "g1501": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html self-closed",
-    "  attr \"x\" [5,11) name=[5,6) = value \"(a)!\" [7,11)",
-    "  sugar attribute : \"b\" [12,14)"
+    "  attr \"x\" [5,14) name=[5,6) = value \"(a)! :b\" [7,14)",
+    "error BABEL_ParseExpressionExpectsEOF [12,12)"
   ],
   "g1502": [
     "tag \"div\" [1,4) [0,20) open=[0,15) mode=html incomplete",
@@ -6844,22 +6771,20 @@
   ],
   "g1507": [
     "tag \"if\" [1,3) [0,16) open=[0,10) close=[11,16) \"if\" mode=html",
-    "  attr default [3,6) name=[3,3) = value \":a\" [4,6)",
-    "  sugar attribute : \"b\" [7,9)",
-    "  text [10,11)"
+    "  attr default [3,9) name=[3,3) = value \":a :b\" [4,9)",
+    "  text [10,11)",
+    "error BABEL_ParseExpressionExpectsEOF [7,7)"
   ],
   "g1508": [
     "tag \"if\" [1,3) [0,17) open=[0,11) close=[12,17) \"if\" mode=html",
-    "  attr default [3,6) name=[3,3) = value \":a\" [4,6)",
-    "  sugar attribute : \"b\" [8,10)",
-    "  text [11,12)"
+    "  attr default [3,10) name=[3,3) = value \":a\\n :b\" [4,10)",
+    "  text [11,12)",
+    "error BABEL_ParseExpressionExpectsEOF [8,8)"
   ],
   "g1509": [
-    "tag \"if\" [1,3) [0,15) open=[0,9) close=[10,15) \"if\" mode=html",
-    "  attr default [3,6) name=[3,3) = value \":a\" [4,6)",
-    "  sugar attribute : \"\" [7,8)",
-    "  text [9,10)",
-    "error MX_SUGAR_NAME_MISSING [7,8)"
+    "tag \"if\" [1,3) [0,4) open=[0,4) mode=html incomplete",
+    "  attr default [3,3) name=[3,3)",
+    "error INVALID_EXPRESSION [4,4)"
   ],
   "g1510": [
     "tag \"if\" [1,3) [0,16) open=[0,10) close=[11,16) \"if\" mode=html",
@@ -6885,9 +6810,9 @@
   ],
   "g1514": [
     "tag \"if\" [1,3) [0,17) open=[0,11) close=[12,17) \"if\" mode=html",
-    "  attr default [3,7) name=[3,3) = value \":a\" [5,7)",
-    "  sugar attribute : \"b\" [8,10)",
-    "  text [11,12)"
+    "  attr default [3,10) name=[3,3) = value \":a :b\" [5,10)",
+    "  text [11,12)",
+    "error BABEL_ParseExpressionExpectsEOF [8,8)"
   ],
   "g1515": [
     "tag \"if\" [1,3) [0,18) open=[0,12) close=[13,18) \"if\" mode=html",
@@ -6897,10 +6822,9 @@
   ],
   "g1516": [
     "tag \"if\" [1,3) [0,19) open=[0,13) close=[14,19) \"if\" mode=html",
-    "  attr default [3,6) name=[3,3) = value \":a\" [4,6)",
-    "  sugar attribute : \"b\" [7,9)",
-    "  sugar attribute : \"c\" [10,12)",
-    "  text [13,14)"
+    "  attr default [3,12) name=[3,3) = value \":a :b :c\" [4,12)",
+    "  text [13,14)",
+    "error BABEL_ParseExpressionExpectsEOF [7,7)"
   ],
   "g1517": [
     "tag \"div\" [0,3) [0,18) open=[0,11) mode=html concise",
@@ -6943,7 +6867,7 @@
   ],
   "g1525": [
     "tag \"div\" [1,4) [0,15) open=[0,15) mode=html self-closed",
-    "  sugar attribute : \"foo\" [5,9) = value \"\\\"x\\\"\" [10,13)"
+    "  attr default [5,13) name=[5,5) modifier \"foo\" [6,9) = value \"\\\"x\\\"\" [10,13)"
   ],
   "g1526": [
     "tag \"div\" [1,4) [0,16) open=[0,16) mode=html incomplete",
@@ -6952,9 +6876,7 @@
   ],
   "g1527": [
     "tag \"div\" [1,4) [0,19) open=[0,19) mode=html self-closed",
-    "  attr \"x\" [5,14) name=[5,6) = value \"/* c */\" [7,14)",
-    "  sugar attribute : \"a\" [15,17)",
-    "error BABEL_ParseExpressionEmptyInput [14,14)"
+    "  attr \"x\" [5,17) name=[5,6) = value \"/* c */ :a\" [7,17)"
   ],
   "g1528": [
     "tag \"div\" [1,4) [0,17) open=[0,17) mode=html self-closed",
@@ -7290,7 +7212,7 @@
     "tag \"div\" [1,4) [0,18) open=[0,18) mode=html self-closed",
     "  attr \"x\" [5,10) name=[5,6) = value \"(x)\" [7,10)",
     "  attr \"of\" [11,13) name=[11,13)",
-    "  sugar attribute : \"a\" [14,16)"
+    "  attr default [14,16) name=[14,14) modifier \"a\" [15,16)"
   ],
   "g1601": [
     "tag \"div\" [1,4) [0,23) open=[0,23) mode=html self-closed",
@@ -7305,7 +7227,7 @@
   "g1603": [
     "tag \"div\" [0,3) [0,10) open=[0,10) mode=html concise",
     "  attr \"x\" [4,7) name=[4,5) = value \"a\" [6,7)",
-    "  sugar attribute # \"b\" [8,10)"
+    "  attr \"#b\" [8,10) name=[8,10)"
   ],
   "g1604": [
     "tag \"p\" [1,2) [0,20) open=[0,3) close=[16,20) \"p\" mode=html",
@@ -7327,8 +7249,8 @@
   ],
   "g1608": [
     "tag \"div\" [1,4) [0,23) open=[0,23) mode=html self-closed",
-    "  attr \"x\" [5,18) name=[5,6) = value \"c ? :a : :b\" [7,18)",
-    "  sugar attribute : \"d\" [19,21)"
+    "  attr \"x\" [5,21) name=[5,6) = value \"c ? :a : :b :d\" [7,21)",
+    "error BABEL_ParseExpressionExpectsEOF [19,19)"
   ],
   "g1609": [
     "tag \"div\" [0,3) [0,14) open=[0,14) mode=html concise",
@@ -7827,8 +7749,7 @@
   "g1715": [
     "tag unnamed [0,0) [0,11) open=[0,11) mode=html concise",
     "  args \"a\" [1,2)",
-    "  sugar attribute : \"É\" [4,6) = value \"> a\" [8,11)",
-    "error MX_SUGAR_NAME_INVALID [4,5)",
+    "  attr default [4,11) name=[4,4) modifier \"É\" [5,6) = value \"> a\" [8,11)",
     "error BABEL_UnexpectedToken [8,8)"
   ],
   "g1716": [

@@ -1,9 +1,9 @@
 /**
  * The atoms-and-sugars dialect's rows (`lang-ext-move-sugars-to-mesh`,
  * slice a1): MX's atoms (decision 156) and name sugars (decision 146) as
- * layer-2 syntax-table rows. The parser's differential tests
- * (`mx-sugar-module.test.ts`) run the atom and after-value corpora through
- * them.
+ * layer-2 syntax-table rows. Core has no name sugars of its own; these
+ * rows are test fixtures. `mx-sugar-module.test.ts` runs the atom corpora
+ * through the atom row.
  *
  * The attribute rows' matchers take exactly the attribute-name extent the
  * built-in lexer gives a static sugar (`#a.b:c`, `.c:b`, `::x`, `:a:b`,
@@ -24,16 +24,15 @@
  *   (the bound operator) and never a trailing `:`.
  *
  * The first character after the sigil decides whether the row arms at all,
- * which is also what `terminatesValue` reads after a value, so each row
- * starts with the character the built-in after-value rule accepts:
+ * which is also what `terminatesValue` reads after a value:
  *
  * - `NAME` (`:`): an ASCII identifier start (`isIdentStartCode`), or `:`
  *   and one (`::x`, so the hook can name it reserved); bare `:` never
- *   matches, `:1a` and `:é` stay built-in;
- * - `CLASS` (`.`): a name start (`isNameStartAt`: a word character that is
+ *   matches, `:1a` and `:é` stay plain attribute names;
+ * - `CLASS` (`.`): a name start (a word character that is
  *   not an ASCII digit; written as letters, `$`, `_`, ID_Start, Mn, Mc, Pc,
  *   ZWNJ and ZWJ, which leaves out the rare non-ASCII decimal digits and
- *   Other_ID_Continue), so `x=a .5` stays one value and `.1` stays built-in;
+ *   Other_ID_Continue), so `x=a .5` stays one value and `.1` stays plain;
  * - `ID` (`#`): any body item, since `#` never continues a value (`#1a`
  *   matches).
  */

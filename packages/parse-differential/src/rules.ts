@@ -18,12 +18,12 @@ export const RULES: readonly Rule[] = [
   {
     id: "rejoin-attribute-name",
     row: "A2",
-    what: "Marko's `name` + `modifier` (the split at the last `:`) are compared field by field against MX's `name`, `modifier` and `modifierSpan` (decision 163 addendum 12: MX's `name` is the head, like Marko's); a sugar chain still rejoins (A6)",
+    what: "Marko's `name` + `modifier` (the split at the last `:`) are compared field by field against MX's `name`, `modifier` and `modifierSpan` (MX's `name` is the head, like Marko's)",
   },
   {
     id: "default-attribute",
     row: "A3",
-    what: "an attribute Marko names `value` with `default: true` is the default value (`name: null`); with a modifier it is the attribute-position `:` sugar",
+    what: "an attribute Marko names `value` with `default: true` is the default value (`name: null`); with a modifier (`:x`) it is the default value's `value:x`, its modifier span right after the `:`",
   },
   {
     id: "unmerge-shorthands",
@@ -34,11 +34,6 @@ export const RULES: readonly Rule[] = [
     id: "unnamed-tag",
     row: "A5",
     what: "a tag Marko named `div` over an empty name span is the unnamed tag",
-  },
-  {
-    id: "split-name-sugar",
-    row: "A6",
-    what: "a static tag name, a tag shorthand value and an attribute-position sugar chain split at the first `:` (and a chain at `.`/`#`) into their sugar parts",
   },
   {
     id: "attribute-tags-in-place",
@@ -76,11 +71,6 @@ export const RULES: readonly Rule[] = [
     what: "a dynamic name is compared by its authored text",
   },
   {
-    id: "sugar-arguments",
-    row: "A6 (decision 163 addendum 11)",
-    what: "arguments Marko keeps on an attribute named `.c`, `#x` or `:x` are the `args` of that chain's last sugar part",
-  },
-  {
     id: "template-error",
     row: "A10",
     what: "Marko throws the template parser's error with a code frame; its message and range are the MX template error's",
@@ -93,7 +83,7 @@ export const RULES: readonly Rule[] = [
  */
 export const NOT_COMPARED: readonly string[] = [
   "tag-position shorthand spans: Marko merges `#id`/`.class` into loc-less `class`/`id` attributes (A4), so only their text and order within a sigil are compared",
-  "the order of tag-position sugar across sigils: the merge loses it; both sides list ids, then classes, then `:`",
+  "the order of tag-position shorthands across sigils: the merge loses it; both sides list ids, then classes",
   "a dynamic tag name's span and container: Marko's whole-template name keeps no position through the clone (A17); compared by text",
   "a dynamic shorthand's spans: merged without loc (A4); compared by text",
   "atoms inside an expression Babel could not parse: today's tree holds the raw text (`MarkoParseError`), not the atom",
@@ -107,44 +97,6 @@ export function rejoinAttributeName(
   modifier: string | null | undefined,
 ): string {
   return modifier == null ? name : `${name}:${modifier}`;
-}
-
-/**
- * A6 and ast §3.6 rule 1: a static sugar value splits at its first `:`
- * (outside `${…}`); returns the value and the `:` part, if any.
- */
-export function splitAtFirstColon(value: string): [string, string | undefined] {
-  let depth = 0;
-  for (let at = 0; at < value.length; at++) {
-    const char = value[at];
-    if (char === "$" && value[at + 1] === "{") {
-      depth++;
-      at++;
-    } else if (depth > 0 && char === "{") depth++;
-    else if (depth > 0 && char === "}") depth--;
-    else if (depth === 0 && char === ":")
-      return [value.slice(0, at), value.slice(at + 1)];
-  }
-  return [value, undefined];
-}
-
-/** A6: an attribute-position chain `.c#m.d` into its `.`/`#` parts, outside `${…}`. */
-export function splitChain(name: string): { sigil: string; word: string }[] {
-  const parts: { sigil: string; word: string }[] = [];
-  let depth = 0;
-  for (let at = 0; at < name.length; at++) {
-    const char = name[at] as string;
-    if (depth === 0 && (char === "." || char === "#")) {
-      parts.push({ sigil: char, word: "" });
-      continue;
-    }
-    if (char === "$" && name[at + 1] === "{") depth++;
-    else if (depth > 0 && char === "{") depth++;
-    else if (depth > 0 && char === "}") depth--;
-    const current = parts[parts.length - 1];
-    if (current) current.word += char;
-  }
-  return parts;
 }
 
 /** A12: a Marko `{ line, column }` (1-based line) to a file offset. */

@@ -60,20 +60,6 @@ describe("a whole-value atom is a static attribute carrying `atom`", () => {
     });
   });
 
-  it.each([
-    ["<string :title/>", span(8, 14)],
-    ["<string:title/>", span(7, 13)],
-    ["string :title\n", span(7, 13)],
-  ])("the sugar-derived name: %j", (source, atomSpan) => {
-    expect(attr(tag(source, "string"), "name")).toMatchObject({
-      kind: "static",
-      name: "name",
-      value: "title",
-      nameSpan: atomSpan,
-      atom: { kind: "atom", name: "title", span: atomSpan },
-    });
-  });
-
   it('a string is no atom: `name="title"`', () => {
     const a = attr(tag('<string name="title"/>', "string"), "name");
     expect(a).toMatchObject({ kind: "static", value: "title" });
@@ -147,17 +133,17 @@ describe("atoms in a method-shorthand body (lead ruling 2026-10-05)", () => {
  */
 describe("Mesh's syntax-v3 lines", () => {
   const SOURCE = [
-    'entity :Invoice table="invoices"',
+    'entity name=:Invoice table="invoices"',
     "  attributes",
-    "    uuid :id primary-key",
-    "    timestamp :createdAt on=:create",
-    "    string :status default=:draft values=[:draft, :sent]",
+    "    uuid name=:id primary-key",
+    "    timestamp name=:createdAt on=:create",
+    "    string name=:status default=:draft values=[:draft, :sent]",
     "  policy accept=[:number] auto=[:read, :destroy] types=[:read] actions=[:pay] load=[:customer] sort=[:dueOn] require=[:id]",
-    "  action :pay on:load=:visible",
+    "  action name=:pay on:load=:visible",
     "    check that=({ self }) => self.status === :sent",
     "    check that=({ self }) => self.status !== :cancelled",
     "  set",
-    "    :status=:sent",
+    "    object name=:status value=:sent",
     "",
   ].join("\n");
 
@@ -187,44 +173,26 @@ describe("Mesh's syntax-v3 lines", () => {
       'check that=({ self }) => self.status === "sent"',
       'check that=({ self }) => self.status !== "cancelled"',
       "set",
-      // Tagless `:status=:sent` under `set`: the default tag, `name` from the
-      // sugar and the default value, both atoms.
       "object name=:status value=:sent",
     ]);
   });
 
-  // Decision 146 addendum 5: a default value that is a single atom takes a
-  // following ` :name` as name sugar (an atom takes no member access).
+  // Stock Marko: a value does not end at whitespace before ` :name`, so the
+  // value is two expressions, "Expected a single expression, but found `:`
+  // after it.", at the `:` (probed: `<has-many=a :y/>`, `<div x=a :b/>`). A
+  // value that is one atom is no exception.
   it.each([
-    [
-      "x\n  belongs-to=:Customer :customer\n",
-      "belongs-to value=:Customer name=:customer",
-    ],
-    ["x\n  has-many=:Order :orders\n", "has-many value=:Order name=:orders"],
-    ["<x><has-many=:Order :orders/></x>", "has-many value=:Order name=:orders"],
-    [
-      "x\n  belongs-to=:Customer :customer required\n",
-      "belongs-to value=:Customer name=:customer required",
-    ],
-  ] as const)(
-    "a single-atom default value then `:name` is name sugar: %j",
-    (source, expected) => {
-      const found = tags(ok(source).body).find((t) => t.name !== "x");
-      expect(found && line(found)).toBe(expected);
-    },
-  );
-
-  it("a non-atom default value then `:name` is still the decision-151 error", () => {
-    const result = lowerSource("x\n  belongs-to=a :customer\n", "/t.mx");
+    ["x\n  belongs-to=a :customer\n", 2, 15],
+    ["x\n  belongs-to=:Customer :customer\n", 2, 23],
+    ["<x><has-many=:Order :orders/></x>", 1, 20],
+    ["x\n  tag y=:a :b\n", 2, 11],
+  ] as const)("%j is Marko's error at the `:`", (source, line, column) => {
+    const result = lowerSource(source, "/t.mx");
     expect(result.ir).toBeUndefined();
     expect(result.diagnostics[0]?.message).toContain(
-      "right after a default value is not supported",
+      "Expected a single expression, but found `:` after it.",
     );
-    expect(result.diagnostics[0]).toMatchObject({ line: 2, column: 15 });
-  });
-
-  it("`:name` after a single-atom value on a non-default attribute is unchanged", () => {
-    expect(lowerSource("x\n  tag y=:a :b\n", "/t.mx").diagnostics).toEqual([]);
+    expect(result.diagnostics[0]).toMatchObject({ line, column });
   });
 });
 

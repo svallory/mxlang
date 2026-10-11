@@ -65,7 +65,7 @@ export function Team(props: { members: Member[] }) {
 
   return (
     <section#team.panel>
-      <input:q.search type="search" value=query() onInput(event) { setQuery(event.currentTarget.value); }/>
+      <input.search name="q" type="search" value=query() onInput(event) { setQuery(event.currentTarget.value); }/>
       <Table rows=shown()>
         <@head>
           <th>Name</th>
@@ -91,7 +91,7 @@ What changed:
 
 - **`<@head>`, `<@row|member|>`, `<@empty>` are `Table`'s props.** These are [attribute tags](/language/attribute-tags-and-params/): a prop that holds markup is written as markup. MX wraps each in the accessor Solid needs, so the `() =>` and the `(member) => () =>` are gone. `Table` declares them with `AttrTag`, so each is checked against its props type.
 - **`<if>` / `<else>` and `<for>`** compile to `<Show>` and `<For>`. You do not import either.
-- **`<section#team.panel>` and `<input:q.search>`** are `id`, `class` and `name`.
+- **`<section#team.panel>` and `<input.search>`** are `id` and `class`.
 - **`onInput(event) { … }`** is a handler written as a method.
 
 Signals are read the way Solid reads them: `query()` in the markup is a tracked read.

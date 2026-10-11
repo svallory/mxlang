@@ -793,104 +793,9 @@ front — otherwise the attribute is emitted twice and the second wins
 `style=` accepts an **object literal only**: `style={color: c()}` →
 `style={{color: c()}}`. Any other `style=` expression is a parse error in MX 1.
 
-### Name sugar: `:name`, `#id` and `.class` anywhere on a tag
-
-**Decisions 146 and 151; [ADR 146](/design-notes/adr-name-sugar/).** `:val` sets
-`name="val"`, as `#val` sets `id="val"` and `.val` sets `class="val"`. All three
-work in three positions, in HTML and concise mode alike:
-
-| Position | Example | Result |
-|---|---|---|
-| tag-adjacent | `<input:email>`, `<a.c:b#d>`, `<:email>` | the tag plus the attributes written out; `<:email>` is the unnamed tag (decision 145) with `name="email"` |
-| first attribute | `<input :email type="email">` | `name="email"` first |
-| after any attribute | `<input type="email" :email>`, `<input x="1" #main .big>` | the attribute at its written position |
-
-`:name` takes an identifier (`[A-Za-z_$][\w$-]*`). `#x` and `.x` take exactly what
-Marko's shorthand takes, in every position: a run of characters up to
-whitespace, `=`, `(`, `/`, `|`, `<`, `,` or `>`, with `.` and `#` starting the
-next part (read from htmljs-parser's own rule and probed against it, so
-`<div #1a>` is `<div#1a>` and `.é` works in both positions; a purely numeric class part (the tail of a split like `.w-1.5`) is decision 174's error (see below); a chain
-such as `.c#m.d` splits like a tag-adjacent one; a dynamic shorthand, `.a${x}`,
-works only tag-adjacent: `<div.a${x}>`). `name` is then an ordinary attribute, so contracts,
-the duplicate-attribute rule (decision 135) and E1 types all apply.
-
-**Decision 174 — two shorthand diagnostics.** The rules above do not change,
-but the silent wrong outputs get positioned errors, each with the way out:
-
-- A part with an unbalanced `[` or `]` (`.bg-[#fff]` would read as the class
-  `bg-[` and the id `fff]`; `.data-[state=open]:flex`, `.bg-[url('/x.png')]`,
-  `.[&>*]:p-4` and `.w-[calc(100%-2rem)]` die in Marko's group reader with
-  "Mismatched group" or "Missing ending tag") is one error at the part:
-  a class or id part cannot hold an unbalanced bracket; use `class="…"`.
-- A class part that is purely numeric — the tail of a `.` split, as in
-  `.w-1.5`, which would read as the classes `w-1` and `5` — is the same error
-  at the part. A digit-leading but non-numeric part (`.2xl` is the class
-  `2xl`) stays valid, as it was before decision 174. `#1a` — an id part
-  starting with a digit — stays valid.
-- A `/` right after a shorthand followed by a non-identifier (`.w-1/2`) keeps
-  its error, but the text names the shorthand instead of Marko's tag-variable
-  read: a `/` after a class or id shorthand starts a tag variable; write the
-  class as `class="…"`.
-
-`.hover:bg-red` stays valid name sugar (decision 146) with no diagnostic.
-
-**Tag-adjacent sugars compose in any order** (23:23 addendum): `<a.c:b>` is class
-`c` and name `b`; `<a#d:b.c>` is id `d`, name `b`, class `c`; `<:b.c>` is the
-unnamed tag with name `b` and class `c`. A static tag name splits at its first
-`:`; the static part of a shorthand `class`/`id` value splits the same way (a
-dynamic shorthand splits only its static tail: `<a.${x}:b>` is a dynamic class
-and name `b`; a `:` before a `${…}`, `<a.c:b${x}>`, is a positioned error). **A second `:` in the
-tag head is a positioned error**: a tag takes one name (`<a:b.c:d>`). The split
-is post-parse, so the parser still sees `tag:rest` as the name: in HTML mode a
-void element needs its `/>` (`<input:email type="email"/>`) and the closing tag
-repeats the written name (`</div:x>`) or is `</>`; concise mode is unaffected.
-
-**In attribute position** `#x`, `.x` and `:x` are rewritten to `id`, class and
-`name` before the shorthand merge, so `<div.a #m .b>` is exactly
-`<div.a.b#m>` and `.x` values are space-joined. **Class order, one rule:** with a
-tag-adjacent class, `.x` joins it, ahead of an authored `class=`
-(`<div.c class="x" .d>` is `<div.c.d class="x">`); with none, `.x` and an authored
-`class=` keep their written order (`<div class="a" .b>` is `a b`, `<div .b
-class="a">` is `b a`), and a falsy authored literal (`false`, `0`, `null`,
-`undefined`) drops out as Marko's class value does. And `#x` or `:x` repeated or beside an explicit `id=`/`name=`
-follow the duplicate rule (the later one wins, with a warning). **A sugar followed
-directly by `=value` or `(params) { body }` sets the tag's default attribute**
-(decision 146 addendum 4): `<a #x=1>` is `id="x"` plus `value=1`, and `kind
-#name(p) { b }`, `kind #name (p) { b }` and `kind (p) { b } #name` are the same
-tag, `id="name"` plus `value=function`; `:name` and `.class` work the same way.
-(`(` and `=` cannot be part of a sugar, so the space after it is optional.) A tag
-that already has a default value (`kind=1 #x=2`, `<if=a #x=b>`, two sugars with
-values) is a positioned error at the second one (a bound `value:=y` is a default value too; two authored `value=` alone stay decision 135's warning, but with any sugar value beside them the error lands on the second authored one). On Angular, attribute-position `#x=1` is still the template reference, not this sugar. Tag-adjacent `=value` (`<a#x=1>`) is Marko's own default attribute, so a second plain `value=` beside it is decision 135's warning there. A bound `:=` right after a sugar (`:n:=y`, `#x:=y`, `.c:=y`) is a positioned error: `a bound value is not supported on name sugar; write name=... value:=...`. A `:name` that is not an identifier, and `:b:c` (two names) or
-`:b(x)`, `#x(p)` and `.c(p)` (arguments without a body), and a bare `:` ("`:` is name sugar and needs a name"; Marko would have read it as `value:`, which is written `value:` here) are positioned errors. A `:name` on a **statement tag** (`<import:x/>`, `<export:x/>`, `<static:x/>`, `<client:x/>`, `<server:x/>`, `<class:x/>`) is a positioned error on the colon too: a statement tag — whatever the parse calls a statement (`import`, `export`, `static`, `client`, `server`, `class` in the core taglib) — is code, not a tag with a name, so its text is not attributes (a statement written without angle brackets is still left completely alone). Which tags count as statements is the parse's own lookup (`getTag(name).parseOptions.statement`), so a data dialect that makes `class` an ordinary tag keeps the sugar on `<class:x/>`. Marko rejects these too, but reads `<import:x/>` as a custom tag called `import:x` and reports that it cannot find an entry point for it; MX reports the sugar-specific message instead.
-
-**Left alone:** the named forms (`class:x`, `style:x`, `value:fn:=x`, and the
-explicit `value:x`), a dynamic tag name
-(`<${x}>`), a bound attribute, and the
-**default attribute**: sugar right after a default value (`<if=a .b>`,
-`<const/x=items\n  .filter()/>`) keeps Marko's meaning, and `:name` there is one
-error ("sugar right after a default value is not supported; put it before
-the value or on the tag") on every parser. The one exception is a default value that is a single atom: `belongs-to=:Customer :customer` is `value` (the atom `Customer`) plus `name` (the atom `customer`), since an atom takes no member access (decision 146, addendum 5).
-
-**Hosts.** Every host applies the sugar, Angular included (decision 146,
-addendum 3). The one host-owned exception is attribute-position `#x` on Angular,
-which stays Angular's template reference (`<div #ref>`); tag-adjacent `<div#x>`
-is the id sugar there too, and `:name` and `.class` apply in every position.
-`<svg:rect>` is the tag `svg` plus `name="rect"` on every target: Angular's
-`svg:`-prefixed element form is not available in MX (wrap in `<svg>`).
-
-**Attribute tags.** An attribute tag's name is a property key, not an element, so
-`<@svg:rect>` is not split; attribute-position sugar on one does apply
-(`<@z .b>` gives `class="b"`).
-
-**Consumers on a stock parser.** The after-attribute positions need the patched
-`htmljs-parser` (a `patchedDependencies` entry of this repo). On a stock parser
-`<input type="email" :email>` fails; core probes the installed parser once and
-raises a positioned error naming the rule, the requirement and the way out
-(`<input:email type="email">`). `x=a.b .c` is silently member access there and
-is not detected. Tag-adjacent and first-position sugars work everywhere.
-
-Divergences from Marko: four rows in `divergences.md` (a `:` in a tag name, bare
-`:x` as `name`, the parser's after-value rule, a `:` in a shorthand class or id).
+Name sugars (`:name` for `name="…"`, `#id` and `.class` among the attributes,
+a `:` in a tag head) are a syntax module's, such as Mesh's, not core's: core
+reads those forms as Marko does ([Attributes](/language/attributes/#attributes-a-colon-and-id-or-class-after-a-space)).
 
 ### Atoms: `:name` as a value
 
@@ -918,11 +823,6 @@ own `:` is never the ternary's, so `a ? :b :c` is `a ? "b" : c`. Atoms are never
 read in `static`/`import`/`export` blocks, scriptlets, tag
 params, strings, template text, regular expressions or comments.
 
-**The name sugar is an atom standing alone in attribute position**: `:email`
-sets `name="email"` (above), and that `name` keeps its atom-ness in the IR,
-`lowerSource`'s included (addendum 1, item 2). `x=:a :b` is the atom value `x="a"` plus
-`name="b"`.
-
 **Atoms in contracts.** A contract attribute declared `{ type: "atom" }`
 accepts a whole-value atom a syntax module built, or a literal list of them. An
 atom where the contract says `string`, and a string where it says `atom`, are
@@ -947,8 +847,7 @@ too: it parses with the MX front end and MX's template parser (decisions 158,
 159), never a stock htmljs-parser.
 
 **IR.** An attribute whose whole value is one atom is a `static`
-attribute carrying `atom: { kind: "atom", name, span }`, the sugar `name`
-included. An atom nested in an expression is a `StringLiteral` whose
+attribute carrying `atom: { kind: "atom", name, span }`. An atom nested in an expression is a `StringLiteral` whose
 `extra.mxAtom` is `{ span }` and whose `Expr.atoms` lists it (see
 [the IR spec](/architecture/ir-spec/)).
 
@@ -3826,10 +3725,9 @@ language-extension design ([design notes](/design-notes/language-extensions/));
 it is not the "L2" of §9.1, which names a custom tag's sidecar. The design pages
 stay as the argument; this section states what is.
 
-**Atoms and the name sugars are not rows of this table.** `:name` as a value,
-`:name` and the spaced `#id`/`.class` on a tag are core today (§4). Decisions 183
-and 196 move them to Mesh's dialect before the beta; until that lands they
-are specified where they are, and a table cannot express them.
+**Atoms are not rows of this table.** `:name` as a value is core today (§4)
+and moves to Mesh's dialect before the beta; until that lands it is specified
+where it is, and a table cannot express it.
 
 #### 13.9.1 The table
 
@@ -4288,13 +4186,13 @@ its `(` (or its `<` for type parameters), so neither `async` nor the trigger is
 part of the value's text. `async` with no method after it stays an ordinary
 boolean attribute. A module that has no meaning for an async method refuses it
 with `ctx.fail`, naming the form: Mesh's dialect does, with `` `async :name(…) { … }` is not supported:
-a `:name` method value cannot be async; remove `async` `` at the `:name`. Core's
-built-in `:name` sugar never sees one: there `async` stays an attribute, and a
-contract that does not declare it reports `` `<kind>`: unknown attribute `async` ``.
+a `:name` method value cannot be async; remove `async` `` at the `:name`. Without
+such a module `async` stays an ordinary attribute, and a contract that does not
+declare it reports `` `<kind>`: unknown attribute `async` ``.
 
 **One pass, in source order.** All of a document's triggers lower in one pass
-before anything reads the tree (right after the atom conversion, before name
-sugar and before contracts are checked), and a trigger lowers once: a second walk over the same document (the
+before anything reads the tree (right after the atom conversion, before contracts
+are checked), and a trigger lowers once: a second walk over the same document (the
 scratch walk that runs a custom tag's `analyze`) calls no hook twice. Order is
 source order, a tag's attributes before its body, and a trigger's own `=value`
 before the trigger that owns it. The parsed tree stays as parsed. The lowered

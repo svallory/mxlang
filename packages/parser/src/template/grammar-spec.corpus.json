@@ -4596,8 +4596,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-8 \"=a\" bound=false value=7-8 \"a\"",
-      "AttrName 9-11 \":b\"",
+      "AttrValue 6-11 \"=a :b\" bound=false value=7-11 \"a :b\"",
       "OpenTagEnd 11-13 \"/>\" selfClosed=true"
     ]
   },
@@ -4609,8 +4608,7 @@
       "OpenTagName 1-3 \"if\" quasis=[1-3 \"if\"] expressions=[]",
       "AttrName 3-3 \"\"",
       "Atom 4-6 \"0.\" value=5-6 \"a\"",
-      "AttrValue 3-6 \"=0.\" bound=false value=4-6 \"0.\"",
-      "AttrName 7-9 \":b\"",
+      "AttrValue 3-9 \"=0. :b\" bound=false value=4-9 \"0. :b\"",
       "OpenTagEnd 9-10 \">\" selfClosed=false",
       "Error 0-10 22 \"Missing ending \\\"if\\\" tag\""
     ]
@@ -4644,9 +4642,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-8 \"=a\" bound=false value=7-8 \"a\"",
-      "AttrName 9-10 \":\"",
-      "OpenTagEnd 10-12 \"/>\" selfClosed=true"
+      "Error 10-10 9 \"EOF reached while parsing regular expression\""
     ]
   },
   {
@@ -4679,8 +4675,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-10 \"=a.b\" bound=false value=7-10 \"a.b\"",
-      "AttrName 11-13 \".c\"",
+      "AttrValue 6-13 \"=a.b .c\" bound=false value=7-13 \"a.b .c\"",
       "OpenTagEnd 13-15 \"/>\" selfClosed=true"
     ]
   },
@@ -4703,8 +4698,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-13 \"=a ?? b\" bound=false value=7-13 \"a ?? b\"",
-      "AttrName 14-16 \":c\"",
+      "AttrValue 6-16 \"=a ?? b :c\" bound=false value=7-16 \"a ?? b :c\"",
       "OpenTagEnd 16-18 \"/>\" selfClosed=true"
     ]
   },
@@ -4715,8 +4709,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-12 \"=a ?.b\" bound=false value=7-12 \"a ?.b\"",
-      "AttrName 13-15 \":c\"",
+      "AttrValue 6-15 \"=a ?.b :c\" bound=false value=7-15 \"a ?.b :c\"",
       "OpenTagEnd 15-17 \"/>\" selfClosed=true"
     ]
   },
@@ -6723,8 +6716,7 @@
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
       "Atom 7-11 \"0.00\" value=8-11 \"new\"",
-      "AttrValue 6-11 \"=0.00\" bound=false value=7-11 \"0.00\"",
-      "AttrName 12-14 \":b\"",
+      "AttrValue 6-14 \"=0.00 :b\" bound=false value=7-14 \"0.00 :b\"",
       "OpenTagEnd 14-16 \"/>\" selfClosed=true"
     ]
   },
@@ -6736,8 +6728,7 @@
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
       "Atom 7-14 \"0.00000\" value=8-14 \"typeof\"",
-      "AttrValue 6-14 \"=0.00000\" bound=false value=7-14 \"0.00000\"",
-      "AttrName 15-17 \":b\"",
+      "AttrValue 6-17 \"=0.00000 :b\" bound=false value=7-17 \"0.00000 :b\"",
       "OpenTagEnd 17-19 \"/>\" selfClosed=true"
     ]
   },
@@ -6771,9 +6762,8 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-10 \"=(a)\" bound=false value=7-10 \"(a)\"",
-      "AttrName 11-13 \":T\"",
-      "Error 15-15 3 \"Missing value for attribute\""
+      "AttrValue 6-18 \"=(a) :T => a\" bound=false value=7-18 \"(a) :T => a\"",
+      "OpenTagEnd 18-20 \"/>\" selfClosed=true"
     ]
   },
   {
@@ -6816,8 +6806,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-11 \"=a?.b\" bound=false value=7-11 \"a?.b\"",
-      "AttrName 12-14 \":c\"",
+      "AttrValue 6-14 \"=a?.b :c\" bound=false value=7-14 \"a?.b :c\"",
       "OpenTagEnd 14-16 \"/>\" selfClosed=true"
     ]
   },
@@ -6871,8 +6860,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-9 \"=a!\" bound=false value=7-9 \"a!\"",
-      "AttrName 10-12 \".c\"",
+      "AttrValue 6-12 \"=a! .c\" bound=false value=7-12 \"a! .c\"",
       "OpenTagEnd 12-14 \"/>\" selfClosed=true"
     ]
   },
@@ -6883,8 +6871,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-11 \"=/re/\" bound=false value=7-11 \"/re/\"",
-      "AttrName 12-14 \".c\"",
+      "AttrValue 6-14 \"=/re/ .c\" bound=false value=7-14 \"/re/ .c\"",
       "OpenTagEnd 14-16 \"/>\" selfClosed=true"
     ]
   },
@@ -6963,9 +6950,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-8 \"=a\" bound=false value=7-8 \"a\"",
-      "AttrName 9-11 \":b\"",
-      "AttrName 12-14 \":c\"",
+      "AttrValue 6-14 \"=a :b :c\" bound=false value=7-14 \"a :b :c\"",
       "OpenTagEnd 14-16 \"/>\" selfClosed=true"
     ]
   },
@@ -6989,8 +6974,7 @@
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
       "Atom 7-9 \"0.\" value=8-9 \"a\"",
-      "AttrValue 6-9 \"=0.\" bound=false value=7-9 \"0.\"",
-      "AttrName 10-12 \":b\"",
+      "AttrValue 6-12 \"=0. :b\" bound=false value=7-12 \"0. :b\"",
       "OpenTagEnd 12-14 \"/>\" selfClosed=true"
     ]
   },
@@ -7049,8 +7033,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-6 \"input\" quasis=[1-6 \"input\"] expressions=[]",
       "AttrName 7-11 \"type\"",
-      "AttrValue 11-19 \"=\\\"email\\\"\" bound=false value=12-19 \"\\\"email\\\"\"",
-      "AttrName 20-26 \":email\"",
+      "AttrValue 11-26 \"=\\\"email\\\" :email\" bound=false value=12-26 \"\\\"email\\\" :email\"",
       "OpenTagEnd 26-27 \">\" selfClosed=false"
     ]
   },
@@ -7201,8 +7184,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-6 \"input\" quasis=[1-6 \"input\"] expressions=[]",
       "AttrName 7-8 \"x\"",
-      "AttrValue 8-12 \"=a.b\" bound=false value=9-12 \"a.b\"",
-      "AttrName 13-15 \".c\"",
+      "AttrValue 8-15 \"=a.b .c\" bound=false value=9-15 \"a.b .c\"",
       "OpenTagEnd 15-17 \"/>\" selfClosed=true"
     ]
   },
@@ -7257,9 +7239,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-6 \"input\" quasis=[1-6 \"input\"] expressions=[]",
       "AttrName 7-8 \"x\"",
-      "AttrValue 8-10 \"=1\" bound=false value=9-10 \"1\"",
-      "AttrName 11-12 \":\"",
-      "OpenTagEnd 12-14 \"/>\" selfClosed=true"
+      "Error 12-12 9 \"EOF reached while parsing regular expression\""
     ]
   },
   {
@@ -7363,8 +7343,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-12 \"=fn(a)\" bound=false value=7-12 \"fn(a)\"",
-      "AttrName 13-15 \".b\"",
+      "AttrValue 6-15 \"=fn(a) .b\" bound=false value=7-15 \"fn(a) .b\"",
       "OpenTagEnd 15-17 \"/>\" selfClosed=true"
     ]
   },
@@ -9453,8 +9432,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-16 \"=a ? b : c\" bound=false value=7-16 \"a ? b : c\"",
-      "AttrName 17-19 \":d\"",
+      "AttrValue 6-19 \"=a ? b : c :d\" bound=false value=7-19 \"a ? b : c :d\"",
       "OpenTagEnd 19-21 \"/>\" selfClosed=true"
     ]
   },
@@ -9465,10 +9443,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-8 \"=a\" bound=false value=7-8 \"a\"",
-      "AttrName 9-10 \":\"",
-      "OpenTagEnd 10-11 \">\" selfClosed=false",
-      "Error 0-11 22 \"Missing ending \\\"div\\\" tag\""
+      "Error 7-7 6 \"Mismatched group. A closing \\\">\\\" character was found but it is not matched with a corresponding opening character.\""
     ]
   },
   {
@@ -9489,8 +9464,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-8 \"=a\" bound=false value=7-8 \"a\"",
-      "AttrName 11-13 \".b\"",
+      "AttrValue 6-13 \"=a\\n  .b\" bound=false value=7-13 \"a\\n  .b\"",
       "OpenTagEnd 13-15 \"/>\" selfClosed=true"
     ]
   },
@@ -9500,8 +9474,7 @@
     "expected": [
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
-      "AttrSpread 5-9 \"...a\" value=8-9 \"a\"",
-      "AttrName 10-12 \":b\"",
+      "AttrSpread 5-12 \"...a :b\" value=8-12 \"a :b\"",
       "OpenTagEnd 12-14 \"/>\" selfClosed=true"
     ]
   },
@@ -9511,8 +9484,7 @@
     "expected": [
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
-      "AttrSpread 5-9 \"...a\" value=8-9 \"a\"",
-      "AttrName 10-12 \".b\"",
+      "AttrSpread 5-12 \"...a .b\" value=8-12 \"a .b\"",
       "OpenTagEnd 12-14 \"/>\" selfClosed=true"
     ]
   },
@@ -9524,8 +9496,7 @@
       "OpenTagName 1-3 \"if\" quasis=[1-3 \"if\"] expressions=[]",
       "AttrName 3-3 \"\"",
       "Atom 5-7 \"0.\" value=6-7 \"a\"",
-      "AttrValue 3-7 \"= 0.\" bound=false value=5-7 \"0.\"",
-      "AttrName 8-10 \":b\"",
+      "AttrValue 3-10 \"= 0. :b\" bound=false value=5-10 \"0. :b\"",
       "OpenTagEnd 10-11 \">\" selfClosed=false",
       "Error 0-11 22 \"Missing ending \\\"if\\\" tag\""
     ]
@@ -9538,8 +9509,7 @@
       "OpenTagName 1-3 \"if\" quasis=[1-3 \"if\"] expressions=[]",
       "AttrName 3-3 \"\"",
       "Atom 4-6 \"0.\" value=5-6 \"a\"",
-      "AttrValue 3-6 \"=0.\" bound=false value=4-6 \"0.\"",
-      "AttrName 8-10 \":b\"",
+      "AttrValue 3-10 \"=0.\\n :b\" bound=false value=4-10 \"0.\\n :b\"",
       "OpenTagEnd 10-11 \">\" selfClosed=false",
       "Error 0-11 22 \"Missing ending \\\"if\\\" tag\""
     ]
@@ -9551,8 +9521,7 @@
       "OpenTagName 0-2 \"if\" quasis=[0-2 \"if\"] expressions=[]",
       "AttrName 2-2 \"\"",
       "Atom 3-5 \"0.\" value=4-5 \"a\"",
-      "AttrValue 2-5 \"=0.\" bound=false value=3-5 \"0.\"",
-      "AttrName 6-8 \":b\"",
+      "AttrValue 2-8 \"=0. :b\" bound=false value=3-8 \"0. :b\"",
       "OpenTagEnd 8-8 \"\" selfClosed=false",
       "CloseTagEnd 8-8 \"\""
     ]
@@ -9566,8 +9535,7 @@
       "TagVar 6-8 \"/x\" value=7-8 \"x\"",
       "AttrName 8-8 \"\"",
       "Atom 9-11 \"0.\" value=10-11 \"a\"",
-      "AttrValue 8-11 \"=0.\" bound=false value=9-11 \"0.\"",
-      "AttrName 12-14 \":b\"",
+      "AttrValue 8-14 \"=0. :b\" bound=false value=9-14 \"0. :b\"",
       "OpenTagEnd 14-16 \"/>\" selfClosed=true"
     ]
   },
@@ -9579,9 +9547,7 @@
       "OpenTagName 1-3 \"if\" quasis=[1-3 \"if\"] expressions=[]",
       "AttrName 3-3 \"\"",
       "Atom 4-6 \"0.\" value=5-6 \"a\"",
-      "AttrValue 3-6 \"=0.\" bound=false value=4-6 \"0.\"",
-      "AttrName 7-9 \":b\"",
-      "AttrName 10-12 \":c\"",
+      "AttrValue 3-12 \"=0. :b :c\" bound=false value=4-12 \"0. :b :c\"",
       "OpenTagEnd 12-13 \">\" selfClosed=false",
       "Error 0-13 22 \"Missing ending \\\"if\\\" tag\""
     ]
@@ -9594,10 +9560,7 @@
       "OpenTagName 1-3 \"if\" quasis=[1-3 \"if\"] expressions=[]",
       "AttrName 3-3 \"\"",
       "Atom 4-6 \"0.\" value=5-6 \"a\"",
-      "AttrValue 3-6 \"=0.\" bound=false value=4-6 \"0.\"",
-      "AttrName 7-8 \":\"",
-      "OpenTagEnd 8-9 \">\" selfClosed=false",
-      "Error 0-9 22 \"Missing ending \\\"if\\\" tag\""
+      "Error 4-4 6 \"Mismatched group. A closing \\\">\\\" character was found but it is not matched with a corresponding opening character.\""
     ]
   },
   {
@@ -9693,8 +9656,7 @@
     "expected": [
       "OpenTagName 0-3 \"div\" quasis=[0-3 \"div\"] expressions=[]",
       "AttrName 4-5 \"x\"",
-      "AttrValue 5-7 \"=a\" bound=false value=6-7 \"a\"",
-      "AttrName 8-10 \":b\"",
+      "AttrValue 5-10 \"=a :b\" bound=false value=6-10 \"a :b\"",
       "OpenTagEnd 10-10 \"\" selfClosed=false",
       "CloseTagEnd 10-10 \"\""
     ]
@@ -9705,8 +9667,7 @@
     "expected": [
       "OpenTagName 0-3 \"div\" quasis=[0-3 \"div\"] expressions=[]",
       "AttrName 4-5 \"x\"",
-      "AttrValue 5-7 \"=a\" bound=false value=6-7 \"a\"",
-      "AttrName 8-9 \":\"",
+      "AttrValue 5-9 \"=a :\" bound=false value=6-9 \"a :\"",
       "OpenTagEnd 9-9 \"\" selfClosed=false",
       "CloseTagEnd 9-9 \"\""
     ]
@@ -11250,8 +11211,8 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-12 \"=yield\" bound=false value=7-12 \"yield\"",
-      "AttrName 13-15 \":b\"",
+      "Atom 13-15 \"0.\" value=14-15 \"b\"",
+      "AttrValue 6-15 \"=yield 0.\" bound=false value=7-15 \"yield 0.\"",
       "OpenTagEnd 15-17 \"/>\" selfClosed=true"
     ]
   },
@@ -11434,8 +11395,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-8 \"=a\" bound=false value=7-8 \"a\"",
-      "AttrName 9-13 \":b%c\"",
+      "AttrValue 6-13 \"=a :b%c\" bound=false value=7-13 \"a :b%c\"",
       "OpenTagEnd 13-15 \"/>\" selfClosed=true"
     ]
   },
@@ -11446,8 +11406,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-8 \"=a\" bound=false value=7-8 \"a\"",
-      "AttrName 9-11 \".\u00e9\"",
+      "AttrValue 6-11 \"=a .\u00e9\" bound=false value=7-11 \"a .\u00e9\"",
       "OpenTagEnd 11-13 \"/>\" selfClosed=true"
     ]
   },
@@ -11477,8 +11436,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-14 \"=(a ? b)\" bound=false value=7-14 \"(a ? b)\"",
-      "AttrName 15-17 \":c\"",
+      "AttrValue 6-17 \"=(a ? b) :c\" bound=false value=7-17 \"(a ? b) :c\"",
       "OpenTagEnd 17-19 \"/>\" selfClosed=true"
     ]
   },
@@ -11489,8 +11447,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-14 \"=\\\"a ? b\\\"\" bound=false value=7-14 \"\\\"a ? b\\\"\"",
-      "AttrName 15-17 \":c\"",
+      "AttrValue 6-17 \"=\\\"a ? b\\\" :c\" bound=false value=7-17 \"\\\"a ? b\\\" :c\"",
       "OpenTagEnd 17-19 \"/>\" selfClosed=true"
     ]
   },
@@ -11500,8 +11457,7 @@
     "expected": [
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
-      "AttrSpread 5-13 \"...props\" value=8-13 \"props\"",
-      "AttrName 14-16 \".b\"",
+      "AttrSpread 5-16 \"...props .b\" value=8-16 \"props .b\"",
       "OpenTagEnd 16-18 \"/>\" selfClosed=true"
     ]
   },
@@ -12270,9 +12226,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-8 \"=a\" bound=false value=7-8 \"a\"",
-      "AttrName 11-13 \".b\"",
-      "AttrName 14-16 \".c\"",
+      "AttrValue 6-16 \"=a\\n  .b .c\" bound=false value=7-16 \"a\\n  .b .c\"",
       "OpenTagEnd 16-18 \"/>\" selfClosed=true"
     ]
   },
@@ -12299,8 +12253,7 @@
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
       "AttrValue 6-8 \"=y\" bound=false value=7-8 \"y\"",
-      "AttrSpread 9-13 \"...a\" value=12-13 \"a\"",
-      "AttrName 14-16 \".b\"",
+      "AttrSpread 9-16 \"...a .b\" value=12-16 \"a .b\"",
       "OpenTagEnd 16-18 \"/>\" selfClosed=true"
     ]
   },
@@ -12693,8 +12646,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-18 \"=(a ? b : c)\" bound=false value=7-18 \"(a ? b : c)\"",
-      "AttrName 19-21 \":d\"",
+      "AttrValue 6-21 \"=(a ? b : c) :d\" bound=false value=7-21 \"(a ? b : c) :d\"",
       "OpenTagEnd 21-23 \"/>\" selfClosed=true"
     ]
   },
@@ -12705,8 +12657,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-14 \"=[a ? b]\" bound=false value=7-14 \"[a ? b]\"",
-      "AttrName 15-17 \":d\"",
+      "AttrValue 6-17 \"=[a ? b] :d\" bound=false value=7-17 \"[a ? b] :d\"",
       "OpenTagEnd 17-19 \"/>\" selfClosed=true"
     ]
   },
@@ -12717,8 +12668,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-26 \"=a ? (b ? c : d) : e\" bound=false value=7-26 \"a ? (b ? c : d) : e\"",
-      "AttrName 27-29 \":f\"",
+      "AttrValue 6-29 \"=a ? (b ? c : d) : e :f\" bound=false value=7-29 \"a ? (b ? c : d) : e :f\"",
       "OpenTagEnd 29-31 \"/>\" selfClosed=true"
     ]
   },
@@ -12729,8 +12679,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-13 \"=`a ? `\" bound=false value=7-13 \"`a ? `\"",
-      "AttrName 14-16 \":d\"",
+      "AttrValue 6-16 \"=`a ? ` :d\" bound=false value=7-16 \"`a ? ` :d\"",
       "OpenTagEnd 16-18 \"/>\" selfClosed=true"
     ]
   },
@@ -12978,8 +12927,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-8 \"=a\" bound=false value=7-8 \"a\"",
-      "AttrName 9-11 \":b\"",
+      "AttrValue 6-11 \"=a :b\" bound=false value=7-11 \"a :b\"",
       "AttrName 12-13 \"y\"",
       "OpenTagEnd 13-15 \"/>\" selfClosed=true"
     ]
@@ -12991,9 +12939,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-16 \"=a ? b : c\" bound=false value=7-16 \"a ? b : c\"",
-      "AttrName 17-19 \":d\"",
-      "AttrName 20-22 \":e\"",
+      "AttrValue 6-22 \"=a ? b : c :d :e\" bound=false value=7-22 \"a ? b : c :d :e\"",
       "OpenTagEnd 22-24 \"/>\" selfClosed=true"
     ]
   },
@@ -13031,8 +12977,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-8 \"=a\" bound=false value=7-8 \"a\"",
-      "AttrName 9-13 \".b.c\"",
+      "AttrValue 6-13 \"=a .b.c\" bound=false value=7-13 \"a .b.c\"",
       "OpenTagEnd 13-15 \"/>\" selfClosed=true"
     ]
   },
@@ -13043,9 +12988,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-8 \"=a\" bound=false value=7-8 \"a\"",
-      "AttrName 9-11 \".b\"",
-      "AttrArgs 11-14 \"(c)\" value=12-13 \"c\"",
+      "AttrValue 6-14 \"=a .b(c)\" bound=false value=7-14 \"a .b(c)\"",
       "AttrName 15-16 \"d\"",
       "OpenTagEnd 16-18 \"/>\" selfClosed=true"
     ]
@@ -13081,9 +13024,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-8 \"=a\" bound=false value=7-8 \"a\"",
-      "AttrName 9-11 \":b\"",
-      "AttrValue 11-13 \"=1\" bound=false value=12-13 \"1\"",
+      "AttrValue 6-13 \"=a :b=1\" bound=false value=7-13 \"a :b=1\"",
       "OpenTagEnd 13-15 \"/>\" selfClosed=true"
     ]
   },
@@ -13094,9 +13035,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-8 \"=a\" bound=false value=7-8 \"a\"",
-      "AttrName 9-11 \":b\"",
-      "AttrMethod 11-18 \"(c) {d}\" params=11-14 \"(c)\" value=12-13 \"c\" async=false body=15-18 \"{d}\" value=16-17 \"d\"",
+      "AttrValue 6-18 \"=a :b(c) {d}\" bound=false value=7-18 \"a :b(c) {d}\"",
       "OpenTagEnd 18-20 \"/>\" selfClosed=true"
     ]
   },
@@ -13427,8 +13366,7 @@
     "expected": [
       "OpenTagName 0-3 \"div\" quasis=[0-3 \"div\"] expressions=[]",
       "AttrName 4-5 \"x\"",
-      "AttrValue 5-12 \"=a ?? b\" bound=false value=6-12 \"a ?? b\"",
-      "AttrName 13-15 \":c\"",
+      "AttrValue 5-15 \"=a ?? b :c\" bound=false value=6-15 \"a ?? b :c\"",
       "OpenTagEnd 15-15 \"\" selfClosed=false",
       "CloseTagEnd 16-16 \"\""
     ]
@@ -13569,8 +13507,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-8 \"=a\" bound=false value=7-8 \"a\"",
-      "AttrName 10-12 \":b\"",
+      "AttrValue 6-12 \"=a\\n :b\" bound=false value=7-12 \"a\\n :b\"",
       "OpenTagEnd 12-14 \"/>\" selfClosed=true"
     ]
   },
@@ -14224,13 +14161,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-8 \"=a\" bound=false value=7-8 \"a\"",
-      "AttrName 9-10 \":\"",
-      "OpenTagEnd 10-11 \">\" selfClosed=false",
-      "CloseTagStart 12-14 \"</\"",
-      "Text 11-12 \"b\"",
-      "CloseTagName 14-17 \"div\"",
-      "CloseTagEnd 17-18 \">\""
+      "Error 7-7 6 \"Mismatched group. A closing \\\">\\\" character was found but it is not matched with a corresponding opening character.\""
     ]
   },
   {
@@ -14240,8 +14171,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-8 \"=a\" bound=false value=7-8 \"a\"",
-      "AttrName 9-11 \".b\"",
+      "AttrValue 6-11 \"=a .b\" bound=false value=7-11 \"a .b\"",
       "OpenTagEnd 11-13 \"/>\" selfClosed=true"
     ]
   },
@@ -14282,8 +14212,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-9 \":=a\" bound=true value=8-9 \"a\"",
-      "AttrName 10-12 \".b\"",
+      "AttrValue 6-12 \":=a .b\" bound=true value=8-12 \"a .b\"",
       "OpenTagEnd 12-14 \"/>\" selfClosed=true"
     ]
   },
@@ -14550,8 +14479,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-13 \"=a ?? b\" bound=false value=7-13 \"a ?? b\"",
-      "AttrName 14-16 \".c\"",
+      "AttrValue 6-16 \"=a ?? b .c\" bound=false value=7-16 \"a ?? b .c\"",
       "OpenTagEnd 16-18 \"/>\" selfClosed=true"
     ]
   },
@@ -14562,8 +14490,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-10 \"=a.b\" bound=false value=7-10 \"a.b\"",
-      "AttrName 11-13 \":c\"",
+      "AttrValue 6-13 \"=a.b :c\" bound=false value=7-13 \"a.b :c\"",
       "OpenTagEnd 13-15 \"/>\" selfClosed=true"
     ]
   },
@@ -14587,8 +14514,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-12 \"=a {b}\" bound=false value=7-12 \"a {b}\"",
-      "AttrName 13-15 \":c\"",
+      "AttrValue 6-15 \"=a {b} :c\" bound=false value=7-15 \"a {b} :c\"",
       "OpenTagEnd 15-17 \"/>\" selfClosed=true"
     ]
   },
@@ -14599,8 +14525,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-11 \"=a: b\" bound=false value=7-11 \"a: b\"",
-      "AttrName 12-14 \":c\"",
+      "AttrValue 6-14 \"=a: b :c\" bound=false value=7-14 \"a: b :c\"",
       "OpenTagEnd 14-16 \"/>\" selfClosed=true"
     ]
   },
@@ -14632,9 +14557,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-8 \"=1\" bound=false value=7-8 \"1\"",
-      "AttrName 9-10 \":\"",
-      "OpenTagEnd 10-12 \"/>\" selfClosed=true"
+      "Error 10-10 9 \"EOF reached while parsing regular expression\""
     ]
   },
   {
@@ -14644,8 +14567,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-6 \"input\" quasis=[1-6 \"input\"] expressions=[]",
       "AttrName 7-11 \"type\"",
-      "AttrValue 11-19 \"=\\\"email\\\"\" bound=false value=12-19 \"\\\"email\\\"\"",
-      "AttrName 20-26 \":email\"",
+      "AttrValue 11-26 \"=\\\"email\\\" :email\" bound=false value=12-26 \"\\\"email\\\" :email\"",
       "OpenTagEnd 26-28 \"/>\" selfClosed=true"
     ]
   },
@@ -16872,8 +16794,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-10 \"=f()\" bound=false value=7-10 \"f()\"",
-      "AttrName 11-13 \":a\"",
+      "AttrValue 6-13 \"=f() :a\" bound=false value=7-13 \"f() :a\"",
       "OpenTagEnd 13-15 \"/>\" selfClosed=true"
     ]
   },
@@ -16884,8 +16805,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-10 \"=(a)\" bound=false value=7-10 \"(a)\"",
-      "AttrName 11-13 \":b\"",
+      "AttrValue 6-13 \"=(a) :b\" bound=false value=7-13 \"(a) :b\"",
       "OpenTagEnd 13-15 \"/>\" selfClosed=true"
     ]
   },
@@ -16906,8 +16826,7 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-11 \"=(a)!\" bound=false value=7-11 \"(a)!\"",
-      "AttrName 12-14 \":b\"",
+      "AttrValue 6-14 \"=(a)! :b\" bound=false value=7-14 \"(a)! :b\"",
       "OpenTagEnd 14-16 \"/>\" selfClosed=true"
     ]
   },
@@ -16976,8 +16895,7 @@
       "OpenTagName 1-3 \"if\" quasis=[1-3 \"if\"] expressions=[]",
       "AttrName 3-3 \"\"",
       "Atom 4-6 \"0.\" value=5-6 \"a\"",
-      "AttrValue 3-6 \"=0.\" bound=false value=4-6 \"0.\"",
-      "AttrName 7-9 \":b\"",
+      "AttrValue 3-9 \"=0. :b\" bound=false value=4-9 \"0. :b\"",
       "OpenTagEnd 9-10 \">\" selfClosed=false",
       "CloseTagStart 11-13 \"</\"",
       "Text 10-11 \"x\"",
@@ -16993,8 +16911,7 @@
       "OpenTagName 1-3 \"if\" quasis=[1-3 \"if\"] expressions=[]",
       "AttrName 3-3 \"\"",
       "Atom 4-6 \"0.\" value=5-6 \"a\"",
-      "AttrValue 3-6 \"=0.\" bound=false value=4-6 \"0.\"",
-      "AttrName 8-10 \":b\"",
+      "AttrValue 3-10 \"=0.\\n :b\" bound=false value=4-10 \"0.\\n :b\"",
       "OpenTagEnd 10-11 \">\" selfClosed=false",
       "CloseTagStart 12-14 \"</\"",
       "Text 11-12 \"x\"",
@@ -17010,13 +16927,7 @@
       "OpenTagName 1-3 \"if\" quasis=[1-3 \"if\"] expressions=[]",
       "AttrName 3-3 \"\"",
       "Atom 4-6 \"0.\" value=5-6 \"a\"",
-      "AttrValue 3-6 \"=0.\" bound=false value=4-6 \"0.\"",
-      "AttrName 7-8 \":\"",
-      "OpenTagEnd 8-9 \">\" selfClosed=false",
-      "CloseTagStart 10-12 \"</\"",
-      "Text 9-10 \"x\"",
-      "CloseTagName 12-14 \"if\"",
-      "CloseTagEnd 14-15 \">\""
+      "Error 4-4 6 \"Mismatched group. A closing \\\">\\\" character was found but it is not matched with a corresponding opening character.\""
     ]
   },
   {
@@ -17093,8 +17004,7 @@
       "OpenTagName 1-3 \"if\" quasis=[1-3 \"if\"] expressions=[]",
       "AttrName 3-3 \"\"",
       "Atom 5-7 \"0.\" value=6-7 \"a\"",
-      "AttrValue 3-7 \"= 0.\" bound=false value=5-7 \"0.\"",
-      "AttrName 8-10 \":b\"",
+      "AttrValue 3-10 \"= 0. :b\" bound=false value=5-10 \"0. :b\"",
       "OpenTagEnd 10-11 \">\" selfClosed=false",
       "CloseTagStart 12-14 \"</\"",
       "Text 11-12 \"x\"",
@@ -17126,9 +17036,7 @@
       "OpenTagName 1-3 \"if\" quasis=[1-3 \"if\"] expressions=[]",
       "AttrName 3-3 \"\"",
       "Atom 4-6 \"0.\" value=5-6 \"a\"",
-      "AttrValue 3-6 \"=0.\" bound=false value=4-6 \"0.\"",
-      "AttrName 7-9 \":b\"",
-      "AttrName 10-12 \":c\"",
+      "AttrValue 3-12 \"=0. :b :c\" bound=false value=4-12 \"0. :b :c\"",
       "OpenTagEnd 12-13 \">\" selfClosed=false",
       "CloseTagStart 14-16 \"</\"",
       "Text 13-14 \"x\"",
@@ -17258,8 +17166,8 @@
       "OpenTagStart 0-1 \"<\"",
       "OpenTagName 1-4 \"div\" quasis=[1-4 \"div\"] expressions=[]",
       "AttrName 5-6 \"x\"",
-      "AttrValue 6-14 \"=/* c */\" bound=false value=7-14 \"/* c */\"",
-      "AttrName 15-17 \":a\"",
+      "Atom 15-17 \"0.\" value=16-17 \"a\"",
+      "AttrValue 6-17 \"=/* c */ 0.\" bound=false value=7-17 \"/* c */ 0.\"",
       "OpenTagEnd 17-19 \"/>\" selfClosed=true"
     ]
   },
@@ -18180,8 +18088,7 @@
       "AttrName 5-6 \"x\"",
       "Atom 11-13 \"0.\" value=12-13 \"a\"",
       "Atom 16-18 \"0.\" value=17-18 \"b\"",
-      "AttrValue 6-18 \"=c ? 0. : 0.\" bound=false value=7-18 \"c ? 0. : 0.\"",
-      "AttrName 19-21 \":d\"",
+      "AttrValue 6-21 \"=c ? 0. : 0. :d\" bound=false value=7-21 \"c ? 0. : 0. :d\"",
       "OpenTagEnd 21-23 \"/>\" selfClosed=true"
     ]
   },

@@ -148,6 +148,9 @@ function projectHead(node: Node, depth: number, out: string[]): void {
         const parts = [
           `${pad}attr ${name} ${r(item)} name=${r(item.nameSpan)}`,
         ];
+        if (item.modifier !== null) {
+          parts.push(`modifier ${q(item.modifier)} ${r(item.modifierSpan)}`);
+        }
         if (item.operator) parts.push(item.operator);
         if (item.value) parts.push(valueText(item.value));
         if (item.args) parts.push(`args ${expr(item.args)}`);

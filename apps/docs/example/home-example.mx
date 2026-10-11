@@ -23,7 +23,7 @@ static const MAX_ITEMS = 3;
 
 <!-- A source comment: it never reaches the output. -->
 <h1#store-title.title>${shown.length} products, one file</h1>
-<input:q.search type=:search placeholder="Filter" required/>
+<input.search name="q" type="search" placeholder="Filter" required/>
 
 <if=shown.length === 0>
   <p.empty>$!{input.emptyHtml ?? "No products yet."}</p>

@@ -266,42 +266,6 @@
     "endsIn": "text"
   },
   {
-    "id": "name-sugar",
-    "card": "sugar",
-    "label": ":name",
-    "note": "`:q` sets `name=\"q\"`, the way `#x` sets `id` and `.x` sets `class`.",
-    "href": "/language/attributes/#attributes-name-and-id-and-class-after-an-attribute",
-    "match": "<input:q.search",
-    "ranges": [
-      {
-        "line": 26,
-        "from": 0,
-        "to": 15
-      }
-    ],
-    "node": "element",
-    "startsIn": "open_tag_start",
-    "endsIn": "tag_name_fragment"
-  },
-  {
-    "id": "atom",
-    "card": "attrs",
-    "label": ":atom",
-    "note": "`:search` in a value position is an atom: a value that represents itself, here the string `search`.",
-    "href": "/language/atoms/",
-    "match": "type=:search",
-    "ranges": [
-      {
-        "line": 26,
-        "from": 16,
-        "to": 28
-      }
-    ],
-    "node": "element",
-    "startsIn": "attr_name",
-    "endsIn": "atom"
-  },
-  {
     "id": "attr-static",
     "card": "attrs",
     "label": "name=\"value\"",
@@ -311,8 +275,8 @@
     "ranges": [
       {
         "line": 26,
-        "from": 29,
-        "to": 49
+        "from": 37,
+        "to": 57
       }
     ],
     "node": "element",
@@ -329,8 +293,8 @@
     "ranges": [
       {
         "line": 26,
-        "from": 50,
-        "to": 58
+        "from": 58,
+        "to": 66
       }
     ],
     "node": "attr_name",

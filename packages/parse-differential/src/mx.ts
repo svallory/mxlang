@@ -124,8 +124,7 @@ function tag(node: Node): NTag {
       ? sugarLine(s.sigil, JSON.stringify(s.value.value))
       : sugarLine(s.sigil, `dynamic ${text(s.value.template.source)}`),
   );
-  const order = (line: string) =>
-    line.startsWith("sugar #") ? 0 : line.startsWith("sugar .") ? 1 : 2;
+  const order = (line: string) => (line.startsWith("sugar #") ? 0 : 1);
   const sugar = tagSugar
     .map((line: string, i: number) => ({ line, i }))
     .sort(

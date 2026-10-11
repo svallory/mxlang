@@ -1,6 +1,6 @@
 ---
 title: "Atoms"
-description: "`:name` as a value that represents itself: where atoms are allowed, the operations they refuse, the name sugar, and atom contracts."
+description: "`:name` as a value that represents itself: where atoms are allowed, the operations they refuse, and atom contracts."
 ---
 
 # Atoms
@@ -83,8 +83,7 @@ A name matches `[A-Za-z_$][\w$]*(-[\w$]+)*`: `:title`, `:rename-all`,
 
 The name keeps its span in the IR, and `lowerSource` from
 [the core IR entry point](/architecture/ir-entry/) reports an attribute whose
-whole value is one atom as a `static` attribute whose `atom` is set (the name
-sugar's `name` included), and an atom nested in an expression as an atom node
+whole value is one atom as a `static` attribute whose `atom` is set, and an atom nested in an expression as an atom node
 with its own span — so a tool can tell
 `:title` from `"title"`. See [the IR spec](/architecture/ir-spec/).
 
@@ -147,45 +146,17 @@ positioned at the `::`. It is never reported inside a `${}` of a tag name or
 shorthand, where the text is an expression: `<${"a::b"}/>` is legal. Write
 `:a` for an atom, `{k: :a}` for an object key.
 
-## The name sugar is an atom standing alone in attribute position
+## `:email` in attribute position is not an atom
 
-`:email` in attribute position is not a value: it is the **name sugar**, the
-same rule as `x=:a :b`. It sets `name`, and the `name` it sets keeps its
-atom-ness in the IR, so a contract that types `name` as an
-atom checks it and `name="title"` is a type error there:
+In attribute position, `:email` is not a value: it is Marko's attribute
+`value:email`, the default attribute with the modifier `email`. Core has no
+name sugar, so an atom is only ever a value, as in `type=:email`. A syntax
+module can give `:email` another meaning; see
+[Attributes](/language/attributes/#attributes-a-colon-and-id-or-class-after-a-space).
 
-```mx
-<input :email/>
-<input type=:email/>
-```
-
-```html
-<input name="email">
-<input type="email">
-```
-
-The whole sugar, its positions and its duplicates are in
-[Attributes](/language/attributes/#attributes-name-and-id-and-class-after-an-attribute). Two
-things atoms add:
-
-- **A sugar after a single-atom default value.** `belongs-to=:Customer :customer`
-  is the tag's default value (the atom `:Customer`) plus `name` (the atom
-  `:customer`), because an atom takes no member access or operator, so nothing
-  else can follow it and the split is unambiguous (decision 146 addendum 5):
-
-  ```mx
-<belongs-to=:Customer :customer/>
-  ```
-
-  Every other default value keeps decision 151 ruling 2 — `belongs-to=a
-  :customer` is still "`:customer` right after a default value is not
-  supported".
-
-- **The sugar against contracts.** A sugar-derived `name` satisfies a `string`
-  or `enum` contract as its string *and* an `atom` contract as the atom (decision
-  156 addendum 6), so `<field :email/>` is fine against `enum: ["email", "phone"]`
-  and against `{ type: "atom" }`. An explicit `x=:a` against `string` stays an
-  error.
+A spaced `:name` after an atom value continues that value, as in stock Marko:
+in `<div x=:a :b/>` the value of `x` is `:a :b`, and the compile fails with
+``Expected a single expression, but found `:` after it.``
 
 ## Known limits: a `:` TypeScript owns
 
@@ -230,7 +201,7 @@ any:    { type: "atom" },                               // any atom
 
 - An atom where the contract says `string`, and a string where it says `atom`,
   are type errors both ways (`` attribute `x` must be string, got atom ``),
-  positioned at the value; the name sugar above is the one exception.
+  positioned at the value.
 - A name outside `values` is a positioned error on the atom that lists the
   candidates and adds a did-you-mean when one is clearly nearest:
   `` `<box>`: attribute `mode`: `:strct` is not one of :strict, :loose; did you mean `:strict`? ``.
@@ -283,8 +254,8 @@ them by name:
 </entity>
 ```
 
-- `uuid :id primary-key` is the name sugar: `name="id"` plus a boolean
-  attribute.
+- `uuid :id primary-key` is Mesh's own name form: its syntax module reads
+  `:id` as the field name, plus a boolean attribute.
 - `accept=[:title, :body]` is a list of atoms, each naming an **attribute** of the
   entity. With `accept` declared `{ type: "atom", ref: "attribute" }` and the type
   tags declaring the kind `attribute` from their `name`, the declarations sit in
@@ -300,7 +271,7 @@ the vocabulary's own build step checks that.
 
 ## See also
 
-- [Attributes](/language/attributes/) — the `#id`, `.class` and `:name` sugars.
+- [Attributes](/language/attributes/) — the `#id` and `.class` shorthands, and what a colon means.
 - [Sidecars](/custom-tags/sidecars/#sidecars-declare-the-call-contract-atoms-in-contracts) — the atom contract reference.
 - [Errors](/language/errors/#errors-atom-errors) — the diagnostics, listed by message.
 - [ADR 156](/design-notes/adr-atoms/) — why this is the shape it is.

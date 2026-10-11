@@ -96,15 +96,6 @@ export type MxErrorCode =
   // Open by design: Babel's reason codes are not enumerated here, and closing
   // the list needs a decision.
   | `BABEL_${string}`
-  | "MX_SECOND_NAME"
-  | "MX_COLON_BEFORE_DYNAMIC"
-  | "MX_SUGAR_NAME_MISSING"
-  | "MX_SUGAR_NAME_INVALID"
-  | "MX_SHORTHAND_INVALID"
-  | "MX_SUGAR_DYNAMIC"
-  | "MX_SUGAR_ARGUMENTS"
-  | "MX_SUGAR_BOUND"
-  | "MX_SUGAR_ON_STATEMENT"
   | "MX_TAG_NAME_MISSING"
   | "MX_STATEMENT_IN_HTML_MODE"
   | "MX_RESERVED_TAG_NAME"
@@ -316,15 +307,18 @@ export interface MxMethod extends MxNodeBase {
   readonly source: string;
 }
 
-/** `#id`, `.class` or `:name` sugar in tag or attribute position (ast §3.6). */
+/**
+ * `#id` or `.class` shorthand: tag-adjacent (`<div#a.b>`, position `tag`),
+ * or placed by a syntax-table trigger (position `attribute`) (ast §3.6).
+ */
 export interface MxShorthand extends MxNodeBase {
   readonly type: "MxShorthand";
-  readonly sigil: "#" | "." | ":";
+  readonly sigil: "#" | ".";
   readonly position: "tag" | "attribute";
   readonly value: MxShorthandValue;
   readonly operator: "=" | ":=" | null;
   readonly default: MxExpression | MxMethod | null;
-  /** Arguments written right after the sugar with no body (`.c(p)`), kept for PR 2b's `MX_SUGAR_ARGUMENTS` (ast §3.6 rule 6). */
+  /** Arguments written right after a trigger's shorthand with no body (`.c(p)`) (ast §3.6 rule 6). */
   readonly args: MxArguments | null;
 }
 

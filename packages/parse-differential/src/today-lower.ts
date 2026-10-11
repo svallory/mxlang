@@ -1,6 +1,6 @@
 /**
  * Today's lowering pass (`core/src/lower.ts` behind `@marko/compiler`'s
- * Program:exit), as `name-sugar.test`'s `lowerSource` runs it: the first
+ * Program:exit), as `shorthand.test`'s `lowerSource` runs it: the first
  * error it throws on one input, message and offset — the oracle for the
  * front end's `MX_*` rules (ast §3.13), which keep today's text and
  * position. Lowering-owned errors (duplicate defaults, host policy, tag
@@ -20,7 +20,7 @@ import { lineStartsOf } from "./rules.ts";
 const policy: Policy = {
   tags: {},
   isElement: () => true,
-  // `name-sugar.test`'s harness: a tag is a component when the file defines it.
+  // `shorthand.test`'s harness: a tag is a component when the file defines it.
   isComponent: (name: string, ctx: unknown) =>
     (ctx as { defines: Set<string> }).defines.has(name),
   resolveDefaultTag: () => "input",

@@ -119,9 +119,8 @@ as the unknown attribute `value`. A token runs to whitespace, `=`,
 character replaces core's built-in handling of that character in that
 position (lexing, after-value rule, lowering).
 
-`atom`, `name` and `member` are Mesh's forms. `id` and `class` are carried
-for parity with core's built-in sugars only: Mesh writes neither, and its
-copy may drop both rows.
+`atom`, `name` and `member` are Mesh's forms. Mesh writes neither `id` nor
+`class`, so its copy may drop both rows.
 
 **Ownership.** Core exports no syntax module. Mesh's atoms, name sugars and
 `&` members, and the corpus of Mesh files that pins them, live in Mesh; core's
@@ -130,9 +129,8 @@ own tests of the claim process use fixture dialects.
 **`async` before a method value.** `kind async :name(p) { b }` reaches the
 `name` hook as an async method (`ctx.valueForm` is `"async-method"`,
 specification §13.9.5). A `:name` method has no async meaning, so a
-dialect that owns the sugar refuses it at the `:name`, naming the form. Core's built-in sugar never
-sees it: there `async` stays an attribute (`` unknown attribute `async` `` under a
-contract that does not declare it), and that is alpha.14's behavior.
+dialect that owns the sugar refuses it at the `:name`, naming the form.
+Without such a dialect, core reads the line as Marko does.
 
 What a Mesh file reads differently from a plain `.mx` file once the move
 lands: `#x=1`, `.x=1` and `#x(p) { b }` are refused (decision 183); a bare

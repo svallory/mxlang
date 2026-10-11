@@ -8,7 +8,7 @@
  * view of the node behind it, and every field a host reads today must say
  * the same thing on both (ast §6.4's field table): the name, the range
  * (`loc.start.index`/`loc.end.index` vs `span`), the attributes after the
- * name-sugar rewrite (name, modifier, range, value), the tag variable, the
+ * shorthand rewrite (name, modifier, range, value), the tag variable, the
  * attribute tags, the params and the dynamic name. An attribute's
  * `nameSpan` has no Marko counterpart: it is checked against the IR's
  * `Attr.nameSpan`, which lowering computes by the same rule. What either
@@ -274,8 +274,7 @@ const TAG_INPUTS: [string, string, string[], RegExp?][] = [
   ["spread first", `<claim ...rest d=2/>\n`, ["claim"]],
   ["bound attribute", `<claim value:=x/>\n`, ["claim"]],
   ["shorthand class and id", `<claim.a.b#main e=1/>\n`, ["claim"]],
-  ["spaced shorthand class and id", `<claim .big #main e=1/>\n`, ["claim"]],
-  ["name sugar", `<claim:email type="email"/>\n`, ["claim"]],
+  ["an empty-head modifier", `<claim :email type="email"/>\n`, ["claim"]],
   [
     "destructured var with a type",
     `<claim/{ a: input, b }: T=1/>\n`,
@@ -477,14 +476,6 @@ describe("positions the Marko-shaped view cannot give", () => {
       ],
     ],
     [
-      "spaced",
-      `<claim .big #main/>\n`,
-      [
-        ["class", 7, 11, ".big"],
-        ["id", 12, 17, "#main"],
-      ],
-    ],
-    [
       "a class with a placeholder after text",
       `<p>a</p>\n<claim.bar\${x} e=1/>\n`,
       [["class", 15, 23, `.bar\${x}`]],
@@ -529,7 +520,12 @@ describe("positions the Marko-shaped view cannot give", () => {
       "class",
       [6, 10, ".big"],
     ],
-    ["a name sugar's token", `<claim:email/>\n`, "name", [6, 12, ":email"]],
+    [
+      "an empty-head modifier, from its `:`",
+      `<claim :email/>\n`,
+      "value",
+      [7, 13, ":email"],
+    ],
     ["empty at a default value's `=`", `<claim=1 c/>\n`, "value", [6, 6, ""]],
   ])("an attribute's nameSpan: %s", (_, source, name, expected) => {
     const { view: tag } = view(source);

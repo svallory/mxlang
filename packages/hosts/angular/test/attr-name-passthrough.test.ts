@@ -39,21 +39,23 @@ describe("`:modifier` is the attribute `value:modifier` (angular)", () => {
     );
   });
 
-  // Decision 146, addendum 3: Angular gets the sugar. The one host-owned
-  // exception is attribute-position `#x`, Angular's template reference.
-  it("applies the name sugar in every position but attribute-position `#x`", () => {
-    expect(emit(`<div :foo/>`, "x.ng.mx")).toContain(`<div name="foo">`);
+  // As in Marko: the bare `:foo` is `value:foo`, a colon in a tag head is
+  // part of the tag name or shorthand word, and a spaced `#ref` / `.b` is an
+  // attribute name, which this host passes through as its own syntax.
+  it("reads `:` and spaced shorthands as Marko does", () => {
+    expect(emit(`<div :foo/>`, "x.ng.mx")).toContain(`<div value:foo="">`);
     expect(emit(`<input:email type="email"/>`, "x.ng.mx")).toContain(
-      `<input name="email" type="email">`,
+      `<input:email type="email">`,
     );
-    expect(emit(`<div .b/>`, "x.ng.mx")).toContain(`<div class="b">`);
-    expect(emit(`<div#x:y/>`, "x.ng.mx")).toContain(`<div name="y" id="x">`);
-    expect(emit(`<div #ref>hi</div>`, "x.ng.mx")).toContain(`#ref`);
+    expect(emit(`<div#x:y/>`, "x.ng.mx")).toContain(`<div id="x:y">`);
+    expect(emit(`<div#x.b/>`, "x.ng.mx")).toContain(`<div class="b" id="x">`);
+    expect(emit(`<div .b/>`, "x.ng.mx")).toContain(`<div .b>`);
+    expect(emit(`<div #ref>hi</div>`, "x.ng.mx")).toContain(`<div #ref>`);
     expect(emit(`<div #ref>hi</div>`, "x.ng.mx")).not.toContain(`id="ref"`);
   });
 
-  it("`<svg:rect>` is the tag `svg` plus a name (no `svg:` element form)", () => {
-    expect(emit(`<svg:rect/>`, "x.ng.mx")).toContain(`<svg name="rect">`);
+  it("`<svg:rect>` is one tag name, Angular's namespaced element form", () => {
+    expect(emit(`<svg:rect/>`, "x.ng.mx")).toContain(`<svg:rect>`);
   });
 
   it.each([

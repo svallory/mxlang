@@ -79,7 +79,7 @@ describe("the PR 2b rules seam", () => {
         type: "MxParseError",
         start: tag.start,
         end: tag.start + 1,
-        code: "MX_SECOND_NAME",
+        code: "MX_TAG_NAME_MISSING",
         origin: "front-end",
         message: "test",
         context: null,
@@ -87,8 +87,8 @@ describe("the PR 2b rules seam", () => {
     ];
     const document = parse("<a/><b></c>", OPTIONS);
     expect(document.errors.map((e) => [e.code, e.start])).toEqual([
-      ["MX_SECOND_NAME", 0],
-      ["MX_SECOND_NAME", 4],
+      ["MX_TAG_NAME_MISSING", 0],
+      ["MX_TAG_NAME_MISSING", 4],
       ["MISMATCHED_CLOSING_TAG", 7],
     ]);
   });

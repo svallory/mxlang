@@ -294,7 +294,6 @@ export {
   mxConfigSearchPaths,
   provideMxConfig,
 } from "./mx-config.ts";
-export { sugarTagName } from "./name-sugar.ts";
 export { dropOwnParserPosition } from "./parse-error-position.ts";
 export {
   checkReservedBindings,

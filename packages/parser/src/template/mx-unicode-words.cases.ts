@@ -118,7 +118,7 @@ export const UNICODE_WORD_ROWS: [string, string][] = [
   ["<div x=a. é y=1/>", '<div> @x ="a. é" @y ="1"'],
   ["<div x=a.\n  é y=1/>", '<div> @x ="a.\\n  é" @y ="1"'],
   ["<div x=a . é y=1/>", '<div> @x ="a . é" @y ="1"'],
-  ["<div x=a .é y=1/>", '<div> @x ="a" @.é @y ="1"'],
+  ["<div x=a .é y=1/>", '<div> @x ="a .é" @y ="1"'],
   ["div x=é / 2 y=1\n", '<div> @x ="é / 2" @y ="1"'],
   ["div x=é / 2 / 3 y=1\n", '<div> @x ="é / 2 / 3" @y ="1"'],
   [
@@ -141,7 +141,7 @@ export const UNICODE_WORD_ROWS: [string, string][] = [
   ["div x=a. é y=1\n", '<div> @x ="a. é" @y ="1"'],
   ["div x=a.\n  é y=1\n", '<div> @x ="a.\\n  é" @y ="1"'],
   ["div x=a . é y=1\n", '<div> @x ="a . é" @y ="1"'],
-  ["div x=a .é y=1\n", '<div> @x ="a" @.é @y ="1"'],
+  ["div x=a .é y=1\n", '<div> @x ="a .é" @y ="1"'],
   ["<if=é / 2>y</if>", '<if> @ ="é / 2"'],
   ["<if=é / 2 / 3>y</if>", '<if> @ ="é / 2 / 3"'],
   ["<if=é\n  / 2>y</if>", '<if> @ ="é\\n  / 2"'],
@@ -865,32 +865,29 @@ export function extraWordTwinMismatches(mod: AtomParserModule) {
  * valid value, as stock reads it. The ASCII twins split (decision 146).
  */
 export const AFTER_VALUE_ON_HOLD_ROWS: [string, string][] = [
-  ["<div x=1 :e/>", '<div> @x ="1" @:e'],
+  ["<div x=1 :e/>", '<div> @x ="1 :e"'],
   ["<div x=1 :é/>", '<div> @x ="1 :é"'],
   ["<div x=1 :\u{20bb7}/>", '<div> @x ="1 :\u{20bb7}"'],
-  [
-    "<div x=(a) :T => a/>",
-    '<div> @x ="(a)" @:T ERR(15-15 Missing value for attribute)',
-  ],
+  ["<div x=(a) :T => a/>", '<div> @x ="(a) :T => a"'],
   ["<div x=(a) :É => a/>", '<div> @x ="(a) :É => a"'],
   ["<div x=(a, b) :é => a/>", '<div> @x ="(a, b) :é => a"'],
   ["<div x=async (a) :名 => a/>", '<div> @x ="async (a) :名 => a"'],
   // Function expressions: the ASCII forms split today (stock reads one value).
   [
     "<div x=function (a) :T { return a }/>",
-    '<div> @x ="function (a)" @:T @{ return a }',
+    '<div> @x ="function (a) :T { return a }"',
   ],
   [
     "<div x=function f(a) :T { return a }/>",
-    '<div> @x ="function f(a)" @:T @{ return a }',
+    '<div> @x ="function f(a) :T { return a }"',
   ],
   [
     "<div x=async function (a) :T { return a }/>",
-    '<div> @x ="async function (a)" @:T @{ return a }',
+    '<div> @x ="async function (a) :T { return a }"',
   ],
   [
     "<div x=function* (a) :T { return a }/>",
-    '<div> @x ="function* (a)" @:T @{ return a }',
+    '<div> @x ="function* (a) :T { return a }"',
   ],
   [
     "<div x=function (a) :É { return a }/>",

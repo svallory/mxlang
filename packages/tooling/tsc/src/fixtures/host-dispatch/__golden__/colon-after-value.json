@@ -9,15 +9,18 @@
           {
             "severity": 1,
             "source": "mxlang",
-            "message": "a tag takes one `:name`; this one already has a name (write the second as `name=\"…\"`)",
+            "message": "Expected a single expression, but found `:` after it.",
+            "data": {
+              "codeFrame": "> 1 | <if=input.x :b>y</if>\n    |             ^ Expected a single expression, but found `:` after it.\n  2 |"
+            },
             "range": {
               "start": {
                 "line": 0,
-                "character": 6
+                "character": 12
               },
               "end": {
                 "line": 0,
-                "character": 7
+                "character": 13
               }
             }
           }
@@ -32,9 +35,9 @@
         "mappings": [],
         "compileDiagnostics": [
           {
-            "fileName": "<root>/sugar-second-colon/page.mx",
-            "message": "a tag takes one `:name`; this one already has a name (write the second as `name=\"…\"`)",
-            "offset": 6,
+            "fileName": "<root>/colon-after-value/page.mx",
+            "message": "\n    > 1 | <if=input.x :b>y</if>\n        |             ^ Expected a single expression, but found `:` after it.\n      2 |",
+            "offset": 12,
             "category": "error"
           }
         ],
@@ -43,21 +46,21 @@
       },
       "vite": {
         "threw": {
-          "name": "TranslateError",
-          "message": "a tag takes one `:name`; this one already has a name (write the second as `name=\"…\"`)",
-          "id": "<root>/sugar-second-colon/page.mx",
+          "name": "CompileError",
+          "message": "Expected a single expression, but found `:` after it.",
+          "id": "<root>/colon-after-value/page.mx",
           "loc": {
-            "file": "<root>/sugar-second-colon/page.mx",
+            "file": "<root>/colon-after-value/page.mx",
             "line": 1,
-            "column": 6
+            "column": 12
           },
-          "frame": "1 | <a:b.c:d/>\n          ^"
+          "frame": "1 | <if=input.x :b>y</if>\n                ^"
         },
         "warnings": []
       }
     }
   },
   "mxTsc": [
-    "<root>/sugar-second-colon/page.mx(1,7): error TS80001: a tag takes one `:name`; this one already has a name (write the second as `name=\"…\"`)"
+    "<root>/colon-after-value/page.mx(1,13): error TS80001: \n    > 1 | <if=input.x :b>y</if>\n        |             ^ Expected a single expression, but found `:` after it.\n      2 |"
   ]
 }

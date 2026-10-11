@@ -13,7 +13,7 @@
  *   (several) with a code frame, built from each `MarkoParseError`'s label
  *   and location; `compileErrorOf` builds the same object from the
  *   document's `MxParseError`s, so the rewrites after it (`hintParseError`,
- *   `tagParamError`, `sugarAfterDefaultError`) read what they always read;
+ *   `tagParamError`) read what they always read;
  * - `stripTypes`: Marko's build output erased TypeScript from every
  *   expression before translating; `stripMxTypes` runs the same Babel
  *   plugin over the document's payloads.
@@ -387,53 +387,14 @@ function shorthandIdErrors(body: readonly Node[]): Node[] {
 /**
  * Whether lowering raises `error` (a front-end `MX_*` rule Marko's tree had
  * lowering raise), not Marko's parser.
- *
- * One exception keeps today's text and position (lead ruling, PR 5): the
- * front end reports `MX_SUGAR_BOUND` on every tag-adjacent `:=` (`<div:=1/>`),
- * but today's sugar check (`checkNearSugar`) fired only on a bindable value
- * (an `Identifier` or a `MemberExpression`); any other value reached Marko's
- * own binding check instead. Such an error is skipped here, so lowering
- * raises that check ("Attributes may only be bound to identifiers or member
- * expressions", at the value) or accepts the value (`a?.b`), as today.
  */
-function isLoweringError(document: Node, error: Node): boolean {
-  if (error.origin !== "front-end" || MARKO_PARSER_RULES.has(error.code)) {
-    return false;
-  }
-  if (error.code !== "MX_SUGAR_BOUND") return true;
-  const bound = defaultBindAt(document.body ?? [], error.start);
-  if (!bound) return true;
-  const type = bound.value?.node?.type;
-  return type === "Identifier" || type === "MemberExpression";
-}
-
-/** The tag-adjacent `:=` (an unnamed bound `MxAttribute`) starting at `offset`. */
-function defaultBindAt(
-  body: readonly Node[],
-  offset: number,
-): Node | undefined {
-  for (const child of body) {
-    for (const attr of child?.attributes ?? []) {
-      if (
-        attr.type === "MxAttribute" &&
-        attr.name === null &&
-        attr.operator === ":=" &&
-        attr.start === offset
-      ) {
-        return attr;
-      }
-    }
-    if (Array.isArray(child?.body)) {
-      const found = defaultBindAt(child.body, offset);
-      if (found) return found;
-    }
-  }
-  return undefined;
+function isLoweringError(error: Node): boolean {
+  return error.origin === "front-end" && !MARKO_PARSER_RULES.has(error.code);
 }
 
 /**
- * The first of the document's front-end errors (ast §3.13: the `MX_*` rules,
- * name sugar the token level already refuses) as the `TranslateError`
+ * The first of the document's front-end errors (ast §3.13: the `MX_*` rules)
+ * as the `TranslateError`
  * lowering raised for it on Marko's tree, at the same position (ruling of
  * decision 158 PR 4 slice 4: same text, same offset). `undefined` when there
  * is none. Positions are the file's: the document's base is applied.
@@ -441,7 +402,7 @@ function defaultBindAt(
 export function frontEndErrorOf(document: Node): TranslateError | undefined {
   const error = (document.errors ?? []).find(
     (each: Node) =>
-      each.code !== INPUT_ENDS_IN_DELIMITER && isLoweringError(document, each),
+      each.code !== INPUT_ENDS_IN_DELIMITER && isLoweringError(each),
   );
   if (!error) return undefined;
   // A bare `,` line: the front end places the error where the unnamed tag's
@@ -466,9 +427,7 @@ const pendingDocuments = new WeakMap<object, Node>();
  * it (a host may lower a wrapper tag's body, as angular does).
  */
 export function registerDocument(document: Node): void {
-  if (
-    !(document.errors ?? []).some((e: Node) => isLoweringError(document, e))
-  ) {
+  if (!(document.errors ?? []).some((e: Node) => isLoweringError(e))) {
     return;
   }
   const seen = new Set<unknown>();

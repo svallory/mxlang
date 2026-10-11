@@ -32,7 +32,7 @@
  * computed on first read, the view
  * and its arrays frozen (nothing writes back to the MX tree), no host names,
  * and a node that is not an MX node (a Babel payload, a Marko node, the
- * Marko-shaped records `rewriteMxSugar` builds) is returned as it is.
+ * Marko-shaped records `rewriteShorthands` builds) is returned as it is.
  *
  * TODO(mx-node-handle): every hook below moves to an `MxNodeHandle` and this
  * adapter goes. One line per hook that receives a view today:

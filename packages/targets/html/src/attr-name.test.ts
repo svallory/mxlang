@@ -37,18 +37,15 @@ describe("invalid attribute names (html)", () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: literal mx source
     ["$foo", "<${input.tag} $foo=1/>", 14, "attribute name"],
     ["@foo", '<div @foo="y"/>', 5, "attribute name"],
+    // Stock Marko: a spaced `#ref` or `.cls` is an attribute name outside its
+    // grammar; the hint points at the tag-adjacent shorthand.
+    ["#ref", "<div #ref/>", 5, "goes on the tag name"],
+    [".cls", "<div .cls/>", 5, "goes on the tag name"],
   ])("rejects %s at the authored name", (name, source, column, hint) => {
     const error = failure(source);
     expect(error.message).toContain(`Invalid attribute name \`${name}\``);
     expect(error.message).toContain(hint);
     expect(error).toMatchObject({ line: 1, column });
-  });
-
-  // Decision 146: `#ref` is `id="ref"` sugar, not Angular's reference.
-  it("reads `#ref` as `id` sugar", () => {
-    expect(compile("<div #ref/>", "/fixtures/test.mx").code).toContain(
-      `__mxOut.write("<div id=\\"ref\\"></div>");`,
-    );
   });
 
   it("positions on the right line and column in a multi-line tag", () => {
@@ -78,8 +75,7 @@ describe("invalid attribute names (html)", () => {
  * Only native `class:`, `style:` and `on:` prefixes are reserved; every other
  * colon name, such as `x:foo` or `data:x`, is an ordinary attribute.
  *
- * Decision 146 made the bare `:foo` spelling `name="foo"` sugar; the explicit
- * `value:foo` below is still Marko's attribute.
+ * The bare `:foo` is the same attribute, `value:foo`.
  *
  * Plain HTML carries the name verbatim, so this host renders exactly what
  * Marko renders. `expected.html` in the `attr-value-modifier` fixture is
@@ -96,9 +92,8 @@ describe("`:modifier` is the attribute `value:modifier` (html)", () => {
     expect(rendered(`<div value:foo/>`)).toContain(
       `__mxOut.write("<div value:foo=\\"\\"></div>");`,
     );
-    // Decision 146: the bare spelling is `name` sugar.
     expect(rendered(`<div :foo/>`)).toContain(
-      `__mxOut.write("<div name=\\"foo\\"></div>");`,
+      `__mxOut.write("<div value:foo=\\"\\"></div>");`,
     );
   });
 
@@ -323,11 +318,13 @@ describe("`<for>` by=/key= (html)", () => {
 });
 
 /**
- * Decision 146: `:name`, `#id` and `.class` sugar, rendered. The IR rows are in
- * `packages/core/src/name-sugar.test.ts`; these pin the HTML each position
- * produces, in HTML and concise mode.
+ * A colon in a tag head, or a spaced `#id` / `.class`, reads as stock Marko
+ * reads it (`@marko/compiler` 5.42.11 on the stock `htmljs-parser` 5.18.0):
+ * `:` is a tag-name and shorthand character, an empty head before a `:` is
+ * the default attribute's `value:`, and a spaced `#`/`.` name is outside
+ * Marko's attribute grammar. These pin the HTML or the error each form gives.
  */
-describe("name sugar renders (html)", () => {
+describe("a colon or a spaced shorthand reads as Marko reads it (html)", () => {
   const html = (source: string): string =>
     compile(source, "/fixtures/test.mx").code.match(
       /__mxOut\.write\((".*")\);/,
@@ -335,129 +332,98 @@ describe("name sugar renders (html)", () => {
   const rendered = (source: string): string => JSON.parse(html(source));
 
   it.each([
-    ['<input:email type="email"/>', '<input name="email" type="email">'],
-    ["<:email/>", '<div name="email"></div>'],
-    ["<a.c:b/>", '<a name="b" class="c"></a>'],
-    ["<a#d:b.c/>", '<a name="b" class="c" id="d"></a>'],
-    ["<a.c:b#d/>", '<a name="b" class="c" id="d"></a>'],
-    ["<a:b.c#d/>", '<a name="b" class="c" id="d"></a>'],
-    ["<a.hover:x/>", '<a name="x" class="hover"></a>'],
+    ["<a.c:b/>", '<a class="c:b"></a>'],
+    ["<a#d:b.c/>", '<a class="c" id="d:b"></a>'],
+    ["<a.c:b#d/>", '<a class="c:b" id="d"></a>'],
+    ["<a.hover:x/>", '<a class="hover:x"></a>'],
     ['<a class="hover:x"/>', '<a class="hover:x"></a>'],
-    ["<a :b/>", '<a name="b"></a>'],
-    ['<a x="1" :b/>', '<a x="1" name="b"></a>'],
-    ["<a #b/>", '<a id="b"></a>'],
-    ["<a .b/>", '<a class="b"></a>'],
-    ['<a x="1" #b/>', '<a x="1" id="b"></a>'],
-    ['<a x="1" .b/>', '<a x="1" class="b"></a>'],
-    ["<div.a #m .b/>", '<div class="a b" id="m"></div>'],
+    ["<a :b/>", '<a value:b=""></a>'],
+    ["<a :1/>", '<a value:1=""></a>'],
     ["<div.a.b#m/>", '<div class="a b" id="m"></div>'],
-    ['a x="1" #b .c :d', '<a x="1" id="b" class="c" name="d"></a>'],
   ])("%s", (source, expected) => {
     expect(rendered(source)).toBe(expected);
   });
 
-  it("`x=a.b .c` is two attributes, `x=(a.b .c)` is one value", () => {
-    const code = (source: string) => compile(source, "/fixtures/test.mx").code;
-    expect(code("<a x=input.a .c/>")).toContain('"x", input.a');
-    expect(code("<a x=input.a .c/>")).toContain('class=\\"c\\"');
-    expect(code("<a x=(input.a .c)/>")).not.toContain('class=\\"c\\"');
+  // `<kind:name>` is one tag name. On a statement keyword it used to become a
+  // statement node in the body, which this target reported as an internal
+  // error; it is now Marko's custom-tag error, positioned at the tag.
+  it.each([
+    ['<input:email type="email"/>', "<input:email>", 0],
+    ["<:email/>", "<:email>", 0],
+    ["<a:b.c#d/>", "<a:b>", 0],
+    ["<import:x/>", "<import:x>", 0],
+    ["<div><import:x/></div>", "<import:x>", 5],
+    ["<div><export:x/></div>", "<export:x>", 5],
+    ["<div><static:x/></div>", "<static:x>", 5],
+  ])("%s is one tag name, Marko's custom-tag error", (source, tag, column) => {
+    const error = failure(source);
+    expect(error.message).toContain(
+      `Unable to find entry point for custom tag \`${tag}\``,
+    );
+    expect(error).toMatchObject({ line: 1, column });
   });
 
   it.each([
-    ["<a :1/>", "`:1`"],
-    ["<a:b.c:d/>", "one `:name`"],
-  ])("%s is a positioned error", (source, text) => {
-    expect(failure(source).message).toContain(text);
-  });
-
-  // A `:name` sugar on a statement tag is not a tag name: rewriting it made
-  // `<import name="x"/>`, a statement node in whatever body the tag sits in,
-  // which this target reported as "@mxlang/core: unexpected module-level node
-  // kind \"Import\" in the body walk" — an internal error, not source
-  // feedback. Core now rejects the sugar, positioned on the colon.
-  it.each([
-    ["<import:x/>", "import", 7],
-    ["<div><import:x/></div>", "import", 12],
-    ["<div><export:x/></div>", "export", 12],
-    ["<div><static:x/></div>", "static", 12],
+    ["<a #b/>", "#b", 3],
+    ["<a .b/>", ".b", 3],
+    ['<a x="1" #b/>', "#b", 9],
+    ["<input .c=1/>", ".c", 7],
+    ["input #x=1", "#x", 6],
   ])(
-    "%s is a positioned error naming the statement tag",
-    (source, tag, column) => {
+    "%s: a spaced shorthand is Marko's invalid attribute name",
+    (source, name, column) => {
       const error = failure(source);
-      expect(error.message).toContain("not supported on the statement tag");
-      expect(error.message).toContain(`\`${tag}\``);
-      expect(error.line).toBe(1);
-      expect(error.column).toBe(column);
+      expect(error.message).toContain(`Invalid attribute name \`${name}\``);
+      expect(error).toMatchObject({ line: 1, column });
     },
   );
-});
 
-// Round 3, review B: a falsy literal beside a `.x` sugar renders as the
-// tag-adjacent spelling does (Marko's class helper drops it).
-describe("a literal class beside a `.x` sugar renders like the tag-adjacent class (html)", () => {
-  const render = (source: string): string =>
-    mx(source, { filename: "/fixtures/render.mx" })({});
-
-  it.each([
-    ["<div class=false .b/>", "<div.b class=false/>"],
-    ["<div class=0 .b/>", "<div.b class=0/>"],
-    ["<div class=null .b/>", "<div.b class=null/>"],
-    ["<div .b class=false/>", "<div.b class=false/>"],
-    ["<div class=1 .b/>", "<div.b class=1/>"],
-    ["<div class=true .b/>", "<div.b class=true/>"],
-  ])("%s", (sugar, adjacent) => {
-    const classes = (html: string) =>
-      [...(html.match(/class="([^"]*)"/)?.[1] ?? "").split(" ")].sort();
-    expect(classes(render(sugar))).toEqual(classes(render(adjacent)));
+  it("` :b` after a value continues it: Marko's single-expression error", () => {
+    let thrown:
+      | { message: string; loc?: { start: { line: number; column: number } } }
+      | undefined;
+    try {
+      compile('<a x="1" :b/>', "/fixtures/test.mx");
+    } catch (error) {
+      thrown = error as typeof thrown;
+    }
+    expect(thrown?.message.replace(ANSI, "")).toContain(
+      "Expected a single expression, but found `:` after it.",
+    );
+    expect(thrown?.loc?.start).toMatchObject({ line: 1, column: 9 });
   });
 
-  it("drops the falsy literal", () => {
-    expect(render("<div class=false .b/>")).toBe('<div class="b"></div>');
-    expect(render("<div class=0 .b/>")).toBe('<div class="b"></div>');
+  it("` .c` after a value is member access on it", () => {
+    const code = (source: string) => compile(source, "/fixtures/test.mx").code;
+    expect(code("<a x=input.a .c/>")).not.toContain('class=\\"c\\"');
+    expect(code("<a x=input.a .c/>")).toContain("input.a .c");
   });
 });
 
-// Decision 146 addendum 4 (PR 4): a sugar followed by `=value` or
-// `(params) { body }` sets the default attribute (`value`).
-describe("a sugar followed by =value sets the default attribute (html)", () => {
+// A tag-adjacent shorthand then `=value` or `(params) { body }` sets the
+// default attribute (`value`), as in Marko.
+describe("a tag-adjacent shorthand followed by =value sets the default attribute (html)", () => {
   const render = (
     source: string,
     input: Record<string, unknown> = {},
   ): string => mx(source, { filename: "/fixtures/render.mx" })(input);
 
   it.each([
-    ["<input #x=1/>", '<input value="1" id="x">'],
-    ["<input :x=input.y/>", '<input value="Y" name="x">'],
-    ["<input .c=1/>", '<input value="1" class="c">'],
-    ['<input .c="s"/>', '<input value="s" class="c">'],
-    ['<input type="text" #x=2/>', '<input value="2" type="text" id="x">'],
-    ["input #x=1", '<input value="1" id="x">'],
-    ["input :x=input.y", '<input value="Y" name="x">'],
-    ["<input:x=1/>", '<input value="1" name="x">'],
     ["<input#x=1/>", '<input value="1" id="x">'],
+    ["<input#x=input.y/>", '<input value="Y" id="x">'],
+    ['<input.c="s"/>', '<input value="s" class="c">'],
+    [
+      '<input.c#x=2 type="text"/>',
+      '<input value="2" type="text" class="c" id="x">',
+    ],
+    ["input#x=1", '<input value="1" id="x">'],
   ])("%s", (source, expected) => {
     expect(render(source, { y: "Y" })).toBe(expected);
   });
 
   it("a method has no runtime in a string target, positioned at the `(`", () => {
-    const error = failure("<input #x(e) { e }/>");
+    const error = failure("<input#x(e) { e }/>");
     expect(error.message).toContain("attribute method");
-    expect(error.line).toBe(1);
+    expect(error).toMatchObject({ line: 1, column: 8 });
   });
-
-  it.each([
-    ["<if=input.a #x=1>y</if>", 1, 15],
-    ["<input=1 #x=2/>", 1, 12],
-    ["input=1 #x=2", 1, 11],
-    // A bound `value:=` is the default value too (round 2, finding 2).
-    ["<input value:=input.v #x=1/>", 1, 25],
-    ["<input #x=1 value:=input.v/>", 1, 12],
-  ])(
-    "%s: a second default value is a positioned error at the second",
-    (source, line, column) => {
-      const error = failure(source);
-      expect(error.message).toContain("already has a default value");
-      expect([error.line, error.column]).toEqual([line, column]);
-    },
-  );
 });

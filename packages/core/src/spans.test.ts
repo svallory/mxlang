@@ -134,7 +134,7 @@ describe("a default attribute's nameSpan", () => {
 describe("a tag shorthand attribute's nameSpan", () => {
   // `#id` and `.cls` written right after the tag name have no attribute node
   // of their own in Marko's AST; the span is the sigil plus the token, as for
-  // the spaced name-sugar form (` .y`), and `valueSpan` is the token alone.
+  // a trigger-placed shorthand (` .y`), and `valueSpan` is the token alone.
   function shorthand(source: string, name: string): [string, string] {
     let el = irOf(source, elements).body[0];
     // The innermost element is the one carrying the shorthand.
@@ -163,11 +163,6 @@ describe("a tag shorthand attribute's nameSpan", () => {
     ["ul\n  li.item#n1", "id", "#n1", "n1"],
   ])("%j: %s is spelled %j, value %j", (source, name, spelled, value) => {
     expect(shorthand(source, name)).toEqual([spelled, value]);
-  });
-
-  it("agrees with the spaced form on what the name span covers", () => {
-    expect(shorthand("<a .y #x/>", "class")).toEqual([".y", "y"]);
-    expect(shorthand("<a .y #x/>", "id")).toEqual(["#x", "x"]);
   });
 });
 
@@ -486,18 +481,18 @@ describe("a whole attribute's span", () => {
   it("covers name through value on every attribute form", () => {
     expect(
       attrSpans(
-        '<t a="x" b c=d+1 e:=f g(x) { return x } ...rest #main .card :email/>\n',
+        '<t#main.card :email a="x" b c=d+1 e:=f g(x) { return x } ...rest/>\n',
       ),
     ).toEqual([
+      ["value:email", ":email"],
       ["a", 'a="x"'],
       ["b", "b"],
       ["c", "c=d+1"],
       ["e", "e:=f"],
       ["g", "g(x) { return x }"],
       ["...", "...rest"],
-      ["id", "#main"],
       ["class", ".card"],
-      ["name", ":email"],
+      ["id", "#main"],
     ]);
   });
 

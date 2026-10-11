@@ -56,8 +56,9 @@ const NOT_CODE = new Set([
  * measured equal over every whole-file `.mx` in the repository: a module
  * statement is a `tag` (Marko parsed it as a statement tag); an attribute tag
  * and its body have none (Marko moved them off the body); an attribute starts
- * at its name (an `async` method's keyword is outside) and a sugar attribute
- * ends after its default value; an atom value is code, a quoted string is not.
+ * at its name (an `async` method's keyword is outside) and a shorthand a
+ * syntax trigger placed ends after its default value; an atom value is code,
+ * a quoted string is not.
  */
 /**
  * The native elements the spans parse with: the default target's, which every

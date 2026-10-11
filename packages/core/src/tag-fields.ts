@@ -180,21 +180,24 @@ export function hasTypeArguments(node: Node): boolean {
 export function tagAttributesOf(node: Node): Node[] {
   if (!isMxTagShape(node)) return node?.attributes ?? [];
   // Attribute triggers as the trigger pass lowered them (decision 182
-  // addendum 5); the name-sugar record, when there is one, is built from
+  // addendum 5); the shorthand record, when there is one, is built from
   // the same list.
   const attributes: Node[] = attributesWithTriggers(node);
   return (
-    sugarAttributes.get(node) ??
+    shorthandAttributes.get(node) ??
     attributes.filter((attr) => attr?.type !== "MxComment")
   );
 }
 
 /**
- * An MX tag's attributes after the name-sugar rewrite (`rewriteMxSugar`):
+ * An MX tag's attributes after the shorthand rewrite (`rewriteShorthands`):
  * kept beside the tree, which stays as parsed.
  */
-const sugarAttributes = new WeakMap<Node, Node[]>();
+const shorthandAttributes = new WeakMap<Node, Node[]>();
 
-export function recordSugarAttributes(node: Node, attributes: Node[]): void {
-  sugarAttributes.set(node, attributes);
+export function recordShorthandAttributes(
+  node: Node,
+  attributes: Node[],
+): void {
+  shorthandAttributes.set(node, attributes);
 }

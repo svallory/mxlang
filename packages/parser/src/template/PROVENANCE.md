@@ -49,9 +49,7 @@ to one place in `src/`:
 |---|---|
 | `ATTRIBUTE` default state: `expr.attrValue = !!(attr.name \|\| attr.spread)` before `expr.operators = !0` | `states/ATTRIBUTE.ts`, where the attribute value `EXPRESSION` is entered (`attr.stage = ATTR_STAGE.VALUE`) |
 | `case 63` (`?`): skip `??` and `?.` (not `?.5`) when `expression.attrValue` | `states/EXPRESSION.ts`, `case CODE.QUESTION` of `EXPRESSION.char` |
-| `lookAheadForOperator`: `case 58` split out of the pass-through cases; ends the value at ` :ident` (no open `?`) or a bare `:` before `>`, `/>`, newline or EOF | `states/EXPRESSION.ts`, `lookAheadForOperator`, `case CODE.COLON` |
-| `lookAheadForOperator`, `case 46`: ` .ident` ends the value | `states/EXPRESSION.ts`, `lookAheadForOperator`, `case CODE.PERIOD` |
-| helpers `isBareColonEnd`, `isIdentStartCode` | `states/EXPRESSION.ts`, end of file (plus `isDigitCode`, the inline `>= 48 && <= 57` of the `?.` hunk) |
+| helper `isIdentStartCode` | `states/EXPRESSION.ts`, end of file (plus `isDigitCode`, the inline `>= 48 && <= 57` of the `?.` hunk) |
 | (the minified build keeps the flag implicit) | `states/EXPRESSION.ts`: `attrValue: boolean` on `ExpressionMeta`, initialised `false` in `enter` |
 
 Nothing else from the decision 146 rule differs from `v5.18.0`. To check:
@@ -230,18 +228,18 @@ npm build's (`corpus-equivalence.test.ts` still pins that). Atoms keep their
 decision-156 path; the triggers are built beside it. Slice a1 of
 `lang-ext-move-sugars-to-mesh` adds the coexistence rule: a loaded row on a
 character replaces the built-in behaviour for that character in that
-position (`CompiledSyntax.builtInAtoms`, `builtInColonEnd`,
-`builtInPeriodEnd`, all true on the default row), so atoms and the name
-sugars are expressible as rows (`test-support/sugar-rows.ts`) while the
-built-in paths stay.
+position (`CompiledSyntax.builtInAtoms`, true on the default row), so atoms
+and the name sugars are expressible as rows (`test-support/sugar-rows.ts`).
+The parser has no built-in name sugars: a spaced ` :b`, ` .b` or bare ` :`
+after a value continues it, as in stock.
 
 | Source location | What changed |
 |---|---|
-| `syntax.ts` (new) | `SyntaxTable`, `Trigger`, `DEFAULT_SYNTAX`, `validateSyntaxTable`, `compileSyntax` (per-list 128-entry first-character table plus a non-ASCII list, sticky `u` matchers), `matchTrigger`, `standInText`. Slice a1: `Trigger.value?: "refuse"` (attribute triggers only, validated as `terminatesValue` is; `CompiledTrigger.refusesValue`), and the three coexistence flags: `builtInAtoms` is false when an expression trigger is armed on `:`, `builtInColonEnd` / `builtInPeriodEnd` when an attribute trigger is armed on `:` / `.` |
+| `syntax.ts` (new) | `SyntaxTable`, `Trigger`, `DEFAULT_SYNTAX`, `validateSyntaxTable`, `compileSyntax` (per-list 128-entry first-character table plus a non-ASCII list, sticky `u` matchers), `matchTrigger`, `standInText`. Slice a1: `Trigger.value?: "refuse"` (attribute triggers only, validated as `terminatesValue` is; `CompiledTrigger.refusesValue`), and the coexistence flag `builtInAtoms`, false when an expression trigger is armed on `:` |
 | `core/Parser.ts` | `syntax` (compiled table, a constructor argument), `triggers` and `lastTriggerStart`; `recordTrigger`; `read` goes through `standIn`, the merge of atom and trigger stand-ins, when a trigger was lexed (`standInAtoms` otherwise, unchanged) |
 | `index.ts` | `createParser`'s second argument; exports `DEFAULT_SYNTAX`, `validateSyntaxTable` and the table types |
 | `util/constants.ts` | `onTrigger` and `Ranges.Trigger` (slice a1: `method`, an attribute trigger's method value) |
-| `states/EXPRESSION.ts` | `lexTrigger`, before the word fast path in expressions that lex atoms, where `expectsExpression` holds or right after a ternary's `?` (never inside a word, never continuing a punctuator of the same character), and refused with an error when the text after the match would continue the stand-in's token (`continuesToken`); a trigger's end is recorded in `atomEnd` (its text is an operand, never a keyword); `checkForOperators` ends an attribute value at a space then a `terminatesValue` attribute trigger under `valueMayEndAt`, the decision 146 guard (`attrValue` or a single-atom default, no open `?`) that the ` :name` rule now calls too; the EOF message of a trigger value. Slice a1: P1, the `?` bypass never applies to a trigger armed on `:` (TypeScript's optional marker is `?` then `:`, `a?:T`, `a? :T`), so there `expectsExpression` alone decides, as for `lexAtom`; P2, a trigger whose next text would continue its token declines silently (it was an error), by `continuesToken` or `stopsShortOfToken` (the matcher would take more had the non-ASCII word characters after it been ASCII letters: `:a-é`), as `lexAtom` declines `:aé` and `:a-é`; coexistence, `lexAtom` runs only under `builtInAtoms`, and `lookAheadForOperator` (now given the compiled syntax) applies the MX ` :name` / bare `:` case only under `builtInColonEnd` and the ` .name` case only under `builtInPeriodEnd` (stock operator continuation is kept either way) |
+| `states/EXPRESSION.ts` | `lexTrigger`, before the word fast path in expressions that lex atoms, where `expectsExpression` holds or right after a ternary's `?` (never inside a word, never continuing a punctuator of the same character), and refused with an error when the text after the match would continue the stand-in's token (`continuesToken`); a trigger's end is recorded in `atomEnd` (its text is an operand, never a keyword); `checkForOperators` ends an attribute value at a space then a `terminatesValue` attribute trigger under `valueMayEndAt`, the decision 146 guard (`attrValue` or a single-atom default, no open `?`) that the ` :name` rule now calls too; the EOF message of a trigger value. Slice a1: P1, the `?` bypass never applies to a trigger armed on `:` (TypeScript's optional marker is `?` then `:`, `a?:T`, `a? :T`), so there `expectsExpression` alone decides, as for `lexAtom`; P2, a trigger whose next text would continue its token declines silently (it was an error), by `continuesToken` or `stopsShortOfToken` (the matcher would take more had the non-ASCII word characters after it been ASCII letters: `:a-é`), as `lexAtom` declines `:aé` and `:a-é`; coexistence, `lexAtom` runs only under `builtInAtoms` |
 | `states/ATTRIBUTE.ts`, `states/attr-stage.ts` | `lexAttrTrigger` at a name's first character, an optional `=value` with whitespace before `=` as after a name (stage `TRIGGER_VALUE`), `endsAttrTriggerAt`; the value-entry code factored into `enterAttrValue`, used by both. Slice a1: a method value after a trigger (`(params) { body }`, `<T>(…) { … }`, `async` before the trigger), lexed by the attribute's own `(` / `<` / `{` branches (no empty name is announced) and announced as the trigger's `method`; `(args)` without a body are the trigger's `args` (review 460 r1, L1: core refuses them through the hook), lexed as a named attribute's arguments, after which `=` / `:=` may give a value and `exit` announces a trigger not yet announced; `:=` after a non-refusing trigger is a value lexed as for `=`, announced with `operator: ":="` (`"="` for `=`, also on line triggers); the generic follow error lists "a method" for a non-refusing row; `isAsyncMethodPrefix` holds `async` before a trigger until the body shows. `value: "refuse"`: `=`, `:=` or `(` after the trigger (after whitespace) is ``The `#main` shorthand takes no value.``, `INVALID_ATTRIBUTE_VALUE`, positioned at that operator; like every parser error it ends the parse (`emitError`), so nothing cascades. `enterAttrValue` sets `defaultAtom` only under `builtInAtoms` (the single-atom default exemption is the built-in atom's) |
 | `states/CONCISE_HTML_CONTENT.ts`, `states/LINE_TRIGGER.ts` (new), `states/index.ts` | a line trigger at a tagless concise line start, its optional `=value` (a concise attribute value, spaces allowed before `=`), then whitespace or a `//` / block comment (reported through `onComment`, as after a concise tag line) |
 | `states/BLOCK_TAG.ts` (new), `states/HTML_CONTENT.ts`, `states/index.ts` | PR B: a table's block tag (`open`, raw body, first `close`) and filter (`open`, a name, `close`, raw body, next `close`) in HTML content, announced by `onBlockTag` / `onFilter`; the text run stops at their first characters (`contentStops`, empty on the default row); an unclosed one is `MALFORMED_BLOCK_TAG` / `MALFORMED_FILTER` (new codes 31, 32, `util/error-code.ts`) at end of input; an opener at a concise line start is `INVALID_LINE_START` (`states/CONCISE_HTML_CONTENT.ts`) |
@@ -368,7 +366,7 @@ twin (`mx-unicode-words.cases.ts`), and ASCII-only input renders as before
 | `states/EXPRESSION.ts` | `isWordOrPeriodBefore` (`lookBehindForKeyword`; `isWordOrPeriodCode` until addendum 13) | a name ending in a unary or relational keyword after a non-ASCII letter is no keyword (`x=énew y=1` no longer swallows `y=1`) |
 | `states/EXPRESSION.ts` | `lookBehindForOperator`, `case CODE.EXCLAMATION` | a `!` after a non-ASCII identifier is postfix (`x=é! y=1`) |
 | `states/EXPRESSION.ts` | `lookBehindForOperator`, `case CODE.PERIOD` | a `.` before a non-ASCII identifier continues the member access (`x=a. é`, `x=a.\n  é`) |
-| `states/EXPRESSION.ts` | `lookAheadForOperator`, `case CODE.PERIOD` | the same, looking ahead (`<if=a .é>`, `x=a . é`); the decision 146 ` .name` sugar test uses the new `isNameStartAt` (a word character other than a digit; `isNameStartCode` until addendum 13), so `x=a .é` stays sugar |
+| `states/EXPRESSION.ts` | `lookAheadForOperator`, `case CODE.PERIOD` | the same, looking ahead (`<if=a .é>`, `x=a . é`) |
 | `states/ATTRIBUTE.ts` | `detectAmbiguousCloseAngleBracket`, `isOperandEndAt` (`isOperandEndCode` until addendum 13) | a non-ASCII operand counts, so `<div x=a >é>c</div>` reports the ambiguous `>` |
 | `states/ATTRIBUTE.ts` | `isAsyncMethodPrefix` | a non-ASCII method name after `async` (`<div async é() {…}>`) |
 | `states/INLINE_SCRIPT.ts` | `startsTypeName` | a non-ASCII type alias name (`$ type é = …`), and a name starting with a binary keyword (`type iné`) |
@@ -397,7 +395,7 @@ Marko 6.3.51.
 Left ASCII, on purpose: the expression fast path (`if (isWordCode(code))`
 in `EXPRESSION.char`: a non-ASCII character falls through to the same
 result, more slowly), `atomNameEnd`/`isIdentStartCode` (atom names are ASCII
-by decision; `x=a :é` is not split as sugar), the keyword checks that test a
+by decision), the keyword checks that test a
 lowercase ASCII first or last letter (`lookBehindForOperator`'s default case,
 `lookAheadForOperator`'s), `isWhitespaceCode` everywhere outside the atom
 look-behind, and `isIndentCode`.

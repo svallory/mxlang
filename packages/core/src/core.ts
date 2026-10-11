@@ -46,7 +46,6 @@ import { handleNode } from "./host-handle.ts";
 import type { Atom, Expr, IrNode, Position } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
-import { sugarAfterDefaultError } from "./stock-parser.ts";
 import type { Dialect } from "./syntax-table.ts";
 import {
   hasTypeArguments,
@@ -765,20 +764,9 @@ export function positionError(ctx: Ctx, error: unknown): void {
   // than reporting a line in the wrong file.
   if (error.file !== undefined && error.file !== ctx.filename) return;
   const at = positionAtOffset(ctx, error.span?.sourceStart ?? 0);
-  // A container's parse failure on `:name` right after a default value
-  // (`<if=x :b>`) gets decision 151's ruling-2 text, as `compileSource`'s
-  // parse-error rewrite gives it; only the source can tell (fragment path).
-  const sugar = sugarAfterDefaultError(
-    Object.assign(new Error(error.message), {
-      loc: { start: { ...at, index: error.span?.sourceStart ?? 0 } },
-    }),
-    ctx.source,
-  );
-  if (sugar) error.message = sugar.message;
-  const final = sugar ?? at;
   // `line`/`column` are read-only to consumers; this is their one writer.
-  (error as { line: number }).line = final.line;
-  (error as { column: number }).column = final.column;
+  (error as { line: number }).line = at.line;
+  (error as { column: number }).column = at.column;
   unpositioned.delete(error);
 }
 

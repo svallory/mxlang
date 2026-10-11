@@ -71,7 +71,7 @@ import type { Member } from "./members";
   selector: "app-team",
   template: <Card>
     <@title>Team <span.count>${shown.length}</span></@title>
-    <input:q.search type="search" value=query onInput=search/>
+    <input.search name="q" type="search" value=query onInput=search/>
     <if=shown.length>
       <ul.members>
         <for|member| of=shown by=(member => member.id)>
@@ -111,7 +111,7 @@ What changed:
 - **No `imports:` array.** MX adds `Card` and `NgClass` to the decorator and writes their `import` lines, because it knows what the template uses.
 - **`<@title>` and `<@footer>`** are [attribute tags](/language/attribute-tags-and-params/): content projected into `Card`'s named slots, without `ngProjectAs`.
 - **`<if>` / `<else>` and `<for>`** compile to `@if`, `@else` and `@for … track`.
-- **`<input:q.search>`, `<span.tag>`** are `name` and `class`. `class={ admin: member.admin }` is `[ngClass]`.
+- **`<input.search>`, `<span.tag>`** set `class`. `class={ admin: member.admin }` is `[ngClass]`.
 - **`value=query`, `onInput=search`** are plain attributes; MX picks `[value]` and `(input)`.
 - **The template is not a string.** It is highlighted, formatted and checked like code.
 

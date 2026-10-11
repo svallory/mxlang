@@ -14,8 +14,6 @@ import {
   offsetOf,
   RULES,
   rejoinAttributeName,
-  splitAtFirstColon,
-  splitChain,
   thrownTemplateError,
 } from "./rules.ts";
 
@@ -38,12 +36,14 @@ describe("rejoin-attribute-name (A2)", () => {
 });
 
 describe("default-attribute (A3)", () => {
-  it("Marko's `value` default is the default value; with a modifier the : sugar", () => {
+  it("Marko's `value` default is the default value; `:x` is its `value:x`", () => {
     expect(marko("<if=a></if>")).toContain(
       '  · attr (default) [3,5) name=[3,3) = "a"@[4,5)',
     );
-    expect(marko("<a :mail/>")).toContain('  · sugar :"mail"@[3,8)');
-    expect(compare("<if=a></if><a :b=1/>").equal).toBe(true);
+    expect(marko("<a :mail/>")).toContain(
+      '  · attr (default) [3,8) name=[3,3) mod="mail"@[4,8)',
+    );
+    expect(compare("<if=a></if><a :b=1/><a :/>").equal).toBe(true);
   });
 });
 
@@ -58,28 +58,21 @@ describe("unmerge-shorthands (A4)", () => {
     expect(compare("<a.b#i.c/>").equal).toBe(true);
     expect(compare("<a.x${y}/>").equal).toBe(true);
   });
+
+  it("a `:` in a tag head stays in its name or shorthand word, as in Marko", () => {
+    expect(marko("<a.c:b/>")).toEqual([
+      'tag "a"@[1,2) [0,8)',
+      '  · sugar ."c:b"',
+    ]);
+    expect(marko("<input:email/>")[0]).toBe('tag "input:email"@[1,12) [0,14)');
+    expect(compare("<a.c:b/><a#d:b/><input:email/><:x/>").equal).toBe(true);
+  });
 });
 
 describe("unnamed-tag (A5)", () => {
   it("Marko's `div` over an empty name span is the unnamed tag", () => {
     expect(marko("<.c/>")[0]).toBe("tag (unnamed)@[1,1) [0,5)");
     expect(compare("<.c/><div/>").equal).toBe(true);
-  });
-});
-
-describe("split-name-sugar (A6)", () => {
-  it("splits at the first colon outside ${…}", () => {
-    expect(splitAtFirstColon("a:b:c")).toEqual(["a", "b:c"]);
-    expect(splitAtFirstColon("${a ? b : c}")).toEqual([
-      "${a ? b : c}",
-      undefined,
-    ]);
-    expect(splitChain(".c#m.d")).toEqual([
-      { sigil: ".", word: "c" },
-      { sigil: "#", word: "m" },
-      { sigil: ".", word: "d" },
-    ]);
-    expect(compare("<input:email/><a.c:b/><b .c#m.d:y/>").equal).toBe(true);
   });
 });
 
@@ -142,15 +135,6 @@ describe("open-tag-comments (A14)", () => {
 describe("dynamic-name (A17)", () => {
   it("a dynamic name compares by its authored text", () => {
     expect(compare("<${x}/><my-${x}/><${a}${b}/>").equal).toBe(true);
-  });
-});
-
-describe("sugar-arguments (A6, decision 163 addendum 11)", () => {
-  it("Marko's arguments on a sugar-named attribute are the last part's args", () => {
-    expect(marko("<div .c(:a)/>")).toContain(
-      '  · sugar ."c"@[5,7) args ":a"@[8,10)',
-    );
-    expect(compare("<div .c(:a)/><div #x.y(1)/><div :n(2)/>").equal).toBe(true);
   });
 });
 

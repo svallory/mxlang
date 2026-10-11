@@ -6,11 +6,9 @@
  * table (`compileSyntax`, cached per object).
  *
  * `DEFAULT_SYNTAX` is the `.mx` row: today's grammar, byte for byte. Atoms
- * (decision 156) and the `:name` / `#id` / `.class` sugars keep their own
- * code paths until `lang-ext-move-sugars-to-mesh` moves them onto the table.
- * Until then a loaded row on one of their characters replaces the built-in
- * behaviour for that character in that position (the coexistence rule,
- * `CompiledSyntax.builtInAtoms` and the two `builtIn…End` flags).
+ * (decision 156) keep their own code path until they move onto the table.
+ * Until then an expression row on `:` replaces built-in atom lexing (the
+ * coexistence rule, `CompiledSyntax.builtInAtoms`).
  */
 import type { TagType as TagTypeValue } from "./util/constants.ts";
 import * as TagType from "./util/tag-type.ts";
@@ -736,10 +734,6 @@ export interface CompiledSyntax {
    * (decision 146 addendum 5's exemption is the built-in atom's).
    */
   readonly builtInAtoms: boolean;
-  /** True unless an attribute trigger is armed on `:`: the built-in ` :name` and bare `:` ends of an attribute value. */
-  readonly builtInColonEnd: boolean;
-  /** True unless an attribute trigger is armed on `.`: the built-in ` .name` end of an attribute value. */
-  readonly builtInPeriodEnd: boolean;
   readonly blockTag: Delimiters | null;
   readonly filter: Delimiters | null;
   /** The first characters of `blockTag.open` and `filter.open`, which stop HTML content's text run (empty on the default row). */
@@ -753,7 +747,6 @@ export interface Delimiters {
 }
 
 const COLON = 58;
-const PERIOD = 46;
 
 const compiled = new WeakMap<object, CompiledSyntax>();
 const listCache = new WeakMap<object, SyntaxDiagnostic[]>();
@@ -769,8 +762,6 @@ export const DEFAULT_COMPILED: CompiledSyntax = Object.freeze({
   value: null,
   terminators: false,
   builtInAtoms: true,
-  builtInColonEnd: true,
-  builtInPeriodEnd: true,
   blockTag: null,
   filter: null,
   contentStops: Object.freeze([]),
@@ -842,8 +833,6 @@ export function compileSyntax(table: SyntaxTable): CompiledSyntax {
       (t) => t.terminatesValue === true,
     ),
     builtInAtoms: expression?.ascii[COLON] === undefined,
-    builtInColonEnd: attribute?.ascii[COLON] === undefined,
-    builtInPeriodEnd: attribute?.ascii[PERIOD] === undefined,
     blockTag: table.blockTag,
     filter: table.filter,
     contentStops: [table.blockTag, table.filter].flatMap((d) =>

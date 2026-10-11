@@ -42,13 +42,14 @@ declines, and the parse goes on as if no row matched; an object rides on
 the trigger event (`Ranges.Trigger.claim`), and the front end places it in
 the tree by identity (`freezeCopy` keeps it) in the trigger's place, unless
 its type is `MxTrigger`. A throw out of `claim` leaves `parse` unwrapped
-(`ClaimThrow`), not as `MX_FRONT_END_INTERNAL`. Atoms and the `:name`/`#id`/`.class` sugars keep
-their own paths until they move onto the table; a loaded row on `:` (expression
-or attribute) or `.` (attribute) turns the built-in path for that character
-off (the coexistence rule, `CompiledSyntax.builtIn*`), and
-`src/template/test-support/sugar-rows.ts` holds the rows that express them
-(slice a1; differences in `src/template/mx-sugar-module.deltas.ts`). Nothing
-is lowered here.
+(`ClaimThrow`), not as `MX_FRONT_END_INTERNAL`. The parser has no name
+sugars: a colon in a tag head, a spaced ` :b` after a value and a spaced
+`#id`/`.class` lex as stock htmljs-parser lexes them. Atoms keep their own path
+until they move onto the table; a loaded row on `:` in an expression turns the
+built-in atom path off (the coexistence rule, `CompiledSyntax.builtInAtoms`).
+`src/template/test-support/sugar-rows.ts` holds layer-2 rows that express the
+atoms and the name sugars as a dialect would (test fixtures; differences in
+`src/template/mx-sugar-module.deltas.ts`). Nothing is lowered here.
 Block tags and filters (`MxBlockTag`, `MxFilter`, ast §4.5) are raw body
 children in HTML content. Tag types come from the table's `tagTypes`
 (addenda 2 and 3), never from a handler's return: the front end passes

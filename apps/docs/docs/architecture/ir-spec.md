@@ -20,10 +20,10 @@ The IR is not the parser's output. It is the result of a parse **plus** a sequen
 `compileSource` (`compile.ts`) parses the whole file with `@marko/compiler` and, in the translator's `Program.exit`, builds a `Ctx` and calls `lower(ctx, body)` once, then hands the result to the host's required `HostOptions.emitIr(ir, ctx)`. `parseFragment` (`fragment.ts`) is the same parse for a substring of a larger file, with positions shifted (section 3.4). `lower()` (`lower.ts`) then runs:
 
 1. **Tree rewrites, before any tag name is read** (`resolveUnnamedTags`, `default-tag.ts`). Top-down over the parsed tree, per tag:
-   1. **Name sugar** (decision 146, `name-sugar.ts` `rewriteNameSugar`): `<input:email>`, `#id`, `.class` and attribute-position `:x`/`#x`/`.x` become the `name`/`id`/`class` attributes the author would otherwise have written. The rewritten attribute remembers its token as `sugarLabel`, which becomes `Attr.sugar` (section 6). A host declaring `claimsAttributeHash` keeps attribute-position `#x` for itself.
-   2. **Default tag** (`resolveDefaultTag` host hook, decision 145): an unnamed tag (`<#a>`, `<.b>`, `<:c>`) is renamed to what the host answers, given its ancestors. With no hook it is a positioned error ("no default tag is declared…").
+   1. **Shorthand** (`shorthand.ts` `rewriteShorthands`): the tag-adjacent `#id` and `.class` become the `id`/`class` attributes the author would otherwise have written, as in Marko. The rewritten attribute remembers its token as `sugarLabel`, which becomes `Attr.sugar` (section 6). A `:` in a tag head is part of the tag name or the shorthand part; core splits nothing at it.
+   2. **Default tag** (`resolveDefaultTag` host hook, decision 145): an unnamed tag (`<#a>`, `<.b>`) is renamed to what the host answers, given its ancestors. With no hook it is a positioned error ("no default tag is declared…").
 
-   After this step the tree contains no sugar and no unnamed tag. A new parser may produce that tree directly; it must not hand an unnamed tag to the walk (step 5).
+   After this step the tree contains no shorthand and no unnamed tag. A new parser may produce that tree directly; it must not hand an unnamed tag to the walk (step 5).
 2. **Reserved-name check** (`checkReservedTemplate`) and the file's own `Input` (`readOwnInput`, `raiseInvalidOwnInput`).
 3. **Custom-tag `analyze` pre-walk** (`runCustomTagAnalyze`), only at the file root and only when a registered tag defines `analyze`: the whole body is lowered once on a scratch `Ctx` whose output is discarded, so every `analyze` receives the same `TagCall` its `transform` will.
 4. **Export name** (`Ir.exportName`), computed before the walk because a self-recursive call resolves to it during the walk (invariant §7.5-7).
@@ -89,7 +89,7 @@ What each span covers is listed with its field. The rule throughout: slicing the
 | --- | --- |
 | `Expr.span` | The expression's own text. For a string literal, quotes included. |
 | `Attr.nameSpan` (required) | The authored name. Zero-width at the `=` for a default attribute (`<x="post">`), as in Marko (`spans.test.ts` › "a default attribute's nameSpan"). For a colon name (`value:foo`, `x:`), the whole spelling, colons included (`lower.test.ts` › "`:modifier` is Marko's `value:modifier` attribute, not a modifier"). For a name-sugar attribute, the sugar token. |
-| `Attr.span` | The whole attribute: name through value, its arguments, refinement or method body included (`a="x"`, `x(1, 2)=3`, `v:fn:=q`, `g(x) { return x }`); a spread from `...` through its expression; a name-sugar attribute's token (`#main`, `.card`, `:email`); a default attribute from its `=` (`="post"`). Absent on a synthesized attribute (a contract default, a merged or synthesized shorthand) and on one the custom-tag builder made from no attribute. An attribute the builder copies from an authored one keeps that one's `span`. |
+| `Attr.span` | The whole attribute: name through value, its arguments, refinement or method body included (`a="x"`, `x(1, 2)=3`, `v:fn:=q`, `g(x) { return x }`); a spread from `...` through its expression; a shorthand attribute's token (`#main`, `.card`); a default attribute from its `=` (`="post"`). Absent on a synthesized attribute (a contract default, a merged or synthesized shorthand) and on one the custom-tag builder made from no attribute. An attribute the builder copies from an authored one keeps that one's `span`. |
 | static `Attr.valueSpan` | The string literal, quotes included; zero-width at the end of the name for a valueless colon name (`value:foo`, `x:`; `lower.test.ts` › "gives the valueless modifier a zero-width valueSpan at the end of its name"). |
 | `Element`/`DelegatedTag`/`AttributeTag` `nameSpan` | The tag name (`x` in `<x>`); for an attribute tag, the name after the `@` (`attributeTagNameSpan`). |
 | `Element`/`Component`/`DelegatedTag`/`AttributeTag`/`For`/`Define`/`Const` `span` | The whole tag: opening tag, body and closing tag, or the self-closed tag. |
@@ -309,7 +309,7 @@ Every attribute has an optional `span`, the whole attribute (section 3.3). Every
 
 | Kind | Fields | Produced for |
 | --- | --- | --- |
-| `static` | `value: string`, `valueSpan?`, `atom?: Atom` | A string-literal value. Also a valueless colon name, `<div value:foo/>`, with `value: ""` (bare `:foo` is the name sugar, decision 146). `atom` is set when the whole value is one atom (`mode=:strict`) and on the `name` the `:name` sugar sets (decision 156 addendum 1, item 2); `value` is then the atom's name, which every target emits, and `valueSpan` is the atom's span. |
+| `static` | `value: string`, `valueSpan?`, `atom?: Atom` | A string-literal value. Also a valueless colon name, `<div value:foo/>`, with `value: ""` (bare `:foo` is the same attribute, `value:foo`, as in Marko). `atom` is set when the whole value is one atom (`mode=:strict`); `value` is then the atom's name, which every target emits, and `valueSpan` is the atom's span. |
 | `boolean` | — | A bare attribute (`disabled`), HTML's `true`. |
 | `dynamic` | `value: Expr` | Any other expression value; also a host-resolved modifier (`resolveModifier` returns the name) and every `on*` off a native element. |
 | `bound` | `value: Expr`, `refinement?: Expr` | `name:=expr`. `name` is the base name. `refinement` is the `fn` of `name:fn:=expr`, Marko's change-handler function (`expr = fn(next)`): an identifier `Expr` over the modifier's text (`node: null`, `span` on the modifier), absent without a modifier; a modifier that is no valid identifier (`x::=q`, `v:no-update:=q`) is Marko's lowering error at the modifier. A host with no update path emits the initial value Angular emits `[name]="__mxGet(expr)"` plus `(nameChange)="__mxSet(object, 'key', fn($event))"` (signal-aware, like `[(name)]`); html ignores `refinement` at run time but type-checks it; a host that refuses `:=` refuses a refined form the same way. |
@@ -358,7 +358,7 @@ Builder-made tags (`ctx.build.delegatedTag`, a routed template call without a pr
 
 None of these is an IR kind. Each is resolved during lowering into ordinary nodes:
 
-- **Name sugar and default tag**: tree rewrites before the walk (section 1, step 1). Visible in the IR only as `Attr.sugar`.
+- **Shorthand and default tag**: tree rewrites before the walk (section 1, step 1). Visible in the IR only as `Attr.sugar`.
 - **Custom tags** (programmatic, discovered sidecars and templates): validated against their contract, then replaced by whatever `transform` returns (`IrNode[]`, possibly empty or several nodes), or routed to their template as a `Component` with a generated `name` target, `authoredName`, `returnsValue` and a synthesized `Import`. A `finalize` hook's nodes are prepended to `Ir.body`.
 - **Contracts** (`mx.contracts`, decision 142): validation only; a contract-only tag on a claimed name becomes a `DelegatedTag` (decision 130).
 - **`<try>`**: a built-in custom tag that validates and emits a `DelegatedTag` named `try`.

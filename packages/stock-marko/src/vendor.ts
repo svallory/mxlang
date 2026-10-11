@@ -55,8 +55,6 @@ export const PATCH_MARKERS = [
   "defaultAtom",
   "isSingleAtomDefault",
   "isIdentStartCode",
-  "isNameStartAt",
-  "isBareColonEnd",
   "standInAtoms",
 ] as const;
 

@@ -7,8 +7,7 @@ import {
 } from "./default-tag-check.ts";
 import type { DefaultTagScope } from "./default-tag-validate.ts";
 import { markoViewOf } from "./marko-view.ts";
-import { rewriteMxSugar } from "./mx-sugar.ts";
-import { rewriteNameSugar } from "./name-sugar.ts";
+import { rewriteShorthands } from "./shorthand.ts";
 import {
   hasStaticName,
   resolveUnnamedTag,
@@ -85,10 +84,9 @@ export function resolveUnnamedTags(ctx: Ctx, body: readonly Node[]): void {
       // An MX attribute tag is its own kind (Marko's is a `MarkoTag` named
       // `@…`); it carries sugar and tags of its own all the same.
       if (!isTagNode(node) && node?.type !== "MxAttributeTag") continue;
-      // Decision 146: `:name`/`#id`/`.class` sugar turns into the tag the
-      // author would have written without it, before the name is read.
-      rewriteNameSugar(ctx, node);
-      rewriteMxSugar(ctx, node);
+      // Marko's `#id`/`.class` shorthand becomes the attributes it sets,
+      // before the name is read.
+      rewriteShorthands(ctx, node);
       const unnamed = resolved.has(node) || isUnnamedTag(node);
       if (!resolved.has(node) && isUnnamedTag(node)) {
         resolved.add(node);

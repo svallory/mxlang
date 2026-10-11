@@ -1,6 +1,6 @@
 ---
 title: "React"
-description: "MX in place of JSX inside a React component: attribute tags for props that hold markup, tags for control flow, and the #id .class :name sugar. Hooks, props and tooling stay React."
+description: "MX in place of JSX inside a React component: attribute tags for props that hold markup, tags for control flow, and the #id and .class shorthands. Hooks, props and tooling stay React."
 ---
 
 # React
@@ -71,7 +71,7 @@ export function Team({ members }: { members: Member[] }) {
 
   return (
     <section#team.panel>
-      <input:q.search type="search" value=query onChange(event) { setQuery(event.target.value); }/>
+      <input.search name="q" type="search" value=query onChange(event) { setQuery(event.target.value); }/>
       <Table rows=shown>
         <@head>
           <th>Name</th>
@@ -96,7 +96,7 @@ export function Team({ members }: { members: Member[] }) {
 What changed:
 
 - **`<@head>`, `<@row|member|>`, `<@empty>` are `Table`'s props.** These are [attribute tags](/language/attribute-tags-and-params/): a prop that holds markup is written as markup. The pipes make `row` a function of `member`, the render prop the TSX spells `row={(member) => …}`. `Table` declares them with `AttrTag`, so each one is checked against its props type.
-- **`<section#team.panel>` and `<input:q.search>`** are `id`, `className` and `name`. `class` is `class`; MX emits `className`.
+- **`<section#team.panel>` and `<input.search>`** are `id` and `className`. `class` is `class`; MX emits `className`.
 - **`<if>` / `<else>` and `<for>`** replace the ternary and the `.map()`. Every `<for>` row gets a `key`; `by="id"` names the field when the row is an object.
 - **`class={ admin: member.admin }`** takes an object or an array, so there is no `clsx` call.
 - **`onChange(event) { … }`** is a handler written as a method.

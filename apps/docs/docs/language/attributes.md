@@ -1,6 +1,6 @@
 ---
 title: "Attributes"
-description: "Attribute forms on elements and components: the #id, .class and :name sugars, and how event handlers are named."
+description: "Attribute forms on elements and components: the #id and .class shorthands, how a colon reads, and how event handlers are named."
 ---
 
 # Attributes
@@ -54,183 +54,33 @@ the tag is an ordinary one, so the parent's `children` list and the tag's own
 [The unnamed tag](/specification/#the-mx-language-4-elements-and-attributes-the-unnamed-tag) and
 [ADR 145](/design-notes/adr-default-tag/).
 
-## `:name`, and `#id` and `.class` after an attribute
+## A colon, and `#id` or `.class` after a space
 
-`:email` sets `name="email"`, the way `#main` sets `id` and `.big` sets `class`.
-A great many tags carry a `name` (`<input>`, `<select>`, `<button>`, and every
-entry of a data vocabulary), and this is the short spelling. It works in three
-positions, in HTML and concise mode alike:
-
-```mx
-<input:email type="email"/>
-<input type="email" :email/>
-<input :email type="email"/>
-<input x="1" #main .big/>
-```
-
-```html
-<input name="email" type="email">
-<input type="email" name="email">
-<input name="email" type="email">
-<input x="1" id="main" class="big">
-```
-
-- **Tag-adjacent** (`<input:email>`): the sugar sits on the tag name.
-- **First attribute** (`<input :email type="email">`).
-- **After any attribute** (`<input type="email" :email>`, `<input x="1" #main .big>`):
-  the attribute lands where you wrote it. In concise mode,
-  `input x="1" #main .big :email` is `<input x="1" id="main" class="big" name="email">`.
-- **On Angular**, attribute-position `#x` stays Angular's template reference (`<div #ref>`; see the [Angular host](/hosts/angular/lowering/#angular-what-mx-compiles-to-name-sugar)); tag-adjacent `<div#x>` is the `id` sugar there too, and `:name` and `.class` apply in every position.
-
-`name` is then an ordinary attribute, so a tag's declared `attributes` apply to
-it, and a type or "unknown attribute" error names what you wrote, with what it
-stands for: ``attribute `:email` (`name`) must be number, got string``.
-
-In an expression position the same `:name` is an [atom](/language/atoms/), a
-value that represents itself: `mode=:strict` is `"strict"` at runtime, and a
-contract can type it (`type: "atom"`, `values`, `pattern`, `ref`). The sugar
-above is the one case where an atom standing alone sets `name` instead, and the
-`name` it sets keeps its atom-ness.
-
-### Composition
-
-Tag-adjacent sugars combine in any order. With no tag name the tag is the
-[unnamed tag](#attributes-id-and-class-without-a-tag-name), so `<:email/>` is the target's
-default tag with a name:
-
-```mx
-<a.c:b#d/>
-<a#d:b.c/>
-<:b.c/>
-```
-
-```html
-<a name="b" class="c" id="d"></a>
-<a name="b" class="c" id="d"></a>
-<div name="b" class="c"></div>
-```
-
-A tag takes **one** `:name`. `<a:b.c:d/>` is an error at the second colon (write
-the second as `name="…"`). In attribute position `#x` and `.x` merge like the
-shorthand next to the tag name: `<div.a #m .b/>` and `<div.a.b#m/>` are the same
-tag. The class order follows one rule. **With a tag-adjacent class** (`<div.c>`),
-`.x` joins it, ahead of an authored `class` (`<div.c class="x" .d/>` renders
-`class="c d x"`, the same as `<div.c.d class="x"/>`). **With no tag-adjacent
-class**, `.x` and an authored `class` keep their written order
-(`<div class="a" .b/>` is `a b`, `<div .b class="a"/>` is `b a`). A falsy authored
-literal (`false`, `0`, `null`, `undefined`) drops out, as Marko's class value does. A repeated `#x` or `:x`, or one
-beside an explicit `id=` or `name=`, follows the
-[duplicate-attribute rule](/specification/#the-mx-language-4-elements-and-attributes-name-sugar-name-id-and-class-anywhere-on-a-tag):
-the later one wins, with a warning (`<input name="a" :b/>` renders
-`<input name="b">`).
-
-### A sugar followed by a value
-
-`=` and `(` cannot be part of a sugar, so the space after a sugar is optional, and
-what follows sets the tag's **default attribute** (`value`). `<input #x=1/>` is
-`id="x"` plus `value=1`; `:x` and `.c` work the same way. A method after a sugar
-is the default attribute's function, which is how a data vocabulary writes a
-computed member, in any of three spellings that are one tag:
-
-```mx
-boolean #isOverdue({ self }) { return self.x }
-boolean #isOverdue ({ self }) { return self.x }
-boolean ({ self }) { return self.x } #isOverdue
-```
-
-(through [the core IR entry point](/specification/#the-mx-language-13-host-semantics-table-137-the-core-ir-entry-point):
-a tag `boolean` with `id="isOverdue"` and a function `value`). A tag takes **one**
-default value: `kind=1 #x=2` and `<if=a #x=b>` are errors at the second. A bound
-`value:=y` counts as the default value too. On Angular an attribute-position
-`#x=1` stays the template reference (it emits `[#x]="1"`, not `id` plus `value`);
-`:n=1`, `.c=1` and tag-adjacent `<div#x=1>` set the default value there.
-
-Tag-adjacent `=value` (`<a#x=1>`) is Marko's own default attribute, not this sugar's value, so a second plain `value=` beside it is decision 135's duplicate warning there, not the double-default error. A bound `:=` right after a sugar (`<a :n:=y/>`, `#x:=y`, `.c:=y`) is an error: write `name=... value:=...`.
-
-### What stays what Marko does
+MX reads these the way Marko does. Name sugars that give them other meanings
+(`:email` for `name="email"`, a spaced `#id` or `.class`) belong to a syntax
+module, such as Mesh's, not to core.
 
 | You write | You get |
 |---|---|
-| `<a class="hover:x"/>` | `class="hover:x"`, untouched |
-| `<a.hover:x/>` | class `hover` plus `name="x"`: a shorthand class cannot contain `:` |
-| `<div value:foo="y"/>` | Marko's attribute `value:foo`, untouched (the explicit `value:x` spelling) |
-| `<a :x=1/>` | `name="x"` plus `value=1`: a sugar followed by `=value` sets the default attribute (see [A sugar followed by a value](#attributes-name-and-id-and-class-after-an-attribute-a-sugar-followed-by-a-value)) |
-| `<div :/>` | an error: `:` is name sugar and needs a name (Marko read a bare `:` as `value:`; write `value:` for that attribute) |
-| `<div :1a/>` | an error: `:name` takes an identifier (`#x` and `.x` take whatever Marko's shorthand takes, so `<div #1a/>` is `id="1a"`) |
+| `<input:email/>`, `<:x/>`, concise `entity:Todo` | one tag name with the colon in it; on a web target that is an unknown custom tag (``Unable to find entry point for custom tag `<input:email>`.``) |
+| `<div.c:b/>`, `<div#d:b/>` | the class `c:b`, the id `d:b`: a shorthand class or id may contain `:` |
+| `<div :foo/>` | Marko's default attribute with a modifier, the same as `<div value:foo/>` |
+| `<div :/>` | `value:`, the same as `<div value:/>` |
+| `<div :b(x)/>` | Marko's error: ``Unsupported arguments on the `value:b` attribute.`` |
+| `<div #a/>`, `<div .b/>` | an error: ``Invalid attribute name `#a` …``. On Angular, `<div #ref>` is the template reference |
+| `<a x=input.o .c/>` | member access, the same as `x=input.o.c` |
+| `<if=input.x :b>` | Marko's error: ``Expected a single expression, but found `:` after it.`` |
+
+### Shorthand parts that read wrong
+
+Three tag-adjacent shorthands would compile to something other than what they
+look like, so each is a positioned error with the way out:
+
+| You write | You get |
+|---|---|
 | `<div.bg-[#fff]/>` | an error: a class or id part cannot hold an unbalanced `[` or `]` (it would read as `class="bg-[" id="fff]"`); write `class="…"` |
 | `<div.w-1.5/>` | an error: a split-off class part cannot be purely numeric (it would read as `class="w-1 5"`); `<div.2xl/>` is the class `2xl` and stays valid; write `class="…"` |
 | `<div.w-1/2/>` | an error naming the shorthand (not Marko's tag-variable text): a `/` after a shorthand starts a tag variable; write the class as `class="…"` |
-
-An attribute tag's name (`<@svg:rect>`) is a property key and is not split;
-sugar inside one applies. `<svg:rect>` is the tag `svg` plus `name="rect"`, on
-every target.
-
-### After a value: what changes
-
-A `:name`, `#id` or `.class` after whitespace inside an attribute value starts a
-new attribute. That changes one thing Marko reads differently: `.c` after a space
-is no longer member access.
-
-```mx
-<a x=input.s .c/>
-<a x=input.o.c/>
-<a x=(input.o .c)/>
-```
-
-```html
-<a x="S" class="c"></a>
-<a x="C"></a>
-<a x="C"></a>
-```
-
-Write a member chain without the space, or in parentheses. A multi-line chain in
-an attribute value (`x=foo\n  .bar()`) is split the same way.
-
-**The default attribute is exempt.** A value written right after the tag name
-(`<if=cond>`, `<const/x=items>`, `<let/x=…/>`) keeps Marko's meaning, so a chain
-across lines is still a chain:
-
-```mx
-<const/x=input.items
-  .filter(Boolean)/>
-<p>${x.length}</p>
-```
-
-```html
-<p>2</p>
-```
-
-and sugar right after such a value is not supported:
-
-```text
-<if=input.x :b>y</if>
-1:12 `:b` right after a default value is not supported; put it before the value or on the tag (`<input:email type="email">`).
-```
-
-The one exception (decision 146 addendum 5): when the default value is a single
-[atom](/language/atoms/), a `:name` after it is the name sugar, because an atom
-takes no member access or operator and nothing else can follow it. `belongs-to=:Customer
-:customer` sets the default value to the atom `:Customer` and `name` to the atom
-`:customer`; `belongs-to=a :customer` is still the error above.
-
-### Needs the patched parser (a limit, in plain words)
-
-Sugar after an attribute value needs a small patch to `htmljs-parser`, which this
-repository installs. A project that installs the published `@mxlang/*` packages
-gets the stock parser through `@marko/compiler`, and there:
-
-- `<input type="email" :email>` is a positioned MX error that says so and points
-  at the tag-adjacent spelling (`<input:email type="email">`), which works with
-  any parser, as does the first-attribute spelling (`<input :email type="email">`);
-- `x=a.b .c` is **silently** member access. MX cannot see that per use, so on a
-  stock parser keep `.c` out of attribute position after a value.
-
-Do not run `prettier-plugin-marko` on a file that uses sugar after a value: it
-bundles a stock parser and rewrites `<a x=a .b/>` to `<a x=a.b/>`, which turns a
-class into member access without any error. See [formatting](/editors/vscode/#vs-code-formatting).
-
-The rules, in full: [Name sugar](/specification/#the-mx-language-4-elements-and-attributes-name-sugar-name-id-and-class-anywhere-on-a-tag)
-and [ADR 146](/design-notes/adr-name-sugar/).
 
 ## Event attributes
 

@@ -1006,8 +1006,9 @@ function listEnum(values: readonly string[]): string {
 
 function literalValue(attr: Attr): LiteralValue | null {
   if (attr.kind === "static") {
-    // The name sugar's `:name` is stringified for every contract but an atom
-    // one (decision 156 addendum 6); an explicit `x=:a` stays an atom.
+    // A sugar's atom token (a syntax module's trigger, `Attr.sugar`) is
+    // stringified for every contract but an atom one; an explicit `x=:a`
+    // stays an atom.
     return {
       type: attr.member
         ? "member"

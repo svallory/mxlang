@@ -4,14 +4,7 @@ Bun `patchedDependencies` (root `package.json`). `bun install` applies them; `bu
 
 ## `htmljs-parser@5.18.0.patch`
 
-After whitespace inside an attribute value, `:name` and `.name` start a new attribute instead of continuing the value (decision 146, `divergences.md`):
-
-```
-<a x="1" :b/>      →  x="1"  :b
-<a x=a.b .c/>      →  x=a.b  .c       (was member access across the space)
-<a x=1 ? y : z/>   →  unchanged        (an open ? owns its :)
-<a x=(a.b .c)/>    →  unchanged        (parentheses keep member access)
-```
+Inside a named attribute's value, `??` and `?.` do not count as an open ternary, so a later `:` is not taken as its colon. A spaced ` :b` or ` .b` after a value continues the value, exactly as in stock.
 
 The patch edits both published builds (`dist/index.js`, `dist/index.mjs`). Tests: `patches/htmljs-parser.test.ts` (vitest project `patches`). It also changes how stock Marko in `packages/oracle` parses the same input.
 
@@ -29,11 +22,11 @@ To regenerate on a version bump (or to change the rule), in this order (`bun ins
 
 To change the rule without a version bump: `bun patch htmljs-parser@<ver>` (the printed `node_modules/htmljs-parser` already has the current patch applied), edit both dist files, `bun patch --commit 'node_modules/htmljs-parser'`. Bun (1.4.2, and the pinned 1.3.14 too) writes an empty `node_modules/htmljs-parser/.bun-tag-<hash>` file section at the top of the patch: delete those lines, then `rm -rf node_modules/.bun/htmljs-parser@<ver>* node_modules/htmljs-parser && bun install` to reinstall from the cleaned file. Left in, it breaks `packages/core/src/stock-parser.test.ts` (and its `@mxlang/target-html` twin), which reverses the patch onto a copy of the package and finds no such file.
 
-The edits: an `attrValue` flag set where a named attribute's (or a spread's) value expression is entered — not for a default attribute (`<if=a .b>`, `<const/x=…>`), which is exempt, except that a `defaultAtom` flag marks a default value and `isSingleAtomDefault` lets ` :ident` end it when the whole value so far is one atom (`belongs-to=:Customer :customer`, decision 146 addendum 5); `?` handling skips `??` and `?.` so they do not count as ternaries; `lookAheadForOperator` ends the value at ` :ident` (no open `?`) and ` .ident`; a small `isIdentStartCode` helper. The `:` check also ends the value at a bare `:` right before `/>`, `>`, a newline or the end of the source, so core can report "`:` is name sugar and needs a name".
+The edits: an `attrValue` flag set where a named attribute's (or a spread's) value expression is entered, so `?` handling there skips `??` and `?.` and does not count them as ternaries; a `defaultAtom` flag and `isSingleAtomDefault`, which belong to atoms and have no caller in the patch now that it has no name sugars (the template parser still calls `isSingleAtomDefault` for a dialect's `terminatesValue` trigger; atoms' own cleanup removes the patch's copy); a small `isIdentStartCode` helper. A spaced ` :b`, ` .b` or bare ` :` after a value continues the value, exactly as in stock 5.18.0.
 
 It also makes every look-behind and look-ahead that decides whether a word starts or ends treat a non-ASCII identifier character as a word character (decision 156 addendum 13: a code point at or above U+0080 that is `ID_Continue`, or U+200C or U+200D, with a surrogate pair read as one code point; `isUnicodeWordCode`, `wordWidthBefore`, `wordWidthAt`. A symbol such as `©` is no word character, as in stock): division after a non-ASCII identifier (`x=é / 2`), names ending in a keyword (`x=énew y=1`), postfix `!`, member access across whitespace, `async` method names, `type` alias names and the ambiguous-`>` check. Stock 5.18.0 misreads all of these; the source copy's `PROVENANCE.md` lists each function. Every look-behind that asks whether a character is whitespace treats Unicode whitespace and line terminators as ASCII whitespace (decision 156 addenda 10 to 12: `(é)\u00a0/ 2` divides, `a +\u00a0` before a terminator continues), except in HTML body text, where only ASCII whitespace before `//` or `/*` starts a comment, as in Marko (addendum 13: `<p>Visit\u00a0//cdn.example/x.js</p>` is text). It also never throws (decision 165): a comment inside a text tag's open tag, a stray closing tag after a nameless concise tag (`,--/</e>`) and a nameless tag still open at the end of the input (`<,>a`) are an `onError`, not a `TypeError` out of `parse()`.
 
-Known changes to valid input: the `.` half changes `x=a.b .c` and html-mode multi-line chains (`x=foo\n  .bar()`), but not default attributes (`<if=a .b>`, `<const/x=items\n  .filter()/>`), which keep Marko's meaning (decision 151), except a default value that is a single atom followed by ` :name` (decision 146 addendum 5). The `:` half changes two valid TS spellings, a return type written with a space before the colon and no space after it (`(a) :T => a`) or a newline after it (`(a) :\n T => a`); `(a): T` and `(a) : T` are unchanged.
+Known changes to valid input: none from the attribute-value rules. `x=a.b .c`, html-mode multi-line chains (`x=foo\n  .bar()`), and default attributes (`<if=a .b>`, `<const/x=items\n  .filter()/>`) read as in stock.
 
 Published `@mxlang/*` packages do not carry this patch; a consumer install resolves stock `htmljs-parser`.
 

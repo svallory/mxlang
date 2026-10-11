@@ -5,6 +5,13 @@ description: "Why `<input:email>`, `<input :email>` and `<:email>` set `name`, w
 
 # ADR 146: the `:name` sugar
 
+:::note Core no longer has the name sugars
+`@mxlang/core` reads `<input:email>`, `<:email>`, `:email` and a spaced `#id` or
+`.class` exactly as Marko does. The name sugars are a syntax module's (Mesh's),
+not core's; see [Attributes](/language/attributes/#attributes-a-colon-and-id-or-class-after-a-space).
+This record stays as history.
+:::
+
 **Status:** accepted 2026-10-04 (decision 146 and its addendum in the decisions log). **Depends on:** ADR 145 (`defaultTag`). **Implementation:** three PRs (parser patch, core, tooling and docs).
 
 ## Context

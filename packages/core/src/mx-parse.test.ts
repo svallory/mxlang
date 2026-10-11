@@ -7,11 +7,11 @@ import { lower } from "./lower.ts";
 import { lookup } from "./test-targets.ts";
 
 /**
- * Port PR 5, review round 1 (lead ruling: PR 5 keeps today's text and
- * position). The front end reports `MX_SUGAR_BOUND` on every tag-adjacent
- * `:=`, but today a value that cannot be bound reached Marko's own binding
- * check first. Every expected value below is 9293794df's actual output
- * (the Marko parse), probed through the same two entries.
+ * A tag-adjacent `:=` (`<div:=x/>`) is Marko's bound default value
+ * (`value:=x`): a value that cannot be bound is Marko's binding error, at the
+ * value, and a bindable one compiles (stock `@marko/compiler` 5.42.11 on
+ * `htmljs-parser` 5.18.0, probed: `<div:=x/>`, `div:=x` and `<div:=a.b/>`
+ * compile, `<div:=1/>` is the binding error at 1:7).
  */
 
 const FILE = "/tmp/mx-core-test/bound.mx";
@@ -56,35 +56,29 @@ function viaFragment(source: string): unknown {
 
 const BINDING =
   "Attributes may only be bound to identifiers or member expressions";
-const BOUND_ON_SUGAR =
-  "a bound value is not supported on name sugar; write name=... value:=...";
-const SECOND_NAME =
-  'a tag takes one `:name`; this one already has a name (write the second as `name="…"`)';
-
 describe.each([
   ["compileSource", viaCompile],
   ["parseFragment + lower", viaFragment],
 ])("a tag-adjacent `:=` on the MX path (%s)", (_name, run) => {
   it.each([
     // A value that cannot be bound: Marko's binding error, at the value.
-    ["<div:=1/>", BINDING, 1, 6],
-    ["div:=1", BINDING, 1, 5],
-    ["<div:=(1)/>", BINDING, 1, 7],
-    // A bindable value: the sugar's own error, at the `:`.
-    ["<div:=x/>", BOUND_ON_SUGAR, 1, 4],
-    ["div:=x", BOUND_ON_SUGAR, 1, 3],
-    ["<div:=a.b/>", BOUND_ON_SUGAR, 1, 4],
-    ["<div:=(x)/>", BOUND_ON_SUGAR, 1, 4],
-    // A later sugar error still wins over the binding error, as today: the
-    // sugar check ran over the whole tree before Marko's binding check.
-    ["<div:=1/>\n<a :b:c/>", SECOND_NAME, 2, 5],
-  ])("%j", (source, message, line, column) => {
+    ["<div:=1/>", 1, 6],
+    ["div:=1", 1, 5],
+    ["<div:=(1)/>", 1, 7],
+  ])("%j", (source, line, column) => {
     const error = run(source);
     expect(error).toBeInstanceOf(TranslateError);
-    expect(error).toMatchObject({ message, line, column });
+    expect(error).toMatchObject({ message: BINDING, line, column });
   });
 
-  it("an optional member is not the sugar's error and Marko binds it", () => {
+  it.each(["<div:=x/>", "div:=x", "<div:=a.b/>", "<div:=(x)/>"])(
+    "%j: a bindable value compiles, as in Marko",
+    (source) => {
+      expect(run(source)).toBeUndefined();
+    },
+  );
+
+  it("an optional member is bound too", () => {
     expect(run("<div:=a?.b/>")).toBeUndefined();
   });
 });

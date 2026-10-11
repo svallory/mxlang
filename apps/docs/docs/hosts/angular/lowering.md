@@ -1,6 +1,6 @@
 ---
 title: "Angular: what MX compiles to"
-description: "Each MX construct and the Angular template syntax it becomes: block control flow, property and attribute bindings, events, the name sugar, and the errors."
+description: "Each MX construct and the Angular template syntax it becomes: block control flow, property and attribute bindings, events, the shorthands, and the errors."
 ---
 
 # Angular: what MX compiles to
@@ -39,12 +39,12 @@ The expression is evaluated once, in an `@let` before the element. This step loa
 
 `*ngIf="x"` and other `*` directives pass through only as the **first** attribute of a tag. Later in the tag, ` *name` parses as a multiplication and the error says so. Prefer `<if>` and `<for>`.
 
-## Name sugar
+## Shorthands and colons
 
-`:name`, `#id` and `.class` work as on every host, with two Angular facts:
+`#id` and `.class` next to the tag name work as on every host, with two Angular facts:
 
-- **`<div #ref>` is still a template reference.** In attribute position `#x` is Angular's; next to the tag name, `<div#x>`, it is the `id` sugar.
-- **`<svg:rect>` is the tag `svg` with `name="rect"`.** Wrap in `<svg>` and write `<rect>`.
+- **`<div #ref>` is a template reference.** In attribute position `#x` is Angular's; next to the tag name, `<div#x>`, it is the `id` shorthand.
+- **`<svg:rect>` is one tag name.** A colon in a tag name is part of the name, as in Marko, so it reaches the template as Angular's `svg:`-prefixed element.
 
 ## Events
 

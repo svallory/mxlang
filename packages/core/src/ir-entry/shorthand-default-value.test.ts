@@ -4,16 +4,11 @@ import type { DelegatedTag } from "../ir.ts";
 import { type LowerSourceOptions, lowerSource, type Spanned } from "./index.ts";
 
 /**
- * Decision 146 addendum 4 (PR 4): a sugar followed directly by `=value` or
- * `(params) { body }` sets the tag's default attribute (`value`). Mesh's
- * `boolean #isOverdue({ self }) { return self.x }` is a `boolean` tag with
- * `id="isOverdue"` and a function `value`.
- *
- * Core's `name-sugar.test.ts` already pins the sugar forms, both orders of a
- * method default, the second-default error positions and the `(at 1:5)`
- * wording; this file keeps what that one does not reach through the entry
- * point: Mesh's own destructuring spelling, the sugar-derived `name` as an
- * atom beside a default value, and the contract errors on `value`.
+ * A tag-adjacent shorthand followed directly by `=value` or
+ * `(params) { body }` sets the tag's default attribute (`value`), through the
+ * IR entry point: `boolean#isOverdue({ self }) { return self.x }` is a
+ * `boolean` tag with `id="isOverdue"` and a function `value`, and a contract
+ * sees that `value` as Marko's default attribute, positioned at its `=`.
  */
 
 type Attr = Spanned<DelegatedTag>["attrs"][number];
@@ -47,24 +42,12 @@ function summary(tag: { attrs: Attr[] }): Record<string, string> {
   );
 }
 
-describe("Mesh: boolean #isOverdue({ self }) { return self.x }", () => {
+describe("boolean#isOverdue({ self }) { return self.x }", () => {
   const FN = "function ({ self }) { return self.x; }";
 
   it.each([
-    ["concise", "boolean #isOverdue({ self }) { return self.x }\n"],
-    [
-      "concise, space before the params",
-      "boolean #isOverdue ({ self }) { return self.x }\n",
-    ],
-    [
-      "concise, params first",
-      "boolean ({ self }) { return self.x } #isOverdue\n",
-    ],
-    ["html", "<boolean #isOverdue({ self }) { return self.x }/>\n"],
-    [
-      "html, params first",
-      "<boolean ({ self }) { return self.x } #isOverdue/>\n",
-    ],
+    ["concise", "boolean#isOverdue({ self }) { return self.x }\n"],
+    ["html", "<boolean#isOverdue({ self }) { return self.x }/>\n"],
   ])("%s", (_name, source) => {
     const tag = firstTag(source);
     expect(tag.name).toBe("boolean");
@@ -77,7 +60,7 @@ describe("Mesh: boolean #isOverdue({ self }) { return self.x }", () => {
 
   it("as a child line", () => {
     const entity = firstTag(
-      "entity\n  boolean #isOverdue({ self }) { return self.x }\n  string #title\n",
+      "entity\n  boolean#isOverdue({ self }) { return self.x }\n  string#title\n",
     );
     const [overdue, title] = entity.children.map((node) => {
       expect(node.kind).toBe("DelegatedTag");
@@ -96,18 +79,6 @@ function nameOf(attr: Attr): string | undefined {
   return attr.kind === "spread" ? undefined : attr.name;
 }
 
-describe("the sugar-derived name stays an atom beside a default value", () => {
-  it.each(["<a :x=input.y/>", "a :x=input.y", "<a:x=1/>"])("%s", (source) => {
-    const name = firstTag(`${source}\n`).attrs.find(
-      (a) => nameOf(a) === "name",
-    );
-    expect(name?.kind).toBe("static");
-    if (name?.kind !== "static") return;
-    expect(name.value).toBe("x");
-    expect(name.atom).toMatchObject({ kind: "atom", name: "x" });
-  });
-});
-
 describe("contracts see the default value", () => {
   const tags: Record<string, CustomTag> = {
     boolean: {
@@ -117,7 +88,7 @@ describe("contracts see the default value", () => {
 
   it("a function value passes `value: function`", () => {
     const { ir, diagnostics } = lowerSource(
-      "boolean #isOverdue({ self }) { return self.x }\n",
+      "boolean#isOverdue({ self }) { return self.x }\n",
       "/d.mx",
       { customTags: tags },
     );
@@ -125,31 +96,30 @@ describe("contracts see the default value", () => {
     expect(ir).toBeDefined();
   });
 
-  it("a wrong value is E1 on `value`, positioned at the sugar's value", () => {
-    const { ir, diagnostics } = lowerSource("boolean #isOverdue=1\n", "/d.mx", {
+  it("a wrong value is E1 on `value`, positioned at the shorthand's value", () => {
+    const { ir, diagnostics } = lowerSource("boolean#isOverdue=1\n", "/d.mx", {
       customTags: tags,
     });
     expect(ir).toBeUndefined();
     expect(diagnostics).toMatchObject([
       {
-        message:
-          "`<boolean>`: attribute `value` (set by `#isOverdue=…`) must be function, got number",
+        message: "`<boolean>`: attribute `value` must be function, got number",
         line: 1,
-        column: 19,
+        column: 17,
       },
     ]);
   });
 
-  it("a closed contract without `value` rejects the sugar's value at it", () => {
-    const { ir, diagnostics } = lowerSource("item #x=1\n", "/d.mx", {
+  it("a closed contract without `value` rejects the shorthand's value at it", () => {
+    const { ir, diagnostics } = lowerSource("item#x=1\n", "/d.mx", {
       customTags: { item: { attributes: { id: { type: "string" } } } },
     });
     expect(ir).toBeUndefined();
     expect(diagnostics).toMatchObject([
       {
-        message: "`<item>`: unknown attribute `value` (set by `#x=…`)",
+        message: "`<item>`: unknown attribute `value`",
         line: 1,
-        column: 8,
+        column: 6,
       },
     ]);
   });

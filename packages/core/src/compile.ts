@@ -52,7 +52,7 @@ import {
   stripMxTypes,
 } from "./mx-parse.ts";
 import { hintParseError } from "./parse-error-hints.ts";
-import { sugarAfterDefaultError, tagParamError } from "./stock-parser.ts";
+import { tagParamError } from "./stock-parser.ts";
 import {
   type Dialect,
   explicitSyntaxOf,
@@ -591,12 +591,8 @@ export function compileSource(
     if (recorded && isTranslateError(error)) error.errors = undefined;
     annotateCloseTagOpener(error, source);
     hintParseError(error, source, filePolicy);
-    // A failure inside a tag's `|params|`, and sugar right after a default
-    // value (decision 151, ruling 2), become positioned MX errors.
-    const thrown =
-      tagParamError(error, source) ??
-      sugarAfterDefaultError(error, source) ??
-      error;
+    // A failure inside a tag's `|params|` becomes a positioned MX error.
+    const thrown = tagParamError(error, source) ?? error;
     if (recorded && thrown === error && isTranslateError(error)) {
       error.errors = recorded;
     }

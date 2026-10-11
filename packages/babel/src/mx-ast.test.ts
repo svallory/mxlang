@@ -167,7 +167,7 @@ it("MxErrorCode's MX_* members are the front-end rows of ast §3.13", () => {
   const declared = [...source.matchAll(/^ {2}\| "(MX_[A-Z_]+)"/gm)].map(
     (m) => m[1] ?? "",
   );
-  expect(table).toHaveLength(17);
+  expect(table).toHaveLength(8);
   expect(new Set(declared)).toEqual(new Set(table));
   expect(table).toContain("MX_UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE");
   expect(table).toContain("MX_INPUT_ENDS_IN_DELIMITER");
@@ -177,7 +177,7 @@ it("MxErrorCode accepts template, Babel and MX codes and nothing else", () => {
   const codes: MxErrorCode[] = [
     "MISMATCHED_CLOSING_TAG",
     "BABEL_UnexpectedToken",
-    "MX_SECOND_NAME",
+    "MX_TAG_NAME_MISSING",
     "MX_UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE",
   ];
   expect(codes).toHaveLength(4);
@@ -185,7 +185,9 @@ it("MxErrorCode accepts template, Babel and MX codes and nothing else", () => {
   const lowering: MxErrorCode = "MX_DUPLICATE_DEFAULT";
   // @ts-expect-error not a code
   const unknown: MxErrorCode = "SOMETHING";
-  expect([lowering, unknown]).toHaveLength(2);
+  // @ts-expect-error the name-sugar codes left with the name sugars
+  const removed: MxErrorCode = "MX_SUGAR_BOUND";
+  expect([lowering, unknown, removed]).toHaveLength(3);
 });
 
 // ---- fixtures --------------------------------------------------------------

@@ -17,8 +17,8 @@
  * held.
  *
  * Attribute entries are what lowering produced: the tag's attributes after
- * the name-sugar rewrite, so a merged `class` or a sugar's default value is
- * one entry, as a hook saw it on the Marko-shaped view.
+ * the shorthand rewrite, so a merged `class` or a shorthand's default value
+ * is one entry, as a hook saw it on the Marko-shaped view.
  */
 import { attrNameOf, attrValueOf } from "./attr-fields.ts";
 import { bindingIdentifierNodes, type Ctx, type Node } from "./core.ts";
@@ -276,7 +276,7 @@ function holdsAttributeTags(child: Node): boolean {
 
 /**
  * The entry of one attribute of `tag`: an `MxAttribute`/`MxSpreadAttribute`,
- * or a record the name-sugar rewrite built in their place. The tag is what
+ * or a record the shorthand rewrite built in their place. The tag is what
  * positions a shorthand's record, which has no range of its own.
  */
 export function hostAttributeViewOf(

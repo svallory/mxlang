@@ -70,7 +70,7 @@ const SAMPLES = [
       // ship as invalid CSS and nothing else here would notice.
       'style="padding-left:0rem"',
       'style="padding-left:1rem"',
-      // The name sugar and the atom, as the attributes they stand for.
+      // The class shorthand, as the attribute it stands for.
       '<input name="q" type="search" placeholder="Filter" required class="search">',
       "<li data-first style",
       '<span class="badge">New</span>',

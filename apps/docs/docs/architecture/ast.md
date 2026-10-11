@@ -79,8 +79,8 @@ Defined `[C]babel.js:8233-8280`; declared `[C]types.d.ts:3704-3714`. Aliases
 
 | Field | Type | Optional | Read by MX |
 |---|---|---|---|
-| `name` | `Expression` (a `StringLiteral` for a static name, a template literal or other expression for `<${x}>`) | required | everywhere a tag is dispatched: `core/src/lower.ts` `lowerChildList` (`name?.value === "if"`), `lowerTemplate` (statement scan), `core/src/default-tag.ts` `isUnnamedTag` (empty-span test), `core/src/name-sugar.ts` `rewriteNameSugar`, `core/src/ir-entry/authored-tags.ts` `scanAuthoredTags` |
-| `attributes` | `(MarkoAttribute \| MarkoSpreadAttribute)[]` | default `[]` | `core/src/lower.ts` `lowerAttrs`, `lowerReturn` (`<return>`), `core/src/name-sugar.ts` `rewriteAttributes` |
+| `name` | `Expression` (a `StringLiteral` for a static name, a template literal or other expression for `<${x}>`) | required | everywhere a tag is dispatched: `core/src/lower.ts` `lowerChildList` (`name?.value === "if"`), `lowerTemplate` (statement scan), `core/src/default-tag.ts` `isUnnamedTag` (empty-span test), `core/src/shorthand.ts` `rewriteShorthands`, `core/src/ir-entry/authored-tags.ts` `scanAuthoredTags` |
+| `attributes` | `(MarkoAttribute \| MarkoSpreadAttribute)[]` | default `[]` | `core/src/lower.ts` `lowerAttrs`, `lowerReturn` (`<return>`), `core/src/shorthand.ts` `rewriteShorthands` |
 | `body` | `MarkoTagBody` | required | `lower.ts` `lowerBlock` (`node.body?.body`), `lowerReturn` |
 | `arguments` | `(Expression \| SpreadElement)[] \| null` | optional | `lower.ts` `rejectArgsWithProps`, `lowerDelegatedTag`, `lowerComponent`, `lowerAuthoredTag` |
 | `typeArguments` | `TSTypeParameterInstantiation \| null` | optional | `core/src/core.ts` `rejectUnsupportedFields` (rejected: "type arguments on … are not supported") |
@@ -119,9 +119,9 @@ Defined `[C]babel.js:8162-8193`; declared `[C]types.d.ts:3681-3689`. Alias
 | `default` | `boolean \| null` | optional | `lower.ts` `attrNameSpan`, `validateBuiltinValueAttributes`, `lowerReturn` |
 | `bound` | `boolean \| null` | optional | `lower.ts` `validateBoundAttributes`, `lowerAttrNamed` |
 
-MX adds four ad hoc fields to attributes it synthesizes for name sugar:
-`sugarNameSpan`, `sugarLabel`, `sugarAt` and real `start`/`end`
-(`core/src/name-sugar.ts` `sugarAttr`, `mergeClassTokens`); `lower.ts` `attrNameSpan`,
+MX adds ad hoc fields to attributes it synthesizes for a shorthand:
+`sugarNameSpan`, `sugarLabel` and real `start`/`end`
+(`core/src/shorthand.ts` `shorthandIdAttr`, `mergeClassTokens`); `lower.ts` `attrNameSpan`,
 `lowerAttr` and `lowerAttrNamed` read them.
 
 #### `MarkoSpreadAttribute`
@@ -229,8 +229,7 @@ Two entry points, both through `compileSync`:
   `PARSE_ONLY_TRANSLATOR` (`fragment.ts`): **no core taglib**. Probe:
   `import x from "./y"` parses as a `MarkoTag` named `import` with attributes
   `x`, `from` and `"./y"`; `class { x = 1 }` as a tag `class` with one
-  attribute named `{ x = 1 }`. `name-sugar.ts` `CORE_STATEMENT_TAGS` carries a fallback list
-  of statement tag names for exactly this case.
+  attribute named `{ x = 1 }`.
 - `compileSource` (`packages/core/src/compile.ts`) with the host's
   translator (`compile.ts` `createTranslator`), which registers MX's core taglib
   (`packages/core/src/taglib/core-tags.json`; `statement: true,
@@ -251,10 +250,10 @@ the row says "not stated".
 |---|---|---|---|---|
 | A1 | The Marko node family lives inside a patched `@babel/types` (`[C]babel.js:8065-8280`), members of Babel's `Node` union (`[C]types.d.ts:381`); `Program` gains `params` (`[C]babel.js:5511`). | Marko's translator is a Babel plugin: it traverses and replaces Marko nodes with Babel's own `NodePath`, scope and builders, so the nodes must be Babel nodes. `MarkoTagBody` is a Babel `Scope`/`FunctionParent` (`[C]babel.js:8201-8207`) so tag params get Babel bindings. | MX never runs Marko's translator. MX needs node types it owns, defined in `@mxlang/babel` without patching Babel's own definitions, and traversable by MX's own walker. | The `Mx*` family (§3), declared as a separate union in `@mxlang/babel`. Babel nodes appear only inside expression containers (§4). |
 | A2 | The attribute name is split at the **last** `:` into `name` + `modifier` (`[C]chunk-src.js:6111-6115`). Decision 170 settled the open question: the split is data MX keeps. | Marko's translator implements modifiers (`class:x`, `value:fn:=x`, `x:scoped`). | `class:`/`style:` reach the host through a hook, but every consumer was re-splitting the string (`lower.ts` `isOrdinaryColonName`, `lowerAttrNamed`); carrying the split as fields removes the re-derivation. | `MxAttribute.name` stays the authored name, colons included, **and** carries `modifier` + `modifierSpan` (decision 170, §3.5). The differential compares the split field by field (§8 D4). |
-| A3 | An attribute with an empty head is named `"value"` with `default: true` (`[C]chunk-src.js:6117`), so `<if=a>` and bare `:x` both become `value`; the default attribute's `loc` starts at the `=` and has no name text (`lower.ts` `attrNameSpan`). | Marko's tags read their default input as `input.value`. | `<if=a>` is "the tag's default value", not an attribute named `value`. Bare `:x` is the name sugar (decision 146, divergence `divergences.md`, row "Bare `:x` is `name="x"`"). | `MxAttribute.name: null` for the default attribute (§3.5); bare `:x` is `MxShorthand { sigil: ":" }` (§3.6). |
-| A4 | Tag-adjacent `#id`/`.class` are buffered and merged into `class`/`id` attributes at `onOpenTagEnd` (`[C]chunk-src.js:6148-6171`); several classes become one string, a template, or an array; the merged attributes have **no `loc`** (probe: `MarkoAttribute@noloc`). A shorthand `id` beside an `id` attribute throws (6168). | Marko's output is HTML; merging gives the translator one `class` attribute. | Shorthands are their own syntax with their own spans; MX's name sugar has to recover them (`name-sugar.ts` exists for this; `lower.ts` `lowerAttrNamed` falls back to the tag position). Merging and duplicate rules are language semantics, owned by lowering. | `MxShorthand` nodes, in source order, each with its own span (§3.6). No merge in the AST. |
+| A3 | An attribute with an empty head is named `"value"` with `default: true` (`[C]chunk-src.js:6117`), so `<if=a>` and bare `:x` both become `value`; the default attribute's `loc` starts at the `=` and has no name text (`lower.ts` `attrNameSpan`). | Marko's tags read their default input as `input.value`. | `<if=a>` is "the tag's default value", not an attribute named `value`. Bare `:x` reads as in Marko: the default value with the modifier `x` (`value:x`). | `MxAttribute.name: null` for the default attribute (§3.5); bare `:x` is that default attribute with `modifier: "x"` (§3.5). |
+| A4 | Tag-adjacent `#id`/`.class` are buffered and merged into `class`/`id` attributes at `onOpenTagEnd` (`[C]chunk-src.js:6148-6171`); several classes become one string, a template, or an array; the merged attributes have **no `loc`** (probe: `MarkoAttribute@noloc`). A shorthand `id` beside an `id` attribute throws (6168). | Marko's output is HTML; merging gives the translator one `class` attribute. | Shorthands are their own syntax with their own spans; MX's shorthand merge has to recover them (`shorthand.ts` exists for this; `lower.ts` `lowerAttrNamed` falls back to the tag position). Merging and duplicate rules are language semantics, owned by lowering. | `MxShorthand` nodes, in source order, each with its own span (§3.6). No merge in the AST. |
 | A5 | An empty tag name becomes `"div"` (`[C]chunk-src.js:6078`), leaving the `StringLiteral` with an empty span. | Marko has one host. | Decision 145: an unnamed tag resolved by the `defaultTag` ladder. MX detects it today by an empty-span test (`default-tag.ts` `isUnnamedTag`, `core/src/ir-entry/authored-tags.ts` `scanAuthoredTags`). | `MxTagName { kind: "unnamed" }` (§3.3). |
-| A6 | A tag name containing `:` is one name (`<a:b>` is tag `a:b`); a `:` inside a shorthand is part of the class (`.c:b`). | htmljs-parser's tag-name rule; Marko has no name sugar. | Decision 146 and addendum (`divergences.md`, row "A static tag name may not contain `:`", and row "A shorthand class or id cannot contain `:`"): the head splits into tag, `:name`, `#id`, `.class` in any order. MX does it post-parse (`name-sugar.ts`, header comment). | `MxShorthand` items in `MxTag.shorthands`; the name never contains `:` (§3.3, §3.6). |
+| A6 | A tag name containing `:` is one name (`<a:b>` is tag `a:b`); a `:` inside a shorthand is part of the class (`.c:b`). | htmljs-parser's tag-name rule; Marko has no name sugar. | The same: core has no name sugar ([Attributes](/language/attributes/#attributes-a-colon-and-id-or-class-after-a-space)). | `MxShorthand` items in `MxTag.shorthands`; a `:` stays in the name or the shorthand value (§3.3, §3.6). |
 | A7 | Attribute tags are moved out of the body into `tag.attributeTags`, with preceding comments (`[C]chunk-src.js:5915-5927`); a `controlFlow` tag holding attribute tags has its body and `attributeTags` swapped and is moved into the **parent's** `attributeTags`, with `body.attributeTags = true` (`[C]chunk-src.js:6194-6227`). The moved list is then re-sorted by `start` (`attributeTags.sort(sortByStart)`, `[C]chunk-src.js:6213`). Probe: `<Card><@head/><if=a><@item/></if></Card>` puts the `<if>` in `Card.attributeTags`. | Marko's translator compiles attribute tags as input properties of the parent; moving them at parse time saves a pass. | Lowering already re-derives structure: three synchronized views (`attributeTags`, `attributeTagTree`, `attrTagProps`) and source-order merging (`lower.ts` `mergeBySourceOffset`, `lowerAttributeTags`). The AST should show what was written, where it was written. | Attribute tags stay in `body` in source order as `MxAttributeTag` nodes; nothing moves (§3.7, §8 D2). |
 | A8 | Statement tags (`import`, `export`, `static`, `server`, `client`, `class`) are tags whose open tag is kept raw (`rawOpenTag`, `[C]chunk-src.js:6173-6177`) and whose meaning comes from the taglib (`core-tags.json`, `<import>` through `<class>`); without the taglib they parse as tags with garbage attributes (probe, §1.4). MX recovers the statement by slicing the source on `loc` (`lower.ts` `lowerStatement`, `lowerTemplate`) and regexes (`lower.ts` `lowerStatement`). Spec §2 documents the cost (`apps/docs/docs/specification.md` ("Syntax")). | Marko's grammar is tag-shaped at the top level; the translator gives the statement tags meaning. | They are TypeScript statements. MX needs the parsed statement, its keyword and its span. | `MxModuleStatement { keyword, statements }` with a parsed Babel statement list (§3.10). |
 | A9 | `MarkoClass` (`[C]babel.js:8152-8161`), a `Class`-aliased node. | Marko 5's class components. | MX has no class components; `class` is not a statement MX accepts (`lower.ts` `lowerStatement` rejects anything but `import`/`static`/`export`). | No node. `class { }` at the top level is an `MxModuleStatement { keyword: "class" }` that lowering rejects (§3.10), so the error keeps its position. |
@@ -355,7 +354,7 @@ The AST does not decide which: resolution is lowering's (spec §7).
 | `typeParams` | `MxTypeParameters \| null` | no | `<T>` before params |
 | `params` | `MxParameterList \| null` | no | `\|a, b\|`; `null` means no pipes, an empty list means `\|\|` |
 | `shorthands` | `MxShorthand[]` | no | tag-adjacent `#id`, `.class`, `:name`, source order |
-| `attributes` | `(MxAttribute \| MxShorthand \| MxSpreadAttribute \| MxComment \| MxTrigger)[]` | no | attribute list in source order, attribute-position sugar, open-tag comments and attribute triggers (§4.4) included |
+| `attributes` | `(MxAttribute \| MxShorthand \| MxSpreadAttribute \| MxComment \| MxTrigger)[]` | no | attribute list in source order, trigger-placed shorthands, open-tag comments and attribute triggers (§4.4) included |
 | `body` | `MxChild[] \| null` | no | `null` for a self-closed tag and for a tag the parser closed at its open tag (`bodyMode: "void"`); children in source order, attribute tags included |
 | `bodyMode` | `"html" \| "parsed-text" \| "preserve" \| "parsed-text-preserve" \| "void"` | no | the parse shape `tagShape(name)` answered (§3.12) |
 | `selfClosed` | `boolean` | no | `/>` written |
@@ -365,9 +364,8 @@ The AST does not decide which: resolution is lowering's (spec §7).
 | `incomplete` | `boolean` | no | `true` when the template parser stopped (§3.13) before this tag's end event |
 
 `MxCloseTag` is `{ span: Span; name: string \| null; nameSpan: Span \| null }`:
-`span` is `</` through `>`; `name` is the **written** closing name, sugar
-included (`</div:x>` gives `"div:x"`, spec "Name sugar",
-`specification.md` ("Name sugar: `:name`, `#id` and `.class` anywhere on a tag"); `divergences.md`, row "A static tag name may not contain `:`"), from `onCloseTagName`;
+`span` is `</` through `>`; `name` is the **written** closing name
+(`</div:x>` gives `"div:x"`), from `onCloseTagName`;
 `name` and `nameSpan` are `null` for `</>`. The front end does not compare it
 with the open name: htmljs reports `MISMATCHED_CLOSING_TAG` (code 21,
 `[H]util/error-code.d.ts`) itself.
@@ -426,31 +424,25 @@ A field shape of `MxTag` (no `type`).
 type MxTagName =
   | { readonly kind: "static"; readonly value: string; readonly span: Span }
   | { readonly kind: "dynamic"; readonly expression: MxExpression; readonly span: Span }  // <${x}>, <my-${x}>
-  | { readonly kind: "unnamed"; readonly span: Span };                                     // <#a>, <.b>, <:c>, concise #a
+  | { readonly kind: "unnamed"; readonly span: Span };                                     // <#a>, <.b>, concise #a
 ```
 
-- `static`: the authored name with the head sugar removed. The written name
-  (htmljs's `onOpenTagName` range) is split at its **first** `:`
-  (`specification.md` ("Name sugar: `:name`, `#id` and `.class` anywhere on a tag"); decision 146, 23:23 addendum): before it is
-  `value`, from it on is a tag-position `MxShorthand { sigil: ":" }` (§3.6).
-  `<input:email>` is `value: "input"`, `span` `[1, 6)`. So `value` never
-  contains `:` (`divergences.md`, row "A static tag name may not contain `:`"). An empty part before the `:`
-  (`<:email>`) makes the name `unnamed`. Marko splits attribute names at the
-  **last** `:` (A2); that rule does not apply here. Attribute tags are not
-  split (§3.7). `tagShape` receives the written static name, before the
-  split (`<input:email>` asks `tagShape("input:email")`, `<.x>` asks
-  `tagShape("")`); a dynamic name is not looked up and is `"html"`; an
+- `static`: the written name (htmljs's `onOpenTagName` range), a `:`
+  included, as in Marko: `<input:email>` is `value: "input:email"`, `span`
+  `[1, 12)`, and `<:email>` is `value: ":email"`. Marko splits attribute
+  names at the **last** `:` (A2); that rule does not apply here. `tagShape`
+  receives the written static name (`<input:email>` asks
+  `tagShape("input:email")`, `<.x>` asks `tagShape("")`); a dynamic name is not looked up and is `"html"`; an
   attribute tag is not asked either, its body is `"html"`. `tagShape` is
   not only asked about tags: unless the caller passes `tagTypes`, the front
   end's pre-scan asks it about every run of the source that could be a
   static tag name, text words included, and the statement keywords are
   asked before the parse (§7.1), so it must answer any string without
   throwing (`"html"` for a name it does not know). The statement-keyword test reads the written name too, so
-  `import:x` is a tag (decision 163 addenda 7 and 8). Because the split happens after htmljs has read the name,
-  htmljs still sees the written name `input:email` when deciding whether the
-  tag is void or may self-close, so `<input:email type="email"/>` needs its
-  `/>` in HTML mode and the closing tag repeats the written name
-  (`specification.md` ("Name sugar: `:name`, `#id` and `.class` anywhere on a tag")). Which table decides self-closing after
+  `import:x` is a tag (decision 163 addenda 7 and 8). htmljs sees the written
+  name `input:email` when deciding whether the tag is void or may
+  self-close, so `<input:email type="email"/>` needs its `/>` in HTML mode
+  and the closing tag repeats the written name. Which table decides self-closing after
   `@marko/compiler` is dropped (today its `self-closing-tags` dependency,
   `bun.lock`) belongs to the element-shape table (§3.12, ruling Q21).
 - `dynamic`: htmljs reports a `Template` (`packages/parser/src/template/util/constants.ts` `Ranges.Template`).
@@ -466,7 +458,7 @@ type MxTagName =
   inner expressions: they would re-parse the same text into a second Babel
   tree. `span` covers the written name, `${` and `}` included.
 - `unnamed` (decision 145): `span` is empty, at the offset right after `<`
-  (concise: at the first sugar character). Lowering resolves it through the
+  (concise: at the first shorthand character). Lowering resolves it through the
   `defaultTag` ladder (spec "The unnamed tag"); the AST never writes `div`.
 
 Examples (`<input:email>`, `<${x}>`, `<.card>`): `static` `[1, 6)`;
@@ -542,7 +534,7 @@ colon (`a:b:=x`) keeps the split `modifier: "b"` for the same reason.
 ### 3.5a `MxMethod`
 
 Purpose: method shorthand, `name(params) { body }`, as an attribute value or a
-sugar's default (`onAttrMethod`).
+default (`onAttrMethod`).
 
 | Field | Type | Opt. | Meaning |
 |---|---|---|---|
@@ -576,18 +568,23 @@ expression only. Example: in `<b ...rest/>`, the node is `[3, 10)` and
 `value.span` `[6, 10)`. Invariants: no name, no `nameSpan`, no sugar (IR spec
 §6, `spread` row); it takes part in source order with the other attributes.
 
-### 3.6 `MxShorthand` (`#id`, `.class`, `:name`)
+### 3.6 `MxShorthand` (`#id`, `.class`)
 
-Purpose: the three name sugars in any position (decision 146 and addenda).
+Purpose: Marko's tag-adjacent shorthands, `<div#a.b>` and the unnamed `<#a>`.
+The front end makes one per `onTagShorthandId`/`onTagShorthandClass`, always
+with `position: "tag"`. `position: "attribute"` is a node a dialect's attribute
+trigger may claim; core has no name sugars of its own, so a spaced `#x` or
+`.x` is an `MxAttribute` with that name (an invalid attribute name on most
+hosts) and `:x` is the attribute `value:x`.
 
 | Field | Type | Opt. | Meaning |
 |---|---|---|---|
-| `sigil` | `"#" \| "." \| ":"` | no | which sugar |
-| `position` | `"tag" \| "attribute"` | no | tag-adjacent (in `MxTag.shorthands`) or in the attribute list |
-| `value` | `MxShorthandValue` | no | the part after the sigil |
-| `operator` | `"=" \| ":=" \| null` | no | what directly follows the token (whitespace allowed): `=`, `:=`, or nothing / a method (decision 146 addendum 4) |
-| `default` | `MxExpression \| MxMethod \| null` | no | decision 146 addendum 4: the value after `=` or `:=`, or the method, in `#name=expr` / `#name(params) { body }`; it sets the tag's default value |
-| `args` | `MxArguments \| null` | no | arguments written right after the sugar with no body (`.c(p)`, `#x(p)`, `:x(p)`); `null` otherwise. Kept on the node with their atoms; `MX_SUGAR_ARGUMENTS` is raised at the sugar (rule 6; decision 163 addendum 11) |
+| `sigil` | `"#" \| "."` | no | which shorthand |
+| `position` | `"tag" \| "attribute"` | no | tag-adjacent (in `MxTag.shorthands`), or claimed by a dialect in the attribute list |
+| `value` | `MxShorthandValue` | no | the part after the sigil, a `:` included (`<a#b:c>` is the id `b:c`, as in Marko) |
+| `operator` | `"=" \| ":=" \| null` | no | set only on a claimed attribute-position node |
+| `default` | `MxExpression \| MxMethod \| null` | no | set only on a claimed attribute-position node: the value or method that sets the tag's default value |
+| `args` | `MxArguments \| null` | no | set only on a claimed attribute-position node: arguments with no body |
 
 ```ts
 type MxShorthandValue =
@@ -596,73 +593,17 @@ type MxShorthandValue =
       readonly expressions: readonly MxExpression[]; readonly span: Span };   // tag position only: <div.a${x}>
 ```
 
-Spans: `start` = the sigil; `end` = end of `value` (not of `default`, which has
-its own span). `value.span` excludes the sigil. The node's span is the
-authored token (`#x`, `.c`, `:n`), kept exactly: lowering takes `Attr.sugar`
-and, on a host that claims `#`, the attribute name `#x` from it (P8, §6.1).
+Spans: `start` = the sigil; `end` = end of `value`. `value.span` excludes the
+sigil. A value is whatever htmljs reports for the shorthand, so `<a.c#d:b>`
+gives `.c` `[2, 4)` and `#d:b` `[4, 8)`; an empty value (`<a.>`) makes no
+node. Lowering merges the parts into `class` and `id` (`core/src/shorthand.ts`)
+and keeps the bracket and numeric-part checks there.
 
-What each sigil takes (`specification.md` ("Name sugar: `:name`, `#id` and `.class` anywhere on a tag")): `:name` an identifier,
-`[A-Za-z_$][\w$-]*`; `#x` and `.x` what Marko's shorthand takes, a run up to
-whitespace, `=`, `(`, `/`, `|`, `<`, `,` or `>`, with `.` and `#` starting the
-next part.
-
-**Splitting a shorthand value: one rule for both positions.** htmljs reports
-a tag-adjacent `#d:b` as **one** `onTagShorthandId` `Template` (reviewer's
-probe: `[4, 8)` for `<a.c#d:b …>`), and an attribute-position `.c#m.d:y` as
-**one** attribute name. The front end splits each into `MxShorthand`s with the
-same rule (`specification.md` ("Name sugar: `:name`, `#id` and `.class` anywhere on a tag"); today `rewriteHead` and
-`rewriteAttributes` in `core/src/name-sugar.ts`, where the attribute-position
-chain is cut into `.`/`#` parts outside any `${…}` by `splitShorthandChain`):
-
-1. Static value: split at its **first** `:`. `.c:b` gives `.c` and a
-   tag-position `:b`. A second `:` anywhere in the tag head is an
-   `MxParseError` `MX_SECOND_NAME` at the second `:` (spec: "a tag takes one
-   name").
-2. Dynamic value: only the static tail after the last `${…}` splits.
-   `<a.${x}:b>` gives `.` with a dynamic value (`template` over `${x}`) and a
-   static `:b`.
-3. A `:` in a static part **before** a `${…}` (`<a.c:b${x}>`) is an
-   `MxParseError` `MX_COLON_BEFORE_DYNAMIC` at that `:`.
-4. A value left empty by a split (`<a.:b>`) produces no `MxShorthand` for that
-   sigil (tag position, `rewriteHead`); in attribute position an empty part
-   (`.`, `#`) is an error, as today (`rewriteAttributes`: "`.` needs a name
-   after it").
-5. A `${…}` in an attribute-position shorthand is an `MxParseError`
-   `MX_SUGAR_DYNAMIC` at its sigil (today: "a dynamic shorthand works only
-   tag-adjacent", `rewriteAttributes`).
-6. Arguments without a body after a sugar (`#x(p)`, `.c(p)`, `:x(p)`) are an
-   `MxParseError` `MX_SUGAR_ARGUMENTS` at the sugar (today `checkNearSugar`,
-   two branches: `#`/`.` and `:`). The arguments are kept on the node
-   (`args`); the error is raised at the sugar. With a body, `#x(p) { … }` is a method
-   default (decision 146 addendum 4), `operator: null`.
-7. `:=` after a sugar (`:n:=y`, `.c:=y`, `#x:=y`) is `operator: ":="` and an
-   `MxParseError` `MX_SUGAR_BOUND` at the sugar ("a bound value is not
-   supported on name sugar", `checkNearSugar`), except where the sugar is not
-   one: attribute-position `#x` on a host that claims `#` (P8). Because that
-   depends on the host, the front end records `MX_SUGAR_BOUND` for `:` and `.`
-   only, and lowering raises it for `#`. Today, a `:n:=y` whose value cannot
-   be bound (not an identifier or member expression) keeps the ordinary bound
-   value error instead (`checkNearSugar`, `bindable`).
-
-```mx
-<a.c#d:b title="t" .big :mail/>
-```
-
-Offsets:
-- tag position: `.c` `[2, 4)` (`value.span` `[3, 4)`), `#d` `[4, 6)`, `:b` `[6, 8)` (split out of htmljs's `#d:b` `[4, 8)`)
-- attribute position: `.big` `[19, 23)`, `:mail` `[24, 29)`
-- `<a.${x}:b>`: `.` `[2, 7)` with `value.span` `[3, 7)` and `template.span` `[5, 6)`; `:b` `[7, 9)`
-
-Invariants: a tag has at most one `:` sugar in its head; `value.kind ===
-"dynamic"` implies `position === "tag"`; `default !== null` implies
-`position === "attribute"` (tag-adjacent `<a#x=1>` is an ordinary default
-attribute, `MxAttribute { name: null }`, because htmljs ends the shorthand
-at `=`); `operator === null` and `default !== null` implies `default` is an
-`MxMethod`; order within `shorthands` and within
-`attributes` is source order, so the spec's class-order rule can be applied by
-lowering without positions. Atoms: `:name` standing alone in attribute
-position **is** this node (decision 156 §4); `:name` inside an expression is
-an `MxAtom` (§4.3).
+Invariants: `value.kind === "dynamic"` implies `position === "tag"`;
+`default !== null` implies `position === "attribute"` (tag-adjacent
+`<a#x=1>` is an ordinary default attribute, `MxAttribute { name: null }`,
+because htmljs ends the shorthand at `=`); order within `shorthands` is source
+order.
 
 ### 3.7 `MxAttributeTag`
 
@@ -671,8 +612,8 @@ Purpose: `<@name>` — a property of the nearest enclosing tag.
 Fields: the same as `MxTag` (§3.2) except `name`, which is `{ value: string;
 span: Span }`: `value` is the key without `@`, `span` covers `@name` as
 written (Marko's name `loc` does the same; probe: `StringLiteral@1:7-1:12` for
-`@head`). Head sugar is **not split**: `<@svg:rect>` keeps `value:
-"svg:rect"` (decision 146 addendum 3); attribute-position sugar applies.
+`@head`). A colon is part of the key: `<@svg:rect>` keeps `value:
+"svg:rect"`.
 
 Example: in `<Card><@head x=1>H</@head></Card>` the attribute tag is
 `[6, 26)`, `name.span` `[7, 12)`, `name.value` `"head"`, and it is `body[0]` of
@@ -821,10 +762,8 @@ Today, by target:
 On the last row a statement line parses as a tag with attributes (probe:
 `static const a = 1` is the tag `static` with attributes `const`, `a`), and
 lowering recovers `Static`/`Import`/`Export` by name (`lowerAuthoredTag`'s
-switch) and by slicing the source (`lowerStatement`); `isStatementTag`
-(`name-sugar.ts`) answers from the compile's lookup, so the name sugar runs
-on those tags under `compileSource` and does not under `parseFragment`
-(`CORE_STATEMENT_TAGS`). This is an accident, not a rule: MX1 TODO
+switch) and by slicing the source (`lowerStatement`). This is an accident,
+not a rule: MX1 TODO
 `statement-tags-not-declared-on-five-hosts` (decision 163 addendum 3) makes
 those hosts pass the core set before the port, with the moved goldens listed
 in that change, so the port carries nothing.
@@ -953,21 +892,10 @@ Three producers, with different consequences:
    expressions, not JSX; remove the wrapping `{ }`" (`withWrappedAttrValueHint`,
    `[C]chunk-src.js:6292-6297`), reworded for MX ("… in MX …").
 3. **Front-end rules** are recorded and do not stop the parse. Each has a
-   code. The ones that exist today as positioned errors in
-   `core/src/name-sugar.ts` (and, for the last four, in Marko's front end)
-   are:
+   code. They are:
 
    | Code | Today | Where today |
    |---|---|---|
-   | `MX_SECOND_NAME` | a second `:name` on a tag (`<a:b:c>`, `<a.c:b:d>`, `:x:y`, `.c:x:y`) | `SECOND_NAME` in `rewriteHead`, `checkNearSugar`, `rewriteAttributes` |
-   | `MX_COLON_BEFORE_DYNAMIC` | a `:` before a `${…}` in a shorthand | `headNamesIn` |
-   | `MX_SUGAR_NAME_MISSING` | a sigil with nothing after it: `:` in a tag name with no name, a bare attribute-position `:`, an empty `.`/`#` part | `checkToken`, `checkNearSugar`, `rewriteAttributes` |
-   | `MX_SUGAR_NAME_INVALID` | a `:name` that is not `[A-Za-z_$][\w$-]*` | `checkToken`, `rewriteAttributes` (`SUGAR_TOKEN`) |
-   | `MX_SHORTHAND_INVALID` | an attribute-position `.x`/`#x` word Marko's shorthand would not accept | `rewriteAttributes` (`isShorthandWord`) |
-   | `MX_SUGAR_DYNAMIC` | a `${…}` in an attribute-position shorthand | `rewriteAttributes` ("a dynamic shorthand works only tag-adjacent") |
-   | `MX_SUGAR_ARGUMENTS` | arguments without a body after a sugar | `checkNearSugar` |
-   | `MX_SUGAR_BOUND` | `:=` after a sugar (front end for `:` and `.`; lowering for `#`, §3.6 rule 7) | `checkNearSugar` (`BOUND_ON_SUGAR`) |
-   | `MX_SUGAR_ON_STATEMENT` | a `:name` on a statement keyword (`<import:x/>`) | `rewriteNameSugar` |
    | `MX_STATEMENT_IN_HTML_MODE` | `<import …>` written with `<` | Marko, `[C]chunk-src.js:6087` |
    | `MX_RESERVED_TAG_NAME` | the tag name `%` | Marko, `[C]chunk-src.js:6079` |
    | `MX_ATTRIBUTE_TAG_AT_ROOT` | an attribute tag with no enclosing tag | Marko, `[C]chunk-src.js:5917` |
@@ -978,8 +906,8 @@ Three producers, with different consequences:
    | `MX_FRONT_END_INTERNAL` | the front end itself failed (an exception inside a handler): always an MX bug, never the author's. The parse does not throw; the error is recorded with the partial tree, its message a fixed MX sentence ending "not yours: an MX bug" (decision 161's wording) followed by the raw exception message, no stack or code frame | new (decision 163 addendum 7) |
 
    A duplicate default value is not among them: it is lowering's
-   (`MX_DUPLICATE_DEFAULT`, §3.5, §6.1a), as is `MX_SUGAR_BOUND` for `#`.
-   This table lists front-end errors only. Errors lowering raises (those two,
+   (`MX_DUPLICATE_DEFAULT`, §3.5, §6.1a).
+   This table lists front-end errors only. Errors lowering raises (that one,
    "Cannot have shorthand id and id attribute." of §6.1a, the control-flow
    attribute-tag error of §3.7, and every error lowering raises today) are
    out of this document's error table: they keep today's text and position,
@@ -1041,7 +969,7 @@ one aggregate, `[C]chunk-src.js:5975-5984`, `:6474`), so the 14 host-dispatch go
 The three post-processors that rewrite Marko's errors today (`compile.ts`,
 the `catch` around `compileSync`: `annotateCloseTagOpener` from
 `close-tag-opener.ts`, `hintParseError` from `parse-error-hints.ts`, and
-`sugarAfterDefaultError`/`tagParamError` from
+`tagParamError` from
 `stock-parser.ts`; decision 151's stock-parser rewrites were deleted in port
 PR 5) key on `MxParseError.code` instead of matching message
 text. **Status on main:** decision 162 is implemented for lowering
@@ -1242,11 +1170,10 @@ What the IR makes of atoms is what shipped (#342, #346, #348, #357):
   holds each as its string literal (core splices `JSON.stringify(name)` at
   each atom's span; IR spec §4, `atoms` row).
 - A whole value that is one atom (`mode=:strict`) is a `static` `Attr` with
-  `atom?: Atom`, `value` the name and `valueSpan` the atom's span; so is the
-  `name` the `:name` sugar sets (decision 156 addendum 1, item 2; `ir.ts`,
+  `atom?: Atom`, `value` the name and `valueSpan` the atom's span (`ir.ts`,
   `Attr`; IR spec §6, `static` row).
 - In `lowerSource`'s IR, such a value is a `static` `Attr` with `atom` set (`ir.ts`
-  `Attr`), the sugar-derived `name` included; nested atoms stay
+  `Attr`); nested atoms stay
   `StringLiteral` + `extra.mxAtom`.
 
 `MxExpressionContainer.atoms` stays: lowering needs the spans to splice the
@@ -1479,7 +1406,7 @@ and the `Ir` root (each its own type in `ir.ts`). The IR spec lists the same 16
 kinds (IR spec §5.2) and is the reference for every field below.
 
 **Where the AST enters the IR spec's pipeline.** The IR spec's step 1 (tree
-rewrites before any tag name is read) turns sugar into `name`/`id`/`class`
+rewrites before any tag name is read) turns shorthands into `id`/`class`
 attributes and resolves the unnamed tag, and says "a new parser may produce
 that tree directly; it must not hand an unnamed tag to the walk" (IR spec §1).
 The MX AST deliberately does **not** produce that tree: it keeps
@@ -1516,21 +1443,26 @@ recorded change, never inside the port (decision 163).
 | `Comment` | `MxComment` | `value`; `html` ← `kind === "html"` |
 | `AttributeTag` | `MxAttributeTag` | `name` ← `name.value`; `nameSpan` ← `name.span` minus the `@`; `span` ← node span; `attrs` ← `attributes` + shorthands; `block.params`/`hasParams` ← `params`; `block.children` ← `body` minus nested attribute tags; `hasBody` ← body content (`hasContent`); its own `attributeTags`/`attributeTagTree`/`attrTagProps` ← nested `MxAttributeTag` children, recursively (IR spec §8) |
 | `Attr` `static` | `MxAttribute` with a string-literal value (any name, colons kept), or whose whole value is one atom (`atom` set); `MxShorthand` with a static value, by the merge of §6.1a | `valueSpan` ← `value.span` |
-| `Attr` `static`, `value: ""` | `MxAttribute`, not bound, `value === null`, whose name contains a `:` that is an ordinary colon name: any colon name on a component, attribute tag or delegated tag, and on a native element any colon name except the reserved `class:`/`style:`/`on:` prefixes (`isOrdinaryColonName`, `lower.ts`). Today's condition is `name !== attr.name` at `lower.ts` `lowerAttrNamed`, `name` being the rejoined `attr.name:attr.modifier` (`lower.ts` `lowerAttrNamed`), so it covers `value:foo`, `x:foo` and the empty-suffix `x:` (`divergences.md`, row "Bare `:x` is `name="x"`") alike | `valueSpan` ← zero-width at `nameSpan.end` (IR spec §3.3) |
+| `Attr` `static`, `value: ""` | `MxAttribute`, not bound, `value === null`, whose name contains a `:` that is an ordinary colon name: any colon name on a component, attribute tag or delegated tag, and on a native element any colon name except the reserved `class:`/`style:`/`on:` prefixes (`isOrdinaryColonName`, `lower.ts`). Today's condition is `name !== attr.name` at `lower.ts` `lowerAttrNamed`, `name` being the rejoined `attr.name:attr.modifier` (`lower.ts` `lowerAttrNamed`), so it covers `value:foo`, `x:foo` and the empty-suffix `x:` alike | `valueSpan` ← zero-width at `nameSpan.end` (IR spec §3.3) |
 | `Attr` `boolean` | `MxAttribute`, `value === null`, whose name has no `:` (`lower.ts` `lowerAttrNamed`; a colon name takes the row above, a reserved-prefix name the `dynamic` row) | |
 | `Attr` `dynamic` / `event` | `MxAttribute` with an expression value or `MxMethod`; also a reserved-prefix colon name on a native element (`class:x`, `style:x`, `on:x`) whose host `resolveModifier` returns a name, any value (`lower.ts` `lowerAttrNamed`; refused otherwise, `lowerAttrNamed`) | `event` derived from `name` (lowering), only on a native element with an expression value |
 | `Attr` `bound` | `MxAttribute` with `operator === ":="` | `name` ← `name`; a refinement `v:fn:=q` is `refinement` (an identifier `Expr` over `fn`, with its span), as Marko's `q = fn(next)` change handler. A refinement that is no valid identifier (`x::=q`, `v:no-update:=q`) is Marko's positioned error at the colon (decision 169 was withdrawn; the earlier `:`-in-a-bound-name error is gone) |
-| `Attr` named `#x` (`boolean`, `static`, `dynamic` or `bound` by its value) | `MxShorthand` `#` with `position: "attribute"` on a host that sets `claimsAttributeHash` (Angular's template reference, decision 146 addendum 3) | `name` ← the authored token (`#x`), `nameSpan` ← the node span, **no `sugar`**; its `default`, if any, is this attribute's value, not the tag's default value (today: `rewriteAttributes` leaves the attribute untouched, `name-sugar.ts`, and the host must also set `acceptsForeignAttrNames`; probe: `<div x=1 #r/>` gives `boolean` `#r`, `nameSpan` `[9, 11)`) |
+| `Attr` named `#x` (`boolean`, `static`, `dynamic` or `bound` by its value) | `MxAttribute` named `#x`, on a host that sets `acceptsForeignAttrNames` (Angular's template reference); on any other host core reports `Invalid attribute name` | `name` ← the authored token (`#x`), **no `sugar`** (probe: `<div x=1 #r/>` gives `boolean` `#r`, `nameSpan` `[9, 11)`) |
 | `Attr` `spread` | `MxSpreadAttribute` | |
 | `Attr.sugar` | `MxShorthand` | ← the authored tokens, by the merge of §6.1a |
-| `Attr.sugarValueOf` | `MxShorthand` with `default` | on the `value` `Attr` the default makes: the token plus `=…` or `(…)` (`#x=…`), §6.1a |
+| `Attr.sugarValueOf` | `MxShorthand` with `default` (a dialect trigger's) | on the `value` `Attr` the default makes: the token plus `=…` or `(…)`, §6.1a |
 | `Ir.returnValue` | `MxReturn`'s default value (§3.14) | |
 
 ### 6.1a The shorthand merge, a lowering step
 
+Attribute-position `#x` and `.x` tokens reach this merge only from a
+dialect's trigger: core itself reads a spaced `#x` or `.x` as an invalid
+attribute name, as Marko does. The steps and rows below that involve
+attribute-position tokens describe that path.
+
 Today Marko's front end merges tag-adjacent shorthands (`onOpenTagEnd`,
-`[C]chunk-src.js:6143-6171`), and `core/src/name-sugar.ts` merges the
-attribute-position ones on top (`rewriteAttributes`, `mergeClassTokens`); the
+`[C]chunk-src.js:6143-6171`), and `core/src/shorthand.ts` merges the
+trigger-placed ones on top (`rewriteShorthands`, `mergeClassTokens`); the
 `Attr` fields then come from `lowerAttr`/`lowerAttrNamed`/`attrNameSpan`
 (`lower.ts`). With the MX AST the whole merge is lowering's. It reproduces
 main as it is after #338 (`666d0f56e`, real `nameSpan` for a tag's own
@@ -1547,23 +1479,22 @@ Order and grouping:
    its own `id` `Attr` at its position. Marko's shorthand `class`, when
    present, is moved before the first attribute-position `id`, and a
    tag-adjacent `id` beside an attribute-position `#` is moved first
-   (`rewriteAttributes`, end). Duplicates then resolve last-wins with decision
+   (`rewriteShorthands`). Duplicates then resolve last-wins with decision
    135's warning (`<div#a #b/>` keeps `id "b"`).
 3. A tag-adjacent `#x` beside an authored `id=` is an error ("Cannot have
    shorthand id and id attribute.", `[C]chunk-src.js:6168`).
-4. `:name` becomes a `name` `Attr` at its own position, `static`, with
-   `atom` set (§4.3).
-5. A sugar's `default` becomes a separate default value (`value`) `Attr`
+4. A trigger-placed shorthand's `default` becomes a separate default value (`value`) `Attr`
    right after the sugar's own, with `sugarValueOf` the token plus `=…` or
    `(…)`, its `nameSpan` zero-width at the value, and `loc` at the value.
-   A second default value on the tag, when at least one comes from a sugar,
+   A second default value on the tag, when at least one comes from a trigger,
    is the error `MX_DUPLICATE_DEFAULT` at the second ("`#x=…` would set the
    default attribute (`value`), but the tag already has a default value (at
    …)", `ALREADY_HAS_DEFAULT`); two authored `value=` stay decision 135's
-   warning; a host that claims `#` exempts attribute-position `#x` (P8).
+   warning.
 
-The `class` value, by case (probed on main from source, `lower()` with a
-plain element host; offsets in each input alone):
+The `class` value, by case (`lower()` with a plain element host; offsets in
+each input alone). An attribute-position token is one a syntax-table trigger
+placed; without such a trigger core reports `Invalid attribute name` for it:
 
 | Input | `kind`, value / `code` | `valueSpan` | `nameSpan` | `loc` | `sugar` |
 |---|---|---|---|---|---|
@@ -1726,8 +1657,8 @@ What `attributes` holds (decision 163 addendum 4, item 2): what lowering
 produced, as hooks see the post-rewrite node today. A default value is an
 entry named `"value"` with a zero-width `nameSpan` (the Q8 adapter); a spread
 is its own entry kind, in source order, so `attributes[0]` means the first
-authored entry; attributes made from shorthands (`class`, `id`, `name`, a
-sugar's default value) appear as the merge of §6.1a produced them. The one
+authored entry; attributes made from shorthands (`class`, `id`, a
+trigger's default value) appear as the merge of §6.1a produced them. The one
 hook that reads `node.attributes` on main, html's `<let>`/`<const>` in
 `translate.ts` `resolveDelegatedTag`, reads `attrByName(node, "value") ??
 node.attributes[0]`, then its `.value` (`core.ts` `attrByName` skips
@@ -1813,7 +1744,7 @@ The `HostDeclarations` hooks (`packages/core/src/declarations.ts`
 | `resolveDefaultTag(node, parents, context)` | `MarkoTag` (+ `DefaultTagParent.node`) | the tag's view (and its parents' views) |
 | `rejectElementAttributeTags`, `rejectComponentTag`, `rejectUnknownTag` (`name, node, ctx`) | `MarkoTag` | the tag's view |
 | `checkBinding(target, what)` | a Babel `LVal` | the `MxPattern` payload (a Babel node, not an `Mx*` node) |
-| `claimsAttributeHash` (flag) | — | — (decides the `#x` row of §6.1 and the `#` exemptions of §3.6 and §6.1a, P8) |
+| `acceptsForeignAttrNames` (flag) | — | — (decides the `#x` row of §6.1) |
 
 Every host `fail`/`rawFail(msg, node)` reads the node's position; after the
 port it takes a view (or an attribute entry) and reports
@@ -1853,7 +1784,7 @@ in-repo template parser adds a 28th, `onAtom` (decision 156; source
 | `onTagArgs` | `Value` | `MxTag.args` |
 | `onTagTypeParams` | `Value` | `MxTag.typeParams` (on the tag, not the body) |
 | `onTagParams` | `Value` | `MxTag.params` (`MxParameterList`, span inside the pipes) |
-| `onAttrName` | `Range` | `MxAttribute.name`/`nameSpan`; a name `#x`, `.x` or `:x` becomes `MxShorthand` (`position: "attribute"`); an empty range is the default value (`name: null`) |
+| `onAttrName` | `Range` | `MxAttribute.name`/`nameSpan`, the head before the last `:`; an empty range or an empty head is the default value (`name: null`, so `:x` is `value:x`); a `#x` or `.x` a trigger claims becomes `MxShorthand` (`position: "attribute"`) |
 | `onAttrArgs` | `Value` | `MxAttribute.args` |
 | `onAttrValue` | `AttrValue { value, bound, trigger?, claim? }` | `MxAttribute.value`, `operator`; on a shorthand, `MxShorthand.default`; a `claim` (the node a value row's type returned) is the value itself (§4.4b) |
 | `onAttrMethod` | `AttrMethod { params, body, typeParams, async }` | `MxMethod` (§3.5a); `params.value` → `MxParameterList` span, `params` range → its `outer`; extends `MxAttribute.start` per §3.5 |
@@ -1861,7 +1792,7 @@ in-repo template parser adds a 28th, `onAtom` (decision 156; source
 | `onOpenTagComment` | `Value` | `MxComment` in `MxTag.attributes` |
 | `onOpenTagEnd` | `OpenTagEnd { selfClosed }` | `openTag.end`, `selfClosed`; no merge |
 | `onCloseTagStart` | `Range` | `closeTag.start` |
-| `onCloseTagName` | `Range` | `closeTag.name`/`nameSpan`, the written name with sugar (`</div:x>` → `"div:x"`); for `</>` htmljs emits it with an empty range (`packages/parser/src/template/states/CLOSE_TAG.ts` `ensureExpectedCloseTag`, `core/Parser.ts` `Parser.closeTagEnd`), which gives `name: null`, `nameSpan: null`. Never re-checked: htmljs reports `MISMATCHED_CLOSING_TAG` (21) itself |
+| `onCloseTagName` | `Range` | `closeTag.name`/`nameSpan`, the written name (`</div:x>` → `"div:x"`); for `</>` htmljs emits it with an empty range (`packages/parser/src/template/states/CLOSE_TAG.ts` `ensureExpectedCloseTag`, `core/Parser.ts` `Parser.closeTagEnd`), which gives `name: null`, `nameSpan: null`. Never re-checked: htmljs reports `MISMATCHED_CLOSING_TAG` (21) itself |
 | `onCloseTagEnd` | `Range` | `closeTag.span.end`, `MxTag.end`; ends a preserving body started by this tag; nothing moves |
 | `onError` | `Error { code, message }` | `MxParseError` (`origin: "template"`, code by name); the last event of the parse: open tags become `incomplete`, `complete: false` (§3.13) |
 
@@ -1916,11 +1847,9 @@ patch
 `packages/parser/src/template/states/ATTRIBUTE.ts` `ATTRIBUTE` and
 `packages/parser/src/template/states/EXPRESSION.ts` `EXPRESSION`, `lookAheadForOperator`,
 `isIdentStartCode`) changes **where `onAttrValue` ends**:
-it marks named-attribute and spread values (`expr.attrValue`), skips `??`
-and `?.` when counting ternary depth, and inside such a value lets a `:`
-followed by an identifier (or a bare `:` at a tag end) and a `.` followed by an
-identifier, after whitespace, terminate the value so `onAttrName` fires for the
-next sugar (decision 146 §3). Atom lexing lives in `EXPRESSION` too
+it marks named-attribute and spread values (`expr.attrValue`) and skips `??`
+and `?.` when counting ternary depth there; a spaced `:` or `.` after a value
+continues it, as in stock. Atom lexing lives in `EXPRESSION` too
 (`lexAtom`), turned on per expression by the states listed in §4.3, and
 reported through `onAtom`; while it is on, `read()` returns the atom's numeric
 stand-in, so a front end that slices `source` for an expression's text must
@@ -1934,8 +1863,8 @@ the node types are listed in the appendix.
 
 **D1. One `MxAttribute` node with a nullable name, plus a separate
 `MxShorthand`.** Alternative: one `MxAttribute` with `kind: "named" |
-"default" | "sugar"`. Chosen because sugar has a sigil, a position and an
-optional `default` that named attributes never have, and a default value is a
+"default" | "shorthand"`. Chosen because a shorthand has a sigil, a position
+and an optional `default` that named attributes never have, and a default value is a
 named attribute without a name, not a third shape.
 
 **D2. Flat children list; attribute tags stay where they were written.**
@@ -2037,7 +1966,7 @@ rulings, with where the text now lives:
 | Q8 | default value read as `value` by one lowering adapter, zero-width `nameSpan`; `MX_DUPLICATE_DEFAULT` is lowering's | §3.5, §6.1a |
 | Q9, Q11, Q18, Q23 | as drafted: concise `end`; read `MxComment.kind`; AST keeps `@name`, lowering trims; shape before shadowing | §3.2, §6.1, §5.1, §3.12 ("Shape before shadowing") |
 | Q10 | field names follow the AST; container `span` = htmljs `value` range, `outer` = event range; the grammar document adopts both | §3.4 (unchanged) |
-| Q12 | port the unknown-tag scan (`core/src/ir-entry/authored-tags.ts`) in the same change; delete the fallback statement list (`CORE_STATEMENT_TAGS`/`isStatementTag`, `core/src/name-sugar.ts`) and the stock-parser probe (`isShorthandWord`'s `markoParser()`, `name-sugar.ts`; `stock-parser.ts`) | §6.4 |
+| Q12 | port the unknown-tag scan (`core/src/ir-entry/authored-tags.ts`) in the same change; delete the stock-parser probe (`isShorthandWord`'s `markoParser()`, `shorthand.ts`; `stock-parser.ts`) | §6.4 |
 | Q13 | plain Babel types in payloads; pin `@babel/{types,traverse,generator}` 7.29.7 with today's generator options; sub-parser node shapes equal to today's | §7.1 |
 | Q14 | `Expr.node: Node \| null` | §4.2 |
 | Q15 | IR spec §6 and §3.3 rows corrected to `value:foo` | `ir-spec.md` |

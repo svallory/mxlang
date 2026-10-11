@@ -155,26 +155,15 @@ describe("§3.2 MxTag", () => {
 });
 
 describe("§3.3 MxTagName", () => {
-  it("<input:email> splits at the first ':'", () => {
+  // Stock `htmljs-parser` 5.18.0 reads a colon as a tag-name character.
+  it("<input:email> is the one name `input:email`", () => {
     const tag = first("<input:email/>");
     expect(tag.name).toEqual({
       kind: "static",
-      value: "input",
-      span: span(1, 6),
+      value: "input:email",
+      span: span(1, 12),
     });
-    expect(tag.shorthands).toEqual([
-      {
-        type: "MxShorthand",
-        start: 6,
-        end: 12,
-        sigil: ":",
-        position: "tag",
-        value: { kind: "static", value: "email", span: span(7, 12) },
-        operator: null,
-        default: null,
-        args: null,
-      },
-    ]);
+    expect(tag.shorthands).toEqual([]);
   });
 
   it("<${x}> is a dynamic name: the one expression of empty quasis", () => {
@@ -206,10 +195,14 @@ describe("§3.3 MxTagName", () => {
     });
   });
 
-  it("<:email> is unnamed with a : sugar", () => {
+  it("<:email> is the name `:email`, not an unnamed tag", () => {
     const tag = first("<:email/>");
-    expect(tag.name).toEqual({ kind: "unnamed", span: span(1, 1) });
-    expect(tag.shorthands[0]).toMatchObject({ sigil: ":", start: 1, end: 7 });
+    expect(tag.name).toEqual({
+      kind: "static",
+      value: ":email",
+      span: span(1, 7),
+    });
+    expect(tag.shorthands).toEqual([]);
   });
 
   it("concise unnamed: at the first sugar character", () => {
@@ -336,11 +329,15 @@ describe("§3.5 MxAttribute", () => {
       modifier: null,
       modifierSpan: null,
     });
-    // A colon first is the name sugar, never an attribute modifier.
+    // A colon first: an empty head, Marko's default attribute with that
+    // modifier (`value:b`).
     expect(first("<a :b=1/>").attributes[0]).toMatchObject({
-      type: "MxShorthand",
-      sigil: ":",
-      value: { value: "b" },
+      type: "MxAttribute",
+      start: 3,
+      name: null,
+      nameSpan: span(3, 3),
+      modifier: "b",
+      modifierSpan: span(4, 5),
     });
   });
 
@@ -435,52 +432,39 @@ describe("§3.5b MxSpreadAttribute", () => {
 });
 
 describe("§3.6 MxShorthand", () => {
+  // Stock `htmljs-parser` 5.18.0: `:` is a shorthand character, so `#d:b`
+  // is the id `d:b`; a spaced `.big` is an attribute whose name is `.big`
+  // (lowering's `Invalid attribute name`), and `:mail` its own attribute.
   it("tag and attribute positions of the catalogue example", () => {
-    const tag = first('<a.c#d:b title="t" .big :mail/>');
+    const tag = first("<a.c#d:b x .big :mail/>");
     expect(
       tag.shorthands.map((s: Any) => [s.sigil, s.start, s.end, s.value.span]),
     ).toEqual([
       [".", 2, 4, span(3, 4)],
-      ["#", 4, 6, span(5, 6)],
-      [":", 6, 8, span(7, 8)],
+      ["#", 4, 8, span(5, 8)],
     ]);
-    const attrs = tag.attributes.filter((a: Any) => a.type === "MxShorthand");
     expect(
-      attrs.map((s: Any) => [
-        s.sigil,
-        s.position,
-        s.start,
-        s.end,
-        s.value.value,
-      ]),
+      tag.attributes.map((a: Any) => [a.type, a.name, a.modifier, a.start]),
     ).toEqual([
-      [".", "attribute", 19, 23, "big"],
-      [":", "attribute", 24, 29, "mail"],
+      ["MxAttribute", "x", null, 9],
+      ["MxAttribute", ".big", null, 11],
+      ["MxAttribute", null, "mail", 16],
     ]);
   });
 
-  it("<a.${x}:b>: a dynamic class and a static :b", () => {
-    const [dot, colon] = first("<a.${x}:b/>").shorthands;
-    expect(dot).toMatchObject({ sigil: ".", start: 2, end: 7 });
+  it("<a.${x}:b>: one dynamic class, `:b` its literal tail", () => {
+    const shorthands = first("<a.${x}:b/>").shorthands;
+    expect(shorthands).toHaveLength(1);
+    const [dot] = shorthands;
+    expect(dot).toMatchObject({ sigil: ".", start: 2, end: 9 });
     expect(dot.value.kind).toBe("dynamic");
-    expect(dot.value.span).toEqual(span(3, 7));
-    expect(dot.value.template).toMatchObject({ start: 5, end: 6, source: "x" });
-    expect(dot.value.quasis).toEqual([span(3, 3), span(7, 7)]);
+    expect(dot.value.span).toEqual(span(3, 9));
+    expect(dot.value.quasis).toEqual([span(3, 3), span(7, 9)]);
     expect(dot.value.expressions).toHaveLength(1);
     expect(dot.value.expressions[0]).toMatchObject({ start: 5, end: 6 });
-    expect(dot.value.expressions[0]).not.toBe(dot.value.template);
-    expect(colon).toMatchObject({
-      sigil: ":",
-      start: 7,
-      end: 9,
-      value: { kind: "static", value: "b" },
-    });
   });
 
-  // Core's `markoHead` (mx-sugar.ts) relies on this: no tag-position `:name`
-  // ever follows a dynamic name, so it only appends one to a static or
-  // unnamed name (PR 4 slice 6).
-  it("<${x}:b>: a :name after a dynamic name stays in its expression", () => {
+  it("<${x}:b>: a colon after a dynamic name stays in its expression", () => {
     const tag = first("<${x}:b.c/>");
     expect(tag.name.kind).toBe("dynamic");
     expect(tag.name.expression).toMatchObject({
@@ -493,41 +477,46 @@ describe("§3.6 MxShorthand", () => {
     ]);
   });
 
-  it("a value left empty by the split makes no shorthand (<a.:b>)", () => {
+  it("<a.:b>: the colon is part of the class (`:b`)", () => {
     const tag = first("<a.:b/>");
-    expect(tag.shorthands.map((s: Any) => s.sigil)).toEqual([":"]);
+    expect(
+      tag.shorthands.map((s: Any) => [s.sigil, s.value.value, s.end]),
+    ).toEqual([[".", ":b", 5]]);
   });
 
-  it("attribute-position chain .c#m.d:y splits into four", () => {
-    const shorthands = first("<a .c#m.d:y/>").attributes;
-    expect(
-      shorthands.map((s: Any) => [s.sigil, s.value.value, s.start, s.end]),
-    ).toEqual([
-      [".", "c", 3, 5],
-      ["#", "m", 5, 7],
-      [".", "d", 7, 9],
-      [":", "y", 9, 11],
+  // Stock Marko: an attribute name runs to its last `:`, so `.c#m.d:y` is
+  // the name `.c#m.d` with the modifier `y` (lowering refuses the name).
+  it("attribute-position `.c#m.d:y` is one attribute", () => {
+    expect(first("<a .c#m.d:y/>").attributes).toMatchObject([
+      {
+        type: "MxAttribute",
+        name: ".c#m.d",
+        nameSpan: span(3, 9),
+        modifier: "y",
+        modifierSpan: span(10, 11),
+      },
     ]);
   });
 
-  it("#name=expr sets operator and default on the sugar", () => {
-    const s = first("<a #q=1/>").attributes[0];
-    expect(s).toMatchObject({
-      type: "MxShorthand",
-      sigil: "#",
+  it("`#q=1` is an attribute named `#q`", () => {
+    expect(first("<a #q=1/>").attributes[0]).toMatchObject({
+      type: "MxAttribute",
+      name: "#q",
       start: 3,
-      end: 5,
       operator: "=",
-      default: { type: "MxExpression", start: 6, end: 7 },
+      value: { type: "MxExpression", start: 6, end: 7 },
     });
   });
 
-  it("a sugar's method default has operator null", () => {
-    const s = first("<a :n(e) { x }/>").attributes[0];
-    expect(s).toMatchObject({
-      sigil: ":",
+  it("`:n(e) { x }` is a method on the empty head, named at its `:`", () => {
+    expect(first("<a :n(e) { x }/>").attributes[0]).toMatchObject({
+      type: "MxAttribute",
+      start: 3,
+      name: null,
+      nameSpan: span(3, 3),
+      modifier: "n",
       operator: null,
-      default: { type: "MxMethod" },
+      value: { type: "MxMethod" },
     });
   });
 });
@@ -918,13 +907,12 @@ describe("template parser shapes the catalogue does not name", () => {
 });
 
 describe("review fixes (decision 163 addenda 10, 11)", () => {
-  it("B1: arguments after a sugar are kept on the node, atoms included", () => {
+  it("B1: arguments are kept on the node, atoms included", () => {
     const s = first("<div .c(:a)/>").attributes[0];
     expect(s).toMatchObject({
-      type: "MxShorthand",
-      sigil: ".",
+      type: "MxAttribute",
+      name: ".c",
       start: 5,
-      end: 7,
       args: {
         type: "MxArguments",
         start: 8,

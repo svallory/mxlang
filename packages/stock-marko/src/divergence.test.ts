@@ -2,14 +2,13 @@
  * The divergence table: every EVENT_ROWS input renders different event
  * streams under the stock parser and MX's; both streams are pinned in
  * `divergence.expected.json` (regenerate with GRAMMAR_SPEC_UPDATE=1, then
- * review the diff — the file is the observation of record). TREE_ROWS
- * inputs render identical streams and are pinned at the Marko-tree level
- * instead. CONTROL_ROWS must stay equal.
+ * review the diff — the file is the observation of record). CONTROL_ROWS
+ * must stay equal; three of them are also pinned at the Marko-tree level.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { CONTROL_ROWS, EVENT_ROWS, TREE_ROWS } from "./divergence.cases.ts";
+import { CONTROL_ROWS, EVENT_ROWS } from "./divergence.cases.ts";
 import { stockMarkoTree } from "./marko.ts";
 import { mxEvents, stockEvents } from "./stock.ts";
 
@@ -23,7 +22,7 @@ const EXPECTED_PATH = fileURLToPath(
 
 function render(): ExpectedFile {
   const rows: ExpectedFile["rows"] = {};
-  for (const row of [...EVENT_ROWS, ...TREE_ROWS, ...CONTROL_ROWS]) {
+  for (const row of [...EVENT_ROWS, ...CONTROL_ROWS]) {
     rows[row.id] = { stock: stockEvents(row.input), mx: mxEvents(row.input) };
   }
   return { rows };
@@ -49,8 +48,8 @@ function* walk(node: unknown): Generator<Record<string, unknown>> {
 }
 
 describe("the event-level divergence table", () => {
-  it("has at least 20 rows", () => {
-    expect(EVENT_ROWS.length).toBeGreaterThanOrEqual(20);
+  it("has at least 15 rows", () => {
+    expect(EVENT_ROWS.length).toBeGreaterThanOrEqual(15);
   });
 
   it("covers the documented divergences", () => {
@@ -75,14 +74,7 @@ function expectedRows(): string[] {
   );
 }
 
-describe("the tree-level divergence table", () => {
-  it.each(TREE_ROWS)("$id: identical parser events", (row) => {
-    const pinned = expected.rows[row.id];
-    expect(stockEvents(row.input)).toEqual(pinned.stock);
-    expect(mxEvents(row.input)).toEqual(pinned.mx);
-    expect(pinned.stock).toEqual(pinned.mx);
-  });
-
+describe("stock Marko's tree for three former MX sugar forms", () => {
   it("tag-colon: stock Marko keeps `a:b` as one tag name", () => {
     const { ok, tree } = stockMarkoTree("<a:b/>");
     expect(ok).toBe(true);

@@ -7,7 +7,7 @@ export function Team({ members, query }: { members: Member[]; query: string }) {
   return (
     <section#team.panel>
       <form method="get">
-        <input:q.search type="search" value=query/>
+        <input.search name="q" type="search" value=query/>
       </form>
       <Table rows=shown>
         <@head>

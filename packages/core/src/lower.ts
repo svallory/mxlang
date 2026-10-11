@@ -366,7 +366,8 @@ export function tagAttrNameSpan(ctx: Ctx, attr: Node, tag: Node): SourceSpan {
 }
 
 function attrNameSpan(ctx: Ctx, attr: Node, tagLoc?: Position): SourceSpan {
-  // A name-sugar attribute (`:b`, `#b`, `.c`) is spelled as one token.
+  // A shorthand record a syntax trigger placed (`#b`, `.c`) is spelled as
+  // one token.
   if (attr?.sugarNameSpan) {
     return {
       sourceStart: attr.sugarNameSpan.start,
@@ -377,8 +378,18 @@ function attrNameSpan(ctx: Ctx, attr: Node, tagLoc?: Position): SourceSpan {
   // The default value is anchored zero-width at the attribute's start, where
   // Marko anchors it (for `<x async(a) {}>` that is `async`, not the `(`).
   if (attr?.type === "MxAttribute" || attr?.type === "MxSpreadAttribute") {
-    if (attr.type === "MxSpreadAttribute" || attr.name === null) {
+    if (attr.type === "MxSpreadAttribute") {
       return { sourceStart: attr.start, sourceEnd: attr.start };
+    }
+    if (attr.name === null) {
+      // `:b` is the default attribute with the modifier `b` (`value:b`): its
+      // name is the spelled `:b`, colon included.
+      return attr.modifierSpan
+        ? {
+            sourceStart: attr.modifierSpan.start - 1,
+            sourceEnd: attr.modifierSpan.end,
+          }
+        : { sourceStart: attr.start, sourceEnd: attr.start };
     }
     return {
       sourceStart: attr.nameSpan.start,
@@ -387,8 +398,8 @@ function attrNameSpan(ctx: Ctx, attr: Node, tagLoc?: Position): SourceSpan {
   }
   // A tag's own shorthand (`<a#x.y/>`, `a#x.y`) has no attribute position in
   // Marko's AST, only its value does, and that value is the token without its
-  // sigil. The name is spelled as the sigil plus the token, the same span the
-  // spaced name-sugar form (` .y`) reports.
+  // sigil. The name is spelled as the sigil plus the token, the same span a
+  // trigger-placed shorthand (` .y`) reports.
   if (!attr?.loc && attr?.start == null) {
     const value = exprSpan(ctx, attr?.value);
     // A merged or interpolated shorthand (`.a.${x}`, `.a${x}`, `#a${x}`) is a
@@ -452,7 +463,7 @@ function attrNameSpan(ctx: Ctx, attr: Node, tagLoc?: Position): SourceSpan {
 function isOrdinaryColonName(attr: Node, isElement: boolean): boolean {
   return (
     attr?.modifier != null &&
-    (!isElement || !/^(?:class|style|on)(?::|$)/.test(attr.name))
+    (!isElement || !/^(?:class|style|on)(?::|$)/.test(attrNameOf(attr)))
   );
 }
 
@@ -730,8 +741,9 @@ const FOREIGN_ATTR_HINTS: [
     (m) => `write \`${m[1]}=\` with the expression as the value`,
   ],
   [
-    /^#/,
-    (_m, mx) => `\`#…\` template reference variables have no meaning in ${mx}`,
+    /^[#.]/,
+    () =>
+      "a `#id` or `.class` shorthand goes on the tag name with no space (`<div#a>`, `<div.cls>`); otherwise write `id=` or `class=`",
   ],
   [
     /^\*/,
@@ -893,8 +905,8 @@ function lowerAttr(
   tagLoc?: Position,
 ): Attr {
   const lowered = lowerAttrNamed(ctx, attr, on, isElement, tagLoc);
-  // Name sugar (decision 146): remember the token the author wrote, so a
-  // diagnostic on the attribute can say `:email` (`name`).
+  // A shorthand record: remember the token the author wrote, so a
+  // diagnostic on the attribute can say `#main` (`id`).
   if (attr?.sugarLabel && lowered.kind !== "spread") {
     lowered.sugar = attr.sugarLabel;
   }
@@ -924,11 +936,10 @@ function lowerAttr(
 /**
  * The whole span of a named attribute, from the spans its parts already
  * carry: the name through the value, arguments (their parentheses, from
- * `argsSpan`), refinement and method body included; a name sugar's token (`:email`, `#id`). A spread takes its parsed
- * node's range instead (`lowerAttrNamed`). Read from the lowered parts, not the
- * parsed node: the front end's range for a default attribute runs on over a
- * name sugar written after it (`<x="post" :email>`), which lowering splits
- * into two attributes. `undefined` when the value was synthesized.
+ * `argsSpan`), refinement and method body included; a shorthand's token
+ * (`#id`, `.big`). A spread takes its parsed node's range instead
+ * (`lowerAttrNamed`). Read from the lowered parts, not the parsed node.
+ * `undefined` when the value was synthesized.
  */
 function wholeAttrSpan(
   attr: Exclude<Attr, { kind: "spread" }>,
@@ -1022,7 +1033,7 @@ function lowerAttrNamed(
   // conversion there, not as part of the rendered attribute name.
   const name =
     !isBoundAttr(attr) && isOrdinaryColonName(attr, isElement)
-      ? `${attr.name}:${attr.modifier}`
+      ? `${attrNameOf(attr)}:${attr.modifier}`
       : attrNameOf(attr);
 
   if (isElement && attr.modifier === "" && attr.name === "on") {
@@ -4991,9 +5002,9 @@ function syntaxHookIr(
  */
 export function lower(ctx: Ctx, body: readonly Node[]): Ir {
   try {
-    // Port PR 5: the name-sugar errors the MX front end already refuses at
-    // token level (its `MX_*` rules) are lowering's errors, as on Marko's
-    // tree, with the same text and position.
+    // Port PR 5: the errors the MX front end already refuses at token level
+    // (its `MX_*` rules) are lowering's errors, as on Marko's tree, with the
+    // same text and position.
     const frontEndError = pendingFrontEndError(body);
     if (frontEndError) throw frontEndError;
     return lastly(ctx, body, () => lowerRoot(ctx, body));

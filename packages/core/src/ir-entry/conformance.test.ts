@@ -137,6 +137,8 @@ const INTENDED: Record<string, { pattern: RegExp; cases: string[] }> = {
   tagVariable: {
     pattern: /tag variable/,
     cases: [
+      // `<a/bar:=foo>`; its `<a:=foo>` is Marko's bound default value.
+      "attr-bound",
       "comma-after-tag-variable",
       "tag-var-before-concise-text",
       "tag-var-comma-concise",
@@ -155,8 +157,13 @@ const INTENDED: Record<string, { pattern: RegExp; cases: string[] }> = {
       "shorthand-closing-html",
     ],
   },
-  // decision 146: a bound value is not supported on name sugar
-  boundOnSugar: { pattern: /bound value/, cases: ["attr-bound"] },
+  // Marko: a value does not end at whitespace before ` :name`, so
+  // `belongs-to=:Customer :customer` is two expressions. Mesh's own syntax
+  // module ends the value there; core reads it as Marko does.
+  colonAfterValue: {
+    pattern: /Expected a single expression, but found `:` after it/,
+    cases: ["mesh-invoice"],
+  },
   // decision 172 (Marko behaviour is the default): a tag with no argument
   // contract takes none, as in stock Marko
   tagArguments: {

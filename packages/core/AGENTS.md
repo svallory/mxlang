@@ -108,8 +108,8 @@ Five facts worth knowing before editing it:
   S3a no production path builds its taglib lookup either (the `defaultTag`
   judge reads core's tag table); slice S3b deleted `buildMarkoLookup`, the
   last way to build one. Babel and the error kit are core's own since PR 6 slice S1. The error-path re-lexes (`stock-parser.ts` `lexedAtoms`/
-  `tagParamError`/`sugarAfterDefaultError`, `close-tag-opener.ts`) and
-  name-sugar's `isShorthandWord` probe import MX's template lexer,
+  `tagParamError`, `close-tag-opener.ts`) and
+  `shorthand.ts`'s `isShorthandWord` probe import MX's template lexer,
   `@mxlang/parser/lexer` (typed by its `public.d.ts`), from source and in the
   dist alike (PR 6 slice S2). The public `parseFragmentNative` now delegates to `parseFragment`.
   Deleted with the Marko readers (PR 6, decision 158).
@@ -281,7 +281,7 @@ Five facts worth knowing before editing it:
   `CompileError`/`CompileErrors` (`compileErrorOf`, a port of
   `@marko/compiler` 5.42.10 `build-code-frame.js` + `merge-errors.js`), so the
   rewrite chain after it (`hintParseError`, `tagParamError`,
-  `sugarAfterDefaultError`, `dropCompiledFilePrefix`) reads what it always
+  `dropCompiledFilePrefix`) reads what it always
   read; the aggregate's message is Node's form on every runtime (decision 151
   addendum, PR 5). `stripTypes` is `stripMxTypes` (Marko's `transform-typescript`
   visitor over each payload; tag type arguments/parameters dropped, a
@@ -295,10 +295,11 @@ Five facts worth knowing before editing it:
   template error, a bare `,` line before any template error (`bareCommaOf`),
   and every expression error when a method's type parameters fail
   (`methodTypeParamsFail`; Marko's printer failed on that tree). Front-end
-  `MX_*` name-sugar
-  errors are raised by `lower`/`lowerChildren` (`pendingFrontEndError`). A
-  `:name` right after a default value gets decision 151 ruling 2's text at the
-  lowering boundary too (`positionError`). Solid's bridge
+  `MX_*` errors are raised by `lower`/`lowerChildren` (`pendingFrontEndError`).
+  Core has no name sugars: a colon in a tag head is part of the name, a spaced
+  ` :b` after a value continues it, and a spaced `#id`/`.class` is an invalid
+  attribute name, all as stock Marko reads them (`src/shorthand.test.ts`).
+  Solid's bridge
   (`packages/tsx-bridge/src/mx/bridge.ts`) calls `parseFragment` for every MX
   region and retries a failed container as TSX (`repairEmbeddedTsx`); see
   `packages/hosts/solid/AGENTS.md`.
@@ -308,7 +309,7 @@ Five facts worth knowing before editing it:
   `typeArguments`/`attributes`/`attributeTags`/`body.{body,params}`,
   `MarkoAttribute`/`MarkoSpreadAttribute`, text/placeholder/comment/scriptlet
   views; Marko-style `loc` from `ctx.lines`); records already Marko-shaped
-  (`rewriteMxSugar`'s) pass through, and `mxNodeOf(view)` maps back. Every
+  (`shorthand.ts`'s) pass through, and `mxNodeOf(view)` maps back. Every
   `HostDeclarations` call site passes the view, so the public hook contract and
   every host are unchanged. It is removed when the hooks move to the
   `MxNodeHandle` hook view (ast §6.4), one PR after PR 6: `resolveDelegatedTag`,
@@ -529,8 +530,7 @@ Five facts worth knowing before editing it:
   compile's document, in source order and with `file` ("`<id>` trigger has
   no lowering yet"); the seams in
   `payloadOf`/`lowerChildList` are the backstop for callers that lower a
-  document themselves. `MX_SUGAR_ON_STATEMENT` is decided by the parse table
-  alone, never by `ctx.tagTable`.
+  document themselves.
   **Dialect hooks (decision 182 addendum 5; `src/triggers.ts`).** `compileSource` and
   `parseFragment` register the document's syntax by every body array
   (`registerSyntax`), and `lower`/`lowerChildren` run `lowerTriggers` right
@@ -599,7 +599,7 @@ Five facts worth knowing before editing it:
   a cache keyed by the AST node that `attributesWithTriggers` and
   `childrenWithTriggers` read; a claimed node with no entry there is an
   internal error. Lowering inside those walkers (with the `Ctx`) is not
-  done: their callers (`tagAttributesOf`, `mx-sugar.ts`, `lower.ts`'s
+  done: their callers (`tagAttributesOf`, `shorthand.ts`, `lower.ts`'s
   body walks, `core.ts`'s `bodyChildren`) have no `Ctx`.
   Core's own lowering stays
   direct until PR 6 is done with `lower.ts`. Tests:
@@ -607,16 +607,17 @@ Five facts worth knowing before editing it:
   A whole-value member is a static `Attr` with `member` (`memberOf`, mirror
   of `atomOf`); `type: "member"` is checked in `custom-tags.ts`
   (`checkMemberAttr`). Core ships no dialect and no `./syntax/*` export: a dialect owns its
-  rows, and Mesh's atoms, name sugars and `&` members live in Mesh. Core's
+  rows, and Mesh's atoms, name sugars and `&` members live in Mesh (core has
+  no name sugars of its own). Core's
   tests of the claim process (`src/triggers.test.ts`, `src/spans.test.ts`,
   `src/value-position.test.ts`, `src/lowered-unit.test.ts` and the
   `src/ir-entry` suites) use test-local fixture dialects: the sigil row in
   `src/fixtures/syntax/member-fixture.ts` and the contract-claim dialect in
   `src/fixtures/syntax/declares-fixture.ts`, plus small row tables defined in
   the test. Never import a Mesh module or copy a Mesh corpus into core.
-  Until atoms and the name sugars leave core, a loaded row on a character
+  Until atoms leave core, a loaded row on a character
   replaces core's handling of it (parser:
-  `CompiledSyntax.builtInAtoms`/`builtInColonEnd`/`builtInPeriodEnd`; core:
+  `CompiledSyntax.builtInAtoms`; core:
   `convertAtoms` skips a stand-in marked `extra.mxTrigger`, and re-runs after
   the trigger pass so a dialect's `extra.mxAtom` literal is recorded and
   spliced as an atom). `src/fixtures/syntax/atom-fixture.ts` is the fixture
@@ -1351,8 +1352,8 @@ stable version.
   from an external `lowerChildren` before `resolveUnnamedTags`; `exprOf`
   asserts no stand-in survives (`assertNoStandIn`). A stand-in reaching an
   emitter would print as a number, silently.
-- **A whole-value atom is a `static` attr with `atom`**, so no emitter changed;
-  the `:name` sugar's `name` gets `extra.mxAtom` in `sugarAttr`. Nested atoms
+- **A whole-value atom is a `static` attr with `atom`**, so no emitter changed.
+  Nested atoms
   are `Expr.atoms`; `mappedExpr` maps each one to its literal. Hosts mapping an
   expression should call `mappedExpr(expr)`, not `mapped(expr.code, expr.span)`.
 - **No stock-parser path.** Core parses with the MX front end (port PR 5), so

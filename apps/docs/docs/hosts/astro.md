@@ -70,7 +70,7 @@ What changed:
 
 - **`<@title>` and `<@footer>` fill `Card`'s named slots.** These are [attribute tags](/language/attribute-tags-and-params/); each compiles to `<Fragment slot="…">`.
 - **`<if>` / `<else>` and `<for>`** replace the ternary and the `.map()`.
-- **`<ul.members>`, `<span.tag>`, `<a.button>`** are `class`. `#id` and `:name` work the same way.
+- **`<ul.members>`, `<span.tag>`, `<a.button>`** are `class`. `#id` works the same way.
 - **`class={ admin: member.admin }`** compiles to `class:list`.
 
 The output is static markup, as from any `.astro` file. MX ships nothing to the browser.

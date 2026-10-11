@@ -1,6 +1,6 @@
 ---
 title: "Hono"
-description: "MX in place of JSX inside a hono/jsx component: attribute tags for props that hold markup, tags for control flow, and the #id .class :name sugar. Routes, context and middleware stay Hono."
+description: "MX in place of JSX inside a hono/jsx component: attribute tags for props that hold markup, tags for control flow, and the #id and .class shorthands. Routes, context and middleware stay Hono."
 ---
 
 # Hono
@@ -64,7 +64,7 @@ export function Team({ members, query }: { members: Member[]; query: string }) {
   return (
     <section#team.panel>
       <form method="get">
-        <input:q.search type="search" value=query/>
+        <input.search name="q" type="search" value=query/>
       </form>
       <Table rows=shown>
         <@head>
@@ -90,7 +90,7 @@ export function Team({ members, query }: { members: Member[]; query: string }) {
 What changed:
 
 - **`<@head>`, `<@row|member|>`, `<@empty>` are `Table`'s props.** These are [attribute tags](/language/attribute-tags-and-params/): a prop that holds markup is written as markup. The pipes make `row` a function of `member`, the render prop the TSX spells `row={(member) => …}`. `Table` declares them with `AttrTag`, so each one is checked against its props type.
-- **`<section#team.panel>` and `<input:q.search>`** are `id`, `class` and `name`.
+- **`<section#team.panel>` and `<input.search>`** are `id` and `class`.
 - **`<if>` / `<else>` and `<for>`** replace the ternary and the `.map()`.
 - **`class={ admin: member.admin }`** takes an object or an array.
 

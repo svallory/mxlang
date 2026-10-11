@@ -1,61 +1,5 @@
 {
   "files": {
-    "member.mx": {
-      "languageServer": {
-        "policy": {
-          "host": "html"
-        },
-        "diagnostics": [
-          {
-            "severity": 1,
-            "source": "mxlang",
-            "message": "a dynamic shorthand works only tag-adjacent (`<div.a${input.s}>`), not as `.a${input.s}` after the tag name",
-            "range": {
-              "start": {
-                "line": 0,
-                "character": 5
-              },
-              "end": {
-                "line": 0,
-                "character": 6
-              }
-            }
-          }
-        ],
-        "related": [],
-        "dependencies": [],
-        "unexpected": []
-      },
-      "tsPlugin": {
-        "languageId": "typescript",
-        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n",
-        "mappings": [],
-        "compileDiagnostics": [
-          {
-            "fileName": "<root>/sugar-dynamic-shorthand/member.mx",
-            "message": "a dynamic shorthand works only tag-adjacent (`<div.a${input.s}>`), not as `.a${input.s}` after the tag name",
-            "offset": 5,
-            "category": "error"
-          }
-        ],
-        "hostPolicyDiagnostics": [],
-        "logged": []
-      },
-      "vite": {
-        "threw": {
-          "name": "TranslateError",
-          "message": "a dynamic shorthand works only tag-adjacent (`<div.a${input.s}>`), not as `.a${input.s}` after the tag name",
-          "id": "<root>/sugar-dynamic-shorthand/member.mx",
-          "loc": {
-            "file": "<root>/sugar-dynamic-shorthand/member.mx",
-            "line": 1,
-            "column": 5
-          },
-          "frame": "1 | <div .a${input.s}/>\n         ^"
-        },
-        "warnings": []
-      }
-    },
     "page.mx": {
       "languageServer": {
         "policy": {
@@ -65,15 +9,30 @@
           {
             "severity": 1,
             "source": "mxlang",
-            "message": "a dynamic shorthand works only tag-adjacent (`<div.a${x}>`), not as `.a${x}` after the tag name",
+            "message": "Unable to find entry point for custom tag `<input:email>`.",
             "range": {
               "start": {
                 "line": 0,
-                "character": 5
+                "character": 0
               },
               "end": {
                 "line": 0,
-                "character": 6
+                "character": 1
+              }
+            }
+          },
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "Unable to find entry point for custom tag `<:b>`.",
+            "range": {
+              "start": {
+                "line": 1,
+                "character": 0
+              },
+              "end": {
+                "line": 1,
+                "character": 1
               }
             }
           }
@@ -88,9 +47,15 @@
         "mappings": [],
         "compileDiagnostics": [
           {
-            "fileName": "<root>/sugar-dynamic-shorthand/page.mx",
-            "message": "a dynamic shorthand works only tag-adjacent (`<div.a${x}>`), not as `.a${x}` after the tag name",
-            "offset": 5,
+            "fileName": "<root>/colon-html/page.mx",
+            "message": "Unable to find entry point for custom tag `<input:email>`.",
+            "offset": 0,
+            "category": "error"
+          },
+          {
+            "fileName": "<root>/colon-html/page.mx",
+            "message": "Unable to find entry point for custom tag `<:b>`.",
+            "offset": 28,
             "category": "error"
           }
         ],
@@ -100,21 +65,78 @@
       "vite": {
         "threw": {
           "name": "TranslateError",
-          "message": "a dynamic shorthand works only tag-adjacent (`<div.a${x}>`), not as `.a${x}` after the tag name",
-          "id": "<root>/sugar-dynamic-shorthand/page.mx",
+          "message": "Unable to find entry point for custom tag `<input:email>`.\n\n1 more error in this file:\n  2:1: Unable to find entry point for custom tag `<:b>`.",
+          "id": "<root>/colon-html/page.mx",
           "loc": {
-            "file": "<root>/sugar-dynamic-shorthand/page.mx",
+            "file": "<root>/colon-html/page.mx",
             "line": 1,
-            "column": 5
+            "column": 0
           },
-          "frame": "1 | <div .a${x}/>\n         ^"
+          "frame": "1 | <input:email type=\"email\"/>\n    ^"
+        },
+        "warnings": []
+      }
+    },
+    "spaced.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "html"
+        },
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "Invalid attribute name `.big` — a `#id` or `.class` shorthand goes on the tag name with no space (`<div#a>`, `<div.cls>`); otherwise write `id=` or `class=`",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 7
+              },
+              "end": {
+                "line": 0,
+                "character": 8
+              }
+            }
+          }
+        ],
+        "related": [],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n",
+        "mappings": [],
+        "compileDiagnostics": [
+          {
+            "fileName": "<root>/colon-html/spaced.mx",
+            "message": "Invalid attribute name `.big` — a `#id` or `.class` shorthand goes on the tag name with no space (`<div#a>`, `<div.cls>`); otherwise write `id=` or `class=`",
+            "offset": 7,
+            "category": "error"
+          }
+        ],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "threw": {
+          "name": "TranslateError",
+          "message": "Invalid attribute name `.big` — a `#id` or `.class` shorthand goes on the tag name with no space (`<div#a>`, `<div.cls>`); otherwise write `id=` or `class=`",
+          "id": "<root>/colon-html/spaced.mx",
+          "loc": {
+            "file": "<root>/colon-html/spaced.mx",
+            "line": 1,
+            "column": 7
+          },
+          "frame": "1 | <input .big/>\n           ^"
         },
         "warnings": []
       }
     }
   },
   "mxTsc": [
-    "<root>/sugar-dynamic-shorthand/member.mx(1,6): error TS80001: a dynamic shorthand works only tag-adjacent (`<div.a${input.s}>`), not as `.a${input.s}` after the tag name",
-    "<root>/sugar-dynamic-shorthand/page.mx(1,6): error TS80001: a dynamic shorthand works only tag-adjacent (`<div.a${x}>`), not as `.a${x}` after the tag name"
+    "<root>/colon-html/page.mx(1,1): error TS80001: Unable to find entry point for custom tag `<input:email>`.",
+    "<root>/colon-html/page.mx(2,1): error TS80001: Unable to find entry point for custom tag `<:b>`.",
+    "<root>/colon-html/spaced.mx(1,8): error TS80001: Invalid attribute name `.big` — a `#id` or `.class` shorthand goes on the tag name with no space (`<div#a>`, `<div.cls>`); otherwise write `id=` or `class=`"
   ]
 }

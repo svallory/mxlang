@@ -14,7 +14,6 @@
 
 import { parseMxDocument } from "../compile.ts";
 import type { CustomTag } from "../custom-tags.ts";
-import { sugarTagName } from "../name-sugar.ts";
 import type { Dialect, SyntaxTable } from "../syntax-table.ts";
 import { type TagRules, taglibsOfRules } from "../tag-presets.ts";
 import {
@@ -154,10 +153,10 @@ export function scanAuthoredTags(
   ) => {
     for (const node of nodes ?? []) {
       if (!TAG_TYPES.has(node.type)) continue;
-      // An unnamed tag (`<#a>`, `.x`, `<:title>`) is the default tag; the
-      // real lowering resolves it, so this pass names it the same way instead
-      // of reporting an unknown tag. Decision 146: `resource:post` is the tag
-      // `resource` (the front end keeps `:post` as a shorthand).
+      // An unnamed tag (`<#a>`, `.x`) is the default tag; the real lowering
+      // resolves it, so this pass names it the same way instead of reporting
+      // an unknown tag. A colon is part of the name (`<resource:post>` is the
+      // tag `resource:post`, as Marko reads it).
       const kind = node.name?.kind;
       const written =
         node.type === "MxAttributeTag"
@@ -165,9 +164,8 @@ export function scanAuthoredTags(
           : kind === "static"
             ? node.name?.value
             : undefined;
-      const split = written === undefined ? undefined : sugarTagName(written);
-      const unnamed = kind === "unnamed" || split?.unnamed === true;
-      const name = unnamed ? defaultTag : split?.tag;
+      const unnamed = kind === "unnamed";
+      const name = unnamed ? defaultTag : written;
       // A tag the enclosing contract's `children["*"]` claims is known
       // (decision 147); the walk carries the contract in force, as core's does.
       // No `lookup`: this pass has no target taglib, and the structural names

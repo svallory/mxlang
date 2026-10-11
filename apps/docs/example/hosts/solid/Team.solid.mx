@@ -8,7 +8,7 @@ export function Team(props: { members: Member[] }) {
 
   return (
     <section#team.panel>
-      <input:q.search type="search" value=query() onInput(event) { setQuery(event.currentTarget.value); }/>
+      <input.search name="q" type="search" value=query() onInput(event) { setQuery(event.currentTarget.value); }/>
       <Table rows=shown()>
         <@head>
           <th>Name</th>

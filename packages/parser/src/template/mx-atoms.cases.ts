@@ -139,7 +139,7 @@ export const ATOMS: [string, string][] = [
   // (decision 146's after-value split used to cut it at ` :c`).
   ["<div x=a ? :b :c/>", '<div> @x atom(b@11-13) ="a ? 0. :c"'],
   ["<div x=a ?:b :c/>", '<div> @x atom(b@10-12) ="a ?0. :c"'],
-  ["<div x=a ? :b :c :d/>", '<div> @x atom(b@11-13) ="a ? 0. :c" @:d'],
+  ["<div x=a ? :b :c :d/>", '<div> @x atom(b@11-13) ="a ? 0. :c :d"'],
   [
     "<div x=:a ? :b : :c/>",
     '<div> @x atom(a@7-9) atom(b@12-14) atom(c@17-19) ="0. ? 0. : 0."',
@@ -183,17 +183,18 @@ export const ATOMS: [string, string][] = [
     '<div> @x atom(a@16-18) atom(b@23-25) ="{ delete 0., in 0. }"',
   ],
   // An atom named like an operator keyword is still an expression end
-  // (review round 2): the next ` :b` is name sugar or the ternary's `:`.
-  ["<div x=:delete :b/>", '<div> @x atom(delete@7-14) ="0.00000" @:b'],
-  ["<div x=:new :b/>", '<div> @x atom(new@7-11) ="0.00" @:b'],
-  ["<div x=:foo-new :b/>", '<div> @x atom(foo-new@7-15) ="0.000000" @:b'],
+  // (review round 2): the next ` :b` continues the value or is the ternary's
+  // `:`, as stock Marko reads it.
+  ["<div x=:delete :b/>", '<div> @x atom(delete@7-14) ="0.00000 :b"'],
+  ["<div x=:new :b/>", '<div> @x atom(new@7-11) ="0.00 :b"'],
+  ["<div x=:foo-new :b/>", '<div> @x atom(foo-new@7-15) ="0.000000 :b"'],
   ["<div x=a ? :new :b/>", '<div> @x atom(new@11-15) ="a ? 0.00 :b"'],
   [
     "<div x=c ? :delete :keep/>",
     '<div> @x atom(delete@11-18) ="c ? 0.00000 :keep"',
   ],
-  ["<div x=:in :b/>", '<div> @x atom(in@7-10) ="0.0" @:b'],
-  ["<div x=:typeof :b/>", '<div> @x atom(typeof@7-14) ="0.00000" @:b'],
+  ["<div x=:in :b/>", '<div> @x atom(in@7-10) ="0.0 :b"'],
+  ["<div x=:typeof :b/>", '<div> @x atom(typeof@7-14) ="0.00000 :b"'],
   // Review round 4 (PR #342): contextual keywords as identifiers, unary `!`,
   // and every `${}` (in raw-text bodies and tag names too, addendum 2).
   ["<div x=f(of, :b)/>", '<div> @x atom(b@13-15) ="f(of, 0.)"'],
@@ -235,24 +236,25 @@ export const ATOMS: [string, string][] = [
     "<div x=a ? :b : c ? :d :e/>",
     '<div> @x atom(b@11-13) atom(d@20-22) ="a ? 0. : c ? 0. :e"',
   ],
-  // Row 12: an atom value followed by decision 146 name sugar.
-  ["<div x=:a :b/>", '<div> @x atom(a@7-9) ="0." @:b'],
+  // Row 12: a spaced ` :b` or ` .b` after an atom value continues it, as stock
+  // Marko reads it.
+  ["<div x=:a :b/>", '<div> @x atom(a@7-9) ="0. :b"'],
   ["<div :b x=:a/>", '<div> @:b @x atom(a@10-12) ="0."'],
   ["<div:b x=[:c]/>", '<div:b> @x atom(c@10-12) ="[0.]"'],
-  ["<div x=:a .b/>", '<div> @x atom(a@7-9) ="0." @.b'],
-  ["div x=:a :b", '<div> @x atom(a@6-8) ="0." @:b'],
-  // Decision 146 addendum 5: a default attribute whose value is a single atom
-  // takes a following ` :name` as sugar (an atom takes no member access).
-  ["<has-many=:X :y/>", '<has-many> @ atom(X@10-12) ="0." @:y'],
-  ["has-many=:X :y", '<has-many> @ atom(X@9-11) ="0." @:y'],
+  ["<div x=:a .b/>", '<div> @x atom(a@7-9) ="0. .b"'],
+  ["div x=:a :b", '<div> @x atom(a@6-8) ="0. :b"'],
+  // A default attribute whose value is a single atom: the following ` :name`
+  // continues the value, as stock Marko reads it.
+  ["<has-many=:X :y/>", '<has-many> @ atom(X@10-12) ="0. :y"'],
+  ["has-many=:X :y", '<has-many> @ atom(X@9-11) ="0. :y"'],
   [
     "<has-many=:X :y required/>",
-    '<has-many> @ atom(X@10-12) ="0." @:y @required',
+    '<has-many> @ atom(X@10-12) ="0. :y" @required',
   ],
-  ["<has-many=:X  :y/>", '<has-many> @ atom(X@10-12) ="0." @:y'],
+  ["<has-many=:X  :y/>", '<has-many> @ atom(X@10-12) ="0.  :y"'],
   [
     "<belongs-to=:Customer :customer/>",
-    '<belongs-to> @ atom(Customer@12-21) ="0.0000000" @:customer',
+    '<belongs-to> @ atom(Customer@12-21) ="0.0000000 :customer"',
   ],
   // Every other default value keeps decision 151 ruling 2.
   ["<has-many=a :y/>", '<has-many> @ ="a :y"'],
@@ -873,7 +875,7 @@ export const NOT_ATOMS: [string, string][] = [
   ["<div x=(a?:number) => a/>", '<div> @x ="(a?:number) => a"'],
   ["<div x=() => { let a!:T; }/>", '<div> @x ="() => { let a!:T; }"'],
   // Stock htmljs-parser ends an unparenthesized value at a binary keyword
-  // followed by `:`, so this is name sugar, as before atoms.
+  // followed by `:`, so `:b` is an attribute, as before atoms.
   ["<div x=a in :b/>", '<div> @x ="a" @in @:b'],
   // A word written right against `:` is a key or label, keyword or not
   // (review round 2): `{ new:a }` parsed before atoms and still does.
@@ -910,20 +912,20 @@ export const NOT_ATOMS: [string, string][] = [
   ],
   ["<div x=c ? of :b/>", '<div> @x ="c ? of :b"'],
   ["<div x=c ? yield :b/>", '<div> @x ="c ? yield :b"'],
-  ["<div x=c ? a! :b :name/>", '<div> @x ="c ? a! :b" @:name'],
+  ["<div x=c ? a! :b :name/>", '<div> @x ="c ? a! :b :name"'],
   // A non-ASCII letter right after a name: no atom, so no stand-in can
   // reach Babel's message (N5). A touching keyword is never an operator
   // (Q4). A regex end is an operand. A statement after a block (N8).
   ["<div x=:a\u00e9/>", '<div> @x =":a\u00e9"'],
   ["<div x=typeof:a/>", '<div> @x ="typeof:a"'],
-  ["<div x=/r/ :b/>", '<div> @x ="/r/" @:b'],
+  ["<div x=/r/ :b/>", '<div> @x ="/r/ :b"'],
   ["<div x() { if (a) {} :b }/>", '<div> @x method:" if (a) {} :b "'],
   // Statement tags, scriptlets, tag variables, tag params.
   ["static const s = :a;\n<div/>", "<static> <div>"],
   ["$ const y = :a;\n<div/>", '$"const y = :a;" <div>'],
   ["$ { const y = :a; }\n<div/>", '$" const y = :a; " <div>'],
   ["<for|:a| of=x>y</for>", '<for> params:":a" @of ="x"'],
-  // The attribute name position is never a value (decision 146 sugar).
+  // The attribute name position is never a value.
   ["<div :a/>", "<div> @:a"],
   ["<div:a/>", "<div:a>"],
   // Review round 5 (PR #342, R2): `::` inside a tag-name placeholder's

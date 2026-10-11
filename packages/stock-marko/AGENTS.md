@@ -34,8 +34,7 @@ patch diverges MX's parser from the published build.
   == installed `dist` byte-for-byte.
 - Core isolation (`packages/core` resolves the patched parser — verified).
 - Table: ≥20 event-level differences (after-value, atoms, non-ASCII,
-  NBSP, never-throw), 3 tree-level rows (`<a:b/>`, `<div :x/>`,
-  `<a.hover:x/>`), 5 equal-stream controls (`copyright-ambiguous`,
+  NBSP, never-throw) and the equal-stream controls (`copyright-ambiguous`,
   `nbsp-before-comment`, etc.).
 
 ## Tests

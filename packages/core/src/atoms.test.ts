@@ -288,80 +288,19 @@ function exprOfAttr2(
   return a.value;
 }
 
-describe("the name sugar keeps atom-ness (addendum 1, item 2)", () => {
+describe("a `:name` after a value, and the shorthand, are not atoms", () => {
+  // Marko's failure: a default value does not end at whitespace, so ` :y`
+  // continues it (stock-parser.test.ts). A value that is one atom is no
+  // exception. `<const/x=(a) :T => a/>` stays a type annotation (parser case
+  // table).
   it.each([
-    ["<input :email/>", span(7, 13)],
-    ["<input:email/>", span(6, 12)],
-    ['<input type="text" :email/>', span(19, 25)],
-    ["<:email/>", span(1, 7)],
-    ["<input.big:email/>", span(10, 16)],
-  ])("%j", (source, atomSpan) => {
-    expect(attr(source, "name")).toMatchObject({
-      kind: "static",
-      value: "email",
-      sugar: source.slice(atomSpan.sourceStart, atomSpan.sourceEnd),
-      atom: { kind: "atom", name: "email", span: atomSpan },
-    });
+    "<has-many=a :y/>",
+    "<has-many=:X.y :z/>",
+    "<belongs-to=:Customer :customer/>",
+    "belongs-to=:Customer :customer",
+  ])("a ` :name` after a default value is Marko's error: %j", (source) => {
+    expect(() => firstElement(source)).toThrow("found `:` after it");
   });
-
-  it("an atom value plus the sugar (row 12)", () => {
-    const element = firstElement("<div x=:a :b/>");
-    expect(element.attrs).toMatchObject([
-      { name: "x", value: "a", atom: { name: "a", span: span(7, 9) } },
-      { name: "name", value: "b", atom: { name: "b", span: span(10, 12) } },
-    ]);
-    expect(firstElement("<div :b x=:a/>").attrs).toMatchObject([
-      { name: "name", value: "b", atom: { name: "b" } },
-      { name: "x", value: "a", atom: { name: "a" } },
-    ]);
-    const tagAdjacent = firstElement("<div:b x=[:c]/>").attrs;
-    expect(tagAdjacent[0]).toMatchObject({
-      name: "name",
-      atom: { name: "b" },
-    });
-    expect(tagAdjacent[1]).toMatchObject({
-      name: "x",
-      value: { code: '["c"]', atoms: [{ name: "c" }] },
-    });
-  });
-
-  // Decision 146 addendum 5: a default attribute whose value is a single atom
-  // takes a following ` :name` as sugar, concise and HTML, with more after.
-  it.each([
-    ["<belongs-to=:Customer :customer/>", ["Customer", "customer"]],
-    ["belongs-to=:Customer :customer", ["Customer", "customer"]],
-    ["<has-many=:X  :y/>", ["X", "y"]],
-    ["<belongs-to=:Customer :customer required/>", ["Customer", "customer"]],
-    ["belongs-to=:Customer :customer required", ["Customer", "customer"]],
-  ])(
-    "a single-atom default value plus the sugar: %j",
-    (source, [value, name]) => {
-      const [first, second] = firstElement(source).attrs;
-      expect(first).toMatchObject({
-        name: "value",
-        value,
-        atom: { name: value },
-      });
-      expect(second).toMatchObject({
-        name: "name",
-        value: name,
-        atom: { name },
-      });
-      expect(firstElement(source).attrs).toHaveLength(
-        source.includes("required") ? 3 : 2,
-      );
-    },
-  );
-
-  // The raw parser failure; core turns it into the positioned ruling-2 error
-  // (stock-parser.test.ts). `<const/x=(a) :T => a/>` stays a type annotation
-  // (parser case table).
-  it.each(["<has-many=a :y/>", "<has-many=:X.y :z/>"])(
-    "every other default value keeps ruling 2: %j",
-    (source) => {
-      expect(() => firstElement(source)).toThrow("found `:` after it");
-    },
-  );
 
   it("`#id` and `.class` are not atoms", () => {
     const element = firstElement("<input#main.big/>");

@@ -4,7 +4,7 @@ export function Invite({ team, open, send }: { team: string; open: boolean; send
   return (
     <Dialog open=open>
       <@title>Invite to <b>${team}</b></@title>
-      <input:email#email.field type="email" required/>
+      <input#email.field name="email" type="email" required/>
       <@actions><button.primary onClick=send>Send invite</button></@actions>
     </Dialog>
   );

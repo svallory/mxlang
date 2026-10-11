@@ -1,3 +1,0 @@
-<input #x=input.v/>
-<input :n=input.w .c/>
-input #p=input.q

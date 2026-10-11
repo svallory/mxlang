@@ -492,8 +492,8 @@ describe("round 3: attribute order and position (PR #6 review)", () => {
 
   it("carries `value:foo` as the namespaced attribute `value:foo` (Marko)", () => {
     // The explicit `value:foo` is one attribute literally named `value:foo`,
-    // the same AST shape a JSX `value:foo={…}` produces. (Decision 146 made
-    // the bare `:foo` spelling `name="foo"` sugar, so these rows write it out.)
+    // the same AST shape a JSX `value:foo={…}` produces, and the bare `:foo`
+    // spelling is the same attribute.
     const attr = attrsOf(`const el = <div value:foo=1>x</div>;`)[0] as {
       name: {
         type: string;
@@ -509,8 +509,7 @@ describe("round 3: attribute order and position (PR #6 review)", () => {
   it("gives a valueless `value:foo` the empty value Marko's HTML means", () => {
     // `<div value:foo>` is an attribute present with an empty value, which
     // every HTML parser reads the same way. The JSX spelling carries it as
-    // `value:foo=""`, not as `true`. (The bare `<div :foo>` is `name="foo"`
-    // sugar since decision 146.)
+    // `value:foo=""`, not as `true`, and so does the bare `<div :foo>`.
     const attr = attrsOf(`const el = <div value:foo>x</div>;`)[0] as {
       name: { namespace: { name: string }; name: { name: string } };
       value: { type: string; value: string };

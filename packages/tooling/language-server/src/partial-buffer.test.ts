@@ -3,24 +3,23 @@ import { describe, expect, it } from "vitest";
 import { diagnoseDocument } from "./diagnose.ts";
 
 /**
- * Decision 146 (PR 3), completions. This language server completes nothing
+ * Completions on a buffer mid-edit. This language server completes nothing
  * (diagnostics only, decisions 71/72: Marko's own server completes attribute
  * names for `.mx`), but an editor asks for completions on a buffer that is
- * mid-edit, and every tool compiles that buffer first. So the sugar sigils
- * right after whitespace inside a tag (`<input :`, `<input #`, `<input .`) must
- * never crash a tool: the server returns diagnostics (a parse error at the
- * cursor at worst). The TypeScript plugin half is in its own package.
+ * mid-edit, and every tool compiles that buffer first. So a sigil right after
+ * whitespace inside a tag (`<input :`, `<input #`, `<input .`) must never
+ * crash a tool: the server returns diagnostics (a parse error at the cursor
+ * at worst). The TypeScript plugin half is in its own package.
  */
 
 const target = defaultTarget();
 const policy = { target, host: hostOf(target) };
 
 /**
- * The exact number of diagnostics each buffer gives: a parse error or a sugar
- * error at the cursor. `input :` is 1 since the bare `:` in attribute position
- * became a positioned error ("`:` is name sugar and needs a name", PR 3 round
- * 2, leader ruling); before that it was Marko's `value:` and gave 0, so an
- * author who typed `:` and stopped got no diagnostic at all.
+ * The exact number of diagnostics each buffer gives, as stock Marko reads it:
+ * an unclosed tag, Marko's "Invalid attribute name" on a spaced `#`/`.`, or a
+ * value that a ` :` continues. The concise `input :` is complete Marko (the
+ * default attribute's `value:`), so it gives none.
  */
 const PARTIAL: [string, number][] = [
   ["<input :", 1],
@@ -31,7 +30,7 @@ const PARTIAL: [string, number][] = [
   ['<input type="email" .', 1],
   ["<input:", 1],
   ["<:", 1],
-  ["input :", 1],
+  ["input :", 0],
   ["input #", 1],
   ['input type="email" .', 1],
   ["<input :e", 1],

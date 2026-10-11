@@ -1451,19 +1451,19 @@ describe("round 4 (rev-236-r2)", () => {
       expect(ok(source).body[0]).toMatchObject({ kind: "DelegatedTag" });
     });
 
-    // Decision 146: a colon in a tag name is the `name` sugar, so the
-    // XML-style namespaced spellings are the tag plus a name, not a name that
-    // carries a colon. (Attribute tags keep their colon, below.)
+    // A colon is part of a tag's name, as in Marko (stock `htmljs-parser`
+    // reads `<svg:rect>` as the one name `svg:rect`). (Attribute tags keep
+    // their colon too, below.)
     it.each([
-      ["a namespaced name", `<svg:rect/>\n`, "svg", "rect"],
-      ["an xml: prefix", `<xml:lang/>\n`, "xml", "lang"],
-      ["a namespaced dashed name", `<ns:tag-x/>\n`, "ns", "tag-x"],
-      ["a namespaced name, concise", `svg:rect\n`, "svg", "rect"],
-      ["a close tag form", `<a:b></a:b>\n`, "a", "b"],
-    ])("splits %s into the tag plus `name`", (_case, source, tag, name) => {
+      ["a namespaced name", `<svg:rect/>\n`, "svg:rect"],
+      ["an xml: prefix", `<xml:lang/>\n`, "xml:lang"],
+      ["a namespaced dashed name", `<ns:tag-x/>\n`, "ns:tag-x"],
+      ["a namespaced name, concise", `svg:rect\n`, "svg:rect"],
+      ["a close tag form", `<a:b></a:b>\n`, "a:b"],
+    ])("keeps %s whole", (_case, source, tag) => {
       const node = firstTag(ok(source));
       expect(node.name).toBe(tag);
-      expect(node.attrs.map(nameValue)).toEqual([["name", name]]);
+      expect(node.attrs).toEqual([]);
     });
 
     it("accepts the same names as attribute tags, so both agree", () => {
@@ -1770,82 +1770,41 @@ describe("valueless default-attribute modifier (Mesh span bug)", () => {
 
 // Decision 146: `:name`, `#id` and `.class` sugar reaches the IR as the
 // attributes the author would have written.
-describe("name sugar (decision 146)", () => {
+// A colon reads as stock Marko reads it (`@marko/compiler` 5.42.11 on
+// `htmljs-parser` 5.18.0, probed): part of a tag's name or of a shorthand
+// token, and `:x` with an empty head is the default attribute's modifier,
+// `value:x`.
+describe("a colon reads as Marko reads it", () => {
   const options = { structural: "reject" } as const;
-  const attrNames = (src: string) =>
-    firstTag(ok(src, options)).attrs.map((a) =>
-      a.kind === "static" ? `${a.name}=${a.value}` : nameOf(a),
-    );
-
-  it("`entity :Todo table=...` is name=Todo (the Mesh spelling)", () => {
-    const entity = firstTag(ok('entity :Todo table="todos"\n', options));
-    expect(entity.attrs.map(nameValue)).toEqual([
-      ["name", "Todo"],
-      ["table", "todos"],
-    ]);
-    // Decision 156 addendum 1, item 2: the sugar's `name` is an atom; the
-    // token `:Todo` is both the name span and the atom's span.
-    const name = attrAs(entity.attrs[0], "static");
-    expect(name.atom).toMatchObject({ kind: "atom", name: "Todo" });
-    expect(name.sugar).toBe(":Todo");
-    expect(name.nameSpan).toEqual({ sourceStart: 7, sourceEnd: 12 });
-    expect(name.atom?.span).toEqual({ sourceStart: 7, sourceEnd: 12 });
-  });
-
-  it("a child line `create :complete ...` works", () => {
-    const ir = ok("entity\n  create :complete done=true\n", options);
-    const create = firstTag(ir)
-      .children.filter((c) => c.kind === "DelegatedTag")
-      .map(tagIn)
-      .find((tag) => tag.name === "create");
-    expect(create?.attrs.map(nameOf)).toEqual(["name", "done"]);
-  });
+  const shapeOf = (src: string) => {
+    const tag = firstTag(ok(src, options));
+    return [
+      tag.name,
+      ...tag.attrs.map((a) =>
+        a.kind === "static" ? `${a.name}=${a.value}` : nameOf(a),
+      ),
+    ];
+  };
 
   it.each([
-    ['<input:email type="email"/>', ["name=email", "type=email"]],
-    ["<:email/>", ["name=email"]],
-    ["<a.c:b/>", ["name=b", "class=c"]],
-    ['<a x="1" :b/>', ["x=1", "name=b"]],
-    ['<a x="1" #b .c :d/>', ["x=1", "id=b", "class=c", "name=d"]],
-  ])("%s", (src, expected) => {
-    expect(attrNames(src)).toEqual(expected);
-  });
-
-  it("an unnamed `<:title/>` is the default tag `object`, with `name` set to `title`", () => {
-    const tag = firstTag(ok("<:title/>\n", options));
-    expect(tag.name).toBe("object");
-    expect(tag.attrs.map(nameValue)).toEqual([["name", "title"]]);
+    ['entity :Todo table="todos"\n', ["entity", "value:Todo=", "table=todos"]],
+    ['<input:email type="email"/>', ["input:email", "type=email"]],
+    ["<:email/>", [":email"]],
+    ["<a.c:b/>", ["a", "class=c:b"]],
+    ["<a#c:b/>", ["a", "id=c:b"]],
+  ])("%j", (src, expected) => {
+    expect(shapeOf(src)).toEqual(expected);
   });
 });
 
-// Decision 146, lead ruling: an attribute tag's name is a property key, not an
-// element, so `<@svg:rect>` is not split; attribute-position sugar on an
-// attribute tag applies (`<@z .b>` gives `class="b"`).
-describe("name sugar on attribute tags", () => {
-  const attrTagOf = (source: string) => {
-    const node = firstTag(ok(source)).attributeTagTree[0];
-    if (node?.kind !== "AttributeTag") throw new Error("expected attr-tag");
-    return node.tag;
-  };
-
+// An attribute tag's name is a property key, so `<@svg:rect>` keeps its
+// colon, as an element's name does.
+describe("a colon in an attribute tag's name", () => {
   it("`<@svg:rect/>` keeps its colon and gets no name", () => {
-    const rect = attrTagOf("<a><@svg:rect/></a>\n");
-    expect(rect.name).toBe("svg:rect");
-    expect(rect.attrs).toEqual([]);
-  });
-
-  it('`<@z .b/>` gives the attribute tag `class="b"`', () => {
-    const z = attrTagOf("<a><@z .b/></a>\n");
-    expect(z.name).toBe("z");
-    expect(z.attrs.map(nameValue)).toEqual([["class", "b"]]);
-  });
-
-  it("`<@z :b #c/>` gives name and id", () => {
-    const z = attrTagOf("<a><@z :b #c/></a>\n");
-    expect(z.attrs.map(nameValue)).toEqual([
-      ["name", "b"],
-      ["id", "c"],
-    ]);
+    const node = firstTag(ok("<a><@svg:rect/></a>\n")).attributeTagTree[0];
+    if (node?.kind !== "AttributeTag") throw new Error("expected attr-tag");
+    expect(node.tag.name).toBe("svg:rect");
+    expect(node.tag.attrs).toEqual([]);
   });
 });
 
@@ -1866,8 +1825,9 @@ describe("a dynamic shorthand class on data", () => {
   });
 
   it.each([
-    [`<a.${D}x} .${D}y}/>`, "a dynamic shorthand works only tag-adjacent"],
-    [`<a .${D}x}/>`, "a dynamic shorthand works only tag-adjacent"],
+    // Stock Marko: a spaced `.` is not an attribute name.
+    [`<a.${D}x} .${D}y}/>`, `Invalid attribute name \`.${D}y}\``],
+    [`<a .${D}x}/>`, `Invalid attribute name \`.${D}x}\``],
     [
       `<a.${D}x} class="y"/>`,
       "a shorthand class (`.a`) together with a `class` attribute",
@@ -1881,31 +1841,15 @@ describe("a dynamic shorthand class on data", () => {
   });
 });
 
-// TODO `data-import-tag-internal-error`: `<root><import:x/></root>` used to
-// throw "@mxlang/data: unexpected IR node kind `Import` in a body". The cause
-// was core's: a `:name` sugar on a statement tag rewrote into `<import
-// name="x"/>`, which lowers to a statement node in whatever body the tag sits
-// in. Core now rejects that sugar, positioned on the colon, so every target
-// reports source feedback instead of an internal error.
-describe("a `:name` sugar on a statement tag nested in a body", () => {
-  it.each([
-    ["import", "<root><import:x/></root>", 13],
-    ["export", "<root><export:x/></root>", 13],
-    ["static", "<root><static:x/></root>", 13],
-  ])("%s", (name, source, column) => {
-    failWith(source, {
-      message: `a \`:name\` is not supported on the statement tag \`${name}\`: its text is code, not attributes — write \`${name} …\` at the root of the template instead`,
-      line: 1,
-      column,
-    });
-  });
-
-  it("is reported at the root too", () => {
-    failWith("<import:x/>", {
-      message:
-        "a `:name` is not supported on the statement tag `import`: its text is code, not attributes — write `import …` at the root of the template instead",
-      line: 1,
-      column: 7,
-    });
+// `<root><import:x/></root>` once threw "@mxlang/data: unexpected IR node
+// kind `Import` in a body". A colon is part of a tag's name, as in Marko
+// (stock `htmljs-parser` reads `import:x` as one name), so the tag is the
+// ordinary tag `import:x`, never the statement.
+describe("a colon after a statement keyword is part of the tag's name", () => {
+  it.each(["import", "export", "static"])("%s", (name) => {
+    const node = firstTag(ok(`<root><${name}:x/></root>\n`)).children.find(
+      (child) => child.kind === "DelegatedTag",
+    );
+    expect(node && tagIn(node).name).toBe(`${name}:x`);
   });
 });

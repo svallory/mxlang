@@ -1184,10 +1184,9 @@ class FrontEnd {
       name = { value: written.slice(1), span: this.span(template) };
     } else {
       bodyMode = this.shapeOf(written);
-      const colon = written.indexOf(":");
-      const value = colon < 0 ? written : written.slice(0, colon);
+      // A `:` is part of the name, as in Marko (`<a:b>` is the tag `a:b`).
       name =
-        value === ""
+        written === ""
           ? {
               kind: "unnamed",
               span: {
@@ -1197,24 +1196,13 @@ class FrontEnd {
             }
           : {
               kind: "static",
-              value,
+              value: written,
               span: this.span({
                 start: template.start,
-                end: template.start + value.length,
+                end: template.start + written.length,
               }),
             };
-      if (value === "return") type = "MxReturn";
-      // ast §3.3: from the first `:` on is a tag-position `:` sugar.
-      if (colon >= 0 && colon + 1 < written.length) {
-        shorthands.push(
-          this.staticShorthand(
-            ":",
-            "tag",
-            template.start + colon,
-            template.end,
-          ),
-        );
-      }
+      if (written === "return") type = "MxReturn";
     }
 
     const phantom = this.top;
@@ -1356,20 +1344,15 @@ class FrontEnd {
 
   shapes = new Map<string, MxBodyMode>();
 
-  /** A shorthand with a static value from `sigilAt` (the sigil) to `end`, local offsets. */
-  staticShorthand(
-    sigil: "#" | "." | ":",
-    position: "tag" | "attribute",
-    sigilAt: number,
-    end: number,
-  ): Builder {
+  /** A tag-adjacent shorthand with a static value from `sigilAt` (the sigil) to `end`, local offsets. */
+  staticShorthand(sigil: "#" | ".", sigilAt: number, end: number): Builder {
     const value = { start: sigilAt + 1, end };
     return {
       type: "MxShorthand",
       start: this.at(sigilAt),
       end: this.at(end),
       sigil,
-      position,
+      position: "tag",
       value: {
         kind: "static",
         value: this.slice(value),
@@ -1382,24 +1365,19 @@ class FrontEnd {
   }
 
   /**
-   * `onTagShorthandId`/`onTagShorthandClass` (ast §3.6, "Splitting a
-   * shorthand value"): the static tail after the last `${…}` splits at its
-   * first `:` into a tag-position `:` sugar; a value the split leaves empty
-   * makes no shorthand for its sigil.
+   * `onTagShorthandId`/`onTagShorthandClass` (ast §3.6): the whole value is
+   * the shorthand's, a `:` included, as in Marko (`<a#b:c>` is the id
+   * `b:c`). An empty value makes no shorthand.
    */
   onTagShorthand(sigil: "#" | ".", template: Ranges.Template): void {
     if (this.statement) return; // a statement's continuation line (g0895)
     const tag = this.headTag(template.start);
     const quasis = template.quasis.map((q) => ({ ...q }));
-    const last = quasis[quasis.length - 1] as Range;
-    const colonInLast = this.slice(last).indexOf(":");
-    const colon = colonInLast < 0 ? -1 : last.start + colonInLast;
-    const valueEnd = colon < 0 ? template.end : colon;
-    last.end = valueEnd;
+    const valueEnd = template.end;
     if (template.expressions.length === 0) {
       if (valueEnd > template.start + 1) {
         tag.shorthands.push(
-          this.staticShorthand(sigil, "tag", template.start, valueEnd),
+          this.staticShorthand(sigil, template.start, valueEnd),
         );
       }
     } else {
@@ -1429,11 +1407,6 @@ class FrontEnd {
         default: null,
         args: null,
       });
-    }
-    if (colon >= 0 && colon + 1 < template.end) {
-      tag.shorthands.push(
-        this.staticShorthand(":", "tag", colon, template.end),
-      );
     }
     this.reach(template.end);
   }
@@ -1507,24 +1480,18 @@ class FrontEnd {
         value: null,
         args: null,
       });
-    } else if (text[0] === ":") {
-      items.push(...this.sugarParts(":", range.start, range.end));
-    } else if (text[0] === "#" || text[0] === ".") {
-      for (const part of splitChain(text)) {
-        const partStart = range.start + part.start;
-        items.push(
-          ...this.sugarParts(part.sigil, partStart, range.start + part.end),
-        );
-      }
     } else {
       // Decision 163 addendum 12: the split is kept as data, and the name
       // is the head before the last colon — `nameSpan` covers the head only.
       // A trailing colon is an empty modifier with a zero-width span after it.
+      // An empty head is the default value, as Marko fills it with `value`
+      // (`:b` is `value:b`, `:` is `value:`).
       const colon = text.lastIndexOf(":");
+      const head = colon < 0 ? text : text.slice(0, colon);
       items.push({
         type: "MxAttribute",
         ...this.span(range),
-        name: colon < 0 ? text : text.slice(0, colon),
+        name: head === "" ? null : head,
         nameSpan:
           colon < 0
             ? this.span(range)
@@ -1550,17 +1517,6 @@ class FrontEnd {
     this.reach(range.end);
   }
 
-  /** One attribute-position sugar from its sigil to `end`, split at the first `:` outside `${…}` (ast §3.6 rule 1). */
-  sugarParts(sigil: "#" | "." | ":", sigilAt: number, end: number): Builder[] {
-    const colon = firstColonOutsidePlaceholders(this.source, sigilAt + 1, end);
-    if (colon < 0)
-      return [this.staticShorthand(sigil, "attribute", sigilAt, end)];
-    return [
-      this.staticShorthand(sigil, "attribute", sigilAt, colon),
-      this.staticShorthand(":", "attribute", colon, end),
-    ];
-  }
-
   requireCurrent(): Builder {
     const current = this.current;
     if (!current)
@@ -1575,9 +1531,8 @@ class FrontEnd {
       current.args = this.container("MxArguments", event.value, event);
       current.end = this.at(event.end);
     } else {
-      // Arguments after a sugar (`.c(p)`) are kept on the node, atoms
-      // included; PR 2b raises MX_SUGAR_ARGUMENTS at the sugar (decision
-      // 163 addendum 11, ast §3.6 rule 6).
+      // Arguments after a trigger's shorthand are kept on the node, atoms
+      // included (ast §3.6 rule 6).
       current.args = this.container("MxArguments", event.value, event);
     }
     this.reach(event.end);
@@ -1648,9 +1603,11 @@ class FrontEnd {
     const method = this.method(event);
     if (current.type === "MxAttribute") {
       current.value = method;
-      if (current.name === null) {
+      if (current.name === null && current.modifier === null) {
         // The default value's name is zero-width at the `(` (ast §3.5); the
-        // parser's empty name sits at `async` or a type parameter's `<`.
+        // parser's empty name sits at `async` or a type parameter's `<`. An
+        // empty head with a modifier (`:n(e) { … }`, Marko's `value:n`) keeps
+        // its name at the `:`.
         const paren = this.at(event.params.start);
         current.nameSpan = { start: paren, end: paren };
         current.start = method.start;
@@ -1985,49 +1942,4 @@ function braced(source: string, value: Range): Range {
 
 function isTrimmable(code: number): boolean {
   return /\s/.test(String.fromCharCode(code));
-}
-
-/** `.c#m.d` → its `.`/`#` parts outside any `${…}` (today's `splitShorthandChain`), offsets within `text`. */
-function splitChain(
-  text: string,
-): { sigil: "#" | "."; start: number; end: number }[] {
-  const parts: { sigil: "#" | "."; start: number; end: number }[] = [];
-  let depth = 0;
-  for (let at = 0; at < text.length; at++) {
-    const char = text[at];
-    if (depth === 0 && (char === "." || char === "#")) {
-      const previous = parts[parts.length - 1];
-      if (previous) previous.end = at;
-      parts.push({ sigil: char, start: at, end: text.length });
-      continue;
-    }
-    if (char === "$" && text[at + 1] === "{") {
-      depth++;
-      at++;
-      continue;
-    }
-    if (depth > 0 && char === "{") depth++;
-    if (depth > 0 && char === "}") depth--;
-  }
-  return parts;
-}
-
-function firstColonOutsidePlaceholders(
-  source: string,
-  start: number,
-  end: number,
-): number {
-  let depth = 0;
-  for (let at = start; at < end; at++) {
-    const char = source[at];
-    if (char === "$" && source[at + 1] === "{") {
-      depth++;
-      at++;
-      continue;
-    }
-    if (depth > 0 && char === "{") depth++;
-    else if (depth > 0 && char === "}") depth--;
-    else if (depth === 0 && char === ":") return at;
-  }
-  return -1;
 }

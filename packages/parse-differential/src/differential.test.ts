@@ -109,52 +109,21 @@ describe(`fixtures (${INPUT_GLOB})`, () => {
 });
 
 /**
- * Where today's front end throws ITS OWN error before the sugar rule
- * (ast \u00a73.13 keeps today's text for the rules themselves). Four inputs;
- * the test below pins each one's exact today-first reason, so a rule change
- * that moves an entry into or out of this list fails there:
- * - `:=1` on an empty tag-adjacent `:name` (`<div:=1/>`): Marko's binding
- *   error "Attributes may only be bound to identifiers or member
- *   expressions" fires before `BOUND_ON_SUGAR`; MX records `MX_SUGAR_BOUND`
- *   at the sugar. Anywhere else (`<let/x:=1/>`, `<div :=1/>`) `:=` is
- *   Marko's own bound default value, not sugar: the front end records
- *   nothing and lowering raises the binding error, as today.
- * - `.` with arguments and no word (`<div x=a . (b) y/>`): today's attr
- *   with arguments is not sugar at all, so "Invalid attribute name `.`"
- *   fires instead of `MX_SUGAR_ARGUMENTS`.
- * - `=>` after a sugar attribute value (`(a) :É => a`, g1715): today's
- *   parser itself rejects the value (`Unexpected token` at the `>` of
- *   `=>`), so its parse error fires before `MX_SUGAR_NAME_INVALID`.
+ * Where today's front end throws ITS OWN error before the front end's rule
+ * (ast \u00a73.13 keeps today's text for the rules themselves). One input;
+ * the test below pins its exact today-first reason, so a rule change that
+ * moves an entry into or out of this list fails there:
+ * - `<div x=$!{a}/>`: today's Marko-front compile throws the Babel error as
+ *   an aggregate frame ("at s.mx:1:10"), not MX's dedicated code with the
+ *   same sentence at the same point.
  */
-const TODAY_OWN_FIRST = new Set([
-  // `<div x=$!{a}/>`: today's Marko-front compile throws the Babel error as
-  // an aggregate frame ("at s.mx:1:10"), not MX's dedicated code with the
-  // same sentence at the same point.
-  "g0755",
-  "g0062",
-  "g0330",
-  "g1715",
-]);
+const TODAY_OWN_FIRST = new Set(["g0755"]);
 
 /** Each TODAY_OWN_FIRST entry's own expected first error from today (offset + message). */
 const TODAY_OWN_REASON: Record<string, { start: number; message: string }> = {
   g0755: {
     start: 9,
     message: "at s.mx:1:10",
-  },
-  g0062: {
-    start: 6,
-    message:
-      "Attributes may only be bound to identifiers or member expressions",
-  },
-  g0330: {
-    start: 9,
-    message:
-      "Invalid attribute name `.` — an attribute name may use letters, digits and `._:-`",
-  },
-  g1715: {
-    start: 8,
-    message: "at s.mx:1:9",
   },
 };
 
@@ -235,12 +204,13 @@ describe("front-end rules against today's lowering (PR 2b)", () => {
 });
 
 /**
- * The curated reverse calibration matrix (review F8): the fixes from the
- * review — compound bound chains, node-kind bindability, unnamed and
- * trailing colons, the `div` fallback, nested silent-EOF tags — pinned in
- * the reverse direction. Each row states today's first error exactly, so a
- * rule that stops firing (or drifts) fails here even when the corpus never
- * contained the shape.
+ * The curated reverse calibration matrix (review F8), pinned in the reverse
+ * direction: each row states the front end's first error and today's first
+ * error exactly, so a rule that stops firing (or drifts) fails here even when
+ * the corpus never contained the shape. The colon and spaced-shorthand rows
+ * pin Marko's own reading: the front end records nothing, and today's error
+ * (or acceptance) is what stock Marko reads (`<div .c:n:=x/>` is an attribute
+ * named `.c:n`, `<:1/>` a tag named `:1`, `<div.c:/>` the class `c:`).
  */
 const REVERSE_MATRIX: readonly {
   id: string;
@@ -253,107 +223,56 @@ const REVERSE_MATRIX: readonly {
   {
     id: "bound-compound-dot",
     source: "<div .c:n:=x/>",
-    mx: {
-      code: "MX_SUGAR_BOUND",
-      start: 5,
-      message:
-        "a bound value is not supported on name sugar; write name=... value:=...",
-    },
+    mx: null,
     today: {
       start: 5,
       message:
-        "a bound value is not supported on name sugar; write name=... value:=...",
+        "Invalid attribute name `.c` — a `#id` or `.class` shorthand goes on the tag name with no space (`<div#a>`, `<div.cls>`); otherwise write `id=` or `class=`",
     },
   },
   {
     id: "bound-compound-dot-value-ignored",
     source: "<div .c:n:=1/>",
-    mx: {
-      code: "MX_SUGAR_BOUND",
-      start: 5,
-      message:
-        "a bound value is not supported on name sugar; write name=... value:=...",
-    },
+    mx: null,
     today: {
-      start: 5,
+      start: 11,
       message:
-        "a bound value is not supported on name sugar; write name=... value:=...",
+        "Attributes may only be bound to identifiers or member expressions",
     },
   },
   {
     id: "bound-compound-two-shorthands",
     source: "<div .a.b:=x/>",
-    mx: {
-      code: "MX_SUGAR_BOUND",
-      start: 5,
-      message:
-        "a bound value is not supported on name sugar; write name=... value:=...",
-    },
+    mx: null,
     today: {
       start: 5,
       message:
-        "a bound value is not supported on name sugar; write name=... value:=...",
+        "Invalid attribute name `.a.b` — a `#id` or `.class` shorthand goes on the tag name with no space (`<div#a>`, `<div.cls>`); otherwise write `id=` or `class=`",
     },
   },
   {
     id: "bindable-computed-member",
     source: "<div :n:=obj[key]/>",
-    mx: {
-      code: "MX_SUGAR_BOUND",
-      start: 5,
-      message:
-        "a bound value is not supported on name sugar; write name=... value:=...",
-    },
-    today: {
-      start: 5,
-      message:
-        "a bound value is not supported on name sugar; write name=... value:=...",
-    },
+    mx: null,
+    today: null,
   },
   {
     id: "bindable-computed-index",
     source: "<div :n:=obj[0]/>",
-    mx: {
-      code: "MX_SUGAR_BOUND",
-      start: 5,
-      message:
-        "a bound value is not supported on name sugar; write name=... value:=...",
-    },
-    today: {
-      start: 5,
-      message:
-        "a bound value is not supported on name sugar; write name=... value:=...",
-    },
+    mx: null,
+    today: null,
   },
   {
     id: "bindable-non-ascii",
     source: "<div :n:=é/>",
-    mx: {
-      code: "MX_SUGAR_BOUND",
-      start: 5,
-      message:
-        "a bound value is not supported on name sugar; write name=... value:=...",
-    },
-    today: {
-      start: 5,
-      message:
-        "a bound value is not supported on name sugar; write name=... value:=...",
-    },
+    mx: null,
+    today: null,
   },
   {
     id: "bindable-parenthesized",
     source: "<a :n:=(obj.x)/>",
-    mx: {
-      code: "MX_SUGAR_BOUND",
-      start: 3,
-      message:
-        "a bound value is not supported on name sugar; write name=... value:=...",
-    },
-    today: {
-      start: 3,
-      message:
-        "a bound value is not supported on name sugar; write name=... value:=...",
-    },
+    mx: null,
+    today: null,
   },
   {
     id: "not-bindable-true",
@@ -378,119 +297,57 @@ const REVERSE_MATRIX: readonly {
   {
     id: "unnamed-colon-word",
     source: "<:1/>",
-    mx: {
-      code: "MX_SUGAR_NAME_INVALID",
-      start: 1,
-      message:
-        "`:1` in a tag name is not a name; `:name` takes an identifier (`:email`, `:first-name`)",
-    },
-    today: {
-      start: 1,
-      message:
-        "`:1` in a tag name is not a name; `:name` takes an identifier (`:email`, `:first-name`)",
-    },
+    mx: null,
+    today: null,
   },
   {
     id: "unnamed-colon-empty",
     source: "<:/>",
-    mx: {
-      code: "MX_SUGAR_NAME_MISSING",
-      start: 1,
-      message: "`:` in a tag name needs a name after it (`:email`)",
-    },
-    today: {
-      start: 1,
-      message: "`:` in a tag name needs a name after it (`:email`)",
-    },
+    mx: null,
+    today: null,
   },
   {
     id: "unnamed-colon-second",
     source: "<:b:c/>",
-    mx: {
-      code: "MX_SECOND_NAME",
-      start: 3,
-      message:
-        'a tag takes one `:name`; this one already has a name (write the second as `name="…"`)',
-    },
-    today: {
-      start: 3,
-      message:
-        'a tag takes one `:name`; this one already has a name (write the second as `name="…"`)',
-    },
+    mx: null,
+    today: null,
   },
   {
     id: "shorthand-trailing-colon",
     source: "<div.c:/>",
-    mx: {
-      code: "MX_SUGAR_NAME_MISSING",
-      start: 6,
-      message:
-        "`:` in a shorthand class or id needs a name after it (`:email`)",
-    },
-    today: {
-      start: 6,
-      message:
-        "`:` in a shorthand class or id needs a name after it (`:email`)",
-    },
+    mx: null,
+    today: null,
   },
   {
     id: "shorthand-trailing-colon-dynamic",
     source: "<div.${x}:/>",
-    mx: {
-      code: "MX_SUGAR_NAME_MISSING",
-      start: 9,
-      message:
-        "`:` in a shorthand class or id needs a name after it (`:email`)",
-    },
-    today: {
-      start: 9,
-      message:
-        "`:` in a shorthand class or id needs a name after it (`:email`)",
-    },
+    mx: null,
+    today: null,
   },
   {
     id: "statement-empty-colon",
     source: "<import:/>",
-    mx: {
-      code: "MX_SUGAR_ON_STATEMENT",
-      start: 7,
-      message:
-        "a `:name` is not supported on the statement tag `import`: its text is code, not attributes — write `import …` at the root of the template instead",
-    },
-    today: {
-      start: 7,
-      message:
-        "a `:name` is not supported on the statement tag `import`: its text is code, not attributes — write `import …` at the root of the template instead",
-    },
+    mx: null,
+    today: null,
   },
   {
     id: "dynamic-shorthand-fallback-div",
     source: "<${t} .a${x}/>",
-    mx: {
-      code: "MX_SUGAR_DYNAMIC",
-      start: 6,
-      message:
-        "a dynamic shorthand works only tag-adjacent (`<div.a${x}>`), not as `.a${x}` after the tag name",
-    },
+    mx: null,
     today: {
       start: 6,
       message:
-        "a dynamic shorthand works only tag-adjacent (`<div.a${x}>`), not as `.a${x}` after the tag name",
+        "Invalid attribute name `.a${x}` — a `#id` or `.class` shorthand goes on the tag name with no space (`<div#a>`, `<div.cls>`); otherwise write `id=` or `class=`",
     },
   },
   {
     id: "authored-range-with-value",
     source: "<div .c:bad%=1/>",
-    mx: {
-      code: "MX_SUGAR_NAME_INVALID",
-      start: 7,
-      message:
-        "`:bad%` in `.c:bad%=1` is not a name; `:name` takes an identifier (`:email`, `:first-name`)",
-    },
+    mx: null,
     today: {
-      start: 7,
+      start: 5,
       message:
-        "`:bad%` in `.c:bad%=1` is not a name; `:name` takes an identifier (`:email`, `:first-name`)",
+        "Invalid attribute name `.c` — a `#id` or `.class` shorthand goes on the tag name with no space (`<div#a>`, `<div.cls>`); otherwise write `id=` or `class=`",
     },
   },
   {
@@ -509,51 +366,34 @@ const REVERSE_MATRIX: readonly {
         "attribute tag `@slot` on `<div>`; attribute tags are props of components, so they are only valid directly inside a component call",
     },
   },
-  // Concise-mode and fragment-base neighbours: the same rules at different
-  // offsets and with leading content.
   {
     id: "concise-bound-compound",
     source: "div .c:n:=x",
-    mx: {
-      code: "MX_SUGAR_BOUND",
-      start: 4,
-      message:
-        "a bound value is not supported on name sugar; write name=... value:=...",
-    },
+    mx: null,
     today: {
       start: 4,
       message:
-        "a bound value is not supported on name sugar; write name=... value:=...",
+        "Invalid attribute name `.c` — a `#id` or `.class` shorthand goes on the tag name with no space (`<div#a>`, `<div.cls>`); otherwise write `id=` or `class=`",
     },
   },
   {
     id: "fragment-base-bound-compound",
     source: "<p/>x<div .c:n:=x/>",
-    mx: {
-      code: "MX_SUGAR_BOUND",
-      start: 10,
-      message:
-        "a bound value is not supported on name sugar; write name=... value:=...",
-    },
+    mx: null,
     today: {
       start: 10,
       message:
-        "a bound value is not supported on name sugar; write name=... value:=...",
+        "Invalid attribute name `.c` — a `#id` or `.class` shorthand goes on the tag name with no space (`<div#a>`, `<div.cls>`); otherwise write `id=` or `class=`",
     },
   },
   {
     id: "newline-fragment-bound-compound",
     source: "x\n<div .c:n:=x/>",
-    mx: {
-      code: "MX_SUGAR_BOUND",
-      start: 7,
-      message:
-        "a bound value is not supported on name sugar; write name=... value:=...",
-    },
+    mx: null,
     today: {
       start: 7,
       message:
-        "a bound value is not supported on name sugar; write name=... value:=...",
+        "Invalid attribute name `.c` — a `#id` or `.class` shorthand goes on the tag name with no space (`<div#a>`, `<div.cls>`); otherwise write `id=` or `class=`",
     },
   },
 ];

@@ -584,9 +584,9 @@ describe("the atom row arms where the built-in atom does (a1 items 3, 4 and 6)",
     );
   });
 
-  it("drops the single-atom default exemption with the built-in atom (182 addendum 1)", () => {
+  it("reads ` :y` into a single-atom default value, with the built-in atom or the row", () => {
     expect(render("<belongs-to=:X :y/>", undefined)).toBe(
-      '<belongs-to> @ atom(X@12-14) ="0." @:y',
+      '<belongs-to> @ atom(X@12-14) ="0. :y"',
     );
     expect(render("<belongs-to=:X :y/>", ATOMS)).toBe(
       '<belongs-to> @ trigger(atom expression ":X"@12-14) ="0. :y"',
@@ -594,9 +594,9 @@ describe("the atom row arms where the built-in atom does (a1 items 3, 4 and 6)",
   });
 });
 
-describe("attribute rows replace the built-in after-value cases (a1 item 6)", () => {
-  // The rows without `terminatesValue`: the built-in case is off, so
-  // nothing ends the value there.
+describe("attribute rows end a value only with `terminatesValue` (a1 item 6)", () => {
+  // Without a row, and with a row that does not set `terminatesValue`,
+  // nothing ends the value there: it reads on as stock reads it.
   const quietName = table({
     attributeTriggers: [{ ...NAME, terminatesValue: false }],
   });
@@ -605,16 +605,20 @@ describe("attribute rows replace the built-in after-value cases (a1 item 6)", ()
   });
 
   it.each([
-    ["<a x=1 :b/>", undefined, '<a> @x ="1" @:b'],
+    ["<a x=1 :b/>", undefined, '<a> @x ="1 :b"'],
     ["<a x=1 :b/>", quietName, '<a> @x ="1 :b"'],
     ["<a x=1 :b/>", SUGARS, '<a> @x ="1" trigger(name attribute ":b"@7-9)'],
-    ["<a x=1 :/>", undefined, '<a> @x ="1" @:'],
+    [
+      "<a x=1 :/>",
+      undefined,
+      "<a> @x ERR(8-8 EOF reached while parsing regular expression)",
+    ],
     [
       "<a x=1 :/>",
       SUGARS,
       "<a> @x ERR(8-8 EOF reached while parsing regular expression)",
     ],
-    ["<a x=a .b/>", undefined, '<a> @x ="a" @.b'],
+    ["<a x=a .b/>", undefined, '<a> @x ="a .b"'],
     ["<a x=a .b/>", quietClass, '<a> @x ="a .b"'],
     ["<a x=a .b/>", SUGARS, '<a> @x ="a" trigger(class attribute ".b"@7-9)'],
     // `.5` matches no row, and the stock rule keeps it in the value.

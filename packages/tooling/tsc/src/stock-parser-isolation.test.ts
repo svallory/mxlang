@@ -17,19 +17,19 @@ import { stripVTControlCharacters } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 /**
- * Decision 159: core's dist parses with its bundled front end and MX's own
- * template parser, so a stock `htmljs-parser` in the install reaches no tool:
- * `<input type="email" :email>` compiles with no diagnostic in the language
- * server and `mx-tsc`. The stock parser is rebuilt in a `mkdtemp` copy by
- * reversing the committed patch (plain JS: the gate PATH has no `patch`), and
- * each tool's built `dist` runs against it in a child process. (Decision 151's
- * stock-parser error is gone: core never parses MX with a stock parser.)
+ * Core's dist parses with its bundled front end and MX's own template parser,
+ * so a stock `htmljs-parser` in the install reaches no tool: a built-in atom
+ * value (`type=:email`), which the stock parser rejects ("Unexpected token"),
+ * compiles with no diagnostic in the language server and `mx-tsc`. The stock
+ * parser is rebuilt in a `mkdtemp` copy by reversing the committed patch
+ * (plain JS: the gate PATH has no `patch`), and each tool's built `dist` runs
+ * against it in a child process.
  */
 
 const here = import.meta.dirname;
 const repo = join(here, "..", "..", "..", "..");
 const require = createRequire(import.meta.url);
-const SOURCE = '<input type="email" :email/>\n';
+const SOURCE = "<input type=:email/>\n";
 
 function reversePatch(dir: string, patchText: string): void {
   for (const section of patchText.split(/^diff --git /m).slice(1)) {
@@ -70,7 +70,7 @@ let page = "";
 let stockOnlyHook = "";
 
 beforeAll(() => {
-  work = mkdtempSync(join(tmpdir(), "mx-sugar-stock-"));
+  work = mkdtempSync(join(tmpdir(), "mx-stock-parser-"));
   const stock = join(work, "htmljs-parser");
   cpSync(dirname(dirname(require.resolve("htmljs-parser"))), stock, {
     recursive: true,

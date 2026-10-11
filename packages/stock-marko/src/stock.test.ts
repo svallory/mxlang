@@ -56,8 +56,8 @@ describe("stockEvents", () => {
     expect(events.some((line) => line.startsWith("Atom"))).toBe(false);
   });
 
-  it("differs from MX on both", () => {
-    expect(stockEvents("<div a=b :c/>")).not.toEqual(mxEvents("<div a=b :c/>"));
+  it("agrees with MX on the first and differs on the atom", () => {
+    expect(stockEvents("<div a=b :c/>")).toEqual(mxEvents("<div a=b :c/>"));
     expect(stockEvents("<div x=:a/>")).not.toEqual(mxEvents("<div x=:a/>"));
   });
 });

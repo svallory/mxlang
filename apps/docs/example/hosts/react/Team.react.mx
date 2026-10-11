@@ -8,7 +8,7 @@ export function Team({ members }: { members: Member[] }) {
 
   return (
     <section#team.panel>
-      <input:q.search type="search" value=query onChange(event) { setQuery(event.target.value); }/>
+      <input.search name="q" type="search" value=query onChange(event) { setQuery(event.target.value); }/>
       <Table rows=shown>
         <@head>
           <th>Name</th>

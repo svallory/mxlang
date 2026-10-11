@@ -264,7 +264,7 @@ export function valueNodeOf(attr: Node): DialectNode | undefined {
 /**
  * A tag's attributes as authored, each attribute trigger node replaced by
  * what it lowered to, and each attribute whose value a value row claimed
- * by the attribute its node lowered to (the name-sugar pass reads these).
+ * by the attribute its node lowered to (the shorthand pass reads these).
  * An `MxTrigger` the pass never lowered stays, for the seams to refuse; a
  * claimed node the pass never lowered is an internal error.
  */

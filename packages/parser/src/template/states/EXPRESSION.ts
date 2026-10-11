@@ -23,12 +23,12 @@ import * as ErrorCode from "../util/error-code.ts";
 export interface ExpressionMeta extends Meta {
   groupStack: number[];
   operators: boolean;
-  /** MX: the expression is a named attribute's (or spread's) value. */
+  /** MX: the expression is a named attribute's (or spread's) value, which a `terminatesValue` trigger may end. */
   attrValue: boolean;
   /**
    * MX (decision 146 addendum 5): the expression is a default attribute's
-   * value, which is exempt from the after-value rule unless it is one single
-   * atom: an atom takes no member access, so ` :name` after it is sugar.
+   * value, which a `terminatesValue` trigger ends only when it is one single
+   * atom: an atom takes no member access.
    */
   defaultAtom: boolean;
   /**
@@ -562,8 +562,7 @@ function checkForOperators(
       )
     ) {
       // MX (decision 182): a space and then an attribute trigger that sets
-      // `terminatesValue` ends an attribute value; decision 146's ` :ident`
-      // and ` .ident` rule as a table property. A row whose claim
+      // `terminatesValue` ends an attribute value. A row whose claim
       // declines ends nothing: the value reads on as if no row matched.
       if (
         parser.syntax.terminators &&
@@ -583,7 +582,6 @@ function checkForOperators(
         expression,
         data,
         nextNonSpace,
-        parser,
       );
       if (lookAheadPos !== -1) {
         parser.pos = lookAheadPos;
@@ -730,8 +728,8 @@ function isClaimedDefault(
  * token after whitespace: a named attribute's (or spread's) value, or a
  * single-atom default value (decision 146 addendum 5) or a default value a
  * value row claims whole, with no `?` open (a ` :x` there is the
- * ternary's). The guard of decision 146's ` :name` rule, shared with the
- * syntax table's `terminatesValue` (decision 182).
+ * ternary's). The guard of the syntax table's `terminatesValue`
+ * (decision 182).
  */
 function valueMayEndAt(
   expression: ExpressionMeta,
@@ -751,9 +749,7 @@ function lookAheadForOperator(
   expression: ExpressionMeta,
   data: string,
   pos: number,
-  parser: Parser,
 ): number {
-  const syntax = parser.syntax;
   switch (data.charCodeAt(pos)) {
     case CODE.AMPERSAND:
     case CODE.ASTERISK:
@@ -772,32 +768,11 @@ function lookAheadForOperator(
     case CODE.OPEN_PAREN:
     case CODE.CLOSE_ANGLE_BRACKET:
     case CODE.QUESTION:
+    case CODE.COLON:
     case CODE.EQUAL:
       return pos; // defers to base expression state to track block groups.
 
-    case CODE.COLON:
-      // MX: in an attribute value, ` :name` (no open `?`) or a bare `:` before
-      // the end of the tag or line starts a new attribute. An attribute
-      // trigger on `:` replaces both (the coexistence rule): its
-      // `terminatesValue`, checked before this, does the work.
-      return syntax.builtInColonEnd &&
-        valueMayEndAt(expression, data, pos, parser) &&
-        (isIdentStartCode(data.charCodeAt(pos + 1)) ||
-          isBareColonEnd(data, pos + 1))
-        ? -1
-        : pos;
-
     case CODE.PERIOD: {
-      // MX: in an attribute value, ` .name` starts a new attribute.
-      // A non-ASCII letter starts a name too (`x=a .é` stays sugar). An
-      // attribute trigger on `.` replaces it (the coexistence rule).
-      if (
-        syntax.builtInPeriodEnd &&
-        expression.attrValue &&
-        isNameStartAt(data, pos + 1)
-      ) {
-        return -1;
-      }
       // Only matches `.` followed by something that could be an identifier.
       const nextPos = lookAheadWhile(isWhitespaceCode, data, pos + 1);
       return wordWidthAt(data, nextPos) > 0 ? nextPos : -1;
@@ -953,30 +928,12 @@ function isDigitCode(code: number) {
   return code >= CODE.NUMBER_0 && code <= CODE.NUMBER_9;
 }
 
-/** Whether a name can start at `at`: a word character other than a digit. */
-function isNameStartAt(data: string, at: number) {
-  return wordWidthAt(data, at) > 0 && !isDigitCode(data.charCodeAt(at));
-}
-
 function isIdentStartCode(code: number) {
   return (
     (code >= CODE.UPPER_A && code <= CODE.UPPER_Z) ||
     (code >= CODE.LOWER_A && code <= CODE.LOWER_Z) ||
     code === CODE.DOLLAR ||
     code === CODE.UNDERSCORE
-  );
-}
-
-/** Whether `at` is the end of the tag or line: `>`, `/>`, a newline or EOF. */
-function isBareColonEnd(data: string, at: number) {
-  const code = data.charCodeAt(at);
-  return (
-    code !== code ||
-    code === CODE.CLOSE_ANGLE_BRACKET ||
-    code === CODE.NEWLINE ||
-    code === CODE.CARRIAGE_RETURN ||
-    (code === CODE.FORWARD_SLASH &&
-      data.charCodeAt(at + 1) === CODE.CLOSE_ANGLE_BRACKET)
   );
 }
 

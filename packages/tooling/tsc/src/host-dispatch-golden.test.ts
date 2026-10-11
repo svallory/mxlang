@@ -145,29 +145,13 @@ const ROWS = [
   // built-in answers meanwhile.
   "default-tag-html",
   "default-tag-invalid",
-  // Decision 146 (the `:name` sugar), PR 3: valid sugar in every position on a
-  // string host and a JSX host (the JSX row pins the mapped name/class/id
-  // tokens), a typed template tag whose `name` prop gets the wrong type (the
-  // TS error lands on the sugar token), and one row per PR 2 error: a second
-  // `:` in the tag head, a value on the sugar, sugar right after a default
-  // value and a dynamic shorthand in attribute position. The stock-parser error
-  // cannot arise here (the repo installs the patched parser); its positions in
-  // every tool are pinned by `sugar-stock-parser.test.ts`.
-  "sugar-html",
-  "sugar-preact",
-  "sugar-typed",
-  "sugar-second-colon",
-  // Decision 146 addendum 4: `=value` / `(params) { body }` after a sugar sets
-  // the default attribute, so `sugar-value` is now the second-default-value
-  // error (at the second) and `sugar-default-value` the valid forms, on a JSX
-  // host so the mapped value is pinned.
-  "sugar-value",
-  "sugar-default-value",
-  "sugar-default-attr",
-  "sugar-dynamic-shorthand",
-  // A bare `:` in attribute position (leader ruling, PR 3 round 2): one error
-  // at the `:`, first, after a value and in concise mode.
-  "sugar-bare-colon",
+  // A colon or a spaced shorthand reads as stock Marko reads it, in every
+  // tool: `<input:email>` and `<:b.c>` are tag names, a spaced `.big` is
+  // Marko's "Invalid attribute name", a ` :b` after a value is Marko's
+  // "Expected a single expression", and a bare `:` is `value:`.
+  "colon-html",
+  "colon-after-value",
+  "colon-bare",
 ] as const;
 
 /** Rows whose Vite leg resolves `~/` through a configured alias. */

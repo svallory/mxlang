@@ -95,16 +95,23 @@ describe("`:modifier` is the attribute `value:modifier` (hono)", () => {
     ).toContain(`<div value:foo={${ATTR}("value:foo", y, "div")} />`);
   });
 
-  // Decision 146: the bare spelling is `name`/`id`/`class` sugar, in every
-  // position, compiled on this host as the attributes written out.
+  // As in Marko: the bare `:foo` is `value:foo` (the empty head is the
+  // default attribute's), and only a tag-adjacent `#id` / `.class` is a
+  // shorthand; a spaced one is Marko's invalid attribute name.
   it.each([
-    ["<div :foo/>", '<div name="foo" />'],
-    ['<input type="email" :email/>', '<input type="email" name="email" />'],
-    ['<input:email type="email"/>', '<input name="email" type="email" />'],
-    ["<div #main .big/>", '<div id="main" class="big" />'],
-    ['<div x="1" .big/>', '<div x="1" class="big" />'],
-  ])("compiles the sugar %s", (source, expected) => {
+    ["<div :foo/>", '<div value:foo="" />'],
+    ["<div#main.big/>", '<div class="big" id="main" />'],
+    ['<input.big type="email"/>', '<input type="email" class="big" />'],
+  ])("compiles %s", (source, expected) => {
     expect(compileHonoMx(source, "/fixtures/test.mx").code).toContain(expected);
+  });
+
+  it.each([
+    ["<div .big/>", "`.big`"],
+    ["<div #main/>", "`#main`"],
+  ])("refuses the spaced shorthand %s at its name", (source, name) => {
+    expect(failure(source).message).toContain(`Invalid attribute name ${name}`);
+    expect(failure(source)).toMatchObject({ line: 1, column: 5 });
   });
 
   it("still refuses a real modifier", () => {

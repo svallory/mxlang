@@ -55,11 +55,7 @@ import {
   parseMx,
   registerDocument,
 } from "./mx-parse.ts";
-import {
-  BARE_COMMA_MESSAGE,
-  sugarAfterDefaultError,
-  tagParamError,
-} from "./stock-parser.ts";
+import { BARE_COMMA_MESSAGE, tagParamError } from "./stock-parser.ts";
 import {
   type Dialect,
   explicitSyntaxOf,
@@ -510,23 +506,24 @@ export function parseFragment(
     // A thrown error's position is on the exception, never in a tree, so the
     // walk below can never reach it (spike 1, limit 2).
     const positioned = error as PositionedError;
-    // A failure inside a tag's `|params|`, and sugar right after a default
-    // value (decision 151, ruling 2), become positioned MX errors; the
+    // A failure inside a tag's `|params|` becomes a positioned MX error; the
     // fragment's own coordinates are shifted like the parse error's.
-    const rewritten =
-      tagParamError(error, source) ?? sugarAfterDefaultError(error, source);
+    const rewritten = tagParamError(error, source);
     if (rewritten) {
       const at = { line: rewritten.line, column: rewritten.column };
       shiftPosition(at, resolved);
       throw new TranslateError(rewritten.message, at.line, at.column);
     }
-    if (positioned?.loc) {
-      shiftPosition(positioned.loc.start, resolved);
-      // Marko's `CompileError` for a point error shares one object between
-      // `start` and `end`; shifting it twice would land at `base + base`.
-      if (positioned.loc.end !== positioned.loc.start) {
-        shiftPosition(positioned.loc.end, resolved);
-      }
+    // A `CompileErrors` aggregate carries each error's position on that
+    // error. Marko's `CompileError` for a point error shares one object
+    // between `start` and `end`; `seen` keeps a shared position from being
+    // shifted twice (`base + base`).
+    const seen = new Set<object>();
+    const errors = (positioned as { errors?: PositionedError[] }).errors ?? [];
+    for (const each of [positioned, ...errors]) {
+      if (!each?.loc) continue;
+      shiftPosition(each.loc.start, resolved, seen);
+      shiftPosition(each.loc.end, resolved, seen);
     }
     throw error;
   }

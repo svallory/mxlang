@@ -9,9 +9,9 @@
   {
     "id": "sugar",
     "group": "Markup",
-    "title": "Name sugar",
-    "text": "`#id`, `.class` and `:name` sit on the tag, where a selector would put them.",
-    "jsx": "<h1 id=\"store-title\" className=\"title\">\n<input name=\"q\" className=\"search\" />"
+    "title": "Shorthands",
+    "text": "`#id` and `.class` sit on the tag, where a selector would put them.",
+    "jsx": "<h1 id=\"store-title\" className=\"title\">\n<input className=\"search\" name=\"q\" />"
   },
   {
     "id": "flow",
@@ -24,7 +24,7 @@
     "id": "attrs",
     "group": "Markup",
     "title": "Attributes",
-    "text": "A value is any expression, with no braces around it: an atom, a comparison, an object, a spread.",
+    "text": "A value is any expression, with no braces around it: a string, a comparison, an object, a spread.",
     "jsx": "type=\"search\" required\ndata-first={i === 0}\nstyle={{ paddingLeft: `${i}rem` }}\n{...cardAttrs}"
   },
   {

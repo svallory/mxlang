@@ -157,12 +157,6 @@ at any depth is prefixed `` `<box>`: `<@row>`: ``):
 | `` attribute `label` must be string, got atom `` | `label` is declared `string` and written `label=:title` |
 | `` attribute `kind` must be atom, got string `` | `kind` is declared `atom` and written `kind="title"`; in a list, the string item itself is the position. Against `values` the message ends with ``(one of :a, :b)``; against `ref` with the declared names and the fix: ``(one of :id, :title); write it as `:title` `` |
 
-**The name sugar is the exception** (decision 156 addendum 6): `name` set by the
-sugar satisfies a `string` or `enum` contract as its string and an `atom`
-contract as the atom, so `<field :email/>` is fine either way. An explicit
-`x=:a` against `string` stays an error, and `name="title"` against an
-atom-typed `name` stays an error.
-
 ### Operations an atom refuses
 
 An atom is a name, not a value to work on. Member access (`:a.length`, `:a[0]`),

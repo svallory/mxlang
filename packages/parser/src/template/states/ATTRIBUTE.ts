@@ -462,8 +462,10 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
 
 /**
  * Enters an attribute value's `EXPRESSION` at the current position.
- * `attrValue` (MX) arms the after-value rule; without it, decision 146
- * addendum 5's single-atom default value still is followed by name sugar.
+ * `attrValue` (MX) arms the after-value rule for a named attribute's value.
+ * A default value has it off: only a dialect's `terminatesValue` trigger may
+ * end one early, and only when the value is a single atom (`defaultAtom`) or
+ * a value row claims it whole (`claimDefault`).
  */
 function enterAttrValue(parser: Parser, attrValue: boolean, bound = false) {
   const expr = parser.enterState(STATE.EXPRESSION);

@@ -14,7 +14,7 @@ const fixture: Dialect = { id: "fixture", name: "Fixture", table: {} };
 
 describe("a module's own contract key", () => {
   it("passes through registration and reaches its `afterLower`, whose `fail` is a positioned, coded diagnostic", () => {
-    const source = "entity :Invoice\n  index on=:title\n";
+    const source = "entity name=:Invoice\n  index on=:title\n";
     const tags: Record<string, CustomTag> = {
       entity: { attributes: { name: { type: "atom" } } },
       index: {

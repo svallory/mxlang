@@ -1,9 +1,7 @@
 /**
  * The divergence table (the package's reason to exist): inputs where the
  * stock htmljs-parser 5.18.0 and MX's template parser read differently by
- * design, plus tree-level rows where the parsers agree and the divergence
- * is in what `@marko/compiler` versus MX core makes of the events, plus
- * controls that must stay equal.
+ * design, plus controls that must stay equal.
  *
  * Expected streams live in `divergence.expected.json`, rendered by the
  * grammar corpus's own `renderProbe` and regenerated (never hand-typed)
@@ -28,58 +26,6 @@ export interface DivergenceRow {
  * cite `divergences.md` rows and the decisions behind them.
  */
 export const EVENT_ROWS: DivergenceRow[] = [
-  // The after-value rule (decision 146; divergences.md "The parser
-  // after-value rule"). Stock continues the value across the whitespace.
-  {
-    id: "after-value-colon",
-    input: "<div a=b :c/>",
-    note: "decision 146: stock reads one value `b :c`; MX splits `:c`",
-  },
-  {
-    id: "after-value-quoted-colon",
-    input: '<a x="1" :b/>',
-    note: 'decision 146: stock continues a quoted value, `"1" :b`; MX splits',
-  },
-  {
-    id: "after-value-quoted-dot",
-    input: '<a x="1" .b/>',
-    note: 'decision 146: stock continues a quoted value, `"1" .b`; MX splits',
-  },
-  {
-    id: "after-value-dot",
-    input: "<a x=a.b .c/>",
-    note: "decision 146: stock member access across the space; MX splits `.c`",
-  },
-  {
-    id: "after-value-call-dot",
-    input: "<a x=fn(a) .b/>",
-    note: "decision 146: stock one value `fn(a) .b`; MX splits `.b`",
-  },
-  {
-    id: "after-value-chain-newline",
-    input: "<div x=foo\n  .bar()/>",
-    note: "decision 146: stock multi-line chain; MX splits `.bar()`",
-  },
-  {
-    id: "after-value-colon-newline",
-    input: "<div x=a\n  :b/>",
-    note: "decision 146: the split works across a newline; stock continues",
-  },
-  {
-    id: "after-value-postfix",
-    input: "<div x=a! .b/>",
-    note: "decision 146: stock one value `a! .b`; MX splits `.b`",
-  },
-  {
-    id: "return-type-space-colon",
-    input: "<div x=(a) :T => a/>",
-    note: "decision 146's known cost: stock keeps the TS return type one value; MX splits `:T`",
-  },
-  {
-    id: "function-return-type-space-colon",
-    input: "<div x=function (a) :T { return a }/>",
-    note: "decision 146's known cost: stock one value; MX splits `:T` and `{ return a }`",
-  },
   // Atoms (decision 156; divergences.md "Atoms"). Stock has no atoms.
   {
     id: "atom-value",
@@ -113,9 +59,9 @@ export const EVENT_ROWS: DivergenceRow[] = [
     note: "decision 156: `::` is a positioned reserved-token error in MX; stock reads the value `::a`",
   },
   {
-    id: "default-single-atom-split",
+    id: "default-atom-value-continues",
     input: "belongs-to=:Customer :customer",
-    note: "decision 146 addendum 5: MX splits a single-atom default value at ` :customer`; stock one value",
+    note: "decision 156: MX lexes the atom `:Customer`; both read one value `:Customer :customer`",
   },
   // Non-ASCII word characters in look-behinds (decision 156 addendum 13;
   // unicode-rules-research.md). Stock is ASCII-only.
@@ -128,6 +74,11 @@ export const EVENT_ROWS: DivergenceRow[] = [
     id: "nonascii-keyword-lookbehind",
     input: "<div x=énew y=1/>",
     note: "addendum 13: stock sees the keyword `new` inside `énew`; MX sees one identifier",
+  },
+  {
+    id: "nonascii-member-dot",
+    input: "<div x=a .é/>",
+    note: "addendum 13: stock's word test is ASCII-only, so it ends the value before `.é`; MX reads member access `a .é`",
   },
   {
     id: "nbsp-division",
@@ -165,33 +116,77 @@ export const EVENT_ROWS: DivergenceRow[] = [
 ];
 
 /**
- * Tree-level rows: the two parsers emit identical events; the divergence
- * is above the parser. `stockMarkoTree` pins what stock Marko makes of
- * them; MX's reading is core's (divergences.md, name-sugar rows).
- */
-export const TREE_ROWS: DivergenceRow[] = [
-  {
-    id: "tag-colon",
-    input: "<a:b/>",
-    note: 'decision 146: Marko\'s tree is one tag named `a:b`; MX is the tag `a` plus `name="b"`',
-  },
-  {
-    id: "bare-sugar",
-    input: "<div :x/>",
-    note: 'decision 146: Marko\'s tree is the attribute `value:x` (empty head filled with `value`); MX is `name="x"`',
-  },
-  {
-    id: "shorthand-colon",
-    input: "<a.hover:x/>",
-    note: 'decision 146: Marko\'s class is `hover:x`; MX is class `hover` plus `name="x"`',
-  },
-];
-
-/**
  * Controls: streams must stay equal. Each guards a place a past or
  * documented MX rule did (or could) diverge.
  */
 export const CONTROL_ROWS: DivergenceRow[] = [
+  // The name sugars left core: a space before `:` or `.` no longer ends an
+  // attribute value, so these read as stock reads them.
+  {
+    id: "after-value-colon",
+    input: "<div a=b :c/>",
+    note: "one value `b :c` in both, as Marko reads it",
+  },
+  {
+    id: "after-value-quoted-colon",
+    input: '<a x="1" :b/>',
+    note: 'one value `"1" :b` in both, as Marko reads it',
+  },
+  {
+    id: "after-value-quoted-dot",
+    input: '<a x="1" .b/>',
+    note: 'one value `"1" .b` in both, as Marko reads it',
+  },
+  {
+    id: "after-value-dot",
+    input: "<a x=a.b .c/>",
+    note: "member access across the space in both, as Marko reads it",
+  },
+  {
+    id: "after-value-call-dot",
+    input: "<a x=fn(a) .b/>",
+    note: "one value `fn(a) .b` in both, as Marko reads it",
+  },
+  {
+    id: "after-value-chain-newline",
+    input: "<div x=foo\n  .bar()/>",
+    note: "a multi-line chain in both, as Marko reads it",
+  },
+  {
+    id: "after-value-colon-newline",
+    input: "<div x=a\n  :b/>",
+    note: "one value across the newline in both, as Marko reads it",
+  },
+  {
+    id: "after-value-postfix",
+    input: "<div x=a! .b/>",
+    note: "one value `a! .b` in both, as Marko reads it",
+  },
+  {
+    id: "return-type-space-colon",
+    input: "<div x=(a) :T => a/>",
+    note: "a TypeScript return type stays in the value in both",
+  },
+  {
+    id: "function-return-type-space-colon",
+    input: "<div x=function (a) :T { return a }/>",
+    note: "a TypeScript return type stays in the value in both",
+  },
+  {
+    id: "tag-colon",
+    input: "<a:b/>",
+    note: "one tag name `a:b` in both; Marko's tree is pinned in divergence.test.ts",
+  },
+  {
+    id: "bare-sugar",
+    input: "<div :x/>",
+    note: "the attribute `:x` in both; Marko fills the empty name with `value`",
+  },
+  {
+    id: "shorthand-colon",
+    input: "<a.hover:x/>",
+    note: "the class shorthand `hover:x` in both; Marko's class is `hover:x`",
+  },
   {
     id: "control-ternary",
     input: "<a x=1 ? y : z/>",
@@ -215,6 +210,6 @@ export const CONTROL_ROWS: DivergenceRow[] = [
   {
     id: "control-nonascii-colon",
     input: "<div x=1 :é/>",
-    note: "the after-value `:` split is ASCII-only (decision 156 addendum 15, on hold): both keep one value",
+    note: "one value `1 :é` in both",
   },
 ];

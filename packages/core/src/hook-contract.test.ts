@@ -90,13 +90,10 @@ describe("hook contract additions", () => {
       ctx.shorthand("id", text.slice(1)),
       ctx.shorthand("class", "x"),
     ]);
-    const tag = first(irOf("<div !main class='a' .b/>", module));
-    const builtIn = first(irOf("<div #main.x class='a' .b/>"));
+    const tag = first(irOf("<div !main class='a'/>", module));
     expect(attr(tag, "id")).toMatchObject({ kind: "static", value: "main" });
-    expect(attr(tag, "class")).toMatchObject({
-      kind: "static",
-      value: (attr(builtIn, "class") as { value: string }).value,
-    });
+    // `<div#main.x class='a'/>` renders the class `x a` (Marko's merge).
+    expect(attr(tag, "class")).toMatchObject({ kind: "static", value: "x a" });
   });
 
   it("`ctx.attribute(null, value)` is the tag's default value", () => {

@@ -138,11 +138,9 @@ describe("source copy vs patched npm htmljs-parser", () => {
       }
     }
     // Files outside the docs pages that use atoms on purpose: the atom
-    // fixtures of PR 1's tests, the expression-value mapping fixtures,
-    // tree-sitter-mx's Mesh fixture (#339) and the docs home example, which
-    // shows one atom (`type=:search`).
+    // fixtures of PR 1's tests, the expression-value mapping fixtures and
+    // tree-sitter-mx's Mesh fixture (#339).
     expect([...new Set(hits)]).toEqual([
-      "apps/docs/example/home-example.mx",
       "packages/editors/tree-sitter-mx/test/fixtures/mesh-invoice.mx",
       "packages/tooling/tsc/src/fixtures/atoms/preact/page.mx",
       "packages/tooling/tsc/src/fixtures/expression-values/html/page.mx",

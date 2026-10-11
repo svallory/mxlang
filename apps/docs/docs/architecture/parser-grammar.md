@@ -31,7 +31,7 @@ Decision 158 (2026-10-05) fixes the delivery plan:
   modifier split as the name**" (decision 170, amended by decision 163
   addendum 12: the split at the last `:` is carried as `modifier` + `modifierSpan`
   fields, and `name`/`nameSpan` cover the head before that colon),
-  and makes sugars, atoms, attribute tags, wildcard children,
+  and makes shorthands, atoms, attribute tags, wildcard children,
   `defaultTag` and `<return>` first-class nodes with native positions.
 - The Marko compiler front end is **not copied** (158.2, superseding 157
   addenda 2 and 4 on that point). `@marko/compiler` stays an npm dependency
@@ -62,8 +62,8 @@ Sources of truth, in this order:
 2. the decision log, `notes/decisions-2026-09-10.md` (cited as *decision N* and
    its addenda);
 3. `divergences.md` at the repository root, cited by its **row heading**, because
-   its rows carry no numbers (for example *divergence row "The parser
-   after-value rule"*), plus `fixtures/divergences.md`.
+   its rows carry no numbers (for example *divergence row "`a ? :b :c` is one
+   value"*), plus `fixtures/divergences.md`.
 
 The htmljs-parser fixtures and the Marko fixtures are **evidence of the default
 behaviour, not a gate**.
@@ -128,7 +128,7 @@ symbols that carry them:
 
 | Departure | Files and symbols | Source of the rule |
 | --- | --- | --- |
-| the after-value rule | `states/ATTRIBUTE.ts` (`attrValue`); `states/EXPRESSION.ts`: the `??`/`?.` branch of `EXPRESSION.parse`, the `:` and `.` rows of `lookAheadForOperator`, `isIdentStartCode`, `isNameStartCode`, `isBareColonEnd` | decision 146, divergence 3 and addendum 6 ([E1](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode)) |
+| the `??` / `?.` skip in a named attribute's value | `states/ATTRIBUTE.ts` (`attrValue`); `states/EXPRESSION.ts`: the `??`/`?.` branch of `EXPRESSION.parse` | ([E1](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode)); OQ 3 |
 | a single-atom default value | `states/ATTRIBUTE.ts` (`defaultAtom`); `states/EXPRESSION.ts` (`isSingleAtomDefault`) | decision 146, addendum 5 ([E1](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode)) |
 | atoms and the reserved `::` | `states/EXPRESSION.ts` (`lexAtom`, `expectsExpression`, `isOperatorWord`, `closesTypeArguments`, `isUnicodeWhitespaceCode`, `isSpreadEnd`, `atomNameEnd`, `rejectReservedName`, the atom guard in `lookBehindForKeyword`); the `atoms = true` sites in `states/ATTRIBUTE.ts`, `OPEN_TAG.ts`, `PLACEHOLDER.ts`, `TAG_NAME.ts`, `TEMPLATE_STRING.ts`; `rejectReservedName` calls in `TAG_NAME.exit` and `ATTRIBUTE.return`; `core/Parser.ts` (`atoms`, `read`, `rawOpenTags`); `util/constants.ts` (`onAtom`); `OPEN_TAG.exit` (`rawOpenTags`) | decision 156 and its addenda 2 to 4 and 8 to 10 ([Atoms](#the-parser-grammar-atoms)) |
 | the base position | `core/Parser.ts` (`ParseOptions`, `parse`, `positionAt`, `offsetAt`); `index.ts` | the parser's API ([Base position](#the-parser-grammar-base-position-for-fragment-parses)) |
@@ -179,9 +179,7 @@ decision number yet (OQ 22). Verbatim:
 
 This document applies it as written and no more strongly:
 
-- Where **the spec's** rule (decision 146 and its addenda, as spec §4 "Name
-  sugar" and divergence row "The parser after-value rule" state it) splits or
-  rejects an input, that result stands, and a TypeScript-aware boundary **must
+- Where **the spec's** rule splits or rejects an input, that result stands, and a TypeScript-aware boundary **must
   not** continue the value past it.
 - Where the spec's rule applies but its outcome turns on a fact only
   TypeScript's grammar supplies, the boundary **may** supply that fact.
@@ -268,8 +266,8 @@ here ("the value", "the arguments") is that `value` range.
 
 | Event (`util/constants.ts`) | Range the parser reports | Catalogue field (ast.md section) | Probes |
 | --- | --- | --- | --- |
-| `onOpenTagName` | the written name, sugar included; an empty range for the unnamed tag | `MxTag.name` (§3.3), after core's `:` split | g0001 g0002 |
-| `onTagShorthandId`, `onTagShorthandClass` | the part from its `#` or `.`, which may hold a `:name` | `MxShorthand` with `position: "tag"` (§3.6), after core's split | g0003 g0004 |
+| `onOpenTagName` | the written name, a `:` included; an empty range for the unnamed tag | `MxTag.name` (§3.3) | g0001 g0002 |
+| `onTagShorthandId`, `onTagShorthandClass` | the part from its `#` or `.`; a `:` is part of it | `MxShorthand` with `position: "tag"` (§3.6) | g0003 g0004 |
 | `onTagTypeArgs`, `onTagVar`, `onTagArgs`, `onTagTypeParams`, `onTagParams` | `value`: inside `<…>`, after `/`, inside `(…)`, inside `\|…\|`; event range: with the delimiters | `MxTag.typeArgs`, `var`, `args`, `typeParams`, `params` (§3.4): span = `value`, `outer` = event range | g0005 g0006 g0007 g0008 g0009 |
 | `onAttrName` | the name; empty for the default attribute | `MxAttribute.nameSpan`, or an `MxShorthand` with `position: "attribute"` for `#x`, `.x`, `:x` (§3.5, §3.6) | g0010 g0011 g0012 |
 | `onAttrValue` | `value`: from the first character after `=`/`:=` and the whitespace after it | `MxAttribute.value` or `MxShorthand.default` (§3.5) | g0013 g0014 |
@@ -391,8 +389,8 @@ What the row order means for some inputs:
 | `div\u00a0-- text` (U+00A0 before `--`) | the tag name `div\u00a0--` and the attribute `text`: the tag-name state stays ASCII, as upstream and Marko (decision 156, addendum 13 item 5) | g1712 |
 | `div.a\u00a0-- text` (U+00A0 before `--`) | the class `a\u00a0--` and the attribute `text`: the shorthand state stays ASCII, as upstream and Marko (decision 156, addendum 13 item 5) | g1713 |
 | `x=1 :é` | the tag `x` with the single value `1 :é`: a bare input has no after-value context, so the `:` is not split (decision 156, addendum 15) | g1714 |
-| `(a) :É => a` | the tag arguments `(a)`, the attribute `:É` and the value `=> a`: a bare input parses as tag forms, not through the after-value rule (decision 156, addendum 15) | g1715 |
-| `<div x=1 :é/>` | the single value `1 :é`: the after-value rule stays ASCII-only, so the `:é` sugar is not split (decision 156, addendum 15) | g1716 |
+| `(a) :É => a` | the tag arguments `(a)`, the attribute `:É` and the value `=> a`: a bare input parses as tag forms | g1715 |
+| `<div x=1 :é/>` | the single value `1 :é`, as stock | g1716 |
 | `<div x=(a) :É => a/>` | the single valid value `(a) :É => a`, as stock and as its ASCII twin without addendum 15's hold (decision 156, addendum 15) | g1717 |
 | `div a\n  // c\n  ,b` | attributes `a` and `b`: row 1's look-ahead crosses the comment line | g0700 |
 | `<div` | `EOF reached while parsing open tag` | g0221 |
@@ -437,11 +435,9 @@ catalogue's `MxTagName` `kind: "unnamed"`, [ast.md §3.3](/architecture/ast/));
 core resolves it through the `defaultTag` ladder
 ([dialect rule 9](#the-parser-grammar-dialect-rules)).
 
-The `:` split of a static tag name (`tag:rest` is the tag `tag` plus
-`name="rest"`; divergence row "A static tag name may not contain `:`";
-decision 146, divergence 1) is core's, after the parse; the parser reports the
-written head as the name (the rows `<:email/>` and `<a:b:c/>` above). A
-dynamic name is not split (spec §4 "Name sugar", "Left alone").
+A `:` in a static tag name is part of the name, as in Marko: `<input:email>`
+is the tag `input:email`, `<:email>` the tag `:email` and `<a:b:c>` the tag
+`a:b:c` (the rows above). Core does not split it.
 
 ### Shorthand `#id` and `.class`
 
@@ -532,7 +528,7 @@ The attribute forms:
 | Arguments | `onClick(a)` | row 8 | g0116 |
 | Method | `onClick(a) { … }`, `onClick<T>(a) { … }`, `async onClick(a) { … }` | rows 8–10 | g0117 g0017 g0118 |
 | Default | `=expr`, `(a) { … }` after tag arguments | zero-width name | g0119 g0120 |
-| Sugar | `#x`, `.x`, `:x` | at this level an attribute whose **name** is `#x`, `.x` or `:x` ([Dialect rules](#the-parser-grammar-dialect-rules)) | g0121 |
+| Spaced shorthand or colon | `#x`, `.x`, `:x` | at this level an attribute whose **name** is `#x`, `.x` or `:x`; core reads `:x` as `value:x` and rejects `#x` and `.x` as invalid attribute names ([Dialect rules](#the-parser-grammar-dialect-rules)) | g0121 |
 
 | Input | Result | Probes |
 | --- | --- | --- |
@@ -614,8 +610,7 @@ rule (see [Status](#the-parser-grammar-status-sources-of-truth-and-method); deci
 | `<div><@svg:rect/></div>` | the tag name `@svg:rect`: `<@name>` is an ordinary tag to the parser | g0661 |
 
 What an attribute tag means is decided after the parse: its name is a property
-key, so the `:` split does not apply (decision 146, addendum 3; spec §4 "Name
-sugar", "Attribute tags"); attribute-position sugar on it does apply; placement
+key, and a `:` in it is part of that key; placement
 and collision rules are in spec §8 "Collisions and placement"; an attribute tag
 on a native element is rejected (spec §8 "Deferred to MX 2").
 
@@ -856,11 +851,8 @@ conditions:
 | text after a closing block delimiter | `A concise mode closing block delimiter can only be followed by whitespace.` | g0240 |
 
 Rejections raised **outside** the template parser, by core: scriptlets, CDATA
-and declarations (spec §3); a second `:` in a tag head, a bare `:` in attribute
-position, a `:name` that is not an identifier (divergence rows; spec §4 "Name
-sugar"); sugar after a default value (decision 151, ruling 2; spec §4 "Name
-sugar", "Left alone"), except after a single-atom default value (decision 146,
-addendum 5); duplicate attributes, a warning with the last occurrence winning
+and declarations (spec §3); an attribute name outside Marko's grammar, such as
+a spaced `#id` or `.class` (`Invalid attribute name`); duplicate attributes, a warning with the last occurrence winning
 (decision 135); the atom misuses of spec §4 "Atoms". The catalogue's list of
 front-end codes is [ast.md §3.13](/architecture/ast/).
 
@@ -1173,54 +1165,47 @@ The value starts after the `=` or `:=` and the whitespace that follows it
 | `<div x=a  y/>` | the value `a` and the name `y`: the whitespace between belongs to neither | g0838 |
 | `<div x=(a` | an error at end of input ([End of input](#the-parser-grammar-expression-boundaries-how-a-position-is-scanned-end-of-input)) | g0199 |
 
-**Overrides (MX).** The after-value rule of divergence row "The parser
-after-value rule" (decision 146, divergence 3, with addendum 6) and decision
-146, addendum 5. Condition (c) of the `:` row is addendum 6: after whitespace,
-"a `:` starts a new attribute only when it is followed by an identifier start,
-or is bare before `>`, `/>`, a newline or the end of input".
+**Overrides (MX).** A spaced `:b` or `.b` after a value continues it, as in
+stock: the look-ahead reads `:` and `.` exactly as stock does. The one MX
+override in a named attribute's value (`attrValue` set) is the `??` / `?.`
+skip.
 
 | Where | Stock (informative, not probed) | MX | Probes |
 | --- | --- | --- | --- |
-| look-ahead, `n` = `:` | operator | **not** an operator when (a) `attrValue` is set, **or** `isSingleAtomDefault` holds: `defaultAtom` is set, the value's first character is `:`, the last atom lexed in it is the one that starts there, and only whitespace lies between that atom's end and `n`; and (b) `ternaryDepth` is 0; and (c) the character after the `:` is `A`–`Z`, `a`–`z`, `$` or `_`, or is `>`, `/>`, `\n`, `\r` or end of input (`isBareColonEnd`). Otherwise an operator, as stock | g0422 g0423 g0424 g0425 g0426 g0427 g0428 |
-| look-ahead, `n` = `.` | operator when the first non-whitespace character after the `.` is a word character | with `attrValue`: **not** an operator when the character directly after the `.` is a word character other than a digit (`isNameStartAt`); otherwise as stock | g0429 g0430 g0328 g0327 |
 | character table, `?` with `operators` at depth 0 | opens a ternary | with `attrValue`: when the next character is `?`, or is `.` not followed by a digit, both characters are consumed and no ternary opens | g0431 g0432 g0433 g0434 |
 
-The first two rows are look-ahead rows, so they apply at step 7 of the
-continuation test: after whitespace whose preceding character is not a
-look-behind operator. On stock, which has no after-value rule, the inputs of
-the next table are one value, apart from `x=a :` before `/>` (the
+The next table pins the stock reading of a spaced `:` or `.` after a value:
+each input is one value, apart from `x=a :` before `/>` (the
 regular-expression error) and before `>` (`Mismatched group`).
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `x=a :b` | the value `a` and an attribute named `:b` | g0422 |
-| `x=a.b .c` | the value `a.b` and an attribute named `.c` | g0429 |
+| `x=a :b` | one value `a :b`: a spaced `:b` after a value continues it, as in stock htmljs-parser | g0422 |
+| `x=a.b .c` | one value `a.b .c`: a spaced `.c` after a value continues it, as in stock htmljs-parser | g0429 |
 | `x=a \| :b` | one value, in which `:b` is an atom: the `\|` before the whitespace is a look-behind operator | g0839 |
 | `x=a ? b :c` | one value: a `?` is open | g0424 |
-| `x=a ? b : c :d` | splits at `:d` | g0840 |
-| `<div x=a :/>`, `<div x=a :>` | the value `a` and an attribute named `:` | g0426 g0841 |
+| `x=a ? b : c :d` | one value `a ? b : c :d` | g0840 |
+| `<div x=a :/>`, `<div x=a :>` | `<div x=a :/>` is the regular-expression error; `<div x=a :>` is the `Mismatched group` error | g0426 g0841 |
 | `x=a : b`, `x=(a) : T => a` | one value: a space follows the colon | g0425 g0611 |
+| `<div x=a :1/>` | one value `a :1` | g0427 |
+| `<div x=a .2xl y/>` | the value `a .2xl`, then `y` | g0430 |
 | `x=a . b`, `x=a .2xl` | one value | g0842 g0626 |
-| `x=a ?? b :c`, `x=a ?.b :c` | split at `:c` (OQ 3) | g0431 g0432 |
+| `x=a ?? b :c`, `x=a ?.b :c` | one value each, `a ?? b :c` and `a ?.b :c` (OQ 3) | g0431 g0432 |
 | `x=a ?:b` | one value, in which `:b` is an atom: `?:` opens a ternary (OQ 3) | g0628 |
-| `<div x=a\n  .b/>` | the split across a newline, in HTML mode | g0843 |
-| `<div ...a :b/>`, `<div ...a .b/>` | a spread's value splits too (OQ 5) | g0844 g0845 |
+| `<div x=a\n  .b/>` | one value across the newline, in HTML mode | g0843 |
+| `<div ...a :b/>`, `<div ...a .b/>` | a spread's value includes the spaced `:b` or `.b`: `...a :b` spreads `a :b` (OQ 5) | g0844 g0845 |
 
-The digit exclusion is OQ 4.
-
-**Default attribute.** A value with no name has `attrValue` off (decision 151,
-ruling 2; divergence row "The parser after-value rule"); core reports `:name`
-after such a value as an error (spec §4 "Name sugar", "Left alone"). A default
-value that is one single atom splits at ` :name` (decision 146, addendum 5).
-On stock the inputs of this table are one value.
+**Default attribute.** A value with no name has `attrValue` off, so not even
+the `??` / `?.` skip applies. Each input of this table is one value, as on
+stock.
 
 | Input | Result | Probes |
 | --- | --- | --- |
 | `<if=a .b>`, `<if=a :b>` | one value | g0327 g0428 |
-| `<if=:a :b>`, `<if= :a :b>`, `<if=:a\n :b>`, concise `if=:a :b`, `<const/x=:a :b/>` | the value `:a` and an attribute named `:b` | g0423 g0846 g0847 g0848 g0849 |
-| `<if=:a :b :c>` | the value `:a` and attributes `:b` and `:c` | g0850 |
-| `<if=:a :>` | the value `:a` and an attribute named `:` | g0851 |
-| `<if=:a .b>` | one value: addendum 5 covers `:` | g0630 |
+| `<if=:a :b>`, `<if= :a :b>`, `<if=:a\n :b>`, concise `if=:a :b`, `<const/x=:a :b/>` | one value `:a :b`, the same as stock | g0423 g0846 g0847 g0848 g0849 |
+| `<if=:a :b :c>` | one value `:a :b :c`, the same as stock | g0850 |
+| `<if=:a :>` | the `Mismatched group` error | g0851 |
+| `<if=:a .b>` | one value | g0630 |
 | `<if=:a.b :c>`, `<if=:a + :b :c>`, `<if=(:a) :b>` | one value: the value is not one atom | g0852 g0853 g0854 |
 | `<if=:a ? :b :c>` | one value: a `?` is open | g0855 |
 
@@ -1297,9 +1282,9 @@ at column 0, which spec §3 "Concise mode" calls a sibling (OQ 18).
 | --- | --- | --- |
 | `div x=a` | the value ends silently at end of input | g0823 |
 | `div x=(a` | an error: a group is open ([End of input](#the-parser-grammar-expression-boundaries-how-a-position-is-scanned-end-of-input)) | g0366 |
-| `div x=a :b` | the value `a` and an attribute named `:b` (the overrides of E1). Stock: one value | g0859 |
-| `div x=a :` | the value `a` and an attribute named `:` | g0860 |
-| `if=:a :b` | the default value `:a` and an attribute named `:b` | g0848 |
+| `div x=a :b` | one value `a :b` (the overrides of E1); MX and stock agree | g0859 |
+| `div x=a :` | one value `a :` | g0860 |
+| `if=:a :b` | the default value `:a :b`, one value | g0848 |
 
 ### E3 — Spread attribute
 
@@ -1318,7 +1303,7 @@ E2.
 | --- | --- | --- |
 | `<div ...a, b/>`, concise `div ...a\n  b` | the spread `a`: the stops of E1 and of E2 | g0861 g0862 |
 | `<div ...:a/>` | the atom `a` | g0863 |
-| `<div ...a .b/>`, `<div ...a :b/>` | the spread `a` and an attribute named `.b` / `:b`: the after-value rule applies (OQ 5) | g0845 g0844 |
+| `<div ...a .b/>`, `<div ...a :b/>` | the spread `a .b` / `a :b`: a spaced `.b` or `:b` after the value continues it (OQ 5) | g0845 g0844 |
 
 ### E4 — Attribute arguments
 
@@ -1330,7 +1315,7 @@ E2.
 | `<div onClick(a,\n b > c)/>` | one argument list: whitespace, a newline, `,` and `>` do not end it | g0865 |
 | `<div onClick(a` | an error ([End of input](#the-parser-grammar-expression-boundaries-how-a-position-is-scanned-end-of-input)) | g0200 |
 | concise `div onClick(a` | the arguments `a`, no error | g0866 |
-| `<div x(a :b)/>` | one argument list: the after-value rule belongs to the value position | g0867 |
+| `<div x(a :b)/>` | one argument list | g0867 |
 | `<div x(:a)/>`, `<div x(a = :b) { c }/>` | the atoms `a` and `b`: arguments and a method's parameters lex atoms (decision 163, addendum 1) | g0868 g0869 |
 
 ### E5 — Attribute method body
@@ -1412,7 +1397,7 @@ continuation test and the type context apply as there.
 | concise `let/x: keyof\n  T`, `let/x: void\n  T` | one variable; the variable `x: void` and a child tag `T`: the unary keyword list is the type list | g0388 g0889 |
 | `<let/x<T>=1/>` | `Unexpected types. …`: outside a type context `<` is a hard stop and the open tag reads a type list | g0350 |
 | `<let/x: A \| B = 1/>` | the variable `x: A`, then tag parameters to the end of the input: `EOF reached while parsing expression`. A `\|` is a hard stop inside a type too (OQ 6) | g0890 |
-| `<const/x=items\n .filter(Boolean)/>` | one default value: the value after the variable is the default attribute, exempt from the after-value rule (divergence row "The parser after-value rule") except after a single atom ([E1](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode)) | g0657 |
+| `<const/x=items\n .filter(Boolean)/>` | one default value: the value after the variable is the default attribute, and a spaced `.b` continues it, as in stock ([E1](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode)) | g0657 |
 | `<let/a::b/>` | the variable `a::b`: no atom lexing in the variable | g0891 |
 | `<let/x=:a/>`, `<let/a = :b/>` | the atom: the default value is E1 | g0892 g0948 |
 
@@ -1703,7 +1688,7 @@ of word characters ending at `p`, within the position:
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `<div x=yield :b/>` | the value `yield` and an attribute `:b`: the after-value rule splits before `lexAtom` is asked, because `yield` is no look-behind keyword | g1003 |
+| `<div x=yield :b/>` | one value `yield :b`, with the atom `b`, because `yield` is no look-behind keyword | g1003 |
 | `<div x=await :b/>` | one value with the atom `b` | g0581 |
 
 **A type argument list's closing `>`** (`closesTypeArguments`), for row 6. It
@@ -1758,9 +1743,9 @@ differs from the probe build, the cell gives stock too. The probes pin main.
 | --- | --- | --- | --- | --- |
 | `lexAtom` runs before the ternary counter (`EXPRESSION.parse`, `case CODE.COLON`) | an atom's `:` does not close a `?`, so a later ` :name` is the ternary's `:` | `x=a ? :b :c` is one value | the first `:` closes the `?`, so `x=a ? :b :c` is the value `a ? :b` and the attribute `:c`. Stock: one value, because it has no after-value rule to split at `:c` | g0533 |
 | the same, at `ternaryDepth` 0 | an atom's `:` does not enter [the type context](#the-parser-grammar-expression-boundaries-how-a-position-is-scanned-the-type-context), so each of its reads that an attribute value can reach takes its other side. (1) `<` is no group. (2) `>` is a plain character. (3) A `>` before whitespace is a look-behind operator. (4) The unary keyword list is JavaScript's, with `delete` and `void` and without `asserts` `infer` `is` `keyof` `readonly` `unique`, in the continuation test, the operator exemption and the `!` row alike. (7) An `as` or `satisfies` after the atom enters the context, and sets `forceType` when `ternaryDepth` is 0. Reads 5 and 6 have nothing to leave, and 8 and 9 belong to the tag variable, which lexes no atom | (1) concise `div x=:a<b, c> d`: value `:a<b`, then attributes `c>` and `d`; `<div x=:a<b>(c) y/>`: value `:a<b` and the `>` ends the tag. (2) concise `div x=:a > b`, `div x=:a <b> c`: one value. (3) concise `div x=:a<b>\n  c`: one value. (4) concise `div x=:a + void\n  b` and `div x=:a + void!\n  b`: one value; `div x=:a + keyof\n  b`: value `:a + keyof` and a child `b`; `<div x=:a + void, y/>`: value `:a + void,`. (7) concise `div x=:a as T = b<c> d`: value `:a as T = b<c>`, then attribute `d` | the `:` enters the type context. (1) value `:a<b, c>`, then `d`; value `:a<b>(c)`, then `y`. (2) `Mismatched group` for both. (3) value `:a<b>` and a child `c`. (4) value `:a + void` and a child `b`, and the same with `void!`; one value `:a + keyof\n  b`; value `:a + void`. (7) one value `:a as T = b<c> d`: the `as` does not set `forceType`, so the `=` leaves the context | g0596 g0597 g0598 g0599 g0600 g0601 g0602 g0603 g0604 g0605 |
-| the atom guard in `lookBehindForKeyword` (continuation test step 2, and the step-4 exemption) | an atom named like a unary keyword is no operator | `x=:new :b` and `x=:typeof :b` split at `:b`; concise `div x=:new\n  span` ends at the newline; `<div x=:typeof />` ends before `/>` | `new`/`typeof` continue the value: `:new :b`, `:new\n  span`, `:typeof /` then `Missing ending "div" tag` | g0606 g0607 g0298 g0608 |
+| the atom guard in `lookBehindForKeyword` (continuation test step 2, and the step-4 exemption) | an atom named like a unary keyword is no operator | `x=:new :b` and `x=:typeof :b` are one value; concise `div x=:new\n  span` ends at the newline; `<div x=:typeof />` ends before `/>` | `new`/`typeof` continue the value: `:new :b`, `:new\n  span`, `:typeof /` then `Missing ending "div" tag` | g0606 g0607 g0298 g0608 |
 | `lexAtom` row 1 | `::` is the reserved-token error and the parse stops | `x=::a`, `x=a :: b` | one value | g0193 g0522 |
-| `isSingleAtomDefault` (decision 146, addendum 5) | a default value that is one atom splits at ` :name` | `<if=:a :b>` | one value (decision 151, ruling 2) | g0423 |
+| `isSingleAtomDefault` | with no dialect loaded, none: a default value takes a spaced ` :name` into its value like any other value. A dialect's `terminatesValue` trigger may end a default value early only when it is one atom | `<if=:a :b>` is one value | one value, as in stock | g0423 |
 
 ### What the parser reports
 
@@ -1780,35 +1765,28 @@ MX's own rules, with the layer that applies each: the template parser or
 core, after the parse. The list summarises the sources it cites; what the
 parser reports for each form is the table after it.
 
-1. **Tag-adjacent sugar.** `#x` sets an id, `.x` a class and `:x` a name, on a
-   named tag or the unnamed tag (decision 146 and its addendum of 23:23; spec
-   §4 "Name sugar"). *Layer:* the parser reports the written head
-   ([Tag names](#the-parser-grammar-tags-tag-names), [Shorthand](#the-parser-grammar-tags-shorthand-id-and-class)); core splits
-   it.
-2. **Attribute-position sugar, first or after a boolean attribute.** The parser
-   reports attributes named `#x`, `.x`, `:x`; core rewrites them to `id`, class
-   and `name` (spec §4 "Name sugar", "In attribute position").
-3. **Attribute-position sugar after a value.** `:x` and `.x` after a value are
-   new attributes through MX's after-value rule
-   ([E1 overrides](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode); decision 146, divergence
-   3). The default attribute's value is exempt (decision 151, ruling 2), except
-   when it is a single atom (decision 146, addendum 5).
-4. **The sugar's value.** `:name` takes an identifier, `[A-Za-z_$][\w$-]*`;
-   `#x` and `.x` take what a shorthand part takes (spec §4 "Name sugar"). The
-   after-value rule tests the character right after the sigil
-   ([E1 overrides](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode); OQ 4).
-5. **A sugar followed by `=value` or `(params) { body }`** sets the tag's
-   default attribute (decision 146, addendum 4). *Layer:* core
-   (`packages/core/src/name-sugar.ts`). The catalogue records the result as
-   `MxShorthand.operator` and `default` ([ast.md §3.6](/architecture/ast/)).
-6. **Left alone** (spec §4 "Name sugar", "Left alone"; decision 146, divergence
-   2 and addendum 3): the named forms `class:x`, `style:x`, `value:fn:=x` and the
-   explicit `value:x`; a dynamic tag name; a bound attribute; the default
-   attribute; an attribute tag's own name.
-7. **Repeated sugars** follow the duplicate rule: the later one wins, with a
-   warning (decision 135; spec §4 "Name sugar").
-8. **A bare `:`** in attribute position is a positioned error from core
-   (divergence row "Bare `:x` is `name="x"`").
+1. **Tag-adjacent shorthand.** `#x` sets an id and `.x` a class, on a named
+   tag or the unnamed tag, as in Marko. A `:` is part of the tag name or of
+   the shorthand part it is written in (`<input:email>` is the tag
+   `input:email`, `<div.c:b>` the class `c:b`). *Layer:* the parser reports
+   the written head ([Tag names](#the-parser-grammar-tags-tag-names),
+   [Shorthand](#the-parser-grammar-tags-shorthand-id-and-class)); core turns
+   the parts into `id` and `class`.
+2. **A colon in attribute position.** An attribute named `:x` is Marko's
+   default attribute with the modifier `x`, `value:x`; a bare `:` is `value:`
+   (spec §4 "`:modifier`"). *Layer:* core.
+3. **A spaced `#x` or `.x` in attribute position** is an attribute name
+   outside Marko's grammar: core reports `Invalid attribute name`, unless the
+   host accepts foreign attribute names (Angular's `#ref`).
+4. **A spaced `:x` or `.x` after a value** continues the value, as in stock
+   ([E1 overrides](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode)).
+5. **Repeated attributes** follow the duplicate rule: the later one wins, with
+   a warning (decision 135).
+6. **Name sugars belong to a syntax module.** Core has none; a dialect that
+   wants `:name` as an attribute or a tag-head name claims it through its
+   syntax table and reads the call core hands it.
+7. *(Retired: the former name-sugar rules.)*
+8. *(Retired: the former bare-`:` error.)*
 9. **The unnamed tag and `defaultTag` (decision 145).** The parser reports an
    empty name range; by design it writes no tag name there. Core resolves the
    name afterwards: parent contract `defaultTag`, then user config
@@ -1828,13 +1806,13 @@ parser reports for each form is the table after it.
 | 2 | `<input :email type="email"/>`, `<input :email :other/>`, `<div a .b/>` | attributes named `:email`, `:other`, `.b` | g0646 g1016 g1017 |
 | 3 | `<div x=1 #y/>` | the value `1` and an attribute `#y`: `#` is in neither operator table | g1018 |
 | 4 | `x=a .2xl` | one value | g0626 |
-| 4 | `x=a :b%c` | the value `a` and an attribute named `:b%c`, which core rejects | g1019 |
-| 4 | `x=a .é` | the value `a` and an attribute `.é` | g1020 |
+| 4 | `x=a :b%c` | one value `a :b%c` | g1019 |
+| 4 | `x=a .é` | one value `a .é` | g1020 |
 | 5 | `<input:email=1/>` | the tag `input:email` with a default value | g0649 |
 | 5 | `<input :email=1/>` | an attribute named `:email` with the value `1` | g0650 |
 | 5 | `<input #main(a) {}/>` | a method named `#main` | g0652 |
-| 7 | `x=a :b :c` | the value and attributes `:b` and `:c`. Stock: one value | g0627 |
-| 8 | `<input :/>`, `<input x=1 :/>` | an attribute named `:`; the after-value rule ends the value before it | g0654 g0653 |
+| 7 | `x=a :b :c` | one value `a :b :c`; MX and stock agree | g0627 |
+| 8 | `<input :/>`, `<input x=1 :/>` | `<input :/>`: an attribute named `:`; `<input x=1 :/>`: the regular-expression error | g0654 g0653 |
 | 9 | `<.a/>` | an empty name range | g1021 |
 | 10 | `<:att/>` | the name `:att` | g1022 |
 
@@ -1845,11 +1823,10 @@ The counter is the `?` and `:` rows of
 
 | Case | Result | Probes |
 | --- | --- | --- |
-| a `?` at depth 0 opens a ternary and a `:` at depth 0 closes one | `x=a ? b : c :d` is the value `a ? b : c` and an attribute `:d` | g0840 |
+| a `?` at depth 0 opens a ternary and a `:` at depth 0 closes one | `x=a ? b : c :d` is one value `a ? b : c :d` | g0840 |
 | a `:` with no ternary open | enters the type context | g0383 |
 | an atom's `:` | does neither: `x=a ? :b :c` is one value (spec §4 "Atoms": "an atom's own `:` is never the ternary's") | g0533 |
-| a `?` or `:` inside a group or a string | does not count: the ` :c` after it splits | g1023 g1024 |
-| the after-value `:` split | needs no ternary open: `x=a ? b :c` is one value | g0424 |
+| a `?` or `:` inside a group or a string | does not count: the ` :c` after it continues the value | g1023 g1024 |
 | `as` or `satisfies` found by the look-ahead | sets `forceType` when no ternary is open | g0348 g0815 |
 | `??` and `?.` in a named or spread attribute's value | do not open a ternary; `?.` followed by a digit does | g0431 g0432 g0433 |
 | `?:` | opens a ternary: `x=a ?:b` is one value, in which `:b` is an atom (OQ 3) | g0628 |
@@ -1863,14 +1840,14 @@ reports a name and core gives it meaning, both are given.
 | Input | Required parse | Settled by | Probes |
 | --- | --- | --- | --- |
 | `x=a ? b : c` | one value | default (observed) | g0609 |
-| `x=a :b` | value `a`, then an attribute named `:b` (core: `name="b"`). Stock: one value | decision 146, divergence 3 (observed) | g0422 |
-| `x=a.b .c` | value `a.b`, then an attribute named `.c` (core: class `c`). Stock: one value | decision 146, divergence 3 (observed) | g0429 |
-| `x=(a) :T => a` | value `(a)`, then an attribute named `:T` whose value is empty: `Missing value for attribute`. Stock: one value | decision 151, ruling 3; divergence row "The parser after-value rule" (observed) | g0610 |
+| `x=a :b` | one value `a :b`; MX and stock agree | stock (observed) | g0422 |
+| `x=a.b .c` | one value `a.b .c`; MX and stock agree | stock (observed) | g0429 |
+| `x=(a) :T => a` | one value `(a) :T => a`; MX and stock agree | stock (observed) | g0610 |
 | `x=(a): T => a` | one value | default (observed) | g0358 |
-| `x=(a) : T => a` | one value: a space follows the `:` | decision 146, addendum 6 (observed) | g0611 |
+| `x=(a) : T => a` | one value: a space follows the `:` | stock (observed) | g0611 |
 | `x=a ?? b` | one value | default (observed) | g0612 |
 | `x=a?.b` | one value | default (observed) | g0613 |
-| `x=a?.b :c` | value `a?.b`, then an attribute named `:c`. Stock: one value | decision 146, divergence 3 for the split; the `?.` handling is MX's, **not settled** (OQ 3) | g0614 |
+| `x=a?.b :c` | one value `a?.b :c`; MX and stock agree | stock for the extent; the `?.` skip is MX's, **not settled** (OQ 3) | g0614 |
 | `x=a < b` | one value | default (observed) | g0615 |
 | `x=f<T>(y)` | observed: value `f<T`; the `>` ends the tag; `(y)/>` is body text. A recorded defect; the required parse is **not settled** | OQ 7 | g0353 |
 | `<div x=a > b</div>` | value `a`; the tag ends at `>`; body text ` b` | default: E1's `>` stop (observed) | g0143 |
@@ -1878,21 +1855,21 @@ reports a name and core gives it meaning, both are given.
 | concise `div x=a > b` | one value | default: `>` is not a concise stop (observed) | g0264 |
 | `x=a as T` | one value | default (observed) | g0617 |
 | `x=a satisfies T` | one value | default (observed) | g0618 |
-| `x=a! .c` | value `a!`, then an attribute named `.c`. Stock: one value | decision 146, divergence 3 (observed) | g0619 |
-| `x=/re/ .c` | value `/re/`, then an attribute named `.c`. Stock: one value | decision 146, divergence 3 (observed) | g0620 |
+| `x=a! .c` | one value `a! .c`; MX and stock agree | stock (observed) | g0619 |
+| `x=/re/ .c` | one value `/re/ .c`; MX and stock agree | stock (observed) | g0620 |
 | `x=a as Map<K, V>` | one value | default: the type context (observed) | g0621 |
 | `x=a [0]` | value `a`, then an attribute named `[0]` | default (observed); **not settled**, OQ 2 | g0622 |
 | `x=a {b}` | one value | default (observed); **not settled**, OQ 2 | g0623 |
 | `x=a: b` | one value | default (observed); OQ 2 | g0624 |
 | `` x=a `t` `` | value `a`, then an attribute named `` `t` `` | default (observed); **not settled**, OQ 2 | g0625 |
-| `x=a .2xl` | one value | the after-value rule's digit exclusion (observed); **not settled**, OQ 4 | g0626 |
-| `x=a :b :c` | value `a`, then attributes named `:b` and `:c`; core: the later name wins, with a warning. Stock: one value | decision 146, divergence 3; decision 135; spec §4 "Name sugar" (observed) | g0627 |
+| `x=a .2xl` | one value | stock (observed) | g0626 |
+| `x=a :b :c` | one value `a :b :c`; MX and stock agree | stock (observed) | g0627 |
 | `x=a ?:b` | one value; `:b` is an atom | default for the extent (observed); OQ 3. The atom: decision 156 ([Atoms](#the-parser-grammar-atoms), row 4) | g0628 |
 | `x= :b` | the value `:b`, which is the atom `b` | decision 156.1; spec §4 "Atoms" (observed) | g0534 |
-| `x=:a :b` | the atom value `:a`, then an attribute named `:b` (core: `name="b"`). Stock: one value | decision 146, divergence 3; spec §4 "Atoms" (observed) | g0629 |
+| `x=:a :b` | one value `:a :b`, with the atom `a`; MX and stock agree | stock for the extent; spec §4 "Atoms" (observed) | g0629 |
 | `x=a ? :b :c` | one value, `a ? :b : c`, with the atom `b`. Stock: one value, no atom | decision 156; spec §4 "Atoms" (observed) | g0533 |
-| `<if=:a :b>` | the default value `:a` (an atom), then an attribute named `:b`. Stock: one value | decision 146, addendum 5 (observed) | g0423 |
-| `<if=:a .b>` | one value | decision 151, ruling 2: addendum 5 covers `:` only (observed) | g0630 |
+| `<if=:a :b>` | one default value `:a :b`, with the atom `a`; MX and stock agree | stock for the extent (observed) | g0423 |
+| `<if=:a .b>` | one value | stock (observed) | g0630 |
 | `x=a :: b`, `x=::a`, `x=(a ? b::c : d)` | the reserved-token error at the `::`. Stock: one value | decision 156.5 and addendum 2 (observed) | g0522 g0193 g0523 |
 | `x=(c ? a < b > :z)`, concise `div x=c ? a < b > :z` | one value with the atom `z` (a spaced `< >` is a comparison). Unparenthesised in HTML mode, `<div x=c ? a < b > :z/>` is the ambiguous-`>` error: the `>` is E1's hard stop first | decision 156, addendum 4: a known limit (observed) | g0631 g0632 |
 | `div x=a\n  <span/>` (concise) | value `a`, then the child tag `span` | default: [E2](#the-parser-grammar-expression-boundaries-e2-attribute-value-concise-mode) (observed); OQ 18 | g0451 |
@@ -1901,30 +1878,30 @@ reports a name and core gives it meaning, both are given.
 | `div x=a\n  + b` (concise) | value `a`, then the child tag `+` | same | g0456 |
 | `div x=a +\n  b` (concise) | one value | default: the look-behind (observed) | g0290 |
 | `<div x=a\n  <span/>` (HTML) | observed: the single value `a\n  <span`. **Not settled** | OQ 2, OQ 18 | g0633 |
-| `<input type="email" :email>` | `type="email"`, then an attribute named `:email` (core: `name="email"`). Stock: one value | decision 146, divergence 3; spec §4 "Name sugar" (observed) | g0634 |
-| `<:email/>` | parser: tag name `:email`. Core: the unnamed tag with `name="email"` | decisions 145 and 146 | g0635 |
-| `<input:email/>` | parser: tag name `input:email`. Core: tag `input`, `name="email"` | decision 146, divergence 1 | g0636 |
-| `<input :email/>` | parser: an attribute named `:email`. Core: `name="email"` | decision 146; spec §4 "Name sugar" | g0637 |
-| `<input#main:email.big/>` | parser: id part `main:email`, class part `big`. Core: id `main`, name `email`, class `big` | decision 146, addendum of 23:23 | g0638 |
-| the six orders of the three tag-adjacent sugars: `<input:email.big#main/>`, `<input:email#main.big/>`, `<input.big:email#main/>`, `<input.big#main:email/>`, `<input#main:email.big/>`, `<input#main.big:email/>` | parser: the `:name` stays in the tag name (first two) or in the shorthand part it follows (`.big:email`, `#main:email`). Core: each sugar keeps its meaning | decision 146, addendum of 23:23 (observed) | g0639 g0640 g0641 g0642 g0638 g0643 |
-| `<input #main/>`, `<input .big/>` | parser: attributes named `#main`, `.big`. Core: id, class | decision 146; spec §4 "Name sugar" | g0644 g0645 |
-| `<input :email type="email"/>` | parser: attributes `:email`, then `type`. Core: `name` first | decision 146 | g0646 |
-| `<input x=1 #main .big :email/>` | parser: `x=1`, then attributes named `#main`, `.big`, `:email` | decision 146 (observed) | g0647 |
-| `<input x=a.b .c/>` | as `x=a.b .c` | decision 146, divergence 3 | g0648 |
-| `<input:email=1/>` | parser: tag `input:email` with a default value `1`. Core: `name="email"` and the default value | decision 146, addendum 4 | g0649 |
-| `<input :email=1/>` | parser: an attribute named `:email` with the value `1`. Core: `name="email"` and the default value `1` | decision 146, addendum 4; spec §4 "Name sugar" | g0650 |
-| `<input:email(a) { return a; }/>` | parser: tag `input:email` with a default method. Core: `name="email"` and a default value that is the function | decision 146, addendum 4 | g0651 |
-| `<input #main(a) {}/>` | parser: a method named `#main`. Core: id `main` and a default value that is the function | decision 146, addendum 4 | g0652 |
-| `<input x=1 :/>`, `<input :/>` | parser: an attribute named `:` (the first not on stock). Core: positioned error, bare `:` | divergence row "Bare `:x` is `name="x"`" | g0653 g0654 |
-| `<a:b:c/>` | parser: tag name `a:b:c`. Core: positioned error, one name per tag | divergence row "A static tag name may not contain `:`"; spec §4 "Name sugar" | g0655 |
-| `<if=a\n .b>x</if>` | one value: the default attribute is exempt | decision 151, ruling 2 (observed) | g0656 |
-| `<const/x=items\n .filter(Boolean)/>` | one value | decision 151, ruling 2 (observed) | g0657 |
+| `<input type="email" :email>` | the value of `type` is `"email" :email`; MX and stock agree | stock (observed) | g0634 |
+| `<:email/>` | parser: tag name `:email`. Core: the tag `:email`, as in Marko | stock (observed) | g0635 |
+| `<input:email/>` | parser: tag name `input:email`. Core: the tag `input:email`, as in Marko | stock (observed) | g0636 |
+| `<input :email/>` | parser: an attribute named `:email`. Core: `value:email`, Marko's default attribute with the modifier `email` | stock; spec §4 "`:modifier`" | g0637 |
+| `<input#main:email.big/>` | parser: id part `main:email`, class part `big`. Core: id `main:email`, class `big` | stock (observed) | g0638 |
+| the six orders of the three tag-adjacent parts: `<input:email.big#main/>`, `<input:email#main.big/>`, `<input.big:email#main/>`, `<input.big#main:email/>`, `<input#main:email.big/>`, `<input#main.big:email/>` | parser: the `:email` stays in the tag name (first two) or in the shorthand part it follows (`.big:email`, `#main:email`). Core: the same, so `<input.big:email#main/>` has the class `big:email` | stock (observed) | g0639 g0640 g0641 g0642 g0638 g0643 |
+| `<input #main/>`, `<input .big/>` | parser: attributes named `#main`, `.big`. Core: `Invalid attribute name`, unless the host accepts foreign attribute names (Angular's `#ref`) | stock | g0644 g0645 |
+| `<input :email type="email"/>` | parser: attributes `:email`, then `type`. Core: `value:email`, then `type` | stock | g0646 |
+| `<input x=1 #main .big :email/>` | parser: `x=1`, then attributes named `#main`, `.big`, `:email`. Core: `Invalid attribute name` at `#main` | stock (observed) | g0647 |
+| `<input x=a.b .c/>` | as `x=a.b .c` | stock | g0648 |
+| `<input:email=1/>` | parser: tag `input:email` with a default value `1`. Core: the same | stock | g0649 |
+| `<input :email=1/>` | parser: an attribute named `:email` with the value `1`. Core: `value:email=1` | stock; spec §4 "`:modifier`" | g0650 |
+| `<input:email(a) { return a; }/>` | parser: tag `input:email` with a default method | stock | g0651 |
+| `<input #main(a) {}/>` | parser: a method named `#main`. Core: `Invalid attribute name` | stock | g0652 |
+| `<input x=1 :/>`, `<input :/>` | parser: `<input :/>` gives an attribute named `:` (the first not on stock); `<input x=1 :/>` is the regular-expression error. Core: `<input :/>` is `value:` | stock | g0653 g0654 |
+| `<a:b:c/>` | parser: tag name `a:b:c`. Core: the same | stock | g0655 |
+| `<if=a\n .b>x</if>` | one value, as stock | stock (observed) | g0656 |
+| `<const/x=items\n .filter(Boolean)/>` | one value | stock (observed) | g0657 |
 | `<div class:x=1/>`, `<div style:x=1/>` | parser: an attribute named `class:x` / `style:x`. Reserved on native elements | spec §4 "`class:foo` / `style:foo` modifiers" | g0658 g0659 |
-| `<input value:fn:=x/>` | parser: a bound attribute named `value:fn` | decision 146, divergence 2 (observed) | g0660 |
-| `<div><@svg:rect/></div>` | parser: a tag named `@svg:rect`, not split. An attribute tag on a native element is then an error | decision 146, addendum 3; spec §8 "Deferred to MX 2" | g0661 |
+| `<input value:fn:=x/>` | parser: a bound attribute named `value:fn` | stock (observed) | g0660 |
+| `<div><@svg:rect/></div>` | parser: a tag named `@svg:rect`. An attribute tag on a native element is then an error | spec §8 "Deferred to MX 2" | g0661 |
 | `x=a ? b :c` | one value | default: `ternaryDepth` is 1 at the `:` (observed) | g0424 |
-| `x=a ?? b :c` | value `a ?? b`, then an attribute named `:c`. Stock: one value | the after-value rule's `??` case (observed); **not settled**, OQ 3 | g0431 |
-| `x=a ?.b :c` | value `a ?.b`, then an attribute named `:c`. Stock: one value | the after-value rule's `?.` case (observed); **not settled**, OQ 3 | g0432 |
+| `x=a ?? b :c` | one value `a ?? b :c`; MX and stock agree | the `??` skip (observed); **not settled**, OQ 3 | g0431 |
+| `x=a ?.b :c` | one value `a ?.b :c`; MX and stock agree | the `?.` skip (observed); **not settled**, OQ 3 | g0432 |
 | `div x=a in\n  b` (concise) | one value | default: the look-ahead keyword row (observed); OQ 18 | g0445 |
 
 ## Open questions for the language lead
@@ -1944,17 +1921,14 @@ the normative one.
    each with its class under the 2026-10-05 ruling. *Recommendation:* rule the
    rows of class (c) one by one; until then the boundary reproduces the default
    for them, as decision 157.3 requires.
-3. **`??`, `?.` and `?:`.** MX's after-value rule stops `??` and `?.` from opening a
+3. **`??`, `?.` and `?:`.** In a named attribute's value MX stops `??` and `?.` from opening a
    ternary, and tests pin it, but no spec paragraph or decision states it, and
    `?:` still counts as a ternary (and on main `x=a ?:b` reads `:b` as an atom). *Recommendation:* state `??` and `?.` in the
    spec as what "no open `?`" means, and decide whether `x=a ?:b` is an error.
-4. **`.` followed by a digit.** The after-value rule does not split `x=a .2xl`, while spec
-   §4 "Name sugar" says `.2xl` works as a class "in both positions".
-   *Recommendation:* keep the exclusion and say so in the spec, or align the
-   positions.
-5. **Spreads.** MX applies the after-value rule to a spread
-   (`...props .b` splits); the spec text and divergence row speak of "an
-   attribute value". *Recommendation:* rule spreads in explicitly.
+4. **`.` followed by a digit.** *Settled*: core has no after-value rule, so a
+   spaced `.2xl` after a value continues it, as in stock.
+5. **Spreads.** *Settled*: a spread's value continues at a spaced `.b` or
+   `:b`, as in stock (`...a :b` spreads `a :b`).
 6. **`|` inside tag parameters and tag variables.** `<foo|x: A | B|/>` ends the
    parameters at the first `|`, and `<let/x: A | B = 1/>` ends the variable
    there. *Recommendation:* require parentheses around a union or bitwise or in
@@ -1972,16 +1946,9 @@ the normative one.
     indicates the end of a line. Only comments may follow it.` and the HTML
     comment error are the stock parser's; no MX source says whether MX keeps
     the wording. *Recommendation:* keep them and pin each with a fixture.
-11. **Spec §4 contradicts itself on a bare `:foo`.** Spec §4 "Attribute forms"
-    (row "Namespaced name": `:foo=y` is "Marko's own attribute named
-    `value:foo`") and spec §4 "`:modifier`" (`<div :foo="y"/>` "is one
-    attribute literally named `value:foo`"; `<div :/>` is `value:`) say the
-    opposite of spec §4 "Name sugar" and divergence row "Bare `:x` is
-    `name="x"`", which decision 158.1's "no `value:` modifier split" also
-    supports. (The earlier question here, `:x=1` listed as an error, is settled:
-    spec §4 "Name sugar" now states decision 146 addendum 4.)
-    *Recommendation:* rewrite the two `value:` paragraphs for named heads only
-    (`x:foo`, `value:foo`) and point bare `:foo` at the name sugar.
+11. **A bare `:foo`.** *Settled*: core has no name sugar, so `<div :foo="y"/>`
+    is Marko's attribute `value:foo` and `<div :/>` is `value:`, as spec §4
+    "`:modifier`" states.
 12. **`$!{…}` in an attribute value.** The template parser accepts it as value
     text; spec §3 "Interpolation" says "Marko's parser rejects it". Under
     decision 158 there is no Marko compiler; which MX layer raises it?
@@ -2002,14 +1969,9 @@ the normative one.
     method bodies, and never the tag variable, tag parameters or type lists)
     and the lead ruling of 2026-10-05 on method bodies. The positions are in
     [Atoms](#the-parser-grammar-atoms).
-15. **Spec §4 "Consumers on a stock parser"** and divergence row "The parser
-    after-value rule" describe the stock-parser diagnostic of decision 151,
-    ruling 1. Decision 157 addendum 3 removed it, 158.2 kept it for the
-    interim, and decision 159 makes core bundle the in-repo template parser,
-    so a published core no longer reaches it. *Recommendation:* the paragraphs
-    lapse now (decision 159), not at the drop of `@marko/compiler`; keep only
-    the sentence for a caller that bypasses the bundle, as spec §4 "Atoms"
-    already does.
+15. **The stock-parser diagnostic.** *Settled*: core has no after-value rule,
+    so the diagnostic for a consumer on a stock parser has no split left to
+    describe: both parsers end an attribute value at the same place.
 16. **A tag name's first character.** A leading digit is accepted (`<1abc/>`). *Recommendation:* state the
     terminator rule in the spec, or add a rule and a diagnostic.
 17. **The operator exemption.** A hard stop written directly after an operator
@@ -2077,11 +2039,9 @@ the normative one.
 27. **The character after a `--` run.** It is skipped unexamined (`--abc` is the
     text `bc`). *Recommendation:* require whitespace or the end of the line
     after the hyphens.
-28. **Decision 146, divergence 3 and the `:` condition.** *Settled* by decision
-    146, addendum 6: "a `:` starts a new attribute only when it is followed by
-    an identifier start, or is bare before `>`, `/>`, a newline or the end of
-    input", amending the divergence row's wording. `x=(a) : T => a` stays one
-    value ([E1](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode)).
+28. **The `:` condition of the former after-value rule.** *Settled*: core has
+    no after-value rule, so a spaced `:` after a value continues it, as in
+    stock. `x=(a) : T => a` stays one value ([E1](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode)).
 29. **`await :name`.** *Settled* by decision 156, addendum 8: addendum 3's rule
     restated by addendum 2's principle, "a `:` TypeScript could own is
     TypeScript's" ([Atoms](#the-parser-grammar-atoms), operator words, rule 5).
@@ -2152,12 +2112,12 @@ decision 146 under the 2026-10-05 ruling:
 
 | Input | Default | TypeScript | Class | Basis | Probes |
 | --- | --- | --- | --- | --- | --- |
-| `x=a.b .c`, `x=fn(a) .b` | split before `.c` / `.b` | member access, one expression | **(b)** | divergence row "The parser after-value rule" names both spellings | g0429 g0662 |
-| `x=(a) :T => a` | split before `:T`, then `Missing value for attribute` | an arrow function with a return type | **(b)** | the same row names this input; decision 151, ruling 3 | g0610 |
-| `<if=a .b>`, `<const/x=items\n .filter()/>` | one value | one expression | **(b)**, no difference | the same row: the default attribute is exempt | g0327 g0663 |
-| `x=a ?? b :c`, `x=a ?.b :c` | split before `:c` | `??` and `?.` are not ternaries; the expression ends before `:c` | **(a)** | the rule says "`:` … with no open `?`"; whether `??` or `?.` opens one is a fact of TypeScript's grammar. OQ 3 | g0431 g0432 |
+| `x=a.b .c`, `x=fn(a) .b` | one value | member access, one expression | **(b)**, no difference | stock reads both as one value | g0429 g0662 |
+| `x=(a) :T => a` | one value | an arrow function with a return type | **(b)**, no difference | stock reads it as one value | g0610 |
+| `<if=a .b>`, `<const/x=items\n .filter()/>` | one value | one expression | **(b)**, no difference | stock reads it as one value | g0327 g0663 |
+| `x=a ?? b :c`, `x=a ?.b :c` | one value | `??` and `?.` are not ternaries; the expression ends before `:c` | **(a)** | the rule says "`:` … with no open `?`"; whether `??` or `?.` opens one is a fact of TypeScript's grammar. OQ 3 | g0431 g0432 |
 | `x=a ? :b :c` | one value, with the atom `b` | `a ? :b : c` is no TypeScript; with atoms read as values it is one expression | **(b)**, no difference | spec §4 "Atoms": "an atom's own `:` is never the ternary's, so `a ? :b :c` is `a ? "b" : c`"; divergence row "`a ? :b :c` is one value" | g0533 |
-| concise `div x=a\n  .b` | value `a`, then an unnamed child tag with class `b` | member access across the newline | **(b)** | divergence row "The parser after-value rule": `.` followed by an identifier after whitespace starts a new attribute, "and across a newline" | g0452 |
+| concise `div x=a\n  .b` | value `a`, then an unnamed child tag with class `b` | member access across the newline | **(b)** | spec §3 "Concise mode": an indented line is a child | g0452 |
 | concise `div x=a\n  (b)`, `\n  + b`, `\n  ? b : c`, `\n  in b`, `\n  <span/>` | value `a`, then a child | continues across the newline | **(c)** | spec §3 "Concise mode" says a concise tag's "children are the lines indented under it" but says nothing about attribute values, and the default itself continues a value onto such lines in other cases (`div x=a +\n  b`, `div x=a in\n  b`). Whether §3 governs value continuation is OQ 18 | g0454 g0456 g0457 g0458 g0451 |
 | `<div x=async/>`, `<div x=async, y=1/>`, concise `div x=async\n  span` | `async/`, then a missing close tag; `async,` then `y=1`; one value swallowing the child | the identifier `async`, then stops | **(c)** | spec silent. OQ 17 | g0664 g0665 g0306 |
 | concise `div x=f<T> ,y=1` | one value | an instantiation expression `f<T>`, then stops | **(c)** | spec silent. OQ 17 | g0666 |
@@ -2165,7 +2125,7 @@ decision 146 under the 2026-10-05 ruling:
 | `x=a [0]` | value `a`, then an attribute named `[0]` | `a[0]` | **(c)** | spec silent. In concise mode `[` begins an attribute group, so continuing would change `div x=a [y=1]` | g0622 |
 | `` x=a `t` `` | value `a`, then an attribute named `` `t` `` | a tagged template, `` a`t` `` | **(c)** | spec silent; accepts nothing the spec rejects | g0625 |
 | `x=a {b}` | one value | stops after `a` | **(c)** | spec silent | g0623 |
-| `x=a: b` | one value | stops after `a`; `: b` is not part of an expression | **(c)** | spec silent: the after-value rule needs whitespace before the `:` | g0624 |
+| `x=a: b` | one value | stops after `a`; `: b` is not part of an expression | **(c)** | spec silent | g0624 |
 | `x=a !b`, `x=a ++b` | one value | `a!`, `a++`, then stops | **(c)** | spec silent. OQ 23 | g0668 g0669 |
 | `x=f<T>(y)`, `x=<T,>(a) => a` | cut at the `>` | a generic call; a generic arrow | **(c)** | spec silent; accepts nothing the spec rejects. Recorded defect. OQ 7 | g0353 g0670 |
 | `x=a as T = b`, `x=a as T < b`, `x=a as T {k: T}` | one value | the type ends at `T` | **(c)** | spec silent | g0671 g0672 g0673 |
@@ -2203,8 +2163,8 @@ tables on the three builds ([Method](#the-parser-grammar-status-sources-of-truth
 Beside it: the htmljs fixtures, upstream's fixture directories kept
 byte-identical in `packages/parser/src/template/__tests__/fixtures/` and run
 by `upstream-suite.test.ts`, which are evidence of the default behaviour and
-not a gate; `mx-after-value.test.ts` (the after-value rule, re-pointed from
-`patches/htmljs-parser.test.ts`); `mx-atoms.test.ts` over the case table
+not a gate; `mx-after-value.test.ts` (a spaced `:b` or `.b` after a value, and
+the `??` / `?.` skip); `mx-atoms.test.ts` over the case table
 `mx-atoms.cases.ts`; `__tests__/base-offset.test.ts`; and
 `corpus-equivalence.test.ts`, which pins identical event streams between this
 source and the patched npm build. Where the fixtures and MX's other tests
@@ -2212,9 +2172,9 @@ exercise a section:
 
 | Section | Exercised by |
 | --- | --- |
-| Tag names, shorthands, the `:` split | `packages/core/src/name-sugar.test.ts`; htmljs fixtures `tag-name-*`, `shorthand-*` |
+| Tag names, shorthands, a `:` in a tag head | `packages/core/src/shorthand.test.ts`; htmljs fixtures `tag-name-*`, `shorthand-*` |
 | Close tags | htmljs fixtures `empty-closing-tag*`, `shorthand-closing-html*` (`shorthand-closing-html2` is `<#foo>` closed by `</div>`) |
-| Sugars and the after-value rule, addendum 5 | `packages/parser/src/template/mx-after-value.test.ts`; `patches/htmljs-parser.test.ts` (`CHANGED`, `PINNED`, `DEFAULT_ATTRIBUTE`); `packages/core/src/name-sugar.test.ts`; `packages/core/src/stock-parser.test.ts`; `packages/targets/html/src/stock-parser.test.ts` |
+| A spaced `:b` or `.b` after a value, and the `??` / `?.` skip | `packages/parser/src/template/mx-after-value.test.ts`; `patches/htmljs-parser.test.ts` (`FORMER_SPLITS`, `PINNED`, `DEFAULT_ATTRIBUTE`); `packages/core/src/shorthand.test.ts`; `packages/core/src/stock-parser.test.ts`; `packages/targets/html/src/stock-parser.test.ts` |
 | Attributes, names, `=` spacing | htmljs fixtures `whitespace-around-equals`, `attr-comma-multiline*`; `packages/targets/html/fixtures-marko/attr-value-modifier` |
 | E1–E3 values and spreads | `patches/htmljs-parser.test.ts`; htmljs fixtures `ts-generic-*`, `attr-ambiguous-right-angle-bracket*`, `attr-eof-spread` |
 | E4, E5, E16, E17 methods | htmljs fixtures `attr-method-*`, `argument-attr-extra-whitespace`, `invalid-attr-type-params`, `invalid-type-params-attr-arg` |
@@ -2332,9 +2292,9 @@ and the text.
 | OpenTagStart, OpenTagName, AttrName ×3, AttrValue, OpenTagEnd, Error: Missing ending "div" tag | g1190 |
 | OpenTagStart, OpenTagName, AttrName ×3, OpenTagEnd | g1037 g1579 |
 | OpenTagStart, OpenTagName, AttrName, Atom ×2, AttrMethod, OpenTagEnd | g1492 |
-| OpenTagStart, OpenTagName, AttrName, Atom ×2, AttrValue, AttrName, OpenTagEnd | g1608 |
+| OpenTagStart, OpenTagName, AttrName, Atom ×2, AttrValue, OpenTagEnd | g1608 |
 | OpenTagStart, OpenTagName, AttrName, Atom ×2, AttrValue, OpenTagEnd, CloseTagStart, Text, CloseTagName, CloseTagEnd | g1511 g1513 |
-| OpenTagStart, OpenTagName, AttrName, Atom, AttrValue, AttrName ×2, OpenTagEnd, CloseTagStart, Text, CloseTagName, CloseTagEnd | g1516 |
+| OpenTagStart, OpenTagName, AttrName, Atom, AttrValue, OpenTagEnd, CloseTagStart, Text, CloseTagName, CloseTagEnd | g1516 |
 | OpenTagStart, OpenTagName, AttrName, Atom, AttrValue, AttrName, OpenTagEnd | g1619 g1621 g1622 |
 | OpenTagStart, OpenTagName, AttrName, Atom, AttrValue, AttrName, OpenTagEnd, CloseTagStart, Text, CloseTagName, CloseTagEnd | g1507 g1508 g1509 g1514 |
 | OpenTagStart, OpenTagName, AttrName, Atom, AttrValue, OpenTagEnd | g1496 g1497 g1503 g1504 g1572 g1593 g1594 g1595 g1596 g1597 g1598 g1599 g1620 g1636 |
@@ -2347,13 +2307,13 @@ and the text.
 | OpenTagStart, OpenTagName, AttrName, AttrMethod, OpenTagEnd | g1044 g1048 g1261 g1272 g1404 g1416 g1417 g1418 g1419 g1471 g1472 g1473 g1474 g1479 g1549 g1551 g1666 g1667 |
 | OpenTagStart, OpenTagName, AttrName, AttrSpread, OpenTagEnd | g1450 |
 | OpenTagStart, OpenTagName, AttrName, AttrValue, AttrName ×2, OpenTagEnd | g1071 g1093 g1148 g1150 g1157 g1158 g1171 g1178 g1179 g1184 g1211 g1294 g1600 |
-| OpenTagStart, OpenTagName, AttrName, AttrValue, AttrName, AttrArgs, AttrName, OpenTagEnd | g1162 |
-| OpenTagStart, OpenTagName, AttrName, AttrValue, AttrName, AttrMethod, OpenTagEnd | g1166 |
+| OpenTagStart, OpenTagName, AttrName, AttrValue, AttrName, OpenTagEnd | g1162 |
+| OpenTagStart, OpenTagName, AttrName, AttrValue, OpenTagEnd | g1166 |
 | OpenTagStart, OpenTagName, AttrName, AttrValue, AttrName, AttrValue, OpenTagEnd | g1053 g1165 g1173 g1174 g1200 |
 | OpenTagStart, OpenTagName, AttrName, AttrValue, AttrName, Error: Ambiguous ">" in attribute. A ">" preceded by whitespace end | g1465 |
 | OpenTagStart, OpenTagName, AttrName, AttrValue, AttrName, OpenTagEnd | g1038 g1049 g1055 g1056 g1057 g1058 g1059 g1060 g1061 g1069 g1070 g1072 g1073 g1074 g1077 g1078 g1079 g1080 g1081 g1082 g1098 g1100 g1101 g1102 g1103 g1106 g1130 g1131 g1132 g1133 g1134 g1147 g1149 g1151 g1152 g1153 g1154 g1161 g1163 g1164 g1176 g1177 g1205 g1207 g1208 g1212 g1213 g1215 g1263 g1266 g1269 g1276 g1277 g1278 g1281 g1282 g1283 g1284 g1287 g1292 g1293 g1295 g1296 g1299 g1300 g1332 g1333 g1334 g1336 g1338 g1339 g1340 g1341 g1357 g1358 g1359 g1360 g1361 g1362 g1363 g1365 g1366 g1374 g1375 g1376 g1377 g1498 g1499 g1501 g1527 g1577 g1626 g1627 g1629 |
-| OpenTagStart, OpenTagName, AttrName, AttrValue, AttrName, OpenTagEnd, CloseTagStart, Text, CloseTagName, CloseTagEnd | g1265 |
-| OpenTagStart, OpenTagName, AttrName, AttrValue, AttrSpread, AttrName, OpenTagEnd | g1095 |
+| OpenTagStart, OpenTagName, AttrName, Error: Mismatched group. A closing ">" character was found but it is not matched with a corresponding opening character | g1265 |
+| OpenTagStart, OpenTagName, AttrName, AttrValue, AttrSpread, OpenTagEnd | g1095 |
 | OpenTagStart, OpenTagName, AttrName, AttrValue, Error: A close tag was found before the "div" open tag was closed.  | g1270 g1291 |
 | OpenTagStart, OpenTagName, AttrName, AttrValue, Error: An html comment cannot be used within an open tag. Use a Jav | g1271 |
 | OpenTagStart, OpenTagName, AttrName, AttrValue, OpenTagEnd | g1035 g1046 g1054 g1064 g1065 g1066 g1075 g1076 g1097 g1099 g1160 g1172 g1180 g1181 g1182 g1183 g1185 g1195 g1196 g1198 g1206 g1209 g1210 g1216 g1219 g1255 g1256 g1262 g1286 g1289 g1290 g1297 g1301 g1335 g1337 g1364 g1368 g1369 g1373 g1383 g1392 g1495 g1505 g1525 g1528 g1529 g1571 g1574 g1601 g1602 g1606 g1607 g1632 g1633 g1634 g1635 g1637 g1638 g1639 g1640 g1641 g1642 g1643 g1644 g1645 g1646 g1647 g1648 g1649 g1650 g1651 g1652 g1653 g1654 g1655 g1677 |

@@ -1,0 +1,114 @@
+{
+  "files": {
+    "after-value.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "html"
+        },
+        "diagnostics": [
+          {
+            "severity": 1,
+            "source": "mxlang",
+            "message": "EOL reached while parsing regular expression",
+            "data": {
+              "codeFrame": "> 1 | <input x=\"1\" :/>\n    |               ^ EOL reached while parsing regular expression\n  2 |"
+            },
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 14
+              },
+              "end": {
+                "line": 0,
+                "character": 15
+              }
+            }
+          }
+        ],
+        "related": [],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n",
+        "mappings": [],
+        "compileDiagnostics": [
+          {
+            "fileName": "<root>/colon-bare/after-value.mx",
+            "message": "\n    > 1 | <input x=\"1\" :/>\n        |               ^ EOL reached while parsing regular expression\n      2 |",
+            "offset": 14,
+            "category": "error"
+          }
+        ],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "threw": {
+          "name": "CompileError",
+          "message": "EOL reached while parsing regular expression",
+          "id": "<root>/colon-bare/after-value.mx",
+          "loc": {
+            "file": "<root>/colon-bare/after-value.mx",
+            "line": 1,
+            "column": 14
+          },
+          "frame": "1 | <input x=\"1\" :/>\n                  ^"
+        },
+        "warnings": []
+      }
+    },
+    "concise.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "html"
+        },
+        "diagnostics": [],
+        "related": [],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/target-html\";\n\nexport interface Input {}\n\nfunction Concise(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nConcise.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxOut.write(\"<input value:=\\\"\\\">\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Concise, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Concise as ((input: Input) => string) & { render: typeof __mxRender };\n",
+        "mappings": [],
+        "compileDiagnostics": [],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "code": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/target-html\";\n\nexport interface Input {}\n\nfunction Concise(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nConcise.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxOut.write(\"<input value:=\\\"\\\">\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Concise, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Concise as ((input: Input) => string) & { render: typeof __mxRender };\n",
+        "map": null,
+        "warnings": []
+      }
+    },
+    "page.mx": {
+      "languageServer": {
+        "policy": {
+          "host": "html"
+        },
+        "diagnostics": [],
+        "related": [],
+        "dependencies": [],
+        "unexpected": []
+      },
+      "tsPlugin": {
+        "languageId": "typescript",
+        "generated": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/target-html\";\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nPage.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxOut.write(\"<input value:=\\\"\\\">\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page as ((input: Input) => string) & { render: typeof __mxRender };\n",
+        "mappings": [],
+        "compileDiagnostics": [],
+        "hostPolicyDiagnostics": [],
+        "logged": []
+      },
+      "vite": {
+        "code": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/target-html\";\n\nexport interface Input {}\n\nfunction Page(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nPage.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxOut.write(\"<input value:=\\\"\\\">\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page as ((input: Input) => string) & { render: typeof __mxRender };\n",
+        "map": null,
+        "warnings": []
+      }
+    }
+  },
+  "mxTsc": [
+    "<root>/colon-bare/after-value.mx(1,15): error TS80001: \n    > 1 | <input x=\"1\" :/>\n        |               ^ EOL reached while parsing regular expression\n      2 |"
+  ]
+}

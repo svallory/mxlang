@@ -11,13 +11,20 @@ describe("atoms on html", () => {
     ["<div x=:a/>", ' x=\\"a\\"'],
     ["<div x=[:a, :b]/>", '["a", "b"]'],
     ["<div x=a ? :b : :c/>", 'a ? "b" : "c"'],
-    ["<div x=:a :b/>", ' x=\\"a\\" name=\\"b\\"'],
     ["<p>${:hello}</p>", '"hello"'],
     ["<if=x === :on><p/></if>", 'x === "on"'],
   ])("%j", (source, expected) => {
     const { code } = compile(source, "/fixtures/atoms.mx");
     expect(code).toContain(expected);
     expect(code).not.toMatch(/[=[(,{\s]:(?:a|b|c|hello|on)\b/);
+  });
+
+  // Stock Marko continues a value at a spaced ` :b`, so `:a :b` is one
+  // expression with a stray `:`; core has no name sugar to split it off.
+  it("a spaced `:b` after an atom value is Marko's expression error", () => {
+    expect(() => compile("<div x=:a :b/>", "/fixtures/atoms.mx")).toThrow(
+      /atoms\.mx:1:11[\s\S]*Expected a single expression, but found `:` after it\./,
+    );
   });
 });
 
