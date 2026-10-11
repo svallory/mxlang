@@ -1,8 +1,0 @@
----
-packages: [core, target-registry, tsc, language-server, typescript-plugin, vite-plugin]
-kind: Changed
----
-
-`MX_UNKNOWN_TAG` no longer claims the contract was missing from `customTags`, which was false for a dialect file whose tags come from the dialect's `contracts`, its tag directories or the project's scan. A file of a dialect now names the dialect by its id: `` `<widget>` is not a known tag: it has no contract in `customTags` `` is now `` `<widget>` is not a known tag in the `mesh` dialect ``. Any other file now reads `` `<widget>` is not a known tag: no contract for it was given ``, because a lowering is handed its contracts and cannot tell where the caller found them. The `; did you mean `<x>`?` hint and the `(inside the unknown tag `<parent>`; may resolve once it is declared)` and `; inside `<parent>`: …` suffixes are unchanged, and so are the code and the position. Consumers that match on the code `MX_UNKNOWN_TAG` are unaffected; a golden file or a test that pins the old text needs to be regenerated.
-
-A dialect's `tagFile` hook whose contract carries a key no contract has now gets the wording every other contract source gives. `` `bogus` is not a contract key: a tag file's contract holds attributes, attributeTags, children, parents, defaultTag, or a key the dialect claims (`contractFields.tag`) `` is now `` Unknown key "bogus" in the declaration of tag "money"; allowed: attributes, attributeTags, children, parents, defaultTag `` (plus any key the dialect claims through `contractFields`), with the same code (`MX_TAG_FILE_ERROR`) and position. A `declares` key in that contract now reads `` `declares` is not allowed: no syntax module claims it (`contractFields`) ``.
