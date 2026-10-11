@@ -9,6 +9,7 @@ import { claimedFields } from "./contract-fields.ts";
 import { isTranslateError } from "./core.ts";
 import {
   type ContractMap,
+  CUSTOM_TAG_KEYS,
   type CustomTag,
   isValidatedContract,
   markValidatedContracts,
@@ -35,17 +36,7 @@ export type ContractFail = (
 ) => never;
 
 /** The `CustomTag` keys a dialect contract may state (every one but `template`). */
-const CONTRACT_KEYS = [
-  "parseOptions",
-  "attributes",
-  "attributeTags",
-  "children",
-  "parents",
-  "defaultTag",
-  "analyze",
-  "transform",
-  "finalize",
-] as const;
+const CONTRACT_KEYS = CUSTOM_TAG_KEYS.filter((key) => key !== "template");
 
 const CONTRACT_HOOKS = ["analyze", "transform", "finalize"] as const;
 

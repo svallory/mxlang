@@ -2137,6 +2137,66 @@ function rejectContradictoryAttribute(
 }
 
 /**
+ * The keys a `CustomTag` may state: the contract keys, the three hooks and
+ * `template` (the file a tag file's template is). The one vocabulary every
+ * contract source is held to (`customTags`, a sidecar, an `mx.contracts`
+ * module, a dialect's `contracts`); the keys a file's dialect claims
+ * (`contractFields.tag`) come on top, and `declares` has its own refusal.
+ */
+export const CUSTOM_TAG_KEYS = [
+  "parseOptions",
+  "attributes",
+  "attributeTags",
+  "children",
+  "parents",
+  "defaultTag",
+  "analyze",
+  "transform",
+  "finalize",
+  "template",
+] as const;
+
+/**
+ * Where a source writes the key `key` of tag `tagName`'s definition, when it
+ * can say: a sidecar's or an `mx.contracts` module's file, at the key. A
+ * `customTags` object has no file to point at, so it passes none and the
+ * refusal carries no position (line and column 0, no file), as every other
+ * declaration refusal of that source does.
+ */
+export type LocateTagKey = (
+  tagName: string,
+  key: string,
+) => Position | undefined;
+
+/**
+ * Rejects a key `tagName`'s definition states that is not a `CustomTag` key
+ * and that the file's dialect does not claim, naming the first one. A
+ * misspelled `atributes` would otherwise register as a tag with no
+ * attributes: its contract silently never applies. The attribute-level
+ * wording (`Unknown key "k" in the … of tag "t"; allowed: …`), no code.
+ * Shared by every contract source through {@link rejectUnknownDeclarationKeys}.
+ */
+export function rejectUnknownTagKeys(
+  tagName: string,
+  definition: object,
+  claimed: ClaimedFields = claimedFields(undefined),
+  locate?: LocateTagKey,
+): void {
+  for (const key of Object.getOwnPropertyNames(definition)) {
+    if ((CUSTOM_TAG_KEYS as readonly string[]).includes(key)) continue;
+    if (key === "declares" || claimed.tag.has(key)) continue;
+    const at = locate?.(tagName, key);
+    const allowed = [...new Set([...CUSTOM_TAG_KEYS, ...claimed.tag])];
+    throw new TranslateError(
+      `Unknown key "${key}" in the declaration of tag "${tagName}"; allowed: ${allowed.join(", ")}`,
+      at?.line ?? 0,
+      at?.column ?? 0,
+      at?.file,
+    );
+  }
+}
+
+/**
  * Rejects an unknown key in a registered tag's attribute, attribute-tag or child
  * declarations, at registration time, before any file is parsed.
  *
@@ -2152,10 +2212,12 @@ export function rejectUnknownDeclarationKeys(
   customTags: Readonly<Record<string, CustomTag>> | undefined,
   claimed: ClaimedFields = claimedFields(undefined),
   subject: (name: string) => boolean = everyTag,
+  locate?: LocateTagKey,
 ): void {
   if (!customTags) return;
   for (const [tagName, definition] of Object.entries(customTags)) {
     if (!subject(tagName)) continue;
+    rejectUnknownTagKeys(tagName, definition, claimed, locate);
     if (definition.children !== undefined) {
       for (const option of ["text", "openTagOnly"] as const) {
         if (definition.parseOptions?.[option] === true) {

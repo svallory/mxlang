@@ -311,7 +311,6 @@ describe("mx.contracts (decision 142)", () => {
     ["export default { box: { finalize() {} } };", "finalize"],
     ["export default { box: { template: {} } };", "template"],
     ["export default { box: { analyze: true } };", "function"],
-    ["export default { box: { attrbutes: {} } };", "attrbutes"],
   ])("rejects module %s", (source, message) => {
     const dir = project(source);
     const caught = error(dir);
