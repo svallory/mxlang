@@ -2235,7 +2235,10 @@ sees them. For a tag `<x>` in a file of dialect D, highest first:
    lists in `reservedTags`. A tag file, an `mx.tags` entry, an `mx.contracts`
    entry or a `customTags` entry passed to `lowerSource` that defines the name is
    `MX_RESERVED_TAG` at that definition, and calls are checked against D's
-   contract.
+   contract. The template compilers (`compileSource`, `parseFragment`) throw
+   `MX_RESERVED_TAG` for a `customTags` entry that names one of D's
+   `reservedTags`, whether or not the file calls it, with the same wording:
+   `` `<name>` cannot be defined by `customTags`: <D's name> reserves it ``.
 4. **The passed `customTags`, or the scan**: tag files nearest first, then
    `mx.tags`, then `mx.contracts`, with their shadow and duplicate warnings. A
    caller that passes D itself (the `dialect` option) owns D's vocabulary: its
@@ -3724,7 +3727,9 @@ name when it ships one (§13.9.3). In
 `lowerSource` a `customTags` entry named after any reserved name, `try`
 included, is an `MX_RESERVED_TAG` diagnostic (an error, so `ir` is `undefined`
 beside it), at each call of the name. `compileSource` and `parseFragment`, the
-template compilers, throw for a registration that shadows `try` (§5 P4).
+template compilers, throw for a registration that shadows `try` (§5 P4), and,
+for a file routed to a dialect, throw `MX_RESERVED_TAG` for a `customTags` entry
+named after one of the dialect's `reservedTags` (§9.2).
 `customTags` passed with an explicit `dialect` are that dialect's own
 vocabulary, so the dialect's `reservedTags` do not apply to them, and they
 override the dialect's `contracts`; core's names still do. Without an explicit
@@ -4246,7 +4251,14 @@ the module writes `contracts` as an object literal (directly, through `as` or
 `` the `dialect` option is not a valid dialect: `dialect.contracts.<name>`: <problem> ``.
 A tool shows the module's position through the diagnostic's `origin`. A load
 failure is kept until the module file changes, and the scan stamps the module,
-so editing it re-checks every file of the dialect.
+so editing it re-checks every file of the dialect. Only the module file is
+stamped: a `contracts` map the module imports from a sibling file is not read
+again until the module file itself changes, so a dialect ships as one bundled
+file. Node keeps an ES-module dialect (`.mjs`, or `.js` under
+`"type": "module"`) loaded until the process restarts; a CommonJS dialect is
+re-read on an edit. A dialect passed as the `dialect` option is validated per
+`contracts` entry object, once, and a `contracts` map reassigned on the same
+dialect object is merged and checked afresh on the next call.
 
 **`tagFile`** derives the contract of one tag file the dialect's `tagDirs`
 discovered, at the tag's first call (§9.2). `ctx.lower`'s `customTags` are

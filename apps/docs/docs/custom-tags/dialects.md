@@ -41,13 +41,15 @@ export default {
 
 An entry that fails stops the whole dialect: every file of it reports `MX_INVALID_DIALECT_CONTRACT`, at the entry's key in your module (`` `contracts.if`: `<if>` cannot name a data tag: it is reserved … ``), or at the module's `1:0` when `contracts` is not written as a literal. A code your `checkContract` gave is kept. In the tools the diagnostic carries `origin`, the place in your module, and sits at the head of the checked file. The failure stays until you edit the module; an edit re-checks every open file of the dialect.
 
+Two limits to that freshness. MX watches the module file only, so a `contracts` map the module imports from a sibling file is not re-read until the module file itself changes: bundle the dialect into one file. And Node keeps an ES-module dialect (`.mjs`, or `.js` under `"type": "module"`) until the process restarts, so a long-running tool needs a restart to see an edit to one.
+
 ### Which definition wins
 
 A file of your dialect gets your contracts beside the project's own definitions. For a tag `<x>`, highest first:
 
 1. Core's reserved names and `<try>`. A contract naming one fails the dialect.
 2. A PascalCase name the file itself binds (an import, a `<define>`, a `<const>`, a tag parameter).
-3. Your contracts whose names your manifest lists in `reservedTags`. A tag file, `mx.tags` entry, `mx.contracts` entry or `customTags` entry of the project that defines the name is `MX_RESERVED_TAG`, and calls are checked against your contract.
+3. Your contracts whose names your manifest lists in `reservedTags`. A tag file, `mx.tags` entry, `mx.contracts` entry or `customTags` entry of the project that defines the name is `MX_RESERVED_TAG`, and calls are checked against your contract. A template compiler (`compileSource`, `parseFragment`) given such a `customTags` entry for a file routed to your dialect throws `MX_RESERVED_TAG` instead of compiling.
 4. The project's definitions: tag files, then `mx.tags`, then `mx.contracts` (or the `customTags` a caller passes).
 5. Your other contracts. A project definition of the same name replaces one silently: an unreserved contract is a default the project may override.
 
