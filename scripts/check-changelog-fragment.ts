@@ -13,11 +13,13 @@
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   assertFragmentPackages,
   discoverPackages,
   FragmentError,
   parseFragment,
+  readFragmentFiles,
 } from "./assemble-changelog.ts";
 
 const root = `${import.meta.dir}/../`;
@@ -37,12 +39,13 @@ export interface CheckInput {
   /** The PR body (empty for a non-PR context). */
   body: string;
   /**
-   * The fragments this branch adds (`changes/<slug>.md`) with their text, and
-   * the packages that own a CHANGELOG.md (short name -> path). When both are
-   * given, a fragment `changelog:assemble` would refuse fails the check.
+   * Every fragment in `changes/` at HEAD (not only the ones this branch adds:
+   * `changelog:assemble` reads them all), and the packages that own a
+   * CHANGELOG.md (short name -> path). A fragment `changelog:assemble` would
+   * refuse fails the check.
    */
-  fragments?: { path: string; text: string }[];
-  packages?: ReadonlyMap<string, string>;
+  fragments: { slug: string; text: string }[];
+  packages: ReadonlyMap<string, string>;
 }
 
 export interface CheckResult {
@@ -51,18 +54,15 @@ export interface CheckResult {
 }
 
 export function evaluate(input: CheckInput): CheckResult {
-  if (input.fragments && input.packages) {
-    for (const { path, text } of input.fragments) {
-      const slug = path.replace(/^changes\//, "").replace(/\.md$/, "");
-      try {
-        assertFragmentPackages(parseFragment(slug, text), input.packages);
-      } catch (error) {
-        if (!(error instanceof FragmentError)) throw error;
-        return {
-          ok: false,
-          message: `${path} would make \`bun run changelog:assemble\` fail: ${error.message}`,
-        };
-      }
+  for (const { slug, text } of input.fragments) {
+    try {
+      assertFragmentPackages(parseFragment(slug, text), input.packages);
+    } catch (error) {
+      if (!(error instanceof FragmentError)) throw error;
+      return {
+        ok: false,
+        message: `changes/${slug}.md would make \`bun run changelog:assemble\` fail: ${error.message}`,
+      };
     }
   }
   const codePaths = input.changed.filter((path) => codeChangeRe.test(path));
@@ -81,6 +81,16 @@ export function evaluate(input: CheckInput): CheckResult {
       "Package files changed:",
       ...codePaths.map((path) => `  ${path}`),
     ].join("\n"),
+  };
+}
+
+/** What `evaluate` needs from the working tree: every fragment and the packages that own a CHANGELOG.md. */
+export function loadFragmentContext(
+  repoRoot: string,
+): Pick<CheckInput, "fragments" | "packages"> {
+  return {
+    fragments: readFragmentFiles(join(repoRoot, "changes")),
+    packages: discoverPackages(repoRoot),
   };
 }
 
@@ -136,16 +146,11 @@ if (import.meta.main) {
   ])
     .split("\n")
     .filter(Boolean);
-  const fragments = added
-    .filter((path) => /^changes\/[^/]+\.md$/.test(path))
-    .filter((path) => existsSync(`${root}${path}`))
-    .map((path) => ({ path, text: readFileSync(`${root}${path}`, "utf8") }));
   const result = evaluate({
     changed,
     added,
     body: prBody(body, bodyFile),
-    fragments,
-    packages: discoverPackages(root),
+    ...loadFragmentContext(root),
   });
   if (!result.ok) {
     console.error(`[changelog-check] ${result.message}`);

@@ -21,7 +21,6 @@ import {
 import { basename, join } from "node:path";
 
 const root = `${import.meta.dir}/../`;
-const changesDir = join(root, "changes");
 const kinds = ["Added", "Changed", "Fixed", "Removed"] as const;
 type Kind = (typeof kinds)[number];
 
@@ -94,6 +93,21 @@ export function parseFragment(slug: string, text: string): Fragment {
     );
   }
   return { slug, packages, kind, body };
+}
+
+// Every `changes/<slug>.md`, in slug order, unparsed. The one reader both
+// `changelog:assemble` and the CI fragment check use, so they see the same set.
+export function readFragmentFiles(
+  changesDir: string,
+): { slug: string; text: string }[] {
+  if (!existsSync(changesDir)) return [];
+  return readdirSync(changesDir)
+    .filter((name) => name.endsWith(".md"))
+    .sort()
+    .map((name) => ({
+      slug: basename(name, ".md"),
+      text: readFileSync(join(changesDir, name), "utf8"),
+    }));
 }
 
 // Discovers every package that owns a CHANGELOG.md, keyed by the short name
@@ -221,17 +235,9 @@ export function assembleChangelog(
   opts: { release?: string; date?: string; changesPath?: string } = {},
 ): AssembleResult {
   const changesDir = opts.changesPath ?? join(repoRoot, "changes");
-  const fragments: Fragment[] = existsSync(changesDir)
-    ? readdirSync(changesDir)
-        .filter((name) => name.endsWith(".md"))
-        .sort()
-        .map((name) =>
-          parseFragment(
-            basename(name, ".md"),
-            readFileSync(join(changesDir, name), "utf8"),
-          ),
-        )
-    : [];
+  const fragments: Fragment[] = readFragmentFiles(changesDir).map(
+    ({ slug, text }) => parseFragment(slug, text),
+  );
 
   const packages = discoverPackages(repoRoot);
   // Per package, entries in slug order.

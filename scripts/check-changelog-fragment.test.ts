@@ -1,6 +1,22 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { assertFragmentPackages, parseFragment } from "./assemble-changelog.ts";
-import { evaluate, noChangelogRe } from "./check-changelog-fragment.ts";
+import {
+  evaluate as evaluateInput,
+  loadFragmentContext,
+  noChangelogRe,
+} from "./check-changelog-fragment.ts";
+
+const packages = new Map([
+  ["core", "packages/core/CHANGELOG.md"],
+  ["solid", "packages/hosts/solid/CHANGELOG.md"],
+]);
+const evaluate = (
+  input: Omit<Parameters<typeof evaluateInput>[0], "fragments" | "packages"> &
+    Partial<Parameters<typeof evaluateInput>[0]>,
+) => evaluateInput({ fragments: [], packages, ...input });
 
 describe("evaluate", () => {
   it("fails when package src is touched with no fragment", () => {
@@ -79,30 +95,38 @@ describe("evaluate", () => {
   });
 
   describe("fragment packages", () => {
-    const packages = new Map([
-      ["core", "packages/core/CHANGELOG.md"],
-      ["solid", "packages/hosts/solid/CHANGELOG.md"],
-    ]);
     const fragment = (names: string, slug = "my-change") => ({
-      path: `changes/${slug}.md`,
+      slug,
       text: `---\npackages: [${names}]\nkind: Fixed\n---\nSomething.\n`,
     });
+    // A fragment already on main (not in `added`) is still assembled.
     const base = {
-      changed: ["packages/core/src/ir.ts"],
-      added: ["changes/my-change.md"],
+      changed: ["docs/index.md"],
+      added: [] as string[],
       body: "",
-      packages,
     };
 
     it("refuses a fragment naming a package with no CHANGELOG.md, with assemble's text", () => {
+      expect(
+        evaluate({ ...base, fragments: [fragment("core, angular")] }),
+      ).toEqual({
+        ok: false,
+        message:
+          "changes/my-change.md would make `bun run changelog:assemble` fail: `my-change` names package `angular`, which has no CHANGELOG.md (known: core, solid)",
+      });
+    });
+
+    it("refuses a bad fragment this branch did not add or touch", () => {
       const result = evaluate({
-        ...base,
-        fragments: [fragment("core, angular")],
+        changed: ["README.md"],
+        added: [],
+        body: "no-changelog: docs\n",
+        fragments: [fragment("core"), fragment("targets", "old-one")],
       });
       expect(result).toEqual({
         ok: false,
         message:
-          "changes/my-change.md would make `bun run changelog:assemble` fail: `my-change` names package `angular`, which has no CHANGELOG.md (known: core, solid)",
+          "changes/old-one.md would make `bun run changelog:assemble` fail: `old-one` names package `targets`, which has no CHANGELOG.md (known: core, solid)",
       });
     });
 
@@ -112,19 +136,25 @@ describe("evaluate", () => {
           ...base,
           body: "no-changelog: nothing\n",
           fragments: [fragment("angular")],
-        }).ok,
-      ).toBe(false);
+        }),
+      ).toEqual({
+        ok: false,
+        message:
+          "changes/my-change.md would make `bun run changelog:assemble` fail: `my-change` names package `angular`, which has no CHANGELOG.md (known: core, solid)",
+      });
     });
 
     it("refuses a fragment assemble cannot parse", () => {
-      const result = evaluate({
-        ...base,
-        fragments: [{ path: "changes/bad.md", text: "no front matter\n" }],
+      expect(
+        evaluate({
+          ...base,
+          fragments: [{ slug: "bad", text: "no front matter\n" }],
+        }),
+      ).toEqual({
+        ok: false,
+        message:
+          "changes/bad.md would make `bun run changelog:assemble` fail: bad: expected the file to open with `---`",
       });
-      expect(result.ok).toBe(false);
-      expect(result.message).toContain(
-        "bad: expected the file to open with `---`",
-      );
     });
 
     it("accepts fragments naming only known packages, or none", () => {
@@ -143,6 +173,44 @@ describe("evaluate", () => {
       ).toThrow(
         "`my-change` names package `angular`, which has no CHANGELOG.md (known: core, solid)",
       );
+    });
+  });
+
+  describe("loadFragmentContext", () => {
+    it("reads every changes/*.md in slug order and the packages that own a CHANGELOG.md", () => {
+      const dir = mkdtempSync(join(tmpdir(), "fragment-context-"));
+      try {
+        mkdirSync(join(dir, "changes"));
+        mkdirSync(join(dir, "packages/core"), { recursive: true });
+        mkdirSync(join(dir, "packages/hosts/solid"), { recursive: true });
+        mkdirSync(join(dir, "packages/hosts/hono"), { recursive: true });
+        writeFileSync(join(dir, "packages/core/CHANGELOG.md"), "# core\n");
+        writeFileSync(join(dir, "packages/hosts/solid/CHANGELOG.md"), "# s\n");
+        writeFileSync(join(dir, "changes/b.md"), "B");
+        writeFileSync(join(dir, "changes/a.md"), "A");
+        writeFileSync(join(dir, "changes/notes.txt"), "ignored");
+        const context = loadFragmentContext(dir);
+        expect(context.fragments).toEqual([
+          { slug: "a", text: "A" },
+          { slug: "b", text: "B" },
+        ]);
+        expect([...context.packages.keys()].sort()).toEqual(["core", "solid"]);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("sees no fragments in an empty or missing changes/ (a release PR)", () => {
+      const dir = mkdtempSync(join(tmpdir(), "fragment-context-"));
+      try {
+        mkdirSync(join(dir, "packages/core"), { recursive: true });
+        writeFileSync(join(dir, "packages/core/CHANGELOG.md"), "# core\n");
+        expect(loadFragmentContext(dir).fragments).toEqual([]);
+        mkdirSync(join(dir, "changes"));
+        expect(loadFragmentContext(dir).fragments).toEqual([]);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
     });
   });
 });
