@@ -207,22 +207,38 @@ export function clearTagFileCache(): void {
 }
 
 /**
- * The files the contracts derived for `tagFiles` depend on, beyond the tag
- * files themselves: what each hook named with `ctx.dependsOn`, and the files
- * of the tag files it called, transitively. A tool that re-checks a file when
- * a file it read changes (the language server) lists these beside the scan's
- * files, which name the tag files but cannot name what a hook read, since the
- * scan never runs one. A tag file not derived yet, or whose derivation was
- * cut short by a cycle, has none. @unstable
+ * Runs `run` and returns, beside its result, the files the tag file
+ * contracts it read depend on: the tag files it read a contract of, what
+ * their hooks named with `ctx.dependsOn`, and the files of the tag files
+ * those called, transitively. Only what `run` itself read counts: a
+ * contract derived earlier by another check, and not read by this one, is
+ * not listed, so the answer does not depend on the order of checks.
+ *
+ * A tool that re-checks a file when a file it read changes (the language
+ * server) lists these beside the scan's files, which name the tag files but
+ * cannot name what a hook read, since the scan never runs one. A contract
+ * whose derivation was cut short by a cycle lists what it read before the
+ * cut. @unstable
  */
-export function tagFileDependencies(tagFiles: Iterable<string>): string[] {
-  const found = new Set<string>();
-  for (const path of tagFiles) {
-    for (const dependency of derivations.get(path)?.dependencies.keys() ?? []) {
-      found.add(dependency);
-    }
+export function collectTagFileDependencies<T>(run: () => T): {
+  result: T;
+  dependencies: string[];
+} {
+  // A root frame with a path no tag file has: a read finds it on the stack
+  // for no tag file, so it can never be part of a cycle, and it receives the
+  // dependencies of the reads made directly under it.
+  const root: Frame = {
+    path: "",
+    dependencies: new Map(),
+    onCycle: false,
+  };
+  stack.push(root);
+  try {
+    const result = run();
+    return { result, dependencies: [...root.dependencies.keys()] };
+  } finally {
+    stack.splice(stack.indexOf(root), 1);
   }
-  return [...found];
 }
 
 /**

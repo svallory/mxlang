@@ -10,6 +10,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import {
+  collectTagFileDependencies,
   type DialectEmit,
   type DialectManifest,
   discoverDialects,
@@ -20,7 +21,6 @@ import {
   reservedExtensionReason,
   routeDialect,
   type ScanResult,
-  tagFileDependencies,
 } from "@mxlang/core";
 import { moduleSegments, scanCached } from "./index.ts";
 
@@ -319,8 +319,8 @@ export function checkDialectFile(
   /**
    * Receives the files the check read: tag files, contracts modules, sidecars
    * and the manifests and configs the scan read, and what the hooks of the
-   * tag files the check called read (`ctx.dependsOn`, and the tag files those
-   * called). A tool that re-checks a file when one of them changes (the
+   * tag files the lowering read a contract of (`ctx.dependsOn`, and the tag
+   * files those called). A tool that re-checks a file when one of them changes (the
    * language server) passes a set.
    */
   dependencies?: Set<string>,
@@ -381,12 +381,14 @@ export function checkDialectFile(
   for (const file of scan.configFiles ?? []) dependencies?.add(file);
   const customTags =
     Object.keys(scan.customTags).length > 0 ? scan.customTags : undefined;
-  const { diagnostics } = lowerSource(text, filePath, { customTags });
-  // The lowering derived the contracts of the tags it called, and a hook
-  // may have read files the scan never saw.
-  for (const file of tagFileDependencies(scan.files.map((f) => f.path))) {
-    dependencies?.add(file);
-  }
+  // The lowering reads the contracts of the tags it calls, and a hook may
+  // have read files the scan never saw: only what this lowering read counts,
+  // not what an earlier check of another file derived.
+  const lowered = collectTagFileDependencies(() =>
+    lowerSource(text, filePath, { customTags }),
+  );
+  const { diagnostics } = lowered.result;
+  for (const file of lowered.dependencies) dependencies?.add(file);
   return {
     source: dialect.name,
     diagnostics: [

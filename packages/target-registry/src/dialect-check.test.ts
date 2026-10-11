@@ -788,6 +788,19 @@ describe("checkDialectFile: files a hook reads through ctx.dependsOn", () => {
     expect([...dependencies]).not.toContain(files.path("concepts/money.json"));
   });
 
+  it("a dialect file that calls no tag records none of them even after another file's check derived the tag, whatever the order", () => {
+    const files = project();
+    const first = new Set<string>();
+    checkDialectFile(files.path("a.probe"), "<money/>\n", first);
+    expect([...first]).toContain(files.path("concepts/money.json"));
+    const second = new Set<string>();
+    checkDialectFile(files.path("b.probe"), "<y !ok/>\n", second);
+    expect([...second]).not.toContain(files.path("concepts/money.json"));
+    const third = new Set<string>();
+    checkDialectFile(files.path("c.probe"), "<money/>\n", third);
+    expect([...third]).toContain(files.path("concepts/money.json"));
+  });
+
   it("an edit to the named file changes the check; one to a file nobody names does not", () => {
     const files = project();
     const check = () =>
