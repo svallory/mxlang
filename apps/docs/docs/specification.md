@@ -2277,7 +2277,12 @@ signature and the stamps of its contract files: `.tag.ts` sidecars, templates
 and the `mx.contracts` module, but not sibling tag files), and the stamps of every file it depends on: the ones `ctx.dependsOn`
 named, and, with no declaration, every tag file it called while lowering,
 transitively. An edit re-derives only the tag files that read the edited file.
-A failed derivation is cached the same way. The call's `DelegatedTag` carries
+A failed derivation is cached the same way. A tag file an editor has open is
+read as the editor has it (the unsaved text `withCalleeInputSources` hands core,
+as for an `.mx` template), and a derivation is kept only for the text it was
+made from: the unsaved text while that is in force, the disk's while it is not.
+The tools re-check a dialect file when a file its tag files' hooks named with
+`ctx.dependsOn` changes. The call's `DelegatedTag` carries
 `definedIn`, the tag file's path (`@unstable`).
 
 The hook's diagnostics are in the tag file's coordinates, and core sets their

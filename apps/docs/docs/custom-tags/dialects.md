@@ -175,7 +175,7 @@ export default {
 The types (`TagFileInput`, `TagFileContext`, `TagFileResult`, `TagFileDiagnostic`) are exported from `@mxlang/core`. What the hook may use:
 
 - **`ctx.lower(options?)`** lowers the tag file with `lowerSource`, under its own dialect and the tags its own directory sees (not the caller's). The result is memoized per options. The tags it sees stay lazy, so lowering a tag file that calls another one reads that one's contract only at the call.
-- **`ctx.dependsOn(path)`** names a file your answer reads, relative to the tag file, so an edit to it re-derives this contract. Every tag file this one calls while lowering is a dependency automatically, transitively.
+- **`ctx.dependsOn(path)`** names a file your answer reads, relative to the tag file, so an edit to it re-derives this contract. Every tag file this one calls while lowering is a dependency automatically, transitively. The hook reads `path` from the disk, so the editor re-checks a file that calls the tag when `path` is saved or changes on disk. The tag file's own `source` is the editor's text, saved or not.
 - **The contract** holds `attributes`, `attributeTags`, `children`, `parents`, `defaultTag`, and the keys your dialect claims (`contractFields.tag`). Any other key is an error. `parseOptions` and `template` are refused: a call is parsed before any contract is read, so static `parseOptions` and hooks come from a `.tag.ts` sidecar beside the tag file (`concepts/money.tag.ts`), when `sidecars` is on.
 - **Diagnostics** are in the tag file's coordinates (1-based line, 0-based column). The hook is sync, and a hook that throws is an error at the thrown error's own position, else at the file's 1:0; it never takes the compile down.
 
