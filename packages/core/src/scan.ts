@@ -395,7 +395,7 @@ export interface DiscoveredTag {
   /** The `x.tag.ts` sidecar, when one exists. */
   sidecar?: string;
   /**
-   * A dialect tag file (`components/money.mesh.mx`): a file in the
+   * A dialect tag file (`concepts/money.mesh.mx`): a file in the
    * dialect's `tagDirs` ending in one of its claimed extensions, whose
    * contract the dialect reads. @unstable
    */
