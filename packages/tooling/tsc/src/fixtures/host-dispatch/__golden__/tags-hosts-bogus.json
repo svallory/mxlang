@@ -110,7 +110,7 @@
           "frame": "1 | <thing/>\n    ^"
         },
         "warnings": [
-          "@mxlang/vite-plugin: <root>/tags-hosts-bogus/package.json: `mx.tags` names an unknown host in `hosts`: bogus"
+          "@mxlang/vite-plugin: <root>/tags-hosts-bogus/package.json:1:1: `mx.tags` names an unknown host in `hosts`: bogus"
         ]
       }
     }
